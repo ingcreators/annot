@@ -75,10 +75,19 @@ export class Sidebar {
 
   async refreshFolderTree(): Promise<void> {
     if (!this.#treeContainer || !this.#storage) {
-      if (this.#treeContainer) this.#treeContainer.innerHTML = "";
+      if (this.#treeContainer) {
+        this.#treeContainer.innerHTML = "";
+        this.#treeContainer.style.display = "none";
+      }
       if (this.#treeSectionTitle) this.#treeSectionTitle.style.display = "none";
       return;
     }
+    // Keep the whole "Folders" section hidden until the async tree
+    // build finishes. Showing the root row early before the heading
+    // reappears — possible when `listFolders` hangs on a 401 →
+    // banner-blocked token refresh — reads as a stray, unlabelled item.
+    this.#treeContainer.style.display = "none";
+    if (this.#treeSectionTitle) this.#treeSectionTitle.style.display = "none";
     this.#treeContainer.innerHTML = "";
     this.#treeContainer.setAttribute("role", "tree");
     this.#treeContainer.setAttribute("aria-label", "Folders");
@@ -137,9 +146,13 @@ export class Sidebar {
     this.#treeContainer.appendChild(childContainer);
     await this.#buildFolderTree(childContainer, "", 1);
 
-    if (this.#treeSectionTitle) {
-      this.#treeSectionTitle.style.display = "";
-    }
+    // Reveal both the heading and the tree together. If the build
+    // errored inside `#buildFolderTree` it swallowed the throw, which
+    // means we still mark the section visible — the user sees the
+    // heading + whatever partial tree loaded, rather than an empty
+    // container that silently stays hidden.
+    if (this.#treeSectionTitle) this.#treeSectionTitle.style.display = "";
+    this.#treeContainer.style.display = "";
   }
 
   render(): void {
@@ -179,6 +192,11 @@ export class Sidebar {
       gd.connected ? { reselect: true, reselectTitle: "Change Drive folder" } : undefined,
     ));
 
+    // The "Folders" section (title + tree) is shown as a unit once
+    // `refreshFolderTree` has successfully built the tree. Hiding both
+    // together avoids the in-between state where the title is
+    // suppressed but the async-built root row has already landed — it
+    // was reading as "orphan storage row with no heading".
     this.#treeSectionTitle = document.createElement("div");
     this.#treeSectionTitle.className = "sidebar-section-title";
     this.#treeSectionTitle.textContent = "Folders";
@@ -187,6 +205,7 @@ export class Sidebar {
 
     this.#treeContainer = document.createElement("div");
     this.#treeContainer.className = "sidebar-folder-tree";
+    this.#treeContainer.style.display = "none";
     this.#container.appendChild(this.#treeContainer);
 
     this.#updateActiveVisuals();
