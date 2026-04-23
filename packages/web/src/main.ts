@@ -35,10 +35,10 @@ const app = new App();
 app.init();
 
 // Phase 1 verification hook for `docs/plans/github-integration.md`.
-// Navigating to `?github-setup=1` opens the connect flow (device
-// code → repo picker → branch → base path). Phase 3 replaces this
-// with a proper sidebar entry; until then this is how we exercise
-// the auth + picker end-to-end on the deployed app.
+// Navigating to `?github-setup=1` opens the connect flow (PAT paste
+// → repo picker → branch → base path). Phase 3 replaces this with
+// a proper sidebar entry; until then this is how we exercise the
+// auth + picker end-to-end on the deployed app.
 if (new URLSearchParams(location.search).get("github-setup") === "1") {
   void import("./storage/github-setup-ui.js").then(async (mod) => {
     const ref = await mod.connectGitHub();

@@ -1,11 +1,14 @@
 /**
- * GitHub connect flow UI — device-flow dialog, PAT fallback dialog,
- * repo picker, branch picker, base-path prompt.
+ * GitHub connect flow UI — PAT paste, repo picker, branch picker,
+ * base-path prompt.
  *
  * Phase 1 of `docs/plans/github-integration.md`: these flows prove
  * out the auth shape end-to-end. `GitHubStore` (Phase 2) and the
  * sidebar item + routing (Phase 3) call into `connectGitHub()` to
  * acquire a `GitHubRepoRef`.
+ *
+ * PAT-only by design. See `github-auth.ts` for why Device Flow /
+ * Web Flow can't complete in a browser without a backend proxy.
  *
  * Shares the `.app-dialog*` CSS tokens defined in
  * `packages/web/src/styles/file-manager.css` so the look matches
@@ -13,11 +16,9 @@
  */
 
 import {
-  signIn,
   signInWithPat,
   signOut,
   isSignedIn,
-  hasClientId,
   fetchUserInfo,
   listWritableRepos,
   searchRepos,
@@ -28,30 +29,19 @@ import {
   normalizeBasePath,
   type GitHubRepoRef,
   type GitHubRepoSummary,
-  type DeviceFlowState,
-  type DeviceFlowHandle,
 } from "./github-auth.js";
 
 /**
- * Run the full connect flow: sign in (device flow or PAT) → pick
- * repo → pick branch → enter base path → persist. Returns the
- * saved ref, or `null` if the user cancelled at any step.
+ * Run the full connect flow: PAT paste → pick repo → pick branch →
+ * enter base path → persist. Returns the saved ref, or `null` if
+ * the user cancelled at any step.
  *
  * If the user is already signed in, the sign-in step is skipped
  * and the picker opens directly.
  */
 export async function connectGitHub(): Promise<GitHubRepoRef | null> {
-  if (!hasClientId() && !isSignedIn()) {
-    await showPlainAlert(
-      "GitHub integration is not configured",
-      "VITE_GITHUB_CLIENT_ID is empty. You can still connect with a "
-        + "personal access token — click \"Use a personal access token\" "
-        + "in the next dialog.",
-    );
-  }
-
   if (!isSignedIn()) {
-    const ok = await runSignInFlow();
+    const ok = await runPatFlow();
     if (!ok) return null;
   }
 
@@ -89,230 +79,42 @@ export function disconnectGitHub(): void {
   // a full reset is needed.
 }
 
-// ---- Sign-in: device flow + PAT fallback ----
-
-async function runSignInFlow(): Promise<boolean> {
-  const choice = await showSignInChoiceDialog();
-  if (choice === "device") {
-    return await runDeviceFlow();
-  }
-  if (choice === "pat") {
-    return await runPatFlow();
-  }
-  return false;
-}
-
-type SignInChoice = "device" | "pat" | null;
-
-function showSignInChoiceDialog(): Promise<SignInChoice> {
-  return new Promise((resolve) => {
-    const { close, root, body } = openDialog(
-      "Connect to GitHub",
-      "Choose how to authorize Annot to read and commit to your repositories.",
-    );
-
-    const makeBtn = (label: string, sub: string, onClick: () => void) => {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "app-dialog-btn app-dialog-primary";
-      btn.style.width = "100%";
-      btn.style.padding = "10px 14px";
-      btn.style.height = "auto";
-      btn.style.justifyContent = "flex-start";
-      btn.style.display = "flex";
-      btn.style.flexDirection = "column";
-      btn.style.alignItems = "flex-start";
-      btn.style.gap = "4px";
-      btn.innerHTML = `
-        <span style="font-weight:600;font-size:14px;">${escapeHtml(label)}</span>
-        <span style="font-weight:400;font-size:12px;opacity:.85;">${escapeHtml(sub)}</span>
-      `;
-      btn.addEventListener("click", onClick);
-      return btn;
-    };
-
-    const deviceBtn = makeBtn(
-      "Sign in with GitHub (device flow)",
-      "Opens github.com/login/device. Requires VITE_GITHUB_CLIENT_ID.",
-      () => { close(); resolve("device"); },
-    );
-    const patBtn = makeBtn(
-      "Use a personal access token",
-      "Paste a fine-grained PAT with Contents read/write. No OAuth App needed.",
-      () => { close(); resolve("pat"); },
-    );
-    if (!hasClientId()) {
-      (deviceBtn as HTMLButtonElement).disabled = true;
-      deviceBtn.style.opacity = "0.55";
-      deviceBtn.style.cursor = "not-allowed";
-    }
-
-    body.appendChild(deviceBtn);
-    body.appendChild(document.createElement("div")).style.height = "8px";
-    body.appendChild(patBtn);
-
-    addCancelOnly(root, () => { close(); resolve(null); });
-    attachCloseBehaviors(root, () => { close(); resolve(null); });
-  });
-}
-
-function runDeviceFlow(): Promise<boolean> {
-  return new Promise((resolve) => {
-    const { close, root, body } = openDialog(
-      "Waiting for GitHub authorization",
-      "Open the URL below and enter the code to authorize Annot.",
-    );
-
-    let handle: DeviceFlowHandle | null = null;
-    let settled = false;
-    const settle = (ok: boolean) => {
-      if (settled) return;
-      settled = true;
-      try { handle?.cancel(); } catch { /* ignore */ }
-      close();
-      resolve(ok);
-    };
-
-    const status = document.createElement("div");
-    status.style.fontSize = "13px";
-    status.style.color = "var(--text-secondary)";
-    status.textContent = "Starting…";
-    body.appendChild(status);
-
-    const codeEl = document.createElement("div");
-    codeEl.style.fontFamily = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
-    codeEl.style.fontSize = "28px";
-    codeEl.style.fontWeight = "700";
-    codeEl.style.letterSpacing = "4px";
-    codeEl.style.textAlign = "center";
-    codeEl.style.padding = "16px 12px";
-    codeEl.style.background = "var(--input-bg)";
-    codeEl.style.border = "1px solid var(--input-border)";
-    codeEl.style.borderRadius = "8px";
-    codeEl.style.color = "var(--text-primary)";
-    codeEl.style.display = "none";
-    body.appendChild(codeEl);
-
-    const linkRow = document.createElement("div");
-    linkRow.style.display = "flex";
-    linkRow.style.gap = "8px";
-    linkRow.style.alignItems = "center";
-    linkRow.style.justifyContent = "space-between";
-    linkRow.style.fontSize = "13px";
-    linkRow.style.marginTop = "4px";
-    linkRow.style.display = "none";
-    body.appendChild(linkRow);
-
-    const linkAnchor = document.createElement("a");
-    linkAnchor.target = "_blank";
-    linkAnchor.rel = "noopener noreferrer";
-    linkAnchor.style.color = "var(--accent)";
-    linkAnchor.style.textDecoration = "underline";
-    linkAnchor.style.wordBreak = "break-all";
-    linkRow.appendChild(linkAnchor);
-
-    const copyBtn = document.createElement("button");
-    copyBtn.type = "button";
-    copyBtn.className = "app-dialog-btn";
-    copyBtn.textContent = "Copy code";
-    copyBtn.style.minWidth = "0";
-    copyBtn.style.height = "30px";
-    copyBtn.style.padding = "0 12px";
-    copyBtn.style.fontSize = "12px";
-    linkRow.appendChild(copyBtn);
-
-    let currentCode = "";
-    copyBtn.addEventListener("click", async () => {
-      if (!currentCode) return;
-      try {
-        await navigator.clipboard.writeText(currentCode);
-        copyBtn.textContent = "Copied";
-        setTimeout(() => { copyBtn.textContent = "Copy code"; }, 1200);
-      } catch { /* ignore */ }
-    });
-
-    const err = document.createElement("div");
-    err.className = "app-dialog-error";
-    err.style.display = "none";
-    body.appendChild(err);
-
-    const fallbackRow = document.createElement("div");
-    fallbackRow.style.fontSize = "12px";
-    fallbackRow.style.marginTop = "6px";
-    fallbackRow.innerHTML =
-      `<a href="#" style="color:var(--accent);">Use a personal access token instead</a>`;
-    body.appendChild(fallbackRow);
-    fallbackRow.querySelector("a")?.addEventListener("click", async (e) => {
-      e.preventDefault();
-      try { handle?.cancel(); } catch { /* ignore */ }
-      close();
-      settled = true;
-      const ok = await runPatFlow();
-      resolve(ok);
-    });
-
-    addCancelOnly(root, () => settle(false), "Cancel");
-    attachCloseBehaviors(root, () => settle(false));
-
-    handle = signIn((state: DeviceFlowState) => {
-      if (settled) return;
-      switch (state.phase) {
-        case "starting":
-          status.textContent = "Requesting device code…";
-          break;
-        case "awaiting-authorization": {
-          currentCode = state.userCode ?? "";
-          codeEl.textContent = currentCode;
-          codeEl.style.display = "";
-          linkRow.style.display = "flex";
-          const targetUri = state.verificationUriComplete ?? state.verificationUri ?? "";
-          linkAnchor.href = targetUri;
-          linkAnchor.textContent = state.verificationUri ?? targetUri;
-          status.textContent = "Waiting for authorization…";
-          err.style.display = "none";
-          break;
-        }
-        case "authorized":
-          status.textContent = "Authorized.";
-          settle(true);
-          break;
-        case "error":
-          err.textContent = state.error ?? "Unknown error.";
-          err.style.display = "";
-          status.textContent = "Authorization failed.";
-          break;
-        case "cancelled":
-          settle(false);
-          break;
-      }
-    });
-
-    handle.result.then(
-      (token) => { if (token) settle(true); else settle(false); },
-      () => { /* error already surfaced via listener */ },
-    );
-  });
-}
+// ---- PAT sign-in ----
 
 function runPatFlow(): Promise<boolean> {
   return new Promise((resolve) => {
     const { close, root, body } = openDialog(
-      "Sign in with a personal access token",
-      "Create a fine-grained PAT with Contents: Read and Write on the "
-        + "repository you want to use, or a classic PAT with the `repo` "
-        + "scope. Paste it below.",
+      "Sign in to GitHub",
+      "Annot stores screenshots by committing them to a repository you "
+        + "own or collaborate on. Create a personal access token and "
+        + "paste it below.",
     );
 
-    const link = document.createElement("div");
-    link.style.fontSize = "12px";
-    link.innerHTML = `
+    const help = document.createElement("div");
+    help.style.fontSize = "12px";
+    help.style.lineHeight = "1.6";
+    help.style.color = "var(--text-secondary)";
+    help.innerHTML = `
+      <strong style="color:var(--text-primary);">Recommended: fine-grained token</strong> —
+      tighter scope than a classic token, limited to the single repo you
+      pick. On the token creation page, set:
+      <ul style="margin:6px 0 8px 18px;padding:0;">
+        <li>Repository access → <em>Only select repositories</em> → pick your target repo</li>
+        <li>Repository permissions → <strong>Contents: Read and write</strong></li>
+      </ul>
       <a href="https://github.com/settings/personal-access-tokens/new"
          target="_blank" rel="noopener noreferrer"
          style="color:var(--accent);text-decoration:underline;">
-         Open GitHub — Fine-grained tokens ↗
+         Open GitHub — New fine-grained token ↗
+      </a>
+      <br/>
+      <a href="https://github.com/settings/tokens/new?scopes=repo&description=Annot"
+         target="_blank" rel="noopener noreferrer"
+         style="color:var(--accent);text-decoration:underline;font-size:11px;">
+         Or create a classic token with the <code>repo</code> scope ↗
       </a>
     `;
-    body.appendChild(link);
+    body.appendChild(help);
 
     const input = document.createElement("input");
     input.type = "password";
