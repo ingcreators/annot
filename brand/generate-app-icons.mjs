@@ -1,10 +1,12 @@
 // Generate application PNG icons from the canonical brand SVGs.
-// Writes directly into each package's public/ directory, so running
-// this script is the single step needed to propagate brand changes
-// to every shipping surface (Chrome Web Store, PWA install, favicon).
+// Writes into each package's public/ directory AND into
+// `brand/generated/` for icons that aren't shipped inside a package
+// (OAuth consent logo, Marketplace/Drive UI Integration assets,
+// etc. — i.e. things you upload to an admin console rather than
+// bundle into a build).
 //
 // Run: node brand/generate-app-icons.mjs
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Resvg } from "../node_modules/.pnpm/@resvg+resvg-js@2.6.2/node_modules/@resvg/resvg-js/index.js";
@@ -21,14 +23,28 @@ const repoRoot = resolve(here, "..");
 //                               80% safe zone centered)
 const targets = [
   // Chrome extension (manifest references these exact filenames)
-  ["annot-icon-16.svg", "packages/browser-extension/public/icons/icon-16.png", 16],
-  ["annot-icon.svg",    "packages/browser-extension/public/icons/icon-48.png", 48],
-  ["annot-icon.svg",    "packages/browser-extension/public/icons/icon-128.png", 128],
+  ["annot-icon-16.svg", "packages/extension/public/icons/icon-16.png", 16],
+  ["annot-icon.svg",    "packages/extension/public/icons/icon-48.png", 48],
+  ["annot-icon.svg",    "packages/extension/public/icons/icon-128.png", 128],
 
   // PWA (vite-plugin-pwa references these)
-  ["annot-icon.svg",          "packages/web-annotation/public/icons/icon-192.png", 192],
-  ["annot-icon.svg",          "packages/web-annotation/public/icons/icon-512.png", 512],
-  ["annot-icon-maskable.svg", "packages/web-annotation/public/icons/icon-512-maskable.png", 512],
+  ["annot-icon.svg",          "packages/web/public/icons/icon-192.png", 192],
+  ["annot-icon.svg",          "packages/web/public/icons/icon-512.png", 512],
+  ["annot-icon-maskable.svg", "packages/web/public/icons/icon-512-maskable.png", 512],
+
+  // Not bundled — uploaded to Google Cloud Console / Marketplace.
+  // Kept under brand/generated/ so we can regenerate from the SVG
+  // source when the brand evolves.
+  //
+  //   120 × 120 — OAuth consent screen "App logo"
+  //   16 × 16 / 32 × 32 / 128 × 128 — Drive UI Integration icons
+  //     (smallest file-list glyph / medium / large)
+  //   512 × 512 — Marketplace listing main icon
+  ["annot-icon-16.svg", "brand/generated/oauth-logo-120.png", 120],
+  ["annot-icon-16.svg", "brand/generated/drive-ui-16.png", 16],
+  ["annot-icon-16.svg", "brand/generated/drive-ui-32.png", 32],
+  ["annot-icon.svg",    "brand/generated/drive-ui-128.png", 128],
+  ["annot-icon.svg",    "brand/generated/marketplace-512.png", 512],
 ];
 
 for (const [src, outRel, size] of targets) {
@@ -39,6 +55,11 @@ for (const [src, outRel, size] of targets) {
   });
   const png = resvg.render().asPng();
   const outAbs = resolve(repoRoot, outRel);
+  // Some of the output paths (notably `brand/generated/`) may not
+  // exist on a fresh clone; create them lazily so running the script
+  // is still a single step.
+  const outDir = dirname(outAbs);
+  if (!existsSync(outDir)) mkdirSync(outDir, { recursive: true });
   writeFileSync(outAbs, png);
   console.log(`✓ ${outRel}  (${size}×${size}, ${png.length} bytes, from ${src})`);
 }
