@@ -208,8 +208,14 @@ async function ensureOffscreen(): Promise<void> {
   }
 }
 
-// Annotation app URL (dev: localhost, production: ingcreators.com/annotation)
-const ANNOTATION_URL = "http://localhost:3000";
+// Annotation app URL. Vite swaps this at build time:
+//   `vite` / `vite dev`   → http://localhost:3000
+//   `vite build` (ship)   → https://annot.work
+// If a staging deploy ever needs a third target, promote this to a
+// VITE_ANNOTATION_URL env var.
+const ANNOTATION_URL = import.meta.env.DEV
+  ? "http://localhost:3000"
+  : "https://annot.work";
 
 /** Build edit URL with multi-segment image path. */
 function buildEditUrl(path: string, extId: string): string {
