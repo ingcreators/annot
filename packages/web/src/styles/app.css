@@ -3,12 +3,15 @@
 /* ---- Error bar (draw.io style) ---- */
 
 .error-bar {
-  /* `position: relative` is load-bearing. Without a non-static
-   * `position`, the `z-index` below is a no-op and the bar ends up
-   * covered by `#file-manager` (which is `position: absolute` and
-   * later in DOM order than the bar's insertion point). With a
-   * relative stacking context + `z-index: 1000`, the bar wins the
-   * overlap regardless of whether we're in gallery or editor mode. */
+  /* `position: relative` + `z-index: 1000` puts the bar at the top
+   * of body flow (y=0), on top of `#toolbar` (absolute; top: 0;
+   * height: 48px). The bar's opaque background covers whatever
+   * chrome sits beneath for the duration of the notification, then
+   * the chrome reappears on dismiss — same pattern Slack / Gmail
+   * use when a top strip notification fires. The chrome is still
+   * interactable once the bar is closed; we pay a brief
+   * "notification takes priority" moment instead of reflowing the
+   * whole layout. */
   position: relative;
   z-index: 1000;
   display: flex;
@@ -32,9 +35,15 @@
 }
 
 .error-bar-info {
-  background: rgba(124,156,255,0.10);
+  /* Opaque background so the bar is actually visible over the
+   * gallery / editor chrome. The previous 10 % alpha blended the
+   * bar into the dark panel behind it, making the "A new version
+   * of Annot is available." notification effectively invisible
+   * (see the report at #32). Match the density error / warning
+   * already use. */
+  background: #10203a;
   color: #a0b8ff;
-  border-bottom: 1px solid rgba(124,156,255,0.15);
+  border-bottom: 1px solid rgba(124,156,255,0.3);
 }
 
 .error-bar-icon {
