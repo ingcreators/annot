@@ -5,8 +5,8 @@
 
 Annot uses URLs in three contexts, each with its own rules:
 
-1. **Web app routes** — path-based routing inside the PWA
-   (`annot.dev/annotation/...`).
+1. **Web app routes** — path-based routing inside the PWA, served
+   from the site root at `annot.work/...`.
 2. **`annot://` custom scheme** — reserved for deep links from
    outside the browser (Issues, Slack, desktop apps) into the editor.
 3. **Extension message URLs** — opaque; not a user-facing contract.
@@ -16,28 +16,40 @@ them without colliding with the others.
 
 ## 1. Web app routes
 
-Owned by `packages/web-annotation/src/router.ts`.
+Owned by [`packages/web/src/router.ts`](../packages/web/src/router.ts).
+The router derives its base prefix from `import.meta.env.BASE_URL`, so
+changing Vite's `base` setting re-homes every route in lockstep. The
+production deploy on Cloudflare Pages uses `base: "/"`, so the routes
+below are served from the site root.
 
-Current routes (subject to the path-based storage refactor — see
-[`docs/plans/path-based-storage.md`](./plans/path-based-storage.md)):
+Current routes (what the router actually accepts today):
 
-| Route                         | Purpose                        |
-|-------------------------------|--------------------------------|
-| `/annotation`                 | Gallery root                   |
-| `/annotation/edit/:store/:id` | Editor for image by numeric id |
-| `/annotation/edit/:store/file?path=…` | Editor for a FileSystem file |
+| Route                        | Purpose                                                                     |
+|------------------------------|-----------------------------------------------------------------------------|
+| `/`                          | Gallery root                                                                |
+| `/folder/<path>`             | Gallery deep-linked into a folder (path segments after `/folder/`)          |
+| `/edit/<store>/<path>`       | Editor for an image. `<store>` is one of `local` / `filesystem` / `extension` / `googledrive` |
 
-Target routes after the refactor (**tentative**, documented here so
-the refactor ships without inventing a new shape):
+Recognized query parameters:
 
-| Route                            | Purpose                         |
-|----------------------------------|---------------------------------|
-| `/annotation`                    | Gallery root                    |
-| `/annotation?p=Folder/Sub`       | Gallery scoped to a folder path |
-| `/annotation/edit/local?p=Folder/image.png`  | Editor, local store |
-| `/annotation/edit/fs?p=…`        | Editor, FileSystem store        |
-| `/annotation/edit/ext?extId=…&p=…` | Editor, via extension relay   |
-| `/annotation/edit/gdrive?p=…`    | Editor, Google Drive store      |
+| Query key | Used on | Purpose                                                    |
+|-----------|---------|------------------------------------------------------------|
+| `extId`   | `/edit/extension/...` | Identifies the extension relay that captured the image |
+| `session` | `/edit/<store>/...`   | Opens the Bulk Editor filtered by the capture session  |
+
+Target routes after the path-based storage refactor (**tentative**,
+see [`docs/plans/path-based-storage.md`](./plans/path-based-storage.md)
+— the plan proposes moving `<path>` into a `?p=...` query parameter
+to avoid `%2F` encoding in path segments):
+
+| Route                          | Purpose                         |
+|--------------------------------|---------------------------------|
+| `/`                            | Gallery root                    |
+| `/?p=Folder/Sub`               | Gallery scoped to a folder path |
+| `/edit/local?p=Folder/image.png`   | Editor, local store         |
+| `/edit/fs?p=…`                 | Editor, FileSystem store        |
+| `/edit/ext?extId=…&p=…`        | Editor, via extension relay     |
+| `/edit/gdrive?p=…`             | Editor, Google Drive store      |
 
 **Query parameter `p`** carries the path (which may contain `/`).
 Using a query param instead of a path segment avoids the `%2F`
@@ -96,3 +108,4 @@ rely on them; they should use the public `annot://` scheme instead.
 | Date       | Change                                         |
 |------------|------------------------------------------------|
 | 2026-04-23 | Initial stub. Reserved `annot://`, documented current + target web routes. |
+| 2026-04-23 | Switched web app base to `/` for Cloudflare Pages deploy at `annot.work`; updated route tables to drop the legacy `/annotation` prefix and match the current router. |

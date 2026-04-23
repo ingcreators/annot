@@ -79,7 +79,7 @@ export interface StorageProvider {
 - `renameFolder` / `moveFolder` も衝突時エラー。
 
 ### Router URLs
-**Query parameter方式**を採用: `/annotation/edit/local?p=Screenshots/Mobile/image-123.png`
+**Query parameter方式**を採用: `/edit/local?p=Screenshots/Mobile/image-123.png`
 - 理由: パスセグメントに `/` を含むため、path param にすると `%2F` エンコードが必要で、一部のサーバ/ブラウザで問題が起きやすい。クエリパラメータなら `/` をそのまま使える。
 - Extension: `?extId=xxx&p=<path>`
 
