@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: typecheck + build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck (all packages)
+        run: pnpm -r typecheck
+
+      # Desktop is excluded from the build job: it runs `tauri build`,
+      # which needs Rust + platform-specific Win32 APIs and is better
+      # suited for a dedicated release workflow than a general CI check.
+      - name: Build (core, web, extension)
+        run: >
+          pnpm
+          --filter @ingcreators/annot-core
+          --filter @ingcreators/annot-web
+          --filter @ingcreators/annot-extension
+          build
