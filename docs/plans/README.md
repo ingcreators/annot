@@ -18,6 +18,7 @@ before implementation, which is invaluable for:
 | Plan | Status | Summary |
 |------|--------|---------|
 | [`path-based-storage.md`](./path-based-storage.md) | Queued | Drop numeric IDs across all storage implementations; use filesystem-style paths as primary key. Prerequisite for `GitHubStore`. |
+| [`google-drive-integration.md`](./google-drive-integration.md) | Draft | Rework the Drive backend onto the non-sensitive `drive.file` scope + Workspace Marketplace + Drive UI Integration so Annot can ship publicly without a restricted-scope CASA audit. |
 
 ## Plan lifecycle
 
