@@ -37,14 +37,14 @@ import {
   getStorage,
   setExtensionId,
   setStorageMode,
-  openFileSystemDirectory,
-  restoreFileSystem,
+  openDeviceDirectory,
+  restoreDevice,
   connectGoogleDrive,
   restoreGoogleDrive,
   isDriveConnected,
   getStorageMode,
   deleteExtensionImage,
-  getFsRootName,
+  getDeviceRootName,
   saveLastStorage,
   loadLastStorage,
   saveLastFolder,
@@ -106,7 +106,7 @@ import { showIntervalCaptureDialog, showIntervalCaptureProgress, loadCursorPrefe
 
 export class App {
   #storage: StorageProvider | null = null;
-  #fsStore: StorageProvider | null = null;
+  #deviceStore: StorageProvider | null = null;
   #fileManager: FileManager | null = null;
 
   #currentEditor: {
@@ -199,23 +199,23 @@ export class App {
   #splitEditor: SplitEditor | null = null;
 
   async init(): Promise<void> {
-    const { LocalStore } = await import("./storage/local-store.js");
-    const localStore = new LocalStore();
-    this.#storage = localStore;
+    const { BrowserStore } = await import("./storage/browser-store.js");
+    const browserStore = new BrowserStore();
+    this.#storage = browserStore;
     setStorageMode("browser");
 
     // Silently restore the filesystem handle if previously granted — this only
-    // populates #fsStore so the user can switch to Device without re-picking.
+    // populates #deviceStore so the user can switch to Device without re-picking.
     // It must NOT override the user's last-selected storage mode.
-    const restored = await restoreFileSystem();
+    const restored = await restoreDevice();
     if (restored) {
-      this.#fsStore = restored;
+      this.#deviceStore = restored;
     }
 
     // Respect the user's last-selected storage across reloads.
     const lastMode = loadLastStorage();
-    if (lastMode === "device" && this.#fsStore) {
-      this.#storage = this.#fsStore;
+    if (lastMode === "device" && this.#deviceStore) {
+      this.#storage = this.#deviceStore;
       setStorageMode("device");
     } else if (lastMode === "googledrive") {
       // If we have a persisted OAuth token AND a previously-picked
@@ -236,12 +236,12 @@ export class App {
         // here and prompt for a re-pick.
         void this.#verifyDriveRootOrPrompt(driveStore);
       } else {
-        this.#storage = localStore;
+        this.#storage = browserStore;
         setStorageMode("browser");
       }
     } else {
-      // Default / "browser" / everything else → Browser (LocalStore)
-      this.#storage = localStore;
+      // Default / "browser" / everything else → Browser (BrowserStore)
+      this.#storage = browserStore;
       setStorageMode("browser");
     }
 
@@ -802,7 +802,7 @@ export class App {
    *  Browser/Local stores to per-origin IDB). */
   #currentRootName(): string | undefined {
     const mode = getStorageMode();
-    if (mode === "device") return getFsRootName() || undefined;
+    if (mode === "device") return getDeviceRootName() || undefined;
     if (mode === "googledrive") return loadDriveRoot()?.name;
     return undefined;
   }
@@ -814,20 +814,20 @@ export class App {
   private async handleStorageSelect(mode: StorageMode, forcePicker = false): Promise<void> {
     try {
       if (mode === "browser") {
-        const { LocalStore } = await import("./storage/local-store.js");
-        this.#storage = new LocalStore();
+        const { BrowserStore } = await import("./storage/browser-store.js");
+        this.#storage = new BrowserStore();
         setStorageMode("browser");
         saveLastStorage("browser");
       } else if (mode === "device") {
-        if (!forcePicker && this.#fsStore) {
+        if (!forcePicker && this.#deviceStore) {
           // Reuse the previously selected folder
-          this.#storage = this.#fsStore;
+          this.#storage = this.#deviceStore;
           setStorageMode("device");
           saveLastStorage("device");
         } else {
-          const store = await openFileSystemDirectory();
+          const store = await openDeviceDirectory();
           if (!store) return;
-          this.#fsStore = store;
+          this.#deviceStore = store;
           this.#storage = store;
           saveLastStorage("device");
         }
@@ -876,7 +876,7 @@ export class App {
     if (!this.#fileManager) return;
     const sidebar = this.#fileManager.sidebar;
     sidebar.setStorageStatus("browser", true, "Local");
-    sidebar.setStorageStatus("device", !!this.#fsStore, getFsRootName() || "Not connected");
+    sidebar.setStorageStatus("device", !!this.#deviceStore, getDeviceRootName() || "Not connected");
     const driveRoot = loadDriveRoot();
     sidebar.setStorageStatus(
       "googledrive",
@@ -897,9 +897,9 @@ export class App {
 
       console.log("[transfer] Found", rootImages.length, "images in Extension IDB root");
 
-      const { LocalStore } = await import("./storage/local-store.js");
+      const { BrowserStore } = await import("./storage/browser-store.js");
       // Transfer to the user's currently selected storage
-      const localStore = this.#storage || new LocalStore();
+      const browserStore = this.#storage || new BrowserStore();
 
       for (const img of rootImages) {
         try {
@@ -922,7 +922,7 @@ export class App {
           const filename = img.path.includes("/") ? img.path.slice(img.path.lastIndexOf("/") + 1) : img.path;
           // Wrap in retry: rapid back-to-back saves into a fresh FS handle
           // can hit Chrome's "stale cached state" issue (InvalidStateError).
-          await retryFsOp(() => localStore.saveImage({
+          await retryFsOp(() => browserStore.saveImage({
             originalDataUrl: full.originalDataUrl,
             thumbnailDataUrl: full.thumbnailDataUrl || "",
             annotationsSvg: full.annotationsSvg || "",
@@ -956,7 +956,7 @@ export class App {
 
   private async transferAndOpen(record: ImageRecord, extPath: string): Promise<void> {
     // Respect the user's currently selected storage
-    const localStore = this.#storage || new (await import("./storage/local-store.js")).LocalStore();
+    const browserStore = this.#storage || new (await import("./storage/browser-store.js")).BrowserStore();
 
     let w = record.width;
     let h = record.height;
@@ -967,7 +967,7 @@ export class App {
     }
 
     const now = new Date().toISOString();
-    const savedPath = await localStore.saveImage({
+    const savedPath = await browserStore.saveImage({
       originalDataUrl: record.originalDataUrl,
       thumbnailDataUrl: record.thumbnailDataUrl || "",
       annotationsSvg: record.annotationsSvg || "",

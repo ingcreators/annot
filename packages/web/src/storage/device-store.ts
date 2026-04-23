@@ -1,6 +1,11 @@
 /**
- * File System Access API storage provider — path-based identification.
- * Reads/writes image files to a user-selected local directory.
+ * Device (File System Access API) storage provider — path-based
+ * identification. Reads/writes image files to a user-selected local
+ * directory. The "Device" name mirrors the sidebar label so
+ * identifiers line up across UI / URL (`/edit/device/...`) / code;
+ * internally the implementation talks to the browser's
+ * `FileSystemDirectoryHandle` API.
+ *
  * Annot-native captures are saved as `annot-<ts>.annot.jpg|png`;
  * images coming from outside (dropped into the folder by other tools,
  * or imported with an explicit filename) keep their original name.
@@ -50,7 +55,7 @@ interface IndexData {
   images: Record<string, IndexEntry>;
 }
 
-export class FileSystemStore implements StorageProvider {
+export class DeviceStore implements StorageProvider {
   #root: FileSystemDirectoryHandle;
   #index: IndexData = { images: {} };
 
@@ -102,7 +107,7 @@ export class FileSystemStore implements StorageProvider {
         if (this.#index.images[fullPath]) {
           delete this.#index.images[fullPath];
         }
-        console.log("[fs-store] purged empty file:", parentPath ? `${parentPath}/${name}` : name);
+        console.log("[device-store] purged empty file:", parentPath ? `${parentPath}/${name}` : name);
       } catch { /* ignore */ }
     }
   }
@@ -698,7 +703,7 @@ export class FileSystemStore implements StorageProvider {
           const encoded = await encodeCaptureInWorker(renderedDataUrl, opts);
           finalDataUrl = encoded.dataUrl;
         } catch (e) {
-          console.warn("[fs-store] rendered-image re-encode failed, keeping PNG-24:", e);
+          console.warn("[device-store] rendered-image re-encode failed, keeping PNG-24:", e);
         }
       }
       renderedBlob = await (await fetch(finalDataUrl)).blob();

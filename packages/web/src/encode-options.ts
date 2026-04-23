@@ -7,7 +7,7 @@
  *
  * Used by:
  *   - app.ts (initial capture / SplitEditor Apply)
- *   - storage providers (fs-store / google-drive-store) when re-encoding
+ *   - storage providers (device-store / google-drive-store) when re-encoding
  *     the flattened "render with annotations baked in" output.
  */
 import { DEFAULT_ENCODE_OPTIONS, type EncodeOptions } from "@ingcreators/annot-core/encode";

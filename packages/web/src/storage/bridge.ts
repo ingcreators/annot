@@ -2,11 +2,12 @@
  * Extension API bridge — communicates with the Annot browser extension
  * (by ingcreators) via chrome.runtime.sendMessage to access its IndexedDB.
  *
- * Falls back to local-store.ts if extension is not installed.
+ * Falls back to `BrowserStore` (IndexedDB in this origin) if the
+ * extension is not installed.
  */
 import type { StorageProvider } from "@ingcreators/annot-core/storage";
-import { LocalStore } from "./local-store.js";
-import { FileSystemStore } from "./fs-store.js";
+import { BrowserStore } from "./browser-store.js";
+import { DeviceStore } from "./device-store.js";
 import { GoogleDriveStore } from "./google-drive-store.js";
 import { saveHandle, loadHandle, clearHandle } from "./fs-handle-store.js";
 import { getAccessToken, loadDriveRoot, signIn } from "./google-auth.js";
@@ -25,9 +26,9 @@ export type StorageMode = "extension" | "browser" | "device" | "googledrive";
 
 let extensionId: string | null = null;
 let extensionAvailable: boolean | null = null;
-let localFallback: StorageProvider | null = null;
+let browserFallback: StorageProvider | null = null;
 let driveStore: GoogleDriveStore | null = null;
-let fsStore: FileSystemStore | null = null;
+let deviceStore: DeviceStore | null = null;
 let currentMode: StorageMode = "browser";
 
 function hasChromeRuntime(): boolean {
@@ -106,20 +107,20 @@ async function send(msg: any): Promise<any> {
   throw new Error("Extension not connected");
 }
 
-function getLocalStore(): StorageProvider {
-  if (!localFallback) localFallback = new LocalStore();
-  return localFallback;
+function getBrowserStore(): StorageProvider {
+  if (!browserFallback) browserFallback = new BrowserStore();
+  return browserFallback;
 }
 
 // ---- Public API ----
 
 export async function getStorage(): Promise<StorageProvider> {
   if (currentMode === "googledrive" && driveStore) return driveStore;
-  if (currentMode === "device" && fsStore) return fsStore;
+  if (currentMode === "device" && deviceStore) return deviceStore;
   const hasExtension = await detectExtension();
   if (hasExtension) { currentMode = "extension"; return extensionStorage; }
   currentMode = "browser";
-  return getLocalStore();
+  return getBrowserStore();
 }
 
 /** Set extension ID and try to connect. Optionally set mode. Returns true if connected. */
@@ -139,21 +140,21 @@ export function setStorageMode(mode: StorageMode): void {
 }
 
 /** Open a local directory and switch to filesystem storage. */
-export async function openFileSystemDirectory(): Promise<StorageProvider | null> {
+export async function openDeviceDirectory(): Promise<StorageProvider | null> {
   try {
     const dirHandle = await (window as any).showDirectoryPicker({ mode: "readwrite" });
     await saveHandle(dirHandle);
-    fsStore = new FileSystemStore(dirHandle);
-    await fsStore.init();
+    deviceStore = new DeviceStore(dirHandle);
+    await deviceStore.init();
     currentMode = "device";
-    return fsStore;
+    return deviceStore;
   } catch {
     return null;
   }
 }
 
 /** Restore previously selected filesystem folder from IndexedDB. */
-export async function restoreFileSystem(): Promise<StorageProvider | null> {
+export async function restoreDevice(): Promise<StorageProvider | null> {
   try {
     const handle = await loadHandle();
     if (!handle) return null;
@@ -164,18 +165,18 @@ export async function restoreFileSystem(): Promise<StorageProvider | null> {
       if (req !== "granted") return null;
     }
 
-    fsStore = new FileSystemStore(handle);
-    await fsStore.init();
+    deviceStore = new DeviceStore(handle);
+    await deviceStore.init();
     currentMode = "device";
-    return fsStore;
+    return deviceStore;
   } catch {
     return null;
   }
 }
 
 /** Clear saved filesystem handle. */
-export async function disconnectFileSystem(): Promise<void> {
-  fsStore = null;
+export async function disconnectDevice(): Promise<void> {
+  deviceStore = null;
   await clearHandle();
   if (currentMode === "device") currentMode = "browser";
 }
@@ -265,8 +266,8 @@ export function isDriveConnected(): boolean {
 }
 
 /** Get the root folder name of the connected filesystem store. */
-export function getFsRootName(): string | null {
-  return fsStore?.rootName ?? null;
+export function getDeviceRootName(): string | null {
+  return deviceStore?.rootName ?? null;
 }
 
 /** Check if extension is connected. */
@@ -323,6 +324,6 @@ const extensionStorage: StorageProvider = {
   async getBreadcrumb(path) { return send({ action: "getBreadcrumb", path }); },
 
   async generateThumbnail(dataUrl, maxWidth) {
-    return getLocalStore().generateThumbnail(dataUrl, maxWidth);
+    return getBrowserStore().generateThumbnail(dataUrl, maxWidth);
   },
 };

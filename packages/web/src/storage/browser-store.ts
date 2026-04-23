@@ -1,6 +1,8 @@
 /**
- * Local IndexedDB storage — path-based identification.
- * Used as default when extension is not installed.
+ * Browser-local IndexedDB storage — path-based identification.
+ * Used as default when extension is not installed. The "Browser"
+ * name mirrors the sidebar label so identifiers line up across
+ * UI / URL (`/edit/browser/...`) / code.
  * Implements StorageProvider interface.
  */
 import type {
@@ -63,7 +65,7 @@ function defaultFilename(data: { originalDataUrl: string }): string {
   return `annot-${Date.now()}.annot.${ext}`;
 }
 
-export class LocalStore implements StorageProvider {
+export class BrowserStore implements StorageProvider {
   // ---- Images ----
 
   async saveImage(data: Omit<ImageRecord, "path"> & { filename?: string }): Promise<string> {
