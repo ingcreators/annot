@@ -24,7 +24,7 @@ const BASE = import.meta.env.BASE_URL.replace(/\/$/, ""); // e.g. "" in dev, "/a
 
 export interface Route {
   type: "gallery" | "edit" | "handoff";
-  store?: string;   // "extension" | "filesystem" | "local" | "googledrive"
+  store?: string;   // "extension" | "device" | "browser" | "googledrive"
   extId?: string;   // extension ID (from query param)
   path?: string;    // image path (edit) or folder path (gallery deep-link); "" = root
   session?: string; // if set, open the Bulk Editor filtered by this session id
