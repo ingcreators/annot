@@ -5,7 +5,15 @@ import { VitePWA } from "vite-plugin-pwa";
 export default defineConfig({
   plugins: [
     VitePWA({
-      registerType: "autoUpdate",
+      // `prompt` lets us show a dismissible in-app banner when a new
+      // service worker is waiting, instead of silently swapping on
+      // next tab open (which in practice left users stuck on stale
+      // bundles and debugging cache invalidation by hand). The
+      // registration happens in `src/main.ts` via `virtual:pwa-register`.
+      registerType: "prompt",
+      // Disable the plugin's auto-injected registrar — we handle it
+      // in code so the update prompt can run through our error-bar.
+      injectRegister: null,
       includeAssets: ["fonts/**/*", "icons/**/*"],
       manifest: {
         name: "Annot (by ingcreators)",
