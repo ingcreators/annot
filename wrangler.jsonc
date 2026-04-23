@@ -1,0 +1,16 @@
+/**
+ * Cloudflare Workers Static Assets config for the annot web app.
+ *
+ * This repo has no Worker script — we deploy only the built PWA
+ * from packages/web/dist/ behind Cloudflare's asset server. When a
+ * request path doesn't match a built asset, `not_found_handling`
+ * serves index.html so the SPA router can take over client-side.
+ */
+{
+  "name": "annot",
+  "compatibility_date": "2026-04-23",
+  "assets": {
+    "directory": "./packages/web/dist",
+    "not_found_handling": "single-page-application"
+  }
+}
