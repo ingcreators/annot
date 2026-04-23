@@ -50,6 +50,26 @@ export class GoogleDriveStore implements StorageProvider {
   // Track children loaded per folder (for invalidation purposes)
   #loadedFolders = new Set<string>();
 
+  /**
+   * Host-supplied callback that returns a fresh access token when the
+   * current one 401s. Expected to try silent renewal first and fall
+   * back to a user-facing sign-in popup only when Google says it's
+   * necessary. Resolves to `null` when recovery failed for good
+   * (user dismissed the popup, no network, scope revoked) — in that
+   * case `#fetch` lets the 401 propagate so the caller can surface
+   * a user-visible error.
+   *
+   * Wired from `bridge.ts` at store construction.
+   */
+  #refreshToken?: () => Promise<string | null>;
+
+  /**
+   * Deduplicates concurrent refreshes. If ten API calls 401 at once
+   * we only want to run the refresh flow once; the other nine await
+   * this shared promise and retry with the refreshed token.
+   */
+  #refreshInFlight: Promise<string | null> | null = null;
+
   constructor(token: string, rootFolderId: string) {
     this.#token = token;
     this.#rootFolderId = rootFolderId;
@@ -59,6 +79,11 @@ export class GoogleDriveStore implements StorageProvider {
 
   setToken(token: string): void {
     this.#token = token;
+  }
+
+  /** Register the host's token-refresh callback. See `#refreshToken`. */
+  setTokenRefresher(refresher: () => Promise<string | null>): void {
+    this.#refreshToken = refresher;
   }
 
   async resync(): Promise<void> {
@@ -158,21 +183,60 @@ export class GoogleDriveStore implements StorageProvider {
   // ---- Drive API helpers ----
 
   async #fetch(url: string, init?: RequestInit): Promise<Response> {
-    const resp = await fetch(url, {
+    const resp = await this.#fetchOnce(url, init);
+    if (resp.ok) return resp;
+
+    // Auto-recover from an expired/stale access token. Every Drive
+    // API path funnels through here, so lifting this one level beats
+    // bolting 401 handlers onto each call site. The `#refreshInFlight`
+    // dedupe keeps a burst of parallel 401s from spawning ten popups.
+    if (resp.status === 401 && this.#refreshToken) {
+      // Drain the response body now so the connection can close.
+      await resp.text().catch(() => "");
+      const newToken = await (this.#refreshInFlight ??= this.#runRefresh());
+      if (newToken) {
+        const retry = await this.#fetchOnce(url, init);
+        if (retry.ok) return retry;
+        await this.#throwDriveError(retry);
+      }
+      // Refresh came back null — user cancelled, network gone, or
+      // scope was revoked. Fall through to the generic error path.
+    }
+    await this.#throwDriveError(resp);
+    // Unreachable: #throwDriveError always throws. The explicit return
+    // keeps TypeScript happy about the function's return type.
+    return resp;
+  }
+
+  async #fetchOnce(url: string, init?: RequestInit): Promise<Response> {
+    return fetch(url, {
       ...init,
       headers: {
         Authorization: `Bearer ${this.#token}`,
         ...((init?.headers as Record<string, string>) || {}),
       },
     });
-    if (!resp.ok) {
-      const text = await resp.text().catch(() => "");
-      const err = new Error(`Drive API ${resp.status}: ${text.slice(0, 200)}`) as any;
-      err.status = resp.status;
-      err.driveError = true;
-      throw err;
+  }
+
+  async #throwDriveError(resp: Response): Promise<never> {
+    const text = await resp.text().catch(() => "");
+    const err = new Error(`Drive API ${resp.status}: ${text.slice(0, 200)}`) as any;
+    err.status = resp.status;
+    err.driveError = true;
+    throw err;
+  }
+
+  async #runRefresh(): Promise<string | null> {
+    try {
+      const token = await this.#refreshToken!();
+      if (token) this.#token = token;
+      return token;
+    } catch (e) {
+      console.warn("[drive-store] token refresh threw:", e);
+      return null;
+    } finally {
+      this.#refreshInFlight = null;
     }
-    return resp;
   }
 
   async #listDrive(query: string, fields = "files(id,name,mimeType,createdTime,thumbnailLink,parents)"): Promise<any[]> {

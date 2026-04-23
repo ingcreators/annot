@@ -9,7 +9,7 @@ import { LocalStore } from "./local-store.js";
 import { FileSystemStore } from "./fs-store.js";
 import { GoogleDriveStore } from "./google-drive-store.js";
 import { saveHandle, loadHandle, clearHandle } from "./fs-handle-store.js";
-import { getAccessToken, loadDriveRoot } from "./google-auth.js";
+import { getAccessToken, loadDriveRoot, signIn, silentSignIn } from "./google-auth.js";
 
 // chrome-types omits `chrome.runtime.lastError` from its public typings,
 // even though it exists at runtime (set during callback-style API calls).
@@ -179,9 +179,31 @@ export async function disconnectFileSystem(): Promise<void> {
   if (currentMode === "filesystem") currentMode = "local";
 }
 
+/**
+ * Refresh the Drive access token when the current one 401s. Tries
+ * silent renewal first (no UI if the user is still signed in to
+ * Google) and only pops the full consent/account picker when silent
+ * fails. Returns the new token, or `null` if the user bailed.
+ *
+ * Registered on every `GoogleDriveStore` instance so its `#fetch`
+ * can auto-retry every call path — `listImages`, `saveImage`,
+ * `updateImage`, folder moves, etc. — without each having to bolt
+ * on its own 401 handler.
+ */
+async function refreshDriveToken(): Promise<string | null> {
+  const silent = await silentSignIn();
+  if (silent) return silent;
+  try {
+    return await signIn();
+  } catch {
+    return null;
+  }
+}
+
 /** Connect to Google Drive with a selected root folder. */
 export function connectGoogleDrive(token: string, rootFolderId: string): StorageProvider {
   driveStore = new GoogleDriveStore(token, rootFolderId);
+  driveStore.setTokenRefresher(refreshDriveToken);
   currentMode = "googledrive";
   return driveStore;
 }
