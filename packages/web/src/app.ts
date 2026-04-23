@@ -496,7 +496,7 @@ export class App {
         this.#fileManager.setStorage(
           this.#storage,
           getStorageMode(),
-          getStorageMode() === "filesystem" ? getFsRootName() || undefined : undefined,
+          this.#currentRootName(),
         );
       }
       this.#fileManager.navigateToFolder(this.#currentFolderPath);
@@ -611,6 +611,18 @@ export class App {
     );
   }
 
+  /** Display name for the root of the currently-active storage.
+   *  Shown under the top-level FOLDERS node in the sidebar so the
+   *  user sees WHICH device folder / Drive folder is in use. Null
+   *  when the backend has no meaningful user-facing root (e.g.
+   *  Browser/Local stores to per-origin IDB). */
+  #currentRootName(): string | undefined {
+    const mode = getStorageMode();
+    if (mode === "filesystem") return getFsRootName() || undefined;
+    if (mode === "googledrive") return loadDriveRoot()?.name;
+    return undefined;
+  }
+
   /**
    * Click-to-switch: if already connected, reuse the existing storage.
    * Use handleStorageReselect() to force a fresh picker.
@@ -667,7 +679,7 @@ export class App {
         this.#fileManager.setStorage(
           this.#storage,
           getStorageMode(),
-          getStorageMode() === "filesystem" ? getFsRootName() || undefined : undefined,
+          this.#currentRootName(),
         );
         this.#fileManager.refresh("");
       }
