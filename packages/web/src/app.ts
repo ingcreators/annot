@@ -1291,6 +1291,13 @@ export class App {
         // editing still lives in the right panel — the flyout only
         // shortcuts "pick sub-shape → start drawing".
         hideToolDropdowns: false,
+        // Direct-download filenames preserve the opened image's base
+        // name (see `buildDownloadName` in core). Freshly-captured
+        // images without a stored path fall back to the timestamp
+        // default inside the export functions.
+        getCurrentFilename: () => this.#currentImagePath
+          ? getFilename(this.#currentImagePath)
+          : undefined,
       },
     );
     this.#editorToolbar = toolbar;

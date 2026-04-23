@@ -1,6 +1,9 @@
 /**
  * File System Access API storage provider — path-based identification.
- * Reads/writes .anno.jpg/.anno.png files to a user-selected local directory.
+ * Reads/writes image files to a user-selected local directory.
+ * Annot-native captures are saved as `annot-<ts>.annot.jpg|png`;
+ * images coming from outside (dropped into the folder by other tools,
+ * or imported with an explicit filename) keep their original name.
  * Annotations, tags, and original image are stored as XMP metadata inside each file.
  * Subfolders on disk = gallery folders.
  */
@@ -274,11 +277,16 @@ export class FileSystemStore implements StorageProvider {
 
   #isImageFile(name: string): boolean {
     const lower = name.toLowerCase();
-    return lower.endsWith(".anno.jpg")
-      || lower.endsWith(".anno.png")
-      || lower.endsWith(".jpg")
+    // Accept any PNG / JPEG / SVG. `.annot.*` and legacy `.anno.*`
+    // are subsumed by the plain extension checks below. Listing is
+    // intentionally permissive so external screenshots dropped into
+    // the folder appear in the Annot gallery alongside annot-native
+    // captures — editor save-back preserves the original name for
+    // external files and uses `.annot.*` only for fresh captures.
+    return lower.endsWith(".jpg")
       || lower.endsWith(".jpeg")
-      || lower.endsWith(".png");
+      || lower.endsWith(".png")
+      || lower.endsWith(".svg");
   }
 
   async #getDirHandle(folderPath: string, create = false): Promise<FileSystemDirectoryHandle> {
@@ -298,8 +306,11 @@ export class FileSystemStore implements StorageProvider {
 
   async saveImage(data: Omit<ImageRecord, "path"> & { filename?: string }): Promise<string> {
     const isJpeg = data.originalDataUrl.startsWith("data:image/jpeg");
-    const ext = isJpeg ? "anno.jpg" : "anno.png";
-    const desiredFilename = data.filename || `image-${Date.now()}.${ext}`;
+    // No explicit filename = annot-native capture → use the shared
+    // `annot-<ts>.annot.<ext>` shape. External-file saves pass their
+    // original filename and keep it unchanged.
+    const ext = isJpeg ? "annot.jpg" : "annot.png";
+    const desiredFilename = data.filename || `annot-${Date.now()}.${ext}`;
     validateName(desiredFilename);
     const folderPath = data.folderPath || "";
 

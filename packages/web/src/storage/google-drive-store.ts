@@ -1,6 +1,9 @@
 /**
  * Google Drive storage provider — path-based interface.
- * Reads/writes .anno.jpg/.anno.png files to a user-selected Drive folder.
+ * Reads/writes image files to a user-selected Drive folder.
+ * Annot-native captures are saved as `annot-<ts>.annot.jpg|png`;
+ * images coming from outside (dropped into the folder by other tools,
+ * or imported with an explicit filename) keep their original name.
  *
  * Internally maintains path↔Drive-ID maps because Drive is ID-native.
  * When two siblings share a name on Drive, the second is given a " (2)" suffix
@@ -256,8 +259,8 @@ export class GoogleDriveStore implements StorageProvider {
     if (!parentId) throw new Error(`Folder not found: ${folderPath}`);
 
     const isJpeg = data.originalDataUrl.startsWith("data:image/jpeg");
-    const ext = isJpeg ? "anno.jpg" : "anno.png";
-    const desired = data.filename || `image-${Date.now()}.${ext}`;
+    const ext = isJpeg ? "annot.jpg" : "annot.png";
+    const desired = data.filename || `annot-${Date.now()}.${ext}`;
     validateName(desired);
 
     // Uniquify against current cache + live siblings

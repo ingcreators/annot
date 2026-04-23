@@ -437,6 +437,15 @@ export interface ToolbarOptions {
    *  when the host renders tool properties elsewhere (e.g. a persistent
    *  right panel) so the sidebar doesn't duplicate affordances. */
   hideToolDropdowns?: boolean;
+  /** Optional callback that returns the filename of the image the
+   *  editor is currently working on (e.g. `"foo.png"`, `"bar.annot.jpg"`).
+   *  Passed to `saveToFile` / `saveAsEditableImage` / `downloadAsImage`
+   *  so direct downloads reuse the open file's base name instead of
+   *  generating a fresh `annot-<timestamp>.annot.<ext>`. Return
+   *  `undefined` (or omit the option) for fresh captures that haven't
+   *  been saved yet — the export functions fall back to the timestamp
+   *  default in that case. */
+  getCurrentFilename?: () => string | undefined;
 }
 
 const WIDTH_PRESETS = [
@@ -504,6 +513,7 @@ export class Toolbar {
   #showSaveGroup: boolean;
   #orientation: "horizontal" | "vertical";
   #hideToolDropdowns: boolean;
+  #getCurrentFilename?: () => string | undefined;
 
   constructor(
     container: HTMLElement,
@@ -523,6 +533,7 @@ export class Toolbar {
     this.#showSaveGroup = options.showSaveGroup ?? true;
     this.#orientation = options.orientation ?? "horizontal";
     this.#hideToolDropdowns = options.hideToolDropdowns ?? false;
+    this.#getCurrentFilename = options.getCurrentFilename;
 
     this.#options = {
       strokeColor: DEFAULT_STROKE_COLOR,
@@ -775,7 +786,7 @@ export class Toolbar {
         if (!isTauri && typeof (window as any).__anno_saveAnnotations === "function") {
           (window as any).__anno_saveAnnotations();
         } else {
-          saveToFile(this.#canvas);
+          saveToFile(this.#canvas, this.#getCurrentFilename?.());
         }
       });
       saveWrap.appendChild(saveBtn);
@@ -865,7 +876,7 @@ export class Toolbar {
         if (!isTauri && typeof (window as any).__anno_saveAnnotations === "function") {
           (window as any).__anno_saveAnnotations();
         } else {
-          saveToFile(this.#canvas);
+          saveToFile(this.#canvas, this.#getCurrentFilename?.());
         }
       } else if (e.ctrlKey && e.key === "c" && !window.getSelection()?.toString()) {
         e.preventDefault();
@@ -913,7 +924,7 @@ export class Toolbar {
     if (!isTauri && typeof (window as any).__anno_saveAnnotations === "function") {
       (window as any).__anno_saveAnnotations();
     } else {
-      saveToFile(this.#canvas);
+      saveToFile(this.#canvas, this.#getCurrentFilename?.());
     }
   }
 
@@ -934,18 +945,18 @@ export class Toolbar {
     menu.style.display = "flex";
 
     const items: [string, string, () => void][] = [
-      ["Download SVG", "Editable vector format", () => saveToFile(this.#canvas)],
+      ["Download SVG", "Editable vector format", () => saveToFile(this.#canvas, this.#getCurrentFilename?.())],
     ];
 
     if (isTauri) {
       items.push(
-        ["Save as JPG (re-editable)", "JPEG with embedded annotations", () => saveAsEditableImage(this.#canvas, "jpg")],
-        ["Save as PNG (re-editable)", "PNG with embedded annotations", () => saveAsEditableImage(this.#canvas, "png")],
+        ["Save as JPG (re-editable)", "JPEG with embedded annotations", () => saveAsEditableImage(this.#canvas, "jpg", this.#getCurrentFilename?.())],
+        ["Save as PNG (re-editable)", "PNG with embedded annotations", () => saveAsEditableImage(this.#canvas, "png", this.#getCurrentFilename?.())],
       );
     } else {
       items.push(
-        ["Download JPG (re-editable)", "JPEG with embedded annotations", () => downloadAsImage(this.#canvas, "jpg")],
-        ["Download PNG (re-editable)", "PNG with embedded annotations", () => downloadAsImage(this.#canvas, "png")],
+        ["Download JPG (re-editable)", "JPEG with embedded annotations", () => downloadAsImage(this.#canvas, "jpg", this.#getCurrentFilename?.())],
+        ["Download PNG (re-editable)", "PNG with embedded annotations", () => downloadAsImage(this.#canvas, "png", this.#getCurrentFilename?.())],
       );
     }
 

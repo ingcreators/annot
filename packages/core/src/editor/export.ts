@@ -148,14 +148,37 @@ function flattenAnnotations(svg: SVGSVGElement): void {
   }
 }
 
+/**
+ * Derive the download filename. If the host passes the currently-open
+ * image's filename (via `baseName` on each export call), we preserve
+ * its root stem and swap only the trailing extension — so editing
+ * `aaa.png` and saving as SVG produces `aaa.svg`, editing
+ * `foo.annot.png` and saving as JPG produces `foo.annot.jpg`, and
+ * so on. The `.annot.` marker carries through verbatim when present
+ * because we only strip the last dot-segment. With no baseName we
+ * fall back to an annot-native default (`annot-<ts>.annot.<ext>`).
+ */
+function buildDownloadName(desiredExt: string, baseName?: string): string {
+  if (baseName) {
+    const dot = baseName.lastIndexOf(".");
+    const stem = dot > 0 ? baseName.slice(0, dot) : baseName;
+    return `${stem}.${desiredExt}`;
+  }
+  return `annot-${Date.now()}.annot.${desiredExt}`;
+}
+
 /** Save full SVG (screenshot + annotations) */
-export function saveToFile(canvas: CanvasManager): void {
+export function saveToFile(canvas: CanvasManager, baseName?: string): void {
   const svgString = exportSVGString(canvas);
-  downloadFile(svgString, "image/svg+xml", `anno-${Date.now()}.svg`);
+  downloadFile(svgString, "image/svg+xml", buildDownloadName("svg", baseName));
 }
 
 /** Save as re-editable JPEG or PNG with XMP metadata */
-export async function saveAsEditableImage(canvas: CanvasManager, format: "jpg" | "png"): Promise<void> {
+export async function saveAsEditableImage(
+  canvas: CanvasManager,
+  format: "jpg" | "png",
+  baseName?: string,
+): Promise<void> {
   const isTauri = typeof window !== "undefined" && !!(window as any).__TAURI_INTERNALS__;
   if (!isTauri) return;
 
@@ -166,7 +189,7 @@ export async function saveAsEditableImage(canvas: CanvasManager, format: "jpg" |
     const ext = format === "jpg" ? "jpg" : "png";
     const filterName = format === "jpg" ? "JPEG" : "PNG";
     const path = await save({
-      defaultPath: `anno-${Date.now()}.anno.${ext}`,
+      defaultPath: buildDownloadName(ext, baseName),
       filters: [{ name: filterName, extensions: [ext] }],
     });
     if (!path) return;
@@ -287,7 +310,11 @@ export async function copyAnnotationsAsImage(canvas: CanvasManager): Promise<voi
 }
 
 /** Download as re-editable PNG or JPEG with XMP metadata (browser) */
-export async function downloadAsImage(canvas: CanvasManager, format: "png" | "jpg"): Promise<void> {
+export async function downloadAsImage(
+  canvas: CanvasManager,
+  format: "png" | "jpg",
+  baseName?: string,
+): Promise<void> {
   // Render the full image (screenshot + annotations) as PNG blob
   const svgString = exportSVGString(canvas);
   const renderedBlob = await rasterizeSVG(svgString, canvas.imageWidth, canvas.imageHeight);
@@ -318,7 +345,7 @@ export async function downloadAsImage(canvas: CanvasManager, format: "png" | "jp
   const url = URL.createObjectURL(editableBlob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `anno-${Date.now()}.anno.${ext}`;
+  a.download = buildDownloadName(ext, baseName);
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
