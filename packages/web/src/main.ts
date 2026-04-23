@@ -33,3 +33,22 @@ const updateSW = registerSW({
 
 const app = new App();
 app.init();
+
+// Phase 1 verification hook for `docs/plans/github-integration.md`.
+// Navigating to `?github-setup=1` opens the connect flow (device
+// code → repo picker → branch → base path). Phase 3 replaces this
+// with a proper sidebar entry; until then this is how we exercise
+// the auth + picker end-to-end on the deployed app.
+if (new URLSearchParams(location.search).get("github-setup") === "1") {
+  void import("./storage/github-setup-ui.js").then(async (mod) => {
+    const ref = await mod.connectGitHub();
+    if (ref) {
+      showError({
+        message: `Connected to ${ref.owner}/${ref.repo} on ${ref.branch}`
+          + (ref.basePath ? ` / ${ref.basePath}` : "")
+          + ". Storage integration arrives in Phase 2.",
+        severity: "info",
+      });
+    }
+  });
+}
