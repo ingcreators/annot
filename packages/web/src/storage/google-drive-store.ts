@@ -64,6 +64,7 @@ export class GoogleDriveStore implements StorageProvider {
     this.#pathToFileId.clear();
     this.#fileIdToPath.clear();
     this.#loadedFolders.clear();
+    this.#recordCache.clear();
     this.#pathToFolderId.set("", this.#rootFolderId);
     this.#folderIdToPath.set(this.#rootFolderId, "");
   }
@@ -192,6 +193,22 @@ export class GoogleDriveStore implements StorageProvider {
     const driveId = await this.#uploadFile(filename, blob, parentId);
     this.#pathToFileId.set(path, driveId);
     this.#fileIdToPath.set(driveId, path);
+    // Seed the cache so the first edit on a freshly saved image
+    // doesn't have to round-trip to Drive for the original data.
+    const now = new Date().toISOString();
+    this.#recordCache.set(path, {
+      path,
+      folderPath,
+      originalDataUrl: data.originalDataUrl,
+      thumbnailDataUrl: data.thumbnailDataUrl || "",
+      annotationsSvg: data.annotationsSvg || "",
+      width: data.width,
+      height: data.height,
+      sourceUrl: data.sourceUrl || "",
+      tags: data.tags || {},
+      createdAt: data.createdAt || now,
+      updatedAt: data.updatedAt || now,
+    });
     return path;
   }
 
@@ -212,8 +229,21 @@ export class GoogleDriveStore implements StorageProvider {
   }
 
   #fileMeta = new Map<string, any>();
+  /**
+   * Cache of the last full `ImageRecord` we produced for each path.
+   * Crucial for edit-loop performance: `updateImage` internally calls
+   * `getImage` to pull the immutable original image data, and without
+   * this cache every single annotation save hit the Drive download
+   * endpoint before re-uploading. The cache is kept in sync by
+   * every mutation path below (`saveImage`, `updateImage`,
+   * `renameImage`, `deleteImage`, moves, folder renames, `resync`).
+   */
+  #recordCache = new Map<string, ImageRecord>();
 
   async getImage(path: string): Promise<ImageRecord | undefined> {
+    const cached = this.#recordCache.get(path);
+    if (cached) return cached;
+
     const folderPath = getParentPath(path);
     await this.#ensureFolderListed(folderPath);
     const driveId = this.#pathToFileId.get(path);
@@ -231,7 +261,7 @@ export class GoogleDriveStore implements StorageProvider {
       const dataUrl = xmp?.originalImageDataUrl || await this.#blobToDataUrl(new Blob([bytes]));
       const cachedMeta = this.#fileMeta.get(driveId);
 
-      return {
+      const record: ImageRecord = {
         path,
         folderPath,
         originalDataUrl: dataUrl,
@@ -244,6 +274,8 @@ export class GoogleDriveStore implements StorageProvider {
         createdAt: meta.createdTime || "",
         updatedAt: meta.createdTime || "",
       };
+      this.#recordCache.set(path, record);
+      return record;
     } catch {
       return undefined;
     }
@@ -296,6 +328,15 @@ export class GoogleDriveStore implements StorageProvider {
         headers: { "Content-Type": blob.type },
         body: blob,
       });
+
+      // Keep the cached record coherent so the next edit doesn't
+      // pull a pre-edit version from the cache.
+      this.#recordCache.set(path, {
+        ...record,
+        annotationsSvg,
+        tags,
+        updatedAt: new Date().toISOString(),
+      });
     }
 
     // Handle move
@@ -318,6 +359,11 @@ export class GoogleDriveStore implements StorageProvider {
       this.#pathToFileId.delete(path);
       this.#pathToFileId.set(newPath, driveId);
       this.#fileIdToPath.set(driveId, newPath);
+      const cached = this.#recordCache.get(path);
+      if (cached) {
+        this.#recordCache.delete(path);
+        this.#recordCache.set(newPath, { ...cached, path: newPath, folderPath: newFolderPath });
+      }
       return newPath;
     }
 
@@ -341,6 +387,11 @@ export class GoogleDriveStore implements StorageProvider {
     this.#pathToFileId.delete(path);
     this.#pathToFileId.set(newPath, driveId);
     this.#fileIdToPath.set(driveId, newPath);
+    const cached = this.#recordCache.get(path);
+    if (cached) {
+      this.#recordCache.delete(path);
+      this.#recordCache.set(newPath, { ...cached, path: newPath });
+    }
     return newPath;
   }
 
@@ -351,6 +402,7 @@ export class GoogleDriveStore implements StorageProvider {
     this.#pathToFileId.delete(path);
     this.#fileIdToPath.delete(driveId);
     this.#fileMeta.delete(driveId);
+    this.#recordCache.delete(path);
   }
 
   // ---- Folders ----
@@ -468,6 +520,15 @@ export class GoogleDriveStore implements StorageProvider {
         this.#fileIdToPath.set(driveId, np);
       }
     }
+    // Rewrite record cache entries (same prefix migration)
+    const cacheEntries = Array.from(this.#recordCache.entries());
+    for (const [p, rec] of cacheEntries) {
+      if (p === oldPath || p.startsWith(oldPath + "/")) {
+        const np = rewritePathPrefix(p, oldPath, newPath);
+        this.#recordCache.delete(p);
+        this.#recordCache.set(np, { ...rec, path: np, folderPath: getParentPath(np) });
+      }
+    }
     // Rewrite loaded folders set
     const loaded = Array.from(this.#loadedFolders);
     this.#loadedFolders.clear();
@@ -496,6 +557,7 @@ export class GoogleDriveStore implements StorageProvider {
         this.#pathToFileId.delete(p);
         this.#fileIdToPath.delete(id);
         this.#fileMeta.delete(id);
+        this.#recordCache.delete(p);
       }
     }
   }

@@ -136,6 +136,13 @@ export class App {
   }
 
   #currentImagePath: string | null = null;
+  /** `writeAnnotationsToStorage` concurrency gate. `saveInFlight` is
+   *  true while an upload is running; edits that land during that
+   *  window flip `savePending` instead of starting a second upload
+   *  in parallel (slow backends like Drive otherwise pile up saves
+   *  and freeze the UI). See `writeAnnotationsToStorage` below. */
+  #saveInFlight = false;
+  #savePending = false;
   /** Latest ImageRecord for the currently-open image (when available). Used
    *  by the file-details drawer to show createdAt/updatedAt/sourceUrl. Null
    *  for not-yet-saved images (e.g. a freshly captured but un-persisted one). */
@@ -1151,12 +1158,15 @@ export class App {
     let autoSaveTimer: number | undefined;
     let thumbTimer: number | undefined;
     history.onStateChange = () => {
-      // Reflect "edits made" immediately — the 500ms debounce before the
-      // actual write hides latency but the user should know something
-      // will be saved soon.
+      // Reflect "edits made" immediately — the debounce hides latency
+      // but the user should know something will be saved soon.
       this.#saveStatusIndicator?.setStatus("pending");
       clearTimeout(autoSaveTimer);
-      autoSaveTimer = window.setTimeout(() => this.writeAnnotationsToStorage(), 500);
+      // Network-backed stores (Drive) get a longer debounce so rapid
+      // +/- clicks on a slider coalesce into a single upload. Local
+      // stores are cheap enough to keep the tight 500ms window.
+      const saveDebounceMs = getStorageMode() === "googledrive" ? 1500 : 500;
+      autoSaveTimer = window.setTimeout(() => this.writeAnnotationsToStorage(), saveDebounceMs);
       clearTimeout(thumbTimer);
       thumbTimer = window.setTimeout(() => this.writeThumbnailToStorage(), 2000);
     };
@@ -1892,6 +1902,17 @@ export class App {
   async writeAnnotationsToStorage(): Promise<void> {
     if (!this.#currentEditor || !this.#storage) return;
     if (!this.#currentImagePath) return;
+
+    // Concurrency gate: if a save is already in flight, just mark
+    // that another one is needed once the current one completes.
+    // Without this, rapid edits on a slow backend (Drive) kick off
+    // overlapping multi-second uploads and freeze the UI.
+    if (this.#saveInFlight) {
+      this.#savePending = true;
+      return;
+    }
+
+    this.#saveInFlight = true;
     const annotationsSvg = exportAnnotationsSvgForIdb(this.#currentEditor.canvas);
     const updates = { annotationsSvg, tags: { ...this.#currentTags } };
 
@@ -1930,6 +1951,15 @@ export class App {
           `Save failed: ${e.message || "Unknown error"}`,
           () => this.writeAnnotationsToStorage(),
         );
+      }
+    } finally {
+      this.#saveInFlight = false;
+      // Catch-up save: if edits arrived while we were uploading,
+      // flush them now. Clearing the flag first so the nested call
+      // actually runs instead of bouncing on the gate.
+      if (this.#savePending) {
+        this.#savePending = false;
+        void this.writeAnnotationsToStorage();
       }
     }
   }
