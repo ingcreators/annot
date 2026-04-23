@@ -1,0 +1,30 @@
+<!--
+  C1 Triangle — balanced (no lines, A-match dots):
+    • No connecting lines — the 3 dots speak for themselves.
+    • Dot colors match Annot's A grammar:
+        top   = blue   (apex pin / crossbar)
+        left  = green  (left leg)
+        right = purple (right leg)
+    • "i" re-proportioned to balance against the triangle cluster:
+        – stem thickness 4 → 3.5  (stem is now ~70% of dot-diameter
+          instead of 80%, so the "i" no longer out-weighs the 3 dots)
+        – stem length shortened so i's visual bottom aligns with the
+          triangle's base (both end at y=33.5), giving a clean baseline
+        – dot nudged down (cy 10 → 11) to center i's mass closer to the
+          triangle's optical center
+  Geometry summary (48×48 viewBox):
+    i    : dot (13,11) r=2.5, stem (13,17)→(13,31.75), sw=3.5, round caps
+    tri  : (31,14), (24,31), (38,31), all r=2.5, equilateral-ish isoceles
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 48 48" fill="none">
+  <rect width="48" height="48" rx="10" fill="#0f1730"/>
+
+  <!-- "i" — blue primary, re-balanced -->
+  <circle cx="13" cy="11" r="2.5" fill="#7c9cff"/>
+  <path d="M13 17 V31.75" stroke="#7c9cff" stroke-width="3.5" stroke-linecap="round"/>
+
+  <!-- Triangle of creators — A-matched colors, no connecting lines -->
+  <circle cx="31" cy="14" r="2.5" fill="#7c9cff"/>    <!-- top:   blue   -->
+  <circle cx="24" cy="31" r="2.5" fill="#7ef0c5"/>    <!-- left:  green  -->
+  <circle cx="38" cy="31" r="2.5" fill="#b391ff"/>    <!-- right: purple -->
+</svg>

@@ -1,0 +1,587 @@
+/* Annot — web app styles (by ingcreators) */
+
+/* ---- Error bar (draw.io style) ---- */
+
+.error-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  z-index: 50;
+}
+
+.error-bar-error {
+  background: #3a1020;
+  color: #ff8a8a;
+  border-bottom: 1px solid rgba(255,80,80,0.2);
+}
+
+.error-bar-warning {
+  background: #3a2a10;
+  color: #ffc966;
+  border-bottom: 1px solid rgba(255,180,60,0.2);
+}
+
+.error-bar-info {
+  background: rgba(124,156,255,0.10);
+  color: #a0b8ff;
+  border-bottom: 1px solid rgba(124,156,255,0.15);
+}
+
+.error-bar-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.error-bar-message {
+  flex: 1;
+}
+
+.error-bar-action {
+  border: 1px solid currentColor;
+  background: transparent;
+  color: inherit;
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.error-bar-action:hover {
+  background: rgba(255,255,255,0.1);
+}
+
+.error-bar-dismiss {
+  border: none;
+  background: none;
+  color: inherit;
+  font-size: 18px;
+  cursor: pointer;
+  opacity: 0.6;
+  padding: 0 4px;
+}
+
+.error-bar-dismiss:hover {
+  opacity: 1;
+}
+
+:root.light .error-bar-error {
+  background: #fff0f0;
+  color: #c41;
+  border-bottom: 1px solid #fcc;
+}
+
+:root.light .error-bar-warning {
+  background: #fff8e8;
+  color: #a66800;
+  border-bottom: 1px solid #eed;
+}
+
+:root.light .error-bar-info {
+  background: #f0f4ff;
+  color: #4466aa;
+  border-bottom: 1px solid #dde4f4;
+}
+
+/* Brand in toolbar */
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+  color: inherit;
+  flex-shrink: 0;
+}
+
+.brand svg {
+  display: block;
+  flex-shrink: 0;
+}
+
+.brand-text {
+  font-family: 'Sora', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-weight: 700;
+  font-size: 20px;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.brand-ing,
+.brand-creators {
+  color: var(--text-primary);
+  transition: color 0.2s ease;
+}
+
+.brand:hover .brand-ing {
+  color: #7c9cff;
+}
+
+.brand:hover .brand-creators {
+  color: #7ef0c5;
+}
+
+.connection-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  font-size: 11px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.connection-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #666;
+}
+
+.connection-dot.extension {
+  background: #4caf50;
+}
+
+.connection-dot.local {
+  background: #ff9800;
+}
+
+.connection-dot.filesystem {
+  background: #2196f3;
+}
+
+.connection-text {
+  color: var(--text-muted);
+}
+
+/* Upload area */
+.upload-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 40px;
+  border: 2px dashed var(--border-color);
+  border-radius: 12px;
+  margin: 20px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+  color: var(--text-muted);
+}
+
+.upload-area:hover,
+.upload-area.dragover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.upload-icon {
+  font-size: 48px;
+  opacity: 0.5;
+}
+
+.upload-text {
+  font-size: 14px;
+}
+
+.upload-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* ---- SplitEditor (Scroll / perPage page-break editor) ---- */
+
+.split-editor {
+  position: fixed;
+  inset: 48px 0 0 0;            /* below the toolbar */
+  background: var(--bg-secondary);
+  display: flex;
+  flex-direction: column;
+  z-index: 30;
+}
+
+body.split-editor-active #canvas-container,
+body.split-editor-active #statusbar,
+body.split-editor-active #file-manager,
+body.split-editor-active #editor-header {
+  display: none !important;
+}
+
+.split-editor-header {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto auto;
+  column-gap: 16px;
+  row-gap: 4px;
+  align-items: center;
+  padding: 12px 20px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.split-editor-title-row {
+  grid-column: 1;
+  grid-row: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.split-editor-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.split-editor-count {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.split-editor-hint {
+  grid-column: 1;
+  grid-row: 2;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.split-editor-actions {
+  grid-column: 2;
+  grid-row: 1 / span 3;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.split-editor-btn {
+  height: 32px;
+  padding: 0 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: filter 0.15s, background 0.15s;
+  border: 1px solid transparent;
+}
+.split-editor-btn:disabled { opacity: 0.5; cursor: wait; }
+.split-editor-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.split-editor-cancel {
+  background: transparent;
+  color: var(--text-primary);
+  border-color: var(--border-color);
+}
+.split-editor-cancel:hover { background: rgba(255,255,255,0.06); }
+html.light .split-editor-cancel:hover { background: rgba(0,0,0,0.04); }
+
+.split-editor-apply {
+  background: var(--accent, #7c9cff);
+  color: #0b1020;
+  border-color: var(--accent, #7c9cff);
+}
+.split-editor-apply:hover { filter: brightness(1.1); }
+html.light .split-editor-apply { color: #fff; }
+
+.split-editor-scroll {
+  flex: 1 1 auto;
+  overflow: auto;
+  padding: 24px;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+/* Cursor hint: clicking empty space in the stack adds a split. */
+.split-editor-stack {
+  position: relative;
+  background: #000;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+  user-select: none;
+  flex: 0 0 auto;
+  cursor: crosshair;
+}
+
+.split-editor-frame {
+  display: block;
+  width: 100%;
+  height: auto;
+  pointer-events: none;   /* clicks fall through to stack for "add split" */
+  user-select: none;
+}
+
+.split-editor-handle {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 16px;
+  margin-top: -8px;                 /* centered on boundary y */
+  cursor: ns-resize;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 8px;
+  background: transparent;
+}
+.split-editor-handle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.split-editor-handle-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 2px;
+  margin-top: -1px;
+  background: var(--accent, #7c9cff);
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.5);
+  pointer-events: none;
+}
+
+.split-editor-handle:hover .split-editor-handle-bar,
+.split-editor-handle.dragging .split-editor-handle-bar {
+  height: 4px;
+  margin-top: -2px;
+}
+
+.split-editor-handle-remove {
+  position: relative;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 50%;
+  background: #e55;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s, filter 0.15s;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+}
+.split-editor-handle:hover .split-editor-handle-remove,
+.split-editor-handle:focus-within .split-editor-handle-remove,
+.split-editor-handle.dragging .split-editor-handle-remove {
+  opacity: 1;
+}
+.split-editor-handle-remove:hover { filter: brightness(1.15); }
+.split-editor-handle-remove:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+/* Page-size labels on each split bar.
+ * Two pills sit just above and below the bar showing the natural-pixel
+ * dimensions of the page on each side ("Page 1 · 1920×540"). */
+.split-editor-handle-size {
+  position: absolute;
+  left: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #fff;
+  background: rgba(15, 23, 48, 0.85);
+  padding: 2px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  letter-spacing: 0.01em;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.35);
+  border: 1px solid rgba(124, 156, 255, 0.4);
+}
+.split-editor-handle-size-above {
+  bottom: calc(50% + 4px);
+}
+.split-editor-handle-size-below {
+  top: calc(50% + 4px);
+}
+html.light .split-editor-handle-size {
+  background: rgba(255, 255, 255, 0.95);
+  color: #0b1020;
+  border-color: var(--accent, #7c9cff);
+}
+
+/* =============================================================================
+ * Keyboard help modal — overlay listing shortcuts, triggered by `?`
+ * from anywhere in the editor. Two-column grid of category cards
+ * modeled on Notion / Linear's `?` help modals.
+ * ============================================================================= */
+.keyboard-help-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(2px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: kbd-help-fade-in 0.15s ease-out;
+}
+@keyframes kbd-help-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.keyboard-help-panel {
+  width: min(720px, calc(100vw - 40px));
+  max-height: calc(100vh - 80px);
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.keyboard-help-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.keyboard-help-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.keyboard-help-close {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s, color 0.12s;
+}
+.keyboard-help-close:hover {
+  background: var(--hover-bg);
+  color: var(--text-primary);
+}
+
+.keyboard-help-body {
+  padding: 16px 20px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px 28px;
+  overflow-y: auto;
+}
+
+.keyboard-help-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.keyboard-help-group-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding-bottom: 2px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.keyboard-help-row {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 12px;
+}
+.keyboard-help-keys {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-wrap: wrap;
+}
+.keyboard-help-plus {
+  color: var(--text-muted);
+  font-size: 11px;
+  padding: 0 1px;
+}
+.keyboard-help-kbd {
+  display: inline-block;
+  min-width: 18px;
+  padding: 2px 6px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--text-primary);
+  background: var(--bg-panel-deep);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.12);
+  text-align: center;
+  letter-spacing: 0.2px;
+}
+.keyboard-help-desc {
+  color: var(--text-secondary);
+}
+
+/* Drawing session indicator — floating pill at the top of the canvas
+ * area shown while the Draw tool is active. Communicates that
+ * strokes accumulate into a session until explicitly ended (Esc /
+ * Done), matching draw.io-style continuous drawing. */
+#draw-session-indicator {
+  position: fixed;
+  top: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  background: var(--accent);
+  color: var(--bg-panel, #fff);
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+  animation: draw-indicator-in 0.2s ease-out;
+}
+#draw-session-indicator .material-symbols-outlined {
+  font-size: 16px;
+}
+#draw-session-indicator kbd {
+  display: inline-block;
+  padding: 1px 5px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10px;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  margin: 0 1px;
+}
+@keyframes draw-indicator-in {
+  from { opacity: 0; transform: translate(-50%, -6px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}

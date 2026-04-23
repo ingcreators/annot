@@ -1,0 +1,21 @@
+<!-- Triangle + subtle network lines (creators interconnected) -->
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 48 48" fill="none">
+  <rect width="48" height="48" rx="10" fill="#0f1730"/>
+
+  <!-- "i" — blue primary -->
+  <circle cx="13" cy="10" r="2.5" fill="#7c9cff"/>
+  <path d="M13 16 V38" stroke="#7c9cff" stroke-width="4" stroke-linecap="round"/>
+
+  <!-- Network triangle (subtle, behind the dots) -->
+  <path d="M31 14 L24 31 L38 31 Z"
+        stroke="rgba(255,255,255,0.14)"
+        stroke-width="1"
+        fill="none"
+        stroke-linejoin="round"
+        stroke-linecap="round"/>
+
+  <!-- Triangle of creators — isoceles, apex centered above base -->
+  <circle cx="31" cy="14" r="2.5" fill="#7ef0c5"/>
+  <circle cx="24" cy="31" r="2.5" fill="#b391ff"/>
+  <circle cx="38" cy="31" r="2.5" fill="#7c9cff"/>
+</svg>

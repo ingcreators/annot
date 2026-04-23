@@ -1,0 +1,11 @@
+<!--
+  Annot icon — BEFORE state (for A/B comparison).
+  Crossbar at y=28 (60% down → hut-like) and disconnected from legs.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 48 48" fill="none">
+  <rect width="48" height="48" rx="10" fill="#0f1730"/>
+  <circle cx="24" cy="8" r="2.5" fill="#7c9cff"/>
+  <path d="M24 13 L13 38" stroke="#7ef0c5" stroke-width="4" stroke-linecap="round"/>
+  <path d="M24 13 L35 38" stroke="#b391ff" stroke-width="4" stroke-linecap="round"/>
+  <path d="M17 28 H31" stroke="#7c9cff" stroke-width="4" stroke-linecap="round"/>
+</svg>

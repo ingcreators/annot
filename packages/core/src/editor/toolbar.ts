@@ -1,0 +1,3509 @@
+import type { CanvasManager } from "./canvas-manager.js";
+import type { History } from "./history.js";
+import type { SelectionManager } from "./selection.js";
+import type {
+  ToolBase, ToolOptions, MarkerShape, LineCap,
+} from "./tools/tool-base.js";
+import { createColorPalette } from "./color-palette.js";
+import { createThemeToggle } from "./theme-toggle.js";
+import { computeDasharray } from "../utils/dash-utils.js";
+import { setTooltip } from "../utils/tooltip.js";
+import { refreshArrowPath } from "./arrow-markers.js";
+import { createCustomSelect } from "./custom-select.js";
+import {
+  openCanvasContextMenu,
+  type CanvasMenuItem,
+} from "./canvas-context-menu.js";
+import { toggleFlip } from "./transform-utils.js";
+import {
+  createPropertyRow,
+  createPropertySection,
+  createNumberInput,
+  createColorPullButton,
+  createArrowEndsRows,
+} from "./property-controls.js";
+import type { ArrowShape, ArrowDim } from "./tools/tool-base.js";
+import { ArrowTool } from "./tools/arrow-tool.js";
+import { ShapeTool } from "./tools/shape-tool.js";
+import { TextTool } from "./tools/text-tool.js";
+import { FreehandTool, isFreehandGroup } from "./tools/freehand-tool.js";
+import { MarkerTool } from "./tools/marker-tool.js";
+import { RedactTool } from "./tools/redact-tool.js";
+import { CropTool } from "./tools/crop-tool.js";
+import { saveToFile, copyAsImage, getPngDataUrl, saveAsEditableImage, downloadAsImage } from "./export.js";
+import { exportPptx } from "./pptx-export.js";
+import {
+  isTauri, copyAsOffice, type AnnotationShape,
+  loadToolPresets, saveToolPresets, type ToolPreset, type ToolPresets,
+} from "../utils/tauri-bridge.js";
+import {
+  DEFAULT_STROKE_COLOR,
+  DEFAULT_FILL_COLOR,
+  DEFAULT_STROKE_WIDTH,
+  DEFAULT_FONT_SIZE,
+} from "../utils/constants.js";
+
+// Minimal ambient declaration for the Chrome extension API surface
+// referenced at runtime below (all call sites are gated by
+// `typeof chrome !== "undefined"`). Declared in this file so downstream
+// packages that typecheck through bundler resolution pick it up too.
+declare namespace chrome {
+  namespace storage {
+    interface StorageArea {
+      get(keys: string | string[] | null): Promise<Record<string, unknown>>;
+      set(items: Record<string, unknown>): Promise<void>;
+    }
+    const local: StorageArea;
+  }
+}
+
+interface ToolDef {
+  label: string;
+  icon: string;
+  factory: (opts: ToolOptions) => ToolBase;
+}
+
+/** Variant metadata for a tool that has a compact flyout picker. Each
+ *  entry describes one "sub-shape" the user can pick from the toolbar
+ *  dropdown. The icon is also used on the parent button so users see
+ *  AT A GLANCE which variant a subsequent click will create — the
+ *  pattern Figma / PowerPoint use for sticky-tool flyouts. */
+interface ToolVariant {
+  /** ToolOptions field value ("rect" | "end" | "sticky" | …). */
+  value: string;
+  /** Material Symbols ligature name. Used when `svg` is not provided —
+   *  the container renders this as text with the
+   *  `material-symbols-outlined` class. */
+  icon: string;
+  label: string;
+  /** Optional inline SVG markup. When present, takes precedence over
+   *  `icon` — the container's innerHTML is set to this string instead
+   *  of rendering the ligature glyph. Used for variants where Material
+   *  Symbols don't provide enough visual distinction at small sizes —
+   *  the canonical case is rect vs rounded-rect, which look nearly
+   *  identical in the generic icon font. The SVG should:
+   *    - use `viewBox="0 0 24 24"` (same unit system as Material
+   *      Symbols, so relative scaling stays consistent)
+   *    - omit explicit width/height so CSS (`.tool-flyout-chip svg`
+   *      and `.tool-btn-badge svg`) can size it per-context
+   *    - use `stroke="currentColor"` and `fill="none"` to match the
+   *      outlined Material-Symbols visual weight. */
+  svg?: string;
+}
+
+interface ToolVariantGroup {
+  /** Which ToolOptions field selects the variant. */
+  field: keyof ToolOptions;
+  variants: ToolVariant[];
+  /** Default variant when no preset exists. */
+  fallback: string;
+}
+
+/** Inline SVG icons for shape variants whose Material-Symbols
+ *  equivalents don't give enough visual distinction at small sizes.
+ *  The canonical problem: `rectangle` and `crop_square` ligatures
+ *  both render as a square outline in 36px buttons — the difference
+ *  (slight vs. no corner radius) is imperceptible. Authoring inline
+ *  SVG with EXAGGERATED corner radius (rx/ry ≈ 1/3 of the side)
+ *  makes the distinction clear, matching what PowerPoint / Google
+ *  Slides / Keynote / Miro all do. */
+export const SHAPE_ICON_SVG = {
+  /** Sharp-cornered rectangle outline. Stroke weight tuned to match
+   *  the optical weight of adjacent Material-Symbols outlined icons. */
+  rect: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="miter" aria-hidden="true"><rect x="4" y="4" width="16" height="16"/></svg>`,
+  /** Rounded rectangle with rx=5 on a 16-wide square (≈ 31% — above
+   *  the 20% threshold where humans reliably perceive corner rounding
+   *  at icon scale). */
+  rounded: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="5"/></svg>`,
+  /** Ellipse / circle outline. Drawn as an <ellipse> with rx=ry so
+   *  it's perfectly circular; using <ellipse> rather than <circle>
+   *  keeps a single element type if future variants (e.g. wide
+   *  ellipse) need different rx/ry. Stroke-width matches rect /
+   *  rounded so the three chips look optically equal (fixes the
+   *  previous inconsistency where the Material-Symbols "circle"
+   *  ligature rendered noticeably thinner than the hand-rolled
+   *  rect / rounded outlines). */
+  ellipse: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><ellipse cx="12" cy="12" rx="8" ry="8"/></svg>`,
+} as const;
+
+/** Inline SVG icons for the Arrow tool's head variants. Material
+ *  Symbols has no icon that accurately depicts a single line with
+ *  arrowheads on both ends (`sync_alt` shows TWO parallel lines in
+ *  opposite directions, which is not the same thing). Hand-rolling
+ *  the three glyphs as a unified set — same line length, same stroke
+ *  weight, only the arrowheads change — makes the "this is the same
+ *  line with different ends" narrative visually obvious.
+ *
+ *  All three share:
+ *    - viewBox 0 0 24 24 (Material Symbols grid)
+ *    - horizontal stem y=12, from x=4 to x=20
+ *    - stroke-width 2, round caps/joins for a polished look
+ *    - arrowheads at 45° (delta ±4 on x and y) — matches the
+ *      visual weight of `arrow_forward` in the default MS set. */
+export const ARROW_ICON_SVG = {
+  /** Plain horizontal line, no arrowheads. Same stem geometry as the
+   *  other two so the three chips line up identically in the
+   *  flyout. */
+  none: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12 H20"/></svg>`,
+  /** Single arrowhead at the right end ("end" variant). */
+  end: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12 H20"/><path d="M16 8 L20 12 L16 16"/></svg>`,
+  /** Arrowheads at BOTH ends ("both" variant). This is the icon the
+   *  `sync_alt` ligature was supposed to approximate but doesn't —
+   *  visually the difference from "end" is obvious here because the
+   *  only delta is the extra left-side chevron. */
+  both: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12 H20"/><path d="M16 8 L20 12 L16 16"/><path d="M8 8 L4 12 L8 16"/></svg>`,
+} as const;
+
+/** Inline SVG icons for the Counter (marker) shape variants — each
+ *  glyph shows the container shape filled with `currentColor` and a
+ *  "1" cut out to represent the numeric label. All three shapes are
+ *  rendered FILLED (unlike SHAPE_ICON_SVG which is stroke-only) so
+ *  they match what the tool actually produces: a solid-filled shape
+ *  with a number centered inside. The cutout uses fill-rule="evenodd"
+ *  so the "1" reads as the panel background showing through,
+ *  automatically adapting to light / dark themes without hard-coded
+ *  colors. */
+export const COUNTER_ICON_SVG = {
+  /** No-fill variant: outline shape with a "1" inside. Matches
+   *  SHAPE_ICON_SVG's outline vocabulary (same stroke-width 2, same
+   *  shape geometry) so Counter's Type row reads as a coherent
+   *  family with Shape. Using no-fill avoids the previous "looks like
+   *  it's already colored" ambiguity — the Type chip is a
+   *  type-definition glyph, not a color preview. The "1" fills with
+   *  currentColor and explicitly sets stroke="none" to block the
+   *  badge CSS's stroke-inheritance rule from painting the text's
+   *  outline (which would blur the glyph at the 13×13 corner-badge
+   *  size). */
+  circle: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><ellipse cx="12" cy="12" rx="8" ry="8"/><text x="12" y="17" text-anchor="middle" font-size="14" font-weight="800" font-family="system-ui, sans-serif" fill="currentColor" stroke="none">1</text></svg>`,
+  /** Sharp-cornered square containing "1" — same geometry as SHAPE_ICON_SVG.rect. */
+  rect: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="miter" aria-hidden="true"><rect x="4" y="4" width="16" height="16"/><text x="12" y="17" text-anchor="middle" font-size="14" font-weight="800" font-family="system-ui, sans-serif" fill="currentColor" stroke="none">1</text></svg>`,
+  /** Rounded square containing "1" — rx matches SHAPE_ICON_SVG.rounded. */
+  rounded: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="5"/><text x="12" y="17" text-anchor="middle" font-size="14" font-weight="800" font-family="system-ui, sans-serif" fill="currentColor" stroke="none">1</text></svg>`,
+} as const;
+
+/** Preset highlight colors — matches common PDF / PowerPoint highlighter
+ *  pen sets. The user can pick any of these from the Highlight tool's
+ *  color-swatch flyout; the chosen color is persisted via the preset
+ *  system so the next click on the Highlight button uses it again. */
+export const HIGHLIGHT_COLORS: ReadonlyArray<{ value: string; label: string }> = [
+  { value: "#ffe100", label: "Yellow" },
+  { value: "#7bff7b", label: "Green" },
+  { value: "#ff91e0", label: "Pink" },
+  { value: "#7be0ff", label: "Blue" },
+  { value: "#ffb84c", label: "Orange" },
+  { value: "#c991ff", label: "Purple" },
+];
+
+/** Map a highlight fill hex (case-insensitive) to its palette label.
+ *  Used by the right-panel selection title ("Selected Highlight
+ *  (Yellow)") and by the Type-picker swatch tooltips. Falls back to
+ *  the hex string itself for colors outside the preset palette
+ *  (e.g. legacy documents with custom highlightColor values). */
+export function highlightColorLabel(fill: string | null | undefined): string {
+  const lc = (fill || "").toLowerCase();
+  return HIGHLIGHT_COLORS.find((c) => c.value === lc)?.label
+    ?? (fill || "");
+}
+
+/** Default highlight color — first palette entry. Used when no preset
+ *  has been saved yet (first-time launch of the Highlight tool). */
+const DEFAULT_HIGHLIGHT_COLOR = HIGHLIGHT_COLORS[0].value;
+
+const TOOL_VARIANTS: Record<string, ToolVariantGroup> = {
+  shape: {
+    field: "shapeType",
+    fallback: "rect",
+    variants: [
+      { value: "rect",    icon: "rectangle",   label: "Rectangle",         svg: SHAPE_ICON_SVG.rect    },
+      { value: "rounded", icon: "crop_square", label: "Rounded rectangle", svg: SHAPE_ICON_SVG.rounded },
+      { value: "ellipse", icon: "circle",      label: "Ellipse",           svg: SHAPE_ICON_SVG.ellipse },
+    ],
+  },
+  arrow: {
+    field: "arrowHead",
+    fallback: "end",
+    variants: [
+      { value: "none", icon: "horizontal_rule", label: "Line (no arrow)", svg: ARROW_ICON_SVG.none },
+      { value: "end",  icon: "north_east",      label: "Arrow",           svg: ARROW_ICON_SVG.end  },
+      { value: "both", icon: "sync_alt",        label: "Double arrow",    svg: ARROW_ICON_SVG.both },
+    ],
+  },
+  text: {
+    field: "textVariant",
+    fallback: "sticky",
+    variants: [
+      { value: "plain",   icon: "text_fields",   label: "Plain text" },
+      { value: "sticky",  icon: "sticky_note_2", label: "Sticky note" },
+      { value: "callout", icon: "chat_bubble",   label: "Callout" },
+    ],
+  },
+  freehand: {
+    field: "drawStyle",
+    fallback: "pen",
+    variants: [
+      { value: "pen",         icon: "edit",            label: "Pen" },
+      { value: "highlighter", icon: "ink_highlighter", label: "Highlighter" },
+    ],
+  },
+  redact: {
+    field: "redactStyle",
+    fallback: "mosaic",
+    variants: [
+      { value: "mosaic", icon: "grid_view",  label: "Mosaic (pixelate)" },
+      { value: "solid",  icon: "check_box",  label: "Solid bar" },
+      { value: "blur",   icon: "blur_on",    label: "Blur" },
+    ],
+  },
+  marker: {
+    field: "markerShape",
+    fallback: "circle",
+    variants: [
+      // All three glyphs are filled-shape-with-"1" so the variant
+      // chip previews match what the tool actually produces. Plain
+      // Material-Symbols ligatures (outline-only square / circle)
+      // would under-represent the filled + numbered character of a
+      // counter marker.
+      { value: "circle",  icon: "circle",      label: "Circle",         svg: COUNTER_ICON_SVG.circle  },
+      { value: "rect",    icon: "square",      label: "Square",         svg: COUNTER_ICON_SVG.rect    },
+      { value: "rounded", icon: "crop_square", label: "Rounded square", svg: COUNTER_ICON_SVG.rounded },
+    ],
+  },
+  // Highlight's "variant" is its color — each palette entry gets its
+  // own preset so users can keep a different transparency per color
+  // (e.g. yellow at 60% but red at 40%). The `value` is the fill
+  // hex; the toolbar uses it for the element key and the swatch chips.
+  highlight: {
+    field: "highlightColor",
+    fallback: HIGHLIGHT_COLORS[0].value,
+    variants: HIGHLIGHT_COLORS.map((c) => ({
+      value: c.value,
+      icon: "ink_highlighter",
+      label: c.label,
+    })),
+  },
+};
+
+/**
+ * Exported so hosts can open their own popovers (e.g. the
+ * Scratchpad library) using the same close / reposition behavior
+ * and visual treatment as the built-in tool flyouts.
+ */
+export { openAnchoredPopover };
+
+/**
+ * Map an annotation element back to the toolbar id that creates it.
+ * Used for rubber-band style propagation — when the user edits an
+ * existing shape, we want to know which tool's preset should absorb
+ * that change. Returns null for elements the toolbar doesn't own.
+ */
+function toolIdForElement(el: SVGElement): string | null {
+  const tag = el.tagName;
+  if (tag === "line") return "arrow";
+  // Redact's `solid` variant is a plain <rect>, distinguished from a
+  // shape rect by the data-redact-style marker.
+  if (tag === "rect" && el.getAttribute("data-redact-style") === "solid") return "redact";
+  // Highlight rects carry `data-highlight="1"` — checked before the
+  // generic shape branch so rubber-band style propagation goes to
+  // the Highlight tool's preset (not the Shape tool's).
+  if (tag === "rect" && el.getAttribute("data-highlight") === "1") return "highlight";
+  if (tag === "rect" || tag === "ellipse") return "shape";
+  // Mosaic / blur redactions bake a PNG into an <image>.
+  if (tag === "image") return "redact";
+  if (tag === "path") return "freehand";
+  if (tag === "text") return "text";
+  if (tag === "g") {
+    // Arrow groups (stem + head <path> children) share the ArrowTool preset.
+    if (el.getAttribute("data-type") === "arrow") return "arrow";
+    if (el.getAttribute("data-type") === "textbox") return "text";
+    // Freehand groups bundle a session's strokes (each a <path> child).
+    // Route back to the Draw tool's preset for rubber-band sync.
+    if (el.getAttribute("data-type") === "freehand") return "freehand";
+    if (el.getAttribute("data-type") === "group") return null;
+    if (el.hasAttribute("data-marker")) return "marker";
+  }
+  return null;
+}
+
+/**
+ * Open a lightweight popover anchored to a toolbar button. The popover
+ * is appended to `<body>` with `position: fixed` so it escapes any
+ * ancestor `overflow: hidden` (the editor header / vertical toolbar
+ * both have one). Closes on outside click, Escape, scroll, or resize.
+ *
+ * Returns a `close()` function so the caller can dismiss the popover
+ * from within its content (e.g. after the user clicks a variant chip).
+ */
+function openAnchoredPopover(
+  anchor: HTMLElement,
+  fill: (root: HTMLElement) => void,
+  opts: { className?: string; placement?: "below" | "right" } = {},
+): () => void {
+  // Toggle semantics — a second click on the same anchor closes the
+  // popover instead of stacking another one underneath.
+  const existing = document.querySelector<HTMLElement>(
+    `[data-anchor-popover="${anchor.dataset.popoverId ?? ""}"]`,
+  );
+  if (existing && anchor.dataset.popoverId) {
+    existing.remove();
+    anchor.dataset.popoverId = "";
+    return () => {};
+  }
+  const id = Math.random().toString(36).slice(2, 10);
+  anchor.dataset.popoverId = id;
+
+  const popover = document.createElement("div");
+  popover.className = "tool-flyout " + (opts.className || "");
+  popover.dataset.anchorPopover = id;
+  popover.style.position = "fixed";
+  popover.style.zIndex = "1000";
+  fill(popover);
+  document.body.appendChild(popover);
+
+  const placement = opts.placement ?? "right";
+  const reposition = () => {
+    const r = anchor.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const pw = popover.offsetWidth;
+    const ph = popover.offsetHeight;
+    let top: number, left: number;
+    if (placement === "right") {
+      // Vertical toolbar sits on the left edge → popover to the right.
+      left = Math.round(r.right + 4);
+      top = Math.round(r.top);
+      if (left + pw > vw - 8) left = Math.max(8, r.left - pw - 4);
+    } else {
+      // Horizontal toolbar → popover below.
+      top = Math.round(r.bottom + 4);
+      left = Math.round(r.left);
+      if (left + pw > vw - 8) left = Math.max(8, vw - pw - 8);
+    }
+    if (top + ph > vh - 8) top = Math.max(8, vh - ph - 8);
+    popover.style.top = `${top}px`;
+    popover.style.left = `${left}px`;
+  };
+  reposition();
+  window.addEventListener("resize", reposition);
+  window.addEventListener("scroll", reposition, true);
+
+  const cleanup = () => {
+    popover.remove();
+    if (anchor.dataset.popoverId === id) anchor.dataset.popoverId = "";
+    document.removeEventListener("click", onDocClick);
+    document.removeEventListener("keydown", onKey);
+    window.removeEventListener("resize", reposition);
+    window.removeEventListener("scroll", reposition, true);
+  };
+  const onDocClick = (e: MouseEvent) => {
+    if (popover.contains(e.target as Node)) return;
+    if (anchor.contains(e.target as Node)) return;
+    cleanup();
+  };
+  const onKey = (e: KeyboardEvent) => {
+    if (e.key === "Escape") cleanup();
+  };
+  // setTimeout so the opening click doesn't immediately close us.
+  setTimeout(() => {
+    document.addEventListener("click", onDocClick);
+    document.addEventListener("keydown", onKey);
+  }, 0);
+
+  return cleanup;
+}
+
+/**
+ * Constructor-time switches for hosts that provide some of the toolbar's
+ * chrome themselves. Defaults keep backwards-compatible behavior so
+ * existing callers (e.g. the desktop app) don't need changes.
+ */
+export interface ToolbarOptions {
+  /** Append the built-in theme toggle. Default true. Set false when the
+   *  host provides its own toggle elsewhere (e.g. the web app's editor
+   *  header) to avoid duplicate controls. */
+  showThemeToggle?: boolean;
+  /** Append the "Gallery" button (web-only). Default true. Set false when
+   *  the host provides navigation via a breadcrumb or other affordance. */
+  showGalleryButton?: boolean;
+  /** Append the Open / Copy / Save group. Default true. Set false when
+   *  the host renders these actions in a document-level chrome area
+   *  (e.g. the editor header) so they aren't duplicated here. */
+  showSaveGroup?: boolean;
+  /** Layout direction. Default "horizontal" (single top bar). Set to
+   *  "vertical" to render as a left-side tool strip — tools stack
+   *  vertically, separators become horizontal rules, the spacer grows
+   *  vertically so trailing items (history) anchor to the bottom. */
+  orientation?: "horizontal" | "vertical";
+  /** Suppress the per-tool ▼ dropdown arrows. Default false. Set true
+   *  when the host renders tool properties elsewhere (e.g. a persistent
+   *  right panel) so the sidebar doesn't duplicate affordances. */
+  hideToolDropdowns?: boolean;
+}
+
+const WIDTH_PRESETS = [
+  { label: "0.5pt", value: 0.5 },
+  { label: "1pt",   value: 1 },
+  { label: "1.5pt", value: 1.5 },
+  { label: "2pt",   value: 2 },
+  { label: "3pt",   value: 3 },
+  { label: "4.5pt", value: 4.5 },
+  { label: "6pt",   value: 6 },
+];
+
+// Dash patterns as multipliers of stroke-width: [dash, gap, ...]
+// "key" is stored in stroke-dasharray attr; actual SVG values computed dynamically
+const STYLE_PRESETS = [
+  { label: "Solid",     value: "" },
+  { label: "Dashed",    value: "dash" },
+  { label: "Dotted",    value: "dot" },
+  { label: "Dash-Dot",  value: "dashDot" },
+  { label: "Long Dash", value: "lgDash" },
+];
+
+// computeDasharray imported from shared/dash-utils
+
+export class Toolbar {
+  #container: HTMLElement;
+  #canvas: CanvasManager;
+  #history: History;
+  #selection: SelectionManager;
+  #options: ToolOptions;
+  /** Preset map. Keys are ELEMENT KEYS (e.g. "shape.rect",
+   *  "shape.rounded", "arrow.end"), NOT raw tool IDs. Each element
+   *  variant gets its own defaults so a user can (say) set red for
+   *  rectangles and blue for ellipses without the two overwriting
+   *  each other via rubber-band propagation.
+   *
+   *  Tools WITHOUT variants (crop, highlight) use the bare tool ID as
+   *  the element key. Legacy preset files that stored presets keyed
+   *  by tool ID are migrated on load by promoting each entry to the
+   *  tool's DEFAULT variant key (see `#loadPresetsFromFile`). */
+  #presets: Map<string, ToolOptions> = new Map();
+  /** Which variant was last active per tool. Used to decide which
+   *  variant's preset to load when the tool is re-selected from the
+   *  toolbar. Persisted alongside presets so the user's "last used
+   *  Shape" (rect vs rounded vs ellipse) survives across sessions. */
+  #lastVariantByTool: Map<string, string> = new Map();
+  #activeBtn: HTMLButtonElement | null = null;
+  #selectBtn: HTMLButtonElement | null = null;
+  #tools: Map<string, ToolDef> = new Map();
+  /** Per-tool main button refs so we can swap their icon when the user
+   *  picks a variant from the flyout (sticky-tool UX — parent button
+   *  reflects the last-used variant). */
+  #toolButtons: Map<string, HTMLButtonElement> = new Map();
+  /** Host-registered extra buttons inserted between the tool group and
+   *  the undo/redo group. Populated via `registerExtraToolButton`. */
+  #extraButtons: HTMLButtonElement[] = [];
+  /** The DOM group that the extra buttons live in, so registrations
+   *  after initial render still attach to the right container. */
+  #extraButtonGroup: HTMLElement | null = null;
+  /** Invoked whenever the active tool changes. `toolId` is the registered
+   *  tool id (e.g. "rect", "arrow") or null for Select / deactivation. */
+  #onToolChange?: (name: string, toolId: string | null) => void;
+  #showThemeToggle: boolean;
+  #showGalleryButton: boolean;
+  #showSaveGroup: boolean;
+  #orientation: "horizontal" | "vertical";
+  #hideToolDropdowns: boolean;
+
+  constructor(
+    container: HTMLElement,
+    canvas: CanvasManager,
+    history: History,
+    selection: SelectionManager,
+    onToolChange?: (name: string, toolId: string | null) => void,
+    options: ToolbarOptions = {},
+  ) {
+    this.#container = container;
+    this.#canvas = canvas;
+    this.#history = history;
+    this.#selection = selection;
+    this.#onToolChange = onToolChange;
+    this.#showThemeToggle = options.showThemeToggle ?? true;
+    this.#showGalleryButton = options.showGalleryButton ?? true;
+    this.#showSaveGroup = options.showSaveGroup ?? true;
+    this.#orientation = options.orientation ?? "horizontal";
+    this.#hideToolDropdowns = options.hideToolDropdowns ?? false;
+
+    this.#options = {
+      strokeColor: DEFAULT_STROKE_COLOR,
+      fillColor: DEFAULT_FILL_COLOR,
+      strokeWidth: DEFAULT_STROKE_WIDTH,
+      fontSize: DEFAULT_FONT_SIZE,
+      strokeDasharray: "",
+      fillOpacity: 1.0,
+    };
+
+    this.#registerTools();
+
+    // Seed the Highlight tool preset with the default yellow color +
+    // 40% fill opacity + no stroke. Keyed by `highlight.<color>` so
+    // it matches the per-color preset scheme (TOOL_VARIANTS.highlight
+    // uses the fill hex as the variant identifier). Without this,
+    // the first click on the Highlight button would pick up the
+    // global fillColor (the user's last Rect fill) and look like a
+    // normal filled rect, not a highlighter.
+    this.#presets.set(`highlight.${DEFAULT_HIGHLIGHT_COLOR}`, {
+      ...this.#options,
+      shapeType: "highlight",
+      highlightColor: DEFAULT_HIGHLIGHT_COLOR,
+      fillOpacity: 0.4,
+      strokeColor: "none",
+      strokeWidth: 0,
+    });
+
+    this.#render();
+
+    // Load presets — backend depends on the runtime:
+    //   Tauri desktop  → YAML file in app data dir
+    //   Browser ext    → chrome.storage.local
+    //   Plain web / PWA → localStorage (fallback so dev & deployed
+    //                     Web still remember per-variant defaults)
+    if (isTauri) {
+      this.#loadPresetsFromFile();
+    } else if (typeof chrome !== "undefined" && chrome.storage?.local) {
+      this.#loadPresetsFromStorage();
+    } else if (typeof localStorage !== "undefined") {
+      this.#loadPresetsFromLocalStorage();
+    }
+
+    // Right-click on the canvas → "Insert here" menu. Lets users drop
+    // a shape of their choice at the exact click point without first
+    // having to switch tools in the toolbar. The menu is populated
+    // from the same tool/variant registry that builds the toolbar, so
+    // adding a new tool automatically makes it appear here too.
+    this.#canvas.onContextMenu = (e, pt) => {
+      this.#openInsertHereMenu(e, pt);
+    };
+  }
+
+  #registerTools(): void {
+    const defs: [string, string, string, (o: ToolOptions) => ToolBase][] = [
+      // Unified line tool — defaults to arrow-end (Arrow behavior) but
+      // the right panel exposes "none / end / both" so the same tool
+      // covers plain lines + bi-directional arrows too.
+      ["arrow", "Line", "north_east", (o) => new ArrowTool(this.#canvas, this.#history, o)],
+      // Single unified shape tool — pick rect / rounded / ellipse via
+      // the shapeType property in the right panel. Replaces what used
+      // to be three separate toolbar buttons.
+      ["shape", "Shape", "shapes", (o) => new ShapeTool(this.#canvas, this.#history, o)],
+      // Highlight — dedicated tool for semi-transparent highlight
+      // rectangles. Internally a ShapeTool with `shapeType="highlight"`
+      // forced on; the separate button lets us attach a 6-swatch
+      // color flyout (distinct from the Shape tool's icon-chip flyout)
+      // and keep the preset's `highlightColor` independent from the
+      // Shape tool's fillColor. UX modeled after PDF-annotator
+      // highlighter pens.
+      ["highlight", "Highlight", "ink_highlighter", (o) => {
+        // Force the highlight shape regardless of any stale preset
+        // state; users expect the Highlight button to always highlight.
+        o.shapeType = "highlight";
+        return new ShapeTool(this.#canvas, this.#history, o);
+      }],
+      // Unified Text tool — property panel chooses variant
+      // (plain / sticky / callout) + font family + size + color.
+      ["text", "Text", "title", (o) => {
+        const t = new TextTool(this.#canvas, this.#history, o);
+        t.onTextBoxChanged = (el) => this.#selection.select(el);
+        return t;
+      }],
+      // Unified Draw tool — pen vs highlighter picked via the
+      // right panel's drawStyle property.
+      ["freehand", "Draw", "draw", (o) => new FreehandTool(this.#canvas, this.#history, o)],
+      ["marker", "Counter", "counter_1", (o) => new MarkerTool(this.#canvas, this.#history, o)],
+      // Unified Redact tool — pick mosaic / solid / blur via the
+      // right panel's redactStyle property.
+      // Icon = `visibility_off` (eye-with-slash) rather than `blur_on`,
+      // because the tool covers mosaic / solid / blur — `blur_on`
+      // suggests only the blur variant and hurts discoverability of
+      // the other two. `visibility_off` is the universal "hide this"
+      // metaphor (used by Google Drive, YouTube, OS settings, etc.)
+      // and abstracts over all three redaction techniques.
+      ["redact", "Redact", "visibility_off", (o) => new RedactTool(this.#canvas, this.#history, o)],
+      ["crop", "Crop", "crop", (o) => new CropTool(this.#canvas, this.#history, o)],
+    ];
+    for (const [id, label, icon, factory] of defs) {
+      this.#tools.set(id, { label, icon, factory });
+    }
+  }
+
+  #render(): void {
+    this.#container.innerHTML = "";
+    // Tag the container so CSS can swap the layout between the default
+    // horizontal toolbar and the vertical left-side strip variant.
+    this.#container.classList.toggle(
+      "toolbar-vertical",
+      this.#orientation === "vertical",
+    );
+
+    // Select button
+    const selectBtn = this.#btn("arrow_selector_tool", "Select (V)");
+    selectBtn.classList.add("active");
+    this.#activeBtn = selectBtn;
+    this.#selectBtn = selectBtn;
+    selectBtn.addEventListener("click", () => this.#activate(null, selectBtn, "Select"));
+    this.#container.appendChild(selectBtn);
+
+    this.#container.appendChild(this.#sep());
+
+    // Tool buttons with dropdown
+    const toolGroup = this.#div("toolbar-group");
+    for (const [id, def] of this.#tools) {
+      const wrap = document.createElement("div");
+      wrap.className = "tool-btn-wrap";
+
+      const btn = this.#btn(def.icon, def.label);
+      btn.addEventListener("click", (e) => {
+        // If the click landed on the variant badge (nested inside
+        // the button), the badge's own handler opens its flyout and
+        // we should NOT also activate the tool. We detect this via
+        // the event target rather than having the badge call
+        // stopPropagation — stopping propagation would also prevent
+        // OTHER open popovers' document-level click listeners from
+        // hearing the click, so they'd fail to close. Letting the
+        // event bubble normally keeps the "clicking another badge
+        // auto-closes the previous flyout" behavior working.
+        const target = e.target as Element | null;
+        if (target?.closest?.(".tool-btn-badge")) return;
+        // Load this tool's preset FOR THE CURRENT VARIANT (e.g.
+        // "shape.rect" vs "shape.rounded"). Each variant has its own
+        // defaults — the user's red rectangles and blue ellipses
+        // don't bleed into each other via rubber-band.
+        const preset = this.#getCurrentPreset(id);
+        Object.assign(this.#options, preset);
+        const tool = def.factory(this.#options);
+        tool.onShapeComplete = (el?: SVGElement) => {
+          this.#saveCurrentPreset(id, this.#options);
+          this.#savePresetsToFile();
+          this.#activate(null, selectBtn, "Select");
+          if (el) this.#selection.select(el);
+        };
+        this.#activate(tool, btn, def.label);
+      });
+      btn.dataset.tool = id;
+      this.#toolButtons.set(id, btn);
+      wrap.appendChild(btn);
+
+      // Variant flyout affordance — for tools with a variant group
+      // (shape / arrow / text / freehand / redact) OR for the
+      // Highlight tool (which uses a custom color-swatch flyout).
+      //
+      // UX: the variant BADGE in the bottom-right corner of the
+      // button serves DOUBLE DUTY as (a) the current-variant
+      // indicator AND (b) the flyout trigger. Clicking the badge
+      // opens the flyout; clicking anywhere else on the button
+      // activates the tool with the current variant. This mirrors
+      // Affinity / Photoshop's sub-variant indicator pattern and
+      // eliminates the previous ~20×10 `tool-dropdown-arrow` which
+      // was too small to hit reliably and visually muted.
+      //
+      // The actual click handler is attached to the badge element in
+      // `#syncToolButtonIcon` (where the badge is created). The badge
+      // stops propagation so the main tool-activation click on the
+      // button doesn't also fire.
+      const hasVariantFlyout = TOOL_VARIANTS[id] || id === "highlight";
+      // Mark the wrap so #syncToolButtonIcon knows to make its badge
+      // interactive. (Tools without a flyout, e.g. Crop, don't have
+      // badges at all, so this is a no-op for them.)
+      if (!this.#hideToolDropdowns && hasVariantFlyout) {
+        wrap.dataset.hasFlyout = "1";
+      }
+
+      toolGroup.appendChild(wrap);
+
+      // Initial icon sync — reflect any persisted variant from the
+      // loaded preset. (Loaded async in the constructor, so this also
+      // runs from #applyLoadedPreset once the storage read returns.)
+      this.#syncToolButtonIcon(id);
+    }
+    this.#container.appendChild(toolGroup);
+
+    // Host-registered extra buttons (e.g. Scratchpad). They live in
+    // their own group between the core tool buttons and the history
+    // group so the visual grouping reads "create stuff / reusable
+    // stuff / history".
+    this.#extraButtonGroup = this.#div("toolbar-group toolbar-extra-group");
+    for (const btn of this.#extraButtons) {
+      this.#extraButtonGroup.appendChild(btn);
+    }
+    if (this.#extraButtons.length > 0) {
+      this.#container.appendChild(this.#extraButtonGroup);
+    }
+
+    // Spacer
+    const spacer = document.createElement("div");
+    spacer.className = "toolbar-spacer";
+    this.#container.appendChild(spacer);
+
+    // Undo / Redo
+    const histGroup = this.#div("toolbar-group");
+    const undoBtn = this.#btn("undo", "Undo (Ctrl+Z)");
+    undoBtn.addEventListener("click", () => this.#history.undo());
+    histGroup.appendChild(undoBtn);
+
+    const redoBtn = this.#btn("redo", "Redo (Ctrl+Y)");
+    redoBtn.addEventListener("click", () => this.#history.redo());
+    histGroup.appendChild(redoBtn);
+    this.#container.appendChild(histGroup);
+
+    // Whether the host provides the __anno_showGallery hook that
+    // gates the Gallery button. Pre-computed so the two places that
+    // need the check (condition below + actual render) stay in sync.
+    const hasGalleryHook =
+      !isTauri && typeof (window as any).__anno_showGallery === "function";
+
+    // Open / Copy / Save group. The host can suppress this if it
+    // renders these actions at the document-chrome level (e.g. the
+    // web app's editor header right cluster).
+    if (this.#showSaveGroup) {
+      this.#container.appendChild(this.#sep());
+      const exportGroup = this.#div("toolbar-group");
+
+      if (!isTauri && typeof (window as any).__anno_openFile === "function") {
+        const openBtn = this.#btn("folder_open", "Open File");
+        openBtn.addEventListener("click", () => (window as any).__anno_openFile());
+        exportGroup.appendChild(openBtn);
+      }
+
+      const copyBtn = this.#btn("content_copy", "Copy (Ctrl+C)");
+      copyBtn.addEventListener("click", () => this.#copyAll());
+      exportGroup.appendChild(copyBtn);
+
+      const saveWrap = document.createElement("div");
+      saveWrap.className = "tool-btn-wrap";
+      const saveBtn = this.#btn("save", "Save (Ctrl+S)");
+      saveBtn.addEventListener("click", () => {
+        if (!isTauri && typeof (window as any).__anno_saveAnnotations === "function") {
+          (window as any).__anno_saveAnnotations();
+        } else {
+          saveToFile(this.#canvas);
+        }
+      });
+      saveWrap.appendChild(saveBtn);
+
+      const saveArrow = document.createElement("button");
+      saveArrow.className = "tool-dropdown-arrow material-symbols-outlined";
+      saveArrow.textContent = "expand_more";
+      setTooltip(saveArrow, "Save options");
+      saveArrow.addEventListener("click", (e) => {
+        e.stopPropagation();
+        this.#showSaveMenu(saveWrap);
+      });
+      saveWrap.appendChild(saveArrow);
+      exportGroup.appendChild(saveWrap);
+      this.#container.appendChild(exportGroup);
+    }
+
+    // Separator before the theme / gallery group — only add when one
+    // of them will actually render.
+    if (this.#showThemeToggle || (this.#showGalleryButton && hasGalleryHook)) {
+      this.#container.appendChild(this.#sep());
+    }
+
+    // Theme toggle (shared factory — reads current theme on init so the icon
+    // reflects the actual state instead of always rendering "dark_mode").
+    // The host may suppress this if it renders its own toggle elsewhere.
+    if (this.#showThemeToggle) {
+      this.#container.appendChild(createThemeToggle());
+    }
+
+    // Gallery button (extension only). The host may suppress this in favor
+    // of a breadcrumb / back-link rendered outside the toolbar.
+    if (this.#showGalleryButton && hasGalleryHook) {
+      const galleryBtn = this.#btn("grid_view", "Gallery");
+      galleryBtn.addEventListener("click", () => (window as any).__anno_showGallery());
+      this.#container.appendChild(galleryBtn);
+    }
+
+    // Keyboard shortcuts
+    this.#setupShortcuts();
+  }
+
+  #activate(tool: ToolBase | null, btn: HTMLButtonElement, label: string): void {
+    // Only clear the selection on actual context changes. Clicking the
+    // already-active button (e.g. pressing "V" while already in Select
+    // mode) shouldn't wipe the user's current selection.
+    const contextChanged = this.#activeBtn !== btn;
+
+    this.#activeBtn?.classList.remove("active");
+    btn.classList.add("active");
+    this.#activeBtn = btn;
+    this.#canvas.setActiveTool(tool);
+
+    // Clearing selection on any tool change unifies the UX: the old
+    // object's handles implied "next action targets me", which
+    // contradicts a new tool's "I'm about to create/place something".
+    // Drawing tools that want to select the freshly-drawn shape just
+    // call selection.select(el) AFTER #activate(null, ...) — the
+    // temporary clear is immediately superseded by the new selection.
+    if (contextChanged) {
+      this.#selection.select(null);
+    }
+
+    // Flush any preset edits the user made in the property panel for
+    // the previous tool before switching. Cheap — a no-op when nothing
+    // changed.
+    this.#savePresetsToFile();
+    // Pass both label (for status text) and toolId (for hosts rendering
+    // tool properties). Select / deactivation → toolId is null.
+    const toolId = btn.dataset.tool ?? null;
+    this.#onToolChange?.(label, toolId);
+  }
+
+  #setupShortcuts(): void {
+    document.addEventListener("keydown", (e) => {
+      // Don't trigger shortcuts when typing in inputs
+      if ((e.target as HTMLElement).tagName === "INPUT" || (e.target as HTMLElement).isContentEditable) return;
+
+      if (e.ctrlKey && e.key === "z") {
+        e.preventDefault();
+        this.#history.undo();
+      } else if (e.ctrlKey && e.key === "y") {
+        e.preventDefault();
+        this.#history.redo();
+      } else if (e.ctrlKey && e.key === "s") {
+        e.preventDefault();
+        if (!isTauri && typeof (window as any).__anno_saveAnnotations === "function") {
+          (window as any).__anno_saveAnnotations();
+        } else {
+          saveToFile(this.#canvas);
+        }
+      } else if (e.ctrlKey && e.key === "c" && !window.getSelection()?.toString()) {
+        e.preventDefault();
+        this.#copyAll();
+      } else if (e.key === "v" || e.key === "Escape") {
+        // Select mode
+        const selectBtn = this.#container.querySelector(".toolbar-btn") as HTMLButtonElement;
+        if (selectBtn) this.#activate(null, selectBtn, "Select");
+      }
+    });
+  }
+
+  /** Programmatically return to Select mode — used by hosts that run
+   *  one-shot tools outside the toolbar (e.g. a scratchpad paste
+   *  action) and want to leave the UI in a clean Select state afterward. */
+  activateSelectMode(): void {
+    if (this.#selectBtn) {
+      this.#activate(null, this.#selectBtn, "Select");
+    }
+  }
+
+  /** Remove the "active" highlight from whichever toolbar button
+   *  currently has it, and report a new tool label to the host.
+   *  Used when a tool is activated directly on the canvas (bypassing
+   *  the toolbar — e.g. scratchpad paste) so the toolbar UI + status
+   *  indicator still reflect the active context.
+   *
+   *  Does NOT touch canvas.setActiveTool or selection — the caller
+   *  has already set the canvas up. This method is UI-state only. */
+  setExternalToolActive(label: string, toolId: string | null): void {
+    this.#activeBtn?.classList.remove("active");
+    this.#activeBtn = null;
+    this.#onToolChange?.(label, toolId);
+  }
+
+  /** Exposed so hosts that render the save button outside the Toolbar
+   *  (e.g. in a document-chrome header) can reuse the exact same menu. */
+  showSaveMenu(anchor: HTMLElement): void {
+    this.#showSaveMenu(anchor);
+  }
+
+  /** Exposed so host-rendered save buttons can trigger the canonical
+   *  save path instead of re-implementing it. */
+  saveNow(): void {
+    if (!isTauri && typeof (window as any).__anno_saveAnnotations === "function") {
+      (window as any).__anno_saveAnnotations();
+    } else {
+      saveToFile(this.#canvas);
+    }
+  }
+
+  /** Exposed so host-rendered copy buttons can trigger the canonical
+   *  copy path (GVML + PNG in Tauri, PNG fallback in browser). */
+  copyNow(): Promise<void> {
+    return this.#copyAll();
+  }
+
+  #showSaveMenu(anchor: HTMLElement): void {
+    // Toggle: a second click on the arrow closes an open menu instead
+    // of stacking another one underneath.
+    const existing = document.querySelector(".save-dropdown-menu");
+    if (existing) { existing.remove(); return; }
+
+    const menu = document.createElement("div");
+    menu.className = "save-dropdown-menu copy-dropdown-menu";
+    menu.style.display = "flex";
+
+    const items: [string, string, () => void][] = [
+      ["Download SVG", "Editable vector format", () => saveToFile(this.#canvas)],
+    ];
+
+    if (isTauri) {
+      items.push(
+        ["Save as JPG (re-editable)", "JPEG with embedded annotations", () => saveAsEditableImage(this.#canvas, "jpg")],
+        ["Save as PNG (re-editable)", "PNG with embedded annotations", () => saveAsEditableImage(this.#canvas, "png")],
+      );
+    } else {
+      items.push(
+        ["Download JPG (re-editable)", "JPEG with embedded annotations", () => downloadAsImage(this.#canvas, "jpg")],
+        ["Download PNG (re-editable)", "PNG with embedded annotations", () => downloadAsImage(this.#canvas, "png")],
+      );
+    }
+
+    // PowerPoint export — produces a single-slide .pptx with the
+    // screenshot as the slide background and each annotation as an
+    // editable native Office shape. Available everywhere (browser-side
+    // ZIP build, no Tauri dependency).
+    items.push([
+      "Download PPTX (PowerPoint)",
+      "Editable PowerPoint slide with native shapes",
+      () => exportPptx(this.#canvas),
+    ]);
+
+    for (const [label, title, action] of items) {
+      const item = document.createElement("button");
+      item.className = "copy-dropdown-item";
+      item.textContent = label;
+      setTooltip(item, title);
+      item.addEventListener("click", () => {
+        action();
+        menu.remove();
+      });
+      menu.appendChild(item);
+    }
+
+    // Render into document.body with fixed positioning so the menu
+    // escapes any ancestor `overflow: hidden` (the editor-header has
+    // exactly that, which would otherwise clip the dropdown the moment
+    // it appears below its anchor).
+    menu.style.position = "fixed";
+    menu.style.zIndex = "1000";
+    document.body.appendChild(menu);
+
+    // Place the menu just below the anchor's bottom edge, right-aligned
+    // to its right edge — the same visual position the previous CSS-only
+    // (top: 100%; right: 0) approach achieved when un-clipped.
+    const reposition = () => {
+      const r = anchor.getBoundingClientRect();
+      const vw = window.innerWidth;
+      // Show, measure, then compute the left edge so the menu doesn't
+      // spill off the viewport on narrow windows.
+      menu.style.top = `${Math.round(r.bottom + 4)}px`;
+      const mw = menu.offsetWidth;
+      let left = Math.round(r.right - mw);
+      if (left < 8) left = 8;
+      if (left + mw > vw - 8) left = vw - mw - 8;
+      menu.style.left = `${left}px`;
+    };
+    reposition();
+    window.addEventListener("resize", reposition);
+    window.addEventListener("scroll", reposition, true);
+
+    const close = (e: MouseEvent) => {
+      if (menu.contains(e.target as Node)) return;
+      // Ignore the same click that opened the menu — without this the
+      // open click would propagate to the document and immediately
+      // close the menu we just attached.
+      if (anchor.contains(e.target as Node)) return;
+      cleanup();
+    };
+    const cleanup = () => {
+      menu.remove();
+      document.removeEventListener("click", close);
+      window.removeEventListener("resize", reposition);
+      window.removeEventListener("scroll", reposition, true);
+    };
+    setTimeout(() => document.addEventListener("click", close), 0);
+  }
+
+  /** Copy: GVML + PNG via Win32 API in one clipboard session */
+  async #copyAll(): Promise<void> {
+    if (isTauri) {
+      try {
+        await this.#copyForOffice();
+      } catch (err) {
+        console.error("Copy failed:", err);
+      }
+    } else {
+      // Browser fallback (non-Tauri)
+      try {
+        await copyAsImage(this.#canvas);
+      } catch (err) {
+        console.error("PNG copy failed:", err);
+      }
+    }
+  }
+
+  async #copyForOffice(): Promise<void> {
+    const shapes: AnnotationShape[] = [];
+    const annos = this.#canvas.annotations.childNodes;
+
+    // Apply a group's "transform=translate(tx, ty)" when pulling out
+    // coordinates, so the Office shape lands at the same screen
+    // position the user sees in the editor. Reads the canonical
+    // data-tx/data-ty (set by the transform-utils layer) so this works
+    // even when the visual transform attr has been rewritten as a
+    // matrix(...) for rotation/flip support.
+    const translateOf = (el: SVGElement): { tx: number; ty: number } => {
+      const dtx = el.getAttribute("data-tx");
+      const dty = el.getAttribute("data-ty");
+      if (dtx != null || dty != null) {
+        return { tx: parseFloat(dtx || "0") || 0, ty: parseFloat(dty || "0") || 0 };
+      }
+      const t = el.getAttribute("transform") || "";
+      const m = t.match(/translate\(([\d.-]+),?\s*([\d.-]+)\)/);
+      return m ? { tx: parseFloat(m[1]), ty: parseFloat(m[2]) } : { tx: 0, ty: 0 };
+    };
+
+    // Pull rotation/flip state for the Office side. Returned only when
+    // non-default so the JSON payload stays compact for the common case.
+    const transformOf = (el: SVGElement): Partial<AnnotationShape> => {
+      const out: Partial<AnnotationShape> = {};
+      const rot = parseFloat(el.getAttribute("data-rot") || "0");
+      if (rot) out.rotation_deg = rot;
+      if (el.getAttribute("data-flip-h") === "1") out.flip_h = true;
+      if (el.getAttribute("data-flip-v") === "1") out.flip_v = true;
+
+      // Line polish — arrow shape/size per end, linecap, linejoin,
+      // stroke opacity, gradients. Only attached when non-default so
+      // the payload stays trim for unstyled shapes.
+      const ss = el.getAttribute("data-arrow-start-shape");
+      const es = el.getAttribute("data-arrow-end-shape");
+      // New per-dimension width/length; fall back to the legacy
+      // single-size attr if only that's present on this element.
+      const sw = el.getAttribute("data-arrow-start-width")
+        || el.getAttribute("data-arrow-start-size");
+      const sl = el.getAttribute("data-arrow-start-length")
+        || el.getAttribute("data-arrow-start-size");
+      const ew = el.getAttribute("data-arrow-end-width")
+        || el.getAttribute("data-arrow-end-size");
+      const eL = el.getAttribute("data-arrow-end-length")
+        || el.getAttribute("data-arrow-end-size");
+      if (ss) out.arrow_shape_start = ss as AnnotationShape["arrow_shape_start"];
+      if (es) out.arrow_shape_end = es as AnnotationShape["arrow_shape_end"];
+      if (sw) out.arrow_width_start = sw as AnnotationShape["arrow_width_start"];
+      if (sl) out.arrow_length_start = sl as AnnotationShape["arrow_length_start"];
+      if (ew) out.arrow_width_end = ew as AnnotationShape["arrow_width_end"];
+      if (eL) out.arrow_length_end = eL as AnnotationShape["arrow_length_end"];
+
+      const cap = el.getAttribute("stroke-linecap");
+      if (cap === "butt" || cap === "round" || cap === "square") {
+        out.stroke_linecap = cap;
+      }
+      const join = el.getAttribute("stroke-linejoin");
+      if (join === "miter" || join === "round" || join === "bevel") {
+        out.stroke_linejoin = join;
+      }
+      // Line transparency may live on `opacity` (new canonical form
+      // — lets markers fade with the line) or `stroke-opacity`
+      // (legacy). Prefer whichever is present; emit the value only
+      // when non-default so solid lines stay unchanged in the
+      // Office paste payload.
+      const opacityRaw = el.getAttribute("opacity")
+        ?? el.getAttribute("stroke-opacity");
+      const so = parseFloat(opacityRaw || "");
+      if (isFinite(so) && so < 1) out.stroke_opacity_value = so;
+
+      const sgRaw = el.getAttribute("data-stroke-gradient");
+      if (sgRaw) {
+        try { out.stroke_gradient = JSON.parse(sgRaw); } catch { /* skip */ }
+      }
+      const fgRaw = el.getAttribute("data-fill-gradient");
+      if (fgRaw) {
+        try { out.fill_gradient = JSON.parse(fgRaw); } catch { /* skip */ }
+      }
+      return out;
+    };
+
+    for (const node of Array.from(annos)) {
+      const el = node as SVGElement;
+      const tag = el.tagName;
+      const { tx, ty } = translateOf(el);
+      const xform = transformOf(el);
+
+      const isArrowPath = tag === "g" && el.getAttribute("data-type") === "arrow";
+      if (tag === "line" || isArrowPath) {
+        // Unified Line/Arrow — may be the legacy <line marker-end=...>
+        // form or the new composed <path data-type="arrow"> form. Both
+        // encode their geometric endpoints + per-end arrow specs so
+        // Office paste sees the same shape payload either way.
+        let x1 = 0, y1 = 0, x2 = 0, y2 = 0;
+        if (isArrowPath) {
+          x1 = parseFloat(el.getAttribute("data-x1") || "0");
+          y1 = parseFloat(el.getAttribute("data-y1") || "0");
+          x2 = parseFloat(el.getAttribute("data-x2") || "0");
+          y2 = parseFloat(el.getAttribute("data-y2") || "0");
+        } else {
+          x1 = parseFloat(el.getAttribute("x1") || "0");
+          y1 = parseFloat(el.getAttribute("y1") || "0");
+          x2 = parseFloat(el.getAttribute("x2") || "0");
+          y2 = parseFloat(el.getAttribute("y2") || "0");
+        }
+        // Arrow-head presence is whichever end has shape ≠ "none" (for
+        // path arrows) OR which marker attribute is present (for the
+        // legacy line form).
+        const endShape = el.getAttribute("data-arrow-end-shape");
+        const startShape = el.getAttribute("data-arrow-start-shape");
+        const headEnd = isArrowPath
+          ? endShape != null && endShape !== "none"
+          : !!el.getAttribute("marker-end");
+        const headStart = isArrowPath
+          ? startShape != null && startShape !== "none"
+          : !!el.getAttribute("marker-start");
+        shapes.push({
+          type: headEnd || headStart ? "arrow" : "line",
+          x1: x1 + tx,
+          y1: y1 + ty,
+          x2: x2 + tx,
+          y2: y2 + ty,
+          stroke: el.getAttribute("stroke") || "#ff0000",
+          stroke_width: parseFloat(el.getAttribute("stroke-width") || "3"),
+          stroke_dasharray: el.getAttribute("stroke-dasharray") || "",
+          has_arrow: headEnd,
+          arrow_head_start: headStart,
+          arrow_head_end: headEnd,
+          ...xform,
+        });
+      } else if (tag === "rect") {
+        // Rect covers three product-level cases:
+        //   1. Shape "rect"     → type="rect",        corner_radius=0
+        //   2. Shape "rounded"  → type="rounded-rect", corner_radius=rx
+        //   3. Redact "solid"   → type="rect",        redact_style="solid"
+        // Type string stays "rect" / "rounded-rect" for back-compat with
+        // the desktop Office-clipboard handler; the new `corner_radius`
+        // / `redact_style` fields add finer-grained info without
+        // breaking existing Rust code paths.
+        const rx = parseFloat(el.getAttribute("rx") || "0");
+        const isRedactSolid = el.getAttribute("data-redact-style") === "solid";
+        const isRounded = el.hasAttribute("data-rounded") || rx > 0;
+        shapes.push({
+          type: isRounded && !isRedactSolid ? "rounded-rect" : "rect",
+          x: parseFloat(el.getAttribute("x") || "0") + tx,
+          y: parseFloat(el.getAttribute("y") || "0") + ty,
+          width: parseFloat(el.getAttribute("width") || "0"),
+          height: parseFloat(el.getAttribute("height") || "0"),
+          stroke: el.getAttribute("stroke") || "none",
+          stroke_width: parseFloat(el.getAttribute("stroke-width") || "0"),
+          stroke_dasharray: el.getAttribute("stroke-dasharray") || "",
+          fill: el.getAttribute("fill") || "none",
+          fill_opacity: parseFloat(el.getAttribute("fill-opacity") || "1"),
+          corner_radius: rx,
+          redact_style: isRedactSolid ? "solid" : undefined,
+          ...xform,
+        });
+      } else if (tag === "ellipse") {
+        shapes.push({
+          type: "ellipse",
+          cx: parseFloat(el.getAttribute("cx") || "0") + tx,
+          cy: parseFloat(el.getAttribute("cy") || "0") + ty,
+          rx: parseFloat(el.getAttribute("rx") || "0"),
+          ry: parseFloat(el.getAttribute("ry") || "0"),
+          stroke: el.getAttribute("stroke") || "#ff0000",
+          stroke_width: parseFloat(el.getAttribute("stroke-width") || "3"),
+          stroke_dasharray: el.getAttribute("stroke-dasharray") || "",
+          fill: el.getAttribute("fill") || "none",
+          fill_opacity: parseFloat(el.getAttribute("fill-opacity") || "1"),
+          ...xform,
+        });
+      } else if (tag === "image") {
+        // Redact image — mosaic or blur. The style tag distinguishes
+        // them so the desktop side can choose a different Office
+        // picture-effect preset if it wants; both carry a baked-in
+        // PNG in image_data_url.
+        const style = el.getAttribute("data-redact-style") as "mosaic" | "blur" | null;
+        const href = el.getAttribute("href") || "";
+        shapes.push({
+          type: style === "blur" ? "blur_image" : "mosaic_image",
+          x: parseFloat(el.getAttribute("x") || "0") + tx,
+          y: parseFloat(el.getAttribute("y") || "0") + ty,
+          width: parseFloat(el.getAttribute("width") || "0"),
+          height: parseFloat(el.getAttribute("height") || "0"),
+          image_data_url: href,
+          text: href,     // legacy field — Rust side can still read it here
+          redact_style: style || "mosaic",
+          ...xform,
+        });
+      } else if (tag === "path") {
+        // Freehand — pen or highlighter. stroke_opacity carries the
+        // transparency so Office can render a translucent shape.
+        const drawStyle = (el.getAttribute("data-draw-style") as "pen" | "highlighter" | null)
+          || (parseFloat(el.getAttribute("stroke-opacity") || "1") < 0.99 ? "highlighter" : "pen");
+        shapes.push({
+          type: "freehand",
+          text: el.getAttribute("d") || "",
+          stroke: el.getAttribute("stroke") || "#ff0000",
+          stroke_width: parseFloat(el.getAttribute("stroke-width") || "3"),
+          stroke_dasharray: el.getAttribute("stroke-dasharray") || "",
+          stroke_opacity: parseFloat(el.getAttribute("stroke-opacity") || "1"),
+          draw_style: drawStyle,
+          ...xform,
+        });
+      } else if (tag === "text") {
+        shapes.push({
+          type: "text",
+          x: parseFloat(el.getAttribute("x") || "0") + tx,
+          y: parseFloat(el.getAttribute("y") || "0") + ty,
+          text: el.textContent || "",
+          font_size: parseFloat(el.getAttribute("font-size") || "24"),
+          font_family: el.getAttribute("font-family") || undefined,
+          fill: el.getAttribute("fill") || "#ff0000",
+          text_variant: "plain",
+          ...xform,
+        });
+      } else if (tag === "g") {
+        if (el.getAttribute("data-type") === "textbox") {
+          // Unified Textbox — plain / sticky / callout. All three
+          // share the same <g> skeleton with a <rect> + optional
+          // <path> tail; the variant is the discriminator for Office.
+          const textEl = el.querySelector("text");
+          const bgRect = el.querySelector("rect");
+          const variant = ((el.getAttribute("data-text-variant") as "plain" | "sticky" | "callout" | null) || "sticky");
+          if (textEl) {
+            const tspans = textEl.querySelectorAll("tspan");
+            const bx = parseFloat(bgRect?.getAttribute("x") || tspans[0]?.getAttribute("x") || "0") + tx;
+            const by = parseFloat(bgRect?.getAttribute("y") || "0") + ty;
+            const bw = parseFloat(bgRect?.getAttribute("width") || "200");
+            const bh = parseFloat(bgRect?.getAttribute("height") || "40");
+            const tailXRaw = el.getAttribute("data-tail-x");
+            const tailYRaw = el.getAttribute("data-tail-y");
+            shapes.push({
+              type: "text",
+              x: bx,
+              y: by,
+              width: bw,
+              height: bh,
+              text: el.getAttribute("data-text") || textEl.textContent || "",
+              font_size: parseFloat(textEl.getAttribute("font-size")
+                || el.getAttribute("data-font-size") || "24"),
+              font_family: textEl.getAttribute("font-family")
+                || el.getAttribute("data-font-family") || undefined,
+              fill: textEl.getAttribute("fill")
+                || el.getAttribute("data-color") || "#ff0000",
+              // Legacy field — sticky's pale background color. Desktop
+              // code historically reads this from `stroke`.
+              stroke: variant === "plain"
+                ? ""
+                : (bgRect?.getAttribute("fill") || ""),
+              text_variant: variant,
+              tail_x: tailXRaw != null ? parseFloat(tailXRaw) + tx : undefined,
+              tail_y: tailYRaw != null ? parseFloat(tailYRaw) + ty : undefined,
+              ...xform,
+            });
+          }
+        } else {
+          // Marker / Counter — circle or rect background with a numbered
+          // label. The outer <g>'s translate() (from user drags) is
+          // added here so the Office shape lands at the user-visible
+          // position, not at the initial drawing coordinate.
+          const bgCircle = el.querySelector("circle");
+          const bgRect = el.querySelector("rect");
+          const bgEl = bgCircle || bgRect;
+          if (bgEl) {
+            // `data-shape` on the outer <g> is the authoritative
+            // shape flag (written by MarkerTool). It can be "circle",
+            // "rect", or "rounded". Fall back to bg tagName for
+            // legacy content missing the data attr.
+            const dataShape = el.getAttribute("data-shape");
+            const shapeName: "circle" | "rect" | "rounded" =
+              dataShape === "rounded" ? "rounded"
+              : dataShape === "rect" ? "rect"
+              : dataShape === "circle" ? "circle"
+              : (bgRect && !bgCircle) ? "rect"
+              : "circle";
+            const isRectLike = shapeName === "rect" || shapeName === "rounded";
+            let mcx: number, mcy: number;
+            if (isRectLike) {
+              const rx = parseFloat(bgRect!.getAttribute("x") || "0");
+              const ry = parseFloat(bgRect!.getAttribute("y") || "0");
+              const rw = parseFloat(bgRect!.getAttribute("width") || "0");
+              const rh = parseFloat(bgRect!.getAttribute("height") || "0");
+              mcx = rx + rw / 2; mcy = ry + rh / 2;
+            } else {
+              mcx = parseFloat(bgCircle!.getAttribute("cx") || "0");
+              mcy = parseFloat(bgCircle!.getAttribute("cy") || "0");
+            }
+            const textEl = el.querySelector("text");
+            const fs = parseFloat(textEl?.getAttribute("font-size") || "13");
+            shapes.push({
+              type: "marker",
+              cx: mcx + tx,
+              cy: mcy + ty,
+              fill: bgEl.getAttribute("fill") || "#ff0000",
+              label: textEl?.textContent || "",
+              font_size: fs,
+              marker_shape: shapeName,
+              // Legacy: Rust side used to read the shape name from
+              // `stroke`. Keep it populated for back-compat until the
+              // desktop side switches to marker_shape. Rust code that
+              // doesn't yet understand "rounded" will treat it as an
+              // unknown shape (defaulting to circle) — acceptable
+              // graceful degradation.
+              stroke: shapeName,
+              ...xform,
+            });
+          }
+        }
+      }
+    }
+    try {
+      const screenshotData = this.#canvas.imageEl.getAttribute("href") || undefined;
+      const pngDataUrl = await getPngDataUrl(this.#canvas);
+      await copyAsOffice(shapes, this.#canvas.imageWidth, this.#canvas.imageHeight, screenshotData, pngDataUrl);
+    } catch (err) {
+      console.error("Copy failed:", err);
+    }
+  }
+
+  /**
+   * Public API: render a tool's property controls INTO `container`.
+   * Hosts use this to display tool properties in a persistent right
+   * panel (Phase 2 of the editor UI refactor) instead of the popover
+   * dropdown. The caller owns the container and is responsible for
+   * clearing it between calls.
+   *
+   * Changes persist to the in-memory preset map immediately; disk
+   * flush happens either via the popover close handler (horizontal
+   * mode) or when the host decides (e.g. when switching tools).
+   */
+  renderToolProperties(toolId: string, container: HTMLElement): void {
+    this.#populateToolProperties(toolId, container);
+  }
+
+  /** Concrete, user-facing ELEMENT name for what the tool is about to
+   *  create — e.g. "Rectangle" / "Arrow" / "Callout". Used by hosts
+   *  as the dynamic header of the properties panel, and intentionally
+   *  MATCHES the naming convention used when the same kind of element
+   *  is selected. So "pick the Shape tool with rect variant" and
+   *  "select a rectangle" produce the SAME title, reinforcing the
+   *  user's mental model that the properties panel is just "what this
+   *  thing is" regardless of how the user got there.
+   *
+   *  This is distinct from the variant LABEL (e.g. "Line (no arrow)")
+   *  which is tuned for compact flyout chips. The title here is tuned
+   *  for reading as a noun ("Line" / "Arrow" / "Callout"). */
+  getToolDisplayTitle(toolId: string): string {
+    const toolDef = this.#tools.get(toolId);
+    if (!toolDef) return toolId;
+    const preset = this.#getCurrentPreset(toolId);
+    switch (toolId) {
+      case "shape":
+        switch (preset.shapeType) {
+          case "rect":      return "Rectangle";
+          case "rounded":   return "Rounded rectangle";
+          case "ellipse":   return "Ellipse";
+          case "highlight": return "Highlight";
+          default:          return "Rectangle";
+        }
+      case "arrow":
+        switch (preset.arrowHead) {
+          case "none": return "Line";
+          case "end":  return "Arrow";
+          case "both": return "Double arrow";
+          default:     return "Arrow";
+        }
+      case "text":
+        switch (preset.textVariant) {
+          case "plain":   return "Text";
+          case "sticky":  return "Sticky note";
+          case "callout": return "Callout";
+          default:        return "Text";
+        }
+      case "freehand":
+        // Match the "<Tool> (<variant>)" convention used by Counter
+        // (Counter (Circle)), Highlight (Highlight (Yellow)), etc.
+        // — "Draw (Pen)" / "Draw (Highlighter)" instead of the bare
+        // variant noun, so the tool family is identifiable from the
+        // title alone.
+        return preset.drawStyle === "highlighter" ? "Draw (Highlighter)" : "Draw (Pen)";
+      case "marker":
+        // Counter variants share the base noun "Counter" and append
+        // the shape in parens (see right-panel's #elementTypeName
+        // for the matching Selection-mode formatter).
+        switch (preset.markerShape) {
+          case "rect":    return "Counter (Square)";
+          case "rounded": return "Counter (Rounded square)";
+          default:        return "Counter (Circle)";
+        }
+      case "redact":
+        switch (preset.redactStyle) {
+          case "mosaic": return "Mosaic";
+          case "solid":  return "Solid redaction";
+          case "blur":   return "Blur";
+          default:       return "Redaction";
+        }
+      case "highlight": {
+        // Mirror the Selection-side "Highlight (Yellow)" formatter:
+        // include the current color's palette label in parens so the
+        // toolbar tooltip reads as a name, not a raw hex.
+        const label = highlightColorLabel(preset.highlightColor);
+        return label ? `Highlight (${label})` : "Highlight";
+      }
+      case "crop":
+        return "Crop";
+      default:
+        return toolDef.label;
+    }
+  }
+
+  /** Persist preset changes. Exposed so hosts using the render API
+   *  directly can flush on tool-change boundaries. */
+  savePresets(): void {
+    this.#savePresetsToFile();
+  }
+
+  /** Apply the element's current variant PRESET (color / width / dash
+   *  / opacity / …) to the DOM element. Used by the host after a
+   *  variant switch in the selection property panel: changing an
+   *  Arrow to a Double arrow should also load the Double arrow
+   *  preset's saved style, matching how that variant was last drawn.
+   *
+   *  The element's elementKey is derived from its current data
+   *  attributes (post variant change, so we look up the NEW variant's
+   *  preset).
+   *
+   *  If no preset is stored for the new variant yet (first-time use),
+   *  we seed one by inheriting style from the current element's OWN
+   *  attributes (which reflect the shape's current on-canvas state).
+   *  This mirrors `#changeVariant`'s seed behavior for toolbar flyout
+   *  switches — first switch = same color as you were using, which
+   *  then becomes the variant's baseline for future sessions. */
+  applyElementVariantPreset(el: SVGElement): void {
+    const toolId = toolIdForElement(el);
+    if (!toolId) return;
+    const elementKey = this.#elementKeyFromElement(el, toolId);
+    let preset = this.#presets.get(elementKey);
+    if (!preset) {
+      // First use of this variant — seed from the element's current
+      // attrs so the conversion starts from a familiar baseline.
+      // Style attrs like stroke / fill / width aren't touched by the
+      // variant-change machinery (that only touches variant-defining
+      // attrs like data-arrow-*-shape), so reading them off `el`
+      // yields the user's pre-conversion style.
+      preset = this.#seedPresetFromElement(el, toolId, elementKey);
+      this.#presets.set(elementKey, preset);
+      this.#savePresetsToFile();
+    }
+    // Update the last-used variant tracking so the next toolbar
+    // activation for this tool picks the same variant.
+    if (elementKey.includes(".")) {
+      const variant = elementKey.slice(elementKey.indexOf(".") + 1);
+      this.#lastVariantByTool.set(toolId, variant);
+    }
+    this.#applyPresetStyleAttrs(el, preset);
+    // Refresh the tool button's badge so the sidebar reflects the
+    // newly-active variant. Without this, converting a Counter from
+    // Circle → Rounded via the property-panel Type picker leaves the
+    // toolbar badge still showing the circle glyph, which confuses
+    // the "what's next click going to create?" reading.
+    this.#syncToolButtonIcon(toolId);
+  }
+
+  /** Construct a ToolOptions seed by reading style attrs off an
+   *  existing element. Used by applyElementVariantPreset when the
+   *  target variant has no saved preset yet — the new preset
+   *  inherits the element's current look so variant conversion
+   *  doesn't surprise the user with unrelated defaults. */
+  #seedPresetFromElement(el: SVGElement, toolId: string, elementKey: string): ToolOptions {
+    // Start from the tool's live options (reflecting whatever the
+    // tool was last configured with), then layer element-specific
+    // style attrs on top.
+    const seed: ToolOptions = { ...this.#options };
+    const stroke = el.getAttribute("stroke");
+    if (stroke) seed.strokeColor = stroke;
+    const fill = el.getAttribute("fill");
+    if (fill) seed.fillColor = fill;
+    const sw = parseFloat(el.getAttribute("stroke-width") || "");
+    if (isFinite(sw) && sw > 0) seed.strokeWidth = sw;
+    const da = el.getAttribute("data-dash-key") ?? el.getAttribute("stroke-dasharray");
+    if (da != null) seed.strokeDasharray = da;
+    const fo = parseFloat(el.getAttribute("fill-opacity") || "");
+    if (isFinite(fo)) seed.fillOpacity = fo;
+    // Ensure the variant-defining field matches this element's variant.
+    const group = TOOL_VARIANTS[toolId];
+    if (group && elementKey.includes(".")) {
+      const variant = elementKey.slice(elementKey.indexOf(".") + 1);
+      (seed as unknown as Record<string, unknown>)[group.field as string] = variant;
+      this.#normalizeVariantSideFields(toolId, variant, seed);
+    }
+    return seed;
+  }
+
+  /** Write the "style" fields of a preset (color / width / dash /
+   *  opacity / linecap / linejoin) onto an existing element.
+   *  Deliberately does NOT touch fields that define the element's
+   *  type/variant (shapeType, arrowHead, textVariant, etc.) because
+   *  those were already established by the variant-change path that
+   *  invoked this helper.
+   *
+   *  Some tools store their "color" on a child element rather than
+   *  the outer wrapper `<g>` (marker: bg primitive's `fill`; text:
+   *  `<text>`'s `fill`). For those cases we dispatch to a tool-
+   *  specific helper instead of writing stroke/fill directly to `el`. */
+  #applyPresetStyleAttrs(el: SVGElement, preset: ToolOptions): void {
+    // Tool-specific style application for composite elements.
+    if (el.tagName === "g" && el.hasAttribute("data-marker")) {
+      this.#applyMarkerPresetStyle(el, preset);
+      return;
+    }
+    if (
+      el.tagName === "g" && el.getAttribute("data-type") === "textbox"
+    ) {
+      this.#applyTextboxPresetStyle(el, preset);
+      return;
+    }
+    // Highlight rects: the visual color is `highlightColor`, NOT
+    // `fillColor`. ShapeTool's createShape uses `highlightColor` for
+    // the rect's `fill` attribute (and leaves `fillColor` untouched,
+    // since `fillColor` tracks the Shape tool's filled-rect color).
+    // Without this branch, loading a Highlight preset whose
+    // `fillColor` was inherited from global defaults (e.g. "#ffffff")
+    // would overwrite the element's highlight color with white,
+    // making the rect effectively invisible. Route fill through
+    // `highlightColor` to mirror ShapeTool's creation logic.
+    if (el.tagName === "rect" && el.getAttribute("data-highlight") === "1") {
+      if (preset.highlightColor) el.setAttribute("fill", preset.highlightColor);
+      if (preset.fillOpacity != null) {
+        el.setAttribute("fill-opacity", String(preset.fillOpacity));
+      }
+      return;
+    }
+
+    // Generic path for shape / arrow / path / line / etc.
+    if (preset.strokeColor) el.setAttribute("stroke", preset.strokeColor);
+    if (preset.strokeWidth != null) {
+      el.setAttribute("stroke-width", String(preset.strokeWidth));
+    }
+    if (preset.strokeDasharray != null) {
+      el.setAttribute(
+        "stroke-dasharray",
+        computeDasharray(preset.strokeDasharray, preset.strokeWidth),
+      );
+      el.setAttribute("data-dash-key", preset.strokeDasharray);
+    }
+    if (preset.fillColor) el.setAttribute("fill", preset.fillColor);
+    if (preset.fillOpacity != null) {
+      el.setAttribute("fill-opacity", String(preset.fillOpacity));
+    }
+    if (preset.strokeLinecap) {
+      el.setAttribute("stroke-linecap", preset.strokeLinecap);
+    }
+    if (preset.strokeLinejoin) {
+      el.setAttribute("stroke-linejoin", preset.strokeLinejoin);
+    }
+    if (preset.strokeOpacity != null) {
+      // Lines carry transparency via `opacity` so markers fade too;
+      // other shapes use `stroke-opacity`. Mirror the same rule as
+      // syncPresetFromElement's reader.
+      if (el.tagName === "line" || (el.tagName === "g" && el.getAttribute("data-type") === "arrow")) {
+        el.setAttribute("opacity", String(preset.strokeOpacity));
+      } else {
+        el.setAttribute("stroke-opacity", String(preset.strokeOpacity));
+      }
+    }
+    // Arrow groups: the head <path>'s `fill` attribute was set
+    // explicitly at refreshArrowPath time from the `<g>`'s stroke
+    // color. Since we just changed the stroke color, the head's
+    // fill is stale — refresh to re-derive it from the new stroke.
+    if (el.tagName === "g" && el.getAttribute("data-type") === "arrow") {
+      refreshArrowPath(el);
+    }
+  }
+
+  /** Marker/counter preset application. Standard semantics (P3-8
+   *  refactor): `fillColor` = bg interior, `strokeColor` = bg border.
+   *  Back-compat: if the preset predates the refactor (has
+   *  `strokeColor` but no `fillColor`), treat strokeColor as the bg
+   *  fill AND use legacy `markerBorder*` fields for border attrs. */
+  #applyMarkerPresetStyle(g: SVGElement, preset: ToolOptions): void {
+    const bg = g.querySelector("circle, rect");
+    if (!bg) return;
+    const legacy = !preset.fillColor && !!preset.strokeColor;
+    // --- bg fill ---
+    const fill = legacy ? preset.strokeColor : preset.fillColor;
+    if (fill) bg.setAttribute("fill", fill);
+    // --- bg border ---
+    const borderColor = legacy ? preset.markerBorderColor : preset.strokeColor;
+    if (borderColor) bg.setAttribute("stroke", borderColor);
+    const borderWidth = legacy ? preset.markerBorderWidth : preset.strokeWidth;
+    if (borderWidth != null) bg.setAttribute("stroke-width", String(borderWidth));
+    const borderDashKey = legacy ? preset.markerBorderDasharray : preset.strokeDasharray;
+    if (borderDashKey != null) {
+      const w = borderWidth ?? parseFloat(bg.getAttribute("stroke-width") || "1.5");
+      bg.setAttribute("stroke-dasharray", computeDasharray(borderDashKey, w));
+      bg.setAttribute("data-dash-key", borderDashKey);
+    }
+    if (preset.fontSize != null) {
+      const text = g.querySelector("text");
+      if (text) text.setAttribute("font-size", String(preset.fontSize));
+    }
+  }
+
+  /** Textbox preset application: text color is the `<text>` child's
+   *  `fill` (TextTool's convention); font family / size also live on
+   *  the `<text>`. The bg `<rect>` (for sticky / callout variants)
+   *  derives its color from the text color via `stickyBgFor` at
+   *  rebuild time — here we just update the data-color attr + text
+   *  fill; a full rebuild happens elsewhere if needed. */
+  #applyTextboxPresetStyle(g: SVGElement, preset: ToolOptions): void {
+    if (preset.strokeColor) {
+      g.setAttribute("data-color", preset.strokeColor);
+      const text = g.querySelector("text");
+      if (text) text.setAttribute("fill", preset.strokeColor);
+    }
+    if (preset.fontFamily) {
+      g.setAttribute("data-font-family", preset.fontFamily);
+      const text = g.querySelector("text");
+      if (text) text.setAttribute("font-family", preset.fontFamily);
+    }
+    if (preset.fontSize != null) {
+      const text = g.querySelector("text");
+      if (text) text.setAttribute("font-size", String(preset.fontSize));
+    }
+  }
+
+  /** Show a compact variant picker for tools whose flyout is just a
+   *  small set of sub-shapes (shape / arrow / text / freehand /
+   *  redact). Clicking a chip sets the variant on the tool's preset,
+   *  updates the parent button icon, closes the popover, and
+   *  activates the tool — a one-click path from "pick variant" to
+   *  "start drawing it". Full property editing lives in the right
+   *  panel; this is intentionally NOT a miniature property panel. */
+  #showVariantFlyout(toolId: string, anchor: HTMLElement): void {
+    const group = TOOL_VARIANTS[toolId];
+    if (!group) return;
+
+    const preset = this.#getCurrentPreset(toolId);
+    const current = (preset[group.field] as string) || group.fallback;
+    const placement = this.#orientation === "vertical" ? "right" : "below";
+
+    const close = openAnchoredPopover(anchor, (root) => {
+      const row = document.createElement("div");
+      row.className = "tool-flyout-row";
+      for (const v of group.variants) {
+        const chip = document.createElement("button");
+        chip.type = "button";
+        // Custom inline SVG takes precedence over ligature when set.
+        // Ligature-only chips keep the Material Symbols class for font
+        // rendering; SVG chips drop it (irrelevant + font-variation
+        // settings would forcibly tint the SVG).
+        chip.className = "tool-flyout-chip"
+          + (v.svg ? " tool-flyout-chip-svg" : " material-symbols-outlined")
+          + (current === v.value ? " active" : "");
+        if (v.svg) chip.innerHTML = v.svg;
+        else chip.textContent = v.icon;
+        setTooltip(chip, v.label);
+        chip.setAttribute("aria-label", v.label);
+        chip.addEventListener("click", () => {
+          // Switch variant: save current at old key, load new (or
+          // seed) at new key. Updates #lastVariantByTool so future
+          // tool activations pick this variant by default.
+          const next = this.#changeVariant(toolId, v.value, preset);
+          // Mutate the captured preset reference so anything inside
+          // this closure that still reads `preset` sees the new
+          // values.
+          Object.keys(preset).forEach((k) => delete (preset as unknown as Record<string, unknown>)[k]);
+          Object.assign(preset, next);
+          this.#savePresetsToFile();
+          this.#syncToolButtonIcon(toolId);
+          close();
+          this.#activateToolById(toolId);
+        });
+        row.appendChild(chip);
+      }
+      root.appendChild(row);
+    }, { placement, className: "tool-flyout-variant" });
+  }
+
+  /** Sync the tool button's variant indicator to reflect the currently-
+   *  selected variant.
+   *
+   *  Design choice: the MAIN icon stays FIXED (so the tool's identity
+   *  is always visible — "Shape is always the shapes icon"). Variant
+   *  is shown as a small badge in the bottom-right corner of the
+   *  button. Rationale:
+   *    - Tool identity must be constant for visual scanning + muscle
+   *      memory (Figma / Miro / PowerPoint pattern)
+   *    - Changing the main icon per-variant (Illustrator "sticky
+   *      tool" pattern) is problematic for casual / short-session
+   *      use like screenshot annotation, because the user has no
+   *      time to memorize which icon maps to which tool
+   *    - The caret (▼) + badge together tell the user "sub-variants
+   *      exist, current one is X" without hiding the tool identity
+   *
+   *  Highlight tool is special-cased: it uses a bottom color bar
+   *  instead of a badge (the "variant" is a color, which reads more
+   *  naturally as a color swatch than as an icon glyph). */
+  /** Ensure the variant badge exists on `btn`, attaching the flyout-
+   *  opening click handler the first time it's created.
+   *
+   *  The badge serves double duty as (a) the current-variant indicator
+   *  and (b) the flyout trigger. Attaching the click handler here
+   *  (rather than on the main button) lets us `stopPropagation` cleanly
+   *  — the tool-activation handler bound to the button never sees the
+   *  click when the user targets the badge, so a badge click opens the
+   *  flyout without also activating the tool. */
+  #ensureBadge(btn: HTMLButtonElement, toolId: string): HTMLSpanElement {
+    let badge = btn.querySelector<HTMLSpanElement>(":scope > .tool-btn-badge");
+    if (badge) return badge;
+    badge = document.createElement("span");
+    // Aria-hidden because the parent button's aria-label already
+    // includes the variant name — the badge is visual shorthand for
+    // the same info and would double-announce if voiced.
+    badge.setAttribute("aria-hidden", "true");
+    // No separate tooltip on the badge: the PARENT button's tooltip
+    // (e.g. "Shape (Rectangle)") already covers the semantic info,
+    // and a second tooltip with "Click for variants" would (a) fire
+    // simultaneously with the parent's on hover since CSS :hover
+    // cascades to ancestors, and (b) in vertical mode land visually
+    // on top of the NEXT tool icon stacked below. Discoverability of
+    // the flyout affordance is handled visually: the badge shows
+    // cursor: pointer and scales on hover, which reads as "clickable"
+    // without needing text.
+    // Only attach the click handler when the enclosing wrap is
+    // marked as having a flyout (set in #render). Tools without a
+    // flyout (Crop) never reach this codepath anyway — the badge is
+    // only created from inside #syncToolButtonIcon, which is only
+    // called for tools in TOOL_VARIANTS or for Highlight. Still,
+    // guard for safety.
+    const wrap = btn.closest<HTMLElement>(".tool-btn-wrap");
+    if (wrap?.dataset.hasFlyout === "1") {
+      badge.addEventListener("click", (e) => {
+        // Intentionally NO stopPropagation — the click needs to
+        // bubble up to document so other open popovers' outside-
+        // click listeners can close themselves. The parent button's
+        // click handler already short-circuits when the event target
+        // is inside a badge (see #render), so the tool won't
+        // accidentally activate. `preventDefault` is kept only for
+        // form-submission edge cases if the button were ever placed
+        // inside a <form>.
+        e.preventDefault();
+        if (toolId === "highlight") {
+          this.#showHighlightColorFlyout(wrap);
+        } else {
+          this.#showVariantFlyout(toolId, wrap);
+        }
+      });
+    }
+    btn.appendChild(badge);
+    return badge;
+  }
+
+  #syncToolButtonIcon(toolId: string): void {
+    const btn = this.#toolButtons.get(toolId);
+    if (!btn) return;
+
+    // Highlight: color-swatch badge in the bottom-right corner — same
+    // position + size as other tools' variant badges, but renders as
+    // a solid-color circle (no icon glyph) because the "variant" IS a
+    // color. This unifies Highlight with the Pattern-A badge scheme
+    // used elsewhere; the previous bottom-underline approach put the
+    // color indicator in a different spot from every other tool's
+    // indicator, which was visually inconsistent.
+    if (toolId === "highlight") {
+      const preset = this.#getCurrentPreset(toolId);
+      const color = (preset.highlightColor as string) || DEFAULT_HIGHLIGHT_COLOR;
+      const badge = this.#ensureBadge(btn, toolId);
+      badge.className = "tool-btn-badge tool-btn-badge-color";
+      badge.textContent = "";  // no glyph — color lives in ::after
+      // The badge itself keeps the circular panel-colored frame (so
+      // it matches every other tool's variant badge shape); the inner
+      // color swatch is rendered as a rounded square via
+      // .tool-btn-badge-color::after, driven by this custom property.
+      // Clear any legacy inline background from before the
+      // circle-containing-square redesign.
+      badge.style.background = "";
+      badge.style.setProperty("--swatch-color", color);
+      // Keep the button's title informative — tools with variants go
+      // through the block below but highlight early-returns, so we
+      // set it directly here. The palette LABEL ("Yellow") is shown
+      // instead of the raw hex so it matches the Selection-side
+      // "Selected Highlight (Yellow)" formatter; for colors outside
+      // the preset palette, highlightColorLabel falls back to the
+      // hex string automatically.
+      const toolDef = this.#tools.get(toolId);
+      if (toolDef) {
+        const label = highlightColorLabel(color);
+        const composed = label
+          ? `${toolDef.label} (${label})`
+          : toolDef.label;
+        setTooltip(btn, composed);
+        btn.setAttribute("aria-label", composed);
+      }
+      return;
+    }
+
+    const group = TOOL_VARIANTS[toolId];
+    if (!group) return;
+    const preset = this.#getCurrentPreset(toolId);
+    const current = (preset[group.field] as string) || group.fallback;
+    const variant = group.variants.find((v) => v.value === current);
+    if (!variant) return;
+
+    const badge = this.#ensureBadge(btn, toolId);
+    // Variants with inline SVG swap the class set so the badge's font
+    // rules (Material Symbols ligature rendering + font-variation)
+    // don't interfere with the SVG glyph.
+    if (variant.svg) {
+      badge.className = "tool-btn-badge tool-btn-badge-svg";
+      badge.innerHTML = variant.svg;
+    } else {
+      badge.className = "tool-btn-badge material-symbols-outlined";
+      badge.textContent = variant.icon;
+    }
+
+    // Update title/aria-label so the variant is announced alongside
+    // the tool identity. Putting tool name FIRST ("Shape (Rounded
+    // rectangle)") ensures screen-reader users hear the tool's
+    // identity before its current variant — matching the visual
+    // priority of main icon > badge.
+    const toolDef = this.#tools.get(toolId);
+    if (toolDef) {
+      const composed = `${toolDef.label} (${variant.label})`;
+      setTooltip(btn, composed);
+      btn.setAttribute("aria-label", composed);
+    }
+  }
+
+  /** Color-swatch flyout for the Highlight tool. Renders one round
+   *  chip per preset color; click stores the color in the preset,
+   *  updates the button's swatch indicator, and activates the tool so
+   *  the user can start highlighting immediately with the new color. */
+  #showHighlightColorFlyout(anchor: HTMLElement): void {
+    const toolId = "highlight";
+    const preset = this.#getCurrentPreset(toolId);
+    const current = (preset.highlightColor as string) || DEFAULT_HIGHLIGHT_COLOR;
+    const placement = this.#orientation === "vertical" ? "right" : "below";
+
+    const close = openAnchoredPopover(anchor, (root) => {
+      const row = document.createElement("div");
+      row.className = "tool-flyout-row tool-flyout-color-row";
+      for (const c of HIGHLIGHT_COLORS) {
+        const chip = document.createElement("button");
+        chip.type = "button";
+        chip.className = "tool-flyout-color-chip"
+          + (current.toLowerCase() === c.value.toLowerCase() ? " active" : "");
+        // Color lives on the inner ::before swatch so the chip frame
+        // can signal hover / active via background + border tint —
+        // same vocabulary as .tool-flyout-chip-svg for glyph chips.
+        chip.style.setProperty("--swatch-color", c.value);
+        setTooltip(chip, c.label);
+        chip.setAttribute("aria-label", c.label);
+        chip.addEventListener("click", () => {
+          preset.highlightColor = c.value;
+          preset.shapeType = "highlight";
+          this.#saveCurrentPreset(toolId, preset);
+          this.#savePresetsToFile();
+          this.#syncToolButtonIcon(toolId);
+          close();
+          this.#activateToolById(toolId);
+        });
+        row.appendChild(chip);
+      }
+      root.appendChild(row);
+    }, { placement, className: "tool-flyout-highlight" });
+  }
+
+  /**
+   * Rubber-band propagation: read the element's current style attrs
+   * and update the MATCHING tool's preset so the next shape drawn
+   * with that tool inherits the same look. Called by the host after
+   * PropertyPanel fires its `onStyleChanged` callback.
+   *
+   * Example: the user drew a red arrow, then edited it to blue via
+   * the Selection panel. Without this, the NEXT arrow would still be
+   * red (preset untouched). With this, the arrow preset's
+   * `strokeColor` is updated to blue, so the next draw matches the
+   * user's most recent deliberate choice.
+   */
+  syncPresetFromElement(el: SVGElement): void {
+    const toolId = toolIdForElement(el);
+    if (!toolId) return;
+    // Per-variant preset: route the update to the SPECIFIC variant
+    // preset (e.g. "shape.rounded") rather than the tool-level preset.
+    // This way editing a rounded rectangle's color doesn't overwrite
+    // the sharp-rectangle default.
+    const elementKey = this.#elementKeyFromElement(el, toolId);
+    const preset = { ...(this.#presets.get(elementKey) || this.#options) };
+
+    // Freehand session groups have no stroke attrs of their own —
+    // the style lives on the child <path> elements. Use the most
+    // recent stroke (last path child) as the read source so rubber-
+    // band reflects "what the user just drew".
+    let readEl: SVGElement = el;
+    if (isFreehandGroup(el)) {
+      const pathChildren = el.querySelectorAll<SVGPathElement>(":scope > path");
+      if (pathChildren.length > 0) {
+        readEl = pathChildren[pathChildren.length - 1];
+      }
+    }
+
+    // Universal style attrs that map 1:1 onto ToolOptions fields.
+    const stroke = readEl.getAttribute("stroke");
+    if (stroke) preset.strokeColor = stroke;
+    const fill = readEl.getAttribute("fill");
+    if (fill) {
+      // For highlight rects, the fill IS the highlight color. Route
+      // it to `highlightColor` so the Highlight tool's next click
+      // remembers the user's tweaked color, while leaving the
+      // Shape tool's `fillColor` alone (the two presets are kept
+      // independent on purpose).
+      if (toolId === "highlight") preset.highlightColor = fill;
+      else preset.fillColor = fill;
+    }
+    const sw = parseFloat(readEl.getAttribute("stroke-width") || "");
+    if (isFinite(sw) && sw > 0) preset.strokeWidth = sw;
+    const da = readEl.getAttribute("stroke-dasharray");
+    if (da != null) preset.strokeDasharray = da;
+    const dashKey = readEl.getAttribute("data-dash-key");
+    if (dashKey != null) preset.strokeDasharray = dashKey;
+    const fo = parseFloat(readEl.getAttribute("fill-opacity") || "");
+    if (isFinite(fo)) preset.fillOpacity = fo;
+    // Lines carry transparency via `opacity` (so markers fade too);
+    // other shapes use stroke-opacity. Check both so the preset
+    // picks up whichever is present.
+    const so = parseFloat(
+      readEl.getAttribute("opacity")
+      || readEl.getAttribute("stroke-opacity")
+      || "",
+    );
+    if (isFinite(so)) preset.strokeOpacity = so;
+    const lc = readEl.getAttribute("stroke-linecap");
+    if (lc === "butt" || lc === "round" || lc === "square") {
+      preset.strokeLinecap = lc;
+    }
+    const lj = readEl.getAttribute("stroke-linejoin");
+    if (lj === "miter" || lj === "round" || lj === "bevel") {
+      preset.strokeLinejoin = lj;
+    }
+
+    // Tool-specific extras — pulled from the appropriate child node
+    // for composite elements (e.g. textboxes nest their <text> inside
+    // a <g data-type="textbox">).
+    if (toolId === "text") {
+      const tEl = el.tagName === "g" ? el.querySelector("text") : el;
+      const fs = parseFloat(tEl?.getAttribute("font-size") || "");
+      if (isFinite(fs) && fs > 0) preset.fontSize = fs;
+      const ff = tEl?.getAttribute("font-family") || el.getAttribute("data-font-family");
+      if (ff) preset.fontFamily = ff;
+      const variant = el.getAttribute("data-text-variant");
+      if (variant === "plain" || variant === "sticky" || variant === "callout") {
+        preset.textVariant = variant;
+      }
+      // Textbox <rect>s live inside the <g> — we don't want their
+      // bg-color / stroke-width polluting the tool preset, so clear
+      // the universal values above and re-read from the <text> child.
+      const textFill = tEl?.getAttribute("fill") || el.getAttribute("data-color");
+      if (textFill) preset.strokeColor = textFill;  // tool treats "text color" as stroke
+    }
+    if (toolId === "arrow") {
+      // Rubber-band the full per-end state into the variant's preset:
+      //   - Legacy `arrowHead` (none/end/both) classifies which
+      //     variant's preset to update.
+      //   - Per-end SHAPE / WIDTH / LENGTH values are preserved
+      //     within the variant's constraints — the user's custom
+      //     "Double arrow with start=diamond, end=oval" survives
+      //     round-trips, because variant-switching clamps per-end
+      //     into the valid range rather than fully resetting.
+      const endShape = el.getAttribute("data-arrow-end-shape");
+      const startShape = el.getAttribute("data-arrow-start-shape");
+      const hEnd = endShape != null
+        ? endShape !== "none"
+        : !!el.getAttribute("marker-end");
+      const hStart = startShape != null
+        ? startShape !== "none"
+        : !!el.getAttribute("marker-start");
+      preset.arrowHead = hStart && hEnd ? "both" : hEnd ? "end" : hStart ? "end" : "none";
+      // Per-end shape + width + length (PowerPoint-parity granular
+      // fields).
+      const ss = el.getAttribute("data-arrow-start-shape");
+      const es = el.getAttribute("data-arrow-end-shape");
+      const sw = el.getAttribute("data-arrow-start-width")
+        || el.getAttribute("data-arrow-start-size");
+      const sl = el.getAttribute("data-arrow-start-length")
+        || el.getAttribute("data-arrow-start-size");
+      const ew = el.getAttribute("data-arrow-end-width")
+        || el.getAttribute("data-arrow-end-size");
+      const el_ = el.getAttribute("data-arrow-end-length")
+        || el.getAttribute("data-arrow-end-size");
+      if (ss) preset.arrowHeadStart = ss as typeof preset.arrowHeadStart;
+      if (es) preset.arrowHeadEnd = es as typeof preset.arrowHeadEnd;
+      if (sw) preset.arrowWidthStart = sw as typeof preset.arrowWidthStart;
+      if (sl) preset.arrowLengthStart = sl as typeof preset.arrowLengthStart;
+      if (ew) preset.arrowWidthEnd = ew as typeof preset.arrowWidthEnd;
+      if (el_) preset.arrowLengthEnd = el_ as typeof preset.arrowLengthEnd;
+      // Clamp per-end shapes into the classified variant's valid range
+      // so the preset is always internally consistent with its variant
+      // label — protects against reverse-arrow data loaded from old
+      // saved files (begin non-"none" + end "none" gets reclassified
+      // as "end" + normalized to begin "none", end non-"none").
+      if (preset.arrowHead) {
+        this.#normalizeVariantSideFields("arrow", preset.arrowHead, preset);
+      }
+    }
+    if (toolId === "shape") {
+      if (el.tagName === "ellipse") preset.shapeType = "ellipse";
+      else if (el.tagName === "rect") {
+        preset.shapeType = el.hasAttribute("data-rounded") ? "rounded" : "rect";
+      }
+    }
+    if (toolId === "freehand") {
+      const ds = el.getAttribute("data-draw-style");
+      if (ds === "pen" || ds === "highlighter") preset.drawStyle = ds;
+    }
+    if (toolId === "redact") {
+      const rs = el.getAttribute("data-redact-style");
+      if (rs === "solid" || rs === "mosaic" || rs === "blur") preset.redactStyle = rs;
+    }
+    if (toolId === "marker") {
+      // MarkerTool writes the selected shape into `data-shape` on the
+      // outer <g>. Propagate it back into the preset's markerShape
+      // field so a subsequent click on the Counter button creates
+      // the same shape variant.
+      const ms = el.getAttribute("data-shape");
+      if (ms === "circle" || ms === "rect" || ms === "rounded") {
+        preset.markerShape = ms;
+      }
+      // P3-8 refactor: marker now uses STANDARD color semantics —
+      // `fillColor` = bg interior, `strokeColor` = bg border. The
+      // outer <g> has no stroke/fill attrs; we read both from the
+      // bg primitive (<circle> / <rect>). Also scrub the legacy
+      // `markerBorder*` fields so old presets don't linger and
+      // shadow the new values on re-save.
+      const bg = el.querySelector("circle, rect");
+      const bgFill = bg?.getAttribute("fill");
+      if (bgFill) preset.fillColor = bgFill;
+      const bgStroke = bg?.getAttribute("stroke");
+      if (bgStroke) preset.strokeColor = bgStroke;
+      const bsw = parseFloat(bg?.getAttribute("stroke-width") || "");
+      if (isFinite(bsw) && bsw >= 0) preset.strokeWidth = bsw;
+      const bdash = bg?.getAttribute("data-dash-key")
+        ?? bg?.getAttribute("stroke-dasharray");
+      if (bdash != null) preset.strokeDasharray = bdash;
+      // Clear legacy fields so we don't carry forward stale values.
+      delete (preset as Partial<ToolOptions>).markerBorderColor;
+      delete (preset as Partial<ToolOptions>).markerBorderWidth;
+      delete (preset as Partial<ToolOptions>).markerBorderDasharray;
+      // Font size for the counter number — read from the <text>
+      // child. Without this, changing font-size via the property
+      // panel wouldn't stick.
+      const tEl = el.tagName === "g" ? el.querySelector("text") : null;
+      const fs = parseFloat(tEl?.getAttribute("font-size") || "");
+      if (isFinite(fs) && fs > 0) preset.fontSize = fs;
+    }
+
+    // Save back at the same element key the read used, and update
+    // the last-used variant tracking so re-selecting this tool picks
+    // the same variant the user just edited.
+    this.#presets.set(elementKey, preset);
+    const group = TOOL_VARIANTS[toolId];
+    if (group && elementKey.includes(".")) {
+      const variant = elementKey.slice(elementKey.indexOf(".") + 1);
+      this.#lastVariantByTool.set(toolId, variant);
+    }
+    Object.assign(this.#options, preset);
+    this.#savePresetsToFile();
+    this.#syncToolButtonIcon(toolId);
+  }
+
+  /** Register a host-provided extra button on the toolbar (e.g. the
+   *  Scratchpad library). The button is appended to a dedicated group
+   *  between the tool group and the undo/redo group so the visual
+   *  rhythm stays "create / reusable / history". `onClick` gets the
+   *  anchor element so the host can open a popover against it. */
+  registerExtraToolButton(opts: {
+    id: string;
+    icon: string;
+    title: string;
+    onClick: (anchor: HTMLButtonElement) => void;
+  }): HTMLButtonElement {
+    const btn = this.#btn(opts.icon, opts.title);
+    btn.dataset.extraTool = opts.id;
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      opts.onClick(btn);
+    });
+    this.#extraButtons.push(btn);
+    if (this.#extraButtonGroup) {
+      this.#extraButtonGroup.appendChild(btn);
+      if (!this.#extraButtonGroup.isConnected) {
+        // If the group wasn't attached (no extras at render time),
+        // slot it in between the tool group and the undo/redo group.
+        const sep = this.#container.querySelector(".toolbar-spacer");
+        if (sep) this.#container.insertBefore(this.#extraButtonGroup, sep);
+        else this.#container.appendChild(this.#extraButtonGroup);
+      }
+    }
+    return btn;
+  }
+
+  /**
+   * Build the property-control DOM for a given tool into `container`.
+   *
+   * Layout mirrors the SELECTION-side property panel so the user sees
+   * the same controls, same labels, same pulldown style regardless of
+   * whether they're configuring "next draw" (Tool mode) or editing an
+   * existing shape (Selection mode). The helpers come from
+   * `property-controls.ts` which is the single source of truth for
+   * pp-row / pp-section / pp-color-btn / pp-number / createCustomSelect
+   * construction.
+   *
+   * Every tool renders:
+   *   1. A "Type" section — chip row for the variant picker (kept as
+   *      chips for now because variants are icon-dense and benefit
+   *      from always-visible choices rather than a pulldown).
+   *   2. Tool-specific appearance controls — Color / Width / Dash
+   *      type / Cap type / Fill / Opacity / Font / Size as
+   *      applicable. All use the shared pp-* helpers.
+   *
+   * Labels are unified with the selection panel:
+   *   "Type" (variant picker), "Color", "Transparency", "Width",
+   *   "Dash type", "Cap type", "Fill", "Opacity", "Font", "Size".
+   */
+  #populateToolProperties(toolId: string, menu: HTMLElement): void {
+    const preset = this.#getCurrentPreset(toolId);
+    const isText = toolId === "text";
+    const isMarker = toolId === "marker";
+    const isShape = toolId === "shape";
+    const isArrow = toolId === "arrow";
+    const isFreehand = toolId === "freehand";
+    const isRedact = toolId === "redact";
+    const isHighlight = toolId === "highlight";
+
+    // --- Local helpers (close over preset + toolId) ------------------
+
+    /** Chip-row variant picker wrapped in a "Type" pp-section. Each
+     *  chip's click routes through #handlePanelVariantChange so the
+     *  switch/save/seed logic matches the toolbar flyout's behavior. */
+    const addTypeRow = (
+      options: Array<{ value: string; icon?: string; svg?: string; label: string }>,
+      current: string,
+    ): void => {
+      const { section, body } = createPropertySection("Type");
+      const row = document.createElement("div");
+      row.className = "pp-type-row";
+      for (const opt of options) {
+        const chip = document.createElement("div");
+        chip.className = "prop-choice-chip"
+          + (opt.svg ? "" : " material-symbols-outlined")
+          + (current === opt.value ? " active" : "");
+        if (opt.svg) {
+          chip.innerHTML = opt.svg;
+        } else if (opt.icon) {
+          chip.textContent = opt.icon;
+          // Size + font-variation come from .prop-choice-chip /
+          // .material-symbols-outlined in CSS so the Tool panel
+          // ligature chips match Selection panel + toolbar flyout
+          // dimensions (22px glyph in a 32×32 box).
+        }
+        setTooltip(chip, opt.label);
+        chip.addEventListener("click", () => {
+          row.querySelectorAll(".prop-choice-chip").forEach((c) => c.classList.remove("active"));
+          chip.classList.add("active");
+          this.#handlePanelVariantChange(toolId, opt.value, preset);
+        });
+        row.appendChild(chip);
+      }
+      body.appendChild(row);
+      menu.appendChild(section);
+    };
+
+    /** Lazily-created Fill / Line section bodies. Category order in
+     *  the DOM is Type → Fill → Line. We enforce the order at
+     *  insertion time: when Fill is created, insert it BEFORE any
+     *  already-created Line section; Line always appends to the end.
+     *  Sections stay out of the DOM entirely if no row is added — no
+     *  empty cards for tools that don't need Fill. */
+    let fillBody: HTMLElement | null = null;
+    let lineSection: HTMLElement | null = null;
+    let lineBody: HTMLElement | null = null;
+    const getFillBody = (): HTMLElement => {
+      if (!fillBody) {
+        const s = createPropertySection("Fill");
+        if (lineSection) {
+          // Line already in DOM — slot Fill in ahead of it.
+          menu.insertBefore(s.section, lineSection);
+        } else {
+          menu.appendChild(s.section);
+        }
+        fillBody = s.body;
+      }
+      return fillBody;
+    };
+    const getLineBody = (): HTMLElement => {
+      if (!lineBody) {
+        const s = createPropertySection("Line");
+        lineSection = s.section;
+        menu.appendChild(s.section);
+        lineBody = s.body;
+      }
+      return lineBody;
+    };
+
+    /** Sync-helper: after a property row mutates `preset`, push the
+     *  change into BOTH the presets map (so it persists) AND the
+     *  live `this.#options` reference (so the ACTIVE tool sees it on
+     *  the next pointerdown — tools read options at creation-time
+     *  values otherwise).
+     *
+     *  Without this sync, e.g. picking a new pen color while Draw is
+     *  active would save the color to the preset but leave the in-
+     *  flight FreehandTool drawing with the OLD color, because its
+     *  `this.options` is a reference to `this.#options` which was
+     *  only populated on tool activation. */
+    const syncPreset = (): void => {
+      this.#saveCurrentPreset(toolId, preset);
+      Object.assign(this.#options, preset);
+    };
+
+    /** Color pull-button row (PowerPoint-style). The callback receives
+     *  the picked color; persistence happens automatically. */
+    const addColorRow = (
+      container: HTMLElement,
+      label: string,
+      current: string,
+      onChange: (v: string) => void,
+      opts?: { allowNone?: boolean },
+    ): void => {
+      const btn = createColorPullButton(current, (color) => {
+        onChange(color);
+        syncPreset();
+      }, { allowNone: opts?.allowNone });
+      container.appendChild(createPropertyRow(label, btn));
+    };
+
+    /** Number input row (PowerPoint-style with up/down spinner). */
+    const addNumberRow = (
+      container: HTMLElement,
+      label: string,
+      current: number,
+      unit: string,
+      min: number,
+      max: number,
+      step: number,
+      onChange: (v: number) => void,
+    ): void => {
+      const input = createNumberInput({
+        current, unit, min, max, step,
+        onChange: (v) => {
+          onChange(v);
+          syncPreset();
+        },
+      });
+      container.appendChild(createPropertyRow(label, input));
+    };
+
+    /** Pulldown row (createCustomSelect), for Dash / Cap / Join /
+     *  Font-family selections with SVG previews. */
+    const addSelectRow = (
+      container: HTMLElement,
+      label: string,
+      options: Array<{ value: string; label: string; preview?: string }>,
+      current: string,
+      onChange: (v: string) => void,
+    ): void => {
+      container.appendChild(createPropertyRow(label, createCustomSelect({
+        options,
+        current,
+        ariaLabel: label,
+        onChange: (v) => {
+          onChange(v);
+          syncPreset();
+        },
+      })));
+    };
+
+    /** Preview SVG helpers — match the selection panel's visuals for
+     *  drop-in consistency between the two surfaces. */
+    const dashPreview = (key: string): string => {
+      const da = computeDasharray(key, 1.5);
+      const daAttr = da ? ` stroke-dasharray="${da}"` : "";
+      return `<svg width="60" height="10" viewBox="0 0 60 10"><line x1="2" y1="5" x2="58" y2="5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"${daAttr}/></svg>`;
+    };
+    const capPreview = (cap: LineCap): string =>
+      `<svg width="32" height="12" viewBox="0 0 32 12"><line x1="4" y1="6" x2="28" y2="6" stroke="currentColor" stroke-width="4" stroke-linecap="${cap}"/></svg>`;
+
+    // =================================================================
+    // 1. Type picker (for tools with variants)
+    // =================================================================
+    if (isRedact) {
+      if (!preset.redactStyle) preset.redactStyle = "mosaic";
+      addTypeRow([
+        { value: "mosaic", icon: "grid_view", label: "Mosaic (pixelate)" },
+        { value: "solid",  icon: "check_box", label: "Solid bar" },
+        { value: "blur",   icon: "blur_on",   label: "Blur" },
+      ], preset.redactStyle);
+    } else if (isFreehand) {
+      if (!preset.drawStyle) preset.drawStyle = "pen";
+      addTypeRow([
+        { value: "pen",         icon: "edit",            label: "Pen" },
+        { value: "highlighter", icon: "ink_highlighter", label: "Highlighter" },
+      ], preset.drawStyle);
+    } else if (isArrow) {
+      if (!preset.arrowHead) preset.arrowHead = "end";
+      // Share ARROW_ICON_SVG with the toolbar flyout so the Tool panel
+      // Type row and the toolbar's variant badge show identical glyphs.
+      addTypeRow([
+        { value: "none", label: "Line",         svg: ARROW_ICON_SVG.none },
+        { value: "end",  label: "Arrow",        svg: ARROW_ICON_SVG.end  },
+        { value: "both", label: "Double arrow", svg: ARROW_ICON_SVG.both },
+      ], preset.arrowHead);
+    } else if (isShape) {
+      if (!preset.shapeType) preset.shapeType = "rect";
+      // Use the same SHAPE_ICON_SVG set as the toolbar badge so the
+      // "next draw" chip and the "currently selected" badge carry
+      // identical glyphs across the three surfaces (toolbar badge /
+      // Tool panel Type row / Selection panel Type row).
+      addTypeRow([
+        { value: "rect",    svg: SHAPE_ICON_SVG.rect,    label: "Rectangle" },
+        { value: "rounded", svg: SHAPE_ICON_SVG.rounded, label: "Rounded"   },
+        { value: "ellipse", svg: SHAPE_ICON_SVG.ellipse, label: "Ellipse"   },
+      ], preset.shapeType);
+    } else if (isMarker) {
+      const currentMarker: MarkerShape = preset.markerShape
+        ?? (preset.fillColor === "rect" ? "rect" : "circle");
+      if (preset.fillColor === "rect" || preset.fillColor === "none") {
+        delete (preset as Partial<ToolOptions>).fillColor;
+      }
+      addTypeRow([
+        { value: "circle",  svg: COUNTER_ICON_SVG.circle,  label: "Circle" },
+        { value: "rect",    svg: COUNTER_ICON_SVG.rect,    label: "Square" },
+        { value: "rounded", svg: COUNTER_ICON_SVG.rounded, label: "Rounded square" },
+      ], currentMarker);
+    } else if (isText) {
+      if (!preset.textVariant) preset.textVariant = "sticky";
+      addTypeRow([
+        { value: "plain",   icon: "text_fields",   label: "Plain text" },
+        { value: "sticky",  icon: "sticky_note_2", label: "Sticky note" },
+        { value: "callout", icon: "chat_bubble",   label: "Callout" },
+      ], preset.textVariant);
+    }
+
+    // =================================================================
+    // 2. Appearance controls
+    // =================================================================
+
+    // --- Redact: only color for solid variant (goes under Fill) ----
+    if (isRedact) {
+      if (preset.redactStyle === "solid") {
+        addColorRow(
+          getFillBody(),
+          "Color",
+          preset.fillColor === "none" ? "#111111" : preset.fillColor,
+          (v) => { preset.fillColor = v; },
+        );
+      }
+      this.#saveCurrentPreset(toolId, preset);
+      Object.assign(this.#options, preset);
+      return;
+    }
+
+    // --- Marker / Counter: Fill (Color) + Line (border) + Label ----
+    // Fill = bg fill (tool convention: stored in preset.strokeColor).
+    // Line = OPTIONAL bg border — stored in the markerBorder* fields
+    //   so it doesn't collide with the strokeColor-as-fill convention.
+    // Label = number-rendering controls (Size; Value is per-element).
+    if (isMarker) {
+      // Fill — `allowNone` so the user can pick "No fill" to create
+      // an outline-only counter (ring + number, no interior paint).
+      // P3-8: standard color semantics — Fill = bg interior
+      // (`fillColor`), Line = bg border (`strokeColor`). Back-compat:
+      // migrate legacy presets on first render by copying the old
+      // `strokeColor = bg fill` value into `fillColor` if unset.
+      if (preset.fillColor === undefined && preset.strokeColor) {
+        preset.fillColor = preset.strokeColor;
+        // Clear old `strokeColor` — it'll be re-seeded below with the
+        // proper border default if needed.
+        preset.strokeColor = preset.markerBorderColor ?? "#ffffff";
+      }
+      const fb = getFillBody();
+      addColorRow(fb, "Color", preset.fillColor ?? "#ff0000",
+        (v) => { preset.fillColor = v; },
+        { allowNone: true });
+
+      // Line — default border is white 1.5pt solid (matches
+      // MarkerTool.onPointerDown). Uses the standard stroke* preset
+      // fields now that marker follows the same color convention as
+      // every other tool.
+      const lb = getLineBody();
+      addColorRow(lb, "Color", preset.strokeColor || "#ffffff",
+        (v) => { preset.strokeColor = v; });
+      addNumberRow(lb, "Width", preset.strokeWidth ?? 1.5, "pt", 0, 20, 0.25,
+        (v) => { preset.strokeWidth = v; });
+      addSelectRow(lb, "Dash type", [
+        { value: "",        label: "Solid",     preview: dashPreview("") },
+        { value: "dash",    label: "Dashed",    preview: dashPreview("dash") },
+        { value: "dot",     label: "Dotted",    preview: dashPreview("dot") },
+        { value: "dashDot", label: "Dash-Dot",  preview: dashPreview("dashDot") },
+        { value: "lgDash",  label: "Long Dash", preview: dashPreview("lgDash") },
+      ], preset.strokeDasharray ?? "",
+        (v) => { preset.strokeDasharray = v; });
+
+      // Label — appended at `menu` tail, which (after Fill + Line
+      // insertion) lands last. Order: Type → Fill → Line → Label.
+      const { section: labelSection, body: labelBody } = createPropertySection("Label");
+      menu.appendChild(labelSection);
+      addNumberRow(labelBody, "Size", preset.fontSize, "pt", 8, 48, 1,
+        (v) => { preset.fontSize = v; });
+
+      this.#saveCurrentPreset(toolId, preset);
+      Object.assign(this.#options, preset);
+      return;
+    }
+
+    // --- Text: Color + Font + Size (Line section) ------------------
+    if (isText) {
+      const lb = getLineBody();
+      addColorRow(lb, "Color", preset.strokeColor, (v) => { preset.strokeColor = v; });
+      if (!preset.fontFamily) preset.fontFamily = "sans-serif";
+      addSelectRow(lb, "Font", [
+        { value: "sans-serif",                            label: "Sans-serif" },
+        { value: "serif",                                 label: "Serif" },
+        { value: "monospace",                             label: "Monospace" },
+        { value: "system-ui, -apple-system, sans-serif",  label: "System UI" },
+      ], preset.fontFamily, (v) => { preset.fontFamily = v; });
+      addNumberRow(lb, "Size", preset.fontSize, "pt", 8, 96, 1,
+        (v) => { preset.fontSize = v; });
+      this.#saveCurrentPreset(toolId, preset);
+      Object.assign(this.#options, preset);
+      return;
+    }
+
+    // --- Highlight: Type = color swatch chips, Fill = Transparency -
+    // The Highlight "variant" concept IS the color itself (see
+    // TOOL_VARIANTS.highlight). Each swatch routes through the
+    // standard #handlePanelVariantChange path so the preset system
+    // keeps a separate Transparency value per color — yellow at 60%
+    // and red at 40% can coexist.
+    if (isHighlight) {
+      const currentColor = (preset.highlightColor || HIGHLIGHT_COLORS[0].value).toLowerCase();
+      const { section: typeSection, body: typeBody } = createPropertySection("Type");
+      const row = document.createElement("div");
+      row.className = "pp-type-row";
+      for (const opt of HIGHLIGHT_COLORS) {
+        const chip = document.createElement("div");
+        chip.className = "prop-choice-chip pp-color-chip"
+          + (currentColor === opt.value ? " active" : "");
+        // Color lives on an inner swatch (rendered via .pp-color-chip
+        // ::before in CSS) driven by this custom property. The chip's
+        // outer frame stays transparent so hover / active states read
+        // the same way as every other Type chip (accent border + bg
+        // tint) — unifies the Highlight picker with the rest of the
+        // Type row vocabulary.
+        chip.style.setProperty("--swatch-color", opt.value);
+        setTooltip(chip, opt.label);
+        chip.addEventListener("click", () => {
+          row.querySelectorAll(".prop-choice-chip").forEach(
+            (c) => c.classList.remove("active"),
+          );
+          chip.classList.add("active");
+          this.#handlePanelVariantChange(toolId, opt.value, preset);
+        });
+        row.appendChild(chip);
+      }
+      typeBody.appendChild(row);
+      menu.appendChild(typeSection);
+
+      // Fill section — Transparency only. Stored as `1 - fillOpacity`
+      // to match the unified Transparency vocabulary used elsewhere
+      // (Shape, Arrow, Freehand strokes). Default fillOpacity 0.4 →
+      // displayed transparency 60%.
+      const fb = getFillBody();
+      addNumberRow(
+        fb,
+        "Transparency",
+        Math.round((1 - (preset.fillOpacity ?? 0.4)) * 100),
+        "%", 0, 100, 5,
+        (v) => { preset.fillOpacity = 1 - v / 100; },
+      );
+      this.#saveCurrentPreset(toolId, preset);
+      Object.assign(this.#options, preset);
+      return;
+    }
+
+    // --- Shape / Arrow / Freehand: stroke-based controls (Line) ----
+    const lb = getLineBody();
+    addColorRow(lb, "Color", preset.strokeColor, (v) => { preset.strokeColor = v; });
+
+    // Transparency (stroke-based). Stored as 1 - opacity to match the
+    // selection panel's Transparency slider semantics.
+    addNumberRow(
+      lb,
+      "Transparency",
+      Math.round((1 - (preset.strokeOpacity ?? 1)) * 100),
+      "%", 0, 100, 1,
+      (v) => { preset.strokeOpacity = 1 - v / 100; },
+    );
+
+    // Width
+    addNumberRow(lb, "Width", preset.strokeWidth, "pt", 0.25, 40, 0.25,
+      (v) => { preset.strokeWidth = v; });
+
+    // Dash type
+    addSelectRow(lb, "Dash type", [
+      { value: "",        label: "Solid",     preview: dashPreview("") },
+      { value: "dash",    label: "Dashed",    preview: dashPreview("dash") },
+      { value: "dot",     label: "Dotted",    preview: dashPreview("dot") },
+      { value: "dashDot", label: "Dash-Dot",  preview: dashPreview("dashDot") },
+      { value: "lgDash",  label: "Long Dash", preview: dashPreview("lgDash") },
+    ], preset.strokeDasharray ?? "", (v) => { preset.strokeDasharray = v; });
+
+    // Cap type — line ends on stroke primitives. Ordering mirrors
+    // selection panel (square / round / flat).
+    if (isShape || isArrow || isFreehand) {
+      addSelectRow(lb, "Cap type", [
+        { value: "square", label: "Square", preview: capPreview("square") },
+        { value: "round",  label: "Round",  preview: capPreview("round") },
+        { value: "butt",   label: "Flat",   preview: capPreview("butt") },
+      ], preset.strokeLinecap ?? "butt",
+        (v) => { preset.strokeLinecap = v as LineCap; });
+    }
+
+    // Join type (stroke-linejoin) intentionally omitted — see
+    // property-panel.ts #addPPLineSection for the rationale (invisible
+    // at typical widths, conceptually confusing).
+
+    // Arrow only: per-end type + size pulldowns (Begin / End). Lives
+    // inside the Line category — they're line-end decorations, not a
+    // separate concern. The picker auto-filters by the `arrowHead`
+    // variant (Line hides all non-"None" shapes).
+    if (isArrow) {
+      createArrowEndsRows(
+        lb,
+        {
+          start: {
+            shape: (preset.arrowHeadStart ?? "none") as ArrowShape,
+            width: (preset.arrowWidthStart ?? "md") as ArrowDim,
+            length: (preset.arrowLengthStart ?? "md") as ArrowDim,
+          },
+          end: {
+            shape: (preset.arrowHeadEnd ?? "triangle") as ArrowShape,
+            width: (preset.arrowWidthEnd ?? "md") as ArrowDim,
+            length: (preset.arrowLengthEnd ?? "md") as ArrowDim,
+          },
+        },
+        (next) => {
+          preset.arrowHeadStart = next.start.shape;
+          preset.arrowHeadEnd = next.end.shape;
+          preset.arrowWidthStart = next.start.width;
+          preset.arrowWidthEnd = next.end.width;
+          preset.arrowLengthStart = next.start.length;
+          preset.arrowLengthEnd = next.end.length;
+          syncPreset();
+        },
+      );
+    }
+
+    // Shape only: Fill section (Fill color + Opacity)
+    if (isShape) {
+      const fb = getFillBody();
+      addColorRow(
+        fb,
+        "Fill",
+        preset.fillColor === "none" ? "#ffffff" : preset.fillColor,
+        (v) => { preset.fillColor = v; },
+        { allowNone: true },
+      );
+      addNumberRow(
+        fb,
+        "Opacity",
+        Math.round((preset.fillOpacity ?? 1) * 100),
+        "%", 0, 100, 5,
+        (v) => { preset.fillOpacity = v / 100; },
+      );
+    }
+
+    // Freehand-only: "Done" button that commits the active drawing
+    // session (matches draw.io's continuous-draw workflow). Strokes
+    // across multiple pen-down cycles accumulate into one <path>
+    // until the user explicitly ends the session via this button
+    // or the Esc key. Without the button, the Esc-key shortcut is
+    // the only visible way to stop, which is easy to miss.
+    if (isFreehand) {
+      const doneRow = document.createElement("div");
+      doneRow.className = "pp-done-row";
+      const doneBtn = document.createElement("button");
+      doneBtn.type = "button";
+      doneBtn.className = "pp-done-btn";
+      doneBtn.textContent = "Done drawing";
+      setTooltip(doneBtn, "Finish the current drawing (Esc)");
+      doneBtn.addEventListener("click", () => {
+        const active = this.#canvas.activeTool;
+        if (active && active.name === "freehand") {
+          (active as FreehandTool).endSession();
+        }
+      });
+      doneRow.appendChild(doneBtn);
+      menu.appendChild(doneRow);
+    }
+
+    this.#saveCurrentPreset(toolId, preset);
+    Object.assign(this.#options, preset);
+  }
+
+
+  #addDropdownChoices<T>(
+    menu: HTMLElement, title: string, options: T[],
+    current: any,
+    onSelect: (val: any) => void,
+    makeSVG: (opt: T) => SVGSVGElement,
+    makeLabel: (opt: T) => string,
+    isActive: (opt: T, cur: any) => boolean,
+  ): void {
+    const section = document.createElement("div");
+    section.className = "prop-section";
+    const lbl = document.createElement("div");
+    lbl.className = "prop-section-label";
+    lbl.textContent = title;
+    section.appendChild(lbl);
+
+    const list = document.createElement("div");
+    list.className = "prop-choice-list";
+
+    for (const opt of options) {
+      const item = document.createElement("div");
+      item.className = "prop-choice-item" + (isActive(opt, current) ? " active" : "");
+      item.appendChild(makeSVG(opt));
+      const label = document.createElement("span");
+      label.className = "prop-choice-label";
+      label.textContent = makeLabel(opt);
+      item.appendChild(label);
+      item.addEventListener("click", () => {
+        list.querySelectorAll(".prop-choice-item").forEach((i) => i.classList.remove("active"));
+        item.classList.add("active");
+        onSelect((opt as any).value);
+      });
+      list.appendChild(item);
+    }
+
+    section.appendChild(list);
+    menu.appendChild(section);
+  }
+
+  #linePreviewSVG(width: number, strokeWidth: number, dash: string, _color: string): SVGSVGElement {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("width", String(width));
+    svg.setAttribute("height", "14");
+    svg.setAttribute("viewBox", `0 0 ${width} 14`);
+    const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+    line.setAttribute("x1", "4");
+    line.setAttribute("y1", "7");
+    line.setAttribute("x2", String(width - 4));
+    line.setAttribute("y2", "7");
+    line.setAttribute("class", "preview-line");
+    line.setAttribute("stroke-width", String(strokeWidth));
+    line.setAttribute("stroke-linecap", "round");
+    if (dash) line.setAttribute("stroke-dasharray", dash);
+    svg.appendChild(line);
+    return svg;
+  }
+
+  // --- Preset persistence ---
+
+  async #loadPresetsFromFile(): Promise<void> {
+    try {
+      const data = await loadToolPresets();
+      if (data.tools) {
+        for (const [rawKey, p] of Object.entries(data.tools)) {
+          // Migrate legacy tool-ID-keyed entries (e.g. "shape") to
+          // the tool's default-variant element key (e.g. "shape.rect").
+          // New entries that already use "tool.variant" form pass
+          // through unchanged.
+          const key = this.#migrateLegacyPresetKey(rawKey);
+          this.#presets.set(key, {
+            strokeColor: p.stroke_color,
+            fillColor: p.fill_color,
+            strokeWidth: p.stroke_width,
+            fontSize: p.font_size,
+            strokeDasharray: p.stroke_dasharray || "",
+            fillOpacity: p.fill_opacity ?? 1.0,
+            shapeType: (p.shape_type as any) || undefined,
+            arrowHead: (p.arrow_head as any) || undefined,
+            textVariant: (p.text_variant as any) || undefined,
+            fontFamily: p.font_family || undefined,
+            drawStyle: (p.draw_style as any) || undefined,
+            redactStyle: (p.redact_style as any) || undefined,
+            arrowHeadStart: (p.arrow_head_start as any) || undefined,
+            arrowHeadEnd: (p.arrow_head_end as any) || undefined,
+            arrowWidthStart: (p.arrow_width_start as any) || undefined,
+            arrowWidthEnd: (p.arrow_width_end as any) || undefined,
+            arrowLengthStart: (p.arrow_length_start as any) || undefined,
+            arrowLengthEnd: (p.arrow_length_end as any) || undefined,
+            highlightColor: p.highlight_color || undefined,
+            markerShape: (p.marker_shape as any) || undefined,
+          });
+        }
+      }
+      if (data.last_variants) {
+        for (const [toolId, variant] of Object.entries(data.last_variants)) {
+          this.#lastVariantByTool.set(toolId, variant);
+        }
+      }
+      // Reflect the just-loaded variants on the tool buttons.
+      for (const id of this.#tools.keys()) this.#syncToolButtonIcon(id);
+    } catch {
+      // No file or parse error, use defaults
+    }
+  }
+
+  /** Map a legacy tool-ID-keyed preset entry to the matching element
+   *  key. `"shape"` → `"shape.rect"` (the shape tool's fallback
+   *  variant), `"arrow"` → `"arrow.end"`, etc. New-format keys that
+   *  already contain "." pass through unchanged. */
+  #migrateLegacyPresetKey(rawKey: string): string {
+    if (rawKey.includes(".")) return rawKey;
+    const group = TOOL_VARIANTS[rawKey];
+    if (!group) return rawKey; // tools without variants (crop, highlight)
+    return `${rawKey}.${group.fallback}`;
+  }
+
+  #savePresetsToFile(): void {
+    if (isTauri) {
+      const tools: Record<string, ToolPreset> = {};
+      for (const [id, opts] of this.#presets) {
+        tools[id] = {
+          stroke_color: opts.strokeColor,
+          fill_color: opts.fillColor,
+          stroke_width: opts.strokeWidth,
+          font_size: opts.fontSize,
+          stroke_dasharray: opts.strokeDasharray,
+          fill_opacity: opts.fillOpacity,
+          shape_type: opts.shapeType,
+          arrow_head: opts.arrowHead,
+          text_variant: opts.textVariant,
+          font_family: opts.fontFamily,
+          draw_style: opts.drawStyle,
+          redact_style: opts.redactStyle,
+          arrow_head_start: opts.arrowHeadStart,
+          arrow_head_end: opts.arrowHeadEnd,
+          arrow_width_start: opts.arrowWidthStart,
+          arrow_width_end: opts.arrowWidthEnd,
+          arrow_length_start: opts.arrowLengthStart,
+          arrow_length_end: opts.arrowLengthEnd,
+          highlight_color: opts.highlightColor,
+          marker_shape: opts.markerShape,
+        };
+      }
+      const last_variants: Record<string, string> = {};
+      for (const [toolId, variant] of this.#lastVariantByTool) {
+        last_variants[toolId] = variant;
+      }
+      saveToolPresets({ tools, last_variants }).catch(() => {});
+    } else if (typeof chrome !== "undefined" && chrome.storage?.local) {
+      this.#savePresetsToStorage();
+    } else if (typeof localStorage !== "undefined") {
+      this.#savePresetsToLocalStorage();
+    }
+  }
+
+  async #loadPresetsFromStorage(): Promise<void> {
+    try {
+      const data = await chrome.storage.local.get(["toolPresets", "toolLastVariants"]);
+      const presets = data.toolPresets as Record<string, any> | undefined;
+      if (presets) {
+        for (const [rawId, p] of Object.entries(presets)) {
+          const id = this.#migrateLegacyPresetKey(rawId);
+          this.#presets.set(id, {
+            strokeColor: p.strokeColor ?? DEFAULT_STROKE_COLOR,
+            fillColor: p.fillColor ?? DEFAULT_FILL_COLOR,
+            strokeWidth: p.strokeWidth ?? DEFAULT_STROKE_WIDTH,
+            fontSize: p.fontSize ?? DEFAULT_FONT_SIZE,
+            strokeDasharray: p.strokeDasharray ?? "",
+            fillOpacity: p.fillOpacity ?? 1.0,
+            shapeType: p.shapeType,
+            arrowHead: p.arrowHead,
+            textVariant: p.textVariant,
+            fontFamily: p.fontFamily,
+            drawStyle: p.drawStyle,
+            redactStyle: p.redactStyle,
+            highlightColor: p.highlightColor,
+            markerShape: p.markerShape,
+          });
+        }
+      }
+      const lastVariants = data.toolLastVariants as Record<string, string> | undefined;
+      if (lastVariants) {
+        for (const [toolId, variant] of Object.entries(lastVariants)) {
+          this.#lastVariantByTool.set(toolId, variant);
+        }
+      }
+      for (const id of this.#tools.keys()) this.#syncToolButtonIcon(id);
+    } catch {
+      // Storage error, use defaults
+    }
+  }
+
+  #savePresetsToStorage(): void {
+    const presets: Record<string, any> = {};
+    for (const [id, opts] of this.#presets) {
+      presets[id] = { ...opts };
+    }
+    const lastVariants: Record<string, string> = {};
+    for (const [toolId, variant] of this.#lastVariantByTool) {
+      lastVariants[toolId] = variant;
+    }
+    chrome.storage.local.set({
+      toolPresets: presets,
+      toolLastVariants: lastVariants,
+    }).catch(() => {});
+  }
+
+  /** Storage key for the plain-Web persistence backend. Namespaced
+   *  (`annot.` prefix) so it doesn't collide with other site data on
+   *  the same origin. Versioned so a future schema migration can be
+   *  detected by reading an alternate key. */
+  static #LOCAL_STORAGE_KEY = "annot.toolPresets.v1";
+
+  /** Load presets + last-used variants from `localStorage`. Used by
+   *  plain-Web and PWA runtimes that don't have Tauri's filesystem
+   *  API or the extension's `chrome.storage`. */
+  #loadPresetsFromLocalStorage(): void {
+    try {
+      const raw = localStorage.getItem(Toolbar.#LOCAL_STORAGE_KEY);
+      if (!raw) return;
+      const data = JSON.parse(raw) as {
+        tools?: Record<string, any>;
+        lastVariants?: Record<string, string>;
+      };
+      if (data.tools) {
+        for (const [rawKey, p] of Object.entries(data.tools)) {
+          const key = this.#migrateLegacyPresetKey(rawKey);
+          this.#presets.set(key, {
+            strokeColor: p.strokeColor ?? DEFAULT_STROKE_COLOR,
+            fillColor: p.fillColor ?? DEFAULT_FILL_COLOR,
+            strokeWidth: p.strokeWidth ?? DEFAULT_STROKE_WIDTH,
+            fontSize: p.fontSize ?? DEFAULT_FONT_SIZE,
+            strokeDasharray: p.strokeDasharray ?? "",
+            fillOpacity: p.fillOpacity ?? 1.0,
+            shapeType: p.shapeType,
+            arrowHead: p.arrowHead,
+            textVariant: p.textVariant,
+            fontFamily: p.fontFamily,
+            drawStyle: p.drawStyle,
+            redactStyle: p.redactStyle,
+            highlightColor: p.highlightColor,
+            markerShape: p.markerShape,
+            arrowHeadStart: p.arrowHeadStart,
+            arrowHeadEnd: p.arrowHeadEnd,
+            arrowWidthStart: p.arrowWidthStart,
+            arrowWidthEnd: p.arrowWidthEnd,
+            arrowLengthStart: p.arrowLengthStart,
+            arrowLengthEnd: p.arrowLengthEnd,
+            strokeOpacity: p.strokeOpacity,
+            strokeLinecap: p.strokeLinecap,
+            strokeLinejoin: p.strokeLinejoin,
+          });
+        }
+      }
+      if (data.lastVariants) {
+        for (const [toolId, variant] of Object.entries(data.lastVariants)) {
+          this.#lastVariantByTool.set(toolId, variant);
+        }
+      }
+      for (const id of this.#tools.keys()) this.#syncToolButtonIcon(id);
+    } catch {
+      // Corrupted JSON or storage quota — fall back to defaults.
+    }
+  }
+
+  /** Persist presets + last-used variants to `localStorage`. Payload
+   *  is small (usually < 10KB total) so we don't worry about the
+   *  5-10MB quota here. Writes are best-effort — if quota is
+   *  exhausted we silently drop the save rather than blocking
+   *  interaction. */
+  #savePresetsToLocalStorage(): void {
+    try {
+      const tools: Record<string, any> = {};
+      for (const [id, opts] of this.#presets) {
+        tools[id] = { ...opts };
+      }
+      const lastVariants: Record<string, string> = {};
+      for (const [toolId, variant] of this.#lastVariantByTool) {
+        lastVariants[toolId] = variant;
+      }
+      localStorage.setItem(
+        Toolbar.#LOCAL_STORAGE_KEY,
+        JSON.stringify({ tools, lastVariants }),
+      );
+    } catch {
+      // Quota exceeded or storage disabled (private mode / 3rd-party
+      // context) — silent. Presets still work in-session via the
+      // in-memory Map; they just won't survive a reload.
+    }
+  }
+
+  /** Activate a tool by its ID (used after closing dropdown) */
+  #activateToolById(toolId: string): void {
+    const def = this.#tools.get(toolId);
+    if (!def) return;
+    const btn = this.#container.querySelector(`[data-tool="${toolId}"]`) as HTMLButtonElement | null;
+    if (!btn) return;
+
+    // Same as the main btn click handler: load the preset for this
+    // tool's CURRENT VARIANT, then activate.
+    const preset = this.#getCurrentPreset(toolId);
+    Object.assign(this.#options, preset);
+
+    const tool = def.factory(this.#options);
+    tool.onShapeComplete = (el?: SVGElement) => {
+      this.#saveCurrentPreset(toolId, this.#options);
+      this.#savePresetsToFile();
+      if (this.#selectBtn) this.#activate(null, this.#selectBtn, "Select");
+      if (el) this.#selection.select(el);
+    };
+    this.#activate(tool, btn, def.label);
+  }
+
+  #dropdownRow(label: string): HTMLDivElement {
+    const row = document.createElement("div");
+    row.className = "prop-row";
+    const lbl = document.createElement("span");
+    lbl.className = "prop-label";
+    lbl.textContent = label;
+    row.appendChild(lbl);
+    return row;
+  }
+
+  // =======================================================================
+  // Per-element preset helpers.
+  //
+  // The preset system is keyed by "element key" — a string like
+  // "shape.rect" / "arrow.end" / "text.callout" that uniquely identifies
+  // both the tool AND its currently-active variant. Element keys:
+  //   - Tools with variants:  `${toolId}.${variant}`
+  //   - Tools without variants: `${toolId}` (e.g. "crop", "highlight")
+  //
+  // The helpers below hide the key computation from callers: they just
+  // say "give me the preset for tool X" and the right one for the
+  // current variant is returned.
+  // =======================================================================
+
+  /** Compute the element key for a tool based on the currently-tracked
+   *  last-used variant. Returns the bare tool ID for tools without
+   *  variants. */
+  #currentElementKey(toolId: string): string {
+    const group = TOOL_VARIANTS[toolId];
+    if (!group) return toolId;
+    const variant = this.#lastVariantByTool.get(toolId) || group.fallback;
+    return `${toolId}.${variant}`;
+  }
+
+  /** Read the preset for a tool's current variant. Falls back to a
+   *  copy of the global defaults (`this.#options`) when no preset has
+   *  been saved for this (tool, variant) combination yet — this is
+   *  the first-use seed path. */
+  #getCurrentPreset(toolId: string): ToolOptions {
+    const key = this.#currentElementKey(toolId);
+    const stored = this.#presets.get(key);
+    return stored ? { ...stored } : { ...this.#options };
+  }
+
+  /** Persist a preset under the tool's CURRENT variant key. */
+  #saveCurrentPreset(toolId: string, preset: ToolOptions): void {
+    const key = this.#currentElementKey(toolId);
+    this.#presets.set(key, { ...preset });
+  }
+
+  /** Switch a tool to a different variant. Saves the CURRENT preset
+   *  under the OLD variant's key (capturing any in-flight edits),
+   *  then returns the NEW variant's preset — loaded from storage if
+   *  one exists, or seeded from the current preset (with the variant
+   *  field updated) if this is the first use.
+   *
+   *  Callers should `Object.assign(this.#options, returnedPreset)` (or
+   *  mutate their local preset object) and then re-activate the tool
+   *  so the change takes effect. */
+  #changeVariant(toolId: string, newVariant: string, currentPreset: ToolOptions): ToolOptions {
+    const group = TOOL_VARIANTS[toolId];
+    if (!group) {
+      // No-op for tools without variants — just return current preset.
+      return currentPreset;
+    }
+
+    // Step 1: save current preset under OLD variant's key.
+    const oldKey = this.#currentElementKey(toolId);
+    this.#presets.set(oldKey, { ...currentPreset });
+
+    // Step 2: update last-used variant tracking.
+    this.#lastVariantByTool.set(toolId, newVariant);
+
+    // Step 3: load new variant's preset, or seed from current.
+    const newKey = this.#currentElementKey(toolId);
+    const stored = this.#presets.get(newKey);
+    let result: ToolOptions;
+    if (stored) {
+      result = { ...stored };
+      (result as unknown as Record<string, unknown>)[group.field as string] = newVariant;
+    } else {
+      // First use of this variant: seed style (color / width / …) from
+      // the preset the user was just editing.
+      result = { ...currentPreset };
+      (result as unknown as Record<string, unknown>)[group.field as string] = newVariant;
+    }
+    // ALWAYS normalize variant-defining side fields (not only on seed).
+    // Rationale: variant represents the element TYPE (e.g. "both" =
+    // arrows on both ends). Its type-defining fields must match the
+    // variant label; otherwise the flyout shows "Double arrow" while
+    // the rendered shape is "circle + triangle", breaking the mental
+    // model. Style fields (color / width / dash) STAY per-variant —
+    // only the type-defining fields (per-end shape) get canonicalized.
+    // This aligns Arrow with how other tools behave: Shape's variant
+    // defines the element; Text's variant defines the composition;
+    // Arrow's variant defines the per-end marker presence.
+    this.#normalizeVariantSideFields(toolId, newVariant, result);
+    // Persist so later reads (e.g. #activateToolById via
+    // #getCurrentPreset) see the same values the caller is about to
+    // apply.
+    this.#presets.set(newKey, result);
+    return result;
+  }
+
+  /** Clamp tool-specific "override" fields into the newly-picked
+   *  variant's valid range. For Arrow this enforces the rule:
+   *    - Line:         begin "none",   end "none"
+   *    - Arrow:        begin "none",   end != "none"
+   *    - Double arrow: begin != "none", end != "none"
+   *
+   *  CLAMP semantics (not full reset): if a per-end shape is already
+   *  valid for the new variant (e.g. end=diamond when switching to
+   *  Double arrow), we KEEP it. Only invalid values get adjusted:
+   *    - If the variant requires "none" at this end → force "none"
+   *    - If the variant requires non-"none" at this end and current
+   *      is "none" → default to "triangle" (canonical marker)
+   *
+   *  This design lets variant be the "type constraint" while per-end
+   *  shapes are free customization within the constraint — matching
+   *  how Shape's variant defines the element type while color/width
+   *  stay independently customizable.
+   */
+  #normalizeVariantSideFields(
+    toolId: string,
+    newVariant: string,
+    preset: ToolOptions,
+  ): void {
+    if (toolId !== "arrow") return;
+    const p = preset as unknown as Record<string, unknown>;
+    const tri = "triangle" as const;
+    const none = "none" as const;
+    const curStart = preset.arrowHeadStart;
+    const curEnd = preset.arrowHeadEnd;
+    switch (newVariant) {
+      case "none":
+        // Line: both ends must be "none" — force.
+        p.arrowHeadStart = none;
+        p.arrowHeadEnd = none;
+        break;
+      case "end":
+        // Arrow: begin must be "none", end must be non-"none".
+        p.arrowHeadStart = none;
+        p.arrowHeadEnd = curEnd && curEnd !== "none" ? curEnd : tri;
+        break;
+      case "both":
+        // Double arrow: both ends must be non-"none". Preserve if
+        // already valid, else seed triangle.
+        p.arrowHeadStart = curStart && curStart !== "none" ? curStart : tri;
+        p.arrowHeadEnd = curEnd && curEnd !== "none" ? curEnd : tri;
+        break;
+    }
+  }
+
+  /** In-panel variant chip handler — swap the tool's variant, mutate
+   *  the captured preset reference so sibling controls stay in sync,
+   *  persist, and re-activate the tool so the right panel re-renders
+   *  with the new variant's saved values. Without the re-activate,
+   *  the panel's other controls (Color / Width / …) would continue
+   *  to show the OLD variant's values and writes to them would
+   *  overwrite the just-switched-to variant's preset. */
+  #handlePanelVariantChange(toolId: string, newVariant: string, preset: ToolOptions): void {
+    const next = this.#changeVariant(toolId, newVariant, preset);
+    // Mutate the captured `preset` object in place so any closures
+    // that still hold a reference see the new values.
+    for (const k of Object.keys(preset)) delete (preset as unknown as Record<string, unknown>)[k];
+    Object.assign(preset, next);
+    this.#savePresetsToFile();
+    this.#syncToolButtonIcon(toolId);
+    // Re-activate to trigger a panel re-render with the new variant's
+    // saved style (Color / Width / etc.). Without this, the other
+    // property controls would still show the OLD variant's values.
+    this.#activateToolById(toolId);
+  }
+
+  /** Compute the element key for an existing SVG element. Used by
+   *  `syncPresetFromElement` so that rubber-band style propagation
+   *  targets the RIGHT variant's preset — e.g. editing a rounded
+   *  rectangle updates "shape.rounded" only, not "shape.rect". */
+  #elementKeyFromElement(el: SVGElement, toolId: string): string {
+    const group = TOOL_VARIANTS[toolId];
+    if (!group) return toolId;
+    let variant: string | null = null;
+    switch (toolId) {
+      case "shape": {
+        if (el.tagName === "ellipse") variant = "ellipse";
+        else if (el.tagName === "rect") {
+          if (el.getAttribute("data-highlight") === "1") variant = "highlight";
+          else if (el.hasAttribute("data-rounded")) variant = "rounded";
+          else variant = "rect";
+        }
+        break;
+      }
+      case "arrow": {
+        const headS = el.getAttribute("data-arrow-start-shape");
+        const headE = el.getAttribute("data-arrow-end-shape");
+        const hasStart = headS && headS !== "none";
+        const hasEnd = headE && headE !== "none";
+        variant = hasStart && hasEnd ? "both" : (hasEnd || hasStart) ? "end" : "none";
+        break;
+      }
+      case "text":
+        variant = el.getAttribute("data-text-variant");
+        break;
+      case "freehand":
+        variant = el.getAttribute("data-draw-style");
+        break;
+      case "marker":
+        variant = el.getAttribute("data-shape");
+        break;
+      case "redact":
+        variant = el.getAttribute("data-redact-style");
+        break;
+      case "highlight": {
+        // Highlight's variant is the fill color itself, stored on the
+        // <rect> as `fill`. Normalized to lowercase so "#FFE100" and
+        // "#ffe100" collapse to the same preset bucket.
+        const fill = el.getAttribute("fill");
+        variant = fill ? fill.toLowerCase() : null;
+        break;
+      }
+    }
+    return variant ? `${toolId}.${variant}` : `${toolId}.${group.fallback}`;
+  }
+
+  #btn(icon: string, title: string): HTMLButtonElement {
+    const b = document.createElement("button");
+    b.className = "toolbar-btn material-symbols-outlined";
+    // Custom CSS tooltip (via data-tooltip) + aria-label, NOT the
+    // native `title` attribute. See utils/tooltip.ts for rationale.
+    setTooltip(b, title);
+    b.textContent = icon;
+    return b;
+  }
+
+  #sep(): HTMLDivElement {
+    const d = document.createElement("div");
+    d.className = "toolbar-separator";
+    return d;
+  }
+
+  #div(cls: string): HTMLDivElement {
+    const d = document.createElement("div");
+    d.className = cls;
+    return d;
+  }
+
+  // =======================================================================
+  // Canvas right-click context menu.
+  //
+  // Two modes, decided by what the user right-clicked on:
+  //
+  // (1) RIGHT-CLICK ON EMPTY CANVAS — "toolbox menu".
+  //     Mirrors the toolbar 1:1: every tool button becomes a top-level
+  //     row, with submenus for tools that have toolbar flyouts. Click
+  //     activates the tool (and remembers the variant), just like the
+  //     toolbar button.
+  //
+  // (2) RIGHT-CLICK ON AN ANNOTATION — "selection action menu".
+  //     If the clicked element isn't already in the selection, it
+  //     becomes the new selection first. The menu then exposes the
+  //     actions already bound to keyboard shortcuts — clipboard,
+  //     duplicate, delete, z-order, align/distribute, group, flip —
+  //     so they're discoverable without memorizing shortcuts.
+  // =======================================================================
+
+  /** Entry point for canvas right-clicks. Branches on whether the
+   *  click landed on an annotation (→ selection menu) or empty space
+   *  (→ toolbox menu). `pt` is in SVG-viewBox space; only used by
+   *  future actions that care about the click location. */
+  #openInsertHereMenu(e: MouseEvent, pt: DOMPoint): void {
+    const clicked = this.#findAnnotationAt(e.target);
+    if (clicked) {
+      // If the right-clicked element isn't already selected, select
+      // it so the action menu operates on what the user was pointing
+      // at. Preserves a pre-existing multi-selection when the click
+      // was ON one of the already-selected items — matches native OS
+      // behavior (Finder / Explorer: right-clicking inside a multi-
+      // selection keeps it intact).
+      const selected = this.#selection.selectedElements;
+      if (!selected.includes(clicked)) {
+        this.#selection.select(clicked);
+      }
+      this.#openSelectionMenu(e, pt);
+    } else {
+      this.#openToolboxMenu(e, pt);
+    }
+  }
+
+  /** Walk up from a right-click event target to find the top-level
+   *  annotation element — i.e. the direct child of `canvas.annotations`
+   *  that contains the click. Returns null if the click was on the
+   *  background image or UI overlay rather than an annotation. */
+  #findAnnotationAt(target: EventTarget | null): SVGElement | null {
+    const annotations = this.#canvas.annotations;
+    let node: Node | null = target as Node | null;
+    while (node && node !== annotations) {
+      if (node.parentNode === annotations) {
+        return node as SVGElement;
+      }
+      node = node.parentNode;
+    }
+    return null;
+  }
+
+  /** Build the toolbox menu (tool activators, exactly mirroring the
+   *  toolbar button ordering + flyout variants). */
+  #openToolboxMenu(e: MouseEvent, pt: DOMPoint): void {
+    void pt;
+    const items: CanvasMenuItem[] = [];
+    for (const [toolId, def] of this.#tools) {
+      items.push(this.#toolMenuEntry(toolId, def));
+    }
+    openCanvasContextMenu({ x: e.clientX, y: e.clientY, items });
+  }
+
+  /** Build the selection action menu. Items vary by selection size:
+   *    1   → clipboard + z-order + flip
+   *    2+  → add align / group
+   *    3+  → add distribute
+   *  Groups (`data-type="group"`) also get an Ungroup row regardless
+   *  of selection size. */
+  #openSelectionMenu(e: MouseEvent, pt: DOMPoint): void {
+    void pt;
+    const sel = this.#selection.selectedElements;
+    const count = sel.length;
+    if (count === 0) {
+      // Safety — shouldn't happen since #openInsertHereMenu pre-selects
+      // the clicked element, but fall through to the toolbox menu so
+      // the user isn't left with no menu at all.
+      this.#openToolboxMenu(e, pt);
+      return;
+    }
+
+    const containsGroup = sel.some(
+      (el) => el.tagName === "g" && el.getAttribute("data-type") === "group",
+    );
+
+    const items: CanvasMenuItem[] = [];
+
+    // --- Clipboard / lifecycle -----------------------------------------
+    items.push({
+      icon: "content_copy",
+      label: "Copy",
+      hint: "Ctrl+C",
+      action: () => this.#selection.copySelected(),
+    });
+    items.push({
+      icon: "content_paste",
+      label: "Paste",
+      hint: "Ctrl+V",
+      action: () => this.#selection.paste(),
+    });
+    items.push({
+      icon: "file_copy",
+      label: "Duplicate",
+      hint: "Ctrl+D",
+      action: () => this.#selection.duplicate(),
+    });
+    items.push({
+      icon: "delete",
+      label: "Delete",
+      hint: "Del",
+      action: () => this.#selection.deleteSelected(),
+    });
+
+    // --- Z-order --------------------------------------------------------
+    items.push({
+      separatorAbove: true,
+      icon: "flip_to_front",
+      label: "Bring to front",
+      hint: "Ctrl+Shift+]",
+      action: () => this.#selection.bringToFront(),
+    });
+    items.push({
+      icon: "keyboard_arrow_up",
+      label: "Bring forward",
+      hint: "Ctrl+]",
+      action: () => this.#selection.bringForward(),
+    });
+    items.push({
+      icon: "keyboard_arrow_down",
+      label: "Send backward",
+      hint: "Ctrl+[",
+      action: () => this.#selection.sendBackward(),
+    });
+    items.push({
+      icon: "flip_to_back",
+      label: "Send to back",
+      hint: "Ctrl+Shift+[",
+      action: () => this.#selection.sendToBack(),
+    });
+
+    // --- Align / Distribute (multi) ------------------------------------
+    if (count >= 2) {
+      items.push({
+        separatorAbove: true,
+        icon: "align_horizontal_left",
+        label: "Align",
+        submenu: [
+          { icon: "align_horizontal_left",   label: "Align left",   action: () => this.#selection.alignSelected("left") },
+          { icon: "align_horizontal_center", label: "Align center", action: () => this.#selection.alignSelected("center-h") },
+          { icon: "align_horizontal_right",  label: "Align right",  action: () => this.#selection.alignSelected("right") },
+          { separatorAbove: true,
+            icon: "align_vertical_top",    label: "Align top",    action: () => this.#selection.alignSelected("top") },
+          { icon: "align_vertical_center", label: "Align middle", action: () => this.#selection.alignSelected("middle-v") },
+          { icon: "align_vertical_bottom", label: "Align bottom", action: () => this.#selection.alignSelected("bottom") },
+        ],
+      });
+      if (count >= 3) {
+        items.push({
+          icon: "horizontal_distribute",
+          label: "Distribute",
+          submenu: [
+            { icon: "horizontal_distribute", label: "Distribute horizontally", action: () => this.#selection.distributeSelected("horizontal") },
+            { icon: "vertical_distribute",   label: "Distribute vertically",   action: () => this.#selection.distributeSelected("vertical") },
+          ],
+        });
+      }
+    }
+
+    // --- Group / Ungroup -----------------------------------------------
+    if (count >= 2) {
+      items.push({
+        separatorAbove: true,
+        icon: "group_work",
+        label: "Group",
+        hint: "Ctrl+G",
+        action: () => this.#selection.groupSelected(),
+      });
+    }
+    if (containsGroup) {
+      items.push({
+        separatorAbove: count < 2, // only if Group row above didn't already
+        icon: "group_remove",
+        label: "Ungroup",
+        hint: "Ctrl+Shift+G",
+        action: () => this.#selection.ungroupSelected(),
+      });
+    }
+
+    // --- Flip -----------------------------------------------------------
+    items.push({
+      separatorAbove: true,
+      icon: "flip",
+      label: "Flip",
+      submenu: [
+        { icon: "swap_horiz", label: "Flip horizontal", hint: "Shift+H", action: () => this.#flipSelection("h") },
+        { icon: "swap_vert",  label: "Flip vertical",   hint: "Shift+V", action: () => this.#flipSelection("v") },
+      ],
+    });
+
+    openCanvasContextMenu({ x: e.clientX, y: e.clientY, items });
+  }
+
+  /** Apply flip to all selected elements and refresh selection handles
+   *  — mirrors the Shift+H / Shift+V keyboard path in SelectionManager.
+   *  Kept here (not on SelectionManager) because the keyboard handler
+   *  inlines this logic too; exposing a single `flipSelected` method
+   *  on SelectionManager is a future refactor. */
+  #flipSelection(axis: "h" | "v"): void {
+    const els = this.#selection.selectedElements;
+    if (els.length === 0) return;
+    for (const el of els) toggleFlip(el, axis);
+    this.#selection.clearHandles();
+    this.#selection.refreshHandles();
+    this.#history.save();
+  }
+
+  /** Build one top-level menu entry for a tool. When the tool has a
+   *  variant group, the row gets:
+   *    - a VARIANT BADGE matching the toolbar button's badge (so the
+   *      user sees which specific variant a left-click will produce),
+   *    - a left-click ACTION that activates the tool with its current
+   *      variant (identical to clicking the toolbar button), AND
+   *    - a SUBMENU (opens on hover or ArrowRight) for picking a
+   *      different variant.
+   *  Tools without a variant group (Crop) render as a plain leaf
+   *  row that activates directly. */
+  #toolMenuEntry(
+    toolId: string,
+    def: ToolDef,
+  ): CanvasMenuItem {
+    const group = TOOL_VARIANTS[toolId];
+    if (!group) {
+      return {
+        icon: def.icon,
+        label: def.label,
+        action: () => this.#activateToolWithVariant(toolId, undefined),
+      };
+    }
+
+    // Resolve the currently-active variant — same lookup path as
+    // `#syncToolButtonIcon`, so the menu badge and the toolbar button
+    // badge are always in lockstep.
+    const preset = this.#getCurrentPreset(toolId);
+    const currentValue = (preset[group.field] as string) || group.fallback;
+    const currentVariant = group.variants.find((v) => v.value === currentValue);
+
+    let badge: CanvasMenuItem["badge"];
+    if (currentVariant) {
+      if (toolId === "highlight") {
+        // Highlight's "variant" is its color — a filled swatch, not a
+        // glyph, matching the toolbar's color-dot badge treatment.
+        badge = { swatch: currentVariant.value };
+      } else if (currentVariant.svg) {
+        badge = { svg: currentVariant.svg };
+      } else {
+        badge = { icon: currentVariant.icon };
+      }
+    }
+
+    return {
+      icon: def.icon,
+      label: def.label,
+      badge,
+      // Left-click → activate with whatever variant is currently
+      // stored as last-used. Passing `undefined` means "don't change
+      // the variant"; the existing preset lookup will pick it up.
+      action: () => this.#activateToolWithVariant(toolId, undefined),
+      submenu: group.variants.map((v) => {
+        if (toolId === "highlight") {
+          return {
+            swatch: v.value,
+            label: v.label,
+            action: () => this.#activateToolWithVariant(toolId, v.value),
+          };
+        }
+        return {
+          svg: v.svg,
+          icon: v.icon,
+          label: v.label,
+          action: () => this.#activateToolWithVariant(toolId, v.value),
+        };
+      }),
+    };
+  }
+
+  /** Activate a tool (optionally switching its variant) — behaviorally
+   *  identical to clicking the tool's button (and, when `variant` is
+   *  given, its flyout chip) in the toolbar. We:
+   *   1. Record the chosen variant as last-used so `#getCurrentPreset`
+   *      returns the matching preset.
+   *   2. Refresh the toolbar button icon so the user sees the new
+   *      variant reflected there too.
+   *   3. Delegate to `#activateToolById`, which loads the preset,
+   *      creates the tool instance, wires `onShapeComplete`, and
+   *      marks the button active. */
+  #activateToolWithVariant(toolId: string, variant: string | undefined): void {
+    if (variant !== undefined && TOOL_VARIANTS[toolId]) {
+      this.#lastVariantByTool.set(toolId, variant);
+      this.#syncToolButtonIcon(toolId);
+    }
+    this.#activateToolById(toolId);
+  }
+}

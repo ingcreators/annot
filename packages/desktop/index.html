@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SVGShot</title>
+  <link rel="stylesheet" href="./src/styles/material-symbols.css">
+  <link rel="stylesheet" href="./src/styles/editor.css">
+  <link rel="stylesheet" href="./src/styles/toolbar.css">
+  <link rel="stylesheet" href="./src/styles/property-panel.css">
+  <link rel="stylesheet" href="./src/styles/app.css">
+</head>
+<body>
+  <div id="app-root">
+    <!-- Editor view (shown when editing) -->
+    <div id="editor-view" style="display:none;">
+      <div id="toolbar"></div>
+      <div id="canvas-container">
+        <svg id="svg-root" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"></svg>
+      </div>
+      <div id="statusbar">
+        <button id="btn-back" class="status-btn">&larr; Back</button>
+        <div id="zoom-controls">
+          <button id="btn-zoom-out" class="zoom-btn material-symbols-outlined">remove</button>
+          <div class="zoom-select-wrap">
+            <button id="btn-zoom-label" class="zoom-label">100%</button>
+            <div id="zoom-menu" class="zoom-menu" style="display:none;"></div>
+          </div>
+          <button id="btn-zoom-in" class="zoom-btn material-symbols-outlined">add</button>
+        </div>
+        <span id="status-size"></span>
+        <span class="toolbar-spacer"></span>
+        <span id="status-tool">Select</span>
+      </div>
+    </div>
+
+    <!-- Welcome / Gallery view (shown by default) -->
+    <div id="gallery-view">
+      <div class="gallery-header">
+        <h1 class="app-title">SVGShot</h1>
+        <div class="gallery-actions">
+          <button id="btn-capture-screen" class="action-btn action-btn-primary">Capture Screen</button>
+          <button id="btn-capture-window" class="action-btn action-btn-primary">Capture Window</button>
+          <button id="btn-capture-region" class="action-btn action-btn-primary">Capture Region</button>
+          <button id="btn-open-image" class="action-btn">Open Image</button>
+          <button id="btn-paste-image" class="action-btn">Paste from Clipboard</button>
+        </div>
+      </div>
+      <div id="gallery-grid" class="gallery-grid">
+        <div class="gallery-empty">
+          <p>No screenshots yet.</p>
+          <p>Use the Chrome extension to capture, or open an image file.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="./src/app/app.ts"></script>
+</body>
+</html>

@@ -1,0 +1,30 @@
+<!--
+  C1 Triangle — hybrid:
+    • Dot colors match Annot's A:
+        top   = blue   (like A's apex pin / crossbar)
+        left  = green  (like A's left leg)
+        right = purple (like A's right leg)
+    • Triangle edges = subtle grey network lines, so the brand rule is
+      "the three dots are the message; the lines just show they belong
+      to one family".
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 48 48" fill="none">
+  <rect width="48" height="48" rx="10" fill="#0f1730"/>
+
+  <!-- "i" — blue primary -->
+  <circle cx="13" cy="10" r="2.5" fill="#7c9cff"/>
+  <path d="M13 16 V38" stroke="#7c9cff" stroke-width="4" stroke-linecap="round"/>
+
+  <!-- Subtle network triangle — quiet background connection -->
+  <path d="M31 14 L24 31 L38 31 Z"
+        stroke="rgba(255,255,255,0.14)"
+        stroke-width="1"
+        fill="none"
+        stroke-linejoin="round"
+        stroke-linecap="round"/>
+
+  <!-- Vertex dots colored per Annot's A grammar -->
+  <circle cx="31" cy="14" r="2.5" fill="#7c9cff"/>    <!-- top:   blue   -->
+  <circle cx="24" cy="31" r="2.5" fill="#7ef0c5"/>    <!-- left:  green  -->
+  <circle cx="38" cy="31" r="2.5" fill="#b391ff"/>    <!-- right: purple -->
+</svg>

@@ -1,0 +1,1388 @@
+/* ---- Global focus ring (accessibility) ----
+ * A single, consistent focus indicator that meets WCAG 2.4.7 visibility.
+ * Uses a bright accent-2 (green) ring against blue accent backgrounds so the
+ * ring remains visible even when an item is already highlighted.
+ */
+#file-manager :focus {
+  outline: none; /* suppress default and use :focus-visible only */
+}
+#file-manager :focus-visible,
+#file-manager .sidebar-new-btn:focus-visible,
+#file-manager .sidebar-storage-item:focus-visible,
+#file-manager .sidebar-storage-reselect:focus-visible,
+#file-manager .folder-tree-item:focus-visible,
+#file-manager .folder-tree-chevron:focus-visible,
+#file-manager .view-toggle-btn:focus-visible,
+#file-manager .gallery-folder-card:focus-visible,
+#file-manager .gallery-item:focus-visible,
+#file-manager .new-menu-item:focus-visible,
+#file-manager .selection-bar-btn:focus-visible,
+#file-manager .selection-bar-close:focus-visible,
+#file-manager .header-info-btn:focus-visible,
+#file-manager .header-search:focus-visible,
+#file-manager .breadcrumb-item:focus-visible {
+  outline: 2px solid var(--focus-ring, var(--accent));
+  outline-offset: 2px;
+  z-index: 5; /* keep ring above neighbouring borders */
+}
+
+/* Honour OS preference for reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  #file-manager *,
+  .capture-dialog-overlay *,
+  .capture-progress-toast * {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+/* ---- File Manager Layout ---- */
+
+#file-manager {
+  position: absolute;
+  top: 48px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  background: var(--bg-primary);
+}
+
+/* Slightly wider sidebar on very large screens so long folder names fit */
+@media (min-width: 1600px) {
+  #file-manager { grid-template-columns: 260px 1fr; }
+}
+@media (min-width: 2400px) {
+  #file-manager { grid-template-columns: 300px 1fr; }
+}
+
+/* ---- Sidebar ---- */
+
+#sidebar {
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 12px;
+  gap: 4px;
+}
+
+.sidebar-new-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  background: var(--bg-panel);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, box-shadow 0.15s;
+  position: relative;
+  margin-bottom: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+}
+
+.sidebar-new-btn:hover {
+  background: var(--hover-bg);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+
+.sidebar-new-btn .material-symbols-outlined {
+  font-size: 22px;
+  color: var(--accent);
+}
+
+/* New menu dropdown */
+.new-menu-wrap {
+  position: relative;
+}
+
+.new-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+  z-index: 200;
+  min-width: 200px;
+}
+
+.new-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 16px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.new-menu-item:hover {
+  background: var(--choice-hover);
+  color: var(--accent);
+}
+
+.new-menu-item .material-symbols-outlined {
+  font-size: 20px;
+  color: var(--text-secondary);
+}
+
+.new-menu-item:hover .material-symbols-outlined {
+  color: var(--accent);
+}
+
+/* Storage section */
+.sidebar-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  padding: 8px 8px 4px;
+}
+
+.sidebar-storage-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.1s;
+  position: relative;
+}
+
+.sidebar-storage-item:hover {
+  background: var(--hover-bg);
+}
+
+.sidebar-storage-item.active {
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
+.sidebar-storage-item.active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 4px;
+  bottom: 4px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--accent);
+}
+
+.sidebar-storage-icon {
+  font-size: 22px;
+  flex-shrink: 0;
+  width: 24px;
+  text-align: center;
+  color: var(--text-primary);
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+.sidebar-storage-item.active .sidebar-storage-icon {
+  color: var(--accent);
+}
+
+.sidebar-storage-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.sidebar-storage-label {
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-storage-status {
+  font-size: 12px; /* was 11px — improve legibility */
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-storage-item.active .sidebar-storage-status {
+  color: var(--accent);
+  opacity: 0.7;
+}
+
+/* Reselect icon — always visible when rendered (i.e. Device is connected),
+ * with a button-like background that works on both themes and on the active
+ * (accent) background. */
+.sidebar-storage-reselect {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--bg-panel);
+  color: var(--text-primary);
+  font-size: 18px !important;
+  font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 24;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.sidebar-storage-reselect:hover {
+  background: var(--accent-bg);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* On the active (selected) storage item, keep the button visible against
+ * the accent-tinted background by giving it a solid panel fill. */
+.sidebar-storage-item.active .sidebar-storage-reselect {
+  background: var(--bg-panel);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.sidebar-storage-item.active .sidebar-storage-reselect:hover {
+  background: var(--accent);
+  color: var(--bg-panel);
+}
+
+/* ---- Folder Tree ---- */
+
+.sidebar-folder-tree {
+  margin-top: 4px;
+  padding-left: 4px;
+}
+
+.folder-tree-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-secondary);
+  transition: background 0.1s;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  user-select: none;
+}
+
+.folder-tree-item:hover {
+  background: var(--hover-bg);
+  color: var(--text-primary);
+}
+
+.folder-tree-item.active {
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
+.folder-tree-chevron {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: none;
+  color: var(--text-primary);
+  font-size: 18px !important;
+  font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 20;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+}
+
+.folder-tree-chevron:hover {
+  background: var(--hover-bg);
+  color: var(--accent);
+}
+
+.folder-tree-icon {
+  flex-shrink: 0;
+  font-size: 18px !important;
+  color: var(--text-primary);
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+}
+
+.folder-tree-item.active .folder-tree-icon {
+  color: var(--accent);
+}
+
+.folder-tree-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.folder-tree-root-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.folder-tree-root-sub {
+  font-size: 11px;                  /* was 10px — min readable */
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.3;
+}
+
+.folder-tree-item.active .folder-tree-root-sub {
+  color: var(--accent);
+  opacity: 0.7;
+}
+
+.folder-tree-children {
+  /* children inherit indentation from inline paddingLeft */
+}
+
+/* ---- Main Content ---- */
+
+#main-content {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.main-content-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+  height: 44px;               /* fixed height so swap with selection-bar is stable */
+}
+
+.main-content-header .breadcrumb {
+  flex: 1;
+}
+
+/* Refresh button (main-content header) */
+.header-refresh-btn {
+  width: 36px;
+  height: 32px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 24;
+  transition: background 0.1s, border-color 0.1s, color 0.1s;
+  flex-shrink: 0;
+}
+
+.header-refresh-btn:hover {
+  background: var(--hover-bg);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.header-refresh-btn:active {
+  transform: rotate(180deg);
+  transition: transform 0.3s ease;
+}
+
+/* View toggle */
+.view-toggle {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.view-toggle-btn {
+  width: 36px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  /* Dimmer than body text so inactive icons read as "available" rather
+   * than "currently on". */
+  color: var(--text-muted, var(--text-primary));
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  /* The shipped Material Symbols TTF in this repo is a weight-only
+   * variable font — the FILL axis is absent — so we differentiate active
+   * vs inactive via color + background + weight only. */
+  font-variation-settings: 'wght' 400;
+  transition: background 0.12s, color 0.12s, font-variation-settings 0.12s;
+}
+
+.view-toggle-btn:hover {
+  background: var(--hover-bg);
+  color: var(--text-primary);
+}
+
+/* Google Drive / Gmail pattern: moderate tint + saturated accent color
+ * + a touch more weight. Loud enough to scan instantly, but stays a
+ * supporting control rather than shouting for attention. */
+.view-toggle-btn.active {
+  background: rgba(124, 156, 255, 0.22);
+  color: var(--accent);
+  font-variation-settings: 'wght' 600;
+}
+
+html.light .view-toggle-btn.active {
+  background: rgba(124, 156, 255, 0.22);
+  color: var(--accent);
+}
+
+.view-toggle-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  z-index: 1;
+}
+
+.view-toggle-btn + .view-toggle-btn {
+  border-left: 1px solid var(--border-color);
+}
+
+/* ---- App dialog (shared prompt / confirm / alert) ---- */
+
+.app-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1500;
+  animation: app-dialog-fade 0.12s ease-out;
+}
+
+@keyframes app-dialog-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.app-dialog {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 22px 24px 18px;
+  min-width: 360px;
+  max-width: 480px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  animation: app-dialog-pop 0.14s cubic-bezier(0.2, 0, 0.2, 1);
+}
+
+@keyframes app-dialog-pop {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.app-dialog-title {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.3;
+}
+
+.app-dialog-message {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.app-dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.app-dialog-input {
+  width: 100%;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--input-border);
+  border-radius: 8px;
+  background: var(--input-bg);
+  color: var(--text-primary);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.app-dialog-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-bg);
+}
+
+.app-dialog-input[aria-invalid="true"] {
+  border-color: #e44;
+}
+
+.app-dialog-error {
+  font-size: 12px;
+  color: #ff8a8a;
+}
+:root.light .app-dialog-error { color: #c41; }
+
+.app-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.app-dialog-btn {
+  min-width: 84px;
+  height: 36px;
+  padding: 0 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+
+.app-dialog-cancel:hover {
+  background: var(--hover-bg);
+  border-color: var(--hover-border);
+}
+
+.app-dialog-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #0b1020;
+}
+
+.app-dialog-primary:hover {
+  opacity: 0.88;
+}
+
+.app-dialog-danger {
+  background: #c83737;
+  border-color: #c83737;
+  color: #fff;
+}
+
+.app-dialog-danger:hover {
+  background: #e44;
+  border-color: #e44;
+}
+
+/* Focus ring already applied by the global focus-visible rule inside #file-manager.
+ * For dialogs outside that scope, add an explicit one: */
+.app-dialog-btn:focus-visible,
+.app-dialog-input:focus-visible {
+  outline: 2px solid var(--focus-ring, var(--accent));
+  outline-offset: 2px;
+}
+
+/* ---- Timed capture dialog ---- */
+
+.capture-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.capture-dialog {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 20px 22px;
+  min-width: 340px;
+  max-width: 420px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.capture-dialog-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.capture-dialog-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.capture-dialog-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.capture-dialog-label {
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.capture-dialog-input {
+  width: 100px;
+  height: 32px;
+  padding: 0 10px;
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 13px;
+  outline: none;
+  text-align: right;
+}
+
+.capture-dialog-input:focus {
+  border-color: var(--accent);
+}
+
+.capture-dialog-select {
+  width: 150px;
+  height: 32px;
+  padding: 0 8px;
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 13px;
+  outline: none;
+  cursor: pointer;
+}
+
+.capture-dialog-select:focus {
+  border-color: var(--accent);
+}
+
+.capture-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.capture-dialog-btn {
+  padding: 7px 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.capture-dialog-btn:hover {
+  background: var(--hover-bg);
+  border-color: var(--hover-border);
+}
+
+.capture-dialog-btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #0b1020;
+}
+
+.capture-dialog-btn-primary:hover {
+  background: var(--accent);
+  opacity: 0.85;
+}
+
+/* ---- Timed capture progress toast ---- */
+
+.capture-progress-toast {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.4);
+  z-index: 1000;
+  min-width: 320px;
+}
+
+.capture-progress-icon {
+  font-size: 20px !important;
+  color: var(--accent);
+}
+
+.capture-progress-text {
+  font-size: 13px;
+  color: var(--text-primary);
+  flex: 1;
+  white-space: nowrap;
+}
+
+.capture-progress-bar {
+  width: 120px;
+  height: 4px;
+  background: var(--border-color);
+  border-radius: 2px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.capture-progress-bar-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--accent);
+  transition: width 0.25s ease;
+}
+
+.capture-progress-cancel {
+  padding: 4px 10px;
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.capture-progress-cancel:hover {
+  border-color: #e44;
+  color: #e44;
+}
+
+/* ---- Selection bar ---- */
+
+.selection-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: var(--accent-bg);
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-primary);
+  flex-shrink: 0;
+  height: 44px;               /* fixed height so swapping doesn't shift layout */
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.selection-bar-close {
+  font-size: 20px !important;
+  color: var(--text-primary);
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.selection-bar-close:hover {
+  background: var(--hover-bg);
+}
+
+.selection-bar-count {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.selection-bar-spacer {
+  flex: 1;
+}
+
+.selection-bar-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--bg-panel);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.1s, border-color 0.1s, color 0.1s;
+}
+
+.selection-bar-btn .material-symbols-outlined {
+  font-size: 18px;
+}
+
+.selection-bar-btn:hover {
+  background: var(--hover-bg);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.selection-bar-btn-danger:hover {
+  border-color: #e44;
+  color: #e44;
+  background: rgba(220, 0, 0, 0.08);
+}
+
+/* ---- 3-dot menu button on cards ---- */
+
+.gallery-card-more {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 18px !important;
+  font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s, background 0.12s;
+  padding: 0;
+  z-index: 3;
+}
+
+/* Image cards have a tall thumbnail — pin to the top-right corner */
+.gallery-item .gallery-card-more {
+  top: 4px;
+  right: 4px;
+}
+
+/* Folder cards are a single horizontal row — vertically center the button */
+.gallery-folder-card .gallery-card-more {
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+}
+
+.gallery-item:hover .gallery-card-more,
+.gallery-folder-card:hover .gallery-card-more,
+.gallery-item:focus-within .gallery-card-more,
+.gallery-folder-card:focus-within .gallery-card-more,
+.gallery-item.selected .gallery-card-more,
+.gallery-folder-card.selected .gallery-card-more {
+  opacity: 1;
+}
+
+.gallery-card-more:hover {
+  background: rgba(255,255,255,0.14);
+}
+:root.light .gallery-card-more:hover {
+  background: rgba(0,0,0,0.08);
+}
+
+/* Place above the image on image cards (with a subtle backdrop) */
+.gallery-item .gallery-card-more {
+  background: rgba(15,23,48,0.55);
+  backdrop-filter: blur(2px);
+  color: #fff;
+}
+.gallery-item .gallery-card-more:hover {
+  background: rgba(15,23,48,0.85);
+}
+
+/* ---- Floating context menu ---- */
+
+.context-menu {
+  position: fixed;
+  min-width: 180px;
+  padding: 4px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.context-menu-item:hover,
+.context-menu-item:focus-visible {
+  background: var(--hover-bg);
+  outline: none;
+}
+
+.context-menu-icon {
+  font-size: 18px !important;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.context-menu-item:hover .context-menu-icon {
+  color: var(--accent);
+}
+
+.context-menu-item-danger {
+  color: #e85858;
+}
+
+.context-menu-item-danger .context-menu-icon {
+  color: #e85858;
+}
+
+.context-menu-item-danger:hover {
+  background: rgba(228, 68, 68, 0.12);
+  color: #e85858;
+}
+
+/* ---- Selected card states ----
+ * Three-layer selection signal (Google Drive / Photos pattern):
+ *   (1) Thick accent ring (3px) for easy scanning
+ *   (2) Tinted background so the card stands out from neighbors
+ *   (3) Filled check badge with white glyph — the strongest recognizer,
+ *       especially over image thumbnails where a colored border can blend.
+ */
+
+/* Anchor the absolute check-badge (::after) to the card itself. */
+.gallery-item,
+.gallery-folder-card {
+  position: relative;
+}
+
+.gallery-folder-card.selected,
+.gallery-item.selected {
+  border-color: var(--accent);
+  background: rgba(124, 156, 255, 0.12);
+  /* 2px ring matches industry norms (Drive / Photos / Finder / Figma).
+   * The check badge is the primary signal, so the ring can stay subtle
+   * to avoid visual noise when many cards are selected. */
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.gallery-folder-card.selected .gallery-folder-card-icon {
+  color: var(--accent);
+}
+
+/* Solid filled badge with a white check — works over any thumbnail.
+ * We use a stacked shadow (hairline + soft drop) instead of a colored
+ * ring: the hairline gives a crisp edge against busy photo thumbnails,
+ * and the soft drop shadow gives the "lift" from the card surface.
+ * This keeps folder cards (no thumbnail) and image cards visually
+ * identical — no context-dependent ring that only shows on one. */
+.gallery-folder-card.selected::after,
+.gallery-item.selected::after {
+  content: "check";
+  font-family: "Material Symbols Outlined";
+  font-variation-settings: 'FILL' 1, 'wght' 700;
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  width: 24px;
+  height: 24px;
+  line-height: 24px;
+  text-align: center;
+  font-size: 16px;
+  color: #fff;
+  background: var(--accent);
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.18),      /* hairline edge for crisp readability */
+    0 2px 8px rgba(0, 0, 0, 0.45);      /* soft drop shadow — "lift" */
+  z-index: 5;
+  pointer-events: none;
+}
+
+/* Light theme — tint is a touch stronger for parity with dark mode */
+html.light .gallery-folder-card.selected,
+html.light .gallery-item.selected {
+  background: rgba(124, 156, 255, 0.14);
+}
+html.light .gallery-folder-card.selected::after,
+html.light .gallery-item.selected::after {
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.12),
+    0 2px 8px rgba(0, 0, 0, 0.22);
+}
+
+/* Gallery scroll area */
+.main-content-body {
+  flex: 1;
+  overflow-y: auto;
+  background: var(--bg-primary);
+}
+
+/* Count footer inside main content */
+.main-content-footer {
+  display: flex;
+  align-items: center;
+  padding: 4px 16px;
+  border-top: 1px solid var(--border-color);
+  flex-shrink: 0;
+  min-height: 28px;
+}
+
+/* ---- Google Drive-style Folder/File sections ---- */
+
+/* Override the legacy grid display; sections manage their own layout */
+.gallery-grid {
+  display: block !important;
+}
+
+.gallery-grid .gallery-empty {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text-muted);
+}
+
+.gallery-section-header {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  padding: 12px 4px 8px;
+  letter-spacing: 0.02em;
+}
+
+.gallery-folder-grid {
+  display: grid;
+  /* auto-fill lets the grid add columns up to the natural content width;
+   * the min-max prevents ugly stretching when there are few items. */
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.gallery-image-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+/* On wider viewports, nudge cards slightly larger so 4K screens look balanced
+ * instead of showing dozens of tiny tiles. */
+@media (min-width: 1600px) {
+  .gallery-image-grid  { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+  .gallery-folder-grid { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+}
+@media (min-width: 2400px) {
+  .gallery-image-grid  { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+  .gallery-folder-grid { grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
+}
+
+.gallery-folder-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-panel);
+  cursor: pointer;
+  transition: background 0.1s, border-color 0.1s;
+  position: relative;
+  min-width: 0;
+}
+
+.gallery-folder-card:hover {
+  background: var(--hover-bg);
+  border-color: var(--accent);
+}
+
+.gallery-folder-card-icon {
+  font-size: 24px !important;
+  color: var(--text-primary);
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  flex-shrink: 0;
+}
+
+.gallery-folder-card:hover .gallery-folder-card-icon {
+  color: var(--accent);
+}
+
+.gallery-folder-card-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gallery-folder-card-delete {
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s, color 0.15s;
+  flex-shrink: 0;
+  padding: 0;
+}
+
+.gallery-folder-card-delete .material-symbols-outlined {
+  font-size: 16px;
+}
+
+.gallery-folder-card:hover .gallery-folder-card-delete {
+  opacity: 1;
+}
+
+.gallery-folder-card-delete:hover {
+  background: rgba(220, 0, 0, 0.15);
+  color: #e44;
+}
+
+/* ---- List View ---- */
+
+.gallery-grid.list-view {
+  grid-template-columns: 1fr;
+  gap: 2px;
+}
+
+.gallery-grid.list-view .gallery-item {
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  border-radius: 4px;
+}
+
+.gallery-grid.list-view .gallery-item:hover {
+  transform: none;
+}
+
+.gallery-grid.list-view .gallery-thumb {
+  aspect-ratio: 1;
+  width: 64px;
+  height: 48px;
+}
+
+.gallery-grid.list-view .gallery-folder-icon {
+  width: 64px;
+  height: 48px;
+}
+
+.gallery-grid.list-view .gallery-folder-icon .material-symbols-outlined {
+  font-size: 28px !important;
+}
+
+.gallery-grid.list-view .gallery-item-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 4px 10px;
+}
+
+.gallery-grid.list-view .gallery-item-name {
+  flex: 1;
+  min-width: 0;
+}
+
+.gallery-grid.list-view .gallery-item-meta {
+  margin-top: 0;
+  flex-shrink: 0;
+}
+
+.gallery-grid.list-view .gallery-tag-chips {
+  margin-top: 0;
+  flex-shrink: 0;
+}
+
+/* ---- Empty / placeholder state ---- */
+
+.file-manager-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-muted);
+  gap: 12px;
+  padding: 40px;
+  text-align: center;
+}
+
+.file-manager-placeholder .material-symbols-outlined {
+  font-size: 64px;
+  opacity: 0.3;
+}
+
+.file-manager-placeholder-text {
+  font-size: 15px;
+}
+
+.file-manager-placeholder-hint {
+  font-size: 13px;
+  opacity: 0.7;
+}
+
+/* ---- Header (gallery mode) ---- */
+
+.header-search {
+  width: 100%;
+  height: 38px;
+  padding: 0 12px 0 38px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--input-bg);
+  color: var(--text-primary);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.header-search:focus {
+  border-color: var(--accent);
+}
+
+/* Brand in the gallery header occupies the sidebar's column width, so the
+ * search bar's left edge aligns with the main-content area (Google Drive
+ * style). Scoped to #toolbar so it doesn't affect the editor toolbar.
+ *
+ * `padding-left: 9px` makes the logo SVG sit 17px from the viewport's
+ * left edge (toolbar's 8px padding + brand's 9px padding). This is the
+ * SAME offset the editor header's `.editor-header-brand` uses (header
+ * padding 14px + (36-30)/2 centering = 14 + 3 = 17px), so the 30×30
+ * logo stays pinned to a single absolute position when navigating
+ * between file-manager and editor views. Navigation landmarks should
+ * never jump between views. */
+#toolbar .brand {
+  width: calc(240px - 8px);          /* sidebar width minus toolbar's 8px left padding */
+  box-sizing: border-box;
+  padding-left: 9px;
+  margin-right: 0;
+}
+@media (min-width: 1600px) {
+  #toolbar .brand { width: calc(260px - 8px); }
+}
+@media (min-width: 2400px) {
+  #toolbar .brand { width: calc(300px - 8px); }
+}
+
+/* Prominent search bar that starts at the right edge of the sidebar. */
+.header-search-wrap {
+  position: relative;
+  flex: 1 1 auto;
+  max-width: 640px;
+  min-width: 200px;
+  display: flex;
+  align-items: center;
+  margin-left: 0;    /* brand already provides the sidebar-aligned offset */
+  margin-right: 32px;
+}
+
+/* Give the search more room on wider screens */
+@media (min-width: 1600px) {
+  .header-search-wrap { max-width: 800px; }
+}
+@media (min-width: 2400px) {
+  .header-search-wrap { max-width: 960px; }
+}
+
+.header-search-icon {
+  position: absolute;
+  left: 12px;
+  font-size: 20px;
+  color: var(--text-secondary);
+  pointer-events: none;
+}
+
+/* ---- Google Drive icon (custom SVG) ---- */
+
+.gdrive-icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+/* ---- Info icon in header ---- */
+
+.header-info-btn {
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 22px;
+  font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 24;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.header-info-btn:hover {
+  background: var(--hover-bg);
+  color: var(--text-primary);
+}

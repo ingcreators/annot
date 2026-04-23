@@ -1,0 +1,37 @@
+<!--
+  C1 Triangle — centered (equilateral + sized for icon presence):
+    • Dots scaled up r=2.5 → r=3.5 (+40%) so the 3 creators dominate
+      the canvas and survive at favicon sizes (16/32px).
+    • Triangle expanded to base=24, height=21 (equilateral) so it
+      occupies ~65% of the canvas horizontally — the industry target
+      for icon subject occupancy (Material / Apple HIG ~60–70%).
+    • Stem sw=3.5 kept unchanged: ratio stem/dot-diameter drops from
+      0.70 → 0.50, so the "i" stem reads clearly as secondary to the
+      3 dots without disappearing entirely.
+    • Color grammar still per Annot's A (top=blue, left=green, right=purple).
+
+  Geometry (48×48 viewBox, safe area respects rx=10 corners):
+    Apex  (24, 11)  r=3.5  blue    ← i-tittle + triangle apex
+    Left  (12, 32)  r=3.5  green
+    Right (36, 32)  r=3.5  purple
+    Stem  (24,18)→(24,25) sw=3.5  blue, round caps
+    Base width 24, height 21  (24·√3/2 = 20.78 ≈ 21, equilateral ✓)
+    Centroid (24, 25) — stem bottom cap lands exactly at centroid
+
+  Occupancy:
+    Bounding box: 31w × 28h (dot edge to dot edge)
+    Horizontal: 31/48 = 65%   Vertical: 28/48 = 58%
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 48 48" fill="none">
+  <rect width="48" height="48" rx="10" fill="#0f1730"/>
+
+  <!-- Shared apex: i's tittle = triangle's top vertex (blue) -->
+  <circle cx="24" cy="11" r="3.5" fill="#7c9cff"/>
+
+  <!-- Short i stem — subtle, ends at triangle centroid -->
+  <path d="M24 18 V25" stroke="#7c9cff" stroke-width="3.5" stroke-linecap="round"/>
+
+  <!-- Equilateral base creators -->
+  <circle cx="12" cy="32" r="3.5" fill="#7ef0c5"/>    <!-- left:  green  -->
+  <circle cx="36" cy="32" r="3.5" fill="#b391ff"/>    <!-- right: purple -->
+</svg>

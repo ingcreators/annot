@@ -1,0 +1,18 @@
+<!--
+  C1 Option 2 — "i" + rising trajectory.
+  Metaphor: foundational "i" with three creators ascending diagonally.
+  Conveys growth, aspiration, forward motion. Dynamic and energetic —
+  fits a brand that's actively shipping and evolving.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 48 48" fill="none">
+  <rect width="48" height="48" rx="10" fill="#0f1730"/>
+
+  <!-- "i" — blue primary -->
+  <circle cx="13" cy="10" r="2.5" fill="#7c9cff"/>
+  <path d="M13 16 V38" stroke="#7c9cff" stroke-width="4" stroke-linecap="round"/>
+
+  <!-- Rising dots: bottom-left → top-right along a diagonal -->
+  <circle cx="22" cy="34" r="2.5" fill="#7c9cff"/>
+  <circle cx="30" cy="24" r="2.5" fill="#7ef0c5"/>
+  <circle cx="38" cy="14" r="2.5" fill="#b391ff"/>
+</svg>

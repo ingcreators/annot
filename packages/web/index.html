@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Annot (by ingcreators)</title>
+  <meta name="theme-color" content="#0f1730">
+  <meta name="description" content="Annot — screenshot & annotate, by ingcreators">
+  <link rel="icon" href="/icons/icon-192.png" type="image/png">
+  <link rel="apple-touch-icon" href="/icons/icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+  <!--
+    Editor / Gallery layout primitives:
+      #editor-header  → shown only when editing (body.editor-mode).
+                         Brand + breadcrumb/filename + save-status
+                         + file actions (save/copy) + help + theme.
+      #toolbar        → gallery mode only.
+                         Brand + search + help + theme (from
+                         buildFileManagerHeader).
+      #editor-sidebar → editor mode only.
+                         Vertical left-side tool strip: Select +
+                         drawing tools + utilities + undo/redo.
+  -->
+  <div id="editor-header"></div>
+  <div id="toolbar"></div>
+  <div id="editor-sidebar"></div>
+  <div id="editor-right-panel"></div>
+  <div id="file-manager" style="display:none;">
+    <div id="sidebar"></div>
+    <div id="main-content"></div>
+  </div>
+  <div id="canvas-container">
+    <svg id="svg-root" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"></svg>
+  </div>
+  <div id="statusbar"></div>
+  <script type="module" src="./src/main.ts"></script>
+</body>
+</html>

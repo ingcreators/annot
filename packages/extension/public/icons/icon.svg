@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 48 48" fill="none">
+  <!-- Dark navy rounded-rect app-icon base -->
+  <rect width="48" height="48" rx="10" fill="#0f1730"/>
+
+  <!--
+    Annotation pin — enlarged r=2.5 → r=3.5 so it reads clearly as a
+    deliberate "pin" (not a stray speck), matches ingcreators' apex-dot
+    scale for family coherence, and survives at favicon sizes.
+    Pin center moved y=8 → y=7 to preserve the same ~0.66 unit visual
+    gap to the letter apex that the old pin had (pin bottom y=10.5, A
+    apex cap top ≈ y=11.16).
+  -->
+  <circle cx="24" cy="7" r="3.5" fill="#7c9cff"/>
+
+  <!-- A left leg (green) — diagonal from apex to bottom-left -->
+  <path d="M24 13 L13 38" stroke="#7ef0c5" stroke-width="4" stroke-linecap="round"/>
+
+  <!-- A right leg (purple) — diagonal from apex to bottom-right -->
+  <path d="M24 13 L35 38" stroke="#b391ff" stroke-width="4" stroke-linecap="round"/>
+
+  <!--
+    A crossbar (blue) — at y=24 (~44% down, classical A proportion).
+    Endpoints (19,24)/(29,24) plug into leg centerlines
+    (left leg at y=24 → x=19.16, right leg at y=24 → x=28.84).
+    Stroke sw=3.5 (vs leg sw=4) establishes a weight hierarchy:
+    legs are the PRIMARY structural element, crossbar is SECONDARY.
+    Round cap radius drops 2.0 → 1.75 so the cap tips stay inside
+    the leg cross-sections; the visual "plug-in" is preserved.
+  -->
+  <path d="M19 24 H29" stroke="#7c9cff" stroke-width="3.5" stroke-linecap="round"/>
+</svg>

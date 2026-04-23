@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "annotating-dev",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@ingcreators/annot-web", "dev"],
+      "port": 3000
+    }
+  ]
+}

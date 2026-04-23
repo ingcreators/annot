@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="../styles/popup.css">
+</head>
+<body>
+  <div class="popup">
+    <div class="title">
+      <svg width="32" height="32" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="24" cy="7" r="3.5" fill="#7c9cff"/>
+        <path d="M24 13 L13 38" stroke="#7ef0c5" stroke-width="4" stroke-linecap="round"/>
+        <path d="M24 13 L35 38" stroke="#b391ff" stroke-width="4" stroke-linecap="round"/>
+        <path d="M19 24 H29" stroke="#7c9cff" stroke-width="3.5" stroke-linecap="round"/>
+      </svg>
+      <span class="brand-stack">
+        <span class="brand-name">Annot</span>
+        <span class="brand-org">by ingcreators</span>
+      </span>
+    </div>
+
+    <!-- Idle state -->
+    <div id="idle-state">
+      <button id="btn-visible" class="capture-btn">
+        <span class="icon">&#9634;</span>
+        <span>Visible Area</span>
+      </button>
+      <button id="btn-area" class="capture-btn">
+        <span class="icon">&#9698;</span>
+        <span>Select Area</span>
+      </button>
+      <button id="btn-full" class="capture-btn">
+        <span class="icon">&#9744;</span>
+        <span>Full Page</span>
+      </button>
+      <button id="btn-pages" class="capture-btn">
+        <span class="icon">&#9783;</span>
+        <span>Per Page</span>
+      </button>
+      <div class="separator"></div>
+      <button id="btn-click-capture" class="capture-btn">
+        <span class="icon">&#128432;</span>
+        <span>Click Capture</span>
+      </button>
+      <button id="btn-hotkey-capture" class="capture-btn">
+        <span class="icon">&#9000;</span>
+        <span>Hotkey Capture</span>
+        <span class="hotkey-hint">Alt+Shift+C</span>
+      </button>
+      <div class="separator"></div>
+      <button id="btn-gallery" class="capture-btn open-btn">
+        <span class="icon">&#128444;</span>
+        <span>Open Gallery</span>
+      </button>
+      <button id="btn-options" class="capture-btn open-btn settings-btn">
+        <span class="icon">&#9881;</span>
+        <span>Settings</span>
+      </button>
+    </div>
+
+    <!-- Active click-capture state -->
+    <div id="active-state" style="display:none;">
+      <div class="rec-indicator">
+        <span class="rec-dot"></span>
+        <span class="rec-text">Click Capture Active</span>
+      </div>
+      <div class="rec-count"><span id="rec-count-num">0</span> frames captured</div>
+      <button id="btn-stop-click" class="capture-btn stop-btn">
+        <span class="icon">&#9632;</span>
+        <span>Stop &amp; Review</span>
+      </button>
+      <div class="separator"></div>
+      <button id="btn-gallery-active" class="capture-btn open-btn">
+        <span class="icon">&#128444;</span>
+        <span>Open Gallery</span>
+      </button>
+    </div>
+
+    <!-- Active hotkey-capture state -->
+    <div id="hotkey-active-state" style="display:none;">
+      <div class="rec-indicator">
+        <span class="rec-dot"></span>
+        <span class="rec-text">Hotkey Capture Active</span>
+      </div>
+      <div class="rec-count">
+        Press <span class="kbd">Alt+Shift+C</span> to capture
+      </div>
+      <div class="rec-count"><span id="hotkey-count-num">0</span> frames captured</div>
+      <button id="btn-stop-hotkey" class="capture-btn stop-btn">
+        <span class="icon">&#9632;</span>
+        <span>Stop &amp; Review</span>
+      </button>
+      <div class="separator"></div>
+      <button id="btn-gallery-hotkey-active" class="capture-btn open-btn">
+        <span class="icon">&#128444;</span>
+        <span>Open Gallery</span>
+      </button>
+    </div>
+  </div>
+  <script type="module" src="./popup.ts"></script>
+</body>
+</html>

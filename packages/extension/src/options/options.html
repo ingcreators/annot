@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Annot — Settings</title>
+  <link rel="stylesheet" href="../styles/options.css">
+</head>
+<body>
+  <main class="options-root">
+    <header class="options-header">
+      <div class="brand">
+        <svg width="32" height="32" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect width="48" height="48" rx="10" fill="#0f1730"/>
+          <circle cx="24" cy="7" r="3.5" fill="#7c9cff"/>
+          <path d="M24 13 L13 38" stroke="#7ef0c5" stroke-width="4" stroke-linecap="round"/>
+          <path d="M24 13 L35 38" stroke="#b391ff" stroke-width="4" stroke-linecap="round"/>
+          <path d="M19 24 H29" stroke="#7c9cff" stroke-width="3.5" stroke-linecap="round"/>
+        </svg>
+        <div>
+          <div class="brand-title">Annot Settings</div>
+          <div class="brand-sub">by ingcreators · Advanced capture options</div>
+        </div>
+      </div>
+      <div class="options-status" id="status" aria-live="polite"></div>
+    </header>
+
+    <section class="options-section">
+      <h2>Overlays</h2>
+      <p class="section-hint">Hide fixed headers, stickies, and modals that repeat across scroll-capture segments.</p>
+
+      <div class="field">
+        <label for="overlay-mode">When to hide overlays</label>
+        <select id="overlay-mode">
+          <option value="scrollOnly">Scroll &amp; per-page captures only (recommended)</option>
+          <option value="all">All captures</option>
+          <option value="never">Never — always keep overlays</option>
+        </select>
+      </div>
+
+      <div class="field checkbox-row">
+        <label class="checkbox">
+          <input type="checkbox" id="keep-first-segment">
+          <span>Keep overlays on the first viewport (scroll / per-page)</span>
+        </label>
+        <div class="field-hint">
+          Recommended. The first scroll-capture segment keeps the page's natural header, then the header is hidden from segment 2 onward so it doesn't repeat in the stitched image. Matches Shottr / Xnapper / CleanShot behavior.
+        </div>
+      </div>
+
+      <details class="advanced">
+        <summary>Advanced: preserved selectors</summary>
+        <div class="field">
+          <label for="preserved-selectors">CSS selectors to NEVER hide (one per line, or comma-separated)</label>
+          <textarea id="preserved-selectors" rows="3" placeholder=".must-stay, #keep-this, header.brand"></textarea>
+          <div class="field-hint">Example: <code>.toast, #cookie-banner</code> — useful when a banner is part of the page you want to capture.</div>
+        </div>
+      </details>
+    </section>
+
+    <section class="options-section">
+      <h2>Scrollbars</h2>
+      <div class="field checkbox-row">
+        <label class="checkbox">
+          <input type="checkbox" id="scrollbars-hide">
+          <span>Hide browser scrollbars during capture</span>
+        </label>
+      </div>
+      <p class="field-hint">
+        Injects CSS to hide the browser's scrollbar so it doesn't appear in the captured image. Works in Chromium &amp; Firefox.
+      </p>
+    </section>
+
+    <section class="options-section">
+      <h2>Capture timing</h2>
+      <p class="section-hint">Longer delays produce more stable captures on slow / animated pages.</p>
+
+      <div class="field">
+        <label for="scroll-settle">Scroll settle delay <output id="scroll-settle-val">300 ms</output></label>
+        <input type="range" id="scroll-settle" min="100" max="2000" step="50">
+        <div class="field-hint">Wait after scrolling before snapping each full-page / per-page segment.</div>
+      </div>
+
+      <div class="field">
+        <label for="click-settle">Click-capture settle delay <output id="click-settle-val">250 ms</output></label>
+        <input type="range" id="click-settle" min="50" max="1500" step="25">
+        <div class="field-hint">Wait after each click before the shot (lets menus / tooltips render).</div>
+      </div>
+
+      <div class="field">
+        <label for="hotkey-settle">Hotkey-capture settle delay <output id="hotkey-settle-val">80 ms</output></label>
+        <input type="range" id="hotkey-settle" min="0" max="500" step="10">
+        <div class="field-hint">Usually kept short so the shot matches the exact moment the key fired.</div>
+      </div>
+
+      <div class="field">
+        <label for="inter-seg">Inter-segment pause <output id="inter-seg-val">200 ms</output></label>
+        <input type="range" id="inter-seg" min="0" max="500" step="25">
+        <div class="field-hint">Throttle between successive segments of scroll / per-page captures to avoid Chrome rate limits.</div>
+      </div>
+    </section>
+
+    <section class="options-section">
+      <h2>Image format</h2>
+      <p class="section-hint">How captured images are encoded and stored.</p>
+
+      <div class="field">
+        <label for="image-format">Format</label>
+        <select id="image-format">
+          <option value="smart">Smart — PNG-8 for UI, fallback for photos (recommended)</option>
+          <option value="png">PNG — always lossless (larger files)</option>
+          <option value="jpeg">JPEG — smallest, lossy on text/UI</option>
+        </select>
+        <div class="field-hint">
+          Smart mode: palettizes crisp UI screens to PNG-8 (smaller AND sharper than JPEG),
+          but automatically falls back for photo-heavy pages to avoid posterization.
+        </div>
+      </div>
+
+      <div class="field" id="smart-fallback-field">
+        <label for="smart-fallback">Smart fallback (for photo-heavy pages)</label>
+        <select id="smart-fallback">
+          <option value="png">PNG-24 — lossless, larger</option>
+          <option value="jpeg">JPEG — compact, lossy</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="smart-threshold">
+          Smart color threshold
+          <output id="smart-threshold-val">15000</output>
+        </label>
+        <input type="range" id="smart-threshold" min="2000" max="50000" step="1000">
+        <div class="field-hint">
+          If a sampled pixel scan finds more unique colors than this, the image is treated as photo-heavy and falls back.
+          Default <strong>15000</strong>: admin UIs / docs / code editors use PNG-8 for sharp text, while feed/photo-heavy pages fall back automatically.
+          Lower to ~5000 for strict "flat UI only"; raise to ~30000 to force PNG-8 on most pages.
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="jpeg-q">JPEG quality <output id="jpeg-q-val">92%</output></label>
+        <input type="range" id="jpeg-q" min="60" max="100" step="1">
+        <div class="field-hint">Used for "JPEG" format and the JPEG smart-fallback option. 85–95% is good for screenshots.</div>
+      </div>
+
+      <div class="field">
+        <label for="thumb-q">Thumbnail quality <output id="thumb-q-val">85%</output></label>
+        <input type="range" id="thumb-q" min="60" max="95" step="1">
+      </div>
+
+      <div class="field">
+        <label for="thumb-w">Thumbnail resolution</label>
+        <select id="thumb-w">
+          <option value="360">360 px — smallest</option>
+          <option value="480">480 px — default</option>
+          <option value="640">640 px — sharper on 4K displays</option>
+          <option value="960">960 px — HiDPI</option>
+        </select>
+      </div>
+    </section>
+
+    <section class="options-section">
+      <h2>Viewport emulation <span class="advanced-badge">Advanced</span></h2>
+      <p class="section-hint">
+        Capture at a specified output pixel size (e.g. Full HD 1920×1080) by physically resizing the browser window
+        before the capture, then restoring it. The extension divides the target by your display's device-pixel-ratio
+        (DPR) so the resulting image lands on the requested pixel dimensions.
+      </p>
+
+      <div class="field checkbox-row">
+        <label class="checkbox">
+          <input type="checkbox" id="emulation-enabled">
+          <span>Enable viewport emulation</span>
+        </label>
+        <div class="field-hint">
+          ⚠ The browser window will briefly resize during capture. If the target is larger than your monitor
+          (after DPR compensation) it's clamped to what fits. Mobile UA emulation is <em>not</em> supported —
+          use Chrome DevTools for that.
+        </div>
+      </div>
+
+      <div id="emulation-options" style="display:none">
+        <div class="field">
+          <label for="emulation-preset">Viewport preset</label>
+          <select id="emulation-preset">
+            <option value="native">Native (don't resize)</option>
+            <option value="fullhd">Full HD — 1920 × 1080</option>
+            <option value="macbook">MacBook — 1440 × 900</option>
+            <option value="iphonese">iPhone SE width — 375 × 667</option>
+            <option value="iphone15promax">iPhone 15 Pro Max width — 430 × 932</option>
+            <option value="ipad">iPad width — 1024 × 1366</option>
+            <option value="custom">Custom…</option>
+          </select>
+        </div>
+
+        <div id="custom-emulation-fields" style="display:none">
+          <div class="field field-row">
+            <div>
+              <label for="custom-width">Width (px)</label>
+              <input type="number" id="custom-width" min="320" max="4096" step="1">
+            </div>
+            <div>
+              <label for="custom-height">Height (px)</label>
+              <input type="number" id="custom-height" min="320" max="4096" step="1">
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <footer class="options-footer">
+      <button type="button" id="btn-reset" class="btn btn-secondary">Reset to defaults</button>
+      <span class="footer-spacer"></span>
+      <span class="footer-saved" id="saved-note"></span>
+    </footer>
+  </main>
+
+  <script type="module" src="./options.ts"></script>
+</body>
+</html>

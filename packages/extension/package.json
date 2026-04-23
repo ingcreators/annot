@@ -1,0 +1,25 @@
+{
+  "name": "@ingcreators/annot-extension",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build && node -e \"require('fs').copyFileSync('manifests/chrome.json','dist/manifest.json')\"",
+    "build:chrome": "vite build && node -e \"require('fs').copyFileSync('manifests/chrome.json','dist/manifest.json')\"",
+    "build:edge": "vite build && node -e \"require('fs').copyFileSync('manifests/chrome.json','dist/manifest.json')\"",
+    "package:chrome": "pnpm build:chrome && node scripts/zip-dist.mjs chrome",
+    "package:edge": "pnpm build:edge && node scripts/zip-dist.mjs edge",
+    "dev": "vite",
+    "typecheck": "tsc --noEmit",
+    "icons": "node ../../brand/generate-app-icons.mjs"
+  },
+  "dependencies": {
+    "@ingcreators/annot-core": "workspace:*"
+  },
+  "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
+    "chrome-types": "^0.1.327",
+    "typescript": "^5.7.0",
+    "vite": "^6.0.0"
+  }
+}

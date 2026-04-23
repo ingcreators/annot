@@ -1,0 +1,44 @@
+<!--
+  C1 — "orbit × hierarchy × full network" (straight-line edges).
+
+  Replaces the single apex→base-right arc with 3 straight edges
+  connecting all 3 dots. All creators are equally networked.
+
+  Trade-offs vs the 1-arc version:
+    + Clearer "community network" reading.
+    + Structural echo of Annot's crossbar (line vocabulary).
+    – Closed triangle reads as static — the orbit-motion narrative
+      weakens. The non-equilateral (scalene) shape tries to keep
+      some dynamism, but closed geometry is inherently stable.
+    – Visual density up (5 → 7 elements) — busier at 16–24px.
+
+  Triangle edges follow the same "quiet line" grammar as the previous
+  arc: rgba(255,255,255,0.14) stroke, sw=1, round joins.
+  Drawn FIRST so the dots render over the edge endpoints (no T-joints
+  poking out from under the dots).
+
+  Geometry (48×48 viewBox):
+    Edges      M24 11 L11 34 L36 28 Z   rgba(255,255,255,0.14) sw=1
+    Apex       (24, 11)  r=4.5  blue
+    Stem       M24 19 L24.77 30  sw=3.5 blue  (4° CW tilt)
+    Left       (11, 34)  r=3.0  green
+    Right      (36, 28)  r=3.0  purple
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 48 48" fill="none">
+  <rect width="48" height="48" rx="10" fill="#0f1730"/>
+
+  <!-- Full network: straight edges connecting all 3 dots -->
+  <path d="M24 11 L11 34 L36 28 Z"
+        stroke="rgba(255,255,255,0.14)" stroke-width="1" fill="none"
+        stroke-linejoin="round" stroke-linecap="round"/>
+
+  <!-- Anchor creator / i-tittle — enlarged (r=4.5) -->
+  <circle cx="24" cy="11" r="4.5" fill="#7c9cff"/>
+
+  <!-- i stem — extended + tilted 4° CW -->
+  <path d="M24 19 L24.77 30" stroke="#7c9cff" stroke-width="3.5" stroke-linecap="round"/>
+
+  <!-- Orbiting community creators -->
+  <circle cx="11" cy="34" r="3" fill="#7ef0c5"/>
+  <circle cx="36" cy="28" r="3" fill="#b391ff"/>
+</svg>

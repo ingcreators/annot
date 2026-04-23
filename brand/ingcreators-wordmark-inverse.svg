@@ -1,0 +1,21 @@
+<!--
+  ingcreators horizontal wordmark (inverse — for dark backgrounds).
+  Use on: dark-themed landing pages, social banners, presentation decks.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 232 48" fill="none" role="img" aria-label="ingcreators">
+  <rect width="48" height="48" rx="10" fill="#0f1730"/>
+  <path d="M11 34 Q22 26 36 28"
+        stroke="#7c9cff" stroke-width="1" fill="none"
+        stroke-linecap="round"/>
+  <circle cx="24" cy="11" r="4.5" fill="#7c9cff"/>
+  <path d="M24 19 L24.77 30" stroke="#7c9cff" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="11" cy="34" r="3" fill="#7ef0c5"/>
+  <circle cx="36" cy="28" r="3" fill="#b391ff"/>
+
+  <text x="62" y="33"
+        fill="#eef2ff"
+        font-family="Sora, -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif"
+        font-weight="700"
+        font-size="26"
+        letter-spacing="-0.03em">ingcreators</text>
+</svg>

@@ -1,0 +1,23 @@
+<!--
+  C1 — "hierarchy" differentiation variant.
+    Break the uniform-dot clichè by introducing a size cascade:
+      apex  = r 4.5  (lead / founder / "you")
+      base  = r 3.0  (community creators)
+    Effect: the eye is pulled to the apex blue dot first, then spreads
+    to the base. Implies "individual creator anchors the community"
+    — on-narrative for ingcreators.
+    Stem thickness kept at 3.5 so it reads clearly secondary to the
+    now-larger apex (ratio 3.5 / 9 = 39%).
+  Color grammar unchanged.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 48 48" fill="none">
+  <rect width="48" height="48" rx="10" fill="#0f1730"/>
+
+  <!-- Lead creator / i-tittle — larger apex -->
+  <circle cx="24" cy="11" r="4.5" fill="#7c9cff"/>
+  <path d="M24 19 V25" stroke="#7c9cff" stroke-width="3.5" stroke-linecap="round"/>
+
+  <!-- Community creators — smaller base dots -->
+  <circle cx="12" cy="32" r="3" fill="#7ef0c5"/>
+  <circle cx="36" cy="32" r="3" fill="#b391ff"/>
+</svg>

@@ -1,0 +1,39 @@
+{
+  "name": "@ingcreators/annot-core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./headless": "./src/headless.ts",
+    "./editor": "./src/editor/index.ts",
+    "./editor/*": "./src/editor/*.ts",
+    "./xmp": "./src/xmp/xmp-browser.ts",
+    "./zip": "./src/zip/zip-builder.ts",
+    "./utils": "./src/utils/index.ts",
+    "./utils/*": "./src/utils/*.ts",
+    "./storage": "./src/storage/index.ts",
+    "./encode": "./src/encode/index.ts",
+    "./styles/*": "./styles/*",
+    "./fonts/*": "./fonts/*"
+  },
+  "scripts": {
+    "build": "vite build",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/pako": "^2.0.4",
+    "typescript": "^5.7.0",
+    "vite": "^6.0.0",
+    "vite-plugin-dts": "^4.5.0"
+  },
+  "dependencies": {
+    "@panda-ai/imagequant": "^0.2.0",
+    "@tauri-apps/api": "^2.10.1",
+    "@tauri-apps/plugin-dialog": "^2.2.0",
+    "@tauri-apps/plugin-fs": "^2.2.0",
+    "pako": "^2.1.0"
+  }
+}

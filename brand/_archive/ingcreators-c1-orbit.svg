@@ -1,0 +1,29 @@
+<!--
+  C1 — "orbit" differentiation variant.
+    Break strict left-right symmetry by positioning:
+      apex stays on axis (anchor)
+      left dot moves DOWN + slightly OUT  (behind / trailing)
+      right dot moves UP + slightly IN    (ahead / leading)
+    Effect: the triangle is no longer isoceles — it reads as a
+    snapshot of rotational motion. The "orbit" feel comes from the
+    implied curve between the 3 positions.
+    Stem stays vertical to preserve the "i" axis (the stable anchor
+    against which the rotation is measured).
+  Color grammar unchanged.
+
+  Coordinates:
+    Apex   (24, 11)  r=3.5  blue    — stationary anchor
+    Left   (11, 34)  r=3.5  green   — lower-left, trailing
+    Right  (36, 28)  r=3.5  purple  — upper-right, leading
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 48 48" fill="none">
+  <rect width="48" height="48" rx="10" fill="#0f1730"/>
+
+  <!-- Shared apex: i-tittle + triangle vertex -->
+  <circle cx="24" cy="11" r="3.5" fill="#7c9cff"/>
+  <path d="M24 18 V25" stroke="#7c9cff" stroke-width="3.5" stroke-linecap="round"/>
+
+  <!-- Orbiting creators — asymmetric positions -->
+  <circle cx="11" cy="34" r="3.5" fill="#7ef0c5"/>    <!-- trailing -->
+  <circle cx="36" cy="28" r="3.5" fill="#b391ff"/>    <!-- leading  -->
+</svg>

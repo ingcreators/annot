@@ -1,0 +1,55 @@
+<!--
+  C1 — "orbit × hierarchy" (refined).
+
+  Three refinements applied on top of the previous orbit-hierarchy:
+
+    1. i-stem extended + tilted 4° clockwise (3–5° range)
+       Old: M24 19 V24          (length 5, vertical)
+       New: M24 19 L24.77 30    (length 11.03, tilted 4°)
+       • dx = 11·sin(4°) = 0.77,  dy = 11·cos(4°) = 10.97
+       • Visual stem-length / apex-diameter = 14.5 / 9 ≈ 1.6x
+         — clearly a stem now, not a nub. Reads as "i".
+       • The 4° tilt aligns the i-axis with the implied orbit rotation
+         (base dots are asymmetrically offset CCW), removing the old
+         "vertical i + tilted base" visual clash.
+
+    2. Orbit arc apex → base-right (subtle trajectory hint)
+       M24 11 Q40 15 36 28, stroke rgba(255,255,255,0.14), sw=1
+       • Ultra-subtle curve bulging toward upper-right, landing at
+         the purple leading dot. Implies the creator "arrived here
+         via an orbit path" — makes the orbit narrative explicit.
+       • Drawn before the apex so the dot covers the arc's start
+         (arc appears to emerge from under the apex dot).
+       • Opacity 0.14 + sw=1 matches the "network" variant grammar,
+         giving the family a consistent "quiet line" secondary layer
+         that also echoes Annot's crossbar (line vocabulary) without
+         dominating.
+
+    3. (Unchanged) hierarchy: apex r=4.5, base r=3.0
+       (Unchanged) orbit:     asymmetric base positions
+
+  Full geometry (48×48 viewBox):
+    Orbit arc  M24 11 Q40 15 36 28  rgba(255,255,255,0.14) sw=1
+    Apex       (24, 11)  r=4.5  blue
+    Stem       M24 19 L24.77 30    sw=3.5  blue  (4° CW tilt)
+    Left       (11, 34)  r=3.0  green   — trailing
+    Right      (36, 28)  r=3.0  purple  — leading
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 48 48" fill="none">
+  <rect width="48" height="48" rx="10" fill="#0f1730"/>
+
+  <!-- Orbit arc — drawn first so apex dot covers its start -->
+  <path d="M24 11 Q40 15 36 28"
+        stroke="rgba(255,255,255,0.14)" stroke-width="1" fill="none"
+        stroke-linecap="round"/>
+
+  <!-- Anchor creator / i-tittle — enlarged (r=4.5) -->
+  <circle cx="24" cy="11" r="4.5" fill="#7c9cff"/>
+
+  <!-- i stem — extended + tilted 4° CW to align with orbit motion -->
+  <path d="M24 19 L24.77 30" stroke="#7c9cff" stroke-width="3.5" stroke-linecap="round"/>
+
+  <!-- Orbiting community creators -->
+  <circle cx="11" cy="34" r="3" fill="#7ef0c5"/>    <!-- trailing -->
+  <circle cx="36" cy="28" r="3" fill="#b391ff"/>    <!-- leading  -->
+</svg>

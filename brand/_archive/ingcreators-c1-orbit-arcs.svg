@@ -1,0 +1,47 @@
+<!--
+  C1 — "orbit × hierarchy × full network" (curved arcs).
+
+  All 3 edges rendered as subtle outward-bulging Q curves instead of
+  straight lines. Preserves the orbit-motion narrative of the 1-arc
+  version while giving every creator equal network treatment.
+
+  Each arc bulges AWAY from the triangle's centroid (≈(23.67, 24.33))
+  so the composition reads as three orbital paths rather than a
+  faceted polygon.
+
+  Arcs:
+    apex (24,11)    → right (36,28): control (42, 14)  bulge UP-RIGHT
+    right (36,28)   → left  (11,34): control (23, 40)  bulge DOWN
+    left  (11,34)   → apex  (24,11): control ( 6, 15)  bulge UP-LEFT
+
+  All control points are outside the triangle, pushed further out than
+  the straight-line edges, giving a gently "inflated" lens shape.
+
+  Trade-offs vs the 1-arc version:
+    + All creators networked (symmetric treatment).
+    + Motion narrative preserved (curves keep the "orbit" reading).
+    – Most complex variant visually; 3 curves + 3 dots + stem is busy.
+      Requires the stroke to stay very quiet (sw=1, opacity 0.14).
+    – At 16–24 px the curves flatten and can muddy the form.
+
+  Same "quiet line" grammar (rgba(255,255,255,0.14), sw=1) as the
+  other network variants for family consistency.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 48 48" fill="none">
+  <rect width="48" height="48" rx="10" fill="#0f1730"/>
+
+  <!-- Full network: 3 outward-bulging arcs -->
+  <path d="M24 11 Q42 14 36 28 Q23 40 11 34 Q6 15 24 11 Z"
+        stroke="rgba(255,255,255,0.14)" stroke-width="1" fill="none"
+        stroke-linejoin="round" stroke-linecap="round"/>
+
+  <!-- Anchor creator / i-tittle — enlarged (r=4.5) -->
+  <circle cx="24" cy="11" r="4.5" fill="#7c9cff"/>
+
+  <!-- i stem — extended + tilted 4° CW -->
+  <path d="M24 19 L24.77 30" stroke="#7c9cff" stroke-width="3.5" stroke-linecap="round"/>
+
+  <!-- Orbiting community creators -->
+  <circle cx="11" cy="34" r="3" fill="#7ef0c5"/>
+  <circle cx="36" cy="28" r="3" fill="#b391ff"/>
+</svg>

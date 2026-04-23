@@ -1,0 +1,67 @@
+<!--
+  ingcreators + Annot family lockup.
+
+  Shows both brand marks together to communicate the parent/product
+  relationship:
+    ingcreators (parent network, organic/orbital)
+    Annot       (product tool, structured/letterform)
+
+  Use for: docs headers explaining the product family, landing-page
+  footer ("part of the ingcreators family"), company deck cover, etc.
+  Works on light backgrounds; for dark, use family-inverse.svg.
+
+  Layout: two 48×48 icons side by side with stacked labels below each,
+  separated by a subtle divider that reinforces the relationship
+  without adding visual clutter.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 96" fill="none" role="img"
+     aria-label="ingcreators and Annot — a product family">
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       Column 1: ingcreators (parent, creators network)
+       ═══════════════════════════════════════════════════════════════ -->
+  <g transform="translate(56 4)">
+    <!-- Icon -->
+    <rect width="48" height="48" rx="10" fill="#0f1730"/>
+    <path d="M11 34 Q22 26 36 28"
+          stroke="#7c9cff" stroke-width="1" fill="none"
+          stroke-linecap="round"/>
+    <circle cx="24" cy="11" r="4.5" fill="#7c9cff"/>
+    <path d="M24 19 L24.77 30" stroke="#7c9cff" stroke-width="4" stroke-linecap="round"/>
+    <circle cx="11" cy="34" r="3" fill="#7ef0c5"/>
+    <circle cx="36" cy="28" r="3" fill="#b391ff"/>
+  </g>
+  <text x="80" y="70" text-anchor="middle"
+        fill="#0f1730"
+        font-family="Sora, -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif"
+        font-weight="700" font-size="14" letter-spacing="-0.02em">ingcreators</text>
+  <text x="80" y="85" text-anchor="middle"
+        fill="#4e5ea0"
+        font-family="Sora, -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif"
+        font-weight="500" font-size="10" letter-spacing="0.02em">creators network</text>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       Divider: "makes" relationship, understated
+       ═══════════════════════════════════════════════════════════════ -->
+  <line x1="160" y1="16" x2="160" y2="52"
+        stroke="#d0d6e8" stroke-width="1" stroke-linecap="round"/>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       Column 2: Annot (product, annotation tool)
+       ═══════════════════════════════════════════════════════════════ -->
+  <g transform="translate(216 4)">
+    <rect width="48" height="48" rx="10" fill="#0f1730"/>
+    <circle cx="24" cy="7" r="3.5" fill="#7c9cff"/>
+    <path d="M24 13 L13 38" stroke="#7ef0c5" stroke-width="4" stroke-linecap="round"/>
+    <path d="M24 13 L35 38" stroke="#b391ff" stroke-width="4" stroke-linecap="round"/>
+    <path d="M19 24 H29" stroke="#7c9cff" stroke-width="3.5" stroke-linecap="round"/>
+  </g>
+  <text x="240" y="70" text-anchor="middle"
+        fill="#0f1730"
+        font-family="Sora, -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif"
+        font-weight="700" font-size="14" letter-spacing="-0.02em">Annot</text>
+  <text x="240" y="85" text-anchor="middle"
+        fill="#4e5ea0"
+        font-family="Sora, -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif"
+        font-weight="500" font-size="10" letter-spacing="0.02em">by ingcreators</text>
+</svg>

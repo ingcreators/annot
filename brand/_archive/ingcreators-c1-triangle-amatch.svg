@@ -1,0 +1,29 @@
+<!--
+  C1 Triangle — color scheme mirrors Annot's A:
+    top apex  = blue  (like A's pin + crossbar)
+    left leg  = green (like A's left diagonal)
+    right leg = purple (like A's right diagonal)
+  The triangle's edges follow the same color rule, so the two brands
+  share one coherent color language: "left = green, right = purple,
+  horizontal/top = blue".
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 48 48" fill="none">
+  <rect width="48" height="48" rx="10" fill="#0f1730"/>
+
+  <!-- "i" — blue primary -->
+  <circle cx="13" cy="10" r="2.5" fill="#7c9cff"/>
+  <path d="M13 16 V38" stroke="#7c9cff" stroke-width="4" stroke-linecap="round"/>
+
+  <!-- Triangle edges (thinner than the i stroke so the i stays the anchor) -->
+  <!-- Left diagonal: top → left-bottom (green, like A's left leg) -->
+  <path d="M31 14 L24 31" stroke="#7ef0c5" stroke-width="2" stroke-linecap="round"/>
+  <!-- Right diagonal: top → right-bottom (purple, like A's right leg) -->
+  <path d="M31 14 L38 31" stroke="#b391ff" stroke-width="2" stroke-linecap="round"/>
+  <!-- Bottom horizontal (blue, like A's crossbar) -->
+  <path d="M24 31 L38 31" stroke="#7c9cff" stroke-width="2" stroke-linecap="round"/>
+
+  <!-- Vertex dots (drawn last so they sit on top of the line ends) -->
+  <circle cx="31" cy="14" r="2.5" fill="#7c9cff"/>
+  <circle cx="24" cy="31" r="2.5" fill="#7ef0c5"/>
+  <circle cx="38" cy="31" r="2.5" fill="#b391ff"/>
+</svg>

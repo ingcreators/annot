@@ -1,0 +1,718 @@
+.prop-panel {
+  position: absolute;
+  top: 52px;
+  right: 8px;
+  background: var(--bg-panel-deep);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 20;
+  box-shadow: 0 4px 16px var(--shadow);
+  min-width: 200px;
+  max-height: calc(100vh - 100px);
+  overflow-y: auto;
+}
+
+/* Docked variant — used when PropertyPanel is embedded in a host
+ * sidebar instead of floating on the canvas. Strips the absolute
+ * positioning + chrome so the panel flows naturally inside its
+ * container. The host is responsible for sizing/positioning the
+ * container (e.g. #editor-right-panel). */
+.prop-panel-docked {
+  position: static;
+  top: auto;
+  right: auto;
+  border: none;
+  border-radius: 0;
+  padding: 14px 16px;
+  box-shadow: none;
+  max-height: none;
+  min-width: 0;
+  background: transparent;
+}
+
+.prop-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.prop-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  width: 36px;
+  flex-shrink: 0;
+}
+
+.prop-color {
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--input-border);
+  border-radius: 4px;
+  padding: 0;
+  cursor: pointer;
+  background: transparent;
+}
+
+.prop-color::-webkit-color-swatch-wrapper { padding: 2px; }
+.prop-color::-webkit-color-swatch { border: none; border-radius: 2px; }
+
+.prop-btn {
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--input-border);
+  border-radius: 4px;
+  background: var(--chip-bg);
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.prop-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Section with label + choice list */
+.prop-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.prop-section-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  padding-bottom: 2px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+/* Vertical choice list (width / style) */
+.prop-choice-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.prop-choice-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.prop-choice-item:hover {
+  background: var(--choice-hover);
+}
+
+.prop-choice-item.active {
+  background: var(--choice-active);
+}
+
+.prop-choice-item svg {
+  flex-shrink: 0;
+}
+
+.prop-choice-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.prop-choice-item.active .prop-choice-label {
+  color: var(--accent);
+}
+
+/* Horizontal chip list (font size) */
+.prop-choice-horizontal {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+/* Variant-picker chip — sized + styled to match `.tool-flyout-chip` /
+ * `.tool-flyout-chip-svg` in the toolbar flyout so "next draw"
+ * (Tool mode) and "this element's variant" (Selection mode) share
+ * the same chip vocabulary across toolbar + property panel.
+ * The .pp-color-chip subclass overrides width/height inline (28×20)
+ * for Highlight color swatches — its inline styles win over these
+ * class defaults. */
+.prop-choice-chip {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 22px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+
+/* SVG glyphs render at a consistent 22×22 — same size as the
+ * ligature glyphs (font-size 22px) so SVG + ligature chips read as
+ * one family inside the same row. For tall/wide SVGs with explicit
+ * width/height attrs the `object-fit: contain`-like scaling is
+ * handled by preserveAspectRatio (SVG default), so non-square icons
+ * stay legible. */
+.prop-choice-chip > svg {
+  width: 22px;
+  height: 22px;
+}
+
+.prop-choice-chip:hover {
+  background: var(--hover-bg);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.prop-choice-chip.active {
+  background: var(--choice-active, var(--choice-hover, var(--hover-bg)));
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.prop-number-input {
+  width: 52px;
+  height: 26px;
+  border: 1px solid var(--input-border);
+  border-radius: 4px;
+  background: var(--input-bg);
+  color: var(--text-primary);
+  font-size: 13px;
+  padding: 0 6px;
+  text-align: center;
+}
+
+/* Preview line color adapts to theme */
+.preview-line {
+  stroke: var(--preview-line);
+}
+
+/* Color palette */
+.color-palette {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.color-palette-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  padding: 2px 0;
+}
+
+.color-palette-row {
+  display: flex;
+  gap: 2px;
+}
+
+.color-swatch {
+  width: 18px;
+  height: 18px;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+
+.color-swatch:hover {
+  transform: scale(1.25);
+  z-index: 1;
+  border-color: var(--accent);
+}
+
+.color-swatch.active {
+  border: 2px solid var(--accent);
+  border-radius: 3px;
+}
+
+.color-palette-custom {
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+}
+
+.color-palette-custom-btn {
+  font-size: 11px;
+  color: var(--accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 0;
+}
+
+.color-palette-custom-btn:hover {
+  text-decoration: underline;
+}
+
+.color-palette-hidden-input {
+  width: 0;
+  height: 0;
+  padding: 0;
+  border: none;
+  opacity: 0;
+  position: absolute;
+}
+
+/* ---- Category / row typography hierarchy ----
+ *
+ * Previously category headers (Type / Fill / Line / Label) and row
+ * labels (Color / Width / Dash type / …) used nearly identical
+ * styling — 13 px bold for headers, 12 px regular for rows — which
+ * read as "slightly bigger text" rather than a clear category /
+ * attribute distinction.
+ *
+ * New hierarchy (Figma / Linear / Notion-style):
+ *   Category header → SMALL UPPERCASE, muted, letter-spaced
+ *     → reads as a "section label" at a glance
+ *   Row label → normal sentence case body text
+ *     → reads as a "property name"
+ *
+ * The contrast in size + case + weight + spacing makes the grouping
+ * obvious without needing borders / boxes, keeping the panel flat
+ * and uncluttered.
+ */
+
+/* Vertical rhythm — Gestalt proximity principle:
+ *   Section → Section : 20px (widest — clear category break)
+ *   Row → Row         : 6px  (moderate — list items)
+ *   Header → Body     : 4px  (tightest — parent-child grouping)
+ *
+ * The ratio 20 : 6 : 4 makes the hierarchy readable at a glance:
+ * biggest gaps separate unrelated groups, smallest gaps bind a
+ * header to its rows. Equal spacing (which the panel previously
+ * had) dissolves the grouping into a flat list. */
+.pp-section {
+  margin: 20px 0 0 0;
+}
+.pp-section:first-child { margin-top: 0; }
+
+.pp-section-header {
+  display: block;
+  user-select: none;
+  /* Small + uppercase + letter-spaced — canonical "section header"
+   * treatment in professional SaaS UIs (Figma right-panel, Linear,
+   * Notion databases). Uppercase + tracking give it visual weight
+   * despite the small font. */
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 0 0 4px 0;
+}
+.pp-section-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  /* Indent rows so they hang off their category header. The
+   * uppercase tracked header stays flush at the section's left
+   * edge, establishing the outer column. */
+  padding-left: 10px;
+}
+
+/* Radio group — paint type choice (none / solid / gradient) */
+.pp-radio-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 0 4px 12px;
+}
+.pp-radio {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-primary);
+  cursor: pointer;
+  user-select: none;
+}
+.pp-radio input[type="radio"] {
+  accent-color: var(--accent);
+  margin: 0;
+  cursor: pointer;
+}
+
+/* Two-column label-value row — the dominant layout in PowerPoint's
+ * side panel. Label hugs the left, control takes remaining width. */
+.pp-row {
+  display: grid;
+  /* 120px label column accommodates the longest row labels
+   * ("Begin arrow type", "End arrow size", "Transparency") with a
+   * few px of breathing room. The remaining space goes to the
+   * control. Panel widened from 240→280 px in P1 gives us the
+   * extra width to work with. */
+  grid-template-columns: 120px 1fr;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+}
+.pp-row-label {
+  /* Row / attribute label — subdued secondary color so the VALUE
+   * (color swatch, number, pulldown) reads as the primary content
+   * of each row. Paired with the uppercase category header above,
+   * the hierarchy reads as: CATEGORY (label) → attribute (value),
+   * matching professional design-tool property panels. */
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+/* Numeric input with unit suffix — width (pt), transparency (%). */
+.pp-number {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--bg-input, var(--bg-panel));
+  overflow: hidden;
+  height: 24px;
+  min-width: 0;
+}
+.pp-number input {
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 12px;
+  text-align: right;
+  width: 100%;
+  min-width: 0;
+  padding: 0 4px;
+}
+.pp-number input::-webkit-outer-spin-button,
+.pp-number input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.pp-number input[type="number"] { -moz-appearance: textfield; }
+.pp-number-unit {
+  color: var(--text-muted);
+  font-size: 11px;
+  padding-right: 4px;
+  user-select: none;
+}
+
+/* Slider paired with a numeric input — PowerPoint's transparency /
+ * brightness rows. The slider is the wide visual scrubber; the input
+ * gives precise values. */
+.pp-slider-row {
+  display: grid;
+  /* Match the .pp-row label column so slider rows (Transparency, etc)
+   * line up with the rest of the label column. */
+  grid-template-columns: 108px 1fr 56px;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+}
+.pp-slider-row input[type="range"] {
+  width: 100%;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+/* PowerPoint-style dropdown button — visual preview + caret. Popup
+ * content uses `.pp-select-popup` (inside the shared .tool-flyout). */
+.pp-select {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  height: 24px;
+  padding: 0 2px 0 6px;
+  background: var(--bg-input, var(--bg-panel));
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 12px;
+}
+.pp-select:hover {
+  border-color: var(--accent);
+}
+.pp-select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.pp-select-preview {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+.pp-select-preview svg {
+  display: block;
+}
+.pp-select-caret {
+  font-size: 16px !important;
+  color: var(--text-muted);
+}
+
+/* Popup content for pp-select. Grid layout so icon galleries
+ * (arrow types) read as PowerPoint's visual pickers. */
+.tool-flyout-pp-select {
+  padding: 6px;
+  /* Let the popup shrink to the widest row — PowerPoint's dropdowns
+   * size to content rather than a fixed min-width, which avoids the
+   * awkward empty band to the right of short previews (dashes, caps,
+   * joins). Callers can still opt into a larger minimum via the
+   * custom-select's `popupWidth` option when they need it. */
+  width: max-content;
+}
+.pp-select-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2px;
+}
+.pp-select-item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+}
+.pp-select-item:hover {
+  background: var(--hover-bg);
+}
+.pp-select-item.active {
+  background: var(--choice-hover, var(--hover-bg));
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.pp-select-item svg {
+  display: block;
+  flex-shrink: 0;
+}
+
+/* Color swatch button — the color pulldown affordance. */
+.pp-color-btn {
+  width: 100%;
+  height: 24px;
+  padding: 2px;
+  background: var(--bg-input, var(--bg-panel));
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pp-color-swatch {
+  width: 20px;
+  height: 16px;
+  border-radius: 2px;
+  border: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+.pp-color-btn .material-symbols-outlined {
+  font-size: 16px !important;
+  color: var(--text-muted);
+  margin-left: auto;
+}
+
+/* "No fill" state for color swatches — diagonal strike from top-right
+ * to bottom-left over a white background. Same visual as PowerPoint's
+ * "No fill" chip so the meaning reads without needing a label. */
+.pp-color-swatch-none {
+  background:
+    linear-gradient(
+      to top left,
+      transparent 0 calc(50% - 0.8px),
+      var(--accent, #e74c3c) calc(50% - 0.8px) calc(50% + 0.8px),
+      transparent calc(50% + 0.8px) 100%
+    ),
+    #ffffff;
+}
+
+/* "No fill" button inside the color-pull popover. Shown ABOVE the
+ * palette grid for shape-fill pickers that support absence as a
+ * meaningful choice. */
+.pp-color-none-btn {
+  display: block;
+  width: 100%;
+  padding: 6px 8px;
+  margin-bottom: 8px;
+  background: var(--bg-input, var(--bg-panel));
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  text-align: left;
+}
+.pp-color-none-btn:hover {
+  background: var(--hover-bg);
+  border-color: var(--accent);
+}
+
+/* Chip-row container for variant/type pickers inside a pp-section.
+ * Mirrors the existing `prop-choice-horizontal` but lives inside a
+ * pp-section-body so the padding matches other pp-rows. */
+.pp-type-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  /* Leave headroom for the active-state outline ring (see
+   * .pp-color-chip.active below) so the ring doesn't clip against
+   * the section edge. */
+  padding: 3px;
+}
+
+/* Color-swatch chip — used by the Highlight Type picker. The chip
+ * frame inherits base .prop-choice-chip styling (32×32 transparent
+ * shell, accent border/bg on hover+active), matching other Type
+ * chips. The preview color lives on an INNER ::before square
+ * (--swatch-color driven by JS), sized smaller than the chip so
+ * the active-state accent border + bg tint show around it. This
+ * unifies the Highlight selection affordance with every other
+ * variant picker — no bespoke double-ring / checkmark needed. */
+.prop-choice-chip.pp-color-chip::before {
+  content: "";
+  display: block;
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  background: var(--swatch-color, transparent);
+  /* Subtle inset stroke so light colors (e.g. yellow on a light
+   * theme) still have a visible edge against the chip frame. */
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.12) inset;
+}
+
+/* Done button row — currently used by Freehand to explicitly end a
+ * continuous drawing session (draw.io-style). Full-width so it reads
+ * as a terminal action, distinct from the setting rows above. */
+.pp-done-row {
+  display: flex;
+  padding: 8px 0 2px 0;
+}
+.pp-done-btn {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: var(--accent);
+  color: var(--bg-panel, #fff);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.12s, transform 0.08s;
+}
+.pp-done-btn:hover {
+  opacity: 0.9;
+}
+.pp-done-btn:active {
+  transform: translateY(1px);
+}
+
+/* Safety: keep PP widgets inside the panel width even when the content
+ * would otherwise force horizontal overflow (long labels, wide
+ * previews, etc). `min-width: 0` is the well-known grid escape hatch
+ * that lets flex/grid children shrink below their content's natural
+ * width instead of overflowing their parent. */
+.pp-row > *,
+.pp-slider-row > * {
+  min-width: 0;
+}
+.pp-section,
+.pp-section-body {
+  min-width: 0;
+  overflow: hidden;
+}
+.pp-select {
+  max-width: 100%;
+  min-width: 0;
+}
+.pp-select-preview svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Icon-grid variant of the custom-select popup (arrow type / size
+ * pickers). PowerPoint renders these as uniform icon buttons — no
+ * text labels, centered previews, tighter padding. We apply these
+ * rules unconditionally since text-only options stay centered
+ * cleanly too. */
+.pp-select-grid {
+  gap: 2px;
+}
+.pp-select-item {
+  justify-content: center;
+  padding: 6px;
+  min-height: 28px;
+}
+/* When a grid has multiple columns (set inline by JS), items become
+ * uniform square-ish cells matching PowerPoint's gallery look. */
+.pp-select-grid[style*="repeat"] .pp-select-item {
+  aspect-ratio: auto;
+  min-width: 0;
+}
+
+/* Custom up/down spinner for pp-number (PowerPoint-style). The
+ * browser's native spin buttons are suppressed above so these
+ * stacked caret buttons take over. Chevrons are drawn with CSS
+ * borders so no extra font / SVG is needed. */
+.pp-number-spinner {
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--border-color);
+  align-self: stretch;
+}
+.pp-number-spinner button {
+  flex: 1;
+  width: 14px;
+  min-height: 10px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.1s, color 0.1s;
+}
+.pp-number-spinner button:hover {
+  background: var(--hover-bg);
+  color: var(--accent);
+}
+.pp-number-spinner button:active {
+  background: var(--choice-hover, var(--hover-bg));
+}
+.pp-number-spin-up::before,
+.pp-number-spin-down::before {
+  content: "";
+  display: block;
+  width: 0;
+  height: 0;
+  border-left: 3px solid transparent;
+  border-right: 3px solid transparent;
+}
+.pp-number-spin-up::before {
+  border-bottom: 4px solid currentColor;
+}
+.pp-number-spin-down::before {
+  border-top: 4px solid currentColor;
+}

@@ -1,0 +1,570 @@
+#toolbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 48px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  gap: 4px;
+  z-index: 10;
+}
+
+.toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.toolbar-separator {
+  width: 1px;
+  height: 28px;
+  background: var(--border-color);
+  margin: 0 6px;
+}
+
+.toolbar-btn {
+  width: 36px;
+  height: 36px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 20px;
+  cursor: pointer;
+  font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.1s, border-color 0.1s;
+  position: relative;
+}
+
+.toolbar-btn:hover {
+  background: var(--hover-bg);
+  border-color: var(--hover-border);
+}
+
+.toolbar-btn.active {
+  background: var(--active-bg);
+  border-color: var(--active-border);
+  color: var(--accent);
+}
+
+/* Custom CSS tooltip — generic for any element with data-tooltip.
+ *
+ * Uses `[data-tooltip]` (NOT `[title]`) as the source attribute so
+ * the browser doesn't show a DUPLICATE native tooltip on top of our
+ * custom one. `title` triggers the OS's built-in yellow bubble
+ * (Windows) / gray bubble (macOS), which is styled differently per
+ * platform, can't be themed, and appears with a fixed ~500 ms delay.
+ * Modern SaaS tools (Figma, Notion, Linear, Miro, VS Code, etc.) all
+ * skip `title` and use a custom tooltip like this one.
+ *
+ * Accessibility: `aria-label` is set in parallel with `data-tooltip`
+ * (via the `setTooltip()` helper in utils/tooltip.ts), so screen
+ * readers still announce the control's name.
+ *
+ * Scope: any element with `data-tooltip`, NOT scoped to specific
+ * button classes — otherwise every new button or tooltip-bearing
+ * element requires adding its class to this selector. A generic
+ * rule means `setTooltip(anyEl, "…")` Just Works.
+ *
+ * `bottom: -40px` — wide enough to clear the extended body of an
+ * accessibility-enlarged mouse cursor. Default OS cursors (~16×20 px)
+ * don't need this much offset, but Windows' "Large" / "Extra Large"
+ * pointer presets (32–64 px) extend down-right from the tip and would
+ * obscure a closer tooltip. 40 px clears the "Large" preset. */
+
+/* Positioning context for the ::after pseudo. `:where()` keeps the
+ * specificity at zero so consuming elements can still override
+ * `position` (e.g. a table cell that needs `position: static` for
+ * its own layout) without `!important`. Most elements that get
+ * data-tooltip are buttons/chips that are fine with relative. */
+:where([data-tooltip]) {
+  position: relative;
+}
+
+[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: -40px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-panel-deep);
+  color: var(--text-primary);
+  /* Force a plain system font. Without this, buttons that carry the
+   * `material-symbols-outlined` class would make the tooltip's text
+   * try to render as Material Symbols ligatures (tooltip text like
+   * "Help" isn't a valid ligature, so the browser falls back to
+   * whatever glyph coverage the font has — which looks weird /
+   * unstyled). */
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-variation-settings: normal;
+  font-weight: 400;
+  font-size: 11px;
+  line-height: 1.2;
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 100;
+  /* Subtle shadow so the bubble reads against the canvas background
+   * (which may be the screenshot itself, not a theme-panel color). */
+  box-shadow: 0 2px 6px var(--shadow, rgba(0, 0, 0, 0.15));
+}
+
+[data-tooltip]:hover::after {
+  opacity: 1;
+}
+
+.toolbar-input {
+  height: 28px;
+  border: 1px solid var(--input-border);
+  border-radius: 4px;
+  background: var(--input-bg);
+  color: var(--text-primary);
+  font-size: 12px;
+  padding: 0 6px;
+}
+
+.toolbar-color {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--input-border);
+  border-radius: 4px;
+  padding: 0;
+  cursor: pointer;
+  background: transparent;
+}
+
+.toolbar-color::-webkit-color-swatch-wrapper { padding: 2px; }
+.toolbar-color::-webkit-color-swatch { border: none; border-radius: 2px; }
+
+.toolbar-range {
+  width: 60px;
+  accent-color: var(--accent);
+}
+
+.toolbar-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-right: 2px;
+}
+
+.toolbar-spacer {
+  flex: 1;
+}
+
+/* ---- Vertical variant (left-side tool strip) ----
+ *
+ * Enabled via the `.toolbar-vertical` class on the Toolbar container.
+ * The same DOM structure is used; only layout-direction properties are
+ * overridden so tool buttons, groups, separators, and the spacer all
+ * rotate 90°.
+ */
+.toolbar-vertical {
+  flex-direction: column;
+  padding: 6px 0;
+  gap: 2px;
+}
+.toolbar-vertical .toolbar-group {
+  flex-direction: column;
+}
+.toolbar-vertical .toolbar-separator {
+  width: 28px;
+  height: 1px;
+  margin: 6px 0;
+}
+.toolbar-vertical .toolbar-spacer {
+  flex: 1;      /* flex: 1 already grows the correct axis in column layout */
+}
+/* Vertical mode: suppress the CSS ::after tooltip. It would need to
+ * extend to the right of the 48px sidebar, which (a) gets clipped by
+ * overflow-x: hidden and (b) pollutes the sidebar's scroll-area
+ * calculation causing a spurious horizontal scrollbar. Native browser
+ * `title` tooltips still appear on hover for accessibility — we just
+ * drop the custom styled bubble in this mode. */
+/* Vertical toolbar: reposition the tooltip to the RIGHT of the
+ * button instead of below. Below-positioning makes no sense for a
+ * vertical strip — the tooltip would overlap the NEXT tool button
+ * stacked directly underneath. Rightward positioning keeps the
+ * tooltip in the canvas area beside the sidebar, which is empty
+ * space from the sidebar's perspective.
+ *
+ * Requires `#editor-sidebar { overflow-x: visible }` (see editor.css)
+ * so the tooltip can extend beyond the 48px strip. */
+.toolbar-vertical .toolbar-btn[data-tooltip]::after {
+  bottom: auto;
+  top: 50%;
+  left: 100%;
+  transform: translateY(-50%);
+  margin-left: 12px;
+}
+/* Dropdown arrow — horizontal mode centers it below the icon; in
+ * vertical mode, put it on the right edge so it doesn't bleed into
+ * the next tool stacked below. */
+/* Tool dropdown menu opens to the RIGHT of the tool in vertical mode
+ * instead of below it. */
+.toolbar-vertical .tool-dropdown-menu {
+  top: 0;
+  left: 100%;
+  margin-top: 0;
+  margin-left: 6px;
+}
+
+/* Copy dropdown */
+.copy-dropdown {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.copy-dropdown-arrow {
+  width: 20px !important;
+  font-size: 10px !important;
+  padding: 0;
+  margin-left: -2px;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.copy-dropdown-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 4px 12px var(--shadow);
+  z-index: 100;
+}
+
+.copy-dropdown-item {
+  display: block;
+  width: 100%;
+  padding: 8px 16px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.copy-dropdown-item:hover {
+  background: var(--choice-hover);
+  color: var(--accent);
+}
+
+/* Tool button with dropdown */
+.tool-btn-wrap {
+  position: relative;
+}
+
+/* Note: the previous `.tool-dropdown-arrow` caret was removed when
+ * the variant badge took over the flyout-trigger role. Keeping the
+ * rules for `.tool-dropdown-menu` below because some other code
+ * paths may reuse the class name for non-toolbar popovers. */
+
+.tool-dropdown-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 2px;
+  background: var(--bg-panel-deep);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  z-index: 200;
+  box-shadow: 0 4px 16px var(--shadow);
+  min-width: 220px;
+  white-space: nowrap;
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
+}
+
+/* --- Tool flyout (variant picker opened from the ▼ arrow) ---
+ *
+ * Rendered into <body> with position: fixed so the popover escapes the
+ * toolbar / editor-header `overflow: hidden`. Placement (right/below)
+ * is computed in JS via getBoundingClientRect + viewport clamp.
+ */
+.tool-flyout {
+  background: var(--bg-panel-deep);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 6px;
+  box-shadow: 0 6px 20px var(--shadow);
+  display: flex;
+  gap: 4px;
+}
+
+/* Compact variant picker — tight row of icon chips. The chips are the
+ * primary hit target (parent-button click uses the last picked variant). */
+.tool-flyout-variant .tool-flyout-row {
+  display: flex;
+  gap: 4px;
+}
+
+.tool-flyout-chip {
+  width: 32px;
+  height: 32px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 22px !important;
+  font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 24;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+
+.tool-flyout-chip:hover {
+  background: var(--hover-bg);
+  color: var(--accent);
+}
+
+.tool-flyout-chip.active {
+  background: var(--choice-hover, var(--hover-bg));
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Chips whose glyph is an inline SVG (rather than a Material Symbols
+ * ligature). The SVG inherits `currentColor` from the chip, so all
+ * the color / hover / active rules above Just Work without extra
+ * selectors. Size matches the optical weight of the 22px
+ * material-symbols glyph next to it so mixed flyouts (e.g. rect + SVG
+ * and ellipse + font glyph) read as one row. */
+.tool-flyout-chip-svg {
+  /* Same box + interaction rules as .tool-flyout-chip — mirrored here
+   * because the chip omits the material-symbols class. */
+  width: 32px;
+  height: 32px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+.tool-flyout-chip-svg:hover {
+  background: var(--hover-bg);
+  color: var(--accent);
+}
+.tool-flyout-chip-svg.active {
+  background: var(--choice-hover, var(--hover-bg));
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.tool-flyout-chip-svg > svg {
+  width: 22px;
+  height: 22px;
+}
+
+/* Highlight color picker — a tight row of 6 colored circle chips.
+ * Each chip's background IS the preset color; a ring indicates the
+ * currently-selected swatch so the user sees at a glance which color
+ * a bare click on the Highlight button will draw with. */
+.tool-flyout-highlight .tool-flyout-color-row {
+  display: flex;
+  gap: 6px;
+}
+
+.tool-flyout-color-chip {
+  /* Same 32×32 frame + hover / active vocabulary as .tool-flyout-chip-svg
+   * (glyph chips) so Highlight color selection reads as one entry in
+   * the same Type-picker family. Color lives on the inner ::before
+   * swatch; the frame handles selection affordance via border / bg. */
+  width: 32px;
+  height: 32px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.tool-flyout-color-chip::before {
+  content: "";
+  display: block;
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  background: var(--swatch-color, transparent);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.12) inset;
+}
+
+.tool-flyout-color-chip:hover {
+  background: var(--hover-bg);
+  border-color: var(--accent);
+}
+
+.tool-flyout-color-chip.active {
+  background: var(--choice-hover, var(--hover-bg));
+  border-color: var(--accent);
+}
+
+/* Variant-bearing tool buttons need positioning context so the
+ * bottom-right badge and / or the highlight color bar can anchor
+ * themselves. Applied to all toolbar buttons because the cost is
+ * zero when no pseudo-element / child badge exists. */
+.toolbar-btn {
+  position: relative;
+}
+
+/* Variant badge — small icon tucked into the bottom-right corner to
+ * indicate which sub-variant the next bare click on the main button
+ * will create. Serves DOUBLE DUTY as the flyout trigger: clicking
+ * the badge opens the variant picker (see #ensureBadge in
+ * toolbar.ts). The MAIN icon (tool identity) stays fixed; the badge
+ * alone mutates. Pattern-matched to Affinity / Photoshop's
+ * sub-variant indicator, where the in-button indicator IS the flyout
+ * affordance — no separate caret needed.
+ *
+ * Sizing / placement notes:
+ *   - 16×16 visual bounds (slightly larger than the old 14×14 so
+ *     the badge is easier to see AND hit).
+ *   - pointer-events: auto so the badge is clickable. Parent button's
+ *     text-node (the main icon) stays the click target for everything
+ *     EXCEPT the badge zone — so main click activates tool, badge
+ *     click opens flyout.
+ *   - Hover state (ring + slight zoom) signals interactivity. */
+.tool-btn-badge {
+  position: absolute;
+  right: 1px;
+  bottom: 1px;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px !important;
+  line-height: 1;
+  color: var(--accent);
+  background: var(--bg-panel);
+  border-radius: 50%;
+  box-shadow: 0 0 0 1.5px var(--bg-panel);
+  pointer-events: auto;
+  cursor: pointer;
+  /* Make the hit area larger than the visual bounds without enlarging
+   * the visible badge — easier to click reliably, Fitts-law friendly.
+   * The invisible padding extends the clickable rect by 4px in every
+   * direction (16+8 = 24×24 effective), while the visual circle stays
+   * 16×16 via width/height above. */
+  padding: 0;
+  border: none;
+  transition: transform 0.12s, box-shadow 0.12s;
+  font-variation-settings: 'FILL' 1, 'wght' 600, 'GRAD' 0, 'opsz' 20;
+}
+
+.tool-btn-badge:hover {
+  transform: scale(1.15);
+  box-shadow:
+    0 0 0 1.5px var(--bg-panel),
+    0 0 0 3px var(--accent);
+}
+
+/* Expand the effective click zone beyond the visual circle without
+ * affecting layout. An invisible ::before covers the bottom-right
+ * quadrant of the parent button; the badge remains absolutely
+ * positioned within it. Users can click anywhere in that quadrant
+ * and hit the badge — forgiving for touch + hover-and-click. */
+.tool-btn-badge::before {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+}
+
+/* When the parent button is active (tool selected), accentuate the
+ * badge so it stays visible against the active-state background. */
+.toolbar-btn.active .tool-btn-badge {
+  background: var(--bg-active, var(--bg-panel));
+  box-shadow: 0 0 0 1.5px var(--bg-active, var(--bg-panel));
+}
+.toolbar-btn.active .tool-btn-badge:hover {
+  box-shadow:
+    0 0 0 1.5px var(--bg-active, var(--bg-panel)),
+    0 0 0 3px var(--accent);
+}
+
+/* SVG-based badge (for rect / rounded variants where Material Symbols
+ * don't give enough visual distinction). Shares positioning + chrome
+ * with .tool-btn-badge, just swaps ligature font rendering for an
+ * inline SVG. Size scales with the badge's 16px bounds so visual
+ * weight matches the ligature glyphs next to it. */
+.tool-btn-badge-svg > svg {
+  width: 13px;
+  height: 13px;
+  color: var(--accent);
+  stroke: currentColor;
+}
+
+/* Highlight tool badge — circular panel frame containing a rounded-
+ * square color swatch. The outer circle keeps the badge shape
+ * consistent with every other tool's variant badge (shape/arrow/
+ * text/marker/redact all get a circle in the bottom-right); the
+ * inner square mirrors the Selection-panel / flyout swatch chips so
+ * the "color = variant" reading lines up visually across all three
+ * surfaces. `--swatch-color` is set inline by #syncToolButtonIcon. */
+.tool-btn-badge-color {
+  font-size: 0 !important;
+  color: transparent;
+  /* Inherits background (panel color) + border-radius (50%) from
+   * .tool-btn-badge. Nudge the outer ring thicker so light colors
+   * stay visible against the panel. */
+  box-shadow: 0 0 0 1.5px var(--bg-panel);
+}
+
+.tool-btn-badge-color::after {
+  /* Inner rounded square showing the current highlight color. Size
+   * chosen to leave a ~2px ring of badge-bg visible all around for a
+   * clear frame; border-radius matches the flyout / property-panel
+   * swatches (4px scaled down to fit 10px). */
+  content: "";
+  display: block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: var(--swatch-color, transparent);
+  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.25);
+}
+
+.toolbar-btn.active .tool-btn-badge-color {
+  box-shadow: 0 0 0 1.5px var(--bg-active, var(--bg-panel));
+}
+
+/* Larger popover used by the Scratchpad button — holds a scrollable
+ * thumbnail grid plus a save-selection action. */
+.tool-flyout-scratchpad {
+  flex-direction: column;
+  gap: 8px;
+  width: 264px;
+  max-height: min(420px, calc(100vh - 40px));
+  padding: 10px;
+}

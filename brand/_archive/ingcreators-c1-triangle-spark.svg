@@ -1,0 +1,16 @@
+<!-- Triangle + center spark (synergy / collaboration emerges) -->
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 48 48" fill="none">
+  <rect width="48" height="48" rx="10" fill="#0f1730"/>
+
+  <!-- "i" — blue primary -->
+  <circle cx="13" cy="10" r="2.5" fill="#7c9cff"/>
+  <path d="M13 16 V38" stroke="#7c9cff" stroke-width="4" stroke-linecap="round"/>
+
+  <!-- Triangle of creators — isoceles, apex centered above base -->
+  <circle cx="31" cy="14" r="2.5" fill="#7ef0c5"/>
+  <circle cx="24" cy="31" r="2.5" fill="#b391ff"/>
+  <circle cx="38" cy="31" r="2.5" fill="#7c9cff"/>
+
+  <!-- Central spark at the triangle's centroid -->
+  <circle cx="31" cy="25.33" r="1.3" fill="#fff" opacity="0.55"/>
+</svg>

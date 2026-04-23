@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+* { margin:0; padding:0; }
+html, body { width:100vw; height:100vh; overflow:hidden; cursor:crosshair; background:transparent; }
+#bg { position:fixed; inset:0; pointer-events:none; }
+#bg img { width:100%; height:100%; object-fit:fill; opacity:0.7; }
+#sel { position:fixed; border:2px solid #00d4ff; background:rgba(0,212,255,0.12); display:none; pointer-events:none; box-shadow:0 0 0 9999px rgba(0,0,0,0.45); z-index:10; }
+#info { position:fixed; color:#00d4ff; font:13px monospace; background:rgba(0,0,0,0.85); padding:3px 10px; border-radius:4px; display:none; pointer-events:none; z-index:11; }
+#hint { position:fixed; top:12px; left:50%; transform:translateX(-50%); color:#fff; font:15px sans-serif; background:rgba(0,0,0,0.8); padding:8px 24px; border-radius:8px; pointer-events:none; z-index:11; }
+.win-highlight { position:fixed; border:3px solid #00d4ff; background:rgba(0,212,255,0.15); pointer-events:none; border-radius:3px; z-index:5; display:none; }
+.win-label { position:fixed; color:#fff; font:12px sans-serif; background:rgba(0,100,200,0.9); padding:3px 10px; border-radius:4px; pointer-events:none; z-index:6; white-space:nowrap; display:none; }
+</style>
+</head>
+<body>
+<div id="bg"></div>
+<div id="sel"></div>
+<div id="info"></div>
+<div id="hint"></div>
+<div id="win-highlight" class="win-highlight"></div>
+<div id="win-label" class="win-label"></div>
+
+<script>
+(async () => {
+  const invoke = window.__TAURI_INTERNALS__?.invoke;
+  if (!invoke) return;
+
+  const params = await invoke("get_capture_params");
+  const mode = params.mode;
+  const windows = params.windows || [];
+
+  // Load screenshot from data URL
+  const img = document.createElement("img");
+  img.src = params.screenshot_data_url;
+  document.getElementById("bg").appendChild(img);
+
+  const screenW = params.screen_width;
+  const screenH = params.screen_height;
+  const scaleX = screenW / window.innerWidth;
+  const scaleY = screenH / window.innerHeight;
+
+  const hint = document.getElementById("hint");
+  hint.textContent = mode === "rect"
+    ? "Drag to select area. Press Escape to cancel."
+    : "Hover over a window and click to capture. Press Escape to cancel.";
+
+  // Escape to cancel
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      invoke("capture_overlay_result", { result: null });
+    }
+  });
+
+  if (mode === "rect") {
+    setupRect(scaleX, scaleY, invoke);
+  } else {
+    setupWindow(scaleX, scaleY, windows, invoke);
+  }
+})();
+
+function setupRect(scaleX, scaleY, invoke) {
+  const sel = document.getElementById("sel");
+  const info = document.getElementById("info");
+  let sx = 0, sy = 0, dragging = false;
+
+  document.addEventListener("mousedown", (e) => {
+    sx = e.clientX; sy = e.clientY; dragging = true;
+    sel.style.display = "block"; info.style.display = "block";
+    document.getElementById("hint").style.display = "none";
+  });
+
+  document.addEventListener("mousemove", (e) => {
+    if (!dragging) return;
+    const x = Math.min(sx, e.clientX), y = Math.min(sy, e.clientY);
+    const w = Math.abs(e.clientX - sx), h = Math.abs(e.clientY - sy);
+    sel.style.left = x + "px"; sel.style.top = y + "px";
+    sel.style.width = w + "px"; sel.style.height = h + "px";
+    info.textContent = Math.round(w * scaleX) + " × " + Math.round(h * scaleY);
+    info.style.left = x + "px"; info.style.top = (y + h + 8) + "px";
+  });
+
+  document.addEventListener("mouseup", (e) => {
+    if (!dragging) return; dragging = false;
+    const x = Math.min(sx, e.clientX), y = Math.min(sy, e.clientY);
+    const w = Math.abs(e.clientX - sx), h = Math.abs(e.clientY - sy);
+    if (w > 5 && h > 5) {
+      invoke("capture_overlay_result", {
+        result: { x: Math.round(x * scaleX), y: Math.round(y * scaleY), w: Math.round(w * scaleX), h: Math.round(h * scaleY) }
+      });
+    } else {
+      invoke("capture_overlay_result", { result: null });
+    }
+  });
+}
+
+function setupWindow(scaleX, scaleY, windows, invoke) {
+  document.body.style.cursor = "pointer";
+  const hl = document.getElementById("win-highlight");
+  const lb = document.getElementById("win-label");
+
+  const cssWins = windows.map(w => ({
+    ...w,
+    cx: w.x / scaleX, cy: w.y / scaleY,
+    cw: w.width / scaleX, ch: w.height / scaleY,
+  }));
+
+  let hovIdx = -1;
+
+  document.addEventListener("mousemove", (e) => {
+    const mx = e.clientX, my = e.clientY;
+    let found = -1;
+    for (let i = 0; i < cssWins.length; i++) {
+      const w = cssWins[i];
+      if (mx >= w.cx && mx <= w.cx + w.cw && my >= w.cy && my <= w.cy + w.ch) {
+        found = i; break;
+      }
+    }
+    if (found !== hovIdx) {
+      hovIdx = found;
+      if (found >= 0) {
+        const w = cssWins[found];
+        hl.style.left = w.cx + "px"; hl.style.top = w.cy + "px";
+        hl.style.width = w.cw + "px"; hl.style.height = w.ch + "px";
+        hl.style.display = "block";
+        lb.textContent = w.title;
+        lb.style.left = w.cx + "px"; lb.style.top = Math.max(0, w.cy - 26) + "px";
+        lb.style.display = "block";
+      } else {
+        hl.style.display = "none"; lb.style.display = "none";
+      }
+    }
+  });
+
+  document.addEventListener("click", () => {
+    if (hovIdx < 0) return;
+    const w = windows[hovIdx];
+    invoke("capture_overlay_result", {
+      result: { x: w.x, y: w.y, w: w.width, h: w.height }
+    });
+  });
+}
+</script>
+</body>
+</html>

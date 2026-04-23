@@ -1,0 +1,1642 @@
+/* ingcreators brand theme — Dark (default)
+ *
+ * Contrast targets (WCAG 2.1 AA):
+ *   text-primary on bg-primary: ≥ 7:1 (AAA)
+ *   text-secondary on bg-primary: ≥ 4.5:1 (AA)
+ *   text-muted on bg-primary / bg-secondary: ≥ 4.5:1 (AA)
+ *   accent (interactive) on bg-primary: ≥ 4.5:1
+ *   borders: ≥ 3:1 for non-text UI
+ *   focus ring: ≥ 3:1 and ≥ 2px thick
+ */
+:root {
+  --bg-primary: #0f1730;
+  --bg-secondary: #0b1020;
+  --bg-panel: #121933;
+  --bg-panel-deep: #0f1730;
+  --text-primary: #eef2ff;        /* ~18:1 on bg-primary (AAA) */
+  --text-secondary: #b7c0e0;      /* ~10:1 on bg-primary (AAA) */
+  --text-muted: #9097b8;          /* ~6.2:1 on bg-primary (AA) — was 5.3:1 */
+  --border-color: rgba(255,255,255,0.22);  /* bumped from 0.08 for ≥3:1 on interactive */
+  --border-subtle: rgba(255,255,255,0.08); /* keeps old value for decorative dividers */
+  --accent: #7c9cff;              /* ~7.5:1 on bg-primary (AAA) */
+  --accent-2: #7ef0c5;
+  --accent-bg: rgba(124,156,255,0.18);
+  --accent-hover: rgba(124,156,255,0.26);
+  --hover-bg: rgba(255,255,255,0.08);
+  --hover-border: rgba(255,255,255,0.22);
+  --active-bg: rgba(124,156,255,0.18);
+  --active-border: #7c9cff;
+  --preview-line: #b7c0e0;
+  --shadow: 0 20px 50px rgba(0,0,0,0.28);
+  --choice-bg: transparent;
+  --choice-hover: rgba(124,156,255,0.10);
+  --choice-active: rgba(124,156,255,0.18);
+  --input-bg: rgba(255,255,255,0.06);
+  --input-border: rgba(255,255,255,0.22); /* ≥3:1 for form borders */
+  --chip-bg: rgba(124,156,255,0.14);
+  --canvas-bg: #0b1020;
+  --canvas-check: #121933;
+  --focus-ring: #7ef0c5;          /* accent-2 green contrasts against blue accent for clarity */
+}
+
+/* ingcreators brand theme — Light */
+:root.light {
+  --bg-primary: #f5f7ff;
+  --bg-secondary: #ffffff;
+  --bg-panel: #ffffff;
+  --bg-panel-deep: #fafbff;
+  --text-primary: #0b1020;         /* ~16:1 on bg-primary (AAA) */
+  --text-secondary: #3a4568;       /* ~8:1 on bg-primary (AAA) — was #4a5580 (~6:1) */
+  --text-muted: #616984;           /* ~4.6:1 on bg-primary (AA) — was #8890b0 (~3.2:1 FAIL) */
+  --border-color: #bfc6de;         /* ~3:1 against bg-primary for visible UI boundaries */
+  --border-subtle: #d8ddef;        /* fainter dividers */
+  --accent: #3456c9;               /* ~6.3:1 on bg-primary (AA+) — was #5b7ee5 (~4.2:1 marginal) */
+  --accent-2: #188a5c;             /* ~5.2:1 for secondary accent */
+  --accent-bg: #edf1ff;
+  --accent-hover: #dce4ff;
+  --hover-bg: #eef1fa;
+  --hover-border: #8893b8;
+  --active-bg: #dce4ff;
+  --active-border: #3456c9;
+  --preview-line: #2a3050;
+  --shadow: rgba(0,0,0,0.08);
+  --choice-bg: transparent;
+  --choice-hover: #eef1fa;
+  --choice-active: #dce4ff;
+  --input-bg: #ffffff;
+  --input-border: #8893b8;
+  --chip-bg: #edf1ff;
+  --canvas-bg: #e8ecf5;
+  --canvas-check: #dde2ef;
+  --focus-ring: #3456c9;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg-primary, #2a2a2a);
+  color: var(--text-primary, #e0e0e0);
+}
+
+#canvas-container {
+  position: absolute;
+  top: 48px;
+  left: 0;
+  right: 0;
+  bottom: 28px;
+  overflow: auto;
+  background: var(--canvas-bg);
+  background-image:
+    linear-gradient(45deg, var(--canvas-check) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--canvas-check) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--canvas-check) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--canvas-check) 75%);
+  background-size: 20px 20px;
+  background-position: 0 0, 0 10px, 10px -10px, -10px 0;
+}
+
+#svg-root {
+  box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+  background: #fff;
+  cursor: default;
+  display: block;
+  margin: 20px auto;
+}
+
+#statusbar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 28px;
+  background: var(--bg-panel, #1e1e1e);
+  border-top: 1px solid var(--border-color, #333);
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  gap: 16px;
+  font-size: 12px;
+  color: #888;
+}
+
+/* Save toast notification */
+.save-toast {
+  position: fixed;
+  bottom: 48px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: var(--accent, #00d4ff);
+  color: #000;
+  padding: 6px 24px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  opacity: 0;
+  transition: opacity 0.3s, transform 0.3s;
+  z-index: 1000;
+  pointer-events: none;
+}
+
+.save-toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* ---- Tag editor ---- */
+
+.tag-editor {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tag-chips {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-wrap: wrap;
+}
+
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: var(--chip-bg, #16213e);
+  color: var(--text-primary);
+  font-size: 11px;
+  white-space: nowrap;
+  border: 1px solid var(--border-color);
+}
+
+.tag-chip-label {
+  pointer-events: none;
+}
+
+.tag-chip-delete {
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0 1px;
+  line-height: 1;
+}
+
+.tag-chip-delete:hover {
+  color: #e44;
+}
+
+.tag-add-btn {
+  border: 1px dashed var(--border-color);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11px;
+  padding: 1px 8px;
+  border-radius: 10px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tag-add-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.tag-input-row {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  margin-bottom: 4px;
+  display: flex;
+  gap: 4px;
+  background: var(--bg-panel-deep, #1e1e2e);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 6px 8px;
+  box-shadow: 0 -4px 12px var(--shadow);
+  z-index: 200;
+}
+
+.tag-input {
+  height: 24px;
+  border: 1px solid var(--input-border, #444);
+  border-radius: 4px;
+  background: var(--input-bg, #2a2a2a);
+  color: var(--text-primary);
+  font-size: 12px;
+  padding: 0 6px;
+  outline: none;
+}
+
+.tag-input-key {
+  width: 80px;
+}
+
+.tag-input-value {
+  width: 120px;
+}
+
+.tag-input:focus {
+  border-color: var(--accent);
+}
+
+.tag-ok-btn, .tag-cancel-btn {
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tag-ok-btn {
+  background: var(--accent);
+  color: #000;
+}
+
+.tag-ok-btn:hover {
+  opacity: 0.8;
+}
+
+.tag-cancel-btn {
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.tag-cancel-btn:hover {
+  color: #e44;
+}
+
+/* Tag chips in gallery cards */
+.gallery-tag-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  margin-top: 3px;
+}
+
+.gallery-tag {
+  font-size: 10px;
+  padding: 0 5px;
+  border-radius: 8px;
+  background: var(--chip-bg, #16213e);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+  white-space: nowrap;
+}
+
+#statusbar span {
+  white-space: nowrap;
+}
+
+/* Zoom controls */
+#zoom-controls {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: var(--input-bg, #2a2a2a);
+  border: 1px solid var(--border-color, #444);
+  border-radius: 4px;
+  padding: 0 2px;
+}
+
+.zoom-btn {
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary, #888);
+  font-size: 16px !important;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+}
+
+.zoom-btn:hover {
+  background: var(--hover-bg, #333);
+  color: var(--accent, #00d4ff);
+}
+
+.zoom-label {
+  min-width: 42px;
+  height: 22px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary, #ccc);
+  font-size: 11px;
+  cursor: pointer;
+  text-align: center;
+  padding: 0 4px;
+}
+
+.zoom-label:hover {
+  color: var(--accent, #00d4ff);
+}
+
+.zoom-select-wrap {
+  position: relative;
+}
+
+.zoom-menu {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 4px;
+  background: var(--bg-panel-deep, #1e1e2e);
+  border: 1px solid var(--border-color, #444);
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 -4px 16px var(--shadow, rgba(0,0,0,0.4));
+  z-index: 200;
+  min-width: 90px;
+}
+
+.zoom-menu-item {
+  display: block;
+  width: 100%;
+  padding: 6px 14px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary, #ccc);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.zoom-menu-item:hover {
+  background: var(--choice-hover, #2a2a40);
+  color: var(--accent, #00d4ff);
+}
+
+.zoom-menu-item.active {
+  color: var(--accent, #00d4ff);
+  font-weight: bold;
+}
+
+.zoom-menu-sep {
+  height: 1px;
+  background: var(--border-color, #444);
+  margin: 2px 0;
+}
+
+/* ---- Gallery toolbar ---- */
+
+.gallery-toolbar-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--accent);
+  padding: 0 4px;
+  white-space: nowrap;
+}
+
+.gallery-toolbar-search {
+  flex: 1;
+  max-width: 360px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--input-bg);
+  color: var(--text-primary);
+  font-size: 13px;
+  outline: none;
+}
+
+.gallery-toolbar-search:focus {
+  border-color: var(--accent);
+}
+
+/* ---- File details drawer ----
+ *
+ * Right-side slide-in panel that consolidates file metadata and full tag
+ * management. Non-modal (canvas stays interactive outside the drawer) and
+ * pinned below editor-header + toolbar and above the statusbar.
+ */
+.file-details-backdrop {
+  position: absolute;
+  top: 48px;
+  right: 0;
+  bottom: 28px;
+  left: 0;
+  background: rgba(0, 0, 0, 0);
+  pointer-events: none;
+  transition: background 0.2s ease-out;
+  z-index: 19;
+}
+.file-details-backdrop.open {
+  background: rgba(0, 0, 0, 0.2);
+  pointer-events: auto;
+}
+
+.file-details-drawer {
+  position: absolute;
+  top: 48px;
+  right: 0;
+  bottom: 28px;
+  width: 360px;
+  max-width: 80vw;
+  background: var(--bg-panel);
+  border-left: 1px solid var(--border-color);
+  box-shadow: -4px 0 28px rgba(0, 0, 0, 0.35);
+  transform: translateX(calc(100% + 28px));   /* include shadow in off-screen */
+  transition: transform 0.22s ease-out;
+  z-index: 20;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+.file-details-drawer.open {
+  transform: translateX(0);
+}
+
+.file-details-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+.file-details-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+.file-details-close {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.file-details-close:hover {
+  background: var(--hover-bg);
+  color: var(--text-primary);
+}
+
+.file-details-section {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.file-details-section:last-child {
+  border-bottom: none;
+}
+.file-details-section-title {
+  margin: 0 0 10px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.file-details-row {
+  display: grid;
+  grid-template-columns: 92px 1fr;
+  gap: 12px;
+  padding: 5px 0;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.file-details-row-label {
+  color: var(--text-muted);
+}
+.file-details-row-value {
+  color: var(--text-primary);
+  word-break: break-word;
+  min-width: 0;
+}
+.file-details-row-value.mono {
+  font-family: SF Mono, Menlo, Consolas, monospace;
+  font-size: 12px;
+}
+.file-details-row-value.selectable {
+  user-select: text;
+}
+a.file-details-row-value {
+  color: var(--accent);
+  text-decoration: none;
+}
+a.file-details-row-value:hover {
+  text-decoration: underline;
+}
+
+.file-details-tags-editor {
+  /* TagEditor renders its own layout; this wrapper just sizes it. */
+  min-height: 32px;
+}
+
+/* Inline rename affordance on the Name row. The input occupies the
+ * same visual slot as a read-only span value — NO border or padding
+ * offset — so the text baseline and left edge line up perfectly with
+ * the "Location", "Dimensions", etc. rows below. Only a subtle box-
+ * shadow hover / focus state hints that the field is editable.
+ * Matches the Finder / macOS settings-panel pattern where values
+ * inline-edit without visible field chrome. */
+.file-details-name-wrap {
+  min-width: 0;
+}
+.file-details-name-input {
+  display: block;
+  width: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.45;
+  padding: 0;
+  margin: 0;
+  border-radius: 3px;
+  transition: background 0.15s, box-shadow 0.15s;
+  min-width: 0;
+  text-overflow: ellipsis;
+}
+.file-details-name-input:hover:not(:focus) {
+  background: var(--hover-bg);
+  box-shadow: inset 0 -1px 0 var(--border-subtle);
+}
+.file-details-name-input:focus {
+  background: var(--input-bg, rgba(255,255,255,0.04));
+  box-shadow: inset 0 0 0 1px var(--accent);
+  text-overflow: clip;
+}
+.file-details-name-input:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.file-details-name-error {
+  color: var(--danger, #ff7070);
+  font-size: 11px;
+  line-height: 1.3;
+  margin-top: 4px;
+  min-height: 0;       /* collapses when empty */
+}
+.file-details-name-error:empty {
+  display: none;
+}
+
+/* ---- Editor header ----
+ *
+ * #editor-header sits above #toolbar in editor mode and carries the
+ * per-file context (brand, breadcrumb + filename, save status, help,
+ * theme). It is hidden by default and revealed via body.editor-mode
+ * so that gallery mode keeps its single-row top (brand + search + …).
+ *
+ * When editor-header is visible, #toolbar is pushed down by 48px and
+ * #canvas-container by another 48px so both rows stay visible.
+ */
+#editor-header {
+  display: none;
+}
+/* Editor header — compact single-row layout, 48px:
+ *
+ *   [A]  Device › test › image-1234.png  ⓘ              [?] [☀]
+ *
+ * Industry-standard pattern used by Google Drive, Finder, VS Code, etc.
+ * The filename is the final breadcrumb segment (styled bold + active),
+ * so path and filename share one coherent unit. Tags moved to the
+ * file-details drawer (opened via ⓘ), leaving the header free for
+ * navigation + a pair of global actions.
+ */
+body.editor-mode #editor-header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  gap: 10px;
+  /* One level deeper than the toolbar (--bg-panel) so the header
+   * reads as page-level context and the toolbar as the elevated
+   * "action surface". Same palette in both themes (dark: #0f1730
+   * vs #121933; light: #fafbff vs #ffffff) — subtle, just enough
+   * to establish hierarchy without adding visual noise. */
+  background: var(--bg-panel-deep);
+  border-bottom: 1px solid var(--border-color);
+  z-index: 11;
+  /* `overflow: visible` so the custom CSS tooltip on header buttons
+   * (positioned at `bottom: -40px`) can extend below the 48px header
+   * without being clipped. Long breadcrumb paths are already
+   * controlled by the `.editor-header-path` container's own
+   * `overflow: hidden` + per-segment `text-overflow: ellipsis`, so
+   * dropping the parent's clip has no effect on the breadcrumb
+   * layout. */
+  overflow: visible;
+}
+
+.editor-header-brand {
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: transparent;
+  padding: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+.editor-header-brand:hover {
+  background: var(--hover-bg);
+}
+.editor-header-brand:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Breadcrumb as full path + filename (the last, bold, non-clickable
+ * "active" segment).
+ *
+ * Flex-shrink priorities (from least important → most important):
+ *   ancestor segments (Device, test, …) : flex-shrink: 1  → shrink first
+ *   filename                             : flex-shrink: 0  → stays visible
+ *   info button                          : flex-shrink: 0  → stays visible
+ *
+ * Result: when space is tight, only the ancestor path segments ellipsize.
+ * The filename and info button remain fully visible. When space is
+ * abundant (as in the usual case), filename renders at natural width
+ * with no artificial max-width cap.
+ */
+.editor-header-path {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+.editor-header-path .breadcrumb-item {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 1;
+}
+.editor-header-path .breadcrumb-filename {
+  flex-shrink: 0;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.editor-header-path .breadcrumb-filename:hover {
+  background: none;
+  color: var(--text-primary);
+  cursor: default;
+}
+.editor-header-path .editor-header-info-btn {
+  flex-shrink: 0;
+}
+
+/* File actions cluster in the editor header right side (Open / Copy /
+ * Save ▼). Reuses .header-info-btn for baseline styling so these
+ * buttons match the help + theme toggle next to them. Grouped in their
+ * own container so there's subtle spacing between "file actions" and
+ * "global actions" (help, theme). */
+.editor-header-file-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-right: 4px;
+  padding-right: 4px;
+  border-right: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+/* The header Save dropdown arrow needs its own layout — the shared
+ * .tool-dropdown-arrow in toolbar.css is absolutely positioned below a
+ * tool icon (vertical-stack case), which doesn't fit horizontal-header
+ * placement. Reset it and let flex lay it out next to the save icon. */
+.header-save-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+}
+.header-save-wrap .tool-dropdown-arrow {
+  position: static;
+  transform: none;
+  width: 14px;
+  height: 28px;
+  background: transparent;
+  color: var(--text-muted);
+  border: none;
+  font-size: 14px !important;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: -4px;
+}
+.header-save-wrap .tool-dropdown-arrow:hover {
+  color: var(--accent);
+  background: var(--hover-bg);
+  border-radius: 4px;
+}
+
+/* Inline rename input that replaces the filename span on double-click.
+ * Styled to match the filename's visual weight (same font-weight,
+ * size, line-height) so swapping in/out of edit mode doesn't shift
+ * the baseline or the row height. */
+.breadcrumb-filename-input {
+  flex-shrink: 0;
+  min-width: 160px;
+  max-width: 420px;
+  font: inherit;
+  font-weight: 600;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-primary);
+  background: var(--input-bg, rgba(255,255,255,0.04));
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  padding: 1px 6px;
+  outline: none;
+}
+.breadcrumb-filename-input:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+/* In editor mode, the top #toolbar is replaced by the left
+ * #editor-sidebar. Hide the top toolbar entirely and make room for
+ * the sidebar on the left edge of the canvas area. */
+body.editor-mode #toolbar {
+  display: none;
+}
+#editor-sidebar {
+  display: none;        /* hidden by default (gallery mode) */
+}
+body.editor-mode #editor-sidebar {
+  position: absolute;
+  top: 48px;
+  left: 0;
+  bottom: 28px;
+  width: 48px;
+  background: var(--bg-panel);
+  border-right: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 6px 0;
+  gap: 2px;
+  z-index: 10;
+  /* `overflow: visible` (both axes) so tooltips positioned to the
+   * right of a tool button can escape the 48px strip into the canvas
+   * area. Per CSS spec, mixing `overflow-x: visible` with
+   * `overflow-y: auto` causes the browser to promote `visible` to
+   * `auto`, which would re-introduce the clipping. So we stay fully
+   * visible and accept that on extremely short viewports the
+   * bottom-most tools may overflow past the sidebar's visual end.
+   * With 9 tools × ~38 px = ~342 px total + 6 px top padding, the
+   * full stack fits in any viewport ≥ 396 px tall — well below the
+   * ~500 px minimum any modern laptop / tablet provides.
+   *
+   * The old "clip dropdown-arrow bleed" justification no longer
+   * applies: the caret element was removed when the variant badge
+   * took over the flyout-trigger role, and the badge's hit-zone
+   * expansion (::before inset: -6px) stays within the button's
+   * 36 px footprint. */
+  overflow: visible;
+}
+body.editor-mode #canvas-container {
+  top: 48px;            /* below editor-header only */
+  left: 48px;           /* right of the sidebar */
+}
+
+/* Right property panel — context-aware:
+ *   Tool active (not Select)  → shows tool default properties
+ *   Selection present         → shows selection properties
+ *   Otherwise                 → hidden (body.has-right-panel removed)
+ * Host (app.ts) toggles `body.has-right-panel` to show/hide.
+ */
+#editor-right-panel {
+  display: none;
+}
+body.editor-mode.has-right-panel #editor-right-panel {
+  position: absolute;
+  top: 48px;
+  right: 0;
+  bottom: 28px;
+  width: 280px;
+  background: var(--bg-panel);
+  border-left: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  z-index: 10;
+  overflow-y: auto;
+}
+body.editor-mode.has-right-panel #canvas-container {
+  right: 280px;         /* leave room for the right panel */
+}
+body.editor-mode.has-right-panel .file-details-drawer,
+body.editor-mode.has-right-panel .file-details-backdrop {
+  /* The details drawer also lives on the right — let it slide over
+   * the property panel so the user can still access file details
+   * while a tool/selection is active. */
+  z-index: 25;
+}
+
+.editor-right-panel-section {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+/* Dynamic section title (e.g. "Rectangle" / "Arrow" / "Callout").
+ * Rendered as a readable, sentence-case heading rather than the
+ * older "SECTION" uppercase pill — the title now names the element
+ * the user is editing, so readability matters more than category
+ * emphasis. Sentence case + slightly larger weight makes it read as
+ * "this IS the thing" rather than "a section labeled …". */
+.editor-right-panel-section-title {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* Actions section — compact transform button row (rotate / flip).
+ * Shown only when selection is non-empty. Padding matches
+ * .editor-right-panel-section so the panel reads as one unified
+ * column, but the thinner vertical padding hints that this is
+ * "controls for actions" not "properties to edit". */
+.editor-right-panel-actions {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+/* Group label above each action row ("Transform" / "Arrange") —
+ * shares the uppercase / muted / tracked typography with the
+ * property panel's pp-section-header so both surfaces read as one
+ * hierarchy: TYPE / FILL / LINE (properties) + TRANSFORM / ARRANGE
+ * (actions). Tight 4 px gap to its row (parent-child proximity)
+ * and larger 14 px margin-top above the header to separate it from
+ * the prior action group (sibling distance). */
+.editor-right-panel-actions-group-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 0 0 4px 0;
+  margin-top: 14px;
+  user-select: none;
+}
+.editor-right-panel-actions-group-label:first-child {
+  margin-top: 0;
+}
+
+.editor-right-panel-actions-row {
+  display: flex;
+  gap: 2px;
+  /* Indent the action row slightly so it visually hangs off the
+   * group label above, matching pp-section-body's 10 px indent in
+   * the property panel. */
+  padding-left: 10px;
+}
+.editor-right-panel-actions-row:not(:last-child) { margin-bottom: 0; }
+
+/* Action buttons inherit the full 36×36 `.toolbar-btn` size + 20 px
+ * font-size from the sidebar/toolbar rules so Icon weight matches
+ * across surfaces. Panel is 208 px inner after padding; 4 buttons
+ * × 36 + 3 × 2 gap = 150 px, leaving ~58 px margin — comfortably
+ * fits without needing a compact-size override. */
+
+/* Custom-SVG action buttons (flip / z-order) — SVG renders at 22 px
+ * to match the optical weight of the 20 px Material-Symbols glyph
+ * in a 36 px button. `currentColor` inside the SVG picks up the
+ * button's color + hover / active states automatically. */
+.editor-right-panel-actions-row .action-btn-svg > svg {
+  width: 22px;
+  height: 22px;
+}
+
+/* Tooltips on action buttons sit INSIDE the 280 px right panel,
+ * whose `overflow-y: auto` implicitly clips horizontal overflow too.
+ * The default centered tooltip (left:50%, nowrap) extends past the
+ * panel's left/right edges for the EXTREMITY buttons (leftmost
+ * overflows left, rightmost overflows right) and gets clipped.
+ *
+ * Fix: keep the tooltip BELOW (matching the rest of the editor's
+ * tooltip convention — all toolbar buttons drop downward), but
+ * anchor to the INSIDE edge for the first / last buttons of each
+ * row so the bubble always extends INTO the panel rather than out
+ * of it. Middle buttons stay centered as usual. Multi-line wrapping
+ * (`white-space: normal`) keeps the bubble narrow enough to fit the
+ * column width. */
+.editor-right-panel-actions-row .toolbar-btn[data-tooltip]::after {
+  bottom: auto;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 180px;
+  white-space: normal;
+  text-align: center;
+  line-height: 1.3;
+}
+/* First button: align tooltip's LEFT edge to the button's left edge
+ * so it extends rightward into the panel (never past panel-left). */
+.editor-right-panel-actions-row .toolbar-btn:first-child[data-tooltip]::after {
+  left: 0;
+  right: auto;
+  transform: none;
+  text-align: left;
+}
+/* Last button: mirror — align tooltip's RIGHT edge to the button's
+ * right edge so it extends leftward (never past panel-right). */
+.editor-right-panel-actions-row .toolbar-btn:last-child[data-tooltip]::after {
+  left: auto;
+  right: 0;
+  transform: none;
+  text-align: right;
+}
+
+/* Empty-state shown when the panel has no active tool AND no
+ * selection. Keeps the always-visible panel feeling intentional
+ * rather than "broken / blank". */
+.editor-right-panel-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--text-muted);
+}
+.editor-right-panel-empty-icon {
+  font-size: 36px;
+  opacity: 0.4;
+  font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 40;
+}
+.editor-right-panel-empty-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.editor-right-panel-empty-hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  max-width: 180px;
+}
+
+/* Scratchpad section — always-visible bottom area of the right panel.
+ * Pinned to the bottom by margin-top:auto inside the flex-column
+ * container so tool/selection content fills the top and scratchpad
+ * stays anchored. Top border differentiates it as a distinct area. */
+.editor-right-panel-scratchpad {
+  margin-top: auto;
+  border-top: 1px solid var(--border-color);
+  border-bottom: none;
+  background: var(--bg-panel-deep);
+  flex-shrink: 0;
+}
+
+.scratchpad-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.scratchpad-section-header .editor-right-panel-section-title {
+  margin: 0;
+}
+
+.scratchpad-save-btn {
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.scratchpad-save-btn:not(:disabled):hover {
+  background: var(--accent-bg);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.scratchpad-save-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.scratchpad-save-btn .material-symbols-outlined {
+  font-size: 16px;
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+}
+
+.scratchpad-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(48px, 1fr));
+  gap: 6px;
+}
+
+.scratchpad-item {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  background: var(--canvas-bg, #0b1020);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  cursor: pointer;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.15s, transform 0.15s;
+}
+.scratchpad-item:hover {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+/* Armed state — the user clicked this item and the paste tool is
+ * waiting for a canvas click. Stronger accent so the "which item
+ * will land next?" question is answered at a glance. */
+.scratchpad-item.active {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+.scratchpad-item-thumb {
+  max-width: 80%;
+  max-height: 80%;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+}
+
+.scratchpad-item-delete {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 16px;
+  height: 16px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-size: 12px !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+  font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 20;
+}
+.scratchpad-item:hover .scratchpad-item-delete {
+  opacity: 1;
+}
+.scratchpad-item-delete:hover {
+  background: var(--danger, #ff7070);
+}
+
+.scratchpad-empty {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+/* ---- Save status indicator ----
+ *
+ * Sits between the filename and the right-edge help/theme actions in the
+ * editor header. Reports the save lifecycle without blocking; matches
+ * the Google Docs / Notion convention of a small, muted indicator that
+ * briefly animates while writing.
+ */
+/* Padding matches .breadcrumb-item (2px 6px) so vertical rhythm aligns
+ * with the filename segment it sits next to. Icon kept at 14px to keep
+ * the indicator visually "inline metadata" rather than a chunky chip. */
+.save-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  user-select: none;
+  flex-shrink: 0;        /* stays intact next to the filename */
+  color: var(--text-muted);
+  transition: color 0.15s, background 0.15s;
+}
+.save-status-icon {
+  font-size: 14px;
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+}
+
+/* Saved — neutral, at rest */
+.save-status.save-status-saved {
+  color: var(--text-muted);
+}
+
+/* Edited — slightly brighter than saved, signals "something's queued" */
+.save-status.save-status-pending {
+  color: var(--text-secondary);
+}
+
+/* Saving — accent color + spinning icon */
+.save-status.save-status-saving {
+  color: var(--accent);
+}
+.save-status.save-status-saving .save-status-icon {
+  animation: save-status-spin 1s linear infinite;
+}
+@keyframes save-status-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* Error — danger color, stays visible until next save attempt */
+.save-status.save-status-error {
+  color: var(--danger, #ff7070);
+  background: rgba(255, 112, 112, 0.1);
+}
+
+.editor-header-info-btn {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 18px;
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+}
+.editor-header-info-btn:hover {
+  background: var(--hover-bg);
+  color: var(--accent);
+}
+.editor-header-info-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+
+/* ---- Breadcrumb ---- */
+
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+/* Breadcrumb items may be either <button> (clickable ancestors) or
+ * <span> (the non-clickable filename segment). Without the font resets
+ * below, <button> falls back to the UA system font while <span>
+ * inherits Sora — the two have different metrics and the filename
+ * appears visually lower than sibling clickable segments.
+ *
+ * `font: inherit` pulls the parent's full font specification into the
+ * button, then we override the few properties we actually want to pin
+ * (size, weight). Setting `display: inline-flex + align-items: center`
+ * also normalizes vertical alignment between span and button so the
+ * glyph baselines line up across element types. */
+.breadcrumb-item {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.4;
+  display: inline-flex;
+  align-items: center;
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.breadcrumb-item:hover {
+  background: var(--hover-bg);
+  color: var(--accent);
+}
+
+.breadcrumb-item.active {
+  color: var(--text-primary);
+  font-weight: 600;
+  cursor: default;
+}
+
+.breadcrumb-item.active:hover {
+  background: none;
+  color: var(--text-primary);
+}
+
+.breadcrumb-sep {
+  color: var(--text-muted);
+  font-size: 16px;
+  user-select: none;
+}
+
+/* ---- Folder cards ---- */
+
+.gallery-folder {
+  border-style: dashed;
+}
+
+.gallery-folder:hover {
+  border-style: solid;
+}
+
+.gallery-folder-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-secondary);
+}
+
+.gallery-folder-name {
+  font-weight: 600;
+}
+
+/* ---- Gallery panel ---- */
+
+/* #gallery-container removed — gallery now renders inside #file-manager > #main-content */
+
+.gallery-panel {
+  padding: 16px 24px;
+  /* Fill the available main-content area — let the gallery grid wrap
+   * naturally instead of clamping to a fixed max-width. */
+  margin: 0 auto;
+}
+
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.gallery-empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.gallery-item {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg-panel);
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.15s;
+}
+
+.gallery-item:hover {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+}
+
+.gallery-thumb {
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: #111;
+}
+
+.gallery-thumb img {
+  width: 100%;
+  height: 100%;
+  /* Thumbnails are pre-rendered at 16:9 with letterboxing / top-crop
+   * baked in, so the card just displays them 1:1. `contain` prevents
+   * any further browser-side upscaling and keeps short images crisp. */
+  object-fit: contain;
+  object-position: center;
+  display: block;
+  image-rendering: auto;
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: high-quality;
+}
+
+.gallery-item-info {
+  padding: 8px 10px;
+  position: relative;
+}
+
+.gallery-item-name {
+  font-size: 12px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-right: 20px;
+}
+
+.gallery-item-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.gallery-item-delete {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(200, 0, 0, 0.6);
+  color: #fff;
+  font-size: 14px;
+  line-height: 20px;
+  text-align: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+  padding: 0;
+}
+
+.gallery-item:hover .gallery-item-delete {
+  opacity: 1;
+}
+
+.gallery-item-delete:hover {
+  background: rgba(220, 0, 0, 0.9);
+}
+
+/* ---- Selection checkbox ---- */
+
+.gallery-checkbox {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.4);
+  color: #888;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 2;
+}
+
+.gallery-checkbox .material-symbols-outlined {
+  font-size: 18px;
+}
+
+.gallery-item:hover .gallery-checkbox,
+.gallery-item.selected .gallery-checkbox {
+  opacity: 1;
+}
+
+.gallery-item.selected .gallery-checkbox {
+  background: var(--accent);
+  color: #000;
+}
+
+.gallery-item.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.gallery-item {
+  position: relative;
+}
+
+/* ---- Selection action bar ---- */
+
+.gallery-action-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.gallery-footer-text {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.gallery-action-btn {
+  border: 1px solid var(--border-color);
+  background: var(--bg-panel);
+  color: var(--text-primary);
+  font-size: 12px;
+  padding: 2px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.gallery-action-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.gallery-action-danger:hover {
+  border-color: #e44;
+  color: #e44;
+}
+
+/* ---- Folder picker dialog ---- */
+
+.folder-picker-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.folder-picker-dialog {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 16px;
+  min-width: 300px;
+  max-width: 450px;
+  max-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.folder-picker-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+}
+
+.folder-picker-list {
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 12px;
+}
+
+.folder-picker-item {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.folder-picker-item:hover {
+  background: var(--choice-hover);
+  color: var(--accent);
+}
+
+.folder-picker-cancel {
+  align-self: flex-end;
+  border: 1px solid var(--border-color);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  padding: 6px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.folder-picker-cancel:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* =============================================================================
+ * Elements panel — sidebar list of detected DOM elements (button /
+ * link / input / heading / etc.) for a screenshot captured by the
+ * browser extension. Rows show icon + label + sub-type. Hover →
+ * highlight on canvas; click → insert a rectangle annotation.
+ * Section is hidden entirely when the current image has no metadata.
+ * ============================================================================= */
+.editor-right-panel-elements {
+  /* Inherits .editor-right-panel-section padding/border. */
+}
+.editor-right-panel-elements-hint {
+  margin: 0 0 8px 0;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.editor-right-panel-elements-search {
+  width: 100%;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--bg-panel-deep);
+  color: var(--text-primary);
+  font-size: 12px;
+  margin-bottom: 8px;
+  box-sizing: border-box;
+}
+.editor-right-panel-elements-search:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.editor-right-panel-elements-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: 320px;
+  overflow-y: auto;
+  /* Negative margin pulls the list to the section padding edge so
+   * scroll bar doesn't waste horizontal space. */
+  margin: 0 -4px;
+}
+.editor-right-panel-element-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  text-align: left;
+  font-size: 12px;
+  color: var(--text-primary);
+  transition: background 0.1s;
+  width: 100%;
+}
+.editor-right-panel-element-row:hover {
+  background: var(--hover-bg);
+}
+.editor-right-panel-element-icon {
+  font-size: 16px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+.editor-right-panel-element-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.editor-right-panel-element-sub {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: lowercase;
+  flex-shrink: 0;
+}
+.editor-right-panel-elements-empty {
+  padding: 12px 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: center;
+}

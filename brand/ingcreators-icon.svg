@@ -1,0 +1,74 @@
+<!--
+  ingcreators — master icon.
+
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  BRAND NARRATIVE
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ingcreators is a network for creators who are simultaneously
+  someone's follower and someone's leader. The mark encodes that
+  identity directly:
+
+    BLUE = "i" = you, the creator, the individual
+      • apex dot (r=4.5)   = the "i" tittle + your presence at top
+      • stem (sw=4)         = your body, your axis of effort
+      • arc  (sw=1)         = your REACH — the line you draw
+                              between who follows you and who
+                              leads you
+
+    GREEN = 追跡者 (follower / trailing)
+      • lower-left, further out — those following in your steps
+
+    PURPLE = 先駆者 (pioneer / leading)
+      • upper-right, further ahead — those you look up to
+
+  The blue arc physically connects green ↔ purple in the color of
+  "i". The message is not "you are connected to the network" but
+  "you ARE the connection. You bridge the one behind and the one
+  ahead." Every creator stands in that middle place. That middle
+  is where ingcreators lives.
+
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SYSTEMIC RULES (shared with Annot)
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  • Palette: exactly 3 brand colors — no grey, no accent.
+      blue   #7c9cff  (i / anchor / connector)
+      green  #7ef0c5  (follower / trailing)
+      purple #b391ff  (pioneer / leading)
+  • Container: rect 48×48 rx=10 fill #0f1730.
+  • Color grammar: left = green, right = purple, top/connector = blue.
+  • Cross-mark rule: "blue bridges green and purple." Annot expresses
+    this as a straight crossbar; ingcreators expresses it as an arc.
+
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  GEOMETRY (48×48 viewBox)
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    Arc    M11 34 Q22 26 36 28     #7c9cff  sw=1    round caps
+    Apex   (24, 11)  r=4.5         #7c9cff
+    Stem   M24 19 L24.77 30        #7c9cff  sw=4    round caps
+           (length 11, tilted 4° CW to align with orbit direction)
+    Left   (11, 34)  r=3.0         #7ef0c5
+    Right  (36, 28)  r=3.0         #b391ff
+
+  For rendering at ≤24 px, use ingcreators-icon-16.svg (arc + stem
+  removed, dot radii increased so the orbit shape survives).
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 48 48" fill="none">
+  <rect width="48" height="48" rx="10" fill="#0f1730"/>
+
+  <!-- Blue arc in the color of "i" — the reach between green and purple -->
+  <path d="M11 34 Q22 26 36 28"
+        stroke="#7c9cff" stroke-width="1" fill="none"
+        stroke-linecap="round"/>
+
+  <!-- i-tittle / apex: "you" at the top -->
+  <circle cx="24" cy="11" r="4.5" fill="#7c9cff"/>
+
+  <!-- i-stem: your axis -->
+  <path d="M24 19 L24.77 30" stroke="#7c9cff" stroke-width="4" stroke-linecap="round"/>
+
+  <!-- Follower (trailing, behind) -->
+  <circle cx="11" cy="34" r="3" fill="#7ef0c5"/>
+
+  <!-- Pioneer (leading, ahead) -->
+  <circle cx="36" cy="28" r="3" fill="#b391ff"/>
+</svg>

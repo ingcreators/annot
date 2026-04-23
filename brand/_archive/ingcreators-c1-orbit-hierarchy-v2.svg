@@ -1,0 +1,69 @@
+<!--
+  C1 — "orbit × hierarchy" v2: green→purple base arc.
+
+  Swap the single arc from apex→base-right (v1) to a subtle bridge
+  between the two base dots (green → purple).
+
+  Why this is the better composition:
+
+    1. Family resonance with Annot
+       Annot connects its GREEN leg and PURPLE leg with a horizontal
+       blue CROSSBAR. ingcreators v2 connects its GREEN dot and
+       PURPLE dot with a horizontal subtle arc. Same structural rule
+       ("a line bridges green and purple") on both marks.
+
+    2. Better upper/lower balance
+       v1 piles arc + apex-dot + stem-start all in the upper half.
+       v2 moves the single line-element to the lower half, giving
+       the composition a quiet "horizon" that grounds the 3 dots.
+
+    3. Correct peer-to-peer narrative
+       ingcreators is about a community of creators. Connecting two
+       base creators (peers) reads as "community bond", while v1's
+       apex→one-base arc read as a hierarchical "leader-to-one-
+       follower" link — on-message but not the primary story.
+
+  Arc spec:
+    M11 34 Q22 26 36 28
+    • Start at green base-left (11, 34)
+    • Control (22, 26) — bulges upward toward the apex, with a slight
+      left-weighted asymmetry that echoes the CCW orbit direction
+      (creators "rising" from trailing-left toward leading-right)
+    • End at purple base-right (36, 28)
+    • Clears the i-stem cleanly: at y=26 the arc passes near x=22
+      while the stem is at x≈24.5 — ~2.5 unit horizontal gap.
+
+  Same quiet-line grammar as the other network variants:
+    stroke rgba(255,255,255,0.14), sw=1, round caps/joins.
+    Drawn BEFORE the dots so the round caps tuck under the dot fills.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 48 48" fill="none">
+  <rect width="48" height="48" rx="10" fill="#0f1730"/>
+
+  <!--
+    Peer-to-peer bridge: green base-left → purple base-right.
+    Opacity raised 0.14 → 0.18 so the arc survives low-contrast
+    viewing (sunlight on laptops, projectors, cheap panels).
+  -->
+  <path d="M11 34 Q22 26 36 28"
+        stroke="rgba(255,255,255,0.18)" stroke-width="1" fill="none"
+        stroke-linecap="round"/>
+
+  <!-- Anchor creator / i-tittle — enlarged (r=4.5) -->
+  <circle cx="24" cy="11" r="4.5" fill="#7c9cff"/>
+
+  <!--
+    i stem — extended + tilted 4° CW.
+    Stroke sw=3.5 → 4 to strengthen the "i" reading. The stem now
+    has ratio sw/apex-diameter = 4/9 = 44% (was 39%), so it is
+    more visible but still clearly thinner than the apex dot —
+    hierarchy preserved (apex dominant > stem > base dots).
+    Cap radius grows 1.75 → 2.0; apex↔stem visual gap stays clean
+    at ~1.5 units (was 1.75).
+  -->
+  <path d="M24 19 L24.77 30" stroke="#7c9cff" stroke-width="4" stroke-linecap="round"/>
+
+  <!-- Orbiting community creators -->
+  <circle cx="11" cy="34" r="3" fill="#7ef0c5"/>
+  <circle cx="36" cy="28" r="3" fill="#b391ff"/>
+</svg>

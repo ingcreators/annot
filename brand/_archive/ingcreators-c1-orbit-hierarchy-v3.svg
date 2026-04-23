@@ -1,0 +1,44 @@
+<!--
+  C1 — "orbit × hierarchy" v3: blue arc (solid #7c9cff).
+
+  Escalates the green→purple arc from a subtle grey hint to a
+  structural blue line, locking ingcreators' color system to exactly
+  3 colors (blue / green / purple) — no more atmospheric grey as a
+  sneaky 4th color.
+
+  Family rule now reads identically on both marks:
+    Annot:        BLUE crossbar connects green leg and purple leg
+    ingcreators:  BLUE arc      connects green dot and purple dot
+
+  Trade-offs vs v2 (grey arc):
+    + 3-color palette strictness (no grey)
+    + Exact family rule parity with Annot
+    + 16px / low-contrast survival guaranteed (no opacity dependency)
+    – Arc reads as PRIMARY structural line instead of a quiet
+      trajectory hint — the "orbit trace" narrative softens into
+      "stated network connection"
+    – Composition visual weight increases slightly (one more
+      blue element in play — pin/apex + stem + arc all blue)
+
+  Arc spec (same path as v2, color changed):
+    M11 34 Q22 26 36 28  stroke=#7c9cff  sw=1  round caps
+    Drawn first so the green/purple dot fills cover the arc endpoints.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 48 48" fill="none">
+  <rect width="48" height="48" rx="10" fill="#0f1730"/>
+
+  <!-- Peer-to-peer bridge (blue, solid) — matches Annot crossbar color -->
+  <path d="M11 34 Q22 26 36 28"
+        stroke="#7c9cff" stroke-width="1" fill="none"
+        stroke-linecap="round"/>
+
+  <!-- Anchor creator / i-tittle -->
+  <circle cx="24" cy="11" r="4.5" fill="#7c9cff"/>
+
+  <!-- i stem -->
+  <path d="M24 19 L24.77 30" stroke="#7c9cff" stroke-width="4" stroke-linecap="round"/>
+
+  <!-- Orbiting community creators -->
+  <circle cx="11" cy="34" r="3" fill="#7ef0c5"/>
+  <circle cx="36" cy="28" r="3" fill="#b391ff"/>
+</svg>
