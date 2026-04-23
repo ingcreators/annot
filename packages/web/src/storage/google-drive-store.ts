@@ -27,7 +27,7 @@ import {
   readEditableImage,
 } from "@ingcreators/annot-core/xmp";
 import { renderImageRecord } from "@ingcreators/annot-core/editor/export";
-import { encodeCapture } from "@ingcreators/annot-core/encode";
+import { encodeCaptureInWorker } from "../workers/encode-client.js";
 import { loadEncodeOptions } from "../encode-options.js";
 
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
@@ -630,7 +630,7 @@ export class GoogleDriveStore implements StorageProvider {
       if (format === "png") {
         try {
           const opts = loadEncodeOptions();
-          const encoded = await encodeCapture(renderedDataUrl, opts);
+          const encoded = await encodeCaptureInWorker(renderedDataUrl, opts);
           finalDataUrl = encoded.dataUrl;
         } catch (e) {
           console.warn("[drive-store] rendered-image re-encode failed, keeping PNG-24:", e);
