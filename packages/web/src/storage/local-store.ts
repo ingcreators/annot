@@ -54,8 +54,13 @@ function folderStore(db: IDBDatabase, mode: IDBTransactionMode) {
 }
 
 function defaultFilename(data: { originalDataUrl: string }): string {
+  // No explicit filename from the caller → treat as an annot-native
+  // capture and use the shared `annot-<ts>.annot.<ext>` shape. Callers
+  // that already have a filename (drag-and-drop, extension transfer
+  // preserving the user's capture name, etc.) pass it through and
+  // their original name wins.
   const ext = data.originalDataUrl.startsWith("data:image/png") ? "png" : "jpg";
-  return `image-${Date.now()}.${ext}`;
+  return `annot-${Date.now()}.annot.${ext}`;
 }
 
 export class LocalStore implements StorageProvider {

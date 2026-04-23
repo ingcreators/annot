@@ -90,7 +90,7 @@ visible to Annot. Only files Annot itself creates after the pick
 become visible. This is by design — it's the trade-off that keeps
 us out of restricted-scope territory.
 
-If the user wants to open an existing `.svg` / `.anno.png` that
+If the user wants to open an existing `.svg` / `.annot.png` that
 Annot didn't create, they do so via Drive UI Integration (§3), not
 via the gallery.
 
@@ -102,7 +102,8 @@ types so users can right-click a file in Drive and choose
 
 - `image/svg+xml` — Annot-authored SVGs (identified by `data-annot-version`)
 - `image/png` / `image/jpeg` — only when accompanied by our XMP metadata
-  (`.anno.png` / `.anno.jpg` naming convention)
+  (`.annot.png` / `.annot.jpg` naming convention for annot-native
+  captures; external images keep their original filename on save)
 
 Registration steps live in Google Cloud Console → Drive UI
 Integration (a sub-page of OAuth consent screen configuration):
@@ -279,7 +280,7 @@ handler is registered:
 
 - [ ] Should the first-run picker also offer "create a new folder
       named `Annot/`" as a one-click option? (UX nicety.)
-- [ ] Custom MIME registration for `.anno.png` / `.anno.jpg` is
+- [ ] Custom MIME registration for `.annot.png` / `.annot.jpg` is
       possible but more involved than relying on `image/png` +
       XMP detection after open. Decide before Phase 2.
 - [ ] Privacy policy / terms templates — likely need a lawyer

@@ -142,7 +142,12 @@ async function openImageFile(): Promise<void> {
     const { open } = await import("@tauri-apps/plugin-dialog");
     const { readXmp } = await import("@ingcreators/annot-core/utils/tauri-bridge");
     const selected = await open({
-      filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "svg", "anno.png", "anno.jpg", "webp", "bmp"] }],
+      // `annot.png` / `annot.jpg` / `annot.svg` are the annot-native
+      // variants (XMP metadata + embedded original). Plain `png` /
+      // `jpg` / `webp` etc. also match so users can bring in any
+      // screenshot. `anno.png` / `anno.jpg` kept for backward
+      // compatibility with files captured before the naming switch.
+      filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "svg", "annot.png", "annot.jpg", "annot.svg", "anno.png", "anno.jpg", "webp", "bmp"] }],
     });
     if (selected) {
       const filePath = selected as string;
