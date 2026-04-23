@@ -220,6 +220,15 @@ Current active plan:
 - [`docs/plans/path-based-storage.md`](./docs/plans/path-based-storage.md)
   — drop numeric IDs in favor of filesystem-style paths. **Prerequisite
   for GitHubStore** (numeric IDs don't map to git objects).
+- [`docs/plans/google-drive-integration.md`](./docs/plans/google-drive-integration.md)
+  — rework Drive onto `drive.file` scope + Workspace Marketplace
+  + Drive UI Integration. Phase 1 landed; Phases 2–4 gated on
+  company incorporation.
+- [`docs/plans/oss-cloud-split.md`](./docs/plans/oss-cloud-split.md)
+  — **read this before adding commercial-only behaviour**. Strategic
+  plan for running OSS `ingcreators/annot` alongside a private
+  `ingcreators/annot-cloud` once paid features enter scope.
+  Guardrails apply today.
 
 Queued work without a formal plan doc yet:
 
