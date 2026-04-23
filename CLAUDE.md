@@ -224,6 +224,10 @@ Current active plan:
   — rework Drive onto `drive.file` scope + Workspace Marketplace
   + Drive UI Integration. Phase 1 landed; Phases 2–4 gated on
   company incorporation.
+- [`docs/plans/github-integration.md`](./docs/plans/github-integration.md)
+  — individual-user `GitHubStore`: device-flow auth, repo +
+  branch + base path picker, commits as save. Drive-equivalent
+  scope. PR automation / Check Runs live in `annot-cloud`.
 - [`docs/plans/oss-cloud-split.md`](./docs/plans/oss-cloud-split.md)
   — **read this before adding commercial-only behaviour**. Strategic
   plan for running OSS `ingcreators/annot` alongside a private
