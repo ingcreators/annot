@@ -3,6 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "description": "Annot — web app (by ingcreators)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ingcreators/annot.git",
+    "directory": "packages/web"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",

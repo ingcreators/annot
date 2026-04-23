@@ -2,6 +2,11 @@
   "name": "@ingcreators/annot-desktop",
   "version": "0.1.0",
   "private": true,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ingcreators/annot.git",
+    "directory": "packages/desktop"
+  },
   "type": "module",
   "scripts": {
     "dev": "tauri dev",

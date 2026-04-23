@@ -1,6 +1,10 @@
 {
   "name": "ingcreators",
   "private": true,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ingcreators/annot.git"
+  },
   "packageManager": "pnpm@9.15.0",
   "scripts": {
     "build": "turbo build",
