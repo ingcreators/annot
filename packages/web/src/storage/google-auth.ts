@@ -81,46 +81,65 @@ export async function signIn(): Promise<string> {
 /**
  * Try to get a fresh access token without any UI. Works when the user
  * is still signed in to Google in this browser AND has previously
- * granted the `drive.file` scope to this client id. Resolves with the
- * new token on success, or `null` when Google indicates interactive
- * sign-in is required (user signed out, scope revoked, cookie purge,
- * granular-consent re-prompt needed).
+ * granted the `drive.file` scope to this client id AND third-party
+ * cookies are allowed so GIS can do the silent iframe exchange.
  *
- * The 401 auto-recovery path in `GoogleDriveStore.#fetch` calls this
- * first; only if it returns `null` does it fall back to the full
- * `signIn` popup, routed through a user-gesture banner in `bridge.ts`.
+ * Resolves with the new token on success, or `null` when any of the
+ * above preconditions doesn't hold. The 401 auto-recovery path in
+ * `GoogleDriveStore.#fetch` calls this first; only if it resolves
+ * `null` does it fall back to the full `signIn` popup, routed
+ * through a user-gesture banner in `bridge.ts`.
  *
- * Uses `prompt: "none"` — not empty string. Google's `""` prompt only
- * means "prompt once on first use"; if Google later decides a
- * re-consent is needed (e.g. because the app's scope set changed, as
- * it did when we moved from `drive` to `drive.file`), `""` still
- * pops a consent screen, which the popup blocker eats when we're not
- * on a user gesture. `"none"` guarantees no UI — it fails cleanly
- * with `error: "interaction_required"` so the banner can take over.
+ * Implementation notes:
+ *
+ * - `prompt: "none"` is Google's "no UI under any circumstance" flag.
+ *   `prompt: ""` doesn't actually mean that; it means "prompt on
+ *    first use only", which still triggers a popup when Google
+ *    decides a re-consent is needed (e.g. after a scope change
+ *    like our `drive` → `drive.file` move in #9).
+ * - A hard `SILENT_TIMEOUT_MS` guard is critical. Under blocked
+ *   third-party cookies GIS tries to fall back to a popup; the
+ *   popup blocker eats it; GIS logs
+ *   `[GSI LOGGER]: Failed to open popup window...` but then
+ *   neither `callback` nor `error_callback` fires. Without the
+ *   timeout the silent-renewal promise hangs forever, the store's
+ *   `#refreshInFlight` gate stays locked, and every subsequent
+ *   Drive call waits on it instead of reaching the banner.
  */
+const SILENT_TIMEOUT_MS = 5000;
+
 export async function silentSignIn(): Promise<string | null> {
   await loadGisScript();
 
   return new Promise((resolve) => {
+    let settled = false;
+    const finish = (token: string | null) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(token);
+    };
+    const timer = setTimeout(() => finish(null), SILENT_TIMEOUT_MS);
+
     const client = (window as any).google.accounts.oauth2.initTokenClient({
       client_id: GOOGLE_CLIENT_ID,
       scope: SCOPES,
       prompt: "none",
       callback: (response: any) => {
         if (response.error) {
-          resolve(null);
+          finish(null);
           return;
         }
         accessToken = response.access_token;
         localStorage.setItem("google-drive-token", accessToken!);
-        resolve(accessToken);
+        finish(accessToken);
       },
-      error_callback: () => resolve(null),
+      error_callback: () => finish(null),
     });
     try {
       client.requestAccessToken({ prompt: "none" });
     } catch {
-      resolve(null);
+      finish(null);
     }
   });
 }
