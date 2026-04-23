@@ -226,6 +226,15 @@ export class App {
       if (driveStore) {
         this.#storage = driveStore;
         setStorageMode("googledrive");
+        // Verify in the background that the previously-picked root
+        // folder is still reachable under the currently-signed-in
+        // Google account. Under `drive.file`, a folder created by
+        // account A is invisible to account B — if the user has
+        // switched Google accounts in this browser since last use,
+        // the persisted folder ID is effectively gone and every
+        // Drive call would either return empty or 404. Catch that
+        // here and prompt for a re-pick.
+        void this.#verifyDriveRootOrPrompt(driveStore);
       } else {
         this.#storage = localStore;
         setStorageMode("local");
@@ -737,6 +746,53 @@ export class App {
     toolbarEl.appendChild(
       createThemeToggle("header-info-btn material-symbols-outlined"),
     );
+  }
+
+  /**
+   * Background check that the restored Drive root folder is still
+   * accessible to the currently-signed-in Google account. If Drive
+   * returns 404/403 (typical when the user has since signed in as a
+   * different Google user), surface a warning banner with a
+   * "Pick folder" action that re-enters the storage-switch flow
+   * with `forcePicker=true`. Dismissing the banner leaves Drive
+   * connected but pointed at an inaccessible folder, which will
+   * manifest as empty listings / failed saves — the user can also
+   * click "Change Drive folder" in the sidebar whenever they're
+   * ready.
+   *
+   * Network / 5xx errors from `verifyRoot` are ignored here so a
+   * transient outage on boot doesn't nag the user — the actual
+   * operation-time error handlers will catch real problems.
+   */
+  async #verifyDriveRootOrPrompt(driveStore: StorageProvider): Promise<void> {
+    if (!(driveStore instanceof GoogleDriveStore)) return;
+    let accessible = true;
+    try {
+      accessible = await driveStore.verifyRoot();
+    } catch {
+      return;
+    }
+    if (accessible) return;
+    showError({
+      message: "Your Annot Drive folder isn't accessible with the currently-signed-in Google account. Pick a new folder to continue using Drive.",
+      severity: "warning",
+      action: {
+        label: "Pick folder",
+        onClick: () => {
+          // Clear the banner optimistically — if the user cancels
+          // the Picker the banner won't auto-reappear, but they can
+          // always click "Change Drive folder" in the sidebar or
+          // reload to get it back. Keeping it visible through the
+          // Picker interaction clutters the editor during the one
+          // step the user is engaging with.
+          hideError();
+          // Same entrypoint as the sidebar's "Change Drive folder"
+          // icon — reuses the existing sign-in + Picker + persist
+          // flow without duplicating logic.
+          void this.handleStorageSelect("googledrive", true);
+        },
+      },
+    });
   }
 
   /** Display name for the root of the currently-active storage.

@@ -98,6 +98,39 @@ export class GoogleDriveStore implements StorageProvider {
   }
 
   /**
+   * Quick round-trip to confirm the configured root folder is still
+   * usable as the Annot workspace. Returns `false` in three cases:
+   *
+   *   1. `files.get` responds with 404 — the folder was permanently
+   *      deleted, or the user switched to a different Google account
+   *      that doesn't have access (under `drive.file` the ID is
+   *      effectively invisible for other accounts).
+   *   2. `files.get` responds with 403 — permission revoked.
+   *   3. `files.get` responds 200 **but** the folder has
+   *      `trashed: true`. Drive keeps a trashed folder metadata-
+   *      addressable for ~30 days before purging; during that window
+   *      `files.get` still returns 200 so the 404 branch above
+   *      misses it. Treating trashed as inaccessible matches user
+   *      intent: if they dropped the folder in the Trash, new
+   *      captures should not silently land in a folder they've
+   *      decided to throw away.
+   *
+   * Network / 5xx errors re-throw — those aren't "folder gone",
+   * they're "temporarily unreachable", and should be handled as
+   * transient by the caller.
+   */
+  async verifyRoot(): Promise<boolean> {
+    try {
+      const resp = await this.#fetch(`${DRIVE_API}/files/${this.#rootFolderId}?fields=id,trashed`);
+      const meta = await resp.json();
+      return meta?.trashed !== true;
+    } catch (e: any) {
+      if (e?.status === 404 || e?.status === 403) return false;
+      throw e;
+    }
+  }
+
+  /**
    * Given a Drive file ID, walk its parents chain up to the user's
    * Annot root folder and return the relative path. Registers every
    * folder + file encountered along the way in the internal maps so
