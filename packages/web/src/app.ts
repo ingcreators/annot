@@ -615,7 +615,12 @@ export class App {
     const sidebar = this.#fileManager.sidebar;
     sidebar.setStorageStatus("local", true, "Local");
     sidebar.setStorageStatus("filesystem", !!this.#fsStore, getFsRootName() || "Not connected");
-    sidebar.setStorageStatus("googledrive", isDriveConnected(), isDriveConnected() ? "Connected" : "Not connected");
+    const driveRoot = loadDriveRoot();
+    sidebar.setStorageStatus(
+      "googledrive",
+      isDriveConnected(),
+      isDriveConnected() ? (driveRoot?.name ?? "Connected") : "Not connected",
+    );
     sidebar.setActiveMode(getStorageMode());
   }
 
