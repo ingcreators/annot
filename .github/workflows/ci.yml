@@ -10,6 +10,13 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Opt JavaScript actions (checkout, setup-node, pnpm/action-setup) into
+# the Node 24 runner ahead of GitHub's forced-switch on 2026-06-02.
+# This only affects how those actions themselves run; the Node version
+# used for our build is still set below via actions/setup-node.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   check:
     name: typecheck + build
