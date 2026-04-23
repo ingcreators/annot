@@ -40,6 +40,7 @@ import {
   openFileSystemDirectory,
   restoreFileSystem,
   connectGoogleDrive,
+  restoreGoogleDrive,
   isDriveConnected,
   getStorageMode,
   deleteExtensionImage,
@@ -50,7 +51,7 @@ import {
   loadLastFolder,
   type StorageMode,
 } from "./storage/bridge.js";
-import { signIn, showFolderPicker } from "./storage/google-auth.js";
+import { signIn, showFolderPicker, saveDriveRoot, loadDriveRoot } from "./storage/google-auth.js";
 import { FileManager } from "./gallery/file-manager.js";
 import type { SplitEditor } from "./editor/split-editor.js";
 import { encodeCapture } from "@ingcreators/annot-core/encode";
@@ -202,9 +203,19 @@ export class App {
     if (lastMode === "filesystem" && this.#fsStore) {
       this.#storage = this.#fsStore;
       setStorageMode("filesystem");
-    } else if (lastMode === "googledrive" && isDriveConnected()) {
-      // Drive reconnect happens on-demand via handleStorageSelect; for now stay local.
-      // (If a persisted Drive token exists, the user can re-select to connect.)
+    } else if (lastMode === "googledrive") {
+      // If we have a persisted OAuth token AND a previously-picked
+      // root folder, rehydrate the Drive store without prompting. A
+      // stale token will surface as a failed API call later; users
+      // can then re-select Drive to re-auth.
+      const driveStore = restoreGoogleDrive();
+      if (driveStore) {
+        this.#storage = driveStore;
+        setStorageMode("googledrive");
+      } else {
+        this.#storage = localStore;
+        setStorageMode("local");
+      }
     } else {
       // Default / "local" / everything else → Browser (LocalStore)
       this.#storage = localStore;
@@ -564,8 +575,16 @@ export class App {
       } else if (mode === "googledrive") {
         try {
           const token = await signIn();
-          const folder = await showFolderPicker();
-          if (!folder) return;
+          // Reuse the previously-picked root when available — under
+          // `drive.file` that picker result is the app's only handle
+          // onto the user's Drive, so skipping the picker here just
+          // skips an extra click, not an access grant.
+          let folder = loadDriveRoot();
+          if (!folder) {
+            folder = await showFolderPicker();
+            if (!folder) return;
+            saveDriveRoot(folder);
+          }
           const store = connectGoogleDrive(token, folder.id);
           this.#storage = store;
           saveLastStorage("googledrive");

@@ -9,6 +9,7 @@ import { LocalStore } from "./local-store.js";
 import { FileSystemStore } from "./fs-store.js";
 import { GoogleDriveStore } from "./google-drive-store.js";
 import { saveHandle, loadHandle, clearHandle } from "./fs-handle-store.js";
+import { getAccessToken, loadDriveRoot } from "./google-auth.js";
 
 // chrome-types omits `chrome.runtime.lastError` from its public typings,
 // even though it exists at runtime (set during callback-style API calls).
@@ -183,6 +184,23 @@ export function connectGoogleDrive(token: string, rootFolderId: string): Storage
   driveStore = new GoogleDriveStore(token, rootFolderId);
   currentMode = "googledrive";
   return driveStore;
+}
+
+/**
+ * Try to re-establish the Drive connection from previously-persisted
+ * token + root folder. Returns the store on success, or `null` if
+ * either value is missing. The caller should fall back to the
+ * sign-in + Picker flow when this returns `null`.
+ *
+ * Does NOT proactively validate the token with Drive — a stale token
+ * will surface as a failed API call later. Keeping the cheaper path
+ * (no network on boot) is worth the slightly worse error UX.
+ */
+export function restoreGoogleDrive(): StorageProvider | null {
+  const token = getAccessToken();
+  const root = loadDriveRoot();
+  if (!token || !root) return null;
+  return connectGoogleDrive(token, root.id);
 }
 
 /** Delete an image from Extension IDB (cleanup after transfer). */

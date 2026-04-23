@@ -8,13 +8,19 @@
  * 3. Replace GOOGLE_CLIENT_ID and GOOGLE_API_KEY below
  */
 
-// Set via environment variables (Vite injects at build time):
+// Set via environment variables (Vite inlines them into the bundle
+// at build time — values are visible in the shipped JS):
 //   VITE_GOOGLE_CLIENT_ID=xxx.apps.googleusercontent.com
 //   VITE_GOOGLE_API_KEY=xxx
-// For local dev, create .env.local in packages/web-annotating/
+// For local dev, create `.env.local` in packages/web/.
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
 const GOOGLE_API_KEY = import.meta.env.VITE_GOOGLE_API_KEY || "";
-const SCOPES = "https://www.googleapis.com/auth/drive";
+
+// Non-sensitive scope: grants access only to files the app creates
+// and to files/folders the user explicitly hands to us through Google
+// Picker (§2 of docs/plans/google-drive-integration.md). The broader
+// `drive` scope is restricted and would require a CASA audit to ship.
+const SCOPES = "https://www.googleapis.com/auth/drive.file";
 
 let accessToken: string | null = null;
 
@@ -91,7 +97,14 @@ export function signOut(): void {
 
 /**
  * Show Google Picker to select a folder.
- * Returns the selected folder ID and name, or null if cancelled.
+ *
+ * This is the gate through which the `drive.file` scope actually
+ * gains access to anything. Until the user picks a folder here, the
+ * app has no Drive access even after sign-in. Everything Annot
+ * stores on Drive from then on lives inside the folder returned by
+ * this call. See `docs/plans/google-drive-integration.md` §2.
+ *
+ * Returns the selected folder's ID and name, or `null` if cancelled.
  */
 export async function showFolderPicker(): Promise<{ id: string; name: string } | null> {
   const token = getAccessToken();
@@ -126,4 +139,41 @@ export async function showFolderPicker(): Promise<{ id: string; name: string } |
       .build();
     picker.setVisible(true);
   });
+}
+
+// ---- Drive root-folder persistence ----
+//
+// Under `drive.file`, the only way the app can access a Drive folder
+// is if the user previously picked it via Google Picker. We remember
+// that pick across sessions so the user doesn't have to repeat the
+// picker flow on every reload. The stored value is just an ID +
+// display name; the real authorization lives server-side on Google's
+// side, tied to the OAuth token.
+
+const DRIVE_ROOT_KEY = "annot-drive-root";
+
+interface DriveRoot {
+  id: string;
+  name: string;
+}
+
+/** Persist the Picker-selected Drive root folder. */
+export function saveDriveRoot(root: DriveRoot): void {
+  localStorage.setItem(DRIVE_ROOT_KEY, JSON.stringify(root));
+}
+
+/** Load the previously-selected Drive root folder, or null. */
+export function loadDriveRoot(): DriveRoot | null {
+  const raw = localStorage.getItem(DRIVE_ROOT_KEY);
+  if (!raw) return null;
+  try {
+    const v = JSON.parse(raw);
+    if (typeof v?.id === "string" && typeof v?.name === "string") return v;
+  } catch { /* fall through */ }
+  return null;
+}
+
+/** Forget the selected root (e.g. on sign-out or to re-pick). */
+export function clearDriveRoot(): void {
+  localStorage.removeItem(DRIVE_ROOT_KEY);
 }
