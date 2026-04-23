@@ -182,7 +182,7 @@ Readers treat missing attribute as v0 and re-stamp on save.
 - [ ] Should `PageMetadata` be embeddable inside the SVG as a
       `<metadata>` element for single-file portability? Trades file
       size against simplicity of the storage contract.
-- [ ] Namespacing: do we want `xmlns:annot="https://annot.dev/ns"`
+- [ ] Namespacing: do we want `xmlns:annot="https://annot.work/ns"`
       and `<annot:*>` elements instead of `data-*` attributes? More
       principled but harder for downstream tools that assume plain
       SVG.
