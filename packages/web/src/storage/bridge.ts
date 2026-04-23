@@ -9,7 +9,7 @@ import { LocalStore } from "./local-store.js";
 import { FileSystemStore } from "./fs-store.js";
 import { GoogleDriveStore } from "./google-drive-store.js";
 import { saveHandle, loadHandle, clearHandle } from "./fs-handle-store.js";
-import { getAccessToken, loadDriveRoot, signIn, silentSignIn } from "./google-auth.js";
+import { getAccessToken, loadDriveRoot, signIn } from "./google-auth.js";
 import { showAuthError, hideError } from "../ui/error-bar.js";
 
 // chrome-types omits `chrome.runtime.lastError` from its public typings,
@@ -181,28 +181,25 @@ export async function disconnectFileSystem(): Promise<void> {
 }
 
 /**
- * Refresh the Drive access token when the current one 401s. Tries
- * silent renewal first (no UI if the user is still signed in to
- * Google) and only asks for an interactive sign-in when silent
- * fails. Returns the new token, or `null` if the user dismissed
- * the prompt.
+ * Refresh the Drive access token when the current one 401s.
+ * Always goes through the visible "Sign in" banner — opening a
+ * popup from a non-gesture code path (boot-time `verifyRoot`,
+ * idle-tab gallery refresh, handoff arrival, etc.) gets blocked
+ * by Chrome's popup blocker, and in the typical 3rd-party-cookie-
+ * blocked environment GIS's "silent" path ends up behaving the
+ * same way anyway — it falls back to a popup that also gets
+ * blocked, just with an extra 5-second wait and a "Failed to open
+ * popup window" console line to show for it. Cutting the silent
+ * attempt entirely gives a tighter, more predictable UX: every
+ * 401 lands on the banner immediately, the user clicks "Sign in",
+ * the OAuth popup opens on that gesture, and Drive resumes.
  *
- * The interactive path goes through a visible "Sign in" banner
- * rather than invoking `signIn()` directly. Opening a popup from
- * a code path that wasn't triggered by a user click (e.g. a Drive
- * API call fired from `handleRoute`) gets blocked by Chrome's
- * popup blocker — forcing the user through an explicit click on
- * the banner gives us the gesture the OAuth popup needs.
- *
- * Registered on every `GoogleDriveStore` instance so its `#fetch`
- * can auto-retry every call path — `listImages`, `saveImage`,
- * `updateImage`, folder moves, etc. — without each having to bolt
- * on its own 401 handler.
+ * Returns the new token, or `null` if the user dismissed the
+ * banner. Registered on every `GoogleDriveStore` instance so
+ * `#fetch` auto-retries `listImages`, `saveImage`, `updateImage`
+ * etc. without each having to bolt on its own 401 handler.
  */
 async function refreshDriveToken(): Promise<string | null> {
-  const silent = await silentSignIn();
-  if (silent) return silent;
-
   return new Promise<string | null>((resolve) => {
     let settled = false;
     const settle = (token: string | null) => {
