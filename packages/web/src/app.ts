@@ -143,6 +143,12 @@ export class App {
    *  and freeze the UI). See `writeAnnotationsToStorage` below. */
   #saveInFlight = false;
   #savePending = false;
+  /** Debounce timer for the annotation autosave. Lifted to an
+   *  instance field so `flushPendingSave()` can cancel-and-fire it
+   *  on navigation boundaries. */
+  #autoSaveTimer: number | undefined;
+  /** Same story for the thumbnail regeneration timer. */
+  #thumbTimer: number | undefined;
   /** Latest ImageRecord for the currently-open image (when available). Used
    *  by the file-details drawer to show createdAt/updatedAt/sourceUrl. Null
    *  for not-yet-saved images (e.g. a freshly captured but un-persisted one). */
@@ -245,6 +251,19 @@ export class App {
     });
 
     window.addEventListener("popstate", () => this.handleRoute());
+
+    // beforeunload: warn the user when closing a tab with a save
+    // still pending or in flight. Browsers no longer honor custom
+    // messages (they show a generic localized string), but setting
+    // returnValue is still required to trigger the prompt. When
+    // everything is clean we leave the handler silent so non-editing
+    // tabs close without friction.
+    window.addEventListener("beforeunload", (e) => {
+      if (this.#autoSaveTimer !== undefined || this.#saveInFlight || this.#savePending) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    });
 
     // Listen for Extension capture events (editPath delivered via detail)
     window.addEventListener("annot-capture", async (e: any) => {
@@ -484,11 +503,48 @@ export class App {
     }
   }
 
-  showGallery(): void {
+  async showGallery(): Promise<void> {
+    // Flush any in-flight / debounced save before leaving the editor
+    // so the user doesn't lose the last few edits between a pending
+    // autosave timer and the navigation. Returns immediately on
+    // Local / Device where the flush is essentially free; on Drive
+    // this may briefly show "Saving…" before the gallery renders.
+    await this.#flushPendingSave();
     if (window.location.pathname !== galleryUrl()) {
       pushRoute(galleryUrl());
     }
     this.showGalleryView();
+  }
+
+  /**
+   * Resolve once (a) no debounced save is scheduled, (b) no upload is
+   * running, and (c) no catch-up save is queued. Safe to call while
+   * not editing — it no-ops.
+   *
+   * Called from every in-app navigation boundary (gallery button,
+   * brand click, session cleanup) and from `beforeunload` so the
+   * user doesn't silently lose a pending edit.
+   */
+  async #flushPendingSave(): Promise<void> {
+    // If a debounce timer is armed, cancel it and run the save now.
+    if (this.#autoSaveTimer !== undefined) {
+      clearTimeout(this.#autoSaveTimer);
+      this.#autoSaveTimer = undefined;
+      await this.writeAnnotationsToStorage();
+    }
+    // Wait for any in-flight save + catch-up save to settle. Polling
+    // with a short interval is ugly but this only runs at navigation
+    // boundaries, never in the hot edit path.
+    while (this.#saveInFlight || this.#savePending) {
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    // Also flush the thumbnail regen so the gallery tile that's
+    // about to be rendered shows the latest state.
+    if (this.#thumbTimer !== undefined) {
+      clearTimeout(this.#thumbTimer);
+      this.#thumbTimer = undefined;
+      await this.writeThumbnailToStorage();
+    }
   }
 
   private buildFileManagerHeader(): void {
@@ -516,7 +572,7 @@ export class App {
       </svg>
       <span class="brand-text">Annot</span>
     `;
-    brand.addEventListener("click", (e) => { e.preventDefault(); this.showGallery(); });
+    brand.addEventListener("click", (e) => { e.preventDefault(); void this.showGallery(); });
     toolbarEl.appendChild(brand);
 
     const searchWrap = document.createElement("div");
@@ -827,7 +883,7 @@ export class App {
       this.#splitEditor = null;
       canvasContainer.style.display = "";
       statusbar.style.display = "";
-      this.showGallery();
+      void this.showGallery();
     };
 
     try {
@@ -1155,20 +1211,24 @@ export class App {
       this.#openScratchpadSection?.setSaveEnabled(this.#scratchpadCanSave);
     };
 
-    let autoSaveTimer: number | undefined;
-    let thumbTimer: number | undefined;
     history.onStateChange = () => {
       // Reflect "edits made" immediately — the debounce hides latency
       // but the user should know something will be saved soon.
       this.#saveStatusIndicator?.setStatus("pending");
-      clearTimeout(autoSaveTimer);
+      clearTimeout(this.#autoSaveTimer);
       // Network-backed stores (Drive) get a longer debounce so rapid
       // +/- clicks on a slider coalesce into a single upload. Local
       // stores are cheap enough to keep the tight 500ms window.
       const saveDebounceMs = getStorageMode() === "googledrive" ? 1500 : 500;
-      autoSaveTimer = window.setTimeout(() => this.writeAnnotationsToStorage(), saveDebounceMs);
-      clearTimeout(thumbTimer);
-      thumbTimer = window.setTimeout(() => this.writeThumbnailToStorage(), 2000);
+      this.#autoSaveTimer = window.setTimeout(() => {
+        this.#autoSaveTimer = undefined;
+        void this.writeAnnotationsToStorage();
+      }, saveDebounceMs);
+      clearTimeout(this.#thumbTimer);
+      this.#thumbTimer = window.setTimeout(() => {
+        this.#thumbTimer = undefined;
+        void this.writeThumbnailToStorage();
+      }, 2000);
     };
 
     if (annotations) {
@@ -1264,7 +1324,7 @@ export class App {
     `;
     brandBtn.addEventListener("click", () => {
       this.#currentFolderPath = "";
-      this.showGallery();
+      void this.showGallery();
     });
     headerEl.appendChild(brandBtn);
 
@@ -1680,7 +1740,7 @@ export class App {
         : `Open gallery root (${rootLabel})`);
       btn.addEventListener("click", () => {
         this.#currentFolderPath = folderPath;
-        this.showGallery();
+        void this.showGallery();
       });
       return btn;
     };
