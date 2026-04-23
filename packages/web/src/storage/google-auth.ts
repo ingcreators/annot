@@ -83,11 +83,20 @@ export async function signIn(): Promise<string> {
  * is still signed in to Google in this browser AND has previously
  * granted the `drive.file` scope to this client id. Resolves with the
  * new token on success, or `null` when Google indicates interactive
- * sign-in is required (user signed out, scope revoked, cookie purge).
+ * sign-in is required (user signed out, scope revoked, cookie purge,
+ * granular-consent re-prompt needed).
  *
  * The 401 auto-recovery path in `GoogleDriveStore.#fetch` calls this
  * first; only if it returns `null` does it fall back to the full
- * `signIn` popup.
+ * `signIn` popup, routed through a user-gesture banner in `bridge.ts`.
+ *
+ * Uses `prompt: "none"` — not empty string. Google's `""` prompt only
+ * means "prompt once on first use"; if Google later decides a
+ * re-consent is needed (e.g. because the app's scope set changed, as
+ * it did when we moved from `drive` to `drive.file`), `""` still
+ * pops a consent screen, which the popup blocker eats when we're not
+ * on a user gesture. `"none"` guarantees no UI — it fails cleanly
+ * with `error: "interaction_required"` so the banner can take over.
  */
 export async function silentSignIn(): Promise<string | null> {
   await loadGisScript();
@@ -96,12 +105,9 @@ export async function silentSignIn(): Promise<string | null> {
     const client = (window as any).google.accounts.oauth2.initTokenClient({
       client_id: GOOGLE_CLIENT_ID,
       scope: SCOPES,
-      prompt: "",
+      prompt: "none",
       callback: (response: any) => {
         if (response.error) {
-          // Google signals interaction-required via `error: "interaction_required"`
-          // or `error: "consent_required"`. Either way, silent is off the table
-          // and the caller should fall through to `signIn()`.
           resolve(null);
           return;
         }
@@ -112,7 +118,7 @@ export async function silentSignIn(): Promise<string | null> {
       error_callback: () => resolve(null),
     });
     try {
-      client.requestAccessToken({ prompt: "" });
+      client.requestAccessToken({ prompt: "none" });
     } catch {
       resolve(null);
     }
