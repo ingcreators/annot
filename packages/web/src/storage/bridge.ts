@@ -184,8 +184,8 @@ export async function disconnectDevice(): Promise<void> {
 /**
  * Refresh the Drive access token when the current one 401s.
  * Always goes through the visible "Sign in" banner — opening a
- * popup from a non-gesture code path (boot-time `verifyRoot`,
- * idle-tab gallery refresh, handoff arrival, etc.) gets blocked
+ * popup from a non-gesture code path (idle-tab gallery refresh,
+ * handoff arrival, etc.) gets blocked
  * by Chrome's popup blocker, and in the typical 3rd-party-cookie-
  * blocked environment GIS's "silent" path ends up behaving the
  * same way anyway — it falls back to a popup that also gets
