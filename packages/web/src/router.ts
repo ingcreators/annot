@@ -23,11 +23,15 @@
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, ""); // e.g. "" in dev, "/annotation" in prod
 
 export interface Route {
-  type: "gallery" | "edit";
+  type: "gallery" | "edit" | "handoff";
   store?: string;   // "extension" | "filesystem" | "local" | "googledrive"
   extId?: string;   // extension ID (from query param)
   path?: string;    // image path (edit) or folder path (gallery deep-link); "" = root
   session?: string; // if set, open the Bulk Editor filtered by this session id
+  /** For type "handoff": the source (e.g. "googledrive", future "onedrive"). */
+  handoffSource?: string;
+  /** For type "handoff": raw `?state=` JSON string as delivered by the source. */
+  handoffState?: string;
 }
 
 /** Percent-encode each segment but keep the "/" separators. */
@@ -53,6 +57,15 @@ export function parseRoute(): Route {
   // Strip base prefix
   const relative = pathname.startsWith(BASE) ? pathname.slice(BASE.length) : pathname;
   const parts = relative.split("/").filter(Boolean);
+
+  // /handoff/<source>?state=...  → external-trigger entrypoint
+  // Kept separate from /edit/... so filenames like "handoff" inside
+  // a storage backend can't collide with the route.
+  if (parts[0] === "handoff" && parts[1]) {
+    const handoffSource = parts[1];
+    const handoffState = params.get("state") || undefined;
+    return { type: "handoff", handoffSource, handoffState };
+  }
 
   // /edit/:store/<path...>
   if (parts[0] === "edit" && parts[1]) {

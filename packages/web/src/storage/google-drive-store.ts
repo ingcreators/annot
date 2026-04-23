@@ -69,6 +69,89 @@ export class GoogleDriveStore implements StorageProvider {
     this.#folderIdToPath.set(this.#rootFolderId, "");
   }
 
+  /**
+   * Given a Drive file ID, walk its parents chain up to the user's
+   * Annot root folder and return the relative path. Registers every
+   * folder + file encountered along the way in the internal maps so
+   * subsequent `getImage` / `listImages` calls hit the cache.
+   *
+   * Returns `null` if the file lives outside the Annot root. Under
+   * `drive.file` the app technically has access to the file itself
+   * (Drive UI granted it) but not to ancestor folders that aren't
+   * in our root — we surface that case as "not in workspace" rather
+   * than trying to open something the gallery UI couldn't navigate
+   * back to.
+   *
+   * Used by the Drive UI Integration handoff route (`/handoff/googledrive`)
+   * to translate a Drive-granted file ID into an editor URL.
+   */
+  async resolveFileIdToPath(fileId: string): Promise<string | null> {
+    // Fetch name + parents for the target file first.
+    const fileResp = await this.#fetch(`${DRIVE_API}/files/${fileId}?fields=id,name,parents,mimeType,createdTime`);
+    const file = await fileResp.json();
+    if (!file?.name || !Array.isArray(file.parents) || file.parents.length === 0) return null;
+
+    // Walk up the parents chain from the file toward the root. Each
+    // step fetches the parent's metadata if we haven't cached it.
+    // We stop when we reach the root or leave Annot's scope.
+    const chain: { id: string; name: string }[] = [];
+    let currentParentId: string | undefined = file.parents[0];
+    const MAX_DEPTH = 64; // generous cap against pathological loops
+    let step = 0;
+    while (currentParentId && step < MAX_DEPTH) {
+      if (currentParentId === this.#rootFolderId) break;
+      if (this.#folderIdToPath.has(currentParentId)) {
+        // We already know this ancestor's path; prepend it and stop walking.
+        const knownPath = this.#folderIdToPath.get(currentParentId)!;
+        // Rebuild ancestor chain from the known path so the caller's
+        // result path is complete.
+        if (knownPath) {
+          const segments = knownPath.split("/");
+          let acc = "";
+          for (const seg of segments) {
+            acc = acc ? `${acc}/${seg}` : seg;
+            const id = this.#pathToFolderId.get(acc);
+            if (id) chain.unshift({ id, name: seg });
+          }
+        }
+        currentParentId = undefined;
+        break;
+      }
+      const parentResp = await this.#fetch(`${DRIVE_API}/files/${currentParentId}?fields=id,name,parents`);
+      const parent = await parentResp.json();
+      if (!parent?.name) return null;
+      chain.unshift({ id: parent.id, name: parent.name });
+      currentParentId = Array.isArray(parent.parents) && parent.parents[0];
+      step += 1;
+    }
+    if (step >= MAX_DEPTH) return null;
+    // If we exited the loop without hitting the root, the file is
+    // outside Annot's scope.
+    if (currentParentId !== undefined && currentParentId !== this.#rootFolderId) return null;
+
+    // Register every folder we learned about, building paths as we go.
+    let folderPath = "";
+    for (const node of chain) {
+      const nextPath = folderPath ? `${folderPath}/${node.name}` : node.name;
+      if (!this.#pathToFolderId.has(nextPath)) {
+        this.#pathToFolderId.set(nextPath, node.id);
+        this.#folderIdToPath.set(node.id, nextPath);
+      }
+      folderPath = nextPath;
+    }
+    const filePath = folderPath ? `${folderPath}/${file.name}` : file.name;
+    this.#pathToFileId.set(filePath, file.id);
+    this.#fileIdToPath.set(file.id, filePath);
+    if (file.createdTime) {
+      this.#fileMeta.set(file.id, {
+        id: file.id,
+        name: file.name,
+        createdTime: file.createdTime,
+      });
+    }
+    return filePath;
+  }
+
   // ---- Drive API helpers ----
 
   async #fetch(url: string, init?: RequestInit): Promise<Response> {
