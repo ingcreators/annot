@@ -176,6 +176,7 @@ export class Sidebar {
       "cloud",
       "Google Drive",
       gd.connected ? gd.label || "Connected" : "Not connected",
+      gd.connected ? { reselect: true, reselectTitle: "Change Drive folder" } : undefined,
     ));
 
     this.#treeSectionTitle = document.createElement("div");

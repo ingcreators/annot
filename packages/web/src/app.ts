@@ -579,7 +579,10 @@ export class App {
           // `drive.file` that picker result is the app's only handle
           // onto the user's Drive, so skipping the picker here just
           // skips an extra click, not an access grant.
-          let folder = loadDriveRoot();
+          // `forcePicker` is wired to the sidebar's reselect icon so
+          // the user can switch the Drive root the same way Device
+          // lets them switch folders.
+          let folder = forcePicker ? null : loadDriveRoot();
           if (!folder) {
             folder = await showFolderPicker();
             if (!folder) return;
