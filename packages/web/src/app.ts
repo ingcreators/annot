@@ -52,6 +52,7 @@ import {
   type StorageMode,
 } from "./storage/bridge.js";
 import { signIn, showFolderPicker, saveDriveRoot, loadDriveRoot } from "./storage/google-auth.js";
+import { GoogleDriveStore } from "./storage/google-drive-store.js";
 import { FileManager } from "./gallery/file-manager.js";
 import type { SplitEditor } from "./editor/split-editor.js";
 import { encodeCaptureInWorker } from "./workers/encode-client.js";
@@ -99,7 +100,7 @@ async function retryFsOp<T>(op: () => Promise<T>, maxRetries = 4): Promise<T> {
 }
 import { showAlertDialog } from "./ui/dialog.js";
 import { parseRoute, editUrl, galleryUrl, pushRoute, sessionEditUrl } from "./router.js";
-import { showSaveError, showAuthError, hideError } from "./ui/error-bar.js";
+import { showSaveError, showAuthError, hideError, showError, showInfo } from "./ui/error-bar.js";
 import { captureScreen, pasteFromClipboard, startIntervalCapture } from "./capture/pwa-capture.js";
 import { showIntervalCaptureDialog, showIntervalCaptureProgress, loadCursorPreference, saveCursorPreference } from "./capture/interval-dialog.js";
 
@@ -327,9 +328,136 @@ export class App {
     await this.handleRoute();
   }
 
+  /**
+   * Translate a `/handoff/<source>` external-entry URL into a regular
+   * editor URL and re-dispatch. Keeps the handoff URL from sticking
+   * in history (uses `replaceState`) so the user's Back button lands
+   * on the gallery, not an opaque state blob.
+   *
+   * Currently only `googledrive` is implemented; future OneDrive /
+   * GitHub sources will plug in here.
+   */
+  async #handleHandoff(source: string, rawState: string): Promise<void> {
+    if (!rawState) {
+      showError({
+        message: "Drive handoff: missing state parameter.",
+        severity: "warning",
+      });
+      window.history.replaceState({}, "", galleryUrl());
+      this.showGalleryView();
+      return;
+    }
+    let state: { action?: string; ids?: string[]; folderId?: string };
+    try {
+      state = JSON.parse(rawState);
+    } catch {
+      showError({
+        message: "Drive handoff: state parameter is not valid JSON.",
+        severity: "warning",
+      });
+      window.history.replaceState({}, "", galleryUrl());
+      this.showGalleryView();
+      return;
+    }
+
+    if (source === "googledrive") {
+      await this.#handleGoogleDriveHandoff(state);
+      return;
+    }
+
+    showError({
+      message: `Handoff source "${source}" is not supported yet.`,
+      severity: "warning",
+    });
+    window.history.replaceState({}, "", galleryUrl());
+    this.showGalleryView();
+  }
+
+  async #handleGoogleDriveHandoff(state: { action?: string; ids?: string[]; folderId?: string }): Promise<void> {
+    // Make sure the Drive store is the active one. If the user isn't
+    // signed in yet, the `handleStorageSelect` flow below takes care
+    // of it (sign-in + reuse of persisted root + store creation).
+    if (getStorageMode() !== "googledrive" || !(this.#storage instanceof GoogleDriveStore)) {
+      await this.handleStorageSelect("googledrive");
+    }
+    if (!(this.#storage instanceof GoogleDriveStore)) {
+      showError({
+        message: "Drive handoff: couldn't connect to Google Drive.",
+        severity: "error",
+      });
+      window.history.replaceState({}, "", galleryUrl());
+      this.showGalleryView();
+      return;
+    }
+
+    const action = state.action || (state.ids?.length ? "open" : "create");
+
+    if (action === "create") {
+      showInfo(
+        "Creating a new annotation from Drive's New menu isn't implemented yet. Please capture via the extension or paste an image in Annot.",
+      );
+      window.history.replaceState({}, "", galleryUrl());
+      this.showGalleryView();
+      return;
+    }
+
+    if (action !== "open" || !state.ids || state.ids.length === 0) {
+      showError({
+        message: "Drive handoff: unsupported action or missing file id.",
+        severity: "warning",
+      });
+      window.history.replaceState({}, "", galleryUrl());
+      this.showGalleryView();
+      return;
+    }
+
+    const fileId = state.ids[0]!;
+    let resolvedPath: string | null = null;
+    try {
+      resolvedPath = await this.#storage.resolveFileIdToPath(fileId);
+    } catch (e) {
+      console.error("[handoff/googledrive] resolve failed:", e);
+      showError({
+        message: "Drive handoff: couldn't read the file from Drive.",
+        severity: "error",
+      });
+      window.history.replaceState({}, "", galleryUrl());
+      this.showGalleryView();
+      return;
+    }
+
+    if (!resolvedPath) {
+      // File exists but lives outside the user's Annot root folder.
+      // Under `drive.file` we could technically operate on it, but the
+      // gallery UI is path-rooted and wouldn't know how to display
+      // "a file outside the workspace", so tell the user how to recover.
+      showError({
+        message: "That file is outside your Annot workspace folder. Use the sidebar's \"Change Drive folder\" icon to point Annot at a folder that contains it.",
+        severity: "warning",
+      });
+      window.history.replaceState({}, "", galleryUrl());
+      this.showGalleryView();
+      return;
+    }
+
+    // Replace the handoff URL with the canonical edit URL (so Back
+    // goes to gallery, not to the opaque handoff), then let the
+    // regular route handler open the file.
+    window.history.replaceState({}, "", editUrl("googledrive", resolvedPath));
+    await this.handleRoute();
+  }
+
   async handleRoute(): Promise<void> {
     const route = parseRoute();
     console.log("[handleRoute]", route);
+
+    // Handoff from Drive UI Integration (and future OneDrive / GitHub
+    // sources). Resolve the incoming file into a path the editor
+    // understands, then replace the URL with the canonical edit URL.
+    if (route.type === "handoff") {
+      await this.#handleHandoff(route.handoffSource || "", route.handoffState || "");
+      return;
+    }
 
     let transferred = false;
     if (route.extId) {

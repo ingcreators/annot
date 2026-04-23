@@ -107,22 +107,43 @@ types so users can right-click a file in Drive and choose
 Registration steps live in Google Cloud Console → Drive UI
 Integration (a sub-page of OAuth consent screen configuration):
 
-- **Open URL:** `https://annot.work/edit/drive/handoff?state={driveState}`
-- **New URL:** `https://annot.work/new/drive?state={driveState}` (if
-  we also want to support "Create → Annot" from the Drive "New" menu)
+- **Open URL:** `https://annot.work/handoff/googledrive?state={driveState}`
+- **New URL:** the same URL — Google passes `state.action = "create"`
+  for the New flow, so one handler covers both.
 - **Supported MIME types:** the list above
 - **Default MIME types:** none (we don't want to claim image/* by
   default — that would clutter every image file's context menu)
 
-The `state` query param that Drive passes contains the file ID the
-user activated. Annot reads that, calls `files.get(fileId)` under
-`drive.file` (permitted because Drive UI initiated the open), and
-loads the file into the editor.
+The `state` query param that Drive passes is a JSON blob:
 
-Route addition: a new `/edit/drive/handoff` route that parses
-`state`, fetches the file, and redirects into the regular editor.
-Document the route in
-[`docs/url-schemes.md`](../url-schemes.md) once implemented.
+```json
+{ "action": "open"|"create", "ids": ["..."], "folderId": "...", "userId": "..." }
+```
+
+Annot parses it, and:
+
+- `action === "open"`: calls `files.get(ids[0])` under `drive.file`
+  (permitted because Drive UI initiated the open), resolves the
+  file's parents chain back to the user's Annot root, registers the
+  file in the internal `pathToFileId` cache, then navigates to
+  `/edit/googledrive/<resolved-path>`.
+- `action === "create"`: reserved for a follow-up — Annot needs a
+  base image to meaningfully "create" an annotation file, so this
+  flow will plug in once the broader capture-from-Drive story is
+  designed.
+
+Routing namespace: a dedicated `/handoff/<source>` tree, kept
+separate from `/edit/<store>/<path>`. Two reasons:
+
+1. "handoff" is not a valid filename to reserve inside `/edit/...`
+   — any file literally named `handoff` would otherwise collide
+   with the route matcher.
+2. Other future sources (OneDrive, GitHub) will land under the
+   same shape — `/handoff/onedrive`, `/handoff/github` — so the
+   namespace is worth a top-level slot.
+
+Document the route in [`docs/url-schemes.md`](../url-schemes.md)
+once implemented.
 
 ### 4. Workspace Marketplace listing
 
@@ -249,6 +270,10 @@ handler is registered:
 - Delivers the Drive half of "individual storage backend" per
   `PRODUCT_DIRECTION.md`. Team collaboration is explicitly not
   part of this plan — that belongs to the future `GitHubStore`.
+- **OneDrive (future):** if Microsoft OneDrive becomes a supported
+  backend, the same handoff shape applies — `/handoff/onedrive`
+  alongside `/handoff/googledrive`. The `/handoff/<source>`
+  namespace is sized for this from day one.
 
 ## Open questions
 
