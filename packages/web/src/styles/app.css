@@ -3,13 +3,20 @@
 /* ---- Error bar (draw.io style) ---- */
 
 .error-bar {
+  /* `position: relative` is load-bearing. Without a non-static
+   * `position`, the `z-index` below is a no-op and the bar ends up
+   * covered by `#file-manager` (which is `position: absolute` and
+   * later in DOM order than the bar's insertion point). With a
+   * relative stacking context + `z-index: 1000`, the bar wins the
+   * overlap regardless of whether we're in gallery or editor mode. */
+  position: relative;
+  z-index: 1000;
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 8px 16px;
   font-size: 13px;
   font-weight: 600;
-  z-index: 50;
 }
 
 .error-bar-error {
