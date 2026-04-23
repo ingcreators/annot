@@ -37,13 +37,18 @@ const targets = [
   // source when the brand evolves.
   //
   //   120 × 120 — OAuth consent screen "App logo"
-  //   16 × 16 / 32 × 32 / 128 × 128 — Drive UI Integration icons
-  //     (smallest file-list glyph / medium / large)
+  //   16 × 16 / 32 × 32 / 64 × 64 / 128 × 128 / 256 × 256 —
+  //     Drive UI Integration asks for the full five-icon set so
+  //     Drive can render crisply across list / detail / high-dpi
+  //     variants without interpolation. The ≤ 32 px sizes use
+  //     `annot-icon-16.svg` (pin-less variant, legible small).
   //   512 × 512 — Marketplace listing main icon
   ["annot-icon-16.svg", "brand/generated/oauth-logo-120.png", 120],
   ["annot-icon-16.svg", "brand/generated/drive-ui-16.png", 16],
   ["annot-icon-16.svg", "brand/generated/drive-ui-32.png", 32],
+  ["annot-icon.svg",    "brand/generated/drive-ui-64.png", 64],
   ["annot-icon.svg",    "brand/generated/drive-ui-128.png", 128],
+  ["annot-icon.svg",    "brand/generated/drive-ui-256.png", 256],
   ["annot-icon.svg",    "brand/generated/marketplace-512.png", 512],
 ];
 
