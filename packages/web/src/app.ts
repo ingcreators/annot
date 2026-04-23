@@ -54,7 +54,7 @@ import {
 import { signIn, showFolderPicker, saveDriveRoot, loadDriveRoot } from "./storage/google-auth.js";
 import { FileManager } from "./gallery/file-manager.js";
 import type { SplitEditor } from "./editor/split-editor.js";
-import { encodeCapture } from "@ingcreators/annot-core/encode";
+import { encodeCaptureInWorker } from "./workers/encode-client.js";
 import { loadEncodeOptions } from "./encode-options.js";
 
 /**
@@ -980,7 +980,7 @@ export class App {
     for (let i = 0; i < slices.length; i++) {
       const slice = slices[i]!;
       // Re-encode the slice (PNG → PNG-8 / PNG / JPEG per options).
-      const encoded = await encodeCapture(slice.dataUrl, encodeOptions);
+      const encoded = await encodeCaptureInWorker(slice.dataUrl, encodeOptions);
       const finalDataUrl = encoded.dataUrl;
       const ext = encoded.chosen === "jpeg" ? ".jpg" : ".png";
       const thumb = await storage.generateThumbnail(finalDataUrl);
