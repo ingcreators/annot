@@ -52,7 +52,11 @@ function loadGapiScript(): Promise<void> {
   });
 }
 
-/** Sign in with Google and get an access token. */
+/** Sign in with Google and get an access token. Shows the OAuth
+ *  popup (consent screen and/or account picker). Use `silentSignIn`
+ *  first when possible — an expired access token can often be
+ *  refreshed without any UI interruption if the user is still
+ *  signed in to Google and previously granted the scope. */
 export async function signIn(): Promise<string> {
   await loadGisScript();
 
@@ -71,6 +75,47 @@ export async function signIn(): Promise<string> {
       },
     });
     client.requestAccessToken();
+  });
+}
+
+/**
+ * Try to get a fresh access token without any UI. Works when the user
+ * is still signed in to Google in this browser AND has previously
+ * granted the `drive.file` scope to this client id. Resolves with the
+ * new token on success, or `null` when Google indicates interactive
+ * sign-in is required (user signed out, scope revoked, cookie purge).
+ *
+ * The 401 auto-recovery path in `GoogleDriveStore.#fetch` calls this
+ * first; only if it returns `null` does it fall back to the full
+ * `signIn` popup.
+ */
+export async function silentSignIn(): Promise<string | null> {
+  await loadGisScript();
+
+  return new Promise((resolve) => {
+    const client = (window as any).google.accounts.oauth2.initTokenClient({
+      client_id: GOOGLE_CLIENT_ID,
+      scope: SCOPES,
+      prompt: "",
+      callback: (response: any) => {
+        if (response.error) {
+          // Google signals interaction-required via `error: "interaction_required"`
+          // or `error: "consent_required"`. Either way, silent is off the table
+          // and the caller should fall through to `signIn()`.
+          resolve(null);
+          return;
+        }
+        accessToken = response.access_token;
+        localStorage.setItem("google-drive-token", accessToken!);
+        resolve(accessToken);
+      },
+      error_callback: () => resolve(null),
+    });
+    try {
+      client.requestAccessToken({ prompt: "" });
+    } catch {
+      resolve(null);
+    }
   });
 }
 
