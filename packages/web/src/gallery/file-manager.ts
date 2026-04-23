@@ -30,7 +30,7 @@ export class FileManager {
   #sidebar: Sidebar;
   #gallery: GalleryPage | null = null;
   #storage: StorageProvider | null = null;
-  #storageMode: StorageMode = "local";
+  #storageMode: StorageMode = "browser";
   #currentFolderPath: string = "";
   #callbacks: FileManagerCallbacks;
   #searchInput: HTMLInputElement | null = null;
@@ -81,7 +81,7 @@ export class FileManager {
   /** Update placeholder to reflect the current folder/storage context. */
   #updateSearchPlaceholder(): void {
     if (!this.#searchInput) return;
-    const rootLabel = this.#storageMode === "filesystem" ? "Device"
+    const rootLabel = this.#storageMode === "device" ? "Device"
       : this.#storageMode === "googledrive" ? "Google Drive"
       : "Browser";
     const parts = this.#currentFolderPath ? this.#currentFolderPath.split("/") : [];
@@ -306,7 +306,7 @@ export class FileManager {
     if (!this.#breadcrumbEl || !this.#storage) return;
     this.#breadcrumbEl.innerHTML = "";
 
-    const rootLabel = this.#storageMode === "filesystem" ? "Device"
+    const rootLabel = this.#storageMode === "device" ? "Device"
       : this.#storageMode === "googledrive" ? "Google Drive"
       : "Browser";
 

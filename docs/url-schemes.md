@@ -31,7 +31,7 @@ Current routes (what the router actually accepts today):
 |------------------------------|-----------------------------------------------------------------------------|
 | `/`                          | Gallery root                                                                |
 | `/folder/<path>`             | Gallery deep-linked into a folder (path segments after `/folder/`)          |
-| `/edit/<store>/<path>`       | Editor for an image. `<store>` is one of `local` / `filesystem` / `extension` / `googledrive` |
+| `/edit/<store>/<path>`       | Editor for an image. `<store>` is one of `browser` / `device` / `extension` / `googledrive` |
 
 Recognized query parameters:
 
@@ -49,10 +49,10 @@ to avoid `%2F` encoding in path segments):
 |--------------------------------|---------------------------------|
 | `/`                            | Gallery root                    |
 | `/?p=Folder/Sub`               | Gallery scoped to a folder path |
-| `/edit/local?p=Folder/image.png`   | Editor, local store         |
-| `/edit/fs?p=…`                 | Editor, FileSystem store        |
-| `/edit/ext?extId=…&p=…`        | Editor, via extension relay     |
-| `/edit/gdrive?p=…`             | Editor, Google Drive store      |
+| `/edit/browser?p=Folder/image.png` | Editor, Browser (IDB) store |
+| `/edit/device?p=…`             | Editor, Device (FileSystem) store |
+| `/edit/extension?extId=…&p=…`  | Editor, via extension relay     |
+| `/edit/googledrive?p=…`        | Editor, Google Drive store      |
 
 **Query parameter `p`** carries the path (which may contain `/`).
 Using a query param instead of a path segment avoids the `%2F`
@@ -157,3 +157,4 @@ rely on them; they should use the public `annot://` scheme instead.
 | 2026-04-23 | Initial stub. Reserved `annot://`, documented current + target web routes. |
 | 2026-04-23 | Switched web app base to `/` for Cloudflare Pages deploy at `annot.work`; updated route tables to drop the legacy `/annotation` prefix and match the current router. |
 | 2026-04-23 | Added the external-handoff namespace `/handoff/<source>` (Drive UI Integration today, OneDrive / GitHub reserved for future). Kept separate from `/edit/<store>/<path>` so reserved words don't collide with filenames. |
+| 2026-04-23 | Renamed URL-visible store identifiers so they track the sidebar labels: `local` → `browser`, `filesystem` → `device`. The internal class names (`LocalStore`, `FileSystemStore`) stay; only the routing segment and `StorageMode` value change. Legacy bookmarks (`/edit/local/...`, `/edit/filesystem/...`) are deliberately left to 404. |

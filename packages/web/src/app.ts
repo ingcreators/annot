@@ -202,7 +202,7 @@ export class App {
     const { LocalStore } = await import("./storage/local-store.js");
     const localStore = new LocalStore();
     this.#storage = localStore;
-    setStorageMode("local");
+    setStorageMode("browser");
 
     // Silently restore the filesystem handle if previously granted — this only
     // populates #fsStore so the user can switch to Device without re-picking.
@@ -214,9 +214,9 @@ export class App {
 
     // Respect the user's last-selected storage across reloads.
     const lastMode = loadLastStorage();
-    if (lastMode === "filesystem" && this.#fsStore) {
+    if (lastMode === "device" && this.#fsStore) {
       this.#storage = this.#fsStore;
-      setStorageMode("filesystem");
+      setStorageMode("device");
     } else if (lastMode === "googledrive") {
       // If we have a persisted OAuth token AND a previously-picked
       // root folder, rehydrate the Drive store without prompting. A
@@ -237,12 +237,12 @@ export class App {
         void this.#verifyDriveRootOrPrompt(driveStore);
       } else {
         this.#storage = localStore;
-        setStorageMode("local");
+        setStorageMode("browser");
       }
     } else {
-      // Default / "local" / everything else → Browser (LocalStore)
+      // Default / "browser" / everything else → Browser (LocalStore)
       this.#storage = localStore;
-      setStorageMode("local");
+      setStorageMode("browser");
     }
 
     // Restore last-viewed folder so extension captures in a fresh tab
@@ -802,7 +802,7 @@ export class App {
    *  Browser/Local stores to per-origin IDB). */
   #currentRootName(): string | undefined {
     const mode = getStorageMode();
-    if (mode === "filesystem") return getFsRootName() || undefined;
+    if (mode === "device") return getFsRootName() || undefined;
     if (mode === "googledrive") return loadDriveRoot()?.name;
     return undefined;
   }
@@ -813,23 +813,23 @@ export class App {
    */
   private async handleStorageSelect(mode: StorageMode, forcePicker = false): Promise<void> {
     try {
-      if (mode === "local") {
+      if (mode === "browser") {
         const { LocalStore } = await import("./storage/local-store.js");
         this.#storage = new LocalStore();
-        setStorageMode("local");
-        saveLastStorage("local");
-      } else if (mode === "filesystem") {
+        setStorageMode("browser");
+        saveLastStorage("browser");
+      } else if (mode === "device") {
         if (!forcePicker && this.#fsStore) {
           // Reuse the previously selected folder
           this.#storage = this.#fsStore;
-          setStorageMode("filesystem");
-          saveLastStorage("filesystem");
+          setStorageMode("device");
+          saveLastStorage("device");
         } else {
           const store = await openFileSystemDirectory();
           if (!store) return;
           this.#fsStore = store;
           this.#storage = store;
-          saveLastStorage("filesystem");
+          saveLastStorage("device");
         }
       } else if (mode === "googledrive") {
         try {
@@ -875,8 +875,8 @@ export class App {
   #updateSidebarStatus(): void {
     if (!this.#fileManager) return;
     const sidebar = this.#fileManager.sidebar;
-    sidebar.setStorageStatus("local", true, "Local");
-    sidebar.setStorageStatus("filesystem", !!this.#fsStore, getFsRootName() || "Not connected");
+    sidebar.setStorageStatus("browser", true, "Local");
+    sidebar.setStorageStatus("device", !!this.#fsStore, getFsRootName() || "Not connected");
     const driveRoot = loadDriveRoot();
     sidebar.setStorageStatus(
       "googledrive",
@@ -1929,7 +1929,7 @@ export class App {
 
     const mode = getStorageMode();
     const rootLabel =
-      mode === "filesystem" ? "Device" :
+      mode === "device" ? "Device" :
       mode === "googledrive" ? "Google Drive" :
       "Browser";
 

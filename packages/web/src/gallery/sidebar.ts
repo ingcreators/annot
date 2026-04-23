@@ -30,13 +30,13 @@ type ExpandedSet = Set<string>;
 export class Sidebar {
   #container: HTMLElement;
   #callbacks: SidebarCallbacks;
-  #activeMode: StorageMode = "local";
+  #activeMode: StorageMode = "browser";
   #activeFolderPath: string = "";
   #storage: StorageProvider | null = null;
   #statuses: Record<StorageMode, StorageStatus> = {
-    local: { connected: true },
+    browser: { connected: true },
     extension: { connected: false },
-    filesystem: { connected: false },
+    device: { connected: false },
     googledrive: { connected: false },
   };
   #expanded: ExpandedSet = new Set([""]); // root always expanded
@@ -93,7 +93,7 @@ export class Sidebar {
     this.#treeContainer.setAttribute("aria-label", "Folders");
 
     // Root node — always shows storage type name; folder name as subtitle for Device
-    const rootLabel = this.#activeMode === "filesystem" ? "Device"
+    const rootLabel = this.#activeMode === "device" ? "Device"
       : this.#activeMode === "googledrive" ? "Google Drive"
       : "Browser";
 
@@ -166,16 +166,16 @@ export class Sidebar {
     this.#container.appendChild(title);
 
     this.#container.appendChild(this.#buildStorageItem(
-      "local",
+      "browser",
       "database",
       "Browser",
-      this.#statuses.local.connected ? this.#statuses.local.label || "Local" : "Local",
+      this.#statuses.browser.connected ? this.#statuses.browser.label || "Local" : "Local",
     ));
 
     if (typeof (window as any).showDirectoryPicker === "function") {
-      const fs = this.#statuses.filesystem;
+      const fs = this.#statuses.device;
       this.#container.appendChild(this.#buildStorageItem(
-        "filesystem",
+        "device",
         "laptop",
         "Device",
         fs.connected ? fs.label || "Connected" : "Not connected",

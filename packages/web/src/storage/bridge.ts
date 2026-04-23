@@ -21,14 +21,14 @@ declare global {
   }
 }
 
-export type StorageMode = "extension" | "local" | "filesystem" | "googledrive";
+export type StorageMode = "extension" | "browser" | "device" | "googledrive";
 
 let extensionId: string | null = null;
 let extensionAvailable: boolean | null = null;
 let localFallback: StorageProvider | null = null;
 let driveStore: GoogleDriveStore | null = null;
 let fsStore: FileSystemStore | null = null;
-let currentMode: StorageMode = "local";
+let currentMode: StorageMode = "browser";
 
 function hasChromeRuntime(): boolean {
   return typeof chrome !== "undefined"
@@ -115,10 +115,10 @@ function getLocalStore(): StorageProvider {
 
 export async function getStorage(): Promise<StorageProvider> {
   if (currentMode === "googledrive" && driveStore) return driveStore;
-  if (currentMode === "filesystem" && fsStore) return fsStore;
+  if (currentMode === "device" && fsStore) return fsStore;
   const hasExtension = await detectExtension();
   if (hasExtension) { currentMode = "extension"; return extensionStorage; }
-  currentMode = "local";
+  currentMode = "browser";
   return getLocalStore();
 }
 
@@ -145,7 +145,7 @@ export async function openFileSystemDirectory(): Promise<StorageProvider | null>
     await saveHandle(dirHandle);
     fsStore = new FileSystemStore(dirHandle);
     await fsStore.init();
-    currentMode = "filesystem";
+    currentMode = "device";
     return fsStore;
   } catch {
     return null;
@@ -166,7 +166,7 @@ export async function restoreFileSystem(): Promise<StorageProvider | null> {
 
     fsStore = new FileSystemStore(handle);
     await fsStore.init();
-    currentMode = "filesystem";
+    currentMode = "device";
     return fsStore;
   } catch {
     return null;
@@ -177,7 +177,7 @@ export async function restoreFileSystem(): Promise<StorageProvider | null> {
 export async function disconnectFileSystem(): Promise<void> {
   fsStore = null;
   await clearHandle();
-  if (currentMode === "filesystem") currentMode = "local";
+  if (currentMode === "device") currentMode = "browser";
 }
 
 /**
@@ -296,7 +296,7 @@ export function loadLastFolder(): string {
 /** Load last selected storage mode from localStorage. */
 export function loadLastStorage(): StorageMode | null {
   const mode = localStorage.getItem("annot-last-storage");
-  if (mode === "local" || mode === "filesystem" || mode === "googledrive" || mode === "extension") {
+  if (mode === "browser" || mode === "device" || mode === "googledrive" || mode === "extension") {
     return mode as StorageMode;
   }
   return null;
