@@ -540,8 +540,12 @@ export class GoogleDriveStore implements StorageProvider {
       `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n` +
       `--${boundary}\r\nContent-Type: ${blob.type}\r\nContent-Transfer-Encoding: base64\r\n\r\n`;
     const footer = `\r\n--${boundary}--`;
-    const blobBytes = new Uint8Array(await blob.arrayBuffer());
-    const base64 = btoa(String.fromCharCode(...blobBytes));
+    // Use FileReader.readAsDataURL to base64-encode the blob. Spreading
+    // a Uint8Array into String.fromCharCode(...bytes) blows the argument
+    // stack for anything larger than a few hundred KiB, which is every
+    // real screenshot.
+    const dataUrl = await this.#blobToDataUrl(blob);
+    const base64 = dataUrl.slice(dataUrl.indexOf(",") + 1);
     const fullBody = body + base64 + footer;
     const resp = await this.#fetch(`${UPLOAD_API}/files?uploadType=multipart`, {
       method: "POST",
