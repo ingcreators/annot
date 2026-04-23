@@ -80,7 +80,5 @@ export default defineConfig({
   server: {
     port: 3000,
   },
-  // In production: base: "/annotation/"
-  // In dev: base: "/" (Vite dev server serves from root)
-  base: process.env.NODE_ENV === "production" ? "/annotation/" : "/",
+  base: "/",
 });
