@@ -10,6 +10,7 @@ import { FileSystemStore } from "./fs-store.js";
 import { GoogleDriveStore } from "./google-drive-store.js";
 import { saveHandle, loadHandle, clearHandle } from "./fs-handle-store.js";
 import { getAccessToken, loadDriveRoot, signIn, silentSignIn } from "./google-auth.js";
+import { showAuthError, hideError } from "../ui/error-bar.js";
 
 // chrome-types omits `chrome.runtime.lastError` from its public typings,
 // even though it exists at runtime (set during callback-style API calls).
@@ -182,8 +183,16 @@ export async function disconnectFileSystem(): Promise<void> {
 /**
  * Refresh the Drive access token when the current one 401s. Tries
  * silent renewal first (no UI if the user is still signed in to
- * Google) and only pops the full consent/account picker when silent
- * fails. Returns the new token, or `null` if the user bailed.
+ * Google) and only asks for an interactive sign-in when silent
+ * fails. Returns the new token, or `null` if the user dismissed
+ * the prompt.
+ *
+ * The interactive path goes through a visible "Sign in" banner
+ * rather than invoking `signIn()` directly. Opening a popup from
+ * a code path that wasn't triggered by a user click (e.g. a Drive
+ * API call fired from `handleRoute`) gets blocked by Chrome's
+ * popup blocker — forcing the user through an explicit click on
+ * the banner gives us the gesture the OAuth popup needs.
  *
  * Registered on every `GoogleDriveStore` instance so its `#fetch`
  * can auto-retry every call path — `listImages`, `saveImage`,
@@ -193,11 +202,31 @@ export async function disconnectFileSystem(): Promise<void> {
 async function refreshDriveToken(): Promise<string | null> {
   const silent = await silentSignIn();
   if (silent) return silent;
-  try {
-    return await signIn();
-  } catch {
-    return null;
-  }
+
+  return new Promise<string | null>((resolve) => {
+    let settled = false;
+    const settle = (token: string | null) => {
+      if (settled) return;
+      settled = true;
+      hideError();
+      resolve(token);
+    };
+    showAuthError(
+      () => {
+        // User-gesture path: the click on "Sign in" is what the
+        // popup blocker is waiting for.
+        signIn()
+          .then((token) => settle(token))
+          .catch(() => settle(null));
+      },
+      () => {
+        // User dismissed the banner. Release the shared refresh
+        // promise so subsequent Drive calls can queue a fresh
+        // attempt instead of hanging on a never-resolved gate.
+        settle(null);
+      },
+    );
+  });
 }
 
 /** Connect to Google Drive with a selected root folder. */

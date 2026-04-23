@@ -30,6 +30,10 @@ export interface ErrorBarOptions {
   severity?: ErrorSeverity;
   action?: { label: string; onClick: () => void };
   autoDismiss?: number; // ms, 0 = manual dismiss only
+  /** Called when the user dismisses the bar (either via the ✕ button
+   *  or when `autoDismiss` elapses). Lets callers release any
+   *  pending promises they were resolving on the action click. */
+  onDismiss?: () => void;
 }
 
 /** Show error/warning bar below toolbar. */
@@ -63,16 +67,23 @@ export function showError(opts: ErrorBarOptions): void {
   }
 
   // Dismiss button
+  const onDismiss = opts.onDismiss;
   const dismiss = document.createElement("button");
   dismiss.className = "error-bar-dismiss";
   dismiss.textContent = "\u00d7";
-  dismiss.addEventListener("click", () => hideError());
+  dismiss.addEventListener("click", () => {
+    hideError();
+    onDismiss?.();
+  });
   bar.appendChild(dismiss);
 
   bar.style.display = "flex";
 
   if (opts.autoDismiss && opts.autoDismiss > 0) {
-    hideTimer = window.setTimeout(() => hideError(), opts.autoDismiss);
+    hideTimer = window.setTimeout(() => {
+      hideError();
+      onDismiss?.();
+    }, opts.autoDismiss);
   }
 }
 
@@ -92,11 +103,12 @@ export function showSaveError(message: string, onRetry?: () => void): void {
 }
 
 /** Convenience: show token expired with re-login action. */
-export function showAuthError(onReLogin: () => void): void {
+export function showAuthError(onReLogin: () => void, onDismiss?: () => void): void {
   showError({
     message: "Session expired. Please sign in again.",
     severity: "warning",
     action: { label: "Sign in", onClick: onReLogin },
+    onDismiss,
   });
 }
 
