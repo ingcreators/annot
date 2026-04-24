@@ -1447,14 +1447,29 @@ export class App {
       // but the user should know something will be saved soon.
       this.#saveStatusIndicator?.setStatus("pending");
       clearTimeout(this.#autoSaveTimer);
-      // Network-backed stores (Drive, GitHub) get a longer debounce
-      // so rapid +/- clicks on a slider coalesce into a single
-      // commit/upload. For GitHub this also keeps the commit log
-      // readable — one commit per meaningful save pause rather than
-      // one per slider tick. Local stores are cheap enough to keep
-      // the tight 500ms window.
+      // Debounce-tuning per backend. GitHub is the outlier: every
+      // save is a real commit, so a short debounce produces a spammy
+      // git log (15+ commits for one continuous editing session).
+      // A 10-second window lets a single drawing gesture / slider
+      // sweep / series of small adjustments coalesce into one
+      // commit per "thinking pause", bringing a typical session
+      // down to 2–5 commits. Navigation boundaries still flush via
+      // `#flushPendingSave`, so data-loss risk doesn't grow — the
+      // window only delays the commit, never skips it.
+      //
+      // Drive keeps 1.5 s because its "save" is a whole-file upload
+      // that costs no history entry; aggregating clicks is enough.
+      //
+      // Local stores stay at 500 ms for responsiveness.
+      //
+      // Phase 4 follow-up: Git Data API `amend` will let us revert
+      // to a shorter debounce without polluting the log — the
+      // ongoing session's commits collapse into one regardless of
+      // save frequency.
       const mode = getStorageMode();
-      const saveDebounceMs = (mode === "googledrive" || mode === "github") ? 1500 : 500;
+      const saveDebounceMs = mode === "github" ? 10000
+        : mode === "googledrive" ? 1500
+        : 500;
       this.#autoSaveTimer = window.setTimeout(() => {
         this.#autoSaveTimer = undefined;
         void this.writeAnnotationsToStorage();
