@@ -26,23 +26,29 @@
  *   path. Errors are `console.error`-logged with the event name so
  *   they're debuggable.
  *
- * ## MVP scope
+ * ## MVP scope (Phase 4) + Phase 5 additions
  *
- * This file lands the skeleton + the two extension points that
- * have immediate in-tree consumers:
+ * Shipped:
  *
  * 1. `addExternalLinkSource` — drives the drawer's "External links"
  *    section. The built-in `github-external-links` plugin is the
  *    reference implementation (moved out of `HeaderHost`).
- * 2. `onAfterSave` / `onEditorReady` / `onRouteChange` — event
- *    hooks carried into `SavePipeline`, `EditorSession`, and
- *    `RouterHost` respectively. No OSS consumers today; the
- *    dispatch paths exist so Cloud plugins have a landing spot.
+ * 2. `onAfterSave` / `onEditorReady` / `onRouteChange` — fire-and-
+ *    forget lifecycle events carried into `SavePipeline`,
+ *    `EditorSession`, and `RouterHost` respectively.
+ * 3. `onBeforeSave` — added in Phase 5 with cancellation semantics
+ *    (a listener throw cancels the save and routes through the
+ *    existing error banner). Unlocks `annot-cloud`'s "server
+ *    validates before a commit lands" path without a fork.
  *
- * `registerStorage` is intentionally deferred — it requires
- * rethinking `./storage/bridge.ts` to accept plugin-registered
- * modes dynamically, which is its own project (see the Phase 5
- * gate in `docs/plans/app-decomposition.md`).
+ * Deferred follow-ups (tracked in
+ * `docs/plans/app-decomposition.md` — Phase 5 gate):
+ *
+ * - `registerStorage` — needs a reshape of `./storage/bridge.ts`.
+ * - Sidebar-tab injection — needs a `FileManager`/`Sidebar` API
+ *   review.
+ * - Drawer-section + right-panel-section injection — needs shared
+ *   "UI slot" shape across both surfaces.
  */
 
 import type { StorageProvider } from "@ingcreators/annot-core/storage";
@@ -62,6 +68,15 @@ export type ExternalLinkSource = (
 export interface EditorReadyEvent {
   path: string | null;
   tags: Record<string, string>;
+}
+
+export interface BeforeSaveEvent {
+  path: string;
+  mode: string;
+  /** Tags snapshot that's about to be written. Listeners may read
+   *  but must NOT mutate; the real payload goes through the SavePipeline
+   *  getter chain and a mid-flight mutation here desyncs that. */
+  readonly tags: Record<string, string>;
 }
 
 export interface AfterSaveEvent {
@@ -100,6 +115,15 @@ export interface PluginContext {
    *  pre-load metadata, etc. */
   onEditorReady(fn: (ev: EditorReadyEvent) => void): void;
 
+  /** Run `fn` before a save hits storage. Listeners are awaited
+   *  sequentially; a listener that throws (or returns a rejecting
+   *  Promise) cancels the save — the save-status indicator goes to
+   *  `error` and the exception propagates to the SavePipeline's
+   *  existing error-handling path. Use for server-side validation
+   *  (Cloud: comment-thread cross-check) or to block saves while a
+   *  CRDT/presence handshake is in flight. */
+  onBeforeSave(fn: (ev: BeforeSaveEvent) => void | Promise<void>): void;
+
   /** Run `fn` after a save lands successfully. Gets the final path
    *  (post-rename / post-move) and the storage mode. */
   onAfterSave(fn: (ev: AfterSaveEvent) => void): void;
@@ -114,6 +138,9 @@ export interface PluginContext {
 export class PluginHost {
   readonly #externalLinkSources: ExternalLinkSource[] = [];
   readonly #editorReadyListeners: Array<(ev: EditorReadyEvent) => void> = [];
+  readonly #beforeSaveListeners: Array<
+    (ev: BeforeSaveEvent) => void | Promise<void>
+  > = [];
   readonly #afterSaveListeners: Array<(ev: AfterSaveEvent) => void> = [];
   readonly #routeChangeListeners: Array<(ev: RouteChangeEvent) => void> = [];
 
@@ -165,6 +192,24 @@ export class PluginHost {
     }
   }
 
+  /**
+   * Run every `onBeforeSave` listener in order. If any throws (or
+   * returns a rejecting Promise), the save is cancelled — the error
+   * propagates so the SavePipeline's existing error-handling path
+   * surfaces the "save failed" banner instead of swallowing it.
+   *
+   * Unlike `dispatchAfterSave` / `dispatchRouteChange`, listener
+   * errors here are NOT isolated: a `onBeforeSave` throw is the
+   * intended cancel signal, and silently swallowing it would defeat
+   * the purpose. Plugins that need fire-and-forget "about to save"
+   * notifications should use `onAfterSave` instead.
+   */
+  async dispatchBeforeSave(ev: BeforeSaveEvent): Promise<void> {
+    for (const fn of this.#beforeSaveListeners) {
+      await fn(ev);
+    }
+  }
+
   dispatchAfterSave(ev: AfterSaveEvent): void {
     for (const fn of this.#afterSaveListeners) {
       try {
@@ -195,6 +240,9 @@ export class PluginHost {
       },
       onEditorReady: (fn) => {
         this.#editorReadyListeners.push(fn);
+      },
+      onBeforeSave: (fn) => {
+        this.#beforeSaveListeners.push(fn);
       },
       onAfterSave: (fn) => {
         this.#afterSaveListeners.push(fn);

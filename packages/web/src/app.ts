@@ -94,6 +94,8 @@ export class App {
       },
       getCurrentTags: () => this.#currentTags,
       getStatusIndicator: () => this.#headerHost.getSaveStatusIndicator(),
+      notifyBeforeSave: (path, tags) =>
+        this.#pluginHost.dispatchBeforeSave({ path, mode: getStorageMode(), tags }),
       onAfterSave: (path) => {
         this.#pluginHost.dispatchAfterSave({ path, mode: getStorageMode() });
       },

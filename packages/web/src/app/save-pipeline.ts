@@ -24,6 +24,10 @@ export interface SavePipelineDeps {
   setCurrentImagePath(path: string): void;
   getCurrentTags(): Record<string, string>;
   getStatusIndicator(): SaveStatusIndicator | null;
+  /** Ask the plugin host if the save should proceed. Rejects if any
+   *  `onBeforeSave` listener throws/rejects — the SavePipeline
+   *  surfaces that through its normal error-banner path. */
+  notifyBeforeSave(path: string, tags: Record<string, string>): Promise<void>;
   /** Notify the plugin host that a save has landed successfully.
    *  Called with the final path (post-uniquify / post-rename) so
    *  plugins read the canonical location. The dep closure is
@@ -103,6 +107,10 @@ export class SavePipeline {
     this.deps.getStatusIndicator()?.setStatus("saving");
 
     try {
+      // Plugin pre-save gate — a throw here cancels the save and
+      // routes through the same error banner as a backend failure.
+      await this.deps.notifyBeforeSave(path, updates.tags);
+
       const newPath = await storage.updateImage(path, updates);
       // Path may change if we ever call updateImage with { folderPath }
       this.deps.setCurrentImagePath(newPath);

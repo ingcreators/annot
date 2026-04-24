@@ -125,6 +125,84 @@ describe("PluginHost", () => {
     expect(Object.isFrozen(capturedCtx)).toBe(true);
   });
 
+  describe("onBeforeSave", () => {
+    it("awaits listeners sequentially in registration order", async () => {
+      const host = new PluginHost();
+      const order: string[] = [];
+      const pluginA: AnnotPlugin = {
+        name: "a",
+        register(ctx) {
+          ctx.onBeforeSave(async () => {
+            await Promise.resolve();
+            order.push("a");
+          });
+        },
+      };
+      const pluginB: AnnotPlugin = {
+        name: "b",
+        register(ctx) {
+          ctx.onBeforeSave(() => {
+            order.push("b");
+          });
+        },
+      };
+      host.registerAll([pluginA, pluginB]);
+      await host.dispatchBeforeSave({ path: "x.png", mode: "browser", tags: {} });
+      expect(order).toEqual(["a", "b"]);
+    });
+
+    it("propagates listener throws to cancel the save — no isolation", async () => {
+      const host = new PluginHost();
+      const after: string[] = [];
+      const cancelPlugin: AnnotPlugin = {
+        name: "cancel",
+        register(ctx) {
+          ctx.onBeforeSave(() => {
+            throw new Error("server rejected");
+          });
+        },
+      };
+      const followerPlugin: AnnotPlugin = {
+        name: "follower",
+        register(ctx) {
+          ctx.onBeforeSave(() => {
+            after.push("ran");
+          });
+        },
+      };
+      host.registerAll([cancelPlugin, followerPlugin]);
+      await expect(
+        host.dispatchBeforeSave({ path: "x.png", mode: "browser", tags: {} }),
+      ).rejects.toThrow("server rejected");
+      // A cancel stops the chain — downstream listeners don't run.
+      expect(after).toEqual([]);
+    });
+
+    it("propagates async rejection the same way", async () => {
+      const host = new PluginHost();
+      const plugin: AnnotPlugin = {
+        name: "async-cancel",
+        register(ctx) {
+          ctx.onBeforeSave(async () => {
+            await Promise.resolve();
+            throw new Error("network timeout");
+          });
+        },
+      };
+      host.registerAll([plugin]);
+      await expect(
+        host.dispatchBeforeSave({ path: "x.png", mode: "browser", tags: {} }),
+      ).rejects.toThrow("network timeout");
+    });
+
+    it("resolves cleanly when no listeners are registered", async () => {
+      const host = new PluginHost();
+      await expect(
+        host.dispatchBeforeSave({ path: "x.png", mode: "browser", tags: {} }),
+      ).resolves.toBeUndefined();
+    });
+  });
+
   it("surfaces + isolates register() throws so one bad plugin doesn't kill init", () => {
     const host = new PluginHost();
     const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
