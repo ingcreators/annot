@@ -106,8 +106,13 @@ export class GitHubStore implements StorageProvider {
    *  such a folder should leave the `.gitkeep` in place so the folder
    *  remains listable until the user explicitly deletes it. */
   #gitkeepFolders = new Set<string>();
-  /** Guard: `#loadTree` only runs once per session unless `resync()`
-   *  is called. GitHub trees are consistent-enough for a tab session. */
+  /** Guard: `#loadTree` only runs once per session unless the user
+   *  explicitly clicks Refresh (which routes through `forceRefresh`).
+   *  Every mutation updates the in-memory tree incrementally, so the
+   *  cache stays authoritative without a post-write re-fetch — and
+   *  we specifically avoid that re-fetch because GitHub's tree
+   *  endpoint can briefly lag behind a just-made commit, which would
+   *  make the sidebar drop the folder the user just created. */
   #treeLoaded = false;
   /** Same dedupe pattern as Drive's refresh — multiple concurrent
    *  first-listImages calls share a single `#loadTree` promise. */
@@ -165,7 +170,32 @@ export class GitHubStore implements StorageProvider {
     return { remaining: this.#rateLimitRemaining, resetAt: this.#rateLimitReset };
   }
 
+  /**
+   * No-op. `StorageProvider.resync` is called automatically by the
+   * gallery after every navigation / mutation; for GitHub a blanket
+   * cache reset at those moments is both wasteful (tree fetch is a
+   * whole-repo request) and incorrect (GitHub's tree endpoint can
+   * briefly lag behind a just-made commit, so the reset+refetch
+   * right after `createFolder` / `deleteFolder` can drop the folder
+   * the user just created). The in-memory tree is maintained
+   * incrementally by every mutation, so no reset is needed.
+   *
+   * Users can still force a re-scan for external commits via the
+   * Refresh button in the gallery header, which routes through
+   * `forceRefresh()` below.
+   */
   async resync(): Promise<void> {
+    // intentionally empty
+  }
+
+  /**
+   * User-initiated full reload. Discards every cached entry and
+   * re-fetches `GET /git/trees/{branch}?recursive=1` on the next
+   * list call. Called by the gallery's Refresh button via
+   * `file-manager.refreshFromDisk()` (which probes for
+   * `forceRefresh` before falling back to `resync`).
+   */
+  async forceRefresh(): Promise<void> {
     this.#shaByPath.clear();
     this.#allFilePaths.clear();
     this.#gitkeepFolders.clear();
