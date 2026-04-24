@@ -55,6 +55,24 @@ const GITHUB_API = "https://api.github.com";
 const GITKEEP = ".gitkeep";
 
 /**
+ * Accepted image extensions. Mirrors `DeviceStore#isImageFile` so
+ * the gallery shows the same kinds of files across every storage
+ * backend. A repo typically contains far more non-image files than
+ * image files (source code, docs, config), and the gallery has no
+ * way to render those — so they'd just be noise if we listed them.
+ *
+ * `.annot.png` / `.annot.jpg` / `.annot.svg` are subsumed by the
+ * bare extension checks below.
+ */
+function isImageFilename(name: string): boolean {
+  const lower = name.toLowerCase();
+  return lower.endsWith(".png")
+    || lower.endsWith(".jpg")
+    || lower.endsWith(".jpeg")
+    || lower.endsWith(".svg");
+}
+
+/**
  * Hard ceiling we accept via the Contents API. The documented limit
  * is ~100 MB binary / ~1 MB text, but requests approaching those
  * numbers get rate-limit penalized hard. Annot captures are almost
@@ -375,6 +393,11 @@ export class GitHubStore implements StorageProvider {
         this.#allFilePaths.add(rel);
         continue;
       }
+      // Skip non-image files entirely — a repo normally carries
+      // code / docs / configs that the gallery can't render. Also
+      // prunes folders that contain only non-image files from the
+      // sidebar tree (they're derived from `#allFilePaths`).
+      if (!isImageFilename(name)) continue;
       this.#shaByPath.set(rel, entry.sha);
       this.#allFilePaths.add(rel);
     }
