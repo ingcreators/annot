@@ -12,49 +12,29 @@ import type { SplitEditor } from "./editor/split-editor.js";
 import { loadEncodeOptions } from "./encode-options.js";
 import { FileManager } from "./gallery/file-manager.js";
 import {
-  connectGitHub,
-  connectGoogleDrive,
   deleteExtensionImage,
-  getDeviceRootName,
-  getGitHubRef,
   getStorage,
   getStorageMode,
-  isDriveConnected,
-  isGitHubConnected,
   loadLastFolder,
-  loadLastStorage,
-  openDeviceDirectory,
-  restoreDevice,
-  restoreGitHub,
-  restoreGoogleDrive,
-  type StorageMode,
   saveLastFolder,
-  saveLastStorage,
   setExtensionId,
   setStorageMode,
+  type StorageMode,
 } from "./storage/bridge.js";
-import {
-  type GitHubRepoRef,
-  getAccessToken as getGitHubToken,
-  isSignedIn as isGitHubSignedIn,
-  loadRepoRef as loadGitHubRef,
-} from "./storage/github-auth.js";
-import { loadDriveRoot, saveDriveRoot, showFolderPicker, signIn } from "./storage/google-auth.js";
-import { GoogleDriveStore } from "./storage/google-drive-store.js";
 import { encodeCaptureInWorker } from "./workers/encode-client.js";
 import { CaptureHost, type OpenEditorArgs } from "./app/capture-host.js";
 import { EditorSession } from "./app/editor-session.js";
 import { bumpFilenameSuffix, retryFsOp } from "./app/fs-utils.js";
 import { HeaderHost } from "./app/header-host.js";
 import { loadImage } from "./app/image-utils.js";
+import { RouterHost } from "./app/router-host.js";
 import { SavePipeline } from "./app/save-pipeline.js";
-import { findSessionRecords } from "./app/session-slice.js";
 import { StatusHost } from "./app/status-host.js";
+import { StorageBridge } from "./app/storage-bridge.js";
 
 import { pasteFromClipboard } from "./capture/pwa-capture.js";
-import { editUrl, galleryUrl, parseRoute, pushRoute, sessionEditUrl } from "./router.js";
+import { editUrl, galleryUrl, pushRoute } from "./router.js";
 import { showAlertDialog } from "./ui/dialog.js";
-import { showError, showInfo } from "./ui/error-bar.js";
 
 export class App {
   #storage: StorageProvider | null = null;
@@ -89,6 +69,13 @@ export class App {
   /** Editor session — owns `setupEditor` + canvas/history/toolbar/
    *  right-panel/drawer/scratchpad lifecycle. */
   #editorSession: EditorSession;
+  /** Router host — owns `handleRoute` + Drive/handoff dispatch. */
+  #routerHost: RouterHost;
+  /** Storage bridge — owns boot-time restore, mode-switch wizard,
+   *  sidebar status, and the `currentRootName` label. `#storage` /
+   *  `#deviceStore` above are kept as read-cache mirrors so the
+   *  many existing `this.#storage` call sites don't churn. */
+  #storageBridge: StorageBridge;
 
   constructor() {
     this.#savePipeline = new SavePipeline({
@@ -144,68 +131,42 @@ export class App {
       this.#savePipeline,
       this.#scratchpadStore,
     );
+    this.#routerHost = new RouterHost({
+      getStorage: () => this.#storage,
+      getCurrentFolderPath: () => this.#currentFolderPath,
+      setFileManager: (fm) => {
+        this.#fileManager = fm;
+      },
+      showGalleryView: () => this.showGalleryView(),
+      handleStorageSelect: (mode) => this.handleStorageSelect(mode),
+      transferAllFromExtension: () => this.transferAllFromExtension(),
+      transferAndOpen: (record, extPath) => this.transferAndOpen(record, extPath),
+      openFromGallery: (record) => this.openFromGallery(record),
+      setupSplitEditor: (records) => this.setupSplitEditor(records),
+    });
+    this.#storageBridge = new StorageBridge({
+      getFileManager: () => this.#fileManager,
+    });
+  }
+
+  /** Sync the local `#storage` / `#deviceStore` mirrors from the
+   *  storage bridge. Called after every operation that can change
+   *  which backend is active. */
+  #syncStorageFromBridge(): void {
+    this.#storage = this.#storageBridge.getStorage();
+    this.#deviceStore = this.#storageBridge.getDeviceStore();
   }
 
   async init(): Promise<void> {
     const { BrowserStore } = await import("./storage/browser-store.js");
     const browserStore = new BrowserStore();
-    this.#storage = browserStore;
-    setStorageMode("browser");
 
-    // Silently restore the filesystem handle if previously granted — this only
-    // populates #deviceStore so the user can switch to Device without re-picking.
-    // It must NOT override the user's last-selected storage mode.
-    const restored = await restoreDevice();
-    if (restored) {
-      this.#deviceStore = restored;
-    }
-
-    // Respect the user's last-selected storage across reloads.
-    const lastMode = loadLastStorage();
-    if (lastMode === "device" && this.#deviceStore) {
-      this.#storage = this.#deviceStore;
-      setStorageMode("device");
-    } else if (lastMode === "googledrive") {
-      // If we have a persisted OAuth token AND a previously-picked
-      // root folder, rehydrate the Drive store without prompting. A
-      // stale token will surface as a failed API call later; users
-      // can then re-select Drive to re-auth.
-      const driveStore = restoreGoogleDrive();
-      if (driveStore) {
-        this.#storage = driveStore;
-        setStorageMode("googledrive");
-        // No boot-time root verification: under `drive.file` a
-        // re-authorized session legitimately loses `files.get`
-        // access to the previously-picked folder even when the
-        // files INSIDE that folder are still fully usable (since
-        // they're app-created and stay in scope). The gallery's
-        // list queries work, saves work — but `files.get(rootId)`
-        // 404s, which misfired as an "isn't accessible" banner
-        // every page load. Real folder-loss scenarios (different
-        // account, trashed root) still surface through operation
-        // errors.
-      } else {
-        this.#storage = browserStore;
-        setStorageMode("browser");
-      }
-    } else if (lastMode === "github") {
-      // Same shape as Drive's restore: token + ref in localStorage
-      // → instantiate the GitHubStore without prompting. Expired
-      // PATs surface as a 401 on the first real API call, which
-      // routes through the bridge's `refreshGithubToken` banner.
-      const githubStore = restoreGitHub();
-      if (githubStore) {
-        this.#storage = githubStore;
-        setStorageMode("github");
-      } else {
-        this.#storage = browserStore;
-        setStorageMode("browser");
-      }
-    } else {
-      // Default / "browser" / everything else → Browser (BrowserStore)
-      this.#storage = browserStore;
-      setStorageMode("browser");
-    }
+    // Silently restore the filesystem handle (if previously granted)
+    // then rehydrate whichever backend the user was last using. Falls
+    // back to the BrowserStore when a persisted session can't be
+    // reopened without prompting.
+    await this.#storageBridge.restoreOnBoot(browserStore);
+    this.#syncStorageFromBridge();
 
     // Restore last-viewed folder so extension captures in a fresh tab
     // land in the folder the user was last working in.
@@ -223,7 +184,7 @@ export class App {
       }
     });
 
-    window.addEventListener("popstate", () => this.handleRoute());
+    window.addEventListener("popstate", () => this.#routerHost.handleRoute());
 
     // beforeunload: warn the user when closing a tab with a save
     // still pending or in flight. Browsers no longer honor custom
@@ -299,228 +260,7 @@ export class App {
       deleteExtensionImage(editPath);
     });
 
-    await this.handleRoute();
-  }
-
-  /**
-   * Translate a `/handoff/<source>` external-entry URL into a regular
-   * editor URL and re-dispatch. Keeps the handoff URL from sticking
-   * in history (uses `replaceState`) so the user's Back button lands
-   * on the gallery, not an opaque state blob.
-   *
-   * Currently only `googledrive` is implemented; future OneDrive /
-   * GitHub sources will plug in here.
-   */
-  async #handleHandoff(source: string, rawState: string): Promise<void> {
-    if (!rawState) {
-      showError({
-        message: "Drive handoff: missing state parameter.",
-        severity: "warning",
-      });
-      window.history.replaceState({}, "", galleryUrl());
-      this.showGalleryView();
-      return;
-    }
-    let state: { action?: string; ids?: string[]; folderId?: string };
-    try {
-      state = JSON.parse(rawState);
-    } catch {
-      showError({
-        message: "Drive handoff: state parameter is not valid JSON.",
-        severity: "warning",
-      });
-      window.history.replaceState({}, "", galleryUrl());
-      this.showGalleryView();
-      return;
-    }
-
-    if (source === "googledrive") {
-      await this.#handleGoogleDriveHandoff(state);
-      return;
-    }
-
-    showError({
-      message: `Handoff source "${source}" is not supported yet.`,
-      severity: "warning",
-    });
-    window.history.replaceState({}, "", galleryUrl());
-    this.showGalleryView();
-  }
-
-  async #handleGoogleDriveHandoff(state: {
-    action?: string;
-    ids?: string[];
-    folderId?: string;
-  }): Promise<void> {
-    // Make sure the Drive store is the active one. If the user isn't
-    // signed in yet, the `handleStorageSelect` flow below takes care
-    // of it (sign-in + reuse of persisted root + store creation).
-    if (getStorageMode() !== "googledrive" || !(this.#storage instanceof GoogleDriveStore)) {
-      await this.handleStorageSelect("googledrive");
-    }
-    if (!(this.#storage instanceof GoogleDriveStore)) {
-      showError({
-        message: "Drive handoff: couldn't connect to Google Drive.",
-        severity: "error",
-      });
-      window.history.replaceState({}, "", galleryUrl());
-      this.showGalleryView();
-      return;
-    }
-
-    const action = state.action || (state.ids?.length ? "open" : "create");
-
-    if (action === "create") {
-      showInfo(
-        "Creating a new annotation from Drive's New menu isn't implemented yet. Please capture via the extension or paste an image in Annot.",
-      );
-      window.history.replaceState({}, "", galleryUrl());
-      this.showGalleryView();
-      return;
-    }
-
-    if (action !== "open" || !state.ids || state.ids.length === 0) {
-      showError({
-        message: "Drive handoff: unsupported action or missing file id.",
-        severity: "warning",
-      });
-      window.history.replaceState({}, "", galleryUrl());
-      this.showGalleryView();
-      return;
-    }
-
-    const fileId = state.ids[0]!;
-    let resolvedPath: string | null = null;
-    try {
-      resolvedPath = await this.#storage.resolveFileIdToPath(fileId);
-    } catch (e) {
-      console.error("[handoff/googledrive] resolve failed:", e);
-      showError({
-        message: "Drive handoff: couldn't read the file from Drive.",
-        severity: "error",
-      });
-      window.history.replaceState({}, "", galleryUrl());
-      this.showGalleryView();
-      return;
-    }
-
-    if (!resolvedPath) {
-      // File exists but lives outside the user's Annot root folder.
-      // Under `drive.file` we could technically operate on it, but the
-      // gallery UI is path-rooted and wouldn't know how to display
-      // "a file outside the workspace", so tell the user how to recover.
-      showError({
-        message:
-          'That file is outside your Annot workspace folder. Use the sidebar\'s "Change Drive folder" icon to point Annot at a folder that contains it.',
-        severity: "warning",
-      });
-      window.history.replaceState({}, "", galleryUrl());
-      this.showGalleryView();
-      return;
-    }
-
-    // Replace the handoff URL with the canonical edit URL (so Back
-    // goes to gallery, not to the opaque handoff), then let the
-    // regular route handler open the file.
-    window.history.replaceState({}, "", editUrl("googledrive", resolvedPath));
-    await this.handleRoute();
-  }
-
-  async handleRoute(): Promise<void> {
-    const route = parseRoute();
-    console.log("[handleRoute]", route);
-
-    // Handoff from Drive UI Integration (and future OneDrive / GitHub
-    // sources). Resolve the incoming file into a path the editor
-    // understands, then replace the URL with the canonical edit URL.
-    if (route.type === "handoff") {
-      await this.#handleHandoff(route.handoffSource || "", route.handoffState || "");
-      return;
-    }
-
-    let transferred = false;
-    if (route.extId) {
-      // Remember the user's selected mode; connecting to extension is transient
-      const savedMode = getStorageMode();
-      const connected = await setExtensionId(
-        route.extId,
-        (route.store as StorageMode) || "extension",
-      );
-      if (connected) {
-        await this.transferAllFromExtension();
-        transferred = true;
-        this.#fileManager = null;
-        const url = new URL(window.location.href);
-        url.searchParams.delete("extId");
-        window.history.replaceState({}, "", url.pathname + url.search || url.pathname);
-      }
-      // Restore user's selected mode after extension read
-      setStorageMode(savedMode);
-    }
-
-    // Capture session: open the Split Editor for scroll / perPage sessions.
-    // Other session kinds (click / hotkey / interval) still carry session
-    // tags for future grouping features but currently fall through to the
-    // gallery view.
-    if (route.session && this.#storage) {
-      try {
-        const records = await findSessionRecords(
-          this.#storage,
-          this.#currentFolderPath,
-          route.session,
-        );
-        const kind = records[0]?.tags?.sessionKind;
-        if (records.length > 0 && (kind === "scroll" || kind === "perPage")) {
-          // Rewrite the URL to the canonical `/edit/<store>?session=…` form
-          // so reloads / popstate re-enter the split editor cleanly.
-          pushRoute(sessionEditUrl(getStorageMode(), route.session));
-          await this.setupSplitEditor(records);
-          return;
-        }
-        if (records.length === 0) {
-          console.warn(
-            "[handleRoute] session has no records in current folder:",
-            route.session,
-            "folder=",
-            this.#currentFolderPath,
-          );
-        }
-      } catch (e) {
-        console.error("[handleRoute] session lookup error:", e);
-      }
-    }
-
-    if (route.type === "edit" && route.path && this.#storage) {
-      try {
-        // Try direct lookup first
-        let record = await this.#storage.getImage(route.path);
-        // If the route came from the extension and a bulk-transfer just ran,
-        // the image was re-homed into the current folder — look it up there.
-        if (!record && transferred && this.#currentFolderPath) {
-          const filename = route.path.includes("/")
-            ? route.path.slice(route.path.lastIndexOf("/") + 1)
-            : route.path;
-          const candidate = `${this.#currentFolderPath}/${filename}`;
-          record = await this.#storage.getImage(candidate);
-          if (record) {
-            // Fix up the URL so it matches the actual stored path
-            pushRoute(editUrl(getStorageMode(), record.path));
-          }
-        }
-        if (record?.originalDataUrl) {
-          if (route.store === "extension" && !transferred) {
-            await this.transferAndOpen(record, route.path);
-          } else {
-            await this.openFromGallery(record);
-          }
-          return;
-        }
-      } catch (e) {
-        console.error("[handleRoute] getImage error:", e);
-      }
-    }
-
-    this.showGalleryView();
+    await this.#routerHost.handleRoute();
   }
 
   // ---- File Manager (Gallery) ----
@@ -583,14 +323,14 @@ export class App {
         onPasteClipboard: () => this.#captureHost.pasteAndSave(),
       });
 
-      this.#updateSidebarStatus();
+      this.#storageBridge.updateSidebarStatus(getStorageMode());
     }
 
     this.buildFileManagerHeader();
 
     if (this.#storage) {
       if (this.#fileManager.storage !== this.#storage) {
-        this.#fileManager.setStorage(this.#storage, getStorageMode(), this.#currentRootName());
+        this.#fileManager.setStorage(this.#storage, getStorageMode(), this.#storageBridge.currentRootName());
       }
       this.#fileManager.navigateToFolder(this.#currentFolderPath);
     }
@@ -679,146 +419,25 @@ export class App {
    *  user sees WHICH device folder / Drive folder is in use. Null
    *  when the backend has no meaningful user-facing root (e.g.
    *  Browser/Local stores to per-origin IDB). */
-  #currentRootName(): string | undefined {
-    const mode = getStorageMode();
-    if (mode === "device") return getDeviceRootName() || undefined;
-    if (mode === "googledrive") return loadDriveRoot()?.name;
-    if (mode === "github") {
-      const ref = getGitHubRef();
-      if (!ref) return undefined;
-      // Show `owner/repo` with optional basePath + branch qualifier
-      // so the sidebar subtitle conveys all three dimensions without
-      // a second row.
-      const base = ref.basePath ? `/${ref.basePath}` : "";
-      return `${ref.owner}/${ref.repo}${base}@${ref.branch}`;
-    }
-    return undefined;
-  }
-
   /**
-   * Click-to-switch: if already connected, reuse the existing storage.
-   * Use handleStorageReselect() to force a fresh picker.
+   * Click-to-switch: delegated to `StorageBridge`. On a successful
+   * switch, sync the local mirrors, clear the folder path, refresh
+   * sidebar status, and reload the file manager's contents.
    */
   private async handleStorageSelect(mode: StorageMode, forcePicker = false): Promise<void> {
-    try {
-      if (mode === "browser") {
-        const { BrowserStore } = await import("./storage/browser-store.js");
-        this.#storage = new BrowserStore();
-        setStorageMode("browser");
-        saveLastStorage("browser");
-      } else if (mode === "device") {
-        if (!forcePicker && this.#deviceStore) {
-          // Reuse the previously selected folder
-          this.#storage = this.#deviceStore;
-          setStorageMode("device");
-          saveLastStorage("device");
-        } else {
-          const store = await openDeviceDirectory();
-          if (!store) return;
-          this.#deviceStore = store;
-          this.#storage = store;
-          saveLastStorage("device");
-        }
-      } else if (mode === "googledrive") {
-        try {
-          // `forcePicker` means the user came in via the sidebar's
-          // reselect icon ("Change Drive folder"). Escalate that
-          // into Google's `select_account` prompt too so the user
-          // can pick a different Google account in the same gesture
-          // — without it, GIS silently reuses the last-used account
-          // and there's no visible path to switch. Mirrors the
-          // GitHub setup dialog's "Use a different personal access
-          // token" escape hatch.
-          const token = await signIn({ forceAccountPicker: forcePicker });
-          // Reuse the previously-picked root when available — under
-          // `drive.file` that picker result is the app's only handle
-          // onto the user's Drive, so skipping the picker here just
-          // skips an extra click, not an access grant.
-          let folder = forcePicker ? null : loadDriveRoot();
-          if (!folder) {
-            folder = await showFolderPicker();
-            if (!folder) return;
-            saveDriveRoot(folder);
-          }
-          const store = connectGoogleDrive(token, folder.id);
-          this.#storage = store;
-          saveLastStorage("googledrive");
-        } catch (e) {
-          console.error("[app] Drive connection failed:", e);
-          return;
-        }
-      } else if (mode === "github") {
-        // First-click: if we already have a persisted PAT + ref,
-        // rehydrate without prompting. Reselect / no ref → open the
-        // reconfigure menu so the user can change just the piece
-        // they care about (repo / branch / base path) instead of
-        // walking the full connect wizard every time.
-        let ref: GitHubRepoRef | null = loadGitHubRef();
-        const needsConnect = !ref || !isGitHubSignedIn();
-        if (needsConnect) {
-          // First connect or session expired → full wizard.
-          const { connectGitHub: runConnect } = await import("./storage/github-setup-ui.js");
-          ref = await runConnect();
-          if (!ref) return;
-        } else if (forcePicker) {
-          // Reselect click. `needsConnect` is false so `ref` is
-          // non-null, but TS can't narrow across the branch, so we
-          // assert. The menu lets the user target a single
-          // dimension (branch switch is the common "I want to
-          // check another feature branch" case and used to require
-          // redoing the whole wizard).
-          const { showReconfigureMenu } = await import("./storage/github-setup-ui.js");
-          const updated = await showReconfigureMenu(ref as GitHubRepoRef);
-          if (!updated) return; // cancelled or no change
-          ref = updated;
-        }
-        const token = getGitHubToken();
-        if (!token) {
-          showError({
-            message: "GitHub sign-in is required. Please try again.",
-            severity: "warning",
-          });
-          return;
-        }
-        const store = connectGitHub(token, ref!);
-        this.#storage = store;
-        saveLastStorage("github");
-      }
-
-      this.#currentFolderPath = "";
-      this.#updateSidebarStatus();
-
-      if (this.#fileManager && this.#storage) {
-        this.#fileManager.setStorage(this.#storage, getStorageMode(), this.#currentRootName());
-        this.#fileManager.refresh("");
-      }
-    } catch (e) {
-      console.error("[app] Storage switch error:", e);
+    const ok = await this.#storageBridge.handleStorageSelect(mode, forcePicker);
+    if (!ok) return;
+    this.#syncStorageFromBridge();
+    this.#currentFolderPath = "";
+    this.#storageBridge.updateSidebarStatus(getStorageMode());
+    if (this.#fileManager && this.#storage) {
+      this.#fileManager.setStorage(
+        this.#storage,
+        getStorageMode(),
+        this.#storageBridge.currentRootName(),
+      );
+      this.#fileManager.refresh("");
     }
-  }
-
-  #updateSidebarStatus(): void {
-    if (!this.#fileManager) return;
-    const sidebar = this.#fileManager.sidebar;
-    sidebar.setStorageStatus("browser", true, "Local");
-    sidebar.setStorageStatus("device", !!this.#deviceStore, getDeviceRootName() || "Not connected");
-    const driveRoot = loadDriveRoot();
-    sidebar.setStorageStatus(
-      "googledrive",
-      isDriveConnected(),
-      isDriveConnected() ? (driveRoot?.name ?? "Connected") : "Not connected",
-    );
-    const ghRef = getGitHubRef();
-    sidebar.setStorageStatus(
-      "github",
-      isGitHubConnected(),
-      isGitHubConnected()
-        ? ghRef
-          ? `${ghRef.owner}/${ghRef.repo}@${ghRef.branch}`
-          : "Connected"
-        : "Not connected",
-    );
-    sidebar.setActiveMode(getStorageMode());
   }
 
   // ---- Editor ----
