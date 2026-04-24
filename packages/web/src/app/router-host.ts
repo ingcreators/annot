@@ -37,6 +37,10 @@ export interface RouterHostDeps {
   transferAndOpen(record: ImageRecord, extPath: string): Promise<void>;
   openFromGallery(record: ImageRecord): Promise<void>;
   setupSplitEditor(records: ImageRecord[]): Promise<void>;
+  /** Fire the plugin-host `onRouteChange` event. Dispatched at the
+   *  top of `handleRoute` so plugins see every URL transition
+   *  (including the handoff path) before the dispatcher branches. */
+  notifyRouteChange(route: unknown): void;
 }
 
 export class RouterHost {
@@ -45,6 +49,7 @@ export class RouterHost {
   async handleRoute(): Promise<void> {
     const route = parseRoute();
     console.log("[handleRoute]", route);
+    this.deps.notifyRouteChange(route);
 
     // Handoff from Drive UI Integration (and future OneDrive / GitHub
     // sources). Resolve the incoming file into a path the editor

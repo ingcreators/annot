@@ -51,6 +51,10 @@ export interface EditorSessionDeps {
   getCurrentFolderPath(): string;
   getCurrentTags(): Record<string, string>;
   setCurrentTags(tags: Record<string, string>): void;
+  /** Fire the plugin-host `onEditorReady` event. Called at the end
+   *  of `setupEditor` once the canvas / history / right panel are
+   *  wired but before the first autosave can fire. */
+  notifyEditorReady(ev: { path: string | null; tags: Record<string, string> }): void;
 }
 
 export class EditorSession {
@@ -395,6 +399,14 @@ export class EditorSession {
     };
 
     this.#currentEditor = { canvas, history, selection };
+
+    // Tell plugins the editor is fully wired. Runs AFTER onStateChange
+    // is hooked so a plugin that edits annotations inside onEditorReady
+    // goes through the normal autosave path, not an orphan state.
+    this.deps.notifyEditorReady({
+      path: this.deps.getCurrentImagePath(),
+      tags: this.deps.getCurrentTags(),
+    });
   }
 
   /**

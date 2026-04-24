@@ -24,6 +24,11 @@ export interface SavePipelineDeps {
   setCurrentImagePath(path: string): void;
   getCurrentTags(): Record<string, string>;
   getStatusIndicator(): SaveStatusIndicator | null;
+  /** Notify the plugin host that a save has landed successfully.
+   *  Called with the final path (post-uniquify / post-rename) so
+   *  plugins read the canonical location. The dep closure is
+   *  responsible for reading `getStorageMode()` itself. */
+  onAfterSave(path: string): void;
 }
 
 export class SavePipeline {
@@ -103,6 +108,10 @@ export class SavePipeline {
       this.deps.setCurrentImagePath(newPath);
       hideError();
       this.deps.getStatusIndicator()?.setStatus("saved");
+      // Notify plugins — `annot-cloud` uses this for server-side
+      // state (comments, team metadata) that rides alongside a save
+      // but doesn't block it.
+      this.deps.onAfterSave(newPath);
     } catch (e: unknown) {
       this.deps.getStatusIndicator()?.setStatus("error");
       console.error("[save] Error:", e);

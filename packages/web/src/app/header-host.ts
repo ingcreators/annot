@@ -47,6 +47,12 @@ export interface HeaderHostDeps {
   /** Navigate to the gallery view. Owned by the app so routing /
    *  teardown stays co-located with the other navigation logic. */
   showGallery(): Promise<void>;
+  /** Plugin-driven external-link contributions (GitHub "View on
+   *  GitHub" as the built-in, Cloud / third-party plugins extend).
+   *  Delegated to `PluginHost.collectExternalLinks`. */
+  collectExternalLinks(
+    path: string | null,
+  ): Array<{ label: string; url: string; icon?: string }> | undefined;
 }
 
 export class HeaderHost {
@@ -172,21 +178,16 @@ export class HeaderHost {
   }
 
   /**
-   * Build the "External links" section for the file-details drawer.
-   * Currently only GitHub contributes a link; Drive / Browser / Device
-   * have nothing analogous (the canonical location is either an IDB
-   * blob or a local path). New backends slot in additively here.
+   * Build the "External links" section for the file-details drawer
+   * by asking the plugin host to collect contributions. The built-in
+   * `github-external-links` plugin contributes "View on GitHub";
+   * Cloud / third-party plugins can stack their own links (team
+   * comment thread, JIRA ticket, etc.).
    */
   buildExternalLinksFor(
     path: string | null,
   ): Array<{ label: string; url: string; icon?: string }> | undefined {
-    if (!path) return undefined;
-    const storage = this.deps.getStorage();
-    if (storage instanceof GitHubStore) {
-      const url = storage.getViewUrl(path);
-      if (url) return [{ label: "View on GitHub", url, icon: "open_in_new" }];
-    }
-    return undefined;
+    return this.deps.collectExternalLinks(path);
   }
 
   /**
