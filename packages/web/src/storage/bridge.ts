@@ -9,8 +9,16 @@ import type { StorageProvider } from "@ingcreators/annot-core/storage";
 import { BrowserStore } from "./browser-store.js";
 import { DeviceStore } from "./device-store.js";
 import { GoogleDriveStore } from "./google-drive-store.js";
+import { GitHubStore } from "./github-store.js";
 import { saveHandle, loadHandle, clearHandle } from "./fs-handle-store.js";
 import { getAccessToken, loadDriveRoot, signIn } from "./google-auth.js";
+import {
+  getAccessToken as getGitHubToken,
+  loadRepoRef as loadGitHubRef,
+  clearRepoRef as clearGitHubRef,
+  signOut as githubSignOut,
+  type GitHubRepoRef,
+} from "./github-auth.js";
 import { showAuthError, hideError } from "../ui/error-bar.js";
 
 // chrome-types omits `chrome.runtime.lastError` from its public typings,
@@ -22,13 +30,14 @@ declare global {
   }
 }
 
-export type StorageMode = "extension" | "browser" | "device" | "googledrive";
+export type StorageMode = "extension" | "browser" | "device" | "googledrive" | "github";
 
 let extensionId: string | null = null;
 let extensionAvailable: boolean | null = null;
 let browserFallback: StorageProvider | null = null;
 let driveStore: GoogleDriveStore | null = null;
 let deviceStore: DeviceStore | null = null;
+let githubStore: GitHubStore | null = null;
 let currentMode: StorageMode = "browser";
 
 function hasChromeRuntime(): boolean {
@@ -116,6 +125,7 @@ function getBrowserStore(): StorageProvider {
 
 export async function getStorage(): Promise<StorageProvider> {
   if (currentMode === "googledrive" && driveStore) return driveStore;
+  if (currentMode === "github" && githubStore) return githubStore;
   if (currentMode === "device" && deviceStore) return deviceStore;
   const hasExtension = await detectExtension();
   if (hasExtension) { currentMode = "extension"; return extensionStorage; }
@@ -252,6 +262,97 @@ export function restoreGoogleDrive(): StorageProvider | null {
   return connectGoogleDrive(token, root.id);
 }
 
+/**
+ * Refresh the GitHub PAT when the current one 401s. Unlike Drive
+ * there's no silent refresh — the user has to paste a new PAT. The
+ * callback surfaces the auth banner; clicking "Sign in" lazy-loads
+ * `github-setup-ui.ts` and opens the PAT dialog. Returns the new
+ * token, or `null` if the user dismissed the banner.
+ *
+ * Registered on every `GitHubStore` instance so the underlying
+ * `#fetch` auto-retries on 401 without every call site bolting on
+ * its own handler.
+ */
+async function refreshGithubToken(): Promise<string | null> {
+  return new Promise<string | null>((resolve) => {
+    let settled = false;
+    const settle = (token: string | null) => {
+      if (settled) return;
+      settled = true;
+      hideError();
+      resolve(token);
+    };
+    showAuthError(
+      async () => {
+        try {
+          // Lazy load the UI module so the main bundle doesn't carry
+          // it when the user never signs into GitHub.
+          const mod = await import("./github-setup-ui.js");
+          // Opening the full connect flow is overkill for a refresh;
+          // Phase 3 can swap this for a narrower "paste a new token"
+          // dialog. For now the full flow re-validates repo access
+          // too, which is defensible.
+          const ref = await mod.connectGitHub();
+          if (!ref) { settle(null); return; }
+          // Re-read the token the UI just persisted.
+          const newToken = getGitHubToken();
+          if (!newToken) { settle(null); return; }
+          if (githubStore) githubStore.setToken(newToken);
+          settle(newToken);
+        } catch {
+          settle(null);
+        }
+      },
+      () => settle(null),
+      { provider: "GitHub" },
+    );
+  });
+}
+
+/** Connect to GitHub with a selected repo ref. */
+export function connectGitHub(token: string, ref: GitHubRepoRef): StorageProvider {
+  githubStore = new GitHubStore(token, ref);
+  githubStore.setTokenRefresher(refreshGithubToken);
+  currentMode = "github";
+  return githubStore;
+}
+
+/**
+ * Try to re-establish the GitHub connection from persisted token +
+ * repo ref. Returns the store on success, or `null` if either value
+ * is missing. The caller should fall back to the PAT + picker flow
+ * when this returns `null`.
+ *
+ * Does NOT proactively validate the token — a stale PAT surfaces as
+ * a failed API call later, which routes through the 401 refresh
+ * callback (same pattern as Drive).
+ */
+export function restoreGitHub(): StorageProvider | null {
+  const token = getGitHubToken();
+  const ref = loadGitHubRef();
+  if (!token || !ref) return null;
+  return connectGitHub(token, ref);
+}
+
+/** Get the connected repo ref (e.g. for the sidebar label). */
+export function getGitHubRef(): GitHubRepoRef | null {
+  if (currentMode !== "github") return null;
+  return loadGitHubRef();
+}
+
+/** Forget the GitHub token + ref. Does not revoke on GitHub's side. */
+export function disconnectGitHub(): void {
+  githubStore = null;
+  githubSignOut();
+  clearGitHubRef();
+  if (currentMode === "github") currentMode = "browser";
+}
+
+/** Check if GitHub is connected. */
+export function isGitHubConnected(): boolean {
+  return currentMode === "github" && githubStore !== null;
+}
+
 /** Delete an image from Extension IDB (cleanup after transfer). */
 export async function deleteExtensionImage(path: string): Promise<void> {
   if (!extensionId) return;
@@ -297,7 +398,13 @@ export function loadLastFolder(): string {
 /** Load last selected storage mode from localStorage. */
 export function loadLastStorage(): StorageMode | null {
   const mode = localStorage.getItem("annot-last-storage");
-  if (mode === "browser" || mode === "device" || mode === "googledrive" || mode === "extension") {
+  if (
+    mode === "browser"
+    || mode === "device"
+    || mode === "googledrive"
+    || mode === "github"
+    || mode === "extension"
+  ) {
     return mode as StorageMode;
   }
   return null;

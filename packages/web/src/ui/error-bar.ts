@@ -103,9 +103,14 @@ export function showSaveError(message: string, onRetry?: () => void): void {
 }
 
 /** Convenience: show token expired with re-login action. */
-export function showAuthError(onReLogin: () => void, onDismiss?: () => void): void {
+export function showAuthError(
+  onReLogin: () => void,
+  onDismiss?: () => void,
+  opts: { provider?: string } = {},
+): void {
+  const label = opts.provider ? `${opts.provider} session expired.` : "Session expired.";
   showError({
-    message: "Session expired. Please sign in again.",
+    message: `${label} Please sign in again.`,
     severity: "warning",
     action: { label: "Sign in", onClick: onReLogin },
     onDismiss,

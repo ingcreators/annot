@@ -38,6 +38,10 @@ export class Sidebar {
     extension: { connected: false },
     device: { connected: false },
     googledrive: { connected: false },
+    // Phase 2 of `docs/plans/github-integration.md` adds the
+    // GitHubStore but leaves the visible sidebar item to Phase 3.
+    // The status entry exists for type completeness.
+    github: { connected: false },
   };
   #expanded: ExpandedSet = new Set([""]); // root always expanded
   #rootName: string | null = null;
