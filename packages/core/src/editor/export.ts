@@ -1,10 +1,6 @@
-import type { CanvasManager } from "./canvas-manager.js";
 import { createEditableImage } from "../xmp/xmp-browser.js";
-import {
-  ANNOT_SVG_VERSION,
-  ANNOT_SVG_VERSION_ATTR,
-  stampAnnotVersion,
-} from "./svg-format.js";
+import type { CanvasManager } from "./canvas-manager.js";
+import { ANNOT_SVG_VERSION, ANNOT_SVG_VERSION_ATTR, stampAnnotVersion } from "./svg-format.js";
 
 export function exportSVGString(canvas: CanvasManager): string {
   const clone = canvas.svg.cloneNode(true) as SVGSVGElement;
@@ -20,7 +16,7 @@ export function exportSVGString(canvas: CanvasManager): string {
 
   const serializer = new XMLSerializer();
   let svgString = serializer.serializeToString(clone);
-  svgString = '<?xml version="1.0" encoding="UTF-8"?>\n' + svgString;
+  svgString = `<?xml version="1.0" encoding="UTF-8"?>\n${svgString}`;
   return svgString;
 }
 
@@ -76,17 +72,17 @@ export function exportExcelSVG(canvas: CanvasManager): string {
   let result = serializer.serializeToString(svg);
   // Clean up: remove xmlns:xlink if present
   result = result.replace(/\s*xmlns:xlink="[^"]*"/g, "");
-  return '<?xml version="1.0" encoding="UTF-8"?>\n' + result;
+  return `<?xml version="1.0" encoding="UTF-8"?>\n${result}`;
 }
 
 /** Convert a <line> with marker-end into a <path> with arrowhead polygon */
 function convertArrowToPath(line: SVGLineElement, SVG_NS: string): SVGElement {
-  const x1 = parseFloat(line.getAttribute("x1") || "0");
-  const y1 = parseFloat(line.getAttribute("y1") || "0");
-  const x2 = parseFloat(line.getAttribute("x2") || "0");
-  const y2 = parseFloat(line.getAttribute("y2") || "0");
+  const x1 = Number.parseFloat(line.getAttribute("x1") || "0");
+  const y1 = Number.parseFloat(line.getAttribute("y1") || "0");
+  const x2 = Number.parseFloat(line.getAttribute("x2") || "0");
+  const y2 = Number.parseFloat(line.getAttribute("y2") || "0");
   const stroke = line.getAttribute("stroke") || "#ff0000";
-  const sw = parseFloat(line.getAttribute("stroke-width") || "3");
+  const sw = Number.parseFloat(line.getAttribute("stroke-width") || "3");
 
   // Direction vector
   const dx = x2 - x1;
@@ -249,7 +245,6 @@ function exportAnnotationsSVGString(canvas: CanvasManager): string {
   return new XMLSerializer().serializeToString(clone);
 }
 
-
 async function downloadFile(content: string, _mime: string, filename: string): Promise<void> {
   const isTauri = typeof window !== "undefined" && !!(window as any).__TAURI_INTERNALS__;
 
@@ -284,7 +279,11 @@ async function downloadFile(content: string, _mime: string, filename: string): P
 
 /** Get full screenshot + annotations as PNG data URL */
 export async function getPngDataUrl(canvas: CanvasManager): Promise<string> {
-  const pngBlob = await rasterizeSVG(exportSVGString(canvas), canvas.imageWidth, canvas.imageHeight);
+  const pngBlob = await rasterizeSVG(
+    exportSVGString(canvas),
+    canvas.imageWidth,
+    canvas.imageHeight,
+  );
   return new Promise((resolve) => {
     const reader = new FileReader();
     reader.onloadend = () => resolve(reader.result as string);
@@ -294,19 +293,19 @@ export async function getPngDataUrl(canvas: CanvasManager): Promise<string> {
 
 /** Copy: PNG (full) */
 export async function copyAsImage(canvas: CanvasManager): Promise<void> {
-  const pngBlob = await rasterizeSVG(exportSVGString(canvas), canvas.imageWidth, canvas.imageHeight);
-  await navigator.clipboard.write([
-    new ClipboardItem({ "image/png": pngBlob }),
-  ]);
+  const pngBlob = await rasterizeSVG(
+    exportSVGString(canvas),
+    canvas.imageWidth,
+    canvas.imageHeight,
+  );
+  await navigator.clipboard.write([new ClipboardItem({ "image/png": pngBlob })]);
 }
 
 /** Copy: annotations only as transparent PNG */
 export async function copyAnnotationsAsImage(canvas: CanvasManager): Promise<void> {
   const annoSvg = exportExcelSVG(canvas);
   const pngBlob = await rasterizeSVG(annoSvg, canvas.imageWidth, canvas.imageHeight);
-  await navigator.clipboard.write([
-    new ClipboardItem({ "image/png": pngBlob }),
-  ]);
+  await navigator.clipboard.write([new ClipboardItem({ "image/png": pngBlob })]);
 }
 
 /** Download as re-editable PNG or JPEG with XMP metadata (browser) */
@@ -326,9 +325,8 @@ export async function downloadAsImage(
   const annotationsSvg = exportAnnotationsSVGString(canvas);
 
   // Get current tags from editor
-  const tags: Record<string, string> = typeof (window as any).__anno_getTags === "function"
-    ? (window as any).__anno_getTags()
-    : {};
+  const tags: Record<string, string> =
+    typeof (window as any).__anno_getTags === "function" ? (window as any).__anno_getTags() : {};
 
   // Embed XMP metadata for re-editing
   const editableBlob = await createEditableImage({
@@ -401,7 +399,7 @@ export async function renderImageRecord(
     }
   }
 
-  svgString += `</svg>`;
+  svgString += "</svg>";
 
   const pngBlob = await rasterizeSVG(svgString, width, height);
 

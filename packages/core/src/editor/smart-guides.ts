@@ -67,8 +67,10 @@ export function computeSnap(input: SnapInput): SnapResult {
   };
 
   // Best (smallest) offset for each axis.
-  let bestX: { delta: number; guide: { x1: number; y1: number; x2: number; y2: number } } | null = null;
-  let bestY: { delta: number; guide: { x1: number; y1: number; x2: number; y2: number } } | null = null;
+  let bestX: { delta: number; guide: { x1: number; y1: number; x2: number; y2: number } } | null =
+    null;
+  let bestY: { delta: number; guide: { x1: number; y1: number; x2: number; y2: number } } | null =
+    null;
 
   for (const other of otherBoxes) {
     const oEdges = {
@@ -81,10 +83,14 @@ export function computeSnap(input: SnapInput): SnapResult {
     };
     // --- X axis ---
     for (const [proposedEdge, pv] of Object.entries({
-      left: proposed.left, centerX: proposed.centerX, right: proposed.right,
+      left: proposed.left,
+      centerX: proposed.centerX,
+      right: proposed.right,
     })) {
       for (const [otherEdge, ov] of Object.entries({
-        left: oEdges.left, centerX: oEdges.centerX, right: oEdges.right,
+        left: oEdges.left,
+        centerX: oEdges.centerX,
+        right: oEdges.right,
       })) {
         const diff = ov - pv;
         if (Math.abs(diff) <= threshold) {
@@ -93,31 +99,34 @@ export function computeSnap(input: SnapInput): SnapResult {
             // the union of both bboxes in y so it visually ties them.
             const x = ov;
             const y1 = Math.min(unionBefore.y + dy, other.y);
-            const y2 = Math.max(unionBefore.y + dy + unionBefore.height,
-                                other.y + other.height);
+            const y2 = Math.max(unionBefore.y + dy + unionBefore.height, other.y + other.height);
             bestX = { delta: diff, guide: { x1: x, y1, x2: x, y2 } };
           }
           // Note: we don't break — keep looking for a BETTER (smaller)
           // candidate across all edge pairs. Tiny perf cost, cleaner
           // result.
-          void proposedEdge; void otherEdge;
+          void proposedEdge;
+          void otherEdge;
         }
       }
     }
     // --- Y axis ---
     for (const [, pv] of Object.entries({
-      top: proposed.top, centerY: proposed.centerY, bottom: proposed.bottom,
+      top: proposed.top,
+      centerY: proposed.centerY,
+      bottom: proposed.bottom,
     })) {
       for (const [, ov] of Object.entries({
-        top: oEdges.top, centerY: oEdges.centerY, bottom: oEdges.bottom,
+        top: oEdges.top,
+        centerY: oEdges.centerY,
+        bottom: oEdges.bottom,
       })) {
         const diff = ov - pv;
         if (Math.abs(diff) <= threshold) {
           if (!bestY || Math.abs(diff) < Math.abs(bestY.delta)) {
             const y = ov;
             const x1 = Math.min(unionBefore.x + dx, other.x);
-            const x2 = Math.max(unionBefore.x + dx + unionBefore.width,
-                                other.x + other.width);
+            const x2 = Math.max(unionBefore.x + dx + unionBefore.width, other.x + other.width);
             bestY = { delta: diff, guide: { x1, y1: y, x2, y2: y } };
           }
         }
@@ -128,13 +137,22 @@ export function computeSnap(input: SnapInput): SnapResult {
   const guides: SnapResult["guides"] = [];
   let adjDx = dx;
   let adjDy = dy;
-  if (bestX) { adjDx += bestX.delta; guides.push(bestX.guide); }
-  if (bestY) { adjDy += bestY.delta; guides.push(bestY.guide); }
+  if (bestX) {
+    adjDx += bestX.delta;
+    guides.push(bestX.guide);
+  }
+  if (bestY) {
+    adjDy += bestY.delta;
+    guides.push(bestY.guide);
+  }
   return { dx: adjDx, dy: adjDy, guides };
 }
 
 function unionRect(rects: DOMRect[]): DOMRect {
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  let minX = Number.POSITIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
   for (const r of rects) {
     if (r.x < minX) minX = r.x;
     if (r.y < minY) minY = r.y;
@@ -179,7 +197,7 @@ export class SmartGuideOverlay {
   }
 
   #ensureLayer(): SVGGElement {
-    if (this.#layer && this.#layer.isConnected) return this.#layer;
+    if (this.#layer?.isConnected) return this.#layer;
     const layer = document.createElementNS(SVG_NS, "g");
     layer.setAttribute("data-role", "smart-guides");
     layer.setAttribute("pointer-events", "none");

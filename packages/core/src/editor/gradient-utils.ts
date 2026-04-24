@@ -48,7 +48,8 @@ function buildLinearGradient(id: string, spec: GradientSpec): SVGLinearGradientE
   // our angle (0 = left→right, 90 = top→bottom) into those corners.
   const rad = (spec.angle * Math.PI) / 180;
   // Start at the bbox center, push out to the perimeter along ±(cos,sin).
-  const cx = 0.5, cy = 0.5;
+  const cx = 0.5;
+  const cy = 0.5;
   const dx = Math.cos(rad) * 0.5;
   const dy = Math.sin(rad) * 0.5;
   g.setAttribute("x1", String(cx - dx));
@@ -71,11 +72,7 @@ function buildLinearGradient(id: string, spec: GradientSpec): SVGLinearGradientE
 /** Apply a gradient as the element's stroke (or fill). `which` selects
  *  which attribute takes the url(...) ref; the spec is also serialized
  *  into `data-{which}-gradient` so it survives round-trips. */
-export function applyGradient(
-  el: SVGElement,
-  which: "stroke" | "fill",
-  spec: GradientSpec,
-): void {
+export function applyGradient(el: SVGElement, which: "stroke" | "fill", spec: GradientSpec): void {
   const defs = ensureDefs(el);
   const id = newGradientId(`grad-${which}`);
   defs.appendChild(buildLinearGradient(id, spec));
@@ -103,10 +100,7 @@ export function removeGradient(
 
 /** Read the persisted gradient spec off an element, or null if the
  *  attribute isn't there (i.e. the paint is solid). */
-export function detectGradient(
-  el: SVGElement,
-  which: "stroke" | "fill",
-): GradientSpec | null {
+export function detectGradient(el: SVGElement, which: "stroke" | "fill"): GradientSpec | null {
   const raw = el.getAttribute(`data-${which}-gradient`);
   if (!raw) return null;
   try {
@@ -167,7 +161,7 @@ export function defaultGradientFrom(color: string): GradientSpec {
 function darken(hex: string, amount: number): string {
   const m = hex.trim().match(/^#?([0-9a-f]{6})$/i);
   if (!m) return hex;
-  const n = parseInt(m[1], 16);
+  const n = Number.parseInt(m[1], 16);
   const r = Math.max(0, Math.round(((n >> 16) & 0xff) * (1 - amount)));
   const g = Math.max(0, Math.round(((n >> 8) & 0xff) * (1 - amount)));
   const b = Math.max(0, Math.round((n & 0xff) * (1 - amount)));

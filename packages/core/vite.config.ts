@@ -1,5 +1,5 @@
-import { defineConfig } from "vite";
 import { resolve } from "path";
+import { defineConfig } from "vite";
 
 export default defineConfig({
   build: {
@@ -12,9 +12,7 @@ export default defineConfig({
     emptyOutDir: true,
     target: "es2022",
     rollupOptions: {
-      external: [
-        /^@tauri-apps\//,
-      ],
+      external: [/^@tauri-apps\//],
     },
   },
 });

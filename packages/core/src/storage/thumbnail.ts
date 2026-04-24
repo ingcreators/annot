@@ -24,9 +24,7 @@ export interface ThumbCanvasLike {
   height: number;
 }
 
-export type ThumbImageSource =
-  | HTMLImageElement
-  | CanvasImageSource;
+export type ThumbImageSource = HTMLImageElement | CanvasImageSource;
 
 /**
  * Configure `canvas` size, clear the background, and draw `source` onto it
@@ -39,11 +37,11 @@ export function drawToThumbCanvas(
   source: ThumbImageSource,
   srcW: number,
   srcH: number,
-  maxWidth: number = 480,
-  bgColor: string = "#111",
+  maxWidth = 480,
+  bgColor = "#111",
 ): void {
   const targetW = maxWidth;
-  const targetH = Math.max(1, Math.round(targetW * 9 / 16));
+  const targetH = Math.max(1, Math.round((targetW * 9) / 16));
   canvas.width = targetW;
   canvas.height = targetH;
 
@@ -60,7 +58,7 @@ export function drawToThumbCanvas(
     // Source is at least as wide as the card: fit width, letterbox vertically.
     // Never upscale past natural width.
     const finalW = Math.min(srcW, targetW);
-    const finalH = Math.round(finalW * srcH / srcW);
+    const finalH = Math.round((finalW * srcH) / srcW);
     const x = Math.round((targetW - finalW) / 2);
     const y = Math.round((targetH - finalH) / 2);
     // Use full source bounds → destination rect

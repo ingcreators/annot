@@ -45,7 +45,5 @@ export function setTooltip(el: Element, text: string): void {
  *  `data-tooltip` first, then falls back to `aria-label`. Useful for
  *  debug / dynamic labels that need to query the current value. */
 export function getTooltip(el: Element): string {
-  return el.getAttribute("data-tooltip")
-    || el.getAttribute("aria-label")
-    || "";
+  return el.getAttribute("data-tooltip") || el.getAttribute("aria-label") || "";
 }

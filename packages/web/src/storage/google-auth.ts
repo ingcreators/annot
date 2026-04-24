@@ -63,9 +63,7 @@ function loadGapiScript(): Promise<void> {
  *  Google accounts. The sidebar's "Change Drive folder" reselect
  *  icon passes `true` so the user can swap accounts or just
  *  confirm the same one before the Picker opens. */
-export async function signIn(
-  opts: { forceAccountPicker?: boolean } = {},
-): Promise<string> {
+export async function signIn(opts: { forceAccountPicker?: boolean } = {}): Promise<string> {
   await loadGisScript();
 
   return new Promise((resolve, reject) => {
@@ -182,7 +180,9 @@ export function loadDriveRoot(): DriveRoot | null {
   try {
     const v = JSON.parse(raw);
     if (typeof v?.id === "string" && typeof v?.name === "string") return v;
-  } catch { /* fall through */ }
+  } catch {
+    /* fall through */
+  }
   return null;
 }
 

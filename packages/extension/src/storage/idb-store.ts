@@ -2,20 +2,16 @@
  * IndexedDB storage for Chrome Extension — path-based identification.
  * Stores captured images and folders with filesystem-style paths.
  */
-import type {
-  ImageRecord,
-  ImageRecordUpdate,
-  FolderRecord,
-} from "@ingcreators/annot-core/storage";
+import type { FolderRecord, ImageRecord, ImageRecordUpdate } from "@ingcreators/annot-core/storage";
 import {
-  joinPath,
-  getParentPath,
-  getFilename,
-  validateName,
   ancestorPaths,
+  drawToThumbCanvas,
+  getFilename,
+  getParentPath,
+  joinPath,
   rewritePathPrefix,
   uniquifyFilenameAsync,
-  drawToThumbCanvas,
+  validateName,
 } from "@ingcreators/annot-core/storage";
 
 export type { ImageRecord, ImageRecordUpdate, FolderRecord };
@@ -62,7 +58,9 @@ function defaultFilename(data: { originalDataUrl: string }): string {
 
 // ---- Image CRUD ----
 
-export async function saveImage(data: Omit<ImageRecord, "path"> & { filename?: string }): Promise<string> {
+export async function saveImage(
+  data: Omit<ImageRecord, "path"> & { filename?: string },
+): Promise<string> {
   const filename = data.filename || defaultFilename(data);
   validateName(filename);
   const folderPath = data.folderPath || "";
@@ -285,7 +283,12 @@ export async function moveFolder(path: string, newParentPath: string): Promise<s
   return moveFolderImpl(path, newPath, newParentPath, folder.name);
 }
 
-async function moveFolderImpl(oldPath: string, newPath: string, newParentPath: string, newName: string): Promise<string> {
+async function moveFolderImpl(
+  oldPath: string,
+  newPath: string,
+  newParentPath: string,
+  newName: string,
+): Promise<string> {
   const db = await openDB();
   const foldersToMove: FolderRecord[] = [];
   const imagesToMove: ImageRecord[] = [];
@@ -296,7 +299,7 @@ async function moveFolderImpl(oldPath: string, newPath: string, newParentPath: s
       const cursor = req.result;
       if (cursor) {
         const f = cursor.value as FolderRecord;
-        if (f.path === oldPath || f.path.startsWith(oldPath + "/")) foldersToMove.push(f);
+        if (f.path === oldPath || f.path.startsWith(`${oldPath}/`)) foldersToMove.push(f);
         cursor.continue();
       } else resolve();
     };
@@ -309,7 +312,7 @@ async function moveFolderImpl(oldPath: string, newPath: string, newParentPath: s
       const cursor = req.result;
       if (cursor) {
         const img = cursor.value as ImageRecord;
-        if (img.path === oldPath || img.path.startsWith(oldPath + "/")) imagesToMove.push(img);
+        if (img.path === oldPath || img.path.startsWith(`${oldPath}/`)) imagesToMove.push(img);
         cursor.continue();
       } else resolve();
     };
@@ -364,7 +367,7 @@ export async function deleteFolder(path: string): Promise<void> {
       const cursor = imgReq.result;
       if (cursor) {
         const img = cursor.value as ImageRecord;
-        if (img.path === path || img.path.startsWith(path + "/")) cursor.delete();
+        if (img.path === path || img.path.startsWith(`${path}/`)) cursor.delete();
         cursor.continue();
       }
     };
@@ -374,7 +377,7 @@ export async function deleteFolder(path: string): Promise<void> {
       const cursor = fReq.result;
       if (cursor) {
         const f = cursor.value as FolderRecord;
-        if (f.path === path || f.path.startsWith(path + "/")) cursor.delete();
+        if (f.path === path || f.path.startsWith(`${path}/`)) cursor.delete();
         cursor.continue();
       }
     };

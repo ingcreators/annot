@@ -1,3 +1,6 @@
+import type { CanvasManager } from "../canvas-manager.js";
+import type { History } from "../history.js";
+import { createTextBox, stickyBgFor } from "../text-utils.js";
 /**
  * TextTool — unified Text / Sticky Note / Callout tool.
  *
@@ -12,13 +15,7 @@
  * SelectionManager's drag / resize logic is variant-agnostic.
  */
 import { ToolBase } from "./tool-base.js";
-import type { CanvasManager } from "../canvas-manager.js";
-import type { History } from "../history.js";
-import type { ToolOptions, TextVariant } from "./tool-base.js";
-import {
-  createTextBox,
-  stickyBgFor,
-} from "../text-utils.js";
+import type { TextVariant, ToolOptions } from "./tool-base.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const DEFAULT_WIDTH = 200;
@@ -67,19 +64,22 @@ export class TextTool extends ToolBase {
     if (this.#editing) this.#finishEditing();
 
     const bg = g.querySelector("rect") as SVGRectElement | null;
-    const x = parseFloat(bg?.getAttribute("x") || "0");
-    const y = parseFloat(bg?.getAttribute("y") || "0");
-    const w = parseFloat(bg?.getAttribute("width") || String(DEFAULT_WIDTH));
-    const h = parseFloat(bg?.getAttribute("height") || String(DEFAULT_HEIGHT));
+    const x = Number.parseFloat(bg?.getAttribute("x") || "0");
+    const y = Number.parseFloat(bg?.getAttribute("y") || "0");
+    const w = Number.parseFloat(bg?.getAttribute("width") || String(DEFAULT_WIDTH));
+    const h = Number.parseFloat(bg?.getAttribute("height") || String(DEFAULT_HEIGHT));
     const text = g.getAttribute("data-text") || g.querySelector("text")?.textContent || "";
-    const fontSize = parseFloat(g.getAttribute("data-font-size") || String(this.options.fontSize));
-    const fontFamily = g.getAttribute("data-font-family") || (this.options.fontFamily ?? "sans-serif");
+    const fontSize = Number.parseFloat(
+      g.getAttribute("data-font-size") || String(this.options.fontSize),
+    );
+    const fontFamily =
+      g.getAttribute("data-font-family") || (this.options.fontFamily ?? "sans-serif");
     const color = g.getAttribute("data-color") || this.options.strokeColor;
 
     const transform = g.getAttribute("transform") || "";
     const match = transform.match(/translate\(([\d.-]+),\s*([\d.-]+)\)/);
-    const tx = match ? parseFloat(match[1]) : 0;
-    const ty = match ? parseFloat(match[2]) : 0;
+    const tx = match ? Number.parseFloat(match[1]) : 0;
+    const ty = match ? Number.parseFloat(match[2]) : 0;
 
     this.#editTarget = g;
     g.style.display = "none";
@@ -88,8 +88,16 @@ export class TextTool extends ToolBase {
   }
 
   #startEditing(
-    x: number, y: number,
-    existing: { text: string; fontSize: number; fontFamily: string; color: string; width: number; height: number } | null,
+    x: number,
+    y: number,
+    existing: {
+      text: string;
+      fontSize: number;
+      fontFamily: string;
+      color: string;
+      width: number;
+      height: number;
+    } | null,
   ): void {
     this.#editing = true;
 
@@ -156,22 +164,25 @@ export class TextTool extends ToolBase {
     this.#editing = false;
 
     const text = this.#editDiv.innerText.trim();
-    const foX = parseFloat(this.#foreignObject.getAttribute("x")!);
-    const foY = parseFloat(this.#foreignObject.getAttribute("y")!);
-    const foW = parseFloat(this.#foreignObject.getAttribute("width")!);
-    const foH = parseFloat(this.#foreignObject.getAttribute("height")!);
+    const foX = Number.parseFloat(this.#foreignObject.getAttribute("x")!);
+    const foY = Number.parseFloat(this.#foreignObject.getAttribute("y")!);
+    const foW = Number.parseFloat(this.#foreignObject.getAttribute("width")!);
+    const foH = Number.parseFloat(this.#foreignObject.getAttribute("height")!);
     // Preserve existing styling on edit; fall back to tool options on new.
     const fontSize = this.#editTarget
-      ? parseFloat(this.#editTarget.getAttribute("data-font-size") || String(this.options.fontSize))
+      ? Number.parseFloat(
+          this.#editTarget.getAttribute("data-font-size") || String(this.options.fontSize),
+        )
       : this.options.fontSize;
     const fontFamily = this.#editTarget
-      ? (this.#editTarget.getAttribute("data-font-family") || (this.options.fontFamily ?? "sans-serif"))
+      ? this.#editTarget.getAttribute("data-font-family") ||
+        (this.options.fontFamily ?? "sans-serif")
       : (this.options.fontFamily ?? "sans-serif");
     const color = this.#editTarget
-      ? (this.#editTarget.getAttribute("data-color") || this.options.strokeColor)
+      ? this.#editTarget.getAttribute("data-color") || this.options.strokeColor
       : this.options.strokeColor;
     const variant: TextVariant = this.#editTarget
-      ? ((this.#editTarget.getAttribute("data-text-variant") as TextVariant) || "sticky")
+      ? (this.#editTarget.getAttribute("data-text-variant") as TextVariant) || "sticky"
       : (this.options.textVariant ?? "sticky");
 
     this.#foreignObject.remove();
@@ -186,8 +197,15 @@ export class TextTool extends ToolBase {
     if (!text) return;
 
     const newEl = createTextBox({
-      x: foX, y: foY, w: foW, h: foH,
-      variant, text, fontSize, fontFamily, color,
+      x: foX,
+      y: foY,
+      w: foW,
+      h: foH,
+      variant,
+      text,
+      fontSize,
+      fontFamily,
+      color,
     });
     this.canvas.annotations.appendChild(newEl);
     this.history.save();

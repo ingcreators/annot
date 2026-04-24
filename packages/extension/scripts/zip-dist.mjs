@@ -1,3 +1,5 @@
+import { execSync } from "node:child_process";
+import { createHash } from "node:crypto";
 // Package `dist/` into a versioned ZIP for store submission.
 //
 //   node scripts/zip-dist.mjs chrome
@@ -8,11 +10,9 @@
 // Chrome Web Store and Microsoft Edge Add-ons accept the exact same
 // manifest (MV3) and asset layout, so both targets ship the identical
 // zip — only the store submission is different.
-import { readFileSync, mkdirSync, statSync, readdirSync, createWriteStream } from "node:fs";
-import { resolve, dirname, join, relative } from "node:path";
+import { mkdirSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createHash } from "node:crypto";
-import { execSync } from "node:child_process";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const pkgRoot = resolve(here, "..");
@@ -53,12 +53,13 @@ console.log(`  target:  ${target}`);
 console.log(`  version: ${version}`);
 console.log(`  size:    ${(size / 1024).toFixed(1)} KB`);
 console.log(`  sha256:  ${sha}…`);
-console.log(`  upload to:`);
+console.log("  upload to:");
 if (target === "chrome") {
-  console.log(`    https://chrome.google.com/webstore/devconsole`);
+  console.log("    https://chrome.google.com/webstore/devconsole");
 } else if (target === "edge") {
-  console.log(`    https://partner.microsoft.com/dashboard/microsoftedge/`);
+  console.log("    https://partner.microsoft.com/dashboard/microsoftedge/");
 }
 
 // Silence unused vars under bundler lint
-void readdirSync; void join;
+void readdirSync;
+void join;

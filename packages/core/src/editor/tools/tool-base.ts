@@ -26,13 +26,7 @@ export type RedactStyle = "mosaic" | "solid" | "blur";
  *  Markers live in <defs> with id `anno-{shape}-w{width}-l{length}`.
  *  Legacy values ("triangle-open", "tbar", "reverse") are accepted on
  *  read and remapped to the closest OOXML preset. */
-export type ArrowShape =
-  | "none"
-  | "arrow"
-  | "triangle"
-  | "stealth"
-  | "diamond"
-  | "oval";
+export type ArrowShape = "none" | "arrow" | "triangle" | "stealth" | "diamond" | "oval";
 
 /** Per-dimension size preset — matches OOXML's `w` / `len` attribute
  *  granularity (sm / med / lg). Width is perpendicular to the stem,
@@ -52,8 +46,8 @@ export type LineJoin = "miter" | "round" | "bevel";
  *  "fade from A to B" workflow; 3+ stops render fine too. */
 export interface GradientStop {
   color: string;
-  offset: number;       // 0.0 .. 1.0
-  opacity?: number;     // 0.0 .. 1.0, default 1
+  offset: number; // 0.0 .. 1.0
+  opacity?: number; // 0.0 .. 1.0, default 1
 }
 
 /** Linear-gradient stroke descriptor. When set on an element, the
@@ -187,7 +181,7 @@ export abstract class ToolBase {
 
   protected createSVG<K extends keyof SVGElementTagNameMap>(
     tag: K,
-    attrs: Record<string, string>
+    attrs: Record<string, string>,
   ): SVGElementTagNameMap[K] {
     const el = document.createElementNS(SVG_NS, tag);
     for (const [k, v] of Object.entries(attrs)) {

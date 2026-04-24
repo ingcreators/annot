@@ -1,14 +1,14 @@
+import {
+  readArrowControl,
+  readArrowEndpoints,
+  refreshArrowPath,
+  writeArrowControl,
+  writeArrowEndpoints,
+} from "./arrow-markers.js";
 import type { CanvasManager } from "./canvas-manager.js";
 import type { History } from "./history.js";
-import { computeSnap, SmartGuideOverlay } from "./smart-guides.js";
-import { setCalloutTail, rebuildCalloutTail } from "./text-utils.js";
-import {
-  readArrowEndpoints,
-  writeArrowEndpoints,
-  readArrowControl,
-  writeArrowControl,
-  refreshArrowPath,
-} from "./arrow-markers.js";
+import { SmartGuideOverlay, computeSnap } from "./smart-guides.js";
+import { rebuildCalloutTail, setCalloutTail } from "./text-utils.js";
 
 /** True when the element is an ArrowTool-produced arrow (outer `<g>`
  *  wrapping stem + head `<path>` children, storing endpoints in
@@ -22,25 +22,24 @@ function isArrowGroup(el: Element): boolean {
  *  geometric endpoints in `data-x1/y1/x2/y2` (the children's `d`
  *  attributes are composed strings, not directly readable). */
 function lineEndpointsOf(el: SVGElement): {
-  x1: number; y1: number; x2: number; y2: number;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
 } {
   if (isArrowGroup(el)) {
     return readArrowEndpoints(el);
   }
   return {
-    x1: parseFloat(el.getAttribute("x1") || "0"),
-    y1: parseFloat(el.getAttribute("y1") || "0"),
-    x2: parseFloat(el.getAttribute("x2") || "0"),
-    y2: parseFloat(el.getAttribute("y2") || "0"),
+    x1: Number.parseFloat(el.getAttribute("x1") || "0"),
+    y1: Number.parseFloat(el.getAttribute("y1") || "0"),
+    x2: Number.parseFloat(el.getAttribute("x2") || "0"),
+    y2: Number.parseFloat(el.getAttribute("y2") || "0"),
   };
 }
 
 /** Write endpoint coordinates to either a `<line>` or an arrow `<g>`. */
-function setLineEndpoints(
-  el: SVGElement,
-  x1: number, y1: number,
-  x2: number, y2: number,
-): void {
+function setLineEndpoints(el: SVGElement, x1: number, y1: number, x2: number, y2: number): void {
   if (isArrowGroup(el)) {
     writeArrowEndpoints(el, x1, y1, x2, y2);
     refreshArrowPath(el);
@@ -67,9 +66,14 @@ import {
  *  takes an element + degrees; the gesture operates on a fixed
  *  snapshot, so we keep this tiny helper local). */
 function rotateAround(
-  px: number, py: number, cx: number, cy: number, rad: number,
+  px: number,
+  py: number,
+  cx: number,
+  cy: number,
+  rad: number,
 ): { x: number; y: number } {
-  const cos = Math.cos(rad), sin = Math.sin(rad);
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
   return {
     x: cx + (px - cx) * cos - (py - cy) * sin,
     y: cy + (px - cx) * sin + (py - cy) * cos,
@@ -86,14 +90,14 @@ const PASTE_OFFSET = 20; // px offset when pasting
  *  an appropriate cursor — so a NW handle on a 45°-rotated rect ends
  *  up showing a north-pointing cursor instead of a NW-pointing one. */
 const CURSOR_BY_SECTOR = [
-  "ew-resize",     // 0 → E (-22.5°..22.5°)
-  "nwse-resize",   // 1 → SE
-  "ns-resize",     // 2 → S
-  "nesw-resize",   // 3 → SW
-  "ew-resize",     // 4 → W
-  "nwse-resize",   // 5 → NW
-  "ns-resize",     // 6 → N
-  "nesw-resize",   // 7 → NE
+  "ew-resize", // 0 → E (-22.5°..22.5°)
+  "nwse-resize", // 1 → SE
+  "ns-resize", // 2 → S
+  "nesw-resize", // 3 → SW
+  "ew-resize", // 4 → W
+  "nwse-resize", // 5 → NW
+  "ns-resize", // 6 → N
+  "nesw-resize", // 7 → NE
 ];
 
 function cursorForAngle(rad: number): string {
@@ -117,7 +121,6 @@ function pointToLocal(el: SVGElement, pt: DOMPoint, svg: SVGSVGElement): DOMPoin
   const m = svgCTM.inverse().multiply(ctm);
   return new DOMPoint(pt.x, pt.y).matrixTransform(m.inverse());
 }
-
 
 /** Map a point in an element's local pre-transform coords back to
  *  SVG-root coords. */
@@ -149,10 +152,15 @@ function getWorldBBox(el: SVGElement, svg: SVGSVGElement): DOMRect | null {
     new DOMPoint(local.x, local.y + local.height).matrixTransform(m),
   ];
 
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  let minX = Number.POSITIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
   for (const c of corners) {
-    minX = Math.min(minX, c.x); minY = Math.min(minY, c.y);
-    maxX = Math.max(maxX, c.x); maxY = Math.max(maxY, c.y);
+    minX = Math.min(minX, c.x);
+    minY = Math.min(minY, c.y);
+    maxX = Math.max(maxX, c.x);
+    maxY = Math.max(maxY, c.y);
   }
   return new DOMRect(minX, minY, maxX - minX, maxY - minY);
 }
@@ -345,7 +353,7 @@ export class SelectionManager {
     const bgEl = g.querySelector("circle") || g.querySelector("rect");
     const color = bgEl?.getAttribute("fill")?.toLowerCase() || "";
     const textEl = g.querySelector("text");
-    const fs = parseFloat(textEl?.getAttribute("font-size") || "0");
+    const fs = Number.parseFloat(textEl?.getAttribute("font-size") || "0");
 
     let max = 0;
     const existing = this.#canvas.annotations.querySelectorAll("g[data-marker]");
@@ -354,10 +362,10 @@ export class SelectionManager {
       if (mShape !== shape) continue;
       const mBg = m.querySelector("circle") || m.querySelector("rect");
       if ((mBg?.getAttribute("fill") || "").toLowerCase() !== color) continue;
-      const mFs = parseFloat(m.querySelector("text")?.getAttribute("font-size") || "0");
+      const mFs = Number.parseFloat(m.querySelector("text")?.getAttribute("font-size") || "0");
       if (Math.abs(mFs - fs) > 1) continue;
-      const val = parseInt(m.getAttribute("data-marker") || "0", 10);
-      if (!isNaN(val) && val > max) max = val;
+      const val = Number.parseInt(m.getAttribute("data-marker") || "0", 10);
+      if (!Number.isNaN(val) && val > max) max = val;
     }
 
     const next = max + 1;
@@ -507,28 +515,46 @@ export class SelectionManager {
   alignSelected(mode: "left" | "center-h" | "right" | "top" | "middle-v" | "bottom"): void {
     const targets = Array.from(this.#selectedSet) as SVGGraphicsElement[];
     if (targets.length < 2) return;
-    const boxes = targets.map((el) => ({ el, b: this.#worldBBox(el) }))
+    const boxes = targets
+      .map((el) => ({ el, b: this.#worldBBox(el) }))
       .filter((x): x is { el: SVGGraphicsElement; b: DOMRect } => x.b !== null);
     if (boxes.length < 2) return;
 
     // Overall selection bbox — reference frame for the align target.
-    const selMin = { x: Math.min(...boxes.map(({ b }) => b.x)),
-                     y: Math.min(...boxes.map(({ b }) => b.y)) };
-    const selMax = { x: Math.max(...boxes.map(({ b }) => b.x + b.width)),
-                     y: Math.max(...boxes.map(({ b }) => b.y + b.height)) };
+    const selMin = {
+      x: Math.min(...boxes.map(({ b }) => b.x)),
+      y: Math.min(...boxes.map(({ b }) => b.y)),
+    };
+    const selMax = {
+      x: Math.max(...boxes.map(({ b }) => b.x + b.width)),
+      y: Math.max(...boxes.map(({ b }) => b.y + b.height)),
+    };
     const selCx = (selMin.x + selMax.x) / 2;
     const selCy = (selMin.y + selMax.y) / 2;
 
     let changed = false;
     for (const { el, b } of boxes) {
-      let dx = 0, dy = 0;
+      let dx = 0;
+      let dy = 0;
       switch (mode) {
-        case "left":     dx = selMin.x - b.x; break;
-        case "right":    dx = selMax.x - (b.x + b.width); break;
-        case "center-h": dx = selCx - (b.x + b.width / 2); break;
-        case "top":      dy = selMin.y - b.y; break;
-        case "bottom":   dy = selMax.y - (b.y + b.height); break;
-        case "middle-v": dy = selCy - (b.y + b.height / 2); break;
+        case "left":
+          dx = selMin.x - b.x;
+          break;
+        case "right":
+          dx = selMax.x - (b.x + b.width);
+          break;
+        case "center-h":
+          dx = selCx - (b.x + b.width / 2);
+          break;
+        case "top":
+          dy = selMin.y - b.y;
+          break;
+        case "bottom":
+          dy = selMax.y - (b.y + b.height);
+          break;
+        case "middle-v":
+          dy = selCy - (b.y + b.height / 2);
+          break;
       }
       if (Math.abs(dx) > 0.001 || Math.abs(dy) > 0.001) {
         this.#moveElement(el, dx, dy);
@@ -544,24 +570,27 @@ export class SelectionManager {
   distributeSelected(axis: "horizontal" | "vertical"): void {
     const targets = Array.from(this.#selectedSet) as SVGGraphicsElement[];
     if (targets.length < 3) return; // distribute needs 3+ to have a middle
-    const boxes = targets.map((el) => ({ el, b: this.#worldBBox(el) }))
+    const boxes = targets
+      .map((el) => ({ el, b: this.#worldBBox(el) }))
       .filter((x): x is { el: SVGGraphicsElement; b: DOMRect } => x.b !== null);
     if (boxes.length < 3) return;
 
     // Sort by leading edge on the chosen axis.
-    boxes.sort((a, b) => axis === "horizontal" ? a.b.x - b.b.x : a.b.y - b.b.y);
+    boxes.sort((a, b) => (axis === "horizontal" ? a.b.x - b.b.x : a.b.y - b.b.y));
 
     const first = boxes[0].b;
     const last = boxes[boxes.length - 1].b;
     // Total span (first leading → last trailing) and sum of widths —
     // leftover is divvied into N-1 equal gaps between adjacent items.
-    const totalSpan = axis === "horizontal"
-      ? (last.x + last.width) - first.x
-      : (last.y + last.height) - first.y;
+    const totalSpan =
+      axis === "horizontal" ? last.x + last.width - first.x : last.y + last.height - first.y;
     const sizeSum = boxes.reduce((s, { b }) => s + (axis === "horizontal" ? b.width : b.height), 0);
     const gap = (totalSpan - sizeSum) / (boxes.length - 1);
 
-    let cursor = (axis === "horizontal" ? first.x : first.y) + (axis === "horizontal" ? first.width : first.height) + gap;
+    let cursor =
+      (axis === "horizontal" ? first.x : first.y) +
+      (axis === "horizontal" ? first.width : first.height) +
+      gap;
     let changed = false;
     for (let i = 1; i < boxes.length - 1; i++) {
       const { el, b } = boxes[i];
@@ -625,9 +654,7 @@ export class SelectionManager {
     // of the grouped set). Keeping z-order intuitive: grouping
     // should never change the visual stacking.
     const anchor = ordered[ordered.length - 1];
-    const group = document.createElementNS(
-      "http://www.w3.org/2000/svg", "g",
-    ) as SVGGElement;
+    const group = document.createElementNS("http://www.w3.org/2000/svg", "g") as SVGGElement;
     group.setAttribute("data-type", "group");
     parent.insertBefore(group, anchor);
     for (const el of ordered) group.appendChild(el);
@@ -772,9 +799,9 @@ export class SelectionManager {
     // this, the tail is locked to its initial position and the callout
     // is essentially decorative. See readTextBoxSpec for coord space.
     if (
-      el.tagName === "g"
-      && el.getAttribute("data-type") === "textbox"
-      && el.getAttribute("data-text-variant") === "callout"
+      el.tagName === "g" &&
+      el.getAttribute("data-type") === "textbox" &&
+      el.getAttribute("data-text-variant") === "callout"
     ) {
       this.#drawCalloutTailHandle(el);
     }
@@ -788,7 +815,11 @@ export class SelectionManager {
     const g = el as SVGGraphicsElement;
     if (!g.getBBox) return;
     let bb: DOMRect;
-    try { bb = g.getBBox(); } catch { return; }
+    try {
+      bb = g.getBBox();
+    } catch {
+      return;
+    }
     const cxL = bb.x + bb.width / 2;
     const cyL = bb.y + bb.height / 2;
 
@@ -796,26 +827,24 @@ export class SelectionManager {
     // resize-logic switch expects (0=TL, 1=TC, 2=TR, 3=MR, 4=BR,
     // 5=BC, 6=BL, 7=ML).
     const localPts: [number, number][] = [
-      [bb.x,                 bb.y],
-      [bb.x + bb.width / 2,  bb.y],
-      [bb.x + bb.width,      bb.y],
-      [bb.x + bb.width,      bb.y + bb.height / 2],
-      [bb.x + bb.width,      bb.y + bb.height],
-      [bb.x + bb.width / 2,  bb.y + bb.height],
-      [bb.x,                 bb.y + bb.height],
-      [bb.x,                 bb.y + bb.height / 2],
+      [bb.x, bb.y],
+      [bb.x + bb.width / 2, bb.y],
+      [bb.x + bb.width, bb.y],
+      [bb.x + bb.width, bb.y + bb.height / 2],
+      [bb.x + bb.width, bb.y + bb.height],
+      [bb.x + bb.width / 2, bb.y + bb.height],
+      [bb.x, bb.y + bb.height],
+      [bb.x, bb.y + bb.height / 2],
     ];
 
     // Outline rectangle (rotated) drawn first so it sits BEHIND the
     // square handles. Closes the visual frame so the user reads the
     // rotated bounding box at a glance.
-    const corners = [localPts[0], localPts[2], localPts[4], localPts[6]]
-      .map(([x, y]) => localToSvgPoint(el, new DOMPoint(x, y), this.#canvas.svg));
-    const outline = document.createElementNS(SVG_NS, "polygon");
-    outline.setAttribute(
-      "points",
-      corners.map((p) => `${p.x},${p.y}`).join(" "),
+    const corners = [localPts[0], localPts[2], localPts[4], localPts[6]].map(([x, y]) =>
+      localToSvgPoint(el, new DOMPoint(x, y), this.#canvas.svg),
     );
+    const outline = document.createElementNS(SVG_NS, "polygon");
+    outline.setAttribute("points", corners.map((p) => `${p.x},${p.y}`).join(" "));
     outline.setAttribute("fill", "none");
     outline.setAttribute("stroke", "#00d4ff");
     outline.setAttribute("stroke-width", String(1 / this.#canvas.zoom));
@@ -823,9 +852,7 @@ export class SelectionManager {
     this.#canvas.uiOverlay.appendChild(outline);
     this.#handles.push(outline as unknown as SVGRectElement);
 
-    const screenCenter = localToSvgPoint(
-      el, new DOMPoint(cxL, cyL), this.#canvas.svg,
-    );
+    const screenCenter = localToSvgPoint(el, new DOMPoint(cxL, cyL), this.#canvas.svg);
 
     const hs = HANDLE_SIZE / this.#canvas.zoom;
     for (let i = 0; i < localPts.length; i++) {
@@ -855,24 +882,25 @@ export class SelectionManager {
     const g = el as SVGGraphicsElement;
     if (!g.getBBox) return;
     let bb: DOMRect;
-    try { bb = g.getBBox(); } catch { return; }
+    try {
+      bb = g.getBBox();
+    } catch {
+      return;
+    }
     const cxL = bb.x + bb.width / 2;
 
     // The top-center anchor in local coords. We want the handle a
     // fixed SCREEN distance above it (perpendicular to the local top
     // edge in screen space), so compute two reference points and use
     // their screen-space normal.
-    const topMid = localToSvgPoint(
-      el, new DOMPoint(cxL, bb.y), this.#canvas.svg,
-    );
-    const botMid = localToSvgPoint(
-      el, new DOMPoint(cxL, bb.y + bb.height), this.#canvas.svg,
-    );
+    const topMid = localToSvgPoint(el, new DOMPoint(cxL, bb.y), this.#canvas.svg);
+    const botMid = localToSvgPoint(el, new DOMPoint(cxL, bb.y + bb.height), this.#canvas.svg);
     const dx = topMid.x - botMid.x;
     const dy = topMid.y - botMid.y;
     const len = Math.hypot(dx, dy) || 1;
     const offset = 22 / this.#canvas.zoom;
-    const ux = dx / len, uy = dy / len;
+    const ux = dx / len;
+    const uy = dy / len;
     const hx = topMid.x + ux * offset;
     const hy = topMid.y + uy * offset;
 
@@ -980,7 +1008,7 @@ export class SelectionManager {
     const tailXRaw = g.getAttribute("data-tail-x");
     const tailYRaw = g.getAttribute("data-tail-y");
     if (tailXRaw == null || tailYRaw == null) return;
-    const local = new DOMPoint(parseFloat(tailXRaw), parseFloat(tailYRaw));
+    const local = new DOMPoint(Number.parseFloat(tailXRaw), Number.parseFloat(tailYRaw));
     const p = localToSvgPoint(g, local, this.#canvas.svg);
     const cx = p.x;
     const cy = p.y;
@@ -1007,7 +1035,10 @@ export class SelectionManager {
     // has a transform (rotation/flip), the visual position differs —
     // map each endpoint through the line's CTM so the handle dots sit
     // exactly where the user sees the arrow start/end.
-    const localPts: [number, number][] = [[x1, y1], [x2, y2]];
+    const localPts: [number, number][] = [
+      [x1, y1],
+      [x2, y2],
+    ];
     for (const [lx, ly] of localPts) {
       const sp = localToSvgPoint(el, new DOMPoint(lx, ly), this.#canvas.svg);
       const circle = document.createElementNS(SVG_NS, "circle");
@@ -1033,9 +1064,7 @@ export class SelectionManager {
     // straighten.
     if (isArrowGroup(el)) {
       const control = readArrowControl(el);
-      const [lx, ly] = control
-        ? [control.x, control.y]
-        : [(x1 + x2) / 2, (y1 + y2) / 2];
+      const [lx, ly] = control ? [control.x, control.y] : [(x1 + x2) / 2, (y1 + y2) / 2];
       const sp = localToSvgPoint(el, new DOMPoint(lx, ly), this.#canvas.svg);
       const r = hs / 1.8;
       const circle = document.createElementNS(SVG_NS, "circle");
@@ -1067,7 +1096,10 @@ export class SelectionManager {
 
   #drawGroupHandles(): void {
     const sw = 1 / this.#canvas.zoom;
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    let minX = Number.POSITIVE_INFINITY;
+    let minY = Number.POSITIVE_INFINITY;
+    let maxX = Number.NEGATIVE_INFINITY;
+    let maxY = Number.NEGATIVE_INFINITY;
 
     // Per-element subtle outline so the user can visually identify
     // WHICH elements are selected — with the combined group bbox alone,
@@ -1094,7 +1126,7 @@ export class SelectionManager {
       this.#canvas.uiOverlay.appendChild(elOutline);
       this.#handles.push(elOutline as any);
     }
-    if (!isFinite(minX)) return;
+    if (!Number.isFinite(minX)) return;
 
     // Combined group bbox — dashed outline to distinguish from the
     // per-element solid outlines. Acts as the anchor for the 8
@@ -1116,18 +1148,27 @@ export class SelectionManager {
   }
 
   // Handle indices: 0=TL, 1=TC, 2=TR, 3=MR, 4=BR, 5=BC, 6=BL, 7=ML
-  static HANDLE_CURSORS = ["nwse-resize","ns-resize","nesw-resize","ew-resize","nwse-resize","ns-resize","nesw-resize","ew-resize"];
+  static HANDLE_CURSORS = [
+    "nwse-resize",
+    "ns-resize",
+    "nesw-resize",
+    "ew-resize",
+    "nwse-resize",
+    "ns-resize",
+    "nesw-resize",
+    "ew-resize",
+  ];
 
   #drawBBoxHandles(bbox: DOMRect): void {
     const points = [
-      [bbox.x, bbox.y],                              // 0: top-left
-      [bbox.x + bbox.width / 2, bbox.y],             // 1: top-center
-      [bbox.x + bbox.width, bbox.y],                  // 2: top-right
-      [bbox.x + bbox.width, bbox.y + bbox.height / 2],// 3: middle-right
-      [bbox.x + bbox.width, bbox.y + bbox.height],    // 4: bottom-right
-      [bbox.x + bbox.width / 2, bbox.y + bbox.height],// 5: bottom-center
-      [bbox.x, bbox.y + bbox.height],                 // 6: bottom-left
-      [bbox.x, bbox.y + bbox.height / 2],             // 7: middle-left
+      [bbox.x, bbox.y], // 0: top-left
+      [bbox.x + bbox.width / 2, bbox.y], // 1: top-center
+      [bbox.x + bbox.width, bbox.y], // 2: top-right
+      [bbox.x + bbox.width, bbox.y + bbox.height / 2], // 3: middle-right
+      [bbox.x + bbox.width, bbox.y + bbox.height], // 4: bottom-right
+      [bbox.x + bbox.width / 2, bbox.y + bbox.height], // 5: bottom-center
+      [bbox.x, bbox.y + bbox.height], // 6: bottom-left
+      [bbox.x, bbox.y + bbox.height / 2], // 7: middle-left
     ];
 
     const hs = HANDLE_SIZE / this.#canvas.zoom;
@@ -1154,516 +1195,552 @@ export class SelectionManager {
     // remove them en masse.
     const opts = { signal: this.#abort.signal };
 
-    svg.addEventListener("pointerdown", (e) => {
-      if (this.#canvas.activeTool) return;
-      if (e.button !== 0) return;
+    svg.addEventListener(
+      "pointerdown",
+      (e) => {
+        if (this.#canvas.activeTool) return;
+        if (e.button !== 0) return;
 
-      const pt = this.#canvas.svgPoint(e);
+        const pt = this.#canvas.svgPoint(e);
 
-      // Curve control-point handle (arrow groups). Tested before
-      // other handles because it sits close to the line body and we
-      // want the user to grab it unambiguously when they click it.
-      if (this.#curveHandle && this.#selectedSet.size === 1) {
-        const cx = parseFloat(this.#curveHandle.getAttribute("cx")!);
-        const cy = parseFloat(this.#curveHandle.getAttribute("cy")!);
-        const r = parseFloat(this.#curveHandle.getAttribute("r")!);
-        const dx = pt.x - cx;
-        const dy = pt.y - cy;
-        const hit = r * 2;
-        if (dx * dx + dy * dy <= hit * hit) {
-          const g = Array.from(this.#selectedSet)[0];
-          // Normalize any legacy transform into endpoints first so
-          // the CP is written in the same frame the user sees.
-          bakeLineTransform(g);
-          this.#draggingCurve = true;
-          this.#gestureChangedContent = false;
-          e.stopPropagation();
-          return;
-        }
-      }
-
-      // Rotation handle has the highest hit-test priority — it sits
-      // outside the bbox so collisions with other handles are
-      // unlikely, but we want unambiguous behavior when zoomed out.
-      if (this.#rotationHandle && this.#selectedSet.size === 1) {
-        const cx = parseFloat(this.#rotationHandle.getAttribute("cx")!);
-        const cy = parseFloat(this.#rotationHandle.getAttribute("cy")!);
-        const r = parseFloat(this.#rotationHandle.getAttribute("r")!);
-        const dx = pt.x - cx;
-        const dy = pt.y - cy;
-        const hit = r * 1.6;
-        if (dx * dx + dy * dy <= hit * hit) {
-          const g = Array.from(this.#selectedSet)[0];
-          // Lines/arrows: bake any stale transform into endpoints
-          // BEFORE snapshotting. After baking, the element's local
-          // and world frames are identical, so the rotation gesture
-          // operates entirely in svg-root coords. Then snapshot the
-          // (post-bake) endpoints so each pointermove computes fresh
-          // endpoints from a stable baseline (no accumulated drift).
-          if (isLineLike(g)) {
+        // Curve control-point handle (arrow groups). Tested before
+        // other handles because it sits close to the line body and we
+        // want the user to grab it unambiguously when they click it.
+        if (this.#curveHandle && this.#selectedSet.size === 1) {
+          const cx = Number.parseFloat(this.#curveHandle.getAttribute("cx")!);
+          const cy = Number.parseFloat(this.#curveHandle.getAttribute("cy")!);
+          const r = Number.parseFloat(this.#curveHandle.getAttribute("r")!);
+          const dx = pt.x - cx;
+          const dy = pt.y - cy;
+          const hit = r * 2;
+          if (dx * dx + dy * dy <= hit * hit) {
+            const g = Array.from(this.#selectedSet)[0];
+            // Normalize any legacy transform into endpoints first so
+            // the CP is written in the same frame the user sees.
             bakeLineTransform(g);
-            const ep = lineEndpointsOf(g);
-            this.#rotateLineSnapshot = { ...ep };
-            this.#rotating = true;
+            this.#draggingCurve = true;
             this.#gestureChangedContent = false;
-            // Pivot = midpoint of endpoints (same convention as
-            // bakeLineTransform). This keeps the rotation visually
-            // centered on the line.
-            this.#rotateCx = (ep.x1 + ep.x2) / 2;
-            this.#rotateCy = (ep.y1 + ep.y2) / 2;
-            this.#rotateStartRot = 0; // unused on the line path
-            this.#rotateStartAngle = Math.atan2(
-              pt.y - this.#rotateCy,
-              pt.x - this.#rotateCx,
-            ) * 180 / Math.PI;
-            e.stopPropagation();
-            return;
-          }
-          // Pivot for rotation = element's bbox center in svg coords.
-          const bb = getWorldBBox(g, this.#canvas.svg);
-          if (bb) {
-            this.#rotating = true;
-            this.#gestureChangedContent = false;
-            this.#rotateLineSnapshot = null;
-            this.#rotateCx = bb.x + bb.width / 2;
-            this.#rotateCy = bb.y + bb.height / 2;
-            this.#rotateStartRot = readTransformState(g).rotation;
-            this.#rotateStartAngle = Math.atan2(
-              pt.y - this.#rotateCy,
-              pt.x - this.#rotateCx,
-            ) * 180 / Math.PI;
             e.stopPropagation();
             return;
           }
         }
-      }
 
-      // Check if clicking the callout tail-tip handle FIRST. Tested
-      // before the resize handles because, when the tip happens to sit
-      // close to a corner handle, we want tail-drag to win — the user
-      // explicitly placed it there.
-      if (this.#tailHandle && this.#selectedSet.size === 1) {
-        const cx = parseFloat(this.#tailHandle.getAttribute("cx")!);
-        const cy = parseFloat(this.#tailHandle.getAttribute("cy")!);
-        const r = parseFloat(this.#tailHandle.getAttribute("r")!);
-        const dx = pt.x - cx;
-        const dy = pt.y - cy;
-        // Hit zone slightly larger than the visual radius to make small
-        // handles still grabbable on touch / coarse pointers.
-        const hit = r * 1.6;
-        if (dx * dx + dy * dy <= hit * hit) {
-          this.#draggingTail = true;
+        // Rotation handle has the highest hit-test priority — it sits
+        // outside the bbox so collisions with other handles are
+        // unlikely, but we want unambiguous behavior when zoomed out.
+        if (this.#rotationHandle && this.#selectedSet.size === 1) {
+          const cx = Number.parseFloat(this.#rotationHandle.getAttribute("cx")!);
+          const cy = Number.parseFloat(this.#rotationHandle.getAttribute("cy")!);
+          const r = Number.parseFloat(this.#rotationHandle.getAttribute("r")!);
+          const dx = pt.x - cx;
+          const dy = pt.y - cy;
+          const hit = r * 1.6;
+          if (dx * dx + dy * dy <= hit * hit) {
+            const g = Array.from(this.#selectedSet)[0];
+            // Lines/arrows: bake any stale transform into endpoints
+            // BEFORE snapshotting. After baking, the element's local
+            // and world frames are identical, so the rotation gesture
+            // operates entirely in svg-root coords. Then snapshot the
+            // (post-bake) endpoints so each pointermove computes fresh
+            // endpoints from a stable baseline (no accumulated drift).
+            if (isLineLike(g)) {
+              bakeLineTransform(g);
+              const ep = lineEndpointsOf(g);
+              this.#rotateLineSnapshot = { ...ep };
+              this.#rotating = true;
+              this.#gestureChangedContent = false;
+              // Pivot = midpoint of endpoints (same convention as
+              // bakeLineTransform). This keeps the rotation visually
+              // centered on the line.
+              this.#rotateCx = (ep.x1 + ep.x2) / 2;
+              this.#rotateCy = (ep.y1 + ep.y2) / 2;
+              this.#rotateStartRot = 0; // unused on the line path
+              this.#rotateStartAngle =
+                (Math.atan2(pt.y - this.#rotateCy, pt.x - this.#rotateCx) * 180) / Math.PI;
+              e.stopPropagation();
+              return;
+            }
+            // Pivot for rotation = element's bbox center in svg coords.
+            const bb = getWorldBBox(g, this.#canvas.svg);
+            if (bb) {
+              this.#rotating = true;
+              this.#gestureChangedContent = false;
+              this.#rotateLineSnapshot = null;
+              this.#rotateCx = bb.x + bb.width / 2;
+              this.#rotateCy = bb.y + bb.height / 2;
+              this.#rotateStartRot = readTransformState(g).rotation;
+              this.#rotateStartAngle =
+                (Math.atan2(pt.y - this.#rotateCy, pt.x - this.#rotateCx) * 180) / Math.PI;
+              e.stopPropagation();
+              return;
+            }
+          }
+        }
+
+        // Check if clicking the callout tail-tip handle FIRST. Tested
+        // before the resize handles because, when the tip happens to sit
+        // close to a corner handle, we want tail-drag to win — the user
+        // explicitly placed it there.
+        if (this.#tailHandle && this.#selectedSet.size === 1) {
+          const cx = Number.parseFloat(this.#tailHandle.getAttribute("cx")!);
+          const cy = Number.parseFloat(this.#tailHandle.getAttribute("cy")!);
+          const r = Number.parseFloat(this.#tailHandle.getAttribute("r")!);
+          const dx = pt.x - cx;
+          const dy = pt.y - cy;
+          // Hit zone slightly larger than the visual radius to make small
+          // handles still grabbable on touch / coarse pointers.
+          const hit = r * 1.6;
+          if (dx * dx + dy * dy <= hit * hit) {
+            this.#draggingTail = true;
+            this.#gestureChangedContent = false;
+            e.stopPropagation();
+            return;
+          }
+        }
+
+        // Check if clicking a resize handle (only for single selection).
+        // Hit-test is over `#resizeHandles` (squares + line endpoints
+        // only) so the index returned is exactly what `#resizeElement`
+        // expects — decorations like the rotated outline polygon live in
+        // `#handles` and don't get in the way.
+        if (this.#selectedSet.size === 1) {
+          for (let i = 0; i < this.#resizeHandles.length; i++) {
+            const h = this.#resizeHandles[i];
+            const hb = (h as SVGGraphicsElement).getBBox();
+            if (
+              pt.x >= hb.x &&
+              pt.x <= hb.x + hb.width &&
+              pt.y >= hb.y &&
+              pt.y <= hb.y + hb.height
+            ) {
+              this.#resizing = true;
+              this.#gestureChangedContent = false;
+              this.#resizeHandle = i;
+              this.#startX = pt.x;
+              this.#startY = pt.y;
+              const sel = Array.from(this.#selectedSet)[0];
+              // Snapshot the LOCAL bbox at gesture start. The resize
+              // logic operates in local space (so a rotated rect stays
+              // rotated while it's being resized), and the snapshot is
+              // its only durable reference for "where we started".
+              const sg = sel as SVGGraphicsElement;
+              try {
+                this.#origBBox = sg.getBBox();
+              } catch {
+                this.#origBBox = getWorldBBox(sel, this.#canvas.svg);
+              }
+              e.stopPropagation();
+              return;
+            }
+          }
+        }
+
+        // Check if clicking an annotation element
+        // First try DOM hit test
+        const target = e.target as SVGElement;
+        let anno = target.closest("#annotations > *") as SVGElement | null;
+
+        // If DOM miss, try BBox hit test (catches pointer-events:none children, thin lines, etc.)
+        if (!anno) {
+          anno = this.#hitTestBBox(pt);
+        }
+
+        if (anno) {
+          if (e.shiftKey) {
+            this.toggleSelect(anno);
+          } else if (!this.#selectedSet.has(anno)) {
+            this.select(anno);
+          }
+          this.#dragging = true;
           this.#gestureChangedContent = false;
+          this.#startX = pt.x;
+          this.#startY = pt.y;
+          // Cache snap candidates (unselected element bboxes) once
+          // per gesture — they don't move while the user drags.
+          this.#snapCandidates = this.#collectSnapCandidates();
           e.stopPropagation();
           return;
         }
-      }
 
-      // Check if clicking a resize handle (only for single selection).
-      // Hit-test is over `#resizeHandles` (squares + line endpoints
-      // only) so the index returned is exactly what `#resizeElement`
-      // expects — decorations like the rotated outline polygon live in
-      // `#handles` and don't get in the way.
-      if (this.#selectedSet.size === 1) {
-        for (let i = 0; i < this.#resizeHandles.length; i++) {
-          const h = this.#resizeHandles[i];
-          const hb = (h as SVGGraphicsElement).getBBox();
-          if (pt.x >= hb.x && pt.x <= hb.x + hb.width && pt.y >= hb.y && pt.y <= hb.y + hb.height) {
-            this.#resizing = true;
-            this.#gestureChangedContent = false;
-            this.#resizeHandle = i;
-            this.#startX = pt.x;
-            this.#startY = pt.y;
-            const sel = Array.from(this.#selectedSet)[0];
-            // Snapshot the LOCAL bbox at gesture start. The resize
-            // logic operates in local space (so a rotated rect stays
-            // rotated while it's being resized), and the snapshot is
-            // its only durable reference for "where we started".
-            const sg = sel as SVGGraphicsElement;
-            try { this.#origBBox = sg.getBBox(); }
-            catch { this.#origBBox = getWorldBBox(sel, this.#canvas.svg); }
-            e.stopPropagation();
+        // Click on empty area: start marquee or deselect
+        if (!e.shiftKey) {
+          this.select(null);
+        }
+        this.#isMarquee = true;
+        this.#marqueeStartX = pt.x;
+        this.#marqueeStartY = pt.y;
+
+        this.#marquee = document.createElementNS(SVG_NS, "rect");
+        this.#marquee.setAttribute("x", String(pt.x));
+        this.#marquee.setAttribute("y", String(pt.y));
+        this.#marquee.setAttribute("width", "0");
+        this.#marquee.setAttribute("height", "0");
+        this.#marquee.setAttribute("fill", "rgba(0,212,255,0.08)");
+        this.#marquee.setAttribute("stroke", "#00d4ff");
+        this.#marquee.setAttribute("stroke-width", String(1 / this.#canvas.zoom));
+        this.#marquee.setAttribute("stroke-dasharray", `${3 / this.#canvas.zoom}`);
+        this.#marquee.style.pointerEvents = "none";
+        this.#canvas.uiOverlay.appendChild(this.#marquee);
+      },
+      opts,
+    );
+
+    svg.addEventListener(
+      "pointermove",
+      (e) => {
+        if (this.#canvas.activeTool) return;
+        const pt = this.#canvas.svgPoint(e);
+
+        // Marquee drag
+        if (this.#isMarquee && this.#marquee) {
+          const x = Math.min(this.#marqueeStartX, pt.x);
+          const y = Math.min(this.#marqueeStartY, pt.y);
+          const w = Math.abs(pt.x - this.#marqueeStartX);
+          const h = Math.abs(pt.y - this.#marqueeStartY);
+          this.#marquee.setAttribute("x", String(x));
+          this.#marquee.setAttribute("y", String(y));
+          this.#marquee.setAttribute("width", String(w));
+          this.#marquee.setAttribute("height", String(h));
+          return;
+        }
+
+        // Drag selected elements
+        if (this.#dragging && this.#selectedSet.size > 0) {
+          let dx = pt.x - this.#startX;
+          let dy = pt.y - this.#startY;
+          if (dx !== 0 || dy !== 0) {
+            // Smart-guide snap — adjust dx/dy so the selected bboxes'
+            // edges/centers coincide with nearby unselected elements,
+            // and draw dashed guide lines through the snapped axes.
+            // Holding Alt disables snap so users can place elements
+            // precisely without fighting the gravity wells.
+            if (this.#snapCandidates && this.#snapCandidates.length > 0 && !e.altKey) {
+              const draggedBoxes: DOMRect[] = [];
+              for (const el of this.#selectedSet) {
+                const gb = this.#worldBBox(el as SVGGraphicsElement);
+                if (gb) draggedBoxes.push(gb);
+              }
+              if (draggedBoxes.length > 0) {
+                const snap = computeSnap({
+                  draggedBoxes,
+                  dx,
+                  dy,
+                  otherBoxes: this.#snapCandidates,
+                  threshold: 5,
+                });
+                dx = snap.dx;
+                dy = snap.dy;
+                if (!this.#smartGuides) {
+                  this.#smartGuides = new SmartGuideOverlay(this.#canvas);
+                }
+                this.#smartGuides.render(snap.guides);
+              }
+            }
+
+            // Only mark the gesture as "actually modified content" when the
+            // pointer has moved. A plain click sets #dragging but never gets
+            // here, so pointerup won't push a new history state.
+            this.#gestureChangedContent = true;
+            for (const el of this.#selectedSet) {
+              this.#moveElement(el, dx, dy);
+            }
+            this.#startX = pt.x - (pt.x - this.#startX - dx); // advance by the snapped delta
+            this.#startY = pt.y - (pt.y - this.#startY - dy);
+            this.clearHandles();
+            this.#drawAllHandles();
+          }
+        }
+
+        // Tail-tip drag for callouts. Coords are stored in the textbox's
+        // LOCAL pre-transform space — invert the element's CTM-relative-
+        // to-svg to convert the pointer back into that frame (handles
+        // rotation/flip uniformly).
+        if (this.#draggingTail && this.#selectedSet.size === 1) {
+          const g = Array.from(this.#selectedSet)[0];
+          const local = pointToLocal(g, pt, this.#canvas.svg);
+          this.#gestureChangedContent = true;
+          setCalloutTail(g, local.x, local.y);
+          this.clearHandles();
+          this.#drawAllHandles();
+        }
+
+        // Curve control-point drag. The pointer position in svg-root
+        // space IS the new control point (arrows are baked, so local
+        // == world). Shift=snap CP to the perpendicular from line
+        // midpoint so symmetric curves are easy to draw.
+        if (this.#draggingCurve && this.#selectedSet.size === 1) {
+          const g = Array.from(this.#selectedSet)[0];
+          if (isArrowGroup(g)) {
+            let cpx = pt.x;
+            let cpy = pt.y;
+            if (e.shiftKey) {
+              // Snap to the line's perpendicular through midpoint —
+              // gives a symmetric U-curve.
+              const ep = readArrowEndpoints(g);
+              const mx = (ep.x1 + ep.x2) / 2;
+              const my = (ep.y1 + ep.y2) / 2;
+              const ldx = ep.x2 - ep.x1;
+              const ldy = ep.y2 - ep.y1;
+              const L2 = ldx * ldx + ldy * ldy;
+              if (L2 > 1e-6) {
+                // Project (pt - mid) onto line direction, subtract from
+                // the vector to get the perpendicular component, add to
+                // midpoint.
+                const t = ((pt.x - mx) * ldx + (pt.y - my) * ldy) / L2;
+                const projX = mx + t * ldx;
+                const projY = my + t * ldy;
+                const perpX = pt.x - projX;
+                const perpY = pt.y - projY;
+                cpx = mx + perpX;
+                cpy = my + perpY;
+              }
+            }
+            writeArrowControl(g, { x: cpx, y: cpy });
+            refreshArrowPath(g);
+            this.#gestureChangedContent = true;
+            this.clearHandles();
+            this.#drawAllHandles();
+          }
+          return;
+        }
+
+        // Rotation handle drag — angle delta from gesture start.
+        if (this.#rotating && this.#selectedSet.size === 1) {
+          const g = Array.from(this.#selectedSet)[0];
+          const ang = (Math.atan2(pt.y - this.#rotateCy, pt.x - this.#rotateCx) * 180) / Math.PI;
+          let deltaDeg = ang - this.#rotateStartAngle;
+          // Shift = snap to 15° increments (Figma / PowerPoint convention).
+          // For lines we snap the DELTA; for non-lines we snap the
+          // absolute rotation (same end result either way).
+          this.#gestureChangedContent = true;
+          if (this.#rotateLineSnapshot) {
+            // Line/arrow path: rotate the snapshot endpoints around the
+            // pivot. No transform attribute involved — the new endpoint
+            // positions ARE the rotation result.
+            if (e.shiftKey) deltaDeg = Math.round(deltaDeg / 15) * 15;
+            const rad = (deltaDeg * Math.PI) / 180;
+            const snap = this.#rotateLineSnapshot;
+            const p1 = rotateAround(snap.x1, snap.y1, this.#rotateCx, this.#rotateCy, rad);
+            const p2 = rotateAround(snap.x2, snap.y2, this.#rotateCx, this.#rotateCy, rad);
+            setLineEndpoints(g, p1.x, p1.y, p2.x, p2.y);
+          } else {
+            let next = this.#rotateStartRot + deltaDeg;
+            if (e.shiftKey) next = Math.round(next / 15) * 15;
+            setRotation(g, next);
+          }
+          this.clearHandles();
+          this.#drawAllHandles();
+        }
+
+        // Resize (single selection only). Convert the pointer into the
+        // element's LOCAL pre-transform frame so the same axis-aligned
+        // resize logic Just Works for rotated/flipped shapes — the
+        // pointer is "what the user grabbed" expressed in the same
+        // coordinate space as x/y/width/height.
+        if (this.#resizing && this.#selectedSet.size === 1 && this.#origBBox) {
+          const el = Array.from(this.#selectedSet)[0];
+          // Always convert the pointer into the element's local
+          // pre-transform frame. Lines need this too once a rotation
+          // transform is on the element — without it, dragging an
+          // endpoint to the visual cursor position writes svg-root
+          // coords into x1/y1 (which are local), so the rendered line
+          // jumps away from the cursor.
+          const localPt = pointToLocal(el, pt, this.#canvas.svg);
+          this.#gestureChangedContent = true;
+          this.#resizeElement(el, this.#resizeHandle, localPt, this.#origBBox);
+          this.clearHandles();
+          this.#drawAllHandles();
+        }
+      },
+      opts,
+    );
+
+    svg.addEventListener(
+      "pointerup",
+      (e) => {
+        // Finish marquee selection
+        if (this.#isMarquee && this.#marquee) {
+          const mx = Number.parseFloat(this.#marquee.getAttribute("x")!);
+          const my = Number.parseFloat(this.#marquee.getAttribute("y")!);
+          const mw = Number.parseFloat(this.#marquee.getAttribute("width")!);
+          const mh = Number.parseFloat(this.#marquee.getAttribute("height")!);
+          this.#marquee.remove();
+          this.#marquee = null;
+          this.#isMarquee = false;
+
+          if (mw > 3 && mh > 3) {
+            // Find all annotations intersecting the marquee
+            const hits = this.#findInRect(mx, my, mw, mh);
+            if (hits.length > 0) {
+              if (e.shiftKey) {
+                // Add to existing selection
+                for (const h of hits) this.#selectedSet.add(h);
+                this.clearHandles();
+                this.#drawAllHandles();
+                this.onChange?.();
+              } else {
+                this.selectMultiple(hits);
+              }
+            }
+          }
+          return;
+        }
+
+        // Push a history state only when the gesture actually modified
+        // content. A plain click (select → release without moving) sets
+        // #dragging but leaves #gestureChangedContent false, so we skip
+        // the save — no spurious "Edited" in the autosave indicator.
+        if (
+          (this.#dragging ||
+            this.#resizing ||
+            this.#draggingTail ||
+            this.#rotating ||
+            this.#draggingCurve) &&
+          this.#gestureChangedContent
+        ) {
+          this.#history.save();
+        }
+        this.#dragging = false;
+        this.#resizing = false;
+        this.#draggingTail = false;
+        this.#rotating = false;
+        this.#draggingCurve = false;
+        this.#rotateLineSnapshot = null;
+        this.#gestureChangedContent = false;
+        this.#origBBox = null;
+        // Clear smart-guide overlay — guides are only meaningful mid-drag.
+        this.#smartGuides?.clear();
+        this.#snapCandidates = null;
+      },
+      opts,
+    );
+
+    document.addEventListener(
+      "keydown",
+      (e) => {
+        if (this.#canvas.activeTool) return;
+        const t = e.target as HTMLElement;
+        if (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable) return;
+        // Also skip if inside a foreignObject (text editing)
+        if (t.closest?.("foreignObject")) return;
+
+        if ((e.key === "Delete" || e.key === "Backspace") && this.#selectedSet.size > 0) {
+          e.preventDefault();
+          this.deleteSelected();
+          return;
+        }
+        // Ctrl+A: select all
+        if (e.ctrlKey && e.key === "a") {
+          e.preventDefault();
+          const all = Array.from(this.#canvas.annotations.children) as SVGElement[];
+          this.selectMultiple(all);
+          return;
+        }
+        // Ctrl+C: copy selected
+        if (e.ctrlKey && e.key === "c" && this.#selectedSet.size > 0) {
+          e.preventDefault();
+          this.copySelected();
+          return;
+        }
+        // Ctrl+V: paste
+        if (e.ctrlKey && e.key === "v") {
+          if (this.#clipboard.length > 0) {
+            e.preventDefault();
+            this.paste();
+            return;
+          }
+          // If no internal clipboard, let browser handle (image paste etc.)
+        }
+        // Ctrl+D: duplicate
+        if (e.ctrlKey && e.key === "d" && this.#selectedSet.size > 0) {
+          e.preventDefault();
+          this.duplicate();
+          return;
+        }
+        // Shift+H / Shift+V: flip horizontally / vertically. Operates on
+        // every selected element so multi-select flips as a batch.
+        if (e.shiftKey && (e.key === "H" || e.key === "h") && this.#selectedSet.size > 0) {
+          e.preventDefault();
+          // toggleFlip auto-dispatches for line/arrow (bake-flip) vs
+          // other elements (data-flip attribute).
+          for (const el of this.#selectedSet) toggleFlip(el, "h");
+          this.clearHandles();
+          this.#drawAllHandles();
+          this.#history.save();
+          return;
+        }
+        if (e.shiftKey && (e.key === "V" || e.key === "v") && this.#selectedSet.size > 0) {
+          e.preventDefault();
+          for (const el of this.#selectedSet) toggleFlip(el, "v");
+          this.clearHandles();
+          this.#drawAllHandles();
+          this.#history.save();
+          return;
+        }
+
+        // Group: Ctrl+G group, Ctrl+Shift+G ungroup — Illustrator /
+        // PowerPoint / Figma convention.
+        if (e.ctrlKey && (e.key === "g" || e.key === "G")) {
+          e.preventDefault();
+          if (e.shiftKey) this.ungroupSelected();
+          else this.groupSelected();
+          return;
+        }
+
+        // Z-order: Ctrl+] bring forward, Ctrl+[ send backward, add Shift
+        // for "all the way" (PowerPoint / Illustrator / Affinity convention).
+        // Matches on the physical bracket keys regardless of kbd layout
+        // by checking both `]`/`[` and their Shift-pressed `}`/`{`.
+        if (e.ctrlKey && this.#selectedSet.size > 0) {
+          const isCloseBracket = e.key === "]" || e.key === "}";
+          const isOpenBracket = e.key === "[" || e.key === "{";
+          if (isCloseBracket) {
+            e.preventDefault();
+            if (e.shiftKey) this.bringToFront();
+            else this.bringForward();
+            return;
+          }
+          if (isOpenBracket) {
+            e.preventDefault();
+            if (e.shiftKey) this.sendToBack();
+            else this.sendBackward();
             return;
           }
         }
-      }
 
-      // Check if clicking an annotation element
-      // First try DOM hit test
-      const target = e.target as SVGElement;
-      let anno = target.closest("#annotations > *") as SVGElement | null;
-
-      // If DOM miss, try BBox hit test (catches pointer-events:none children, thin lines, etc.)
-      if (!anno) {
-        anno = this.#hitTestBBox(pt);
-      }
-
-      if (anno) {
-        if (e.shiftKey) {
-          this.toggleSelect(anno);
-        } else if (!this.#selectedSet.has(anno)) {
-          this.select(anno);
-        }
-        this.#dragging = true;
-        this.#gestureChangedContent = false;
-        this.#startX = pt.x;
-        this.#startY = pt.y;
-        // Cache snap candidates (unselected element bboxes) once
-        // per gesture — they don't move while the user drags.
-        this.#snapCandidates = this.#collectSnapCandidates();
-        e.stopPropagation();
-        return;
-      }
-
-      // Click on empty area: start marquee or deselect
-      if (!e.shiftKey) {
-        this.select(null);
-      }
-      this.#isMarquee = true;
-      this.#marqueeStartX = pt.x;
-      this.#marqueeStartY = pt.y;
-
-      this.#marquee = document.createElementNS(SVG_NS, "rect");
-      this.#marquee.setAttribute("x", String(pt.x));
-      this.#marquee.setAttribute("y", String(pt.y));
-      this.#marquee.setAttribute("width", "0");
-      this.#marquee.setAttribute("height", "0");
-      this.#marquee.setAttribute("fill", "rgba(0,212,255,0.08)");
-      this.#marquee.setAttribute("stroke", "#00d4ff");
-      this.#marquee.setAttribute("stroke-width", String(1 / this.#canvas.zoom));
-      this.#marquee.setAttribute("stroke-dasharray", `${3 / this.#canvas.zoom}`);
-      this.#marquee.style.pointerEvents = "none";
-      this.#canvas.uiOverlay.appendChild(this.#marquee);
-    }, opts);
-
-    svg.addEventListener("pointermove", (e) => {
-      if (this.#canvas.activeTool) return;
-      const pt = this.#canvas.svgPoint(e);
-
-      // Marquee drag
-      if (this.#isMarquee && this.#marquee) {
-        const x = Math.min(this.#marqueeStartX, pt.x);
-        const y = Math.min(this.#marqueeStartY, pt.y);
-        const w = Math.abs(pt.x - this.#marqueeStartX);
-        const h = Math.abs(pt.y - this.#marqueeStartY);
-        this.#marquee.setAttribute("x", String(x));
-        this.#marquee.setAttribute("y", String(y));
-        this.#marquee.setAttribute("width", String(w));
-        this.#marquee.setAttribute("height", String(h));
-        return;
-      }
-
-      // Drag selected elements
-      if (this.#dragging && this.#selectedSet.size > 0) {
-        let dx = pt.x - this.#startX;
-        let dy = pt.y - this.#startY;
-        if (dx !== 0 || dy !== 0) {
-          // Smart-guide snap — adjust dx/dy so the selected bboxes'
-          // edges/centers coincide with nearby unselected elements,
-          // and draw dashed guide lines through the snapped axes.
-          // Holding Alt disables snap so users can place elements
-          // precisely without fighting the gravity wells.
-          if (this.#snapCandidates && this.#snapCandidates.length > 0 && !e.altKey) {
-            const draggedBoxes: DOMRect[] = [];
-            for (const el of this.#selectedSet) {
-              const gb = this.#worldBBox(el as SVGGraphicsElement);
-              if (gb) draggedBoxes.push(gb);
-            }
-            if (draggedBoxes.length > 0) {
-              const snap = computeSnap({
-                draggedBoxes,
-                dx, dy,
-                otherBoxes: this.#snapCandidates,
-                threshold: 5,
-              });
-              dx = snap.dx;
-              dy = snap.dy;
-              if (!this.#smartGuides) {
-                this.#smartGuides = new SmartGuideOverlay(this.#canvas);
-              }
-              this.#smartGuides.render(snap.guides);
-            }
+        // Arrow keys: move selected elements
+        if (
+          this.#selectedSet.size > 0 &&
+          ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)
+        ) {
+          e.preventDefault();
+          const step = e.shiftKey ? 10 : 1; // Shift = 10px steps
+          let dx = 0;
+          let dy = 0;
+          switch (e.key) {
+            case "ArrowUp":
+              dy = -step;
+              break;
+            case "ArrowDown":
+              dy = step;
+              break;
+            case "ArrowLeft":
+              dx = -step;
+              break;
+            case "ArrowRight":
+              dx = step;
+              break;
           }
-
-          // Only mark the gesture as "actually modified content" when the
-          // pointer has moved. A plain click sets #dragging but never gets
-          // here, so pointerup won't push a new history state.
-          this.#gestureChangedContent = true;
           for (const el of this.#selectedSet) {
             this.#moveElement(el, dx, dy);
           }
-          this.#startX = pt.x - (pt.x - this.#startX - dx); // advance by the snapped delta
-          this.#startY = pt.y - (pt.y - this.#startY - dy);
           this.clearHandles();
           this.#drawAllHandles();
+          this.#history.save();
         }
-      }
-
-      // Tail-tip drag for callouts. Coords are stored in the textbox's
-      // LOCAL pre-transform space — invert the element's CTM-relative-
-      // to-svg to convert the pointer back into that frame (handles
-      // rotation/flip uniformly).
-      if (this.#draggingTail && this.#selectedSet.size === 1) {
-        const g = Array.from(this.#selectedSet)[0];
-        const local = pointToLocal(g, pt, this.#canvas.svg);
-        this.#gestureChangedContent = true;
-        setCalloutTail(g, local.x, local.y);
-        this.clearHandles();
-        this.#drawAllHandles();
-      }
-
-      // Curve control-point drag. The pointer position in svg-root
-      // space IS the new control point (arrows are baked, so local
-      // == world). Shift=snap CP to the perpendicular from line
-      // midpoint so symmetric curves are easy to draw.
-      if (this.#draggingCurve && this.#selectedSet.size === 1) {
-        const g = Array.from(this.#selectedSet)[0];
-        if (isArrowGroup(g)) {
-          let cpx = pt.x, cpy = pt.y;
-          if (e.shiftKey) {
-            // Snap to the line's perpendicular through midpoint —
-            // gives a symmetric U-curve.
-            const ep = readArrowEndpoints(g);
-            const mx = (ep.x1 + ep.x2) / 2;
-            const my = (ep.y1 + ep.y2) / 2;
-            const ldx = ep.x2 - ep.x1;
-            const ldy = ep.y2 - ep.y1;
-            const L2 = ldx * ldx + ldy * ldy;
-            if (L2 > 1e-6) {
-              // Project (pt - mid) onto line direction, subtract from
-              // the vector to get the perpendicular component, add to
-              // midpoint.
-              const t = ((pt.x - mx) * ldx + (pt.y - my) * ldy) / L2;
-              const projX = mx + t * ldx;
-              const projY = my + t * ldy;
-              const perpX = pt.x - projX;
-              const perpY = pt.y - projY;
-              cpx = mx + perpX;
-              cpy = my + perpY;
-            }
-          }
-          writeArrowControl(g, { x: cpx, y: cpy });
-          refreshArrowPath(g);
-          this.#gestureChangedContent = true;
-          this.clearHandles();
-          this.#drawAllHandles();
-        }
-        return;
-      }
-
-      // Rotation handle drag — angle delta from gesture start.
-      if (this.#rotating && this.#selectedSet.size === 1) {
-        const g = Array.from(this.#selectedSet)[0];
-        const ang = Math.atan2(pt.y - this.#rotateCy, pt.x - this.#rotateCx)
-          * 180 / Math.PI;
-        let deltaDeg = ang - this.#rotateStartAngle;
-        // Shift = snap to 15° increments (Figma / PowerPoint convention).
-        // For lines we snap the DELTA; for non-lines we snap the
-        // absolute rotation (same end result either way).
-        this.#gestureChangedContent = true;
-        if (this.#rotateLineSnapshot) {
-          // Line/arrow path: rotate the snapshot endpoints around the
-          // pivot. No transform attribute involved — the new endpoint
-          // positions ARE the rotation result.
-          if (e.shiftKey) deltaDeg = Math.round(deltaDeg / 15) * 15;
-          const rad = deltaDeg * Math.PI / 180;
-          const snap = this.#rotateLineSnapshot;
-          const p1 = rotateAround(snap.x1, snap.y1, this.#rotateCx, this.#rotateCy, rad);
-          const p2 = rotateAround(snap.x2, snap.y2, this.#rotateCx, this.#rotateCy, rad);
-          setLineEndpoints(g, p1.x, p1.y, p2.x, p2.y);
-        } else {
-          let next = this.#rotateStartRot + deltaDeg;
-          if (e.shiftKey) next = Math.round(next / 15) * 15;
-          setRotation(g, next);
-        }
-        this.clearHandles();
-        this.#drawAllHandles();
-      }
-
-      // Resize (single selection only). Convert the pointer into the
-      // element's LOCAL pre-transform frame so the same axis-aligned
-      // resize logic Just Works for rotated/flipped shapes — the
-      // pointer is "what the user grabbed" expressed in the same
-      // coordinate space as x/y/width/height.
-      if (this.#resizing && this.#selectedSet.size === 1 && this.#origBBox) {
-        const el = Array.from(this.#selectedSet)[0];
-        // Always convert the pointer into the element's local
-        // pre-transform frame. Lines need this too once a rotation
-        // transform is on the element — without it, dragging an
-        // endpoint to the visual cursor position writes svg-root
-        // coords into x1/y1 (which are local), so the rendered line
-        // jumps away from the cursor.
-        const localPt = pointToLocal(el, pt, this.#canvas.svg);
-        this.#gestureChangedContent = true;
-        this.#resizeElement(el, this.#resizeHandle, localPt, this.#origBBox);
-        this.clearHandles();
-        this.#drawAllHandles();
-      }
-    }, opts);
-
-    svg.addEventListener("pointerup", (e) => {
-      // Finish marquee selection
-      if (this.#isMarquee && this.#marquee) {
-        const mx = parseFloat(this.#marquee.getAttribute("x")!);
-        const my = parseFloat(this.#marquee.getAttribute("y")!);
-        const mw = parseFloat(this.#marquee.getAttribute("width")!);
-        const mh = parseFloat(this.#marquee.getAttribute("height")!);
-        this.#marquee.remove();
-        this.#marquee = null;
-        this.#isMarquee = false;
-
-        if (mw > 3 && mh > 3) {
-          // Find all annotations intersecting the marquee
-          const hits = this.#findInRect(mx, my, mw, mh);
-          if (hits.length > 0) {
-            if (e.shiftKey) {
-              // Add to existing selection
-              for (const h of hits) this.#selectedSet.add(h);
-              this.clearHandles();
-              this.#drawAllHandles();
-              this.onChange?.();
-            } else {
-              this.selectMultiple(hits);
-            }
-          }
-        }
-        return;
-      }
-
-      // Push a history state only when the gesture actually modified
-      // content. A plain click (select → release without moving) sets
-      // #dragging but leaves #gestureChangedContent false, so we skip
-      // the save — no spurious "Edited" in the autosave indicator.
-      if (
-        (this.#dragging || this.#resizing || this.#draggingTail
-          || this.#rotating || this.#draggingCurve)
-        && this.#gestureChangedContent
-      ) {
-        this.#history.save();
-      }
-      this.#dragging = false;
-      this.#resizing = false;
-      this.#draggingTail = false;
-      this.#rotating = false;
-      this.#draggingCurve = false;
-      this.#rotateLineSnapshot = null;
-      this.#gestureChangedContent = false;
-      this.#origBBox = null;
-      // Clear smart-guide overlay — guides are only meaningful mid-drag.
-      this.#smartGuides?.clear();
-      this.#snapCandidates = null;
-    }, opts);
-
-    document.addEventListener("keydown", (e) => {
-      if (this.#canvas.activeTool) return;
-      const t = e.target as HTMLElement;
-      if (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable) return;
-      // Also skip if inside a foreignObject (text editing)
-      if (t.closest?.("foreignObject")) return;
-
-      if ((e.key === "Delete" || e.key === "Backspace") && this.#selectedSet.size > 0) {
-        e.preventDefault();
-        this.deleteSelected();
-        return;
-      }
-      // Ctrl+A: select all
-      if (e.ctrlKey && e.key === "a") {
-        e.preventDefault();
-        const all = Array.from(this.#canvas.annotations.children) as SVGElement[];
-        this.selectMultiple(all);
-        return;
-      }
-      // Ctrl+C: copy selected
-      if (e.ctrlKey && e.key === "c" && this.#selectedSet.size > 0) {
-        e.preventDefault();
-        this.copySelected();
-        return;
-      }
-      // Ctrl+V: paste
-      if (e.ctrlKey && e.key === "v") {
-        if (this.#clipboard.length > 0) {
-          e.preventDefault();
-          this.paste();
-          return;
-        }
-        // If no internal clipboard, let browser handle (image paste etc.)
-      }
-      // Ctrl+D: duplicate
-      if (e.ctrlKey && e.key === "d" && this.#selectedSet.size > 0) {
-        e.preventDefault();
-        this.duplicate();
-        return;
-      }
-      // Shift+H / Shift+V: flip horizontally / vertically. Operates on
-      // every selected element so multi-select flips as a batch.
-      if (e.shiftKey && (e.key === "H" || e.key === "h") && this.#selectedSet.size > 0) {
-        e.preventDefault();
-        // toggleFlip auto-dispatches for line/arrow (bake-flip) vs
-        // other elements (data-flip attribute).
-        for (const el of this.#selectedSet) toggleFlip(el, "h");
-        this.clearHandles();
-        this.#drawAllHandles();
-        this.#history.save();
-        return;
-      }
-      if (e.shiftKey && (e.key === "V" || e.key === "v") && this.#selectedSet.size > 0) {
-        e.preventDefault();
-        for (const el of this.#selectedSet) toggleFlip(el, "v");
-        this.clearHandles();
-        this.#drawAllHandles();
-        this.#history.save();
-        return;
-      }
-
-      // Group: Ctrl+G group, Ctrl+Shift+G ungroup — Illustrator /
-      // PowerPoint / Figma convention.
-      if (e.ctrlKey && (e.key === "g" || e.key === "G")) {
-        e.preventDefault();
-        if (e.shiftKey) this.ungroupSelected();
-        else this.groupSelected();
-        return;
-      }
-
-      // Z-order: Ctrl+] bring forward, Ctrl+[ send backward, add Shift
-      // for "all the way" (PowerPoint / Illustrator / Affinity convention).
-      // Matches on the physical bracket keys regardless of kbd layout
-      // by checking both `]`/`[` and their Shift-pressed `}`/`{`.
-      if (e.ctrlKey && this.#selectedSet.size > 0) {
-        const isCloseBracket = e.key === "]" || e.key === "}";
-        const isOpenBracket = e.key === "[" || e.key === "{";
-        if (isCloseBracket) {
-          e.preventDefault();
-          if (e.shiftKey) this.bringToFront();
-          else this.bringForward();
-          return;
-        }
-        if (isOpenBracket) {
-          e.preventDefault();
-          if (e.shiftKey) this.sendToBack();
-          else this.sendBackward();
-          return;
-        }
-      }
-
-      // Arrow keys: move selected elements
-      if (this.#selectedSet.size > 0 && ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
-        e.preventDefault();
-        const step = e.shiftKey ? 10 : 1; // Shift = 10px steps
-        let dx = 0, dy = 0;
-        switch (e.key) {
-          case "ArrowUp": dy = -step; break;
-          case "ArrowDown": dy = step; break;
-          case "ArrowLeft": dx = -step; break;
-          case "ArrowRight": dx = step; break;
-        }
-        for (const el of this.#selectedSet) {
-          this.#moveElement(el, dx, dy);
-        }
-        this.clearHandles();
-        this.#drawAllHandles();
-        this.#history.save();
-      }
-    }, opts);
+      },
+      opts,
+    );
   }
 
   /** Hit test by checking if point falls within any annotation's bounding box */
@@ -1677,8 +1754,10 @@ export class SelectionManager {
       // Expand thin elements (lines) by a few pixels for easier clicking
       const pad = 6 / this.#canvas.zoom;
       if (
-        pt.x >= bbox.x - pad && pt.x <= bbox.x + bbox.width + pad &&
-        pt.y >= bbox.y - pad && pt.y <= bbox.y + bbox.height + pad
+        pt.x >= bbox.x - pad &&
+        pt.x <= bbox.x + bbox.width + pad &&
+        pt.y >= bbox.y - pad &&
+        pt.y <= bbox.y + bbox.height + pad
       ) {
         return el;
       }
@@ -1710,11 +1789,11 @@ export class SelectionManager {
   #moveElement(el: SVGElement, dx: number, dy: number): void {
     const tag = el.tagName;
     if (tag === "rect" || tag === "image") {
-      el.setAttribute("x", String(parseFloat(el.getAttribute("x") || "0") + dx));
-      el.setAttribute("y", String(parseFloat(el.getAttribute("y") || "0") + dy));
+      el.setAttribute("x", String(Number.parseFloat(el.getAttribute("x") || "0") + dx));
+      el.setAttribute("y", String(Number.parseFloat(el.getAttribute("y") || "0") + dy));
     } else if (tag === "ellipse") {
-      el.setAttribute("cx", String(parseFloat(el.getAttribute("cx") || "0") + dx));
-      el.setAttribute("cy", String(parseFloat(el.getAttribute("cy") || "0") + dy));
+      el.setAttribute("cx", String(Number.parseFloat(el.getAttribute("cx") || "0") + dx));
+      el.setAttribute("cy", String(Number.parseFloat(el.getAttribute("cy") || "0") + dy));
     } else if (isLineLike(el)) {
       // Line / arrow: rotation is baked into endpoints, so no
       // transform attribute exists and local space == world space.
@@ -1735,8 +1814,8 @@ export class SelectionManager {
       }
       return;
     } else if (tag === "text" || tag === "foreignObject") {
-      el.setAttribute("x", String(parseFloat(el.getAttribute("x") || "0") + dx));
-      el.setAttribute("y", String(parseFloat(el.getAttribute("y") || "0") + dy));
+      el.setAttribute("x", String(Number.parseFloat(el.getAttribute("x") || "0") + dx));
+      el.setAttribute("y", String(Number.parseFloat(el.getAttribute("y") || "0") + dy));
     } else if (tag === "path" || tag === "g") {
       // Translate-positioned: nudge data-tx/data-ty and let
       // applyTransformState rebuild the composite transform.
@@ -1776,10 +1855,10 @@ export class SelectionManager {
       const fromLeft = h === 0 || h === 6 || h === 7;
       const fromTop = h === 0 || h === 1 || h === 2;
 
-      let x = parseFloat(bgRect.getAttribute("x") || String(orig.x));
-      let y = parseFloat(bgRect.getAttribute("y") || String(orig.y));
-      let w = parseFloat(bgRect.getAttribute("width") || String(orig.width));
-      let bh = parseFloat(bgRect.getAttribute("height") || String(orig.height));
+      let x = Number.parseFloat(bgRect.getAttribute("x") || String(orig.x));
+      let y = Number.parseFloat(bgRect.getAttribute("y") || String(orig.y));
+      let w = Number.parseFloat(bgRect.getAttribute("width") || String(orig.width));
+      let bh = Number.parseFloat(bgRect.getAttribute("height") || String(orig.height));
 
       if (changeX) {
         if (fromLeft) {
@@ -1830,14 +1909,14 @@ export class SelectionManager {
     const h = handleIdx;
     const changeX = h !== 1 && h !== 5; // top-center and bottom-center: no X change
     const changeY = h !== 3 && h !== 7; // middle-right and middle-left: no Y change
-    const fromLeft = h === 0 || h === 6 || h === 7;   // TL, BL, ML
-    const fromTop = h === 0 || h === 1 || h === 2;     // TL, TC, TR
+    const fromLeft = h === 0 || h === 6 || h === 7; // TL, BL, ML
+    const fromTop = h === 0 || h === 1 || h === 2; // TL, TC, TR
 
     if (tag === "rect" || tag === "image" || tag === "foreignObject") {
-      let x = parseFloat(el.getAttribute("x") || String(orig.x));
-      let y = parseFloat(el.getAttribute("y") || String(orig.y));
-      let w = parseFloat(el.getAttribute("width") || String(orig.width));
-      let h2 = parseFloat(el.getAttribute("height") || String(orig.height));
+      let x = Number.parseFloat(el.getAttribute("x") || String(orig.x));
+      let y = Number.parseFloat(el.getAttribute("y") || String(orig.y));
+      let w = Number.parseFloat(el.getAttribute("width") || String(orig.width));
+      let h2 = Number.parseFloat(el.getAttribute("height") || String(orig.height));
 
       if (changeX) {
         if (fromLeft) {
@@ -1862,10 +1941,10 @@ export class SelectionManager {
       el.setAttribute("width", String(w));
       el.setAttribute("height", String(h2));
     } else if (tag === "ellipse") {
-      let cx = parseFloat(el.getAttribute("cx") || "0");
-      let cy = parseFloat(el.getAttribute("cy") || "0");
-      let rx = parseFloat(el.getAttribute("rx") || "0");
-      let ry = parseFloat(el.getAttribute("ry") || "0");
+      let cx = Number.parseFloat(el.getAttribute("cx") || "0");
+      let cy = Number.parseFloat(el.getAttribute("cy") || "0");
+      let rx = Number.parseFloat(el.getAttribute("rx") || "0");
+      let ry = Number.parseFloat(el.getAttribute("ry") || "0");
 
       if (changeX) {
         if (fromLeft) {
@@ -1875,7 +1954,7 @@ export class SelectionManager {
           cx = newLeft + rx;
         } else {
           rx = Math.max(5, Math.abs(pt.x - (cx - rx)) / 2);
-          cx = (cx - rx) + rx; // keep left edge, recalc center
+          cx = cx - rx + rx; // keep left edge, recalc center
           const left = cx - rx;
           rx = Math.max(5, (pt.x - left) / 2);
           cx = left + rx;

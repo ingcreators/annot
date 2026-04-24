@@ -47,8 +47,8 @@ export function showError(opts: ErrorBarOptions): void {
   // Icon
   const icon = document.createElement("span");
   icon.className = "error-bar-icon material-symbols-outlined";
-  icon.textContent = opts.severity === "warning" ? "warning"
-    : opts.severity === "info" ? "info" : "error";
+  icon.textContent =
+    opts.severity === "warning" ? "warning" : opts.severity === "info" ? "info" : "error";
   bar.appendChild(icon);
 
   // Message

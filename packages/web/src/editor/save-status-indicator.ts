@@ -21,7 +21,7 @@
 export type SaveStatus = "saved" | "pending" | "saving" | "error";
 
 interface StatusSpec {
-  icon: string;   // Material Symbols icon name
+  icon: string; // Material Symbols icon name
   label: string;
   className: string;
   ariaLabel: string;
@@ -90,7 +90,7 @@ export class SaveStatusIndicator {
     const spec = STATUS_SPECS[this.#status];
     // Reset status-specific classes then apply the new one, keeping the
     // base `save-status` class intact.
-    this.#el.className = "save-status " + spec.className;
+    this.#el.className = `save-status ${spec.className}`;
     this.#el.setAttribute("aria-label", spec.ariaLabel);
     setTooltip(this.#el, spec.ariaLabel);
     this.#iconEl.textContent = spec.icon;

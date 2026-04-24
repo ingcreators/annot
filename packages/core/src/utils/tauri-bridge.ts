@@ -33,7 +33,7 @@ export async function saveScreenshot(
     data,
     projectId: projectId ?? 1,
     sourceUrl: sourceUrl ?? "",
-    baseDir: baseDir + "/images",
+    baseDir: `${baseDir}/images`,
   });
 }
 
@@ -167,7 +167,12 @@ export async function saveWithXmp(
   filePath: string,
 ): Promise<void> {
   return invoke<void>("save_with_xmp", {
-    renderedImageB64, originalImageB64, annotationsSvg, width, height, filePath,
+    renderedImageB64,
+    originalImageB64,
+    annotationsSvg,
+    width,
+    height,
+    filePath,
   });
 }
 
@@ -213,7 +218,12 @@ export async function captureWindow(hwnd: number): Promise<CaptureResult> {
   return invoke<CaptureResult>("capture_window", { hwnd });
 }
 
-export async function captureRegion(x: number, y: number, width: number, height: number): Promise<CaptureResult> {
+export async function captureRegion(
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+): Promise<CaptureResult> {
   return invoke<CaptureResult>("capture_region", { x, y, width, height });
 }
 
@@ -250,15 +260,26 @@ export async function captureRegion(x: number, y: number, width: number, height:
 export interface AnnotationShape {
   type: string;
   // ---- Geometry ----
-  x?: number; y?: number; width?: number; height?: number;
-  x1?: number; y1?: number; x2?: number; y2?: number;
-  cx?: number; cy?: number; rx?: number; ry?: number;
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  x1?: number;
+  y1?: number;
+  x2?: number;
+  y2?: number;
+  cx?: number;
+  cy?: number;
+  rx?: number;
+  ry?: number;
 
   // ---- Stroke / fill ----
-  stroke?: string; stroke_width?: number;
+  stroke?: string;
+  stroke_width?: number;
   stroke_dasharray?: string;
   stroke_opacity?: number;
-  fill?: string; fill_opacity?: number;
+  fill?: string;
+  fill_opacity?: number;
 
   // ---- Rectangle variant ----
   /** Corner radius. 0 (or omitted) = sharp; >0 = rounded rectangle. */
@@ -312,18 +333,18 @@ export interface AnnotationShape {
    *  triangle-open→stealth, oval→oval, diamond→diamond, tbar→stealth
    *  w/ sm len, reverse→arrow reverse). */
   arrow_shape_start?: "none" | "arrow" | "triangle" | "stealth" | "diamond" | "oval";
-  arrow_shape_end?:   "none" | "arrow" | "triangle" | "stealth" | "diamond" | "oval";
+  arrow_shape_end?: "none" | "arrow" | "triangle" | "stealth" | "diamond" | "oval";
   /** Per-dimension arrow widths (perpendicular to stem, OOXML `w`). */
   arrow_width_start?: "sm" | "md" | "lg";
-  arrow_width_end?:   "sm" | "md" | "lg";
+  arrow_width_end?: "sm" | "md" | "lg";
   /** Per-dimension arrow lengths (along stem, OOXML `len`). */
   arrow_length_start?: "sm" | "md" | "lg";
-  arrow_length_end?:   "sm" | "md" | "lg";
+  arrow_length_end?: "sm" | "md" | "lg";
   /** Legacy single-size field — written for back-compat when older
    *  Rust handlers still read `arrow_size_*`. Equal to the length
    *  value. */
   arrow_size_start?: "sm" | "md" | "lg";
-  arrow_size_end?:   "sm" | "md" | "lg";
+  arrow_size_end?: "sm" | "md" | "lg";
 
   /** Stroke opacity (0..1). Emitted as `<a:alpha val="..."/>` inside
    *  the stroke's solidFill. */
@@ -355,7 +376,13 @@ export async function copyAsOffice(
   screenshotData?: string,
   pngDataUrl?: string,
 ): Promise<void> {
-  return invoke<void>("copy_as_office", { shapes, canvasWidth, canvasHeight, screenshotData, pngDataUrl });
+  return invoke<void>("copy_as_office", {
+    shapes,
+    canvasWidth,
+    canvasHeight,
+    screenshotData,
+    pngDataUrl,
+  });
 }
 
 export { isTauri };

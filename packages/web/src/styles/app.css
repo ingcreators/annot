@@ -25,13 +25,13 @@
 .error-bar-error {
   background: #3a1020;
   color: #ff8a8a;
-  border-bottom: 1px solid rgba(255,80,80,0.2);
+  border-bottom: 1px solid rgba(255, 80, 80, 0.2);
 }
 
 .error-bar-warning {
   background: #3a2a10;
   color: #ffc966;
-  border-bottom: 1px solid rgba(255,180,60,0.2);
+  border-bottom: 1px solid rgba(255, 180, 60, 0.2);
 }
 
 .error-bar-info {
@@ -43,7 +43,7 @@
    * already use. */
   background: #10203a;
   color: #a0b8ff;
-  border-bottom: 1px solid rgba(124,156,255,0.3);
+  border-bottom: 1px solid rgba(124, 156, 255, 0.3);
 }
 
 .error-bar-icon {
@@ -68,7 +68,7 @@
 }
 
 .error-bar-action:hover {
-  background: rgba(255,255,255,0.1);
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .error-bar-dismiss {
@@ -119,7 +119,7 @@
 }
 
 .brand-text {
-  font-family: 'Sora', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-weight: 700;
   font-size: 20px;
   letter-spacing: -0.04em;
@@ -214,7 +214,7 @@
 
 .split-editor {
   position: fixed;
-  inset: 48px 0 0 0;            /* below the toolbar */
+  inset: 48px 0 0 0; /* below the toolbar */
   background: var(--bg-secondary);
   display: flex;
   flex-direction: column;
@@ -287,7 +287,10 @@ body.split-editor-active #editor-header {
   transition: filter 0.15s, background 0.15s;
   border: 1px solid transparent;
 }
-.split-editor-btn:disabled { opacity: 0.5; cursor: wait; }
+.split-editor-btn:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
 .split-editor-btn:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
@@ -298,16 +301,24 @@ body.split-editor-active #editor-header {
   color: var(--text-primary);
   border-color: var(--border-color);
 }
-.split-editor-cancel:hover { background: rgba(255,255,255,0.06); }
-html.light .split-editor-cancel:hover { background: rgba(0,0,0,0.04); }
+.split-editor-cancel:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+html.light .split-editor-cancel:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
 
 .split-editor-apply {
   background: var(--accent, #7c9cff);
   color: #0b1020;
   border-color: var(--accent, #7c9cff);
 }
-.split-editor-apply:hover { filter: brightness(1.1); }
-html.light .split-editor-apply { color: #fff; }
+.split-editor-apply:hover {
+  filter: brightness(1.1);
+}
+html.light .split-editor-apply {
+  color: #fff;
+}
 
 .split-editor-scroll {
   flex: 1 1 auto;
@@ -322,7 +333,7 @@ html.light .split-editor-apply { color: #fff; }
 .split-editor-stack {
   position: relative;
   background: #000;
-  box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
   user-select: none;
   flex: 0 0 auto;
   cursor: crosshair;
@@ -332,7 +343,7 @@ html.light .split-editor-apply { color: #fff; }
   display: block;
   width: 100%;
   height: auto;
-  pointer-events: none;   /* clicks fall through to stack for "add split" */
+  pointer-events: none; /* clicks fall through to stack for "add split" */
   user-select: none;
 }
 
@@ -341,7 +352,7 @@ html.light .split-editor-apply { color: #fff; }
   left: 0;
   right: 0;
   height: 16px;
-  margin-top: -8px;                 /* centered on boundary y */
+  margin-top: -8px; /* centered on boundary y */
   cursor: ns-resize;
   display: flex;
   align-items: center;
@@ -362,7 +373,7 @@ html.light .split-editor-apply { color: #fff; }
   height: 2px;
   margin-top: -1px;
   background: var(--accent, #7c9cff);
-  box-shadow: 0 0 0 1px rgba(0,0,0,0.5);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5);
   pointer-events: none;
 }
 
@@ -389,14 +400,16 @@ html.light .split-editor-apply { color: #fff; }
   justify-content: center;
   opacity: 0;
   transition: opacity 0.15s, filter 0.15s;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
 }
 .split-editor-handle:hover .split-editor-handle-remove,
 .split-editor-handle:focus-within .split-editor-handle-remove,
 .split-editor-handle.dragging .split-editor-handle-remove {
   opacity: 1;
 }
-.split-editor-handle-remove:hover { filter: brightness(1.15); }
+.split-editor-handle-remove:hover {
+  filter: brightness(1.15);
+}
 .split-editor-handle-remove:focus-visible {
   outline: 2px solid #fff;
   outline-offset: 2px;
@@ -418,7 +431,7 @@ html.light .split-editor-apply { color: #fff; }
   font-variant-numeric: tabular-nums;
   pointer-events: none;
   letter-spacing: 0.01em;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.35);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
   border: 1px solid rgba(124, 156, 255, 0.4);
 }
 .split-editor-handle-size-above {
@@ -450,8 +463,12 @@ html.light .split-editor-handle-size {
   animation: kbd-help-fade-in 0.15s ease-out;
 }
 @keyframes kbd-help-fade-in {
-  from { opacity: 0; }
-  to   { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .keyboard-help-panel {
@@ -598,6 +615,12 @@ html.light .split-editor-handle-size {
   margin: 0 1px;
 }
 @keyframes draw-indicator-in {
-  from { opacity: 0; transform: translate(-50%, -6px); }
-  to   { opacity: 1; transform: translate(-50%, 0); }
+  from {
+    opacity: 0;
+    transform: translate(-50%, -6px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
 }

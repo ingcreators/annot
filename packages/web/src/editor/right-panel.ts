@@ -38,13 +38,19 @@
  *      on selection changes would cause canvas-size jitter and
  *      fit-to-window recomputes.
  */
-import type { Toolbar, SelectionManager, PageMetadata, PageElement } from "@ingcreators/annot-core";
+import type { PageElement, PageMetadata, SelectionManager, Toolbar } from "@ingcreators/annot-core";
 import {
-  PropertyPanel, setTooltip,
+  type CanvasManager,
+  type History,
+  PropertyPanel,
   highlightColorLabel,
-  type CanvasManager, type History,
+  setTooltip,
 } from "@ingcreators/annot-core";
-import { setRotation, toggleFlip, readTransformState } from "@ingcreators/annot-core/editor/transform-utils";
+import {
+  readTransformState,
+  setRotation,
+  toggleFlip,
+} from "@ingcreators/annot-core/editor/transform-utils";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -190,12 +196,7 @@ export class EditorRightPanel {
 
     // Embedded PropertyPanel — renders into its own root inside
     // selectionContent, which we toggle visibility on.
-    this.#propPanel = new PropertyPanel(
-      this.#selectionContent,
-      canvas,
-      history,
-      "docked",
-    );
+    this.#propPanel = new PropertyPanel(this.#selectionContent, canvas, history, "docked");
     this.#propPanel.onTargetReplaced = (replacements) => {
       const newEls = replacements.map((r) => r.newEl);
       if (newEls.length === 1) selection.select(newEls[0]);
@@ -333,9 +334,11 @@ export class EditorRightPanel {
    *  hides itself. Called by app.ts on each new editor session. */
   setPageMetadata(meta: PageMetadata | null | undefined): void {
     this.#pageMetadata = meta ?? null;
-    console.log("[annot/editor] setPageMetadata:",
+    console.log(
+      "[annot/editor] setPageMetadata:",
       meta ? `${meta.elements.length} elements` : "null/undefined",
-      meta?.captureRect);
+      meta?.captureRect,
+    );
     if (!this.#pageMetadata || this.#pageMetadata.elements.length === 0) {
       // Hide section if visible
       if (this.#elementsSection) this.#elementsSection.style.display = "none";
@@ -410,22 +413,25 @@ export class EditorRightPanel {
     };
     const inBounds = (el: PageElement): boolean => {
       const [x, y, w, h] = el.bbox;
-      return x + w > cr.x
-          && y + h > cr.y
-          && x < cr.x + cr.width
-          && y < cr.y + cr.height;
+      return x + w > cr.x && y + h > cr.y && x < cr.x + cr.width && y < cr.y + cr.height;
     };
     const matchesQuery = (el: PageElement): boolean => {
       if (!query) return true;
       const q = query.toLowerCase();
-      return [el.text, el.ariaLabel, el.role, el.placeholder, el.tag, el.href]
-        .some((s) => s && s.toLowerCase().includes(q));
+      return [el.text, el.ariaLabel, el.role, el.placeholder, el.tag, el.href].some((s) =>
+        s?.toLowerCase().includes(q),
+      );
     };
 
     const filtered = meta.elements.filter((e) => inBounds(e) && matchesQuery(e));
-    console.log("[annot/editor] filtered elements:",
-      filtered.length, "/", meta.elements.length,
-      "captureRect:", cr);
+    console.log(
+      "[annot/editor] filtered elements:",
+      filtered.length,
+      "/",
+      meta.elements.length,
+      "captureRect:",
+      cr,
+    );
     this.#visibleElements = filtered;
     this.#elementsBody.innerHTML = "";
     if (filtered.length === 0) {
@@ -552,7 +558,9 @@ export class EditorRightPanel {
      *  terminology + keyboard shortcut, so users who recognize the
      *  icon click directly and everyone else hovers. */
     const mkBtn = (
-      icon: string | { svg: string }, tooltip: string, onClick: () => void,
+      icon: string | { svg: string },
+      tooltip: string,
+      onClick: () => void,
     ): HTMLButtonElement => {
       const btn = document.createElement("button");
       btn.type = "button";
@@ -584,10 +592,16 @@ export class EditorRightPanel {
     container.appendChild(mkGroupHeader("Transform"));
     const transformRow = document.createElement("div");
     transformRow.className = "editor-right-panel-actions-row";
-    transformRow.appendChild(mkBtn("rotate_left",  "Rotate 90° counter-clockwise", () => this.#rotate(-90)));
-    transformRow.appendChild(mkBtn("rotate_right", "Rotate 90° clockwise",         () => this.#rotate(90)));
-    transformRow.appendChild(mkBtn({ svg: FLIP_H_SVG }, "Flip Horizontal (Shift+H)", () => this.#flip("h")));
-    transformRow.appendChild(mkBtn({ svg: FLIP_V_SVG }, "Flip Vertical (Shift+V)",   () => this.#flip("v")));
+    transformRow.appendChild(
+      mkBtn("rotate_left", "Rotate 90° counter-clockwise", () => this.#rotate(-90)),
+    );
+    transformRow.appendChild(mkBtn("rotate_right", "Rotate 90° clockwise", () => this.#rotate(90)));
+    transformRow.appendChild(
+      mkBtn({ svg: FLIP_H_SVG }, "Flip Horizontal (Shift+H)", () => this.#flip("h")),
+    );
+    transformRow.appendChild(
+      mkBtn({ svg: FLIP_V_SVG }, "Flip Vertical (Shift+V)", () => this.#flip("v")),
+    );
     container.appendChild(transformRow);
 
     // Group 2: Arrange (z-order) — operations that change the
@@ -596,10 +610,26 @@ export class EditorRightPanel {
     container.appendChild(mkGroupHeader("Arrange"));
     const zorderRow = document.createElement("div");
     zorderRow.className = "editor-right-panel-actions-row";
-    zorderRow.appendChild(mkBtn({ svg: BRING_TO_FRONT_SVG }, "Bring to Front (Ctrl+Shift+])", () => this.#selection.bringToFront()));
-    zorderRow.appendChild(mkBtn({ svg: BRING_FORWARD_SVG },  "Bring Forward (Ctrl+])",        () => this.#selection.bringForward()));
-    zorderRow.appendChild(mkBtn({ svg: SEND_BACKWARD_SVG },  "Send Backward (Ctrl+[)",        () => this.#selection.sendBackward()));
-    zorderRow.appendChild(mkBtn({ svg: SEND_TO_BACK_SVG },   "Send to Back (Ctrl+Shift+[)",   () => this.#selection.sendToBack()));
+    zorderRow.appendChild(
+      mkBtn({ svg: BRING_TO_FRONT_SVG }, "Bring to Front (Ctrl+Shift+])", () =>
+        this.#selection.bringToFront(),
+      ),
+    );
+    zorderRow.appendChild(
+      mkBtn({ svg: BRING_FORWARD_SVG }, "Bring Forward (Ctrl+])", () =>
+        this.#selection.bringForward(),
+      ),
+    );
+    zorderRow.appendChild(
+      mkBtn({ svg: SEND_BACKWARD_SVG }, "Send Backward (Ctrl+[)", () =>
+        this.#selection.sendBackward(),
+      ),
+    );
+    zorderRow.appendChild(
+      mkBtn({ svg: SEND_TO_BACK_SVG }, "Send to Back (Ctrl+Shift+[)", () =>
+        this.#selection.sendToBack(),
+      ),
+    );
     container.appendChild(zorderRow);
 
     // Group 3: Align — six edge/center options + two distribute.
@@ -610,25 +640,53 @@ export class EditorRightPanel {
     container.appendChild(mkGroupHeader("Align"));
     const alignRow = document.createElement("div");
     alignRow.className = "editor-right-panel-actions-row";
-    alignRow.appendChild(mkBtn("align_horizontal_left",   "Align left",          () => this.#selection.alignSelected("left")));
-    alignRow.appendChild(mkBtn("align_horizontal_center", "Align center",        () => this.#selection.alignSelected("center-h")));
-    alignRow.appendChild(mkBtn("align_horizontal_right",  "Align right",         () => this.#selection.alignSelected("right")));
-    alignRow.appendChild(mkBtn("horizontal_distribute",   "Distribute horizontally (needs 3+)", () => this.#selection.distributeSelected("horizontal")));
+    alignRow.appendChild(
+      mkBtn("align_horizontal_left", "Align left", () => this.#selection.alignSelected("left")),
+    );
+    alignRow.appendChild(
+      mkBtn("align_horizontal_center", "Align center", () =>
+        this.#selection.alignSelected("center-h"),
+      ),
+    );
+    alignRow.appendChild(
+      mkBtn("align_horizontal_right", "Align right", () => this.#selection.alignSelected("right")),
+    );
+    alignRow.appendChild(
+      mkBtn("horizontal_distribute", "Distribute horizontally (needs 3+)", () =>
+        this.#selection.distributeSelected("horizontal"),
+      ),
+    );
     container.appendChild(alignRow);
     const align2Row = document.createElement("div");
     align2Row.className = "editor-right-panel-actions-row";
-    align2Row.appendChild(mkBtn("align_vertical_top",     "Align top",           () => this.#selection.alignSelected("top")));
-    align2Row.appendChild(mkBtn("align_vertical_center",  "Align middle",        () => this.#selection.alignSelected("middle-v")));
-    align2Row.appendChild(mkBtn("align_vertical_bottom",  "Align bottom",        () => this.#selection.alignSelected("bottom")));
-    align2Row.appendChild(mkBtn("vertical_distribute",    "Distribute vertically (needs 3+)", () => this.#selection.distributeSelected("vertical")));
+    align2Row.appendChild(
+      mkBtn("align_vertical_top", "Align top", () => this.#selection.alignSelected("top")),
+    );
+    align2Row.appendChild(
+      mkBtn("align_vertical_center", "Align middle", () =>
+        this.#selection.alignSelected("middle-v"),
+      ),
+    );
+    align2Row.appendChild(
+      mkBtn("align_vertical_bottom", "Align bottom", () => this.#selection.alignSelected("bottom")),
+    );
+    align2Row.appendChild(
+      mkBtn("vertical_distribute", "Distribute vertically (needs 3+)", () =>
+        this.#selection.distributeSelected("vertical"),
+      ),
+    );
     container.appendChild(align2Row);
 
     // Group 4: Group / Ungroup.
     container.appendChild(mkGroupHeader("Group"));
     const groupRow = document.createElement("div");
     groupRow.className = "editor-right-panel-actions-row";
-    groupRow.appendChild(mkBtn("join_inner", "Group (Ctrl+G)",         () => this.#selection.groupSelected()));
-    groupRow.appendChild(mkBtn("join_left",  "Ungroup (Ctrl+Shift+G)", () => this.#selection.ungroupSelected()));
+    groupRow.appendChild(
+      mkBtn("join_inner", "Group (Ctrl+G)", () => this.#selection.groupSelected()),
+    );
+    groupRow.appendChild(
+      mkBtn("join_left", "Ungroup (Ctrl+Shift+G)", () => this.#selection.ungroupSelected()),
+    );
     container.appendChild(groupRow);
   }
 
@@ -693,9 +751,7 @@ export class EditorRightPanel {
       // "Counter (Circle)" already stripped to "Counter".
       return `${name.toLowerCase()}s`;
     };
-    const parts = Array.from(counts.entries()).map(
-      ([name, n]) => `${n} ${pluralize(name, n)}`,
-    );
+    const parts = Array.from(counts.entries()).map(([name, n]) => `${n} ${pluralize(name, n)}`);
     // Cap at 3 segments to keep the title readable in the narrow
     // panel; overflow becomes "…". Users can still see the full
     // count from the leading "N selected" prefix.
@@ -703,7 +759,7 @@ export class EditorRightPanel {
     if (parts.length <= 3) {
       breakdown = parts.join(" + ");
     } else {
-      breakdown = parts.slice(0, 2).join(" + ") + ` + ${parts.length - 2} more`;
+      breakdown = `${parts.slice(0, 2).join(" + ")} + ${parts.length - 2} more`;
     }
     return `${elements.length} selected — ${breakdown}`;
   }
@@ -730,7 +786,7 @@ export class EditorRightPanel {
       // Mosaic / blur redactions bake a modified PNG into an <image>.
       const rs = el.getAttribute("data-redact-style");
       if (rs === "mosaic") return "Mosaic";
-      if (rs === "blur")   return "Blur";
+      if (rs === "blur") return "Blur";
       return "Redaction";
     }
     if (tag === "path") {
@@ -743,7 +799,7 @@ export class EditorRightPanel {
       // naming so "Selected Draw (Pen)" identifies both the family
       // and the variant at a glance.
       if (style === "highlighter") return "Draw (Highlighter)";
-      if (style === "pen")         return "Draw (Pen)";
+      if (style === "pen") return "Draw (Pen)";
       return "Drawing";
     }
     if (tag === "g") {
@@ -783,7 +839,7 @@ export class EditorRightPanel {
         // shape or a circle marker, so the parens format keeps the
         // identity clear.
         const shape = el.getAttribute("data-shape");
-        if (shape === "rect")    return "Counter (Square)";
+        if (shape === "rect") return "Counter (Square)";
         if (shape === "rounded") return "Counter (Rounded square)";
         return "Counter (Circle)";
       }
@@ -837,7 +893,7 @@ function primaryLabelFor(el: PageElement): string {
   const candidate = el.ariaLabel || el.text || el.placeholder || el.role || el.tag;
   if (!candidate) return el.tag;
   // Sidebar rows are ~220 px after icon + sub. Keep label snug.
-  return candidate.length > 36 ? candidate.slice(0, 33) + "…" : candidate;
+  return candidate.length > 36 ? `${candidate.slice(0, 33)}…` : candidate;
 }
 
 /** Sub-label (small grey text on the right) — type / role hint. */

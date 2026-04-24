@@ -6,20 +6,20 @@
  * Implements StorageProvider interface.
  */
 import type {
+  FolderRecord,
   ImageRecord,
   ImageRecordUpdate,
-  FolderRecord,
   StorageProvider,
 } from "@ingcreators/annot-core/storage";
 import {
-  joinPath,
-  getParentPath,
-  getFilename,
-  validateName,
   ancestorPaths,
+  drawToThumbCanvas,
+  getFilename,
+  getParentPath,
+  joinPath,
   rewritePathPrefix,
   uniquifyFilenameAsync,
-  drawToThumbCanvas,
+  validateName,
 } from "@ingcreators/annot-core/storage";
 
 const DB_NAME = "annot";
@@ -294,7 +294,12 @@ export class BrowserStore implements StorageProvider {
   }
 
   /** Rewrite all descendant paths (folders + images) when a folder is moved/renamed. */
-  async #moveFolderImpl(oldPath: string, newPath: string, newParentPath: string, newName: string): Promise<string> {
+  async #moveFolderImpl(
+    oldPath: string,
+    newPath: string,
+    newParentPath: string,
+    newName: string,
+  ): Promise<string> {
     const db = await openDB();
     // Collect descendant folders and images
     const foldersToMove: FolderRecord[] = [];
@@ -306,7 +311,7 @@ export class BrowserStore implements StorageProvider {
         const cursor = req.result;
         if (cursor) {
           const f = cursor.value as FolderRecord;
-          if (f.path === oldPath || f.path.startsWith(oldPath + "/")) foldersToMove.push(f);
+          if (f.path === oldPath || f.path.startsWith(`${oldPath}/`)) foldersToMove.push(f);
           cursor.continue();
         } else resolve();
       };
@@ -319,7 +324,7 @@ export class BrowserStore implements StorageProvider {
         const cursor = req.result;
         if (cursor) {
           const img = cursor.value as ImageRecord;
-          if (img.path === oldPath || img.path.startsWith(oldPath + "/")) imagesToMove.push(img);
+          if (img.path === oldPath || img.path.startsWith(`${oldPath}/`)) imagesToMove.push(img);
           cursor.continue();
         } else resolve();
       };
@@ -376,7 +381,7 @@ export class BrowserStore implements StorageProvider {
         const cursor = imgReq.result;
         if (cursor) {
           const img = cursor.value as ImageRecord;
-          if (img.path === path || img.path.startsWith(path + "/")) cursor.delete();
+          if (img.path === path || img.path.startsWith(`${path}/`)) cursor.delete();
           cursor.continue();
         }
       };
@@ -387,7 +392,7 @@ export class BrowserStore implements StorageProvider {
         const cursor = fReq.result;
         if (cursor) {
           const f = cursor.value as FolderRecord;
-          if (f.path === path || f.path.startsWith(path + "/")) cursor.delete();
+          if (f.path === path || f.path.startsWith(`${path}/`)) cursor.delete();
           cursor.continue();
         }
       };

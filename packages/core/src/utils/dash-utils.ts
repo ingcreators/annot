@@ -1,9 +1,9 @@
 /** Dash pattern multipliers (relative to stroke-width), matching Office presets */
 export const DASH_MULTIPLIERS: Record<string, number[]> = {
-  "dash":    [4, 3],
-  "dot":     [1, 3],
-  "dashDot": [4, 3, 1, 3],
-  "lgDash":  [8, 3],
+  dash: [4, 3],
+  dot: [1, 3],
+  dashDot: [4, 3, 1, 3],
+  lgDash: [8, 3],
 };
 
 /** Compute SVG stroke-dasharray from a dash key and stroke width */

@@ -1,5 +1,5 @@
-import { defineConfig } from "vite";
 import { resolve } from "path";
+import { defineConfig } from "vite";
 import type { Plugin } from "vite";
 
 /**
@@ -35,12 +35,7 @@ function iifeWrapContentScript(): Plugin {
         // giving us an early-out on repeat executions without touching
         // user code. `globalThis` works in browsers (window) and
         // isolated worlds alike.
-        chunk.code =
-          `(function(){\n`
-          + `if(globalThis.__anno_content_loaded)return;\n`
-          + `globalThis.__anno_content_loaded=true;\n`
-          + chunk.code
-          + `\n})();\n`;
+        chunk.code = `(function(){\nif(globalThis.__anno_content_loaded)return;\nglobalThis.__anno_content_loaded=true;\n${chunk.code}\n})();\n`;
         void fileName;
       }
     },
@@ -64,10 +59,9 @@ export default defineConfig({
         chunkFileNames: "chunks/[name]-[hash].js",
         assetFileNames: "assets/[name]-[hash][extname]",
         // Prevent service-worker from importing chunks that use DOM APIs
-        manualChunks(id) {
+        manualChunks(_id) {
           // Keep service-worker self-contained (no shared chunks)
           return undefined;
-          void id;
         },
       },
     },

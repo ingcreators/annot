@@ -9,9 +9,15 @@
   "scripts": {
     "build": "turbo build",
     "dev": "turbo dev",
-    "typecheck": "turbo typecheck"
+    "typecheck": "turbo typecheck",
+    "lint": "biome lint packages",
+    "lint:fix": "biome check packages --write",
+    "format": "biome format packages --write",
+    "check": "biome check packages",
+    "audit": "pnpm audit --audit-level=high"
   },
   "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
     "turbo": "^2.5.0"
   }
 }

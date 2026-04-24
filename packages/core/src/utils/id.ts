@@ -24,7 +24,7 @@ function uuid7Bytes(now: number = Date.now()): Uint8Array {
   // 48-bit timestamp (ms) — big-endian, bytes 0..5
   // Use arithmetic to avoid 32-bit overflow on the high bits.
   const tsHigh = Math.floor(now / 0x1_0000_0000); // upper 16 bits
-  const tsLow = now >>> 0;                         // lower 32 bits
+  const tsLow = now >>> 0; // lower 32 bits
   bytes[0] = (tsHigh >>> 8) & 0xff;
   bytes[1] = tsHigh & 0xff;
   bytes[2] = (tsLow >>> 24) & 0xff;

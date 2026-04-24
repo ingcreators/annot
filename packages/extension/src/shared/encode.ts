@@ -6,16 +6,13 @@
  * `@ingcreators/annot-core/encode` so both the extension and the Annot web
  * app share one canonical implementation.
  */
-import { encodeCapture as coreEncode, type EncodeResult } from "@ingcreators/annot-core/encode";
+import { type EncodeResult, encodeCapture as coreEncode } from "@ingcreators/annot-core/encode";
 import type { Settings } from "./settings.js";
 
 export type { EncodeResult };
 
 /** Encode per current extension settings. */
-export function encodeCapture(
-  pngDataUrl: string,
-  settings: Settings,
-): Promise<EncodeResult> {
+export function encodeCapture(pngDataUrl: string, settings: Settings): Promise<EncodeResult> {
   return coreEncode(pngDataUrl, {
     format: settings.quality.format,
     smartFallback: settings.quality.smartFallback,

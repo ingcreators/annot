@@ -6,7 +6,7 @@
  * - "fullscreen": immediately returns the full image
  */
 
-import type { WindowInfo, CaptureResult } from "@ingcreators/annot-core/utils/tauri-bridge";
+import type { CaptureResult, WindowInfo } from "@ingcreators/annot-core/utils/tauri-bridge";
 
 export type CaptureMode = "rect" | "window" | "fullscreen";
 
@@ -28,7 +28,8 @@ export function showCaptureOverlay(
 ): Promise<RegionResult | null> {
   if (mode === "fullscreen") {
     return Promise.resolve({
-      x: 0, y: 0,
+      x: 0,
+      y: 0,
       w: screenshot.width,
       h: screenshot.height,
     });
@@ -62,9 +63,10 @@ export function showCaptureOverlay(
       background: rgba(0,0,0,0.75); padding: 8px 20px; border-radius: 8px;
       pointer-events: none; z-index: 2;
     `;
-    hint.textContent = mode === "rect"
-      ? "Drag to select area. Press Escape to cancel."
-      : "Click a window to capture. Press Escape to cancel.";
+    hint.textContent =
+      mode === "rect"
+        ? "Drag to select area. Press Escape to cancel."
+        : "Click a window to capture. Press Escape to cancel.";
     overlay.appendChild(hint);
 
     // Scale from CSS px to screen px
@@ -77,7 +79,10 @@ export function showCaptureOverlay(
     }
 
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") { cleanup(); resolve(null); }
+      if (e.key === "Escape") {
+        cleanup();
+        resolve(null);
+      }
     }
     document.addEventListener("keydown", onKey);
 
@@ -93,7 +98,8 @@ export function showCaptureOverlay(
 
 function setupRectMode(
   overlay: HTMLElement,
-  scaleX: number, scaleY: number,
+  scaleX: number,
+  scaleY: number,
   cleanup: () => void,
   resolve: (r: RegionResult | null) => void,
 ): void {
@@ -114,10 +120,13 @@ function setupRectMode(
   `;
   overlay.appendChild(info);
 
-  let sx = 0, sy = 0, dragging = false;
+  let sx = 0;
+  let sy = 0;
+  let dragging = false;
 
   overlay.addEventListener("mousedown", (e) => {
-    sx = e.clientX; sy = e.clientY;
+    sx = e.clientX;
+    sy = e.clientY;
     dragging = true;
     sel.style.display = "block";
     info.style.display = "block";
@@ -125,19 +134,26 @@ function setupRectMode(
 
   overlay.addEventListener("mousemove", (e) => {
     if (!dragging) return;
-    const x = Math.min(sx, e.clientX), y = Math.min(sy, e.clientY);
-    const w = Math.abs(e.clientX - sx), h = Math.abs(e.clientY - sy);
-    sel.style.left = x + "px"; sel.style.top = y + "px";
-    sel.style.width = w + "px"; sel.style.height = h + "px";
+    const x = Math.min(sx, e.clientX);
+    const y = Math.min(sy, e.clientY);
+    const w = Math.abs(e.clientX - sx);
+    const h = Math.abs(e.clientY - sy);
+    sel.style.left = `${x}px`;
+    sel.style.top = `${y}px`;
+    sel.style.width = `${w}px`;
+    sel.style.height = `${h}px`;
     info.textContent = `${Math.round(w * scaleX)} \u00d7 ${Math.round(h * scaleY)}`;
-    info.style.left = x + "px"; info.style.top = (y + h + 6) + "px";
+    info.style.left = `${x}px`;
+    info.style.top = `${y + h + 6}px`;
   });
 
   overlay.addEventListener("mouseup", (e) => {
     if (!dragging) return;
     dragging = false;
-    const x = Math.min(sx, e.clientX), y = Math.min(sy, e.clientY);
-    const w = Math.abs(e.clientX - sx), h = Math.abs(e.clientY - sy);
+    const x = Math.min(sx, e.clientX);
+    const y = Math.min(sy, e.clientY);
+    const w = Math.abs(e.clientX - sx);
+    const h = Math.abs(e.clientY - sy);
     cleanup();
     if (w > 5 && h > 5) {
       resolve({
@@ -154,7 +170,8 @@ function setupRectMode(
 
 function setupWindowMode(
   overlay: HTMLElement,
-  scaleX: number, scaleY: number,
+  scaleX: number,
+  scaleY: number,
   windows: WindowInfo[],
   cleanup: () => void,
   resolve: (r: RegionResult | null) => void,
@@ -191,7 +208,8 @@ function setupWindowMode(
   let hoveredIdx = -1;
 
   overlay.addEventListener("mousemove", (e) => {
-    const mx = e.clientX, my = e.clientY;
+    const mx = e.clientX;
+    const my = e.clientY;
     // Find topmost window under cursor (first in list = topmost)
     let found = -1;
     for (let i = 0; i < cssWindows.length; i++) {
@@ -206,12 +224,14 @@ function setupWindowMode(
       hoveredIdx = found;
       if (found >= 0) {
         const w = cssWindows[found];
-        highlight.style.left = w.cx + "px"; highlight.style.top = w.cy + "px";
-        highlight.style.width = w.cw + "px"; highlight.style.height = w.ch + "px";
+        highlight.style.left = `${w.cx}px`;
+        highlight.style.top = `${w.cy}px`;
+        highlight.style.width = `${w.cw}px`;
+        highlight.style.height = `${w.ch}px`;
         highlight.style.display = "block";
         label.textContent = w.title;
-        label.style.left = w.cx + "px";
-        label.style.top = Math.max(0, w.cy - 28) + "px";
+        label.style.left = `${w.cx}px`;
+        label.style.top = `${Math.max(0, w.cy - 28)}px`;
         label.style.display = "block";
       } else {
         highlight.style.display = "none";

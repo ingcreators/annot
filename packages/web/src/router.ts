@@ -24,9 +24,9 @@ const BASE = import.meta.env.BASE_URL.replace(/\/$/, ""); // e.g. "" in dev, "/a
 
 export interface Route {
   type: "gallery" | "edit" | "handoff";
-  store?: string;   // "extension" | "device" | "browser" | "googledrive"
-  extId?: string;   // extension ID (from query param)
-  path?: string;    // image path (edit) or folder path (gallery deep-link); "" = root
+  store?: string; // "extension" | "device" | "browser" | "googledrive"
+  extId?: string; // extension ID (from query param)
+  path?: string; // image path (edit) or folder path (gallery deep-link); "" = root
   session?: string; // if set, open the Bulk Editor filtered by this session id
   /** For type "handoff": the source (e.g. "googledrive", future "onedrive"). */
   handoffSource?: string;
@@ -42,9 +42,15 @@ function encodePath(path: string): string {
 
 /** Decode percent-encoded segments back to a logical path. */
 function decodePath(segments: string[]): string {
-  return segments.map((s) => {
-    try { return decodeURIComponent(s); } catch { return s; }
-  }).join("/");
+  return segments
+    .map((s) => {
+      try {
+        return decodeURIComponent(s);
+      } catch {
+        return s;
+      }
+    })
+    .join("/");
 }
 
 /** Parse current URL into a Route. */
@@ -96,7 +102,12 @@ export function editUrl(store: string, imagePath: string, extId?: string): strin
  * Optionally includes an initial image path (active frame); otherwise the
  * editor opens with the first frame of the session active.
  */
-export function sessionEditUrl(store: string, sessionId: string, imagePath?: string, extId?: string): string {
+export function sessionEditUrl(
+  store: string,
+  sessionId: string,
+  imagePath?: string,
+  extId?: string,
+): string {
   const encoded = imagePath ? encodePath(imagePath) : "";
   const suffix = encoded ? `/${encoded}` : "";
   const params = new URLSearchParams();

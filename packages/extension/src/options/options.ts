@@ -1,9 +1,4 @@
-import {
-  DEFAULT_SETTINGS,
-  loadSettings,
-  saveSettings,
-  type Settings,
-} from "../shared/settings.js";
+import { DEFAULT_SETTINGS, type Settings, loadSettings, saveSettings } from "../shared/settings.js";
 
 let current: Settings = DEFAULT_SETTINGS;
 let savedTimer: number | undefined;
@@ -18,12 +13,12 @@ async function init(): Promise<void> {
 
 function apply(s: Settings): void {
   // Overlays
-  (el<HTMLSelectElement>("overlay-mode")).value = s.overlays.mode;
-  (el<HTMLInputElement>("keep-first-segment")).checked = s.overlays.keepFirstSegment;
-  (el<HTMLTextAreaElement>("preserved-selectors")).value = s.overlays.preservedSelectors;
+  el<HTMLSelectElement>("overlay-mode").value = s.overlays.mode;
+  el<HTMLInputElement>("keep-first-segment").checked = s.overlays.keepFirstSegment;
+  el<HTMLTextAreaElement>("preserved-selectors").value = s.overlays.preservedSelectors;
 
   // Scrollbars
-  (el<HTMLInputElement>("scrollbars-hide")).checked = s.scrollbars.hide;
+  el<HTMLInputElement>("scrollbars-hide").checked = s.scrollbars.hide;
 
   // Timing
   setRange("scroll-settle", s.timing.scrollSettleMs, "ms");
@@ -32,35 +27,37 @@ function apply(s: Settings): void {
   setRange("inter-seg", s.timing.interSegmentMs, "ms");
 
   // Format
-  (el<HTMLSelectElement>("image-format")).value = s.quality.format;
-  (el<HTMLSelectElement>("smart-fallback")).value = s.quality.smartFallback;
+  el<HTMLSelectElement>("image-format").value = s.quality.format;
+  el<HTMLSelectElement>("smart-fallback").value = s.quality.smartFallback;
   setRange("smart-threshold", s.quality.smartColorThreshold, "");
 
   // Quality
   setRange("jpeg-q", s.quality.jpegPercent, "%");
   setRange("thumb-q", s.quality.thumbnailPercent, "%");
-  (el<HTMLSelectElement>("thumb-w")).value = String(s.quality.thumbnailMaxWidth);
+  el<HTMLSelectElement>("thumb-w").value = String(s.quality.thumbnailMaxWidth);
 
   // Visibility: smart-fallback only matters when format === "smart"
   updateSmartFieldsVisibility(s.quality.format);
 
   // Emulation
-  (el<HTMLInputElement>("emulation-enabled")).checked = s.emulation.enabled;
-  (el<HTMLSelectElement>("emulation-preset")).value = s.emulation.preset;
-  (el<HTMLInputElement>("custom-width")).value = String(s.emulation.customWidth);
-  (el<HTMLInputElement>("custom-height")).value = String(s.emulation.customHeight);
+  el<HTMLInputElement>("emulation-enabled").checked = s.emulation.enabled;
+  el<HTMLSelectElement>("emulation-preset").value = s.emulation.preset;
+  el<HTMLInputElement>("custom-width").value = String(s.emulation.customWidth);
+  el<HTMLInputElement>("custom-height").value = String(s.emulation.customHeight);
   updateEmulationVisibility(s.emulation.enabled, s.emulation.preset);
 }
 
 function updateEmulationVisibility(enabled: boolean, preset: string): void {
-  (el<HTMLElement>("emulation-options")).style.display = enabled ? "" : "none";
-  (el<HTMLElement>("custom-emulation-fields")).style.display =
+  el<HTMLElement>("emulation-options").style.display = enabled ? "" : "none";
+  el<HTMLElement>("custom-emulation-fields").style.display =
     enabled && preset === "custom" ? "" : "none";
 }
 
 function updateSmartFieldsVisibility(format: string): void {
   const fallbackField = document.getElementById("smart-fallback-field")!;
-  const thresholdField = document.getElementById("smart-threshold")?.closest(".field") as HTMLElement | null;
+  const thresholdField = document
+    .getElementById("smart-threshold")
+    ?.closest(".field") as HTMLElement | null;
   const show = format === "smart";
   fallbackField.style.display = show ? "" : "none";
   if (thresholdField) thresholdField.style.display = show ? "" : "none";
@@ -91,7 +88,8 @@ function readCurrent(): Settings {
     },
     quality: {
       format: el<HTMLSelectElement>("image-format").value as Settings["quality"]["format"],
-      smartFallback: el<HTMLSelectElement>("smart-fallback").value as Settings["quality"]["smartFallback"],
+      smartFallback: el<HTMLSelectElement>("smart-fallback")
+        .value as Settings["quality"]["smartFallback"],
       smartColorThreshold: Number(el<HTMLInputElement>("smart-threshold").value),
       jpegPercent: Number(el<HTMLInputElement>("jpeg-q").value),
       thumbnailPercent: Number(el<HTMLInputElement>("thumb-q").value),
@@ -119,18 +117,24 @@ function wireEvents(): void {
   ] as const) {
     el<HTMLInputElement>(id).addEventListener("input", () => {
       const v = Number(el<HTMLInputElement>(id).value);
-      (el<HTMLOutputElement>(`${id}-val`)).textContent = `${v} ${unit}`.replace(" %", "%");
+      el<HTMLOutputElement>(`${id}-val`).textContent = `${v} ${unit}`.replace(" %", "%");
       scheduleSave();
     });
   }
 
   // Selects / checkbox / textarea — save on change
   const liveTargets = [
-    "overlay-mode", "keep-first-segment", "thumb-w",
-    "scrollbars-hide", "preserved-selectors",
-    "image-format", "smart-fallback",
-    "emulation-enabled", "emulation-preset",
-    "custom-width", "custom-height",
+    "overlay-mode",
+    "keep-first-segment",
+    "thumb-w",
+    "scrollbars-hide",
+    "preserved-selectors",
+    "image-format",
+    "smart-fallback",
+    "emulation-enabled",
+    "emulation-preset",
+    "custom-width",
+    "custom-height",
   ];
   for (const id of liveTargets) {
     const node = el(id);
@@ -163,7 +167,8 @@ function wireEvents(): void {
 
   // Reset button
   el<HTMLButtonElement>("btn-reset").addEventListener("click", async () => {
-    current = { ...DEFAULT_SETTINGS,
+    current = {
+      ...DEFAULT_SETTINGS,
       overlays: { ...DEFAULT_SETTINGS.overlays },
       scrollbars: { ...DEFAULT_SETTINGS.scrollbars },
       timing: { ...DEFAULT_SETTINGS.timing },

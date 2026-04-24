@@ -20,16 +20,19 @@ export function loadEncodeOptions(): EncodeOptions {
     if (!raw) return DEFAULT_ENCODE_OPTIONS;
     const parsed = JSON.parse(raw);
     return {
-      format: parsed.format === "png" || parsed.format === "jpeg" || parsed.format === "smart"
-        ? parsed.format
-        : DEFAULT_ENCODE_OPTIONS.format,
+      format:
+        parsed.format === "png" || parsed.format === "jpeg" || parsed.format === "smart"
+          ? parsed.format
+          : DEFAULT_ENCODE_OPTIONS.format,
       smartFallback: parsed.smartFallback === "jpeg" ? "jpeg" : "png",
-      smartColorThreshold: typeof parsed.smartColorThreshold === "number"
-        ? parsed.smartColorThreshold
-        : DEFAULT_ENCODE_OPTIONS.smartColorThreshold,
-      jpegPercent: typeof parsed.jpegPercent === "number"
-        ? parsed.jpegPercent
-        : DEFAULT_ENCODE_OPTIONS.jpegPercent,
+      smartColorThreshold:
+        typeof parsed.smartColorThreshold === "number"
+          ? parsed.smartColorThreshold
+          : DEFAULT_ENCODE_OPTIONS.smartColorThreshold,
+      jpegPercent:
+        typeof parsed.jpegPercent === "number"
+          ? parsed.jpegPercent
+          : DEFAULT_ENCODE_OPTIONS.jpegPercent,
     };
   } catch {
     return DEFAULT_ENCODE_OPTIONS;
@@ -39,5 +42,7 @@ export function loadEncodeOptions(): EncodeOptions {
 export function saveEncodeOptions(options: EncodeOptions): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(options));
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }

@@ -54,13 +54,22 @@ export function showPromptDialog(opts: PromptOptions): Promise<string | null> {
       okLabel: opts.okLabel ?? "OK",
       cancelLabel: opts.cancelLabel ?? "Cancel",
       danger: opts.danger,
-      onCancel: () => { close(); resolve(null); },
+      onCancel: () => {
+        close();
+        resolve(null);
+      },
       onOk: () => {
         const v = input.value.trim();
-        if (!v) { showError("Please enter a value."); return; }
+        if (!v) {
+          showError("Please enter a value.");
+          return;
+        }
         if (opts.validate) {
           const err = opts.validate(v);
-          if (err) { showError(err); return; }
+          if (err) {
+            showError(err);
+            return;
+          }
         }
         close();
         resolve(v);
@@ -75,11 +84,18 @@ export function showPromptDialog(opts: PromptOptions): Promise<string | null> {
     input.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
-        (root.querySelector<HTMLButtonElement>(".app-dialog-ok"))?.click();
+        root.querySelector<HTMLButtonElement>(".app-dialog-ok")?.click();
       }
     });
 
-    attachCloseBehaviors(root, () => { close(); resolve(null); }, { clickOutside: false });
+    attachCloseBehaviors(
+      root,
+      () => {
+        close();
+        resolve(null);
+      },
+      { clickOutside: false },
+    );
   });
 }
 
@@ -91,13 +107,26 @@ export function showConfirmDialog(opts: ConfirmOptions): Promise<boolean> {
       okLabel: opts.okLabel ?? "OK",
       cancelLabel: opts.cancelLabel ?? "Cancel",
       danger: opts.danger,
-      onCancel: () => { close(); resolve(false); },
-      onOk: () => { close(); resolve(true); },
+      onCancel: () => {
+        close();
+        resolve(false);
+      },
+      onOk: () => {
+        close();
+        resolve(true);
+      },
     });
     requestAnimationFrame(() => {
       root.querySelector<HTMLButtonElement>(".app-dialog-ok")?.focus();
     });
-    attachCloseBehaviors(root, () => { close(); resolve(false); }, { clickOutside: true });
+    attachCloseBehaviors(
+      root,
+      () => {
+        close();
+        resolve(false);
+      },
+      { clickOutside: true },
+    );
   });
 }
 
@@ -107,14 +136,27 @@ export function showAlertDialog(opts: AlertOptions): Promise<void> {
     const { close, root } = openDialog(opts.title, opts.message);
     addActions(root, {
       okLabel: opts.okLabel ?? "OK",
-      onCancel: () => { close(); resolve(); },
-      onOk: () => { close(); resolve(); },
+      onCancel: () => {
+        close();
+        resolve();
+      },
+      onOk: () => {
+        close();
+        resolve();
+      },
       singleButton: true,
     });
     requestAnimationFrame(() => {
       root.querySelector<HTMLButtonElement>(".app-dialog-ok")?.focus();
     });
-    attachCloseBehaviors(root, () => { close(); resolve(); }, { clickOutside: true });
+    attachCloseBehaviors(
+      root,
+      () => {
+        close();
+        resolve();
+      },
+      { clickOutside: true },
+    );
   });
 }
 
@@ -156,7 +198,11 @@ function openDialog(title: string, message?: string): OpenedDialog {
   document.body.appendChild(overlay);
 
   const close = () => {
-    try { overlay.remove(); } catch { /* ignore */ }
+    try {
+      overlay.remove();
+    } catch {
+      /* ignore */
+    }
   };
 
   return { root: dialog, body, close };
@@ -186,8 +232,7 @@ function addActions(root: HTMLElement, opts: ActionOpts): void {
 
   const ok = document.createElement("button");
   ok.type = "button";
-  ok.className = "app-dialog-btn app-dialog-ok"
-    + (opts.danger ? " app-dialog-danger" : " app-dialog-primary");
+  ok.className = `app-dialog-btn app-dialog-ok${opts.danger ? " app-dialog-danger" : " app-dialog-primary"}`;
   ok.textContent = opts.okLabel;
   ok.addEventListener("click", () => opts.onOk());
   actions.appendChild(ok);

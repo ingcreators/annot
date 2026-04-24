@@ -1,28 +1,28 @@
 import { CanvasManager } from "@ingcreators/annot-core/editor/canvas-manager";
 import { History } from "@ingcreators/annot-core/editor/history";
+import { PropertyPanel } from "@ingcreators/annot-core/editor/property-panel";
 import { SelectionManager } from "@ingcreators/annot-core/editor/selection";
 import { Toolbar } from "@ingcreators/annot-core/editor/toolbar";
-import { PropertyPanel } from "@ingcreators/annot-core/editor/property-panel";
+import {
+  isTauri,
+  loadScreenshot,
+  saveScreenshot,
+} from "@ingcreators/annot-core/utils/tauri-bridge";
 import { Gallery } from "./gallery.js";
 import { ProjectManager } from "./project-manager.js";
-import {
-  isTauri, saveScreenshot, loadScreenshot,
-} from "@ingcreators/annot-core/utils/tauri-bridge";
 
 let currentCanvas: CanvasManager | null = null;
-let currentImageId: number | undefined;
+let _currentImageId: number | undefined;
 let gallery: Gallery | null = null;
 
 function showView(view: "gallery" | "editor"): void {
-  document.getElementById("gallery-view")!.style.display =
-    view === "gallery" ? "" : "none";
-  document.getElementById("editor-view")!.style.display =
-    view === "editor" ? "" : "none";
+  document.getElementById("gallery-view")!.style.display = view === "gallery" ? "" : "none";
+  document.getElementById("editor-view")!.style.display = view === "editor" ? "" : "none";
 }
 
 function openEditor(dataUrl: string, width: number, height: number, imageId?: number): void {
   showView("editor");
-  currentImageId = imageId;
+  _currentImageId = imageId;
 
   const svg = document.getElementById("svg-root") as unknown as SVGSVGElement;
   svg.innerHTML = "";
@@ -72,7 +72,10 @@ function openEditor(dataUrl: string, width: number, height: number, imageId?: nu
         const item = document.createElement("button");
         item.className = "zoom-menu-item";
         item.textContent = "Fit to window";
-        item.addEventListener("click", () => { canvas.fitToView(); zoomMenu.style.display = "none"; });
+        item.addEventListener("click", () => {
+          canvas.fitToView();
+          zoomMenu.style.display = "none";
+        });
         zoomMenu.appendChild(item);
         const sep = document.createElement("div");
         sep.className = "zoom-menu-sep";
@@ -83,7 +86,10 @@ function openEditor(dataUrl: string, width: number, height: number, imageId?: nu
         const curZoom = Math.round(canvas.zoom * 100);
         if (Math.round((opt.value as number) * 100) === curZoom) item.classList.add("active");
         item.textContent = opt.label;
-        item.addEventListener("click", () => { canvas.setZoom(opt.value as number); zoomMenu.style.display = "none"; });
+        item.addEventListener("click", () => {
+          canvas.setZoom(opt.value as number);
+          zoomMenu.style.display = "none";
+        });
         zoomMenu.appendChild(item);
       }
     }
@@ -98,7 +104,9 @@ function openEditor(dataUrl: string, width: number, height: number, imageId?: nu
       zoomMenu.style.display = "none";
     }
   });
-  document.addEventListener("click", () => { zoomMenu.style.display = "none"; });
+  document.addEventListener("click", () => {
+    zoomMenu.style.display = "none";
+  });
 
   const toolbarEl = document.getElementById("toolbar")!;
   toolbarEl.innerHTML = "";
@@ -147,7 +155,24 @@ async function openImageFile(): Promise<void> {
       // `jpg` / `webp` etc. also match so users can bring in any
       // screenshot. `anno.png` / `anno.jpg` kept for backward
       // compatibility with files captured before the naming switch.
-      filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "svg", "annot.png", "annot.jpg", "annot.svg", "anno.png", "anno.jpg", "webp", "bmp"] }],
+      filters: [
+        {
+          name: "Images",
+          extensions: [
+            "png",
+            "jpg",
+            "jpeg",
+            "svg",
+            "annot.png",
+            "annot.jpg",
+            "annot.svg",
+            "anno.png",
+            "anno.jpg",
+            "webp",
+            "bmp",
+          ],
+        },
+      ],
     });
     if (selected) {
       const filePath = selected as string;
@@ -160,7 +185,7 @@ async function openImageFile(): Promise<void> {
 
       // Check for XMP metadata (re-editable image)
       const xmp = await readXmp(filePath);
-      if (xmp && xmp.original_image_b64 && xmp.annotations_svg) {
+      if (xmp?.original_image_b64 && xmp.annotations_svg) {
         const originalDataUrl = `data:image/jpeg;base64,${xmp.original_image_b64}`;
         const img = await loadImage(originalDataUrl);
         openEditor(originalDataUrl, img.naturalWidth, img.naturalHeight);
@@ -240,8 +265,8 @@ async function openSvgFile(filePath: string): Promise<void> {
     if (!href.startsWith("data:")) {
       // No embedded image, treat as annotation-only SVG
       // Use a blank white background
-      const w = parseInt(svgRoot.getAttribute("width") || "800");
-      const h = parseInt(svgRoot.getAttribute("height") || "600");
+      const w = Number.parseInt(svgRoot.getAttribute("width") || "800");
+      const h = Number.parseInt(svgRoot.getAttribute("height") || "600");
       const canvas = document.createElement("canvas");
       canvas.width = w;
       canvas.height = h;
@@ -261,7 +286,7 @@ async function openSvgFile(filePath: string): Promise<void> {
     // Restore annotations (everything except the base image and defs)
     setTimeout(() => restoreAnnotationsFromSvgRoot(svgRoot), 100);
   } catch (err) {
-    alert("Failed to open SVG: " + err);
+    alert(`Failed to open SVG: ${err}`);
   }
 }
 
@@ -272,7 +297,12 @@ function restoreAnnotationsFromSvgRoot(svgRoot: Element): void {
     const tag = child.tagName;
     // Skip: defs, base image, ui-overlay, annotations group wrapper
     if (tag === "defs") continue;
-    if (tag === "image" && (child.getAttribute("href")?.startsWith("data:") || child.getAttribute("xlink:href")?.startsWith("data:"))) continue;
+    if (
+      tag === "image" &&
+      (child.getAttribute("href")?.startsWith("data:") ||
+        child.getAttribute("xlink:href")?.startsWith("data:"))
+    )
+      continue;
     if (child.id === "ui-overlay") continue;
 
     if (child.id === "annotations") {
@@ -327,7 +357,9 @@ async function doCapture(mode: CaptureModeType): Promise<void> {
       // Simple: minimize, capture, restore
       await tauriInvoke("minimize_main_window");
       await new Promise((r) => setTimeout(r, 400));
-      const result = await tauriInvoke<{ data_url: string; width: number; height: number }>("capture_screen");
+      const result = await tauriInvoke<{ data_url: string; width: number; height: number }>(
+        "capture_screen",
+      );
       await tauriInvoke("restore_main_window");
       const saved = await saveScreenshot(result.data_url, activeProjectId());
       openEditor(result.data_url, result.width, result.height, saved.id);
@@ -352,19 +384,28 @@ async function doCapture(mode: CaptureModeType): Promise<void> {
     openEditor(cropped, region.w, region.h, saved.id);
     gallery?.refresh();
   } catch (err) {
-    try { await tauriInvoke("restore_main_window"); } catch {}
+    try {
+      await tauriInvoke("restore_main_window");
+    } catch {}
     if (String(err) !== "Capture cancelled") {
-      alert("Capture failed: " + err);
+      alert(`Capture failed: ${err}`);
     }
   }
 }
 
-function cropImage(dataUrl: string, sx: number, sy: number, sw: number, sh: number): Promise<string> {
+function cropImage(
+  dataUrl: string,
+  sx: number,
+  sy: number,
+  sw: number,
+  sh: number,
+): Promise<string> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
       const c = document.createElement("canvas");
-      c.width = sw; c.height = sh;
+      c.width = sw;
+      c.height = sh;
       c.getContext("2d")!.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
       resolve(c.toDataURL("image/png"));
     };
@@ -391,13 +432,22 @@ function init(): void {
   document.getElementById("btn-paste-image")!.addEventListener("click", pasteFromClipboard);
 
   if (isTauri) {
-    document.getElementById("btn-capture-screen")!.addEventListener("click", () => doCapture("fullscreen"));
-    document.getElementById("btn-capture-window")!.addEventListener("click", () => doCapture("window"));
-    document.getElementById("btn-capture-region")!.addEventListener("click", () => doCapture("rect"));
+    document
+      .getElementById("btn-capture-screen")!
+      .addEventListener("click", () => doCapture("fullscreen"));
+    document
+      .getElementById("btn-capture-window")!
+      .addEventListener("click", () => doCapture("window"));
+    document
+      .getElementById("btn-capture-region")!
+      .addEventListener("click", () => doCapture("rect"));
 
     // Global hotkey: PrintScreen
     document.addEventListener("keydown", (e) => {
-      if (e.key === "PrintScreen") { e.preventDefault(); doCapture("rect"); }
+      if (e.key === "PrintScreen") {
+        e.preventDefault();
+        doCapture("rect");
+      }
     });
   } else {
     document.getElementById("btn-capture-screen")!.style.display = "none";
@@ -414,7 +464,7 @@ function init(): void {
   document.getElementById("btn-back")!.addEventListener("click", () => {
     showView("gallery");
     currentCanvas = null;
-    currentImageId = undefined;
+    _currentImageId = undefined;
     gallery?.refresh();
   });
 
@@ -443,7 +493,7 @@ function init(): void {
 }
 
 async function startIncomingListener(): Promise<void> {
-  const baseDir = (await tauriInvoke<string>("get_portable_dir")) + "/images";
+  const baseDir = `${await tauriInvoke<string>("get_portable_dir")}/images`;
 
   // Listen for real-time events from HTTP server
   try {

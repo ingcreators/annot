@@ -1,3 +1,4 @@
+import { renderImageRecord } from "@ingcreators/annot-core/editor/export";
 /**
  * Google Drive storage provider — path-based interface.
  * Reads/writes image files to a user-selected Drive folder.
@@ -10,28 +11,24 @@
  * in the exposed path (Drive-side name is unchanged).
  */
 import type {
+  FolderRecord,
   ImageRecord,
   ImageRecordUpdate,
-  FolderRecord,
   StorageProvider,
 } from "@ingcreators/annot-core/storage";
 import {
-  joinPath,
-  getParentPath,
-  getFilename,
-  validateName,
   ancestorPaths,
+  drawToThumbCanvas,
+  getFilename,
+  getParentPath,
+  joinPath,
   rewritePathPrefix,
   uniquifyFilename,
-  drawToThumbCanvas,
+  validateName,
 } from "@ingcreators/annot-core/storage";
-import {
-  createEditableImage,
-  readEditableImage,
-} from "@ingcreators/annot-core/xmp";
-import { renderImageRecord } from "@ingcreators/annot-core/editor/export";
-import { encodeCaptureInWorker } from "../workers/encode-client.js";
+import { createEditableImage, readEditableImage } from "@ingcreators/annot-core/xmp";
 import { loadEncodeOptions } from "../encode-options.js";
+import { encodeCaptureInWorker } from "../workers/encode-client.js";
 
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
 const UPLOAD_API = "https://www.googleapis.com/upload/drive/v3";
@@ -42,7 +39,7 @@ export class GoogleDriveStore implements StorageProvider {
   #rootFolderId: string;
 
   // Path ↔ Drive ID maps
-  #pathToFolderId = new Map<string, string>();  // "" -> rootFolderId
+  #pathToFolderId = new Map<string, string>(); // "" -> rootFolderId
   #folderIdToPath = new Map<string, string>();
   #pathToFileId = new Map<string, string>();
   #fileIdToPath = new Map<string, string>();
@@ -115,7 +112,9 @@ export class GoogleDriveStore implements StorageProvider {
    */
   async resolveFileIdToPath(fileId: string): Promise<string | null> {
     // Fetch name + parents for the target file first.
-    const fileResp = await this.#fetch(`${DRIVE_API}/files/${fileId}?fields=id,name,parents,mimeType,createdTime`);
+    const fileResp = await this.#fetch(
+      `${DRIVE_API}/files/${fileId}?fields=id,name,parents,mimeType,createdTime`,
+    );
     const file = await fileResp.json();
     if (!file?.name || !Array.isArray(file.parents) || file.parents.length === 0) return null;
 
@@ -145,7 +144,9 @@ export class GoogleDriveStore implements StorageProvider {
         currentParentId = undefined;
         break;
       }
-      const parentResp = await this.#fetch(`${DRIVE_API}/files/${currentParentId}?fields=id,name,parents`);
+      const parentResp = await this.#fetch(
+        `${DRIVE_API}/files/${currentParentId}?fields=id,name,parents`,
+      );
       const parent = await parentResp.json();
       if (!parent?.name) return null;
       chain.unshift({ id: parent.id, name: parent.name });
@@ -239,10 +240,15 @@ export class GoogleDriveStore implements StorageProvider {
     }
   }
 
-  async #listDrive(query: string, fields = "files(id,name,mimeType,createdTime,thumbnailLink,parents)"): Promise<any[]> {
+  async #listDrive(
+    query: string,
+    fields = "files(id,name,mimeType,createdTime,thumbnailLink,parents)",
+  ): Promise<any[]> {
     const q = encodeURIComponent(query);
     const f = encodeURIComponent(fields);
-    const resp = await this.#fetch(`${DRIVE_API}/files?q=${q}&fields=${f}&orderBy=createdTime desc&pageSize=200`);
+    const resp = await this.#fetch(
+      `${DRIVE_API}/files?q=${q}&fields=${f}&orderBy=createdTime desc&pageSize=200`,
+    );
     const data = await resp.json();
     return data.files || [];
   }
@@ -337,7 +343,13 @@ export class GoogleDriveStore implements StorageProvider {
     const path = joinPath(folderPath, filename);
 
     const blob = await this.#buildXmpBlob(
-      { originalDataUrl: data.originalDataUrl, annotationsSvg: data.annotationsSvg, width: data.width, height: data.height, tags: data.tags },
+      {
+        originalDataUrl: data.originalDataUrl,
+        annotationsSvg: data.annotationsSvg,
+        width: data.width,
+        height: data.height,
+        tags: data.tags,
+      },
       isJpeg ? "jpg" : "png",
     );
     const driveId = await this.#uploadFile(filename, blob, parentId);
@@ -400,7 +412,9 @@ export class GoogleDriveStore implements StorageProvider {
     if (!driveId) return undefined;
 
     try {
-      const metaResp = await this.#fetch(`${DRIVE_API}/files/${driveId}?fields=id,name,createdTime,parents`);
+      const metaResp = await this.#fetch(
+        `${DRIVE_API}/files/${driveId}?fields=id,name,createdTime,parents`,
+      );
       const meta = await metaResp.json();
 
       const binResp = await this.#fetch(`${DRIVE_API}/files/${driveId}?alt=media`);
@@ -408,7 +422,7 @@ export class GoogleDriveStore implements StorageProvider {
       const bytes = new Uint8Array(arrayBuf);
 
       const xmp = readEditableImage(bytes);
-      const dataUrl = xmp?.originalImageDataUrl || await this.#blobToDataUrl(new Blob([bytes]));
+      const dataUrl = xmp?.originalImageDataUrl || (await this.#blobToDataUrl(new Blob([bytes])));
       const cachedMeta = this.#fileMeta.get(driveId);
 
       const record: ImageRecord = {
@@ -653,7 +667,7 @@ export class GoogleDriveStore implements StorageProvider {
     // Rewrite folder entries
     const folderEntries = Array.from(this.#pathToFolderId.entries());
     for (const [p, driveId] of folderEntries) {
-      if (p === oldPath || p.startsWith(oldPath + "/")) {
+      if (p === oldPath || p.startsWith(`${oldPath}/`)) {
         const np = rewritePathPrefix(p, oldPath, newPath);
         this.#pathToFolderId.delete(p);
         this.#pathToFolderId.set(np, driveId);
@@ -663,7 +677,7 @@ export class GoogleDriveStore implements StorageProvider {
     // Rewrite file entries
     const fileEntries = Array.from(this.#pathToFileId.entries());
     for (const [p, driveId] of fileEntries) {
-      if (p === oldPath || p.startsWith(oldPath + "/")) {
+      if (p === oldPath || p.startsWith(`${oldPath}/`)) {
         const np = rewritePathPrefix(p, oldPath, newPath);
         this.#pathToFileId.delete(p);
         this.#pathToFileId.set(np, driveId);
@@ -673,7 +687,7 @@ export class GoogleDriveStore implements StorageProvider {
     // Rewrite record cache entries (same prefix migration)
     const cacheEntries = Array.from(this.#recordCache.entries());
     for (const [p, rec] of cacheEntries) {
-      if (p === oldPath || p.startsWith(oldPath + "/")) {
+      if (p === oldPath || p.startsWith(`${oldPath}/`)) {
         const np = rewritePathPrefix(p, oldPath, newPath);
         this.#recordCache.delete(p);
         this.#recordCache.set(np, { ...rec, path: np, folderPath: getParentPath(np) });
@@ -695,14 +709,14 @@ export class GoogleDriveStore implements StorageProvider {
     await this.#fetch(`${DRIVE_API}/files/${driveId}`, { method: "DELETE" });
     // Clean up cache
     for (const [p] of Array.from(this.#pathToFolderId)) {
-      if (p === path || p.startsWith(path + "/")) {
+      if (p === path || p.startsWith(`${path}/`)) {
         const id = this.#pathToFolderId.get(p)!;
         this.#pathToFolderId.delete(p);
         this.#folderIdToPath.delete(id);
       }
     }
     for (const [p] of Array.from(this.#pathToFileId)) {
-      if (p === path || p.startsWith(path + "/")) {
+      if (p === path || p.startsWith(`${path}/`)) {
         const id = this.#pathToFileId.get(p)!;
         this.#pathToFileId.delete(p);
         this.#fileIdToPath.delete(id);
@@ -747,7 +761,7 @@ export class GoogleDriveStore implements StorageProvider {
 
   async #uploadFile(filename: string, blob: Blob, parentId: string): Promise<string> {
     const metadata = JSON.stringify({ name: filename, parents: [parentId] });
-    const boundary = "annot_boundary_" + Date.now();
+    const boundary = `annot_boundary_${Date.now()}`;
     const body =
       `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n` +
       `--${boundary}\r\nContent-Type: ${blob.type}\r\nContent-Transfer-Encoding: base64\r\n\r\n`;
@@ -772,7 +786,10 @@ export class GoogleDriveStore implements StorageProvider {
     let renderedBlob: Blob;
     if (record.annotationsSvg && record.annotationsSvg.length > 10 && record.originalDataUrl) {
       const renderedDataUrl = await renderImageRecord(
-        record.originalDataUrl, record.annotationsSvg, record.width || 0, record.height || 0,
+        record.originalDataUrl,
+        record.annotationsSvg,
+        record.width || 0,
+        record.height || 0,
       );
       // Re-encode rendered PNG via shared encoder (PNG-8 smart fallback).
       // Skip JPEG — already small at q=92.

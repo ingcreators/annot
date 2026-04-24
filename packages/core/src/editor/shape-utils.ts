@@ -32,17 +32,17 @@ export function detectShapeType(el: SVGElement): ShapeType | null {
  */
 export function shapeBBox(el: SVGElement): { x: number; y: number; w: number; h: number } {
   if (el.tagName === "ellipse") {
-    const cx = parseFloat(el.getAttribute("cx") || "0");
-    const cy = parseFloat(el.getAttribute("cy") || "0");
-    const rx = parseFloat(el.getAttribute("rx") || "0");
-    const ry = parseFloat(el.getAttribute("ry") || "0");
+    const cx = Number.parseFloat(el.getAttribute("cx") || "0");
+    const cy = Number.parseFloat(el.getAttribute("cy") || "0");
+    const rx = Number.parseFloat(el.getAttribute("rx") || "0");
+    const ry = Number.parseFloat(el.getAttribute("ry") || "0");
     return { x: cx - rx, y: cy - ry, w: rx * 2, h: ry * 2 };
   }
   return {
-    x: parseFloat(el.getAttribute("x") || "0"),
-    y: parseFloat(el.getAttribute("y") || "0"),
-    w: parseFloat(el.getAttribute("width") || "0"),
-    h: parseFloat(el.getAttribute("height") || "0"),
+    x: Number.parseFloat(el.getAttribute("x") || "0"),
+    y: Number.parseFloat(el.getAttribute("y") || "0"),
+    w: Number.parseFloat(el.getAttribute("width") || "0"),
+    h: Number.parseFloat(el.getAttribute("height") || "0"),
   };
 }
 

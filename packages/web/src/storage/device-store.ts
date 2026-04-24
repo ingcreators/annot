@@ -1,3 +1,4 @@
+import { renderImageRecord } from "@ingcreators/annot-core/editor/export";
 /**
  * Device (File System Access API) storage provider — path-based
  * identification. Reads/writes image files to a user-selected local
@@ -13,28 +14,24 @@
  * Subfolders on disk = gallery folders.
  */
 import type {
+  FolderRecord,
   ImageRecord,
   ImageRecordUpdate,
-  FolderRecord,
   StorageProvider,
 } from "@ingcreators/annot-core/storage";
 import {
-  joinPath,
-  getParentPath,
-  getFilename,
-  validateName,
   ancestorPaths,
+  drawToThumbCanvas,
+  getFilename,
+  getParentPath,
+  joinPath,
   rewritePathPrefix,
   uniquifyFilenameAsync,
-  drawToThumbCanvas,
+  validateName,
 } from "@ingcreators/annot-core/storage";
-import {
-  createEditableImage,
-  readEditableImage,
-} from "@ingcreators/annot-core/xmp";
-import { renderImageRecord } from "@ingcreators/annot-core/editor/export";
-import { encodeCaptureInWorker } from "../workers/encode-client.js";
+import { createEditableImage, readEditableImage } from "@ingcreators/annot-core/xmp";
 import { loadEncodeOptions } from "../encode-options.js";
+import { encodeCaptureInWorker } from "../workers/encode-client.js";
 
 const INDEX_FILE = ".annot.json";
 
@@ -59,7 +56,9 @@ export class DeviceStore implements StorageProvider {
   #root: FileSystemDirectoryHandle;
   #index: IndexData = { images: {} };
 
-  get rootName(): string { return this.#root.name; }
+  get rootName(): string {
+    return this.#root.name;
+  }
 
   constructor(root: FileSystemDirectoryHandle) {
     this.#root = root;
@@ -90,14 +89,21 @@ export class DeviceStore implements StorageProvider {
    */
   async #purgeEmptyFiles(dir: FileSystemDirectoryHandle, parentPath: string): Promise<void> {
     const toDelete: string[] = [];
-    for await (const [name, handle] of (dir as any).entries() as AsyncIterable<[string, FileSystemHandle]>) {
+    for await (const [name, handle] of (dir as any).entries() as AsyncIterable<
+      [string, FileSystemHandle]
+    >) {
       if (handle.kind === "file") {
         try {
           const file = await (handle as FileSystemFileHandle).getFile();
           if (file.size === 0) toDelete.push(name);
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
       } else if (handle.kind === "directory") {
-        await this.#purgeEmptyFiles(handle as FileSystemDirectoryHandle, parentPath ? `${parentPath}/${name}` : name);
+        await this.#purgeEmptyFiles(
+          handle as FileSystemDirectoryHandle,
+          parentPath ? `${parentPath}/${name}` : name,
+        );
       }
     }
     for (const name of toDelete) {
@@ -107,8 +113,13 @@ export class DeviceStore implements StorageProvider {
         if (this.#index.images[fullPath]) {
           delete this.#index.images[fullPath];
         }
-        console.log("[device-store] purged empty file:", parentPath ? `${parentPath}/${name}` : name);
-      } catch { /* ignore */ }
+        console.log(
+          "[device-store] purged empty file:",
+          parentPath ? `${parentPath}/${name}` : name,
+        );
+      } catch {
+        /* ignore */
+      }
     }
   }
 
@@ -164,7 +175,9 @@ export class DeviceStore implements StorageProvider {
         try {
           const dataUrl = await this.#fileToDataUrl(file);
           entry.thumbnailDataUrl = await this.generateThumbnail(dataUrl);
-        } catch { /* keep old thumbnail on failure */ }
+        } catch {
+          /* keep old thumbnail on failure */
+        }
         entry.mtime = file.lastModified;
         changed = true;
       } catch {
@@ -230,7 +243,9 @@ export class DeviceStore implements StorageProvider {
   async #syncFilesToIndex(): Promise<void> {
     const known = new Set(Object.keys(this.#index.images));
     let changed = false;
-    await this.#syncDir(this.#root, "", known, () => { changed = true; });
+    await this.#syncDir(this.#root, "", known, () => {
+      changed = true;
+    });
     if (changed) await this.#saveIndex();
   }
 
@@ -246,7 +261,8 @@ export class DeviceStore implements StorageProvider {
         if (!known.has(path)) {
           let thumbnailDataUrl = "";
           let tags: Record<string, string> = {};
-          let width = 0, height = 0;
+          let width = 0;
+          let height = 0;
           let mtime = 0;
           try {
             const file = await (handle as FileSystemFileHandle).getFile();
@@ -261,7 +277,9 @@ export class DeviceStore implements StorageProvider {
             }
             const dataUrl = await this.#fileToDataUrl(file);
             thumbnailDataUrl = await this.generateThumbnail(dataUrl);
-          } catch { /* skip on error — entry still added with empty tags */ }
+          } catch {
+            /* skip on error — entry still added with empty tags */
+          }
 
           this.#index.images[path] = {
             thumbnailDataUrl,
@@ -288,10 +306,12 @@ export class DeviceStore implements StorageProvider {
     // the folder appear in the Annot gallery alongside annot-native
     // captures — editor save-back preserves the original name for
     // external files and uses `.annot.*` only for fresh captures.
-    return lower.endsWith(".jpg")
-      || lower.endsWith(".jpeg")
-      || lower.endsWith(".png")
-      || lower.endsWith(".svg");
+    return (
+      lower.endsWith(".jpg") ||
+      lower.endsWith(".jpeg") ||
+      lower.endsWith(".png") ||
+      lower.endsWith(".svg")
+    );
   }
 
   async #getDirHandle(folderPath: string, create = false): Promise<FileSystemDirectoryHandle> {
@@ -304,7 +324,12 @@ export class DeviceStore implements StorageProvider {
   }
 
   async #fileExists(dir: FileSystemDirectoryHandle, name: string): Promise<boolean> {
-    try { await dir.getFileHandle(name); return true; } catch { return false; }
+    try {
+      await dir.getFileHandle(name);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   // ---- Images ----
@@ -320,7 +345,9 @@ export class DeviceStore implements StorageProvider {
     const folderPath = data.folderPath || "";
 
     const dir = await this.#getDirHandle(folderPath, true);
-    const filename = await uniquifyFilenameAsync(desiredFilename, (candidate) => this.#fileExists(dir, candidate));
+    const filename = await uniquifyFilenameAsync(desiredFilename, (candidate) =>
+      this.#fileExists(dir, candidate),
+    );
     const path = joinPath(folderPath, filename);
 
     // Build XMP blob
@@ -347,15 +374,27 @@ export class DeviceStore implements StorageProvider {
       // saves into "filename (2)". Clean up the partial file so retries
       // can use the original name.
       if (writable) {
-        try { await writable.abort(); } catch { /* ignore */ }
+        try {
+          await writable.abort();
+        } catch {
+          /* ignore */
+        }
       }
-      try { await dir.removeEntry(filename); } catch { /* ignore */ }
+      try {
+        await dir.removeEntry(filename);
+      } catch {
+        /* ignore */
+      }
       throw e;
     }
 
     const thumbnailDataUrl = await this.generateThumbnail(data.originalDataUrl);
     let mtime = 0;
-    try { mtime = (await fileHandle.getFile()).lastModified; } catch { /* ignore */ }
+    try {
+      mtime = (await fileHandle.getFile()).lastModified;
+    } catch {
+      /* ignore */
+    }
 
     this.#index.images[path] = {
       thumbnailDataUrl,
@@ -385,7 +424,7 @@ export class DeviceStore implements StorageProvider {
       return {
         path,
         folderPath: getParentPath(path),
-        originalDataUrl: meta?.originalImageDataUrl || await this.#fileToDataUrl(file),
+        originalDataUrl: meta?.originalImageDataUrl || (await this.#fileToDataUrl(file)),
         thumbnailDataUrl: entry.thumbnailDataUrl || "",
         annotationsSvg: meta?.annotationsSvg || "",
         width: meta?.width || 0,
@@ -441,7 +480,11 @@ export class DeviceStore implements StorageProvider {
       await writable.write(blob);
       await writable.close();
       // Record the new mtime so external-edit detection knows this change was ours
-      try { entry.mtime = (await fileHandle.getFile()).lastModified; } catch { /* ignore */ }
+      try {
+        entry.mtime = (await fileHandle.getFile()).lastModified;
+      } catch {
+        /* ignore */
+      }
     }
 
     if (updates.thumbnailDataUrl) {
@@ -459,7 +502,9 @@ export class DeviceStore implements StorageProvider {
       const oldDir = await this.#getDirHandle(getParentPath(path));
       const newDir = await this.#getDirHandle(newFolderPath, true);
 
-      const uniqueName = await uniquifyFilenameAsync(filename, (candidate) => this.#fileExists(newDir, candidate));
+      const uniqueName = await uniquifyFilenameAsync(filename, (candidate) =>
+        this.#fileExists(newDir, candidate),
+      );
       const newPath = joinPath(newFolderPath, uniqueName);
 
       const oldFile = await (await oldDir.getFileHandle(filename)).getFile();
@@ -503,7 +548,11 @@ export class DeviceStore implements StorageProvider {
     const entry = this.#index.images[path];
     delete this.#index.images[path];
     if (entry) {
-      try { entry.mtime = (await newHandle.getFile()).lastModified; } catch { /* ignore */ }
+      try {
+        entry.mtime = (await newHandle.getFile()).lastModified;
+      } catch {
+        /* ignore */
+      }
       this.#index.images[newPath] = entry;
     }
     await this.#saveIndex();
@@ -516,7 +565,9 @@ export class DeviceStore implements StorageProvider {
     try {
       const dir = await this.#getDirHandle(getParentPath(path));
       await dir.removeEntry(getFilename(path));
-    } catch { /* may already be gone */ }
+    } catch {
+      /* may already be gone */
+    }
 
     delete this.#index.images[path];
     await this.#saveIndex();
@@ -615,7 +666,10 @@ export class DeviceStore implements StorageProvider {
     return newPath;
   }
 
-  async #copyDirRecursive(src: FileSystemDirectoryHandle, dst: FileSystemDirectoryHandle): Promise<void> {
+  async #copyDirRecursive(
+    src: FileSystemDirectoryHandle,
+    dst: FileSystemDirectoryHandle,
+  ): Promise<void> {
     for await (const [name, handle] of (src as any).entries()) {
       if (handle.kind === "file") {
         const file = await (handle as FileSystemFileHandle).getFile();
@@ -634,7 +688,7 @@ export class DeviceStore implements StorageProvider {
     if (!path) return;
     // Drop index entries
     for (const p of Object.keys(this.#index.images)) {
-      if (p === path || p.startsWith(path + "/")) {
+      if (p === path || p.startsWith(`${path}/`)) {
         delete this.#index.images[p];
       }
     }
@@ -642,7 +696,9 @@ export class DeviceStore implements StorageProvider {
     const parentDir = await this.#getDirHandle(getParentPath(path));
     try {
       await parentDir.removeEntry(getFilename(path), { recursive: true });
-    } catch { /* may fail if not empty in some browsers */ }
+    } catch {
+      /* may fail if not empty in some browsers */
+    }
 
     await this.#saveIndex();
   }
@@ -690,7 +746,10 @@ export class DeviceStore implements StorageProvider {
     let renderedBlob: Blob;
     if (record.annotationsSvg && record.annotationsSvg.length > 10 && record.originalDataUrl) {
       const renderedDataUrl = await renderImageRecord(
-        record.originalDataUrl, record.annotationsSvg, record.width || 0, record.height || 0,
+        record.originalDataUrl,
+        record.annotationsSvg,
+        record.width || 0,
+        record.height || 0,
       );
       // The rendered image is a freshly-rasterized PNG-24 (or JPEG q=92).
       // Pipe it through the shared encoder so PNG output benefits from

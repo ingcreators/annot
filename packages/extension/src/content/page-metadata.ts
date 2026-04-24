@@ -23,7 +23,7 @@
  *   - The screenshot is in DEVICE pixels; consumers multiply by DPR.
  */
 
-import type { PageMetadata, PageElement } from "@ingcreators/annot-core";
+import type { PageElement, PageMetadata } from "@ingcreators/annot-core";
 
 /** Upper bound on elements collected. Protects against pathological
  *  pages (e.g. 10k-row tables). User-visible symptom of hitting the
@@ -76,26 +76,28 @@ export function capturePageMetadata(region?: CaptureRegion): PageMetadata {
         height: window.innerHeight,
       };
 
-  const walker = document.createTreeWalker(
-    document.body,
-    NodeFilter.SHOW_ELEMENT,
-    {
-      acceptNode: (node) => {
-        const el = node as Element;
-        // Skip our own UI (area selector, progress overlay, etc.) —
-        // the content script marks them with this attribute.
-        if (el.hasAttribute("data-annot-ui")) {
-          return NodeFilter.FILTER_REJECT;
-        }
-        // Skip script / style / head-ish elements.
-        const tag = el.tagName.toLowerCase();
-        if (tag === "script" || tag === "style" || tag === "noscript" || tag === "link" || tag === "meta") {
-          return NodeFilter.FILTER_REJECT;
-        }
-        return isInteresting(el) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP;
-      },
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT, {
+    acceptNode: (node) => {
+      const el = node as Element;
+      // Skip our own UI (area selector, progress overlay, etc.) —
+      // the content script marks them with this attribute.
+      if (el.hasAttribute("data-annot-ui")) {
+        return NodeFilter.FILTER_REJECT;
+      }
+      // Skip script / style / head-ish elements.
+      const tag = el.tagName.toLowerCase();
+      if (
+        tag === "script" ||
+        tag === "style" ||
+        tag === "noscript" ||
+        tag === "link" ||
+        tag === "meta"
+      ) {
+        return NodeFilter.FILTER_REJECT;
+      }
+      return isInteresting(el) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP;
     },
-  );
+  });
 
   let node: Node | null;
   while ((node = walker.nextNode()) !== null) {
@@ -172,7 +174,7 @@ function isVisuallyOnScreen(el: HTMLElement): boolean {
       const style = window.getComputedStyle(el);
       if (style.display === "none") return false;
       if (style.visibility === "hidden" || style.visibility === "collapse") return false;
-      if (parseFloat(style.opacity || "1") <= 0.05) return false;
+      if (Number.parseFloat(style.opacity || "1") <= 0.05) return false;
     }
 
     const rect = el.getBoundingClientRect();
@@ -206,13 +208,23 @@ function isInteresting(el: Element): boolean {
     case "select":
     case "textarea":
     case "label":
-    case "h1": case "h2": case "h3": case "h4": case "h5": case "h6":
+    case "h1":
+    case "h2":
+    case "h3":
+    case "h4":
+    case "h5":
+    case "h6":
       return true;
   }
   // Explicit ARIA role counts too — captures custom buttons / links
   // / tabs / menuitems built from <div>s.
   const role = el.getAttribute("role");
-  if (role && /^(button|link|tab|menuitem|checkbox|radio|switch|textbox|combobox|searchbox|option|treeitem|slider|spinbutton)$/.test(role)) {
+  if (
+    role &&
+    /^(button|link|tab|menuitem|checkbox|radio|switch|textbox|combobox|searchbox|option|treeitem|slider|spinbutton)$/.test(
+      role,
+    )
+  ) {
     return true;
   }
   // Any element explicitly in the tab order is interactive.
@@ -309,7 +321,7 @@ function extractText(el: HTMLElement): string | undefined {
   if (!raw) return undefined;
   // Clip very long text so sidebar rows stay compact — users can
   // always see the full text via tooltip on hover.
-  return raw.length > 120 ? raw.slice(0, 117) + "…" : raw;
+  return raw.length > 120 ? `${raw.slice(0, 117)}…` : raw;
 }
 
 /** Find the <label> associated with a form control. Supports both the
@@ -331,8 +343,10 @@ function labelFor(input: HTMLElement): string | null {
 function implicitRole(el: HTMLElement): string | null {
   const tag = el.tagName.toLowerCase();
   switch (tag) {
-    case "button": return "button";
-    case "a": return (el as HTMLAnchorElement).href ? "link" : null;
+    case "button":
+      return "button";
+    case "a":
+      return (el as HTMLAnchorElement).href ? "link" : null;
     case "input": {
       const t = (el as HTMLInputElement).type;
       if (t === "button" || t === "submit" || t === "reset") return "button";
@@ -342,10 +356,18 @@ function implicitRole(el: HTMLElement): string | null {
       if (t === "search") return "searchbox";
       return "textbox";
     }
-    case "textarea": return "textbox";
-    case "select": return "combobox";
-    case "label": return null;
-    case "h1": case "h2": case "h3": case "h4": case "h5": case "h6":
+    case "textarea":
+      return "textbox";
+    case "select":
+      return "combobox";
+    case "label":
+      return null;
+    case "h1":
+    case "h2":
+    case "h3":
+    case "h4":
+    case "h5":
+    case "h6":
       return "heading";
   }
   return null;
@@ -374,8 +396,9 @@ function cssSelector(el: Element): string {
     }
     // nth-of-type chain for stability.
     if (cur.parentElement) {
-      const siblings = Array.from(cur.parentElement.children)
-        .filter((c) => c.tagName === cur!.tagName);
+      const siblings = Array.from(cur.parentElement.children).filter(
+        (c) => c.tagName === cur!.tagName,
+      );
       if (siblings.length > 1) {
         part += `:nth-of-type(${siblings.indexOf(cur) + 1})`;
       }

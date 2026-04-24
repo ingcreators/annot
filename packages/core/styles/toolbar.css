@@ -35,7 +35,7 @@
   color: var(--text-primary);
   font-size: 20px;
   cursor: pointer;
-  font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 20;
+  font-variation-settings: "FILL" 0, "wght" 300, "GRAD" 0, "opsz" 20;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -144,8 +144,13 @@
   background: transparent;
 }
 
-.toolbar-color::-webkit-color-swatch-wrapper { padding: 2px; }
-.toolbar-color::-webkit-color-swatch { border: none; border-radius: 2px; }
+.toolbar-color::-webkit-color-swatch-wrapper {
+  padding: 2px;
+}
+.toolbar-color::-webkit-color-swatch {
+  border: none;
+  border-radius: 2px;
+}
 
 .toolbar-range {
   width: 60px;
@@ -183,7 +188,7 @@
   margin: 6px 0;
 }
 .toolbar-vertical .toolbar-spacer {
-  flex: 1;      /* flex: 1 already grows the correct axis in column layout */
+  flex: 1; /* flex: 1 already grows the correct axis in column layout */
 }
 /* Vertical mode: suppress the CSS ::after tooltip. It would need to
  * extend to the right of the 48px sidebar, which (a) gets clipped by
@@ -328,7 +333,7 @@
   background: transparent;
   color: var(--text-primary);
   font-size: 22px !important;
-  font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 24;
+  font-variation-settings: "FILL" 0, "wght" 500, "GRAD" 0, "opsz" 24;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -479,14 +484,12 @@
   padding: 0;
   border: none;
   transition: transform 0.12s, box-shadow 0.12s;
-  font-variation-settings: 'FILL' 1, 'wght' 600, 'GRAD' 0, 'opsz' 20;
+  font-variation-settings: "FILL" 1, "wght" 600, "GRAD" 0, "opsz" 20;
 }
 
 .tool-btn-badge:hover {
   transform: scale(1.15);
-  box-shadow:
-    0 0 0 1.5px var(--bg-panel),
-    0 0 0 3px var(--accent);
+  box-shadow: 0 0 0 1.5px var(--bg-panel), 0 0 0 3px var(--accent);
 }
 
 /* Expand the effective click zone beyond the visual circle without
@@ -508,9 +511,7 @@
   box-shadow: 0 0 0 1.5px var(--bg-active, var(--bg-panel));
 }
 .toolbar-btn.active .tool-btn-badge:hover {
-  box-shadow:
-    0 0 0 1.5px var(--bg-active, var(--bg-panel)),
-    0 0 0 3px var(--accent);
+  box-shadow: 0 0 0 1.5px var(--bg-active, var(--bg-panel)), 0 0 0 3px var(--accent);
 }
 
 /* SVG-based badge (for rect / rounded variants where Material Symbols

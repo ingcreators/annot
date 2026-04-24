@@ -1,5 +1,5 @@
-import { JPEG_QUALITY, MOSAIC_BLOCK_SIZE } from "@ingcreators/annot-core/utils";
 import type { EncodeOptions, EncodeResult } from "@ingcreators/annot-core/encode";
+import { MOSAIC_BLOCK_SIZE } from "@ingcreators/annot-core/utils";
 
 // ---- Worker pool for parallel PNG-8 / JPEG / PNG encoding ----
 
@@ -18,7 +18,7 @@ interface PendingTask {
 }
 
 const WORKER_COUNT = Math.min(4, Math.max(2, ((navigator as any).hardwareConcurrency || 4) - 1));
-let workers: Worker[] = [];
+const workers: Worker[] = [];
 const idleWorkers: Worker[] = [];
 const pendingByReqId = new Map<number, PendingTask>();
 const queue: PendingTask[] = [];
@@ -87,7 +87,11 @@ function loadImage(dataUrl: string): Promise<HTMLImageElement> {
   });
 }
 
-function canvasToDataUrl(canvas: OffscreenCanvas, format: string, quality: number): Promise<string> {
+function canvasToDataUrl(
+  canvas: OffscreenCanvas,
+  format: string,
+  quality: number,
+): Promise<string> {
   return canvas.convertToBlob({ type: format, quality }).then((blob) => {
     return new Promise<string>((resolve) => {
       const reader = new FileReader();
@@ -100,7 +104,7 @@ function canvasToDataUrl(canvas: OffscreenCanvas, format: string, quality: numbe
 async function handleStitch(
   segments: { dataUrl: string; offsetY: number }[],
   width: number,
-  height: number
+  height: number,
 ): Promise<string> {
   const canvas = new OffscreenCanvas(width, height);
   const ctx = canvas.getContext("2d")!;
@@ -116,7 +120,7 @@ async function handleStitch(
 async function handleCrop(
   dataUrl: string,
   rect: { x: number; y: number; width: number; height: number },
-  dpr: number
+  dpr: number,
 ): Promise<string> {
   const img = await loadImage(dataUrl);
   const sx = Math.round(rect.x * dpr);
@@ -133,7 +137,7 @@ async function handleCrop(
 async function handleMosaic(
   dataUrl: string,
   rect: { x: number; y: number; width: number; height: number },
-  blockSize: number
+  blockSize: number,
 ): Promise<string> {
   const img = await loadImage(dataUrl);
   const canvas = new OffscreenCanvas(rect.width, rect.height);
@@ -147,11 +151,17 @@ async function handleMosaic(
       const sampleX = Math.min(x + Math.floor(bs / 2), rect.width - 1);
       const sampleY = Math.min(y + Math.floor(bs / 2), rect.height - 1);
       const idx = (sampleY * rect.width + sampleX) * 4;
-      const r = data[idx], g = data[idx + 1], b = data[idx + 2], a = data[idx + 3];
+      const r = data[idx];
+      const g = data[idx + 1];
+      const b = data[idx + 2];
+      const a = data[idx + 3];
       for (let by = y; by < Math.min(y + bs, rect.height); by++) {
         for (let bx = x; bx < Math.min(x + bs, rect.width); bx++) {
           const i = (by * rect.width + bx) * 4;
-          data[i] = r; data[i + 1] = g; data[i + 2] = b; data[i + 3] = a;
+          data[i] = r;
+          data[i + 1] = g;
+          data[i + 2] = b;
+          data[i + 3] = a;
         }
       }
     }

@@ -70,24 +70,29 @@ export function detectTextVariant(g: SVGElement): TextVariant {
  */
 export function readTextBoxSpec(g: SVGElement): TextBoxSpec {
   const bg = g.querySelector("rect");
-  const x = parseFloat(bg?.getAttribute("x") || "0");
-  const y = parseFloat(bg?.getAttribute("y") || "0");
-  const w = parseFloat(bg?.getAttribute("width") || "200");
-  const h = parseFloat(bg?.getAttribute("height") || "80");
-  const text = g.getAttribute("data-text")
-    || g.querySelector("text")?.textContent || "";
-  const fontSize = parseFloat(g.getAttribute("data-font-size") || "16");
+  const x = Number.parseFloat(bg?.getAttribute("x") || "0");
+  const y = Number.parseFloat(bg?.getAttribute("y") || "0");
+  const w = Number.parseFloat(bg?.getAttribute("width") || "200");
+  const h = Number.parseFloat(bg?.getAttribute("height") || "80");
+  const text = g.getAttribute("data-text") || g.querySelector("text")?.textContent || "";
+  const fontSize = Number.parseFloat(g.getAttribute("data-font-size") || "16");
   const fontFamily = g.getAttribute("data-font-family") || "sans-serif";
   const color = g.getAttribute("data-color") || "#ff0000";
   const variant = detectTextVariant(g);
   const tailXRaw = g.getAttribute("data-tail-x");
   const tailYRaw = g.getAttribute("data-tail-y");
   return {
-    x, y, w, h,
+    x,
+    y,
+    w,
+    h,
     variant,
-    text, fontSize, fontFamily, color,
-    tailX: tailXRaw != null ? parseFloat(tailXRaw) : undefined,
-    tailY: tailYRaw != null ? parseFloat(tailYRaw) : undefined,
+    text,
+    fontSize,
+    fontFamily,
+    color,
+    tailX: tailXRaw != null ? Number.parseFloat(tailXRaw) : undefined,
+    tailY: tailYRaw != null ? Number.parseFloat(tailYRaw) : undefined,
   };
 }
 
@@ -199,12 +204,12 @@ export function rebuildCalloutTail(g: SVGElement): void {
   const bg = g.querySelector("rect");
   const tail = g.querySelector("path");
   if (!bg || !tail) return;
-  const x = parseFloat(bg.getAttribute("x") || "0");
-  const y = parseFloat(bg.getAttribute("y") || "0");
-  const w = parseFloat(bg.getAttribute("width") || "0");
-  const h = parseFloat(bg.getAttribute("height") || "0");
-  const tailX = parseFloat(g.getAttribute("data-tail-x") || String(x - 30));
-  const tailY = parseFloat(g.getAttribute("data-tail-y") || String(y + h + 40));
+  const x = Number.parseFloat(bg.getAttribute("x") || "0");
+  const y = Number.parseFloat(bg.getAttribute("y") || "0");
+  const w = Number.parseFloat(bg.getAttribute("width") || "0");
+  const h = Number.parseFloat(bg.getAttribute("height") || "0");
+  const tailX = Number.parseFloat(g.getAttribute("data-tail-x") || String(x - 30));
+  const tailY = Number.parseFloat(g.getAttribute("data-tail-y") || String(y + h + 40));
 
   // Pick the closest edge midpoint as the base. The tail looks most
   // natural when it grows from the side facing the tip — bottom edge
@@ -215,23 +220,28 @@ export function rebuildCalloutTail(g: SVGElement): void {
   const dy = tailY - cy;
   const horizontal = Math.abs(dx) > Math.abs(dy);
 
-  let baseX1: number, baseY1: number, baseX2: number, baseY2: number;
+  let baseX1: number;
+  let baseY1: number;
+  let baseX2: number;
+  let baseY2: number;
   if (horizontal) {
     // Tail exits the left or right edge, base spans vertically.
     const baseX = dx > 0 ? x + w : x;
     const half = Math.min(16, h * 0.2);
-    baseX1 = baseX; baseY1 = cy - half;
-    baseX2 = baseX; baseY2 = cy + half;
+    baseX1 = baseX;
+    baseY1 = cy - half;
+    baseX2 = baseX;
+    baseY2 = cy + half;
   } else {
     // Tail exits the top or bottom edge, base spans horizontally.
     const baseY = dy > 0 ? y + h : y;
     const half = Math.min(16, w * 0.2);
-    baseX1 = cx - half; baseY1 = baseY;
-    baseX2 = cx + half; baseY2 = baseY;
+    baseX1 = cx - half;
+    baseY1 = baseY;
+    baseX2 = cx + half;
+    baseY2 = baseY;
   }
-  tail.setAttribute("d",
-    `M ${baseX1} ${baseY1} L ${tailX} ${tailY} L ${baseX2} ${baseY2} Z`,
-  );
+  tail.setAttribute("d", `M ${baseX1} ${baseY1} L ${tailX} ${tailY} L ${baseX2} ${baseY2} Z`);
 }
 
 /**
@@ -240,11 +250,7 @@ export function rebuildCalloutTail(g: SVGElement): void {
  * the textbox's LOCAL space — the caller is responsible for subtracting
  * any group transform (e.g. translate from a previous drag).
  */
-export function setCalloutTail(
-  g: SVGElement,
-  localTailX: number,
-  localTailY: number,
-): void {
+export function setCalloutTail(g: SVGElement, localTailX: number, localTailY: number): void {
   g.setAttribute("data-tail-x", String(localTailX));
   g.setAttribute("data-tail-y", String(localTailY));
   rebuildCalloutTail(g);
@@ -256,10 +262,7 @@ export function setCalloutTail(
  * DOM and returns the new element (caller must update SelectionManager
  * refs via the PropertyPanel's onTargetReplaced callback).
  */
-export function convertTextVariant(
-  oldG: SVGElement,
-  newVariant: TextVariant,
-): SVGElement {
+export function convertTextVariant(oldG: SVGElement, newVariant: TextVariant): SVGElement {
   const parent = oldG.parentNode;
   if (!parent) throw new Error("convertTextVariant: element is detached");
   const spec = readTextBoxSpec(oldG);

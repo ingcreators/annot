@@ -3,71 +3,69 @@
  * File Manager (gallery) ↔ Editor switching with path-based StorageProvider.
  */
 import {
+  ANNOT_SVG_VERSION,
   CanvasManager,
   History,
   SelectionManager,
   Toolbar,
-  openAnchoredPopover,
   createThemeToggle,
-  readEditableImage,
   exportAnnotationsSvgForIdb,
   getPngDataUrl,
-  ANNOT_SVG_VERSION,
+  openAnchoredPopover,
   readAnnotVersion,
+  readEditableImage,
 } from "@ingcreators/annot-core";
-import { EditorRightPanel } from "./editor/right-panel.js";
-import { installKeyboardHelp } from "./editor/keyboard-help.js";
-import { ScratchpadSection } from "./editor/scratchpad-section.js";
-import { ScratchpadStore } from "./editor/scratchpad-store.js";
-import {
-  serializeSelection,
-  renderThumbnail,
-} from "./editor/scratchpad-utils.js";
-import { ScratchpadPasteTool } from "./editor/scratchpad-paste-tool.js";
 import type { ToolOptions } from "@ingcreators/annot-core";
-import type {
-  ImageRecord,
-  StorageProvider,
-} from "@ingcreators/annot-core/storage";
+import type { ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
 import { getFilename } from "@ingcreators/annot-core/storage";
-import { FileDetailsDrawer, estimateDataUrlBytes, validateFilename } from "./editor/file-details-drawer.js";
-import { SaveStatusIndicator } from "./editor/save-status-indicator.js";
 import { newIdB58, setTooltip } from "@ingcreators/annot-core/utils";
 import {
-  getStorage,
-  setExtensionId,
-  setStorageMode,
-  openDeviceDirectory,
-  restoreDevice,
-  connectGoogleDrive,
-  restoreGoogleDrive,
-  isDriveConnected,
+  FileDetailsDrawer,
+  estimateDataUrlBytes,
+  validateFilename,
+} from "./editor/file-details-drawer.js";
+import { installKeyboardHelp } from "./editor/keyboard-help.js";
+import { EditorRightPanel } from "./editor/right-panel.js";
+import { SaveStatusIndicator } from "./editor/save-status-indicator.js";
+import { ScratchpadPasteTool } from "./editor/scratchpad-paste-tool.js";
+import { ScratchpadSection } from "./editor/scratchpad-section.js";
+import { ScratchpadStore } from "./editor/scratchpad-store.js";
+import { renderThumbnail, serializeSelection } from "./editor/scratchpad-utils.js";
+import type { SplitEditor } from "./editor/split-editor.js";
+import { loadEncodeOptions } from "./encode-options.js";
+import { FileManager } from "./gallery/file-manager.js";
+import {
+  type StorageMode,
   connectGitHub,
-  restoreGitHub,
-  isGitHubConnected,
-  getGitHubRef,
-  getStorageMode,
+  connectGoogleDrive,
   deleteExtensionImage,
   getDeviceRootName,
-  saveLastStorage,
-  loadLastStorage,
-  saveLastFolder,
+  getGitHubRef,
+  getStorage,
+  getStorageMode,
+  isDriveConnected,
+  isGitHubConnected,
   loadLastFolder,
-  type StorageMode,
+  loadLastStorage,
+  openDeviceDirectory,
+  restoreDevice,
+  restoreGitHub,
+  restoreGoogleDrive,
+  saveLastFolder,
+  saveLastStorage,
+  setExtensionId,
+  setStorageMode,
 } from "./storage/bridge.js";
-import { signIn, showFolderPicker, saveDriveRoot, loadDriveRoot } from "./storage/google-auth.js";
 import {
-  isSignedIn as isGitHubSignedIn,
-  getAccessToken as getGitHubToken,
-  loadRepoRef as loadGitHubRef,
   type GitHubRepoRef,
+  getAccessToken as getGitHubToken,
+  isSignedIn as isGitHubSignedIn,
+  loadRepoRef as loadGitHubRef,
 } from "./storage/github-auth.js";
-import { GoogleDriveStore } from "./storage/google-drive-store.js";
 import { GitHubStore } from "./storage/github-store.js";
-import { FileManager } from "./gallery/file-manager.js";
-import type { SplitEditor } from "./editor/split-editor.js";
+import { loadDriveRoot, saveDriveRoot, showFolderPicker, signIn } from "./storage/google-auth.js";
+import { GoogleDriveStore } from "./storage/google-drive-store.js";
 import { encodeCaptureInWorker } from "./workers/encode-client.js";
-import { loadEncodeOptions } from "./encode-options.js";
 
 /**
  * Append " (n)" before the file extension to uniquify a colliding filename.
@@ -109,11 +107,16 @@ async function retryFsOp<T>(op: () => Promise<T>, maxRetries = 4): Promise<T> {
   }
   throw lastErr;
 }
-import { showAlertDialog } from "./ui/dialog.js";
-import { parseRoute, editUrl, galleryUrl, pushRoute, sessionEditUrl } from "./router.js";
-import { showSaveError, showAuthError, hideError, showError, showInfo } from "./ui/error-bar.js";
+import {
+  loadCursorPreference,
+  saveCursorPreference,
+  showIntervalCaptureDialog,
+  showIntervalCaptureProgress,
+} from "./capture/interval-dialog.js";
 import { captureScreen, pasteFromClipboard, startIntervalCapture } from "./capture/pwa-capture.js";
-import { showIntervalCaptureDialog, showIntervalCaptureProgress, loadCursorPreference, saveCursorPreference } from "./capture/interval-dialog.js";
+import { editUrl, galleryUrl, parseRoute, pushRoute, sessionEditUrl } from "./router.js";
+import { showAlertDialog } from "./ui/dialog.js";
+import { hideError, showError, showInfo, showSaveError } from "./ui/error-bar.js";
 
 export class App {
   #storage: StorageProvider | null = null;
@@ -166,7 +169,7 @@ export class App {
    *  for not-yet-saved images (e.g. a freshly captured but un-persisted one). */
   #currentImageRecord: ImageRecord | null = null;
   /** Latest original data URL — used to approximate file size for the drawer. */
-  #currentImageDataUrl: string = "";
+  #currentImageDataUrl = "";
   /** The file-details drawer, created per editor session. */
   #fileDetailsDrawer: FileDetailsDrawer | null = null;
   /** Save status indicator, rebuilt per editor session. */
@@ -206,7 +209,7 @@ export class App {
    *  same active thumbnail. */
   #armedScratchpadItemId: string | null = null;
   #currentTags: Record<string, string> = {};
-  #currentFolderPath: string = "";
+  #currentFolderPath = "";
   #splitEditor: SplitEditor | null = null;
 
   async init(): Promise<void> {
@@ -276,7 +279,8 @@ export class App {
 
     document.addEventListener("paste", async (e) => {
       const target = e.target as HTMLElement;
-      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
+      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)
+        return;
       if (this.#currentEditor) return;
       const dataUrl = await pasteFromClipboard();
       if (dataUrl) {
@@ -350,8 +354,10 @@ export class App {
       this.#currentTags = record.tags || {};
       this.#fileManager = null;
 
-      console.log("[annot/app] handoff record.pageMetadata:",
-        record.pageMetadata ? `${record.pageMetadata.elements.length} elements` : "none");
+      console.log(
+        "[annot/app] handoff record.pageMetadata:",
+        record.pageMetadata ? `${record.pageMetadata.elements.length} elements` : "none",
+      );
       this.setupEditor(record.originalDataUrl, w, h, undefined, record.pageMetadata);
 
       pushRoute(editUrl(getStorageMode(), savedPath));
@@ -407,7 +413,11 @@ export class App {
     this.showGalleryView();
   }
 
-  async #handleGoogleDriveHandoff(state: { action?: string; ids?: string[]; folderId?: string }): Promise<void> {
+  async #handleGoogleDriveHandoff(state: {
+    action?: string;
+    ids?: string[];
+    folderId?: string;
+  }): Promise<void> {
     // Make sure the Drive store is the active one. If the user isn't
     // signed in yet, the `handleStorageSelect` flow below takes care
     // of it (sign-in + reuse of persisted root + store creation).
@@ -466,7 +476,8 @@ export class App {
       // gallery UI is path-rooted and wouldn't know how to display
       // "a file outside the workspace", so tell the user how to recover.
       showError({
-        message: "That file is outside your Annot workspace folder. Use the sidebar's \"Change Drive folder\" icon to point Annot at a folder that contains it.",
+        message:
+          'That file is outside your Annot workspace folder. Use the sidebar\'s "Change Drive folder" icon to point Annot at a folder that contains it.',
         severity: "warning",
       });
       window.history.replaceState({}, "", galleryUrl());
@@ -497,7 +508,10 @@ export class App {
     if (route.extId) {
       // Remember the user's selected mode; connecting to extension is transient
       const savedMode = getStorageMode();
-      const connected = await setExtensionId(route.extId, route.store as StorageMode || "extension");
+      const connected = await setExtensionId(
+        route.extId,
+        (route.store as StorageMode) || "extension",
+      );
       if (connected) {
         await this.transferAllFromExtension();
         transferred = true;
@@ -526,7 +540,12 @@ export class App {
           return;
         }
         if (records.length === 0) {
-          console.warn("[handleRoute] session has no records in current folder:", route.session, "folder=", this.#currentFolderPath);
+          console.warn(
+            "[handleRoute] session has no records in current folder:",
+            route.session,
+            "folder=",
+            this.#currentFolderPath,
+          );
         }
       } catch (e) {
         console.error("[handleRoute] session lookup error:", e);
@@ -589,7 +608,12 @@ export class App {
   // ---- File Manager (Gallery) ----
 
   private showGalleryView(): void {
-    console.log("[showGalleryView] mode:", getStorageMode(), "storage:", this.#storage?.constructor?.name);
+    console.log(
+      "[showGalleryView] mode:",
+      getStorageMode(),
+      "storage:",
+      this.#storage?.constructor?.name,
+    );
     // Tear down split editor if active (session → gallery).
     if (this.#splitEditor) {
       this.#splitEditor.unmount();
@@ -655,11 +679,7 @@ export class App {
 
     if (this.#storage) {
       if (this.#fileManager.storage !== this.#storage) {
-        this.#fileManager.setStorage(
-          this.#storage,
-          getStorageMode(),
-          this.#currentRootName(),
-        );
+        this.#fileManager.setStorage(this.#storage, getStorageMode(), this.#currentRootName());
       }
       this.#fileManager.navigateToFolder(this.#currentFolderPath);
     }
@@ -734,7 +754,10 @@ export class App {
       </svg>
       <span class="brand-text">Annot</span>
     `;
-    brand.addEventListener("click", (e) => { e.preventDefault(); void this.showGallery(); });
+    brand.addEventListener("click", (e) => {
+      e.preventDefault();
+      void this.showGallery();
+    });
     toolbarEl.appendChild(brand);
 
     const searchWrap = document.createElement("div");
@@ -768,9 +791,7 @@ export class App {
 
     // Shared theme toggle factory (from @ingcreators/annot-core) — same behavior
     // as the editor toolbar's toggle so both stay in sync.
-    toolbarEl.appendChild(
-      createThemeToggle("header-info-btn material-symbols-outlined"),
-    );
+    toolbarEl.appendChild(createThemeToggle("header-info-btn material-symbols-outlined"));
   }
 
   /** Display name for the root of the currently-active storage.
@@ -868,7 +889,7 @@ export class App {
           // redoing the whole wizard).
           const { showReconfigureMenu } = await import("./storage/github-setup-ui.js");
           const updated = await showReconfigureMenu(ref as GitHubRepoRef);
-          if (!updated) return;   // cancelled or no change
+          if (!updated) return; // cancelled or no change
           ref = updated;
         }
         const token = getGitHubToken();
@@ -888,11 +909,7 @@ export class App {
       this.#updateSidebarStatus();
 
       if (this.#fileManager && this.#storage) {
-        this.#fileManager.setStorage(
-          this.#storage,
-          getStorageMode(),
-          this.#currentRootName(),
-        );
+        this.#fileManager.setStorage(this.#storage, getStorageMode(), this.#currentRootName());
         this.#fileManager.refresh("");
       }
     } catch (e) {
@@ -916,7 +933,9 @@ export class App {
       "github",
       isGitHubConnected(),
       isGitHubConnected()
-        ? (ghRef ? `${ghRef.owner}/${ghRef.repo}@${ghRef.branch}` : "Connected")
+        ? ghRef
+          ? `${ghRef.owner}/${ghRef.repo}@${ghRef.branch}`
+          : "Connected"
         : "Not connected",
     );
     sidebar.setActiveMode(getStorageMode());
@@ -949,33 +968,39 @@ export class App {
               const imgEl = await this.loadImage(full.originalDataUrl);
               w = imgEl.naturalWidth;
               h = imgEl.naturalHeight;
-            } catch { continue; }
+            } catch {
+              continue;
+            }
           }
 
           const now = new Date().toISOString();
           // Preserve the extension's filename (not path — we re-home into the
           // user's currently-selected folder).
-          const filename = img.path.includes("/") ? img.path.slice(img.path.lastIndexOf("/") + 1) : img.path;
+          const filename = img.path.includes("/")
+            ? img.path.slice(img.path.lastIndexOf("/") + 1)
+            : img.path;
           // Wrap in retry: rapid back-to-back saves into a fresh FS handle
           // can hit Chrome's "stale cached state" issue (InvalidStateError).
-          await retryFsOp(() => browserStore.saveImage({
-            originalDataUrl: full.originalDataUrl,
-            thumbnailDataUrl: full.thumbnailDataUrl || "",
-            annotationsSvg: full.annotationsSvg || "",
-            width: w,
-            height: h,
-            sourceUrl: full.sourceUrl || "",
-            tags: full.tags || {},
-            folderPath: this.#currentFolderPath,
-            filename,
-            createdAt: full.createdAt || now,
-            updatedAt: now,
-            // Carry DOM element metadata through the extension → app
-            // hand-off so the Elements sidebar works on captures that
-            // came in through this bulk-transfer path (which is how
-            // the extension typically hands screenshots over).
-            pageMetadata: full.pageMetadata,
-          }));
+          await retryFsOp(() =>
+            browserStore.saveImage({
+              originalDataUrl: full.originalDataUrl,
+              thumbnailDataUrl: full.thumbnailDataUrl || "",
+              annotationsSvg: full.annotationsSvg || "",
+              width: w,
+              height: h,
+              sourceUrl: full.sourceUrl || "",
+              tags: full.tags || {},
+              folderPath: this.#currentFolderPath,
+              filename,
+              createdAt: full.createdAt || now,
+              updatedAt: now,
+              // Carry DOM element metadata through the extension → app
+              // hand-off so the Elements sidebar works on captures that
+              // came in through this bulk-transfer path (which is how
+              // the extension typically hands screenshots over).
+              pageMetadata: full.pageMetadata,
+            }),
+          );
 
           deleteExtensionImage(img.path);
         } catch (e) {
@@ -984,7 +1009,14 @@ export class App {
         }
       }
 
-      console.log("[transfer] Transferred", rootImages.length, "images to", getStorageMode(), "folder:", JSON.stringify(this.#currentFolderPath));
+      console.log(
+        "[transfer] Transferred",
+        rootImages.length,
+        "images to",
+        getStorageMode(),
+        "folder:",
+        JSON.stringify(this.#currentFolderPath),
+      );
     } catch (e) {
       console.error("[transfer] Error:", e);
     }
@@ -992,7 +1024,8 @@ export class App {
 
   private async transferAndOpen(record: ImageRecord, extPath: string): Promise<void> {
     // Respect the user's currently selected storage
-    const browserStore = this.#storage || new (await import("./storage/browser-store.js")).BrowserStore();
+    const browserStore =
+      this.#storage || new (await import("./storage/browser-store.js")).BrowserStore();
 
     let w = record.width;
     let h = record.height;
@@ -1022,7 +1055,13 @@ export class App {
 
     pushRoute(editUrl(getStorageMode(), savedPath));
 
-    this.setupEditor(record.originalDataUrl, w, h, record.annotationsSvg || undefined, record.pageMetadata);
+    this.setupEditor(
+      record.originalDataUrl,
+      w,
+      h,
+      record.annotationsSvg || undefined,
+      record.pageMetadata,
+    );
 
     deleteExtensionImage(extPath);
   }
@@ -1206,25 +1245,27 @@ export class App {
       const thumb = await storage.generateThumbnail(finalDataUrl);
       const page = String(i + 1).padStart(pad, "0");
       const tmpFilename = `${tempPrefix}${stem}-p${page}${ext}`;
-      const savedPath = await retryFsOp(() => storage.saveImage({
-        originalDataUrl: finalDataUrl,
-        thumbnailDataUrl: thumb,
-        annotationsSvg: "",
-        width: slice.width,
-        height: slice.height,
-        sourceUrl: first.sourceUrl || "",
-        tags: {
-          ...inheritedTags,
-          captureId: newIdB58(),
-          page: String(i + 1),
-          sessionIndex: String(i),
-          sessionTotal: String(total),
-        },
-        folderPath: first.folderPath,
-        filename: tmpFilename,
-        createdAt: first.createdAt || now,
-        updatedAt: now,
-      }));
+      const savedPath = await retryFsOp(() =>
+        storage.saveImage({
+          originalDataUrl: finalDataUrl,
+          thumbnailDataUrl: thumb,
+          annotationsSvg: "",
+          width: slice.width,
+          height: slice.height,
+          sourceUrl: first.sourceUrl || "",
+          tags: {
+            ...inheritedTags,
+            captureId: newIdB58(),
+            page: String(i + 1),
+            sessionIndex: String(i),
+            sessionTotal: String(total),
+          },
+          folderPath: first.folderPath,
+          filename: tmpFilename,
+          createdAt: first.createdAt || now,
+          updatedAt: now,
+        }),
+      );
       savedSlicePaths.push(savedPath);
     }
 
@@ -1392,9 +1433,8 @@ export class App {
         // name (see `buildDownloadName` in core). Freshly-captured
         // images without a stored path fall back to the timestamp
         // default inside the export functions.
-        getCurrentFilename: () => this.#currentImagePath
-          ? getFilename(this.#currentImagePath)
-          : undefined,
+        getCurrentFilename: () =>
+          this.#currentImagePath ? getFilename(this.#currentImagePath) : undefined,
       },
     );
     this.#editorToolbar = toolbar;
@@ -1406,9 +1446,7 @@ export class App {
       id: "scratchpad",
       icon: "collections_bookmark",
       title: "Scratchpad",
-      onClick: (anchor) => this.#openScratchpadPopover(
-        anchor, canvas, selection, history,
-      ),
+      onClick: (anchor) => this.#openScratchpadPopover(anchor, canvas, selection, history),
     });
     this.#scratchpadToolbarBtn = scratchpadBtn;
 
@@ -1498,7 +1536,7 @@ export class App {
       // branch regardless of save frequency, so the debounce can go
       // back to parity with Drive without risking log spam.
       const mode = getStorageMode();
-      const saveDebounceMs = (mode === "github" || mode === "googledrive") ? 1500 : 500;
+      const saveDebounceMs = mode === "github" || mode === "googledrive" ? 1500 : 500;
       this.#autoSaveTimer = window.setTimeout(() => {
         this.#autoSaveTimer = undefined;
         void this.writeAnnotationsToStorage();
@@ -1656,9 +1694,7 @@ export class App {
     headerEl.appendChild(helpBtn);
 
     // Theme toggle
-    headerEl.appendChild(
-      createThemeToggle("header-info-btn material-symbols-outlined"),
-    );
+    headerEl.appendChild(createThemeToggle("header-info-btn material-symbols-outlined"));
   }
 
   /**
@@ -1803,7 +1839,9 @@ export class App {
         restore();
       }
     });
-    input.addEventListener("blur", () => { commit(); });
+    input.addEventListener("blur", () => {
+      commit();
+    });
   }
 
   /**
@@ -1853,30 +1891,34 @@ export class App {
     selection: SelectionManager,
     history: History,
   ): void {
-    openAnchoredPopover(anchor, (root) => {
-      const section = new ScratchpadSection(root, this.#scratchpadStore);
-      section.onSaveRequested = () => {
-        void this.#saveSelectionToScratchpad(canvas, selection, history);
-      };
-      section.onInsert = (item) => {
-        this.#armScratchpadPaste(canvas, selection, history, item);
-        this.#armedScratchpadItemId = item.id;
-        section.setActiveItem(item.id);
-      };
-      section.setSaveEnabled(this.#scratchpadCanSave);
-      section.setActiveItem(this.#armedScratchpadItemId);
-      this.#openScratchpadSection = section;
-      // Cleanup when the popover closes — the MutationObserver on
-      // <body> catches the helper's `remove()` regardless of WHY the
-      // popover closed (outside click, Escape, resize-kill, etc).
-      const obs = new MutationObserver(() => {
-        if (!root.isConnected) {
-          this.#openScratchpadSection = null;
-          obs.disconnect();
-        }
-      });
-      obs.observe(document.body, { childList: true, subtree: false });
-    }, { placement: "right", className: "tool-flyout-scratchpad" });
+    openAnchoredPopover(
+      anchor,
+      (root) => {
+        const section = new ScratchpadSection(root, this.#scratchpadStore);
+        section.onSaveRequested = () => {
+          void this.#saveSelectionToScratchpad(canvas, selection, history);
+        };
+        section.onInsert = (item) => {
+          this.#armScratchpadPaste(canvas, selection, history, item);
+          this.#armedScratchpadItemId = item.id;
+          section.setActiveItem(item.id);
+        };
+        section.setSaveEnabled(this.#scratchpadCanSave);
+        section.setActiveItem(this.#armedScratchpadItemId);
+        this.#openScratchpadSection = section;
+        // Cleanup when the popover closes — the MutationObserver on
+        // <body> catches the helper's `remove()` regardless of WHY the
+        // popover closed (outside click, Escape, resize-kill, etc).
+        const obs = new MutationObserver(() => {
+          if (!root.isConnected) {
+            this.#openScratchpadSection = null;
+            obs.disconnect();
+          }
+        });
+        obs.observe(document.body, { childList: true, subtree: false });
+      },
+      { placement: "right", className: "tool-flyout-scratchpad" },
+    );
   }
 
   /**
@@ -1979,7 +2021,9 @@ export class App {
    * have nothing analogous (the canonical location is either an IDB
    * blob or a local path). New backends slot in additively here.
    */
-  #buildExternalLinksFor(path: string | null): Array<{ label: string; url: string; icon?: string }> | undefined {
+  #buildExternalLinksFor(
+    path: string | null,
+  ): Array<{ label: string; url: string; icon?: string }> | undefined {
     if (!path) return undefined;
     if (this.#storage instanceof GitHubStore) {
       const url = this.#storage.getViewUrl(path);
@@ -2035,19 +2079,23 @@ export class App {
 
     const mode = getStorageMode();
     const rootLabel =
-      mode === "device" ? "Device" :
-      mode === "googledrive" ? "Google Drive" :
-      mode === "github" ? "GitHub" :
-      "Browser";
+      mode === "device"
+        ? "Device"
+        : mode === "googledrive"
+          ? "Google Drive"
+          : mode === "github"
+            ? "GitHub"
+            : "Browser";
 
     const makeItem = (label: string, folderPath: string): HTMLButtonElement => {
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "breadcrumb-item";
       btn.textContent = label;
-      setTooltip(btn, folderPath
-        ? `Open "${label}" in gallery`
-        : `Open gallery root (${rootLabel})`);
+      setTooltip(
+        btn,
+        folderPath ? `Open "${label}" in gallery` : `Open gallery root (${rootLabel})`,
+      );
       btn.addEventListener("click", () => {
         this.#currentFolderPath = folderPath;
         void this.showGallery();
@@ -2108,9 +2156,7 @@ export class App {
     // "Fit" instead of the raw percentage so the user can tell at a
     // glance that the canvas will track viewport changes.
     const refreshLabel = () => {
-      label.textContent = canvas.isFitMode
-        ? "Fit"
-        : `${Math.round(canvas.zoom * 100)}%`;
+      label.textContent = canvas.isFitMode ? "Fit" : `${Math.round(canvas.zoom * 100)}%`;
     };
     refreshLabel();
 
@@ -2126,7 +2172,10 @@ export class App {
           item.className = "zoom-menu-item";
           if (canvas.isFitMode) item.classList.add("active");
           item.textContent = "Fit to window";
-          item.addEventListener("click", () => { canvas.fitToView(); menu.style.display = "none"; });
+          item.addEventListener("click", () => {
+            canvas.fitToView();
+            menu.style.display = "none";
+          });
           menu.appendChild(item);
           const sep = document.createElement("div");
           sep.className = "zoom-menu-sep";
@@ -2137,13 +2186,16 @@ export class App {
           // Highlight a numeric preset only when NOT in fit mode —
           // otherwise the "Fit" item is the source of truth.
           if (
-            !canvas.isFitMode
-            && Math.round(canvas.zoom * 100) === Math.round((opt.value as number) * 100)
+            !canvas.isFitMode &&
+            Math.round(canvas.zoom * 100) === Math.round((opt.value as number) * 100)
           ) {
             item.classList.add("active");
           }
           item.textContent = opt.label;
-          item.addEventListener("click", () => { canvas.setZoom(opt.value as number); menu.style.display = "none"; });
+          item.addEventListener("click", () => {
+            canvas.setZoom(opt.value as number);
+            menu.style.display = "none";
+          });
           menu.appendChild(item);
         }
       }
@@ -2151,8 +2203,12 @@ export class App {
 
     label.addEventListener("click", (e) => {
       e.stopPropagation();
-      if (menu.style.display === "none") { renderMenu(); menu.style.display = "block"; }
-      else { menu.style.display = "none"; }
+      if (menu.style.display === "none") {
+        renderMenu();
+        menu.style.display = "block";
+      } else {
+        menu.style.display = "none";
+      }
     });
 
     labelWrap.appendChild(label);
@@ -2169,9 +2225,13 @@ export class App {
 
     holder.appendChild(wrap);
 
-    canvas.onZoomChange = (_z) => { refreshLabel(); };
+    canvas.onZoomChange = (_z) => {
+      refreshLabel();
+    };
 
-    document.addEventListener("click", () => { menu.style.display = "none"; });
+    document.addEventListener("click", () => {
+      menu.style.display = "none";
+    });
   }
 
   restoreAnnotations(canvas: CanvasManager, svgString: string): void {
@@ -2220,11 +2280,17 @@ export class App {
     const ns = "http://www.w3.org/2000/svg";
     const color = "#ff3b3b";
 
-    const rx = parseFloat(this.#currentTags["click.rect.x"]);
-    const ry = parseFloat(this.#currentTags["click.rect.y"]);
-    const rw = parseFloat(this.#currentTags["click.rect.w"]);
-    const rh = parseFloat(this.#currentTags["click.rect.h"]);
-    const hasRect = isFinite(rx) && isFinite(ry) && isFinite(rw) && isFinite(rh) && rw > 0 && rh > 0;
+    const rx = Number.parseFloat(this.#currentTags["click.rect.x"]);
+    const ry = Number.parseFloat(this.#currentTags["click.rect.y"]);
+    const rw = Number.parseFloat(this.#currentTags["click.rect.w"]);
+    const rh = Number.parseFloat(this.#currentTags["click.rect.h"]);
+    const hasRect =
+      Number.isFinite(rx) &&
+      Number.isFinite(ry) &&
+      Number.isFinite(rw) &&
+      Number.isFinite(rh) &&
+      rw > 0 &&
+      rh > 0;
 
     if (hasRect) {
       const rect = document.createElementNS(ns, "rect");
@@ -2241,9 +2307,9 @@ export class App {
       canvas.annotations.appendChild(rect);
     }
 
-    const x = parseFloat(this.#currentTags["click.x"]);
-    const y = parseFloat(this.#currentTags["click.y"]);
-    if (!isFinite(x) || !isFinite(y)) return;
+    const x = Number.parseFloat(this.#currentTags["click.x"]);
+    const y = Number.parseFloat(this.#currentTags["click.y"]);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
 
     // Outer ring (smaller when we also have a rect, since the rect gives context)
     const ring = document.createElementNS(ns, "circle");
@@ -2318,11 +2384,12 @@ export class App {
       } else if (e.status === 404) {
         showSaveError("File or folder not found. It may have been deleted.");
       } else if (!navigator.onLine) {
-        showSaveError("You are offline. Changes will be lost.", () => this.writeAnnotationsToStorage());
+        showSaveError("You are offline. Changes will be lost.", () =>
+          this.writeAnnotationsToStorage(),
+        );
       } else {
-        showSaveError(
-          `Save failed: ${e.message || "Unknown error"}`,
-          () => this.writeAnnotationsToStorage(),
+        showSaveError(`Save failed: ${e.message || "Unknown error"}`, () =>
+          this.writeAnnotationsToStorage(),
         );
       }
     } finally {
@@ -2424,14 +2491,16 @@ export class App {
       // If the tab is hidden, try flashing title to draw attention as a fallback.
       if (document.visibilityState !== "visible") {
         const originalTitle = document.title;
-        document.title = "✔ Capture complete — " + originalTitle;
+        document.title = `✔ Capture complete — ${originalTitle}`;
         const restore = () => {
           document.title = originalTitle;
           document.removeEventListener("visibilitychange", restore);
         };
         document.addEventListener("visibilitychange", restore);
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
 
     // Interval capture frames are tagged with a session id for future
     // grouping, but we don't auto-open any editor — just refresh the
@@ -2504,7 +2573,7 @@ export class App {
     let w = img.naturalWidth;
     let h = img.naturalHeight;
 
-    if (meta && meta.annotationsSvg) {
+    if (meta?.annotationsSvg) {
       originalUrl = meta.originalImageDataUrl || dataUrl;
       annotations = meta.annotationsSvg;
       tags = meta.tags || {};

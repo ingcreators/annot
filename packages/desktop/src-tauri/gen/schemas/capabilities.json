@@ -1,1 +1,16 @@
-{"default":{"identifier":"default","description":"Default capabilities for SVGShot","local":true,"windows":["main","capture-overlay"],"permissions":["core:default","fs:default","fs:allow-write-text-file","dialog:default","dialog:allow-save","shell:default"]}}
+{
+  "default": {
+    "identifier": "default",
+    "description": "Default capabilities for SVGShot",
+    "local": true,
+    "windows": ["main", "capture-overlay"],
+    "permissions": [
+      "core:default",
+      "fs:default",
+      "fs:allow-write-text-file",
+      "dialog:default",
+      "dialog:allow-save",
+      "shell:default"
+    ]
+  }
+}

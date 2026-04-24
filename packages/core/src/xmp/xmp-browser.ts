@@ -14,7 +14,12 @@ const PNG_XMP_KEYWORD = new TextEncoder().encode("XML:com.adobe.xmp");
 
 // ---- XMP XML ----
 
-function buildXmp(annotationsSvg: string, width: number, height: number, tags?: Record<string, string>): string {
+function buildXmp(
+  annotationsSvg: string,
+  width: number,
+  height: number,
+  tags?: Record<string, string>,
+): string {
   const tagsJson = tags && Object.keys(tags).length > 0 ? JSON.stringify(tags) : "";
   const tagsLine = tagsJson ? `\n      <${XMP_NS}:tags>${tagsJson}</${XMP_NS}:tags>` : "";
   return `<?xpacket begin="\ufeff" id="W5M0MpCehiHzreSzNTczkc9d"?>
@@ -47,7 +52,13 @@ function readU16be(data: Uint8Array, offset: number): number {
 }
 
 function readU32be(data: Uint8Array, offset: number): number {
-  return ((data[offset] << 24) | (data[offset + 1] << 16) | (data[offset + 2] << 8) | data[offset + 3]) >>> 0;
+  return (
+    ((data[offset] << 24) |
+      (data[offset + 1] << 16) |
+      (data[offset + 2] << 8) |
+      data[offset + 3]) >>>
+    0
+  );
 }
 
 function concat(...arrays: Uint8Array[]): Uint8Array {
@@ -90,11 +101,7 @@ function dataUrlToUint8Array(dataUrl: string): Uint8Array {
 
 function buildJpegSegment(marker: number, payload: Uint8Array): Uint8Array {
   const segLen = payload.length + 2;
-  return concat(
-    new Uint8Array([0xff, marker]),
-    u16be(segLen),
-    payload,
-  );
+  return concat(new Uint8Array([0xff, marker]), u16be(segLen), payload);
 }
 
 function buildApp2Segments(data: Uint8Array): Uint8Array {
@@ -108,12 +115,7 @@ function buildApp2Segments(data: Uint8Array): Uint8Array {
     const end = Math.min(start + maxChunk, data.length);
     const chunk = data.slice(start, end);
 
-    const payload = concat(
-      ANNOT_APP2_PREFIX,
-      u16be(i),
-      u16be(totalChunks),
-      chunk,
-    );
+    const payload = concat(ANNOT_APP2_PREFIX, u16be(i), u16be(totalChunks), chunk);
     parts.push(buildJpegSegment(0xe2, payload));
   }
 
@@ -162,12 +164,7 @@ function writeJpegWithMetadata(
   const cleaned = removeJpegMetadata(jpegData);
 
   // SOI + XMP + APP2s + rest
-  return concat(
-    cleaned.slice(0, 2),
-    xmpSeg,
-    app2Segs,
-    cleaned.slice(2),
-  );
+  return concat(cleaned.slice(0, 2), xmpSeg, app2Segs, cleaned.slice(2));
 }
 
 // ---- PNG writing ----
@@ -242,12 +239,7 @@ function writePngWithMetadata(
 
   // Insert before IEND (last 12 bytes)
   const insertPos = cleaned.length - 12;
-  return concat(
-    cleaned.slice(0, insertPos),
-    itxtChunk,
-    origChunk,
-    cleaned.slice(insertPos),
-  );
+  return concat(cleaned.slice(0, insertPos), itxtChunk, origChunk, cleaned.slice(insertPos));
 }
 
 // ---- Public API ----
@@ -281,13 +273,12 @@ export async function createEditableImage(opts: EditableImageOptions): Promise<B
     const pngData = await blobToUint8Array(opts.renderedBlob);
     const result = writePngWithMetadata(pngData, xmpBytes, originalBytes);
     return new Blob([result as BlobPart], { type: "image/png" });
-  } else {
-    // Convert rendered PNG blob to JPEG first
-    const jpegBlob = await pngBlobToJpegBlob(opts.renderedBlob, opts.width, opts.height);
-    const jpegData = await blobToUint8Array(jpegBlob);
-    const result = writeJpegWithMetadata(jpegData, xmpBytes, originalBytes);
-    return new Blob([result as BlobPart], { type: "image/jpeg" });
   }
+  // Convert rendered PNG blob to JPEG first
+  const jpegBlob = await pngBlobToJpegBlob(opts.renderedBlob, opts.width, opts.height);
+  const jpegData = await blobToUint8Array(jpegBlob);
+  const result = writeJpegWithMetadata(jpegData, xmpBytes, originalBytes);
+  return new Blob([result as BlobPart], { type: "image/jpeg" });
 }
 
 async function pngBlobToJpegBlob(pngBlob: Blob, width: number, height: number): Promise<Blob> {
@@ -355,15 +346,14 @@ function parseXmpToMetadata(xmp: string, originalBytes: Uint8Array | null): Svgs
   const svg = extractTag(xmp, "annotations");
   if (!svg) return null;
   const annotationsSvg = svg.replace(/^<!\[CDATA\[/, "").replace(/\]\]>$/, "");
-  const width = parseInt(extractTag(xmp, "width") || "0", 10);
-  const height = parseInt(extractTag(xmp, "height") || "0", 10);
+  const width = Number.parseInt(extractTag(xmp, "width") || "0", 10);
+  const height = Number.parseInt(extractTag(xmp, "height") || "0", 10);
 
   let originalImageDataUrl = "";
   if (originalBytes && originalBytes.length > 0) {
     // Detect MIME from magic bytes
-    const mime = (originalBytes[0] === 0x89 && originalBytes[1] === 0x50)
-      ? "image/png"
-      : "image/jpeg";
+    const mime =
+      originalBytes[0] === 0x89 && originalBytes[1] === 0x50 ? "image/png" : "image/jpeg";
     const b64 = uint8ArrayToBase64(originalBytes);
     originalImageDataUrl = `data:${mime};base64,${b64}`;
   }
@@ -372,7 +362,11 @@ function parseXmpToMetadata(xmp: string, originalBytes: Uint8Array | null): Svgs
   let tags: Record<string, string> = {};
   const tagsStr = extractTag(xmp, "tags");
   if (tagsStr) {
-    try { tags = JSON.parse(tagsStr); } catch { /* invalid JSON, ignore */ }
+    try {
+      tags = JSON.parse(tagsStr);
+    } catch {
+      /* invalid JSON, ignore */
+    }
   }
 
   return { originalImageDataUrl, annotationsSvg, width, height, tags };
@@ -440,7 +434,12 @@ function readPngXmp(data: Uint8Array): string | null {
   let pos = 8;
   while (pos + 12 <= data.length) {
     const chunkLen = readU32be(data, pos);
-    const chunkType = String.fromCharCode(data[pos + 4], data[pos + 5], data[pos + 6], data[pos + 7]);
+    const chunkType = String.fromCharCode(
+      data[pos + 4],
+      data[pos + 5],
+      data[pos + 6],
+      data[pos + 7],
+    );
     const chunkDataStart = pos + 8;
     const chunkEnd = chunkDataStart + chunkLen + 4;
     if (chunkEnd > data.length) break;
@@ -452,7 +451,10 @@ function readPngXmp(data: Uint8Array): string | null {
       let xmpStart = afterKw;
       for (let i = afterKw; i < chunkDataStart + chunkLen; i++) {
         if (data[i] === 0) nulls++;
-        if (nulls >= 4) { xmpStart = i + 1; break; }
+        if (nulls >= 4) {
+          xmpStart = i + 1;
+          break;
+        }
       }
       return new TextDecoder().decode(data.slice(xmpStart, chunkDataStart + chunkLen));
     }
@@ -465,7 +467,12 @@ function readPngOriginal(data: Uint8Array): Uint8Array | null {
   let pos = 8;
   while (pos + 12 <= data.length) {
     const chunkLen = readU32be(data, pos);
-    const chunkType = String.fromCharCode(data[pos + 4], data[pos + 5], data[pos + 6], data[pos + 7]);
+    const chunkType = String.fromCharCode(
+      data[pos + 4],
+      data[pos + 5],
+      data[pos + 6],
+      data[pos + 7],
+    );
     const chunkDataStart = pos + 8;
     const chunkEnd = chunkDataStart + chunkLen + 4;
     if (chunkEnd > data.length) break;

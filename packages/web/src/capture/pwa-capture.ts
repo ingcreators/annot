@@ -77,12 +77,12 @@ export async function pasteFromClipboard(): Promise<string | null> {
 
 /** Check if getDisplayMedia is available. */
 export function isScreenCaptureSupported(): boolean {
-  return !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia);
+  return !!navigator.mediaDevices?.getDisplayMedia;
 }
 
 /** Check if clipboard read is available. */
 export function isClipboardReadSupported(): boolean {
-  return !!(navigator.clipboard && navigator.clipboard.read);
+  return !!navigator.clipboard?.read;
 }
 
 /** Control handle returned by startIntervalCapture. */
@@ -146,7 +146,7 @@ function mountOverlay(
   onCloseHost: (() => void) | null,
 ): CaptureOverlay {
   const root = doc.createElement("div");
-  root.className = "capture-overlay" + (isPip ? " capture-overlay-pip" : "");
+  root.className = `capture-overlay${isPip ? " capture-overlay-pip" : ""}`;
 
   // Inline styles so the element stays self-contained inside a PiP document.
   const rootStyle = root.style as any;
@@ -176,24 +176,34 @@ function mountOverlay(
   });
 
   const countEl = doc.createElement("div");
-  Object.assign((countEl.style as any), {
-    fontSize: "15px", fontWeight: "600", letterSpacing: "0.02em",
+  Object.assign(countEl.style as any, {
+    fontSize: "15px",
+    fontWeight: "600",
+    letterSpacing: "0.02em",
   });
   root.appendChild(countEl);
 
   const nextEl = doc.createElement("div");
-  Object.assign((nextEl.style as any), {
-    fontSize: "12px", color: "#b7c0e0",
+  Object.assign(nextEl.style as any, {
+    fontSize: "12px",
+    color: "#b7c0e0",
   });
   root.appendChild(nextEl);
 
   const bar = doc.createElement("div");
-  Object.assign((bar.style as any), {
-    height: "4px", background: "rgba(255,255,255,0.12)", borderRadius: "2px", overflow: "hidden", marginTop: "2px",
+  Object.assign(bar.style as any, {
+    height: "4px",
+    background: "rgba(255,255,255,0.12)",
+    borderRadius: "2px",
+    overflow: "hidden",
+    marginTop: "2px",
   });
   const fill = doc.createElement("div");
-  Object.assign((fill.style as any), {
-    height: "100%", width: "0%", background: "#7c9cff", transition: "width 0.25s ease",
+  Object.assign(fill.style as any, {
+    height: "100%",
+    width: "0%",
+    background: "#7c9cff",
+    transition: "width 0.25s ease",
   });
   bar.appendChild(fill);
   root.appendChild(bar);
@@ -211,12 +221,24 @@ function mountOverlay(
       }
       fill.style.width = `${Math.min(100, Math.round((captured / total) * 100))}%`;
     },
-    hide() { rootStyle.visibility = "hidden"; },
-    show() { rootStyle.visibility = "visible"; },
+    hide() {
+      rootStyle.visibility = "hidden";
+    },
+    show() {
+      rootStyle.visibility = "visible";
+    },
     close() {
-      try { root.remove(); } catch { /* ignore */ }
+      try {
+        root.remove();
+      } catch {
+        /* ignore */
+      }
       if (onCloseHost) {
-        try { onCloseHost(); } catch { /* ignore */ }
+        try {
+          onCloseHost();
+        } catch {
+          /* ignore */
+        }
       }
     },
   };
@@ -226,7 +248,7 @@ export async function startIntervalCapture(
   opts: IntervalCaptureOptions,
 ): Promise<IntervalCaptureHandle | null> {
   const { intervalSec, count, cursor = "always", onFrame, onProgress, onError } = opts;
-  if (!isFinite(intervalSec) || intervalSec <= 0) throw new Error("intervalSec must be > 0");
+  if (!Number.isFinite(intervalSec) || intervalSec <= 0) throw new Error("intervalSec must be > 0");
   if (!Number.isInteger(count) || count <= 0) throw new Error("count must be a positive integer");
 
   let stream: MediaStream;
@@ -252,7 +274,9 @@ export async function startIntervalCapture(
   let overlay: CaptureOverlay | null = null;
   try {
     overlay = await createCaptureOverlay();
-  } catch { /* continue without overlay */ }
+  } catch {
+    /* continue without overlay */
+  }
 
   let cancelled = false;
   let captured = 0;
@@ -260,7 +284,9 @@ export async function startIntervalCapture(
   let tickTimer: number | undefined;
   let nextCaptureAt = Date.now() + 300;
   let resolveDone!: () => void;
-  const done = new Promise<void>((resolve) => { resolveDone = resolve; });
+  const done = new Promise<void>((resolve) => {
+    resolveDone = resolve;
+  });
 
   const cleanup = () => {
     if (cancelled) return;

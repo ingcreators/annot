@@ -57,8 +57,13 @@
   background: transparent;
 }
 
-.prop-color::-webkit-color-swatch-wrapper { padding: 2px; }
-.prop-color::-webkit-color-swatch { border: none; border-radius: 2px; }
+.prop-color::-webkit-color-swatch-wrapper {
+  padding: 2px;
+}
+.prop-color::-webkit-color-swatch {
+  border: none;
+  border-radius: 2px;
+}
 
 .prop-btn {
   width: 26px;
@@ -298,7 +303,9 @@
 .pp-section {
   margin: 20px 0 0 0;
 }
-.pp-section:first-child { margin-top: 0; }
+.pp-section:first-child {
+  margin-top: 0;
+}
 
 .pp-section-header {
   display: block;
@@ -399,7 +406,9 @@
   -webkit-appearance: none;
   margin: 0;
 }
-.pp-number input[type="number"] { -moz-appearance: textfield; }
+.pp-number input[type="number"] {
+  -moz-appearance: textfield;
+}
 .pp-number-unit {
   color: var(--text-muted);
   font-size: 11px;
@@ -536,14 +545,12 @@
  * to bottom-left over a white background. Same visual as PowerPoint's
  * "No fill" chip so the meaning reads without needing a label. */
 .pp-color-swatch-none {
-  background:
-    linear-gradient(
+  background: linear-gradient(
       to top left,
       transparent 0 calc(50% - 0.8px),
       var(--accent, #e74c3c) calc(50% - 0.8px) calc(50% + 0.8px),
       transparent calc(50% + 0.8px) 100%
-    ),
-    #ffffff;
+    ), #ffffff;
 }
 
 /* "No fill" button inside the color-pull popover. Shown ABOVE the

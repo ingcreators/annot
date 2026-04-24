@@ -2,15 +2,12 @@
  * FileManager — orchestrates sidebar (storage tree) + main content (breadcrumb + gallery grid).
  * Path-based identification throughout.
  */
-import type {
-  ImageRecord,
-  StorageProvider,
-} from "@ingcreators/annot-core/storage";
-import type { StorageMode } from "../storage/bridge.js";
-import { Sidebar, type SidebarCallbacks } from "./sidebar.js";
-import { GalleryPage } from "./gallery-page.js";
-import { showPromptDialog, showAlertDialog } from "../ui/dialog.js";
+import type { ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
 import { setTooltip } from "@ingcreators/annot-core/utils";
+import type { StorageMode } from "../storage/bridge.js";
+import { showAlertDialog, showPromptDialog } from "../ui/dialog.js";
+import { GalleryPage } from "./gallery-page.js";
+import { Sidebar, type SidebarCallbacks } from "./sidebar.js";
 
 export interface FileManagerCallbacks {
   onStorageSelect: (mode: StorageMode) => Promise<void>;
@@ -31,7 +28,7 @@ export class FileManager {
   #gallery: GalleryPage | null = null;
   #storage: StorageProvider | null = null;
   #storageMode: StorageMode = "browser";
-  #currentFolderPath: string = "";
+  #currentFolderPath = "";
   #callbacks: FileManagerCallbacks;
   #searchInput: HTMLInputElement | null = null;
   #viewMode: "grid" | "list" = "grid";
@@ -44,11 +41,7 @@ export class FileManager {
   #selectionBarEl: HTMLElement | null = null;
   #selectionCountEl: HTMLElement | null = null;
 
-  constructor(
-    sidebarEl: HTMLElement,
-    mainContentEl: HTMLElement,
-    callbacks: FileManagerCallbacks,
-  ) {
+  constructor(sidebarEl: HTMLElement, mainContentEl: HTMLElement, callbacks: FileManagerCallbacks) {
     this.#sidebarEl = sidebarEl;
     this.#mainContentEl = mainContentEl;
     this.#callbacks = callbacks;
@@ -68,9 +61,15 @@ export class FileManager {
     this.#buildMainContent();
   }
 
-  get sidebar(): Sidebar { return this.#sidebar; }
-  get currentFolderPath(): string { return this.#currentFolderPath; }
-  get storage(): StorageProvider | null { return this.#storage; }
+  get sidebar(): Sidebar {
+    return this.#sidebar;
+  }
+  get currentFolderPath(): string {
+    return this.#currentFolderPath;
+  }
+  get storage(): StorageProvider | null {
+    return this.#storage;
+  }
 
   setSearchInput(input: HTMLInputElement): void {
     this.#searchInput = input;
@@ -81,10 +80,14 @@ export class FileManager {
   /** Update placeholder to reflect the current folder/storage context. */
   #updateSearchPlaceholder(): void {
     if (!this.#searchInput) return;
-    const rootLabel = this.#storageMode === "device" ? "Device"
-      : this.#storageMode === "googledrive" ? "Google Drive"
-      : this.#storageMode === "github" ? "GitHub"
-      : "Browser";
+    const rootLabel =
+      this.#storageMode === "device"
+        ? "Device"
+        : this.#storageMode === "googledrive"
+          ? "Google Drive"
+          : this.#storageMode === "github"
+            ? "GitHub"
+            : "Browser";
     const parts = this.#currentFolderPath ? this.#currentFolderPath.split("/") : [];
     const breadcrumb = [rootLabel, ...parts].join(" > ");
     this.#searchInput.placeholder = `Search in ${breadcrumb} and subfolders...`;
@@ -117,9 +120,17 @@ export class FileManager {
   async refreshFromDisk(): Promise<void> {
     const s = this.#storage as unknown as { forceRefresh?: () => Promise<void> } | null;
     if (s?.forceRefresh) {
-      try { await s.forceRefresh(); } catch (e) { console.error("[refresh] forceRefresh error:", e); }
+      try {
+        await s.forceRefresh();
+      } catch (e) {
+        console.error("[refresh] forceRefresh error:", e);
+      }
     } else if (this.#storage?.resync) {
-      try { await this.#storage.resync(); } catch (e) { console.error("[refresh] resync error:", e); }
+      try {
+        await this.#storage.resync();
+      } catch (e) {
+        console.error("[refresh] resync error:", e);
+      }
     }
     await this.#sidebar.refreshFolderTree();
     await this.refresh();
@@ -235,7 +246,8 @@ export class FileManager {
     const deleteBtn = document.createElement("button");
     deleteBtn.type = "button";
     deleteBtn.className = "selection-bar-btn selection-bar-btn-danger";
-    deleteBtn.innerHTML = '<span class="material-symbols-outlined" aria-hidden="true">delete</span>Delete';
+    deleteBtn.innerHTML =
+      '<span class="material-symbols-outlined" aria-hidden="true">delete</span>Delete';
     setTooltip(deleteBtn, "Delete selected");
     deleteBtn.setAttribute("aria-label", "Delete selected items");
     deleteBtn.addEventListener("click", () => this.#gallery?.deleteSelection());
@@ -276,9 +288,10 @@ export class FileManager {
     };
     this.#gallery.onCountChange = (total, filtered) => {
       if (this.#countEl) {
-        this.#countEl.textContent = total === filtered
-          ? `${total} image${total !== 1 ? "s" : ""}`
-          : `${filtered} / ${total} images`;
+        this.#countEl.textContent =
+          total === filtered
+            ? `${total} image${total !== 1 ? "s" : ""}`
+            : `${filtered} / ${total} images`;
       }
     };
     this.#gallery.onFoldersChanged = () => this.#sidebar.refreshFolderTree();
@@ -291,8 +304,10 @@ export class FileManager {
       if (this.#headerEl) this.#headerEl.style.display = active ? "none" : "";
       if (this.#selectionCountEl) {
         const parts: string[] = [];
-        if (sel.folders.length) parts.push(`${sel.folders.length} folder${sel.folders.length !== 1 ? "s" : ""}`);
-        if (sel.images.length) parts.push(`${sel.images.length} file${sel.images.length !== 1 ? "s" : ""}`);
+        if (sel.folders.length)
+          parts.push(`${sel.folders.length} folder${sel.folders.length !== 1 ? "s" : ""}`);
+        if (sel.images.length)
+          parts.push(`${sel.images.length} file${sel.images.length !== 1 ? "s" : ""}`);
         this.#selectionCountEl.textContent = `${count} selected (${parts.join(", ")})`;
       }
     };
@@ -307,13 +322,17 @@ export class FileManager {
     if (!this.#breadcrumbEl || !this.#storage) return;
     this.#breadcrumbEl.innerHTML = "";
 
-    const rootLabel = this.#storageMode === "device" ? "Device"
-      : this.#storageMode === "googledrive" ? "Google Drive"
-      : this.#storageMode === "github" ? "GitHub"
-      : "Browser";
+    const rootLabel =
+      this.#storageMode === "device"
+        ? "Device"
+        : this.#storageMode === "googledrive"
+          ? "Google Drive"
+          : this.#storageMode === "github"
+            ? "GitHub"
+            : "Browser";
 
     const rootItem = document.createElement("button");
-    rootItem.className = "breadcrumb-item" + (this.#currentFolderPath === "" ? " active" : "");
+    rootItem.className = `breadcrumb-item${this.#currentFolderPath === "" ? " active" : ""}`;
     rootItem.textContent = rootLabel;
     rootItem.addEventListener("click", () => this.navigateToFolder(""));
     this.#breadcrumbEl.appendChild(rootItem);
@@ -328,7 +347,7 @@ export class FileManager {
           this.#breadcrumbEl.appendChild(chevron);
 
           const item = document.createElement("button");
-          item.className = "breadcrumb-item" + (folder.path === this.#currentFolderPath ? " active" : "");
+          item.className = `breadcrumb-item${folder.path === this.#currentFolderPath ? " active" : ""}`;
           item.textContent = folder.name;
           item.addEventListener("click", () => this.navigateToFolder(folder.path));
           this.#breadcrumbEl.appendChild(item);

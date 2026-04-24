@@ -7,7 +7,11 @@
  * of the libimagequant WASM module — WASM is single-instance-per-realm, so
  * N workers give N parallel quantizers.
  */
-import { encodeCapture, type EncodeOptions, type EncodeResult } from "@ingcreators/annot-core/encode";
+import {
+  type EncodeOptions,
+  type EncodeResult,
+  encodeCapture,
+} from "@ingcreators/annot-core/encode";
 
 interface WorkerTask {
   reqId: number;
@@ -53,13 +57,20 @@ self.onmessage = async (e: MessageEvent<WorkerTask>) => {
   }
 };
 
-async function cropPngVertical(pngDataUrl: string, srcY: number, keepHeight: number): Promise<string> {
+async function cropPngVertical(
+  pngDataUrl: string,
+  srcY: number,
+  keepHeight: number,
+): Promise<string> {
   const blob = await (await fetch(pngDataUrl)).blob();
   const bmp = await createImageBitmap(blob);
   const w = bmp.width;
   const yClamped = Math.max(0, Math.min(srcY, bmp.height));
   const h = Math.max(0, Math.min(keepHeight, bmp.height - yClamped));
-  if (h <= 0) { bmp.close(); return pngDataUrl; }
+  if (h <= 0) {
+    bmp.close();
+    return pngDataUrl;
+  }
   const canvas = new OffscreenCanvas(w, h);
   const ctx = canvas.getContext("2d")!;
   ctx.drawImage(bmp, 0, yClamped, w, h, 0, 0, w, h);

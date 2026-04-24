@@ -1,3 +1,4 @@
+import { computeDasharray } from "../../utils/dash-utils.js";
 /**
  * FreehandTool — unified Draw / Highlighter tool.
  *
@@ -13,7 +14,6 @@
  */
 import { ToolBase } from "./tool-base.js";
 import type { DrawStyle } from "./tool-base.js";
-import { computeDasharray } from "../../utils/dash-utils.js";
 
 /**
  * Recommended defaults for a pristine-feeling highlighter — thick,
@@ -47,7 +47,10 @@ function applyDrawStyleToPath(el: SVGElement, style: DrawStyle, strokeWidth?: nu
   el.setAttribute("data-draw-style", style);
   if (style === "highlighter") {
     // Enforce a minimum width so the highlighter always reads as one.
-    const w = Math.max(strokeWidth ?? parseFloat(el.getAttribute("stroke-width") || "0"), HIGHLIGHTER_MIN_WIDTH);
+    const w = Math.max(
+      strokeWidth ?? Number.parseFloat(el.getAttribute("stroke-width") || "0"),
+      HIGHLIGHTER_MIN_WIDTH,
+    );
     el.setAttribute("stroke-width", String(w));
     el.setAttribute("stroke-opacity", String(HIGHLIGHTER_OPACITY));
     el.setAttribute("stroke-linecap", "butt");
@@ -72,7 +75,7 @@ export function detectDrawStyle(el: SVGElement): DrawStyle {
   const tagged = el.getAttribute("data-draw-style") as DrawStyle | null;
   if (tagged) return tagged;
   // Back-compat: infer from stroke-opacity.
-  return parseFloat(el.getAttribute("stroke-opacity") || "1") < 0.99 ? "highlighter" : "pen";
+  return Number.parseFloat(el.getAttribute("stroke-opacity") || "1") < 0.99 ? "highlighter" : "pen";
 }
 
 /** True for the `<g data-type="freehand">` wrapper that FreehandTool
@@ -80,8 +83,7 @@ export function detectDrawStyle(el: SVGElement): DrawStyle {
  *  one such group, so the whole drawing selects / moves / deletes as
  *  one unit even when the individual strokes have different colors. */
 export function isFreehandGroup(el: Element): boolean {
-  return el.tagName.toLowerCase() === "g"
-      && el.getAttribute("data-type") === "freehand";
+  return el.tagName.toLowerCase() === "g" && el.getAttribute("data-type") === "freehand";
 }
 
 /**
@@ -139,9 +141,7 @@ export class FreehandTool extends ToolBase {
       // stroke's style is reflected at the group level too (used by
       // detectDrawStyle on the group). Individual children retain
       // their own per-stroke style attrs.
-      this.#sessionGroup.setAttribute(
-        "data-draw-style", this.options.drawStyle ?? "pen",
-      );
+      this.#sessionGroup.setAttribute("data-draw-style", this.options.drawStyle ?? "pen");
     }
 
     // Build a fresh `<path>` for THIS stroke with the CURRENT options,
@@ -166,7 +166,7 @@ export class FreehandTool extends ToolBase {
     this.#points.push({ x: pt.x, y: pt.y });
     this.#currentPath.setAttribute(
       "d",
-      (this.#currentPath.getAttribute("d") || "") + ` L ${pt.x},${pt.y}`,
+      `${this.#currentPath.getAttribute("d") || ""} L ${pt.x},${pt.y}`,
     );
   }
 
@@ -260,7 +260,11 @@ export class FreehandTool extends ToolBase {
     return [start, end];
   }
 
-  #perpDist(p: { x: number; y: number }, a: { x: number; y: number }, b: { x: number; y: number }): number {
+  #perpDist(
+    p: { x: number; y: number },
+    a: { x: number; y: number },
+    b: { x: number; y: number },
+  ): number {
     const dx = b.x - a.x;
     const dy = b.y - a.y;
     const len = Math.sqrt(dx * dx + dy * dy);

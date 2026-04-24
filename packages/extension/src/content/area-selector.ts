@@ -59,14 +59,14 @@ export function startAreaSelection(): void {
     const w = Math.abs(e.clientX - startX);
     const h = Math.abs(e.clientY - startY);
     Object.assign(selection.style, {
-      left: x + "px",
-      top: y + "px",
-      width: w + "px",
-      height: h + "px",
+      left: `${x}px`,
+      top: `${y}px`,
+      width: `${w}px`,
+      height: `${h}px`,
     });
     info.textContent = `${w} x ${h}`;
-    info.style.left = x + "px";
-    info.style.top = y + h + 4 + "px";
+    info.style.left = `${x}px`;
+    info.style.top = `${y + h + 4}px`;
   };
 
   const onMouseUp = (e: MouseEvent) => {

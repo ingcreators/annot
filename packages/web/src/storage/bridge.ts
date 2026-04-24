@@ -6,20 +6,20 @@
  * extension is not installed.
  */
 import type { StorageProvider } from "@ingcreators/annot-core/storage";
+import { hideError, showAuthError, showError } from "../ui/error-bar.js";
 import { BrowserStore } from "./browser-store.js";
 import { DeviceStore } from "./device-store.js";
-import { GoogleDriveStore } from "./google-drive-store.js";
-import { GitHubStore } from "./github-store.js";
-import { saveHandle, loadHandle, clearHandle } from "./fs-handle-store.js";
-import { getAccessToken, loadDriveRoot, signIn } from "./google-auth.js";
+import { clearHandle, loadHandle, saveHandle } from "./fs-handle-store.js";
 import {
-  getAccessToken as getGitHubToken,
-  loadRepoRef as loadGitHubRef,
-  clearRepoRef as clearGitHubRef,
-  signOut as githubSignOut,
   type GitHubRepoRef,
+  clearRepoRef as clearGitHubRef,
+  getAccessToken as getGitHubToken,
+  signOut as githubSignOut,
+  loadRepoRef as loadGitHubRef,
 } from "./github-auth.js";
-import { showAuthError, hideError, showError } from "../ui/error-bar.js";
+import { GitHubStore } from "./github-store.js";
+import { getAccessToken, loadDriveRoot, signIn } from "./google-auth.js";
+import { GoogleDriveStore } from "./google-drive-store.js";
 
 // chrome-types omits `chrome.runtime.lastError` from its public typings,
 // even though it exists at runtime (set during callback-style API calls).
@@ -41,9 +41,11 @@ let githubStore: GitHubStore | null = null;
 let currentMode: StorageMode = "browser";
 
 function hasChromeRuntime(): boolean {
-  return typeof chrome !== "undefined"
-    && typeof chrome.runtime !== "undefined"
-    && typeof chrome.runtime.sendMessage === "function";
+  return (
+    typeof chrome !== "undefined" &&
+    typeof chrome.runtime !== "undefined" &&
+    typeof chrome.runtime.sendMessage === "function"
+  );
 }
 
 /** Try to detect extension by sending a ping. */
@@ -68,7 +70,7 @@ async function detectExtension(): Promise<boolean> {
       console.log(`[bridge] Pinging extension ${id}...`);
       const resp = await sendToExtension(id, { action: "ping" });
       console.log("[bridge] Ping response:", resp);
-      if (resp && resp.ok) {
+      if (resp?.ok) {
         extensionId = id;
         extensionAvailable = true;
         console.log("[bridge] Connected to extension!");
@@ -128,7 +130,10 @@ export async function getStorage(): Promise<StorageProvider> {
   if (currentMode === "github" && githubStore) return githubStore;
   if (currentMode === "device" && deviceStore) return deviceStore;
   const hasExtension = await detectExtension();
-  if (hasExtension) { currentMode = "extension"; return extensionStorage; }
+  if (hasExtension) {
+    currentMode = "extension";
+    return extensionStorage;
+  }
   currentMode = "browser";
   return getBrowserStore();
 }
@@ -294,10 +299,16 @@ async function refreshGithubToken(): Promise<string | null> {
           // dialog. For now the full flow re-validates repo access
           // too, which is defensible.
           const ref = await mod.connectGitHub();
-          if (!ref) { settle(null); return; }
+          if (!ref) {
+            settle(null);
+            return;
+          }
           // Re-read the token the UI just persisted.
           const newToken = getGitHubToken();
-          if (!newToken) { settle(null); return; }
+          if (!newToken) {
+            settle(null);
+            return;
+          }
           if (githubStore) githubStore.setToken(newToken);
           settle(newToken);
         } catch {
@@ -321,12 +332,11 @@ export function connectGitHub(token: string, ref: GitHubRepoRef): StorageProvide
     // GitHub's next hourly reset. Rate-limit information is
     // approximate — GitHub's per-minute rounding can nudge the
     // displayed reset time by up to a minute either way.
-    const resetText = resetAt
-      ? ` Resets at ${new Date(resetAt).toLocaleTimeString()}.`
-      : "";
+    const resetText = resetAt ? ` Resets at ${new Date(resetAt).toLocaleTimeString()}.` : "";
     showError({
-      message: `GitHub API rate limit is low (${remaining} requests left).`
-        + ` Consider pausing editing for a few minutes.${resetText}`,
+      message:
+        `GitHub API rate limit is low (${remaining} requests left).` +
+        ` Consider pausing editing for a few minutes.${resetText}`,
       severity: "warning",
       autoDismiss: 12000,
     });
@@ -376,7 +386,9 @@ export async function deleteExtensionImage(path: string): Promise<void> {
   if (!extensionId) return;
   try {
     await sendToExtension(extensionId, { action: "deleteImage", path });
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
 
 /** Check if Google Drive is connected. */
@@ -417,11 +429,11 @@ export function loadLastFolder(): string {
 export function loadLastStorage(): StorageMode | null {
   const mode = localStorage.getItem("annot-last-storage");
   if (
-    mode === "browser"
-    || mode === "device"
-    || mode === "googledrive"
-    || mode === "github"
-    || mode === "extension"
+    mode === "browser" ||
+    mode === "device" ||
+    mode === "googledrive" ||
+    mode === "github" ||
+    mode === "extension"
   ) {
     return mode as StorageMode;
   }
@@ -433,20 +445,46 @@ export function loadLastStorage(): StorageMode | null {
  * to the extension's IDB. The extension must be connected (see setExtensionId).
  */
 const extensionStorage: StorageProvider = {
-  async saveImage(data) { return send({ action: "saveImage", data }); },
-  async getImage(path) { return send({ action: "getImage", path }); },
-  async listImages(folderPath) { return send({ action: "listImages", folderPath }); },
-  async updateImage(path, updates) { return send({ action: "updateImage", path, updates }); },
-  async renameImage(path, newName) { return send({ action: "renameImage", path, name: newName }); },
-  async deleteImage(path) { return send({ action: "deleteImage", path }); },
+  async saveImage(data) {
+    return send({ action: "saveImage", data });
+  },
+  async getImage(path) {
+    return send({ action: "getImage", path });
+  },
+  async listImages(folderPath) {
+    return send({ action: "listImages", folderPath });
+  },
+  async updateImage(path, updates) {
+    return send({ action: "updateImage", path, updates });
+  },
+  async renameImage(path, newName) {
+    return send({ action: "renameImage", path, name: newName });
+  },
+  async deleteImage(path) {
+    return send({ action: "deleteImage", path });
+  },
 
-  async createFolder(parentPath, name) { return send({ action: "createFolder", parentPath, name }); },
-  async listFolders(parentPath) { return send({ action: "listFolders", parentPath }); },
-  async getFolder(path) { return send({ action: "getFolder", path }); },
-  async renameFolder(path, name) { return send({ action: "renameFolder", path, name }); },
-  async moveFolder(path, newParentPath) { return send({ action: "moveFolder", path, newParentPath }); },
-  async deleteFolder(path) { return send({ action: "deleteFolder", path }); },
-  async getBreadcrumb(path) { return send({ action: "getBreadcrumb", path }); },
+  async createFolder(parentPath, name) {
+    return send({ action: "createFolder", parentPath, name });
+  },
+  async listFolders(parentPath) {
+    return send({ action: "listFolders", parentPath });
+  },
+  async getFolder(path) {
+    return send({ action: "getFolder", path });
+  },
+  async renameFolder(path, name) {
+    return send({ action: "renameFolder", path, name });
+  },
+  async moveFolder(path, newParentPath) {
+    return send({ action: "moveFolder", path, newParentPath });
+  },
+  async deleteFolder(path) {
+    return send({ action: "deleteFolder", path });
+  },
+  async getBreadcrumb(path) {
+    return send({ action: "getBreadcrumb", path });
+  },
 
   async generateThumbnail(dataUrl, maxWidth) {
     return getBrowserStore().generateThumbnail(dataUrl, maxWidth);

@@ -1,11 +1,11 @@
 import {
-  listImages,
-  listProjects,
-  deleteImage,
-  loadScreenshot,
-  isTauri,
   type ImageInfo,
   type Project,
+  deleteImage,
+  isTauri,
+  listImages,
+  listProjects,
+  loadScreenshot,
 } from "@ingcreators/annot-core/utils/tauri-bridge";
 
 export class Gallery {
@@ -18,7 +18,9 @@ export class Gallery {
   #currentProjectId: number | null = null;
 
   /** Currently selected project ID (null = all projects) */
-  get currentProjectId(): number | null { return this.#currentProjectId; }
+  get currentProjectId(): number | null {
+    return this.#currentProjectId;
+  }
 
   onOpenImage?: (dataUrl: string, width: number, height: number, imageId?: number) => void;
 
@@ -46,7 +48,7 @@ export class Gallery {
     this.#projectSelect.className = "gallery-select";
     this.#projectSelect.addEventListener("change", () => {
       const val = this.#projectSelect!.value;
-      this.#currentProjectId = val === "all" ? null : parseInt(val);
+      this.#currentProjectId = val === "all" ? null : Number.parseInt(val);
       this.#loadImages();
     });
     projectWrap.appendChild(this.#projectSelect);
@@ -102,10 +104,7 @@ export class Gallery {
     if (!isTauri) return;
     try {
       const search = this.#searchInput?.value || undefined;
-      this.#images = await listImages(
-        this.#currentProjectId ?? undefined,
-        search,
-      );
+      this.#images = await listImages(this.#currentProjectId ?? undefined, search);
       this.#renderGrid();
     } catch {
       this.#renderEmpty();
@@ -136,14 +135,17 @@ export class Gallery {
         imgEl.src = this.#fileUrl(img.thumbnail_path);
         imgEl.onerror = () => {
           // Fallback: load via Tauri invoke
-          loadScreenshot(img.thumbnail_path!).then((dataUrl) => {
-            imgEl.src = dataUrl;
-          }).catch(() => {});
+          loadScreenshot(img.thumbnail_path!)
+            .then((dataUrl) => {
+              imgEl.src = dataUrl;
+            })
+            .catch(() => {});
         };
         thumbEl.appendChild(imgEl);
       } else {
         thumbEl.textContent = "No preview";
-        thumbEl.style.cssText = "display:flex;align-items:center;justify-content:center;aspect-ratio:16/9;background:#222;color:#666;font-size:12px;";
+        thumbEl.style.cssText =
+          "display:flex;align-items:center;justify-content:center;aspect-ratio:16/9;background:#222;color:#666;font-size:12px;";
       }
       item.appendChild(thumbEl);
 
@@ -219,8 +221,8 @@ export class Gallery {
   #formatDate(iso: string): string {
     if (!iso) return "";
     try {
-      const d = new Date(iso + "Z");
-      return d.toLocaleDateString() + " " + d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      const d = new Date(`${iso}Z`);
+      return `${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
     } catch {
       return iso;
     }

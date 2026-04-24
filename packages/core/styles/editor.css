@@ -13,30 +13,30 @@
   --bg-secondary: #0b1020;
   --bg-panel: #121933;
   --bg-panel-deep: #0f1730;
-  --text-primary: #eef2ff;        /* ~18:1 on bg-primary (AAA) */
-  --text-secondary: #b7c0e0;      /* ~10:1 on bg-primary (AAA) */
-  --text-muted: #9097b8;          /* ~6.2:1 on bg-primary (AA) — was 5.3:1 */
-  --border-color: rgba(255,255,255,0.22);  /* bumped from 0.08 for ≥3:1 on interactive */
-  --border-subtle: rgba(255,255,255,0.08); /* keeps old value for decorative dividers */
-  --accent: #7c9cff;              /* ~7.5:1 on bg-primary (AAA) */
+  --text-primary: #eef2ff; /* ~18:1 on bg-primary (AAA) */
+  --text-secondary: #b7c0e0; /* ~10:1 on bg-primary (AAA) */
+  --text-muted: #9097b8; /* ~6.2:1 on bg-primary (AA) — was 5.3:1 */
+  --border-color: rgba(255, 255, 255, 0.22); /* bumped from 0.08 for ≥3:1 on interactive */
+  --border-subtle: rgba(255, 255, 255, 0.08); /* keeps old value for decorative dividers */
+  --accent: #7c9cff; /* ~7.5:1 on bg-primary (AAA) */
   --accent-2: #7ef0c5;
-  --accent-bg: rgba(124,156,255,0.18);
-  --accent-hover: rgba(124,156,255,0.26);
-  --hover-bg: rgba(255,255,255,0.08);
-  --hover-border: rgba(255,255,255,0.22);
-  --active-bg: rgba(124,156,255,0.18);
+  --accent-bg: rgba(124, 156, 255, 0.18);
+  --accent-hover: rgba(124, 156, 255, 0.26);
+  --hover-bg: rgba(255, 255, 255, 0.08);
+  --hover-border: rgba(255, 255, 255, 0.22);
+  --active-bg: rgba(124, 156, 255, 0.18);
   --active-border: #7c9cff;
   --preview-line: #b7c0e0;
-  --shadow: 0 20px 50px rgba(0,0,0,0.28);
+  --shadow: 0 20px 50px rgba(0, 0, 0, 0.28);
   --choice-bg: transparent;
-  --choice-hover: rgba(124,156,255,0.10);
-  --choice-active: rgba(124,156,255,0.18);
-  --input-bg: rgba(255,255,255,0.06);
-  --input-border: rgba(255,255,255,0.22); /* ≥3:1 for form borders */
-  --chip-bg: rgba(124,156,255,0.14);
+  --choice-hover: rgba(124, 156, 255, 0.1);
+  --choice-active: rgba(124, 156, 255, 0.18);
+  --input-bg: rgba(255, 255, 255, 0.06);
+  --input-border: rgba(255, 255, 255, 0.22); /* ≥3:1 for form borders */
+  --chip-bg: rgba(124, 156, 255, 0.14);
   --canvas-bg: #0b1020;
   --canvas-check: #121933;
-  --focus-ring: #7ef0c5;          /* accent-2 green contrasts against blue accent for clarity */
+  --focus-ring: #7ef0c5; /* accent-2 green contrasts against blue accent for clarity */
 }
 
 /* ingcreators brand theme — Light */
@@ -45,13 +45,13 @@
   --bg-secondary: #ffffff;
   --bg-panel: #ffffff;
   --bg-panel-deep: #fafbff;
-  --text-primary: #0b1020;         /* ~16:1 on bg-primary (AAA) */
-  --text-secondary: #3a4568;       /* ~8:1 on bg-primary (AAA) — was #4a5580 (~6:1) */
-  --text-muted: #616984;           /* ~4.6:1 on bg-primary (AA) — was #8890b0 (~3.2:1 FAIL) */
-  --border-color: #bfc6de;         /* ~3:1 against bg-primary for visible UI boundaries */
-  --border-subtle: #d8ddef;        /* fainter dividers */
-  --accent: #3456c9;               /* ~6.3:1 on bg-primary (AA+) — was #5b7ee5 (~4.2:1 marginal) */
-  --accent-2: #188a5c;             /* ~5.2:1 for secondary accent */
+  --text-primary: #0b1020; /* ~16:1 on bg-primary (AAA) */
+  --text-secondary: #3a4568; /* ~8:1 on bg-primary (AAA) — was #4a5580 (~6:1) */
+  --text-muted: #616984; /* ~4.6:1 on bg-primary (AA) — was #8890b0 (~3.2:1 FAIL) */
+  --border-color: #bfc6de; /* ~3:1 against bg-primary for visible UI boundaries */
+  --border-subtle: #d8ddef; /* fainter dividers */
+  --accent: #3456c9; /* ~6.3:1 on bg-primary (AA+) — was #5b7ee5 (~4.2:1 marginal) */
+  --accent-2: #188a5c; /* ~5.2:1 for secondary accent */
   --accent-bg: #edf1ff;
   --accent-hover: #dce4ff;
   --hover-bg: #eef1fa;
@@ -59,7 +59,7 @@
   --active-bg: #dce4ff;
   --active-border: #3456c9;
   --preview-line: #2a3050;
-  --shadow: rgba(0,0,0,0.08);
+  --shadow: rgba(0, 0, 0, 0.08);
   --choice-bg: transparent;
   --choice-hover: #eef1fa;
   --choice-active: #dce4ff;
@@ -77,7 +77,8 @@
   box-sizing: border-box;
 }
 
-html, body {
+html,
+body {
   width: 100%;
   height: 100%;
   overflow: hidden;
@@ -94,8 +95,7 @@ html, body {
   bottom: 28px;
   overflow: auto;
   background: var(--canvas-bg);
-  background-image:
-    linear-gradient(45deg, var(--canvas-check) 25%, transparent 25%),
+  background-image: linear-gradient(45deg, var(--canvas-check) 25%, transparent 25%),
     linear-gradient(-45deg, var(--canvas-check) 25%, transparent 25%),
     linear-gradient(45deg, transparent 75%, var(--canvas-check) 75%),
     linear-gradient(-45deg, transparent 75%, var(--canvas-check) 75%);
@@ -104,7 +104,7 @@ html, body {
 }
 
 #svg-root {
-  box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
   background: #fff;
   cursor: default;
   display: block;
@@ -250,7 +250,8 @@ html, body {
   border-color: var(--accent);
 }
 
-.tag-ok-btn, .tag-cancel-btn {
+.tag-ok-btn,
+.tag-cancel-btn {
   width: 24px;
   height: 24px;
   border: none;
@@ -362,7 +363,7 @@ html, body {
   border: 1px solid var(--border-color, #444);
   border-radius: 6px;
   overflow: hidden;
-  box-shadow: 0 -4px 16px var(--shadow, rgba(0,0,0,0.4));
+  box-shadow: 0 -4px 16px var(--shadow, rgba(0, 0, 0, 0.4));
   z-index: 200;
   min-width: 90px;
 }
@@ -455,7 +456,7 @@ html, body {
   background: var(--bg-panel);
   border-left: 1px solid var(--border-color);
   box-shadow: -4px 0 28px rgba(0, 0, 0, 0.35);
-  transform: translateX(calc(100% + 28px));   /* include shadow in off-screen */
+  transform: translateX(calc(100% + 28px)); /* include shadow in off-screen */
   transition: transform 0.22s ease-out;
   z-index: 20;
   overflow-y: auto;
@@ -643,7 +644,7 @@ a.file-details-row-value:hover {
   box-shadow: inset 0 -1px 0 var(--border-subtle);
 }
 .file-details-name-input:focus {
-  background: var(--input-bg, rgba(255,255,255,0.04));
+  background: var(--input-bg, rgba(255, 255, 255, 0.04));
   box-shadow: inset 0 0 0 1px var(--accent);
   text-overflow: clip;
 }
@@ -657,7 +658,7 @@ a.file-details-row-value:hover {
   font-size: 11px;
   line-height: 1.3;
   margin-top: 4px;
-  min-height: 0;       /* collapses when empty */
+  min-height: 0; /* collapses when empty */
 }
 .file-details-name-error:empty {
   display: none;
@@ -832,7 +833,7 @@ body.editor-mode #editor-header {
   font-size: 13px;
   line-height: 1.4;
   color: var(--text-primary);
-  background: var(--input-bg, rgba(255,255,255,0.04));
+  background: var(--input-bg, rgba(255, 255, 255, 0.04));
   border: 1px solid var(--accent);
   border-radius: 4px;
   padding: 1px 6px;
@@ -850,7 +851,7 @@ body.editor-mode #toolbar {
   display: none;
 }
 #editor-sidebar {
-  display: none;        /* hidden by default (gallery mode) */
+  display: none; /* hidden by default (gallery mode) */
 }
 body.editor-mode #editor-sidebar {
   position: absolute;
@@ -885,8 +886,8 @@ body.editor-mode #editor-sidebar {
   overflow: visible;
 }
 body.editor-mode #canvas-container {
-  top: 48px;            /* below editor-header only */
-  left: 48px;           /* right of the sidebar */
+  top: 48px; /* below editor-header only */
+  left: 48px; /* right of the sidebar */
 }
 
 /* Right property panel — context-aware:
@@ -912,7 +913,7 @@ body.editor-mode.has-right-panel #editor-right-panel {
   overflow-y: auto;
 }
 body.editor-mode.has-right-panel #canvas-container {
-  right: 280px;         /* leave room for the right panel */
+  right: 280px; /* leave room for the right panel */
 }
 body.editor-mode.has-right-panel .file-details-drawer,
 body.editor-mode.has-right-panel .file-details-backdrop {
@@ -977,7 +978,9 @@ body.editor-mode.has-right-panel .file-details-backdrop {
    * the property panel. */
   padding-left: 10px;
 }
-.editor-right-panel-actions-row:not(:last-child) { margin-bottom: 0; }
+.editor-right-panel-actions-row:not(:last-child) {
+  margin-bottom: 0;
+}
 
 /* Action buttons inherit the full 36×36 `.toolbar-btn` size + 20 px
  * font-size from the sidebar/toolbar rules so Icon weight matches
@@ -1051,7 +1054,7 @@ body.editor-mode.has-right-panel .file-details-backdrop {
 .editor-right-panel-empty-icon {
   font-size: 36px;
   opacity: 0.4;
-  font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 40;
+  font-variation-settings: "FILL" 0, "wght" 300, "GRAD" 0, "opsz" 40;
 }
 .editor-right-panel-empty-title {
   margin: 0;
@@ -1113,7 +1116,7 @@ body.editor-mode.has-right-panel .file-details-backdrop {
 }
 .scratchpad-save-btn .material-symbols-outlined {
   font-size: 16px;
-  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+  font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 20;
 }
 
 .scratchpad-grid {
@@ -1172,7 +1175,7 @@ body.editor-mode.has-right-panel .file-details-backdrop {
   cursor: pointer;
   opacity: 0;
   transition: opacity 0.15s;
-  font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 20;
+  font-variation-settings: "FILL" 0, "wght" 500, "GRAD" 0, "opsz" 20;
 }
 .scratchpad-item:hover .scratchpad-item-delete {
   opacity: 1;
@@ -1209,13 +1212,13 @@ body.editor-mode.has-right-panel .file-details-backdrop {
   line-height: 1;
   white-space: nowrap;
   user-select: none;
-  flex-shrink: 0;        /* stays intact next to the filename */
+  flex-shrink: 0; /* stays intact next to the filename */
   color: var(--text-muted);
   transition: color 0.15s, background 0.15s;
 }
 .save-status-icon {
   font-size: 14px;
-  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+  font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 20;
 }
 
 /* Saved — neutral, at rest */
@@ -1236,8 +1239,12 @@ body.editor-mode.has-right-panel .file-details-backdrop {
   animation: save-status-spin 1s linear infinite;
 }
 @keyframes save-status-spin {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* Error — danger color, stays visible until next save attempt */
@@ -1255,7 +1262,7 @@ body.editor-mode.has-right-panel .file-details-backdrop {
   border-radius: 4px;
   cursor: pointer;
   font-size: 18px;
-  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+  font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 20;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1270,7 +1277,6 @@ body.editor-mode.has-right-panel .file-details-backdrop {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
-
 
 /* ---- Breadcrumb ---- */
 
