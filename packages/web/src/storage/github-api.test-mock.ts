@@ -17,12 +17,15 @@
  * backend must agree on. The amend / atomic-tree paths are
  * GitHub-specific optimisations and live in their own unit tests.
  *
- * The SHA we hand out is `sha1(path + ":" + body)` — not the same
- * algorithm GitHub uses (blob SHAs are `sha1("blob " + len + "\0" +
- * bytes)`) but stable and unique per byte-sequence, which is all
- * the store relies on.
+ * The SHA we hand out is a deterministic hex digest of
+ * `path + ":" + body` — not the same algorithm GitHub uses (real
+ * blob SHAs are `sha1("blob " + len + "\0" + bytes)`) but stable
+ * and unique per byte-sequence, which is all the store relies on.
+ * We roll a tiny FNV-1a 64-bit hash inline so the test mock stays
+ * dependency-free — pulling in `node:crypto` would force either
+ * `@types/node` into this browser-targeted package's tsconfig or
+ * a typecheck break under vitest 4's stricter type resolution.
  */
-import { createHash } from "node:crypto";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 
@@ -45,8 +48,33 @@ export function createRepoState(): GitHubRepoState {
   return { files: new Map(), folders: new Set() };
 }
 
+/**
+ * FNV-1a 64-bit hash, rendered as a 16-hex-char string. Produces
+ * stable, collision-resistant-enough digests for the mock's "distinct
+ * SHA per distinct content" invariant. Not cryptographic; not the
+ * same bytes GitHub would return for a real blob.
+ */
 function sha1(input: string): string {
-  return createHash("sha1").update(input).digest("hex");
+  // FNV-1a 64 in two 32-bit halves so we avoid BigInt for TS 5.x
+  // lib compatibility. Seeds are the FNV-1a offset basis (split),
+  // prime is 1099511628211 = 0x100000001b3.
+  let hi = 0xcbf2_9ce4;
+  let lo = 0x8422_2325;
+  for (let i = 0; i < input.length; i++) {
+    lo ^= input.charCodeAt(i);
+    // Multiply (hi:lo) by 0x100000001b3 == 2^40 + 2^8 + 0xb3.
+    const aLo = Math.imul(lo, 0x1b3) >>> 0;
+    const bLo = ((lo << 8) | 0) >>> 0;
+    const cLo = 0;
+    const aHi = Math.imul(hi, 0x1b3) >>> 0;
+    const bHi = ((hi << 8) | 0) >>> 0;
+    const cHi = ((lo >>> 24) | 0) >>> 0;
+    const sumLo = aLo + bLo + cLo;
+    const sumHi = aHi + bHi + cHi + Math.floor(sumLo / 0x1_0000_0000);
+    lo = sumLo >>> 0;
+    hi = sumHi >>> 0;
+  }
+  return hi.toString(16).padStart(8, "0") + lo.toString(16).padStart(8, "0");
 }
 
 /** Build the GitHub tree listing from the repo state. */
