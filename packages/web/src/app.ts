@@ -3,30 +3,11 @@
  * File Manager (gallery) ↔ Editor switching with path-based StorageProvider.
  */
 
-import type { ToolOptions } from "@ingcreators/annot-core";
-import {
-  CanvasManager,
-  createThemeToggle,
-  History,
-  openAnchoredPopover,
-  SelectionManager,
-  Toolbar,
-} from "@ingcreators/annot-core";
+import { createThemeToggle } from "@ingcreators/annot-core";
 import type { ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
 import { getFilename } from "@ingcreators/annot-core/storage";
 import { newIdB58, setTooltip } from "@ingcreators/annot-core/utils";
-import {
-  estimateDataUrlBytes,
-  FileDetailsDrawer,
-  validateFilename,
-} from "./editor/file-details-drawer.js";
-import { installKeyboardHelp } from "./editor/keyboard-help.js";
-import { EditorRightPanel } from "./editor/right-panel.js";
-import { SaveStatusIndicator } from "./editor/save-status-indicator.js";
-import { ScratchpadPasteTool } from "./editor/scratchpad-paste-tool.js";
-import { ScratchpadSection } from "./editor/scratchpad-section.js";
 import { ScratchpadStore } from "./editor/scratchpad-store.js";
-import { renderThumbnail, serializeSelection } from "./editor/scratchpad-utils.js";
 import type { SplitEditor } from "./editor/split-editor.js";
 import { loadEncodeOptions } from "./encode-options.js";
 import { FileManager } from "./gallery/file-manager.js";
@@ -58,17 +39,17 @@ import {
   isSignedIn as isGitHubSignedIn,
   loadRepoRef as loadGitHubRef,
 } from "./storage/github-auth.js";
-import { GitHubStore } from "./storage/github-store.js";
 import { loadDriveRoot, saveDriveRoot, showFolderPicker, signIn } from "./storage/google-auth.js";
 import { GoogleDriveStore } from "./storage/google-drive-store.js";
 import { encodeCaptureInWorker } from "./workers/encode-client.js";
 import { CaptureHost, type OpenEditorArgs } from "./app/capture-host.js";
-import { addClickMarker } from "./app/click-marker.js";
+import { EditorSession } from "./app/editor-session.js";
 import { bumpFilenameSuffix, retryFsOp } from "./app/fs-utils.js";
+import { HeaderHost } from "./app/header-host.js";
 import { loadImage } from "./app/image-utils.js";
-import { restoreAnnotations } from "./app/restore-annotations.js";
 import { SavePipeline } from "./app/save-pipeline.js";
 import { findSessionRecords } from "./app/session-slice.js";
+import { StatusHost } from "./app/status-host.js";
 
 import { pasteFromClipboard } from "./capture/pwa-capture.js";
 import { editUrl, galleryUrl, parseRoute, pushRoute, sessionEditUrl } from "./router.js";
@@ -80,101 +61,45 @@ export class App {
   #deviceStore: StorageProvider | null = null;
   #fileManager: FileManager | null = null;
 
-  #currentEditor: {
-    canvas: CanvasManager;
-    history: History;
-    selection: SelectionManager;
-  } | null = null;
-
-  /** ResizeObserver that keeps the canvas fitted to the viewport
-   *  while "Fit to window" mode is active. Observes #canvas-container
-   *  so panel open/close, window resize, and toolbar height changes
-   *  all re-trigger the fit. */
-  #fitObserver: ResizeObserver | null = null;
-
-  /** Tear down the previous editor session's DOM listeners so they
-   *  don't accumulate on the reused #svg-root element. Without this,
-   *  each reopen adds another SelectionManager/CanvasManager listening
-   *  to the same pointer events — dragging a shape would apply
-   *  #moveElement N times per mouse tick and the shape appears to
-   *  move N× faster than the cursor. */
-  #disposePreviousEditor(): void {
-    if (!this.#currentEditor) return;
-    this.#currentEditor.selection.destroy();
-    this.#currentEditor.canvas.destroy();
-    this.#currentEditor = null;
-    this.#fitObserver?.disconnect();
-    this.#fitObserver = null;
-  }
-
   #currentImagePath: string | null = null;
+  /** Latest ImageRecord for the currently-open image (when available). Used
+   *  by the file-details drawer to show createdAt/updatedAt/sourceUrl. Null
+   *  for not-yet-saved images (e.g. a freshly captured but un-persisted one). */
+  #currentImageRecord: ImageRecord | null = null;
+  #currentTags: Record<string, string> = {};
+  #currentFolderPath = "";
+  #splitEditor: SplitEditor | null = null;
+
+  /** Scratchpad persistence — shared across editor sessions (the
+   *  store itself is stateless, just a thin wrapper around IndexedDB). */
+  #scratchpadStore = new ScratchpadStore();
+
   /** Save pipeline — owns the annotation-save + thumbnail-regen debounce
-   *  state machine. Instantiated in `init()` once the `#storage` and
-   *  `#saveStatusIndicator` getters have meaningful values for the
-   *  pipeline to read through. */
+   *  state machine. */
   #savePipeline: SavePipeline;
   /** Capture host — owns the screenshot / paste / file-upload flows.
    *  Routes the resulting image back through `#openEditorFor` so this
    *  file keeps owning the "editor setup + URL push" concern. */
   #captureHost: CaptureHost;
-  /** Latest ImageRecord for the currently-open image (when available). Used
-   *  by the file-details drawer to show createdAt/updatedAt/sourceUrl. Null
-   *  for not-yet-saved images (e.g. a freshly captured but un-persisted one). */
-  #currentImageRecord: ImageRecord | null = null;
-  /** Latest original data URL — used to approximate file size for the drawer. */
-  #currentImageDataUrl = "";
-  /** The file-details drawer, created per editor session. */
-  #fileDetailsDrawer: FileDetailsDrawer | null = null;
-  /** Save status indicator, rebuilt per editor session. */
-  #saveStatusIndicator: SaveStatusIndicator | null = null;
-  /** Current editor toolbar. Kept around so the header-level Save /
-   *  Copy actions can delegate to the toolbar's canonical implementation
-   *  (saveNow, copyNow, showSaveMenu) instead of re-implementing them. */
-  #editorToolbar: Toolbar | null = null;
-  /** Right-side property panel (tool properties + selection properties).
-   *  Rebuilt per editor session. */
-  #editorRightPanel: EditorRightPanel | null = null;
-  /** DOM-element metadata captured alongside the current screenshot
-   *  (browser-extension captures only). Drives the Elements sidebar
-   *  panel / smart-annotation features in the editor. Null when the
-   *  image has no metadata (paste, desktop capture, legacy). */
-  #pageMetadata: import("@ingcreators/annot-core").PageMetadata | null = null;
-  /** Teardown for the global `?` keyboard-help listener. Installed
-   *  once at editor boot; removed on destroy. */
-  #keyboardHelpUninstall: (() => void) | null = null;
-  /** Scratchpad persistence — shared across editor sessions (the
-   *  store itself is stateless, just a thin wrapper around IndexedDB). */
-  #scratchpadStore = new ScratchpadStore();
-  /** Reference to the Scratchpad toolbar button — kept so future hooks
-   *  (e.g. highlighting when armed) have a stable anchor. */
-  #scratchpadToolbarBtn: HTMLButtonElement | null = null;
-  /** Live ScratchpadSection instance while its popover is open; null
-   *  otherwise. Lets external events (selection change, tool change)
-   *  push state in even if the popover is currently closed (they just
-   *  become no-ops). */
-  #openScratchpadSection: ScratchpadSection | null = null;
-  /** Cached "is selection non-empty in Select mode" so a freshly
-   *  opened scratchpad popover can reflect the save-enabled state
-   *  without waiting for the next selection event. */
-  #scratchpadCanSave = false;
-  /** Id of the scratchpad item currently armed for paste (if any).
-   *  Persists across popover open/close cycles so reopening shows the
-   *  same active thumbnail. */
-  #armedScratchpadItemId: string | null = null;
-  #currentTags: Record<string, string> = {};
-  #currentFolderPath = "";
-  #splitEditor: SplitEditor | null = null;
+  /** Header host — owns the editor header bar, inline rename, external
+   *  links, and the `SaveStatusIndicator`. */
+  #headerHost: HeaderHost;
+  /** Status host — owns the editor statusbar + zoom controls. */
+  #statusHost: StatusHost = new StatusHost();
+  /** Editor session — owns `setupEditor` + canvas/history/toolbar/
+   *  right-panel/drawer/scratchpad lifecycle. */
+  #editorSession: EditorSession;
 
   constructor() {
     this.#savePipeline = new SavePipeline({
       getStorage: () => this.#storage,
-      getCanvas: () => this.#currentEditor?.canvas ?? null,
+      getCanvas: () => this.#editorSession.getCanvas(),
       getCurrentImagePath: () => this.#currentImagePath,
       setCurrentImagePath: (p) => {
         this.#currentImagePath = p;
       },
       getCurrentTags: () => this.#currentTags,
-      getStatusIndicator: () => this.#saveStatusIndicator,
+      getStatusIndicator: () => this.#headerHost.getSaveStatusIndicator(),
     });
     this.#captureHost = new CaptureHost({
       getStorage: () => this.#storage,
@@ -182,6 +107,43 @@ export class App {
       getFileManager: () => this.#fileManager,
       openEditor: (args) => this.#openEditorFor(args),
     });
+    this.#headerHost = new HeaderHost({
+      getStorage: () => this.#storage,
+      getCurrentImagePath: () => this.#currentImagePath,
+      setCurrentImagePath: (p) => {
+        this.#currentImagePath = p;
+      },
+      getCurrentImageRecord: () => this.#currentImageRecord,
+      setCurrentImageRecord: (r) => {
+        this.#currentImageRecord = r;
+      },
+      getCurrentTags: () => this.#currentTags,
+      getCurrentImageDataUrl: () => this.#editorSession.getCurrentImageDataUrl(),
+      getCurrentFolderPath: () => this.#currentFolderPath,
+      setCurrentFolderPath: (p) => {
+        this.#currentFolderPath = p;
+      },
+      getFileDetailsDrawer: () => this.#editorSession.getFileDetailsDrawer(),
+      getToolbar: () => this.#editorSession.getToolbar(),
+      getImageSize: () => this.#editorSession.getImageSize(),
+      showGallery: () => this.showGallery(),
+    });
+    this.#editorSession = new EditorSession(
+      {
+        getStorage: () => this.#storage,
+        getCurrentImagePath: () => this.#currentImagePath,
+        getCurrentImageRecord: () => this.#currentImageRecord,
+        getCurrentFolderPath: () => this.#currentFolderPath,
+        getCurrentTags: () => this.#currentTags,
+        setCurrentTags: (t) => {
+          this.#currentTags = t;
+        },
+      },
+      this.#headerHost,
+      this.#statusHost,
+      this.#savePipeline,
+      this.#scratchpadStore,
+    );
   }
 
   async init(): Promise<void> {
@@ -253,7 +215,7 @@ export class App {
       const target = e.target as HTMLElement;
       if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)
         return;
-      if (this.#currentEditor) return;
+      if (this.#editorSession.getEditor()) return;
       const dataUrl = await pasteFromClipboard();
       if (dataUrl) {
         e.preventDefault();
@@ -330,7 +292,7 @@ export class App {
         "[annot/app] handoff record.pageMetadata:",
         record.pageMetadata ? `${record.pageMetadata.elements.length} elements` : "none",
       );
-      this.setupEditor(record.originalDataUrl, w, h, undefined, record.pageMetadata);
+      this.#editorSession.setupEditor(record.originalDataUrl, w, h, undefined, record.pageMetadata);
 
       pushRoute(editUrl(getStorageMode(), savedPath));
 
@@ -591,23 +553,16 @@ export class App {
     document.body.classList.remove("editor-mode");
     const editorHeaderEl = document.getElementById("editor-header");
     if (editorHeaderEl) editorHeaderEl.innerHTML = "";
-    this.#fileDetailsDrawer?.destroy();
-    this.#fileDetailsDrawer = null;
-    // The save-status indicator is owned by the editor header DOM we
-    // just cleared; null the reference so the next session creates a
-    // fresh one attached to the fresh header markup.
-    this.#saveStatusIndicator = null;
-    // Same for the sidebar toolbar — DOM is cleared via .innerHTML.
+    // The save-status indicator lives on the header DOM we just
+    // cleared; null HeaderHost's reference so the next session
+    // creates a fresh one attached to the fresh header markup.
+    this.#headerHost.reset();
+    // Clear the sidebar toolbar DOM and release the editor session's
+    // per-session UI (drawer, toolbar ref, right-panel, canvas /
+    // selection listeners on the shared #svg-root element).
     const sidebarEl = document.getElementById("editor-sidebar");
     if (sidebarEl) sidebarEl.innerHTML = "";
-    this.#editorToolbar = null;
-    // Release the canvas/selection event listeners so they don't
-    // pile up on the shared #svg-root element across sessions.
-    this.#disposePreviousEditor();
-    // Right panel: destroy() clears its DOM and removes the
-    // body.has-right-panel class so the canvas reclaims the space.
-    this.#editorRightPanel?.destroy();
-    this.#editorRightPanel = null;
+    this.#editorSession.resetSessionUI();
 
     if (!this.#fileManager) {
       const sidebarEl = document.getElementById("sidebar")!;
@@ -980,7 +935,7 @@ export class App {
 
     pushRoute(editUrl(getStorageMode(), savedPath));
 
-    this.setupEditor(
+    this.#editorSession.setupEditor(
       record.originalDataUrl,
       w,
       h,
@@ -999,7 +954,6 @@ export class App {
 
     this.#currentImagePath = full.path;
     this.#currentImageRecord = full;
-    this.#currentImageDataUrl = full.originalDataUrl;
     this.#currentTags = full.tags || {};
 
     let w = full.width;
@@ -1012,7 +966,7 @@ export class App {
 
     pushRoute(editUrl(getStorageMode(), full.path));
 
-    this.setupEditor(
+    this.#editorSession.setupEditor(
       full.originalDataUrl,
       w,
       h,
@@ -1234,922 +1188,6 @@ export class App {
     }
   }
 
-  setupEditor(
-    dataUrl: string,
-    width: number,
-    height: number,
-    annotations?: string,
-    pageMetadata?: import("@ingcreators/annot-core").PageMetadata,
-  ): void {
-    this.#currentImageDataUrl = dataUrl;
-    this.#pageMetadata = pageMetadata ?? null;
-
-    // Clean up any previous editor session's listeners before creating
-    // new CanvasManager / SelectionManager. Critical because the
-    // #svg-root element is reused across sessions.
-    this.#disposePreviousEditor();
-
-    const canvasContainer = document.getElementById("canvas-container")!;
-    const fileManagerEl = document.getElementById("file-manager")!;
-    fileManagerEl.style.display = "none";
-    canvasContainer.style.display = "";
-
-    const statusbar = document.getElementById("statusbar")!;
-    statusbar.style.display = "";
-
-    let svg = document.getElementById("svg-root") as unknown as SVGSVGElement | null;
-    if (!svg) {
-      canvasContainer.innerHTML = "";
-      svg = document.createElementNS("http://www.w3.org/2000/svg", "svg") as SVGSVGElement;
-      svg.id = "svg-root";
-      svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
-      svg.setAttribute("xmlns:xlink", "http://www.w3.org/1999/xlink");
-      canvasContainer.appendChild(svg);
-    } else {
-      svg.innerHTML = "";
-      svg.removeAttribute("style");
-    }
-    canvasContainer.querySelector(".property-panel")?.remove();
-
-    const canvas = new CanvasManager(svg, dataUrl, width, height);
-    const history = new History(canvas.annotations);
-    const selection = new SelectionManager(canvas, history);
-
-    // Keep "Fit to window" tracking the viewport size: re-fit whenever
-    // #canvas-container resizes. This covers window resize, right-panel
-    // open/close (future), devtools toggle, etc. — the user picks Fit
-    // once and the canvas keeps matching the viewport.
-    this.#fitObserver?.disconnect();
-    this.#fitObserver = new ResizeObserver(() => canvas.refitIfFitMode());
-    this.#fitObserver.observe(canvasContainer);
-
-    // Mark the body as "editor mode" so the editor-header becomes visible
-    // and the toolbar / canvas offsets account for it.
-    // showGalleryView() removes this class.
-    document.body.classList.add("editor-mode");
-
-    // Tear down any drawer from a previous editor session and build a
-    // fresh one for this image. Attached to document.body so it uses the
-    // same absolute-positioning coordinate space as toolbar/canvas/statusbar.
-    this.#fileDetailsDrawer?.destroy();
-    this.#fileDetailsDrawer = new FileDetailsDrawer(document.body, {
-      filename: this.#currentImagePath ? getFilename(this.#currentImagePath) : "(untitled)",
-      folderPath: this.#currentImageRecord?.folderPath ?? this.#currentFolderPath,
-      width,
-      height,
-      fileSizeBytes: estimateDataUrlBytes(dataUrl),
-      createdAt: this.#currentImageRecord?.createdAt,
-      updatedAt: this.#currentImageRecord?.updatedAt,
-      sourceUrl: this.#currentImageRecord?.sourceUrl,
-      tags: this.#currentTags,
-      externalLinks: this.#buildExternalLinksFor(this.#currentImagePath),
-    });
-    // GitHub: commit lookup is a separate API call (~300ms) that we
-    // don't want to block the editor opening on. Fire it in the
-    // background and patch the drawer when it lands.
-    void this.#populateLastCommit(this.#currentImagePath);
-    this.#fileDetailsDrawer.onRename = (newName) => this.#renameCurrentImage(newName);
-    this.#fileDetailsDrawer.onTagsChange = (t) => {
-      this.#currentTags = t;
-      void this.#savePipeline.writeAnnotations();
-    };
-
-    this.#buildEditorHeader();
-    this.buildEditorStatusbar(canvas, width, height);
-
-    // The editor toolbar moves from the top bar to a left vertical
-    // sidebar (Draw.io / Figma pattern). Theme toggle + gallery button
-    // live in the editor header; save/copy/open move there too as
-    // document-level actions. Tool ▼ dropdowns are suppressed because
-    // the right panel renders tool properties persistently instead.
-    const sidebarEl = document.getElementById("editor-sidebar")!;
-    sidebarEl.innerHTML = "";
-    const toolbar = new Toolbar(
-      sidebarEl,
-      canvas,
-      history,
-      selection,
-      (toolName, toolId) => {
-        const el = document.getElementById("status-tool");
-        if (el) el.textContent = toolName;
-        // Show the active tool's properties in the right panel
-        // (or hide the tool section when switching to Select).
-        this.#editorRightPanel?.showToolProperties(toolId);
-        // Any toolbar tool change also cancels a pending scratchpad
-        // paste — clear the armed-thumbnail highlight so the user
-        // isn't led to believe the scratchpad item is still waiting
-        // to drop. (The popover may not currently be open; the
-        // section instance is tracked separately so we can still
-        // clear its state if the user reopens it.)
-        this.#openScratchpadSection?.setActiveItem(null);
-        this.#armedScratchpadItemId = null;
-      },
-      {
-        orientation: "vertical",
-        showThemeToggle: false,
-        showGalleryButton: false,
-        showSaveGroup: false,
-        // Variant flyouts (shape / arrow / text / draw / redact) open
-        // a compact icon-chip row from the ▼ arrow. Full property
-        // editing still lives in the right panel — the flyout only
-        // shortcuts "pick sub-shape → start drawing".
-        hideToolDropdowns: false,
-        // Direct-download filenames preserve the opened image's base
-        // name (see `buildDownloadName` in core). Freshly-captured
-        // images without a stored path fall back to the timestamp
-        // default inside the export functions.
-        getCurrentFilename: () =>
-          this.#currentImagePath ? getFilename(this.#currentImagePath) : undefined,
-      },
-    );
-    this.#editorToolbar = toolbar;
-
-    // Scratchpad library lives on the toolbar (consistent with other
-    // "add to canvas" actions). The popover is rendered against the
-    // button via core's shared popover helper.
-    const scratchpadBtn = toolbar.registerExtraToolButton({
-      id: "scratchpad",
-      icon: "collections_bookmark",
-      title: "Scratchpad",
-      onClick: (anchor) => this.#openScratchpadPopover(anchor, canvas, selection, history),
-    });
-    this.#scratchpadToolbarBtn = scratchpadBtn;
-
-    // Right property panel — now pure context (tool defaults +
-    // selection properties). Scratchpad moved to the toolbar as its
-    // own library popover so the right panel has a single clean
-    // responsibility: "edit the thing the user is focused on".
-    const rightPanelEl = document.getElementById("editor-right-panel")!;
-    this.#editorRightPanel?.destroy();
-    this.#editorRightPanel = new EditorRightPanel(
-      rightPanelEl,
-      toolbar,
-      canvas,
-      history,
-      selection,
-    );
-    // Push DOM-element metadata (captured by the browser extension)
-    // into the right panel so the Elements section appears for
-    // browser-sourced screenshots. Null/undefined hides the section
-    // gracefully for paste / desktop / legacy captures.
-    this.#editorRightPanel.setPageMetadata(this.#pageMetadata);
-
-    // Global `?` key → open the keyboard-shortcut help modal. Idempotent
-    // — if a prior editor session installed a listener, tear it down
-    // first so we don't stack handlers across re-opens.
-    this.#keyboardHelpUninstall?.();
-    this.#keyboardHelpUninstall = installKeyboardHelp();
-
-    selection.onChange = () => {
-      const els = selection.selectedElements;
-      // Selection-based properties only show while Select is active;
-      // during a drawing tool, we keep the tool's defaults visible
-      // even if a shape was momentarily selected by the creation flow.
-      if (els.length > 0 && !canvas.activeTool) {
-        this.#editorRightPanel?.showSelectionProperties(els);
-      } else {
-        this.#editorRightPanel?.showSelectionProperties([]);
-      }
-      // Scratchpad "+ Save" button is enabled only while something
-      // is selected in Select mode (serializeSelection needs at
-      // least one element). Stored so the popover can consult it when
-      // it opens later.
-      this.#scratchpadCanSave = els.length > 0 && !canvas.activeTool;
-      this.#openScratchpadSection?.setSaveEnabled(this.#scratchpadCanSave);
-    };
-
-    // Seed initial canvas state BEFORE wiring the autosave hook.
-    // Otherwise the `history.save()` that records the restored
-    // annotations (or the just-added click marker) fires
-    // `onStateChange`, and the autosave timer commits a no-op copy
-    // of the file ~10 seconds after the user simply opens it — a
-    // real problem on GitHub where each commit shows in git log.
-    // The click-marker path still persists explicitly below, so
-    // delaying the hook doesn't lose that save.
-    if (annotations) {
-      restoreAnnotations(canvas, annotations);
-      history.save();
-    } else if (
-      this.#currentTags["click.x"] !== undefined &&
-      this.#currentTags["click.y"] !== undefined &&
-      this.#currentTags["click.marker"] !== "added"
-    ) {
-      // First-time open of a click-captured image — draw a target marker
-      // at the recorded click position so the user sees where the click was.
-      addClickMarker(canvas, this.#currentTags);
-      this.#currentTags["click.marker"] = "added";
-      history.save();
-      // Persist the marker so we don't re-add it on next open,
-      // and so the thumbnail gets refreshed with the marker included.
-      void this.#savePipeline.writeAnnotations();
-    }
-
-    history.onStateChange = () => {
-      // Reflect "edits made" immediately — the debounce hides latency
-      // but the user should know something will be saved soon.
-      this.#saveStatusIndicator?.setStatus("pending");
-      // Network-backed stores (Drive, GitHub) get a longer debounce
-      // than local ones so a rapid slider sweep / series of small
-      // adjustments coalesces into a single upload instead of a
-      // fusillade. Local stores can afford the tight 500 ms window.
-      //
-      // GitHub previously ran at 10 s specifically to keep the
-      // commit log readable when every save was a fresh commit.
-      // The `#commitFileAmendable` path in GitHubStore now collapses
-      // a streak of same-file updates into a single commit on the
-      // branch regardless of save frequency, so the debounce can go
-      // back to parity with Drive without risking log spam.
-      const mode = getStorageMode();
-      const saveDebounceMs = mode === "github" || mode === "googledrive" ? 1500 : 500;
-      this.#savePipeline.scheduleAnnotationSave(saveDebounceMs);
-      this.#savePipeline.scheduleThumbnailRegen(2000);
-    };
-
-    this.#currentEditor = { canvas, history, selection };
-  }
-
-  buildEditorStatusbar(canvas: CanvasManager, width: number, height: number): void {
-    const statusbar = document.getElementById("statusbar")!;
-    statusbar.innerHTML = "";
-
-    const zoomEl = document.createElement("div");
-    zoomEl.id = "status-zoom";
-    statusbar.appendChild(zoomEl);
-    this.buildZoomControls(canvas, zoomEl);
-
-    const sizeEl = document.createElement("span");
-    sizeEl.textContent = `${width} \u00d7 ${height}`;
-    setTooltip(sizeEl, "Image dimensions (width × height in pixels)");
-    statusbar.appendChild(sizeEl);
-
-    // Spacer pushes the tool indicator to the far right. Tags and the
-    // breadcrumb live in #editor-header, so this statusbar stays focused
-    // on canvas-state info only:
-    //   [zoom] [dimensions] ───── [current tool]
-    const spacer = document.createElement("span");
-    spacer.className = "toolbar-spacer";
-    statusbar.appendChild(spacer);
-
-    const toolEl = document.createElement("span");
-    toolEl.id = "status-tool";
-    setTooltip(toolEl, "Current tool — press V or Esc to return to Select");
-    toolEl.textContent = "Select";
-    statusbar.appendChild(toolEl);
-  }
-
-  /**
-   * Single-row editor header (industry-standard compact layout, ~48px):
-   *
-   *   [A]  Device › test › image-1776...png  ⓘ             [?] [☀]
-   *
-   * Rationale:
-   *   - Filename is the last segment of a file's PATH. Treating it as
-   *     the final breadcrumb segment (bold, non-clickable) reflects
-   *     the semantic reality and matches Google Drive / Finder / VS Code.
-   *   - A single row at 48px leaves more room for the canvas than
-   *     the previous 64px 2-row layout, without losing any info —
-   *     tags already moved to the file-details drawer.
-   *   - Overflow is solved by flex-shrink priority: ancestor breadcrumb
-   *     segments shrink first (ellipsis), while the FILENAME segment
-   *     refuses to shrink (flex-shrink: 0). A very long path shows
-   *     "Device › … › folder › image.png" — filename is always visible.
-   */
-  #buildEditorHeader(): void {
-    const headerEl = document.getElementById("editor-header");
-    if (!headerEl) return;
-    headerEl.innerHTML = "";
-
-    // Brand — A icon, click → gallery root
-    const brandBtn = document.createElement("button");
-    brandBtn.type = "button";
-    brandBtn.className = "editor-header-brand";
-    setTooltip(brandBtn, "Back to Gallery");
-    brandBtn.setAttribute("aria-label", "Back to Gallery");
-    // Logo is 30×30 — matches the file-manager header's .brand SVG
-    // so the logo stays at the exact same x/y position when the user
-    // navigates between gallery and editor views. 30px fills ~62% of
-    // the 48px header, which is the sweet spot used by Figma / Slack /
-    // Notion (all ≈ 28–32px in an equivalent-height chrome).
-    brandBtn.innerHTML = `
-      <svg width="30" height="30" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="24" cy="7" r="3.5" fill="#7c9cff"/>
-        <path d="M24 13 L13 38" stroke="#7ef0c5" stroke-width="4" stroke-linecap="round"/>
-        <path d="M24 13 L35 38" stroke="#b391ff" stroke-width="4" stroke-linecap="round"/>
-        <path d="M19 24 H29" stroke="#7c9cff" stroke-width="3.5" stroke-linecap="round"/>
-      </svg>
-    `;
-    brandBtn.addEventListener("click", () => {
-      this.#currentFolderPath = "";
-      void this.showGallery();
-    });
-    headerEl.appendChild(brandBtn);
-
-    // Breadcrumb — folder path. Appends filename as the active final
-    // segment + info button, so the full path reads as one unit.
-    const breadcrumb = this.#buildEditorBreadcrumb();
-    breadcrumb.classList.add("editor-header-path");
-
-    if (this.#currentImagePath) {
-      const sep = document.createElement("span");
-      sep.className = "breadcrumb-sep";
-      sep.textContent = "\u203a";
-      sep.setAttribute("aria-hidden", "true");
-      breadcrumb.appendChild(sep);
-
-      // Filename is the "active" final breadcrumb segment. Double-click
-      // enters inline rename mode (Finder / Notion convention). Single
-      // click leaves the text selectable so users can copy the name.
-      const filenameEl = document.createElement("span");
-      filenameEl.className = "breadcrumb-item breadcrumb-filename active";
-      filenameEl.textContent = getFilename(this.#currentImagePath);
-      setTooltip(filenameEl, `${this.#currentImagePath}\nDouble-click to rename`);
-      filenameEl.addEventListener("dblclick", () => {
-        this.#startHeaderFilenameRename(filenameEl);
-      });
-      breadcrumb.appendChild(filenameEl);
-
-      const infoBtn = document.createElement("button");
-      infoBtn.type = "button";
-      infoBtn.className = "editor-header-info-btn material-symbols-outlined";
-      infoBtn.textContent = "info";
-      setTooltip(infoBtn, "Show file details and all tags");
-      infoBtn.setAttribute("aria-label", "Show file details and all tags");
-      infoBtn.addEventListener("click", () => {
-        this.#fileDetailsDrawer?.toggle();
-      });
-      breadcrumb.appendChild(infoBtn);
-    }
-    headerEl.appendChild(breadcrumb);
-
-    // Save status indicator — sits directly after the filename.
-    // Rationale: save state is a property OF this file; keeping it next
-    // to the file identifier lets the eye read "image.png · Saved" as a
-    // single unit. Industry pattern: Figma, Notion, VS Code, macOS
-    // title bar all place edit/save status beside the title, not at
-    // the far right of the window.
-    this.#saveStatusIndicator = new SaveStatusIndicator(headerEl);
-
-    // Spacer then pushes global actions to the far right.
-    const spacer = document.createElement("span");
-    spacer.className = "toolbar-spacer";
-    headerEl.appendChild(spacer);
-
-    // File action cluster (Open / Copy / Save ▼) — document-level
-    // actions that used to live in the top toolbar's right group. We
-    // render them as standard toolbar buttons in the header and
-    // delegate to the canonical Toolbar implementation so keyboard
-    // shortcuts (Ctrl+S, Ctrl+C) + click both go through one path.
-    this.#appendHeaderFileActions(headerEl);
-
-    // Help (placeholder — future keyboard-shortcuts / feature overlay)
-    const helpBtn = document.createElement("button");
-    helpBtn.type = "button";
-    helpBtn.className = "header-info-btn material-symbols-outlined";
-    helpBtn.textContent = "help_outline";
-    setTooltip(helpBtn, "Help");
-    helpBtn.setAttribute("aria-label", "Help");
-    headerEl.appendChild(helpBtn);
-
-    // Theme toggle
-    headerEl.appendChild(createThemeToggle("header-info-btn material-symbols-outlined"));
-  }
-
-  /**
-   * Rename the currently-open image. Called from both the drawer's
-   * inline edit and the header's double-click-to-rename flow so the
-   * two entry points share exactly one code path.
-   *
-   * The storage layer may uniquify ("foo (2).png") if the desired name
-   * collides with a sibling; we trust the path it returns and refresh
-   * the UI (URL, header breadcrumb, drawer contents) to match.
-   */
-  /**
-   * Build the header's right-side file action cluster: Open (optional),
-   * Copy, and Save with dropdown. Delegates all behavior to the current
-   * Toolbar instance so there's a single source of truth for what "save"
-   * and "copy" mean — the header buttons are a UI alias, not a second
-   * implementation.
-   */
-  #appendHeaderFileActions(headerEl: HTMLElement): void {
-    const group = document.createElement("div");
-    group.className = "editor-header-file-actions";
-
-    // Open — only in contexts where the host wires up an opener.
-    if (typeof (window as any).__anno_openFile === "function") {
-      const openBtn = document.createElement("button");
-      openBtn.type = "button";
-      openBtn.className = "header-info-btn material-symbols-outlined";
-      openBtn.textContent = "folder_open";
-      setTooltip(openBtn, "Open File");
-      openBtn.setAttribute("aria-label", "Open File");
-      openBtn.addEventListener("click", () => (window as any).__anno_openFile());
-      group.appendChild(openBtn);
-    }
-
-    // Copy
-    const copyBtn = document.createElement("button");
-    copyBtn.type = "button";
-    copyBtn.className = "header-info-btn material-symbols-outlined";
-    copyBtn.textContent = "content_copy";
-    setTooltip(copyBtn, "Copy (Ctrl+C)");
-    copyBtn.setAttribute("aria-label", "Copy");
-    copyBtn.addEventListener("click", () => {
-      this.#editorToolbar?.copyNow().catch((e) => console.error("[copy]", e));
-    });
-    group.appendChild(copyBtn);
-
-    // Save + dropdown
-    const saveWrap = document.createElement("div");
-    saveWrap.className = "tool-btn-wrap header-save-wrap";
-
-    const saveBtn = document.createElement("button");
-    saveBtn.type = "button";
-    saveBtn.className = "header-info-btn material-symbols-outlined";
-    saveBtn.textContent = "save";
-    setTooltip(saveBtn, "Save (Ctrl+S)");
-    saveBtn.setAttribute("aria-label", "Save");
-    saveBtn.addEventListener("click", () => {
-      this.#editorToolbar?.saveNow();
-    });
-    saveWrap.appendChild(saveBtn);
-
-    const saveArrow = document.createElement("button");
-    saveArrow.type = "button";
-    saveArrow.className = "tool-dropdown-arrow material-symbols-outlined";
-    saveArrow.textContent = "expand_more";
-    setTooltip(saveArrow, "Save options");
-    saveArrow.setAttribute("aria-label", "Save options");
-    saveArrow.addEventListener("click", (e) => {
-      e.stopPropagation();
-      this.#editorToolbar?.showSaveMenu(saveWrap);
-    });
-    saveWrap.appendChild(saveArrow);
-
-    group.appendChild(saveWrap);
-    headerEl.appendChild(group);
-  }
-
-  /**
-   * Swap the breadcrumb filename span with an inline input so the user
-   * can rename the file without opening the details drawer. Commits on
-   * Enter / blur, cancels on Escape. Same validation + storage rename
-   * path as the drawer (#renameCurrentImage).
-   */
-  #startHeaderFilenameRename(filenameEl: HTMLElement): void {
-    if (!this.#currentImagePath) return;
-    const oldName = getFilename(this.#currentImagePath);
-    const input = document.createElement("input");
-    input.type = "text";
-    input.value = oldName;
-    input.className = "breadcrumb-filename-input";
-    input.spellcheck = false;
-    input.autocomplete = "off";
-    input.setAttribute("aria-label", "File name, editable");
-
-    const parent = filenameEl.parentElement!;
-    parent.replaceChild(input, filenameEl);
-    input.focus();
-    // Select just the base name so the extension is preserved by default.
-    const dot = oldName.lastIndexOf(".");
-    setTimeout(() => {
-      input.setSelectionRange(0, dot > 0 ? dot : oldName.length);
-    }, 0);
-
-    let committing = false;
-    const restore = () => {
-      if (input.parentElement) input.replaceWith(filenameEl);
-    };
-    const commit = async () => {
-      if (committing) return;
-      committing = true;
-      const next = input.value.trim();
-      if (!next || next === oldName) {
-        restore();
-        return;
-      }
-      const err = validateFilename(next);
-      if (err) {
-        input.setCustomValidity(err);
-        input.reportValidity();
-        input.focus();
-        committing = false;
-        return;
-      }
-      try {
-        input.disabled = true;
-        await this.#renameCurrentImage(next);
-        // #renameCurrentImage rebuilds the header, so the input is
-        // already gone by the time this resolves — nothing to restore.
-      } catch (e: any) {
-        console.error("[rename] header:", e);
-        restore();
-      }
-    };
-
-    input.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        input.blur();
-      } else if (e.key === "Escape") {
-        e.preventDefault();
-        input.value = oldName;
-        restore();
-      }
-    });
-    input.addEventListener("blur", () => {
-      commit();
-    });
-  }
-
-  /**
-   * Serialize the current selection into the scratchpad so the user
-   * can paste it back later. Uses scratchpad-utils' serializeSelection
-   * (wraps elements in an origin-anchored <g> + computes bbox) and
-   * renderThumbnail (blob URL → <img> → <canvas> → PNG) for preview.
-   */
-  async #saveSelectionToScratchpad(
-    _canvas: CanvasManager,
-    selection: SelectionManager,
-    _history: History,
-  ): Promise<void> {
-    const els = selection.selectedElements;
-    if (els.length === 0) return;
-
-    const serialized = serializeSelection(els);
-    if (!serialized) return;
-
-    try {
-      const thumbnail = await renderThumbnail(serialized.svgMarkup, 80);
-      const item = await this.#scratchpadStore.save({
-        svgMarkup: serialized.svgMarkup,
-        thumbnail,
-        width: serialized.width,
-        height: serialized.height,
-      });
-      await this.#openScratchpadSection?.addItem(item);
-    } catch (e) {
-      console.error("[scratchpad] save failed:", e);
-    }
-  }
-
-  /**
-   * Open the Scratchpad library popover anchored to the toolbar
-   * button. Reuses the existing ScratchpadSection (thumbnail grid +
-   * save button) — just in a popover instead of the right panel.
-   *
-   * The section is stored on `this.#openScratchpadSection` while the
-   * popover is open so save/insert callbacks, selection changes, and
-   * tool-change events can still push state in; on close, the ref is
-   * cleared.
-   */
-  #openScratchpadPopover(
-    anchor: HTMLElement,
-    canvas: CanvasManager,
-    selection: SelectionManager,
-    history: History,
-  ): void {
-    openAnchoredPopover(
-      anchor,
-      (root) => {
-        const section = new ScratchpadSection(root, this.#scratchpadStore);
-        section.onSaveRequested = () => {
-          void this.#saveSelectionToScratchpad(canvas, selection, history);
-        };
-        section.onInsert = (item) => {
-          this.#armScratchpadPaste(canvas, selection, history, item);
-          this.#armedScratchpadItemId = item.id;
-          section.setActiveItem(item.id);
-        };
-        section.setSaveEnabled(this.#scratchpadCanSave);
-        section.setActiveItem(this.#armedScratchpadItemId);
-        this.#openScratchpadSection = section;
-        // Cleanup when the popover closes — the MutationObserver on
-        // <body> catches the helper's `remove()` regardless of WHY the
-        // popover closed (outside click, Escape, resize-kill, etc).
-        const obs = new MutationObserver(() => {
-          if (!root.isConnected) {
-            this.#openScratchpadSection = null;
-            obs.disconnect();
-          }
-        });
-        obs.observe(document.body, { childList: true, subtree: false });
-      },
-      { placement: "right", className: "tool-flyout-scratchpad" },
-    );
-  }
-
-  /**
-   * Arm a scratchpad-paste tool. Clicking the thumbnail doesn't
-   * insert immediately — it puts the editor into a short-lived
-   * "placement mode" where the next click on the canvas drops the
-   * item at that exact position.
-   *
-   * This matches the gesture model of drawing tools (Rectangle, Arrow,
-   * Sticky, …) where a tool is armed and then a canvas click creates
-   * the shape. Users get precise placement without dragging tiny
-   * thumbnails, and the mental model stays consistent across the
-   * whole sidebar.
-   *
-   * Escape cancels placement without inserting. After insertion or
-   * cancel, the toolbar returns to Select mode and (on success) the
-   * inserted elements become the current selection so the user can
-   * immediately re-drag them if the first placement wasn't perfect.
-   */
-  #armScratchpadPaste(
-    canvas: CanvasManager,
-    selection: SelectionManager,
-    history: History,
-    item: { svgMarkup: string; width: number; height: number },
-  ): void {
-    // Clear the previous selection before entering placement mode.
-    // Keeping the old selection handles visible while the user is
-    // about to place a NEW item is confusing — handles imply "this
-    // is the subject of my next action", which conflicts with the
-    // paste tool's "click to drop a fresh object" semantics.
-    selection.select(null);
-
-    // ScratchpadPasteTool doesn't actually use ToolOptions, but
-    // ToolBase requires them. Pass neutral defaults.
-    const opts: ToolOptions = {
-      strokeColor: "#ff0000",
-      fillColor: "none",
-      strokeWidth: 2,
-      fontSize: 16,
-      strokeDasharray: "",
-      fillOpacity: 1,
-    };
-    const tool = new ScratchpadPasteTool(canvas, history, opts, item);
-    tool.onInsert = (inserted) => {
-      if (inserted.length === 1) {
-        selection.select(inserted[0]!);
-      } else if (inserted.length > 1) {
-        selection.selectMultiple(inserted);
-      }
-    };
-    tool.onShapeComplete = () => {
-      // Return the toolbar to Select mode so its UI reflects the
-      // canvas state after the one-shot paste finishes (or is
-      // canceled via Escape). onToolChange fires inside activateSelectMode
-      // and the app-level handler clears the armed-thumbnail highlight.
-      this.#editorToolbar?.activateSelectMode();
-    };
-    canvas.setActiveTool(tool);
-
-    // Sync the toolbar UI + footer status with the now-armed paste tool:
-    // no toolbar button highlighted, footer shows "Scratchpad".
-    // The label matches the sidebar area the armed item came from so the
-    // user can identify the context at a glance.
-    this.#editorToolbar?.setExternalToolActive("Scratchpad", null);
-  }
-
-  async #renameCurrentImage(newName: string): Promise<void> {
-    if (!this.#storage || !this.#currentImagePath) {
-      throw new Error("No active file to rename.");
-    }
-    const oldPath = this.#currentImagePath;
-    const newPath = await this.#storage.renameImage(oldPath, newName);
-    this.#currentImagePath = newPath;
-    if (this.#currentImageRecord) {
-      this.#currentImageRecord = { ...this.#currentImageRecord, path: newPath };
-    }
-    pushRoute(editUrl(getStorageMode(), newPath));
-    this.#buildEditorHeader();
-    const canvas = this.#currentEditor?.canvas;
-    this.#fileDetailsDrawer?.setData({
-      filename: getFilename(newPath),
-      folderPath: this.#currentImageRecord?.folderPath ?? this.#currentFolderPath,
-      width: canvas?.imageWidth ?? 0,
-      height: canvas?.imageHeight ?? 0,
-      fileSizeBytes: estimateDataUrlBytes(this.#currentImageDataUrl),
-      createdAt: this.#currentImageRecord?.createdAt,
-      updatedAt: this.#currentImageRecord?.updatedAt,
-      sourceUrl: this.#currentImageRecord?.sourceUrl,
-      tags: this.#currentTags,
-      externalLinks: this.#buildExternalLinksFor(newPath),
-    });
-    // Rename changes the blob path → the "View on GitHub" URL + last
-    // commit reflect the new location. Re-fetch in the background.
-    void this.#populateLastCommit(newPath);
-  }
-
-  /**
-   * Build the "External links" section for the file-details drawer.
-   * Currently only GitHub contributes a link; Drive / Browser / Device
-   * have nothing analogous (the canonical location is either an IDB
-   * blob or a local path). New backends slot in additively here.
-   */
-  #buildExternalLinksFor(
-    path: string | null,
-  ): Array<{ label: string; url: string; icon?: string }> | undefined {
-    if (!path) return undefined;
-    if (this.#storage instanceof GitHubStore) {
-      const url = this.#storage.getViewUrl(path);
-      if (url) return [{ label: "View on GitHub", url, icon: "open_in_new" }];
-    }
-    return undefined;
-  }
-
-  /**
-   * Lazy-load backend-provided last-commit metadata and patch it
-   * into the drawer. Awaits the network call in the background so
-   * the editor opens instantly; the drawer section just pops in
-   * when the lookup settles (typically within a few hundred ms).
-   */
-  async #populateLastCommit(path: string | null): Promise<void> {
-    if (!path || !(this.#storage instanceof GitHubStore)) return;
-    const store = this.#storage;
-    try {
-      const info = await store.getLastCommit(path);
-      if (!info) return;
-      // Race guard: if the user navigated to a different image
-      // while we were fetching, the drawer is now owned by that
-      // image — skip the patch.
-      if (this.#currentImagePath !== path) return;
-      this.#fileDetailsDrawer?.setLastCommit({
-        authorName: info.authorName,
-        authorAvatarUrl: info.authorAvatarUrl,
-        messageHeadline: info.messageHeadline,
-        date: info.date,
-        shortSha: info.shortSha,
-        url: info.url,
-      });
-    } catch {
-      // Silent — the drawer just omits the section.
-    }
-  }
-
-  /**
-   * Build a clickable breadcrumb for the editor statusbar, e.g.:
-   *
-   *   Device › Screenshots › Mobile
-   *
-   * - The root segment ("Device" / "Browser" / "Google Drive") returns to
-   *   the gallery at the storage root.
-   * - Each path segment returns to the gallery focused on that folder.
-   * - Reuses the .breadcrumb / .breadcrumb-item CSS already defined for
-   *   the gallery so the two views use one visual vocabulary.
-   */
-  #buildEditorBreadcrumb(): HTMLElement {
-    const nav = document.createElement("nav");
-    nav.className = "breadcrumb";
-    nav.setAttribute("aria-label", "Return to gallery");
-
-    const mode = getStorageMode();
-    const rootLabel =
-      mode === "device"
-        ? "Device"
-        : mode === "googledrive"
-          ? "Google Drive"
-          : mode === "github"
-            ? "GitHub"
-            : "Browser";
-
-    const makeItem = (label: string, folderPath: string): HTMLButtonElement => {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "breadcrumb-item";
-      btn.textContent = label;
-      setTooltip(
-        btn,
-        folderPath ? `Open "${label}" in gallery` : `Open gallery root (${rootLabel})`,
-      );
-      btn.addEventListener("click", () => {
-        this.#currentFolderPath = folderPath;
-        void this.showGallery();
-      });
-      return btn;
-    };
-
-    nav.appendChild(makeItem(rootLabel, ""));
-
-    if (this.#currentFolderPath) {
-      const segments = this.#currentFolderPath.split("/").filter(Boolean);
-      let acc = "";
-      for (const seg of segments) {
-        acc = acc ? `${acc}/${seg}` : seg;
-        const sep = document.createElement("span");
-        sep.className = "breadcrumb-sep";
-        sep.textContent = "\u203a";
-        sep.setAttribute("aria-hidden", "true");
-        nav.appendChild(sep);
-        nav.appendChild(makeItem(seg, acc));
-      }
-    }
-
-    return nav;
-  }
-
-  static ZOOM_OPTIONS: { label: string; value: number | "fit" }[] = [
-    { label: "Fit to window", value: "fit" },
-    { label: "25%", value: 0.25 },
-    { label: "50%", value: 0.5 },
-    { label: "75%", value: 0.75 },
-    { label: "100%", value: 1 },
-    { label: "150%", value: 1.5 },
-    { label: "200%", value: 2 },
-    { label: "300%", value: 3 },
-  ];
-
-  buildZoomControls(canvas: CanvasManager, holder: HTMLElement): void {
-    const wrap = document.createElement("div");
-    wrap.id = "zoom-controls";
-
-    const outBtn = document.createElement("button");
-    outBtn.className = "zoom-btn material-symbols-outlined";
-    outBtn.textContent = "remove";
-    setTooltip(outBtn, "Zoom out (−10%)");
-    outBtn.setAttribute("aria-label", "Zoom out");
-    outBtn.addEventListener("click", () => canvas.setZoom(canvas.zoom - 0.1));
-    wrap.appendChild(outBtn);
-
-    const labelWrap = document.createElement("div");
-    labelWrap.className = "zoom-select-wrap";
-
-    const label = document.createElement("button");
-    label.className = "zoom-label";
-    setTooltip(label, "Zoom level — click to choose a preset");
-    label.setAttribute("aria-label", "Zoom level — click to choose a preset");
-    // Label reflects the ACTIVE zoom state. In Fit mode we show
-    // "Fit" instead of the raw percentage so the user can tell at a
-    // glance that the canvas will track viewport changes.
-    const refreshLabel = () => {
-      label.textContent = canvas.isFitMode ? "Fit" : `${Math.round(canvas.zoom * 100)}%`;
-    };
-    refreshLabel();
-
-    const menu = document.createElement("div");
-    menu.className = "zoom-menu";
-    menu.style.display = "none";
-
-    const renderMenu = () => {
-      menu.innerHTML = "";
-      for (const opt of App.ZOOM_OPTIONS) {
-        if (opt.value === "fit") {
-          const item = document.createElement("button");
-          item.className = "zoom-menu-item";
-          if (canvas.isFitMode) item.classList.add("active");
-          item.textContent = "Fit to window";
-          item.addEventListener("click", () => {
-            canvas.fitToView();
-            menu.style.display = "none";
-          });
-          menu.appendChild(item);
-          const sep = document.createElement("div");
-          sep.className = "zoom-menu-sep";
-          menu.appendChild(sep);
-        } else {
-          const item = document.createElement("button");
-          item.className = "zoom-menu-item";
-          // Highlight a numeric preset only when NOT in fit mode —
-          // otherwise the "Fit" item is the source of truth.
-          if (
-            !canvas.isFitMode &&
-            Math.round(canvas.zoom * 100) === Math.round((opt.value as number) * 100)
-          ) {
-            item.classList.add("active");
-          }
-          item.textContent = opt.label;
-          item.addEventListener("click", () => {
-            canvas.setZoom(opt.value as number);
-            menu.style.display = "none";
-          });
-          menu.appendChild(item);
-        }
-      }
-    };
-
-    label.addEventListener("click", (e) => {
-      e.stopPropagation();
-      if (menu.style.display === "none") {
-        renderMenu();
-        menu.style.display = "block";
-      } else {
-        menu.style.display = "none";
-      }
-    });
-
-    labelWrap.appendChild(label);
-    labelWrap.appendChild(menu);
-    wrap.appendChild(labelWrap);
-
-    const inBtn = document.createElement("button");
-    inBtn.className = "zoom-btn material-symbols-outlined";
-    inBtn.textContent = "add";
-    setTooltip(inBtn, "Zoom in (+10%)");
-    inBtn.setAttribute("aria-label", "Zoom in");
-    inBtn.addEventListener("click", () => canvas.setZoom(canvas.zoom + 0.1));
-    wrap.appendChild(inBtn);
-
-    holder.appendChild(wrap);
-
-    canvas.onZoomChange = (_z) => {
-      refreshLabel();
-    };
-
-    document.addEventListener("click", () => {
-      menu.style.display = "none";
-    });
-  }
 
   /** Post-capture / post-upload transition: set the "currently open
    *  image" state, switch to the editor view, and push the canonical
@@ -2158,7 +1196,7 @@ export class App {
   #openEditorFor(args: OpenEditorArgs): void {
     this.#currentImagePath = args.path;
     this.#currentTags = args.tags;
-    this.setupEditor(args.dataUrl, args.width, args.height, args.annotations);
+    this.#editorSession.setupEditor(args.dataUrl, args.width, args.height, args.annotations);
     pushRoute(editUrl(getStorageMode(), args.path));
   }
 }
