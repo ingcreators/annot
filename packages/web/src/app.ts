@@ -63,6 +63,7 @@ import {
   type GitHubRepoRef,
 } from "./storage/github-auth.js";
 import { GoogleDriveStore } from "./storage/google-drive-store.js";
+import { GitHubStore } from "./storage/github-store.js";
 import { FileManager } from "./gallery/file-manager.js";
 import type { SplitEditor } from "./editor/split-editor.js";
 import { encodeCaptureInWorker } from "./workers/encode-client.js";
@@ -1322,7 +1323,12 @@ export class App {
       updatedAt: this.#currentImageRecord?.updatedAt,
       sourceUrl: this.#currentImageRecord?.sourceUrl,
       tags: this.#currentTags,
+      externalLinks: this.#buildExternalLinksFor(this.#currentImagePath),
     });
+    // GitHub: commit lookup is a separate API call (~300ms) that we
+    // don't want to block the editor opening on. Fire it in the
+    // background and patch the drawer when it lands.
+    void this.#populateLastCommit(this.#currentImagePath);
     this.#fileDetailsDrawer.onRename = (newName) => this.#renameCurrentImage(newName);
     this.#fileDetailsDrawer.onTagsChange = (t) => {
       this.#currentTags = t;
@@ -1436,30 +1442,14 @@ export class App {
       this.#openScratchpadSection?.setSaveEnabled(this.#scratchpadCanSave);
     };
 
-    history.onStateChange = () => {
-      // Reflect "edits made" immediately — the debounce hides latency
-      // but the user should know something will be saved soon.
-      this.#saveStatusIndicator?.setStatus("pending");
-      clearTimeout(this.#autoSaveTimer);
-      // Network-backed stores (Drive, GitHub) get a longer debounce
-      // so rapid +/- clicks on a slider coalesce into a single
-      // commit/upload. For GitHub this also keeps the commit log
-      // readable — one commit per meaningful save pause rather than
-      // one per slider tick. Local stores are cheap enough to keep
-      // the tight 500ms window.
-      const mode = getStorageMode();
-      const saveDebounceMs = (mode === "googledrive" || mode === "github") ? 1500 : 500;
-      this.#autoSaveTimer = window.setTimeout(() => {
-        this.#autoSaveTimer = undefined;
-        void this.writeAnnotationsToStorage();
-      }, saveDebounceMs);
-      clearTimeout(this.#thumbTimer);
-      this.#thumbTimer = window.setTimeout(() => {
-        this.#thumbTimer = undefined;
-        void this.writeThumbnailToStorage();
-      }, 2000);
-    };
-
+    // Seed initial canvas state BEFORE wiring the autosave hook.
+    // Otherwise the `history.save()` that records the restored
+    // annotations (or the just-added click marker) fires
+    // `onStateChange`, and the autosave timer commits a no-op copy
+    // of the file ~10 seconds after the user simply opens it — a
+    // real problem on GitHub where each commit shows in git log.
+    // The click-marker path still persists explicitly below, so
+    // delaying the hook doesn't lose that save.
     if (annotations) {
       this.restoreAnnotations(canvas, annotations);
       history.save();
@@ -1477,6 +1467,45 @@ export class App {
       // and so the thumbnail gets refreshed with the marker included.
       this.writeAnnotationsToStorage();
     }
+
+    history.onStateChange = () => {
+      // Reflect "edits made" immediately — the debounce hides latency
+      // but the user should know something will be saved soon.
+      this.#saveStatusIndicator?.setStatus("pending");
+      clearTimeout(this.#autoSaveTimer);
+      // Debounce-tuning per backend. GitHub is the outlier: every
+      // save is a real commit, so a short debounce produces a spammy
+      // git log (15+ commits for one continuous editing session).
+      // A 10-second window lets a single drawing gesture / slider
+      // sweep / series of small adjustments coalesce into one
+      // commit per "thinking pause", bringing a typical session
+      // down to 2–5 commits. Navigation boundaries still flush via
+      // `#flushPendingSave`, so data-loss risk doesn't grow — the
+      // window only delays the commit, never skips it.
+      //
+      // Drive keeps 1.5 s because its "save" is a whole-file upload
+      // that costs no history entry; aggregating clicks is enough.
+      //
+      // Local stores stay at 500 ms for responsiveness.
+      //
+      // Phase 4 follow-up: Git Data API `amend` will let us revert
+      // to a shorter debounce without polluting the log — the
+      // ongoing session's commits collapse into one regardless of
+      // save frequency.
+      const mode = getStorageMode();
+      const saveDebounceMs = mode === "github" ? 10000
+        : mode === "googledrive" ? 1500
+        : 500;
+      this.#autoSaveTimer = window.setTimeout(() => {
+        this.#autoSaveTimer = undefined;
+        void this.writeAnnotationsToStorage();
+      }, saveDebounceMs);
+      clearTimeout(this.#thumbTimer);
+      this.#thumbTimer = window.setTimeout(() => {
+        this.#thumbTimer = undefined;
+        void this.writeThumbnailToStorage();
+      }, 2000);
+    };
 
     this.#currentEditor = { canvas, history, selection };
   }
@@ -1934,7 +1963,55 @@ export class App {
       updatedAt: this.#currentImageRecord?.updatedAt,
       sourceUrl: this.#currentImageRecord?.sourceUrl,
       tags: this.#currentTags,
+      externalLinks: this.#buildExternalLinksFor(newPath),
     });
+    // Rename changes the blob path → the "View on GitHub" URL + last
+    // commit reflect the new location. Re-fetch in the background.
+    void this.#populateLastCommit(newPath);
+  }
+
+  /**
+   * Build the "External links" section for the file-details drawer.
+   * Currently only GitHub contributes a link; Drive / Browser / Device
+   * have nothing analogous (the canonical location is either an IDB
+   * blob or a local path). New backends slot in additively here.
+   */
+  #buildExternalLinksFor(path: string | null): Array<{ label: string; url: string; icon?: string }> | undefined {
+    if (!path) return undefined;
+    if (this.#storage instanceof GitHubStore) {
+      const url = this.#storage.getViewUrl(path);
+      if (url) return [{ label: "View on GitHub", url, icon: "open_in_new" }];
+    }
+    return undefined;
+  }
+
+  /**
+   * Lazy-load backend-provided last-commit metadata and patch it
+   * into the drawer. Awaits the network call in the background so
+   * the editor opens instantly; the drawer section just pops in
+   * when the lookup settles (typically within a few hundred ms).
+   */
+  async #populateLastCommit(path: string | null): Promise<void> {
+    if (!path || !(this.#storage instanceof GitHubStore)) return;
+    const store = this.#storage;
+    try {
+      const info = await store.getLastCommit(path);
+      if (!info) return;
+      // Race guard: if the user navigated to a different image
+      // while we were fetching, the drawer is now owned by that
+      // image — skip the patch.
+      if (this.#currentImagePath !== path) return;
+      this.#fileDetailsDrawer?.setLastCommit({
+        authorName: info.authorName,
+        authorAvatarUrl: info.authorAvatarUrl,
+        messageHeadline: info.messageHeadline,
+        date: info.date,
+        shortSha: info.shortSha,
+        url: info.url,
+      });
+    } catch {
+      // Silent — the drawer just omits the section.
+    }
   }
 
   /**

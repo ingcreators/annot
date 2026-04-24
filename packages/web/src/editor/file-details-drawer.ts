@@ -24,6 +24,36 @@ export interface FileDetailsData {
   updatedAt?: string;          // ISO
   sourceUrl?: string;          // captured page URL, if known
   tags: Record<string, string>;
+  /**
+   * Storage-level links (e.g. "View on GitHub"). Rendered in their
+   * own section at the bottom of the drawer. Populated by the host
+   * when the active storage exposes such links (currently only
+   * `GitHubStore.getViewUrl(path)`).
+   */
+  externalLinks?: Array<{ label: string; url: string; icon?: string }>;
+  /**
+   * Last-commit metadata for the current file. Populated
+   * asynchronously by the host after the drawer is constructed —
+   * the first render omits the section, and `setLastCommit()`
+   * refreshes just that block when the info arrives. GitHub is the
+   * only backend that exposes this today.
+   */
+  lastCommit?: LastCommitInfo;
+}
+
+export interface LastCommitInfo {
+  /** `author.name` or fallback login. */
+  authorName: string;
+  /** `https://github.com/<login>.png` or equivalent; optional. */
+  authorAvatarUrl?: string;
+  /** First line of the commit message. */
+  messageHeadline: string;
+  /** ISO timestamp from the commit. */
+  date: string;
+  /** 7-char abbreviated SHA. */
+  shortSha: string;
+  /** `https://github.com/<owner>/<repo>/commit/<sha>`. */
+  url?: string;
 }
 
 export class FileDetailsDrawer {
@@ -145,6 +175,112 @@ export class FileDetailsDrawer {
       this.#data.tags = t;
       this.onTagsChange?.(t);
     };
+
+    // ----- Last commit section (backend-provided, currently GitHub) -----
+    if (this.#data.lastCommit) {
+      this.#panel.appendChild(this.#renderLastCommitSection(this.#data.lastCommit));
+    }
+
+    // ----- External links section (e.g. "View on GitHub") -----
+    if (this.#data.externalLinks && this.#data.externalLinks.length > 0) {
+      this.#panel.appendChild(this.#renderLinksSection(this.#data.externalLinks));
+    }
+  }
+
+  #renderLastCommitSection(commit: LastCommitInfo): HTMLElement {
+    const section = this.#createSection("Last commit");
+
+    // Author row: avatar + name side by side when we have the avatar.
+    const authorRow = document.createElement("div");
+    authorRow.className = "file-details-row";
+    const authorLbl = document.createElement("span");
+    authorLbl.className = "file-details-row-label";
+    authorLbl.textContent = "Author";
+    authorRow.appendChild(authorLbl);
+    const authorVal = document.createElement("span");
+    authorVal.className = "file-details-row-value selectable";
+    if (commit.authorAvatarUrl) {
+      const avatar = document.createElement("img");
+      avatar.className = "file-details-avatar";
+      avatar.src = commit.authorAvatarUrl;
+      avatar.alt = "";
+      avatar.width = 16;
+      avatar.height = 16;
+      authorVal.appendChild(avatar);
+    }
+    const authorText = document.createTextNode(commit.authorName);
+    authorVal.appendChild(authorText);
+    authorRow.appendChild(authorVal);
+    section.appendChild(authorRow);
+
+    section.appendChild(this.#makeRow("Date", formatDate(commit.date)));
+
+    // Message: clickable link to the commit when we have a URL,
+    // plain text otherwise. Short SHA shown in monospace alongside.
+    const msgRow = document.createElement("div");
+    msgRow.className = "file-details-row";
+    const msgLbl = document.createElement("span");
+    msgLbl.className = "file-details-row-label";
+    msgLbl.textContent = "Message";
+    msgRow.appendChild(msgLbl);
+    const msgWrap = document.createElement("span");
+    msgWrap.className = "file-details-row-value selectable";
+    if (commit.url) {
+      const a = document.createElement("a");
+      a.href = commit.url;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      a.textContent = commit.messageHeadline;
+      msgWrap.appendChild(a);
+    } else {
+      msgWrap.appendChild(document.createTextNode(commit.messageHeadline));
+    }
+    msgWrap.appendChild(document.createTextNode(" "));
+    const sha = document.createElement("code");
+    sha.className = "file-details-sha";
+    sha.textContent = commit.shortSha;
+    msgWrap.appendChild(sha);
+    setTooltip(msgWrap, commit.messageHeadline);
+    msgRow.appendChild(msgWrap);
+    section.appendChild(msgRow);
+
+    return section;
+  }
+
+  #renderLinksSection(links: Array<{ label: string; url: string; icon?: string }>): HTMLElement {
+    const section = this.#createSection("Links");
+    for (const link of links) {
+      const row = document.createElement("div");
+      row.className = "file-details-row file-details-link-row";
+      const a = document.createElement("a");
+      a.href = link.url;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      a.className = "file-details-external-link";
+      if (link.icon) {
+        const icon = document.createElement("span");
+        icon.className = "material-symbols-outlined";
+        icon.textContent = link.icon;
+        icon.setAttribute("aria-hidden", "true");
+        a.appendChild(icon);
+      }
+      a.appendChild(document.createTextNode(link.label));
+      setTooltip(a, link.url);
+      row.appendChild(a);
+      section.appendChild(row);
+    }
+    return section;
+  }
+
+  /**
+   * Patch in last-commit info after the drawer is already rendered.
+   * The metadata lookup (GitHub commits API) is async and cheap to
+   * race against the initial editor open, so the host fetches it
+   * in the background and calls this when the result lands.
+   */
+  setLastCommit(info: LastCommitInfo | undefined): void {
+    this.#data = { ...this.#data, lastCommit: info };
+    this.#render();
   }
 
   #createSection(title: string): HTMLElement {
