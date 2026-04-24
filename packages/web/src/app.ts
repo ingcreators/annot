@@ -849,14 +849,27 @@ export class App {
       } else if (mode === "github") {
         // First-click: if we already have a persisted PAT + ref,
         // rehydrate without prompting. Reselect / no ref → open the
-        // full PAT + repo picker flow (lazy-loaded so the UI module
-        // only ships in the bundle when the user actually engages
-        // with GitHub).
-        let ref: GitHubRepoRef | null = forcePicker ? null : loadGitHubRef();
-        if (!ref || forcePicker || !isGitHubSignedIn()) {
+        // reconfigure menu so the user can change just the piece
+        // they care about (repo / branch / base path) instead of
+        // walking the full connect wizard every time.
+        let ref: GitHubRepoRef | null = loadGitHubRef();
+        const needsConnect = !ref || !isGitHubSignedIn();
+        if (needsConnect) {
+          // First connect or session expired → full wizard.
           const { connectGitHub: runConnect } = await import("./storage/github-setup-ui.js");
           ref = await runConnect();
           if (!ref) return;
+        } else if (forcePicker) {
+          // Reselect click. `needsConnect` is false so `ref` is
+          // non-null, but TS can't narrow across the branch, so we
+          // assert. The menu lets the user target a single
+          // dimension (branch switch is the common "I want to
+          // check another feature branch" case and used to require
+          // redoing the whole wizard).
+          const { showReconfigureMenu } = await import("./storage/github-setup-ui.js");
+          const updated = await showReconfigureMenu(ref as GitHubRepoRef);
+          if (!updated) return;   // cancelled or no change
+          ref = updated;
         }
         const token = getGitHubToken();
         if (!token) {
@@ -866,7 +879,7 @@ export class App {
           });
           return;
         }
-        const store = connectGitHub(token, ref);
+        const store = connectGitHub(token, ref!);
         this.#storage = store;
         saveLastStorage("github");
       }
