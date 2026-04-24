@@ -67,6 +67,107 @@ via the public npm registry (once core packages are published) or
 via a pinned git ref during earlier iterations. No OSS code path
 imports anything from `annot-cloud`.
 
+## Cloud storage model
+
+Binary-heavy workloads like Annot (annotated screenshot PNGs,
+200 KB–2 MB each, multiple edits per image) hit a specific pain
+with git-native backends: every save is a fresh blob, tree
+compression does nothing for binary deltas, and even the
+amend-based single-commit-per-session strategy (see
+`github-integration.md#amend`) still accumulates in repo size
+over weeks of heavy use. The OSS `GitHubStore` accepts this
+trade-off because the cost buys "no server required"; Cloud's
+job is to offer a differentiated path for users who outgrow it.
+
+### Architecture: pointer commits, images on annot.work
+
+Cloud's storage model splits the artifact:
+
+- **Image bytes** — authoritative storage on annot.work's object
+  store (S3 / R2 via Cloudflare Workers). Access via short-lived
+  signed URLs tied to the user's workspace session.
+- **Git trace** — only a thin JSON pointer file
+  (e.g. `annot-XXX.annot.pointer.json`, a few KB) hits the user's
+  GitHub repo. Carries: remote object id, dimensions, rendered
+  thumbnail URL, annotation metadata, last-edit timestamp, and
+  a sha256 of the rendered bytes for integrity.
+
+The editor loads the pointer → fetches bytes from annot.work →
+edits → saves bytes back to annot.work and commits the updated
+pointer JSON to GitHub. Git history stays lean (text-diff
+friendly JSON); image artifacts live where they belong, in an
+object store built for them.
+
+This is *not* Git LFS:
+
+| | LFS | Annot pointer |
+|---|---|---|
+| Storage billed by | GitHub (1 GB free, then $5 / 50 GB pack) | Annot subscription (bundled) |
+| Git diff | Opaque oid change | Readable JSON change |
+| Offline browsing | Fetches blob on checkout | Pointer readable; bytes on-demand |
+| User setup | `.gitattributes`, LFS enable, quota mgmt | None — transparent |
+| Works with other clients | Standard LFS | Annot-proprietary |
+
+### LFS as compatibility bundle, not the marquee
+
+A minority of users (typically orgs with existing LFS
+infrastructure and strong "everything in git" policies) will
+prefer LFS over the pointer model. Cloud can ship LFS protocol
+support as a bundled compatibility feature:
+
+- Detect an LFS-enabled repo (`.gitattributes` + `lfs` filter) at
+  connect time.
+- Upload blobs via the LFS batch API instead of Contents API.
+- Commit LFS pointer files (`version https://git-lfs.github.com/spec/v1` +
+  `oid sha256:…`) instead of the blob inline.
+
+Positioning: *"We also work with your existing LFS setup,"* not
+"LFS is the Cloud value prop." The marquee is the pointer-commit-
+and-hosted-storage model that keeps git clean **without** users
+paying GitHub's LFS bill.
+
+### OSS stays git-native
+
+The OSS `GitHubStore` keeps committing directly. It's fine for:
+
+- Small dedicated asset repos (README images, docs illustrations)
+- ~tens of screenshots per repo
+- Individual devs who want everything in one place and don't mind
+  modest repo size creep
+
+The OSS README / connect dialog points heavy users to annot-cloud
+when they outgrow it — similar to how Sentry's OSS "hobby"
+deployment recommends the SaaS for larger footprints.
+
+### Pricing alignment
+
+Tentative Cloud Pro bundle:
+
+- Hosted annot.work storage ← **marquee**
+- Team workspaces (shared captures, ACL)
+- PR automation / Check Run reporting
+- LFS compatibility ← **bundled**, not standalone
+- Activity feed / revision browser
+
+Single-line marketing claim: *"Edit annotated screenshots
+anywhere, without bloating your git repo."* The LFS users are
+a small subset who get it as a bonus.
+
+### Compatibility between tiers
+
+Users should be able to move between OSS and Cloud without
+losing data:
+
+- **OSS → Cloud**: migration tool converts direct commits into
+  pointer + object-store uploads. OSS history is preserved;
+  new edits switch to pointer mode.
+- **Cloud → OSS**: export tool materializes each pointer back
+  into a direct commit. Users lose access to annot.work storage
+  but keep every byte in their repo.
+
+Both migrations land in `annot-cloud` (not OSS) because they
+depend on the pointer-format spec that's a Cloud-side contract.
+
 ## Architectural guardrails (apply from today)
 
 These are the rules that keep the future split cheap. They don't
@@ -242,7 +343,10 @@ the risk is live.
 - **Future GitHub integration** — individual / read-only GitHub
   Store goes in OSS; paid team features (auto-post to PRs,
   Check Run reporting, org-scoped configuration) sit in
-  `annot-cloud`.
+  `annot-cloud`. The Cloud storage model (see above) replaces
+  "commit binary screenshots directly to git" with
+  "commit pointers, keep bytes on annot.work" — this is what
+  makes heavy-use commit history sustainable.
 
 ## What to avoid doing in the meantime
 
