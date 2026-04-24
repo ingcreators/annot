@@ -726,6 +726,11 @@ export class GitHubStore implements StorageProvider {
         // a save could have finished between our SHA snapshot and
         // the canvas work.
         if (this.#shaByPath.get(relPath) !== before) return;
+        // Don't clobber a freshly-seeded thumbnail from the editor
+        // (`updateImage({ thumbnailDataUrl })` → seed → clear
+        // in-flight). Its render reflects the current canvas state,
+        // which may include edits newer than what our GET saw.
+        if (this.#thumbnailCache.has(relPath)) return;
         this.#thumbnailCache.set(relPath, dataUrl);
         // CustomEvent is typed loosely here because we don't augment
         // the WindowEventMap globally for a storage-specific event.
@@ -751,6 +756,31 @@ export class GitHubStore implements StorageProvider {
   async updateImage(path: string, updates: ImageRecordUpdate): Promise<string> {
     await this.#ensureTreeLoaded();
     let currentPath = path;
+
+    // -- Thumbnail-only update from the editor (every 2s during
+    // editing, also flushed on navigation boundaries). Thumbnails
+    // aren't persisted in the repo — we just seed the in-memory
+    // cache so the gallery sees the caller-provided render directly
+    // without waiting on the background prefetch's round-trip.
+    if (updates.thumbnailDataUrl !== undefined) {
+      if (updates.thumbnailDataUrl) {
+        this.#thumbnailCache.set(currentPath, updates.thumbnailDataUrl);
+        // Stop any still-in-flight prefetch from clobbering this
+        // freshly-rendered thumbnail — the editor canvas is the
+        // source of truth at this moment.
+        this.#thumbnailInFlight.delete(currentPath);
+        window.dispatchEvent(new CustomEvent("annot-thumbnail-ready", {
+          detail: { path: currentPath, dataUrl: updates.thumbnailDataUrl },
+        }));
+      }
+      const existingRecord = this.#recordCache.get(currentPath);
+      if (existingRecord) {
+        this.#recordCache.set(currentPath, {
+          ...existingRecord,
+          thumbnailDataUrl: updates.thumbnailDataUrl,
+        });
+      }
+    }
 
     // -- Annotation / tag update: re-render + PUT in place.
     if (updates.annotationsSvg !== undefined || updates.tags !== undefined) {
