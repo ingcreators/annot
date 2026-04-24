@@ -36,8 +36,10 @@ updates:
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
+      # Monthly runs on the first working day of the month; Dependabot
+      # rejects `day:` values that aren't weekday names (monday–sunday),
+      # so we leave it off entirely rather than pin it.
       interval: monthly
-      day: "1"
     open-pull-requests-limit: 5
     labels:
       - dependencies
