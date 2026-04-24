@@ -1,6 +1,6 @@
 # GitHub Integration (v1, individual-user)
 
-> **Status:** Phase 1 in progress. Individual-user storage +
+> **Status:** Phases 1–3 landed. Individual-user storage +
 > personal-access-token auth is the scope. Team / PR-automation
 > features are *deliberately* out of scope here — they live in
 > the commercial `annot-cloud` per
