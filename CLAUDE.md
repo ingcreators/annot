@@ -147,6 +147,8 @@ Rules when adding public symbols:
 
 ## Landing rules
 
+### Branch + PR workflow
+
 - **All changes land via PR, never directly committed to `main`.**
   Even a one-line docs tweak goes through a topic branch + PR. The
   existing `main` history is entirely squash-merged PRs (visible by
@@ -167,12 +169,73 @@ Rules when adding public symbols:
   branch → open the PR. The branch preserves the work; the reset
   only rewinds the local main pointer.
 
+### Phased plans: one PR per phase
+
+For work broken into phases inside a `docs/plans/` document:
+
+- **Each phase lands as its own independent PR, merged before the
+  next phase starts.** Don't chain feature branches; a phase-2 PR
+  must have phase-1 on `main` as its base.
+- Each phase PR must be revertable in isolation — a later revert
+  of phase N shouldn't force a revert of phase N+1.
+- The plan doc is the source of truth for phase boundaries; amend
+  the plan if reality diverges, don't silently re-slice phases.
+
+### Commit message body
+
+- Wrap at ~72 columns. Use Markdown `##` subsections for larger
+  bodies (Scope / Fix pattern / Why / Verified are common choices —
+  see recent `git log` for examples).
+- End non-trivial commits with a `Verified:` paragraph listing what
+  was run (e.g. `pnpm -r typecheck`, `pnpm test` with the pass
+  count, `pnpm lint — 0 findings`, `pnpm --filter <pkgs> build`).
+  This mirrors the current main-history convention and keeps the
+  reviewer's next steps short.
+- **Do not add `Co-Authored-By:` trailers** (including the Claude
+  Code default). The existing `main` history has zero such trailers;
+  keeping commits consistent matters more than the attribution.
+  When AI assistance is worth noting, mention it in the PR
+  description instead, where it can carry context without polluting
+  the permanent commit log.
+
+## Plan-first for non-trivial work
+
+`docs/plans/` is the staging ground for work that's too big to
+land in a single small PR: large refactors, new storage backends,
+new cross-package features, architectural shifts. The convention:
+
+- **Write a plan before the implementation PR.** The plan doc goes
+  into `docs/plans/` with a status header (`Draft` / `Queued` / `In
+  progress` / `Done` / `Abandoned`) — see
+  [`docs/plans/README.md`](./docs/plans/README.md) for the lifecycle
+  and required header fields.
+- Don't start implementation until the plan is at least `Queued`
+  (i.e. the user has signed off on the approach). `Draft` means
+  still-under-discussion.
+- When implementation lands, the plan stays as-is for history; once
+  fully done, move it to `docs/plans/_done/` and leave a one-line
+  pointer in the active index if the plan is historically important.
+- A plan should be self-contained enough that a fresh Claude Code
+  session can resume work from the file alone after a context reset.
+
+Small, obviously-scoped changes (bug fixes, one-file refactors,
+dependency bumps, typo-level docs) don't need a plan — go straight
+to a PR. The test is whether a reviewer would want to see the
+approach discussed before the diff, or is happy reading the diff
+first.
+
 ## Pre-landing checklist for new features
 
 Before declaring a feature done:
 
-- [ ] `pnpm --filter <pkg> typecheck` passes
-- [ ] `pnpm --filter <pkg> build` passes
+- [ ] `pnpm -r typecheck` passes (or the single-package variant
+      for a scoped change)
+- [ ] `pnpm test` passes — note the pass count in the commit's
+      `Verified:` paragraph
+- [ ] `pnpm lint` (Biome) reports **0 findings**; CI blocks on this
+- [ ] `pnpm --filter <pkg> build` passes for every package whose
+      source changed (CI builds core / web / extension; desktop is
+      opt-in)
 - [ ] If the SVG schema changed, `data-annot-version` is bumped and
       a note added to `docs/svg-format.md` (create if missing)
 - [ ] If `StorageProvider` changed, all four existing implementations
