@@ -579,7 +579,8 @@ a.file-details-row-value:hover {
 .file-details-link-row {
   display: block;
 }
-.file-details-external-link {
+.file-details-external-link,
+.file-details-external-link:visited {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -593,6 +594,21 @@ a.file-details-row-value:hover {
 }
 .file-details-external-link .material-symbols-outlined {
   font-size: 16px;
+}
+
+/* Anchors inside a row value (e.g. the commit-message link in the
+ * Last commit section). Override the browser's default :visited
+ * color — on a dark panel it drops to a near-black purple that the
+ * user reported as unreadable. Keeping the accent color across
+ * states matches how `a.file-details-row-value` handles the
+ * top-level Source link. */
+.file-details-row-value a,
+.file-details-row-value a:visited {
+  color: var(--accent);
+  text-decoration: underline;
+}
+.file-details-row-value a:hover {
+  opacity: 0.85;
 }
 
 /* Inline rename affordance on the Name row. The input occupies the
