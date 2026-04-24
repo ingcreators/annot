@@ -857,15 +857,21 @@ export class GitHubStore implements StorageProvider {
         tags,
         updatedAt: new Date().toISOString(),
       });
-      // Annotations changed → rendered bytes changed → the cached
-      // thumbnail is stale. Drop it and eagerly kick off a fresh
-      // prefetch so the gallery sees the update the moment the user
-      // navigates back, without waiting on the next `listImages` to
-      // schedule one. Also detach any pre-save in-flight prefetch
-      // so it doesn't race the new one — its compare-and-set already
-      // skips caching when the SHA has advanced.
-      this.#thumbnailCache.delete(currentPath);
-      this.#thumbnailInFlight.delete(currentPath);
+      // Don't invalidate the thumbnail cache here. The editor runs
+      // its own `writeThumbnailToStorage` (2 s debounce) which fires
+      // before this annotation save (10 s debounce) and seeds the
+      // cache with a render of the exact same canvas state we're
+      // committing now — so the cache already matches the just-
+      // committed blob. A blanket `delete` + re-prefetch would leave
+      // the cache empty for the network round-trip it takes the
+      // prefetch to complete, producing a black-tile flash if the
+      // user navigates into that window.
+      //
+      // Still kick off `#ensureThumbnail` as a *fallback*: the
+      // `cache.has` guard inside makes it a no-op when the editor
+      // thumbnail is present, and it populates the cache when
+      // `writeThumbnailToStorage` didn't run (e.g. the generator
+      // errored or the editor was torn down before the 2 s timer).
       void this.#ensureThumbnail(currentPath);
     }
 
