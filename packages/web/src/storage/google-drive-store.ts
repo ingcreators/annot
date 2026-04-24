@@ -265,7 +265,8 @@ export class GoogleDriveStore implements StorageProvider {
     let acc = "";
     let startIdx = 0;
     for (let i = 0; i < parts.length; i++) {
-      const candidate = acc ? `${acc}/${parts[i]}` : parts[i];
+      // Loop bound matches `parts.length`; `parts[i]` is always defined.
+      const candidate = acc ? `${acc}/${parts[i]}` : parts[i]!;
       if (this.#pathToFolderId.has(candidate)) {
         acc = candidate;
         startIdx = i + 1;
@@ -283,7 +284,7 @@ export class GoogleDriveStore implements StorageProvider {
       );
       // Register all children with uniquified paths
       this.#registerFolderChildren(acc, children);
-      acc = acc ? `${acc}/${parts[i]}` : parts[i];
+      acc = acc ? `${acc}/${parts[i]}` : parts[i]!;
       if (!this.#pathToFolderId.has(acc)) return undefined;
     }
     return this.#pathToFolderId.get(path);

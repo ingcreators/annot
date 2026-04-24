@@ -48,15 +48,17 @@ function u32be(n: number): Uint8Array {
 }
 
 function readU16be(data: Uint8Array, offset: number): number {
-  return (data[offset] << 8) | data[offset + 1];
+  // Callers guarantee `offset + 1 < data.length` (bounds are checked
+  // in the outer parse loops). `!` matches the contract.
+  return (data[offset]! << 8) | data[offset + 1]!;
 }
 
 function readU32be(data: Uint8Array, offset: number): number {
   return (
-    ((data[offset] << 24) |
-      (data[offset + 1] << 16) |
-      (data[offset + 2] << 8) |
-      data[offset + 3]) >>>
+    ((data[offset]! << 24) |
+      (data[offset + 1]! << 16) |
+      (data[offset + 2]! << 8) |
+      data[offset + 3]!) >>>
     0
   );
 }
@@ -185,7 +187,10 @@ const CRC32_TABLE = (() => {
 function crc32(data: Uint8Array): number {
   let crc = 0xffffffff;
   for (let i = 0; i < data.length; i++) {
-    crc = CRC32_TABLE[(crc ^ data[i]) & 0xff] ^ (crc >>> 8);
+    // `CRC32_TABLE` has 256 entries; `(crc ^ data[i]) & 0xff` is a
+    // byte index, so `CRC32_TABLE[...]` is always defined.
+    // Loop bound matches `data.length`; `data[i]` is in range.
+    crc = CRC32_TABLE[(crc ^ data[i]!) & 0xff]! ^ (crc >>> 8);
   }
   return (crc ^ 0xffffffff) >>> 0;
 }
@@ -434,11 +439,13 @@ function readPngXmp(data: Uint8Array): string | null {
   let pos = 8;
   while (pos + 12 <= data.length) {
     const chunkLen = readU32be(data, pos);
+    // Loop guard `pos + 12 <= data.length` means `pos + 4..7` are
+    // always in bounds for the 4-byte chunk-type read.
     const chunkType = String.fromCharCode(
-      data[pos + 4],
-      data[pos + 5],
-      data[pos + 6],
-      data[pos + 7],
+      data[pos + 4]!,
+      data[pos + 5]!,
+      data[pos + 6]!,
+      data[pos + 7]!,
     );
     const chunkDataStart = pos + 8;
     const chunkEnd = chunkDataStart + chunkLen + 4;
@@ -467,11 +474,12 @@ function readPngOriginal(data: Uint8Array): Uint8Array | null {
   let pos = 8;
   while (pos + 12 <= data.length) {
     const chunkLen = readU32be(data, pos);
+    // Same bounds-guard pattern as `readPngXmp` above.
     const chunkType = String.fromCharCode(
-      data[pos + 4],
-      data[pos + 5],
-      data[pos + 6],
-      data[pos + 7],
+      data[pos + 4]!,
+      data[pos + 5]!,
+      data[pos + 6]!,
+      data[pos + 7]!,
     );
     const chunkDataStart = pos + 8;
     const chunkEnd = chunkDataStart + chunkLen + 4;

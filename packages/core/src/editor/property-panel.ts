@@ -133,7 +133,9 @@ export class PropertyPanel {
     this.#el.innerHTML = "";
     this.#el.style.display = "flex";
 
-    const sample = elements[0];
+    // `elements.length === 0` was guarded above, so `elements[0]`
+    // is always defined here.
+    const sample = elements[0]!;
     const isTextbox = sample.tagName === "g" && sample.getAttribute("data-type") === "textbox";
     const isMarker = sample.tagName === "g" && sample.hasAttribute("data-marker");
     const isRedact = detectRedactStyle(sample) !== null;
@@ -375,7 +377,8 @@ export class PropertyPanel {
    *  "variant" IS the color); Fill section carries only Transparency.
    *  No Line section — highlight rects are strokeless paints. */
   #renderHighlightControls(el: SVGElement): void {
-    const currentFill = (el.getAttribute("fill") || HIGHLIGHT_COLORS[0].value).toLowerCase();
+    // `HIGHLIGHT_COLORS` is a non-empty constant; `[0]` is always defined.
+    const currentFill = (el.getAttribute("fill") || HIGHLIGHT_COLORS[0]!.value).toLowerCase();
 
     // Type section — swatch chips routed through onVariantChanged so
     // the new color's preset (including its saved Transparency) gets

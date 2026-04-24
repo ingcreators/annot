@@ -77,5 +77,6 @@ export function readAnnotVersion(svgRoot: Element): string {
  */
 export function getAnnotVersionFromString(svgString: string): string {
   const m = /\sdata-annot-version="([^"]*)"/.exec(svgString);
-  return m ? m[1] : ANNOT_SVG_VERSION_UNSTAMPED;
+  // Capture group 1 is always present on a successful match.
+  return m ? m[1]! : ANNOT_SVG_VERSION_UNSTAMPED;
 }

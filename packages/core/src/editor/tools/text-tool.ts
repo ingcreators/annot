@@ -78,8 +78,10 @@ export class TextTool extends ToolBase {
 
     const transform = g.getAttribute("transform") || "";
     const match = transform.match(/translate\(([\d.-]+),\s*([\d.-]+)\)/);
-    const tx = match ? Number.parseFloat(match[1]) : 0;
-    const ty = match ? Number.parseFloat(match[2]) : 0;
+    // Both capture groups are required by the regex, so `match[1]` /
+    // `match[2]` are present when `match` is truthy.
+    const tx = match ? Number.parseFloat(match[1]!) : 0;
+    const ty = match ? Number.parseFloat(match[2]!) : 0;
 
     this.#editTarget = g;
     g.style.display = "none";

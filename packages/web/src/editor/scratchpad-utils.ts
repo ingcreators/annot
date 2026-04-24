@@ -45,8 +45,9 @@ export function translateElement(el: SVGElement, dx: number, dy: number): void {
     // often carry a transform from previous drags).
     const transform = el.getAttribute("transform") || "";
     const match = transform.match(/translate\(([\d.-]+),?\s*([\d.-]+)\)/);
-    const tx = match ? Number.parseFloat(match[1]) + dx : dx;
-    const ty = match ? Number.parseFloat(match[2]) + dy : dy;
+    // Both capture groups are required by the regex.
+    const tx = match ? Number.parseFloat(match[1]!) + dx : dx;
+    const ty = match ? Number.parseFloat(match[2]!) + dy : dy;
     el.setAttribute("transform", `translate(${tx}, ${ty})`);
   }
 }
@@ -65,8 +66,8 @@ function canvasBBox(el: SVGElement): { x: number; y: number; w: number; h: numbe
   if (bb.width === 0 && bb.height === 0) return null;
   const transform = el.getAttribute("transform") || "";
   const match = transform.match(/translate\(([\d.-]+),?\s*([\d.-]+)\)/);
-  const tx = match ? Number.parseFloat(match[1]) : 0;
-  const ty = match ? Number.parseFloat(match[2]) : 0;
+  const tx = match ? Number.parseFloat(match[1]!) : 0;
+  const ty = match ? Number.parseFloat(match[2]!) : 0;
   return { x: bb.x + tx, y: bb.y + ty, w: bb.width, h: bb.height };
 }
 

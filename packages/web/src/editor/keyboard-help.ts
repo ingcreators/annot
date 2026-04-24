@@ -185,7 +185,7 @@ function buildModal(onClose: () => void): HTMLElement {
         }
         const kbd = document.createElement("kbd");
         kbd.className = "keyboard-help-kbd";
-        kbd.textContent = entry.keys[i];
+        kbd.textContent = entry.keys[i]!;
         keys.appendChild(kbd);
       }
       row.appendChild(keys);

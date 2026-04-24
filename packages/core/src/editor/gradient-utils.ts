@@ -91,7 +91,7 @@ export function removeGradient(
   const urlRef = el.getAttribute(which);
   const m = urlRef?.match(/^url\(#([^)]+)\)$/);
   if (m) {
-    const grad = el.ownerDocument?.getElementById(m[1]);
+    const grad = el.ownerDocument?.getElementById(m[1]!);
     grad?.remove();
   }
   el.setAttribute(which, fallbackColor);
@@ -135,7 +135,7 @@ export function rebuildGradients(svg: SVGSVGElement): void {
     if (!spec) return;
     const ref = el.getAttribute(which) || "";
     const m = ref.match(/^url\(#([^)]+)\)$/);
-    if (m && svg.querySelector(`#${CSS.escape(m[1])}`)) return; // still present
+    if (m && svg.querySelector(`#${CSS.escape(m[1]!)}`)) return; // still present
     const id = newGradientId(`grad-${which}`);
     defs.appendChild(buildLinearGradient(id, spec));
     el.setAttribute(which, `url(#${id})`);
@@ -161,7 +161,7 @@ export function defaultGradientFrom(color: string): GradientSpec {
 function darken(hex: string, amount: number): string {
   const m = hex.trim().match(/^#?([0-9a-f]{6})$/i);
   if (!m) return hex;
-  const n = Number.parseInt(m[1], 16);
+  const n = Number.parseInt(m[1]!, 16);
   const r = Math.max(0, Math.round(((n >> 16) & 0xff) * (1 - amount)));
   const g = Math.max(0, Math.round(((n >> 8) & 0xff) * (1 - amount)));
   const b = Math.max(0, Math.round((n & 0xff) * (1 - amount)));

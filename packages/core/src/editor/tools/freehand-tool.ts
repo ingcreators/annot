@@ -176,9 +176,12 @@ export class FreehandTool extends ToolBase {
 
     if (this.#points.length >= 3) {
       const simplified = this.#simplify(this.#points, 1.5);
-      let d = `M ${simplified[0].x},${simplified[0].y}`;
+      // `simplified` is non-empty: `#simplify` preserves the first
+      // and last input points, and we entered this branch with
+      // `#points.length >= 3`.
+      let d = `M ${simplified[0]!.x},${simplified[0]!.y}`;
       for (let i = 1; i < simplified.length; i++) {
-        d += ` L ${simplified[i].x},${simplified[i].y}`;
+        d += ` L ${simplified[i]!.x},${simplified[i]!.y}`;
       }
       this.#currentPath.setAttribute("d", d);
     } else {
@@ -239,13 +242,16 @@ export class FreehandTool extends ToolBase {
   #simplify(points: { x: number; y: number }[], epsilon: number): { x: number; y: number }[] {
     if (points.length <= 2) return points;
 
+    // `points.length > 2` above guarantees `[0]` and
+    // `[length - 1]` exist.
     let maxDist = 0;
     let maxIdx = 0;
-    const start = points[0];
-    const end = points[points.length - 1];
+    const start = points[0]!;
+    const end = points[points.length - 1]!;
 
     for (let i = 1; i < points.length - 1; i++) {
-      const dist = this.#perpDist(points[i], start, end);
+      // Loop bound is `length - 1`, so `points[i]` is in range.
+      const dist = this.#perpDist(points[i]!, start, end);
       if (dist > maxDist) {
         maxDist = dist;
         maxIdx = i;

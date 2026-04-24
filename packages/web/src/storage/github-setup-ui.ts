@@ -545,7 +545,7 @@ function showRepoPicker(userLogin: string): Promise<GitHubRepoSummary | null> {
       }
       err.style.display = "none";
       try {
-        const r = await getRepo(m[1], m[2]);
+        const r = await getRepo(m[1]!, m[2]!);
         await verifyAndSelect(r);
       } catch (ex) {
         err.textContent = (ex as Error).message;

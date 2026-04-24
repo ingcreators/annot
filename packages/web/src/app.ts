@@ -1966,7 +1966,7 @@ export class App {
     const tool = new ScratchpadPasteTool(canvas, history, opts, item);
     tool.onInsert = (inserted) => {
       if (inserted.length === 1) {
-        selection.select(inserted[0]);
+        selection.select(inserted[0]!);
       } else if (inserted.length > 1) {
         selection.selectMultiple(inserted);
       }
@@ -2282,10 +2282,12 @@ export class App {
     const ns = "http://www.w3.org/2000/svg";
     const color = "#ff3b3b";
 
-    const rx = Number.parseFloat(this.#currentTags["click.rect.x"]);
-    const ry = Number.parseFloat(this.#currentTags["click.rect.y"]);
-    const rw = Number.parseFloat(this.#currentTags["click.rect.w"]);
-    const rh = Number.parseFloat(this.#currentTags["click.rect.h"]);
+    // Missing tag → `parseFloat("")` returns NaN, which the `isFinite`
+    // guard below correctly rejects. Default to "" so TS is happy.
+    const rx = Number.parseFloat(this.#currentTags["click.rect.x"] ?? "");
+    const ry = Number.parseFloat(this.#currentTags["click.rect.y"] ?? "");
+    const rw = Number.parseFloat(this.#currentTags["click.rect.w"] ?? "");
+    const rh = Number.parseFloat(this.#currentTags["click.rect.h"] ?? "");
     const hasRect =
       Number.isFinite(rx) &&
       Number.isFinite(ry) &&
@@ -2309,8 +2311,8 @@ export class App {
       canvas.annotations.appendChild(rect);
     }
 
-    const x = Number.parseFloat(this.#currentTags["click.x"]);
-    const y = Number.parseFloat(this.#currentTags["click.y"]);
+    const x = Number.parseFloat(this.#currentTags["click.x"] ?? "");
+    const y = Number.parseFloat(this.#currentTags["click.y"] ?? "");
     if (!Number.isFinite(x) || !Number.isFinite(y)) return;
 
     // Outer ring (smaller when we also have a rect, since the rect gives context)
