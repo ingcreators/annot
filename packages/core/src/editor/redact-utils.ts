@@ -158,10 +158,13 @@ async function sampleBlockAveragePng(
       const sx = Math.min(bx + Math.floor(blockSize / 2), width - 1);
       const sy = Math.min(by + Math.floor(blockSize / 2), height - 1);
       const idx = (sy * width + sx) * 4;
-      const r = px[idx];
-      const g = px[idx + 1];
-      const b = px[idx + 2];
-      const a = px[idx + 3];
+      // `px` is a `Uint8ClampedArray` sized at `width * height * 4`;
+      // `sx` / `sy` are clamped to their dimensions above, so `idx`
+      // and `idx + 0..3` are always within bounds.
+      const r = px[idx]!;
+      const g = px[idx + 1]!;
+      const b = px[idx + 2]!;
+      const a = px[idx + 3]!;
       for (let yy = by; yy < Math.min(by + blockSize, height); yy++) {
         for (let xx = bx; xx < Math.min(bx + blockSize, width); xx++) {
           const i = (yy * width + xx) * 4;

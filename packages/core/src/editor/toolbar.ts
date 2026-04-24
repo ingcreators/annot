@@ -216,7 +216,7 @@ export function highlightColorLabel(fill: string | null | undefined): string {
 
 /** Default highlight color — first palette entry. Used when no preset
  *  has been saved yet (first-time launch of the Highlight tool). */
-const DEFAULT_HIGHLIGHT_COLOR = HIGHLIGHT_COLORS[0].value;
+const DEFAULT_HIGHLIGHT_COLOR = HIGHLIGHT_COLORS[0]!.value;
 
 const TOOL_VARIANTS: Record<string, ToolVariantGroup> = {
   shape: {
@@ -298,7 +298,7 @@ const TOOL_VARIANTS: Record<string, ToolVariantGroup> = {
   // hex; the toolbar uses it for the element key and the swatch chips.
   highlight: {
     field: "highlightColor",
-    fallback: HIGHLIGHT_COLORS[0].value,
+    fallback: HIGHLIGHT_COLORS[0]!.value,
     variants: HIGHLIGHT_COLORS.map((c) => ({
       value: c.value,
       icon: "ink_highlighter",
@@ -1120,7 +1120,7 @@ export class Toolbar {
       }
       const t = el.getAttribute("transform") || "";
       const m = t.match(/translate\(([\d.-]+),?\s*([\d.-]+)\)/);
-      return m ? { tx: Number.parseFloat(m[1]), ty: Number.parseFloat(m[2]) } : { tx: 0, ty: 0 };
+      return m ? { tx: Number.parseFloat(m[1]!), ty: Number.parseFloat(m[2]!) } : { tx: 0, ty: 0 };
     };
 
     // Pull rotation/flip state for the Office side. Returned only when
@@ -2054,7 +2054,7 @@ export class Toolbar {
     if (isFreehandGroup(el)) {
       const pathChildren = el.querySelectorAll<SVGPathElement>(":scope > path");
       if (pathChildren.length > 0) {
-        readEl = pathChildren[pathChildren.length - 1];
+        readEl = pathChildren[pathChildren.length - 1]!;
       }
     }
 
@@ -2646,7 +2646,7 @@ export class Toolbar {
     // keeps a separate Transparency value per color — yellow at 60%
     // and red at 40% can coexist.
     if (isHighlight) {
-      const currentColor = (preset.highlightColor || HIGHLIGHT_COLORS[0].value).toLowerCase();
+      const currentColor = (preset.highlightColor || HIGHLIGHT_COLORS[0]!.value).toLowerCase();
       const { section: typeSection, body: typeBody } = createPropertySection("Type");
       const row = document.createElement("div");
       row.className = "pp-type-row";

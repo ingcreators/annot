@@ -38,15 +38,14 @@
     // when first enabled.
     "noImplicitOverride": true,
 
-    // Deliberately NOT enabled: `noUncheckedIndexedAccess`. Would
-    // force every `arr[i]` / `map.get(k)` read into a null-guard.
-    // High signal, but a one-shot flip surfaces ~97 sites across
-    // ~17 files (heaviest: selection.ts:31, property-panel.ts:15,
-    // xmp-browser.ts:10, freehand-tool.ts:7). Each fix wants a real
-    // decision — is the index provably in range, is a missing value
-    // a silent bug worth catching, or does the call site want a
-    // typed default? Tracked as a focused follow-up sweep rather
-    // than a drive-by flip.
+    // `arr[i]` / `map.get(k)` read as `T | undefined` rather than
+    // `T`. Forces every indexed access into either a null-guard
+    // (when the miss is a real runtime case) or an explicit `!`
+    // non-null assertion (when the index is provably in range, e.g.
+    // just after a `length > 0` check or inside a `for (let i = 0;
+    // i < arr.length; i++)` loop). Enabling this caught ~97 latent
+    // sites across the codebase; each was reviewed individually.
+    "noUncheckedIndexedAccess": true,
 
     // ---- Module / interop ----
     "isolatedModules": true,

@@ -151,10 +151,12 @@ async function handleMosaic(
       const sampleX = Math.min(x + Math.floor(bs / 2), rect.width - 1);
       const sampleY = Math.min(y + Math.floor(bs / 2), rect.height - 1);
       const idx = (sampleY * rect.width + sampleX) * 4;
-      const r = data[idx];
-      const g = data[idx + 1];
-      const b = data[idx + 2];
-      const a = data[idx + 3];
+      // `data` is `Uint8ClampedArray` of `width * height * 4`; the
+      // sample coords are clamped to [0, dim-1] above.
+      const r = data[idx]!;
+      const g = data[idx + 1]!;
+      const b = data[idx + 2]!;
+      const a = data[idx + 3]!;
       for (let by = y; by < Math.min(y + bs, rect.height); by++) {
         for (let bx = x; bx < Math.min(x + bs, rect.width); bx++) {
           const i = (by * rect.width + bx) * 4;

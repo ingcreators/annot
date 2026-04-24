@@ -420,7 +420,7 @@ function parseLinkHeader(header: string | null): string | null {
   // `<https://api.github.com/...>; rel="next", <...>; rel="last"`
   for (const part of header.split(",")) {
     const match = part.match(/<([^>]+)>\s*;\s*rel="([^"]+)"/);
-    if (match && match[2] === "next") return match[1];
+    if (match && match[2] === "next") return match[1]!;
   }
   return null;
 }

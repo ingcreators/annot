@@ -133,8 +133,9 @@ function parseMultipart(
     return { headers, body };
   };
 
-  const metaPart = parsePart(parts[0]);
-  const contentPart = parsePart(parts[1]);
+  // `parts.length < 2` was guarded above, so both indices are in range.
+  const metaPart = parsePart(parts[0]!);
+  const contentPart = parsePart(parts[1]!);
   if (!metaPart || !contentPart) return null;
 
   let metadata: Record<string, unknown>;
@@ -214,7 +215,7 @@ export function buildDriveHandlers(state: DriveState) {
       if (!boundaryMatch) {
         return HttpResponse.json({ error: { message: "missing boundary" } }, { status: 400 });
       }
-      const boundary = boundaryMatch[1];
+      const boundary = boundaryMatch[1]!;
       const body = await request.text();
       const parsed = parseMultipart(body, boundary);
       if (!parsed) {
@@ -255,7 +256,7 @@ export function buildDriveHandlers(state: DriveState) {
       const buf = await request.arrayBuffer();
       const bytes = new Uint8Array(buf);
       let binary = "";
-      for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+      for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]!);
       file.content = btoa(binary);
       file.contentType = request.headers.get("Content-Type") || file.contentType;
       return HttpResponse.json({ id, name: file.name });

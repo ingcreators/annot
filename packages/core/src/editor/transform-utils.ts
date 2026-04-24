@@ -279,8 +279,9 @@ export function readTransformState(el: SVGElement): TransformState {
       const t = el.getAttribute("transform") || "";
       const m = t.match(/translate\(\s*([\d.-]+)\s*,?\s*([\d.-]+)\s*\)/);
       if (m) {
-        tx = Number.parseFloat(m[1]);
-        ty = Number.parseFloat(m[2]);
+        // Both capture groups are present on a successful match.
+        tx = Number.parseFloat(m[1]!);
+        ty = Number.parseFloat(m[2]!);
       }
       // Persist the migrated values so the next read is fast.
       el.setAttribute("data-tx", String(tx));

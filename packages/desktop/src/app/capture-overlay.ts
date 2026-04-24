@@ -213,7 +213,8 @@ function setupWindowMode(
     // Find topmost window under cursor (first in list = topmost)
     let found = -1;
     for (let i = 0; i < cssWindows.length; i++) {
-      const w = cssWindows[i];
+      // Loop bound matches array length; `[i]` always defined.
+      const w = cssWindows[i]!;
       if (mx >= w.cx && mx <= w.cx + w.cw && my >= w.cy && my <= w.cy + w.ch) {
         found = i;
         break;
@@ -223,7 +224,8 @@ function setupWindowMode(
     if (found !== hoveredIdx) {
       hoveredIdx = found;
       if (found >= 0) {
-        const w = cssWindows[found];
+        // `found` came from a valid loop index above.
+        const w = cssWindows[found]!;
         highlight.style.left = `${w.cx}px`;
         highlight.style.top = `${w.cy}px`;
         highlight.style.width = `${w.cw}px`;
@@ -242,7 +244,9 @@ function setupWindowMode(
 
   overlay.addEventListener("click", () => {
     if (hoveredIdx < 0) return;
-    const w = windows[hoveredIdx];
+    // `hoveredIdx` was assigned from the same loop iteration where
+    // `cssWindows` and `windows` are 1:1.
+    const w = windows[hoveredIdx]!;
     cleanup();
     resolve({ x: w.x, y: w.y, w: w.width, h: w.height });
   });

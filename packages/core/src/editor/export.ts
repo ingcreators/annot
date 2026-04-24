@@ -192,7 +192,10 @@ export async function saveAsEditableImage(
 
     // Render the full image as PNG (Rust converts to JPEG if needed)
     const renderedDataUrl = await getPngDataUrl(canvas);
-    const renderedB64 = renderedDataUrl.split(",")[1];
+    // `getPngDataUrl` always returns a well-formed data URL; the
+    // comma-split has two parts. Default to "" so a malformed URL
+    // short-circuits later in `saveWithXmp` rather than crashing.
+    const renderedB64 = renderedDataUrl.split(",")[1] ?? "";
 
     // Get original capture image (without annotations)
     const originalDataUrl = canvas.imageEl.getAttribute("href") || "";

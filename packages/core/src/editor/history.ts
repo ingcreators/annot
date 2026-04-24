@@ -26,7 +26,9 @@ export class History {
     if (this.#undoStack.length <= 1) return;
     const current = this.#undoStack.pop()!;
     this.#redoStack.push(current);
-    this.#annotations.innerHTML = this.#undoStack[this.#undoStack.length - 1];
+    // After the pop above, `#undoStack` still has at least one entry
+    // (the guard was `<= 1`, so pre-pop length was ≥ 2).
+    this.#annotations.innerHTML = this.#undoStack[this.#undoStack.length - 1]!;
     this.#onChange?.();
     this.onStateChange?.();
   }

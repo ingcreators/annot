@@ -63,7 +63,8 @@ export function ancestorPaths(path: string): string[] {
   const out: string[] = [];
   let acc = "";
   for (let i = 0; i < parts.length - 1; i++) {
-    acc = acc ? `${acc}/${parts[i]}` : parts[i];
+    // Loop bound is `parts.length - 1`, so `parts[i]` is always defined.
+    acc = acc ? `${acc}/${parts[i]}` : parts[i]!;
     out.push(acc);
   }
   return out;

@@ -885,7 +885,8 @@ function parseSVGPath(d: string): { x: number; y: number }[] {
   const re = /([ML])\s*([\d.-]+)[,\s]+([\d.-]+)/gi;
   let m: RegExpExecArray | null;
   while ((m = re.exec(d)) !== null) {
-    points.push({ x: Number.parseFloat(m[2]), y: Number.parseFloat(m[3]) });
+    // Both capture groups (x and y) are required by the regex.
+    points.push({ x: Number.parseFloat(m[2]!), y: Number.parseFloat(m[3]!) });
   }
   return points;
 }

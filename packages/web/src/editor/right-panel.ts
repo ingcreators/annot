@@ -199,7 +199,7 @@ export class EditorRightPanel {
     this.#propPanel = new PropertyPanel(this.#selectionContent, canvas, history, "docked");
     this.#propPanel.onTargetReplaced = (replacements) => {
       const newEls = replacements.map((r) => r.newEl);
-      if (newEls.length === 1) selection.select(newEls[0]);
+      if (newEls.length === 1) selection.select(newEls[0]!);
       else selection.selectMultiple(newEls);
     };
     this.#propPanel.onTargetMutated = () => selection.refreshHandles();
@@ -725,7 +725,7 @@ export class EditorRightPanel {
    *  mechanism by which the user got to it. */
   #computeSelectionTitle(elements: SVGElement[]): string {
     if (elements.length === 1) {
-      return `Selected ${this.#elementTypeName(elements[0])}`;
+      return `Selected ${this.#elementTypeName(elements[0]!)}`;
     }
     // Multi selection: show the breakdown by element type so users
     // can confirm "what they grabbed" at a glance ("2 rectangles +

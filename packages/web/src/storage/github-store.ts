@@ -1558,8 +1558,8 @@ export class GitHubStore implements StorageProvider {
       // Fallback: per-file migrate via the Contents API. Produces
       // 2 × N commits but preserves the operation if the branch
       // refuses the atomic path (protection, concurrent commit).
-      if (entries.length === 1 && getFilename(entries[0]) === GITKEEP) {
-        await this.#migrateBlob(entries[0], joinPath(newPath, GITKEEP), "move folder");
+      if (entries.length === 1 && getFilename(entries[0]!) === GITKEEP) {
+        await this.#migrateBlob(entries[0]!, joinPath(newPath, GITKEEP), "move folder");
       } else {
         for (const oldFile of entries) {
           const newFile = rewritePathPrefix(oldFile, oldPath, newPath);

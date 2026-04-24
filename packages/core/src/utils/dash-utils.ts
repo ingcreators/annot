@@ -23,7 +23,9 @@ export function detectDashKey(dasharray: string, strokeWidth: number): string {
   // Fallback heuristic
   const parts = dasharray.split(",").map(Number);
   if (parts.length === 4) return "dashDot";
-  if (parts.length === 2 && parts[0] <= strokeWidth * 2) return "dot";
-  if (parts.length === 2 && parts[0] > strokeWidth * 5) return "lgDash";
+  // `parts[0]` is only read after the `length === 2` guard, so the
+  // non-null assertion matches the runtime check.
+  if (parts.length === 2 && parts[0]! <= strokeWidth * 2) return "dot";
+  if (parts.length === 2 && parts[0]! > strokeWidth * 5) return "lgDash";
   return "dash";
 }

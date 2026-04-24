@@ -109,7 +109,8 @@ function cursorForAngle(rad: number): string {
   a += Math.PI / 8;
   if (a >= TAU) a -= TAU;
   const idx = Math.floor(a / (Math.PI / 4));
-  return CURSOR_BY_SECTOR[idx % 8];
+  // `idx % 8` is in `[0, 7]` and `CURSOR_BY_SECTOR` has 8 entries.
+  return CURSOR_BY_SECTOR[idx % 8]!;
 }
 
 /** Convert a point in SVG-root coords into an element's local
@@ -272,7 +273,7 @@ export class SelectionManager {
 
   get selected(): SVGElement | null {
     const arr = Array.from(this.#selectedSet);
-    return arr.length === 1 ? arr[0] : null;
+    return arr.length === 1 ? arr[0]! : null;
   }
 
   get selectedElements(): SVGElement[] {
@@ -443,7 +444,7 @@ export class SelectionManager {
     // in DOM order — achieved by inserting in REVERSE iteration to
     // the first position.
     for (let i = ordered.length - 1; i >= 0; i--) {
-      parent.insertBefore(ordered[i], parent.firstChild);
+      parent.insertBefore(ordered[i]!, parent.firstChild);
     }
     this.#history.save();
     this.refreshHandles();
@@ -463,8 +464,8 @@ export class SelectionManager {
     // we swap, subsequent iterations see the updated DOM.
     let changed = false;
     for (let i = children.length - 2; i >= 0; i--) {
-      const el = children[i];
-      const next = children[i + 1];
+      const el = children[i]!;
+      const next = children[i + 1]!;
       if (sel.has(el as SVGElement) && !sel.has(next as SVGElement)) {
         parent.insertBefore(next, el);
         changed = true;
@@ -488,8 +489,8 @@ export class SelectionManager {
     // sibling is NOT selected, swap (move selected one step back).
     let changed = false;
     for (let i = 1; i < children.length; i++) {
-      const el = children[i];
-      const prev = children[i - 1];
+      const el = children[i]!;
+      const prev = children[i - 1]!;
       if (sel.has(el as SVGElement) && !sel.has(prev as SVGElement)) {
         parent.insertBefore(el, prev);
         changed = true;
@@ -579,8 +580,10 @@ export class SelectionManager {
     // Sort by leading edge on the chosen axis.
     boxes.sort((a, b) => (axis === "horizontal" ? a.b.x - b.b.x : a.b.y - b.b.y));
 
-    const first = boxes[0].b;
-    const last = boxes[boxes.length - 1].b;
+    // `boxes.length < 3` was guarded above, so both `[0]` and
+    // `[length - 1]` are in range.
+    const first = boxes[0]!.b;
+    const last = boxes[boxes.length - 1]!.b;
     // Total span (first leading → last trailing) and sum of widths —
     // leftover is divvied into N-1 equal gaps between adjacent items.
     const totalSpan =
@@ -594,7 +597,7 @@ export class SelectionManager {
       gap;
     let changed = false;
     for (let i = 1; i < boxes.length - 1; i++) {
-      const { el, b } = boxes[i];
+      const { el, b } = boxes[i]!;
       const currentLead = axis === "horizontal" ? b.x : b.y;
       const delta = cursor - currentLead;
       if (Math.abs(delta) > 0.001) {
@@ -654,7 +657,8 @@ export class SelectionManager {
     // sits, so the new group inherits its z-position (the topmost
     // of the grouped set). Keeping z-order intuitive: grouping
     // should never change the visual stacking.
-    const anchor = ordered[ordered.length - 1];
+    // `ordered.length < 2` was guarded above.
+    const anchor = ordered[ordered.length - 1]!;
     const group = document.createElementNS("http://www.w3.org/2000/svg", "g") as SVGGElement;
     group.setAttribute("data-type", "group");
     parent.insertBefore(group, anchor);
@@ -766,7 +770,7 @@ export class SelectionManager {
   #drawAllHandles(): void {
     if (this.#selectedSet.size === 0) return;
     if (this.#selectedSet.size === 1) {
-      this.#drawHandles(Array.from(this.#selectedSet)[0]);
+      this.#drawHandles(Array.from(this.#selectedSet)[0]!);
     } else {
       // Multi-selection: draw a combined bounding box
       this.#drawGroupHandles();
@@ -841,7 +845,9 @@ export class SelectionManager {
     // Outline rectangle (rotated) drawn first so it sits BEHIND the
     // square handles. Closes the visual frame so the user reads the
     // rotated bounding box at a glance.
-    const corners = [localPts[0], localPts[2], localPts[4], localPts[6]].map(([x, y]) =>
+    // Indices 0/2/4/6 are always in range of the 8-element
+    // `localPts` array constructed just above.
+    const corners = [localPts[0]!, localPts[2]!, localPts[4]!, localPts[6]!].map(([x, y]) =>
       localToSvgPoint(el, new DOMPoint(x, y), this.#canvas.svg),
     );
     const outline = document.createElementNS(SVG_NS, "polygon");
@@ -857,7 +863,7 @@ export class SelectionManager {
 
     const hs = HANDLE_SIZE / this.#canvas.zoom;
     for (let i = 0; i < localPts.length; i++) {
-      const [lx, ly] = localPts[i];
+      const [lx, ly] = localPts[i]!;
       const sp = localToSvgPoint(el, new DOMPoint(lx, ly), this.#canvas.svg);
       const ang = Math.atan2(sp.y - screenCenter.y, sp.x - screenCenter.x);
       const rect = document.createElementNS(SVG_NS, "rect");
@@ -1161,7 +1167,7 @@ export class SelectionManager {
   ];
 
   #drawBBoxHandles(bbox: DOMRect): void {
-    const points = [
+    const points: [number, number][] = [
       [bbox.x, bbox.y], // 0: top-left
       [bbox.x + bbox.width / 2, bbox.y], // 1: top-center
       [bbox.x + bbox.width, bbox.y], // 2: top-right
@@ -1174,7 +1180,7 @@ export class SelectionManager {
 
     const hs = HANDLE_SIZE / this.#canvas.zoom;
     for (let i = 0; i < points.length; i++) {
-      const [cx, cy] = points[i];
+      const [cx, cy] = points[i]!;
       const rect = document.createElementNS(SVG_NS, "rect");
       rect.setAttribute("x", String(cx - hs / 2));
       rect.setAttribute("y", String(cy - hs / 2));
@@ -1183,7 +1189,9 @@ export class SelectionManager {
       rect.setAttribute("fill", "#00d4ff");
       rect.setAttribute("stroke", "#fff");
       rect.setAttribute("stroke-width", String(1 / this.#canvas.zoom));
-      rect.style.cursor = SelectionManager.HANDLE_CURSORS[i];
+      // Loop bound matches `HANDLE_CURSORS.length` (both are the
+      // 8-entry cardinal list); `[i]` is always defined.
+      rect.style.cursor = SelectionManager.HANDLE_CURSORS[i]!;
       rect.style.pointerEvents = "all";
       this.#canvas.uiOverlay.appendChild(rect);
       this.#resizeHandles.push(rect);
@@ -1215,7 +1223,7 @@ export class SelectionManager {
           const dy = pt.y - cy;
           const hit = r * 2;
           if (dx * dx + dy * dy <= hit * hit) {
-            const g = Array.from(this.#selectedSet)[0];
+            const g = Array.from(this.#selectedSet)[0]!;
             // Normalize any legacy transform into endpoints first so
             // the CP is written in the same frame the user sees.
             bakeLineTransform(g);
@@ -1237,7 +1245,7 @@ export class SelectionManager {
           const dy = pt.y - cy;
           const hit = r * 1.6;
           if (dx * dx + dy * dy <= hit * hit) {
-            const g = Array.from(this.#selectedSet)[0];
+            const g = Array.from(this.#selectedSet)[0]!;
             // Lines/arrows: bake any stale transform into endpoints
             // BEFORE snapshotting. After baking, the element's local
             // and world frames are identical, so the rotation gesture
@@ -1319,7 +1327,8 @@ export class SelectionManager {
               this.#resizeHandle = i;
               this.#startX = pt.x;
               this.#startY = pt.y;
-              const sel = Array.from(this.#selectedSet)[0];
+              // Reached only when `size === 1` was confirmed earlier.
+              const sel = Array.from(this.#selectedSet)[0]!;
               // Snapshot the LOCAL bbox at gesture start. The resize
               // logic operates in local space (so a rotated rect stays
               // rotated while it's being resized), and the snapshot is
@@ -1457,7 +1466,7 @@ export class SelectionManager {
         // to-svg to convert the pointer back into that frame (handles
         // rotation/flip uniformly).
         if (this.#draggingTail && this.#selectedSet.size === 1) {
-          const g = Array.from(this.#selectedSet)[0];
+          const g = Array.from(this.#selectedSet)[0]!;
           const local = pointToLocal(g, pt, this.#canvas.svg);
           this.#gestureChangedContent = true;
           setCalloutTail(g, local.x, local.y);
@@ -1470,7 +1479,7 @@ export class SelectionManager {
         // == world). Shift=snap CP to the perpendicular from line
         // midpoint so symmetric curves are easy to draw.
         if (this.#draggingCurve && this.#selectedSet.size === 1) {
-          const g = Array.from(this.#selectedSet)[0];
+          const g = Array.from(this.#selectedSet)[0]!;
           if (isArrowGroup(g)) {
             let cpx = pt.x;
             let cpy = pt.y;
@@ -1507,7 +1516,7 @@ export class SelectionManager {
 
         // Rotation handle drag — angle delta from gesture start.
         if (this.#rotating && this.#selectedSet.size === 1) {
-          const g = Array.from(this.#selectedSet)[0];
+          const g = Array.from(this.#selectedSet)[0]!;
           const ang = (Math.atan2(pt.y - this.#rotateCy, pt.x - this.#rotateCx) * 180) / Math.PI;
           let deltaDeg = ang - this.#rotateStartAngle;
           // Shift = snap to 15° increments (Figma / PowerPoint convention).
@@ -1539,7 +1548,7 @@ export class SelectionManager {
         // pointer is "what the user grabbed" expressed in the same
         // coordinate space as x/y/width/height.
         if (this.#resizing && this.#selectedSet.size === 1 && this.#origBBox) {
-          const el = Array.from(this.#selectedSet)[0];
+          const el = Array.from(this.#selectedSet)[0]!;
           // Always convert the pointer into the element's local
           // pre-transform frame. Lines need this too once a rotation
           // transform is on the element — without it, dragging an

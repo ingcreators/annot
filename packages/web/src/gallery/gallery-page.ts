@@ -695,7 +695,7 @@ export class GalleryPage {
     this.#selectedImagePaths.clear();
     this.#selectedFolderPaths.clear();
     for (let i = lo; i <= hi; i++) {
-      const item = flat[i];
+      const item = flat[i]!;
       const set = item.type === "image" ? this.#selectedImagePaths : this.#selectedFolderPaths;
       set.add(item.path);
     }

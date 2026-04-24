@@ -36,9 +36,11 @@ function uuid7Bytes(now: number = Date.now()): Uint8Array {
   crypto.getRandomValues(bytes.subarray(6));
 
   // Set version (0111) in the high nibble of byte 6
-  bytes[6] = (bytes[6] & 0x0f) | 0x70;
+  // `bytes` is a fixed-size 16-byte Uint8Array, indices 6 and 8 are
+  // always in range.
+  bytes[6] = (bytes[6]! & 0x0f) | 0x70;
   // Set variant (10) in the high 2 bits of byte 8
-  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  bytes[8] = (bytes[8]! & 0x3f) | 0x80;
 
   return bytes;
 }
