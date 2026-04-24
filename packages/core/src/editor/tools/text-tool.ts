@@ -1,6 +1,7 @@
 import type { CanvasManager } from "../canvas-manager.js";
 import type { History } from "../history.js";
 import { createTextBox, stickyBgFor } from "../text-utils.js";
+import type { TextVariant, ToolOptions } from "./tool-base.js";
 /**
  * TextTool — unified Text / Sticky Note / Callout tool.
  *
@@ -15,7 +16,6 @@ import { createTextBox, stickyBgFor } from "../text-utils.js";
  * SelectionManager's drag / resize logic is variant-agnostic.
  */
 import { ToolBase } from "./tool-base.js";
-import type { TextVariant, ToolOptions } from "./tool-base.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const DEFAULT_WIDTH = 200;

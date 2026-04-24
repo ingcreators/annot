@@ -16,9 +16,9 @@
  */
 
 import {
+  fetchUserInfo,
   type GitHubRepoRef,
   type GitHubRepoSummary,
-  fetchUserInfo,
   getRepo,
   isSignedIn,
   listBranches,

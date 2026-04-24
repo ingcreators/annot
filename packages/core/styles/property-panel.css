@@ -163,7 +163,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.12s, border-color 0.12s, color 0.12s;
+  transition:
+    background 0.12s,
+    border-color 0.12s,
+    color 0.12s;
 }
 
 /* SVG glyphs render at a consistent 22×22 — same size as the
@@ -468,7 +471,7 @@
   display: block;
 }
 .pp-select-caret {
-  font-size: 16px !important;
+  font-size: 16px;
   color: var(--text-muted);
 }
 
@@ -536,7 +539,7 @@
   flex-shrink: 0;
 }
 .pp-color-btn .material-symbols-outlined {
-  font-size: 16px !important;
+  font-size: 16px;
   color: var(--text-muted);
   margin-left: auto;
 }
@@ -545,12 +548,14 @@
  * to bottom-left over a white background. Same visual as PowerPoint's
  * "No fill" chip so the meaning reads without needing a label. */
 .pp-color-swatch-none {
-  background: linear-gradient(
+  background:
+    linear-gradient(
       to top left,
       transparent 0 calc(50% - 0.8px),
       var(--accent, #e74c3c) calc(50% - 0.8px) calc(50% + 0.8px),
       transparent calc(50% + 0.8px) 100%
-    ), #ffffff;
+    ),
+    #ffffff;
 }
 
 /* "No fill" button inside the color-pull popover. Shown ABOVE the
@@ -624,7 +629,9 @@
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  transition: opacity 0.12s, transform 0.08s;
+  transition:
+    opacity 0.12s,
+    transform 0.08s;
 }
 .pp-done-btn:hover {
   opacity: 0.9;
@@ -699,7 +706,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.1s, color 0.1s;
+  transition:
+    background 0.1s,
+    color 0.1s;
 }
 .pp-number-spinner button:hover {
   background: var(--hover-bg);

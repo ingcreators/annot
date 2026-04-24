@@ -225,7 +225,7 @@ body.split-editor-active #canvas-container,
 body.split-editor-active #statusbar,
 body.split-editor-active #file-manager,
 body.split-editor-active #editor-header {
-  display: none !important;
+  display: none;
 }
 
 .split-editor-header {
@@ -284,7 +284,9 @@ body.split-editor-active #editor-header {
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  transition: filter 0.15s, background 0.15s;
+  transition:
+    filter 0.15s,
+    background 0.15s;
   border: 1px solid transparent;
 }
 .split-editor-btn:disabled {
@@ -399,7 +401,9 @@ html.light .split-editor-apply {
   align-items: center;
   justify-content: center;
   opacity: 0;
-  transition: opacity 0.15s, filter 0.15s;
+  transition:
+    opacity 0.15s,
+    filter 0.15s;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
 }
 .split-editor-handle:hover .split-editor-handle-remove,
@@ -508,7 +512,9 @@ html.light .split-editor-handle-size {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.12s, color 0.12s;
+  transition:
+    background 0.12s,
+    color 0.12s;
 }
 .keyboard-help-close:hover {
   background: var(--hover-bg);

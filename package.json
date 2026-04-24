@@ -20,7 +20,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "devDependencies": {
-    "@biomejs/biome": "^1.9.4",
+    "@biomejs/biome": "^2.4.13",
     "fake-indexeddb": "^6",
     "happy-dom": "^20",
     "msw": "^2.6",

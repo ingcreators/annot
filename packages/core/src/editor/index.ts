@@ -13,11 +13,11 @@
 // ╰─────────────────────────────────────────────────────────────────╯
 export {
   ANNOT_SVG_VERSION,
-  ANNOT_SVG_VERSION_UNSTAMPED,
   ANNOT_SVG_VERSION_ATTR,
-  stampAnnotVersion,
-  readAnnotVersion,
+  ANNOT_SVG_VERSION_UNSTAMPED,
   getAnnotVersionFromString,
+  readAnnotVersion,
+  stampAnnotVersion,
 } from "./svg-format.js";
 
 // ╭─ Editor UI (browser / DOM required) ────────────────────────────╮
@@ -28,44 +28,41 @@ export {
 
 // --- Canvas + core lifecycle ---
 export { CanvasManager } from "./canvas-manager.js";
-export { History } from "./history.js";
-export { SelectionManager } from "./selection.js";
-
-// --- Toolbar + property panel (+ shared UI helpers) ---
-export {
-  Toolbar,
-  openAnchoredPopover,
-  HIGHLIGHT_COLORS,
-  highlightColorLabel,
-  COUNTER_ICON_SVG,
-  SHAPE_ICON_SVG,
-  ARROW_ICON_SVG,
-} from "./toolbar.js";
-export type { ToolbarOptions } from "./toolbar.js";
-export { PropertyPanel } from "./property-panel.js";
 export { createColorPalette } from "./color-palette.js";
-export { createThemeToggle } from "./theme-toggle.js";
-
 // --- Serializers / file IO / clipboard ---
 // Use DOMParser / XMLSerializer / Blob / URL.createObjectURL /
 // navigator.clipboard internally.
 export {
-  exportSVGString,
-  exportExcelSVG,
-  saveToFile,
-  saveAsEditableImage,
-  downloadAsImage,
-  copyAsImage,
   copyAnnotationsAsImage,
-  getPngDataUrl,
+  copyAsImage,
+  downloadAsImage,
   exportAnnotationsSvgForIdb,
+  exportExcelSVG,
+  exportSVGString,
+  getPngDataUrl,
   renderImageRecord,
+  saveAsEditableImage,
+  saveToFile,
 } from "./export.js";
-
+export { History } from "./history.js";
+export { PropertyPanel } from "./property-panel.js";
+export { SelectionManager } from "./selection.js";
+export { createThemeToggle } from "./theme-toggle.js";
+export type { ToolbarOptions } from "./toolbar.js";
+// --- Toolbar + property panel (+ shared UI helpers) ---
+export {
+  ARROW_ICON_SVG,
+  COUNTER_ICON_SVG,
+  HIGHLIGHT_COLORS,
+  highlightColorLabel,
+  openAnchoredPopover,
+  SHAPE_ICON_SVG,
+  Toolbar,
+} from "./toolbar.js";
+export type { ToolOptions } from "./tools/tool-base.js";
 // --- Tool base class + options type ---
 // Tools create live SVG nodes via `document.createElementNS` on
 // pointer events; their shape-building logic is slated for extraction
 // into DOM-free builders (tracked under the "headless annotator
 // prototype" in docs/plans/).
 export { ToolBase } from "./tools/tool-base.js";
-export type { ToolOptions } from "./tools/tool-base.js";

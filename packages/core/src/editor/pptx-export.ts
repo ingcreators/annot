@@ -124,7 +124,7 @@ function gradFillXml(gRaw: string | null): string {
  * gradient), opacity alpha, cap, and join. Used by every shape/line
  * builder so the style features stay consistent across element types.
  */
-function lnXml(
+function _lnXml(
   el: SVGElement,
   swPx: number,
   fallbackStroke: string,
@@ -867,7 +867,7 @@ function buildMarker(g: SVGElement, bg: Element, text: SVGTextElement, id: numbe
 // --- Data URI to binary ---
 
 function dataUrlToUint8Array(dataUrl: string): Uint8Array {
-  if (!dataUrl || !dataUrl.startsWith("data:")) return new Uint8Array(0);
+  if (!dataUrl?.startsWith("data:")) return new Uint8Array(0);
   const base64 = dataUrl.split(",")[1];
   if (!base64) return new Uint8Array(0);
   const binary = atob(base64);

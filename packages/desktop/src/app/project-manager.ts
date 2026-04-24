@@ -1,9 +1,9 @@
 import {
-  type Project,
   createProject,
   deleteProject,
   isTauri,
   listProjects,
+  type Project,
 } from "@ingcreators/annot-core/utils/tauri-bridge";
 
 export class ProjectManager {

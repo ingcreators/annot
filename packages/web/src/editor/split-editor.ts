@@ -75,7 +75,7 @@ export class SplitEditor {
     // are the most common reason loadImage fails silently further down.
     for (let i = 0; i < this.#records.length; i++) {
       const r = this.#records[i]!;
-      if (!r.originalDataUrl || !r.originalDataUrl.startsWith("data:")) {
+      if (!r.originalDataUrl?.startsWith("data:")) {
         throw new Error(
           `Frame ${i + 1}/${this.#records.length} has no image data (path="${r.path}"). The session may not have fully transferred yet — try reloading.`,
         );

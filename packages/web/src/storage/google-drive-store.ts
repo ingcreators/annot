@@ -476,7 +476,7 @@ export class GoogleDriveStore implements StorageProvider {
 
     if (updates.annotationsSvg !== undefined || updates.tags !== undefined) {
       const record = await this.getImage(path);
-      if (!record || !record.originalDataUrl) return path;
+      if (!record?.originalDataUrl) return path;
 
       const annotationsSvg = updates.annotationsSvg ?? record.annotationsSvg;
       const tags = updates.tags ?? record.tags;

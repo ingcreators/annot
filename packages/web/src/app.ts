@@ -2,26 +2,27 @@
  * Annot (by ingcreators) — main application.
  * File Manager (gallery) ↔ Editor switching with path-based StorageProvider.
  */
+
+import type { ToolOptions } from "@ingcreators/annot-core";
 import {
   ANNOT_SVG_VERSION,
   CanvasManager,
-  History,
-  SelectionManager,
-  Toolbar,
   createThemeToggle,
   exportAnnotationsSvgForIdb,
   getPngDataUrl,
+  History,
   openAnchoredPopover,
   readAnnotVersion,
   readEditableImage,
+  SelectionManager,
+  Toolbar,
 } from "@ingcreators/annot-core";
-import type { ToolOptions } from "@ingcreators/annot-core";
 import type { ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
 import { getFilename } from "@ingcreators/annot-core/storage";
 import { newIdB58, setTooltip } from "@ingcreators/annot-core/utils";
 import {
-  FileDetailsDrawer,
   estimateDataUrlBytes,
+  FileDetailsDrawer,
   validateFilename,
 } from "./editor/file-details-drawer.js";
 import { installKeyboardHelp } from "./editor/keyboard-help.js";
@@ -35,7 +36,6 @@ import type { SplitEditor } from "./editor/split-editor.js";
 import { loadEncodeOptions } from "./encode-options.js";
 import { FileManager } from "./gallery/file-manager.js";
 import {
-  type StorageMode,
   connectGitHub,
   connectGoogleDrive,
   deleteExtensionImage,
@@ -51,6 +51,7 @@ import {
   restoreDevice,
   restoreGitHub,
   restoreGoogleDrive,
+  type StorageMode,
   saveLastFolder,
   saveLastStorage,
   setExtensionId,
@@ -107,6 +108,7 @@ async function retryFsOp<T>(op: () => Promise<T>, maxRetries = 4): Promise<T> {
   }
   throw lastErr;
 }
+
 import {
   loadCursorPreference,
   saveCursorPreference,
@@ -320,7 +322,7 @@ export class App {
       // Restore the user's selected mode (extension was a transient read target)
       setStorageMode(savedMode);
 
-      if (!record || !record.originalDataUrl) return;
+      if (!record?.originalDataUrl) return;
 
       let w = record.width;
       let h = record.height;
@@ -959,7 +961,7 @@ export class App {
       for (const img of rootImages) {
         try {
           const full = await extStorage.getImage(img.path);
-          if (!full || !full.originalDataUrl) continue;
+          if (!full?.originalDataUrl) continue;
 
           let w = full.width;
           let h = full.height;

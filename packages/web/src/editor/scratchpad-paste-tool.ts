@@ -9,8 +9,9 @@
  *
  * Escape cancels placement without inserting anything.
  */
-import { ToolBase, type ToolOptions } from "@ingcreators/annot-core";
+
 import type { CanvasManager, History } from "@ingcreators/annot-core";
+import { ToolBase, type ToolOptions } from "@ingcreators/annot-core";
 import { parseStoredItem, translateElement } from "./scratchpad-utils.js";
 
 export class ScratchpadPasteTool extends ToolBase {

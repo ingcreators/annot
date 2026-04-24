@@ -1,4 +1,4 @@
-import { DEFAULT_SETTINGS, type Settings, loadSettings, saveSettings } from "../shared/settings.js";
+import { DEFAULT_SETTINGS, loadSettings, type Settings, saveSettings } from "../shared/settings.js";
 
 let current: Settings = DEFAULT_SETTINGS;
 let savedTimer: number | undefined;

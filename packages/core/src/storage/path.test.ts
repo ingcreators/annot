@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
-  ROOT_PATH,
   ancestorPaths,
   getFilename,
   getParentPath,
   isDescendantOrSame,
   joinPath,
+  ROOT_PATH,
   rewritePathPrefix,
   splitExt,
   splitPath,

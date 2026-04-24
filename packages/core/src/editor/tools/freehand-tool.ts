@@ -1,4 +1,5 @@
 import { computeDasharray } from "../../utils/dash-utils.js";
+import type { DrawStyle } from "./tool-base.js";
 /**
  * FreehandTool — unified Draw / Highlighter tool.
  *
@@ -13,7 +14,6 @@ import { computeDasharray } from "../../utils/dash-utils.js";
  * a cheap attribute toggle, no element replacement needed.
  */
 import { ToolBase } from "./tool-base.js";
-import type { DrawStyle } from "./tool-base.js";
 
 /**
  * Recommended defaults for a pristine-feeling highlighter — thick,

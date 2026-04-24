@@ -7,7 +7,7 @@ import {
 } from "./arrow-markers.js";
 import type { CanvasManager } from "./canvas-manager.js";
 import type { History } from "./history.js";
-import { SmartGuideOverlay, computeSnap } from "./smart-guides.js";
+import { computeSnap, SmartGuideOverlay } from "./smart-guides.js";
 import { rebuildCalloutTail, setCalloutTail } from "./text-utils.js";
 
 /** True when the element is an ArrowTool-produced arrow (outer `<g>`
@@ -50,6 +50,7 @@ function setLineEndpoints(el: SVGElement, x1: number, y1: number, x2: number, y2
   el.setAttribute("x2", String(x2));
   el.setAttribute("y2", String(y2));
 }
+
 import {
   applyTransformState,
   bakeLineTransform,
