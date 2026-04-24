@@ -115,15 +115,27 @@ export class GitHubStore implements StorageProvider {
 
   // ---- Tree state (keys are relative paths, i.e. basePath-relative) ----
 
-  /** File path → current blob SHA. Updated on every PUT/DELETE response. */
+  /**
+   * Blob path → current SHA. Populated from the initial tree fetch
+   * and kept in sync by every PUT / DELETE. Holds every blob Annot
+   * cares about: image files (listed in the gallery) plus `.gitkeep`
+   * markers (needed only so `deleteFolder` can find their SHAs).
+   * Non-image blobs that Annot doesn't touch (READMEs, source code,
+   * config) are never added here. `#shaByPath.keys()` is the
+   * authoritative "file set" for listImages / rename / move checks.
+   */
   #shaByPath = new Map<string, string>();
-  /** All file paths that exist in the tree (relative to basePath). */
-  #allFilePaths = new Set<string>();
-  /** Folder paths that exist *only* because of a `.gitkeep` file we
-   *  (or someone else) committed there. Deleting the last child in
-   *  such a folder should leave the `.gitkeep` in place so the folder
-   *  remains listable until the user explicitly deletes it. */
-  #gitkeepFolders = new Set<string>();
+  /**
+   * All folder paths visible to the caller, relative to basePath.
+   * Populated directly from the git tree's `type === "tree"` entries
+   * so every folder the repo actually contains under basePath appears
+   * in the sidebar, matching BrowserStore / DeviceStore / Drive
+   * semantics where folders exist regardless of their contents.
+   * Also updated incrementally by createFolder / deleteFolder /
+   * renameFolder / moveFolder / saveImage so the cache stays
+   * authoritative without a post-write tree re-fetch.
+   */
+  #allFolderPaths = new Set<string>();
   /** Guard: `#loadTree` only runs once per session unless the user
    *  explicitly clicks Refresh (which routes through `forceRefresh`).
    *  Every mutation updates the in-memory tree incrementally, so the
@@ -215,8 +227,7 @@ export class GitHubStore implements StorageProvider {
    */
   async forceRefresh(): Promise<void> {
     this.#shaByPath.clear();
-    this.#allFilePaths.clear();
-    this.#gitkeepFolders.clear();
+    this.#allFolderPaths.clear();
     this.#fileMeta.clear();
     this.#recordCache.clear();
     this.#treeLoaded = false;
@@ -380,29 +391,47 @@ export class GitHubStore implements StorageProvider {
     }
 
     for (const entry of tree) {
-      if (entry.type !== "blob") continue;
       const rel = this.#relPath(entry.path);
       if (rel == null) continue;
-      const name = getFilename(rel);
-      if (name === GITKEEP) {
-        const folder = getParentPath(rel);
-        this.#gitkeepFolders.add(folder);
-        // Also track the gitkeep file's SHA so we can delete it on
-        // `deleteFolder`.
-        this.#shaByPath.set(rel, entry.sha);
-        this.#allFilePaths.add(rel);
+      if (entry.type === "tree") {
+        // Every directory the repo actually contains becomes a
+        // sidebar folder entry, just like DeviceStore / Drive /
+        // Browser — no need for image contents or a `.gitkeep`
+        // marker to materialise it.
+        if (rel) this.#allFolderPaths.add(rel);
         continue;
       }
-      // Skip non-image files entirely — a repo normally carries
-      // code / docs / configs that the gallery can't render. Also
-      // prunes folders that contain only non-image files from the
-      // sidebar tree (they're derived from `#allFilePaths`).
+      if (entry.type !== "blob") continue;
+      const name = getFilename(rel);
+      if (name === GITKEEP) {
+        // Track the gitkeep SHA so `deleteFolder` can remove it.
+        // No special "empty folder" flag needed — the folder itself
+        // shows up via its `type === "tree"` entry above.
+        this.#shaByPath.set(rel, entry.sha);
+        continue;
+      }
+      // Non-image blobs (READMEs, source code, configs) are visible
+      // in the folder tree via their containing folder's tree entry,
+      // but never listed in the gallery — Annot can't render them.
       if (!isImageFilename(name)) continue;
       this.#shaByPath.set(rel, entry.sha);
-      this.#allFilePaths.add(rel);
     }
 
     this.#treeLoaded = true;
+  }
+
+  /**
+   * Add `path` and all ancestor paths to `#allFolderPaths`. Used by
+   * saveImage so a capture into `a/b/c/foo.png` materialises `a`,
+   * `a/b`, `a/b/c` in the sidebar tree without waiting for a
+   * re-fetch.
+   */
+  #registerFolder(path: string): void {
+    let p = path;
+    while (p) {
+      this.#allFolderPaths.add(p);
+      p = getParentPath(p);
+    }
   }
 
   // ===========================================================================
@@ -439,7 +468,9 @@ export class GitHubStore implements StorageProvider {
     const newSha: string | undefined = data?.content?.sha;
     if (!newSha) throw githubError("GitHub PUT returned no content SHA.");
     this.#shaByPath.set(relPath, newSha);
-    this.#allFilePaths.add(relPath);
+    // Materialise the containing folder (and ancestors) in the
+    // sidebar tree without waiting for a tree re-fetch.
+    this.#registerFolder(getParentPath(relPath));
     return newSha;
   }
 
@@ -456,7 +487,9 @@ export class GitHubStore implements StorageProvider {
       }),
     });
     this.#shaByPath.delete(relPath);
-    this.#allFilePaths.delete(relPath);
+    // We intentionally don't prune ancestor folders here — other
+    // stores (Drive, Device, Browser) leave the folder visible after
+    // its last child is deleted, and we mirror that behaviour.
   }
 
   /** Fetch a blob by path. Returns the bytes + SHA for cache seeding. */
@@ -473,7 +506,6 @@ export class GitHubStore implements StorageProvider {
       }
       const bytes = base64ToBytes(data.content);
       this.#shaByPath.set(relPath, data.sha);
-      this.#allFilePaths.add(relPath);
       return { bytes, sha: data.sha };
     } catch (e) {
       const err = e as GitHubError;
@@ -496,7 +528,7 @@ export class GitHubStore implements StorageProvider {
     validateName(desired);
 
     const filename = uniquifyFilename(desired, (candidate) => {
-      return this.#allFilePaths.has(joinPath(folderPath, candidate));
+      return this.#shaByPath.has(joinPath(folderPath, candidate));
     });
     const relPath = joinPath(folderPath, filename);
 
@@ -513,10 +545,9 @@ export class GitHubStore implements StorageProvider {
     await this.#putContents(relPath, blob, this.#commitMessage("add", relPath));
 
     // If this save lands in a folder that previously existed only by
-    // virtue of a `.gitkeep`, we can remove the gitkeep now that
-    // there's real content — but leave that to the next deleteImage
-    // call to batch cleanup. For now the gitkeep stays; it's ignored
-    // by listImages.
+    // virtue of a `.gitkeep`, we leave the gitkeep in place rather
+    // than chase a second commit to remove it. It's ignored by
+    // listImages (extension filter) and costs 0 bytes in the repo.
 
     const now = new Date().toISOString();
     const record: ImageRecord = {
@@ -543,10 +574,11 @@ export class GitHubStore implements StorageProvider {
     if (cached) return cached;
 
     await this.#ensureTreeLoaded();
-    if (!this.#allFilePaths.has(path)) {
+    if (!this.#shaByPath.has(path)) {
       // Give the Contents API a chance anyway — the tree cache may
       // be out of date (external commit) even though we haven't
-      // explicitly `resync`-ed. If it also 404s we hand back undefined.
+      // explicitly `forceRefresh()`-ed. If it also 404s we return
+      // undefined.
       const fresh = await this.#getContents(path);
       if (!fresh) return undefined;
       return this.#decodeRecord(path, fresh.bytes);
@@ -583,8 +615,10 @@ export class GitHubStore implements StorageProvider {
   async listImages(folderPath: string): Promise<ImageRecord[]> {
     await this.#ensureTreeLoaded();
     const results: ImageRecord[] = [];
-    for (const path of this.#allFilePaths) {
-      if (getFilename(path) === GITKEEP) continue;
+    for (const path of this.#shaByPath.keys()) {
+      const name = getFilename(path);
+      if (name === GITKEEP) continue;
+      if (!isImageFilename(name)) continue;
       if (getParentPath(path) !== folderPath) continue;
       const meta = this.#fileMeta.get(path);
       results.push({
@@ -645,7 +679,7 @@ export class GitHubStore implements StorageProvider {
       const newFolderPath = updates.folderPath;
       const newPath = joinPath(newFolderPath, getFilename(currentPath));
       if (newPath === currentPath) return currentPath;
-      if (this.#allFilePaths.has(newPath)) {
+      if (this.#shaByPath.has(newPath)) {
         throw githubError(`Destination already exists: ${newPath}`);
       }
 
@@ -682,12 +716,12 @@ export class GitHubStore implements StorageProvider {
   async renameImage(path: string, newName: string): Promise<string> {
     validateName(newName);
     await this.#ensureTreeLoaded();
-    if (!this.#allFilePaths.has(path)) return path;
+    if (!this.#shaByPath.has(path)) return path;
 
     const folderPath = getParentPath(path);
     const newPath = joinPath(folderPath, newName);
     if (newPath === path) return path;
-    if (this.#allFilePaths.has(newPath)) {
+    if (this.#shaByPath.has(newPath)) {
       throw githubError(`Image already exists: ${newPath}`);
     }
 
@@ -737,24 +771,27 @@ export class GitHubStore implements StorageProvider {
     if (this.#folderExists(fullPath)) {
       throw githubError(`Folder already exists: ${fullPath}`);
     }
+    // Git has no "empty directory" concept, so we commit a zero-byte
+    // `.gitkeep` to materialise the folder in the tree. The folder
+    // path itself is registered in `#allFolderPaths` so the sidebar
+    // sees it immediately without waiting for a tree re-fetch (which
+    // can briefly lag behind the just-made commit anyway).
     const gitkeepRel = joinPath(fullPath, GITKEEP);
-    // Zero-byte blob is valid; GitHub stores it as an empty file.
     const blob = new Blob([""], { type: "application/octet-stream" });
     await this.#putContents(gitkeepRel, blob, `annot: create folder ${fullPath}`);
-    this.#gitkeepFolders.add(fullPath);
+    this.#registerFolder(fullPath);
     return fullPath;
   }
 
   async listFolders(parentPath: string): Promise<FolderRecord[]> {
     await this.#ensureTreeLoaded();
-    const folders = this.#allExistingFolders();
     const results: FolderRecord[] = [];
-    for (const folder of folders) {
+    for (const folder of this.#allFolderPaths) {
+      if (!folder) continue;
       if (getParentPath(folder) !== parentPath) continue;
-      if (!folder) continue; // root itself is never listed
       results.push({
         path: folder,
-        parentPath: getParentPath(folder),
+        parentPath,
         name: getFilename(folder),
         createdAt: "",
       });
@@ -797,30 +834,27 @@ export class GitHubStore implements StorageProvider {
       throw githubError(`Folder already exists: ${newPath}`);
     }
 
-    // Collect entries to move (files + any gitkeep that materialized
-    // empty subfolders). Iterate a snapshot so the in-progress mutations
-    // of `#allFilePaths` don't invalidate iteration.
-    const entries = Array.from(this.#allFilePaths).filter((p) =>
+    // Collect every blob we track under the old path — images and
+    // any `.gitkeep` markers that materialised empty subfolders.
+    // Iterate a snapshot so the in-flight PUT / DELETE mutations of
+    // `#shaByPath` don't invalidate iteration.
+    const entries = Array.from(this.#shaByPath.keys()).filter((p) =>
       p === oldPath || p.startsWith(oldPath + "/")
     );
 
-    // Ensure the destination folder materialises even if there are no
-    // files under it (edge case: the user renamed an empty folder).
-    if (entries.length === 0 && this.#gitkeepFolders.has(oldPath)) {
+    // Empty folder (just a `.gitkeep` at oldPath) → migrate that
+    // single blob so the folder re-materialises at the new path.
+    if (entries.length === 0) {
       const oldGitkeep = joinPath(oldPath, GITKEEP);
       const newGitkeep = joinPath(newPath, GITKEEP);
       await this.#migrateBlob(oldGitkeep, newGitkeep, "move folder");
-      this.#gitkeepFolders.delete(oldPath);
-      this.#gitkeepFolders.add(newPath);
-      return;
+    } else {
+      for (const oldFile of entries) {
+        const newFile = rewritePathPrefix(oldFile, oldPath, newPath);
+        await this.#migrateBlob(oldFile, newFile, this.#commitMessage("update", newFile));
+      }
     }
 
-    for (const oldFile of entries) {
-      const newFile = rewritePathPrefix(oldFile, oldPath, newPath);
-      await this.#migrateBlob(oldFile, newFile, this.#commitMessage("update", newFile));
-    }
-
-    // Rewrite caches
     this.#rewriteDescendantCaches(oldPath, newPath);
   }
 
@@ -864,13 +898,16 @@ export class GitHubStore implements StorageProvider {
         this.#fileMeta.set(np, m);
       }
     }
-    // gitkeepFolders
-    for (const f of Array.from(this.#gitkeepFolders)) {
+    // folder set
+    for (const f of Array.from(this.#allFolderPaths)) {
       if (f === oldPath || f.startsWith(oldPath + "/")) {
-        this.#gitkeepFolders.delete(f);
-        this.#gitkeepFolders.add(rewritePathPrefix(f, oldPath, newPath));
+        this.#allFolderPaths.delete(f);
+        this.#allFolderPaths.add(rewritePathPrefix(f, oldPath, newPath));
       }
     }
+    // Ensure every ancestor of the new path is present too (in case
+    // the parent itself wasn't in the set yet).
+    this.#registerFolder(newPath);
   }
 
   async deleteFolder(path: string): Promise<void> {
@@ -878,8 +915,9 @@ export class GitHubStore implements StorageProvider {
     await this.#ensureTreeLoaded();
     if (!this.#folderExists(path)) return;
 
-    // Collect all descendants.
-    const entries = Array.from(this.#allFilePaths).filter((p) =>
+    // Collect every tracked blob under the folder — images plus
+    // any `.gitkeep` markers for empty subfolders.
+    const entries = Array.from(this.#shaByPath.keys()).filter((p) =>
       p === path || p.startsWith(path + "/")
     );
     // Per-file delete. Phase 4 will add a Git Data API bulk commit
@@ -891,9 +929,10 @@ export class GitHubStore implements StorageProvider {
       this.#recordCache.delete(rel);
       this.#fileMeta.delete(rel);
     }
-    // Clean up gitkeep folder markers for anything under the removed path.
-    for (const f of Array.from(this.#gitkeepFolders)) {
-      if (f === path || f.startsWith(path + "/")) this.#gitkeepFolders.delete(f);
+    // Remove the folder itself and every subfolder from the visible
+    // tree. (Ancestor folders stay — they may still contain siblings.)
+    for (const f of Array.from(this.#allFolderPaths)) {
+      if (f === path || f.startsWith(path + "/")) this.#allFolderPaths.delete(f);
     }
   }
 
@@ -909,31 +948,14 @@ export class GitHubStore implements StorageProvider {
   }
 
   // ===========================================================================
-  // Folder-existence logic — derived from files + .gitkeep markers.
+  // Folder-existence logic — driven directly by `#allFolderPaths`,
+  // which is populated from the git tree's `type === "tree"` entries
+  // plus any createFolder calls made locally.
   // ===========================================================================
 
   #folderExists(path: string): boolean {
     if (!path) return true; // root always exists
-    if (this.#gitkeepFolders.has(path)) return true;
-    for (const filePath of this.#allFilePaths) {
-      if (filePath.startsWith(path + "/")) return true;
-    }
-    return false;
-  }
-
-  /** All folder paths that currently exist (either implicit via file
-   *  descendants or explicit via `.gitkeep`). Root is excluded. */
-  #allExistingFolders(): Set<string> {
-    const out = new Set<string>();
-    for (const f of this.#gitkeepFolders) out.add(f);
-    for (const filePath of this.#allFilePaths) {
-      let parent = getParentPath(filePath);
-      while (parent) {
-        out.add(parent);
-        parent = getParentPath(parent);
-      }
-    }
-    return out;
+    return this.#allFolderPaths.has(path);
   }
 
   // ===========================================================================
