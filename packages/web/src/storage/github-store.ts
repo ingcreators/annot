@@ -510,6 +510,200 @@ export class GitHubStore implements StorageProvider {
     return newSha;
   }
 
+  // ===========================================================================
+  // Amend path — the preferred write strategy for annotation updates.
+  //
+  // A naïve commit-per-save produces one git commit per debounce tick, so a
+  // single editing session ends up with dozens of identical "annot: update
+  // foo.png" commits filling the log. Instead we check whether the branch's
+  // HEAD is already an Annot update commit for THIS file; if so, we replace
+  // it with a new commit that has the SAME parent, and force-update the ref.
+  // The intermediate commit is still reachable via reflog for a while but
+  // drops out of `git log` — matching what `git commit --amend` does locally.
+  //
+  // Falls back to a regular `#putContents` whenever amend can't apply:
+  //   - No previous commit (empty branch / first save of this file)
+  //   - HEAD is a different file's commit, or not from Annot
+  //   - Branch protection refuses force-update (422)
+  //   - Any API error along the way
+  //
+  // Only used from `updateImage`'s annotation path; `saveImage` (new file)
+  // and the Contents-API deletes keep their existing behaviour because
+  // there's nothing to amend for those.
+  // ===========================================================================
+
+  async #commitFileAmendable(
+    relPath: string,
+    blob: Blob,
+    message: string,
+    expectedBlobSha?: string,
+  ): Promise<string> {
+    // Best-effort amend first. Any failure falls through to Contents PUT,
+    // which preserves the historical behaviour unchanged.
+    try {
+      const amended = await this.#tryAmendCommit(relPath, blob, message, expectedBlobSha);
+      if (amended) return amended;
+    } catch (e) {
+      // Swallow amend failures — they're non-fatal; we'll create a
+      // fresh commit via Contents PUT below.
+      console.warn("[github-store] amend failed, falling back to Contents PUT:", e);
+    }
+    return this.#putContents(relPath, blob, message, expectedBlobSha);
+  }
+
+  /**
+   * Try to amend the HEAD commit on the configured branch. Returns the
+   * new blob SHA on success, or `null` if the HEAD isn't amendable for
+   * this file (caller should fall through to Contents PUT).
+   */
+  async #tryAmendCommit(
+    relPath: string,
+    blob: Blob,
+    message: string,
+    expectedBlobSha?: string,
+  ): Promise<string | null> {
+    const owner = encodeURIComponent(this.#owner);
+    const repo = encodeURIComponent(this.#repo);
+    const branchEnc = encodeURIComponent(this.#branch);
+    const repoBase = `${GITHUB_API}/repos/${owner}/${repo}`;
+    const fullPath = this.#fullPath(relPath);
+
+    // 1) Current ref → HEAD commit sha.
+    const refResp = await this.#fetchOrNull(`${repoBase}/git/refs/heads/${branchEnc}`);
+    if (!refResp) return null;
+    const refBody = await refResp.json();
+    const headSha: string | undefined = refBody?.object?.sha;
+    if (!headSha) return null;
+
+    // 2) HEAD commit → parent sha + tree sha + committer info + message.
+    const commitResp = await this.#fetchOrNull(`${repoBase}/git/commits/${headSha}`);
+    if (!commitResp) return null;
+    const commitBody = await commitResp.json();
+    const headMessage = (commitBody?.message as string | undefined) ?? "";
+    const parentSha: string | undefined = commitBody?.parents?.[0]?.sha;
+    if (!parentSha) return null;   // initial commit — amending would delete history
+
+    // 3) Amendable iff HEAD is an Annot update commit for THIS file.
+    // Matches the message produced by `#commitMessage("update", ...)`:
+    // `annot: update <filename>`.
+    const filename = getFilename(relPath) || relPath;
+    if (headMessage !== `annot: update ${filename}`) return null;
+
+    // Optimistic-concurrency check: the expected blob SHA the caller
+    // has is still the HEAD tree's entry for this file. If somebody
+    // else committed in between (GitHub UI, another tab), expectedBlobSha
+    // won't match → bail so the caller's Contents PUT raises a proper
+    // 409 for the user to resolve.
+    if (expectedBlobSha) {
+      const headTreeSha: string | undefined = commitBody?.tree?.sha;
+      if (!headTreeSha) return null;
+      const treeResp = await this.#fetchOrNull(
+        `${repoBase}/git/trees/${headTreeSha}?recursive=1`,
+      );
+      if (!treeResp) return null;
+      const treeBody = await treeResp.json();
+      const entry = (treeBody?.tree as Array<{ path: string; sha: string }> | undefined)
+        ?.find((e) => e.path === fullPath);
+      if (!entry || entry.sha !== expectedBlobSha) return null;
+    }
+
+    // 4) New blob for the file we're writing.
+    const base64 = await blobToBase64(blob);
+    const blobResp = await this.#fetch(`${repoBase}/git/blobs`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: base64, encoding: "base64" }),
+    });
+    const blobBody = await blobResp.json();
+    const newBlobSha: string | undefined = blobBody?.sha;
+    if (!newBlobSha) throw githubError("git/blobs returned no SHA");
+
+    // 5) New tree: inherit the HEAD tree and overlay our file.
+    const headTreeSha: string | undefined = commitBody?.tree?.sha;
+    if (!headTreeSha) return null;
+    const treePostResp = await this.#fetch(`${repoBase}/git/trees`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        base_tree: headTreeSha,
+        tree: [
+          {
+            path: fullPath,
+            mode: "100644",
+            type: "blob",
+            sha: newBlobSha,
+          },
+        ],
+      }),
+    });
+    const treePostBody = await treePostResp.json();
+    const newTreeSha: string | undefined = treePostBody?.sha;
+    if (!newTreeSha) throw githubError("git/trees returned no SHA");
+
+    // 6) New commit with the SAME parent as the HEAD we're replacing.
+    const newCommitResp = await this.#fetch(`${repoBase}/git/commits`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message,
+        tree: newTreeSha,
+        parents: [parentSha],
+      }),
+    });
+    const newCommitBody = await newCommitResp.json();
+    const newCommitSha: string | undefined = newCommitBody?.sha;
+    if (!newCommitSha) throw githubError("git/commits returned no SHA");
+
+    // 7) Force-update the branch ref to the replacement commit. If
+    // branch protection refuses (422), treat it as a non-amendable
+    // branch and let the caller fall back to Contents PUT — the user
+    // will still get their save, just as an additional commit.
+    const patchResp = await this.#fetchOrNull(`${repoBase}/git/refs/heads/${branchEnc}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sha: newCommitSha, force: true }),
+    });
+    if (!patchResp) return null;
+
+    // Refresh local state to reflect the new blob.
+    this.#shaByPath.set(relPath, newBlobSha);
+    this.#registerFolder(getParentPath(relPath));
+    return newBlobSha;
+  }
+
+  /**
+   * `#fetch` variant that swallows non-OK responses and returns `null`
+   * instead of throwing. Used inside the amend path where any failure
+   * (missing ref, unreadable tree, branch-protection force-rejection)
+   * should gracefully fall through to the Contents PUT path.
+   */
+  async #fetchOrNull(url: string, init?: RequestInit): Promise<Response | null> {
+    try {
+      const resp = await this.#fetchOnce(url, init);
+      if (resp.ok) {
+        this.#updateRateLimit(resp);
+        return resp;
+      }
+      // Respect the 401 auto-refresh semantics the real `#fetch` has;
+      // dedupe recovery with the shared #refreshInFlight so a burst
+      // of amend attempts doesn't spawn multiple PAT banners.
+      if (resp.status === 401 && this.#refreshToken) {
+        await resp.text().catch(() => "");
+        const newToken = await (this.#refreshInFlight ??= this.#runRefresh());
+        if (newToken) {
+          const retry = await this.#fetchOnce(url, init);
+          if (retry.ok) {
+            this.#updateRateLimit(retry);
+            return retry;
+          }
+        }
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
   /** Delete a file. Requires the current SHA. */
   async #deleteContents(relPath: string, sha: string, message: string): Promise<void> {
     const full = this.#fullPath(relPath);
@@ -825,7 +1019,11 @@ export class GitHubStore implements StorageProvider {
 
       const existingSha = this.#shaByPath.get(currentPath);
       try {
-        await this.#putContents(
+        // Use the amend-aware commit path so a sequence of debounced
+        // updates collapses into a single commit on the branch's
+        // `git log` instead of piling up identical
+        // "annot: update foo.png" entries.
+        await this.#commitFileAmendable(
           currentPath,
           blob,
           this.#commitMessage("update", currentPath),
@@ -843,7 +1041,7 @@ export class GitHubStore implements StorageProvider {
         const fresh = await this.#getContents(currentPath);
         if (!fresh) throw e;
         this.#shaByPath.set(currentPath, fresh.sha);
-        await this.#putContents(
+        await this.#commitFileAmendable(
           currentPath,
           blob,
           this.#commitMessage("update", currentPath),
