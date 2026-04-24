@@ -1289,6 +1289,13 @@ body.editor-mode.has-right-panel .file-details-backdrop {
   background: rgba(255, 112, 112, 0.1);
 }
 
+/* The descendant rule `.editor-header-path .editor-header-info-btn`
+ * earlier in the file intentionally has higher specificity — it's a
+ * contextual tweak for buttons inside the breadcrumb path. Keeping
+ * the base class here with a documented suppression is cleaner than
+ * fragmenting the "editor header info button" styling across two
+ * sections just to satisfy the linter. */
+/* biome-ignore lint/style/noDescendingSpecificity: base rule deliberately follows contextual .editor-header-path descendant */
 .editor-header-info-btn {
   width: 28px;
   height: 28px;
@@ -1340,7 +1347,13 @@ body.editor-mode.has-right-panel .file-details-backdrop {
  * button, then we override the few properties we actually want to pin
  * (size, weight). Setting `display: inline-flex + align-items: center`
  * also normalizes vertical alignment between span and button so the
- * glyph baselines line up across element types. */
+ * glyph baselines line up across element types.
+ *
+ * Same pattern as `.editor-header-info-btn` above: the descendant
+ * rule `.editor-header-path .breadcrumb-item` earlier in the file
+ * is a contextual override, and the base rule lives here with the
+ * rest of the breadcrumb section. */
+/* biome-ignore lint/style/noDescendingSpecificity: base rule deliberately follows contextual .editor-header-path descendant */
 .breadcrumb-item {
   font: inherit;
   font-size: 13px;

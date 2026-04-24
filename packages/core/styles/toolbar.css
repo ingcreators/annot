@@ -286,8 +286,13 @@
 /* Note: the previous `.tool-dropdown-arrow` caret was removed when
  * the variant badge took over the flyout-trigger role. Keeping the
  * rules for `.tool-dropdown-menu` below because some other code
- * paths may reuse the class name for non-toolbar popovers. */
-
+ * paths may reuse the class name for non-toolbar popovers.
+ *
+ * The `.toolbar-vertical .tool-dropdown-menu` rule earlier in the
+ * file is a contextual override (different docking for vertical
+ * toolbars); the base styling lives here with the rest of the
+ * dropdown-menu rules, hence the descending-specificity suppression. */
+/* biome-ignore lint/style/noDescendingSpecificity: base rule deliberately follows contextual .toolbar-vertical descendant */
 .tool-dropdown-menu {
   position: absolute;
   top: 100%;
