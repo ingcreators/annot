@@ -43,6 +43,9 @@ jobs:
       - name: Typecheck (all packages)
         run: pnpm -r typecheck
 
+      - name: Tests (vitest)
+        run: pnpm test
+
       # Desktop is excluded from the build job: it runs `tauri build`,
       # which needs Rust + platform-specific Win32 APIs and is better
       # suited for a dedicated release workflow than a general CI check.
