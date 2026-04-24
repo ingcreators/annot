@@ -21,7 +21,9 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
+    "fake-indexeddb": "^6",
     "happy-dom": "^20",
+    "msw": "^2.6",
     "turbo": "^2.5.0",
     "vitest": "^2.1.9"
   },
