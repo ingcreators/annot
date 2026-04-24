@@ -690,14 +690,22 @@ export class GitHubStore implements StorageProvider {
     if (this.#thumbnailCache.has(relPath)) return;
     const existing = this.#thumbnailInFlight.get(relPath);
     if (existing) return existing;
-    const p = (async () => {
+    // `self` is captured so the `finally` block can confirm ownership
+    // of the in-flight slot before clearing it. Without this check, an
+    // orphaned pre-save prefetch would clobber the newer prefetch's
+    // entry when its `finally` ran. The explicit `any` cast works
+    // around TS's use-before-assigned warning; `self` is guaranteed
+    // assigned by the time the IIFE's `finally` runs.
+    // eslint-disable-next-line prefer-const
+    let self: Promise<void> = undefined as any;
+    self = (async () => {
       try {
         // Snapshot the SHA so we can detect a concurrent mutation
         // during the fetch. If the file was re-committed locally
         // (e.g. via `updateImage` → `#putContents`) while our GET
         // was in flight, our bytes are already stale — skip caching
-        // the thumbnail so the next `listImages` schedules a fresh
-        // fetch against the up-to-date blob.
+        // the thumbnail so the next `listImages` / post-save trigger
+        // schedules a fresh fetch against the up-to-date blob.
         const before = this.#shaByPath.get(relPath);
         const fetched = await this.#getContents(relPath);
         if (!fetched) return;
@@ -728,11 +736,16 @@ export class GitHubStore implements StorageProvider {
         // Swallow — the gallery just keeps showing the placeholder.
         // A subsequent forceRefresh / navigation retries.
       } finally {
-        this.#thumbnailInFlight.delete(relPath);
+        // Only clear the in-flight slot if it's still ours. A save
+        // that raced in may have already removed this entry and
+        // launched a replacement prefetch.
+        if (this.#thumbnailInFlight.get(relPath) === self) {
+          this.#thumbnailInFlight.delete(relPath);
+        }
       }
     })();
-    this.#thumbnailInFlight.set(relPath, p);
-    return p;
+    this.#thumbnailInFlight.set(relPath, self);
+    return self;
   }
 
   async updateImage(path: string, updates: ImageRecordUpdate): Promise<string> {
@@ -787,9 +800,15 @@ export class GitHubStore implements StorageProvider {
         updatedAt: new Date().toISOString(),
       });
       // Annotations changed → rendered bytes changed → the cached
-      // thumbnail is stale. Drop it so the next listImages triggers
-      // a fresh prefetch.
+      // thumbnail is stale. Drop it and eagerly kick off a fresh
+      // prefetch so the gallery sees the update the moment the user
+      // navigates back, without waiting on the next `listImages` to
+      // schedule one. Also detach any pre-save in-flight prefetch
+      // so it doesn't race the new one — its compare-and-set already
+      // skips caching when the SHA has advanced.
       this.#thumbnailCache.delete(currentPath);
+      this.#thumbnailInFlight.delete(currentPath);
+      void this.#ensureThumbnail(currentPath);
     }
 
     // -- Move: implemented as delete-at-old + create-at-new. Two
