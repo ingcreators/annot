@@ -23,6 +23,8 @@ import { EditorSession } from "./app/editor-session.js";
 import { ExtensionTransferHost } from "./app/extension-transfer-host.js";
 import { HeaderHost } from "./app/header-host.js";
 import { loadImage } from "./app/image-utils.js";
+import { type AnnotPlugin, PluginHost } from "./app/plugin-host.js";
+import { githubExternalLinksPlugin } from "./app/plugins/github-external-links.js";
 import { RouterHost } from "./app/router-host.js";
 import { SavePipeline } from "./app/save-pipeline.js";
 import { SplitEditorHost } from "./app/split-editor-host.js";
@@ -77,6 +79,10 @@ export class App {
   /** Split-editor host — owns the overlay lifecycle + slice-apply
    *  persistence flow. */
   #splitEditorHost: SplitEditorHost;
+  /** Plugin host — `PluginContext` dispatcher for external-link
+   *  contributions + lifecycle events. Built-in + caller-supplied
+   *  plugins are registered once from `init`. */
+  #pluginHost = new PluginHost();
 
   constructor() {
     this.#savePipeline = new SavePipeline({
@@ -88,6 +94,9 @@ export class App {
       },
       getCurrentTags: () => this.#currentTags,
       getStatusIndicator: () => this.#headerHost.getSaveStatusIndicator(),
+      onAfterSave: (path) => {
+        this.#pluginHost.dispatchAfterSave({ path, mode: getStorageMode() });
+      },
     });
     this.#captureHost = new CaptureHost({
       getStorage: () => this.#storage,
@@ -115,6 +124,7 @@ export class App {
       getToolbar: () => this.#editorSession.getToolbar(),
       getImageSize: () => this.#editorSession.getImageSize(),
       showGallery: () => this.showGallery(),
+      collectExternalLinks: (path) => this.#pluginHost.collectExternalLinks(path, this.#storage),
     });
     this.#editorSession = new EditorSession(
       {
@@ -126,6 +136,7 @@ export class App {
         setCurrentTags: (t) => {
           this.#currentTags = t;
         },
+        notifyEditorReady: (ev) => this.#pluginHost.dispatchEditorReady(ev),
       },
       this.#headerHost,
       this.#statusHost,
@@ -166,6 +177,7 @@ export class App {
         this.#extensionTransferHost.transferAndOpen(record, extPath),
       openFromGallery: (record) => this.openFromGallery(record),
       setupSplitEditor: (records) => this.#splitEditorHost.setup(records),
+      notifyRouteChange: (route) => this.#pluginHost.dispatchRouteChange({ route }),
     });
   }
 
@@ -177,7 +189,14 @@ export class App {
     this.#deviceStore = this.#storageBridge.getDeviceStore();
   }
 
-  async init(): Promise<void> {
+  async init(opts: { plugins?: AnnotPlugin[] } = {}): Promise<void> {
+    // Register plugins first so every lifecycle event — including
+    // the very first `restoreOnBoot` → `onRouteChange` — goes through
+    // the plugin dispatch path. Built-in plugins come first; caller-
+    // supplied plugins (`annot-cloud`, third parties) are appended so
+    // they see the final state built-ins produced.
+    this.#pluginHost.registerAll([githubExternalLinksPlugin, ...(opts.plugins ?? [])]);
+
     const { BrowserStore } = await import("./storage/browser-store.js");
     const browserStore = new BrowserStore();
 
