@@ -228,6 +228,35 @@ function showRepoPicker(userLogin: string): Promise<GitHubRepoSummary | null> {
     err.style.display = "none";
     body.appendChild(err);
 
+    // "Use a different token" escape hatch. Without this the only
+    // way to rotate a PAT is to wait for the current one to 401,
+    // which is a bad fit for proactive rotation (token about to
+    // expire, scope tightening, suspected leak). Clicking runs the
+    // PAT flow first, then re-opens the picker with the new user
+    // info. `signInWithPat` overwrites the existing token so we
+    // don't sign out pre-emptively — if the user cancels the PAT
+    // dialog their current session stays intact.
+    const rotateRow = document.createElement("div");
+    rotateRow.style.fontSize = "12px";
+    rotateRow.style.marginTop = "4px";
+    rotateRow.innerHTML =
+      `<a href="#" style="color:var(--accent);">Use a different personal access token</a>`;
+    body.appendChild(rotateRow);
+    rotateRow.querySelector("a")?.addEventListener("click", async (e) => {
+      e.preventDefault();
+      close();
+      const ok = await runPatFlow();
+      if (!ok) { resolve(null); return; }
+      try {
+        const user = await fetchUserInfo();
+        const repo = await showRepoPicker(user.login);
+        resolve(repo);
+      } catch (ex) {
+        await showPlainAlert("GitHub sign-in failed", (ex as Error).message);
+        resolve(null);
+      }
+    });
+
     const cancelBtn = addCancelOnly(root, () => { close(); resolve(null); });
 
     let repos: GitHubRepoSummary[] = [];
