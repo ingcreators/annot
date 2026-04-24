@@ -26,11 +26,14 @@
   z-index: 5; /* keep ring above neighbouring borders */
 }
 
-/* Honour OS preference for reduced motion */
+/* Honour OS preference for reduced motion. Selectors are listed in
+ * ascending-specificity order (class `*` → id `*`) so biome's
+ * `noDescendingSpecificity` lint is happy; all three share a single
+ * declaration block regardless. */
 @media (prefers-reduced-motion: reduce) {
-  #file-manager *,
   .capture-dialog-overlay *,
-  .capture-progress-toast * {
+  .capture-progress-toast *,
+  #file-manager * {
     transition-duration: 0.01ms;
     animation-duration: 0.01ms;
     animation-iteration-count: 1;
@@ -504,6 +507,12 @@ html.light .view-toggle-btn.active {
   color: var(--accent);
 }
 
+/* The global focus-ring block at the top of this file includes
+ * `#file-manager .view-toggle-btn:focus-visible` at higher
+ * specificity. This base rule is a standalone fallback for any
+ * `.view-toggle-btn` rendered outside `#file-manager` — hence the
+ * descending-specificity suppression. */
+/* biome-ignore lint/style/noDescendingSpecificity: intentional base fallback for use outside #file-manager */
 .view-toggle-btn:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
@@ -1223,6 +1232,12 @@ html.light .gallery-item.selected::after {
   border-color: var(--accent);
 }
 
+/* `.gallery-folder-card.selected .gallery-folder-card-icon` earlier
+ * in this file paints the icon accent when the card is selected.
+ * This base rule provides the default non-selected styling and lives
+ * with the rest of the folder-card pieces, hence the descending-
+ * specificity suppression. */
+/* biome-ignore lint/style/noDescendingSpecificity: base rule deliberately follows contextual .selected descendant */
 .gallery-folder-card-icon {
   font-size: 24px;
   color: var(--text-primary);
