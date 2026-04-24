@@ -7,11 +7,8 @@ import type { ToolOptions } from "@ingcreators/annot-core";
 import {
   CanvasManager,
   createThemeToggle,
-  exportAnnotationsSvgForIdb,
-  getPngDataUrl,
   History,
   openAnchoredPopover,
-  readEditableImage,
   SelectionManager,
   Toolbar,
 } from "@ingcreators/annot-core";
@@ -65,21 +62,18 @@ import { GitHubStore } from "./storage/github-store.js";
 import { loadDriveRoot, saveDriveRoot, showFolderPicker, signIn } from "./storage/google-auth.js";
 import { GoogleDriveStore } from "./storage/google-drive-store.js";
 import { encodeCaptureInWorker } from "./workers/encode-client.js";
+import { CaptureHost, type OpenEditorArgs } from "./app/capture-host.js";
 import { addClickMarker } from "./app/click-marker.js";
 import { bumpFilenameSuffix, retryFsOp } from "./app/fs-utils.js";
+import { loadImage } from "./app/image-utils.js";
 import { restoreAnnotations } from "./app/restore-annotations.js";
+import { SavePipeline } from "./app/save-pipeline.js";
 import { findSessionRecords } from "./app/session-slice.js";
 
-import {
-  loadCursorPreference,
-  saveCursorPreference,
-  showIntervalCaptureDialog,
-  showIntervalCaptureProgress,
-} from "./capture/interval-dialog.js";
-import { captureScreen, pasteFromClipboard, startIntervalCapture } from "./capture/pwa-capture.js";
+import { pasteFromClipboard } from "./capture/pwa-capture.js";
 import { editUrl, galleryUrl, parseRoute, pushRoute, sessionEditUrl } from "./router.js";
 import { showAlertDialog } from "./ui/dialog.js";
-import { hideError, showError, showInfo, showSaveError } from "./ui/error-bar.js";
+import { showError, showInfo } from "./ui/error-bar.js";
 
 export class App {
   #storage: StorageProvider | null = null;
@@ -114,19 +108,15 @@ export class App {
   }
 
   #currentImagePath: string | null = null;
-  /** `writeAnnotationsToStorage` concurrency gate. `saveInFlight` is
-   *  true while an upload is running; edits that land during that
-   *  window flip `savePending` instead of starting a second upload
-   *  in parallel (slow backends like Drive otherwise pile up saves
-   *  and freeze the UI). See `writeAnnotationsToStorage` below. */
-  #saveInFlight = false;
-  #savePending = false;
-  /** Debounce timer for the annotation autosave. Lifted to an
-   *  instance field so `flushPendingSave()` can cancel-and-fire it
-   *  on navigation boundaries. */
-  #autoSaveTimer: number | undefined;
-  /** Same story for the thumbnail regeneration timer. */
-  #thumbTimer: number | undefined;
+  /** Save pipeline — owns the annotation-save + thumbnail-regen debounce
+   *  state machine. Instantiated in `init()` once the `#storage` and
+   *  `#saveStatusIndicator` getters have meaningful values for the
+   *  pipeline to read through. */
+  #savePipeline: SavePipeline;
+  /** Capture host — owns the screenshot / paste / file-upload flows.
+   *  Routes the resulting image back through `#openEditorFor` so this
+   *  file keeps owning the "editor setup + URL push" concern. */
+  #captureHost: CaptureHost;
   /** Latest ImageRecord for the currently-open image (when available). Used
    *  by the file-details drawer to show createdAt/updatedAt/sourceUrl. Null
    *  for not-yet-saved images (e.g. a freshly captured but un-persisted one). */
@@ -174,6 +164,25 @@ export class App {
   #currentTags: Record<string, string> = {};
   #currentFolderPath = "";
   #splitEditor: SplitEditor | null = null;
+
+  constructor() {
+    this.#savePipeline = new SavePipeline({
+      getStorage: () => this.#storage,
+      getCanvas: () => this.#currentEditor?.canvas ?? null,
+      getCurrentImagePath: () => this.#currentImagePath,
+      setCurrentImagePath: (p) => {
+        this.#currentImagePath = p;
+      },
+      getCurrentTags: () => this.#currentTags,
+      getStatusIndicator: () => this.#saveStatusIndicator,
+    });
+    this.#captureHost = new CaptureHost({
+      getStorage: () => this.#storage,
+      getCurrentFolderPath: () => this.#currentFolderPath,
+      getFileManager: () => this.#fileManager,
+      openEditor: (args) => this.#openEditorFor(args),
+    });
+  }
 
   async init(): Promise<void> {
     const { BrowserStore } = await import("./storage/browser-store.js");
@@ -248,7 +257,7 @@ export class App {
       const dataUrl = await pasteFromClipboard();
       if (dataUrl) {
         e.preventDefault();
-        await this.saveDataUrlAndOpen(dataUrl);
+        await this.#captureHost.saveDataUrlAndOpen(dataUrl);
       }
     });
 
@@ -261,7 +270,7 @@ export class App {
     // everything is clean we leave the handler silent so non-editing
     // tabs close without friction.
     window.addEventListener("beforeunload", (e) => {
-      if (this.#autoSaveTimer !== undefined || this.#saveInFlight || this.#savePending) {
+      if (this.#savePipeline.hasPendingWork()) {
         e.preventDefault();
         e.returnValue = "";
       }
@@ -288,7 +297,7 @@ export class App {
       let w = record.width;
       let h = record.height;
       if (!w || !h) {
-        const img = await this.loadImage(record.originalDataUrl);
+        const img = await loadImage(record.originalDataUrl);
         w = img.naturalWidth;
         h = img.naturalHeight;
       }
@@ -613,10 +622,10 @@ export class App {
           saveLastFolder(folderPath);
         },
         onNewFolder: () => this.#fileManager!.createNewFolder(),
-        onUploadImage: () => this.openFileDialog(),
-        onCaptureScreen: () => this.captureScreenAndSave(),
-        onTimedCapture: () => this.timedCaptureAndSave(),
-        onPasteClipboard: () => this.pasteAndSave(),
+        onUploadImage: () => this.#captureHost.openFileDialog(),
+        onCaptureScreen: () => this.#captureHost.captureScreenAndSave(),
+        onTimedCapture: () => this.#captureHost.timedCaptureAndSave(),
+        onPasteClipboard: () => this.#captureHost.pasteAndSave(),
       });
 
       this.#updateSidebarStatus();
@@ -638,42 +647,11 @@ export class App {
     // autosave timer and the navigation. Returns immediately on
     // Local / Device where the flush is essentially free; on Drive
     // this may briefly show "Saving…" before the gallery renders.
-    await this.#flushPendingSave();
+    await this.#savePipeline.flushPending();
     if (window.location.pathname !== galleryUrl()) {
       pushRoute(galleryUrl());
     }
     this.showGalleryView();
-  }
-
-  /**
-   * Resolve once (a) no debounced save is scheduled, (b) no upload is
-   * running, and (c) no catch-up save is queued. Safe to call while
-   * not editing — it no-ops.
-   *
-   * Called from every in-app navigation boundary (gallery button,
-   * brand click, session cleanup) and from `beforeunload` so the
-   * user doesn't silently lose a pending edit.
-   */
-  async #flushPendingSave(): Promise<void> {
-    // If a debounce timer is armed, cancel it and run the save now.
-    if (this.#autoSaveTimer !== undefined) {
-      clearTimeout(this.#autoSaveTimer);
-      this.#autoSaveTimer = undefined;
-      await this.writeAnnotationsToStorage();
-    }
-    // Wait for any in-flight save + catch-up save to settle. Polling
-    // with a short interval is ugly but this only runs at navigation
-    // boundaries, never in the hot edit path.
-    while (this.#saveInFlight || this.#savePending) {
-      await new Promise((r) => setTimeout(r, 50));
-    }
-    // Also flush the thumbnail regen so the gallery tile that's
-    // about to be rendered shows the latest state.
-    if (this.#thumbTimer !== undefined) {
-      clearTimeout(this.#thumbTimer);
-      this.#thumbTimer = undefined;
-      await this.writeThumbnailToStorage();
-    }
   }
 
   private buildFileManagerHeader(): void {
@@ -912,7 +890,7 @@ export class App {
           let h = full.height;
           if (!w || !h) {
             try {
-              const imgEl = await this.loadImage(full.originalDataUrl);
+              const imgEl = await loadImage(full.originalDataUrl);
               w = imgEl.naturalWidth;
               h = imgEl.naturalHeight;
             } catch {
@@ -977,7 +955,7 @@ export class App {
     let w = record.width;
     let h = record.height;
     if (!w || !h) {
-      const img = await this.loadImage(record.originalDataUrl);
+      const img = await loadImage(record.originalDataUrl);
       w = img.naturalWidth;
       h = img.naturalHeight;
     }
@@ -1027,7 +1005,7 @@ export class App {
     let w = full.width;
     let h = full.height;
     if ((!w || !h) && full.originalDataUrl) {
-      const img = await this.loadImage(full.originalDataUrl);
+      const img = await loadImage(full.originalDataUrl);
       w = img.naturalWidth;
       h = img.naturalHeight;
     }
@@ -1333,7 +1311,7 @@ export class App {
     this.#fileDetailsDrawer.onRename = (newName) => this.#renameCurrentImage(newName);
     this.#fileDetailsDrawer.onTagsChange = (t) => {
       this.#currentTags = t;
-      this.writeAnnotationsToStorage();
+      void this.#savePipeline.writeAnnotations();
     };
 
     this.#buildEditorHeader();
@@ -1463,14 +1441,13 @@ export class App {
       history.save();
       // Persist the marker so we don't re-add it on next open,
       // and so the thumbnail gets refreshed with the marker included.
-      this.writeAnnotationsToStorage();
+      void this.#savePipeline.writeAnnotations();
     }
 
     history.onStateChange = () => {
       // Reflect "edits made" immediately — the debounce hides latency
       // but the user should know something will be saved soon.
       this.#saveStatusIndicator?.setStatus("pending");
-      clearTimeout(this.#autoSaveTimer);
       // Network-backed stores (Drive, GitHub) get a longer debounce
       // than local ones so a rapid slider sweep / series of small
       // adjustments coalesces into a single upload instead of a
@@ -1484,15 +1461,8 @@ export class App {
       // back to parity with Drive without risking log spam.
       const mode = getStorageMode();
       const saveDebounceMs = mode === "github" || mode === "googledrive" ? 1500 : 500;
-      this.#autoSaveTimer = window.setTimeout(() => {
-        this.#autoSaveTimer = undefined;
-        void this.writeAnnotationsToStorage();
-      }, saveDebounceMs);
-      clearTimeout(this.#thumbTimer);
-      this.#thumbTimer = window.setTimeout(() => {
-        this.#thumbTimer = undefined;
-        void this.writeThumbnailToStorage();
-      }, 2000);
+      this.#savePipeline.scheduleAnnotationSave(saveDebounceMs);
+      this.#savePipeline.scheduleThumbnailRegen(2000);
     };
 
     this.#currentEditor = { canvas, history, selection };
@@ -2181,292 +2151,14 @@ export class App {
     });
   }
 
-  // ---- Storage ----
-
-  async writeAnnotationsToStorage(): Promise<void> {
-    if (!this.#currentEditor || !this.#storage) return;
-    if (!this.#currentImagePath) return;
-
-    // Concurrency gate: if a save is already in flight, just mark
-    // that another one is needed once the current one completes.
-    // Without this, rapid edits on a slow backend (Drive) kick off
-    // overlapping multi-second uploads and freeze the UI.
-    if (this.#saveInFlight) {
-      this.#savePending = true;
-      return;
-    }
-
-    this.#saveInFlight = true;
-    const annotationsSvg = exportAnnotationsSvgForIdb(this.#currentEditor.canvas);
-    const updates = { annotationsSvg, tags: { ...this.#currentTags } };
-
-    // Every save goes through this method, so this is the single place
-    // that drives the save-status indicator through its full lifecycle:
-    // saving → saved on success, saving → error on failure.
-    this.#saveStatusIndicator?.setStatus("saving");
-
-    try {
-      const newPath = await this.#storage.updateImage(this.#currentImagePath, updates);
-      // Path may change if we ever call updateImage with { folderPath }
-      this.#currentImagePath = newPath;
-      hideError();
-      this.#saveStatusIndicator?.setStatus("saved");
-    } catch (e: any) {
-      this.#saveStatusIndicator?.setStatus("error");
-      console.error("[save] Error:", e);
-      if (e.status === 401) {
-        // Token refresh is handled internally by every network-backed
-        // store via `setTokenRefresher` (see bridge.ts), so a 401 that
-        // reaches here means the user already dismissed the refresh
-        // banner. Don't stack another auth banner on top — surface a
-        // plain retry so they can either sign back in via the sidebar
-        // and come back, or try again once the store has a valid
-        // session. The provider-labelled banner shown by the store's
-        // refresher carries the correct UX for re-auth.
-        showSaveError(
-          "Save failed — session expired. Sign in again from the sidebar and retry.",
-          () => this.writeAnnotationsToStorage(),
-        );
-      } else if (e.status === 403) {
-        showSaveError("Permission denied. You may not have write access to this folder.");
-      } else if (e.status === 404) {
-        showSaveError("File or folder not found. It may have been deleted.");
-      } else if (!navigator.onLine) {
-        showSaveError("You are offline. Changes will be lost.", () =>
-          this.writeAnnotationsToStorage(),
-        );
-      } else {
-        showSaveError(`Save failed: ${e.message || "Unknown error"}`, () =>
-          this.writeAnnotationsToStorage(),
-        );
-      }
-    } finally {
-      this.#saveInFlight = false;
-      // Catch-up save: if edits arrived while we were uploading,
-      // flush them now. Clearing the flag first so the nested call
-      // actually runs instead of bouncing on the gate.
-      if (this.#savePending) {
-        this.#savePending = false;
-        void this.writeAnnotationsToStorage();
-      }
-    }
-  }
-
-  async writeThumbnailToStorage(): Promise<void> {
-    if (!this.#currentEditor || !this.#storage || !this.#currentImagePath) return;
-    const renderedDataUrl = await getPngDataUrl(this.#currentEditor.canvas);
-    const thumbnailDataUrl = await this.#storage.generateThumbnail(renderedDataUrl);
-    await this.#storage.updateImage(this.#currentImagePath, { thumbnailDataUrl });
-  }
-
-  // ---- PWA Capture ----
-
-  async captureScreenAndSave(): Promise<void> {
-    // Use last-chosen cursor preference; defaults to "always".
-    const dataUrl = await captureScreen(loadCursorPreference());
-    if (!dataUrl) return;
-    await this.saveDataUrlAndOpen(dataUrl);
-  }
-
-  async timedCaptureAndSave(): Promise<void> {
-    if (!this.#storage) return;
-    const cfg = await showIntervalCaptureDialog();
-    if (!cfg) return;
-    // Remember the cursor choice for next captures (single + timed)
-    saveCursorPreference(cfg.cursor);
-
-    const progress = showIntervalCaptureProgress(cfg.count);
-    const storage = this.#storage;
-    const folderPath = this.#currentFolderPath;
-    const sessionId = newIdB58();
-    const total = cfg.count;
-    let savedFrames = 0;
-
-    const handle = await startIntervalCapture({
-      intervalSec: cfg.intervalSec,
-      count: cfg.count,
-      cursor: cfg.cursor,
-      onProgress: (captured, total) => progress.update(captured, total),
-      onError: (err) => console.error("[timed-capture] frame error:", err),
-      onFrame: async (dataUrl, index) => {
-        try {
-          const img = await this.loadImage(dataUrl);
-          const thumbnailDataUrl = await storage.generateThumbnail(dataUrl);
-          const now = new Date().toISOString();
-          const sec = String(index + 1).padStart(3, "0");
-          await storage.saveImage({
-            originalDataUrl: dataUrl,
-            thumbnailDataUrl,
-            annotationsSvg: "",
-            width: img.naturalWidth,
-            height: img.naturalHeight,
-            sourceUrl: "",
-            tags: {
-              timed: "1",
-              seq: sec,
-              captureId: newIdB58(),
-              session: sessionId,
-              sessionKind: "interval",
-              sessionIndex: String(index),
-              sessionTotal: String(total),
-            },
-            folderPath,
-            filename: `capture-${now.replace(/[:.]/g, "-")}-${sec}.jpg`,
-            createdAt: now,
-            updatedAt: now,
-          });
-          savedFrames++;
-        } catch (e) {
-          console.error("[timed-capture] save error:", e);
-        }
-      },
-    });
-
-    if (!handle) {
-      progress.complete();
-      return;
-    }
-
-    progress.setOnCancel(() => handle.cancel());
-
-    await handle.done;
-    progress.complete();
-
-    // Return focus to this tab (which initiated the capture).
-    // Chrome may require a recent user gesture; try multiple paths.
-    try {
-      window.focus();
-      // If the tab is hidden, try flashing title to draw attention as a fallback.
-      if (document.visibilityState !== "visible") {
-        const originalTitle = document.title;
-        document.title = `✔ Capture complete — ${originalTitle}`;
-        const restore = () => {
-          document.title = originalTitle;
-          document.removeEventListener("visibilitychange", restore);
-        };
-        document.addEventListener("visibilitychange", restore);
-      }
-    } catch {
-      /* ignore */
-    }
-
-    // Interval capture frames are tagged with a session id for future
-    // grouping, but we don't auto-open any editor — just refresh the
-    // gallery so the new frames are visible.
-    if (this.#fileManager) {
-      await this.#fileManager.refresh(this.#currentFolderPath);
-    }
-    // Silence the unused-var warning for `savedFrames` / `sessionId` while
-    // still keeping the ids attached to the stored tags for later features.
-    void savedFrames;
-    void sessionId;
-  }
-
-  async pasteAndSave(): Promise<void> {
-    const dataUrl = await pasteFromClipboard();
-    if (!dataUrl) {
-      showSaveError("No image found in clipboard.");
-      return;
-    }
-    await this.saveDataUrlAndOpen(dataUrl);
-  }
-
-  private async saveDataUrlAndOpen(dataUrl: string): Promise<void> {
-    if (!this.#storage) return;
-    const img = await this.loadImage(dataUrl);
-    const thumbnailDataUrl = await this.#storage.generateThumbnail(dataUrl);
-    const now = new Date().toISOString();
-    const path = await this.#storage.saveImage({
-      originalDataUrl: dataUrl,
-      thumbnailDataUrl,
-      annotationsSvg: "",
-      width: img.naturalWidth,
-      height: img.naturalHeight,
-      sourceUrl: "",
-      tags: {},
-      folderPath: this.#currentFolderPath,
-      createdAt: now,
-      updatedAt: now,
-    });
-    this.#currentImagePath = path;
-    this.#currentTags = {};
-    this.setupEditor(dataUrl, img.naturalWidth, img.naturalHeight);
-    pushRoute(editUrl(getStorageMode(), path));
-  }
-
-  // ---- File upload ----
-
-  openFileDialog(): void {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = ".jpg,.jpeg,.png,.svg";
-    input.addEventListener("change", async () => {
-      const file = input.files?.[0];
-      if (file) await this.openFile(file);
-    });
-    input.click();
-  }
-
-  async openFile(file: File): Promise<void> {
-    if (!this.#storage) return;
-    const dataUrl = await this.fileToDataUrl(file);
-    const img = await this.loadImage(dataUrl);
-
-    const arrayBuf = await file.arrayBuffer();
-    const meta = readEditableImage(new Uint8Array(arrayBuf));
-
-    let originalUrl = dataUrl;
-    let annotations = "";
-    let tags: Record<string, string> = {};
-    let w = img.naturalWidth;
-    let h = img.naturalHeight;
-
-    if (meta?.annotationsSvg) {
-      originalUrl = meta.originalImageDataUrl || dataUrl;
-      annotations = meta.annotationsSvg;
-      tags = meta.tags || {};
-      w = meta.width || w;
-      h = meta.height || h;
-    }
-
-    const thumbnailDataUrl = await this.#storage.generateThumbnail(originalUrl);
-    const now = new Date().toISOString();
-    const path = await this.#storage.saveImage({
-      originalDataUrl: originalUrl,
-      thumbnailDataUrl,
-      annotationsSvg: annotations,
-      width: w,
-      height: h,
-      sourceUrl: "",
-      tags,
-      folderPath: this.#currentFolderPath,
-      filename: file.name || undefined,
-      createdAt: now,
-      updatedAt: now,
-    });
-
-    this.#currentImagePath = path;
-    this.#currentTags = tags;
-    this.setupEditor(originalUrl, w, h, annotations || undefined);
-    pushRoute(editUrl(getStorageMode(), path));
-  }
-
-  // ---- Helpers ----
-
-  private loadImage(dataUrl: string): Promise<HTMLImageElement> {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => resolve(img);
-      img.onerror = reject;
-      img.src = dataUrl;
-    });
-  }
-
-  private fileToDataUrl(file: File): Promise<string> {
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result as string);
-      reader.readAsDataURL(file);
-    });
+  /** Post-capture / post-upload transition: set the "currently open
+   *  image" state, switch to the editor view, and push the canonical
+   *  edit URL. Invoked by `CaptureHost` once a freshly-saved image is
+   *  ready to open. */
+  #openEditorFor(args: OpenEditorArgs): void {
+    this.#currentImagePath = args.path;
+    this.#currentTags = args.tags;
+    this.setupEditor(args.dataUrl, args.width, args.height, args.annotations);
+    pushRoute(editUrl(getStorageMode(), args.path));
   }
 }
