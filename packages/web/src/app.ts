@@ -5,14 +5,12 @@
 
 import type { ToolOptions } from "@ingcreators/annot-core";
 import {
-  ANNOT_SVG_VERSION,
   CanvasManager,
   createThemeToggle,
   exportAnnotationsSvgForIdb,
   getPngDataUrl,
   History,
   openAnchoredPopover,
-  readAnnotVersion,
   readEditableImage,
   SelectionManager,
   Toolbar,
@@ -67,47 +65,10 @@ import { GitHubStore } from "./storage/github-store.js";
 import { loadDriveRoot, saveDriveRoot, showFolderPicker, signIn } from "./storage/google-auth.js";
 import { GoogleDriveStore } from "./storage/google-drive-store.js";
 import { encodeCaptureInWorker } from "./workers/encode-client.js";
-
-/**
- * Append " (n)" before the file extension to uniquify a colliding filename.
- * Mirrors the convention used by the storage layer's own `uniquifyFilename`.
- *   "image-X-p5.png", 2  → "image-X-p5 (2).png"
- *   "image-X-p5.png", 3  → "image-X-p5 (3).png"
- */
-function bumpFilenameSuffix(filename: string, n: number): string {
-  const dot = filename.lastIndexOf(".");
-  if (dot <= 0) return `${filename} (${n})`;
-  return `${filename.slice(0, dot)} (${n})${filename.slice(dot)}`;
-}
-
-/**
- * Retry a File System Access API call when Chrome reports
- * `InvalidStateError` ("state cached in interface object… changed since
- * read from disk") or `InvalidModificationError`. Both fire when a
- * directory handle's internal entry cache goes stale after rapid
- * delete + create cycles, and a small backoff usually clears them.
- */
-async function retryFsOp<T>(op: () => Promise<T>, maxRetries = 4): Promise<T> {
-  let lastErr: any;
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      return await op();
-    } catch (e: any) {
-      lastErr = e;
-      const name = e?.name || "";
-      const msg = String(e?.message || "");
-      const isStaleHandle =
-        name === "InvalidStateError" ||
-        name === "InvalidModificationError" ||
-        msg.includes("state had changed since it was read from disk");
-      if (!isStaleHandle || attempt === maxRetries) throw e;
-      // Backoff: 50ms, 120ms, 220ms, 350ms — gives Chrome time to refresh
-      // its cached directory entries.
-      await new Promise((r) => setTimeout(r, 50 + attempt * 70));
-    }
-  }
-  throw lastErr;
-}
+import { addClickMarker } from "./app/click-marker.js";
+import { bumpFilenameSuffix, retryFsOp } from "./app/fs-utils.js";
+import { restoreAnnotations } from "./app/restore-annotations.js";
+import { findSessionRecords } from "./app/session-slice.js";
 
 import {
   loadCursorPreference,
@@ -532,7 +493,11 @@ export class App {
     // gallery view.
     if (route.session && this.#storage) {
       try {
-        const records = await this.#findSessionRecords(route.session);
+        const records = await findSessionRecords(
+          this.#storage,
+          this.#currentFolderPath,
+          route.session,
+        );
         const kind = records[0]?.tags?.sessionKind;
         if (records.length > 0 && (kind === "scroll" || kind === "perPage")) {
           // Rewrite the URL to the canonical `/edit/<store>?session=…` form
@@ -585,26 +550,6 @@ export class App {
     }
 
     this.showGalleryView();
-  }
-
-  /**
-   * Locate all images in the current folder that carry `tags.session === sessionId`.
-   * Returns them sorted by sessionIndex (numeric, asc) so the filmstrip
-   * presents frames in capture order.
-   */
-  async #findSessionRecords(sessionId: string): Promise<ImageRecord[]> {
-    if (!this.#storage) return [];
-    const folderPath = this.#currentFolderPath;
-    const all = await this.#storage.listImages(folderPath);
-    const matched = all.filter((r) => r.tags?.session === sessionId);
-    matched.sort((a, b) => {
-      const ai = Number(a.tags?.sessionIndex ?? 0);
-      const bi = Number(b.tags?.sessionIndex ?? 0);
-      if (ai !== bi) return ai - bi;
-      // Fallback: compare path for stable ordering
-      return a.path.localeCompare(b.path);
-    });
-    return matched;
   }
 
   // ---- File Manager (Gallery) ----
@@ -1504,7 +1449,7 @@ export class App {
     // The click-marker path still persists explicitly below, so
     // delaying the hook doesn't lose that save.
     if (annotations) {
-      this.restoreAnnotations(canvas, annotations);
+      restoreAnnotations(canvas, annotations);
       history.save();
     } else if (
       this.#currentTags["click.x"] !== undefined &&
@@ -1513,7 +1458,7 @@ export class App {
     ) {
       // First-time open of a click-captured image — draw a target marker
       // at the recorded click position so the user sees where the click was.
-      this.#addClickMarker(canvas);
+      addClickMarker(canvas, this.#currentTags);
       this.#currentTags["click.marker"] = "added";
       history.save();
       // Persist the marker so we don't re-add it on next open,
@@ -2234,107 +2179,6 @@ export class App {
     document.addEventListener("click", () => {
       menu.style.display = "none";
     });
-  }
-
-  restoreAnnotations(canvas: CanvasManager, svgString: string): void {
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(svgString, "image/svg+xml");
-    const svgRoot = doc.documentElement;
-
-    // Inspect the Annot format version stamp. Today only version "1"
-    // exists (and "0" = unstamped legacy); we read-through both
-    // without branching. When a breaking schema change lands, this
-    // is the hook point where migration runs before the element
-    // adoption loop. Keep the lookup unconditional so the surface
-    // stays visible in the code even in the "no migration needed"
-    // era — it's the lever we committed to in docs/svg-format.md.
-    const version = readAnnotVersion(svgRoot);
-    if (version !== ANNOT_SVG_VERSION && version !== "0") {
-      // Newer-than-known file (e.g. written by a future Annot).
-      // Parse leniently — we still understand the container shape,
-      // only unfamiliar annotation types might render degenerately.
-      console.warn(
-        `[annot] SVG stamped with version "${version}" (this build expects "${ANNOT_SVG_VERSION}"). Rendering with forward-compat fallback.`,
-      );
-    }
-
-    for (const child of Array.from(svgRoot.children)) {
-      const tag = child.tagName;
-      if (tag === "defs" || (tag === "image" && !child.closest("g"))) continue;
-      if (child.id === "ui-overlay") continue;
-      if (child.id === "annotations") {
-        for (const anno of Array.from(child.children)) {
-          canvas.annotations.appendChild(document.importNode(anno, true));
-        }
-        continue;
-      }
-      canvas.annotations.appendChild(document.importNode(child, true));
-    }
-  }
-
-  /**
-   * Draw click indicators using tags recorded at capture time:
-   *   - `click.rect.*` → rectangle outlining the clicked element
-   *   - `click.x` / `click.y` → precise click point (dot + ring)
-   * Coordinates are already in image-pixel space (dpr-multiplied).
-   */
-  #addClickMarker(canvas: CanvasManager): void {
-    const ns = "http://www.w3.org/2000/svg";
-    const color = "#ff3b3b";
-
-    // Missing tag → `parseFloat("")` returns NaN, which the `isFinite`
-    // guard below correctly rejects. Default to "" so TS is happy.
-    const rx = Number.parseFloat(this.#currentTags["click.rect.x"] ?? "");
-    const ry = Number.parseFloat(this.#currentTags["click.rect.y"] ?? "");
-    const rw = Number.parseFloat(this.#currentTags["click.rect.w"] ?? "");
-    const rh = Number.parseFloat(this.#currentTags["click.rect.h"] ?? "");
-    const hasRect =
-      Number.isFinite(rx) &&
-      Number.isFinite(ry) &&
-      Number.isFinite(rw) &&
-      Number.isFinite(rh) &&
-      rw > 0 &&
-      rh > 0;
-
-    if (hasRect) {
-      const rect = document.createElementNS(ns, "rect");
-      rect.setAttribute("x", String(rx));
-      rect.setAttribute("y", String(ry));
-      rect.setAttribute("width", String(rw));
-      rect.setAttribute("height", String(rh));
-      rect.setAttribute("fill", color);
-      rect.setAttribute("fill-opacity", "0.12");
-      rect.setAttribute("stroke", color);
-      rect.setAttribute("stroke-width", "3");
-      rect.setAttribute("rx", "4");
-      rect.setAttribute("ry", "4");
-      canvas.annotations.appendChild(rect);
-    }
-
-    const x = Number.parseFloat(this.#currentTags["click.x"] ?? "");
-    const y = Number.parseFloat(this.#currentTags["click.y"] ?? "");
-    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
-
-    // Outer ring (smaller when we also have a rect, since the rect gives context)
-    const ring = document.createElementNS(ns, "circle");
-    ring.setAttribute("cx", String(x));
-    ring.setAttribute("cy", String(y));
-    ring.setAttribute("r", hasRect ? "14" : "28");
-    ring.setAttribute("fill", "none");
-    ring.setAttribute("stroke", color);
-    ring.setAttribute("stroke-width", hasRect ? "3" : "4");
-    ring.setAttribute("opacity", "0.9");
-    canvas.annotations.appendChild(ring);
-
-    // Inner dot
-    const dot = document.createElementNS(ns, "circle");
-    dot.setAttribute("cx", String(x));
-    dot.setAttribute("cy", String(y));
-    dot.setAttribute("r", hasRect ? "5" : "7");
-    dot.setAttribute("fill", color);
-    dot.setAttribute("stroke", "#fff");
-    dot.setAttribute("stroke-width", "2");
-    canvas.annotations.appendChild(dot);
   }
 
   // ---- Storage ----
