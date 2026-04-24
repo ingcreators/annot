@@ -23,6 +23,7 @@ import {
   listWritableRepos,
   searchRepos,
   getRepo,
+  verifyWriteAccess,
   listBranches,
   saveRepoRef,
   loadRepoRef,
@@ -228,10 +229,73 @@ function showRepoPicker(userLogin: string): Promise<GitHubRepoSummary | null> {
     err.style.display = "none";
     body.appendChild(err);
 
+    // "Use a different token" escape hatch. Without this the only
+    // way to rotate a PAT is to wait for the current one to 401,
+    // which is a bad fit for proactive rotation (token about to
+    // expire, scope tightening, suspected leak). Clicking runs the
+    // PAT flow first, then re-opens the picker with the new user
+    // info. `signInWithPat` overwrites the existing token so we
+    // don't sign out pre-emptively — if the user cancels the PAT
+    // dialog their current session stays intact.
+    const rotateRow = document.createElement("div");
+    rotateRow.style.fontSize = "12px";
+    rotateRow.style.marginTop = "4px";
+    rotateRow.innerHTML =
+      `<a href="#" style="color:var(--accent);">Use a different personal access token</a>`;
+    body.appendChild(rotateRow);
+    rotateRow.querySelector("a")?.addEventListener("click", async (e) => {
+      e.preventDefault();
+      close();
+      const ok = await runPatFlow();
+      if (!ok) { resolve(null); return; }
+      try {
+        const user = await fetchUserInfo();
+        const repo = await showRepoPicker(user.login);
+        resolve(repo);
+      } catch (ex) {
+        await showPlainAlert("GitHub sign-in failed", (ex as Error).message);
+        resolve(null);
+      }
+    });
+
     const cancelBtn = addCancelOnly(root, () => { close(); resolve(null); });
 
     let repos: GitHubRepoSummary[] = [];
     let filtered: GitHubRepoSummary[] = [];
+
+    /**
+     * Close the picker with `r` selected, but first verify the token
+     * can actually write to it. `/user/repos` happily lists public
+     * repos the user owns even when a fine-grained PAT has no write
+     * grant on them (GitHub's "Also includes public repositories
+     * (read-only)" behaviour, built-in and not togglable), so the
+     * only way to tell is a probe PUT with an impossible SHA — see
+     * `verifyWriteAccess`.
+     */
+    const verifyAndSelect = async (r: GitHubRepoSummary) => {
+      err.style.display = "none";
+      list.style.opacity = "0.5";
+      list.style.pointerEvents = "none";
+      try {
+        const canWrite = await verifyWriteAccess(r.owner, r.name);
+        if (!canWrite) {
+          err.innerHTML = `Your personal access token doesn't have `
+            + `<strong>Contents: Read and Write</strong> on `
+            + `<strong>${escapeHtml(r.fullName)}</strong>. `
+            + `Pick another repository, or rotate your token via the link below.`;
+          err.style.display = "";
+          return;
+        }
+        close();
+        resolve(r);
+      } catch (e) {
+        err.textContent = `Couldn't verify write access: ${(e as Error).message}`;
+        err.style.display = "";
+      } finally {
+        list.style.opacity = "";
+        list.style.pointerEvents = "";
+      }
+    };
 
     const renderRows = (items: GitHubRepoSummary[], emptyMsg: string) => {
       list.innerHTML = "";
@@ -270,9 +334,8 @@ function showRepoPicker(userLogin: string): Promise<GitHubRepoSummary | null> {
             ${escapeHtml(r.description ?? "")} ${r.description ? "·" : ""} default: ${escapeHtml(r.defaultBranch)}
           </div>
         `;
-        row.addEventListener("click", () => {
-          close();
-          resolve(r);
+        row.addEventListener("click", async () => {
+          await verifyAndSelect(r);
         });
         list.appendChild(row);
       }
@@ -345,8 +408,7 @@ function showRepoPicker(userLogin: string): Promise<GitHubRepoSummary | null> {
       err.style.display = "none";
       try {
         const r = await getRepo(m[1], m[2]);
-        close();
-        resolve(r);
+        await verifyAndSelect(r);
       } catch (ex) {
         err.textContent = (ex as Error).message;
         err.style.display = "";

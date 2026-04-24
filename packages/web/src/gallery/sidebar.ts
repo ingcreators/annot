@@ -96,9 +96,11 @@ export class Sidebar {
     this.#treeContainer.setAttribute("role", "tree");
     this.#treeContainer.setAttribute("aria-label", "Folders");
 
-    // Root node — always shows storage type name; folder name as subtitle for Device
+    // Root node — always shows storage type name; folder/repo name
+    // as subtitle for Device / Drive / GitHub.
     const rootLabel = this.#activeMode === "device" ? "Device"
       : this.#activeMode === "googledrive" ? "Google Drive"
+      : this.#activeMode === "github" ? "GitHub"
       : "Browser";
 
     const rootRow = document.createElement("div");
@@ -194,6 +196,15 @@ export class Sidebar {
       "Google Drive",
       gd.connected ? gd.label || "Connected" : "Not connected",
       gd.connected ? { reselect: true, reselectTitle: "Change Drive folder" } : undefined,
+    ));
+
+    const gh = this.#statuses.github;
+    this.#container.appendChild(this.#buildStorageItem(
+      "github",
+      "hub",
+      "GitHub",
+      gh.connected ? gh.label || "Connected" : "Not connected",
+      gh.connected ? { reselect: true, reselectTitle: "Change repository" } : undefined,
     ));
 
     // The "Folders" section (title + tree) is shown as a unit once

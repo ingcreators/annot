@@ -83,6 +83,7 @@ export class FileManager {
     if (!this.#searchInput) return;
     const rootLabel = this.#storageMode === "device" ? "Device"
       : this.#storageMode === "googledrive" ? "Google Drive"
+      : this.#storageMode === "github" ? "GitHub"
       : "Browser";
     const parts = this.#currentFolderPath ? this.#currentFolderPath.split("/") : [];
     const breadcrumb = [rootLabel, ...parts].join(" > ");
@@ -308,6 +309,7 @@ export class FileManager {
 
     const rootLabel = this.#storageMode === "device" ? "Device"
       : this.#storageMode === "googledrive" ? "Google Drive"
+      : this.#storageMode === "github" ? "GitHub"
       : "Browser";
 
     const rootItem = document.createElement("button");

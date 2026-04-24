@@ -42,6 +42,10 @@ import {
   connectGoogleDrive,
   restoreGoogleDrive,
   isDriveConnected,
+  connectGitHub,
+  restoreGitHub,
+  isGitHubConnected,
+  getGitHubRef,
   getStorageMode,
   deleteExtensionImage,
   getDeviceRootName,
@@ -52,6 +56,12 @@ import {
   type StorageMode,
 } from "./storage/bridge.js";
 import { signIn, showFolderPicker, saveDriveRoot, loadDriveRoot } from "./storage/google-auth.js";
+import {
+  isSignedIn as isGitHubSignedIn,
+  getAccessToken as getGitHubToken,
+  loadRepoRef as loadGitHubRef,
+  type GitHubRepoRef,
+} from "./storage/github-auth.js";
 import { GoogleDriveStore } from "./storage/google-drive-store.js";
 import { FileManager } from "./gallery/file-manager.js";
 import type { SplitEditor } from "./editor/split-editor.js";
@@ -236,6 +246,19 @@ export class App {
         // every page load. Real folder-loss scenarios (different
         // account, trashed root) still surface through operation
         // errors.
+      } else {
+        this.#storage = browserStore;
+        setStorageMode("browser");
+      }
+    } else if (lastMode === "github") {
+      // Same shape as Drive's restore: token + ref in localStorage
+      // → instantiate the GitHubStore without prompting. Expired
+      // PATs surface as a 401 on the first real API call, which
+      // routes through the bridge's `refreshGithubToken` banner.
+      const githubStore = restoreGitHub();
+      if (githubStore) {
+        this.#storage = githubStore;
+        setStorageMode("github");
       } else {
         this.#storage = browserStore;
         setStorageMode("browser");
@@ -758,6 +781,15 @@ export class App {
     const mode = getStorageMode();
     if (mode === "device") return getDeviceRootName() || undefined;
     if (mode === "googledrive") return loadDriveRoot()?.name;
+    if (mode === "github") {
+      const ref = getGitHubRef();
+      if (!ref) return undefined;
+      // Show `owner/repo` with optional basePath + branch qualifier
+      // so the sidebar subtitle conveys all three dimensions without
+      // a second row.
+      const base = ref.basePath ? `/${ref.basePath}` : "";
+      return `${ref.owner}/${ref.repo}${base}@${ref.branch}`;
+    }
     return undefined;
   }
 
@@ -787,14 +819,19 @@ export class App {
         }
       } else if (mode === "googledrive") {
         try {
-          const token = await signIn();
+          // `forcePicker` means the user came in via the sidebar's
+          // reselect icon ("Change Drive folder"). Escalate that
+          // into Google's `select_account` prompt too so the user
+          // can pick a different Google account in the same gesture
+          // — without it, GIS silently reuses the last-used account
+          // and there's no visible path to switch. Mirrors the
+          // GitHub setup dialog's "Use a different personal access
+          // token" escape hatch.
+          const token = await signIn({ forceAccountPicker: forcePicker });
           // Reuse the previously-picked root when available — under
           // `drive.file` that picker result is the app's only handle
           // onto the user's Drive, so skipping the picker here just
           // skips an extra click, not an access grant.
-          // `forcePicker` is wired to the sidebar's reselect icon so
-          // the user can switch the Drive root the same way Device
-          // lets them switch folders.
           let folder = forcePicker ? null : loadDriveRoot();
           if (!folder) {
             folder = await showFolderPicker();
@@ -808,6 +845,29 @@ export class App {
           console.error("[app] Drive connection failed:", e);
           return;
         }
+      } else if (mode === "github") {
+        // First-click: if we already have a persisted PAT + ref,
+        // rehydrate without prompting. Reselect / no ref → open the
+        // full PAT + repo picker flow (lazy-loaded so the UI module
+        // only ships in the bundle when the user actually engages
+        // with GitHub).
+        let ref: GitHubRepoRef | null = forcePicker ? null : loadGitHubRef();
+        if (!ref || forcePicker || !isGitHubSignedIn()) {
+          const { connectGitHub: runConnect } = await import("./storage/github-setup-ui.js");
+          ref = await runConnect();
+          if (!ref) return;
+        }
+        const token = getGitHubToken();
+        if (!token) {
+          showError({
+            message: "GitHub sign-in is required. Please try again.",
+            severity: "warning",
+          });
+          return;
+        }
+        const store = connectGitHub(token, ref);
+        this.#storage = store;
+        saveLastStorage("github");
       }
 
       this.#currentFolderPath = "";
@@ -836,6 +896,14 @@ export class App {
       "googledrive",
       isDriveConnected(),
       isDriveConnected() ? (driveRoot?.name ?? "Connected") : "Not connected",
+    );
+    const ghRef = getGitHubRef();
+    sidebar.setStorageStatus(
+      "github",
+      isGitHubConnected(),
+      isGitHubConnected()
+        ? (ghRef ? `${ghRef.owner}/${ghRef.repo}@${ghRef.branch}` : "Connected")
+        : "Not connected",
     );
     sidebar.setActiveMode(getStorageMode());
   }
@@ -1373,10 +1441,14 @@ export class App {
       // but the user should know something will be saved soon.
       this.#saveStatusIndicator?.setStatus("pending");
       clearTimeout(this.#autoSaveTimer);
-      // Network-backed stores (Drive) get a longer debounce so rapid
-      // +/- clicks on a slider coalesce into a single upload. Local
-      // stores are cheap enough to keep the tight 500ms window.
-      const saveDebounceMs = getStorageMode() === "googledrive" ? 1500 : 500;
+      // Network-backed stores (Drive, GitHub) get a longer debounce
+      // so rapid +/- clicks on a slider coalesce into a single
+      // commit/upload. For GitHub this also keeps the commit log
+      // readable — one commit per meaningful save pause rather than
+      // one per slider tick. Local stores are cheap enough to keep
+      // the tight 500ms window.
+      const mode = getStorageMode();
+      const saveDebounceMs = (mode === "googledrive" || mode === "github") ? 1500 : 500;
       this.#autoSaveTimer = window.setTimeout(() => {
         this.#autoSaveTimer = undefined;
         void this.writeAnnotationsToStorage();
@@ -1885,6 +1957,7 @@ export class App {
     const rootLabel =
       mode === "device" ? "Device" :
       mode === "googledrive" ? "Google Drive" :
+      mode === "github" ? "GitHub" :
       "Browser";
 
     const makeItem = (label: string, folderPath: string): HTMLButtonElement => {
@@ -2148,15 +2221,18 @@ export class App {
       this.#saveStatusIndicator?.setStatus("error");
       console.error("[save] Error:", e);
       if (e.status === 401) {
-        showAuthError(() => {
-          signIn().then((token) => {
-            if (this.#storage && "setToken" in this.#storage) {
-              (this.#storage as any).setToken(token);
-            }
-            hideError();
-            this.writeAnnotationsToStorage();
-          }).catch(() => {});
-        });
+        // Token refresh is handled internally by every network-backed
+        // store via `setTokenRefresher` (see bridge.ts), so a 401 that
+        // reaches here means the user already dismissed the refresh
+        // banner. Don't stack another auth banner on top — surface a
+        // plain retry so they can either sign back in via the sidebar
+        // and come back, or try again once the store has a valid
+        // session. The provider-labelled banner shown by the store's
+        // refresher carries the correct UX for re-auth.
+        showSaveError(
+          "Save failed — session expired. Sign in again from the sidebar and retry.",
+          () => this.writeAnnotationsToStorage(),
+        );
       } else if (e.status === 403) {
         showSaveError("Permission denied. You may not have write access to this folder.");
       } else if (e.status === 404) {

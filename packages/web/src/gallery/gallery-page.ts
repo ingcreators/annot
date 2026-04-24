@@ -76,12 +76,40 @@ export class GalleryPage {
 
     // Esc clears selection (skipped while typing, while gallery is hidden, or in editor)
     document.addEventListener("keydown", this.#onKeyDown);
+
+    // Stores that can't return thumbnails synchronously (GitHub) emit
+    // `annot-thumbnail-ready` once each image is fetched and downscaled
+    // in the background. Patch the matching card's `<img src>` in
+    // place so the gallery fills in as thumbnails land.
+    window.addEventListener("annot-thumbnail-ready", this.#onThumbnailReady);
   }
 
   /** Clean up document-level listeners. Call before discarding the instance. */
   destroy(): void {
     document.removeEventListener("keydown", this.#onKeyDown);
+    window.removeEventListener("annot-thumbnail-ready", this.#onThumbnailReady);
   }
+
+  #onThumbnailReady = (e: Event): void => {
+    const detail = (e as CustomEvent).detail as { path?: string; dataUrl?: string } | undefined;
+    if (!detail?.path || !detail?.dataUrl) return;
+    const card = this.#grid.querySelector<HTMLElement>(
+      `.gallery-item[data-image-path="${CSS.escape(detail.path)}"] .gallery-thumb`,
+    );
+    if (!card) return;
+    let img = card.querySelector<HTMLImageElement>("img");
+    if (!img) {
+      img = document.createElement("img");
+      img.loading = "lazy";
+      img.alt = "";
+      card.appendChild(img);
+    }
+    img.src = detail.dataUrl;
+    // Also mutate the in-memory record so a later refilter / re-render
+    // keeps the thumbnail without re-fetching.
+    const record = this.#images.find((r) => r.path === detail.path);
+    if (record) record.thumbnailDataUrl = detail.dataUrl;
+  };
 
   #onKeyDown = (e: KeyboardEvent): void => {
     if (e.key !== "Escape") return;
