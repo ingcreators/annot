@@ -772,6 +772,13 @@ export class GitHubStore implements StorageProvider {
         window.dispatchEvent(new CustomEvent("annot-thumbnail-ready", {
           detail: { path: currentPath, dataUrl: updates.thumbnailDataUrl },
         }));
+      } else {
+        // Caller passed empty (generator failed) — don't leave a
+        // stale entry hanging around. Wipe so the next listImages
+        // schedules a fresh prefetch from the just-committed blob.
+        this.#thumbnailCache.delete(currentPath);
+        this.#thumbnailInFlight.delete(currentPath);
+        void this.#ensureThumbnail(currentPath);
       }
       const existingRecord = this.#recordCache.get(currentPath);
       if (existingRecord) {
