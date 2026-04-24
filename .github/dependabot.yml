@@ -27,25 +27,11 @@ updates:
         update-types:
           - minor
           - patch
-    # Hold back majors that need a planned migration rather than a
-    # drive-by upgrade. Dependabot still opens minor / patch bumps
-    # and security advisories; only untriaged major-version PRs are
-    # suppressed.
-    #   - vitest@5+    — mocking / hooks API tends to shift; msw +
-    #                    happy-dom + fake-indexeddb rigs want
-    #                    re-validated as a set.
-    #   - vite@9+      — PWA plugin + worker inputs moved between
-    #                    7/8; future majors deserve the same
-    #                    service-worker precache + handoff-route
-    #                    pass we did for 8.
-    # (biome was previously here for the 1 → 2 migration that landed
-    #  in #57; dropped now that the config is on the 2.x schema and
-    #  opinionated new rules are explicitly triaged.)
-    ignore:
-      - dependency-name: "vitest"
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "vite"
-        update-types: ["version-update:semver-major"]
+    # Major-version PRs come through individually (dependabot never
+    # groups majors). Each one still gets its own review — we've
+    # seen enough churn-per-major that a drive-by merge isn't safe
+    # — but the review happens on an open PR rather than a
+    # phantom one we've preemptively suppressed.
     labels:
       - dependencies
     commit-message:
