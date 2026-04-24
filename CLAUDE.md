@@ -145,6 +145,28 @@ Rules when adding public symbols:
 - When in doubt, match the language of surrounding text in the file
   being edited.
 
+## Landing rules
+
+- **All changes land via PR, never directly committed to `main`.**
+  Even a one-line docs tweak goes through a topic branch + PR. The
+  existing `main` history is entirely squash-merged PRs (visible by
+  the `(#NN)` suffix in `git log`); direct commits break that shape.
+- Topic branch name: `<type>/<short-kebab-desc>`
+  (e.g. `refactor/app-phase0-extract-helpers`,
+  `docs/claude-md-landing-rules`). `<type>` follows the Conventional
+  Commits verb used for the commit itself.
+- Commit & PR title style: Conventional Commits, matching the tone
+  of recent `git log` entries
+  (`refactor(web): …`, `docs(plans): …`, `chore(tsconfig): …`).
+- Claude Code opens the PR and reports the URL. **Merging is the
+  user's call** — never run `gh pr merge`, and never force-push to
+  `main` or to a PR branch the user is reviewing without explicit
+  confirmation.
+- If a change has accidentally landed on local `main`, the recovery
+  is: branch it off → `git reset --hard origin/main` → push the
+  branch → open the PR. The branch preserves the work; the reset
+  only rewinds the local main pointer.
+
 ## Pre-landing checklist for new features
 
 Before declaring a feature done:
