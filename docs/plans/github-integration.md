@@ -1,9 +1,12 @@
 # GitHub Integration (v1, individual-user)
 
-> **Status:** Phases 1–3 landed. Individual-user storage +
-> personal-access-token auth is the scope. Team / PR-automation
-> features are *deliberately* out of scope here — they live in
-> the commercial `annot-cloud` per
+> **Status:** Phases 1–3 landed; Phase 4 polish in progress
+> (file-details drawer, amend commits, reconfigure menu,
+> rate-limit banner all shipped; Git Data API bulk ops still
+> pending). Individual-user storage + personal-access-token
+> auth is the scope. Team / PR-automation features are
+> *deliberately* out of scope here — they live in the
+> commercial `annot-cloud` per
 > [`oss-cloud-split.md`](./oss-cloud-split.md).
 >
 > **Compatibility:** New storage backend in `packages/web` (+ a
@@ -199,21 +202,52 @@ If rate-limit headers (`X-RateLimit-Remaining`) drop below 100
 we show an info banner ("GitHub rate limit near — pause
 editing for a few minutes"), not a hard block.
 
-### 7. Large files
+### 7. Large files and repo bloat
 
 GitHub Contents API caps at ~1 MB text / ~100 MB binary.
 Typical Annot captures stay <2 MB, but scroll-captures can
-exceed. Plan for v1:
+exceed. The immediate plan (v1):
 
 - Single request with base64-encoded content via Contents API
   (works up to ~40 MB effective after base64 overhead on
   GitHub's accepted request body).
 - If the blob exceeds the Contents API limit, fall back to the
   Git Data API: `POST git/blobs` → `POST git/trees` →
-  `POST git/commits` → `PATCH git/refs/heads/{branch}`.
-- LFS is *not* supported in v1. If a user commits into an
-  LFS-enabled repo, the file uploads as a regular blob; a
-  future plan can add proper LFS handshaking.
+  `POST git/commits` → `PATCH git/refs/heads/{branch}`. The
+  amend path (see §amend) already uses these endpoints; the
+  large-file path is the same pipeline without the amend
+  heuristic.
+
+**LFS is *not* supported in OSS.** If a user commits into an
+LFS-enabled repo, the file uploads as a regular blob (losing
+the LFS benefit but not breaking). OSS's stance on binary bloat
+is "commit directly, keep your repo small, or move to Annot
+Cloud if you outgrow this" — committing binaries to git is
+structurally hostile to long-term repo health regardless of
+Annot's debounce / amend tricks:
+
+- Every save is a fresh blob (git doesn't delta binaries).
+- Even with amend collapsing a session to one commit, N
+  sessions produce N blobs.
+- Clone / fetch cost grows monotonically.
+
+The proper answer for heavy use is the pointer-commit model in
+`annot-cloud`: commit only a small JSON pointer to git, keep
+the image bytes in annot.work's object store. See
+[`oss-cloud-split.md#cloud-storage-model`](./oss-cloud-split.md#cloud-storage-model)
+for the design. LFS compatibility in Cloud is a bundled
+feature for users with existing LFS infrastructure, not the
+marquee solution.
+
+OSS users who need git-native storage for team-sized workloads
+should:
+
+- Use a **dedicated screenshot repo** (not mixed with source),
+- Keep a `screenshots/` subfolder (not repo root),
+- Periodically archive / prune old sessions.
+
+The OSS connect flow will surface these recommendations in the
+picker help text at Phase 1 docs polish time.
 
 ### 8. URLs
 
