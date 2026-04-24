@@ -83,6 +83,16 @@ function isImageFilename(name: string): boolean {
  */
 const MAX_CONTENTS_BYTES = 40 * 1024 * 1024; // 40 MB rendered size
 
+/**
+ * Threshold at which `GitHubStore#setRateLimitListener`'s callback
+ * fires. GitHub's authenticated REST API allows 5 000 requests /
+ * hour / token; surfacing an advisory when the remaining budget
+ * drops to 100 lets the user pause before hitting the hard wall
+ * (403 + "rate limit exceeded"). Chosen to give ~a-few-minutes of
+ * headroom at Annot's typical save pace (~1 request per save).
+ */
+const RATE_LIMIT_WARN_AT = 100;
+
 interface TreeEntry {
   path: string;            // repo-relative
   mode: string;
@@ -193,6 +203,14 @@ export class GitHubStore implements StorageProvider {
    *  UI can render an advisory banner when remaining drops low. */
   #rateLimitRemaining: number | null = null;
   #rateLimitReset: number | null = null;
+  /** Host-supplied callback invoked whenever `X-RateLimit-Remaining`
+   *  drops below {@link RATE_LIMIT_WARN_AT}. Fires at most once per
+   *  resetAt window so the gallery banner doesn't re-pop on every
+   *  API call. Registered from `bridge.ts` at store construction. */
+  #rateLimitListener?: (info: { remaining: number; resetAt: number | null }) => void;
+  /** Window we've already warned for (unix ms). Reset when the
+   *  next reset time moves forward. */
+  #rateLimitWarnedFor: number | null = null;
 
   constructor(token: string, ref: GitHubRepoRef) {
     this.#token = token;
@@ -212,6 +230,14 @@ export class GitHubStore implements StorageProvider {
 
   getRateLimit(): { remaining: number | null; resetAt: number | null } {
     return { remaining: this.#rateLimitRemaining, resetAt: this.#rateLimitReset };
+  }
+
+  /** Register a listener for rate-limit-low events. See
+   *  `#rateLimitListener`. */
+  setRateLimitListener(
+    listener: (info: { remaining: number; resetAt: number | null }) => void,
+  ): void {
+    this.#rateLimitListener = listener;
   }
 
   /**
@@ -350,6 +376,29 @@ export class GitHubStore implements StorageProvider {
     const reset = resp.headers.get("X-RateLimit-Reset");
     if (remaining != null) this.#rateLimitRemaining = parseInt(remaining, 10);
     if (reset != null) this.#rateLimitReset = parseInt(reset, 10) * 1000;
+
+    // Fire the low-rate-limit listener once per reset window.
+    // 100 req / hour left out of 5 000 is a useful "heavy editor
+    // about to cap out" signal — editors typically burn ~1 request
+    // per save, so the remaining budget is a rough editing-minutes
+    // forecast until the window resets.
+    if (
+      this.#rateLimitRemaining != null
+      && this.#rateLimitRemaining <= RATE_LIMIT_WARN_AT
+      && this.#rateLimitListener
+      && this.#rateLimitReset !== this.#rateLimitWarnedFor
+    ) {
+      this.#rateLimitWarnedFor = this.#rateLimitReset;
+      try {
+        this.#rateLimitListener({
+          remaining: this.#rateLimitRemaining,
+          resetAt: this.#rateLimitReset,
+        });
+      } catch {
+        // Listener threw — swallow so a UI bug can't cascade into
+        // API request failures.
+      }
+    }
   }
 
   async #throwGitHubError(resp: Response): Promise<never> {

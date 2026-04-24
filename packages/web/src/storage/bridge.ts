@@ -19,7 +19,7 @@ import {
   signOut as githubSignOut,
   type GitHubRepoRef,
 } from "./github-auth.js";
-import { showAuthError, hideError } from "../ui/error-bar.js";
+import { showAuthError, hideError, showError } from "../ui/error-bar.js";
 
 // chrome-types omits `chrome.runtime.lastError` from its public typings,
 // even though it exists at runtime (set during callback-style API calls).
@@ -314,6 +314,23 @@ async function refreshGithubToken(): Promise<string | null> {
 export function connectGitHub(token: string, ref: GitHubRepoRef): StorageProvider {
   githubStore = new GitHubStore(token, ref);
   githubStore.setTokenRefresher(refreshGithubToken);
+  githubStore.setRateLimitListener(({ remaining, resetAt }) => {
+    // Advisory info banner; non-blocking. Fires at most once per
+    // reset window (the store dedupes), so the user sees it when
+    // they dip below the threshold and then it stays quiet until
+    // GitHub's next hourly reset. Rate-limit information is
+    // approximate — GitHub's per-minute rounding can nudge the
+    // displayed reset time by up to a minute either way.
+    const resetText = resetAt
+      ? ` Resets at ${new Date(resetAt).toLocaleTimeString()}.`
+      : "";
+    showError({
+      message: `GitHub API rate limit is low (${remaining} requests left).`
+        + ` Consider pausing editing for a few minutes.${resetText}`,
+      severity: "warning",
+      autoDismiss: 12000,
+    });
+  });
   currentMode = "github";
   return githubStore;
 }

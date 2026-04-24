@@ -80,6 +80,114 @@ export function disconnectGitHub(): void {
   // a full reset is needed.
 }
 
+/**
+ * Present the reconfigure menu to the user (repo / branch / base
+ * path) and run the sub-flow they pick. Returns the updated ref
+ * on success, or `null` if cancelled or the existing ref is
+ * unchanged. Intended to be called from the sidebar's reselect
+ * icon when the user is already connected — first-time connect
+ * should go through `connectGitHub()` for the full flow.
+ */
+export async function showReconfigureMenu(current: GitHubRepoRef): Promise<GitHubRepoRef | null> {
+  const choice = await showChoiceDialog();
+  if (!choice) return null;
+  if (choice === "repo") {
+    // Full flow including repo picker. The existing helper handles
+    // PAT re-entry if the session expired.
+    return await connectGitHub();
+  }
+  if (choice === "branch") {
+    return await runBranchOnlySwitch(current);
+  }
+  if (choice === "basePath") {
+    return await runBasePathOnlySwitch(current);
+  }
+  return null;
+}
+
+/**
+ * Fetch branches for the currently-configured repo, show the branch
+ * picker, and persist the new ref on success. Reused by the
+ * reconfigure menu's "Change branch" path. `basePath` is carried
+ * through unchanged.
+ */
+export async function runBranchOnlySwitch(current: GitHubRepoRef): Promise<GitHubRepoRef | null> {
+  let repo: GitHubRepoSummary;
+  try {
+    repo = await getRepo(current.owner, current.repo);
+  } catch (e) {
+    await showPlainAlert("Couldn't load repository", (e as Error).message);
+    return null;
+  }
+  const branch = await showBranchPicker(repo);
+  if (branch == null) return null;
+  if (branch === current.branch) return null;  // no-op
+  const ref: GitHubRepoRef = { ...current, branch };
+  saveRepoRef(ref);
+  return ref;
+}
+
+/**
+ * Show the base-path prompt pre-filled with the current base path.
+ * Reused by the reconfigure menu's "Change base path" path. Other
+ * fields carry through unchanged. No-op (returns `null`) if the
+ * value didn't change.
+ */
+export async function runBasePathOnlySwitch(current: GitHubRepoRef): Promise<GitHubRepoRef | null> {
+  let repo: GitHubRepoSummary;
+  try {
+    repo = await getRepo(current.owner, current.repo);
+  } catch (e) {
+    await showPlainAlert("Couldn't load repository", (e as Error).message);
+    return null;
+  }
+  const basePath = await showBasePathPrompt(repo, current.branch);
+  if (basePath == null) return null;
+  if (basePath === current.basePath) return null;  // no-op
+  const ref: GitHubRepoRef = { ...current, basePath };
+  saveRepoRef(ref);
+  return ref;
+}
+
+type ReconfigureChoice = "repo" | "branch" | "basePath";
+
+function showChoiceDialog(): Promise<ReconfigureChoice | null> {
+  return new Promise((resolve) => {
+    const { close, root, body } = openDialog(
+      "Change GitHub connection",
+      "Pick what you'd like to change. Everything else stays the same.",
+    );
+
+    const makeBtn = (label: string, sub: string, value: ReconfigureChoice) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "app-dialog-btn app-dialog-primary";
+      btn.style.width = "100%";
+      btn.style.padding = "10px 14px";
+      btn.style.height = "auto";
+      btn.style.display = "flex";
+      btn.style.flexDirection = "column";
+      btn.style.alignItems = "flex-start";
+      btn.style.gap = "4px";
+      btn.innerHTML = `
+        <span style="font-weight:600;font-size:14px;">${escapeHtml(label)}</span>
+        <span style="font-weight:400;font-size:12px;opacity:.85;">${escapeHtml(sub)}</span>
+      `;
+      btn.addEventListener("click", () => { close(); resolve(value); });
+      return btn;
+    };
+
+    body.appendChild(makeBtn("Repository", "Switch to a different repo. Runs the full picker flow.", "repo"));
+    const g1 = document.createElement("div"); g1.style.height = "8px"; body.appendChild(g1);
+    body.appendChild(makeBtn("Branch", "Same repo, different branch.", "branch"));
+    const g2 = document.createElement("div"); g2.style.height = "8px"; body.appendChild(g2);
+    body.appendChild(makeBtn("Base path", "Same repo + branch, different folder inside.", "basePath"));
+
+    addCancelOnly(root, () => { close(); resolve(null); });
+    attachCloseBehaviors(root, () => { close(); resolve(null); });
+  });
+}
+
 // ---- PAT sign-in ----
 
 function runPatFlow(): Promise<boolean> {
