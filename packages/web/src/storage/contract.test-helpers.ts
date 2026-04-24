@@ -27,17 +27,24 @@ import { describe, expect, it } from "vitest";
  *
  * ## Current coverage
  *
- * - `BrowserStore` — `browser-store.contract.test.ts` (fake-indexeddb)
- * - `GitHubStore`  — `github-store.contract.test.ts` (msw + happy-dom)
+ * All four backends implement the full contract:
  *
- * ## Deferred
+ * - `BrowserStore`     — `browser-store.contract.test.ts`
+ *                        (fake-indexeddb per test)
+ * - `GitHubStore`      — `github-store.contract.test.ts`
+ *                        (msw + happy-dom + in-memory repo simulator
+ *                        in `github-api.test-mock.ts`)
+ * - `GoogleDriveStore` — `google-drive-store.contract.test.ts`
+ *                        (msw + happy-dom + ID-native Drive simulator
+ *                        in `google-drive-api.test-mock.ts`)
+ * - `DeviceStore`      — `device-store.contract.test.ts`
+ *                        (happy-dom + in-memory FileSystemDirectoryHandle
+ *                        in `device-fs.test-mock.ts`)
  *
- * - `GoogleDriveStore` — Drive's v3 REST surface is ID-based with
- *   multipart uploads; the simulator needed is materially larger than
- *   the GitHub one and earns its own follow-up PR.
- * - `DeviceStore` — backed by the File System Access API, which has
- *   no standard polyfill and can only be exercised via Playwright in
- *   a real Chromium. Likely stays integration-only.
+ * All payloads keep `annotationsSvg` ≤ 10 chars so the GitHub / Drive
+ * stores' `#buildXmpBlob` skips the `renderImageRecord` +
+ * `encodeCaptureInWorker` branch that would otherwise need a real
+ * canvas pipeline — see the comment on the `updateImage` test below.
  */
 
 /**
