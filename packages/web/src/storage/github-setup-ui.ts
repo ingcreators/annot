@@ -116,13 +116,24 @@ function runPatFlow(): Promise<boolean> {
     `;
     body.appendChild(help);
 
+    // Chrome warns when a password field isn't inside a form (it
+    // can't offer to save the PAT to the password manager otherwise),
+    // so wrap the input. `method="dialog"` + preventDefault on submit
+    // keeps the page from navigating when the user hits Enter.
+    const form = document.createElement("form");
+    form.method = "dialog";
+    form.autocomplete = "on";
+    form.addEventListener("submit", (e) => { e.preventDefault(); submit(); });
+    body.appendChild(form);
+
     const input = document.createElement("input");
     input.type = "password";
     input.className = "app-dialog-input";
     input.placeholder = "github_pat_… or ghp_…";
-    input.autocomplete = "off";
+    input.autocomplete = "current-password";
     input.spellcheck = false;
-    body.appendChild(input);
+    input.name = "github-pat";
+    form.appendChild(input);
 
     const err = document.createElement("div");
     err.className = "app-dialog-error";
@@ -171,9 +182,7 @@ function runPatFlow(): Promise<boolean> {
     actions.appendChild(okBtn);
     root.appendChild(actions);
 
-    input.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") { e.preventDefault(); submit(); }
-    });
+    // Enter-to-submit is handled by the form's submit event above.
     requestAnimationFrame(() => input.focus());
     attachCloseBehaviors(root, () => { close(); resolve(false); });
   });
