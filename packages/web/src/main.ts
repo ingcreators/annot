@@ -34,21 +34,94 @@ const updateSW = registerSW({
 const app = new App();
 app.init();
 
-// Phase 1 verification hook for `docs/plans/github-integration.md`.
-// Navigating to `?github-setup=1` opens the connect flow (PAT paste
-// → repo picker → branch → base path). Phase 3 replaces this with
-// a proper sidebar entry; until then this is how we exercise the
-// auth + picker end-to-end on the deployed app.
+// Phases 1–2 verification hook for `docs/plans/github-integration.md`.
+// Navigating to `?github-setup=1` opens the PAT paste → repo picker →
+// branch → base path flow, then (Phase 2) instantiates a `GitHubStore`
+// and runs a non-destructive smoke test (`listFolders` + `listImages`
+// at the base path) so we can confirm the API round-trip works before
+// Phase 3 wires the store into the full sidebar / editor path.
+//
+// `?github-smoke=1` additionally exercises the write path — creates a
+// throwaway folder, writes a tiny test image, deletes both. Leaves
+// commits in the picked repo's git log; only use against a scratch
+// repo.
 if (new URLSearchParams(location.search).get("github-setup") === "1") {
-  void import("./storage/github-setup-ui.js").then(async (mod) => {
-    const ref = await mod.connectGitHub();
-    if (ref) {
+  const runSmoke = new URLSearchParams(location.search).get("github-smoke") === "1";
+  void (async () => {
+    const setup = await import("./storage/github-setup-ui.js");
+    const bridge = await import("./storage/bridge.js");
+    const auth = await import("./storage/github-auth.js");
+
+    const ref = await setup.connectGitHub();
+    if (!ref) return;
+    const token = auth.getAccessToken();
+    if (!token) return;
+
+    const store = bridge.connectGitHub(token, ref);
+    const label = `${ref.owner}/${ref.repo} on ${ref.branch}`
+      + (ref.basePath ? ` / ${ref.basePath}` : "");
+
+    try {
+      const [images, folders] = await Promise.all([
+        store.listImages(""),
+        store.listFolders(""),
+      ]);
       showError({
-        message: `Connected to ${ref.owner}/${ref.repo} on ${ref.branch}`
-          + (ref.basePath ? ` / ${ref.basePath}` : "")
-          + ". Storage integration arrives in Phase 2.",
+        message: `Connected to ${label}. Found ${images.length} image(s) and `
+          + `${folders.length} folder(s) at the base path.`,
         severity: "info",
       });
+
+      if (runSmoke) {
+        await runGithubSmokeTest(store);
+      }
+    } catch (e) {
+      showError({
+        message: `Connected to ${label} but listing failed: ${(e as Error).message}`,
+        severity: "error",
+      });
     }
-  });
+  })();
+}
+
+async function runGithubSmokeTest(
+  store: import("@ingcreators/annot-core/storage").StorageProvider,
+): Promise<void> {
+  const folderName = `annot-smoke-${Date.now()}`;
+  try {
+    // 1x1 transparent PNG, embedded as data URL.
+    const tinyPng = "data:image/png;base64,"
+      + "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+
+    await store.createFolder("", folderName);
+    const savedPath = await store.saveImage({
+      folderPath: folderName,
+      originalDataUrl: tinyPng,
+      thumbnailDataUrl: "",
+      annotationsSvg: "",
+      width: 1,
+      height: 1,
+      sourceUrl: "",
+      tags: { smoke: "true" },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      filename: "smoke.annot.png",
+    });
+    const listed = await store.listImages(folderName);
+    const found = listed.some((r) => r.path === savedPath);
+    await store.deleteImage(savedPath);
+    await store.deleteFolder(folderName);
+    showError({
+      message: found
+        ? `Smoke test passed: created → listed → deleted ${savedPath}.`
+        : `Smoke test saw save+delete succeed but the list didn't include ${savedPath}.`,
+      severity: found ? "info" : "warning",
+      autoDismiss: 8000,
+    });
+  } catch (e) {
+    showError({
+      message: `Smoke test failed in ${folderName}: ${(e as Error).message}`,
+      severity: "error",
+    });
+  }
 }
