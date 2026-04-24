@@ -1,18 +1,70 @@
+// Shared TypeScript compiler options for every workspace package.
+// Per-package tsconfig.json extends this and only overrides
+// `rootDir` / `outDir` / `include` / `types`. Keep package deltas to
+// the minimum needed; anything else belongs here so all four hosts
+// (core, web, extension, desktop) stay in lockstep.
 {
   "compilerOptions": {
+    // ---- Language level ----
+
+    // Annot targets evergreen browsers + Node 20+ everywhere. ES2022
+    // gives us top-level await, class private fields, `at()`, error
+    // cause.
     "target": "ES2022",
     "module": "ES2022",
+
+    // `bundler` matches how Vite / esbuild resolve — extensionless
+    // imports, conditional exports, package.json `exports` maps.
+    // `node` would reject the `.js` suffixes we use in source.
     "moduleResolution": "bundler",
+
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
+
+    // ---- Strictness ----
+
+    // Enables the full strict family (implicit-any, null-checks,
+    // function-types, bind/call/apply, property-init, override).
+    // Treat this as the floor, not the ceiling.
     "strict": true,
-    "noEmit": true,
+
+    // `case X: foo();` followed by `case Y:` must have an explicit
+    // `break` / `return` / `throw`. Zero cost today (no switches
+    // fall through) and catches a classic bug class.
+    "noFallthroughCasesInSwitch": true,
+
+    // Subclass methods that override a base must carry the
+    // `override` keyword. Prevents accidental shadowing after a
+    // rename in the base. Caught a handful of editor-tool callbacks
+    // when first enabled.
+    "noImplicitOverride": true,
+
+    // Deliberately NOT enabled: `noUncheckedIndexedAccess`. Would
+    // force every `arr[i]` / `map.get(k)` read into a null-guard.
+    // High signal, but a one-shot flip surfaces ~97 sites across
+    // ~17 files (heaviest: selection.ts:31, property-panel.ts:15,
+    // xmp-browser.ts:10, freehand-tool.ts:7). Each fix wants a real
+    // decision — is the index provably in range, is a missing value
+    // a silent bug worth catching, or does the call site want a
+    // typed default? Tracked as a focused follow-up sweep rather
+    // than a drive-by flip.
+
+    // ---- Module / interop ----
     "isolatedModules": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
     "esModuleInterop": true,
     "resolveJsonModule": true,
-    "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true
+    "forceConsistentCasingInFileNames": true,
+
+    // ---- Typecheck-only; Vite owns real emit ----
+
+    // tsc is only a typechecker in this repo. Vite + rollup handle
+    // the bundling; vite-plugin-dts handles .d.ts emission for the
+    // core package. Keeping noEmit avoids stray `dist/` files from
+    // `pnpm typecheck`.
+    "noEmit": true,
+
+    // Third-party .d.ts files are frequently out of sync between
+    // majors (happy-dom, lit, @tauri-apps). Checking them is rarely
+    // actionable and often blocks real work.
+    "skipLibCheck": true
   }
 }

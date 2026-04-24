@@ -11,7 +11,7 @@ export class CropTool extends ToolBase {
   #drawing = false;
   #confirmHint: SVGTextElement | null = null;
 
-  onActivate(): void {
+  override onActivate(): void {
     // Show instruction
     this.#confirmHint = document.createElementNS(SVG_NS, "text") as SVGTextElement;
     this.#confirmHint.setAttribute("x", "10");
@@ -24,7 +24,7 @@ export class CropTool extends ToolBase {
     this.canvas.uiOverlay.appendChild(this.#confirmHint);
   }
 
-  onDeactivate(): void {
+  override onDeactivate(): void {
     this.#cleanup();
   }
 
@@ -101,7 +101,7 @@ export class CropTool extends ToolBase {
     this.#drawing = false;
   }
 
-  onKeyDown(e: KeyboardEvent): void {
+  override onKeyDown(e: KeyboardEvent): void {
     if (e.key === "Enter" && this.#rect) {
       this.#applyCrop();
     } else if (e.key === "Escape") {

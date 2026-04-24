@@ -219,11 +219,11 @@ export class FreehandTool extends ToolBase {
   }
 
   /** Commit any active session when the tool is deactivated. */
-  onDeactivate(): void {
+  override onDeactivate(): void {
     this.endSession();
   }
 
-  onKeyDown(e: KeyboardEvent): void {
+  override onKeyDown(e: KeyboardEvent): void {
     if (e.key === "Escape") {
       this.endSession();
       e.preventDefault();

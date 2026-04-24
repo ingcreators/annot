@@ -46,7 +46,7 @@ export class TextTool extends ToolBase {
   onPointerMove(_e: PointerEvent, _pt: DOMPoint): void {}
   onPointerUp(_e: PointerEvent, _pt: DOMPoint): void {}
 
-  onDeactivate(): void {
+  override onDeactivate(): void {
     if (this.#editing) this.#finishEditing();
   }
 
