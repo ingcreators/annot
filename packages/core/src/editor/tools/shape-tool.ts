@@ -1,4 +1,5 @@
 import { computeDasharray } from "../../utils/dash-utils.js";
+import type { ShapeType } from "./tool-base.js";
 /**
  * ShapeTool — unified tool for Rectangle / Rounded Rectangle / Ellipse.
  *
@@ -11,7 +12,6 @@ import { computeDasharray } from "../../utils/dash-utils.js";
  * and-redraw.
  */
 import { ToolBase } from "./tool-base.js";
-import type { ShapeType } from "./tool-base.js";
 
 export class ShapeTool extends ToolBase {
   readonly name = "shape";

@@ -31,9 +31,9 @@
   #file-manager *,
   .capture-dialog-overlay *,
   .capture-progress-toast * {
-    transition-duration: 0.01ms !important;
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms;
+    animation-duration: 0.01ms;
+    animation-iteration-count: 1;
   }
 }
 
@@ -87,7 +87,9 @@
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.15s, box-shadow 0.15s;
+  transition:
+    background 0.15s,
+    box-shadow 0.15s;
   position: relative;
   margin-bottom: 8px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
@@ -204,7 +206,11 @@
   width: 24px;
   text-align: center;
   color: var(--text-primary);
-  font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+  font-variation-settings:
+    "FILL" 0,
+    "wght" 400,
+    "GRAD" 0,
+    "opsz" 24;
 }
 
 .sidebar-storage-item.active .sidebar-storage-icon {
@@ -247,14 +253,21 @@
   border-radius: 6px;
   background: var(--bg-panel);
   color: var(--text-primary);
-  font-size: 18px !important;
-  font-variation-settings: "FILL" 0, "wght" 500, "GRAD" 0, "opsz" 24;
+  font-size: 18px;
+  font-variation-settings:
+    "FILL" 0,
+    "wght" 500,
+    "GRAD" 0,
+    "opsz" 24;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   padding: 0;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    color 0.15s;
 }
 
 .sidebar-storage-reselect:hover {
@@ -316,8 +329,12 @@
   border: none;
   background: none;
   color: var(--text-primary);
-  font-size: 18px !important;
-  font-variation-settings: "FILL" 0, "wght" 500, "GRAD" 0, "opsz" 20;
+  font-size: 18px;
+  font-variation-settings:
+    "FILL" 0,
+    "wght" 500,
+    "GRAD" 0,
+    "opsz" 20;
   cursor: pointer;
   padding: 0;
   display: flex;
@@ -333,9 +350,13 @@
 
 .folder-tree-icon {
   flex-shrink: 0;
-  font-size: 18px !important;
+  font-size: 18px;
   color: var(--text-primary);
-  font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 20;
+  font-variation-settings:
+    "FILL" 0,
+    "wght" 400,
+    "GRAD" 0,
+    "opsz" 20;
 }
 
 .folder-tree-item.active .folder-tree-icon {
@@ -408,8 +429,15 @@
   align-items: center;
   justify-content: center;
   font-size: 20px;
-  font-variation-settings: "FILL" 0, "wght" 500, "GRAD" 0, "opsz" 24;
-  transition: background 0.1s, border-color 0.1s, color 0.1s;
+  font-variation-settings:
+    "FILL" 0,
+    "wght" 500,
+    "GRAD" 0,
+    "opsz" 24;
+  transition:
+    background 0.1s,
+    border-color 0.1s,
+    color 0.1s;
   flex-shrink: 0;
 }
 
@@ -451,7 +479,10 @@
    * variable font — the FILL axis is absent — so we differentiate active
    * vs inactive via color + background + weight only. */
   font-variation-settings: "wght" 400;
-  transition: background 0.12s, color 0.12s, font-variation-settings 0.12s;
+  transition:
+    background 0.12s,
+    color 0.12s,
+    font-variation-settings 0.12s;
 }
 
 .view-toggle-btn:hover {
@@ -599,7 +630,10 @@ html.light .view-toggle-btn.active {
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: background 0.12s, border-color 0.12s, color 0.12s;
+  transition:
+    background 0.12s,
+    border-color 0.12s,
+    color 0.12s;
 }
 
 .app-dialog-cancel:hover {
@@ -773,7 +807,7 @@ html.light .view-toggle-btn.active {
 }
 
 .capture-progress-icon {
-  font-size: 20px !important;
+  font-size: 20px;
   color: var(--accent);
 }
 
@@ -832,7 +866,7 @@ html.light .view-toggle-btn.active {
 }
 
 .selection-bar-close {
-  font-size: 20px !important;
+  font-size: 20px;
   color: var(--text-primary);
   background: transparent;
   border: none;
@@ -875,7 +909,10 @@ html.light .view-toggle-btn.active {
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: background 0.1s, border-color 0.1s, color 0.1s;
+  transition:
+    background 0.1s,
+    border-color 0.1s,
+    color 0.1s;
 }
 
 .selection-bar-btn .material-symbols-outlined {
@@ -904,14 +941,20 @@ html.light .view-toggle-btn.active {
   border-radius: 50%;
   background: transparent;
   color: var(--text-primary);
-  font-size: 18px !important;
-  font-variation-settings: "FILL" 0, "wght" 500, "GRAD" 0, "opsz" 20;
+  font-size: 18px;
+  font-variation-settings:
+    "FILL" 0,
+    "wght" 500,
+    "GRAD" 0,
+    "opsz" 20;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   opacity: 0;
-  transition: opacity 0.12s, background 0.12s;
+  transition:
+    opacity 0.12s,
+    background 0.12s;
   padding: 0;
   z-index: 3;
 }
@@ -994,7 +1037,7 @@ html.light .view-toggle-btn.active {
 }
 
 .context-menu-icon {
-  font-size: 18px !important;
+  font-size: 18px;
   color: var(--text-secondary);
   flex-shrink: 0;
 }
@@ -1054,7 +1097,9 @@ html.light .view-toggle-btn.active {
 .gallery-item.selected::after {
   content: "check";
   font-family: "Material Symbols Outlined";
-  font-variation-settings: "FILL" 1, "wght" 700;
+  font-variation-settings:
+    "FILL" 1,
+    "wght" 700;
   position: absolute;
   top: 8px;
   left: 8px;
@@ -1066,8 +1111,9 @@ html.light .view-toggle-btn.active {
   color: #fff;
   background: var(--accent);
   border-radius: 50%;
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.18), /* hairline edge for crisp readability */ 0 2px 8px
-    rgba(0, 0, 0, 0.45); /* soft drop shadow — "lift" */
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.18), /* hairline edge for crisp readability */
+    0 2px 8px rgba(0, 0, 0, 0.45); /* soft drop shadow — "lift" */
   z-index: 5;
   pointer-events: none;
 }
@@ -1079,7 +1125,9 @@ html.light .gallery-item.selected {
 }
 html.light .gallery-folder-card.selected::after,
 html.light .gallery-item.selected::after {
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.22);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.12),
+    0 2px 8px rgba(0, 0, 0, 0.22);
 }
 
 /* Gallery scroll area */
@@ -1103,7 +1151,7 @@ html.light .gallery-item.selected::after {
 
 /* Override the legacy grid display; sections manage their own layout */
 .gallery-grid {
-  display: block !important;
+  display: block;
 }
 
 .gallery-grid .gallery-empty {
@@ -1163,7 +1211,9 @@ html.light .gallery-item.selected::after {
   border-radius: 8px;
   background: var(--bg-panel);
   cursor: pointer;
-  transition: background 0.1s, border-color 0.1s;
+  transition:
+    background 0.1s,
+    border-color 0.1s;
   position: relative;
   min-width: 0;
 }
@@ -1174,9 +1224,13 @@ html.light .gallery-item.selected::after {
 }
 
 .gallery-folder-card-icon {
-  font-size: 24px !important;
+  font-size: 24px;
   color: var(--text-primary);
-  font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+  font-variation-settings:
+    "FILL" 0,
+    "wght" 400,
+    "GRAD" 0,
+    "opsz" 24;
   flex-shrink: 0;
 }
 
@@ -1207,7 +1261,10 @@ html.light .gallery-item.selected::after {
   align-items: center;
   justify-content: center;
   opacity: 0;
-  transition: opacity 0.15s, background 0.15s, color 0.15s;
+  transition:
+    opacity 0.15s,
+    background 0.15s,
+    color 0.15s;
   flex-shrink: 0;
   padding: 0;
 }
@@ -1254,7 +1311,7 @@ html.light .gallery-item.selected::after {
 }
 
 .gallery-grid.list-view .gallery-folder-icon .material-symbols-outlined {
-  font-size: 28px !important;
+  font-size: 28px;
 }
 
 .gallery-grid.list-view .gallery-item-info {
@@ -1404,7 +1461,11 @@ html.light .gallery-item.selected::after {
   background: transparent;
   color: var(--text-primary);
   font-size: 22px;
-  font-variation-settings: "FILL" 0, "wght" 500, "GRAD" 0, "opsz" 24;
+  font-variation-settings:
+    "FILL" 0,
+    "wght" 500,
+    "GRAD" 0,
+    "opsz" 24;
   cursor: pointer;
   display: flex;
   align-items: center;

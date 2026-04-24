@@ -5,6 +5,7 @@ import {
   renderMosaicRedact,
   renderSolidRedact,
 } from "../redact-utils.js";
+import type { RedactStyle } from "./tool-base.js";
 /**
  * RedactTool — unified Mosaic / Solid / Blur redaction tool.
  *
@@ -19,7 +20,6 @@ import {
  * offer the user an in-place style-swap without redrawing.
  */
 import { ToolBase } from "./tool-base.js";
-import type { RedactStyle } from "./tool-base.js";
 
 export class RedactTool extends ToolBase {
   readonly name = "redact";

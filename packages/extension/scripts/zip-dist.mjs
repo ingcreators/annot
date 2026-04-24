@@ -10,7 +10,7 @@ import { createHash } from "node:crypto";
 // Chrome Web Store and Microsoft Edge Add-ons accept the exact same
 // manifest (MV3) and asset layout, so both targets ship the identical
 // zip — only the store submission is different.
-import { mkdirSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 

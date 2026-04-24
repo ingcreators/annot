@@ -10,10 +10,10 @@ const POST_HIDE_PAINT_MS = 80;
 import { newIdB58 } from "@ingcreators/annot-core/utils";
 import { encodeCapture } from "../shared/encode.js";
 import {
-  type Settings,
   loadSettings,
   parseSelectorList,
   resolveEmulation,
+  type Settings,
   shouldHideOverlaysFor,
 } from "../shared/settings.js";
 // Static import of IDB store — used by external message API
@@ -490,7 +490,7 @@ async function findAnnotTab(): Promise<chrome.tabs.Tab | undefined> {
   // Fallback: full scan + manual filter
   const all = await chrome.tabs.query({});
   return (
-    all.find((t) => t.id != null && t.url && t.url.startsWith(`${ANNOTATION_URL}/`)) ||
+    all.find((t) => t.id && t.url?.startsWith(`${ANNOTATION_URL}/`)) ||
     all.find((t) => t.id != null && t.url === ANNOTATION_URL) ||
     all.find((t) => t.id != null && t.url?.startsWith(ANNOTATION_URL))
   );

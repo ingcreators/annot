@@ -13,14 +13,16 @@ import { applyArrowHead, detectArrowEnds } from "./tools/arrow-tool.js";
 import { applyDrawStyle, detectDrawStyle, isFreehandGroup } from "./tools/freehand-tool.js";
 import { convertMarkerShape, detectMarkerShape, resizeMarker } from "./tools/marker-tool.js";
 import type {
+  ArrowDim,
   ArrowHead,
+  ArrowShape,
   DrawStyle,
+  LineCap,
+  MarkerShape,
   RedactStyle,
   ShapeType,
   TextVariant,
 } from "./tools/tool-base.js";
-import type { ArrowDim, ArrowShape, LineCap } from "./tools/tool-base.js";
-import type { MarkerShape } from "./tools/tool-base.js";
 import { readTransformState, setRotation, toggleFlip } from "./transform-utils.js";
 
 /** True for any element that represents a line-with-optional-arrowheads:
@@ -988,7 +990,7 @@ export class PropertyPanel {
     plusBtn.textContent = "add";
 
     const apply = () => {
-      let v = Number.parseInt(input.value) || 0;
+      let v = Number.parseInt(input.value, 10) || 0;
       v = Math.max(0, Math.min(100, v));
       input.value = String(v);
       this.#setAll("fill-opacity", String(v / 100));
@@ -996,12 +998,12 @@ export class PropertyPanel {
 
     input.addEventListener("change", apply);
     minusBtn.addEventListener("click", () => {
-      const v = (Number.parseInt(input.value) || 0) - 5;
+      const v = (Number.parseInt(input.value, 10) || 0) - 5;
       input.value = String(Math.max(0, v));
       apply();
     });
     plusBtn.addEventListener("click", () => {
-      const v = (Number.parseInt(input.value) || 0) + 5;
+      const v = (Number.parseInt(input.value, 10) || 0) + 5;
       input.value = String(Math.min(100, v));
       apply();
     });

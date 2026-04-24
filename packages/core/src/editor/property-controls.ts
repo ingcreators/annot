@@ -18,8 +18,8 @@
  */
 
 import { setTooltip } from "../utils/tooltip.js";
-import { computeArrowParts } from "./arrow-markers.js";
 import type { ArrowSpec } from "./arrow-markers.js";
+import { computeArrowParts } from "./arrow-markers.js";
 import { createColorPalette } from "./color-palette.js";
 import { createCustomSelect } from "./custom-select.js";
 import { openAnchoredPopover } from "./toolbar.js";

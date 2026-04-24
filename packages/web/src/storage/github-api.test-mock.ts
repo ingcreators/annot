@@ -26,7 +26,7 @@
  * `@types/node` into this browser-targeted package's tsconfig or
  * a typecheck break under vitest 4's stricter type resolution.
  */
-import { http, HttpResponse } from "msw";
+import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 
 const API = "https://api.github.com";

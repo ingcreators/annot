@@ -1,23 +1,24 @@
 {
-  "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.4.13/schema.json",
   "vcs": {
     "enabled": true,
     "clientKind": "git",
     "useIgnoreFile": true
   },
   "files": {
-    "ignore": [
-      "**/node_modules",
-      "**/dist",
-      "**/build",
-      "**/.turbo",
-      "**/coverage",
-      "packages/desktop/src-tauri/target",
-      "packages/desktop/dist-isolation",
-      "pnpm-lock.yaml",
-      "packages/*/public/**",
-      "brand/**",
-      "**/*.md"
+    "includes": [
+      "**",
+      "!**/node_modules",
+      "!**/dist",
+      "!**/build",
+      "!**/.turbo",
+      "!**/coverage",
+      "!**/packages/desktop/src-tauri/target",
+      "!**/packages/desktop/dist-isolation",
+      "!**/pnpm-lock.yaml",
+      "!**/packages/**/*/public/**",
+      "!**/brand/**",
+      "!**/*.md"
     ]
   },
   "formatter": {
@@ -66,12 +67,14 @@
         "noExplicitAny": "off",
         "noArrayIndexKey": "off",
         "noConsole": "off",
-        "noAssignInExpressions": "off"
+        "noAssignInExpressions": "off",
+        "useIterableCallbackReturn": "off"
       },
       "complexity": {
         "noForEach": "off",
         "noUselessFragments": "off",
-        "useLiteralKeys": "off"
+        "useLiteralKeys": "off",
+        "useIndexOf": "off"
       },
       "performance": {
         "noDelete": "off"
@@ -79,6 +82,7 @@
       "correctness": {
         "noUnusedVariables": "warn",
         "noUnusedImports": "warn",
+        "noUnusedPrivateClassMembers": "off",
         "useExhaustiveDependencies": "off"
       },
       "a11y": {
@@ -91,7 +95,7 @@
   },
   "overrides": [
     {
-      "include": ["packages/extension/**/*.ts"],
+      "includes": ["**/packages/extension/**/*.ts"],
       "linter": {
         "rules": {
           "suspicious": {
@@ -101,7 +105,7 @@
       }
     },
     {
-      "include": ["**/vite.config.ts", "**/vitest.config.ts", "**/*.config.ts"],
+      "includes": ["**/vite.config.ts", "**/vitest.config.ts", "**/*.config.ts"],
       "linter": {
         "rules": {
           "style": {

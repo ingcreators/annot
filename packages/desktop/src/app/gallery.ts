@@ -1,11 +1,11 @@
 import {
-  type ImageInfo,
-  type Project,
   deleteImage,
+  type ImageInfo,
   isTauri,
   listImages,
   listProjects,
   loadScreenshot,
+  type Project,
 } from "@ingcreators/annot-core/utils/tauri-bridge";
 
 export class Gallery {
@@ -48,7 +48,7 @@ export class Gallery {
     this.#projectSelect.className = "gallery-select";
     this.#projectSelect.addEventListener("change", () => {
       const val = this.#projectSelect!.value;
-      this.#currentProjectId = val === "all" ? null : Number.parseInt(val);
+      this.#currentProjectId = val === "all" ? null : Number.parseInt(val, 10);
       this.#loadImages();
     });
     projectWrap.appendChild(this.#projectSelect);

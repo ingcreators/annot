@@ -1,15 +1,12 @@
-import { ToolBase } from "./tool-base.js";
 import type { MarkerShape } from "./tool-base.js";
+import { ToolBase } from "./tool-base.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
 /** Resolve the current marker shape, honoring both the new
  *  `markerShape` field and the legacy `fillColor === "rect"` hack so
  *  older saved presets continue to work. */
-function resolveMarkerShape(opts: {
-  markerShape?: MarkerShape;
-  fillColor?: string;
-}): MarkerShape {
+function resolveMarkerShape(opts: { markerShape?: MarkerShape; fillColor?: string }): MarkerShape {
   if (opts.markerShape) return opts.markerShape;
   if (opts.fillColor === "rect") return "rect";
   return "circle";

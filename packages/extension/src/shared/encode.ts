@@ -6,7 +6,7 @@
  * `@ingcreators/annot-core/encode` so both the extension and the Annot web
  * app share one canonical implementation.
  */
-import { type EncodeResult, encodeCapture as coreEncode } from "@ingcreators/annot-core/encode";
+import { encodeCapture as coreEncode, type EncodeResult } from "@ingcreators/annot-core/encode";
 import type { Settings } from "./settings.js";
 
 export type { EncodeResult };

@@ -208,7 +208,9 @@ input[type="checkbox"] {
   background: var(--input-bg);
   cursor: pointer;
   position: relative;
-  transition: border-color 0.15s, background 0.15s;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
 }
 input[type="checkbox"]:checked {
   background: var(--accent);
@@ -274,7 +276,9 @@ input[type="checkbox"]:focus-visible {
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  transition: filter 0.15s, background 0.15s;
+  transition:
+    filter 0.15s,
+    background 0.15s;
 }
 .btn-secondary {
   background: transparent;

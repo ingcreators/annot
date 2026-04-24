@@ -42,8 +42,8 @@ import type { PageElement, PageMetadata, SelectionManager, Toolbar } from "@ingc
 import {
   type CanvasManager,
   type History,
-  PropertyPanel,
   highlightColorLabel,
+  PropertyPanel,
   setTooltip,
 } from "@ingcreators/annot-core";
 import {

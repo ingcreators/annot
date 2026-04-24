@@ -1,6 +1,6 @@
 import { resolve } from "path";
-import { defineConfig } from "vite";
 import type { Plugin } from "vite";
+import { defineConfig } from "vite";
 
 /**
  * Wrap the content-script entry in an IIFE with a re-injection guard.

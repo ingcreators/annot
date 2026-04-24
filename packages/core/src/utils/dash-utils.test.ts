@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DASH_MULTIPLIERS, computeDasharray, detectDashKey } from "./dash-utils.js";
+import { computeDasharray, DASH_MULTIPLIERS, detectDashKey } from "./dash-utils.js";
 
 describe("DASH_MULTIPLIERS", () => {
   it("exposes the Office dash presets", () => {

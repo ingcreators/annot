@@ -11,8 +11,8 @@ import { BrowserStore } from "./browser-store.js";
 import { DeviceStore } from "./device-store.js";
 import { clearHandle, loadHandle, saveHandle } from "./fs-handle-store.js";
 import {
-  type GitHubRepoRef,
   clearRepoRef as clearGitHubRef,
+  type GitHubRepoRef,
   getAccessToken as getGitHubToken,
   signOut as githubSignOut,
   loadRepoRef as loadGitHubRef,

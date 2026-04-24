@@ -95,12 +95,17 @@ body {
   bottom: 28px;
   overflow: auto;
   background: var(--canvas-bg);
-  background-image: linear-gradient(45deg, var(--canvas-check) 25%, transparent 25%),
+  background-image:
+    linear-gradient(45deg, var(--canvas-check) 25%, transparent 25%),
     linear-gradient(-45deg, var(--canvas-check) 25%, transparent 25%),
     linear-gradient(45deg, transparent 75%, var(--canvas-check) 75%),
     linear-gradient(-45deg, transparent 75%, var(--canvas-check) 75%);
   background-size: 20px 20px;
-  background-position: 0 0, 0 10px, 10px -10px, -10px 0;
+  background-position:
+    0 0,
+    0 10px,
+    10px -10px,
+    -10px 0;
 }
 
 #svg-root {
@@ -140,7 +145,9 @@ body {
   font-size: 13px;
   font-weight: 600;
   opacity: 0;
-  transition: opacity 0.3s, transform 0.3s;
+  transition:
+    opacity 0.3s,
+    transform 0.3s;
   z-index: 1000;
   pointer-events: none;
 }
@@ -320,7 +327,7 @@ body {
   border: none;
   background: transparent;
   color: var(--text-secondary, #888);
-  font-size: 16px !important;
+  font-size: 16px;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -533,7 +540,11 @@ body {
   min-width: 0;
 }
 .file-details-row-value.mono {
-  font-family: SF Mono, Menlo, Consolas, monospace;
+  font-family:
+    SF Mono,
+    Menlo,
+    Consolas,
+    monospace;
   font-size: 12px;
 }
 .file-details-row-value.selectable {
@@ -635,7 +646,9 @@ a.file-details-row-value:hover {
   padding: 0;
   margin: 0;
   border-radius: 3px;
-  transition: background 0.15s, box-shadow 0.15s;
+  transition:
+    background 0.15s,
+    box-shadow 0.15s;
   min-width: 0;
   text-overflow: ellipsis;
 }
@@ -807,7 +820,7 @@ body.editor-mode #editor-header {
   background: transparent;
   color: var(--text-muted);
   border: none;
-  font-size: 14px !important;
+  font-size: 14px;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -1054,7 +1067,11 @@ body.editor-mode.has-right-panel .file-details-backdrop {
 .editor-right-panel-empty-icon {
   font-size: 36px;
   opacity: 0.4;
-  font-variation-settings: "FILL" 0, "wght" 300, "GRAD" 0, "opsz" 40;
+  font-variation-settings:
+    "FILL" 0,
+    "wght" 300,
+    "GRAD" 0,
+    "opsz" 40;
 }
 .editor-right-panel-empty-title {
   margin: 0;
@@ -1103,7 +1120,10 @@ body.editor-mode.has-right-panel .file-details-backdrop {
   align-items: center;
   justify-content: center;
   font-size: 14px;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    color 0.15s;
 }
 .scratchpad-save-btn:not(:disabled):hover {
   background: var(--accent-bg);
@@ -1116,7 +1136,11 @@ body.editor-mode.has-right-panel .file-details-backdrop {
 }
 .scratchpad-save-btn .material-symbols-outlined {
   font-size: 16px;
-  font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 20;
+  font-variation-settings:
+    "FILL" 0,
+    "wght" 400,
+    "GRAD" 0,
+    "opsz" 20;
 }
 
 .scratchpad-grid {
@@ -1136,7 +1160,9 @@ body.editor-mode.has-right-panel .file-details-backdrop {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: border-color 0.15s, transform 0.15s;
+  transition:
+    border-color 0.15s,
+    transform 0.15s;
 }
 .scratchpad-item:hover {
   border-color: var(--accent);
@@ -1168,14 +1194,18 @@ body.editor-mode.has-right-panel .file-details-backdrop {
   border-radius: 50%;
   background: rgba(0, 0, 0, 0.6);
   color: #fff;
-  font-size: 12px !important;
+  font-size: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   opacity: 0;
   transition: opacity 0.15s;
-  font-variation-settings: "FILL" 0, "wght" 500, "GRAD" 0, "opsz" 20;
+  font-variation-settings:
+    "FILL" 0,
+    "wght" 500,
+    "GRAD" 0,
+    "opsz" 20;
 }
 .scratchpad-item:hover .scratchpad-item-delete {
   opacity: 1;
@@ -1214,11 +1244,17 @@ body.editor-mode.has-right-panel .file-details-backdrop {
   user-select: none;
   flex-shrink: 0; /* stays intact next to the filename */
   color: var(--text-muted);
-  transition: color 0.15s, background 0.15s;
+  transition:
+    color 0.15s,
+    background 0.15s;
 }
 .save-status-icon {
   font-size: 14px;
-  font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 20;
+  font-variation-settings:
+    "FILL" 0,
+    "wght" 400,
+    "GRAD" 0,
+    "opsz" 20;
 }
 
 /* Saved — neutral, at rest */
@@ -1262,12 +1298,18 @@ body.editor-mode.has-right-panel .file-details-backdrop {
   border-radius: 4px;
   cursor: pointer;
   font-size: 18px;
-  font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 20;
+  font-variation-settings:
+    "FILL" 0,
+    "wght" 400,
+    "GRAD" 0,
+    "opsz" 20;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  transition: background 0.15s, color 0.15s;
+  transition:
+    background 0.15s,
+    color 0.15s;
 }
 .editor-header-info-btn:hover {
   background: var(--hover-bg);
@@ -1389,7 +1431,9 @@ body.editor-mode.has-right-panel .file-details-backdrop {
   overflow: hidden;
   background: var(--bg-panel);
   cursor: pointer;
-  transition: border-color 0.15s, transform 0.15s;
+  transition:
+    border-color 0.15s,
+    transform 0.15s;
 }
 
 .gallery-item:hover {
@@ -1412,9 +1456,15 @@ body.editor-mode.has-right-panel .file-details-backdrop {
   object-fit: contain;
   object-position: center;
   display: block;
+  /* Progressive enhancement: browsers that don't recognise `high-
+   * quality` fall back to `-webkit-optimize-contrast` or the plain
+   * `auto` declaration earlier in the stack. This is a deliberate
+   * cross-browser pattern, not a typo. */
+  /* biome-ignore-start lint/suspicious/noDuplicateProperties: deliberate CSS fallback stack */
   image-rendering: auto;
   image-rendering: -webkit-optimize-contrast;
   image-rendering: high-quality;
+  /* biome-ignore-end lint/suspicious/noDuplicateProperties: deliberate CSS fallback stack */
 }
 
 .gallery-item-info {

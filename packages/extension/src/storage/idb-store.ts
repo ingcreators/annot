@@ -14,7 +14,7 @@ import {
   validateName,
 } from "@ingcreators/annot-core/storage";
 
-export type { ImageRecord, ImageRecordUpdate, FolderRecord };
+export type { FolderRecord, ImageRecord, ImageRecordUpdate };
 
 const DB_NAME = "annot";
 const DB_VERSION = 4; // v4: path-based keys

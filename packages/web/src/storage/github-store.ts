@@ -834,17 +834,19 @@ export class GitHubStore implements StorageProvider {
       const blobShaByRelPath = new Map<string, string>();
       const uploads = ops.filter((op) => op.blob != null);
       if (uploads.length > 0) {
-        await Promise.all(uploads.map(async (op) => {
-          const base64 = await blobToBase64(op.blob!);
-          const blobResp = await this.#fetch(`${repoBase}/git/blobs`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ content: base64, encoding: "base64" }),
-          });
-          const body = await blobResp.json();
-          if (!body?.sha) throw githubError("git/blobs returned no SHA");
-          blobShaByRelPath.set(op.relPath, body.sha);
-        }));
+        await Promise.all(
+          uploads.map(async (op) => {
+            const base64 = await blobToBase64(op.blob!);
+            const blobResp = await this.#fetch(`${repoBase}/git/blobs`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ content: base64, encoding: "base64" }),
+            });
+            const body = await blobResp.json();
+            if (!body?.sha) throw githubError("git/blobs returned no SHA");
+            blobShaByRelPath.set(op.relPath, body.sha);
+          }),
+        );
       }
 
       // Build tree entries. Per GitHub docs, `sha: null` removes the
@@ -917,8 +919,7 @@ export class GitHubStore implements StorageProvider {
           this.#thumbnailInFlight.delete(op.relPath);
           continue;
         }
-        const newBlobSha = op.existingBlobSha
-          ?? blobShaByRelPath.get(op.relPath);
+        const newBlobSha = op.existingBlobSha ?? blobShaByRelPath.get(op.relPath);
         if (newBlobSha) this.#shaByPath.set(op.relPath, newBlobSha);
         this.#registerFolder(getParentPath(op.relPath));
       }
@@ -1234,7 +1235,7 @@ export class GitHubStore implements StorageProvider {
     // -- Annotation / tag update: re-render + PUT in place.
     if (updates.annotationsSvg !== undefined || updates.tags !== undefined) {
       const record = await this.getImage(currentPath);
-      if (!record || !record.originalDataUrl) return currentPath;
+      if (!record?.originalDataUrl) return currentPath;
 
       const annotationsSvg = updates.annotationsSvg ?? record.annotationsSvg;
       const tags = updates.tags ?? record.tags;
@@ -1331,14 +1332,18 @@ export class GitHubStore implements StorageProvider {
       if (!moved) {
         // Fallback to the two-commit Contents-API path.
         const record = await this.getImage(currentPath);
-        if (!record || !record.originalDataUrl) {
+        if (!record?.originalDataUrl) {
           throw githubError(`Cannot move missing image: ${currentPath}`);
         }
         const isJpeg = record.originalDataUrl.startsWith("data:image/jpeg");
         const blob = await this.#buildXmpBlob(record, isJpeg ? "jpg" : "png");
         await this.#putContents(newPath, blob, this.#commitMessage("add", newPath));
         if (oldSha) {
-          await this.#deleteContents(currentPath, oldSha, this.#commitMessage("delete", currentPath));
+          await this.#deleteContents(
+            currentPath,
+            oldSha,
+            this.#commitMessage("delete", currentPath),
+          );
         }
       }
 
@@ -1398,7 +1403,7 @@ export class GitHubStore implements StorageProvider {
     // rebuild the blob via XMP and fall back to the Contents-API
     // two-commit path. Preserves the historical semantics.
     const record = await this.getImage(path);
-    if (!record || !record.originalDataUrl) {
+    if (!record?.originalDataUrl) {
       throw githubError(`Cannot rename missing image: ${path}`);
     }
     const isJpeg = record.originalDataUrl.startsWith("data:image/jpeg");
@@ -1544,9 +1549,10 @@ export class GitHubStore implements StorageProvider {
       treeOps.push({ relPath: newFile, existingBlobSha: sha });
       treeOps.push({ relPath: oldFile, deleteOnly: true });
     }
-    const atomicSha = treeOps.length > 0
-      ? await this.#commitTreeOps(treeOps, `annot: move ${oldPath} → ${newPath}`)
-      : null;
+    const atomicSha =
+      treeOps.length > 0
+        ? await this.#commitTreeOps(treeOps, `annot: move ${oldPath} → ${newPath}`)
+        : null;
 
     if (!atomicSha) {
       // Fallback: per-file migrate via the Contents API. Produces
@@ -1578,7 +1584,7 @@ export class GitHubStore implements StorageProvider {
     }
 
     const record = await this.getImage(oldRelPath);
-    if (!record || !record.originalDataUrl) return;
+    if (!record?.originalDataUrl) return;
     const isJpeg = record.originalDataUrl.startsWith("data:image/jpeg");
     const blob = await this.#buildXmpBlob(record, isJpeg ? "jpg" : "png");
     await this.#putContents(newRelPath, blob, message);

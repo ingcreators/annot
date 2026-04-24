@@ -6,6 +6,7 @@ import {
   writeArrowEndpoints,
   writeArrowSpec,
 } from "../arrow-markers.js";
+import type { ArrowDim, ArrowHead, ArrowShape, MarkerSize } from "./tool-base.js";
 /**
  * ArrowTool — unified Line / Arrow tool.
  *
@@ -26,7 +27,6 @@ import {
  * affects the closed ones.
  */
 import { ToolBase } from "./tool-base.js";
-import type { ArrowDim, ArrowHead, ArrowShape, MarkerSize } from "./tool-base.js";
 
 export interface ArrowEndsSpec {
   start: ArrowSpec;

@@ -21,54 +21,53 @@
 //   3. If no, add it ONLY in `src/index.ts`.
 // See PRODUCT_DIRECTION.md principle P2 for the underlying rule.
 
-// ─── Storage types (pure types) ───────────────────────────────────────
-export type {
-  ImageRecord,
-  ImageRecordUpdate,
-  FolderRecord,
-  StorageProvider,
-  PageMetadata,
-  PageElement,
-} from "./storage/types.js";
-
-// ─── Path utilities (pure string manipulation) ────────────────────────
-export {
-  ROOT_PATH,
-  validateName,
-  joinPath,
-  getParentPath,
-  getFilename,
-  splitPath,
-  ancestorPaths,
-  isDescendantOrSame,
-  splitExt,
-  uniquifyFilename,
-  uniquifyFilenameAsync,
-  rewritePathPrefix,
-} from "./storage/path.js";
-
 // ─── SVG format versioning ────────────────────────────────────────────
 // Element-taking helpers work with any DOM-ish Element (jsdom, etc.);
 // the constants and string helper are pure.
 export {
   ANNOT_SVG_VERSION,
-  ANNOT_SVG_VERSION_UNSTAMPED,
   ANNOT_SVG_VERSION_ATTR,
-  stampAnnotVersion,
-  readAnnotVersion,
+  ANNOT_SVG_VERSION_UNSTAMPED,
   getAnnotVersionFromString,
+  readAnnotVersion,
+  stampAnnotVersion,
 } from "./editor/svg-format.js";
+
+// ─── Path utilities (pure string manipulation) ────────────────────────
+export {
+  ancestorPaths,
+  getFilename,
+  getParentPath,
+  isDescendantOrSame,
+  joinPath,
+  ROOT_PATH,
+  rewritePathPrefix,
+  splitExt,
+  splitPath,
+  uniquifyFilename,
+  uniquifyFilenameAsync,
+  validateName,
+} from "./storage/path.js";
+// ─── Storage types (pure types) ───────────────────────────────────────
+export type {
+  FolderRecord,
+  ImageRecord,
+  ImageRecordUpdate,
+  PageElement,
+  PageMetadata,
+  StorageProvider,
+} from "./storage/types.js";
 
 // ─── Style constants + dash utilities ─────────────────────────────────
 // Shared defaults so headless and UI-driven annotations produce the
 // same defaults unless explicitly overridden.
 export {
-  DEFAULT_STROKE_COLOR,
   DEFAULT_FILL_COLOR,
-  DEFAULT_STROKE_WIDTH,
   DEFAULT_FONT_SIZE,
-  MOSAIC_BLOCK_SIZE,
+  DEFAULT_STROKE_COLOR,
+  DEFAULT_STROKE_WIDTH,
   JPEG_QUALITY,
+  MOSAIC_BLOCK_SIZE,
 } from "./utils/constants.js";
 export { computeDasharray, detectDashKey } from "./utils/dash-utils.js";
 
@@ -76,4 +75,4 @@ export { computeDasharray, detectDashKey } from "./utils/dash-utils.js";
 export { newIdB58 } from "./utils/id.js";
 
 // ─── ZIP builder (Uint8Array + Blob; no DOM) ──────────────────────────
-export { buildZip, dataUrlToBytes, dataUrlExt } from "./zip/zip-builder.js";
+export { buildZip, dataUrlExt, dataUrlToBytes } from "./zip/zip-builder.js";

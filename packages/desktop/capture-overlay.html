@@ -63,7 +63,9 @@ html, body { width:100vw; height:100vh; overflow:hidden; cursor:crosshair; backg
 function setupRect(scaleX, scaleY, invoke) {
   const sel = document.getElementById("sel");
   const info = document.getElementById("info");
-  let sx = 0, sy = 0, dragging = false;
+  let sx = 0;
+  let sy = 0;
+  let dragging = false;
 
   document.addEventListener("mousedown", (e) => {
     sx = e.clientX; sy = e.clientY; dragging = true;
@@ -73,18 +75,22 @@ function setupRect(scaleX, scaleY, invoke) {
 
   document.addEventListener("mousemove", (e) => {
     if (!dragging) return;
-    const x = Math.min(sx, e.clientX), y = Math.min(sy, e.clientY);
-    const w = Math.abs(e.clientX - sx), h = Math.abs(e.clientY - sy);
-    sel.style.left = x + "px"; sel.style.top = y + "px";
-    sel.style.width = w + "px"; sel.style.height = h + "px";
-    info.textContent = Math.round(w * scaleX) + " × " + Math.round(h * scaleY);
-    info.style.left = x + "px"; info.style.top = (y + h + 8) + "px";
+    const x = Math.min(sx, e.clientX);
+    const y = Math.min(sy, e.clientY);
+    const w = Math.abs(e.clientX - sx);
+    const h = Math.abs(e.clientY - sy);
+    sel.style.left = `${x}px`; sel.style.top = `${y}px`;
+    sel.style.width = `${w}px`; sel.style.height = `${h}px`;
+    info.textContent = `${Math.round(w * scaleX)} × ${Math.round(h * scaleY)}`;
+    info.style.left = `${x}px`; info.style.top = `${y + h + 8}px`;
   });
 
   document.addEventListener("mouseup", (e) => {
     if (!dragging) return; dragging = false;
-    const x = Math.min(sx, e.clientX), y = Math.min(sy, e.clientY);
-    const w = Math.abs(e.clientX - sx), h = Math.abs(e.clientY - sy);
+    const x = Math.min(sx, e.clientX);
+    const y = Math.min(sy, e.clientY);
+    const w = Math.abs(e.clientX - sx);
+    const h = Math.abs(e.clientY - sy);
     if (w > 5 && h > 5) {
       invoke("capture_overlay_result", {
         result: { x: Math.round(x * scaleX), y: Math.round(y * scaleY), w: Math.round(w * scaleX), h: Math.round(h * scaleY) }
@@ -109,7 +115,8 @@ function setupWindow(scaleX, scaleY, windows, invoke) {
   let hovIdx = -1;
 
   document.addEventListener("mousemove", (e) => {
-    const mx = e.clientX, my = e.clientY;
+    const mx = e.clientX;
+    const my = e.clientY;
     let found = -1;
     for (let i = 0; i < cssWins.length; i++) {
       const w = cssWins[i];
@@ -121,11 +128,11 @@ function setupWindow(scaleX, scaleY, windows, invoke) {
       hovIdx = found;
       if (found >= 0) {
         const w = cssWins[found];
-        hl.style.left = w.cx + "px"; hl.style.top = w.cy + "px";
-        hl.style.width = w.cw + "px"; hl.style.height = w.ch + "px";
+        hl.style.left = `${w.cx}px`; hl.style.top = `${w.cy}px`;
+        hl.style.width = `${w.cw}px`; hl.style.height = `${w.ch}px`;
         hl.style.display = "block";
         lb.textContent = w.title;
-        lb.style.left = w.cx + "px"; lb.style.top = Math.max(0, w.cy - 26) + "px";
+        lb.style.left = `${w.cx}px`; lb.style.top = `${Math.max(0, w.cy - 26)}px`;
         lb.style.display = "block";
       } else {
         hl.style.display = "none"; lb.style.display = "none";

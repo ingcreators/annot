@@ -64,7 +64,9 @@ body {
   color: #eef2ff;
   font-size: 14px;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
 }
 
 .capture-btn:hover {

@@ -7,11 +7,11 @@ import {
 import { computeDasharray } from "../utils/dash-utils.js";
 import {
   type AnnotationShape,
-  type ToolPreset,
   copyAsOffice,
   isTauri,
   loadToolPresets,
   saveToolPresets,
+  type ToolPreset,
 } from "../utils/tauri-bridge.js";
 import { setTooltip } from "../utils/tooltip.js";
 import { refreshArrowPath } from "./arrow-markers.js";
@@ -43,8 +43,14 @@ import { MarkerTool } from "./tools/marker-tool.js";
 import { RedactTool } from "./tools/redact-tool.js";
 import { ShapeTool } from "./tools/shape-tool.js";
 import { TextTool } from "./tools/text-tool.js";
-import type { LineCap, MarkerShape, ToolBase, ToolOptions } from "./tools/tool-base.js";
-import type { ArrowDim, ArrowShape } from "./tools/tool-base.js";
+import type {
+  ArrowDim,
+  ArrowShape,
+  LineCap,
+  MarkerShape,
+  ToolBase,
+  ToolOptions,
+} from "./tools/tool-base.js";
 import { toggleFlip } from "./transform-utils.js";
 
 // Minimal ambient declaration for the Chrome extension API surface
@@ -590,7 +596,7 @@ export class Toolbar {
     //                     Web still remember per-variant defaults)
     if (isTauri) {
       this.#loadPresetsFromFile();
-    } else if (typeof chrome !== "undefined" && chrome.storage?.local) {
+    } else if (chrome?.storage?.local) {
       this.#loadPresetsFromStorage();
     } else if (typeof localStorage !== "undefined") {
       this.#loadPresetsFromLocalStorage();
@@ -2986,7 +2992,7 @@ export class Toolbar {
         last_variants[toolId] = variant;
       }
       saveToolPresets({ tools, last_variants }).catch(() => {});
-    } else if (typeof chrome !== "undefined" && chrome.storage?.local) {
+    } else if (chrome?.storage?.local) {
       this.#savePresetsToStorage();
     } else if (typeof localStorage !== "undefined") {
       this.#savePresetsToLocalStorage();

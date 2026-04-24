@@ -19,8 +19,8 @@ import { createEditableImage, readEditableImage } from "./xmp-browser.js";
 
 /** Smallest valid 1×1 transparent PNG, 67 bytes. */
 const TINY_PNG_DATA_URL =
-  "data:image/png;base64,"
-  + "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+  "data:image/png;base64," +
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
 
 function dataUrlToBytes(dataUrl: string): Uint8Array {
   const comma = dataUrl.indexOf(",");
@@ -42,7 +42,7 @@ describe("createEditableImage + readEditableImage (PNG round-trip)", () => {
   // The runtime value is unchanged — this is purely a type assertion.
   const renderedBlob = new Blob([tinyPngBytes as BlobPart], { type: "image/png" });
 
-  const annotationsSvg = "<g><rect x=\"10\" y=\"10\" width=\"30\" height=\"30\"/></g>";
+  const annotationsSvg = '<g><rect x="10" y="10" width="30" height="30"/></g>';
   const width = 1;
   const height = 1;
 
@@ -137,8 +137,8 @@ describe("readEditableImage — negative / boundary cases", () => {
     // A plain PNG with no Annot metadata should cleanly return null
     // rather than throwing.
     const plainPng = dataUrlToBytes(
-      "data:image/png;base64,"
-      + "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
+      "data:image/png;base64," +
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
     );
     expect(readEditableImage(plainPng)).toBeNull();
   });

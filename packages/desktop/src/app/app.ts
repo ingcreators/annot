@@ -265,8 +265,8 @@ async function openSvgFile(filePath: string): Promise<void> {
     if (!href.startsWith("data:")) {
       // No embedded image, treat as annotation-only SVG
       // Use a blank white background
-      const w = Number.parseInt(svgRoot.getAttribute("width") || "800");
-      const h = Number.parseInt(svgRoot.getAttribute("height") || "600");
+      const w = Number.parseInt(svgRoot.getAttribute("width") || "800", 10);
+      const h = Number.parseInt(svgRoot.getAttribute("height") || "600", 10);
       const canvas = document.createElement("canvas");
       canvas.width = w;
       canvas.height = h;
