@@ -19,5 +19,10 @@
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
     "turbo": "^2.5.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "serialize-javascript@<7.0.3": ">=7.0.3"
+    }
   }
 }
