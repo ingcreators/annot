@@ -27,6 +27,26 @@ updates:
         update-types:
           - minor
           - patch
+    # Hold back majors that need a planned migration rather than a
+    # drive-by upgrade. Dependabot still opens minor / patch bumps
+    # and security advisories; only untriaged major-version PRs are
+    # suppressed.
+    #   - biome@2        — config schema migrates + ~120 files of
+    #                      auto-format diff + new default rules
+    #                      (useIterableCallbackReturn et al) that
+    #                      deserve their own focused PR.
+    #   - vitest@3, @4   — mocking / hooks API changes, msw + happy-dom
+    #                      integration needs re-validation.
+    #   - vite@7, @8     — PWA plugin + worker inputs changed; handoff
+    #                      routes and service-worker precache need a
+    #                      dedicated pass.
+    ignore:
+      - dependency-name: "@biomejs/biome"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "vitest"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "vite"
+        update-types: ["version-update:semver-major"]
     labels:
       - dependencies
     commit-message:
