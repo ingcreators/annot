@@ -2221,15 +2221,18 @@ export class App {
       this.#saveStatusIndicator?.setStatus("error");
       console.error("[save] Error:", e);
       if (e.status === 401) {
-        showAuthError(() => {
-          signIn().then((token) => {
-            if (this.#storage && "setToken" in this.#storage) {
-              (this.#storage as any).setToken(token);
-            }
-            hideError();
-            this.writeAnnotationsToStorage();
-          }).catch(() => {});
-        });
+        // Token refresh is handled internally by every network-backed
+        // store via `setTokenRefresher` (see bridge.ts), so a 401 that
+        // reaches here means the user already dismissed the refresh
+        // banner. Don't stack another auth banner on top — surface a
+        // plain retry so they can either sign back in via the sidebar
+        // and come back, or try again once the store has a valid
+        // session. The provider-labelled banner shown by the store's
+        // refresher carries the correct UX for re-auth.
+        showSaveError(
+          "Save failed — session expired. Sign in again from the sidebar and retry.",
+          () => this.writeAnnotationsToStorage(),
+        );
       } else if (e.status === 403) {
         showSaveError("Permission denied. You may not have write access to this folder.");
       } else if (e.status === 404) {

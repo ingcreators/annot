@@ -233,6 +233,7 @@ async function refreshDriveToken(): Promise<string | null> {
         // attempt instead of hanging on a never-resolved gate.
         settle(null);
       },
+      { provider: "Google Drive" },
     );
   });
 }
