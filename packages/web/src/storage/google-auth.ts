@@ -53,17 +53,26 @@ function loadGapiScript(): Promise<void> {
 }
 
 /** Sign in with Google and get an access token. Shows the OAuth
- *  popup (consent screen and/or account picker). Use `silentSignIn`
- *  first when possible — an expired access token can often be
- *  refreshed without any UI interruption if the user is still
- *  signed in to Google and previously granted the scope. */
-export async function signIn(): Promise<string> {
+ *  popup (consent screen and/or account picker).
+ *
+ *  `forceAccountPicker: true` routes through GIS's
+ *  `prompt: "select_account"`, which mirrors the GitHub setup
+ *  dialog's "Use a different personal access token" escape hatch
+ *  — without it, Google silently re-selects the last-used account,
+ *  so once a user is connected there's no visible path to switch
+ *  Google accounts. The sidebar's "Change Drive folder" reselect
+ *  icon passes `true` so the user can swap accounts or just
+ *  confirm the same one before the Picker opens. */
+export async function signIn(
+  opts: { forceAccountPicker?: boolean } = {},
+): Promise<string> {
   await loadGisScript();
 
   return new Promise((resolve, reject) => {
     const client = (window as any).google.accounts.oauth2.initTokenClient({
       client_id: GOOGLE_CLIENT_ID,
       scope: SCOPES,
+      prompt: opts.forceAccountPicker ? "select_account" : "",
       callback: (response: any) => {
         if (response.error) {
           reject(new Error(response.error));

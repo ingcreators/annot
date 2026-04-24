@@ -819,14 +819,19 @@ export class App {
         }
       } else if (mode === "googledrive") {
         try {
-          const token = await signIn();
+          // `forcePicker` means the user came in via the sidebar's
+          // reselect icon ("Change Drive folder"). Escalate that
+          // into Google's `select_account` prompt too so the user
+          // can pick a different Google account in the same gesture
+          // — without it, GIS silently reuses the last-used account
+          // and there's no visible path to switch. Mirrors the
+          // GitHub setup dialog's "Use a different personal access
+          // token" escape hatch.
+          const token = await signIn({ forceAccountPicker: forcePicker });
           // Reuse the previously-picked root when available — under
           // `drive.file` that picker result is the app's only handle
           // onto the user's Drive, so skipping the picker here just
           // skips an extra click, not an access grant.
-          // `forcePicker` is wired to the sidebar's reselect icon so
-          // the user can switch the Drive root the same way Device
-          // lets them switch folders.
           let folder = forcePicker ? null : loadDriveRoot();
           if (!folder) {
             folder = await showFolderPicker();
