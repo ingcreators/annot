@@ -5,11 +5,8 @@
 
 import { createThemeToggle } from "@ingcreators/annot-core";
 import type { ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
-import { getFilename } from "@ingcreators/annot-core/storage";
-import { newIdB58, setTooltip } from "@ingcreators/annot-core/utils";
+import { setTooltip } from "@ingcreators/annot-core/utils";
 import { ScratchpadStore } from "./editor/scratchpad-store.js";
-import type { SplitEditor } from "./editor/split-editor.js";
-import { loadEncodeOptions } from "./encode-options.js";
 import { FileManager } from "./gallery/file-manager.js";
 import {
   deleteExtensionImage,
@@ -21,20 +18,19 @@ import {
   setStorageMode,
   type StorageMode,
 } from "./storage/bridge.js";
-import { encodeCaptureInWorker } from "./workers/encode-client.js";
 import { CaptureHost, type OpenEditorArgs } from "./app/capture-host.js";
 import { EditorSession } from "./app/editor-session.js";
-import { bumpFilenameSuffix, retryFsOp } from "./app/fs-utils.js";
+import { ExtensionTransferHost } from "./app/extension-transfer-host.js";
 import { HeaderHost } from "./app/header-host.js";
 import { loadImage } from "./app/image-utils.js";
 import { RouterHost } from "./app/router-host.js";
 import { SavePipeline } from "./app/save-pipeline.js";
+import { SplitEditorHost } from "./app/split-editor-host.js";
 import { StatusHost } from "./app/status-host.js";
 import { StorageBridge } from "./app/storage-bridge.js";
 
 import { pasteFromClipboard } from "./capture/pwa-capture.js";
 import { editUrl, galleryUrl, pushRoute } from "./router.js";
-import { showAlertDialog } from "./ui/dialog.js";
 
 export class App {
   #storage: StorageProvider | null = null;
@@ -48,7 +44,6 @@ export class App {
   #currentImageRecord: ImageRecord | null = null;
   #currentTags: Record<string, string> = {};
   #currentFolderPath = "";
-  #splitEditor: SplitEditor | null = null;
 
   /** Scratchpad persistence — shared across editor sessions (the
    *  store itself is stateless, just a thin wrapper around IndexedDB). */
@@ -76,6 +71,12 @@ export class App {
    *  `#deviceStore` above are kept as read-cache mirrors so the
    *  many existing `this.#storage` call sites don't churn. */
   #storageBridge: StorageBridge;
+  /** Extension transfer host — owns bulk + single-file transfer
+   *  from the browser-extension IDB into the user's backend. */
+  #extensionTransferHost: ExtensionTransferHost;
+  /** Split-editor host — owns the overlay lifecycle + slice-apply
+   *  persistence flow. */
+  #splitEditorHost: SplitEditorHost;
 
   constructor() {
     this.#savePipeline = new SavePipeline({
@@ -131,6 +132,27 @@ export class App {
       this.#savePipeline,
       this.#scratchpadStore,
     );
+    this.#storageBridge = new StorageBridge({
+      getFileManager: () => this.#fileManager,
+    });
+    this.#extensionTransferHost = new ExtensionTransferHost({
+      getStorage: () => this.#storage,
+      getCurrentFolderPath: () => this.#currentFolderPath,
+      setCurrentImagePath: (p) => {
+        this.#currentImagePath = p;
+      },
+      setCurrentTags: (t) => {
+        this.#currentTags = t;
+      },
+      clearFileManager: () => {
+        this.#fileManager = null;
+      },
+      getEditorSession: () => this.#editorSession,
+    });
+    this.#splitEditorHost = new SplitEditorHost({
+      getStorage: () => this.#storage,
+      showGallery: () => this.showGallery(),
+    });
     this.#routerHost = new RouterHost({
       getStorage: () => this.#storage,
       getCurrentFolderPath: () => this.#currentFolderPath,
@@ -139,13 +161,11 @@ export class App {
       },
       showGalleryView: () => this.showGalleryView(),
       handleStorageSelect: (mode) => this.handleStorageSelect(mode),
-      transferAllFromExtension: () => this.transferAllFromExtension(),
-      transferAndOpen: (record, extPath) => this.transferAndOpen(record, extPath),
+      transferAllFromExtension: () => this.#extensionTransferHost.transferAll(),
+      transferAndOpen: (record, extPath) =>
+        this.#extensionTransferHost.transferAndOpen(record, extPath),
       openFromGallery: (record) => this.openFromGallery(record),
-      setupSplitEditor: (records) => this.setupSplitEditor(records),
-    });
-    this.#storageBridge = new StorageBridge({
-      getFileManager: () => this.#fileManager,
+      setupSplitEditor: (records) => this.#splitEditorHost.setup(records),
     });
   }
 
@@ -273,10 +293,7 @@ export class App {
       this.#storage?.constructor?.name,
     );
     // Tear down split editor if active (session → gallery).
-    if (this.#splitEditor) {
-      this.#splitEditor.unmount();
-      this.#splitEditor = null;
-    }
+    this.#splitEditorHost.unmount();
     const canvasContainer = document.getElementById("canvas-container")!;
     canvasContainer.style.display = "none";
 
@@ -440,130 +457,7 @@ export class App {
     }
   }
 
-  // ---- Editor ----
 
-  private async transferAllFromExtension(): Promise<void> {
-    try {
-      const extStorage = await getStorage();
-      // Extension root images only — walking all folders would be expensive
-      const rootImages = await extStorage.listImages("");
-      if (rootImages.length === 0) return;
-
-      console.log("[transfer] Found", rootImages.length, "images in Extension IDB root");
-
-      const { BrowserStore } = await import("./storage/browser-store.js");
-      // Transfer to the user's currently selected storage
-      const browserStore = this.#storage || new BrowserStore();
-
-      for (const img of rootImages) {
-        try {
-          const full = await extStorage.getImage(img.path);
-          if (!full?.originalDataUrl) continue;
-
-          let w = full.width;
-          let h = full.height;
-          if (!w || !h) {
-            try {
-              const imgEl = await loadImage(full.originalDataUrl);
-              w = imgEl.naturalWidth;
-              h = imgEl.naturalHeight;
-            } catch {
-              continue;
-            }
-          }
-
-          const now = new Date().toISOString();
-          // Preserve the extension's filename (not path — we re-home into the
-          // user's currently-selected folder).
-          const filename = img.path.includes("/")
-            ? img.path.slice(img.path.lastIndexOf("/") + 1)
-            : img.path;
-          // Wrap in retry: rapid back-to-back saves into a fresh FS handle
-          // can hit Chrome's "stale cached state" issue (InvalidStateError).
-          await retryFsOp(() =>
-            browserStore.saveImage({
-              originalDataUrl: full.originalDataUrl,
-              thumbnailDataUrl: full.thumbnailDataUrl || "",
-              annotationsSvg: full.annotationsSvg || "",
-              width: w,
-              height: h,
-              sourceUrl: full.sourceUrl || "",
-              tags: full.tags || {},
-              folderPath: this.#currentFolderPath,
-              filename,
-              createdAt: full.createdAt || now,
-              updatedAt: now,
-              // Carry DOM element metadata through the extension → app
-              // hand-off so the Elements sidebar works on captures that
-              // came in through this bulk-transfer path (which is how
-              // the extension typically hands screenshots over).
-              pageMetadata: full.pageMetadata,
-            }),
-          );
-
-          deleteExtensionImage(img.path);
-        } catch (e) {
-          // Don't abort the whole batch on a single bad image — log and continue.
-          console.error("[transfer] failed for", img.path, "(continuing):", e);
-        }
-      }
-
-      console.log(
-        "[transfer] Transferred",
-        rootImages.length,
-        "images to",
-        getStorageMode(),
-        "folder:",
-        JSON.stringify(this.#currentFolderPath),
-      );
-    } catch (e) {
-      console.error("[transfer] Error:", e);
-    }
-  }
-
-  private async transferAndOpen(record: ImageRecord, extPath: string): Promise<void> {
-    // Respect the user's currently selected storage
-    const browserStore =
-      this.#storage || new (await import("./storage/browser-store.js")).BrowserStore();
-
-    let w = record.width;
-    let h = record.height;
-    if (!w || !h) {
-      const img = await loadImage(record.originalDataUrl);
-      w = img.naturalWidth;
-      h = img.naturalHeight;
-    }
-
-    const now = new Date().toISOString();
-    const savedPath = await browserStore.saveImage({
-      originalDataUrl: record.originalDataUrl,
-      thumbnailDataUrl: record.thumbnailDataUrl || "",
-      annotationsSvg: record.annotationsSvg || "",
-      width: w,
-      height: h,
-      sourceUrl: record.sourceUrl || "",
-      tags: record.tags || {},
-      folderPath: this.#currentFolderPath,
-      createdAt: now,
-      updatedAt: now,
-    });
-
-    this.#currentImagePath = savedPath;
-    this.#currentTags = record.tags || {};
-    this.#fileManager = null;
-
-    pushRoute(editUrl(getStorageMode(), savedPath));
-
-    this.#editorSession.setupEditor(
-      record.originalDataUrl,
-      w,
-      h,
-      record.annotationsSvg || undefined,
-      record.pageMetadata,
-    );
-
-    deleteExtensionImage(extPath);
-  }
 
   async openFromGallery(record: ImageRecord): Promise<void> {
     if (!this.#storage) return;
@@ -593,220 +487,6 @@ export class App {
       full.pageMetadata,
     );
   }
-
-  /**
-   * Mount the Split Editor for a `perPage` or `scroll` capture session.
-   * The editor stacks all session frames vertically (forming a virtual
-   * continuous page) and lets the user drag, add, or remove page-break
-   * lines. On Apply the images are re-sliced to the new boundaries and
-   * persisted (delete-all + save-N); the session may end up with a
-   * different number of images than it started with.
-   */
-  async setupSplitEditor(records: ImageRecord[]): Promise<void> {
-    if (records.length === 0 || !this.#storage) return;
-
-    // Tear down any previous instance
-    if (this.#splitEditor) {
-      this.#splitEditor.unmount();
-      this.#splitEditor = null;
-    }
-
-    // `listImages` on FileSystem / Drive / some extension-bridged stores
-    // returns lazy records with `originalDataUrl: ""` for performance. The
-    // split editor needs the full pixel data, so load each record via
-    // `getImage()` which forces the full read.
-    const storage = this.#storage;
-    const fullRecords: ImageRecord[] = [];
-    for (const r of records) {
-      if (r.originalDataUrl) {
-        fullRecords.push(r);
-        continue;
-      }
-      try {
-        const full = await storage.getImage(r.path);
-        if (full?.originalDataUrl) {
-          fullRecords.push(full);
-        } else {
-          console.warn("[split-editor] getImage returned no data for:", r.path);
-          fullRecords.push(r); // push placeholder so index/count stays stable; mount() will throw with a clear message
-        }
-      } catch (e) {
-        console.error("[split-editor] getImage failed for:", r.path, e);
-        fullRecords.push(r);
-      }
-    }
-    records = fullRecords;
-
-    const sessionId = records[0]!.tags?.session || "";
-
-    // Hide the single-image editor chrome so the SplitEditor owns the screen.
-    const canvasContainer = document.getElementById("canvas-container")!;
-    canvasContainer.style.display = "none";
-    const statusbar = document.getElementById("statusbar")!;
-    statusbar.style.display = "none";
-    const fileManagerEl = document.getElementById("file-manager")!;
-    fileManagerEl.style.display = "none";
-
-    const closeAndGoHome = () => {
-      this.#splitEditor?.unmount();
-      this.#splitEditor = null;
-      canvasContainer.style.display = "";
-      statusbar.style.display = "";
-      void this.showGallery();
-    };
-
-    try {
-      const { SplitEditor } = await import("./editor/split-editor.js");
-      this.#splitEditor = new SplitEditor(records, {
-        onCancel: () => closeAndGoHome(),
-        onApply: async (slices) => {
-          try {
-            await this.#applySlicesToStorage(records, slices, sessionId);
-            // After apply, session content changed — go back to gallery in
-            // the folder that owned the session.
-            closeAndGoHome();
-          } catch (e: any) {
-            console.error("[split-editor] apply failed:", e);
-            await showAlertDialog({
-              title: "Couldn't apply splits",
-              message: e?.message || "An error occurred while saving the new slices.",
-            });
-          }
-        },
-      });
-      await this.#splitEditor.mount();
-    } catch (e: any) {
-      console.error("[split-editor] mount failed:", e);
-      await showAlertDialog({
-        title: "Couldn't open split editor",
-        message: e?.message || "Failed to load session frames.",
-      });
-      closeAndGoHome();
-    }
-  }
-
-  /**
-   * Persist a new list of slices as replacement frames for the given
-   * session. All original records are deleted first, then N fresh records
-   * are saved. Output count may differ from input count (splits can be
-   * added or removed). Preserves session id and sessionKind; assigns fresh
-   * captureIds and re-sequences sessionIndex/page/sessionTotal.
-   */
-  async #applySlicesToStorage(
-    records: ImageRecord[],
-    slices: import("./editor/split-editor.js").SplitEditorSlice[],
-    sessionId: string,
-  ): Promise<void> {
-    if (!this.#storage) throw new Error("Storage is not available");
-    if (slices.length === 0) throw new Error("No slices to save");
-    const storage = this.#storage;
-    const now = new Date().toISOString();
-    const total = slices.length;
-
-    // Derive a stable base filename stem from the first record (strip any
-    // trailing "-p<n>" so re-splits don't accumulate suffixes).
-    const first = records[0]!;
-    const firstName = getFilename(first.path);
-    const dot = firstName.lastIndexOf(".");
-    let stem = dot >= 0 ? firstName.slice(0, dot) : firstName;
-    stem = stem.replace(/-p\d+$/, "");
-
-    // The split editor outputs lossless PNG slices. Run them through the
-    // shared encoder so each slice respects the user's format preference
-    // (PNG-8 smart fallback by default — same logic as initial captures).
-    const encodeOptions = loadEncodeOptions();
-
-    // Inherit shared metadata from the first record
-    const inheritedTags = { ...(first.tags || {}) };
-    // Drop per-frame keys that we'll re-assign
-    delete inheritedTags.captureId;
-    delete inheritedTags.page;
-    delete inheritedTags.sessionIndex;
-    delete inheritedTags.sessionTotal;
-    inheritedTags.session = sessionId;
-
-    // Add a `.split-<timestamp>-` prefix to slice filenames so they never
-    // collide with the originals we're about to remove. We rename them back
-    // (drop the prefix) only AFTER all originals are safely deleted.
-    const tempPrefix = `.split-${Date.now()}-`;
-
-    // 1) Save all N new slices first (with disambiguated filenames). This
-    //    ensures the user never loses data if a delete fails partway.
-    const pad = String(total).length;
-    const savedSlicePaths: string[] = [];
-    for (let i = 0; i < slices.length; i++) {
-      const slice = slices[i]!;
-      // Re-encode the slice (PNG → PNG-8 / PNG / JPEG per options).
-      const encoded = await encodeCaptureInWorker(slice.dataUrl, encodeOptions);
-      const finalDataUrl = encoded.dataUrl;
-      const ext = encoded.chosen === "jpeg" ? ".jpg" : ".png";
-      const thumb = await storage.generateThumbnail(finalDataUrl);
-      const page = String(i + 1).padStart(pad, "0");
-      const tmpFilename = `${tempPrefix}${stem}-p${page}${ext}`;
-      const savedPath = await retryFsOp(() =>
-        storage.saveImage({
-          originalDataUrl: finalDataUrl,
-          thumbnailDataUrl: thumb,
-          annotationsSvg: "",
-          width: slice.width,
-          height: slice.height,
-          sourceUrl: first.sourceUrl || "",
-          tags: {
-            ...inheritedTags,
-            captureId: newIdB58(),
-            page: String(i + 1),
-            sessionIndex: String(i),
-            sessionTotal: String(total),
-          },
-          folderPath: first.folderPath,
-          filename: tmpFilename,
-          createdAt: first.createdAt || now,
-          updatedAt: now,
-        }),
-      );
-      savedSlicePaths.push(savedPath);
-    }
-
-    // 2) Now that all slices are safely saved, delete every original record.
-    for (const rec of records) {
-      try {
-        await retryFsOp(() => storage.deleteImage(rec.path));
-      } catch (e) {
-        console.warn("[split-editor] delete failed (continuing):", rec.path, e);
-      }
-    }
-
-    // 3) Rename slices to drop the temporary prefix so the user sees the
-    //    expected names. If a same-named file already exists in the folder
-    //    (e.g. orphaned output from a prior split that wasn't cleaned up),
-    //    uniquify with " (2)", " (3)" etc. so we never lose the slice.
-    for (const tmpPath of savedSlicePaths) {
-      const tmpName = getFilename(tmpPath);
-      if (!tmpName.startsWith(tempPrefix)) continue;
-      const baseFinalName = tmpName.slice(tempPrefix.length);
-      let finalName = baseFinalName;
-      let success = false;
-      for (let attempt = 0; attempt < 100; attempt++) {
-        try {
-          await retryFsOp(() => storage.renameImage(tmpPath, finalName));
-          success = true;
-          break;
-        } catch (e: any) {
-          const msg = String(e?.message || "");
-          if (msg.includes("already exists") || e?.name === "ConstraintError") {
-            // Bump the suffix and retry: "name.png" → "name (2).png" → "name (3).png" ...
-            finalName = bumpFilenameSuffix(baseFinalName, attempt + 2);
-            continue;
-          }
-          throw e;
-        }
-      }
-      if (!success) {
-        console.warn("[split-editor] rename failed after retries (keeping temp name):", tmpPath);
-      }
-    }
-  }
-
 
   /** Post-capture / post-upload transition: set the "currently open
    *  image" state, switch to the editor view, and push the canonical
