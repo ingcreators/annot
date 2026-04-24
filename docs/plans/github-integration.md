@@ -1,9 +1,9 @@
 # GitHub Integration (v1, individual-user)
 
-> **Status:** Draft. Ready for review; individual-user storage +
-> device-flow auth is the scope. Team / PR-automation features
-> are *deliberately* out of scope here — they live in the
-> commercial `annot-cloud` per
+> **Status:** Phase 1 in progress. Individual-user storage +
+> personal-access-token auth is the scope. Team / PR-automation
+> features are *deliberately* out of scope here — they live in
+> the commercial `annot-cloud` per
 > [`oss-cloud-split.md`](./oss-cloud-split.md).
 >
 > **Compatibility:** New storage backend in `packages/web` (+ a
@@ -12,9 +12,9 @@
 > implementation.
 >
 > **Risk:** External API surface, rate limits on free-tier
-> accounts, OAuth device flow's extra interaction step. Bounded
-> by reusing the same plug-in shape `GoogleDriveStore` already
-> proved out.
+> accounts, PAT creation friction (user has to visit GitHub's
+> token page). Bounded by reusing the same plug-in shape
+> `GoogleDriveStore` already proved out.
 
 ## Context
 
@@ -42,34 +42,67 @@ GitHub App, just a personal access grant.
 
 ## Design
 
-### 1. Auth: OAuth Device Flow
+### 1. Auth: personal access token (paste)
 
-Why device flow:
+The OSS side authenticates by **user-pasted personal access
+token**, not OAuth. This is a reluctant-but-correct choice:
 
-- Annot is a PWA with no server-side callback URL to register.
-  OAuth Web flow needs a `redirect_uri`; device flow doesn't.
-- GitHub CLI uses device flow — users recognize the
-  "enter this code on github.com/login/device" pattern.
-- Token exchange only needs `client_id`; no client secret to
-  embed in the bundle. Exactly the same safety property as the
-  Google Drive inline `VITE_GOOGLE_CLIENT_ID`.
-- The token is a user access token scoped by the OAuth App,
-  which the user can revoke from their GitHub settings page.
+**Device Flow — tried and abandoned.** Initial implementation
+attempted OAuth Device Flow because it avoids the
+`redirect_uri` problem Web Flow has. Runtime testing confirmed
+that GitHub's `github.com/login/device/code` and
+`github.com/login/oauth/access_token` endpoints don't advertise
+CORS headers for browser origins (standing issue since 2013;
+see `isaacs/github#330`). A browser `fetch` to either endpoint
+fails with a network TypeError — there is no way to complete
+either Device Flow or Web Flow from a static SPA.
 
-Scope: **`repo`** (covers both public and private repos). We
-ask once; users who want to restrict can create a repo-scoped
-personal access token and paste it instead (supported as a
-manual fallback).
+**Backend proxy — option declined for OSS.** This is how draw.io
+solves the same problem: they run a server-side endpoint that
+performs the code ↔ token exchange on behalf of the browser
+(`GitHubClient.js` → `redirectUri = DRAWIO_SERVER_URL + 'github2'`;
+see `jgraph/drawio`). Adopting that pattern would:
 
-Token storage: `localStorage["annot-github-token"]` (same shape
-as the Drive persistence — opaque string, no expiry tracking
-beyond "revoked → 401 on next call").
+- Require a Cloudflare Worker script (we currently ship only
+  static assets; see `wrangler.jsonc`).
+- Force every self-hoster of `@ingcreators/annot-web` to stand
+  up an equivalent proxy — breaking the "single PWA, no
+  backend" property of the OSS build.
+- Not even improve the scope story — an OAuth App's `repo`
+  scope grants access to *all* the user's repos, wider than
+  what fine-grained PATs give us (below).
 
-Auth flow implementation lives in
-`packages/web/src/storage/github-auth.ts`, exporting:
+The proper one-click OAuth experience lands on the commercial
+`annot-cloud` side, where we're running a backend anyway. See
+`oss-cloud-split.md` for the split.
+
+**Fine-grained PAT — what we actually use.** GitHub's
+fine-grained personal access tokens (GA since March 2025)
+scope a token to specific repositories with specific
+permissions. For Annot the correct grant is:
+
+- Repository access: *Only select repositories* → the one the
+  user picks.
+- Repository permissions: **Contents: Read and write**.
+- Implicit: Metadata: Read-only.
+
+This is **strictly narrower than `repo` scope** — the token
+can't touch any other repo, can't read org membership, can't
+act on issues / PRs / workflows. Matches the spirit of the
+Drive `drive.file` scope: the user hands Annot exactly what
+it needs, nothing more.
+
+Classic PATs with the `repo` scope still work as a fallback
+for users on orgs that require them.
+
+Token storage: `localStorage["annot-github-token"]` (opaque
+string, no expiry tracking beyond "revoked / expired → 401 on
+next call").
+
+Auth module `packages/web/src/storage/github-auth.ts` exports:
 
 ```ts
-export async function signIn(): Promise<string>;          // device flow
+export async function signInWithPat(pat: string): Promise<string>;
 export function getAccessToken(): string | null;
 export function isSignedIn(): boolean;
 export function signOut(): void;
@@ -85,8 +118,6 @@ export function saveRepoRef(ref: GitHubRepoRef): void;
 export function loadRepoRef(): GitHubRepoRef | null;
 export function clearRepoRef(): void;
 ```
-
-Mirrors the Drive auth module structure intentionally.
 
 ### 2. Storage shape
 
@@ -218,30 +249,40 @@ Both are explicitly commercial-side / follow-up work.
 
 ### 10. `drive.file` analogue — permission shape
 
-GitHub's permissions model is coarser than Drive's: the OAuth
-token either has `repo` scope (all private repos) or
-`public_repo` (public only). There's no per-repo consent like
-Drive UI Integration gives us.
+With fine-grained PATs (§1), GitHub's permissions model is
+actually **closer to Drive `drive.file` than OAuth is**: the
+user picks the exact repository the token can touch, at PAT
+creation time, from GitHub's own UI. Annot receives a token
+that is mechanically incapable of reading any other repo.
 
-Mitigation: make the repo picker clearly show what the app
-will touch ("Annot will read and commit to: `owner/repo` on
-branch `main`"), and store only the picked repo — never probe
-other repos in the user's account. The network-level scope is
-broad but the app-level behaviour is narrow and transparent.
+For users that still prefer a classic `repo`-scoped PAT (or
+whose org policy requires it), the repo picker clearly shows
+what the app will touch ("Annot will read and commit to:
+`owner/repo` on branch `main`") and stores only that picked
+repo — it never probes other repos in the user's account. The
+network-level scope is broad in that case, but the app-level
+behaviour stays narrow and transparent.
 
 ## Phased plan
 
 ### Phase 1 — auth + repo picker
 
 - `packages/web/src/storage/github-auth.ts` with the exports
-  listed in §1.
-- Minimal device-flow UI: dialog with the user code + the
-  github.com/login/device URL and a "Waiting for
-  authorization..." state.
-- Repo picker: search / filter over `GET /user/repos`, pick
-  one, pick a branch (default branch preselected), pick a base
-  path (empty = repo root).
-- `saveRepoRef` / `loadRepoRef` persistence.
+  listed in §1. PAT paste + validation via `GET /user`. No
+  OAuth code path — Device Flow / Web Flow are ruled out by
+  browser CORS on GitHub's OAuth endpoints (§1 rationale).
+- `packages/web/src/storage/github-setup-ui.ts` with the
+  paired UI: PAT paste dialog (with fine-grained PAT guidance
+  and a link to the token creation page), repo picker with
+  local filter + `/search/repositories` fallback + manual
+  `owner/repo` entry, branch picker (default preselected),
+  base-path prompt with live preview.
+- `saveRepoRef` / `loadRepoRef` persistence via
+  `localStorage["annot-github-ref"]`.
+- `?github-setup=1` URL flag in `main.ts` as a temporary
+  verification entry point; the code splits into its own
+  chunk so the main bundle is unchanged when unused. Phase 3
+  replaces this with a sidebar item.
 
 No storage calls yet; this phase proves out the auth shape.
 
@@ -283,36 +324,65 @@ subscribers, access-control UI.
 None — new storage backend, no existing data to migrate. Users
 choose GitHub from the sidebar like any other storage.
 
+## Related work
+
+- **draw.io / diagrams.net** — the closest precedent. Uses
+  OAuth Web Flow via a server-side endpoint
+  (`DRAWIO_SERVER_URL + 'github2'`) that handles the code →
+  token exchange for the browser. Self-hosters run the
+  companion `draw-server` to get the same UX. We deliberately
+  don't adopt this pattern in OSS because it breaks the "static
+  PWA, no backend" property; the equivalent UX will live in
+  `annot-cloud` via a GitHub App.
+- **GitHub CLI (`gh`)** — uses Device Flow. Works for CLI
+  because it's not in a browser (no CORS). Sets the user-
+  facing precedent for "enter this code on the web" but
+  doesn't translate to browser apps.
+- **VS Code GitHub extension** — uses OAuth Web Flow through
+  its own backend at `vscode.dev`. Same server-side-proxy
+  structure as draw.io. For users without internet access to
+  Microsoft's backend, falls back to PAT paste.
+
 ## Relationship to other plans
 
 - [`path-based-storage.md`](./path-based-storage.md) — provides
   the `StorageProvider` interface this plan implements against.
   No type changes needed.
 - [`google-drive-integration.md`](./google-drive-integration.md)
-  — pattern source for auth module, reselect flow, store
-  caching. Read before starting Phase 2 so the same shape
-  carries over.
+  — pattern source for reselect flow and store caching. Read
+  before starting Phase 2 so the same shape carries over; the
+  auth module's shape diverges (PAT vs OAuth token client) but
+  the surface around it is the same.
 - [`oss-cloud-split.md`](./oss-cloud-split.md) — establishes
-  why PR automation lives in `annot-cloud`, not here. The
+  why PR automation lives in `annot-cloud`, not here. Also
+  where the proper one-click OAuth UX lands (via a GitHub
+  App), since `annot-cloud` runs a backend anyway. The
   individual-user `GitHubStore` shipped by this plan is a
   natural OSS citizen.
 
 ## Open questions
 
-- [ ] OAuth App vs GitHub App for even the OSS side? OAuth App
-      (device flow) is simpler and works without server
-      infrastructure, which is why v1 picks it. GitHub App has
-      higher rate limits and fine-grained installation — worth
-      reconsidering if the OSS single-user story starts bumping
-      rate limits in practice.
 - [ ] Branch picking UX: just a text input, or pre-fetch the
       list of branches? Likely pre-fetch up to 100 branches and
       fall back to text input for mono-repos with thousands.
+      (Phase 1 implements pre-fetch; text fallback is a Phase 4
+      polish item.)
 - [ ] `.gitkeep` vs empty-tree commit for `createFolder`.
       `.gitkeep` is the convention; weighs ~0 bytes; no
       objection expected.
 - [ ] Should the repo picker filter to repos the user has
-      write access to? `repo` scope token grants access to all
-      their repos, but showing orgs they're read-only on is
-      confusing. Filter via `permissions.push: true` on the
-      repo list response.
+      write access to? Yes — fine-grained PATs typically scope
+      to one repo anyway, but classic PATs and future GitHub
+      App installs need the filter. Phase 1 implements
+      `permissions.push: true`.
+
+### Resolved
+
+- ~~OAuth App vs GitHub App for even the OSS side?~~ Neither.
+  OAuth Web Flow / Device Flow both require a backend to
+  complete the token exchange (GitHub's
+  `github.com/login/oauth/*` endpoints don't send CORS headers
+  for browser origins; confirmed against the Phase 1
+  implementation attempt). Running a backend would break the
+  OSS "static PWA, no server" property. PAT paste is the OSS
+  auth path; GitHub App lives in `annot-cloud`.
