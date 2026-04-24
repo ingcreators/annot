@@ -187,6 +187,61 @@ export async function getRepo(owner: string, name: string): Promise<GitHubRepoSu
   return toRepoSummary(body);
 }
 
+/**
+ * Probe whether the current token can actually write to `owner/name`'s
+ * Contents. Needed because `permissions.push` on the `/user/repos`
+ * response reflects the **user's** role-based permission, not the
+ * token's scope:
+ *
+ *   Fine-grained PATs always have implicit read-only access to the
+ *   authenticated user's public repositories (GitHub's "Also
+ *   includes public repositories (read-only)" — on by design and
+ *   not togglable). That makes user-owned public repos appear in
+ *   `/user/repos` with `permissions.push: true` (because the user
+ *   owns them) even though the token itself can only read. The only
+ *   reliable way to tell what the token can do is to attempt a
+ *   write.
+ *
+ * The probe is a conditional `PUT /contents/…` with a deliberately
+ * impossible SHA so nothing actually gets written:
+ *
+ *   - `403 Forbidden` → token lacks Contents: Write on this repo.
+ *   - `404 Not Found` → token can't see this repo (private without
+ *     grant). Treated as "can't write".
+ *   - `409 Conflict` / `422 Unprocessable Entity` → token HAS
+ *     Contents: Write; the server went past the auth check and
+ *     tripped on the fake SHA. No write happened.
+ *   - Any 2xx → unexpected (nothing should have been created,
+ *     because `sha` was provided so the call is treated as an
+ *     update, and no file matches `0…0`). Treat as success.
+ */
+export async function verifyWriteAccess(owner: string, name: string): Promise<boolean> {
+  const token = getAccessToken();
+  if (!token) return false;
+  const url = `${GITHUB_API}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`
+    + `/contents/${encodeURIComponent(".annot-perm-probe")}`;
+  try {
+    const res = await fetch(url, {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        message: "annot: permission probe (ignore)",
+        content: "",
+        sha: "0000000000000000000000000000000000000000",
+      }),
+    });
+    if (res.status === 403 || res.status === 404) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** List branches for a repo (up to 100; mono-repos beyond that are
  *  Phase 4 territory per the plan's open questions). */
 export async function listBranches(

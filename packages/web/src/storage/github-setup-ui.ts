@@ -23,6 +23,7 @@ import {
   listWritableRepos,
   searchRepos,
   getRepo,
+  verifyWriteAccess,
   listBranches,
   saveRepoRef,
   loadRepoRef,
@@ -262,6 +263,40 @@ function showRepoPicker(userLogin: string): Promise<GitHubRepoSummary | null> {
     let repos: GitHubRepoSummary[] = [];
     let filtered: GitHubRepoSummary[] = [];
 
+    /**
+     * Close the picker with `r` selected, but first verify the token
+     * can actually write to it. `/user/repos` happily lists public
+     * repos the user owns even when a fine-grained PAT has no write
+     * grant on them (GitHub's "Also includes public repositories
+     * (read-only)" behaviour, built-in and not togglable), so the
+     * only way to tell is a probe PUT with an impossible SHA — see
+     * `verifyWriteAccess`.
+     */
+    const verifyAndSelect = async (r: GitHubRepoSummary) => {
+      err.style.display = "none";
+      list.style.opacity = "0.5";
+      list.style.pointerEvents = "none";
+      try {
+        const canWrite = await verifyWriteAccess(r.owner, r.name);
+        if (!canWrite) {
+          err.innerHTML = `Your personal access token doesn't have `
+            + `<strong>Contents: Read and Write</strong> on `
+            + `<strong>${escapeHtml(r.fullName)}</strong>. `
+            + `Pick another repository, or rotate your token via the link below.`;
+          err.style.display = "";
+          return;
+        }
+        close();
+        resolve(r);
+      } catch (e) {
+        err.textContent = `Couldn't verify write access: ${(e as Error).message}`;
+        err.style.display = "";
+      } finally {
+        list.style.opacity = "";
+        list.style.pointerEvents = "";
+      }
+    };
+
     const renderRows = (items: GitHubRepoSummary[], emptyMsg: string) => {
       list.innerHTML = "";
       if (items.length === 0) {
@@ -299,9 +334,8 @@ function showRepoPicker(userLogin: string): Promise<GitHubRepoSummary | null> {
             ${escapeHtml(r.description ?? "")} ${r.description ? "·" : ""} default: ${escapeHtml(r.defaultBranch)}
           </div>
         `;
-        row.addEventListener("click", () => {
-          close();
-          resolve(r);
+        row.addEventListener("click", async () => {
+          await verifyAndSelect(r);
         });
         list.appendChild(row);
       }
@@ -374,8 +408,7 @@ function showRepoPicker(userLogin: string): Promise<GitHubRepoSummary | null> {
       err.style.display = "none";
       try {
         const r = await getRepo(m[1], m[2]);
-        close();
-        resolve(r);
+        await verifyAndSelect(r);
       } catch (ex) {
         err.textContent = (ex as Error).message;
         err.style.display = "";
