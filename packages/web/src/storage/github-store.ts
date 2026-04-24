@@ -101,6 +101,28 @@ interface TreeEntry {
   size?: number;
 }
 
+/**
+ * One file change in a Git Data API batch commit
+ * (`GitHubStore#commitTreeOps`). Exactly one of `blob`,
+ * `existingBlobSha`, or `deleteOnly` must be set:
+ *
+ *   - `blob`            — upload fresh content, reference it in the tree.
+ *   - `existingBlobSha` — rename / move: reference an already-known blob
+ *                         at the new path (git's implicit rename).
+ *   - `deleteOnly`      — drop the entry from the tree.
+ *
+ * `relPath` is the basePath-relative path the rest of the store uses;
+ * the commit helper applies `#fullPath()` before handing entries to
+ * GitHub.
+ */
+interface TreeOp {
+  relPath: string;
+  mode?: string;
+  blob?: Blob;
+  existingBlobSha?: string;
+  deleteOnly?: boolean;
+}
+
 interface GitHubError extends Error {
   status?: number;
   githubError?: true;
@@ -753,6 +775,162 @@ export class GitHubStore implements StorageProvider {
     }
   }
 
+  // ===========================================================================
+  // Atomic multi-file commit via Git Data API.
+  //
+  // The Contents API works a file at a time: every PUT / DELETE is a
+  // separate commit. That's fine for the single-file edit loop, but
+  // operations that touch several paths — folder rename, folder move,
+  // `deleteFolder` on a tree of captures, image rename (= delete-at-old
+  // + add-at-new) — explode into N commits each. Users reported the
+  // resulting git log as spammy, and each commit carries a
+  // round-trip so the wall-clock cost grows linearly.
+  //
+  // `#commitTreeOps` collapses any batch of upserts / deletes into a
+  // single commit on the branch:
+  //
+  //   1. GET /git/refs/heads/{branch}        HEAD commit sha
+  //   2. GET /git/commits/{HEAD}             HEAD tree sha
+  //   3. POST /git/blobs  (for each upsert with fresh content)
+  //   4. POST /git/trees  base_tree = HEAD tree, overlay entries
+  //   5. POST /git/commits  parent = HEAD (fast-forward)
+  //   6. PATCH /git/refs/heads/{branch}  force=false (safe advance)
+  //
+  // Pure renames / moves (path change, content unchanged) skip the
+  // blob upload in step 3 and reference the file's existing blob sha
+  // — git handles the rename implicitly at the tree level.
+  //
+  // Returns `null` on any failure, including:
+  //   - Branch protection rejects the fast-forward (422).
+  //   - Ref moved between steps 1 and 6 (concurrent commit).
+  //   - Network / API error at any step.
+  //
+  // Callers fall back to the per-file Contents API loop on null,
+  // so the batch failing gracefully degrades instead of losing the
+  // user's work.
+  // ===========================================================================
+
+  async #commitTreeOps(ops: TreeOp[], message: string): Promise<string | null> {
+    if (ops.length === 0) return null;
+
+    const owner = encodeURIComponent(this.#owner);
+    const repo = encodeURIComponent(this.#repo);
+    const branchEnc = encodeURIComponent(this.#branch);
+    const repoBase = `${GITHUB_API}/repos/${owner}/${repo}`;
+
+    try {
+      // HEAD ref → commit sha.
+      const refResp = await this.#fetchOrNull(`${repoBase}/git/refs/heads/${branchEnc}`);
+      if (!refResp) return null;
+      const headSha: string | undefined = (await refResp.json())?.object?.sha;
+      if (!headSha) return null;
+
+      // HEAD commit → tree sha.
+      const commitResp = await this.#fetchOrNull(`${repoBase}/git/commits/${headSha}`);
+      if (!commitResp) return null;
+      const headTreeSha: string | undefined = (await commitResp.json())?.tree?.sha;
+      if (!headTreeSha) return null;
+
+      // Upload blobs in parallel for every upsert carrying fresh
+      // content. Renames reuse the old blob's sha and skip this.
+      const blobShaByRelPath = new Map<string, string>();
+      const uploads = ops.filter((op) => op.blob != null);
+      if (uploads.length > 0) {
+        await Promise.all(uploads.map(async (op) => {
+          const base64 = await blobToBase64(op.blob!);
+          const blobResp = await this.#fetch(`${repoBase}/git/blobs`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ content: base64, encoding: "base64" }),
+          });
+          const body = await blobResp.json();
+          if (!body?.sha) throw githubError("git/blobs returned no SHA");
+          blobShaByRelPath.set(op.relPath, body.sha);
+        }));
+      }
+
+      // Build tree entries. Per GitHub docs, `sha: null` removes the
+      // entry from base_tree; omitting it for upserts would append,
+      // but we always set sha explicitly so the diff is unambiguous.
+      const treeEntries = ops.map((op) => {
+        const entry: {
+          path: string;
+          mode: string;
+          type: "blob";
+          sha: string | null;
+        } = {
+          path: this.#fullPath(op.relPath),
+          mode: op.mode ?? "100644",
+          type: "blob",
+          sha: null,
+        };
+        if (op.deleteOnly) {
+          entry.sha = null;
+        } else if (op.existingBlobSha) {
+          entry.sha = op.existingBlobSha;
+        } else {
+          const uploadedSha = blobShaByRelPath.get(op.relPath);
+          if (!uploadedSha) throw githubError("tree op missing blob content");
+          entry.sha = uploadedSha;
+        }
+        return entry;
+      });
+
+      const treeResp = await this.#fetch(`${repoBase}/git/trees`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ base_tree: headTreeSha, tree: treeEntries }),
+      });
+      const newTreeSha: string | undefined = (await treeResp.json())?.sha;
+      if (!newTreeSha) throw githubError("git/trees returned no SHA");
+
+      const commitPostResp = await this.#fetch(`${repoBase}/git/commits`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message,
+          tree: newTreeSha,
+          parents: [headSha],
+        }),
+      });
+      const newCommitSha: string | undefined = (await commitPostResp.json())?.sha;
+      if (!newCommitSha) throw githubError("git/commits returned no SHA");
+
+      // Fast-forward update. `force: false` protects against
+      // concurrent commits on the branch — if someone else pushed
+      // between our ref read (step 1) and this PATCH, GitHub
+      // refuses with 422 and we fall back.
+      const patchResp = await this.#fetchOrNull(`${repoBase}/git/refs/heads/${branchEnc}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sha: newCommitSha, force: false }),
+      });
+      if (!patchResp) return null;
+
+      // Reconcile local state against the new commit's effective
+      // contents. Upserts learn their new blob sha; deletes drop out
+      // of every cache for this path.
+      for (const op of ops) {
+        if (op.deleteOnly) {
+          this.#shaByPath.delete(op.relPath);
+          this.#recordCache.delete(op.relPath);
+          this.#fileMeta.delete(op.relPath);
+          this.#thumbnailCache.delete(op.relPath);
+          this.#thumbnailInFlight.delete(op.relPath);
+          continue;
+        }
+        const newBlobSha = op.existingBlobSha
+          ?? blobShaByRelPath.get(op.relPath);
+        if (newBlobSha) this.#shaByPath.set(op.relPath, newBlobSha);
+        this.#registerFolder(getParentPath(op.relPath));
+      }
+      return newCommitSha;
+    } catch (e) {
+      console.warn("[github-store] tree commit failed, caller will fall back:", e);
+      return null;
+    }
+  }
+
   /** Delete a file. Requires the current SHA. */
   async #deleteContents(relPath: string, sha: string, message: string): Promise<void> {
     const full = this.#fullPath(relPath);
@@ -1133,18 +1311,35 @@ export class GitHubStore implements StorageProvider {
         throw githubError(`Destination already exists: ${newPath}`);
       }
 
-      const record = await this.getImage(currentPath);
-      if (!record || !record.originalDataUrl) {
-        throw githubError(`Cannot move missing image: ${currentPath}`);
-      }
-      const isJpeg = record.originalDataUrl.startsWith("data:image/jpeg");
-      const blob = await this.#buildXmpBlob(record, isJpeg ? "jpg" : "png");
-
-      // Create first; if it fails we haven't lost the original.
-      await this.#putContents(newPath, blob, this.#commitMessage("add", newPath));
       const oldSha = this.#shaByPath.get(currentPath);
+
+      // Atomic move: single commit that re-targets the existing
+      // blob at the new path and drops the old entry. Reuses the
+      // blob, so no XMP rebuild / upload in the happy path.
+      let moved = false;
       if (oldSha) {
-        await this.#deleteContents(currentPath, oldSha, this.#commitMessage("delete", currentPath));
+        const atomicSha = await this.#commitTreeOps(
+          [
+            { relPath: newPath, existingBlobSha: oldSha },
+            { relPath: currentPath, deleteOnly: true },
+          ],
+          `annot: move ${getFilename(currentPath)} → ${newFolderPath || "/"}`,
+        );
+        if (atomicSha) moved = true;
+      }
+
+      if (!moved) {
+        // Fallback to the two-commit Contents-API path.
+        const record = await this.getImage(currentPath);
+        if (!record || !record.originalDataUrl) {
+          throw githubError(`Cannot move missing image: ${currentPath}`);
+        }
+        const isJpeg = record.originalDataUrl.startsWith("data:image/jpeg");
+        const blob = await this.#buildXmpBlob(record, isJpeg ? "jpg" : "png");
+        await this.#putContents(newPath, blob, this.#commitMessage("add", newPath));
+        if (oldSha) {
+          await this.#deleteContents(currentPath, oldSha, this.#commitMessage("delete", currentPath));
+        }
       }
 
       const cached = this.#recordCache.get(currentPath);
@@ -1180,6 +1375,28 @@ export class GitHubStore implements StorageProvider {
       throw githubError(`Image already exists: ${newPath}`);
     }
 
+    const oldSha = this.#shaByPath.get(path);
+
+    // Atomic path: one commit that references the existing blob at
+    // the new path and removes the old entry. No blob upload, no
+    // content re-render — a pure git rename.
+    if (oldSha) {
+      const atomicSha = await this.#commitTreeOps(
+        [
+          { relPath: newPath, existingBlobSha: oldSha },
+          { relPath: path, deleteOnly: true },
+        ],
+        `annot: rename ${getFilename(path)} → ${newName}`,
+      );
+      if (atomicSha) {
+        this.#migrateLocalCachesAfterRename(path, newPath);
+        return newPath;
+      }
+    }
+
+    // Fallback (branch protection, concurrent commit, API error):
+    // rebuild the blob via XMP and fall back to the Contents-API
+    // two-commit path. Preserves the historical semantics.
     const record = await this.getImage(path);
     if (!record || !record.originalDataUrl) {
       throw githubError(`Cannot rename missing image: ${path}`);
@@ -1188,27 +1405,33 @@ export class GitHubStore implements StorageProvider {
     const blob = await this.#buildXmpBlob(record, isJpeg ? "jpg" : "png");
 
     await this.#putContents(newPath, blob, this.#commitMessage("add", newPath));
-    const oldSha = this.#shaByPath.get(path);
     if (oldSha) {
       await this.#deleteContents(path, oldSha, this.#commitMessage("delete", path));
     }
 
-    const cached = this.#recordCache.get(path);
+    this.#migrateLocalCachesAfterRename(path, newPath);
+    return newPath;
+  }
+
+  /** Move `path`'s in-memory record / meta / thumbnail entries to
+   *  `newPath`. Shared between the atomic and fallback rename
+   *  paths so both end up with the same local state. */
+  #migrateLocalCachesAfterRename(oldPath: string, newPath: string): void {
+    const cached = this.#recordCache.get(oldPath);
     if (cached) {
-      this.#recordCache.delete(path);
+      this.#recordCache.delete(oldPath);
       this.#recordCache.set(newPath, { ...cached, path: newPath });
     }
-    const meta = this.#fileMeta.get(path);
+    const meta = this.#fileMeta.get(oldPath);
     if (meta) {
-      this.#fileMeta.delete(path);
+      this.#fileMeta.delete(oldPath);
       this.#fileMeta.set(newPath, meta);
     }
-    const thumb = this.#thumbnailCache.get(path);
+    const thumb = this.#thumbnailCache.get(oldPath);
     if (thumb) {
-      this.#thumbnailCache.delete(path);
+      this.#thumbnailCache.delete(oldPath);
       this.#thumbnailCache.set(newPath, thumb);
     }
-    return newPath;
   }
 
   async deleteImage(path: string): Promise<void> {
@@ -1303,16 +1526,39 @@ export class GitHubStore implements StorageProvider {
       p === oldPath || p.startsWith(oldPath + "/")
     );
 
-    // Empty folder (just a `.gitkeep` at oldPath) → migrate that
-    // single blob so the folder re-materialises at the new path.
+    // Empty folder (just a `.gitkeep` at oldPath) — convert to a
+    // one-entry batch so the atomic path still runs.
     if (entries.length === 0) {
-      const oldGitkeep = joinPath(oldPath, GITKEEP);
-      const newGitkeep = joinPath(newPath, GITKEEP);
-      await this.#migrateBlob(oldGitkeep, newGitkeep, "move folder");
-    } else {
-      for (const oldFile of entries) {
-        const newFile = rewritePathPrefix(oldFile, oldPath, newPath);
-        await this.#migrateBlob(oldFile, newFile, this.#commitMessage("update", newFile));
+      entries.push(joinPath(oldPath, GITKEEP));
+    }
+
+    // Atomic path: one commit that renames every descendant blob.
+    // Pure rename via existingBlobSha — no byte-rebuild, no upload,
+    // just a tree + commit + ref update. For a 50-file folder this
+    // cuts N=100 round-trips (add + delete per file) down to 4.
+    const treeOps: TreeOp[] = [];
+    for (const oldFile of entries) {
+      const newFile = rewritePathPrefix(oldFile, oldPath, newPath);
+      const sha = this.#shaByPath.get(oldFile);
+      if (!sha) continue;
+      treeOps.push({ relPath: newFile, existingBlobSha: sha });
+      treeOps.push({ relPath: oldFile, deleteOnly: true });
+    }
+    const atomicSha = treeOps.length > 0
+      ? await this.#commitTreeOps(treeOps, `annot: move ${oldPath} → ${newPath}`)
+      : null;
+
+    if (!atomicSha) {
+      // Fallback: per-file migrate via the Contents API. Produces
+      // 2 × N commits but preserves the operation if the branch
+      // refuses the atomic path (protection, concurrent commit).
+      if (entries.length === 1 && getFilename(entries[0]) === GITKEEP) {
+        await this.#migrateBlob(entries[0], joinPath(newPath, GITKEEP), "move folder");
+      } else {
+        for (const oldFile of entries) {
+          const newFile = rewritePathPrefix(oldFile, oldPath, newPath);
+          await this.#migrateBlob(oldFile, newFile, this.#commitMessage("update", newFile));
+        }
       }
     }
 
@@ -1389,15 +1635,31 @@ export class GitHubStore implements StorageProvider {
     const entries = Array.from(this.#shaByPath.keys()).filter((p) =>
       p === path || p.startsWith(path + "/")
     );
-    // Per-file delete. Phase 4 will add a Git Data API bulk commit
-    // that removes the whole subtree in a single commit.
-    for (const rel of entries) {
-      const sha = this.#shaByPath.get(rel);
-      if (!sha) continue;
-      await this.#deleteContents(rel, sha, this.#commitMessage("delete", rel));
-      this.#recordCache.delete(rel);
-      this.#fileMeta.delete(rel);
+
+    // Atomic bulk delete via Git Data API: one commit drops every
+    // descendant blob instead of `N` per-file Contents API deletes.
+    // `#commitTreeOps` handles cache cleanup for each op on
+    // success; we just need to clean the folder set separately.
+    if (entries.length > 0) {
+      const atomicSha = await this.#commitTreeOps(
+        entries.map((rel) => ({ relPath: rel, deleteOnly: true })),
+        `annot: delete folder ${path}`,
+      );
+      if (!atomicSha) {
+        // Fallback: per-file Contents API deletes. Produces N
+        // commits but guarantees the folder is gone even when
+        // the atomic path is refused (branch protection etc.).
+        for (const rel of entries) {
+          const sha = this.#shaByPath.get(rel);
+          if (!sha) continue;
+          await this.#deleteContents(rel, sha, this.#commitMessage("delete", rel));
+          this.#recordCache.delete(rel);
+          this.#fileMeta.delete(rel);
+          this.#thumbnailCache.delete(rel);
+        }
+      }
     }
+
     // Remove the folder itself and every subfolder from the visible
     // tree. (Ancestor folders stay — they may still contain siblings.)
     for (const f of Array.from(this.#allFolderPaths)) {
