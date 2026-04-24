@@ -507,7 +507,20 @@ export class GitHubStore implements StorageProvider {
     // its last child is deleted, and we mirror that behaviour.
   }
 
-  /** Fetch a blob by path. Returns the bytes + SHA for cache seeding. */
+  /**
+   * Fetch a blob by path. Pure read — does NOT mutate `#shaByPath`.
+   *
+   * Writing to `#shaByPath` from here was the source of a 409
+   * conflict bug: a background thumbnail prefetch (launched by a
+   * prior `listImages`) would eventually return with a now-stale
+   * SHA and overwrite the freshly-saved one in the cache, so the
+   * next save PUT would send a stale SHA and GitHub would 409.
+   *
+   * Callers who *want* to promote the fetched SHA into the cache
+   * (e.g. `getImage`, which is on the foreground edit path) do so
+   * explicitly after the await. Background callers (the thumbnail
+   * prefetch) leave the cache alone.
+   */
   async #getContents(relPath: string): Promise<{ bytes: Uint8Array; sha: string } | undefined> {
     const full = this.#fullPath(relPath);
     const branch = encodeURIComponent(this.#branch);
@@ -520,7 +533,6 @@ export class GitHubStore implements StorageProvider {
         return undefined;
       }
       const bytes = base64ToBytes(data.content);
-      this.#shaByPath.set(relPath, data.sha);
       return { bytes, sha: data.sha };
     } catch (e) {
       const err = e as GitHubError;
@@ -595,18 +607,16 @@ export class GitHubStore implements StorageProvider {
     if (cached) return cached;
 
     await this.#ensureTreeLoaded();
-    if (!this.#shaByPath.has(path)) {
-      // Give the Contents API a chance anyway — the tree cache may
-      // be out of date (external commit) even though we haven't
-      // explicitly `forceRefresh()`-ed. If it also 404s we return
-      // undefined.
-      const fresh = await this.#getContents(path);
-      if (!fresh) return undefined;
-      return this.#decodeRecord(path, fresh.bytes);
-    }
-
+    // Snapshot the cached SHA before fetching so we can apply a
+    // compare-and-set on the way out. Without this a concurrent
+    // mutation that advances `#shaByPath` while our GET is in flight
+    // would be clobbered on our return path.
+    const before = this.#shaByPath.get(path);
     const result = await this.#getContents(path);
     if (!result) return undefined;
+    if (this.#shaByPath.get(path) === before) {
+      this.#shaByPath.set(path, result.sha);
+    }
     return this.#decodeRecord(path, result.bytes);
   }
 
@@ -682,8 +692,17 @@ export class GitHubStore implements StorageProvider {
     if (existing) return existing;
     const p = (async () => {
       try {
+        // Snapshot the SHA so we can detect a concurrent mutation
+        // during the fetch. If the file was re-committed locally
+        // (e.g. via `updateImage` → `#putContents`) while our GET
+        // was in flight, our bytes are already stale — skip caching
+        // the thumbnail so the next `listImages` schedules a fresh
+        // fetch against the up-to-date blob.
+        const before = this.#shaByPath.get(relPath);
         const fetched = await this.#getContents(relPath);
         if (!fetched) return;
+        if (this.#shaByPath.get(relPath) !== before) return;
+
         const mime = inferMimeFromPath(relPath);
         const blob = new Blob([fetched.bytes as BlobPart], { type: mime });
         const bmp = await createImageBitmap(blob);
@@ -695,6 +714,10 @@ export class GitHubStore implements StorageProvider {
         bmp.close();
         const outBlob = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.85 });
         const dataUrl = await blobToDataUrl(outBlob);
+        // Re-check after the (synchronous-ish but yielding) encode —
+        // a save could have finished between our SHA snapshot and
+        // the canvas work.
+        if (this.#shaByPath.get(relPath) !== before) return;
         this.#thumbnailCache.set(relPath, dataUrl);
         // CustomEvent is typed loosely here because we don't augment
         // the WindowEventMap globally for a storage-specific event.
@@ -730,12 +753,32 @@ export class GitHubStore implements StorageProvider {
       );
 
       const existingSha = this.#shaByPath.get(currentPath);
-      await this.#putContents(
-        currentPath,
-        blob,
-        this.#commitMessage("update", currentPath),
-        existingSha,
-      );
+      try {
+        await this.#putContents(
+          currentPath,
+          blob,
+          this.#commitMessage("update", currentPath),
+          existingSha,
+        );
+      } catch (e) {
+        // Auto-recover from a stale-SHA 409. This can happen when a
+        // background task (e.g. thumbnail prefetch) leaves a cached
+        // SHA out of date, or when a user's other tab committed to
+        // the same file. Refetch the current SHA and retry once.
+        // v1 is last-write-wins (see plan §5); a real merge flow is
+        // a future plan.
+        const err = e as GitHubError;
+        if (!err.conflict) throw e;
+        const fresh = await this.#getContents(currentPath);
+        if (!fresh) throw e;
+        this.#shaByPath.set(currentPath, fresh.sha);
+        await this.#putContents(
+          currentPath,
+          blob,
+          this.#commitMessage("update", currentPath),
+          fresh.sha,
+        );
+      }
 
       this.#recordCache.set(currentPath, {
         ...record,
