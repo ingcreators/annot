@@ -16,7 +16,7 @@
  */
 
 interface ShortcutEntry {
-  keys: string[];            // e.g. ["Ctrl", "Shift", "]"]
+  keys: string[]; // e.g. ["Ctrl", "Shift", "]"]
   description: string;
 }
 
@@ -29,60 +29,56 @@ const SHORTCUT_GROUPS: ShortcutGroup[] = [
   {
     title: "Selection",
     entries: [
-      { keys: ["Ctrl", "A"],           description: "Select all" },
-      { keys: ["Delete"],              description: "Delete selected" },
-      { keys: ["Esc"],                 description: "Deselect / cancel" },
+      { keys: ["Ctrl", "A"], description: "Select all" },
+      { keys: ["Delete"], description: "Delete selected" },
+      { keys: ["Esc"], description: "Deselect / cancel" },
     ],
   },
   {
     title: "Clipboard",
     entries: [
-      { keys: ["Ctrl", "C"],           description: "Copy" },
-      { keys: ["Ctrl", "V"],           description: "Paste" },
-      { keys: ["Ctrl", "D"],           description: "Duplicate in place" },
+      { keys: ["Ctrl", "C"], description: "Copy" },
+      { keys: ["Ctrl", "V"], description: "Paste" },
+      { keys: ["Ctrl", "D"], description: "Duplicate in place" },
     ],
   },
   {
     title: "Move",
     entries: [
-      { keys: ["↑", "↓", "←", "→"],    description: "Nudge 1 px" },
-      { keys: ["Shift", "↑↓←→"],       description: "Nudge 10 px" },
+      { keys: ["↑", "↓", "←", "→"], description: "Nudge 1 px" },
+      { keys: ["Shift", "↑↓←→"], description: "Nudge 10 px" },
     ],
   },
   {
     title: "Transform",
     entries: [
-      { keys: ["Shift", "H"],          description: "Flip horizontal" },
-      { keys: ["Shift", "V"],          description: "Flip vertical" },
+      { keys: ["Shift", "H"], description: "Flip horizontal" },
+      { keys: ["Shift", "V"], description: "Flip vertical" },
     ],
   },
   {
     title: "Arrange",
     entries: [
-      { keys: ["Ctrl", "Shift", "]"],  description: "Bring to front" },
-      { keys: ["Ctrl", "]"],           description: "Bring forward" },
-      { keys: ["Ctrl", "["],           description: "Send backward" },
-      { keys: ["Ctrl", "Shift", "["],  description: "Send to back" },
+      { keys: ["Ctrl", "Shift", "]"], description: "Bring to front" },
+      { keys: ["Ctrl", "]"], description: "Bring forward" },
+      { keys: ["Ctrl", "["], description: "Send backward" },
+      { keys: ["Ctrl", "Shift", "["], description: "Send to back" },
     ],
   },
   {
     title: "Group",
     entries: [
-      { keys: ["Ctrl", "G"],           description: "Group selected" },
-      { keys: ["Ctrl", "Shift", "G"],  description: "Ungroup" },
+      { keys: ["Ctrl", "G"], description: "Group selected" },
+      { keys: ["Ctrl", "Shift", "G"], description: "Ungroup" },
     ],
   },
   {
     title: "Drawing",
-    entries: [
-      { keys: ["Esc"],                 description: "End draw session / commit" },
-    ],
+    entries: [{ keys: ["Esc"], description: "End draw session / commit" }],
   },
   {
     title: "Help",
-    entries: [
-      { keys: ["?"],                   description: "Show this panel" },
-    ],
+    entries: [{ keys: ["?"], description: "Show this panel" }],
   },
 ];
 

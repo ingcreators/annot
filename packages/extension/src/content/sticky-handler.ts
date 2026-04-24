@@ -103,12 +103,20 @@ function buildPreserveMatcher(selectors: string[]): (el: HTMLElement) => boolean
   try {
     document.createElement("div").matches(joined);
     return (el) => {
-      try { return el.matches(joined); } catch { return false; }
+      try {
+        return el.matches(joined);
+      } catch {
+        return false;
+      }
     };
   } catch {
     return (el) => {
       for (const sel of selectors) {
-        try { if (el.matches(sel)) return true; } catch { /* skip invalid */ }
+        try {
+          if (el.matches(sel)) return true;
+        } catch {
+          /* skip invalid */
+        }
       }
       return false;
     };

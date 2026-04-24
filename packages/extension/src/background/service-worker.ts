@@ -7,17 +7,17 @@ const IDB_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
  *  enough time to flush a stale frame before `captureVisibleTab` runs. */
 const POST_HIDE_PAINT_MS = 80;
 
-// Static import of IDB store — used by external message API
-import * as idbStore from "../storage/idb-store.js";
 import { newIdB58 } from "@ingcreators/annot-core/utils";
+import { encodeCapture } from "../shared/encode.js";
 import {
+  type Settings,
   loadSettings,
   parseSelectorList,
-  shouldHideOverlaysFor,
   resolveEmulation,
-  type Settings,
+  shouldHideOverlaysFor,
 } from "../shared/settings.js";
-import { encodeCapture } from "../shared/encode.js";
+// Static import of IDB store — used by external message API
+import * as idbStore from "../storage/idb-store.js";
 
 type CaptureKind = "visible" | "area" | "scroll" | "perPage" | "click" | "hotkey";
 
@@ -31,10 +31,10 @@ type CaptureKind = "visible" | "area" | "scroll" | "perPage" | "click" | "hotkey
 async function beginCapturePrep(
   tabId: number,
   kind: CaptureKind,
-  segmentIndex: number = 0,
+  segmentIndex = 0,
   preloaded?: Settings,
 ): Promise<Settings> {
-  const settings = preloaded ?? await loadSettings();
+  const settings = preloaded ?? (await loadSettings());
   const hideOverlays = shouldHideOverlaysFor(
     kind,
     settings.overlays.mode,
@@ -52,24 +52,36 @@ async function beginCapturePrep(
       preservedSelectors: parseSelectorList(settings.overlays.preservedSelectors),
       scrollbars: hideScrollbars,
     });
-  } catch { /* content script may not be ready — ignore */ }
+  } catch {
+    /* content script may not be ready — ignore */
+  }
   return settings;
 }
 
 async function endCapturePrep(tabId: number): Promise<void> {
   try {
     await sendToTab(tabId, { type: "restore-after-capture" });
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
 
 async function showProgress(tabId: number | undefined, text: string): Promise<void> {
   if (tabId == null) return;
-  try { await sendToTab(tabId, { type: "show-progress", text }); } catch { /* ignore */ }
+  try {
+    await sendToTab(tabId, { type: "show-progress", text });
+  } catch {
+    /* ignore */
+  }
 }
 
 async function hideProgress(tabId: number | undefined): Promise<void> {
   if (tabId == null) return;
-  try { await sendToTab(tabId, { type: "hide-progress" }); } catch { /* ignore */ }
+  try {
+    await sendToTab(tabId, { type: "hide-progress" });
+  } catch {
+    /* ignore */
+  }
 }
 
 /**
@@ -116,11 +128,18 @@ async function withWindowResize<T>(
   try {
     const dims: PageDimensions = await sendToTab(tabId, { type: "get-page-dimensions" });
     dpr = dims.devicePixelRatio || 1;
-    if (originalWindow.width && originalWindow.height && dims.viewportWidth && dims.viewportHeight) {
+    if (
+      originalWindow.width &&
+      originalWindow.height &&
+      dims.viewportWidth &&
+      dims.viewportHeight
+    ) {
       chromeDeltaW = originalWindow.width - dims.viewportWidth;
       chromeDeltaH = originalWindow.height - dims.viewportHeight;
     }
-  } catch { /* fall back to zero deltas / dpr=1 */ }
+  } catch {
+    /* fall back to zero deltas / dpr=1 */
+  }
 
   // Convert pixel target → CSS target so the captured image lands on the
   // user's desired pixel resolution. (`captureVisibleTab` captures at
@@ -156,11 +175,12 @@ async function withWindowResize<T>(
           top: originalWindow.top,
           state: originalWindow.state || "normal",
         });
-      } catch { /* ignore — best effort restore */ }
+      } catch {
+        /* ignore — best effort restore */
+      }
     }
   }
 }
-
 
 // Auto-cleanup: delete images older than 7 days on startup
 (async () => {
@@ -173,7 +193,9 @@ async function withWindowResize<T>(
         await idbStore.deleteImage(img.path);
       }
     }
-  } catch { /* ignore on startup */ }
+  } catch {
+    /* ignore on startup */
+  }
 })();
 
 interface CaptureSegment {
@@ -213,9 +235,7 @@ async function ensureOffscreen(): Promise<void> {
 //   `vite build` (ship)   → https://annot.work
 // If a staging deploy ever needs a third target, promote this to a
 // VITE_ANNOTATION_URL env var.
-const ANNOTATION_URL = import.meta.env.DEV
-  ? "http://localhost:3000"
-  : "https://annot.work";
+const ANNOTATION_URL = import.meta.env.DEV ? "http://localhost:3000" : "https://annot.work";
 
 /** Build edit URL with multi-segment image path. */
 function buildEditUrl(path: string, extId: string): string {
@@ -268,8 +288,8 @@ async function requestPageMetadata(
     // message type and returns undefined. Reloading the target tab
     // pulls in the new content script and fixes it.
     console.warn(
-      "[annot] page metadata unavailable — target tab may have a stale content script. "
-      + "Reload the page (F5) and re-capture.",
+      "[annot] page metadata unavailable — target tab may have a stale content script. " +
+        "Reload the page (F5) and re-capture.",
       res,
     );
     return null;
@@ -277,8 +297,8 @@ async function requestPageMetadata(
     // Same root cause as above when err.message contains "Could not
     // establish connection" — content script not present / mismatched.
     console.warn(
-      "[annot] page metadata request failed — target tab may need to be reloaded. "
-      + "Reload the page (F5) after re-loading the extension and try again.",
+      "[annot] page metadata request failed — target tab may need to be reloaded. " +
+        "Reload the page (F5) after re-loading the extension and try again.",
       err,
     );
     return null;
@@ -298,7 +318,9 @@ async function openEditor(
     const tab = await findCaptureTarget();
     if (tab?.url) sourceUrl = tab.url;
     captureTabId = tab?.id ?? undefined;
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 
   // Detect dimensions from image if not provided
   let w = width || 0;
@@ -311,7 +333,9 @@ async function openEditor(
       w = bmp.width;
       h = bmp.height;
       bmp.close();
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
   // Auto-generate URL tags + per-image unique id
@@ -357,9 +381,11 @@ async function openEditor(
         // chrome-types declares `func: () => void` without a generic for
         // args, so we cast. Chrome passes `args` at runtime regardless.
         func: ((editPath: string, extId: string) => {
-          window.dispatchEvent(new CustomEvent("annot-capture", {
-            detail: { editPath, extId },
-          }));
+          window.dispatchEvent(
+            new CustomEvent("annot-capture", {
+              detail: { editPath, extId },
+            }),
+          );
         }) as () => void,
         args: [path, extId],
       });
@@ -436,7 +462,9 @@ async function findCaptureTarget(): Promise<chrome.tabs.Tab | undefined> {
       const results = await chrome.tabs.query(q);
       const usable = results.find((t) => t.id != null && isCapturableUrl(t.url));
       if (usable) return usable;
-    } catch { /* try next */ }
+    } catch {
+      /* try next */
+    }
   }
   // Last resort: any tab with a capturable URL, prefer most-recently-accessed
   const all = await chrome.tabs.query({});
@@ -461,9 +489,11 @@ async function findAnnotTab(): Promise<chrome.tabs.Tab | undefined> {
   }
   // Fallback: full scan + manual filter
   const all = await chrome.tabs.query({});
-  return all.find((t) => t.id != null && t.url && t.url.startsWith(ANNOTATION_URL + "/"))
-    || all.find((t) => t.id != null && t.url === ANNOTATION_URL)
-    || all.find((t) => t.id != null && t.url?.startsWith(ANNOTATION_URL));
+  return (
+    all.find((t) => t.id != null && t.url && t.url.startsWith(`${ANNOTATION_URL}/`)) ||
+    all.find((t) => t.id != null && t.url === ANNOTATION_URL) ||
+    all.find((t) => t.id != null && t.url?.startsWith(ANNOTATION_URL))
+  );
 }
 
 async function openGallery(): Promise<void> {
@@ -477,13 +507,20 @@ async function openGallery(): Promise<void> {
  * the current page's content (the browser may clamp scroll-to past the
  * document bottom, so we can't rely on the requested scroll position).
  */
-async function cropPngVertical(pngDataUrl: string, srcY: number, keepHeight: number): Promise<string> {
+async function cropPngVertical(
+  pngDataUrl: string,
+  srcY: number,
+  keepHeight: number,
+): Promise<string> {
   const blob = await (await fetch(pngDataUrl)).blob();
   const bmp = await createImageBitmap(blob);
   const w = bmp.width;
   const yClamped = Math.max(0, Math.min(srcY, bmp.height));
   const h = Math.max(0, Math.min(keepHeight, bmp.height - yClamped));
-  if (h <= 0) { bmp.close(); return pngDataUrl; }
+  if (h <= 0) {
+    bmp.close();
+    return pngDataUrl;
+  }
   const canvas = new OffscreenCanvas(w, h);
   const ctx = canvas.getContext("2d")!;
   ctx.drawImage(bmp, 0, yClamped, w, h, 0, 0, w, h);
@@ -506,7 +543,9 @@ async function captureVisible(): Promise<void> {
   try {
     const tab = await findCaptureTarget();
     if (!tab?.id || tab.windowId == null) {
-      console.warn("[capture-visible] no capturable tab found (devtools / chrome:// pages cannot be captured)");
+      console.warn(
+        "[capture-visible] no capturable tab found (devtools / chrome:// pages cannot be captured)",
+      );
       return;
     }
     const settings = await loadSettings();
@@ -555,58 +594,68 @@ async function captureArea(): Promise<void> {
 
   // Area selection must happen under the emulated viewport so the user
   // drags on the actually-rendered content. Wrap everything.
-  await withWindowResize(tab.id, tab.windowId, settings, () => new Promise<void>((resolve) => {
-    const handler = (msg: any): undefined => {
-      if (msg.type === "area-selected") {
-        chrome.runtime.onMessage.removeListener(handler);
-        (async () => {
-          await beginCapturePrep(tab.id!, "area", 0, settings);
-          // Paint delay so the scrollbar-hiding / sticky-hiding styles
-          // injected by beginCapturePrep are reflected in the captured
-          // frame. Without it, captureVisibleTab can read the stale
-          // pre-hide frame and bake the scrollbar / fixed elements
-          // into the screenshot.
-          await delay(POST_HIDE_PAINT_MS);
-          try {
-            // Snapshot DOM metadata BEFORE the crop pipeline so the
-            // captureRect lines up with the SAME area the user
-            // selected. Done up-front (rather than letting openEditor
-            // do its default no-area request) because area captures
-            // need the area dimensions to filter off-frame elements.
-            const areaMeta = await requestPageMetadata(tab.id!, {
-              x: msg.rect.x, y: msg.rect.y,
-              width: msg.rect.width, height: msg.rect.height,
-            });
-            const pngDataUrl = await chrome.tabs.captureVisibleTab(tab.windowId!, { format: "png" });
-            await ensureOffscreen();
-            const result = await chrome.runtime.sendMessage({
-              type: "offscreen-crop",
-              dataUrl: pngDataUrl,
-              rect: msg.rect,
-              dpr: msg.dpr,
-            });
-            if (result?.dataUrl) {
-              const encoded = await encodeCapture(result.dataUrl, settings);
-              const croppedW = Math.round(msg.rect.width * msg.dpr);
-              const croppedH = Math.round(msg.rect.height * msg.dpr);
-              openEditor(encoded.dataUrl, croppedW, croppedH, areaMeta);
-            }
-          } catch (err) {
-            console.error("SVGShot: captureArea failed", err);
-          } finally {
-            await endCapturePrep(tab.id!);
+  await withWindowResize(
+    tab.id,
+    tab.windowId,
+    settings,
+    () =>
+      new Promise<void>((resolve) => {
+        const handler = (msg: any): undefined => {
+          if (msg.type === "area-selected") {
+            chrome.runtime.onMessage.removeListener(handler);
+            (async () => {
+              await beginCapturePrep(tab.id!, "area", 0, settings);
+              // Paint delay so the scrollbar-hiding / sticky-hiding styles
+              // injected by beginCapturePrep are reflected in the captured
+              // frame. Without it, captureVisibleTab can read the stale
+              // pre-hide frame and bake the scrollbar / fixed elements
+              // into the screenshot.
+              await delay(POST_HIDE_PAINT_MS);
+              try {
+                // Snapshot DOM metadata BEFORE the crop pipeline so the
+                // captureRect lines up with the SAME area the user
+                // selected. Done up-front (rather than letting openEditor
+                // do its default no-area request) because area captures
+                // need the area dimensions to filter off-frame elements.
+                const areaMeta = await requestPageMetadata(tab.id!, {
+                  x: msg.rect.x,
+                  y: msg.rect.y,
+                  width: msg.rect.width,
+                  height: msg.rect.height,
+                });
+                const pngDataUrl = await chrome.tabs.captureVisibleTab(tab.windowId!, {
+                  format: "png",
+                });
+                await ensureOffscreen();
+                const result = await chrome.runtime.sendMessage({
+                  type: "offscreen-crop",
+                  dataUrl: pngDataUrl,
+                  rect: msg.rect,
+                  dpr: msg.dpr,
+                });
+                if (result?.dataUrl) {
+                  const encoded = await encodeCapture(result.dataUrl, settings);
+                  const croppedW = Math.round(msg.rect.width * msg.dpr);
+                  const croppedH = Math.round(msg.rect.height * msg.dpr);
+                  openEditor(encoded.dataUrl, croppedW, croppedH, areaMeta);
+                }
+              } catch (err) {
+                console.error("SVGShot: captureArea failed", err);
+              } finally {
+                await endCapturePrep(tab.id!);
+              }
+              resolve();
+            })();
+          } else if (msg.type === "area-cancelled") {
+            chrome.runtime.onMessage.removeListener(handler);
+            resolve();
           }
-          resolve();
-        })();
-      } else if (msg.type === "area-cancelled") {
-        chrome.runtime.onMessage.removeListener(handler);
-        resolve();
-      }
-      return undefined;
-    };
-    chrome.runtime.onMessage.addListener(handler);
-    sendToTab(tab.id!, { type: "start-area-select" });
-  }));
+          return undefined;
+        };
+        chrome.runtime.onMessage.addListener(handler);
+        sendToTab(tab.id!, { type: "start-area-select" });
+      }),
+  );
 }
 
 // --- Capture full page (scroll stitch) ---
@@ -621,15 +670,14 @@ async function captureFullPage(): Promise<void> {
   await injectContentScript(tab.id);
   const settings = await loadSettings();
 
-  await withWindowResize(tab.id, tab.windowId, settings, () => captureFullPageInner(tab as CaptureTab, settings));
+  await withWindowResize(tab.id, tab.windowId, settings, () =>
+    captureFullPageInner(tab as CaptureTab, settings),
+  );
 }
 
 type CaptureTab = chrome.tabs.Tab & { id: number; windowId: number };
 
-async function captureFullPageInner(
-  tab: CaptureTab,
-  settings: Settings,
-): Promise<void> {
+async function captureFullPageInner(tab: CaptureTab, settings: Settings): Promise<void> {
   // Re-measure AFTER emulation is applied (viewport may differ).
   const dims: PageDimensions = await sendToTab(tab.id!, { type: "get-page-dimensions" });
 
@@ -682,7 +730,7 @@ async function captureFullPageInner(
   const stitchWidth = Math.round(dims.viewportWidth * dims.devicePixelRatio);
   const stitchHeight = Math.min(
     Math.round(dims.scrollHeight * dims.devicePixelRatio),
-    MAX_CANVAS_DIMENSION
+    MAX_CANVAS_DIMENSION,
   );
 
   const result = await chrome.runtime.sendMessage({
@@ -693,9 +741,9 @@ async function captureFullPageInner(
   });
 
   if (result?.dataUrl) {
-    await showProgress(tab.id, `Compressing full-page image…`);
+    await showProgress(tab.id, "Compressing full-page image…");
     const encoded = await encodeCapture(result.dataUrl, settings);
-    await showProgress(tab.id, `Saving…`);
+    await showProgress(tab.id, "Saving…");
     await saveAsScrollSession(encoded.dataUrl, stitchWidth, stitchHeight, tab.url || "");
   }
   await hideProgress(tab.id);
@@ -750,7 +798,9 @@ async function capturePages(): Promise<void> {
   await injectContentScript(tab.id);
   const settings = await loadSettings();
 
-  await withWindowResize(tab.id, tab.windowId, settings, () => capturePagesInner(tab as CaptureTab, settings));
+  await withWindowResize(tab.id, tab.windowId, settings, () =>
+    capturePagesInner(tab as CaptureTab, settings),
+  );
 }
 
 async function capturePagesInner(tab: CaptureTab, settings: Settings): Promise<void> {
@@ -832,7 +882,10 @@ async function capturePagesInner(tab: CaptureTab, settings: Settings): Promise<v
   await sendToTab(tab.id, { type: "scroll-to", x: 0, y: originalScrollY });
 
   // ---- Phase 2: Parallel crop + encode via offscreen worker pool ----
-  await showProgress(tab.id, `Compressing ${rawPages.length} page${rawPages.length === 1 ? "" : "s"} in parallel…`);
+  await showProgress(
+    tab.id,
+    `Compressing ${rawPages.length} page${rawPages.length === 1 ? "" : "s"} in parallel…`,
+  );
   await ensureOffscreen();
   const encodeOpts = {
     format: settings.quality.format,
@@ -850,7 +903,10 @@ async function capturePagesInner(tab: CaptureTab, settings: Settings): Promise<v
 
   let batchResults: Array<{ dataUrl: string }> = [];
   try {
-    const resp = await chrome.runtime.sendMessage({ type: "offscreen-encode-batch", items: batchItems });
+    const resp = await chrome.runtime.sendMessage({
+      type: "offscreen-encode-batch",
+      items: batchItems,
+    });
     if (resp?.error) throw new Error(resp.error);
     batchResults = resp?.results || [];
   } catch (e) {
@@ -862,7 +918,11 @@ async function capturePagesInner(tab: CaptureTab, settings: Settings): Promise<v
       const { pngDataUrl, srcYpx, sliceHeightPx } = rawPages[i]!;
       let url = pngDataUrl;
       if (srcYpx > 0 || sliceHeightPx < fullHeightPx) {
-        try { url = await cropPngVertical(pngDataUrl, srcYpx, sliceHeightPx); } catch { /* ignore */ }
+        try {
+          url = await cropPngVertical(pngDataUrl, srcYpx, sliceHeightPx);
+        } catch {
+          /* ignore */
+        }
       }
       const encoded = await encodeCapture(url, settings);
       batchResults.push({ dataUrl: encoded.dataUrl });
@@ -1020,9 +1080,11 @@ chrome.runtime.onMessageExternal.addListener(
       sendResponse({ error: "Invalid message" });
       return true;
     }
-    handleExternalMessage(msg).then(sendResponse).catch((e) => {
-      sendResponse({ error: String(e) });
-    });
+    handleExternalMessage(msg)
+      .then(sendResponse)
+      .catch((e) => {
+        sendResponse({ error: String(e) });
+      });
     return true; // keep channel open for async response
   },
 );
@@ -1087,10 +1149,13 @@ const clickState: ClickCaptureState = { active: false, count: 0, lastCaptureAt: 
 const hotkeyState: ClickCaptureState = { active: false, count: 0, lastCaptureAt: 0, sessionId: "" };
 
 const CLICK_CAPTURE_MIN_INTERVAL_MS = 350; // debounce window
-const CLICK_CAPTURE_MAX_FRAMES = 500;      // safety cap
+const CLICK_CAPTURE_MAX_FRAMES = 500; // safety cap
 const HOTKEY_CAPTURE_MIN_INTERVAL_MS = 200;
 
-function getClickCaptureStatus(): ClickCaptureState & { hotkeyActive: boolean; hotkeyCount: number } {
+function getClickCaptureStatus(): ClickCaptureState & {
+  hotkeyActive: boolean;
+  hotkeyCount: number;
+} {
   return { ...clickState, hotkeyActive: hotkeyState.active, hotkeyCount: hotkeyState.count };
 }
 
@@ -1115,7 +1180,9 @@ async function broadcastClickCapture(enable: boolean): Promise<void> {
       // Ensure content script is present for http(s) pages
       if (enable) await injectContentScript(t.id);
       await chrome.tabs.sendMessage(t.id, { type: msgType }).catch(() => {});
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 }
 
@@ -1125,7 +1192,10 @@ async function startClickCapture(): Promise<void> {
   clickState.count = 0;
   clickState.lastCaptureAt = 0;
   clickState.sessionId = newIdB58();
-  await chrome.storage.local.set({ clickCaptureActive: true, clickCaptureSession: clickState.sessionId });
+  await chrome.storage.local.set({
+    clickCaptureActive: true,
+    clickCaptureSession: clickState.sessionId,
+  });
   updateBadge();
   await broadcastClickCapture(true);
 }
@@ -1150,8 +1220,14 @@ async function stopClickCapture(): Promise<void> {
 /** Handle a click reported by a content script: capture + save. */
 async function handleClickDetected(
   msg: {
-    x: number; y: number; pageX: number; pageY: number;
-    dpr: number; target: string; url: string; title: string;
+    x: number;
+    y: number;
+    pageX: number;
+    pageY: number;
+    dpr: number;
+    target: string;
+    url: string;
+    title: string;
     rect?: { x: number; y: number; width: number; height: number };
   },
   sender: chrome.runtime.MessageSender,
@@ -1189,11 +1265,16 @@ async function handleClickDetected(
     const thumbnailDataUrl = await idbStore.generateThumbnail(dataUrl);
 
     // Dimensions from image
-    let w = 0, h = 0;
+    let w = 0;
+    let h = 0;
     try {
       const bmp = await createImageBitmap(await (await fetch(dataUrl)).blob());
-      w = bmp.width; h = bmp.height; bmp.close();
-    } catch { /* ignore */ }
+      w = bmp.width;
+      h = bmp.height;
+      bmp.close();
+    } catch {
+      /* ignore */
+    }
 
     // Re-query the tab AFTER the settle delay so the recorded URL/title
     // reflects the captured page (post-navigation), not the page the click
@@ -1205,7 +1286,9 @@ async function handleClickDetected(
       const updated = await chrome.tabs.get(tabId);
       if (updated?.url) capturedUrl = updated.url;
       if (updated?.title) capturedTitle = updated.title;
-    } catch { /* ignore — fall back to click-time values */ }
+    } catch {
+      /* ignore — fall back to click-time values */
+    }
 
     // Did the page navigate between click and capture? If so, click
     // coordinates/rect are on a different layout and would draw a misplaced
@@ -1286,8 +1369,10 @@ chrome.tabs.onUpdated.addListener((tabId, info, tab) => {
 (async () => {
   try {
     const res = await chrome.storage.local.get([
-      "clickCaptureActive", "clickCaptureSession",
-      "hotkeyCaptureActive", "hotkeyCaptureSession",
+      "clickCaptureActive",
+      "clickCaptureSession",
+      "hotkeyCaptureActive",
+      "hotkeyCaptureSession",
     ]);
     if (res.clickCaptureActive) {
       clickState.active = true;
@@ -1298,7 +1383,9 @@ chrome.tabs.onUpdated.addListener((tabId, info, tab) => {
       hotkeyState.sessionId = res.hotkeyCaptureSession || newIdB58();
     }
     updateBadge();
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 })();
 
 // ---- Hotkey Capture ----
@@ -1309,7 +1396,10 @@ async function startHotkeyCapture(): Promise<void> {
   hotkeyState.count = 0;
   hotkeyState.lastCaptureAt = 0;
   hotkeyState.sessionId = newIdB58();
-  await chrome.storage.local.set({ hotkeyCaptureActive: true, hotkeyCaptureSession: hotkeyState.sessionId });
+  await chrome.storage.local.set({
+    hotkeyCaptureActive: true,
+    hotkeyCaptureSession: hotkeyState.sessionId,
+  });
   updateBadge();
 }
 
@@ -1330,7 +1420,12 @@ async function stopHotkeyCapture(): Promise<void> {
 
 /** Triggered by the Alt+Shift+C hotkey. Auto-starts the session on first press. */
 async function hotkeyCaptureShot(firedTab?: chrome.tabs.Tab): Promise<void> {
-  console.log("[hotkey-capture] shot fired, active=", hotkeyState.active, "firedTab=", firedTab?.id);
+  console.log(
+    "[hotkey-capture] shot fired, active=",
+    hotkeyState.active,
+    "firedTab=",
+    firedTab?.id,
+  );
   if (!hotkeyState.active) {
     await startHotkeyCapture();
   }
@@ -1367,16 +1462,15 @@ async function hotkeyCaptureShot(firedTab?: chrome.tabs.Tab): Promise<void> {
   if (injectable) {
     try {
       await injectContentScript(tab.id);
-      context = await chrome.tabs.sendMessage(tab.id, { type: "get-capture-context" })
+      context = await chrome.tabs
+        .sendMessage(tab.id, { type: "get-capture-context" })
         .catch(() => null);
     } catch (e) {
       console.log("[hotkey-capture] context query failed:", e);
     }
   }
 
-  const settings = injectable
-    ? await beginCapturePrep(tab.id, "hotkey")
-    : await loadSettings();
+  const settings = injectable ? await beginCapturePrep(tab.id, "hotkey") : await loadSettings();
 
   // Small settle delay so menus/hover states render
   await delay(settings.timing.hotkeySettleMs);
@@ -1393,11 +1487,16 @@ async function hotkeyCaptureShot(firedTab?: chrome.tabs.Tab): Promise<void> {
     const dataUrl = encoded.dataUrl;
     const thumbnailDataUrl = await idbStore.generateThumbnail(dataUrl);
 
-    let w = 0, h = 0;
+    let w = 0;
+    let h = 0;
     try {
       const bmp = await createImageBitmap(await (await fetch(dataUrl)).blob());
-      w = bmp.width; h = bmp.height; bmp.close();
-    } catch { /* ignore */ }
+      w = bmp.width;
+      h = bmp.height;
+      bmp.close();
+    } catch {
+      /* ignore */
+    }
 
     const ts = new Date().toISOString();
     const url = context?.url || tab.url || "";
@@ -1429,9 +1528,7 @@ async function hotkeyCaptureShot(firedTab?: chrome.tabs.Tab): Promise<void> {
     // Snapshot DOM metadata while page state matches the screenshot.
     // Hotkey captures save silently and the user opens them later
     // from the gallery — Elements sidebar then becomes useful.
-    const meta = injectable && tab.id != null
-      ? await requestPageMetadata(tab.id)
-      : null;
+    const meta = injectable && tab.id != null ? await requestPageMetadata(tab.id) : null;
 
     await idbStore.saveImage({
       originalDataUrl: dataUrl,

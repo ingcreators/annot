@@ -1,5 +1,5 @@
-import type { ToolBase } from "./tools/tool-base.js";
 import { stampAnnotVersion } from "./svg-format.js";
+import type { ToolBase } from "./tools/tool-base.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -77,9 +77,15 @@ export class CanvasManager {
     this.fitToView();
   }
 
-  get imageWidth(): number { return this.#imageWidth; }
-  get imageHeight(): number { return this.#imageHeight; }
-  get zoom(): number { return this.#zoom; }
+  get imageWidth(): number {
+    return this.#imageWidth;
+  }
+  get imageHeight(): number {
+    return this.#imageHeight;
+  }
+  get zoom(): number {
+    return this.#zoom;
+  }
 
   setActiveTool(tool: ToolBase | null): void {
     this.#activeTool?.onDeactivate?.();
@@ -88,7 +94,9 @@ export class CanvasManager {
     this.svg.style.cursor = tool ? "crosshair" : "default";
   }
 
-  get activeTool(): ToolBase | null { return this.#activeTool; }
+  get activeTool(): ToolBase | null {
+    return this.#activeTool;
+  }
 
   /** Release all DOM listeners this manager attached. */
   destroy(): void {
@@ -130,7 +138,9 @@ export class CanvasManager {
   /** True when the canvas is tracking the viewport via "Fit to window"
    *  mode. Hosts can use this to highlight the "Fit" menu item and
    *  label the zoom chip as "Fit" instead of "N%". */
-  get isFitMode(): boolean { return this.#fitMode; }
+  get isFitMode(): boolean {
+    return this.#fitMode;
+  }
 
   setZoom(z: number): void {
     this.#zoom = Math.max(0.1, Math.min(z, 5));
@@ -143,8 +153,8 @@ export class CanvasManager {
     const h = Math.round(this.#imageHeight * this.#zoom);
     this.svg.setAttribute("width", String(w));
     this.svg.setAttribute("height", String(h));
-    this.svg.style.width = w + "px";
-    this.svg.style.height = h + "px";
+    this.svg.style.width = `${w}px`;
+    this.svg.style.height = `${h}px`;
     this.onZoomChange?.(this.#zoom);
   }
 
@@ -165,7 +175,6 @@ export class CanvasManager {
    * a migration step.
    */
   #createArrowMarker(): void {
-
     // Legacy alias. Keeps old saved files with `url(#anno-arrowhead)`
     // rendering correctly — renders identically to an "md/md" triangle.
     const legacy = document.createElementNS(SVG_NS, "marker");
@@ -186,68 +195,92 @@ export class CanvasManager {
   #setupEvents(): void {
     const opts = { signal: this.#abort.signal };
 
-    this.svg.addEventListener("pointerdown", (e) => {
-      // Middle mouse for panning
-      if (e.button === 1) {
-        this.#isPanning = true;
-        this.#panStartX = e.clientX;
-        this.#panStartY = e.clientY;
-        e.preventDefault();
-        return;
-      }
-      if (e.button !== 0) return;
-      const pt = this.svgPoint(e);
-      this.#activeTool?.onPointerDown(e, pt);
-    }, opts);
+    this.svg.addEventListener(
+      "pointerdown",
+      (e) => {
+        // Middle mouse for panning
+        if (e.button === 1) {
+          this.#isPanning = true;
+          this.#panStartX = e.clientX;
+          this.#panStartY = e.clientY;
+          e.preventDefault();
+          return;
+        }
+        if (e.button !== 0) return;
+        const pt = this.svgPoint(e);
+        this.#activeTool?.onPointerDown(e, pt);
+      },
+      opts,
+    );
 
-    this.svg.addEventListener("pointermove", (e) => {
-      if (this.#isPanning) {
-        const container = this.svg.parentElement!;
-        container.scrollLeft -= e.clientX - this.#panStartX;
-        container.scrollTop -= e.clientY - this.#panStartY;
-        this.#panStartX = e.clientX;
-        this.#panStartY = e.clientY;
-        return;
-      }
-      const pt = this.svgPoint(e);
-      this.#activeTool?.onPointerMove(e, pt);
-    }, opts);
+    this.svg.addEventListener(
+      "pointermove",
+      (e) => {
+        if (this.#isPanning) {
+          const container = this.svg.parentElement!;
+          container.scrollLeft -= e.clientX - this.#panStartX;
+          container.scrollTop -= e.clientY - this.#panStartY;
+          this.#panStartX = e.clientX;
+          this.#panStartY = e.clientY;
+          return;
+        }
+        const pt = this.svgPoint(e);
+        this.#activeTool?.onPointerMove(e, pt);
+      },
+      opts,
+    );
 
-    this.svg.addEventListener("pointerup", (e) => {
-      if (this.#isPanning) {
-        this.#isPanning = false;
-        return;
-      }
-      if (e.button !== 0) return;
-      const pt = this.svgPoint(e);
-      this.#activeTool?.onPointerUp(e, pt);
-    }, opts);
+    this.svg.addEventListener(
+      "pointerup",
+      (e) => {
+        if (this.#isPanning) {
+          this.#isPanning = false;
+          return;
+        }
+        if (e.button !== 0) return;
+        const pt = this.svgPoint(e);
+        this.#activeTool?.onPointerUp(e, pt);
+      },
+      opts,
+    );
 
     // Right-click — always swallow the browser's stock context menu so
     // we don't flash the default "Save image as…" / "Inspect" menu on
     // top of any annotation UI. If a host has registered `onContextMenu`,
     // forward the event (with SVG-space coords) so it can open its own
     // Insert-Here menu. No host subscription → silent no-op.
-    this.svg.addEventListener("contextmenu", (e) => {
-      e.preventDefault();
-      if (!this.onContextMenu) return;
-      const pt = this.svgPoint(e);
-      this.onContextMenu(e, pt);
-    }, opts);
+    this.svg.addEventListener(
+      "contextmenu",
+      (e) => {
+        e.preventDefault();
+        if (!this.onContextMenu) return;
+        const pt = this.svgPoint(e);
+        this.onContextMenu(e, pt);
+      },
+      opts,
+    );
 
     // Zoom with Ctrl+Wheel
-    this.svg.parentElement?.addEventListener("wheel", (e) => {
-      if (e.ctrlKey) {
-        e.preventDefault();
-        const delta = e.deltaY > 0 ? -0.1 : 0.1;
-        this.setZoom(this.#zoom + delta);
-      }
-    }, { passive: false, signal: this.#abort.signal });
+    this.svg.parentElement?.addEventListener(
+      "wheel",
+      (e) => {
+        if (e.ctrlKey) {
+          e.preventDefault();
+          const delta = e.deltaY > 0 ? -0.1 : 0.1;
+          this.setZoom(this.#zoom + delta);
+        }
+      },
+      { passive: false, signal: this.#abort.signal },
+    );
 
     // Keyboard
-    document.addEventListener("keydown", (e) => {
-      this.#activeTool?.onKeyDown?.(e);
-    }, opts);
+    document.addEventListener(
+      "keydown",
+      (e) => {
+        this.#activeTool?.onKeyDown?.(e);
+      },
+      opts,
+    );
   }
 
   updateViewBox(x: number, y: number, w: number, h: number): void {

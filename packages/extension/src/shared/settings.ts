@@ -105,12 +105,15 @@ export interface EmulationViewport {
   height: number;
 }
 
-const EMULATION_PRESETS: Record<Exclude<EmulationPreset, "native" | "custom">, EmulationViewport> = {
-  fullhd:         { width: 1920, height: 1080 },
-  macbook:        { width: 1440, height: 900  },
-  iphonese:       { width: 375,  height: 667  },
-  iphone15promax: { width: 430,  height: 932  },
-  ipad:           { width: 1024, height: 1366 },
+const EMULATION_PRESETS: Record<
+  Exclude<EmulationPreset, "native" | "custom">,
+  EmulationViewport
+> = {
+  fullhd: { width: 1920, height: 1080 },
+  macbook: { width: 1440, height: 900 },
+  iphonese: { width: 375, height: 667 },
+  iphone15promax: { width: 430, height: 932 },
+  ipad: { width: 1024, height: 1366 },
 };
 
 /**
@@ -171,38 +174,100 @@ export function mergeSettings(partial: any): Settings {
         typeof p.overlays?.preservedSelectors === "string"
           ? p.overlays.preservedSelectors
           : DEFAULT_SETTINGS.overlays.preservedSelectors,
-      keepFirstSegment: typeof p.overlays?.keepFirstSegment === "boolean"
-        ? p.overlays.keepFirstSegment
-        : DEFAULT_SETTINGS.overlays.keepFirstSegment,
+      keepFirstSegment:
+        typeof p.overlays?.keepFirstSegment === "boolean"
+          ? p.overlays.keepFirstSegment
+          : DEFAULT_SETTINGS.overlays.keepFirstSegment,
     },
     scrollbars: {
-      hide: typeof p.scrollbars?.hide === "boolean"
-        ? p.scrollbars.hide
-        : DEFAULT_SETTINGS.scrollbars.hide,
+      hide:
+        typeof p.scrollbars?.hide === "boolean"
+          ? p.scrollbars.hide
+          : DEFAULT_SETTINGS.scrollbars.hide,
     },
     timing: {
-      scrollSettleMs: clampNumber(p.timing?.scrollSettleMs, 100, 2000, DEFAULT_SETTINGS.timing.scrollSettleMs),
-      clickSettleMs: clampNumber(p.timing?.clickSettleMs, 50, 1500, DEFAULT_SETTINGS.timing.clickSettleMs),
-      hotkeySettleMs: clampNumber(p.timing?.hotkeySettleMs, 0, 500, DEFAULT_SETTINGS.timing.hotkeySettleMs),
-      interSegmentMs: clampNumber(p.timing?.interSegmentMs, 0, 500, DEFAULT_SETTINGS.timing.interSegmentMs),
+      scrollSettleMs: clampNumber(
+        p.timing?.scrollSettleMs,
+        100,
+        2000,
+        DEFAULT_SETTINGS.timing.scrollSettleMs,
+      ),
+      clickSettleMs: clampNumber(
+        p.timing?.clickSettleMs,
+        50,
+        1500,
+        DEFAULT_SETTINGS.timing.clickSettleMs,
+      ),
+      hotkeySettleMs: clampNumber(
+        p.timing?.hotkeySettleMs,
+        0,
+        500,
+        DEFAULT_SETTINGS.timing.hotkeySettleMs,
+      ),
+      interSegmentMs: clampNumber(
+        p.timing?.interSegmentMs,
+        0,
+        500,
+        DEFAULT_SETTINGS.timing.interSegmentMs,
+      ),
     },
     quality: {
-      format: pickEnum<ImageFormat>(p.quality?.format, ["smart", "png", "jpeg"], DEFAULT_SETTINGS.quality.format),
-      smartFallback: pickEnum<"png" | "jpeg">(p.quality?.smartFallback, ["png", "jpeg"], DEFAULT_SETTINGS.quality.smartFallback),
-      smartColorThreshold: clampNumber(p.quality?.smartColorThreshold, 500, 200000, DEFAULT_SETTINGS.quality.smartColorThreshold),
-      jpegPercent: clampNumber(p.quality?.jpegPercent, 60, 100, DEFAULT_SETTINGS.quality.jpegPercent),
-      thumbnailPercent: clampNumber(p.quality?.thumbnailPercent, 60, 95, DEFAULT_SETTINGS.quality.thumbnailPercent),
-      thumbnailMaxWidth: pickEnum(p.quality?.thumbnailMaxWidth, [360, 480, 640, 960], DEFAULT_SETTINGS.quality.thumbnailMaxWidth),
+      format: pickEnum<ImageFormat>(
+        p.quality?.format,
+        ["smart", "png", "jpeg"],
+        DEFAULT_SETTINGS.quality.format,
+      ),
+      smartFallback: pickEnum<"png" | "jpeg">(
+        p.quality?.smartFallback,
+        ["png", "jpeg"],
+        DEFAULT_SETTINGS.quality.smartFallback,
+      ),
+      smartColorThreshold: clampNumber(
+        p.quality?.smartColorThreshold,
+        500,
+        200000,
+        DEFAULT_SETTINGS.quality.smartColorThreshold,
+      ),
+      jpegPercent: clampNumber(
+        p.quality?.jpegPercent,
+        60,
+        100,
+        DEFAULT_SETTINGS.quality.jpegPercent,
+      ),
+      thumbnailPercent: clampNumber(
+        p.quality?.thumbnailPercent,
+        60,
+        95,
+        DEFAULT_SETTINGS.quality.thumbnailPercent,
+      ),
+      thumbnailMaxWidth: pickEnum(
+        p.quality?.thumbnailMaxWidth,
+        [360, 480, 640, 960],
+        DEFAULT_SETTINGS.quality.thumbnailMaxWidth,
+      ),
     },
     emulation: {
-      enabled: typeof p.emulation?.enabled === "boolean" ? p.emulation.enabled : DEFAULT_SETTINGS.emulation.enabled,
+      enabled:
+        typeof p.emulation?.enabled === "boolean"
+          ? p.emulation.enabled
+          : DEFAULT_SETTINGS.emulation.enabled,
       preset: pickEnum<EmulationPreset>(
         p.emulation?.preset,
         ["native", "fullhd", "macbook", "iphonese", "iphone15promax", "ipad", "custom"],
         DEFAULT_SETTINGS.emulation.preset,
       ),
-      customWidth: clampNumber(p.emulation?.customWidth, 320, 4096, DEFAULT_SETTINGS.emulation.customWidth),
-      customHeight: clampNumber(p.emulation?.customHeight, 320, 4096, DEFAULT_SETTINGS.emulation.customHeight),
+      customWidth: clampNumber(
+        p.emulation?.customWidth,
+        320,
+        4096,
+        DEFAULT_SETTINGS.emulation.customWidth,
+      ),
+      customHeight: clampNumber(
+        p.emulation?.customHeight,
+        320,
+        4096,
+        DEFAULT_SETTINGS.emulation.customHeight,
+      ),
     },
   };
 }
@@ -282,8 +347,8 @@ export type CaptureKind = "visible" | "area" | "scroll" | "perPage" | "click" | 
 export function shouldHideOverlaysFor(
   kind: CaptureKind,
   mode: OverlayMode,
-  segmentIndex: number = 0,
-  keepFirstSegment: boolean = false,
+  segmentIndex = 0,
+  keepFirstSegment = false,
 ): boolean {
   if (mode === "never") return false;
   const multiSegment = kind === "scroll" || kind === "perPage";

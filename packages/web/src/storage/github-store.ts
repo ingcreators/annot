@@ -1,3 +1,4 @@
+import { renderImageRecord } from "@ingcreators/annot-core/editor/export";
 /**
  * GitHub storage provider — commits images to a user-picked repo.
  *
@@ -25,29 +26,25 @@
  * limit and block the save behind a network round-trip.
  */
 import type {
+  FolderRecord,
   ImageRecord,
   ImageRecordUpdate,
-  FolderRecord,
   StorageProvider,
 } from "@ingcreators/annot-core/storage";
 import {
-  joinPath,
-  getParentPath,
-  getFilename,
-  validateName,
   ancestorPaths,
+  drawToThumbCanvas,
+  getFilename,
+  getParentPath,
+  joinPath,
   rewritePathPrefix,
   uniquifyFilename,
-  drawToThumbCanvas,
+  validateName,
 } from "@ingcreators/annot-core/storage";
-import {
-  createEditableImage,
-  readEditableImage,
-} from "@ingcreators/annot-core/xmp";
-import { renderImageRecord } from "@ingcreators/annot-core/editor/export";
-import { encodeCaptureInWorker } from "../workers/encode-client.js";
+import { createEditableImage, readEditableImage } from "@ingcreators/annot-core/xmp";
 import { loadEncodeOptions } from "../encode-options.js";
-import type { GitHubRepoRef, GitHubCommitSummary } from "./github-auth.js";
+import { encodeCaptureInWorker } from "../workers/encode-client.js";
+import type { GitHubCommitSummary, GitHubRepoRef } from "./github-auth.js";
 import { getLastCommitForPath } from "./github-auth.js";
 
 const GITHUB_API = "https://api.github.com";
@@ -67,10 +64,12 @@ const GITKEEP = ".gitkeep";
  */
 function isImageFilename(name: string): boolean {
   const lower = name.toLowerCase();
-  return lower.endsWith(".png")
-    || lower.endsWith(".jpg")
-    || lower.endsWith(".jpeg")
-    || lower.endsWith(".svg");
+  return (
+    lower.endsWith(".png") ||
+    lower.endsWith(".jpg") ||
+    lower.endsWith(".jpeg") ||
+    lower.endsWith(".svg")
+  );
 }
 
 /**
@@ -94,7 +93,7 @@ const MAX_CONTENTS_BYTES = 40 * 1024 * 1024; // 40 MB rendered size
 const RATE_LIMIT_WARN_AT = 100;
 
 interface TreeEntry {
-  path: string;            // repo-relative
+  path: string; // repo-relative
   mode: string;
   type: "blob" | "tree" | "commit";
   sha: string;
@@ -312,14 +311,17 @@ export class GitHubStore implements StorageProvider {
   #relPath(fullPath: string): string | null {
     if (!this.#basePath) return fullPath;
     if (fullPath === this.#basePath) return "";
-    const prefix = this.#basePath + "/";
+    const prefix = `${this.#basePath}/`;
     if (fullPath.startsWith(prefix)) return fullPath.slice(prefix.length);
     return null;
   }
 
   #encodePath(path: string): string {
     // Percent-encode each segment separately so slashes stay intact.
-    return path.split("/").map((s) => encodeURIComponent(s)).join("/");
+    return path
+      .split("/")
+      .map((s) => encodeURIComponent(s))
+      .join("/");
   }
 
   #contentsUrl(fullPath: string): string {
@@ -374,8 +376,8 @@ export class GitHubStore implements StorageProvider {
   #updateRateLimit(resp: Response): void {
     const remaining = resp.headers.get("X-RateLimit-Remaining");
     const reset = resp.headers.get("X-RateLimit-Reset");
-    if (remaining != null) this.#rateLimitRemaining = parseInt(remaining, 10);
-    if (reset != null) this.#rateLimitReset = parseInt(reset, 10) * 1000;
+    if (remaining != null) this.#rateLimitRemaining = Number.parseInt(remaining, 10);
+    if (reset != null) this.#rateLimitReset = Number.parseInt(reset, 10) * 1000;
 
     // Fire the low-rate-limit listener once per reset window.
     // 100 req / hour left out of 5 000 is a useful "heavy editor
@@ -383,10 +385,10 @@ export class GitHubStore implements StorageProvider {
     // per save, so the remaining budget is a rough editing-minutes
     // forecast until the window resets.
     if (
-      this.#rateLimitRemaining != null
-      && this.#rateLimitRemaining <= RATE_LIMIT_WARN_AT
-      && this.#rateLimitListener
-      && this.#rateLimitReset !== this.#rateLimitWarnedFor
+      this.#rateLimitRemaining != null &&
+      this.#rateLimitRemaining <= RATE_LIMIT_WARN_AT &&
+      this.#rateLimitListener &&
+      this.#rateLimitReset !== this.#rateLimitWarnedFor
     ) {
       this.#rateLimitWarnedFor = this.#rateLimitReset;
       try {
@@ -407,7 +409,9 @@ export class GitHubStore implements StorageProvider {
     try {
       const parsed = JSON.parse(text);
       if (parsed?.message) detail = parsed.message;
-    } catch { /* keep raw text */ }
+    } catch {
+      /* keep raw text */
+    }
 
     // 409 on PUT means our cached SHA was stale — someone else
     // committed to the same path between our read and write. Tag
@@ -417,11 +421,7 @@ export class GitHubStore implements StorageProvider {
     if (resp.status === 409 || (resp.status === 422 && /sha/i.test(detail))) {
       extra.conflict = true;
     }
-    throw githubError(
-      `GitHub API ${resp.status}: ${detail}`,
-      resp.status,
-      extra,
-    );
+    throw githubError(`GitHub API ${resp.status}: ${detail}`, resp.status, extra);
   }
 
   async #runRefresh(): Promise<string | null> {
@@ -532,8 +532,7 @@ export class GitHubStore implements StorageProvider {
   ): Promise<string> {
     if (blob.size > MAX_CONTENTS_BYTES) {
       throw githubError(
-        `File is too large for the GitHub Contents API (${(blob.size / 1024 / 1024).toFixed(1)} MB > 40 MB). `
-          + `Large-file support via the Git Data API is planned for a later phase.`,
+        `File is too large for the GitHub Contents API (${(blob.size / 1024 / 1024).toFixed(1)} MB > 40 MB). Large-file support via the Git Data API is planned for a later phase.`,
       );
     }
     const full = this.#fullPath(relPath);
@@ -630,7 +629,7 @@ export class GitHubStore implements StorageProvider {
     const commitBody = await commitResp.json();
     const headMessage = (commitBody?.message as string | undefined) ?? "";
     const parentSha: string | undefined = commitBody?.parents?.[0]?.sha;
-    if (!parentSha) return null;   // initial commit — amending would delete history
+    if (!parentSha) return null; // initial commit — amending would delete history
 
     // 3) Amendable iff HEAD is an Annot update commit for THIS file.
     // Matches the message produced by `#commitMessage("update", ...)`:
@@ -646,13 +645,12 @@ export class GitHubStore implements StorageProvider {
     if (expectedBlobSha) {
       const headTreeSha: string | undefined = commitBody?.tree?.sha;
       if (!headTreeSha) return null;
-      const treeResp = await this.#fetchOrNull(
-        `${repoBase}/git/trees/${headTreeSha}?recursive=1`,
-      );
+      const treeResp = await this.#fetchOrNull(`${repoBase}/git/trees/${headTreeSha}?recursive=1`);
       if (!treeResp) return null;
       const treeBody = await treeResp.json();
-      const entry = (treeBody?.tree as Array<{ path: string; sha: string }> | undefined)
-        ?.find((e) => e.path === fullPath);
+      const entry = (treeBody?.tree as Array<{ path: string; sha: string }> | undefined)?.find(
+        (e) => e.path === fullPath,
+      );
       if (!entry || entry.sha !== expectedBlobSha) return null;
     }
 
@@ -789,9 +787,7 @@ export class GitHubStore implements StorageProvider {
     const full = this.#fullPath(relPath);
     const branch = encodeURIComponent(this.#branch);
     try {
-      const resp = await this.#fetch(
-        `${this.#contentsUrl(full)}?ref=${branch}`,
-      );
+      const resp = await this.#fetch(`${this.#contentsUrl(full)}?ref=${branch}`);
       const data = await resp.json();
       if (typeof data?.content !== "string" || typeof data?.sha !== "string") {
         return undefined;
@@ -888,8 +884,8 @@ export class GitHubStore implements StorageProvider {
     const folderPath = getParentPath(relPath);
     const xmp = readEditableImage(bytes);
     const meta = this.#fileMeta.get(relPath);
-    const originalDataUrl = xmp?.originalImageDataUrl
-      || bytesToDataUrl(bytes, inferMimeFromPath(relPath));
+    const originalDataUrl =
+      xmp?.originalImageDataUrl || bytesToDataUrl(bytes, inferMimeFromPath(relPath));
     const record: ImageRecord = {
       path: relPath,
       folderPath,
@@ -998,9 +994,11 @@ export class GitHubStore implements StorageProvider {
         this.#thumbnailCache.set(relPath, dataUrl);
         // CustomEvent is typed loosely here because we don't augment
         // the WindowEventMap globally for a storage-specific event.
-        window.dispatchEvent(new CustomEvent("annot-thumbnail-ready", {
-          detail: { path: relPath, dataUrl },
-        }));
+        window.dispatchEvent(
+          new CustomEvent("annot-thumbnail-ready", {
+            detail: { path: relPath, dataUrl },
+          }),
+        );
       } catch {
         // Swallow — the gallery just keeps showing the placeholder.
         // A subsequent forceRefresh / navigation retries.
@@ -1033,9 +1031,11 @@ export class GitHubStore implements StorageProvider {
         // freshly-rendered thumbnail — the editor canvas is the
         // source of truth at this moment.
         this.#thumbnailInFlight.delete(currentPath);
-        window.dispatchEvent(new CustomEvent("annot-thumbnail-ready", {
-          detail: { path: currentPath, dataUrl: updates.thumbnailDataUrl },
-        }));
+        window.dispatchEvent(
+          new CustomEvent("annot-thumbnail-ready", {
+            detail: { path: currentPath, dataUrl: updates.thumbnailDataUrl },
+          }),
+        );
       } else {
         // Caller passed empty (generator failed) — don't leave a
         // stale entry hanging around. Wipe so the next listImages
@@ -1299,8 +1299,8 @@ export class GitHubStore implements StorageProvider {
     // any `.gitkeep` markers that materialised empty subfolders.
     // Iterate a snapshot so the in-flight PUT / DELETE mutations of
     // `#shaByPath` don't invalidate iteration.
-    const entries = Array.from(this.#shaByPath.keys()).filter((p) =>
-      p === oldPath || p.startsWith(oldPath + "/")
+    const entries = Array.from(this.#shaByPath.keys()).filter(
+      (p) => p === oldPath || p.startsWith(`${oldPath}/`),
     );
 
     // Empty folder (just a `.gitkeep` at oldPath) → migrate that
@@ -1345,7 +1345,7 @@ export class GitHubStore implements StorageProvider {
   #rewriteDescendantCaches(oldPath: string, newPath: string): void {
     // recordCache
     for (const [p, rec] of Array.from(this.#recordCache.entries())) {
-      if (p === oldPath || p.startsWith(oldPath + "/")) {
+      if (p === oldPath || p.startsWith(`${oldPath}/`)) {
         const np = rewritePathPrefix(p, oldPath, newPath);
         this.#recordCache.delete(p);
         this.#recordCache.set(np, { ...rec, path: np, folderPath: getParentPath(np) });
@@ -1353,7 +1353,7 @@ export class GitHubStore implements StorageProvider {
     }
     // fileMeta
     for (const [p, m] of Array.from(this.#fileMeta.entries())) {
-      if (p === oldPath || p.startsWith(oldPath + "/")) {
+      if (p === oldPath || p.startsWith(`${oldPath}/`)) {
         const np = rewritePathPrefix(p, oldPath, newPath);
         this.#fileMeta.delete(p);
         this.#fileMeta.set(np, m);
@@ -1361,7 +1361,7 @@ export class GitHubStore implements StorageProvider {
     }
     // thumbnailCache
     for (const [p, t] of Array.from(this.#thumbnailCache.entries())) {
-      if (p === oldPath || p.startsWith(oldPath + "/")) {
+      if (p === oldPath || p.startsWith(`${oldPath}/`)) {
         const np = rewritePathPrefix(p, oldPath, newPath);
         this.#thumbnailCache.delete(p);
         this.#thumbnailCache.set(np, t);
@@ -1369,7 +1369,7 @@ export class GitHubStore implements StorageProvider {
     }
     // folder set
     for (const f of Array.from(this.#allFolderPaths)) {
-      if (f === oldPath || f.startsWith(oldPath + "/")) {
+      if (f === oldPath || f.startsWith(`${oldPath}/`)) {
         this.#allFolderPaths.delete(f);
         this.#allFolderPaths.add(rewritePathPrefix(f, oldPath, newPath));
       }
@@ -1386,8 +1386,8 @@ export class GitHubStore implements StorageProvider {
 
     // Collect every tracked blob under the folder — images plus
     // any `.gitkeep` markers for empty subfolders.
-    const entries = Array.from(this.#shaByPath.keys()).filter((p) =>
-      p === path || p.startsWith(path + "/")
+    const entries = Array.from(this.#shaByPath.keys()).filter(
+      (p) => p === path || p.startsWith(`${path}/`),
     );
     // Per-file delete. Phase 4 will add a Git Data API bulk commit
     // that removes the whole subtree in a single commit.
@@ -1401,7 +1401,7 @@ export class GitHubStore implements StorageProvider {
     // Remove the folder itself and every subfolder from the visible
     // tree. (Ancestor folders stay — they may still contain siblings.)
     for (const f of Array.from(this.#allFolderPaths)) {
-      if (f === path || f.startsWith(path + "/")) this.#allFolderPaths.delete(f);
+      if (f === path || f.startsWith(`${path}/`)) this.#allFolderPaths.delete(f);
     }
   }
 
@@ -1535,10 +1535,7 @@ function bytesToDataUrl(bytes: Uint8Array, mime: string): string {
   let binary = "";
   const chunk = 0x8000;
   for (let i = 0; i < bytes.length; i += chunk) {
-    binary += String.fromCharCode.apply(
-      null,
-      bytes.subarray(i, i + chunk) as unknown as number[],
-    );
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk) as unknown as number[]);
   }
   return `data:${mime};base64,${btoa(binary)}`;
 }

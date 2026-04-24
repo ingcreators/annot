@@ -1,3 +1,4 @@
+import { setTooltip } from "@ingcreators/annot-core/utils";
 /**
  * FileDetailsDrawer — right-side slide-in panel consolidating every piece
  * of information about the currently-open image in one place.
@@ -12,17 +13,16 @@
  * Dropbox / macOS Finder so users don't need to learn a new affordance.
  */
 import { TagEditor } from "./tag-editor.js";
-import { setTooltip } from "@ingcreators/annot-core/utils";
 
 export interface FileDetailsData {
   filename: string;
-  folderPath: string;          // "" = root
+  folderPath: string; // "" = root
   width: number;
   height: number;
-  fileSizeBytes: number;       // approximated from the dataUrl length
-  createdAt?: string;          // ISO; may be undefined for not-yet-persisted images
-  updatedAt?: string;          // ISO
-  sourceUrl?: string;          // captured page URL, if known
+  fileSizeBytes: number; // approximated from the dataUrl length
+  createdAt?: string; // ISO; may be undefined for not-yet-persisted images
+  updatedAt?: string; // ISO
+  sourceUrl?: string; // captured page URL, if known
   tags: Record<string, string>;
   /**
    * Storage-level links (e.g. "View on GitHub"). Rendered in their
@@ -134,19 +134,16 @@ export class FileDetailsDrawer {
     // ----- File section -----
     const fileSection = this.#createSection("File");
     fileSection.appendChild(this.#makeNameRow());
-    fileSection.appendChild(this.#makeRow(
-      "Location",
-      this.#data.folderPath || "(root)",
-      { selectable: true, mono: true },
-    ));
-    fileSection.appendChild(this.#makeRow(
-      "Dimensions",
-      `${this.#data.width} × ${this.#data.height} px`,
-    ));
-    fileSection.appendChild(this.#makeRow(
-      "File size",
-      formatBytes(this.#data.fileSizeBytes),
-    ));
+    fileSection.appendChild(
+      this.#makeRow("Location", this.#data.folderPath || "(root)", {
+        selectable: true,
+        mono: true,
+      }),
+    );
+    fileSection.appendChild(
+      this.#makeRow("Dimensions", `${this.#data.width} × ${this.#data.height} px`),
+    );
+    fileSection.appendChild(this.#makeRow("File size", formatBytes(this.#data.fileSizeBytes)));
     if (this.#data.createdAt) {
       fileSection.appendChild(this.#makeRow("Created", formatDate(this.#data.createdAt)));
     }
@@ -154,11 +151,9 @@ export class FileDetailsDrawer {
       fileSection.appendChild(this.#makeRow("Modified", formatDate(this.#data.updatedAt)));
     }
     if (this.#data.sourceUrl) {
-      fileSection.appendChild(this.#makeRow(
-        "Source",
-        this.#data.sourceUrl,
-        { selectable: true, mono: true, link: true },
-      ));
+      fileSection.appendChild(
+        this.#makeRow("Source", this.#data.sourceUrl, { selectable: true, mono: true, link: true }),
+      );
     }
     this.#panel.appendChild(fileSection);
 
@@ -347,7 +342,7 @@ export class FileDetailsDrawer {
     const commit = async () => {
       const next = input.value.trim();
       if (!next || next === this.#data.filename) {
-        input.value = this.#data.filename;  // restore
+        input.value = this.#data.filename; // restore
         errorEl.textContent = "";
         return;
       }
@@ -365,7 +360,7 @@ export class FileDetailsDrawer {
         // final (possibly uniquified) name.
       } catch (e: any) {
         errorEl.textContent = e?.message || "Rename failed";
-        input.value = this.#data.filename;  // restore
+        input.value = this.#data.filename; // restore
       } finally {
         input.disabled = false;
       }
@@ -374,15 +369,17 @@ export class FileDetailsDrawer {
     input.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
-        input.blur();  // triggers commit via blur listener
+        input.blur(); // triggers commit via blur listener
       } else if (e.key === "Escape") {
         e.preventDefault();
-        input.value = this.#data.filename;  // cancel
+        input.value = this.#data.filename; // cancel
         errorEl.textContent = "";
         input.blur();
       }
     });
-    input.addEventListener("blur", () => { commit(); });
+    input.addEventListener("blur", () => {
+      commit();
+    });
 
     wrap.appendChild(input);
     wrap.appendChild(errorEl);
@@ -416,10 +413,7 @@ export class FileDetailsDrawer {
       valEl = document.createElement("span");
       valEl.textContent = value;
     }
-    valEl.className =
-      "file-details-row-value"
-      + (opts.mono ? " mono" : "")
-      + (opts.selectable ? " selectable" : "");
+    valEl.className = `file-details-row-value${opts.mono ? " mono" : ""}${opts.selectable ? " selectable" : ""}`;
     setTooltip(valEl, value);
     row.appendChild(valEl);
 
@@ -469,7 +463,7 @@ function formatBytes(bytes: number): string {
 function formatDate(iso: string): string {
   try {
     const d = new Date(iso);
-    if (isNaN(d.getTime())) return iso;
+    if (Number.isNaN(d.getTime())) return iso;
     return d.toLocaleString(undefined, {
       year: "numeric",
       month: "2-digit",
@@ -493,8 +487,9 @@ function formatDate(iso: string): string {
 export function validateFilename(name: string): string | null {
   if (!name) return "Name cannot be empty.";
   if (name === "." || name === "..") return "That name is reserved.";
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: intentional — POSIX / Windows filename validation.
   if (/[<>:"/\\|?*\x00-\x1f]/.test(name)) {
-    return "Name cannot contain  < > : \" / \\ | ? *";
+    return 'Name cannot contain  < > : " / \\ | ? *';
   }
   if (name.length > 200) return "Name is too long.";
   return null;

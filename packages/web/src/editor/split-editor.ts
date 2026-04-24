@@ -32,7 +32,7 @@ export interface SplitEditorCallbacks {
   onCancel: () => void;
 }
 
-const MIN_SLICE_PX = 40;   // smallest allowed slice height in natural pixels
+const MIN_SLICE_PX = 40; // smallest allowed slice height in natural pixels
 const CLICK_TOLERANCE_PX = 3; // mouse movement under this = click (not drag)
 
 export class SplitEditor {
@@ -46,14 +46,20 @@ export class SplitEditor {
   #countEl: HTMLElement | null = null;
 
   #images: HTMLImageElement[] = [];
-  #heights: number[] = [];       // natural heights of the original frames
-  #offsets: number[] = [];       // natural Y of each frame's top in the stack
-  #totalHeight: number = 0;      // sum of natural heights
-  #width: number = 0;            // natural frame width (all frames share this)
-  #boundaries: number[] = [];    // sorted natural Y of each split
-  #displayScale: number = 1;
+  #heights: number[] = []; // natural heights of the original frames
+  #offsets: number[] = []; // natural Y of each frame's top in the stack
+  #totalHeight = 0; // sum of natural heights
+  #width = 0; // natural frame width (all frames share this)
+  #boundaries: number[] = []; // sorted natural Y of each split
+  #displayScale = 1;
 
-  #dragging: { boundaryValue: number; handleEl: HTMLElement; offsetWithinHandle: number; startClientY: number; moved: boolean } | null = null;
+  #dragging: {
+    boundaryValue: number;
+    handleEl: HTMLElement;
+    offsetWithinHandle: number;
+    startClientY: number;
+    moved: boolean;
+  } | null = null;
   #onMouseMove: ((e: MouseEvent) => void) | null = null;
   #onMouseUp: ((e: MouseEvent) => void) | null = null;
   #onResize: (() => void) | null = null;
@@ -70,16 +76,22 @@ export class SplitEditor {
     for (let i = 0; i < this.#records.length; i++) {
       const r = this.#records[i]!;
       if (!r.originalDataUrl || !r.originalDataUrl.startsWith("data:")) {
-        throw new Error(`Frame ${i + 1}/${this.#records.length} has no image data (path="${r.path}"). The session may not have fully transferred yet — try reloading.`);
+        throw new Error(
+          `Frame ${i + 1}/${this.#records.length} has no image data (path="${r.path}"). The session may not have fully transferred yet — try reloading.`,
+        );
       }
     }
 
     try {
       this.#images = await Promise.all(
-        this.#records.map((r, i) => loadImage(r.originalDataUrl).catch((e) => {
-          const size = r.originalDataUrl?.length ?? 0;
-          throw new Error(`Frame ${i + 1}: failed to decode image (size=${(size / 1024).toFixed(0)} KB, path="${r.path}"). ${e?.message || ""}`);
-        })),
+        this.#records.map((r, i) =>
+          loadImage(r.originalDataUrl).catch((e) => {
+            const size = r.originalDataUrl?.length ?? 0;
+            throw new Error(
+              `Frame ${i + 1}: failed to decode image (size=${(size / 1024).toFixed(0)} KB, path="${r.path}"). ${e?.message || ""}`,
+            );
+          }),
+        ),
       );
     } catch (e) {
       console.error("[split-editor] image load failed:", e);
@@ -91,7 +103,7 @@ export class SplitEditor {
     }
     this.#width = this.#images[0].naturalWidth;
     if (this.#width === 0) {
-      throw new Error(`Frame 1 decoded with 0 width — the captured image is corrupt`);
+      throw new Error("Frame 1 decoded with 0 width — the captured image is corrupt");
     }
     for (const img of this.#images) {
       if (img.naturalWidth !== this.#width) {
@@ -167,7 +179,8 @@ export class SplitEditor {
 
     const hint = document.createElement("div");
     hint.className = "split-editor-hint";
-    hint.textContent = "Drag a line to move. Click empty space to add. Shift-click or right-click a line to remove. Annotations will be discarded when you apply.";
+    hint.textContent =
+      "Drag a line to move. Click empty space to add. Shift-click or right-click a line to remove. Annotations will be discarded when you apply.";
     header.appendChild(hint);
 
     const actions = document.createElement("div");
@@ -397,9 +410,13 @@ export class SplitEditor {
    */
   #updateAllHandleSizeLabels(): void {
     if (!this.#handlesEl) return;
-    const handles = Array.from(this.#handlesEl.querySelectorAll<HTMLElement>(".split-editor-handle"));
+    const handles = Array.from(
+      this.#handlesEl.querySelectorAll<HTMLElement>(".split-editor-handle"),
+    );
     // Sort handles by their data-value so handle index === slice index
-    handles.sort((a, b) => Number(a.getAttribute("data-value")) - Number(b.getAttribute("data-value")));
+    handles.sort(
+      (a, b) => Number(a.getAttribute("data-value")) - Number(b.getAttribute("data-value")),
+    );
     const sortedBoundaries = [...this.#boundaries].sort((a, b) => a - b);
     const totalPages = sortedBoundaries.length + 1;
     for (let i = 0; i < handles.length; i++) {
@@ -431,11 +448,14 @@ export class SplitEditor {
     let next = this.#totalHeight;
     for (const b of sorted) {
       if (b < rounded) prev = b;
-      else { next = b; break; }
+      else {
+        next = b;
+        break;
+      }
     }
     const min = prev + MIN_SLICE_PX;
     const max = next - MIN_SLICE_PX;
-    if (max < min) return null;                           // no room
+    if (max < min) return null; // no room
     // Reject duplicate exact values within 1px to avoid jitter.
     if (sorted.some((b) => Math.abs(b - rounded) < 1)) return null;
     return Math.round(Math.max(min, Math.min(max, rounded)));
@@ -461,8 +481,11 @@ export class SplitEditor {
         this.#dragging.moved = true;
       }
       const stackRect = this.#stackEl.getBoundingClientRect();
-      const localY = e.clientY - stackRect.top - this.#dragging.offsetWithinHandle
-        + this.#dragging.handleEl.offsetHeight / 2;
+      const localY =
+        e.clientY -
+        stackRect.top -
+        this.#dragging.offsetWithinHandle +
+        this.#dragging.handleEl.offsetHeight / 2;
       const naturalY = localY / this.#displayScale;
       const newVal = this.#moveBoundary(this.#dragging.boundaryValue, naturalY);
       if (newVal != null) this.#dragging.boundaryValue = newVal;
@@ -534,11 +557,7 @@ export class SplitEditor {
         const srcY = overlapStart - frameTop;
         const dstY = overlapStart - newTop;
         const h = overlapEnd - overlapStart;
-        ctx.drawImage(
-          this.#images[j]!,
-          0, srcY, this.#width, h,
-          0, dstY, this.#width, h,
-        );
+        ctx.drawImage(this.#images[j]!, 0, srcY, this.#width, h, 0, dstY, this.#width, h);
       }
 
       // Emit lossless PNG; app.ts re-encodes each slice via the shared

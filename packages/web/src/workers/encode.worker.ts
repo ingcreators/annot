@@ -10,7 +10,11 @@
  * the WASM quantization + DEFLATE-9 pass that this file exists to
  * move off the main thread.
  */
-import { encodeCapture, type EncodeOptions, type EncodeResult } from "@ingcreators/annot-core/encode";
+import {
+  type EncodeOptions,
+  type EncodeResult,
+  encodeCapture,
+} from "@ingcreators/annot-core/encode";
 
 type EncodeRequest = {
   type: "encode";

@@ -30,23 +30,23 @@ export interface SerializedSelection {
 export function translateElement(el: SVGElement, dx: number, dy: number): void {
   const tag = el.tagName;
   if (tag === "rect" || tag === "image" || tag === "text" || tag === "foreignObject") {
-    el.setAttribute("x", String(parseFloat(el.getAttribute("x") || "0") + dx));
-    el.setAttribute("y", String(parseFloat(el.getAttribute("y") || "0") + dy));
+    el.setAttribute("x", String(Number.parseFloat(el.getAttribute("x") || "0") + dx));
+    el.setAttribute("y", String(Number.parseFloat(el.getAttribute("y") || "0") + dy));
   } else if (tag === "ellipse" || tag === "circle") {
-    el.setAttribute("cx", String(parseFloat(el.getAttribute("cx") || "0") + dx));
-    el.setAttribute("cy", String(parseFloat(el.getAttribute("cy") || "0") + dy));
+    el.setAttribute("cx", String(Number.parseFloat(el.getAttribute("cx") || "0") + dx));
+    el.setAttribute("cy", String(Number.parseFloat(el.getAttribute("cy") || "0") + dy));
   } else if (tag === "line") {
-    el.setAttribute("x1", String(parseFloat(el.getAttribute("x1") || "0") + dx));
-    el.setAttribute("y1", String(parseFloat(el.getAttribute("y1") || "0") + dy));
-    el.setAttribute("x2", String(parseFloat(el.getAttribute("x2") || "0") + dx));
-    el.setAttribute("y2", String(parseFloat(el.getAttribute("y2") || "0") + dy));
+    el.setAttribute("x1", String(Number.parseFloat(el.getAttribute("x1") || "0") + dx));
+    el.setAttribute("y1", String(Number.parseFloat(el.getAttribute("y1") || "0") + dy));
+    el.setAttribute("x2", String(Number.parseFloat(el.getAttribute("x2") || "0") + dx));
+    el.setAttribute("y2", String(Number.parseFloat(el.getAttribute("y2") || "0") + dy));
   } else if (tag === "path" || tag === "g") {
     // Compose with any existing translate (e.g. counter/marker <g>s
     // often carry a transform from previous drags).
     const transform = el.getAttribute("transform") || "";
     const match = transform.match(/translate\(([\d.-]+),?\s*([\d.-]+)\)/);
-    const tx = match ? parseFloat(match[1]) + dx : dx;
-    const ty = match ? parseFloat(match[2]) + dy : dy;
+    const tx = match ? Number.parseFloat(match[1]) + dx : dx;
+    const ty = match ? Number.parseFloat(match[2]) + dy : dy;
     el.setAttribute("transform", `translate(${tx}, ${ty})`);
   }
 }
@@ -65,8 +65,8 @@ function canvasBBox(el: SVGElement): { x: number; y: number; w: number; h: numbe
   if (bb.width === 0 && bb.height === 0) return null;
   const transform = el.getAttribute("transform") || "";
   const match = transform.match(/translate\(([\d.-]+),?\s*([\d.-]+)\)/);
-  const tx = match ? parseFloat(match[1]) : 0;
-  const ty = match ? parseFloat(match[2]) : 0;
+  const tx = match ? Number.parseFloat(match[1]) : 0;
+  const ty = match ? Number.parseFloat(match[2]) : 0;
   return { x: bb.x + tx, y: bb.y + ty, w: bb.width, h: bb.height };
 }
 
@@ -80,8 +80,10 @@ function canvasBBox(el: SVGElement): { x: number; y: number; w: number; h: numbe
 export function serializeSelection(elements: SVGElement[]): SerializedSelection | null {
   if (elements.length === 0) return null;
 
-  let minX = Infinity, minY = Infinity;
-  let maxX = -Infinity, maxY = -Infinity;
+  let minX = Number.POSITIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
   for (const el of elements) {
     const bb = canvasBBox(el);
     if (!bb) continue;
@@ -90,7 +92,7 @@ export function serializeSelection(elements: SVGElement[]): SerializedSelection 
     maxX = Math.max(maxX, bb.x + bb.w);
     maxY = Math.max(maxY, bb.y + bb.h);
   }
-  if (!isFinite(minX)) return null;
+  if (!Number.isFinite(minX)) return null;
 
   const PAD = 4;
   minX -= PAD;
@@ -130,15 +132,12 @@ export function serializeSelection(elements: SVGElement[]): SerializedSelection 
  * because <canvas>.drawImage() accepts <img> elements sourced from
  * SVG data URLs / blob URLs reliably across browsers.
  */
-export async function renderThumbnail(
-  svgMarkup: string,
-  maxSize = 80,
-): Promise<string> {
+export async function renderThumbnail(svgMarkup: string, maxSize = 80): Promise<string> {
   const parser = new DOMParser();
   const doc = parser.parseFromString(svgMarkup, "image/svg+xml");
   const root = doc.documentElement as unknown as SVGSVGElement;
-  const w = parseFloat(root.getAttribute("width") || "80");
-  const h = parseFloat(root.getAttribute("height") || "80");
+  const w = Number.parseFloat(root.getAttribute("width") || "80");
+  const h = Number.parseFloat(root.getAttribute("height") || "80");
 
   const scale = Math.min(1, maxSize / Math.max(w, h));
   const canvasW = Math.max(1, Math.round(w * scale));

@@ -1,40 +1,27 @@
-import type { CanvasManager } from "./canvas-manager.js";
-import type { History } from "./history.js";
 import { computeDasharray, detectDashKey } from "../utils/dash-utils.js";
 import { setTooltip } from "../utils/tooltip.js";
+import { type ArrowSpec, computeArrowParts, refreshArrowPath } from "./arrow-markers.js";
+import type { CanvasManager } from "./canvas-manager.js";
+import { createCustomSelect } from "./custom-select.js";
+import type { History } from "./history.js";
+import { createColorPullButton, openAnchoredPopoverForColor } from "./property-controls.js";
+import { convertRedactStyle, detectRedactStyle } from "./redact-utils.js";
 import { convertShape, detectShapeType } from "./shape-utils.js";
-import type { ShapeType, ArrowHead, TextVariant, DrawStyle, RedactStyle } from "./tools/tool-base.js";
-import {
-  applyArrowHead,
-  detectArrowHead,
-  detectArrowEnds,
-} from "./tools/arrow-tool.js";
-import type {
-  ArrowShape,
-  ArrowDim,
-  LineCap,
-} from "./tools/tool-base.js";
 import { convertTextVariant, detectTextVariant } from "./text-utils.js";
+import { ARROW_ICON_SVG, COUNTER_ICON_SVG, HIGHLIGHT_COLORS, SHAPE_ICON_SVG } from "./toolbar.js";
+import { applyArrowHead, detectArrowEnds } from "./tools/arrow-tool.js";
 import { applyDrawStyle, detectDrawStyle, isFreehandGroup } from "./tools/freehand-tool.js";
 import { convertMarkerShape, detectMarkerShape, resizeMarker } from "./tools/marker-tool.js";
+import type {
+  ArrowHead,
+  DrawStyle,
+  RedactStyle,
+  ShapeType,
+  TextVariant,
+} from "./tools/tool-base.js";
+import type { ArrowDim, ArrowShape, LineCap } from "./tools/tool-base.js";
 import type { MarkerShape } from "./tools/tool-base.js";
-import {
-  openAnchoredPopoverForColor,
-  createColorPullButton,
-} from "./property-controls.js";
-import { detectRedactStyle, convertRedactStyle } from "./redact-utils.js";
-import {
-  readTransformState,
-  setRotation,
-  toggleFlip,
-} from "./transform-utils.js";
-import { createCustomSelect } from "./custom-select.js";
-import { openAnchoredPopover, HIGHLIGHT_COLORS, COUNTER_ICON_SVG, SHAPE_ICON_SVG, ARROW_ICON_SVG } from "./toolbar.js";
-import {
-  refreshArrowPath,
-  computeArrowParts,
-  type ArrowSpec,
-} from "./arrow-markers.js";
+import { readTransformState, setRotation, toggleFlip } from "./transform-utils.js";
 
 /** True for any element that represents a line-with-optional-arrowheads:
  *  a classic `<line>` OR the new composed `<g data-type="arrow">`
@@ -55,14 +42,12 @@ const WIDTH_OPTIONS = [
 ];
 
 const STYLE_PRESETS = [
-  { label: "Solid",     value: "" },
-  { label: "Dashed",    value: "dash" },
-  { label: "Dotted",    value: "dot" },
-  { label: "Dash-Dot",  value: "dashDot" },
+  { label: "Solid", value: "" },
+  { label: "Dashed", value: "dash" },
+  { label: "Dotted", value: "dot" },
+  { label: "Dash-Dot", value: "dashDot" },
   { label: "Long Dash", value: "lgDash" },
 ];
-
-
 
 /**
  * Placement mode for the PropertyPanel.
@@ -129,8 +114,7 @@ export class PropertyPanel {
     this.#history = history;
 
     this.#el = document.createElement("div");
-    this.#el.className =
-      "prop-panel" + (mode === "docked" ? " prop-panel-docked" : "");
+    this.#el.className = `prop-panel${mode === "docked" ? " prop-panel-docked" : ""}`;
     this.#el.style.display = "none";
     container.appendChild(this.#el);
 
@@ -139,7 +123,10 @@ export class PropertyPanel {
 
   show(elements: SVGElement[]): void {
     this.#targets = elements;
-    if (elements.length === 0) { this.hide(); return; }
+    if (elements.length === 0) {
+      this.hide();
+      return;
+    }
 
     this.#el.innerHTML = "";
     this.#el.style.display = "flex";
@@ -201,18 +188,14 @@ export class PropertyPanel {
         const ends = detectArrowEnds(el);
         const hStart = ends.start.shape !== "none";
         const hEnd = ends.end.shape !== "none";
-        const current: ArrowHead =
-          !hStart && !hEnd ? "none"
-          : (hStart && hEnd) ? "both"
-          : "end";
+        const current: ArrowHead = !hStart && !hEnd ? "none" : hStart && hEnd ? "both" : "end";
         this.#addArrowVariantPicker(current);
       }
       // Draw style picker: shown for both bare <path> elements (legacy
       // / single-stroke) and freehand <g> groups (new multi-stroke
       // session wrapper). Detection is uniform because detectDrawStyle
       // handles both shapes.
-      const isFreehandEl = (t: SVGElement) =>
-        t.tagName === "path" || isFreehandGroup(t);
+      const isFreehandEl = (t: SVGElement) => t.tagName === "path" || isFreehandGroup(t);
       if (isFreehandEl(el) && this.#targets.every(isFreehandEl)) {
         this.#addDrawStylePicker(detectDrawStyle(el));
       }
@@ -235,9 +218,8 @@ export class PropertyPanel {
     const textEl = g.querySelector("text");
     const color = textEl?.getAttribute("fill") || "#ff0000";
     const fontSize = textEl?.getAttribute("font-size") || "16";
-    const fontFamily = textEl?.getAttribute("font-family")
-      || g.getAttribute("data-font-family")
-      || "sans-serif";
+    const fontFamily =
+      textEl?.getAttribute("font-family") || g.getAttribute("data-font-family") || "sans-serif";
 
     // Type section: variant picker (plain / sticky / callout).
     this.#inSection("Type", () => {
@@ -259,7 +241,7 @@ export class PropertyPanel {
         this.#commit();
       });
       this.#addFontFamilyPicker(fontFamily);
-      this.#addFontSizePicker(parseFloat(fontSize));
+      this.#addFontSizePicker(Number.parseFloat(fontSize));
     });
   }
 
@@ -288,14 +270,13 @@ export class PropertyPanel {
     const row = document.createElement("div");
     row.className = "pp-type-row";
     const options: Array<{ value: TextVariant; icon: string; label: string }> = [
-      { value: "plain",   icon: "text_fields",   label: "Plain text" },
-      { value: "sticky",  icon: "sticky_note_2", label: "Sticky note" },
-      { value: "callout", icon: "chat_bubble",   label: "Callout" },
+      { value: "plain", icon: "text_fields", label: "Plain text" },
+      { value: "sticky", icon: "sticky_note_2", label: "Sticky note" },
+      { value: "callout", icon: "chat_bubble", label: "Callout" },
     ];
     for (const opt of options) {
       const chip = document.createElement("div");
-      chip.className = "prop-choice-chip material-symbols-outlined"
-        + (current === opt.value ? " active" : "");
+      chip.className = `prop-choice-chip material-symbols-outlined${current === opt.value ? " active" : ""}`;
       chip.textContent = opt.icon;
       setTooltip(chip, opt.label);
       chip.addEventListener("click", () => {
@@ -329,10 +310,10 @@ export class PropertyPanel {
     const select = document.createElement("select");
     select.className = "toolbar-input prop-font-select";
     const FONT_OPTIONS: Array<{ label: string; value: string }> = [
-      { label: "Sans-serif",  value: "sans-serif" },
-      { label: "Serif",       value: "serif" },
-      { label: "Monospace",   value: "monospace" },
-      { label: "System UI",   value: "system-ui, -apple-system, sans-serif" },
+      { label: "Sans-serif", value: "sans-serif" },
+      { label: "Serif", value: "serif" },
+      { label: "Monospace", value: "monospace" },
+      { label: "System UI", value: "system-ui, -apple-system, sans-serif" },
     ];
     // Preserve any non-preset value so it round-trips.
     if (!FONT_OPTIONS.some((o) => o.value === current)) {
@@ -402,8 +383,7 @@ export class PropertyPanel {
       row.className = "pp-type-row";
       for (const opt of HIGHLIGHT_COLORS) {
         const chip = document.createElement("div");
-        chip.className = "prop-choice-chip pp-color-chip"
-          + (currentFill === opt.value ? " active" : "");
+        chip.className = `prop-choice-chip pp-color-chip${currentFill === opt.value ? " active" : ""}`;
         // Color goes on the inner swatch (.pp-color-chip::before); the
         // chip frame stays transparent so active state matches other
         // Type chips (accent border + bg tint).
@@ -433,8 +413,8 @@ export class PropertyPanel {
     // Fill section — Transparency only. 1 - fill-opacity, so 60% means
     // the rect is 40% opaque (the classic highlighter feel).
     this.#inSection("Fill", () => {
-      const fo = parseFloat(el.getAttribute("fill-opacity") || "0.4");
-      const transparency = Math.round((1 - (isFinite(fo) ? fo : 0.4)) * 100);
+      const fo = Number.parseFloat(el.getAttribute("fill-opacity") || "0.4");
+      const transparency = Math.round((1 - (Number.isFinite(fo) ? fo : 0.4)) * 100);
       const input = this.#ppNumberInput(transparency, "%", 0, 100, 5, (v) => {
         const nextOpacity = 1 - v / 100;
         for (const t of this.#targets) {
@@ -452,13 +432,12 @@ export class PropertyPanel {
     row.className = "pp-type-row";
     const options: Array<{ value: RedactStyle; icon: string; label: string }> = [
       { value: "mosaic", icon: "grid_view", label: "Mosaic (pixelate)" },
-      { value: "solid",  icon: "check_box", label: "Solid bar" },
-      { value: "blur",   icon: "blur_on",   label: "Blur" },
+      { value: "solid", icon: "check_box", label: "Solid bar" },
+      { value: "blur", icon: "blur_on", label: "Blur" },
     ];
     for (const opt of options) {
       const chip = document.createElement("div");
-      chip.className = "prop-choice-chip material-symbols-outlined"
-        + (current === opt.value ? " active" : "");
+      chip.className = `prop-choice-chip material-symbols-outlined${current === opt.value ? " active" : ""}`;
       chip.textContent = opt.icon;
       setTooltip(chip, opt.label);
       chip.addEventListener("click", async () => {
@@ -501,13 +480,14 @@ export class PropertyPanel {
     const bgEl = g.querySelector("circle") || g.querySelector("rect");
     const fill = bgEl?.getAttribute("fill") || "#ff0000";
     const bgStroke = bgEl?.getAttribute("stroke") || "#ffffff";
-    const bgStrokeWidth = parseFloat(bgEl?.getAttribute("stroke-width") || "1.5");
-    const bgDashKey = bgEl?.getAttribute("data-dash-key")
-      ?? detectDashKey(bgEl?.getAttribute("stroke-dasharray") || "", bgStrokeWidth)
-      ?? "";
+    const bgStrokeWidth = Number.parseFloat(bgEl?.getAttribute("stroke-width") || "1.5");
+    const bgDashKey =
+      bgEl?.getAttribute("data-dash-key") ??
+      detectDashKey(bgEl?.getAttribute("stroke-dasharray") || "", bgStrokeWidth) ??
+      "";
     const textEl = g.querySelector("text");
-    const fontSize = parseFloat(textEl?.getAttribute("font-size") || "13");
-    const currentVal = parseInt(g.getAttribute("data-marker") || "1", 10);
+    const fontSize = Number.parseFloat(textEl?.getAttribute("font-size") || "13");
+    const currentVal = Number.parseInt(g.getAttribute("data-marker") || "1", 10);
 
     // Type section: Circle / Square / Rounded square.
     this.#inSection("Type", () => {
@@ -519,13 +499,18 @@ export class PropertyPanel {
     // exposes "No fill" so users can make an outline-only counter
     // (just the ring + number, no interior paint).
     this.#inSection("Fill", () => {
-      this.#addColorPicker("Color", fill, (v) => {
-        for (const t of this.#targets) {
-          const bg = t.querySelector("circle") || t.querySelector("rect");
-          bg?.setAttribute("fill", v);
-        }
-        this.#commit();
-      }, { allowNone: true });
+      this.#addColorPicker(
+        "Color",
+        fill,
+        (v) => {
+          for (const t of this.#targets) {
+            const bg = t.querySelector("circle") || t.querySelector("rect");
+            bg?.setAttribute("fill", v);
+          }
+          this.#commit();
+        },
+        { allowNone: true },
+      );
     });
 
     // Line section: the bg primitive's OPTIONAL border. Unlike most
@@ -544,54 +529,58 @@ export class PropertyPanel {
         this.#commit();
       });
       // Border width
-      this.#target().appendChild(this.#ppRow(
-        "Width",
-        this.#ppNumberInput(bgStrokeWidth, "pt", 0, 20, 0.25, (v) => {
-          for (const t of this.#targets) {
-            const bg = t.querySelector("circle") || t.querySelector("rect");
-            if (!bg) continue;
-            bg.setAttribute("stroke-width", String(v));
-            // Re-express the dasharray (if any) against the new width
-            // so dots/dashes stay proportional, matching how the Line
-            // section does it for stroke primitives.
-            const dashKey = bg.getAttribute("data-dash-key");
-            if (dashKey) {
-              bg.setAttribute("stroke-dasharray", computeDasharray(dashKey, v));
-            }
-          }
-          this.#commit();
-        }),
-      ));
-      // Border dash type
-      this.#target().appendChild(this.#ppRow(
-        "Dash type",
-        createCustomSelect({
-          options: [
-            { value: "",        label: "Solid",     preview: this.#dashPreview("") },
-            { value: "dash",    label: "Dashed",    preview: this.#dashPreview("dash") },
-            { value: "dot",     label: "Dotted",    preview: this.#dashPreview("dot") },
-            { value: "dashDot", label: "Dash-Dot",  preview: this.#dashPreview("dashDot") },
-            { value: "lgDash",  label: "Long Dash", preview: this.#dashPreview("lgDash") },
-          ],
-          current: bgDashKey,
-          ariaLabel: "Dash type",
-          onChange: (v) => {
+      this.#target().appendChild(
+        this.#ppRow(
+          "Width",
+          this.#ppNumberInput(bgStrokeWidth, "pt", 0, 20, 0.25, (v) => {
             for (const t of this.#targets) {
               const bg = t.querySelector("circle") || t.querySelector("rect");
               if (!bg) continue;
-              const w = parseFloat(bg.getAttribute("stroke-width") || "1.5");
-              if (v) {
-                bg.setAttribute("stroke-dasharray", computeDasharray(v, w));
-                bg.setAttribute("data-dash-key", v);
-              } else {
-                bg.removeAttribute("stroke-dasharray");
-                bg.removeAttribute("data-dash-key");
+              bg.setAttribute("stroke-width", String(v));
+              // Re-express the dasharray (if any) against the new width
+              // so dots/dashes stay proportional, matching how the Line
+              // section does it for stroke primitives.
+              const dashKey = bg.getAttribute("data-dash-key");
+              if (dashKey) {
+                bg.setAttribute("stroke-dasharray", computeDasharray(dashKey, v));
               }
             }
             this.#commit();
-          },
-        }),
-      ));
+          }),
+        ),
+      );
+      // Border dash type
+      this.#target().appendChild(
+        this.#ppRow(
+          "Dash type",
+          createCustomSelect({
+            options: [
+              { value: "", label: "Solid", preview: this.#dashPreview("") },
+              { value: "dash", label: "Dashed", preview: this.#dashPreview("dash") },
+              { value: "dot", label: "Dotted", preview: this.#dashPreview("dot") },
+              { value: "dashDot", label: "Dash-Dot", preview: this.#dashPreview("dashDot") },
+              { value: "lgDash", label: "Long Dash", preview: this.#dashPreview("lgDash") },
+            ],
+            current: bgDashKey,
+            ariaLabel: "Dash type",
+            onChange: (v) => {
+              for (const t of this.#targets) {
+                const bg = t.querySelector("circle") || t.querySelector("rect");
+                if (!bg) continue;
+                const w = Number.parseFloat(bg.getAttribute("stroke-width") || "1.5");
+                if (v) {
+                  bg.setAttribute("stroke-dasharray", computeDasharray(v, w));
+                  bg.setAttribute("data-dash-key", v);
+                } else {
+                  bg.removeAttribute("stroke-dasharray");
+                  bg.removeAttribute("data-dash-key");
+                }
+              }
+              this.#commit();
+            },
+          }),
+        ),
+      );
     });
 
     // Label section: the displayed number + its rendered size. "Label"
@@ -637,14 +626,13 @@ export class PropertyPanel {
     const row = document.createElement("div");
     row.className = "pp-type-row";
     const options: Array<{ value: MarkerShape; label: string; svg: string }> = [
-      { value: "circle",  label: "Circle",         svg: COUNTER_ICON_SVG.circle  },
-      { value: "rect",    label: "Square",         svg: COUNTER_ICON_SVG.rect    },
+      { value: "circle", label: "Circle", svg: COUNTER_ICON_SVG.circle },
+      { value: "rect", label: "Square", svg: COUNTER_ICON_SVG.rect },
       { value: "rounded", label: "Rounded square", svg: COUNTER_ICON_SVG.rounded },
     ];
     for (const opt of options) {
       const chip = document.createElement("div");
-      chip.className = "prop-choice-chip"
-        + (current === opt.value ? " active" : "");
+      chip.className = `prop-choice-chip${current === opt.value ? " active" : ""}`;
       chip.innerHTML = opt.svg;
       setTooltip(chip, opt.label);
       chip.addEventListener("click", () => {
@@ -689,14 +677,13 @@ export class PropertyPanel {
     // "circle" ligature rendered visibly thinner than the hand-
     // rolled rect / rounded outlines.
     const options: Array<{ value: ShapeType; svg: string; label: string }> = [
-      { value: "rect",    svg: SHAPE_ICON_SVG.rect,    label: "Rectangle" },
-      { value: "rounded", svg: SHAPE_ICON_SVG.rounded, label: "Rounded"   },
-      { value: "ellipse", svg: SHAPE_ICON_SVG.ellipse, label: "Ellipse"   },
+      { value: "rect", svg: SHAPE_ICON_SVG.rect, label: "Rectangle" },
+      { value: "rounded", svg: SHAPE_ICON_SVG.rounded, label: "Rounded" },
+      { value: "ellipse", svg: SHAPE_ICON_SVG.ellipse, label: "Ellipse" },
     ];
     for (const opt of options) {
       const chip = document.createElement("div");
-      chip.className = "prop-choice-chip"
-        + (current === opt.value ? " active" : "");
+      chip.className = `prop-choice-chip${current === opt.value ? " active" : ""}`;
       chip.innerHTML = opt.svg;
       setTooltip(chip, opt.label);
       chip.addEventListener("click", () => {
@@ -742,9 +729,8 @@ export class PropertyPanel {
     // four rows line up visually in the right panel instead of
     // looking like mismatched pairs.
     const content = this.#arrowPreviewContent(shape);
-    const wrap = dir === "left"
-      ? `<g transform="translate(40,0) scale(-1,1)">${content}</g>`
-      : content;
+    const wrap =
+      dir === "left" ? `<g transform="translate(40,0) scale(-1,1)">${content}</g>` : content;
     return `<svg width="40" height="14" viewBox="0 0 40 14">${wrap}</svg>`;
   }
 
@@ -798,7 +784,7 @@ export class PropertyPanel {
     input.value = String(Math.round(current * 100));
     input.className = "prop-slider";
     input.addEventListener("input", () => {
-      const v = parseFloat(input.value) / 100;
+      const v = Number.parseFloat(input.value) / 100;
       // Cheap per-frame update — avoid history save until release.
       for (const t of this.#targets) {
         // Lines use `opacity` so markers fade with the stroke
@@ -815,7 +801,7 @@ export class PropertyPanel {
       valLbl.textContent = `${input.value}%`;
     });
     input.addEventListener("change", () => {
-      const v = parseFloat(input.value) / 100;
+      const v = Number.parseFloat(input.value) / 100;
       for (const t of this.#targets) {
         if (isLineLike(t)) {
           t.setAttribute("opacity", String(v));
@@ -834,7 +820,6 @@ export class PropertyPanel {
     wrap.appendChild(valLbl);
     this.#el.appendChild(wrap);
   }
-
 
   /**
    * Arrow variant picker — "Type" row at the top of the properties
@@ -860,14 +845,13 @@ export class PropertyPanel {
     // variant glyph is bit-for-bit identical across toolbar badge /
     // flyout / Selection panel Type row.
     const options: Array<{ value: ArrowHead; label: string; svg: string }> = [
-      { value: "none", label: "Line",         svg: ARROW_ICON_SVG.none },
-      { value: "end",  label: "Arrow",        svg: ARROW_ICON_SVG.end  },
+      { value: "none", label: "Line", svg: ARROW_ICON_SVG.none },
+      { value: "end", label: "Arrow", svg: ARROW_ICON_SVG.end },
       { value: "both", label: "Double arrow", svg: ARROW_ICON_SVG.both },
     ];
     for (const opt of options) {
       const chip = document.createElement("div");
-      chip.className = "prop-choice-chip"
-        + (current === opt.value ? " active" : "");
+      chip.className = `prop-choice-chip${current === opt.value ? " active" : ""}`;
       chip.innerHTML = opt.svg;
       setTooltip(chip, opt.label);
       chip.addEventListener("click", () => {
@@ -915,7 +899,7 @@ export class PropertyPanel {
   ): ReturnType<typeof detectArrowEnds> {
     const next = {
       start: { ...spec.start },
-      end:   { ...spec.end   },
+      end: { ...spec.end },
     };
     switch (variant) {
       case "none":
@@ -947,13 +931,12 @@ export class PropertyPanel {
     const row = document.createElement("div");
     row.className = "pp-type-row";
     const options: Array<{ value: DrawStyle; icon: string; label: string }> = [
-      { value: "pen",         icon: "edit",            label: "Pen" },
+      { value: "pen", icon: "edit", label: "Pen" },
       { value: "highlighter", icon: "ink_highlighter", label: "Highlighter" },
     ];
     for (const opt of options) {
       const chip = document.createElement("div");
-      chip.className = "prop-choice-chip material-symbols-outlined"
-        + (current === opt.value ? " active" : "");
+      chip.className = `prop-choice-chip material-symbols-outlined${current === opt.value ? " active" : ""}`;
       chip.textContent = opt.icon;
       setTooltip(chip, opt.label);
       chip.addEventListener("click", () => {
@@ -1005,7 +988,7 @@ export class PropertyPanel {
     plusBtn.textContent = "add";
 
     const apply = () => {
-      let v = parseInt(input.value) || 0;
+      let v = Number.parseInt(input.value) || 0;
       v = Math.max(0, Math.min(100, v));
       input.value = String(v);
       this.#setAll("fill-opacity", String(v / 100));
@@ -1013,12 +996,12 @@ export class PropertyPanel {
 
     input.addEventListener("change", apply);
     minusBtn.addEventListener("click", () => {
-      let v = (parseInt(input.value) || 0) - 5;
+      const v = (Number.parseInt(input.value) || 0) - 5;
       input.value = String(Math.max(0, v));
       apply();
     });
     plusBtn.addEventListener("click", () => {
-      let v = (parseInt(input.value) || 0) + 5;
+      const v = (Number.parseInt(input.value) || 0) + 5;
       input.value = String(Math.min(100, v));
       apply();
     });
@@ -1030,7 +1013,13 @@ export class PropertyPanel {
     this.#el.appendChild(wrap);
   }
 
-  #addNumberInput(label: string, value: number, min: number, max: number, onChange: (v: number) => void): void {
+  #addNumberInput(
+    label: string,
+    value: number,
+    min: number,
+    max: number,
+    onChange: (v: number) => void,
+  ): void {
     // Unified: render as a pp-row with a pp-number input + stepper,
     // matching the Line / Fill rows. Previous implementation used a
     // bare `<input>` — looked visually out-of-place inside a pp card.
@@ -1040,7 +1029,7 @@ export class PropertyPanel {
 
   // --- Width picker: visual line samples ---
 
-  #addWidthPicker(current: number, color: string, onWidthChange?: (w: number) => void): void {
+  #addWidthPicker(current: number, _color: string, onWidthChange?: (w: number) => void): void {
     const wrap = document.createElement("div");
     wrap.className = "prop-section";
 
@@ -1054,7 +1043,7 @@ export class PropertyPanel {
 
     for (const opt of WIDTH_OPTIONS) {
       const item = document.createElement("div");
-      item.className = "prop-choice-item" + (Math.abs(opt.value - current) < 0.3 ? " active" : "");
+      item.className = `prop-choice-item${Math.abs(opt.value - current) < 0.3 ? " active" : ""}`;
       setTooltip(item, opt.label);
 
       // SVG preview of line thickness
@@ -1114,7 +1103,7 @@ export class PropertyPanel {
 
     for (const opt of STYLE_PRESETS) {
       const item = document.createElement("div");
-      item.className = "prop-choice-item" + (opt.value === currentKey ? " active" : "");
+      item.className = `prop-choice-item${opt.value === currentKey ? " active" : ""}`;
       setTooltip(item, opt.label);
 
       const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -1145,7 +1134,7 @@ export class PropertyPanel {
         // Set both the key and computed SVG dasharray
         for (const t of this.#targets) {
           t.setAttribute("data-dash-key", opt.value);
-          const elSw = parseFloat(t.getAttribute("stroke-width") || String(sw));
+          const elSw = Number.parseFloat(t.getAttribute("stroke-width") || String(sw));
           t.setAttribute("stroke-dasharray", computeDasharray(opt.value, elSw));
         }
         this.#commit();
@@ -1277,8 +1266,8 @@ export class PropertyPanel {
     rotInput.value = String(Math.round(state.rotation));
     setTooltip(rotInput, "Rotation (degrees)");
     rotInput.addEventListener("change", () => {
-      const v = parseFloat(rotInput.value);
-      if (!isFinite(v)) return;
+      const v = Number.parseFloat(rotInput.value);
+      if (!Number.isFinite(v)) return;
       for (const t of this.#targets) setRotation(t, v);
       // Rotation is instance-specific — don't rubber-band it to the
       // tool's preset, just save history and refresh handles.
@@ -1306,7 +1295,7 @@ export class PropertyPanel {
           setRotation(t, cur + delta);
         }
         this.#history.save();
-        this.show(this.#targets);  // reflect new value in the input
+        this.show(this.#targets); // reflect new value in the input
         this.onTargetMutated?.();
       });
       rotRow.appendChild(btn);
@@ -1324,15 +1313,14 @@ export class PropertyPanel {
     const flipChip = (axis: "h" | "v", icon: string, label: string) => {
       const chip = document.createElement("div");
       const active = axis === "h" ? state.flipH : state.flipV;
-      chip.className = "prop-choice-chip material-symbols-outlined"
-        + (active ? " active" : "");
+      chip.className = `prop-choice-chip material-symbols-outlined${active ? " active" : ""}`;
       chip.textContent = icon;
       setTooltip(chip, label);
       chip.addEventListener("click", () => {
         for (const t of this.#targets) toggleFlip(t, axis);
         // Flip is instance-specific — don't rubber-band.
         this.#history.save();
-        this.show(this.#targets);  // refresh active state
+        this.show(this.#targets); // refresh active state
         this.onTargetMutated?.();
       });
       flipRow.appendChild(chip);
@@ -1363,7 +1351,9 @@ export class PropertyPanel {
    *  section's inner controls haven't loaded yet). */
   /** Where the next row should be inserted. Falls back to `#el` when
    *  no section has been opened (picker-only flow). */
-  #target(): HTMLElement { return this.#appendTarget ?? this.#el; }
+  #target(): HTMLElement {
+    return this.#appendTarget ?? this.#el;
+  }
 
   /** Create a pp-section and run `fn` with the section body as the
    *  current append target. Any helper called inside `fn` (pickers,
@@ -1433,8 +1423,7 @@ export class PropertyPanel {
     // actually live). `targets()` returns that expanded list so each
     // callback below can iterate the right elements.
     const targets = () => this.#strokeTargets();
-    const isLineEl = isLineLike(el)
-      && this.#targets.every((t) => isLineLike(t));
+    const isLineEl = isLineLike(el) && this.#targets.every((t) => isLineLike(t));
 
     // Normalize any stray non-solid stroke to a solid color so the
     // rest of the section has a real paint to bind to. "none" and
@@ -1472,7 +1461,8 @@ export class PropertyPanel {
             // Only the filled head carries a colored fill; the open
             // head path keeps fill="none" and should stay untouched.
             const headFilled = t.querySelector<SVGPathElement>(
-              ':scope > [data-role="head-filled"]');
+              ':scope > [data-role="head-filled"]',
+            );
             if (headFilled) headFilled.setAttribute("fill", color);
           }
         }
@@ -1495,9 +1485,7 @@ export class PropertyPanel {
     // (written by an older build that didn't know about the marker
     // propagation issue), move the value to `opacity` on first edit
     // so any subsequent slider change doesn't compound the two.
-    if (isLineLike(el)
-        && el.hasAttribute("stroke-opacity")
-        && !el.hasAttribute("opacity")) {
+    if (isLineLike(el) && el.hasAttribute("stroke-opacity") && !el.hasAttribute("opacity")) {
       for (const t of targets()) {
         if (isLineLike(t)) {
           const legacy = t.getAttribute("stroke-opacity");
@@ -1510,75 +1498,83 @@ export class PropertyPanel {
     }
     const readOp = (e: SVGElement) => {
       const direct = e.getAttribute("opacity");
-      if (direct != null) return parseFloat(direct);
-      return parseFloat(this.#getAttr(e, "stroke-opacity") || "1");
+      if (direct != null) return Number.parseFloat(direct);
+      return Number.parseFloat(this.#getAttr(e, "stroke-opacity") || "1");
     };
     const strokeOp = readOp(el);
-    body.appendChild(this.#ppRow("Transparency", this.#ppNumberInput(
-      Math.round((1 - strokeOp) * 100),
-      "%",
-      0,
-      100,
-      1,
-      (transparencyPct) => {
-        const op = 1 - transparencyPct / 100;
-        for (const t of targets()) {
-          if (t.tagName === "line") {
-            t.setAttribute("opacity", String(op));
-            // Drop any lingering stroke-opacity so the two don't
-            // multiply into an unexpectedly faint line.
-            t.removeAttribute("stroke-opacity");
-          } else {
-            t.setAttribute("stroke-opacity", String(op));
+    body.appendChild(
+      this.#ppRow(
+        "Transparency",
+        this.#ppNumberInput(Math.round((1 - strokeOp) * 100), "%", 0, 100, 1, (transparencyPct) => {
+          const op = 1 - transparencyPct / 100;
+          for (const t of targets()) {
+            if (t.tagName === "line") {
+              t.setAttribute("opacity", String(op));
+              // Drop any lingering stroke-opacity so the two don't
+              // multiply into an unexpectedly faint line.
+              t.removeAttribute("stroke-opacity");
+            } else {
+              t.setAttribute("stroke-opacity", String(op));
+            }
           }
-        }
-        this.#commit();
-      },
-    )));
+          this.#commit();
+        }),
+      ),
+    );
 
     // --- Width number input (pt) -----------------------------------
-    const sw = parseFloat(this.#getAttr(el, "stroke-width") || "3");
-    body.appendChild(this.#ppRow("Width", this.#ppNumberInput(sw, "pt", 0.25, 200, 0.25, (v) => {
-      for (const t of targets()) {
-        t.setAttribute("stroke-width", String(v));
-        // Dashes are derived from the width — recompute so the pattern
-        // stays visually consistent across width changes.
-        const key = t.getAttribute("data-dash-key") || "";
-        if (key) t.setAttribute("stroke-dasharray", computeDasharray(key, v));
-        // Arrow groups compute their shortening offsets from the
-        // stroke width (the trig constants multiply `sw`). Regenerate
-        // stem + head `d` so the alignment stays flush after a width
-        // change.
-        if (t.tagName === "g" && t.getAttribute("data-type") === "arrow") {
-          refreshArrowPath(t);
-        }
-      }
-      this.#commit();
-    })));
+    const sw = Number.parseFloat(this.#getAttr(el, "stroke-width") || "3");
+    body.appendChild(
+      this.#ppRow(
+        "Width",
+        this.#ppNumberInput(sw, "pt", 0.25, 200, 0.25, (v) => {
+          for (const t of targets()) {
+            t.setAttribute("stroke-width", String(v));
+            // Dashes are derived from the width — recompute so the pattern
+            // stays visually consistent across width changes.
+            const key = t.getAttribute("data-dash-key") || "";
+            if (key) t.setAttribute("stroke-dasharray", computeDasharray(key, v));
+            // Arrow groups compute their shortening offsets from the
+            // stroke width (the trig constants multiply `sw`). Regenerate
+            // stem + head `d` so the alignment stays flush after a width
+            // change.
+            if (t.tagName === "g" && t.getAttribute("data-type") === "arrow") {
+              refreshArrowPath(t);
+            }
+          }
+          this.#commit();
+        }),
+      ),
+    );
 
     // --- Dash type pulldown ----------------------------------------
     const dashRaw = this.#getAttr(el, "stroke-dasharray") || "";
     const dashKey = this.#getAttr(el, "data-dash-key") || detectDashKey(dashRaw, sw);
     const DASH_OPTIONS: Array<{ value: string; label: string; preview: string }> = [
-      { value: "",        label: "Solid",     preview: this.#dashPreview("") },
-      { value: "dash",    label: "Dashed",    preview: this.#dashPreview("dash") },
-      { value: "dot",     label: "Dotted",    preview: this.#dashPreview("dot") },
-      { value: "dashDot", label: "Dash-Dot",  preview: this.#dashPreview("dashDot") },
-      { value: "lgDash",  label: "Long Dash", preview: this.#dashPreview("lgDash") },
+      { value: "", label: "Solid", preview: this.#dashPreview("") },
+      { value: "dash", label: "Dashed", preview: this.#dashPreview("dash") },
+      { value: "dot", label: "Dotted", preview: this.#dashPreview("dot") },
+      { value: "dashDot", label: "Dash-Dot", preview: this.#dashPreview("dashDot") },
+      { value: "lgDash", label: "Long Dash", preview: this.#dashPreview("lgDash") },
     ];
-    body.appendChild(this.#ppRow("Dash type", createCustomSelect({
-      options: DASH_OPTIONS,
-      current: dashKey,
-      ariaLabel: "Dash type",
-      onChange: (v) => {
-        for (const t of targets()) {
-          t.setAttribute("data-dash-key", v);
-          const elSw = parseFloat(t.getAttribute("stroke-width") || String(sw));
-          t.setAttribute("stroke-dasharray", computeDasharray(v, elSw));
-        }
-        this.#commit();
-      },
-    })));
+    body.appendChild(
+      this.#ppRow(
+        "Dash type",
+        createCustomSelect({
+          options: DASH_OPTIONS,
+          current: dashKey,
+          ariaLabel: "Dash type",
+          onChange: (v) => {
+            for (const t of targets()) {
+              t.setAttribute("data-dash-key", v);
+              const elSw = Number.parseFloat(t.getAttribute("stroke-width") || String(sw));
+              t.setAttribute("stroke-dasharray", computeDasharray(v, elSw));
+            }
+            this.#commit();
+          },
+        }),
+      ),
+    );
 
     // --- Cap type pulldown -----------------------------------------
     // Fallback is "butt" to match SVG's actual rendering when no
@@ -1587,16 +1583,33 @@ export class PropertyPanel {
     // were actually rendering flat. Order mirrors PowerPoint's
     // Square → Round → Flat ordering.
     const currentCap = (this.#getAttr(el, "stroke-linecap") as LineCap | null) || "butt";
-    body.appendChild(this.#ppRow("Cap type", createCustomSelect({
-      options: [
-        { value: "square", label: "Square", preview: `<svg width="32" height="12" viewBox="0 0 32 12"><line x1="4" y1="6" x2="28" y2="6" stroke="currentColor" stroke-width="4" stroke-linecap="square"/></svg>` },
-        { value: "round",  label: "Round",  preview: `<svg width="32" height="12" viewBox="0 0 32 12"><line x1="4" y1="6" x2="28" y2="6" stroke="currentColor" stroke-width="4" stroke-linecap="round"/></svg>` },
-        { value: "butt",   label: "Flat",   preview: `<svg width="32" height="12" viewBox="0 0 32 12"><line x1="4" y1="6" x2="28" y2="6" stroke="currentColor" stroke-width="4" stroke-linecap="butt"/></svg>` },
-      ],
-      current: currentCap,
-      ariaLabel: "Line cap",
-      onChange: (v) => this.#setAll("stroke-linecap", v),
-    })));
+    body.appendChild(
+      this.#ppRow(
+        "Cap type",
+        createCustomSelect({
+          options: [
+            {
+              value: "square",
+              label: "Square",
+              preview: `<svg width="32" height="12" viewBox="0 0 32 12"><line x1="4" y1="6" x2="28" y2="6" stroke="currentColor" stroke-width="4" stroke-linecap="square"/></svg>`,
+            },
+            {
+              value: "round",
+              label: "Round",
+              preview: `<svg width="32" height="12" viewBox="0 0 32 12"><line x1="4" y1="6" x2="28" y2="6" stroke="currentColor" stroke-width="4" stroke-linecap="round"/></svg>`,
+            },
+            {
+              value: "butt",
+              label: "Flat",
+              preview: `<svg width="32" height="12" viewBox="0 0 32 12"><line x1="4" y1="6" x2="28" y2="6" stroke="currentColor" stroke-width="4" stroke-linecap="butt"/></svg>`,
+            },
+          ],
+          current: currentCap,
+          ariaLabel: "Line cap",
+          onChange: (v) => this.#setAll("stroke-linecap", v),
+        }),
+      ),
+    );
 
     // Join type (stroke-linejoin) intentionally omitted from the UI.
     // At casual annotation widths (~3 pt default) the visible effect
@@ -1646,28 +1659,31 @@ export class PropertyPanel {
     caret.textContent = "expand_more";
     colorBtn.appendChild(caret);
     colorBtn.addEventListener("click", () => {
-      openAnchoredPopoverForColor(colorBtn, fill, (color) => {
-        for (const t of this.#targets) t.setAttribute("fill", color);
-        applySwatch(color);
-        this.#commit();
-      }, { allowNone: true });
+      openAnchoredPopoverForColor(
+        colorBtn,
+        fill,
+        (color) => {
+          for (const t of this.#targets) t.setAttribute("fill", color);
+          applySwatch(color);
+          this.#commit();
+        },
+        { allowNone: true },
+      );
     });
     body.appendChild(this.#ppRow("Color", colorBtn));
 
     // Fill transparency (0 = fully opaque, 100 = fully transparent)
-    const fillOp = parseFloat(this.#getAttr(el, "fill-opacity") || "1");
-    body.appendChild(this.#ppRow("Transparency", this.#ppNumberInput(
-      Math.round((1 - fillOp) * 100),
-      "%",
-      0,
-      100,
-      1,
-      (transparencyPct) => {
-        const op = 1 - transparencyPct / 100;
-        for (const t of this.#targets) t.setAttribute("fill-opacity", String(op));
-        this.#commit();
-      },
-    )));
+    const fillOp = Number.parseFloat(this.#getAttr(el, "fill-opacity") || "1");
+    body.appendChild(
+      this.#ppRow(
+        "Transparency",
+        this.#ppNumberInput(Math.round((1 - fillOp) * 100), "%", 0, 100, 1, (transparencyPct) => {
+          const op = 1 - transparencyPct / 100;
+          for (const t of this.#targets) t.setAttribute("fill-opacity", String(op));
+          this.#commit();
+        }),
+      ),
+    );
   }
 
   /** Two rows of pulldowns per endpoint (type + size).
@@ -1692,7 +1708,7 @@ export class PropertyPanel {
     const hStart = current.start.shape !== "none";
     const hEnd = current.end.shape !== "none";
     const lineVariant: "none" | "end" | "both" =
-      !hStart && !hEnd ? "none" : (hStart && hEnd) ? "both" : "end";
+      !hStart && !hEnd ? "none" : hStart && hEnd ? "both" : "end";
 
     // Rebuild the shape list for a specific endpoint, FILTERED by
     // the variant's rule:
@@ -1705,12 +1721,12 @@ export class PropertyPanel {
     const shapesFor = (end: "start" | "end") => {
       const dir: "left" | "right" = end === "start" ? "left" : "right";
       const allShapes = [
-        { value: "none",     label: "None",     preview: this.#arrowPreview("none",     dir) },
+        { value: "none", label: "None", preview: this.#arrowPreview("none", dir) },
         { value: "triangle", label: "Triangle", preview: this.#arrowPreview("triangle", dir) },
-        { value: "arrow",    label: "Arrow",    preview: this.#arrowPreview("arrow",    dir) },
-        { value: "stealth",  label: "Stealth",  preview: this.#arrowPreview("stealth",  dir) },
-        { value: "diamond",  label: "Diamond",  preview: this.#arrowPreview("diamond",  dir) },
-        { value: "oval",     label: "Oval",     preview: this.#arrowPreview("oval",     dir) },
+        { value: "arrow", label: "Arrow", preview: this.#arrowPreview("arrow", dir) },
+        { value: "stealth", label: "Stealth", preview: this.#arrowPreview("stealth", dir) },
+        { value: "diamond", label: "Diamond", preview: this.#arrowPreview("diamond", dir) },
+        { value: "oval", label: "Oval", preview: this.#arrowPreview("oval", dir) },
       ] as Array<{ value: ArrowShape; label: string; preview: string }>;
       // Filter rule: "none" is a MARKER ABSENCE, every other shape
       // is a MARKER PRESENCE. Each end must match what the variant
@@ -1740,43 +1756,53 @@ export class PropertyPanel {
     };
 
     const push = (end: "start" | "end", typeLabel: string, sizeLabel: string) => {
-      body.appendChild(this.#ppRow(typeLabel, createCustomSelect({
-        options: shapesFor(end),
-        current: current[end].shape,
-        ariaLabel: typeLabel,
-        // PowerPoint arranges the 6 preset shapes as a 3-wide × 2-tall
-        // grid of icon buttons, not a vertical list. Pass columns: 3
-        // so the custom-select popup matches the layout exactly.
-        columns: 3,
-        popupWidth: 170,
-        onChange: (v) => {
-          const next = { start: { ...current.start }, end: { ...current.end } };
-          next[end].shape = v as ArrowShape;
-          for (const t of this.#targets) applyArrowHead(t, next);
-          current[end].shape = v as ArrowShape;
-          this.#commit();
-        },
-      })));
-      body.appendChild(this.#ppRow(sizeLabel, createCustomSelect({
-        options: sizesFor(end),
-        current: `${current[end].width}-${current[end].length}`,
-        ariaLabel: sizeLabel,
-        columns: 3,        // 3×3 grid
-        popupWidth: 180,
-        onChange: (v) => {
-          const [w, l] = v.split("-") as [ArrowDim, ArrowDim];
-          const next = { start: { ...current.start }, end: { ...current.end } };
-          next[end].width = w;
-          next[end].length = l;
-          for (const t of this.#targets) applyArrowHead(t, next);
-          current[end].width = w;
-          current[end].length = l;
-          this.#commit();
-        },
-      })));
+      body.appendChild(
+        this.#ppRow(
+          typeLabel,
+          createCustomSelect({
+            options: shapesFor(end),
+            current: current[end].shape,
+            ariaLabel: typeLabel,
+            // PowerPoint arranges the 6 preset shapes as a 3-wide × 2-tall
+            // grid of icon buttons, not a vertical list. Pass columns: 3
+            // so the custom-select popup matches the layout exactly.
+            columns: 3,
+            popupWidth: 170,
+            onChange: (v) => {
+              const next = { start: { ...current.start }, end: { ...current.end } };
+              next[end].shape = v as ArrowShape;
+              for (const t of this.#targets) applyArrowHead(t, next);
+              current[end].shape = v as ArrowShape;
+              this.#commit();
+            },
+          }),
+        ),
+      );
+      body.appendChild(
+        this.#ppRow(
+          sizeLabel,
+          createCustomSelect({
+            options: sizesFor(end),
+            current: `${current[end].width}-${current[end].length}`,
+            ariaLabel: sizeLabel,
+            columns: 3, // 3×3 grid
+            popupWidth: 180,
+            onChange: (v) => {
+              const [w, l] = v.split("-") as [ArrowDim, ArrowDim];
+              const next = { start: { ...current.start }, end: { ...current.end } };
+              next[end].width = w;
+              next[end].length = l;
+              for (const t of this.#targets) applyArrowHead(t, next);
+              current[end].width = w;
+              current[end].length = l;
+              this.#commit();
+            },
+          }),
+        ),
+      );
     };
     push("start", "Begin arrow type", "Begin arrow size");
-    push("end",   "End arrow type",   "End arrow size");
+    push("end", "End arrow type", "End arrow size");
   }
 
   /** Small SVG preview for the 3×3 arrow size grid. PowerPoint's
@@ -1800,7 +1826,8 @@ export class PropertyPanel {
     // — no more maintaining a separate ad-hoc scale table that
     // drifts from the real rendering. Filled triangle is used as
     // the reference shape (matches LENGTH_PX / WIDTH_FACTOR).
-    const VB_W = 40, VB_H = 14;
+    const VB_W = 40;
+    const VB_H = 14;
     const cy = VB_H / 2;
     // A moderate preview stroke so the ~12×8 viewBox comfortably
     // shows the head; arrow-markers' output scales with this value.
@@ -1810,16 +1837,21 @@ export class PropertyPanel {
     const specStart: ArrowSpec = { shape: "none", width: w, length: l };
     const specEnd: ArrowSpec = { shape: "triangle", width: w, length: l };
     const { stemD, headFilledD, headOpenD } = computeArrowParts(
-      x1, cy, x2, cy, specStart, specEnd, previewStroke,
+      x1,
+      cy,
+      x2,
+      cy,
+      specStart,
+      specEnd,
+      previewStroke,
     );
     const headAttrs = `stroke="currentColor" stroke-width="${previewStroke}" stroke-linecap="round" stroke-linejoin="miter"`;
     const content =
-      `<path d="${stemD}" fill="none" stroke="currentColor" stroke-width="${previewStroke}" stroke-linecap="butt"/>`
-      + `<path d="${headFilledD}" fill="currentColor" ${headAttrs}/>`
-      + `<path d="${headOpenD}" fill="none" ${headAttrs}/>`;
-    const wrap = dir === "left"
-      ? `<g transform="translate(${VB_W},0) scale(-1,1)">${content}</g>`
-      : content;
+      `<path d="${stemD}" fill="none" stroke="currentColor" stroke-width="${previewStroke}" stroke-linecap="butt"/>` +
+      `<path d="${headFilledD}" fill="currentColor" ${headAttrs}/>` +
+      `<path d="${headOpenD}" fill="none" ${headAttrs}/>`;
+    const wrap =
+      dir === "left" ? `<g transform="translate(${VB_W},0) scale(-1,1)">${content}</g>` : content;
     return `<svg width="${VB_W}" height="${VB_H}" viewBox="0 0 ${VB_W} ${VB_H}">${wrap}</svg>`;
   }
 
@@ -1853,15 +1885,15 @@ export class PropertyPanel {
 
     const clamp = (v: number) => Math.max(min, Math.min(max, v));
     const commit = () => {
-      let v = parseFloat(input.value);
-      if (!isFinite(v)) v = current;
+      let v = Number.parseFloat(input.value);
+      if (!Number.isFinite(v)) v = current;
       v = clamp(v);
       input.value = String(v);
       onCommit(v);
     };
     const bump = (dir: 1 | -1) => {
-      const cur = parseFloat(input.value);
-      const base = isFinite(cur) ? cur : current;
+      const cur = Number.parseFloat(input.value);
+      const base = Number.isFinite(cur) ? cur : current;
       const next = clamp(Math.round((base + dir * step) * 1e6) / 1e6);
       input.value = String(next);
       onCommit(next);
@@ -1875,20 +1907,30 @@ export class PropertyPanel {
     up.className = "pp-number-spin-up";
     up.setAttribute("aria-label", "Increase");
     up.tabIndex = -1;
-    up.addEventListener("click", (e) => { e.preventDefault(); bump(1); });
+    up.addEventListener("click", (e) => {
+      e.preventDefault();
+      bump(1);
+    });
     const down = document.createElement("button");
     down.type = "button";
     down.className = "pp-number-spin-down";
     down.setAttribute("aria-label", "Decrease");
     down.tabIndex = -1;
-    down.addEventListener("click", (e) => { e.preventDefault(); bump(-1); });
+    down.addEventListener("click", (e) => {
+      e.preventDefault();
+      bump(-1);
+    });
     spinner.appendChild(up);
     spinner.appendChild(down);
     wrap.appendChild(spinner);
 
     input.addEventListener("change", commit);
     input.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") { e.preventDefault(); commit(); input.blur(); }
+      if (e.key === "Enter") {
+        e.preventDefault();
+        commit();
+        input.blur();
+      }
     });
     return wrap;
   }
@@ -1922,7 +1964,7 @@ export class PropertyPanel {
     });
     row.appendChild(num);
     slider.addEventListener("input", () => {
-      const v = parseFloat(slider.value);
+      const v = Number.parseFloat(slider.value);
       (num.querySelector("input") as HTMLInputElement).value = String(v);
       onInput(v);
     });

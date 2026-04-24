@@ -1,3 +1,4 @@
+import { computeDasharray } from "../../utils/dash-utils.js";
 /**
  * ShapeTool — unified tool for Rectangle / Rounded Rectangle / Ellipse.
  *
@@ -11,7 +12,6 @@
  */
 import { ToolBase } from "./tool-base.js";
 import type { ShapeType } from "./tool-base.js";
-import { computeDasharray } from "../../utils/dash-utils.js";
 
 export class ShapeTool extends ToolBase {
   readonly name = "shape";
@@ -76,7 +76,8 @@ export class ShapeTool extends ToolBase {
       let ry = Math.abs(pt.y - this.#startY);
       if (this.#shiftHeld) {
         const r = Math.max(rx, ry);
-        rx = r; ry = r;
+        rx = r;
+        ry = r;
       }
       const cx = (this.#startX + pt.x) / 2;
       const cy = (this.#startY + pt.y) / 2;
@@ -114,12 +115,12 @@ export class ShapeTool extends ToolBase {
 
     let tooSmall: boolean;
     if (this.#shapeType === "ellipse") {
-      const rx = parseFloat(this.#el.getAttribute("rx") || "0");
-      const ry = parseFloat(this.#el.getAttribute("ry") || "0");
+      const rx = Number.parseFloat(this.#el.getAttribute("rx") || "0");
+      const ry = Number.parseFloat(this.#el.getAttribute("ry") || "0");
       tooSmall = rx < 3 || ry < 3;
     } else {
-      const w = parseFloat(this.#el.getAttribute("width") || "0");
-      const h = parseFloat(this.#el.getAttribute("height") || "0");
+      const w = Number.parseFloat(this.#el.getAttribute("width") || "0");
+      const h = Number.parseFloat(this.#el.getAttribute("height") || "0");
       tooSmall = w < 3 || h < 3;
       if (!tooSmall && this.#shapeType === "rounded") {
         const rx = Math.max(2, Math.round(Math.min(w, h) / 6));

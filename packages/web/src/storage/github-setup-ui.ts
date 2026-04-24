@@ -16,20 +16,20 @@
  */
 
 import {
-  signInWithPat,
-  signOut,
-  isSignedIn,
-  fetchUserInfo,
-  listWritableRepos,
-  searchRepos,
-  getRepo,
-  verifyWriteAccess,
-  listBranches,
-  saveRepoRef,
-  loadRepoRef,
-  normalizeBasePath,
   type GitHubRepoRef,
   type GitHubRepoSummary,
+  fetchUserInfo,
+  getRepo,
+  isSignedIn,
+  listBranches,
+  listWritableRepos,
+  loadRepoRef,
+  normalizeBasePath,
+  saveRepoRef,
+  searchRepos,
+  signInWithPat,
+  signOut,
+  verifyWriteAccess,
 } from "./github-auth.js";
 
 /**
@@ -46,7 +46,7 @@ export async function connectGitHub(): Promise<GitHubRepoRef | null> {
     if (!ok) return null;
   }
 
-  let user;
+  let user: Awaited<ReturnType<typeof fetchUserInfo>>;
   try {
     user = await fetchUserInfo();
   } catch (e) {
@@ -121,7 +121,7 @@ export async function runBranchOnlySwitch(current: GitHubRepoRef): Promise<GitHu
   }
   const branch = await showBranchPicker(repo);
   if (branch == null) return null;
-  if (branch === current.branch) return null;  // no-op
+  if (branch === current.branch) return null; // no-op
   const ref: GitHubRepoRef = { ...current, branch };
   saveRepoRef(ref);
   return ref;
@@ -143,7 +143,7 @@ export async function runBasePathOnlySwitch(current: GitHubRepoRef): Promise<Git
   }
   const basePath = await showBasePathPrompt(repo, current.branch);
   if (basePath == null) return null;
-  if (basePath === current.basePath) return null;  // no-op
+  if (basePath === current.basePath) return null; // no-op
   const ref: GitHubRepoRef = { ...current, basePath };
   saveRepoRef(ref);
   return ref;
@@ -173,18 +173,35 @@ function showChoiceDialog(): Promise<ReconfigureChoice | null> {
         <span style="font-weight:600;font-size:14px;">${escapeHtml(label)}</span>
         <span style="font-weight:400;font-size:12px;opacity:.85;">${escapeHtml(sub)}</span>
       `;
-      btn.addEventListener("click", () => { close(); resolve(value); });
+      btn.addEventListener("click", () => {
+        close();
+        resolve(value);
+      });
       return btn;
     };
 
-    body.appendChild(makeBtn("Repository", "Switch to a different repo. Runs the full picker flow.", "repo"));
-    const g1 = document.createElement("div"); g1.style.height = "8px"; body.appendChild(g1);
+    body.appendChild(
+      makeBtn("Repository", "Switch to a different repo. Runs the full picker flow.", "repo"),
+    );
+    const g1 = document.createElement("div");
+    g1.style.height = "8px";
+    body.appendChild(g1);
     body.appendChild(makeBtn("Branch", "Same repo, different branch.", "branch"));
-    const g2 = document.createElement("div"); g2.style.height = "8px"; body.appendChild(g2);
-    body.appendChild(makeBtn("Base path", "Same repo + branch, different folder inside.", "basePath"));
+    const g2 = document.createElement("div");
+    g2.style.height = "8px";
+    body.appendChild(g2);
+    body.appendChild(
+      makeBtn("Base path", "Same repo + branch, different folder inside.", "basePath"),
+    );
 
-    addCancelOnly(root, () => { close(); resolve(null); });
-    attachCloseBehaviors(root, () => { close(); resolve(null); });
+    addCancelOnly(root, () => {
+      close();
+      resolve(null);
+    });
+    attachCloseBehaviors(root, () => {
+      close();
+      resolve(null);
+    });
   });
 }
 
@@ -194,9 +211,9 @@ function runPatFlow(): Promise<boolean> {
   return new Promise((resolve) => {
     const { close, root, body } = openDialog(
       "Sign in to GitHub",
-      "Annot stores screenshots by committing them to a repository you "
-        + "own or collaborate on. Create a personal access token and "
-        + "paste it below.",
+      "Annot stores screenshots by committing them to a repository you " +
+        "own or collaborate on. Create a personal access token and " +
+        "paste it below.",
     );
 
     const help = document.createElement("div");
@@ -232,7 +249,10 @@ function runPatFlow(): Promise<boolean> {
     const form = document.createElement("form");
     form.method = "dialog";
     form.autocomplete = "on";
-    form.addEventListener("submit", (e) => { e.preventDefault(); submit(); });
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      submit();
+    });
     body.appendChild(form);
 
     const input = document.createElement("input");
@@ -281,7 +301,10 @@ function runPatFlow(): Promise<boolean> {
     cancel.type = "button";
     cancel.className = "app-dialog-btn app-dialog-cancel";
     cancel.textContent = "Cancel";
-    cancel.addEventListener("click", () => { close(); resolve(false); });
+    cancel.addEventListener("click", () => {
+      close();
+      resolve(false);
+    });
     actions.appendChild(cancel);
     okBtn = document.createElement("button");
     okBtn.type = "button";
@@ -293,7 +316,10 @@ function runPatFlow(): Promise<boolean> {
 
     // Enter-to-submit is handled by the form's submit event above.
     requestAnimationFrame(() => input.focus());
-    attachCloseBehaviors(root, () => { close(); resolve(false); });
+    attachCloseBehaviors(root, () => {
+      close();
+      resolve(false);
+    });
   });
 }
 
@@ -348,14 +374,16 @@ function showRepoPicker(userLogin: string): Promise<GitHubRepoSummary | null> {
     const rotateRow = document.createElement("div");
     rotateRow.style.fontSize = "12px";
     rotateRow.style.marginTop = "4px";
-    rotateRow.innerHTML =
-      `<a href="#" style="color:var(--accent);">Use a different personal access token</a>`;
+    rotateRow.innerHTML = `<a href="#" style="color:var(--accent);">Use a different personal access token</a>`;
     body.appendChild(rotateRow);
     rotateRow.querySelector("a")?.addEventListener("click", async (e) => {
       e.preventDefault();
       close();
       const ok = await runPatFlow();
-      if (!ok) { resolve(null); return; }
+      if (!ok) {
+        resolve(null);
+        return;
+      }
       try {
         const user = await fetchUserInfo();
         const repo = await showRepoPicker(user.login);
@@ -366,7 +394,10 @@ function showRepoPicker(userLogin: string): Promise<GitHubRepoSummary | null> {
       }
     });
 
-    const cancelBtn = addCancelOnly(root, () => { close(); resolve(null); });
+    const cancelBtn = addCancelOnly(root, () => {
+      close();
+      resolve(null);
+    });
 
     let repos: GitHubRepoSummary[] = [];
     let filtered: GitHubRepoSummary[] = [];
@@ -387,10 +418,7 @@ function showRepoPicker(userLogin: string): Promise<GitHubRepoSummary | null> {
       try {
         const canWrite = await verifyWriteAccess(r.owner, r.name);
         if (!canWrite) {
-          err.innerHTML = `Your personal access token doesn't have `
-            + `<strong>Contents: Read and Write</strong> on `
-            + `<strong>${escapeHtml(r.fullName)}</strong>. `
-            + `Pick another repository, or rotate your token via the link below.`;
+          err.innerHTML = `Your personal access token doesn't have <strong>Contents: Read and Write</strong> on <strong>${escapeHtml(r.fullName)}</strong>. Pick another repository, or rotate your token via the link below.`;
           err.style.display = "";
           return;
         }
@@ -435,7 +463,9 @@ function showRepoPicker(userLogin: string): Promise<GitHubRepoSummary | null> {
         row.addEventListener("mouseleave", () => {
           row.style.background = "transparent";
         });
-        const badge = r.private ? `<span style="font-size:10px;background:var(--border-color);color:var(--text-secondary);padding:1px 6px;border-radius:999px;margin-left:6px;">private</span>` : "";
+        const badge = r.private
+          ? `<span style="font-size:10px;background:var(--border-color);color:var(--text-secondary);padding:1px 6px;border-radius:999px;margin-left:6px;">private</span>`
+          : "";
         row.innerHTML = `
           <div style="font-size:13px;font-weight:600;">${escapeHtml(r.fullName)}${badge}</div>
           <div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">
@@ -524,7 +554,10 @@ function showRepoPicker(userLogin: string): Promise<GitHubRepoSummary | null> {
     });
 
     requestAnimationFrame(() => search.focus());
-    attachCloseBehaviors(root, () => { close(); resolve(null); });
+    attachCloseBehaviors(root, () => {
+      close();
+      resolve(null);
+    });
 
     // silence unused var lint — we hold the reference to move focus if needed
     void cancelBtn;
@@ -543,7 +576,7 @@ function showBranchPicker(repo: GitHubRepoSummary): Promise<string | null> {
     const select = document.createElement("select");
     select.className = "app-dialog-input";
     select.style.appearance = "auto";
-    select.innerHTML = `<option>Loading…</option>`;
+    select.innerHTML = "<option>Loading…</option>";
     select.disabled = true;
     body.appendChild(select);
 
@@ -563,7 +596,8 @@ function showBranchPicker(repo: GitHubRepoSummary): Promise<string | null> {
         for (const b of branches) {
           const opt = document.createElement("option");
           opt.value = b.name;
-          opt.textContent = b.name + (b.isDefault ? " (default)" : "") + (b.protected ? " — protected" : "");
+          opt.textContent =
+            b.name + (b.isDefault ? " (default)" : "") + (b.protected ? " — protected" : "");
           if (b.isDefault) opt.selected = true;
           select.appendChild(opt);
         }
@@ -579,14 +613,20 @@ function showBranchPicker(repo: GitHubRepoSummary): Promise<string | null> {
 
     addActions(root, {
       okLabel: "Continue",
-      onCancel: () => { close(); resolve(null); },
+      onCancel: () => {
+        close();
+        resolve(null);
+      },
       onOk: () => {
         const v = select.value || repo.defaultBranch;
         close();
         resolve(v);
       },
     });
-    attachCloseBehaviors(root, () => { close(); resolve(null); });
+    attachCloseBehaviors(root, () => {
+      close();
+      resolve(null);
+    });
   });
 }
 
@@ -595,9 +635,10 @@ function showBranchPicker(repo: GitHubRepoSummary): Promise<string | null> {
 function showBasePathPrompt(repo: GitHubRepoSummary, branch: string): Promise<string | null> {
   return new Promise((resolve) => {
     const existing = loadRepoRef();
-    const defaultVal = existing && existing.owner === repo.owner && existing.repo === repo.name
-      ? existing.basePath
-      : "";
+    const defaultVal =
+      existing && existing.owner === repo.owner && existing.repo === repo.name
+        ? existing.basePath
+        : "";
 
     const { close, root, body } = openDialog(
       "Pick a base path",
@@ -619,16 +660,17 @@ function showBasePathPrompt(repo: GitHubRepoSummary, branch: string): Promise<st
 
     const renderPreview = () => {
       const norm = normalizeBasePath(input.value);
-      preview.textContent = norm
-        ? `→ ${repo.fullName}/${norm}/…`
-        : `→ ${repo.fullName}/…`;
+      preview.textContent = norm ? `→ ${repo.fullName}/${norm}/…` : `→ ${repo.fullName}/…`;
     };
     input.addEventListener("input", renderPreview);
     renderPreview();
 
     addActions(root, {
       okLabel: "Connect",
-      onCancel: () => { close(); resolve(null); },
+      onCancel: () => {
+        close();
+        resolve(null);
+      },
       onOk: () => {
         close();
         resolve(normalizeBasePath(input.value));
@@ -640,8 +682,14 @@ function showBasePathPrompt(repo: GitHubRepoSummary, branch: string): Promise<st
         root.querySelector<HTMLButtonElement>(".app-dialog-ok")?.click();
       }
     });
-    requestAnimationFrame(() => { input.focus(); input.select(); });
-    attachCloseBehaviors(root, () => { close(); resolve(null); });
+    requestAnimationFrame(() => {
+      input.focus();
+      input.select();
+    });
+    attachCloseBehaviors(root, () => {
+      close();
+      resolve(null);
+    });
   });
 }
 
@@ -679,7 +727,13 @@ function openDialog(title: string, message?: string): OpenedDialog {
   return {
     root: dialog,
     body,
-    close: () => { try { overlay.remove(); } catch { /* ignore */ } },
+    close: () => {
+      try {
+        overlay.remove();
+      } catch {
+        /* ignore */
+      }
+    },
   };
 }
 
@@ -751,10 +805,16 @@ function showPlainAlert(title: string, message: string): Promise<void> {
     ok.type = "button";
     ok.className = "app-dialog-btn app-dialog-ok app-dialog-primary";
     ok.textContent = "OK";
-    ok.addEventListener("click", () => { close(); resolve(); });
+    ok.addEventListener("click", () => {
+      close();
+      resolve();
+    });
     actions.appendChild(ok);
     root.appendChild(actions);
-    attachCloseBehaviors(root, () => { close(); resolve(); });
+    attachCloseBehaviors(root, () => {
+      close();
+      resolve();
+    });
     requestAnimationFrame(() => ok.focus());
   });
 }

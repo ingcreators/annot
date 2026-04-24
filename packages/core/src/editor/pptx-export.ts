@@ -3,7 +3,9 @@ import type { CanvasManager } from "./canvas-manager.js";
 import { getEffectiveLineEndpoints } from "./transform-utils.js";
 
 const __pptxTextEncoder = new TextEncoder();
-function strToU8(s: string): Uint8Array { return __pptxTextEncoder.encode(s); }
+function strToU8(s: string): Uint8Array {
+  return __pptxTextEncoder.encode(s);
+}
 
 /** Convert a point value into EMU. OOXML line widths (`<a:ln w="…"/>`)
  *  are in EMU where 1pt = 12,700 EMU, NOT in the 9,525-EMU-per-pixel
@@ -37,7 +39,10 @@ function colorHex(color: string): string {
   // etc.) slipped through — again, fall back rather than break the file.
   if (!/^[0-9A-F]{6}$/.test(hex) && !/^[0-9A-F]{3}$/.test(hex)) return "000000";
   return hex.length === 3
-    ? hex.split("").map((c) => c + c).join("")
+    ? hex
+        .split("")
+        .map((c) => c + c)
+        .join("")
     : hex;
 }
 
@@ -93,18 +98,24 @@ function endOOXML(
 function gradFillXml(gRaw: string | null): string {
   if (!gRaw) return "";
   let spec: { angle: number; stops: Array<{ color: string; offset: number; opacity?: number }> };
-  try { spec = JSON.parse(gRaw); }
-  catch { return ""; }
+  try {
+    spec = JSON.parse(gRaw);
+  } catch {
+    return "";
+  }
   if (!spec?.stops || !Array.isArray(spec.stops)) return "";
   const rotNorm = (((spec.angle || 0) % 360) + 360) % 360;
   const ang = Math.round(rotNorm * 60000);
-  const gs = spec.stops.map((s) => {
-    const pos = Math.round((s.offset ?? 0) * 100000);
-    const alpha = s.opacity != null && s.opacity < 1
-      ? `<a:alpha val="${Math.round(s.opacity * 100000)}"/>`
-      : "";
-    return `<a:gs pos="${pos}"><a:srgbClr val="${colorHex(s.color)}">${alpha}</a:srgbClr></a:gs>`;
-  }).join("");
+  const gs = spec.stops
+    .map((s) => {
+      const pos = Math.round((s.offset ?? 0) * 100000);
+      const alpha =
+        s.opacity != null && s.opacity < 1
+          ? `<a:alpha val="${Math.round(s.opacity * 100000)}"/>`
+          : "";
+      return `<a:gs pos="${pos}"><a:srgbClr val="${colorHex(s.color)}">${alpha}</a:srgbClr></a:gs>`;
+    })
+    .join("");
   return `<a:gradFill flip="none" rotWithShape="1"><a:gsLst>${gs}</a:gsLst><a:lin ang="${ang}" scaled="1"/></a:gradFill>`;
 }
 
@@ -113,7 +124,13 @@ function gradFillXml(gRaw: string | null): string {
  * gradient), opacity alpha, cap, and join. Used by every shape/line
  * builder so the style features stay consistent across element types.
  */
-function lnXml(el: SVGElement, swPx: number, fallbackStroke: string, dashXml: string, arrowXml: string): string {
+function lnXml(
+  el: SVGElement,
+  swPx: number,
+  fallbackStroke: string,
+  dashXml: string,
+  arrowXml: string,
+): string {
   const grad = el.getAttribute("data-stroke-gradient");
   // strokeOpacity() checks both `opacity` (preferred for <line> so
   // markers fade with the stroke) and `stroke-opacity` (for shapes).
@@ -123,9 +140,7 @@ function lnXml(el: SVGElement, swPx: number, fallbackStroke: string, dashXml: st
   if (grad) {
     paint = gradFillXml(grad);
   } else {
-    const alpha = opacity < 1
-      ? `<a:alpha val="${Math.round(opacity * 100000)}"/>`
-      : "";
+    const alpha = opacity < 1 ? `<a:alpha val="${Math.round(opacity * 100000)}"/>` : "";
     paint = `<a:solidFill><a:srgbClr val="${colorHex(stroke)}">${alpha}</a:srgbClr></a:solidFill>`;
   }
   const capAttr = capOOXML(el.getAttribute("stroke-linecap"));
@@ -142,9 +157,9 @@ function lnXml(el: SVGElement, swPx: number, fallbackStroke: string, dashXml: st
  */
 function strokeOpacity(el: SVGElement): number {
   const o = el.getAttribute("opacity");
-  if (o != null && o !== "") return parseFloat(o);
+  if (o != null && o !== "") return Number.parseFloat(o);
   const so = el.getAttribute("stroke-opacity");
-  if (so != null && so !== "") return parseFloat(so);
+  if (so != null && so !== "") return Number.parseFloat(so);
   return 1;
 }
 
@@ -153,25 +168,20 @@ function strokeOpacity(el: SVGElement): number {
  * for any element's stroke or fill. Centralizes the defensive handling
  * so `url(#...)` gradient refs NEVER end up inside `<a:srgbClr>`.
  */
-function paintXml(
-  el: SVGElement,
-  value: string,
-  which: "stroke" | "fill",
-): string {
+function paintXml(el: SVGElement, value: string, which: "stroke" | "fill"): string {
   const gradRaw = el.getAttribute(`data-${which}-gradient`);
   if (gradRaw) return gradFillXml(gradRaw);
-  if (value === "none" || !value) return `<a:noFill/>`;
+  if (value === "none" || !value) return "<a:noFill/>";
   if (/^url\(#.+\)$/i.test(value.trim())) {
     // Fallback — an SVG defs gradient reference without a stored
     // spec. Emit a sane solid color rather than breaking the file.
     return `<a:solidFill><a:srgbClr val="000000"/></a:solidFill>`;
   }
-  const op = which === "stroke"
-    ? strokeOpacity(el)
-    : parseFloat(el.getAttribute("fill-opacity") || "1");
-  const alpha = op < 1
-    ? `<a:alpha val="${Math.round(op * 100000)}"/>`
-    : "";
+  const op =
+    which === "stroke"
+      ? strokeOpacity(el)
+      : Number.parseFloat(el.getAttribute("fill-opacity") || "1");
+  const alpha = op < 1 ? `<a:alpha val="${Math.round(op * 100000)}"/>` : "";
   return `<a:solidFill><a:srgbClr val="${colorHex(value)}">${alpha}</a:srgbClr></a:solidFill>`;
 }
 
@@ -184,12 +194,7 @@ function paintXml(
  * it were a #rrggbb color produces garbage like `URL(GRAD-...)` which
  * PowerPoint rejects as a malformed color value.
  */
-function lineLnXml(
-  el: SVGElement,
-  swPx: number,
-  strokeAttr: string,
-  arrowXml: string,
-): string {
+function lineLnXml(el: SVGElement, swPx: number, strokeAttr: string, arrowXml: string): string {
   const dashXml = ""; // line builder currently doesn't pass dash; arrows are the usual decoration
   const capAttr = capOOXML(el.getAttribute("stroke-linecap"));
   const joinXml = joinOOXML(el.getAttribute("stroke-linejoin"));
@@ -209,9 +214,7 @@ function lineLnXml(
     paint = `<a:solidFill><a:srgbClr val="000000"/></a:solidFill>`;
   } else {
     const opacity = strokeOpacity(el);
-    const alpha = opacity < 1
-      ? `<a:alpha val="${Math.round(opacity * 100000)}"/>`
-      : "";
+    const alpha = opacity < 1 ? `<a:alpha val="${Math.round(opacity * 100000)}"/>` : "";
     paint = `<a:solidFill><a:srgbClr val="${colorHex(strokeAttr)}">${alpha}</a:srgbClr></a:solidFill>`;
   }
   return `<a:ln w="${ptToEMU(swPx)}"${capStr}>${paint}${joinXml}${dashXml}${arrowXml}</a:ln>`;
@@ -237,13 +240,13 @@ function joinOOXML(join: string | null): string {
  *  so exports reflect the element's actual on-canvas position —
  *  without it, elements show up at their pre-move location. */
 function offsetFromTransform(el: SVGElement): { tx: number; ty: number } {
-  const tx = parseFloat(el.getAttribute("data-tx") || "0") || 0;
-  const ty = parseFloat(el.getAttribute("data-ty") || "0") || 0;
+  const tx = Number.parseFloat(el.getAttribute("data-tx") || "0") || 0;
+  const ty = Number.parseFloat(el.getAttribute("data-ty") || "0") || 0;
   return { tx, ty };
 }
 
 function xfrmAttrs(el: SVGElement, opts?: { excludeFlip?: boolean }): string {
-  let rot = parseFloat(el.getAttribute("data-rot") || "0") || 0;
+  let rot = Number.parseFloat(el.getAttribute("data-rot") || "0") || 0;
   if (rot) {
     rot = ((rot % 360) + 360) % 360;
     const ooxmlRot = Math.round(rot * 60000);
@@ -277,7 +280,7 @@ export function exportPptx(canvas: CanvasManager): void {
   const dataUrl = canvas.imageEl.getAttribute("href") || "";
   const imageBytes = dataUrlToUint8Array(dataUrl);
   const imageExt = dataUrl.startsWith("data:image/png") ? "png" : "jpeg";
-  const imageMime = imageExt === "png" ? "image/png" : "image/jpeg";
+  const _imageMime = imageExt === "png" ? "image/png" : "image/jpeg";
   const hasImage = imageBytes.length > 0;
 
   const slideXml = buildSlide(w, h, shapes, hasImage);
@@ -392,7 +395,7 @@ function buildLine(el: SVGElement, id: number): string {
   // a completely different position than the Annot canvas shows.
   const { x1, y1, x2, y2, cx, cy } = getEffectiveLineEndpoints(el);
   const stroke = el.getAttribute("stroke") || "#ff0000";
-  const sw = parseFloat(el.getAttribute("stroke-width") || "3");
+  const sw = Number.parseFloat(el.getAttribute("stroke-width") || "3");
   const isCurved = cx != null && cy != null;
 
   // Bounding box includes the control point for curved arrows — a
@@ -404,8 +407,8 @@ function buildLine(el: SVGElement, id: number): string {
   const ys = isCurved ? [y1, cy!, y2] : [y1, y2];
   const left = Math.min(...xs);
   const top = Math.min(...ys);
-  const w = (Math.max(...xs) - left) || 1;
-  const h = (Math.max(...ys) - top) || 1;
+  const w = Math.max(...xs) - left || 1;
+  const h = Math.max(...ys) - top || 1;
 
   // Flip flags only apply to the straight `prst="line"` form — they
   // select which diagonal of the bbox the line traces. For curves we
@@ -420,22 +423,23 @@ function buildLine(el: SVGElement, id: number): string {
   const endShape = el.getAttribute("data-arrow-end-shape");
   // Read width & length separately (new schema). Fall back through
   // the legacy single-size attr for content created before the split.
-  const startW = el.getAttribute("data-arrow-start-width")
-    || el.getAttribute("data-arrow-start-size") || "md";
-  const startL = el.getAttribute("data-arrow-start-length")
-    || el.getAttribute("data-arrow-start-size") || "md";
-  const endW = el.getAttribute("data-arrow-end-width")
-    || el.getAttribute("data-arrow-end-size") || "md";
-  const endL = el.getAttribute("data-arrow-end-length")
-    || el.getAttribute("data-arrow-end-size") || "md";
+  const startW =
+    el.getAttribute("data-arrow-start-width") || el.getAttribute("data-arrow-start-size") || "md";
+  const startL =
+    el.getAttribute("data-arrow-start-length") || el.getAttribute("data-arrow-start-size") || "md";
+  const endW =
+    el.getAttribute("data-arrow-end-width") || el.getAttribute("data-arrow-end-size") || "md";
+  const endL =
+    el.getAttribute("data-arrow-end-length") || el.getAttribute("data-arrow-end-size") || "md";
   const legacyEnd = !!el.getAttribute("marker-end");
 
   const head = endOOXML("headEnd", startShape, startW, startL);
-  const tail = endShape != null
-    ? endOOXML("tailEnd", endShape, endW, endL)
-    : legacyEnd
-      ? `<a:tailEnd type="triangle" w="med" len="med"/>`
-      : "";
+  const tail =
+    endShape != null
+      ? endOOXML("tailEnd", endShape, endW, endL)
+      : legacyEnd
+        ? `<a:tailEnd type="triangle" w="med" len="med"/>`
+        : "";
   // Legacy single-var for downstream insertion below.
   const tailEnd = head + tail;
 
@@ -505,12 +509,12 @@ function buildLine(el: SVGElement, id: number): string {
 }
 
 function buildRect(el: SVGRectElement, id: number): string {
-  const x = parseFloat(el.getAttribute("x") || "0");
-  const y = parseFloat(el.getAttribute("y") || "0");
-  const w = parseFloat(el.getAttribute("width") || "0");
-  const h = parseFloat(el.getAttribute("height") || "0");
+  const x = Number.parseFloat(el.getAttribute("x") || "0");
+  const y = Number.parseFloat(el.getAttribute("y") || "0");
+  const w = Number.parseFloat(el.getAttribute("width") || "0");
+  const h = Number.parseFloat(el.getAttribute("height") || "0");
   const stroke = el.getAttribute("stroke") || "#ff0000";
-  const sw = parseFloat(el.getAttribute("stroke-width") || "3");
+  const sw = Number.parseFloat(el.getAttribute("stroke-width") || "3");
   const fill = el.getAttribute("fill") || "none";
   const fillXml = paintXml(el, fill, "fill");
 
@@ -535,12 +539,12 @@ function buildRect(el: SVGRectElement, id: number): string {
 }
 
 function buildEllipse(el: SVGEllipseElement, id: number): string {
-  const cx = parseFloat(el.getAttribute("cx") || "0");
-  const cy = parseFloat(el.getAttribute("cy") || "0");
-  const rx = parseFloat(el.getAttribute("rx") || "0");
-  const ry = parseFloat(el.getAttribute("ry") || "0");
+  const cx = Number.parseFloat(el.getAttribute("cx") || "0");
+  const cy = Number.parseFloat(el.getAttribute("cy") || "0");
+  const rx = Number.parseFloat(el.getAttribute("rx") || "0");
+  const ry = Number.parseFloat(el.getAttribute("ry") || "0");
   const stroke = el.getAttribute("stroke") || "#ff0000";
-  const sw = parseFloat(el.getAttribute("stroke-width") || "3");
+  const sw = Number.parseFloat(el.getAttribute("stroke-width") || "3");
   const fill = el.getAttribute("fill") || "none";
 
   const fillXml = paintXml(el, fill, "fill");
@@ -566,9 +570,9 @@ function buildEllipse(el: SVGEllipseElement, id: number): string {
 }
 
 function buildText(el: SVGTextElement, id: number): string {
-  const x = parseFloat(el.getAttribute("x") || "0");
-  const y = parseFloat(el.getAttribute("y") || "0");
-  const fontSize = parseFloat(el.getAttribute("font-size") || "24");
+  const x = Number.parseFloat(el.getAttribute("x") || "0");
+  const y = Number.parseFloat(el.getAttribute("y") || "0");
+  const fontSize = Number.parseFloat(el.getAttribute("font-size") || "24");
   const fill = el.getAttribute("fill") || "#ff0000";
 
   // Collect text from tspans or direct text
@@ -585,11 +589,15 @@ function buildText(el: SVGTextElement, id: number): string {
   // Font size in hundredths of a point: 24px ≈ 18pt = 1800
   const ptSize = Math.round(fontSize * 0.75 * 100);
 
-  const paragraphs = textContent.split("\n").map((line) =>
-    `<a:p><a:r><a:rPr lang="ja-JP" sz="${ptSize}" dirty="0">
+  const paragraphs = textContent
+    .split("\n")
+    .map(
+      (line) =>
+        `<a:p><a:r><a:rPr lang="ja-JP" sz="${ptSize}" dirty="0">
       <a:solidFill><a:srgbClr val="${colorHex(fill)}"/></a:solidFill>
-    </a:rPr><a:t>${escXml(line)}</a:t></a:r></a:p>`
-  ).join("");
+    </a:rPr><a:t>${escXml(line)}</a:t></a:r></a:p>`,
+    )
+    .join("");
 
   // Estimate text box size
   const boxW = Math.max(200, textContent.length * fontSize * 0.6);
@@ -621,13 +629,16 @@ function buildText(el: SVGTextElement, id: number): string {
 function buildFreehand(el: SVGPathElement, id: number): string {
   const d = el.getAttribute("d") || "";
   const stroke = el.getAttribute("stroke") || "#ff0000";
-  const sw = parseFloat(el.getAttribute("stroke-width") || "3");
+  const sw = Number.parseFloat(el.getAttribute("stroke-width") || "3");
 
   // Parse SVG path to get bounding box and relative points
   const points = parseSVGPath(d);
   if (points.length < 2) return "";
 
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  let minX = Number.POSITIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
   for (const p of points) {
     minX = Math.min(minX, p.x);
     minY = Math.min(minY, p.y);
@@ -644,13 +655,15 @@ function buildFreehand(el: SVGPathElement, id: number): string {
   const offY = minY + pathOff.ty;
 
   // Convert to DrawingML path (coordinates in EMU relative to shape origin)
-  const pathPoints = points.map((p, i) => {
-    const ex = px(p.x - minX);
-    const ey = px(p.y - minY);
-    return i === 0
-      ? `<a:moveTo><a:pt x="${ex}" y="${ey}"/></a:moveTo>`
-      : `<a:lnTo><a:pt x="${ex}" y="${ey}"/></a:lnTo>`;
-  }).join("");
+  const pathPoints = points
+    .map((p, i) => {
+      const ex = px(p.x - minX);
+      const ey = px(p.y - minY);
+      return i === 0
+        ? `<a:moveTo><a:pt x="${ex}" y="${ey}"/></a:moveTo>`
+        : `<a:lnTo><a:pt x="${ex}" y="${ey}"/></a:lnTo>`;
+    })
+    .join("");
 
   return `<p:sp>
   <p:nvSpPr>
@@ -706,7 +719,10 @@ function buildFreehandGroup(
   // Compute the collective bbox so the group's xfrm knows its extent.
   // PowerPoint uses this for selection highlight + as the reference
   // frame when the user subsequently moves the group.
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  let minX = Number.POSITIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
   for (const p of Array.from(paths)) {
     const pts = parseSVGPath(p.getAttribute("d") || "");
     for (const pt of pts) {
@@ -716,7 +732,7 @@ function buildFreehandGroup(
       if (pt.y > maxY) maxY = pt.y;
     }
   }
-  if (!isFinite(minX)) return null;
+  if (!Number.isFinite(minX)) return null;
   const bw = Math.max(maxX - minX, 1);
   const bh = Math.max(maxY - minY, 1);
   // Bake the freehand group's pending translation into BOTH the
@@ -759,31 +775,29 @@ function buildFreehandGroup(
   return { xml, nextId: childId };
 }
 
-function buildMarker(
-  g: SVGElement,
-  bg: Element,
-  text: SVGTextElement,
-  id: number,
-): string {
+function buildMarker(g: SVGElement, bg: Element, text: SVGTextElement, id: number): string {
   // Geometry is taken from whichever SVG primitive backs the marker
   // (circle or rect). Shape routing comes from `data-shape` on the
   // outer <g> (authoritative — written by MarkerTool) with a fallback
   // to the bg tag in case data-shape is missing (legacy content).
   const declaredShape = g.getAttribute("data-shape");
-  const isRectLike = declaredShape === "rect" || declaredShape === "rounded"
-    || bg.tagName === "rect";
+  const isRectLike =
+    declaredShape === "rect" || declaredShape === "rounded" || bg.tagName === "rect";
   const isRounded = declaredShape === "rounded";
 
-  let offX: number, offY: number, extCx: number, extCy: number;
+  let offX: number;
+  let offY: number;
+  let extCx: number;
+  let extCy: number;
   if (isRectLike) {
-    offX = parseFloat(bg.getAttribute("x") || "0");
-    offY = parseFloat(bg.getAttribute("y") || "0");
-    extCx = parseFloat(bg.getAttribute("width") || "36");
-    extCy = parseFloat(bg.getAttribute("height") || "36");
+    offX = Number.parseFloat(bg.getAttribute("x") || "0");
+    offY = Number.parseFloat(bg.getAttribute("y") || "0");
+    extCx = Number.parseFloat(bg.getAttribute("width") || "36");
+    extCy = Number.parseFloat(bg.getAttribute("height") || "36");
   } else {
-    const cx = parseFloat(bg.getAttribute("cx") || "0");
-    const cy = parseFloat(bg.getAttribute("cy") || "0");
-    const r = parseFloat(bg.getAttribute("r") || "18");
+    const cx = Number.parseFloat(bg.getAttribute("cx") || "0");
+    const cy = Number.parseFloat(bg.getAttribute("cy") || "0");
+    const r = Number.parseFloat(bg.getAttribute("r") || "18");
     offX = cx - r;
     offY = cy - r;
     extCx = r * 2;
@@ -800,7 +814,7 @@ function buildMarker(
 
   const fill = bg.getAttribute("fill") || "#ff0000";
   const label = text.textContent || "";
-  const fontSize = parseFloat(text.getAttribute("font-size") || "16");
+  const fontSize = Number.parseFloat(text.getAttribute("font-size") || "16");
   const ptSize = Math.round(fontSize * 0.75 * 100);
 
   // OOXML preset geometry selector. `roundRect` uses an adjustment
@@ -809,7 +823,7 @@ function buildMarker(
   // the on-canvas look.
   let prstGeomXml: string;
   if (isRounded) {
-    const rx = parseFloat(bg.getAttribute("rx") || "0");
+    const rx = Number.parseFloat(bg.getAttribute("rx") || "0");
     const halfMin = Math.max(1, Math.min(extCx, extCy) / 2);
     const adj = Math.round(Math.max(0, Math.min(1, rx / halfMin)) * 50000);
     prstGeomXml = `<a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val ${adj}"/></a:avLst></a:prstGeom>`;
@@ -869,9 +883,9 @@ function dataUrlToUint8Array(dataUrl: string): Uint8Array {
 function parseSVGPath(d: string): { x: number; y: number }[] {
   const points: { x: number; y: number }[] = [];
   const re = /([ML])\s*([\d.-]+)[,\s]+([\d.-]+)/gi;
-  let m;
+  let m: RegExpExecArray | null;
   while ((m = re.exec(d)) !== null) {
-    points.push({ x: parseFloat(m[2]), y: parseFloat(m[3]) });
+    points.push({ x: Number.parseFloat(m[2]), y: Number.parseFloat(m[3]) });
   }
   return points;
 }
@@ -883,7 +897,9 @@ function escXml(s: string): string {
 // --- OOXML boilerplate ---
 
 function contentTypes(hasImage: boolean, imageExt: string): string {
-  const imgDefault = hasImage ? `\n  <Default Extension="${imageExt}" ContentType="image/${imageExt === "png" ? "png" : "jpeg"}"/>` : "";
+  const imgDefault = hasImage
+    ? `\n  <Default Extension="${imageExt}" ContentType="image/${imageExt === "png" ? "png" : "jpeg"}"/>`
+    : "";
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
@@ -948,7 +964,8 @@ function presentationRels(): string {
 function buildSlide(w: number, h: number, shapes: ShapeInfo[], hasImage: boolean): string {
   const shapeXml = shapes.map((s) => s.xml).join("\n");
   // Screenshot as a picture shape, placed behind annotations
-  const picXml = hasImage ? `<p:pic>
+  const picXml = hasImage
+    ? `<p:pic>
       <p:nvPicPr>
         <p:cNvPr id="1000" name="Screenshot"/>
         <p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr>
@@ -965,7 +982,8 @@ function buildSlide(w: number, h: number, shapes: ShapeInfo[], hasImage: boolean
         </a:xfrm>
         <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
       </p:spPr>
-    </p:pic>` : "";
+    </p:pic>`
+    : "";
 
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
@@ -981,7 +999,9 @@ function buildSlide(w: number, h: number, shapes: ShapeInfo[], hasImage: boolean
 }
 
 function slideRels(hasImage: boolean, imageExt = "jpeg"): string {
-  const imgRel = hasImage ? `\n  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/screenshot.${imageExt}"/>` : "";
+  const imgRel = hasImage
+    ? `\n  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/screenshot.${imageExt}"/>`
+    : "";
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>${imgRel}

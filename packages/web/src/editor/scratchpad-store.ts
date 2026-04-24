@@ -57,9 +57,7 @@ export class ScratchpadStore {
     return this.#dbPromise;
   }
 
-  async save(
-    data: Omit<ScratchpadItem, "id" | "createdAt">,
-  ): Promise<ScratchpadItem> {
+  async save(data: Omit<ScratchpadItem, "id" | "createdAt">): Promise<ScratchpadItem> {
     const item: ScratchpadItem = {
       id: newIdB58(),
       createdAt: new Date().toISOString(),
@@ -108,7 +106,10 @@ export class ScratchpadStore {
       const getReq = store.get(id);
       getReq.onsuccess = () => {
         const item = getReq.result as ScratchpadItem | undefined;
-        if (!item) { resolve(); return; }
+        if (!item) {
+          resolve();
+          return;
+        }
         item.name = name;
         store.put(item);
       };

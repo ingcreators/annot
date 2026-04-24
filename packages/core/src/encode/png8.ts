@@ -15,9 +15,7 @@
  */
 import { deflate } from "pako";
 
-const PNG_MAGIC = new Uint8Array([
-  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
-]);
+const PNG_MAGIC = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
 // Precomputed CRC-32 table (IEEE 802.3 polynomial — same as PNG / zip).
 const CRC_TABLE = (() => {
@@ -25,7 +23,7 @@ const CRC_TABLE = (() => {
   for (let i = 0; i < 256; i++) {
     let c = i;
     for (let k = 0; k < 8; k++) {
-      c = (c & 1) ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+      c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
     }
     table[i] = c >>> 0;
   }
@@ -72,13 +70,16 @@ export function encodePng8(
   level: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 = 9,
 ): Uint8Array {
   if (width <= 0 || height <= 0) throw new Error("encodePng8: invalid dimensions");
-  if (palette.length % 4 !== 0) throw new Error("encodePng8: palette must be RGBA bytes (multiple of 4)");
+  if (palette.length % 4 !== 0)
+    throw new Error("encodePng8: palette must be RGBA bytes (multiple of 4)");
   const numColors = palette.length >>> 2;
   if (numColors < 1 || numColors > 256) {
     throw new Error(`encodePng8: palette must have 1–256 colors, got ${numColors}`);
   }
   if (indices.length !== width * height) {
-    throw new Error(`encodePng8: indices length ${indices.length} != width*height ${width * height}`);
+    throw new Error(
+      `encodePng8: indices length ${indices.length} != width*height ${width * height}`,
+    );
   }
 
   // ---- IHDR (13 bytes) ----
@@ -86,18 +87,18 @@ export function encodePng8(
   const ihdrView = new DataView(ihdr.buffer);
   ihdrView.setUint32(0, width, false);
   ihdrView.setUint32(4, height, false);
-  ihdr[8] = 8;   // bit depth
-  ihdr[9] = 3;   // color type: indexed
-  ihdr[10] = 0;  // compression method (deflate)
-  ihdr[11] = 0;  // filter method (standard)
-  ihdr[12] = 0;  // interlace method (none)
+  ihdr[8] = 8; // bit depth
+  ihdr[9] = 3; // color type: indexed
+  ihdr[10] = 0; // compression method (deflate)
+  ihdr[11] = 0; // filter method (standard)
+  ihdr[12] = 0; // interlace method (none)
 
   // ---- PLTE (3 bytes per color) ----
   const plte = new Uint8Array(numColors * 3);
   let hasAlpha = false;
   let trnsLastIdx = -1; // last palette index with alpha < 255
   for (let i = 0; i < numColors; i++) {
-    plte[i * 3]     = palette[i * 4]!;
+    plte[i * 3] = palette[i * 4]!;
     plte[i * 3 + 1] = palette[i * 4 + 1]!;
     plte[i * 3 + 2] = palette[i * 4 + 2]!;
     if (palette[i * 4 + 3]! < 255) {
@@ -125,11 +126,7 @@ export function encodePng8(
   const idat = deflate(raw, { level, memLevel: 9, windowBits: 15 });
 
   // ---- Assemble ----
-  const chunks: Uint8Array[] = [
-    PNG_MAGIC,
-    encodeChunk("IHDR", ihdr),
-    encodeChunk("PLTE", plte),
-  ];
+  const chunks: Uint8Array[] = [PNG_MAGIC, encodeChunk("IHDR", ihdr), encodeChunk("PLTE", plte)];
   if (trns) chunks.push(encodeChunk("tRNS", trns));
   chunks.push(encodeChunk("IDAT", idat));
   chunks.push(encodeChunk("IEND", new Uint8Array(0)));

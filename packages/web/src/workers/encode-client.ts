@@ -28,7 +28,10 @@ type EncodeResponse =
 let worker: Worker | null = null;
 let workerUnusable = false;
 let nextId = 1;
-const pending = new Map<number, { resolve: (r: EncodeResult) => void; reject: (e: Error) => void }>();
+const pending = new Map<
+  number,
+  { resolve: (r: EncodeResult) => void; reject: (e: Error) => void }
+>();
 
 function ensureWorker(): Worker | null {
   if (workerUnusable) return null;
@@ -46,7 +49,8 @@ function ensureWorker(): Worker | null {
     worker.addEventListener("error", (e) => {
       // Fatal worker error: reject everyone outstanding and poison the
       // worker so future calls take the main-thread fallback path.
-      for (const entry of pending.values()) entry.reject(new Error(e.message || "encode worker crashed"));
+      for (const entry of pending.values())
+        entry.reject(new Error(e.message || "encode worker crashed"));
       pending.clear();
       worker?.terminate();
       worker = null;

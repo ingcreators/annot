@@ -52,10 +52,14 @@
 
 /* Slightly wider sidebar on very large screens so long folder names fit */
 @media (min-width: 1600px) {
-  #file-manager { grid-template-columns: 260px 1fr; }
+  #file-manager {
+    grid-template-columns: 260px 1fr;
+  }
 }
 @media (min-width: 2400px) {
-  #file-manager { grid-template-columns: 300px 1fr; }
+  #file-manager {
+    grid-template-columns: 300px 1fr;
+  }
 }
 
 /* ---- Sidebar ---- */
@@ -86,12 +90,12 @@
   transition: background 0.15s, box-shadow 0.15s;
   position: relative;
   margin-bottom: 8px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
 }
 
 .sidebar-new-btn:hover {
   background: var(--hover-bg);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
 .sidebar-new-btn .material-symbols-outlined {
@@ -113,7 +117,7 @@
   border: 1px solid var(--border-color);
   border-radius: 8px;
   overflow: hidden;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
   z-index: 200;
   min-width: 200px;
 }
@@ -200,7 +204,7 @@
   width: 24px;
   text-align: center;
   color: var(--text-primary);
-  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
 }
 
 .sidebar-storage-item.active .sidebar-storage-icon {
@@ -244,7 +248,7 @@
   background: var(--bg-panel);
   color: var(--text-primary);
   font-size: 18px !important;
-  font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 24;
+  font-variation-settings: "FILL" 0, "wght" 500, "GRAD" 0, "opsz" 24;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -313,7 +317,7 @@
   background: none;
   color: var(--text-primary);
   font-size: 18px !important;
-  font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 20;
+  font-variation-settings: "FILL" 0, "wght" 500, "GRAD" 0, "opsz" 20;
   cursor: pointer;
   padding: 0;
   display: flex;
@@ -331,7 +335,7 @@
   flex-shrink: 0;
   font-size: 18px !important;
   color: var(--text-primary);
-  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+  font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 20;
 }
 
 .folder-tree-item.active .folder-tree-icon {
@@ -352,7 +356,7 @@
 }
 
 .folder-tree-root-sub {
-  font-size: 11px;                  /* was 10px — min readable */
+  font-size: 11px; /* was 10px — min readable */
   color: var(--text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -384,7 +388,7 @@
   padding: 8px 16px;
   border-bottom: 1px solid var(--border-color);
   flex-shrink: 0;
-  height: 44px;               /* fixed height so swap with selection-bar is stable */
+  height: 44px; /* fixed height so swap with selection-bar is stable */
 }
 
 .main-content-header .breadcrumb {
@@ -404,7 +408,7 @@
   align-items: center;
   justify-content: center;
   font-size: 20px;
-  font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 24;
+  font-variation-settings: "FILL" 0, "wght" 500, "GRAD" 0, "opsz" 24;
   transition: background 0.1s, border-color 0.1s, color 0.1s;
   flex-shrink: 0;
 }
@@ -446,7 +450,7 @@
   /* The shipped Material Symbols TTF in this repo is a weight-only
    * variable font — the FILL axis is absent — so we differentiate active
    * vs inactive via color + background + weight only. */
-  font-variation-settings: 'wght' 400;
+  font-variation-settings: "wght" 400;
   transition: background 0.12s, color 0.12s, font-variation-settings 0.12s;
 }
 
@@ -461,7 +465,7 @@
 .view-toggle-btn.active {
   background: rgba(124, 156, 255, 0.22);
   color: var(--accent);
-  font-variation-settings: 'wght' 600;
+  font-variation-settings: "wght" 600;
 }
 
 html.light .view-toggle-btn.active {
@@ -493,8 +497,12 @@ html.light .view-toggle-btn.active {
 }
 
 @keyframes app-dialog-fade {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .app-dialog {
@@ -512,8 +520,14 @@ html.light .view-toggle-btn.active {
 }
 
 @keyframes app-dialog-pop {
-  from { opacity: 0; transform: scale(0.96); }
-  to { opacity: 1; transform: scale(1); }
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .app-dialog-title {
@@ -563,7 +577,9 @@ html.light .view-toggle-btn.active {
   font-size: 12px;
   color: #ff8a8a;
 }
-:root.light .app-dialog-error { color: #c41; }
+:root.light .app-dialog-error {
+  color: #c41;
+}
 
 .app-dialog-actions {
   display: flex;
@@ -810,7 +826,7 @@ html.light .view-toggle-btn.active {
   border-bottom: 1px solid var(--border-color);
   color: var(--text-primary);
   flex-shrink: 0;
-  height: 44px;               /* fixed height so swapping doesn't shift layout */
+  height: 44px; /* fixed height so swapping doesn't shift layout */
   overflow: hidden;
   white-space: nowrap;
 }
@@ -889,7 +905,7 @@ html.light .view-toggle-btn.active {
   background: transparent;
   color: var(--text-primary);
   font-size: 18px !important;
-  font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 20;
+  font-variation-settings: "FILL" 0, "wght" 500, "GRAD" 0, "opsz" 20;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -923,20 +939,20 @@ html.light .view-toggle-btn.active {
 }
 
 .gallery-card-more:hover {
-  background: rgba(255,255,255,0.14);
+  background: rgba(255, 255, 255, 0.14);
 }
 :root.light .gallery-card-more:hover {
-  background: rgba(0,0,0,0.08);
+  background: rgba(0, 0, 0, 0.08);
 }
 
 /* Place above the image on image cards (with a subtle backdrop) */
 .gallery-item .gallery-card-more {
-  background: rgba(15,23,48,0.55);
+  background: rgba(15, 23, 48, 0.55);
   backdrop-filter: blur(2px);
   color: #fff;
 }
 .gallery-item .gallery-card-more:hover {
-  background: rgba(15,23,48,0.85);
+  background: rgba(15, 23, 48, 0.85);
 }
 
 /* ---- Floating context menu ---- */
@@ -948,7 +964,7 @@ html.light .view-toggle-btn.active {
   background: var(--bg-panel);
   border: 1px solid var(--border-color);
   border-radius: 8px;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
   z-index: 2000;
   display: flex;
   flex-direction: column;
@@ -1038,7 +1054,7 @@ html.light .view-toggle-btn.active {
 .gallery-item.selected::after {
   content: "check";
   font-family: "Material Symbols Outlined";
-  font-variation-settings: 'FILL' 1, 'wght' 700;
+  font-variation-settings: "FILL" 1, "wght" 700;
   position: absolute;
   top: 8px;
   left: 8px;
@@ -1050,9 +1066,8 @@ html.light .view-toggle-btn.active {
   color: #fff;
   background: var(--accent);
   border-radius: 50%;
-  box-shadow:
-    0 0 0 1px rgba(0, 0, 0, 0.18),      /* hairline edge for crisp readability */
-    0 2px 8px rgba(0, 0, 0, 0.45);      /* soft drop shadow — "lift" */
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.18), /* hairline edge for crisp readability */ 0 2px 8px
+    rgba(0, 0, 0, 0.45); /* soft drop shadow — "lift" */
   z-index: 5;
   pointer-events: none;
 }
@@ -1064,9 +1079,7 @@ html.light .gallery-item.selected {
 }
 html.light .gallery-folder-card.selected::after,
 html.light .gallery-item.selected::after {
-  box-shadow:
-    0 0 0 1px rgba(0, 0, 0, 0.12),
-    0 2px 8px rgba(0, 0, 0, 0.22);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.22);
 }
 
 /* Gallery scroll area */
@@ -1125,12 +1138,20 @@ html.light .gallery-item.selected::after {
 /* On wider viewports, nudge cards slightly larger so 4K screens look balanced
  * instead of showing dozens of tiny tiles. */
 @media (min-width: 1600px) {
-  .gallery-image-grid  { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
-  .gallery-folder-grid { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+  .gallery-image-grid {
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  }
+  .gallery-folder-grid {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  }
 }
 @media (min-width: 2400px) {
-  .gallery-image-grid  { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
-  .gallery-folder-grid { grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
+  .gallery-image-grid {
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  }
+  .gallery-folder-grid {
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  }
 }
 
 .gallery-folder-card {
@@ -1155,7 +1176,7 @@ html.light .gallery-item.selected::after {
 .gallery-folder-card-icon {
   font-size: 24px !important;
   color: var(--text-primary);
-  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
   flex-shrink: 0;
 }
 
@@ -1317,16 +1338,20 @@ html.light .gallery-item.selected::after {
  * between file-manager and editor views. Navigation landmarks should
  * never jump between views. */
 #toolbar .brand {
-  width: calc(240px - 8px);          /* sidebar width minus toolbar's 8px left padding */
+  width: calc(240px - 8px); /* sidebar width minus toolbar's 8px left padding */
   box-sizing: border-box;
   padding-left: 9px;
   margin-right: 0;
 }
 @media (min-width: 1600px) {
-  #toolbar .brand { width: calc(260px - 8px); }
+  #toolbar .brand {
+    width: calc(260px - 8px);
+  }
 }
 @media (min-width: 2400px) {
-  #toolbar .brand { width: calc(300px - 8px); }
+  #toolbar .brand {
+    width: calc(300px - 8px);
+  }
 }
 
 /* Prominent search bar that starts at the right edge of the sidebar. */
@@ -1337,16 +1362,20 @@ html.light .gallery-item.selected::after {
   min-width: 200px;
   display: flex;
   align-items: center;
-  margin-left: 0;    /* brand already provides the sidebar-aligned offset */
+  margin-left: 0; /* brand already provides the sidebar-aligned offset */
   margin-right: 32px;
 }
 
 /* Give the search more room on wider screens */
 @media (min-width: 1600px) {
-  .header-search-wrap { max-width: 800px; }
+  .header-search-wrap {
+    max-width: 800px;
+  }
 }
 @media (min-width: 2400px) {
-  .header-search-wrap { max-width: 960px; }
+  .header-search-wrap {
+    max-width: 960px;
+  }
 }
 
 .header-search-icon {
@@ -1375,7 +1404,7 @@ html.light .gallery-item.selected::after {
   background: transparent;
   color: var(--text-primary);
   font-size: 22px;
-  font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 24;
+  font-variation-settings: "FILL" 0, "wght" 500, "GRAD" 0, "opsz" 24;
   cursor: pointer;
   display: flex;
   align-items: center;

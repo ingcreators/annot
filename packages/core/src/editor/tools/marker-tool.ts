@@ -7,7 +7,8 @@ const SVG_NS = "http://www.w3.org/2000/svg";
  *  `markerShape` field and the legacy `fillColor === "rect"` hack so
  *  older saved presets continue to work. */
 function resolveMarkerShape(opts: {
-  markerShape?: MarkerShape; fillColor?: string;
+  markerShape?: MarkerShape;
+  fillColor?: string;
 }): MarkerShape {
   if (opts.markerShape) return opts.markerShape;
   if (opts.fillColor === "rect") return "rect";
@@ -41,15 +42,15 @@ export class MarkerTool extends ToolBase {
     // legacy `markerBorder*` fields if present (old presets). Fall
     // back to the classic white 1.5 pt ring that makes markers
     // legible against any background color.
-    const borderColor = (this.options.fillColor
-      ? this.options.strokeColor
-      : this.options.markerBorderColor) || "#fff";
-    const borderWidth = (this.options.fillColor
-      ? this.options.strokeWidth
-      : this.options.markerBorderWidth) ?? 1.5;
-    const borderDash = (this.options.fillColor
-      ? this.options.strokeDasharray
-      : this.options.markerBorderDasharray) ?? "";
+    const borderColor =
+      (this.options.fillColor ? this.options.strokeColor : this.options.markerBorderColor) ||
+      "#fff";
+    const borderWidth =
+      (this.options.fillColor ? this.options.strokeWidth : this.options.markerBorderWidth) ?? 1.5;
+    const borderDash =
+      (this.options.fillColor
+        ? this.options.strokeDasharray
+        : this.options.markerBorderDasharray) ?? "";
     const borderAttrs: Record<string, string> = {
       stroke: borderColor,
       "stroke-width": String(borderWidth),
@@ -121,11 +122,11 @@ export class MarkerTool extends ToolBase {
       if (bgColor.toLowerCase() !== color.toLowerCase()) continue;
 
       const textEl = g.querySelector("text");
-      const fs = parseFloat(textEl?.getAttribute("font-size") || "0");
+      const fs = Number.parseFloat(textEl?.getAttribute("font-size") || "0");
       if (Math.abs(fs - fontSize) > 1) continue;
 
-      const val = parseInt(g.getAttribute("data-marker") || "0", 10);
-      if (!isNaN(val) && val > max) max = val;
+      const val = Number.parseInt(g.getAttribute("data-marker") || "0", 10);
+      if (!Number.isNaN(val) && val > max) max = val;
     }
     return max + 1;
   }
@@ -161,16 +162,18 @@ export function convertMarkerShape(g: SVGElement, newShape: MarkerShape): SVGEle
 
   // Derive center + half-side (radius) from whichever primitive is
   // present.
-  let cx: number, cy: number, r: number;
+  let cx: number;
+  let cy: number;
+  let r: number;
   if (bgEl.tagName === "circle") {
-    cx = parseFloat(bgEl.getAttribute("cx") || "0");
-    cy = parseFloat(bgEl.getAttribute("cy") || "0");
-    r = parseFloat(bgEl.getAttribute("r") || "12");
+    cx = Number.parseFloat(bgEl.getAttribute("cx") || "0");
+    cy = Number.parseFloat(bgEl.getAttribute("cy") || "0");
+    r = Number.parseFloat(bgEl.getAttribute("r") || "12");
   } else {
-    const x = parseFloat(bgEl.getAttribute("x") || "0");
-    const y = parseFloat(bgEl.getAttribute("y") || "0");
-    const w = parseFloat(bgEl.getAttribute("width") || "24");
-    const h = parseFloat(bgEl.getAttribute("height") || "24");
+    const x = Number.parseFloat(bgEl.getAttribute("x") || "0");
+    const y = Number.parseFloat(bgEl.getAttribute("y") || "0");
+    const w = Number.parseFloat(bgEl.getAttribute("width") || "24");
+    const h = Number.parseFloat(bgEl.getAttribute("height") || "24");
     cx = x + w / 2;
     cy = y + h / 2;
     r = Math.min(w, h) / 2;
@@ -234,15 +237,16 @@ export function resizeMarker(g: SVGElement, newFontSize: number): void {
   if (!bgEl) return;
 
   // Current center (so we can re-place the bg around the same point).
-  let cx: number, cy: number;
+  let cx: number;
+  let cy: number;
   if (bgEl.tagName === "circle") {
-    cx = parseFloat(bgEl.getAttribute("cx") || "0");
-    cy = parseFloat(bgEl.getAttribute("cy") || "0");
+    cx = Number.parseFloat(bgEl.getAttribute("cx") || "0");
+    cy = Number.parseFloat(bgEl.getAttribute("cy") || "0");
   } else {
-    const x = parseFloat(bgEl.getAttribute("x") || "0");
-    const y = parseFloat(bgEl.getAttribute("y") || "0");
-    const w = parseFloat(bgEl.getAttribute("width") || "24");
-    const h = parseFloat(bgEl.getAttribute("height") || "24");
+    const x = Number.parseFloat(bgEl.getAttribute("x") || "0");
+    const y = Number.parseFloat(bgEl.getAttribute("y") || "0");
+    const w = Number.parseFloat(bgEl.getAttribute("width") || "24");
+    const h = Number.parseFloat(bgEl.getAttribute("height") || "24");
     cx = x + w / 2;
     cy = y + h / 2;
   }

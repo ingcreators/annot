@@ -1,3 +1,4 @@
+import { setTooltip } from "@ingcreators/annot-core/utils";
 /**
  * ScratchpadSection — thumbnail grid UI for the right panel's
  * "Scratchpad" area.
@@ -12,8 +13,7 @@
  *   - Rename / reorder
  *   - Categories
  */
-import { ScratchpadStore, type ScratchpadItem } from "./scratchpad-store.js";
-import { setTooltip } from "@ingcreators/annot-core/utils";
+import type { ScratchpadItem, ScratchpadStore } from "./scratchpad-store.js";
 
 export class ScratchpadSection {
   #container: HTMLElement;
@@ -52,9 +52,8 @@ export class ScratchpadSection {
     this.#saveBtn.className = "scratchpad-save-btn";
     setTooltip(this.#saveBtn, "Save current selection to Scratchpad");
     this.#saveBtn.setAttribute("aria-label", "Save selection to Scratchpad");
-    this.#saveBtn.innerHTML =
-      `<span class="material-symbols-outlined" aria-hidden="true">add</span>`;
-    this.#saveBtn.disabled = true;  // enabled when selection is present
+    this.#saveBtn.innerHTML = `<span class="material-symbols-outlined" aria-hidden="true">add</span>`;
+    this.#saveBtn.disabled = true; // enabled when selection is present
     this.#saveBtn.addEventListener("click", () => this.onSaveRequested?.());
     header.appendChild(this.#saveBtn);
     this.#container.appendChild(header);
@@ -78,9 +77,10 @@ export class ScratchpadSection {
    *  the canvas currently has a non-empty selection. */
   setSaveEnabled(enabled: boolean): void {
     this.#saveBtn.disabled = !enabled;
-    setTooltip(this.#saveBtn, enabled
-      ? "Save current selection to Scratchpad"
-      : "Select one or more shapes first");
+    setTooltip(
+      this.#saveBtn,
+      enabled ? "Save current selection to Scratchpad" : "Select one or more shapes first",
+    );
   }
 
   async refresh(): Promise<void> {
@@ -126,8 +126,7 @@ export class ScratchpadSection {
 
   #makeThumbnail(item: ScratchpadItem): HTMLElement {
     const cell = document.createElement("div");
-    cell.className = "scratchpad-item"
-      + (this.#activeItemId === item.id ? " active" : "");
+    cell.className = `scratchpad-item${this.#activeItemId === item.id ? " active" : ""}`;
     setTooltip(cell, item.name || "Click, then click on the canvas to place");
 
     const img = document.createElement("img");

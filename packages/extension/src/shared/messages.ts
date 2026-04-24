@@ -1,5 +1,8 @@
-import type { CaptureRect, PageDimensions, CaptureSegment } from "@ingcreators/annot-core/utils/types";
-import type { PageMetadata } from "@ingcreators/annot-core";
+import type {
+  CaptureRect,
+  CaptureSegment,
+  PageDimensions,
+} from "@ingcreators/annot-core/utils/types";
 
 // Popup -> Background
 export type PopupMessage =

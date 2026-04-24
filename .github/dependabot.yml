@@ -1,0 +1,46 @@
+version: 2
+
+# Keep dependency churn low on a two-person repo: grouped PRs, weekly
+# cadence for npm, monthly for GitHub Actions (infrastructure moves
+# slower). Security advisories bypass the groups and land immediately
+# as individual PRs — that's the behaviour we actually want to wake up
+# for. Major-version updates also come as individual PRs since they
+# usually need attention.
+
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Asia/Tokyo
+    open-pull-requests-limit: 10
+    groups:
+      dev-dependencies:
+        dependency-type: development
+        update-types:
+          - minor
+          - patch
+      prod-dependencies:
+        dependency-type: production
+        update-types:
+          - minor
+          - patch
+    labels:
+      - dependencies
+    commit-message:
+      prefix: chore(deps)
+      prefix-development: chore(deps-dev)
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
+      day: "1"
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - ci
+    commit-message:
+      prefix: chore(ci)

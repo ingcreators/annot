@@ -15,8 +15,8 @@
  * the button and the popup row.
  */
 
-import { openAnchoredPopover } from "./toolbar.js";
 import { setTooltip } from "../utils/tooltip.js";
+import { openAnchoredPopover } from "./toolbar.js";
 
 export interface CustomSelectOption {
   value: string;
@@ -66,7 +66,10 @@ export function createCustomSelect(opts: CustomSelectOpts): HTMLElement {
 
   const renderPreview = (value: string) => {
     const opt = opts.options.find((o) => o.value === value) ?? opts.options[0];
-    if (!opt) { previewEl.textContent = ""; return; }
+    if (!opt) {
+      previewEl.textContent = "";
+      return;
+    }
     if (opt.preview) previewEl.innerHTML = opt.preview;
     else previewEl.textContent = opt.label;
   };
@@ -84,39 +87,43 @@ export function createCustomSelect(opts: CustomSelectOpts): HTMLElement {
 
   btn.addEventListener("click", () => {
     opts.onOpen?.();
-    openAnchoredPopover(btn, (root) => {
-      root.classList.add("pp-select-popup");
-      if (opts.popupWidth) root.style.minWidth = `${opts.popupWidth}px`;
-      const grid = document.createElement("div");
-      grid.className = "pp-select-grid";
-      if (opts.columns) grid.style.gridTemplateColumns = `repeat(${opts.columns}, 1fr)`;
-      for (const o of opts.options) {
-        const item = document.createElement("button");
-        item.type = "button";
-        item.className = "pp-select-item" + (o.value === current ? " active" : "");
-        setTooltip(item, o.label);
-        item.setAttribute("aria-label", o.label);
-        if (o.preview) item.innerHTML = o.preview;
-        else item.textContent = o.label;
-        item.addEventListener("click", () => {
-          setValue(o.value, true);
-          // Let the popover's own outside-click path close it.
-          const t = document.body.querySelector<HTMLElement>(
-            `[data-anchor-popover="${btn.dataset.popoverId ?? ""}"]`,
-          );
-          t?.remove();
-          if (btn.dataset.popoverId) btn.dataset.popoverId = "";
-        });
-        grid.appendChild(item);
-      }
-      root.appendChild(grid);
-    }, { placement: "below", className: "tool-flyout-pp-select" });
+    openAnchoredPopover(
+      btn,
+      (root) => {
+        root.classList.add("pp-select-popup");
+        if (opts.popupWidth) root.style.minWidth = `${opts.popupWidth}px`;
+        const grid = document.createElement("div");
+        grid.className = "pp-select-grid";
+        if (opts.columns) grid.style.gridTemplateColumns = `repeat(${opts.columns}, 1fr)`;
+        for (const o of opts.options) {
+          const item = document.createElement("button");
+          item.type = "button";
+          item.className = `pp-select-item${o.value === current ? " active" : ""}`;
+          setTooltip(item, o.label);
+          item.setAttribute("aria-label", o.label);
+          if (o.preview) item.innerHTML = o.preview;
+          else item.textContent = o.label;
+          item.addEventListener("click", () => {
+            setValue(o.value, true);
+            // Let the popover's own outside-click path close it.
+            const t = document.body.querySelector<HTMLElement>(
+              `[data-anchor-popover="${btn.dataset.popoverId ?? ""}"]`,
+            );
+            t?.remove();
+            if (btn.dataset.popoverId) btn.dataset.popoverId = "";
+          });
+          grid.appendChild(item);
+        }
+        root.appendChild(grid);
+      },
+      { placement: "below", className: "tool-flyout-pp-select" },
+    );
   });
 
   // Expose a setter so callers can push external state back in
   // (e.g. rubber-band refresh) without re-creating the button.
-  (btn as HTMLElement & { setValue?: (v: string) => void }).setValue =
-    (v: string) => setValue(v, false);
+  (btn as HTMLElement & { setValue?: (v: string) => void }).setValue = (v: string) =>
+    setValue(v, false);
 
   return btn;
 }

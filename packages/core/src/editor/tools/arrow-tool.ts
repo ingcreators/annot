@@ -1,3 +1,11 @@
+import { computeDasharray } from "../../utils/dash-utils.js";
+import {
+  type ArrowSpec,
+  detectArrowSpec,
+  refreshArrowPath,
+  writeArrowEndpoints,
+  writeArrowSpec,
+} from "../arrow-markers.js";
 /**
  * ArrowTool — unified Line / Arrow tool.
  *
@@ -18,20 +26,7 @@
  * affects the closed ones.
  */
 import { ToolBase } from "./tool-base.js";
-import type {
-  ArrowHead,
-  ArrowShape,
-  ArrowDim,
-  MarkerSize,
-} from "./tool-base.js";
-import { computeDasharray } from "../../utils/dash-utils.js";
-import {
-  detectArrowSpec,
-  writeArrowEndpoints,
-  writeArrowSpec,
-  refreshArrowPath,
-  type ArrowSpec,
-} from "../arrow-markers.js";
+import type { ArrowDim, ArrowHead, ArrowShape, MarkerSize } from "./tool-base.js";
 
 export interface ArrowEndsSpec {
   start: ArrowSpec;
@@ -49,10 +44,14 @@ function canonicalShape(value: string | null): ArrowShape {
     case "oval":
     case "none":
       return value;
-    case "triangle-open": return "arrow";
-    case "tbar":          return "stealth";
-    case "reverse":       return "arrow";
-    default:              return "triangle";
+    case "triangle-open":
+      return "arrow";
+    case "tbar":
+      return "stealth";
+    case "reverse":
+      return "arrow";
+    default:
+      return "triangle";
   }
 }
 
@@ -60,12 +59,14 @@ function canonicalShape(value: string | null): ArrowShape {
  *  per-end ArrowEndsSpec (default md/md dimensions). */
 export function fromLegacyArrowHead(head: ArrowHead | undefined): ArrowEndsSpec {
   const none: ArrowSpec = { shape: "none", width: "md", length: "md" };
-  const tri: ArrowSpec  = { shape: "triangle", width: "md", length: "md" };
+  const tri: ArrowSpec = { shape: "triangle", width: "md", length: "md" };
   switch (head) {
-    case "none": return { start: none, end: none };
-    case "both": return { start: tri, end: tri };
-    case "end":
-    default:     return { start: none, end: tri };
+    case "none":
+      return { start: none, end: none };
+    case "both":
+      return { start: tri, end: tri };
+    default:
+      return { start: none, end: tri };
   }
 }
 
@@ -80,10 +81,7 @@ export function fromLegacyArrowHead(head: ArrowHead | undefined): ArrowEndsSpec 
  */
 export function applyArrowHead(el: SVGElement, head: ArrowHead): void;
 export function applyArrowHead(el: SVGElement, spec: ArrowEndsSpec): void;
-export function applyArrowHead(
-  el: SVGElement,
-  v: ArrowHead | ArrowEndsSpec,
-): void {
+export function applyArrowHead(el: SVGElement, v: ArrowHead | ArrowEndsSpec): void {
   const spec: ArrowEndsSpec = typeof v === "string" ? fromLegacyArrowHead(v) : v;
   writeArrowSpec(el, "start", spec.start);
   writeArrowSpec(el, "end", spec.end);
@@ -92,11 +90,7 @@ export function applyArrowHead(
   // migrated (Office paste fallback, `detectArrowHead`).
   const hasStart = spec.start.shape !== "none";
   const hasEnd = spec.end.shape !== "none";
-  const legacy: ArrowHead = hasStart && hasEnd
-    ? "both"
-    : hasStart || hasEnd
-      ? "end"
-      : "none";
+  const legacy: ArrowHead = hasStart && hasEnd ? "both" : hasStart || hasEnd ? "end" : "none";
   el.setAttribute("data-arrow-head", legacy);
 
   refreshArrowPath(el);
@@ -124,8 +118,9 @@ export function detectArrowEnds(el: SVGElement): ArrowEndsSpec {
   }
   // Legacy: element has the 3-state `data-arrow-head` or plain marker
   // attributes.
-  const legacy = (el.getAttribute("data-arrow-head") as ArrowHead | null)
-    || (el.hasAttribute("marker-start") && el.hasAttribute("marker-end")
+  const legacy =
+    (el.getAttribute("data-arrow-head") as ArrowHead | null) ||
+    (el.hasAttribute("marker-start") && el.hasAttribute("marker-end")
       ? "both"
       : el.hasAttribute("marker-end") || el.hasAttribute("marker-start")
         ? "end"
@@ -172,9 +167,9 @@ export class ArrowTool extends ToolBase {
       },
     };
     if (
-      this.options.arrowHeadStart == null
-      && this.options.arrowHeadEnd == null
-      && this.options.arrowHead
+      this.options.arrowHeadStart == null &&
+      this.options.arrowHeadEnd == null &&
+      this.options.arrowHead
     ) {
       const legacy = fromLegacyArrowHead(this.options.arrowHead);
       spec.start = legacy.start;

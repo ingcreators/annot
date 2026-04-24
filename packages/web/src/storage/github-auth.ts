@@ -155,7 +155,8 @@ export async function listWritableRepos(
 ): Promise<GitHubRepoSummary[]> {
   const max = opts.maxRepos ?? 300;
   const out: GitHubRepoSummary[] = [];
-  let url: string | null = "/user/repos?per_page=100&sort=pushed&affiliation=owner,collaborator,organization_member";
+  let url: string | null =
+    "/user/repos?per_page=100&sort=pushed&affiliation=owner,collaborator,organization_member";
   while (url && out.length < max) {
     const { body, nextUrl } = await authedGetWithLink(url);
     for (const entry of body as any[]) {
@@ -176,9 +177,7 @@ export async function listWritableRepos(
 export async function searchRepos(q: string): Promise<GitHubRepoSummary[]> {
   const query = encodeURIComponent(q);
   const body = await authedGet(`/search/repositories?q=${query}&per_page=30`);
-  return (body.items ?? [])
-    .map(toRepoSummary)
-    .filter((r: GitHubRepoSummary) => r.canPush);
+  return (body.items ?? []).map(toRepoSummary).filter((r: GitHubRepoSummary) => r.canPush);
 }
 
 /** Look up a single repo by "owner/name". Used for direct-entry. */
@@ -190,11 +189,11 @@ export async function getRepo(owner: string, name: string): Promise<GitHubRepoSu
 export interface GitHubCommitSummary {
   sha: string;
   shortSha: string;
-  url: string;                 // https://github.com/<owner>/<repo>/commit/<sha>
+  url: string; // https://github.com/<owner>/<repo>/commit/<sha>
   authorName: string;
   authorAvatarUrl?: string;
-  date: string;                // ISO
-  messageHeadline: string;     // first line only
+  date: string; // ISO
+  messageHeadline: string; // first line only
 }
 
 /**
@@ -216,8 +215,9 @@ export async function getLastCommitForPath(
 ): Promise<GitHubCommitSummary | null> {
   const token = getAccessToken();
   if (!token) return null;
-  const url = `${GITHUB_API}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`
-    + `/commits?path=${encodeURIComponent(path)}&sha=${encodeURIComponent(branch)}&per_page=1`;
+  const url =
+    `${GITHUB_API}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}` +
+    `/commits?path=${encodeURIComponent(path)}&sha=${encodeURIComponent(branch)}&per_page=1`;
   try {
     const res = await fetch(url, {
       headers: {
@@ -234,14 +234,15 @@ export async function getLastCommitForPath(
     if (!sha) return null;
     const commit = entry.commit ?? {};
     const author = commit.author ?? {};
-    const userAuthor = entry.author ?? {};  // user object when the commit email matches a GitHub user
+    const userAuthor = entry.author ?? {}; // user object when the commit email matches a GitHub user
     const message = (commit.message as string | undefined) ?? "";
     const headline = message.split("\n", 1)[0] || "(no message)";
     return {
       sha,
       shortSha: sha.slice(0, 7),
-      url: entry.html_url
-        ?? `https://github.com/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/commit/${sha}`,
+      url:
+        entry.html_url ??
+        `https://github.com/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/commit/${sha}`,
       authorName: author.name || userAuthor.login || "Unknown",
       authorAvatarUrl: userAuthor.avatar_url,
       date: author.date || userAuthor.updated_at || "",
@@ -283,8 +284,9 @@ export async function getLastCommitForPath(
 export async function verifyWriteAccess(owner: string, name: string): Promise<boolean> {
   const token = getAccessToken();
   if (!token) return false;
-  const url = `${GITHUB_API}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`
-    + `/contents/${encodeURIComponent(".annot-perm-probe")}`;
+  const url =
+    `${GITHUB_API}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}` +
+    `/contents/${encodeURIComponent(".annot-perm-probe")}`;
   try {
     const res = await fetch(url, {
       method: "PUT",
@@ -336,14 +338,16 @@ export function loadRepoRef(): GitHubRepoRef | null {
   try {
     const v = JSON.parse(raw);
     if (
-      typeof v?.owner === "string"
-      && typeof v?.repo === "string"
-      && typeof v?.branch === "string"
-      && typeof v?.basePath === "string"
+      typeof v?.owner === "string" &&
+      typeof v?.repo === "string" &&
+      typeof v?.branch === "string" &&
+      typeof v?.basePath === "string"
     ) {
       return v;
     }
-  } catch { /* fall through */ }
+  } catch {
+    /* fall through */
+  }
   return null;
 }
 

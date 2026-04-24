@@ -9,15 +9,11 @@
  *   - Shift + click      → range select from anchor to clicked item
  *   - Click empty area   → clear selection
  */
-import type {
-  ImageRecord,
-  FolderRecord,
-  StorageProvider,
-} from "@ingcreators/annot-core/storage";
+import type { FolderRecord, ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
 import { getFilename } from "@ingcreators/annot-core/storage";
 import { setTooltip } from "@ingcreators/annot-core/utils";
-import { openContextMenu, type MenuItem } from "./context-menu.js";
-import { showPromptDialog, showConfirmDialog, showAlertDialog } from "../ui/dialog.js";
+import { showAlertDialog, showConfirmDialog, showPromptDialog } from "../ui/dialog.js";
+import { type MenuItem, openContextMenu } from "./context-menu.js";
 
 export interface Selection {
   images: ImageRecord[];
@@ -31,7 +27,7 @@ export class GalleryPage {
   #searchInput: HTMLInputElement | null = null;
   #images: ImageRecord[] = [];
   #folders: FolderRecord[] = [];
-  #currentFolderPath: string = "";
+  #currentFolderPath = "";
 
   #selectedImagePaths = new Set<string>();
   #selectedFolderPaths = new Set<string>();
@@ -45,9 +41,15 @@ export class GalleryPage {
   /** Fired whenever the folder tree structure changes (create / delete / move). */
   onFoldersChanged?: () => void | Promise<void>;
 
-  get currentFolderPath() { return this.#currentFolderPath; }
-  get totalSelectedCount() { return this.#selectedImagePaths.size + this.#selectedFolderPaths.size; }
-  get storage() { return this.#storage; }
+  get currentFolderPath() {
+    return this.#currentFolderPath;
+  }
+  get totalSelectedCount() {
+    return this.#selectedImagePaths.size + this.#selectedFolderPaths.size;
+  }
+  get storage() {
+    return this.#storage;
+  }
 
   /** Current selection as records. */
   getSelection(): Selection {
@@ -169,7 +171,14 @@ export class GalleryPage {
         this.#images = await this.#storage.listImages(this.#currentFolderPath);
         this.#folders = await this.#storage.listFolders(this.#currentFolderPath);
       }
-      console.log("[gallery] refresh: images:", this.#images.length, "folders:", this.#folders.length, "folderPath:", JSON.stringify(this.#currentFolderPath));
+      console.log(
+        "[gallery] refresh: images:",
+        this.#images.length,
+        "folders:",
+        this.#folders.length,
+        "folderPath:",
+        JSON.stringify(this.#currentFolderPath),
+      );
     } catch (e) {
       console.error("[gallery] refresh error:", e);
       this.#images = [];
@@ -178,8 +187,10 @@ export class GalleryPage {
     // Drop stale selections that no longer exist
     const imgPaths = new Set(this.#images.map((i) => i.path));
     const folderPaths = new Set(this.#folders.map((f) => f.path));
-    for (const p of Array.from(this.#selectedImagePaths)) if (!imgPaths.has(p)) this.#selectedImagePaths.delete(p);
-    for (const p of Array.from(this.#selectedFolderPaths)) if (!folderPaths.has(p)) this.#selectedFolderPaths.delete(p);
+    for (const p of Array.from(this.#selectedImagePaths))
+      if (!imgPaths.has(p)) this.#selectedImagePaths.delete(p);
+    for (const p of Array.from(this.#selectedFolderPaths))
+      if (!folderPaths.has(p)) this.#selectedFolderPaths.delete(p);
     this.#applyFilter();
     this.#fireSelectionChange();
   }
@@ -217,23 +228,33 @@ export class GalleryPage {
     const sel = this.getSelection();
     const count = sel.images.length + sel.folders.length;
     if (count === 0) return 0;
-    const label = count === 1
-      ? getFilename(sel.images[0]?.path || sel.folders[0]?.path || "") || "this item"
-      : `${count} items`;
+    const label =
+      count === 1
+        ? getFilename(sel.images[0]?.path || sel.folders[0]?.path || "") || "this item"
+        : `${count} items`;
     const ok = await showConfirmDialog({
       title: count === 1 ? `Delete "${label}"?` : `Delete ${label}?`,
-      message: sel.folders.length > 0
-        ? "Folders and their contents will be permanently removed."
-        : "This cannot be undone.",
+      message:
+        sel.folders.length > 0
+          ? "Folders and their contents will be permanently removed."
+          : "This cannot be undone.",
       okLabel: "Delete",
       danger: true,
     });
     if (!ok) return 0;
     for (const img of sel.images) {
-      try { await this.#storage.deleteImage(img.path); } catch (e) { console.error(e); }
+      try {
+        await this.#storage.deleteImage(img.path);
+      } catch (e) {
+        console.error(e);
+      }
     }
     for (const folder of sel.folders) {
-      try { await this.#storage.deleteFolder(folder.path); } catch (e) { console.error(e); }
+      try {
+        await this.#storage.deleteFolder(folder.path);
+      } catch (e) {
+        console.error(e);
+      }
     }
     this.clearSelection();
     await this.refresh();
@@ -285,9 +306,10 @@ export class GalleryPage {
     if (filteredItems === 0) {
       const empty = document.createElement("div");
       empty.className = "gallery-empty";
-      empty.textContent = this.#images.length === 0 && this.#folders.length === 0
-        ? "No images yet. Upload an image or capture with the extension."
-        : "No matches found.";
+      empty.textContent =
+        this.#images.length === 0 && this.#folders.length === 0
+          ? "No images yet. Upload an image or capture with the extension."
+          : "No matches found.";
       this.#grid.appendChild(empty);
       return;
     }
@@ -325,7 +347,10 @@ export class GalleryPage {
     card.className = "gallery-folder-card";
     card.dataset.folderPath = folder.path;
     card.setAttribute("role", "button");
-    card.setAttribute("aria-label", `Folder ${folder.name}. Enter to open, Space to toggle selection.`);
+    card.setAttribute(
+      "aria-label",
+      `Folder ${folder.name}. Enter to open, Space to toggle selection.`,
+    );
     card.tabIndex = 0;
     if (this.#selectedFolderPaths.has(folder.path)) {
       card.classList.add("selected");
@@ -372,7 +397,10 @@ export class GalleryPage {
     };
 
     card.addEventListener("click", (e) => this.#handleItemClick(e, "folder", folder.path));
-    card.addEventListener("dblclick", (e) => { e.stopPropagation(); open(); });
+    card.addEventListener("dblclick", (e) => {
+      e.stopPropagation();
+      open();
+    });
     card.addEventListener("contextmenu", (e) => {
       e.preventDefault();
       // If right-clicking on an unselected item, select just this one
@@ -651,7 +679,10 @@ export class GalleryPage {
   }
 
   /** Select all items between anchor and target (inclusive), across folder+image lists. */
-  #selectRange(anchor: { type: "image" | "folder"; path: string }, target: { type: "image" | "folder"; path: string }): void {
+  #selectRange(
+    anchor: { type: "image" | "folder"; path: string },
+    target: { type: "image" | "folder"; path: string },
+  ): void {
     // Build flat ordered list: folders first, then images (matches render order)
     const flat: { type: "image" | "folder"; path: string }[] = [
       ...this.#folders.map((f) => ({ type: "folder" as const, path: f.path })),
@@ -711,7 +742,9 @@ export class GalleryPage {
     try {
       const u = new URL(url);
       return u.hostname + (u.pathname === "/" ? "" : u.pathname.slice(0, 30));
-    } catch { return url.slice(0, 40); }
+    } catch {
+      return url.slice(0, 40);
+    }
   }
 
   #formatDate(iso: string): string {
@@ -719,6 +752,8 @@ export class GalleryPage {
     try {
       const d = new Date(iso);
       return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}`;
-    } catch { return ""; }
+    } catch {
+      return "";
+    }
   }
 }

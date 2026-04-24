@@ -27,14 +27,14 @@
  * existing serialization stays byte-identical for unrotated content.
  */
 
-import { rebuildCalloutTail } from "./text-utils.js";
 import {
-  readArrowEndpoints,
-  writeArrowEndpoints,
   readArrowControl,
-  writeArrowControl,
+  readArrowEndpoints,
   refreshArrowPath,
+  writeArrowControl,
+  writeArrowEndpoints,
 } from "./arrow-markers.js";
+import { rebuildCalloutTail } from "./text-utils.js";
 
 // ---- Line/arrow specialization ----------------------------------
 //
@@ -64,23 +64,23 @@ function isLineLike(el: Element): boolean {
 /** Read a line/arrow's endpoint coords (in its current coord frame —
  *  for a baked element, that's svg-root coords). */
 function lineEndpointsOf(el: SVGElement): {
-  x1: number; y1: number; x2: number; y2: number;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
 } {
   if (isArrowGroup(el)) return readArrowEndpoints(el);
   return {
-    x1: parseFloat(el.getAttribute("x1") || "0"),
-    y1: parseFloat(el.getAttribute("y1") || "0"),
-    x2: parseFloat(el.getAttribute("x2") || "0"),
-    y2: parseFloat(el.getAttribute("y2") || "0"),
+    x1: Number.parseFloat(el.getAttribute("x1") || "0"),
+    y1: Number.parseFloat(el.getAttribute("y1") || "0"),
+    x2: Number.parseFloat(el.getAttribute("x2") || "0"),
+    y2: Number.parseFloat(el.getAttribute("y2") || "0"),
   };
 }
 
 /** Write endpoint coords back to a line or arrow (rebuilds the arrow's
  *  stem + head paths automatically). */
-function setLineEndpoints(
-  el: SVGElement,
-  x1: number, y1: number, x2: number, y2: number,
-): void {
+function setLineEndpoints(el: SVGElement, x1: number, y1: number, x2: number, y2: number): void {
   if (isArrowGroup(el)) {
     writeArrowEndpoints(el, x1, y1, x2, y2);
     refreshArrowPath(el);
@@ -93,9 +93,14 @@ function setLineEndpoints(
 }
 
 function rotateAround(
-  px: number, py: number, cx: number, cy: number, rad: number,
+  px: number,
+  py: number,
+  cx: number,
+  cy: number,
+  rad: number,
 ): { x: number; y: number } {
-  const cos = Math.cos(rad), sin = Math.sin(rad);
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
   return {
     x: cx + (px - cx) * cos - (py - cy) * sin,
     y: cy + (px - cx) * sin + (py - cy) * cos,
@@ -105,9 +110,7 @@ function rotateAround(
 /** Compose the element's current transform state into a DOMMatrix.
  *  Shared by the endpoint+control-point transformation helpers so the
  *  math is identical everywhere. */
-function composeLineMatrix(
-  state: TransformState, midX: number, midY: number,
-): DOMMatrix {
+function composeLineMatrix(state: TransformState, midX: number, midY: number): DOMMatrix {
   const sx = state.flipH ? -1 : 1;
   const sy = state.flipV ? -1 : 1;
   const m = new DOMMatrix();
@@ -126,8 +129,12 @@ function composeLineMatrix(
  *  below. The control point is included so curved arrows survive the
  *  transform intact. */
 export function getEffectiveLineEndpoints(el: SVGElement): {
-  x1: number; y1: number; x2: number; y2: number;
-  cx: number | null; cy: number | null;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  cx: number | null;
+  cy: number | null;
 } {
   const ep = lineEndpointsOf(el);
   const control = isArrowGroup(el) ? readArrowControl(el) : null;
@@ -135,8 +142,7 @@ export function getEffectiveLineEndpoints(el: SVGElement): {
     return { ...ep, cx: control?.x ?? null, cy: control?.y ?? null };
   }
   const s = readTransformState(el);
-  const identity =
-    s.tx === 0 && s.ty === 0 && s.rotation === 0 && !s.flipH && !s.flipV;
+  const identity = s.tx === 0 && s.ty === 0 && s.rotation === 0 && !s.flipH && !s.flipV;
   if (identity) {
     return { ...ep, cx: control?.x ?? null, cy: control?.y ?? null };
   }
@@ -145,10 +151,12 @@ export function getEffectiveLineEndpoints(el: SVGElement): {
   const m = composeLineMatrix(s, midX, midY);
   const p1 = new DOMPoint(ep.x1, ep.y1).matrixTransform(m);
   const p2 = new DOMPoint(ep.x2, ep.y2).matrixTransform(m);
-  let cx: number | null = null, cy: number | null = null;
+  let cx: number | null = null;
+  let cy: number | null = null;
   if (control) {
     const pc = new DOMPoint(control.x, control.y).matrixTransform(m);
-    cx = pc.x; cy = pc.y;
+    cx = pc.x;
+    cy = pc.y;
   }
   return { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y, cx, cy };
 }
@@ -161,8 +169,7 @@ export function getEffectiveLineEndpoints(el: SVGElement): {
 export function bakeLineTransform(el: SVGElement): void {
   if (!isLineLike(el)) return;
   const s = readTransformState(el);
-  const identity =
-    s.tx === 0 && s.ty === 0 && s.rotation === 0 && !s.flipH && !s.flipV;
+  const identity = s.tx === 0 && s.ty === 0 && s.rotation === 0 && !s.flipH && !s.flipV;
   if (identity) return;
   const { x1, y1, x2, y2, cx, cy } = getEffectiveLineEndpoints(el);
   setLineEndpoints(el, x1, y1, x2, y2);
@@ -185,7 +192,7 @@ export function rotateLineEndpointsBy(el: SVGElement, deg: number): void {
   const ep = lineEndpointsOf(el);
   const midX = (ep.x1 + ep.x2) / 2;
   const midY = (ep.y1 + ep.y2) / 2;
-  const rad = deg * Math.PI / 180;
+  const rad = (deg * Math.PI) / 180;
   const p1 = rotateAround(ep.x1, ep.y1, midX, midY, rad);
   const p2 = rotateAround(ep.x2, ep.y2, midX, midY, rad);
   setLineEndpoints(el, p1.x, p1.y, p2.x, p2.y);
@@ -214,9 +221,10 @@ export function flipLineEndpoints(el: SVGElement, axis: "h" | "v"): void {
   if (isArrowGroup(el)) {
     const control = readArrowControl(el);
     if (control) {
-      const fc = axis === "h"
-        ? { x: 2 * midX - control.x, y: control.y }
-        : { x: control.x, y: 2 * midY - control.y };
+      const fc =
+        axis === "h"
+          ? { x: 2 * midX - control.x, y: control.y }
+          : { x: control.x, y: 2 * midY - control.y };
       writeArrowControl(el, fc);
       refreshArrowPath(el);
     }
@@ -228,7 +236,7 @@ export { isLineLike };
 export interface TransformState {
   tx: number;
   ty: number;
-  rotation: number;  // degrees, CW positive
+  rotation: number; // degrees, CW positive
   flipH: boolean;
   flipV: boolean;
 }
@@ -240,9 +248,13 @@ export interface TransformState {
 export function usesGeometryPosition(el: Element): boolean {
   const tag = el.tagName;
   return (
-    tag === "rect" || tag === "ellipse" || tag === "circle"
-    || tag === "image" || tag === "text" || tag === "line"
-    || tag === "foreignObject"
+    tag === "rect" ||
+    tag === "ellipse" ||
+    tag === "circle" ||
+    tag === "image" ||
+    tag === "text" ||
+    tag === "line" ||
+    tag === "foreignObject"
   );
 }
 
@@ -250,7 +262,7 @@ export function usesGeometryPosition(el: Element): boolean {
  *  values found on `<g>` / `<path>` into data-tx/data-ty so subsequent
  *  reads/writes use the unified path.  */
 export function readTransformState(el: SVGElement): TransformState {
-  const rotation = parseFloat(el.getAttribute("data-rot") || "0") || 0;
+  const rotation = Number.parseFloat(el.getAttribute("data-rot") || "0") || 0;
   const flipH = el.getAttribute("data-flip-h") === "1";
   const flipV = el.getAttribute("data-flip-v") === "1";
 
@@ -260,15 +272,15 @@ export function readTransformState(el: SVGElement): TransformState {
     const dtx = el.getAttribute("data-tx");
     const dty = el.getAttribute("data-ty");
     if (dtx != null && dty != null) {
-      tx = parseFloat(dtx) || 0;
-      ty = parseFloat(dty) || 0;
+      tx = Number.parseFloat(dtx) || 0;
+      ty = Number.parseFloat(dty) || 0;
     } else {
       // Legacy: parse the existing transform's translate component.
       const t = el.getAttribute("transform") || "";
       const m = t.match(/translate\(\s*([\d.-]+)\s*,?\s*([\d.-]+)\s*\)/);
       if (m) {
-        tx = parseFloat(m[1]);
-        ty = parseFloat(m[2]);
+        tx = Number.parseFloat(m[1]);
+        ty = Number.parseFloat(m[2]);
       }
       // Persist the migrated values so the next read is fast.
       el.setAttribute("data-tx", String(tx));
@@ -299,8 +311,7 @@ function localCenter(el: SVGElement): { cx: number; cy: number } | null {
  *  change. */
 export function applyTransformState(el: SVGElement, state?: TransformState): void {
   const s = state ?? readTransformState(el);
-  const isIdentity =
-    s.tx === 0 && s.ty === 0 && s.rotation === 0 && !s.flipH && !s.flipV;
+  const isIdentity = s.tx === 0 && s.ty === 0 && s.rotation === 0 && !s.flipH && !s.flipV;
 
   if (isIdentity) {
     el.removeAttribute("transform");
@@ -343,10 +354,7 @@ function fmt(n: number): string {
 /** Persist a (possibly partial) state update and re-apply the
  *  composite transform. Callout tails get rebuilt automatically since
  *  rotation/flip pivots can change as the bbox changes. */
-export function writeTransformState(
-  el: SVGElement,
-  patch: Partial<TransformState>,
-): void {
+export function writeTransformState(el: SVGElement, patch: Partial<TransformState>): void {
   const cur = readTransformState(el);
   const next: TransformState = { ...cur, ...patch };
   if (next.rotation !== 0) el.setAttribute("data-rot", String(next.rotation));
@@ -363,9 +371,9 @@ export function writeTransformState(
   // Tail base anchors at a closest-edge midpoint, which depends on the
   // unrotated bg rect. Recompute defensively so visual stays consistent.
   if (
-    el.tagName === "g"
-    && el.getAttribute("data-type") === "textbox"
-    && el.getAttribute("data-text-variant") === "callout"
+    el.tagName === "g" &&
+    el.getAttribute("data-type") === "textbox" &&
+    el.getAttribute("data-text-variant") === "callout"
   ) {
     rebuildCalloutTail(el);
   }

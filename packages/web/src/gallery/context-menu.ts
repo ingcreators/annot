@@ -40,12 +40,16 @@ export function openContextMenu(opts: OpenOptions): void {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.setAttribute("role", "menuitem");
-    btn.className = "context-menu-item" + (item.danger ? " context-menu-item-danger" : "");
+    btn.className = `context-menu-item${item.danger ? " context-menu-item-danger" : ""}`;
     btn.innerHTML = `<span class="material-symbols-outlined context-menu-icon" aria-hidden="true">${item.icon}</span><span>${item.label}</span>`;
     btn.addEventListener("click", async (e) => {
       e.stopPropagation();
       closeActive();
-      try { await item.action(); } catch (err) { console.error("[context-menu]", err); }
+      try {
+        await item.action();
+      } catch (err) {
+        console.error("[context-menu]", err);
+      }
     });
     menu.appendChild(btn);
   }
@@ -76,9 +80,8 @@ export function openContextMenu(opts: OpenOptions): void {
       e.preventDefault();
       const items = Array.from(menu.querySelectorAll<HTMLElement>(".context-menu-item"));
       const idx = items.findIndex((el) => el === document.activeElement);
-      const nextIdx = e.key === "ArrowDown"
-        ? (idx + 1) % items.length
-        : (idx - 1 + items.length) % items.length;
+      const nextIdx =
+        e.key === "ArrowDown" ? (idx + 1) % items.length : (idx - 1 + items.length) % items.length;
       items[nextIdx]?.focus();
     }
   };

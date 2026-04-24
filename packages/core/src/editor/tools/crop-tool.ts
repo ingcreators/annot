@@ -19,7 +19,8 @@ export class CropTool extends ToolBase {
     this.#confirmHint.setAttribute("fill", "#00d4ff");
     this.#confirmHint.setAttribute("font-size", "16");
     this.#confirmHint.setAttribute("font-family", "sans-serif");
-    this.#confirmHint.textContent = "Draw crop area, then press Enter to confirm or Escape to cancel";
+    this.#confirmHint.textContent =
+      "Draw crop area, then press Enter to confirm or Escape to cancel";
     this.canvas.uiOverlay.appendChild(this.#confirmHint);
   }
 
@@ -111,10 +112,10 @@ export class CropTool extends ToolBase {
   #applyCrop(): void {
     if (!this.#rect) return;
 
-    const x = parseFloat(this.#rect.getAttribute("x")!);
-    const y = parseFloat(this.#rect.getAttribute("y")!);
-    const w = parseFloat(this.#rect.getAttribute("width")!);
-    const h = parseFloat(this.#rect.getAttribute("height")!);
+    const x = Number.parseFloat(this.#rect.getAttribute("x")!);
+    const y = Number.parseFloat(this.#rect.getAttribute("y")!);
+    const w = Number.parseFloat(this.#rect.getAttribute("width")!);
+    const h = Number.parseFloat(this.#rect.getAttribute("height")!);
 
     if (w < 10 || h < 10) {
       this.#cleanup();

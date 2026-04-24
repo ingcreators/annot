@@ -1,3 +1,10 @@
+import { REDACT_SOLID_COLOR } from "../../utils/constants.js";
+import {
+  type RedactRect,
+  renderBlurRedact,
+  renderMosaicRedact,
+  renderSolidRedact,
+} from "../redact-utils.js";
 /**
  * RedactTool — unified Mosaic / Solid / Blur redaction tool.
  *
@@ -13,13 +20,6 @@
  */
 import { ToolBase } from "./tool-base.js";
 import type { RedactStyle } from "./tool-base.js";
-import {
-  renderSolidRedact,
-  renderMosaicRedact,
-  renderBlurRedact,
-  type RedactRect,
-} from "../redact-utils.js";
-import { REDACT_SOLID_COLOR } from "../../utils/constants.js";
 
 export class RedactTool extends ToolBase {
   readonly name = "redact";
@@ -65,10 +65,10 @@ export class RedactTool extends ToolBase {
     this.#drawing = false;
 
     const rect: RedactRect = {
-      x: Math.round(parseFloat(this.#marquee.getAttribute("x")!)),
-      y: Math.round(parseFloat(this.#marquee.getAttribute("y")!)),
-      width: Math.round(parseFloat(this.#marquee.getAttribute("width")!)),
-      height: Math.round(parseFloat(this.#marquee.getAttribute("height")!)),
+      x: Math.round(Number.parseFloat(this.#marquee.getAttribute("x")!)),
+      y: Math.round(Number.parseFloat(this.#marquee.getAttribute("y")!)),
+      width: Math.round(Number.parseFloat(this.#marquee.getAttribute("width")!)),
+      height: Math.round(Number.parseFloat(this.#marquee.getAttribute("height")!)),
     };
     this.#marquee.remove();
     this.#marquee = null;
@@ -98,9 +98,10 @@ export class RedactTool extends ToolBase {
     if (style === "solid") {
       // Allow the user's fillColor preference to drive the bar color;
       // fall back to the constant if no explicit color was set.
-      const color = this.options.fillColor && this.options.fillColor !== "none"
-        ? this.options.fillColor
-        : REDACT_SOLID_COLOR;
+      const color =
+        this.options.fillColor && this.options.fillColor !== "none"
+          ? this.options.fillColor
+          : REDACT_SOLID_COLOR;
       return renderSolidRedact(rect, color);
     }
     if (style === "blur") {

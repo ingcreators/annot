@@ -47,7 +47,8 @@ export function showIntervalCaptureDialog(
 
     const desc = document.createElement("div");
     desc.className = "capture-dialog-desc";
-    desc.textContent = "You'll be asked to pick a screen/window once. Frames will be captured at the configured interval.";
+    desc.textContent =
+      "You'll be asked to pick a screen/window once. Frames will be captured at the configured interval.";
     dialog.appendChild(desc);
 
     const mkField = (labelText: string, value: number, min: number, max: number) => {
@@ -68,7 +69,12 @@ export function showIntervalCaptureDialog(
       return { row, input };
     };
 
-    const { row: intervalRow, input: intervalInput } = mkField("Interval (seconds)", cfg.intervalSec, 1, 3600);
+    const { row: intervalRow, input: intervalInput } = mkField(
+      "Interval (seconds)",
+      cfg.intervalSec,
+      1,
+      3600,
+    );
     const { row: countRow, input: countInput } = mkField("Frame count", cfg.count, 1, 1000);
     dialog.appendChild(intervalRow);
     dialog.appendChild(countRow);
@@ -111,10 +117,15 @@ export function showIntervalCaptureDialog(
     okBtn.className = "capture-dialog-btn capture-dialog-btn-primary";
     okBtn.textContent = "Start";
     okBtn.addEventListener("click", () => {
-      const intervalSec = parseInt(intervalInput.value, 10);
-      const count = parseInt(countInput.value, 10);
+      const intervalSec = Number.parseInt(intervalInput.value, 10);
+      const count = Number.parseInt(countInput.value, 10);
       const cursor = cursorSelect.value as CursorMode;
-      if (!isFinite(intervalSec) || intervalSec <= 0 || !isFinite(count) || count <= 0) {
+      if (
+        !Number.isFinite(intervalSec) ||
+        intervalSec <= 0 ||
+        !Number.isFinite(count) ||
+        count <= 0
+      ) {
         intervalInput.focus();
         return;
       }
@@ -164,7 +175,10 @@ export interface ProgressToastHandle {
   setOnCancel(fn: () => void): void;
 }
 
-export function showIntervalCaptureProgress(total: number, onCancel?: () => void): ProgressToastHandle {
+export function showIntervalCaptureProgress(
+  total: number,
+  onCancel?: () => void,
+): ProgressToastHandle {
   const toast = document.createElement("div");
   toast.className = "capture-progress-toast";
 

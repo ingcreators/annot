@@ -40,6 +40,10 @@ export class History {
     this.onStateChange?.();
   }
 
-  get canUndo(): boolean { return this.#undoStack.length > 1; }
-  get canRedo(): boolean { return this.#redoStack.length > 0; }
+  get canUndo(): boolean {
+    return this.#undoStack.length > 1;
+  }
+  get canRedo(): boolean {
+    return this.#redoStack.length > 0;
+  }
 }

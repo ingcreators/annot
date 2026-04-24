@@ -35,9 +35,12 @@
  *     the line should actually end.
  */
 
-import type { ArrowShape, ArrowDim } from "./tools/tool-base.js";
+import type { ArrowDim, ArrowShape } from "./tools/tool-base.js";
 
-export interface Point { x: number; y: number; }
+export interface Point {
+  x: number;
+  y: number;
+}
 
 export interface ArrowSpec {
   shape: ArrowShape;
@@ -56,7 +59,9 @@ export interface ArrowSpec {
  */
 class SvgPathCanvas {
   #d = "";
-  begin(): void { /* no-op — path commands don't need a separate begin */ }
+  begin(): void {
+    /* no-op — path commands don't need a separate begin */
+  }
   moveTo(x: number, y: number): void {
     this.#d += `M ${fmt(x)} ${fmt(y)} `;
   }
@@ -66,7 +71,9 @@ class SvgPathCanvas {
   quadTo(cx: number, cy: number, x: number, y: number): void {
     this.#d += `Q ${fmt(cx)} ${fmt(cy)} ${fmt(x)} ${fmt(y)} `;
   }
-  close(): void { this.#d += "Z "; }
+  close(): void {
+    this.#d += "Z ";
+  }
   /** maxGraph emits `canvas.ellipse(x, y, w, h)` for the oval
    *  marker (box top-left + box dimensions). We render it as two
    *  half-arc commands — SVG A commands can't draw a full ellipse
@@ -76,16 +83,25 @@ class SvgPathCanvas {
     const ry = h / 2;
     const cx = x + rx;
     const cy = y + ry;
-    this.#d += `M ${fmt(cx - rx)} ${fmt(cy)} `
-      + `A ${fmt(rx)} ${fmt(ry)} 0 1 0 ${fmt(cx + rx)} ${fmt(cy)} `
-      + `A ${fmt(rx)} ${fmt(ry)} 0 1 0 ${fmt(cx - rx)} ${fmt(cy)} Z `;
+    this.#d +=
+      `M ${fmt(cx - rx)} ${fmt(cy)} ` +
+      `A ${fmt(rx)} ${fmt(ry)} 0 1 0 ${fmt(cx + rx)} ${fmt(cy)} ` +
+      `A ${fmt(rx)} ${fmt(ry)} 0 1 0 ${fmt(cx - rx)} ${fmt(cy)} Z `;
   }
-  stroke(): void { /* stroke / fill toggles are meaningless for an
-    offline path string; the final <path> carries stroke + fill attrs. */ }
-  fillAndStroke(): void { /* see stroke() */ }
+  stroke(): void {
+    /* stroke / fill toggles are meaningless for an
+    offline path string; the final <path> carries stroke + fill attrs. */
+  }
+  fillAndStroke(): void {
+    /* see stroke() */
+  }
 
-  get d(): string { return this.#d.trim(); }
-  clear(): void { this.#d = ""; }
+  get d(): string {
+    return this.#d.trim();
+  }
+  clear(): void {
+    this.#d = "";
+  }
 }
 
 function fmt(n: number): string {
@@ -128,17 +144,11 @@ function drawClassicLike(
   pe.y += -uY * f - endOffsetY;
 
   canvas.moveTo(pt.x, pt.y);
-  canvas.lineTo(
-    pt.x - uX - uY / widthFactor,
-    pt.y - uY + uX / widthFactor,
-  );
+  canvas.lineTo(pt.x - uX - uY / widthFactor, pt.y - uY + uX / widthFactor);
   if (classic) {
     canvas.lineTo(pt.x - (uX * 3) / 4, pt.y - (uY * 3) / 4);
   }
-  canvas.lineTo(
-    pt.x + uY / widthFactor - uX,
-    pt.y - uY - uX / widthFactor,
-  );
+  canvas.lineTo(pt.x + uY / widthFactor - uX, pt.y - uY - uX / widthFactor);
   canvas.close();
 }
 
@@ -165,15 +175,9 @@ function drawOpenArrow(
   pe.x += -endOffsetX * 2;
   pe.y += -endOffsetY * 2;
 
-  canvas.moveTo(
-    pt.x - uX - uY / widthFactor,
-    pt.y - uY + uX / widthFactor,
-  );
+  canvas.moveTo(pt.x - uX - uY / widthFactor, pt.y - uY + uX / widthFactor);
   canvas.lineTo(pt.x, pt.y);
-  canvas.lineTo(
-    pt.x + uY / widthFactor - uX,
-    pt.y - uY - uX / widthFactor,
-  );
+  canvas.lineTo(pt.x + uY / widthFactor - uX, pt.y - uY - uX / widthFactor);
 }
 
 /**
@@ -189,7 +193,7 @@ function drawDiamond(
   sw: number,
 ): void {
   // 0.7071 = 1/(2·sin(45°)); 0.9862 for the thin diamond's 45°/81° tip.
-  const swFactor = thin ? 0.9862 : 0.7071;
+  const swFactor = thin ? 0.9862 : Math.SQRT1_2;
   const endOffsetX = unitX * sw * swFactor;
   const endOffsetY = unitY * sw * swFactor;
 
@@ -302,12 +306,9 @@ export function renderArrowHead(
   // Open chevrons pick from their own larger / wider tables so they
   // visually match PowerPoint's arrow preset (which is drawn about
   // 2× the size of the filled triangle at the same w/len).
-  const size = spec.shape === "arrow"
-    ? ARROW_LENGTH_PX[spec.length]
-    : LENGTH_PX[spec.length];
-  const widthFactor = spec.shape === "arrow"
-    ? ARROW_WIDTH_FACTOR[spec.width]
-    : WIDTH_FACTOR[spec.width];
+  const size = spec.shape === "arrow" ? ARROW_LENGTH_PX[spec.length] : LENGTH_PX[spec.length];
+  const widthFactor =
+    spec.shape === "arrow" ? ARROW_WIDTH_FACTOR[spec.width] : WIDTH_FACTOR[spec.width];
   switch (spec.shape) {
     case "triangle":
       drawClassicLike(canvas, widthFactor, false, pe, unitX, unitY, size, strokeWidth);
@@ -351,8 +352,10 @@ export function renderArrowHead(
  * the interiors.
  */
 export function computeArrowParts(
-  x1: number, y1: number,
-  x2: number, y2: number,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
   specStart: ArrowSpec,
   specEnd: ArrowSpec,
   strokeWidth: number,
@@ -380,8 +383,10 @@ export function computeArrowParts(
   const straightUx = straightDx / straightLen;
   const straightUy = straightDy / straightLen;
 
-  let startUx = straightUx, startUy = straightUy;
-  let endUx = straightUx, endUy = straightUy;
+  let startUx = straightUx;
+  let startUy = straightUy;
+  let endUx = straightUx;
+  let endUy = straightUy;
   if (control) {
     const sdx = control.x - x1;
     const sdy = control.y - y1;
@@ -404,15 +409,16 @@ export function computeArrowParts(
 
   const endFilled = isShapeFilled(specEnd.shape);
   const startFilled = isShapeFilled(specStart.shape);
-  renderArrowHead(
-    endFilled ? filledCanvas : openCanvas,
-    specEnd, peEnd, endUx, endUy, strokeWidth,
-  );
+  renderArrowHead(endFilled ? filledCanvas : openCanvas, specEnd, peEnd, endUx, endUy, strokeWidth);
   // For the start end, unit vector points OUT of the line (reverse of
   // forward direction at start).
   renderArrowHead(
     startFilled ? filledCanvas : openCanvas,
-    specStart, peStart, -startUx, -startUy, strokeWidth,
+    specStart,
+    peStart,
+    -startUx,
+    -startUy,
+    strokeWidth,
   );
 
   const stemCanvas = new SvgPathCanvas();
@@ -442,29 +448,26 @@ export function computeArrowParts(
  *  predicate so computeArrowParts can route head data to the correct
  *  canvas without a dry-run render. */
 function isShapeFilled(shape: ArrowShape): boolean {
-  return shape === "triangle" || shape === "stealth"
-    || shape === "diamond" || shape === "oval";
+  return shape === "triangle" || shape === "stealth" || shape === "diamond" || shape === "oval";
 }
 
 /** Read the per-end arrow spec off an existing arrow <path> element.
  *  Mirrors the data-* attribute contract applyArrowPath writes. */
 export function detectArrowSpec(el: SVGElement, end: "start" | "end"): ArrowSpec {
   const shape = (el.getAttribute(`data-arrow-${end}-shape`) as ArrowShape | null) || "none";
-  const width = (el.getAttribute(`data-arrow-${end}-width`) as ArrowDim | null)
-    || (el.getAttribute(`data-arrow-${end}-size`) as ArrowDim | null)
-    || "md";
-  const length = (el.getAttribute(`data-arrow-${end}-length`) as ArrowDim | null)
-    || (el.getAttribute(`data-arrow-${end}-size`) as ArrowDim | null)
-    || "md";
+  const width =
+    (el.getAttribute(`data-arrow-${end}-width`) as ArrowDim | null) ||
+    (el.getAttribute(`data-arrow-${end}-size`) as ArrowDim | null) ||
+    "md";
+  const length =
+    (el.getAttribute(`data-arrow-${end}-length`) as ArrowDim | null) ||
+    (el.getAttribute(`data-arrow-${end}-size`) as ArrowDim | null) ||
+    "md";
   return { shape, width, length };
 }
 
 /** Write the arrow spec back onto an element. */
-export function writeArrowSpec(
-  el: SVGElement,
-  end: "start" | "end",
-  spec: ArrowSpec,
-): void {
+export function writeArrowSpec(el: SVGElement, end: "start" | "end", spec: ArrowSpec): void {
   el.setAttribute(`data-arrow-${end}-shape`, spec.shape);
   el.setAttribute(`data-arrow-${end}-width`, spec.width);
   el.setAttribute(`data-arrow-${end}-length`, spec.length);
@@ -477,20 +480,25 @@ export function writeArrowSpec(
  *  x1/y1/x2/y2 values are stored as data attrs (the `d` string is
  *  derived from them). */
 export function readArrowEndpoints(el: SVGElement): {
-  x1: number; y1: number; x2: number; y2: number;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
 } {
   return {
-    x1: parseFloat(el.getAttribute("data-x1") || "0"),
-    y1: parseFloat(el.getAttribute("data-y1") || "0"),
-    x2: parseFloat(el.getAttribute("data-x2") || "0"),
-    y2: parseFloat(el.getAttribute("data-y2") || "0"),
+    x1: Number.parseFloat(el.getAttribute("data-x1") || "0"),
+    y1: Number.parseFloat(el.getAttribute("data-y1") || "0"),
+    x2: Number.parseFloat(el.getAttribute("data-x2") || "0"),
+    y2: Number.parseFloat(el.getAttribute("data-y2") || "0"),
   };
 }
 
 export function writeArrowEndpoints(
   el: SVGElement,
-  x1: number, y1: number,
-  x2: number, y2: number,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
 ): void {
   el.setAttribute("data-x1", String(x1));
   el.setAttribute("data-y1", String(y1));
@@ -504,9 +512,9 @@ export function readArrowControl(el: SVGElement): Point | null {
   const cxRaw = el.getAttribute("data-cx");
   const cyRaw = el.getAttribute("data-cy");
   if (cxRaw == null || cyRaw == null) return null;
-  const cx = parseFloat(cxRaw);
-  const cy = parseFloat(cyRaw);
-  if (!isFinite(cx) || !isFinite(cy)) return null;
+  const cx = Number.parseFloat(cxRaw);
+  const cy = Number.parseFloat(cyRaw);
+  if (!Number.isFinite(cx) || !Number.isFinite(cy)) return null;
   return { x: cx, y: cy };
 }
 
@@ -548,9 +556,16 @@ export function refreshArrowPath(el: SVGElement): void {
   const control = readArrowControl(el);
   const specStart = detectArrowSpec(el, "start");
   const specEnd = detectArrowSpec(el, "end");
-  const sw = parseFloat(el.getAttribute("stroke-width") || "3") || 3;
+  const sw = Number.parseFloat(el.getAttribute("stroke-width") || "3") || 3;
   const { stemD, headFilledD, headOpenD } = computeArrowParts(
-    x1, y1, x2, y2, specStart, specEnd, sw, control,
+    x1,
+    y1,
+    x2,
+    y2,
+    specStart,
+    specEnd,
+    sw,
+    control,
   );
 
   // Drop any legacy single-head path that older DOM may carry.

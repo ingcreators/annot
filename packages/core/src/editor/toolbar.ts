@@ -1,47 +1,51 @@
-import type { CanvasManager } from "./canvas-manager.js";
-import type { History } from "./history.js";
-import type { SelectionManager } from "./selection.js";
-import type {
-  ToolBase, ToolOptions, MarkerShape, LineCap,
-} from "./tools/tool-base.js";
-import { createColorPalette } from "./color-palette.js";
-import { createThemeToggle } from "./theme-toggle.js";
+import {
+  DEFAULT_FILL_COLOR,
+  DEFAULT_FONT_SIZE,
+  DEFAULT_STROKE_COLOR,
+  DEFAULT_STROKE_WIDTH,
+} from "../utils/constants.js";
 import { computeDasharray } from "../utils/dash-utils.js";
+import {
+  type AnnotationShape,
+  type ToolPreset,
+  copyAsOffice,
+  isTauri,
+  loadToolPresets,
+  saveToolPresets,
+} from "../utils/tauri-bridge.js";
 import { setTooltip } from "../utils/tooltip.js";
 import { refreshArrowPath } from "./arrow-markers.js";
+import { type CanvasMenuItem, openCanvasContextMenu } from "./canvas-context-menu.js";
+import type { CanvasManager } from "./canvas-manager.js";
 import { createCustomSelect } from "./custom-select.js";
 import {
-  openCanvasContextMenu,
-  type CanvasMenuItem,
-} from "./canvas-context-menu.js";
-import { toggleFlip } from "./transform-utils.js";
+  copyAsImage,
+  downloadAsImage,
+  getPngDataUrl,
+  saveAsEditableImage,
+  saveToFile,
+} from "./export.js";
+import type { History } from "./history.js";
+import { exportPptx } from "./pptx-export.js";
 import {
+  createArrowEndsRows,
+  createColorPullButton,
+  createNumberInput,
   createPropertyRow,
   createPropertySection,
-  createNumberInput,
-  createColorPullButton,
-  createArrowEndsRows,
 } from "./property-controls.js";
-import type { ArrowShape, ArrowDim } from "./tools/tool-base.js";
+import type { SelectionManager } from "./selection.js";
+import { createThemeToggle } from "./theme-toggle.js";
 import { ArrowTool } from "./tools/arrow-tool.js";
-import { ShapeTool } from "./tools/shape-tool.js";
-import { TextTool } from "./tools/text-tool.js";
+import { CropTool } from "./tools/crop-tool.js";
 import { FreehandTool, isFreehandGroup } from "./tools/freehand-tool.js";
 import { MarkerTool } from "./tools/marker-tool.js";
 import { RedactTool } from "./tools/redact-tool.js";
-import { CropTool } from "./tools/crop-tool.js";
-import { saveToFile, copyAsImage, getPngDataUrl, saveAsEditableImage, downloadAsImage } from "./export.js";
-import { exportPptx } from "./pptx-export.js";
-import {
-  isTauri, copyAsOffice, type AnnotationShape,
-  loadToolPresets, saveToolPresets, type ToolPreset, type ToolPresets,
-} from "../utils/tauri-bridge.js";
-import {
-  DEFAULT_STROKE_COLOR,
-  DEFAULT_FILL_COLOR,
-  DEFAULT_STROKE_WIDTH,
-  DEFAULT_FONT_SIZE,
-} from "../utils/constants.js";
+import { ShapeTool } from "./tools/shape-tool.js";
+import { TextTool } from "./tools/text-tool.js";
+import type { LineCap, MarkerShape, ToolBase, ToolOptions } from "./tools/tool-base.js";
+import type { ArrowDim, ArrowShape } from "./tools/tool-base.js";
+import { toggleFlip } from "./transform-utils.js";
 
 // Minimal ambient declaration for the Chrome extension API surface
 // referenced at runtime below (all call sites are gated by
@@ -201,8 +205,7 @@ export const HIGHLIGHT_COLORS: ReadonlyArray<{ value: string; label: string }> =
  *  (e.g. legacy documents with custom highlightColor values). */
 export function highlightColorLabel(fill: string | null | undefined): string {
   const lc = (fill || "").toLowerCase();
-  return HIGHLIGHT_COLORS.find((c) => c.value === lc)?.label
-    ?? (fill || "");
+  return HIGHLIGHT_COLORS.find((c) => c.value === lc)?.label ?? (fill || "");
 }
 
 /** Default highlight color — first palette entry. Used when no preset
@@ -214,34 +217,44 @@ const TOOL_VARIANTS: Record<string, ToolVariantGroup> = {
     field: "shapeType",
     fallback: "rect",
     variants: [
-      { value: "rect",    icon: "rectangle",   label: "Rectangle",         svg: SHAPE_ICON_SVG.rect    },
-      { value: "rounded", icon: "crop_square", label: "Rounded rectangle", svg: SHAPE_ICON_SVG.rounded },
-      { value: "ellipse", icon: "circle",      label: "Ellipse",           svg: SHAPE_ICON_SVG.ellipse },
+      { value: "rect", icon: "rectangle", label: "Rectangle", svg: SHAPE_ICON_SVG.rect },
+      {
+        value: "rounded",
+        icon: "crop_square",
+        label: "Rounded rectangle",
+        svg: SHAPE_ICON_SVG.rounded,
+      },
+      { value: "ellipse", icon: "circle", label: "Ellipse", svg: SHAPE_ICON_SVG.ellipse },
     ],
   },
   arrow: {
     field: "arrowHead",
     fallback: "end",
     variants: [
-      { value: "none", icon: "horizontal_rule", label: "Line (no arrow)", svg: ARROW_ICON_SVG.none },
-      { value: "end",  icon: "north_east",      label: "Arrow",           svg: ARROW_ICON_SVG.end  },
-      { value: "both", icon: "sync_alt",        label: "Double arrow",    svg: ARROW_ICON_SVG.both },
+      {
+        value: "none",
+        icon: "horizontal_rule",
+        label: "Line (no arrow)",
+        svg: ARROW_ICON_SVG.none,
+      },
+      { value: "end", icon: "north_east", label: "Arrow", svg: ARROW_ICON_SVG.end },
+      { value: "both", icon: "sync_alt", label: "Double arrow", svg: ARROW_ICON_SVG.both },
     ],
   },
   text: {
     field: "textVariant",
     fallback: "sticky",
     variants: [
-      { value: "plain",   icon: "text_fields",   label: "Plain text" },
-      { value: "sticky",  icon: "sticky_note_2", label: "Sticky note" },
-      { value: "callout", icon: "chat_bubble",   label: "Callout" },
+      { value: "plain", icon: "text_fields", label: "Plain text" },
+      { value: "sticky", icon: "sticky_note_2", label: "Sticky note" },
+      { value: "callout", icon: "chat_bubble", label: "Callout" },
     ],
   },
   freehand: {
     field: "drawStyle",
     fallback: "pen",
     variants: [
-      { value: "pen",         icon: "edit",            label: "Pen" },
+      { value: "pen", icon: "edit", label: "Pen" },
       { value: "highlighter", icon: "ink_highlighter", label: "Highlighter" },
     ],
   },
@@ -249,9 +262,9 @@ const TOOL_VARIANTS: Record<string, ToolVariantGroup> = {
     field: "redactStyle",
     fallback: "mosaic",
     variants: [
-      { value: "mosaic", icon: "grid_view",  label: "Mosaic (pixelate)" },
-      { value: "solid",  icon: "check_box",  label: "Solid bar" },
-      { value: "blur",   icon: "blur_on",    label: "Blur" },
+      { value: "mosaic", icon: "grid_view", label: "Mosaic (pixelate)" },
+      { value: "solid", icon: "check_box", label: "Solid bar" },
+      { value: "blur", icon: "blur_on", label: "Blur" },
     ],
   },
   marker: {
@@ -263,9 +276,14 @@ const TOOL_VARIANTS: Record<string, ToolVariantGroup> = {
       // Material-Symbols ligatures (outline-only square / circle)
       // would under-represent the filled + numbered character of a
       // counter marker.
-      { value: "circle",  icon: "circle",      label: "Circle",         svg: COUNTER_ICON_SVG.circle  },
-      { value: "rect",    icon: "square",      label: "Square",         svg: COUNTER_ICON_SVG.rect    },
-      { value: "rounded", icon: "crop_square", label: "Rounded square", svg: COUNTER_ICON_SVG.rounded },
+      { value: "circle", icon: "circle", label: "Circle", svg: COUNTER_ICON_SVG.circle },
+      { value: "rect", icon: "square", label: "Square", svg: COUNTER_ICON_SVG.rect },
+      {
+        value: "rounded",
+        icon: "crop_square",
+        label: "Rounded square",
+        svg: COUNTER_ICON_SVG.rounded,
+      },
     ],
   },
   // Highlight's "variant" is its color — each palette entry gets its
@@ -352,7 +370,7 @@ function openAnchoredPopover(
   anchor.dataset.popoverId = id;
 
   const popover = document.createElement("div");
-  popover.className = "tool-flyout " + (opts.className || "");
+  popover.className = `tool-flyout ${opts.className || ""}`;
   popover.dataset.anchorPopover = id;
   popover.style.position = "fixed";
   popover.style.zIndex = "1000";
@@ -366,7 +384,8 @@ function openAnchoredPopover(
     const vh = window.innerHeight;
     const pw = popover.offsetWidth;
     const ph = popover.offsetHeight;
-    let top: number, left: number;
+    let top: number;
+    let left: number;
     if (placement === "right") {
       // Vertical toolbar sits on the left edge → popover to the right.
       left = Math.round(r.right + 4);
@@ -448,23 +467,23 @@ export interface ToolbarOptions {
   getCurrentFilename?: () => string | undefined;
 }
 
-const WIDTH_PRESETS = [
+const _WIDTH_PRESETS = [
   { label: "0.5pt", value: 0.5 },
-  { label: "1pt",   value: 1 },
+  { label: "1pt", value: 1 },
   { label: "1.5pt", value: 1.5 },
-  { label: "2pt",   value: 2 },
-  { label: "3pt",   value: 3 },
+  { label: "2pt", value: 2 },
+  { label: "3pt", value: 3 },
   { label: "4.5pt", value: 4.5 },
-  { label: "6pt",   value: 6 },
+  { label: "6pt", value: 6 },
 ];
 
 // Dash patterns as multipliers of stroke-width: [dash, gap, ...]
 // "key" is stored in stroke-dasharray attr; actual SVG values computed dynamically
-const STYLE_PRESETS = [
-  { label: "Solid",     value: "" },
-  { label: "Dashed",    value: "dash" },
-  { label: "Dotted",    value: "dot" },
-  { label: "Dash-Dot",  value: "dashDot" },
+const _STYLE_PRESETS = [
+  { label: "Solid", value: "" },
+  { label: "Dashed", value: "dash" },
+  { label: "Dotted", value: "dot" },
+  { label: "Dash-Dot", value: "dashDot" },
   { label: "Long Dash", value: "lgDash" },
 ];
 
@@ -604,19 +623,29 @@ export class Toolbar {
       // and keep the preset's `highlightColor` independent from the
       // Shape tool's fillColor. UX modeled after PDF-annotator
       // highlighter pens.
-      ["highlight", "Highlight", "ink_highlighter", (o) => {
-        // Force the highlight shape regardless of any stale preset
-        // state; users expect the Highlight button to always highlight.
-        o.shapeType = "highlight";
-        return new ShapeTool(this.#canvas, this.#history, o);
-      }],
+      [
+        "highlight",
+        "Highlight",
+        "ink_highlighter",
+        (o) => {
+          // Force the highlight shape regardless of any stale preset
+          // state; users expect the Highlight button to always highlight.
+          o.shapeType = "highlight";
+          return new ShapeTool(this.#canvas, this.#history, o);
+        },
+      ],
       // Unified Text tool — property panel chooses variant
       // (plain / sticky / callout) + font family + size + color.
-      ["text", "Text", "title", (o) => {
-        const t = new TextTool(this.#canvas, this.#history, o);
-        t.onTextBoxChanged = (el) => this.#selection.select(el);
-        return t;
-      }],
+      [
+        "text",
+        "Text",
+        "title",
+        (o) => {
+          const t = new TextTool(this.#canvas, this.#history, o);
+          t.onTextBoxChanged = (el) => this.#selection.select(el);
+          return t;
+        },
+      ],
       // Unified Draw tool — pen vs highlighter picked via the
       // right panel's drawStyle property.
       ["freehand", "Draw", "draw", (o) => new FreehandTool(this.#canvas, this.#history, o)],
@@ -641,10 +670,7 @@ export class Toolbar {
     this.#container.innerHTML = "";
     // Tag the container so CSS can swap the layout between the default
     // horizontal toolbar and the vertical left-side strip variant.
-    this.#container.classList.toggle(
-      "toolbar-vertical",
-      this.#orientation === "vertical",
-    );
+    this.#container.classList.toggle("toolbar-vertical", this.#orientation === "vertical");
 
     // Select button
     const selectBtn = this.#btn("arrow_selector_tool", "Select (V)");
@@ -759,8 +785,7 @@ export class Toolbar {
     // Whether the host provides the __anno_showGallery hook that
     // gates the Gallery button. Pre-computed so the two places that
     // need the check (condition below + actual render) stay in sync.
-    const hasGalleryHook =
-      !isTauri && typeof (window as any).__anno_showGallery === "function";
+    const hasGalleryHook = !isTauri && typeof (window as any).__anno_showGallery === "function";
 
     // Open / Copy / Save group. The host can suppress this if it
     // renders these actions at the document-chrome level (e.g. the
@@ -863,7 +888,11 @@ export class Toolbar {
   #setupShortcuts(): void {
     document.addEventListener("keydown", (e) => {
       // Don't trigger shortcuts when typing in inputs
-      if ((e.target as HTMLElement).tagName === "INPUT" || (e.target as HTMLElement).isContentEditable) return;
+      if (
+        (e.target as HTMLElement).tagName === "INPUT" ||
+        (e.target as HTMLElement).isContentEditable
+      )
+        return;
 
       if (e.ctrlKey && e.key === "z") {
         e.preventDefault();
@@ -938,25 +967,48 @@ export class Toolbar {
     // Toggle: a second click on the arrow closes an open menu instead
     // of stacking another one underneath.
     const existing = document.querySelector(".save-dropdown-menu");
-    if (existing) { existing.remove(); return; }
+    if (existing) {
+      existing.remove();
+      return;
+    }
 
     const menu = document.createElement("div");
     menu.className = "save-dropdown-menu copy-dropdown-menu";
     menu.style.display = "flex";
 
     const items: [string, string, () => void][] = [
-      ["Download SVG", "Editable vector format", () => saveToFile(this.#canvas, this.#getCurrentFilename?.())],
+      [
+        "Download SVG",
+        "Editable vector format",
+        () => saveToFile(this.#canvas, this.#getCurrentFilename?.()),
+      ],
     ];
 
     if (isTauri) {
       items.push(
-        ["Save as JPG (re-editable)", "JPEG with embedded annotations", () => saveAsEditableImage(this.#canvas, "jpg", this.#getCurrentFilename?.())],
-        ["Save as PNG (re-editable)", "PNG with embedded annotations", () => saveAsEditableImage(this.#canvas, "png", this.#getCurrentFilename?.())],
+        [
+          "Save as JPG (re-editable)",
+          "JPEG with embedded annotations",
+          () => saveAsEditableImage(this.#canvas, "jpg", this.#getCurrentFilename?.()),
+        ],
+        [
+          "Save as PNG (re-editable)",
+          "PNG with embedded annotations",
+          () => saveAsEditableImage(this.#canvas, "png", this.#getCurrentFilename?.()),
+        ],
       );
     } else {
       items.push(
-        ["Download JPG (re-editable)", "JPEG with embedded annotations", () => downloadAsImage(this.#canvas, "jpg", this.#getCurrentFilename?.())],
-        ["Download PNG (re-editable)", "PNG with embedded annotations", () => downloadAsImage(this.#canvas, "png", this.#getCurrentFilename?.())],
+        [
+          "Download JPG (re-editable)",
+          "JPEG with embedded annotations",
+          () => downloadAsImage(this.#canvas, "jpg", this.#getCurrentFilename?.()),
+        ],
+        [
+          "Download PNG (re-editable)",
+          "PNG with embedded annotations",
+          () => downloadAsImage(this.#canvas, "png", this.#getCurrentFilename?.()),
+        ],
       );
     }
 
@@ -1058,18 +1110,18 @@ export class Toolbar {
       const dtx = el.getAttribute("data-tx");
       const dty = el.getAttribute("data-ty");
       if (dtx != null || dty != null) {
-        return { tx: parseFloat(dtx || "0") || 0, ty: parseFloat(dty || "0") || 0 };
+        return { tx: Number.parseFloat(dtx || "0") || 0, ty: Number.parseFloat(dty || "0") || 0 };
       }
       const t = el.getAttribute("transform") || "";
       const m = t.match(/translate\(([\d.-]+),?\s*([\d.-]+)\)/);
-      return m ? { tx: parseFloat(m[1]), ty: parseFloat(m[2]) } : { tx: 0, ty: 0 };
+      return m ? { tx: Number.parseFloat(m[1]), ty: Number.parseFloat(m[2]) } : { tx: 0, ty: 0 };
     };
 
     // Pull rotation/flip state for the Office side. Returned only when
     // non-default so the JSON payload stays compact for the common case.
     const transformOf = (el: SVGElement): Partial<AnnotationShape> => {
       const out: Partial<AnnotationShape> = {};
-      const rot = parseFloat(el.getAttribute("data-rot") || "0");
+      const rot = Number.parseFloat(el.getAttribute("data-rot") || "0");
       if (rot) out.rotation_deg = rot;
       if (el.getAttribute("data-flip-h") === "1") out.flip_h = true;
       if (el.getAttribute("data-flip-v") === "1") out.flip_v = true;
@@ -1081,14 +1133,12 @@ export class Toolbar {
       const es = el.getAttribute("data-arrow-end-shape");
       // New per-dimension width/length; fall back to the legacy
       // single-size attr if only that's present on this element.
-      const sw = el.getAttribute("data-arrow-start-width")
-        || el.getAttribute("data-arrow-start-size");
-      const sl = el.getAttribute("data-arrow-start-length")
-        || el.getAttribute("data-arrow-start-size");
-      const ew = el.getAttribute("data-arrow-end-width")
-        || el.getAttribute("data-arrow-end-size");
-      const eL = el.getAttribute("data-arrow-end-length")
-        || el.getAttribute("data-arrow-end-size");
+      const sw =
+        el.getAttribute("data-arrow-start-width") || el.getAttribute("data-arrow-start-size");
+      const sl =
+        el.getAttribute("data-arrow-start-length") || el.getAttribute("data-arrow-start-size");
+      const ew = el.getAttribute("data-arrow-end-width") || el.getAttribute("data-arrow-end-size");
+      const eL = el.getAttribute("data-arrow-end-length") || el.getAttribute("data-arrow-end-size");
       if (ss) out.arrow_shape_start = ss as AnnotationShape["arrow_shape_start"];
       if (es) out.arrow_shape_end = es as AnnotationShape["arrow_shape_end"];
       if (sw) out.arrow_width_start = sw as AnnotationShape["arrow_width_start"];
@@ -1109,18 +1159,25 @@ export class Toolbar {
       // (legacy). Prefer whichever is present; emit the value only
       // when non-default so solid lines stay unchanged in the
       // Office paste payload.
-      const opacityRaw = el.getAttribute("opacity")
-        ?? el.getAttribute("stroke-opacity");
-      const so = parseFloat(opacityRaw || "");
-      if (isFinite(so) && so < 1) out.stroke_opacity_value = so;
+      const opacityRaw = el.getAttribute("opacity") ?? el.getAttribute("stroke-opacity");
+      const so = Number.parseFloat(opacityRaw || "");
+      if (Number.isFinite(so) && so < 1) out.stroke_opacity_value = so;
 
       const sgRaw = el.getAttribute("data-stroke-gradient");
       if (sgRaw) {
-        try { out.stroke_gradient = JSON.parse(sgRaw); } catch { /* skip */ }
+        try {
+          out.stroke_gradient = JSON.parse(sgRaw);
+        } catch {
+          /* skip */
+        }
       }
       const fgRaw = el.getAttribute("data-fill-gradient");
       if (fgRaw) {
-        try { out.fill_gradient = JSON.parse(fgRaw); } catch { /* skip */ }
+        try {
+          out.fill_gradient = JSON.parse(fgRaw);
+        } catch {
+          /* skip */
+        }
       }
       return out;
     };
@@ -1137,17 +1194,20 @@ export class Toolbar {
         // form or the new composed <path data-type="arrow"> form. Both
         // encode their geometric endpoints + per-end arrow specs so
         // Office paste sees the same shape payload either way.
-        let x1 = 0, y1 = 0, x2 = 0, y2 = 0;
+        let x1 = 0;
+        let y1 = 0;
+        let x2 = 0;
+        let y2 = 0;
         if (isArrowPath) {
-          x1 = parseFloat(el.getAttribute("data-x1") || "0");
-          y1 = parseFloat(el.getAttribute("data-y1") || "0");
-          x2 = parseFloat(el.getAttribute("data-x2") || "0");
-          y2 = parseFloat(el.getAttribute("data-y2") || "0");
+          x1 = Number.parseFloat(el.getAttribute("data-x1") || "0");
+          y1 = Number.parseFloat(el.getAttribute("data-y1") || "0");
+          x2 = Number.parseFloat(el.getAttribute("data-x2") || "0");
+          y2 = Number.parseFloat(el.getAttribute("data-y2") || "0");
         } else {
-          x1 = parseFloat(el.getAttribute("x1") || "0");
-          y1 = parseFloat(el.getAttribute("y1") || "0");
-          x2 = parseFloat(el.getAttribute("x2") || "0");
-          y2 = parseFloat(el.getAttribute("y2") || "0");
+          x1 = Number.parseFloat(el.getAttribute("x1") || "0");
+          y1 = Number.parseFloat(el.getAttribute("y1") || "0");
+          x2 = Number.parseFloat(el.getAttribute("x2") || "0");
+          y2 = Number.parseFloat(el.getAttribute("y2") || "0");
         }
         // Arrow-head presence is whichever end has shape ≠ "none" (for
         // path arrows) OR which marker attribute is present (for the
@@ -1167,7 +1227,7 @@ export class Toolbar {
           x2: x2 + tx,
           y2: y2 + ty,
           stroke: el.getAttribute("stroke") || "#ff0000",
-          stroke_width: parseFloat(el.getAttribute("stroke-width") || "3"),
+          stroke_width: Number.parseFloat(el.getAttribute("stroke-width") || "3"),
           stroke_dasharray: el.getAttribute("stroke-dasharray") || "",
           has_arrow: headEnd,
           arrow_head_start: headStart,
@@ -1183,20 +1243,20 @@ export class Toolbar {
         // the desktop Office-clipboard handler; the new `corner_radius`
         // / `redact_style` fields add finer-grained info without
         // breaking existing Rust code paths.
-        const rx = parseFloat(el.getAttribute("rx") || "0");
+        const rx = Number.parseFloat(el.getAttribute("rx") || "0");
         const isRedactSolid = el.getAttribute("data-redact-style") === "solid";
         const isRounded = el.hasAttribute("data-rounded") || rx > 0;
         shapes.push({
           type: isRounded && !isRedactSolid ? "rounded-rect" : "rect",
-          x: parseFloat(el.getAttribute("x") || "0") + tx,
-          y: parseFloat(el.getAttribute("y") || "0") + ty,
-          width: parseFloat(el.getAttribute("width") || "0"),
-          height: parseFloat(el.getAttribute("height") || "0"),
+          x: Number.parseFloat(el.getAttribute("x") || "0") + tx,
+          y: Number.parseFloat(el.getAttribute("y") || "0") + ty,
+          width: Number.parseFloat(el.getAttribute("width") || "0"),
+          height: Number.parseFloat(el.getAttribute("height") || "0"),
           stroke: el.getAttribute("stroke") || "none",
-          stroke_width: parseFloat(el.getAttribute("stroke-width") || "0"),
+          stroke_width: Number.parseFloat(el.getAttribute("stroke-width") || "0"),
           stroke_dasharray: el.getAttribute("stroke-dasharray") || "",
           fill: el.getAttribute("fill") || "none",
-          fill_opacity: parseFloat(el.getAttribute("fill-opacity") || "1"),
+          fill_opacity: Number.parseFloat(el.getAttribute("fill-opacity") || "1"),
           corner_radius: rx,
           redact_style: isRedactSolid ? "solid" : undefined,
           ...xform,
@@ -1204,15 +1264,15 @@ export class Toolbar {
       } else if (tag === "ellipse") {
         shapes.push({
           type: "ellipse",
-          cx: parseFloat(el.getAttribute("cx") || "0") + tx,
-          cy: parseFloat(el.getAttribute("cy") || "0") + ty,
-          rx: parseFloat(el.getAttribute("rx") || "0"),
-          ry: parseFloat(el.getAttribute("ry") || "0"),
+          cx: Number.parseFloat(el.getAttribute("cx") || "0") + tx,
+          cy: Number.parseFloat(el.getAttribute("cy") || "0") + ty,
+          rx: Number.parseFloat(el.getAttribute("rx") || "0"),
+          ry: Number.parseFloat(el.getAttribute("ry") || "0"),
           stroke: el.getAttribute("stroke") || "#ff0000",
-          stroke_width: parseFloat(el.getAttribute("stroke-width") || "3"),
+          stroke_width: Number.parseFloat(el.getAttribute("stroke-width") || "3"),
           stroke_dasharray: el.getAttribute("stroke-dasharray") || "",
           fill: el.getAttribute("fill") || "none",
-          fill_opacity: parseFloat(el.getAttribute("fill-opacity") || "1"),
+          fill_opacity: Number.parseFloat(el.getAttribute("fill-opacity") || "1"),
           ...xform,
         });
       } else if (tag === "image") {
@@ -1224,37 +1284,40 @@ export class Toolbar {
         const href = el.getAttribute("href") || "";
         shapes.push({
           type: style === "blur" ? "blur_image" : "mosaic_image",
-          x: parseFloat(el.getAttribute("x") || "0") + tx,
-          y: parseFloat(el.getAttribute("y") || "0") + ty,
-          width: parseFloat(el.getAttribute("width") || "0"),
-          height: parseFloat(el.getAttribute("height") || "0"),
+          x: Number.parseFloat(el.getAttribute("x") || "0") + tx,
+          y: Number.parseFloat(el.getAttribute("y") || "0") + ty,
+          width: Number.parseFloat(el.getAttribute("width") || "0"),
+          height: Number.parseFloat(el.getAttribute("height") || "0"),
           image_data_url: href,
-          text: href,     // legacy field — Rust side can still read it here
+          text: href, // legacy field — Rust side can still read it here
           redact_style: style || "mosaic",
           ...xform,
         });
       } else if (tag === "path") {
         // Freehand — pen or highlighter. stroke_opacity carries the
         // transparency so Office can render a translucent shape.
-        const drawStyle = (el.getAttribute("data-draw-style") as "pen" | "highlighter" | null)
-          || (parseFloat(el.getAttribute("stroke-opacity") || "1") < 0.99 ? "highlighter" : "pen");
+        const drawStyle =
+          (el.getAttribute("data-draw-style") as "pen" | "highlighter" | null) ||
+          (Number.parseFloat(el.getAttribute("stroke-opacity") || "1") < 0.99
+            ? "highlighter"
+            : "pen");
         shapes.push({
           type: "freehand",
           text: el.getAttribute("d") || "",
           stroke: el.getAttribute("stroke") || "#ff0000",
-          stroke_width: parseFloat(el.getAttribute("stroke-width") || "3"),
+          stroke_width: Number.parseFloat(el.getAttribute("stroke-width") || "3"),
           stroke_dasharray: el.getAttribute("stroke-dasharray") || "",
-          stroke_opacity: parseFloat(el.getAttribute("stroke-opacity") || "1"),
+          stroke_opacity: Number.parseFloat(el.getAttribute("stroke-opacity") || "1"),
           draw_style: drawStyle,
           ...xform,
         });
       } else if (tag === "text") {
         shapes.push({
           type: "text",
-          x: parseFloat(el.getAttribute("x") || "0") + tx,
-          y: parseFloat(el.getAttribute("y") || "0") + ty,
+          x: Number.parseFloat(el.getAttribute("x") || "0") + tx,
+          y: Number.parseFloat(el.getAttribute("y") || "0") + ty,
           text: el.textContent || "",
-          font_size: parseFloat(el.getAttribute("font-size") || "24"),
+          font_size: Number.parseFloat(el.getAttribute("font-size") || "24"),
           font_family: el.getAttribute("font-family") || undefined,
           fill: el.getAttribute("fill") || "#ff0000",
           text_variant: "plain",
@@ -1267,13 +1330,17 @@ export class Toolbar {
           // <path> tail; the variant is the discriminator for Office.
           const textEl = el.querySelector("text");
           const bgRect = el.querySelector("rect");
-          const variant = ((el.getAttribute("data-text-variant") as "plain" | "sticky" | "callout" | null) || "sticky");
+          const variant =
+            (el.getAttribute("data-text-variant") as "plain" | "sticky" | "callout" | null) ||
+            "sticky";
           if (textEl) {
             const tspans = textEl.querySelectorAll("tspan");
-            const bx = parseFloat(bgRect?.getAttribute("x") || tspans[0]?.getAttribute("x") || "0") + tx;
-            const by = parseFloat(bgRect?.getAttribute("y") || "0") + ty;
-            const bw = parseFloat(bgRect?.getAttribute("width") || "200");
-            const bh = parseFloat(bgRect?.getAttribute("height") || "40");
+            const bx =
+              Number.parseFloat(bgRect?.getAttribute("x") || tspans[0]?.getAttribute("x") || "0") +
+              tx;
+            const by = Number.parseFloat(bgRect?.getAttribute("y") || "0") + ty;
+            const bw = Number.parseFloat(bgRect?.getAttribute("width") || "200");
+            const bh = Number.parseFloat(bgRect?.getAttribute("height") || "40");
             const tailXRaw = el.getAttribute("data-tail-x");
             const tailYRaw = el.getAttribute("data-tail-y");
             shapes.push({
@@ -1283,20 +1350,20 @@ export class Toolbar {
               width: bw,
               height: bh,
               text: el.getAttribute("data-text") || textEl.textContent || "",
-              font_size: parseFloat(textEl.getAttribute("font-size")
-                || el.getAttribute("data-font-size") || "24"),
-              font_family: textEl.getAttribute("font-family")
-                || el.getAttribute("data-font-family") || undefined,
-              fill: textEl.getAttribute("fill")
-                || el.getAttribute("data-color") || "#ff0000",
+              font_size: Number.parseFloat(
+                textEl.getAttribute("font-size") || el.getAttribute("data-font-size") || "24",
+              ),
+              font_family:
+                textEl.getAttribute("font-family") ||
+                el.getAttribute("data-font-family") ||
+                undefined,
+              fill: textEl.getAttribute("fill") || el.getAttribute("data-color") || "#ff0000",
               // Legacy field — sticky's pale background color. Desktop
               // code historically reads this from `stroke`.
-              stroke: variant === "plain"
-                ? ""
-                : (bgRect?.getAttribute("fill") || ""),
+              stroke: variant === "plain" ? "" : bgRect?.getAttribute("fill") || "",
               text_variant: variant,
-              tail_x: tailXRaw != null ? parseFloat(tailXRaw) + tx : undefined,
-              tail_y: tailYRaw != null ? parseFloat(tailYRaw) + ty : undefined,
+              tail_x: tailXRaw != null ? Number.parseFloat(tailXRaw) + tx : undefined,
+              tail_y: tailYRaw != null ? Number.parseFloat(tailYRaw) + ty : undefined,
               ...xform,
             });
           }
@@ -1315,25 +1382,31 @@ export class Toolbar {
             // legacy content missing the data attr.
             const dataShape = el.getAttribute("data-shape");
             const shapeName: "circle" | "rect" | "rounded" =
-              dataShape === "rounded" ? "rounded"
-              : dataShape === "rect" ? "rect"
-              : dataShape === "circle" ? "circle"
-              : (bgRect && !bgCircle) ? "rect"
-              : "circle";
+              dataShape === "rounded"
+                ? "rounded"
+                : dataShape === "rect"
+                  ? "rect"
+                  : dataShape === "circle"
+                    ? "circle"
+                    : bgRect && !bgCircle
+                      ? "rect"
+                      : "circle";
             const isRectLike = shapeName === "rect" || shapeName === "rounded";
-            let mcx: number, mcy: number;
+            let mcx: number;
+            let mcy: number;
             if (isRectLike) {
-              const rx = parseFloat(bgRect!.getAttribute("x") || "0");
-              const ry = parseFloat(bgRect!.getAttribute("y") || "0");
-              const rw = parseFloat(bgRect!.getAttribute("width") || "0");
-              const rh = parseFloat(bgRect!.getAttribute("height") || "0");
-              mcx = rx + rw / 2; mcy = ry + rh / 2;
+              const rx = Number.parseFloat(bgRect!.getAttribute("x") || "0");
+              const ry = Number.parseFloat(bgRect!.getAttribute("y") || "0");
+              const rw = Number.parseFloat(bgRect!.getAttribute("width") || "0");
+              const rh = Number.parseFloat(bgRect!.getAttribute("height") || "0");
+              mcx = rx + rw / 2;
+              mcy = ry + rh / 2;
             } else {
-              mcx = parseFloat(bgCircle!.getAttribute("cx") || "0");
-              mcy = parseFloat(bgCircle!.getAttribute("cy") || "0");
+              mcx = Number.parseFloat(bgCircle!.getAttribute("cx") || "0");
+              mcy = Number.parseFloat(bgCircle!.getAttribute("cy") || "0");
             }
             const textEl = el.querySelector("text");
-            const fs = parseFloat(textEl?.getAttribute("font-size") || "13");
+            const fs = Number.parseFloat(textEl?.getAttribute("font-size") || "13");
             shapes.push({
               type: "marker",
               cx: mcx + tx,
@@ -1358,7 +1431,13 @@ export class Toolbar {
     try {
       const screenshotData = this.#canvas.imageEl.getAttribute("href") || undefined;
       const pngDataUrl = await getPngDataUrl(this.#canvas);
-      await copyAsOffice(shapes, this.#canvas.imageWidth, this.#canvas.imageHeight, screenshotData, pngDataUrl);
+      await copyAsOffice(
+        shapes,
+        this.#canvas.imageWidth,
+        this.#canvas.imageHeight,
+        screenshotData,
+        pngDataUrl,
+      );
     } catch (err) {
       console.error("Copy failed:", err);
     }
@@ -1398,25 +1477,38 @@ export class Toolbar {
     switch (toolId) {
       case "shape":
         switch (preset.shapeType) {
-          case "rect":      return "Rectangle";
-          case "rounded":   return "Rounded rectangle";
-          case "ellipse":   return "Ellipse";
-          case "highlight": return "Highlight";
-          default:          return "Rectangle";
+          case "rect":
+            return "Rectangle";
+          case "rounded":
+            return "Rounded rectangle";
+          case "ellipse":
+            return "Ellipse";
+          case "highlight":
+            return "Highlight";
+          default:
+            return "Rectangle";
         }
       case "arrow":
         switch (preset.arrowHead) {
-          case "none": return "Line";
-          case "end":  return "Arrow";
-          case "both": return "Double arrow";
-          default:     return "Arrow";
+          case "none":
+            return "Line";
+          case "end":
+            return "Arrow";
+          case "both":
+            return "Double arrow";
+          default:
+            return "Arrow";
         }
       case "text":
         switch (preset.textVariant) {
-          case "plain":   return "Text";
-          case "sticky":  return "Sticky note";
-          case "callout": return "Callout";
-          default:        return "Text";
+          case "plain":
+            return "Text";
+          case "sticky":
+            return "Sticky note";
+          case "callout":
+            return "Callout";
+          default:
+            return "Text";
         }
       case "freehand":
         // Match the "<Tool> (<variant>)" convention used by Counter
@@ -1430,16 +1522,23 @@ export class Toolbar {
         // the shape in parens (see right-panel's #elementTypeName
         // for the matching Selection-mode formatter).
         switch (preset.markerShape) {
-          case "rect":    return "Counter (Square)";
-          case "rounded": return "Counter (Rounded square)";
-          default:        return "Counter (Circle)";
+          case "rect":
+            return "Counter (Square)";
+          case "rounded":
+            return "Counter (Rounded square)";
+          default:
+            return "Counter (Circle)";
         }
       case "redact":
         switch (preset.redactStyle) {
-          case "mosaic": return "Mosaic";
-          case "solid":  return "Solid redaction";
-          case "blur":   return "Blur";
-          default:       return "Redaction";
+          case "mosaic":
+            return "Mosaic";
+          case "solid":
+            return "Solid redaction";
+          case "blur":
+            return "Blur";
+          default:
+            return "Redaction";
         }
       case "highlight": {
         // Mirror the Selection-side "Highlight (Yellow)" formatter:
@@ -1522,12 +1621,12 @@ export class Toolbar {
     if (stroke) seed.strokeColor = stroke;
     const fill = el.getAttribute("fill");
     if (fill) seed.fillColor = fill;
-    const sw = parseFloat(el.getAttribute("stroke-width") || "");
-    if (isFinite(sw) && sw > 0) seed.strokeWidth = sw;
+    const sw = Number.parseFloat(el.getAttribute("stroke-width") || "");
+    if (Number.isFinite(sw) && sw > 0) seed.strokeWidth = sw;
     const da = el.getAttribute("data-dash-key") ?? el.getAttribute("stroke-dasharray");
     if (da != null) seed.strokeDasharray = da;
-    const fo = parseFloat(el.getAttribute("fill-opacity") || "");
-    if (isFinite(fo)) seed.fillOpacity = fo;
+    const fo = Number.parseFloat(el.getAttribute("fill-opacity") || "");
+    if (Number.isFinite(fo)) seed.fillOpacity = fo;
     // Ensure the variant-defining field matches this element's variant.
     const group = TOOL_VARIANTS[toolId];
     if (group && elementKey.includes(".")) {
@@ -1555,9 +1654,7 @@ export class Toolbar {
       this.#applyMarkerPresetStyle(el, preset);
       return;
     }
-    if (
-      el.tagName === "g" && el.getAttribute("data-type") === "textbox"
-    ) {
+    if (el.tagName === "g" && el.getAttribute("data-type") === "textbox") {
       this.#applyTextboxPresetStyle(el, preset);
       return;
     }
@@ -1604,7 +1701,10 @@ export class Toolbar {
       // Lines carry transparency via `opacity` so markers fade too;
       // other shapes use `stroke-opacity`. Mirror the same rule as
       // syncPresetFromElement's reader.
-      if (el.tagName === "line" || (el.tagName === "g" && el.getAttribute("data-type") === "arrow")) {
+      if (
+        el.tagName === "line" ||
+        (el.tagName === "g" && el.getAttribute("data-type") === "arrow")
+      ) {
         el.setAttribute("opacity", String(preset.strokeOpacity));
       } else {
         el.setAttribute("stroke-opacity", String(preset.strokeOpacity));
@@ -1638,7 +1738,7 @@ export class Toolbar {
     if (borderWidth != null) bg.setAttribute("stroke-width", String(borderWidth));
     const borderDashKey = legacy ? preset.markerBorderDasharray : preset.strokeDasharray;
     if (borderDashKey != null) {
-      const w = borderWidth ?? parseFloat(bg.getAttribute("stroke-width") || "1.5");
+      const w = borderWidth ?? Number.parseFloat(bg.getAttribute("stroke-width") || "1.5");
       bg.setAttribute("stroke-dasharray", computeDasharray(borderDashKey, w));
       bg.setAttribute("data-dash-key", borderDashKey);
     }
@@ -1686,42 +1786,46 @@ export class Toolbar {
     const current = (preset[group.field] as string) || group.fallback;
     const placement = this.#orientation === "vertical" ? "right" : "below";
 
-    const close = openAnchoredPopover(anchor, (root) => {
-      const row = document.createElement("div");
-      row.className = "tool-flyout-row";
-      for (const v of group.variants) {
-        const chip = document.createElement("button");
-        chip.type = "button";
-        // Custom inline SVG takes precedence over ligature when set.
-        // Ligature-only chips keep the Material Symbols class for font
-        // rendering; SVG chips drop it (irrelevant + font-variation
-        // settings would forcibly tint the SVG).
-        chip.className = "tool-flyout-chip"
-          + (v.svg ? " tool-flyout-chip-svg" : " material-symbols-outlined")
-          + (current === v.value ? " active" : "");
-        if (v.svg) chip.innerHTML = v.svg;
-        else chip.textContent = v.icon;
-        setTooltip(chip, v.label);
-        chip.setAttribute("aria-label", v.label);
-        chip.addEventListener("click", () => {
-          // Switch variant: save current at old key, load new (or
-          // seed) at new key. Updates #lastVariantByTool so future
-          // tool activations pick this variant by default.
-          const next = this.#changeVariant(toolId, v.value, preset);
-          // Mutate the captured preset reference so anything inside
-          // this closure that still reads `preset` sees the new
-          // values.
-          Object.keys(preset).forEach((k) => delete (preset as unknown as Record<string, unknown>)[k]);
-          Object.assign(preset, next);
-          this.#savePresetsToFile();
-          this.#syncToolButtonIcon(toolId);
-          close();
-          this.#activateToolById(toolId);
-        });
-        row.appendChild(chip);
-      }
-      root.appendChild(row);
-    }, { placement, className: "tool-flyout-variant" });
+    const close = openAnchoredPopover(
+      anchor,
+      (root) => {
+        const row = document.createElement("div");
+        row.className = "tool-flyout-row";
+        for (const v of group.variants) {
+          const chip = document.createElement("button");
+          chip.type = "button";
+          // Custom inline SVG takes precedence over ligature when set.
+          // Ligature-only chips keep the Material Symbols class for font
+          // rendering; SVG chips drop it (irrelevant + font-variation
+          // settings would forcibly tint the SVG).
+          chip.className = `tool-flyout-chip${v.svg ? " tool-flyout-chip-svg" : " material-symbols-outlined"}${current === v.value ? " active" : ""}`;
+          if (v.svg) chip.innerHTML = v.svg;
+          else chip.textContent = v.icon;
+          setTooltip(chip, v.label);
+          chip.setAttribute("aria-label", v.label);
+          chip.addEventListener("click", () => {
+            // Switch variant: save current at old key, load new (or
+            // seed) at new key. Updates #lastVariantByTool so future
+            // tool activations pick this variant by default.
+            const next = this.#changeVariant(toolId, v.value, preset);
+            // Mutate the captured preset reference so anything inside
+            // this closure that still reads `preset` sees the new
+            // values.
+            Object.keys(preset).forEach(
+              (k) => delete (preset as unknown as Record<string, unknown>)[k],
+            );
+            Object.assign(preset, next);
+            this.#savePresetsToFile();
+            this.#syncToolButtonIcon(toolId);
+            close();
+            this.#activateToolById(toolId);
+          });
+          row.appendChild(chip);
+        }
+        root.appendChild(row);
+      },
+      { placement, className: "tool-flyout-variant" },
+    );
   }
 
   /** Sync the tool button's variant indicator to reflect the currently-
@@ -1814,7 +1918,7 @@ export class Toolbar {
       const color = (preset.highlightColor as string) || DEFAULT_HIGHLIGHT_COLOR;
       const badge = this.#ensureBadge(btn, toolId);
       badge.className = "tool-btn-badge tool-btn-badge-color";
-      badge.textContent = "";  // no glyph — color lives in ::after
+      badge.textContent = ""; // no glyph — color lives in ::after
       // The badge itself keeps the circular panel-colored frame (so
       // it matches every other tool's variant badge shape); the inner
       // color swatch is rendered as a rounded square via
@@ -1833,9 +1937,7 @@ export class Toolbar {
       const toolDef = this.#tools.get(toolId);
       if (toolDef) {
         const label = highlightColorLabel(color);
-        const composed = label
-          ? `${toolDef.label} (${label})`
-          : toolDef.label;
+        const composed = label ? `${toolDef.label} (${label})` : toolDef.label;
         setTooltip(btn, composed);
         btn.setAttribute("aria-label", composed);
       }
@@ -1884,33 +1986,36 @@ export class Toolbar {
     const current = (preset.highlightColor as string) || DEFAULT_HIGHLIGHT_COLOR;
     const placement = this.#orientation === "vertical" ? "right" : "below";
 
-    const close = openAnchoredPopover(anchor, (root) => {
-      const row = document.createElement("div");
-      row.className = "tool-flyout-row tool-flyout-color-row";
-      for (const c of HIGHLIGHT_COLORS) {
-        const chip = document.createElement("button");
-        chip.type = "button";
-        chip.className = "tool-flyout-color-chip"
-          + (current.toLowerCase() === c.value.toLowerCase() ? " active" : "");
-        // Color lives on the inner ::before swatch so the chip frame
-        // can signal hover / active via background + border tint —
-        // same vocabulary as .tool-flyout-chip-svg for glyph chips.
-        chip.style.setProperty("--swatch-color", c.value);
-        setTooltip(chip, c.label);
-        chip.setAttribute("aria-label", c.label);
-        chip.addEventListener("click", () => {
-          preset.highlightColor = c.value;
-          preset.shapeType = "highlight";
-          this.#saveCurrentPreset(toolId, preset);
-          this.#savePresetsToFile();
-          this.#syncToolButtonIcon(toolId);
-          close();
-          this.#activateToolById(toolId);
-        });
-        row.appendChild(chip);
-      }
-      root.appendChild(row);
-    }, { placement, className: "tool-flyout-highlight" });
+    const close = openAnchoredPopover(
+      anchor,
+      (root) => {
+        const row = document.createElement("div");
+        row.className = "tool-flyout-row tool-flyout-color-row";
+        for (const c of HIGHLIGHT_COLORS) {
+          const chip = document.createElement("button");
+          chip.type = "button";
+          chip.className = `tool-flyout-color-chip${current.toLowerCase() === c.value.toLowerCase() ? " active" : ""}`;
+          // Color lives on the inner ::before swatch so the chip frame
+          // can signal hover / active via background + border tint —
+          // same vocabulary as .tool-flyout-chip-svg for glyph chips.
+          chip.style.setProperty("--swatch-color", c.value);
+          setTooltip(chip, c.label);
+          chip.setAttribute("aria-label", c.label);
+          chip.addEventListener("click", () => {
+            preset.highlightColor = c.value;
+            preset.shapeType = "highlight";
+            this.#saveCurrentPreset(toolId, preset);
+            this.#savePresetsToFile();
+            this.#syncToolButtonIcon(toolId);
+            close();
+            this.#activateToolById(toolId);
+          });
+          row.appendChild(chip);
+        }
+        root.appendChild(row);
+      },
+      { placement, className: "tool-flyout-highlight" },
+    );
   }
 
   /**
@@ -1960,23 +2065,21 @@ export class Toolbar {
       if (toolId === "highlight") preset.highlightColor = fill;
       else preset.fillColor = fill;
     }
-    const sw = parseFloat(readEl.getAttribute("stroke-width") || "");
-    if (isFinite(sw) && sw > 0) preset.strokeWidth = sw;
+    const sw = Number.parseFloat(readEl.getAttribute("stroke-width") || "");
+    if (Number.isFinite(sw) && sw > 0) preset.strokeWidth = sw;
     const da = readEl.getAttribute("stroke-dasharray");
     if (da != null) preset.strokeDasharray = da;
     const dashKey = readEl.getAttribute("data-dash-key");
     if (dashKey != null) preset.strokeDasharray = dashKey;
-    const fo = parseFloat(readEl.getAttribute("fill-opacity") || "");
-    if (isFinite(fo)) preset.fillOpacity = fo;
+    const fo = Number.parseFloat(readEl.getAttribute("fill-opacity") || "");
+    if (Number.isFinite(fo)) preset.fillOpacity = fo;
     // Lines carry transparency via `opacity` (so markers fade too);
     // other shapes use stroke-opacity. Check both so the preset
     // picks up whichever is present.
-    const so = parseFloat(
-      readEl.getAttribute("opacity")
-      || readEl.getAttribute("stroke-opacity")
-      || "",
+    const so = Number.parseFloat(
+      readEl.getAttribute("opacity") || readEl.getAttribute("stroke-opacity") || "",
     );
-    if (isFinite(so)) preset.strokeOpacity = so;
+    if (Number.isFinite(so)) preset.strokeOpacity = so;
     const lc = readEl.getAttribute("stroke-linecap");
     if (lc === "butt" || lc === "round" || lc === "square") {
       preset.strokeLinecap = lc;
@@ -1991,8 +2094,8 @@ export class Toolbar {
     // a <g data-type="textbox">).
     if (toolId === "text") {
       const tEl = el.tagName === "g" ? el.querySelector("text") : el;
-      const fs = parseFloat(tEl?.getAttribute("font-size") || "");
-      if (isFinite(fs) && fs > 0) preset.fontSize = fs;
+      const fs = Number.parseFloat(tEl?.getAttribute("font-size") || "");
+      if (Number.isFinite(fs) && fs > 0) preset.fontSize = fs;
       const ff = tEl?.getAttribute("font-family") || el.getAttribute("data-font-family");
       if (ff) preset.fontFamily = ff;
       const variant = el.getAttribute("data-text-variant");
@@ -2003,7 +2106,7 @@ export class Toolbar {
       // bg-color / stroke-width polluting the tool preset, so clear
       // the universal values above and re-read from the <text> child.
       const textFill = tEl?.getAttribute("fill") || el.getAttribute("data-color");
-      if (textFill) preset.strokeColor = textFill;  // tool treats "text color" as stroke
+      if (textFill) preset.strokeColor = textFill; // tool treats "text color" as stroke
     }
     if (toolId === "arrow") {
       // Rubber-band the full per-end state into the variant's preset:
@@ -2016,25 +2119,20 @@ export class Toolbar {
       //     into the valid range rather than fully resetting.
       const endShape = el.getAttribute("data-arrow-end-shape");
       const startShape = el.getAttribute("data-arrow-start-shape");
-      const hEnd = endShape != null
-        ? endShape !== "none"
-        : !!el.getAttribute("marker-end");
-      const hStart = startShape != null
-        ? startShape !== "none"
-        : !!el.getAttribute("marker-start");
+      const hEnd = endShape != null ? endShape !== "none" : !!el.getAttribute("marker-end");
+      const hStart = startShape != null ? startShape !== "none" : !!el.getAttribute("marker-start");
       preset.arrowHead = hStart && hEnd ? "both" : hEnd ? "end" : hStart ? "end" : "none";
       // Per-end shape + width + length (PowerPoint-parity granular
       // fields).
       const ss = el.getAttribute("data-arrow-start-shape");
       const es = el.getAttribute("data-arrow-end-shape");
-      const sw = el.getAttribute("data-arrow-start-width")
-        || el.getAttribute("data-arrow-start-size");
-      const sl = el.getAttribute("data-arrow-start-length")
-        || el.getAttribute("data-arrow-start-size");
-      const ew = el.getAttribute("data-arrow-end-width")
-        || el.getAttribute("data-arrow-end-size");
-      const el_ = el.getAttribute("data-arrow-end-length")
-        || el.getAttribute("data-arrow-end-size");
+      const sw =
+        el.getAttribute("data-arrow-start-width") || el.getAttribute("data-arrow-start-size");
+      const sl =
+        el.getAttribute("data-arrow-start-length") || el.getAttribute("data-arrow-start-size");
+      const ew = el.getAttribute("data-arrow-end-width") || el.getAttribute("data-arrow-end-size");
+      const el_ =
+        el.getAttribute("data-arrow-end-length") || el.getAttribute("data-arrow-end-size");
       if (ss) preset.arrowHeadStart = ss as typeof preset.arrowHeadStart;
       if (es) preset.arrowHeadEnd = es as typeof preset.arrowHeadEnd;
       if (sw) preset.arrowWidthStart = sw as typeof preset.arrowWidthStart;
@@ -2084,10 +2182,9 @@ export class Toolbar {
       if (bgFill) preset.fillColor = bgFill;
       const bgStroke = bg?.getAttribute("stroke");
       if (bgStroke) preset.strokeColor = bgStroke;
-      const bsw = parseFloat(bg?.getAttribute("stroke-width") || "");
-      if (isFinite(bsw) && bsw >= 0) preset.strokeWidth = bsw;
-      const bdash = bg?.getAttribute("data-dash-key")
-        ?? bg?.getAttribute("stroke-dasharray");
+      const bsw = Number.parseFloat(bg?.getAttribute("stroke-width") || "");
+      if (Number.isFinite(bsw) && bsw >= 0) preset.strokeWidth = bsw;
+      const bdash = bg?.getAttribute("data-dash-key") ?? bg?.getAttribute("stroke-dasharray");
       if (bdash != null) preset.strokeDasharray = bdash;
       // Clear legacy fields so we don't carry forward stale values.
       delete (preset as Partial<ToolOptions>).markerBorderColor;
@@ -2097,8 +2194,8 @@ export class Toolbar {
       // child. Without this, changing font-size via the property
       // panel wouldn't stick.
       const tEl = el.tagName === "g" ? el.querySelector("text") : null;
-      const fs = parseFloat(tEl?.getAttribute("font-size") || "");
-      if (isFinite(fs) && fs > 0) preset.fontSize = fs;
+      const fs = Number.parseFloat(tEl?.getAttribute("font-size") || "");
+      if (Number.isFinite(fs) && fs > 0) preset.fontSize = fs;
     }
 
     // Save back at the same element key the read used, and update
@@ -2193,9 +2290,7 @@ export class Toolbar {
       row.className = "pp-type-row";
       for (const opt of options) {
         const chip = document.createElement("div");
-        chip.className = "prop-choice-chip"
-          + (opt.svg ? "" : " material-symbols-outlined")
-          + (current === opt.value ? " active" : "");
+        chip.className = `prop-choice-chip${opt.svg ? "" : " material-symbols-outlined"}${current === opt.value ? " active" : ""}`;
         if (opt.svg) {
           chip.innerHTML = opt.svg;
         } else if (opt.icon) {
@@ -2274,10 +2369,14 @@ export class Toolbar {
       onChange: (v: string) => void,
       opts?: { allowNone?: boolean },
     ): void => {
-      const btn = createColorPullButton(current, (color) => {
-        onChange(color);
-        syncPreset();
-      }, { allowNone: opts?.allowNone });
+      const btn = createColorPullButton(
+        current,
+        (color) => {
+          onChange(color);
+          syncPreset();
+        },
+        { allowNone: opts?.allowNone },
+      );
       container.appendChild(createPropertyRow(label, btn));
     };
 
@@ -2293,7 +2392,11 @@ export class Toolbar {
       onChange: (v: number) => void,
     ): void => {
       const input = createNumberInput({
-        current, unit, min, max, step,
+        current,
+        unit,
+        min,
+        max,
+        step,
         onChange: (v) => {
           onChange(v);
           syncPreset();
@@ -2311,15 +2414,20 @@ export class Toolbar {
       current: string,
       onChange: (v: string) => void,
     ): void => {
-      container.appendChild(createPropertyRow(label, createCustomSelect({
-        options,
-        current,
-        ariaLabel: label,
-        onChange: (v) => {
-          onChange(v);
-          syncPreset();
-        },
-      })));
+      container.appendChild(
+        createPropertyRow(
+          label,
+          createCustomSelect({
+            options,
+            current,
+            ariaLabel: label,
+            onChange: (v) => {
+              onChange(v);
+              syncPreset();
+            },
+          }),
+        ),
+      );
     };
 
     /** Preview SVG helpers — match the selection panel's visuals for
@@ -2337,55 +2445,73 @@ export class Toolbar {
     // =================================================================
     if (isRedact) {
       if (!preset.redactStyle) preset.redactStyle = "mosaic";
-      addTypeRow([
-        { value: "mosaic", icon: "grid_view", label: "Mosaic (pixelate)" },
-        { value: "solid",  icon: "check_box", label: "Solid bar" },
-        { value: "blur",   icon: "blur_on",   label: "Blur" },
-      ], preset.redactStyle);
+      addTypeRow(
+        [
+          { value: "mosaic", icon: "grid_view", label: "Mosaic (pixelate)" },
+          { value: "solid", icon: "check_box", label: "Solid bar" },
+          { value: "blur", icon: "blur_on", label: "Blur" },
+        ],
+        preset.redactStyle,
+      );
     } else if (isFreehand) {
       if (!preset.drawStyle) preset.drawStyle = "pen";
-      addTypeRow([
-        { value: "pen",         icon: "edit",            label: "Pen" },
-        { value: "highlighter", icon: "ink_highlighter", label: "Highlighter" },
-      ], preset.drawStyle);
+      addTypeRow(
+        [
+          { value: "pen", icon: "edit", label: "Pen" },
+          { value: "highlighter", icon: "ink_highlighter", label: "Highlighter" },
+        ],
+        preset.drawStyle,
+      );
     } else if (isArrow) {
       if (!preset.arrowHead) preset.arrowHead = "end";
       // Share ARROW_ICON_SVG with the toolbar flyout so the Tool panel
       // Type row and the toolbar's variant badge show identical glyphs.
-      addTypeRow([
-        { value: "none", label: "Line",         svg: ARROW_ICON_SVG.none },
-        { value: "end",  label: "Arrow",        svg: ARROW_ICON_SVG.end  },
-        { value: "both", label: "Double arrow", svg: ARROW_ICON_SVG.both },
-      ], preset.arrowHead);
+      addTypeRow(
+        [
+          { value: "none", label: "Line", svg: ARROW_ICON_SVG.none },
+          { value: "end", label: "Arrow", svg: ARROW_ICON_SVG.end },
+          { value: "both", label: "Double arrow", svg: ARROW_ICON_SVG.both },
+        ],
+        preset.arrowHead,
+      );
     } else if (isShape) {
       if (!preset.shapeType) preset.shapeType = "rect";
       // Use the same SHAPE_ICON_SVG set as the toolbar badge so the
       // "next draw" chip and the "currently selected" badge carry
       // identical glyphs across the three surfaces (toolbar badge /
       // Tool panel Type row / Selection panel Type row).
-      addTypeRow([
-        { value: "rect",    svg: SHAPE_ICON_SVG.rect,    label: "Rectangle" },
-        { value: "rounded", svg: SHAPE_ICON_SVG.rounded, label: "Rounded"   },
-        { value: "ellipse", svg: SHAPE_ICON_SVG.ellipse, label: "Ellipse"   },
-      ], preset.shapeType);
+      addTypeRow(
+        [
+          { value: "rect", svg: SHAPE_ICON_SVG.rect, label: "Rectangle" },
+          { value: "rounded", svg: SHAPE_ICON_SVG.rounded, label: "Rounded" },
+          { value: "ellipse", svg: SHAPE_ICON_SVG.ellipse, label: "Ellipse" },
+        ],
+        preset.shapeType,
+      );
     } else if (isMarker) {
-      const currentMarker: MarkerShape = preset.markerShape
-        ?? (preset.fillColor === "rect" ? "rect" : "circle");
+      const currentMarker: MarkerShape =
+        preset.markerShape ?? (preset.fillColor === "rect" ? "rect" : "circle");
       if (preset.fillColor === "rect" || preset.fillColor === "none") {
         delete (preset as Partial<ToolOptions>).fillColor;
       }
-      addTypeRow([
-        { value: "circle",  svg: COUNTER_ICON_SVG.circle,  label: "Circle" },
-        { value: "rect",    svg: COUNTER_ICON_SVG.rect,    label: "Square" },
-        { value: "rounded", svg: COUNTER_ICON_SVG.rounded, label: "Rounded square" },
-      ], currentMarker);
+      addTypeRow(
+        [
+          { value: "circle", svg: COUNTER_ICON_SVG.circle, label: "Circle" },
+          { value: "rect", svg: COUNTER_ICON_SVG.rect, label: "Square" },
+          { value: "rounded", svg: COUNTER_ICON_SVG.rounded, label: "Rounded square" },
+        ],
+        currentMarker,
+      );
     } else if (isText) {
       if (!preset.textVariant) preset.textVariant = "sticky";
-      addTypeRow([
-        { value: "plain",   icon: "text_fields",   label: "Plain text" },
-        { value: "sticky",  icon: "sticky_note_2", label: "Sticky note" },
-        { value: "callout", icon: "chat_bubble",   label: "Callout" },
-      ], preset.textVariant);
+      addTypeRow(
+        [
+          { value: "plain", icon: "text_fields", label: "Plain text" },
+          { value: "sticky", icon: "sticky_note_2", label: "Sticky note" },
+          { value: "callout", icon: "chat_bubble", label: "Callout" },
+        ],
+        preset.textVariant,
+      );
     }
 
     // =================================================================
@@ -2399,7 +2525,9 @@ export class Toolbar {
           getFillBody(),
           "Color",
           preset.fillColor === "none" ? "#111111" : preset.fillColor,
-          (v) => { preset.fillColor = v; },
+          (v) => {
+            preset.fillColor = v;
+          },
         );
       }
       this.#saveCurrentPreset(toolId, preset);
@@ -2426,34 +2554,50 @@ export class Toolbar {
         preset.strokeColor = preset.markerBorderColor ?? "#ffffff";
       }
       const fb = getFillBody();
-      addColorRow(fb, "Color", preset.fillColor ?? "#ff0000",
-        (v) => { preset.fillColor = v; },
-        { allowNone: true });
+      addColorRow(
+        fb,
+        "Color",
+        preset.fillColor ?? "#ff0000",
+        (v) => {
+          preset.fillColor = v;
+        },
+        { allowNone: true },
+      );
 
       // Line — default border is white 1.5pt solid (matches
       // MarkerTool.onPointerDown). Uses the standard stroke* preset
       // fields now that marker follows the same color convention as
       // every other tool.
       const lb = getLineBody();
-      addColorRow(lb, "Color", preset.strokeColor || "#ffffff",
-        (v) => { preset.strokeColor = v; });
-      addNumberRow(lb, "Width", preset.strokeWidth ?? 1.5, "pt", 0, 20, 0.25,
-        (v) => { preset.strokeWidth = v; });
-      addSelectRow(lb, "Dash type", [
-        { value: "",        label: "Solid",     preview: dashPreview("") },
-        { value: "dash",    label: "Dashed",    preview: dashPreview("dash") },
-        { value: "dot",     label: "Dotted",    preview: dashPreview("dot") },
-        { value: "dashDot", label: "Dash-Dot",  preview: dashPreview("dashDot") },
-        { value: "lgDash",  label: "Long Dash", preview: dashPreview("lgDash") },
-      ], preset.strokeDasharray ?? "",
-        (v) => { preset.strokeDasharray = v; });
+      addColorRow(lb, "Color", preset.strokeColor || "#ffffff", (v) => {
+        preset.strokeColor = v;
+      });
+      addNumberRow(lb, "Width", preset.strokeWidth ?? 1.5, "pt", 0, 20, 0.25, (v) => {
+        preset.strokeWidth = v;
+      });
+      addSelectRow(
+        lb,
+        "Dash type",
+        [
+          { value: "", label: "Solid", preview: dashPreview("") },
+          { value: "dash", label: "Dashed", preview: dashPreview("dash") },
+          { value: "dot", label: "Dotted", preview: dashPreview("dot") },
+          { value: "dashDot", label: "Dash-Dot", preview: dashPreview("dashDot") },
+          { value: "lgDash", label: "Long Dash", preview: dashPreview("lgDash") },
+        ],
+        preset.strokeDasharray ?? "",
+        (v) => {
+          preset.strokeDasharray = v;
+        },
+      );
 
       // Label — appended at `menu` tail, which (after Fill + Line
       // insertion) lands last. Order: Type → Fill → Line → Label.
       const { section: labelSection, body: labelBody } = createPropertySection("Label");
       menu.appendChild(labelSection);
-      addNumberRow(labelBody, "Size", preset.fontSize, "pt", 8, 48, 1,
-        (v) => { preset.fontSize = v; });
+      addNumberRow(labelBody, "Size", preset.fontSize, "pt", 8, 48, 1, (v) => {
+        preset.fontSize = v;
+      });
 
       this.#saveCurrentPreset(toolId, preset);
       Object.assign(this.#options, preset);
@@ -2463,16 +2607,27 @@ export class Toolbar {
     // --- Text: Color + Font + Size (Line section) ------------------
     if (isText) {
       const lb = getLineBody();
-      addColorRow(lb, "Color", preset.strokeColor, (v) => { preset.strokeColor = v; });
+      addColorRow(lb, "Color", preset.strokeColor, (v) => {
+        preset.strokeColor = v;
+      });
       if (!preset.fontFamily) preset.fontFamily = "sans-serif";
-      addSelectRow(lb, "Font", [
-        { value: "sans-serif",                            label: "Sans-serif" },
-        { value: "serif",                                 label: "Serif" },
-        { value: "monospace",                             label: "Monospace" },
-        { value: "system-ui, -apple-system, sans-serif",  label: "System UI" },
-      ], preset.fontFamily, (v) => { preset.fontFamily = v; });
-      addNumberRow(lb, "Size", preset.fontSize, "pt", 8, 96, 1,
-        (v) => { preset.fontSize = v; });
+      addSelectRow(
+        lb,
+        "Font",
+        [
+          { value: "sans-serif", label: "Sans-serif" },
+          { value: "serif", label: "Serif" },
+          { value: "monospace", label: "Monospace" },
+          { value: "system-ui, -apple-system, sans-serif", label: "System UI" },
+        ],
+        preset.fontFamily,
+        (v) => {
+          preset.fontFamily = v;
+        },
+      );
+      addNumberRow(lb, "Size", preset.fontSize, "pt", 8, 96, 1, (v) => {
+        preset.fontSize = v;
+      });
       this.#saveCurrentPreset(toolId, preset);
       Object.assign(this.#options, preset);
       return;
@@ -2491,8 +2646,7 @@ export class Toolbar {
       row.className = "pp-type-row";
       for (const opt of HIGHLIGHT_COLORS) {
         const chip = document.createElement("div");
-        chip.className = "prop-choice-chip pp-color-chip"
-          + (currentColor === opt.value ? " active" : "");
+        chip.className = `prop-choice-chip pp-color-chip${currentColor === opt.value ? " active" : ""}`;
         // Color lives on an inner swatch (rendered via .pp-color-chip
         // ::before in CSS) driven by this custom property. The chip's
         // outer frame stays transparent so hover / active states read
@@ -2502,9 +2656,7 @@ export class Toolbar {
         chip.style.setProperty("--swatch-color", opt.value);
         setTooltip(chip, opt.label);
         chip.addEventListener("click", () => {
-          row.querySelectorAll(".prop-choice-chip").forEach(
-            (c) => c.classList.remove("active"),
-          );
+          row.querySelectorAll(".prop-choice-chip").forEach((c) => c.classList.remove("active"));
           chip.classList.add("active");
           this.#handlePanelVariantChange(toolId, opt.value, preset);
         });
@@ -2522,8 +2674,13 @@ export class Toolbar {
         fb,
         "Transparency",
         Math.round((1 - (preset.fillOpacity ?? 0.4)) * 100),
-        "%", 0, 100, 5,
-        (v) => { preset.fillOpacity = 1 - v / 100; },
+        "%",
+        0,
+        100,
+        5,
+        (v) => {
+          preset.fillOpacity = 1 - v / 100;
+        },
       );
       this.#saveCurrentPreset(toolId, preset);
       Object.assign(this.#options, preset);
@@ -2532,7 +2689,9 @@ export class Toolbar {
 
     // --- Shape / Arrow / Freehand: stroke-based controls (Line) ----
     const lb = getLineBody();
-    addColorRow(lb, "Color", preset.strokeColor, (v) => { preset.strokeColor = v; });
+    addColorRow(lb, "Color", preset.strokeColor, (v) => {
+      preset.strokeColor = v;
+    });
 
     // Transparency (stroke-based). Stored as 1 - opacity to match the
     // selection panel's Transparency slider semantics.
@@ -2540,32 +2699,53 @@ export class Toolbar {
       lb,
       "Transparency",
       Math.round((1 - (preset.strokeOpacity ?? 1)) * 100),
-      "%", 0, 100, 1,
-      (v) => { preset.strokeOpacity = 1 - v / 100; },
+      "%",
+      0,
+      100,
+      1,
+      (v) => {
+        preset.strokeOpacity = 1 - v / 100;
+      },
     );
 
     // Width
-    addNumberRow(lb, "Width", preset.strokeWidth, "pt", 0.25, 40, 0.25,
-      (v) => { preset.strokeWidth = v; });
+    addNumberRow(lb, "Width", preset.strokeWidth, "pt", 0.25, 40, 0.25, (v) => {
+      preset.strokeWidth = v;
+    });
 
     // Dash type
-    addSelectRow(lb, "Dash type", [
-      { value: "",        label: "Solid",     preview: dashPreview("") },
-      { value: "dash",    label: "Dashed",    preview: dashPreview("dash") },
-      { value: "dot",     label: "Dotted",    preview: dashPreview("dot") },
-      { value: "dashDot", label: "Dash-Dot",  preview: dashPreview("dashDot") },
-      { value: "lgDash",  label: "Long Dash", preview: dashPreview("lgDash") },
-    ], preset.strokeDasharray ?? "", (v) => { preset.strokeDasharray = v; });
+    addSelectRow(
+      lb,
+      "Dash type",
+      [
+        { value: "", label: "Solid", preview: dashPreview("") },
+        { value: "dash", label: "Dashed", preview: dashPreview("dash") },
+        { value: "dot", label: "Dotted", preview: dashPreview("dot") },
+        { value: "dashDot", label: "Dash-Dot", preview: dashPreview("dashDot") },
+        { value: "lgDash", label: "Long Dash", preview: dashPreview("lgDash") },
+      ],
+      preset.strokeDasharray ?? "",
+      (v) => {
+        preset.strokeDasharray = v;
+      },
+    );
 
     // Cap type — line ends on stroke primitives. Ordering mirrors
     // selection panel (square / round / flat).
     if (isShape || isArrow || isFreehand) {
-      addSelectRow(lb, "Cap type", [
-        { value: "square", label: "Square", preview: capPreview("square") },
-        { value: "round",  label: "Round",  preview: capPreview("round") },
-        { value: "butt",   label: "Flat",   preview: capPreview("butt") },
-      ], preset.strokeLinecap ?? "butt",
-        (v) => { preset.strokeLinecap = v as LineCap; });
+      addSelectRow(
+        lb,
+        "Cap type",
+        [
+          { value: "square", label: "Square", preview: capPreview("square") },
+          { value: "round", label: "Round", preview: capPreview("round") },
+          { value: "butt", label: "Flat", preview: capPreview("butt") },
+        ],
+        preset.strokeLinecap ?? "butt",
+        (v) => {
+          preset.strokeLinecap = v as LineCap;
+        },
+      );
     }
 
     // Join type (stroke-linejoin) intentionally omitted — see
@@ -2610,15 +2790,22 @@ export class Toolbar {
         fb,
         "Fill",
         preset.fillColor === "none" ? "#ffffff" : preset.fillColor,
-        (v) => { preset.fillColor = v; },
+        (v) => {
+          preset.fillColor = v;
+        },
         { allowNone: true },
       );
       addNumberRow(
         fb,
         "Opacity",
         Math.round((preset.fillOpacity ?? 1) * 100),
-        "%", 0, 100, 5,
-        (v) => { preset.fillOpacity = v / 100; },
+        "%",
+        0,
+        100,
+        5,
+        (v) => {
+          preset.fillOpacity = v / 100;
+        },
       );
     }
 
@@ -2650,9 +2837,10 @@ export class Toolbar {
     Object.assign(this.#options, preset);
   }
 
-
   #addDropdownChoices<T>(
-    menu: HTMLElement, title: string, options: T[],
+    menu: HTMLElement,
+    title: string,
+    options: T[],
     current: any,
     onSelect: (val: any) => void,
     makeSVG: (opt: T) => SVGSVGElement,
@@ -2671,7 +2859,7 @@ export class Toolbar {
 
     for (const opt of options) {
       const item = document.createElement("div");
-      item.className = "prop-choice-item" + (isActive(opt, current) ? " active" : "");
+      item.className = `prop-choice-item${isActive(opt, current) ? " active" : ""}`;
       item.appendChild(makeSVG(opt));
       const label = document.createElement("span");
       label.className = "prop-choice-label";
@@ -2851,10 +3039,12 @@ export class Toolbar {
     for (const [toolId, variant] of this.#lastVariantByTool) {
       lastVariants[toolId] = variant;
     }
-    chrome.storage.local.set({
-      toolPresets: presets,
-      toolLastVariants: lastVariants,
-    }).catch(() => {});
+    chrome.storage.local
+      .set({
+        toolPresets: presets,
+        toolLastVariants: lastVariants,
+      })
+      .catch(() => {});
   }
 
   /** Storage key for the plain-Web persistence backend. Namespaced
@@ -2930,10 +3120,7 @@ export class Toolbar {
       for (const [toolId, variant] of this.#lastVariantByTool) {
         lastVariants[toolId] = variant;
       }
-      localStorage.setItem(
-        Toolbar.#LOCAL_STORAGE_KEY,
-        JSON.stringify({ tools, lastVariants }),
-      );
+      localStorage.setItem(Toolbar.#LOCAL_STORAGE_KEY, JSON.stringify({ tools, lastVariants }));
     } catch {
       // Quota exceeded or storage disabled (private mode / 3rd-party
       // context) — silent. Presets still work in-session via the
@@ -2945,7 +3132,9 @@ export class Toolbar {
   #activateToolById(toolId: string): void {
     const def = this.#tools.get(toolId);
     if (!def) return;
-    const btn = this.#container.querySelector(`[data-tool="${toolId}"]`) as HTMLButtonElement | null;
+    const btn = this.#container.querySelector(
+      `[data-tool="${toolId}"]`,
+    ) as HTMLButtonElement | null;
     if (!btn) return;
 
     // Same as the main btn click handler: load the preset for this
@@ -3085,11 +3274,7 @@ export class Toolbar {
    *  how Shape's variant defines the element type while color/width
    *  stay independently customizable.
    */
-  #normalizeVariantSideFields(
-    toolId: string,
-    newVariant: string,
-    preset: ToolOptions,
-  ): void {
+  #normalizeVariantSideFields(toolId: string, newVariant: string, preset: ToolOptions): void {
     if (toolId !== "arrow") return;
     const p = preset as unknown as Record<string, unknown>;
     const tri = "triangle" as const;
@@ -3160,7 +3345,7 @@ export class Toolbar {
         const headE = el.getAttribute("data-arrow-end-shape");
         const hasStart = headS && headS !== "none";
         const hasEnd = headE && headE !== "none";
-        variant = hasStart && hasEnd ? "both" : (hasEnd || hasStart) ? "end" : "none";
+        variant = hasStart && hasEnd ? "both" : hasEnd || hasStart ? "end" : "none";
         break;
       }
       case "text":
@@ -3362,13 +3547,37 @@ export class Toolbar {
         icon: "align_horizontal_left",
         label: "Align",
         submenu: [
-          { icon: "align_horizontal_left",   label: "Align left",   action: () => this.#selection.alignSelected("left") },
-          { icon: "align_horizontal_center", label: "Align center", action: () => this.#selection.alignSelected("center-h") },
-          { icon: "align_horizontal_right",  label: "Align right",  action: () => this.#selection.alignSelected("right") },
-          { separatorAbove: true,
-            icon: "align_vertical_top",    label: "Align top",    action: () => this.#selection.alignSelected("top") },
-          { icon: "align_vertical_center", label: "Align middle", action: () => this.#selection.alignSelected("middle-v") },
-          { icon: "align_vertical_bottom", label: "Align bottom", action: () => this.#selection.alignSelected("bottom") },
+          {
+            icon: "align_horizontal_left",
+            label: "Align left",
+            action: () => this.#selection.alignSelected("left"),
+          },
+          {
+            icon: "align_horizontal_center",
+            label: "Align center",
+            action: () => this.#selection.alignSelected("center-h"),
+          },
+          {
+            icon: "align_horizontal_right",
+            label: "Align right",
+            action: () => this.#selection.alignSelected("right"),
+          },
+          {
+            separatorAbove: true,
+            icon: "align_vertical_top",
+            label: "Align top",
+            action: () => this.#selection.alignSelected("top"),
+          },
+          {
+            icon: "align_vertical_center",
+            label: "Align middle",
+            action: () => this.#selection.alignSelected("middle-v"),
+          },
+          {
+            icon: "align_vertical_bottom",
+            label: "Align bottom",
+            action: () => this.#selection.alignSelected("bottom"),
+          },
         ],
       });
       if (count >= 3) {
@@ -3376,8 +3585,16 @@ export class Toolbar {
           icon: "horizontal_distribute",
           label: "Distribute",
           submenu: [
-            { icon: "horizontal_distribute", label: "Distribute horizontally", action: () => this.#selection.distributeSelected("horizontal") },
-            { icon: "vertical_distribute",   label: "Distribute vertically",   action: () => this.#selection.distributeSelected("vertical") },
+            {
+              icon: "horizontal_distribute",
+              label: "Distribute horizontally",
+              action: () => this.#selection.distributeSelected("horizontal"),
+            },
+            {
+              icon: "vertical_distribute",
+              label: "Distribute vertically",
+              action: () => this.#selection.distributeSelected("vertical"),
+            },
           ],
         });
       }
@@ -3409,8 +3626,18 @@ export class Toolbar {
       icon: "flip",
       label: "Flip",
       submenu: [
-        { icon: "swap_horiz", label: "Flip horizontal", hint: "Shift+H", action: () => this.#flipSelection("h") },
-        { icon: "swap_vert",  label: "Flip vertical",   hint: "Shift+V", action: () => this.#flipSelection("v") },
+        {
+          icon: "swap_horiz",
+          label: "Flip horizontal",
+          hint: "Shift+H",
+          action: () => this.#flipSelection("h"),
+        },
+        {
+          icon: "swap_vert",
+          label: "Flip vertical",
+          hint: "Shift+V",
+          action: () => this.#flipSelection("v"),
+        },
       ],
     });
 
@@ -3441,10 +3668,7 @@ export class Toolbar {
    *      different variant.
    *  Tools without a variant group (Crop) render as a plain leaf
    *  row that activates directly. */
-  #toolMenuEntry(
-    toolId: string,
-    def: ToolDef,
-  ): CanvasMenuItem {
+  #toolMenuEntry(toolId: string, def: ToolDef): CanvasMenuItem {
     const group = TOOL_VARIANTS[toolId];
     if (!group) {
       return {

@@ -1,4 +1,4 @@
-export const JPEG_QUALITY = 0.90;
+export const JPEG_QUALITY = 0.9;
 export const CAPTURE_DELAY_MS = 300;
 export const MAX_CANVAS_DIMENSION = 32767;
 export const DEFAULT_STROKE_COLOR = "#ff0000";
@@ -6,5 +6,5 @@ export const DEFAULT_FILL_COLOR = "none";
 export const DEFAULT_STROKE_WIDTH = 3;
 export const DEFAULT_FONT_SIZE = 24;
 export const MOSAIC_BLOCK_SIZE = 10;
-export const REDACT_BLUR_RADIUS = 12;      // px for "blur" redact variant
-export const REDACT_SOLID_COLOR = "#111";  // default fill for "solid" redact
+export const REDACT_BLUR_RADIUS = 12; // px for "blur" redact variant
+export const REDACT_SOLID_COLOR = "#111"; // default fill for "solid" redact

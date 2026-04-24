@@ -2,10 +2,10 @@
  * Sidebar — storage tree + folder tree + "New" button for the file manager.
  * Path-based identification for folders.
  */
-import type { FolderRecord, StorageProvider } from "@ingcreators/annot-core/storage";
+import type { StorageProvider } from "@ingcreators/annot-core/storage";
 import { setTooltip } from "@ingcreators/annot-core/utils";
+import { isClipboardReadSupported, isScreenCaptureSupported } from "../capture/pwa-capture.js";
 import type { StorageMode } from "../storage/bridge.js";
-import { isScreenCaptureSupported, isClipboardReadSupported } from "../capture/pwa-capture.js";
 
 export interface SidebarCallbacks {
   onStorageSelect: (mode: StorageMode) => void;
@@ -31,7 +31,7 @@ export class Sidebar {
   #container: HTMLElement;
   #callbacks: SidebarCallbacks;
   #activeMode: StorageMode = "browser";
-  #activeFolderPath: string = "";
+  #activeFolderPath = "";
   #storage: StorageProvider | null = null;
   #statuses: Record<StorageMode, StorageStatus> = {
     browser: { connected: true },
@@ -98,13 +98,17 @@ export class Sidebar {
 
     // Root node — always shows storage type name; folder/repo name
     // as subtitle for Device / Drive / GitHub.
-    const rootLabel = this.#activeMode === "device" ? "Device"
-      : this.#activeMode === "googledrive" ? "Google Drive"
-      : this.#activeMode === "github" ? "GitHub"
-      : "Browser";
+    const rootLabel =
+      this.#activeMode === "device"
+        ? "Device"
+        : this.#activeMode === "googledrive"
+          ? "Google Drive"
+          : this.#activeMode === "github"
+            ? "GitHub"
+            : "Browser";
 
     const rootRow = document.createElement("div");
-    rootRow.className = "folder-tree-item" + (this.#activeFolderPath === "" ? " active" : "");
+    rootRow.className = `folder-tree-item${this.#activeFolderPath === "" ? " active" : ""}`;
     rootRow.dataset.folderPath = "";
     rootRow.style.paddingLeft = "8px";
     rootRow.setAttribute("role", "treeitem");
@@ -171,41 +175,49 @@ export class Sidebar {
     title.textContent = "Storage";
     this.#container.appendChild(title);
 
-    this.#container.appendChild(this.#buildStorageItem(
-      "browser",
-      "database",
-      "Browser",
-      this.#statuses.browser.connected ? this.#statuses.browser.label || "Local" : "Local",
-    ));
+    this.#container.appendChild(
+      this.#buildStorageItem(
+        "browser",
+        "database",
+        "Browser",
+        this.#statuses.browser.connected ? this.#statuses.browser.label || "Local" : "Local",
+      ),
+    );
 
     if (typeof (window as any).showDirectoryPicker === "function") {
       const fs = this.#statuses.device;
-      this.#container.appendChild(this.#buildStorageItem(
-        "device",
-        "laptop",
-        "Device",
-        fs.connected ? fs.label || "Connected" : "Not connected",
-        fs.connected ? { reselect: true, reselectTitle: "Change device folder" } : undefined,
-      ));
+      this.#container.appendChild(
+        this.#buildStorageItem(
+          "device",
+          "laptop",
+          "Device",
+          fs.connected ? fs.label || "Connected" : "Not connected",
+          fs.connected ? { reselect: true, reselectTitle: "Change device folder" } : undefined,
+        ),
+      );
     }
 
     const gd = this.#statuses.googledrive;
-    this.#container.appendChild(this.#buildStorageItem(
-      "googledrive",
-      "cloud",
-      "Google Drive",
-      gd.connected ? gd.label || "Connected" : "Not connected",
-      gd.connected ? { reselect: true, reselectTitle: "Change Drive folder" } : undefined,
-    ));
+    this.#container.appendChild(
+      this.#buildStorageItem(
+        "googledrive",
+        "cloud",
+        "Google Drive",
+        gd.connected ? gd.label || "Connected" : "Not connected",
+        gd.connected ? { reselect: true, reselectTitle: "Change Drive folder" } : undefined,
+      ),
+    );
 
     const gh = this.#statuses.github;
-    this.#container.appendChild(this.#buildStorageItem(
-      "github",
-      "hub",
-      "GitHub",
-      gh.connected ? gh.label || "Connected" : "Not connected",
-      gh.connected ? { reselect: true, reselectTitle: "Change repository" } : undefined,
-    ));
+    this.#container.appendChild(
+      this.#buildStorageItem(
+        "github",
+        "hub",
+        "GitHub",
+        gh.connected ? gh.label || "Connected" : "Not connected",
+        gh.connected ? { reselect: true, reselectTitle: "Change repository" } : undefined,
+      ),
+    );
 
     // The "Folders" section (title + tree) is shown as a unit once
     // `refreshFolderTree` has successfully built the tree. Hiding both
@@ -258,11 +270,30 @@ export class Sidebar {
     menu.className = "new-menu";
 
     const items: { icon: string; label: string; action: () => void; show?: boolean }[] = [
-      { icon: "create_new_folder", label: "New Folder", action: () => this.#callbacks.onNewFolder() },
+      {
+        icon: "create_new_folder",
+        label: "New Folder",
+        action: () => this.#callbacks.onNewFolder(),
+      },
       { icon: "upload", label: "Upload Image", action: () => this.#callbacks.onUploadImage() },
-      { icon: "screenshot_monitor", label: "Capture Screen", action: () => this.#callbacks.onCaptureScreen(), show: isScreenCaptureSupported() },
-      { icon: "timer", label: "Timed Capture...", action: () => this.#callbacks.onTimedCapture(), show: isScreenCaptureSupported() },
-      { icon: "content_paste", label: "Paste from Clipboard", action: () => this.#callbacks.onPasteClipboard(), show: isClipboardReadSupported() },
+      {
+        icon: "screenshot_monitor",
+        label: "Capture Screen",
+        action: () => this.#callbacks.onCaptureScreen(),
+        show: isScreenCaptureSupported(),
+      },
+      {
+        icon: "timer",
+        label: "Timed Capture...",
+        action: () => this.#callbacks.onTimedCapture(),
+        show: isScreenCaptureSupported(),
+      },
+      {
+        icon: "content_paste",
+        label: "Paste from Clipboard",
+        action: () => this.#callbacks.onPasteClipboard(),
+        show: isClipboardReadSupported(),
+      },
     ];
 
     for (const item of items) {
@@ -352,7 +383,7 @@ export class Sidebar {
         const isActive = this.#activeFolderPath === folderPath;
 
         const row = document.createElement("div");
-        row.className = "folder-tree-item" + (isActive ? " active" : "");
+        row.className = `folder-tree-item${isActive ? " active" : ""}`;
         row.dataset.folderPath = folderPath;
         row.style.paddingLeft = `${8 + depth * 16}px`;
         row.setAttribute("role", "treeitem");
@@ -366,7 +397,10 @@ export class Sidebar {
         chevron.type = "button";
         chevron.className = "folder-tree-chevron material-symbols-outlined";
         chevron.textContent = isExpanded ? "expand_more" : "chevron_right";
-        chevron.setAttribute("aria-label", isExpanded ? `Collapse ${folder.name}` : `Expand ${folder.name}`);
+        chevron.setAttribute(
+          "aria-label",
+          isExpanded ? `Collapse ${folder.name}` : `Expand ${folder.name}`,
+        );
         chevron.setAttribute("tabindex", "-1"); // row handles focus; chevron is a skip target
         chevron.addEventListener("click", (e) => {
           e.stopPropagation();

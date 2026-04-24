@@ -19,14 +19,17 @@
  * can treat it as a redaction rather than a generic shape.
  */
 
-import type { RedactStyle } from "./tools/tool-base.js";
 import { MOSAIC_BLOCK_SIZE, REDACT_BLUR_RADIUS, REDACT_SOLID_COLOR } from "../utils/constants.js";
 import type { CanvasManager } from "./canvas-manager.js";
+import type { RedactStyle } from "./tools/tool-base.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
 export interface RedactRect {
-  x: number; y: number; width: number; height: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
 }
 
 /** Classify an SVG element as a redact variant, or null if not a
@@ -41,10 +44,10 @@ export function detectRedactStyle(el: SVGElement): RedactStyle | null {
  *  <rect> solid and <image> mosaic/blur). */
 export function redactRect(el: SVGElement): RedactRect {
   return {
-    x: parseFloat(el.getAttribute("x") || "0"),
-    y: parseFloat(el.getAttribute("y") || "0"),
-    width: parseFloat(el.getAttribute("width") || "0"),
-    height: parseFloat(el.getAttribute("height") || "0"),
+    x: Number.parseFloat(el.getAttribute("x") || "0"),
+    y: Number.parseFloat(el.getAttribute("y") || "0"),
+    width: Number.parseFloat(el.getAttribute("width") || "0"),
+    height: Number.parseFloat(el.getAttribute("height") || "0"),
   };
 }
 
@@ -155,11 +158,17 @@ async function sampleBlockAveragePng(
       const sx = Math.min(bx + Math.floor(blockSize / 2), width - 1);
       const sy = Math.min(by + Math.floor(blockSize / 2), height - 1);
       const idx = (sy * width + sx) * 4;
-      const r = px[idx], g = px[idx + 1], b = px[idx + 2], a = px[idx + 3];
+      const r = px[idx];
+      const g = px[idx + 1];
+      const b = px[idx + 2];
+      const a = px[idx + 3];
       for (let yy = by; yy < Math.min(by + blockSize, height); yy++) {
         for (let xx = bx; xx < Math.min(bx + blockSize, width); xx++) {
           const i = (yy * width + xx) * 4;
-          px[i] = r; px[i + 1] = g; px[i + 2] = b; px[i + 3] = a;
+          px[i] = r;
+          px[i + 1] = g;
+          px[i + 2] = b;
+          px[i + 3] = a;
         }
       }
     }

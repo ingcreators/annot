@@ -296,7 +296,7 @@ function renderMenu(
     const row = document.createElement("button");
     row.type = "button";
     row.setAttribute("role", item.header ? "presentation" : "menuitem");
-    row.className = "anno-canvas-ctx-item" + (item.header ? " is-header" : "");
+    row.className = `anno-canvas-ctx-item${item.header ? " is-header" : ""}`;
     const hasSubmenu = !!(item.submenu && item.submenu.length > 0);
     if (item.disabled || item.header) row.setAttribute("disabled", "");
     if (hasSubmenu) row.setAttribute("aria-haspopup", "menu");
@@ -384,7 +384,9 @@ function renderMenu(
         ? async () => {
             const action = item.action!;
             closeAll();
-            try { await action(); } catch (err) {
+            try {
+              await action();
+            } catch (err) {
               console.error("[canvas-ctx]", err);
             }
           }
@@ -396,7 +398,10 @@ function renderMenu(
       let openTimer: number | null = null;
       const openSubmenu = (focusFirst: boolean): void => {
         if (!hasSubmenu) return;
-        if (openTimer !== null) { clearTimeout(openTimer); openTimer = null; }
+        if (openTimer !== null) {
+          clearTimeout(openTimer);
+          openTimer = null;
+        }
         const myLevelIdx = menuStack.indexOf(level);
         if (myLevelIdx >= 0) {
           // Close any descendant levels before opening a new submenu
@@ -405,13 +410,7 @@ function renderMenu(
         }
         row.classList.add("is-parent-open");
         const rect = row.getBoundingClientRect();
-        const child = renderMenu(
-          item.submenu!,
-          { anchorRect: rect },
-          level,
-          row,
-          rowIdx,
-        );
+        const child = renderMenu(item.submenu!, { anchorRect: rect }, level, row, rowIdx);
         menuStack.push(child);
         level.openChildFromIdx = rowIdx;
         if (focusFirst) child.focusables[0]?.focus();
@@ -440,9 +439,9 @@ function renderMenu(
           if (myLevelIdx >= 0 && level.openChildFromIdx !== -1) {
             closeLevelsFrom(myLevelIdx + 1);
             level.openChildFromIdx = -1;
-            menu.querySelectorAll(".is-parent-open").forEach((el) =>
-              el.classList.remove("is-parent-open"),
-            );
+            menu
+              .querySelectorAll(".is-parent-open")
+              .forEach((el) => el.classList.remove("is-parent-open"));
           }
         });
       }
@@ -516,9 +515,10 @@ function renderMenu(
       if (level.focusables.length === 0) return;
       e.preventDefault();
       const idx = level.focusables.findIndex((el) => el === document.activeElement);
-      const next = e.key === "ArrowDown"
-        ? (idx + 1) % level.focusables.length
-        : (idx - 1 + level.focusables.length) % level.focusables.length;
+      const next =
+        e.key === "ArrowDown"
+          ? (idx + 1) % level.focusables.length
+          : (idx - 1 + level.focusables.length) % level.focusables.length;
       level.focusables[next]?.focus();
       return;
     }
@@ -532,8 +532,7 @@ function renderMenu(
         // action. Using the hook bypasses the default click handler
         // (which would trigger the action on action-bearing rows).
         e.preventDefault();
-        const openHook = (active as any).__annoOpenSubmenu as
-          | (() => void) | undefined;
+        const openHook = (active as any).__annoOpenSubmenu as (() => void) | undefined;
         if (openHook) openHook();
         else active.click();
       }

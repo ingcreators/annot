@@ -115,8 +115,14 @@ export class TagEditor {
 
     // Enter to add, Escape to cancel
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Enter") { e.preventDefault(); addTag(); }
-      if (e.key === "Escape") { e.preventDefault(); row.remove(); }
+      if (e.key === "Enter") {
+        e.preventDefault();
+        addTag();
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        row.remove();
+      }
     };
     keyInput.addEventListener("keydown", onKey);
     valInput.addEventListener("keydown", onKey);

@@ -9,7 +9,7 @@
 export const ROOT_PATH = "";
 
 /** Characters not allowed in a single path segment (Windows-reserved + control). */
-// eslint-disable-next-line no-control-regex
+// biome-ignore lint/suspicious/noControlCharactersInRegex: intentional — rejects ASCII control chars in filenames (POSIX + Windows block these).
 const INVALID_NAME_CHARS = /[<>:"/\\|?*\x00-\x1f]/;
 
 /**
@@ -75,7 +75,7 @@ export function ancestorPaths(path: string): string[] {
  */
 export function isDescendantOrSame(path: string, ancestor: string): boolean {
   if (!ancestor) return true;
-  return path === ancestor || path.startsWith(ancestor + "/");
+  return path === ancestor || path.startsWith(`${ancestor}/`);
 }
 
 /**
@@ -93,10 +93,7 @@ export function splitExt(filename: string): [string, string] {
  * Return a unique filename within its folder by appending " (2)", " (3)", ...
  * before the extension. If `desired` is already free, returns it unchanged.
  */
-export function uniquifyFilename(
-  desired: string,
-  exists: (candidate: string) => boolean,
-): string {
+export function uniquifyFilename(desired: string, exists: (candidate: string) => boolean): string {
   if (!exists(desired)) return desired;
   const [base, ext] = splitExt(desired);
   for (let n = 2; n < 10000; n++) {
@@ -123,10 +120,8 @@ export async function uniquifyFilenameAsync(
 /** Rewrite a child path when its ancestor folder is renamed/moved. */
 export function rewritePathPrefix(path: string, oldPrefix: string, newPrefix: string): string {
   if (path === oldPrefix) return newPrefix;
-  if (oldPrefix && path.startsWith(oldPrefix + "/")) {
-    return newPrefix
-      ? newPrefix + path.slice(oldPrefix.length)
-      : path.slice(oldPrefix.length + 1);
+  if (oldPrefix && path.startsWith(`${oldPrefix}/`)) {
+    return newPrefix ? newPrefix + path.slice(oldPrefix.length) : path.slice(oldPrefix.length + 1);
   }
   if (!oldPrefix) {
     return newPrefix ? `${newPrefix}/${path}` : path;
