@@ -1,0 +1,248 @@
+/**
+ * Capture host — owns the "get a new image into the app" flows:
+ * screenshot capture, interval capture, clipboard paste, file upload.
+ *
+ * Extracted from `app.ts` as part of the Phase 1 decomposition
+ * (see `docs/plans/app-decomposition.md`). After a successful save the
+ * host invokes the `openEditor` callback rather than reaching into
+ * `AnnotApp` state directly — that indirection is what lets Phase 2's
+ * `EditorSession` extraction land without touching this file again.
+ *
+ * Storage is taken as a getter so a mode-switch during capture routes
+ * the save to the newly-selected backend.
+ */
+
+import { readEditableImage } from "@ingcreators/annot-core";
+import type { StorageProvider } from "@ingcreators/annot-core/storage";
+import { newIdB58 } from "@ingcreators/annot-core/utils";
+import {
+  loadCursorPreference,
+  saveCursorPreference,
+  showIntervalCaptureDialog,
+  showIntervalCaptureProgress,
+} from "../capture/interval-dialog.js";
+import { captureScreen, pasteFromClipboard, startIntervalCapture } from "../capture/pwa-capture.js";
+import type { FileManager } from "../gallery/file-manager.js";
+import { showSaveError } from "../ui/error-bar.js";
+import { fileToDataUrl, loadImage } from "./image-utils.js";
+
+export interface OpenEditorArgs {
+  path: string;
+  dataUrl: string;
+  width: number;
+  height: number;
+  tags: Record<string, string>;
+  annotations?: string;
+  filename?: string;
+}
+
+export interface CaptureHostDeps {
+  getStorage(): StorageProvider | null;
+  getCurrentFolderPath(): string;
+  getFileManager(): FileManager | null;
+  /** Invoked after a successful save to switch the app into the editor
+   *  view for the new image. The callback owns `setCurrentImagePath`,
+   *  `setupEditor`, and the URL push. */
+  openEditor(args: OpenEditorArgs): void;
+}
+
+export class CaptureHost {
+  constructor(private readonly deps: CaptureHostDeps) {}
+
+  async captureScreenAndSave(): Promise<void> {
+    // Use last-chosen cursor preference; defaults to "always".
+    const dataUrl = await captureScreen(loadCursorPreference());
+    if (!dataUrl) return;
+    await this.saveDataUrlAndOpen(dataUrl);
+  }
+
+  async timedCaptureAndSave(): Promise<void> {
+    const storage = this.deps.getStorage();
+    if (!storage) return;
+    const cfg = await showIntervalCaptureDialog();
+    if (!cfg) return;
+    // Remember the cursor choice for next captures (single + timed)
+    saveCursorPreference(cfg.cursor);
+
+    const progress = showIntervalCaptureProgress(cfg.count);
+    const folderPath = this.deps.getCurrentFolderPath();
+    const sessionId = newIdB58();
+    const total = cfg.count;
+    let savedFrames = 0;
+
+    const handle = await startIntervalCapture({
+      intervalSec: cfg.intervalSec,
+      count: cfg.count,
+      cursor: cfg.cursor,
+      onProgress: (captured, total) => progress.update(captured, total),
+      onError: (err) => console.error("[timed-capture] frame error:", err),
+      onFrame: async (dataUrl, index) => {
+        try {
+          const img = await loadImage(dataUrl);
+          const thumbnailDataUrl = await storage.generateThumbnail(dataUrl);
+          const now = new Date().toISOString();
+          const sec = String(index + 1).padStart(3, "0");
+          await storage.saveImage({
+            originalDataUrl: dataUrl,
+            thumbnailDataUrl,
+            annotationsSvg: "",
+            width: img.naturalWidth,
+            height: img.naturalHeight,
+            sourceUrl: "",
+            tags: {
+              timed: "1",
+              seq: sec,
+              captureId: newIdB58(),
+              session: sessionId,
+              sessionKind: "interval",
+              sessionIndex: String(index),
+              sessionTotal: String(total),
+            },
+            folderPath,
+            filename: `capture-${now.replace(/[:.]/g, "-")}-${sec}.jpg`,
+            createdAt: now,
+            updatedAt: now,
+          });
+          savedFrames++;
+        } catch (e) {
+          console.error("[timed-capture] save error:", e);
+        }
+      },
+    });
+
+    if (!handle) {
+      progress.complete();
+      return;
+    }
+
+    progress.setOnCancel(() => handle.cancel());
+
+    await handle.done;
+    progress.complete();
+
+    // Return focus to this tab (which initiated the capture).
+    // Chrome may require a recent user gesture; try multiple paths.
+    try {
+      window.focus();
+      // If the tab is hidden, try flashing title to draw attention as a fallback.
+      if (document.visibilityState !== "visible") {
+        const originalTitle = document.title;
+        document.title = `✔ Capture complete — ${originalTitle}`;
+        const restore = () => {
+          document.title = originalTitle;
+          document.removeEventListener("visibilitychange", restore);
+        };
+        document.addEventListener("visibilitychange", restore);
+      }
+    } catch {
+      /* ignore */
+    }
+
+    // Interval capture frames are tagged with a session id for future
+    // grouping, but we don't auto-open any editor — just refresh the
+    // gallery so the new frames are visible.
+    await this.deps.getFileManager()?.refresh(folderPath);
+    // Silence the unused-var warning for `savedFrames` / `sessionId` while
+    // still keeping the ids attached to the stored tags for later features.
+    void savedFrames;
+    void sessionId;
+  }
+
+  async pasteAndSave(): Promise<void> {
+    const dataUrl = await pasteFromClipboard();
+    if (!dataUrl) {
+      showSaveError("No image found in clipboard.");
+      return;
+    }
+    await this.saveDataUrlAndOpen(dataUrl);
+  }
+
+  openFileDialog(): void {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".jpg,.jpeg,.png,.svg";
+    input.addEventListener("change", async () => {
+      const file = input.files?.[0];
+      if (file) await this.openFile(file);
+    });
+    input.click();
+  }
+
+  async openFile(file: File): Promise<void> {
+    const storage = this.deps.getStorage();
+    if (!storage) return;
+    const dataUrl = await fileToDataUrl(file);
+    const img = await loadImage(dataUrl);
+
+    const arrayBuf = await file.arrayBuffer();
+    const meta = readEditableImage(new Uint8Array(arrayBuf));
+
+    let originalUrl = dataUrl;
+    let annotations = "";
+    let tags: Record<string, string> = {};
+    let w = img.naturalWidth;
+    let h = img.naturalHeight;
+
+    if (meta?.annotationsSvg) {
+      originalUrl = meta.originalImageDataUrl || dataUrl;
+      annotations = meta.annotationsSvg;
+      tags = meta.tags || {};
+      w = meta.width || w;
+      h = meta.height || h;
+    }
+
+    const thumbnailDataUrl = await storage.generateThumbnail(originalUrl);
+    const now = new Date().toISOString();
+    const path = await storage.saveImage({
+      originalDataUrl: originalUrl,
+      thumbnailDataUrl,
+      annotationsSvg: annotations,
+      width: w,
+      height: h,
+      sourceUrl: "",
+      tags,
+      folderPath: this.deps.getCurrentFolderPath(),
+      filename: file.name || undefined,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    this.deps.openEditor({
+      path,
+      dataUrl: originalUrl,
+      width: w,
+      height: h,
+      tags,
+      annotations: annotations || undefined,
+      filename: file.name || undefined,
+    });
+  }
+
+  async saveDataUrlAndOpen(dataUrl: string): Promise<void> {
+    const storage = this.deps.getStorage();
+    if (!storage) return;
+    const img = await loadImage(dataUrl);
+    const thumbnailDataUrl = await storage.generateThumbnail(dataUrl);
+    const now = new Date().toISOString();
+    const path = await storage.saveImage({
+      originalDataUrl: dataUrl,
+      thumbnailDataUrl,
+      annotationsSvg: "",
+      width: img.naturalWidth,
+      height: img.naturalHeight,
+      sourceUrl: "",
+      tags: {},
+      folderPath: this.deps.getCurrentFolderPath(),
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    this.deps.openEditor({
+      path,
+      dataUrl,
+      width: img.naturalWidth,
+      height: img.naturalHeight,
+      tags: {},
+    });
+  }
+}
