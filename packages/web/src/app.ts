@@ -63,6 +63,7 @@ import {
   type GitHubRepoRef,
 } from "./storage/github-auth.js";
 import { GoogleDriveStore } from "./storage/google-drive-store.js";
+import { GitHubStore } from "./storage/github-store.js";
 import { FileManager } from "./gallery/file-manager.js";
 import type { SplitEditor } from "./editor/split-editor.js";
 import { encodeCaptureInWorker } from "./workers/encode-client.js";
@@ -1322,7 +1323,12 @@ export class App {
       updatedAt: this.#currentImageRecord?.updatedAt,
       sourceUrl: this.#currentImageRecord?.sourceUrl,
       tags: this.#currentTags,
+      externalLinks: this.#buildExternalLinksFor(this.#currentImagePath),
     });
+    // GitHub: commit lookup is a separate API call (~300ms) that we
+    // don't want to block the editor opening on. Fire it in the
+    // background and patch the drawer when it lands.
+    void this.#populateLastCommit(this.#currentImagePath);
     this.#fileDetailsDrawer.onRename = (newName) => this.#renameCurrentImage(newName);
     this.#fileDetailsDrawer.onTagsChange = (t) => {
       this.#currentTags = t;
@@ -1934,7 +1940,55 @@ export class App {
       updatedAt: this.#currentImageRecord?.updatedAt,
       sourceUrl: this.#currentImageRecord?.sourceUrl,
       tags: this.#currentTags,
+      externalLinks: this.#buildExternalLinksFor(newPath),
     });
+    // Rename changes the blob path → the "View on GitHub" URL + last
+    // commit reflect the new location. Re-fetch in the background.
+    void this.#populateLastCommit(newPath);
+  }
+
+  /**
+   * Build the "External links" section for the file-details drawer.
+   * Currently only GitHub contributes a link; Drive / Browser / Device
+   * have nothing analogous (the canonical location is either an IDB
+   * blob or a local path). New backends slot in additively here.
+   */
+  #buildExternalLinksFor(path: string | null): Array<{ label: string; url: string; icon?: string }> | undefined {
+    if (!path) return undefined;
+    if (this.#storage instanceof GitHubStore) {
+      const url = this.#storage.getViewUrl(path);
+      if (url) return [{ label: "View on GitHub", url, icon: "open_in_new" }];
+    }
+    return undefined;
+  }
+
+  /**
+   * Lazy-load backend-provided last-commit metadata and patch it
+   * into the drawer. Awaits the network call in the background so
+   * the editor opens instantly; the drawer section just pops in
+   * when the lookup settles (typically within a few hundred ms).
+   */
+  async #populateLastCommit(path: string | null): Promise<void> {
+    if (!path || !(this.#storage instanceof GitHubStore)) return;
+    const store = this.#storage;
+    try {
+      const info = await store.getLastCommit(path);
+      if (!info) return;
+      // Race guard: if the user navigated to a different image
+      // while we were fetching, the drawer is now owned by that
+      // image — skip the patch.
+      if (this.#currentImagePath !== path) return;
+      this.#fileDetailsDrawer?.setLastCommit({
+        authorName: info.authorName,
+        authorAvatarUrl: info.authorAvatarUrl,
+        messageHeadline: info.messageHeadline,
+        date: info.date,
+        shortSha: info.shortSha,
+        url: info.url,
+      });
+    } catch {
+      // Silent — the drawer just omits the section.
+    }
   }
 
   /**

@@ -47,7 +47,8 @@ import {
 import { renderImageRecord } from "@ingcreators/annot-core/editor/export";
 import { encodeCaptureInWorker } from "../workers/encode-client.js";
 import { loadEncodeOptions } from "../encode-options.js";
-import type { GitHubRepoRef } from "./github-auth.js";
+import type { GitHubRepoRef, GitHubCommitSummary } from "./github-auth.js";
+import { getLastCommitForPath } from "./github-auth.js";
 
 const GITHUB_API = "https://api.github.com";
 
@@ -211,6 +212,26 @@ export class GitHubStore implements StorageProvider {
 
   getRateLimit(): { remaining: number | null; resetAt: number | null } {
     return { remaining: this.#rateLimitRemaining, resetAt: this.#rateLimitReset };
+  }
+
+  /**
+   * Public URL to the file's blob on github.com. Used by the file-
+   * details drawer's "View on GitHub" link. Returns `null` if the
+   * path is outside basePath (shouldn't happen but guard anyway).
+   */
+  getViewUrl(relPath: string): string | null {
+    const fullPath = this.#fullPath(relPath);
+    if (!fullPath) return null;
+    const owner = encodeURIComponent(this.#owner);
+    const repo = encodeURIComponent(this.#repo);
+    const branch = encodeURIComponent(this.#branch);
+    return `https://github.com/${owner}/${repo}/blob/${branch}/${this.#encodePath(fullPath)}`;
+  }
+
+  /** Convenience wrapper so the host doesn't have to thread `owner`,
+   *  `repo`, `branch` through the call site. */
+  async getLastCommit(relPath: string): Promise<GitHubCommitSummary | null> {
+    return getLastCommitForPath(this.#owner, this.#repo, this.#branch, this.#fullPath(relPath));
   }
 
   /**

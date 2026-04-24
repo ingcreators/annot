@@ -187,6 +187,71 @@ export async function getRepo(owner: string, name: string): Promise<GitHubRepoSu
   return toRepoSummary(body);
 }
 
+export interface GitHubCommitSummary {
+  sha: string;
+  shortSha: string;
+  url: string;                 // https://github.com/<owner>/<repo>/commit/<sha>
+  authorName: string;
+  authorAvatarUrl?: string;
+  date: string;                // ISO
+  messageHeadline: string;     // first line only
+}
+
+/**
+ * Return the most recent commit that touched `{owner}/{name}:{path}` on
+ * the given branch. The commits-by-path API is what the GitHub blob
+ * UI uses itself, so the result matches what a user would see on
+ * `github.com/<owner>/<repo>/blob/<branch>/<path>`.
+ *
+ * Returns `null` if the file has no commit history yet (just created
+ * via our PUT and propagation hasn't caught up) or on any error —
+ * the drawer section is a nice-to-have and we don't want its failure
+ * to disrupt the edit flow.
+ */
+export async function getLastCommitForPath(
+  owner: string,
+  repo: string,
+  branch: string,
+  path: string,
+): Promise<GitHubCommitSummary | null> {
+  const token = getAccessToken();
+  if (!token) return null;
+  const url = `${GITHUB_API}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`
+    + `/commits?path=${encodeURIComponent(path)}&sha=${encodeURIComponent(branch)}&per_page=1`;
+  try {
+    const res = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+      },
+    });
+    if (!res.ok) return null;
+    const body = await res.json();
+    const entry = Array.isArray(body) ? body[0] : undefined;
+    if (!entry) return null;
+    const sha = entry.sha as string | undefined;
+    if (!sha) return null;
+    const commit = entry.commit ?? {};
+    const author = commit.author ?? {};
+    const userAuthor = entry.author ?? {};  // user object when the commit email matches a GitHub user
+    const message = (commit.message as string | undefined) ?? "";
+    const headline = message.split("\n", 1)[0] || "(no message)";
+    return {
+      sha,
+      shortSha: sha.slice(0, 7),
+      url: entry.html_url
+        ?? `https://github.com/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/commit/${sha}`,
+      authorName: author.name || userAuthor.login || "Unknown",
+      authorAvatarUrl: userAuthor.avatar_url,
+      date: author.date || userAuthor.updated_at || "",
+      messageHeadline: headline,
+    };
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Probe whether the current token can actually write to `owner/name`'s
  * Contents. Needed because `permissions.push` on the `/user/repos`

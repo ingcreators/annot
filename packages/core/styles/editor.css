@@ -551,6 +551,50 @@ a.file-details-row-value:hover {
   min-height: 32px;
 }
 
+/* Author avatar inside the Last commit section. Rendered inline with
+ * the author name so the row height stays consistent with the other
+ * metadata rows. */
+.file-details-avatar {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: middle;
+  display: inline-block;
+}
+
+/* Abbreviated commit SHA shown alongside the message. Monospace so it
+ * reads as a git ref rather than prose. */
+.file-details-sha {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  color: var(--text-secondary);
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: var(--input-bg, rgba(255, 255, 255, 0.04));
+}
+
+/* External-link section ("View on GitHub", etc). One link per row,
+ * icon + label, styled like a prominent action rather than a value. */
+.file-details-link-row {
+  display: block;
+}
+.file-details-external-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 13px;
+  padding: 4px 0;
+}
+.file-details-external-link:hover {
+  text-decoration: underline;
+}
+.file-details-external-link .material-symbols-outlined {
+  font-size: 16px;
+}
+
 /* Inline rename affordance on the Name row. The input occupies the
  * same visual slot as a read-only span value — NO border or padding
  * offset — so the text baseline and left edge line up perfectly with
