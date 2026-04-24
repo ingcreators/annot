@@ -1442,6 +1442,32 @@ export class App {
       this.#openScratchpadSection?.setSaveEnabled(this.#scratchpadCanSave);
     };
 
+    // Seed initial canvas state BEFORE wiring the autosave hook.
+    // Otherwise the `history.save()` that records the restored
+    // annotations (or the just-added click marker) fires
+    // `onStateChange`, and the autosave timer commits a no-op copy
+    // of the file ~10 seconds after the user simply opens it — a
+    // real problem on GitHub where each commit shows in git log.
+    // The click-marker path still persists explicitly below, so
+    // delaying the hook doesn't lose that save.
+    if (annotations) {
+      this.restoreAnnotations(canvas, annotations);
+      history.save();
+    } else if (
+      this.#currentTags["click.x"] !== undefined &&
+      this.#currentTags["click.y"] !== undefined &&
+      this.#currentTags["click.marker"] !== "added"
+    ) {
+      // First-time open of a click-captured image — draw a target marker
+      // at the recorded click position so the user sees where the click was.
+      this.#addClickMarker(canvas);
+      this.#currentTags["click.marker"] = "added";
+      history.save();
+      // Persist the marker so we don't re-add it on next open,
+      // and so the thumbnail gets refreshed with the marker included.
+      this.writeAnnotationsToStorage();
+    }
+
     history.onStateChange = () => {
       // Reflect "edits made" immediately — the debounce hides latency
       // but the user should know something will be saved soon.
@@ -1480,24 +1506,6 @@ export class App {
         void this.writeThumbnailToStorage();
       }, 2000);
     };
-
-    if (annotations) {
-      this.restoreAnnotations(canvas, annotations);
-      history.save();
-    } else if (
-      this.#currentTags["click.x"] !== undefined &&
-      this.#currentTags["click.y"] !== undefined &&
-      this.#currentTags["click.marker"] !== "added"
-    ) {
-      // First-time open of a click-captured image — draw a target marker
-      // at the recorded click position so the user sees where the click was.
-      this.#addClickMarker(canvas);
-      this.#currentTags["click.marker"] = "added";
-      history.save();
-      // Persist the marker so we don't re-add it on next open,
-      // and so the thumbnail gets refreshed with the marker included.
-      this.writeAnnotationsToStorage();
-    }
 
     this.#currentEditor = { canvas, history, selection };
   }
