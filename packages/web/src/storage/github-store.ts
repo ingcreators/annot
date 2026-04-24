@@ -160,6 +160,19 @@ export class GitHubStore implements StorageProvider {
    */
   #recordCache = new Map<string, ImageRecord>();
 
+  /**
+   * Gallery thumbnail cache. Unlike Drive (which returns a
+   * server-generated `thumbnailLink`) and Browser / Device (where
+   * thumbnails are persisted alongside the file), GitHub has no
+   * thumbnail facility of its own — the gallery would otherwise
+   * render empty squares. `listImages` kicks off a background fetch
+   * for any uncached paths and dispatches a DOM event once each
+   * thumbnail lands, so the gallery can patch the cards in place
+   * without blocking the initial render.
+   */
+  #thumbnailCache = new Map<string, string>();
+  #thumbnailInFlight = new Map<string, Promise<void>>();
+
   // ---- Token refresh ----
 
   /**
@@ -230,6 +243,8 @@ export class GitHubStore implements StorageProvider {
     this.#allFolderPaths.clear();
     this.#fileMeta.clear();
     this.#recordCache.clear();
+    this.#thumbnailCache.clear();
+    this.#thumbnailInFlight.clear();
     this.#treeLoaded = false;
     this.#treeLoadInFlight = null;
   }
@@ -566,6 +581,12 @@ export class GitHubStore implements StorageProvider {
     };
     this.#recordCache.set(relPath, record);
     this.#fileMeta.set(relPath, { createdAt: record.createdAt, updatedAt: record.updatedAt });
+    // Pre-seed the thumbnail cache from the caller-provided one so
+    // the new entry shows up in the gallery immediately. `listImages`
+    // will still fetch-and-cache for entries we never saved locally.
+    if (data.thumbnailDataUrl) {
+      this.#thumbnailCache.set(relPath, data.thumbnailDataUrl);
+    }
     return relPath;
   }
 
@@ -615,17 +636,20 @@ export class GitHubStore implements StorageProvider {
   async listImages(folderPath: string): Promise<ImageRecord[]> {
     await this.#ensureTreeLoaded();
     const results: ImageRecord[] = [];
+    const uncachedPaths: string[] = [];
     for (const path of this.#shaByPath.keys()) {
       const name = getFilename(path);
       if (name === GITKEEP) continue;
       if (!isImageFilename(name)) continue;
       if (getParentPath(path) !== folderPath) continue;
       const meta = this.#fileMeta.get(path);
+      const cachedThumb = this.#thumbnailCache.get(path);
+      if (!cachedThumb) uncachedPaths.push(path);
       results.push({
         path,
         folderPath,
         originalDataUrl: "",
-        thumbnailDataUrl: "",
+        thumbnailDataUrl: cachedThumb || "",
         annotationsSvg: "",
         width: 0,
         height: 0,
@@ -636,7 +660,56 @@ export class GitHubStore implements StorageProvider {
       });
     }
     results.sort((a, b) => a.path.localeCompare(b.path));
+    // Fire-and-forget thumbnail prefetch. Each one emits a DOM event
+    // on completion (see `#ensureThumbnail`) so the gallery can patch
+    // the card's `<img src>` in place without awaiting here.
+    for (const p of uncachedPaths) {
+      void this.#ensureThumbnail(p);
+    }
     return results;
+  }
+
+  /**
+   * Fetch `path`'s blob, generate a 480px JPEG thumbnail, cache the
+   * resulting data URL, and emit an `annot-thumbnail-ready` window
+   * event so any rendered gallery card for this path can swap in the
+   * real thumbnail. Idempotent: duplicate calls share the in-flight
+   * promise and cache hits return immediately.
+   */
+  async #ensureThumbnail(relPath: string): Promise<void> {
+    if (this.#thumbnailCache.has(relPath)) return;
+    const existing = this.#thumbnailInFlight.get(relPath);
+    if (existing) return existing;
+    const p = (async () => {
+      try {
+        const fetched = await this.#getContents(relPath);
+        if (!fetched) return;
+        const mime = inferMimeFromPath(relPath);
+        const blob = new Blob([fetched.bytes as BlobPart], { type: mime });
+        const bmp = await createImageBitmap(blob);
+        const canvas = new OffscreenCanvas(1, 1);
+        const ctx = canvas.getContext("2d")!;
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
+        drawToThumbCanvas(ctx, canvas, bmp, bmp.width, bmp.height, 480);
+        bmp.close();
+        const outBlob = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.85 });
+        const dataUrl = await blobToDataUrl(outBlob);
+        this.#thumbnailCache.set(relPath, dataUrl);
+        // CustomEvent is typed loosely here because we don't augment
+        // the WindowEventMap globally for a storage-specific event.
+        window.dispatchEvent(new CustomEvent("annot-thumbnail-ready", {
+          detail: { path: relPath, dataUrl },
+        }));
+      } catch {
+        // Swallow — the gallery just keeps showing the placeholder.
+        // A subsequent forceRefresh / navigation retries.
+      } finally {
+        this.#thumbnailInFlight.delete(relPath);
+      }
+    })();
+    this.#thumbnailInFlight.set(relPath, p);
+    return p;
   }
 
   async updateImage(path: string, updates: ImageRecordUpdate): Promise<string> {
@@ -670,6 +743,10 @@ export class GitHubStore implements StorageProvider {
         tags,
         updatedAt: new Date().toISOString(),
       });
+      // Annotations changed → rendered bytes changed → the cached
+      // thumbnail is stale. Drop it so the next listImages triggers
+      // a fresh prefetch.
+      this.#thumbnailCache.delete(currentPath);
     }
 
     // -- Move: implemented as delete-at-old + create-at-new. Two
@@ -706,6 +783,11 @@ export class GitHubStore implements StorageProvider {
       if (meta) {
         this.#fileMeta.delete(currentPath);
         this.#fileMeta.set(newPath, meta);
+      }
+      const thumb = this.#thumbnailCache.get(currentPath);
+      if (thumb) {
+        this.#thumbnailCache.delete(currentPath);
+        this.#thumbnailCache.set(newPath, thumb);
       }
       currentPath = newPath;
     }
@@ -748,6 +830,11 @@ export class GitHubStore implements StorageProvider {
       this.#fileMeta.delete(path);
       this.#fileMeta.set(newPath, meta);
     }
+    const thumb = this.#thumbnailCache.get(path);
+    if (thumb) {
+      this.#thumbnailCache.delete(path);
+      this.#thumbnailCache.set(newPath, thumb);
+    }
     return newPath;
   }
 
@@ -758,6 +845,7 @@ export class GitHubStore implements StorageProvider {
     await this.#deleteContents(path, sha, this.#commitMessage("delete", path));
     this.#recordCache.delete(path);
     this.#fileMeta.delete(path);
+    this.#thumbnailCache.delete(path);
   }
 
   // ===========================================================================
@@ -896,6 +984,14 @@ export class GitHubStore implements StorageProvider {
         const np = rewritePathPrefix(p, oldPath, newPath);
         this.#fileMeta.delete(p);
         this.#fileMeta.set(np, m);
+      }
+    }
+    // thumbnailCache
+    for (const [p, t] of Array.from(this.#thumbnailCache.entries())) {
+      if (p === oldPath || p.startsWith(oldPath + "/")) {
+        const np = rewritePathPrefix(p, oldPath, newPath);
+        this.#thumbnailCache.delete(p);
+        this.#thumbnailCache.set(np, t);
       }
     }
     // folder set
