@@ -91,20 +91,17 @@ itself be open for extension.**
 
 ## Non-goals
 
-- **Removing the built-in modes.** Browser / Device / Drive /
-  GitHub / Extension stay first-class. The plugin path is for
-  *additional* backends, not a replacement.
 - **Plugin-supplied auth UI for the built-ins.** Drive's GIS
   popup + GitHub's PAT dialog stay where they are.
 - **Hot-swapping a registered mode at runtime.** Modes are
   registered once at `init` and live for the app's lifetime.
-- **Plugin-driven sidebar order.** The sidebar's left-rail order
-  for built-ins stays hardcoded; plugin modes are appended in
-  registration order at the bottom of the strip.
 - **Persisted-mode forward-compat.** If a user's `loadLastStorage()`
   returns `"cloud"` but the Cloud plugin isn't loaded this session,
   we fall back to `"browser"` — same behaviour as today's
   "device handle revoked" path.
+
+(*Removing* a built-in is a goal, not a non-goal — see
+"Built-in opt-out" below.)
 
 ## Design
 
@@ -290,6 +287,46 @@ This is a small additive change to `@ingcreators/annot-core/storage`
 and lands in Phase B alongside the `StorageRegistry` extraction so
 both the type widening and the contract addition ship together.
 
+### Built-in opt-out
+
+`annot-cloud` may want to ship a deployment that *replaces* the
+built-in GitHub mode with its own pointer-commit store, not
+*augments* it. A locked-down distribution may want only its own
+backend visible. To support both:
+
+```ts
+// AnnotApp init shape
+app.init({
+  plugins: [cloudPointerCommitPlugin],
+  disableBuiltinStorage: ["github"],          // hide the built-in
+  disableBuiltinPlugins: ["github-external-links"], // and its drawer link
+});
+```
+
+Semantics:
+
+- **`disableBuiltinStorage: BuiltInStorageMode[]`** — built-ins
+  in the list are not registered as `StorageRegistration`s. They
+  don't appear in the sidebar, can't be the result of a successful
+  `handleStorageSelect`, and `restoreOnBoot` skips them. If the
+  user's persisted `loadLastStorage()` returns a disabled mode,
+  the bridge silently falls back to the active default (typically
+  `browser` — same as the "device handle revoked" path).
+- **`disableBuiltinPlugins: string[]`** — applied to the existing
+  Phase 4 built-in plugin list (today: just `github-external-links`;
+  Phase 4 retroactive scope) before user plugins are registered.
+  Plugin name string match; unknown names log a warning, no error
+  — keeps deployment configs forward-compatible.
+- **No way to disable `browser`.** It's the universal fallback;
+  every other backend's failure path lands there. Attempting to
+  pass `"browser"` in `disableBuiltinStorage` throws at `init`
+  time so misconfigurations surface immediately rather than at
+  runtime when the fallback would be needed.
+
+The opt-out lists are constructor-time only (matching `plugins`).
+No runtime add/remove. Changing the disable list requires a
+reload, same as changing the plugin list.
+
 ## Phased plan
 
 ### Phase A — `StorageMode` widens to `string`
@@ -313,7 +350,7 @@ contract tests + a manual smoke of every mode-switch path.
 Expected delta: ~50 lines net inside bridge.ts; 0 lines elsewhere.
 **Lands as one PR.**
 
-### Phase C — `PluginContext.registerStorage` + sidebar plumbing
+### Phase C — `PluginContext.registerStorage` + sidebar plumbing + opt-out
 
 The actual feature.
 
@@ -323,12 +360,21 @@ The actual feature.
 - `PluginContext.registerStorage(reg)` validates mode-key
   uniqueness against built-ins + previously-registered plugins.
 - `app/storage-bridge.ts` learns the plugin fallthrough branches
-  in `restoreOnBoot` and `handleStorageSelect`.
-- `gallery/sidebar.ts` accepts a plugin-registration list at
-  construction time, renders chips for each. The status strip
+  in `restoreOnBoot` and `handleStorageSelect`. Both honor the
+  caller's `disableBuiltinStorage` set: a disabled built-in's
+  registration isn't created, so it can't be selected, restored,
+  or shown in the sidebar.
+- `App.init({ disableBuiltinStorage, disableBuiltinPlugins })`
+  signature lands. `"browser"` in `disableBuiltinStorage` throws
+  at `init` time. Unknown names in `disableBuiltinPlugins` log a
+  warning and no-op for forward-compat.
+- `gallery/sidebar.ts` renders chips by sorting the (filtered)
+  combined registration list by `priority`. The status strip
   + active highlight already work on string keys.
 - New tests: a fake plugin registers a mode, the host resolves
-  it, the sidebar lists it. ~6 plugin-host tests.
+  it, the sidebar lists it; a disabled built-in doesn't appear;
+  `disableBuiltinStorage: ["browser"]` throws; unknown
+  `disableBuiltinPlugins` entry warns. ~10 plugin-host tests.
 
 **Lands as one PR.** No new built-in plugin in this phase — the
 in-tree validation is the unit tests; the first real consumer is
@@ -420,6 +466,15 @@ At each phase boundary:
    implement it; local stores skip it. `bridge.ts` wires its
    per-backend refresher closures via the same contract method
    instead of a per-class instance method.
+5. **Built-in opt-out via `init` options.**
+   `disableBuiltinStorage?: BuiltInStorageMode[]` skips the listed
+   built-in storage registrations entirely (sidebar / select /
+   restore all honor it). `disableBuiltinPlugins?: string[]`
+   filters the Phase 4 built-in plugin list by name before user
+   plugins register. `"browser"` can never be disabled — throws
+   at `init`. Unknown plugin names warn-and-no-op for forward-
+   compat with newer-than-config deployments. Constructor-time
+   only; no runtime mutation.
 
 ## References
 
