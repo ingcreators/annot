@@ -7,7 +7,7 @@
  * but takes its inputs explicitly — no app-state reach-ins.
  */
 
-import type { CanvasManager } from "@ingcreators/annot-core/editor";
+import type { CanvasManager } from "@ingcreators/annot-editor";
 
 /**
  * Draw click indicators using tags recorded at capture time:

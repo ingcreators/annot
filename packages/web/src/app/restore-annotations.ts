@@ -7,7 +7,8 @@
  * document.importNode), but has no app-state dependencies.
  */
 
-import { ANNOT_SVG_VERSION, type CanvasManager, readAnnotVersion } from "@ingcreators/annot-core/editor";
+import { ANNOT_SVG_VERSION, readAnnotVersion } from "@ingcreators/annot-core/editor";
+import type { CanvasManager } from "@ingcreators/annot-editor";
 
 export function restoreAnnotations(canvas: CanvasManager, svgString: string): void {
   const parser = new DOMParser();

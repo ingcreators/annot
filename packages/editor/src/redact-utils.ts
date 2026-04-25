@@ -20,7 +20,7 @@
  */
 
 import { MOSAIC_BLOCK_SIZE, REDACT_BLUR_RADIUS, REDACT_SOLID_COLOR } from "@ingcreators/annot-core/utils";
-import type { CanvasManager } from "@ingcreators/annot-core/editor/canvas-manager";
+import type { CanvasManager } from "./canvas-manager.js";
 import type { RedactStyle } from "@ingcreators/annot-core/editor/tool-options";
 
 const SVG_NS = "http://www.w3.org/2000/svg";

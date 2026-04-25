@@ -100,6 +100,12 @@ importers:
       '@ingcreators/annot-core':
         specifier: workspace:*
         version: link:../core
+      '@tauri-apps/plugin-dialog':
+        specifier: ^2.2.0
+        version: 2.7.0
+      '@tauri-apps/plugin-fs':
+        specifier: ^2.2.0
+        version: 2.5.0
     devDependencies:
       typescript:
         specifier: ^6.0.3
@@ -148,6 +154,9 @@ importers:
       '@ingcreators/annot-editor':
         specifier: workspace:*
         version: link:../editor
+      '@ingcreators/annot-render':
+        specifier: workspace:*
+        version: link:../render
       lit:
         specifier: ^3.3.2
         version: 3.3.2

@@ -34,9 +34,32 @@ export type { ToolOptions } from "./tools/tool-base.js";
 // PropertyPanel — full DOM panel construction; see Phase 2 notes
 // in `docs/plans/three-package-split.md`.
 export { PropertyPanel } from "./property-panel.js";
+// CanvasManager — live SVG host (image, annotations group, UI
+// overlay, pointer event routing). Keystone editor primitive.
+export { CanvasManager } from "./canvas-manager.js";
 // History — undo/redo for the canvas's annotation subtree.
 // Tracks `<g id="annotations">` innerHTML snapshots.
 export { History } from "./history.js";
+// CanvasManager-coupled save / copy / download surface. The
+// data-driven counterpart `renderImageRecord` lives in
+// `@ingcreators/annot-render` so storage backends and gallery
+// bulk-export can reach it without pulling in the editor.
+export {
+  copyAnnotationsAsImage,
+  copyAsImage,
+  downloadAsImage,
+  exportAnnotationsSvgForIdb,
+  exportExcelSVG,
+  exportSVGString,
+  getPngDataUrl,
+  saveAsEditableImage,
+  saveToFile,
+} from "./export.js";
+// PowerPoint export. Today coupled to a live `CanvasManager`;
+// future ImageRecord-driven refactor migrates it to
+// `@ingcreators/annot-render` so bulk-export can build
+// multi-slide decks from gallery selections.
+export { exportPptx } from "./pptx-export.js";
 // SelectionManager — pointer-driven selection / handles / drag /
 // resize / rotate. Uses `smart-guides` overlays internally.
 export { SelectionManager } from "./selection.js";

@@ -10,7 +10,7 @@
  * renders through this element.
  */
 
-import type { CanvasManager } from "@ingcreators/annot-core/editor";
+import type { CanvasManager } from "@ingcreators/annot-editor";
 import { html, LitElement, nothing } from "../lit.js";
 
 export const ZOOM_OPTIONS: { label: string; value: number | "fit" }[] = [

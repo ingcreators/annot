@@ -1,7 +1,7 @@
 import { computeDasharray, detectDashKey } from "@ingcreators/annot-core/utils";
 import { setTooltip } from "./tooltip.js";
 import { refreshArrowPath } from "@ingcreators/annot-core/editor/arrow-markers";
-import type { CanvasManager } from "@ingcreators/annot-core/editor/canvas-manager";
+import type { CanvasManager } from "./canvas-manager.js";
 import { createCustomSelect } from "./custom-select.js";
 import {
   arrowPreview,

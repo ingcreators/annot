@@ -16,11 +16,11 @@
 
 import {
   ARROW_ICON_SVG,
-  type CanvasManager,
   COUNTER_ICON_SVG,
   HIGHLIGHT_COLORS,
   SHAPE_ICON_SVG,
 } from "@ingcreators/annot-core/editor";
+import type { CanvasManager } from "@ingcreators/annot-editor";
 import type {
   ArrowDim,
   ArrowShape,

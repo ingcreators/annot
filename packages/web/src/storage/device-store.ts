@@ -1,6 +1,6 @@
 /// <reference path="../types/fs-access-extras.d.ts" />
 
-import { renderImageRecord } from "@ingcreators/annot-core/editor/export";
+import { renderImageRecord } from "@ingcreators/annot-render";
 import { logger } from "../logger.js";
 /**
  * Device (File System Access API) storage provider — path-based

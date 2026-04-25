@@ -16,7 +16,7 @@
  * legacy) skip the section's heading entirely.
  */
 
-import type { CanvasManager } from "@ingcreators/annot-core/editor";
+import type { CanvasManager } from "@ingcreators/annot-editor";
 import type { History } from "@ingcreators/annot-editor";
 import type { SelectionManager } from "@ingcreators/annot-editor";
 import type { PageElement } from "@ingcreators/annot-core/storage";

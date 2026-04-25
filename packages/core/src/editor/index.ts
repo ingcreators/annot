@@ -27,24 +27,13 @@ export {
 // ╰─────────────────────────────────────────────────────────────────╯
 
 // --- Canvas + core lifecycle ---
-export { CanvasManager } from "./canvas-manager.js";
-// `createColorPalette` moved to `@ingcreators/annot-editor` in
-// Phase 6 of `docs/plans/three-package-split.md`.
+// `CanvasManager` and `createColorPalette` moved to
+// `@ingcreators/annot-editor` in Phases 6 / 8 of
+// `docs/plans/three-package-split.md`.
 // --- Serializers / file IO / clipboard ---
-// Use DOMParser / XMLSerializer / Blob / URL.createObjectURL /
-// navigator.clipboard internally.
-export {
-  copyAnnotationsAsImage,
-  copyAsImage,
-  downloadAsImage,
-  exportAnnotationsSvgForIdb,
-  exportExcelSVG,
-  exportSVGString,
-  getPngDataUrl,
-  renderImageRecord,
-  saveAsEditableImage,
-  saveToFile,
-} from "./export.js";
+// `export.ts` (CanvasManager-coupled portion) moved to
+// `@ingcreators/annot-editor` in Phase 8. `renderImageRecord`
+// (data-driven counterpart) moved to `@ingcreators/annot-render`.
 // `History` moved to `@ingcreators/annot-editor` in Phase 7 of
 // `docs/plans/three-package-split.md`.
 // `PropertyPanel` and `SelectionManager` moved to `@ingcreators/annot-editor`
