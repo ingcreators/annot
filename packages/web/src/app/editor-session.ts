@@ -34,6 +34,7 @@ import { renderThumbnail, serializeSelection } from "../editor/scratchpad-utils.
 import { getStorageMode } from "../storage/bridge.js";
 import { addClickMarker } from "./click-marker.js";
 import type { HeaderHost } from "./header-host.js";
+import type { UISection } from "./plugin-host.js";
 import { restoreAnnotations } from "./restore-annotations.js";
 import type { SavePipeline } from "./save-pipeline.js";
 import type { StatusHost } from "./status-host.js";
@@ -51,6 +52,15 @@ export interface EditorSessionDeps {
   getCurrentFolderPath(): string;
   getCurrentTags(): Record<string, string>;
   setCurrentTags(tags: Record<string, string>): void;
+  /** Plugin-registered drawer sections. The drawer combines this
+   *  list with built-ins, filters by `isBuiltinUISectionDisabled`,
+   *  sorts by `priority`, and mounts each. Optional. */
+  getDrawerSections?(): UISection[];
+  /** True if the deployment opted out of the named built-in UI
+   *  section via `App.init({ disableBuiltinUISections })`.
+   *  Phase 2 wires the drawer; Phase 3 will wire the right-panel
+   *  through the same callback. */
+  isBuiltinUISectionDisabled?(id: string): boolean;
   /** Fire the plugin-host `onEditorReady` event. Called at the end
    *  of `setupEditor` once the canvas / history / right panel are
    *  wired but before the first autosave can fire. */
@@ -220,18 +230,25 @@ export class EditorSession {
     this.#fileDetailsDrawer?.destroy();
     const currentPath = this.deps.getCurrentImagePath();
     const currentRecord = this.deps.getCurrentImageRecord();
-    this.#fileDetailsDrawer = new FileDetailsDrawer(document.body, {
-      filename: currentPath ? getFilename(currentPath) : "(untitled)",
-      folderPath: currentRecord?.folderPath ?? this.deps.getCurrentFolderPath(),
-      width,
-      height,
-      fileSizeBytes: estimateDataUrlBytes(dataUrl),
-      createdAt: currentRecord?.createdAt,
-      updatedAt: currentRecord?.updatedAt,
-      sourceUrl: currentRecord?.sourceUrl,
-      tags: this.deps.getCurrentTags(),
-      externalLinks: this.headerHost.buildExternalLinksFor(currentPath),
-    });
+    this.#fileDetailsDrawer = new FileDetailsDrawer(
+      document.body,
+      {
+        filename: currentPath ? getFilename(currentPath) : "(untitled)",
+        folderPath: currentRecord?.folderPath ?? this.deps.getCurrentFolderPath(),
+        width,
+        height,
+        fileSizeBytes: estimateDataUrlBytes(dataUrl),
+        createdAt: currentRecord?.createdAt,
+        updatedAt: currentRecord?.updatedAt,
+        sourceUrl: currentRecord?.sourceUrl,
+        tags: this.deps.getCurrentTags(),
+        externalLinks: this.headerHost.buildExternalLinksFor(currentPath),
+      },
+      {
+        getPluginSections: this.deps.getDrawerSections,
+        isBuiltinSectionDisabled: this.deps.isBuiltinUISectionDisabled,
+      },
+    );
     // GitHub: commit lookup is a separate API call (~300ms) that we
     // don't want to block the editor opening on. Fire it in the
     // background and patch the drawer when it lands.

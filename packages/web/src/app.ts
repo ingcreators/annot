@@ -156,6 +156,8 @@ export class App {
           this.#currentTags = t;
         },
         notifyEditorReady: (ev) => this.#pluginHost.dispatchEditorReady(ev),
+        getDrawerSections: () => this.#pluginHost.listDrawerSections(),
+        isBuiltinUISectionDisabled: (id) => this.#disabledBuiltinUISections.has(id),
       },
       this.#headerHost,
       this.#statusHost,
@@ -310,6 +312,20 @@ export class App {
     // boot so we don't need a setter — a deployment that wants
     // to change ordering at runtime would re-init.
     this.#sidebarSectionOrder = opts.sidebarSectionOrder ?? {};
+    // Validate `disableBuiltinUISections` against the known built-in
+    // ids. Drawer ids land in Phase 2 (this PR); Phase 3 will add
+    // the right-panel ids to the `knownIds` set. Unknown entries
+    // log a warning + no-op for forward-compat with newer-than-
+    // config deployments.
+    const { BUILTIN_DRAWER_SECTION_IDS } = await import("./editor/file-details-drawer.js");
+    const knownIds = new Set<string>(BUILTIN_DRAWER_SECTION_IDS);
+    for (const id of opts.disableBuiltinUISections ?? []) {
+      if (!knownIds.has(id)) {
+        console.warn(
+          `[init] disableBuiltinUISections: "${id}" is not a known built-in section id; ignoring.`,
+        );
+      }
+    }
     this.#disabledBuiltinUISections = new Set(opts.disableBuiltinUISections ?? []);
 
     // Wire the sidebar refresh hook BEFORE plugin registration —
