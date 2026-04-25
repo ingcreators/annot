@@ -1,5 +1,7 @@
+import type { ToolDOMSurface } from "@ingcreators/annot-core/editor/tool-lifecycle";
 import type { CanvasManager } from "../canvas-manager.js";
 import type { History } from "../history.js";
+import { createCanvasToolSurface } from "./canvas-tool-surface.js";
 
 // All `ToolOptions`-related pure types live in
 // `@ingcreators/annot-core/editor/tool-options` so core/editor
@@ -31,14 +33,46 @@ const SVG_NS = "http://www.w3.org/2000/svg";
 export abstract class ToolBase {
   abstract readonly name: string;
 
-  protected canvas: CanvasManager;
-  protected history: History;
+  /** DOM-side abstraction every tool depends on for canvas access.
+   *  See `@ingcreators/annot-core/editor/tool-lifecycle` for the
+   *  three-method contract. Always set: synthesised from `canvas` +
+   *  `history` in the legacy three-arg constructor, or supplied
+   *  directly in the surface-only constructor used by tests. */
+  protected surface: ToolDOMSurface;
   protected options: ToolOptions;
 
-  constructor(canvas: CanvasManager, history: History, options: ToolOptions) {
-    this.canvas = canvas;
-    this.history = history;
-    this.options = options;
+  /** Legacy escape hatches — only set when the tool was constructed
+   *  via the (canvas, history, options) shape. Tools that still need
+   *  CanvasManager features outside the three-method surface
+   *  (uiOverlay, defs, imageWidth, viewBox manipulation) read these
+   *  directly. Marked with `!` because they're definitely-assigned
+   *  on the legacy path; tools that inspect them while a test uses
+   *  the surface-only construction will throw NPE — that's the
+   *  intended signal that more of the tool needs to be migrated to
+   *  the surface contract. */
+  protected canvas!: CanvasManager;
+  protected history!: History;
+
+  constructor(surface: ToolDOMSurface, options: ToolOptions);
+  constructor(canvas: CanvasManager, history: History, options: ToolOptions);
+  constructor(
+    arg1: CanvasManager | ToolDOMSurface,
+    arg2: History | ToolOptions,
+    arg3?: ToolOptions,
+  ) {
+    if (arg3 === undefined) {
+      // Surface-only form: arg1=surface, arg2=options.
+      this.surface = arg1 as ToolDOMSurface;
+      this.options = arg2 as ToolOptions;
+    } else {
+      // Legacy form: arg1=canvas, arg2=history, arg3=options.
+      const canvas = arg1 as CanvasManager;
+      const history = arg2 as History;
+      this.canvas = canvas;
+      this.history = history;
+      this.surface = createCanvasToolSurface(canvas, history);
+      this.options = arg3;
+    }
   }
 
   abstract onPointerDown(e: PointerEvent, pt: DOMPoint): void;
@@ -63,8 +97,9 @@ export abstract class ToolBase {
     return el;
   }
 
+  /** Mount a fully-formed annotation and snapshot history. Delegates
+   *  to `surface.addAnnotation` so the test mock sees the call. */
   protected addAnnotation(el: SVGElement): void {
-    this.canvas.annotations.appendChild(el);
-    this.history.save();
+    this.surface.addAnnotation(el);
   }
 }
