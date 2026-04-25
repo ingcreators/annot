@@ -1,3 +1,12 @@
+// Pull in the `__anno_*` window-global declarations so the four
+// host-bridge reads below typecheck without `(window as any)` casts.
+// The `<reference>` directive is needed because downstream packages
+// that compile this file (e.g. `@ingcreators/annot-desktop` via the
+// `Toolbar` import) don't see web's `.d.ts` files through their own
+// tsconfig `include` glob — only files explicitly referenced by the
+// compiled module are picked up.
+/// <reference path="../types/anno-window.d.ts" />
+
 /**
  * `Toolbar` — the editor's vertical tool rail (Select / Crop /
  * Shape / Arrow / Text / Highlight / Redact / Marker / Draw)
@@ -673,7 +682,7 @@ export class Toolbar {
     // Whether the host provides the __anno_showGallery hook that
     // gates the Gallery button. Pre-computed so the two places that
     // need the check (condition below + actual render) stay in sync.
-    const hasGalleryHook = !isTauri && typeof (window as any).__anno_showGallery === "function";
+    const hasGalleryHook = !isTauri && typeof window.__anno_showGallery === "function";
 
     // Open / Copy / Save group. The host can suppress this if it
     // renders these actions at the document-chrome level (e.g. the
@@ -682,9 +691,9 @@ export class Toolbar {
       shell.appendChild(this.#sep());
       const exportGroup = this.#div("toolbar-group");
 
-      if (!isTauri && typeof (window as any).__anno_openFile === "function") {
+      if (!isTauri && typeof window.__anno_openFile === "function") {
         const openBtn = this.#btn("folder_open", "Open File");
-        openBtn.addEventListener("click", () => (window as any).__anno_openFile());
+        openBtn.addEventListener("click", () => window.__anno_openFile?.());
         exportGroup.appendChild(openBtn);
       }
 
@@ -696,8 +705,8 @@ export class Toolbar {
       saveWrap.className = "tool-btn-wrap";
       const saveBtn = this.#btn("save", "Save (Ctrl+S)");
       saveBtn.addEventListener("click", () => {
-        if (!isTauri && typeof (window as any).__anno_saveAnnotations === "function") {
-          (window as any).__anno_saveAnnotations();
+        if (!isTauri && typeof window.__anno_saveAnnotations === "function") {
+          window.__anno_saveAnnotations();
         } else {
           saveToFile(this.#canvas, this.#getCurrentFilename?.());
         }
@@ -734,7 +743,7 @@ export class Toolbar {
     // of a breadcrumb / back-link rendered outside the toolbar.
     if (this.#showGalleryButton && hasGalleryHook) {
       const galleryBtn = this.#btn("grid_view", "Gallery");
-      galleryBtn.addEventListener("click", () => (window as any).__anno_showGallery());
+      galleryBtn.addEventListener("click", () => window.__anno_showGallery?.());
       shell.appendChild(galleryBtn);
     }
 
@@ -790,8 +799,8 @@ export class Toolbar {
         this.#history.redo();
       } else if (e.ctrlKey && e.key === "s") {
         e.preventDefault();
-        if (!isTauri && typeof (window as any).__anno_saveAnnotations === "function") {
-          (window as any).__anno_saveAnnotations();
+        if (!isTauri && typeof window.__anno_saveAnnotations === "function") {
+          window.__anno_saveAnnotations();
         } else {
           saveToFile(this.#canvas, this.#getCurrentFilename?.());
         }
@@ -838,8 +847,8 @@ export class Toolbar {
   /** Exposed so host-rendered save buttons can trigger the canonical
    *  save path instead of re-implementing it. */
   saveNow(): void {
-    if (!isTauri && typeof (window as any).__anno_saveAnnotations === "function") {
-      (window as any).__anno_saveAnnotations();
+    if (!isTauri && typeof window.__anno_saveAnnotations === "function") {
+      window.__anno_saveAnnotations();
     } else {
       saveToFile(this.#canvas, this.#getCurrentFilename?.());
     }
@@ -2798,6 +2807,12 @@ export class Toolbar {
           // New entries that already use "tool.variant" form pass
           // through unchanged.
           const key = this.#migrateLegacyPresetKey(rawKey);
+          // The persisted shape carries each variant field as a plain
+          // `string` (the tauri-bridge serializer doesn't know our
+          // tool-side union vocabulary). Trust the disk and narrow via
+          // an indexed-access cast — `ToolOptions["fieldName"]` keeps
+          // the source of truth in `tool-base.ts` and lets a future
+          // union-extension propagate without touching this file.
           this.#presets.set(key, {
             strokeColor: p.stroke_color,
             fillColor: p.fill_color,
@@ -2805,20 +2820,20 @@ export class Toolbar {
             fontSize: p.font_size,
             strokeDasharray: p.stroke_dasharray || "",
             fillOpacity: p.fill_opacity ?? 1.0,
-            shapeType: (p.shape_type as any) || undefined,
-            arrowHead: (p.arrow_head as any) || undefined,
-            textVariant: (p.text_variant as any) || undefined,
+            shapeType: (p.shape_type as ToolOptions["shapeType"]) || undefined,
+            arrowHead: (p.arrow_head as ToolOptions["arrowHead"]) || undefined,
+            textVariant: (p.text_variant as ToolOptions["textVariant"]) || undefined,
             fontFamily: p.font_family || undefined,
-            drawStyle: (p.draw_style as any) || undefined,
-            redactStyle: (p.redact_style as any) || undefined,
-            arrowHeadStart: (p.arrow_head_start as any) || undefined,
-            arrowHeadEnd: (p.arrow_head_end as any) || undefined,
-            arrowWidthStart: (p.arrow_width_start as any) || undefined,
-            arrowWidthEnd: (p.arrow_width_end as any) || undefined,
-            arrowLengthStart: (p.arrow_length_start as any) || undefined,
-            arrowLengthEnd: (p.arrow_length_end as any) || undefined,
+            drawStyle: (p.draw_style as ToolOptions["drawStyle"]) || undefined,
+            redactStyle: (p.redact_style as ToolOptions["redactStyle"]) || undefined,
+            arrowHeadStart: (p.arrow_head_start as ToolOptions["arrowHeadStart"]) || undefined,
+            arrowHeadEnd: (p.arrow_head_end as ToolOptions["arrowHeadEnd"]) || undefined,
+            arrowWidthStart: (p.arrow_width_start as ToolOptions["arrowWidthStart"]) || undefined,
+            arrowWidthEnd: (p.arrow_width_end as ToolOptions["arrowWidthEnd"]) || undefined,
+            arrowLengthStart: (p.arrow_length_start as ToolOptions["arrowLengthStart"]) || undefined,
+            arrowLengthEnd: (p.arrow_length_end as ToolOptions["arrowLengthEnd"]) || undefined,
             highlightColor: p.highlight_color || undefined,
-            markerShape: (p.marker_shape as any) || undefined,
+            markerShape: (p.marker_shape as ToolOptions["markerShape"]) || undefined,
           });
         }
       }
