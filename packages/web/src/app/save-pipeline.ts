@@ -14,7 +14,7 @@
 import { exportAnnotationsSvgForIdb, getPngDataUrl } from "@ingcreators/annot-core";
 import type { CanvasManager } from "@ingcreators/annot-core";
 import type { StorageProvider } from "@ingcreators/annot-core/storage";
-import type { SaveStatusIndicator } from "../editor/save-status-indicator.js";
+import type { AnnotSaveStatusElement } from "../editor/save-status-indicator.js";
 import { hideError, showSaveError } from "../ui/error-bar.js";
 
 export interface SavePipelineDeps {
@@ -23,7 +23,7 @@ export interface SavePipelineDeps {
   getCurrentImagePath(): string | null;
   setCurrentImagePath(path: string): void;
   getCurrentTags(): Record<string, string>;
-  getStatusIndicator(): SaveStatusIndicator | null;
+  getStatusIndicator(): AnnotSaveStatusElement | null;
   /** Ask the plugin host if the save should proceed. Rejects if any
    *  `onBeforeSave` listener throws/rejects — the SavePipeline
    *  surfaces that through its normal error-banner path. */
@@ -104,7 +104,8 @@ export class SavePipeline {
     // Every save goes through this method, so this is the single place
     // that drives the save-status indicator through its full lifecycle:
     // saving → saved on success, saving → error on failure.
-    this.deps.getStatusIndicator()?.setStatus("saving");
+    const statusEl = this.deps.getStatusIndicator();
+    if (statusEl) statusEl.status = "saving";
 
     try {
       // Plugin pre-save gate — a throw here cancels the save and
@@ -115,13 +116,15 @@ export class SavePipeline {
       // Path may change if we ever call updateImage with { folderPath }
       this.deps.setCurrentImagePath(newPath);
       hideError();
-      this.deps.getStatusIndicator()?.setStatus("saved");
+      const s = this.deps.getStatusIndicator();
+      if (s) s.status = "saved";
       // Notify plugins — `annot-cloud` uses this for server-side
       // state (comments, team metadata) that rides alongside a save
       // but doesn't block it.
       this.deps.onAfterSave(newPath);
     } catch (e: unknown) {
-      this.deps.getStatusIndicator()?.setStatus("error");
+      const s = this.deps.getStatusIndicator();
+      if (s) s.status = "error";
       console.error("[save] Error:", e);
       const err = e as { status?: number; message?: string };
       const retry = () => this.writeAnnotations();
