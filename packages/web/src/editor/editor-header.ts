@@ -100,6 +100,21 @@ export class AnnotEditorHeaderElement extends LitElement {
     return this;
   }
 
+  override connectedCallback(): void {
+    super.connectedCallback();
+    // The host `#editor-header` div is `display: flex` and lays
+    // out the brand / breadcrumb / filename / save-status /
+    // file-actions cluster as direct flex children. With this
+    // Lit element wrapping them, those children become flex
+    // grandchildren — the flex container only sees one block-
+    // level item (`<annot-editor-header>`) and stacks our chrome
+    // vertically inside an unintended block. `display: contents`
+    // makes the wrapper transparent to layout: the children are
+    // re-parented for layout purposes into `#editor-header`,
+    // restoring the original flex row.
+    this.style.display = "contents";
+  }
+
   /** Returns the `<annot-save-status>` child so the header host
    *  can hand its reference to `SavePipeline` for state updates. */
   getSaveStatusIndicator(): AnnotSaveStatusElement | null {

@@ -72,6 +72,19 @@ export class AnnotFileManagerShellElement extends LitElement {
     return this;
   }
 
+  override connectedCallback(): void {
+    super.connectedCallback();
+    // The host `#main-content` div is `display: flex; flex-
+    // direction: column;` and lays out [header] [selection-bar]
+    // [body] [footer] as direct flex children — the body uses
+    // `flex: 1` to consume available height between the fixed
+    // header + footer. With this Lit wrapper sitting in between,
+    // the flex column would only see ONE block-level item and
+    // the body would no longer grow as intended. `display:
+    // contents` makes the wrapper transparent to layout.
+    this.style.display = "contents";
+  }
+
   /** The container the file-manager imperatively mounts the
    *  vanilla GalleryPage into. Stable across re-renders because
    *  Lit reuses the same DOM node when the template structure

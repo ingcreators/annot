@@ -73,6 +73,15 @@ export class AnnotEditorStatusbarElement extends LitElement {
   override connectedCallback(): void {
     super.connectedCallback();
     document.addEventListener("click", this.#onDocClick);
+    // The host `#statusbar` is `display: flex` and lays out
+    // [zoom controls] [dimensions] [.toolbar-spacer] [tool name]
+    // as direct flex children. With this Lit wrapper sitting in
+    // between, the flex container only sees one block-level item
+    // (`<annot-editor-statusbar>`) and the inner `.toolbar-spacer`
+    // (which relies on `flex: 1` to push the tool name to the
+    // right) collapses to 0 width. `display: contents` makes the
+    // wrapper transparent to layout so the spacer works again.
+    this.style.display = "contents";
   }
 
   override disconnectedCallback(): void {
