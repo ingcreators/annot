@@ -24,7 +24,9 @@ import {
 } from "@ingcreators/annot-core";
 import type { ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
 import { getFilename } from "@ingcreators/annot-core/storage";
-import { FileDetailsDrawer, estimateDataUrlBytes } from "../editor/file-details-drawer.js";
+import type { AnnotFileDetailsDrawerElement } from "../editor/file-details-drawer.js";
+import { estimateDataUrlBytes } from "../editor/file-details-drawer.js";
+import "../editor/file-details-drawer.js";
 import { installKeyboardHelp } from "../editor/keyboard-help.js";
 import { EditorRightPanel } from "../editor/right-panel.js";
 import { ScratchpadPasteTool } from "../editor/scratchpad-paste-tool.js";
@@ -85,7 +87,7 @@ export class EditorSession {
    *  Rebuilt per editor session. */
   #editorRightPanel: EditorRightPanel | null = null;
   /** The file-details drawer, created per editor session. */
-  #fileDetailsDrawer: FileDetailsDrawer | null = null;
+  #fileDetailsDrawer: AnnotFileDetailsDrawerElement | null = null;
   /** DOM-element metadata captured alongside the current screenshot
    *  (browser-extension captures only). Drives the Elements sidebar
    *  panel / smart-annotation features in the editor. Null when the
@@ -133,7 +135,7 @@ export class EditorSession {
     return this.#editorToolbar;
   }
 
-  getFileDetailsDrawer(): FileDetailsDrawer | null {
+  getFileDetailsDrawer(): AnnotFileDetailsDrawerElement | null {
     return this.#fileDetailsDrawer;
   }
 
@@ -233,34 +235,32 @@ export class EditorSession {
     this.#fileDetailsDrawer?.destroy();
     const currentPath = this.deps.getCurrentImagePath();
     const currentRecord = this.deps.getCurrentImageRecord();
-    this.#fileDetailsDrawer = new FileDetailsDrawer(
-      document.body,
-      {
-        filename: currentPath ? getFilename(currentPath) : "(untitled)",
-        folderPath: currentRecord?.folderPath ?? this.deps.getCurrentFolderPath(),
-        width,
-        height,
-        fileSizeBytes: estimateDataUrlBytes(dataUrl),
-        createdAt: currentRecord?.createdAt,
-        updatedAt: currentRecord?.updatedAt,
-        sourceUrl: currentRecord?.sourceUrl,
-        tags: this.deps.getCurrentTags(),
-        externalLinks: this.headerHost.buildExternalLinksFor(currentPath),
-      },
-      {
-        getPluginSections: this.deps.getDrawerSections,
-        isBuiltinSectionDisabled: this.deps.isBuiltinUISectionDisabled,
-      },
-    );
+    const drawer = document.createElement("annot-file-details-drawer");
+    drawer.data = {
+      filename: currentPath ? getFilename(currentPath) : "(untitled)",
+      folderPath: currentRecord?.folderPath ?? this.deps.getCurrentFolderPath(),
+      width,
+      height,
+      fileSizeBytes: estimateDataUrlBytes(dataUrl),
+      createdAt: currentRecord?.createdAt,
+      updatedAt: currentRecord?.updatedAt,
+      sourceUrl: currentRecord?.sourceUrl,
+      tags: this.deps.getCurrentTags(),
+      externalLinks: this.headerHost.buildExternalLinksFor(currentPath),
+    };
+    drawer.getPluginSections = this.deps.getDrawerSections ?? null;
+    drawer.isBuiltinSectionDisabled = this.deps.isBuiltinUISectionDisabled ?? null;
+    drawer.onRename = (newName) => this.headerHost.renameCurrentImage(newName);
+    drawer.onTagsChange = (t) => {
+      this.deps.setCurrentTags(t);
+      void this.savePipeline.writeAnnotations();
+    };
+    document.body.appendChild(drawer);
+    this.#fileDetailsDrawer = drawer;
     // GitHub: commit lookup is a separate API call (~300ms) that we
     // don't want to block the editor opening on. Fire it in the
     // background and patch the drawer when it lands.
     void this.headerHost.populateLastCommit(currentPath);
-    this.#fileDetailsDrawer.onRename = (newName) => this.headerHost.renameCurrentImage(newName);
-    this.#fileDetailsDrawer.onTagsChange = (t) => {
-      this.deps.setCurrentTags(t);
-      void this.savePipeline.writeAnnotations();
-    };
 
     this.headerHost.build();
     this.statusHost.build(canvas, width, height);

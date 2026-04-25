@@ -1,22 +1,23 @@
 /**
  * @vitest-environment happy-dom
  *
- * FileDetailsDrawer — Phase 2 tests covering the section-host
- * migration: built-in section presence + ordering, plugin section
- * interleave + filter, the `disableBuiltinUISections` opt-out,
- * lifecycle (mount + unmount on `destroy`), and the reactive
+ * `<annot-file-details-drawer>` tests covering the section-host
+ * behaviour: built-in section presence + ordering, plugin section
+ * interleave + filter, the `isBuiltinSectionDisabled` opt-out,
+ * lifecycle (mount + unmount on disconnect), and the reactive
  * `update(ctx)` path through `notifyUpdate`.
  *
- * happy-dom supplies the DOM the drawer mounts into; the surface-
- * level test exercises the full mount / render / dispose loop end
- * to end without any host wiring.
+ * happy-dom supplies the DOM + customElements registry the Lit
+ * element needs; the surface-level test exercises the full mount
+ * / render / dispose loop end to end.
  */
 
 import { describe, expect, it, vi } from "vitest";
 import type { UISection, UISectionLifecycle } from "../app/plugin-host.js";
+import "./file-details-drawer.js";
 import {
+  type AnnotFileDetailsDrawerElement,
   BUILTIN_DRAWER_SECTION_IDS,
-  FileDetailsDrawer,
   type FileDetailsData,
 } from "./file-details-drawer.js";
 
@@ -32,45 +33,58 @@ function baseData(overrides: Partial<FileDetailsData> = {}): FileDetailsData {
   };
 }
 
-function getSectionHeadings(container: HTMLElement): string[] {
-  return Array.from(container.querySelectorAll(".file-details-section-title")).map(
-    (el) => el.textContent || "",
+function getSectionHeadings(el: HTMLElement): string[] {
+  return Array.from(el.querySelectorAll(".file-details-section-title")).map(
+    (n) => n.textContent || "",
   );
 }
 
-describe("FileDetailsDrawer — section-host migration", () => {
-  it("renders the four built-in sections in priority order (File → Tags → Last commit → Links)", () => {
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-    new FileDetailsDrawer(container, baseData({
-      lastCommit: {
-        authorName: "alice",
-        messageHeadline: "fix bug",
-        date: "2026-01-01T00:00:00Z",
-        shortSha: "abc1234",
-      },
-      externalLinks: [{ label: "View on GitHub", url: "https://example.test" }],
-    }));
-    const panel = container.querySelector(".file-details-drawer") as HTMLElement;
-    expect(getSectionHeadings(panel)).toEqual(["File", "Tags", "Last commit", "Links"]);
+/** Build + mount a drawer with the supplied props + append to
+ *  `document.body`. Returns the element so the test can call
+ *  methods / read classes. Waits one microtask tick so Lit's
+ *  async `updated()` has a chance to run. */
+async function mountDrawer(
+  data: FileDetailsData,
+  deps: {
+    getPluginSections?: () => UISection[];
+    isBuiltinSectionDisabled?: (id: string) => boolean;
+  } = {},
+): Promise<AnnotFileDetailsDrawerElement> {
+  const el = document.createElement("annot-file-details-drawer");
+  el.data = data;
+  if (deps.getPluginSections) el.getPluginSections = deps.getPluginSections;
+  if (deps.isBuiltinSectionDisabled) el.isBuiltinSectionDisabled = deps.isBuiltinSectionDisabled;
+  document.body.appendChild(el);
+  await el.updateComplete;
+  return el;
+}
+
+describe("<annot-file-details-drawer> — section-host migration", () => {
+  it("renders the four built-in sections in priority order (File → Tags → Last commit → Links)", async () => {
+    const el = await mountDrawer(
+      baseData({
+        lastCommit: {
+          authorName: "alice",
+          messageHeadline: "fix bug",
+          date: "2026-01-01T00:00:00Z",
+          shortSha: "abc1234",
+        },
+        externalLinks: [{ label: "View on GitHub", url: "https://example.test" }],
+      }),
+    );
+    expect(getSectionHeadings(el)).toEqual(["File", "Tags", "Last commit", "Links"]);
   });
 
-  it("hides the Last commit + Links sections when the data has no commit / links (visible() gate)", () => {
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-    new FileDetailsDrawer(container, baseData()); // no lastCommit, no externalLinks
-    const panel = container.querySelector(".file-details-drawer") as HTMLElement;
+  it("hides the Last commit + Links sections when the data has no commit / links (visible() gate)", async () => {
+    const el = await mountDrawer(baseData()); // no lastCommit, no externalLinks
     // Only File + Tags should render. The visible() predicates on
     // last-commit and external-links return false → the host skips
     // the mount entirely.
-    expect(getSectionHeadings(panel)).toEqual(["File", "Tags"]);
+    expect(getSectionHeadings(el)).toEqual(["File", "Tags"]);
   });
 
-  it("disableBuiltinUISections filters built-in sections out of the render", () => {
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-    new FileDetailsDrawer(
-      container,
+  it("isBuiltinSectionDisabled filters built-in sections out of the render", async () => {
+    const el = await mountDrawer(
       baseData({
         lastCommit: {
           authorName: "alice",
@@ -86,21 +100,17 @@ describe("FileDetailsDrawer — section-host migration", () => {
         isBuiltinSectionDisabled: (id) => id === "drawer.file" || id === "drawer.last-commit",
       },
     );
-    const panel = container.querySelector(".file-details-drawer") as HTMLElement;
-    expect(getSectionHeadings(panel)).toEqual(["Tags"]);
+    expect(getSectionHeadings(el)).toEqual(["Tags"]);
   });
 
-  it("plugin sections interleave with built-ins by priority", () => {
-    const container = document.createElement("div");
-    document.body.appendChild(container);
+  it("plugin sections interleave with built-ins by priority", async () => {
     const between: UISection = {
       id: "test.between",
       title: "Plugin between",
       priority: 25, // lands between Tags (20) and Last commit (30)
       mount: () => () => {},
     };
-    new FileDetailsDrawer(
-      container,
+    const el = await mountDrawer(
       baseData({
         lastCommit: {
           authorName: "alice",
@@ -111,18 +121,10 @@ describe("FileDetailsDrawer — section-host migration", () => {
       }),
       { getPluginSections: () => [between] },
     );
-    const panel = container.querySelector(".file-details-drawer") as HTMLElement;
-    expect(getSectionHeadings(panel)).toEqual([
-      "File",
-      "Tags",
-      "Plugin between",
-      "Last commit",
-    ]);
+    expect(getSectionHeadings(el)).toEqual(["File", "Tags", "Plugin between", "Last commit"]);
   });
 
-  it("calls the plugin section's mount with the host-supplied container + ctx", () => {
-    const container = document.createElement("div");
-    document.body.appendChild(container);
+  it("calls the plugin section's mount with the host-supplied container + ctx", async () => {
     type MountArgs = Parameters<UISection["mount"]>;
     const mountSpy = vi.fn<(...args: MountArgs) => UISectionLifecycle>(() => () => {});
     const plugin: UISection = {
@@ -131,9 +133,7 @@ describe("FileDetailsDrawer — section-host migration", () => {
       priority: 100,
       mount: mountSpy,
     };
-    new FileDetailsDrawer(container, baseData(), {
-      getPluginSections: () => [plugin],
-    });
+    await mountDrawer(baseData(), { getPluginSections: () => [plugin] });
     expect(mountSpy).toHaveBeenCalledTimes(1);
     const call = mountSpy.mock.calls[0]!;
     expect(call[0]).toBeInstanceOf(HTMLElement);
@@ -141,29 +141,25 @@ describe("FileDetailsDrawer — section-host migration", () => {
     expect(call[1].tags).toEqual({ author: "alice" });
   });
 
-  it("destroy() runs every section's teardown (function lifecycle)", () => {
-    const container = document.createElement("div");
-    document.body.appendChild(container);
+  it("disconnect runs every section's teardown (function lifecycle)", async () => {
     const teardownA = vi.fn();
     const teardownB = vi.fn();
-    const drawer = new FileDetailsDrawer(container, baseData(), {
+    const el = await mountDrawer(baseData(), {
       getPluginSections: () => [
         { id: "test.a", title: "A", priority: 100, mount: () => teardownA },
         { id: "test.b", title: "B", priority: 200, mount: () => teardownB },
       ],
     });
     expect(teardownA).not.toHaveBeenCalled();
-    drawer.destroy();
+    el.destroy();
     expect(teardownA).toHaveBeenCalledTimes(1);
     expect(teardownB).toHaveBeenCalledTimes(1);
   });
 
-  it("destroy() runs every section's unmount (object lifecycle) and survives a teardown throw", () => {
-    const container = document.createElement("div");
-    document.body.appendChild(container);
+  it("disconnect runs every section's unmount (object lifecycle) and survives a teardown throw", async () => {
     const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const goodUnmount = vi.fn();
-    const drawer = new FileDetailsDrawer(container, baseData(), {
+    const el = await mountDrawer(baseData(), {
       getPluginSections: () => [
         {
           id: "test.bad",
@@ -184,7 +180,7 @@ describe("FileDetailsDrawer — section-host migration", () => {
         },
       ],
     });
-    drawer.destroy();
+    el.destroy();
     // Bad section's throw is logged but doesn't prevent the good
     // section from tearing down.
     expect(goodUnmount).toHaveBeenCalledTimes(1);
@@ -192,13 +188,11 @@ describe("FileDetailsDrawer — section-host migration", () => {
     consoleErrorSpy.mockRestore();
   });
 
-  it("notifyUpdate dispatches update(ctx) to reactive sections only — function-teardown sections aren't called", () => {
-    const container = document.createElement("div");
-    document.body.appendChild(container);
+  it("notifyUpdate dispatches update(ctx) to reactive sections only — function-teardown sections aren't called", async () => {
     const reactiveUpdate = vi.fn();
     const reactiveUnmount = vi.fn();
     const simpleTeardown = vi.fn();
-    const drawer = new FileDetailsDrawer(container, baseData(), {
+    const el = await mountDrawer(baseData(), {
       getPluginSections: () => [
         {
           id: "test.reactive",
@@ -214,7 +208,7 @@ describe("FileDetailsDrawer — section-host migration", () => {
         },
       ],
     });
-    drawer.notifyUpdate();
+    el.notifyUpdate();
     expect(reactiveUpdate).toHaveBeenCalledTimes(1);
     expect(simpleTeardown).not.toHaveBeenCalled();
     // Sanity: ctx carries the latest tags from the drawer's data.
@@ -222,21 +216,19 @@ describe("FileDetailsDrawer — section-host migration", () => {
     expect((call[0] as { tags: Record<string, string> }).tags).toEqual({ author: "alice" });
   });
 
-  it("setLastCommit triggers a full re-render — newly-visible Last commit section appears", () => {
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-    const drawer = new FileDetailsDrawer(container, baseData());
-    const panel = container.querySelector(".file-details-drawer") as HTMLElement;
+  it("setLastCommit triggers a full re-render — newly-visible Last commit section appears", async () => {
+    const el = await mountDrawer(baseData());
     // Initial render: no Last commit (data.lastCommit is undefined).
-    expect(getSectionHeadings(panel)).toEqual(["File", "Tags"]);
-    drawer.setLastCommit({
+    expect(getSectionHeadings(el)).toEqual(["File", "Tags"]);
+    el.setLastCommit({
       authorName: "alice",
       messageHeadline: "add Phase 2",
       date: "2026-04-25T00:00:00Z",
       shortSha: "1234abc",
     });
+    await el.updateComplete;
     // After setLastCommit: visibility flipped, section appears.
-    expect(getSectionHeadings(panel)).toEqual(["File", "Tags", "Last commit"]);
+    expect(getSectionHeadings(el)).toEqual(["File", "Tags", "Last commit"]);
   });
 
   it("BUILTIN_DRAWER_SECTION_IDS lists the four built-in ids", () => {
