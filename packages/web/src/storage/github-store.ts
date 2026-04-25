@@ -1129,15 +1129,12 @@ export class GitHubStore implements StorageProvider {
     if (this.#thumbnailCache.has(relPath)) return;
     const existing = this.#thumbnailInFlight.get(relPath);
     if (existing) return existing;
-    // `self` is captured so the `finally` block can confirm ownership
-    // of the in-flight slot before clearing it. Without this check, an
-    // orphaned pre-save prefetch would clobber the newer prefetch's
-    // entry when its `finally` ran. The explicit `any` cast works
-    // around TS's use-before-assigned warning; `self` is guaranteed
-    // assigned by the time the IIFE's `finally` runs.
-    // eslint-disable-next-line prefer-const
-    let self: Promise<void> = undefined as any;
-    self = (async () => {
+    // `inFlight` is captured so the `finally` block can confirm
+    // ownership of the in-flight slot before clearing it. Without
+    // this check, an orphaned pre-save prefetch would clobber the
+    // newer prefetch's entry when its `finally` ran.
+    let inFlight: Promise<void> | undefined;
+    inFlight = (async () => {
       try {
         // Snapshot the SHA so we can detect a concurrent mutation
         // during the fetch. If the file was re-committed locally
@@ -1185,13 +1182,13 @@ export class GitHubStore implements StorageProvider {
         // Only clear the in-flight slot if it's still ours. A save
         // that raced in may have already removed this entry and
         // launched a replacement prefetch.
-        if (this.#thumbnailInFlight.get(relPath) === self) {
+        if (this.#thumbnailInFlight.get(relPath) === inFlight) {
           this.#thumbnailInFlight.delete(relPath);
         }
       }
     })();
-    this.#thumbnailInFlight.set(relPath, self);
-    return self;
+    this.#thumbnailInFlight.set(relPath, inFlight);
+    return inFlight;
   }
 
   async updateImage(path: string, updates: ImageRecordUpdate): Promise<string> {
@@ -1800,10 +1797,12 @@ function base64ToBytes(b64: string): Uint8Array {
 }
 
 function bytesToDataUrl(bytes: Uint8Array, mime: string): string {
+  // Chunk to stay well under V8's argument-count cap (~65k); 32k is the
+  // long-standing safe size used by the surrounding Web platform code.
   let binary = "";
   const chunk = 0x8000;
   for (let i = 0; i < bytes.length; i += chunk) {
-    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk) as unknown as number[]);
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
   }
   return `data:${mime};base64,${btoa(binary)}`;
 }
