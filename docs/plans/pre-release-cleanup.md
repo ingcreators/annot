@@ -167,28 +167,54 @@ typecheck + build + Storybook pass.
 
 ### Stage 4 — `core` ↔ `web` boundary
 
-The big one. Move PWA-only UI out of `packages/core`:
+The big one. CLAUDE.md explicitly permits editor UI (selection
+handles, text caret, property panel) to use DOM APIs as PWA-only
+code. The genuine architectural smell is therefore narrower than
+"move everything DOM-touching out": it's that `@ingcreators/annot-core`
+exposes ONE root barrel that conflates the headless surface with
+the editor UI surface. Future Playwright / GitHub Action
+consumers can't distinguish the two.
 
-- `packages/core/src/editor/property-panel.ts` → `packages/web/src/editor/property-panel.ts`
-- `packages/core/src/editor/property-controls.ts` → `packages/web/src/editor/property-controls.ts`
-- `packages/core/src/utils/tooltip.ts` → `packages/web/src/ui/tooltip.ts`
-- Toolbar already moved to web in an earlier phase — verify residue cleaned.
+Multi-step landing — one carve-out per PR so each is reviewable
+and revertable:
 
-After the move:
+- **4-1.** Codify the headless boundary as an executable test.
+  `packages/core/src/headless.test.ts` imports
+  `@ingcreators/annot-core/headless` under a pure `node` vitest
+  environment and asserts that:
+    1. The import resolves without throwing.
+    2. The documented surface is present at runtime.
+    3. `globalThis.document` / `globalThis.window` are `undefined`
+       (no polyfill leak).
+  This catches a regression at the moment a new `headless.ts`
+  re-export starts pulling in DOM-side code, before any of the
+  more invasive moves below land.
 
-- `packages/core/src/index.ts` becomes the **headless-by-construction**
-  entry. The separate `headless.ts` becomes a deprecated alias re-
-  export pointing at root, kept for one release for external callers.
-- A CI grep guard added to `packages/core/`: `document\.|window\.|navigator\.`
-  must produce zero matches outside an explicit allowlist (the editor
-  UI parts being moved out, by then empty).
-- A note added to CLAUDE.md: the old "headless.ts second entry" rule
-  is replaced with "everything in `core` is headless; browser code
-  lives in `web` or in a dedicated `annot-editor` package."
+- **4-2.** Move `packages/core/src/editor/property-panel.ts` +
+  `property-panel-helpers.ts` to `packages/web/src/editor/`.
+  Update importers (`packages/desktop/src/app/app.ts`, the
+  selection-properties section, etc.). Touches ~22 files
+  workspace-wide; mechanical search-and-replace.
 
-This stage may itself want sub-phases (one file per PR) depending
-on how much downstream code imports from the moved files. Decide
-the slicing during Stage 4 kickoff.
+- **4-3.** Move `packages/core/src/editor/property-controls.ts`
+  to `packages/web/src/editor/`. Smaller fan-out than 4-2.
+
+- **4-4.** Move `packages/core/src/utils/tooltip.ts` to
+  `packages/web/src/ui/tooltip.ts`. Smallest of the moves.
+
+- **4-5.** Now that the explicit DOM-dependent leaves are out
+  of `core`, make `packages/core/src/index.ts` the
+  headless-by-construction entry. Editor UI exports (selection,
+  canvas-manager, tools — still PWA-only per CLAUDE.md) keep
+  living in `core/editor/*` but get re-exposed only via a new
+  `@ingcreators/annot-core/editor` subpath, never the root.
+  `headless.ts` becomes a deprecated alias re-export pointing at
+  root, kept for one release for external callers.
+
+- **4-6.** Update CLAUDE.md: replace the "headless.ts second
+  entry" rule with "root `index.ts` is headless; browser code
+  lives in `core/editor/*` (re-exposed via `/editor` subpath) or
+  in `web`."
 
 ## Phased plan
 
@@ -208,7 +234,12 @@ the slicing during Stage 4 kickoff.
 | 3c | `selection.ts` decomposition | 1 | 3b |
 | 3d | `github-store.ts` decomposition | 1 | 2 done (sequencing flexible) |
 | 3e | `service-worker.ts` decomposition | 1 | 1a done |
-| 4  | `core` ↔ `web` boundary move | 1+ | 3 done |
+| 4-1 | Headless boundary executable test | 1 | 3 done |
+| 4-2 | Move `property-panel.ts` core → web | 1 | 4-1 |
+| 4-3 | Move `property-controls.ts` core → web | 1 | 4-2 |
+| 4-4 | Move `tooltip.ts` core → web | 1 | 4-3 |
+| 4-5 | `core/index.ts` becomes headless-by-construction | 1 | 4-4 |
+| 4-6 | CLAUDE.md / docs updates for the new boundary | 1 | 4-5 |
 
 Stages run sequentially. PRs within a stage may overlap if
 they touch disjoint files (e.g. 1a + 1b + 1c can be three concurrent
