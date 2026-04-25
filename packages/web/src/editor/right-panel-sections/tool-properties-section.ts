@@ -17,7 +17,7 @@
  * for tools that have no adjustable properties (`crop`).
  */
 
-import type { Toolbar } from "@ingcreators/annot-core";
+import type { Toolbar } from "../toolbar.js";
 import type { UISection } from "../../app/plugin-host.js";
 import { html, LitElement } from "../../lit.js";
 

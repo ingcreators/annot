@@ -8,7 +8,12 @@ import { createColorPullButton, openAnchoredPopoverForColor } from "./property-c
 import { convertRedactStyle, detectRedactStyle } from "./redact-utils.js";
 import { convertShape, detectShapeType } from "./shape-utils.js";
 import { convertTextVariant, detectTextVariant } from "./text-utils.js";
-import { ARROW_ICON_SVG, COUNTER_ICON_SVG, HIGHLIGHT_COLORS, SHAPE_ICON_SVG } from "./toolbar.js";
+import {
+  ARROW_ICON_SVG,
+  COUNTER_ICON_SVG,
+  HIGHLIGHT_COLORS,
+  SHAPE_ICON_SVG,
+} from "./toolbar-icons.js";
 import { applyArrowHead, detectArrowEnds } from "./tools/arrow-tool.js";
 import { applyDrawStyle, detectDrawStyle, isFreehandGroup } from "./tools/freehand-tool.js";
 import { convertMarkerShape, detectMarkerShape, resizeMarker } from "./tools/marker-tool.js";

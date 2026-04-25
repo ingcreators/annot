@@ -52,7 +52,8 @@
  *      survive mode switches.
  */
 
-import type { PageMetadata, SelectionManager, Toolbar } from "@ingcreators/annot-core";
+import type { PageMetadata, SelectionManager } from "@ingcreators/annot-core";
+import type { Toolbar } from "./toolbar.js";
 import {
   type CanvasManager,
   type History,

@@ -1,57 +1,85 @@
+/**
+ * `Toolbar` — the editor's vertical tool rail (Select / Crop /
+ * Shape / Arrow / Text / Highlight / Redact / Marker / Draw)
+ * plus its tool-properties side-panel renderer.
+ *
+ * Lit Phase 5a — relocated from `@ingcreators/annot-core` to
+ * `@ingcreators/annot-web`. Pre-Lit, this 3,500-line module
+ * was the only browser-only surface still living in core; the
+ * relocation hardens core's DOM-free guarantee so the headless
+ * entry point doesn't need a build-time exclusion.
+ *
+ * Phase 5a is mechanical — no behaviour changes. Phases 5b
+ * (Lit shell + tool buttons) and 5c (Lit variant flyouts +
+ * property dropdowns) follow in their own PRs.
+ */
+
+// Cross-package imports use the published `@ingcreators/annot-core`
+// surface where available; deep subpaths (`./editor/*`,
+// `./editor/tools/*`) reach the bits that aren't re-exported via
+// the top-level barrel.
 import {
+  type AnnotationShape,
+  ARROW_ICON_SVG,
+  type CanvasManager,
+  computeDasharray,
+  copyAsImage,
+  copyAsOffice,
+  COUNTER_ICON_SVG,
+  createThemeToggle,
   DEFAULT_FILL_COLOR,
   DEFAULT_FONT_SIZE,
   DEFAULT_STROKE_COLOR,
   DEFAULT_STROKE_WIDTH,
-} from "../utils/constants.js";
-import { computeDasharray } from "../utils/dash-utils.js";
-import {
-  type AnnotationShape,
-  copyAsOffice,
-  isTauri,
-  loadToolPresets,
-  saveToolPresets,
-  type ToolPreset,
-} from "../utils/tauri-bridge.js";
-import { setTooltip } from "../utils/tooltip.js";
-import { refreshArrowPath } from "./arrow-markers.js";
-import { type CanvasMenuItem, openCanvasContextMenu } from "./canvas-context-menu.js";
-import type { CanvasManager } from "./canvas-manager.js";
-import { createCustomSelect } from "./custom-select.js";
-import {
-  copyAsImage,
   downloadAsImage,
   getPngDataUrl,
+  type History,
+  HIGHLIGHT_COLORS,
+  highlightColorLabel,
+  isTauri,
+  loadToolPresets,
+  openAnchoredPopover,
   saveAsEditableImage,
   saveToFile,
-} from "./export.js";
-import type { History } from "./history.js";
-import { exportPptx } from "./pptx-export.js";
+  saveToolPresets,
+  type SelectionManager,
+  setTooltip,
+  SHAPE_ICON_SVG,
+  type ToolBase,
+  type ToolOptions,
+  type ToolPreset,
+} from "@ingcreators/annot-core";
+import { refreshArrowPath } from "@ingcreators/annot-core/editor/arrow-markers";
+import {
+  type CanvasMenuItem,
+  openCanvasContextMenu,
+} from "@ingcreators/annot-core/editor/canvas-context-menu";
+import { createCustomSelect } from "@ingcreators/annot-core/editor/custom-select";
+import { exportPptx } from "@ingcreators/annot-core/editor/pptx-export";
 import {
   createArrowEndsRows,
   createColorPullButton,
   createNumberInput,
   createPropertyRow,
   createPropertySection,
-} from "./property-controls.js";
-import type { SelectionManager } from "./selection.js";
-import { createThemeToggle } from "./theme-toggle.js";
-import { ArrowTool } from "./tools/arrow-tool.js";
-import { CropTool } from "./tools/crop-tool.js";
-import { FreehandTool, isFreehandGroup } from "./tools/freehand-tool.js";
-import { MarkerTool } from "./tools/marker-tool.js";
-import { RedactTool } from "./tools/redact-tool.js";
-import { ShapeTool } from "./tools/shape-tool.js";
-import { TextTool } from "./tools/text-tool.js";
+} from "@ingcreators/annot-core/editor/property-controls";
+import { ArrowTool } from "@ingcreators/annot-core/editor/tools/arrow-tool";
+import { CropTool } from "@ingcreators/annot-core/editor/tools/crop-tool";
+import {
+  FreehandTool,
+  isFreehandGroup,
+} from "@ingcreators/annot-core/editor/tools/freehand-tool";
+import { MarkerTool } from "@ingcreators/annot-core/editor/tools/marker-tool";
+import { RedactTool } from "@ingcreators/annot-core/editor/tools/redact-tool";
+import { ShapeTool } from "@ingcreators/annot-core/editor/tools/shape-tool";
+import { TextTool } from "@ingcreators/annot-core/editor/tools/text-tool";
 import type {
   ArrowDim,
   ArrowShape,
   LineCap,
   MarkerShape,
-  ToolBase,
-  ToolOptions,
-} from "./tools/tool-base.js";
-import { toggleFlip } from "./transform-utils.js";
+} from "@ingcreators/annot-core/editor/tools/tool-base";
+import { toggleFlip } from "@ingcreators/annot-core/editor/transform-utils";
 
 // Minimal ambient declaration for the Chrome extension API surface
 // referenced at runtime below (all call sites are gated by
@@ -109,113 +137,10 @@ interface ToolVariantGroup {
   fallback: string;
 }
 
-/** Inline SVG icons for shape variants whose Material-Symbols
- *  equivalents don't give enough visual distinction at small sizes.
- *  The canonical problem: `rectangle` and `crop_square` ligatures
- *  both render as a square outline in 36px buttons — the difference
- *  (slight vs. no corner radius) is imperceptible. Authoring inline
- *  SVG with EXAGGERATED corner radius (rx/ry ≈ 1/3 of the side)
- *  makes the distinction clear, matching what PowerPoint / Google
- *  Slides / Keynote / Miro all do. */
-export const SHAPE_ICON_SVG = {
-  /** Sharp-cornered rectangle outline. Stroke weight tuned to match
-   *  the optical weight of adjacent Material-Symbols outlined icons. */
-  rect: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="miter" aria-hidden="true"><rect x="4" y="4" width="16" height="16"/></svg>`,
-  /** Rounded rectangle with rx=5 on a 16-wide square (≈ 31% — above
-   *  the 20% threshold where humans reliably perceive corner rounding
-   *  at icon scale). */
-  rounded: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="5"/></svg>`,
-  /** Ellipse / circle outline. Drawn as an <ellipse> with rx=ry so
-   *  it's perfectly circular; using <ellipse> rather than <circle>
-   *  keeps a single element type if future variants (e.g. wide
-   *  ellipse) need different rx/ry. Stroke-width matches rect /
-   *  rounded so the three chips look optically equal (fixes the
-   *  previous inconsistency where the Material-Symbols "circle"
-   *  ligature rendered noticeably thinner than the hand-rolled
-   *  rect / rounded outlines). */
-  ellipse: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><ellipse cx="12" cy="12" rx="8" ry="8"/></svg>`,
-} as const;
-
-/** Inline SVG icons for the Arrow tool's head variants. Material
- *  Symbols has no icon that accurately depicts a single line with
- *  arrowheads on both ends (`sync_alt` shows TWO parallel lines in
- *  opposite directions, which is not the same thing). Hand-rolling
- *  the three glyphs as a unified set — same line length, same stroke
- *  weight, only the arrowheads change — makes the "this is the same
- *  line with different ends" narrative visually obvious.
- *
- *  All three share:
- *    - viewBox 0 0 24 24 (Material Symbols grid)
- *    - horizontal stem y=12, from x=4 to x=20
- *    - stroke-width 2, round caps/joins for a polished look
- *    - arrowheads at 45° (delta ±4 on x and y) — matches the
- *      visual weight of `arrow_forward` in the default MS set. */
-export const ARROW_ICON_SVG = {
-  /** Plain horizontal line, no arrowheads. Same stem geometry as the
-   *  other two so the three chips line up identically in the
-   *  flyout. */
-  none: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12 H20"/></svg>`,
-  /** Single arrowhead at the right end ("end" variant). */
-  end: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12 H20"/><path d="M16 8 L20 12 L16 16"/></svg>`,
-  /** Arrowheads at BOTH ends ("both" variant). This is the icon the
-   *  `sync_alt` ligature was supposed to approximate but doesn't —
-   *  visually the difference from "end" is obvious here because the
-   *  only delta is the extra left-side chevron. */
-  both: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12 H20"/><path d="M16 8 L20 12 L16 16"/><path d="M8 8 L4 12 L8 16"/></svg>`,
-} as const;
-
-/** Inline SVG icons for the Counter (marker) shape variants — each
- *  glyph shows the container shape filled with `currentColor` and a
- *  "1" cut out to represent the numeric label. All three shapes are
- *  rendered FILLED (unlike SHAPE_ICON_SVG which is stroke-only) so
- *  they match what the tool actually produces: a solid-filled shape
- *  with a number centered inside. The cutout uses fill-rule="evenodd"
- *  so the "1" reads as the panel background showing through,
- *  automatically adapting to light / dark themes without hard-coded
- *  colors. */
-export const COUNTER_ICON_SVG = {
-  /** No-fill variant: outline shape with a "1" inside. Matches
-   *  SHAPE_ICON_SVG's outline vocabulary (same stroke-width 2, same
-   *  shape geometry) so Counter's Type row reads as a coherent
-   *  family with Shape. Using no-fill avoids the previous "looks like
-   *  it's already colored" ambiguity — the Type chip is a
-   *  type-definition glyph, not a color preview. The "1" fills with
-   *  currentColor and explicitly sets stroke="none" to block the
-   *  badge CSS's stroke-inheritance rule from painting the text's
-   *  outline (which would blur the glyph at the 13×13 corner-badge
-   *  size). */
-  circle: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><ellipse cx="12" cy="12" rx="8" ry="8"/><text x="12" y="17" text-anchor="middle" font-size="14" font-weight="800" font-family="system-ui, sans-serif" fill="currentColor" stroke="none">1</text></svg>`,
-  /** Sharp-cornered square containing "1" — same geometry as SHAPE_ICON_SVG.rect. */
-  rect: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="miter" aria-hidden="true"><rect x="4" y="4" width="16" height="16"/><text x="12" y="17" text-anchor="middle" font-size="14" font-weight="800" font-family="system-ui, sans-serif" fill="currentColor" stroke="none">1</text></svg>`,
-  /** Rounded square containing "1" — rx matches SHAPE_ICON_SVG.rounded. */
-  rounded: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="5"/><text x="12" y="17" text-anchor="middle" font-size="14" font-weight="800" font-family="system-ui, sans-serif" fill="currentColor" stroke="none">1</text></svg>`,
-} as const;
-
-/** Preset highlight colors — matches common PDF / PowerPoint highlighter
- *  pen sets. The user can pick any of these from the Highlight tool's
- *  color-swatch flyout; the chosen color is persisted via the preset
- *  system so the next click on the Highlight button uses it again. */
-export const HIGHLIGHT_COLORS: ReadonlyArray<{ value: string; label: string }> = [
-  { value: "#ffe100", label: "Yellow" },
-  { value: "#7bff7b", label: "Green" },
-  { value: "#ff91e0", label: "Pink" },
-  { value: "#7be0ff", label: "Blue" },
-  { value: "#ffb84c", label: "Orange" },
-  { value: "#c991ff", label: "Purple" },
-];
-
-/** Map a highlight fill hex (case-insensitive) to its palette label.
- *  Used by the right-panel selection title ("Selected Highlight
- *  (Yellow)") and by the Type-picker swatch tooltips. Falls back to
- *  the hex string itself for colors outside the preset palette
- *  (e.g. legacy documents with custom highlightColor values). */
-export function highlightColorLabel(fill: string | null | undefined): string {
-  const lc = (fill || "").toLowerCase();
-  return HIGHLIGHT_COLORS.find((c) => c.value === lc)?.label ?? (fill || "");
-}
-
 /** Default highlight color — first palette entry. Used when no preset
- *  has been saved yet (first-time launch of the Highlight tool). */
+ *  has been saved yet (first-time launch of the Highlight tool).
+ *  Constant lives here (not in `toolbar-icons.ts`) because it's
+ *  toolbar-only — the icon catalogue file holds shared data only. */
 const DEFAULT_HIGHLIGHT_COLOR = HIGHLIGHT_COLORS[0]!.value;
 
 const TOOL_VARIANTS: Record<string, ToolVariantGroup> = {
@@ -308,13 +233,6 @@ const TOOL_VARIANTS: Record<string, ToolVariantGroup> = {
 };
 
 /**
- * Exported so hosts can open their own popovers (e.g. the
- * Scratchpad library) using the same close / reposition behavior
- * and visual treatment as the built-in tool flyouts.
- */
-export { openAnchoredPopover };
-
-/**
  * Map an annotation element back to the toolbar id that creates it.
  * Used for rubber-band style propagation — when the user edits an
  * existing shape, we want to know which tool's preset should absorb
@@ -348,93 +266,11 @@ function toolIdForElement(el: SVGElement): string | null {
   return null;
 }
 
-/**
- * Open a lightweight popover anchored to a toolbar button. The popover
- * is appended to `<body>` with `position: fixed` so it escapes any
- * ancestor `overflow: hidden` (the editor header / vertical toolbar
- * both have one). Closes on outside click, Escape, scroll, or resize.
- *
- * Returns a `close()` function so the caller can dismiss the popover
- * from within its content (e.g. after the user clicks a variant chip).
- */
-function openAnchoredPopover(
-  anchor: HTMLElement,
-  fill: (root: HTMLElement) => void,
-  opts: { className?: string; placement?: "below" | "right" } = {},
-): () => void {
-  // Toggle semantics — a second click on the same anchor closes the
-  // popover instead of stacking another one underneath.
-  const existing = document.querySelector<HTMLElement>(
-    `[data-anchor-popover="${anchor.dataset.popoverId ?? ""}"]`,
-  );
-  if (existing && anchor.dataset.popoverId) {
-    existing.remove();
-    anchor.dataset.popoverId = "";
-    return () => {};
-  }
-  const id = Math.random().toString(36).slice(2, 10);
-  anchor.dataset.popoverId = id;
-
-  const popover = document.createElement("div");
-  popover.className = `tool-flyout ${opts.className || ""}`;
-  popover.dataset.anchorPopover = id;
-  popover.style.position = "fixed";
-  popover.style.zIndex = "1000";
-  fill(popover);
-  document.body.appendChild(popover);
-
-  const placement = opts.placement ?? "right";
-  const reposition = () => {
-    const r = anchor.getBoundingClientRect();
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const pw = popover.offsetWidth;
-    const ph = popover.offsetHeight;
-    let top: number;
-    let left: number;
-    if (placement === "right") {
-      // Vertical toolbar sits on the left edge → popover to the right.
-      left = Math.round(r.right + 4);
-      top = Math.round(r.top);
-      if (left + pw > vw - 8) left = Math.max(8, r.left - pw - 4);
-    } else {
-      // Horizontal toolbar → popover below.
-      top = Math.round(r.bottom + 4);
-      left = Math.round(r.left);
-      if (left + pw > vw - 8) left = Math.max(8, vw - pw - 8);
-    }
-    if (top + ph > vh - 8) top = Math.max(8, vh - ph - 8);
-    popover.style.top = `${top}px`;
-    popover.style.left = `${left}px`;
-  };
-  reposition();
-  window.addEventListener("resize", reposition);
-  window.addEventListener("scroll", reposition, true);
-
-  const cleanup = () => {
-    popover.remove();
-    if (anchor.dataset.popoverId === id) anchor.dataset.popoverId = "";
-    document.removeEventListener("click", onDocClick);
-    document.removeEventListener("keydown", onKey);
-    window.removeEventListener("resize", reposition);
-    window.removeEventListener("scroll", reposition, true);
-  };
-  const onDocClick = (e: MouseEvent) => {
-    if (popover.contains(e.target as Node)) return;
-    if (anchor.contains(e.target as Node)) return;
-    cleanup();
-  };
-  const onKey = (e: KeyboardEvent) => {
-    if (e.key === "Escape") cleanup();
-  };
-  // setTimeout so the opening click doesn't immediately close us.
-  setTimeout(() => {
-    document.addEventListener("click", onDocClick);
-    document.addEventListener("keydown", onKey);
-  }, 0);
-
-  return cleanup;
-}
+// `openAnchoredPopover` lives in `@ingcreators/annot-core` (see
+// `packages/core/src/editor/anchored-popover.ts`). It's imported
+// at the top of this file alongside the other shared editor
+// helpers; this comment marks the spot where the inline
+// definition used to live before Phase 5a.
 
 /**
  * Constructor-time switches for hosts that provide some of the toolbar's

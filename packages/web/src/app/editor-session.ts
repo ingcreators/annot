@@ -17,11 +17,11 @@ import type { ToolOptions } from "@ingcreators/annot-core";
 import {
   CanvasManager,
   History,
+  openAnchoredPopover,
   type PageMetadata,
   SelectionManager,
-  Toolbar,
-  openAnchoredPopover,
 } from "@ingcreators/annot-core";
+import { Toolbar } from "../editor/toolbar.js";
 import type { ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
 import { getFilename } from "@ingcreators/annot-core/storage";
 import type { AnnotFileDetailsDrawerElement } from "../editor/file-details-drawer.js";
