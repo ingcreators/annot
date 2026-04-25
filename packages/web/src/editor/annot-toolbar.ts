@@ -82,9 +82,26 @@ export class AnnotToolbarButtonElement extends LitElement {
   /** Inner `<button>` ref — the Toolbar class queries this so
    *  the existing imperative wiring (click handler + variant
    *  badge child, attached via `btn.appendChild(badge)`) still
-   *  works without modification. */
+   *  works without modification.
+   *
+   *  Forces a synchronous render via `performUpdate()` if the
+   *  inner button hasn't been rendered yet. Pre-this-call, Lit
+   *  schedules its first update on a microtask, which is too
+   *  late for `Toolbar.#render`'s synchronous wiring path —
+   *  it queries this getter immediately after `document.createElement`
+   *  + `shell.appendChild(...)`. The normal async cycle would
+   *  return null and the `!` non-null assertion downstream would
+   *  blow up `addEventListener` on null. */
   getButton(): HTMLButtonElement | null {
-    return this.querySelector<HTMLButtonElement>(".toolbar-btn");
+    let btn = this.querySelector<HTMLButtonElement>(".toolbar-btn");
+    if (!btn) {
+      // `performUpdate` is a public ReactiveElement API that runs
+      // any pending update synchronously. Safe even when no update
+      // is pending — it short-circuits in that case.
+      this.performUpdate();
+      btn = this.querySelector<HTMLButtonElement>(".toolbar-btn");
+    }
+    return btn;
   }
 
   override render() {
