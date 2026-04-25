@@ -341,27 +341,94 @@ green (typecheck, tests, lint, builds). The original
 — **not** kept as a re-export shim, since this is a pre-release
 window and the indirection would mask future drift.
 
+### Phase ordering — top-down, not leaves-first
+
+The Phase 0 implementation surfaced a real-world dependency cycle
+risk that an earlier draft of this plan got backwards. Files like
+`tooltip.ts`, `custom-select.ts`, and `color-palette.ts` look like
+"leaves" of the dep graph from the **producer** side — they don't
+import anything fancy. But from the **consumer** side they're
+deeply depended-on by other Tier C files still living in
+`core/editor/` (`property-panel`, `property-controls`,
+`theme-toggle`, etc.).
+
+If we move `tooltip.ts` to `annot-editor` while
+`core/editor/property-panel.ts` still imports it, the property-panel
+file would have to read:
+
+```ts
+import { setTooltip } from "@ingcreators/annot-editor/tooltip";
+```
+
+That's `annot-core → annot-editor` at the package level — a
+circular import (`annot-editor` already depends on `annot-core`).
+Bundlers and TypeScript would reject this immediately.
+
+The correct order is **top-down**: move consumers BEFORE their
+dependencies, so each phase only ever introduces an
+`annot-editor → annot-core` edge (which is the legal direction).
+A grep of `core/editor/` produced this consumer graph:
+
+| File | Other core/editor files that import it |
+|------|------------------------------------------|
+| `canvas-context-menu` | (none) |
+| `export.ts` | (none — only web) |
+| `pptx-export.ts` | (none — only web) |
+| `theme-toggle` | `index.ts` barrel only |
+| `property-panel` | `index.ts` barrel only |
+| `property-controls` | `property-panel` |
+| `redact-utils` | `property-panel`, `tools/redact-tool` |
+| `color-palette` | `property-controls` |
+| `custom-select` | `property-controls`, `property-panel` |
+| `anchored-popover` | `custom-select`, `property-controls` |
+| `tooltip` | `color-palette`, `custom-select`, `property-controls`, `property-panel`, `theme-toggle` |
+| `tools/*` | (intra-tool only; consumed by web `toolbar.ts` post-Phase 5) |
+| `smart-guides` | `selection` |
+| `selection` + `helpers` | (none — only web) |
+| `history` | `selection` |
+| `canvas-manager` | almost everything — keystone |
+
+Sorted into levels (each level has zero remaining
+core/editor consumers once prior levels have moved):
+
+| Level | Files |
+|-------|-------|
+| 0 (no in-core consumers) | `canvas-context-menu`, `theme-toggle`, `property-panel`, `selection`, `smart-guides`, `tools/*` (consumed only by web), `export.ts`, `pptx-export.ts` |
+| 1 (consumers all in level 0) | `property-controls`, `redact-utils`, `history` |
+| 2 | `color-palette`, `custom-select` |
+| 3 | `anchored-popover` |
+| 4 | `tooltip` |
+| 5 (keystone) | `canvas-manager` |
+
+### Phased plan
+
 | Phase | Scope | PR count |
 |-------|-------|----------|
-| **0** | Set up **two** empty workspace packages: `@ingcreators/annot-editor` and `@ingcreators/annot-render`. Each gets its own `package.json`, `tsconfig.json`, `vite.config.ts`, and a placeholder `index.ts`. `pnpm install` + green CI. | 1 |
-| **1** | Move the **leaf DOM widgets** (no dependencies on other Tier C primitives): `tooltip.ts`, `theme-toggle.ts`, `custom-select.ts`, `anchored-popover.ts`, `canvas-context-menu.ts`, `color-palette.ts`, **`redact-utils.ts`**. Update importers in web + extension. (`redact-utils` joins because its only Tier-C consumers — `redact-tool` and `property-panel` — both move later, so it can land in this batch and become a one-import-line edit when those land.) | 1 |
-| **2** | Move `property-controls.ts`. Update importers (mostly `core/editor/property-panel.ts`, web's `tool-property-renderer.ts`). | 1 |
-| **3** | Move the **PropertyPanel cluster**: `property-panel.ts` + `property-panel-helpers.ts`. Importers in web (right-panel + selection-properties section) + desktop. | 1 |
-| **4** | Move **`History`** to the editor package. Despite being pure-ish, it works on `SVGGElement.innerHTML` and is consumed only by editor primitives. | 1 |
-| **5** | Move the **tool hierarchy**: `tools/tool-base.ts`, `tools/{shape,arrow,text,freehand,marker,redact,crop}-tool.ts`. Largest single move; ~7 files + heavy importers in web's toolbar / property renderer / scratchpad. | 1 |
-| **6** | Move `smart-guides.ts`. | 1 |
-| **7** | Move `selection.ts` + `selection-helpers.ts`. | 1 |
+| **0** | ✅ DONE — both `@ingcreators/annot-editor` and `@ingcreators/annot-render` workspace packages scaffolded with empty placeholder entries. `pnpm install` + green CI. | 1 (landed in [#128](https://github.com/ingcreators/annot/pull/128)) |
+| **1** | **Warm-up moves**: `canvas-context-menu.ts` (no in-core consumers — pattern validation) + `theme-toggle.ts` (consumer is just the editor barrel re-export, easy to update). Establishes the move-pattern this plan will repeat ~8 more times. | 1 |
+| **2** | Move the **tool hierarchy**: `tools/tool-base.ts`, `tools/{shape,arrow,text,freehand,marker,redact,crop}-tool.ts`. Largest single move. Tools have no in-core consumers (the `core/editor/index.ts` barrel re-exports `ToolBase` / `ToolOptions` only — these get redirected to `annot-editor`). After this phase, `redact-utils`'s `tools/redact-tool` consumer is in annot-editor; only `property-panel` still consumes it from core. | 1 |
+| **3** | Move **PropertyPanel cluster**: `property-panel.ts` + `property-panel-helpers.ts`. Only consumer in core is the editor barrel. After this, the leaf widgets (`tooltip`, `custom-select`, `color-palette`, `anchored-popover`, `redact-utils`) lose their last in-core consumer. | 1 |
+| **4** | Move `property-controls.ts` + `redact-utils.ts` together. Both are now Level 1: their core consumers (`property-panel`, `tools/redact-tool`) have moved out. | 1 |
+| **5** | Move **`smart-guides.ts`** + **`selection.ts`** + **`selection-helpers.ts`**. selection consumes smart-guides; both have no other in-core consumers. | 1 |
+| **6** | Move **leaf widgets** in one batch: `color-palette.ts`, `custom-select.ts`, `anchored-popover.ts`, `tooltip.ts`. All Level 2–4. By now their core consumers have all moved to annot-editor, so the moves are now "safe leaves" — opposite of the original plan's framing. | 1 |
+| **7** | Move **`History`**. Consumer was `selection` (already moved); it's now an isolated Tier C file in core. | 1 |
 | **8** | **Keystone**: move `canvas-manager.ts` together with **`export.ts`** and **`pptx-export.ts`**. `canvas-manager.ts` and `pptx-export.ts` go to `annot-editor` (CanvasManager-coupled). `export.ts` is **split**: `renderImageRecord` (and its private helpers) → `annot-render`; the rest of `export.ts` (CanvasManager-coupled `saveToFile`, `getPngDataUrl`, `copyAsImage`, `saveAsEditableImage`, `exportSVGString`, `exportExcelSVG`, `exportAnnotationsSvgForIdb`, `copyAnnotationsAsImage`) → `annot-editor`. The three storage backends in `packages/web/src/storage/*` switch their `renderImageRecord` import to `@ingcreators/annot-render`. After this PR, `core/editor/` no longer holds any Tier C / C-render code. | 1 |
-| **9** | **CLAUDE.md** + plan-doc updates: drop the "editor UI in core can use DOM APIs" carve-out from `Architectural guardrails 2`. Record the Tier A / B / C model in the public-API section. Mark this plan `Done`. | 1 |
-| **10** | **Headless annotator prototype kickoff** (separate plan): now that the boundary is honest, the "headless annotator prototype" item in CLAUDE.md's pending-work list becomes actionable. Out of scope for this plan; left as a forward pointer. | n/a |
+| **9** | **CLAUDE.md** + plan-doc updates: drop the "editor UI in core can use DOM APIs" carve-out from `Architectural guardrails 2`. Record the Tier A / B / C / C-render model in the public-API section. Mark this plan `Done`. | 1 |
 
-Phase ordering matters because Tier C files import each other: the
-PropertyPanel imports tooltip, the SelectionManager imports
-arrow-markers (Tier B — no problem), the tools import canvas-manager.
-By moving leaf widgets first, then the panel, then tools, then
-selection, then canvas-manager last, every intermediate phase
-compiles without circular imports. Within `core/editor/index.ts`
-the surviving Tier B re-exports stay until Phase 9 cleans them up.
+After this plan lands, the **headless annotator prototype** item
+in CLAUDE.md's pending-work list becomes actionable — that's a
+separate plan, out of scope here.
+
+### Cycle-prevention invariant (CI-enforced)
+
+Phase 1 also extends `packages/core/src/headless.test.ts` with
+an additional assertion: **no module under `packages/core/src/`
+may transitively import `@ingcreators/annot-editor` or
+`@ingcreators/annot-render`**. Implemented by walking
+`require.cache` after the headless-import smoke runs and
+checking no path matches those package names. This catches the
+"oops, I added an editor-package import to a core file" case at
+CI time, no human review needed.
 
 ## Verification
 
