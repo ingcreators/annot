@@ -52,7 +52,7 @@
  *      survive mode switches.
  */
 
-import type { SelectionManager } from "@ingcreators/annot-core/editor";
+import type { SelectionManager } from "@ingcreators/annot-editor";
 import type { Toolbar } from "./toolbar.js";
 import {
   type CanvasManager,

@@ -3,9 +3,9 @@ import {
   readArrowEndpoints,
   refreshArrowPath,
   writeArrowControl,
-} from "./arrow-markers.js";
-import type { CanvasManager } from "./canvas-manager.js";
-import type { History } from "./history.js";
+} from "@ingcreators/annot-core/editor/arrow-markers";
+import type { CanvasManager } from "@ingcreators/annot-core/editor/canvas-manager";
+import type { History } from "@ingcreators/annot-core/editor/history";
 import {
   cursorForAngle,
   getWorldBBox,
@@ -20,7 +20,7 @@ import {
   SVG_NS,
 } from "./selection-helpers.js";
 import { computeSnap, SmartGuideOverlay } from "./smart-guides.js";
-import { rebuildCalloutTail, setCalloutTail } from "./text-utils.js";
+import { rebuildCalloutTail, setCalloutTail } from "@ingcreators/annot-core/editor/text-utils";
 import {
   applyTransformState,
   bakeLineTransform,
@@ -29,7 +29,7 @@ import {
   readTransformState,
   setRotation,
   toggleFlip,
-} from "./transform-utils.js";
+} from "@ingcreators/annot-core/editor/transform-utils";
 
 
 export class SelectionManager {

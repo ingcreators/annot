@@ -45,10 +45,9 @@ export {
   saveToFile,
 } from "./export.js";
 export { History } from "./history.js";
-// `PropertyPanel` moved to `@ingcreators/annot-editor` in Phase 2
-// of `docs/plans/three-package-split.md`. Consumers should
-// `import { PropertyPanel } from "@ingcreators/annot-editor"`.
-export { SelectionManager } from "./selection.js";
+// `PropertyPanel` and `SelectionManager` moved to `@ingcreators/annot-editor`
+// in Phases 2 / 5 of `docs/plans/three-package-split.md`. Consumers
+// should `import { PropertyPanel, SelectionManager } from "@ingcreators/annot-editor"`.
 // `createThemeToggle` moved to `@ingcreators/annot-editor` in
 // Phase 1 of `docs/plans/three-package-split.md`. Consumers
 // should `import { createThemeToggle } from "@ingcreators/annot-editor"`.

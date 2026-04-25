@@ -34,3 +34,6 @@ export type { ToolOptions } from "./tools/tool-base.js";
 // PropertyPanel — full DOM panel construction; see Phase 2 notes
 // in `docs/plans/three-package-split.md`.
 export { PropertyPanel } from "./property-panel.js";
+// SelectionManager — pointer-driven selection / handles / drag /
+// resize / rotate. Uses `smart-guides` overlays internally.
+export { SelectionManager } from "./selection.js";

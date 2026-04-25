@@ -18,8 +18,8 @@ import {
   CanvasManager,
   History,
   openAnchoredPopover,
-  SelectionManager,
 } from "@ingcreators/annot-core/editor";
+import { SelectionManager } from "@ingcreators/annot-editor";
 import { Toolbar } from "../editor/toolbar.js";
 import type { ImageRecord, PageMetadata, StorageProvider } from "@ingcreators/annot-core/storage";
 import { getFilename } from "@ingcreators/annot-core/storage";
