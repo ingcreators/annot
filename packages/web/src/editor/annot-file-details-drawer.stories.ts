@@ -12,8 +12,8 @@
  */
 
 import type { Meta, StoryObj } from "@storybook/web-components-vite";
-import "./file-details-drawer.js";
-import type { FileDetailsData } from "./file-details-drawer.js";
+import "./annot-file-details-drawer.js";
+import type { FileDetailsData } from "./annot-file-details-drawer.js";
 
 interface Args {
   data: FileDetailsData;

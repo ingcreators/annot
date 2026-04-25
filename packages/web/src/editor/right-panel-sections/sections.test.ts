@@ -26,12 +26,12 @@
 import type { Toolbar } from "../toolbar.js";
 import { describe, expect, it, vi } from "vitest";
 import type { UISectionContext } from "../../app/plugin-host.js";
-import "./page-elements-section.js";
-import { createPageElementsSection } from "./page-elements-section.js";
-import "./selection-properties-section.js";
-import { createSelectionPropertiesSection } from "./selection-properties-section.js";
-import "./tool-properties-section.js";
-import { createToolPropertiesSection } from "./tool-properties-section.js";
+import "./annot-page-elements-section.js";
+import { createPageElementsSection } from "./annot-page-elements-section.js";
+import "./annot-selection-properties-section.js";
+import { createSelectionPropertiesSection } from "./annot-selection-properties-section.js";
+import "./annot-tool-properties-section.js";
+import { createToolPropertiesSection } from "./annot-tool-properties-section.js";
 import { BUILTIN_RIGHT_PANEL_SECTION_IDS } from "../right-panel.js";
 
 function fakeCtx(overrides: Partial<UISectionContext> = {}): UISectionContext {

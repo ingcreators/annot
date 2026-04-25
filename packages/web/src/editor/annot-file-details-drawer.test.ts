@@ -14,12 +14,12 @@
 
 import { describe, expect, it, vi } from "vitest";
 import type { UISection, UISectionLifecycle } from "../app/plugin-host.js";
-import "./file-details-drawer.js";
+import "./annot-file-details-drawer.js";
 import {
   type AnnotFileDetailsDrawerElement,
   BUILTIN_DRAWER_SECTION_IDS,
   type FileDetailsData,
-} from "./file-details-drawer.js";
+} from "./annot-file-details-drawer.js";
 
 function baseData(overrides: Partial<FileDetailsData> = {}): FileDetailsData {
   return {
