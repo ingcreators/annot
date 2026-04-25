@@ -23,7 +23,6 @@
  * property dropdowns) follow in their own PRs.
  */
 
-import type { SaveMenuSelectDetail } from "./annot-save-menu.js";
 // Lit Phase 5b — outer shell + per-tool button primitives.
 // Phase 5c adds the variant / color flyouts (`<annot-tool-flyout>`)
 // + the save dropdown (`<annot-save-menu>`); badge state machine
@@ -50,7 +49,6 @@ import {
   DEFAULT_FONT_SIZE,
   DEFAULT_STROKE_COLOR,
   DEFAULT_STROKE_WIDTH,
-  downloadAsImage,
   getPngDataUrl,
   HIGHLIGHT_COLORS,
   type History,
@@ -59,7 +57,6 @@ import {
   loadToolPresets,
   openAnchoredPopover,
   type SelectionManager,
-  saveAsEditableImage,
   saveToFile,
   saveToolPresets,
   setTooltip,
@@ -72,7 +69,6 @@ import {
   type CanvasMenuItem,
   openCanvasContextMenu,
 } from "@ingcreators/annot-core/editor/canvas-context-menu";
-import { exportPptx } from "@ingcreators/annot-core/editor/pptx-export";
 import { ArrowTool } from "@ingcreators/annot-core/editor/tools/arrow-tool";
 import { CropTool } from "@ingcreators/annot-core/editor/tools/crop-tool";
 import { FreehandTool, isFreehandGroup } from "@ingcreators/annot-core/editor/tools/freehand-tool";
@@ -83,6 +79,7 @@ import { TextTool } from "@ingcreators/annot-core/editor/tools/text-tool";
 import { toggleFlip } from "@ingcreators/annot-core/editor/transform-utils";
 import type { AnnotToolbarButtonElement, AnnotToolbarElement } from "./annot-toolbar.js";
 import { populateToolPropertyPanel } from "./tool-property-renderer.js";
+import { openToolbarSaveMenu } from "./toolbar-save-menu.js";
 import {
   DEFAULT_HIGHLIGHT_COLOR,
   TOOL_VARIANTS,
@@ -658,121 +655,10 @@ export class Toolbar {
   }
 
   #showSaveMenu(anchor: HTMLElement): void {
-    // Toggle: a second click on the arrow closes an open menu instead
-    // of stacking another one underneath.
-    const existing = document.querySelector(".save-dropdown-menu");
-    if (existing) {
-      existing.remove();
-      return;
-    }
-
-    // Build the action map keyed on the menu-select detail id so the
-    // Lit element can stay purely presentational while the orchestrator
-    // owns the export-format dispatch.
-    const actions: Record<string, () => void> = {
-      svg: () => saveToFile(this.#canvas, this.#getCurrentFilename?.()),
-      pptx: () => exportPptx(this.#canvas),
-    };
-    const menu = document.createElement("annot-save-menu");
-    const items: { id: string; label: string; description: string }[] = [
-      { id: "svg", label: "Download SVG", description: "Editable vector format" },
-    ];
-
-    if (isTauri) {
-      actions["jpg-editable"] = () =>
-        saveAsEditableImage(this.#canvas, "jpg", this.#getCurrentFilename?.());
-      actions["png-editable"] = () =>
-        saveAsEditableImage(this.#canvas, "png", this.#getCurrentFilename?.());
-      items.push(
-        {
-          id: "jpg-editable",
-          label: "Save as JPG (re-editable)",
-          description: "JPEG with embedded annotations",
-        },
-        {
-          id: "png-editable",
-          label: "Save as PNG (re-editable)",
-          description: "PNG with embedded annotations",
-        },
-      );
-    } else {
-      actions["jpg-editable"] = () =>
-        downloadAsImage(this.#canvas, "jpg", this.#getCurrentFilename?.());
-      actions["png-editable"] = () =>
-        downloadAsImage(this.#canvas, "png", this.#getCurrentFilename?.());
-      items.push(
-        {
-          id: "jpg-editable",
-          label: "Download JPG (re-editable)",
-          description: "JPEG with embedded annotations",
-        },
-        {
-          id: "png-editable",
-          label: "Download PNG (re-editable)",
-          description: "PNG with embedded annotations",
-        },
-      );
-    }
-
-    // PowerPoint export — produces a single-slide .pptx with the
-    // screenshot as the slide background and each annotation as an
-    // editable native Office shape. Available everywhere (browser-side
-    // ZIP build, no Tauri dependency).
-    items.push({
-      id: "pptx",
-      label: "Download PPTX (PowerPoint)",
-      description: "Editable PowerPoint slide with native shapes",
+    openToolbarSaveMenu(anchor, {
+      canvas: this.#canvas,
+      getCurrentFilename: this.#getCurrentFilename,
     });
-
-    menu.items = items;
-    menu.addEventListener("menu-select", (e: Event) => {
-      const detail = (e as CustomEvent<SaveMenuSelectDetail>).detail;
-      actions[detail.id]?.();
-      cleanup();
-    });
-
-    // Render into document.body with fixed positioning so the menu
-    // escapes any ancestor `overflow: hidden` (the editor-header has
-    // exactly that, which would otherwise clip the dropdown the moment
-    // it appears below its anchor).
-    menu.style.position = "fixed";
-    menu.style.zIndex = "1000";
-    document.body.appendChild(menu);
-
-    // Place the menu just below the anchor's bottom edge, right-aligned
-    // to its right edge — the same visual position the previous CSS-only
-    // (top: 100%; right: 0) approach achieved when un-clipped.
-    const reposition = () => {
-      const r = anchor.getBoundingClientRect();
-      const vw = window.innerWidth;
-      // Show, measure, then compute the left edge so the menu doesn't
-      // spill off the viewport on narrow windows.
-      menu.style.top = `${Math.round(r.bottom + 4)}px`;
-      const mw = menu.offsetWidth;
-      let left = Math.round(r.right - mw);
-      if (left < 8) left = 8;
-      if (left + mw > vw - 8) left = vw - mw - 8;
-      menu.style.left = `${left}px`;
-    };
-    reposition();
-    window.addEventListener("resize", reposition);
-    window.addEventListener("scroll", reposition, true);
-
-    const close = (e: MouseEvent) => {
-      if (menu.contains(e.target as Node)) return;
-      // Ignore the same click that opened the menu — without this the
-      // open click would propagate to the document and immediately
-      // close the menu we just attached.
-      if (anchor.contains(e.target as Node)) return;
-      cleanup();
-    };
-    const cleanup = () => {
-      menu.remove();
-      document.removeEventListener("click", close);
-      window.removeEventListener("resize", reposition);
-      window.removeEventListener("scroll", reposition, true);
-    };
-    setTimeout(() => document.addEventListener("click", close), 0);
   }
 
   /** Copy: GVML + PNG via Win32 API in one clipboard session */
