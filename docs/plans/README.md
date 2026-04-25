@@ -20,6 +20,7 @@ window (`Queued`), or actively shipping (`In progress`).
 
 | Plan | Status | Summary |
 |------|--------|---------|
+| [`desktop-browser-mode.md`](./desktop-browser-mode.md) | Queued | Bring the Tauri desktop to full extension-capture parity by extracting `@ingcreators/annot-capture` (orchestration + content scripts + encoding) and adding a Tauri host adapter with per-OS native capture commands. Windows-first; Browse window is Chrome-style tabbed with `window.open` / OAuth popups handled in-window. Extension and desktop both consume the shared package. |
 | [`path-based-storage.md`](./path-based-storage.md) | Queued | Drop numeric IDs across all storage implementations; use filesystem-style paths as primary key. Prerequisite for `GitHubStore`. |
 | [`google-drive-integration.md`](./google-drive-integration.md) | Draft | Rework the Drive backend onto the non-sensitive `drive.file` scope + Workspace Marketplace + Drive UI Integration so Annot can ship publicly without a restricted-scope CASA audit. |
 | [`oss-cloud-split.md`](./oss-cloud-split.md) | Draft | Forward-looking strategy for keeping Annot OSS while developing paid features in a separate private `annot-cloud` repo. Guardrails apply from today; concrete phases trigger on "first paid feature" and "company incorporation". |
