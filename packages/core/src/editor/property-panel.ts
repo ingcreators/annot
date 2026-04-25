@@ -1,8 +1,14 @@
 import { computeDasharray, detectDashKey } from "../utils/dash-utils.js";
 import { setTooltip } from "../utils/tooltip.js";
-import { type ArrowSpec, computeArrowParts, refreshArrowPath } from "./arrow-markers.js";
+import { refreshArrowPath } from "./arrow-markers.js";
 import type { CanvasManager } from "./canvas-manager.js";
 import { createCustomSelect } from "./custom-select.js";
+import {
+  arrowPreview,
+  arrowSizePreview,
+  dashPreview,
+  ppNumberInput,
+} from "./property-panel-helpers.js";
 import type { History } from "./history.js";
 import { createColorPullButton, openAnchoredPopoverForColor } from "./property-controls.js";
 import { convertRedactStyle, detectRedactStyle } from "./redact-utils.js";
@@ -425,7 +431,7 @@ export class PropertyPanel {
     this.#inSection("Fill", () => {
       const fo = Number.parseFloat(el.getAttribute("fill-opacity") || "0.4");
       const transparency = Math.round((1 - (Number.isFinite(fo) ? fo : 0.4)) * 100);
-      const input = this.#ppNumberInput(transparency, "%", 0, 100, 5, (v) => {
+      const input = ppNumberInput(transparency, "%", 0, 100, 5, (v) => {
         const nextOpacity = 1 - v / 100;
         for (const t of this.#targets) {
           t.setAttribute("fill-opacity", String(nextOpacity));
@@ -542,7 +548,7 @@ export class PropertyPanel {
       this.#target().appendChild(
         this.#ppRow(
           "Width",
-          this.#ppNumberInput(bgStrokeWidth, "pt", 0, 20, 0.25, (v) => {
+          ppNumberInput(bgStrokeWidth, "pt", 0, 20, 0.25, (v) => {
             for (const t of this.#targets) {
               const bg = t.querySelector("circle") || t.querySelector("rect");
               if (!bg) continue;
@@ -565,11 +571,11 @@ export class PropertyPanel {
           "Dash type",
           createCustomSelect({
             options: [
-              { value: "", label: "Solid", preview: this.#dashPreview("") },
-              { value: "dash", label: "Dashed", preview: this.#dashPreview("dash") },
-              { value: "dot", label: "Dotted", preview: this.#dashPreview("dot") },
-              { value: "dashDot", label: "Dash-Dot", preview: this.#dashPreview("dashDot") },
-              { value: "lgDash", label: "Long Dash", preview: this.#dashPreview("lgDash") },
+              { value: "", label: "Solid", preview: dashPreview("") },
+              { value: "dash", label: "Dashed", preview: dashPreview("dash") },
+              { value: "dot", label: "Dotted", preview: dashPreview("dot") },
+              { value: "dashDot", label: "Dash-Dot", preview: dashPreview("dashDot") },
+              { value: "lgDash", label: "Long Dash", preview: dashPreview("lgDash") },
             ],
             current: bgDashKey,
             ariaLabel: "Dash type",
@@ -611,7 +617,7 @@ export class PropertyPanel {
       // the shared `#addFontSizePicker` would only touch font-size,
       // leaving the ring unchanged — visually awkward (tiny label in
       // big bubble).
-      const sizeInput = this.#ppNumberInput(fontSize, "pt", 8, 96, 1, (v) => {
+      const sizeInput = ppNumberInput(fontSize, "pt", 8, 96, 1, (v) => {
         for (const t of this.#targets) resizeMarker(t, v);
         // #commit rubber-bands the style to the tool preset so a
         // subsequent Counter draw uses the new size.
@@ -733,44 +739,9 @@ export class PropertyPanel {
    *  (outward from line's end), left-pointing for Begin arrow
    *  (outward from line's start). The two variants share the same
    *  geometry, just mirrored horizontally via a wrapper transform. */
-  #arrowPreview(shape: ArrowShape, dir: "left" | "right" = "right"): string {
-    // Shared 40×14 viewBox with #arrowSizePreview so Begin/End type
-    // and size buttons render at the same apparent stem length — the
-    // four rows line up visually in the right panel instead of
-    // looking like mismatched pairs.
-    const content = this.#arrowPreviewContent(shape);
-    const wrap =
-      dir === "left" ? `<g transform="translate(40,0) scale(-1,1)">${content}</g>` : content;
-    return `<svg width="40" height="14" viewBox="0 0 40 14">${wrap}</svg>`;
-  }
-
-  #arrowPreviewContent(shape: ArrowShape): string {
-    // 40×14 viewBox. Stem along y=7, head occupies x∈[28,38], 10-unit
-    // long × 10-unit wide (tip at x=38, base at x=28). The stem's
-    // right endpoint varies per shape so it touches the marker's
-    // attachment point (chevron tip, stealth notch, filled base, etc).
-    const mkStem = (x2: number) =>
-      `<line x1="2" y1="7" x2="${x2}" y2="7" stroke="currentColor" stroke-width="1.6" stroke-linecap="butt"/>`;
-    switch (shape) {
-      case "none":
-        // Plain line, full width.
-        return `<line x1="2" y1="7" x2="38" y2="7" stroke="currentColor" stroke-width="1.6" stroke-linecap="butt"/>`;
-      case "triangle":
-        return `${mkStem(28)}<polygon points="28 2, 38 7, 28 12" fill="currentColor"/>`;
-      case "arrow":
-        // Open chevron with thick rounded outline — matches
-        // PowerPoint's "arrow" preset. Stem extends through to the
-        // tip so the stem line has no visible gap at the opening.
-        return `${mkStem(38)}<polyline points="26 1, 38 7, 26 13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>`;
-      case "stealth":
-        // Notch at ~30% of length → x = 28 + 10*0.3 = 31.
-        return `${mkStem(31)}<polygon points="28 2, 38 7, 28 12, 31 7" fill="currentColor"/>`;
-      case "diamond":
-        return `${mkStem(28)}<polygon points="24 7, 31 2, 38 7, 31 12" fill="currentColor"/>`;
-      case "oval":
-        return `${mkStem(28)}<circle cx="33" cy="7" r="5" fill="currentColor"/>`;
-    }
-  }
+  // `#arrowPreview` and `#arrowPreviewContent` extracted to
+  // `./property-panel-helpers.ts` (Stage 3b-1). Call sites use the
+  // imported `arrowPreview` / `arrowPreviewContent` directly.
 
   /** Stroke-opacity slider (0..100%). Kept distinct from
    *  `#addOpacityPicker` which targets fill-opacity, because the two
@@ -1033,7 +1004,7 @@ export class PropertyPanel {
     // Unified: render as a pp-row with a pp-number input + stepper,
     // matching the Line / Fill rows. Previous implementation used a
     // bare `<input>` — looked visually out-of-place inside a pp card.
-    const input = this.#ppNumberInput(value, "", min, max, 1, (v) => onChange(Math.round(v)));
+    const input = ppNumberInput(value, "", min, max, 1, (v) => onChange(Math.round(v)));
     this.#target().appendChild(this.#ppRow(label, input));
   }
 
@@ -1163,7 +1134,7 @@ export class PropertyPanel {
     // pp-number input used by Tool mode, so both panels expose the
     // same spinner + keyboard-entry control. Accepts any pt value in
     // a reasonable range rather than the preset list.
-    const input = this.#ppNumberInput(current, "pt", 8, 96, 1, (v) => {
+    const input = ppNumberInput(current, "pt", 8, 96, 1, (v) => {
       for (const t of this.#targets) {
         const te = t.querySelector("text");
         if (te) te.setAttribute("font-size", String(v));
@@ -1515,7 +1486,7 @@ export class PropertyPanel {
     body.appendChild(
       this.#ppRow(
         "Transparency",
-        this.#ppNumberInput(Math.round((1 - strokeOp) * 100), "%", 0, 100, 1, (transparencyPct) => {
+        ppNumberInput(Math.round((1 - strokeOp) * 100), "%", 0, 100, 1, (transparencyPct) => {
           const op = 1 - transparencyPct / 100;
           for (const t of targets()) {
             if (t.tagName === "line") {
@@ -1537,7 +1508,7 @@ export class PropertyPanel {
     body.appendChild(
       this.#ppRow(
         "Width",
-        this.#ppNumberInput(sw, "pt", 0.25, 200, 0.25, (v) => {
+        ppNumberInput(sw, "pt", 0.25, 200, 0.25, (v) => {
           for (const t of targets()) {
             t.setAttribute("stroke-width", String(v));
             // Dashes are derived from the width — recompute so the pattern
@@ -1561,11 +1532,11 @@ export class PropertyPanel {
     const dashRaw = this.#getAttr(el, "stroke-dasharray") || "";
     const dashKey = this.#getAttr(el, "data-dash-key") || detectDashKey(dashRaw, sw);
     const DASH_OPTIONS: Array<{ value: string; label: string; preview: string }> = [
-      { value: "", label: "Solid", preview: this.#dashPreview("") },
-      { value: "dash", label: "Dashed", preview: this.#dashPreview("dash") },
-      { value: "dot", label: "Dotted", preview: this.#dashPreview("dot") },
-      { value: "dashDot", label: "Dash-Dot", preview: this.#dashPreview("dashDot") },
-      { value: "lgDash", label: "Long Dash", preview: this.#dashPreview("lgDash") },
+      { value: "", label: "Solid", preview: dashPreview("") },
+      { value: "dash", label: "Dashed", preview: dashPreview("dash") },
+      { value: "dot", label: "Dotted", preview: dashPreview("dot") },
+      { value: "dashDot", label: "Dash-Dot", preview: dashPreview("dashDot") },
+      { value: "lgDash", label: "Long Dash", preview: dashPreview("lgDash") },
     ];
     body.appendChild(
       this.#ppRow(
@@ -1687,7 +1658,7 @@ export class PropertyPanel {
     body.appendChild(
       this.#ppRow(
         "Transparency",
-        this.#ppNumberInput(Math.round((1 - fillOp) * 100), "%", 0, 100, 1, (transparencyPct) => {
+        ppNumberInput(Math.round((1 - fillOp) * 100), "%", 0, 100, 1, (transparencyPct) => {
           const op = 1 - transparencyPct / 100;
           for (const t of this.#targets) t.setAttribute("fill-opacity", String(op));
           this.#commit();
@@ -1731,12 +1702,12 @@ export class PropertyPanel {
     const shapesFor = (end: "start" | "end") => {
       const dir: "left" | "right" = end === "start" ? "left" : "right";
       const allShapes = [
-        { value: "none", label: "None", preview: this.#arrowPreview("none", dir) },
-        { value: "triangle", label: "Triangle", preview: this.#arrowPreview("triangle", dir) },
-        { value: "arrow", label: "Arrow", preview: this.#arrowPreview("arrow", dir) },
-        { value: "stealth", label: "Stealth", preview: this.#arrowPreview("stealth", dir) },
-        { value: "diamond", label: "Diamond", preview: this.#arrowPreview("diamond", dir) },
-        { value: "oval", label: "Oval", preview: this.#arrowPreview("oval", dir) },
+        { value: "none", label: "None", preview: arrowPreview("none", dir) },
+        { value: "triangle", label: "Triangle", preview: arrowPreview("triangle", dir) },
+        { value: "arrow", label: "Arrow", preview: arrowPreview("arrow", dir) },
+        { value: "stealth", label: "Stealth", preview: arrowPreview("stealth", dir) },
+        { value: "diamond", label: "Diamond", preview: arrowPreview("diamond", dir) },
+        { value: "oval", label: "Oval", preview: arrowPreview("oval", dir) },
       ] as Array<{ value: ArrowShape; label: string; preview: string }>;
       // Filter rule: "none" is a MARKER ABSENCE, every other shape
       // is a MARKER PRESENCE. Each end must match what the variant
@@ -1758,7 +1729,7 @@ export class PropertyPanel {
           out.push({
             value: `${w}-${l}`,
             label: `W:${w.toUpperCase()}  L:${l.toUpperCase()}`,
-            preview: this.#arrowSizePreview(w, l, dir),
+            preview: arrowSizePreview(w, l, dir),
           });
         }
       }
@@ -1828,166 +1799,8 @@ export class PropertyPanel {
    *      each cell, matching PowerPoint's visual priority
    *  The preview is horizontally mirrored for the Begin-arrow picker
    *  so the arrow faces the same way it will render on the line. */
-  #arrowSizePreview(w: ArrowDim, l: ArrowDim, dir: "left" | "right" = "right"): string {
-    // Render the preview with the SAME arrow-geometry engine the
-    // canvas uses (`computeArrowParts` from arrow-markers.ts). That
-    // way the dropdown cells accurately reflect the actual stroke-
-    // width-relative shortening / tip trig / width-factor gradient
-    // — no more maintaining a separate ad-hoc scale table that
-    // drifts from the real rendering. Filled triangle is used as
-    // the reference shape (matches LENGTH_PX / WIDTH_FACTOR).
-    const VB_W = 40;
-    const VB_H = 14;
-    const cy = VB_H / 2;
-    // A moderate preview stroke so the ~12×8 viewBox comfortably
-    // shows the head; arrow-markers' output scales with this value.
-    const previewStroke = 1.2;
-    const x1 = 2;
-    const x2 = VB_W - 2;
-    const specStart: ArrowSpec = { shape: "none", width: w, length: l };
-    const specEnd: ArrowSpec = { shape: "triangle", width: w, length: l };
-    const { stemD, headFilledD, headOpenD } = computeArrowParts(
-      x1,
-      cy,
-      x2,
-      cy,
-      specStart,
-      specEnd,
-      previewStroke,
-    );
-    const headAttrs = `stroke="currentColor" stroke-width="${previewStroke}" stroke-linecap="round" stroke-linejoin="miter"`;
-    const content =
-      `<path d="${stemD}" fill="none" stroke="currentColor" stroke-width="${previewStroke}" stroke-linecap="butt"/>` +
-      `<path d="${headFilledD}" fill="currentColor" ${headAttrs}/>` +
-      `<path d="${headOpenD}" fill="none" ${headAttrs}/>`;
-    const wrap =
-      dir === "left" ? `<g transform="translate(${VB_W},0) scale(-1,1)">${content}</g>` : content;
-    return `<svg width="${VB_W}" height="${VB_H}" viewBox="0 0 ${VB_W} ${VB_H}">${wrap}</svg>`;
-  }
-
-  /** Number input with unit suffix + custom up/down spinner buttons —
-   *  matches PowerPoint's "4.5 pt", "40 %", "90°" fields. The browser's
-   *  native spin buttons are suppressed by CSS so styling stays
-   *  consistent in both light and dark themes; our stacked caret
-   *  buttons take over their role, with Enter / blur committing the
-   *  current value to the caller. */
-  #ppNumberInput(
-    current: number,
-    unit: string,
-    min: number,
-    max: number,
-    step: number,
-    onCommit: (value: number) => void,
-  ): HTMLElement {
-    const wrap = document.createElement("div");
-    wrap.className = "pp-number";
-    const input = document.createElement("input");
-    input.type = "number";
-    input.min = String(min);
-    input.max = String(max);
-    input.step = String(step);
-    input.value = String(current);
-    const unitEl = document.createElement("span");
-    unitEl.className = "pp-number-unit";
-    unitEl.textContent = unit;
-    wrap.appendChild(input);
-    wrap.appendChild(unitEl);
-
-    const clamp = (v: number) => Math.max(min, Math.min(max, v));
-    const commit = () => {
-      let v = Number.parseFloat(input.value);
-      if (!Number.isFinite(v)) v = current;
-      v = clamp(v);
-      input.value = String(v);
-      onCommit(v);
-    };
-    const bump = (dir: 1 | -1) => {
-      const cur = Number.parseFloat(input.value);
-      const base = Number.isFinite(cur) ? cur : current;
-      const next = clamp(Math.round((base + dir * step) * 1e6) / 1e6);
-      input.value = String(next);
-      onCommit(next);
-    };
-
-    // Stacked spinner caret buttons, PowerPoint-style.
-    const spinner = document.createElement("div");
-    spinner.className = "pp-number-spinner";
-    const up = document.createElement("button");
-    up.type = "button";
-    up.className = "pp-number-spin-up";
-    up.setAttribute("aria-label", "Increase");
-    up.tabIndex = -1;
-    up.addEventListener("click", (e) => {
-      e.preventDefault();
-      bump(1);
-    });
-    const down = document.createElement("button");
-    down.type = "button";
-    down.className = "pp-number-spin-down";
-    down.setAttribute("aria-label", "Decrease");
-    down.tabIndex = -1;
-    down.addEventListener("click", (e) => {
-      e.preventDefault();
-      bump(-1);
-    });
-    spinner.appendChild(up);
-    spinner.appendChild(down);
-    wrap.appendChild(spinner);
-
-    input.addEventListener("change", commit);
-    input.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        commit();
-        input.blur();
-      }
-    });
-    return wrap;
-  }
-
-  /** Slider + matching number input pair (PowerPoint's transparency /
-   *  brightness rows use this). */
-  #ppSliderRow(
-    label: string,
-    current: number,
-    unit: string,
-    onInput: (value: number) => void,
-    onCommit: () => void,
-  ): HTMLElement {
-    const row = document.createElement("div");
-    row.className = "pp-slider-row";
-    const lbl = document.createElement("div");
-    lbl.className = "pp-row-label";
-    lbl.textContent = label;
-    row.appendChild(lbl);
-    const slider = document.createElement("input");
-    slider.type = "range";
-    slider.min = "0";
-    slider.max = "100";
-    slider.step = "1";
-    slider.value = String(current);
-    row.appendChild(slider);
-    const num = this.#ppNumberInput(current, unit, 0, 100, 1, (v) => {
-      slider.value = String(v);
-      onInput(v);
-      onCommit();
-    });
-    row.appendChild(num);
-    slider.addEventListener("input", () => {
-      const v = Number.parseFloat(slider.value);
-      (num.querySelector("input") as HTMLInputElement).value = String(v);
-      onInput(v);
-    });
-    slider.addEventListener("change", () => onCommit());
-    return row;
-  }
-
-  #dashPreview(key: string): string {
-    const prev = 1.5;
-    const da = computeDasharray(key, prev);
-    const daAttr = da ? ` stroke-dasharray="${da}"` : "";
-    return `<svg width="60" height="10" viewBox="0 0 60 10"><line x1="2" y1="5" x2="58" y2="5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"${daAttr}/></svg>`;
-  }
+  // `#arrowSizePreview`, `#ppNumberInput`, `#ppSliderRow`, `#dashPreview`
+  // extracted to `./property-panel-helpers.ts` (Stage 3b-1).
 }
 
 // `openAnchoredPopoverForColor` now lives in property-controls.ts so
