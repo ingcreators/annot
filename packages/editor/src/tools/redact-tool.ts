@@ -4,7 +4,7 @@ import {
   renderBlurRedact,
   renderMosaicRedact,
   renderSolidRedact,
-} from "@ingcreators/annot-core/editor/redact-utils";
+} from "@ingcreators/annot-editor/redact-utils";
 import type { RedactStyle } from "./tool-base.js";
 /**
  * RedactTool — unified Mosaic / Solid / Blur redaction tool.
