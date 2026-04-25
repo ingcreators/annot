@@ -4,52 +4,93 @@
  * `github-external-links` built-in plugin contributes "View on
  * GitHub"; future plugins can stack their own).
  *
- * Migrated from the previous monolithic
- * `FileDetailsDrawer.#renderLinksSection` as part of Phase 2 of
- * `docs/plans/plugin-ui-slots.md`. The section's `visible(ctx)`
- * gates on the data carrying at least one link, so deployments
- * without contributing plugins (or with the GitHub built-in
- * disabled) don't see the heading.
+ * Lit Phase 1 — replaces the imperative `render()` closure with
+ * a `<annot-drawer-external-links-section>` element. The
+ * `createExternalLinksSection` factory stays so the drawer host
+ * can compose it as a `UISection` alongside plugin-authored
+ * sections (whose `mount` is still an opaque callback).
  *
- * Reactive lifecycle: `update(ctx)` re-reads the link list and
- * re-renders. New plugins coming online mid-session would land
- * here on the next host-level update.
+ * Reactive lifecycle: the element's `links` property reflects
+ * the latest contributions; the factory's `update(ctx)`
+ * re-reads via `deps.getData()` and reassigns the property,
+ * which triggers a Lit re-render.
  */
 
-import { setTooltip } from "@ingcreators/annot-core/utils";
 import type { UISection } from "../../app/plugin-host.js";
+import { html, LitElement, nothing } from "../../lit.js";
 import type { FileDetailsData } from "../file-details-drawer-types.js";
+
+export interface ExternalLinkEntry {
+  label: string;
+  url: string;
+  icon?: string;
+}
+
+export class AnnotDrawerExternalLinksSectionElement extends LitElement {
+  static override properties = {
+    links: { attribute: false },
+  };
+
+  declare links: ExternalLinkEntry[];
+
+  constructor() {
+    super();
+    this.links = [];
+  }
+
+  protected override createRenderRoot(): HTMLElement {
+    return this;
+  }
+
+  override render() {
+    if (!this.links.length) return nothing;
+    return html`
+      ${this.links.map(
+        (link) => html`
+          <div class="file-details-row file-details-link-row">
+            <a
+              class="file-details-external-link"
+              href=${link.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              data-tooltip=${link.url}
+              aria-label=${link.url}
+            >
+              ${link.icon
+                ? html`<span class="material-symbols-outlined" aria-hidden="true"
+                    >${link.icon}</span
+                  >`
+                : nothing}${link.label}
+            </a>
+          </div>
+        `,
+      )}
+    `;
+  }
+}
+
+if (!customElements.get("annot-drawer-external-links-section")) {
+  customElements.define(
+    "annot-drawer-external-links-section",
+    AnnotDrawerExternalLinksSectionElement,
+  );
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    "annot-drawer-external-links-section": AnnotDrawerExternalLinksSectionElement;
+  }
+}
 
 export interface ExternalLinksSectionDeps {
   getData(): FileDetailsData;
 }
 
 export function createExternalLinksSection(deps: ExternalLinksSectionDeps): UISection {
-  let bodyRef: HTMLElement | null = null;
-
-  const render = (container: HTMLElement) => {
-    container.innerHTML = "";
-    const links = deps.getData().externalLinks ?? [];
-    for (const link of links) {
-      const row = document.createElement("div");
-      row.className = "file-details-row file-details-link-row";
-      const a = document.createElement("a");
-      a.href = link.url;
-      a.target = "_blank";
-      a.rel = "noopener noreferrer";
-      a.className = "file-details-external-link";
-      if (link.icon) {
-        const icon = document.createElement("span");
-        icon.className = "material-symbols-outlined";
-        icon.textContent = link.icon;
-        icon.setAttribute("aria-hidden", "true");
-        a.appendChild(icon);
-      }
-      a.appendChild(document.createTextNode(link.label));
-      setTooltip(a, link.url);
-      row.appendChild(a);
-      container.appendChild(row);
-    }
+  let el: AnnotDrawerExternalLinksSectionElement | null = null;
+  const sync = () => {
+    if (!el) return;
+    el.links = deps.getData().externalLinks ?? [];
   };
 
   return {
@@ -61,14 +102,16 @@ export function createExternalLinksSection(deps: ExternalLinksSectionDeps): UISe
       return Boolean(links && links.length > 0);
     },
     mount(container) {
-      bodyRef = container;
-      render(container);
+      el = document.createElement("annot-drawer-external-links-section");
+      container.appendChild(el);
+      sync();
       return {
         update() {
-          if (bodyRef) render(bodyRef);
+          sync();
         },
         unmount() {
-          bodyRef = null;
+          el?.remove();
+          el = null;
         },
       };
     },

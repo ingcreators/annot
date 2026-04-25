@@ -20,7 +20,7 @@ import type { Toolbar } from "@ingcreators/annot-core";
 import type { ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
 import { getFilename } from "@ingcreators/annot-core/storage";
 import { setTooltip } from "@ingcreators/annot-core/utils";
-import type { FileDetailsDrawer } from "../editor/file-details-drawer.js";
+import type { AnnotFileDetailsDrawerElement } from "../editor/file-details-drawer.js";
 import { estimateDataUrlBytes, validateFilename } from "../editor/file-details-drawer.js";
 import type { AnnotSaveStatusElement } from "../editor/save-status-indicator.js";
 import "../editor/save-status-indicator.js";
@@ -38,7 +38,7 @@ export interface HeaderHostDeps {
   getCurrentImageDataUrl(): string;
   getCurrentFolderPath(): string;
   setCurrentFolderPath(path: string): void;
-  getFileDetailsDrawer(): FileDetailsDrawer | null;
+  getFileDetailsDrawer(): AnnotFileDetailsDrawerElement | null;
   /** Lazy — the toolbar is built after `build()` returns, so header
    *  buttons that delegate to it (copy / save / save-menu) resolve
    *  on click, not at build time. */

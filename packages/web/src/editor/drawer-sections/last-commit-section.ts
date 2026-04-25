@@ -6,33 +6,102 @@
  * GitHub before the async lookup completes) don't render the
  * heading.
  *
- * Migrated from the previous monolithic
- * `FileDetailsDrawer.#renderLastCommitSection` as part of Phase 2
- * of `docs/plans/plugin-ui-slots.md`.
- *
- * Reactive lifecycle: `update(ctx)` re-renders the rows when
- * `setLastCommit` fires with new info. The drawer host handles
- * visibility transitions (commit appearing for the first time)
- * via its own re-render path.
+ * Lit Phase 1 — replaces the imperative `renderRows` closure with
+ * a `<annot-drawer-last-commit-section>` element. The
+ * `createLastCommitSection` factory stays so the drawer host can
+ * compose it as a `UISection` alongside plugin-authored sections
+ * (whose `mount` is still an opaque callback).
  */
 
-import { setTooltip } from "@ingcreators/annot-core/utils";
 import type { UISection } from "../../app/plugin-host.js";
+import { html, LitElement, nothing } from "../../lit.js";
 import type { FileDetailsData, LastCommitInfo } from "../file-details-drawer-types.js";
-import { formatDate, makeRow } from "./helpers.js";
+import { formatDate } from "./helpers.js";
+
+export class AnnotDrawerLastCommitSectionElement extends LitElement {
+  static override properties = {
+    commit: { attribute: false },
+  };
+
+  declare commit: LastCommitInfo | null;
+
+  constructor() {
+    super();
+    this.commit = null;
+  }
+
+  protected override createRenderRoot(): HTMLElement {
+    return this;
+  }
+
+  override render() {
+    const commit = this.commit;
+    if (!commit) return nothing;
+    return html`
+      <div class="file-details-row">
+        <span class="file-details-row-label">Author</span>
+        <span class="file-details-row-value selectable">
+          ${commit.authorAvatarUrl
+            ? html`<img
+                class="file-details-avatar"
+                src=${commit.authorAvatarUrl}
+                alt=""
+                width="16"
+                height="16"
+              />`
+            : nothing}${commit.authorName}
+        </span>
+      </div>
+      <div class="file-details-row">
+        <span class="file-details-row-label">Date</span>
+        <span
+          class="file-details-row-value"
+          data-tooltip=${formatDate(commit.date)}
+          aria-label=${formatDate(commit.date)}
+          >${formatDate(commit.date)}</span
+        >
+      </div>
+      <div class="file-details-row">
+        <span class="file-details-row-label">Message</span>
+        <span
+          class="file-details-row-value selectable"
+          data-tooltip=${commit.messageHeadline}
+          aria-label=${commit.messageHeadline}
+        >
+          ${commit.url
+            ? html`<a href=${commit.url} target="_blank" rel="noopener noreferrer"
+                >${commit.messageHeadline}</a
+              >`
+            : commit.messageHeadline}
+          <code class="file-details-sha">${commit.shortSha}</code>
+        </span>
+      </div>
+    `;
+  }
+}
+
+if (!customElements.get("annot-drawer-last-commit-section")) {
+  customElements.define(
+    "annot-drawer-last-commit-section",
+    AnnotDrawerLastCommitSectionElement,
+  );
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    "annot-drawer-last-commit-section": AnnotDrawerLastCommitSectionElement;
+  }
+}
 
 export interface LastCommitSectionDeps {
   getData(): FileDetailsData;
 }
 
 export function createLastCommitSection(deps: LastCommitSectionDeps): UISection {
-  let bodyRef: HTMLElement | null = null;
-
-  const render = (container: HTMLElement) => {
-    container.innerHTML = "";
-    const commit = deps.getData().lastCommit;
-    if (!commit) return; // visible() guard usually prevents this; defensive no-op
-    renderRows(container, commit);
+  let el: AnnotDrawerLastCommitSectionElement | null = null;
+  const sync = () => {
+    if (!el) return;
+    el.commit = deps.getData().lastCommit ?? null;
   };
 
   return {
@@ -43,72 +112,18 @@ export function createLastCommitSection(deps: LastCommitSectionDeps): UISection 
       return Boolean(deps.getData().lastCommit);
     },
     mount(container) {
-      bodyRef = container;
-      render(container);
+      el = document.createElement("annot-drawer-last-commit-section");
+      container.appendChild(el);
+      sync();
       return {
         update() {
-          if (bodyRef) render(bodyRef);
+          sync();
         },
         unmount() {
-          bodyRef = null;
+          el?.remove();
+          el = null;
         },
       };
     },
   };
-}
-
-function renderRows(container: HTMLElement, commit: LastCommitInfo): void {
-  // Author row: avatar + name side by side when we have the avatar.
-  const authorRow = document.createElement("div");
-  authorRow.className = "file-details-row";
-  const authorLbl = document.createElement("span");
-  authorLbl.className = "file-details-row-label";
-  authorLbl.textContent = "Author";
-  authorRow.appendChild(authorLbl);
-  const authorVal = document.createElement("span");
-  authorVal.className = "file-details-row-value selectable";
-  if (commit.authorAvatarUrl) {
-    const avatar = document.createElement("img");
-    avatar.className = "file-details-avatar";
-    avatar.src = commit.authorAvatarUrl;
-    avatar.alt = "";
-    avatar.width = 16;
-    avatar.height = 16;
-    authorVal.appendChild(avatar);
-  }
-  const authorText = document.createTextNode(commit.authorName);
-  authorVal.appendChild(authorText);
-  authorRow.appendChild(authorVal);
-  container.appendChild(authorRow);
-
-  container.appendChild(makeRow("Date", formatDate(commit.date)));
-
-  // Message: clickable link to the commit when we have a URL,
-  // plain text otherwise. Short SHA shown in monospace alongside.
-  const msgRow = document.createElement("div");
-  msgRow.className = "file-details-row";
-  const msgLbl = document.createElement("span");
-  msgLbl.className = "file-details-row-label";
-  msgLbl.textContent = "Message";
-  msgRow.appendChild(msgLbl);
-  const msgWrap = document.createElement("span");
-  msgWrap.className = "file-details-row-value selectable";
-  if (commit.url) {
-    const a = document.createElement("a");
-    a.href = commit.url;
-    a.target = "_blank";
-    a.rel = "noopener noreferrer";
-    a.textContent = commit.messageHeadline;
-    msgWrap.appendChild(a);
-  } else {
-    msgWrap.appendChild(document.createTextNode(commit.messageHeadline));
-  }
-  msgWrap.appendChild(document.createTextNode(" "));
-  const sha = document.createElement("code");
-  sha.className = "file-details-sha";
-  sha.textContent = commit.shortSha;
-  msgWrap.appendChild(sha);
-  setTooltip(msgWrap, commit.messageHeadline);
-  msgRow.appendChild(msgWrap);
-  container.appendChild(msgRow);
 }

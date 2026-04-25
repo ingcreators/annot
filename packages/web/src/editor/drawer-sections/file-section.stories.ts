@@ -1,15 +1,18 @@
 /**
  * Stories for the built-in `drawer.file` section — the File
- * metadata block in `FileDetailsDrawer`. Exercises the
- * section's `mount` factory in isolation, away from the drawer
- * host, so the variants land as focused visual artifacts.
+ * metadata block in `<annot-file-details-drawer>`. Exercises the
+ * `<annot-drawer-file-section>` Lit element in isolation, away
+ * from the drawer host, so the variants land as focused visual
+ * artifacts.
  *
- * Phase 1 initial landmark of `docs/plans/storybook-introduction.md`.
+ * Bootstrapped in Phase 1 of `docs/plans/storybook-introduction.md`
+ * when the section was still an imperative factory; converted to
+ * the Lit element in Phase 1 of `docs/plans/lit-migration.md`.
  */
 
 import type { Meta, StoryObj } from "@storybook/web-components-vite";
+import "./file-section.js";
 import { createDrawerSectionFrame } from "./helpers.js";
-import { createFileSection } from "./file-section.js";
 import type { FileDetailsData } from "../file-details-drawer-types.js";
 
 interface Args {
@@ -25,11 +28,10 @@ interface Args {
 
 const meta: Meta<Args> = {
   title: "Editor / DrawerSections / drawer.file",
-  // Build the section frame + invoke the section's `mount`
-  // with a fake `FileDetailsData` derived from args. The
-  // drawer's visual chrome wraps the section body so the
-  // rendered story mirrors what the user sees inside the
-  // drawer.
+  // Build the section frame (heading + body) and mount the
+  // `<annot-drawer-file-section>` Lit element inside the body.
+  // The drawer's visual chrome wraps the section body so the
+  // rendered story mirrors what the user sees inside the drawer.
   render: (args) => {
     const data: FileDetailsData = {
       filename: args.filename,
@@ -42,19 +44,13 @@ const meta: Meta<Args> = {
       sourceUrl: args.sourceUrl || undefined,
       tags: {},
     };
-    const section = createFileSection({
-      getData: () => data,
-      onRename: async (newName) => {
-        console.log("[story] onRename", newName);
-      },
-    });
-    const frame = createDrawerSectionFrame(section.title);
-    section.mount(frame.body, {
-      path: "",
-      mode: "",
-      tags: {},
-      setTitle: () => {},
-    });
+    const frame = createDrawerSectionFrame("File");
+    const section = document.createElement("annot-drawer-file-section");
+    section.data = data;
+    section.onRename = async (newName) => {
+      console.log("[story] onRename", newName);
+    };
+    frame.body.appendChild(section);
     // Keep the drawer's panel class so the story picks up the
     // same layout tokens (fixed width, padding, typography).
     const wrapper = document.createElement("aside");
