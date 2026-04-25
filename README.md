@@ -8,6 +8,69 @@ annotator callable from Playwright / Node and tight GitHub integration.
 See [PRODUCT_DIRECTION.md](./PRODUCT_DIRECTION.md) for the strategic
 north star, and [CLAUDE.md](./CLAUDE.md) for operational guidance.
 
+## For evaluators
+
+If you're vetting Annot for internal adoption — security review, IT
+sign-off, vendor selection — this section points at the artefacts you
+need without making you read the rest of the repo first.
+
+**What it is.** A monorepo housing the editor core
+(`@ingcreators/annot-core`) plus three first-party hosts (web PWA,
+Chrome extension, Tauri desktop). Annotations are persisted as SVG;
+storage backends are pluggable (browser IDB, local filesystem, Google
+Drive, GitHub). Every host shares the same editor and the same SVG
+format, so an annotation captured in the extension opens identically
+in the desktop app.
+
+**Who it targets.** Individuals and small teams that want to annotate
+screenshots without sending them to a third-party SaaS. The codebase
+is OSS (Apache-2.0); a separate private `annot-cloud` repo will host
+optional team / billing / PR-automation features when those land — see
+[`docs/plans/oss-cloud-split.md`](./docs/plans/oss-cloud-split.md) for
+the long-form rationale and the guardrails that already apply.
+
+**Engineering posture (snapshot, 2026-04-25).**
+
+| Signal | Value |
+|--------|-------|
+| Test suite | 250 tests (Vitest), green on every PR via the `typecheck + build` workflow |
+| Lint | Biome 2, 0 findings; CI blocks on this |
+| TypeScript | strict + `override` + `noFallthroughCasesInSwitch` + `noUncheckedIndexedAccess`, every package |
+| Public API | two stable entry points: `@ingcreators/annot-core` (full) and `/headless` (DOM-free) |
+| Dependency hygiene | Dependabot + `pnpm audit --audit-level=high` on every PR |
+| Documentation | `PRODUCT_DIRECTION.md` (strategy), per-feature `docs/plans/*` design docs, `CHANGELOG.md` (every PR landed) |
+
+**Documents an auditor will want.**
+
+- [`LICENSE`](./LICENSE) — Apache-2.0, with the explicit patent grant
+  that lands on most enterprise approved-license lists.
+- [`SECURITY.md`](./SECURITY.md) — responsible-disclosure policy; primary
+  intake is GitHub Private Vulnerability Reporting, fallback is a DM
+  to [@ingmrn](https://github.com/ingmrn). Includes scope, response
+  targets, and a "hardening that already ships" section.
+- [`CONTRIBUTING.md`](./CONTRIBUTING.md) — branch / PR / commit
+  conventions, quality gates, and the architectural guardrails new
+  contributions must respect.
+- [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md) — Contributor Covenant 2.1.
+- [`CHANGELOG.md`](./CHANGELOG.md) — every PR landed on `main` since
+  the project's first commit, grouped by date. The audit trail without
+  forcing a release-train process.
+- [`docs/plans/_done/`](./docs/plans/_done/) — design docs for landed
+  work (Lit migration, app decomposition, plugin API MVP, Storybook
+  introduction, plugin-storage / sidebar-tabs / UI-slots — full list
+  in [`docs/plans/README.md`](./docs/plans/README.md)).
+- [`PRODUCT_DIRECTION.md`](./PRODUCT_DIRECTION.md) — strategy, including
+  the deliberate OSS / commercial-cloud boundary.
+
+**What's coming but isn't here yet.** A hosted Storybook URL (the build
+runs in CI today; deploy is queued behind a separate plan), a published
+Chrome Web Store listing, and the `annot-cloud` cohort of paid features
+(separate private repo, no current ETA).
+
+If something an auditor would expect is missing, please open an issue —
+the gaps are usually "we haven't gotten to it" rather than deliberate
+omissions.
+
 ## Monorepo layout
 
 | Package | npm name | Role |
@@ -52,8 +115,11 @@ pnpm --filter @ingcreators/annot-web storybook    # component stories (Storybook
 - [`CLAUDE.md`](./CLAUDE.md) — operational guide (also consulted by Claude Code)
 - [`docs/svg-format.md`](./docs/svg-format.md) — canonical SVG annotation format
 - [`docs/url-schemes.md`](./docs/url-schemes.md) — web routes + reserved `annot://` scheme
-- [`docs/plans/`](./docs/plans/) — queued / in-progress design plans
+- [`docs/plans/`](./docs/plans/) — active design plans
+- [`docs/plans/_done/`](./docs/plans/_done/) — landed plans (historical reference)
 
 ## License
 
-Unpublished. All rights reserved © ingcreators.
+[Apache License, Version 2.0](./LICENSE) © ingcreators 2026.
+See [`NOTICE`](./NOTICE) for the third-party attribution required by
+Apache §4(d).
