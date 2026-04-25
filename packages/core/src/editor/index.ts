@@ -45,7 +45,8 @@ export {
   saveAsEditableImage,
   saveToFile,
 } from "./export.js";
-export { History } from "./history.js";
+// `History` moved to `@ingcreators/annot-editor` in Phase 7 of
+// `docs/plans/three-package-split.md`.
 // `PropertyPanel` and `SelectionManager` moved to `@ingcreators/annot-editor`
 // in Phases 2 / 5 of `docs/plans/three-package-split.md`. Consumers
 // should `import { PropertyPanel, SelectionManager } from "@ingcreators/annot-editor"`.

@@ -1,5 +1,5 @@
 import { CanvasManager } from "@ingcreators/annot-core/editor/canvas-manager";
-import { History } from "@ingcreators/annot-core/editor/history";
+import { History } from "@ingcreators/annot-editor";
 import { PropertyPanel } from "@ingcreators/annot-editor";
 import { SelectionManager } from "@ingcreators/annot-editor";
 // Phase 5a moved the Toolbar class from `annot-core` to `annot-web`

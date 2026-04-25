@@ -9,7 +9,7 @@ import {
   dashPreview,
   ppNumberInput,
 } from "./property-panel-helpers.js";
-import type { History } from "@ingcreators/annot-core/editor/history";
+import type { History } from "./history.js";
 import { createColorPullButton, openAnchoredPopoverForColor } from "@ingcreators/annot-editor/property-controls";
 import { convertRedactStyle, detectRedactStyle } from "@ingcreators/annot-editor/redact-utils";
 import { convertShape, detectShapeType } from "@ingcreators/annot-core/editor/shape-utils";
