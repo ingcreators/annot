@@ -185,3 +185,150 @@ export function planScrollSegments(
     capped: naturalStitchHeight > maxCanvasDim,
   };
 }
+
+// ─── Per-page step decision (used by capturePagesInner) ──────────────
+//
+// Per-page capture re-measures the page on every iteration to handle
+// lazy-loaded content that changes scrollHeight as the user scrolls
+// past trigger points. So unlike `planScrollSegments`, we can't lay
+// the whole capture out in one pass — we plan ONE iteration at a
+// time, given the freshly-measured response from the page. Three
+// stop conditions terminate the loop early when the orchestrator
+// would otherwise produce a redundant or stuck capture.
+
+/** Default minimum content height (in CSS pixels) below which a
+ *  trailing page is dropped instead of becoming a "page N+1" with
+ *  almost no fresh content. Matches the historical
+ *  `MIN_LAST_PAGE_CONTENT_PX` literal in `service-worker.ts`. */
+export const DEFAULT_MIN_LAST_PAGE_CONTENT_PX = 80;
+
+/** Default safety cap on the number of per-page captures. Lazy-loaded
+ *  pages that grow unboundedly need a hard ceiling so the loop can't
+ *  spin forever. Matches the historical `MAX_PAGES` literal. */
+export const DEFAULT_MAX_PAGES = 60;
+
+export interface PerPageStepInput {
+  /** Zero-based index of the iteration about to be processed. */
+  pageIndex: number;
+  /** The "intended top" — where the orchestrator asked the page to
+   *  scroll to before this iteration. The page may have honored a
+   *  smaller value (e.g. clamping to scrollHeight); the actual
+   *  scroll position is read from `actualScrollY` below. */
+  nextDocTop: number;
+  /** CSS-pixel viewport height as last reported by the page. */
+  viewportHeight: number;
+  /** CSS-pixel scrollHeight as freshly reported AFTER the scroll +
+   *  paint. Lazy-load triggers can have grown this between iterations. */
+  scrollHeight: number;
+  /** CSS-pixel scrollY actually reached after the scroll. May be
+   *  below the requested `nextDocTop` if the page is shorter than
+   *  expected. */
+  actualScrollY: number;
+  devicePixelRatio: number;
+  /** `actualScrollY` from the previous iteration, for the
+   *  "scroll position stuck" guard. Pass `-1` for the first
+   *  iteration (no prior scroll). */
+  lastActualScrollY: number;
+  /** Minimum CSS-pixel slice for trailing pages. See
+   *  {@link DEFAULT_MIN_LAST_PAGE_CONTENT_PX}. */
+  minLastPageContentPx?: number;
+}
+
+/** "Capture this slice" payload returned when the iteration produces
+ *  a usable image. Numbers are in physical pixels (DPR-scaled) where
+ *  named with `Px`, in CSS pixels where named with `Css`. */
+export interface PerPageSlice {
+  /** Vertical offset INSIDE the captured PNG where this slice's
+   *  fresh content begins, in physical pixels. */
+  srcYpx: number;
+  /** Height of this slice in physical pixels. */
+  sliceHeightPx: number;
+  /** Height of this slice in CSS pixels. */
+  sliceCss: number;
+  /** Top of this slice in document CSS coords. */
+  intendedTopCss: number;
+  /** Bottom of this slice in document CSS coords. */
+  intendedBotCss: number;
+  /** Where the next iteration should ask to scroll to. */
+  nextDocTopAfter: number;
+  /** True when `nextDocTopAfter >= scrollHeight`, i.e. the next
+   *  iteration would be entirely past the end of the document and
+   *  the orchestrator should stop the loop. */
+  doneAfter: boolean;
+}
+
+export type PerPageStopReason = "no-advance" | "trailing-too-small" | "scroll-stuck";
+
+export type PerPageStepDecision =
+  | { action: "capture"; slice: PerPageSlice }
+  | { action: "stop"; reason: PerPageStopReason };
+
+/**
+ * Decide what one iteration of `capturePagesInner` should do given
+ * the freshly-measured page state. This is the entire pure portion
+ * of the per-page loop: every conditional that could terminate the
+ * loop OR shape the slice rectangle lives here, so each branch is
+ * unit-testable.
+ *
+ * The orchestrator is responsible for:
+ *   - actually scrolling the page to `input.nextDocTop`
+ *   - sleeping for `scrollSettleMs` + `POST_HIDE_PAINT_MS`
+ *   - calling `chrome.tabs.captureVisibleTab` after a `capture`
+ *     decision
+ *   - propagating `slice.nextDocTopAfter` into the next call's
+ *     `nextDocTop`
+ *   - propagating `actualScrollY` into the next call's
+ *     `lastActualScrollY`
+ *   - applying the `MAX_PAGES` cap (test for it externally — it's a
+ *     loop-level rather than per-iteration concern)
+ */
+export function planPerPageStep(input: PerPageStepInput): PerPageStepDecision {
+  const minLastPageContentPx = input.minLastPageContentPx ?? DEFAULT_MIN_LAST_PAGE_CONTENT_PX;
+
+  const visibleTopCss = input.actualScrollY;
+  const visibleBotCss = Math.min(input.actualScrollY + input.viewportHeight, input.scrollHeight);
+  const intendedTopCss = Math.max(input.nextDocTop, visibleTopCss);
+  const intendedBotCss = visibleBotCss;
+  const sliceCss = intendedBotCss - intendedTopCss;
+
+  // Stop condition 1: the page didn't (or couldn't) advance the
+  // visible window enough to produce any new content for this slice.
+  if (sliceCss <= 0) return { action: "stop", reason: "no-advance" };
+
+  // Stop condition 2: the trailing slice has too little fresh content
+  // to be worth a "page N+1" — only applies after at least one page
+  // has been captured. The first page is always kept regardless.
+  if (input.pageIndex > 0 && sliceCss < minLastPageContentPx) {
+    return { action: "stop", reason: "trailing-too-small" };
+  }
+
+  // Stop condition 3: the scroll position got stuck at the same
+  // value as the previous iteration AND the intended top matches
+  // that position — the page is refusing to advance further (e.g.
+  // a sticky footer pinning the viewport), so further iterations
+  // would keep producing the same slice forever.
+  if (
+    input.actualScrollY === input.lastActualScrollY &&
+    intendedTopCss === input.lastActualScrollY
+  ) {
+    return { action: "stop", reason: "scroll-stuck" };
+  }
+
+  const srcYpx = Math.round((intendedTopCss - visibleTopCss) * input.devicePixelRatio);
+  const sliceHeightPx = Math.round(sliceCss * input.devicePixelRatio);
+  const nextDocTopAfter = intendedBotCss;
+  const doneAfter = nextDocTopAfter >= input.scrollHeight;
+
+  return {
+    action: "capture",
+    slice: {
+      srcYpx,
+      sliceHeightPx,
+      sliceCss,
+      intendedTopCss,
+      intendedBotCss,
+      nextDocTopAfter,
+      doneAfter,
+    },
+  };
+}

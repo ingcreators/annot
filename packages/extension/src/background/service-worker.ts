@@ -15,6 +15,9 @@ import * as idbStore from "../storage/idb-store.js";
 import {
   computeChromeDelta,
   computeDesiredWindowSize,
+  DEFAULT_MAX_PAGES,
+  DEFAULT_MIN_LAST_PAGE_CONTENT_PX,
+  planPerPageStep,
   planScrollSegments,
 } from "./capture-strategy.js";
 import {
@@ -767,21 +770,17 @@ async function capturePagesInner(tab: CaptureTab, settings: Settings): Promise<v
   const dims: PageDimensions = await sendToTab(tab.id, { type: "get-page-dimensions" });
 
   const vpHeight = dims.viewportHeight;
-  const numSegments = Math.ceil(dims.scrollHeight / vpHeight);
   const originalScrollY = dims.scrollY;
   const sourceUrl = tab.url || "";
 
   const dpr = dims.devicePixelRatio;
   const fullHeightPx = Math.round(vpHeight * dpr);
-  // Skip a trailing segment if it has less than this many fresh content
-  // pixels left to show (avoid producing a "page N+1" that would be < 80px).
-  const MIN_LAST_PAGE_CONTENT_PX = 80;
-  // Hard safety cap so a runaway lazy-loaded page can't loop forever.
-  const MAX_PAGES = 60;
 
   // ---- Phase 1: Scroll + capture everything as raw PNGs ----
-  // No encoding in this loop — we want the scrolling phase to feel fast
-  // and uninterrupted. Compression happens in Phase 2 below.
+  // The "what should we do this iteration?" decision (capture vs stop,
+  // and the slice geometry when capturing) lives in `./capture-strategy`'s
+  // `planPerPageStep`. The orchestrator here owns the I/O: scroll the
+  // page, hide overlays, sleep, capture, push the raw PNG.
   interface RawPage {
     pngDataUrl: string;
     srcYpx: number;
@@ -792,7 +791,7 @@ async function capturePagesInner(tab: CaptureTab, settings: Settings): Promise<v
   let pageIndex = 0;
   let lastActualScrollY = -1;
 
-  while (pageIndex < MAX_PAGES) {
+  while (pageIndex < DEFAULT_MAX_PAGES) {
     await showProgress(tab.id, `Capturing page ${pageIndex + 1}…`);
 
     await sendToTab(tab.id, { type: "scroll-to", x: 0, y: nextDocTop });
@@ -801,39 +800,35 @@ async function capturePagesInner(tab: CaptureTab, settings: Settings): Promise<v
     await delay(POST_HIDE_PAINT_MS);
 
     const after: PageDimensions = await sendToTab(tab.id, { type: "get-page-dimensions" });
-    const actualScrollY = after.scrollY;
-    const currentScrollHeight = after.scrollHeight;
-    const visibleTopCss = actualScrollY;
-    const visibleBotCss = Math.min(actualScrollY + vpHeight, currentScrollHeight);
-    const intendedTopCss = Math.max(nextDocTop, visibleTopCss);
-    const intendedBotCss = visibleBotCss;
-    const sliceCss = intendedBotCss - intendedTopCss;
+    const decision = planPerPageStep({
+      pageIndex,
+      nextDocTop,
+      viewportHeight: vpHeight,
+      scrollHeight: after.scrollHeight,
+      actualScrollY: after.scrollY,
+      devicePixelRatio: dpr,
+      lastActualScrollY,
+      minLastPageContentPx: DEFAULT_MIN_LAST_PAGE_CONTENT_PX,
+    });
 
-    if (sliceCss <= 0) {
-      logger.debug(`[capture-pages] no advance at page ${pageIndex + 1}, stopping`);
+    if (decision.action === "stop") {
+      logger.debug(`[capture-pages] ${decision.reason} at page ${pageIndex + 1}, stopping`);
       break;
     }
-    if (pageIndex > 0 && sliceCss < MIN_LAST_PAGE_CONTENT_PX) {
-      logger.debug(`[capture-pages] skipping near-empty trailing page (${sliceCss}px)`);
-      break;
-    }
-    if (actualScrollY === lastActualScrollY && intendedTopCss === lastActualScrollY) {
-      logger.debug("[capture-pages] scroll position stuck, stopping");
-      break;
-    }
-    lastActualScrollY = actualScrollY;
+    lastActualScrollY = after.scrollY;
 
     const pngDataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: "png" });
-    const srcYpx = Math.round((intendedTopCss - visibleTopCss) * dpr);
-    const sliceHeightPx = Math.round(sliceCss * dpr);
-    rawPages.push({ pngDataUrl, srcYpx, sliceHeightPx });
+    rawPages.push({
+      pngDataUrl,
+      srcYpx: decision.slice.srcYpx,
+      sliceHeightPx: decision.slice.sliceHeightPx,
+    });
 
     pageIndex += 1;
-    nextDocTop = intendedBotCss;
-    if (nextDocTop >= currentScrollHeight) break;
+    nextDocTop = decision.slice.nextDocTopAfter;
+    if (decision.slice.doneAfter) break;
     await delay(settings.timing.interSegmentMs);
   }
-  void numSegments;
 
   // Scroll restored / overlays restored BEFORE we start the long compression
   // phase — the user's browser returns to normal right away.

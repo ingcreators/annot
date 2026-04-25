@@ -206,3 +206,244 @@ describe("planScrollSegments — stitch dimensions", () => {
     expect(plan.stitchHeight).toBe(cap);
   });
 });
+
+// ─── planPerPageStep ─────────────────────────────────────────────────
+
+import {
+  DEFAULT_MIN_LAST_PAGE_CONTENT_PX,
+  planPerPageStep,
+  type PerPageStepInput,
+} from "./capture-strategy.js";
+
+const stepInput = (over: Partial<PerPageStepInput> = {}): PerPageStepInput => ({
+  pageIndex: 0,
+  nextDocTop: 0,
+  viewportHeight: 800,
+  scrollHeight: 3000,
+  actualScrollY: 0,
+  devicePixelRatio: 1,
+  lastActualScrollY: -1,
+  ...over,
+});
+
+describe("planPerPageStep — capture happy path", () => {
+  it("first iteration of a tall page produces the top viewport-sized slice", () => {
+    const out = planPerPageStep(stepInput());
+    expect(out.action).toBe("capture");
+    if (out.action !== "capture") return;
+    expect(out.slice.intendedTopCss).toBe(0);
+    expect(out.slice.intendedBotCss).toBe(800);
+    expect(out.slice.sliceCss).toBe(800);
+    expect(out.slice.srcYpx).toBe(0);
+    expect(out.slice.sliceHeightPx).toBe(800);
+    expect(out.slice.nextDocTopAfter).toBe(800);
+    expect(out.slice.doneAfter).toBe(false);
+  });
+
+  it("scales the physical-pixel fields by devicePixelRatio", () => {
+    const out = planPerPageStep(stepInput({ devicePixelRatio: 2 }));
+    expect(out.action).toBe("capture");
+    if (out.action !== "capture") return;
+    expect(out.slice.srcYpx).toBe(0);
+    expect(out.slice.sliceHeightPx).toBe(1600);
+  });
+
+  it("middle iteration: trims the captured PNG so srcYpx skips already-shown content", () => {
+    // Page asked us to scroll to 1500 but the page only landed at 1200
+    // (e.g. snap-stop), AND nextDocTop was 1500. The first 300 CSS
+    // pixels of the captured PNG are content the previous slice
+    // already showed, so srcYpx skips past them.
+    const out = planPerPageStep(
+      stepInput({
+        pageIndex: 1,
+        nextDocTop: 1500,
+        actualScrollY: 1200,
+        lastActualScrollY: 400,
+      }),
+    );
+    expect(out.action).toBe("capture");
+    if (out.action !== "capture") return;
+    // intendedTopCss = max(1500, 1200) = 1500 → srcYpx = (1500 - 1200) * 1 = 300.
+    expect(out.slice.intendedTopCss).toBe(1500);
+    expect(out.slice.srcYpx).toBe(300);
+    expect(out.slice.sliceCss).toBe(500); // 2000 - 1500
+    expect(out.slice.nextDocTopAfter).toBe(2000);
+  });
+
+  it("clamps the bottom edge to scrollHeight when the viewport extends past the page", () => {
+    // Last slice on a 2900-px page with 800 vp: scroll to 2200, vp
+    // covers 2200..3000 — but scrollHeight is 2900, so the visible
+    // bottom clamps to 2900. Slice height is 700, not 800.
+    const out = planPerPageStep(
+      stepInput({
+        pageIndex: 3,
+        nextDocTop: 2200,
+        scrollHeight: 2900,
+        actualScrollY: 2200,
+        lastActualScrollY: 1500,
+      }),
+    );
+    expect(out.action).toBe("capture");
+    if (out.action !== "capture") return;
+    expect(out.slice.sliceCss).toBe(700);
+    expect(out.slice.nextDocTopAfter).toBe(2900);
+    expect(out.slice.doneAfter).toBe(true);
+  });
+});
+
+describe("planPerPageStep — stop conditions", () => {
+  it("no-advance: actualScrollY beyond scrollHeight produces a 0 slice", () => {
+    const out = planPerPageStep(
+      stepInput({
+        pageIndex: 1,
+        nextDocTop: 3000,
+        scrollHeight: 2900, // page got SHORTER (lazy-load reverted, etc.)
+        actualScrollY: 2900,
+        lastActualScrollY: 2200,
+      }),
+    );
+    expect(out).toEqual({ action: "stop", reason: "no-advance" });
+  });
+
+  it("no-advance: viewport already past scrollHeight (visibleBot <= visibleTop)", () => {
+    const out = planPerPageStep(
+      stepInput({
+        pageIndex: 2,
+        nextDocTop: 5000,
+        scrollHeight: 4000,
+        actualScrollY: 4000,
+        lastActualScrollY: 3000,
+      }),
+    );
+    expect(out).toEqual({ action: "stop", reason: "no-advance" });
+  });
+
+  it("trailing-too-small: a final slice below the threshold is dropped", () => {
+    // Page: 3000 px; we asked for 2950 → only 50 px of slice. Below
+    // the 80 px threshold and pageIndex > 0 → stop.
+    const out = planPerPageStep(
+      stepInput({
+        pageIndex: 3,
+        nextDocTop: 2950,
+        scrollHeight: 3000,
+        actualScrollY: 2200,
+        lastActualScrollY: 1500,
+      }),
+    );
+    expect(out).toEqual({ action: "stop", reason: "trailing-too-small" });
+  });
+
+  it("trailing-too-small: NOT triggered on the first page (pageIndex=0)", () => {
+    // Tiny page (50 px tall) — first capture should still produce a
+    // slice rather than stopping with "trailing-too-small".
+    const out = planPerPageStep(
+      stepInput({
+        pageIndex: 0,
+        scrollHeight: 50,
+        actualScrollY: 0,
+      }),
+    );
+    expect(out.action).toBe("capture");
+  });
+
+  it("trailing-too-small: respects an alternative threshold", () => {
+    // 30 px slice with a custom 20 px threshold → still captured.
+    const out = planPerPageStep(
+      stepInput({
+        pageIndex: 2,
+        nextDocTop: 2970,
+        scrollHeight: 3000,
+        actualScrollY: 2200,
+        lastActualScrollY: 1500,
+        minLastPageContentPx: 20,
+      }),
+    );
+    expect(out.action).toBe("capture");
+  });
+
+  it("scroll-stuck: actualScrollY === lastActualScrollY AND intendedTop matches → stop", () => {
+    // Page refuses to scroll past 1500 (sticky footer? CSS overflow trap?).
+    // Two iterations in a row land at scrollY=1500 with nextDocTop=1500,
+    // so the second iteration would just re-capture the same slice.
+    const out = planPerPageStep(
+      stepInput({
+        pageIndex: 2,
+        nextDocTop: 1500,
+        actualScrollY: 1500,
+        lastActualScrollY: 1500,
+      }),
+    );
+    expect(out).toEqual({ action: "stop", reason: "scroll-stuck" });
+  });
+
+  it("does NOT trigger scroll-stuck when intendedTop is BEYOND lastActualScrollY", () => {
+    // Same scrollY twice, BUT we're asking the page to advance further
+    // than where it landed last time. That's a legitimate forward
+    // advance (the page is just slow); not stuck.
+    const out = planPerPageStep(
+      stepInput({
+        pageIndex: 1,
+        nextDocTop: 2000,
+        actualScrollY: 1500,
+        lastActualScrollY: 1500,
+      }),
+    );
+    expect(out.action).toBe("capture");
+  });
+});
+
+describe("planPerPageStep — defaults", () => {
+  it("DEFAULT_MIN_LAST_PAGE_CONTENT_PX matches the historical literal of 80", () => {
+    expect(DEFAULT_MIN_LAST_PAGE_CONTENT_PX).toBe(80);
+  });
+
+  it("uses DEFAULT_MIN_LAST_PAGE_CONTENT_PX when minLastPageContentPx is omitted", () => {
+    const out = planPerPageStep(
+      stepInput({
+        pageIndex: 1,
+        nextDocTop: 2950,
+        scrollHeight: 3000,
+        actualScrollY: 2200,
+        lastActualScrollY: 1500,
+      }),
+    );
+    expect(out).toEqual({ action: "stop", reason: "trailing-too-small" });
+  });
+});
+
+describe("planPerPageStep — sequencing simulation", () => {
+  it("walks a 2400-px page in 3 captures + a final no-advance stop", () => {
+    // Drive `planPerPageStep` like the orchestrator would, threading
+    // outputs back into the next iteration's inputs. Asserts that
+    // the loop terminates cleanly via `doneAfter` after the third
+    // capture — no extra "fake" stop condition needed.
+    const seq: ("capture" | { stop: string })[] = [];
+    let pageIndex = 0;
+    let nextDocTop = 0;
+    let lastActualScrollY = -1;
+    for (let i = 0; i < 6; i++) {
+      // Page honors the requested scroll exactly (no clamping).
+      const actualScrollY = Math.min(nextDocTop, 2400 - 800);
+      const decision = planPerPageStep({
+        pageIndex,
+        nextDocTop,
+        viewportHeight: 800,
+        scrollHeight: 2400,
+        actualScrollY,
+        devicePixelRatio: 1,
+        lastActualScrollY,
+      });
+      if (decision.action === "stop") {
+        seq.push({ stop: decision.reason });
+        break;
+      }
+      seq.push("capture");
+      pageIndex += 1;
+      nextDocTop = decision.slice.nextDocTopAfter;
+      lastActualScrollY = actualScrollY;
+      if (decision.slice.doneAfter) break;
+    }
+    // 2400 / 800 = 3 captures, then doneAfter ends the loop.
+    expect(seq).toEqual(["capture", "capture", "capture"]);
+  });
+});
