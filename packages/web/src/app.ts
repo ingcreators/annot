@@ -26,11 +26,13 @@ import { HeaderHost } from "./app/header-host.js";
 import { loadImage } from "./app/image-utils.js";
 import { type AnnotPlugin, PluginHost } from "./app/plugin-host.js";
 import { githubExternalLinksPlugin } from "./app/plugins/github-external-links.js";
+import { recentTabPlugin } from "./app/plugins/recent-tab.js";
 import { RouterHost } from "./app/router-host.js";
 import { SavePipeline } from "./app/save-pipeline.js";
 import { SplitEditorHost } from "./app/split-editor-host.js";
 import { StatusHost } from "./app/status-host.js";
 import { StorageBridge } from "./app/storage-bridge.js";
+import type { SidebarSectionOrder } from "./gallery/sidebar.js";
 
 import { pasteFromClipboard } from "./capture/pwa-capture.js";
 import { editUrl, galleryUrl, pushRoute } from "./router.js";
@@ -88,6 +90,10 @@ export class App {
    *  `init({ disableBuiltinStorage })`. Read by `StorageBridge`
    *  on every `restoreOnBoot` / `handleStorageSelect`. */
   #disabledBuiltinStorage: ReadonlySet<string> = new Set();
+  /** Sidebar section-order override from
+   *  `init({ sidebarSectionOrder })`. Empty object means defaults
+   *  apply (Storage 10 → Views 20 → Folders 30). */
+  #sidebarSectionOrder: SidebarSectionOrder = {};
 
   constructor() {
     this.#savePipeline = new SavePipeline({
@@ -216,6 +222,19 @@ export class App {
        *  (so a deployment config doesn't break when a future Annot
        *  release renames a built-in). */
       disableBuiltinPlugins?: string[];
+      /** Skip listed built-in sidebar tabs by tab id. Today the
+       *  only built-in is `"recent"` (registered by the
+       *  `recent-tab` plugin). Unknown ids log a warning + no-op
+       *  for forward-compat. The whole plugin is skipped — its
+       *  `onEditorReady` tracker doesn't run either, so there's
+       *  no orphan localStorage write happening behind the
+       *  scenes. */
+      disableBuiltinTabs?: string[];
+      /** Section ordering override. Merged over the defaults
+       *  `{ storage: 10, views: 20, folders: 30 }`. Lower
+       *  priority renders first; ties fall back to the fixed
+       *  storage / views / folders order. */
+      sidebarSectionOrder?: SidebarSectionOrder;
     } = {},
   ): Promise<void> {
     // `"browser"` opt-out check — fail fast at init so the
@@ -229,10 +248,32 @@ export class App {
     }
     this.#disabledBuiltinStorage = new Set(opts.disableBuiltinStorage ?? []);
 
+    // Built-in tabs map their tab id → owning plugin so
+    // `disableBuiltinTabs: ["recent"]` can drop the whole plugin
+    // (including its `onEditorReady` tracker) instead of leaving
+    // an orphan listener writing to localStorage with nothing on
+    // screen to use it. Tab-id keys keep the public-facing name
+    // distinct from internal plugin names.
+    const builtinTabPlugins: Array<{ tabId: string; plugin: AnnotPlugin }> = [
+      { tabId: "recent", plugin: recentTabPlugin },
+    ];
+    const disabledTabIds = new Set(opts.disableBuiltinTabs ?? []);
+    const knownTabIds = new Set(builtinTabPlugins.map((b) => b.tabId));
+    for (const id of disabledTabIds) {
+      if (!knownTabIds.has(id)) {
+        console.warn(
+          `[init] disableBuiltinTabs: "${id}" is not a known built-in tab; ignoring.`,
+        );
+      }
+    }
+
     // Filter built-in plugins by name. Unknown names are tolerated
     // so a config that names a future-renamed built-in doesn't
     // crash on an older Annot.
-    const allBuiltinPlugins = [githubExternalLinksPlugin];
+    const allBuiltinPlugins: AnnotPlugin[] = [
+      githubExternalLinksPlugin,
+      ...builtinTabPlugins.filter((b) => !disabledTabIds.has(b.tabId)).map((b) => b.plugin),
+    ];
     const disabledPluginNames = new Set(opts.disableBuiltinPlugins ?? []);
     const knownNames = new Set(allBuiltinPlugins.map((p) => p.name));
     for (const name of disabledPluginNames) {
@@ -245,6 +286,22 @@ export class App {
     const activeBuiltinPlugins = allBuiltinPlugins.filter(
       (p) => !disabledPluginNames.has(p.name),
     );
+
+    // Stash the section-order override so the sidebar callbacks
+    // can read it on every render. `App.init` is called once at
+    // boot so we don't need a setter — a deployment that wants
+    // to change ordering at runtime would re-init.
+    this.#sidebarSectionOrder = opts.sidebarSectionOrder ?? {};
+
+    // Wire the sidebar refresh hook BEFORE plugin registration —
+    // a plugin's `register()` may call `updateSidebarTab` (e.g. to
+    // declare an initial active state) and we want that to fire
+    // through the listener path on the very first render. The
+    // listener no-ops while the file manager isn't mounted, so
+    // there's no cost during the editor-only sessions.
+    this.#pluginHost.onSidebarChange(() => {
+      this.#fileManager?.sidebar.render();
+    });
 
     // Register plugins first so every lifecycle event — including
     // the very first `restoreOnBoot` → `onRouteChange` — goes through
@@ -415,6 +472,8 @@ export class App {
         onPasteClipboard: () => this.#captureHost.pasteAndSave(),
         getPluginStorages: () => this.#pluginHost.listStorageRegistrations(),
         isBuiltinDisabled: (mode) => this.#disabledBuiltinStorage.has(mode),
+        getSidebarTabs: () => this.#pluginHost.listSidebarTabs(),
+        getSidebarSectionOrder: () => this.#sidebarSectionOrder,
       });
 
       this.#storageBridge.updateSidebarStatus(getStorageMode());

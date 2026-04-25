@@ -4,11 +4,11 @@
  */
 import type { ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
 import { setTooltip } from "@ingcreators/annot-core/utils";
-import type { StorageRegistration } from "../app/plugin-host.js";
+import type { SidebarTab, StorageRegistration } from "../app/plugin-host.js";
 import type { StorageMode } from "../storage/bridge.js";
 import { showAlertDialog, showPromptDialog } from "../ui/dialog.js";
 import { GalleryPage } from "./gallery-page.js";
-import { Sidebar, type SidebarCallbacks } from "./sidebar.js";
+import { Sidebar, type SidebarCallbacks, type SidebarSectionOrder } from "./sidebar.js";
 
 export interface FileManagerCallbacks {
   onStorageSelect: (mode: StorageMode) => Promise<void>;
@@ -29,6 +29,13 @@ export interface FileManagerCallbacks {
    *  `App.init({ disableBuiltinStorage })`). Used to filter chips
    *  out of the sidebar strip. Optional. */
   isBuiltinDisabled?: (mode: string) => boolean;
+  /** All registered sidebar tabs (built-in + plugin). The Views
+   *  section is suppressed when this returns an empty list.
+   *  Optional. */
+  getSidebarTabs?: () => SidebarTab[];
+  /** Section ordering override for the sidebar (Storage / Views /
+   *  Folders). Optional. */
+  getSidebarSectionOrder?: () => SidebarSectionOrder;
 }
 
 export class FileManager {
@@ -67,6 +74,8 @@ export class FileManager {
       onPasteClipboard: () => this.#callbacks.onPasteClipboard(),
       getPluginStorages: this.#callbacks.getPluginStorages,
       isBuiltinDisabled: this.#callbacks.isBuiltinDisabled,
+      getSidebarTabs: this.#callbacks.getSidebarTabs,
+      getSidebarSectionOrder: this.#callbacks.getSidebarSectionOrder,
     };
     this.#sidebar = new Sidebar(this.#sidebarEl, sidebarCallbacks);
 
