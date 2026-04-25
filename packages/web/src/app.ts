@@ -94,6 +94,12 @@ export class App {
    *  `init({ sidebarSectionOrder })`. Empty object means defaults
    *  apply (Storage 10 → Views 20 → Folders 30). */
   #sidebarSectionOrder: SidebarSectionOrder = {};
+  /** Built-in UI section ids the deployment opted out of via
+   *  `init({ disableBuiltinUISections })`. Phase 1 just stores +
+   *  validates the set; rendering surfaces (drawer in Phase 2 /
+   *  right-panel in Phase 3) consult it through the deps
+   *  interface to filter their built-in section list. */
+  #disabledBuiltinUISections: ReadonlySet<string> = new Set();
 
   constructor() {
     this.#savePipeline = new SavePipeline({
@@ -235,6 +241,18 @@ export class App {
        *  priority renders first; ties fall back to the fixed
        *  storage / views / folders order. */
       sidebarSectionOrder?: SidebarSectionOrder;
+      /** Skip listed built-in drawer / right-panel sections by
+       *  id. Today no built-ins use the `UISection` shape yet
+       *  (Phase 2 / 3 of plugin-ui-slots migrate them); the
+       *  option lands now so cloud / locked-down deployments
+       *  can pre-configure their disable list against the
+       *  documented built-in ids. Once the migrations land,
+       *  passing `["drawer.last-commit"]` will hide that
+       *  section. Unknown ids will warn + no-op for forward-
+       *  compat — Phase 1 doesn't know any built-in ids yet, so
+       *  the validation defers to the surfaces that consume the
+       *  set in later phases. */
+      disableBuiltinUISections?: string[];
     } = {},
   ): Promise<void> {
     // `"browser"` opt-out check — fail fast at init so the
@@ -292,6 +310,7 @@ export class App {
     // boot so we don't need a setter — a deployment that wants
     // to change ordering at runtime would re-init.
     this.#sidebarSectionOrder = opts.sidebarSectionOrder ?? {};
+    this.#disabledBuiltinUISections = new Set(opts.disableBuiltinUISections ?? []);
 
     // Wire the sidebar refresh hook BEFORE plugin registration —
     // a plugin's `register()` may call `updateSidebarTab` (e.g. to

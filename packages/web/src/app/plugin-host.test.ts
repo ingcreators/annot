@@ -18,6 +18,8 @@ import {
   type ExternalLink,
   type SidebarTab,
   type StorageRegistration,
+  type UISection,
+  type UISectionLifecycle,
 } from "./plugin-host.js";
 
 /** Minimal `StorageRegistration` factory for tests — only fills the
@@ -46,6 +48,19 @@ function fakeTab(id: string, overrides: Partial<SidebarTab> = {}): SidebarTab {
     label: id,
     priority: 100,
     onClick: () => {},
+    ...overrides,
+  };
+}
+
+/** Minimal `UISection` factory for tests. The default `mount`
+ *  returns an empty teardown function — callers that exercise the
+ *  lifecycle override `mount` with their own implementation. */
+function fakeSection(id: string, overrides: Partial<UISection> = {}): UISection {
+  return {
+    id,
+    title: id,
+    priority: 100,
+    mount: (): UISectionLifecycle => () => {},
     ...overrides,
   };
 }
@@ -537,6 +552,157 @@ describe("PluginHost", () => {
     it("returns undefined for an unregistered tab id", () => {
       const host = new PluginHost();
       expect(host.findSidebarTab("nonexistent")).toBeUndefined();
+    });
+  });
+
+  describe("addDrawerSection / addRightPanelSection", () => {
+    it("registers a drawer section and resolves it via findDrawerSection", () => {
+      const host = new PluginHost();
+      const section = fakeSection("cloud.comments", { priority: 25 });
+      host.registerAll([
+        { name: "cloud", register: (ctx) => ctx.addDrawerSection(section) },
+      ]);
+      expect(host.findDrawerSection("cloud.comments")).toBe(section);
+    });
+
+    it("registers a right-panel section and resolves it via findRightPanelSection", () => {
+      const host = new PluginHost();
+      const section = fakeSection("cloud.team-presence");
+      host.registerAll([
+        { name: "cloud", register: (ctx) => ctx.addRightPanelSection(section) },
+      ]);
+      expect(host.findRightPanelSection("cloud.team-presence")).toBe(section);
+    });
+
+    it("the two namespaces are independent — same id allowed across targets", () => {
+      // A common Cloud pattern: a "comments" section in both the
+      // drawer and the right-panel. Independent namespaces let
+      // the plugin reuse the suffix without colliding.
+      const host = new PluginHost();
+      const drawerComments = fakeSection("comments", { title: "Comments (drawer)" });
+      const rightPanelComments = fakeSection("comments", { title: "Comments (panel)" });
+      host.registerAll([
+        {
+          name: "cloud",
+          register(ctx) {
+            ctx.addDrawerSection(drawerComments);
+            ctx.addRightPanelSection(rightPanelComments);
+          },
+        },
+      ]);
+      expect(host.findDrawerSection("comments")).toBe(drawerComments);
+      expect(host.findRightPanelSection("comments")).toBe(rightPanelComments);
+    });
+
+    it("listDrawerSections / listRightPanelSections preserve registration order", () => {
+      const host = new PluginHost();
+      host.registerAll([
+        {
+          name: "p1",
+          register(ctx) {
+            ctx.addDrawerSection(fakeSection("a"));
+            ctx.addDrawerSection(fakeSection("b"));
+            ctx.addRightPanelSection(fakeSection("x"));
+          },
+        },
+        {
+          name: "p2",
+          register(ctx) {
+            ctx.addDrawerSection(fakeSection("c"));
+            ctx.addRightPanelSection(fakeSection("y"));
+          },
+        },
+      ]);
+      expect(host.listDrawerSections().map((s) => s.id)).toEqual(["a", "b", "c"]);
+      expect(host.listRightPanelSections().map((s) => s.id)).toEqual(["x", "y"]);
+    });
+
+    it("throws on duplicate drawer-section id (collision with previous registration)", () => {
+      const host = new PluginHost();
+      const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      host.registerAll([
+        { name: "p1", register: (ctx) => ctx.addDrawerSection(fakeSection("file")) },
+        { name: "p2", register: (ctx) => ctx.addDrawerSection(fakeSection("file")) },
+      ]);
+      // First registration wins; the second's throw is logged +
+      // isolated by `registerAll`'s per-plugin try/catch (same
+      // pattern as the storage / sidebar-tab paths).
+      expect(host.findDrawerSection("file")).toBeDefined();
+      expect(consoleErrorSpy).toHaveBeenCalled();
+      consoleErrorSpy.mockRestore();
+    });
+
+    it("throws on duplicate right-panel-section id", () => {
+      const host = new PluginHost();
+      const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      host.registerAll([
+        { name: "p1", register: (ctx) => ctx.addRightPanelSection(fakeSection("tool")) },
+        { name: "p2", register: (ctx) => ctx.addRightPanelSection(fakeSection("tool")) },
+      ]);
+      expect(host.findRightPanelSection("tool")).toBeDefined();
+      expect(consoleErrorSpy).toHaveBeenCalled();
+      consoleErrorSpy.mockRestore();
+    });
+
+    it("returns undefined for an unregistered section id", () => {
+      const host = new PluginHost();
+      expect(host.findDrawerSection("nonexistent")).toBeUndefined();
+      expect(host.findRightPanelSection("nonexistent")).toBeUndefined();
+    });
+
+    it("registration captures the lifecycle factory shape — both teardown function and reactive object are valid mounts", () => {
+      // Smoke test that `mount` accepts both shapes the plan
+      // promises:
+      //   - simple: returns a function
+      //   - reactive: returns { update?, unmount }
+      // Phase 1 doesn't render anything, so we just verify the
+      // factory is callable and the return value matches the
+      // declared type.
+      const host = new PluginHost();
+      const teardownSpy = vi.fn();
+      const updateSpy = vi.fn();
+      const unmountSpy = vi.fn();
+      const simple: UISection = fakeSection("simple", {
+        mount: () => teardownSpy,
+      });
+      const reactive: UISection = fakeSection("reactive", {
+        mount: () => ({
+          update: updateSpy,
+          unmount: unmountSpy,
+        }),
+      });
+      host.registerAll([
+        {
+          name: "p",
+          register(ctx) {
+            ctx.addDrawerSection(simple);
+            ctx.addDrawerSection(reactive);
+          },
+        },
+      ]);
+      // Use a stand-in object — the test environment is `node`,
+      // so `document.createElement` isn't available. Phase 2 / 3
+      // tests that exercise the actual drawer / right-panel render
+      // path will switch to happy-dom.
+      const stub = {} as unknown as HTMLElement;
+      const ctx = {
+        path: "x",
+        mode: "browser",
+        tags: {},
+        setTitle: () => {},
+      };
+      // Pull the registered shapes back and exercise their mount
+      // factories. Both should produce the documented lifecycle
+      // shape; the host doesn't transform what mount returns.
+      const simpleLifecycle = host.findDrawerSection("simple")!.mount(stub, ctx);
+      const reactiveLifecycle = host.findDrawerSection("reactive")!.mount(stub, ctx);
+      expect(typeof simpleLifecycle).toBe("function");
+      expect(typeof reactiveLifecycle).toBe("object");
+      // Spot-check the lifecycle is wired through correctly.
+      (simpleLifecycle as () => void)();
+      expect(teardownSpy).toHaveBeenCalled();
+      (reactiveLifecycle as { update?: (c: typeof ctx) => void; unmount(): void }).update!(ctx);
+      expect(updateSpy).toHaveBeenCalled();
     });
   });
 });
