@@ -13,6 +13,11 @@ import {
 // Static import of IDB store — used by external message API
 import * as idbStore from "../storage/idb-store.js";
 import {
+  computeChromeDelta,
+  computeDesiredWindowSize,
+  planScrollSegments,
+} from "./capture-strategy.js";
+import {
   ANNOTATION_URL,
   buildEditUrl,
   CLICK_CAPTURE_MAX_FRAMES,
@@ -129,42 +134,34 @@ async function withWindowResize<T>(
   //      by dividing by the device pixel ratio. Without this step, a
   //      display at DPR 1.5 would produce a 2880×1620 image for a Full HD
   //      target because `captureVisibleTab` delivers physical pixels.
-  let chromeDeltaW = 0;
-  let chromeDeltaH = 0;
+  // The arithmetic itself lives in `./capture-strategy.ts` so it can
+  // be unit-tested without `chrome.windows.*`.
   let dpr = 1;
+  let chromeDelta = { width: 0, height: 0 };
   try {
     const dims: PageDimensions = await sendToTab(tabId, { type: "get-page-dimensions" });
     dpr = dims.devicePixelRatio || 1;
-    if (
-      originalWindow.width &&
-      originalWindow.height &&
-      dims.viewportWidth &&
-      dims.viewportHeight
-    ) {
-      chromeDeltaW = originalWindow.width - dims.viewportWidth;
-      chromeDeltaH = originalWindow.height - dims.viewportHeight;
-    }
+    chromeDelta = computeChromeDelta(
+      { width: originalWindow.width, height: originalWindow.height },
+      { width: dims.viewportWidth, height: dims.viewportHeight },
+    );
   } catch {
     /* fall back to zero deltas / dpr=1 */
   }
 
-  // Convert pixel target → CSS target so the captured image lands on the
-  // user's desired pixel resolution. (`captureVisibleTab` captures at
-  // CSS-viewport × DPR physical pixels.)
-  const cssTargetW = Math.round(targetVp.width / dpr);
-  const cssTargetH = Math.round(targetVp.height / dpr);
-
-  // Request the new window size so the CSS viewport lands on cssTarget.
-  const desiredWindowW = cssTargetW + Math.max(0, chromeDeltaW);
-  const desiredWindowH = cssTargetH + Math.max(0, chromeDeltaH);
+  const desired = computeDesiredWindowSize(
+    { width: targetVp.width, height: targetVp.height },
+    dpr,
+    chromeDelta,
+  );
 
   let didResize = false;
   try {
     // `chrome.windows.update` clamps to the monitor's available work area,
     // so if the target exceeds the screen we'll capture at max-available.
     await chrome.windows.update(windowId, {
-      width: Math.max(320, desiredWindowW),
-      height: Math.max(320, desiredWindowH),
+      width: desired.width,
+      height: desired.height,
       state: "normal", // in case the window was maximized — forces explicit size
     });
     didResize = true;
@@ -651,32 +648,29 @@ async function captureFullPageInner(tab: CaptureTab, settings: Settings): Promis
   // Re-measure AFTER emulation is applied (viewport may differ).
   const dims: PageDimensions = await sendToTab(tab.id!, { type: "get-page-dimensions" });
 
-  const totalHeight = dims.scrollHeight * dims.devicePixelRatio;
-  if (totalHeight > MAX_CANVAS_DIMENSION) {
-    console.warn(`Page height ${totalHeight}px exceeds max canvas size. Capping.`);
+  // Pure layout decisions (segment count, per-segment scrollY, stitch
+  // canvas size + truncation flag) live in `./capture-strategy.ts`
+  // so they can be exercised without `chrome.*`.
+  const plan = planScrollSegments(dims, MAX_CANVAS_DIMENSION);
+  if (plan.capped) {
+    console.warn(
+      `Page height ${dims.scrollHeight * dims.devicePixelRatio}px exceeds max canvas size. Capping.`,
+    );
   }
-
-  const vpHeight = dims.viewportHeight;
-  const numSegments = Math.ceil(dims.scrollHeight / vpHeight);
   const originalScrollY = dims.scrollY;
-
   const segments: CaptureSegment[] = [];
 
-  for (let i = 0; i < numSegments; i++) {
-    await showProgress(tab.id, `Capturing ${i + 1}/${numSegments}…`);
-    let scrollY = i * vpHeight;
-    if (i === numSegments - 1) {
-      scrollY = dims.scrollHeight - vpHeight;
-    }
+  for (const seg of plan.segments) {
+    await showProgress(tab.id, `Capturing ${seg.index + 1}/${plan.segments.length}…`);
 
     // Scroll first, let the page's scroll handlers fire (which is often
     // when sites add/toggle `position: fixed` on nav bars, FABs, etc.),
     // THEN hide overlays so the mutation catches the post-scroll state.
-    await sendToTab(tab.id, { type: "scroll-to", x: 0, y: scrollY });
+    await sendToTab(tab.id, { type: "scroll-to", x: 0, y: seg.scrollY });
     await delay(settings.timing.scrollSettleMs);
     // Hide directives may change between segment 0 and segment 1 when
     // `keepFirstSegment` is enabled, so refresh every iteration.
-    await beginCapturePrep(tab.id, "scroll", i, settings);
+    await beginCapturePrep(tab.id, "scroll", seg.index, settings);
     // Tiny extra delay so the DOM mutation is painted before capture.
     await delay(POST_HIDE_PAINT_MS);
 
@@ -686,7 +680,7 @@ async function captureFullPageInner(tab: CaptureTab, settings: Settings): Promis
 
     segments.push({
       dataUrl,
-      offsetY: Math.round(scrollY * dims.devicePixelRatio),
+      offsetY: Math.round(seg.scrollY * dims.devicePixelRatio),
     });
 
     await delay(settings.timing.interSegmentMs);
@@ -697,24 +691,19 @@ async function captureFullPageInner(tab: CaptureTab, settings: Settings): Promis
 
   await showProgress(tab.id, `Stitching ${segments.length} segments…`);
   await ensureOffscreen();
-  const stitchWidth = Math.round(dims.viewportWidth * dims.devicePixelRatio);
-  const stitchHeight = Math.min(
-    Math.round(dims.scrollHeight * dims.devicePixelRatio),
-    MAX_CANVAS_DIMENSION,
-  );
 
   const result = await chrome.runtime.sendMessage({
     type: "offscreen-stitch",
     segments,
-    width: stitchWidth,
-    height: stitchHeight,
+    width: plan.stitchWidth,
+    height: plan.stitchHeight,
   });
 
   if (result?.dataUrl) {
     await showProgress(tab.id, "Compressing full-page image…");
     const encoded = await encodeCapture(result.dataUrl, settings);
     await showProgress(tab.id, "Saving…");
-    await saveAsScrollSession(encoded.dataUrl, stitchWidth, stitchHeight, tab.url || "");
+    await saveAsScrollSession(encoded.dataUrl, plan.stitchWidth, plan.stitchHeight, tab.url || "");
   }
   await hideProgress(tab.id);
 }
