@@ -19,6 +19,7 @@
     "./zip": "./src/zip/zip-builder.ts",
     "./utils": "./src/utils/index.ts",
     "./utils/*": "./src/utils/*.ts",
+    "./tauri-bridge": "./src/utils/tauri-bridge.ts",
     "./storage": "./src/storage/index.ts",
     "./encode": "./src/encode/index.ts",
     "./styles/*": "./styles/*",

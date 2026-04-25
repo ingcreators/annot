@@ -6,7 +6,7 @@ import {
   listProjects,
   loadScreenshot,
   type Project,
-} from "@ingcreators/annot-core/utils/tauri-bridge";
+} from "@ingcreators/annot-core/tauri-bridge";
 
 export class Gallery {
   #container: HTMLElement;
