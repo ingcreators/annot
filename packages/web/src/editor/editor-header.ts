@@ -18,7 +18,7 @@
  * Lit element's `getSaveStatusIndicator()` accessor.
  */
 
-import { createThemeToggle } from "@ingcreators/annot-core";
+import { createThemeToggle } from "@ingcreators/annot-core/editor";
 import { html, LitElement, nothing, unsafeHTML } from "../lit.js";
 import "./editable-filename.js";
 import type { AnnotEditableFilenameElement } from "./editable-filename.js";

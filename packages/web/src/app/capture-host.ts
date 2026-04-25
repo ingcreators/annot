@@ -12,7 +12,7 @@
  * the save to the newly-selected backend.
  */
 
-import { readEditableImage } from "@ingcreators/annot-core";
+import { readEditableImage } from "@ingcreators/annot-core/xmp";
 import type { StorageProvider } from "@ingcreators/annot-core/storage";
 import { newIdB58 } from "@ingcreators/annot-core/utils";
 import {

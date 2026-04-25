@@ -13,18 +13,17 @@
  * everything through a deps-object indirection.
  */
 
-import type { ToolOptions } from "@ingcreators/annot-core";
+import type { ToolOptions } from "@ingcreators/annot-core/editor";
 import {
-  assertNonNull,
   CanvasManager,
   History,
   openAnchoredPopover,
-  type PageMetadata,
   SelectionManager,
-} from "@ingcreators/annot-core";
+} from "@ingcreators/annot-core/editor";
 import { Toolbar } from "../editor/toolbar.js";
-import type { ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
+import type { ImageRecord, PageMetadata, StorageProvider } from "@ingcreators/annot-core/storage";
 import { getFilename } from "@ingcreators/annot-core/storage";
+import { assertNonNull } from "@ingcreators/annot-core/utils";
 import type { AnnotFileDetailsDrawerElement } from "../editor/annot-file-details-drawer.js";
 import { estimateDataUrlBytes } from "../editor/annot-file-details-drawer.js";
 import "../editor/annot-file-details-drawer.js";

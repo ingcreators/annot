@@ -16,7 +16,8 @@
  * legacy) skip the section's heading entirely.
  */
 
-import type { CanvasManager, History, PageElement, SelectionManager } from "@ingcreators/annot-core";
+import type { CanvasManager, History, SelectionManager } from "@ingcreators/annot-core/editor";
+import type { PageElement } from "@ingcreators/annot-core/storage";
 import type { UISection } from "../../app/plugin-host.js";
 import { html, LitElement } from "../../lit.js";
 import {

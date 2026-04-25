@@ -17,7 +17,7 @@ import {
   downloadAsImage,
   saveAsEditableImage,
   saveToFile,
-} from "@ingcreators/annot-core";
+} from "@ingcreators/annot-core/editor";
 import { exportPptx } from "@ingcreators/annot-core/editor/pptx-export";
 import { isTauri } from "@ingcreators/annot-core/tauri-bridge";
 import type { SaveMenuSelectDetail } from "./annot-save-menu.js";

@@ -13,7 +13,8 @@
  * that does not need to land in the same PR as this carve-out.
  */
 
-import { computeDasharray, type ToolOptions } from "@ingcreators/annot-core";
+import type { ToolOptions } from "@ingcreators/annot-core/editor";
+import { computeDasharray } from "@ingcreators/annot-core/utils";
 import { refreshArrowPath } from "@ingcreators/annot-core/editor/arrow-markers";
 import { TOOL_VARIANTS } from "./toolbar-variants.js";
 

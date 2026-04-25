@@ -52,14 +52,15 @@
  *      survive mode switches.
  */
 
-import type { PageMetadata, SelectionManager } from "@ingcreators/annot-core";
+import type { SelectionManager } from "@ingcreators/annot-core/editor";
 import type { Toolbar } from "./toolbar.js";
 import {
   type CanvasManager,
   type History,
   highlightColorLabel,
   PropertyPanel,
-} from "@ingcreators/annot-core";
+} from "@ingcreators/annot-core/editor";
+import type { PageMetadata } from "@ingcreators/annot-core/storage";
 import {
   readTransformState,
   setRotation,
