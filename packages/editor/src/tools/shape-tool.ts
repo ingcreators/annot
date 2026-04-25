@@ -64,7 +64,7 @@ export class ShapeTool extends ToolBase {
       });
     }
 
-    this.canvas.annotations.appendChild(this.#el);
+    this.surface.attachDraft(this.#el);
   }
 
   onPointerMove(e: PointerEvent, pt: DOMPoint): void {
@@ -134,7 +134,7 @@ export class ShapeTool extends ToolBase {
       return;
     }
 
-    this.history.save();
+    this.surface.saveHistory();
     const el = this.#el;
     this.#el = null;
     this.onShapeComplete?.(el);

@@ -86,6 +86,18 @@ export {
   type SnapResult,
 } from "./editor/selection-geometry.js";
 
+// ─── Tool lifecycle DOM surface ───────────────────────────────────────
+// Three-method abstraction every editor tool depends on for canvas
+// access. Live-canvas adapters live in
+// `@ingcreators/annot-editor/tools/canvas-tool-surface`; the test
+// helper `createMockToolSurface` is published here so plugin authors
+// can drive their tools against an inert sink in unit tests.
+export {
+  createMockToolSurface,
+  type MockToolSurface,
+  type ToolDOMSurface,
+} from "./editor/tool-lifecycle.js";
+
 // ─── Path utilities (pure string manipulation) ────────────────────────
 export {
   ancestorPaths,

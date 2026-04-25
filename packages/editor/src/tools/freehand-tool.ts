@@ -135,7 +135,7 @@ export class FreehandTool extends ToolBase {
         "data-type": "freehand",
         "data-draw-style": this.options.drawStyle ?? "pen",
       });
-      this.canvas.annotations.appendChild(this.#sessionGroup);
+      this.surface.attachDraft(this.#sessionGroup);
     } else {
       // Update the group's draw-style indicator so the most recent
       // stroke's style is reflected at the group level too (used by
@@ -215,7 +215,7 @@ export class FreehandTool extends ToolBase {
     if (pathChildren.length === 0) {
       group.remove();
     } else {
-      this.history.save();
+      this.surface.saveHistory();
       this.onShapeComplete?.(group);
     }
     this.onSessionEnd?.();

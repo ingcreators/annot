@@ -52,6 +52,11 @@ export {
   type SnapInput,
   type SnapResult,
 } from "./selection-geometry.js";
+export {
+  createMockToolSurface,
+  type MockToolSurface,
+  type ToolDOMSurface,
+} from "./tool-lifecycle.js";
 
 // ╭─ Editor UI (browser / DOM required) ────────────────────────────╮
 // │ These hit `document` / `window`, subscribe to pointer events,   │
