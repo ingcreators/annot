@@ -6,7 +6,7 @@
 import { createThemeToggle } from "@ingcreators/annot-editor";
 import type { ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
 import { assertNonNull } from "@ingcreators/annot-core/utils";
-import { setTooltip } from "@ingcreators/annot-core/editor/tooltip";
+import { setTooltip } from "@ingcreators/annot-editor/tooltip";
 import { ScratchpadStore } from "./editor/scratchpad-store.js";
 import { FileManager } from "./gallery/file-manager.js";
 import { logger } from "./logger.js";

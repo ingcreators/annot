@@ -14,12 +14,8 @@
  */
 
 import type { ToolOptions } from "@ingcreators/annot-core/editor/tool-options";
-import {
-  CanvasManager,
-  History,
-  openAnchoredPopover,
-} from "@ingcreators/annot-core/editor";
-import { SelectionManager } from "@ingcreators/annot-editor";
+import { CanvasManager, History } from "@ingcreators/annot-core/editor";
+import { openAnchoredPopover, SelectionManager } from "@ingcreators/annot-editor";
 import { Toolbar } from "../editor/toolbar.js";
 import type { ImageRecord, PageMetadata, StorageProvider } from "@ingcreators/annot-core/storage";
 import { getFilename } from "@ingcreators/annot-core/storage";

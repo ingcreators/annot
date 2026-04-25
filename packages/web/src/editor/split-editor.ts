@@ -16,7 +16,7 @@
  * record (see App#applySlicesToStorage).
  */
 import type { ImageRecord } from "@ingcreators/annot-core/storage";
-import { setTooltip } from "@ingcreators/annot-core/editor/tooltip";
+import { setTooltip } from "@ingcreators/annot-editor/tooltip";
 
 export interface SplitEditorSlice {
   /** Base64 data URL (JPEG) for the re-sliced frame. */

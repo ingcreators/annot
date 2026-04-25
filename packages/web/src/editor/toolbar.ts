@@ -45,12 +45,12 @@ import {
   HIGHLIGHT_COLORS,
   type History,
   highlightColorLabel,
-  openAnchoredPopover,
   saveToFile,
 } from "@ingcreators/annot-core/editor";
 import type { ToolOptions } from "@ingcreators/annot-core/editor/tool-options";
 import {
   createThemeToggle,
+  openAnchoredPopover,
   type SelectionManager,
   type ToolBase,
 } from "@ingcreators/annot-editor";
@@ -68,7 +68,7 @@ import {
   saveToolPresets,
   type ToolPreset,
 } from "@ingcreators/annot-core/tauri-bridge";
-import { setTooltip } from "@ingcreators/annot-core/editor/tooltip";
+import { setTooltip } from "@ingcreators/annot-editor/tooltip";
 import { ArrowTool } from "@ingcreators/annot-editor/tools/arrow-tool";
 import { CropTool } from "@ingcreators/annot-editor/tools/crop-tool";
 import { FreehandTool, isFreehandGroup } from "@ingcreators/annot-editor/tools/freehand-tool";

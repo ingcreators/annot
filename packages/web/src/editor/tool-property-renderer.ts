@@ -29,8 +29,8 @@ import type {
   ToolOptions,
 } from "@ingcreators/annot-core/editor/tool-options";
 import { computeDasharray } from "@ingcreators/annot-core/utils";
-import { createCustomSelect } from "@ingcreators/annot-core/editor/custom-select";
-import { setTooltip } from "@ingcreators/annot-core/editor/tooltip";
+import { createCustomSelect } from "@ingcreators/annot-editor/custom-select";
+import { setTooltip } from "@ingcreators/annot-editor/tooltip";
 import {
   createArrowEndsRows,
   createColorPullButton,
