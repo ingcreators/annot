@@ -4,7 +4,7 @@ import {
   isTauri,
   listProjects,
   type Project,
-} from "@ingcreators/annot-core/utils/tauri-bridge";
+} from "@ingcreators/annot-core/tauri-bridge";
 
 export class ProjectManager {
   #dialog: HTMLDialogElement | null = null;

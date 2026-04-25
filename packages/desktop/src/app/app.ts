@@ -11,7 +11,7 @@ import {
   isTauri,
   loadScreenshot,
   saveScreenshot,
-} from "@ingcreators/annot-core/utils/tauri-bridge";
+} from "@ingcreators/annot-core/tauri-bridge";
 import { Gallery } from "./gallery.js";
 import { ProjectManager } from "./project-manager.js";
 

@@ -39,10 +39,8 @@ import "./annot-toolbar.js";
 // `./editor/tools/*`) reach the bits that aren't re-exported via
 // the top-level barrel.
 import {
-  type AnnotationShape,
   type CanvasManager,
   copyAsImage,
-  copyAsOffice,
   createThemeToggle,
   DEFAULT_FILL_COLOR,
   DEFAULT_FONT_SIZE,
@@ -52,16 +50,20 @@ import {
   HIGHLIGHT_COLORS,
   type History,
   highlightColorLabel,
-  isTauri,
-  loadToolPresets,
   openAnchoredPopover,
   type SelectionManager,
   saveToFile,
-  saveToolPresets,
   type ToolBase,
   type ToolOptions,
-  type ToolPreset,
 } from "@ingcreators/annot-core";
+import {
+  type AnnotationShape,
+  copyAsOffice,
+  isTauri,
+  loadToolPresets,
+  saveToolPresets,
+  type ToolPreset,
+} from "@ingcreators/annot-core/tauri-bridge";
 import { setTooltip } from "@ingcreators/annot-core/editor/tooltip";
 import { ArrowTool } from "@ingcreators/annot-core/editor/tools/arrow-tool";
 import { CropTool } from "@ingcreators/annot-core/editor/tools/crop-tool";
