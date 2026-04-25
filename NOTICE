@@ -1,0 +1,27 @@
+Annot
+Copyright 2026 ingcreators
+
+This product includes software developed by ingcreators
+(https://github.com/ingcreators/annot).
+
+Licensed under the Apache License, Version 2.0 (the "License").
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Third-party dependencies are distributed under their own
+licenses. See each package's `package.json` and the lockfile
+for the full dependency list. Major runtime dependencies:
+
+  - Lit (BSD-3-Clause) — https://lit.dev
+  - Workbox / vite-plugin-pwa (MIT) — https://workbox.dev
+  - Tauri (Apache-2.0 / MIT) — https://tauri.app
+  - pako (MIT + zlib) — https://github.com/nodeca/pako
+  - imagequant (GPL-3.0+ for the original library; the
+    `@panda-ai/imagequant` WASM build used here is distributed
+    under MIT — verify before redistributing if license terms
+    matter for your use case)
+
+This NOTICE is a "informational only" attribution file as
+described in §4(d) of the Apache License, Version 2.0. It
+does not modify the License.
