@@ -20,6 +20,7 @@ window (`Queued`), or actively shipping (`In progress`).
 
 | Plan | Status | Summary |
 |------|--------|---------|
+| [`three-package-split.md`](./three-package-split.md) | Queued | Split `core/editor/` into TWO new workspace packages: `@ingcreators/annot-editor` (live-browser editor primitives) and `@ingcreators/annot-render` (data-driven `ImageRecord` rendering — gallery bulk-export's future home). Four runtime tiers (pure-Node / jsdom helpers / live-browser editor / data-driven render); 9 sequential phases; no external API break. |
 | [`pre-release-cleanup.md`](./pre-release-cleanup.md) | Queued | Senior-engineer audit follow-through: four stages (hygiene → `StorageProvider` capability split → god-module decomposition → `core`↔`web` boundary fix). Each stage independently revertable; no data migration; touches every package. |
 | [`desktop-browser-mode.md`](./desktop-browser-mode.md) | Queued | Bring the Tauri desktop to full extension-capture parity by extracting `@ingcreators/annot-capture` (orchestration + content scripts + encoding) and adding a Tauri host adapter with per-OS native capture commands. Windows-first; Browse window is Chrome-style tabbed with `window.open` / OAuth popups handled in-window. Extension and desktop both consume the shared package. |
 | [`path-based-storage.md`](./path-based-storage.md) | Queued | Drop numeric IDs across all storage implementations; use filesystem-style paths as primary key. Prerequisite for `GitHubStore`. |
