@@ -19,6 +19,7 @@
  */
 
 import type { ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
+import { logger } from "../logger.js";
 import { editUrl, pushRoute } from "../router.js";
 import { deleteExtensionImage, getStorage, getStorageMode } from "../storage/bridge.js";
 import type { EditorSession } from "./editor-session.js";
@@ -54,7 +55,7 @@ export class ExtensionTransferHost {
       const rootImages = await extStorage.listImages("");
       if (rootImages.length === 0) return;
 
-      console.log("[transfer] Found", rootImages.length, "images in Extension IDB root");
+      logger.debug("[transfer] Found", rootImages.length, "images in Extension IDB root");
 
       const { BrowserStore } = await import("../storage/browser-store.js");
       // Transfer to the user's currently selected storage
@@ -110,11 +111,11 @@ export class ExtensionTransferHost {
           deleteExtensionImage(img.path);
         } catch (e) {
           // Don't abort the whole batch on a single bad image — log and continue.
-          console.error("[transfer] failed for", img.path, "(continuing):", e);
+          logger.error("[transfer] failed for", img.path, "(continuing):", e);
         }
       }
 
-      console.log(
+      logger.debug(
         "[transfer] Transferred",
         rootImages.length,
         "images to",
@@ -123,7 +124,7 @@ export class ExtensionTransferHost {
         JSON.stringify(folderPath),
       );
     } catch (e) {
-      console.error("[transfer] Error:", e);
+      logger.error("[transfer] Error:", e);
     }
   }
 

@@ -47,6 +47,7 @@ const meta: Meta<Args> = {
     const frame = createDrawerSectionFrame("File");
     const section = document.createElement("annot-drawer-file-section");
     section.data = data;
+    // Storybook arg-flow trace — intentional `console.log`.
     section.onRename = async (newName) => {
       console.log("[story] onRename", newName);
     };

@@ -8,6 +8,7 @@ import type { ImageRecord, StorageProvider } from "@ingcreators/annot-core/stora
 import { setTooltip } from "@ingcreators/annot-core/utils";
 import { ScratchpadStore } from "./editor/scratchpad-store.js";
 import { FileManager } from "./gallery/file-manager.js";
+import { logger } from "./logger.js";
 import {
   type BuiltInStorageMode,
   deleteExtensionImage,
@@ -444,7 +445,7 @@ export class App {
       this.#currentTags = record.tags || {};
       this.#fileManager = null;
 
-      console.log(
+      logger.debug(
         "[annot/app] handoff record.pageMetadata:",
         record.pageMetadata ? `${record.pageMetadata.elements.length} elements` : "none",
       );
@@ -461,7 +462,7 @@ export class App {
   // ---- File Manager (Gallery) ----
 
   private showGalleryView(): void {
-    console.log(
+    logger.debug(
       "[showGalleryView] mode:",
       getStorageMode(),
       "storage:",

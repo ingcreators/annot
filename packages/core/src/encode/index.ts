@@ -81,9 +81,6 @@ export async function encodeCapture(
   if (format === "jpeg") {
     const dataUrl = await canvasToDataUrl(canvas, "image/jpeg", jpegPercent / 100);
     bmp.close();
-    console.log(
-      `[encode] JPEG ${w}x${h} q=${jpegPercent}% → ${((dataUrl.length * 0.75) / 1024).toFixed(1)} KB (~)`,
-    );
     return { dataUrl, chosen: "jpeg" };
   }
 
@@ -100,15 +97,9 @@ export async function encodeCapture(
     if (smartFallback === "jpeg") {
       const dataUrl = await canvasToDataUrl(canvas, "image/jpeg", jpegPercent / 100);
       bmp.close();
-      console.log(
-        `[encode] photo-fallback JPEG ${w}x${h} → ${((dataUrl.length * 0.75) / 1024).toFixed(1)} KB`,
-      );
       return { dataUrl, chosen: "jpeg", reason: "photo-fallback-jpeg" };
     }
     bmp.close();
-    console.log(
-      `[encode] photo-fallback PNG-24 ${w}x${h} → ${((pngDataUrl.length * 0.75) / 1024).toFixed(1)} KB`,
-    );
     return { dataUrl: pngDataUrl, chosen: "png", reason: "photo-fallback-png" };
   }
 
@@ -117,7 +108,6 @@ export async function encodeCapture(
     const png8Bytes = await quantizeToPng8(imageData);
     bmp.close();
     const dataUrl = await blobToDataUrl(new Blob([png8Bytes as BlobPart], { type: "image/png" }));
-    console.log(`[encode] PNG-8 ${w}x${h} → ${(png8Bytes.byteLength / 1024).toFixed(1)} KB`);
     return { dataUrl, chosen: "png", reason: "png-8" };
   } catch (e) {
     console.warn("[encode] PNG-8 quantization failed, falling back to PNG-24:", e);
