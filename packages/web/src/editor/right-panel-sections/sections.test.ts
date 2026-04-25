@@ -1,29 +1,38 @@
 /**
  * @vitest-environment happy-dom
  *
- * Phase 3 tests for the right-panel section modules. The full
- * `EditorRightPanel` host construction requires a Toolbar +
- * PropertyPanel + CanvasManager + History + SelectionManager —
- * heavy mocks that don't add much beyond what these per-section
- * unit tests already exercise. Section-level tests cover:
+ * Tests for the right-panel section modules. The full
+ * `<annot-editor-right-panel>` host construction requires a
+ * Toolbar + PropertyPanel + CanvasManager + History +
+ * SelectionManager — heavy mocks that don't add much beyond what
+ * these per-section unit tests already exercise. Section-level
+ * tests cover:
  *   - `visible(ctx)` predicates against the deps closure
  *   - mount → lifecycle round-trip (function vs object shape)
  *   - dynamic title via `ctx.setTitle` from inside mount
  *   - update path re-evaluates state through the deps closure
  *
  * The section host's compose / sort / filter / dispose loop is
- * structurally identical to the drawer's (Phase 2 covered it
- * end-to-end in `file-details-drawer.test.ts`); the duplication
- * isn't worth re-asserting through a mock-heavy harness.
+ * structurally identical to the drawer's; the duplication isn't
+ * worth re-asserting through a mock-heavy harness.
+ *
+ * Lit Phase 2: each section is now backed by a Lit element. The
+ * factory's `mount` creates the element, assigns properties, and
+ * returns a lifecycle. Tests `await el.updateComplete` after
+ * property changes so Lit's async reactive update has a chance to
+ * call `updated()`.
  */
 
 import type { Toolbar } from "@ingcreators/annot-core";
 import { describe, expect, it, vi } from "vitest";
 import type { UISectionContext } from "../../app/plugin-host.js";
-import { BUILTIN_RIGHT_PANEL_SECTION_IDS } from "../right-panel.js";
+import "./page-elements-section.js";
 import { createPageElementsSection } from "./page-elements-section.js";
+import "./selection-properties-section.js";
 import { createSelectionPropertiesSection } from "./selection-properties-section.js";
+import "./tool-properties-section.js";
 import { createToolPropertiesSection } from "./tool-properties-section.js";
+import { BUILTIN_RIGHT_PANEL_SECTION_IDS } from "../right-panel.js";
 
 function fakeCtx(overrides: Partial<UISectionContext> = {}): UISectionContext {
   return {
@@ -42,6 +51,15 @@ function fakeToolbar(): Toolbar {
     renderToolProperties: vi.fn(),
     getToolDisplayTitle: vi.fn((id: string) => `Display: ${id}`),
   } as unknown as Toolbar;
+}
+
+/** Resolve once Lit's microtask reactive update has completed for
+ *  every connected element under `container`. Used after mount /
+ *  update calls because property assignments don't immediately
+ *  trigger render. */
+async function flushLitUpdates(container: HTMLElement): Promise<void> {
+  const el = container.firstElementChild as HTMLElement & { updateComplete?: Promise<unknown> };
+  if (el?.updateComplete) await el.updateComplete;
 }
 
 describe("BUILTIN_RIGHT_PANEL_SECTION_IDS", () => {
@@ -71,7 +89,7 @@ describe("tool-properties section", () => {
     expect(section.visible?.(fakeCtx())).toBe(false);
   });
 
-  it("renders + sets the dynamic title from the toolbar's display name on mount", () => {
+  it("renders + sets the dynamic title from the toolbar's display name on mount", async () => {
     const tb = fakeToolbar();
     const section = createToolPropertiesSection({
       getActiveToolId: () => "rectangle",
@@ -79,13 +97,21 @@ describe("tool-properties section", () => {
     });
     const setTitle = vi.fn();
     const container = document.createElement("div");
+    document.body.appendChild(container);
     const lifecycle = section.mount(container, fakeCtx({ setTitle }));
-    expect(tb.renderToolProperties).toHaveBeenCalledWith("rectangle", container);
+    await flushLitUpdates(container);
+    // The Lit element delegates into Toolbar.renderToolProperties,
+    // passing its OWN `.tool-properties-host` child as the target
+    // container — that's where the toolbar paints its DOM.
+    expect(tb.renderToolProperties).toHaveBeenCalledTimes(1);
+    const args = (tb.renderToolProperties as ReturnType<typeof vi.fn>).mock.calls[0]!;
+    expect(args[0]).toBe("rectangle");
+    expect((args[1] as HTMLElement).className).toBe("tool-properties-host");
     expect(setTitle).toHaveBeenCalledWith("Display: rectangle");
     expect(typeof lifecycle).toBe("object");
   });
 
-  it("update(ctx) re-renders with the latest active tool", () => {
+  it("update(ctx) re-renders with the latest active tool", async () => {
     const tb = fakeToolbar();
     let activeTool: string | null = "rectangle";
     const section = createToolPropertiesSection({
@@ -94,13 +120,18 @@ describe("tool-properties section", () => {
     });
     const setTitle = vi.fn();
     const container = document.createElement("div");
+    document.body.appendChild(container);
     const lifecycle = section.mount(container, fakeCtx({ setTitle })) as {
       update?(ctx: UISectionContext): void;
       unmount(): void;
     };
+    await flushLitUpdates(container);
     activeTool = "arrow";
     lifecycle.update?.(fakeCtx({ setTitle }));
-    expect(tb.renderToolProperties).toHaveBeenLastCalledWith("arrow", container);
+    await flushLitUpdates(container);
+    const calls = (tb.renderToolProperties as ReturnType<typeof vi.fn>).mock.calls;
+    const last = calls[calls.length - 1]!;
+    expect(last[0]).toBe("arrow");
     expect(setTitle).toHaveBeenLastCalledWith("Display: arrow");
   });
 });
@@ -117,7 +148,7 @@ describe("selection-properties section", () => {
     expect(section.visible?.(fakeCtx())).toBe(false);
   });
 
-  it("attaches the PropPanel host on mount + computes the title", () => {
+  it("attaches the PropPanel host on mount + computes the title", async () => {
     const propPanelHost = document.createElement("div");
     propPanelHost.id = "fake-prop-panel-host";
     const sel = document.createElementNS("http://www.w3.org/2000/svg", "rect");
@@ -133,11 +164,14 @@ describe("selection-properties section", () => {
       computeTitle: titleSpy,
     });
     const container = document.createElement("div");
+    document.body.appendChild(container);
     const lifecycle = section.mount(container, fakeCtx({ setTitle })) as {
       unmount(): void;
     };
-    // Host element attached to section container.
-    expect(propPanelHost.parentElement).toBe(container);
+    await flushLitUpdates(container);
+    // The PropPanel host element lives inside the Lit element's
+    // `.selection-properties-host` container.
+    expect(propPanelHost.parentElement?.className).toBe("selection-properties-host");
     expect(showSpy).toHaveBeenCalledWith([sel]);
     expect(setTitle).toHaveBeenCalledWith("Selected Rectangle");
     // Unmount detaches the prop-panel host so the next section
@@ -195,7 +229,7 @@ describe("page-elements section", () => {
     expect(section.visible?.(fakeCtx())).toBe(false);
   });
 
-  it("renders an interactive list when metadata carries elements", () => {
+  it("renders an interactive list when metadata carries elements", async () => {
     const section = createPageElementsSection({
       getPageMetadata: () => pageMeta(3),
       getCanvas: () => ({ svg: {} as SVGSVGElement, annotations: {} as SVGGElement }) as never,
@@ -204,8 +238,12 @@ describe("page-elements section", () => {
     });
     expect(section.visible?.(fakeCtx())).toBe(true);
     const container = document.createElement("div");
+    document.body.appendChild(container);
     section.mount(container, fakeCtx());
-    // Three element rows + the search input + the hint paragraph.
+    await flushLitUpdates(container);
+    // Three element rows + the search input. Children are inside
+    // the Lit element's render output, but `querySelectorAll`
+    // walks descendants regardless of element type.
     expect(container.querySelectorAll(".editor-right-panel-element-row").length).toBe(3);
     expect(container.querySelector("input[type=search]")).not.toBeNull();
   });

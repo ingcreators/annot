@@ -28,7 +28,8 @@ import type { AnnotFileDetailsDrawerElement } from "../editor/file-details-drawe
 import { estimateDataUrlBytes } from "../editor/file-details-drawer.js";
 import "../editor/file-details-drawer.js";
 import { installKeyboardHelp } from "../editor/keyboard-help.js";
-import { EditorRightPanel } from "../editor/right-panel.js";
+import type { AnnotEditorRightPanelElement } from "../editor/right-panel.js";
+import "../editor/right-panel.js";
 import { ScratchpadPasteTool } from "../editor/scratchpad-paste-tool.js";
 import { ScratchpadSection } from "../editor/scratchpad-section.js";
 import type { ScratchpadStore } from "../editor/scratchpad-store.js";
@@ -85,7 +86,7 @@ export class EditorSession {
   #editorToolbar: Toolbar | null = null;
   /** Right-side property panel (tool properties + selection properties).
    *  Rebuilt per editor session. */
-  #editorRightPanel: EditorRightPanel | null = null;
+  #editorRightPanel: AnnotEditorRightPanelElement | null = null;
   /** The file-details drawer, created per editor session. */
   #fileDetailsDrawer: AnnotFileDetailsDrawerElement | null = null;
   /** DOM-element metadata captured alongside the current screenshot
@@ -331,17 +332,16 @@ export class EditorSession {
     // responsibility: "edit the thing the user is focused on".
     const rightPanelEl = document.getElementById("editor-right-panel")!;
     this.#editorRightPanel?.destroy();
-    this.#editorRightPanel = new EditorRightPanel(
-      rightPanelEl,
-      toolbar,
-      canvas,
-      history,
-      selection,
-      {
-        getPluginSections: this.deps.getRightPanelSections,
-        isBuiltinSectionDisabled: this.deps.isBuiltinUISectionDisabled,
-      },
-    );
+    rightPanelEl.innerHTML = "";
+    const panel = document.createElement("annot-editor-right-panel");
+    panel.toolbar = toolbar;
+    panel.canvas = canvas;
+    panel.history = history;
+    panel.selection = selection;
+    panel.getPluginSections = this.deps.getRightPanelSections ?? null;
+    panel.isBuiltinSectionDisabled = this.deps.isBuiltinUISectionDisabled ?? null;
+    rightPanelEl.appendChild(panel);
+    this.#editorRightPanel = panel;
     // Push DOM-element metadata (captured by the browser extension)
     // into the right panel so the Elements section appears for
     // browser-sourced screenshots. Null/undefined hides the section
