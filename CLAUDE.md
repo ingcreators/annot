@@ -79,16 +79,38 @@ These follow from `PRODUCT_DIRECTION.md`. When modifying code, check:
 - Adding a new annotation type? Confirm it survives round-trip:
   **write → reload → compare SVG byte-for-byte**.
 
-### 2. DOM independence in `core`
+### 2. Three-tier package boundary (DOM independence in `core`)
 
-- **New SVG-producing code** in `packages/core/src/editor/tools/*` or
-  `packages/core/src/svg/*` should NOT reference `document`,
-  `window`, `getComputedStyle`, or `getBoundingClientRect` at the
-  generation layer.
-- Editing UI (selection handles, text caret, property panel) can
-  freely use DOM APIs — it's PWA-only.
-- Shared helpers that need measurements should accept a metrics
-  provider interface rather than calling the browser directly.
+The `three-package-split` plan replaced the old "editor UI in
+core may use DOM APIs" carve-out with a real three-tier split.
+Match the file's home to its runtime requirements:
+
+| Tier | Package | Runtime | Examples |
+|------|---------|---------|----------|
+| A | `@ingcreators/annot-core` (root + subpaths) | pure Node | SVG format constants, storage types, path utilities, ZIP builder, capability predicates |
+| B | `@ingcreators/annot-core/editor` subpath | jsdom-friendly Element manipulation, no `<canvas>` | `arrow-markers`, `transform-utils`, `shape-utils`, `text-utils`, `gradient-utils`, `tool-options` types, svg-format, toolbar-icons |
+| C | `@ingcreators/annot-editor` | real browser (live SVG, pointer events, ResizeObserver, MutationObserver) | `CanvasManager`, `SelectionManager`, `PropertyPanel`, `ToolBase` + concrete tools, `History`, save/copy/download helpers, leaf widgets (tooltip, theme-toggle, custom-select, anchored-popover, color-palette, canvas-context-menu), `redact-utils`, `pptx-export`, the CanvasManager-coupled side of `export.ts` |
+| C-render | `@ingcreators/annot-editor`'s sibling `@ingcreators/annot-render` | `<canvas>` rasterisation, no live editor session | `renderImageRecord` (data-driven `ImageRecord` → bitmap; future home for gallery bulk-export and the eventual `pptx-export` ImageRecord refactor) |
+
+Dependency direction: `annot-render → annot-core` and
+`annot-editor → annot-core`. **`annot-core` MUST NOT depend on
+either** — circular package dependency. Likewise
+`annot-render` MUST NOT depend on `annot-editor` (the split
+exists so storage backends and gallery bulk-export can pull
+rendering without dragging in the live editor).
+
+Both invariants are CI-enforced by
+`packages/core/src/headless.test.ts` (walks
+`require.cache` after importing every documented `annot-core`
+subpath; fails if any cached entry resolves under
+`packages/editor/` or `packages/render/`).
+
+When adding new code, ask: "does my function need a live
+browser?" — yes → `annot-editor`. "Does it need `<canvas>`?" —
+yes → `annot-editor` if also CanvasManager-coupled,
+`annot-render` if data-driven. "Just SVG element manipulation,
+works under jsdom?" — `annot-core/editor` (Tier B). "No DOM
+references at all?" — `annot-core` root.
 
 ### 3. StorageProvider is the only way in
 
@@ -110,39 +132,41 @@ These follow from `PRODUCT_DIRECTION.md`. When modifying code, check:
 - Future-proofing: Playwright integration will populate a
   `locator?: string` field. Treat that name as reserved.
 
-### 5. Public API of `@ingcreators/annot-core`
+### 5. Public API of `@ingcreators/annot-core` / `-editor` / `-render`
 
-**The root entry is headless by construction.** `src/index.ts`
-just `export * from "./headless.js"` — the two are
-indistinguishable. Browser-side consumers reach the editor UI,
-XMP, and Tauri-bridge symbols through their respective subpaths:
+**The `annot-core` root entry is headless by construction.**
+`src/index.ts` just `export * from "./headless.js"` — the two
+are indistinguishable. Editor UI lives in `@ingcreators/annot-editor`,
+data-driven rendering lives in `@ingcreators/annot-render`,
+and the matching package layout reflects the three-tier model
+in section 2 above.
 
 | Subpath | Surface |
 |---------|---------|
-| `@ingcreators/annot-core` (or `/headless`) | DOM-free: SVG format versioning, storage types, path utilities, capability predicates, dash utils, constants, id, assertNonNull, ZIP builder. **Importable in pure Node.** |
-| `@ingcreators/annot-core/editor` | Editor UI: `CanvasManager`, `PropertyPanel`, `SelectionManager`, `History`, `ToolBase`, the `export*Svg*` / `copy*` / `save*` / `download*` / `getPng*` / `render*` helpers, theme toggle, anchored popover, icon catalogues. |
-| `@ingcreators/annot-core/storage` | Storage value types (`ImageRecord`, `FolderRecord`, `PageElement`, `PageMetadata`, `StorageProvider`). |
-| `@ingcreators/annot-core/utils` | Pure utilities: `assertNonNull`, `computeDasharray`, `detectDashKey`, `newIdB58`, `DEFAULT_*` constants. |
-| `@ingcreators/annot-core/xmp` | `createEditableImage` / `readEditableImage` round-trip. |
-| `@ingcreators/annot-core/tauri-bridge` | Tauri IPC + `isTauri` detection. |
-| `@ingcreators/annot-core/editor/<file>` | Per-file deep imports for editor internals (`property-controls`, `tools/freehand-tool`, etc.). Use sparingly. |
+| `@ingcreators/annot-core` (or `/headless`) | Tier A. DOM-free: SVG format versioning, storage types, path utilities, capability predicates, dash utils, constants, id, assertNonNull, ZIP builder. **Importable in pure Node.** |
+| `@ingcreators/annot-core/editor` | Tier B. jsdom-friendly element-taking helpers: `arrow-markers`, `transform-utils`, `shape-utils`, `text-utils`, `gradient-utils`, `tool-options` types, svg-format, toolbar-icons. No `<canvas>`. |
+| `@ingcreators/annot-core/storage` | Tier A. Storage value types (`ImageRecord`, `FolderRecord`, `PageElement`, `PageMetadata`, `StorageProvider`). |
+| `@ingcreators/annot-core/utils` | Tier A. Pure utilities: `assertNonNull`, `computeDasharray`, `detectDashKey`, `newIdB58`, `DEFAULT_*` constants. |
+| `@ingcreators/annot-core/xmp` | Browser-side. `createEditableImage` / `readEditableImage` round-trip. |
+| `@ingcreators/annot-core/tauri-bridge` | Browser-side. Tauri IPC + `isTauri` detection. |
+| `@ingcreators/annot-editor` | Tier C. `CanvasManager`, `SelectionManager`, `PropertyPanel`, `History`, `ToolBase`, the tool hierarchy, save/copy/download helpers (`saveToFile`, `getPngDataUrl`, `copyAsImage`, `saveAsEditableImage`, `exportSVGString`, `exportPptx`, `downloadAsImage`, …), leaf widgets (`setTooltip`, `createThemeToggle`, `createCustomSelect`, `createColorPalette`, `openAnchoredPopover`), context menu (`openCanvasContextMenu`). |
+| `@ingcreators/annot-editor/<file>` | Per-file deep imports for editor internals (`tools/freehand-tool`, `property-controls`, etc.). Use sparingly. |
+| `@ingcreators/annot-render` | Tier C-render. `renderImageRecord` (today). Future home of gallery bulk-export and the ImageRecord-driven `pptx-export` refactor. **Does NOT depend on `annot-editor`.** |
 
 Rules when adding public symbols:
 
-- New DOM-free symbols → export from `src/headless.ts`. They
-  flow into the root automatically via `export *`.
-- New DOM-dependent UI symbols → export from
-  `src/editor/index.ts`. **Never** add them to `headless.ts` or
-  the root.
-- New Tauri-bridge / XMP / extension-only symbols → put them in
-  the matching subpath module; don't bounce them through
-  `core/utils/index.ts` (that subpath is "pure utilities" by
-  contract — see Stage 4-3 of `docs/plans/pre-release-cleanup.md`).
-- The boundary is enforced by `packages/core/src/headless.test.ts`,
-  which imports the root under a pure-Node vitest environment
-  and asserts `globalThis.document` / `globalThis.window` stay
-  `undefined`. Add a probe there if you introduce a new
-  load-time global.
+- New DOM-free symbols → export from `annot-core/src/headless.ts`.
+  They flow into the root automatically via `export *`.
+- New jsdom-friendly element-takers → `annot-core/src/editor/`
+  (Tier B). Update `annot-core/src/editor/index.ts` if the
+  symbol should be re-exported.
+- New live-browser editor primitives → `annot-editor/src/` (Tier C).
+- New data-driven `ImageRecord`-taking renderers / exporters →
+  `annot-render/src/`. **Never** import from `annot-editor` here.
+- The boundaries are CI-enforced by
+  `packages/core/src/headless.test.ts`. Add a probe there if you
+  introduce a new load-time global or a new package edge that
+  could break the cycle invariant.
 
 ### 6. Reply and commit language
 
