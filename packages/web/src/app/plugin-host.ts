@@ -200,6 +200,95 @@ export type SidebarTabUpdate = Partial<
 >;
 
 /**
+ * Per-image context handed to a UI section's `mount` (and to every
+ * subsequent `update(ctx)` call on reactive sections). Captures the
+ * minimum a typical section needs to render — path, mode, tags —
+ * plus a `setTitle` escape hatch for sections whose heading depends
+ * on dynamic state (the right-panel's tool-properties / selection-
+ * properties sections set their title from the active tool / kind
+ * of selection).
+ */
+export interface UISectionContext {
+  /** Path of the open image. Always set when the section is
+   *  mounted — sections only render when there's an active editor
+   *  session. */
+  readonly path: string;
+  /** Storage mode at mount / update time. Stable for the section's
+   *  lifetime — image swap unmounts + remounts. */
+  readonly mode: string;
+  /** Snapshot of `tags`. Re-read on each `update(ctx)` call. */
+  readonly tags: Readonly<Record<string, string>>;
+  /** Override the section heading. Idempotent; calling with the
+   *  same string is a no-op. The host re-renders only the heading
+   *  element, not the section body. */
+  setTitle(title: string): void;
+}
+
+/**
+ * Lifecycle returned from `UISection.mount`. Plugins pick the shape
+ * that fits their needs:
+ *
+ * - **Function** — simple sections that own their DOM and don't
+ *   need notifications when the image state changes. Equivalent
+ *   to `{ unmount: fn }`.
+ * - **Object** — reactive sections that want to be notified on
+ *   rename / save / tag-edit. The host calls `update(ctx)` with a
+ *   fresh context, then `unmount()` on session end.
+ *
+ * The host inspects the return shape: if it's a function, no
+ * `update` notifications fire; if it's an object, `update?` runs
+ * on every host-level state change.
+ */
+export type UISectionLifecycle =
+  | (() => void)
+  | {
+      /** Optional. Called when per-image state changes (rename,
+       *  save, tag edit). Plugin re-reads from `ctx` and updates
+       *  its DOM in place — no remount. */
+      update?(ctx: UISectionContext): void;
+      /** Called once when the section is unmounted (editor
+       *  session ends, opt-out toggled, plugin teardown). */
+      unmount(): void;
+    };
+
+/**
+ * Descriptor for a section in the file-details drawer or the editor
+ * right-panel. Built-in sections describe themselves via this same
+ * shape (Phase 2 / 3 of `docs/plans/plugin-ui-slots.md` migrate
+ * them); plugins fill it from `PluginContext.addDrawerSection` /
+ * `addRightPanelSection`. The two targets have independent id
+ * namespaces — the same id is allowed across targets so a single
+ * plugin can use `"comments"` for both surfaces.
+ */
+export interface UISection {
+  /** Stable id, unique within the section's target namespace.
+   *  Plugin-owned namespace — e.g. `"cloud.comments"`. Built-ins
+   *  reserve dotted ids: `"drawer.file"` / `"drawer.tags"` /
+   *  `"right-panel.tool-properties"` etc. */
+  readonly id: string;
+  /** Section heading. The host wraps the plugin's mount container
+   *  in a section frame matching the existing built-in sections
+   *  (heading + content body). Use `ctx.setTitle` to override
+   *  later. */
+  readonly title: string;
+  /** Render order within the target. Lower numbers render first.
+   *  Falsy = `+Infinity` (appended last). Stable sort, so ties
+   *  fall back to registration order. Built-ins reserve
+   *  priorities documented per surface in
+   *  `docs/plans/plugin-ui-slots.md`. */
+  readonly priority: number;
+  /** Mount the section into the supplied container. Returns either
+   *  a teardown function (simple) or a lifecycle object with
+   *  `update?` + `unmount` (reactive). */
+  mount(container: HTMLElement, ctx: UISectionContext): UISectionLifecycle;
+  /** Optional: filter at mount time. False skips the section
+   *  entirely (no `mount` call, no DOM). Plugins use this for
+   *  "hide when no comments exist yet" type cases. Default:
+   *  always visible. */
+  visible?(ctx: UISectionContext): boolean;
+}
+
+/**
  * A plugin exposes a single `register` entry point that wires itself
  * into the host. `ctx` is constructed once per app init and frozen
  * after `register()` returns so plugins can't hold onto it and keep
@@ -263,6 +352,22 @@ export interface PluginContext {
    *  other tab's `isActive` to `false` before the re-render
    *  (single-active across plugins). */
   updateSidebarTab(id: string, partial: SidebarTabUpdate): void;
+
+  /** Register a section in the file-details drawer. `id` must be
+   *  unique within the drawer namespace (built-in + plugin
+   *  drawer sections); duplicates throw. Sections render sorted
+   *  by `priority`. Phase 1 of plugin-ui-slots ships the
+   *  registration plumbing; rendering arrives in Phase 2 (drawer
+   *  migration), so a plugin can register but the section won't
+   *  display until the drawer host learns to consume the list. */
+  addDrawerSection(section: UISection): void;
+
+  /** Register a section in the editor right-panel. `id` must be
+   *  unique within the right-panel namespace (built-in + plugin
+   *  right-panel sections); duplicates throw. Phase 1 of
+   *  plugin-ui-slots ships the registration plumbing; rendering
+   *  arrives in Phase 3 (right-panel migration). */
+  addRightPanelSection(section: UISection): void;
 }
 
 export class PluginHost {
@@ -283,6 +388,12 @@ export class PluginHost {
    *  by `App.init` so the sidebar's render() is the only side
    *  effect; plugin authors don't see this hook directly. */
   readonly #sidebarChangeListeners: Array<() => void> = [];
+  /** Drawer + right-panel section registrations. Two separate
+   *  `Map`s so the id namespaces are independent per target —
+   *  the same id is allowed across surfaces. Phase 2 / 3 of
+   *  plugin-ui-slots add the surfaces that consume these. */
+  readonly #drawerSections = new Map<string, UISection>();
+  readonly #rightPanelSections = new Map<string, UISection>();
 
   /**
    * Register every plugin in `plugins`. Called once from
@@ -408,6 +519,31 @@ export class PluginHost {
     this.#sidebarChangeListeners.push(fn);
   }
 
+  /** Snapshot of registered drawer sections in registration
+   *  order. The drawer surface (Phase 2) composes built-ins +
+   *  this list, applies the disable filter, sorts by `priority`,
+   *  and renders. */
+  listDrawerSections(): UISection[] {
+    return Array.from(this.#drawerSections.values());
+  }
+
+  /** Find a drawer section by id. Returns `undefined` for
+   *  built-ins (which the drawer surface tracks separately) and
+   *  for unknown ids. */
+  findDrawerSection(id: string): UISection | undefined {
+    return this.#drawerSections.get(id);
+  }
+
+  /** Snapshot of registered right-panel sections in
+   *  registration order. */
+  listRightPanelSections(): UISection[] {
+    return Array.from(this.#rightPanelSections.values());
+  }
+
+  findRightPanelSection(id: string): UISection | undefined {
+    return this.#rightPanelSections.get(id);
+  }
+
   #fireSidebarChange(): void {
     for (const fn of this.#sidebarChangeListeners) {
       try {
@@ -491,6 +627,22 @@ export class PluginHost {
         }
         this.#sidebarTabs.set(id, { ...existing, ...partial });
         this.#fireSidebarChange();
+      },
+      addDrawerSection: (section) => {
+        if (this.#drawerSections.has(section.id)) {
+          throw new Error(
+            `[plugin-host] drawer section id "${section.id}" is already registered.`,
+          );
+        }
+        this.#drawerSections.set(section.id, section);
+      },
+      addRightPanelSection: (section) => {
+        if (this.#rightPanelSections.has(section.id)) {
+          throw new Error(
+            `[plugin-host] right-panel section id "${section.id}" is already registered.`,
+          );
+        }
+        this.#rightPanelSections.set(section.id, section);
       },
     } satisfies PluginContext);
   }
