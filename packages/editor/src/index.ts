@@ -37,3 +37,10 @@ export { PropertyPanel } from "./property-panel.js";
 // SelectionManager — pointer-driven selection / handles / drag /
 // resize / rotate. Uses `smart-guides` overlays internally.
 export { SelectionManager } from "./selection.js";
+// Leaf widgets — used by editor surfaces (PropertyPanel, Toolbar)
+// and by external host code (e.g. web's gallery uses `setTooltip`,
+// the toolbar's flyouts open via `openAnchoredPopover`).
+export { setTooltip, getTooltip } from "./tooltip.js";
+export { createCustomSelect } from "./custom-select.js";
+export { createColorPalette } from "./color-palette.js";
+export { openAnchoredPopover } from "./anchored-popover.js";

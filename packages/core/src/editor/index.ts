@@ -28,7 +28,8 @@ export {
 
 // --- Canvas + core lifecycle ---
 export { CanvasManager } from "./canvas-manager.js";
-export { createColorPalette } from "./color-palette.js";
+// `createColorPalette` moved to `@ingcreators/annot-editor` in
+// Phase 6 of `docs/plans/three-package-split.md`.
 // --- Serializers / file IO / clipboard ---
 // Use DOMParser / XMLSerializer / Blob / URL.createObjectURL /
 // navigator.clipboard internally.
@@ -62,7 +63,8 @@ export {
   highlightColorLabel,
   SHAPE_ICON_SVG,
 } from "./toolbar-icons.js";
-export { openAnchoredPopover } from "./anchored-popover.js";
+// `openAnchoredPopover` moved to `@ingcreators/annot-editor` in
+// Phase 6 of `docs/plans/three-package-split.md`.
 // `ToolBase` + `ToolOptions` moved to `@ingcreators/annot-editor/tools/tool-base`
 // in Phase 2 of `docs/plans/three-package-split.md`. Consumers
 // should `import { ToolBase, type ToolOptions } from "@ingcreators/annot-editor"`.
