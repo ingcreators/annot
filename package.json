@@ -1,10 +1,28 @@
 {
-  "name": "ingcreators",
+  "name": "annot",
+  "version": "0.0.0",
   "private": true,
+  "description": "SVG-first screenshot annotation toolkit — PWA, Chrome extension, and Tauri desktop sharing a single editor core.",
+  "license": "Apache-2.0",
+  "author": "ingcreators",
+  "homepage": "https://github.com/ingcreators/annot#readme",
+  "bugs": {
+    "url": "https://github.com/ingcreators/annot/issues"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ingcreators/annot.git"
   },
+  "keywords": [
+    "annotation",
+    "screenshot",
+    "svg",
+    "pwa",
+    "chrome-extension",
+    "tauri",
+    "lit",
+    "monorepo"
+  ],
   "packageManager": "pnpm@9.15.0",
   "scripts": {
     "build": "turbo build",
