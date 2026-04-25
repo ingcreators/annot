@@ -65,6 +65,14 @@ export class FileManager {
   #callbacks: FileManagerCallbacks;
   #searchInput: HTMLInputElement | null = null;
   #viewMode: "grid" | "list" = "grid";
+  /** Tracks the most recent `#rebuildGallery()` so `refresh()` /
+   *  `navigateToFolder()` calls that race a storage switch can
+   *  await the gallery being available before refreshing it.
+   *  Without this, the post-`setStorage` `refresh("")` in
+   *  `handleStorageSelect` runs while `#gallery` is still null
+   *  (Phase 3 made the rebuild async), and the new storage's
+   *  files never appear. */
+  #galleryReady: Promise<void> = Promise.resolve();
 
   constructor(sidebarEl: HTMLElement, mainContentEl: HTMLElement, callbacks: FileManagerCallbacks) {
     this.#sidebarEl = sidebarEl;
@@ -137,12 +145,19 @@ export class FileManager {
     this.#sidebar.setStorage(storage, rootName);
     this.#sidebar.setActiveFolderPath("");
 
-    void this.#rebuildGallery();
+    // Capture the rebuild promise so callers' subsequent
+    // `refresh` / `navigateToFolder` invocations can wait until
+    // `#gallery` is wired before reading it. The shell renders
+    // asynchronously (Lit's microtask), so reading
+    // `#shell.getGridHost()` synchronously after `appendChild`
+    // returns null on the very first mount.
+    this.#galleryReady = this.#rebuildGallery();
     this.#updateSearchPlaceholder();
   }
 
   async refresh(folderPath?: string): Promise<void> {
     if (folderPath !== undefined) this.#currentFolderPath = folderPath;
+    await this.#galleryReady;
     await this.#refreshBreadcrumbs();
     if (this.#gallery) {
       await this.#gallery.refresh(this.#currentFolderPath);
@@ -177,6 +192,7 @@ export class FileManager {
     this.#sidebar.setActiveFolderPath(folderPath);
     this.#callbacks.onFolderChange(folderPath);
     this.#updateSearchPlaceholder();
+    await this.#galleryReady;
     await this.#refreshBreadcrumbs();
     if (this.#gallery) {
       await this.#gallery.refresh(folderPath);
