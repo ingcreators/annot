@@ -14,12 +14,16 @@
  * property dropdowns) follow in their own PRs.
  */
 
-// Lit Phase 5b — outer shell + per-tool button primitives. The
-// shell becomes `<annot-toolbar>` (a plain custom element with
-// orientation handling) and each tool button becomes
-// `<annot-toolbar-button>` (a Lit element with reactive props).
-// Variant flyouts + badge children are still imperative, scheduled
-// for Phase 5c.
+// Lit Phase 5b — outer shell + per-tool button primitives.
+// Phase 5c adds the variant / color flyouts (`<annot-tool-flyout>`)
+// + the save dropdown (`<annot-save-menu>`); badge state machine
+// stays imperative because it co-evolves with the per-tool preset
+// state (toolbar-internal concern, no public surface to slot into
+// declaratively).
+import type { ChipSelectDetail } from "./annot-tool-flyout.js";
+import type { SaveMenuSelectDetail } from "./annot-save-menu.js";
+import "./annot-save-menu.js";
+import "./annot-tool-flyout.js";
 import "./annot-toolbar.js";
 import type {
   AnnotToolbarButtonElement,
@@ -856,43 +860,51 @@ export class Toolbar {
       return;
     }
 
-    const menu = document.createElement("div");
-    menu.className = "save-dropdown-menu copy-dropdown-menu";
-    menu.style.display = "flex";
-
-    const items: [string, string, () => void][] = [
-      [
-        "Download SVG",
-        "Editable vector format",
-        () => saveToFile(this.#canvas, this.#getCurrentFilename?.()),
-      ],
+    // Build the action map keyed on the menu-select detail id so the
+    // Lit element can stay purely presentational while the orchestrator
+    // owns the export-format dispatch.
+    const actions: Record<string, () => void> = {
+      svg: () => saveToFile(this.#canvas, this.#getCurrentFilename?.()),
+      pptx: () => exportPptx(this.#canvas),
+    };
+    const menu = document.createElement("annot-save-menu");
+    const items: { id: string; label: string; description: string }[] = [
+      { id: "svg", label: "Download SVG", description: "Editable vector format" },
     ];
 
     if (isTauri) {
+      actions["jpg-editable"] = () =>
+        saveAsEditableImage(this.#canvas, "jpg", this.#getCurrentFilename?.());
+      actions["png-editable"] = () =>
+        saveAsEditableImage(this.#canvas, "png", this.#getCurrentFilename?.());
       items.push(
-        [
-          "Save as JPG (re-editable)",
-          "JPEG with embedded annotations",
-          () => saveAsEditableImage(this.#canvas, "jpg", this.#getCurrentFilename?.()),
-        ],
-        [
-          "Save as PNG (re-editable)",
-          "PNG with embedded annotations",
-          () => saveAsEditableImage(this.#canvas, "png", this.#getCurrentFilename?.()),
-        ],
+        {
+          id: "jpg-editable",
+          label: "Save as JPG (re-editable)",
+          description: "JPEG with embedded annotations",
+        },
+        {
+          id: "png-editable",
+          label: "Save as PNG (re-editable)",
+          description: "PNG with embedded annotations",
+        },
       );
     } else {
+      actions["jpg-editable"] = () =>
+        downloadAsImage(this.#canvas, "jpg", this.#getCurrentFilename?.());
+      actions["png-editable"] = () =>
+        downloadAsImage(this.#canvas, "png", this.#getCurrentFilename?.());
       items.push(
-        [
-          "Download JPG (re-editable)",
-          "JPEG with embedded annotations",
-          () => downloadAsImage(this.#canvas, "jpg", this.#getCurrentFilename?.()),
-        ],
-        [
-          "Download PNG (re-editable)",
-          "PNG with embedded annotations",
-          () => downloadAsImage(this.#canvas, "png", this.#getCurrentFilename?.()),
-        ],
+        {
+          id: "jpg-editable",
+          label: "Download JPG (re-editable)",
+          description: "JPEG with embedded annotations",
+        },
+        {
+          id: "png-editable",
+          label: "Download PNG (re-editable)",
+          description: "PNG with embedded annotations",
+        },
       );
     }
 
@@ -900,23 +912,18 @@ export class Toolbar {
     // screenshot as the slide background and each annotation as an
     // editable native Office shape. Available everywhere (browser-side
     // ZIP build, no Tauri dependency).
-    items.push([
-      "Download PPTX (PowerPoint)",
-      "Editable PowerPoint slide with native shapes",
-      () => exportPptx(this.#canvas),
-    ]);
+    items.push({
+      id: "pptx",
+      label: "Download PPTX (PowerPoint)",
+      description: "Editable PowerPoint slide with native shapes",
+    });
 
-    for (const [label, title, action] of items) {
-      const item = document.createElement("button");
-      item.className = "copy-dropdown-item";
-      item.textContent = label;
-      setTooltip(item, title);
-      item.addEventListener("click", () => {
-        action();
-        menu.remove();
-      });
-      menu.appendChild(item);
-    }
+    menu.items = items;
+    menu.addEventListener("menu-select", (e: Event) => {
+      const detail = (e as CustomEvent<SaveMenuSelectDetail>).detail;
+      actions[detail.id]?.();
+      cleanup();
+    });
 
     // Render into document.body with fixed positioning so the menu
     // escapes any ancestor `overflow: hidden` (the editor-header has
@@ -1673,40 +1680,34 @@ export class Toolbar {
     const close = openAnchoredPopover(
       anchor,
       (root) => {
-        const row = document.createElement("div");
-        row.className = "tool-flyout-row";
-        for (const v of group.variants) {
-          const chip = document.createElement("button");
-          chip.type = "button";
-          // Custom inline SVG takes precedence over ligature when set.
-          // Ligature-only chips keep the Material Symbols class for font
-          // rendering; SVG chips drop it (irrelevant + font-variation
-          // settings would forcibly tint the SVG).
-          chip.className = `tool-flyout-chip${v.svg ? " tool-flyout-chip-svg" : " material-symbols-outlined"}${current === v.value ? " active" : ""}`;
-          if (v.svg) chip.innerHTML = v.svg;
-          else chip.textContent = v.icon;
-          setTooltip(chip, v.label);
-          chip.setAttribute("aria-label", v.label);
-          chip.addEventListener("click", () => {
-            // Switch variant: save current at old key, load new (or
-            // seed) at new key. Updates #lastVariantByTool so future
-            // tool activations pick this variant by default.
-            const next = this.#changeVariant(toolId, v.value, preset);
-            // Mutate the captured preset reference so anything inside
-            // this closure that still reads `preset` sees the new
-            // values.
-            Object.keys(preset).forEach(
-              (k) => delete (preset as unknown as Record<string, unknown>)[k],
-            );
-            Object.assign(preset, next);
-            this.#savePresetsToFile();
-            this.#syncToolButtonIcon(toolId);
-            close();
-            this.#activateToolById(toolId);
-          });
-          row.appendChild(chip);
-        }
-        root.appendChild(row);
+        const flyout = document.createElement("annot-tool-flyout");
+        flyout.layout = "variant";
+        flyout.active = current;
+        flyout.chips = group.variants.map((v) => ({
+          value: v.value,
+          icon: v.icon,
+          svg: v.svg,
+          label: v.label,
+        }));
+        flyout.addEventListener("chip-select", (e: Event) => {
+          const detail = (e as CustomEvent<ChipSelectDetail>).detail;
+          // Switch variant: save current at old key, load new (or
+          // seed) at new key. Updates #lastVariantByTool so future
+          // tool activations pick this variant by default.
+          const next = this.#changeVariant(toolId, detail.value, preset);
+          // Mutate the captured preset reference so anything inside
+          // this closure that still reads `preset` sees the new
+          // values.
+          Object.keys(preset).forEach(
+            (k) => delete (preset as unknown as Record<string, unknown>)[k],
+          );
+          Object.assign(preset, next);
+          this.#savePresetsToFile();
+          this.#syncToolButtonIcon(toolId);
+          close();
+          this.#activateToolById(toolId);
+        });
+        root.appendChild(flyout);
       },
       { placement, className: "tool-flyout-variant" },
     );
@@ -1873,30 +1874,31 @@ export class Toolbar {
     const close = openAnchoredPopover(
       anchor,
       (root) => {
-        const row = document.createElement("div");
-        row.className = "tool-flyout-row tool-flyout-color-row";
-        for (const c of HIGHLIGHT_COLORS) {
-          const chip = document.createElement("button");
-          chip.type = "button";
-          chip.className = `tool-flyout-color-chip${current.toLowerCase() === c.value.toLowerCase() ? " active" : ""}`;
-          // Color lives on the inner ::before swatch so the chip frame
-          // can signal hover / active via background + border tint —
-          // same vocabulary as .tool-flyout-chip-svg for glyph chips.
-          chip.style.setProperty("--swatch-color", c.value);
-          setTooltip(chip, c.label);
-          chip.setAttribute("aria-label", c.label);
-          chip.addEventListener("click", () => {
-            preset.highlightColor = c.value;
-            preset.shapeType = "highlight";
-            this.#saveCurrentPreset(toolId, preset);
-            this.#savePresetsToFile();
-            this.#syncToolButtonIcon(toolId);
-            close();
-            this.#activateToolById(toolId);
-          });
-          row.appendChild(chip);
-        }
-        root.appendChild(row);
+        const flyout = document.createElement("annot-tool-flyout");
+        flyout.layout = "color";
+        flyout.active = current.toLowerCase();
+        flyout.chips = HIGHLIGHT_COLORS.map((c) => ({
+          value: c.value.toLowerCase(),
+          color: c.value,
+          label: c.label,
+        }));
+        flyout.addEventListener("chip-select", (e: Event) => {
+          const detail = (e as CustomEvent<ChipSelectDetail>).detail;
+          // The chip's value is normalised lower-case; look up the
+          // canonical (mixed-case) hex from HIGHLIGHT_COLORS so the
+          // saved preset matches the catalogue entry.
+          const canonical =
+            HIGHLIGHT_COLORS.find((c) => c.value.toLowerCase() === detail.value)?.value ??
+            detail.value;
+          preset.highlightColor = canonical;
+          preset.shapeType = "highlight";
+          this.#saveCurrentPreset(toolId, preset);
+          this.#savePresetsToFile();
+          this.#syncToolButtonIcon(toolId);
+          close();
+          this.#activateToolById(toolId);
+        });
+        root.appendChild(flyout);
       },
       { placement, className: "tool-flyout-highlight" },
     );
