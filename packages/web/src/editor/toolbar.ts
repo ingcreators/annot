@@ -38,19 +38,16 @@ import "./annot-toolbar.js";
 // surface where available; deep subpaths (`./editor/*`,
 // `./editor/tools/*`) reach the bits that aren't re-exported via
 // the top-level barrel.
+import { HIGHLIGHT_COLORS, highlightColorLabel } from "@ingcreators/annot-core/editor";
+import type { ToolOptions } from "@ingcreators/annot-core/editor/tool-options";
 import {
   type CanvasManager,
   copyAsImage,
-  getPngDataUrl,
-  HIGHLIGHT_COLORS,
-  highlightColorLabel,
-  saveToFile,
-} from "@ingcreators/annot-core/editor";
-import type { ToolOptions } from "@ingcreators/annot-core/editor/tool-options";
-import {
   createThemeToggle,
+  getPngDataUrl,
   type History,
   openAnchoredPopover,
+  saveToFile,
   type SelectionManager,
   type ToolBase,
 } from "@ingcreators/annot-editor";

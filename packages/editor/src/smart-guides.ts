@@ -17,7 +17,7 @@
  * axis, breaking ties by edge-similarity (left↔left before
  * left↔right) to pick the most intuitive alignment.
  */
-import type { CanvasManager } from "@ingcreators/annot-core/editor/canvas-manager";
+import type { CanvasManager } from "./canvas-manager.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 

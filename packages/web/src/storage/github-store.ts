@@ -1,4 +1,4 @@
-import { renderImageRecord } from "@ingcreators/annot-core/editor/export";
+import { renderImageRecord } from "@ingcreators/annot-render";
 /**
  * GitHub storage provider — commits images to a user-picked repo.
  *

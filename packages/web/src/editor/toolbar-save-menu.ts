@@ -15,10 +15,10 @@
 import {
   type CanvasManager,
   downloadAsImage,
+  exportPptx,
   saveAsEditableImage,
   saveToFile,
-} from "@ingcreators/annot-core/editor";
-import { exportPptx } from "@ingcreators/annot-core/editor/pptx-export";
+} from "@ingcreators/annot-editor";
 import { isTauri } from "@ingcreators/annot-core/tauri-bridge";
 import type { SaveMenuSelectDetail } from "./annot-save-menu.js";
 

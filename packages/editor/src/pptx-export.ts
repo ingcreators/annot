@@ -1,6 +1,6 @@
-import { buildZip } from "../zip/zip-builder.js";
+import { buildZip } from "@ingcreators/annot-core/zip";
 import type { CanvasManager } from "./canvas-manager.js";
-import { getEffectiveLineEndpoints } from "./transform-utils.js";
+import { getEffectiveLineEndpoints } from "@ingcreators/annot-core/editor/transform-utils";
 
 const __pptxTextEncoder = new TextEncoder();
 function strToU8(s: string): Uint8Array {

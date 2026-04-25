@@ -24,6 +24,8 @@
     "vite": "^8.0.10"
   },
   "dependencies": {
-    "@ingcreators/annot-core": "workspace:*"
+    "@ingcreators/annot-core": "workspace:*",
+    "@tauri-apps/plugin-dialog": "^2.2.0",
+    "@tauri-apps/plugin-fs": "^2.2.0"
   }
 }

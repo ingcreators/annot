@@ -1,4 +1,4 @@
-import { renderImageRecord } from "@ingcreators/annot-core/editor/export";
+import { renderImageRecord } from "@ingcreators/annot-render";
 /**
  * Google Drive storage provider — path-based interface.
  * Reads/writes image files to a user-selected Drive folder.

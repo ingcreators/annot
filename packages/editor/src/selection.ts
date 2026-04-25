@@ -4,7 +4,7 @@ import {
   refreshArrowPath,
   writeArrowControl,
 } from "@ingcreators/annot-core/editor/arrow-markers";
-import type { CanvasManager } from "@ingcreators/annot-core/editor/canvas-manager";
+import type { CanvasManager } from "./canvas-manager.js";
 import type { History } from "./history.js";
 import {
   cursorForAngle,

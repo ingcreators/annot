@@ -1,4 +1,4 @@
-import { CanvasManager } from "@ingcreators/annot-core/editor/canvas-manager";
+import { CanvasManager } from "@ingcreators/annot-editor";
 import { History } from "@ingcreators/annot-editor";
 import { PropertyPanel } from "@ingcreators/annot-editor";
 import { SelectionManager } from "@ingcreators/annot-editor";

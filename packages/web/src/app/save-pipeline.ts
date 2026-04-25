@@ -11,8 +11,11 @@
  * routes subsequent saves to the new store without re-wiring.
  */
 
-import { exportAnnotationsSvgForIdb, getPngDataUrl } from "@ingcreators/annot-core/editor";
-import type { CanvasManager } from "@ingcreators/annot-core/editor";
+import {
+  type CanvasManager,
+  exportAnnotationsSvgForIdb,
+  getPngDataUrl,
+} from "@ingcreators/annot-editor";
 import type { StorageProvider } from "@ingcreators/annot-core/storage";
 import type { AnnotSaveStatusElement } from "../editor/save-status-indicator.js";
 import { hideError, showSaveError } from "../ui/error-bar.js";

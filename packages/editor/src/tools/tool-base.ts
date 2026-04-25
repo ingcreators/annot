@@ -1,4 +1,4 @@
-import type { CanvasManager } from "@ingcreators/annot-core/editor/canvas-manager";
+import type { CanvasManager } from "../canvas-manager.js";
 import type { History } from "../history.js";
 
 // All `ToolOptions`-related pure types live in
