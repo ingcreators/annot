@@ -27,6 +27,7 @@ before implementation, which is invaluable for:
 | [`google-drive-integration.md`](./google-drive-integration.md) | Draft | Rework the Drive backend onto the non-sensitive `drive.file` scope + Workspace Marketplace + Drive UI Integration so Annot can ship publicly without a restricted-scope CASA audit. |
 | [`oss-cloud-split.md`](./oss-cloud-split.md) | Draft | Forward-looking strategy for keeping Annot OSS while developing paid features in a separate private `annot-cloud` repo. Guardrails apply from today; concrete phases trigger on "first paid feature" and "company incorporation". |
 | [`github-integration.md`](./github-integration.md) | Draft | Individual-user `GitHubStore` — device-flow auth, pick repo + branch + base path, commits as save. Drive-integration-equivalent scope. PR automation / Check Runs / org admin live in `annot-cloud`, not here. |
+| [`source-audit-cleanup.md`](./source-audit-cleanup.md) | Draft | Repo-hygiene + presentation pass for corporate adoption auditing — `LICENSE` / `SECURITY.md` / `CONTRIBUTING.md` / `CHANGELOG.md`, plan-status sync with `main`, scoped `console.log` + `any` cleanup, README "for evaluators" section. |
 
 ## Plan lifecycle
 
