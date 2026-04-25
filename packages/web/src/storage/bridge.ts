@@ -63,13 +63,57 @@ export type BuiltInStorageMode = (typeof BUILT_IN_STORAGE_MODES)[number];
  */
 export type StorageMode = string;
 
-let extensionId: string | null = null;
-let extensionAvailable: boolean | null = null;
-let browserFallback: StorageProvider | null = null;
-let driveStore: GoogleDriveStore | null = null;
-let deviceStore: DeviceStore | null = null;
-let githubStore: GitHubStore | null = null;
-let currentMode: StorageMode = "browser";
+/**
+ * State container for the bridge — collapses the per-backend
+ * module-level globals into one object. Phase B of
+ * `docs/plans/plugin-storage-registration.md` extracts this so
+ * Phase C's `StorageRegistry.registerPluginStore(mode, store)` has
+ * a single owner of "what's currently active". The exported
+ * functions below stay flat and just delegate, so callers don't
+ * move.
+ *
+ * Extension-handshake state (`extensionId` / `extensionAvailable`)
+ * lives here too even though it's not a built-in slot per se: the
+ * lifecycle is the same (set once, persisted, read by `getStorage`)
+ * and keeping it next to the other globals avoids two parallel
+ * "module state" surfaces.
+ */
+class StorageRegistry {
+  // Built-in slots. Named fields rather than a Map<mode, store>
+  // because each is initialised on a different code path (Drive
+  // and GitHub have their own connect functions; Browser has a
+  // lazy fallback) and refer-back narrows correctly with the
+  // concrete types.
+  browserFallback: StorageProvider | null = null;
+  driveStore: GoogleDriveStore | null = null;
+  deviceStore: DeviceStore | null = null;
+  githubStore: GitHubStore | null = null;
+  currentMode: StorageMode = "browser";
+
+  // Extension handshake.
+  extensionId: string | null = null;
+  /** `null` = haven't tried yet; `true`/`false` = cached probe result. */
+  extensionAvailable: boolean | null = null;
+
+  /** Pick the active store given the current mode. Built-in only
+   *  for Phase B; Phase C extends this with a plugin-store map
+   *  lookup. Returns `null` for "no concrete store yet" cases that
+   *  the caller (e.g. `getStorage`) can handle (extension probe
+   *  fallthrough, browser fallback). */
+  active(): StorageProvider | null {
+    if (this.currentMode === "googledrive" && this.driveStore) return this.driveStore;
+    if (this.currentMode === "github" && this.githubStore) return this.githubStore;
+    if (this.currentMode === "device" && this.deviceStore) return this.deviceStore;
+    return null;
+  }
+
+  getBrowserStore(): StorageProvider {
+    if (!this.browserFallback) this.browserFallback = new BrowserStore();
+    return this.browserFallback;
+  }
+}
+
+const registry = new StorageRegistry();
 
 function hasChromeRuntime(): boolean {
   return (
@@ -81,18 +125,18 @@ function hasChromeRuntime(): boolean {
 
 /** Try to detect extension by sending a ping. */
 async function detectExtension(): Promise<boolean> {
-  if (extensionAvailable !== null) return extensionAvailable;
+  if (registry.extensionAvailable !== null) return registry.extensionAvailable;
 
   if (!hasChromeRuntime()) {
     console.log("[bridge] chrome.runtime not available — using local storage");
-    extensionAvailable = false;
+    registry.extensionAvailable = false;
     return false;
   }
 
   const ids = getExtensionIds();
   if (ids.length === 0) {
     console.log("[bridge] No extension ID configured — using local storage");
-    extensionAvailable = false;
+    registry.extensionAvailable = false;
     return false;
   }
 
@@ -102,8 +146,8 @@ async function detectExtension(): Promise<boolean> {
       const resp = await sendToExtension(id, { action: "ping" });
       console.log("[bridge] Ping response:", resp);
       if (resp?.ok) {
-        extensionId = id;
-        extensionAvailable = true;
+        registry.extensionId = id;
+        registry.extensionAvailable = true;
         console.log("[bridge] Connected to extension!");
         return true;
       }
@@ -112,7 +156,7 @@ async function detectExtension(): Promise<boolean> {
     }
   }
 
-  extensionAvailable = false;
+  registry.extensionAvailable = false;
   return false;
 }
 
@@ -143,46 +187,40 @@ function sendToExtension(id: string, msg: any): Promise<any> {
 }
 
 async function send(msg: any): Promise<any> {
-  if (extensionId) {
-    return sendToExtension(extensionId, msg);
+  if (registry.extensionId) {
+    return sendToExtension(registry.extensionId, msg);
   }
   throw new Error("Extension not connected");
-}
-
-function getBrowserStore(): StorageProvider {
-  if (!browserFallback) browserFallback = new BrowserStore();
-  return browserFallback;
 }
 
 // ---- Public API ----
 
 export async function getStorage(): Promise<StorageProvider> {
-  if (currentMode === "googledrive" && driveStore) return driveStore;
-  if (currentMode === "github" && githubStore) return githubStore;
-  if (currentMode === "device" && deviceStore) return deviceStore;
+  const active = registry.active();
+  if (active) return active;
   const hasExtension = await detectExtension();
   if (hasExtension) {
-    currentMode = "extension";
+    registry.currentMode = "extension";
     return extensionStorage;
   }
-  currentMode = "browser";
-  return getBrowserStore();
+  registry.currentMode = "browser";
+  return registry.getBrowserStore();
 }
 
 /** Set extension ID and try to connect. Optionally set mode. Returns true if connected. */
 export async function setExtensionId(id: string, mode?: StorageMode): Promise<boolean> {
   localStorage.setItem("annot-extension-id", id);
-  extensionId = null;
-  extensionAvailable = null;
+  registry.extensionId = null;
+  registry.extensionAvailable = null;
   const ok = await detectExtension();
   if (ok) {
-    currentMode = mode || "extension";
+    registry.currentMode = mode || "extension";
   }
   return ok;
 }
 
 export function setStorageMode(mode: StorageMode): void {
-  currentMode = mode;
+  registry.currentMode = mode;
 }
 
 /** Open a local directory and switch to filesystem storage. */
@@ -190,10 +228,11 @@ export async function openDeviceDirectory(): Promise<StorageProvider | null> {
   try {
     const dirHandle = await (window as any).showDirectoryPicker({ mode: "readwrite" });
     await saveHandle(dirHandle);
-    deviceStore = new DeviceStore(dirHandle);
-    await deviceStore.init();
-    currentMode = "device";
-    return deviceStore;
+    const store = new DeviceStore(dirHandle);
+    await store.init();
+    registry.deviceStore = store;
+    registry.currentMode = "device";
+    return store;
   } catch {
     return null;
   }
@@ -211,10 +250,11 @@ export async function restoreDevice(): Promise<StorageProvider | null> {
       if (req !== "granted") return null;
     }
 
-    deviceStore = new DeviceStore(handle);
-    await deviceStore.init();
-    currentMode = "device";
-    return deviceStore;
+    const store = new DeviceStore(handle);
+    await store.init();
+    registry.deviceStore = store;
+    registry.currentMode = "device";
+    return store;
   } catch {
     return null;
   }
@@ -222,9 +262,9 @@ export async function restoreDevice(): Promise<StorageProvider | null> {
 
 /** Clear saved filesystem handle. */
 export async function disconnectDevice(): Promise<void> {
-  deviceStore = null;
+  registry.deviceStore = null;
   await clearHandle();
-  if (currentMode === "device") currentMode = "browser";
+  if (registry.currentMode === "device") registry.currentMode = "browser";
 }
 
 /**
@@ -276,10 +316,11 @@ async function refreshDriveToken(): Promise<string | null> {
 
 /** Connect to Google Drive with a selected root folder. */
 export function connectGoogleDrive(token: string, rootFolderId: string): StorageProvider {
-  driveStore = new GoogleDriveStore(token, rootFolderId);
-  driveStore.setTokenRefresher(refreshDriveToken);
-  currentMode = "googledrive";
-  return driveStore;
+  const store = new GoogleDriveStore(token, rootFolderId);
+  store.setTokenRefresher(refreshDriveToken);
+  registry.driveStore = store;
+  registry.currentMode = "googledrive";
+  return store;
 }
 
 /**
@@ -340,7 +381,7 @@ async function refreshGithubToken(): Promise<string | null> {
             settle(null);
             return;
           }
-          if (githubStore) githubStore.setToken(newToken);
+          if (registry.githubStore) registry.githubStore.setToken(newToken);
           settle(newToken);
         } catch {
           settle(null);
@@ -354,9 +395,9 @@ async function refreshGithubToken(): Promise<string | null> {
 
 /** Connect to GitHub with a selected repo ref. */
 export function connectGitHub(token: string, ref: GitHubRepoRef): StorageProvider {
-  githubStore = new GitHubStore(token, ref);
-  githubStore.setTokenRefresher(refreshGithubToken);
-  githubStore.setRateLimitListener(({ remaining, resetAt }) => {
+  const store = new GitHubStore(token, ref);
+  store.setTokenRefresher(refreshGithubToken);
+  store.setRateLimitListener(({ remaining, resetAt }) => {
     // Advisory info banner; non-blocking. Fires at most once per
     // reset window (the store dedupes), so the user sees it when
     // they dip below the threshold and then it stays quiet until
@@ -372,8 +413,9 @@ export function connectGitHub(token: string, ref: GitHubRepoRef): StorageProvide
       autoDismiss: 12000,
     });
   });
-  currentMode = "github";
-  return githubStore;
+  registry.githubStore = store;
+  registry.currentMode = "github";
+  return store;
 }
 
 /**
@@ -395,28 +437,28 @@ export function restoreGitHub(): StorageProvider | null {
 
 /** Get the connected repo ref (e.g. for the sidebar label). */
 export function getGitHubRef(): GitHubRepoRef | null {
-  if (currentMode !== "github") return null;
+  if (registry.currentMode !== "github") return null;
   return loadGitHubRef();
 }
 
 /** Forget the GitHub token + ref. Does not revoke on GitHub's side. */
 export function disconnectGitHub(): void {
-  githubStore = null;
+  registry.githubStore = null;
   githubSignOut();
   clearGitHubRef();
-  if (currentMode === "github") currentMode = "browser";
+  if (registry.currentMode === "github") registry.currentMode = "browser";
 }
 
 /** Check if GitHub is connected. */
 export function isGitHubConnected(): boolean {
-  return currentMode === "github" && githubStore !== null;
+  return registry.currentMode === "github" && registry.githubStore !== null;
 }
 
 /** Delete an image from Extension IDB (cleanup after transfer). */
 export async function deleteExtensionImage(path: string): Promise<void> {
-  if (!extensionId) return;
+  if (!registry.extensionId) return;
   try {
-    await sendToExtension(extensionId, { action: "deleteImage", path });
+    await sendToExtension(registry.extensionId, { action: "deleteImage", path });
   } catch {
     /* ignore */
   }
@@ -424,22 +466,22 @@ export async function deleteExtensionImage(path: string): Promise<void> {
 
 /** Check if Google Drive is connected. */
 export function isDriveConnected(): boolean {
-  return currentMode === "googledrive" && driveStore !== null;
+  return registry.currentMode === "googledrive" && registry.driveStore !== null;
 }
 
 /** Get the root folder name of the connected filesystem store. */
 export function getDeviceRootName(): string | null {
-  return deviceStore?.rootName ?? null;
+  return registry.deviceStore?.rootName ?? null;
 }
 
 /** Check if extension is connected. */
 export function isExtensionConnected(): boolean {
-  return extensionAvailable === true;
+  return registry.extensionAvailable === true;
 }
 
 /** Get current storage mode. */
 export function getStorageMode(): StorageMode {
-  return currentMode;
+  return registry.currentMode;
 }
 
 /** Save last selected storage mode to localStorage. */
@@ -517,6 +559,6 @@ const extensionStorage: StorageProvider = {
   },
 
   async generateThumbnail(dataUrl, maxWidth) {
-    return getBrowserStore().generateThumbnail(dataUrl, maxWidth);
+    return registry.getBrowserStore().generateThumbnail(dataUrl, maxWidth);
   },
 };

@@ -183,4 +183,23 @@ export interface StorageProvider {
 
   /** Optional: re-scan underlying storage for external changes. */
   resync?(): Promise<void>;
+
+  /**
+   * Optional: register a callback the store calls on a 401 to ask
+   * the host for a fresh authentication token. The refresher
+   * resolves to the new token string, or `null` if the user
+   * dismissed the auth banner / declined to re-auth. The store
+   * then retries the failed request once with the new token and
+   * gives up if `null` came back.
+   *
+   * Today implemented by the network-backed built-ins
+   * (`GoogleDriveStore`, `GitHubStore`); local stores
+   * (`BrowserStore`, `DeviceStore`, `Extension` proxy) skip it.
+   * Plugin stores opt in by implementing this method and
+   * calling the registered refresher from their own `#fetch`
+   * 401 path. Callers must check `if (store.setTokenRefresher)`
+   * before calling, mirroring the pattern used for the other
+   * optional methods on this interface.
+   */
+  setTokenRefresher?(refresher: () => Promise<string | null>): void;
 }
