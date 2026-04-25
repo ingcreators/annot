@@ -1,12 +1,14 @@
-# Three-package split
+# Editor + Render package split
 
 > **Status:** Draft
-> **Compatibility:** Introduces a new `@ingcreators/annot-editor`
->                    workspace package. No external API breakage
->                    (pre-release). Internal importers across web +
->                    extension + desktop migrate from
->                    `@ingcreators/annot-core/editor/...` to
->                    `@ingcreators/annot-editor/...` over the
+> **Compatibility:** Introduces two new workspace packages,
+>                    `@ingcreators/annot-editor` and
+>                    `@ingcreators/annot-render`. No external
+>                    API breakage (pre-release). Internal
+>                    importers across web + extension + desktop
+>                    migrate from `@ingcreators/annot-core/editor/...`
+>                    to `@ingcreators/annot-editor/...` or
+>                    `@ingcreators/annot-render/...` over the
 >                    course of the migration. Headless boundary
 >                    test (`packages/core/src/headless.test.ts`)
 >                    keeps passing throughout.
@@ -46,15 +48,51 @@ transitional rule. With the API boundary now in place and the
 headless annotator becoming a near-term goal (one of the next
 queued initiatives in CLAUDE.md), this rule should retire and
 the file tree should match the import path: PWA editor code
-ships from a dedicated `@ingcreators/annot-editor` package.
+ships from a dedicated `@ingcreators/annot-editor` package, and
+data-driven rendering ships from a sibling
+`@ingcreators/annot-render` package.
 
-The desired final layout reflects three audiences:
+### Why split editor and render
+
+`packages/core/src/editor/export.ts` mixes two concerns:
+
+- **CanvasManager-coupled** functions (`saveToFile`,
+  `getPngDataUrl`, `copyAsImage`, `saveAsEditableImage`,
+  `exportSVGString`, `exportExcelSVG`, `exportAnnotationsSvgForIdb`)
+  operate on a live editor session — naturally editor-side.
+- **`renderImageRecord(record)`** operates on a serialised
+  `ImageRecord` (annotation SVG string + image data URL +
+  metadata). Today it's used by three storage backends in
+  `packages/web/src/storage/*` for thumbnail generation.
+  Tomorrow it'll be the heart of gallery bulk-export
+  (select N images → ZIP / multi-slide PPTX / etc.) per
+  the product roadmap.
+
+If we ship a single `annot-editor` package containing both,
+the bulk-export / storage call sites would read:
+
+```ts
+import { renderImageRecord } from "@ingcreators/annot-editor";
+```
+
+That import line is dishonest — bulk-export and thumbnail
+generation are not "editor" concerns. They're rendering
+concerns that happen to use the same `<canvas>` rasterisation
+machinery the editor's save flow uses.
+
+Splitting the package surfaces the correct dependency:
+storage backends and the future gallery bulk-export view
+import `@ingcreators/annot-render`; only the live editor (and
+its `toolbar-save-menu`) imports `@ingcreators/annot-editor`.
+
+### Final layout reflects four audiences
 
 | Audience | Reads from | Runtime |
 |----------|-----------|---------|
 | Headless annotator (Playwright fixture, GitHub Action) | `@ingcreators/annot-core` (+ optionally `@ingcreators/annot-core/editor` under jsdom) | pure Node, jsdom for Element-taking helpers |
-| Editor library consumer (`annot-cloud`, future plugins) | `@ingcreators/annot-editor` | real browser |
-| PWA / extension / desktop hosts | `@ingcreators/annot-web` (which depends on the two above) | real browser |
+| Server-side / batch render (e.g. headless thumbnail worker) | `@ingcreators/annot-render` (under jsdom + node-canvas, or future `resvg-js` swap-in) | jsdom + canvas, no live editor |
+| Editor library consumer (`annot-cloud`, future plugins) | `@ingcreators/annot-editor` (+ `@ingcreators/annot-render`) | real browser |
+| PWA / extension / desktop hosts | `@ingcreators/annot-web` (which depends on the three above) | real browser |
 
 ## Design
 
@@ -83,9 +121,20 @@ Three runtime tiers (one more than today's "headless vs not"):
   pointer-event handling, ResizeObserver, MutationObserver,
   and every DOM-widget helper. Real browser only.
 
-(`@ingcreators/annot-web` continues to depend on all three for
-the PWA app shell. `annot-extension` and `annot-desktop` likewise
-pick up Tier C through the editor package.)
+- **Tier C-render — data-driven rendering.** New
+  `@ingcreators/annot-render` package. `renderImageRecord` and
+  any future `ImageRecord`-taking exporter. Uses `<canvas>`,
+  `Blob`, etc., but does NOT need a live editor session — it
+  works from serialised `ImageRecord` data. Powers thumbnail
+  generation in storage backends today; will power gallery
+  bulk-export tomorrow. Could in principle run under jsdom +
+  `node-canvas` for server-side batch rendering, though that
+  isn't a goal of this plan.
+
+(`@ingcreators/annot-web` continues to depend on all four tiers
+for the PWA app shell. `annot-extension` and `annot-desktop`
+likewise pick up Tier C / C-render through the editor and
+render packages.)
 
 ### File assignments
 
@@ -135,34 +184,59 @@ DOM-element factory — but that is **not** in this plan.
 | `canvas-context-menu.ts` | DOM context menu |
 | `color-palette.ts` | DOM palette swatches |
 | `redact-utils.ts` | `OffscreenCanvas` + `<canvas>` for mosaic / blur rasterisation |
-| `export.ts` | `XMLSerializer` + `Blob` + `URL.createObjectURL` + canvas rasterisation |
-| `pptx-export.ts` | `<canvas>` for slide-background rasterisation |
+| `export.ts` (most of it — see below) | `XMLSerializer` + `Blob` + `URL.createObjectURL` + canvas rasterisation |
+| `pptx-export.ts` (today; see below) | `<canvas>` for slide-background rasterisation |
+
+**Moves to `@ingcreators/annot-render` (Tier C-render, NEW package)**
+
+| Symbol | Source | Reason |
+|--------|--------|--------|
+| `renderImageRecord` | split out of `export.ts` | takes `ImageRecord`, not `CanvasManager` — data-driven rasterisation, the seed of gallery bulk-export |
+
+This is the only function that lands in `annot-render` on day 1.
+The expectation is that gallery bulk-export work (out of scope
+for this plan) will add new `ImageRecord`-taking exporters
+(`exportZip`, `exportMultiSlidePptx`, etc.) that join here, and
+that a follow-up refactor will lift the existing
+CanvasManager-coupled `export.ts` / `pptx-export.ts` functions
+to also accept `ImageRecord` and migrate to `annot-render`.
+Until that refactor lands, those functions stay in
+`annot-editor` because their TypeScript signatures require a
+live `CanvasManager` instance the render package shouldn't
+import.
 
 **Note on `redact-utils`, `export.ts`, `pptx-export.ts`.** An
 earlier draft of this plan kept these three in Tier B as
 "DOM-ish helpers", citing a hypothetical circular import.
 Tracing the actual dependency graph showed the concern was
-unfounded:
+unfounded — and a separate review surfaced that `export.ts`
+splits cleanly between editor-side and render-side concerns
+(see "Why split editor and render" above):
 
 - `redact-utils` is consumed only by `property-panel.ts` and
-  `tools/redact-tool.ts` — both already Tier C.
-- `pptx-export.ts` is consumed only by `web/src/editor/toolbar-save-menu.ts`
-  (already in the editor-dependent web package).
-- `export.ts`'s `renderImageRecord` is consumed by
-  `packages/web/src/storage/{device,github,google-drive}-store.ts`,
-  which would gain a transitive dependency on
-  `@ingcreators/annot-editor`. That's honest: those storage
-  backends already use `<canvas>` for thumbnail generation
-  and are unportable beyond a real browser. A future
-  `annot-cloud` server-side GitHub storage would not reuse
-  the browser `GitHubStore`; it would call octokit + sharp /
-  resvg directly.
+  `tools/redact-tool.ts` — both Tier C. Lands in
+  `annot-editor` alongside its consumers.
+- `pptx-export.ts` is consumed only by
+  `web/src/editor/toolbar-save-menu.ts` (already
+  editor-side). Lands in `annot-editor` for now; a future
+  refactor will rework it to take `ImageRecord` + a list of
+  shapes (instead of a live `CanvasManager`) and migrate it
+  to `annot-render` so gallery bulk-export can build
+  multi-slide decks from selections.
+- `export.ts` splits between the two new packages.
+  `renderImageRecord` (data-driven) → `annot-render`;
+  everything else (CanvasManager-coupled — `saveToFile`,
+  `getPngDataUrl`, `copyAsImage`, `saveAsEditableImage`,
+  `exportSVGString`, etc.) → `annot-editor`.
 
-So all three move to Tier C. The benefit: Tier B becomes the
-honest definition "jsdom-friendly Element manipulation, no
-`<canvas>` rasterisation required" — exactly the surface a
-headless-annotator (running under jsdom or `resvg-js`) wants to
-reach for.
+The benefit: Tier B becomes the honest definition
+"jsdom-friendly Element manipulation, no `<canvas>`
+rasterisation required" — exactly the surface a
+headless-annotator (running under jsdom or `resvg-js`) wants
+to reach for. And `annot-render` lands with the smallest
+possible day-1 surface (one function), giving us the right
+place to grow gallery bulk-export into without rerunning the
+package-naming debate.
 
 ### Package layout (after the migration)
 
@@ -207,8 +281,8 @@ packages/
       canvas-context-menu.ts
       color-palette.ts
       redact-utils.ts
-      export.ts
-      pptx-export.ts
+      export.ts                # CanvasManager-coupled save / copy / etc.
+      pptx-export.ts           # CanvasManager-coupled today; future migration to render
       tools/
         tool-base.ts
         arrow-tool.ts
@@ -219,21 +293,45 @@ packages/
         shape-tool.ts
         text-tool.ts
 
+  render/                     # Tier C-render — NEW
+    package.json              # name: @ingcreators/annot-render
+    src/
+      index.ts                # main entry
+      render-image-record.ts  # `renderImageRecord(record)` — the day-1 surface
+
   web/                        # PWA shell (unchanged structure)
   extension/                  # MV3 extension (unchanged)
   desktop/                    # Tauri host (unchanged)
 ```
 
-`@ingcreators/annot-editor` depends on `@ingcreators/annot-core`
-(both Tier A and Tier B subpath).
-`@ingcreators/annot-web` adds `@ingcreators/annot-editor` to its
-dependencies.
-`@ingcreators/annot-extension` already imports
-`@ingcreators/annot-web/editor/toolbar`; it picks up the editor
-package transitively via web.
-`@ingcreators/annot-desktop` updates from
-`@ingcreators/annot-core/editor/canvas-manager` (etc.) to
-`@ingcreators/annot-editor`.
+Dependency direction (top → bottom; nothing reads upward):
+
+- `@ingcreators/annot-core` — depends on nothing in the
+  workspace.
+- `@ingcreators/annot-render` — depends on
+  `@ingcreators/annot-core` (`ImageRecord` type from
+  `/storage`, SVG-format constants from `/editor`).
+  **Does NOT depend on `annot-editor`** — that's the whole
+  point of splitting.
+- `@ingcreators/annot-editor` — depends on
+  `@ingcreators/annot-core` (Tier A + Tier B subpaths) and
+  on `@ingcreators/annot-render` for the few places editor
+  code today reaches `renderImageRecord` directly (mostly
+  none — editor-side save uses CanvasManager-coupled
+  functions that stay in `annot-editor`).
+- `@ingcreators/annot-web` — adds `@ingcreators/annot-editor`
+  and `@ingcreators/annot-render` to its dependencies.
+  Storage backends (`packages/web/src/storage/*`) import
+  `renderImageRecord` from `@ingcreators/annot-render`,
+  not `@ingcreators/annot-editor`.
+- `@ingcreators/annot-extension` already imports
+  `@ingcreators/annot-web/editor/toolbar`; picks up editor +
+  render transitively via web.
+- `@ingcreators/annot-desktop` updates from
+  `@ingcreators/annot-core/editor/canvas-manager` (etc.) to
+  `@ingcreators/annot-editor`. (Desktop's gallery may also
+  consume `@ingcreators/annot-render` directly when the
+  bulk-export plan lands.)
 
 ## Phased plan
 
@@ -245,7 +343,7 @@ window and the indirection would mask future drift.
 
 | Phase | Scope | PR count |
 |-------|-------|----------|
-| **0** | Set up the empty `@ingcreators/annot-editor` workspace package: `package.json`, `tsconfig.json`, `vite.config.ts`, `index.ts` re-exporting only `svg-format` (placeholder, not the final shape). `pnpm install` + green CI. | 1 |
+| **0** | Set up **two** empty workspace packages: `@ingcreators/annot-editor` and `@ingcreators/annot-render`. Each gets its own `package.json`, `tsconfig.json`, `vite.config.ts`, and a placeholder `index.ts`. `pnpm install` + green CI. | 1 |
 | **1** | Move the **leaf DOM widgets** (no dependencies on other Tier C primitives): `tooltip.ts`, `theme-toggle.ts`, `custom-select.ts`, `anchored-popover.ts`, `canvas-context-menu.ts`, `color-palette.ts`, **`redact-utils.ts`**. Update importers in web + extension. (`redact-utils` joins because its only Tier-C consumers — `redact-tool` and `property-panel` — both move later, so it can land in this batch and become a one-import-line edit when those land.) | 1 |
 | **2** | Move `property-controls.ts`. Update importers (mostly `core/editor/property-panel.ts`, web's `tool-property-renderer.ts`). | 1 |
 | **3** | Move the **PropertyPanel cluster**: `property-panel.ts` + `property-panel-helpers.ts`. Importers in web (right-panel + selection-properties section) + desktop. | 1 |
@@ -253,7 +351,7 @@ window and the indirection would mask future drift.
 | **5** | Move the **tool hierarchy**: `tools/tool-base.ts`, `tools/{shape,arrow,text,freehand,marker,redact,crop}-tool.ts`. Largest single move; ~7 files + heavy importers in web's toolbar / property renderer / scratchpad. | 1 |
 | **6** | Move `smart-guides.ts`. | 1 |
 | **7** | Move `selection.ts` + `selection-helpers.ts`. | 1 |
-| **8** | **Keystone**: move `canvas-manager.ts` together with **`export.ts`** and **`pptx-export.ts`**. The two export modules type-import `CanvasManager`, so colocating their move with canvas-manager is the lowest-friction option. After this PR, `core/editor/` no longer holds any Tier C code. | 1 |
+| **8** | **Keystone**: move `canvas-manager.ts` together with **`export.ts`** and **`pptx-export.ts`**. `canvas-manager.ts` and `pptx-export.ts` go to `annot-editor` (CanvasManager-coupled). `export.ts` is **split**: `renderImageRecord` (and its private helpers) → `annot-render`; the rest of `export.ts` (CanvasManager-coupled `saveToFile`, `getPngDataUrl`, `copyAsImage`, `saveAsEditableImage`, `exportSVGString`, `exportExcelSVG`, `exportAnnotationsSvgForIdb`, `copyAnnotationsAsImage`) → `annot-editor`. The three storage backends in `packages/web/src/storage/*` switch their `renderImageRecord` import to `@ingcreators/annot-render`. After this PR, `core/editor/` no longer holds any Tier C / C-render code. | 1 |
 | **9** | **CLAUDE.md** + plan-doc updates: drop the "editor UI in core can use DOM APIs" carve-out from `Architectural guardrails 2`. Record the Tier A / B / C model in the public-API section. Mark this plan `Done`. | 1 |
 | **10** | **Headless annotator prototype kickoff** (separate plan): now that the boundary is honest, the "headless annotator prototype" item in CLAUDE.md's pending-work list becomes actionable. Out of scope for this plan; left as a forward pointer. | n/a |
 
@@ -276,6 +374,7 @@ checklist):
 - [ ] `pnpm test` — 253+ pass (no regression in count).
 - [ ] `pnpm --filter @ingcreators/annot-core build` — pass.
 - [ ] `pnpm --filter @ingcreators/annot-editor build` — pass (after Phase 0).
+- [ ] `pnpm --filter @ingcreators/annot-render build` — pass (after Phase 0).
 - [ ] `pnpm --filter @ingcreators/annot-web build` — pass.
 - [ ] `pnpm --filter @ingcreators/annot-extension build` — pass.
 - [ ] `pnpm lint` — 0 findings.
@@ -284,13 +383,17 @@ checklist):
 
 Stage-specific extras:
 
-- **Phase 0:** confirm the new package shows up in `pnpm -r ls --depth=-1`.
+- **Phase 0:** confirm both new packages show up in `pnpm -r ls --depth=-1`. Confirm `@ingcreators/annot-render` does NOT depend on `@ingcreators/annot-editor` in its `package.json` (the dependency direction is render-side only — render never imports editor).
 - **Phase 5 (tools):** spot-check each tool in the PWA — pick the
   Shape, Arrow, Text, and Marker tools, draw one annotation each,
   confirm save round-trips.
-- **Phase 8 (canvas-manager):** open the PWA, capture / paste an
-  image, verify the editor mounts. This is the riskiest single
-  move; if anything breaks it'll be here.
+- **Phase 8 (canvas-manager + export split):** open the PWA,
+  capture / paste an image, verify the editor mounts. Save the
+  edited image — confirms the editor-side save path. Open the
+  gallery, confirm thumbnails render — this exercises the
+  `renderImageRecord` path now living in `@ingcreators/annot-render`
+  via the storage backends. This is the riskiest single move;
+  if anything breaks it'll be here.
 
 ## Migration notes
 
@@ -315,11 +418,26 @@ Stage-specific extras:
   becomes headless-by-construction); this plan delivers the
   matching physical layout.
 
-## Forward pointer
+## Forward pointers
 
-After this plan lands, the next strategic step is the
-**headless annotator prototype** (one-week spike currently
-listed in CLAUDE.md "Pending work"). With the boundary now
-both API-true and physically-true, the prototype can pick up
-the Tier B element-takers under jsdom (or `resvg-js` for pure-SVG
-generation) without dragging Tier C into the bundle.
+Two strategic follow-ups become unblocked after this plan
+lands:
+
+1. **Gallery bulk export** (out of scope here) gets a clean
+   home in `@ingcreators/annot-render`. Future
+   `exportZip(records[])`, `exportMultiSlidePptx(records[])`,
+   etc. join `renderImageRecord` there. Also unblocks the
+   refactor of today's `pptx-export.ts` — currently
+   `CanvasManager`-coupled and living in `annot-editor` —
+   to take an `ImageRecord` (or list of them) and migrate
+   to `annot-render`.
+
+2. **Headless annotator prototype** (one-week spike currently
+   listed in CLAUDE.md "Pending work"). With the boundary
+   now both API-true and physically-true, the prototype can
+   pick up the Tier B element-takers under jsdom (or
+   `resvg-js` for pure-SVG generation) without dragging
+   Tier C into the bundle. If the prototype also needs
+   bitmap rasterisation (e.g. for PR-comment thumbnail
+   posting), it imports `@ingcreators/annot-render`
+   under jsdom + `node-canvas`.
