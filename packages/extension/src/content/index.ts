@@ -1,3 +1,4 @@
+import { logger } from "../logger.js";
 import type { BackgroundToContentMessage } from "../shared/messages.js";
 import { startAreaSelection } from "./area-selector.js";
 import { capturePageMetadata } from "./page-metadata.js";
@@ -13,10 +14,10 @@ import {
 // Guard against double injection
 if ((window as any).__anno_injected) {
   // Already injected, skip
-  console.log("[annot] content script reinjected — guard active");
+  logger.debug("[annot] content script reinjected — guard active");
 } else {
   (window as any).__anno_injected = true;
-  console.log("[annot] content script loaded");
+  logger.debug("[annot] content script loaded");
 
   chrome.runtime.onMessage.addListener((msg: BackgroundToContentMessage, _sender, sendResponse) => {
     switch (msg.type) {
@@ -86,7 +87,7 @@ if ((window as any).__anno_injected) {
         // region with garbage coordinates.
         try {
           const meta = capturePageMetadata(msg.area);
-          console.log(
+          logger.debug(
             "[annot] sending metadata:",
             meta.elements.length,
             "elements, captureRect:",

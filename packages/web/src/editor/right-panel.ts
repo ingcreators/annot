@@ -67,6 +67,7 @@ import {
 } from "@ingcreators/annot-core/editor/transform-utils";
 import type { UISection, UISectionContext, UISectionLifecycle } from "../app/plugin-host.js";
 import { html, LitElement, unsafeHTML } from "../lit.js";
+import { logger } from "../logger.js";
 import { createPageElementsSection } from "./right-panel-sections/page-elements-section.js";
 import { createSelectionPropertiesSection } from "./right-panel-sections/selection-properties-section.js";
 import { createToolPropertiesSection } from "./right-panel-sections/tool-properties-section.js";
@@ -554,7 +555,7 @@ export class AnnotEditorRightPanelElement extends LitElement {
    *  session. */
   setPageMetadata(meta: PageMetadata | null | undefined): void {
     this.pageMetadata = meta ?? null;
-    console.log(
+    logger.debug(
       "[annot/editor] setPageMetadata:",
       meta ? `${meta.elements.length} elements` : "null/undefined",
       meta?.captureRect,

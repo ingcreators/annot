@@ -12,6 +12,7 @@
 import type { FolderRecord, ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
 import { getFilename } from "@ingcreators/annot-core/storage";
 import { setTooltip } from "@ingcreators/annot-core/utils";
+import { logger } from "../logger.js";
 import { showAlertDialog, showConfirmDialog, showPromptDialog } from "../ui/dialog.js";
 import { type MenuItem, openContextMenu } from "./context-menu.js";
 
@@ -171,7 +172,7 @@ export class GalleryPage {
         this.#images = await this.#storage.listImages(this.#currentFolderPath);
         this.#folders = await this.#storage.listFolders(this.#currentFolderPath);
       }
-      console.log(
+      logger.debug(
         "[gallery] refresh: images:",
         this.#images.length,
         "folders:",
@@ -180,7 +181,7 @@ export class GalleryPage {
         JSON.stringify(this.#currentFolderPath),
       );
     } catch (e) {
-      console.error("[gallery] refresh error:", e);
+      logger.error("[gallery] refresh error:", e);
       this.#images = [];
       this.#folders = [];
     }

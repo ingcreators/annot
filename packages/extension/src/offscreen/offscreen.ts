@@ -1,5 +1,6 @@
 import type { EncodeOptions, EncodeResult } from "@ingcreators/annot-core/encode";
 import { MOSAIC_BLOCK_SIZE } from "@ingcreators/annot-core/utils";
+import { logger } from "../logger.js";
 
 // ---- Worker pool for parallel PNG-8 / JPEG / PNG encoding ----
 
@@ -45,7 +46,7 @@ function ensureWorkerPool(): void {
     workers.push(w);
     idleWorkers.push(w);
   }
-  console.log(`[offscreen] encode worker pool started (${WORKER_COUNT} workers)`);
+  logger.debug(`[offscreen] encode worker pool started (${WORKER_COUNT} workers)`);
 }
 
 function drainQueue(): void {

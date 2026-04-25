@@ -1,4 +1,5 @@
 import { renderImageRecord } from "@ingcreators/annot-core/editor/export";
+import { logger } from "../logger.js";
 /**
  * Device (File System Access API) storage provider — path-based
  * identification. Reads/writes image files to a user-selected local
@@ -113,7 +114,7 @@ export class DeviceStore implements StorageProvider {
         if (this.#index.images[fullPath]) {
           delete this.#index.images[fullPath];
         }
-        console.log(
+        logger.debug(
           "[device-store] purged empty file:",
           parentPath ? `${parentPath}/${name}` : name,
         );

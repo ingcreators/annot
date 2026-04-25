@@ -42,6 +42,7 @@ const meta: Meta<Args> = {
     const bar = document.createElement("annot-error-bar");
     bar.severity = args.severity;
     bar.message = args.message;
+    // Storybook arg-flow traces — intentional `console.log`.
     bar.action = args.withAction
       ? {
           label: "Retry",
@@ -104,6 +105,7 @@ export const SaveErrorShorthand: Story = {
   name: "Shorthand — showSaveError",
   render: () => {
     hideError();
+    // Storybook arg-flow trace — intentional `console.log`.
     showSaveError("Save failed: session expired.", () => {
       console.log("[story] showSaveError retry clicked");
     });
@@ -129,6 +131,7 @@ export const ErrorSingleton: Story = {
   name: "Shorthand — showError",
   render: () => {
     hideError();
+    // Storybook arg-flow trace — intentional `console.log`.
     showError({
       message: "Unhandled exception in save pipeline.",
       severity: "error",

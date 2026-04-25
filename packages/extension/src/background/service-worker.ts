@@ -8,6 +8,7 @@ const IDB_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const POST_HIDE_PAINT_MS = 80;
 
 import { newIdB58 } from "@ingcreators/annot-core/utils";
+import { logger } from "../logger.js";
 import { encodeCapture } from "../shared/encode.js";
 import {
   loadSettings,
@@ -389,13 +390,13 @@ async function openEditor(
         }) as () => void,
         args: [path, extId],
       });
-      console.log("[openEditor] reused existing tab", existing.id, existing.url);
+      logger.debug("[openEditor] reused existing tab", existing.id, existing.url);
     } catch (e) {
       console.warn("[openEditor] executeScript failed, opening new tab:", e);
       chrome.tabs.create({ url: targetUrl });
     }
   } else {
-    console.log("[openEditor] no existing Annot tab found, opening new");
+    logger.debug("[openEditor] no existing Annot tab found, opening new");
     chrome.tabs.create({ url: targetUrl });
   }
 }
@@ -423,7 +424,7 @@ async function openOrReuseAnnotTab(extId: string, sessionId?: string): Promise<v
         }) as () => void,
         args: [extId, sessionId ?? null],
       });
-      console.log("[openOrReuseAnnotTab] reused tab", existing.id, "session=", sessionId);
+      logger.debug("[openOrReuseAnnotTab] reused tab", existing.id, "session=", sessionId);
       return;
     } catch (e) {
       console.warn("[openOrReuseAnnotTab] executeScript failed, opening new tab:", e);
@@ -851,15 +852,15 @@ async function capturePagesInner(tab: CaptureTab, settings: Settings): Promise<v
     const sliceCss = intendedBotCss - intendedTopCss;
 
     if (sliceCss <= 0) {
-      console.log(`[capture-pages] no advance at page ${pageIndex + 1}, stopping`);
+      logger.debug(`[capture-pages] no advance at page ${pageIndex + 1}, stopping`);
       break;
     }
     if (pageIndex > 0 && sliceCss < MIN_LAST_PAGE_CONTENT_PX) {
-      console.log(`[capture-pages] skipping near-empty trailing page (${sliceCss}px)`);
+      logger.debug(`[capture-pages] skipping near-empty trailing page (${sliceCss}px)`);
       break;
     }
     if (actualScrollY === lastActualScrollY && intendedTopCss === lastActualScrollY) {
-      console.log("[capture-pages] scroll position stuck, stopping");
+      logger.debug("[capture-pages] scroll position stuck, stopping");
       break;
     }
     lastActualScrollY = actualScrollY;
@@ -1052,7 +1053,7 @@ chrome.runtime.onMessage.addListener((msg: any, sender, sendResponse) => {
 // --- Keyboard shortcut commands ---
 
 chrome.commands.onCommand.addListener((command, tab) => {
-  console.log("[cmd]", command, "tab:", tab?.id, tab?.url);
+  logger.debug("[cmd]", command, "tab:", tab?.id, tab?.url);
   switch (command) {
     case "capture-visible":
       captureVisible();
@@ -1420,7 +1421,7 @@ async function stopHotkeyCapture(): Promise<void> {
 
 /** Triggered by the Alt+Shift+C hotkey. Auto-starts the session on first press. */
 async function hotkeyCaptureShot(firedTab?: chrome.tabs.Tab): Promise<void> {
-  console.log(
+  logger.debug(
     "[hotkey-capture] shot fired, active=",
     hotkeyState.active,
     "firedTab=",
@@ -1466,7 +1467,7 @@ async function hotkeyCaptureShot(firedTab?: chrome.tabs.Tab): Promise<void> {
         .sendMessage(tab.id, { type: "get-capture-context" })
         .catch(() => null);
     } catch (e) {
-      console.log("[hotkey-capture] context query failed:", e);
+      logger.debug("[hotkey-capture] context query failed:", e);
     }
   }
 
@@ -1480,7 +1481,7 @@ async function hotkeyCaptureShot(firedTab?: chrome.tabs.Tab): Promise<void> {
   }
 
   try {
-    console.log("[hotkey-capture] capturing window", tab.windowId);
+    logger.debug("[hotkey-capture] capturing window", tab.windowId);
     const pngDataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: "png" });
     if (injectable) await endCapturePrep(tab.id);
     const encoded = await encodeCapture(pngDataUrl, settings);

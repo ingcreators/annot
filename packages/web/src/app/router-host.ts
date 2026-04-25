@@ -16,6 +16,7 @@
 
 import type { ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
 import type { FileManager } from "../gallery/file-manager.js";
+import { logger } from "../logger.js";
 import { editUrl, galleryUrl, parseRoute, pushRoute, sessionEditUrl } from "../router.js";
 import { getStorageMode, setExtensionId, setStorageMode, type StorageMode } from "../storage/bridge.js";
 import { GoogleDriveStore } from "../storage/google-drive-store.js";
@@ -48,7 +49,7 @@ export class RouterHost {
 
   async handleRoute(): Promise<void> {
     const route = parseRoute();
-    console.log("[handleRoute]", route);
+    logger.debug("[handleRoute]", route);
     this.deps.notifyRouteChange(route);
 
     // Handoff from Drive UI Integration (and future OneDrive / GitHub

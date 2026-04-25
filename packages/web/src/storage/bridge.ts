@@ -6,6 +6,7 @@
  * extension is not installed.
  */
 import type { StorageProvider } from "@ingcreators/annot-core/storage";
+import { logger } from "../logger.js";
 import { hideError, showAuthError, showError } from "../ui/error-bar.js";
 import { BrowserStore } from "./browser-store.js";
 import { DeviceStore } from "./device-store.js";
@@ -144,31 +145,31 @@ async function detectExtension(): Promise<boolean> {
   if (registry.extensionAvailable !== null) return registry.extensionAvailable;
 
   if (!hasChromeRuntime()) {
-    console.log("[bridge] chrome.runtime not available — using local storage");
+    logger.debug("[bridge] chrome.runtime not available — using local storage");
     registry.extensionAvailable = false;
     return false;
   }
 
   const ids = getExtensionIds();
   if (ids.length === 0) {
-    console.log("[bridge] No extension ID configured — using local storage");
+    logger.debug("[bridge] No extension ID configured — using local storage");
     registry.extensionAvailable = false;
     return false;
   }
 
   for (const id of ids) {
     try {
-      console.log(`[bridge] Pinging extension ${id}...`);
+      logger.debug(`[bridge] Pinging extension ${id}...`);
       const resp = await sendToExtension(id, { action: "ping" });
-      console.log("[bridge] Ping response:", resp);
+      logger.debug("[bridge] Ping response:", resp);
       if (resp?.ok) {
         registry.extensionId = id;
         registry.extensionAvailable = true;
-        console.log("[bridge] Connected to extension!");
+        logger.debug("[bridge] Connected to extension!");
         return true;
       }
     } catch (e) {
-      console.warn("[bridge] Ping failed:", e);
+      logger.warn("[bridge] Ping failed:", e);
     }
   }
 

@@ -38,6 +38,9 @@ function mountSidebar(args: Args): HTMLElement {
   container.style.flexDirection = "column";
 
   const sidebar = document.createElement("annot-sidebar");
+  // Storybook callback traces — intentional `console.log` so the
+  // story actions panel + the dev-tools console both surface the
+  // arg flow when reviewers click around the rendered sidebar.
   sidebar.callbacks = {
     onStorageSelect: (m) => console.log("[story] onStorageSelect", m),
     onStorageReselect: (m) => console.log("[story] onStorageReselect", m),
@@ -135,6 +138,7 @@ export const WithPluginStorage: Story = {
 export const WithSidebarTabs: Story = {
   args: {
     activeMode: "browser",
+    // Storybook arg-flow traces — intentional `console.log`.
     sidebarTabs: [
       {
         id: "recent",
