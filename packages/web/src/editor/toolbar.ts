@@ -58,11 +58,11 @@ import {
   type SelectionManager,
   saveToFile,
   saveToolPresets,
-  setTooltip,
   type ToolBase,
   type ToolOptions,
   type ToolPreset,
 } from "@ingcreators/annot-core";
+import { setTooltip } from "@ingcreators/annot-core/editor/tooltip";
 import { ArrowTool } from "@ingcreators/annot-core/editor/tools/arrow-tool";
 import { CropTool } from "@ingcreators/annot-core/editor/tools/crop-tool";
 import { FreehandTool, isFreehandGroup } from "@ingcreators/annot-core/editor/tools/freehand-tool";

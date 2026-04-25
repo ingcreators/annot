@@ -1,7 +1,7 @@
 /**
  * Excel-style color palette with theme colors, standard colors, and custom picker.
  */
-import { setTooltip } from "../utils/tooltip.js";
+import { setTooltip } from "./tooltip.js";
 
 // Theme colors (top 2 rows: base + tints/shades)
 const THEME_COLORS = [

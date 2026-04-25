@@ -15,7 +15,7 @@
  * the button and the popup row.
  */
 
-import { setTooltip } from "../utils/tooltip.js";
+import { setTooltip } from "./tooltip.js";
 import { openAnchoredPopover } from "./anchored-popover.js";
 
 export interface CustomSelectOption {

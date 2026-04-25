@@ -1,4 +1,4 @@
-import { setTooltip } from "@ingcreators/annot-core/utils";
+import { setTooltip } from "@ingcreators/annot-core/editor/tooltip";
 /**
  * ScratchpadSection — thumbnail grid UI for the right panel's
  * "Scratchpad" area.
