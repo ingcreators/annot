@@ -1,14 +1,5 @@
 /// <reference path="../types/chrome-extras.d.ts" />
 
-// Inline constants to avoid chunk imports in service worker context
-const MAX_CANVAS_DIMENSION = 32767;
-const IDB_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
-/** Small delay after `hide-for-capture` so the DOM mutation is painted
- *  before we snap the viewport. Using `display: none` on the progress
- *  overlay triggers a layout + paint; 80ms gives Chrome's compositor
- *  enough time to flush a stale frame before `captureVisibleTab` runs. */
-const POST_HIDE_PAINT_MS = 80;
-
 import { newIdB58 } from "@ingcreators/annot-core/utils";
 import { logger } from "../logger.js";
 import { encodeCapture } from "../shared/encode.js";
@@ -21,6 +12,19 @@ import {
 } from "../shared/settings.js";
 // Static import of IDB store — used by external message API
 import * as idbStore from "../storage/idb-store.js";
+import {
+  ANNOTATION_URL,
+  buildEditUrl,
+  CLICK_CAPTURE_MAX_FRAMES,
+  CLICK_CAPTURE_MIN_INTERVAL_MS,
+  delay,
+  HOTKEY_CAPTURE_MIN_INTERVAL_MS,
+  IDB_MAX_AGE_MS,
+  isCapturableUrl,
+  MAX_CANVAS_DIMENSION,
+  POST_HIDE_PAINT_MS,
+  urlTags,
+} from "./service-worker-helpers.js";
 
 type CaptureKind = "visible" | "area" | "scroll" | "perPage" | "click" | "hotkey";
 
@@ -237,41 +241,6 @@ async function ensureOffscreen(): Promise<void> {
   }
 }
 
-// Annotation app URL. Vite swaps this at build time:
-//   `vite` / `vite dev`   → http://localhost:3000
-//   `vite build` (ship)   → https://annot.work
-// If a staging deploy ever needs a third target, promote this to a
-// VITE_ANNOTATION_URL env var.
-const ANNOTATION_URL = import.meta.env.DEV ? "http://localhost:3000" : "https://annot.work";
-
-/** Build edit URL with multi-segment image path. */
-function buildEditUrl(path: string, extId: string): string {
-  const encoded = path.split("/").map(encodeURIComponent).join("/");
-  return `${ANNOTATION_URL}/edit/extension/${encoded}?extId=${encodeURIComponent(extId)}`;
-}
-
-/**
- * Shared URL → tag extractor. Returns empty object if the URL can't be parsed.
- * Keys are populated only when the corresponding URL component is present:
- *   - host: URL.hostname
- *   - path: URL.pathname (when not "/")
- *   - query: URL.search (leading "?" stripped)
- *   - fragment: URL.hash (leading "#" stripped)
- */
-function urlTags(sourceUrl: string | undefined | null): Record<string, string> {
-  if (!sourceUrl) return {};
-  try {
-    const u = new URL(sourceUrl);
-    const t: Record<string, string> = {};
-    if (u.hostname) t.host = u.hostname;
-    if (u.pathname && u.pathname !== "/") t.path = u.pathname;
-    if (u.search) t.query = u.search.slice(1);
-    if (u.hash) t.fragment = u.hash.slice(1);
-    return t;
-  } catch {
-    return {};
-  }
-}
 
 /** Ask the content script running in `tabId` for a DOM-element
  *  snapshot. `area` (when set, in viewport CSS pixels) narrows the
@@ -450,10 +419,6 @@ async function openOrReuseAnnotTab(extId: string, sessionId?: string): Promise<v
  * any active tab → first http/https/file tab. The result is always a
  * capturable URL, or `undefined` if nothing usable is open.
  */
-function isCapturableUrl(url: string | undefined): boolean {
-  if (!url) return false;
-  return /^(https?|file|ftp):/.test(url);
-}
 
 async function findCaptureTarget(): Promise<chrome.tabs.Tab | undefined> {
   // chrome-types doesn't export the query-info shape as a named type,
@@ -540,9 +505,6 @@ async function cropPngVertical(
   });
 }
 
-function delay(ms: number): Promise<void> {
-  return new Promise((r) => setTimeout(r, ms));
-}
 
 // --- Capture visible area ---
 
@@ -1161,9 +1123,6 @@ interface ClickCaptureState {
 const clickState: ClickCaptureState = { active: false, count: 0, lastCaptureAt: 0, sessionId: "" };
 const hotkeyState: ClickCaptureState = { active: false, count: 0, lastCaptureAt: 0, sessionId: "" };
 
-const CLICK_CAPTURE_MIN_INTERVAL_MS = 350; // debounce window
-const CLICK_CAPTURE_MAX_FRAMES = 500; // safety cap
-const HOTKEY_CAPTURE_MIN_INTERVAL_MS = 200;
 
 function getClickCaptureStatus(): ClickCaptureState & {
   hotkeyActive: boolean;
