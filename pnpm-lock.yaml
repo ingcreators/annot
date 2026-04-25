@@ -92,6 +92,19 @@ importers:
         specifier: ^8.0.10
         version: 8.0.10(@types/node@25.6.0)(terser@5.46.2)
 
+  packages/editor:
+    dependencies:
+      '@ingcreators/annot-core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      vite:
+        specifier: ^8.0.10
+        version: 8.0.10(@types/node@25.6.0)(terser@5.46.2)
+
   packages/extension:
     dependencies:
       '@ingcreators/annot-core':
@@ -104,6 +117,19 @@ importers:
       chrome-types:
         specifier: ^0.1.327
         version: 0.1.425
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      vite:
+        specifier: ^8.0.10
+        version: 8.0.10(@types/node@25.6.0)(terser@5.46.2)
+
+  packages/render:
+    dependencies:
+      '@ingcreators/annot-core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
