@@ -1,6 +1,6 @@
 # Editor + Render package split
 
-> **Status:** Queued
+> **Status:** Done
 > **Compatibility:** Introduces two new workspace packages,
 >                    `@ingcreators/annot-editor` and
 >                    `@ingcreators/annot-render`. No external
