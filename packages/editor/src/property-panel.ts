@@ -1,25 +1,25 @@
-import { computeDasharray, detectDashKey } from "../utils/dash-utils.js";
-import { setTooltip } from "./tooltip.js";
-import { refreshArrowPath } from "./arrow-markers.js";
-import type { CanvasManager } from "./canvas-manager.js";
-import { createCustomSelect } from "./custom-select.js";
+import { computeDasharray, detectDashKey } from "@ingcreators/annot-core/utils";
+import { setTooltip } from "@ingcreators/annot-core/editor/tooltip";
+import { refreshArrowPath } from "@ingcreators/annot-core/editor/arrow-markers";
+import type { CanvasManager } from "@ingcreators/annot-core/editor/canvas-manager";
+import { createCustomSelect } from "@ingcreators/annot-core/editor/custom-select";
 import {
   arrowPreview,
   arrowSizePreview,
   dashPreview,
   ppNumberInput,
 } from "./property-panel-helpers.js";
-import type { History } from "./history.js";
-import { createColorPullButton, openAnchoredPopoverForColor } from "./property-controls.js";
-import { convertRedactStyle, detectRedactStyle } from "./redact-utils.js";
-import { convertShape, detectShapeType } from "./shape-utils.js";
-import { convertTextVariant, detectTextVariant } from "./text-utils.js";
+import type { History } from "@ingcreators/annot-core/editor/history";
+import { createColorPullButton, openAnchoredPopoverForColor } from "@ingcreators/annot-core/editor/property-controls";
+import { convertRedactStyle, detectRedactStyle } from "@ingcreators/annot-core/editor/redact-utils";
+import { convertShape, detectShapeType } from "@ingcreators/annot-core/editor/shape-utils";
+import { convertTextVariant, detectTextVariant } from "@ingcreators/annot-core/editor/text-utils";
 import {
   ARROW_ICON_SVG,
   COUNTER_ICON_SVG,
   HIGHLIGHT_COLORS,
   SHAPE_ICON_SVG,
-} from "./toolbar-icons.js";
+} from "@ingcreators/annot-core/editor/toolbar-icons";
 import { applyArrowHead, detectArrowEnds } from "./tools/arrow-tool.js";
 import { applyDrawStyle, detectDrawStyle, isFreehandGroup } from "./tools/freehand-tool.js";
 import { convertMarkerShape, detectMarkerShape, resizeMarker } from "./tools/marker-tool.js";
@@ -34,7 +34,7 @@ import type {
   ShapeType,
   TextVariant,
 } from "./tools/tool-base.js";
-import { readTransformState, setRotation, toggleFlip } from "./transform-utils.js";
+import { readTransformState, setRotation, toggleFlip } from "@ingcreators/annot-core/editor/transform-utils";
 
 /** True for any element that represents a line-with-optional-arrowheads:
  *  a classic `<line>` OR the new composed `<g data-type="arrow">`

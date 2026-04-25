@@ -1,6 +1,6 @@
-import type { CanvasManager } from "../canvas-manager.js";
-import type { History } from "../history.js";
-import { createTextBox, stickyBgFor } from "../text-utils.js";
+import type { CanvasManager } from "@ingcreators/annot-core/editor/canvas-manager";
+import type { History } from "@ingcreators/annot-core/editor/history";
+import { createTextBox, stickyBgFor } from "@ingcreators/annot-core/editor/text-utils";
 import type { TextVariant, ToolOptions } from "./tool-base.js";
 /**
  * TextTool — unified Text / Sticky Note / Callout tool.

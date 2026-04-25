@@ -10,7 +10,7 @@
  * different variant without re-drawing.
  */
 
-import type { ShapeType } from "./tools/tool-base.js";
+import type { ShapeType } from "./tool-options.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 

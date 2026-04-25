@@ -1,4 +1,4 @@
-import { computeDasharray } from "../../utils/dash-utils.js";
+import { computeDasharray } from "@ingcreators/annot-core/utils";
 import type { DrawStyle } from "./tool-base.js";
 /**
  * FreehandTool — unified Draw / Highlighter tool.

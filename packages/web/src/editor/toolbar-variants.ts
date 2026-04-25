@@ -15,9 +15,9 @@ import {
   COUNTER_ICON_SVG,
   HIGHLIGHT_COLORS,
   SHAPE_ICON_SVG,
-  type ToolBase,
-  type ToolOptions,
 } from "@ingcreators/annot-core/editor";
+import type { ToolOptions } from "@ingcreators/annot-core/editor/tool-options";
+import type { ToolBase } from "@ingcreators/annot-editor";
 
 export interface ToolDef {
   label: string;

@@ -22,3 +22,15 @@
 export { openCanvasContextMenu } from "./canvas-context-menu.js";
 export type { CanvasMenuItem } from "./canvas-context-menu.js";
 export { createThemeToggle } from "./theme-toggle.js";
+// Tool hierarchy moved in Phase 2. `ToolBase` is the abstract
+// pointer-event-driven primitive every concrete tool extends;
+// `ToolOptions` is the styled-options contract the toolbar reads
+// presets into. Per-tool concrete classes are exposed only
+// through their deep subpaths (`./tools/<name>-tool`) — tools
+// are typically activated by the toolbar and not imported by
+// general-purpose host code.
+export { ToolBase } from "./tools/tool-base.js";
+export type { ToolOptions } from "./tools/tool-base.js";
+// PropertyPanel — full DOM panel construction; see Phase 2 notes
+// in `docs/plans/three-package-split.md`.
+export { PropertyPanel } from "./property-panel.js";

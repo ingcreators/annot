@@ -1,4 +1,4 @@
-import { computeDasharray } from "../../utils/dash-utils.js";
+import { computeDasharray } from "@ingcreators/annot-core/utils";
 import type { ShapeType } from "./tool-base.js";
 /**
  * ShapeTool — unified tool for Rectangle / Rounded Rectangle / Ellipse.

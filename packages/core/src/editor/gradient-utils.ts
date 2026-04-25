@@ -16,7 +16,7 @@
  *      translate into `<a:gradFill>`.
  */
 
-import type { GradientSpec, GradientStop } from "./tools/tool-base.js";
+import type { GradientSpec, GradientStop } from "./tool-options.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 

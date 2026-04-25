@@ -11,9 +11,9 @@
  * the panel instance.
  */
 
-import { computeDasharray } from "../utils/dash-utils.js";
-import { type ArrowSpec, computeArrowParts } from "./arrow-markers.js";
-import type { ArrowDim, ArrowShape } from "./tools/tool-base.js";
+import { computeDasharray } from "@ingcreators/annot-core/utils";
+import { type ArrowSpec, computeArrowParts } from "@ingcreators/annot-core/editor/arrow-markers";
+import type { ArrowDim, ArrowShape } from "@ingcreators/annot-core/editor/tool-options";
 
 /**
  * Inline SVG for an arrow-end shape used by the per-end pulldown

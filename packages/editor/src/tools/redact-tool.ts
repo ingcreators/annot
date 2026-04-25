@@ -1,10 +1,10 @@
-import { REDACT_SOLID_COLOR } from "../../utils/constants.js";
+import { REDACT_SOLID_COLOR } from "@ingcreators/annot-core/utils";
 import {
   type RedactRect,
   renderBlurRedact,
   renderMosaicRedact,
   renderSolidRedact,
-} from "../redact-utils.js";
+} from "@ingcreators/annot-core/editor/redact-utils";
 import type { RedactStyle } from "./tool-base.js";
 /**
  * RedactTool — unified Mosaic / Solid / Blur redaction tool.

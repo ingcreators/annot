@@ -6,6 +6,8 @@ export {
   DEFAULT_STROKE_WIDTH,
   JPEG_QUALITY,
   MOSAIC_BLOCK_SIZE,
+  REDACT_BLUR_RADIUS,
+  REDACT_SOLID_COLOR,
 } from "./constants.js";
 export { computeDasharray, detectDashKey } from "./dash-utils.js";
 export { newIdB58 } from "./id.js";

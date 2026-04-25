@@ -45,7 +45,9 @@ export {
   saveToFile,
 } from "./export.js";
 export { History } from "./history.js";
-export { PropertyPanel } from "./property-panel.js";
+// `PropertyPanel` moved to `@ingcreators/annot-editor` in Phase 2
+// of `docs/plans/three-package-split.md`. Consumers should
+// `import { PropertyPanel } from "@ingcreators/annot-editor"`.
 export { SelectionManager } from "./selection.js";
 // `createThemeToggle` moved to `@ingcreators/annot-editor` in
 // Phase 1 of `docs/plans/three-package-split.md`. Consumers
@@ -62,10 +64,6 @@ export {
   SHAPE_ICON_SVG,
 } from "./toolbar-icons.js";
 export { openAnchoredPopover } from "./anchored-popover.js";
-export type { ToolOptions } from "./tools/tool-base.js";
-// --- Tool base class + options type ---
-// Tools create live SVG nodes via `document.createElementNS` on
-// pointer events; their shape-building logic is slated for extraction
-// into DOM-free builders (tracked under the "headless annotator
-// prototype" in docs/plans/).
-export { ToolBase } from "./tools/tool-base.js";
+// `ToolBase` + `ToolOptions` moved to `@ingcreators/annot-editor/tools/tool-base`
+// in Phase 2 of `docs/plans/three-package-split.md`. Consumers
+// should `import { ToolBase, type ToolOptions } from "@ingcreators/annot-editor"`.

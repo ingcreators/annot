@@ -11,7 +11,7 @@
  */
 
 import type { CanvasManager, History } from "@ingcreators/annot-core/editor";
-import { ToolBase, type ToolOptions } from "@ingcreators/annot-core/editor";
+import { ToolBase, type ToolOptions } from "@ingcreators/annot-editor";
 import { parseStoredItem, translateElement } from "./scratchpad-utils.js";
 
 export class ScratchpadPasteTool extends ToolBase {

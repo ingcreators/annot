@@ -1,11 +1,11 @@
-import { computeDasharray } from "../../utils/dash-utils.js";
+import { computeDasharray } from "@ingcreators/annot-core/utils";
 import {
   type ArrowSpec,
   detectArrowSpec,
   refreshArrowPath,
   writeArrowEndpoints,
   writeArrowSpec,
-} from "../arrow-markers.js";
+} from "@ingcreators/annot-core/editor/arrow-markers";
 import type { ArrowDim, ArrowHead, ArrowShape, MarkerSize } from "./tool-base.js";
 /**
  * ArrowTool — unified Line / Arrow tool.
