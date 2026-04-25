@@ -13,14 +13,19 @@
     "dev": "vite",
     "build": "vite build",
     "typecheck": "tsc --noEmit",
-    "icons": "node ../../brand/generate-app-icons.mjs"
+    "icons": "node ../../brand/generate-app-icons.mjs",
+    "storybook": "storybook dev -p 6006",
+    "build-storybook": "storybook build"
   },
   "dependencies": {
     "@ingcreators/annot-core": "workspace:*"
   },
   "devDependencies": {
     "@resvg/resvg-js": "^2.6.2",
+    "@storybook/addon-a11y": "^10.3.5",
+    "@storybook/web-components-vite": "^10.3.5",
     "chrome-types": "^0.1.327",
+    "storybook": "^10.3.5",
     "typescript": "^6.0.3",
     "vite": "^8.0.10",
     "vite-plugin-pwa": "^1.2.0",

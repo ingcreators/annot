@@ -290,7 +290,16 @@ export class MockDirectoryHandle implements FileSystemDirectoryHandle {
     map: (item: any) => T,
   ): FileSystemDirectoryHandleAsyncIterator<T> {
     const iter = source();
-    const asyncIter: FileSystemDirectoryHandleAsyncIterator<T> = {
+    // Bag shape matches the global FileSystemDirectoryHandleAsyncIterator
+    // (including `[Symbol.asyncDispose]`, added for Explicit Resource
+    // Management in newer lib.dom.d.ts versions). The `this` self-
+    // reference in `[Symbol.asyncIterator]` would normally narrow to
+    // the plain `AsyncIterableIterator<T>` the inline object literal
+    // widens to; the `as FileSystemDirectoryHandleAsyncIterator<T>`
+    // cast at the end pins the type back down so callers in
+    // contract tests see the dispose-bearing shape the FSA spec
+    // promises.
+    const asyncIter = {
       async next() {
         const { value, done } = iter.next();
         if (done) return { value: undefined as unknown as T, done: true };
@@ -299,22 +308,24 @@ export class MockDirectoryHandle implements FileSystemDirectoryHandle {
       async return(value?: T) {
         return { value: value as T, done: true };
       },
+      async [Symbol.asyncDispose]() {
+        /* nothing to release */
+      },
       [Symbol.asyncIterator]() {
-        return this;
+        return asyncIter;
       },
     };
-    return asyncIter;
+    return asyncIter as FileSystemDirectoryHandleAsyncIterator<T>;
   }
 }
 
-/**
- * Spec-correct type for FSA async iterators. TS's `lib.dom.d.ts`
- * names this `FileSystemDirectoryHandleAsyncIterator<T>` — re-export
- * the shape here so the `#makeAsyncIterator` return type compiles
- * under `skipLibCheck: true` even on TS versions where the global
- * isn't declared yet.
- */
-type FileSystemDirectoryHandleAsyncIterator<T> = AsyncIterableIterator<T>;
+// Use the global `FileSystemDirectoryHandleAsyncIterator<T>` from
+// `lib.dom.d.ts`. Older TS versions shadowed it with a local alias
+// here to survive under `skipLibCheck: true`; the project's TS 6
+// toolchain now has the global type with the
+// `[Symbol.asyncDispose]` requirement (Explicit Resource
+// Management, ES2026), so the shadow is gone and the mock matches
+// the global shape directly.
 
 /** Factory used by tests: fresh root directory per call. */
 export function createMockRoot(name = "annot-test-root"): MockDirectoryHandle {
