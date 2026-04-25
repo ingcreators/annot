@@ -19,6 +19,7 @@ before implementation, which is invaluable for:
 |------|--------|---------|
 | [`app-decomposition.md`](./app-decomposition.md) | In progress | Break `packages/web/src/app.ts` (2.6k lines) into collaborator modules and ship a `PluginHost` MVP. Phases 0–5 + 3.5 landed; three Cloud-readiness gate items deferred to follow-up plans. |
 | [`plugin-storage-registration.md`](./plugin-storage-registration.md) | Queued | Open `storage/bridge.ts` to plugin-registered backends so `annot-cloud`'s pointer-commit store can land without a fork. First of three Phase-5-deferred follow-ups. |
+| [`plugin-sidebar-tabs.md`](./plugin-sidebar-tabs.md) | Draft | Sidebar "Views" section so plugins can add Cloud-style tabs ("Team library", "Recent", "Starred"). Second of three Phase-5-deferred follow-ups. |
 | [`path-based-storage.md`](./path-based-storage.md) | Queued | Drop numeric IDs across all storage implementations; use filesystem-style paths as primary key. Prerequisite for `GitHubStore`. |
 | [`google-drive-integration.md`](./google-drive-integration.md) | Draft | Rework the Drive backend onto the non-sensitive `drive.file` scope + Workspace Marketplace + Drive UI Integration so Annot can ship publicly without a restricted-scope CASA audit. |
 | [`oss-cloud-split.md`](./oss-cloud-split.md) | Draft | Forward-looking strategy for keeping Annot OSS while developing paid features in a separate private `annot-cloud` repo. Guardrails apply from today; concrete phases trigger on "first paid feature" and "company incorporation". |
