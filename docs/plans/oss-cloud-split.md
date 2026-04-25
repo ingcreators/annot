@@ -320,15 +320,18 @@ compliance, regional data residency.
 
 | Repo | License | Why |
 |------|---------|-----|
-| `ingcreators/annot` | **MIT** (at Phase 1) | Adoption-friendly; maximises the chance that OSS contributors, Playwright users, and integrators pick it up. |
+| `ingcreators/annot` | **Apache-2.0** (at Phase 1) | Adoption-friendly + corporate-ready. Same permissive shape as MIT for OSS contributors / Playwright users / integrators, **plus an explicit patent-grant clause** the legal review at adopting companies looks for. Apache-2.0 lands on every enterprise approved-license list; MIT sits on the case-by-case tier at many shops. The `NOTICE` file requirement is trivial (one line of copyright). Choice locked in via `docs/plans/source-audit-cleanup.md` (Decision #1). |
 | `ingcreators/annot-cloud` | Proprietary, not distributed | Runs only on annot.work; users interact with the hosted service, not the code. |
 | `ingcreators/annot-ee` | Proprietary, distributed to paying customers | Separate commercial license agreement. |
 
 Alternative licensing if hosted-competitor risk becomes
 meaningful: switch OSS repo to **AGPL-3.0**. Forces hosted
 competitors to open-source their fork. Adoption cost is real
-(many companies disallow AGPL). Keep MIT until there's evidence
-the risk is live.
+(many companies disallow AGPL). Keep Apache-2.0 until there's
+evidence the risk is live — for an "open-core + hosted cloud"
+model where ~80% of the actual product value lives in the
+private `annot-cloud` repo, the architecture itself is the
+moat and hosted-clone risk is structurally low.
 
 ## Relationship to other plans
 

@@ -1,8 +1,10 @@
 # Source-Code Audit Cleanup
 
-> **Status:** Draft. Authored 2026-04-25 in response to a request
+> **Status:** Queued. Authored 2026-04-25 in response to a request
 > to evaluate Annot from the perspective of a corporate IT
 > auditor / system administrator vetting the project for adoption.
+> Sign-off received 2026-04-25 on the five open questions below
+> (see "Decisions" at the bottom).
 >
 > **Compatibility:** No public-API changes. The work is mostly
 > documentation + repo-hygiene + dead-code removal; minor type
@@ -294,30 +296,54 @@ At every phase:
 - Dev-server smoke (Phases 4–6 only): editor + gallery boot
   without console errors after the affected source changes.
 
-## Open questions for sign-off
+## Decisions (sign-off 2026-04-25)
 
-1. **License choice.** MIT, Apache-2.0, BUSL-1.1, or other?
-   Affects every package's `package.json` `license` field +
-   the root `LICENSE` file. The OSS-cloud split plan
-   (`docs/plans/oss-cloud-split.md`) implies the OSS repo
-   stays permissive while paid features live in a private
-   Cloud repo — Apache-2.0 vs MIT would be defensible.
-2. **Logger shim scope.** Should the logger live in `core` (so
-   the extension + future headless annotator share it) or
-   `web` (gallery / editor only)? Lean web for now; promote
-   later if needed.
-3. **Plan-cleanup PR sizing.** Plan-status hygiene (Phase 2)
-   could land as one big PR or split per landed plan. Default
-   to one PR — it's mechanical doc-moving.
-4. **`SECURITY.md` mailbox.** Does the project want a
-   dedicated `security@ingcreators.com` alias, or is GitHub's
-   private vulnerability reporting (PVR) enabled? GitHub PVR
-   is the modern path and avoids the "dead inbox" failure
-   mode.
-5. **`__anno_*` global types.** Should these be exported from
-   `packages/core` (so future hosts can ambient-augment
-   `Window` once) or stay in `packages/web` since only the
-   PWA + Tauri shells set them?
+1. **License: Apache-2.0** for `ingcreators/annot` (this OSS
+   repo). Slight upgrade from `oss-cloud-split.md`'s original
+   MIT recommendation — the explicit patent-grant clause is
+   load-bearing for corporate adoption (this plan's whole
+   premise), and Apache-2.0 lands on every enterprise OSS
+   approved-license list while MIT often sits on a
+   "case-by-case" tier. Same permissive shape as MIT for
+   integrators / Playwright users; same compatibility with the
+   private `annot-cloud` extension model.
+   `annot-cloud` stays proprietary and not distributed.
+   `oss-cloud-split.md`'s license direction table is updated
+   in the same change-set landing this plan to keep the two
+   docs aligned.
+2. **Logger shim lives in `packages/web`** —
+   `packages/web/src/logger.ts`. Two reasons: (a) the bulk of
+   the `console.log` traces in scope are gallery / editor /
+   capture-pipeline calls that already live in `web`; (b)
+   `core` is committed to staying DOM-free for the headless
+   entry point, and a logger that respects environment
+   detection (browser console vs node stdout) is more useful
+   when it can lean on browser-only features. If the future
+   `@ingcreators/annot-annotator` package needs a logger, it
+   can ship its own headless variant or import the same
+   abstraction promoted to a small dedicated package.
+3. **Plan-cleanup ships as one PR.** It's mechanical
+   doc-moving with no risk of partial states; splitting per
+   landed plan would just multiply CI runs without adding
+   review value.
+4. **`SECURITY.md` enables GitHub Private Vulnerability
+   Reporting (PVR)** as the primary intake channel. The PVR
+   form lives on the repo's Security tab once enabled and
+   avoids the "dead inbox" failure mode of a generic
+   `security@` alias. We document a fallback contact (the
+   maintainer's GitHub username via DM) for researchers who
+   prefer that path.
+5. **`__anno_*` window globals stay in `packages/web`.** Only
+   the PWA + the Tauri shell set them; `core` doesn't need to
+   know they exist. The new
+   `packages/web/src/types/anno-window.d.ts` ambient-augments
+   `Window` so the casts in `toolbar.ts` etc. disappear.
+
+## Open questions
+
+None remaining for the implementation phases. If new ones
+surface during the work, they get added here with a status
+header and resolved before the affecting phase lands.
 
 ## References
 
