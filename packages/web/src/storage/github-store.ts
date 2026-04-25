@@ -30,6 +30,9 @@ import type {
   ImageRecord,
   ImageRecordUpdate,
   StorageProvider,
+  StorageWithForceRefresh,
+  StorageWithResync,
+  StorageWithTokenRefresher,
 } from "@ingcreators/annot-core/storage";
 import {
   ancestorPaths,
@@ -136,7 +139,13 @@ function githubError(message: string, status?: number, extra?: Partial<GitHubErr
   return err;
 }
 
-export class GitHubStore implements StorageProvider {
+export class GitHubStore
+  implements
+    StorageProvider,
+    StorageWithResync,
+    StorageWithForceRefresh,
+    StorageWithTokenRefresher
+{
   #token: string;
   #owner: string;
   #repo: string;

@@ -9,6 +9,7 @@
  * + GalleryPage + sidebar wiring + breadcrumb / count refresh.
  */
 import type { ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
+import { supportsForceRefresh, supportsResync } from "@ingcreators/annot-core/storage";
 import type { SidebarTab, StorageRegistration } from "../app/plugin-host.js";
 import type { StorageMode } from "../storage/bridge.js";
 import { showAlertDialog, showPromptDialog } from "../ui/dialog.js";
@@ -169,16 +170,16 @@ export class FileManager {
    * re-validate every cached entry against disk. Then re-renders.
    */
   async refreshFromDisk(): Promise<void> {
-    const s = this.#storage as unknown as { forceRefresh?: () => Promise<void> } | null;
-    if (s?.forceRefresh) {
+    const s = this.#storage;
+    if (s && supportsForceRefresh(s)) {
       try {
         await s.forceRefresh();
       } catch (e) {
         console.error("[refresh] forceRefresh error:", e);
       }
-    } else if (this.#storage?.resync) {
+    } else if (s && supportsResync(s)) {
       try {
-        await this.#storage.resync();
+        await s.resync();
       } catch (e) {
         console.error("[refresh] resync error:", e);
       }

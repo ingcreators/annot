@@ -127,6 +127,12 @@ export interface FolderRecord {
  * - Extension API bridge (web-annotation when extension is installed)
  * - File System Access API (web-annotation direct FS mode)
  * - Google Drive API (web-annotation Drive mode)
+ *
+ * The interface is **capability-narrowed**: only methods every backend
+ * implements live here. Optional behaviours (resync, token refresh,
+ * force-refresh of cached state) live on separate `StorageWith*`
+ * interfaces below; use the matching `supports*()` type predicate to
+ * narrow before calling.
  */
 export interface StorageProvider {
   // ---- Images ----
@@ -180,26 +186,68 @@ export interface StorageProvider {
   // ---- Utility ----
 
   generateThumbnail(dataUrl: string, maxWidth?: number): Promise<string>;
+}
 
-  /** Optional: re-scan underlying storage for external changes. */
-  resync?(): Promise<void>;
+// ─── Capability interfaces ────────────────────────────────────────────
+// These describe optional behaviour a store may implement on top of the
+// core `StorageProvider`. Add `implements StorageProvider, StorageWithX`
+// to the concrete class; callers use the matching `supportsX()` type
+// predicate to narrow before invoking the method.
 
-  /**
-   * Optional: register a callback the store calls on a 401 to ask
-   * the host for a fresh authentication token. The refresher
-   * resolves to the new token string, or `null` if the user
-   * dismissed the auth banner / declined to re-auth. The store
-   * then retries the failed request once with the new token and
-   * gives up if `null` came back.
-   *
-   * Today implemented by the network-backed built-ins
-   * (`GoogleDriveStore`, `GitHubStore`); local stores
-   * (`BrowserStore`, `DeviceStore`, `Extension` proxy) skip it.
-   * Plugin stores opt in by implementing this method and
-   * calling the registered refresher from their own `#fetch`
-   * 401 path. Callers must check `if (store.setTokenRefresher)`
-   * before calling, mirroring the pattern used for the other
-   * optional methods on this interface.
-   */
-  setTokenRefresher?(refresher: () => Promise<string | null>): void;
+/**
+ * Re-scan underlying storage for external changes. Useful for stores
+ * whose backing state can mutate behind our back — local filesystems
+ * (changes from another editor) and network-backed stores (changes
+ * pushed from another client).
+ */
+export interface StorageWithResync {
+  resync(): Promise<void>;
+}
+
+/**
+ * Force-refresh cached state from the source of truth, bypassing any
+ * local cache. Stronger than `resync()`: where `resync` typically
+ * picks up incremental changes, `forceRefresh` invalidates everything
+ * the store knows about and re-fetches.
+ */
+export interface StorageWithForceRefresh {
+  forceRefresh(): Promise<void>;
+}
+
+/**
+ * Register a callback the store calls on a 401 to ask the host for a
+ * fresh authentication token. The refresher resolves to the new token
+ * string, or `null` if the user dismissed the auth banner / declined
+ * to re-auth. The store then retries the failed request once with the
+ * new token and gives up if `null` came back.
+ *
+ * Today implemented by the network-backed built-ins (`GoogleDriveStore`,
+ * `GitHubStore`); local stores (`BrowserStore`, `DeviceStore`, the
+ * extension proxy) skip it. Plugin stores opt in by implementing this
+ * interface and calling the registered refresher from their own 401 path.
+ */
+export interface StorageWithTokenRefresher {
+  setTokenRefresher(refresher: () => Promise<string | null>): void;
+}
+
+// ─── Capability predicates ────────────────────────────────────────────
+// Use these instead of `if (store.method)` so the narrow is type-safe
+// and the optional behaviour is documented at the call site.
+
+export function supportsResync(
+  store: StorageProvider,
+): store is StorageProvider & StorageWithResync {
+  return typeof (store as Partial<StorageWithResync>).resync === "function";
+}
+
+export function supportsForceRefresh(
+  store: StorageProvider,
+): store is StorageProvider & StorageWithForceRefresh {
+  return typeof (store as Partial<StorageWithForceRefresh>).forceRefresh === "function";
+}
+
+export function supportsTokenRefresher(
+  store: StorageProvider,
+): store is StorageProvider & StorageWithTokenRefresher {
+  return typeof (store as Partial<StorageWithTokenRefresher>).setTokenRefresher === "function";
 }

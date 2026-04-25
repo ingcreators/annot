@@ -50,6 +50,14 @@ export type {
   PageElement,
   PageMetadata,
   StorageProvider,
+  StorageWithForceRefresh,
+  StorageWithResync,
+  StorageWithTokenRefresher,
+} from "./storage/types.js";
+export {
+  supportsForceRefresh,
+  supportsResync,
+  supportsTokenRefresher,
 } from "./storage/types.js";
 // --- Misc utilities (dash, constants, id, Tauri bridge) ---
 // `./utils/index.js` includes a few DOM-dependent helpers (tooltip)
