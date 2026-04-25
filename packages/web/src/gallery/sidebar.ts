@@ -5,7 +5,11 @@
 import type { StorageProvider } from "@ingcreators/annot-core/storage";
 import { setTooltip } from "@ingcreators/annot-core/utils";
 import { isClipboardReadSupported, isScreenCaptureSupported } from "../capture/pwa-capture.js";
-import type { StorageMode } from "../storage/bridge.js";
+import {
+  BUILT_IN_STORAGE_MODES,
+  type BuiltInStorageMode,
+  type StorageMode,
+} from "../storage/bridge.js";
 
 export interface SidebarCallbacks {
   onStorageSelect: (mode: StorageMode) => void;
@@ -33,7 +37,15 @@ export class Sidebar {
   #activeMode: StorageMode = "browser";
   #activeFolderPath = "";
   #storage: StorageProvider | null = null;
-  #statuses: Record<StorageMode, StorageStatus> = {
+  // Bounded to the built-in modes for type-narrowing on indexed
+  // access (the render() reads below would otherwise trip
+  // `noUncheckedIndexedAccess` since `StorageMode` widened to
+  // `string` in Phase A of plugin-storage-registration). Phase C
+  // will replace this with a registry-aware structure that also
+  // tracks plugin-registered modes; until then,
+  // `setStorageStatus` ignores non-built-in keys (no-op
+  // fallthrough).
+  #statuses: Record<BuiltInStorageMode, StorageStatus> = {
     browser: { connected: true },
     extension: { connected: false },
     device: { connected: false },
@@ -73,8 +85,14 @@ export class Sidebar {
   }
 
   setStorageStatus(mode: StorageMode, connected: boolean, label?: string): void {
-    this.#statuses[mode] = { connected, label };
-    this.render();
+    // Built-in only for now. Phase C of plugin-storage-registration
+    // adds the registry-aware path so plugin modes also flow through
+    // here; until that lands, callers passing a plugin mode are a
+    // no-op (the sidebar simply has no chip to update).
+    if ((BUILT_IN_STORAGE_MODES as readonly string[]).includes(mode)) {
+      this.#statuses[mode as BuiltInStorageMode] = { connected, label };
+      this.render();
+    }
   }
 
   async refreshFolderTree(): Promise<void> {
