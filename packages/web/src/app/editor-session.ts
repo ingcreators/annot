@@ -279,8 +279,7 @@ export class EditorSession {
       history,
       selection,
       (toolName, toolId) => {
-        const el = document.getElementById("status-tool");
-        if (el) el.textContent = toolName;
+        this.statusHost.setActiveTool(toolName);
         // Show the active tool's properties in the right panel
         // (or hide the tool section when switching to Select).
         this.#editorRightPanel?.showToolProperties(toolId);
