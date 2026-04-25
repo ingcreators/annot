@@ -52,6 +52,7 @@
  */
 
 import type { StorageProvider } from "@ingcreators/annot-core/storage";
+import { BUILT_IN_STORAGE_MODES } from "../storage/bridge.js";
 
 export type ExternalLink = { label: string; url: string; icon?: string };
 
@@ -89,6 +90,53 @@ export interface RouteChangeEvent {
    *  care about the exact shape should import `parseRoute` from
    *  `./router.js` for its types. */
   route: unknown;
+}
+
+/**
+ * Storage backend descriptor — used by both built-ins and plugins.
+ *
+ * Built-ins describe themselves via internal const instances inside
+ * `storage/bridge.ts` (with `connect` / `restore` wrapping the
+ * existing per-backend functions). Plugins fill the same shape from
+ * `PluginContext.registerStorage`. The sidebar takes the combined
+ * sorted list and renders chips; the bridge consults the same list
+ * for `handleStorageSelect` / `restoreOnBoot` fallthrough on
+ * non-built-in modes.
+ */
+export interface StorageRegistration {
+  /** Mode key. Must not collide with another registration's mode.
+   *  Built-ins reserve `"browser"` / `"device"` / `"googledrive"` /
+   *  `"github"` / `"extension"`. */
+  readonly mode: string;
+  /** Sidebar chip label (visible to the user). */
+  readonly label: string;
+  /** Material-symbols icon name (e.g. `"database"`, `"hub"`). */
+  readonly icon?: string;
+  /** Sidebar order. Lower numbers render first. Built-ins reserve
+   *  Browser=10, Device=20, Drive=30, GitHub=40. Plugins choose any
+   *  number; missing / falsy = `+Infinity` (appended last). Stable
+   *  sort, so ties fall back to registration order. */
+  readonly priority: number;
+  /** Optional: hide the chip if false. Used by the Device built-in
+   *  to gate on `showDirectoryPicker` API availability; plugins can
+   *  use it to hide their chip on platforms they don't support. */
+  visible?(): boolean;
+  /** Optional tooltip on the "change" / "reselect" icon shown next
+   *  to a connected chip. Drive uses "Change Drive folder", GitHub
+   *  uses "Change repository". When omitted, the reselect icon is
+   *  not rendered. */
+  readonly reselectTitle?: string;
+  /** Build the live `StorageProvider`. Called from
+   *  `handleStorageSelect`. May return `null` if the user cancelled
+   *  a picker or a connection failed. */
+  connect(opts: { forcePicker: boolean }): Promise<StorageProvider | null>;
+  /** Cheap rehydrate from persisted state without prompting. Returns
+   *  `null` if a persisted session can't be reopened — the bridge
+   *  falls back to `BrowserStore`. */
+  restore(): StorageProvider | null;
+  /** Connection state for the sidebar status strip. `label` is the
+   *  subtitle ("owner/repo@branch", "My Drive folder", etc.). */
+  status(): { connected: boolean; label?: string };
 }
 
 /**
@@ -133,6 +181,15 @@ export interface PluginContext {
    *  gallery) takes over, so a plugin that wants to veto a route
    *  can't — that's deliberate for MVP. */
   onRouteChange(fn: (ev: RouteChangeEvent) => void): void;
+
+  /** Register a custom storage backend. The mode key must be unique
+   *  across built-ins (`"browser"` / `"device"` / `"googledrive"` /
+   *  `"github"` / `"extension"`) and previously-registered plugins;
+   *  duplicates throw at registration time so misconfigurations
+   *  surface immediately. Use a non-built-in `priority` (>40) to
+   *  append after the built-ins, or interleave at e.g. 25 to land
+   *  between Device and Drive. */
+  registerStorage(reg: StorageRegistration): void;
 }
 
 export class PluginHost {
@@ -143,6 +200,7 @@ export class PluginHost {
   > = [];
   readonly #afterSaveListeners: Array<(ev: AfterSaveEvent) => void> = [];
   readonly #routeChangeListeners: Array<(ev: RouteChangeEvent) => void> = [];
+  readonly #storageRegistrations = new Map<string, StorageRegistration>();
 
   /**
    * Register every plugin in `plugins`. Called once from
@@ -230,6 +288,22 @@ export class PluginHost {
     }
   }
 
+  /** Look up a plugin-registered storage by its mode key. Returns
+   *  `undefined` for built-in or unknown modes — the bridge handles
+   *  built-ins separately, and unknown is the silent-fallback
+   *  case for "user's persisted last-mode is from a plugin that
+   *  isn't loaded this session". */
+  findStorageRegistration(mode: string): StorageRegistration | undefined {
+    return this.#storageRegistrations.get(mode);
+  }
+
+  /** Snapshot the registered list (in registration order). The
+   *  caller composes this with built-in registrations and sorts by
+   *  `priority` for sidebar render. */
+  listStorageRegistrations(): StorageRegistration[] {
+    return Array.from(this.#storageRegistrations.values());
+  }
+
   #makeContext(_pluginName: string): PluginContext {
     // Capture references — a plugin could stash `ctx` and call these
     // later, which is fine: the underlying arrays live on the host
@@ -249,6 +323,20 @@ export class PluginHost {
       },
       onRouteChange: (fn) => {
         this.#routeChangeListeners.push(fn);
+      },
+      registerStorage: (reg) => {
+        if ((BUILT_IN_STORAGE_MODES as readonly string[]).includes(reg.mode)) {
+          throw new Error(
+            `[plugin-host] storage mode "${reg.mode}" collides with a built-in. ` +
+              "Pick a different mode key (e.g. \"cloud\", \"team-library\").",
+          );
+        }
+        if (this.#storageRegistrations.has(reg.mode)) {
+          throw new Error(
+            `[plugin-host] storage mode "${reg.mode}" is already registered.`,
+          );
+        }
+        this.#storageRegistrations.set(reg.mode, reg);
       },
     } satisfies PluginContext);
   }

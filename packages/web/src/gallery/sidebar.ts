@@ -4,12 +4,9 @@
  */
 import type { StorageProvider } from "@ingcreators/annot-core/storage";
 import { setTooltip } from "@ingcreators/annot-core/utils";
+import type { StorageRegistration } from "../app/plugin-host.js";
 import { isClipboardReadSupported, isScreenCaptureSupported } from "../capture/pwa-capture.js";
-import {
-  BUILT_IN_STORAGE_MODES,
-  type BuiltInStorageMode,
-  type StorageMode,
-} from "../storage/bridge.js";
+import type { StorageMode } from "../storage/bridge.js";
 
 export interface SidebarCallbacks {
   onStorageSelect: (mode: StorageMode) => void;
@@ -21,7 +18,64 @@ export interface SidebarCallbacks {
   onCaptureScreen: () => void;
   onTimedCapture: () => void;
   onPasteClipboard: () => void;
+  /** Plugin-registered storage backends — appended to the sidebar
+   *  strip per the registration's `priority`. Defaults to "no
+   *  plugins" so existing callers (e.g. the desktop shell) don't
+   *  have to be updated. */
+  getPluginStorages?: () => StorageRegistration[];
+  /** Built-in storage modes the deployment opted out of via
+   *  `App.init({ disableBuiltinStorage })`. Optional for the same
+   *  reason as `getPluginStorages`. */
+  isBuiltinDisabled?: (mode: string) => boolean;
 }
+
+/** Internal chip descriptor shared across built-ins + plugins. The
+ *  built-in metadata is hardcoded below; plugin chips lift these
+ *  fields out of the `StorageRegistration` they came from. */
+interface ChipDescriptor {
+  mode: string;
+  icon: string;
+  label: string;
+  priority: number;
+  /** Optional: hide the chip when this returns false. Used by the
+   *  Device built-in to gate on `showDirectoryPicker` API support. */
+  visible?: () => boolean;
+  /** Tooltip on the "reselect" icon. Empty / undefined hides it. */
+  reselectTitle?: string;
+}
+
+const BUILTIN_CHIP_DESCRIPTORS: readonly ChipDescriptor[] = [
+  {
+    mode: "browser",
+    icon: "database",
+    label: "Browser",
+    priority: 10,
+  },
+  {
+    mode: "device",
+    icon: "laptop",
+    label: "Device",
+    priority: 20,
+    visible: () =>
+      typeof (window as unknown as { showDirectoryPicker?: unknown }).showDirectoryPicker ===
+      "function",
+    reselectTitle: "Change device folder",
+  },
+  {
+    mode: "googledrive",
+    icon: "cloud",
+    label: "Google Drive",
+    priority: 30,
+    reselectTitle: "Change Drive folder",
+  },
+  {
+    mode: "github",
+    icon: "hub",
+    label: "GitHub",
+    priority: 40,
+    reselectTitle: "Change repository",
+  },
+];
 
 interface StorageStatus {
   connected: boolean;
@@ -37,24 +91,20 @@ export class Sidebar {
   #activeMode: StorageMode = "browser";
   #activeFolderPath = "";
   #storage: StorageProvider | null = null;
-  // Bounded to the built-in modes for type-narrowing on indexed
-  // access (the render() reads below would otherwise trip
-  // `noUncheckedIndexedAccess` since `StorageMode` widened to
-  // `string` in Phase A of plugin-storage-registration). Phase C
-  // will replace this with a registry-aware structure that also
-  // tracks plugin-registered modes; until then,
-  // `setStorageStatus` ignores non-built-in keys (no-op
-  // fallthrough).
-  #statuses: Record<BuiltInStorageMode, StorageStatus> = {
-    browser: { connected: true },
-    extension: { connected: false },
-    device: { connected: false },
-    googledrive: { connected: false },
+  // A `Map` keyed by mode string. Phase A bounded this to
+  // `BuiltInStorageMode` to narrow indexed-access; Phase C of
+  // plugin-storage-registration widens it to accept plugin keys
+  // alongside built-ins.
+  #statuses = new Map<string, StorageStatus>([
+    ["browser", { connected: true }],
+    ["extension", { connected: false }],
+    ["device", { connected: false }],
+    ["googledrive", { connected: false }],
     // Phase 2 of `docs/plans/github-integration.md` adds the
     // GitHubStore but leaves the visible sidebar item to Phase 3.
     // The status entry exists for type completeness.
-    github: { connected: false },
-  };
+    ["github", { connected: false }],
+  ]);
   #expanded: ExpandedSet = new Set([""]); // root always expanded
   #rootName: string | null = null;
   #newMenuOpen = false;
@@ -85,14 +135,8 @@ export class Sidebar {
   }
 
   setStorageStatus(mode: StorageMode, connected: boolean, label?: string): void {
-    // Built-in only for now. Phase C of plugin-storage-registration
-    // adds the registry-aware path so plugin modes also flow through
-    // here; until that lands, callers passing a plugin mode are a
-    // no-op (the sidebar simply has no chip to update).
-    if ((BUILT_IN_STORAGE_MODES as readonly string[]).includes(mode)) {
-      this.#statuses[mode as BuiltInStorageMode] = { connected, label };
-      this.render();
-    }
+    this.#statuses.set(mode, { connected, label });
+    this.render();
   }
 
   async refreshFolderTree(): Promise<void> {
@@ -193,49 +237,47 @@ export class Sidebar {
     title.textContent = "Storage";
     this.#container.appendChild(title);
 
-    this.#container.appendChild(
-      this.#buildStorageItem(
-        "browser",
-        "database",
-        "Browser",
-        this.#statuses.browser.connected ? this.#statuses.browser.label || "Local" : "Local",
-      ),
+    // Build the combined chip list: built-ins (filtered against the
+    // deployment's `disableBuiltinStorage`) + plugin registrations.
+    // Sort by `priority` so plugins can interleave with built-ins
+    // (e.g. a `priority: 25` plugin lands between Device and Drive)
+    // or append at the end (`priority: 100`). Stable sort means
+    // ties fall back to the source order (built-ins first, then
+    // plugin registration order).
+    const isBuiltinDisabled = this.#callbacks.isBuiltinDisabled ?? (() => false);
+    const builtins: ChipDescriptor[] = BUILTIN_CHIP_DESCRIPTORS.filter(
+      (d) => !isBuiltinDisabled(d.mode),
     );
+    const plugins: ChipDescriptor[] = (this.#callbacks.getPluginStorages?.() ?? []).map(
+      (reg) => ({
+        mode: reg.mode,
+        icon: reg.icon ?? "extension",
+        label: reg.label,
+        priority: Number.isFinite(reg.priority) ? reg.priority : Number.POSITIVE_INFINITY,
+        visible: reg.visible ? () => reg.visible!() : undefined,
+        reselectTitle: reg.reselectTitle,
+      }),
+    );
+    const chips = [...builtins, ...plugins]
+      .filter((d) => (d.visible ? d.visible() : true))
+      .sort((a, b) => a.priority - b.priority);
 
-    if (typeof (window as any).showDirectoryPicker === "function") {
-      const fs = this.#statuses.device;
+    for (const chip of chips) {
+      const status = this.#statuses.get(chip.mode) ?? { connected: false };
+      // Default label per mode mirrors what the previous hardcoded
+      // strip rendered: "Local" for Browser, "Not connected" / a
+      // backend-supplied label for everything else.
+      const defaultLabel =
+        chip.mode === "browser" ? "Local" : status.connected ? "Connected" : "Not connected";
+      const subtitle = status.connected ? status.label || defaultLabel : defaultLabel;
+      const reselect =
+        chip.reselectTitle && status.connected
+          ? { reselect: true, reselectTitle: chip.reselectTitle }
+          : undefined;
       this.#container.appendChild(
-        this.#buildStorageItem(
-          "device",
-          "laptop",
-          "Device",
-          fs.connected ? fs.label || "Connected" : "Not connected",
-          fs.connected ? { reselect: true, reselectTitle: "Change device folder" } : undefined,
-        ),
+        this.#buildStorageItem(chip.mode, chip.icon, chip.label, subtitle, reselect),
       );
     }
-
-    const gd = this.#statuses.googledrive;
-    this.#container.appendChild(
-      this.#buildStorageItem(
-        "googledrive",
-        "cloud",
-        "Google Drive",
-        gd.connected ? gd.label || "Connected" : "Not connected",
-        gd.connected ? { reselect: true, reselectTitle: "Change Drive folder" } : undefined,
-      ),
-    );
-
-    const gh = this.#statuses.github;
-    this.#container.appendChild(
-      this.#buildStorageItem(
-        "github",
-        "hub",
-        "GitHub",
-        gh.connected ? gh.label || "Connected" : "Not connected",
-        gh.connected ? { reselect: true, reselectTitle: "Change repository" } : undefined,
-      ),
-    );
 
     // The "Folders" section (title + tree) is shown as a unit once
     // `refreshFolderTree` has successfully built the tree. Hiding both
