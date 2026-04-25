@@ -134,17 +134,35 @@ DOM-element factory — but that is **not** in this plan.
 | `anchored-popover.ts` | DOM popover |
 | `canvas-context-menu.ts` | DOM context menu |
 | `color-palette.ts` | DOM palette swatches |
+| `redact-utils.ts` | `OffscreenCanvas` + `<canvas>` for mosaic / blur rasterisation |
+| `export.ts` | `XMLSerializer` + `Blob` + `URL.createObjectURL` + canvas rasterisation |
+| `pptx-export.ts` | `<canvas>` for slide-background rasterisation |
 
-**`redact-utils.ts`, `export.ts`, `pptx-export.ts` — borderline.**
-`redact-utils` uses `OffscreenCanvas` / `<canvas>`; `export.ts`
-uses `XMLSerializer` + `Blob` + `URL.createObjectURL`;
-`pptx-export.ts` uses `<canvas>` for thumbnails. All three
-work under jsdom-with-canvas but are ~10× the runtime cost of
-a pure jsdom + element-taker. **Decision: stay in Tier B
-(`core/editor`)** — they're "DOM-ish helpers" by their
-existing role, and pulling them into Tier C creates a circular
-import (PWA save flow → `annot-editor.export` → would need
-back-reference into `annot-core/editor` for the SVG helpers).
+**Note on `redact-utils`, `export.ts`, `pptx-export.ts`.** An
+earlier draft of this plan kept these three in Tier B as
+"DOM-ish helpers", citing a hypothetical circular import.
+Tracing the actual dependency graph showed the concern was
+unfounded:
+
+- `redact-utils` is consumed only by `property-panel.ts` and
+  `tools/redact-tool.ts` — both already Tier C.
+- `pptx-export.ts` is consumed only by `web/src/editor/toolbar-save-menu.ts`
+  (already in the editor-dependent web package).
+- `export.ts`'s `renderImageRecord` is consumed by
+  `packages/web/src/storage/{device,github,google-drive}-store.ts`,
+  which would gain a transitive dependency on
+  `@ingcreators/annot-editor`. That's honest: those storage
+  backends already use `<canvas>` for thumbnail generation
+  and are unportable beyond a real browser. A future
+  `annot-cloud` server-side GitHub storage would not reuse
+  the browser `GitHubStore`; it would call octokit + sharp /
+  resvg directly.
+
+So all three move to Tier C. The benefit: Tier B becomes the
+honest definition "jsdom-friendly Element manipulation, no
+`<canvas>` rasterisation required" — exactly the surface a
+headless-annotator (running under jsdom or `resvg-js`) wants to
+reach for.
 
 ### Package layout (after the migration)
 
@@ -169,10 +187,7 @@ packages/
         arrow-markers.ts
         shape-utils.ts
         text-utils.ts
-        redact-utils.ts
         gradient-utils.ts
-        export.ts
-        pptx-export.ts
 
   editor/                     # Tier C — NEW
     package.json              # name: @ingcreators/annot-editor
@@ -191,6 +206,9 @@ packages/
       anchored-popover.ts
       canvas-context-menu.ts
       color-palette.ts
+      redact-utils.ts
+      export.ts
+      pptx-export.ts
       tools/
         tool-base.ts
         arrow-tool.ts
@@ -228,14 +246,14 @@ window and the indirection would mask future drift.
 | Phase | Scope | PR count |
 |-------|-------|----------|
 | **0** | Set up the empty `@ingcreators/annot-editor` workspace package: `package.json`, `tsconfig.json`, `vite.config.ts`, `index.ts` re-exporting only `svg-format` (placeholder, not the final shape). `pnpm install` + green CI. | 1 |
-| **1** | Move the **leaf DOM widgets** (no dependencies on other Tier C primitives): `tooltip.ts`, `theme-toggle.ts`, `custom-select.ts`, `anchored-popover.ts`, `canvas-context-menu.ts`, `color-palette.ts`. Update importers in web + extension. | 1 |
+| **1** | Move the **leaf DOM widgets** (no dependencies on other Tier C primitives): `tooltip.ts`, `theme-toggle.ts`, `custom-select.ts`, `anchored-popover.ts`, `canvas-context-menu.ts`, `color-palette.ts`, **`redact-utils.ts`**. Update importers in web + extension. (`redact-utils` joins because its only Tier-C consumers — `redact-tool` and `property-panel` — both move later, so it can land in this batch and become a one-import-line edit when those land.) | 1 |
 | **2** | Move `property-controls.ts`. Update importers (mostly `core/editor/property-panel.ts`, web's `tool-property-renderer.ts`). | 1 |
 | **3** | Move the **PropertyPanel cluster**: `property-panel.ts` + `property-panel-helpers.ts`. Importers in web (right-panel + selection-properties section) + desktop. | 1 |
 | **4** | Move **`History`** to the editor package. Despite being pure-ish, it works on `SVGGElement.innerHTML` and is consumed only by editor primitives. | 1 |
 | **5** | Move the **tool hierarchy**: `tools/tool-base.ts`, `tools/{shape,arrow,text,freehand,marker,redact,crop}-tool.ts`. Largest single move; ~7 files + heavy importers in web's toolbar / property renderer / scratchpad. | 1 |
 | **6** | Move `smart-guides.ts`. | 1 |
 | **7** | Move `selection.ts` + `selection-helpers.ts`. | 1 |
-| **8** | Move `canvas-manager.ts`. The keystone — last because every other Tier C file depends on it directly or indirectly, so it lands cleanly only after everything else has migrated. | 1 |
+| **8** | **Keystone**: move `canvas-manager.ts` together with **`export.ts`** and **`pptx-export.ts`**. The two export modules type-import `CanvasManager`, so colocating their move with canvas-manager is the lowest-friction option. After this PR, `core/editor/` no longer holds any Tier C code. | 1 |
 | **9** | **CLAUDE.md** + plan-doc updates: drop the "editor UI in core can use DOM APIs" carve-out from `Architectural guardrails 2`. Record the Tier A / B / C model in the public-API section. Mark this plan `Done`. | 1 |
 | **10** | **Headless annotator prototype kickoff** (separate plan): now that the boundary is honest, the "headless annotator prototype" item in CLAUDE.md's pending-work list becomes actionable. Out of scope for this plan; left as a forward pointer. | n/a |
 
