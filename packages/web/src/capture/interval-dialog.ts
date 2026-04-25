@@ -1,15 +1,21 @@
 /**
- * Simple configuration modal for timed (interval) screen capture.
- * Returns { intervalSec, count } on confirm, or null on cancel.
+ * Promise / handle-shaped wrappers around the timed-capture UI
+ * elements. The actual DOM lives in `<annot-interval-capture-dialog>`
+ * and `<annot-capture-progress-toast>` (Lit Phase 6); this module
+ * keeps the public function shape the rest of the capture
+ * pipeline already calls.
  */
 
-export type CursorMode = "always" | "motion" | "never";
+import "./annot-capture-progress-toast.js";
+import type { AnnotCaptureProgressToastElement } from "./annot-capture-progress-toast.js";
+import "./annot-interval-capture-dialog.js";
+import type {
+  AnnotIntervalCaptureDialogElement,
+  IntervalCaptureConfirmDetail,
+} from "./annot-interval-capture-dialog.js";
 
-export interface IntervalCaptureConfig {
-  intervalSec: number;
-  count: number;
-  cursor: CursorMode;
-}
+export type { CursorMode, IntervalCaptureConfig } from "./annot-interval-capture-dialog.js";
+import type { CursorMode, IntervalCaptureConfig } from "./annot-interval-capture-dialog.js";
 
 const CURSOR_PREF_KEY = "annot-capture-cursor";
 
@@ -34,137 +40,24 @@ export function showIntervalCaptureDialog(
     cursor: loadCursorPreference(),
   };
   return new Promise((resolve) => {
-    const overlay = document.createElement("div");
-    overlay.className = "capture-dialog-overlay";
-
-    const dialog = document.createElement("div");
-    dialog.className = "capture-dialog";
-
-    const title = document.createElement("div");
-    title.className = "capture-dialog-title";
-    title.textContent = "Timed screen capture";
-    dialog.appendChild(title);
-
-    const desc = document.createElement("div");
-    desc.className = "capture-dialog-desc";
-    desc.textContent =
-      "You'll be asked to pick a screen/window once. Frames will be captured at the configured interval.";
-    dialog.appendChild(desc);
-
-    const mkField = (labelText: string, value: number, min: number, max: number) => {
-      const row = document.createElement("label");
-      row.className = "capture-dialog-row";
-      const label = document.createElement("span");
-      label.className = "capture-dialog-label";
-      label.textContent = labelText;
-      const input = document.createElement("input");
-      input.type = "number";
-      input.className = "capture-dialog-input";
-      input.value = String(value);
-      input.min = String(min);
-      input.max = String(max);
-      input.step = "1";
-      row.appendChild(label);
-      row.appendChild(input);
-      return { row, input };
-    };
-
-    const { row: intervalRow, input: intervalInput } = mkField(
-      "Interval (seconds)",
-      cfg.intervalSec,
-      1,
-      3600,
+    const dlg: AnnotIntervalCaptureDialogElement = document.createElement(
+      "annot-interval-capture-dialog",
     );
-    const { row: countRow, input: countInput } = mkField("Frame count", cfg.count, 1, 1000);
-    dialog.appendChild(intervalRow);
-    dialog.appendChild(countRow);
+    dlg.intervalSec = cfg.intervalSec;
+    dlg.frameCount = cfg.count;
+    dlg.cursor = cfg.cursor;
+    document.body.appendChild(dlg);
 
-    // Cursor selector
-    const cursorRow = document.createElement("label");
-    cursorRow.className = "capture-dialog-row";
-    const cursorLabel = document.createElement("span");
-    cursorLabel.className = "capture-dialog-label";
-    cursorLabel.textContent = "Mouse cursor";
-    const cursorSelect = document.createElement("select");
-    cursorSelect.className = "capture-dialog-select";
-    for (const [value, label] of [
-      ["always", "Always show"],
-      ["motion", "Only when moving"],
-      ["never", "Hide"],
-    ] as const) {
-      const opt = document.createElement("option");
-      opt.value = value;
-      opt.textContent = label;
-      if (value === cfg.cursor) opt.selected = true;
-      cursorSelect.appendChild(opt);
-    }
-    cursorRow.appendChild(cursorLabel);
-    cursorRow.appendChild(cursorSelect);
-    dialog.appendChild(cursorRow);
-
-    const actions = document.createElement("div");
-    actions.className = "capture-dialog-actions";
-
-    const cancelBtn = document.createElement("button");
-    cancelBtn.className = "capture-dialog-btn";
-    cancelBtn.textContent = "Cancel";
-    cancelBtn.addEventListener("click", () => {
+    const close = () => dlg.remove();
+    dlg.addEventListener("capture-cancel", () => {
       close();
       resolve(null);
     });
-
-    const okBtn = document.createElement("button");
-    okBtn.className = "capture-dialog-btn capture-dialog-btn-primary";
-    okBtn.textContent = "Start";
-    okBtn.addEventListener("click", () => {
-      const intervalSec = Number.parseInt(intervalInput.value, 10);
-      const count = Number.parseInt(countInput.value, 10);
-      const cursor = cursorSelect.value as CursorMode;
-      if (
-        !Number.isFinite(intervalSec) ||
-        intervalSec <= 0 ||
-        !Number.isFinite(count) ||
-        count <= 0
-      ) {
-        intervalInput.focus();
-        return;
-      }
+    dlg.addEventListener("capture-confirm", (e: Event) => {
+      const detail = (e as CustomEvent<IntervalCaptureConfirmDetail>).detail;
       close();
-      resolve({ intervalSec, count, cursor });
+      resolve(detail.config);
     });
-
-    actions.appendChild(cancelBtn);
-    actions.appendChild(okBtn);
-    dialog.appendChild(actions);
-
-    overlay.appendChild(dialog);
-    document.body.appendChild(overlay);
-
-    // ESC closes
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        close();
-        resolve(null);
-      } else if (e.key === "Enter" && (e.target === intervalInput || e.target === countInput)) {
-        okBtn.click();
-      }
-    };
-    document.addEventListener("keydown", onKey);
-
-    const close = () => {
-      document.removeEventListener("keydown", onKey);
-      overlay.remove();
-    };
-
-    // Click outside closes
-    overlay.addEventListener("click", (e) => {
-      if (e.target === overlay) {
-        close();
-        resolve(null);
-      }
-    });
-
-    requestAnimationFrame(() => intervalInput.focus());
   });
 }
 
@@ -179,39 +72,19 @@ export function showIntervalCaptureProgress(
   total: number,
   onCancel?: () => void,
 ): ProgressToastHandle {
-  const toast = document.createElement("div");
-  toast.className = "capture-progress-toast";
-
-  const icon = document.createElement("span");
-  icon.className = "material-symbols-outlined capture-progress-icon";
-  icon.textContent = "screenshot_monitor";
-  toast.appendChild(icon);
-
-  const text = document.createElement("span");
-  text.className = "capture-progress-text";
-  text.textContent = `Capturing 0 / ${total}...`;
-  toast.appendChild(text);
-
-  const bar = document.createElement("div");
-  bar.className = "capture-progress-bar";
-  const barFill = document.createElement("div");
-  barFill.className = "capture-progress-bar-fill";
-  bar.appendChild(barFill);
-  toast.appendChild(bar);
-
-  const cancelBtn = document.createElement("button");
-  cancelBtn.className = "capture-progress-cancel";
-  cancelBtn.textContent = "Cancel";
+  const toast: AnnotCaptureProgressToastElement = document.createElement(
+    "annot-capture-progress-toast",
+  );
+  toast.current = 0;
+  toast.total = total;
   let cancelHandler = onCancel;
-  cancelBtn.addEventListener("click", () => cancelHandler?.());
-  toast.appendChild(cancelBtn);
-
+  toast.addEventListener("cancel-click", () => cancelHandler?.());
   document.body.appendChild(toast);
 
   return {
-    update(current: number, total: number) {
-      text.textContent = `Capturing ${current} / ${total}...`;
-      barFill.style.width = `${Math.min(100, Math.round((current / total) * 100))}%`;
+    update(current: number, totalArg: number) {
+      toast.current = current;
+      toast.total = totalArg;
     },
     complete() {
       toast.remove();
