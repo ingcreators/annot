@@ -1,9 +1,21 @@
 # `app.ts` Decomposition + Plugin API MVP
 
-> **Status:** In progress. Phases 0–4 landed + a Phase 3.5 follow-up.
-> Phase 5 (the cloud readiness gate) is live-tracked in the checklist
-> below. The plan closes when every gate box is either ticked or
-> carries a dated "deferred" note linking to its own follow-up plan.
+> **Status:** Done (2026-04-25). Phases 0–5 + a Phase 3.5 follow-up
+> landed in
+> [#65](https://github.com/ingcreators/annot/pull/65),
+> [#67](https://github.com/ingcreators/annot/pull/67),
+> [#68](https://github.com/ingcreators/annot/pull/68),
+> [#69](https://github.com/ingcreators/annot/pull/69),
+> [#70](https://github.com/ingcreators/annot/pull/70),
+> [#71](https://github.com/ingcreators/annot/pull/71), and
+> [#72](https://github.com/ingcreators/annot/pull/72). Each Phase 5
+> readiness-gate item carries a dated "deferred" note pointing at
+> its own follow-up plan
+> ([`plugin-storage-registration.md`](./plugin-storage-registration.md),
+> [`plugin-sidebar-tabs.md`](./plugin-sidebar-tabs.md),
+> [`plugin-ui-slots.md`](./plugin-ui-slots.md) — all subsequently
+> landed). File moved to `_done/` 2026-04-25 alongside its three
+> follow-ups.
 >
 > **Compatibility:** Touches `packages/web/src/app.ts` (2.6k lines,
 > the PWA host's god-class) and promotes a `PluginHost` entry point

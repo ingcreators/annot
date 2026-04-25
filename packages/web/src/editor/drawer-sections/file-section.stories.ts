@@ -5,9 +5,9 @@
  * from the drawer host, so the variants land as focused visual
  * artifacts.
  *
- * Bootstrapped in Phase 1 of `docs/plans/storybook-introduction.md`
+ * Bootstrapped in Phase 1 of `docs/plans/_done/storybook-introduction.md`
  * when the section was still an imperative factory; converted to
- * the Lit element in Phase 1 of `docs/plans/lit-migration.md`.
+ * the Lit element in Phase 1 of `docs/plans/_done/lit-migration.md`.
  */
 
 import type { Meta, StoryObj } from "@storybook/web-components-vite";

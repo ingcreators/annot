@@ -1,10 +1,13 @@
 # Source-Code Audit Cleanup
 
-> **Status:** Queued. Authored 2026-04-25 in response to a request
-> to evaluate Annot from the perspective of a corporate IT
+> **Status:** In progress. Authored 2026-04-25 in response to a
+> request to evaluate Annot from the perspective of a corporate IT
 > auditor / system administrator vetting the project for adoption.
 > Sign-off received 2026-04-25 on the five open questions below
-> (see "Decisions" at the bottom).
+> (see "Decisions" at the bottom). Phase 1 (repo-root metadata +
+> Apache-2.0 license + audit-facing root docs) landed in
+> [#100](https://github.com/ingcreators/annot/pull/100). Phases
+> 2–7 are queued.
 >
 > **Compatibility:** No public-API changes. The work is mostly
 > documentation + repo-hygiene + dead-code removal; minor type
@@ -72,8 +75,8 @@ see:
 - **No bundle-size optimisation.** Worth doing eventually but
   out of scope for an audit-prep pass.
 - **No Lit-to-decorators migration.** Tracked separately in
-  `lit-migration.md`'s "future direction"; doesn't move the
-  audit needle.
+  [`_done/lit-migration.md`](./_done/lit-migration.md)'s "future
+  direction"; doesn't move the audit needle.
 - **No new tests for already-tested code.** Coverage gaps
   surfaced incidentally during cleanup may get a regression
   test (matching the established pattern), but a coverage push

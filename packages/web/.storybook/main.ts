@@ -1,7 +1,7 @@
 /**
  * Storybook config for `@ingcreators/annot-web`.
  *
- * Phase 1 of `docs/plans/storybook-introduction.md`. The
+ * Phase 1 of `docs/plans/_done/storybook-introduction.md`. The
  * `web-components-vite` framework is the canonical Storybook
  * path for Lit components (Lit elements are web components);
  * it also renders today's vanilla DOM components so the five

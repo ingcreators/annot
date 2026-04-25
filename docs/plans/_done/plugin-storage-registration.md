@@ -1,9 +1,14 @@
 # Plugin Storage Registration
 
-> **Status:** Queued. Authored 2026-04-25 as the named follow-up from
+> **Status:** Done (2026-04-25). Authored 2026-04-25 as the named
+> follow-up from
 > [`app-decomposition.md`](./app-decomposition.md) Phase 5; sign-off
 > received 2026-04-25 on the four design questions (see "Decisions"
-> at the bottom).
+> at the bottom). Phases A, B, C landed in
+> [#74](https://github.com/ingcreators/annot/pull/74),
+> [#75](https://github.com/ingcreators/annot/pull/75), and
+> [#76](https://github.com/ingcreators/annot/pull/76). File moved
+> to `_done/` 2026-04-25.
 >
 > **Compatibility:** Touches
 > [`packages/web/src/storage/bridge.ts`](../../packages/web/src/storage/bridge.ts)

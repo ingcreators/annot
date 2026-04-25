@@ -1,11 +1,28 @@
 # Lit Web Component Migration
 
-> **Status:** Queued. Authored 2026-04-25 alongside
+> **Status:** Done (2026-04-25). Authored 2026-04-25 alongside
 > [`storybook-introduction.md`](./storybook-introduction.md);
 > sign-off received 2026-04-25 on the seven design questions
 > (see "Decisions" at the bottom). Lit migration assumes
 > Storybook is already in place to act as the component
-> playground + visual regression net for the migration.
+> playground + visual regression net for the migration. All
+> seven phases landed in
+> [#85](https://github.com/ingcreators/annot/pull/85),
+> [#86](https://github.com/ingcreators/annot/pull/86),
+> [#87](https://github.com/ingcreators/annot/pull/87),
+> [#88](https://github.com/ingcreators/annot/pull/88),
+> [#89](https://github.com/ingcreators/annot/pull/89),
+> [#90](https://github.com/ingcreators/annot/pull/90),
+> [#91](https://github.com/ingcreators/annot/pull/91),
+> [#92](https://github.com/ingcreators/annot/pull/92), and
+> [#93](https://github.com/ingcreators/annot/pull/93)
+> (Phases 0, 1, 2, 3, 4, 5a, 5b, 5c, 6 in order). Several
+> follow-up fixes ([#94](https://github.com/ingcreators/annot/pull/94),
+> [#95](https://github.com/ingcreators/annot/pull/95),
+> [#96](https://github.com/ingcreators/annot/pull/96),
+> [#98](https://github.com/ingcreators/annot/pull/98))
+> tightened post-migration corner cases. File moved to `_done/`
+> 2026-04-25.
 >
 > **Compatibility:** Adds `lit` to runtime deps in
 > `packages/web` (~5 KB gzipped). Multi-phase migration touching

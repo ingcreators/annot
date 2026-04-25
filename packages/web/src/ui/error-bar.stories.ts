@@ -4,10 +4,10 @@
  * functional API (`showError` / `showInfo` / `showSaveError`),
  * which is a thin facade over a singleton `<annot-error-bar>`.
  *
- * Bootstrapped in Phase 1 of `docs/plans/storybook-introduction.md`
+ * Bootstrapped in Phase 1 of `docs/plans/_done/storybook-introduction.md`
  * when the bar was imperative; the declarative variants lock in
  * the Phase 0 Lit element's visual contract per
- * `docs/plans/lit-migration.md`.
+ * `docs/plans/_done/lit-migration.md`.
  */
 
 import type { Meta, StoryObj } from "@storybook/web-components-vite";

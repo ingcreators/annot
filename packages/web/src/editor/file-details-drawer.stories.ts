@@ -4,9 +4,9 @@
  * every visible combination of built-in sections (File / Tags /
  * Last commit / External links).
  *
- * Bootstrapped in Phase 1 of `docs/plans/storybook-introduction.md`
+ * Bootstrapped in Phase 1 of `docs/plans/_done/storybook-introduction.md`
  * when the drawer was still imperative; converted to the Lit
- * element in Phase 1 of `docs/plans/lit-migration.md`. Each
+ * element in Phase 1 of `docs/plans/_done/lit-migration.md`. Each
  * story opens the drawer automatically so reviewers see the
  * populated panel without having to click "toggle".
  */

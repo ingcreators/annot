@@ -57,7 +57,7 @@ jobs:
           --filter @ingcreators/annot-extension
           build
 
-      # Storybook build. Phase 1 of storybook-introduction.md ships
+      # Storybook build. Phase 1 of docs/plans/_done/storybook-introduction.md ships
       # this as `continue-on-error: true` so a flaky story doesn't
       # stall unrelated PRs while the team gets used to the
       # workflow. Flipped to blocking in the follow-up once the

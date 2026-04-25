@@ -54,7 +54,7 @@ export type BuiltInStorageMode = (typeof BUILT_IN_STORAGE_MODES)[number];
 
 /**
  * A storage mode key. Kept open as `string` so plugin-registered
- * backends (Phase C of `docs/plans/plugin-storage-registration.md`)
+ * backends (Phase C of `docs/plans/_done/plugin-storage-registration.md`)
  * can introduce their own modes without editing every consumer.
  *
  * Use `BuiltInStorageMode` if you specifically need to refer only
@@ -66,7 +66,7 @@ export type StorageMode = string;
 /**
  * State container for the bridge — collapses the per-backend
  * module-level globals into one object. Phase B of
- * `docs/plans/plugin-storage-registration.md` extracts this so
+ * `docs/plans/_done/plugin-storage-registration.md` extracts this so
  * Phase C's `StorageRegistry.registerPluginStore(mode, store)` has
  * a single owner of "what's currently active". The exported
  * functions below stay flat and just delegate, so callers don't
@@ -96,7 +96,7 @@ class StorageRegistry {
   extensionAvailable: boolean | null = null;
 
   /** Plugin-registered stores keyed by mode. Phase C of
-   *  `docs/plans/plugin-storage-registration.md` populates this via
+   *  `docs/plans/_done/plugin-storage-registration.md` populates this via
    *  `registerPluginStore`; the bridge's plugin-fallthrough branch
    *  in `app/storage-bridge.ts` reads it back. Empty when no
    *  storage plugins are loaded (the typical OSS case). */

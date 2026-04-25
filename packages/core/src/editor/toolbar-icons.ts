@@ -2,7 +2,7 @@
  * Inline-SVG icon catalogues + highlight-color presets shared
  * between the toolbar (in `@ingcreators/annot-web`) and core's
  * `PropertyPanel`. Extracted out of `toolbar.ts` as part of
- * Phase 5a of `docs/plans/lit-migration.md` so the Toolbar
+ * Phase 5a of `docs/plans/_done/lit-migration.md` so the Toolbar
  * class could relocate to web without dragging core's
  * PropertyPanel into the cross-package import.
  *

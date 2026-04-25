@@ -5,7 +5,7 @@
  * that replaces a session's frames with a new set of slices.
  *
  * Extracted from `app.ts` as part of the Phase 3.5 follow-up to the
- * Phase 3 decomposition (see `docs/plans/app-decomposition.md`).
+ * Phase 3 decomposition (see `docs/plans/_done/app-decomposition.md`).
  * The plan originally left these in `app.ts`; splitting them out
  * finishes the "app.ts is orchestration only" goal.
  */

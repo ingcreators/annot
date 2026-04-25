@@ -4,7 +4,7 @@
  * status strip, and the `currentRootName` label.
  *
  * Extracted from `app.ts` as part of the Phase 3 decomposition
- * (see `docs/plans/app-decomposition.md`). This class collects the
+ * (see `docs/plans/_done/app-decomposition.md`). This class collects the
  * app-level state that the old module-level `./storage/bridge.ts`
  * globals don't know about: the `#deviceStore` cache, the "last
  * selected mode" rehydration on boot, and the UI wiring that keeps

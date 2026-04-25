@@ -49,7 +49,7 @@ export {
 /** Built-in section ids exposed by the drawer. Used by
  *  `App.init({ disableBuiltinUISections })` to opt out of any
  *  given section without touching plugin code. Documented in
- *  `docs/plans/plugin-ui-slots.md`. */
+ *  `docs/plans/_done/plugin-ui-slots.md`. */
 export const BUILTIN_DRAWER_SECTION_IDS = [
   "drawer.file",
   "drawer.tags",
