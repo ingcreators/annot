@@ -5,7 +5,7 @@
 
 import { createThemeToggle } from "@ingcreators/annot-core";
 import type { ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
-import { setTooltip } from "@ingcreators/annot-core/utils";
+import { assertNonNull, setTooltip } from "@ingcreators/annot-core/utils";
 import { ScratchpadStore } from "./editor/scratchpad-store.js";
 import { FileManager } from "./gallery/file-manager.js";
 import { logger } from "./logger.js";
@@ -470,13 +470,22 @@ export class App {
     );
     // Tear down split editor if active (session → gallery).
     this.#splitEditorHost.unmount();
-    const canvasContainer = document.getElementById("canvas-container")!;
+    const canvasContainer = assertNonNull(
+      document.getElementById("canvas-container"),
+      "#canvas-container missing — check index.html shell",
+    );
     canvasContainer.style.display = "none";
 
-    const fileManagerEl = document.getElementById("file-manager")!;
+    const fileManagerEl = assertNonNull(
+      document.getElementById("file-manager"),
+      "#file-manager missing — check index.html shell",
+    );
     fileManagerEl.style.display = "";
 
-    const statusbar = document.getElementById("statusbar")!;
+    const statusbar = assertNonNull(
+      document.getElementById("statusbar"),
+      "#statusbar missing — check index.html shell",
+    );
     statusbar.style.display = "none";
 
     // Tear down editor chrome: remove the body.editor-mode class (hides
@@ -498,8 +507,14 @@ export class App {
     this.#editorSession.resetSessionUI();
 
     if (!this.#fileManager) {
-      const sidebarEl = document.getElementById("sidebar")!;
-      const mainContentEl = document.getElementById("main-content")!;
+      const sidebarEl = assertNonNull(
+        document.getElementById("sidebar"),
+        "#sidebar missing — check index.html shell",
+      );
+      const mainContentEl = assertNonNull(
+        document.getElementById("main-content"),
+        "#main-content missing — check index.html shell",
+      );
 
       this.#fileManager = new FileManager(sidebarEl, mainContentEl, {
         onStorageSelect: (mode) => this.handleStorageSelect(mode),
@@ -547,7 +562,10 @@ export class App {
   }
 
   private buildFileManagerHeader(): void {
-    const toolbarEl = document.getElementById("toolbar")!;
+    const toolbarEl = assertNonNull(
+      document.getElementById("toolbar"),
+      "#toolbar missing — check index.html shell",
+    );
     toolbarEl.innerHTML = "";
 
     const brand = document.createElement("a");

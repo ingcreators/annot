@@ -12,7 +12,7 @@
 
 import type { ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
 import { getFilename } from "@ingcreators/annot-core/storage";
-import { newIdB58 } from "@ingcreators/annot-core/utils";
+import { assertNonNull, newIdB58 } from "@ingcreators/annot-core/utils";
 import type { SplitEditor, SplitEditorSlice } from "../editor/split-editor.js";
 import { loadEncodeOptions } from "../encode-options.js";
 import { showAlertDialog } from "../ui/dialog.js";
@@ -76,11 +76,20 @@ export class SplitEditorHost {
     const sessionId = records[0]!.tags?.session || "";
 
     // Hide the single-image editor chrome so the SplitEditor owns the screen.
-    const canvasContainer = document.getElementById("canvas-container")!;
+    const canvasContainer = assertNonNull(
+      document.getElementById("canvas-container"),
+      "#canvas-container missing — check index.html shell",
+    );
     canvasContainer.style.display = "none";
-    const statusbar = document.getElementById("statusbar")!;
+    const statusbar = assertNonNull(
+      document.getElementById("statusbar"),
+      "#statusbar missing — check index.html shell",
+    );
     statusbar.style.display = "none";
-    const fileManagerEl = document.getElementById("file-manager")!;
+    const fileManagerEl = assertNonNull(
+      document.getElementById("file-manager"),
+      "#file-manager missing — check index.html shell",
+    );
     fileManagerEl.style.display = "none";
 
     const closeAndGoHome = () => {

@@ -1,3 +1,4 @@
+export { assertNonNull } from "./assert.js";
 export {
   DEFAULT_FILL_COLOR,
   DEFAULT_FONT_SIZE,

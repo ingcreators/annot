@@ -71,6 +71,9 @@ export {
 } from "./utils/constants.js";
 export { computeDasharray, detectDashKey } from "./utils/dash-utils.js";
 
+// ─── Assertions (pure runtime guard for non-null invariants) ──────────
+export { assertNonNull } from "./utils/assert.js";
+
 // ─── ID generation (Web Crypto, Node 19+ or `node:crypto` webcrypto) ──
 export { newIdB58 } from "./utils/id.js";
 
