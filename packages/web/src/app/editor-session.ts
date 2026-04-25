@@ -56,10 +56,13 @@ export interface EditorSessionDeps {
    *  list with built-ins, filters by `isBuiltinUISectionDisabled`,
    *  sorts by `priority`, and mounts each. Optional. */
   getDrawerSections?(): UISection[];
+  /** Plugin-registered right-panel sections. Same shape and
+   *  semantics as `getDrawerSections`. Optional. */
+  getRightPanelSections?(): UISection[];
   /** True if the deployment opted out of the named built-in UI
-   *  section via `App.init({ disableBuiltinUISections })`.
-   *  Phase 2 wires the drawer; Phase 3 will wire the right-panel
-   *  through the same callback. */
+   *  section via `App.init({ disableBuiltinUISections })`. Used
+   *  for both the drawer (Phase 2) and the right-panel
+   *  (Phase 3). */
   isBuiltinUISectionDisabled?(id: string): boolean;
   /** Fire the plugin-host `onEditorReady` event. Called at the end
    *  of `setupEditor` once the canvas / history / right panel are
@@ -334,6 +337,10 @@ export class EditorSession {
       canvas,
       history,
       selection,
+      {
+        getPluginSections: this.deps.getRightPanelSections,
+        isBuiltinSectionDisabled: this.deps.isBuiltinUISectionDisabled,
+      },
     );
     // Push DOM-element metadata (captured by the browser extension)
     // into the right panel so the Elements section appears for

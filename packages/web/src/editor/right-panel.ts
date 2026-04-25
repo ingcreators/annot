@@ -1,44 +1,54 @@
 /**
  * EditorRightPanel — unified context-aware properties panel.
  *
+ * Phase 3 of `docs/plans/plugin-ui-slots.md` reshaped this class
+ * into a section host. The three previous hardcoded blocks
+ * (tool-properties, selection-properties, page-elements) are now
+ * `UISection` modules under `./right-panel-sections/`. Plugin-
+ * registered right-panel sections (Phase 1's
+ * `addRightPanelSection`) render alongside, sorted by `priority`.
+ *
  * Layout (top to bottom):
  *   ┌─ Actions ──────────────────────┐    ← only with selection
- *   │ ↺  ↻  ↔  ↕                     │       (rotate/flip)
+ *   │ ↺  ↻  ↔  ↕   ⇧  ⇩  ⤴ ⤵ etc.    │       (rotate/flip/arrange/align/group)
  *   └─────────────────────────────────┘
- *   ┌─ [Dynamic Title] ──────────────┐    ← tool OR selection props
- *   │ Color ▌                         │
- *   │ Width  3 pt                     │
- *   │ ...                             │
+ *   ┌─ Sections (sorted by priority) ┐
+ *   │ • right-panel.tool-properties   │  ← when active tool
+ *   │ • right-panel.selection-properties│ ← when selection
+ *   │ • right-panel.page-elements     │  ← when pageMetadata
+ *   │ • plugin sections by priority   │
+ *   └─────────────────────────────────┘
+ *   ┌─ Empty state ──────────────────┐    ← when no section visible
  *   └─────────────────────────────────┘
  *
- * Design decisions (consolidated from the earlier two-section layout):
+ * Design decisions preserved from the previous implementation:
  *
- *   1. SINGLE properties section with a DYNAMIC title — e.g.
- *      "Rectangle" when the Shape tool is active with the rect
- *      variant, "Arrow" when an arrow is selected. The generic
- *      "Tool" / "Selection" section labels were removed because they
- *      describe the MECHANISM (which data source) rather than the
- *      CONTENT (what the user is editing). Concrete names match the
- *      Figma / Miro / Excalidraw convention.
+ *   1. Tool and Selection modes are MUTUALLY EXCLUSIVE. Their
+ *      sections each have a `visible(ctx)` predicate; the host
+ *      already enforces "either active tool or selection, not
+ *      both" by calling `showSelectionProperties([])` whenever a
+ *      drawing tool is active and `showToolProperties(null)` on
+ *      selection. The visible() guards then ensure exactly one
+ *      section mounts.
  *
- *   2. Tool and Selection modes are MUTUALLY EXCLUSIVE. Only one
- *      content block is visible at a time (the host's `app.ts`
- *      already enforces this: it calls `showSelectionProperties([])`
- *      whenever a drawing tool is active, and vice versa). So the
- *      panel keeps ONE content container and swaps its contents.
+ *   2. Transform / Arrange / Align / Group buttons live in an
+ *      "Actions" panel chrome rendered above the section list.
+ *      Operations the user performs ON a shape, not properties
+ *      they edit. Stays as panel-level chrome (not a UISection)
+ *      to preserve the visual hierarchy.
  *
- *   3. Transform (rotate/flip) moved OUT of the properties panel
- *      into an "Actions" button row above it. Rationale: rotate/flip
- *      are operations the user performs ON a shape, not properties
- *      they edit. Exposing them as quick-tap buttons matches the
- *      Figma / Miro / PowerPoint convention and removes the
- *      temptation to treat rotation as a cumulative numeric input.
+ *   3. The panel is ALWAYS VISIBLE (240 px reserved). Hiding /
+ *      showing on selection changes would cause canvas-size
+ *      jitter and fit-to-window recomputes.
  *
- *   4. The panel is ALWAYS VISIBLE (240 px reserved). Hiding/showing
- *      on selection changes would cause canvas-size jitter and
- *      fit-to-window recomputes.
+ *   4. `PropertyPanel` is a panel-level singleton. The
+ *      selection-properties section borrows its host element on
+ *      mount and detaches on unmount, so the embedded
+ *      PropertyPanel's internal observers / event listeners
+ *      survive mode switches.
  */
-import type { PageElement, PageMetadata, SelectionManager, Toolbar } from "@ingcreators/annot-core";
+
+import type { PageMetadata, SelectionManager, Toolbar } from "@ingcreators/annot-core";
 import {
   type CanvasManager,
   type History,
@@ -51,8 +61,10 @@ import {
   setRotation,
   toggleFlip,
 } from "@ingcreators/annot-core/editor/transform-utils";
-
-const SVG_NS = "http://www.w3.org/2000/svg";
+import type { UISection, UISectionContext, UISectionLifecycle } from "../app/plugin-host.js";
+import { createPageElementsSection } from "./right-panel-sections/page-elements-section.js";
+import { createSelectionPropertiesSection } from "./right-panel-sections/selection-properties-section.js";
+import { createToolPropertiesSection } from "./right-panel-sections/tool-properties-section.js";
 
 // =============================================================================
 // Action-button SVGs — custom glyphs modeled on PowerPoint's ribbon
@@ -76,79 +88,94 @@ const FLIP_V_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" s
   <path d="M7 20 L7 14 L17 14 L17 20 Z"/>
 </svg>`;
 
-/** Bring to Front — two overlapping rectangles, the front one solid
- *  (closer to viewer), the back one outlined. Matches PowerPoint's
- *  "bring to front" glyph where the foreground shape is emphasized. */
 const BRING_TO_FRONT_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true">
   <rect x="4" y="4" width="11" height="11" stroke-opacity="0.45"/>
   <rect x="9" y="9" width="11" height="11" fill="currentColor"/>
 </svg>`;
 
-/** Send to Back — inverse of BringToFront: the BACK shape is the
- *  solid one, the front is merely outlined. */
 const SEND_TO_BACK_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true">
   <rect x="4" y="4" width="11" height="11" fill="currentColor"/>
   <rect x="9" y="9" width="11" height="11" fill="var(--bg-panel, #fff)" stroke-opacity="0.9"/>
 </svg>`;
 
-/** Bring Forward — single rectangle with an up-pointing arrow on
- *  the right, echoing PowerPoint's "step up one layer" glyph. */
 const BRING_FORWARD_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
   <rect x="4" y="8" width="12" height="12" fill="currentColor" fill-opacity="0.15"/>
   <path d="M20 16 V6 M16 10 L20 6 L24 10" transform="translate(-2 0)"/>
 </svg>`;
 
-/** Send Backward — mirror of BringForward: same rect + down arrow. */
 const SEND_BACKWARD_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
   <rect x="4" y="4" width="12" height="12" fill="currentColor" fill-opacity="0.15"/>
   <path d="M20 8 V18 M16 14 L20 18 L24 14" transform="translate(-2 0)"/>
 </svg>`;
+
+/** Built-in section ids exposed by the right-panel. Used by
+ *  `App.init({ disableBuiltinUISections })` to opt out of any
+ *  given section without touching plugin code. Documented in
+ *  `docs/plans/plugin-ui-slots.md`. */
+export const BUILTIN_RIGHT_PANEL_SECTION_IDS = [
+  "right-panel.tool-properties",
+  "right-panel.selection-properties",
+  "right-panel.page-elements",
+] as const;
+
+export interface EditorRightPanelDeps {
+  /** Plugin-registered right-panel sections. Combined with built-
+   *  ins before sort + filter. Optional. */
+  getPluginSections?(): UISection[];
+  /** Built-in section ids the deployment opted out of via
+   *  `App.init({ disableBuiltinUISections })`. Optional. */
+  isBuiltinSectionDisabled?(id: string): boolean;
+}
+
+interface MountedSection {
+  section: UISection;
+  sectionEl: HTMLElement;
+  bodyEl: HTMLElement;
+  lifecycle: UISectionLifecycle;
+  reactive: boolean;
+}
 
 export class EditorRightPanel {
   #container: HTMLElement;
   #toolbar: Toolbar;
   #history: History;
   #selection: SelectionManager;
+  #canvas: CanvasManager;
+  #deps: EditorRightPanelDeps;
 
-  /** Inline, "docked" PropertyPanel — no floating chrome. */
+  /** Inline, "docked" PropertyPanel — owned at the panel level so
+   *  its internal observers / event listeners survive mode
+   *  switches. The selection-properties section attaches /
+   *  detaches `#propPanelHost` to / from its mount container. */
   #propPanel: PropertyPanel;
+  #propPanelHost: HTMLElement;
 
-  /** Action buttons (rotate/flip) shown only with selection. */
+  /** Action buttons (rotate / flip / arrange / align / group) shown
+   *  only when there's a selection. Panel-level chrome — not a
+   *  `UISection` — so it stays anchored above the section list
+   *  regardless of which sections happen to be visible. */
   #actionsSection: HTMLElement;
 
-  /** Single properties section with dynamic title. */
-  #propertiesSection: HTMLElement;
-  #titleEl: HTMLElement;
-  /** Container for tool-side rendered controls. */
-  #toolContent: HTMLElement;
-  /** Container for PropertyPanel's content (Selection mode). */
-  #selectionContent: HTMLElement;
+  /** Wraps the priority-sorted plugin + built-in sections. Inserted
+   *  between Actions and the empty state so the layout stays
+   *  consistent across re-renders. */
+  #sectionsHost: HTMLElement;
 
-  /** Shown when neither tool nor selection has something to edit. */
+  /** Shown when no section visible — keeps the always-visible
+   *  panel feeling intentional. */
   #emptyState: HTMLElement;
 
-  /** Track mode so swapping the visible content is idempotent. */
-  #mode: "none" | "tool" | "selection" = "none";
-  /** Selected targets remembered so the action buttons can reach them. */
-  #currentTargets: SVGElement[] = [];
-
-  // ---- Elements (DOM metadata) section ----
-
-  /** Lazy: only created when an image with pageMetadata is loaded. */
-  #elementsSection: HTMLElement | null = null;
-  #elementsBody: HTMLElement | null = null;
-  /** Live metadata for the current image. Null when the image has
-   *  no DOM snapshot (paste, desktop capture, legacy). */
+  /** Active tool id mirror — set via `showToolProperties`. */
+  #activeToolId: string | null = null;
+  /** Current selection mirror — set via `showSelectionProperties`. */
+  #currentSelection: SVGElement[] = [];
+  /** Current page metadata — set via `setPageMetadata`. */
   #pageMetadata: PageMetadata | null = null;
-  /** Filtered list of elements currently displayed (matches search
-   *  + falls within screenshot bounds). */
-  #visibleElements: PageElement[] = [];
-  /** Hover-highlight overlay drawn in the canvas SVG when a sidebar
-   *  row is hovered. Lazy-created on first hover. */
-  #hoverHighlight: SVGRectElement | null = null;
-  /** CanvasManager — needed to insert annotations + draw the hover
-   *  overlay on the canvas SVG. Stashed at construction time. */
-  #canvas: CanvasManager;
+
+  /** Built-in sections constructed once at panel boot. */
+  #builtinSections: UISection[];
+  /** Currently-mounted section state. */
+  #mounted: MountedSection[] = [];
 
   constructor(
     container: HTMLElement,
@@ -156,47 +183,35 @@ export class EditorRightPanel {
     canvas: CanvasManager,
     history: History,
     selection: SelectionManager,
+    deps: EditorRightPanelDeps = {},
   ) {
     this.#container = container;
     this.#toolbar = toolbar;
     this.#history = history;
     this.#selection = selection;
     this.#canvas = canvas;
+    this.#deps = deps;
     this.#container.innerHTML = "";
 
-    // --- Actions section (transform buttons) ---
+    // --- Actions section (transform / arrange / align / group buttons) ---
     this.#actionsSection = document.createElement("section");
     this.#actionsSection.className = "editor-right-panel-actions";
     this.#actionsSection.style.display = "none";
     this.#buildActionButtons(this.#actionsSection);
     this.#container.appendChild(this.#actionsSection);
 
-    // --- Properties section (dynamic title + swappable content) ---
-    this.#propertiesSection = document.createElement("section");
-    this.#propertiesSection.className = "editor-right-panel-section";
-    this.#propertiesSection.style.display = "none";
+    // --- Sections host (priority-sorted built-ins + plugins) ---
+    this.#sectionsHost = document.createElement("div");
+    this.#sectionsHost.className = "editor-right-panel-sections-host";
+    this.#container.appendChild(this.#sectionsHost);
 
-    this.#titleEl = document.createElement("h3");
-    this.#titleEl.className = "editor-right-panel-section-title";
-    this.#propertiesSection.appendChild(this.#titleEl);
-
-    // Two inner containers; exactly one is visible at a time. We keep
-    // them as siblings (rather than swapping `innerHTML`) so the embedded
-    // PropertyPanel instance survives across mode switches and retains
-    // its state (event handlers, observers, etc.).
-    this.#toolContent = document.createElement("div");
-    this.#toolContent.style.display = "none";
-    this.#propertiesSection.appendChild(this.#toolContent);
-
-    this.#selectionContent = document.createElement("div");
-    this.#selectionContent.style.display = "none";
-    this.#propertiesSection.appendChild(this.#selectionContent);
-
-    this.#container.appendChild(this.#propertiesSection);
-
-    // Embedded PropertyPanel — renders into its own root inside
-    // selectionContent, which we toggle visibility on.
-    this.#propPanel = new PropertyPanel(this.#selectionContent, canvas, history, "docked");
+    // --- PropertyPanel singleton ---
+    // Built once into a stable host element so its event listeners
+    // / observers survive mode switches. The selection-properties
+    // section attaches / detaches this host as it mounts /
+    // unmounts.
+    this.#propPanelHost = document.createElement("div");
+    this.#propPanel = new PropertyPanel(this.#propPanelHost, canvas, history, "docked");
     this.#propPanel.onTargetReplaced = (replacements) => {
       const newEls = replacements.map((r) => r.newEl);
       if (newEls.length === 1) selection.select(newEls[0]!);
@@ -213,9 +228,8 @@ export class EditorRightPanel {
     // via the Type picker). Load the new variant's preset and apply
     // its style attrs so the element visually reflects the variant's
     // saved defaults, then re-render this panel so the TITLE refreshes
-    // ("Selected Arrow" → "Selected Double arrow") and variant-
-    // dependent controls (like the per-end shape picker's filter)
-    // rebuild against the new state.
+    // and variant-dependent controls (like the per-end shape picker's
+    // filter) rebuild against the new state.
     this.#propPanel.onVariantChanged = (targets) => {
       for (const t of targets) toolbar.applyElementVariantPreset(t);
       selection.refreshHandles();
@@ -234,49 +248,193 @@ export class EditorRightPanel {
     `;
     this.#container.appendChild(this.#emptyState);
 
+    // --- Built-in sections ---
+    this.#builtinSections = [
+      createToolPropertiesSection({
+        getActiveToolId: () => this.#activeToolId,
+        getToolbar: () => this.#toolbar,
+      }),
+      createSelectionPropertiesSection({
+        getSelection: () => this.#currentSelection,
+        getPropPanelHost: () => this.#propPanelHost,
+        showPropPanel: (els) => this.#propPanel.show(els),
+        hidePropPanel: () => this.#propPanel.hide(),
+        computeTitle: (els) => this.#computeSelectionTitle(els),
+      }),
+      createPageElementsSection({
+        getPageMetadata: () => this.#pageMetadata,
+        getCanvas: () => this.#canvas,
+        getHistory: () => this.#history,
+        getSelection: () => this.#selection,
+      }),
+    ];
+
     document.body.classList.add("has-right-panel");
-    this.#syncEmptyState();
+    this.#render();
   }
 
-  /** Called when the active tool changes. `toolId === null` → Select
-   *  mode (no tool → hide tool content). */
+  /** Called when the active tool changes. `toolId === null` →
+   *  Select mode (no tool). */
   showToolProperties(toolId: string | null): void {
-    if (!toolId || toolId === "crop") {
-      // Select mode, or tool has no adjustable properties.
-      if (this.#mode === "tool") {
-        this.#mode = "none";
-        this.#propertiesSection.style.display = "none";
-        this.#toolContent.style.display = "none";
-        this.#toolContent.innerHTML = "";
-      }
-      this.#setDrawingBanner(false);
-      this.#syncEmptyState();
-      return;
-    }
-    this.#mode = "tool";
-    this.#toolContent.innerHTML = "";
-    this.#toolbar.renderToolProperties(toolId, this.#toolContent);
-    this.#toolContent.style.display = "";
-    this.#selectionContent.style.display = "none";
-    this.#propPanel.hide();
-    this.#titleEl.textContent = this.#toolbar.getToolDisplayTitle(toolId);
-    this.#propertiesSection.style.display = "";
-    // Tool mode implies no selection — hide Actions (transform buttons
-    // have nothing to act on).
-    this.#actionsSection.style.display = "none";
-    this.#currentTargets = [];
-    // Show the floating "Drawing mode" indicator when the freehand
-    // tool is active (multi-stroke session continues until Esc/Done —
-    // users need a visual cue that the tool is "holding" their work).
+    this.#activeToolId = toolId;
+    // The tool-properties section's `visible(ctx)` filters out
+    // null / "crop" tools, so a null toolId naturally hides the
+    // section on the next render.
     this.#setDrawingBanner(toolId === "freehand");
-    this.#syncEmptyState();
+    this.#render();
+  }
+
+  /** Called on selection change. Empty selection → hide section. */
+  showSelectionProperties(elements: SVGElement[]): void {
+    this.#currentSelection = elements;
+    this.#render();
+  }
+
+  /** Update / clear the DOM-element metadata for the current image.
+   *  Pass `null` (or omit) when loading an image without metadata
+   *  (paste, desktop capture, legacy) — the Elements section then
+   *  hides itself. Called by EditorSession on each new editor
+   *  session. */
+  setPageMetadata(meta: PageMetadata | null | undefined): void {
+    this.#pageMetadata = meta ?? null;
+    console.log(
+      "[annot/editor] setPageMetadata:",
+      meta ? `${meta.elements.length} elements` : "null/undefined",
+      meta?.captureRect,
+    );
+    this.#render();
+  }
+
+  destroy(): void {
+    this.#disposeSections();
+    this.#setDrawingBanner(false);
+    this.#container.innerHTML = "";
+    document.body.classList.remove("has-right-panel");
+  }
+
+  /**
+   * Lightweight refresh: dispatch `update(ctx)` to every reactive
+   * section without re-rendering DOM. Use when only data inside an
+   * existing section changed and visibility didn't flip.
+   */
+  notifyUpdate(): void {
+    const ctx = this.#ctx();
+    for (const state of this.#mounted) {
+      if (state.reactive) {
+        const lifecycle = state.lifecycle as { update?(c: UISectionContext): void };
+        if (lifecycle.update) {
+          try {
+            lifecycle.update(ctx);
+          } catch (e) {
+            console.error(
+              `[right-panel] section "${state.section.id}" update threw:`,
+              e,
+            );
+          }
+        }
+      }
+    }
+  }
+
+  /** Section context handed to every `mount` / `update` call. The
+   *  `path` / `mode` / `tags` fields are placeholders for now —
+   *  the right-panel doesn't directly receive them; a future
+   *  follow-up can plumb them via deps if a plugin section needs
+   *  them. */
+  #ctx(): UISectionContext {
+    return {
+      path: "",
+      mode: "",
+      tags: {},
+      setTitle: (newTitle) => {
+        // Find the most-recently-mounted section that asked to
+        // override its title — plugins typically call this from
+        // inside `mount` (as the host-supplied DOM is being set
+        // up), so the freshest entry in `#mounted` is theirs.
+        const last = this.#mounted[this.#mounted.length - 1];
+        if (!last) return;
+        const heading = last.sectionEl.querySelector(
+          ".editor-right-panel-section-title",
+        );
+        if (heading) heading.textContent = newTitle;
+      },
+    };
+  }
+
+  #composeSections(): UISection[] {
+    const isDisabled = this.#deps.isBuiltinSectionDisabled ?? (() => false);
+    const builtins = this.#builtinSections.filter((s) => !isDisabled(s.id));
+    const plugins = this.#deps.getPluginSections?.() ?? [];
+    const all = [...builtins, ...plugins];
+    return all.sort((a, b) => {
+      const ap = Number.isFinite(a.priority) ? a.priority : Number.POSITIVE_INFINITY;
+      const bp = Number.isFinite(b.priority) ? b.priority : Number.POSITIVE_INFINITY;
+      return ap - bp;
+    });
+  }
+
+  #render(): void {
+    this.#disposeSections();
+    this.#sectionsHost.innerHTML = "";
+
+    // Toggle Actions panel chrome based on selection state. Stays
+    // above the section list (panel-level chrome).
+    this.#actionsSection.style.display =
+      this.#currentSelection.length > 0 ? "" : "none";
+
+    const ctx = this.#ctx();
+    let mountedCount = 0;
+    for (const section of this.#composeSections()) {
+      if (section.visible && !section.visible(ctx)) continue;
+      const sectionEl = document.createElement("section");
+      sectionEl.className = "editor-right-panel-section";
+      sectionEl.dataset["sectionId"] = section.id;
+      const heading = document.createElement("h3");
+      heading.className = "editor-right-panel-section-title";
+      heading.textContent = section.title;
+      sectionEl.appendChild(heading);
+      const body = document.createElement("div");
+      body.className = "editor-right-panel-section-body";
+      sectionEl.appendChild(body);
+      this.#sectionsHost.appendChild(sectionEl);
+      try {
+        const lifecycle = section.mount(body, ctx);
+        this.#mounted.push({
+          section,
+          sectionEl,
+          bodyEl: body,
+          lifecycle,
+          reactive: typeof lifecycle === "object",
+        });
+        mountedCount++;
+      } catch (e) {
+        console.error(`[right-panel] section "${section.id}" mount threw:`, e);
+        sectionEl.remove();
+      }
+    }
+
+    this.#emptyState.style.display = mountedCount > 0 ? "none" : "";
+  }
+
+  #disposeSections(): void {
+    for (const state of this.#mounted) {
+      try {
+        if (typeof state.lifecycle === "function") state.lifecycle();
+        else state.lifecycle.unmount();
+      } catch (e) {
+        console.error(
+          `[right-panel] section "${state.section.id}" unmount threw:`,
+          e,
+        );
+      }
+    }
+    this.#mounted = [];
   }
 
   /** Toggle the floating "Drawing mode" banner shown at the top of
    *  the canvas while the Draw tool is active. Communicates that
    *  strokes are accumulating into a session that needs to be
-   *  committed (Esc / Done) — surfaces the non-standard draw.io-
-   *  style behavior so users don't get confused. Lazily-created. */
+   *  committed (Esc / Done). Lazily-created. */
   #setDrawingBanner(visible: boolean): void {
     const id = "draw-session-indicator";
     let banner = document.getElementById(id);
@@ -293,270 +451,10 @@ export class EditorRightPanel {
     }
   }
 
-  /** Called on selection change. Empty selection → hide section. */
-  showSelectionProperties(elements: SVGElement[]): void {
-    this.#currentTargets = elements;
-    if (elements.length === 0) {
-      if (this.#mode === "selection") {
-        this.#mode = "none";
-        this.#propertiesSection.style.display = "none";
-        this.#selectionContent.style.display = "none";
-        this.#propPanel.hide();
-      }
-      this.#actionsSection.style.display = "none";
-      this.#syncEmptyState();
-      return;
-    }
-    this.#mode = "selection";
-    this.#toolContent.style.display = "none";
-    this.#toolContent.innerHTML = "";
-    this.#selectionContent.style.display = "";
-    this.#propPanel.show(elements);
-    this.#titleEl.textContent = this.#computeSelectionTitle(elements);
-    this.#propertiesSection.style.display = "";
-    // Actions only make sense on at least one real element. Markers
-    // (numbered badges) have rotation suppressed elsewhere but we
-    // still show the flip buttons for consistency.
-    this.#actionsSection.style.display = "";
-    this.#syncEmptyState();
-  }
-
-  destroy(): void {
-    this.#container.innerHTML = "";
-    document.body.classList.remove("has-right-panel");
-    this.#hoverHighlight?.remove();
-    this.#hoverHighlight = null;
-  }
-
-  /** Update / clear the DOM-element metadata for the current image.
-   *  Pass `null` (or omit) when loading an image without metadata
-   *  (paste, desktop capture, legacy) — the Elements section then
-   *  hides itself. Called by app.ts on each new editor session. */
-  setPageMetadata(meta: PageMetadata | null | undefined): void {
-    this.#pageMetadata = meta ?? null;
-    console.log(
-      "[annot/editor] setPageMetadata:",
-      meta ? `${meta.elements.length} elements` : "null/undefined",
-      meta?.captureRect,
-    );
-    if (!this.#pageMetadata || this.#pageMetadata.elements.length === 0) {
-      // Hide section if visible
-      if (this.#elementsSection) this.#elementsSection.style.display = "none";
-      return;
-    }
-    if (!this.#elementsSection) this.#buildElementsSection();
-    this.#elementsSection!.style.display = "";
-    this.#refreshElementsList("");
-  }
-
-  /** Lazy-build the Elements panel: section header + search box +
-   *  scrollable list. Mounted at the bottom of the right panel so it
-   *  doesn't shift the focus area (Properties / Actions) above. */
-  #buildElementsSection(): void {
-    const section = document.createElement("section");
-    section.className = "editor-right-panel-section editor-right-panel-elements";
-
-    const title = document.createElement("h3");
-    title.className = "editor-right-panel-section-title";
-    title.textContent = "Elements";
-    section.appendChild(title);
-
-    const hint = document.createElement("p");
-    hint.className = "editor-right-panel-elements-hint";
-    hint.textContent = "Click to draw a box around it.";
-    section.appendChild(hint);
-
-    const search = document.createElement("input");
-    search.type = "search";
-    search.placeholder = "Search by text…";
-    search.className = "editor-right-panel-elements-search";
-    search.addEventListener("input", () => this.#refreshElementsList(search.value));
-    section.appendChild(search);
-
-    const body = document.createElement("div");
-    body.className = "editor-right-panel-elements-list";
-    section.appendChild(body);
-    this.#elementsBody = body;
-
-    // Insert BEFORE the empty-state element. The empty state has
-    // `flex: 1` to fill remaining space and is appended last in the
-    // constructor — appending the Elements section after it would
-    // push the section below the visible area, hidden by the
-    // panel's flex layout. Inserting before the empty state lands
-    // the section in the visible flow above it.
-    this.#container.insertBefore(section, this.#emptyState);
-    this.#elementsSection = section;
-  }
-
-  /** Re-render the elements list, optionally filtered by query (case-
-   *  insensitive substring match against text + ariaLabel + role +
-   *  placeholder). Off-frame elements (bbox outside captureRect /
-   *  screenshot) are skipped — they wouldn't render usefully and
-   *  produce nonsense coordinates. */
-  #refreshElementsList(query: string): void {
-    if (!this.#elementsBody || !this.#pageMetadata) return;
-    const meta = this.#pageMetadata;
-
-    // Filter against the metadata's `captureRect` (the doc-coord
-    // rectangle the screenshot covers). For area captures this is
-    // a small sub-region — without this filter we'd surface every
-    // element on the page with screenshot-coord garbage. Element
-    // is "in bounds" if its bbox INTERSECTS captureRect at all.
-    // Defensive: older metadata records may not have captureRect
-    // (the field was added later). Fall back to scrollOffset +
-    // viewport so existing screenshots still surface elements.
-    const cr = meta.captureRect ?? {
-      x: meta.scrollOffset.x,
-      y: meta.scrollOffset.y,
-      width: meta.viewport.width,
-      height: meta.viewport.height,
-    };
-    const inBounds = (el: PageElement): boolean => {
-      const [x, y, w, h] = el.bbox;
-      return x + w > cr.x && y + h > cr.y && x < cr.x + cr.width && y < cr.y + cr.height;
-    };
-    const matchesQuery = (el: PageElement): boolean => {
-      if (!query) return true;
-      const q = query.toLowerCase();
-      return [el.text, el.ariaLabel, el.role, el.placeholder, el.tag, el.href].some((s) =>
-        s?.toLowerCase().includes(q),
-      );
-    };
-
-    const filtered = meta.elements.filter((e) => inBounds(e) && matchesQuery(e));
-    console.log(
-      "[annot/editor] filtered elements:",
-      filtered.length,
-      "/",
-      meta.elements.length,
-      "captureRect:",
-      cr,
-    );
-    this.#visibleElements = filtered;
-    this.#elementsBody.innerHTML = "";
-    if (filtered.length === 0) {
-      const empty = document.createElement("div");
-      empty.className = "editor-right-panel-elements-empty";
-      empty.textContent = query ? "No matches." : "No interactive elements detected.";
-      this.#elementsBody.appendChild(empty);
-      return;
-    }
-    for (const el of filtered) {
-      this.#elementsBody.appendChild(this.#buildElementRow(el));
-    }
-  }
-
-  /** One row in the elements list — icon + label + (optional) sub-text. */
-  #buildElementRow(el: PageElement): HTMLElement {
-    const row = document.createElement("button");
-    row.type = "button";
-    row.className = "editor-right-panel-element-row";
-
-    const icon = document.createElement("span");
-    icon.className = "editor-right-panel-element-icon material-symbols-outlined";
-    icon.textContent = iconForElement(el);
-    row.appendChild(icon);
-
-    const text = document.createElement("span");
-    text.className = "editor-right-panel-element-label";
-    text.textContent = primaryLabelFor(el);
-    row.appendChild(text);
-
-    const sub = document.createElement("span");
-    sub.className = "editor-right-panel-element-sub";
-    sub.textContent = subLabelFor(el);
-    row.appendChild(sub);
-
-    setTooltip(row, fullDescriptionFor(el));
-
-    // Hover → outline on canvas. Pointer-leave clears.
-    row.addEventListener("mouseenter", () => this.#showHoverHighlight(el));
-    row.addEventListener("mouseleave", () => this.#clearHoverHighlight());
-    // Click → insert annotation rectangle around the element.
-    row.addEventListener("click", () => {
-      this.#clearHoverHighlight();
-      this.#annotateElement(el);
-    });
-    return row;
-  }
-
-  /** Convert an element's document-coords bbox (from metadata) to
-   *  the canvas SVG's viewBox coords (which equal the screenshot's
-   *  device-pixel dimensions). Origin is the metadata's `captureRect`
-   *  — the doc-coord rect the screenshot covers — so visible / area
-   *  / scroll captures all map to the right spot. CSS px → device
-   *  px via DPR. */
-  #bboxOnScreenshot(el: PageElement): [number, number, number, number] {
-    const meta = this.#pageMetadata!;
-    const dpr = meta.devicePixelRatio || 1;
-    const ox = meta.captureRect.x;
-    const oy = meta.captureRect.y;
-    const [x, y, w, h] = el.bbox;
-    return [(x - ox) * dpr, (y - oy) * dpr, w * dpr, h * dpr];
-  }
-
-  /** Draw a translucent outline rect on the canvas SVG at the given
-   *  element's bbox. Reuses one rect across hovers (cheap). Cleared
-   *  by `#clearHoverHighlight` when the row's hover ends. */
-  #showHoverHighlight(el: PageElement): void {
-    const [x, y, w, h] = this.#bboxOnScreenshot(el);
-    if (!this.#hoverHighlight) {
-      const rect = document.createElementNS(SVG_NS, "rect");
-      rect.setAttribute("fill", "none");
-      rect.setAttribute("stroke", "#ff00a8");
-      rect.setAttribute("stroke-width", "2");
-      rect.setAttribute("vector-effect", "non-scaling-stroke");
-      rect.setAttribute("pointer-events", "none");
-      rect.setAttribute("data-role", "elements-hover");
-      this.#canvas.svg.appendChild(rect);
-      this.#hoverHighlight = rect;
-    }
-    this.#hoverHighlight.setAttribute("x", String(x));
-    this.#hoverHighlight.setAttribute("y", String(y));
-    this.#hoverHighlight.setAttribute("width", String(w));
-    this.#hoverHighlight.setAttribute("height", String(h));
-    this.#hoverHighlight.setAttribute("opacity", "1");
-  }
-
-  #clearHoverHighlight(): void {
-    if (this.#hoverHighlight) this.#hoverHighlight.setAttribute("opacity", "0");
-  }
-
-  /** Insert a red rectangle annotation around the element's bbox.
-   *  The new rect lands in `#annotations` (so it exports / saves
-   *  like any user-drawn rect) and becomes the selection so the
-   *  user can immediately tweak it via the Property panel. */
-  #annotateElement(el: PageElement): void {
-    const [x, y, w, h] = this.#bboxOnScreenshot(el);
-    if (w < 1 || h < 1) return;
-    const rect = document.createElementNS(SVG_NS, "rect");
-    rect.setAttribute("x", String(x));
-    rect.setAttribute("y", String(y));
-    rect.setAttribute("width", String(w));
-    rect.setAttribute("height", String(h));
-    rect.setAttribute("fill", "none");
-    rect.setAttribute("stroke", "#ff0000");
-    rect.setAttribute("stroke-width", "3");
-    this.#canvas.annotations.appendChild(rect);
-    this.#history.save();
-    // Select the newly-created rect so the user can immediately
-    // drag / resize / restyle without an extra click.
-    this.#selection.select(rect);
-  }
-
-  // ---- Private helpers ----
-
-  /** Build the rotate-CCW / rotate-CW / flip-H / flip-V buttons. Each
-   *  button applies its operation to every currently-selected element
-   *  and saves a history entry. Rotation is incremental (90° per
-   *  click), matching the user's mental model of "do it, see it,
-   *  maybe do it again". */
+  /** Build the rotate / flip / arrange / align / group buttons. Each
+   *  button applies its operation to every currently-selected
+   *  element and saves a history entry. */
   #buildActionButtons(container: HTMLElement): void {
-    /** Icon-only button matching the rest of the editor UI. Tooltip
-     *  (positioned above the button via editor.css so it stays
-     *  inside the narrow 240 px panel) carries the full PowerPoint
-     *  terminology + keyboard shortcut, so users who recognize the
-     *  icon click directly and everyone else hovers. */
     const mkBtn = (
       icon: string | { svg: string },
       tooltip: string,
@@ -576,10 +474,6 @@ export class EditorRightPanel {
       return btn;
     };
 
-    /** Build a category header matching the property-panel's
-     *  pp-section pattern so Actions reads with the same visual
-     *  vocabulary as Properties — TRANSFORM / ARRANGE appear the
-     *  same way as TYPE / FILL / LINE above. */
     const mkGroupHeader = (text: string): HTMLElement => {
       const h = document.createElement("div");
       h.className = "editor-right-panel-actions-group-label";
@@ -587,8 +481,6 @@ export class EditorRightPanel {
       return h;
     };
 
-    // Group 1: Transform (rotate / flip) — operations that change
-    // the element's orientation.
     container.appendChild(mkGroupHeader("Transform"));
     const transformRow = document.createElement("div");
     transformRow.className = "editor-right-panel-actions-row";
@@ -604,9 +496,6 @@ export class EditorRightPanel {
     );
     container.appendChild(transformRow);
 
-    // Group 2: Arrange (z-order) — operations that change the
-    // element's stacking position. "Arrange" is PowerPoint's ribbon
-    // tab name for this group; matches users' existing vocabulary.
     container.appendChild(mkGroupHeader("Arrange"));
     const zorderRow = document.createElement("div");
     zorderRow.className = "editor-right-panel-actions-row";
@@ -632,11 +521,6 @@ export class EditorRightPanel {
     );
     container.appendChild(zorderRow);
 
-    // Group 3: Align — six edge/center options + two distribute.
-    // Material Symbols ships dedicated glyphs for horizontal /
-    // vertical alignment (align_horizontal_* / align_vertical_*)
-    // that read instantly. Distribute shares the horizontal /
-    // vertical_distribute pair.
     container.appendChild(mkGroupHeader("Align"));
     const alignRow = document.createElement("div");
     alignRow.className = "editor-right-panel-actions-row";
@@ -677,7 +561,6 @@ export class EditorRightPanel {
     );
     container.appendChild(align2Row);
 
-    // Group 4: Group / Ungroup.
     container.appendChild(mkGroupHeader("Group"));
     const groupRow = document.createElement("div");
     groupRow.className = "editor-right-panel-actions-row";
@@ -691,8 +574,8 @@ export class EditorRightPanel {
   }
 
   #rotate(delta: number): void {
-    if (this.#currentTargets.length === 0) return;
-    for (const t of this.#currentTargets) {
+    if (this.#currentSelection.length === 0) return;
+    for (const t of this.#currentSelection) {
       const cur = readTransformState(t).rotation;
       setRotation(t, cur + delta);
     }
@@ -701,60 +584,31 @@ export class EditorRightPanel {
   }
 
   #flip(axis: "h" | "v"): void {
-    if (this.#currentTargets.length === 0) return;
-    for (const t of this.#currentTargets) toggleFlip(t, axis);
+    if (this.#currentSelection.length === 0) return;
+    for (const t of this.#currentSelection) toggleFlip(t, axis);
     this.#history.save();
     this.#selection.refreshHandles();
   }
 
-  /** Friendly, user-facing title for the selection.
-   *
-   *  Format:
-   *    - Single selection: `"Selected [element name]"` (e.g. "Selected
-   *      Rectangle", "Selected Arrow"). The "Selected" prefix makes it
-   *      read as a past-tense status ("this is what you've selected")
-   *      and disambiguates from Tool-mode titles that use the same
-   *      element names but describe "what the tool will create next".
-   *    - Multi selection: `"N selected"`.
-   *
-   *  Element names deliberately MIRROR `Toolbar.getToolDisplayTitle`
-   *  output — selecting a rounded rectangle and activating the Shape
-   *  tool with the rounded variant both show "Rounded rectangle" (the
-   *  former prefixed with "Selected "). This reinforces the mental
-   *  model that the properties panel labels the SHAPE, not the
-   *  mechanism by which the user got to it. */
+  /** Friendly, user-facing title for the selection. Plumbed into
+   *  the selection-properties section's `computeTitle` dep so the
+   *  panel-level naming logic stays co-located with the rest of
+   *  the right-panel state. */
   #computeSelectionTitle(elements: SVGElement[]): string {
     if (elements.length === 1) {
       return `Selected ${this.#elementTypeName(elements[0]!)}`;
     }
-    // Multi selection: show the breakdown by element type so users
-    // can confirm "what they grabbed" at a glance ("2 rectangles +
-    // 1 arrow" beats a generic "3 selected"). Grouping uses the
-    // base type name (stripping variant parens) so homogeneous
-    // selections collapse cleanly — e.g. 3 rectangles of different
-    // sizes all read as "3 rectangles", not "3 different things".
     const counts = new Map<string, number>();
     for (const el of elements) {
-      // Use the base element family (before the " (variant)" suffix)
-      // so "Counter (Circle)" + "Counter (Square)" collapse to
-      // "2 counters" rather than listing variants separately.
       const full = this.#elementTypeName(el);
       const base = full.replace(/\s*\(.*\)$/, "");
       counts.set(base, (counts.get(base) ?? 0) + 1);
     }
-    // Pluralize the common cases by appending "s". Types that
-    // pluralize irregularly (none in the current set) would need
-    // an explicit map; we keep the naive rule for now.
     const pluralize = (name: string, n: number): string => {
       if (n === 1) return name.toLowerCase();
-      // "Arrow" → "arrows", "Highlight" → "highlights", etc.
-      // "Counter (Circle)" already stripped to "Counter".
       return `${name.toLowerCase()}s`;
     };
     const parts = Array.from(counts.entries()).map(([name, n]) => `${n} ${pluralize(name, n)}`);
-    // Cap at 3 segments to keep the title readable in the narrow
-    // panel; overflow becomes "…". Users can still see the full
-    // count from the leading "N selected" prefix.
     let breakdown: string;
     if (parts.length <= 3) {
       breakdown = parts.join(" + ");
@@ -768,10 +622,6 @@ export class EditorRightPanel {
     const tag = el.tagName;
     if (tag === "rect") {
       if (el.getAttribute("data-highlight") === "1") {
-        // Mirror the Counter (Circle) / Counter (Square) convention:
-        // append the color label in parens so "Selected Highlight
-        // (Yellow)" makes the current swatch obvious from the panel
-        // title alone.
         const label = highlightColorLabel(el.getAttribute("fill"));
         return label ? `Highlight (${label})` : "Highlight";
       }
@@ -783,21 +633,13 @@ export class EditorRightPanel {
     if (tag === "line") return "Line";
     if (tag === "text") return "Text";
     if (tag === "image") {
-      // Mosaic / blur redactions bake a modified PNG into an <image>.
       const rs = el.getAttribute("data-redact-style");
       if (rs === "mosaic") return "Mosaic";
       if (rs === "blur") return "Blur";
       return "Redaction";
     }
     if (tag === "path") {
-      // Freehand tool tags its output with data-draw-style so pen vs
-      // highlighter strokes surface as distinct element names —
-      // matches Toolbar.getToolDisplayTitle's output for the same
-      // variants.
       const style = el.getAttribute("data-draw-style");
-      // "<Tool> (<variant>)" convention — matches Counter / Highlight
-      // naming so "Selected Draw (Pen)" identifies both the family
-      // and the variant at a glance.
       if (style === "highlighter") return "Draw (Highlighter)";
       if (style === "pen") return "Draw (Pen)";
       return "Drawing";
@@ -809,9 +651,6 @@ export class EditorRightPanel {
         return `Group (${n} item${n === 1 ? "" : "s"})`;
       }
       if (type === "freehand") {
-        // Freehand session group — multiple <path> children bundled
-        // as one drawing. Read style from the group's data-draw-style
-        // (updated on every stroke, so it reflects the latest style).
         const style = el.getAttribute("data-draw-style");
         if (style === "highlighter") return "Draw (Highlighter)";
         return "Draw (Pen)";
@@ -832,12 +671,6 @@ export class EditorRightPanel {
         return "Text";
       }
       if (el.hasAttribute("data-marker")) {
-        // Counter variants share the base noun "Counter" and append
-        // the shape in parens. The shape names ("Circle", "Square",
-        // "Rounded square") are ambiguous without the "Counter"
-        // qualifier — e.g. "Selected Circle" could mean a circle
-        // shape or a circle marker, so the parens format keeps the
-        // identity clear.
         const shape = el.getAttribute("data-shape");
         if (shape === "rect") return "Counter (Square)";
         if (shape === "rounded") return "Counter (Rounded square)";
@@ -846,71 +679,4 @@ export class EditorRightPanel {
     }
     return "Element";
   }
-
-  /** Show the empty-state hint when nothing is visible in the main
-   *  sections — keeps the always-visible panel feeling intentional. */
-  #syncEmptyState(): void {
-    const hasContent = this.#propertiesSection.style.display !== "none";
-    this.#emptyState.style.display = hasContent ? "none" : "";
-  }
-}
-
-// =============================================================================
-// Element-row formatting helpers — pure functions of a PageElement.
-// Kept at module level so the row builder stays readable.
-// =============================================================================
-
-/** Material Symbols glyph name appropriate to the element's role. */
-function iconForElement(el: PageElement): string {
-  const tag = el.tag;
-  if (tag === "button" || el.role === "button") return "smart_button";
-  if (tag === "a" || el.role === "link") return "link";
-  if (tag === "input") {
-    const t = el.inputType || "text";
-    if (t === "checkbox") return "check_box";
-    if (t === "radio") return "radio_button_checked";
-    if (t === "submit" || t === "button") return "smart_button";
-    if (t === "email") return "alternate_email";
-    if (t === "search") return "search";
-    if (t === "password") return "key";
-    return "edit";
-  }
-  if (tag === "textarea") return "edit_note";
-  if (tag === "select" || el.role === "combobox") return "list";
-  if (tag === "label") return "label";
-  if (/^h[1-6]$/.test(tag)) return "title";
-  if (el.role === "tab") return "tab";
-  if (el.role === "menuitem") return "more_vert";
-  if (el.role === "checkbox") return "check_box";
-  if (el.role === "radio") return "radio_button_checked";
-  if (el.role === "slider") return "tune";
-  return "widgets";
-}
-
-/** Primary text shown on a row — first available of: ariaLabel,
- *  text, placeholder, role, tag. Trimmed for compactness. */
-function primaryLabelFor(el: PageElement): string {
-  const candidate = el.ariaLabel || el.text || el.placeholder || el.role || el.tag;
-  if (!candidate) return el.tag;
-  // Sidebar rows are ~220 px after icon + sub. Keep label snug.
-  return candidate.length > 36 ? `${candidate.slice(0, 33)}…` : candidate;
-}
-
-/** Sub-label (small grey text on the right) — type / role hint. */
-function subLabelFor(el: PageElement): string {
-  if (el.tag === "input" && el.inputType) return el.inputType;
-  if (el.tag === "a") return "link";
-  if (/^h[1-6]$/.test(el.tag)) return el.tag;
-  if (el.role && el.role !== el.tag) return el.role;
-  return el.tag;
-}
-
-/** Tooltip — the full label without truncation, plus role and href. */
-function fullDescriptionFor(el: PageElement): string {
-  const parts: string[] = [];
-  const label = el.ariaLabel || el.text || el.placeholder;
-  if (label) parts.push(label);
-  parts.push(`<${el.tag}${el.role ? ` role="${el.role}"` : ""}>`);
-  if (el.href) parts.push(`→ ${el.href}`);
-  return parts.join("\n");
 }
