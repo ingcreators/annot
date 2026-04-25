@@ -43,6 +43,7 @@ pnpm -r build
 pnpm --filter @ingcreators/annot-web dev          # PWA dev server
 pnpm --filter @ingcreators/annot-extension dev    # extension build (watch)
 pnpm --filter @ingcreators/annot-desktop dev      # Tauri dev (requires Rust)
+pnpm --filter @ingcreators/annot-web storybook    # component stories (Storybook)
 ```
 
 ## Documentation

@@ -145,6 +145,34 @@ Rules when adding public symbols:
 - When in doubt, match the language of surrounding text in the file
   being edited.
 
+## Component stories (Storybook)
+
+Storybook lives in
+[`packages/web/.storybook/`](./packages/web/.storybook/) per
+[`docs/plans/storybook-introduction.md`](./docs/plans/storybook-introduction.md).
+Run locally with `pnpm --filter @ingcreators/annot-web storybook`.
+CI builds the static bundle on every PR (currently
+non-blocking); flipped to blocking in a later phase.
+
+- **New Lit components ship with a co-located
+  `*.stories.ts`** next to their `*.ts` source. Story
+  variants cover every visible state the component can land
+  in (idle / loading / empty / populated / error etc.). The
+  rule is documented in
+  [`docs/plans/lit-migration.md`](./docs/plans/lit-migration.md)
+  — every Lit migration PR's test plan expects Storybook
+  screenshots demonstrating pre-Lit / post-Lit visual
+  equivalence.
+- **Vanilla components don't need retroactive stories.** The
+  five initial stories (`SaveStatusIndicator`, `ErrorBar`,
+  `drawer.file`, `FileDetailsDrawer`, `Sidebar`) were
+  written to bootstrap Storybook; further vanilla-component
+  stories are optional and land opportunistically when a
+  component is about to be Lit-migrated.
+- **Stories are not test replacements.** Vitest stays the
+  unit-test home; Storybook is the visual + interactive
+  surface for reviewers + future plugin authors.
+
 ## Landing rules
 
 ### Branch + PR workflow
