@@ -21,6 +21,8 @@ import type {
   ImageRecord,
   ImageRecordUpdate,
   StorageProvider,
+  StorageWithForceRefresh,
+  StorageWithResync,
 } from "@ingcreators/annot-core/storage";
 import {
   ancestorPaths,
@@ -55,7 +57,7 @@ interface IndexData {
   images: Record<string, IndexEntry>;
 }
 
-export class DeviceStore implements StorageProvider {
+export class DeviceStore implements StorageProvider, StorageWithResync, StorageWithForceRefresh {
   #root: FileSystemDirectoryHandle;
   #index: IndexData = { images: {} };
 

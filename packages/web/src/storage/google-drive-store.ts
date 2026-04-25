@@ -15,6 +15,8 @@ import type {
   ImageRecord,
   ImageRecordUpdate,
   StorageProvider,
+  StorageWithResync,
+  StorageWithTokenRefresher,
 } from "@ingcreators/annot-core/storage";
 import {
   ancestorPaths,
@@ -34,7 +36,9 @@ const DRIVE_API = "https://www.googleapis.com/drive/v3";
 const UPLOAD_API = "https://www.googleapis.com/upload/drive/v3";
 const FOLDER_MIME = "application/vnd.google-apps.folder";
 
-export class GoogleDriveStore implements StorageProvider {
+export class GoogleDriveStore
+  implements StorageProvider, StorageWithResync, StorageWithTokenRefresher
+{
   #token: string;
   #rootFolderId: string;
 

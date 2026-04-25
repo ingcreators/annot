@@ -56,6 +56,14 @@ export type {
   PageElement,
   PageMetadata,
   StorageProvider,
+  StorageWithForceRefresh,
+  StorageWithResync,
+  StorageWithTokenRefresher,
+} from "./storage/types.js";
+export {
+  supportsForceRefresh,
+  supportsResync,
+  supportsTokenRefresher,
 } from "./storage/types.js";
 
 // ─── Style constants + dash utilities ─────────────────────────────────

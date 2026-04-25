@@ -10,7 +10,7 @@
  *   - Click empty area   → clear selection
  */
 import type { FolderRecord, ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
-import { getFilename } from "@ingcreators/annot-core/storage";
+import { getFilename, supportsResync } from "@ingcreators/annot-core/storage";
 import { setTooltip } from "@ingcreators/annot-core/utils";
 import { logger } from "../logger.js";
 import { showAlertDialog, showConfirmDialog, showPromptDialog } from "../ui/dialog.js";
@@ -160,7 +160,7 @@ export class GalleryPage {
   async refresh(folderPath?: string): Promise<void> {
     if (folderPath !== undefined) this.#currentFolderPath = folderPath;
     try {
-      if (this.#storage.resync) await this.#storage.resync();
+      if (supportsResync(this.#storage)) await this.#storage.resync();
 
       const q = (this.#searchInput?.value || "").trim();
       if (q) {
