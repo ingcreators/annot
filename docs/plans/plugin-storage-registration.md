@@ -1,8 +1,9 @@
 # Plugin Storage Registration
 
-> **Status:** Draft. Authored 2026-04-25 as the named follow-up from
-> [`app-decomposition.md`](./app-decomposition.md) Phase 5. Awaiting
-> sign-off before implementation.
+> **Status:** Queued. Authored 2026-04-25 as the named follow-up from
+> [`app-decomposition.md`](./app-decomposition.md) Phase 5; sign-off
+> received 2026-04-25 on the four design questions (see "Decisions"
+> at the bottom).
 >
 > **Compatibility:** Touches
 > [`packages/web/src/storage/bridge.ts`](../../packages/web/src/storage/bridge.ts)
@@ -171,6 +172,13 @@ export interface StorageRegistration {
   /** Sidebar label + icon. Plugin-controlled. */
   readonly label: string;
   readonly icon?: string; // material-symbols name
+  /** Sidebar order. Lower numbers render first. Built-ins reserve:
+   *    Browser=10, Device=20, Drive=30, GitHub=40.
+   *  A plugin can interleave (e.g. `priority: 25` lands between
+   *  Device and Drive) or append (`priority: 100`). The sort is
+   *  stable so plugins with identical priorities fall back to
+   *  registration order — predictable and visible at a glance. */
+  readonly priority: number;
   /** Build the live `StorageProvider` for this mode. Called when
    *  the user selects this mode from the sidebar OR when
    *  `loadLastStorage()` returns this mode at boot. May return
@@ -198,18 +206,32 @@ interface PluginContext {
 ### Sidebar reshape
 
 `gallery/sidebar.ts` today renders a fixed strip of four chips
-(plus extension which is always-on). Plugin modes append to the
-same strip in registration order:
+(plus extension which is always-on). The strip becomes a sorted
+render of the combined built-in + plugin registration list, keyed
+by `priority`:
 
 ```
-[ Browser ] [ Device ] [ Drive ] [ GitHub ] [ Cloud (plugin) ]
+priority 10  → [ Browser ]
+priority 20  → [ Device ]
+priority 25  → [ Cloud   ]   ← plugin interleaves
+priority 30  → [ Drive   ]
+priority 40  → [ GitHub  ]
+priority 100 → [ Audit log ] ← plugin appends
 ```
 
-Built-in chips stay static for visual consistency. Plugin chips
-come from `pluginHost.listStorageRegistrations()` at sidebar
-build time. Sidebar already exposes `setStorageStatus(mode, …)`
-keyed on a `StorageMode` string, which under the new shape
-accepts plugin keys without API change.
+Built-ins are described internally by the same
+`StorageRegistration` shape (constants in `bridge.ts`); plugin
+chips come from `pluginHost.listStorageRegistrations()`. Sidebar
+already exposes `setStorageStatus(mode, …)` keyed on a
+`StorageMode` string, which under the new shape accepts plugin
+keys without API change.
+
+Stable sort by `priority` then registration order means a plugin
+with a colliding priority lands deterministically after the
+built-in (or after a previously-registered plugin), and the
+default case ("plugin doesn't pick a priority") still appends —
+the registration accepts a falsy priority and treats it as the
+sentinel `Number.POSITIVE_INFINITY` for sort purposes.
 
 ### `handleStorageSelect("cloud")`
 
@@ -233,11 +255,40 @@ through to a plugin-mode lookup that calls `reg.restore()`.
 
 ### Token refresh
 
-Token refresh stays per-backend for built-ins (the gesture / dialog
-shapes are different enough that a generic interface would be
-worse). Plugins that need a refresh path bake it into their own
-`StorageProvider` (`setTokenRefresher`-style pattern is a
-private contract on the store class, not on `StorageProvider`).
+Promote `setTokenRefresher` from a per-backend method (Drive +
+GitHub each implement it privately today) to a **standard
+optional method on the `StorageProvider` contract**:
+
+```ts
+// @ingcreators/annot-core/storage — additive surface change.
+export interface StorageProvider {
+  // ... existing methods ...
+  /** Optional. Network-backed stores call this on a 401 to ask the
+   *  host for a fresh token. The refresher returns the new token
+   *  string, or `null` if the user dismissed the auth banner /
+   *  declined to re-auth. The store retries the failed request
+   *  once and gives up if `null` came back. */
+  setTokenRefresher?(fn: () => Promise<string | null>): void;
+}
+```
+
+`bridge.ts` wires built-in refreshers (`refreshDriveToken`,
+`refreshGithubToken`) the same way it does today — just via the
+contract method instead of a per-class instance method. Local
+stores (`BrowserStore`, `DeviceStore`) don't implement it; the
+caller checks `if (store.setTokenRefresher)` before calling, same
+pattern as the other optional methods on `StorageProvider`.
+
+Plugin stores opt in by implementing `setTokenRefresher` and
+calling the refresher from their own `#fetch` 401 path. The
+host-side refresher closure can do anything — open an OAuth
+gesture, show a "paste a token" dialog, hit a Cloud-managed token
+endpoint — the contract just demands `Promise<string | null>`.
+
+This is a small additive change to `@ingcreators/annot-core/storage`
+([`packages/core/src/storage/types.ts`](../../packages/core/src/storage/types.ts))
+and lands in Phase B alongside the `StorageRegistry` extraction so
+both the type widening and the contract addition ship together.
 
 ## Phased plan
 
@@ -346,6 +397,29 @@ At each phase boundary:
   the built-ins; any plugin shipping its own glyph can do so via
   CSS classes set on its sidebar chip's anchor element (future
   hook).
+
+## Decisions (sign-off 2026-04-25)
+
+1. **`StorageMode` widens to `string`** with a const array
+   `BUILT_IN_STORAGE_MODES` exported alongside for consumers that
+   need the typed list. ✅
+2. **`connect({ forcePicker })`** signature: built-ins and plugins
+   share the same boolean. ✅
+3. **Sidebar order: `priority` field on `StorageRegistration`,
+   not append-at-end.** Built-ins are described as
+   `StorageRegistration`s with reserved priorities
+   (Browser=10, Device=20, Drive=30, GitHub=40); plugins choose
+   their own priority and the strip renders them mixed in the
+   sorted order. Stable sort by `priority` then registration
+   order, falsy priority = `+Infinity` so unspecified-priority
+   plugins still append.
+4. **Token refresh: promoted to `StorageProvider` contract.**
+   `setTokenRefresher?(fn)` becomes a standard optional method on
+   `@ingcreators/annot-core/storage`'s `StorageProvider`. The
+   built-in network stores (Drive, GitHub) and plugin stores both
+   implement it; local stores skip it. `bridge.ts` wires its
+   per-backend refresher closures via the same contract method
+   instead of a per-class instance method.
 
 ## References
 
