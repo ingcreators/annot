@@ -43,13 +43,13 @@ import {
   copyAsImage,
   getPngDataUrl,
   HIGHLIGHT_COLORS,
-  type History,
   highlightColorLabel,
   saveToFile,
 } from "@ingcreators/annot-core/editor";
 import type { ToolOptions } from "@ingcreators/annot-core/editor/tool-options";
 import {
   createThemeToggle,
+  type History,
   openAnchoredPopover,
   type SelectionManager,
   type ToolBase,

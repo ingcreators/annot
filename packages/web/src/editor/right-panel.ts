@@ -54,12 +54,8 @@
 
 import type { SelectionManager } from "@ingcreators/annot-editor";
 import type { Toolbar } from "./toolbar.js";
-import {
-  type CanvasManager,
-  type History,
-  highlightColorLabel,
-} from "@ingcreators/annot-core/editor";
-import { PropertyPanel } from "@ingcreators/annot-editor";
+import { type CanvasManager, highlightColorLabel } from "@ingcreators/annot-core/editor";
+import { type History, PropertyPanel } from "@ingcreators/annot-editor";
 import type { PageMetadata } from "@ingcreators/annot-core/storage";
 import {
   readTransformState,

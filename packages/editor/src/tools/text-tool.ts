@@ -1,5 +1,5 @@
 import type { CanvasManager } from "@ingcreators/annot-core/editor/canvas-manager";
-import type { History } from "@ingcreators/annot-core/editor/history";
+import type { History } from "../history.js";
 import { createTextBox, stickyBgFor } from "@ingcreators/annot-core/editor/text-utils";
 import type { TextVariant, ToolOptions } from "./tool-base.js";
 /**
