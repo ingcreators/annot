@@ -9,6 +9,9 @@
     "directory": "packages/web"
   },
   "type": "module",
+  "exports": {
+    "./lit": "./src/lit.ts"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -18,7 +21,8 @@
     "build-storybook": "storybook build"
   },
   "dependencies": {
-    "@ingcreators/annot-core": "workspace:*"
+    "@ingcreators/annot-core": "workspace:*",
+    "lit": "^3.3.2"
   },
   "devDependencies": {
     "@resvg/resvg-js": "^2.6.2",

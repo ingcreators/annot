@@ -1,16 +1,16 @@
 /**
- * Stories for `SaveStatusIndicator` — one variant per
- * `SaveStatus` state plus a "cycle" story that walks through
- * each state on a timer for manual visual verification.
+ * Stories for `<annot-save-status>` — one variant per
+ * `SaveStatus` state.
  *
- * Phase 1 initial landmark of `docs/plans/storybook-introduction.md`.
- * The indicator becomes a Lit element in Phase 0 of
- * `lit-migration.md`; this story stays through the migration
- * as its visual contract.
+ * Bootstrapped in Phase 1 of `docs/plans/storybook-introduction.md`
+ * when the indicator was still imperative; converted to the
+ * Lit element in Phase 0 of `docs/plans/lit-migration.md`.
+ * Stories are the visual contract preserved across the migration.
  */
 
 import type { Meta, StoryObj } from "@storybook/web-components-vite";
-import { SaveStatusIndicator, type SaveStatus } from "./save-status-indicator.js";
+import "./save-status-indicator.js";
+import type { SaveStatus } from "./save-status-indicator.js";
 
 interface Args {
   status: SaveStatus;
@@ -19,15 +19,9 @@ interface Args {
 const meta: Meta<Args> = {
   title: "Editor / SaveStatusIndicator",
   render: (args) => {
-    // The imperative class mounts itself into its container. We
-    // hand Storybook a <div> and let the indicator populate it.
-    // Storybook's `web-components-vite` framework accepts an
-    // HTMLElement directly as a Renderable — no lit-html wrapper
-    // needed (Lit lands as a dep in Phase 0 of lit-migration.md).
-    const root = document.createElement("div");
-    const ind = new SaveStatusIndicator(root);
-    ind.setStatus(args.status);
-    return root;
+    const el = document.createElement("annot-save-status");
+    el.status = args.status;
+    return el;
   },
   argTypes: {
     status: {

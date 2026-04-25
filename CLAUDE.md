@@ -173,6 +173,63 @@ non-blocking); flipped to blocking in a later phase.
   unit-test home; Storybook is the visual + interactive
   surface for reviewers + future plugin authors.
 
+## Lit conventions
+
+Lit is the UI framework for `packages/web`. Introduced in
+Phase 0 of
+[`docs/plans/lit-migration.md`](./docs/plans/lit-migration.md);
+subsequent phases migrate built-in UI surfaces one at a time.
+
+- **Custom-element prefix: `annot-`.** `<annot-save-status>`,
+  `<annot-error-bar>`, `<annot-file-details-drawer>`, etc.
+  Plugin authors may use their own prefix; built-in elements
+  always use `annot-`.
+- **No experimental decorators.** Never set
+  `experimentalDecorators: true` in any tsconfig. The TC39
+  standard-decorators form Lit 3 supports requires the
+  `accessor` keyword, which Vite 8's oxc transformer leaves
+  intact and Node 24's V8 can't parse — so Phase 0 elements
+  declare reactive properties via Lit's runtime
+  `static properties` API instead:
+
+  ```ts
+  export class AnnotSaveStatusElement extends LitElement {
+    static override properties = {
+      status: { type: String },
+    };
+    // `declare` is type-only so Lit's reactive getter/setter
+    // isn't shadowed by a class-field initializer at ES2022.
+    declare status: SaveStatus;
+    constructor() {
+      super();
+      this.status = "saved";
+    }
+    // …
+  }
+  customElements.define("annot-save-status", AnnotSaveStatusElement);
+  ```
+
+  When the toolchain gains stable `accessor` transpilation,
+  we can revisit and migrate to the decorator form in a
+  follow-up PR.
+- **Import Lit from `@ingcreators/annot-web/lit`, not `lit`
+  directly.** Built-in modules and plugin authors both go
+  through the subpath re-export
+  ([`packages/web/src/lit.ts`](./packages/web/src/lit.ts)).
+  This keeps one `LitElement` identity across host + plugin
+  code so `instanceof` checks work, and lets us bump Lit
+  centrally. The only exception is `packages/web/src/lit.ts`
+  itself, which re-exports from `lit`.
+- **Light DOM while migrating.** Phase migrations start by
+  rendering to light DOM (`createRenderRoot() { return this; }`)
+  so the existing global CSS in `editor.css` / `app.css`
+  applies unchanged. Newly-written component CSS can move
+  into scoped `static styles` opportunistically — the
+  "hybrid CSS" approach decided at sign-off. Don't wholesale-
+  rewrite the stylesheet as part of a migration.
+- **Every Lit component ships a co-located `*.stories.ts`**
+  per the Storybook convention above.
+
 ## Landing rules
 
 ### Branch + PR workflow

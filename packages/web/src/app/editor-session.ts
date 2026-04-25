@@ -404,7 +404,8 @@ export class EditorSession {
     history.onStateChange = () => {
       // Reflect "edits made" immediately — the debounce hides latency
       // but the user should know something will be saved soon.
-      this.headerHost.getSaveStatusIndicator()?.setStatus("pending");
+      const statusEl = this.headerHost.getSaveStatusIndicator();
+      if (statusEl) statusEl.status = "pending";
       // Network-backed stores (Drive, GitHub) get a longer debounce
       // than local ones so a rapid slider sweep / series of small
       // adjustments coalesces into a single upload instead of a

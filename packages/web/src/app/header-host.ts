@@ -22,7 +22,8 @@ import { getFilename } from "@ingcreators/annot-core/storage";
 import { setTooltip } from "@ingcreators/annot-core/utils";
 import type { FileDetailsDrawer } from "../editor/file-details-drawer.js";
 import { estimateDataUrlBytes, validateFilename } from "../editor/file-details-drawer.js";
-import { SaveStatusIndicator } from "../editor/save-status-indicator.js";
+import type { AnnotSaveStatusElement } from "../editor/save-status-indicator.js";
+import "../editor/save-status-indicator.js";
 import { editUrl, pushRoute } from "../router.js";
 import { getStorageMode } from "../storage/bridge.js";
 import { GitHubStore } from "../storage/github-store.js";
@@ -56,7 +57,7 @@ export interface HeaderHostDeps {
 }
 
 export class HeaderHost {
-  #saveStatusIndicator: SaveStatusIndicator | null = null;
+  #saveStatusIndicator: AnnotSaveStatusElement | null = null;
 
   constructor(private readonly deps: HeaderHostDeps) {}
 
@@ -137,7 +138,8 @@ export class HeaderHost {
     // single unit. Industry pattern: Figma, Notion, VS Code, macOS
     // title bar all place edit/save status beside the title, not at
     // the far right of the window.
-    this.#saveStatusIndicator = new SaveStatusIndicator(headerEl);
+    this.#saveStatusIndicator = document.createElement("annot-save-status");
+    headerEl.appendChild(this.#saveStatusIndicator);
 
     // Spacer then pushes global actions to the far right.
     const spacer = document.createElement("span");
@@ -173,7 +175,7 @@ export class HeaderHost {
 
   /** Exposed for `SavePipeline` to read through its `getStatusIndicator`
    *  dep. Null when no editor session is open. */
-  getSaveStatusIndicator(): SaveStatusIndicator | null {
+  getSaveStatusIndicator(): AnnotSaveStatusElement | null {
     return this.#saveStatusIndicator;
   }
 
