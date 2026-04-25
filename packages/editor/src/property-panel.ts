@@ -10,8 +10,8 @@ import {
   ppNumberInput,
 } from "./property-panel-helpers.js";
 import type { History } from "@ingcreators/annot-core/editor/history";
-import { createColorPullButton, openAnchoredPopoverForColor } from "@ingcreators/annot-core/editor/property-controls";
-import { convertRedactStyle, detectRedactStyle } from "@ingcreators/annot-core/editor/redact-utils";
+import { createColorPullButton, openAnchoredPopoverForColor } from "@ingcreators/annot-editor/property-controls";
+import { convertRedactStyle, detectRedactStyle } from "@ingcreators/annot-editor/redact-utils";
 import { convertShape, detectShapeType } from "@ingcreators/annot-core/editor/shape-utils";
 import { convertTextVariant, detectTextVariant } from "@ingcreators/annot-core/editor/text-utils";
 import {

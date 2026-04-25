@@ -37,7 +37,7 @@ import {
   createNumberInput,
   createPropertyRow,
   createPropertySection,
-} from "@ingcreators/annot-core/editor/property-controls";
+} from "@ingcreators/annot-editor/property-controls";
 import type { FreehandTool } from "@ingcreators/annot-editor/tools/freehand-tool";
 
 /**

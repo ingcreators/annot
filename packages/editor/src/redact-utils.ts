@@ -19,9 +19,9 @@
  * can treat it as a redaction rather than a generic shape.
  */
 
-import { MOSAIC_BLOCK_SIZE, REDACT_BLUR_RADIUS, REDACT_SOLID_COLOR } from "../utils/constants.js";
-import type { CanvasManager } from "./canvas-manager.js";
-import type { RedactStyle } from "./tool-options.js";
+import { MOSAIC_BLOCK_SIZE, REDACT_BLUR_RADIUS, REDACT_SOLID_COLOR } from "@ingcreators/annot-core/utils";
+import type { CanvasManager } from "@ingcreators/annot-core/editor/canvas-manager";
+import type { RedactStyle } from "@ingcreators/annot-core/editor/tool-options";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
