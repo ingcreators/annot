@@ -121,9 +121,34 @@ external callers (use barrel re-exports in the original location).
 Order chosen so the most painful file lands first while reviewer
 attention is fresh:
 
-- **3a.** [`packages/web/src/editor/toolbar.ts`](../../packages/web/src/editor/toolbar.ts) (3,610 lines)
-  → `toolbar.ts` (Lit shell), `toolbar-state.ts` (preset + active-
-  tool state), `toolbar-keybindings.ts`, `tool-property-renderer.ts`.
+- **3a.** [`packages/web/src/editor/toolbar.ts`](../../packages/web/src/editor/toolbar.ts) (3,610 lines).
+  The `Toolbar` class shares `this.#`-private state across nearly
+  every method, so a single all-at-once decomposition would be a
+  high-risk megapatch. Split into multiple sub-PRs, each landing
+  the next-cheapest carve-out:
+    - **3a-1.** Pure data + element-mapping → `toolbar-variants.ts`.
+      Also delete the dead `_WIDTH_PRESETS` / `_STYLE_PRESETS`
+      constants.
+    - **3a-2.** Tool-property panel renderer
+      (`#populateToolProperties` + helpers, ~700 lines) →
+      `tool-property-renderer.ts`. Likely needs a small "renderer
+      context" object so the function can stay private to the
+      file while the toolbar passes in the few callbacks it owns.
+    - **3a-3.** Save menu (`#showSaveMenu`, ~500 lines) →
+      `toolbar-save-menu.ts`. Same context-object pattern.
+    - **3a-4.** Canvas context menus (`#openInsertHereMenu`,
+      `#openToolboxMenu`, `#openSelectionMenu`, ~400 lines) →
+      `toolbar-canvas-menu.ts`.
+    - **3a-5.** Preset persistence + variant rotation
+      (`savePresets`, `applyElementVariantPreset`,
+      `#seedPresetFromElement`, the four `#savePresetsTo*` /
+      `#loadPresetsFrom*` methods, the variant-side helpers) →
+      `toolbar-presets.ts`. This is the trickiest carve-out
+      because preset state is mutated from many call sites; do
+      it last so the surrounding shape is settled.
+    - **3a-6.** Variant flyouts + badges + keyboard shortcuts.
+      Whatever's left at this point goes into focused
+      sidecars (`toolbar-flyouts.ts`, `toolbar-keybindings.ts`).
 - **3b.** [`packages/core/src/editor/property-panel.ts`](../../packages/core/src/editor/property-panel.ts) (1,995 lines)
   → `property-panel.ts` (panel), `property-panel-rows.ts`
   (per-tool row factories), `property-panel-helpers.ts` (shared).
@@ -173,7 +198,12 @@ the slicing during Stage 4 kickoff.
 | 1b | `github-store.ts` cast cleanup | 1 | — |
 | 1c | Lit element `annot-` filename rename | 1 | — |
 | 2  | `StorageProvider` capability split | 1 | 1 done |
-| 3a | `toolbar.ts` decomposition | 1 | 2 done |
+| 3a-1 | `toolbar.ts`: extract pure variants + delete dead presets | 1 | 2 done |
+| 3a-2 | `toolbar.ts`: extract `tool-property-renderer.ts` | 1 | 3a-1 |
+| 3a-3 | `toolbar.ts`: extract `toolbar-save-menu.ts` | 1 | 3a-2 |
+| 3a-4 | `toolbar.ts`: extract `toolbar-canvas-menu.ts` | 1 | 3a-3 |
+| 3a-5 | `toolbar.ts`: extract `toolbar-presets.ts` | 1 | 3a-4 |
+| 3a-6 | `toolbar.ts`: residual flyouts + keybindings sidecars | 1 | 3a-5 |
 | 3b | `property-panel.ts` decomposition | 1 | 3a |
 | 3c | `selection.ts` decomposition | 1 | 3b |
 | 3d | `github-store.ts` decomposition | 1 | 2 done (sequencing flexible) |
