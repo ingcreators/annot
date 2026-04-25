@@ -4,6 +4,7 @@
  */
 import type { ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
 import { setTooltip } from "@ingcreators/annot-core/utils";
+import type { StorageRegistration } from "../app/plugin-host.js";
 import type { StorageMode } from "../storage/bridge.js";
 import { showAlertDialog, showPromptDialog } from "../ui/dialog.js";
 import { GalleryPage } from "./gallery-page.js";
@@ -19,6 +20,15 @@ export interface FileManagerCallbacks {
   onCaptureScreen: () => Promise<void>;
   onTimedCapture: () => Promise<void>;
   onPasteClipboard: () => Promise<void>;
+  /** Plugin-registered storage backends, fed through to the
+   *  sidebar so plugin chips can render alongside the built-ins.
+   *  Optional — desktop / embedded shells that don't load plugins
+   *  can omit it and the sidebar falls back to built-ins-only. */
+  getPluginStorages?: () => StorageRegistration[];
+  /** Set of disabled built-in storage modes (from
+   *  `App.init({ disableBuiltinStorage })`). Used to filter chips
+   *  out of the sidebar strip. Optional. */
+  isBuiltinDisabled?: (mode: string) => boolean;
 }
 
 export class FileManager {
@@ -55,6 +65,8 @@ export class FileManager {
       onCaptureScreen: () => this.#callbacks.onCaptureScreen(),
       onTimedCapture: () => this.#callbacks.onTimedCapture(),
       onPasteClipboard: () => this.#callbacks.onPasteClipboard(),
+      getPluginStorages: this.#callbacks.getPluginStorages,
+      isBuiltinDisabled: this.#callbacks.isBuiltinDisabled,
     };
     this.#sidebar = new Sidebar(this.#sidebarEl, sidebarCallbacks);
 

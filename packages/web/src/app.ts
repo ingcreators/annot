@@ -9,6 +9,7 @@ import { setTooltip } from "@ingcreators/annot-core/utils";
 import { ScratchpadStore } from "./editor/scratchpad-store.js";
 import { FileManager } from "./gallery/file-manager.js";
 import {
+  type BuiltInStorageMode,
   deleteExtensionImage,
   getStorage,
   getStorageMode,
@@ -83,6 +84,10 @@ export class App {
    *  contributions + lifecycle events. Built-in + caller-supplied
    *  plugins are registered once from `init`. */
   #pluginHost = new PluginHost();
+  /** Built-in storage modes the caller opted out of via
+   *  `init({ disableBuiltinStorage })`. Read by `StorageBridge`
+   *  on every `restoreOnBoot` / `handleStorageSelect`. */
+  #disabledBuiltinStorage: ReadonlySet<string> = new Set();
 
   constructor() {
     this.#savePipeline = new SavePipeline({
@@ -147,6 +152,9 @@ export class App {
     );
     this.#storageBridge = new StorageBridge({
       getFileManager: () => this.#fileManager,
+      findPluginStorage: (mode) => this.#pluginHost.findStorageRegistration(mode),
+      listPluginStorages: () => this.#pluginHost.listStorageRegistrations(),
+      isBuiltinDisabled: (mode) => this.#disabledBuiltinStorage.has(mode),
     });
     this.#extensionTransferHost = new ExtensionTransferHost({
       getStorage: () => this.#storage,
@@ -191,13 +199,59 @@ export class App {
     this.#deviceStore = this.#storageBridge.getDeviceStore();
   }
 
-  async init(opts: { plugins?: AnnotPlugin[] } = {}): Promise<void> {
+  async init(
+    opts: {
+      plugins?: AnnotPlugin[];
+      /** Skip the listed built-in storage backends. Disabled
+       *  built-ins don't appear in the sidebar, can't be selected,
+       *  and `restoreOnBoot` falls back to `browser` if a disabled
+       *  mode was the user's last selection. `"browser"` can never
+       *  be disabled — it's the universal fallback every other
+       *  backend's failure path lands on; passing `"browser"`
+       *  throws here so the misconfiguration surfaces immediately. */
+      disableBuiltinStorage?: BuiltInStorageMode[];
+      /** Filter the built-in plugin list before registration.
+       *  Currently the only built-in is `"github-external-links"`.
+       *  Unknown names log a warning and no-op for forward-compat
+       *  (so a deployment config doesn't break when a future Annot
+       *  release renames a built-in). */
+      disableBuiltinPlugins?: string[];
+    } = {},
+  ): Promise<void> {
+    // `"browser"` opt-out check — fail fast at init so the
+    // misconfiguration is obvious rather than triggering at the
+    // first storage failure when fallback is needed.
+    if (opts.disableBuiltinStorage?.includes("browser")) {
+      throw new Error(
+        '`"browser"` cannot be disabled via disableBuiltinStorage — ' +
+          "it's the universal fallback every other backend lands on.",
+      );
+    }
+    this.#disabledBuiltinStorage = new Set(opts.disableBuiltinStorage ?? []);
+
+    // Filter built-in plugins by name. Unknown names are tolerated
+    // so a config that names a future-renamed built-in doesn't
+    // crash on an older Annot.
+    const allBuiltinPlugins = [githubExternalLinksPlugin];
+    const disabledPluginNames = new Set(opts.disableBuiltinPlugins ?? []);
+    const knownNames = new Set(allBuiltinPlugins.map((p) => p.name));
+    for (const name of disabledPluginNames) {
+      if (!knownNames.has(name)) {
+        console.warn(
+          `[init] disableBuiltinPlugins: "${name}" is not a known built-in plugin; ignoring.`,
+        );
+      }
+    }
+    const activeBuiltinPlugins = allBuiltinPlugins.filter(
+      (p) => !disabledPluginNames.has(p.name),
+    );
+
     // Register plugins first so every lifecycle event — including
     // the very first `restoreOnBoot` → `onRouteChange` — goes through
     // the plugin dispatch path. Built-in plugins come first; caller-
     // supplied plugins (`annot-cloud`, third parties) are appended so
     // they see the final state built-ins produced.
-    this.#pluginHost.registerAll([githubExternalLinksPlugin, ...(opts.plugins ?? [])]);
+    this.#pluginHost.registerAll([...activeBuiltinPlugins, ...(opts.plugins ?? [])]);
 
     const { BrowserStore } = await import("./storage/browser-store.js");
     const browserStore = new BrowserStore();
@@ -359,6 +413,8 @@ export class App {
         onCaptureScreen: () => this.#captureHost.captureScreenAndSave(),
         onTimedCapture: () => this.#captureHost.timedCaptureAndSave(),
         onPasteClipboard: () => this.#captureHost.pasteAndSave(),
+        getPluginStorages: () => this.#pluginHost.listStorageRegistrations(),
+        isBuiltinDisabled: (mode) => this.#disabledBuiltinStorage.has(mode),
       });
 
       this.#storageBridge.updateSidebarStatus(getStorageMode());

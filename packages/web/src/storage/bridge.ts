@@ -95,21 +95,37 @@ class StorageRegistry {
   /** `null` = haven't tried yet; `true`/`false` = cached probe result. */
   extensionAvailable: boolean | null = null;
 
-  /** Pick the active store given the current mode. Built-in only
-   *  for Phase B; Phase C extends this with a plugin-store map
-   *  lookup. Returns `null` for "no concrete store yet" cases that
-   *  the caller (e.g. `getStorage`) can handle (extension probe
-   *  fallthrough, browser fallback). */
+  /** Plugin-registered stores keyed by mode. Phase C of
+   *  `docs/plans/plugin-storage-registration.md` populates this via
+   *  `registerPluginStore`; the bridge's plugin-fallthrough branch
+   *  in `app/storage-bridge.ts` reads it back. Empty when no
+   *  storage plugins are loaded (the typical OSS case). */
+  readonly pluginStores = new Map<string, StorageProvider>();
+
+  /** Pick the active store given the current mode. Falls through
+   *  to the plugin store map if the mode isn't a built-in. Returns
+   *  `null` for "no concrete store yet" cases the caller (e.g.
+   *  `getStorage`) handles (extension probe, browser fallback). */
   active(): StorageProvider | null {
     if (this.currentMode === "googledrive" && this.driveStore) return this.driveStore;
     if (this.currentMode === "github" && this.githubStore) return this.githubStore;
     if (this.currentMode === "device" && this.deviceStore) return this.deviceStore;
+    const pluginStore = this.pluginStores.get(this.currentMode);
+    if (pluginStore) return pluginStore;
     return null;
   }
 
   getBrowserStore(): StorageProvider {
     if (!this.browserFallback) this.browserFallback = new BrowserStore();
     return this.browserFallback;
+  }
+
+  /** Stash the active plugin-mode store so subsequent `active()` /
+   *  `getStorage()` calls find it. Replaces any previous store for
+   *  the same mode (fine — a re-`connect` is the supported way to
+   *  recover from a session expiry). */
+  registerPluginStore(mode: string, store: StorageProvider): void {
+    this.pluginStores.set(mode, store);
   }
 }
 
@@ -484,6 +500,25 @@ export function getStorageMode(): StorageMode {
   return registry.currentMode;
 }
 
+/**
+ * Plugin-mode registration entry point — set the active store for a
+ * plugin-registered mode and switch the bridge to it. Used by
+ * `app/storage-bridge.ts`'s `handleStorageSelect` /
+ * `restoreOnBoot` plugin-fallthrough branches once they've called
+ * the plugin's `connect` / `restore` factory.
+ */
+export function setPluginStore(mode: StorageMode, store: StorageProvider): void {
+  registry.registerPluginStore(mode, store);
+  registry.currentMode = mode;
+}
+
+/** True if the active mode is a plugin-registered one (i.e. not a
+ *  built-in). Used by the storage-bridge collaborator to decide
+ *  whether to take the plugin-fallthrough path on boot rehydrate. */
+export function isPluginMode(mode: StorageMode): boolean {
+  return !(BUILT_IN_STORAGE_MODES as readonly string[]).includes(mode);
+}
+
 /** Save last selected storage mode to localStorage. */
 export function saveLastStorage(mode: StorageMode): void {
   localStorage.setItem("annot-last-storage", mode);
@@ -499,17 +534,14 @@ export function loadLastFolder(): string {
 }
 
 /** Load last selected storage mode from localStorage. Returns
- *  built-in modes verbatim; rejects null/garbage. Plugin-registered
- *  modes (Phase C) will go through a separate `loadLastStorage`
- *  branch that consults the runtime registry — for now, anything
- *  outside the built-in set returns `null` and the boot path
- *  falls through to `browser`. */
+ *  whatever non-empty string is stored — built-in or plugin mode.
+ *  The caller (`app/storage-bridge.ts:restoreOnBoot`) is responsible
+ *  for validating it against the active built-in set + plugin
+ *  registry; an unrecognised mode triggers the browser fallback,
+ *  matching the behaviour for "device handle revoked". */
 export function loadLastStorage(): StorageMode | null {
   const mode = localStorage.getItem("annot-last-storage");
-  if (mode && (BUILT_IN_STORAGE_MODES as readonly string[]).includes(mode)) {
-    return mode;
-  }
-  return null;
+  return mode || null;
 }
 
 /**

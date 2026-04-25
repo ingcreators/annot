@@ -19,6 +19,7 @@
 import type { StorageProvider } from "@ingcreators/annot-core/storage";
 import type { FileManager } from "../gallery/file-manager.js";
 import {
+  BUILT_IN_STORAGE_MODES,
   connectGitHub,
   connectGoogleDrive,
   getDeviceRootName,
@@ -31,9 +32,10 @@ import {
   restoreDevice,
   restoreGitHub,
   restoreGoogleDrive,
-  type StorageMode,
   saveLastStorage,
+  setPluginStore,
   setStorageMode,
+  type StorageMode,
 } from "../storage/bridge.js";
 import {
   type GitHubRepoRef,
@@ -43,9 +45,21 @@ import {
 } from "../storage/github-auth.js";
 import { loadDriveRoot, saveDriveRoot, showFolderPicker, signIn } from "../storage/google-auth.js";
 import { showError } from "../ui/error-bar.js";
+import type { StorageRegistration } from "./plugin-host.js";
 
 export interface StorageBridgeDeps {
   getFileManager(): FileManager | null;
+  /** Look up a plugin-registered storage mode. Returns `undefined`
+   *  if the mode is built-in or no plugin matches. */
+  findPluginStorage(mode: string): StorageRegistration | undefined;
+  /** All plugin-registered storage modes. Used when refreshing the
+   *  sidebar status strip so plugin chips reflect the latest
+   *  `connected` / `label` state. */
+  listPluginStorages(): StorageRegistration[];
+  /** Set of built-in modes the caller has opted out of via
+   *  `App.init({ disableBuiltinStorage })`. Disabled built-ins
+   *  short-circuit `handleStorageSelect` and `restoreOnBoot`. */
+  isBuiltinDisabled(mode: string): boolean;
 }
 
 export class StorageBridge {
@@ -80,14 +94,24 @@ export class StorageBridge {
 
     // Silently restore the filesystem handle if previously granted — this only
     // populates #deviceStore so the user can switch to Device without re-picking.
-    // It must NOT override the user's last-selected storage mode.
-    const restored = await restoreDevice();
-    if (restored) {
-      this.#deviceStore = restored;
+    // It must NOT override the user's last-selected storage mode (and skip
+    // entirely if the deployment opted Device out).
+    if (!this.deps.isBuiltinDisabled("device")) {
+      const restored = await restoreDevice();
+      if (restored) {
+        this.#deviceStore = restored;
+      }
     }
 
     // Respect the user's last-selected storage across reloads.
     const lastMode = loadLastStorage();
+    // Disabled built-ins fall through to the browser default — same
+    // behaviour as "device handle revoked" / "drive token expired".
+    if (lastMode && this.deps.isBuiltinDisabled(lastMode)) {
+      this.#storage = browserStore;
+      setStorageMode("browser");
+      return;
+    }
     if (lastMode === "device" && this.#deviceStore) {
       this.#storage = this.#deviceStore;
       setStorageMode("device");
@@ -127,6 +151,21 @@ export class StorageBridge {
         this.#storage = browserStore;
         setStorageMode("browser");
       }
+    } else if (lastMode && !(BUILT_IN_STORAGE_MODES as readonly string[]).includes(lastMode)) {
+      // Plugin-registered mode rehydrate. The plugin's `restore`
+      // factory does the same "no network on boot" cheap rehydrate
+      // that the built-in `restoreGoogleDrive` / `restoreGitHub`
+      // do — returning `null` falls back to the browser store the
+      // same way as a stale Drive session.
+      const reg = this.deps.findPluginStorage(lastMode);
+      const pluginStore = reg?.restore() ?? null;
+      if (pluginStore) {
+        this.#storage = pluginStore;
+        setPluginStore(lastMode, pluginStore);
+      } else {
+        this.#storage = browserStore;
+        setStorageMode("browser");
+      }
     } else {
       // Default / "browser" / everything else → Browser (BrowserStore)
       this.#storage = browserStore;
@@ -146,6 +185,15 @@ export class StorageBridge {
    * untouched.
    */
   async handleStorageSelect(mode: StorageMode, forcePicker = false): Promise<boolean> {
+    // Refuse to switch into a disabled built-in. The sidebar
+    // shouldn't even render the chip in that case (Phase C of
+    // plugin-storage-registration filters the chip list), so
+    // this is a defence-in-depth check for callers reaching the
+    // bridge through other paths (Drive handoff URL, etc.).
+    if (this.deps.isBuiltinDisabled(mode)) {
+      console.warn(`[storage-bridge] mode "${mode}" is disabled; ignoring select.`);
+      return false;
+    }
     try {
       if (mode === "browser") {
         const { BrowserStore } = await import("../storage/browser-store.js");
@@ -229,6 +277,22 @@ export class StorageBridge {
         const store = connectGitHub(token, ref!);
         this.#storage = store;
         saveLastStorage("github");
+      } else {
+        // Plugin-registered mode. The plugin owns the picker UX +
+        // any token / handshake; the bridge just stashes the
+        // resulting store and persists the mode for next reload.
+        const reg = this.deps.findPluginStorage(mode);
+        if (!reg) {
+          console.warn(
+            `[storage-bridge] no plugin or built-in registered for mode "${mode}".`,
+          );
+          return false;
+        }
+        const store = await reg.connect({ forcePicker });
+        if (!store) return false;
+        this.#storage = store;
+        setPluginStore(mode, store);
+        saveLastStorage(mode);
       }
       return true;
     } catch (e) {
@@ -257,7 +321,11 @@ export class StorageBridge {
       const base = ref.basePath ? `/${ref.basePath}` : "";
       return `${ref.owner}/${ref.repo}${base}@${ref.branch}`;
     }
-    return undefined;
+    // Plugin-registered mode — use the registration's own status
+    // label as the sidebar subtitle (mirrors what built-ins surface
+    // for "Connected ← drive root name / repo ref").
+    const reg = this.deps.findPluginStorage(mode);
+    return reg?.status().label;
   }
 
   /** Refresh the sidebar's per-backend connected / label state. No-op
@@ -288,6 +356,11 @@ export class StorageBridge {
           : "Connected"
         : "Not connected",
     );
+    // Plugin chips report their own connected / label state.
+    for (const reg of this.deps.listPluginStorages()) {
+      const s = reg.status();
+      sidebar.setStorageStatus(reg.mode, s.connected, s.label);
+    }
     sidebar.setActiveMode(activeMode);
   }
 }
