@@ -1,11 +1,24 @@
 /**
- * Sidebar — storage tree + folder tree + "New" button for the file manager.
- * Path-based identification for folders.
+ * `<annot-sidebar>` — storage tree + folder tree + "New" button
+ * for the file manager. Path-based identification for folders.
+ *
+ * Lit Phase 3 — the imperative `Sidebar` class became this Lit
+ * element. The chrome (heading text, sections, "New" button,
+ * storage chips, sidebar-tab rows) is declarative; the recursive
+ * folder-tree itself is still built imperatively in `updated()`
+ * because async + recursive expansion doesn't fit Lit's render
+ * loop cleanly. Per the migration plan, the tree's hot-spot stays
+ * vanilla and a follow-up plan can revisit if it pays off.
+ *
+ * The public method surface (`setActiveMode` / `setActiveFolderPath`
+ * / `setStorage` / `setStorageStatus` / `refreshFolderTree` /
+ * `render`) is preserved so pre-Lit callers (FileManager,
+ * StorageBridge) don't move.
  */
 import type { StorageProvider } from "@ingcreators/annot-core/storage";
-import { setTooltip } from "@ingcreators/annot-core/utils";
 import type { SidebarTab, StorageRegistration } from "../app/plugin-host.js";
 import { isClipboardReadSupported, isScreenCaptureSupported } from "../capture/pwa-capture.js";
+import { html, LitElement, nothing } from "../lit.js";
 import type { StorageMode } from "../storage/bridge.js";
 
 /** Default priorities the sidebar's three sections render in.
@@ -107,97 +120,129 @@ interface StorageStatus {
 /** Tracks which folder paths are expanded. "" = root (always expanded). */
 type ExpandedSet = Set<string>;
 
-export class Sidebar {
-  #container: HTMLElement;
-  #callbacks: SidebarCallbacks;
-  #activeMode: StorageMode = "browser";
-  #activeFolderPath = "";
-  #storage: StorageProvider | null = null;
-  // A `Map` keyed by mode string. Phase A bounded this to
-  // `BuiltInStorageMode` to narrow indexed-access; Phase C of
-  // plugin-storage-registration widens it to accept plugin keys
-  // alongside built-ins.
-  #statuses = new Map<string, StorageStatus>([
-    ["browser", { connected: true }],
-    ["extension", { connected: false }],
-    ["device", { connected: false }],
-    ["googledrive", { connected: false }],
-    // Phase 2 of `docs/plans/github-integration.md` adds the
-    // GitHubStore but leaves the visible sidebar item to Phase 3.
-    // The status entry exists for type completeness.
-    ["github", { connected: false }],
-  ]);
-  #expanded: ExpandedSet = new Set([""]); // root always expanded
-  #rootName: string | null = null;
-  #newMenuOpen = false;
-  #treeContainer: HTMLElement | null = null;
-  #treeSectionTitle: HTMLElement | null = null;
+export class AnnotSidebarElement extends LitElement {
+  static override properties = {
+    activeMode: { state: true },
+    activeFolderPath: { state: true },
+    storage: { attribute: false },
+    rootName: { state: true },
+    statuses: { state: true },
+    callbacks: { attribute: false },
+    newMenuOpen: { state: true },
+  };
 
-  constructor(container: HTMLElement, callbacks: SidebarCallbacks) {
-    this.#container = container;
-    this.#callbacks = callbacks;
-    this.render();
+  declare activeMode: StorageMode;
+  declare activeFolderPath: string;
+  declare storage: StorageProvider | null;
+  declare rootName: string | null;
+  declare statuses: Map<string, StorageStatus>;
+  declare callbacks: SidebarCallbacks;
+  declare newMenuOpen: boolean;
+
+  #expanded: ExpandedSet = new Set([""]);
+  #closeNewMenu: ((e: MouseEvent) => void) | null = null;
+
+  constructor() {
+    super();
+    this.activeMode = "browser";
+    this.activeFolderPath = "";
+    this.storage = null;
+    this.rootName = null;
+    this.statuses = new Map<string, StorageStatus>([
+      ["browser", { connected: true }],
+      ["extension", { connected: false }],
+      ["device", { connected: false }],
+      ["googledrive", { connected: false }],
+      // Phase 2 of `docs/plans/github-integration.md` adds the
+      // GitHubStore but leaves the visible sidebar item to Phase 3.
+      // The status entry exists for type completeness.
+      ["github", { connected: false }],
+    ]);
+    this.callbacks = {
+      onStorageSelect: () => {},
+      onStorageReselect: () => {},
+      onFolderSelect: () => {},
+      onNewFolder: () => {},
+      onUploadImage: () => {},
+      onCaptureScreen: () => {},
+      onTimedCapture: () => {},
+      onPasteClipboard: () => {},
+    };
+    this.newMenuOpen = false;
   }
 
+  protected override createRenderRoot(): HTMLElement {
+    return this;
+  }
+
+  // ---- Public method surface (kept for parity with the pre-Lit class) ----
+
   setActiveMode(mode: StorageMode): void {
-    this.#activeMode = mode;
-    this.#updateActiveVisuals();
+    this.activeMode = mode;
   }
 
   setActiveFolderPath(folderPath: string): void {
-    this.#activeFolderPath = folderPath;
-    this.#updateFolderHighlight();
+    this.activeFolderPath = folderPath;
   }
 
   setStorage(storage: StorageProvider | null, rootName?: string): void {
-    this.#storage = storage;
-    this.#rootName = rootName || null;
+    this.storage = storage;
+    this.rootName = rootName || null;
     this.#expanded = new Set([""]);
-    this.refreshFolderTree();
+    void this.refreshFolderTree();
   }
 
   setStorageStatus(mode: StorageMode, connected: boolean, label?: string): void {
-    this.#statuses.set(mode, { connected, label });
-    this.render();
+    // Mutate via a fresh Map so Lit's identity check picks up the
+    // change. Keeping the original reference would skip the render.
+    const next = new Map(this.statuses);
+    next.set(mode, { connected, label });
+    this.statuses = next;
+  }
+
+  override render() {
+    return this.#renderTemplate();
   }
 
   async refreshFolderTree(): Promise<void> {
-    if (!this.#treeContainer || !this.#storage) {
-      if (this.#treeContainer) {
-        this.#treeContainer.innerHTML = "";
-        this.#treeContainer.style.display = "none";
-      }
-      if (this.#treeSectionTitle) this.#treeSectionTitle.style.display = "none";
+    await this.updateComplete;
+    const treeContainer = this.querySelector<HTMLElement>(".sidebar-folder-tree");
+    const treeSectionTitle = this.querySelector<HTMLElement>(".sidebar-folders-title");
+    if (!treeContainer) return;
+    if (!this.storage) {
+      treeContainer.innerHTML = "";
+      treeContainer.style.display = "none";
+      if (treeSectionTitle) treeSectionTitle.style.display = "none";
       return;
     }
     // Keep the whole "Folders" section hidden until the async tree
     // build finishes. Showing the root row early before the heading
     // reappears — possible when `listFolders` hangs on a 401 →
     // banner-blocked token refresh — reads as a stray, unlabelled item.
-    this.#treeContainer.style.display = "none";
-    if (this.#treeSectionTitle) this.#treeSectionTitle.style.display = "none";
-    this.#treeContainer.innerHTML = "";
-    this.#treeContainer.setAttribute("role", "tree");
-    this.#treeContainer.setAttribute("aria-label", "Folders");
+    treeContainer.style.display = "none";
+    if (treeSectionTitle) treeSectionTitle.style.display = "none";
+    treeContainer.innerHTML = "";
+    treeContainer.setAttribute("role", "tree");
+    treeContainer.setAttribute("aria-label", "Folders");
 
     // Root node — always shows storage type name; folder/repo name
     // as subtitle for Device / Drive / GitHub.
     const rootLabel =
-      this.#activeMode === "device"
+      this.activeMode === "device"
         ? "Device"
-        : this.#activeMode === "googledrive"
+        : this.activeMode === "googledrive"
           ? "Google Drive"
-          : this.#activeMode === "github"
+          : this.activeMode === "github"
             ? "GitHub"
             : "Browser";
 
     const rootRow = document.createElement("div");
-    rootRow.className = `folder-tree-item${this.#activeFolderPath === "" ? " active" : ""}`;
-    rootRow.dataset.folderPath = "";
+    rootRow.className = `folder-tree-item${this.activeFolderPath === "" ? " active" : ""}`;
+    rootRow.dataset["folderPath"] = "";
     rootRow.style.paddingLeft = "8px";
     rootRow.setAttribute("role", "treeitem");
     rootRow.setAttribute("aria-level", "1");
-    rootRow.setAttribute("aria-selected", String(this.#activeFolderPath === ""));
+    rootRow.setAttribute("aria-selected", String(this.activeFolderPath === ""));
     rootRow.tabIndex = 0;
 
     const rootIcon = document.createElement("span");
@@ -212,18 +257,18 @@ export class Sidebar {
     rootNameEl.className = "folder-tree-name";
     rootNameEl.textContent = rootLabel;
     rootInfo.appendChild(rootNameEl);
-    if (this.#rootName) {
+    if (this.rootName) {
       const rootSub = document.createElement("span");
       rootSub.className = "folder-tree-root-sub";
-      rootSub.textContent = this.#rootName;
+      rootSub.textContent = this.rootName;
       rootInfo.appendChild(rootSub);
     }
     rootRow.appendChild(rootInfo);
 
     const activateRoot = () => {
-      this.#activeFolderPath = "";
+      this.activeFolderPath = "";
       this.#updateFolderHighlight();
-      this.#callbacks.onFolderSelect("");
+      this.callbacks.onFolderSelect("");
     };
     rootRow.addEventListener("click", activateRoot);
     rootRow.addEventListener("keydown", (e) => {
@@ -232,67 +277,63 @@ export class Sidebar {
         activateRoot();
       }
     });
-    this.#treeContainer.appendChild(rootRow);
+    treeContainer.appendChild(rootRow);
 
     // Child folders
     const childContainer = document.createElement("div");
     childContainer.className = "folder-tree-children";
-    this.#treeContainer.appendChild(childContainer);
+    treeContainer.appendChild(childContainer);
     await this.#buildFolderTree(childContainer, "", 1);
 
-    // Reveal both the heading and the tree together. If the build
-    // errored inside `#buildFolderTree` it swallowed the throw, which
-    // means we still mark the section visible — the user sees the
-    // heading + whatever partial tree loaded, rather than an empty
-    // container that silently stays hidden.
-    if (this.#treeSectionTitle) this.#treeSectionTitle.style.display = "";
-    this.#treeContainer.style.display = "";
+    // Reveal both the heading and the tree together.
+    if (treeSectionTitle) treeSectionTitle.style.display = "";
+    treeContainer.style.display = "";
   }
 
-  render(): void {
-    this.#container.innerHTML = "";
+  // ---- Lit lifecycle ----
 
-    // The "New" button is pinned at the top regardless of section
-    // priorities — it's the primary action, not a navigable
-    // section.
-    this.#container.appendChild(this.#buildNewButton());
+  protected override updated(changed: Map<string, unknown>): void {
+    if (
+      changed.has("storage") ||
+      changed.has("activeMode") ||
+      changed.has("activeFolderPath") ||
+      changed.has("rootName")
+    ) {
+      void this.refreshFolderTree();
+    }
+  }
 
-    // Resolve section order. Defaults place Storage / Views /
-    // Folders in the historical visual order; deployments can
-    // override per-section via `App.init({ sidebarSectionOrder })`
-    // to e.g. put Views above Storage.
-    const orderOverride = this.#callbacks.getSidebarSectionOrder?.() ?? {};
+  override disconnectedCallback(): void {
+    super.disconnectedCallback();
+    if (this.#closeNewMenu) {
+      document.removeEventListener("click", this.#closeNewMenu);
+      this.#closeNewMenu = null;
+    }
+  }
+
+  // ---- Template ----
+
+  #renderTemplate() {
+    const orderOverride = this.callbacks.getSidebarSectionOrder?.() ?? {};
     const order = { ...DEFAULT_SIDEBAR_SECTION_ORDER, ...orderOverride };
-    const sections: Array<{ priority: number; render: () => void }> = [
+    type RenderedSection = { priority: number; render: () => unknown };
+    const sections: RenderedSection[] = [
       { priority: order.storage, render: () => this.#renderStorageSection() },
       { priority: order.views, render: () => this.#renderViewsSection() },
       { priority: order.folders, render: () => this.#renderFoldersSection() },
     ];
     sections.sort((a, b) => a.priority - b.priority);
-    for (const s of sections) s.render();
-
-    this.#updateActiveVisuals();
-    this.refreshFolderTree();
+    return html`
+      ${this.#renderNewButton()} ${sections.map((s) => s.render())}
+    `;
   }
 
-  #renderStorageSection(): void {
-    const title = document.createElement("div");
-    title.className = "sidebar-section-title";
-    title.textContent = "Storage";
-    this.#container.appendChild(title);
-
-    // Build the combined chip list: built-ins (filtered against the
-    // deployment's `disableBuiltinStorage`) + plugin registrations.
-    // Sort by `priority` so plugins can interleave with built-ins
-    // (e.g. a `priority: 25` plugin lands between Device and Drive)
-    // or append at the end (`priority: 100`). Stable sort means
-    // ties fall back to the source order (built-ins first, then
-    // plugin registration order).
-    const isBuiltinDisabled = this.#callbacks.isBuiltinDisabled ?? (() => false);
+  #renderStorageSection() {
+    const isBuiltinDisabled = this.callbacks.isBuiltinDisabled ?? (() => false);
     const builtins: ChipDescriptor[] = BUILTIN_CHIP_DESCRIPTORS.filter(
       (d) => !isBuiltinDisabled(d.mode),
     );
-    const plugins: ChipDescriptor[] = (this.#callbacks.getPluginStorages?.() ?? []).map(
+    const plugins: ChipDescriptor[] = (this.callbacks.getPluginStorages?.() ?? []).map(
       (reg) => ({
         mode: reg.mode,
         icon: reg.icon ?? "extension",
@@ -306,246 +347,211 @@ export class Sidebar {
       .filter((d) => (d.visible ? d.visible() : true))
       .sort((a, b) => a.priority - b.priority);
 
-    for (const chip of chips) {
-      const status = this.#statuses.get(chip.mode) ?? { connected: false };
-      const defaultLabel =
-        chip.mode === "browser" ? "Local" : status.connected ? "Connected" : "Not connected";
-      const subtitle = status.connected ? status.label || defaultLabel : defaultLabel;
-      const reselect =
-        chip.reselectTitle && status.connected
-          ? { reselect: true, reselectTitle: chip.reselectTitle }
-          : undefined;
-      this.#container.appendChild(
-        this.#buildStorageItem(chip.mode, chip.icon, chip.label, subtitle, reselect),
-      );
-    }
+    return html`
+      <div class="sidebar-section-title">Storage</div>
+      ${chips.map((chip) => this.#renderStorageChip(chip))}
+    `;
   }
 
-  #renderViewsSection(): void {
-    const tabs = (this.#callbacks.getSidebarTabs?.() ?? [])
+  #renderStorageChip(chip: ChipDescriptor) {
+    const status = this.statuses.get(chip.mode) ?? { connected: false };
+    const defaultLabel =
+      chip.mode === "browser" ? "Local" : status.connected ? "Connected" : "Not connected";
+    const subtitle = status.connected ? status.label || defaultLabel : defaultLabel;
+    const showReselect = chip.reselectTitle && status.connected;
+    const isActive = chip.mode === this.activeMode;
+    return html`
+      <button
+        type="button"
+        class=${isActive ? "sidebar-storage-item active" : "sidebar-storage-item"}
+        data-mode=${chip.mode}
+        aria-label=${`${chip.label} storage \u2014 ${subtitle}`}
+        @click=${() => this.callbacks.onStorageSelect(chip.mode as StorageMode)}
+      >
+        <span class="material-symbols-outlined sidebar-storage-icon" aria-hidden="true"
+          >${chip.icon}</span
+        >
+        <div class="sidebar-storage-info">
+          <div class="sidebar-storage-label">${chip.label}</div>
+          <div class="sidebar-storage-status">${subtitle}</div>
+        </div>
+        ${showReselect
+          ? html`<button
+              type="button"
+              class="sidebar-storage-reselect material-symbols-outlined"
+              data-tooltip=${chip.reselectTitle ?? "Change folder"}
+              aria-label=${chip.reselectTitle ?? "Change folder"}
+              @click=${(e: MouseEvent) => {
+                e.stopPropagation();
+                this.callbacks.onStorageReselect(chip.mode as StorageMode);
+              }}
+            >
+              drive_folder_upload
+            </button>`
+          : nothing}
+      </button>
+    `;
+  }
+
+  #renderViewsSection() {
+    const tabs = (this.callbacks.getSidebarTabs?.() ?? [])
       .filter((t) => t.visible !== false)
       .sort((a, b) => {
         const ap = Number.isFinite(a.priority) ? a.priority : Number.POSITIVE_INFINITY;
         const bp = Number.isFinite(b.priority) ? b.priority : Number.POSITIVE_INFINITY;
         return ap - bp;
       });
-    if (tabs.length === 0) return; // suppress heading entirely
-
-    const title = document.createElement("div");
-    title.className = "sidebar-section-title";
-    title.textContent = "Views";
-    this.#container.appendChild(title);
-
-    for (const tab of tabs) {
-      this.#container.appendChild(this.#buildSidebarTabRow(tab));
-    }
+    if (tabs.length === 0) return nothing;
+    return html`
+      <div class="sidebar-section-title">Views</div>
+      ${tabs.map((tab) => this.#renderSidebarTab(tab))}
+    `;
   }
 
-  #renderFoldersSection(): void {
-    // The "Folders" section (title + tree) is shown as a unit once
-    // `refreshFolderTree` has successfully built the tree. Hiding both
-    // together avoids the in-between state where the title is
-    // suppressed but the async-built root row has already landed — it
-    // was reading as "orphan storage row with no heading".
-    this.#treeSectionTitle = document.createElement("div");
-    this.#treeSectionTitle.className = "sidebar-section-title";
-    this.#treeSectionTitle.textContent = "Folders";
-    this.#treeSectionTitle.style.display = "none";
-    this.#container.appendChild(this.#treeSectionTitle);
-
-    this.#treeContainer = document.createElement("div");
-    this.#treeContainer.className = "sidebar-folder-tree";
-    this.#treeContainer.style.display = "none";
-    this.#container.appendChild(this.#treeContainer);
+  #renderSidebarTab(tab: SidebarTab) {
+    return html`
+      <button
+        type="button"
+        class=${tab.isActive ? "sidebar-storage-item active" : "sidebar-storage-item"}
+        data-tab-id=${tab.id}
+        @click=${(e: MouseEvent) => {
+          e.stopPropagation();
+          try {
+            tab.onClick();
+          } catch (err) {
+            console.error(`[sidebar] tab "${tab.id}" onClick threw:`, err);
+          }
+        }}
+      >
+        <span class="material-symbols-outlined">${tab.icon || "view_module"}</span>
+        <span class="sidebar-storage-label">${tab.label}</span>
+        ${tab.badge ? html`<span class="sidebar-tab-badge">${tab.badge}</span>` : nothing}
+      </button>
+    `;
   }
 
-  /** Render a single sidebar tab row (icon + label + optional
-   *  badge + active highlight). Click dispatches to the tab's
-   *  own `onClick`; single-active enforcement is on the
-   *  `PluginHost` setter, so by the time we render, exactly one
-   *  tab has `isActive: true`. */
-  #buildSidebarTabRow(tab: SidebarTab): HTMLElement {
-    const row = document.createElement("button");
-    row.type = "button";
-    row.className = "sidebar-storage-item";
-    if (tab.isActive) row.classList.add("active");
-    row.dataset["tabId"] = tab.id;
-
-    const iconEl = document.createElement("span");
-    iconEl.className = "material-symbols-outlined";
-    iconEl.textContent = tab.icon || "view_module";
-    row.appendChild(iconEl);
-
-    const labelEl = document.createElement("span");
-    labelEl.className = "sidebar-storage-label";
-    labelEl.textContent = tab.label;
-    row.appendChild(labelEl);
-
-    if (tab.badge) {
-      const badgeEl = document.createElement("span");
-      badgeEl.className = "sidebar-tab-badge";
-      badgeEl.textContent = tab.badge;
-      row.appendChild(badgeEl);
-    }
-
-    row.addEventListener("click", (e) => {
-      e.stopPropagation();
-      try {
-        tab.onClick();
-      } catch (err) {
-        console.error(`[sidebar] tab "${tab.id}" onClick threw:`, err);
-      }
-    });
-
-    return row;
+  #renderFoldersSection() {
+    // Heading + tree container — both hidden initially. The async
+    // `refreshFolderTree()` reveals them in lock-step once the
+    // tree successfully builds, so a slow listFolders() never
+    // shows "orphan storage row with no heading".
+    return html`
+      <div class="sidebar-section-title sidebar-folders-title" style="display: none">
+        Folders
+      </div>
+      <div class="sidebar-folder-tree" style="display: none"></div>
+    `;
   }
 
-  // ---- New button ----
-
-  #buildNewButton(): HTMLElement {
-    const wrap = document.createElement("div");
-    wrap.className = "new-menu-wrap";
-
-    const btn = document.createElement("button");
-    btn.className = "sidebar-new-btn";
-    btn.innerHTML = '<span class="material-symbols-outlined">add</span> New';
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      this.#toggleNewMenu(wrap);
-    });
-    wrap.appendChild(btn);
-
-    return wrap;
+  #renderNewButton() {
+    return html`
+      <div class="new-menu-wrap">
+        <button
+          type="button"
+          class="sidebar-new-btn"
+          @click=${(e: MouseEvent) => {
+            e.stopPropagation();
+            this.#toggleNewMenu();
+          }}
+        >
+          <span class="material-symbols-outlined">add</span> New
+        </button>
+        ${this.newMenuOpen ? this.#renderNewMenu() : nothing}
+      </div>
+    `;
   }
 
-  #toggleNewMenu(wrap: HTMLElement): void {
-    const existing = wrap.querySelector(".new-menu");
-    if (existing) {
-      existing.remove();
-      this.#newMenuOpen = false;
-      return;
-    }
-
-    this.#newMenuOpen = true;
-    const menu = document.createElement("div");
-    menu.className = "new-menu";
-
-    const items: { icon: string; label: string; action: () => void; show?: boolean }[] = [
+  #renderNewMenu() {
+    const items: Array<{ icon: string; label: string; action: () => void; show?: boolean }> = [
       {
         icon: "create_new_folder",
         label: "New Folder",
-        action: () => this.#callbacks.onNewFolder(),
+        action: () => this.callbacks.onNewFolder(),
       },
-      { icon: "upload", label: "Upload Image", action: () => this.#callbacks.onUploadImage() },
+      { icon: "upload", label: "Upload Image", action: () => this.callbacks.onUploadImage() },
       {
         icon: "screenshot_monitor",
         label: "Capture Screen",
-        action: () => this.#callbacks.onCaptureScreen(),
+        action: () => this.callbacks.onCaptureScreen(),
         show: isScreenCaptureSupported(),
       },
       {
         icon: "timer",
         label: "Timed Capture...",
-        action: () => this.#callbacks.onTimedCapture(),
+        action: () => this.callbacks.onTimedCapture(),
         show: isScreenCaptureSupported(),
       },
       {
         icon: "content_paste",
         label: "Paste from Clipboard",
-        action: () => this.#callbacks.onPasteClipboard(),
+        action: () => this.callbacks.onPasteClipboard(),
         show: isClipboardReadSupported(),
       },
     ];
+    return html`
+      <div class="new-menu">
+        ${items
+          .filter((item) => item.show !== false)
+          .map(
+            (item) => html`
+              <button
+                type="button"
+                class="new-menu-item"
+                @click=${() => {
+                  this.newMenuOpen = false;
+                  item.action();
+                }}
+              >
+                <span class="material-symbols-outlined">${item.icon}</span> ${item.label}
+              </button>
+            `,
+          )}
+      </div>
+    `;
+  }
 
-    for (const item of items) {
-      if (item.show === false) continue;
-      const btn = document.createElement("button");
-      btn.className = "new-menu-item";
-      btn.innerHTML = `<span class="material-symbols-outlined">${item.icon}</span> ${item.label}`;
-      btn.addEventListener("click", () => {
-        menu.remove();
-        this.#newMenuOpen = false;
-        item.action();
-      });
-      menu.appendChild(btn);
+  #toggleNewMenu(): void {
+    if (this.newMenuOpen) {
+      this.newMenuOpen = false;
+      if (this.#closeNewMenu) {
+        document.removeEventListener("click", this.#closeNewMenu);
+        this.#closeNewMenu = null;
+      }
+      return;
     }
-
-    wrap.appendChild(menu);
-
+    this.newMenuOpen = true;
+    // Close on outside click. Defer one frame so the click that
+    // opened the menu doesn't immediately re-close it.
     const close = (e: MouseEvent) => {
-      if (!wrap.contains(e.target as Node)) {
-        menu.remove();
-        this.#newMenuOpen = false;
+      const wrap = this.querySelector(".new-menu-wrap");
+      if (wrap && !wrap.contains(e.target as Node)) {
+        this.newMenuOpen = false;
         document.removeEventListener("click", close);
+        this.#closeNewMenu = null;
       }
     };
+    this.#closeNewMenu = close;
     requestAnimationFrame(() => document.addEventListener("click", close));
   }
 
-  // ---- Storage items ----
+  // ---- Folder tree (imperative; recursive + async) ----
 
-  #buildStorageItem(
-    mode: StorageMode,
-    icon: string,
-    label: string,
-    status: string,
-    opts: { reselect?: boolean; reselectTitle?: string } = {},
-  ): HTMLElement {
-    const btn = document.createElement("button");
-    btn.className = "sidebar-storage-item";
-    btn.dataset.mode = mode;
-    btn.type = "button";
-    btn.setAttribute("aria-label", `${label} storage — ${status}`);
-
-    // Icon is decorative — hide from AT (status text already conveys meaning)
-    btn.innerHTML = `
-      <span class="material-symbols-outlined sidebar-storage-icon" aria-hidden="true">${icon}</span>
-      <div class="sidebar-storage-info">
-        <div class="sidebar-storage-label">${label}</div>
-        <div class="sidebar-storage-status">${status}</div>
-      </div>
-    `;
-
-    btn.addEventListener("click", () => this.#callbacks.onStorageSelect(mode));
-
-    if (opts.reselect) {
-      const reselectBtn = document.createElement("button");
-      reselectBtn.type = "button";
-      reselectBtn.className = "sidebar-storage-reselect material-symbols-outlined";
-      reselectBtn.textContent = "drive_folder_upload";
-      setTooltip(reselectBtn, opts.reselectTitle || "Change folder");
-      reselectBtn.setAttribute("aria-label", opts.reselectTitle || "Change folder");
-      reselectBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        this.#callbacks.onStorageReselect(mode);
-      });
-      btn.appendChild(reselectBtn);
-    }
-
-    return btn;
-  }
-
-  #updateActiveVisuals(): void {
-    for (const item of this.#container.querySelectorAll<HTMLElement>(".sidebar-storage-item")) {
-      item.classList.toggle("active", item.dataset.mode === this.#activeMode);
-    }
-  }
-
-  // ---- Folder tree ----
-
-  async #buildFolderTree(container: HTMLElement, parentPath: string, depth: number): Promise<void> {
-    if (!this.#storage) return;
-
+  async #buildFolderTree(
+    container: HTMLElement,
+    parentPath: string,
+    depth: number,
+  ): Promise<void> {
+    if (!this.storage) return;
     try {
-      const folders = await this.#storage.listFolders(parentPath);
+      const folders = await this.storage.listFolders(parentPath);
       for (const folder of folders) {
         const folderPath = folder.path;
         const isExpanded = this.#expanded.has(folderPath);
-        const isActive = this.#activeFolderPath === folderPath;
+        const isActive = this.activeFolderPath === folderPath;
 
         const row = document.createElement("div");
         row.className = `folder-tree-item${isActive ? " active" : ""}`;
-        row.dataset.folderPath = folderPath;
+        row.dataset["folderPath"] = folderPath;
         row.style.paddingLeft = `${8 + depth * 16}px`;
         row.setAttribute("role", "treeitem");
         row.setAttribute("aria-level", String(depth + 1));
@@ -562,10 +568,10 @@ export class Sidebar {
           "aria-label",
           isExpanded ? `Collapse ${folder.name}` : `Expand ${folder.name}`,
         );
-        chevron.setAttribute("tabindex", "-1"); // row handles focus; chevron is a skip target
+        chevron.setAttribute("tabindex", "-1");
         chevron.addEventListener("click", (e) => {
           e.stopPropagation();
-          this.#toggleExpand(folderPath);
+          void this.#toggleExpand(folderPath);
         });
         row.appendChild(chevron);
 
@@ -581,28 +587,25 @@ export class Sidebar {
         row.appendChild(name);
 
         const activate = () => {
-          this.#activeFolderPath = folderPath;
+          this.activeFolderPath = folderPath;
           this.#updateFolderHighlight();
-          this.#callbacks.onFolderSelect(folderPath);
+          this.callbacks.onFolderSelect(folderPath);
           if (!this.#expanded.has(folderPath)) {
             this.#expanded.add(folderPath);
-            this.refreshFolderTree();
+            void this.refreshFolderTree();
           }
         };
         row.addEventListener("click", activate);
         row.addEventListener("keydown", (e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            activate();
-          } else if (e.key === " ") {
+          if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
             activate();
           } else if (e.key === "ArrowRight") {
             e.preventDefault();
-            if (!isExpanded) this.#toggleExpand(folderPath);
+            if (!isExpanded) void this.#toggleExpand(folderPath);
           } else if (e.key === "ArrowLeft") {
             e.preventDefault();
-            if (isExpanded) this.#toggleExpand(folderPath);
+            if (isExpanded) void this.#toggleExpand(folderPath);
           }
         });
 
@@ -622,19 +625,27 @@ export class Sidebar {
   }
 
   async #toggleExpand(folderPath: string): Promise<void> {
-    if (this.#expanded.has(folderPath)) {
-      this.#expanded.delete(folderPath);
-    } else {
-      this.#expanded.add(folderPath);
-    }
+    if (this.#expanded.has(folderPath)) this.#expanded.delete(folderPath);
+    else this.#expanded.add(folderPath);
     await this.refreshFolderTree();
   }
 
   #updateFolderHighlight(): void {
-    if (!this.#treeContainer) return;
-    for (const item of this.#treeContainer.querySelectorAll<HTMLElement>(".folder-tree-item")) {
-      const p = item.dataset.folderPath;
-      item.classList.toggle("active", p === this.#activeFolderPath);
+    const treeContainer = this.querySelector<HTMLElement>(".sidebar-folder-tree");
+    if (!treeContainer) return;
+    for (const item of treeContainer.querySelectorAll<HTMLElement>(".folder-tree-item")) {
+      const p = item.dataset["folderPath"];
+      item.classList.toggle("active", p === this.activeFolderPath);
     }
+  }
+}
+
+if (!customElements.get("annot-sidebar")) {
+  customElements.define("annot-sidebar", AnnotSidebarElement);
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    "annot-sidebar": AnnotSidebarElement;
   }
 }

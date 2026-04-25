@@ -339,7 +339,11 @@ export class App {
     // listener no-ops while the file manager isn't mounted, so
     // there's no cost during the editor-only sessions.
     this.#pluginHost.onSidebarChange(() => {
-      this.#fileManager?.sidebar.render();
+      // The sidebar reads tabs / plugin storages via callbacks the
+      // plugin host evaluates on render. Lit doesn't observe those
+      // closures directly, so we ask the element for a manual
+      // re-render after the host announces a change.
+      this.#fileManager?.sidebar.requestUpdate();
     });
 
     // Register plugins first so every lifecycle event — including
