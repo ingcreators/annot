@@ -16,7 +16,7 @@
  */
 
 import { setTooltip } from "../utils/tooltip.js";
-import { openAnchoredPopover } from "./toolbar.js";
+import { openAnchoredPopover } from "./anchored-popover.js";
 
 export interface CustomSelectOption {
   value: string;

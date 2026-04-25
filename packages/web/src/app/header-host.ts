@@ -19,7 +19,7 @@
  * + plugin host.
  */
 
-import type { Toolbar } from "@ingcreators/annot-core";
+import type { Toolbar } from "../editor/toolbar.js";
 import type { ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
 import { getFilename } from "@ingcreators/annot-core/storage";
 import "../editor/editor-header.js";

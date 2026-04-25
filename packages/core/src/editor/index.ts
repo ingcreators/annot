@@ -48,17 +48,18 @@ export { History } from "./history.js";
 export { PropertyPanel } from "./property-panel.js";
 export { SelectionManager } from "./selection.js";
 export { createThemeToggle } from "./theme-toggle.js";
-export type { ToolbarOptions } from "./toolbar.js";
-// --- Toolbar + property panel (+ shared UI helpers) ---
+// --- Shared UI helpers used by PropertyPanel + the relocated Toolbar ---
+// Phase 5a moved the Toolbar class to `@ingcreators/annot-web`; the
+// icon catalogues + popover helper stayed here because PropertyPanel
+// (which lives in core) consumes them.
 export {
   ARROW_ICON_SVG,
   COUNTER_ICON_SVG,
   HIGHLIGHT_COLORS,
   highlightColorLabel,
-  openAnchoredPopover,
   SHAPE_ICON_SVG,
-  Toolbar,
-} from "./toolbar.js";
+} from "./toolbar-icons.js";
+export { openAnchoredPopover } from "./anchored-popover.js";
 export type { ToolOptions } from "./tools/tool-base.js";
 // --- Tool base class + options type ---
 // Tools create live SVG nodes via `document.createElementNS` on

@@ -66,6 +66,9 @@ importers:
       '@ingcreators/annot-core':
         specifier: workspace:*
         version: link:../core
+      '@ingcreators/annot-web':
+        specifier: workspace:*
+        version: link:../web
       '@tauri-apps/api':
         specifier: ^2.10.1
         version: 2.10.1
