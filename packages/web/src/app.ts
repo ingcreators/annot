@@ -157,6 +157,7 @@ export class App {
         },
         notifyEditorReady: (ev) => this.#pluginHost.dispatchEditorReady(ev),
         getDrawerSections: () => this.#pluginHost.listDrawerSections(),
+        getRightPanelSections: () => this.#pluginHost.listRightPanelSections(),
         isBuiltinUISectionDisabled: (id) => this.#disabledBuiltinUISections.has(id),
       },
       this.#headerHost,
@@ -313,12 +314,15 @@ export class App {
     // to change ordering at runtime would re-init.
     this.#sidebarSectionOrder = opts.sidebarSectionOrder ?? {};
     // Validate `disableBuiltinUISections` against the known built-in
-    // ids. Drawer ids land in Phase 2 (this PR); Phase 3 will add
-    // the right-panel ids to the `knownIds` set. Unknown entries
-    // log a warning + no-op for forward-compat with newer-than-
-    // config deployments.
+    // ids — drawer (Phase 2) + right-panel (Phase 3). Unknown
+    // entries log a warning + no-op for forward-compat with
+    // newer-than-config deployments.
     const { BUILTIN_DRAWER_SECTION_IDS } = await import("./editor/file-details-drawer.js");
-    const knownIds = new Set<string>(BUILTIN_DRAWER_SECTION_IDS);
+    const { BUILTIN_RIGHT_PANEL_SECTION_IDS } = await import("./editor/right-panel.js");
+    const knownIds = new Set<string>([
+      ...BUILTIN_DRAWER_SECTION_IDS,
+      ...BUILTIN_RIGHT_PANEL_SECTION_IDS,
+    ]);
     for (const id of opts.disableBuiltinUISections ?? []) {
       if (!knownIds.has(id)) {
         console.warn(
