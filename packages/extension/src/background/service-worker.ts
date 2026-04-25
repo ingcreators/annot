@@ -64,8 +64,8 @@ async function beginCapturePrep(
 async function endCapturePrep(tabId: number): Promise<void> {
   try {
     await sendToTab(tabId, { type: "restore-after-capture" });
-  } catch {
-    /* ignore */
+  } catch (err) {
+    logger.debug("[capture-prep] restore-after-capture failed (tab gone or navigated):", err);
   }
 }
 
@@ -73,8 +73,8 @@ async function showProgress(tabId: number | undefined, text: string): Promise<vo
   if (tabId == null) return;
   try {
     await sendToTab(tabId, { type: "show-progress", text });
-  } catch {
-    /* ignore */
+  } catch (err) {
+    logger.debug("[capture-prep] show-progress failed:", err);
   }
 }
 
@@ -82,8 +82,8 @@ async function hideProgress(tabId: number | undefined): Promise<void> {
   if (tabId == null) return;
   try {
     await sendToTab(tabId, { type: "hide-progress" });
-  } catch {
-    /* ignore */
+  } catch (err) {
+    logger.debug("[capture-prep] hide-progress failed:", err);
   }
 }
 
@@ -325,8 +325,8 @@ async function openEditor(
     const tab = await findCaptureTarget();
     if (tab?.url) sourceUrl = tab.url;
     captureTabId = tab?.id ?? undefined;
-  } catch {
-    /* ignore */
+  } catch (err) {
+    logger.debug("[openEditor] findCaptureTarget failed:", err);
   }
 
   // Detect dimensions from image if not provided
@@ -340,8 +340,8 @@ async function openEditor(
       w = bmp.width;
       h = bmp.height;
       bmp.close();
-    } catch {
-      /* ignore */
+    } catch (err) {
+      logger.debug("[openEditor] image dimension probe failed:", err);
     }
   }
 
@@ -928,8 +928,8 @@ async function capturePagesInner(tab: CaptureTab, settings: Settings): Promise<v
       if (srcYpx > 0 || sliceHeightPx < fullHeightPx) {
         try {
           url = await cropPngVertical(pngDataUrl, srcYpx, sliceHeightPx);
-        } catch {
-          /* ignore */
+        } catch (err) {
+          logger.debug("[capture-pages] serial-fallback crop failed, using uncropped slice:", err);
         }
       }
       const encoded = await encodeCapture(url, settings);
@@ -1193,8 +1193,8 @@ async function broadcastClickCapture(enable: boolean): Promise<void> {
       // Ensure content script is present for http(s) pages
       if (enable) await injectContentScript(t.id);
       await chrome.tabs.sendMessage(t.id, { type: msgType }).catch(() => {});
-    } catch {
-      /* ignore */
+    } catch (err) {
+      logger.debug("[click-capture] broadcast to tab failed:", t.id, err);
     }
   }
 }
@@ -1285,8 +1285,8 @@ async function handleClickDetected(
       w = bmp.width;
       h = bmp.height;
       bmp.close();
-    } catch {
-      /* ignore */
+    } catch (err) {
+      logger.debug("[click-capture] image dimension probe failed:", err);
     }
 
     // Re-query the tab AFTER the settle delay so the recorded URL/title
@@ -1396,8 +1396,8 @@ chrome.tabs.onUpdated.addListener((tabId, info, tab) => {
       hotkeyState.sessionId = res.hotkeyCaptureSession || newIdB58();
     }
     updateBadge();
-  } catch {
-    /* ignore */
+  } catch (err) {
+    logger.debug("[startup] capture-state restore failed:", err);
   }
 })();
 
@@ -1515,8 +1515,8 @@ async function hotkeyCaptureShot(firedTab?: chrome.tabs.Tab): Promise<void> {
       w = bmp.width;
       h = bmp.height;
       bmp.close();
-    } catch {
-      /* ignore */
+    } catch (err) {
+      logger.debug("[hotkey-capture] image dimension probe failed:", err);
     }
 
     const ts = new Date().toISOString();
