@@ -75,9 +75,16 @@ export class AnnotFileManagerShellElement extends LitElement {
   /** The container the file-manager imperatively mounts the
    *  vanilla GalleryPage into. Stable across re-renders because
    *  Lit reuses the same DOM node when the template structure
-   *  doesn't change. */
+   *  doesn't change.
+   *
+   *  Lookup is intentionally id-based: `GalleryPage`'s
+   *  constructor overwrites the container's `className` to
+   *  `"gallery-panel"`, which would wipe the `.file-manager-
+   *  grid-host` class on the second mount and make a class-
+   *  based query miss the existing host. The `id` survives
+   *  because `GalleryPage` doesn't touch it. */
   getGridHost(): HTMLElement | null {
-    return this.querySelector<HTMLElement>(".file-manager-grid-host");
+    return this.querySelector<HTMLElement>("#gallery-container");
   }
 
   override render() {
