@@ -1,3 +1,4 @@
+import { classifyPropertyElement } from "@ingcreators/annot-core/editor/property-schema";
 import { computeDasharray, detectDashKey } from "@ingcreators/annot-core/utils";
 import { setTooltip } from "./tooltip.js";
 import { refreshArrowPath } from "@ingcreators/annot-core/editor/arrow-markers";
@@ -147,29 +148,37 @@ export class PropertyPanel {
     // `elements.length === 0` was guarded above, so `elements[0]`
     // is always defined here.
     const sample = elements[0]!;
-    const isTextbox = sample.tagName === "g" && sample.getAttribute("data-type") === "textbox";
-    const isMarker = sample.tagName === "g" && sample.hasAttribute("data-marker");
-    const isRedact = detectRedactStyle(sample) !== null;
-    const isHighlight = sample.tagName === "rect" && sample.getAttribute("data-highlight") === "1";
-    const isGroup = sample.tagName === "g" && sample.getAttribute("data-type") === "group";
-
-    if (isGroup) {
-      // Manually-grouped <g data-type="group"> — no per-element
-      // properties to edit (children have wildly different shapes
-      // in the general case). Only the Actions section (rotate /
-      // flip / z-order / ungroup) applies. Render nothing here.
-      return;
-    }
-    if (isTextbox) {
-      this.#renderTextboxControls(sample);
-    } else if (isMarker) {
-      this.#renderMarkerControls(sample);
-    } else if (isRedact) {
-      this.#renderRedactControls(sample);
-    } else if (isHighlight) {
-      this.#renderHighlightControls(sample);
-    } else {
-      this.#renderShapeControls(sample);
+    // Coarse category dispatch lives in `@ingcreators/annot-core/editor/property-schema`
+    // (Tier B, jsdom-testable). The category enum collapses the
+    // three redact variants into a single dispatch arm here — the
+    // sub-variant (mosaic / solid / blur) is re-detected inside
+    // `#renderRedactControls` because the picker UI needs the
+    // current style.
+    const category = classifyPropertyElement(sample);
+    switch (category) {
+      case "group":
+        // Manually-grouped <g data-type="group"> — no per-element
+        // properties to edit (children have wildly different shapes
+        // in the general case). Only the Actions section (rotate /
+        // flip / z-order / ungroup) applies. Render nothing here.
+        return;
+      case "textbox":
+        this.#renderTextboxControls(sample);
+        break;
+      case "marker":
+        this.#renderMarkerControls(sample);
+        break;
+      case "redact-mosaic":
+      case "redact-solid":
+      case "redact-blur":
+        this.#renderRedactControls(sample);
+        break;
+      case "highlight":
+        this.#renderHighlightControls(sample);
+        break;
+      case "shape":
+        this.#renderShapeControls(sample);
+        break;
     }
 
     // Transform (rotate / flip) used to be rendered here as a section,

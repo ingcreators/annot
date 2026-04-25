@@ -33,6 +33,59 @@ export {
   stampAnnotVersion,
 } from "./editor/svg-format.js";
 
+// ─── Viewport math (pure number-in/number-out) ────────────────────────
+// Used by `CanvasManager` (live editor, in `@ingcreators/annot-editor`)
+// and reusable by future headless viewport simulators.
+export {
+  applyInverseAffine,
+  clampZoom,
+  computeFitZoom,
+  computeRenderedSize,
+  DEFAULT_MAX_ZOOM,
+  DEFAULT_MIN_ZOOM,
+  FIT_VIEW_PADDING,
+  type AffineMatrix,
+} from "./editor/viewport-math.js";
+
+// ─── Undo/redo stack management (pure string snapshots) ───────────────
+// `History` (in `@ingcreators/annot-editor`) wraps this with the
+// `innerHTML` adapter; headless callers can drive the same logic
+// against any string-snapshot model.
+export {
+  createHistoryCore,
+  DEFAULT_HISTORY_DEPTH,
+  type HistoryCore,
+  type HistoryHooks,
+} from "./editor/history-core.js";
+
+// ─── Property-panel category classifier + control-shape registry ──────
+// Element-taking helpers (jsdom-friendly) used by the editor's
+// PropertyPanel to decide which control set to render. No DOM
+// globals touched at module load — safe to import in pure Node;
+// calling the classifier requires an `Element` instance.
+export {
+  CATEGORY_CONTROL_SHAPE,
+  classifyPropertyElement,
+  classifyPropertySelection,
+  PROPERTY_CONTROL_IDS,
+  type PropertyCategory,
+  type PropertyControlId,
+} from "./editor/property-schema.js";
+
+// ─── Selection geometry (pure math: snap, rotate, cursor lookup) ──────
+// Used by SelectionManager + smart-guide overlay (Tier C) and reusable
+// from any headless layout/snap simulator. Plain numbers + Rect-shaped
+// inputs only — no DOM access.
+export {
+  computeSnap,
+  cursorForAngle,
+  rotateAround,
+  type Rect,
+  type SnapGuide,
+  type SnapInput,
+  type SnapResult,
+} from "./editor/selection-geometry.js";
+
 // ─── Path utilities (pure string manipulation) ────────────────────────
 export {
   ancestorPaths,

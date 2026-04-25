@@ -34,6 +34,10 @@ import {
   writeArrowControl,
   writeArrowEndpoints,
 } from "./arrow-markers.js";
+// `rotateAround` lives in `./selection-geometry.ts` so the math has a
+// single source of truth shared between transform-utils (Tier B) and
+// the live SelectionManager (Tier C).
+import { rotateAround } from "./selection-geometry.js";
 import { rebuildCalloutTail } from "./text-utils.js";
 
 // ---- Line/arrow specialization ----------------------------------
@@ -92,20 +96,6 @@ function setLineEndpoints(el: SVGElement, x1: number, y1: number, x2: number, y2
   el.setAttribute("y2", String(y2));
 }
 
-function rotateAround(
-  px: number,
-  py: number,
-  cx: number,
-  cy: number,
-  rad: number,
-): { x: number; y: number } {
-  const cos = Math.cos(rad);
-  const sin = Math.sin(rad);
-  return {
-    x: cx + (px - cx) * cos - (py - cy) * sin,
-    y: cy + (px - cx) * sin + (py - cy) * cos,
-  };
-}
 
 /** Compose the element's current transform state into a DOMMatrix.
  *  Shared by the endpoint+control-point transformation helpers so the

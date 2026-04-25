@@ -79,6 +79,7 @@ import { openCanvasRightClickMenu } from "./toolbar-canvas-menu.js";
 import {
   applyPresetStyleAttrs,
   elementKeyFromElement,
+  mergePresetForVariantChange,
   migrateLegacyPresetKey,
   normalizeVariantSideFields,
   seedPresetFromElement,
@@ -2044,29 +2045,12 @@ export class Toolbar {
     this.#lastVariantByTool.set(toolId, newVariant);
 
     // Step 3: load new variant's preset, or seed from current.
+    // Pure merge + invariant normalisation lives in
+    // `mergePresetForVariantChange` (toolbar-preset-helpers) so the
+    // logic can be unit-tested without standing up a Toolbar.
     const newKey = this.#currentElementKey(toolId);
     const stored = this.#presets.get(newKey);
-    let result: ToolOptions;
-    if (stored) {
-      result = { ...stored };
-      (result as unknown as Record<string, unknown>)[group.field as string] = newVariant;
-    } else {
-      // First use of this variant: seed style (color / width / …) from
-      // the preset the user was just editing.
-      result = { ...currentPreset };
-      (result as unknown as Record<string, unknown>)[group.field as string] = newVariant;
-    }
-    // ALWAYS normalize variant-defining side fields (not only on seed).
-    // Rationale: variant represents the element TYPE (e.g. "both" =
-    // arrows on both ends). Its type-defining fields must match the
-    // variant label; otherwise the flyout shows "Double arrow" while
-    // the rendered shape is "circle + triangle", breaking the mental
-    // model. Style fields (color / width / dash) STAY per-variant —
-    // only the type-defining fields (per-end shape) get canonicalized.
-    // This aligns Arrow with how other tools behave: Shape's variant
-    // defines the element; Text's variant defines the composition;
-    // Arrow's variant defines the per-end marker presence.
-    normalizeVariantSideFields(toolId, newVariant, result);
+    const result = mergePresetForVariantChange(currentPreset, stored, toolId, newVariant);
     // Persist so later reads (e.g. #activateToolById via
     // #getCurrentPreset) see the same values the caller is about to
     // apply.

@@ -80,6 +80,97 @@ export function elementKeyFromElement(el: SVGElement, toolId: string): string {
 }
 
 /**
+ * Pick the right starting point for a variant-switch merge: prefer
+ * the stored preset for the new variant if one exists (so the user
+ * gets back the look they last saved for "Double arrow" / "Sticky"
+ * / etc.), otherwise carry over the style fields the user is
+ * currently editing on the OLD variant (so a first-time switch into
+ * "Sticky" inherits the color / font you just set on "Plain").
+ *
+ * The variant-defining field (e.g. `arrowHead`, `shapeType`) is
+ * always overwritten with `newVariant`, regardless of branch.
+ *
+ * Pure: returns a new ToolOptions object, never mutates either
+ * input. The callee is also responsible for invoking
+ * {@link normalizeVariantSideFields} on the result before applying
+ * — matching the legacy two-step contract that `Toolbar.#changeVariant`
+ * established.
+ */
+export function mergePresetForVariantChange(
+  currentPreset: ToolOptions,
+  storedPreset: ToolOptions | undefined,
+  toolId: string,
+  newVariant: string,
+): ToolOptions {
+  const group = TOOL_VARIANTS[toolId];
+  // No-variant tools (crop, highlight when called incorrectly): return
+  // a defensive copy of the current preset so callers can mutate freely.
+  if (!group) return { ...currentPreset };
+  const seed = storedPreset ? { ...storedPreset } : { ...currentPreset };
+  (seed as unknown as Record<string, unknown>)[group.field as string] = newVariant;
+  normalizeVariantSideFields(toolId, newVariant, seed);
+  return seed;
+}
+
+/**
+ * Validate that a preset is internally consistent for the named
+ * tool. Today this catches the arrow side-field invariants
+ * (begin/end shape must agree with `arrowHead` variant). Returns an
+ * array of human-readable problems — empty array means valid.
+ *
+ * Useful at the storage boundary: when loading presets from disk,
+ * callers can warn / repair / drop entries that fail validation
+ * instead of silently rendering a "Double arrow" with both ends
+ * actually "none". Pure — does not mutate the preset.
+ */
+export function validatePresetForTool(preset: ToolOptions, toolId: string): string[] {
+  const errors: string[] = [];
+  const group = TOOL_VARIANTS[toolId];
+  if (!group) return errors;
+
+  // The variant-defining field must hold a value the toolbar advertises.
+  const variantValue = (preset as unknown as Record<string, unknown>)[group.field as string];
+  if (variantValue !== undefined) {
+    const known = group.variants.some((v) => v.value === variantValue);
+    if (!known) {
+      errors.push(
+        `${toolId}: preset.${String(group.field)}="${String(variantValue)}" is not a known variant`,
+      );
+    }
+  }
+
+  if (toolId === "arrow") {
+    const variant = preset.arrowHead;
+    const start = preset.arrowHeadStart;
+    const end = preset.arrowHeadEnd;
+    if (variant === "none") {
+      if (start !== undefined && start !== "none") {
+        errors.push(`arrow: variant=none requires arrowHeadStart=none (got "${start}")`);
+      }
+      if (end !== undefined && end !== "none") {
+        errors.push(`arrow: variant=none requires arrowHeadEnd=none (got "${end}")`);
+      }
+    } else if (variant === "end") {
+      if (start !== undefined && start !== "none") {
+        errors.push(`arrow: variant=end requires arrowHeadStart=none (got "${start}")`);
+      }
+      if (end === "none") {
+        errors.push("arrow: variant=end requires arrowHeadEnd!=none");
+      }
+    } else if (variant === "both") {
+      if (start === "none") {
+        errors.push("arrow: variant=both requires arrowHeadStart!=none");
+      }
+      if (end === "none") {
+        errors.push("arrow: variant=both requires arrowHeadEnd!=none");
+      }
+    }
+  }
+
+  return errors;
+}
+
+/**
  * After a variant switch, fix up the side-fields on `preset` so the
  * new variant's invariants hold. Today only `arrow` needs this:
  * - `none`: both ends must be "none".

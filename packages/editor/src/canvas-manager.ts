@@ -1,4 +1,10 @@
 import { stampAnnotVersion } from "@ingcreators/annot-core/editor/svg-format";
+import {
+  applyInverseAffine,
+  clampZoom,
+  computeFitZoom,
+  computeRenderedSize,
+} from "@ingcreators/annot-core/editor/viewport-math";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -130,18 +136,29 @@ export class CanvasManager {
     pt.x = e.clientX;
     pt.y = e.clientY;
     const ctm = this.svg.getScreenCTM();
-    if (ctm) {
-      return pt.matrixTransform(ctm.inverse());
-    }
+    if (!ctm) return pt;
+    // Pure-math inverse-affine via viewport-math so the arithmetic
+    // is unit-tested independently of `DOMMatrix` / `SVGSVGElement`.
+    const out = applyInverseAffine(
+      [ctm.a, ctm.b, ctm.c, ctm.d, ctm.e, ctm.f],
+      e.clientX,
+      e.clientY,
+    );
+    pt.x = out.x;
+    pt.y = out.y;
     return pt;
   }
 
   fitToView(): void {
     const container = this.svg.parentElement;
     if (!container) return;
-    const cw = container.clientWidth - 40;
-    const ch = container.clientHeight - 40;
-    const scale = Math.min(cw / this.#imageWidth, ch / this.#imageHeight, 1);
+    const scale = computeFitZoom(
+      this.#imageWidth,
+      this.#imageHeight,
+      container.clientWidth,
+      container.clientHeight,
+    );
+    if (scale <= 0) return;
     // setZoom() clears fitMode as a side-effect (any zoom call is
     // assumed to be user-initiated and exit fit). Re-set it here
     // because THIS call IS the fit that should persist.
@@ -165,14 +182,17 @@ export class CanvasManager {
   }
 
   setZoom(z: number): void {
-    this.#zoom = Math.max(0.1, Math.min(z, 5));
+    this.#zoom = clampZoom(z);
     // Any explicit zoom set exits fit mode (the user is requesting
     // a specific zoom level, not "whatever fits"). fitToView() re-
     // enables it right after calling this, so fit-driven zoom sets
     // land in fit mode correctly.
     this.#fitMode = false;
-    const w = Math.round(this.#imageWidth * this.#zoom);
-    const h = Math.round(this.#imageHeight * this.#zoom);
+    const { width: w, height: h } = computeRenderedSize(
+      this.#imageWidth,
+      this.#imageHeight,
+      this.#zoom,
+    );
     this.svg.setAttribute("width", String(w));
     this.svg.setAttribute("height", String(h));
     this.svg.style.width = `${w}px`;
