@@ -1,3 +1,5 @@
+/// <reference path="../types/document-pip.d.ts" />
+
 /**
  * PWA capture methods — alternatives to Chrome Extension capture.
  * Works without any extension installed.
@@ -128,10 +130,10 @@ interface CaptureOverlay {
 
 /** Create a floating overlay. Prefers Document PiP for always-on-top visibility. */
 async function createCaptureOverlay(): Promise<CaptureOverlay> {
-  const dpip = (window as any).documentPictureInPicture;
-  if (dpip && typeof dpip.requestWindow === "function") {
+  const dpip = window.documentPictureInPicture;
+  if (dpip) {
     try {
-      const pip: Window = await dpip.requestWindow({ width: 260, height: 110 });
+      const pip = await dpip.requestWindow({ width: 260, height: 110 });
       return mountOverlay(pip.document, true, () => pip.close());
     } catch {
       // Fall through to in-tab overlay
@@ -149,8 +151,10 @@ function mountOverlay(
   root.className = `capture-overlay${isPip ? " capture-overlay-pip" : ""}`;
 
   // Inline styles so the element stays self-contained inside a PiP document.
-  const rootStyle = root.style as any;
-  Object.assign(rootStyle, {
+  // `Object.assign` against CSSStyleDeclaration's typed surface accepts
+  // the property bag straight; the previous `as any` was leftover from
+  // before lib.dom narrowed the indexer.
+  Object.assign(root.style, {
     position: isPip ? "fixed" : "fixed",
     top: isPip ? "0" : "auto",
     left: isPip ? "0" : "auto",
@@ -176,7 +180,7 @@ function mountOverlay(
   });
 
   const countEl = doc.createElement("div");
-  Object.assign(countEl.style as any, {
+  Object.assign(countEl.style, {
     fontSize: "15px",
     fontWeight: "600",
     letterSpacing: "0.02em",
@@ -184,14 +188,14 @@ function mountOverlay(
   root.appendChild(countEl);
 
   const nextEl = doc.createElement("div");
-  Object.assign(nextEl.style as any, {
+  Object.assign(nextEl.style, {
     fontSize: "12px",
     color: "#b7c0e0",
   });
   root.appendChild(nextEl);
 
   const bar = doc.createElement("div");
-  Object.assign(bar.style as any, {
+  Object.assign(bar.style, {
     height: "4px",
     background: "rgba(255,255,255,0.12)",
     borderRadius: "2px",
@@ -199,7 +203,7 @@ function mountOverlay(
     marginTop: "2px",
   });
   const fill = doc.createElement("div");
-  Object.assign(fill.style as any, {
+  Object.assign(fill.style, {
     height: "100%",
     width: "0%",
     background: "#7c9cff",
@@ -222,10 +226,10 @@ function mountOverlay(
       fill.style.width = `${Math.min(100, Math.round((captured / total) * 100))}%`;
     },
     hide() {
-      rootStyle.visibility = "hidden";
+      root.style.visibility = "hidden";
     },
     show() {
-      rootStyle.visibility = "visible";
+      root.style.visibility = "visible";
     },
     close() {
       try {

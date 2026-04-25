@@ -1,3 +1,5 @@
+/// <reference path="../types/fs-access-extras.d.ts" />
+
 /**
  * Extension API bridge — communicates with the Annot browser extension
  * (by ingcreators) via chrome.runtime.sendMessage to access its IndexedDB.
@@ -183,6 +185,20 @@ function getExtensionIds(): string[] {
   return [];
 }
 
+/**
+ * Cross-extension `chrome.runtime.sendMessage` IPC. The boundary is
+ * fundamentally untyped — the Chrome runtime delivers an opaque JSON
+ * object to a service worker we don't statically know the shape of.
+ * Both `msg` and the response stay `any` here; the per-method
+ * `extensionStorage` adapter below trusts each return shape via the
+ * surrounding `StorageProvider` contract, and the 165-line shared
+ * contract test suite is the actual regression net for shape drift.
+ *
+ * Tightening these to a discriminated union would require enumerating
+ * every action / response pair AND would conflict with the
+ * `chrome.runtime.sendMessage` overload signature, which the Chrome
+ * types package still pins to `message: any`.
+ */
 function sendToExtension(id: string, msg: any): Promise<any> {
   return new Promise((resolve, reject) => {
     if (!hasChromeRuntime()) {
@@ -242,8 +258,9 @@ export function setStorageMode(mode: StorageMode): void {
 
 /** Open a local directory and switch to filesystem storage. */
 export async function openDeviceDirectory(): Promise<StorageProvider | null> {
+  if (!window.showDirectoryPicker) return null;
   try {
-    const dirHandle = await (window as any).showDirectoryPicker({ mode: "readwrite" });
+    const dirHandle = await window.showDirectoryPicker({ mode: "readwrite" });
     await saveHandle(dirHandle);
     const store = new DeviceStore(dirHandle);
     await store.init();
@@ -261,9 +278,9 @@ export async function restoreDevice(): Promise<StorageProvider | null> {
     const handle = await loadHandle();
     if (!handle) return null;
 
-    const perm = await (handle as any).queryPermission({ mode: "readwrite" });
+    const perm = await handle.queryPermission({ mode: "readwrite" });
     if (perm !== "granted") {
-      const req = await (handle as any).requestPermission({ mode: "readwrite" });
+      const req = await handle.requestPermission({ mode: "readwrite" });
       if (req !== "granted") return null;
     }
 

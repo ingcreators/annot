@@ -1,3 +1,5 @@
+/// <reference path="../types/chrome-extras.d.ts" />
+
 // Inline constants to avoid chunk imports in service worker context
 const MAX_CANVAS_DIMENSION = 32767;
 const IDB_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
@@ -216,16 +218,20 @@ interface PageDimensions {
 
 // --- Helpers ---
 
+// chrome.tabs.sendMessage / sendResponse payloads are method-specific
+// JSON envelopes; the service worker is the receiver as well as a
+// sender, so the boundary is fundamentally untyped. Keep `any`
+// at the wire and let each individual handler narrow.
 function sendToTab(tabId: number, msg: any): Promise<any> {
   return chrome.tabs.sendMessage(tabId, msg);
 }
 
 async function ensureOffscreen(): Promise<void> {
-  const exists = await (chrome.offscreen as any).hasDocument();
+  const exists = await chrome.offscreen.hasDocument();
   if (!exists) {
     await chrome.offscreen.createDocument({
       url: "src/offscreen/offscreen.html",
-      reasons: ["BLOBS" as any],
+      reasons: ["BLOBS"],
       justification: "Image processing (stitch, crop, mosaic)",
     });
   }
@@ -601,6 +607,7 @@ async function captureArea(): Promise<void> {
     settings,
     () =>
       new Promise<void>((resolve) => {
+        // chrome.runtime listener payloads are untyped on the wire.
         const handler = (msg: any): undefined => {
           if (msg.type === "area-selected") {
             chrome.runtime.onMessage.removeListener(handler);
@@ -1007,6 +1014,8 @@ async function injectContentScript(tabId: number): Promise<void> {
 
 // --- Message listener ---
 
+// chrome.runtime listener payloads are untyped on the wire — every
+// concrete handler narrows by `msg.type` below.
 chrome.runtime.onMessage.addListener((msg: any, sender, sendResponse) => {
   switch (msg.type) {
     case "capture-visible":
@@ -1076,6 +1085,8 @@ chrome.commands.onCommand.addListener((command, tab) => {
 // --- External message API (for annotating.work / noting.work) ---
 
 chrome.runtime.onMessageExternal.addListener(
+  // External callers post arbitrary JSON over `runtime.sendMessage`;
+  // the dispatch below validates `msg.action` before doing anything.
   (msg: any, _sender, sendResponse: (response: any) => void) => {
     if (!msg || typeof msg.action !== "string") {
       sendResponse({ error: "Invalid message" });
@@ -1090,6 +1101,7 @@ chrome.runtime.onMessageExternal.addListener(
   },
 );
 
+// External JSON dispatcher; each `case` reads only the fields it needs.
 async function handleExternalMessage(msg: any): Promise<any> {
   switch (msg.action) {
     // Images (path-based)
@@ -1458,14 +1470,22 @@ async function hotkeyCaptureShot(firedTab?: chrome.tabs.Tab): Promise<void> {
 
   // Query content script for mouse / focused-element context (best-effort).
   // Fails silently on pages we can't inject into (chrome://, PDF viewer, etc.)
-  let context: any = null;
+  interface CaptureContext {
+    url?: string;
+    title?: string;
+    dpr?: number;
+    target?: string;
+    mouse?: { x: number; y: number };
+    rect?: { x: number; y: number; width: number; height: number };
+  }
+  let context: CaptureContext | null = null;
   const injectable = !!tab.url && /^(https?|file):/.test(tab.url);
   if (injectable) {
     try {
       await injectContentScript(tab.id);
-      context = await chrome.tabs
+      context = (await chrome.tabs
         .sendMessage(tab.id, { type: "get-capture-context" })
-        .catch(() => null);
+        .catch(() => null)) as CaptureContext | null;
     } catch (e) {
       logger.debug("[hotkey-capture] context query failed:", e);
     }
