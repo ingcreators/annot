@@ -14,6 +14,18 @@
  * property dropdowns) follow in their own PRs.
  */
 
+// Lit Phase 5b — outer shell + per-tool button primitives. The
+// shell becomes `<annot-toolbar>` (a plain custom element with
+// orientation handling) and each tool button becomes
+// `<annot-toolbar-button>` (a Lit element with reactive props).
+// Variant flyouts + badge children are still imperative, scheduled
+// for Phase 5c.
+import "./annot-toolbar.js";
+import type {
+  AnnotToolbarButtonElement,
+  AnnotToolbarElement,
+} from "./annot-toolbar.js";
+
 // Cross-package imports use the published `@ingcreators/annot-core`
 // surface where available; deep subpaths (`./editor/*`,
 // `./editor/tools/*`) reach the bits that aren't re-exported via
@@ -508,21 +520,47 @@ export class Toolbar {
     }
   }
 
+  /** Reference to the `<annot-toolbar>` host that wraps the
+   *  buttons. Created in `#render` and reused by code paths that
+   *  previously talked to `#container` directly (extras
+   *  registration, save-menu anchor lookup). */
+  #shellEl: AnnotToolbarElement | null = null;
+
+  /** Build a `<annot-toolbar-button>` Lit element + return it.
+   *  The inner `<button class="toolbar-btn">` is queryable via
+   *  `el.getButton()` so the existing imperative wiring (click
+   *  handlers, `data-tool`, variant badges) continues unchanged
+   *  against the inner button. */
+  #toolButton(icon: string, title: string, dataTool = ""): AnnotToolbarButtonElement {
+    const el = document.createElement("annot-toolbar-button");
+    el.icon = icon;
+    el.tooltip = title;
+    el.dataTool = dataTool;
+    return el;
+  }
+
   #render(): void {
     this.#container.innerHTML = "";
     // Tag the container so CSS can swap the layout between the default
     // horizontal toolbar and the vertical left-side strip variant.
-    this.#container.classList.toggle("toolbar-vertical", this.#orientation === "vertical");
+    // The orientation class lands on `<annot-toolbar>`, not the
+    // outer container, so multiple toolbars can coexist with
+    // independent orientations on a single page.
+    const shell = document.createElement("annot-toolbar");
+    shell.setAttribute("orientation", this.#orientation);
+    this.#container.appendChild(shell);
+    this.#shellEl = shell;
 
     // Select button
-    const selectBtn = this.#btn("arrow_selector_tool", "Select (V)");
-    selectBtn.classList.add("active");
+    const selectEl = this.#toolButton("arrow_selector_tool", "Select (V)");
+    selectEl.active = true;
+    const selectBtn = selectEl.getButton()!;
     this.#activeBtn = selectBtn;
     this.#selectBtn = selectBtn;
     selectBtn.addEventListener("click", () => this.#activate(null, selectBtn, "Select"));
-    this.#container.appendChild(selectBtn);
+    shell.appendChild(selectEl);
 
-    this.#container.appendChild(this.#sep());
+    shell.appendChild(this.#sep());
 
     // Tool buttons with dropdown
     const toolGroup = this.#div("toolbar-group");
@@ -530,7 +568,8 @@ export class Toolbar {
       const wrap = document.createElement("div");
       wrap.className = "tool-btn-wrap";
 
-      const btn = this.#btn(def.icon, def.label);
+      const btnEl = this.#toolButton(def.icon, def.label, id);
+      const btn = btnEl.getButton()!;
       btn.addEventListener("click", (e) => {
         // If the click landed on the variant badge (nested inside
         // the button), the badge's own handler opens its flyout and
@@ -558,9 +597,12 @@ export class Toolbar {
         };
         this.#activate(tool, btn, def.label);
       });
-      btn.dataset.tool = id;
+      // `data-tool` is mirrored on the host element via the Lit
+      // property; setting it on the inner button too keeps the
+      // existing imperative read paths (`btn.dataset.tool`) working.
+      btn.dataset["tool"] = id;
       this.#toolButtons.set(id, btn);
-      wrap.appendChild(btn);
+      wrap.appendChild(btnEl);
 
       // Variant flyout affordance — for tools with a variant group
       // (shape / arrow / text / freehand / redact) OR for the
@@ -594,7 +636,7 @@ export class Toolbar {
       // runs from #applyLoadedPreset once the storage read returns.)
       this.#syncToolButtonIcon(id);
     }
-    this.#container.appendChild(toolGroup);
+    shell.appendChild(toolGroup);
 
     // Host-registered extra buttons (e.g. Scratchpad). They live in
     // their own group between the core tool buttons and the history
@@ -605,13 +647,13 @@ export class Toolbar {
       this.#extraButtonGroup.appendChild(btn);
     }
     if (this.#extraButtons.length > 0) {
-      this.#container.appendChild(this.#extraButtonGroup);
+      shell.appendChild(this.#extraButtonGroup);
     }
 
     // Spacer
     const spacer = document.createElement("div");
     spacer.className = "toolbar-spacer";
-    this.#container.appendChild(spacer);
+    shell.appendChild(spacer);
 
     // Undo / Redo
     const histGroup = this.#div("toolbar-group");
@@ -622,7 +664,7 @@ export class Toolbar {
     const redoBtn = this.#btn("redo", "Redo (Ctrl+Y)");
     redoBtn.addEventListener("click", () => this.#history.redo());
     histGroup.appendChild(redoBtn);
-    this.#container.appendChild(histGroup);
+    shell.appendChild(histGroup);
 
     // Whether the host provides the __anno_showGallery hook that
     // gates the Gallery button. Pre-computed so the two places that
@@ -633,7 +675,7 @@ export class Toolbar {
     // renders these actions at the document-chrome level (e.g. the
     // web app's editor header right cluster).
     if (this.#showSaveGroup) {
-      this.#container.appendChild(this.#sep());
+      shell.appendChild(this.#sep());
       const exportGroup = this.#div("toolbar-group");
 
       if (!isTauri && typeof (window as any).__anno_openFile === "function") {
@@ -668,20 +710,20 @@ export class Toolbar {
       });
       saveWrap.appendChild(saveArrow);
       exportGroup.appendChild(saveWrap);
-      this.#container.appendChild(exportGroup);
+      shell.appendChild(exportGroup);
     }
 
     // Separator before the theme / gallery group — only add when one
     // of them will actually render.
     if (this.#showThemeToggle || (this.#showGalleryButton && hasGalleryHook)) {
-      this.#container.appendChild(this.#sep());
+      shell.appendChild(this.#sep());
     }
 
     // Theme toggle (shared factory — reads current theme on init so the icon
     // reflects the actual state instead of always rendering "dark_mode").
     // The host may suppress this if it renders its own toggle elsewhere.
     if (this.#showThemeToggle) {
-      this.#container.appendChild(createThemeToggle());
+      shell.appendChild(createThemeToggle());
     }
 
     // Gallery button (extension only). The host may suppress this in favor
@@ -689,7 +731,7 @@ export class Toolbar {
     if (this.#showGalleryButton && hasGalleryHook) {
       const galleryBtn = this.#btn("grid_view", "Gallery");
       galleryBtn.addEventListener("click", () => (window as any).__anno_showGallery());
-      this.#container.appendChild(galleryBtn);
+      shell.appendChild(galleryBtn);
     }
 
     // Keyboard shortcuts
@@ -2077,9 +2119,14 @@ export class Toolbar {
       if (!this.#extraButtonGroup.isConnected) {
         // If the group wasn't attached (no extras at render time),
         // slot it in between the tool group and the undo/redo group.
-        const sep = this.#container.querySelector(".toolbar-spacer");
-        if (sep) this.#container.insertBefore(this.#extraButtonGroup, sep);
-        else this.#container.appendChild(this.#extraButtonGroup);
+        // Lookup the spacer inside the `<annot-toolbar>` shell so
+        // the insertion lands in the right parent (the shell, not
+        // the outer host div).
+        const root = this.#shellEl ?? this.#container;
+        const sep = root.querySelector(".toolbar-spacer");
+        if (sep?.parentElement)
+          sep.parentElement.insertBefore(this.#extraButtonGroup, sep);
+        else root.appendChild(this.#extraButtonGroup);
       }
     }
     return btn;
