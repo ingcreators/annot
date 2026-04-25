@@ -1,51 +1,48 @@
+import {
+  createHistoryCore,
+  type HistoryCore,
+} from "@ingcreators/annot-core/editor/history-core";
+
+/**
+ * Browser-side undo/redo wrapper that snapshots an `<g>` annotations
+ * element by serialising / restoring its `innerHTML`. The actual
+ * stack management (push, pop, depth cap, redo invalidation) lives
+ * in `@ingcreators/annot-core/editor/history-core` so it can be unit-
+ * tested without a live SVG element.
+ */
 export class History {
-  #undoStack: string[] = [];
-  #redoStack: string[] = [];
-  #annotations: SVGGElement;
-  #onChange?: () => void;
+  #core: HistoryCore;
 
   /** Called after every state change (save/undo/redo). Use for auto-save. */
   onStateChange?: () => void;
 
   constructor(annotations: SVGGElement, onChange?: () => void) {
-    this.#annotations = annotations;
-    this.#onChange = onChange;
-    this.save();
+    this.#core = createHistoryCore({
+      getSnapshot: () => annotations.innerHTML,
+      setSnapshot: (snapshot) => {
+        annotations.innerHTML = snapshot;
+      },
+      onRestore: onChange,
+      onStateChange: () => this.onStateChange?.(),
+    });
   }
 
   save(): void {
-    this.#undoStack.push(this.#annotations.innerHTML);
-    this.#redoStack.length = 0;
-    if (this.#undoStack.length > 100) {
-      this.#undoStack.shift();
-    }
-    this.onStateChange?.();
+    this.#core.save();
   }
 
   undo(): void {
-    if (this.#undoStack.length <= 1) return;
-    const current = this.#undoStack.pop()!;
-    this.#redoStack.push(current);
-    // After the pop above, `#undoStack` still has at least one entry
-    // (the guard was `<= 1`, so pre-pop length was ≥ 2).
-    this.#annotations.innerHTML = this.#undoStack[this.#undoStack.length - 1]!;
-    this.#onChange?.();
-    this.onStateChange?.();
+    this.#core.undo();
   }
 
   redo(): void {
-    if (this.#redoStack.length === 0) return;
-    const state = this.#redoStack.pop()!;
-    this.#undoStack.push(state);
-    this.#annotations.innerHTML = state;
-    this.#onChange?.();
-    this.onStateChange?.();
+    this.#core.redo();
   }
 
   get canUndo(): boolean {
-    return this.#undoStack.length > 1;
+    return this.#core.canUndo;
   }
   get canRedo(): boolean {
-    return this.#redoStack.length > 0;
+    return this.#core.canRedo;
   }
 }

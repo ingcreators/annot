@@ -19,6 +19,39 @@ export {
   readAnnotVersion,
   stampAnnotVersion,
 } from "./svg-format.js";
+export {
+  applyInverseAffine,
+  clampZoom,
+  computeFitZoom,
+  computeRenderedSize,
+  DEFAULT_MAX_ZOOM,
+  DEFAULT_MIN_ZOOM,
+  FIT_VIEW_PADDING,
+  type AffineMatrix,
+} from "./viewport-math.js";
+export {
+  createHistoryCore,
+  DEFAULT_HISTORY_DEPTH,
+  type HistoryCore,
+  type HistoryHooks,
+} from "./history-core.js";
+export {
+  CATEGORY_CONTROL_SHAPE,
+  classifyPropertyElement,
+  classifyPropertySelection,
+  PROPERTY_CONTROL_IDS,
+  type PropertyCategory,
+  type PropertyControlId,
+} from "./property-schema.js";
+export {
+  computeSnap,
+  cursorForAngle,
+  rotateAround,
+  type Rect,
+  type SnapGuide,
+  type SnapInput,
+  type SnapResult,
+} from "./selection-geometry.js";
 
 // ╭─ Editor UI (browser / DOM required) ────────────────────────────╮
 // │ These hit `document` / `window`, subscribe to pointer events,   │

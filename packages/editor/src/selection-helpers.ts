@@ -12,6 +12,14 @@ import {
   refreshArrowPath,
   writeArrowEndpoints,
 } from "@ingcreators/annot-core/editor/arrow-markers";
+// `rotateAround` and `cursorForAngle` were promoted to Tier B in
+// `@ingcreators/annot-core/editor/selection-geometry`. Re-exported
+// here so existing call sites keep working without churning their
+// import paths.
+export {
+  cursorForAngle,
+  rotateAround,
+} from "@ingcreators/annot-core/editor/selection-geometry";
 
 /** Namespace URI for SVG elements — used by `createElementNS`. */
 export const SVG_NS = "http://www.w3.org/2000/svg";
@@ -68,56 +76,6 @@ export function setLineEndpoints(
   el.setAttribute("y1", String(y1));
   el.setAttribute("x2", String(x2));
   el.setAttribute("y2", String(y2));
-}
-
-/** Rotate (px, py) around (cx, cy) by `rad` radians. Local copy for
- *  the rotation gesture's snapshot-based update path (transform-utils
- *  has the same formula inside `rotateLineEndpointsBy` but that helper
- *  takes an element + degrees; the gesture operates on a fixed
- *  snapshot, so we keep this tiny helper local). */
-export function rotateAround(
-  px: number,
-  py: number,
-  cx: number,
-  cy: number,
-  rad: number,
-): { x: number; y: number } {
-  const cos = Math.cos(rad);
-  const sin = Math.sin(rad);
-  return {
-    x: cx + (px - cx) * cos - (py - cy) * sin,
-    y: cy + (px - cx) * sin + (py - cy) * cos,
-  };
-}
-
-/** 8 axis-aligned resize cursor names, indexed by 45° sector starting
- *  from "due east" (right) and walking clockwise. Used to map a
- *  handle's screen-space angle (relative to its element's center) into
- *  an appropriate cursor — so a NW handle on a 45°-rotated rect ends
- *  up showing a north-pointing cursor instead of a NW-pointing one. */
-const CURSOR_BY_SECTOR = [
-  "ew-resize", // 0 → E (-22.5°..22.5°)
-  "nwse-resize", // 1 → SE
-  "ns-resize", // 2 → S
-  "nesw-resize", // 3 → SW
-  "ew-resize", // 4 → W
-  "nwse-resize", // 5 → NW
-  "ns-resize", // 6 → N
-  "nesw-resize", // 7 → NE
-];
-
-/** Pick the appropriate axis-aligned cursor for the angle at which
- *  a resize handle sits relative to its element's centre. */
-export function cursorForAngle(rad: number): string {
-  // Normalize to [0, 2π), then split into 8 equal sectors offset by π/8
-  // so cursor "centers" align with E/SE/S/SW/W/NW/N/NE.
-  const TAU = Math.PI * 2;
-  let a = ((rad % TAU) + TAU) % TAU;
-  a += Math.PI / 8;
-  if (a >= TAU) a -= TAU;
-  const idx = Math.floor(a / (Math.PI / 4));
-  // `idx % 8` is in `[0, 7]` and `CURSOR_BY_SECTOR` has 8 entries.
-  return CURSOR_BY_SECTOR[idx % 8]!;
 }
 
 /** Convert a point in SVG-root coords into an element's local
