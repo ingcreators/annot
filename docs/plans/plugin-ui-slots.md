@@ -1,13 +1,14 @@
 # Plugin UI Slots
 
-> **Status:** Draft. Authored 2026-04-25 as the third and final
+> **Status:** Queued. Authored 2026-04-25 as the third and final
 > named follow-up from
-> [`app-decomposition.md`](./app-decomposition.md) Phase 5; siblings
-> are
+> [`app-decomposition.md`](./app-decomposition.md) Phase 5; sign-off
+> received 2026-04-25 on the five design questions (see "Decisions"
+> at the bottom). Siblings are
 > [`plugin-storage-registration.md`](./plugin-storage-registration.md)
 > (landed) and
 > [`plugin-sidebar-tabs.md`](./plugin-sidebar-tabs.md) (Phase 1
-> landed). Awaiting sign-off before implementation.
+> landed).
 >
 > **Compatibility:** Touches
 > [`packages/web/src/editor/file-details-drawer.ts`](../../packages/web/src/editor/file-details-drawer.ts)
@@ -19,11 +20,15 @@
 > `PluginContext`. No `StorageProvider` changes; no data-schema
 > changes.
 >
-> **Risk:** Medium. Both surfaces have fixed internal structures
-> that this plan extends; built-ins keep their existing render
-> paths byte-for-byte, but the lifecycle plumbing (section mount /
-> unmount across editor sessions) is new. Existing 205-test suite
-> is the regression net.
+> **Risk:** Medium-high. Both surfaces have fixed internal
+> structures today and this plan **migrates every built-in section
+> to the same `UISection` shape** (per sign-off decision #2) so
+> the panels become generic section hosts instead of bespoke render
+> trees. Built-in DOM stays byte-for-byte identical; the difference
+> is that each built-in now has a stable id, a `priority`, and
+> participates in the same mount / update / unmount lifecycle as
+> plugin sections. The 205-test suite is the regression net at
+> every phase boundary.
 
 ## Context
 
@@ -53,54 +58,69 @@ visual roles, but the lifecycle is identical:
   change) via the existing `onAfterSave` / `onEditorReady`
   events the plugin can subscribe to independently.
 
-Built-ins on both surfaces stay hardcoded in this plan — full
-migration to the slot model is its own follow-up. Plugin sections
-land in a dedicated "trailing" area at the bottom of each panel,
-sorted by plugin priority.
+**Built-ins migrate to the same `UISection` shape** (sign-off
+decision #2). Each existing block (drawer's File / Tags /
+External links / Last commit; right-panel's Tool / Selection /
+Page elements) becomes a `UISection` with a stable id, `priority`,
+and target. The drawer + right-panel render any
+`UISection[]` they're handed, with built-in and plugin sections
+interleaving by `priority`.
 
 ## Goals
 
-- A plugin can call `ctx.addUISection(slot)` during `register()`
-  and have its section appear at the bottom of either the drawer
-  or the right-panel, scoped to the active editor session.
+- A plugin can call `ctx.addDrawerSection(section)` or
+  `ctx.addRightPanelSection(section)` during `register()` and
+  have the section appear in the matching surface, sorted by
+  `priority` alongside built-ins.
 - Per-image data (path, mode, tags) flows into the section's
-  mount via a typed context. Plugin updates reactively by
-  subscribing to existing `onEditorReady` / `onAfterSave` events
-  and re-rendering its own DOM.
-- Section mount returns a teardown function the host calls when
-  the editor session ends. Mirrors Web Components' connected /
-  disconnected semantics.
-- Existing built-in sections (drawer's File / Tags / Last commit /
-  External links; right-panel's Tool / Selection / Page elements)
-  render unchanged byte-for-byte.
-- Existing 205-test suite keeps passing; ~8 new tests cover
-  registration, target routing, lifecycle, and per-image context.
+  mount via a typed context. Reactive updates flow through the
+  same context object on `update(ctx)` calls fired by the host
+  on rename / save / tag-edit; plugins that don't need
+  reactivity can return a plain teardown function and skip the
+  update path entirely.
+- Both lifecycle shapes are first-class:
+  - Simple: `mount(container, ctx) => () => void` — returns a
+    teardown function; no update notifications.
+  - Reactive: `mount(container, ctx) => { update?(ctx), unmount() }`
+    — the host calls `update(ctx)` on relevant state changes
+    and `unmount()` on session end.
+- Each built-in section has a public id (e.g. `"drawer.file"`,
+  `"right-panel.tool-properties"`) and can be opted out of via
+  `App.init({ disableBuiltinUISections: ["drawer.file"] })`.
+- Existing visible behaviour stays intact — the same heading
+  copy, the same row layouts, the same conditional rendering
+  (Last commit hidden when no commit, External links hidden
+  when none, etc.). The migration is a re-shape, not a
+  re-design.
+- Existing 205-test suite keeps passing; ~14 new tests cover
+  registration on both targets, target-specific id namespaces,
+  lifecycle (both shapes), update dispatch, opt-out, and the
+  built-in id stability.
 
 ## Non-goals
 
-- **Migrating built-ins to the slot API.** The drawer's File /
-  Tags / Last commit blocks and the right-panel's Tool /
-  Selection / Page elements blocks stay hardcoded. Migration is
-  a larger refactor with no concrete consumer pressure today;
-  tracked as a future follow-up if a plugin needs to land
-  *between* two built-in sections.
-- **Priority interleaving with built-ins.** Plugin sections all
-  render in a dedicated trailing area at the bottom of each
-  panel. This avoids exposing built-in priorities (and locking
-  in their values for backwards-compat). Re-considered if
-  Cloud's comment-thread really needs to land above the
-  external-links section.
-- **Cross-target sections.** A single section registration
-  targets exactly one surface. A plugin that wants both a
-  drawer AND a right-panel section calls `addUISection` twice.
-- **State injection for built-in DOM (drawer's `setData`,
-  right-panel's `setPageMetadata`).** Built-ins keep their
-  imperative setters; plugin sections own their DOM and
-  subscribe to events for updates.
+- **Cross-target sections.** A single registration targets
+  exactly one surface. A plugin that wants both a drawer AND
+  a right-panel section calls both `addDrawerSection` and
+  `addRightPanelSection` (different id namespaces, so the
+  same plugin can use the same suffix for both:
+  `"cloud.comments"` in each).
 - **DOM-shape contract.** Plugins are free to use any
   framework / templating / vanilla DOM inside their mount
   container. The host doesn't enforce CSS classes or layout
-  conventions beyond providing a flex-column container.
+  conventions beyond providing the section heading + body
+  wrapper.
+- **Hot-swapping a section's `mount` factory.** Sections are
+  registered once at `init` and live for the app's lifetime.
+  Re-registering with the same id throws.
+- **Migrating away from imperative setters that aren't
+  per-section** (drawer's `setData` for header rows; right-panel's
+  `setPageMetadata` argument). Those stay imperative; the
+  migration is per-section, not a wholesale rewrite of the
+  drawer / right-panel APIs.
+- **Generalizing the section concept across other surfaces**
+  (header chrome, status bar, toolbar). Out of scope; this plan
+  is specifically the drawer + right-panel pair.
 
 ## Design
 
@@ -111,82 +131,309 @@ Exported from
 alongside `StorageRegistration` and `SidebarTab`:
 
 ```ts
-export type UISectionTarget = "drawer" | "right-panel";
-
 export interface UISectionContext {
   /** Path of the open image. Always set when the section is
    *  mounted — sections only render when there's an active
    *  editor session. */
   readonly path: string;
-  /** Storage mode at mount time. Stable for the section's
-   *  lifetime — image swap unmounts + remounts. */
+  /** Storage mode at mount time / update time. */
   readonly mode: string;
-  /** Snapshot of `tags` at mount time. To react to tag changes
-   *  during a session, the plugin subscribes to `onAfterSave`
-   *  via the same `PluginContext` and re-reads from its own
-   *  state-management layer. */
+  /** Snapshot of `tags`. Re-read on each `update(ctx)` call. */
   readonly tags: Readonly<Record<string, string>>;
 }
 
+/** Lifecycle returned from `mount`. Plugins pick one shape based
+ *  on whether they want reactive updates:
+ *
+ *  - **Function** — simple sections that own their DOM and don't
+ *    need notifications when the image state changes. Equivalent
+ *    to `{ unmount: fn }`.
+ *  - **Object** — reactive sections that want to be notified on
+ *    rename / save / tag-edit. The host calls `update(ctx)` with
+ *    a fresh context, then `unmount()` on session end.
+ */
+export type UISectionLifecycle =
+  | (() => void)
+  | {
+      /** Optional. Called when per-image state changes (rename,
+       *  save, tag edit). Plugin re-reads from `ctx` and updates
+       *  its DOM in place — no remount. */
+      update?(ctx: UISectionContext): void;
+      /** Called once when the section is unmounted (editor
+       *  session ends, opt-out toggled, plugin teardown). */
+      unmount(): void;
+    };
+
 export interface UISection {
-  /** Stable id, unique across all `addUISection` calls (regardless
-   *  of target). Plugin-owned namespace —
-   *  e.g. `"cloud.comment-thread"`. Throws on duplicate. */
+  /** Stable id. Unique within the section's target namespace
+   *  (drawer ids and right-panel ids are independent — both can
+   *  use `"comment-thread"` without colliding). Plugin-owned —
+   *  e.g. `"cloud.comments"`. Built-ins reserve dotted ids:
+   *  `"drawer.file"`, `"drawer.tags"`, `"right-panel.tool-properties"`,
+   *  etc. (full list in the migration section). */
   readonly id: string;
 
-  /** Which surface this section renders into. */
-  readonly target: UISectionTarget;
-
-  /** Sidebar header. The host wraps the plugin's mount container
+  /** Section heading. The host wraps the plugin's mount container
    *  in a section frame matching the existing built-in sections
-   *  (heading + content). */
+   *  (heading + content body). */
   readonly title: string;
 
-  /** Render order within the trailing plugin-section area. Lower
-   *  numbers render first. Falsy = `+Infinity` (appended last).
-   *  Stable sort, ties fall back to registration order. There
-   *  are no reserved built-in priorities in this plan since
-   *  built-ins don't share the slot. */
+  /** Render order within the section's target. Lower numbers
+   *  render first. Falsy = `+Infinity` (appended last). Stable
+   *  sort, so ties fall back to registration order. Built-ins
+   *  reserve priorities documented per surface (see "Built-in
+   *  migration" below). */
   readonly priority: number;
 
-  /** Mount the section. Called when the editor session opens an
-   *  image (or when the plugin registers, if a session is already
-   *  active). The host hands the plugin an empty `<div>` to render
-   *  into. The plugin returns a teardown function the host calls
-   *  when the section is unmounted (session ends, image swap,
-   *  app close). */
-  mount(container: HTMLElement, ctx: UISectionContext): () => void;
+  /** Mount the section into the supplied container. Returns
+   *  either a teardown function (simple) or a lifecycle object
+   *  with `update?` + `unmount`. */
+  mount(container: HTMLElement, ctx: UISectionContext): UISectionLifecycle;
 
-  /** Optional: hide the section in this session. Read at mount
-   *  time only — to dynamically show/hide during a session, the
-   *  plugin removes its own DOM via the teardown returned from
-   *  `mount`. Default: visible. */
+  /** Optional: filter at mount time. False skips the section
+   *  entirely (no `mount` call, no DOM). Plugins use this for
+   *  "hide when no comments exist yet" type cases. Default:
+   *  always visible. */
   visible?(ctx: UISectionContext): boolean;
 }
 ```
 
-### `PluginContext.addUISection(section)`
+### `PluginContext` additions — split per target
+
+Per sign-off decision #1, the registration API is split by
+target rather than carrying a `target` discriminator. This
+gives type safety on target-specific options if either surface
+ever needs them (the right-panel context might gain
+`selection: SVGElement[]` later; the drawer wouldn't):
 
 ```ts
 interface PluginContext {
   // ... existing methods ...
 
-  /** Register a UI section. `id` must be unique across all
-   *  registered sections (regardless of target). The host throws
-   *  on duplicates so a misconfigured plugin can't shadow another
-   *  plugin's section. */
-  addUISection(section: UISection): void;
+  /** Register a section in the file-details drawer. `id` must be
+   *  unique across all drawer sections (built-in + plugin);
+   *  duplicates throw. Sections render sorted by `priority`. */
+  addDrawerSection(section: UISection): void;
+
+  /** Register a section in the editor right-panel. `id` must be
+   *  unique across all right-panel sections (built-in + plugin);
+   *  duplicates throw. */
+  addRightPanelSection(section: UISection): void;
 }
 ```
 
-Validation at registration time:
+Each registration goes into its own keyed map on the host;
+ids only need to be unique within the target. The two sets of
+accessors mirror the existing `listStorageRegistrations`
+pattern:
 
-- Duplicate `id` (collision with a previously-registered section)
-  → throws. Errors are isolated by `registerAll`'s existing
-  per-plugin try/catch.
-- No collision check against `target`-specific ids — both
-  drawer and right-panel ids share a single namespace so a
-  plugin migrating a section between targets keeps the same id.
+```ts
+class PluginHost {
+  // ...
+  listDrawerSections(): UISection[];
+  listRightPanelSections(): UISection[];
+  findDrawerSection(id: string): UISection | undefined;
+  findRightPanelSection(id: string): UISection | undefined;
+}
+```
+
+### Built-in migration
+
+Per sign-off decision #2, every existing built-in section
+becomes a `UISection`. The drawer + right-panel internal render
+loops collapse into "iterate the section list, sort by
+`priority`, mount each one in order".
+
+**Drawer built-ins** (defined in
+[`editor/file-details-drawer.ts`](../../packages/web/src/editor/file-details-drawer.ts)):
+
+| Id | Title | Priority | Notes |
+|----|-------|----------|-------|
+| `drawer.file` | "File" | 10 | Filename + folder + dimensions + size + dates + source URL — uses the existing `setData` imperative refresh pattern internally, which the section translates into `update(ctx)` on the lifecycle object. |
+| `drawer.tags` | "Tags" | 20 | The tag editor; `update(ctx)` re-reads `ctx.tags`. |
+| `drawer.last-commit` | "Last commit" | 30 | GitHub-only, hidden when no commit info; `visible(ctx)` gates on storage mode. |
+| `drawer.external-links` | "External links" | 40 | Already plugin-extensible via `addExternalLinkSource` (Phase 4); the migrated section calls `pluginHost.collectExternalLinks` for its data and renders the heading conditionally. |
+
+**Right-panel built-ins** (defined in
+[`editor/right-panel.ts`](../../packages/web/src/editor/right-panel.ts)):
+
+| Id | Title | Priority | Notes |
+|----|-------|----------|-------|
+| `right-panel.tool-properties` | (dynamic — current tool's name) | 10 | Tool-specific property controls. Title comes from the active tool, so the section's `title` field is "(set per tool)" and the actual heading is overridden at mount time. |
+| `right-panel.selection-properties` | (dynamic — element kind) | 20 | Properties of the selected element(s). |
+| `right-panel.page-elements` | "Page elements" | 30 | DOM metadata sidebar — visible only when `pageMetadata` is set. |
+
+The dynamic-title cases (tool / selection) need a small API
+extension: the section can call `ctx.setTitle(newTitle)` from
+inside `mount` to override the heading post-construction. This
+keeps the registration value type-safe while letting built-ins
+that already title themselves dynamically (the existing
+right-panel does) keep their behaviour.
+
+Plugin sections that want a dynamic title can use the same
+mechanism. To keep the API surface small, the `setTitle`
+function is part of the `UISectionContext` (so it's available
+on every `mount` and `update` call):
+
+```ts
+export interface UISectionContext {
+  readonly path: string;
+  readonly mode: string;
+  readonly tags: Readonly<Record<string, string>>;
+  /** Override the section heading. Idempotent; calling with the
+   *  same string is a no-op. The host re-renders only the
+   *  heading element, not the section body. */
+  setTitle(title: string): void;
+}
+```
+
+### `disableBuiltinUISections` opt-out
+
+Per sign-off decision #5:
+
+```ts
+app.init({
+  disableBuiltinUISections: [
+    "drawer.last-commit",          // hide GitHub commit info
+    "right-panel.page-elements",   // hide DOM metadata
+  ],
+});
+```
+
+Semantics:
+
+- The id must match a known built-in id; unknown ids log a
+  warning + no-op (forward-compat with newer-than-config
+  deployments).
+- A disabled built-in is filtered out of the drawer's /
+  right-panel's section list before sort, so it doesn't render
+  at all.
+- Plugin sections cannot be disabled via this option (they're
+  the plugin author's responsibility — they have their own
+  `visible?(ctx)` predicate).
+
+### Drawer + right-panel host plumbing
+
+Both surfaces shrink to "section list host + sort + mount loop":
+
+**Drawer** (
+[`editor/file-details-drawer.ts`](../../packages/web/src/editor/file-details-drawer.ts)):
+
+```ts
+class FileDetailsDrawer {
+  // ... existing fields ...
+  #sectionStates: Array<{
+    section: UISection;
+    headingEl: HTMLElement;
+    bodyEl: HTMLElement;
+    lifecycle: UISectionLifecycle;
+  }> = [];
+
+  #renderSections(): void {
+    this.#disposeSections();
+    const all = this.#getAllSections();      // built-ins + plugins, filtered by disable set
+    const sorted = all
+      .filter((s) => (s.visible ? s.visible(this.#ctx()) : true))
+      .sort((a, b) => a.priority - b.priority);
+    for (const section of sorted) {
+      const sectionEl = this.#createSection(section.title);
+      const body = document.createElement("div");
+      sectionEl.appendChild(body);
+      this.#panel.appendChild(sectionEl);
+      try {
+        const lifecycle = section.mount(body, this.#ctx());
+        this.#sectionStates.push({ section, headingEl: ..., bodyEl: body, lifecycle });
+      } catch (e) {
+        console.error(`[drawer] section "${section.id}" mount threw:`, e);
+        sectionEl.remove();
+      }
+    }
+  }
+
+  /** Dispatch update to every section that opted into the
+   *  reactive lifecycle. Called from the existing `setData` and
+   *  `setLastCommit` imperative entry points (which now also
+   *  re-emit through this path) and from the editor session's
+   *  `onAfterSave` hookup. */
+  notifyUpdate(): void {
+    const ctx = this.#ctx();
+    for (const state of this.#sectionStates) {
+      if (typeof state.lifecycle === "object" && state.lifecycle.update) {
+        try { state.lifecycle.update(ctx); }
+        catch (e) {
+          console.error(`[drawer] section "${state.section.id}" update threw:`, e);
+        }
+      }
+    }
+  }
+
+  #disposeSections(): void {
+    for (const state of this.#sectionStates) {
+      try {
+        if (typeof state.lifecycle === "function") state.lifecycle();
+        else state.lifecycle.unmount();
+      } catch (e) {
+        console.error(`[drawer] section "${state.section.id}" unmount threw:`, e);
+      }
+    }
+    this.#sectionStates = [];
+  }
+}
+```
+
+**Right-panel** mirrors the same shape — `#sectionStates`,
+`#renderSections`, `notifyUpdate`, `#disposeSections`. Its
+existing imperative entry points (`showToolProperties`,
+`showSelectionProperties`, `setPageMetadata`) become section-
+internal — each affected built-in section subscribes to the
+relevant state via the lifecycle's `update` hook and the
+right-panel surface as a whole exposes `notifyUpdate` for
+external triggers.
+
+### `EditorSession` wiring
+
+[`app/editor-session.ts`](../../packages/web/src/app/editor-session.ts)
+constructs both surfaces today; Phase 1 adds two new dep
+callbacks per surface:
+
+```ts
+this.#editorSession = new EditorSession(
+  {
+    // ... existing deps ...
+    getDrawerSections: () => this.#composeDrawerSections(),
+    getRightPanelSections: () => this.#composeRightPanelSections(),
+    isBuiltinUISectionDisabled: (id) =>
+      this.#disabledBuiltinUISections.has(id),
+  },
+  // ...
+);
+```
+
+`#composeDrawerSections` returns the array of drawer built-in
+sections + `pluginHost.listDrawerSections()` filtered by the
+disable set; same for right-panel. `EditorSession` passes
+these through to the drawer / right-panel constructors as
+their `getAllSections` deps.
+
+`notifyUpdate` is wired to fire from the existing
+`onAfterSave` dispatcher (after a save lands) and from the
+existing rename flow's `setData` call.
+
+### Lifecycle ordering
+
+1. **Session start** — `setupEditor` constructs drawer +
+   right-panel; their constructors call `#renderSections()`
+   which mounts every visible section in priority order.
+2. **Rename / save / tag-edit** — drawer's `setData` and
+   right-panel's analogous setters trigger `notifyUpdate`.
+   Reactive sections receive the call; simple-teardown
+   sections don't.
+3. **Session end** — `EditorSession.resetSessionUI()` calls
+   `drawer.destroy()` / `rightPanel.destroy()`, which both
+   run `#disposeSections()` first.
+4. **Image swap** — current `disposePreviousEditor` flow
+   tears the previous editor down and rebuilds, so plugin
+   sections naturally unmount + remount with the new context.
 
 ### Drawer + right-panel host plumbing
 
@@ -310,58 +557,116 @@ this.#editorSession = new EditorSession(
 
 ## Phased plan
 
-Single PR scope; the implementation splits internally but ships
-together so the API arrives with both targets working.
+Multi-PR scope. The migration touches enough surface that
+shipping it as one PR would make the diff hard to review;
+splitting along surface boundaries (drawer first, then
+right-panel) keeps each phase independently revertable.
 
-### Phase 1 — `UISection` API + drawer + right-panel
+### Phase 1 — `UISection` API + plugin host plumbing
 
-- Export `UISection` / `UISectionContext` / `UISectionTarget`
+Pure plumbing; no built-in migration in this phase. Plugins
+can register sections but the surfaces don't display them yet.
+
+- Export `UISection` / `UISectionContext` / `UISectionLifecycle`
   from `plugin-host.ts`.
-- `PluginContext.addUISection(section)` lands; `PluginHost`
-  tracks sections in a `Map<id, UISection>` with the same
-  duplicate-throw semantics as `addSidebarTab`.
-- `PluginHost.listUISections()` accessor for the drawer +
-  right-panel deps.
-- `editor/file-details-drawer.ts` adds the trailing plugin
-  area + lifecycle hooks (`getPluginSections`,
-  `getCurrentSectionContext` constructor deps).
-- `editor/right-panel.ts` adds the same plumbing.
-- `app/editor-session.ts` wires both deps from
-  `pluginHost.listUISections()` and the current-image state.
-- ~8 new tests (215 → 223 total estimated):
-  - `addUISection` registers, validates duplicate-id throw,
-    accepts both targets in the same id namespace
-  - `listUISections` preserves registration order
-  - `findUISection` returns undefined for unknown id
-  - mount lifecycle: a fake plugin mounts → teardown is called
-    on session end (verified via spy)
-  - mount-throw doesn't kill sibling sections + logs to
-    console.error
-  - teardown-throw doesn't break unmount of subsequent sections
-  - `visible: false` skips the mount entirely (no teardown
-    accumulated)
-  - Per-target filtering: a `target: "right-panel"` section
-    doesn't appear in the drawer.
+- `PluginContext.addDrawerSection` + `addRightPanelSection`.
+- `PluginHost.listDrawerSections` / `listRightPanelSections` /
+  `findDrawerSection` / `findRightPanelSection` accessors with
+  per-target id namespaces.
+- `App.init({ disableBuiltinUISections })` lands; the disable
+  set is stored on App and exposed via the deps interface
+  collaborators consume.
+- ~6 plugin-host tests:
+  - `addDrawerSection` registers; duplicate id throws.
+  - `addRightPanelSection` registers; duplicate id throws.
+  - The two namespaces are independent — same id allowed
+    across targets.
+  - `list*` preserves registration order.
+  - Unknown ids in `disableBuiltinUISections` warn + no-op.
+  - Setter is plumbed into the dep getter at `App.init`.
 
-  DOM-touching tests use `// @vitest-environment happy-dom`
-  similar to the recent-tab suite.
+**Lands as one PR.** Expected delta: ~150 lines net
+(plugin-host + tests). Plugin sections don't render anywhere
+yet — that's Phase 2 / 3.
 
-Expected delta: ~280 lines net (plumbing ~150, tests ~130).
+### Phase 2 — Drawer migration
 
-### Phase 2 _(optional)_ — Polish + reference built-in
+[`editor/file-details-drawer.ts`](../../packages/web/src/editor/file-details-drawer.ts)
+becomes a generic section host. The four built-in blocks
+(File / Tags / Last commit / External links) migrate to
+`UISection` shapes living in
+`packages/web/src/editor/drawer-sections/*.ts`. The drawer's
+constructor takes a `getAllSections` callback that returns the
+built-in + plugin list filtered by the disable set; render +
+update + dispose loops replace the existing per-section render
+methods.
 
-If Phase 1's manual smoke calls for them:
+- `editor/drawer-sections/file-section.ts` — id `drawer.file`,
+  priority 10. Reads `data` via the existing imperative
+  `setData` path translated to `update(ctx)`. The header rows
+  (filename rename, folder, dimensions, file size, dates,
+  source URL) move into the section.
+- `editor/drawer-sections/tags-section.ts` — id `drawer.tags`,
+  priority 20.
+- `editor/drawer-sections/last-commit-section.ts` — id
+  `drawer.last-commit`, priority 30. `visible(ctx)` returns
+  `false` when no `lastCommit` data is present.
+- `editor/drawer-sections/external-links-section.ts` — id
+  `drawer.external-links`, priority 40. Calls
+  `pluginHost.collectExternalLinks` for its data; renders
+  conditionally.
+- Drawer constructor accepts `getAllDrawerSections` +
+  `isBuiltinUISectionDisabled` deps.
+- `notifyUpdate` API lands; `setData` / `setLastCommit` route
+  through it.
+- `app/editor-session.ts` wires the new deps.
+- ~5 tests:
+  - Built-in sections render in priority order.
+  - `disableBuiltinUISections: ["drawer.tags"]` hides Tags.
+  - A plugin section with priority 25 lands between Tags and
+    Last commit.
+  - Lifecycle: mount called once per session, unmount on
+    session end (via spy on a fixture section).
+  - Reactive update: a fixture section with `update(ctx)`
+    sees the new tags after `notifyUpdate` fires.
 
-- A small reference built-in plugin (e.g. an "Image hash"
-  drawer section that shows a SHA-1 of the current image
-  data — trivial but exercises the lifecycle end-to-end and
-  serves as the documentation example).
-- `disableBuiltinUISections?: string[]` opt-out on `App.init`,
-  mirroring the other three opt-out patterns.
-- Section animation polish (slide-in on mount, fade-out on
-  teardown).
+  DOM-touching tests use `// @vitest-environment happy-dom`.
 
-Lands only if reviewers / first-consumer feedback warrants.
+**Lands as one PR.** Expected delta: ~400 lines net (built-in
+sections move, drawer collapses, tests).
+
+### Phase 3 — Right-panel migration
+
+Same shape as Phase 2 for
+[`editor/right-panel.ts`](../../packages/web/src/editor/right-panel.ts):
+
+- `editor/right-panel-sections/tool-properties-section.ts` —
+  id `right-panel.tool-properties`, priority 10. Hosts the
+  current-tool's property controls via the existing
+  `toolbar.renderToolProperties` integration. Title is
+  dynamic (set via `ctx.setTitle` from inside `update`).
+- `editor/right-panel-sections/selection-properties-section.ts`
+  — id `right-panel.selection-properties`, priority 20.
+- `editor/right-panel-sections/page-elements-section.ts` — id
+  `right-panel.page-elements`, priority 30.
+  `visible(ctx)` returns false when `pageMetadata` is null
+  (which is most non-extension captures).
+- Right-panel constructor accepts the matching deps.
+- The existing imperative `showToolProperties` /
+  `showSelectionProperties` / `setPageMetadata` entry points
+  become section-internal; the right-panel surface exposes
+  `notifyUpdate` plus narrow forwarders so callers
+  (`EditorSession`'s selection.onChange handler) can keep
+  their existing call shapes.
+- ~5 tests parallel to Phase 2.
+
+**Lands as one PR.** Expected delta: ~400 lines net.
+
+### Phase 4 _(optional)_ — Polish
+
+Animation + accessibility polish (slide-in on mount, focus
+management when a plugin section gains an interactive
+element). Lands only if usability testing warrants.
 
 ## Verification
 
@@ -394,45 +699,40 @@ Lands only if reviewers / first-consumer feedback warrants.
   Existing callers that don't supply the two new constructor
   deps get the legacy "no plugin sections" behaviour.
 
-## Open questions (sign-off requested)
+## Decisions (sign-off 2026-04-25)
 
-1. **API granularity.**
-   Plan unifies both targets under a single `addUISection({ target })`.
-   Alternative: separate `addDrawerSection` / `addRightPanelSection`
-   for tighter type-safety on target-specific options (the
-   right-panel might later want a `selection: SVGElement[]` field
-   on the context, drawer doesn't). Lean: unified for MVP — the
-   `target` discriminator is fine.
-   ✅ unified / split
-
-2. **Built-in migration.**
-   Plan keeps built-ins (drawer's File / Tags / etc.; right-panel's
-   Tool / Selection) hardcoded; plugin sections render in a
-   trailing area. Alternative: migrate every built-in to the
-   `UISection` shape so the panel becomes a generic section host
-   and priority interleaving works. Lean: keep hardcoded — full
-   migration is a larger refactor with no consumer pressure.
-   ✅ hardcoded / migrate-builtins
-
-3. **Mount lifecycle model.**
-   Plan: `mount(container) => teardown` (Web Components-style).
-   Alternative: section returns a class instance with
-   `mount` / `unmount` / `update(state)` hooks (more reactive).
-   Lean: `mount → teardown` for MVP; reactive shape is a
-   plugin-side concern.
-   ✅ mount-teardown / class-with-update
-
-4. **Reference built-in.**
-   Plan ships zero built-in sections in Phase 1 (consistent with
-   `plugin-storage-registration` Phase C; differs from
-   `plugin-sidebar-tabs` which shipped Recent). Alternative:
-   ship a small "Image hash" or "Path" demo section.
-   ✅ no-builtin / ship-demo-section
-
-5. **`disableBuiltinUISections` opt-out option.**
-   Mirrors the existing three. Only useful if we ship built-in
-   sections (see #4). Lean: defer until first built-in lands.
-   ✅ defer / land-now
+1. **Split registration: `addDrawerSection` + `addRightPanelSection`.**
+   Keeps each target's id namespace independent (the same suffix
+   like `"comments"` can be reused across drawer and right-panel
+   without collision). Opens the door to target-specific context
+   shapes later (right-panel could carry `selection` later;
+   drawer wouldn't).
+2. **Migrate every built-in to the `UISection` shape.** Drawer
+   gets `drawer.file` / `drawer.tags` / `drawer.last-commit` /
+   `drawer.external-links`; right-panel gets
+   `right-panel.tool-properties` / `selection-properties` /
+   `page-elements`. The two surfaces become generic section
+   hosts that iterate the registered list (built-in + plugin)
+   sorted by `priority`, mount each into a section frame, and
+   manage the lifecycle. Plugin sections naturally interleave
+   with built-ins.
+3. **Both lifecycle shapes are first-class.** `mount()` returns
+   either a teardown function (simple sections) or
+   `{ update?(ctx), unmount() }` (reactive sections). The host
+   inspects the return shape and dispatches accordingly.
+   Reactive sections receive `update(ctx)` calls when the host
+   fires `notifyUpdate` (after rename / save / tag-edit etc.);
+   simple sections never get notified.
+4. **No reference built-in plugin section.** With every built-in
+   migrating to the `UISection` shape, the migrated sections
+   are themselves the reference implementations. A separate
+   demo plugin would be redundant.
+5. **`disableBuiltinUISections: string[]` lands now** with the
+   migrated built-in ids as the disable targets. Default empty
+   array; unknown ids warn + no-op for forward-compat. A
+   deployment can hide `"drawer.last-commit"` /
+   `"right-panel.page-elements"` (or any other built-in
+   section) without touching plugin code.
 
 ## References
 
