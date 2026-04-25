@@ -15,6 +15,7 @@
 
 import type { ToolOptions } from "@ingcreators/annot-core";
 import {
+  assertNonNull,
   CanvasManager,
   History,
   openAnchoredPopover,
@@ -191,12 +192,21 @@ export class EditorSession {
     // #svg-root element is reused across sessions.
     this.disposePreviousEditor();
 
-    const canvasContainer = document.getElementById("canvas-container")!;
-    const fileManagerEl = document.getElementById("file-manager")!;
+    const canvasContainer = assertNonNull(
+      document.getElementById("canvas-container"),
+      "#canvas-container missing — check index.html shell",
+    );
+    const fileManagerEl = assertNonNull(
+      document.getElementById("file-manager"),
+      "#file-manager missing — check index.html shell",
+    );
     fileManagerEl.style.display = "none";
     canvasContainer.style.display = "";
 
-    const statusbar = document.getElementById("statusbar")!;
+    const statusbar = assertNonNull(
+      document.getElementById("statusbar"),
+      "#statusbar missing — check index.html shell",
+    );
     statusbar.style.display = "";
 
     let svg = document.getElementById("svg-root") as unknown as SVGSVGElement | null;
@@ -271,7 +281,10 @@ export class EditorSession {
     // live in the editor header; save/copy/open move there too as
     // document-level actions. Tool ▼ dropdowns are suppressed because
     // the right panel renders tool properties persistently instead.
-    const sidebarEl = document.getElementById("editor-sidebar")!;
+    const sidebarEl = assertNonNull(
+      document.getElementById("editor-sidebar"),
+      "#editor-sidebar missing — check index.html shell",
+    );
     sidebarEl.innerHTML = "";
     const toolbar = new Toolbar(
       sidebarEl,
@@ -329,7 +342,10 @@ export class EditorSession {
     // selection properties). Scratchpad moved to the toolbar as its
     // own library popover so the right panel has a single clean
     // responsibility: "edit the thing the user is focused on".
-    const rightPanelEl = document.getElementById("editor-right-panel")!;
+    const rightPanelEl = assertNonNull(
+      document.getElementById("editor-right-panel"),
+      "#editor-right-panel missing — check index.html shell",
+    );
     this.#editorRightPanel?.destroy();
     rightPanelEl.innerHTML = "";
     const panel = document.createElement("annot-editor-right-panel");
