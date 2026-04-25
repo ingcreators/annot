@@ -23,7 +23,7 @@ import type {
   History,
   SelectionManager,
   ToolOptions,
-} from "@ingcreators/annot-core";
+} from "@ingcreators/annot-core/editor";
 import {
   type CanvasMenuItem,
   openCanvasContextMenu,

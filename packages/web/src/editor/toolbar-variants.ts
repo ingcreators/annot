@@ -17,7 +17,7 @@ import {
   SHAPE_ICON_SVG,
   type ToolBase,
   type ToolOptions,
-} from "@ingcreators/annot-core";
+} from "@ingcreators/annot-core/editor";
 
 export interface ToolDef {
   label: string;

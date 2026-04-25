@@ -18,11 +18,11 @@ import {
   ARROW_ICON_SVG,
   type CanvasManager,
   COUNTER_ICON_SVG,
-  computeDasharray,
   HIGHLIGHT_COLORS,
   SHAPE_ICON_SVG,
   type ToolOptions,
-} from "@ingcreators/annot-core";
+} from "@ingcreators/annot-core/editor";
+import { computeDasharray } from "@ingcreators/annot-core/utils";
 import { createCustomSelect } from "@ingcreators/annot-core/editor/custom-select";
 import { setTooltip } from "@ingcreators/annot-core/editor/tooltip";
 import {

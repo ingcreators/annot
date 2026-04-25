@@ -42,10 +42,6 @@ import {
   type CanvasManager,
   copyAsImage,
   createThemeToggle,
-  DEFAULT_FILL_COLOR,
-  DEFAULT_FONT_SIZE,
-  DEFAULT_STROKE_COLOR,
-  DEFAULT_STROKE_WIDTH,
   getPngDataUrl,
   HIGHLIGHT_COLORS,
   type History,
@@ -55,7 +51,13 @@ import {
   saveToFile,
   type ToolBase,
   type ToolOptions,
-} from "@ingcreators/annot-core";
+} from "@ingcreators/annot-core/editor";
+import {
+  DEFAULT_FILL_COLOR,
+  DEFAULT_FONT_SIZE,
+  DEFAULT_STROKE_COLOR,
+  DEFAULT_STROKE_WIDTH,
+} from "@ingcreators/annot-core/utils";
 import {
   type AnnotationShape,
   copyAsOffice,

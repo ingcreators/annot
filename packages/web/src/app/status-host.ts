@@ -9,7 +9,7 @@
  * `setActiveTool(name)` for tool-name updates.
  */
 
-import type { CanvasManager } from "@ingcreators/annot-core";
+import type { CanvasManager } from "@ingcreators/annot-core/editor";
 import "../editor/editor-statusbar.js";
 import type { AnnotEditorStatusbarElement } from "../editor/editor-statusbar.js";
 

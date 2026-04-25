@@ -112,31 +112,37 @@ These follow from `PRODUCT_DIRECTION.md`. When modifying code, check:
 
 ### 5. Public API of `@ingcreators/annot-core`
 
-Two entry points, both stable:
+**The root entry is headless by construction.** `src/index.ts`
+just `export * from "./headless.js"` — the two are
+indistinguishable. Browser-side consumers reach the editor UI,
+XMP, and Tauri-bridge symbols through their respective subpaths:
 
-- **`@ingcreators/annot-core`** (root `index.ts`) — **full surface**,
-  including browser-only UI. Imported by the PWA, extension,
-  desktop host. Use this from browser-targeted packages.
-- **`@ingcreators/annot-core/headless`** (`headless.ts`) — **DOM-free
-  subset**, guaranteed to not pull in `document` / `window` /
-  `navigator`. Imported by the future `@ingcreators/annot-annotator`,
-  Playwright fixture, GitHub Action. Only covers storage types,
-  path utilities, SVG format versioning, pure constants, ZIP
-  builder, and a few pure helpers (dash utils, id).
-
-Additional subpaths (`./editor`, `./storage`, `./utils`, `./encode`,
-`./xmp`, `./zip`) remain for internal use; most external callers
-should stick to the two top entries.
+| Subpath | Surface |
+|---------|---------|
+| `@ingcreators/annot-core` (or `/headless`) | DOM-free: SVG format versioning, storage types, path utilities, capability predicates, dash utils, constants, id, assertNonNull, ZIP builder. **Importable in pure Node.** |
+| `@ingcreators/annot-core/editor` | Editor UI: `CanvasManager`, `PropertyPanel`, `SelectionManager`, `History`, `ToolBase`, the `export*Svg*` / `copy*` / `save*` / `download*` / `getPng*` / `render*` helpers, theme toggle, anchored popover, icon catalogues. |
+| `@ingcreators/annot-core/storage` | Storage value types (`ImageRecord`, `FolderRecord`, `PageElement`, `PageMetadata`, `StorageProvider`). |
+| `@ingcreators/annot-core/utils` | Pure utilities: `assertNonNull`, `computeDasharray`, `detectDashKey`, `newIdB58`, `DEFAULT_*` constants. |
+| `@ingcreators/annot-core/xmp` | `createEditableImage` / `readEditableImage` round-trip. |
+| `@ingcreators/annot-core/tauri-bridge` | Tauri IPC + `isTauri` detection. |
+| `@ingcreators/annot-core/editor/<file>` | Per-file deep imports for editor internals (`property-controls`, `tools/freehand-tool`, etc.). Use sparingly. |
 
 Rules when adding public symbols:
 
-- New DOM-free symbols → export from BOTH `src/index.ts` and
-  `src/headless.ts`.
-- New DOM-dependent symbols → export from `src/index.ts` only.
-- Don't add per-file `export *` barrels that mix DOM / non-DOM
-  without clear sections.
-- Internal helpers stay inside their module without root-level
-  re-export.
+- New DOM-free symbols → export from `src/headless.ts`. They
+  flow into the root automatically via `export *`.
+- New DOM-dependent UI symbols → export from
+  `src/editor/index.ts`. **Never** add them to `headless.ts` or
+  the root.
+- New Tauri-bridge / XMP / extension-only symbols → put them in
+  the matching subpath module; don't bounce them through
+  `core/utils/index.ts` (that subpath is "pure utilities" by
+  contract — see Stage 4-3 of `docs/plans/pre-release-cleanup.md`).
+- The boundary is enforced by `packages/core/src/headless.test.ts`,
+  which imports the root under a pure-Node vitest environment
+  and asserts `globalThis.document` / `globalThis.window` stay
+  `undefined`. Add a probe there if you introduce a new
+  load-time global.
 
 ### 6. Reply and commit language
 
