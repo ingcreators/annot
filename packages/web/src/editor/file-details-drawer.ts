@@ -1,67 +1,94 @@
-import { setTooltip } from "@ingcreators/annot-core/utils";
 /**
  * FileDetailsDrawer — right-side slide-in panel consolidating every piece
  * of information about the currently-open image in one place.
  *
- * Answers "what is this image, and what do I know about it?" with:
- *   - File section: name, location, dimensions, size, timestamps, source URL
- *   - Tags section: full list of host/fragment/session/custom tags,
- *     editable via an embedded TagEditor
+ * Phase 2 of `docs/plans/plugin-ui-slots.md` migrated the previous
+ * hardcoded section blocks (File / Tags / Last commit / Links) into
+ * `UISection` modules under `./drawer-sections/`. The drawer is now
+ * a thin host that:
  *
- * Triggered from an info icon next to the filename in the editor header.
- * Mirrors the "Details" sidebar pattern familiar from Google Drive /
- * Dropbox / macOS Finder so users don't need to learn a new affordance.
+ *   1. Owns the chrome (backdrop + panel + close button + Esc handler).
+ *   2. Composes built-in sections + plugin-registered sections (from
+ *      `getPluginSections`), filters by `disableBuiltinUISections`
+ *      and per-section `visible(ctx)` predicates, and sorts by
+ *      `priority`.
+ *   3. Mounts each section into a section frame and tracks the
+ *      lifecycle for teardown / `update(ctx)` dispatch.
+ *
+ * Existing public API is preserved byte-for-byte:
+ *   - `setData(data)` triggers a full re-render (matches today's
+ *     behavior; sections that opt into reactive lifecycle will
+ *     remount with fresh state).
+ *   - `setLastCommit(info)` likewise (visibility-affecting).
+ *   - `notifyUpdate()` is the new lightweight path: dispatches
+ *     `update(ctx)` to reactive sections without re-rendering DOM.
+ *     Phase 2 doesn't call it from inside the drawer; future
+ *     callers (rename / save observers, plugins) can use it.
+ *
+ * Triggered from an info icon next to the filename in the editor
+ * header. Mirrors the "Details" sidebar pattern familiar from
+ * Google Drive / Dropbox / macOS Finder so users don't need to
+ * learn a new affordance.
  */
-import { TagEditor } from "./tag-editor.js";
 
-export interface FileDetailsData {
-  filename: string;
-  folderPath: string; // "" = root
-  width: number;
-  height: number;
-  fileSizeBytes: number; // approximated from the dataUrl length
-  createdAt?: string; // ISO; may be undefined for not-yet-persisted images
-  updatedAt?: string; // ISO
-  sourceUrl?: string; // captured page URL, if known
-  tags: Record<string, string>;
-  /**
-   * Storage-level links (e.g. "View on GitHub"). Rendered in their
-   * own section at the bottom of the drawer. Populated by the host
-   * when the active storage exposes such links (currently only
-   * `GitHubStore.getViewUrl(path)`).
-   */
-  externalLinks?: Array<{ label: string; url: string; icon?: string }>;
-  /**
-   * Last-commit metadata for the current file. Populated
-   * asynchronously by the host after the drawer is constructed —
-   * the first render omits the section, and `setLastCommit()`
-   * refreshes just that block when the info arrives. GitHub is the
-   * only backend that exposes this today.
-   */
-  lastCommit?: LastCommitInfo;
+import { setTooltip } from "@ingcreators/annot-core/utils";
+import type { UISection, UISectionContext, UISectionLifecycle } from "../app/plugin-host.js";
+import { createDrawerSectionFrame } from "./drawer-sections/helpers.js";
+import { createExternalLinksSection } from "./drawer-sections/external-links-section.js";
+import { createFileSection } from "./drawer-sections/file-section.js";
+import { createLastCommitSection } from "./drawer-sections/last-commit-section.js";
+import { createTagsSection } from "./drawer-sections/tags-section.js";
+import type { FileDetailsData, LastCommitInfo } from "./file-details-drawer-types.js";
+
+export type { FileDetailsData, LastCommitInfo } from "./file-details-drawer-types.js";
+export {
+  validateFilename,
+  estimateDataUrlBytes,
+} from "./file-details-drawer-types.js";
+
+/** Built-in section ids exposed by the drawer. Used by
+ *  `App.init({ disableBuiltinUISections })` to opt out of any
+ *  given section without touching plugin code. Documented in
+ *  `docs/plans/plugin-ui-slots.md`. */
+export const BUILTIN_DRAWER_SECTION_IDS = [
+  "drawer.file",
+  "drawer.tags",
+  "drawer.last-commit",
+  "drawer.external-links",
+] as const;
+
+export interface FileDetailsDrawerDeps {
+  /** Plugin-registered drawer sections. Combined with built-ins
+   *  before sort + filter. Optional — desktop / embedded shells
+   *  that don't load plugins can skip it. */
+  getPluginSections?(): UISection[];
+  /** Built-in section ids the deployment opted out of via
+   *  `App.init({ disableBuiltinUISections })`. Optional. */
+  isBuiltinSectionDisabled?(id: string): boolean;
 }
 
-export interface LastCommitInfo {
-  /** `author.name` or fallback login. */
-  authorName: string;
-  /** `https://github.com/<login>.png` or equivalent; optional. */
-  authorAvatarUrl?: string;
-  /** First line of the commit message. */
-  messageHeadline: string;
-  /** ISO timestamp from the commit. */
-  date: string;
-  /** 7-char abbreviated SHA. */
-  shortSha: string;
-  /** `https://github.com/<owner>/<repo>/commit/<sha>`. */
-  url?: string;
+interface MountedSection {
+  section: UISection;
+  /** Outer `<section>` element including heading. Removed during
+   *  teardown so visibility transitions don't leak DOM. */
+  sectionEl: HTMLElement;
+  /** Body container the section's `mount` rendered into. */
+  bodyEl: HTMLElement;
+  /** The lifecycle returned from `mount`. */
+  lifecycle: UISectionLifecycle;
+  /** True when the lifecycle is the reactive object shape. */
+  reactive: boolean;
 }
 
 export class FileDetailsDrawer {
   #panel: HTMLElement;
   #backdrop: HTMLElement;
-  #tagEditor: TagEditor | null = null;
   #data: FileDetailsData;
   #isOpen = false;
+  #deps: FileDetailsDrawerDeps;
+  #builtinSections: UISection[];
+  #mounted: MountedSection[] = [];
+
   /** Called when the user edits tags inside the drawer. */
   onTagsChange?: (tags: Record<string, string>) => void;
   /**
@@ -73,8 +100,9 @@ export class FileDetailsDrawer {
    */
   onRename?: (newFilename: string) => Promise<void>;
 
-  constructor(container: HTMLElement, data: FileDetailsData) {
+  constructor(container: HTMLElement, data: FileDetailsData, deps: FileDetailsDrawerDeps = {}) {
     this.#data = data;
+    this.#deps = deps;
 
     // Subtle backdrop — this is a COMPANION panel, not a modal, so it
     // shouldn't dim the canvas heavily. It mainly provides a click-to-close
@@ -92,6 +120,25 @@ export class FileDetailsDrawer {
     container.appendChild(this.#backdrop);
     container.appendChild(this.#panel);
 
+    // Built-in sections: factories take a `getData` getter so each
+    // section reads the latest `#data` on every render / update,
+    // not a snapshot from constructor time.
+    this.#builtinSections = [
+      createFileSection({
+        getData: () => this.#data,
+        onRename: (next) => this.onRename?.(next) ?? Promise.resolve(),
+      }),
+      createTagsSection({
+        getData: () => this.#data,
+        onTagsChange: (t) => {
+          this.#data = { ...this.#data, tags: t };
+          this.onTagsChange?.(t);
+        },
+      }),
+      createLastCommitSection({ getData: () => this.#data }),
+      createExternalLinksSection({ getData: () => this.#data }),
+    ];
+
     this.#render();
 
     // Close on Escape when the drawer is focused / open
@@ -108,10 +155,46 @@ export class FileDetailsDrawer {
     }
   };
 
+  /** Section context handed to every `mount` / `update` call. The
+   *  `path` / `mode` are placeholders for now — the drawer doesn't
+   *  currently receive them; the editor session can pass them in
+   *  via deps in a follow-up if a plugin section needs them. Tags
+   *  are the live `#data.tags` snapshot. */
+  #ctx(): UISectionContext {
+    return {
+      path: "",
+      mode: "",
+      tags: this.#data.tags,
+      setTitle: (newTitle) => {
+        // Find the most-recently-mounted section that asked to
+        // override its title. Plugins typically call this from
+        // inside `mount` (as the host-supplied DOM is being set
+        // up), so the freshest entry in `#mounted` is theirs.
+        const last = this.#mounted[this.#mounted.length - 1];
+        if (!last) return;
+        const heading = last.sectionEl.querySelector(".file-details-section-title");
+        if (heading) heading.textContent = newTitle;
+      },
+    };
+  }
+
+  #composeSections(): UISection[] {
+    const isDisabled = this.#deps.isBuiltinSectionDisabled ?? (() => false);
+    const builtins = this.#builtinSections.filter((s) => !isDisabled(s.id));
+    const plugins = this.#deps.getPluginSections?.() ?? [];
+    const all = [...builtins, ...plugins];
+    return all.sort((a, b) => {
+      const ap = Number.isFinite(a.priority) ? a.priority : Number.POSITIVE_INFINITY;
+      const bp = Number.isFinite(b.priority) ? b.priority : Number.POSITIVE_INFINITY;
+      return ap - bp;
+    });
+  }
+
   #render(): void {
+    this.#disposeSections();
     this.#panel.innerHTML = "";
 
-    // ----- Header -----
+    // ----- Header chrome (stays out of the section system) -----
     const header = document.createElement("div");
     header.className = "file-details-header";
 
@@ -131,140 +214,38 @@ export class FileDetailsDrawer {
 
     this.#panel.appendChild(header);
 
-    // ----- File section -----
-    const fileSection = this.#createSection("File");
-    fileSection.appendChild(this.#makeNameRow());
-    fileSection.appendChild(
-      this.#makeRow("Location", this.#data.folderPath || "(root)", {
-        selectable: true,
-        mono: true,
-      }),
-    );
-    fileSection.appendChild(
-      this.#makeRow("Dimensions", `${this.#data.width} × ${this.#data.height} px`),
-    );
-    fileSection.appendChild(this.#makeRow("File size", formatBytes(this.#data.fileSizeBytes)));
-    if (this.#data.createdAt) {
-      fileSection.appendChild(this.#makeRow("Created", formatDate(this.#data.createdAt)));
-    }
-    if (this.#data.updatedAt) {
-      fileSection.appendChild(this.#makeRow("Modified", formatDate(this.#data.updatedAt)));
-    }
-    if (this.#data.sourceUrl) {
-      fileSection.appendChild(
-        this.#makeRow("Source", this.#data.sourceUrl, { selectable: true, mono: true, link: true }),
-      );
-    }
-    this.#panel.appendChild(fileSection);
-
-    // ----- Tags section -----
-    const tagsSection = this.#createSection("Tags");
-    const tagsContent = document.createElement("div");
-    tagsContent.className = "file-details-tags-editor";
-    tagsSection.appendChild(tagsContent);
-    this.#panel.appendChild(tagsSection);
-
-    this.#tagEditor = new TagEditor(tagsContent);
-    this.#tagEditor.setTags(this.#data.tags);
-    this.#tagEditor.onTagsChange = (t) => {
-      this.#data.tags = t;
-      this.onTagsChange?.(t);
-    };
-
-    // ----- Last commit section (backend-provided, currently GitHub) -----
-    if (this.#data.lastCommit) {
-      this.#panel.appendChild(this.#renderLastCommitSection(this.#data.lastCommit));
-    }
-
-    // ----- External links section (e.g. "View on GitHub") -----
-    if (this.#data.externalLinks && this.#data.externalLinks.length > 0) {
-      this.#panel.appendChild(this.#renderLinksSection(this.#data.externalLinks));
-    }
-  }
-
-  #renderLastCommitSection(commit: LastCommitInfo): HTMLElement {
-    const section = this.#createSection("Last commit");
-
-    // Author row: avatar + name side by side when we have the avatar.
-    const authorRow = document.createElement("div");
-    authorRow.className = "file-details-row";
-    const authorLbl = document.createElement("span");
-    authorLbl.className = "file-details-row-label";
-    authorLbl.textContent = "Author";
-    authorRow.appendChild(authorLbl);
-    const authorVal = document.createElement("span");
-    authorVal.className = "file-details-row-value selectable";
-    if (commit.authorAvatarUrl) {
-      const avatar = document.createElement("img");
-      avatar.className = "file-details-avatar";
-      avatar.src = commit.authorAvatarUrl;
-      avatar.alt = "";
-      avatar.width = 16;
-      avatar.height = 16;
-      authorVal.appendChild(avatar);
-    }
-    const authorText = document.createTextNode(commit.authorName);
-    authorVal.appendChild(authorText);
-    authorRow.appendChild(authorVal);
-    section.appendChild(authorRow);
-
-    section.appendChild(this.#makeRow("Date", formatDate(commit.date)));
-
-    // Message: clickable link to the commit when we have a URL,
-    // plain text otherwise. Short SHA shown in monospace alongside.
-    const msgRow = document.createElement("div");
-    msgRow.className = "file-details-row";
-    const msgLbl = document.createElement("span");
-    msgLbl.className = "file-details-row-label";
-    msgLbl.textContent = "Message";
-    msgRow.appendChild(msgLbl);
-    const msgWrap = document.createElement("span");
-    msgWrap.className = "file-details-row-value selectable";
-    if (commit.url) {
-      const a = document.createElement("a");
-      a.href = commit.url;
-      a.target = "_blank";
-      a.rel = "noopener noreferrer";
-      a.textContent = commit.messageHeadline;
-      msgWrap.appendChild(a);
-    } else {
-      msgWrap.appendChild(document.createTextNode(commit.messageHeadline));
-    }
-    msgWrap.appendChild(document.createTextNode(" "));
-    const sha = document.createElement("code");
-    sha.className = "file-details-sha";
-    sha.textContent = commit.shortSha;
-    msgWrap.appendChild(sha);
-    setTooltip(msgWrap, commit.messageHeadline);
-    msgRow.appendChild(msgWrap);
-    section.appendChild(msgRow);
-
-    return section;
-  }
-
-  #renderLinksSection(links: Array<{ label: string; url: string; icon?: string }>): HTMLElement {
-    const section = this.#createSection("Links");
-    for (const link of links) {
-      const row = document.createElement("div");
-      row.className = "file-details-row file-details-link-row";
-      const a = document.createElement("a");
-      a.href = link.url;
-      a.target = "_blank";
-      a.rel = "noopener noreferrer";
-      a.className = "file-details-external-link";
-      if (link.icon) {
-        const icon = document.createElement("span");
-        icon.className = "material-symbols-outlined";
-        icon.textContent = link.icon;
-        icon.setAttribute("aria-hidden", "true");
-        a.appendChild(icon);
+    // ----- Sections (built-in + plugin, sorted by priority) -----
+    const ctx = this.#ctx();
+    for (const section of this.#composeSections()) {
+      if (section.visible && !section.visible(ctx)) continue;
+      const { section: sectionEl, body } = createDrawerSectionFrame(section.title);
+      this.#panel.appendChild(sectionEl);
+      try {
+        const lifecycle = section.mount(body, ctx);
+        this.#mounted.push({
+          section,
+          sectionEl,
+          bodyEl: body,
+          lifecycle,
+          reactive: typeof lifecycle === "object",
+        });
+      } catch (e) {
+        console.error(`[drawer] section "${section.id}" mount threw:`, e);
+        sectionEl.remove();
       }
-      a.appendChild(document.createTextNode(link.label));
-      setTooltip(a, link.url);
-      row.appendChild(a);
-      section.appendChild(row);
     }
-    return section;
+  }
+
+  #disposeSections(): void {
+    for (const state of this.#mounted) {
+      try {
+        if (typeof state.lifecycle === "function") state.lifecycle();
+        else state.lifecycle.unmount();
+      } catch (e) {
+        console.error(`[drawer] section "${state.section.id}" unmount threw:`, e);
+      }
+    }
+    this.#mounted = [];
   }
 
   /**
@@ -275,155 +256,41 @@ export class FileDetailsDrawer {
    */
   setLastCommit(info: LastCommitInfo | undefined): void {
     this.#data = { ...this.#data, lastCommit: info };
+    // Visibility-affecting (the section renders only when commit
+    // info is present), so do a full re-render rather than a
+    // notifyUpdate-only path.
     this.#render();
-  }
-
-  #createSection(title: string): HTMLElement {
-    const section = document.createElement("section");
-    section.className = "file-details-section";
-    const heading = document.createElement("h3");
-    heading.className = "file-details-section-title";
-    heading.textContent = title;
-    section.appendChild(heading);
-    return section;
-  }
-
-  /**
-   * The Name row is special: it's inline-editable. The rest of the row
-   * behaves like any other read-only metadata display until the user
-   * focuses the value, at which point the span becomes a text input.
-   *
-   * Commit rules:
-   *   - Enter or blur → commit (calls onRename)
-   *   - Escape       → cancel (restores original)
-   *   - Empty / unchanged name → silently cancel
-   *   - Invalid chars (/\:*?"<>|) → stay in editing mode, show inline error
-   *
-   * Extension is preserved across edits but NOT protected from the
-   * user — advanced users can change extensions if they really want,
-   * which matches Finder / Explorer behavior.
-   */
-  #makeNameRow(): HTMLElement {
-    const row = document.createElement("div");
-    row.className = "file-details-row";
-
-    const lbl = document.createElement("span");
-    lbl.className = "file-details-row-label";
-    lbl.textContent = "Name";
-    row.appendChild(lbl);
-
-    const wrap = document.createElement("div");
-    wrap.className = "file-details-name-wrap";
-
-    const input = document.createElement("input");
-    input.type = "text";
-    input.className = "file-details-name-input";
-    input.value = this.#data.filename;
-    input.spellcheck = false;
-    input.autocomplete = "off";
-    setTooltip(input, "Click to rename. Enter to save, Esc to cancel.");
-    input.setAttribute("aria-label", "File name, editable");
-
-    const errorEl = document.createElement("div");
-    errorEl.className = "file-details-name-error";
-    errorEl.setAttribute("aria-live", "polite");
-
-    // Select only the base name (before the last dot) when the user
-    // focuses — matches Finder / Explorer "rename" behavior so users
-    // don't accidentally wipe the extension.
-    input.addEventListener("focus", () => {
-      const dot = input.value.lastIndexOf(".");
-      if (dot > 0) {
-        // defer so browser's default all-select is overridden
-        setTimeout(() => input.setSelectionRange(0, dot), 0);
-      }
-    });
-
-    const commit = async () => {
-      const next = input.value.trim();
-      if (!next || next === this.#data.filename) {
-        input.value = this.#data.filename; // restore
-        errorEl.textContent = "";
-        return;
-      }
-      const err = validateFilename(next);
-      if (err) {
-        errorEl.textContent = err;
-        input.focus();
-        return;
-      }
-      try {
-        input.disabled = true;
-        errorEl.textContent = "";
-        await this.onRename?.(next);
-        // setData() from the host will refresh input.value with the
-        // final (possibly uniquified) name.
-      } catch (e: any) {
-        errorEl.textContent = e?.message || "Rename failed";
-        input.value = this.#data.filename; // restore
-      } finally {
-        input.disabled = false;
-      }
-    };
-
-    input.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        input.blur(); // triggers commit via blur listener
-      } else if (e.key === "Escape") {
-        e.preventDefault();
-        input.value = this.#data.filename; // cancel
-        errorEl.textContent = "";
-        input.blur();
-      }
-    });
-    input.addEventListener("blur", () => {
-      commit();
-    });
-
-    wrap.appendChild(input);
-    wrap.appendChild(errorEl);
-    row.appendChild(wrap);
-
-    return row;
-  }
-
-  #makeRow(
-    label: string,
-    value: string,
-    opts: { selectable?: boolean; mono?: boolean; link?: boolean } = {},
-  ): HTMLElement {
-    const row = document.createElement("div");
-    row.className = "file-details-row";
-
-    const lbl = document.createElement("span");
-    lbl.className = "file-details-row-label";
-    lbl.textContent = label;
-    row.appendChild(lbl);
-
-    let valEl: HTMLElement;
-    if (opts.link && /^https?:\/\//i.test(value)) {
-      const a = document.createElement("a");
-      a.href = value;
-      a.target = "_blank";
-      a.rel = "noopener noreferrer";
-      a.textContent = value;
-      valEl = a;
-    } else {
-      valEl = document.createElement("span");
-      valEl.textContent = value;
-    }
-    valEl.className = `file-details-row-value${opts.mono ? " mono" : ""}${opts.selectable ? " selectable" : ""}`;
-    setTooltip(valEl, value);
-    row.appendChild(valEl);
-
-    return row;
   }
 
   /** Replace the full data set and re-render. */
   setData(data: FileDetailsData): void {
     this.#data = data;
     this.#render();
+  }
+
+  /**
+   * Lightweight refresh: dispatch `update(ctx)` to every reactive
+   * section without re-rendering the DOM. Use when only data
+   * inside an existing section changed and visibility didn't
+   * flip (e.g. tag changes pushed from outside, file size update).
+   *
+   * Sections that returned a teardown function rather than a
+   * reactive object don't see the call.
+   */
+  notifyUpdate(): void {
+    const ctx = this.#ctx();
+    for (const state of this.#mounted) {
+      if (state.reactive) {
+        const lifecycle = state.lifecycle as { update?(c: UISectionContext): void };
+        if (lifecycle.update) {
+          try {
+            lifecycle.update(ctx);
+          } catch (e) {
+            console.error(`[drawer] section "${state.section.id}" update threw:`, e);
+          }
+        }
+      }
+    }
   }
 
   open(): void {
@@ -446,63 +313,9 @@ export class FileDetailsDrawer {
   }
 
   destroy(): void {
+    this.#disposeSections();
     document.removeEventListener("keydown", this.#onKeydown);
     this.#panel.remove();
     this.#backdrop.remove();
   }
-}
-
-function formatBytes(bytes: number): string {
-  if (!bytes || bytes < 0) return "—";
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
-  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
-}
-
-function formatDate(iso: string): string {
-  try {
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return iso;
-    return d.toLocaleString(undefined, {
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return iso;
-  }
-}
-
-/**
- * Return null if the filename is acceptable, or a short human-readable
- * error string if not. Mirrors the checks the storage providers apply
- * (POSIX-unsafe chars, reserved names), so the user gets immediate
- * feedback without a round trip to the backend.
- *
- * Exported so the header inline-rename UI can share the same rules.
- */
-export function validateFilename(name: string): string | null {
-  if (!name) return "Name cannot be empty.";
-  if (name === "." || name === "..") return "That name is reserved.";
-  // biome-ignore lint/suspicious/noControlCharactersInRegex: intentional — POSIX / Windows filename validation.
-  if (/[<>:"/\\|?*\x00-\x1f]/.test(name)) {
-    return 'Name cannot contain  < > : " / \\ | ? *';
-  }
-  if (name.length > 200) return "Name is too long.";
-  return null;
-}
-
-/** Approximate the byte size of a data URL payload (base64 → bytes). */
-export function estimateDataUrlBytes(dataUrl: string): number {
-  if (!dataUrl) return 0;
-  const commaIdx = dataUrl.indexOf(",");
-  if (commaIdx === -1) return dataUrl.length;
-  const body = dataUrl.substring(commaIdx + 1);
-  // Base64 encodes 3 bytes into 4 chars. Padding "=" chars subtract 1 byte each.
-  const paddingMatch = body.match(/=+$/);
-  const padding = paddingMatch ? paddingMatch[0].length : 0;
-  return Math.max(0, Math.floor(body.length * 0.75) - padding);
 }
