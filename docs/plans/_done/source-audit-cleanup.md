@@ -1,13 +1,24 @@
 # Source-Code Audit Cleanup
 
-> **Status:** In progress. Authored 2026-04-25 in response to a
-> request to evaluate Annot from the perspective of a corporate IT
+> **Status:** Done (2026-04-25). Authored 2026-04-25 in response to
+> a request to evaluate Annot from the perspective of a corporate IT
 > auditor / system administrator vetting the project for adoption.
 > Sign-off received 2026-04-25 on the five open questions below
-> (see "Decisions" at the bottom). Phase 1 (repo-root metadata +
-> Apache-2.0 license + audit-facing root docs) landed in
-> [#100](https://github.com/ingcreators/annot/pull/100). Phases
-> 2–7 are queued.
+> (see "Decisions" at the bottom). All seven phases landed in
+> [#100](https://github.com/ingcreators/annot/pull/100) (repo-root
+> metadata + Apache-2.0),
+> [#101](https://github.com/ingcreators/annot/pull/101) (plan-status
+> hygiene),
+> [#102](https://github.com/ingcreators/annot/pull/102) (logger shim
+> + `console.log` triage),
+> [#103](https://github.com/ingcreators/annot/pull/103) (toolbar.ts
+> `any` triage),
+> [#104](https://github.com/ingcreators/annot/pull/104) (`any`
+> cleanup outside toolbar.ts),
+> [#105](https://github.com/ingcreators/annot/pull/105)
+> (`assertNonNull` helper + fragile DOM-lookup guards), and
+> [#106](https://github.com/ingcreators/annot/pull/106) (README
+> "for evaluators" section). File moved to `_done/` 2026-04-25.
 >
 > **Compatibility:** No public-API changes. The work is mostly
 > documentation + repo-hygiene + dead-code removal; minor type

@@ -20,7 +20,6 @@ window (`Queued`), or actively shipping (`In progress`).
 
 | Plan | Status | Summary |
 |------|--------|---------|
-| [`source-audit-cleanup.md`](./source-audit-cleanup.md) | In progress | Repo-hygiene + presentation pass for corporate adoption auditing — `LICENSE` / `SECURITY.md` / `CONTRIBUTING.md` / `CHANGELOG.md`, plan-status sync with `main`, scoped `console.log` + `any` cleanup, README "for evaluators" section. Phase 1 landed in [#100](https://github.com/ingcreators/annot/pull/100); Phases 2–7 queued. |
 | [`path-based-storage.md`](./path-based-storage.md) | Queued | Drop numeric IDs across all storage implementations; use filesystem-style paths as primary key. Prerequisite for `GitHubStore`. |
 | [`google-drive-integration.md`](./google-drive-integration.md) | Draft | Rework the Drive backend onto the non-sensitive `drive.file` scope + Workspace Marketplace + Drive UI Integration so Annot can ship publicly without a restricted-scope CASA audit. |
 | [`oss-cloud-split.md`](./oss-cloud-split.md) | Draft | Forward-looking strategy for keeping Annot OSS while developing paid features in a separate private `annot-cloud` repo. Guardrails apply from today; concrete phases trigger on "first paid feature" and "company incorporation". |
@@ -34,6 +33,7 @@ historic full list is the directory itself; this table is the
 
 | Plan | Landed | Summary |
 |------|--------|---------|
+| [`_done/source-audit-cleanup.md`](./_done/source-audit-cleanup.md) | 2026-04-25 | Repo-hygiene + presentation pass for corporate adoption auditing. All seven phases shipped in [#100](https://github.com/ingcreators/annot/pull/100)–[#106](https://github.com/ingcreators/annot/pull/106): Apache-2.0 LICENSE + audit-facing root docs, plan-status hygiene, centralised logger shim, `any` triage in toolbar.ts and outside, `assertNonNull` helper + fragile DOM-lookup guards, README "for evaluators" section. |
 | [`_done/lit-migration.md`](./_done/lit-migration.md) | 2026-04-25 | Multi-phase migration of `packages/web` UI from imperative DOM to Lit Web Components. All seven phases (0–6) shipped in [#85](https://github.com/ingcreators/annot/pull/85)–[#93](https://github.com/ingcreators/annot/pull/93); follow-up corner-case fixes in [#94](https://github.com/ingcreators/annot/pull/94)–[#98](https://github.com/ingcreators/annot/pull/98). |
 | [`_done/storybook-introduction.md`](./_done/storybook-introduction.md) | 2026-04-25 | Storybook bootstrap in `packages/web` as the component showroom + visual-regression net for the Lit migration. Phase 1 landed in [#84](https://github.com/ingcreators/annot/pull/84); Phase 2 (CI-blocking) and beyond are explicitly optional follow-ups. |
 | [`_done/plugin-ui-slots.md`](./_done/plugin-ui-slots.md) | 2026-04-25 | Drawer + right-panel become generic `UISection` hosts. Built-ins migrated; plugins register via split `addDrawerSection` / `addRightPanelSection`. Phases 1–3 landed in [#80](https://github.com/ingcreators/annot/pull/80)–[#82](https://github.com/ingcreators/annot/pull/82); optional Phase 4 polish deferred. |
