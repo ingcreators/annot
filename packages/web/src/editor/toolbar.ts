@@ -2737,46 +2737,6 @@ export class Toolbar {
     Object.assign(this.#options, preset);
   }
 
-  #addDropdownChoices<T>(
-    menu: HTMLElement,
-    title: string,
-    options: T[],
-    current: any,
-    onSelect: (val: any) => void,
-    makeSVG: (opt: T) => SVGSVGElement,
-    makeLabel: (opt: T) => string,
-    isActive: (opt: T, cur: any) => boolean,
-  ): void {
-    const section = document.createElement("div");
-    section.className = "prop-section";
-    const lbl = document.createElement("div");
-    lbl.className = "prop-section-label";
-    lbl.textContent = title;
-    section.appendChild(lbl);
-
-    const list = document.createElement("div");
-    list.className = "prop-choice-list";
-
-    for (const opt of options) {
-      const item = document.createElement("div");
-      item.className = `prop-choice-item${isActive(opt, current) ? " active" : ""}`;
-      item.appendChild(makeSVG(opt));
-      const label = document.createElement("span");
-      label.className = "prop-choice-label";
-      label.textContent = makeLabel(opt);
-      item.appendChild(label);
-      item.addEventListener("click", () => {
-        list.querySelectorAll(".prop-choice-item").forEach((i) => i.classList.remove("active"));
-        item.classList.add("active");
-        onSelect((opt as any).value);
-      });
-      list.appendChild(item);
-    }
-
-    section.appendChild(list);
-    menu.appendChild(section);
-  }
-
   #linePreviewSVG(width: number, strokeWidth: number, dash: string, _color: string): SVGSVGElement {
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     svg.setAttribute("width", String(width));
