@@ -3,7 +3,7 @@
  * state machine and the "flush pending work before navigation" protocol.
  *
  * Extracted from `app.ts` as part of the Phase 1 decomposition
- * (see `docs/plans/app-decomposition.md`). `AnnotApp` holds an instance
+ * (see `docs/plans/_done/app-decomposition.md`). `AnnotApp` holds an instance
  * and forwards calls; all save-status state lives here.
  *
  * Storage is taken as a getter rather than a snapshot so a backend

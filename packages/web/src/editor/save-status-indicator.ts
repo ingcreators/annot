@@ -19,7 +19,7 @@
  * Lit Phase 0 — first proof-of-concept migration from the imperative
  * `SaveStatusIndicator` class to a Lit element. Renders to light DOM
  * so the existing `.save-status` rules in `editor.css` apply without
- * churn (hybrid-CSS approach per `docs/plans/lit-migration.md`).
+ * churn (hybrid-CSS approach per `docs/plans/_done/lit-migration.md`).
  *
  * Uses Lit's `static properties` runtime API instead of field
  * decorators: the TC39 `accessor` keyword the decorator form requires

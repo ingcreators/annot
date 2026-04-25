@@ -116,7 +116,7 @@ const SEND_BACKWARD_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentC
 /** Built-in section ids exposed by the right-panel. Used by
  *  `App.init({ disableBuiltinUISections })` to opt out of any
  *  given section without touching plugin code. Documented in
- *  `docs/plans/plugin-ui-slots.md`. */
+ *  `docs/plans/_done/plugin-ui-slots.md`. */
 export const BUILTIN_RIGHT_PANEL_SECTION_IDS = [
   "right-panel.tool-properties",
   "right-panel.selection-properties",

@@ -6,7 +6,7 @@
  * the above.
  *
  * Extracted from `app.ts` as part of the Phase 2 decomposition
- * (see `docs/plans/app-decomposition.md`). `AnnotApp` holds a
+ * (see `docs/plans/_done/app-decomposition.md`). `AnnotApp` holds a
  * reference and forwards `setupEditor` / `dispose` calls; the session
  * reaches other collaborators through direct instance references
  * (HeaderHost / StatusHost / SavePipeline) instead of re-plumbing

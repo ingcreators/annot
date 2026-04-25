@@ -2,7 +2,7 @@
  * Plugin host — the stable extension surface for `@ingcreators/annot-web`.
  *
  * Phase 4 of the app.ts decomposition plan
- * (see `docs/plans/app-decomposition.md`). The plugin API is the key
+ * (see `docs/plans/_done/app-decomposition.md`). The plugin API is the key
  * enabler for the `annot-cloud` carve-out: Cloud-specific features
  * (team library, per-image comment threads, pointer-commit storage)
  * land as plugins on top of OSS `packages/web`, not as a fork of
@@ -42,7 +42,7 @@
  *    validates before a commit lands" path without a fork.
  *
  * Deferred follow-ups (tracked in
- * `docs/plans/app-decomposition.md` — Phase 5 gate):
+ * `docs/plans/_done/app-decomposition.md` — Phase 5 gate):
  *
  * - `registerStorage` — needs a reshape of `./storage/bridge.ts`.
  * - Sidebar-tab injection — needs a `FileManager`/`Sidebar` API
@@ -254,7 +254,7 @@ export type UISectionLifecycle =
 /**
  * Descriptor for a section in the file-details drawer or the editor
  * right-panel. Built-in sections describe themselves via this same
- * shape (Phase 2 / 3 of `docs/plans/plugin-ui-slots.md` migrate
+ * shape (Phase 2 / 3 of `docs/plans/_done/plugin-ui-slots.md` migrate
  * them); plugins fill it from `PluginContext.addDrawerSection` /
  * `addRightPanelSection`. The two targets have independent id
  * namespaces — the same id is allowed across targets so a single
@@ -275,7 +275,7 @@ export interface UISection {
    *  Falsy = `+Infinity` (appended last). Stable sort, so ties
    *  fall back to registration order. Built-ins reserve
    *  priorities documented per surface in
-   *  `docs/plans/plugin-ui-slots.md`. */
+   *  `docs/plans/_done/plugin-ui-slots.md`. */
   readonly priority: number;
   /** Mount the section into the supplied container. Returns either
    *  a teardown function (simple) or a lifecycle object with

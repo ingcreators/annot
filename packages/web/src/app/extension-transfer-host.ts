@@ -3,7 +3,7 @@
  * browser-extension IDB into the user's selected storage" flows.
  *
  * Extracted from `app.ts` as part of the Phase 3.5 follow-up to the
- * Phase 3 decomposition (see `docs/plans/app-decomposition.md`).
+ * Phase 3 decomposition (see `docs/plans/_done/app-decomposition.md`).
  * The plan originally bundled the whole app-level reshape under
  * Phase 3, but `setupSplitEditor` + `transferAllFromExtension` were
  * separately cohesive and deferred to their own PR to keep the

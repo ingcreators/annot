@@ -1,14 +1,19 @@
 # Plugin UI Slots
 
-> **Status:** Queued. Authored 2026-04-25 as the third and final
-> named follow-up from
+> **Status:** Done (2026-04-25). Authored 2026-04-25 as the third
+> and final named follow-up from
 > [`app-decomposition.md`](./app-decomposition.md) Phase 5; sign-off
 > received 2026-04-25 on the five design questions (see "Decisions"
 > at the bottom). Siblings are
 > [`plugin-storage-registration.md`](./plugin-storage-registration.md)
-> (landed) and
-> [`plugin-sidebar-tabs.md`](./plugin-sidebar-tabs.md) (Phase 1
-> landed).
+> and
+> [`plugin-sidebar-tabs.md`](./plugin-sidebar-tabs.md) — both also
+> landed. Phases 1, 2, 3 landed in
+> [#80](https://github.com/ingcreators/annot/pull/80),
+> [#81](https://github.com/ingcreators/annot/pull/81), and
+> [#82](https://github.com/ingcreators/annot/pull/82). Phase 4
+> (polish) is marked optional and not required to close the plan.
+> File moved to `_done/` 2026-04-25.
 >
 > **Compatibility:** Touches
 > [`packages/web/src/editor/file-details-drawer.ts`](../../packages/web/src/editor/file-details-drawer.ts)

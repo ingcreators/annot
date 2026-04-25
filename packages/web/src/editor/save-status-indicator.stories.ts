@@ -2,9 +2,9 @@
  * Stories for `<annot-save-status>` — one variant per
  * `SaveStatus` state.
  *
- * Bootstrapped in Phase 1 of `docs/plans/storybook-introduction.md`
+ * Bootstrapped in Phase 1 of `docs/plans/_done/storybook-introduction.md`
  * when the indicator was still imperative; converted to the
- * Lit element in Phase 0 of `docs/plans/lit-migration.md`.
+ * Lit element in Phase 0 of `docs/plans/_done/lit-migration.md`.
  * Stories are the visual contract preserved across the migration.
  */
 

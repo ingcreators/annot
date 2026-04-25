@@ -2,7 +2,7 @@
  * Capture-session helpers for grouping records by `tags.session`.
  *
  * Extracted from `app.ts` as part of the Phase 0 decomposition
- * (see `docs/plans/app-decomposition.md`). Pure logic — the only
+ * (see `docs/plans/_done/app-decomposition.md`). Pure logic — the only
  * external contact is the caller-supplied `StorageProvider`.
  */
 

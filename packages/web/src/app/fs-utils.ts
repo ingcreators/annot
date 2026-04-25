@@ -2,7 +2,7 @@
  * Filesystem and filename helpers shared across the app shell.
  *
  * Extracted from `app.ts` as part of the Phase 0 decomposition
- * (see `docs/plans/app-decomposition.md`). Pure functions only — no
+ * (see `docs/plans/_done/app-decomposition.md`). Pure functions only — no
  * DOM, no app state.
  */
 

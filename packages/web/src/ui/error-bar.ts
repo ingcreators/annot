@@ -65,7 +65,7 @@ export class AnnotErrorBarElement extends LitElement {
 
   // Light DOM so the existing `.error-bar` / `.error-bar-*` rules in
   // `app.css` apply unchanged (hybrid-CSS approach per
-  // `docs/plans/lit-migration.md`).
+  // `docs/plans/_done/lit-migration.md`).
   protected override createRenderRoot(): HTMLElement {
     return this;
   }

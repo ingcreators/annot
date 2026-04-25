@@ -1,7 +1,7 @@
 /**
  * Shared types + pure helpers for the file-details drawer + its
  * section modules. Split out of `file-details-drawer.ts` as part of
- * Phase 2 of `docs/plans/plugin-ui-slots.md` so the section files
+ * Phase 2 of `docs/plans/_done/plugin-ui-slots.md` so the section files
  * (under `drawer-sections/`) can import the data shape without
  * pulling in the drawer host class — avoids the import cycle that
  * would otherwise form (drawer → sections → drawer).

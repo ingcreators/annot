@@ -3,7 +3,7 @@
  * recorded at capture time.
  *
  * Extracted from `app.ts` as part of the Phase 0 decomposition
- * (see `docs/plans/app-decomposition.md`). Touches DOM (createElementNS),
+ * (see `docs/plans/_done/app-decomposition.md`). Touches DOM (createElementNS),
  * but takes its inputs explicitly — no app-state reach-ins.
  */
 

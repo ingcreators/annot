@@ -1,10 +1,15 @@
 # Plugin Sidebar Tabs
 
-> **Status:** Queued. Authored 2026-04-25 as the named follow-up from
+> **Status:** Done (2026-04-25). Authored 2026-04-25 as the named
+> follow-up from
 > [`app-decomposition.md`](./app-decomposition.md) Phase 5; sign-off
 > received 2026-04-25 on the five design questions (see "Decisions"
 > at the bottom). Second of three deferred plugin-API extensions,
 > after [`plugin-storage-registration.md`](./plugin-storage-registration.md).
+> Phase 1 (Tabs API + Recent built-in + section-priority order) landed
+> in [#78](https://github.com/ingcreators/annot/pull/78). Phase 2
+> (visual polish) is marked optional and not required to close the
+> plan. File moved to `_done/` 2026-04-25.
 >
 > **Compatibility:** Touches
 > [`packages/web/src/gallery/sidebar.ts`](../../packages/web/src/gallery/sidebar.ts)

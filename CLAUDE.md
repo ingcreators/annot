@@ -149,7 +149,7 @@ Rules when adding public symbols:
 
 Storybook lives in
 [`packages/web/.storybook/`](./packages/web/.storybook/) per
-[`docs/plans/storybook-introduction.md`](./docs/plans/storybook-introduction.md).
+[`docs/plans/_done/storybook-introduction.md`](./docs/plans/_done/storybook-introduction.md).
 Run locally with `pnpm --filter @ingcreators/annot-web storybook`.
 CI builds the static bundle on every PR (currently
 non-blocking); flipped to blocking in a later phase.
@@ -159,7 +159,7 @@ non-blocking); flipped to blocking in a later phase.
   variants cover every visible state the component can land
   in (idle / loading / empty / populated / error etc.). The
   rule is documented in
-  [`docs/plans/lit-migration.md`](./docs/plans/lit-migration.md)
+  [`docs/plans/_done/lit-migration.md`](./docs/plans/_done/lit-migration.md)
   — every Lit migration PR's test plan expects Storybook
   screenshots demonstrating pre-Lit / post-Lit visual
   equivalence.
@@ -177,7 +177,7 @@ non-blocking); flipped to blocking in a later phase.
 
 Lit is the UI framework for `packages/web`. Introduced in
 Phase 0 of
-[`docs/plans/lit-migration.md`](./docs/plans/lit-migration.md);
+[`docs/plans/_done/lit-migration.md`](./docs/plans/_done/lit-migration.md);
 subsequent phases migrate built-in UI surfaces one at a time.
 
 - **Custom-element prefix: `annot-`.** `<annot-save-status>`,

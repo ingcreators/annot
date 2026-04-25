@@ -2,7 +2,7 @@
  * Helpers for the page-elements section — pure functions of a
  * `PageElement` plus the SVG namespace constant. Extracted from the
  * previous monolithic right-panel as part of Phase 3 of
- * `docs/plans/plugin-ui-slots.md`.
+ * `docs/plans/_done/plugin-ui-slots.md`.
  */
 
 import type { PageElement } from "@ingcreators/annot-core";

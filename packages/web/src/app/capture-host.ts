@@ -3,7 +3,7 @@
  * screenshot capture, interval capture, clipboard paste, file upload.
  *
  * Extracted from `app.ts` as part of the Phase 1 decomposition
- * (see `docs/plans/app-decomposition.md`). After a successful save the
+ * (see `docs/plans/_done/app-decomposition.md`). After a successful save the
  * host invokes the `openEditor` callback rather than reaching into
  * `AnnotApp` state directly — that indirection is what lets Phase 2's
  * `EditorSession` extraction land without touching this file again.

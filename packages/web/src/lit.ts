@@ -7,7 +7,7 @@
  * host + plugin code share the same `LitElement` identity
  * (`instanceof` checks work across the boundary).
  *
- * Introduced in Phase 0 of `docs/plans/lit-migration.md`.
+ * Introduced in Phase 0 of `docs/plans/_done/lit-migration.md`.
  * Subsequent phases migrate built-in UI surfaces to Lit; those
  * internal modules import from here too so the single-version
  * invariant holds end-to-end.

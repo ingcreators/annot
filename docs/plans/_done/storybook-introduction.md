@@ -1,11 +1,16 @@
 # Storybook Introduction
 
-> **Status:** Queued. Authored 2026-04-25 alongside
+> **Status:** Done (2026-04-25). Authored 2026-04-25 alongside
 > [`lit-migration.md`](./lit-migration.md); sign-off received
 > 2026-04-25 on the five design questions (see "Decisions" at
 > the bottom). The two plans are separable but Storybook is the
 > natural showroom + dev harness for the Lit migration that
-> follows it.
+> follows it. Phase 1 (bootstrap + 5 landmark stories) landed in
+> [#84](https://github.com/ingcreators/annot/pull/84). Phase 2
+> ("make CI blocking") is gated on Phase 1 proving stable and
+> stays as a future follow-up; Phases 3 (Chromatic) and 4 (static
+> deployment) are explicitly optional. File moved to `_done/`
+> 2026-04-25.
 >
 > **Compatibility:** Adds `.storybook/` config + dev-dependencies
 > to `packages/web`. Storybook ships only as a developer tool —

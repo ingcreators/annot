@@ -3,7 +3,7 @@
  * and the per-source handoff dispatchers.
  *
  * Extracted from `app.ts` as part of the Phase 3 decomposition
- * (see `docs/plans/app-decomposition.md`). The host parses the
+ * (see `docs/plans/_done/app-decomposition.md`). The host parses the
  * current URL and delegates the concrete transition — transfer from
  * extension, open from gallery, open split editor, show gallery —
  * back to `AnnotApp` through the `RouterHostDeps` callbacks.

@@ -2,9 +2,9 @@
  * Stories for `<annot-sidebar>` — the file-manager's left rail
  * (storage chips + views tabs + folder tree).
  *
- * Bootstrapped in Phase 1 of `docs/plans/storybook-introduction.md`
+ * Bootstrapped in Phase 1 of `docs/plans/_done/storybook-introduction.md`
  * when the sidebar was still imperative; converted to the Lit
- * element in Phase 3 of `docs/plans/lit-migration.md`.
+ * element in Phase 3 of `docs/plans/_done/lit-migration.md`.
  *
  * Covers each built-in storage mode as the "active" selection
  * plus variants that show / hide plugin chips and sidebar tabs.
