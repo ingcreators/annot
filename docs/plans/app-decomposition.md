@@ -1,8 +1,9 @@
 # `app.ts` Decomposition + Plugin API MVP
 
-> **Status:** Queued. Prerequisite for carving `annot-cloud` out of
-> this repo per [`oss-cloud-split.md`](./oss-cloud-split.md). No
-> code has been written yet; this plan is the execution spec.
+> **Status:** In progress. Phases 0–4 landed + a Phase 3.5 follow-up.
+> Phase 5 (the cloud readiness gate) is live-tracked in the checklist
+> below. The plan closes when every gate box is either ticked or
+> carries a dated "deferred" note linking to its own follow-up plan.
 >
 > **Compatibility:** Touches `packages/web/src/app.ts` (2.6k lines,
 > the PWA host's god-class) and promotes a `PluginHost` entry point
@@ -311,25 +312,53 @@ Deliverables:
 
 ### Phase 5 — `annot-cloud` readiness check _(gate)_
 
-Before declaring the decomposition done, sanity-check it against
-the cloud-web requirements:
+Audited 2026-04-25 against the Phase 4 `PluginHost` surface:
 
-- [ ] Is there a hook for injecting a custom `StorageProvider`
-      mode? (Cloud needs this for pointer-commit store.)
-- [ ] Is there a hook for adding tabs to the gallery sidebar?
-      (Cloud needs "Team library".)
-- [ ] Is there a hook for adding items to the file-details
-      drawer? (Cloud needs "Comment thread", "PR context".)
-- [ ] Is there a hook for intercepting save to add server-side
-      state (comments, team metadata)? The `onAfterSave` event
-      covers observation — Cloud may also need
-      `onBeforeSave(cancel?)` if a save needs server validation.
-- [ ] Does the editor-session surface let a plugin inject extra
-      right-panel sections? (Cloud: team presence, per-image
-      comment count.)
+- [ ] **Custom `StorageProvider` mode injection.**
+      Cloud needs this for the pointer-commit store.
+      **Status: deferred.** Would require reshaping
+      [`./storage/bridge.ts`](../../packages/web/src/storage/bridge.ts)
+      (a globals module imported by dozens of callers) to accept
+      plugin-registered modes dynamically. Tracking as its own
+      design: [`plugin-storage-registration.md`](./plugin-storage-registration.md)
+      (to be authored before `annot-cloud` starts its pointer-
+      commit work).
+- [ ] **Gallery-sidebar tab injection.**
+      Cloud needs this for a "Team library" tab.
+      **Status: deferred.** `FileManager` owns the sidebar; it
+      doesn't yet expose a tab-insertion API. Tracking as its
+      own design: [`plugin-sidebar-tabs.md`](./plugin-sidebar-tabs.md)
+      (unblocked by a smaller-scope `FileManager`/`Sidebar` surface
+      review).
+- [ ] **File-details-drawer section injection.**
+      Cloud needs this for comment-thread + PR-context panels.
+      **Status: partial — external-links works, sections don't.**
+      [`FileDetailsDrawer`](../../packages/web/src/editor/file-details-drawer.ts)
+      has no `addSection` API today. Plugins can contribute links
+      via `addExternalLinkSource`, which covers lightweight
+      "go-to" affordances but not arbitrary UI. Drawer section
+      injection tracked alongside the right-panel item below under
+      a single `plugin-ui-slots.md` plan.
+- [x] **`onBeforeSave` with cancellation.**
+      **Done in Phase 5.** Listeners run sequentially; throwing
+      (or returning a rejecting `Promise`) cancels the save. The
+      error propagates into `SavePipeline`'s existing error-
+      banner path, so a rejected save shows "Save failed:
+      &lt;reason&gt;" like a backend failure.
+      `onAfterSave` still covers fire-and-forget observation.
+- [ ] **Right-panel section injection** (team presence,
+      per-image comment count).
+      **Status: deferred.** [`EditorRightPanel`](../../packages/web/src/editor/right-panel.ts)
+      currently owns its section list internally. Tracked under
+      `plugin-ui-slots.md` together with the drawer sections.
 
-Any "no" → add the missing hook as a Phase 5 PR before closing
-this plan.
+Three "deferred" items → plan stays open until the follow-up
+plans exist. Phases 0–4 + Phase 3.5 + the `onBeforeSave` hook
+land this refactor in a shape that `annot-cloud` can start work
+against; the three UI-slot extensions are scoped follow-ups
+rather than blockers, since Cloud's first features (pointer-
+commit `StorageProvider`, `onBeforeSave` server validation) are
+unblocked today.
 
 ## Verification
 
