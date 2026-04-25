@@ -1,10 +1,11 @@
 # Lit Web Component Migration
 
-> **Status:** Draft. Authored 2026-04-25 alongside
+> **Status:** Queued. Authored 2026-04-25 alongside
 > [`storybook-introduction.md`](./storybook-introduction.md);
-> Lit migration assumes Storybook is already in place to act as
-> the component playground + visual regression net for the
-> migration. Awaiting sign-off before implementation.
+> sign-off received 2026-04-25 on the seven design questions
+> (see "Decisions" at the bottom). Lit migration assumes
+> Storybook is already in place to act as the component
+> playground + visual regression net for the migration.
 >
 > **Compatibility:** Adds `lit` to runtime deps in
 > `packages/web` (~5 KB gzipped). Multi-phase migration touching
@@ -96,6 +97,14 @@ boundaries are already drawn.
   (`PRODUCT_DIRECTION.md`'s P2: "core runs without a
   browser"). Lit pulls in DOM APIs that would break the
   DOM-free guarantee. Lit lives only in `packages/web`.
+  As part of Phase 5 (per sign-off decision #5), the
+  `Toolbar` class relocates **out** of core and **into**
+  web since it's the only browser-only-imported surface
+  still living in core. The relocation hardens core's
+  DOM-free boundary — after Phase 5, every core module
+  (including the currently-browser-only ones) can be
+  loaded from the headless entry point without pulling DOM
+  APIs transitively.
 - **Adopting a state-management library.** Lit's built-in
   reactive properties + lit-context (if needed) are enough
   for our component graph. No Redux / Zustand / signals
@@ -133,7 +142,7 @@ boundaries are already drawn.
 | `Sidebar` (chrome + tab rows) | 3 | Per-mode chip variants. |
 | `gallery/file-manager` shell + breadcrumbs | 3 | Grid stays vanilla — high-perf list rendering. |
 | Editor `HeaderHost` + `StatusHost` | 4 | Includes inline rename + zoom controls. |
-| `Toolbar` + variant flyouts | 5 | Heaviest. Last. |
+| `Toolbar` + variant flyouts | 5 | Heaviest. **Also relocates from core to web** per sign-off decision #5. Split into 5a (relocate) / 5b (Lit shell) / 5c (Lit flyouts). |
 | Dialog UIs (`alert`, `prompt`, interval-capture) | 6 | Polish phase. |
 | `TagEditor` | (deferred) | Self-contained; not user-facing as a section. Migrate only if it gets in the way. |
 | `PropertyPanel` (in core) | (deferred) | Out of scope per Non-goals. |
@@ -169,19 +178,26 @@ export class SaveStatusElement extends LitElement {
 - One Lit class per file. Default-exported alongside the
   decorated `@customElement` definition.
 - Public API is the **`@property`** surface. Existing class
-  facades (e.g. `SaveStatusIndicator.setStatus(s)`) become
-  thin wrappers that set the property:
+  facades (e.g. `SaveStatusIndicator.setStatus(s)`) are
+  **retired in the same PR** that introduces their Lit
+  replacement. Per sign-off decision #3 (break per phase),
+  each migration phase touches every call site of the
+  affected components so the end state has exactly one way
+  to construct each UI element. The `annot-foo` element is
+  the only API consumers see:
   ```ts
-  // Backward-compat facade
-  export class SaveStatusIndicator {
-    #el = document.createElement("annot-save-status") as SaveStatusElement;
-    setStatus(s: typeof STATUS) { this.#el.status = s; }
-  }
+  // After Phase 0's PR: old class is gone, callers use the
+  // element directly.
+  const el = document.createElement("annot-save-status") as SaveStatusElement;
+  parent.appendChild(el);
+  el.status = "saving";
   ```
-  This keeps existing call sites unchanged through the
-  migration. Once every caller is comfortable using the
-  element directly, the facade can be inlined or deleted in
-  a follow-up.
+  Scope trade-off: each phase PR is bigger (touches every
+  caller of the migrated component), but the end state
+  avoids the "ambient facade class that's nominally public
+  but nobody should use" confusion that kept-facades would
+  create. The 233-test suite + per-phase Storybook stories
+  catch regressions.
 - Styling: prefer scoped `static styles` for new component
   CSS; keep referencing global tokens via CSS custom
   properties (`var(--bg-panel)` etc.) so theme switches
@@ -222,36 +238,115 @@ don't accidentally enable the experimental flag.
   property assignment + Lit-context are alternatives;
   evaluate per phase.
 
-### The "facade" backward-compat pattern
+### Break-per-phase migration shape
 
-Each migration PR keeps the existing class API as a thin
-wrapper around the Lit element. Example —
-`SaveStatusIndicator`:
+Per sign-off decision #3, each migration PR:
+
+1. Ships the new Lit element with its `annot-` custom name.
+2. **Deletes the old imperative class / factory** in the
+   same PR.
+3. Updates every call site to construct + use the Lit
+   element directly.
+4. Includes tests against the Lit element's `@property`
+   surface and Storybook stories per the
+   `storybook-introduction.md` convention.
+
+Example — `SaveStatusIndicator` (Phase 0):
 
 ```ts
-// Before: existing imperative class.
-export class SaveStatusIndicator {
-  #el: HTMLElement;
-  constructor(parent: HTMLElement) {
-    this.#el = document.createElement("span");
-    /* ... */
-    parent.appendChild(this.#el);
-  }
-  setStatus(s: Status) { /* mutate this.#el directly */ }
-}
+// Before (imperative class):
+//   const ind = new SaveStatusIndicator(header);
+//   ind.setStatus("saving");
+//
+// After (Phase 0 PR):
+//   const el = document.createElement("annot-save-status") as SaveStatusElement;
+//   header.appendChild(el);
+//   el.status = "saving";
+```
 
-// After: same public API, internals are a Lit element.
-import "./save-status-element.js"; // registers <annot-save-status>
-export class SaveStatusIndicator {
-  #el = document.createElement("annot-save-status") as SaveStatusElement;
-  constructor(parent: HTMLElement) { parent.appendChild(this.#el); }
-  setStatus(s: Status) { this.#el.status = s; }
+The `SaveStatusIndicator` class, its `.ts` file, and every
+import statement pointing at it either move or disappear in
+the same PR. Phase 0 updates `HeaderHost` + the
+`SavePipeline` status-indicator getter dep. After the PR
+lands, grepping the repo for `SaveStatusIndicator` returns
+zero matches.
+
+Trade-off acknowledged: the "one PR per phase" promise
+means every phase carries both the shape change and the
+call-site churn. Sign-off chose this over the alternative
+(keep facades, retire in a follow-up) on the grounds that
+the end state avoids nominally-public facades nobody
+should use, and the `233`-test suite + Storybook stories
+catch regressions.
+
+Phase 5 (toolbar) will split further because of its size —
+see the phased plan below.
+
+### `@ingcreators/annot-web/lit` re-export
+
+Per sign-off decision #6, `packages/web` ships a tiny
+re-export module so plugin authors can author Lit
+components without taking a direct `lit` dependency.
+
+```ts
+// packages/web/src/lit.ts (new in Phase 0)
+export {
+  LitElement,
+  css,
+  html,
+  nothing,
+  render,
+  svg,
+  type CSSResultGroup,
+  type PropertyValues,
+  type TemplateResult,
+} from "lit";
+export {
+  customElement,
+  property,
+  query,
+  queryAll,
+  state,
+} from "lit/decorators.js";
+```
+
+`packages/web/package.json` adds the subpath export:
+
+```json
+"exports": {
+  ".": "./dist/index.js",
+  "./lit": "./dist/lit.js"
 }
 ```
 
-Call sites in `HeaderHost` / `SavePipeline` etc. don't
-change. The facade can be retired in a separate "use the
-element directly" PR once the migration is widely landed.
+Plugin authors write:
+
+```ts
+import { LitElement, html, customElement, property } from "@ingcreators/annot-web/lit";
+
+@customElement("cloud-comment-thread")
+export class CommentThreadElement extends LitElement {
+  @property({ type: String }) path = "";
+  render() { return html`...`; }
+}
+```
+
+Benefits:
+
+- Plugin authors don't add `lit` to their own `package.json`
+  — one fewer dep to manage.
+- Annot controls the Lit version centrally. If a future
+  Lit 4 lands, we bump once in `packages/web` and every
+  plugin gets it on their next annot-web update.
+- Plugin + annot-web code use the **same** Lit
+  identity — `instanceof LitElement` checks work across
+  the boundary.
+
+The re-export is part of Phase 0 so it's available to
+subsequent phases (built-in UI sections migrating to Lit
+will also import from `@ingcreators/annot-web/lit`, not
+from `lit` directly, for the same version-consistency
+reason).
 
 ### Bundle impact
 
@@ -359,27 +454,43 @@ Expected delta: ~500-700 lines net.
 
 Expected delta: ~400-600 lines net.
 
-### Phase 5 — toolbar + variant flyouts (heavy)
+### Phase 5 — toolbar relocation + Lit migration (heaviest)
 
-The toolbar in `@ingcreators/annot-core` is the biggest
-single UI module (~2k lines) and the trickiest to convert
-because of its dropdown / flyout / preset state machine.
-Two PRs split:
+The toolbar is `@ingcreators/annot-core`'s single largest
+UI module (~2k lines) and the trickiest to convert because
+of its dropdown / flyout / preset state machine. Per
+sign-off decision #5, it also **relocates from core to
+web** so core's DOM-free guarantee no longer relies on
+import-path discipline. Three PRs split to keep each
+reviewable:
 
-- **Phase 5a** — primary toolbar shell + tool buttons.
-- **Phase 5b** — variant flyouts + property dropdowns.
+- **Phase 5a — relocate toolbar.ts from core to web.**
+  Move `packages/core/src/editor/toolbar.ts` (+ any
+  toolbar-only helpers) to `packages/web/src/editor/toolbar.ts`.
+  Update every import — `import { Toolbar } from "@ingcreators/annot-core"`
+  becomes `import { Toolbar } from "./editor/toolbar.js"` or
+  cross-package wherever applicable. `packages/core`'s
+  public surface shrinks; `Toolbar` type re-exports from
+  core are deleted. After this PR, core is purely DOM-free
+  and can be loaded from the headless entry point without
+  a build-time exclusion. No Lit changes yet — just code
+  movement + imports. Expected delta: ~500-700 lines net
+  across many files.
+- **Phase 5b — Lit toolbar shell + tool buttons.** The
+  primary toolbar element + its tool-button children
+  become Lit elements. Variant flyouts still use their
+  existing imperative code. Expected delta: ~800 lines
+  net.
+- **Phase 5c — Lit variant flyouts + property dropdowns.**
+  The remaining dropdown / flyout machinery converts.
+  Completes the toolbar migration. Expected delta:
+  ~700-1000 lines net.
 
-Toolbar lives in **core**, not web. Per the non-goals,
-`@ingcreators/annot-core` stays DOM-free for the headless
-path; the toolbar doesn't compromise that since it's
-already imported only by browser-targeted packages, not by
-the headless subset entry point. We can migrate it to Lit
-without violating the boundary, but the import-path
-discipline (toolbar must NOT be re-exported from
-`@ingcreators/annot-core/headless`) needs to be re-verified
-during the migration.
-
-Expected delta: ~1500-2000 lines net across both PRs.
+Each sub-phase is its own PR and independently revertable.
+Phase 5a is especially worth landing separately — the
+relocation is mechanical but wide, and merging it alone
+lets CI confirm no regression before touching the bigger
+Lit work in 5b / 5c.
 
 ### Phase 6 — dialog UIs
 
@@ -401,11 +512,21 @@ At every phase boundary:
 - `pnpm --filter @ingcreators/annot-web build` succeeds.
 - `pnpm --filter @ingcreators/annot-web build-storybook`
   succeeds.
+- **Storybook visual check — required per sign-off
+  decision #7.** Each phase PR's description includes
+  **screenshot(s)** of the Storybook stories for every
+  migrated component, taken from `pnpm storybook` locally.
+  Screenshots demonstrate the pre-Lit / post-Lit visual
+  equivalence for every state variant the component
+  supports. Before / after images either side-by-side in
+  the PR description, or two separate collapsed `<details>`
+  sections if volume warrants. This is a reviewer aid, not
+  a CI gate — the expectation is a human looking at the
+  diffs.
 - Manual smoke (per phase PR's test plan section):
   open the relevant UI surface and exercise the variants
   the migration touched. The UI should look + behave
-  identical to pre-Lit; stories give the reviewer
-  side-by-side checks against the documented states.
+  identical to pre-Lit.
 - Bundle delta: ±5 KB per phase is acceptable; larger
   swings warrant inspection.
 
@@ -421,63 +542,55 @@ At every phase boundary:
   facades by migrating call sites to use the Lit elements
   directly. Not in scope of this plan.
 
-## Open questions (sign-off requested)
+## Decisions (sign-off 2026-04-25)
 
-1. **Decorator flavor** — TS standard / TC39 stage-3
-   decorators (no `experimentalDecorators`) vs legacy
-   experimental decorators. Lean: standard. Lit 3 supports
-   both; standard is the future and TS 6 is well past the
+1. **TS standard / TC39 stage-3 decorators.** No
+   `experimentalDecorators` flag in tsconfig. Lit 3
+   supports both; standard is the spec-stable future and
+   the project's TS 6 is well past the adoption
    threshold.
-   ✅ standard / experimental
-
-2. **Custom-element prefix** — `annot-` is the proposal.
-   Alternative: domain-scoped (`ingcreators-`). Lean:
-   `annot-` keeps it short; `ingcreators-` only matters if
-   another company product loaded into the same page might
-   ship its own `annot-foo` elements (no concrete risk
-   today).
-   ✅ annot- / ingcreators-
-
-3. **Backward-compat facades** — keep every existing class
-   facade pointing at its Lit element for the duration of
-   the migration, retire them in a separate cleanup PR.
-   Alternative: break the existing class APIs in each phase
-   and update all call sites. Lean: keep facades — easier
-   per-PR review, smaller blast radius.
-   ✅ keep-facades / break-per-phase
-
-4. **CSS strategy** — keep referencing existing global
-   `editor.css` / `toolbar.css` from each Lit element via
-   `static styles = unsafeCSS(...)` imports OR migrate the
-   stylesheet rules into per-element `static styles`
-   blocks. Lean: hybrid — keep global tokens
-   (`var(--bg-panel)`, etc.); migrate per-component class
-   selectors to scoped `static styles` opportunistically as
-   each component lands.
-   ✅ hybrid / one-strategy
-
-5. **Phase 5 (toolbar)** — toolbar lives in core. Stays in
-   core (with `annot-` element registration in core)
-   vs moves to web (since Lit is web-only). Lean:
-   stays in core — toolbar is already browser-only-imported,
-   and moving it would touch every import statement.
-   ✅ stays-in-core / moves-to-web
-
-6. **Plugin authors using Lit** — should we ship a small
-   `@ingcreators/annot-web/lit-helpers` re-export so plugin
-   authors can `import { LitElement } from "@ingcreators/annot-web/lit"`
-   without depending on `lit` separately? Alternative: just
-   document that plugin authors install lit themselves.
-   Lean: document-only — adding a re-export is trivial later
-   if demand surfaces.
-   ✅ document-only / re-export
-
-7. **Per-phase Storybook visual check** — make Phase 1's
-   PR test plan require "screenshot Storybook story X.Y in
-   the PR description"? Or just rely on the existing PR
-   review process? Lean: optional visual checklist in the
-   PR template (manual, not enforced).
-   ✅ optional-checklist / required
+2. **`annot-` custom-element prefix.** Short, reads
+   cleanly (`<annot-save-status>`,
+   `<annot-file-details-drawer>`). No cross-company
+   collision risk today.
+3. **Break per phase.** Each migration PR deletes the old
+   imperative class / factory and updates every call site
+   to use the Lit element directly. No ambient
+   backward-compat facades lingering through the
+   migration. Trade-off: bigger per-PR diffs; benefit:
+   the end state has one way to construct each UI
+   element, no deprecated-but-public class to grep for.
+4. **Hybrid CSS.** Global tokens (`var(--bg-panel)`,
+   `var(--accent)`, etc.) stay referenced from Lit
+   elements' `static styles` via CSS custom properties.
+   Per-component class selectors migrate into scoped
+   `static styles` blocks as each component lands —
+   opportunistic, not a wholesale stylesheet rewrite.
+5. **Phase 5 relocates toolbar from core to web.** On top
+   of Lit-ifying the toolbar, the `toolbar.ts` module
+   moves from `packages/core/src/editor/` to
+   `packages/web/src/editor/`. Import paths across the
+   codebase update. Phase 5 splits into 5a (relocate —
+   no Lit), 5b (Lit shell), 5c (Lit flyouts) so each sub-
+   phase is independently revertable. Result: core
+   becomes purely DOM-free, the headless entry point no
+   longer needs import-path discipline to stay clean.
+6. **Ship `@ingcreators/annot-web/lit` re-export.** Adds
+   a subpath export to `packages/web/package.json` that
+   re-exports `LitElement` / `html` / `css` / decorators
+   from `lit`. Plugin authors import from
+   `@ingcreators/annot-web/lit` without taking a direct
+   `lit` dependency. Lands in Phase 0 so subsequent
+   phases can use it for their own Lit imports too
+   (single-Lit-version invariant across host + plugin
+   code).
+7. **Storybook visual check required per phase PR.**
+   Every phase PR description includes screenshots of the
+   Storybook stories for every migrated component,
+   demonstrating pre-Lit / post-Lit visual equivalence for
+   each state variant. Reviewer aid, not a CI gate.
+   Baked into each PR's test plan template so the
+   expectation is explicit.
 
 ## References
 

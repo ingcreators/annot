@@ -1,10 +1,11 @@
 # Storybook Introduction
 
-> **Status:** Draft. Authored 2026-04-25 alongside
-> [`lit-migration.md`](./lit-migration.md) — the two plans are
-> separable but Storybook is the natural showroom + dev harness
-> for the Lit migration that follows it. Awaiting sign-off
-> before implementation.
+> **Status:** Queued. Authored 2026-04-25 alongside
+> [`lit-migration.md`](./lit-migration.md); sign-off received
+> 2026-04-25 on the five design questions (see "Decisions" at
+> the bottom). The two plans are separable but Storybook is the
+> natural showroom + dev harness for the Lit migration that
+> follows it.
 >
 > **Compatibility:** Adds `.storybook/` config + dev-dependencies
 > to `packages/web`. Storybook ships only as a developer tool —
@@ -95,9 +96,14 @@ No big-bang rewrite required.
 
 ### Tooling choice
 
-- **Framework:** `@storybook/web-components-vite` — works for
-  both vanilla DOM components (today) and Lit components
-  (after the migration). Doesn't lock us into a UI framework.
+- **Framework:** `@storybook/web-components-vite` — the
+  canonical Lit-first Storybook 8 preset. Lit components
+  **are** web components, so this framework renders them
+  natively (no separate `@storybook/lit` package in
+  Storybook 8+ — Lit support ships via the
+  web-components framework). Works for today's vanilla DOM
+  components too, so the 5 initial stories below can
+  bootstrap before the Lit migration starts.
 - **Vite-based:** matches the existing `packages/web` build
   toolchain, which already runs Vite 8. No new bundler in the
   stack.
@@ -275,39 +281,34 @@ the bootstrap.
   plugin authors building UI sections, but that's a separate
   conversation.
 
-## Open questions (sign-off requested)
+## Decisions (sign-off 2026-04-25)
 
-1. **Story location** — co-located (`foo.stories.ts` next to
-   `foo.ts`) vs centralized (`stories/` directory). Lean:
-   co-located, matching the existing test convention.
-   ✅ co-located / centralized
-
-2. **Storybook target** — `@storybook/web-components-vite`
-   (works for both vanilla DOM + Lit). Alternative: separate
-   targets (`html-vite` for vanilla, `web-components-vite`
-   later for Lit). Lean: single target now, since the Lit
-   migration is the next initiative.
-   ✅ web-components-vite / separate-targets
-
-3. **CI blocking timing** — non-blocking for the first few
-   weeks (Phase 1 default), then flipped to blocking
-   (Phase 2). Alternative: blocking from day 1. Lean: ramp
-   up — gives the team time to fix flakiness without
-   stalling unrelated PRs.
-   ✅ ramp-up / blocking-day-1
-
-4. **Initial story coverage** — the five listed above. Want
-   to add or swap any? (PropertyPanel is missing, deliberately
-   — it's complex and slated for Lit migration; storying it
-   pre-Lit would be redundant work.)
-   ✅ as-listed / propose-changes
-
-5. **CLAUDE.md rule scope** — applies to "new Lit components"
-   only (no retroactive backfill). Alternative: every new
-   component, vanilla or Lit. Lean: Lit-only — vanilla
-   components rarely need stories beyond what the PWA already
-   exercises end-to-end.
-   ✅ lit-only / all-new-components
+1. **Co-located stories** — `foo.stories.ts` next to
+   `foo.ts`, matching the existing test convention. Stories
+   move with their component during refactors; no central
+   `stories/` directory.
+2. **Lit-first Storybook target** —
+   `@storybook/web-components-vite`. This is the canonical
+   Storybook 8 preset for Lit; Lit components render
+   natively because they're web components. The framework
+   also handles today's vanilla DOM components, so the 5
+   initial stories can ship before Lit arrives without
+   dual setup.
+3. **CI ramp-up** — the `pnpm build-storybook` step lands
+   with `continue-on-error: true` so a flaky story doesn't
+   block unrelated PRs while the team gets comfortable with
+   the workflow. Flipped to blocking in a follow-up PR
+   (Phase 2) once the set has stabilized.
+4. **Initial story coverage** — the five proposed landmarks:
+   `SaveStatusIndicator`, `ErrorBar`, `drawer.file`,
+   `FileDetailsDrawer`, `Sidebar`. Each covers every
+   visible state the component can land in. PropertyPanel
+   deliberately skipped — it's complex and scheduled for
+   Lit migration; storying it pre-Lit would be redundant.
+5. **CLAUDE.md rule: new Lit components only.** Vanilla
+   components rarely need stories beyond what the PWA
+   already exercises end-to-end. The rule scales with the
+   Lit migration rather than forcing retroactive backfill.
 
 ## References
 
