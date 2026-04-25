@@ -47,7 +47,9 @@ export {
 export { History } from "./history.js";
 export { PropertyPanel } from "./property-panel.js";
 export { SelectionManager } from "./selection.js";
-export { createThemeToggle } from "./theme-toggle.js";
+// `createThemeToggle` moved to `@ingcreators/annot-editor` in
+// Phase 1 of `docs/plans/three-package-split.md`. Consumers
+// should `import { createThemeToggle } from "@ingcreators/annot-editor"`.
 // --- Shared UI helpers used by PropertyPanel + the relocated Toolbar ---
 // Phase 5a moved the Toolbar class to `@ingcreators/annot-web`; the
 // icon catalogues + popover helper stayed here because PropertyPanel

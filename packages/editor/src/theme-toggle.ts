@@ -10,7 +10,7 @@
  * Call sites pass their own className so the button can match the surrounding
  * toolbar (editor: "toolbar-btn", gallery: "header-info-btn").
  */
-import { setTooltip } from "./tooltip.js";
+import { setTooltip } from "@ingcreators/annot-core/editor/tooltip";
 
 export function createThemeToggle(
   className = "toolbar-btn material-symbols-outlined",

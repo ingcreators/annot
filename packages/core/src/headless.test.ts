@@ -47,3 +47,59 @@ describe("@ingcreators/annot-core/headless boundary", () => {
     expect(g.window).toBeUndefined();
   });
 });
+
+describe("@ingcreators/annot-core ↔ @ingcreators/annot-editor cycle prevention", () => {
+  // Phase 1 of `docs/plans/three-package-split.md`. While the editor /
+  // render package extraction is in progress, the temptation will be
+  // strong to add a "convenience re-export" or "just-in-time import"
+  // that points from `annot-core` back into `annot-editor` or
+  // `annot-render`. Doing so is a circular package dependency and
+  // would break bundling immediately.
+  //
+  // This test walks the Node module cache after importing the entire
+  // `annot-core` surface (root + every documented subpath) and asserts
+  // that no entry in the cache resolves under either editor or render
+  // package paths. If any does, a `core/*` module imported it
+  // transitively — exactly the regression we want to catch.
+  //
+  // Implementation note: we use the `node:module` `createRequire`
+  // because `import.meta.url`-relative paths can't introspect the
+  // ESM loader cache directly. The CJS-side `require.cache` reflects
+  // the same dependency graph because vitest's test loader bridges
+  // both module systems.
+
+  it("no @ingcreators/annot-core module transitively imports annot-editor or annot-render", async () => {
+    // Re-import each documented subpath so any module they pull in
+    // shows up in the loader cache. Importing for side-effects is
+    // sufficient — we only need them in the cache.
+    await import("@ingcreators/annot-core");
+    await import("@ingcreators/annot-core/headless");
+    await import("@ingcreators/annot-core/storage");
+    await import("@ingcreators/annot-core/utils");
+
+    // Vitest's loader exposes the resolved module list via the
+    // CJS-side `require.cache`. We avoid pulling `@types/node` into
+    // the core tsconfig (which is configured with `"types": []` to
+    // keep its surface deliberately small) by accessing the Node
+    // APIs through a stringified dynamic import — TypeScript can't
+    // statically resolve the module name, so it doesn't demand the
+    // type package.
+    const nodeModuleSpecifier = "node:module";
+    const nodeModule = (await import(nodeModuleSpecifier)) as unknown as {
+      default: { createRequire: (url: string) => { cache: Record<string, unknown> } };
+    };
+    const req = nodeModule.default.createRequire(import.meta.url);
+    const cachedKeys = Object.keys(req.cache);
+    const forbidden = cachedKeys.filter(
+      (k) =>
+        k.includes("/packages/editor/") ||
+        k.includes("\\packages\\editor\\") ||
+        k.includes("/packages/render/") ||
+        k.includes("\\packages\\render\\"),
+    );
+    expect(
+      forbidden,
+      `@ingcreators/annot-core must not transitively import annot-editor / annot-render. Offending paths: ${forbidden.join(", ")}`,
+    ).toEqual([]);
+  });
+});

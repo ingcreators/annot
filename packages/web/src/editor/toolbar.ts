@@ -41,7 +41,6 @@ import "./annot-toolbar.js";
 import {
   type CanvasManager,
   copyAsImage,
-  createThemeToggle,
   getPngDataUrl,
   HIGHLIGHT_COLORS,
   type History,
@@ -52,6 +51,7 @@ import {
   type ToolBase,
   type ToolOptions,
 } from "@ingcreators/annot-core/editor";
+import { createThemeToggle } from "@ingcreators/annot-editor";
 import {
   DEFAULT_FILL_COLOR,
   DEFAULT_FONT_SIZE,

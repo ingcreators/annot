@@ -1,18 +1,24 @@
 // @ingcreators/annot-editor — live-browser editor primitives.
 //
-// Phase 0 placeholder per `docs/plans/three-package-split.md`.
-// The actual editor surface (CanvasManager, SelectionManager,
-// PropertyPanel, the tool hierarchy, DOM widgets) lands here in
-// Phases 1–8. Until then this entry has nothing to export and
-// importing it from web / extension / desktop should be avoided —
-// the existing `@ingcreators/annot-core/editor/*` deep imports
-// remain the source of truth during the migration.
+// Phases 1–8 of `docs/plans/three-package-split.md` migrate the
+// editor UI surface here from `@ingcreators/annot-core/editor/*`.
+// During the migration the entry grows phase by phase; consumers
+// that want a specific symbol can import from the deep subpath
+// (e.g. `@ingcreators/annot-editor/canvas-context-menu`) when
+// the root re-export hasn't been added yet.
 //
-// Lives in the workspace from Phase 0 so:
-//   - `pnpm install` resolves the package + runs through CI
-//   - `pnpm --filter @ingcreators/annot-editor build` + typecheck
-//     are wired and green before any code moves
-//   - downstream package.json edits adding the dependency can
-//     land alongside the moves they enable
+// **Architectural invariants:**
+//
+//   1. This package depends on `@ingcreators/annot-core` only.
+//      It MUST NOT import from `@ingcreators/annot-web` (the
+//      PWA shell) or pull in any host-specific feature flags.
+//
+//   2. Conversely, `@ingcreators/annot-core` MUST NOT import
+//      from this package. The dependency direction is one-way:
+//      `annot-editor → annot-core`. The cycle-prevention check
+//      in `packages/core/src/headless.test.ts` enforces this at
+//      CI time.
 
-export {};
+export { openCanvasContextMenu } from "./canvas-context-menu.js";
+export type { CanvasMenuItem } from "./canvas-context-menu.js";
+export { createThemeToggle } from "./theme-toggle.js";

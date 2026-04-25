@@ -23,6 +23,7 @@
   },
   "dependencies": {
     "@ingcreators/annot-core": "workspace:*",
+    "@ingcreators/annot-editor": "workspace:*",
     "lit": "^3.3.2"
   },
   "devDependencies": {
