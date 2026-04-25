@@ -131,7 +131,11 @@ export async function signInWithPat(pat: string): Promise<string> {
 
 /** Fetch the authenticated user. Throws on 401 / network error. */
 export async function fetchUserInfo(): Promise<GitHubUserInfo> {
-  const body = await authedGet("/user");
+  const body = (await authedGet("/user")) as {
+    login: string;
+    name?: string | null;
+    avatar_url?: string | null;
+  };
   return {
     login: body.login,
     name: body.name ?? null,
@@ -159,7 +163,7 @@ export async function listWritableRepos(
     "/user/repos?per_page=100&sort=pushed&affiliation=owner,collaborator,organization_member";
   while (url && out.length < max) {
     const { body, nextUrl } = await authedGetWithLink(url);
-    for (const entry of body as any[]) {
+    for (const entry of body as unknown as GitHubRepoPayload[]) {
       if (!entry.permissions?.push) continue;
       out.push(toRepoSummary(entry));
       if (out.length >= max) break;
@@ -176,13 +180,17 @@ export async function listWritableRepos(
  */
 export async function searchRepos(q: string): Promise<GitHubRepoSummary[]> {
   const query = encodeURIComponent(q);
-  const body = await authedGet(`/search/repositories?q=${query}&per_page=30`);
-  return (body.items ?? []).map(toRepoSummary).filter((r: GitHubRepoSummary) => r.canPush);
+  const body = (await authedGet(`/search/repositories?q=${query}&per_page=30`)) as {
+    items?: GitHubRepoPayload[];
+  };
+  return (body.items ?? []).map(toRepoSummary).filter((r) => r.canPush);
 }
 
 /** Look up a single repo by "owner/name". Used for direct-entry. */
 export async function getRepo(owner: string, name: string): Promise<GitHubRepoSummary> {
-  const body = await authedGet(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`);
+  const body = (await authedGet(
+    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`,
+  )) as GitHubRepoPayload;
   return toRepoSummary(body);
 }
 
@@ -319,7 +327,7 @@ export async function listBranches(
   const body = await authedGet(
     `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/branches?per_page=100`,
   );
-  return (body as any[]).map((b) => ({
+  return (body as unknown as GitHubBranchPayload[]).map((b) => ({
     name: b.name,
     isDefault: b.name === defaultBranch,
     protected: !!b.protected,
@@ -369,7 +377,33 @@ export function normalizeBasePath(input: string): string {
 
 // ---- Internal: authenticated fetch ----
 
-async function authedGet(path: string): Promise<any> {
+/**
+ * Minimal shape of the GitHub REST repo payload, scoped to the
+ * fields `toRepoSummary` actually reads. Stays narrow on purpose
+ * — `@octokit/types` is the official source of truth but is
+ * 100s of KB of typings; we read 7 fields, this is fine.
+ */
+interface GitHubRepoPayload {
+  full_name: string;
+  name: string;
+  owner?: { login?: string };
+  default_branch?: string;
+  private?: boolean;
+  description?: string | null;
+  permissions?: { push?: boolean };
+  pushed_at?: string | null;
+}
+
+interface GitHubBranchPayload {
+  name: string;
+  protected?: boolean;
+}
+
+/** GitHub REST responses are heterogeneous JSON; helpers return
+ *  `unknown` and each caller casts to its endpoint-specific shape.
+ *  More verbose than `any` but every cast becomes a documented
+ *  assertion of "I expect this endpoint to return X." */
+async function authedGet(path: string): Promise<unknown> {
   const token = getAccessToken();
   if (!token) throw new Error("Not signed in to GitHub.");
   const res = await fetch(`${GITHUB_API}${path}`, {
@@ -391,7 +425,9 @@ async function authedGet(path: string): Promise<any> {
   return res.json();
 }
 
-async function authedGetWithLink(path: string): Promise<{ body: any; nextUrl: string | null }> {
+async function authedGetWithLink(
+  path: string,
+): Promise<{ body: unknown; nextUrl: string | null }> {
   const token = getAccessToken();
   if (!token) throw new Error("Not signed in to GitHub.");
   const url = path.startsWith("http") ? path : `${GITHUB_API}${path}`;
@@ -432,10 +468,10 @@ function toRelativeUrl(fullUrl: string): string {
   return fullUrl;
 }
 
-function toRepoSummary(entry: any): GitHubRepoSummary {
+function toRepoSummary(entry: GitHubRepoPayload): GitHubRepoSummary {
   return {
     fullName: entry.full_name,
-    owner: entry.owner?.login ?? entry.full_name.split("/")[0],
+    owner: entry.owner?.login ?? entry.full_name.split("/")[0]!,
     name: entry.name,
     defaultBranch: entry.default_branch ?? "main",
     private: !!entry.private,

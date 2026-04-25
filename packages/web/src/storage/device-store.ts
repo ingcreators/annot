@@ -1,3 +1,5 @@
+/// <reference path="../types/fs-access-extras.d.ts" />
+
 import { renderImageRecord } from "@ingcreators/annot-core/editor/export";
 import { logger } from "../logger.js";
 /**
@@ -90,9 +92,7 @@ export class DeviceStore implements StorageProvider {
    */
   async #purgeEmptyFiles(dir: FileSystemDirectoryHandle, parentPath: string): Promise<void> {
     const toDelete: string[] = [];
-    for await (const [name, handle] of (dir as any).entries() as AsyncIterable<
-      [string, FileSystemHandle]
-    >) {
+    for await (const [name, handle] of dir.entries()) {
       if (handle.kind === "file") {
         try {
           const file = await (handle as FileSystemFileHandle).getFile();
@@ -256,7 +256,7 @@ export class DeviceStore implements StorageProvider {
     known: Set<string>,
     onAdd: () => void,
   ): Promise<void> {
-    for await (const [name, handle] of (dir as any).entries()) {
+    for await (const [name, handle] of dir.entries()) {
       if (handle.kind === "file" && this.#isImageFile(name)) {
         const path = joinPath(folderPath, name);
         if (!known.has(path)) {
@@ -583,11 +583,13 @@ export class DeviceStore implements StorageProvider {
     try {
       await parentDir.getDirectoryHandle(name);
       throw new Error(`Folder already exists: ${joinPath(parentPath, name)}`);
-    } catch (e: any) {
-      if (e.name !== "NotFoundError" && !String(e.message).startsWith("Folder already")) {
+    } catch (e: unknown) {
+      const name = (e as { name?: string }).name;
+      const message = String((e as { message?: unknown }).message ?? "");
+      if (name !== "NotFoundError" && !message.startsWith("Folder already")) {
         throw e;
       }
-      if (String(e.message).startsWith("Folder already")) throw e;
+      if (message.startsWith("Folder already")) throw e;
     }
     await parentDir.getDirectoryHandle(name, { create: true });
     return joinPath(parentPath, name);
@@ -596,7 +598,7 @@ export class DeviceStore implements StorageProvider {
   async listFolders(parentPath: string): Promise<FolderRecord[]> {
     const dir = await this.#getDirHandle(parentPath);
     const results: FolderRecord[] = [];
-    for await (const [name, handle] of (dir as any).entries()) {
+    for await (const [name, handle] of dir.entries()) {
       if (handle.kind === "directory" && !name.startsWith(".")) {
         results.push({
           path: joinPath(parentPath, name),
@@ -671,7 +673,7 @@ export class DeviceStore implements StorageProvider {
     src: FileSystemDirectoryHandle,
     dst: FileSystemDirectoryHandle,
   ): Promise<void> {
-    for await (const [name, handle] of (src as any).entries()) {
+    for await (const [name, handle] of src.entries()) {
       if (handle.kind === "file") {
         const file = await (handle as FileSystemFileHandle).getFile();
         const newHandle = await dst.getFileHandle(name, { create: true });

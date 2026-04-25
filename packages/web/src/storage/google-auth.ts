@@ -1,3 +1,5 @@
+/// <reference path="../types/google-globals.d.ts" />
+
 /**
  * Google OAuth 2.0 + Google Picker integration.
  * Uses Google Identity Services (GIS) for auth and Picker API for folder selection.
@@ -67,18 +69,26 @@ export async function signIn(opts: { forceAccountPicker?: boolean } = {}): Promi
   await loadGisScript();
 
   return new Promise((resolve, reject) => {
-    const client = (window as any).google.accounts.oauth2.initTokenClient({
+    if (!window.google) {
+      reject(new Error("Google Identity Services failed to initialise"));
+      return;
+    }
+    const client = window.google.accounts.oauth2.initTokenClient({
       client_id: GOOGLE_CLIENT_ID,
       scope: SCOPES,
       prompt: opts.forceAccountPicker ? "select_account" : "",
-      callback: (response: any) => {
+      callback: (response) => {
         if (response.error) {
           reject(new Error(response.error));
           return;
         }
+        if (!response.access_token) {
+          reject(new Error("Google sign-in returned no access token"));
+          return;
+        }
         accessToken = response.access_token;
-        localStorage.setItem("google-drive-token", accessToken!);
-        resolve(accessToken!);
+        localStorage.setItem("google-drive-token", accessToken);
+        resolve(accessToken);
       },
     });
     client.requestAccessToken();
@@ -101,8 +111,8 @@ export function isSignedIn(): boolean {
 export function signOut(): void {
   accessToken = null;
   localStorage.removeItem("google-drive-token");
-  if ((window as any).google?.accounts?.oauth2) {
-    (window as any).google.accounts.oauth2.revoke(accessToken);
+  if (window.google?.accounts?.oauth2) {
+    window.google.accounts.oauth2.revoke(accessToken);
   }
 }
 
@@ -124,25 +134,32 @@ export async function showFolderPicker(): Promise<{ id: string; name: string } |
   await loadGapiScript();
 
   // Load Picker API
-  await new Promise<void>((resolve) => {
-    (window as any).gapi.load("picker", resolve);
+  await new Promise<void>((resolve, reject) => {
+    if (!window.gapi) {
+      reject(new Error("Google API loader not available"));
+      return;
+    }
+    window.gapi.load("picker", resolve);
   });
 
-  return new Promise((resolve) => {
-    const view = new (window as any).google.picker.DocsView(
-      (window as any).google.picker.ViewId.FOLDERS,
-    );
+  return new Promise((resolve, reject) => {
+    if (!window.google) {
+      reject(new Error("Google Picker namespace not available"));
+      return;
+    }
+    const view = new window.google.picker.DocsView(window.google.picker.ViewId.FOLDERS);
     view.setSelectFolderEnabled(true);
     view.setMimeTypes("application/vnd.google-apps.folder");
 
-    const picker = new (window as any).google.picker.PickerBuilder()
+    const picker = new window.google.picker.PickerBuilder()
       .setTitle("Select a folder for annotating.work")
       .addView(view)
       .setOAuthToken(token)
       .setDeveloperKey(GOOGLE_API_KEY)
-      .setCallback((data: any) => {
-        if (data.action === "picked" && data.docs?.[0]) {
-          resolve({ id: data.docs[0].id, name: data.docs[0].name });
+      .setCallback((data) => {
+        const firstDoc = data.docs?.[0];
+        if (data.action === "picked" && firstDoc) {
+          resolve({ id: firstDoc.id, name: firstDoc.name });
         } else if (data.action === "cancel") {
           resolve(null);
         }
