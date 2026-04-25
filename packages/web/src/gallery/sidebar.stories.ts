@@ -1,8 +1,11 @@
 /**
- * Stories for `Sidebar` — the file-manager's left rail
+ * Stories for `<annot-sidebar>` — the file-manager's left rail
  * (storage chips + views tabs + folder tree).
  *
- * Phase 1 initial landmark of `docs/plans/storybook-introduction.md`.
+ * Bootstrapped in Phase 1 of `docs/plans/storybook-introduction.md`
+ * when the sidebar was still imperative; converted to the Lit
+ * element in Phase 3 of `docs/plans/lit-migration.md`.
+ *
  * Covers each built-in storage mode as the "active" selection
  * plus variants that show / hide plugin chips and sidebar tabs.
  */
@@ -10,7 +13,7 @@
 import type { Meta, StoryObj } from "@storybook/web-components-vite";
 import type { SidebarTab, StorageRegistration } from "../app/plugin-host.js";
 import type { StorageMode } from "../storage/bridge.js";
-import { Sidebar } from "./sidebar.js";
+import "./sidebar.js";
 
 interface Args {
   activeMode: StorageMode;
@@ -34,7 +37,8 @@ function mountSidebar(args: Args): HTMLElement {
   container.style.padding = "8px";
   container.style.flexDirection = "column";
 
-  const sidebar = new Sidebar(container, {
+  const sidebar = document.createElement("annot-sidebar");
+  sidebar.callbacks = {
     onStorageSelect: (m) => console.log("[story] onStorageSelect", m),
     onStorageReselect: (m) => console.log("[story] onStorageReselect", m),
     onFolderSelect: (p) => console.log("[story] onFolderSelect", p),
@@ -45,14 +49,15 @@ function mountSidebar(args: Args): HTMLElement {
     onPasteClipboard: () => console.log("[story] onPasteClipboard"),
     getPluginStorages: () => args.pluginStorages,
     getSidebarTabs: () => args.sidebarTabs,
-    isBuiltinDisabled: (mode) => args.disabledBuiltins.includes(mode),
-  });
+    isBuiltinDisabled: (mode) => args.disabledBuiltins.includes(mode as StorageMode),
+  };
   sidebar.setActiveMode(args.activeMode);
   if (args.deviceConnected) sidebar.setStorageStatus("device", true, "My Screenshots");
   if (args.driveConnected) sidebar.setStorageStatus("googledrive", true, "Annot Drive");
   if (args.githubConnected) {
     sidebar.setStorageStatus("github", true, "ingcreators/annot@main");
   }
+  container.appendChild(sidebar);
   return container;
 }
 
