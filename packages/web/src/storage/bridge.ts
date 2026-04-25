@@ -30,7 +30,38 @@ declare global {
   }
 }
 
-export type StorageMode = "extension" | "browser" | "device" | "googledrive" | "github";
+/**
+ * Built-in backends bundled with `@ingcreators/annot-web`. Plugin
+ * code can register additional modes alongside these via the
+ * (Phase C) `PluginContext.registerStorage` API; once that lands,
+ * `StorageMode` carries any of these strings PLUS plugin-supplied
+ * ones, hence the type widening to plain `string` below.
+ *
+ * Consumers that need to know "is this a built-in?" should
+ * iterate this array (or use `BuiltInStorageMode` for type narrowing
+ * at the call site). Consumers that just need to compare modes can
+ * keep using string literals — `"github"`, `"googledrive"`, etc.
+ */
+export const BUILT_IN_STORAGE_MODES = [
+  "browser",
+  "device",
+  "googledrive",
+  "github",
+  "extension",
+] as const;
+
+export type BuiltInStorageMode = (typeof BUILT_IN_STORAGE_MODES)[number];
+
+/**
+ * A storage mode key. Kept open as `string` so plugin-registered
+ * backends (Phase C of `docs/plans/plugin-storage-registration.md`)
+ * can introduce their own modes without editing every consumer.
+ *
+ * Use `BuiltInStorageMode` if you specifically need to refer only
+ * to the bundled backends (sidebar layout assertions, the
+ * `loadLastStorage` validator, etc.).
+ */
+export type StorageMode = string;
 
 let extensionId: string | null = null;
 let extensionAvailable: boolean | null = null;
@@ -425,17 +456,16 @@ export function loadLastFolder(): string {
   return localStorage.getItem("annot-last-folder") || "";
 }
 
-/** Load last selected storage mode from localStorage. */
+/** Load last selected storage mode from localStorage. Returns
+ *  built-in modes verbatim; rejects null/garbage. Plugin-registered
+ *  modes (Phase C) will go through a separate `loadLastStorage`
+ *  branch that consults the runtime registry — for now, anything
+ *  outside the built-in set returns `null` and the boot path
+ *  falls through to `browser`. */
 export function loadLastStorage(): StorageMode | null {
   const mode = localStorage.getItem("annot-last-storage");
-  if (
-    mode === "browser" ||
-    mode === "device" ||
-    mode === "googledrive" ||
-    mode === "github" ||
-    mode === "extension"
-  ) {
-    return mode as StorageMode;
+  if (mode && (BUILT_IN_STORAGE_MODES as readonly string[]).includes(mode)) {
+    return mode;
   }
   return null;
 }
