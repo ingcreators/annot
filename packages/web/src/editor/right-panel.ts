@@ -189,6 +189,14 @@ export class AnnotEditorRightPanelElement extends LitElement {
   override connectedCallback(): void {
     super.connectedCallback();
     document.body.classList.add("has-right-panel");
+    // The host `#editor-right-panel` is `display: flex` (column).
+    // With this Lit element wrapping the actions / sections-host
+    // / empty-state divs, the flex column would only see ONE
+    // item (this element) and any inner `flex: 1` rules on the
+    // sections-host wouldn't grow against the empty-state row.
+    // `display: contents` makes the wrapper transparent so the
+    // three children become direct flex items of the column.
+    this.style.display = "contents";
   }
 
   override disconnectedCallback(): void {
