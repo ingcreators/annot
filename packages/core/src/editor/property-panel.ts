@@ -1,5 +1,5 @@
 import { computeDasharray, detectDashKey } from "../utils/dash-utils.js";
-import { setTooltip } from "../utils/tooltip.js";
+import { setTooltip } from "./tooltip.js";
 import { refreshArrowPath } from "./arrow-markers.js";
 import type { CanvasManager } from "./canvas-manager.js";
 import { createCustomSelect } from "./custom-select.js";

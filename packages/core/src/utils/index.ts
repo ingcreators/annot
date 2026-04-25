@@ -22,4 +22,3 @@ export {
   saveToolPresets,
   saveWithXmp,
 } from "./tauri-bridge.js";
-export { getTooltip, setTooltip } from "./tooltip.js";

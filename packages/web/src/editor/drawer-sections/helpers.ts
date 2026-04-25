@@ -5,7 +5,7 @@
  * utilities; no drawer state.
  */
 
-import { setTooltip } from "@ingcreators/annot-core/utils";
+import { setTooltip } from "@ingcreators/annot-core/editor/tooltip";
 
 /** Build the standard "section frame" (heading + body container)
  *  that every drawer section renders into. The drawer host calls

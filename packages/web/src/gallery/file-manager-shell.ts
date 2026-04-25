@@ -13,7 +13,7 @@
  * exposes.
  */
 
-import { setTooltip } from "@ingcreators/annot-core/utils";
+import { setTooltip } from "@ingcreators/annot-core/editor/tooltip";
 import { html, LitElement } from "../lit.js";
 
 /** Breadcrumb entry shown in the header. The shell renders the

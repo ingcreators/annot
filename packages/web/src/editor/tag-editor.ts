@@ -3,7 +3,7 @@
  * Used by the file-details drawer.
  */
 
-import { setTooltip } from "@ingcreators/annot-core/utils";
+import { setTooltip } from "@ingcreators/annot-core/editor/tooltip";
 
 export class TagEditor {
   #container: HTMLElement;

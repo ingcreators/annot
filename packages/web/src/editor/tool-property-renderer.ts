@@ -21,10 +21,10 @@ import {
   computeDasharray,
   HIGHLIGHT_COLORS,
   SHAPE_ICON_SVG,
-  setTooltip,
   type ToolOptions,
 } from "@ingcreators/annot-core";
 import { createCustomSelect } from "@ingcreators/annot-core/editor/custom-select";
+import { setTooltip } from "@ingcreators/annot-core/editor/tooltip";
 import {
   createArrowEndsRows,
   createColorPullButton,

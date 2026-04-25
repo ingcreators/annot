@@ -11,7 +11,7 @@
  */
 import type { FolderRecord, ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
 import { getFilename, supportsResync } from "@ingcreators/annot-core/storage";
-import { setTooltip } from "@ingcreators/annot-core/utils";
+import { setTooltip } from "@ingcreators/annot-core/editor/tooltip";
 import { logger } from "../logger.js";
 import { showAlertDialog, showConfirmDialog, showPromptDialog } from "../ui/dialog.js";
 import { type MenuItem, openContextMenu } from "./context-menu.js";
