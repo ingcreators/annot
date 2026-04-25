@@ -68,9 +68,9 @@ import {
 import type { UISection, UISectionContext, UISectionLifecycle } from "../app/plugin-host.js";
 import { html, LitElement, unsafeHTML } from "../lit.js";
 import { logger } from "../logger.js";
-import { createPageElementsSection } from "./right-panel-sections/page-elements-section.js";
-import { createSelectionPropertiesSection } from "./right-panel-sections/selection-properties-section.js";
-import { createToolPropertiesSection } from "./right-panel-sections/tool-properties-section.js";
+import { createPageElementsSection } from "./right-panel-sections/annot-page-elements-section.js";
+import { createSelectionPropertiesSection } from "./right-panel-sections/annot-selection-properties-section.js";
+import { createToolPropertiesSection } from "./right-panel-sections/annot-tool-properties-section.js";
 
 // =============================================================================
 // Action-button SVGs — custom glyphs modeled on PowerPoint's ribbon

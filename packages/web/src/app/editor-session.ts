@@ -25,9 +25,9 @@ import {
 import { Toolbar } from "../editor/toolbar.js";
 import type { ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
 import { getFilename } from "@ingcreators/annot-core/storage";
-import type { AnnotFileDetailsDrawerElement } from "../editor/file-details-drawer.js";
-import { estimateDataUrlBytes } from "../editor/file-details-drawer.js";
-import "../editor/file-details-drawer.js";
+import type { AnnotFileDetailsDrawerElement } from "../editor/annot-file-details-drawer.js";
+import { estimateDataUrlBytes } from "../editor/annot-file-details-drawer.js";
+import "../editor/annot-file-details-drawer.js";
 import { installKeyboardHelp } from "../editor/keyboard-help.js";
 import type { AnnotEditorRightPanelElement } from "../editor/right-panel.js";
 import "../editor/right-panel.js";
