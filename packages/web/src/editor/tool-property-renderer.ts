@@ -20,8 +20,14 @@ import {
   COUNTER_ICON_SVG,
   HIGHLIGHT_COLORS,
   SHAPE_ICON_SVG,
-  type ToolOptions,
 } from "@ingcreators/annot-core/editor";
+import type {
+  ArrowDim,
+  ArrowShape,
+  LineCap,
+  MarkerShape,
+  ToolOptions,
+} from "@ingcreators/annot-core/editor/tool-options";
 import { computeDasharray } from "@ingcreators/annot-core/utils";
 import { createCustomSelect } from "@ingcreators/annot-core/editor/custom-select";
 import { setTooltip } from "@ingcreators/annot-core/editor/tooltip";
@@ -32,13 +38,7 @@ import {
   createPropertyRow,
   createPropertySection,
 } from "@ingcreators/annot-core/editor/property-controls";
-import type { FreehandTool } from "@ingcreators/annot-core/editor/tools/freehand-tool";
-import type {
-  ArrowDim,
-  ArrowShape,
-  LineCap,
-  MarkerShape,
-} from "@ingcreators/annot-core/editor/tools/tool-base";
+import type { FreehandTool } from "@ingcreators/annot-editor/tools/freehand-tool";
 
 /**
  * Hooks the renderer needs from the owning toolbar. Kept narrow so

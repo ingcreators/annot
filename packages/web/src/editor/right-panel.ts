@@ -58,8 +58,8 @@ import {
   type CanvasManager,
   type History,
   highlightColorLabel,
-  PropertyPanel,
 } from "@ingcreators/annot-core/editor";
+import { PropertyPanel } from "@ingcreators/annot-editor";
 import type { PageMetadata } from "@ingcreators/annot-core/storage";
 import {
   readTransformState,

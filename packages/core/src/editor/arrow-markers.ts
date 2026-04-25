@@ -35,7 +35,7 @@
  *     the line should actually end.
  */
 
-import type { ArrowDim, ArrowShape } from "./tools/tool-base.js";
+import type { ArrowDim, ArrowShape } from "./tool-options.js";
 
 export interface Point {
   x: number;

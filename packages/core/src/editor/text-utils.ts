@@ -21,7 +21,7 @@
  *   data-tail-y        callout only — tail tip y (canvas coords)
  */
 
-import type { TextVariant } from "./tools/tool-base.js";
+import type { TextVariant } from "./tool-options.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 

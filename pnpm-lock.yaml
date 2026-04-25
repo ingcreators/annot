@@ -66,6 +66,9 @@ importers:
       '@ingcreators/annot-core':
         specifier: workspace:*
         version: link:../core
+      '@ingcreators/annot-editor':
+        specifier: workspace:*
+        version: link:../editor
       '@ingcreators/annot-web':
         specifier: workspace:*
         version: link:../web

@@ -13,7 +13,7 @@
  * everything through a deps-object indirection.
  */
 
-import type { ToolOptions } from "@ingcreators/annot-core/editor";
+import type { ToolOptions } from "@ingcreators/annot-core/editor/tool-options";
 import {
   CanvasManager,
   History,

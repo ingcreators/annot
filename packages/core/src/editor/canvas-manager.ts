@@ -1,7 +1,29 @@
 import { stampAnnotVersion } from "./svg-format.js";
-import type { ToolBase } from "./tools/tool-base.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
+
+/**
+ * Minimal structural shape canvas-manager needs from an active
+ * tool. The full `ToolBase` class lives in `@ingcreators/annot-editor/tools/tool-base`
+ * — referencing it here would create a circular package
+ * dependency (annot-core → annot-editor) once Phase 2 of
+ * `docs/plans/three-package-split.md` lands. TypeScript's
+ * structural typing means any `ToolBase` instance assigns to
+ * this interface without an explicit `implements` clause.
+ */
+interface CanvasActiveTool {
+  /** Discriminator string ToolBase subclasses set so call sites can
+   *  branch on tool identity (e.g. `if (active.name === "freehand")`).
+   *  Made optional here so future Tier C Active-tool interfaces with
+   *  different naming conventions don't have to satisfy the field. */
+  readonly name?: string;
+  onActivate?(): void;
+  onDeactivate?(): void;
+  onPointerDown(e: PointerEvent, pt: DOMPoint): void;
+  onPointerMove(e: PointerEvent, pt: DOMPoint): void;
+  onPointerUp(e: PointerEvent, pt: DOMPoint): void;
+  onKeyDown?(e: KeyboardEvent): void;
+}
 
 export class CanvasManager {
   readonly svg: SVGSVGElement;
@@ -19,7 +41,7 @@ export class CanvasManager {
    *  the fit stays correct across window resizes and right-panel
    *  open/close — consistent with Figma / Draw.io behavior. */
   #fitMode = false;
-  #activeTool: ToolBase | null = null;
+  #activeTool: CanvasActiveTool | null = null;
   #isPanning = false;
   #panStartX = 0;
   #panStartY = 0;
@@ -87,14 +109,14 @@ export class CanvasManager {
     return this.#zoom;
   }
 
-  setActiveTool(tool: ToolBase | null): void {
+  setActiveTool(tool: CanvasActiveTool | null): void {
     this.#activeTool?.onDeactivate?.();
     this.#activeTool = tool;
     this.#activeTool?.onActivate?.();
     this.svg.style.cursor = tool ? "crosshair" : "default";
   }
 
-  get activeTool(): ToolBase | null {
+  get activeTool(): CanvasActiveTool | null {
     return this.#activeTool;
   }
 

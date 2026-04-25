@@ -1,7 +1,19 @@
-import type { CanvasManager } from "../canvas-manager.js";
-import type { History } from "../history.js";
-
-const SVG_NS = "http://www.w3.org/2000/svg";
+/**
+ * Pure type / interface definitions for the editor's tool layer.
+ * Moved out of `tools/tool-base.ts` (now in
+ * `@ingcreators/annot-editor`) as part of Phase 2 of
+ * `docs/plans/three-package-split.md` — these types are shared
+ * between the editor (which contains the runtime `ToolBase`
+ * class + concrete tool classes) and the rest of `core/editor`
+ * (PropertyPanel was a temporary dependent; the helpers in
+ * `gradient-utils`, `redact-utils`, `shape-utils`, `text-utils`,
+ * `property-controls`, `property-panel-helpers` continue to read
+ * variant strings out of these types).
+ *
+ * Lives in core/editor (Tier B subpath) because consumers run
+ * under jsdom for tests and the types are used at the SVG
+ * element manipulation layer.
+ */
 
 export type ShapeType = "rect" | "rounded" | "ellipse" | "highlight";
 
@@ -83,21 +95,15 @@ export interface ToolOptions {
    *  when not specified. Stored on the textbox as `data-font-family`
    *  so it survives save / reopen / Office paste. */
   fontFamily?: string;
-  /** Style for the Draw tool: normal pen vs highlighter.
-   *    "pen"         = crisp opaque stroke, round caps (default)
-   *    "highlighter" = thick semi-transparent stroke, flat caps */
+  /** Style for the Draw tool: normal pen vs highlighter. */
   drawStyle?: DrawStyle;
-  /** Style for the unified Redact tool.
-   *    "mosaic" = block-averaged pixelation (default)
-   *    "solid"  = opaque colored rectangle (fillColor / black)
-   *    "blur"   = gaussian blur of the underlying image */
+  /** Style for the unified Redact tool. */
   redactStyle?: RedactStyle;
 
   // ---- PowerPoint-equivalent line polish ----
 
   /** Per-end arrow head shapes. When set, override the simpler
-   *  `arrowHead` (which only distinguishes none / end / both). Start
-   *  defaults to "none", end to "triangle" (the classic arrow). */
+   *  `arrowHead` (which only distinguishes none / end / both). */
   arrowHeadStart?: ArrowShape;
   arrowHeadEnd?: ArrowShape;
   /** Per-end arrow widths (perpendicular to stem) — sm / md / lg. */
@@ -107,91 +113,34 @@ export interface ToolOptions {
   arrowLengthStart?: ArrowDim;
   arrowLengthEnd?: ArrowDim;
   /** Legacy per-end size (used only when the split width/length
-   *  options above are absent). Kept for back-compat with older
-   *  saved presets and ingested SVGs. */
+   *  options above are absent). */
   arrowSizeStart?: MarkerSize;
   arrowSizeEnd?: MarkerSize;
 
-  /** Stroke opacity (0..1). Separate from fill-opacity and from the
-   *  drawStyle=highlighter alpha, so users can dial any line. */
+  /** Stroke opacity (0..1). Separate from fill-opacity. */
   strokeOpacity?: number;
 
-  /** SVG stroke-linecap: butt / round / square. Changes dash / open-
-   *  end appearance. */
+  /** SVG stroke-linecap: butt / round / square. */
   strokeLinecap?: LineCap;
 
   /** SVG stroke-linejoin for shapes with corners (rect, path). */
   strokeLinejoin?: LineJoin;
 
-  /** Optional gradient override for stroke. When set, supersedes
-   *  `strokeColor` at render time — the tool builds a <linearGradient>
-   *  in defs and references it via stroke="url(#id)". */
+  /** Optional gradient override for stroke. */
   strokeGradient?: GradientSpec;
 
-  /** Optional gradient override for fill. Same shape as
-   *  strokeGradient, applied to the fill attribute. */
+  /** Optional gradient override for fill. */
   fillGradient?: GradientSpec;
 
-  /** Color for the Highlight shape variant. Independent from
-   *  `fillColor` so the user's choice of Rect fill doesn't bleed into
-   *  their chosen highlighter color (and vice versa). Defaults to
-   *  `#ffe100` (the classic yellow highlighter pen). */
+  /** Color for the Highlight shape variant. */
   highlightColor?: string;
 
-  /** Shape variant for the Counter (Marker) tool — circle / square /
-   *  rounded square. Replaces the legacy convention of encoding the
-   *  shape into `fillColor` ("rect" string), which conflated color
-   *  and shape concepts. Older saved presets with `fillColor="rect"`
-   *  are migrated on read in MarkerTool. */
+  /** Shape variant for the Counter (Marker) tool. */
   markerShape?: MarkerShape;
 
   /** Counter (Marker) border — an OPTIONAL ring drawn around the
-   *  bg primitive (circle/rect). The marker preset convention uses
-   *  `strokeColor` as the bg FILL (historical — see marker-tool.ts),
-   *  so the actual stroke attrs need dedicated fields. Unset =
-   *  use the tool's defaults (white / 1.5pt / solid). */
+   *  bg primitive (circle/rect). */
   markerBorderColor?: string;
   markerBorderWidth?: number;
   markerBorderDasharray?: string;
-}
-
-export abstract class ToolBase {
-  abstract readonly name: string;
-
-  protected canvas: CanvasManager;
-  protected history: History;
-  protected options: ToolOptions;
-
-  constructor(canvas: CanvasManager, history: History, options: ToolOptions) {
-    this.canvas = canvas;
-    this.history = history;
-    this.options = options;
-  }
-
-  abstract onPointerDown(e: PointerEvent, pt: DOMPoint): void;
-  abstract onPointerMove(e: PointerEvent, pt: DOMPoint): void;
-  abstract onPointerUp(e: PointerEvent, pt: DOMPoint): void;
-
-  onKeyDown?(e: KeyboardEvent): void;
-  onActivate?(): void;
-  onDeactivate?(): void;
-
-  /** Called after a shape is completed; toolbar uses this to switch back to select mode */
-  onShapeComplete?: (el?: SVGElement) => void;
-
-  protected createSVG<K extends keyof SVGElementTagNameMap>(
-    tag: K,
-    attrs: Record<string, string>,
-  ): SVGElementTagNameMap[K] {
-    const el = document.createElementNS(SVG_NS, tag);
-    for (const [k, v] of Object.entries(attrs)) {
-      el.setAttribute(k, v);
-    }
-    return el;
-  }
-
-  protected addAnnotation(el: SVGElement): void {
-    this.canvas.annotations.appendChild(el);
-    this.history.save();
-  }
 }

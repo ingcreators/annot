@@ -22,8 +22,8 @@ import type {
   CanvasManager,
   History,
   SelectionManager,
-  ToolOptions,
 } from "@ingcreators/annot-core/editor";
+import type { ToolOptions } from "@ingcreators/annot-core/editor/tool-options";
 import {
   type CanvasMenuItem,
   openCanvasContextMenu,

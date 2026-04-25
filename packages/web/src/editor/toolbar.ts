@@ -48,10 +48,9 @@ import {
   openAnchoredPopover,
   type SelectionManager,
   saveToFile,
-  type ToolBase,
-  type ToolOptions,
 } from "@ingcreators/annot-core/editor";
-import { createThemeToggle } from "@ingcreators/annot-editor";
+import type { ToolOptions } from "@ingcreators/annot-core/editor/tool-options";
+import { createThemeToggle, type ToolBase } from "@ingcreators/annot-editor";
 import {
   DEFAULT_FILL_COLOR,
   DEFAULT_FONT_SIZE,
@@ -67,13 +66,13 @@ import {
   type ToolPreset,
 } from "@ingcreators/annot-core/tauri-bridge";
 import { setTooltip } from "@ingcreators/annot-core/editor/tooltip";
-import { ArrowTool } from "@ingcreators/annot-core/editor/tools/arrow-tool";
-import { CropTool } from "@ingcreators/annot-core/editor/tools/crop-tool";
-import { FreehandTool, isFreehandGroup } from "@ingcreators/annot-core/editor/tools/freehand-tool";
-import { MarkerTool } from "@ingcreators/annot-core/editor/tools/marker-tool";
-import { RedactTool } from "@ingcreators/annot-core/editor/tools/redact-tool";
-import { ShapeTool } from "@ingcreators/annot-core/editor/tools/shape-tool";
-import { TextTool } from "@ingcreators/annot-core/editor/tools/text-tool";
+import { ArrowTool } from "@ingcreators/annot-editor/tools/arrow-tool";
+import { CropTool } from "@ingcreators/annot-editor/tools/crop-tool";
+import { FreehandTool, isFreehandGroup } from "@ingcreators/annot-editor/tools/freehand-tool";
+import { MarkerTool } from "@ingcreators/annot-editor/tools/marker-tool";
+import { RedactTool } from "@ingcreators/annot-editor/tools/redact-tool";
+import { ShapeTool } from "@ingcreators/annot-editor/tools/shape-tool";
+import { TextTool } from "@ingcreators/annot-editor/tools/text-tool";
 import type { AnnotToolbarButtonElement, AnnotToolbarElement } from "./annot-toolbar.js";
 import { populateToolPropertyPanel } from "./tool-property-renderer.js";
 import { openCanvasRightClickMenu } from "./toolbar-canvas-menu.js";

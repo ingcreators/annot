@@ -23,7 +23,7 @@ import { computeArrowParts } from "./arrow-markers.js";
 import { createColorPalette } from "./color-palette.js";
 import { createCustomSelect } from "./custom-select.js";
 import { openAnchoredPopover } from "./anchored-popover.js";
-import type { ArrowDim, ArrowShape } from "./tools/tool-base.js";
+import type { ArrowDim, ArrowShape } from "./tool-options.js";
 
 export interface ArrowEndsState {
   start: ArrowSpec;

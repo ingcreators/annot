@@ -21,7 +21,7 @@
 
 import { MOSAIC_BLOCK_SIZE, REDACT_BLUR_RADIUS, REDACT_SOLID_COLOR } from "../utils/constants.js";
 import type { CanvasManager } from "./canvas-manager.js";
-import type { RedactStyle } from "./tools/tool-base.js";
+import type { RedactStyle } from "./tool-options.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
