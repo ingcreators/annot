@@ -142,6 +142,9 @@ importers:
       '@ingcreators/annot-core':
         specifier: workspace:*
         version: link:../core
+      '@ingcreators/annot-editor':
+        specifier: workspace:*
+        version: link:../editor
       lit:
         specifier: ^3.3.2
         version: 3.3.2

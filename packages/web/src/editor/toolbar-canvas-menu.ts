@@ -27,7 +27,7 @@ import type {
 import {
   type CanvasMenuItem,
   openCanvasContextMenu,
-} from "@ingcreators/annot-core/editor/canvas-context-menu";
+} from "@ingcreators/annot-editor/canvas-context-menu";
 import { toggleFlip } from "@ingcreators/annot-core/editor/transform-utils";
 import { TOOL_VARIANTS, type ToolDef } from "./toolbar-variants.js";
 

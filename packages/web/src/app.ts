@@ -3,7 +3,7 @@
  * File Manager (gallery) ↔ Editor switching with path-based StorageProvider.
  */
 
-import { createThemeToggle } from "@ingcreators/annot-core/editor";
+import { createThemeToggle } from "@ingcreators/annot-editor";
 import type { ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
 import { assertNonNull } from "@ingcreators/annot-core/utils";
 import { setTooltip } from "@ingcreators/annot-core/editor/tooltip";
