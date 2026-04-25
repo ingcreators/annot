@@ -1,7 +1,7 @@
 import { CanvasManager } from "@ingcreators/annot-core/editor/canvas-manager";
 import { History } from "@ingcreators/annot-core/editor/history";
 import { PropertyPanel } from "@ingcreators/annot-editor";
-import { SelectionManager } from "@ingcreators/annot-core/editor/selection";
+import { SelectionManager } from "@ingcreators/annot-editor";
 // Phase 5a moved the Toolbar class from `annot-core` to `annot-web`
 // so core stays DOM-free. The Tauri shell now picks it up from
 // web's editor surface — the rest of the imports below remain in

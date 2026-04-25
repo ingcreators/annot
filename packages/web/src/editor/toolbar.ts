@@ -46,11 +46,14 @@ import {
   type History,
   highlightColorLabel,
   openAnchoredPopover,
-  type SelectionManager,
   saveToFile,
 } from "@ingcreators/annot-core/editor";
 import type { ToolOptions } from "@ingcreators/annot-core/editor/tool-options";
-import { createThemeToggle, type ToolBase } from "@ingcreators/annot-editor";
+import {
+  createThemeToggle,
+  type SelectionManager,
+  type ToolBase,
+} from "@ingcreators/annot-editor";
 import {
   DEFAULT_FILL_COLOR,
   DEFAULT_FONT_SIZE,

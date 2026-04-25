@@ -18,11 +18,8 @@
  * private-state coupling.
  */
 
-import type {
-  CanvasManager,
-  History,
-  SelectionManager,
-} from "@ingcreators/annot-core/editor";
+import type { CanvasManager, History } from "@ingcreators/annot-core/editor";
+import type { SelectionManager } from "@ingcreators/annot-editor";
 import type { ToolOptions } from "@ingcreators/annot-core/editor/tool-options";
 import {
   type CanvasMenuItem,

@@ -11,7 +11,7 @@ import {
   readArrowEndpoints,
   refreshArrowPath,
   writeArrowEndpoints,
-} from "./arrow-markers.js";
+} from "@ingcreators/annot-core/editor/arrow-markers";
 
 /** Namespace URI for SVG elements — used by `createElementNS`. */
 export const SVG_NS = "http://www.w3.org/2000/svg";
