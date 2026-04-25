@@ -5,25 +5,100 @@
  * via `ctx.setTitle` so it reads "Selected Rectangle" / "Selected
  * Arrow" / "3 selected — 2 rectangles + 1 arrow".
  *
- * Migrated from the previous monolithic right-panel as part of
- * Phase 3 of `docs/plans/plugin-ui-slots.md`.
+ * Lit Phase 2 — replaces the imperative lifecycle closure with a
+ * `<annot-right-panel-selection-properties-section>` element that
+ * owns the attach / detach of the panel-level `PropertyPanel`
+ * singleton. `PropertyPanel` itself stays vanilla (it lives in
+ * `@ingcreators/annot-core`; migrating it is a separate plan per
+ * the migration's Non-goals).
  *
- * Implementation note: `PropertyPanel` is a panel-level singleton
- * owned by `EditorRightPanel`. The section attaches its host
- * element on mount + detaches on unmount, preserving the
- * PropertyPanel's internal observers / event listeners across mode
- * switches (consistent with the previous "single section, swappable
- * containers" design).
+ * The `PropertyPanel` singleton is owned by `<annot-editor-right-panel>`;
+ * this section borrows its host element on mount and detaches it
+ * on unmount so the PropertyPanel's internal observers / event
+ * listeners survive mode switches.
  */
 
 import type { UISection } from "../../app/plugin-host.js";
+import { html, LitElement } from "../../lit.js";
+
+export class AnnotRightPanelSelectionPropertiesSectionElement extends LitElement {
+  static override properties = {
+    elements: { attribute: false },
+    propPanelHost: { attribute: false },
+    showPropPanel: { attribute: false },
+    hidePropPanel: { attribute: false },
+    setTitle: { attribute: false },
+    computeTitle: { attribute: false },
+  };
+
+  declare elements: SVGElement[];
+  declare propPanelHost: HTMLElement | null;
+  declare showPropPanel: ((els: SVGElement[]) => void) | null;
+  declare hidePropPanel: (() => void) | null;
+  declare setTitle: ((title: string) => void) | null;
+  declare computeTitle: ((els: SVGElement[]) => string) | null;
+
+  constructor() {
+    super();
+    this.elements = [];
+    this.propPanelHost = null;
+    this.showPropPanel = null;
+    this.hidePropPanel = null;
+    this.setTitle = null;
+    this.computeTitle = null;
+  }
+
+  protected override createRenderRoot(): HTMLElement {
+    return this;
+  }
+
+  override render() {
+    // The PropertyPanel host is attached imperatively from `updated()`.
+    return html`<div class="selection-properties-host"></div>`;
+  }
+
+  protected override updated(): void {
+    const host = this.querySelector(".selection-properties-host") as HTMLElement | null;
+    if (!host || !this.propPanelHost) return;
+    if (this.propPanelHost.parentElement !== host) {
+      host.appendChild(this.propPanelHost);
+    }
+    this.showPropPanel?.(this.elements);
+    if (this.computeTitle) this.setTitle?.(this.computeTitle(this.elements));
+  }
+
+  override disconnectedCallback(): void {
+    super.disconnectedCallback();
+    this.hidePropPanel?.();
+    // Detach the PropertyPanel's host element from this section's
+    // container so the next mount can re-attach it cleanly. The
+    // element itself is stable (owned by `<annot-editor-right-panel>`);
+    // only the parent link drops here.
+    if (this.propPanelHost?.parentElement) {
+      this.propPanelHost.parentElement.removeChild(this.propPanelHost);
+    }
+  }
+}
+
+if (!customElements.get("annot-right-panel-selection-properties-section")) {
+  customElements.define(
+    "annot-right-panel-selection-properties-section",
+    AnnotRightPanelSelectionPropertiesSectionElement,
+  );
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    "annot-right-panel-selection-properties-section": AnnotRightPanelSelectionPropertiesSectionElement;
+  }
+}
 
 export interface SelectionPropertiesSectionDeps {
   getSelection(): SVGElement[];
   /** Stable PropertyPanel host container — owned by
-   *  EditorRightPanel so the embedded `PropertyPanel` instance
-   *  survives mode switches. The section borrows the element on
-   *  mount, returns it on unmount. */
+   *  `<annot-editor-right-panel>` so the embedded `PropertyPanel`
+   *  instance survives mode switches. The section borrows the
+   *  element on mount, returns it on unmount. */
   getPropPanelHost(): HTMLElement;
   /** `propPanel.show(elements)` — re-render the controls for the
    *  current selection. */
@@ -38,6 +113,17 @@ export interface SelectionPropertiesSectionDeps {
 export function createSelectionPropertiesSection(
   deps: SelectionPropertiesSectionDeps,
 ): UISection {
+  let el: AnnotRightPanelSelectionPropertiesSectionElement | null = null;
+  const sync = (ctx: { setTitle: (t: string) => void }) => {
+    if (!el) return;
+    el.elements = deps.getSelection();
+    el.propPanelHost = deps.getPropPanelHost();
+    el.showPropPanel = (els) => deps.showPropPanel(els);
+    el.hidePropPanel = () => deps.hidePropPanel();
+    el.setTitle = (t) => ctx.setTitle(t);
+    el.computeTitle = (els) => deps.computeTitle(els);
+  };
+
   return {
     id: "right-panel.selection-properties",
     title: "Selection",
@@ -46,27 +132,16 @@ export function createSelectionPropertiesSection(
       return deps.getSelection().length > 0;
     },
     mount(container, ctx) {
-      const elements = deps.getSelection();
-      const host = deps.getPropPanelHost();
-      container.appendChild(host);
-      deps.showPropPanel(elements);
-      ctx.setTitle(deps.computeTitle(elements));
+      el = document.createElement("annot-right-panel-selection-properties-section");
+      container.appendChild(el);
+      sync(ctx);
       return {
         update(updateCtx) {
-          const els = deps.getSelection();
-          deps.showPropPanel(els);
-          updateCtx.setTitle(deps.computeTitle(els));
+          sync(updateCtx);
         },
         unmount() {
-          deps.hidePropPanel();
-          // Detach the PropertyPanel's host element from this
-          // section's container so the host can stash it for the
-          // next mount. The element itself is stable (owned by
-          // EditorRightPanel); only the parent link drops.
-          const host = deps.getPropPanelHost();
-          if (host.parentElement === container) {
-            container.removeChild(host);
-          }
+          el?.remove();
+          el = null;
         },
       };
     },

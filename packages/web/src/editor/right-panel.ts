@@ -1,12 +1,11 @@
 /**
- * EditorRightPanel — unified context-aware properties panel.
+ * `<annot-editor-right-panel>` — unified context-aware properties
+ * panel.
  *
- * Phase 3 of `docs/plans/plugin-ui-slots.md` reshaped this class
- * into a section host. The three previous hardcoded blocks
- * (tool-properties, selection-properties, page-elements) are now
- * `UISection` modules under `./right-panel-sections/`. Plugin-
- * registered right-panel sections (Phase 1's
- * `addRightPanelSection`) render alongside, sorted by `priority`.
+ * The three built-in blocks (tool-properties, selection-properties,
+ * page-elements) are `UISection` modules under
+ * `./right-panel-sections/`. Plugin-registered right-panel
+ * sections render alongside, sorted by `priority`.
  *
  * Layout (top to bottom):
  *   ┌─ Actions ──────────────────────┐    ← only with selection
@@ -20,6 +19,11 @@
  *   └─────────────────────────────────┘
  *   ┌─ Empty state ──────────────────┐    ← when no section visible
  *   └─────────────────────────────────┘
+ *
+ * Lit Phase 2 — the class facade became this Lit element. The
+ * `setPageMetadata` / `showToolProperties` / `showSelectionProperties`
+ * / `destroy` / `notifyUpdate` method surface is preserved so
+ * pre-Lit callers don't move.
  *
  * Design decisions preserved from the previous implementation:
  *
@@ -54,7 +58,6 @@ import {
   type History,
   highlightColorLabel,
   PropertyPanel,
-  setTooltip,
 } from "@ingcreators/annot-core";
 import {
   readTransformState,
@@ -62,6 +65,7 @@ import {
   toggleFlip,
 } from "@ingcreators/annot-core/editor/transform-utils";
 import type { UISection, UISectionContext, UISectionLifecycle } from "../app/plugin-host.js";
+import { html, LitElement, unsafeHTML } from "../lit.js";
 import { createPageElementsSection } from "./right-panel-sections/page-elements-section.js";
 import { createSelectionPropertiesSection } from "./right-panel-sections/selection-properties-section.js";
 import { createToolPropertiesSection } from "./right-panel-sections/tool-properties-section.js";
@@ -118,15 +122,6 @@ export const BUILTIN_RIGHT_PANEL_SECTION_IDS = [
   "right-panel.page-elements",
 ] as const;
 
-export interface EditorRightPanelDeps {
-  /** Plugin-registered right-panel sections. Combined with built-
-   *  ins before sort + filter. Optional. */
-  getPluginSections?(): UISection[];
-  /** Built-in section ids the deployment opted out of via
-   *  `App.init({ disableBuiltinUISections })`. Optional. */
-  isBuiltinSectionDisabled?(id: string): boolean;
-}
-
 interface MountedSection {
   section: UISection;
   sectionEl: HTMLElement;
@@ -135,83 +130,271 @@ interface MountedSection {
   reactive: boolean;
 }
 
-export class EditorRightPanel {
-  #container: HTMLElement;
-  #toolbar: Toolbar;
-  #history: History;
-  #selection: SelectionManager;
-  #canvas: CanvasManager;
-  #deps: EditorRightPanelDeps;
+export class AnnotEditorRightPanelElement extends LitElement {
+  static override properties = {
+    toolbar: { attribute: false },
+    canvas: { attribute: false },
+    history: { attribute: false },
+    selection: { attribute: false },
+    getPluginSections: { attribute: false },
+    isBuiltinSectionDisabled: { attribute: false },
+    activeToolId: { state: true },
+    currentSelection: { state: true },
+    pageMetadata: { state: true },
+  };
+
+  declare toolbar: Toolbar | null;
+  declare canvas: CanvasManager | null;
+  declare history: History | null;
+  declare selection: SelectionManager | null;
+  declare getPluginSections: (() => UISection[]) | null;
+  declare isBuiltinSectionDisabled: ((id: string) => boolean) | null;
+  declare activeToolId: string | null;
+  declare currentSelection: SVGElement[];
+  declare pageMetadata: PageMetadata | null;
 
   /** Inline, "docked" PropertyPanel — owned at the panel level so
    *  its internal observers / event listeners survive mode
    *  switches. The selection-properties section attaches /
    *  detaches `#propPanelHost` to / from its mount container. */
-  #propPanel: PropertyPanel;
+  #propPanel: PropertyPanel | null = null;
   #propPanelHost: HTMLElement;
 
-  /** Action buttons (rotate / flip / arrange / align / group) shown
-   *  only when there's a selection. Panel-level chrome — not a
-   *  `UISection` — so it stays anchored above the section list
-   *  regardless of which sections happen to be visible. */
-  #actionsSection: HTMLElement;
-
-  /** Wraps the priority-sorted plugin + built-in sections. Inserted
-   *  between Actions and the empty state so the layout stays
-   *  consistent across re-renders. */
-  #sectionsHost: HTMLElement;
-
-  /** Shown when no section visible — keeps the always-visible
-   *  panel feeling intentional. */
-  #emptyState: HTMLElement;
-
-  /** Active tool id mirror — set via `showToolProperties`. */
-  #activeToolId: string | null = null;
-  /** Current selection mirror — set via `showSelectionProperties`. */
-  #currentSelection: SVGElement[] = [];
-  /** Current page metadata — set via `setPageMetadata`. */
-  #pageMetadata: PageMetadata | null = null;
-
-  /** Built-in sections constructed once at panel boot. */
-  #builtinSections: UISection[];
-  /** Currently-mounted section state. */
+  /** Built-in sections constructed once on first mount (when the
+   *  Toolbar / Canvas / History / Selection deps are all known). */
+  #builtinSections: UISection[] | null = null;
   #mounted: MountedSection[] = [];
 
-  constructor(
-    container: HTMLElement,
-    toolbar: Toolbar,
-    canvas: CanvasManager,
-    history: History,
-    selection: SelectionManager,
-    deps: EditorRightPanelDeps = {},
-  ) {
-    this.#container = container;
-    this.#toolbar = toolbar;
-    this.#history = history;
-    this.#selection = selection;
-    this.#canvas = canvas;
-    this.#deps = deps;
-    this.#container.innerHTML = "";
-
-    // --- Actions section (transform / arrange / align / group buttons) ---
-    this.#actionsSection = document.createElement("section");
-    this.#actionsSection.className = "editor-right-panel-actions";
-    this.#actionsSection.style.display = "none";
-    this.#buildActionButtons(this.#actionsSection);
-    this.#container.appendChild(this.#actionsSection);
-
-    // --- Sections host (priority-sorted built-ins + plugins) ---
-    this.#sectionsHost = document.createElement("div");
-    this.#sectionsHost.className = "editor-right-panel-sections-host";
-    this.#container.appendChild(this.#sectionsHost);
-
-    // --- PropertyPanel singleton ---
-    // Built once into a stable host element so its event listeners
-    // / observers survive mode switches. The selection-properties
-    // section attaches / detaches this host as it mounts /
-    // unmounts.
+  constructor() {
+    super();
+    this.toolbar = null;
+    this.canvas = null;
+    this.history = null;
+    this.selection = null;
+    this.getPluginSections = null;
+    this.isBuiltinSectionDisabled = null;
+    this.activeToolId = null;
+    this.currentSelection = [];
+    this.pageMetadata = null;
+    // Stable PropertyPanel host built once; the selection section
+    // attaches / detaches it across mode switches.
     this.#propPanelHost = document.createElement("div");
-    this.#propPanel = new PropertyPanel(this.#propPanelHost, canvas, history, "docked");
+  }
+
+  protected override createRenderRoot(): HTMLElement {
+    return this;
+  }
+
+  override connectedCallback(): void {
+    super.connectedCallback();
+    document.body.classList.add("has-right-panel");
+  }
+
+  override disconnectedCallback(): void {
+    this.#disposeSections();
+    this.#setDrawingBanner(false);
+    document.body.classList.remove("has-right-panel");
+    super.disconnectedCallback();
+  }
+
+  override render() {
+    const hasSelection = this.currentSelection.length > 0;
+    return html`
+      <section
+        class="editor-right-panel-actions"
+        style=${hasSelection ? "" : "display: none"}
+      >
+        <div class="editor-right-panel-actions-group-label">Transform</div>
+        <div class="editor-right-panel-actions-row">
+          <button
+            type="button"
+            class="toolbar-btn material-symbols-outlined"
+            data-tooltip="Rotate 90° counter-clockwise"
+            aria-label="Rotate 90° counter-clockwise"
+            @click=${() => this.#rotate(-90)}
+          >
+            rotate_left
+          </button>
+          <button
+            type="button"
+            class="toolbar-btn material-symbols-outlined"
+            data-tooltip="Rotate 90° clockwise"
+            aria-label="Rotate 90° clockwise"
+            @click=${() => this.#rotate(90)}
+          >
+            rotate_right
+          </button>
+          ${this.#svgActionBtn(FLIP_H_SVG, "Flip Horizontal (Shift+H)", () => this.#flip("h"))}
+          ${this.#svgActionBtn(FLIP_V_SVG, "Flip Vertical (Shift+V)", () => this.#flip("v"))}
+        </div>
+
+        <div class="editor-right-panel-actions-group-label">Arrange</div>
+        <div class="editor-right-panel-actions-row">
+          ${this.#svgActionBtn(BRING_TO_FRONT_SVG, "Bring to Front (Ctrl+Shift+])", () =>
+            this.selection?.bringToFront(),
+          )}
+          ${this.#svgActionBtn(BRING_FORWARD_SVG, "Bring Forward (Ctrl+])", () =>
+            this.selection?.bringForward(),
+          )}
+          ${this.#svgActionBtn(SEND_BACKWARD_SVG, "Send Backward (Ctrl+[)", () =>
+            this.selection?.sendBackward(),
+          )}
+          ${this.#svgActionBtn(SEND_TO_BACK_SVG, "Send to Back (Ctrl+Shift+[)", () =>
+            this.selection?.sendToBack(),
+          )}
+        </div>
+
+        <div class="editor-right-panel-actions-group-label">Align</div>
+        <div class="editor-right-panel-actions-row">
+          <button
+            type="button"
+            class="toolbar-btn material-symbols-outlined"
+            data-tooltip="Align left"
+            aria-label="Align left"
+            @click=${() => this.selection?.alignSelected("left")}
+          >
+            align_horizontal_left
+          </button>
+          <button
+            type="button"
+            class="toolbar-btn material-symbols-outlined"
+            data-tooltip="Align center"
+            aria-label="Align center"
+            @click=${() => this.selection?.alignSelected("center-h")}
+          >
+            align_horizontal_center
+          </button>
+          <button
+            type="button"
+            class="toolbar-btn material-symbols-outlined"
+            data-tooltip="Align right"
+            aria-label="Align right"
+            @click=${() => this.selection?.alignSelected("right")}
+          >
+            align_horizontal_right
+          </button>
+          <button
+            type="button"
+            class="toolbar-btn material-symbols-outlined"
+            data-tooltip="Distribute horizontally (needs 3+)"
+            aria-label="Distribute horizontally (needs 3+)"
+            @click=${() => this.selection?.distributeSelected("horizontal")}
+          >
+            horizontal_distribute
+          </button>
+        </div>
+        <div class="editor-right-panel-actions-row">
+          <button
+            type="button"
+            class="toolbar-btn material-symbols-outlined"
+            data-tooltip="Align top"
+            aria-label="Align top"
+            @click=${() => this.selection?.alignSelected("top")}
+          >
+            align_vertical_top
+          </button>
+          <button
+            type="button"
+            class="toolbar-btn material-symbols-outlined"
+            data-tooltip="Align middle"
+            aria-label="Align middle"
+            @click=${() => this.selection?.alignSelected("middle-v")}
+          >
+            align_vertical_center
+          </button>
+          <button
+            type="button"
+            class="toolbar-btn material-symbols-outlined"
+            data-tooltip="Align bottom"
+            aria-label="Align bottom"
+            @click=${() => this.selection?.alignSelected("bottom")}
+          >
+            align_vertical_bottom
+          </button>
+          <button
+            type="button"
+            class="toolbar-btn material-symbols-outlined"
+            data-tooltip="Distribute vertically (needs 3+)"
+            aria-label="Distribute vertically (needs 3+)"
+            @click=${() => this.selection?.distributeSelected("vertical")}
+          >
+            vertical_distribute
+          </button>
+        </div>
+
+        <div class="editor-right-panel-actions-group-label">Group</div>
+        <div class="editor-right-panel-actions-row">
+          <button
+            type="button"
+            class="toolbar-btn material-symbols-outlined"
+            data-tooltip="Group (Ctrl+G)"
+            aria-label="Group"
+            @click=${() => this.selection?.groupSelected()}
+          >
+            join_inner
+          </button>
+          <button
+            type="button"
+            class="toolbar-btn material-symbols-outlined"
+            data-tooltip="Ungroup (Ctrl+Shift+G)"
+            aria-label="Ungroup"
+            @click=${() => this.selection?.ungroupSelected()}
+          >
+            join_left
+          </button>
+        </div>
+      </section>
+
+      <div class="editor-right-panel-sections-host"></div>
+
+      <div class="editor-right-panel-empty">
+        <span class="editor-right-panel-empty-icon material-symbols-outlined">tune</span>
+        <p class="editor-right-panel-empty-title">Properties</p>
+        <p class="editor-right-panel-empty-hint">
+          Pick a tool or select a shape to see its properties here.
+        </p>
+      </div>
+    `;
+  }
+
+  #svgActionBtn(svg: string, tooltip: string, onClick: () => void) {
+    return html`
+      <button
+        type="button"
+        class="toolbar-btn action-btn-svg"
+        data-tooltip=${tooltip}
+        aria-label=${tooltip}
+        @click=${onClick}
+      >
+        ${unsafeHTML(svg)}
+      </button>
+    `;
+  }
+
+  protected override updated(): void {
+    // Lazy-initialise the PropertyPanel + built-in sections once
+    // the editor-host deps are known. Re-running cheaply after
+    // that since `#buildBuiltinSections` returns the cached list.
+    this.#ensurePropPanel();
+    this.#renderSections();
+    this.#setDrawingBanner(this.activeToolId === "freehand");
+    // Empty-state visibility follows whether any section actually
+    // mounted. Hidden by style() rather than re-rendered so Lit
+    // doesn't churn the template on every section change.
+    const empty = this.querySelector(".editor-right-panel-empty") as HTMLElement | null;
+    if (empty) empty.style.display = this.#mounted.length > 0 ? "none" : "";
+  }
+
+  #ensurePropPanel(): void {
+    if (this.#propPanel || !this.canvas || !this.history || !this.selection) return;
+    const selection = this.selection;
+    const toolbar = this.toolbar;
+    this.#propPanel = new PropertyPanel(
+      this.#propPanelHost,
+      this.canvas,
+      this.history,
+      "docked",
+    );
     this.#propPanel.onTargetReplaced = (replacements) => {
       const newEls = replacements.map((r) => r.newEl);
       if (newEls.length === 1) selection.select(newEls[0]!);
@@ -222,72 +405,137 @@ export class EditorRightPanel {
     // panel updates the matching tool's preset so the next shape
     // drawn with that tool inherits the value.
     this.#propPanel.onStyleChanged = (targets) => {
+      if (!toolbar) return;
       for (const t of targets) toolbar.syncPresetFromElement(t);
     };
     // Variant change (e.g. Selected Arrow → Selected Double arrow
     // via the Type picker). Load the new variant's preset and apply
     // its style attrs so the element visually reflects the variant's
-    // saved defaults, then re-render this panel so the TITLE refreshes
-    // and variant-dependent controls (like the per-end shape picker's
-    // filter) rebuild against the new state.
+    // saved defaults, then re-render this panel so the TITLE
+    // refreshes and variant-dependent controls (like the per-end
+    // shape picker's filter) rebuild against the new state.
     this.#propPanel.onVariantChanged = (targets) => {
-      for (const t of targets) toolbar.applyElementVariantPreset(t);
+      if (toolbar) for (const t of targets) toolbar.applyElementVariantPreset(t);
       selection.refreshHandles();
       this.showSelectionProperties(targets);
     };
+  }
 
-    // --- Empty state ---
-    this.#emptyState = document.createElement("div");
-    this.#emptyState.className = "editor-right-panel-empty";
-    this.#emptyState.innerHTML = `
-      <span class="editor-right-panel-empty-icon material-symbols-outlined">tune</span>
-      <p class="editor-right-panel-empty-title">Properties</p>
-      <p class="editor-right-panel-empty-hint">
-        Pick a tool or select a shape to see its properties here.
-      </p>
-    `;
-    this.#container.appendChild(this.#emptyState);
-
-    // --- Built-in sections ---
+  #builtinSectionList(): UISection[] {
+    if (this.#builtinSections) return this.#builtinSections;
+    if (!this.toolbar || !this.canvas || !this.history || !this.selection) return [];
+    const panel = this.#propPanel;
+    if (!panel) return [];
     this.#builtinSections = [
       createToolPropertiesSection({
-        getActiveToolId: () => this.#activeToolId,
-        getToolbar: () => this.#toolbar,
+        getActiveToolId: () => this.activeToolId,
+        getToolbar: () => this.toolbar!,
       }),
       createSelectionPropertiesSection({
-        getSelection: () => this.#currentSelection,
+        getSelection: () => this.currentSelection,
         getPropPanelHost: () => this.#propPanelHost,
-        showPropPanel: (els) => this.#propPanel.show(els),
-        hidePropPanel: () => this.#propPanel.hide(),
+        showPropPanel: (els) => panel.show(els),
+        hidePropPanel: () => panel.hide(),
         computeTitle: (els) => this.#computeSelectionTitle(els),
       }),
       createPageElementsSection({
-        getPageMetadata: () => this.#pageMetadata,
-        getCanvas: () => this.#canvas,
-        getHistory: () => this.#history,
-        getSelection: () => this.#selection,
+        getPageMetadata: () => this.pageMetadata,
+        getCanvas: () => this.canvas!,
+        getHistory: () => this.history!,
+        getSelection: () => this.selection!,
       }),
     ];
+    return this.#builtinSections;
+  }
 
-    document.body.classList.add("has-right-panel");
-    this.#render();
+  /** Section context handed to every `mount` / `update` call. The
+   *  `path` / `mode` / `tags` fields are placeholders for now —
+   *  the right-panel doesn't directly receive them; a future
+   *  follow-up can plumb them via properties if a plugin section
+   *  needs them. */
+  #ctx(): UISectionContext {
+    return {
+      path: "",
+      mode: "",
+      tags: {},
+      setTitle: (newTitle) => {
+        const last = this.#mounted[this.#mounted.length - 1];
+        if (!last) return;
+        const heading = last.sectionEl.querySelector(".editor-right-panel-section-title");
+        if (heading) heading.textContent = newTitle;
+      },
+    };
+  }
+
+  #composeSections(): UISection[] {
+    const isDisabled = this.isBuiltinSectionDisabled ?? (() => false);
+    const builtins = this.#builtinSectionList().filter((s) => !isDisabled(s.id));
+    const plugins = this.getPluginSections?.() ?? [];
+    const all = [...builtins, ...plugins];
+    return all.sort((a, b) => {
+      const ap = Number.isFinite(a.priority) ? a.priority : Number.POSITIVE_INFINITY;
+      const bp = Number.isFinite(b.priority) ? b.priority : Number.POSITIVE_INFINITY;
+      return ap - bp;
+    });
+  }
+
+  #renderSections(): void {
+    const host = this.querySelector(".editor-right-panel-sections-host") as HTMLElement | null;
+    if (!host) return;
+    this.#disposeSections();
+    host.innerHTML = "";
+
+    const ctx = this.#ctx();
+    for (const section of this.#composeSections()) {
+      if (section.visible && !section.visible(ctx)) continue;
+      const sectionEl = document.createElement("section");
+      sectionEl.className = "editor-right-panel-section";
+      sectionEl.dataset["sectionId"] = section.id;
+      const heading = document.createElement("h3");
+      heading.className = "editor-right-panel-section-title";
+      heading.textContent = section.title;
+      sectionEl.appendChild(heading);
+      const body = document.createElement("div");
+      body.className = "editor-right-panel-section-body";
+      sectionEl.appendChild(body);
+      host.appendChild(sectionEl);
+      try {
+        const lifecycle = section.mount(body, ctx);
+        this.#mounted.push({
+          section,
+          sectionEl,
+          bodyEl: body,
+          lifecycle,
+          reactive: typeof lifecycle === "object",
+        });
+      } catch (e) {
+        console.error(`[right-panel] section "${section.id}" mount threw:`, e);
+        sectionEl.remove();
+      }
+    }
+  }
+
+  #disposeSections(): void {
+    for (const state of this.#mounted) {
+      try {
+        if (typeof state.lifecycle === "function") state.lifecycle();
+        else state.lifecycle.unmount();
+      } catch (e) {
+        console.error(`[right-panel] section "${state.section.id}" unmount threw:`, e);
+      }
+    }
+    this.#mounted = [];
   }
 
   /** Called when the active tool changes. `toolId === null` →
    *  Select mode (no tool). */
   showToolProperties(toolId: string | null): void {
-    this.#activeToolId = toolId;
-    // The tool-properties section's `visible(ctx)` filters out
-    // null / "crop" tools, so a null toolId naturally hides the
-    // section on the next render.
-    this.#setDrawingBanner(toolId === "freehand");
-    this.#render();
+    this.activeToolId = toolId;
   }
 
   /** Called on selection change. Empty selection → hide section. */
   showSelectionProperties(elements: SVGElement[]): void {
-    this.#currentSelection = elements;
-    this.#render();
+    this.currentSelection = elements;
   }
 
   /** Update / clear the DOM-element metadata for the current image.
@@ -296,20 +544,19 @@ export class EditorRightPanel {
    *  hides itself. Called by EditorSession on each new editor
    *  session. */
   setPageMetadata(meta: PageMetadata | null | undefined): void {
-    this.#pageMetadata = meta ?? null;
+    this.pageMetadata = meta ?? null;
     console.log(
       "[annot/editor] setPageMetadata:",
       meta ? `${meta.elements.length} elements` : "null/undefined",
       meta?.captureRect,
     );
-    this.#render();
   }
 
+  /** Pre-Lit API parity — `.destroy()` is an alias for `.remove()`.
+   *  `disconnectedCallback` handles section teardown + chrome
+   *  cleanup. */
   destroy(): void {
-    this.#disposeSections();
-    this.#setDrawingBanner(false);
-    this.#container.innerHTML = "";
-    document.body.classList.remove("has-right-panel");
+    this.remove();
   }
 
   /**
@@ -326,109 +573,11 @@ export class EditorRightPanel {
           try {
             lifecycle.update(ctx);
           } catch (e) {
-            console.error(
-              `[right-panel] section "${state.section.id}" update threw:`,
-              e,
-            );
+            console.error(`[right-panel] section "${state.section.id}" update threw:`, e);
           }
         }
       }
     }
-  }
-
-  /** Section context handed to every `mount` / `update` call. The
-   *  `path` / `mode` / `tags` fields are placeholders for now —
-   *  the right-panel doesn't directly receive them; a future
-   *  follow-up can plumb them via deps if a plugin section needs
-   *  them. */
-  #ctx(): UISectionContext {
-    return {
-      path: "",
-      mode: "",
-      tags: {},
-      setTitle: (newTitle) => {
-        // Find the most-recently-mounted section that asked to
-        // override its title — plugins typically call this from
-        // inside `mount` (as the host-supplied DOM is being set
-        // up), so the freshest entry in `#mounted` is theirs.
-        const last = this.#mounted[this.#mounted.length - 1];
-        if (!last) return;
-        const heading = last.sectionEl.querySelector(
-          ".editor-right-panel-section-title",
-        );
-        if (heading) heading.textContent = newTitle;
-      },
-    };
-  }
-
-  #composeSections(): UISection[] {
-    const isDisabled = this.#deps.isBuiltinSectionDisabled ?? (() => false);
-    const builtins = this.#builtinSections.filter((s) => !isDisabled(s.id));
-    const plugins = this.#deps.getPluginSections?.() ?? [];
-    const all = [...builtins, ...plugins];
-    return all.sort((a, b) => {
-      const ap = Number.isFinite(a.priority) ? a.priority : Number.POSITIVE_INFINITY;
-      const bp = Number.isFinite(b.priority) ? b.priority : Number.POSITIVE_INFINITY;
-      return ap - bp;
-    });
-  }
-
-  #render(): void {
-    this.#disposeSections();
-    this.#sectionsHost.innerHTML = "";
-
-    // Toggle Actions panel chrome based on selection state. Stays
-    // above the section list (panel-level chrome).
-    this.#actionsSection.style.display =
-      this.#currentSelection.length > 0 ? "" : "none";
-
-    const ctx = this.#ctx();
-    let mountedCount = 0;
-    for (const section of this.#composeSections()) {
-      if (section.visible && !section.visible(ctx)) continue;
-      const sectionEl = document.createElement("section");
-      sectionEl.className = "editor-right-panel-section";
-      sectionEl.dataset["sectionId"] = section.id;
-      const heading = document.createElement("h3");
-      heading.className = "editor-right-panel-section-title";
-      heading.textContent = section.title;
-      sectionEl.appendChild(heading);
-      const body = document.createElement("div");
-      body.className = "editor-right-panel-section-body";
-      sectionEl.appendChild(body);
-      this.#sectionsHost.appendChild(sectionEl);
-      try {
-        const lifecycle = section.mount(body, ctx);
-        this.#mounted.push({
-          section,
-          sectionEl,
-          bodyEl: body,
-          lifecycle,
-          reactive: typeof lifecycle === "object",
-        });
-        mountedCount++;
-      } catch (e) {
-        console.error(`[right-panel] section "${section.id}" mount threw:`, e);
-        sectionEl.remove();
-      }
-    }
-
-    this.#emptyState.style.display = mountedCount > 0 ? "none" : "";
-  }
-
-  #disposeSections(): void {
-    for (const state of this.#mounted) {
-      try {
-        if (typeof state.lifecycle === "function") state.lifecycle();
-        else state.lifecycle.unmount();
-      } catch (e) {
-        console.error(
-          `[right-panel] section "${state.section.id}" unmount threw:`,
-          e,
-        );
-      }
-    }
-    this.#mounted = [];
   }
 
   /** Toggle the floating "Drawing mode" banner shown at the top of
@@ -451,143 +600,21 @@ export class EditorRightPanel {
     }
   }
 
-  /** Build the rotate / flip / arrange / align / group buttons. Each
-   *  button applies its operation to every currently-selected
-   *  element and saves a history entry. */
-  #buildActionButtons(container: HTMLElement): void {
-    const mkBtn = (
-      icon: string | { svg: string },
-      tooltip: string,
-      onClick: () => void,
-    ): HTMLButtonElement => {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      if (typeof icon === "string") {
-        btn.className = "toolbar-btn material-symbols-outlined";
-        btn.textContent = icon;
-      } else {
-        btn.className = "toolbar-btn action-btn-svg";
-        btn.innerHTML = icon.svg;
-      }
-      setTooltip(btn, tooltip);
-      btn.addEventListener("click", onClick);
-      return btn;
-    };
-
-    const mkGroupHeader = (text: string): HTMLElement => {
-      const h = document.createElement("div");
-      h.className = "editor-right-panel-actions-group-label";
-      h.textContent = text;
-      return h;
-    };
-
-    container.appendChild(mkGroupHeader("Transform"));
-    const transformRow = document.createElement("div");
-    transformRow.className = "editor-right-panel-actions-row";
-    transformRow.appendChild(
-      mkBtn("rotate_left", "Rotate 90° counter-clockwise", () => this.#rotate(-90)),
-    );
-    transformRow.appendChild(mkBtn("rotate_right", "Rotate 90° clockwise", () => this.#rotate(90)));
-    transformRow.appendChild(
-      mkBtn({ svg: FLIP_H_SVG }, "Flip Horizontal (Shift+H)", () => this.#flip("h")),
-    );
-    transformRow.appendChild(
-      mkBtn({ svg: FLIP_V_SVG }, "Flip Vertical (Shift+V)", () => this.#flip("v")),
-    );
-    container.appendChild(transformRow);
-
-    container.appendChild(mkGroupHeader("Arrange"));
-    const zorderRow = document.createElement("div");
-    zorderRow.className = "editor-right-panel-actions-row";
-    zorderRow.appendChild(
-      mkBtn({ svg: BRING_TO_FRONT_SVG }, "Bring to Front (Ctrl+Shift+])", () =>
-        this.#selection.bringToFront(),
-      ),
-    );
-    zorderRow.appendChild(
-      mkBtn({ svg: BRING_FORWARD_SVG }, "Bring Forward (Ctrl+])", () =>
-        this.#selection.bringForward(),
-      ),
-    );
-    zorderRow.appendChild(
-      mkBtn({ svg: SEND_BACKWARD_SVG }, "Send Backward (Ctrl+[)", () =>
-        this.#selection.sendBackward(),
-      ),
-    );
-    zorderRow.appendChild(
-      mkBtn({ svg: SEND_TO_BACK_SVG }, "Send to Back (Ctrl+Shift+[)", () =>
-        this.#selection.sendToBack(),
-      ),
-    );
-    container.appendChild(zorderRow);
-
-    container.appendChild(mkGroupHeader("Align"));
-    const alignRow = document.createElement("div");
-    alignRow.className = "editor-right-panel-actions-row";
-    alignRow.appendChild(
-      mkBtn("align_horizontal_left", "Align left", () => this.#selection.alignSelected("left")),
-    );
-    alignRow.appendChild(
-      mkBtn("align_horizontal_center", "Align center", () =>
-        this.#selection.alignSelected("center-h"),
-      ),
-    );
-    alignRow.appendChild(
-      mkBtn("align_horizontal_right", "Align right", () => this.#selection.alignSelected("right")),
-    );
-    alignRow.appendChild(
-      mkBtn("horizontal_distribute", "Distribute horizontally (needs 3+)", () =>
-        this.#selection.distributeSelected("horizontal"),
-      ),
-    );
-    container.appendChild(alignRow);
-    const align2Row = document.createElement("div");
-    align2Row.className = "editor-right-panel-actions-row";
-    align2Row.appendChild(
-      mkBtn("align_vertical_top", "Align top", () => this.#selection.alignSelected("top")),
-    );
-    align2Row.appendChild(
-      mkBtn("align_vertical_center", "Align middle", () =>
-        this.#selection.alignSelected("middle-v"),
-      ),
-    );
-    align2Row.appendChild(
-      mkBtn("align_vertical_bottom", "Align bottom", () => this.#selection.alignSelected("bottom")),
-    );
-    align2Row.appendChild(
-      mkBtn("vertical_distribute", "Distribute vertically (needs 3+)", () =>
-        this.#selection.distributeSelected("vertical"),
-      ),
-    );
-    container.appendChild(align2Row);
-
-    container.appendChild(mkGroupHeader("Group"));
-    const groupRow = document.createElement("div");
-    groupRow.className = "editor-right-panel-actions-row";
-    groupRow.appendChild(
-      mkBtn("join_inner", "Group (Ctrl+G)", () => this.#selection.groupSelected()),
-    );
-    groupRow.appendChild(
-      mkBtn("join_left", "Ungroup (Ctrl+Shift+G)", () => this.#selection.ungroupSelected()),
-    );
-    container.appendChild(groupRow);
-  }
-
   #rotate(delta: number): void {
-    if (this.#currentSelection.length === 0) return;
-    for (const t of this.#currentSelection) {
+    if (!this.history || !this.selection || this.currentSelection.length === 0) return;
+    for (const t of this.currentSelection) {
       const cur = readTransformState(t).rotation;
       setRotation(t, cur + delta);
     }
-    this.#history.save();
-    this.#selection.refreshHandles();
+    this.history.save();
+    this.selection.refreshHandles();
   }
 
   #flip(axis: "h" | "v"): void {
-    if (this.#currentSelection.length === 0) return;
-    for (const t of this.#currentSelection) toggleFlip(t, axis);
-    this.#history.save();
-    this.#selection.refreshHandles();
+    if (!this.history || !this.selection || this.currentSelection.length === 0) return;
+    for (const t of this.currentSelection) toggleFlip(t, axis);
+    this.history.save();
+    this.selection.refreshHandles();
   }
 
   /** Friendly, user-facing title for the selection. Plumbed into
@@ -615,7 +642,7 @@ export class EditorRightPanel {
     } else {
       breakdown = `${parts.slice(0, 2).join(" + ")} + ${parts.length - 2} more`;
     }
-    return `${elements.length} selected — ${breakdown}`;
+    return `${elements.length} selected \u2014 ${breakdown}`;
   }
 
   #elementTypeName(el: SVGElement): string {
@@ -678,5 +705,15 @@ export class EditorRightPanel {
       }
     }
     return "Element";
+  }
+}
+
+if (!customElements.get("annot-editor-right-panel")) {
+  customElements.define("annot-editor-right-panel", AnnotEditorRightPanelElement);
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    "annot-editor-right-panel": AnnotEditorRightPanelElement;
   }
 }

@@ -5,10 +5,13 @@
  * `ctx.setTitle` so it reads "Rectangle" / "Arrow" / "Sticky note"
  * matching the toolbar's display title.
  *
- * Migrated from the previous monolithic right-panel as part of
- * Phase 3 of `docs/plans/plugin-ui-slots.md`. The reactive
- * lifecycle's `update(ctx)` re-renders the controls when the active
- * tool changes (host calls `notifyUpdate` after `showToolProperties`).
+ * Lit Phase 2 — replaces the imperative render closure with a
+ * `<annot-right-panel-tool-properties-section>` element whose
+ * `firstUpdated` + `updated` delegates into
+ * `Toolbar.renderToolProperties(id, container)`. The `Toolbar`
+ * class itself is still vanilla — it moves out of
+ * `@ingcreators/annot-core` and into web as part of Phase 5 per
+ * the plan's sign-off.
  *
  * `visible(ctx)` returns false in Select mode (no active tool) and
  * for tools that have no adjustable properties (`crop`).
@@ -16,6 +19,58 @@
 
 import type { Toolbar } from "@ingcreators/annot-core";
 import type { UISection } from "../../app/plugin-host.js";
+import { html, LitElement } from "../../lit.js";
+
+export class AnnotRightPanelToolPropertiesSectionElement extends LitElement {
+  static override properties = {
+    toolId: { attribute: false },
+    toolbar: { attribute: false },
+    setTitle: { attribute: false },
+  };
+
+  declare toolId: string | null;
+  declare toolbar: Toolbar | null;
+  declare setTitle: ((title: string) => void) | null;
+
+  constructor() {
+    super();
+    this.toolId = null;
+    this.toolbar = null;
+    this.setTitle = null;
+  }
+
+  protected override createRenderRoot(): HTMLElement {
+    return this;
+  }
+
+  override render() {
+    // Static shell — Toolbar populates the inner container
+    // imperatively from `updated()`. Re-rendering the wrapper
+    // without this.toolId set would wipe the Toolbar's DOM.
+    return html`<div class="tool-properties-host"></div>`;
+  }
+
+  protected override updated(): void {
+    const host = this.querySelector(".tool-properties-host") as HTMLElement | null;
+    if (!host || !this.toolbar || !this.toolId) return;
+    host.innerHTML = "";
+    this.toolbar.renderToolProperties(this.toolId, host);
+    this.setTitle?.(this.toolbar.getToolDisplayTitle(this.toolId));
+  }
+}
+
+if (!customElements.get("annot-right-panel-tool-properties-section")) {
+  customElements.define(
+    "annot-right-panel-tool-properties-section",
+    AnnotRightPanelToolPropertiesSectionElement,
+  );
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    "annot-right-panel-tool-properties-section": AnnotRightPanelToolPropertiesSectionElement;
+  }
+}
 
 export interface ToolPropertiesSectionDeps {
   getActiveToolId(): string | null;
@@ -23,22 +78,12 @@ export interface ToolPropertiesSectionDeps {
 }
 
 export function createToolPropertiesSection(deps: ToolPropertiesSectionDeps): UISection {
-  let bodyRef: HTMLElement | null = null;
-
-  const render = (container: HTMLElement, ctx: { setTitle(t: string): void }) => {
-    container.innerHTML = "";
-    const toolId = deps.getActiveToolId();
-    if (!toolId) return; // visible() guard usually prevents this; defensive no-op
-    deps.getToolbar().renderToolProperties(toolId, container);
-    ctx.setTitle(deps.getToolbar().getToolDisplayTitle(toolId));
-  };
+  let el: AnnotRightPanelToolPropertiesSectionElement | null = null;
 
   return {
     id: "right-panel.tool-properties",
-    // Static fallback — the host overrides via `ctx.setTitle` from
-    // inside mount with the active tool's display name. Sections
-    // can declare a sensible-but-generic title that's used until
-    // the dynamic override fires.
+    // Static fallback — the host overrides via `ctx.setTitle`
+    // from inside mount with the active tool's display name.
     title: "Tool",
     priority: 10,
     visible() {
@@ -46,14 +91,23 @@ export function createToolPropertiesSection(deps: ToolPropertiesSectionDeps): UI
       return id !== null && id !== "crop";
     },
     mount(container, ctx) {
-      bodyRef = container;
-      render(container, ctx);
+      el = document.createElement("annot-right-panel-tool-properties-section");
+      el.toolbar = deps.getToolbar();
+      el.toolId = deps.getActiveToolId();
+      el.setTitle = (t) => ctx.setTitle(t);
+      container.appendChild(el);
       return {
         update(updateCtx) {
-          if (bodyRef) render(bodyRef, updateCtx);
+          if (!el) return;
+          el.toolbar = deps.getToolbar();
+          el.toolId = deps.getActiveToolId();
+          el.setTitle = (t) => updateCtx.setTitle(t);
+          // Properties assigned above are already reactive; the
+          // Lit `updated()` hook re-delegates into Toolbar.
         },
         unmount() {
-          bodyRef = null;
+          el?.remove();
+          el = null;
         },
       };
     },
