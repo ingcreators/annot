@@ -16,6 +16,7 @@ import {
   PluginHost,
   type AnnotPlugin,
   type ExternalLink,
+  type SidebarTab,
   type StorageRegistration,
 } from "./plugin-host.js";
 
@@ -34,6 +35,17 @@ function fakeStorageReg(
     connect: async () => null,
     restore: () => null,
     status: () => ({ connected: false }),
+    ...overrides,
+  };
+}
+
+/** Minimal `SidebarTab` factory for tests. */
+function fakeTab(id: string, overrides: Partial<SidebarTab> = {}): SidebarTab {
+  return {
+    id,
+    label: id,
+    priority: 100,
+    onClick: () => {},
     ...overrides,
   };
 }
@@ -372,6 +384,159 @@ describe("PluginHost", () => {
       const back = host.findStorageRegistration("cloud");
       const result = await back!.connect({ forcePicker: false });
       expect(result).toBe(fakeStore);
+    });
+  });
+
+  describe("addSidebarTab / updateSidebarTab", () => {
+    it("registers a tab and resolves it via findSidebarTab", () => {
+      const host = new PluginHost();
+      const tab = fakeTab("recent", { priority: 10 });
+      host.registerAll([
+        { name: "p", register: (ctx) => ctx.addSidebarTab(tab) },
+      ]);
+      expect(host.findSidebarTab("recent")).toEqual(tab);
+    });
+
+    it("listSidebarTabs preserves registration order", () => {
+      const host = new PluginHost();
+      host.registerAll([
+        { name: "p1", register: (ctx) => ctx.addSidebarTab(fakeTab("a", { priority: 50 })) },
+        { name: "p2", register: (ctx) => ctx.addSidebarTab(fakeTab("b", { priority: 25 })) },
+        { name: "p3", register: (ctx) => ctx.addSidebarTab(fakeTab("c", { priority: 100 })) },
+      ]);
+      // Sidebar sort by priority is the sidebar's job; the host
+      // returns registration order so the sort is the only thing
+      // that controls visual order.
+      expect(host.listSidebarTabs().map((t) => t.id)).toEqual(["a", "b", "c"]);
+    });
+
+    it("throws on duplicate tab id (collision with previously-registered tab)", () => {
+      const host = new PluginHost();
+      const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      host.registerAll([
+        { name: "p1", register: (ctx) => ctx.addSidebarTab(fakeTab("recent")) },
+        { name: "p2", register: (ctx) => ctx.addSidebarTab(fakeTab("recent")) },
+      ]);
+      // The first registration wins; the second's throw is logged
+      // and isolated by the existing per-plugin try/catch in
+      // `registerAll`.
+      expect(host.findSidebarTab("recent")).toBeDefined();
+      expect(consoleErrorSpy).toHaveBeenCalled();
+      consoleErrorSpy.mockRestore();
+    });
+
+    it("updateSidebarTab mutates only the supplied fields", () => {
+      const host = new PluginHost();
+      let captured: ((id: string, partial: Partial<SidebarTab>) => void) | undefined;
+      host.registerAll([
+        {
+          name: "p",
+          register(ctx) {
+            ctx.addSidebarTab(fakeTab("recent", { label: "Recent", icon: "history" }));
+            captured = ctx.updateSidebarTab;
+          },
+        },
+      ]);
+      captured!("recent", { badge: "12" });
+      const tab = host.findSidebarTab("recent")!;
+      expect(tab.label).toBe("Recent");
+      expect(tab.icon).toBe("history");
+      expect(tab.badge).toBe("12");
+    });
+
+    it("updateSidebarTab throws on unknown id", () => {
+      const host = new PluginHost();
+      let captured: ((id: string, partial: Partial<SidebarTab>) => void) | undefined;
+      host.registerAll([
+        {
+          name: "p",
+          register(ctx) {
+            captured = ctx.updateSidebarTab;
+          },
+        },
+      ]);
+      expect(() => captured!("nonexistent", { badge: "1" })).toThrow(/not registered/);
+    });
+
+    it("setting one tab active flips every other tab to inactive (single-active enforcement)", () => {
+      const host = new PluginHost();
+      let captured: ((id: string, partial: Partial<SidebarTab>) => void) | undefined;
+      host.registerAll([
+        {
+          name: "p1",
+          register(ctx) {
+            ctx.addSidebarTab(fakeTab("a", { isActive: true }));
+            ctx.addSidebarTab(fakeTab("b"));
+            captured = ctx.updateSidebarTab;
+          },
+        },
+        {
+          name: "p2",
+          register(ctx) {
+            ctx.addSidebarTab(fakeTab("c"));
+          },
+        },
+      ]);
+      // Sanity: only "a" starts active.
+      expect(host.findSidebarTab("a")?.isActive).toBe(true);
+      expect(host.findSidebarTab("b")?.isActive).toBeFalsy();
+      expect(host.findSidebarTab("c")?.isActive).toBeFalsy();
+
+      // Activate "c" (a different plugin's tab). Sidebar enforces
+      // single-active across plugin boundaries, so "a" deactivates.
+      captured!("c", { isActive: true });
+      expect(host.findSidebarTab("a")?.isActive).toBe(false);
+      expect(host.findSidebarTab("b")?.isActive).toBeFalsy();
+      expect(host.findSidebarTab("c")?.isActive).toBe(true);
+    });
+
+    it("addSidebarTab with isActive: true also enforces single-active vs previously-active tab", () => {
+      const host = new PluginHost();
+      host.registerAll([
+        {
+          name: "p1",
+          register: (ctx) => ctx.addSidebarTab(fakeTab("a", { isActive: true })),
+        },
+        {
+          name: "p2",
+          // A misconfigured second plugin tries to register another
+          // initial-active tab. The host honors single-active by
+          // deactivating the first one rather than refusing the
+          // registration — keeps the rule simple ("at most one
+          // active at any moment") regardless of how the state got
+          // there.
+          register: (ctx) => ctx.addSidebarTab(fakeTab("b", { isActive: true })),
+        },
+      ]);
+      expect(host.findSidebarTab("a")?.isActive).toBe(false);
+      expect(host.findSidebarTab("b")?.isActive).toBe(true);
+    });
+
+    it("onSidebarChange fires after addSidebarTab and updateSidebarTab", () => {
+      const host = new PluginHost();
+      const log: string[] = [];
+      host.onSidebarChange(() => {
+        log.push("changed");
+      });
+      let captured: ((id: string, partial: Partial<SidebarTab>) => void) | undefined;
+      host.registerAll([
+        {
+          name: "p",
+          register(ctx) {
+            ctx.addSidebarTab(fakeTab("recent"));
+            captured = ctx.updateSidebarTab;
+          },
+        },
+      ]);
+      // One fire from addSidebarTab.
+      expect(log).toHaveLength(1);
+      captured!("recent", { badge: "5" });
+      expect(log).toHaveLength(2);
+    });
+
+    it("returns undefined for an unregistered tab id", () => {
+      const host = new PluginHost();
+      expect(host.findSidebarTab("nonexistent")).toBeUndefined();
     });
   });
 });

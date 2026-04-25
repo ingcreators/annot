@@ -140,6 +140,66 @@ export interface StorageRegistration {
 }
 
 /**
+ * Sidebar tab — a top-level navigation entry rendered in the
+ * "Views" section between Storage and Folders (default order).
+ *
+ * Built-ins describe themselves via plain object instances handed
+ * to `PluginContext.addSidebarTab` from a built-in plugin's
+ * `register`. The "Recent" built-in is the reference example.
+ *
+ * State (`isActive` / `badge` / `visible`) is a plain value the
+ * sidebar reads on render. Plugins mutate via
+ * `PluginContext.updateSidebarTab(id, partial)`; the sidebar
+ * enforces single-active across all tabs (setting one true flips
+ * every other to false before re-render).
+ */
+export interface SidebarTab {
+  /** Stable id. Used by `updateSidebarTab`'s mutation target +
+   *  the active-state diff. Plugin-owned namespace —
+   *  e.g. `"cloud.team-library"` — to avoid collisions across
+   *  plugins. Throws at registration time on duplicate id. */
+  readonly id: string;
+
+  /** Visible label. */
+  readonly label: string;
+
+  /** Material-symbols icon name (e.g. `"groups"`, `"history"`,
+   *  `"star"`). Optional; falls back to a generic glyph. */
+  readonly icon?: string;
+
+  /** Render order within the "Views" section. Lower numbers
+   *  render first. Falsy = `+Infinity` (appended last). Stable
+   *  sort. The built-in "Recent" tab reserves priority 10. */
+  readonly priority: number;
+
+  /** Click handler. Plugin-owned. Typically swaps the main
+   *  content area to the plugin's view (route push, gallery
+   *  filter, modal, …) and (if the plugin wants a sticky
+   *  highlight) calls `ctx.updateSidebarTab(id, { isActive: true })`. */
+  onClick(): void;
+
+  /** Initial active state. The sidebar enforces single-active
+   *  across plugins: setting one tab to `isActive: true` (via
+   *  this initial value or via `updateSidebarTab`) flips all
+   *  other tabs to `isActive: false` automatically. */
+  readonly isActive?: boolean;
+
+  /** Initial badge text. `undefined` hides the badge. */
+  readonly badge?: string;
+
+  /** Initial visibility. False hides the tab without
+   *  un-registering it. Used for "show this tab only when the
+   *  user has access" cases. */
+  readonly visible?: boolean;
+}
+
+/** Mutable subset of `SidebarTab` — the fields a plugin can
+ *  flip via `updateSidebarTab` after registration. */
+export type SidebarTabUpdate = Partial<
+  Pick<SidebarTab, "label" | "icon" | "isActive" | "badge" | "visible">
+>;
+
+/**
  * A plugin exposes a single `register` entry point that wires itself
  * into the host. `ctx` is constructed once per app init and frozen
  * after `register()` returns so plugins can't hold onto it and keep
@@ -190,6 +250,19 @@ export interface PluginContext {
    *  append after the built-ins, or interleave at e.g. 25 to land
    *  between Device and Drive. */
   registerStorage(reg: StorageRegistration): void;
+
+  /** Register a sidebar tab. `id` must be unique across all
+   *  registered tabs (built-in + plugin); duplicates throw. The
+   *  tab appears in the sidebar's "Views" section, sorted by
+   *  `priority`. The Recent built-in reserves priority 10. */
+  addSidebarTab(tab: SidebarTab): void;
+
+  /** Mutate a previously-registered tab. Only the supplied
+   *  fields change; omitted fields are unchanged. Throws if no
+   *  tab matches `id`. Setting `isActive: true` flips every
+   *  other tab's `isActive` to `false` before the re-render
+   *  (single-active across plugins). */
+  updateSidebarTab(id: string, partial: SidebarTabUpdate): void;
 }
 
 export class PluginHost {
@@ -201,6 +274,15 @@ export class PluginHost {
   readonly #afterSaveListeners: Array<(ev: AfterSaveEvent) => void> = [];
   readonly #routeChangeListeners: Array<(ev: RouteChangeEvent) => void> = [];
   readonly #storageRegistrations = new Map<string, StorageRegistration>();
+  /** Sidebar tabs in mutation-friendly form: a `Map` keyed by id
+   *  so `updateSidebarTab` can locate the entry in O(1) and so
+   *  iteration order is registration order (which then feeds into
+   *  the sidebar's stable `priority` sort). */
+  readonly #sidebarTabs = new Map<string, SidebarTab>();
+  /** Listeners that re-render the sidebar when tabs change. Wired
+   *  by `App.init` so the sidebar's render() is the only side
+   *  effect; plugin authors don't see this hook directly. */
+  readonly #sidebarChangeListeners: Array<() => void> = [];
 
   /**
    * Register every plugin in `plugins`. Called once from
@@ -304,6 +386,42 @@ export class PluginHost {
     return Array.from(this.#storageRegistrations.values());
   }
 
+  /** Find a sidebar tab by id. Returns `undefined` if no tab
+   *  matches — the typical reason is a stale id from before
+   *  `unloadSidebarTab` (future). */
+  findSidebarTab(id: string): SidebarTab | undefined {
+    return this.#sidebarTabs.get(id);
+  }
+
+  /** Snapshot of registered tabs in registration order. The
+   *  caller (sidebar) sorts by `priority` for render. */
+  listSidebarTabs(): SidebarTab[] {
+    return Array.from(this.#sidebarTabs.values());
+  }
+
+  /** Subscribe to "tabs changed" — fires after every
+   *  `updateSidebarTab` mutation (and after the initial
+   *  `addSidebarTab` calls during `registerAll`). Wired by
+   *  `App.init` so the sidebar re-renders without the plugin
+   *  having to know about the sidebar. */
+  onSidebarChange(fn: () => void): void {
+    this.#sidebarChangeListeners.push(fn);
+  }
+
+  #fireSidebarChange(): void {
+    for (const fn of this.#sidebarChangeListeners) {
+      try {
+        fn();
+      } catch (e) {
+        // The listener is host-supplied (sidebar render hook), not
+        // plugin-supplied — a throw here is a host bug, not a
+        // plugin bug. Log and continue so a single broken hook
+        // doesn't take down subsequent dispatches.
+        console.error("[plugin-host] onSidebarChange listener threw:", e);
+      }
+    }
+  }
+
   #makeContext(_pluginName: string): PluginContext {
     // Capture references — a plugin could stash `ctx` and call these
     // later, which is fine: the underlying arrays live on the host
@@ -337,6 +455,42 @@ export class PluginHost {
           );
         }
         this.#storageRegistrations.set(reg.mode, reg);
+      },
+      addSidebarTab: (tab) => {
+        if (this.#sidebarTabs.has(tab.id)) {
+          throw new Error(`[plugin-host] sidebar tab id "${tab.id}" is already registered.`);
+        }
+        // If the registration self-declares isActive, enforce
+        // single-active right away so a misconfigured plugin
+        // can't have two tabs both initial-active.
+        if (tab.isActive) {
+          for (const [id, existing] of this.#sidebarTabs) {
+            if (existing.isActive) {
+              this.#sidebarTabs.set(id, { ...existing, isActive: false });
+            }
+          }
+        }
+        this.#sidebarTabs.set(tab.id, tab);
+        this.#fireSidebarChange();
+      },
+      updateSidebarTab: (id, partial) => {
+        const existing = this.#sidebarTabs.get(id);
+        if (!existing) {
+          throw new Error(`[plugin-host] sidebar tab id "${id}" is not registered.`);
+        }
+        // Single-active enforcement: if the partial activates
+        // this tab, deactivate every other tab in the same pass
+        // so the sidebar's render sees a consistent state with
+        // exactly one active row.
+        if (partial.isActive === true) {
+          for (const [otherId, otherTab] of this.#sidebarTabs) {
+            if (otherId !== id && otherTab.isActive) {
+              this.#sidebarTabs.set(otherId, { ...otherTab, isActive: false });
+            }
+          }
+        }
+        this.#sidebarTabs.set(id, { ...existing, ...partial });
+        this.#fireSidebarChange();
       },
     } satisfies PluginContext);
   }

@@ -4,9 +4,22 @@
  */
 import type { StorageProvider } from "@ingcreators/annot-core/storage";
 import { setTooltip } from "@ingcreators/annot-core/utils";
-import type { StorageRegistration } from "../app/plugin-host.js";
+import type { SidebarTab, StorageRegistration } from "../app/plugin-host.js";
 import { isClipboardReadSupported, isScreenCaptureSupported } from "../capture/pwa-capture.js";
 import type { StorageMode } from "../storage/bridge.js";
+
+/** Default priorities the sidebar's three sections render in.
+ *  `App.init({ sidebarSectionOrder })` overrides per-section to
+ *  reorder. Lower priority renders first; ties fall back to the
+ *  fixed (storage / views / folders) declaration order via the
+ *  stable sort. */
+export const DEFAULT_SIDEBAR_SECTION_ORDER = {
+  storage: 10,
+  views: 20,
+  folders: 30,
+} as const;
+
+export type SidebarSectionOrder = Partial<typeof DEFAULT_SIDEBAR_SECTION_ORDER>;
 
 export interface SidebarCallbacks {
   onStorageSelect: (mode: StorageMode) => void;
@@ -27,6 +40,15 @@ export interface SidebarCallbacks {
    *  `App.init({ disableBuiltinStorage })`. Optional for the same
    *  reason as `getPluginStorages`. */
   isBuiltinDisabled?: (mode: string) => boolean;
+  /** All registered sidebar tabs (built-in + plugin). Sorted by
+   *  `priority` inside the sidebar before render. Optional — the
+   *  Views section is suppressed entirely when the callback is
+   *  absent or returns an empty list. */
+  getSidebarTabs?: () => SidebarTab[];
+  /** Section ordering override. Merged over
+   *  `DEFAULT_SIDEBAR_SECTION_ORDER`; missing fields keep their
+   *  default. Optional. */
+  getSidebarSectionOrder?: () => SidebarSectionOrder;
 }
 
 /** Internal chip descriptor shared across built-ins + plugins. The
@@ -230,8 +252,30 @@ export class Sidebar {
   render(): void {
     this.#container.innerHTML = "";
 
+    // The "New" button is pinned at the top regardless of section
+    // priorities — it's the primary action, not a navigable
+    // section.
     this.#container.appendChild(this.#buildNewButton());
 
+    // Resolve section order. Defaults place Storage / Views /
+    // Folders in the historical visual order; deployments can
+    // override per-section via `App.init({ sidebarSectionOrder })`
+    // to e.g. put Views above Storage.
+    const orderOverride = this.#callbacks.getSidebarSectionOrder?.() ?? {};
+    const order = { ...DEFAULT_SIDEBAR_SECTION_ORDER, ...orderOverride };
+    const sections: Array<{ priority: number; render: () => void }> = [
+      { priority: order.storage, render: () => this.#renderStorageSection() },
+      { priority: order.views, render: () => this.#renderViewsSection() },
+      { priority: order.folders, render: () => this.#renderFoldersSection() },
+    ];
+    sections.sort((a, b) => a.priority - b.priority);
+    for (const s of sections) s.render();
+
+    this.#updateActiveVisuals();
+    this.refreshFolderTree();
+  }
+
+  #renderStorageSection(): void {
     const title = document.createElement("div");
     title.className = "sidebar-section-title";
     title.textContent = "Storage";
@@ -264,9 +308,6 @@ export class Sidebar {
 
     for (const chip of chips) {
       const status = this.#statuses.get(chip.mode) ?? { connected: false };
-      // Default label per mode mirrors what the previous hardcoded
-      // strip rendered: "Local" for Browser, "Not connected" / a
-      // backend-supplied label for everything else.
       const defaultLabel =
         chip.mode === "browser" ? "Local" : status.connected ? "Connected" : "Not connected";
       const subtitle = status.connected ? status.label || defaultLabel : defaultLabel;
@@ -278,7 +319,29 @@ export class Sidebar {
         this.#buildStorageItem(chip.mode, chip.icon, chip.label, subtitle, reselect),
       );
     }
+  }
 
+  #renderViewsSection(): void {
+    const tabs = (this.#callbacks.getSidebarTabs?.() ?? [])
+      .filter((t) => t.visible !== false)
+      .sort((a, b) => {
+        const ap = Number.isFinite(a.priority) ? a.priority : Number.POSITIVE_INFINITY;
+        const bp = Number.isFinite(b.priority) ? b.priority : Number.POSITIVE_INFINITY;
+        return ap - bp;
+      });
+    if (tabs.length === 0) return; // suppress heading entirely
+
+    const title = document.createElement("div");
+    title.className = "sidebar-section-title";
+    title.textContent = "Views";
+    this.#container.appendChild(title);
+
+    for (const tab of tabs) {
+      this.#container.appendChild(this.#buildSidebarTabRow(tab));
+    }
+  }
+
+  #renderFoldersSection(): void {
     // The "Folders" section (title + tree) is shown as a unit once
     // `refreshFolderTree` has successfully built the tree. Hiding both
     // together avoids the in-between state where the title is
@@ -294,9 +357,47 @@ export class Sidebar {
     this.#treeContainer.className = "sidebar-folder-tree";
     this.#treeContainer.style.display = "none";
     this.#container.appendChild(this.#treeContainer);
+  }
 
-    this.#updateActiveVisuals();
-    this.refreshFolderTree();
+  /** Render a single sidebar tab row (icon + label + optional
+   *  badge + active highlight). Click dispatches to the tab's
+   *  own `onClick`; single-active enforcement is on the
+   *  `PluginHost` setter, so by the time we render, exactly one
+   *  tab has `isActive: true`. */
+  #buildSidebarTabRow(tab: SidebarTab): HTMLElement {
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = "sidebar-storage-item";
+    if (tab.isActive) row.classList.add("active");
+    row.dataset["tabId"] = tab.id;
+
+    const iconEl = document.createElement("span");
+    iconEl.className = "material-symbols-outlined";
+    iconEl.textContent = tab.icon || "view_module";
+    row.appendChild(iconEl);
+
+    const labelEl = document.createElement("span");
+    labelEl.className = "sidebar-storage-label";
+    labelEl.textContent = tab.label;
+    row.appendChild(labelEl);
+
+    if (tab.badge) {
+      const badgeEl = document.createElement("span");
+      badgeEl.className = "sidebar-tab-badge";
+      badgeEl.textContent = tab.badge;
+      row.appendChild(badgeEl);
+    }
+
+    row.addEventListener("click", (e) => {
+      e.stopPropagation();
+      try {
+        tab.onClick();
+      } catch (err) {
+        console.error(`[sidebar] tab "${tab.id}" onClick threw:`, err);
+      }
+    });
+
+    return row;
   }
 
   // ---- New button ----
