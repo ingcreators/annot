@@ -1,16 +1,24 @@
 # Finish the PPTX export migration to the shared OOXML builder
 
-> **Status:** Queued. Direct follow-up to
-> [`_done/office-paste-shared-drawing-builder.md`](./_done/office-paste-shared-drawing-builder.md).
+> **Status:** Done. Landed across PRs
+> [#219](https://github.com/ingcreators/annot/pull/219)–
+> [#223](https://github.com/ingcreators/annot/pull/223). Direct
+> follow-up to
+> [`_done/office-paste-shared-drawing-builder.md`](./office-paste-shared-drawing-builder.md).
 > That plan landed the shared builder under
 > `@ingcreators/annot-render/drawingml` and migrated the simple
 > shapes (rect / ellipse / text / marker / freehand single path /
 > mosaic) onto it. Lines / arrows + the freehand session-group
 > wrapper stayed on
 > [`packages/editor/src/pptx-export.ts`](../../packages/editor/src/pptx-export.ts)'s
-> own SVG-element handlers because they need OOXML output that
+> own SVG-element handlers because they needed OOXML output that
 > the shared builder didn't model yet (curved-arrow `<a:custGeom>`,
-> PPTX-only `<p:grpSp>` group). This plan finishes the migration.
+> PPTX-only `<p:grpSp>` group). This plan finished the migration:
+> after landing, the `<p:grpSp>` wrapper is the only PPTX-only
+> structure that remains in `pptx-export.ts`; every other per-shape
+> OOXML emit routes through the shared builder via
+> `svgElementToAnnotationShape` + `buildShapeXml`. Office paste
+> picks up curved-arrow support for free.
 >
 > **Risk:** Low–medium. The end state is `pptx-export.ts` containing
 > only the slide envelope + theme + content-types + ZIP packaging

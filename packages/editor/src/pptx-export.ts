@@ -1,4 +1,22 @@
-import { svgElementToAnnotationShape } from "@ingcreators/annot-core/editor/svg-to-annotation-shapes";
+/**
+ * PPTX export — slide envelope + theme + content_types + ZIP
+ * packaging. Per-shape OOXML construction lives in the shared
+ * builder (`@ingcreators/annot-render/drawingml`); this file
+ * is what's left after
+ * [`_done/pptx-export-shared-builder-finish` phase 4](../../../docs/plans/_done/pptx-export-shared-builder-finish.md)
+ * folded the simple emitters and the line / arrow / freehand
+ * cases into the shared dispatch.
+ *
+ * The one PPTX-only structure that stays is the freehand
+ * session group's `<p:grpSp>` wrapper — the GVML clipboard
+ * side intentionally flattens, so there's nothing to share
+ * for that case.
+ */
+
+import {
+  svgElementToAnnotationShape,
+  translateOf,
+} from "@ingcreators/annot-core/editor/svg-to-annotation-shapes";
 import { buildZip } from "@ingcreators/annot-core/zip";
 import { buildShapeXml, parseSvgPath, px } from "@ingcreators/annot-render";
 import type { CanvasManager } from "./canvas-manager.js";
@@ -8,44 +26,25 @@ function strToU8(s: string): Uint8Array {
   return __pptxTextEncoder.encode(s);
 }
 
-/**
- * Build a `<a:gradFill>` XML fragment from a gradient spec (parsed
- * from the data-*-gradient JSON attribute). OOXML uses
- * `gsLst` → `<a:gs>` children with `pos` in thousandths and colors
- * inside `<a:srgbClr>`. The angle is in 60000ths of a degree with the
- * same convention as our source (0° = left→right, CW positive).
- */
-/** Read the pending `data-tx` / `data-ty` translation on an element.
- *  For path / group elements, `#moveElement` (used by drag / align /
- *  nudge) stores the translation here rather than baking it into the
- *  element's geometry. Every PPTX shape's `<a:off>` needs to add this
- *  so exports reflect the element's actual on-canvas position —
- *  without it, elements show up at their pre-move location. */
-function offsetFromTransform(el: SVGElement): { tx: number; ty: number } {
-  const tx = Number.parseFloat(el.getAttribute("data-tx") || "0") || 0;
-  const ty = Number.parseFloat(el.getAttribute("data-ty") || "0") || 0;
-  return { tx, ty };
-}
-
-function xfrmAttrs(el: SVGElement, opts?: { excludeFlip?: boolean }): string {
+/** Build the rotation / flip attribute string for the freehand
+ *  session-group's `<a:xfrm>` open tag. PPTX-only — the GVML
+ *  clipboard side flattens freehand sessions to individual shapes,
+ *  so there's no equivalent in the shared builder. The
+ *  shape-level rotation / flip used by every other PPTX shape
+ *  goes through `xfrmAttrs(s, opts)` in
+ *  `@ingcreators/annot-render/drawingml/helpers`; this helper is
+ *  the SVG-element-input twin needed for the group wrapper
+ *  itself. */
+function freehandGroupXfrmAttrs(el: SVGElement): string {
   let rot = Number.parseFloat(el.getAttribute("data-rot") || "0") || 0;
+  let out = "";
   if (rot) {
     rot = ((rot % 360) + 360) % 360;
-    const ooxmlRot = Math.round(rot * 60000);
-    let out = ` rot="${ooxmlRot}"`;
-    if (!opts?.excludeFlip) {
-      if (el.getAttribute("data-flip-h") === "1") out += ` flipH="1"`;
-      if (el.getAttribute("data-flip-v") === "1") out += ` flipV="1"`;
-    }
-    return out;
+    out += ` rot="${Math.round(rot * 60000)}"`;
   }
-  if (!opts?.excludeFlip) {
-    let out = "";
-    if (el.getAttribute("data-flip-h") === "1") out += ` flipH="1"`;
-    if (el.getAttribute("data-flip-v") === "1") out += ` flipV="1"`;
-    return out;
-  }
-  return "";
+  if (el.getAttribute("data-flip-h") === "1") out += ` flipH="1"`;
+  if (el.getAttribute("data-flip-v") === "1") out += ` flipV="1"`;
+  return out;
 }
 
 interface ShapeInfo {
@@ -205,7 +204,7 @@ function buildFreehandGroup(
   // at the right place inside the group). Without this, aligning /
   // nudging a freehand drawing leaves the PPTX export at the old
   // spot.
-  const grpOff = offsetFromTransform(g);
+  const grpOff = translateOf(g);
   const offX = minX + grpOff.tx;
   const offY = minY + grpOff.ty;
 
@@ -234,7 +233,7 @@ function buildFreehandGroup(
     <p:nvPr/>
   </p:nvGrpSpPr>
   <p:grpSpPr>
-    <a:xfrm${xfrmAttrs(g)}>
+    <a:xfrm${freehandGroupXfrmAttrs(g)}>
       <a:off x="${px(offX)}" y="${px(offY)}"/>
       <a:ext cx="${px(bw)}" cy="${px(bh)}"/>
       <a:chOff x="${px(minX)}" y="${px(minY)}"/>
