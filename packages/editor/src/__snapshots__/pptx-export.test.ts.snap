@@ -116,66 +116,8 @@ exports[`buildPptxFiles slide XML > pins the current output for every emitter 1`
       <a:chExt cx="1047750" cy="238125"/>
     </a:xfrm>
   </p:grpSpPr>
-  <p:sp>
-  <p:nvSpPr>
-    <p:cNvPr id="9" name="Freehand 9"/>
-    <p:cNvSpPr/>
-    <p:nvPr/>
-  </p:nvSpPr>
-  <p:spPr>
-    <a:xfrm>
-      <a:off x="476250" y="5715000"/>
-      <a:ext cx="952500" cy="47625"/>
-    </a:xfrm>
-    <a:custGeom>
-      <a:avLst/>
-      <a:gdLst/>
-      <a:ahLst/>
-      <a:cxnLst/>
-      <a:rect l="0" t="0" r="952500" b="47625"/>
-      <a:pathLst>
-        <a:path w="952500" h="47625">
-          <a:moveTo><a:pt x="0" y="0"/></a:moveTo><a:lnTo><a:pt x="476250" y="47625"/></a:lnTo><a:lnTo><a:pt x="952500" y="0"/></a:lnTo>
-        </a:path>
-      </a:pathLst>
-    </a:custGeom>
-    <a:noFill/>
-    <a:ln w="38100" cap="rnd">
-      <a:solidFill><a:srgbClr val="FF8800"></a:srgbClr></a:solidFill>
-      <a:round/>
-    </a:ln>
-  </p:spPr>
-</p:sp>
-  <p:sp>
-  <p:nvSpPr>
-    <p:cNvPr id="10" name="Freehand 10"/>
-    <p:cNvSpPr/>
-    <p:nvPr/>
-  </p:nvSpPr>
-  <p:spPr>
-    <a:xfrm>
-      <a:off x="571500" y="5905500"/>
-      <a:ext cx="952500" cy="47625"/>
-    </a:xfrm>
-    <a:custGeom>
-      <a:avLst/>
-      <a:gdLst/>
-      <a:ahLst/>
-      <a:cxnLst/>
-      <a:rect l="0" t="0" r="952500" b="47625"/>
-      <a:pathLst>
-        <a:path w="952500" h="47625">
-          <a:moveTo><a:pt x="0" y="0"/></a:moveTo><a:lnTo><a:pt x="476250" y="47625"/></a:lnTo><a:lnTo><a:pt x="952500" y="0"/></a:lnTo>
-        </a:path>
-      </a:pathLst>
-    </a:custGeom>
-    <a:noFill/>
-    <a:ln w="38100" cap="rnd">
-      <a:solidFill><a:srgbClr val="FF8800"></a:srgbClr></a:solidFill>
-      <a:round/>
-    </a:ln>
-  </p:spPr>
-</p:sp>
+  <p:sp><p:nvSpPr><p:cNvPr id="9" name="F9"/><p:cNvSpPr/></p:nvSpPr><a:spPr><a:xfrm><a:off x="476250" y="5715000"/><a:ext cx="952500" cy="47625"/></a:xfrm><a:custGeom><a:avLst/><a:gdLst/><a:ahLst/><a:cxnLst/><a:rect l="0" t="0" r="952500" b="47625"/><a:pathLst><a:path w="952500" h="47625"><a:moveTo><a:pt x="0" y="0"/></a:moveTo><a:lnTo><a:pt x="476250" y="47625"/></a:lnTo><a:lnTo><a:pt x="952500" y="0"/></a:lnTo></a:path></a:pathLst></a:custGeom><a:noFill/><a:ln w="38100" cap="rnd"><a:solidFill><a:srgbClr val="FF8800"/></a:solidFill><a:round/></a:ln></a:spPr></p:sp>
+  <p:sp><p:nvSpPr><p:cNvPr id="10" name="F10"/><p:cNvSpPr/></p:nvSpPr><a:spPr><a:xfrm><a:off x="571500" y="5905500"/><a:ext cx="952500" cy="47625"/></a:xfrm><a:custGeom><a:avLst/><a:gdLst/><a:ahLst/><a:cxnLst/><a:rect l="0" t="0" r="952500" b="47625"/><a:pathLst><a:path w="952500" h="47625"><a:moveTo><a:pt x="0" y="0"/></a:moveTo><a:lnTo><a:pt x="476250" y="47625"/></a:lnTo><a:lnTo><a:pt x="952500" y="0"/></a:lnTo></a:path></a:pathLst></a:custGeom><a:noFill/><a:ln w="38100" cap="rnd"><a:solidFill><a:srgbClr val="FF8800"/></a:solidFill><a:round/></a:ln></a:spPr></p:sp>
 </p:grpSp>
 <p:sp><p:nvSpPr><p:cNvPr id="11" name="M11"/><p:cNvSpPr/></p:nvSpPr><a:spPr><a:xfrm><a:off x="3710940" y="4663440"/><a:ext cx="198120" cy="198120"/></a:xfrm><a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val 10000"/></a:avLst></a:prstGeom><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill><a:ln w="14288"><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill></a:ln></a:spPr><p:txBody><a:bodyPr anchor="ctr" lIns="0" tIns="0" rIns="0" bIns="0" wrap="none"><a:normAutofit/></a:bodyPr><a:lstStyle/><a:p><a:pPr algn="ctr"/><a:r><a:rPr lang="en-US" sz="975" b="1"><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill></a:rPr><a:t>1</a:t></a:r></a:p></p:txBody></p:sp>
     </p:spTree>

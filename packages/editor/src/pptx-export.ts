@@ -50,35 +50,6 @@ function gradFillXml(gRaw: string | null): string {
 }
 
 /**
- * Build the <a:ln> line description including stroke color (or
- * gradient), opacity alpha, cap, and join. Used by every shape/line
- * builder so the style features stay consistent across element types.
- */
-function _lnXml(
-  el: SVGElement,
-  swPx: number,
-  fallbackStroke: string,
-  dashXml: string,
-  arrowXml: string,
-): string {
-  const grad = el.getAttribute("data-stroke-gradient");
-  // strokeOpacity() checks both `opacity` (preferred for <line> so
-  // markers fade with the stroke) and `stroke-opacity` (for shapes).
-  const opacity = strokeOpacity(el);
-  const stroke = el.getAttribute("stroke") || fallbackStroke;
-  let paint: string;
-  if (grad) {
-    paint = gradFillXml(grad);
-  } else {
-    const alpha = opacity < 1 ? `<a:alpha val="${Math.round(opacity * 100000)}"/>` : "";
-    paint = `<a:solidFill><a:srgbClr val="${chex(stroke)}">${alpha}</a:srgbClr></a:solidFill>`;
-  }
-  const capStr = capAttr(el.getAttribute("stroke-linecap"));
-  const joinElement = joinXml(el.getAttribute("stroke-linejoin"));
-  return `<a:ln w="${pt(swPx)}"${capStr}>${paint}${joinElement}${dashXml}${arrowXml}</a:ln>`;
-}
-
-/**
  * Read the effective stroke opacity for an element. For <line> the
  * canonical attribute is `opacity` (so the marker fades with the
  * line); other shapes use `stroke-opacity`. Both are accepted in
@@ -90,28 +61,6 @@ function strokeOpacity(el: SVGElement): number {
   const so = el.getAttribute("stroke-opacity");
   if (so != null && so !== "") return Number.parseFloat(so);
   return 1;
-}
-
-/**
- * Build a `<a:solidFill>` / `<a:gradFill>` / `<a:noFill/>` fragment
- * for any element's stroke or fill. Centralizes the defensive handling
- * so `url(#...)` gradient refs NEVER end up inside `<a:srgbClr>`.
- */
-function paintXml(el: SVGElement, value: string, which: "stroke" | "fill"): string {
-  const gradRaw = el.getAttribute(`data-${which}-gradient`);
-  if (gradRaw) return gradFillXml(gradRaw);
-  if (value === "none" || !value) return "<a:noFill/>";
-  if (/^url\(#.+\)$/i.test(value.trim())) {
-    // Fallback — an SVG defs gradient reference without a stored
-    // spec. Emit a sane solid color rather than breaking the file.
-    return `<a:solidFill><a:srgbClr val="000000"/></a:solidFill>`;
-  }
-  const op =
-    which === "stroke"
-      ? strokeOpacity(el)
-      : Number.parseFloat(el.getAttribute("fill-opacity") || "1");
-  const alpha = op < 1 ? `<a:alpha val="${Math.round(op * 100000)}"/>` : "";
-  return `<a:solidFill><a:srgbClr val="${chex(value)}">${alpha}</a:srgbClr></a:solidFill>`;
 }
 
 /**
@@ -424,77 +373,6 @@ function buildLine(el: SVGElement, id: number): string {
 </p:cxnSp>`;
 }
 
-function buildFreehand(el: SVGPathElement, id: number): string {
-  const d = el.getAttribute("d") || "";
-  const stroke = el.getAttribute("stroke") || "#ff0000";
-  const sw = Number.parseFloat(el.getAttribute("stroke-width") || "3");
-
-  // Parse SVG path to get bounding box and relative points.
-  const points = parseSvgPath(d);
-  if (points.length < 2) return "";
-
-  let minX = Number.POSITIVE_INFINITY;
-  let minY = Number.POSITIVE_INFINITY;
-  let maxX = Number.NEGATIVE_INFINITY;
-  let maxY = Number.NEGATIVE_INFINITY;
-  for (const [x, y] of points) {
-    minX = Math.min(minX, x);
-    minY = Math.min(minY, y);
-    maxX = Math.max(maxX, x);
-    maxY = Math.max(maxY, y);
-  }
-  const bw = maxX - minX || 1;
-  const bh = maxY - minY || 1;
-  // Include the element's pending translation (set by drag / align /
-  // nudge on the path directly, or inherited from a freehand <g>
-  // parent via the caller passing the group's offset).
-  const pathOff = offsetFromTransform(el);
-  const offX = minX + pathOff.tx;
-  const offY = minY + pathOff.ty;
-
-  // Convert to DrawingML path (coordinates in EMU relative to shape origin).
-  const pathPoints = points
-    .map(([x, y], i) => {
-      const ex = px(x - minX);
-      const ey = px(y - minY);
-      return i === 0
-        ? `<a:moveTo><a:pt x="${ex}" y="${ey}"/></a:moveTo>`
-        : `<a:lnTo><a:pt x="${ex}" y="${ey}"/></a:lnTo>`;
-    })
-    .join("");
-
-  return `<p:sp>
-  <p:nvSpPr>
-    <p:cNvPr id="${id}" name="Freehand ${id}"/>
-    <p:cNvSpPr/>
-    <p:nvPr/>
-  </p:nvSpPr>
-  <p:spPr>
-    <a:xfrm${xfrmAttrs(el)}>
-      <a:off x="${px(offX)}" y="${px(offY)}"/>
-      <a:ext cx="${px(bw)}" cy="${px(bh)}"/>
-    </a:xfrm>
-    <a:custGeom>
-      <a:avLst/>
-      <a:gdLst/>
-      <a:ahLst/>
-      <a:cxnLst/>
-      <a:rect l="0" t="0" r="${px(bw)}" b="${px(bh)}"/>
-      <a:pathLst>
-        <a:path w="${px(bw)}" h="${px(bh)}">
-          ${pathPoints}
-        </a:path>
-      </a:pathLst>
-    </a:custGeom>
-    <a:noFill/>
-    <a:ln w="${pt(sw)}" cap="rnd">
-      ${paintXml(el, stroke, "stroke")}
-      <a:round/>
-    </a:ln>
-  </p:spPr>
-</p:sp>`;
-}
-
 /** Wrap a freehand session `<g>` as an OOXML group shape (`<p:grpSp>`)
  *  so PowerPoint opens the strokes as a single selectable unit.
  *  Each child `<path>` is emitted as a `<p:sp>` via `buildFreehand`,
@@ -546,7 +424,14 @@ function buildFreehandGroup(
   let childId = startId + 1;
   const childXml: string[] = [];
   for (const p of Array.from(paths)) {
-    const xml = buildFreehand(p, childId);
+    // Each per-stroke `<p:sp>` goes through the shared builder
+    // — same `freehand` emitter the Office-clipboard side uses.
+    // The group wrapper (`<p:grpSp>` + group `xfrm`) stays
+    // here because PPTX uses it for "select all strokes as one
+    // unit" UX; GVML clipboard intentionally flattens.
+    const shape = svgElementToAnnotationShape(p);
+    if (!shape) continue;
+    const xml = buildShapeXml(shape, { ns: "p", id: childId });
     if (xml) {
       childXml.push(xml);
       childId++;
