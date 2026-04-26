@@ -105,9 +105,13 @@ declare namespace chrome {
   }
 }
 
-// `ToolDef`, `ToolVariant`, `ToolVariantGroup`, `TOOL_VARIANTS`,
-// `DEFAULT_HIGHLIGHT_COLOR`, and `toolIdForElement` were extracted
-// to `./toolbar-variants.ts` (Stage 3a-1 of the pre-release cleanup).
+// Tool metadata (label / icon / variants / preset fields / element
+// classifier / style extractor) lives in
+// `@ingcreators/annot-core`'s `TOOL_REGISTRY`. The Tier C bridge
+// (`ToolDef`, `TOOL_FACTORIES`, `toolIdForElement`) lives in
+// `./tool-factories.ts`. Phases 1–5 of
+// `docs/plans/_done/toolbar-schema.md` migrated everything off the
+// old `toolbar-variants.ts` (now deleted).
 
 // `openAnchoredPopover` lives in `@ingcreators/annot-core` (see
 // `packages/core/src/editor/anchored-popover.ts`). It's imported
