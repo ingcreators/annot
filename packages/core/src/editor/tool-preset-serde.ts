@@ -67,9 +67,6 @@ const FIELD_TO_SNAKE = {
   strokeOpacity: "stroke_opacity",
   strokeLinecap: "stroke_linecap",
   strokeLinejoin: "stroke_linejoin",
-  markerBorderColor: "marker_border_color",
-  markerBorderWidth: "marker_border_width",
-  markerBorderDasharray: "marker_border_dasharray",
 } as const satisfies Partial<Record<keyof ToolOptions, string>>;
 
 /** Reverse map (snake → camel) computed once at module load. */

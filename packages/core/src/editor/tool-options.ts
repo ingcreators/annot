@@ -137,10 +137,4 @@ export interface ToolOptions {
 
   /** Shape variant for the Counter (Marker) tool. */
   markerShape?: MarkerShape;
-
-  /** Counter (Marker) border — an OPTIONAL ring drawn around the
-   *  bg primitive (circle/rect). */
-  markerBorderColor?: string;
-  markerBorderWidth?: number;
-  markerBorderDasharray?: string;
 }

@@ -486,10 +486,8 @@ export const TOOL_REGISTRY: Readonly<Record<string, ToolRegistryEntry>> = {
         svg: COUNTER_ICON_SVG.rounded,
       },
     ],
-    // P3-8 refactor: marker uses standard color semantics —
-    // `fillColor` = bg interior, `strokeColor` = bg border. The
-    // legacy `markerBorder*` fields are kept off the array so new
-    // saves don't carry them forward.
+    // Marker uses standard color semantics: `fillColor` = bg
+    // interior, `strokeColor` = bg border.
     presetFields: [
       ...UNIVERSAL_STROKE_FIELDS,
       "fillColor",
@@ -510,12 +508,10 @@ export const TOOL_REGISTRY: Readonly<Record<string, ToolRegistryEntry>> = {
       if (ms === "circle" || ms === "rect" || ms === "rounded") {
         preset.markerShape = ms;
       }
-      // P3-8 refactor: marker uses STANDARD color semantics —
-      // `fillColor` = bg interior, `strokeColor` = bg border. The
-      // outer <g> has no stroke/fill attrs; we read both from the
-      // bg primitive (<circle> / <rect>). Also scrub the legacy
-      // `markerBorder*` fields so old presets don't linger and
-      // shadow the new values on re-save.
+      // Marker uses STANDARD color semantics: `fillColor` = bg
+      // interior, `strokeColor` = bg border. The outer <g> has no
+      // stroke/fill attrs; we read both from the bg primitive
+      // (<circle> / <rect>).
       const bg = el.querySelector("circle, rect");
       const bgFill = bg?.getAttribute("fill");
       if (bgFill) preset.fillColor = bgFill;
@@ -525,9 +521,6 @@ export const TOOL_REGISTRY: Readonly<Record<string, ToolRegistryEntry>> = {
       if (Number.isFinite(bsw) && bsw >= 0) preset.strokeWidth = bsw;
       const bdash = bg?.getAttribute("data-dash-key") ?? bg?.getAttribute("stroke-dasharray");
       if (bdash != null) preset.strokeDasharray = bdash;
-      delete (preset as Partial<ToolOptions>).markerBorderColor;
-      delete (preset as Partial<ToolOptions>).markerBorderWidth;
-      delete (preset as Partial<ToolOptions>).markerBorderDasharray;
       // Font size for the counter number — read from the <text>
       // child. Without this, changing font-size via the property
       // panel wouldn't stick.

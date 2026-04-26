@@ -265,28 +265,23 @@ export function applyPresetStyleAttrs(el: SVGElement, preset: ToolOptions): void
   }
 }
 
-/** Marker/counter preset application. Standard semantics (P3-8
- *  refactor): `fillColor` = bg interior, `strokeColor` = bg border.
- *  Back-compat: if the preset predates the refactor (has
- *  `strokeColor` but no `fillColor`), treat strokeColor as the bg
- *  fill AND use legacy `markerBorder*` fields for border attrs. */
+/** Marker/counter preset application. Standard color semantics:
+ *  `fillColor` = bg interior, `strokeColor` = bg border. Same fields
+ *  every other tool uses for fill / stroke. */
 export function applyMarkerPresetStyle(g: SVGElement, preset: ToolOptions): void {
   const bg = g.querySelector("circle, rect");
   if (!bg) return;
-  const legacy = !preset.fillColor && !!preset.strokeColor;
   // --- bg fill ---
-  const fill = legacy ? preset.strokeColor : preset.fillColor;
-  if (fill) bg.setAttribute("fill", fill);
+  if (preset.fillColor) bg.setAttribute("fill", preset.fillColor);
   // --- bg border ---
-  const borderColor = legacy ? preset.markerBorderColor : preset.strokeColor;
-  if (borderColor) bg.setAttribute("stroke", borderColor);
-  const borderWidth = legacy ? preset.markerBorderWidth : preset.strokeWidth;
-  if (borderWidth != null) bg.setAttribute("stroke-width", String(borderWidth));
-  const borderDashKey = legacy ? preset.markerBorderDasharray : preset.strokeDasharray;
-  if (borderDashKey != null) {
-    const w = borderWidth ?? Number.parseFloat(bg.getAttribute("stroke-width") || "1.5");
-    bg.setAttribute("stroke-dasharray", computeDasharray(borderDashKey, w));
-    bg.setAttribute("data-dash-key", borderDashKey);
+  if (preset.strokeColor) bg.setAttribute("stroke", preset.strokeColor);
+  if (preset.strokeWidth != null) {
+    bg.setAttribute("stroke-width", String(preset.strokeWidth));
+  }
+  if (preset.strokeDasharray != null) {
+    const w = preset.strokeWidth ?? Number.parseFloat(bg.getAttribute("stroke-width") || "1.5");
+    bg.setAttribute("stroke-dasharray", computeDasharray(preset.strokeDasharray, w));
+    bg.setAttribute("data-dash-key", preset.strokeDasharray);
   }
   if (preset.fontSize != null) {
     const text = g.querySelector("text");
