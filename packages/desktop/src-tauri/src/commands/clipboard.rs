@@ -72,6 +72,17 @@ pub struct AnnotationShape {
     /// stash the color in `stroke` still render via the fallback in
     /// `gvml_text`.
     pub text_bg_color: Option<String>,
+
+    // ---- Textbox variant ----
+    /// `plain` | `sticky` | `callout`. Distinguishes the three
+    /// `type === "text"` shapes; only `callout` cares about tail
+    /// coordinates today.
+    pub text_variant: Option<String>,
+    /// Callout tail-tip coordinates, in the same (canvas) space as
+    /// `x` / `y`. Both populated together; either being absent
+    /// degrades the shape to a plain rounded textbox.
+    pub tail_x: Option<f64>,
+    pub tail_y: Option<f64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -631,7 +642,39 @@ fn gvml_text(s: &AnnotationShape, id: u32) -> String {
         exml(l)
     )).collect();
     let xf = xfrm_attrs(s, false);
-    format!(r#"<a:sp><a:nvSpPr><a:cNvPr id="{id}" name="T{id}"/><a:cNvSpPr txBox="1"/></a:nvSpPr><a:spPr><a:xfrm{xf}><a:off x="{x}" y="{y}"/><a:ext cx="{bw}" cy="{bh}"/></a:xfrm><a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val 5000"/></a:avLst></a:prstGeom>{bg_fill}<a:ln w="9525"><a:solidFill><a:srgbClr val="BFBFBF"/></a:solidFill></a:ln></a:spPr><a:txSp><a:txBody><a:bodyPr wrap="square" rtlCol="0" lIns="91440" tIns="45720" rIns="91440" bIns="45720"/><a:lstStyle/>{p}</a:txBody><a:useSpRect/></a:txSp></a:sp>"#)
+
+    // Callouts with a populated tail tip switch from `roundRect` to
+    // `wedgeRoundRectCallout`. adj1/adj2 express the tail tip as a
+    // signed percentage offset from the bbox center, in 1/100,000ths
+    // of width / height; values can exceed ±50% when the tail tip
+    // lands outside the bbox (the typical case for callouts).
+    // adj3 keeps the same corner-rounding constant as the
+    // non-callout `roundRect` form (val 5000) so plain / sticky /
+    // callout share the visual corner radius.
+    let geom = match (
+        s.text_variant.as_deref(),
+        s.tail_x,
+        s.tail_y,
+        s.x,
+        s.y,
+        s.width,
+        s.height,
+    ) {
+        (Some("callout"), Some(tx), Some(ty), Some(bx), Some(by), Some(bw), Some(bh))
+            if bw > 0.0 && bh > 0.0 =>
+        {
+            let dx = tx - (bx + bw / 2.0);
+            let dy = ty - (by + bh / 2.0);
+            let adj1 = (dx / bw * 100_000.0).round() as i64;
+            let adj2 = (dy / bh * 100_000.0).round() as i64;
+            format!(
+                r#"<a:prstGeom prst="wedgeRoundRectCallout"><a:avLst><a:gd name="adj1" fmla="val {adj1}"/><a:gd name="adj2" fmla="val {adj2}"/><a:gd name="adj3" fmla="val 5000"/></a:avLst></a:prstGeom>"#
+            )
+        }
+        _ => r#"<a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val 5000"/></a:avLst></a:prstGeom>"#.to_string(),
+    };
+
+    format!(r#"<a:sp><a:nvSpPr><a:cNvPr id="{id}" name="T{id}"/><a:cNvSpPr txBox="1"/></a:nvSpPr><a:spPr><a:xfrm{xf}><a:off x="{x}" y="{y}"/><a:ext cx="{bw}" cy="{bh}"/></a:xfrm>{geom}{bg_fill}<a:ln w="9525"><a:solidFill><a:srgbClr val="BFBFBF"/></a:solidFill></a:ln></a:spPr><a:txSp><a:txBody><a:bodyPr wrap="square" rtlCol="0" lIns="91440" tIns="45720" rIns="91440" bIns="45720"/><a:lstStyle/>{p}</a:txBody><a:useSpRect/></a:txSp></a:sp>"#)
 }
 
 /// Parse "rgba(r,g,b,a)" or "#rrggbb" to (r,g,b,a) where a is 0-255

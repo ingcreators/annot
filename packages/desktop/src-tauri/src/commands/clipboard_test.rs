@@ -136,6 +136,28 @@ fn text_shape() -> AnnotationShape {
     }
 }
 
+fn callout_shape() -> AnnotationShape {
+    // Callout textbox with tail at (300, 470) — outside the bbox to
+    // its bottom-right. Phase 4 makes Rust read `tail_x` / `tail_y`
+    // and `text_variant`, switching `prstGeom` from `roundRect` to
+    // `wedgeRoundRectCallout`.
+    AnnotationShape {
+        shape_type: "text".into(),
+        x: Some(100.0),
+        y: Some(400.0),
+        width: Some(150.0),
+        height: Some(50.0),
+        font_size: Some(20.0),
+        fill: Some("#000000".into()),
+        text: Some("Callout!".into()),
+        text_bg_color: Some("rgba(255,255,200,0.92)".into()),
+        text_variant: Some("callout".into()),
+        tail_x: Some(300.0),
+        tail_y: Some(470.0),
+        ..Default::default()
+    }
+}
+
 fn text_shape_legacy_carrier() -> AnnotationShape {
     // Mirror of `text_shape()` but using only the legacy
     // `stroke`-as-bg-color carrier — proves the fallback in
@@ -232,6 +254,18 @@ fn drawing_xml_marker_legacy_stroke_carrier_matches_canonical() {
     let canonical = build_drawing_xml(&[marker_shape()], 800.0, 600.0, false).0;
     let legacy = build_drawing_xml(&[marker_shape_legacy_carrier()], 800.0, 600.0, false).0;
     assert_eq!(canonical, legacy);
+}
+
+#[test]
+fn drawing_xml_callout_emits_wedge_round_rect_callout() {
+    // Phase 4: a callout with a populated tail tip switches from
+    // the plain `roundRect` form to `wedgeRoundRectCallout`. The
+    // signed adj1/adj2 percentages encode the tail offset from the
+    // bbox center; for a 150x50 bbox at (100,400) and tail at
+    // (300,470), the offsets are dx = +125 (≈+83333), dy = +45
+    // (≈+90000).
+    let (xml, _) = build_drawing_xml(&[callout_shape()], 800.0, 600.0, false);
+    insta::assert_snapshot!("drawing_xml_callout_with_tail", xml);
 }
 
 #[test]
