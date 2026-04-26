@@ -72,6 +72,7 @@ import {
   type ToolPreset,
 } from "@ingcreators/annot-core/tauri-bridge";
 import { setTooltip } from "@ingcreators/annot-editor/tooltip";
+import { buildDrawingXml } from "@ingcreators/annot-render";
 import type { AnnotToolbarButtonElement, AnnotToolbarElement } from "./annot-toolbar.js";
 import { populateToolPropertyPanel } from "./tool-property-renderer.js";
 import { openCanvasRightClickMenu } from "./toolbar-canvas-menu.js";
@@ -659,13 +660,13 @@ export class Toolbar {
     try {
       const screenshotData = this.#canvas.imageEl.getAttribute("href") || undefined;
       const pngDataUrl = await getPngDataUrl(this.#canvas);
-      await copyAsOffice(
+      const { drawing, mediaFiles } = buildDrawingXml({
         shapes,
-        this.#canvas.imageWidth,
-        this.#canvas.imageHeight,
-        screenshotData,
-        pngDataUrl,
-      );
+        width: this.#canvas.imageWidth,
+        height: this.#canvas.imageHeight,
+        hasImage: !!screenshotData,
+      });
+      await copyAsOffice(drawing, mediaFiles, screenshotData, pngDataUrl);
     } catch (err) {
       console.error("Copy failed:", err);
     }

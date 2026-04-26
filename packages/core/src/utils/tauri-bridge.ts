@@ -393,17 +393,39 @@ export interface AnnotationShape {
   };
 }
 
+/** One mosaic / blur image embedded into the GVML clipboard
+ *  package. The caller (TS-side `buildDrawingXml` consumer)
+ *  passes pre-decoded bytes; the Rust packager writes them at
+ *  `clipboard/media/{filename}` and binds them via the
+ *  matching rId in the drawing rels. */
+export interface MosaicMediaPayload {
+  filename: string;
+  /** Raw image bytes (PNG / JPEG). Tauri JSON-serializes this
+   *  as an array of numbers — fine for the typical mosaic
+   *  payload size (a few KB per patch). */
+  bytes: Uint8Array;
+}
+
+/**
+ * Office-clipboard copy. Since
+ * [`office-paste-shared-drawing-builder` phase 3](../../../../../docs/plans/office-paste-shared-drawing-builder.md)
+ * the per-shape OOXML is built on the TS side via
+ * `@ingcreators/annot-render`'s `buildDrawingXml`; this IPC
+ * boundary just hands the assembled drawing XML + media list
+ * to Rust for ZIP packaging + Win32 clipboard write.
+ */
 export async function copyAsOffice(
-  shapes: AnnotationShape[],
-  canvasWidth: number,
-  canvasHeight: number,
+  drawingXml: string,
+  mosaicMedia: MosaicMediaPayload[],
   screenshotData?: string,
   pngDataUrl?: string,
 ): Promise<void> {
   return invoke<void>("copy_as_office", {
-    shapes,
-    canvasWidth,
-    canvasHeight,
+    drawingXml,
+    mosaicMedia: mosaicMedia.map((m) => ({
+      filename: m.filename,
+      bytes: Array.from(m.bytes),
+    })),
     screenshotData,
     pngDataUrl,
   });
