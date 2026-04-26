@@ -68,8 +68,14 @@ export {
   classifyPropertyElement,
   classifyPropertySelection,
   PROPERTY_CONTROL_IDS,
+  PROPERTY_CONTROLS,
+  PROPERTY_EFFECT_IDS,
   type PropertyCategory,
+  type PropertyControlDef,
   type PropertyControlId,
+  type PropertyControlOption,
+  type PropertyControlType,
+  type PropertyEffectId,
 } from "./editor/property-schema.js";
 
 // ─── Selection geometry (pure math: snap, rotate, cursor lookup) ──────
