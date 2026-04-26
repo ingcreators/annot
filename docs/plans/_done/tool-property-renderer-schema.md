@@ -1,26 +1,35 @@
 # Tool Property Renderer — Schema-driven Refactor
 
-> **Status:** Queued. Final piece of the schema-driven trilogy:
-> [`_done/property-panel-schema.md`](./_done/property-panel-schema.md)
-> + [`_done/property-panel-schema-extensions.md`](./_done/property-panel-schema-extensions.md)
+> **Status:** Done — landed across PRs #188–#192 (April 2026).
+> Final piece of the schema-driven trilogy:
+> [`property-panel-schema.md`](./property-panel-schema.md)
+> + [`property-panel-schema-extensions.md`](./property-panel-schema-extensions.md)
 > (PRs #153–#164) declarativised the SELECTION-side property panel;
-> [`_done/toolbar-schema.md`](./_done/toolbar-schema.md) (PRs #166–#171)
+> [`toolbar-schema.md`](./toolbar-schema.md) (PRs #166–#171)
 > declarativised the toolbar's tool registry + preset persistence
 > + variant flyout + rubber-band reader.
 >
-> This plan declarativises the third surface that still relies on
+> This plan declarativised the third surface that still relied on
 > the same `if (toolId === "shape") … if (toolId === "arrow") …`
 > imperative cascade: the **TOOL-side property panel renderer**
-> ([`packages/web/src/editor/tool-property-renderer.ts`](../../packages/web/src/editor/tool-property-renderer.ts),
-> 649 LOC, 14 per-tool branches).
+> (`packages/web/src/editor/tool-property-renderer.ts`,
+> 649 LOC, 14 per-tool branches at the start of the work).
 >
-> **Risk:** Medium. The renderer is the per-tool side panel users
-> see whenever they activate a drawing tool from the toolbar — a
-> regression here means visible UI breakage for every tool. The
-> behaviour preservation contract is "DOM byte-equivalence" against
-> the existing imperative output, validated by happy-dom golden
-> snapshots (matching the contract used for the PropertyPanel
-> migration).
+> **Outcome:** the imperative cascade is gone; per-tool panels are
+> driven by `TOOL_REGISTRY[toolId].panelControls` (Tier B data) +
+> `TOOL_PANEL_ADAPTERS` (Tier B writers) + `selectionDefMetadata`
+> (Tier B metadata bridge). Adding a new control to a tool is one
+> entry in the registry + one matching adapter; no edits to the
+> renderer or its callers. CLAUDE.md guardrail #6 carries the
+> ongoing convention.
+>
+> **Risk (at landing):** Medium. The renderer is the per-tool side
+> panel users see whenever they activate a drawing tool from the
+> toolbar — a regression here would mean visible UI breakage for
+> every tool. The behaviour preservation contract was "DOM byte-
+> equivalence" against the existing imperative output, validated by
+> happy-dom golden snapshots; Phase 5 adopted the registry's
+> tooltip labels as a deliberate (and pre-announced) UX cleanup.
 
 ## How to resume in a fresh session
 

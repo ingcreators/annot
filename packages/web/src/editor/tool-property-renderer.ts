@@ -275,27 +275,6 @@ function renderMenuLevelControl(
 
 // ─── Type chip row ───────────────────────────────────────────────────
 
-/** Per-tool tooltip overrides that preserve the imperative renderer's
- *  hardcoded labels. Two registry variants today carry more
- *  descriptive labels than the imperative tool panel uses — keeping
- *  the imperative wording is what the Phase 2 byte-equivalence
- *  contract requires.
- *
- *  Phase 5 cleanup will DROP this table and accept the registry's
- *  labels as the canonical source of truth (a deliberate UX
- *  improvement: "Rounded" → "Rounded rectangle", "Line" → "Line (no
- *  arrow)" — small wording fixes that bring the right-panel chip
- *  tooltips in line with the toolbar flyout, which already uses
- *  the registry labels). */
-const TYPE_CHIP_TOOLTIP_OVERRIDES: Readonly<Record<string, Readonly<Record<string, string>>>> = {
-  arrow: {
-    none: "Line",
-  },
-  shape: {
-    rounded: "Rounded",
-  },
-};
-
 function renderTypeChipsRow(
   toolId: string,
   preset: ToolOptions,
@@ -311,7 +290,6 @@ function renderTypeChipsRow(
   if (toolId === "highlight") return renderHighlightTypeChipsRow(preset, ctx);
 
   const current = preset[meta.variantField];
-  const overrides = TYPE_CHIP_TOOLTIP_OVERRIDES[toolId] ?? {};
   const row = document.createElement("div");
   row.className = "pp-type-row";
   for (const opt of meta.variants ?? []) {
@@ -327,7 +305,7 @@ function renderTypeChipsRow(
     } else {
       chip.textContent = opt.icon;
     }
-    setTooltip(chip, overrides[opt.value] ?? opt.label);
+    setTooltip(chip, opt.label);
     chip.addEventListener("click", () => {
       row.querySelectorAll(".prop-choice-chip").forEach((c) => c.classList.remove("active"));
       chip.classList.add("active");
