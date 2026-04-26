@@ -47,6 +47,12 @@ function decode(bytes: Uint8Array): string {
   return new TextDecoder().decode(bytes);
 }
 
+/** 1x1 transparent PNG data URL. Bytes are irrelevant for the
+ *  XML / packaging tests — only that `dataUrlToUint8Array`
+ *  decode-success lets the mosaic emitter run. */
+const TEST_PNG_DATA_URL =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+
 function buildInput(annotations: SVGElement, opts?: { hasImage?: boolean }): PptxExportInput {
   // 1x1 transparent JPEG-ish data URL — content irrelevant; only
   // `dataUrlToUint8Array` decode-success matters for whether the
@@ -156,6 +162,67 @@ describe("buildPptxFiles slide XML", () => {
     const files = buildPptxFiles(buildInput(annotations, { hasImage: true }));
     const slide = decode(files["ppt/slides/slide1.xml"]!);
     expect(slide).toMatchSnapshot();
+  });
+
+  it("mosaic + blur images embed media files and bind via rIds", () => {
+    // Two redact images on the canvas — a mosaic PNG and a blur
+    // PNG. PPTX export must:
+    //   1. Embed each as `ppt/media/mosaic_<i>.png` in the OPC ZIP.
+    //   2. Add a `<Relationship Id="rId..." ... Target="../media/...">`
+    //      entry to `ppt/slides/_rels/slide1.xml.rels`.
+    //   3. Emit a `<p:pic>` per shape in the slide XML with a
+    //      matching `<a:blip r:embed="rId..."/>` reference.
+    // Pre-fix (before this PR) all three steps were skipped — the
+    // shapes silently disappeared from the output.
+    const annotations = makeAnnotationGroup(
+      svg("image", {
+        x: "10",
+        y: "20",
+        width: "100",
+        height: "80",
+        href: TEST_PNG_DATA_URL,
+        "data-redact-style": "mosaic",
+      }),
+      svg("image", {
+        x: "120",
+        y: "20",
+        width: "100",
+        height: "80",
+        href: TEST_PNG_DATA_URL,
+        "data-redact-style": "blur",
+      }),
+    );
+    const files = buildPptxFiles(buildInput(annotations));
+    const slide = decode(files["ppt/slides/slide1.xml"]!);
+    const slideRelsXml = decode(files["ppt/slides/_rels/slide1.xml.rels"]!);
+    const contentTypesXml = decode(files["[Content_Types].xml"]!);
+
+    // Two `<p:pic>` shapes appear in the slide.
+    const picMatches = slide.match(/<p:pic>/g) ?? [];
+    expect(picMatches.length).toBe(2);
+
+    // Each `<p:pic>` references its rId. With no screenshot,
+    // mosaic rIds start at rId2.
+    expect(slide).toContain('r:embed="rId2"');
+    expect(slide).toContain('r:embed="rId3"');
+
+    // The slide rels declare both image relationships pointing
+    // at the embedded media files.
+    expect(slideRelsXml).toContain(
+      'Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/mosaic_0.png"',
+    );
+    expect(slideRelsXml).toContain(
+      'Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/mosaic_1.png"',
+    );
+
+    // Both image bytes are present in the OPC package.
+    expect(files["ppt/media/mosaic_0.png"]).toBeInstanceOf(Uint8Array);
+    expect(files["ppt/media/mosaic_1.png"]).toBeInstanceOf(Uint8Array);
+    expect(files["ppt/media/mosaic_0.png"]!.length).toBeGreaterThan(0);
+
+    // Content types must declare `Default Extension="png"` so
+    // PowerPoint maps the embedded files to image/png.
+    expect(contentTypesXml).toContain('Extension="png"');
   });
 
   it("rounded marker dispatches via data-shape='rounded'", () => {
