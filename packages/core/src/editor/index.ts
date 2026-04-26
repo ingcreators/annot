@@ -77,6 +77,7 @@ export {
   presetFromWire,
   presetToWire,
 } from "./tool-preset-serde.js";
+export { readUniversalStyleAttrs, resolveStyleReadSource } from "./tool-style-reader.js";
 
 // ╭─ Editor UI (browser / DOM required) ────────────────────────────╮
 // │ These hit `document` / `window`, subscribe to pointer events,   │

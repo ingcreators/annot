@@ -43,6 +43,7 @@ import {
   highlightColorLabel,
   presetFromWire,
   presetToWire,
+  readUniversalStyleAttrs,
   TOOL_REGISTRY,
 } from "@ingcreators/annot-core/editor";
 import type { ToolOptions } from "@ingcreators/annot-core/editor/tool-options";
@@ -72,7 +73,6 @@ import {
   type ToolPreset,
 } from "@ingcreators/annot-core/tauri-bridge";
 import { setTooltip } from "@ingcreators/annot-editor/tooltip";
-import { isFreehandGroup } from "@ingcreators/annot-editor/tools/freehand-tool";
 import type { AnnotToolbarButtonElement, AnnotToolbarElement } from "./annot-toolbar.js";
 import { populateToolPropertyPanel } from "./tool-property-renderer.js";
 import { openCanvasRightClickMenu } from "./toolbar-canvas-menu.js";
@@ -1438,50 +1438,12 @@ export class Toolbar {
     const elementKey = elementKeyFromElement(el, toolId);
     const preset = { ...(this.#presets.get(elementKey) || this.#options) };
 
-    // Freehand session groups have no stroke attrs of their own —
-    // the style lives on the child <path> elements. Use the most
-    // recent stroke (last path child) as the read source so rubber-
-    // band reflects "what the user just drew".
-    let readEl: SVGElement = el;
-    if (isFreehandGroup(el)) {
-      const pathChildren = el.querySelectorAll<SVGPathElement>(":scope > path");
-      if (pathChildren.length > 0) {
-        readEl = pathChildren[pathChildren.length - 1]!;
-      }
-    }
-
     // Universal style attrs that map 1:1 onto ToolOptions fields.
-    // Phase 5 of `docs/plans/toolbar-schema.md` keeps THIS block
-    // toolId-agnostic — anything that needs per-tool routing is
-    // delegated to the registry's `extractStyleFromElement` callback
-    // below.
-    const stroke = readEl.getAttribute("stroke");
-    if (stroke) preset.strokeColor = stroke;
-    const fill = readEl.getAttribute("fill");
-    if (fill) preset.fillColor = fill;
-    const sw = Number.parseFloat(readEl.getAttribute("stroke-width") || "");
-    if (Number.isFinite(sw) && sw > 0) preset.strokeWidth = sw;
-    const da = readEl.getAttribute("stroke-dasharray");
-    if (da != null) preset.strokeDasharray = da;
-    const dashKey = readEl.getAttribute("data-dash-key");
-    if (dashKey != null) preset.strokeDasharray = dashKey;
-    const fo = Number.parseFloat(readEl.getAttribute("fill-opacity") || "");
-    if (Number.isFinite(fo)) preset.fillOpacity = fo;
-    // Lines carry transparency via `opacity` (so markers fade too);
-    // other shapes use stroke-opacity. Check both so the preset
-    // picks up whichever is present.
-    const so = Number.parseFloat(
-      readEl.getAttribute("opacity") || readEl.getAttribute("stroke-opacity") || "",
-    );
-    if (Number.isFinite(so)) preset.strokeOpacity = so;
-    const lc = readEl.getAttribute("stroke-linecap");
-    if (lc === "butt" || lc === "round" || lc === "square") {
-      preset.strokeLinecap = lc;
-    }
-    const lj = readEl.getAttribute("stroke-linejoin");
-    if (lj === "miter" || lj === "round" || lj === "bevel") {
-      preset.strokeLinejoin = lj;
-    }
+    // The reader resolves freehand groups to their last-`<path>`
+    // child internally so the rubber-band reflects "what the user
+    // just drew". Tool-id-agnostic — anything per-tool is delegated
+    // to the registry's `extractStyleFromElement` below.
+    readUniversalStyleAttrs(el, preset);
 
     // Tool-specific extras delegated to the registry. Each tool's
     // `extractStyleFromElement` mutates `preset` in place with

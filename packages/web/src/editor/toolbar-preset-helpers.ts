@@ -13,7 +13,11 @@
  * that does not need to land in the same PR as this carve-out.
  */
 
-import { normalizeVariantSideFields, TOOL_REGISTRY } from "@ingcreators/annot-core/editor";
+import {
+  normalizeVariantSideFields,
+  readUniversalStyleAttrs,
+  TOOL_REGISTRY,
+} from "@ingcreators/annot-core/editor";
 import type { ToolOptions } from "@ingcreators/annot-core/editor/tool-options";
 import { computeDasharray } from "@ingcreators/annot-core/utils";
 import { refreshArrowPath } from "@ingcreators/annot-core/editor/arrow-markers";
@@ -162,18 +166,13 @@ export function seedPresetFromElement(
 ): ToolOptions {
   // Start from the tool's live options (reflecting whatever the
   // tool was last configured with), then layer element-specific
-  // style attrs on top.
+  // style attrs on top via the same universal reader the rubber-
+  // band path uses (`Toolbar.syncPresetFromElement`). Sharing the
+  // reader means a freehand-group seed inherits from the last
+  // path child + every captured attr (stroke / fill / dasharray /
+  // opacity / cap / join) round-trips into the new variant.
   const seed: ToolOptions = { ...liveOptions };
-  const stroke = el.getAttribute("stroke");
-  if (stroke) seed.strokeColor = stroke;
-  const fill = el.getAttribute("fill");
-  if (fill) seed.fillColor = fill;
-  const sw = Number.parseFloat(el.getAttribute("stroke-width") || "");
-  if (Number.isFinite(sw) && sw > 0) seed.strokeWidth = sw;
-  const da = el.getAttribute("data-dash-key") ?? el.getAttribute("stroke-dasharray");
-  if (da != null) seed.strokeDasharray = da;
-  const fo = Number.parseFloat(el.getAttribute("fill-opacity") || "");
-  if (Number.isFinite(fo)) seed.fillOpacity = fo;
+  readUniversalStyleAttrs(el, seed);
   // Ensure the variant-defining field matches this element's variant.
   const meta = TOOL_REGISTRY[toolId];
   if (meta?.variants && meta.variantField && elementKey.includes(".")) {
