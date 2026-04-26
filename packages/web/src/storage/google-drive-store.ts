@@ -20,7 +20,6 @@ import type {
 } from "@ingcreators/annot-core/storage";
 import {
   ancestorPaths,
-  drawToThumbCanvas,
   getFilename,
   getParentPath,
   joinPath,
@@ -31,6 +30,7 @@ import {
 import { createEditableImage, readEditableImage } from "@ingcreators/annot-core/xmp";
 import { loadEncodeOptions } from "../encode-options.js";
 import { encodeCaptureInWorker } from "../workers/encode-client.js";
+import { generateThumbnailFromDataUrl } from "./image-thumbnail.js";
 
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
 const UPLOAD_API = "https://www.googleapis.com/upload/drive/v3";
@@ -745,21 +745,7 @@ export class GoogleDriveStore
   // ---- Thumbnail ----
 
   async generateThumbnail(dataUrl: string, maxWidth = 480): Promise<string> {
-    try {
-      const resp = await fetch(dataUrl);
-      const blob = await resp.blob();
-      const bmp = await createImageBitmap(blob);
-      const canvas = new OffscreenCanvas(1, 1);
-      const ctx = canvas.getContext("2d")!;
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = "high";
-      drawToThumbCanvas(ctx, canvas, bmp, bmp.width, bmp.height, maxWidth);
-      bmp.close();
-      const outBlob = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.85 });
-      return this.#blobToDataUrl(outBlob);
-    } catch {
-      return "";
-    }
+    return generateThumbnailFromDataUrl(dataUrl, maxWidth);
   }
 
   // ---- Helpers ----

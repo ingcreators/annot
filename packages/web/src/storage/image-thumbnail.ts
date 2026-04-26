@@ -1,7 +1,7 @@
 /**
- * Shared thumbnail-generation helpers used by storage backends that
- * have no server-side thumbnail facility (GitHub, Device, Drive).
- * Each store needs the same "scale into JPEG, return data URL" pipeline:
+ * Single source of truth for thumbnail generation across every
+ * `StorageProvider` implementation that has no server-side thumbnail
+ * facility (Browser / GitHub / Device / Drive). The pipeline:
  *
  *     blob ──► createImageBitmap ──► OffscreenCanvas (resize)
  *                                         │
@@ -12,13 +12,17 @@
  *                                  blobToDataUrl
  *
  * Lifted out of `github-store.ts` (which had two near-identical
- * copies — its public `generateThumbnail` and the inner `#ensureThumbnail`)
- * so the resize pipeline has a single source of truth and unit tests.
+ * copies — its public `generateThumbnail` and the inner
+ * `#ensureThumbnail`) and subsequently picked up by Device / Drive /
+ * Browser to eliminate ~45 LOC of duplicated resize code across the
+ * 4 stores.
  *
- * `BrowserStore` keeps its own `<img>`-based variant because it runs
- * in the main thread + DOM document and depends on `<img>` rather
- * than `createImageBitmap`. That divergence is intentional; the
- * helpers here are for the workerable path the other three stores share.
+ * Browser previously used `<img>` + `<canvas>`; the divergence was
+ * historical accident, not an environmental constraint. Every store
+ * runs in the same PWA main-thread context, both APIs work there,
+ * and the `createImageBitmap` path has fewer edge cases (no
+ * synthetic onload / onerror bugs, no document-mutation cost,
+ * worker-compatible by default).
  */
 
 import { drawToThumbCanvas } from "@ingcreators/annot-core/storage";
