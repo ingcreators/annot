@@ -1283,66 +1283,83 @@ export class Toolbar {
     return badge;
   }
 
+  /** Sync the tool button's variant indicator + tooltip to reflect
+   *  the currently-selected variant. Phase 3 of
+   *  `docs/plans/toolbar-highlight-flyout-kind.md`: collapsed onto
+   *  the registry's `flyoutKind` discriminator + the
+   *  `chipColorForVariant` / `tooltipLabelForVariant` accessors —
+   *  the early-return Highlight branch is gone.
+   *
+   *  Two badge shapes share the rest of the path:
+   *    - `flyoutKind === "color"`: the variant value renders as a
+   *      color swatch in the badge's `::after` pseudo-element via
+   *      the `--swatch-color` custom property. Ad-hoc hex values
+   *      (legacy documents outside the palette) render fine here
+   *      because we don't require the value to appear in
+   *      `meta.variants`; the variant lookup below produces a
+   *      blank `variantLabel` for the unknown case, which the
+   *      tooltip resolver collapses into a no-parens title.
+   *    - default (`undefined`, treated as `"variant"`): icon glyph
+   *      / inline SVG badge, requires the value to appear in
+   *      `meta.variants` (an unrecognised variant is a logic bug
+   *      worth bailing on).
+   *
+   *  Tooltip composition is unified: the registry's
+   *  `tooltipLabelForVariant` (when present) overrides the default
+   *  `variant.label`. Highlight uses this to map known palette
+   *  hexes to "Yellow" / "Green" / … and ad-hoc hexes to empty
+   *  string (which collapses the title to bare "Highlight" instead
+   *  of leaking the raw hex into the UI). */
   #syncToolButtonIcon(toolId: string): void {
     const btn = this.#toolButtons.get(toolId);
     if (!btn) return;
-
-    // Highlight: color-swatch badge in the bottom-right corner — same
-    // position + size as other tools' variant badges, but renders as
-    // a solid-color circle (no icon glyph) because the "variant" IS a
-    // color. This unifies Highlight with the Pattern-A badge scheme
-    // used elsewhere; the previous bottom-underline approach put the
-    // color indicator in a different spot from every other tool's
-    // indicator, which was visually inconsistent.
-    if (toolId === "highlight") {
-      const preset = this.#getCurrentPreset(toolId);
-      const color =
-        (preset.highlightColor as string) || TOOL_REGISTRY.highlight!.defaultVariant!;
-      const badge = this.#ensureBadge(btn, toolId);
-      badge.className = "tool-btn-badge tool-btn-badge-color";
-      badge.textContent = ""; // no glyph — color lives in ::after
-      // The badge itself keeps the circular panel-colored frame (so
-      // it matches every other tool's variant badge shape); the inner
-      // color swatch is rendered as a rounded square via
-      // .tool-btn-badge-color::after, driven by this custom property.
-      // Clear any legacy inline background from before the
-      // circle-containing-square redesign.
-      badge.style.background = "";
-      badge.style.setProperty("--swatch-color", color);
-      // Keep the button's title informative — tools with variants go
-      // through the block below but highlight early-returns, so we
-      // set it directly here. The palette LABEL ("Yellow") is shown
-      // instead of the raw hex so it matches the Selection-side
-      // "Selected Highlight (Yellow)" formatter; for colors outside
-      // the preset palette, highlightColorLabel falls back to the
-      // hex string automatically.
-      const toolDef = this.#tools.get(toolId);
-      if (toolDef) {
-        const label = highlightColorLabel(color);
-        const composed = label ? `${toolDef.label} (${label})` : toolDef.label;
-        setTooltip(btn, composed);
-        btn.setAttribute("aria-label", composed);
-      }
-      return;
-    }
 
     const meta = TOOL_REGISTRY[toolId];
     if (!meta?.variants || !meta.variantField || !meta.defaultVariant) return;
     const preset = this.#getCurrentPreset(toolId);
     const current = (preset[meta.variantField] as string) || meta.defaultVariant;
-    const variant = meta.variants.find((v) => v.value === current);
-    if (!variant) return;
 
     const badge = this.#ensureBadge(btn, toolId);
-    // Variants with inline SVG swap the class set so the badge's font
-    // rules (Material Symbols ligature rendering + font-variation)
-    // don't interfere with the SVG glyph.
-    if (variant.svg) {
-      badge.className = "tool-btn-badge tool-btn-badge-svg";
-      badge.innerHTML = variant.svg;
+    let variantLabel = "";
+
+    if (meta.flyoutKind === "color") {
+      // Color-swatch badge: render the variant value as a swatch
+      // regardless of whether it appears in the palette (legacy
+      // documents may carry ad-hoc hex colors outside the 6-color
+      // palette). The badge itself keeps the circular panel-colored
+      // frame (so it matches every other tool's variant badge shape);
+      // the inner color swatch is rendered as a rounded square via
+      // `.tool-btn-badge-color::after`, driven by `--swatch-color`.
+      badge.className = "tool-btn-badge tool-btn-badge-color";
+      badge.textContent = ""; // no glyph — color lives in ::after
+      // Clear any legacy inline background from before the
+      // circle-containing-square redesign.
+      badge.style.background = "";
+      badge.style.setProperty(
+        "--swatch-color",
+        meta.chipColorForVariant?.(current) ?? current,
+      );
+      // Look up the variant for the tooltip resolver. Falls through
+      // to "" for ad-hoc hexes outside the palette — the resolver
+      // (Highlight's `tooltipLabelForVariant`) collapses both cases
+      // into the right tooltip ("Yellow" for palette, "" for ad-hoc).
+      variantLabel =
+        meta.variants.find((v) => v.value.toLowerCase() === current.toLowerCase())?.label ??
+        "";
     } else {
-      badge.className = "tool-btn-badge material-symbols-outlined";
-      badge.textContent = variant.icon;
+      const variant = meta.variants.find((v) => v.value === current);
+      if (!variant) return;
+      variantLabel = variant.label;
+      // Variants with inline SVG swap the class set so the badge's
+      // font rules (Material Symbols ligature rendering + font-
+      // variation) don't interfere with the SVG glyph.
+      if (variant.svg) {
+        badge.className = "tool-btn-badge tool-btn-badge-svg";
+        badge.innerHTML = variant.svg;
+      } else {
+        badge.className = "tool-btn-badge material-symbols-outlined";
+        badge.textContent = variant.icon;
+      }
     }
 
     // Update title/aria-label so the variant is announced alongside
@@ -1350,9 +1367,14 @@ export class Toolbar {
     // rectangle)") ensures screen-reader users hear the tool's
     // identity before its current variant — matching the visual
     // priority of main icon > badge.
+    //
+    // The registry's `tooltipLabelForVariant` (Highlight's case)
+    // overrides the default `variantLabel`; an empty result
+    // collapses the title to bare `toolDef.label` (no parens).
     const toolDef = this.#tools.get(toolId);
     if (toolDef) {
-      const composed = `${toolDef.label} (${variant.label})`;
+      const labelPart = meta.tooltipLabelForVariant?.(current, variantLabel) ?? variantLabel;
+      const composed = labelPart ? `${toolDef.label} (${labelPart})` : toolDef.label;
       setTooltip(btn, composed);
       btn.setAttribute("aria-label", composed);
     }
