@@ -107,6 +107,19 @@ export {
   type ToolRegistryVariant,
 } from "./editor/tool-registry.js";
 
+// ─── Toolbar preset (de)serializer (pure data conversion) ─────────────
+// Companion to `tool-registry`: walks `presetFields` and converts a
+// `ToolOptions` ↔ wire-record pair via the shared camelCase ↔
+// snake_case table. Used by the Toolbar to drive both the Tauri YAML
+// path and the localStorage / chrome.storage paths from one source
+// of truth.
+export {
+  fieldForSnakeKey,
+  type PresetWireFormat,
+  presetFromWire,
+  presetToWire,
+} from "./editor/tool-preset-serde.js";
+
 // ─── Tool lifecycle DOM surface ───────────────────────────────────────
 // Three-method abstraction every editor tool depends on for canvas
 // access. Live-canvas adapters live in
