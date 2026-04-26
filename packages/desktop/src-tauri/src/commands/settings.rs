@@ -1,34 +1,44 @@
 use serde::{Deserialize, Serialize};
+use serde_yaml::Value;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use tauri::{command, AppHandle, Manager};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ToolPreset {
-    #[serde(default = "default_stroke_color")]
-    pub stroke_color: String,
-    #[serde(default = "default_fill_color")]
-    pub fill_color: String,
-    #[serde(default = "default_stroke_width")]
-    pub stroke_width: f64,
-    #[serde(default = "default_font_size")]
-    pub font_size: f64,
-    #[serde(default)]
-    pub stroke_dasharray: String,
-    #[serde(default = "default_fill_opacity")]
-    pub fill_opacity: f64,
-}
-
-fn default_stroke_color() -> String { "#ff0000".into() }
-fn default_fill_color() -> String { "none".into() }
-fn default_fill_opacity() -> f64 { 1.0 }
-fn default_stroke_width() -> f64 { 3.0 }
-fn default_font_size() -> f64 { 24.0 }
-
+/// On-disk shape of the tool-presets YAML file.
+///
+/// The Rust side is intentionally **schema-transparent** for the
+/// inner preset values: the JS toolbar
+/// (`packages/web/src/editor/toolbar.ts`) is the source of truth for
+/// which fields each tool persists, driven by per-tool `presetFields`
+/// arrays in `packages/core/src/editor/tool-registry.ts`. Anything
+/// the JS side emits round-trips through this Rust struct unchanged.
+///
+/// History: this used to be `HashMap<String, ToolPreset>` where
+/// `ToolPreset` named six specific fields (stroke_color, fill_color,
+/// stroke_width, font_size, stroke_dasharray, fill_opacity) with
+/// `#[serde(default = …)]` defaults. That silently DROPPED every
+/// other field on save — including the variant discriminators
+/// (shape_type / arrow_head / text_variant / draw_style /
+/// redact_style / marker_shape / highlight_color), the per-end arrow
+/// shape / width / length, and the stroke opacity / cap / join. The
+/// `last_variants` field was also missing on the wrapper, so the
+/// user's last-used variant tracking was lost on every Tauri
+/// session. Replacing the typed inner struct with `serde_yaml::Value`
+/// closes both gaps while keeping the YAML output identical for the
+/// six historical fields.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ToolPresets {
+    /// Preset map. Keys are element keys ("shape.rect", "arrow.end")
+    /// for tools with variants, or bare tool IDs ("crop") for tools
+    /// without variants. Each value is a free-form YAML mapping; the
+    /// Rust side never inspects the inner shape.
     #[serde(default)]
-    pub tools: HashMap<String, ToolPreset>,
+    pub tools: HashMap<String, Value>,
+    /// Last-used variant per tool. Keyed by tool id, value is the
+    /// variant string. Skipped on serialize when empty so the YAML
+    /// output stays clean for fresh installs.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub last_variants: HashMap<String, String>,
 }
 
 /// Get the portable base directory (same directory as the exe)
