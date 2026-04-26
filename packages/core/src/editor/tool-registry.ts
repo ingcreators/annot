@@ -273,6 +273,12 @@ export const TOOL_REGISTRY: Readonly<Record<string, ToolRegistryEntry>> = {
       //     into the valid range rather than fully resetting.
       preset.arrowHead = arrowVariantFromAttrs(el);
       // Per-end shape + width + length (PowerPoint-parity granular fields).
+      // `data-arrow-{start,end}-size` is a legacy attribute saved by
+      // versions that pre-date the width/length split; newly-saved SVGs
+      // emit `-width` / `-length` directly. The same back-compat
+      // fallback is applied at the other read sites
+      // (`pptx-export.ts`, `toolbar.ts:transformOf`,
+      // `desktop/src-tauri/src/commands/clipboard.rs`).
       const ss = el.getAttribute("data-arrow-start-shape");
       const es = el.getAttribute("data-arrow-end-shape");
       const sw =

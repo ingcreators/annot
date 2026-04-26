@@ -45,11 +45,6 @@ export type ArrowShape = "none" | "arrow" | "triangle" | "stealth" | "diamond" |
  *  length is along the stem. */
 export type ArrowDim = "sm" | "md" | "lg";
 
-/** Legacy single-enum size kept for backward compat with presets
- *  saved before width/length were split. Always treated as both width
- *  AND length set to the same value. */
-export type MarkerSize = ArrowDim;
-
 export type LineCap = "butt" | "round" | "square";
 export type LineJoin = "miter" | "round" | "bevel";
 
@@ -112,10 +107,15 @@ export interface ToolOptions {
   /** Per-end arrow lengths (along stem) — sm / md / lg. */
   arrowLengthStart?: ArrowDim;
   arrowLengthEnd?: ArrowDim;
-  /** Legacy per-end size (used only when the split width/length
-   *  options above are absent). */
-  arrowSizeStart?: MarkerSize;
-  arrowSizeEnd?: MarkerSize;
+  /** **Deprecated, read-only back-compat.** Single-enum per-end size
+   *  saved by versions that pre-date the width/length split. Newly-
+   *  saved presets do NOT populate these fields. `ArrowTool` reads
+   *  them as a fallback when both `arrowWidthStart` /
+   *  `arrowLengthStart` (resp. `*End`) are absent. The preset
+   *  serializer keeps an entry in `FIELD_TO_SNAKE` (`arrow_size_*`)
+   *  so disk files written by old versions still load cleanly. */
+  arrowSizeStart?: ArrowDim;
+  arrowSizeEnd?: ArrowDim;
 
   /** Stroke opacity (0..1). Separate from fill-opacity. */
   strokeOpacity?: number;

@@ -20,7 +20,6 @@ export type {
   LineCap,
   LineJoin,
   MarkerShape,
-  MarkerSize,
   RedactStyle,
   ShapeType,
   TextVariant,
