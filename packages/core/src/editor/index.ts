@@ -70,6 +70,12 @@ export {
   type ToolRegistryId,
   type ToolRegistryVariant,
 } from "./tool-registry.js";
+export {
+  fieldForSnakeKey,
+  type PresetWireFormat,
+  presetFromWire,
+  presetToWire,
+} from "./tool-preset-serde.js";
 
 // ╭─ Editor UI (browser / DOM required) ────────────────────────────╮
 // │ These hit `document` / `window`, subscribe to pointer events,   │

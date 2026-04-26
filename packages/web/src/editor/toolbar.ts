@@ -38,7 +38,13 @@ import "./annot-toolbar.js";
 // surface where available; deep subpaths (`./editor/*`,
 // `./editor/tools/*`) reach the bits that aren't re-exported via
 // the top-level barrel.
-import { HIGHLIGHT_COLORS, highlightColorLabel } from "@ingcreators/annot-core/editor";
+import {
+  HIGHLIGHT_COLORS,
+  highlightColorLabel,
+  presetFromWire,
+  presetToWire,
+  TOOL_REGISTRY,
+} from "@ingcreators/annot-core/editor";
 import type { ToolOptions } from "@ingcreators/annot-core/editor/tool-options";
 import {
   type CanvasManager,
@@ -1724,6 +1730,33 @@ export class Toolbar {
   }
 
   // --- Preset persistence ---
+  //
+  // Phase 2 of `docs/plans/toolbar-schema.md`. The four save / load
+  // pairs now route every field copy through `presetToWire` /
+  // `presetFromWire` (driven by `TOOL_REGISTRY[toolId].presetFields`)
+  // instead of hand-rolling per-method 20-field mappings. Adding a
+  // new persisted field is one entry in the matching tool's
+  // `presetFields` array — the marshallers pick it up automatically.
+
+  /** Look up a preset key's tool id and resolve its `presetFields`.
+   *  The element-key format is `${toolId}.${variant}` (or just
+   *  `${toolId}` for variantless tools). Returns an empty array for
+   *  unknown tool ids — callers skip those entries so corrupt /
+   *  stale storage doesn't pollute the in-memory preset map. */
+  #presetFieldsForKey(elementKey: string): ReadonlyArray<keyof ToolOptions> {
+    const dotIdx = elementKey.indexOf(".");
+    const toolId = dotIdx === -1 ? elementKey : elementKey.slice(0, dotIdx);
+    return TOOL_REGISTRY[toolId]?.presetFields ?? [];
+  }
+
+  /** Merge a wire-loaded partial onto a defaults base so the stored
+   *  preset is a full `ToolOptions`. The base is `this.#options` at
+   *  load time (which IS the constructor defaults for the universal
+   *  fields), so a missing field on disk falls back to the same
+   *  default the legacy `?? DEFAULT_*` chain produced. */
+  #presetFromPartial(partial: Partial<ToolOptions>): ToolOptions {
+    return { ...this.#options, ...partial };
+  }
 
   async #loadPresetsFromFile(): Promise<void> {
     try {
@@ -1732,38 +1765,11 @@ export class Toolbar {
         for (const [rawKey, p] of Object.entries(data.tools)) {
           // Migrate legacy tool-ID-keyed entries (e.g. "shape") to
           // the tool's default-variant element key (e.g. "shape.rect").
-          // New entries that already use "tool.variant" form pass
-          // through unchanged.
           const key = migrateLegacyPresetKey(rawKey);
-          // The persisted shape carries each variant field as a plain
-          // `string` (the tauri-bridge serializer doesn't know our
-          // tool-side union vocabulary). Trust the disk and narrow via
-          // an indexed-access cast — `ToolOptions["fieldName"]` keeps
-          // the source of truth in `tool-base.ts` and lets a future
-          // union-extension propagate without touching this file.
-          this.#presets.set(key, {
-            strokeColor: p.stroke_color,
-            fillColor: p.fill_color,
-            strokeWidth: p.stroke_width,
-            fontSize: p.font_size,
-            strokeDasharray: p.stroke_dasharray || "",
-            fillOpacity: p.fill_opacity ?? 1.0,
-            shapeType: (p.shape_type as ToolOptions["shapeType"]) || undefined,
-            arrowHead: (p.arrow_head as ToolOptions["arrowHead"]) || undefined,
-            textVariant: (p.text_variant as ToolOptions["textVariant"]) || undefined,
-            fontFamily: p.font_family || undefined,
-            drawStyle: (p.draw_style as ToolOptions["drawStyle"]) || undefined,
-            redactStyle: (p.redact_style as ToolOptions["redactStyle"]) || undefined,
-            arrowHeadStart: (p.arrow_head_start as ToolOptions["arrowHeadStart"]) || undefined,
-            arrowHeadEnd: (p.arrow_head_end as ToolOptions["arrowHeadEnd"]) || undefined,
-            arrowWidthStart: (p.arrow_width_start as ToolOptions["arrowWidthStart"]) || undefined,
-            arrowWidthEnd: (p.arrow_width_end as ToolOptions["arrowWidthEnd"]) || undefined,
-            arrowLengthStart:
-              (p.arrow_length_start as ToolOptions["arrowLengthStart"]) || undefined,
-            arrowLengthEnd: (p.arrow_length_end as ToolOptions["arrowLengthEnd"]) || undefined,
-            highlightColor: p.highlight_color || undefined,
-            markerShape: (p.marker_shape as ToolOptions["markerShape"]) || undefined,
-          });
+          const fields = this.#presetFieldsForKey(key);
+          if (fields.length === 0) continue;
+          const partial = presetFromWire(p as Record<string, unknown>, fields, "snake");
+          this.#presets.set(key, this.#presetFromPartial(partial));
         }
       }
       if (data.last_variants) {
@@ -1787,28 +1793,9 @@ export class Toolbar {
     if (isTauri) {
       const tools: Record<string, ToolPreset> = {};
       for (const [id, opts] of this.#presets) {
-        tools[id] = {
-          stroke_color: opts.strokeColor,
-          fill_color: opts.fillColor,
-          stroke_width: opts.strokeWidth,
-          font_size: opts.fontSize,
-          stroke_dasharray: opts.strokeDasharray,
-          fill_opacity: opts.fillOpacity,
-          shape_type: opts.shapeType,
-          arrow_head: opts.arrowHead,
-          text_variant: opts.textVariant,
-          font_family: opts.fontFamily,
-          draw_style: opts.drawStyle,
-          redact_style: opts.redactStyle,
-          arrow_head_start: opts.arrowHeadStart,
-          arrow_head_end: opts.arrowHeadEnd,
-          arrow_width_start: opts.arrowWidthStart,
-          arrow_width_end: opts.arrowWidthEnd,
-          arrow_length_start: opts.arrowLengthStart,
-          arrow_length_end: opts.arrowLengthEnd,
-          highlight_color: opts.highlightColor,
-          marker_shape: opts.markerShape,
-        };
+        const fields = this.#presetFieldsForKey(id);
+        if (fields.length === 0) continue;
+        tools[id] = presetToWire(opts, fields, "snake") as ToolPreset;
       }
       const last_variants: Record<string, string> = {};
       for (const [toolId, variant] of this.#lastVariantByTool) {
@@ -1825,26 +1812,14 @@ export class Toolbar {
   async #loadPresetsFromStorage(): Promise<void> {
     try {
       const data = await chrome.storage.local.get(["toolPresets", "toolLastVariants"]);
-      const presets = data.toolPresets as Record<string, any> | undefined;
+      const presets = data.toolPresets as Record<string, unknown> | undefined;
       if (presets) {
         for (const [rawId, p] of Object.entries(presets)) {
           const id = migrateLegacyPresetKey(rawId);
-          this.#presets.set(id, {
-            strokeColor: p.strokeColor ?? DEFAULT_STROKE_COLOR,
-            fillColor: p.fillColor ?? DEFAULT_FILL_COLOR,
-            strokeWidth: p.strokeWidth ?? DEFAULT_STROKE_WIDTH,
-            fontSize: p.fontSize ?? DEFAULT_FONT_SIZE,
-            strokeDasharray: p.strokeDasharray ?? "",
-            fillOpacity: p.fillOpacity ?? 1.0,
-            shapeType: p.shapeType,
-            arrowHead: p.arrowHead,
-            textVariant: p.textVariant,
-            fontFamily: p.fontFamily,
-            drawStyle: p.drawStyle,
-            redactStyle: p.redactStyle,
-            highlightColor: p.highlightColor,
-            markerShape: p.markerShape,
-          });
+          const fields = this.#presetFieldsForKey(id);
+          if (fields.length === 0) continue;
+          const partial = presetFromWire(p as Record<string, unknown>, fields, "camel");
+          this.#presets.set(id, this.#presetFromPartial(partial));
         }
       }
       const lastVariants = data.toolLastVariants as Record<string, string> | undefined;
@@ -1860,9 +1835,11 @@ export class Toolbar {
   }
 
   #savePresetsToStorage(): void {
-    const presets: Record<string, any> = {};
+    const presets: Record<string, unknown> = {};
     for (const [id, opts] of this.#presets) {
-      presets[id] = { ...opts };
+      const fields = this.#presetFieldsForKey(id);
+      if (fields.length === 0) continue;
+      presets[id] = presetToWire(opts, fields, "camel");
     }
     const lastVariants: Record<string, string> = {};
     for (const [toolId, variant] of this.#lastVariantByTool) {
@@ -1890,37 +1867,16 @@ export class Toolbar {
       const raw = localStorage.getItem(Toolbar.#LOCAL_STORAGE_KEY);
       if (!raw) return;
       const data = JSON.parse(raw) as {
-        tools?: Record<string, any>;
+        tools?: Record<string, Record<string, unknown>>;
         lastVariants?: Record<string, string>;
       };
       if (data.tools) {
         for (const [rawKey, p] of Object.entries(data.tools)) {
           const key = migrateLegacyPresetKey(rawKey);
-          this.#presets.set(key, {
-            strokeColor: p.strokeColor ?? DEFAULT_STROKE_COLOR,
-            fillColor: p.fillColor ?? DEFAULT_FILL_COLOR,
-            strokeWidth: p.strokeWidth ?? DEFAULT_STROKE_WIDTH,
-            fontSize: p.fontSize ?? DEFAULT_FONT_SIZE,
-            strokeDasharray: p.strokeDasharray ?? "",
-            fillOpacity: p.fillOpacity ?? 1.0,
-            shapeType: p.shapeType,
-            arrowHead: p.arrowHead,
-            textVariant: p.textVariant,
-            fontFamily: p.fontFamily,
-            drawStyle: p.drawStyle,
-            redactStyle: p.redactStyle,
-            highlightColor: p.highlightColor,
-            markerShape: p.markerShape,
-            arrowHeadStart: p.arrowHeadStart,
-            arrowHeadEnd: p.arrowHeadEnd,
-            arrowWidthStart: p.arrowWidthStart,
-            arrowWidthEnd: p.arrowWidthEnd,
-            arrowLengthStart: p.arrowLengthStart,
-            arrowLengthEnd: p.arrowLengthEnd,
-            strokeOpacity: p.strokeOpacity,
-            strokeLinecap: p.strokeLinecap,
-            strokeLinejoin: p.strokeLinejoin,
-          });
+          const fields = this.#presetFieldsForKey(key);
+          if (fields.length === 0) continue;
+          const partial = presetFromWire(p, fields, "camel");
+          this.#presets.set(key, this.#presetFromPartial(partial));
         }
       }
       if (data.lastVariants) {
@@ -1941,9 +1897,11 @@ export class Toolbar {
    *  interaction. */
   #savePresetsToLocalStorage(): void {
     try {
-      const tools: Record<string, any> = {};
+      const tools: Record<string, unknown> = {};
       for (const [id, opts] of this.#presets) {
-        tools[id] = { ...opts };
+        const fields = this.#presetFieldsForKey(id);
+        if (fields.length === 0) continue;
+        tools[id] = presetToWire(opts, fields, "camel");
       }
       const lastVariants: Record<string, string> = {};
       for (const [toolId, variant] of this.#lastVariantByTool) {

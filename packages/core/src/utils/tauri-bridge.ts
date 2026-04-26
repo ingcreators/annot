@@ -104,12 +104,20 @@ export async function deleteImage(id: number): Promise<void> {
 // --- Tool Presets ---
 
 export interface ToolPreset {
-  stroke_color: string;
-  fill_color: string;
-  stroke_width: number;
-  font_size: number;
-  stroke_dasharray: string;
-  fill_opacity: number;
+  // All fields are optional because the Rust side
+  // (`packages/desktop/src-tauri/src/commands/settings.rs`) declares
+  // every field with `#[serde(default = …)]` — missing keys round-trip
+  // as the type's default value, not as a deserialization error. This
+  // matches reality, lets per-tool `presetFields` arrays drive the
+  // wire schema (Phase 2 of `docs/plans/toolbar-schema.md`), and lets
+  // a Highlight or Redact preset persist without carrying the six
+  // historical "always-write" universal fields it doesn't read.
+  stroke_color?: string;
+  fill_color?: string;
+  stroke_width?: number;
+  font_size?: number;
+  stroke_dasharray?: string;
+  fill_opacity?: number;
   /** Subtype for the unified Shape tool (rect / rounded / ellipse). */
   shape_type?: string;
   /** Head variant for the unified Line/Arrow tool (none / end / both). */
@@ -134,6 +142,14 @@ export interface ToolPreset {
   highlight_color?: string;
   /** Shape for the Counter (Marker) tool — circle / rect / rounded. */
   marker_shape?: string;
+  /** Stroke opacity / cap / join — added in Phase 2 of
+   *  `docs/plans/toolbar-schema.md` so per-tool presetFields can
+   *  persist them without a separate schema change. The Rust struct
+   *  doesn't model these yet, so they're silently dropped on disk
+   *  via Tauri today; localStorage / chrome.storage do persist them. */
+  stroke_opacity?: number;
+  stroke_linecap?: string;
+  stroke_linejoin?: string;
 }
 
 export interface ToolPresets {
