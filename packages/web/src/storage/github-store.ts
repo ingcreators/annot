@@ -68,6 +68,7 @@ import {
   type GitHubApiClient,
   type RateLimitListener,
 } from "./github-api-client.js";
+import { GitHubBlobCache } from "./github-blob-cache.js";
 import {
   commitMessage as buildCommitMessage,
   contentsUrl as buildContentsUrl,
@@ -141,30 +142,27 @@ export class GitHubStore
    */
   #tree = new GitHubTreeState();
 
-  /** Last-known commit info per file, surfaced to the editor header
-   *  (Phase 4). Populated opportunistically on `getImage`. */
-  #fileMeta = new Map<string, { createdAt?: string; updatedAt?: string }>();
-
   /**
-   * Mirror of the last full `ImageRecord` we produced per path. Keeps
-   * edit-loops fast: `updateImage` needs the original image bytes to
-   * re-render, and without this cache every save round-trips through
-   * the Contents GET. Kept in sync by every mutation path.
+   * In-memory caches keyed by basePath-relative path:
+   *
+   *   - `record`            — last full `ImageRecord` per path.
+   *     Lets `updateImage` re-render without re-fetching the source
+   *     bytes.
+   *   - `meta`              — last-known commit info per file
+   *     (`createdAt` / `updatedAt`), surfaced to the editor header.
+   *   - `thumbnail`         — gallery thumbnail data URL. GitHub
+   *     has no thumbnail facility of its own, so we generate and
+   *     remember our own.
+   *   - `thumbnailInFlight` — dedup map for in-flight thumbnail
+   *     fetches launched by `listImages` so the gallery can patch
+   *     cards in place without blocking its initial render.
+   *
+   * Implementation lives in `./github-blob-cache.ts` so the cache
+   * invariants (purge-all-on-delete, move-on-rename,
+   * rewrite-on-folder-rename) are unit-testable independently of
+   * the HTTP layer + I/O pipeline.
    */
-  #recordCache = new Map<string, ImageRecord>();
-
-  /**
-   * Gallery thumbnail cache. Unlike Drive (which returns a
-   * server-generated `thumbnailLink`) and Browser / Device (where
-   * thumbnails are persisted alongside the file), GitHub has no
-   * thumbnail facility of its own — the gallery would otherwise
-   * render empty squares. `listImages` kicks off a background fetch
-   * for any uncached paths and dispatches a DOM event once each
-   * thumbnail lands, so the gallery can patch the cards in place
-   * without blocking the initial render.
-   */
-  #thumbnailCache = new Map<string, string>();
-  #thumbnailInFlight = new Map<string, Promise<void>>();
+  #cache = new GitHubBlobCache();
 
   // Token refresh + rate-limit telemetry now live inside `#api`.
 
@@ -242,10 +240,7 @@ export class GitHubStore
    */
   async forceRefresh(): Promise<void> {
     this.#tree.clear();
-    this.#fileMeta.clear();
-    this.#recordCache.clear();
-    this.#thumbnailCache.clear();
-    this.#thumbnailInFlight.clear();
+    this.#cache.clear();
   }
 
   // ===========================================================================
@@ -711,10 +706,7 @@ export class GitHubStore
       for (const op of ops) {
         if (op.deleteOnly) {
           this.#tree.removeBlob(op.relPath);
-          this.#recordCache.delete(op.relPath);
-          this.#fileMeta.delete(op.relPath);
-          this.#thumbnailCache.delete(op.relPath);
-          this.#thumbnailInFlight.delete(op.relPath);
+          this.#cache.purge(op.relPath);
           continue;
         }
         const newBlobSha = op.existingBlobSha ?? blobShaByRelPath.get(op.relPath);
@@ -828,19 +820,19 @@ export class GitHubStore
       updatedAt: data.updatedAt || now,
       pageMetadata: data.pageMetadata,
     };
-    this.#recordCache.set(relPath, record);
-    this.#fileMeta.set(relPath, { createdAt: record.createdAt, updatedAt: record.updatedAt });
+    this.#cache.setRecord(relPath, record);
+    this.#cache.setMeta(relPath, { createdAt: record.createdAt, updatedAt: record.updatedAt });
     // Pre-seed the thumbnail cache from the caller-provided one so
     // the new entry shows up in the gallery immediately. `listImages`
     // will still fetch-and-cache for entries we never saved locally.
     if (data.thumbnailDataUrl) {
-      this.#thumbnailCache.set(relPath, data.thumbnailDataUrl);
+      this.#cache.setThumbnail(relPath, data.thumbnailDataUrl);
     }
     return relPath;
   }
 
   async getImage(path: string): Promise<ImageRecord | undefined> {
-    const cached = this.#recordCache.get(path);
+    const cached = this.#cache.getRecord(path);
     if (cached) return cached;
 
     await this.#ensureTreeLoaded();
@@ -860,7 +852,7 @@ export class GitHubStore
   #decodeRecord(relPath: string, bytes: Uint8Array): ImageRecord {
     const folderPath = getParentPath(relPath);
     const xmp = readEditableImage(bytes);
-    const meta = this.#fileMeta.get(relPath);
+    const meta = this.#cache.getMeta(relPath);
     const originalDataUrl =
       xmp?.originalImageDataUrl || bytesToDataUrl(bytes, inferMimeFromPath(relPath));
     const record: ImageRecord = {
@@ -876,7 +868,7 @@ export class GitHubStore
       createdAt: meta?.createdAt || "",
       updatedAt: meta?.updatedAt || "",
     };
-    this.#recordCache.set(relPath, record);
+    this.#cache.setRecord(relPath, record);
     return record;
   }
 
@@ -889,8 +881,8 @@ export class GitHubStore
       if (name === GITKEEP) continue;
       if (!isImageFilename(name)) continue;
       if (getParentPath(path) !== folderPath) continue;
-      const meta = this.#fileMeta.get(path);
-      const cachedThumb = this.#thumbnailCache.get(path);
+      const meta = this.#cache.getMeta(path);
+      const cachedThumb = this.#cache.getThumbnail(path);
       if (!cachedThumb) uncachedPaths.push(path);
       results.push({
         path,
@@ -924,8 +916,8 @@ export class GitHubStore
    * promise and cache hits return immediately.
    */
   async #ensureThumbnail(relPath: string): Promise<void> {
-    if (this.#thumbnailCache.has(relPath)) return;
-    const existing = this.#thumbnailInFlight.get(relPath);
+    if (this.#cache.hasThumbnail(relPath)) return;
+    const existing = this.#cache.getThumbnailInFlight(relPath);
     if (existing) return existing;
     // `inFlight` is captured so the `finally` block can confirm
     // ownership of the in-flight slot before clearing it. Without
@@ -964,8 +956,8 @@ export class GitHubStore
         // (`updateImage({ thumbnailDataUrl })` → seed → clear
         // in-flight). Its render reflects the current canvas state,
         // which may include edits newer than what our GET saw.
-        if (this.#thumbnailCache.has(relPath)) return;
-        this.#thumbnailCache.set(relPath, dataUrl);
+        if (this.#cache.hasThumbnail(relPath)) return;
+        this.#cache.setThumbnail(relPath, dataUrl);
         // CustomEvent is typed loosely here because we don't augment
         // the WindowEventMap globally for a storage-specific event.
         window.dispatchEvent(
@@ -980,12 +972,12 @@ export class GitHubStore
         // Only clear the in-flight slot if it's still ours. A save
         // that raced in may have already removed this entry and
         // launched a replacement prefetch.
-        if (this.#thumbnailInFlight.get(relPath) === inFlight) {
-          this.#thumbnailInFlight.delete(relPath);
+        if (this.#cache.getThumbnailInFlight(relPath) === inFlight) {
+          this.#cache.deleteThumbnailInFlight(relPath);
         }
       }
     })();
-    this.#thumbnailInFlight.set(relPath, inFlight);
+    this.#cache.setThumbnailInFlight(relPath, inFlight);
     return inFlight;
   }
 
@@ -1000,11 +992,11 @@ export class GitHubStore
     // without waiting on the background prefetch's round-trip.
     if (updates.thumbnailDataUrl !== undefined) {
       if (updates.thumbnailDataUrl) {
-        this.#thumbnailCache.set(currentPath, updates.thumbnailDataUrl);
+        this.#cache.setThumbnail(currentPath, updates.thumbnailDataUrl);
         // Stop any still-in-flight prefetch from clobbering this
         // freshly-rendered thumbnail — the editor canvas is the
         // source of truth at this moment.
-        this.#thumbnailInFlight.delete(currentPath);
+        this.#cache.deleteThumbnailInFlight(currentPath);
         window.dispatchEvent(
           new CustomEvent("annot-thumbnail-ready", {
             detail: { path: currentPath, dataUrl: updates.thumbnailDataUrl },
@@ -1014,13 +1006,13 @@ export class GitHubStore
         // Caller passed empty (generator failed) — don't leave a
         // stale entry hanging around. Wipe so the next listImages
         // schedules a fresh prefetch from the just-committed blob.
-        this.#thumbnailCache.delete(currentPath);
-        this.#thumbnailInFlight.delete(currentPath);
+        this.#cache.deleteThumbnail(currentPath);
+        this.#cache.deleteThumbnailInFlight(currentPath);
         void this.#ensureThumbnail(currentPath);
       }
-      const existingRecord = this.#recordCache.get(currentPath);
+      const existingRecord = this.#cache.getRecord(currentPath);
       if (existingRecord) {
-        this.#recordCache.set(currentPath, {
+        this.#cache.setRecord(currentPath, {
           ...existingRecord,
           thumbnailDataUrl: updates.thumbnailDataUrl,
         });
@@ -1072,7 +1064,7 @@ export class GitHubStore
         );
       }
 
-      this.#recordCache.set(currentPath, {
+      this.#cache.setRecord(currentPath, {
         ...record,
         annotationsSvg,
         tags,
@@ -1142,21 +1134,11 @@ export class GitHubStore
         }
       }
 
-      const cached = this.#recordCache.get(currentPath);
-      if (cached) {
-        this.#recordCache.delete(currentPath);
-        this.#recordCache.set(newPath, { ...cached, path: newPath, folderPath: newFolderPath });
-      }
-      const meta = this.#fileMeta.get(currentPath);
-      if (meta) {
-        this.#fileMeta.delete(currentPath);
-        this.#fileMeta.set(newPath, meta);
-      }
-      const thumb = this.#thumbnailCache.get(currentPath);
-      if (thumb) {
-        this.#thumbnailCache.delete(currentPath);
-        this.#thumbnailCache.set(newPath, thumb);
-      }
+      this.#cache.migrateEntry(currentPath, newPath, (rec) => ({
+        ...rec,
+        path: newPath,
+        folderPath: newFolderPath,
+      }));
       currentPath = newPath;
     }
 
@@ -1217,21 +1199,7 @@ export class GitHubStore
    *  `newPath`. Shared between the atomic and fallback rename
    *  paths so both end up with the same local state. */
   #migrateLocalCachesAfterRename(oldPath: string, newPath: string): void {
-    const cached = this.#recordCache.get(oldPath);
-    if (cached) {
-      this.#recordCache.delete(oldPath);
-      this.#recordCache.set(newPath, { ...cached, path: newPath });
-    }
-    const meta = this.#fileMeta.get(oldPath);
-    if (meta) {
-      this.#fileMeta.delete(oldPath);
-      this.#fileMeta.set(newPath, meta);
-    }
-    const thumb = this.#thumbnailCache.get(oldPath);
-    if (thumb) {
-      this.#thumbnailCache.delete(oldPath);
-      this.#thumbnailCache.set(newPath, thumb);
-    }
+    this.#cache.migrateEntry(oldPath, newPath, (rec) => ({ ...rec, path: newPath }));
   }
 
   async deleteImage(path: string): Promise<void> {
@@ -1239,9 +1207,7 @@ export class GitHubStore
     const sha = this.#tree.getBlobSha(path);
     if (!sha) return;
     await this.#deleteContents(path, sha, this.#commitMessage("delete", path));
-    this.#recordCache.delete(path);
-    this.#fileMeta.delete(path);
-    this.#thumbnailCache.delete(path);
+    this.#cache.purge(path);
   }
 
   // ===========================================================================
@@ -1390,30 +1356,15 @@ export class GitHubStore
   }
 
   #rewriteDescendantCaches(oldPath: string, newPath: string): void {
-    // recordCache
-    for (const [p, rec] of Array.from(this.#recordCache.entries())) {
-      if (p === oldPath || p.startsWith(`${oldPath}/`)) {
-        const np = rewritePathPrefix(p, oldPath, newPath);
-        this.#recordCache.delete(p);
-        this.#recordCache.set(np, { ...rec, path: np, folderPath: getParentPath(np) });
-      }
-    }
-    // fileMeta
-    for (const [p, m] of Array.from(this.#fileMeta.entries())) {
-      if (p === oldPath || p.startsWith(`${oldPath}/`)) {
-        const np = rewritePathPrefix(p, oldPath, newPath);
-        this.#fileMeta.delete(p);
-        this.#fileMeta.set(np, m);
-      }
-    }
-    // thumbnailCache
-    for (const [p, t] of Array.from(this.#thumbnailCache.entries())) {
-      if (p === oldPath || p.startsWith(`${oldPath}/`)) {
-        const np = rewritePathPrefix(p, oldPath, newPath);
-        this.#thumbnailCache.delete(p);
-        this.#thumbnailCache.set(np, t);
-      }
-    }
+    // Record / meta / thumbnail entries are migrated atomically by
+    // the cache's prefix-rewrite helper; the record's `path` and
+    // `folderPath` fields stay consistent with the new key via the
+    // transform callback.
+    this.#cache.rewriteEntriesForPrefix(oldPath, newPath, (rec, np) => ({
+      ...rec,
+      path: np,
+      folderPath: getParentPath(np),
+    }));
     // folder set
     this.#tree.rewriteFolderPrefix(oldPath, newPath);
     // Ensure every ancestor of the new path is present too (in case
@@ -1449,9 +1400,7 @@ export class GitHubStore
           const sha = this.#tree.getBlobSha(rel);
           if (!sha) continue;
           await this.#deleteContents(rel, sha, this.#commitMessage("delete", rel));
-          this.#recordCache.delete(rel);
-          this.#fileMeta.delete(rel);
-          this.#thumbnailCache.delete(rel);
+          this.#cache.purge(rel);
         }
       }
     }
