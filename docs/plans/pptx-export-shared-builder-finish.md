@@ -65,19 +65,24 @@ or block on shape-model gaps. Concretely:
 
 | pptx-export | Shared builder gap | Resolution |
 |---|---|---|
-| `buildLine` ([pptx-export.ts:396](../../packages/editor/src/pptx-export.ts)) | Curved-arrow `<a:custGeom>` Bezier path; legacy `<line>` element | Extend `AnnotationShape` with `arrow_curve_cx?` + `arrow_curve_cy?`. Add `<a:custGeom>` branch to [`render/src/drawingml/shapes/line.ts`](../../packages/render/src/drawingml/shapes/line.ts) when curve coords are present. Add a `<line>` handler to `svgElementToAnnotationShape`. |
+| `buildLine` ([pptx-export.ts:396](../../packages/editor/src/pptx-export.ts)) | Curved-arrow `<a:custGeom>` Bezier path | Extend `AnnotationShape` with `arrow_curve_cx?` + `arrow_curve_cy?`. Add `<a:custGeom>` branch to [`render/src/drawingml/shapes/line.ts`](../../packages/render/src/drawingml/shapes/line.ts) when curve coords are present. Plain `<line>` elements are not migrated — phase 1 drops the legacy dispatch arm. |
 | `buildFreehand` ([pptx-export.ts:508](../../packages/editor/src/pptx-export.ts)) | (none — used only as `buildFreehandGroup`'s per-child emitter) | Replace internal call with `buildShapeXml(svgElementToAnnotationShape(p), { ns: "p", id })` inside `buildFreehandGroup`. `buildFreehand` then disappears. |
 | `buildFreehandGroup` ([pptx-export.ts:591](../../packages/editor/src/pptx-export.ts)) | PPTX-only `<p:grpSp>` wrapper; the GVML clipboard side flattens | Stays in pptx-export — it's a PPTX-only presentation feature. But its child-emit loop routes through the shared builder so the duplicate `buildFreehand` goes away. |
 
-### `<line>` legacy element coverage gap
+### Legacy `<line>` element — drop, don't unify
 
 `pptx-export.ts:buildShapes` dispatches `tag === "line"` to its
-local `buildLine`. `svgElementToAnnotationShape` only knows
-`<g data-type="arrow">` — for plain `<line>` elements (legacy
-saved annotations from before ArrowTool always emitted `<g>`),
-the shared builder produces `null` and the shape is silently
-dropped on the Office-clipboard side. Phase 3 of this plan
-closes that gap.
+local `buildLine`. This branch only fires for plain `<line>`
+elements that survive in saved annotations from before
+ArrowTool was unified into the `<g data-type="arrow">` form;
+the current ArrowTool no longer emits `<line>` directly (a
+`grep -rn "createElementNS.*line\|tag === \"line\"" packages/editor/src/tools/`
+returns nothing). Past-data salvage is explicitly **out of
+scope** — user direction (2026-04-26) is to drop the legacy
+branch as dead code rather than mirror it on the Office-paste
+side. Phase 1 deletes the dispatch arm; the shared builder
+stays scoped to ArrowTool's current output (`<g
+data-type="arrow">`, optionally with a curve control point).
 
 ## Goal
 
@@ -119,23 +124,25 @@ After this plan lands:
 
 ## Phases
 
-### Phase 0 — Lock the curved-arrow + plain-`<line>` paths in the PPTX golden
+### Phase 0 — Lock the curved-arrow path in the PPTX golden
 
 **Goal:** The current `pptx-export.test.ts` fixture covers
-`<line>` (plain, no head), `<g data-type="arrow">` with a
-triangle head, and a freehand session group. It does NOT
-cover a curved arrow (the `<a:custGeom>` quadratic-Bezier
-form). Without that fixture, phase 3 lands "blind" — the
-`<a:custGeom>` migration could silently drop the curve and
-the diff would look clean.
+`<g data-type="arrow">` with a triangle head and a freehand
+session group, but does NOT cover a curved arrow (the
+`<a:custGeom>` quadratic-Bezier form). Without that fixture,
+phase 3 lands "blind" — the `<a:custGeom>` migration could
+silently drop the curve and the diff would look clean.
 
 **Files:**
 
 - [`packages/editor/src/pptx-export.test.ts`](../../packages/editor/src/pptx-export.test.ts)
   — add a test fixture for a curved arrow (`<g
-  data-type="arrow"`> with `data-cx` / `data-cy` populated).
+  data-type="arrow">` with `data-cx` / `data-cy` populated).
   Snapshot via `toMatchSnapshot()`, mirroring the existing
-  fixtures.
+  fixtures. The plain-line fixture in the existing
+  `pins the current output for every emitter` snapshot stays
+  for now; phase 1 removes the test's `svg("line", …)`
+  contributor along with the production code.
 
 **Acceptance:**
 
@@ -144,12 +151,15 @@ the diff would look clean.
 - The new snapshot pins the current `<a:custGeom>` quadratic
   Bezier output literally; phase 3 must match it.
 
-### Phase 1 — Drop the drop-in helper duplicates
+### Phase 1 — Drop the drop-in helper duplicates + the legacy `<line>` dispatch
 
 **Goal:** Replace pptx-export's `colorHex` / `endOOXML` /
 `capOOXML` / `joinOOXML` / `parseSVGPath` / EMU constants with
 imports from `@ingcreators/annot-render/drawingml/helpers`.
-No structural change; pure dedupe.
+At the same time delete the `tag === "line"` branch in
+`buildShapes` (legacy past-data salvage; ArrowTool no longer
+emits plain `<line>`). No structural change for the modern
+ArrowTool path; pure dedupe + dead-code removal.
 
 **Files:**
 
@@ -175,12 +185,30 @@ No structural change; pure dedupe.
     mechanical edit.
   - Adjust `buildFreehand`'s callsite for the tuple return
     type of `parseSvgPath`.
+  - **Delete** the `if (tag === "line") { ... }` branch in
+    `buildShapes`. ArrowTool emits `<g data-type="arrow">`
+    exclusively (verified via `grep -rn "createElementNS.*line\|tag === \"line\""
+    packages/editor/src/tools/`); the only payloads that
+    fired this branch were back-compat reads from old saved
+    files, which are out of scope per the user direction
+    on 2026-04-26.
+- [`packages/editor/src/pptx-export.test.ts`](../../packages/editor/src/pptx-export.test.ts)
+  — drop the `svg("line", …)` contributor in the
+  `pins the current output for every emitter` fixture (one
+  shape removed). The snapshot's `<a:cxnSp>` for the bare
+  line goes away; the existing arrow-group entry covers the
+  modern surface.
 
 **Acceptance:**
 
-- `pptx-export.test.ts` — all 4 snapshots byte-equivalent.
+- `pptx-export.test.ts` — fixture snapshot regenerates with
+  the bare-line `<a:cxnSp>` removed (intentional, declared
+  in the PR description). Curved-arrow + freehand-group +
+  arrow-group + rect / ellipse / text / marker / freehand-
+  single fixtures stay byte-equivalent.
 - `pnpm -r typecheck` — green.
-- `pnpm test` — same pass count as before.
+- `pnpm test` — same pass count as before (snapshots
+  regenerated, not added).
 
 ### Phase 2 — Migrate `buildFreehandGroup`'s child emit through the shared builder
 
@@ -208,10 +236,10 @@ but its per-child path emit goes through
   phase 4 of `_done/office-paste-shared-drawing-builder` already
   proved byte-equivalence for single-path freehand).
 
-### Phase 3 — Widen `AnnotationShape` for curved arrows + plain `<line>`; migrate `buildLine`
+### Phase 3 — Widen `AnnotationShape` for curved arrows; migrate `buildLine`
 
-**Goal:** Move the line / arrow / curved-arrow OOXML emit
-into the shared builder. After this phase, pptx-export has no
+**Goal:** Move the arrow / curved-arrow OOXML emit into the
+shared builder. After this phase, pptx-export has no
 line-related helpers (`paintXml` / `strokeOpacity` / `_lnXml` /
 `lineLnXml` / SVG-element `xfrmAttrs` / `buildLine`).
 
@@ -224,9 +252,9 @@ line-related helpers (`paintXml` / `strokeOpacity` / `_lnXml` /
 - [`packages/core/src/editor/svg-to-annotation-shapes.ts`](../../packages/core/src/editor/svg-to-annotation-shapes.ts)
   — extend the arrow-group branch to read `data-cx` /
   `data-cy` (or whatever `getEffectiveLineEndpoints` populates
-  for the curve control point). Add a new `tag === "line"`
-  branch that emits a plain line (closes the `<line>`
-  legacy-element parity gap).
+  for the curve control point) and emit
+  `arrow_curve_cx` / `arrow_curve_cy` when present. No new
+  `<line>` branch — the legacy dispatch was removed in phase 1.
 - [`packages/render/src/drawingml/shapes/line.ts`](../../packages/render/src/drawingml/shapes/line.ts)
   — when `arrow_curve_cx` + `arrow_curve_cy` are populated,
   swap the `<a:prstGeom prst="line">` for `<a:custGeom>` with
@@ -239,10 +267,10 @@ line-related helpers (`paintXml` / `strokeOpacity` / `_lnXml` /
     `lineLnXml`, the SVG-element `xfrmAttrs`, and
     pptx-export's own `gradFillXml` (the `gRaw` / JSON-parsing
     variant).
-  - The `if (tag === "line") { ... }` and `if (tag === "g" &&
-    data-type === "arrow") { ... }` branches in `buildShapes`
-    fold into the generic `svgElementToAnnotationShape →
-    buildShapeXml` dispatch (same as rect / ellipse / etc).
+  - The `if (tag === "g" && data-type === "arrow") { ... }`
+    branch in `buildShapes` folds into the generic
+    `svgElementToAnnotationShape → buildShapeXml` dispatch
+    (same as rect / ellipse / etc).
 
 **Acceptance:**
 
@@ -281,6 +309,9 @@ line-related helpers (`paintXml` / `strokeOpacity` / `_lnXml` /
   ~877).
 - A `grep -r "buildLine\|buildFreehand\|colorHex\|endOOXML\|paintXml" packages/editor/src/pptx-export.ts`
   returns nothing.
+- A `grep -rn "tag === \"line\"" packages/` returns nothing
+  outside test fixtures (the legacy dispatch arm is gone
+  from production code).
 
 ## Out of scope
 
@@ -324,6 +355,14 @@ Before starting, read these in this order:
   `_done/office-paste-shared-drawing-builder`. Found via a
   systematic duplication audit of the post-refactor
   `pptx-export.ts` / `render/drawingml/helpers.ts` /
-  `svg-to-annotation-shapes.ts` triple. The audit also flagged
-  curved-arrow + `<line>` coverage as parity gaps — folded
-  into phase 3.
+  `svg-to-annotation-shapes.ts` triple. The audit flagged
+  both curved arrows (current ArrowTool feature, silently
+  lost in Office paste) and plain-`<line>` (legacy past-data
+  salvage) as parity gaps.
+- 2026-04-26 — User direction: drop the legacy `<line>`
+  branch as dead code rather than mirror it on the
+  Office-paste side. Past-data salvage is out of scope; the
+  plan unifies on ArrowTool's current output (`<g
+  data-type="arrow">`, with optional curve control point).
+  Phase 1 absorbs the legacy delete; phase 3 simplifies to
+  curved-arrow widening only.
