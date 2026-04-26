@@ -1,8 +1,30 @@
 # PropertyPanel — Schema-driven Render
 
-> **Status:** Queued. Closes the long-running testability series
-> (proposals 1–8 + StorageProvider contract review, PRs #138–#151).
-> This is the remaining "large" piece of proposal 8.
+> **Status:** Done — landed in PRs #153–#161 (April 2026). Closes
+> the long-running testability series (proposals 1–8 +
+> StorageProvider contract review, PRs #138–#151).
+>
+> **PR map:**
+> - #153 — Phase 1: `PropertyControlDef` interface + `PROPERTY_CONTROLS` registry (Tier B)
+> - #154 — Phase 2: free-function renderer + golden DOM tests
+> - #155 — Phase 3a: live wiring for the empty `group` category
+> - #156 — Phase 3b: `shape` Type-section migration
+> - #157 — Phase 3c: `redact` (validates async effect path)
+> - #158 — Phase 3d: `highlight` (variant-IS-the-value pattern)
+> - #159 — Phase 3e: `marker` Type + Size (composite-`<g>` setter)
+> - #160 — Phase 3f: `textbox` (text-on-child setter, sticky/callout
+>   bg recreation via `applyTextColor` effect)
+> - #161 — Phase 4: dead-code cleanup + plan archival + CLAUDE.md
+>   guardrail
+>
+> **Outcome:** every category in `CATEGORY_CONTROL_SHAPE` now routes
+> through `PropertyPanel#renderViaRegistry` → `renderControl`.
+> `property-panel.ts` shrank from 1,817 LOC to ~1,580 (target was
+> ≤800 — the residual is imperative rows the registry doesn't yet
+> model: stroke / fill transparency, cap type, per-end arrow
+> type+size grids, marker bg-primitive controls). Those are
+> independent follow-up work; the schema-driven scaffold is in
+> place for them to land incrementally.
 >
 > **Scope:** Replace the imperative `#renderXxxControls` methods in
 > `packages/editor/src/property-panel.ts` with a schema-driven

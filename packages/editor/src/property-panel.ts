@@ -8,7 +8,6 @@ import {
   type PropertyEffectId,
 } from "@ingcreators/annot-core/editor/property-schema";
 import { computeDasharray, detectDashKey } from "@ingcreators/annot-core/utils";
-import { setTooltip } from "./tooltip.js";
 import { refreshArrowPath } from "@ingcreators/annot-core/editor/arrow-markers";
 import type { CanvasManager } from "./canvas-manager.js";
 import { createCustomSelect } from "./custom-select.js";
@@ -41,7 +40,6 @@ import type {
   MarkerShape,
   RedactStyle,
 } from "./tools/tool-base.js";
-import { readTransformState, setRotation, toggleFlip } from "@ingcreators/annot-core/editor/transform-utils";
 
 /** True for any element that represents a line-with-optional-arrowheads:
  *  a classic `<line>` OR the new composed `<g data-type="arrow">`
@@ -50,24 +48,6 @@ function isLineLike(el: Element): boolean {
   if (el.tagName === "line") return true;
   return el.tagName === "g" && el.getAttribute("data-type") === "arrow";
 }
-
-const WIDTH_OPTIONS = [
-  { label: "0.5pt", value: 0.5 },
-  { label: "1pt", value: 1 },
-  { label: "1.5pt", value: 1.5 },
-  { label: "2pt", value: 2 },
-  { label: "3pt", value: 3 },
-  { label: "4.5pt", value: 4.5 },
-  { label: "6pt", value: 6 },
-];
-
-const STYLE_PRESETS = [
-  { label: "Solid", value: "" },
-  { label: "Dashed", value: "dash" },
-  { label: "Dotted", value: "dot" },
-  { label: "Dash-Dot", value: "dashDot" },
-  { label: "Long Dash", value: "lgDash" },
-];
 
 /**
  * Placement mode for the PropertyPanel.
@@ -745,64 +725,9 @@ export class PropertyPanel {
   // `./property-panel-helpers.ts` (Stage 3b-1). Call sites use the
   // imported `arrowPreview` / `arrowPreviewContent` directly.
 
-  /** Stroke-opacity slider (0..100%). Kept distinct from
-   *  `#addOpacityPicker` which targets fill-opacity, because the two
-   *  control different visual properties and users often want one
-   *  faded and the other solid. */
-  #addStrokeOpacityPicker(current: number): void {
-    const wrap = document.createElement("div");
-    wrap.className = "prop-row";
-    const lbl = document.createElement("span");
-    lbl.className = "prop-label";
-    // "Stroke opacity" — the old "Stroke α" label was too cryptic
-    // (users don't know "α" = alpha = opacity at a glance).
-    lbl.textContent = "Stroke opacity";
-    wrap.appendChild(lbl);
-
-    const input = document.createElement("input");
-    input.type = "range";
-    input.min = "0";
-    input.max = "100";
-    input.step = "1";
-    input.value = String(Math.round(current * 100));
-    input.className = "prop-slider";
-    input.addEventListener("input", () => {
-      const v = Number.parseFloat(input.value) / 100;
-      // Cheap per-frame update — avoid history save until release.
-      for (const t of this.#targets) {
-        // Lines use `opacity` so markers fade with the stroke
-        // (context-stroke propagates color but not stroke-opacity).
-        // Also drop the legacy stroke-opacity so the two paint
-        // channels don't compound into an overly faded line.
-        if (isLineLike(t)) {
-          t.setAttribute("opacity", String(v));
-          t.removeAttribute("stroke-opacity");
-        } else {
-          t.setAttribute("stroke-opacity", String(v));
-        }
-      }
-      valLbl.textContent = `${input.value}%`;
-    });
-    input.addEventListener("change", () => {
-      const v = Number.parseFloat(input.value) / 100;
-      for (const t of this.#targets) {
-        if (isLineLike(t)) {
-          t.setAttribute("opacity", String(v));
-          t.removeAttribute("stroke-opacity");
-        } else {
-          t.setAttribute("stroke-opacity", String(v));
-        }
-      }
-      this.#commit();
-    });
-    wrap.appendChild(input);
-
-    const valLbl = document.createElement("span");
-    valLbl.className = "prop-value";
-    valLbl.textContent = `${Math.round(current * 100)}%`;
-    wrap.appendChild(valLbl);
-    this.#el.appendChild(wrap);
-  }
+  // `#addStrokeOpacityPicker` removed in Phase 4 — never called from
+  // anywhere in the panel. Stroke transparency is handled inline by
+  // `#addPPLineSection` which writes its own ppNumberInput row.
 
   // `#addArrowVariantPicker` removed in Phase 3b — the chip row is
   // now produced by the schema-driven renderer
@@ -852,59 +777,10 @@ export class PropertyPanel {
   // and the effect handler bound in the constructor calls
   // `applyDrawStyle` per target.
 
-  #addOpacityPicker(current: number): void {
-    const wrap = document.createElement("div");
-    wrap.className = "prop-row";
-    const lbl = document.createElement("span");
-    lbl.className = "prop-label";
-    lbl.textContent = "Opacity";
-    wrap.appendChild(lbl);
-
-    const minusBtn = document.createElement("button");
-    minusBtn.className = "zoom-btn material-symbols-outlined";
-    minusBtn.textContent = "remove";
-
-    const input = document.createElement("input");
-    input.type = "number";
-    input.className = "prop-number-input";
-    input.min = "0";
-    input.max = "100";
-    input.step = "5";
-    input.value = String(Math.round(current * 100));
-
-    const pctLabel = document.createElement("span");
-    pctLabel.className = "prop-value";
-    pctLabel.textContent = "%";
-
-    const plusBtn = document.createElement("button");
-    plusBtn.className = "zoom-btn material-symbols-outlined";
-    plusBtn.textContent = "add";
-
-    const apply = () => {
-      let v = Number.parseInt(input.value, 10) || 0;
-      v = Math.max(0, Math.min(100, v));
-      input.value = String(v);
-      this.#setAll("fill-opacity", String(v / 100));
-    };
-
-    input.addEventListener("change", apply);
-    minusBtn.addEventListener("click", () => {
-      const v = (Number.parseInt(input.value, 10) || 0) - 5;
-      input.value = String(Math.max(0, v));
-      apply();
-    });
-    plusBtn.addEventListener("click", () => {
-      const v = (Number.parseInt(input.value, 10) || 0) + 5;
-      input.value = String(Math.min(100, v));
-      apply();
-    });
-
-    wrap.appendChild(minusBtn);
-    wrap.appendChild(input);
-    wrap.appendChild(pctLabel);
-    wrap.appendChild(plusBtn);
-    this.#el.appendChild(wrap);
-  }
+  // `#addOpacityPicker` removed in Phase 4 — never called from
+  // anywhere in the panel. Fill transparency is handled inline by
+  // `#addPPFillSection` (shape) and `#renderHighlightControls`
+  // (highlight, schema-driven via `highlightTransparency`).
 
   #addNumberInput(
     label: string,
@@ -920,124 +796,12 @@ export class PropertyPanel {
     this.#target().appendChild(this.#ppRow(label, input));
   }
 
-  // --- Width picker: visual line samples ---
-
-  #addWidthPicker(current: number, _color: string, onWidthChange?: (w: number) => void): void {
-    const wrap = document.createElement("div");
-    wrap.className = "prop-section";
-
-    const label = document.createElement("div");
-    label.className = "prop-section-label";
-    label.textContent = "Width";
-    wrap.appendChild(label);
-
-    const list = document.createElement("div");
-    list.className = "prop-choice-list";
-
-    for (const opt of WIDTH_OPTIONS) {
-      const item = document.createElement("div");
-      item.className = `prop-choice-item${Math.abs(opt.value - current) < 0.3 ? " active" : ""}`;
-      setTooltip(item, opt.label);
-
-      // SVG preview of line thickness
-      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-      svg.setAttribute("width", "80");
-      svg.setAttribute("height", "16");
-      svg.setAttribute("viewBox", "0 0 80 16");
-      const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
-      line.setAttribute("x1", "4");
-      line.setAttribute("y1", "8");
-      line.setAttribute("x2", "76");
-      line.setAttribute("y2", "8");
-      line.setAttribute("class", "preview-line");
-      line.setAttribute("stroke-width", String(opt.value));
-      line.setAttribute("stroke-linecap", "round");
-      svg.appendChild(line);
-      item.appendChild(svg);
-
-      const lbl = document.createElement("span");
-      lbl.className = "prop-choice-label";
-      lbl.textContent = opt.label;
-      item.appendChild(lbl);
-
-      item.addEventListener("click", () => {
-        list.querySelectorAll(".prop-choice-item").forEach((i) => i.classList.remove("active"));
-        item.classList.add("active");
-        this.#setAll("stroke-width", String(opt.value));
-        onWidthChange?.(opt.value);
-      });
-      list.appendChild(item);
-    }
-
-    wrap.appendChild(list);
-    this.#el.appendChild(wrap);
-  }
-
-  // --- Dash picker: visual dash pattern samples ---
-
-  #addStylePicker(currentKey: string, sw: number): void {
-    const wrap = document.createElement("div");
-    wrap.className = "prop-section";
-
-    const label = document.createElement("div");
-    label.className = "prop-section-label";
-    // "Dash" (not "Style") — the tool-side panel uses "Style" for
-    // variant pickers (pen/highlighter, mosaic/solid/blur, etc.).
-    // Calling dash-pattern "Style" here clashed; "Dash" names the
-    // CSS property explicitly and avoids the confusion.
-    label.textContent = "Dash";
-    wrap.appendChild(label);
-
-    const list = document.createElement("div");
-    list.className = "prop-choice-list";
-
-    // Fixed preview stroke width for consistency
-    const previewSw = 1.5;
-
-    for (const opt of STYLE_PRESETS) {
-      const item = document.createElement("div");
-      item.className = `prop-choice-item${opt.value === currentKey ? " active" : ""}`;
-      setTooltip(item, opt.label);
-
-      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-      svg.setAttribute("width", "80");
-      svg.setAttribute("height", "16");
-      svg.setAttribute("viewBox", "0 0 80 16");
-      const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
-      line.setAttribute("x1", "4");
-      line.setAttribute("y1", "8");
-      line.setAttribute("x2", "76");
-      line.setAttribute("y2", "8");
-      line.setAttribute("class", "preview-line");
-      line.setAttribute("stroke-width", String(previewSw));
-      line.setAttribute("stroke-linecap", "round");
-      const previewDash = computeDasharray(opt.value, previewSw);
-      if (previewDash) line.setAttribute("stroke-dasharray", previewDash);
-      svg.appendChild(line);
-      item.appendChild(svg);
-
-      const lbl = document.createElement("span");
-      lbl.className = "prop-choice-label";
-      lbl.textContent = opt.label;
-      item.appendChild(lbl);
-
-      item.addEventListener("click", () => {
-        list.querySelectorAll(".prop-choice-item").forEach((i) => i.classList.remove("active"));
-        item.classList.add("active");
-        // Set both the key and computed SVG dasharray
-        for (const t of this.#targets) {
-          t.setAttribute("data-dash-key", opt.value);
-          const elSw = Number.parseFloat(t.getAttribute("stroke-width") || String(sw));
-          t.setAttribute("stroke-dasharray", computeDasharray(opt.value, elSw));
-        }
-        this.#commit();
-      });
-      list.appendChild(item);
-    }
-
-    wrap.appendChild(list);
-    this.#el.appendChild(wrap);
-  }
+  // `#addWidthPicker` and `#addStylePicker` removed in Phase 4 —
+  // visual chip-grid pickers for stroke width / dash pattern that
+  // were never wired up from any category render method (the live
+  // panel uses ppNumberInput / createCustomSelect rows in
+  // `#addPPLineSection` instead). Their `WIDTH_OPTIONS` and
+  // `STYLE_PRESETS` constants went with them.
 
   // `#addFontSizePicker` removed in Phase 3f — schema-driven via
   // `PROPERTY_CONTROLS.fontSize` (8..96 pt, step 1, unit "pt"). The
@@ -1060,14 +824,7 @@ export class PropertyPanel {
     this.#target().appendChild(this.#ppRow(label, btn));
   }
 
-  #addButton(icon: string, title: string, onClick: () => void): void {
-    const btn = document.createElement("button");
-    btn.className = "prop-btn";
-    btn.textContent = icon;
-    setTooltip(btn, title);
-    btn.addEventListener("click", onClick);
-    this.#el.appendChild(btn);
-  }
+  // `#addButton` removed in Phase 4 — never called.
 
   #setAll(attr: string, value: string): void {
     // Use the stroke-target expansion so freehand groups also route
@@ -1120,97 +877,10 @@ export class PropertyPanel {
     return out;
   }
 
-  /**
-   * Universal Transform section — rotate (numeric input + quick-set
-   * buttons) and flip (horizontal / vertical toggles). Operates on
-   * every selected target so multi-select rotates / flips as a batch.
-   */
-  #addTransformControls(sample: SVGElement): void {
-    const state = readTransformState(sample);
-
-    const section = document.createElement("div");
-    section.className = "prop-section";
-    const lbl = document.createElement("div");
-    lbl.className = "prop-section-label";
-    lbl.textContent = "Transform";
-    section.appendChild(lbl);
-
-    // Rotation row: numeric input + ±90° quick-set chips.
-    const rotRow = document.createElement("div");
-    rotRow.className = "prop-row";
-
-    const rotInput = document.createElement("input");
-    rotInput.type = "number";
-    rotInput.className = "toolbar-input";
-    rotInput.style.width = "64px";
-    rotInput.value = String(Math.round(state.rotation));
-    setTooltip(rotInput, "Rotation (degrees)");
-    rotInput.addEventListener("change", () => {
-      const v = Number.parseFloat(rotInput.value);
-      if (!Number.isFinite(v)) return;
-      for (const t of this.#targets) setRotation(t, v);
-      // Rotation is instance-specific — don't rubber-band it to the
-      // tool's preset, just save history and refresh handles.
-      this.#history.save();
-      this.onTargetMutated?.();
-    });
-    rotRow.appendChild(rotInput);
-
-    const degLabel = document.createElement("span");
-    degLabel.textContent = "°";
-    degLabel.style.opacity = "0.7";
-    degLabel.style.marginRight = "6px";
-    rotRow.appendChild(degLabel);
-
-    const quickRotate = (delta: number, title: string) => {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "toolbar-btn material-symbols-outlined";
-      setTooltip(btn, title);
-      btn.textContent = delta < 0 ? "rotate_left" : "rotate_right";
-      btn.style.fontSize = "18px";
-      btn.addEventListener("click", () => {
-        for (const t of this.#targets) {
-          const cur = readTransformState(t).rotation;
-          setRotation(t, cur + delta);
-        }
-        this.#history.save();
-        this.show(this.#targets); // reflect new value in the input
-        this.onTargetMutated?.();
-      });
-      rotRow.appendChild(btn);
-    };
-    quickRotate(-90, "Rotate 90° counter-clockwise");
-    quickRotate(90, "Rotate 90° clockwise");
-
-    section.appendChild(rotRow);
-
-    // Flip row: two icon chips. "active" mirrors the current flip
-    // state so the user sees at a glance which axes are mirrored.
-    const flipRow = document.createElement("div");
-    flipRow.className = "prop-choice-list prop-choice-horizontal";
-
-    const flipChip = (axis: "h" | "v", icon: string, label: string) => {
-      const chip = document.createElement("div");
-      const active = axis === "h" ? state.flipH : state.flipV;
-      chip.className = `prop-choice-chip material-symbols-outlined${active ? " active" : ""}`;
-      chip.textContent = icon;
-      setTooltip(chip, label);
-      chip.addEventListener("click", () => {
-        for (const t of this.#targets) toggleFlip(t, axis);
-        // Flip is instance-specific — don't rubber-band.
-        this.#history.save();
-        this.show(this.#targets); // refresh active state
-        this.onTargetMutated?.();
-      });
-      flipRow.appendChild(chip);
-    };
-    flipChip("h", "swap_horiz", "Flip horizontal (Shift+H)");
-    flipChip("v", "swap_vert", "Flip vertical (Shift+V)");
-
-    section.appendChild(flipRow);
-    this.#el.appendChild(section);
-  }
+  // `#addTransformControls` removed in Phase 4 — never invoked from
+  // anywhere in the panel. Rotate / flip live on the right-panel
+  // Actions row (EditorRightPanel) per the rationale documented in
+  // `show()`'s trailing comment.
 
   // ==================================================================
   // PowerPoint-style "Line" property section.

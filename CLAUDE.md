@@ -168,7 +168,58 @@ Rules when adding public symbols:
   introduce a new load-time global or a new package edge that
   could break the cycle invariant.
 
-### 6. Reply and commit language
+### 6. PropertyPanel is schema-driven
+
+The right-side editor's PropertyPanel renders its controls from a
+declarative registry (`PROPERTY_CONTROLS` in
+[`packages/core/src/editor/property-schema.ts`](./packages/core/src/editor/property-schema.ts)),
+not from a per-category imperative chain. When adding or editing a
+property control:
+
+- **New controls land in the registry first.** Add the id to
+  `PROPERTY_CONTROL_IDS` (Tier B), the def to `PROPERTY_CONTROLS`,
+  and a per-category entry in `CATEGORY_CONTROL_SHAPE`. Each def
+  declares EXACTLY ONE of `setValue` (in-place attr write,
+  Tier B), `replace` (element swap returning the new node,
+  Tier B-friendly), or `effect: PropertyEffectId` (Tier C-only
+  side effect — canvas pixel sampling, composite-`<g>` mutations,
+  etc.). Visibility predicates (`visibleWhen`) act as ALL-targets
+  gates so multi-select hides the control when any selected element
+  fails the predicate.
+- **Effect handlers live in PropertyPanel's constructor**
+  (`packages/editor/src/property-panel.ts`). Each entry in
+  `PROPERTY_EFFECT_IDS` maps to a closure that calls the matching
+  Tier C helper (`applyArrowHead`, `convertRedactStyle`, etc.) and
+  returns per-target replacements. Async handlers are awaited by
+  the renderer before firing onCommit.
+- **The renderer is in
+  [`packages/editor/src/property-panel-renderer.ts`](./packages/editor/src/property-panel-renderer.ts).**
+  `renderControl(def, targets, deps)` is a free function — it
+  doesn't import `PropertyPanel`, so you can drive it from tests
+  with a stub effect-handler table. A unified `dispatchMutation`
+  helper routes `setValue` / `replace` / `effect` paths
+  consistently across `color`, `number`, `select`, `variantPicker`
+  control types.
+- **PropertyPanel sections (Type / Fill / Line / Label) wrap the
+  registry calls.** The registry doesn't model section grouping —
+  the panel's per-category render method (`#renderShapeControls`,
+  etc.) decides which controls go in which `#inSection` and may
+  interleave imperative rows for behaviour the registry doesn't
+  yet model (transparency sliders, cap type, per-end arrow
+  type+size grids, marker bg-primitive controls).
+- **DOM byte-equivalence is the migration contract.** When
+  swapping an imperative `#addXxx` helper for a
+  `#renderRegistryControl(id)` call, the rendered DOM must match
+  the imperative output. The renderer's golden snapshots in
+  [`packages/editor/src/property-panel-renderer.test.ts`](./packages/editor/src/property-panel-renderer.test.ts)
+  pin the exact class names + attribute shapes — break them
+  intentionally only when the migration is itself a deliberate
+  visual change (called out in the PR description).
+
+History: the schema-driven refactor landed across PRs #153–#161,
+following [`docs/plans/_done/property-panel-schema.md`](./docs/plans/_done/property-panel-schema.md).
+
+### 7. Reply and commit language
 
 - Replies to the user: **Japanese**.
 - Code, comments, commit messages, PR descriptions: **English**.
