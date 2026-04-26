@@ -1,0 +1,7 @@
+---
+source: src/commands/clipboard_test.rs
+assertion_line: 268
+expression: xml
+---
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/lockedCanvas"><lc:lockedCanvas xmlns:lc="http://schemas.openxmlformats.org/drawingml/2006/lockedCanvas"><a:nvGrpSpPr><a:cNvPr id="0" name=""/><a:cNvGrpSpPr/></a:nvGrpSpPr><a:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="7620000" cy="5715000"/><a:chOff x="0" y="0"/><a:chExt cx="7620000" cy="5715000"/></a:xfrm></a:grpSpPr><a:sp><a:nvSpPr><a:cNvPr id="2" name="T2"/><a:cNvSpPr txBox="1"/></a:nvSpPr><a:spPr><a:xfrm><a:off x="952500" y="3810000"/><a:ext cx="1428750" cy="476250"/></a:xfrm><a:prstGeom prst="wedgeRoundRectCallout"><a:avLst><a:gd name="adj1" fmla="val 83333"/><a:gd name="adj2" fmla="val 90000"/><a:gd name="adj3" fmla="val 5000"/></a:avLst></a:prstGeom><a:solidFill><a:srgbClr val="FFFFC8"><a:alpha val="92157"/></a:srgbClr></a:solidFill><a:ln w="9525"><a:solidFill><a:srgbClr val="BFBFBF"/></a:solidFill></a:ln></a:spPr><a:txSp><a:txBody><a:bodyPr wrap="square" rtlCol="0" lIns="91440" tIns="45720" rIns="91440" bIns="45720"/><a:lstStyle/><a:p><a:r><a:rPr lang="ja-JP" sz="1500" dirty="0"><a:solidFill><a:srgbClr val="000000"/></a:solidFill></a:rPr><a:t>Callout!</a:t></a:r></a:p></a:txBody><a:useSpRect/></a:txSp></a:sp></lc:lockedCanvas></a:graphicData></a:graphic>
