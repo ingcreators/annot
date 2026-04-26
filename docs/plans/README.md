@@ -26,6 +26,7 @@ window (`Queued`), or actively shipping (`In progress`).
 | [`google-drive-integration.md`](./google-drive-integration.md) | Draft | Rework the Drive backend onto the non-sensitive `drive.file` scope + Workspace Marketplace + Drive UI Integration so Annot can ship publicly without a restricted-scope CASA audit. |
 | [`oss-cloud-split.md`](./oss-cloud-split.md) | Draft | Forward-looking strategy for keeping Annot OSS while developing paid features in a separate private `annot-cloud` repo. Guardrails apply from today; concrete phases trigger on "first paid feature" and "company incorporation". |
 | [`github-integration.md`](./github-integration.md) | Draft | Individual-user `GitHubStore` — device-flow auth, pick repo + branch + base path, commits as save. Drive-integration-equivalent scope. PR automation / Check Runs / org admin live in `annot-cloud`, not here. Phases 1–3 landed (#36–#38); Phase 4 polish in progress. |
+| [`property-panel-schema.md`](./property-panel-schema.md) | Queued | Closing piece of the testability series (proposal 8). Replace `PropertyPanel`'s imperative `#renderXxxControls` methods with a schema-driven renderer reading from a Tier B `PropertyControlDef` registry. 4 phases, each a separate PR. Resume via `"Read docs/plans/property-panel-schema.md and start Phase 1."` |
 
 ## Recently landed plans
 
