@@ -26,7 +26,6 @@ import type {
 } from "@ingcreators/annot-core/storage";
 import {
   ancestorPaths,
-  drawToThumbCanvas,
   getFilename,
   getParentPath,
   joinPath,
@@ -37,6 +36,7 @@ import {
 import { createEditableImage, readEditableImage } from "@ingcreators/annot-core/xmp";
 import { loadEncodeOptions } from "../encode-options.js";
 import { encodeCaptureInWorker } from "../workers/encode-client.js";
+import { generateThumbnailFromDataUrl } from "./image-thumbnail.js";
 
 const INDEX_FILE = ".annot.json";
 
@@ -722,27 +722,7 @@ export class DeviceStore implements StorageProvider, StorageWithResync, StorageW
   // ---- Thumbnail ----
 
   async generateThumbnail(dataUrl: string, maxWidth = 480): Promise<string> {
-    try {
-      const resp = await fetch(dataUrl);
-      const blob = await resp.blob();
-      const bmp = await createImageBitmap(blob);
-
-      const canvas = new OffscreenCanvas(1, 1);
-      const ctx = canvas.getContext("2d")!;
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = "high";
-      drawToThumbCanvas(ctx, canvas, bmp, bmp.width, bmp.height, maxWidth);
-      bmp.close();
-
-      const outBlob = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.85 });
-      return new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result as string);
-        reader.readAsDataURL(outBlob);
-      });
-    } catch {
-      return "";
-    }
+    return generateThumbnailFromDataUrl(dataUrl, maxWidth);
   }
 
   // ---- Helpers ----

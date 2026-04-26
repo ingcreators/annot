@@ -13,7 +13,6 @@ import type {
 } from "@ingcreators/annot-core/storage";
 import {
   ancestorPaths,
-  drawToThumbCanvas,
   getFilename,
   getParentPath,
   joinPath,
@@ -21,6 +20,7 @@ import {
   uniquifyFilenameAsync,
   validateName,
 } from "@ingcreators/annot-core/storage";
+import { generateThumbnailFromDataUrl } from "./image-thumbnail.js";
 
 const DB_NAME = "annot";
 const DB_VERSION = 2; // v2: path-based keys
@@ -413,18 +413,6 @@ export class BrowserStore implements StorageProvider {
   // ---- Utility ----
 
   async generateThumbnail(dataUrl: string, maxWidth = 480): Promise<string> {
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.onload = () => {
-        const c = document.createElement("canvas");
-        const ctx = c.getContext("2d")!;
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = "high";
-        drawToThumbCanvas(ctx, c, img, img.naturalWidth, img.naturalHeight, maxWidth);
-        resolve(c.toDataURL("image/jpeg", 0.85));
-      };
-      img.onerror = () => resolve("");
-      img.src = dataUrl;
-    });
+    return generateThumbnailFromDataUrl(dataUrl, maxWidth);
   }
 }
