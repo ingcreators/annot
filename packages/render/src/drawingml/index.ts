@@ -77,3 +77,25 @@ export function buildShapeXml(shape: AnnotationShape, opts: BuildShapeOpts): str
 export { buildBackgroundPic } from "./shapes/mosaic-image.js";
 export type { Namespace, NamespaceOpts };
 export { namespaceFor };
+
+// Pure helpers re-exported so PPTX export and any future
+// consumer can import them from the package's single entry
+// instead of reaching into `drawingml/helpers.js`.
+export {
+  buildFillXml,
+  capAttr,
+  chex,
+  dashToDrawingml,
+  endXml,
+  exml,
+  gradFillXml,
+  joinXml,
+  parseRgba,
+  parseSvgPath,
+  pt,
+  PT_EMU,
+  px,
+  PX_EMU,
+  strokePaintXml,
+  xfrmAttrs,
+} from "./helpers.js";

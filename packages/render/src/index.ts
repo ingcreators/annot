@@ -14,11 +14,27 @@
 export { renderImageRecord } from "./render-image-record.js";
 export {
   buildBackgroundPic,
+  buildFillXml,
   type BuildShapeOpts,
   buildShapeXml,
+  capAttr,
+  chex,
+  dashToDrawingml,
+  endXml,
+  exml,
+  gradFillXml,
+  joinXml,
   type Namespace,
   type NamespaceOpts,
   namespaceFor,
+  parseRgba,
+  parseSvgPath,
+  pt,
+  PT_EMU,
+  px,
+  PX_EMU,
+  strokePaintXml,
+  xfrmAttrs,
 } from "./drawingml/index.js";
 export {
   type BuildDrawingXmlOpts,

@@ -93,21 +93,6 @@ exports[`buildPptxFiles slide XML > pins the current output for every emitter 1`
   </p:nvCxnSpPr>
   <p:spPr>
     <a:xfrm>
-      <a:off x="95250" y="1428750"/>
-      <a:ext cx="1905000" cy="9525"/>
-    </a:xfrm>
-    <a:prstGeom prst="line"><a:avLst/></a:prstGeom>
-    <a:ln w="38100"><a:solidFill><a:srgbClr val="FF0000"></a:srgbClr></a:solidFill></a:ln>
-  </p:spPr>
-</p:cxnSp>
-<p:cxnSp>
-  <p:nvCxnSpPr>
-    <p:cNvPr id="6" name="Line 6"/>
-    <p:cNvCxnSpPr/>
-    <p:nvPr/>
-  </p:nvCxnSpPr>
-  <p:spPr>
-    <a:xfrm>
       <a:off x="95250" y="2381250"/>
       <a:ext cx="1905000" cy="9525"/>
     </a:xfrm>
@@ -115,11 +100,11 @@ exports[`buildPptxFiles slide XML > pins the current output for every emitter 1`
     <a:ln w="38100"><a:solidFill><a:srgbClr val="FF0000"></a:srgbClr></a:solidFill><a:tailEnd type="triangle" w="med" len="med"/></a:ln>
   </p:spPr>
 </p:cxnSp>
-<p:sp><p:nvSpPr><p:cNvPr id="7" name="T7"/><p:cNvSpPr txBox="1"/></p:nvSpPr><a:spPr><a:xfrm><a:off x="95250" y="3333750"/><a:ext cx="1905000" cy="342900"/></a:xfrm><a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val 5000"/></a:avLst></a:prstGeom><a:noFill/><a:ln w="9525"><a:solidFill><a:srgbClr val="BFBFBF"/></a:solidFill></a:ln></a:spPr><p:txBody><a:bodyPr wrap="square" rtlCol="0" lIns="91440" tIns="45720" rIns="91440" bIns="45720"/><a:lstStyle/><a:p><a:r><a:rPr lang="ja-JP" sz="1800" dirty="0"><a:solidFill><a:srgbClr val="000000"/></a:solidFill></a:rPr><a:t></a:t></a:r></a:p></p:txBody></p:sp>
-<p:sp><p:nvSpPr><p:cNvPr id="8" name="F8"/><p:cNvSpPr/></p:nvSpPr><a:spPr><a:xfrm><a:off x="0" y="3810000"/><a:ext cx="1905000" cy="95250"/></a:xfrm><a:custGeom><a:avLst/><a:gdLst/><a:ahLst/><a:cxnLst/><a:rect l="0" t="0" r="1905000" b="95250"/><a:pathLst><a:path w="1905000" h="95250"><a:moveTo><a:pt x="0" y="0"/></a:moveTo><a:lnTo><a:pt x="952500" y="95250"/></a:lnTo><a:lnTo><a:pt x="1905000" y="47625"/></a:lnTo></a:path></a:pathLst></a:custGeom><a:noFill/><a:ln w="25400" cap="rnd"><a:solidFill><a:srgbClr val="FF00FF"/></a:solidFill><a:round/></a:ln></a:spPr></p:sp>
+<p:sp><p:nvSpPr><p:cNvPr id="6" name="T6"/><p:cNvSpPr txBox="1"/></p:nvSpPr><a:spPr><a:xfrm><a:off x="95250" y="3333750"/><a:ext cx="1905000" cy="342900"/></a:xfrm><a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val 5000"/></a:avLst></a:prstGeom><a:noFill/><a:ln w="9525"><a:solidFill><a:srgbClr val="BFBFBF"/></a:solidFill></a:ln></a:spPr><p:txBody><a:bodyPr wrap="square" rtlCol="0" lIns="91440" tIns="45720" rIns="91440" bIns="45720"/><a:lstStyle/><a:p><a:r><a:rPr lang="ja-JP" sz="1800" dirty="0"><a:solidFill><a:srgbClr val="000000"/></a:solidFill></a:rPr><a:t></a:t></a:r></a:p></p:txBody></p:sp>
+<p:sp><p:nvSpPr><p:cNvPr id="7" name="F7"/><p:cNvSpPr/></p:nvSpPr><a:spPr><a:xfrm><a:off x="0" y="3810000"/><a:ext cx="1905000" cy="95250"/></a:xfrm><a:custGeom><a:avLst/><a:gdLst/><a:ahLst/><a:cxnLst/><a:rect l="0" t="0" r="1905000" b="95250"/><a:pathLst><a:path w="1905000" h="95250"><a:moveTo><a:pt x="0" y="0"/></a:moveTo><a:lnTo><a:pt x="952500" y="95250"/></a:lnTo><a:lnTo><a:pt x="1905000" y="47625"/></a:lnTo></a:path></a:pathLst></a:custGeom><a:noFill/><a:ln w="25400" cap="rnd"><a:solidFill><a:srgbClr val="FF00FF"/></a:solidFill><a:round/></a:ln></a:spPr></p:sp>
 <p:grpSp>
   <p:nvGrpSpPr>
-    <p:cNvPr id="9" name="Freehand group 9"/>
+    <p:cNvPr id="8" name="Freehand group 8"/>
     <p:cNvGrpSpPr/>
     <p:nvPr/>
   </p:nvGrpSpPr>
@@ -133,7 +118,7 @@ exports[`buildPptxFiles slide XML > pins the current output for every emitter 1`
   </p:grpSpPr>
   <p:sp>
   <p:nvSpPr>
-    <p:cNvPr id="10" name="Freehand 10"/>
+    <p:cNvPr id="9" name="Freehand 9"/>
     <p:cNvSpPr/>
     <p:nvPr/>
   </p:nvSpPr>
@@ -163,7 +148,7 @@ exports[`buildPptxFiles slide XML > pins the current output for every emitter 1`
 </p:sp>
   <p:sp>
   <p:nvSpPr>
-    <p:cNvPr id="11" name="Freehand 11"/>
+    <p:cNvPr id="10" name="Freehand 10"/>
     <p:cNvSpPr/>
     <p:nvPr/>
   </p:nvSpPr>
@@ -192,7 +177,7 @@ exports[`buildPptxFiles slide XML > pins the current output for every emitter 1`
   </p:spPr>
 </p:sp>
 </p:grpSp>
-<p:sp><p:nvSpPr><p:cNvPr id="12" name="M12"/><p:cNvSpPr/></p:nvSpPr><a:spPr><a:xfrm><a:off x="3710940" y="4663440"/><a:ext cx="198120" cy="198120"/></a:xfrm><a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val 10000"/></a:avLst></a:prstGeom><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill><a:ln w="14288"><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill></a:ln></a:spPr><p:txBody><a:bodyPr anchor="ctr" lIns="0" tIns="0" rIns="0" bIns="0" wrap="none"><a:normAutofit/></a:bodyPr><a:lstStyle/><a:p><a:pPr algn="ctr"/><a:r><a:rPr lang="en-US" sz="975" b="1"><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill></a:rPr><a:t>1</a:t></a:r></a:p></p:txBody></p:sp>
+<p:sp><p:nvSpPr><p:cNvPr id="11" name="M11"/><p:cNvSpPr/></p:nvSpPr><a:spPr><a:xfrm><a:off x="3710940" y="4663440"/><a:ext cx="198120" cy="198120"/></a:xfrm><a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val 10000"/></a:avLst></a:prstGeom><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill><a:ln w="14288"><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill></a:ln></a:spPr><p:txBody><a:bodyPr anchor="ctr" lIns="0" tIns="0" rIns="0" bIns="0" wrap="none"><a:normAutofit/></a:bodyPr><a:lstStyle/><a:p><a:pPr algn="ctr"/><a:r><a:rPr lang="en-US" sz="975" b="1"><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill></a:rPr><a:t>1</a:t></a:r></a:p></p:txBody></p:sp>
     </p:spTree>
   </p:cSld>
 </p:sld>"
