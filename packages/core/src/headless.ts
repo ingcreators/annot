@@ -92,6 +92,21 @@ export {
   type SnapResult,
 } from "./editor/selection-geometry.js";
 
+// ─── Toolbar tool registry (pure data + jsdom-friendly classifiers) ──
+// Tier B metadata describing every toolbar tool: id / label / icon /
+// variants / preset field set / element-to-key classifier. The
+// classifier callbacks (`variantKeyForElement`) take an Element but
+// don't touch `document` / `window`, so the module loads cleanly in
+// pure Node. Sibling to `property-schema` — same pattern (declarative
+// registry replacing imperative chains) applied to the toolbar.
+export {
+  TOOL_REGISTRY,
+  TOOL_REGISTRY_IDS,
+  type ToolRegistryEntry,
+  type ToolRegistryId,
+  type ToolRegistryVariant,
+} from "./editor/tool-registry.js";
+
 // ─── Tool lifecycle DOM surface ───────────────────────────────────────
 // Three-method abstraction every editor tool depends on for canvas
 // access. Live-canvas adapters live in

@@ -63,6 +63,13 @@ export {
   type MockToolSurface,
   type ToolDOMSurface,
 } from "./tool-lifecycle.js";
+export {
+  TOOL_REGISTRY,
+  TOOL_REGISTRY_IDS,
+  type ToolRegistryEntry,
+  type ToolRegistryId,
+  type ToolRegistryVariant,
+} from "./tool-registry.js";
 
 // ╭─ Editor UI (browser / DOM required) ────────────────────────────╮
 // │ These hit `document` / `window`, subscribe to pointer events,   │
