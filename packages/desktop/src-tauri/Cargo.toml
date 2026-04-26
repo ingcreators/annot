@@ -38,6 +38,9 @@ windows = { version = "0.58", features = [
 zip = { version = "2", default-features = false, features = ["deflate"] }
 opener = "0.7"
 
+[dev-dependencies]
+insta = "1"
+
 [[bin]]
 name = "annot"
 path = "src/main.rs"

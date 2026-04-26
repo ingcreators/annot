@@ -2,7 +2,7 @@ use serde::Deserialize;
 use tauri::command;
 use std::io::Write;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Default, Deserialize)]
 pub struct AnnotationShape {
     #[serde(rename = "type")]
     pub shape_type: String,
@@ -213,10 +213,22 @@ fn parse_data_url_bytes(data_url: &str) -> Option<Vec<u8>> {
     STANDARD.decode(&data_url[pos + 1..]).ok()
 }
 
-fn build_gvml_zip(shapes: &[AnnotationShape], w: f64, h: f64, image_bytes: Option<&[u8]>) -> Result<Vec<u8>, String> {
-    let cx = px(w); let cy = px(h);
-
-    let has_image = image_bytes.is_some();
+/// Build the GVML drawing XML string and the mosaic media files list.
+///
+/// The XML half is reachable from a Rust unit test (see
+/// `clipboard_test.rs`); the wrapper `build_gvml_zip` keeps the
+/// existing public entry point and packs this output into the OPC
+/// ZIP. Extracted as the regression net for the Office-paste ABI
+/// modernisation plan — see
+/// `docs/plans/office-paste-abi-modernisation.md`.
+pub(crate) fn build_drawing_xml(
+    shapes: &[AnnotationShape],
+    w: f64,
+    h: f64,
+    has_image: bool,
+) -> (String, Vec<(String, Vec<u8>)>) {
+    let cx = px(w);
+    let cy = px(h);
 
     // Track extra media files (mosaic patches). rId starts at 3 (rId1=theme, rId2=screenshot)
     let mut media_files: Vec<(String, Vec<u8>)> = Vec::new(); // (filename, bytes)
@@ -259,6 +271,14 @@ fn build_gvml_zip(shapes: &[AnnotationShape], w: f64, h: f64, image_bytes: Optio
 
     let drawing = format!(r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/lockedCanvas"><lc:lockedCanvas xmlns:lc="http://schemas.openxmlformats.org/drawingml/2006/lockedCanvas"><a:nvGrpSpPr><a:cNvPr id="0" name=""/><a:cNvGrpSpPr/></a:nvGrpSpPr><a:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="{cx}" cy="{cy}"/><a:chOff x="0" y="0"/><a:chExt cx="{cx}" cy="{cy}"/></a:xfrm></a:grpSpPr>{shape_xml}</lc:lockedCanvas></a:graphicData></a:graphic>"#);
+
+    (drawing, media_files)
+}
+
+fn build_gvml_zip(shapes: &[AnnotationShape], w: f64, h: f64, image_bytes: Option<&[u8]>) -> Result<Vec<u8>, String> {
+    let has_image = image_bytes.is_some();
+
+    let (drawing, media_files) = build_drawing_xml(shapes, w, h, has_image);
 
     let has_any_image = has_image || !media_files.is_empty();
     let img_ct = if has_any_image {

@@ -1,0 +1,171 @@
+//! Golden-snapshot regression net for the GVML drawing XML produced
+//! by `copy_as_office`. Exercises every emitter
+//! (`rect` / `rounded-rect` / `ellipse` / `arrow` / `marker` / `text` /
+//! `freehand` / `mosaic_image`) and pins the current XML byte-for-byte
+//! so subsequent ABI-modernisation phases (see
+//! `docs/plans/office-paste-abi-modernisation.md`) can land
+//! field-rename refactors without silently dropping output.
+
+use super::clipboard::{build_drawing_xml, AnnotationShape};
+
+fn rect_shape() -> AnnotationShape {
+    AnnotationShape {
+        shape_type: "rect".into(),
+        x: Some(10.0),
+        y: Some(20.0),
+        width: Some(100.0),
+        height: Some(80.0),
+        stroke: Some("#ff0000".into()),
+        stroke_width: Some(3.0),
+        fill: Some("#ffeeaa".into()),
+        fill_opacity: Some(0.5),
+        ..Default::default()
+    }
+}
+
+fn rounded_rect_shape() -> AnnotationShape {
+    AnnotationShape {
+        shape_type: "rounded-rect".into(),
+        x: Some(120.0),
+        y: Some(20.0),
+        width: Some(100.0),
+        height: Some(80.0),
+        stroke: Some("#0000ff".into()),
+        stroke_width: Some(2.0),
+        fill: Some("none".into()),
+        ..Default::default()
+    }
+}
+
+fn ellipse_shape() -> AnnotationShape {
+    AnnotationShape {
+        shape_type: "ellipse".into(),
+        cx: Some(300.0),
+        cy: Some(60.0),
+        rx: Some(50.0),
+        ry: Some(40.0),
+        stroke: Some("#00ff00".into()),
+        stroke_width: Some(3.0),
+        fill: Some("none".into()),
+        ..Default::default()
+    }
+}
+
+fn arrow_shape() -> AnnotationShape {
+    AnnotationShape {
+        shape_type: "arrow".into(),
+        x1: Some(10.0),
+        y1: Some(150.0),
+        x2: Some(210.0),
+        y2: Some(250.0),
+        stroke: Some("#ff0000".into()),
+        stroke_width: Some(3.0),
+        has_arrow: Some(true),
+        arrow_shape_end: Some("triangle".into()),
+        arrow_width_end: Some("med".into()),
+        arrow_length_end: Some("med".into()),
+        ..Default::default()
+    }
+}
+
+fn marker_shape() -> AnnotationShape {
+    AnnotationShape {
+        shape_type: "marker".into(),
+        cx: Some(400.0),
+        cy: Some(300.0),
+        font_size: Some(13.0),
+        fill: Some("#ff0000".into()),
+        label: Some("1".into()),
+        // Today the marker shape ("circle" vs "rect") rides on the
+        // `stroke` field; phase 1 of the ABI plan moves it to a
+        // dedicated `marker_shape`. The snapshot pins the legacy form
+        // so the rename stays output-equivalent.
+        stroke: Some("rect".into()),
+        ..Default::default()
+    }
+}
+
+fn text_shape() -> AnnotationShape {
+    AnnotationShape {
+        shape_type: "text".into(),
+        x: Some(10.0),
+        y: Some(400.0),
+        width: Some(200.0),
+        height: Some(50.0),
+        font_size: Some(24.0),
+        fill: Some("#000000".into()),
+        text: Some("Hello".into()),
+        // Sticky bg color rides on `stroke` today; phase 3 introduces
+        // `text_bg_color`. Snapshot pins the legacy form.
+        stroke: Some("rgba(255,255,200,0.92)".into()),
+        ..Default::default()
+    }
+}
+
+fn freehand_shape() -> AnnotationShape {
+    AnnotationShape {
+        shape_type: "freehand".into(),
+        stroke: Some("#ff00ff".into()),
+        stroke_width: Some(2.0),
+        // `text` carries the SVG path d-string today; deliberately
+        // kept as the legacy carrier until a later cleanup pass.
+        text: Some("M 0 0 L 10 10 L 20 5".into()),
+        ..Default::default()
+    }
+}
+
+fn mosaic_shape() -> AnnotationShape {
+    AnnotationShape {
+        shape_type: "mosaic_image".into(),
+        x: Some(500.0),
+        y: Some(400.0),
+        width: Some(100.0),
+        height: Some(80.0),
+        // 1x1 transparent PNG data URL. The bytes themselves don't
+        // matter for the XML snapshot — only that
+        // `parse_data_url_bytes` succeeds so the emitter runs.
+        // Phase 2 of the ABI plan moves this off `text` to a dedicated
+        // `image_data_url` field.
+        text: Some(
+            "data:image/png;base64,\
+             iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
+                .into(),
+        ),
+        ..Default::default()
+    }
+}
+
+#[test]
+fn drawing_xml_pins_every_emitter() {
+    let shapes = vec![
+        rect_shape(),
+        rounded_rect_shape(),
+        ellipse_shape(),
+        arrow_shape(),
+        marker_shape(),
+        text_shape(),
+        freehand_shape(),
+        mosaic_shape(),
+    ];
+    let (xml, media_files) = build_drawing_xml(&shapes, 800.0, 600.0, false);
+
+    // The mosaic emitter is the only one that pushes a media file.
+    // ABI phase 2 will rename the carrier (`text` → `image_data_url`)
+    // but the count + filename pattern should remain stable.
+    assert_eq!(media_files.len(), 1);
+    assert!(media_files[0].0.starts_with("mosaic_"));
+
+    insta::assert_snapshot!("drawing_xml_all_emitters", xml);
+}
+
+#[test]
+fn drawing_xml_with_background_screenshot() {
+    // `has_image: true` prepends an <a:pic> for the rId2-bound
+    // screenshot. Pin its XML separately so the wrapping envelope
+    // stays untouched across phases.
+    let shapes = vec![rect_shape()];
+    let (xml, media_files) = build_drawing_xml(&shapes, 1024.0, 768.0, true);
+
+    assert!(media_files.is_empty());
+    insta::assert_snapshot!("drawing_xml_with_screenshot", xml);
+}
