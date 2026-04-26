@@ -121,6 +121,16 @@ export {
   presetToWire,
 } from "./editor/tool-preset-serde.js";
 
+// ─── Toolbar universal-style attribute reader (pure Element-taker) ────
+// Single source of truth for "read stroke / fill / dasharray / opacity
+// / linecap / linejoin off an Element into a preset" — used by both
+// `Toolbar.syncPresetFromElement` and `seedPresetFromElement`. The
+// freehand-group → last-path-child fallback is encapsulated inside.
+export {
+  readUniversalStyleAttrs,
+  resolveStyleReadSource,
+} from "./editor/tool-style-reader.js";
+
 // ─── Tool lifecycle DOM surface ───────────────────────────────────────
 // Three-method abstraction every editor tool depends on for canvas
 // access. Live-canvas adapters live in
