@@ -132,6 +132,92 @@ export function bytesToDataUrl(bytes: Uint8Array, mime: string): string {
   return `data:${mime};base64,${btoa(binary)}`;
 }
 
+// ─── HTTP-response parsing (extracted for unit testing) ───────────────
+
+/**
+ * Parse the standard GitHub rate-limit response headers. Returns
+ * `null` for absent / unparseable values so callers can decide
+ * whether to overwrite their cached telemetry. The reset timestamp
+ * is converted from epoch seconds (GitHub) into epoch milliseconds
+ * (JS-friendly).
+ */
+export function parseRateLimitHeaders(headers: Headers): {
+  remaining: number | null;
+  resetAt: number | null;
+} {
+  const remainingRaw = headers.get("X-RateLimit-Remaining");
+  const resetRaw = headers.get("X-RateLimit-Reset");
+  const remaining = remainingRaw == null ? null : Number.parseInt(remainingRaw, 10);
+  const reset = resetRaw == null ? null : Number.parseInt(resetRaw, 10);
+  return {
+    remaining: remaining != null && Number.isFinite(remaining) ? remaining : null,
+    resetAt: reset != null && Number.isFinite(reset) ? reset * 1000 : null,
+  };
+}
+
+/**
+ * Decide whether the rate-limit listener should fire given the
+ * current observation, the threshold, and the last reset window we
+ * already warned for. The "fire once per reset window" rule lives
+ * here so callers don't need to track the window themselves.
+ *
+ * Returns:
+ *   - `fire: true` when remaining ≤ threshold AND resetAt differs
+ *     from the last-warned-for window.
+ *   - `nextWarnedFor`: the value the caller should remember as the
+ *     new "last warned for" — `resetAt` when firing, otherwise the
+ *     previous value untouched.
+ */
+export function shouldFireRateLimitWarning(opts: {
+  remaining: number | null;
+  resetAt: number | null;
+  threshold: number;
+  lastWarnedFor: number | null;
+}): { fire: boolean; nextWarnedFor: number | null } {
+  const { remaining, resetAt, threshold, lastWarnedFor } = opts;
+  if (remaining == null) return { fire: false, nextWarnedFor: lastWarnedFor };
+  if (remaining > threshold) return { fire: false, nextWarnedFor: lastWarnedFor };
+  // Same reset window we already warned for — don't re-fire even if
+  // the user keeps making requests.
+  if (resetAt != null && resetAt === lastWarnedFor) {
+    return { fire: false, nextWarnedFor: lastWarnedFor };
+  }
+  return { fire: true, nextWarnedFor: resetAt };
+}
+
+/**
+ * Parse a non-2xx GitHub response body for the human-readable
+ * error message and discriminator flags the store reacts to.
+ *
+ * Inputs are explicit (status + already-read body text) instead of
+ * a `Response` so the helper can be unit-tested without fabricating
+ * one. The store's I/O code reads the body once with
+ * `resp.text().catch(() => "")` and forwards it here.
+ *
+ * Discriminator flags currently exposed:
+ *   - `conflict`: 409, or 422 with "sha" mentioned in the message
+ *     (cached blob SHA went stale — retry with a fresh tree fetch).
+ */
+export function parseGitHubErrorBody(
+  status: number,
+  bodyText: string,
+): { detail: string; conflict?: true } {
+  let detail = bodyText.slice(0, 300);
+  try {
+    const parsed = JSON.parse(bodyText);
+    if (parsed && typeof parsed === "object" && typeof parsed.message === "string") {
+      detail = parsed.message;
+    }
+  } catch {
+    /* keep raw text */
+  }
+  const out: { detail: string; conflict?: true } = { detail };
+  if (status === 409 || (status === 422 && /sha/i.test(detail))) {
+    out.conflict = true;
+  }
+  return out;
+}
+
 /** Map a path's extension to a MIME type. Used when re-creating
  *  data URLs from raw bytes pulled out of the Contents API. */
 export function inferMimeFromPath(path: string): string {

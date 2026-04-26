@@ -62,8 +62,12 @@ import {
   githubError,
   isImageFilename,
   MAX_CONTENTS_BYTES,
-  RATE_LIMIT_WARN_AT,
 } from "./github-helpers.js";
+import {
+  createGitHubApiClient,
+  type GitHubApiClient,
+  type RateLimitListener,
+} from "./github-api-client.js";
 
 interface TreeEntry {
   path: string; // repo-relative
@@ -103,7 +107,11 @@ export class GitHubStore
     StorageWithForceRefresh,
     StorageWithTokenRefresher
 {
-  #token: string;
+  /** HTTP layer — owns token, token-refresh, rate-limit state, and
+   *  the GitHub-specific error mapping. Synthesised in the public
+   *  constructor; tests can inject a mock via the alternate
+   *  `(token, ref, apiClient)` signature. */
+  #api: GitHubApiClient;
   #owner: string;
   #repo: string;
   #branch: string;
@@ -171,36 +179,10 @@ export class GitHubStore
   #thumbnailCache = new Map<string, string>();
   #thumbnailInFlight = new Map<string, Promise<void>>();
 
-  // ---- Token refresh ----
+  // Token refresh + rate-limit telemetry now live inside `#api`.
 
-  /**
-   * Host-supplied callback that returns a fresh PAT when the current
-   * one 401s. PATs can't be silently refreshed (unlike Drive's
-   * refresh token), so this callback typically shows the PAT paste
-   * dialog again. Returning `null` lets the 401 propagate so the
-   * caller can surface a user-visible error.
-   */
-  #refreshToken?: () => Promise<string | null>;
-  #refreshInFlight: Promise<string | null> | null = null;
-
-  // ---- Rate limit telemetry ----
-
-  /** Most recent X-RateLimit-Remaining / -Reset values from the
-   *  Contents + Git Data APIs. Exposed via `getRateLimit()` so the
-   *  UI can render an advisory banner when remaining drops low. */
-  #rateLimitRemaining: number | null = null;
-  #rateLimitReset: number | null = null;
-  /** Host-supplied callback invoked whenever `X-RateLimit-Remaining`
-   *  drops below {@link RATE_LIMIT_WARN_AT}. Fires at most once per
-   *  resetAt window so the gallery banner doesn't re-pop on every
-   *  API call. Registered from `bridge.ts` at store construction. */
-  #rateLimitListener?: (info: { remaining: number; resetAt: number | null }) => void;
-  /** Window we've already warned for (unix ms). Reset when the
-   *  next reset time moves forward. */
-  #rateLimitWarnedFor: number | null = null;
-
-  constructor(token: string, ref: GitHubRepoRef) {
-    this.#token = token;
+  constructor(token: string, ref: GitHubRepoRef, apiClient?: GitHubApiClient) {
+    this.#api = apiClient ?? createGitHubApiClient(token);
     this.#owner = ref.owner;
     this.#repo = ref.repo;
     this.#branch = ref.branch;
@@ -208,23 +190,22 @@ export class GitHubStore
   }
 
   setToken(token: string): void {
-    this.#token = token;
+    this.#api.setToken(token);
   }
 
   setTokenRefresher(refresher: () => Promise<string | null>): void {
-    this.#refreshToken = refresher;
+    this.#api.setTokenRefresher(refresher);
   }
 
   getRateLimit(): { remaining: number | null; resetAt: number | null } {
-    return { remaining: this.#rateLimitRemaining, resetAt: this.#rateLimitReset };
+    return this.#api.getRateLimit();
   }
 
-  /** Register a listener for rate-limit-low events. See
-   *  `#rateLimitListener`. */
-  setRateLimitListener(
-    listener: (info: { remaining: number; resetAt: number | null }) => void,
-  ): void {
-    this.#rateLimitListener = listener;
+  /** Register a listener for rate-limit-low events. Delegates to
+   *  the API client, which fires the listener at most once per
+   *  reset window. */
+  setRateLimitListener(listener: RateLimitListener): void {
+    this.#api.setRateLimitListener(listener);
   }
 
   /**
@@ -324,105 +305,15 @@ export class GitHubStore
   }
 
   // ===========================================================================
-  // Low-level fetch + 401 auto-recovery (mirrors GoogleDriveStore.#fetch).
+  // Low-level HTTP delegation. The actual fetch / 401-retry / rate-
+  // limit / error-mapping logic lives in `GitHubApiClient` (see
+  // `./github-api-client.ts`); these thin adapters keep the existing
+  // call sites readable without re-typing `this.#api.request(...)`
+  // everywhere.
   // ===========================================================================
 
-  async #fetch(url: string, init?: RequestInit): Promise<Response> {
-    const resp = await this.#fetchOnce(url, init);
-    if (resp.ok) {
-      this.#updateRateLimit(resp);
-      return resp;
-    }
-
-    if (resp.status === 401 && this.#refreshToken) {
-      await resp.text().catch(() => "");
-      const newToken = await (this.#refreshInFlight ??= this.#runRefresh());
-      if (newToken) {
-        const retry = await this.#fetchOnce(url, init);
-        if (retry.ok) {
-          this.#updateRateLimit(retry);
-          return retry;
-        }
-        await this.#throwGitHubError(retry);
-      }
-    }
-    await this.#throwGitHubError(resp);
-    // Unreachable — `#throwGitHubError` always throws.
-    return resp;
-  }
-
-  async #fetchOnce(url: string, init?: RequestInit): Promise<Response> {
-    const headers: Record<string, string> = {
-      Authorization: `Bearer ${this.#token}`,
-      Accept: "application/vnd.github+json",
-      "X-GitHub-Api-Version": "2022-11-28",
-      ...((init?.headers as Record<string, string>) || {}),
-    };
-    return fetch(url, { ...init, headers });
-  }
-
-  #updateRateLimit(resp: Response): void {
-    const remaining = resp.headers.get("X-RateLimit-Remaining");
-    const reset = resp.headers.get("X-RateLimit-Reset");
-    if (remaining != null) this.#rateLimitRemaining = Number.parseInt(remaining, 10);
-    if (reset != null) this.#rateLimitReset = Number.parseInt(reset, 10) * 1000;
-
-    // Fire the low-rate-limit listener once per reset window.
-    // 100 req / hour left out of 5 000 is a useful "heavy editor
-    // about to cap out" signal — editors typically burn ~1 request
-    // per save, so the remaining budget is a rough editing-minutes
-    // forecast until the window resets.
-    if (
-      this.#rateLimitRemaining != null &&
-      this.#rateLimitRemaining <= RATE_LIMIT_WARN_AT &&
-      this.#rateLimitListener &&
-      this.#rateLimitReset !== this.#rateLimitWarnedFor
-    ) {
-      this.#rateLimitWarnedFor = this.#rateLimitReset;
-      try {
-        this.#rateLimitListener({
-          remaining: this.#rateLimitRemaining,
-          resetAt: this.#rateLimitReset,
-        });
-      } catch {
-        // Listener threw — swallow so a UI bug can't cascade into
-        // API request failures.
-      }
-    }
-  }
-
-  async #throwGitHubError(resp: Response): Promise<never> {
-    const text = await resp.text().catch(() => "");
-    let detail = text.slice(0, 300);
-    try {
-      const parsed = JSON.parse(text);
-      if (parsed?.message) detail = parsed.message;
-    } catch {
-      /* keep raw text */
-    }
-
-    // 409 on PUT means our cached SHA was stale — someone else
-    // committed to the same path between our read and write. Tag
-    // the error so callers (the editor save path) can offer a
-    // Refresh-then-retry UX.
-    const extra: Partial<GitHubError> = {};
-    if (resp.status === 409 || (resp.status === 422 && /sha/i.test(detail))) {
-      extra.conflict = true;
-    }
-    throw githubError(`GitHub API ${resp.status}: ${detail}`, resp.status, extra);
-  }
-
-  async #runRefresh(): Promise<string | null> {
-    try {
-      const token = await this.#refreshToken!();
-      if (token) this.#token = token;
-      return token;
-    } catch (e) {
-      console.warn("[github-store] token refresh threw:", e);
-      return null;
-    } finally {
-      this.#refreshInFlight = null;
-    }
+  #fetch(url: string, init?: RequestInit): Promise<Response> {
+    return this.#api.request(url, init);
   }
 
   // ===========================================================================
@@ -710,33 +601,12 @@ export class GitHubStore
    * `#fetch` variant that swallows non-OK responses and returns `null`
    * instead of throwing. Used inside the amend path where any failure
    * (missing ref, unreadable tree, branch-protection force-rejection)
-   * should gracefully fall through to the Contents PUT path.
+   * should gracefully fall through to the Contents PUT path. Delegates
+   * to the API client, which handles the same 401-retry semantics
+   * as `#fetch`.
    */
-  async #fetchOrNull(url: string, init?: RequestInit): Promise<Response | null> {
-    try {
-      const resp = await this.#fetchOnce(url, init);
-      if (resp.ok) {
-        this.#updateRateLimit(resp);
-        return resp;
-      }
-      // Respect the 401 auto-refresh semantics the real `#fetch` has;
-      // dedupe recovery with the shared #refreshInFlight so a burst
-      // of amend attempts doesn't spawn multiple PAT banners.
-      if (resp.status === 401 && this.#refreshToken) {
-        await resp.text().catch(() => "");
-        const newToken = await (this.#refreshInFlight ??= this.#runRefresh());
-        if (newToken) {
-          const retry = await this.#fetchOnce(url, init);
-          if (retry.ok) {
-            this.#updateRateLimit(retry);
-            return retry;
-          }
-        }
-      }
-      return null;
-    } catch {
-      return null;
-    }
+  #fetchOrNull(url: string, init?: RequestInit): Promise<Response | null> {
+    return this.#api.requestOrNull(url, init);
   }
 
   // ===========================================================================
