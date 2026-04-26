@@ -1,4 +1,10 @@
-import { classifyPropertyElement } from "@ingcreators/annot-core/editor/property-schema";
+import {
+  CATEGORY_CONTROL_SHAPE,
+  classifyPropertyElement,
+  type PropertyCategory,
+  PROPERTY_CONTROLS,
+  type PropertyEffectId,
+} from "@ingcreators/annot-core/editor/property-schema";
 import { computeDasharray, detectDashKey } from "@ingcreators/annot-core/utils";
 import { setTooltip } from "./tooltip.js";
 import { refreshArrowPath } from "@ingcreators/annot-core/editor/arrow-markers";
@@ -21,6 +27,13 @@ import {
   HIGHLIGHT_COLORS,
   SHAPE_ICON_SVG,
 } from "@ingcreators/annot-core/editor/toolbar-icons";
+import {
+  type CommitInfo,
+  type ElementReplacement,
+  type PropertyEffectHandler,
+  renderControl,
+  type RenderControlDeps,
+} from "./property-panel-renderer.js";
 import { applyArrowHead, detectArrowEnds } from "./tools/arrow-tool.js";
 import { applyDrawStyle, detectDrawStyle, isFreehandGroup } from "./tools/freehand-tool.js";
 import { convertMarkerShape, detectMarkerShape, resizeMarker } from "./tools/marker-tool.js";
@@ -118,6 +131,22 @@ export class PropertyPanel {
    *       and variant-dependent controls refresh. */
   onVariantChanged?: (targets: SVGElement[]) => void;
 
+  /** Effect-handler table consumed by the schema-driven renderer
+   *  (see `property-panel-renderer.ts`). Built once in the constructor
+   *  so each `#renderViaRegistry` call reuses the same bound handlers
+   *  — the deps' identity is stable across re-renders, which lets a
+   *  future Storybook / golden test pin behaviour without re-wiring.
+   *
+   *  Each handler bridges a Tier B `PropertyControlDef.effect` id to
+   *  the Tier C operation it represents (arrow head regeneration,
+   *  freehand pen↔highlighter, marker geometry rescale, redact
+   *  pixel-baked converter). All handlers return per-element
+   *  replacement records so the renderer can update its target list
+   *  AND the panel can fire `onTargetReplaced` for nodes that swapped
+   *  identity. The redact handler is async (canvas pixel sampling); the
+   *  others mutate in place + return identity replacements. */
+  #effects: Record<PropertyEffectId, PropertyEffectHandler>;
+
   constructor(
     container: HTMLElement,
     canvas: CanvasManager,
@@ -133,6 +162,81 @@ export class PropertyPanel {
     container.appendChild(this.#el);
 
     this.#el.addEventListener("pointerdown", (e) => e.stopPropagation());
+
+    // Bind once — the renderer re-uses the same handlers across every
+    // `show()` call. `convertRedactStyle` closes over `this.#canvas`,
+    // so the deps object is panel-specific (each PropertyPanel
+    // instance has its own canvas reference).
+    this.#effects = {
+      applyArrowVariant: (els, value) => {
+        // The variant value is a 3-state `ArrowHead` ("none"/"end"/
+        // "both"); per-end shapes are clamped to that variant via
+        // the same `#clampArrowEndsToVariant` rule the imperative
+        // chip handler uses, then `applyArrowHead` regenerates the
+        // path's `d`. Replacement records carry identity (in-place
+        // mutation; the outer element keeps its node).
+        const v = value as ArrowHead;
+        const out: ElementReplacement[] = [];
+        for (const el of els) {
+          const ends = detectArrowEnds(el);
+          const clamped = this.#clampArrowEndsToVariant(ends, v);
+          applyArrowHead(el, clamped);
+          out.push({ oldEl: el, newEl: el });
+        }
+        return out;
+      },
+      applyDrawStyle: (els, value) => {
+        const v = value as DrawStyle;
+        const out: ElementReplacement[] = [];
+        for (const el of els) {
+          applyDrawStyle(el, v);
+          out.push({ oldEl: el, newEl: el });
+        }
+        return out;
+      },
+      applyMarkerShape: (els, value) => {
+        // `convertMarkerShape` swaps the inner bg primitive but the
+        // outer <g> keeps identity — no real replacement.
+        const v = value as MarkerShape;
+        const out: ElementReplacement[] = [];
+        for (const el of els) {
+          convertMarkerShape(el, v);
+          out.push({ oldEl: el, newEl: el });
+        }
+        return out;
+      },
+      resizeMarker: (els, value) => {
+        const v = Number(value);
+        const out: ElementReplacement[] = [];
+        for (const el of els) {
+          resizeMarker(el, v);
+          out.push({ oldEl: el, newEl: el });
+        }
+        // The marker's bbox changed — the host needs to refresh
+        // selection handles. `onTargetMutated` fires from the
+        // commit path on a non-empty replacement set; see
+        // `#handleRendererCommit`.
+        return out;
+      },
+      applyRedactStyle: async (els, value) => {
+        // Mosaic / blur converters resample the underlying base
+        // image — async, sequential to avoid N concurrent decodes.
+        // Failures per-element are logged but don't abort the
+        // batch; the still-converting elements still succeed.
+        const v = value as RedactStyle;
+        const out: ElementReplacement[] = [];
+        for (const el of els) {
+          try {
+            const newEl = await convertRedactStyle(el, v, this.#canvas);
+            out.push({ oldEl: el, newEl });
+          } catch (err) {
+            console.error("[redact] style convert failed", err);
+            out.push({ oldEl: el, newEl: el });
+          }
+        }
+        return out;
+      },
+    };
   }
 
   show(elements: SVGElement[]): void {
@@ -160,7 +264,13 @@ export class PropertyPanel {
         // Manually-grouped <g data-type="group"> — no per-element
         // properties to edit (children have wildly different shapes
         // in the general case). Only the Actions section (rotate /
-        // flip / z-order / ungroup) applies. Render nothing here.
+        // flip / z-order / ungroup) applies. `CATEGORY_CONTROL_SHAPE
+        // .group` is `[]`, so the registry-driven render is a no-op
+        // here — equivalent to the previous early return — but it
+        // exercises the renderer wiring end-to-end so the Phase 3b–
+        // 3f migrations can swap one switch arm at a time without
+        // re-plumbing.
+        this.#renderViaRegistry(category);
         return;
       case "textbox":
         this.#renderTextboxControls(sample);
@@ -197,6 +307,86 @@ export class PropertyPanel {
   hide(): void {
     this.#el.style.display = "none";
     this.#targets = [];
+  }
+
+  /**
+   * Schema-driven render path — looks each id in
+   * `CATEGORY_CONTROL_SHAPE[category]` up in `PROPERTY_CONTROLS`
+   * (Tier B registry), passes the def + current targets + the
+   * panel's own deps to `renderControl`, and appends the produced
+   * element under the current `#appendTarget` (so callers wrapping
+   * this in `#inSection(...)` get the controls placed inside the
+   * right pp-section card).
+   *
+   * Phase 3a only invokes this for `category === "group"` — an
+   * empty registry slice — so the visible behaviour stays
+   * "render nothing." Phase 3b–3f will progressively swap the
+   * remaining `#renderXxxControls` calls in `show()` for matching
+   * `#renderViaRegistry(...)` invocations, deleting the now-unused
+   * imperative methods as they go.
+   */
+  #renderViaRegistry(category: PropertyCategory): void {
+    if (this.#targets.length === 0) return;
+    const deps: RenderControlDeps = {
+      effects: this.#effects,
+      onCommit: (info) => this.#handleRendererCommit(info),
+    };
+    for (const id of CATEGORY_CONTROL_SHAPE[category]) {
+      const el = renderControl(PROPERTY_CONTROLS[id], this.#targets, deps);
+      if (el) this.#target().appendChild(el);
+    }
+  }
+
+  /**
+   * Bridge from the renderer's `onCommit(info)` callback to the
+   * panel's existing host-callback contract:
+   *   - apply replacements to `#targets` so subsequent edits route
+   *     to the post-swap elements
+   *   - fire `onTargetReplaced` for entries whose identity actually
+   *     changed (`oldEl !== newEl`); pure in-place mutations
+   *     (`setValue` / most `effect`s) skip this signal because the
+   *     selection still holds the same DOM nodes
+   *   - save history once per commit
+   *   - dispatch the rubber-band callbacks: `onVariantChanged` for
+   *     variant pickers (so the host loads the new variant's saved
+   *     preset instead of overwriting it), `onStyleChanged` for
+   *     everything else
+   *
+   * The branching mirrors the per-control imperative paths in
+   * `#renderShapeControls` etc. — variant pickers historically called
+   * `this.#history.save()` + `this.onVariantChanged?.(...)` while
+   * non-variant edits called `this.#commit()` (which fires
+   * `onStyleChanged`). Centralising that branching here is the whole
+   * point of the schema-driven migration.
+   */
+  #handleRendererCommit(info: CommitInfo): void {
+    if (info.replacements.length > 0) {
+      const map = new Map<SVGElement, SVGElement>(
+        info.replacements.map((r) => [r.oldEl, r.newEl] as const),
+      );
+      this.#targets = this.#targets.map((t) => map.get(t) ?? t);
+      const real = info.replacements.filter((r) => r.oldEl !== r.newEl);
+      if (real.length > 0) this.onTargetReplaced?.(real);
+    }
+    this.#history.save();
+    if (info.variantChange) {
+      if (this.onVariantChanged) {
+        this.onVariantChanged(this.#targets);
+      } else {
+        // No host hook — re-render so dependent controls (e.g. the
+        // arrow per-end shape pickers' variant filter) refresh.
+        this.show(this.#targets);
+      }
+    } else {
+      this.onStyleChanged?.(this.#targets);
+      // For in-place mutations that change visual geometry (resize-
+      // Marker), `onTargetMutated` is the host's selection-handle
+      // refresh hook. Conservatively fire it on every non-variant
+      // commit — selection handles re-laying out is cheap, and the
+      // alternative (per-effect-id branching here) duplicates the
+      // registry's classification.
+      this.onTargetMutated?.();
+    }
   }
 
   #renderShapeControls(el: SVGElement): void {
