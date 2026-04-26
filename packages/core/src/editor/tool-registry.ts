@@ -28,6 +28,8 @@
  * phases consume the registry one site at a time.
  */
 
+import { computeDasharray } from "../utils/dash-utils.js";
+import { refreshArrowPath } from "./arrow-markers.js";
 import { PROPERTY_CONTROL_IDS, type PropertyControlId } from "./property-schema.js";
 import {
   ARROW_ICON_SVG,
@@ -36,6 +38,7 @@ import {
   SHAPE_ICON_SVG,
 } from "./toolbar-icons.js";
 import type { ToolOptions } from "./tool-options.js";
+import { writeUniversalStyleAttrs } from "./tool-style-writer.js";
 
 /** Tool-side panel sections. The Tool property panel uses the same
  *  four pp-section buckets as the SELECTION-side property panel, in
@@ -431,6 +434,18 @@ export const TOOL_REGISTRY: Readonly<Record<string, ToolRegistryEntry>> = {
       // saved files.
       normalizeVariantSideFields("arrow", preset.arrowHead, preset);
     },
+    applyStyleToElement(el, preset) {
+      writeUniversalStyleAttrs(el, preset);
+      // Arrow groups: the head <path>'s `fill` was set explicitly at
+      // refreshArrowPath time from the <g>'s stroke color. Since we
+      // just changed the stroke color, the head's fill is stale —
+      // refresh to re-derive it from the new stroke. Plain <line>
+      // arrow-variants ("arrow.none") have no head subpath and skip
+      // this regen.
+      if (el.tagName === "g" && el.getAttribute("data-type") === "arrow") {
+        refreshArrowPath(el);
+      }
+    },
   },
 
   // Single unified shape tool — pick rect / rounded / ellipse via
@@ -489,6 +504,13 @@ export const TOOL_REGISTRY: Readonly<Record<string, ToolRegistryEntry>> = {
         preset.shapeType = el.hasAttribute("data-rounded") ? "rounded" : "rect";
       }
     },
+    applyStyleToElement(el, preset) {
+      // Shape elements (rect / rounded rect / ellipse) carry their
+      // style attrs directly — no composite child writes needed.
+      // The variant-defining `data-rounded` attr is left to the
+      // variant-change path that invoked this writer.
+      writeUniversalStyleAttrs(el, preset);
+    },
   },
 
   // Highlight — dedicated tool for semi-transparent highlight rects.
@@ -536,6 +558,18 @@ export const TOOL_REGISTRY: Readonly<Record<string, ToolRegistryEntry>> = {
       // universal-reader's fillColor capture into the right field.
       const fill = el.getAttribute("fill");
       if (fill) preset.highlightColor = fill;
+    },
+    applyStyleToElement(el, preset) {
+      // Inverse of `extractStyleFromElement`: the visual color is
+      // `highlightColor` (NOT `fillColor`). ShapeTool's createShape
+      // uses `highlightColor` for the rect's `fill` and leaves
+      // `fillColor` untouched, so writing `fillColor` here would
+      // overwrite the highlight with the Shape tool's color.
+      // `fillOpacity` controls the rect's transparency directly.
+      if (preset.highlightColor) el.setAttribute("fill", preset.highlightColor);
+      if (preset.fillOpacity != null) {
+        el.setAttribute("fill-opacity", String(preset.fillOpacity));
+      }
     },
   },
 
@@ -598,6 +632,36 @@ export const TOOL_REGISTRY: Readonly<Record<string, ToolRegistryEntry>> = {
       const textFill = tEl?.getAttribute("fill") || el.getAttribute("data-color");
       if (textFill) preset.strokeColor = textFill;
     },
+    applyStyleToElement(el, preset) {
+      // Textbox composite: write color/font onto BOTH the <g>'s
+      // data-color / data-font-family cache attrs AND the inner
+      // <text>. The wrapper's cache attrs persist across save / paste
+      // / Office round-trips when the <text> child gets re-rendered;
+      // the <text>'s own attrs are what the SVG renderer actually
+      // uses. Mirrors the legacy `applyTextboxPresetStyle` exactly.
+      if (el.tagName === "g" && el.getAttribute("data-type") === "textbox") {
+        if (preset.strokeColor) {
+          el.setAttribute("data-color", preset.strokeColor);
+          const text = el.querySelector("text");
+          if (text) text.setAttribute("fill", preset.strokeColor);
+        }
+        if (preset.fontFamily) {
+          el.setAttribute("data-font-family", preset.fontFamily);
+          const text = el.querySelector("text");
+          if (text) text.setAttribute("font-family", preset.fontFamily);
+        }
+        if (preset.fontSize != null) {
+          const text = el.querySelector("text");
+          if (text) text.setAttribute("font-size", String(preset.fontSize));
+        }
+        return;
+      }
+      // Plain `<text>` (variantKeyForElement matches it but the
+      // legacy `applyPresetStyleAttrs` fell through to the generic
+      // path for this case). Preserve byte-equivalence for Phase 3's
+      // dispatch by routing through the universal writer here too.
+      writeUniversalStyleAttrs(el, preset);
+    },
   },
 
   // Unified Draw tool — pen vs highlighter picked via the right
@@ -642,6 +706,16 @@ export const TOOL_REGISTRY: Readonly<Record<string, ToolRegistryEntry>> = {
     extractStyleFromElement(el, preset) {
       const ds = el.getAttribute("data-draw-style");
       if (ds === "pen" || ds === "highlighter") preset.drawStyle = ds;
+    },
+    applyStyleToElement(el, preset) {
+      // Freehand sessions wrap their strokes in a <g data-type=freehand>
+      // wrapper; each child <path> inherits unset attrs from the
+      // wrapper. Writing to the wrapper here lets a subsequent stroke
+      // pick up the new style without having to walk every child.
+      // For a bare <path> (a single freehand stroke that escaped the
+      // wrapper), the same call writes attrs directly. Either way the
+      // universal helper covers it.
+      writeUniversalStyleAttrs(el, preset);
     },
   },
 
@@ -720,6 +794,33 @@ export const TOOL_REGISTRY: Readonly<Record<string, ToolRegistryEntry>> = {
       const fs = Number.parseFloat(tEl?.getAttribute("font-size") || "");
       if (Number.isFinite(fs) && fs > 0) preset.fontSize = fs;
     },
+    applyStyleToElement(g, preset) {
+      // Marker/counter composite: bg primitive (<circle> or <rect>)
+      // carries fill / stroke / stroke-width / dasharray; the inner
+      // <text> carries the counter number's font-size. The outer <g>
+      // has no style attrs of its own — writing to it would not
+      // affect rendering. Mirrors the legacy `applyMarkerPresetStyle`.
+      const bg = g.querySelector("circle, rect");
+      if (!bg) return;
+      if (preset.fillColor) bg.setAttribute("fill", preset.fillColor);
+      if (preset.strokeColor) bg.setAttribute("stroke", preset.strokeColor);
+      if (preset.strokeWidth != null) {
+        bg.setAttribute("stroke-width", String(preset.strokeWidth));
+      }
+      if (preset.strokeDasharray != null) {
+        // Fall back to the bg's existing stroke-width when the preset
+        // doesn't carry one — keeps dashes proportional even on a
+        // partially-populated preset (matches the legacy helper).
+        const w =
+          preset.strokeWidth ?? Number.parseFloat(bg.getAttribute("stroke-width") || "1.5");
+        bg.setAttribute("stroke-dasharray", computeDasharray(preset.strokeDasharray, w));
+        bg.setAttribute("data-dash-key", preset.strokeDasharray);
+      }
+      if (preset.fontSize != null) {
+        const text = g.querySelector("text");
+        if (text) text.setAttribute("font-size", String(preset.fontSize));
+      }
+    },
   },
 
   // Unified Redact tool — pick mosaic / solid / blur via the right
@@ -775,6 +876,18 @@ export const TOOL_REGISTRY: Readonly<Record<string, ToolRegistryEntry>> = {
     extractStyleFromElement(el, preset) {
       const rs = el.getAttribute("data-redact-style");
       if (rs === "solid" || rs === "mosaic" || rs === "blur") preset.redactStyle = rs;
+    },
+    applyStyleToElement(el, preset) {
+      // Solid redact rects accept the universal style writes (mainly
+      // `fillColor` → bar color). Mosaic / blur variants bake a PNG
+      // into an `<image>` and have no stylable attrs; skipping the
+      // writer for those is a cosmetic no-op vs. the legacy generic
+      // path (which would `setAttribute("fill", …)` on the <image>,
+      // ignored by SVG rendering). Documented in
+      // `docs/plans/toolbar-apply-style-to-element.md` Out-of-scope.
+      if (el.tagName === "rect" && el.getAttribute("data-redact-style") === "solid") {
+        writeUniversalStyleAttrs(el, preset);
+      }
     },
   },
 

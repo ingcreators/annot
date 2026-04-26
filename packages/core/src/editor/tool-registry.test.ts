@@ -20,7 +20,9 @@
 // + `variantKeyForElement` blocks above only use a tiny fakeEl and
 // don't depend on happy-dom — but happy-dom is harmless for them.
 import { describe, expect, it } from "vitest";
+import { computeDasharray } from "../utils/dash-utils.js";
 import type { ToolOptions } from "./tool-options.js";
+import { readUniversalStyleAttrs } from "./tool-style-reader.js";
 import {
   normalizeVariantSideFields,
   TOOL_REGISTRY,
@@ -408,6 +410,279 @@ describe("TOOL_REGISTRY extractStyleFromElement", () => {
 
   it("crop has no extractStyleFromElement (no on-canvas element)", () => {
     expect(TOOL_REGISTRY.crop!.extractStyleFromElement).toBeUndefined();
+  });
+});
+
+describe("TOOL_REGISTRY applyStyleToElement", () => {
+  // Phase 2 of `docs/plans/toolbar-apply-style-to-element.md`.
+  // Each block builds a synthetic element with attrs, harvests a
+  // preset (universal reader + tool-specific extractor — mirrors
+  // `Toolbar.syncPresetFromElement`), builds a fresh element of the
+  // same shape, applies the writer, then re-harvests and asserts
+  // round-trip equivalence on the fields the tool actually owns.
+
+  /** Mirrors `Toolbar.syncPresetFromElement` minus the toolId
+   *  classifier dance — call universal reader THEN the tool-
+   *  specific extractor so the harvested preset reflects what the
+   *  toolbar would have stored after a rubber-band capture. */
+  function harvest(toolId: keyof typeof TOOL_REGISTRY, el: SVGElement): ToolOptions {
+    const preset = emptyPreset();
+    readUniversalStyleAttrs(el, preset);
+    TOOL_REGISTRY[toolId]!.extractStyleFromElement?.(el, preset);
+    return preset;
+  }
+
+  describe("shape", () => {
+    it("rect: round-trips stroke / fill / width / dasharray / opacity", () => {
+      const original = svg("rect", {
+        stroke: "#112233",
+        fill: "#445566",
+        "stroke-width": "2",
+        "stroke-dasharray": computeDasharray("dash", 2),
+        "data-dash-key": "dash",
+        "stroke-opacity": "0.6",
+        "fill-opacity": "0.8",
+        "stroke-linecap": "round",
+        "stroke-linejoin": "miter",
+      });
+      const preset = harvest("shape", original);
+      const fresh = svg("rect");
+      TOOL_REGISTRY.shape!.applyStyleToElement!(fresh, preset);
+      const reharvested = harvest("shape", fresh);
+      expect(reharvested.strokeColor).toBe(preset.strokeColor);
+      expect(reharvested.fillColor).toBe(preset.fillColor);
+      expect(reharvested.strokeWidth).toBe(preset.strokeWidth);
+      expect(reharvested.strokeDasharray).toBe(preset.strokeDasharray);
+      expect(reharvested.strokeOpacity).toBe(preset.strokeOpacity);
+      expect(reharvested.fillOpacity).toBe(preset.fillOpacity);
+      expect(reharvested.strokeLinecap).toBe(preset.strokeLinecap);
+      expect(reharvested.strokeLinejoin).toBe(preset.strokeLinejoin);
+    });
+  });
+
+  describe("highlight", () => {
+    it("rect[data-highlight=1]: round-trips highlightColor + fillOpacity", () => {
+      const original = svg("rect", {
+        "data-highlight": "1",
+        fill: "#ffe100",
+        "fill-opacity": "0.4",
+      });
+      const preset = harvest("highlight", original);
+      const fresh = svg("rect", { "data-highlight": "1" });
+      TOOL_REGISTRY.highlight!.applyStyleToElement!(fresh, preset);
+      // Highlight writes `fill` from `highlightColor` (NOT `fillColor`).
+      expect(fresh.getAttribute("fill")).toBe("#ffe100");
+      expect(fresh.getAttribute("fill-opacity")).toBe("0.4");
+      // Round-trip: harvest again and verify highlightColor matches.
+      const reharvested = harvest("highlight", fresh);
+      expect(reharvested.highlightColor).toBe("#ffe100");
+      expect(reharvested.fillOpacity).toBe(0.4);
+    });
+  });
+
+  describe("text", () => {
+    it("<g data-type=textbox>: round-trips strokeColor / fontFamily / fontSize", () => {
+      const original = svg("g", {
+        "data-type": "textbox",
+        "data-text-variant": "callout",
+        "data-color": "#222222",
+        "data-font-family": "Inter",
+      });
+      const t = svg("text", { fill: "#222222", "font-family": "Inter", "font-size": "20" });
+      original.appendChild(t);
+      const preset = harvest("text", original);
+      // Build a fresh textbox <g> with an empty inner <text>.
+      const fresh = svg("g", { "data-type": "textbox", "data-text-variant": "callout" });
+      const freshT = svg("text");
+      fresh.appendChild(freshT);
+      TOOL_REGISTRY.text!.applyStyleToElement!(fresh, preset);
+      // Wrapper cache attrs are populated.
+      expect(fresh.getAttribute("data-color")).toBe("#222222");
+      expect(fresh.getAttribute("data-font-family")).toBe("Inter");
+      // Inner <text> picks up fill / font-family / font-size.
+      expect(freshT.getAttribute("fill")).toBe("#222222");
+      expect(freshT.getAttribute("font-family")).toBe("Inter");
+      expect(freshT.getAttribute("font-size")).toBe("20");
+      // Re-harvest and confirm the preset round-trips back.
+      const reharvested = harvest("text", fresh);
+      expect(reharvested.strokeColor).toBe(preset.strokeColor);
+      expect(reharvested.fontFamily).toBe(preset.fontFamily);
+      expect(reharvested.fontSize).toBe(preset.fontSize);
+    });
+  });
+
+  describe("freehand", () => {
+    it("<path>: round-trips stroke + width + dasharray", () => {
+      const original = svg("path", {
+        "data-draw-style": "pen",
+        stroke: "#ff0000",
+        "stroke-width": "3",
+        "stroke-dasharray": computeDasharray("dot", 3),
+        "data-dash-key": "dot",
+        fill: "none",
+      });
+      const preset = harvest("freehand", original);
+      const fresh = svg("path", { "data-draw-style": "pen" });
+      TOOL_REGISTRY.freehand!.applyStyleToElement!(fresh, preset);
+      const reharvested = harvest("freehand", fresh);
+      expect(reharvested.strokeColor).toBe(preset.strokeColor);
+      expect(reharvested.strokeWidth).toBe(preset.strokeWidth);
+      expect(reharvested.strokeDasharray).toBe(preset.strokeDasharray);
+      expect(reharvested.drawStyle).toBe("pen");
+    });
+  });
+
+  describe("marker", () => {
+    it("<g data-marker>: round-trips bg fill / stroke / width / dasharray + counter font-size", () => {
+      const original = svg("g", { "data-marker": "1", "data-shape": "rounded" });
+      const bg = svg("rect", {
+        fill: "#abcdef",
+        stroke: "#123456",
+        "stroke-width": "2.5",
+        "stroke-dasharray": computeDasharray("dash", 2.5),
+        "data-dash-key": "dash",
+      });
+      original.appendChild(bg);
+      const t = svg("text", { "font-size": "18" });
+      original.appendChild(t);
+      const preset = harvest("marker", original);
+      // Build fresh: same composite shape, no style attrs.
+      const fresh = svg("g", { "data-marker": "1", "data-shape": "rounded" });
+      const freshBg = svg("rect");
+      fresh.appendChild(freshBg);
+      const freshT = svg("text");
+      fresh.appendChild(freshT);
+      TOOL_REGISTRY.marker!.applyStyleToElement!(fresh, preset);
+      // Bg picks up the style writes (NOT the outer <g>).
+      expect(freshBg.getAttribute("fill")).toBe("#abcdef");
+      expect(freshBg.getAttribute("stroke")).toBe("#123456");
+      expect(freshBg.getAttribute("stroke-width")).toBe("2.5");
+      expect(freshBg.getAttribute("data-dash-key")).toBe("dash");
+      expect(freshBg.getAttribute("stroke-dasharray")).toBe(
+        computeDasharray("dash", 2.5),
+      );
+      // Counter <text> picks up font-size.
+      expect(freshT.getAttribute("font-size")).toBe("18");
+      // Re-harvest round-trip.
+      const reharvested = harvest("marker", fresh);
+      expect(reharvested.fillColor).toBe(preset.fillColor);
+      expect(reharvested.strokeColor).toBe(preset.strokeColor);
+      expect(reharvested.strokeWidth).toBe(preset.strokeWidth);
+      expect(reharvested.strokeDasharray).toBe(preset.strokeDasharray);
+      expect(reharvested.fontSize).toBe(preset.fontSize);
+      expect(reharvested.markerShape).toBe("rounded");
+    });
+
+    it("falls back to the bg's existing stroke-width for dashes when preset.strokeWidth is absent", () => {
+      // Build a preset with strokeDasharray set but strokeWidth absent
+      // (deleted) — exercises the legacy fallback in
+      // `applyMarkerPresetStyle` that reads the bg's own stroke-width.
+      const fresh = svg("g", { "data-marker": "1", "data-shape": "circle" });
+      const freshBg = svg("circle", { "stroke-width": "4" });
+      fresh.appendChild(freshBg);
+      const preset = emptyPreset();
+      preset.strokeDasharray = "lgDash";
+      delete (preset as { strokeWidth?: number }).strokeWidth;
+      TOOL_REGISTRY.marker!.applyStyleToElement!(fresh, preset);
+      // Dash is computed against the bg's existing stroke-width (4),
+      // NOT the preset's missing one.
+      expect(freshBg.getAttribute("stroke-dasharray")).toBe(
+        computeDasharray("lgDash", 4),
+      );
+    });
+  });
+
+  describe("redact", () => {
+    it("solid: writes universal style attrs onto the rect", () => {
+      const fresh = svg("rect", { "data-redact-style": "solid" });
+      const preset = emptyPreset();
+      preset.fillColor = "#000000";
+      TOOL_REGISTRY.redact!.applyStyleToElement!(fresh, preset);
+      expect(fresh.getAttribute("fill")).toBe("#000000");
+    });
+
+    it("mosaic / blur are no-ops (PNG-baked, no stylable attrs)", () => {
+      const mosaic = svg("image", { "data-redact-style": "mosaic" });
+      const blur = svg("image", { "data-redact-style": "blur" });
+      const preset = emptyPreset();
+      preset.fillColor = "#ffffff";
+      TOOL_REGISTRY.redact!.applyStyleToElement!(mosaic, preset);
+      TOOL_REGISTRY.redact!.applyStyleToElement!(blur, preset);
+      expect(mosaic.hasAttribute("fill")).toBe(false);
+      expect(blur.hasAttribute("fill")).toBe(false);
+    });
+  });
+
+  describe("arrow", () => {
+    it("<line> (arrow.none): round-trips universal style attrs", () => {
+      const original = svg("line", {
+        stroke: "#ff0000",
+        "stroke-width": "3",
+        opacity: "0.5",
+      });
+      const preset = harvest("arrow", original);
+      const fresh = svg("line");
+      TOOL_REGISTRY.arrow!.applyStyleToElement!(fresh, preset);
+      // Lines use `opacity` (NOT `stroke-opacity`) for transparency
+      // so SVG-marker arrowheads fade with the stem.
+      expect(fresh.getAttribute("stroke")).toBe("#ff0000");
+      expect(fresh.getAttribute("stroke-width")).toBe("3");
+      expect(fresh.getAttribute("opacity")).toBe("0.5");
+      expect(fresh.hasAttribute("stroke-opacity")).toBe(false);
+    });
+
+    it("<g data-type=arrow>: refreshArrowPath rebuilds the head paths after writing", () => {
+      // Need real endpoint data so refreshArrowPath has something to
+      // generate. Synthetic 100x0 → 200x0 horizontal arrow with a
+      // triangular end head.
+      const fresh = svg("g", {
+        "data-type": "arrow",
+        "data-x1": "100",
+        "data-y1": "0",
+        "data-x2": "200",
+        "data-y2": "0",
+        "data-arrow-end-shape": "triangle",
+        "data-arrow-end-width": "md",
+        "data-arrow-end-length": "md",
+      });
+      const preset = emptyPreset();
+      preset.strokeColor = "#00ff00";
+      preset.strokeWidth = 2;
+      TOOL_REGISTRY.arrow!.applyStyleToElement!(fresh, preset);
+      // Universal writer wrote stroke + stroke-width on the <g>.
+      expect(fresh.getAttribute("stroke")).toBe("#00ff00");
+      expect(fresh.getAttribute("stroke-width")).toBe("2");
+      // refreshArrowPath created the stem + head subpaths.
+      const stem = fresh.querySelector('[data-role="stem"]');
+      const head = fresh.querySelector('[data-role="head-filled"]');
+      expect(stem?.getAttribute("d")).toBeTruthy();
+      expect(head?.getAttribute("d")).toBeTruthy();
+      // Head fill is re-derived from the new stroke color.
+      expect(head?.getAttribute("fill")).toBe("#00ff00");
+    });
+  });
+
+  it("crop has no applyStyleToElement (no on-canvas element)", () => {
+    expect(TOOL_REGISTRY.crop!.applyStyleToElement).toBeUndefined();
+  });
+
+  it("each tool with extractStyleFromElement also has applyStyleToElement", () => {
+    // Phase-4-shape symmetry guard, eagerly enforced in Phase 2 so
+    // adding a new tool with a one-sided callback fails the build.
+    for (const [id, entry] of Object.entries(TOOL_REGISTRY)) {
+      if (entry.extractStyleFromElement) {
+        expect(
+          entry.applyStyleToElement,
+          `${id}: extractStyleFromElement defined but applyStyleToElement missing`,
+        ).toBeDefined();
+      }
+      if (entry.applyStyleToElement) {
+        expect(
+          entry.extractStyleFromElement,
+          `${id}: applyStyleToElement defined but extractStyleFromElement missing`,
+        ).toBeDefined();
+      }
+    }
   });
 });
 
