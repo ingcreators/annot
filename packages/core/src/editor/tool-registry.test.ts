@@ -13,9 +13,38 @@
 //   - the 8 expected tool ids being present
 // surfaces immediately rather than waiting for a Toolbar wiring PR.
 
+// @vitest-environment happy-dom
+//
+// Spot-checks for `extractStyleFromElement` need real `Element`
+// instances (`querySelector`, attribute coercion). The shape-invariant
+// + `variantKeyForElement` blocks above only use a tiny fakeEl and
+// don't depend on happy-dom — but happy-dom is harmless for them.
 import { describe, expect, it } from "vitest";
 import type { ToolOptions } from "./tool-options.js";
-import { TOOL_REGISTRY, TOOL_REGISTRY_IDS } from "./tool-registry.js";
+import {
+  normalizeVariantSideFields,
+  TOOL_REGISTRY,
+  TOOL_REGISTRY_IDS,
+} from "./tool-registry.js";
+
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+function svg(tag: string, attrs: Record<string, string> = {}): SVGElement {
+  const el = document.createElementNS(SVG_NS, tag) as SVGElement;
+  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+  return el;
+}
+
+function emptyPreset(): ToolOptions {
+  return {
+    strokeColor: "#000",
+    fillColor: "#fff",
+    strokeWidth: 1,
+    fontSize: 12,
+    strokeDasharray: "",
+    fillOpacity: 1,
+  };
+}
 
 /** Minimal SVGElement-shaped stub. The classifier only reads
  *  `tagName`, `getAttribute`, `hasAttribute`, `querySelector` —
@@ -274,5 +303,151 @@ describe("TOOL_REGISTRY variantKeyForElement spot-checks", () => {
       if (id === "crop") continue;
       expect(entry.variantKeyForElement, `${id}.variantKeyForElement`).toBeDefined();
     }
+  });
+});
+
+describe("TOOL_REGISTRY extractStyleFromElement", () => {
+  // Each spot-check builds a synthetic element with the on-canvas
+  // attributes the corresponding tool would emit, runs the
+  // extractor, and asserts the harvested preset fields match.
+  // Happy-dom-backed Element so `querySelector` works.
+
+  it("shape: ellipse → shapeType=ellipse", () => {
+    const preset = emptyPreset();
+    TOOL_REGISTRY.shape!.extractStyleFromElement!(svg("ellipse"), preset);
+    expect(preset.shapeType).toBe("ellipse");
+  });
+
+  it("shape: rect[data-rounded] → shapeType=rounded", () => {
+    const preset = emptyPreset();
+    TOOL_REGISTRY.shape!.extractStyleFromElement!(svg("rect", { "data-rounded": "1" }), preset);
+    expect(preset.shapeType).toBe("rounded");
+  });
+
+  it("highlight: routes fill into highlightColor", () => {
+    const preset = emptyPreset();
+    TOOL_REGISTRY.highlight!.extractStyleFromElement!(
+      svg("rect", { "data-highlight": "1", fill: "#ffe100" }),
+      preset,
+    );
+    expect(preset.highlightColor).toBe("#ffe100");
+  });
+
+  it("freehand: data-draw-style → drawStyle", () => {
+    const preset = emptyPreset();
+    TOOL_REGISTRY.freehand!.extractStyleFromElement!(
+      svg("path", { "data-draw-style": "highlighter" }),
+      preset,
+    );
+    expect(preset.drawStyle).toBe("highlighter");
+  });
+
+  it("redact: data-redact-style → redactStyle", () => {
+    const preset = emptyPreset();
+    TOOL_REGISTRY.redact!.extractStyleFromElement!(
+      svg("rect", { "data-redact-style": "solid" }),
+      preset,
+    );
+    expect(preset.redactStyle).toBe("solid");
+  });
+
+  it("text: <g data-type=textbox> reads variant + font + text-color", () => {
+    const g = svg("g", {
+      "data-type": "textbox",
+      "data-text-variant": "callout",
+      "data-color": "#222222",
+    });
+    const t = svg("text", { "font-size": "20", "font-family": "Inter", fill: "#222222" });
+    g.appendChild(t);
+    const preset = emptyPreset();
+    TOOL_REGISTRY.text!.extractStyleFromElement!(g, preset);
+    expect(preset.textVariant).toBe("callout");
+    expect(preset.fontSize).toBe(20);
+    expect(preset.fontFamily).toBe("Inter");
+    expect(preset.strokeColor).toBe("#222222");
+  });
+
+  it("marker: bg primitive's fill+stroke → fillColor+strokeColor; legacy fields scrubbed", () => {
+    const g = svg("g", { "data-marker": "1", "data-shape": "rounded" });
+    const bg = svg("rect", { fill: "#abc", stroke: "#def", "stroke-width": "2.5" });
+    g.appendChild(bg);
+    const t = svg("text", { "font-size": "16" });
+    g.appendChild(t);
+    const preset = emptyPreset();
+    preset.markerBorderColor = "#legacy"; // legacy field; should be scrubbed
+    TOOL_REGISTRY.marker!.extractStyleFromElement!(g, preset);
+    expect(preset.markerShape).toBe("rounded");
+    expect(preset.fillColor).toBe("#abc");
+    expect(preset.strokeColor).toBe("#def");
+    expect(preset.strokeWidth).toBe(2.5);
+    expect(preset.fontSize).toBe(16);
+    expect(preset.markerBorderColor).toBeUndefined();
+  });
+
+  it("arrow: per-end shape attrs round-trip into per-end preset fields", () => {
+    const el = svg("g", {
+      "data-type": "arrow",
+      "data-arrow-start-shape": "diamond",
+      "data-arrow-end-shape": "stealth",
+      "data-arrow-start-width": "lg",
+      "data-arrow-end-length": "sm",
+    });
+    const preset = emptyPreset();
+    TOOL_REGISTRY.arrow!.extractStyleFromElement!(el, preset);
+    expect(preset.arrowHead).toBe("both");
+    expect(preset.arrowHeadStart).toBe("diamond");
+    expect(preset.arrowHeadEnd).toBe("stealth");
+    expect(preset.arrowWidthStart).toBe("lg");
+    expect(preset.arrowLengthEnd).toBe("sm");
+  });
+
+  it("arrow: variant=none clamps both ends to none via normalizeVariantSideFields", () => {
+    // Build a line with no per-end shape attrs — variant is "none".
+    const el = svg("line");
+    const preset = emptyPreset();
+    preset.arrowHeadStart = "triangle";
+    preset.arrowHeadEnd = "triangle";
+    TOOL_REGISTRY.arrow!.extractStyleFromElement!(el, preset);
+    expect(preset.arrowHead).toBe("none");
+    expect(preset.arrowHeadStart).toBe("none");
+    expect(preset.arrowHeadEnd).toBe("none");
+  });
+
+  it("crop has no extractStyleFromElement (no on-canvas element)", () => {
+    expect(TOOL_REGISTRY.crop!.extractStyleFromElement).toBeUndefined();
+  });
+});
+
+describe("normalizeVariantSideFields", () => {
+  it("non-arrow tool ids are no-ops", () => {
+    const preset = emptyPreset();
+    preset.arrowHeadStart = "triangle";
+    normalizeVariantSideFields("shape", "rect", preset);
+    expect(preset.arrowHeadStart).toBe("triangle");
+  });
+
+  it("arrow.none forces both ends to none", () => {
+    const preset = emptyPreset();
+    preset.arrowHeadStart = "diamond";
+    preset.arrowHeadEnd = "stealth";
+    normalizeVariantSideFields("arrow", "none", preset);
+    expect(preset.arrowHeadStart).toBe("none");
+    expect(preset.arrowHeadEnd).toBe("none");
+  });
+
+  it("arrow.end forces start=none, defaults end=triangle when absent", () => {
+    const preset = emptyPreset();
+    normalizeVariantSideFields("arrow", "end", preset);
+    expect(preset.arrowHeadStart).toBe("none");
+    expect(preset.arrowHeadEnd).toBe("triangle");
+  });
+
+  it("arrow.both preserves valid per-end values; defaults invalid to triangle", () => {
+    const preset = emptyPreset();
+    preset.arrowHeadStart = "none";
+    preset.arrowHeadEnd = "diamond";
+    normalizeVariantSideFields("arrow", "both", preset);
+    expect(preset.arrowHeadStart).toBe("triangle");
+    expect(preset.arrowHeadEnd).toBe("diamond");
   });
 });

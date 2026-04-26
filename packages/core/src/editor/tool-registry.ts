@@ -110,6 +110,24 @@ export interface ToolRegistryEntry {
    *  (`tagName`, `getAttribute`, `hasAttribute`, `querySelector`).
    *  No `document` / `window` access. */
   variantKeyForElement?: (el: SVGElement) => string | null;
+  /** Tool-specific style reader. Mutates `preset` in place with
+   *  values harvested from `el`'s attributes / children. The
+   *  generic universal-style reader (stroke / fill / stroke-width /
+   *  dasharray / opacity / linecap / linejoin) runs BEFORE this
+   *  hook; the hook only handles tool-specific branches the
+   *  universal reader can't capture (text font + variant on a
+   *  child `<text>`, arrow per-end state, marker bg primitive
+   *  reads, etc.).
+   *
+   *  Phase 5 of `docs/plans/toolbar-schema.md`: the imperative
+   *  `if (toolId === "text") { … } if (toolId === "arrow") { … }`
+   *  cascades in `Toolbar.syncPresetFromElement` collapse to a
+   *  single `TOOL_REGISTRY[toolId]?.extractStyleFromElement?.(el,
+   *  preset)` dispatch.
+   *
+   *  Tier B — implementations live in `tool-registry.ts` itself
+   *  and may only use jsdom-friendly Element APIs. */
+  extractStyleFromElement?: (el: SVGElement, preset: ToolOptions) => void;
 }
 
 /** Universal style fields most tools persist. Pulled out so each
@@ -145,6 +163,51 @@ function arrowVariantFromAttrs(el: SVGElement): string {
   if (hasStart && hasEnd) return "both";
   if (hasEnd || hasStart) return "end";
   return "none";
+}
+
+/** After a variant switch, fix up the side-fields on `preset` so the
+ *  new variant's invariants hold. Today only `arrow` needs this:
+ *    - `none`: both ends must be "none".
+ *    - `end`:  begin must be "none", end must be non-"none" (default tri).
+ *    - `both`: both ends must be non-"none" (default tri).
+ *
+ *  Mutates `preset` in place; safe to call for tools without a
+ *  relevant invariant (it's a no-op).
+ *
+ *  Tier B — pure (no DOM, no `Toolbar` access). Relocated from
+ *  `packages/web/src/editor/toolbar-preset-helpers.ts` in Phase 5
+ *  of `docs/plans/toolbar-schema.md` so the registry's
+ *  `extractStyleFromElement` callbacks can call it without crossing
+ *  the Tier B → Tier C boundary. */
+export function normalizeVariantSideFields(
+  toolId: string,
+  newVariant: string,
+  preset: ToolOptions,
+): void {
+  if (toolId !== "arrow") return;
+  const p = preset as unknown as Record<string, unknown>;
+  const tri = "triangle" as const;
+  const none = "none" as const;
+  const curStart = preset.arrowHeadStart;
+  const curEnd = preset.arrowHeadEnd;
+  switch (newVariant) {
+    case "none":
+      // Line: both ends must be "none" — force.
+      p.arrowHeadStart = none;
+      p.arrowHeadEnd = none;
+      break;
+    case "end":
+      // Arrow: begin must be "none", end must be non-"none".
+      p.arrowHeadStart = none;
+      p.arrowHeadEnd = curEnd && curEnd !== "none" ? curEnd : tri;
+      break;
+    case "both":
+      // Double arrow: both ends must be non-"none". Preserve if
+      // already valid, else seed triangle.
+      p.arrowHeadStart = curStart && curStart !== "none" ? curStart : tri;
+      p.arrowHeadEnd = curEnd && curEnd !== "none" ? curEnd : tri;
+      break;
+  }
 }
 
 export const TOOL_REGISTRY: Readonly<Record<string, ToolRegistryEntry>> = {
@@ -184,6 +247,46 @@ export const TOOL_REGISTRY: Readonly<Record<string, ToolRegistryEntry>> = {
       }
       return null;
     },
+    extractStyleFromElement(el, preset) {
+      // Rubber-band the full per-end state into the variant's preset:
+      //   - Legacy `arrowHead` (none/end/both) classifies which
+      //     variant's preset to update.
+      //   - Per-end SHAPE / WIDTH / LENGTH values are preserved
+      //     within the variant's constraints — the user's custom
+      //     "Double arrow with start=diamond, end=oval" survives
+      //     round-trips, because variant-switching clamps per-end
+      //     into the valid range rather than fully resetting.
+      const endShape = el.getAttribute("data-arrow-end-shape");
+      const startShape = el.getAttribute("data-arrow-start-shape");
+      const hEnd = endShape != null ? endShape !== "none" : !!el.getAttribute("marker-end");
+      const hStart =
+        startShape != null ? startShape !== "none" : !!el.getAttribute("marker-start");
+      preset.arrowHead = hStart && hEnd ? "both" : hEnd ? "end" : hStart ? "end" : "none";
+      // Per-end shape + width + length (PowerPoint-parity granular fields).
+      const ss = el.getAttribute("data-arrow-start-shape");
+      const es = el.getAttribute("data-arrow-end-shape");
+      const sw =
+        el.getAttribute("data-arrow-start-width") || el.getAttribute("data-arrow-start-size");
+      const sl =
+        el.getAttribute("data-arrow-start-length") || el.getAttribute("data-arrow-start-size");
+      const ew =
+        el.getAttribute("data-arrow-end-width") || el.getAttribute("data-arrow-end-size");
+      const el_ =
+        el.getAttribute("data-arrow-end-length") || el.getAttribute("data-arrow-end-size");
+      if (ss) preset.arrowHeadStart = ss as typeof preset.arrowHeadStart;
+      if (es) preset.arrowHeadEnd = es as typeof preset.arrowHeadEnd;
+      if (sw) preset.arrowWidthStart = sw as typeof preset.arrowWidthStart;
+      if (sl) preset.arrowLengthStart = sl as typeof preset.arrowLengthStart;
+      if (ew) preset.arrowWidthEnd = ew as typeof preset.arrowWidthEnd;
+      if (el_) preset.arrowLengthEnd = el_ as typeof preset.arrowLengthEnd;
+      // Clamp per-end shapes into the classified variant's valid range
+      // so the preset is always internally consistent with its variant
+      // label — protects against reverse-arrow data loaded from old
+      // saved files.
+      if (preset.arrowHead) {
+        normalizeVariantSideFields("arrow", preset.arrowHead, preset);
+      }
+    },
   },
 
   // Single unified shape tool — pick rect / rounded / ellipse via
@@ -220,6 +323,12 @@ export const TOOL_REGISTRY: Readonly<Record<string, ToolRegistryEntry>> = {
       }
       return null;
     },
+    extractStyleFromElement(el, preset) {
+      if (el.tagName === "ellipse") preset.shapeType = "ellipse";
+      else if (el.tagName === "rect") {
+        preset.shapeType = el.hasAttribute("data-rounded") ? "rounded" : "rect";
+      }
+    },
   },
 
   // Highlight — dedicated tool for semi-transparent highlight rects.
@@ -251,6 +360,12 @@ export const TOOL_REGISTRY: Readonly<Record<string, ToolRegistryEntry>> = {
       const fill = el.getAttribute("fill");
       const variant = fill ? fill.toLowerCase() : HIGHLIGHT_COLORS[0]!.value;
       return `highlight.${variant}`;
+    },
+    extractStyleFromElement(el, preset) {
+      // Highlight's "fill" IS its highlight color — route the
+      // universal-reader's fillColor capture into the right field.
+      const fill = el.getAttribute("fill");
+      if (fill) preset.highlightColor = fill;
     },
   },
 
@@ -285,6 +400,25 @@ export const TOOL_REGISTRY: Readonly<Record<string, ToolRegistryEntry>> = {
       }
       return null;
     },
+    extractStyleFromElement(el, preset) {
+      // Textbox composite: <g data-type=textbox> with a <text> child.
+      // Plain text: bare <text>. In both cases font + color live on
+      // the <text>; the variant + data-color cache live on the wrapper.
+      const tEl = el.tagName === "g" ? el.querySelector("text") : el;
+      const fs = Number.parseFloat(tEl?.getAttribute("font-size") || "");
+      if (Number.isFinite(fs) && fs > 0) preset.fontSize = fs;
+      const ff = tEl?.getAttribute("font-family") || el.getAttribute("data-font-family");
+      if (ff) preset.fontFamily = ff;
+      const variant = el.getAttribute("data-text-variant");
+      if (variant === "plain" || variant === "sticky" || variant === "callout") {
+        preset.textVariant = variant;
+      }
+      // Tool treats "text color" as stroke (TextTool convention) — re-read
+      // from the <text> child (or `data-color` cache on the <g>) so the
+      // textbox <rect>'s bg-color doesn't leak into the preset.
+      const textFill = tEl?.getAttribute("fill") || el.getAttribute("data-color");
+      if (textFill) preset.strokeColor = textFill;
+    },
   },
 
   // Unified Draw tool — pen vs highlighter picked via the right
@@ -310,6 +444,10 @@ export const TOOL_REGISTRY: Readonly<Record<string, ToolRegistryEntry>> = {
         return `freehand.${ds ?? "pen"}`;
       }
       return null;
+    },
+    extractStyleFromElement(el, preset) {
+      const ds = el.getAttribute("data-draw-style");
+      if (ds === "pen" || ds === "highlighter") preset.drawStyle = ds;
     },
   },
 
@@ -348,6 +486,40 @@ export const TOOL_REGISTRY: Readonly<Record<string, ToolRegistryEntry>> = {
       if (el.tagName !== "g" || !el.hasAttribute("data-marker")) return null;
       const ms = el.getAttribute("data-shape");
       return `marker.${ms ?? "circle"}`;
+    },
+    extractStyleFromElement(el, preset) {
+      // MarkerTool writes the selected shape into `data-shape` on the
+      // outer <g>. Propagate it back into the preset's markerShape
+      // field so a subsequent click on the Counter button creates
+      // the same shape variant.
+      const ms = el.getAttribute("data-shape");
+      if (ms === "circle" || ms === "rect" || ms === "rounded") {
+        preset.markerShape = ms;
+      }
+      // P3-8 refactor: marker uses STANDARD color semantics —
+      // `fillColor` = bg interior, `strokeColor` = bg border. The
+      // outer <g> has no stroke/fill attrs; we read both from the
+      // bg primitive (<circle> / <rect>). Also scrub the legacy
+      // `markerBorder*` fields so old presets don't linger and
+      // shadow the new values on re-save.
+      const bg = el.querySelector("circle, rect");
+      const bgFill = bg?.getAttribute("fill");
+      if (bgFill) preset.fillColor = bgFill;
+      const bgStroke = bg?.getAttribute("stroke");
+      if (bgStroke) preset.strokeColor = bgStroke;
+      const bsw = Number.parseFloat(bg?.getAttribute("stroke-width") || "");
+      if (Number.isFinite(bsw) && bsw >= 0) preset.strokeWidth = bsw;
+      const bdash = bg?.getAttribute("data-dash-key") ?? bg?.getAttribute("stroke-dasharray");
+      if (bdash != null) preset.strokeDasharray = bdash;
+      delete (preset as Partial<ToolOptions>).markerBorderColor;
+      delete (preset as Partial<ToolOptions>).markerBorderWidth;
+      delete (preset as Partial<ToolOptions>).markerBorderDasharray;
+      // Font size for the counter number — read from the <text>
+      // child. Without this, changing font-size via the property
+      // panel wouldn't stick.
+      const tEl = el.tagName === "g" ? el.querySelector("text") : null;
+      const fs = Number.parseFloat(tEl?.getAttribute("font-size") || "");
+      if (Number.isFinite(fs) && fs > 0) preset.fontSize = fs;
     },
   },
 
@@ -388,6 +560,10 @@ export const TOOL_REGISTRY: Readonly<Record<string, ToolRegistryEntry>> = {
         return "redact.mosaic";
       }
       return null;
+    },
+    extractStyleFromElement(el, preset) {
+      const rs = el.getAttribute("data-redact-style");
+      if (rs === "solid" || rs === "mosaic" || rs === "blur") preset.redactStyle = rs;
     },
   },
 

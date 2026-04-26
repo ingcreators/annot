@@ -100,6 +100,7 @@ export {
 // pure Node. Sibling to `property-schema` — same pattern (declarative
 // registry replacing imperative chains) applied to the toolbar.
 export {
+  normalizeVariantSideFields,
   TOOL_REGISTRY,
   TOOL_REGISTRY_IDS,
   type ToolRegistryEntry,
