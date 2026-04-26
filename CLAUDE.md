@@ -248,6 +248,51 @@ registry pattern via `TOOL_REGISTRY` in
 History: PRs #166–TBD, following
 [`docs/plans/_done/toolbar-schema.md`](./docs/plans/_done/toolbar-schema.md).
 
+The Tool-side property panel (the right panel users see when
+they activate a drawing tool) applies the same pattern via
+the optional `panelControls` field on each `TOOL_REGISTRY`
+entry, with the schema-driven renderer in
+[`packages/web/src/editor/tool-property-renderer.ts`](./packages/web/src/editor/tool-property-renderer.ts):
+
+- **Per-tool control list lives in `panelControls`.** Each
+  entry declares a `section` (`Type` / `Fill` / `Line` /
+  `Label`) and an `id` — either a SELECTION-side
+  `PropertyControlId` (`fillColor`, `strokeWidth`, …) or a
+  Tool-only id from `ToolPanelExtraControlId` (`tool.typeChips`,
+  `tool.transparencyPercent`, `tool.fillTransparencyPercent`,
+  `tool.fillOpacityPercent`, `tool.freehandDone`). Optional
+  `visibleWhen(preset)` predicate gates the row by current
+  preset state (e.g. Redact's Color row only appears when
+  `redactStyle === "solid"`).
+- **Adapters bridge ids to preset mutations.**
+  `TOOL_PANEL_ADAPTERS` in
+  [`packages/core/src/editor/tool-panel-adapter.ts`](./packages/core/src/editor/tool-panel-adapter.ts)
+  maps each id to a `(preset, value, toolId) => void` writer.
+  The Tool side mutates a `ToolOptions` object instead of
+  attributes on an `SVGElement`, but the option lists / labels
+  / number ranges / `allowNone` flag come from the SELECTION
+  registry via `selectionDefMetadata(id)` — ONE source of
+  truth, so a UX edit to `PROPERTY_CONTROLS.strokeStyle.options`
+  flows through to BOTH surfaces.
+- **Per-tool overrides are explicit constants in the
+  renderer**, not registry entries:
+  `MARKER_STROKE_WIDTH_OVERRIDE` (counter borders cap at 20pt),
+  `FONT_SIZE_TOOL_MAX.marker = 48` (counter numerals overflow
+  past that), `FILL_COLOR_OVERRIDES` (shape uses "Fill" label,
+  redact disables `allowNone`, each tool has its own fallback
+  color when the preset is unset). Adding a new override is
+  one entry in the matching constant + a one-line comment
+  saying why the SELECTION baseline doesn't fit.
+- **DOM byte-equivalence is the migration contract.** Goldens
+  in
+  [`packages/web/src/editor/tool-property-renderer.test.ts`](./packages/web/src/editor/tool-property-renderer.test.ts)
+  pin every tool × variant combination via
+  `toMatchInlineSnapshot()`. Edit the snapshots ONLY when the
+  PR description calls out a deliberate visual change.
+
+History: PRs #188–TBD, following
+[`docs/plans/_done/tool-property-renderer-schema.md`](./docs/plans/_done/tool-property-renderer-schema.md).
+
 ### 7. Reply and commit language
 
 - Replies to the user: **Japanese**.
