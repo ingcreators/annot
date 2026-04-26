@@ -956,11 +956,6 @@ export class Toolbar {
               label: textEl?.textContent || "",
               font_size: fs,
               marker_shape: shapeName,
-              // The Rust-side OOXML emitter reads the marker's
-              // shape name off `stroke` (its `AnnotationShape` struct
-              // doesn't model `marker_shape`). Both fields carry the
-              // same value until that ABI is widened.
-              stroke: shapeName,
               ...xform,
             });
           }

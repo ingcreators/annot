@@ -48,6 +48,14 @@ pub struct AnnotationShape {
     // ---- Gradient paint ----
     pub stroke_gradient: Option<GradientSpec>,
     pub fill_gradient: Option<GradientSpec>,
+
+    // ---- Marker (counter) ----
+    /// Counter background shape. `circle` | `rect` | `rounded`. The
+    /// canonical discriminator since
+    /// [office-paste-abi-modernisation phase 1]; older callers that
+    /// only set `stroke` to `"rect"` still dispatch correctly via the
+    /// fallback in `gvml_marker`.
+    pub marker_shape: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -628,11 +636,25 @@ fn gvml_marker(s: &AnnotationShape, id: u32) -> String {
     let fill = chex(s.fill.as_deref().unwrap_or("#ff0000"));
     let label = s.label.as_deref().unwrap_or("");
     let pt = (fs * 75.0_f64).round() as i64;
-    let is_rect = s.stroke.as_deref() == Some("rect");
-    let geom = if is_rect {
-        r#"<a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val 10000"/></a:avLst></a:prstGeom>"#
-    } else {
-        r#"<a:prstGeom prst="ellipse"><a:avLst/></a:prstGeom>"#
+    // Prefer the canonical `marker_shape` field; fall back to the
+    // legacy `stroke == "rect"` carrier so payloads built before
+    // office-paste-abi-modernisation phase 1 still dispatch.
+    // Phase 8 removes the fallback once no live caller relies on it.
+    let shape = s
+        .marker_shape
+        .as_deref()
+        .or_else(|| match s.stroke.as_deref() {
+            Some("rect") => Some("rect"),
+            _ => None,
+        });
+    let geom = match shape {
+        Some("rect") => {
+            r#"<a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val 10000"/></a:avLst></a:prstGeom>"#
+        }
+        Some("rounded") => {
+            r#"<a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val 30000"/></a:avLst></a:prstGeom>"#
+        }
+        _ => r#"<a:prstGeom prst="ellipse"><a:avLst/></a:prstGeom>"#,
     };
     // bodyPr: zero insets so text fits in small shapes, shrink text to fit
     format!(r#"<a:sp><a:nvSpPr><a:cNvPr id="{id}" name="M{id}"/><a:cNvSpPr/></a:nvSpPr><a:spPr><a:xfrm><a:off x="{}" y="{}"/><a:ext cx="{}" cy="{}"/></a:xfrm>{geom}<a:solidFill><a:srgbClr val="{fill}"/></a:solidFill><a:ln w="14288"><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill></a:ln></a:spPr><a:txSp><a:txBody><a:bodyPr anchor="ctr" lIns="0" tIns="0" rIns="0" bIns="0" wrap="none"><a:normAutofit/></a:bodyPr><a:lstStyle/><a:p><a:pPr algn="ctr"/><a:r><a:rPr lang="en-US" sz="{pt}" b="1"><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill></a:rPr><a:t>{}</a:t></a:r></a:p></a:txBody><a:useSpRect/></a:txSp></a:sp>"#, px(cx-r), px(cy-r), px(r*2.0), px(r*2.0), exml(label))
