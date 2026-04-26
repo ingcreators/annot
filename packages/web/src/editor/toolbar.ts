@@ -1433,13 +1433,11 @@ export class Toolbar {
             meta.variants!.find((v) => v.value.toLowerCase() === detail.value)?.value ??
             detail.value;
           (preset as unknown as Record<string, unknown>)[variantField as string] = canonical;
-          // Highlight-specific: ShapeTool's highlight rendering path
-          // requires `shapeType === "highlight"` — without this the
-          // underlying ShapeTool would dispatch to the regular rect
-          // path and lose the highlighter look. Preserved for byte-
-          // equivalence; future "color" tools without a ShapeTool
-          // backing leave shapeType untouched.
-          if (toolId === "highlight") preset.shapeType = "highlight";
+          // Per-tool preset invariants (Highlight needs
+          // `shapeType="highlight"` so the underlying ShapeTool's
+          // rendering dispatch sees the flag). Generic dispatch via
+          // the registry — no `toolId === "..."` literal here.
+          meta.ensurePresetForVariantChange?.(preset, canonical);
           this.#saveCurrentPreset(toolId, preset);
           this.#savePresetsToFile();
           this.#syncToolButtonIcon(toolId);

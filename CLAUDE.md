@@ -259,12 +259,32 @@ registry pattern via `TOOL_REGISTRY` in
   composite tools (marker bg primitive, textbox `<text>` child,
   arrow's `refreshArrowPath` regen) override and call the helper
   themselves.
+- **Flyout / badge presentation is registry-driven.**
+  `flyoutKind?: "variant" | "color"` on each `TOOL_REGISTRY` entry
+  decides whether the variant flyout, the toolbar button's badge,
+  and the canvas right-click toolbox menu present each variant as
+  an icon glyph (default) or a filled color swatch. The optional
+  `chipColorForVariant?: (variantValue) => string` resolves the
+  swatch fill (Highlight uses identity since the variant value IS
+  the hex), `tooltipLabelForVariant?: (value, label) => string`
+  customises the tooltip text (Highlight maps palette hexes to
+  "Yellow" / "Green" / … and ad-hoc hexes to empty for a no-parens
+  fallback), and `ensurePresetForVariantChange?: (preset, value)
+  => void` fixes up cross-field invariants on the preset after a
+  flyout chip-pick (Highlight forces `shapeType="highlight"` so
+  the underlying ShapeTool dispatches correctly). The structural
+  test in [`packages/web/src/editor/toolbar.test.ts`](./packages/web/src/editor/toolbar.test.ts)
+  guards the no-`toolId === "..."`-literal invariant in the
+  toolbar render paths going forward — adding a new color-flyout
+  tool is one entry in `TOOL_REGISTRY`, no `if (toolId ===
+  "stamp")` chain in `toolbar.ts`.
 
 History: PRs #166–#171 (toolbar schema), #193–#196 (write-back
-symmetry), following
-[`docs/plans/_done/toolbar-schema.md`](./docs/plans/_done/toolbar-schema.md)
+symmetry), #197–TBD (flyoutKind discriminator), following
+[`docs/plans/_done/toolbar-schema.md`](./docs/plans/_done/toolbar-schema.md),
+[`docs/plans/_done/toolbar-apply-style-to-element.md`](./docs/plans/_done/toolbar-apply-style-to-element.md),
 and
-[`docs/plans/_done/toolbar-apply-style-to-element.md`](./docs/plans/_done/toolbar-apply-style-to-element.md).
+[`docs/plans/_done/toolbar-highlight-flyout-kind.md`](./docs/plans/_done/toolbar-highlight-flyout-kind.md).
 
 The Tool-side property panel (the right panel users see when
 they activate a drawing tool) applies the same pattern via

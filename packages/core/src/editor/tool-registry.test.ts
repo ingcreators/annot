@@ -228,6 +228,28 @@ describe("TOOL_REGISTRY flyoutKind discriminator", () => {
     // an identity closure. Other tools omit the field entirely.
     expect(TOOL_REGISTRY.highlight!.chipColorForVariant).toBeUndefined();
   });
+
+  it("highlight ensurePresetForVariantChange writes shapeType", () => {
+    // Phase 5 of `docs/plans/toolbar-highlight-flyout-kind.md` —
+    // pin the per-tool preset-invariant hook that lifts the last
+    // `if (toolId === "highlight")` literal out of
+    // `Toolbar.#showColorFlyout`.
+    const fn = TOOL_REGISTRY.highlight!.ensurePresetForVariantChange!;
+    const preset: ToolOptions = { ...emptyPreset(), highlightColor: "#ffe100" };
+    delete (preset as { shapeType?: string }).shapeType;
+    fn(preset, "#ffe100");
+    expect(preset.shapeType).toBe("highlight");
+  });
+
+  it("non-highlight tools have ensurePresetForVariantChange === undefined", () => {
+    for (const [id, entry] of Object.entries(TOOL_REGISTRY)) {
+      if (id === "highlight") continue;
+      expect(
+        entry.ensurePresetForVariantChange,
+        `${id}.ensurePresetForVariantChange`,
+      ).toBeUndefined();
+    }
+  });
 });
 
 describe("TOOL_REGISTRY variantKeyForElement spot-checks", () => {

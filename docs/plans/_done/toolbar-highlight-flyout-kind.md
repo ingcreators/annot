@@ -1,7 +1,9 @@
 # Toolbar — Schema-drive the Highlight "color flyout" special case
 
-> **Status:** Queued. Cleanup follow-up to
-> [`_done/toolbar-schema.md`](./_done/toolbar-schema.md).
+> **Status:** Done — landed 2026-04-26 across PRs
+> [#197](https://github.com/ingcreators/annot/pull/197)–TBD.
+> Cleanup follow-up to
+> [`./toolbar-schema.md`](./toolbar-schema.md).
 > The toolbar's Highlight tool is the last residual `if (toolId
 > === "highlight")` branch site after the Phase 5 schema-driven
 > migration: 3 callsites still hard-code Highlight's "variant is
@@ -440,3 +442,27 @@ Before starting, read these in this order:
   Highlight-shaped escape hatch out of toolbar.ts +
   toolbar-canvas-menu.ts into a `flyoutKind` discriminator on
   `ToolRegistryEntry`.
+- 2026-04-26 — All five phases landed:
+  - Phase 1 ([#197](https://github.com/ingcreators/annot/pull/197))
+    — `flyoutKind` / `chipColorForVariant` / `tooltipLabelForVariant`
+    fields on `ToolRegistryEntry` + populated for highlight, with
+    shape-invariant tests.
+  - Phase 2 ([#198](https://github.com/ingcreators/annot/pull/198))
+    — generic `Toolbar.#showColorFlyout(toolId, anchor)` +
+    badge-click dispatch via `flyoutKind`. `#showHighlightColorFlyout`
+    deleted; `HIGHLIGHT_COLORS` import dropped from `toolbar.ts`.
+  - Phase 3 ([#199](https://github.com/ingcreators/annot/pull/199))
+    — `#syncToolButtonIcon` highlight branch collapsed onto the
+    `flyoutKind` discriminator + `tooltipLabelForVariant` accessor.
+  - Phase 4 ([#200](https://github.com/ingcreators/annot/pull/200))
+    — `toolbar-canvas-menu.ts` `toolMenuEntry` highlight branches
+    (badge + submenu chip mapping) collapsed onto `flyoutKind`.
+  - Phase 5 (this PR) — added `ensurePresetForVariantChange`
+    callback on `ToolRegistryEntry` to lift the last
+    `if (toolId === "highlight") preset.shapeType = "highlight";`
+    line out of `#showColorFlyout`. Added structural test in
+    `packages/web/src/editor/toolbar.test.ts` that grep-asserts
+    `toolbar.ts` + `toolbar-canvas-menu.ts` source is free of
+    `toolId === "<id>"` literals (excluding comments). Updated
+    CLAUDE.md's schema-driven trilogy guardrail block; archived
+    plan to `_done/`.
