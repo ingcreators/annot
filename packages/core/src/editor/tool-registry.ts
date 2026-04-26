@@ -378,8 +378,14 @@ export const TOOL_REGISTRY: Readonly<Record<string, ToolRegistryEntry>> = {
         return "redact.solid";
       }
       if (el.tagName === "image") {
+        // Mosaic / blur redactions bake a PNG into an `<image>`. We
+        // claim ANY `<image>` here (matches the legacy
+        // `toolIdForElement`'s "any image is redact" branch) so a
+        // redact-style attribute that hasn't been written yet falls
+        // back to the default variant rather than going un-claimed.
         const rs = el.getAttribute("data-redact-style");
         if (rs === "mosaic" || rs === "blur") return `redact.${rs}`;
+        return "redact.mosaic";
       }
       return null;
     },

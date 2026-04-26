@@ -27,7 +27,8 @@ import {
   openCanvasContextMenu,
 } from "@ingcreators/annot-editor/canvas-context-menu";
 import { toggleFlip } from "@ingcreators/annot-core/editor/transform-utils";
-import { TOOL_VARIANTS, type ToolDef } from "./toolbar-variants.js";
+import { TOOL_REGISTRY } from "@ingcreators/annot-core/editor";
+import type { ToolDef } from "./tool-factories.js";
 
 /** Hooks the canvas menus need from the host toolbar. */
 export interface ToolbarCanvasMenuContext {
@@ -308,8 +309,8 @@ function toolMenuEntry(
   def: ToolDef,
   ctx: ToolbarCanvasMenuContext,
 ): CanvasMenuItem {
-  const group = TOOL_VARIANTS[toolId];
-  if (!group) {
+  const meta = TOOL_REGISTRY[toolId];
+  if (!meta?.variants || !meta.variantField || !meta.defaultVariant) {
     return {
       icon: def.icon,
       label: def.label,
@@ -321,8 +322,8 @@ function toolMenuEntry(
   // `#syncToolButtonIcon`, so the menu badge and the toolbar button
   // badge are always in lockstep.
   const preset = ctx.getCurrentPreset(toolId);
-  const currentValue = (preset[group.field] as string) || group.fallback;
-  const currentVariant = group.variants.find((v) => v.value === currentValue);
+  const currentValue = (preset[meta.variantField] as string) || meta.defaultVariant;
+  const currentVariant = meta.variants.find((v) => v.value === currentValue);
 
   let badge: CanvasMenuItem["badge"];
   if (currentVariant) {
@@ -345,7 +346,7 @@ function toolMenuEntry(
     // stored as last-used. Passing `undefined` means "don't change
     // the variant"; the existing preset lookup will pick it up.
     action: () => ctx.activateToolWithVariant(toolId, undefined),
-    submenu: group.variants.map((v) => {
+    submenu: meta.variants.map((v) => {
       if (toolId === "highlight") {
         return {
           swatch: v.value,

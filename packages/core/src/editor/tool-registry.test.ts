@@ -254,6 +254,17 @@ describe("TOOL_REGISTRY variantKeyForElement spot-checks", () => {
     ).toBe("redact.blur");
   });
 
+  it("redact: <image> without data-redact-style falls back to mosaic", () => {
+    // Matches the legacy `toolIdForElement`'s catch-all for `<image>`
+    // → "redact" + `elementKeyFromElement`'s fallback to the group's
+    // default variant ("mosaic"). Without this branch a redact image
+    // saved before the redact-style attribute existed would fail
+    // tool routing.
+    expect(TOOL_REGISTRY.redact!.variantKeyForElement!(fakeEl("image"))).toBe(
+      "redact.mosaic",
+    );
+  });
+
   it("crop: has no variantKeyForElement (no on-canvas element)", () => {
     expect(TOOL_REGISTRY.crop!.variantKeyForElement).toBeUndefined();
   });

@@ -13,10 +13,10 @@
  * that does not need to land in the same PR as this carve-out.
  */
 
+import { TOOL_REGISTRY } from "@ingcreators/annot-core/editor";
 import type { ToolOptions } from "@ingcreators/annot-core/editor/tool-options";
 import { computeDasharray } from "@ingcreators/annot-core/utils";
 import { refreshArrowPath } from "@ingcreators/annot-core/editor/arrow-markers";
-import { TOOL_VARIANTS } from "./toolbar-variants.js";
 
 /** Map a legacy tool-ID-keyed preset entry to the matching element
  *  key. `"shape"` → `"shape.rect"` (the shape tool's fallback
@@ -24,59 +24,30 @@ import { TOOL_VARIANTS } from "./toolbar-variants.js";
  *  already contain "." pass through unchanged. */
 export function migrateLegacyPresetKey(rawKey: string): string {
   if (rawKey.includes(".")) return rawKey;
-  const group = TOOL_VARIANTS[rawKey];
-  if (!group) return rawKey; // tools without variants (crop, highlight)
-  return `${rawKey}.${group.fallback}`;
+  const meta = TOOL_REGISTRY[rawKey];
+  if (!meta?.variants || !meta.defaultVariant) return rawKey;
+  return `${rawKey}.${meta.defaultVariant}`;
 }
 
 /** Compute the element key for an existing SVG element. Used by
  *  `syncPresetFromElement` so that rubber-band style propagation
  *  targets the RIGHT variant's preset — e.g. editing a rounded
- *  rectangle updates "shape.rounded" only, not "shape.rect". */
+ *  rectangle updates "shape.rounded" only, not "shape.rect".
+ *
+ *  Routes through the registry's `variantKeyForElement` classifier —
+ *  the per-tool branches that used to live here are now Tier B in
+ *  `tool-registry.ts` (Phase 4 of `docs/plans/toolbar-schema.md`). */
 export function elementKeyFromElement(el: SVGElement, toolId: string): string {
-  const group = TOOL_VARIANTS[toolId];
-  if (!group) return toolId;
-  let variant: string | null = null;
-  switch (toolId) {
-    case "shape": {
-      if (el.tagName === "ellipse") variant = "ellipse";
-      else if (el.tagName === "rect") {
-        if (el.getAttribute("data-highlight") === "1") variant = "highlight";
-        else if (el.hasAttribute("data-rounded")) variant = "rounded";
-        else variant = "rect";
-      }
-      break;
-    }
-    case "arrow": {
-      const headS = el.getAttribute("data-arrow-start-shape");
-      const headE = el.getAttribute("data-arrow-end-shape");
-      const hasStart = headS && headS !== "none";
-      const hasEnd = headE && headE !== "none";
-      variant = hasStart && hasEnd ? "both" : hasEnd || hasStart ? "end" : "none";
-      break;
-    }
-    case "text":
-      variant = el.getAttribute("data-text-variant");
-      break;
-    case "freehand":
-      variant = el.getAttribute("data-draw-style");
-      break;
-    case "marker":
-      variant = el.getAttribute("data-shape");
-      break;
-    case "redact":
-      variant = el.getAttribute("data-redact-style");
-      break;
-    case "highlight": {
-      // Highlight's variant is the fill color itself, stored on the
-      // <rect> as `fill`. Normalized to lowercase so "#FFE100" and
-      // "#ffe100" collapse to the same preset bucket.
-      const fill = el.getAttribute("fill");
-      variant = fill ? fill.toLowerCase() : null;
-      break;
-    }
-  }
-  return variant ? `${toolId}.${variant}` : `${toolId}.${group.fallback}`;
+  const meta = TOOL_REGISTRY[toolId];
+  if (!meta?.variants || !meta.defaultVariant) return toolId;
+  const key = meta.variantKeyForElement?.(el);
+  // The registry's classifier returns the FULL `tool.variant` key
+  // when it claims the element. If it returns null (element doesn't
+  // match the tool we were asked about — e.g. `<rect>` without
+  // `data-highlight` passed with `toolId="highlight"`), fall back to
+  // the tool's default variant so the legacy "always returns a
+  // variant key" contract holds.
+  return key ?? `${toolId}.${meta.defaultVariant}`;
 }
 
 /**
@@ -102,12 +73,12 @@ export function mergePresetForVariantChange(
   toolId: string,
   newVariant: string,
 ): ToolOptions {
-  const group = TOOL_VARIANTS[toolId];
+  const meta = TOOL_REGISTRY[toolId];
   // No-variant tools (crop, highlight when called incorrectly): return
   // a defensive copy of the current preset so callers can mutate freely.
-  if (!group) return { ...currentPreset };
+  if (!meta?.variants || !meta.variantField) return { ...currentPreset };
   const seed = storedPreset ? { ...storedPreset } : { ...currentPreset };
-  (seed as unknown as Record<string, unknown>)[group.field as string] = newVariant;
+  (seed as unknown as Record<string, unknown>)[meta.variantField as string] = newVariant;
   normalizeVariantSideFields(toolId, newVariant, seed);
   return seed;
 }
@@ -125,16 +96,18 @@ export function mergePresetForVariantChange(
  */
 export function validatePresetForTool(preset: ToolOptions, toolId: string): string[] {
   const errors: string[] = [];
-  const group = TOOL_VARIANTS[toolId];
-  if (!group) return errors;
+  const meta = TOOL_REGISTRY[toolId];
+  if (!meta?.variants || !meta.variantField) return errors;
 
   // The variant-defining field must hold a value the toolbar advertises.
-  const variantValue = (preset as unknown as Record<string, unknown>)[group.field as string];
+  const variantValue = (preset as unknown as Record<string, unknown>)[
+    meta.variantField as string
+  ];
   if (variantValue !== undefined) {
-    const known = group.variants.some((v) => v.value === variantValue);
+    const known = meta.variants.some((v) => v.value === variantValue);
     if (!known) {
       errors.push(
-        `${toolId}: preset.${String(group.field)}="${String(variantValue)}" is not a known variant`,
+        `${toolId}: preset.${String(meta.variantField)}="${String(variantValue)}" is not a known variant`,
       );
     }
   }
@@ -239,10 +212,10 @@ export function seedPresetFromElement(
   const fo = Number.parseFloat(el.getAttribute("fill-opacity") || "");
   if (Number.isFinite(fo)) seed.fillOpacity = fo;
   // Ensure the variant-defining field matches this element's variant.
-  const group = TOOL_VARIANTS[toolId];
-  if (group && elementKey.includes(".")) {
+  const meta = TOOL_REGISTRY[toolId];
+  if (meta?.variants && meta.variantField && elementKey.includes(".")) {
     const variant = elementKey.slice(elementKey.indexOf(".") + 1);
-    (seed as unknown as Record<string, unknown>)[group.field as string] = variant;
+    (seed as unknown as Record<string, unknown>)[meta.variantField as string] = variant;
     normalizeVariantSideFields(toolId, variant, seed);
   }
   return seed;
