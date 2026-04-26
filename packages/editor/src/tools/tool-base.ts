@@ -8,8 +8,8 @@ import { createCanvasToolSurface } from "./canvas-tool-surface.js";
 // helpers (`shape-utils`, `text-utils`, `redact-utils`,
 // `gradient-utils`, etc.) can read them without importing
 // `annot-editor` and triggering a circular package dependency.
-// Re-exported here for back-compat with the historical
-// `from "@ingcreators/annot-editor/tools/tool-base"` import shape.
+// Re-exported here so subclassed tools can pull both `ToolBase`
+// and the `ToolOptions` types from one path.
 export type {
   ArrowDim,
   ArrowHead,
@@ -35,24 +35,33 @@ export abstract class ToolBase {
   /** DOM-side abstraction every tool depends on for canvas access.
    *  See `@ingcreators/annot-core/editor/tool-lifecycle` for the
    *  three-method contract. Always set: synthesised from `canvas` +
-   *  `history` in the legacy three-arg constructor, or supplied
-   *  directly in the surface-only constructor used by tests. */
+   *  `history` in the canvas-form constructor, or supplied directly
+   *  in the surface-form constructor used by tests. */
   protected surface: ToolDOMSurface;
   protected options: ToolOptions;
 
-  /** Legacy escape hatches — only set when the tool was constructed
-   *  via the (canvas, history, options) shape. Tools that still need
-   *  CanvasManager features outside the three-method surface
-   *  (uiOverlay, defs, imageWidth, viewBox manipulation) read these
-   *  directly. Marked with `!` because they're definitely-assigned
-   *  on the legacy path; tools that inspect them while a test uses
-   *  the surface-only construction will throw NPE — that's the
-   *  intended signal that more of the tool needs to be migrated to
-   *  the surface contract. */
+  /** Direct CanvasManager / History references — only set when the
+   *  tool was constructed via the (canvas, history, options) shape.
+   *  Tools that need CanvasManager features outside the three-method
+   *  surface (uiOverlay, defs, imageWidth, viewBox manipulation)
+   *  read these directly. Marked with `!` because they're
+   *  definitely-assigned on the canvas-form path; tools that
+   *  inspect them while a test uses the surface-only construction
+   *  will throw NPE — the intended signal that more of the tool's
+   *  CanvasManager surface needs to be expressed via
+   *  `ToolDOMSurface` to be testable in isolation. */
   protected canvas!: CanvasManager;
   protected history!: History;
 
+  /** Surface-form constructor — used by unit tests that drive a
+   *  tool against `createMockToolSurface(host)` without standing up
+   *  a full CanvasManager. */
   constructor(surface: ToolDOMSurface, options: ToolOptions);
+  /** Canvas-form constructor — used by production via
+   *  `tool-factories.ts`. Synthesises a surface from `canvas` +
+   *  `history` and exposes both as protected fields so subclasses
+   *  can reach the wider CanvasManager API (uiOverlay, defs,
+   *  fitToView, etc.). */
   constructor(canvas: CanvasManager, history: History, options: ToolOptions);
   constructor(
     arg1: CanvasManager | ToolDOMSurface,
@@ -60,11 +69,11 @@ export abstract class ToolBase {
     arg3?: ToolOptions,
   ) {
     if (arg3 === undefined) {
-      // Surface-only form: arg1=surface, arg2=options.
+      // Surface-form: arg1=surface, arg2=options.
       this.surface = arg1 as ToolDOMSurface;
       this.options = arg2 as ToolOptions;
     } else {
-      // Legacy form: arg1=canvas, arg2=history, arg3=options.
+      // Canvas-form: arg1=canvas, arg2=history, arg3=options.
       const canvas = arg1 as CanvasManager;
       const history = arg2 as History;
       this.canvas = canvas;
