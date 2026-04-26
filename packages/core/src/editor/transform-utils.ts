@@ -248,9 +248,10 @@ export function usesGeometryPosition(el: Element): boolean {
   );
 }
 
-/** Read the current transform state. Migrates legacy `translate(tx,ty)`
- *  values found on `<g>` / `<path>` into data-tx/data-ty so subsequent
- *  reads/writes use the unified path.  */
+/** Read the current transform state from `data-tx` / `data-ty` /
+ *  `data-rot` / `data-flip-{h,v}`. Geometry-positioned elements
+ *  (`<rect>` / `<ellipse>` / etc.) use their geometry attributes for
+ *  position so `tx` / `ty` stay zero. */
 export function readTransformState(el: SVGElement): TransformState {
   const rotation = Number.parseFloat(el.getAttribute("data-rot") || "0") || 0;
   const flipH = el.getAttribute("data-flip-h") === "1";
@@ -259,24 +260,8 @@ export function readTransformState(el: SVGElement): TransformState {
   let tx = 0;
   let ty = 0;
   if (!usesGeometryPosition(el)) {
-    const dtx = el.getAttribute("data-tx");
-    const dty = el.getAttribute("data-ty");
-    if (dtx != null && dty != null) {
-      tx = Number.parseFloat(dtx) || 0;
-      ty = Number.parseFloat(dty) || 0;
-    } else {
-      // Legacy: parse the existing transform's translate component.
-      const t = el.getAttribute("transform") || "";
-      const m = t.match(/translate\(\s*([\d.-]+)\s*,?\s*([\d.-]+)\s*\)/);
-      if (m) {
-        // Both capture groups are present on a successful match.
-        tx = Number.parseFloat(m[1]!);
-        ty = Number.parseFloat(m[2]!);
-      }
-      // Persist the migrated values so the next read is fast.
-      el.setAttribute("data-tx", String(tx));
-      el.setAttribute("data-ty", String(ty));
-    }
+    tx = Number.parseFloat(el.getAttribute("data-tx") || "0") || 0;
+    ty = Number.parseFloat(el.getAttribute("data-ty") || "0") || 0;
   }
   return { tx, ty, rotation, flipH, flipV };
 }
@@ -309,8 +294,8 @@ export function applyTransformState(el: SVGElement, state?: TransformState): voi
     return;
   }
 
-  // No rotation, no flip → keep the legacy "translate(tx, ty)" shape so
-  // diffs against pre-rotation files stay minimal.
+  // No rotation, no flip → use the simple translate form for
+  // smaller transform-attr strings.
   if (s.rotation === 0 && !s.flipH && !s.flipV) {
     el.setAttribute("transform", `translate(${s.tx}, ${s.ty})`);
     return;
