@@ -108,9 +108,6 @@ export class App {
       getStorage: () => this.#storage,
       getCanvas: () => this.#editorSession.getCanvas(),
       getCurrentImagePath: () => this.#currentImagePath,
-      setCurrentImagePath: (p) => {
-        this.#currentImagePath = p;
-      },
       getCurrentTags: () => this.#currentTags,
       getStatusIndicator: () => this.#headerHost.getSaveStatusIndicator(),
       notifyBeforeSave: (path, tags) =>

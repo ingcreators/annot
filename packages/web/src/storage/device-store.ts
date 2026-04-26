@@ -439,13 +439,13 @@ export class DeviceStore
     return results;
   }
 
-  async updateImage(path: string, updates: ImageRecordUpdate): Promise<string> {
+  async updateImage(path: string, updates: ImageRecordUpdate): Promise<void> {
     const record = await this.getImage(path);
-    if (!record) return path;
+    if (!record) return;
 
     Object.assign(record, updates);
     const entry = this.#index.images[path];
-    if (!entry) return path;
+    if (!entry) return;
 
     // Rewrite file if annotations or tags changed
     if (updates.annotationsSvg !== undefined || updates.tags !== undefined) {
@@ -473,33 +473,34 @@ export class DeviceStore
       entry.tags = { ...updates.tags };
     }
 
-    // Handle folder move
-    if (updates.folderPath !== undefined && updates.folderPath !== getParentPath(path)) {
-      const newFolderPath = updates.folderPath;
-      const filename = getFilename(path);
-      const oldDir = await this.#getDirHandle(getParentPath(path));
-      const newDir = await this.#getDirHandle(newFolderPath, true);
-
-      const uniqueName = await uniquifyFilenameAsync(filename, (candidate) =>
-        this.#fileExists(newDir, candidate),
-      );
-      const newPath = joinPath(newFolderPath, uniqueName);
-
-      const oldFile = await (await oldDir.getFileHandle(filename)).getFile();
-      const newHandle = await newDir.getFileHandle(uniqueName, { create: true });
-      const writable = await newHandle.createWritable();
-      await writable.write(await oldFile.arrayBuffer());
-      await writable.close();
-      await oldDir.removeEntry(filename);
-
-      delete this.#index.images[path];
-      this.#index.images[newPath] = entry;
-      await this.#saveIndex();
-      return newPath;
-    }
-
     await this.#saveIndex();
-    return path;
+  }
+
+  async moveImage(path: string, newFolderPath: string): Promise<string> {
+    if (newFolderPath === getParentPath(path)) return path;
+    const entry = this.#index.images[path];
+    if (!entry) return path;
+
+    const filename = getFilename(path);
+    const oldDir = await this.#getDirHandle(getParentPath(path));
+    const newDir = await this.#getDirHandle(newFolderPath, true);
+
+    const uniqueName = await uniquifyFilenameAsync(filename, (candidate) =>
+      this.#fileExists(newDir, candidate),
+    );
+    const newPath = joinPath(newFolderPath, uniqueName);
+
+    const oldFile = await (await oldDir.getFileHandle(filename)).getFile();
+    const newHandle = await newDir.getFileHandle(uniqueName, { create: true });
+    const writable = await newHandle.createWritable();
+    await writable.write(await oldFile.arrayBuffer());
+    await writable.close();
+    await oldDir.removeEntry(filename);
+
+    delete this.#index.images[path];
+    this.#index.images[newPath] = entry;
+    await this.#saveIndex();
+    return newPath;
   }
 
   async renameImage(path: string, newName: string): Promise<string> {

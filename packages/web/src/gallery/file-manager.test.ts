@@ -52,7 +52,10 @@ class MemoryStore implements StorageProvider {
   async listImages(folderPath: string): Promise<ImageRecord[]> {
     return Array.from(this.#images.values()).filter((i) => i.folderPath === folderPath);
   }
-  updateImage(_path: string, _updates: ImageRecordUpdate): Promise<string> {
+  updateImage(_path: string, _updates: ImageRecordUpdate): Promise<void> {
+    throw new Error("not implemented");
+  }
+  moveImage(): Promise<string> {
     throw new Error("not implemented");
   }
   renameImage(): Promise<string> {

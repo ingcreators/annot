@@ -25,7 +25,6 @@ export interface SavePipelineDeps {
   getStorage(): StorageProvider | null;
   getCanvas(): CanvasManager | null;
   getCurrentImagePath(): string | null;
-  setCurrentImagePath(path: string): void;
   getCurrentTags(): Record<string, string>;
   getStatusIndicator(): AnnotSaveStatusElement | null;
   /** Ask the plugin host if the save should proceed. Rejects if any
@@ -116,16 +115,16 @@ export class SavePipeline {
       // routes through the same error banner as a backend failure.
       await this.deps.notifyBeforeSave(path, updates.tags);
 
-      const newPath = await storage.updateImage(path, updates);
-      // Path may change if we ever call updateImage with { folderPath }
-      this.deps.setCurrentImagePath(newPath);
+      await storage.updateImage(path, updates);
+      // `updateImage` is in-place — the path is unchanged. Folder
+      // moves go through a separate `moveImage` codepath.
       hideError();
       const s = this.deps.getStatusIndicator();
       if (s) s.status = "saved";
       // Notify plugins — `annot-cloud` uses this for server-side
       // state (comments, team metadata) that rides alongside a save
       // but doesn't block it.
-      this.deps.onAfterSave(newPath);
+      this.deps.onAfterSave(path);
     } catch (e: unknown) {
       const s = this.deps.getStatusIndicator();
       if (s) s.status = "error";
