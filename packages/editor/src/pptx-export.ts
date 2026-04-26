@@ -1,88 +1,21 @@
 import { svgElementToAnnotationShape } from "@ingcreators/annot-core/editor/svg-to-annotation-shapes";
 import { getEffectiveLineEndpoints } from "@ingcreators/annot-core/editor/transform-utils";
 import { buildZip } from "@ingcreators/annot-core/zip";
-import { buildShapeXml } from "@ingcreators/annot-render";
+import {
+  buildShapeXml,
+  capAttr,
+  chex,
+  endXml,
+  joinXml,
+  parseSvgPath,
+  pt,
+  px,
+} from "@ingcreators/annot-render";
 import type { CanvasManager } from "./canvas-manager.js";
 
 const __pptxTextEncoder = new TextEncoder();
 function strToU8(s: string): Uint8Array {
   return __pptxTextEncoder.encode(s);
-}
-
-/** Convert a point value into EMU. OOXML line widths (`<a:ln w="…"/>`)
- *  are in EMU where 1pt = 12,700 EMU, NOT in the 9,525-EMU-per-pixel
- *  scale used by `px(…)` elsewhere. Using the wrong conversion made a
- *  stroke-width of "6" become a 4.5pt line in PowerPoint instead of
- *  6pt. The editor's width input is labelled "pt", so we treat SVG
- *  stroke-width as points at export time. */
-const PT_TO_EMU = 12700;
-function ptToEMU(v: number): number {
-  return Math.round(v * PT_TO_EMU);
-}
-
-// EMU conversion: 1 pixel at 96 DPI = 9525 EMU
-const PX_TO_EMU = 9525;
-
-function px(v: number): number {
-  return Math.round(v * PX_TO_EMU);
-}
-
-function colorHex(color: string): string {
-  // Defend against `url(#...)` gradient refs sneaking in: `<a:srgbClr>`
-  // requires a 6-hex digit value, so fall back to black (000000) for
-  // non-hex inputs rather than emitting malformed XML that PowerPoint
-  // refuses to open. (Callers that actually need gradient output
-  // should emit <a:gradFill> directly.)
-  if (!color) return "000000";
-  const trimmed = color.trim();
-  if (trimmed.startsWith("url(") || trimmed === "none") return "000000";
-  const hex = trimmed.replace("#", "").toUpperCase();
-  // If it isn't 3 or 6 hex digits, something else (rgb(), named color,
-  // etc.) slipped through — again, fall back rather than break the file.
-  if (!/^[0-9A-F]{6}$/.test(hex) && !/^[0-9A-F]{3}$/.test(hex)) return "000000";
-  return hex.length === 3
-    ? hex
-        .split("")
-        .map((c) => c + c)
-        .join("")
-    : hex;
-}
-
-/**
- * Build the OOXML attrs that go on `<a:xfrm rot="..." flipH="1" flipV="1">`
- * from an SVG element's data-* transform state. OOXML rotation is in
- * 60,000ths of a degree, normalized to [0, 21,600,000).
- *
- * `excludeFlip` is for line/connector shapes whose own logic already
- * uses flipH/flipV to express endpoint direction — combining that with
- * a user-applied mirror would be incorrect. The xfrm here only carries
- * rotation in that case.
- */
-/**
- * Translate an SVG arrow-shape name into the matching OOXML
- * `<a:headEnd>` / `<a:tailEnd>` element. The SVG shape set is
- * aligned 1:1 with OOXML's six preset types. Width and length are
- * passed through separately (OOXML's native model).
- */
-function endOOXML(
-  which: "headEnd" | "tailEnd",
-  svgShape: string | null,
-  svgWidth: string,
-  svgLength: string,
-): string {
-  if (!svgShape || svgShape === "none") return "";
-  const mapType: Record<string, string> = {
-    arrow: "arrow",
-    triangle: "triangle",
-    stealth: "stealth",
-    diamond: "diamond",
-    oval: "oval",
-  };
-  const mapSize: Record<string, string> = { sm: "sm", md: "med", lg: "lg" };
-  const type = mapType[svgShape] || "triangle";
-  const w = mapSize[svgWidth] || "med";
-  const len = mapSize[svgLength] || "med";
-  return `<a:${which} type="${type}" w="${w}" len="${len}"/>`;
 }
 
 /**
@@ -110,7 +43,7 @@ function gradFillXml(gRaw: string | null): string {
         s.opacity != null && s.opacity < 1
           ? `<a:alpha val="${Math.round(s.opacity * 100000)}"/>`
           : "";
-      return `<a:gs pos="${pos}"><a:srgbClr val="${colorHex(s.color)}">${alpha}</a:srgbClr></a:gs>`;
+      return `<a:gs pos="${pos}"><a:srgbClr val="${chex(s.color)}">${alpha}</a:srgbClr></a:gs>`;
     })
     .join("");
   return `<a:gradFill flip="none" rotWithShape="1"><a:gsLst>${gs}</a:gsLst><a:lin ang="${ang}" scaled="1"/></a:gradFill>`;
@@ -138,12 +71,11 @@ function _lnXml(
     paint = gradFillXml(grad);
   } else {
     const alpha = opacity < 1 ? `<a:alpha val="${Math.round(opacity * 100000)}"/>` : "";
-    paint = `<a:solidFill><a:srgbClr val="${colorHex(stroke)}">${alpha}</a:srgbClr></a:solidFill>`;
+    paint = `<a:solidFill><a:srgbClr val="${chex(stroke)}">${alpha}</a:srgbClr></a:solidFill>`;
   }
-  const capAttr = capOOXML(el.getAttribute("stroke-linecap"));
-  const joinXml = joinOOXML(el.getAttribute("stroke-linejoin"));
-  const capStr = capAttr ? ` cap="${capAttr}"` : "";
-  return `<a:ln w="${ptToEMU(swPx)}"${capStr}>${paint}${joinXml}${dashXml}${arrowXml}</a:ln>`;
+  const capStr = capAttr(el.getAttribute("stroke-linecap"));
+  const joinElement = joinXml(el.getAttribute("stroke-linejoin"));
+  return `<a:ln w="${pt(swPx)}"${capStr}>${paint}${joinElement}${dashXml}${arrowXml}</a:ln>`;
 }
 
 /**
@@ -179,7 +111,7 @@ function paintXml(el: SVGElement, value: string, which: "stroke" | "fill"): stri
       ? strokeOpacity(el)
       : Number.parseFloat(el.getAttribute("fill-opacity") || "1");
   const alpha = op < 1 ? `<a:alpha val="${Math.round(op * 100000)}"/>` : "";
-  return `<a:solidFill><a:srgbClr val="${colorHex(value)}">${alpha}</a:srgbClr></a:solidFill>`;
+  return `<a:solidFill><a:srgbClr val="${chex(value)}">${alpha}</a:srgbClr></a:solidFill>`;
 }
 
 /**
@@ -187,15 +119,14 @@ function paintXml(el: SVGElement, value: string, which: "stroke" | "fill"): stri
  * gradient strokes, stroke opacity, linecap, linejoin, and arrow
  * heads in one place. Critically: when the SVG `stroke` attribute is
  * a `url(#...)` gradient reference, we MUST emit a `<a:gradFill>`
- * inside the `<a:ln>` — passing the url(...) through `colorHex` as if
+ * inside the `<a:ln>` — passing the url(...) through `chex` as if
  * it were a #rrggbb color produces garbage like `URL(GRAD-...)` which
  * PowerPoint rejects as a malformed color value.
  */
 function lineLnXml(el: SVGElement, swPx: number, strokeAttr: string, arrowXml: string): string {
   const dashXml = ""; // line builder currently doesn't pass dash; arrows are the usual decoration
-  const capAttr = capOOXML(el.getAttribute("stroke-linecap"));
-  const joinXml = joinOOXML(el.getAttribute("stroke-linejoin"));
-  const capStr = capAttr ? ` cap="${capAttr}"` : "";
+  const capStr = capAttr(el.getAttribute("stroke-linecap"));
+  const joinElement = joinXml(el.getAttribute("stroke-linejoin"));
 
   const gradRaw = el.getAttribute("data-stroke-gradient");
   const strokeIsUrl = /^url\(#.+\)$/i.test(strokeAttr.trim());
@@ -212,22 +143,9 @@ function lineLnXml(el: SVGElement, swPx: number, strokeAttr: string, arrowXml: s
   } else {
     const opacity = strokeOpacity(el);
     const alpha = opacity < 1 ? `<a:alpha val="${Math.round(opacity * 100000)}"/>` : "";
-    paint = `<a:solidFill><a:srgbClr val="${colorHex(strokeAttr)}">${alpha}</a:srgbClr></a:solidFill>`;
+    paint = `<a:solidFill><a:srgbClr val="${chex(strokeAttr)}">${alpha}</a:srgbClr></a:solidFill>`;
   }
-  return `<a:ln w="${ptToEMU(swPx)}"${capStr}>${paint}${joinXml}${dashXml}${arrowXml}</a:ln>`;
-}
-
-function capOOXML(cap: string | null): string {
-  if (cap === "butt") return "flat";
-  if (cap === "square") return "sq";
-  if (cap === "round") return "rnd";
-  return "";
-}
-function joinOOXML(join: string | null): string {
-  if (join === "round") return "<a:round/>";
-  if (join === "bevel") return "<a:bevel/>";
-  if (join === "miter") return `<a:miter lim="800000"/>`;
-  return "";
+  return `<a:ln w="${pt(swPx)}"${capStr}>${paint}${joinElement}${dashXml}${arrowXml}</a:ln>`;
 }
 
 /** Read the pending `data-tx` / `data-ty` translation on an element.
@@ -350,17 +268,18 @@ function buildShapes(input: PptxExportInput): ShapeInfo[] {
     const el = node as SVGElement;
     const tag = el.tagName;
 
-    // Lines and arrows still use pptx-export's own `buildLine` —
-    // the shared builder doesn't yet model curved arrows (the
-    // `<a:custGeom>` quadratic-Bezier path that ArrowTool emits
-    // for curves). Plain lines + non-curved arrows could route
-    // through the shared `buildShapeXml` instead, but until the
-    // curved path lands there we keep all line dispatch local.
-    if (tag === "line") {
-      shapes.push({ xml: buildLine(el, id), id });
-      id++;
-      continue;
-    }
+    // Arrows still use pptx-export's own `buildLine` — the shared
+    // builder doesn't yet model curved arrows (the `<a:custGeom>`
+    // quadratic-Bezier path that ArrowTool emits for curves).
+    // Phase 3 of pptx-export-shared-builder-finish folds this into
+    // the shared dispatch.
+    //
+    // Plain `<line>` SVG elements were a legacy back-compat path
+    // for old saved files; ArrowTool no longer emits them
+    // (verified via `grep -rn "createElementNS.*line\|tag === \"line\""
+    // packages/editor/src/tools/`). Past-data salvage is out of
+    // scope, so the `tag === "line"` dispatch was dropped in
+    // pptx-export-shared-builder-finish phase 1.
     if (tag === "g" && el.getAttribute("data-type") === "arrow") {
       shapes.push({ xml: buildLine(el, id), id });
       id++;
@@ -436,8 +355,8 @@ function buildLine(el: SVGElement, id: number): string {
   const endW = el.getAttribute("data-arrow-end-width") || "md";
   const endL = el.getAttribute("data-arrow-end-length") || "md";
 
-  const head = endOOXML("headEnd", startShape, startW, startL);
-  const tail = endShape != null ? endOOXML("tailEnd", endShape, endW, endL) : "";
+  const head = endXml("headEnd", startShape, startW, startL);
+  const tail = endShape != null ? endXml("tailEnd", endShape, endW, endL) : "";
   const tailEnd = head + tail;
 
   if (isCurved) {
@@ -510,19 +429,19 @@ function buildFreehand(el: SVGPathElement, id: number): string {
   const stroke = el.getAttribute("stroke") || "#ff0000";
   const sw = Number.parseFloat(el.getAttribute("stroke-width") || "3");
 
-  // Parse SVG path to get bounding box and relative points
-  const points = parseSVGPath(d);
+  // Parse SVG path to get bounding box and relative points.
+  const points = parseSvgPath(d);
   if (points.length < 2) return "";
 
   let minX = Number.POSITIVE_INFINITY;
   let minY = Number.POSITIVE_INFINITY;
   let maxX = Number.NEGATIVE_INFINITY;
   let maxY = Number.NEGATIVE_INFINITY;
-  for (const p of points) {
-    minX = Math.min(minX, p.x);
-    minY = Math.min(minY, p.y);
-    maxX = Math.max(maxX, p.x);
-    maxY = Math.max(maxY, p.y);
+  for (const [x, y] of points) {
+    minX = Math.min(minX, x);
+    minY = Math.min(minY, y);
+    maxX = Math.max(maxX, x);
+    maxY = Math.max(maxY, y);
   }
   const bw = maxX - minX || 1;
   const bh = maxY - minY || 1;
@@ -533,11 +452,11 @@ function buildFreehand(el: SVGPathElement, id: number): string {
   const offX = minX + pathOff.tx;
   const offY = minY + pathOff.ty;
 
-  // Convert to DrawingML path (coordinates in EMU relative to shape origin)
+  // Convert to DrawingML path (coordinates in EMU relative to shape origin).
   const pathPoints = points
-    .map((p, i) => {
-      const ex = px(p.x - minX);
-      const ey = px(p.y - minY);
+    .map(([x, y], i) => {
+      const ex = px(x - minX);
+      const ey = px(y - minY);
       return i === 0
         ? `<a:moveTo><a:pt x="${ex}" y="${ey}"/></a:moveTo>`
         : `<a:lnTo><a:pt x="${ex}" y="${ey}"/></a:lnTo>`;
@@ -568,7 +487,7 @@ function buildFreehand(el: SVGPathElement, id: number): string {
       </a:pathLst>
     </a:custGeom>
     <a:noFill/>
-    <a:ln w="${ptToEMU(sw)}" cap="rnd">
+    <a:ln w="${pt(sw)}" cap="rnd">
       ${paintXml(el, stroke, "stroke")}
       <a:round/>
     </a:ln>
@@ -603,12 +522,12 @@ function buildFreehandGroup(
   let maxX = Number.NEGATIVE_INFINITY;
   let maxY = Number.NEGATIVE_INFINITY;
   for (const p of Array.from(paths)) {
-    const pts = parseSVGPath(p.getAttribute("d") || "");
-    for (const pt of pts) {
-      if (pt.x < minX) minX = pt.x;
-      if (pt.y < minY) minY = pt.y;
-      if (pt.x > maxX) maxX = pt.x;
-      if (pt.y > maxY) maxY = pt.y;
+    const pts = parseSvgPath(p.getAttribute("d") || "");
+    for (const [x, y] of pts) {
+      if (x < minX) minX = x;
+      if (y < minY) minY = y;
+      if (x > maxX) maxX = x;
+      if (y > maxY) maxY = y;
     }
   }
   if (!Number.isFinite(minX)) return null;
@@ -667,20 +586,6 @@ function dataUrlToUint8Array(dataUrl: string): Uint8Array {
   }
   return bytes;
 }
-
-// --- SVG path parser (basic M/L commands) ---
-
-function parseSVGPath(d: string): { x: number; y: number }[] {
-  const points: { x: number; y: number }[] = [];
-  const re = /([ML])\s*([\d.-]+)[,\s]+([\d.-]+)/gi;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(d)) !== null) {
-    // Both capture groups (x and y) are required by the regex.
-    points.push({ x: Number.parseFloat(m[2]!), y: Number.parseFloat(m[3]!) });
-  }
-  return points;
-}
-
 
 // --- OOXML boilerplate ---
 

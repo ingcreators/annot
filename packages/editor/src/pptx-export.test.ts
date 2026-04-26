@@ -102,16 +102,11 @@ describe("buildPptxFiles slide XML", () => {
         "stroke-width": "3",
         fill: "none",
       }),
-      // Plain line (no arrow heads).
-      svg("line", {
-        x1: "10",
-        y1: "150",
-        x2: "210",
-        y2: "150",
-        stroke: "#ff0000",
-        "stroke-width": "3",
-      }),
       // Arrow group — ArrowTool's `<g data-type="arrow">` form.
+      // (Plain `<line>` SVG elements were a legacy back-compat
+      // path for old saved files; ArrowTool no longer emits them
+      // and the dispatch was dropped in
+      // pptx-export-shared-builder-finish phase 1.)
       makeArrowGroup({
         x1: 10,
         y1: 250,
