@@ -218,6 +218,20 @@ export interface PropertyControlDef<T = unknown> {
   visibleWhen?: (el: SVGElement) => boolean;
   /** Optional metadata for variant pickers / select dropdowns. */
   options?: ReadonlyArray<PropertyControlOption<T>>;
+  // ─── Number-input metadata (meaningful when `type === "number"`) ──
+  /** Inclusive lower bound for a number input. */
+  min?: number;
+  /** Inclusive upper bound for a number input. */
+  max?: number;
+  /** Spinner / arrow-key step granularity for a number input. */
+  step?: number;
+  /** Trailing unit label for a number input (e.g. "pt", "%"). */
+  unit?: string;
+  // ─── Color-input metadata (meaningful when `type === "color"`) ────
+  /** Whether a "No fill" sentinel is offered alongside the palette
+   *  (only applies to `type === "color"` controls — fill paints can
+   *  be unset, strokes generally cannot). */
+  allowNone?: boolean;
 }
 
 // ─── Helpers used by the registry below ─────────────────────────────
@@ -353,6 +367,7 @@ export const PROPERTY_CONTROLS: Readonly<{
     // don't render a fill control — there's no painted region to
     // fill on a stroke. Mirrors the imperative panel's branch.
     visibleWhen: (el) => !isLineLike(el) && el.tagName !== "path" && !isFreehandGroupEl(el),
+    allowNone: true,
   },
   strokeColor: {
     id: PROPERTY_CONTROL_IDS.strokeColor,
@@ -377,6 +392,10 @@ export const PROPERTY_CONTROLS: Readonly<{
       const key = el.getAttribute("data-dash-key");
       if (key) el.setAttribute("stroke-dasharray", computeDasharray(key, w));
     },
+    min: 0.25,
+    max: 200,
+    step: 0.25,
+    unit: "pt",
   },
   strokeStyle: {
     id: PROPERTY_CONTROL_IDS.strokeStyle,
@@ -471,6 +490,10 @@ export const PROPERTY_CONTROLS: Readonly<{
       el.querySelector("text")?.setAttribute("font-size", String(v));
       el.setAttribute("data-font-size", String(v));
     },
+    min: 8,
+    max: 96,
+    step: 1,
+    unit: "pt",
   },
 
   // ─── Redact controls ──────────────────────────────────────────────
@@ -538,6 +561,10 @@ export const PROPERTY_CONTROLS: Readonly<{
       const opacity = 1 - pct / 100;
       el.setAttribute("fill-opacity", String(opacity));
     },
+    min: 0,
+    max: 100,
+    step: 5,
+    unit: "%",
   },
 
   // ─── Marker (counter) controls ────────────────────────────────────
@@ -564,6 +591,10 @@ export const PROPERTY_CONTROLS: Readonly<{
     // helper (the math lives there alongside MarkerTool's creation
     // logic so both stay in step).
     effect: PROPERTY_EFFECT_IDS.resizeMarker,
+    min: 8,
+    max: 96,
+    step: 1,
+    unit: "pt",
   },
 };
 
