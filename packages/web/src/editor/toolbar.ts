@@ -771,18 +771,16 @@ export class Toolbar {
         });
       } else if (tag === "rect") {
         // Rect covers three product-level cases:
-        //   1. Shape "rect"     → type="rect",        corner_radius=0
-        //   2. Shape "rounded"  → type="rounded-rect", corner_radius=rx
-        //   3. Redact "solid"   → type="rect",        redact_style="solid"
-        // Type string stays "rect" / "rounded-rect" for back-compat with
-        // the desktop Office-clipboard handler; the new `corner_radius`
-        // / `redact_style` fields add finer-grained info without
-        // breaking existing Rust code paths.
+        //   1. Shape "rect"     → type="rect", corner_radius=0
+        //   2. Shape "rounded"  → type="rect", corner_radius=rx
+        //   3. Redact "solid"   → type="rect", redact_style="solid"
+        // The Rust side branches on `corner_radius > 0` for the
+        // `roundRect` preset and on `redact_style` for the no-outline
+        // bar — one type string is enough.
         const rx = Number.parseFloat(el.getAttribute("rx") || "0");
         const isRedactSolid = el.getAttribute("data-redact-style") === "solid";
-        const isRounded = el.hasAttribute("data-rounded") || rx > 0;
         shapes.push({
-          type: isRounded && !isRedactSolid ? "rounded-rect" : "rect",
+          type: "rect",
           x: Number.parseFloat(el.getAttribute("x") || "0") + tx,
           y: Number.parseFloat(el.getAttribute("y") || "0") + ty,
           width: Number.parseFloat(el.getAttribute("width") || "0"),
