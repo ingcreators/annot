@@ -128,8 +128,27 @@ fn text_shape() -> AnnotationShape {
         font_size: Some(24.0),
         fill: Some("#000000".into()),
         text: Some("Hello".into()),
-        // Sticky bg color rides on `stroke` today; phase 3 introduces
-        // `text_bg_color`. Snapshot pins the legacy form.
+        // Phase 3 of the office-paste ABI plan made `text_bg_color`
+        // the canonical carrier; the legacy `stroke`-as-bg-color
+        // path is still honored as a fallback (phase 8 drops it).
+        text_bg_color: Some("rgba(255,255,200,0.92)".into()),
+        ..Default::default()
+    }
+}
+
+fn text_shape_legacy_carrier() -> AnnotationShape {
+    // Mirror of `text_shape()` but using only the legacy
+    // `stroke`-as-bg-color carrier — proves the fallback in
+    // `gvml_text` produces byte-equivalent XML to the canonical form.
+    AnnotationShape {
+        shape_type: "text".into(),
+        x: Some(10.0),
+        y: Some(400.0),
+        width: Some(200.0),
+        height: Some(50.0),
+        font_size: Some(24.0),
+        fill: Some("#000000".into()),
+        text: Some("Hello".into()),
         stroke: Some("rgba(255,255,200,0.92)".into()),
         ..Default::default()
     }
@@ -212,6 +231,17 @@ fn drawing_xml_marker_legacy_stroke_carrier_matches_canonical() {
     // test (and the helper) goes away.
     let canonical = build_drawing_xml(&[marker_shape()], 800.0, 600.0, false).0;
     let legacy = build_drawing_xml(&[marker_shape_legacy_carrier()], 800.0, 600.0, false).0;
+    assert_eq!(canonical, legacy);
+}
+
+#[test]
+fn drawing_xml_text_legacy_stroke_bg_carrier_matches_canonical() {
+    // Phase 3 fallback equivalence: a payload that stashes the
+    // sticky bg color in `stroke` (pre-phase-3 form) must produce
+    // the same XML body as the canonical `text_bg_color` form.
+    // Phase 8 drops both this test and the helper.
+    let canonical = build_drawing_xml(&[text_shape()], 800.0, 600.0, false).0;
+    let legacy = build_drawing_xml(&[text_shape_legacy_carrier()], 800.0, 600.0, false).0;
     assert_eq!(canonical, legacy);
 }
 
