@@ -1059,6 +1059,8 @@ async function handleExternalMessage(msg: any): Promise<any> {
       return idbStore.saveImage(msg.data);
     case "updateImage":
       return idbStore.updateImage(msg.path, msg.updates);
+    case "moveImage":
+      return idbStore.moveImage(msg.path, msg.newFolderPath ?? "");
     case "renameImage":
       return idbStore.renameImage(msg.path, msg.name);
     case "deleteImage":

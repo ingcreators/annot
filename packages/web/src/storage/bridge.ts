@@ -577,7 +577,10 @@ const extensionStorage: StorageProvider = {
     return send({ action: "listImages", folderPath });
   },
   async updateImage(path, updates) {
-    return send({ action: "updateImage", path, updates });
+    await send({ action: "updateImage", path, updates });
+  },
+  async moveImage(path, newFolderPath) {
+    return send({ action: "moveImage", path, newFolderPath });
   },
   async renameImage(path, newName) {
     return send({ action: "renameImage", path, name: newName });

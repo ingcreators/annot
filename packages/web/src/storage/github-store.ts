@@ -963,9 +963,8 @@ export class GitHubStore
     return inFlight;
   }
 
-  async updateImage(path: string, updates: ImageRecordUpdate): Promise<string> {
+  async updateImage(path: string, updates: ImageRecordUpdate): Promise<void> {
     await this.#ensureTreeLoaded();
-    let currentPath = path;
 
     // -- Thumbnail-only update from the editor (every 2s during
     // editing, also flushed on navigation boundaries). Thumbnails
@@ -974,27 +973,27 @@ export class GitHubStore
     // without waiting on the background prefetch's round-trip.
     if (updates.thumbnailDataUrl !== undefined) {
       if (updates.thumbnailDataUrl) {
-        this.#cache.setThumbnail(currentPath, updates.thumbnailDataUrl);
+        this.#cache.setThumbnail(path, updates.thumbnailDataUrl);
         // Stop any still-in-flight prefetch from clobbering this
         // freshly-rendered thumbnail — the editor canvas is the
         // source of truth at this moment.
-        this.#cache.deleteThumbnailInFlight(currentPath);
+        this.#cache.deleteThumbnailInFlight(path);
         window.dispatchEvent(
           new CustomEvent("annot-thumbnail-ready", {
-            detail: { path: currentPath, dataUrl: updates.thumbnailDataUrl },
+            detail: { path, dataUrl: updates.thumbnailDataUrl },
           }),
         );
       } else {
         // Caller passed empty (generator failed) — don't leave a
         // stale entry hanging around. Wipe so the next listImages
         // schedules a fresh prefetch from the just-committed blob.
-        this.#cache.deleteThumbnail(currentPath);
-        this.#cache.deleteThumbnailInFlight(currentPath);
-        void this.#ensureThumbnail(currentPath);
+        this.#cache.deleteThumbnail(path);
+        this.#cache.deleteThumbnailInFlight(path);
+        void this.#ensureThumbnail(path);
       }
-      const existingRecord = this.#cache.getRecord(currentPath);
+      const existingRecord = this.#cache.getRecord(path);
       if (existingRecord) {
-        this.#cache.setRecord(currentPath, {
+        this.#cache.setRecord(path, {
           ...existingRecord,
           thumbnailDataUrl: updates.thumbnailDataUrl,
         });
@@ -1003,8 +1002,8 @@ export class GitHubStore
 
     // -- Annotation / tag update: re-render + PUT in place.
     if (updates.annotationsSvg !== undefined || updates.tags !== undefined) {
-      const record = await this.getImage(currentPath);
-      if (!record?.originalDataUrl) return currentPath;
+      const record = await this.getImage(path);
+      if (!record?.originalDataUrl) return;
 
       const annotationsSvg = updates.annotationsSvg ?? record.annotationsSvg;
       const tags = updates.tags ?? record.tags;
@@ -1014,16 +1013,16 @@ export class GitHubStore
         isJpeg ? "jpg" : "png",
       );
 
-      const existingSha = this.#tree.getBlobSha(currentPath);
+      const existingSha = this.#tree.getBlobSha(path);
       try {
         // Use the amend-aware commit path so a sequence of debounced
         // updates collapses into a single commit on the branch's
         // `git log` instead of piling up identical
         // "annot: update foo.png" entries.
         await this.#commitFileAmendable(
-          currentPath,
+          path,
           blob,
-          this.#commitMessage("update", currentPath),
+          this.#commitMessage("update", path),
           existingSha,
         );
       } catch (e) {
@@ -1035,18 +1034,18 @@ export class GitHubStore
         // a future plan.
         const err = e as GitHubError;
         if (!err.conflict) throw e;
-        const fresh = await this.#getContents(currentPath);
+        const fresh = await this.#getContents(path);
         if (!fresh) throw e;
-        this.#tree.setBlobSha(currentPath, fresh.sha);
+        this.#tree.setBlobSha(path, fresh.sha);
         await this.#commitFileAmendable(
-          currentPath,
+          path,
           blob,
-          this.#commitMessage("update", currentPath),
+          this.#commitMessage("update", path),
           fresh.sha,
         );
       }
 
-      this.#cache.setRecord(currentPath, {
+      this.#cache.setRecord(path, {
         ...record,
         annotationsSvg,
         tags,
@@ -1067,64 +1066,61 @@ export class GitHubStore
       // thumbnail is present, and it populates the cache when
       // `writeThumbnailToStorage` didn't run (e.g. the generator
       // errored or the editor was torn down before the 2 s timer).
-      void this.#ensureThumbnail(currentPath);
+      void this.#ensureThumbnail(path);
+    }
+  }
+
+  /**
+   * Move an image to a different folder. Implemented as a single
+   * atomic Git Data API commit that re-targets the existing blob at
+   * the new path and drops the old entry — so the blob is reused
+   * and there's no XMP rebuild in the happy path. Falls back to
+   * the two-commit Contents-API path (PUT new, DELETE old) when
+   * the atomic commit fails (e.g. branch protection rejecting the
+   * fast-forward).
+   */
+  async moveImage(path: string, newFolderPath: string): Promise<string> {
+    await this.#ensureTreeLoaded();
+    if (newFolderPath === getParentPath(path)) return path;
+    const newPath = joinPath(newFolderPath, getFilename(path));
+    if (newPath === path) return path;
+    if (this.#tree.hasBlob(newPath)) {
+      throw githubError(`Destination already exists: ${newPath}`);
     }
 
-    // -- Move: implemented as delete-at-old + create-at-new. Two
-    // commits per move; `oss-cloud-split.md`-aligned Phase 4 polish
-    // switches to a single Git Data API commit.
-    if (updates.folderPath !== undefined && updates.folderPath !== getParentPath(currentPath)) {
-      const newFolderPath = updates.folderPath;
-      const newPath = joinPath(newFolderPath, getFilename(currentPath));
-      if (newPath === currentPath) return currentPath;
-      if (this.#tree.hasBlob(newPath)) {
-        throw githubError(`Destination already exists: ${newPath}`);
+    const oldSha = this.#tree.getBlobSha(path);
+    let moved = false;
+    if (oldSha) {
+      const atomicSha = await this.#commitTreeOps(
+        [
+          { relPath: newPath, existingBlobSha: oldSha },
+          { relPath: path, deleteOnly: true },
+        ],
+        `annot: move ${getFilename(path)} → ${newFolderPath || "/"}`,
+      );
+      if (atomicSha) moved = true;
+    }
+
+    if (!moved) {
+      // Fallback to the two-commit Contents-API path.
+      const record = await this.getImage(path);
+      if (!record?.originalDataUrl) {
+        throw githubError(`Cannot move missing image: ${path}`);
       }
-
-      const oldSha = this.#tree.getBlobSha(currentPath);
-
-      // Atomic move: single commit that re-targets the existing
-      // blob at the new path and drops the old entry. Reuses the
-      // blob, so no XMP rebuild / upload in the happy path.
-      let moved = false;
+      const isJpeg = record.originalDataUrl.startsWith("data:image/jpeg");
+      const blob = await this.#buildXmpBlob(record, isJpeg ? "jpg" : "png");
+      await this.#putContents(newPath, blob, this.#commitMessage("add", newPath));
       if (oldSha) {
-        const atomicSha = await this.#commitTreeOps(
-          [
-            { relPath: newPath, existingBlobSha: oldSha },
-            { relPath: currentPath, deleteOnly: true },
-          ],
-          `annot: move ${getFilename(currentPath)} → ${newFolderPath || "/"}`,
-        );
-        if (atomicSha) moved = true;
+        await this.#deleteContents(path, oldSha, this.#commitMessage("delete", path));
       }
-
-      if (!moved) {
-        // Fallback to the two-commit Contents-API path.
-        const record = await this.getImage(currentPath);
-        if (!record?.originalDataUrl) {
-          throw githubError(`Cannot move missing image: ${currentPath}`);
-        }
-        const isJpeg = record.originalDataUrl.startsWith("data:image/jpeg");
-        const blob = await this.#buildXmpBlob(record, isJpeg ? "jpg" : "png");
-        await this.#putContents(newPath, blob, this.#commitMessage("add", newPath));
-        if (oldSha) {
-          await this.#deleteContents(
-            currentPath,
-            oldSha,
-            this.#commitMessage("delete", currentPath),
-          );
-        }
-      }
-
-      this.#cache.migrateEntry(currentPath, newPath, (rec) => ({
-        ...rec,
-        path: newPath,
-        folderPath: newFolderPath,
-      }));
-      currentPath = newPath;
     }
 
-    return currentPath;
+    this.#cache.migrateEntry(path, newPath, (rec) => ({
+      ...rec,
+      path: newPath,
+      folderPath: newFolderPath,
+    }));
+    return newPath;
   }
 
   async renameImage(path: string, newName: string): Promise<string> {

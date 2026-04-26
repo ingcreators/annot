@@ -136,42 +136,9 @@ export class BrowserStore implements StorageProvider {
     });
   }
 
-  async updateImage(path: string, updates: ImageRecordUpdate): Promise<string> {
+  async updateImage(path: string, updates: ImageRecordUpdate): Promise<void> {
     const record = await this.getImage(path);
-    if (!record) return path;
-
-    // If folderPath changes, we must move the record (key change).
-    if (updates.folderPath !== undefined && updates.folderPath !== record.folderPath) {
-      const filename = getFilename(record.path);
-      const newFolderPath = updates.folderPath;
-      const uniqueName = await uniquifyFilenameAsync(filename, async (candidate) => {
-        const p = joinPath(newFolderPath, candidate);
-        if (p === path) return false;
-        const existing = await this.getImage(p);
-        return existing !== undefined;
-      });
-      const newPath = joinPath(newFolderPath, uniqueName);
-      const newRecord: ImageRecord = {
-        ...record,
-        ...updates,
-        folderPath: newFolderPath,
-        path: newPath,
-        updatedAt: updates.updatedAt || new Date().toISOString(),
-      };
-      const db = await openDB();
-      const tx = db.transaction(IMG_STORE, "readwrite");
-      const store = tx.objectStore(IMG_STORE);
-      await new Promise<void>((resolve, reject) => {
-        store.delete(path).onsuccess = () => {
-          const addReq = store.add(newRecord);
-          addReq.onsuccess = () => resolve();
-          addReq.onerror = () => reject(addReq.error);
-        };
-        tx.onerror = () => reject(tx.error);
-      });
-      return newPath;
-    }
-
+    if (!record) return;
     Object.assign(record, updates, { updatedAt: updates.updatedAt || new Date().toISOString() });
     const db = await openDB();
     await new Promise<void>((resolve, reject) => {
@@ -179,7 +146,39 @@ export class BrowserStore implements StorageProvider {
       req.onsuccess = () => resolve();
       req.onerror = () => reject(req.error);
     });
-    return path;
+  }
+
+  async moveImage(path: string, newFolderPath: string): Promise<string> {
+    const record = await this.getImage(path);
+    if (!record) return path;
+    if (newFolderPath === record.folderPath) return path;
+
+    const filename = getFilename(record.path);
+    const uniqueName = await uniquifyFilenameAsync(filename, async (candidate) => {
+      const p = joinPath(newFolderPath, candidate);
+      if (p === path) return false;
+      const existing = await this.getImage(p);
+      return existing !== undefined;
+    });
+    const newPath = joinPath(newFolderPath, uniqueName);
+    const newRecord: ImageRecord = {
+      ...record,
+      folderPath: newFolderPath,
+      path: newPath,
+      updatedAt: new Date().toISOString(),
+    };
+    const db = await openDB();
+    const tx = db.transaction(IMG_STORE, "readwrite");
+    const store = tx.objectStore(IMG_STORE);
+    await new Promise<void>((resolve, reject) => {
+      store.delete(path).onsuccess = () => {
+        const addReq = store.add(newRecord);
+        addReq.onsuccess = () => resolve();
+        addReq.onerror = () => reject(addReq.error);
+      };
+      tx.onerror = () => reject(tx.error);
+    });
+    return newPath;
   }
 
   async renameImage(path: string, newName: string): Promise<string> {

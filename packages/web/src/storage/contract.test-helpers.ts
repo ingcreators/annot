@@ -158,28 +158,37 @@ export function runStorageContract(backend: string, factory: StorageFactory): vo
       const path = await store.saveImage(
         makeImagePayload({ filename: "u.annot.png", annotationsSvg: "<o/>", tags: {} }),
       );
-      const returned = await store.updateImage(path, {
+      await store.updateImage(path, {
         annotationsSvg: "<n/>",
         tags: { t: "v" },
       });
-      expect(returned).toBe(path);
 
       const back = await store.getImage(path);
       expect(back!.annotationsSvg).toBe("<n/>");
       expect(back!.tags).toEqual({ t: "v" });
     });
 
-    it("updateImage with a new folderPath moves the image and returns the new path", async () => {
+    // ---- moveImage ----
+
+    it("moveImage relocates the image to a new folder and returns the new path", async () => {
       const store = await factory();
       await store.createFolder("", "Dest");
       const path = await store.saveImage(makeImagePayload({ filename: "mv.annot.png" }));
 
-      const newPath = await store.updateImage(path, { folderPath: "Dest" });
+      const newPath = await store.moveImage(path, "Dest");
       expect(newPath).toBe("Dest/mv.annot.png");
       expect(await store.getImage(path)).toBeUndefined();
       const back = await store.getImage(newPath);
       expect(back).toBeDefined();
       expect(back!.folderPath).toBe("Dest");
+    });
+
+    it("moveImage to the current folder is a no-op", async () => {
+      const store = await factory();
+      const path = await store.saveImage(makeImagePayload({ filename: "stay.annot.png" }));
+      const out = await store.moveImage(path, "");
+      expect(out).toBe(path);
+      expect(await store.getImage(path)).toBeDefined();
     });
 
     // ---- renameImage ----

@@ -27,9 +27,14 @@ export interface ImageRecord {
   pageMetadata?: PageMetadata;
 }
 
-/** Updates allowed via `updateImage`. Set `folderPath` to move the image. */
+/**
+ * In-place updates allowed via `updateImage`. Note that `folderPath`
+ * is intentionally NOT in this set — moving an image to a different
+ * folder goes through {@link StorageProvider.moveImage}, which has
+ * a clearer contract (returns the new path; `updateImage` doesn't).
+ */
 export type ImageRecordUpdate = Partial<
-  Pick<ImageRecord, "annotationsSvg" | "tags" | "thumbnailDataUrl" | "folderPath" | "updatedAt">
+  Pick<ImageRecord, "annotationsSvg" | "tags" | "thumbnailDataUrl" | "updatedAt">
 >;
 
 // =============================================================================
@@ -151,10 +156,19 @@ export interface StorageProvider {
   listImages(folderPath: string): Promise<ImageRecord[]>;
 
   /**
-   * Update image. If `updates.folderPath` is set, moves the image and
-   * returns the new path. Otherwise returns the original path.
+   * Update an image's annotations / tags / thumbnail / updatedAt
+   * in place. Path stays the same — to move the image, use
+   * {@link moveImage}.
    */
-  updateImage(path: string, updates: ImageRecordUpdate): Promise<string>;
+  updateImage(path: string, updates: ImageRecordUpdate): Promise<void>;
+
+  /**
+   * Move an image to a different folder. Returns the new path
+   * (filename unchanged; only the folder portion changes). The
+   * destination folder must already exist. No-op (returns the
+   * original path) when `newFolderPath` matches the current folder.
+   */
+  moveImage(path: string, newFolderPath: string): Promise<string>;
 
   /** Rename image in place. Returns the new path. */
   renameImage(path: string, newName: string): Promise<string>;

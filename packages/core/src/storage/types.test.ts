@@ -33,6 +33,7 @@ function bareStorage(): StorageProvider {
     getImage: stub,
     listImages: stub,
     updateImage: stub,
+    moveImage: stub,
     renameImage: stub,
     deleteImage: stub,
     createFolder: stub,

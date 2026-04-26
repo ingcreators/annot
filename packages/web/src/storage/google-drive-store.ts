@@ -416,13 +416,13 @@ export class GoogleDriveStore
     return results;
   }
 
-  async updateImage(path: string, updates: ImageRecordUpdate): Promise<string> {
+  async updateImage(path: string, updates: ImageRecordUpdate): Promise<void> {
     const driveId = this.#pathToFileId.get(path);
-    if (!driveId) return path;
+    if (!driveId) return;
 
     if (updates.annotationsSvg !== undefined || updates.tags !== undefined) {
       const record = await this.getImage(path);
-      if (!record?.originalDataUrl) return path;
+      if (!record?.originalDataUrl) return;
 
       const annotationsSvg = updates.annotationsSvg ?? record.annotationsSvg;
       const tags = updates.tags ?? record.tags;
@@ -448,36 +448,36 @@ export class GoogleDriveStore
         updatedAt: new Date().toISOString(),
       });
     }
+  }
 
-    // Handle move
-    if (updates.folderPath !== undefined && updates.folderPath !== getParentPath(path)) {
-      const newFolderPath = updates.folderPath;
-      const newParentId = await this.#resolveFolderId(newFolderPath);
-      if (!newParentId) throw new Error(`Folder not found: ${newFolderPath}`);
+  async moveImage(path: string, newFolderPath: string): Promise<string> {
+    const driveId = this.#pathToFileId.get(path);
+    if (!driveId) return path;
+    if (newFolderPath === getParentPath(path)) return path;
 
-      // Remove from old parent
-      const metaResp = await this.#fetch(`${DRIVE_API}/files/${driveId}?fields=parents`);
-      const metaData = await metaResp.json();
-      const oldParents = (metaData.parents || []).join(",");
-      await this.#fetch(
-        `${DRIVE_API}/files/${driveId}?addParents=${newParentId}&removeParents=${oldParents}`,
-        { method: "PATCH" },
-      );
+    const newParentId = await this.#resolveFolderId(newFolderPath);
+    if (!newParentId) throw new Error(`Folder not found: ${newFolderPath}`);
 
-      // Update local cache
-      const newPath = joinPath(newFolderPath, getFilename(path));
-      this.#pathToFileId.delete(path);
-      this.#pathToFileId.set(newPath, driveId);
-      this.#fileIdToPath.set(driveId, newPath);
-      const cached = this.#recordCache.get(path);
-      if (cached) {
-        this.#recordCache.delete(path);
-        this.#recordCache.set(newPath, { ...cached, path: newPath, folderPath: newFolderPath });
-      }
-      return newPath;
+    // Remove from old parent
+    const metaResp = await this.#fetch(`${DRIVE_API}/files/${driveId}?fields=parents`);
+    const metaData = await metaResp.json();
+    const oldParents = (metaData.parents || []).join(",");
+    await this.#fetch(
+      `${DRIVE_API}/files/${driveId}?addParents=${newParentId}&removeParents=${oldParents}`,
+      { method: "PATCH" },
+    );
+
+    // Update local cache
+    const newPath = joinPath(newFolderPath, getFilename(path));
+    this.#pathToFileId.delete(path);
+    this.#pathToFileId.set(newPath, driveId);
+    this.#fileIdToPath.set(driveId, newPath);
+    const cached = this.#recordCache.get(path);
+    if (cached) {
+      this.#recordCache.delete(path);
+      this.#recordCache.set(newPath, { ...cached, path: newPath, folderPath: newFolderPath });
     }
-
-    return path;
+    return newPath;
   }
 
   async renameImage(path: string, newName: string): Promise<string> {
