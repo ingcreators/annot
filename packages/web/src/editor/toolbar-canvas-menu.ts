@@ -325,17 +325,25 @@ function toolMenuEntry(
   const currentValue = (preset[meta.variantField] as string) || meta.defaultVariant;
   const currentVariant = meta.variants.find((v) => v.value === currentValue);
 
+  // Phase 4 of `docs/plans/toolbar-highlight-flyout-kind.md`:
+  // dispatch on the registry's `flyoutKind` discriminator instead
+  // of the literal `toolId === "highlight"`. Color-flyout tools
+  // render filled swatches (driven by `chipColorForVariant`, with
+  // identity fallback to the variant value); icon-glyph tools
+  // render `svg` or `icon` from the variant entry.
+  const isColor = meta.flyoutKind === "color";
+
   let badge: CanvasMenuItem["badge"];
-  if (currentVariant) {
-    if (toolId === "highlight") {
-      // Highlight's "variant" is its color — a filled swatch, not a
-      // glyph, matching the toolbar's color-dot badge treatment.
-      badge = { swatch: currentVariant.value };
-    } else if (currentVariant.svg) {
-      badge = { svg: currentVariant.svg };
-    } else {
-      badge = { icon: currentVariant.icon };
-    }
+  if (isColor) {
+    // Color flyouts render the active swatch even when the current
+    // value is outside the palette (ad-hoc hex), so the menu's
+    // active-variant indicator stays in lockstep with the toolbar
+    // button's badge — both use the value directly as the fill.
+    badge = { swatch: meta.chipColorForVariant?.(currentValue) ?? currentValue };
+  } else if (currentVariant) {
+    badge = currentVariant.svg
+      ? { svg: currentVariant.svg }
+      : { icon: currentVariant.icon };
   }
 
   return {
@@ -346,20 +354,19 @@ function toolMenuEntry(
     // stored as last-used. Passing `undefined` means "don't change
     // the variant"; the existing preset lookup will pick it up.
     action: () => ctx.activateToolWithVariant(toolId, undefined),
-    submenu: meta.variants.map((v) => {
-      if (toolId === "highlight") {
-        return {
-          swatch: v.value,
-          label: v.label,
-          action: () => ctx.activateToolWithVariant(toolId, v.value),
-        };
-      }
-      return {
-        svg: v.svg,
-        icon: v.icon,
-        label: v.label,
-        action: () => ctx.activateToolWithVariant(toolId, v.value),
-      };
-    }),
+    submenu: meta.variants.map((v) =>
+      isColor
+        ? {
+            swatch: meta.chipColorForVariant?.(v.value) ?? v.value,
+            label: v.label,
+            action: () => ctx.activateToolWithVariant(toolId, v.value),
+          }
+        : {
+            svg: v.svg,
+            icon: v.icon,
+            label: v.label,
+            action: () => ctx.activateToolWithVariant(toolId, v.value),
+          },
+    ),
   };
 }
