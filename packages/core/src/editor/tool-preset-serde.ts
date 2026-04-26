@@ -60,8 +60,6 @@ const FIELD_TO_SNAKE = {
   arrowWidthEnd: "arrow_width_end",
   arrowLengthStart: "arrow_length_start",
   arrowLengthEnd: "arrow_length_end",
-  arrowSizeStart: "arrow_size_start",
-  arrowSizeEnd: "arrow_size_end",
   highlightColor: "highlight_color",
   markerShape: "marker_shape",
   strokeOpacity: "stroke_opacity",

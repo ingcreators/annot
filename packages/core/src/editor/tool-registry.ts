@@ -273,22 +273,12 @@ export const TOOL_REGISTRY: Readonly<Record<string, ToolRegistryEntry>> = {
       //     into the valid range rather than fully resetting.
       preset.arrowHead = arrowVariantFromAttrs(el);
       // Per-end shape + width + length (PowerPoint-parity granular fields).
-      // `data-arrow-{start,end}-size` is a legacy attribute saved by
-      // versions that pre-date the width/length split; newly-saved SVGs
-      // emit `-width` / `-length` directly. The same back-compat
-      // fallback is applied at the other read sites
-      // (`pptx-export.ts`, `toolbar.ts:transformOf`,
-      // `desktop/src-tauri/src/commands/clipboard.rs`).
       const ss = el.getAttribute("data-arrow-start-shape");
       const es = el.getAttribute("data-arrow-end-shape");
-      const sw =
-        el.getAttribute("data-arrow-start-width") || el.getAttribute("data-arrow-start-size");
-      const sl =
-        el.getAttribute("data-arrow-start-length") || el.getAttribute("data-arrow-start-size");
-      const ew =
-        el.getAttribute("data-arrow-end-width") || el.getAttribute("data-arrow-end-size");
-      const el_ =
-        el.getAttribute("data-arrow-end-length") || el.getAttribute("data-arrow-end-size");
+      const sw = el.getAttribute("data-arrow-start-width");
+      const sl = el.getAttribute("data-arrow-start-length");
+      const ew = el.getAttribute("data-arrow-end-width");
+      const el_ = el.getAttribute("data-arrow-end-length");
       if (ss) preset.arrowHeadStart = ss as typeof preset.arrowHeadStart;
       if (es) preset.arrowHeadEnd = es as typeof preset.arrowHeadEnd;
       if (sw) preset.arrowWidthStart = sw as typeof preset.arrowWidthStart;
