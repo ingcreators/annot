@@ -1,0 +1,345 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`buildPptxFiles slide XML > emits <p:pic> background when the canvas has an image 1`] = `
+"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+  <p:cSld>
+    <p:spTree>
+      <p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>
+      <p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="7620000" cy="5715000"/><a:chOff x="0" y="0"/><a:chExt cx="7620000" cy="5715000"/></a:xfrm></p:grpSpPr>
+      <p:pic>
+      <p:nvPicPr>
+        <p:cNvPr id="1000" name="Screenshot"/>
+        <p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr>
+        <p:nvPr/>
+      </p:nvPicPr>
+      <p:blipFill>
+        <a:blip r:embed="rId2"/>
+        <a:stretch><a:fillRect/></a:stretch>
+      </p:blipFill>
+      <p:spPr>
+        <a:xfrm>
+          <a:off x="0" y="0"/>
+          <a:ext cx="7620000" cy="5715000"/>
+        </a:xfrm>
+        <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+      </p:spPr>
+    </p:pic>
+      <p:sp>
+  <p:nvSpPr>
+    <p:cNvPr id="2" name="Rect 2"/>
+    <p:cNvSpPr/>
+    <p:nvPr/>
+  </p:nvSpPr>
+  <p:spPr>
+    <a:xfrm>
+      <a:off x="95250" y="190500"/>
+      <a:ext cx="952500" cy="762000"/>
+    </a:xfrm>
+    <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+    <a:solidFill><a:srgbClr val="FFEEAA"></a:srgbClr></a:solidFill>
+    <a:ln w="38100">
+      <a:solidFill><a:srgbClr val="FF0000"></a:srgbClr></a:solidFill>
+    </a:ln>
+  </p:spPr>
+</p:sp>
+    </p:spTree>
+  </p:cSld>
+</p:sld>"
+`;
+
+exports[`buildPptxFiles slide XML > pins the current output for every emitter 1`] = `
+"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+  <p:cSld>
+    <p:spTree>
+      <p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>
+      <p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="7620000" cy="5715000"/><a:chOff x="0" y="0"/><a:chExt cx="7620000" cy="5715000"/></a:xfrm></p:grpSpPr>
+      
+      <p:sp>
+  <p:nvSpPr>
+    <p:cNvPr id="2" name="Rect 2"/>
+    <p:cNvSpPr/>
+    <p:nvPr/>
+  </p:nvSpPr>
+  <p:spPr>
+    <a:xfrm>
+      <a:off x="95250" y="190500"/>
+      <a:ext cx="952500" cy="762000"/>
+    </a:xfrm>
+    <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+    <a:solidFill><a:srgbClr val="FFEEAA"><a:alpha val="50000"/></a:srgbClr></a:solidFill>
+    <a:ln w="38100">
+      <a:solidFill><a:srgbClr val="FF0000"></a:srgbClr></a:solidFill>
+    </a:ln>
+  </p:spPr>
+</p:sp>
+<p:sp>
+  <p:nvSpPr>
+    <p:cNvPr id="3" name="Rect 3"/>
+    <p:cNvSpPr/>
+    <p:nvPr/>
+  </p:nvSpPr>
+  <p:spPr>
+    <a:xfrm>
+      <a:off x="1143000" y="190500"/>
+      <a:ext cx="952500" cy="762000"/>
+    </a:xfrm>
+    <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+    <a:noFill/>
+    <a:ln w="25400">
+      <a:solidFill><a:srgbClr val="0000FF"></a:srgbClr></a:solidFill>
+    </a:ln>
+  </p:spPr>
+</p:sp>
+<p:sp>
+  <p:nvSpPr>
+    <p:cNvPr id="4" name="Ellipse 4"/>
+    <p:cNvSpPr/>
+    <p:nvPr/>
+  </p:nvSpPr>
+  <p:spPr>
+    <a:xfrm>
+      <a:off x="2381250" y="190500"/>
+      <a:ext cx="952500" cy="762000"/>
+    </a:xfrm>
+    <a:prstGeom prst="ellipse"><a:avLst/></a:prstGeom>
+    <a:noFill/>
+    <a:ln w="38100">
+      <a:solidFill><a:srgbClr val="00FF00"></a:srgbClr></a:solidFill>
+    </a:ln>
+  </p:spPr>
+</p:sp>
+<p:cxnSp>
+  <p:nvCxnSpPr>
+    <p:cNvPr id="5" name="Line 5"/>
+    <p:cNvCxnSpPr/>
+    <p:nvPr/>
+  </p:nvCxnSpPr>
+  <p:spPr>
+    <a:xfrm>
+      <a:off x="95250" y="1428750"/>
+      <a:ext cx="1905000" cy="9525"/>
+    </a:xfrm>
+    <a:prstGeom prst="line"><a:avLst/></a:prstGeom>
+    <a:ln w="38100"><a:solidFill><a:srgbClr val="FF0000"></a:srgbClr></a:solidFill></a:ln>
+  </p:spPr>
+</p:cxnSp>
+<p:cxnSp>
+  <p:nvCxnSpPr>
+    <p:cNvPr id="6" name="Line 6"/>
+    <p:cNvCxnSpPr/>
+    <p:nvPr/>
+  </p:nvCxnSpPr>
+  <p:spPr>
+    <a:xfrm>
+      <a:off x="95250" y="2381250"/>
+      <a:ext cx="1905000" cy="9525"/>
+    </a:xfrm>
+    <a:prstGeom prst="line"><a:avLst/></a:prstGeom>
+    <a:ln w="38100"><a:solidFill><a:srgbClr val="FF0000"></a:srgbClr></a:solidFill><a:tailEnd type="triangle" w="med" len="med"/></a:ln>
+  </p:spPr>
+</p:cxnSp>
+<p:sp>
+  <p:nvSpPr>
+    <p:cNvPr id="7" name="Text 7"/>
+    <p:cNvSpPr txBox="1"/>
+    <p:nvPr/>
+  </p:nvSpPr>
+  <p:spPr>
+    <a:xfrm>
+      <a:off x="95250" y="3105150"/>
+      <a:ext cx="1905000" cy="342900"/>
+    </a:xfrm>
+    <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+    <a:noFill/>
+    <a:ln><a:noFill/></a:ln>
+  </p:spPr>
+  <p:txBody>
+    <a:bodyPr wrap="none" rtlCol="0"/>
+    <a:lstStyle/>
+    <a:p><a:r><a:rPr lang="ja-JP" sz="1800" dirty="0">
+      <a:solidFill><a:srgbClr val="000000"/></a:solidFill>
+    </a:rPr><a:t></a:t></a:r></a:p>
+  </p:txBody>
+</p:sp>
+<p:sp>
+  <p:nvSpPr>
+    <p:cNvPr id="8" name="Freehand 8"/>
+    <p:cNvSpPr/>
+    <p:nvPr/>
+  </p:nvSpPr>
+  <p:spPr>
+    <a:xfrm>
+      <a:off x="0" y="3810000"/>
+      <a:ext cx="1905000" cy="95250"/>
+    </a:xfrm>
+    <a:custGeom>
+      <a:avLst/>
+      <a:gdLst/>
+      <a:ahLst/>
+      <a:cxnLst/>
+      <a:rect l="0" t="0" r="1905000" b="95250"/>
+      <a:pathLst>
+        <a:path w="1905000" h="95250">
+          <a:moveTo><a:pt x="0" y="0"/></a:moveTo><a:lnTo><a:pt x="952500" y="95250"/></a:lnTo><a:lnTo><a:pt x="1905000" y="47625"/></a:lnTo>
+        </a:path>
+      </a:pathLst>
+    </a:custGeom>
+    <a:noFill/>
+    <a:ln w="25400" cap="rnd">
+      <a:solidFill><a:srgbClr val="FF00FF"></a:srgbClr></a:solidFill>
+      <a:round/>
+    </a:ln>
+  </p:spPr>
+</p:sp>
+<p:grpSp>
+  <p:nvGrpSpPr>
+    <p:cNvPr id="9" name="Freehand group 9"/>
+    <p:cNvGrpSpPr/>
+    <p:nvPr/>
+  </p:nvGrpSpPr>
+  <p:grpSpPr>
+    <a:xfrm>
+      <a:off x="476250" y="5715000"/>
+      <a:ext cx="1047750" cy="238125"/>
+      <a:chOff x="476250" y="5715000"/>
+      <a:chExt cx="1047750" cy="238125"/>
+    </a:xfrm>
+  </p:grpSpPr>
+  <p:sp>
+  <p:nvSpPr>
+    <p:cNvPr id="10" name="Freehand 10"/>
+    <p:cNvSpPr/>
+    <p:nvPr/>
+  </p:nvSpPr>
+  <p:spPr>
+    <a:xfrm>
+      <a:off x="476250" y="5715000"/>
+      <a:ext cx="952500" cy="47625"/>
+    </a:xfrm>
+    <a:custGeom>
+      <a:avLst/>
+      <a:gdLst/>
+      <a:ahLst/>
+      <a:cxnLst/>
+      <a:rect l="0" t="0" r="952500" b="47625"/>
+      <a:pathLst>
+        <a:path w="952500" h="47625">
+          <a:moveTo><a:pt x="0" y="0"/></a:moveTo><a:lnTo><a:pt x="476250" y="47625"/></a:lnTo><a:lnTo><a:pt x="952500" y="0"/></a:lnTo>
+        </a:path>
+      </a:pathLst>
+    </a:custGeom>
+    <a:noFill/>
+    <a:ln w="38100" cap="rnd">
+      <a:solidFill><a:srgbClr val="FF8800"></a:srgbClr></a:solidFill>
+      <a:round/>
+    </a:ln>
+  </p:spPr>
+</p:sp>
+  <p:sp>
+  <p:nvSpPr>
+    <p:cNvPr id="11" name="Freehand 11"/>
+    <p:cNvSpPr/>
+    <p:nvPr/>
+  </p:nvSpPr>
+  <p:spPr>
+    <a:xfrm>
+      <a:off x="571500" y="5905500"/>
+      <a:ext cx="952500" cy="47625"/>
+    </a:xfrm>
+    <a:custGeom>
+      <a:avLst/>
+      <a:gdLst/>
+      <a:ahLst/>
+      <a:cxnLst/>
+      <a:rect l="0" t="0" r="952500" b="47625"/>
+      <a:pathLst>
+        <a:path w="952500" h="47625">
+          <a:moveTo><a:pt x="0" y="0"/></a:moveTo><a:lnTo><a:pt x="476250" y="47625"/></a:lnTo><a:lnTo><a:pt x="952500" y="0"/></a:lnTo>
+        </a:path>
+      </a:pathLst>
+    </a:custGeom>
+    <a:noFill/>
+    <a:ln w="38100" cap="rnd">
+      <a:solidFill><a:srgbClr val="FF8800"></a:srgbClr></a:solidFill>
+      <a:round/>
+    </a:ln>
+  </p:spPr>
+</p:sp>
+</p:grpSp>
+<p:sp>
+  <p:nvSpPr>
+    <p:cNvPr id="12" name="Marker 12"/>
+    <p:cNvSpPr/>
+    <p:nvPr/>
+  </p:nvSpPr>
+  <p:spPr>
+    <a:xfrm>
+      <a:off x="3714750" y="4667250"/>
+      <a:ext cx="190500" cy="190500"/>
+    </a:xfrm>
+    <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+    <a:solidFill><a:srgbClr val="FF0000"/></a:solidFill>
+    <a:ln w="19050"><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill></a:ln>
+  </p:spPr>
+  <p:txBody>
+    <a:bodyPr anchor="ctr"/>
+    <a:lstStyle/>
+    <a:p>
+      <a:pPr algn="ctr"/>
+      <a:r>
+        <a:rPr lang="en-US" sz="975" b="1">
+          <a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill>
+        </a:rPr>
+        <a:t>1</a:t>
+      </a:r>
+    </a:p>
+  </p:txBody>
+</p:sp>
+    </p:spTree>
+  </p:cSld>
+</p:sld>"
+`;
+
+exports[`buildPptxFiles slide XML > rounded marker dispatches via data-shape='rounded' 1`] = `
+"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+  <p:cSld>
+    <p:spTree>
+      <p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>
+      <p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="7620000" cy="5715000"/><a:chOff x="0" y="0"/><a:chExt cx="7620000" cy="5715000"/></a:xfrm></p:grpSpPr>
+      
+      <p:sp>
+  <p:nvSpPr>
+    <p:cNvPr id="2" name="Marker 2"/>
+    <p:cNvSpPr/>
+    <p:nvPr/>
+  </p:nvSpPr>
+  <p:spPr>
+    <a:xfrm>
+      <a:off x="4667250" y="2762250"/>
+      <a:ext cx="190500" cy="190500"/>
+    </a:xfrm>
+    <a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val 0"/></a:avLst></a:prstGeom>
+    <a:solidFill><a:srgbClr val="FF0000"/></a:solidFill>
+    <a:ln w="19050"><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill></a:ln>
+  </p:spPr>
+  <p:txBody>
+    <a:bodyPr anchor="ctr"/>
+    <a:lstStyle/>
+    <a:p>
+      <a:pPr algn="ctr"/>
+      <a:r>
+        <a:rPr lang="en-US" sz="975" b="1">
+          <a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill>
+        </a:rPr>
+        <a:t>2</a:t>
+      </a:r>
+    </a:p>
+  </p:txBody>
+</p:sp>
+    </p:spTree>
+  </p:cSld>
+</p:sld>"
+`;

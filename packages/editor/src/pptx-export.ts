@@ -266,16 +266,33 @@ interface ShapeInfo {
   id: number;
 }
 
-export function exportPptx(canvas: CanvasManager): void {
-  const w = canvas.imageWidth;
-  const h = canvas.imageHeight;
-  const shapes = buildShapes(canvas);
+/**
+ * Structural input for `buildPptxFiles` — the subset of
+ * `CanvasManager` that PPTX export actually reads. Lets the unit
+ * test feed a stub without spinning up a full editor instance.
+ */
+export interface PptxExportInput {
+  imageWidth: number;
+  imageHeight: number;
+  imageEl: { getAttribute(name: string): string | null };
+  annotations: { childNodes: ArrayLike<Node> };
+}
 
-  // Extract JPEG binary from data URI
-  const dataUrl = canvas.imageEl.getAttribute("href") || "";
+/**
+ * Build the PPTX OPC file map (filenames → bytes) for a given canvas
+ * input. Reachable from a unit test (see `pptx-export.test.ts`); the
+ * download wrapper `exportPptx` keeps the existing public entry point
+ * and packs this output into a ZIP + triggers a browser download.
+ */
+export function buildPptxFiles(input: PptxExportInput): Record<string, Uint8Array> {
+  const w = input.imageWidth;
+  const h = input.imageHeight;
+  const shapes = buildShapes(input);
+
+  // Extract JPEG / PNG binary from data URI.
+  const dataUrl = input.imageEl.getAttribute("href") || "";
   const imageBytes = dataUrlToUint8Array(dataUrl);
   const imageExt = dataUrl.startsWith("data:image/png") ? "png" : "jpeg";
-  const _imageMime = imageExt === "png" ? "image/png" : "image/jpeg";
   const hasImage = imageBytes.length > 0;
 
   const slideXml = buildSlide(w, h, shapes, hasImage);
@@ -300,6 +317,11 @@ export function exportPptx(canvas: CanvasManager): void {
     files[`ppt/media/screenshot.${imageExt}`] = imageBytes;
   }
 
+  return files;
+}
+
+export function exportPptx(canvas: CanvasManager): void {
+  const files = buildPptxFiles(canvas);
   const entries = Object.entries(files).map(([name, data]) => ({ name, data }));
   const zipBlob = buildZip(entries);
   // Re-wrap with the PPTX MIME type (buildZip emits a generic application/zip).
@@ -316,11 +338,11 @@ export function exportPptx(canvas: CanvasManager): void {
   URL.revokeObjectURL(url);
 }
 
-function buildShapes(canvas: CanvasManager): ShapeInfo[] {
+function buildShapes(input: PptxExportInput): ShapeInfo[] {
   const shapes: ShapeInfo[] = [];
   let id = 2; // id=1 is reserved for slide background
 
-  const annos = canvas.annotations.childNodes;
+  const annos = input.annotations.childNodes;
   for (const node of Array.from(annos)) {
     const el = node as SVGElement;
     const tag = el.tagName;
