@@ -824,11 +824,6 @@ export class Toolbar {
           width: Number.parseFloat(el.getAttribute("width") || "0"),
           height: Number.parseFloat(el.getAttribute("height") || "0"),
           image_data_url: href,
-          // The Rust-side OOXML emitter currently reads the data URL
-          // off `text` (its `AnnotationShape` struct doesn't model
-          // `image_data_url`). Both fields carry the same value
-          // until that ABI is widened.
-          text: href,
           redact_style: style || "mosaic",
           ...xform,
         });
