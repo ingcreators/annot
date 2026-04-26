@@ -39,7 +39,6 @@ import "./annot-toolbar.js";
 // `./editor/tools/*`) reach the bits that aren't re-exported via
 // the top-level barrel.
 import {
-  HIGHLIGHT_COLORS,
   highlightColorLabel,
   presetFromWire,
   presetToWire,
@@ -1267,8 +1266,14 @@ export class Toolbar {
         // form-submission edge cases if the button were ever placed
         // inside a <form>.
         e.preventDefault();
-        if (toolId === "highlight") {
-          this.#showHighlightColorFlyout(wrap);
+        // Phase 2 of `docs/plans/toolbar-highlight-flyout-kind.md`:
+        // dispatch on the registry's `flyoutKind` discriminator
+        // instead of the literal `toolId === "highlight"`. Tools with
+        // `flyoutKind === "color"` open the swatch-row flyout (today
+        // only Highlight); every other tool with a variant catalog
+        // opens the icon-chip flyout via the legacy path.
+        if (TOOL_REGISTRY[toolId]?.flyoutKind === "color") {
+          this.#showColorFlyout(toolId, wrap);
         } else {
           this.#showVariantFlyout(toolId, wrap);
         }
@@ -1353,38 +1358,66 @@ export class Toolbar {
     }
   }
 
-  /** Color-swatch flyout for the Highlight tool. Renders one round
-   *  chip per preset color; click stores the color in the preset,
-   *  updates the button's swatch indicator, and activates the tool so
-   *  the user can start highlighting immediately with the new color. */
-  #showHighlightColorFlyout(anchor: HTMLElement): void {
-    const toolId = "highlight";
+  /** Color-swatch flyout for tools whose variants are colors rather
+   *  than icon glyphs (today: Highlight). Renders one round chip per
+   *  registry variant; click writes the canonical (mixed-case)
+   *  variant value into `preset[meta.variantField]`, updates the
+   *  button's swatch indicator, and activates the tool so the user
+   *  can start drawing immediately with the new color.
+   *
+   *  Symmetric with `#showVariantFlyout`: same popover scaffolding,
+   *  same chip-select event shape, same close-then-activate flow.
+   *  Diverges only in (a) `flyout.layout = "color"` vs `"variant"`,
+   *  (b) chip mapping uses `meta.chipColorForVariant?.(v.value) ??
+   *  v.value` for the swatch fill (defaulting to identity for
+   *  Highlight where the variant value IS the hex), and (c) chip
+   *  values are lower-cased for case-insensitive active-state
+   *  matching with the canonical look-up on chip-select.
+   *
+   *  Phase 2 of `docs/plans/toolbar-highlight-flyout-kind.md`:
+   *  replaces `#showHighlightColorFlyout`. The HIGHLIGHT_COLORS
+   *  import was the previous chip source; chips now derive from
+   *  `meta.variants` so future color-flyout tools (Stamp, Pen
+   *  color, …) inherit the same path without copy-paste. */
+  #showColorFlyout(toolId: string, anchor: HTMLElement): void {
+    const meta = TOOL_REGISTRY[toolId];
+    if (!meta?.variants || !meta.variantField || !meta.defaultVariant) return;
+
     const preset = this.#getCurrentPreset(toolId);
-    const current =
-      (preset.highlightColor as string) || TOOL_REGISTRY.highlight!.defaultVariant!;
+    const currentRaw = (preset[meta.variantField] as string) || meta.defaultVariant;
+    const current = currentRaw.toLowerCase();
     const placement = this.#orientation === "vertical" ? "right" : "below";
+    const variantField = meta.variantField;
 
     const close = openAnchoredPopover(
       anchor,
       (root) => {
         const flyout = document.createElement("annot-tool-flyout");
         flyout.layout = "color";
-        flyout.active = current.toLowerCase();
-        flyout.chips = HIGHLIGHT_COLORS.map((c) => ({
-          value: c.value.toLowerCase(),
-          color: c.value,
-          label: c.label,
+        flyout.active = current;
+        flyout.chips = meta.variants!.map((v) => ({
+          value: v.value.toLowerCase(),
+          color: meta.chipColorForVariant?.(v.value) ?? v.value,
+          label: v.label,
         }));
         flyout.addEventListener("chip-select", (e: Event) => {
           const detail = (e as CustomEvent<ChipSelectDetail>).detail;
           // The chip's value is normalised lower-case; look up the
-          // canonical (mixed-case) hex from HIGHLIGHT_COLORS so the
-          // saved preset matches the catalogue entry.
+          // canonical (mixed-case) variant value from `meta.variants`
+          // so the saved preset matches the catalogue entry. Falls
+          // through to `detail.value` if the chip isn't in the
+          // registry (e.g. legacy ad-hoc hex preserved across reloads).
           const canonical =
-            HIGHLIGHT_COLORS.find((c) => c.value.toLowerCase() === detail.value)?.value ??
+            meta.variants!.find((v) => v.value.toLowerCase() === detail.value)?.value ??
             detail.value;
-          preset.highlightColor = canonical;
-          preset.shapeType = "highlight";
+          (preset as unknown as Record<string, unknown>)[variantField as string] = canonical;
+          // Highlight-specific: ShapeTool's highlight rendering path
+          // requires `shapeType === "highlight"` — without this the
+          // underlying ShapeTool would dispatch to the regular rect
+          // path and lose the highlighter look. Preserved for byte-
+          // equivalence; future "color" tools without a ShapeTool
+          // backing leave shapeType untouched.
+          if (toolId === "highlight") preset.shapeType = "highlight";
           this.#saveCurrentPreset(toolId, preset);
           this.#savePresetsToFile();
           this.#syncToolButtonIcon(toolId);
@@ -1393,7 +1426,7 @@ export class Toolbar {
         });
         root.appendChild(flyout);
       },
-      { placement, className: "tool-flyout-highlight" },
+      { placement, className: "tool-flyout-color" },
     );
   }
 
