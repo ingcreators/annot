@@ -26,6 +26,7 @@ window (`Queued`), or actively shipping (`In progress`).
 | [`google-drive-integration.md`](./google-drive-integration.md) | Draft | Rework the Drive backend onto the non-sensitive `drive.file` scope + Workspace Marketplace + Drive UI Integration so Annot can ship publicly without a restricted-scope CASA audit. |
 | [`oss-cloud-split.md`](./oss-cloud-split.md) | Draft | Forward-looking strategy for keeping Annot OSS while developing paid features in a separate private `annot-cloud` repo. Guardrails apply from today; concrete phases trigger on "first paid feature" and "company incorporation". |
 | [`github-integration.md`](./github-integration.md) | Draft | Individual-user `GitHubStore` — device-flow auth, pick repo + branch + base path, commits as save. Drive-integration-equivalent scope. PR automation / Check Runs / org admin live in `annot-cloud`, not here. Phases 1–3 landed (#36–#38); Phase 4 polish in progress. |
+| [`toolbar-schema.md`](./toolbar-schema.md) | Queued | Sibling to `_done/property-panel-schema.md` (PRs #153–#164). Six phases applying the same registry-driven pattern to `packages/web/src/editor/toolbar.ts` (2,181 LOC): Tier B `TOOL_REGISTRY` + generic preset (de)serializer + variant flyout / preset-rubber-band migrations. Target: drop `toolbar.ts` to ~1,100 LOC. |
 
 ## Recently landed plans
 
