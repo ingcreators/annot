@@ -67,6 +67,11 @@ export const PROPERTY_CONTROL_IDS = {
   highlightTransparency: "highlightTransparency",
   markerShapePicker: "markerShapePicker",
   markerSize: "markerSize",
+  markerBgFillColor: "markerBgFillColor",
+  markerBgStrokeColor: "markerBgStrokeColor",
+  markerBgStrokeWidth: "markerBgStrokeWidth",
+  markerBgStrokeStyle: "markerBgStrokeStyle",
+  markerLabelValue: "markerLabelValue",
 } as const;
 export type PropertyControlId =
   (typeof PROPERTY_CONTROL_IDS)[keyof typeof PROPERTY_CONTROL_IDS];
@@ -88,7 +93,15 @@ export const CATEGORY_CONTROL_SHAPE: Readonly<
     PROPERTY_CONTROL_IDS.fontFamily,
     PROPERTY_CONTROL_IDS.fontSize,
   ],
-  marker: [PROPERTY_CONTROL_IDS.markerShapePicker, PROPERTY_CONTROL_IDS.markerSize],
+  marker: [
+    PROPERTY_CONTROL_IDS.markerShapePicker,
+    PROPERTY_CONTROL_IDS.markerBgFillColor,
+    PROPERTY_CONTROL_IDS.markerBgStrokeColor,
+    PROPERTY_CONTROL_IDS.markerBgStrokeWidth,
+    PROPERTY_CONTROL_IDS.markerBgStrokeStyle,
+    PROPERTY_CONTROL_IDS.markerLabelValue,
+    PROPERTY_CONTROL_IDS.markerSize,
+  ],
   "redact-mosaic": [PROPERTY_CONTROL_IDS.redactStylePicker],
   "redact-solid": [
     PROPERTY_CONTROL_IDS.redactStylePicker,
@@ -282,6 +295,13 @@ function markerShapeOf(g: SVGElement): MarkerShape {
   // Legacy fallback: infer from the bg primitive's tag name.
   const bg = g.querySelector("circle, rect");
   return bg?.tagName === "rect" ? "rect" : "circle";
+}
+
+/** The marker's bg primitive — `<circle>` for `circle`, `<rect>`
+ *  for `rect` / `rounded`. Centralised so the marker-bg control
+ *  defs below all traverse the same way the imperative panel did. */
+function markerBgEl(g: SVGElement): Element | null {
+  return g.querySelector("circle") ?? g.querySelector("rect");
 }
 
 function markerSizeOf(g: SVGElement): number {
@@ -599,6 +619,111 @@ export const PROPERTY_CONTROLS: Readonly<{
     max: 96,
     step: 1,
     unit: "pt",
+  },
+
+  // ─── Marker bg-primitive controls ────────────────────────────────
+  // The Counter (marker) tool's Fill / Line rows write to the inner
+  // `<circle>` / `<rect>` bg primitive (where MarkerTool puts its
+  // styling), not the outer `<g>`. The five defs below traverse via
+  // `markerBgEl(g)` so the registry can model the same per-target
+  // attribute reads / writes the imperative `#renderMarkerControls`
+  // chain did.
+  markerBgFillColor: {
+    id: PROPERTY_CONTROL_IDS.markerBgFillColor,
+    type: "color",
+    label: "Color",
+    getValue: (el) => markerBgEl(el)?.getAttribute("fill") ?? "#ff0000",
+    setValue: (el, value) => {
+      markerBgEl(el)?.setAttribute("fill", String(value));
+    },
+    allowNone: true,
+  },
+  markerBgStrokeColor: {
+    id: PROPERTY_CONTROL_IDS.markerBgStrokeColor,
+    type: "color",
+    label: "Color",
+    getValue: (el) => markerBgEl(el)?.getAttribute("stroke") ?? "#ffffff",
+    setValue: (el, value) => {
+      markerBgEl(el)?.setAttribute("stroke", String(value));
+    },
+  },
+  markerBgStrokeWidth: {
+    id: PROPERTY_CONTROL_IDS.markerBgStrokeWidth,
+    type: "number",
+    label: "Width",
+    getValue: (el) => Number.parseFloat(markerBgEl(el)?.getAttribute("stroke-width") || "1.5"),
+    setValue: (el, value) => {
+      const bg = markerBgEl(el);
+      if (!bg) return;
+      const w = Number(value);
+      bg.setAttribute("stroke-width", String(w));
+      // Re-express the dasharray (if any) against the new width so
+      // dots / dashes stay proportional, matching the Line section's
+      // strokeWidth setter.
+      const key = bg.getAttribute("data-dash-key");
+      if (key) bg.setAttribute("stroke-dasharray", computeDasharray(key, w));
+    },
+    min: 0,
+    max: 20,
+    step: 0.25,
+    unit: "pt",
+  },
+  markerBgStrokeStyle: {
+    id: PROPERTY_CONTROL_IDS.markerBgStrokeStyle,
+    type: "select",
+    label: "Dash type",
+    getValue: (el) => {
+      const bg = markerBgEl(el);
+      if (!bg) return "";
+      const stored = bg.getAttribute("data-dash-key");
+      if (stored != null) return stored;
+      const sw = Number.parseFloat(bg.getAttribute("stroke-width") || "1.5");
+      const raw = bg.getAttribute("stroke-dasharray") || "";
+      return detectDashKey(raw, sw) ?? "";
+    },
+    setValue: (el, value) => {
+      const bg = markerBgEl(el);
+      if (!bg) return;
+      const key = String(value);
+      const sw = Number.parseFloat(bg.getAttribute("stroke-width") || "1.5");
+      if (key) {
+        bg.setAttribute("data-dash-key", key);
+        bg.setAttribute("stroke-dasharray", computeDasharray(key, sw));
+      } else {
+        bg.removeAttribute("data-dash-key");
+        bg.removeAttribute("stroke-dasharray");
+      }
+    },
+    options: [
+      { value: "", label: "Solid" },
+      { value: "dash", label: "Dashed" },
+      { value: "dot", label: "Dotted" },
+      { value: "dashDot", label: "Dash-Dot" },
+      { value: "lgDash", label: "Long Dash" },
+    ],
+  },
+  markerLabelValue: {
+    id: PROPERTY_CONTROL_IDS.markerLabelValue,
+    type: "number",
+    label: "Value",
+    // Counter number lives BOTH on the outer <g>'s `data-marker`
+    // attribute (durable / round-trips through SVG IO) AND on the
+    // inner <text>'s textContent (what users see). The setValue
+    // keeps the two in sync the same way the imperative
+    // `#renderMarkerControls` Label > Value row did.
+    getValue: (el) => {
+      const v = Number.parseInt(el.getAttribute("data-marker") || "1", 10);
+      return Number.isFinite(v) ? v : 1;
+    },
+    setValue: (el, value) => {
+      const v = Math.round(Number(value));
+      el.setAttribute("data-marker", String(v));
+      const t = el.querySelector("text");
+      if (t) t.textContent = String(v);
+    },
+    min: 1,
+    max: 999,
+    step: 1,
   },
 };
 

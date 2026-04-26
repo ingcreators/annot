@@ -558,143 +558,42 @@ export class PropertyPanel {
   // `convertRedactStyle(t, v, this.#canvas)` per target with the
   // same sequential-await pattern the imperative click handler used.
 
-  #renderMarkerControls(g: SVGElement): void {
-    const bgEl = g.querySelector("circle") || g.querySelector("rect");
-    const fill = bgEl?.getAttribute("fill") || "#ff0000";
-    const bgStroke = bgEl?.getAttribute("stroke") || "#ffffff";
-    const bgStrokeWidth = Number.parseFloat(bgEl?.getAttribute("stroke-width") || "1.5");
-    const bgDashKey =
-      bgEl?.getAttribute("data-dash-key") ??
-      detectDashKey(bgEl?.getAttribute("stroke-dasharray") || "", bgStrokeWidth) ??
-      "";
-    const currentVal = Number.parseInt(g.getAttribute("data-marker") || "1", 10);
-
-    // Type section: schema-driven via `markerShapePicker.effect =
-    // applyMarkerShape`. The effect handler bound in the constructor
-    // calls `convertMarkerShape(t, v)` per target — the outer `<g>`
-    // keeps identity (only the inner bg primitive swaps), so the
-    // returned identity replacements skip `onTargetReplaced` and the
-    // commit routes through `onVariantChanged` via the variantPicker
-    // dispatch. Matches the imperative chip handler one-for-one.
+  /**
+   * Marker (counter) properties — fully schema-driven via Phase A
+   * of `docs/plans/property-panel-schema-extensions.md`.
+   *
+   *  - Type (markerShapePicker, effect: applyMarkerShape) — landed
+   *    in Phase 3e.
+   *  - Fill > Color (markerBgFillColor, allowNone) — bg primitive's
+   *    interior paint.
+   *  - Line > Color / Width / Dash type (markerBgStroke{Color,
+   *    Width,Style}) — bg primitive's optional border. Width's
+   *    setValue recomputes dasharray against the new width to
+   *    match the imperative Line section's proportional behaviour.
+   *  - Label > Value (markerLabelValue) — outer `<g>`'s
+   *    `data-marker` attr + the inner `<text>`'s textContent kept
+   *    in sync via the registry's setValue.
+   *  - Label > Size (markerSize, effect: resizeMarker) — landed in
+   *    Phase 3e; rescales bg + text geometry proportionally.
+   *
+   *  All five new defs traverse the inner bg primitive via
+   *  `g.querySelector("circle, rect")` — Tier B-friendly element
+   *  manipulation, no `effect` needed.
+   */
+  #renderMarkerControls(_g: SVGElement): void {
     this.#inSection("Type", () => {
       this.#renderRegistryControl(PROPERTY_CONTROL_IDS.markerShapePicker);
     });
-
-    // Fill / Line / Label-Value sections are still imperative because
-    // they write to the inner `<circle>` / `<rect>` bg primitive —
-    // a target shape the registry's standard `fillColor` /
-    // `strokeColor` / `strokeWidth` controls don't model (they all
-    // operate on the outer element via `el.setAttribute`). A future
-    // phase can extend the registry with `markerBgFillColor` /
-    // `markerBgStrokeColor` / etc. ids and migrate these too. The
-    // Size sub-row in the Label section IS schema-driven below
-    // (markerSize uses `effect: resizeMarker`).
-
-    // Fill section: the bg primitive's color. The Counter's interior
-    // paint lives here, mirroring Shape / Highlight. `allowNone`
-    // exposes "No fill" so users can make an outline-only counter
-    // (just the ring + number, no interior paint).
     this.#inSection("Fill", () => {
-      this.#addColorPicker(
-        "Color",
-        fill,
-        (v) => {
-          for (const t of this.#targets) {
-            const bg = t.querySelector("circle") || t.querySelector("rect");
-            bg?.setAttribute("fill", v);
-          }
-          this.#commit();
-        },
-        { allowNone: true },
-      );
+      this.#renderRegistryControl(PROPERTY_CONTROL_IDS.markerBgFillColor);
     });
-
-    // Line section: the bg primitive's OPTIONAL border. Unlike most
-    // tools the Counter's stroke isn't required, but users occasionally
-    // want a thicker outline or a dashed ring — expose the standard
-    // Color / Width / Dash rows here. Attrs go on the <circle>/<rect>
-    // child (not the outer <g>), matching where MarkerTool writes them
-    // at creation time.
     this.#inSection("Line", () => {
-      // Border color
-      this.#addColorPicker("Color", bgStroke, (v) => {
-        for (const t of this.#targets) {
-          const bg = t.querySelector("circle") || t.querySelector("rect");
-          bg?.setAttribute("stroke", v);
-        }
-        this.#commit();
-      });
-      // Border width
-      this.#target().appendChild(
-        this.#ppRow(
-          "Width",
-          ppNumberInput(bgStrokeWidth, "pt", 0, 20, 0.25, (v) => {
-            for (const t of this.#targets) {
-              const bg = t.querySelector("circle") || t.querySelector("rect");
-              if (!bg) continue;
-              bg.setAttribute("stroke-width", String(v));
-              // Re-express the dasharray (if any) against the new width
-              // so dots/dashes stay proportional, matching how the Line
-              // section does it for stroke primitives.
-              const dashKey = bg.getAttribute("data-dash-key");
-              if (dashKey) {
-                bg.setAttribute("stroke-dasharray", computeDasharray(dashKey, v));
-              }
-            }
-            this.#commit();
-          }),
-        ),
-      );
-      // Border dash type
-      this.#target().appendChild(
-        this.#ppRow(
-          "Dash type",
-          createCustomSelect({
-            options: [
-              { value: "", label: "Solid", preview: dashPreview("") },
-              { value: "dash", label: "Dashed", preview: dashPreview("dash") },
-              { value: "dot", label: "Dotted", preview: dashPreview("dot") },
-              { value: "dashDot", label: "Dash-Dot", preview: dashPreview("dashDot") },
-              { value: "lgDash", label: "Long Dash", preview: dashPreview("lgDash") },
-            ],
-            current: bgDashKey,
-            ariaLabel: "Dash type",
-            onChange: (v) => {
-              for (const t of this.#targets) {
-                const bg = t.querySelector("circle") || t.querySelector("rect");
-                if (!bg) continue;
-                const w = Number.parseFloat(bg.getAttribute("stroke-width") || "1.5");
-                if (v) {
-                  bg.setAttribute("stroke-dasharray", computeDasharray(v, w));
-                  bg.setAttribute("data-dash-key", v);
-                } else {
-                  bg.removeAttribute("stroke-dasharray");
-                  bg.removeAttribute("data-dash-key");
-                }
-              }
-              this.#commit();
-            },
-          }),
-        ),
-      );
+      this.#renderRegistryControl(PROPERTY_CONTROL_IDS.markerBgStrokeColor);
+      this.#renderRegistryControl(PROPERTY_CONTROL_IDS.markerBgStrokeWidth);
+      this.#renderRegistryControl(PROPERTY_CONTROL_IDS.markerBgStrokeStyle);
     });
-
-    // Label section: the displayed number + its rendered size. "Label"
-    // covers both the textual content (Value, imperative — the
-    // `data-marker` attribute + `<text>` content tweak isn't a
-    // standard "set attribute on element" the registry models) and
-    // the font size that drives the counter's overall visual size
-    // (Size, schema-driven via `markerSize.effect = resizeMarker`,
-    // which rescales bg + text geometry together).
     this.#inSection("Label", () => {
-      this.#addNumberInput("Value", currentVal, 1, 999, (v) => {
-        for (const t of this.#targets) {
-          t.setAttribute("data-marker", String(v));
-          const te = t.querySelector("text");
-          if (te) te.textContent = String(v);
-        }
-        this.#commit();
-      });
+      this.#renderRegistryControl(PROPERTY_CONTROL_IDS.markerLabelValue);
       this.#renderRegistryControl(PROPERTY_CONTROL_IDS.markerSize);
     });
   }
