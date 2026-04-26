@@ -690,14 +690,10 @@ export class Toolbar {
       // the payload stays trim for unstyled shapes.
       const ss = el.getAttribute("data-arrow-start-shape");
       const es = el.getAttribute("data-arrow-end-shape");
-      // New per-dimension width/length; fall back to the legacy
-      // single-size attr if only that's present on this element.
-      const sw =
-        el.getAttribute("data-arrow-start-width") || el.getAttribute("data-arrow-start-size");
-      const sl =
-        el.getAttribute("data-arrow-start-length") || el.getAttribute("data-arrow-start-size");
-      const ew = el.getAttribute("data-arrow-end-width") || el.getAttribute("data-arrow-end-size");
-      const eL = el.getAttribute("data-arrow-end-length") || el.getAttribute("data-arrow-end-size");
+      const sw = el.getAttribute("data-arrow-start-width");
+      const sl = el.getAttribute("data-arrow-start-length");
+      const ew = el.getAttribute("data-arrow-end-width");
+      const eL = el.getAttribute("data-arrow-end-length");
       if (ss) out.arrow_shape_start = ss as AnnotationShape["arrow_shape_start"];
       if (es) out.arrow_shape_end = es as AnnotationShape["arrow_shape_end"];
       if (sw) out.arrow_width_start = sw as AnnotationShape["arrow_width_start"];

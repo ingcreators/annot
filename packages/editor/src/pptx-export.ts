@@ -417,30 +417,16 @@ function buildLine(el: SVGElement, id: number): string {
   const flipV = !isCurved && y2 < y1 ? ' flipV="1"' : "";
 
   // Per-end head config — translate SVG shape names into OOXML preset
-  // types. Fall back to the legacy marker-end attribute so pre-refactor
-  // arrows ("any marker-end present" → triangle) still look right.
+  // types.
   const startShape = el.getAttribute("data-arrow-start-shape");
   const endShape = el.getAttribute("data-arrow-end-shape");
-  // Read width & length separately (new schema). Fall back through
-  // the legacy single-size attr for content created before the split.
-  const startW =
-    el.getAttribute("data-arrow-start-width") || el.getAttribute("data-arrow-start-size") || "md";
-  const startL =
-    el.getAttribute("data-arrow-start-length") || el.getAttribute("data-arrow-start-size") || "md";
-  const endW =
-    el.getAttribute("data-arrow-end-width") || el.getAttribute("data-arrow-end-size") || "md";
-  const endL =
-    el.getAttribute("data-arrow-end-length") || el.getAttribute("data-arrow-end-size") || "md";
-  const legacyEnd = !!el.getAttribute("marker-end");
+  const startW = el.getAttribute("data-arrow-start-width") || "md";
+  const startL = el.getAttribute("data-arrow-start-length") || "md";
+  const endW = el.getAttribute("data-arrow-end-width") || "md";
+  const endL = el.getAttribute("data-arrow-end-length") || "md";
 
   const head = endOOXML("headEnd", startShape, startW, startL);
-  const tail =
-    endShape != null
-      ? endOOXML("tailEnd", endShape, endW, endL)
-      : legacyEnd
-        ? `<a:tailEnd type="triangle" w="med" len="med"/>`
-        : "";
-  // Legacy single-var for downstream insertion below.
+  const tail = endShape != null ? endOOXML("tailEnd", endShape, endW, endL) : "";
   const tailEnd = head + tail;
 
   if (isCurved) {

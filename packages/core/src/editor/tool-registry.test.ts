@@ -87,8 +87,6 @@ const VALID_TOOL_OPTIONS_KEYS = new Set<keyof ToolOptions>([
   "arrowWidthEnd",
   "arrowLengthStart",
   "arrowLengthEnd",
-  "arrowSizeStart",
-  "arrowSizeEnd",
   "strokeOpacity",
   "strokeLinecap",
   "strokeLinejoin",

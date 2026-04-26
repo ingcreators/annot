@@ -6,7 +6,7 @@ import {
   writeArrowEndpoints,
   writeArrowSpec,
 } from "@ingcreators/annot-core/editor/arrow-markers";
-import type { ArrowDim, ArrowHead, ArrowShape } from "./tool-base.js";
+import type { ArrowHead, ArrowShape } from "./tool-base.js";
 /**
  * ArrowTool — unified Line / Arrow tool.
  *
@@ -150,22 +150,19 @@ export class ArrowTool extends ToolBase {
     this.#startX = pt.x;
     this.#startY = pt.y;
 
-    // Compose the initial spec from the unified per-dim fields, with
-    // fallbacks through the legacy `arrowSize*` and `arrowHead`
-    // options so upgrading users don't lose their defaults.
-    // `arrowSize*` are deprecated/read-only — newly-saved presets
-    // populate the split width/length fields directly.
-    const legacySize = (v: ArrowDim | undefined): ArrowDim => v ?? "md";
+    // Compose the initial spec from the per-dim fields. The
+    // `arrowHead` 3-state field is the second source — accepted as a
+    // fallback when the per-end `arrowHead{Start,End}` are unset.
     const spec: ArrowEndsSpec = {
       start: {
         shape: this.options.arrowHeadStart ?? "none",
-        width: this.options.arrowWidthStart ?? legacySize(this.options.arrowSizeStart),
-        length: this.options.arrowLengthStart ?? legacySize(this.options.arrowSizeStart),
+        width: this.options.arrowWidthStart ?? "md",
+        length: this.options.arrowLengthStart ?? "md",
       },
       end: {
         shape: this.options.arrowHeadEnd ?? "triangle",
-        width: this.options.arrowWidthEnd ?? legacySize(this.options.arrowSizeEnd),
-        length: this.options.arrowLengthEnd ?? legacySize(this.options.arrowSizeEnd),
+        width: this.options.arrowWidthEnd ?? "md",
+        length: this.options.arrowLengthEnd ?? "md",
       },
     };
     if (

@@ -107,15 +107,6 @@ export interface ToolOptions {
   /** Per-end arrow lengths (along stem) — sm / md / lg. */
   arrowLengthStart?: ArrowDim;
   arrowLengthEnd?: ArrowDim;
-  /** **Deprecated, read-only back-compat.** Single-enum per-end size
-   *  saved by versions that pre-date the width/length split. Newly-
-   *  saved presets do NOT populate these fields. `ArrowTool` reads
-   *  them as a fallback when both `arrowWidthStart` /
-   *  `arrowLengthStart` (resp. `*End`) are absent. The preset
-   *  serializer keeps an entry in `FIELD_TO_SNAKE` (`arrow_size_*`)
-   *  so disk files written by old versions still load cleanly. */
-  arrowSizeStart?: ArrowDim;
-  arrowSizeEnd?: ArrowDim;
 
   /** Stroke opacity (0..1). Separate from fill-opacity. */
   strokeOpacity?: number;

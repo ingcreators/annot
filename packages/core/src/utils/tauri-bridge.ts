@@ -367,11 +367,6 @@ export interface AnnotationShape {
   /** Per-dimension arrow lengths (along stem, OOXML `len`). */
   arrow_length_start?: "sm" | "md" | "lg";
   arrow_length_end?: "sm" | "md" | "lg";
-  /** Legacy single-size field — written for back-compat when older
-   *  Rust handlers still read `arrow_size_*`. Equal to the length
-   *  value. */
-  arrow_size_start?: "sm" | "md" | "lg";
-  arrow_size_end?: "sm" | "md" | "lg";
 
   /** Stroke opacity (0..1). Emitted as `<a:alpha val="..."/>` inside
    *  the stroke's solidFill. */

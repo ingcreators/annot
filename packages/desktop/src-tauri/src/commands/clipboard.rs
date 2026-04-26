@@ -36,10 +36,6 @@ pub struct AnnotationShape {
     /// Per-dimension lengths (along stem, OOXML `len`).
     pub arrow_length_start: Option<String>,
     pub arrow_length_end: Option<String>,
-    /// Legacy single-size field — kept as the fallback when the new
-    /// per-dimension attrs are absent (older payloads).
-    pub arrow_size_start: Option<String>,
-    pub arrow_size_end: Option<String>,
 
     /// Stroke opacity (0..1). Emitted as `<a:alpha val="..."/>` inside
     /// the stroke's solidFill.
@@ -533,13 +529,11 @@ fn gvml_line(s: &AnnotationShape, id: u32) -> String {
     let fh = if x2 < x1 { r#" flipH="1""# } else { "" };
     let fv = if y2 < y1 { r#" flipV="1""# } else { "" };
 
-    // Per-end arrows with independent width / length. Fall back
-    // through the legacy single-size field, then the has_arrow
-    // boolean, so pre-refactor payloads keep rendering.
-    let start_w = s.arrow_width_start.as_deref().or(s.arrow_size_start.as_deref());
-    let start_l = s.arrow_length_start.as_deref().or(s.arrow_size_start.as_deref());
-    let end_w = s.arrow_width_end.as_deref().or(s.arrow_size_end.as_deref());
-    let end_l = s.arrow_length_end.as_deref().or(s.arrow_size_end.as_deref());
+    // Per-end arrows with independent width / length.
+    let start_w = s.arrow_width_start.as_deref();
+    let start_l = s.arrow_length_start.as_deref();
+    let end_w = s.arrow_width_end.as_deref();
+    let end_l = s.arrow_length_end.as_deref();
     let head = end_xml("headEnd", s.arrow_shape_start.as_deref(), start_w, start_l);
     let tail = if s.arrow_shape_end.is_some() {
         end_xml("tailEnd", s.arrow_shape_end.as_deref(), end_w, end_l)
