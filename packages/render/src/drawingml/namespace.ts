@@ -35,6 +35,14 @@ export interface NamespaceOpts {
   cnvCxnSp: "a:cNvCxnSpPr" | "p:cNvCxnSpPr";
   /** `<{ns}:cNvPicPr>` open tag. */
   cnvPic: "a:cNvPicPr" | "p:cNvPicPr";
+  /** Open tag(s) for the text-body wrapper inside a shape.
+   *  GVML wraps text in `<a:txSp><a:txBody>` (the locked-canvas
+   *  text primitive); PPTX puts `<p:txBody>` directly under
+   *  `<p:sp>`. Both ultimately contain `<a:bodyPr/>`, `<a:lstStyle/>`,
+   *  and one or more `<a:p>` runs — only the wrapper differs. */
+  txBodyOpen: "<a:txSp><a:txBody>" | "<p:txBody>";
+  /** Matching close tag(s) for `txBodyOpen`. */
+  txBodyClose: "</a:txBody><a:useSpRect/></a:txSp>" | "</p:txBody>";
 }
 
 export const NS_GVML: NamespaceOpts = {
@@ -48,6 +56,8 @@ export const NS_GVML: NamespaceOpts = {
   cnvSp: "a:cNvSpPr",
   cnvCxnSp: "a:cNvCxnSpPr",
   cnvPic: "a:cNvPicPr",
+  txBodyOpen: "<a:txSp><a:txBody>",
+  txBodyClose: "</a:txBody><a:useSpRect/></a:txSp>",
 };
 
 export const NS_PPTX: NamespaceOpts = {
@@ -61,6 +71,8 @@ export const NS_PPTX: NamespaceOpts = {
   cnvSp: "p:cNvSpPr",
   cnvCxnSp: "p:cNvCxnSpPr",
   cnvPic: "p:cNvPicPr",
+  txBodyOpen: "<p:txBody>",
+  txBodyClose: "</p:txBody>",
 };
 
 export type Namespace = "a" | "p";

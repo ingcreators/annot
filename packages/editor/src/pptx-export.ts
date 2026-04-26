@@ -1,6 +1,8 @@
-import { buildZip } from "@ingcreators/annot-core/zip";
-import type { CanvasManager } from "./canvas-manager.js";
+import { svgElementToAnnotationShape } from "@ingcreators/annot-core/editor/svg-to-annotation-shapes";
 import { getEffectiveLineEndpoints } from "@ingcreators/annot-core/editor/transform-utils";
+import { buildZip } from "@ingcreators/annot-core/zip";
+import { buildShapeXml } from "@ingcreators/annot-render";
+import type { CanvasManager } from "./canvas-manager.js";
 
 const __pptxTextEncoder = new TextEncoder();
 function strToU8(s: string): Uint8Array {
@@ -344,56 +346,48 @@ function buildShapes(input: PptxExportInput): ShapeInfo[] {
 
   const annos = input.annotations.childNodes;
   for (const node of Array.from(annos)) {
+    if (node.nodeType !== 1) continue;
     const el = node as SVGElement;
     const tag = el.tagName;
 
+    // Lines and arrows still use pptx-export's own `buildLine` —
+    // the shared builder doesn't yet model curved arrows (the
+    // `<a:custGeom>` quadratic-Bezier path that ArrowTool emits
+    // for curves). Plain lines + non-curved arrows could route
+    // through the shared `buildShapeXml` instead, but until the
+    // curved path lands there we keep all line dispatch local.
     if (tag === "line") {
-      shapes.push({ xml: buildLine(el as SVGLineElement, id), id });
+      shapes.push({ xml: buildLine(el, id), id });
       id++;
-    } else if (tag === "rect") {
-      shapes.push({ xml: buildRect(el as SVGRectElement, id), id });
+      continue;
+    }
+    if (tag === "g" && el.getAttribute("data-type") === "arrow") {
+      shapes.push({ xml: buildLine(el, id), id });
       id++;
-    } else if (tag === "ellipse") {
-      shapes.push({ xml: buildEllipse(el as SVGEllipseElement, id), id });
-      id++;
-    } else if (tag === "text") {
-      shapes.push({ xml: buildText(el as SVGTextElement, id), id });
-      id++;
-    } else if (tag === "path") {
-      shapes.push({ xml: buildFreehand(el as SVGPathElement, id), id });
-      id++;
-    } else if (tag === "g") {
-      const gType = el.getAttribute("data-type");
-      // Arrow group — ArrowTool's output since the move away from SVG
-      // markers. Same XML shape as the legacy <line> form; the helper
-      // just reads endpoints from data-x1/y1/x2/y2 and arrow spec
-      // from the data-arrow-*-* attrs.
-      if (gType === "arrow") {
-        shapes.push({ xml: buildLine(el, id), id });
-        id++;
-      } else if (gType === "freehand") {
-        // Freehand session group — one <path> per stroke. Wrap all
-        // strokes in an OOXML `<p:grpSp>` so PowerPoint opens them
-        // as a single selectable group (mirroring Annot's one-object
-        // UX). Each child <path> still becomes its own `<p:sp>` so
-        // per-stroke color / width / style is preserved; the group
-        // just organizes them visually.
-        const groupXml = buildFreehandGroup(el, id);
-        if (groupXml) {
-          shapes.push({ xml: groupXml.xml, id });
-          id = groupXml.nextId;
-        }
-      } else {
-        // Numbered marker: circle/rect/rounded + text. Pass the outer
-        // <g> so buildMarker can inspect `data-shape` and dispatch to
-        // the correct OOXML prstGeom (`ellipse` / `rect` / `roundRect`).
-        const text = el.querySelector("text");
-        const bg = el.querySelector("circle, rect");
-        if (bg && text) {
-          shapes.push({ xml: buildMarker(el, bg, text, id), id });
-          id++;
-        }
+      continue;
+    }
+    // Freehand session group — one `<p:grpSp>` containing one
+    // `<p:sp>` per stroke. PPTX-only structure (the GVML
+    // clipboard side flattens to individual freehand shapes), so
+    // it stays in pptx-export.
+    if (tag === "g" && el.getAttribute("data-type") === "freehand") {
+      const groupXml = buildFreehandGroup(el, id);
+      if (groupXml) {
+        shapes.push({ xml: groupXml.xml, id });
+        id = groupXml.nextId;
       }
+      continue;
+    }
+    // Everything else routes through the shared builder — same
+    // dispatcher the Office-clipboard path uses, so any new tool
+    // gets PPTX support automatically once `transformOf` and the
+    // shared per-shape emitter know about it.
+    const shape = svgElementToAnnotationShape(el);
+    if (!shape) continue;
+    const xml = buildShapeXml(shape, { ns: "p", id });
+    if (xml) {
+      shapes.push({ xml, id });
+      id++;
     }
   }
   return shapes;
@@ -509,124 +503,6 @@ function buildLine(el: SVGElement, id: number): string {
     ${lineLnXml(el, sw, stroke, tailEnd)}
   </p:spPr>
 </p:cxnSp>`;
-}
-
-function buildRect(el: SVGRectElement, id: number): string {
-  const x = Number.parseFloat(el.getAttribute("x") || "0");
-  const y = Number.parseFloat(el.getAttribute("y") || "0");
-  const w = Number.parseFloat(el.getAttribute("width") || "0");
-  const h = Number.parseFloat(el.getAttribute("height") || "0");
-  const stroke = el.getAttribute("stroke") || "#ff0000";
-  const sw = Number.parseFloat(el.getAttribute("stroke-width") || "3");
-  const fill = el.getAttribute("fill") || "none";
-  const fillXml = paintXml(el, fill, "fill");
-
-  return `<p:sp>
-  <p:nvSpPr>
-    <p:cNvPr id="${id}" name="Rect ${id}"/>
-    <p:cNvSpPr/>
-    <p:nvPr/>
-  </p:nvSpPr>
-  <p:spPr>
-    <a:xfrm${xfrmAttrs(el)}>
-      <a:off x="${px(x)}" y="${px(y)}"/>
-      <a:ext cx="${px(w)}" cy="${px(h)}"/>
-    </a:xfrm>
-    <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
-    ${fillXml}
-    <a:ln w="${ptToEMU(sw)}">
-      ${paintXml(el, stroke, "stroke")}
-    </a:ln>
-  </p:spPr>
-</p:sp>`;
-}
-
-function buildEllipse(el: SVGEllipseElement, id: number): string {
-  const cx = Number.parseFloat(el.getAttribute("cx") || "0");
-  const cy = Number.parseFloat(el.getAttribute("cy") || "0");
-  const rx = Number.parseFloat(el.getAttribute("rx") || "0");
-  const ry = Number.parseFloat(el.getAttribute("ry") || "0");
-  const stroke = el.getAttribute("stroke") || "#ff0000";
-  const sw = Number.parseFloat(el.getAttribute("stroke-width") || "3");
-  const fill = el.getAttribute("fill") || "none";
-
-  const fillXml = paintXml(el, fill, "fill");
-
-  return `<p:sp>
-  <p:nvSpPr>
-    <p:cNvPr id="${id}" name="Ellipse ${id}"/>
-    <p:cNvSpPr/>
-    <p:nvPr/>
-  </p:nvSpPr>
-  <p:spPr>
-    <a:xfrm${xfrmAttrs(el)}>
-      <a:off x="${px(cx - rx)}" y="${px(cy - ry)}"/>
-      <a:ext cx="${px(rx * 2)}" cy="${px(ry * 2)}"/>
-    </a:xfrm>
-    <a:prstGeom prst="ellipse"><a:avLst/></a:prstGeom>
-    ${fillXml}
-    <a:ln w="${ptToEMU(sw)}">
-      ${paintXml(el, stroke, "stroke")}
-    </a:ln>
-  </p:spPr>
-</p:sp>`;
-}
-
-function buildText(el: SVGTextElement, id: number): string {
-  const x = Number.parseFloat(el.getAttribute("x") || "0");
-  const y = Number.parseFloat(el.getAttribute("y") || "0");
-  const fontSize = Number.parseFloat(el.getAttribute("font-size") || "24");
-  const fill = el.getAttribute("fill") || "#ff0000";
-
-  // Collect text from tspans or direct text
-  const tspans = el.querySelectorAll("tspan");
-  let textContent = "";
-  if (tspans.length > 0) {
-    const lines: string[] = [];
-    tspans.forEach((ts) => lines.push(ts.textContent || ""));
-    textContent = lines.join("\n");
-  } else {
-    textContent = el.textContent || "";
-  }
-
-  // Font size in hundredths of a point: 24px ≈ 18pt = 1800
-  const ptSize = Math.round(fontSize * 0.75 * 100);
-
-  const paragraphs = textContent
-    .split("\n")
-    .map(
-      (line) =>
-        `<a:p><a:r><a:rPr lang="ja-JP" sz="${ptSize}" dirty="0">
-      <a:solidFill><a:srgbClr val="${colorHex(fill)}"/></a:solidFill>
-    </a:rPr><a:t>${escXml(line)}</a:t></a:r></a:p>`,
-    )
-    .join("");
-
-  // Estimate text box size
-  const boxW = Math.max(200, textContent.length * fontSize * 0.6);
-  const boxH = fontSize * 1.5 * textContent.split("\n").length;
-
-  return `<p:sp>
-  <p:nvSpPr>
-    <p:cNvPr id="${id}" name="Text ${id}"/>
-    <p:cNvSpPr txBox="1"/>
-    <p:nvPr/>
-  </p:nvSpPr>
-  <p:spPr>
-    <a:xfrm${xfrmAttrs(el)}>
-      <a:off x="${px(x)}" y="${px(y - fontSize)}"/>
-      <a:ext cx="${px(boxW)}" cy="${px(boxH)}"/>
-    </a:xfrm>
-    <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
-    <a:noFill/>
-    <a:ln><a:noFill/></a:ln>
-  </p:spPr>
-  <p:txBody>
-    <a:bodyPr wrap="none" rtlCol="0"/>
-    <a:lstStyle/>
-    ${paragraphs}
-  </p:txBody>
-</p:sp>`;
 }
 
 function buildFreehand(el: SVGPathElement, id: number): string {
@@ -778,95 +654,6 @@ function buildFreehandGroup(
   return { xml, nextId: childId };
 }
 
-function buildMarker(g: SVGElement, bg: Element, text: SVGTextElement, id: number): string {
-  // Geometry is taken from whichever SVG primitive backs the marker
-  // (circle or rect). Shape routing comes from `data-shape` on the
-  // outer <g> (authoritative — written by MarkerTool) with a fallback
-  // to the bg tag in case data-shape is missing (legacy content).
-  const declaredShape = g.getAttribute("data-shape");
-  const isRectLike =
-    declaredShape === "rect" || declaredShape === "rounded" || bg.tagName === "rect";
-  const isRounded = declaredShape === "rounded";
-
-  let offX: number;
-  let offY: number;
-  let extCx: number;
-  let extCy: number;
-  if (isRectLike) {
-    offX = Number.parseFloat(bg.getAttribute("x") || "0");
-    offY = Number.parseFloat(bg.getAttribute("y") || "0");
-    extCx = Number.parseFloat(bg.getAttribute("width") || "36");
-    extCy = Number.parseFloat(bg.getAttribute("height") || "36");
-  } else {
-    const cx = Number.parseFloat(bg.getAttribute("cx") || "0");
-    const cy = Number.parseFloat(bg.getAttribute("cy") || "0");
-    const r = Number.parseFloat(bg.getAttribute("r") || "18");
-    offX = cx - r;
-    offY = cy - r;
-    extCx = r * 2;
-    extCy = r * 2;
-  }
-  // The outer <g> may carry a data-tx/data-ty translation (from
-  // drag / align / nudge via #moveElement → nudgeTranslate). Bake
-  // it into the export offset so aligned / moved markers land where
-  // the user sees them, not where their child geometry was before
-  // the move.
-  const off = offsetFromTransform(g);
-  offX += off.tx;
-  offY += off.ty;
-
-  const fill = bg.getAttribute("fill") || "#ff0000";
-  const label = text.textContent || "";
-  const fontSize = Number.parseFloat(text.getAttribute("font-size") || "16");
-  const ptSize = Math.round(fontSize * 0.75 * 100);
-
-  // OOXML preset geometry selector. `roundRect` uses an adjustment
-  // value in `avLst` — we map the SVG rx (relative to half the shorter
-  // side) onto OOXML's 0–50000 permille scale so the rounding matches
-  // the on-canvas look.
-  let prstGeomXml: string;
-  if (isRounded) {
-    const rx = Number.parseFloat(bg.getAttribute("rx") || "0");
-    const halfMin = Math.max(1, Math.min(extCx, extCy) / 2);
-    const adj = Math.round(Math.max(0, Math.min(1, rx / halfMin)) * 50000);
-    prstGeomXml = `<a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val ${adj}"/></a:avLst></a:prstGeom>`;
-  } else if (isRectLike) {
-    prstGeomXml = `<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>`;
-  } else {
-    prstGeomXml = `<a:prstGeom prst="ellipse"><a:avLst/></a:prstGeom>`;
-  }
-
-  return `<p:sp>
-  <p:nvSpPr>
-    <p:cNvPr id="${id}" name="Marker ${id}"/>
-    <p:cNvSpPr/>
-    <p:nvPr/>
-  </p:nvSpPr>
-  <p:spPr>
-    <a:xfrm>
-      <a:off x="${px(offX)}" y="${px(offY)}"/>
-      <a:ext cx="${px(extCx)}" cy="${px(extCy)}"/>
-    </a:xfrm>
-    ${prstGeomXml}
-    <a:solidFill><a:srgbClr val="${colorHex(fill)}"/></a:solidFill>
-    <a:ln w="19050"><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill></a:ln>
-  </p:spPr>
-  <p:txBody>
-    <a:bodyPr anchor="ctr"/>
-    <a:lstStyle/>
-    <a:p>
-      <a:pPr algn="ctr"/>
-      <a:r>
-        <a:rPr lang="en-US" sz="${ptSize}" b="1">
-          <a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill>
-        </a:rPr>
-        <a:t>${escXml(label)}</a:t>
-      </a:r>
-    </a:p>
-  </p:txBody>
-</p:sp>`;
-}
-
 // --- Data URI to binary ---
 
 function dataUrlToUint8Array(dataUrl: string): Uint8Array {
@@ -894,9 +681,6 @@ function parseSVGPath(d: string): { x: number; y: number }[] {
   return points;
 }
 
-function escXml(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
 
 // --- OOXML boilerplate ---
 
