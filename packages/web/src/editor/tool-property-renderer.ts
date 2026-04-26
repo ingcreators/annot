@@ -1,24 +1,50 @@
 /**
- * Tool-properties side-panel renderer for the editor toolbar. This
- * module owns the layout / DOM construction of the per-tool panel
- * (Type / Fill / Line / Label sections, color pull-buttons, number
- * inputs, dash-style selects, etc.) but does NOT own preset state —
- * the calling toolbar passes in the small set of state operations
- * the renderer needs as a `ToolPropertyRendererContext`.
+ * Tool-side property panel renderer — schema-driven. Per
+ * `docs/plans/tool-property-renderer-schema.md`, this is the live
+ * renderer for the per-tool side panel that the toolbar shows when
+ * the user picks a drawing tool. Phase 3 replaced the previous
+ * imperative `if (toolId === "shape") … if (toolId === "arrow") …`
+ * cascade with this dispatch-on-`panelControls` shape; Phase 4 of
+ * the plan will pull per-control metadata from `PROPERTY_CONTROLS`
+ * via the `selectionDef` field on each adapter, so a UX edit
+ * becomes one entry in the SELECTION registry that flows through to
+ * both surfaces.
  *
- * Extracted from `toolbar.ts` as Stage 3a-2 of
- * `docs/plans/pre-release-cleanup.md` to start whittling that file
- * down from its god-module shape. The context-object pattern keeps
- * preset state private to the toolbar while letting the renderer
- * stay a self-contained pure-ish function (all DOM access, no
- * cross-method `this.#` coupling).
+ * Inputs:
+ *   - `TOOL_REGISTRY[toolId].panelControls` (Tier B, lives in
+ *     `@ingcreators/annot-core`) supplies the per-tool control list
+ *     + section grouping.
+ *   - `TOOL_PANEL_ADAPTERS` (also Tier B) supplies the
+ *     `(preset, value, toolId) => void` mutation routed by each
+ *     control id (consumed by Phase 4 metadata wiring; Phase 3 still
+ *     hardcodes per-id mutations inside the per-control branches).
+ *
+ * Output structure:
+ *   - One `pp-section` per consecutive run of entries with the same
+ *     `section`, in the order encoded by the registry array.
+ *   - Per-control rows constructed via the shared primitives in
+ *     `@ingcreators/annot-editor/property-controls`
+ *     (`createColorPullButton`, `createNumberInput`,
+ *     `createCustomSelect`, …) so the resulting class names +
+ *     attribute shapes match the SELECTION-side property panel.
+ *   - Type chip row: standard `prop-choice-chip` icon/svg chips for
+ *     most tools; `pp-color-chip` swatches for Highlight.
+ *   - Freehand: `pp-done-row` button appended to `menu` AFTER all
+ *     pp-sections, NOT inside one.
+ *
+ * Per-(toolId, id) metadata (number-input min/max/step, color
+ * fallbacks, dash/cap/font option lists) is HARDCODED here. Phase 4
+ * of the plan replaces those tables with reads against
+ * `PROPERTY_CONTROLS` + `selectionDef`-keyed metadata.
  */
 
 import {
-  ARROW_ICON_SVG,
-  COUNTER_ICON_SVG,
   HIGHLIGHT_COLORS,
-  SHAPE_ICON_SVG,
+  PROPERTY_CONTROL_IDS,
+  TOOL_REGISTRY,
+  type ToolPanelAdapterId,
+  type ToolPanelControlDef,
+  type ToolPanelSection,
 } from "@ingcreators/annot-core/editor";
 import type { CanvasManager } from "@ingcreators/annot-editor";
 import type {
@@ -39,6 +65,8 @@ import {
 } from "@ingcreators/annot-editor/property-controls";
 import type { FreehandTool } from "@ingcreators/annot-editor/tools/freehand-tool";
 
+// ─── Public surface ──────────────────────────────────────────────────
+
 /**
  * Hooks the renderer needs from the owning toolbar. Kept narrow so
  * the renderer stays decoupled from `Toolbar`'s private state shape;
@@ -46,14 +74,12 @@ import type { FreehandTool } from "@ingcreators/annot-editor/tools/freehand-tool
  * this same handful of primitives.
  */
 export interface ToolPropertyRendererContext {
-  /** Active editor canvas. Used by the "Done drawing" button to
-   *  commit the freehand session. */
+  /** Active editor canvas. Used by the freehand "Done drawing"
+   *  button to commit the active drawing session. */
   canvas: CanvasManager;
-  /** Live `ToolOptions` reference owned by the toolbar. The renderer
-   *  `Object.assign`s mutated preset values into this so the active
-   *  tool picks them up on the next pointer event (without it, an
-   *  in-flight FreehandTool keeps drawing with the OLD color even
-   *  after the user picks a new one in the panel). */
+  /** Live `ToolOptions` reference owned by the toolbar. Mutated in
+   *  place after each control commit so the active tool picks up
+   *  preset changes on the next pointer event. */
   options: ToolOptions;
   /** Read the current preset (variant-keyed) for `toolId`. */
   getCurrentPreset: (toolId: string) => ToolOptions;
@@ -65,569 +91,591 @@ export interface ToolPropertyRendererContext {
 }
 
 /**
- * Render the per-tool properties panel into `menu`. Caller is
+ * Render the per-tool properties panel into `menu` from the
+ * declarative `TOOL_REGISTRY[toolId].panelControls` array. Caller is
  * responsible for clearing `menu` between invocations.
  *
- * Changes persist to the in-memory preset map immediately; disk
- * flush happens either via the popover close handler (horizontal
- * mode) or when the host decides (e.g. when switching tools).
+ * Tools without `panelControls` (currently only `crop`, which has a
+ * transient overlay rather than a persistent side panel) leave the
+ * menu empty. Tools whose registry exists but lists an empty array
+ * also produce an empty render — consistent with "panelControls is
+ * the source of truth for the side panel".
  */
 export function populateToolPropertyPanel(
   toolId: string,
   menu: HTMLElement,
   ctx: ToolPropertyRendererContext,
 ): void {
+  const meta = TOOL_REGISTRY[toolId];
+  if (!meta?.panelControls) return;
   const preset = ctx.getCurrentPreset(toolId);
-  const isText = toolId === "text";
-  const isMarker = toolId === "marker";
-  const isShape = toolId === "shape";
-  const isArrow = toolId === "arrow";
-  const isFreehand = toolId === "freehand";
-  const isRedact = toolId === "redact";
-  const isHighlight = toolId === "highlight";
 
-  // --- Local helpers (close over preset + toolId) ------------------
+  // Seed the variant field if a Type chip row is the first control
+  // and the preset doesn't carry one yet. Mirrors the imperative
+  // renderer's `if (!preset.drawStyle) preset.drawStyle = "pen"` /
+  // `if (!preset.shapeType) preset.shapeType = "rect"` etc. — without
+  // this the chip row would render with NO active chip on first use.
+  seedDefaultVariantIfNeeded(toolId, meta.variantField, meta.defaultVariant, preset);
 
-  /** Chip-row variant picker wrapped in a "Type" pp-section. Each
-   *  chip's click routes through ctx.handlePanelVariantChange so the
-   *  switch/save/seed logic matches the toolbar flyout's behavior. */
-  const addTypeRow = (
-    options: Array<{ value: string; icon?: string; svg?: string; label: string }>,
-    current: string,
-  ): void => {
-    const { section, body } = createPropertySection("Type");
-    const row = document.createElement("div");
-    row.className = "pp-type-row";
-    for (const opt of options) {
-      const chip = document.createElement("div");
-      chip.className = `prop-choice-chip${opt.svg ? "" : " material-symbols-outlined"}${current === opt.value ? " active" : ""}`;
-      if (opt.svg) {
-        chip.innerHTML = opt.svg;
-      } else if (opt.icon) {
-        chip.textContent = opt.icon;
-        // Size + font-variation come from .prop-choice-chip /
-        // .material-symbols-outlined in CSS so the Tool panel
-        // ligature chips match Selection panel + toolbar flyout
-        // dimensions (22px glyph in a 32×32 box).
-      }
-      setTooltip(chip, opt.label);
-      chip.addEventListener("click", () => {
-        row.querySelectorAll(".prop-choice-chip").forEach((c) => c.classList.remove("active"));
-        chip.classList.add("active");
-        ctx.handlePanelVariantChange(toolId, opt.value, preset);
-      });
-      row.appendChild(chip);
-    }
-    body.appendChild(row);
-    menu.appendChild(section);
-  };
-
-  /** Lazily-created Fill / Line section bodies. Category order in
-   *  the DOM is Type → Fill → Line. We enforce the order at
-   *  insertion time: when Fill is created, insert it BEFORE any
-   *  already-created Line section; Line always appends to the end.
-   *  Sections stay out of the DOM entirely if no row is added — no
-   *  empty cards for tools that don't need Fill. */
-  let fillBody: HTMLElement | null = null;
-  let lineSection: HTMLElement | null = null;
-  let lineBody: HTMLElement | null = null;
-  const getFillBody = (): HTMLElement => {
-    if (!fillBody) {
-      const s = createPropertySection("Fill");
-      if (lineSection) {
-        // Line already in DOM — slot Fill in ahead of it.
-        menu.insertBefore(s.section, lineSection);
-      } else {
-        menu.appendChild(s.section);
-      }
-      fillBody = s.body;
-    }
-    return fillBody;
-  };
-  const getLineBody = (): HTMLElement => {
-    if (!lineBody) {
-      const s = createPropertySection("Line");
-      lineSection = s.section;
-      menu.appendChild(s.section);
-      lineBody = s.body;
-    }
-    return lineBody;
-  };
-
-  /** Sync-helper: after a property row mutates `preset`, push the
-   *  change into BOTH the presets map (so it persists) AND the
-   *  live `ctx.options` reference (so the ACTIVE tool sees it on
-   *  the next pointerdown — tools read options at creation-time
-   *  values otherwise).
-   *
-   *  Without this sync, e.g. picking a new pen color while Draw is
-   *  active would save the color to the preset but leave the in-
-   *  flight FreehandTool drawing with the OLD color, because its
-   *  `this.options` is a reference to `ctx.options` which was only
-   *  populated on tool activation. */
-  const syncPreset = (): void => {
+  const sync = (): void => {
     ctx.saveCurrentPreset(toolId, preset);
     Object.assign(ctx.options, preset);
   };
 
-  /** Color pull-button row (PowerPoint-style). The callback receives
-   *  the picked color; persistence happens automatically. */
-  const addColorRow = (
-    container: HTMLElement,
-    label: string,
-    current: string,
-    onChange: (v: string) => void,
-    opts?: { allowNone?: boolean },
-  ): void => {
-    const btn = createColorPullButton(
-      current,
-      (color) => {
-        onChange(color);
-        syncPreset();
-      },
-      { allowNone: opts?.allowNone },
-    );
-    container.appendChild(createPropertyRow(label, btn));
-  };
+  // Filter visible controls against the current preset (e.g. Redact
+  // Fill row hides unless redactStyle === "solid").
+  const visible = meta.panelControls.filter(
+    (c) => !c.visibleWhen || c.visibleWhen(preset),
+  );
 
-  /** Number input row (PowerPoint-style with up/down spinner). */
-  const addNumberRow = (
-    container: HTMLElement,
-    label: string,
-    current: number,
-    unit: string,
-    min: number,
-    max: number,
-    step: number,
-    onChange: (v: number) => void,
-  ): void => {
-    const input = createNumberInput({
-      current,
-      unit,
+  // Group by section, preserving array order. Consecutive entries
+  // with the same section share one `pp-section`.
+  const sections: Array<[ToolPanelSection, ToolPanelControlDef[]]> = [];
+  const sectionIndex = new Map<ToolPanelSection, number>();
+  for (const def of visible) {
+    if (isMenuLevelToolId(def.id)) continue; // rendered after sections
+    const existing = sectionIndex.get(def.section);
+    if (existing == null) {
+      sectionIndex.set(def.section, sections.length);
+      sections.push([def.section, [def]]);
+    } else {
+      sections[existing]![1].push(def);
+    }
+  }
+
+  // Render each section.
+  for (const [name, controls] of sections) {
+    const { section, body } = createPropertySection(name);
+    renderControlsIntoBody(toolId, controls, preset, body, ctx, sync);
+    menu.appendChild(section);
+  }
+
+  // Render menu-level extras (currently only `tool.freehandDone`)
+  // AFTER sections, matching the imperative renderer's ordering.
+  for (const def of visible) {
+    if (!isMenuLevelToolId(def.id)) continue;
+    const node = renderMenuLevelControl(toolId, def.id, ctx);
+    if (node) menu.appendChild(node);
+  }
+
+  // Initial persist — matches the imperative tail's
+  // `ctx.saveCurrentPreset + Object.assign`.
+  sync();
+}
+
+// ─── Section body rendering ──────────────────────────────────────────
+
+/** Ids that are rendered OUTSIDE any pp-section, directly on `menu`.
+ *  Currently just the freehand "Done drawing" button. */
+function isMenuLevelToolId(id: ToolPanelAdapterId): boolean {
+  return id === "tool.freehandDone";
+}
+
+/** Set of arrow per-end pulldown ids. The imperative renderer batches
+ *  all four into one `createArrowEndsRows` call (a single widget
+ *  producing 4 rows of Begin Type / Begin Size / End Type / End
+ *  Size). For byte-equivalent DOM, the schema renderer detects the
+ *  full set in a section and dispatches to the SAME helper instead
+ *  of rendering each id as its own row. */
+const ARROW_PER_END_IDS: ReadonlySet<ToolPanelAdapterId> = new Set([
+  PROPERTY_CONTROL_IDS.arrowStartShape,
+  PROPERTY_CONTROL_IDS.arrowStartSize,
+  PROPERTY_CONTROL_IDS.arrowEndShape,
+  PROPERTY_CONTROL_IDS.arrowEndSize,
+]);
+
+function renderControlsIntoBody(
+  toolId: string,
+  controls: ToolPanelControlDef[],
+  preset: ToolOptions,
+  body: HTMLElement,
+  ctx: ToolPropertyRendererContext,
+  sync: () => void,
+): void {
+  // Detect a complete arrow-per-end group — render via
+  // createArrowEndsRows, then drop the four ids from the per-id
+  // dispatch loop below so they aren't double-rendered.
+  const arrowGroupIds = new Set<ToolPanelAdapterId>();
+  for (const def of controls) {
+    if (ARROW_PER_END_IDS.has(def.id)) arrowGroupIds.add(def.id);
+  }
+  const hasFullArrowGroup = arrowGroupIds.size === ARROW_PER_END_IDS.size;
+
+  for (const def of controls) {
+    if (hasFullArrowGroup && ARROW_PER_END_IDS.has(def.id)) {
+      // Render the whole group on the FIRST encounter; skip the
+      // remaining three so we emit createArrowEndsRows exactly once.
+      if (def.id !== PROPERTY_CONTROL_IDS.arrowStartShape) continue;
+      renderArrowEndsRows(body, preset, sync);
+      continue;
+    }
+    const node = renderPerIdControl(toolId, def.id, preset, ctx, sync);
+    if (node) body.appendChild(node);
+  }
+}
+
+// ─── Per-id rendering ────────────────────────────────────────────────
+
+function renderPerIdControl(
+  toolId: string,
+  id: ToolPanelAdapterId,
+  preset: ToolOptions,
+  ctx: ToolPropertyRendererContext,
+  sync: () => void,
+): HTMLElement | null {
+  switch (id) {
+    case "tool.typeChips":
+      return renderTypeChipsRow(toolId, preset, ctx);
+    case "tool.transparencyPercent":
+      return renderTransparencyPercent(preset, sync);
+    case "tool.fillTransparencyPercent":
+      return renderFillTransparencyPercent(preset, sync);
+    case "tool.fillOpacityPercent":
+      return renderFillOpacityPercent(preset, sync);
+    case "tool.freehandDone":
+      // Menu-level — handled separately, never reaches here.
+      return null;
+    case PROPERTY_CONTROL_IDS.strokeColor:
+      return renderStrokeColorRow(toolId, preset, sync);
+    case PROPERTY_CONTROL_IDS.strokeWidth:
+      return renderStrokeWidthRow(toolId, preset, sync);
+    case PROPERTY_CONTROL_IDS.strokeStyle:
+      return renderDashTypeRow(preset, sync);
+    case PROPERTY_CONTROL_IDS.strokeLinecap:
+      return renderCapTypeRow(preset, sync);
+    case PROPERTY_CONTROL_IDS.fillColor:
+      return renderFillColorRow(toolId, preset, sync);
+    case PROPERTY_CONTROL_IDS.fontSize:
+      return renderFontSizeRow(toolId, preset, sync);
+    case PROPERTY_CONTROL_IDS.fontFamily:
+      return renderFontFamilyRow(preset, sync);
+    default:
+      // Per-end arrow ids reach here only when the section doesn't
+      // have the full 4-id group — which the registry today never
+      // produces, but render a defensive null so a malformed
+      // registry edit surfaces in tests rather than throwing.
+      return null;
+  }
+}
+
+function renderMenuLevelControl(
+  toolId: string,
+  id: ToolPanelAdapterId,
+  ctx: ToolPropertyRendererContext,
+): HTMLElement | null {
+  // Currently only freehandDone — kept as a switch so adding a new
+  // menu-level id is a one-line edit here.
+  if (id === "tool.freehandDone" && toolId === "freehand") {
+    return renderFreehandDoneRow(ctx);
+  }
+  return null;
+}
+
+// ─── Type chip row ───────────────────────────────────────────────────
+
+/** Per-tool tooltip overrides that preserve the imperative renderer's
+ *  hardcoded labels. Two registry variants today carry more
+ *  descriptive labels than the imperative tool panel uses — keeping
+ *  the imperative wording is what the Phase 2 byte-equivalence
+ *  contract requires.
+ *
+ *  Phase 5 cleanup will DROP this table and accept the registry's
+ *  labels as the canonical source of truth (a deliberate UX
+ *  improvement: "Rounded" → "Rounded rectangle", "Line" → "Line (no
+ *  arrow)" — small wording fixes that bring the right-panel chip
+ *  tooltips in line with the toolbar flyout, which already uses
+ *  the registry labels). */
+const TYPE_CHIP_TOOLTIP_OVERRIDES: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  arrow: {
+    none: "Line",
+  },
+  shape: {
+    rounded: "Rounded",
+  },
+};
+
+function renderTypeChipsRow(
+  toolId: string,
+  preset: ToolOptions,
+  ctx: ToolPropertyRendererContext,
+): HTMLElement | null {
+  const meta = TOOL_REGISTRY[toolId];
+  if (!meta?.variantField) return null;
+
+  // Highlight uses color-swatch chips driven by HIGHLIGHT_COLORS
+  // (the variants list maps from the same source but loses the
+  // swatch info); every other tool uses regular icon/svg chips
+  // driven by `meta.variants`.
+  if (toolId === "highlight") return renderHighlightTypeChipsRow(preset, ctx);
+
+  const current = preset[meta.variantField];
+  const overrides = TYPE_CHIP_TOOLTIP_OVERRIDES[toolId] ?? {};
+  const row = document.createElement("div");
+  row.className = "pp-type-row";
+  for (const opt of meta.variants ?? []) {
+    const chip = document.createElement("div");
+    const useSvg = !!opt.svg;
+    const isActive = current === opt.value;
+    chip.className =
+      `prop-choice-chip${useSvg ? "" : " material-symbols-outlined"}${
+        isActive ? " active" : ""
+      }`;
+    if (useSvg) {
+      chip.innerHTML = opt.svg!;
+    } else {
+      chip.textContent = opt.icon;
+    }
+    setTooltip(chip, overrides[opt.value] ?? opt.label);
+    chip.addEventListener("click", () => {
+      row.querySelectorAll(".prop-choice-chip").forEach((c) => c.classList.remove("active"));
+      chip.classList.add("active");
+      ctx.handlePanelVariantChange(toolId, opt.value, preset);
+    });
+    row.appendChild(chip);
+  }
+  // The chip row goes under the "Type" pp-section directly — return
+  // the row, the caller appends it to the section body.
+  return row;
+}
+
+function renderHighlightTypeChipsRow(
+  preset: ToolOptions,
+  ctx: ToolPropertyRendererContext,
+): HTMLElement {
+  const fallback = HIGHLIGHT_COLORS[0]!.value;
+  const currentColor = (preset.highlightColor || fallback).toLowerCase();
+  const row = document.createElement("div");
+  row.className = "pp-type-row";
+  for (const opt of HIGHLIGHT_COLORS) {
+    const chip = document.createElement("div");
+    chip.className = `prop-choice-chip pp-color-chip${
+      currentColor === opt.value ? " active" : ""
+    }`;
+    chip.style.setProperty("--swatch-color", opt.value);
+    setTooltip(chip, opt.label);
+    chip.addEventListener("click", () => {
+      row.querySelectorAll(".prop-choice-chip").forEach((c) => c.classList.remove("active"));
+      chip.classList.add("active");
+      ctx.handlePanelVariantChange("highlight", opt.value, preset);
+    });
+    row.appendChild(chip);
+  }
+  return row;
+}
+
+// ─── Transparency / opacity number rows ──────────────────────────────
+
+function renderTransparencyPercent(preset: ToolOptions, sync: () => void): HTMLElement {
+  return createPropertyRow(
+    "Transparency",
+    createNumberInput({
+      current: Math.round((1 - (preset.strokeOpacity ?? 1)) * 100),
+      unit: "%",
+      min: 0,
+      max: 100,
+      step: 1,
+      onChange: (v) => {
+        preset.strokeOpacity = 1 - v / 100;
+        sync();
+      },
+    }),
+  );
+}
+
+function renderFillTransparencyPercent(preset: ToolOptions, sync: () => void): HTMLElement {
+  return createPropertyRow(
+    "Transparency",
+    createNumberInput({
+      current: Math.round((1 - (preset.fillOpacity ?? 0.4)) * 100),
+      unit: "%",
+      min: 0,
+      max: 100,
+      step: 5,
+      onChange: (v) => {
+        preset.fillOpacity = 1 - v / 100;
+        sync();
+      },
+    }),
+  );
+}
+
+function renderFillOpacityPercent(preset: ToolOptions, sync: () => void): HTMLElement {
+  return createPropertyRow(
+    "Opacity",
+    createNumberInput({
+      current: Math.round((preset.fillOpacity ?? 1) * 100),
+      unit: "%",
+      min: 0,
+      max: 100,
+      step: 5,
+      onChange: (v) => {
+        preset.fillOpacity = v / 100;
+        sync();
+      },
+    }),
+  );
+}
+
+// ─── Freehand "Done drawing" button ──────────────────────────────────
+
+function renderFreehandDoneRow(ctx: ToolPropertyRendererContext): HTMLElement {
+  const doneRow = document.createElement("div");
+  doneRow.className = "pp-done-row";
+  const doneBtn = document.createElement("button");
+  doneBtn.type = "button";
+  doneBtn.className = "pp-done-btn";
+  doneBtn.textContent = "Done drawing";
+  setTooltip(doneBtn, "Finish the current drawing (Esc)");
+  doneBtn.addEventListener("click", () => {
+    const active = ctx.canvas.activeTool;
+    if (active && active.name === "freehand") {
+      (active as FreehandTool).endSession();
+    }
+  });
+  doneRow.appendChild(doneBtn);
+  return doneRow;
+}
+
+// ─── SELECTION-side ids ──────────────────────────────────────────────
+
+function renderStrokeColorRow(
+  toolId: string,
+  preset: ToolOptions,
+  sync: () => void,
+): HTMLElement {
+  // Marker's Line > Color falls back to white when strokeColor is
+  // empty; every other tool uses the literal preset value. Matches
+  // the imperative `preset.strokeColor || "#ffffff"` for marker,
+  // `preset.strokeColor` everywhere else.
+  const initial = toolId === "marker" ? preset.strokeColor || "#ffffff" : preset.strokeColor;
+  const btn = createColorPullButton(initial, (color) => {
+    preset.strokeColor = color;
+    sync();
+  });
+  return createPropertyRow("Color", btn);
+}
+
+function renderStrokeWidthRow(
+  toolId: string,
+  preset: ToolOptions,
+  sync: () => void,
+): HTMLElement {
+  // Marker's Line > Width allows 0 (matches the imperative's
+  // `min: 0, max: 20`); every stroke-bearing tool else uses
+  // `min: 0.25, max: 40`. Step = 0.25, unit = "pt" everywhere.
+  const isMarker = toolId === "marker";
+  const min = isMarker ? 0 : 0.25;
+  const max = isMarker ? 20 : 40;
+  const initial = isMarker ? preset.strokeWidth ?? 1.5 : preset.strokeWidth;
+  return createPropertyRow(
+    "Width",
+    createNumberInput({
+      current: initial,
+      unit: "pt",
       min,
       max,
-      step,
+      step: 0.25,
       onChange: (v) => {
-        onChange(v);
-        syncPreset();
+        preset.strokeWidth = v;
+        sync();
       },
-    });
-    container.appendChild(createPropertyRow(label, input));
-  };
+    }),
+  );
+}
 
-  /** Pulldown row (createCustomSelect), for Dash / Cap / Join /
-   *  Font-family selections with SVG previews. */
-  const addSelectRow = (
-    container: HTMLElement,
-    label: string,
-    options: Array<{ value: string; label: string; preview?: string }>,
-    current: string,
-    onChange: (v: string) => void,
-  ): void => {
-    container.appendChild(
-      createPropertyRow(
-        label,
-        createCustomSelect({
-          options,
-          current,
-          ariaLabel: label,
-          onChange: (v) => {
-            onChange(v);
-            syncPreset();
-          },
-        }),
-      ),
-    );
-  };
-
-  /** Preview SVG helpers — match the selection panel's visuals for
-   *  drop-in consistency between the two surfaces. */
-  const dashPreview = (key: string): string => {
-    const da = computeDasharray(key, 1.5);
-    const daAttr = da ? ` stroke-dasharray="${da}"` : "";
-    return `<svg width="60" height="10" viewBox="0 0 60 10"><line x1="2" y1="5" x2="58" y2="5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"${daAttr}/></svg>`;
-  };
-  const capPreview = (cap: LineCap): string =>
-    `<svg width="32" height="12" viewBox="0 0 32 12"><line x1="4" y1="6" x2="28" y2="6" stroke="currentColor" stroke-width="4" stroke-linecap="${cap}"/></svg>`;
-
-  // =================================================================
-  // 1. Type picker (for tools with variants)
-  // =================================================================
-  if (isRedact) {
-    if (!preset.redactStyle) preset.redactStyle = "mosaic";
-    addTypeRow(
-      [
-        { value: "mosaic", icon: "grid_view", label: "Mosaic (pixelate)" },
-        { value: "solid", icon: "check_box", label: "Solid bar" },
-        { value: "blur", icon: "blur_on", label: "Blur" },
-      ],
-      preset.redactStyle,
-    );
-  } else if (isFreehand) {
-    if (!preset.drawStyle) preset.drawStyle = "pen";
-    addTypeRow(
-      [
-        { value: "pen", icon: "edit", label: "Pen" },
-        { value: "highlighter", icon: "ink_highlighter", label: "Highlighter" },
-      ],
-      preset.drawStyle,
-    );
-  } else if (isArrow) {
-    if (!preset.arrowHead) preset.arrowHead = "end";
-    // Share ARROW_ICON_SVG with the toolbar flyout so the Tool panel
-    // Type row and the toolbar's variant badge show identical glyphs.
-    addTypeRow(
-      [
-        { value: "none", label: "Line", svg: ARROW_ICON_SVG.none },
-        { value: "end", label: "Arrow", svg: ARROW_ICON_SVG.end },
-        { value: "both", label: "Double arrow", svg: ARROW_ICON_SVG.both },
-      ],
-      preset.arrowHead,
-    );
-  } else if (isShape) {
-    if (!preset.shapeType) preset.shapeType = "rect";
-    // Use the same SHAPE_ICON_SVG set as the toolbar badge so the
-    // "next draw" chip and the "currently selected" badge carry
-    // identical glyphs across the three surfaces (toolbar badge /
-    // Tool panel Type row / Selection panel Type row).
-    addTypeRow(
-      [
-        { value: "rect", svg: SHAPE_ICON_SVG.rect, label: "Rectangle" },
-        { value: "rounded", svg: SHAPE_ICON_SVG.rounded, label: "Rounded" },
-        { value: "ellipse", svg: SHAPE_ICON_SVG.ellipse, label: "Ellipse" },
-      ],
-      preset.shapeType,
-    );
-  } else if (isMarker) {
-    if (!preset.markerShape) preset.markerShape = "circle";
-    addTypeRow(
-      [
-        { value: "circle", svg: COUNTER_ICON_SVG.circle, label: "Circle" },
-        { value: "rect", svg: COUNTER_ICON_SVG.rect, label: "Square" },
-        { value: "rounded", svg: COUNTER_ICON_SVG.rounded, label: "Rounded square" },
-      ],
-      preset.markerShape,
-    );
-  } else if (isText) {
-    if (!preset.textVariant) preset.textVariant = "sticky";
-    addTypeRow(
-      [
-        { value: "plain", icon: "text_fields", label: "Plain text" },
-        { value: "sticky", icon: "sticky_note_2", label: "Sticky note" },
-        { value: "callout", icon: "chat_bubble", label: "Callout" },
-      ],
-      preset.textVariant,
-    );
-  }
-
-  // =================================================================
-  // 2. Appearance controls
-  // =================================================================
-
-  // --- Redact: only color for solid variant (goes under Fill) ----
-  if (isRedact) {
-    if (preset.redactStyle === "solid") {
-      addColorRow(
-        getFillBody(),
-        "Color",
-        preset.fillColor === "none" ? "#111111" : preset.fillColor,
-        (v) => {
-          preset.fillColor = v;
-        },
-      );
-    }
-    ctx.saveCurrentPreset(toolId, preset);
-    Object.assign(ctx.options, preset);
-    return;
-  }
-
-  // --- Marker / Counter: Fill (Color) + Line (border) + Label ----
-  // Standard color semantics: Fill = bg interior (`fillColor`),
-  // Line = bg border (`strokeColor`).
-  if (isMarker) {
-    // Fill — `allowNone` so the user can pick "No fill" to create
-    // an outline-only counter (ring + number, no interior paint).
-    const fb = getFillBody();
-    addColorRow(
-      fb,
-      "Color",
-      preset.fillColor ?? "#ff0000",
-      (v) => {
-        preset.fillColor = v;
-      },
-      { allowNone: true },
-    );
-
-    // Line — default border is white 1.5pt solid (matches
-    // MarkerTool.onPointerDown). Uses the standard stroke* preset
-    // fields now that marker follows the same color convention as
-    // every other tool.
-    const lb = getLineBody();
-    addColorRow(lb, "Color", preset.strokeColor || "#ffffff", (v) => {
-      preset.strokeColor = v;
-    });
-    addNumberRow(lb, "Width", preset.strokeWidth ?? 1.5, "pt", 0, 20, 0.25, (v) => {
-      preset.strokeWidth = v;
-    });
-    addSelectRow(
-      lb,
-      "Dash type",
-      [
+function renderDashTypeRow(preset: ToolOptions, sync: () => void): HTMLElement {
+  return createPropertyRow(
+    "Dash type",
+    createCustomSelect({
+      options: [
         { value: "", label: "Solid", preview: dashPreview("") },
         { value: "dash", label: "Dashed", preview: dashPreview("dash") },
         { value: "dot", label: "Dotted", preview: dashPreview("dot") },
         { value: "dashDot", label: "Dash-Dot", preview: dashPreview("dashDot") },
         { value: "lgDash", label: "Long Dash", preview: dashPreview("lgDash") },
       ],
-      preset.strokeDasharray ?? "",
-      (v) => {
+      current: preset.strokeDasharray ?? "",
+      ariaLabel: "Dash type",
+      onChange: (v) => {
         preset.strokeDasharray = v;
+        sync();
       },
-    );
+    }),
+  );
+}
 
-    // Label — appended at `menu` tail, which (after Fill + Line
-    // insertion) lands last. Order: Type → Fill → Line → Label.
-    const { section: labelSection, body: labelBody } = createPropertySection("Label");
-    menu.appendChild(labelSection);
-    addNumberRow(labelBody, "Size", preset.fontSize, "pt", 8, 48, 1, (v) => {
-      preset.fontSize = v;
-    });
+function renderCapTypeRow(preset: ToolOptions, sync: () => void): HTMLElement {
+  return createPropertyRow(
+    "Cap type",
+    createCustomSelect({
+      options: [
+        { value: "square", label: "Square", preview: capPreview("square") },
+        { value: "round", label: "Round", preview: capPreview("round") },
+        { value: "butt", label: "Flat", preview: capPreview("butt") },
+      ],
+      current: preset.strokeLinecap ?? "butt",
+      ariaLabel: "Cap type",
+      onChange: (v) => {
+        preset.strokeLinecap = v as LineCap;
+        sync();
+      },
+    }),
+  );
+}
 
-    ctx.saveCurrentPreset(toolId, preset);
-    Object.assign(ctx.options, preset);
-    return;
+function renderFillColorRow(
+  toolId: string,
+  preset: ToolOptions,
+  sync: () => void,
+): HTMLElement {
+  // Per-tool fallbacks match the imperative renderer:
+  //   marker:  preset.fillColor ?? "#ff0000"        (allowNone)
+  //   shape:   "none" → "#ffffff", else preset      (allowNone)
+  //   redact:  "none" → "#111111", else preset      (no allowNone)
+  // Label varies too: marker / redact use "Color"; shape uses "Fill".
+  let initial: string;
+  let allowNone: boolean;
+  let label: string;
+  switch (toolId) {
+    case "marker":
+      initial = preset.fillColor ?? "#ff0000";
+      allowNone = true;
+      label = "Color";
+      break;
+    case "shape":
+      initial = preset.fillColor === "none" ? "#ffffff" : preset.fillColor;
+      allowNone = true;
+      label = "Fill";
+      break;
+    case "redact":
+      initial = preset.fillColor === "none" ? "#111111" : preset.fillColor;
+      allowNone = false;
+      label = "Color";
+      break;
+    default:
+      initial = preset.fillColor;
+      allowNone = false;
+      label = "Color";
+      break;
   }
+  const btn = createColorPullButton(
+    initial,
+    (color) => {
+      preset.fillColor = color;
+      sync();
+    },
+    { allowNone },
+  );
+  return createPropertyRow(label, btn);
+}
 
-  // --- Text: Color + Font + Size (Line section) ------------------
-  if (isText) {
-    const lb = getLineBody();
-    addColorRow(lb, "Color", preset.strokeColor, (v) => {
-      preset.strokeColor = v;
-    });
-    if (!preset.fontFamily) preset.fontFamily = "sans-serif";
-    addSelectRow(
-      lb,
-      "Font",
-      [
+function renderFontSizeRow(
+  toolId: string,
+  preset: ToolOptions,
+  sync: () => void,
+): HTMLElement {
+  // Text > Line > Size: 8..96. Marker > Label > Size: 8..48. Step 1.
+  const max = toolId === "marker" ? 48 : 96;
+  return createPropertyRow(
+    "Size",
+    createNumberInput({
+      current: preset.fontSize,
+      unit: "pt",
+      min: 8,
+      max,
+      step: 1,
+      onChange: (v) => {
+        preset.fontSize = v;
+        sync();
+      },
+    }),
+  );
+}
+
+function renderFontFamilyRow(preset: ToolOptions, sync: () => void): HTMLElement {
+  // Standard 4-option set. Phase 4 will read this from
+  // PROPERTY_CONTROLS.fontFamily.options.
+  if (!preset.fontFamily) preset.fontFamily = "sans-serif";
+  return createPropertyRow(
+    "Font",
+    createCustomSelect({
+      options: [
         { value: "sans-serif", label: "Sans-serif" },
         { value: "serif", label: "Serif" },
         { value: "monospace", label: "Monospace" },
         { value: "system-ui, -apple-system, sans-serif", label: "System UI" },
       ],
-      preset.fontFamily,
-      (v) => {
+      current: preset.fontFamily,
+      ariaLabel: "Font",
+      onChange: (v) => {
         preset.fontFamily = v;
+        sync();
       },
-    );
-    addNumberRow(lb, "Size", preset.fontSize, "pt", 8, 96, 1, (v) => {
-      preset.fontSize = v;
-    });
-    ctx.saveCurrentPreset(toolId, preset);
-    Object.assign(ctx.options, preset);
-    return;
-  }
+    }),
+  );
+}
 
-  // --- Highlight: Type = color swatch chips, Fill = Transparency -
-  // The Highlight "variant" concept IS the color itself (see
-  // `TOOL_REGISTRY.highlight` — `variantField: "highlightColor"`,
-  // `variants` mapped from `HIGHLIGHT_COLORS`). Each swatch routes
-  // through the standard ctx.handlePanelVariantChange path so the
-  // preset system keeps a separate Transparency value per color —
-  // yellow at 60% and red at 40% can coexist.
-  if (isHighlight) {
-    const currentColor = (preset.highlightColor || HIGHLIGHT_COLORS[0]!.value).toLowerCase();
-    const { section: typeSection, body: typeBody } = createPropertySection("Type");
-    const row = document.createElement("div");
-    row.className = "pp-type-row";
-    for (const opt of HIGHLIGHT_COLORS) {
-      const chip = document.createElement("div");
-      chip.className = `prop-choice-chip pp-color-chip${currentColor === opt.value ? " active" : ""}`;
-      // Color lives on an inner swatch (rendered via .pp-color-chip
-      // ::before in CSS) driven by this custom property. The chip's
-      // outer frame stays transparent so hover / active states read
-      // the same way as every other Type chip (accent border + bg
-      // tint) — unifies the Highlight picker with the rest of the
-      // Type row vocabulary.
-      chip.style.setProperty("--swatch-color", opt.value);
-      setTooltip(chip, opt.label);
-      chip.addEventListener("click", () => {
-        row.querySelectorAll(".prop-choice-chip").forEach((c) => c.classList.remove("active"));
-        chip.classList.add("active");
-        ctx.handlePanelVariantChange(toolId, opt.value, preset);
-      });
-      row.appendChild(chip);
-    }
-    typeBody.appendChild(row);
-    menu.appendChild(typeSection);
+// ─── Arrow per-end group ─────────────────────────────────────────────
 
-    // Fill section — Transparency only. Stored as `1 - fillOpacity`
-    // to match the unified Transparency vocabulary used elsewhere
-    // (Shape, Arrow, Freehand strokes). Default fillOpacity 0.4 →
-    // displayed transparency 60%.
-    const fb = getFillBody();
-    addNumberRow(
-      fb,
-      "Transparency",
-      Math.round((1 - (preset.fillOpacity ?? 0.4)) * 100),
-      "%",
-      0,
-      100,
-      5,
-      (v) => {
-        preset.fillOpacity = 1 - v / 100;
+function renderArrowEndsRows(body: HTMLElement, preset: ToolOptions, sync: () => void): void {
+  // Same 4-row widget the imperative arrow renderer used. Per-end
+  // shape / width / length are all preserved when the user picks a
+  // different begin / end variant — `createArrowEndsRows` clamps
+  // them internally based on the current line variant.
+  createArrowEndsRows(
+    body,
+    {
+      start: {
+        shape: (preset.arrowHeadStart ?? "none") as ArrowShape,
+        width: (preset.arrowWidthStart ?? "md") as ArrowDim,
+        length: (preset.arrowLengthStart ?? "md") as ArrowDim,
       },
-    );
-    ctx.saveCurrentPreset(toolId, preset);
-    Object.assign(ctx.options, preset);
-    return;
-  }
-
-  // --- Shape / Arrow / Freehand: stroke-based controls (Line) ----
-  const lb = getLineBody();
-  addColorRow(lb, "Color", preset.strokeColor, (v) => {
-    preset.strokeColor = v;
-  });
-
-  // Transparency (stroke-based). Stored as 1 - opacity to match the
-  // selection panel's Transparency slider semantics.
-  addNumberRow(
-    lb,
-    "Transparency",
-    Math.round((1 - (preset.strokeOpacity ?? 1)) * 100),
-    "%",
-    0,
-    100,
-    1,
-    (v) => {
-      preset.strokeOpacity = 1 - v / 100;
+      end: {
+        shape: (preset.arrowHeadEnd ?? "triangle") as ArrowShape,
+        width: (preset.arrowWidthEnd ?? "md") as ArrowDim,
+        length: (preset.arrowLengthEnd ?? "md") as ArrowDim,
+      },
+    },
+    (next) => {
+      preset.arrowHeadStart = next.start.shape;
+      preset.arrowHeadEnd = next.end.shape;
+      preset.arrowWidthStart = next.start.width;
+      preset.arrowWidthEnd = next.end.width;
+      preset.arrowLengthStart = next.start.length;
+      preset.arrowLengthEnd = next.end.length;
+      sync();
     },
   );
+}
 
-  // Width
-  addNumberRow(lb, "Width", preset.strokeWidth, "pt", 0.25, 40, 0.25, (v) => {
-    preset.strokeWidth = v;
-  });
+// ─── Helpers ─────────────────────────────────────────────────────────
 
-  // Dash type
-  addSelectRow(
-    lb,
-    "Dash type",
-    [
-      { value: "", label: "Solid", preview: dashPreview("") },
-      { value: "dash", label: "Dashed", preview: dashPreview("dash") },
-      { value: "dot", label: "Dotted", preview: dashPreview("dot") },
-      { value: "dashDot", label: "Dash-Dot", preview: dashPreview("dashDot") },
-      { value: "lgDash", label: "Long Dash", preview: dashPreview("lgDash") },
-    ],
-    preset.strokeDasharray ?? "",
-    (v) => {
-      preset.strokeDasharray = v;
-    },
-  );
+/** Ensure `preset[variantField]` is set before rendering the Type
+ *  chip row — otherwise no chip would highlight on first launch. */
+function seedDefaultVariantIfNeeded(
+  toolId: string,
+  variantField: keyof ToolOptions | undefined,
+  defaultVariant: string | undefined,
+  preset: ToolOptions,
+): void {
+  if (!variantField || !defaultVariant) return;
+  const cur = preset[variantField];
+  if (cur != null && cur !== "") return;
+  // Same dynamic-dispatch trick the `tool.typeChips` adapter uses —
+  // see the `tool-panel-adapter.ts` doc for why it's safe.
+  void toolId;
+  (preset as unknown as Record<string, unknown>)[variantField as string] = defaultVariant;
+}
 
-  // Cap type — line ends on stroke primitives. Ordering mirrors
-  // selection panel (square / round / flat).
-  if (isShape || isArrow || isFreehand) {
-    addSelectRow(
-      lb,
-      "Cap type",
-      [
-        { value: "square", label: "Square", preview: capPreview("square") },
-        { value: "round", label: "Round", preview: capPreview("round") },
-        { value: "butt", label: "Flat", preview: capPreview("butt") },
-      ],
-      preset.strokeLinecap ?? "butt",
-      (v) => {
-        preset.strokeLinecap = v as LineCap;
-      },
-    );
-  }
+/** SVG preview for a dash-style dropdown row — same markup the
+ *  imperative renderer + selection panel emit. */
+function dashPreview(key: string): string {
+  const da = computeDasharray(key, 1.5);
+  const daAttr = da ? ` stroke-dasharray="${da}"` : "";
+  return `<svg width="60" height="10" viewBox="0 0 60 10"><line x1="2" y1="5" x2="58" y2="5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"${daAttr}/></svg>`;
+}
 
-  // Join type (stroke-linejoin) intentionally omitted — see
-  // property-panel.ts #addPPLineSection for the rationale (invisible
-  // at typical widths, conceptually confusing).
-
-  // Arrow only: per-end type + size pulldowns (Begin / End). Lives
-  // inside the Line category — they're line-end decorations, not a
-  // separate concern. The picker auto-filters by the `arrowHead`
-  // variant (Line hides all non-"None" shapes).
-  if (isArrow) {
-    createArrowEndsRows(
-      lb,
-      {
-        start: {
-          shape: (preset.arrowHeadStart ?? "none") as ArrowShape,
-          width: (preset.arrowWidthStart ?? "md") as ArrowDim,
-          length: (preset.arrowLengthStart ?? "md") as ArrowDim,
-        },
-        end: {
-          shape: (preset.arrowHeadEnd ?? "triangle") as ArrowShape,
-          width: (preset.arrowWidthEnd ?? "md") as ArrowDim,
-          length: (preset.arrowLengthEnd ?? "md") as ArrowDim,
-        },
-      },
-      (next) => {
-        preset.arrowHeadStart = next.start.shape;
-        preset.arrowHeadEnd = next.end.shape;
-        preset.arrowWidthStart = next.start.width;
-        preset.arrowWidthEnd = next.end.width;
-        preset.arrowLengthStart = next.start.length;
-        preset.arrowLengthEnd = next.end.length;
-        syncPreset();
-      },
-    );
-  }
-
-  // Shape only: Fill section (Fill color + Opacity)
-  if (isShape) {
-    const fb = getFillBody();
-    addColorRow(
-      fb,
-      "Fill",
-      preset.fillColor === "none" ? "#ffffff" : preset.fillColor,
-      (v) => {
-        preset.fillColor = v;
-      },
-      { allowNone: true },
-    );
-    addNumberRow(
-      fb,
-      "Opacity",
-      Math.round((preset.fillOpacity ?? 1) * 100),
-      "%",
-      0,
-      100,
-      5,
-      (v) => {
-        preset.fillOpacity = v / 100;
-      },
-    );
-  }
-
-  // Freehand-only: "Done" button that commits the active drawing
-  // session (matches draw.io's continuous-draw workflow). Strokes
-  // across multiple pen-down cycles accumulate into one <path>
-  // until the user explicitly ends the session via this button
-  // or the Esc key. Without the button, the Esc-key shortcut is
-  // the only visible way to stop, which is easy to miss.
-  if (isFreehand) {
-    const doneRow = document.createElement("div");
-    doneRow.className = "pp-done-row";
-    const doneBtn = document.createElement("button");
-    doneBtn.type = "button";
-    doneBtn.className = "pp-done-btn";
-    doneBtn.textContent = "Done drawing";
-    setTooltip(doneBtn, "Finish the current drawing (Esc)");
-    doneBtn.addEventListener("click", () => {
-      const active = ctx.canvas.activeTool;
-      if (active && active.name === "freehand") {
-        (active as FreehandTool).endSession();
-      }
-    });
-    doneRow.appendChild(doneBtn);
-    menu.appendChild(doneRow);
-  }
-
-  ctx.saveCurrentPreset(toolId, preset);
-  Object.assign(ctx.options, preset);
+/** SVG preview for a stroke-linecap dropdown row. */
+function capPreview(cap: LineCap): string {
+  return `<svg width="32" height="12" viewBox="0 0 32 12"><line x1="4" y1="6" x2="28" y2="6" stroke="currentColor" stroke-width="4" stroke-linecap="${cap}"/></svg>`;
 }
