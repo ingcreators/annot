@@ -25,7 +25,6 @@ import type {
   ArrowDim,
   ArrowShape,
   LineCap,
-  MarkerShape,
   ToolOptions,
 } from "@ingcreators/annot-core/editor/tool-options";
 import { computeDasharray } from "@ingcreators/annot-core/utils";
@@ -300,18 +299,14 @@ export function populateToolPropertyPanel(
       preset.shapeType,
     );
   } else if (isMarker) {
-    const currentMarker: MarkerShape =
-      preset.markerShape ?? (preset.fillColor === "rect" ? "rect" : "circle");
-    if (preset.fillColor === "rect" || preset.fillColor === "none") {
-      delete (preset as Partial<ToolOptions>).fillColor;
-    }
+    if (!preset.markerShape) preset.markerShape = "circle";
     addTypeRow(
       [
         { value: "circle", svg: COUNTER_ICON_SVG.circle, label: "Circle" },
         { value: "rect", svg: COUNTER_ICON_SVG.rect, label: "Square" },
         { value: "rounded", svg: COUNTER_ICON_SVG.rounded, label: "Rounded square" },
       ],
-      currentMarker,
+      preset.markerShape,
     );
   } else if (isText) {
     if (!preset.textVariant) preset.textVariant = "sticky";
@@ -347,23 +342,11 @@ export function populateToolPropertyPanel(
   }
 
   // --- Marker / Counter: Fill (Color) + Line (border) + Label ----
-  // Fill = bg fill (tool convention: stored in preset.strokeColor).
-  // Line = OPTIONAL bg border — stored in the markerBorder* fields
-  //   so it doesn't collide with the strokeColor-as-fill convention.
-  // Label = number-rendering controls (Size; Value is per-element).
+  // Standard color semantics: Fill = bg interior (`fillColor`),
+  // Line = bg border (`strokeColor`).
   if (isMarker) {
     // Fill — `allowNone` so the user can pick "No fill" to create
     // an outline-only counter (ring + number, no interior paint).
-    // P3-8: standard color semantics — Fill = bg interior
-    // (`fillColor`), Line = bg border (`strokeColor`). Back-compat:
-    // migrate legacy presets on first render by copying the old
-    // `strokeColor = bg fill` value into `fillColor` if unset.
-    if (preset.fillColor === undefined && preset.strokeColor) {
-      preset.fillColor = preset.strokeColor;
-      // Clear old `strokeColor` — it'll be re-seeded below with the
-      // proper border default if needed.
-      preset.strokeColor = preset.markerBorderColor ?? "#ffffff";
-    }
     const fb = getFillBody();
     addColorRow(
       fb,

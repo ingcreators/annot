@@ -96,9 +96,6 @@ const VALID_TOOL_OPTIONS_KEYS = new Set<keyof ToolOptions>([
   "fillGradient",
   "highlightColor",
   "markerShape",
-  "markerBorderColor",
-  "markerBorderWidth",
-  "markerBorderDasharray",
 ]);
 
 describe("TOOL_REGISTRY shape invariants", () => {
@@ -387,21 +384,19 @@ describe("TOOL_REGISTRY extractStyleFromElement", () => {
     expect(preset.strokeColor).toBe("#222222");
   });
 
-  it("marker: bg primitive's fill+stroke → fillColor+strokeColor; legacy fields scrubbed", () => {
+  it("marker: bg primitive's fill+stroke → fillColor+strokeColor", () => {
     const g = svg("g", { "data-marker": "1", "data-shape": "rounded" });
     const bg = svg("rect", { fill: "#abc", stroke: "#def", "stroke-width": "2.5" });
     g.appendChild(bg);
     const t = svg("text", { "font-size": "16" });
     g.appendChild(t);
     const preset = emptyPreset();
-    preset.markerBorderColor = "#legacy"; // legacy field; should be scrubbed
     TOOL_REGISTRY.marker!.extractStyleFromElement!(g, preset);
     expect(preset.markerShape).toBe("rounded");
     expect(preset.fillColor).toBe("#abc");
     expect(preset.strokeColor).toBe("#def");
     expect(preset.strokeWidth).toBe(2.5);
     expect(preset.fontSize).toBe(16);
-    expect(preset.markerBorderColor).toBeUndefined();
   });
 
   it("arrow: per-end shape attrs round-trip into per-end preset fields", () => {

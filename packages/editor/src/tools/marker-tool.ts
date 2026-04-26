@@ -3,28 +3,16 @@ import { ToolBase } from "./tool-base.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
-/** Resolve the current marker shape, honoring both the new
- *  `markerShape` field and the legacy `fillColor === "rect"` hack so
- *  older saved presets continue to work. */
-function resolveMarkerShape(opts: { markerShape?: MarkerShape; fillColor?: string }): MarkerShape {
-  if (opts.markerShape) return opts.markerShape;
-  if (opts.fillColor === "rect") return "rect";
-  return "circle";
-}
-
 export class MarkerTool extends ToolBase {
   readonly name = "marker";
 
   onPointerDown(_e: PointerEvent, pt: DOMPoint): void {
     const fontSize = this.options.fontSize;
     const r = fontSize * 0.8;
-    // Standard semantics (P3-8 refactor): `fillColor` = bg interior,
-    // `strokeColor` = bg border. Back-compat: if fillColor is missing
-    // but the legacy `strokeColor = bg fill` value is set (old presets),
-    // fall back to it so users don't lose their saved color on first
-    // load after the refactor.
-    const color = this.options.fillColor || this.options.strokeColor || "#ff0000";
-    const shape = resolveMarkerShape(this.options);
+    // `fillColor` = bg interior, `strokeColor` = bg border (the
+    // canonical color semantics every tool uses).
+    const color = this.options.fillColor || "#ff0000";
+    const shape = this.options.markerShape ?? "circle";
 
     // Find next counter value: max of same style + 1
     const nextVal = this.#findNextCounter(color, shape, fontSize);
@@ -34,20 +22,13 @@ export class MarkerTool extends ToolBase {
     g.setAttribute("data-marker", label);
     g.setAttribute("data-shape", shape);
 
-    // Border attrs come from the standard `strokeColor` / `strokeWidth`
-    // / `strokeDasharray` preset fields. Back-compat: read from the
-    // legacy `markerBorder*` fields if present (old presets). Fall
-    // back to the classic white 1.5 pt ring that makes markers
-    // legible against any background color.
-    const borderColor =
-      (this.options.fillColor ? this.options.strokeColor : this.options.markerBorderColor) ||
-      "#fff";
-    const borderWidth =
-      (this.options.fillColor ? this.options.strokeWidth : this.options.markerBorderWidth) ?? 1.5;
-    const borderDash =
-      (this.options.fillColor
-        ? this.options.strokeDasharray
-        : this.options.markerBorderDasharray) ?? "";
+    // Border attrs come from the standard `strokeColor` /
+    // `strokeWidth` / `strokeDasharray` preset fields. The classic
+    // white 1.5 pt ring is the default — keeps the counter legible
+    // against any background color.
+    const borderColor = this.options.strokeColor || "#fff";
+    const borderWidth = this.options.strokeWidth ?? 1.5;
+    const borderDash = this.options.strokeDasharray ?? "";
     const borderAttrs: Record<string, string> = {
       stroke: borderColor,
       "stroke-width": String(borderWidth),
