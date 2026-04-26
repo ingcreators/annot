@@ -13,10 +13,17 @@
  * that does not need to land in the same PR as this carve-out.
  */
 
-import { TOOL_REGISTRY } from "@ingcreators/annot-core/editor";
+import { normalizeVariantSideFields, TOOL_REGISTRY } from "@ingcreators/annot-core/editor";
 import type { ToolOptions } from "@ingcreators/annot-core/editor/tool-options";
 import { computeDasharray } from "@ingcreators/annot-core/utils";
 import { refreshArrowPath } from "@ingcreators/annot-core/editor/arrow-markers";
+
+// Phase 5 of `docs/plans/toolbar-schema.md`: `normalizeVariantSideFields`
+// moved to `tool-registry.ts` (Tier B) so the registry's
+// `extractStyleFromElement` callbacks can call it without a
+// Tier B → Tier C cycle. Re-exported here for back-compat with
+// existing callers of this file.
+export { normalizeVariantSideFields };
 
 /** Map a legacy tool-ID-keyed preset entry to the matching element
  *  key. `"shape"` → `"shape.rect"` (the shape tool's fallback
@@ -141,47 +148,6 @@ export function validatePresetForTool(preset: ToolOptions, toolId: string): stri
   }
 
   return errors;
-}
-
-/**
- * After a variant switch, fix up the side-fields on `preset` so the
- * new variant's invariants hold. Today only `arrow` needs this:
- * - `none`: both ends must be "none".
- * - `end`: begin must be "none", end must be non-"none" (default tri).
- * - `both`: both ends must be non-"none" (default tri).
- *
- * Mutates `preset` in place; safe to call for tools without a
- * relevant invariant (it's a no-op).
- */
-export function normalizeVariantSideFields(
-  toolId: string,
-  newVariant: string,
-  preset: ToolOptions,
-): void {
-  if (toolId !== "arrow") return;
-  const p = preset as unknown as Record<string, unknown>;
-  const tri = "triangle" as const;
-  const none = "none" as const;
-  const curStart = preset.arrowHeadStart;
-  const curEnd = preset.arrowHeadEnd;
-  switch (newVariant) {
-    case "none":
-      // Line: both ends must be "none" — force.
-      p.arrowHeadStart = none;
-      p.arrowHeadEnd = none;
-      break;
-    case "end":
-      // Arrow: begin must be "none", end must be non-"none".
-      p.arrowHeadStart = none;
-      p.arrowHeadEnd = curEnd && curEnd !== "none" ? curEnd : tri;
-      break;
-    case "both":
-      // Double arrow: both ends must be non-"none". Preserve if
-      // already valid, else seed triangle.
-      p.arrowHeadStart = curStart && curStart !== "none" ? curStart : tri;
-      p.arrowHeadEnd = curEnd && curEnd !== "none" ? curEnd : tri;
-      break;
-  }
 }
 
 /** Build a fresh preset from the current style attributes of an

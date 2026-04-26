@@ -64,6 +64,7 @@ export {
   type ToolDOMSurface,
 } from "./tool-lifecycle.js";
 export {
+  normalizeVariantSideFields,
   TOOL_REGISTRY,
   TOOL_REGISTRY_IDS,
   type ToolRegistryEntry,
