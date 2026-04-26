@@ -151,7 +151,7 @@ in section 2 above.
 | `@ingcreators/annot-core/tauri-bridge` | Browser-side. Tauri IPC + `isTauri` detection. |
 | `@ingcreators/annot-editor` | Tier C. `CanvasManager`, `SelectionManager`, `PropertyPanel`, `History`, `ToolBase`, the tool hierarchy, save/copy/download helpers (`saveToFile`, `getPngDataUrl`, `copyAsImage`, `saveAsEditableImage`, `exportSVGString`, `exportPptx`, `downloadAsImage`, …), leaf widgets (`setTooltip`, `createThemeToggle`, `createCustomSelect`, `createColorPalette`, `openAnchoredPopover`), context menu (`openCanvasContextMenu`). |
 | `@ingcreators/annot-editor/<file>` | Per-file deep imports for editor internals (`tools/freehand-tool`, `property-controls`, etc.). Use sparingly. |
-| `@ingcreators/annot-render` | Tier C-render. `renderImageRecord` (today). Future home of gallery bulk-export and the ImageRecord-driven `pptx-export` refactor. **Does NOT depend on `annot-editor`.** |
+| `@ingcreators/annot-render` | Tier C-render. `renderImageRecord` plus the shared OOXML DrawingML builder (`buildShapeXml(shape, { ns: "a" \| "p", id })`, `buildDrawingXml`, `buildBackgroundPic`) used by both `pptx-export` (PPTX slides) and `toolbar.ts:#copyForOffice` (Office clipboard). Future home of gallery bulk-export. **Does NOT depend on `annot-editor`.** |
 
 Rules when adding public symbols:
 
@@ -163,6 +163,18 @@ Rules when adding public symbols:
 - New live-browser editor primitives → `annot-editor/src/` (Tier C).
 - New data-driven `ImageRecord`-taking renderers / exporters →
   `annot-render/src/`. **Never** import from `annot-editor` here.
+- New OOXML output for a tool (so it pastes correctly into
+  PowerPoint AND exports correctly to PPTX) → one
+  `transformOf` mapping in
+  [`packages/core/src/editor/svg-to-annotation-shapes.ts`](./packages/core/src/editor/svg-to-annotation-shapes.ts)
+  (Tier B) plus one per-shape builder under
+  [`packages/render/src/drawingml/shapes/`](./packages/render/src/drawingml/shapes/).
+  Both surfaces — the Tauri Office-clipboard path (`ns: "a"`) and
+  the PPTX export path (`ns: "p"`) — pick the new shape up
+  automatically. Don't add per-shape OOXML to the Rust crate
+  (`packages/desktop/src-tauri/src/commands/clipboard.rs`) — Rust
+  is packaging-only since
+  [`_done/office-paste-shared-drawing-builder` phase 3](./docs/plans/_done/office-paste-shared-drawing-builder.md).
 - The boundaries are CI-enforced by
   `packages/core/src/headless.test.ts`. Add a probe there if you
   introduce a new load-time global or a new package edge that

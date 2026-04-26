@@ -257,13 +257,19 @@ export async function captureRegion(
 // --- Clipboard ---
 
 /**
- * Unified annotation-shape payload sent to the desktop (Tauri) side
- * for Office clipboard export (`copy_as_office`).
+ * Unified annotation-shape payload — the input to the shared OOXML
+ * DrawingML builder in `@ingcreators/annot-render`. Used by both
+ * the PPTX export path
+ * (`packages/editor/src/pptx-export.ts`, `ns: "p"`) and the
+ * Office-clipboard path
+ * (`packages/web/src/editor/toolbar.ts:#copyForOffice`, `ns: "a"`).
  *
- * Each TS field is mirrored 1:1 by the Rust `AnnotationShape` struct
- * in `packages/desktop/src-tauri/src/commands/clipboard.rs` — names
- * match exactly, and every field that travels through the wire
- * dispatches to a code path that reads it. Shape taxonomy:
+ * The Rust crate (`packages/desktop/src-tauri/src/commands/clipboard.rs`)
+ * no longer mirrors this struct field-for-field — since
+ * [`office-paste-shared-drawing-builder` phase 3](../../../../docs/plans/_done/office-paste-shared-drawing-builder.md)
+ * the per-shape OOXML is built TS-side and passed to Rust as a
+ * pre-assembled drawing XML string. The shape taxonomy below is
+ * what `svgElementToAnnotationShape` produces:
  *
  *   type="rect"         Rectangle. Use `corner_radius>0` for rounded
  *                       variant. Use `redact_style="solid"` for an

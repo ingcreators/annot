@@ -1,14 +1,21 @@
 # Office-paste & PPTX export — share the DrawingML builder
 
-> **Status:** Queued. Direct follow-up to
-> [`_done/office-paste-abi-modernisation.md`](./_done/office-paste-abi-modernisation.md).
+> **Status:** Done. Landed across PRs
+> [#212](https://github.com/ingcreators/annot/pull/212)–
+> [#217](https://github.com/ingcreators/annot/pull/217). Direct
+> follow-up to
+> [`_done/office-paste-abi-modernisation.md`](./office-paste-abi-modernisation.md).
 > That plan made the TS `AnnotationShape` interface and the Rust
 > `AnnotationShape` struct lockstep (every TS field reads from a
-> matching Rust field). This plan exploits that lockstep to delete
+> matching Rust field). This plan exploited that lockstep to delete
 > the per-shape OOXML duplication between the PPTX export path
 > ([`packages/editor/src/pptx-export.ts`](../../packages/editor/src/pptx-export.ts))
 > and the Office-clipboard path
 > ([`packages/desktop/src-tauri/src/commands/clipboard.rs`](../../packages/desktop/src-tauri/src/commands/clipboard.rs)).
+> After landing, both surfaces consume one shared
+> `buildShapeXml` from `@ingcreators/annot-render` — adding a new
+> tool means one `transformOf` mapping plus one per-shape builder,
+> nothing else.
 >
 > **Risk:** Medium. Both surfaces are user-visible:
 >
