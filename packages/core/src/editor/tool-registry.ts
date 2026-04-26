@@ -156,23 +156,10 @@ function shapeRectVariant(el: SVGElement): string | null {
  *  per-end shape attributes. Single source of truth shared by
  *  `variantKeyForElement` (preset-bucket routing) and
  *  `extractStyleFromElement` (rubber-band reader) so the two stay
- *  in lockstep — without this, a legacy `<line marker-end>`
- *  without `data-arrow-end-shape` ends up in the `arrow.none`
- *  preset bucket while its rubber-banded preset says
- *  `arrowHead = "end"`, violating the variant-defining-field
- *  invariant.
- *
- *  Falls back to the SVG-marker attributes (`marker-start` /
- *  `marker-end`) when the canonical `data-arrow-*-shape` attrs are
- *  absent, so legacy SVGs (saved before per-end shape attrs
- *  existed) classify correctly. */
+ *  in lockstep. */
 function arrowVariantFromAttrs(el: SVGElement): "none" | "end" | "both" {
-  const startShape = el.getAttribute("data-arrow-start-shape");
-  const endShape = el.getAttribute("data-arrow-end-shape");
-  const hasStart =
-    startShape != null ? startShape !== "none" : !!el.getAttribute("marker-start");
-  const hasEnd =
-    endShape != null ? endShape !== "none" : !!el.getAttribute("marker-end");
+  const hasStart = (el.getAttribute("data-arrow-start-shape") ?? "none") !== "none";
+  const hasEnd = (el.getAttribute("data-arrow-end-shape") ?? "none") !== "none";
   if (hasStart && hasEnd) return "both";
   if (hasStart || hasEnd) return "end";
   return "none";

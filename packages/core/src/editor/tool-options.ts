@@ -35,9 +35,7 @@ export type RedactStyle = "mosaic" | "solid" | "blur";
  *    stealth  — narrow filled angular arrow
  *    diamond  — filled diamond
  *    oval     — filled circle / oval
- *  Markers live in <defs> with id `anno-{shape}-w{width}-l{length}`.
- *  Legacy values ("triangle-open", "tbar", "reverse") are accepted on
- *  read and remapped to the closest OOXML preset. */
+ *  Markers live in <defs> with id `anno-{shape}-w{width}-l{length}`. */
 export type ArrowShape = "none" | "arrow" | "triangle" | "stealth" | "diamond" | "oval";
 
 /** Per-dimension size preset — matches OOXML's `w` / `len` attribute

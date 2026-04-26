@@ -58,10 +58,9 @@ function colorHex(color: string): string {
  */
 /**
  * Translate an SVG arrow-shape name into the matching OOXML
- * `<a:headEnd>` / `<a:tailEnd>` element. The SVG shape set is now
- * aligned 1:1 with OOXML's six preset types; legacy names are
- * remapped for content produced before that alignment. Width and
- * length are passed through separately (OOXML's native model).
+ * `<a:headEnd>` / `<a:tailEnd>` element. The SVG shape set is
+ * aligned 1:1 with OOXML's six preset types. Width and length are
+ * passed through separately (OOXML's native model).
  */
 function endOOXML(
   which: "headEnd" | "tailEnd",
@@ -76,10 +75,6 @@ function endOOXML(
     stealth: "stealth",
     diamond: "diamond",
     oval: "oval",
-    // Legacy fallbacks for pre-alignment content.
-    "triangle-open": "arrow",
-    tbar: "stealth",
-    reverse: "arrow",
   };
   const mapSize: Record<string, string> = { sm: "sm", md: "med", lg: "lg" };
   const type = mapType[svgShape] || "triangle";
