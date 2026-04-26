@@ -24,6 +24,28 @@ fn rect_shape() -> AnnotationShape {
 }
 
 fn rounded_rect_shape() -> AnnotationShape {
+    // Phase 6 of the office-paste ABI plan made `corner_radius`
+    // the canonical roundedness signal; the legacy
+    // `type: "rounded-rect"` arm is still honored as a fallback
+    // (phase 8 drops it).
+    AnnotationShape {
+        shape_type: "rect".into(),
+        x: Some(120.0),
+        y: Some(20.0),
+        width: Some(100.0),
+        height: Some(80.0),
+        stroke: Some("#0000ff".into()),
+        stroke_width: Some(2.0),
+        fill: Some("none".into()),
+        corner_radius: Some(8.0),
+        ..Default::default()
+    }
+}
+
+fn rounded_rect_shape_legacy_type() -> AnnotationShape {
+    // Mirror of `rounded_rect_shape()` but using only the legacy
+    // `type: "rounded-rect"` dispatch — proves the legacy arm
+    // produces byte-equivalent XML to the canonical form.
     AnnotationShape {
         shape_type: "rounded-rect".into(),
         x: Some(120.0),
@@ -275,6 +297,17 @@ fn drawing_xml_marker_legacy_stroke_carrier_matches_canonical() {
     // test (and the helper) goes away.
     let canonical = build_drawing_xml(&[marker_shape()], 800.0, 600.0, false).0;
     let legacy = build_drawing_xml(&[marker_shape_legacy_carrier()], 800.0, 600.0, false).0;
+    assert_eq!(canonical, legacy);
+}
+
+#[test]
+fn drawing_xml_rounded_rect_legacy_type_matches_canonical() {
+    // Phase 6 fallback equivalence: a payload that uses the legacy
+    // `type: "rounded-rect"` (without `corner_radius`) must produce
+    // the same XML body as the canonical `type: "rect"` +
+    // `corner_radius` form. Phase 8 removes this test + helper.
+    let canonical = build_drawing_xml(&[rounded_rect_shape()], 800.0, 600.0, false).0;
+    let legacy = build_drawing_xml(&[rounded_rect_shape_legacy_type()], 800.0, 600.0, false).0;
     assert_eq!(canonical, legacy);
 }
 

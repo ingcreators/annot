@@ -92,6 +92,15 @@ pub struct AnnotationShape {
     /// discriminator, so this field only matters when paired with
     /// `type === "rect"`.
     pub redact_style: Option<String>,
+
+    // ---- Rectangle corner radius ----
+    /// Corner radius (canvas-space px). `>0` triggers the `roundRect`
+    /// preset inside `gvml_rect`; `None` / `0` keeps the sharp
+    /// `rect` preset. The canonical form since
+    /// [office-paste-abi-modernisation phase 6]; older callers that
+    /// emit `type: "rounded-rect"` still dispatch via the legacy
+    /// match arm.
+    pub corner_radius: Option<f64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -291,6 +300,11 @@ pub(crate) fn build_drawing_xml(
     for shape in shapes {
         let xml = match shape.shape_type.as_str() {
             "rect" => { let s = gvml_rect(shape, id, false); id += 1; s }
+            // Legacy dispatch — payloads built before
+            // office-paste-abi-modernisation phase 6 emit
+            // `type: "rounded-rect"`. New payloads use
+            // `type: "rect"` + `corner_radius > 0` instead. Phase 8
+            // removes this arm.
             "rounded-rect" => { let s = gvml_rect(shape, id, true); id += 1; s }
             "ellipse" => { let s = gvml_ellipse(shape, id); id += 1; s }
             "line" | "arrow" => { let s = gvml_line(shape, id); id += 1; s }
@@ -553,7 +567,11 @@ fn gvml_rect(s: &AnnotationShape, id: u32, rounded: bool) -> String {
     let fill = s.fill.as_deref().unwrap_or("none");
     let opacity = s.fill_opacity.unwrap_or(1.0);
     let f = build_fill_xml(fill, opacity);
-    let geom = if rounded {
+    // Either the legacy `type: "rounded-rect"` dispatch (rounded=true)
+    // or the canonical `corner_radius > 0` form picks the `roundRect`
+    // preset. Phase 8 drops the legacy form's match arm.
+    let is_rounded = rounded || s.corner_radius.unwrap_or(0.0) > 0.0;
+    let geom = if is_rounded {
         r#"<a:prstGeom prst="roundRect"><a:avLst/></a:prstGeom>"#
     } else {
         r#"<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>"#
