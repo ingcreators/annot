@@ -33,6 +33,7 @@ import {
   validateName,
 } from "@ingcreators/annot-core/storage";
 import { readEditableImage } from "@ingcreators/annot-core/xmp";
+import { fileExists, getDirHandle, purgeEmptyFiles } from "./device-fs.js";
 import { buildEditableImageBlob } from "./image-encode.js";
 import { generateThumbnailFromDataUrl } from "./image-thumbnail.js";
 
@@ -90,37 +91,17 @@ export class DeviceStore implements StorageProvider, StorageWithResync, StorageW
    * between then and close() leaves an orphan empty file). Subdirectories
    * are walked but never removed.
    */
+  /** Remove every zero-byte file under `dir` (recursive) and drop
+   *  matching entries from the in-memory index. The FS-side scan
+   *  lives in `./device-fs.ts`'s `purgeEmptyFiles`; this wrapper
+   *  applies the index cleanup that's specific to DeviceStore. */
   async #purgeEmptyFiles(dir: FileSystemDirectoryHandle, parentPath: string): Promise<void> {
-    const toDelete: string[] = [];
-    for await (const [name, handle] of dir.entries()) {
-      if (handle.kind === "file") {
-        try {
-          const file = await (handle as FileSystemFileHandle).getFile();
-          if (file.size === 0) toDelete.push(name);
-        } catch {
-          /* ignore */
-        }
-      } else if (handle.kind === "directory") {
-        await this.#purgeEmptyFiles(
-          handle as FileSystemDirectoryHandle,
-          parentPath ? `${parentPath}/${name}` : name,
-        );
+    const deleted = await purgeEmptyFiles(dir, parentPath);
+    for (const fullPath of deleted) {
+      if (this.#index.images[fullPath]) {
+        delete this.#index.images[fullPath];
       }
-    }
-    for (const name of toDelete) {
-      try {
-        await dir.removeEntry(name);
-        const fullPath = parentPath ? `${parentPath}/${name}` : name;
-        if (this.#index.images[fullPath]) {
-          delete this.#index.images[fullPath];
-        }
-        logger.debug(
-          "[device-store] purged empty file:",
-          parentPath ? `${parentPath}/${name}` : name,
-        );
-      } catch {
-        /* ignore */
-      }
+      logger.debug("[device-store] purged empty file:", fullPath);
     }
   }
 
@@ -315,22 +296,15 @@ export class DeviceStore implements StorageProvider, StorageWithResync, StorageW
     );
   }
 
-  async #getDirHandle(folderPath: string, create = false): Promise<FileSystemDirectoryHandle> {
-    if (!folderPath) return this.#root;
-    let dir = this.#root;
-    for (const part of folderPath.split("/")) {
-      dir = await dir.getDirectoryHandle(part, { create });
-    }
-    return dir;
+  /** Thin wrappers around the shared FSA helpers in `./device-fs.ts`
+   *  so call sites stay short. The helpers themselves are
+   *  structurally typed and unit-tested separately. */
+  #getDirHandle(folderPath: string, create = false): Promise<FileSystemDirectoryHandle> {
+    return getDirHandle(this.#root, folderPath, create);
   }
 
-  async #fileExists(dir: FileSystemDirectoryHandle, name: string): Promise<boolean> {
-    try {
-      await dir.getFileHandle(name);
-      return true;
-    } catch {
-      return false;
-    }
+  #fileExists(dir: FileSystemDirectoryHandle, name: string): Promise<boolean> {
+    return fileExists(dir, name);
   }
 
   // ---- Images ----

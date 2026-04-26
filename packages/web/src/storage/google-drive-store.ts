@@ -27,6 +27,10 @@ import {
   validateName,
 } from "@ingcreators/annot-core/storage";
 import { readEditableImage } from "@ingcreators/annot-core/xmp";
+import {
+  createGoogleDriveApiClient,
+  type GoogleDriveApiClient,
+} from "./google-drive-api-client.js";
 import { buildEditableImageBlob } from "./image-encode.js";
 import { generateThumbnailFromDataUrl } from "./image-thumbnail.js";
 
@@ -37,7 +41,10 @@ const FOLDER_MIME = "application/vnd.google-apps.folder";
 export class GoogleDriveStore
   implements StorageProvider, StorageWithResync, StorageWithTokenRefresher
 {
-  #token: string;
+  /** HTTP layer — owns token, refresh, error mapping. Synthesised
+   *  in the constructor; tests can inject a mock via the alternate
+   *  `(token, rootFolderId, apiClient)` signature. */
+  #api: GoogleDriveApiClient;
   #rootFolderId: string;
 
   // Path ↔ Drive ID maps
@@ -49,40 +56,27 @@ export class GoogleDriveStore
   // Track children loaded per folder (for invalidation purposes)
   #loadedFolders = new Set<string>();
 
-  /**
-   * Host-supplied callback that returns a fresh access token when the
-   * current one 401s. Expected to try silent renewal first and fall
-   * back to a user-facing sign-in popup only when Google says it's
-   * necessary. Resolves to `null` when recovery failed for good
-   * (user dismissed the popup, no network, scope revoked) — in that
-   * case `#fetch` lets the 401 propagate so the caller can surface
-   * a user-visible error.
-   *
-   * Wired from `bridge.ts` at store construction.
-   */
-  #refreshToken?: () => Promise<string | null>;
+  // Token refresh + dedup live inside `#api`.
 
-  /**
-   * Deduplicates concurrent refreshes. If ten API calls 401 at once
-   * we only want to run the refresh flow once; the other nine await
-   * this shared promise and retry with the refreshed token.
-   */
-  #refreshInFlight: Promise<string | null> | null = null;
-
-  constructor(token: string, rootFolderId: string) {
-    this.#token = token;
+  constructor(token: string, rootFolderId: string, apiClient?: GoogleDriveApiClient) {
+    this.#api = apiClient ?? createGoogleDriveApiClient(token);
     this.#rootFolderId = rootFolderId;
     this.#pathToFolderId.set("", rootFolderId);
     this.#folderIdToPath.set(rootFolderId, "");
   }
 
   setToken(token: string): void {
-    this.#token = token;
+    this.#api.setToken(token);
   }
 
-  /** Register the host's token-refresh callback. See `#refreshToken`. */
+  /** Register the host's token-refresh callback. The refresher is
+   *  expected to try silent renewal first and fall back to a user-
+   *  facing sign-in popup only when Google says it's necessary.
+   *  Resolves to `null` when recovery failed for good (user
+   *  dismissed the popup, no network, scope revoked) — in that case
+   *  the API client lets the 401 propagate. */
   setTokenRefresher(refresher: () => Promise<string | null>): void {
-    this.#refreshToken = refresher;
+    this.#api.setTokenRefresher(refresher);
   }
 
   async resync(): Promise<void> {
@@ -185,61 +179,11 @@ export class GoogleDriveStore
 
   // ---- Drive API helpers ----
 
-  async #fetch(url: string, init?: RequestInit): Promise<Response> {
-    const resp = await this.#fetchOnce(url, init);
-    if (resp.ok) return resp;
-
-    // Auto-recover from an expired/stale access token. Every Drive
-    // API path funnels through here, so lifting this one level beats
-    // bolting 401 handlers onto each call site. The `#refreshInFlight`
-    // dedupe keeps a burst of parallel 401s from spawning ten popups.
-    if (resp.status === 401 && this.#refreshToken) {
-      // Drain the response body now so the connection can close.
-      await resp.text().catch(() => "");
-      const newToken = await (this.#refreshInFlight ??= this.#runRefresh());
-      if (newToken) {
-        const retry = await this.#fetchOnce(url, init);
-        if (retry.ok) return retry;
-        await this.#throwDriveError(retry);
-      }
-      // Refresh came back null — user cancelled, network gone, or
-      // scope was revoked. Fall through to the generic error path.
-    }
-    await this.#throwDriveError(resp);
-    // Unreachable: #throwDriveError always throws. The explicit return
-    // keeps TypeScript happy about the function's return type.
-    return resp;
-  }
-
-  async #fetchOnce(url: string, init?: RequestInit): Promise<Response> {
-    return fetch(url, {
-      ...init,
-      headers: {
-        Authorization: `Bearer ${this.#token}`,
-        ...((init?.headers as Record<string, string>) || {}),
-      },
-    });
-  }
-
-  async #throwDriveError(resp: Response): Promise<never> {
-    const text = await resp.text().catch(() => "");
-    const err = new Error(`Drive API ${resp.status}: ${text.slice(0, 200)}`) as any;
-    err.status = resp.status;
-    err.driveError = true;
-    throw err;
-  }
-
-  async #runRefresh(): Promise<string | null> {
-    try {
-      const token = await this.#refreshToken!();
-      if (token) this.#token = token;
-      return token;
-    } catch (e) {
-      console.warn("[drive-store] token refresh threw:", e);
-      return null;
-    } finally {
-      this.#refreshInFlight = null;
-    }
+  /** Thin alias keeping every call site short and readable. The
+   *  actual fetch / 401-retry / error-mapping logic lives in
+   *  `GoogleDriveApiClient` (see `./google-drive-api-client.ts`). */
+  #fetch(url: string, init?: RequestInit): Promise<Response> {
+    return this.#api.request(url, init);
   }
 
   async #listDrive(
