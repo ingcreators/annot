@@ -17,6 +17,7 @@
  */
 
 import type { AnnotationShape } from "../utils/tauri-bridge.js";
+import { getEffectiveLineEndpoints } from "./transform-utils.js";
 
 /** Apply a group's `transform="translate(tx, ty)"` (or the
  *  canonical `data-tx` / `data-ty`) when pulling out coordinates,
@@ -120,29 +121,38 @@ export function svgElementToAnnotationShape(el: SVGElement): AnnotationShape | n
   const isArrowGroup = tag === "g" && el.getAttribute("data-type") === "arrow";
   if (isArrowGroup) {
     // ArrowTool's composed `<g data-type="arrow">` — endpoints +
-    // per-end shape attrs in `data-*` form, so Office paste can
-    // emit the matching OOXML preset.
-    const x1 = Number.parseFloat(el.getAttribute("data-x1") || "0");
-    const y1 = Number.parseFloat(el.getAttribute("data-y1") || "0");
-    const x2 = Number.parseFloat(el.getAttribute("data-x2") || "0");
-    const y2 = Number.parseFloat(el.getAttribute("data-y2") || "0");
+    // per-end shape attrs in `data-*` form, so the shared OOXML
+    // builder can emit the matching preset.
+    //
+    // `getEffectiveLineEndpoints` returns endpoints (and the
+    // optional Bezier control point) in world space, with any
+    // pending `data-tx` / `data-ty` translation + `data-rot` /
+    // `data-flip-*` orientation already baked in. For line-like
+    // shapes the OOXML side reads orientation from the endpoints
+    // themselves (flipH = `x2 < x1` etc), so we explicitly DROP
+    // `rotation_deg` / `flip_h` / `flip_v` from the xform partial
+    // — keeping them would double-apply.
+    const ep = getEffectiveLineEndpoints(el);
     const startShape = el.getAttribute("data-arrow-start-shape");
     const endShape = el.getAttribute("data-arrow-end-shape");
     const headStart = startShape != null && startShape !== "none";
     const headEnd = endShape != null && endShape !== "none";
+    const { rotation_deg: _r, flip_h: _fh, flip_v: _fv, ...lineXform } = xform;
     return {
       type: headEnd || headStart ? "arrow" : "line",
-      x1: x1 + tx,
-      y1: y1 + ty,
-      x2: x2 + tx,
-      y2: y2 + ty,
+      x1: ep.x1,
+      y1: ep.y1,
+      x2: ep.x2,
+      y2: ep.y2,
+      arrow_curve_cx: ep.cx ?? undefined,
+      arrow_curve_cy: ep.cy ?? undefined,
       stroke: el.getAttribute("stroke") || "#ff0000",
       stroke_width: Number.parseFloat(el.getAttribute("stroke-width") || "3"),
       stroke_dasharray: el.getAttribute("stroke-dasharray") || "",
       has_arrow: headEnd,
       arrow_head_start: headStart,
       arrow_head_end: headEnd,
-      ...xform,
+      ...lineXform,
     };
   }
 

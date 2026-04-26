@@ -1,16 +1,6 @@
 import { svgElementToAnnotationShape } from "@ingcreators/annot-core/editor/svg-to-annotation-shapes";
-import { getEffectiveLineEndpoints } from "@ingcreators/annot-core/editor/transform-utils";
 import { buildZip } from "@ingcreators/annot-core/zip";
-import {
-  buildShapeXml,
-  capAttr,
-  chex,
-  endXml,
-  joinXml,
-  parseSvgPath,
-  pt,
-  px,
-} from "@ingcreators/annot-render";
+import { buildShapeXml, parseSvgPath, px } from "@ingcreators/annot-render";
 import type { CanvasManager } from "./canvas-manager.js";
 
 const __pptxTextEncoder = new TextEncoder();
@@ -25,78 +15,6 @@ function strToU8(s: string): Uint8Array {
  * inside `<a:srgbClr>`. The angle is in 60000ths of a degree with the
  * same convention as our source (0° = left→right, CW positive).
  */
-function gradFillXml(gRaw: string | null): string {
-  if (!gRaw) return "";
-  let spec: { angle: number; stops: Array<{ color: string; offset: number; opacity?: number }> };
-  try {
-    spec = JSON.parse(gRaw);
-  } catch {
-    return "";
-  }
-  if (!spec?.stops || !Array.isArray(spec.stops)) return "";
-  const rotNorm = (((spec.angle || 0) % 360) + 360) % 360;
-  const ang = Math.round(rotNorm * 60000);
-  const gs = spec.stops
-    .map((s) => {
-      const pos = Math.round((s.offset ?? 0) * 100000);
-      const alpha =
-        s.opacity != null && s.opacity < 1
-          ? `<a:alpha val="${Math.round(s.opacity * 100000)}"/>`
-          : "";
-      return `<a:gs pos="${pos}"><a:srgbClr val="${chex(s.color)}">${alpha}</a:srgbClr></a:gs>`;
-    })
-    .join("");
-  return `<a:gradFill flip="none" rotWithShape="1"><a:gsLst>${gs}</a:gsLst><a:lin ang="${ang}" scaled="1"/></a:gradFill>`;
-}
-
-/**
- * Read the effective stroke opacity for an element. For <line> the
- * canonical attribute is `opacity` (so the marker fades with the
- * line); other shapes use `stroke-opacity`. Both are accepted in
- * either case so legacy content and new content both round-trip.
- */
-function strokeOpacity(el: SVGElement): number {
-  const o = el.getAttribute("opacity");
-  if (o != null && o !== "") return Number.parseFloat(o);
-  const so = el.getAttribute("stroke-opacity");
-  if (so != null && so !== "") return Number.parseFloat(so);
-  return 1;
-}
-
-/**
- * Build the full `<a:ln>` fragment for a line-like element, handling
- * gradient strokes, stroke opacity, linecap, linejoin, and arrow
- * heads in one place. Critically: when the SVG `stroke` attribute is
- * a `url(#...)` gradient reference, we MUST emit a `<a:gradFill>`
- * inside the `<a:ln>` — passing the url(...) through `chex` as if
- * it were a #rrggbb color produces garbage like `URL(GRAD-...)` which
- * PowerPoint rejects as a malformed color value.
- */
-function lineLnXml(el: SVGElement, swPx: number, strokeAttr: string, arrowXml: string): string {
-  const dashXml = ""; // line builder currently doesn't pass dash; arrows are the usual decoration
-  const capStr = capAttr(el.getAttribute("stroke-linecap"));
-  const joinElement = joinXml(el.getAttribute("stroke-linejoin"));
-
-  const gradRaw = el.getAttribute("data-stroke-gradient");
-  const strokeIsUrl = /^url\(#.+\)$/i.test(strokeAttr.trim());
-  let paint: string;
-  if (gradRaw) {
-    // Gradient spec recorded on the element — authoritative source.
-    paint = gradFillXml(gradRaw);
-  } else if (strokeIsUrl) {
-    // url(...) reference without a matching data-*-gradient — the
-    // element points at a gradient defined in SVG defs. Fall back to
-    // the underlying first stop color so the line still renders in
-    // PowerPoint (instead of triggering the malformed-color error).
-    paint = `<a:solidFill><a:srgbClr val="000000"/></a:solidFill>`;
-  } else {
-    const opacity = strokeOpacity(el);
-    const alpha = opacity < 1 ? `<a:alpha val="${Math.round(opacity * 100000)}"/>` : "";
-    paint = `<a:solidFill><a:srgbClr val="${chex(strokeAttr)}">${alpha}</a:srgbClr></a:solidFill>`;
-  }
-  return `<a:ln w="${pt(swPx)}"${capStr}>${paint}${joinElement}${dashXml}${arrowXml}</a:ln>`;
-}
-
 /** Read the pending `data-tx` / `data-ty` translation on an element.
  *  For path / group elements, `#moveElement` (used by drag / align /
  *  nudge) stores the translation here rather than baking it into the
@@ -217,23 +135,6 @@ function buildShapes(input: PptxExportInput): ShapeInfo[] {
     const el = node as SVGElement;
     const tag = el.tagName;
 
-    // Arrows still use pptx-export's own `buildLine` — the shared
-    // builder doesn't yet model curved arrows (the `<a:custGeom>`
-    // quadratic-Bezier path that ArrowTool emits for curves).
-    // Phase 3 of pptx-export-shared-builder-finish folds this into
-    // the shared dispatch.
-    //
-    // Plain `<line>` SVG elements were a legacy back-compat path
-    // for old saved files; ArrowTool no longer emits them
-    // (verified via `grep -rn "createElementNS.*line\|tag === \"line\""
-    // packages/editor/src/tools/`). Past-data salvage is out of
-    // scope, so the `tag === "line"` dispatch was dropped in
-    // pptx-export-shared-builder-finish phase 1.
-    if (tag === "g" && el.getAttribute("data-type") === "arrow") {
-      shapes.push({ xml: buildLine(el, id), id });
-      id++;
-      continue;
-    }
     // Freehand session group — one `<p:grpSp>` containing one
     // `<p:sp>` per stroke. PPTX-only structure (the GVML
     // clipboard side flattens to individual freehand shapes), so
@@ -259,118 +160,6 @@ function buildShapes(input: PptxExportInput): ShapeInfo[] {
     }
   }
   return shapes;
-}
-
-function buildLine(el: SVGElement, id: number): string {
-  // Endpoints come from `x1/y1/x2/y2` (legacy `<line>`) or `data-x1/…`
-  // (arrow `<g>`). getEffectiveLineEndpoints handles both shapes AND
-  // applies any lingering data-rot/flip/tx,ty state so we always get
-  // the "what the user sees" endpoints in world space. Going through
-  // this helper is what lets us skip `rot=` / `flipH=` / `flipV=` in
-  // the OOXML `<a:xfrm>` below — the endpoints already encode all
-  // orientation. Without this step, a legacy arrow that still carries
-  // a `data-rot` attribute would be rotated TWICE (once via the
-  // pre-rotation endpoints, once via the OOXML rot attr), landing in
-  // a completely different position than the Annot canvas shows.
-  const { x1, y1, x2, y2, cx, cy } = getEffectiveLineEndpoints(el);
-  const stroke = el.getAttribute("stroke") || "#ff0000";
-  const sw = Number.parseFloat(el.getAttribute("stroke-width") || "3");
-  const isCurved = cx != null && cy != null;
-
-  // Bounding box includes the control point for curved arrows — a
-  // quadratic Bézier is contained in the convex hull of its 3 control
-  // points, so (min/max of {x1,cx,x2}) × (min/max of {y1,cy,y2}) is a
-  // tight and correct bbox. Without this, the control point could sit
-  // outside the bbox and PowerPoint would clip the curve.
-  const xs = isCurved ? [x1, cx!, x2] : [x1, x2];
-  const ys = isCurved ? [y1, cy!, y2] : [y1, y2];
-  const left = Math.min(...xs);
-  const top = Math.min(...ys);
-  const w = Math.max(...xs) - left || 1;
-  const h = Math.max(...ys) - top || 1;
-
-  // Flip flags only apply to the straight `prst="line"` form — they
-  // select which diagonal of the bbox the line traces. For curves we
-  // emit explicit path coords so no flip is ever needed.
-  const flipH = !isCurved && x2 < x1 ? ' flipH="1"' : "";
-  const flipV = !isCurved && y2 < y1 ? ' flipV="1"' : "";
-
-  // Per-end head config — translate SVG shape names into OOXML preset
-  // types.
-  const startShape = el.getAttribute("data-arrow-start-shape");
-  const endShape = el.getAttribute("data-arrow-end-shape");
-  const startW = el.getAttribute("data-arrow-start-width") || "md";
-  const startL = el.getAttribute("data-arrow-start-length") || "md";
-  const endW = el.getAttribute("data-arrow-end-width") || "md";
-  const endL = el.getAttribute("data-arrow-end-length") || "md";
-
-  const head = endXml("headEnd", startShape, startW, startL);
-  const tail = endShape != null ? endXml("tailEnd", endShape, endW, endL) : "";
-  const tailEnd = head + tail;
-
-  if (isCurved) {
-    // Curved arrow — emit a freeform shape (p:sp + custGeom) with a
-    // quadratic-Bézier path. OOXML doesn't have a "curved line with
-    // an arbitrary control point" preset, and prst="curvedConnector3"
-    // only offers a single hard-coded S-bend — so custGeom is the
-    // only faithful round-trip. Arrow-head `<a:headEnd>` /
-    // `<a:tailEnd>` still work on custGeom.
-    //
-    // Path coordinates: OOXML's `<a:path w=.. h=..>` defines a LOCAL
-    // coordinate system (in EMU). By setting w/h to the bbox's EMU
-    // size we can write path points as (worldX - left, worldY - top)
-    // in EMU with no additional scaling.
-    const wEmu = px(w);
-    const hEmu = px(h);
-    const localX = (wx: number) => px(wx - left);
-    const localY = (wy: number) => px(wy - top);
-    return `<p:sp>
-  <p:nvSpPr>
-    <p:cNvPr id="${id}" name="CurvedArrow ${id}"/>
-    <p:cNvSpPr/>
-    <p:nvPr/>
-  </p:nvSpPr>
-  <p:spPr>
-    <a:xfrm>
-      <a:off x="${px(left)}" y="${px(top)}"/>
-      <a:ext cx="${wEmu}" cy="${hEmu}"/>
-    </a:xfrm>
-    <a:custGeom>
-      <a:avLst/>
-      <a:gdLst/>
-      <a:ahLst/>
-      <a:cxnLst/>
-      <a:rect l="0" t="0" r="${wEmu}" b="${hEmu}"/>
-      <a:pathLst>
-        <a:path w="${wEmu}" h="${hEmu}">
-          <a:moveTo><a:pt x="${localX(x1)}" y="${localY(y1)}"/></a:moveTo>
-          <a:quadBezTo>
-            <a:pt x="${localX(cx!)}" y="${localY(cy!)}"/>
-            <a:pt x="${localX(x2)}" y="${localY(y2)}"/>
-          </a:quadBezTo>
-        </a:path>
-      </a:pathLst>
-    </a:custGeom>
-    ${lineLnXml(el, sw, stroke, tailEnd)}
-  </p:spPr>
-</p:sp>`;
-  }
-
-  return `<p:cxnSp>
-  <p:nvCxnSpPr>
-    <p:cNvPr id="${id}" name="Line ${id}"/>
-    <p:cNvCxnSpPr/>
-    <p:nvPr/>
-  </p:nvCxnSpPr>
-  <p:spPr>
-    <a:xfrm${flipH}${flipV}>
-      <a:off x="${px(left)}" y="${px(top)}"/>
-      <a:ext cx="${px(w)}" cy="${px(h)}"/>
-    </a:xfrm>
-    <a:prstGeom prst="line"><a:avLst/></a:prstGeom>
-    ${lineLnXml(el, sw, stroke, tailEnd)}
-  </p:spPr>
-</p:cxnSp>`;
 }
 
 /** Wrap a freehand session `<g>` as an OOXML group shape (`<p:grpSp>`)
