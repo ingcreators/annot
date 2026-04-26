@@ -1,13 +1,15 @@
 # Toolbar — `applyStyleToElement` write-back symmetry
 
-> **Status:** Queued. Direct follow-up to
-> [`_done/toolbar-schema.md`](./_done/toolbar-schema.md) Phase 5
+> **Status:** Done. Landed in PRs
+> [#193](https://github.com/ingcreators/annot/pull/193)–[#196](https://github.com/ingcreators/annot/pull/196)
+> over four phases (2026-04-26). Direct follow-up to
+> [`_done/toolbar-schema.md`](../_done/toolbar-schema.md) Phase 5
 > (PR [#170](https://github.com/ingcreators/annot/pull/170)),
 > which schema-drove the **read** path
 > (`Toolbar.syncPresetFromElement`) via
 > `TOOL_REGISTRY[toolId].extractStyleFromElement`. The **write**
 > path (`applyElementVariantPreset` → `applyPresetStyleAttrs`)
-> stayed hand-rolled. This plan completes the symmetry by adding
+> stayed hand-rolled. This plan completed the symmetry by adding
 > a Tier B `applyStyleToElement` callback to the registry and
 > collapsing the per-tool branches in
 > [`packages/web/src/editor/toolbar-preset-helpers.ts`](../../packages/web/src/editor/toolbar-preset-helpers.ts)'s

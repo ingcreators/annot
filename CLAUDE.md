@@ -244,9 +244,27 @@ registry pattern via `TOOL_REGISTRY` in
   `TOOL_REGISTRY[toolId]?.extractStyleFromElement?.(el, preset)`
   for tool-specific reads. The per-tool `if (toolId === "...")`
   cascade is gone.
+- **Variant write-back is generic too.** `applyPresetStyleAttrs`
+  in [`packages/web/src/editor/toolbar-preset-helpers.ts`](./packages/web/src/editor/toolbar-preset-helpers.ts)
+  walks `TOOL_REGISTRY` for the entry whose `variantKeyForElement`
+  claims `el`, then routes to that entry's
+  `applyStyleToElement(el, preset)`. Each tool's writer is the
+  paired inverse of its `extractStyleFromElement` — when adding a
+  new style field to a tool, edit BOTH callbacks; the
+  `tool-registry.test.ts` symmetry test fails the build if one
+  side is missing. Universal-style attrs (stroke / fill / cap /
+  join / opacity / dasharray) flow through
+  `writeUniversalStyleAttrs` in
+  [`packages/core/src/editor/tool-style-writer.ts`](./packages/core/src/editor/tool-style-writer.ts);
+  composite tools (marker bg primitive, textbox `<text>` child,
+  arrow's `refreshArrowPath` regen) override and call the helper
+  themselves.
 
-History: PRs #166–TBD, following
-[`docs/plans/_done/toolbar-schema.md`](./docs/plans/_done/toolbar-schema.md).
+History: PRs #166–#171 (toolbar schema), #193–#196 (write-back
+symmetry), following
+[`docs/plans/_done/toolbar-schema.md`](./docs/plans/_done/toolbar-schema.md)
+and
+[`docs/plans/_done/toolbar-apply-style-to-element.md`](./docs/plans/_done/toolbar-apply-style-to-element.md).
 
 The Tool-side property panel (the right panel users see when
 they activate a drawing tool) applies the same pattern via
