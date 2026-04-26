@@ -241,6 +241,26 @@ describe("TOOL_REGISTRY variantKeyForElement spot-checks", () => {
     ).toBe("arrow.both");
   });
 
+  it("arrow: legacy `<line marker-end>` (no data-arrow-end-shape) classifies as arrow.end", () => {
+    // Legacy SVGs saved before per-end shape attrs existed only have
+    // the SVG-marker attributes. The classifier falls back to those so
+    // the preset-bucket lookup matches what `extractStyleFromElement`
+    // writes into `arrowHead`.
+    expect(
+      TOOL_REGISTRY.arrow!.variantKeyForElement!(
+        fakeEl("line", { "marker-end": "url(#anno-triangle)" }),
+      ),
+    ).toBe("arrow.end");
+    expect(
+      TOOL_REGISTRY.arrow!.variantKeyForElement!(
+        fakeEl("line", {
+          "marker-start": "url(#anno-triangle)",
+          "marker-end": "url(#anno-triangle)",
+        }),
+      ),
+    ).toBe("arrow.both");
+  });
+
   it("text: <g data-type=textbox> reads data-text-variant", () => {
     expect(
       TOOL_REGISTRY.text!.variantKeyForElement!(
@@ -399,6 +419,17 @@ describe("TOOL_REGISTRY extractStyleFromElement", () => {
     expect(preset.arrowHeadEnd).toBe("stealth");
     expect(preset.arrowWidthStart).toBe("lg");
     expect(preset.arrowLengthEnd).toBe("sm");
+  });
+
+  it("arrow: legacy <line marker-end> (no data-arrow-end-shape) sets arrowHead=end", () => {
+    // Read path uses the same classifier as `variantKeyForElement`,
+    // so the preset bucket and the written `arrowHead` field stay in
+    // lockstep on legacy data. Without this, a legacy element rubber-
+    // banded its arrow style into the WRONG preset bucket.
+    const el = svg("line", { "marker-end": "url(#anno-triangle)" });
+    const preset = emptyPreset();
+    TOOL_REGISTRY.arrow!.extractStyleFromElement!(el, preset);
+    expect(preset.arrowHead).toBe("end");
   });
 
   it("arrow: variant=none clamps both ends to none via normalizeVariantSideFields", () => {

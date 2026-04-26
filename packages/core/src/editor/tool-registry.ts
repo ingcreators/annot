@@ -153,15 +153,28 @@ function shapeRectVariant(el: SVGElement): string | null {
 }
 
 /** Helper: classify an arrow-bearing element's variant from its
- *  per-end shape attributes. Mirrors `elementKeyFromElement`'s
- *  arrow branch verbatim. */
-function arrowVariantFromAttrs(el: SVGElement): string {
-  const headS = el.getAttribute("data-arrow-start-shape");
-  const headE = el.getAttribute("data-arrow-end-shape");
-  const hasStart = headS != null && headS !== "none";
-  const hasEnd = headE != null && headE !== "none";
+ *  per-end shape attributes. Single source of truth shared by
+ *  `variantKeyForElement` (preset-bucket routing) and
+ *  `extractStyleFromElement` (rubber-band reader) so the two stay
+ *  in lockstep — without this, a legacy `<line marker-end>`
+ *  without `data-arrow-end-shape` ends up in the `arrow.none`
+ *  preset bucket while its rubber-banded preset says
+ *  `arrowHead = "end"`, violating the variant-defining-field
+ *  invariant.
+ *
+ *  Falls back to the SVG-marker attributes (`marker-start` /
+ *  `marker-end`) when the canonical `data-arrow-*-shape` attrs are
+ *  absent, so legacy SVGs (saved before per-end shape attrs
+ *  existed) classify correctly. */
+function arrowVariantFromAttrs(el: SVGElement): "none" | "end" | "both" {
+  const startShape = el.getAttribute("data-arrow-start-shape");
+  const endShape = el.getAttribute("data-arrow-end-shape");
+  const hasStart =
+    startShape != null ? startShape !== "none" : !!el.getAttribute("marker-start");
+  const hasEnd =
+    endShape != null ? endShape !== "none" : !!el.getAttribute("marker-end");
   if (hasStart && hasEnd) return "both";
-  if (hasEnd || hasStart) return "end";
+  if (hasStart || hasEnd) return "end";
   return "none";
 }
 
@@ -250,18 +263,15 @@ export const TOOL_REGISTRY: Readonly<Record<string, ToolRegistryEntry>> = {
     extractStyleFromElement(el, preset) {
       // Rubber-band the full per-end state into the variant's preset:
       //   - Legacy `arrowHead` (none/end/both) classifies which
-      //     variant's preset to update.
+      //     variant's preset to update — uses the SAME classifier as
+      //     `variantKeyForElement` so the preset bucket and the
+      //     written `arrowHead` field always agree.
       //   - Per-end SHAPE / WIDTH / LENGTH values are preserved
       //     within the variant's constraints — the user's custom
       //     "Double arrow with start=diamond, end=oval" survives
       //     round-trips, because variant-switching clamps per-end
       //     into the valid range rather than fully resetting.
-      const endShape = el.getAttribute("data-arrow-end-shape");
-      const startShape = el.getAttribute("data-arrow-start-shape");
-      const hEnd = endShape != null ? endShape !== "none" : !!el.getAttribute("marker-end");
-      const hStart =
-        startShape != null ? startShape !== "none" : !!el.getAttribute("marker-start");
-      preset.arrowHead = hStart && hEnd ? "both" : hEnd ? "end" : hStart ? "end" : "none";
+      preset.arrowHead = arrowVariantFromAttrs(el);
       // Per-end shape + width + length (PowerPoint-parity granular fields).
       const ss = el.getAttribute("data-arrow-start-shape");
       const es = el.getAttribute("data-arrow-end-shape");
@@ -283,9 +293,7 @@ export const TOOL_REGISTRY: Readonly<Record<string, ToolRegistryEntry>> = {
       // so the preset is always internally consistent with its variant
       // label — protects against reverse-arrow data loaded from old
       // saved files.
-      if (preset.arrowHead) {
-        normalizeVariantSideFields("arrow", preset.arrowHead, preset);
-      }
+      normalizeVariantSideFields("arrow", preset.arrowHead, preset);
     },
   },
 
