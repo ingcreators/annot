@@ -40,7 +40,6 @@ import type {
   LineCap,
   MarkerShape,
   RedactStyle,
-  TextVariant,
 } from "./tools/tool-base.js";
 import { readTransformState, setRotation, toggleFlip } from "@ingcreators/annot-core/editor/transform-utils";
 
@@ -226,6 +225,28 @@ export class PropertyPanel {
           } catch (err) {
             console.error("[redact] style convert failed", err);
             out.push({ oldEl: el, newEl: el });
+          }
+        }
+        return out;
+      },
+      applyTextColor: (els, value) => {
+        // Set the text fill + data-color attr first; then for sticky
+        // / callout textboxes regenerate the bg primitive (its tint
+        // is derived from data-color, so re-running convertTextVariant
+        // produces a fresh element with the matching new bg). Plain
+        // textboxes return identity replacements — only the inner
+        // <text> fill changed, no element swap needed.
+        const v = String(value);
+        const out: ElementReplacement[] = [];
+        for (const el of els) {
+          el.querySelector("text")?.setAttribute("fill", v);
+          el.setAttribute("data-color", v);
+          const variant = detectTextVariant(el);
+          if (variant === "plain") {
+            out.push({ oldEl: el, newEl: el });
+          } else {
+            const newEl = convertTextVariant(el, variant);
+            out.push({ oldEl: el, newEl });
           }
         }
         return out;
@@ -433,128 +454,56 @@ export class PropertyPanel {
     this.#addPPLineSection(el);
   }
 
-  #renderTextboxControls(g: SVGElement): void {
-    const textEl = g.querySelector("text");
-    const color = textEl?.getAttribute("fill") || "#ff0000";
-    const fontSize = textEl?.getAttribute("font-size") || "16";
-    const fontFamily =
-      textEl?.getAttribute("font-family") || g.getAttribute("data-font-family") || "sans-serif";
-
-    // Type section: variant picker (plain / sticky / callout).
-    this.#inSection("Type", () => {
-      this.#addTextVariantPicker(detectTextVariant(g));
-    });
-
-    // Line section: textbox "line" means all text-appearance rows
-    // (Color / Font / Size). We reuse the "Line" label for every tool
-    // to keep the category vocabulary consistent.
-    this.#inSection("Line", () => {
-      this.#addColorPicker("Color", color, (v) => {
-        for (const t of this.#targets) {
-          t.querySelector("text")?.setAttribute("fill", v);
-          t.setAttribute("data-color", v);
-          if (detectTextVariant(t) !== "plain") {
-            this.#recreateTextbox(t);
-          }
-        }
-        this.#commit();
-      });
-      this.#addFontFamilyPicker(fontFamily);
-      this.#addFontSizePicker(Number.parseFloat(fontSize));
-    });
-  }
-
   /**
-   * Regenerate a textbox element in place so its bg / tail cosmetics
-   * catch up with the latest data-* metadata. Used when changing the
-   * color of a sticky (whose pale bg is derived from the text color).
+   * Textbox properties — schema-driven via Phase 3f of
+   * `docs/plans/property-panel-schema.md`. All four controls live
+   * in the registry:
+   *
+   *   - `textVariantPicker` (variantPicker → replace via
+   *     `convertTextVariant`) — plain / sticky / callout chips. The
+   *     replace path produces a fresh element per target; the
+   *     renderer threads the swap through `onTargetReplaced` and
+   *     fires `onVariantChanged` so the new variant's preset
+   *     overrides the carried-over style.
+   *
+   *   - `textColor` (color → `effect: applyTextColor`) — text fill
+   *     write + sticky / callout bg recreation. The effect handler
+   *     bound in the constructor sets the attrs in place AND
+   *     regenerates the bg primitive for non-plain variants
+   *     (returns the post-recreation element so the renderer can
+   *     fire `onTargetReplaced`). Plain textboxes return identity.
+   *
+   *   - `fontFamily` (select) — same 4 presets the imperative
+   *     picker offered, plus the renderer's "preserve current value
+   *     if non-preset" fallback so externally-supplied custom fonts
+   *     round-trip. Renders via `createCustomSelect` (matching the
+   *     panel's other dropdowns) instead of the imperative version's
+   *     native `<select>` — a visual consistency improvement.
+   *
+   *   - `fontSize` (number) — 8..96 pt, step 1, unit "pt". The
+   *     registry's setValue writes both the `<text>`'s `font-size`
+   *     and the outer `data-font-size` marker.
    */
-  #recreateTextbox(g: SVGElement): SVGElement | null {
-    // Import lazily to avoid a top-level cycle with text-utils.
-    // (text-utils has no reverse dependency, so this is safe either
-    // way — inline for readability.)
-    const parent = g.parentNode;
-    if (!parent) return null;
-    const newEl = convertTextVariant(g, detectTextVariant(g));
-    // Update the target list if the target we just replaced was tracked.
-    const idx = this.#targets.indexOf(g);
-    if (idx >= 0) this.#targets[idx] = newEl;
-    this.onTargetReplaced?.([{ oldEl: g, newEl }]);
-    return newEl;
-  }
-
-  #addTextVariantPicker(current: TextVariant): void {
-    // Emits just the chip row — the outer "Type" category card is
-    // created by `#inSection("Type", ...)` in the render method.
-    const row = document.createElement("div");
-    row.className = "pp-type-row";
-    const options: Array<{ value: TextVariant; icon: string; label: string }> = [
-      { value: "plain", icon: "text_fields", label: "Plain text" },
-      { value: "sticky", icon: "sticky_note_2", label: "Sticky note" },
-      { value: "callout", icon: "chat_bubble", label: "Callout" },
-    ];
-    for (const opt of options) {
-      const chip = document.createElement("div");
-      chip.className = `prop-choice-chip material-symbols-outlined${current === opt.value ? " active" : ""}`;
-      chip.textContent = opt.icon;
-      setTooltip(chip, opt.label);
-      chip.addEventListener("click", () => {
-        if (opt.value === current) return;
-        const replacements: { oldEl: SVGElement; newEl: SVGElement }[] = [];
-        const nextTargets: SVGElement[] = [];
-        for (const t of this.#targets) {
-          const newEl = convertTextVariant(t, opt.value);
-          replacements.push({ oldEl: t, newEl });
-          nextTargets.push(newEl);
-        }
-        this.#targets = nextTargets;
-        // Skip the style rubber-band (#commit would push the converted
-        // element's OLD style into the NEW variant's preset). The
-        // host's onVariantChanged will load the new variant's saved
-        // style and apply it instead.
-        this.#history.save();
-        this.onTargetReplaced?.(replacements);
-        if (this.onVariantChanged) {
-          this.onVariantChanged(nextTargets);
-        } else {
-          this.show(nextTargets);
-        }
-      });
-      row.appendChild(chip);
-    }
-    this.#target().appendChild(row);
-  }
-
-  #addFontFamilyPicker(current: string): void {
-    const select = document.createElement("select");
-    select.className = "toolbar-input prop-font-select";
-    const FONT_OPTIONS: Array<{ label: string; value: string }> = [
-      { label: "Sans-serif", value: "sans-serif" },
-      { label: "Serif", value: "serif" },
-      { label: "Monospace", value: "monospace" },
-      { label: "System UI", value: "system-ui, -apple-system, sans-serif" },
-    ];
-    // Preserve any non-preset value so it round-trips.
-    if (!FONT_OPTIONS.some((o) => o.value === current)) {
-      FONT_OPTIONS.push({ label: current, value: current });
-    }
-    for (const opt of FONT_OPTIONS) {
-      const o = document.createElement("option");
-      o.value = opt.value;
-      o.textContent = opt.label;
-      if (opt.value === current) o.selected = true;
-      select.appendChild(o);
-    }
-    select.addEventListener("change", () => {
-      const next = select.value;
-      for (const t of this.#targets) {
-        t.setAttribute("data-font-family", next);
-        t.querySelector("text")?.setAttribute("font-family", next);
-      }
-      this.#commit();
+  #renderTextboxControls(_g: SVGElement): void {
+    this.#inSection("Type", () => {
+      this.#renderRegistryControl(PROPERTY_CONTROL_IDS.textVariantPicker);
     });
-    this.#target().appendChild(this.#ppRow("Font", select));
+    this.#inSection("Line", () => {
+      this.#renderRegistryControl(PROPERTY_CONTROL_IDS.textColor);
+      this.#renderRegistryControl(PROPERTY_CONTROL_IDS.fontFamily);
+      this.#renderRegistryControl(PROPERTY_CONTROL_IDS.fontSize);
+    });
   }
+
+  // `#recreateTextbox`, `#addTextVariantPicker`, `#addFontFamilyPicker`,
+  // `#addFontSizePicker` removed in Phase 3f — all four textbox
+  // controls are now schema-driven. Sticky / callout bg recreation
+  // moved into the `applyTextColor` effect handler bound in the
+  // constructor; variant conversion is handled by the registry's
+  // `textVariantPicker.replace = convertTextVariant`. The font
+  // family dropdown switched from a native `<select>` to
+  // `createCustomSelect` (renderer's "select" type) for visual
+  // consistency with the panel's other dropdowns.
 
   /**
    * Redact properties — style picker + solid color picker (only
@@ -1090,23 +1039,10 @@ export class PropertyPanel {
     this.#el.appendChild(wrap);
   }
 
-  // --- Font size picker ---
-
-  #addFontSizePicker(current: number): void {
-    // Unified: switched from a chip grid (9 fixed sizes) to the
-    // pp-number input used by Tool mode, so both panels expose the
-    // same spinner + keyboard-entry control. Accepts any pt value in
-    // a reasonable range rather than the preset list.
-    const input = ppNumberInput(current, "pt", 8, 96, 1, (v) => {
-      for (const t of this.#targets) {
-        const te = t.querySelector("text");
-        if (te) te.setAttribute("font-size", String(v));
-        t.setAttribute("data-font-size", String(v));
-      }
-      this.#commit();
-    });
-    this.#target().appendChild(this.#ppRow("Size", input));
-  }
+  // `#addFontSizePicker` removed in Phase 3f — schema-driven via
+  // `PROPERTY_CONTROLS.fontSize` (8..96 pt, step 1, unit "pt"). The
+  // registry's setValue does the same `<text>` font-size +
+  // `data-font-size` outer-attr write the imperative version did.
 
   // --- Common helpers ---
 
