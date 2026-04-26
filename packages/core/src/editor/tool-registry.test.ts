@@ -181,6 +181,55 @@ describe("TOOL_REGISTRY shape invariants", () => {
   });
 });
 
+describe("TOOL_REGISTRY flyoutKind discriminator", () => {
+  // Phase 1 of `docs/plans/toolbar-highlight-flyout-kind.md` — pin
+  // the registry's per-tool presentation discriminator so a
+  // regression in any of:
+  //   - highlight being the lone "color" flyout
+  //   - every other tool defaulting to undefined (treated as
+  //     "variant" by callers)
+  //   - the tooltip-label resolver returning the palette label for
+  //     known colors and empty for ad-hoc hexes
+  // surfaces immediately rather than waiting for a Toolbar wiring PR.
+
+  it("highlight has flyoutKind = 'color'", () => {
+    expect(TOOL_REGISTRY.highlight!.flyoutKind).toBe("color");
+  });
+
+  it("every non-highlight tool has flyoutKind === undefined", () => {
+    for (const [id, entry] of Object.entries(TOOL_REGISTRY)) {
+      if (id === "highlight") continue;
+      expect(entry.flyoutKind, `${id}.flyoutKind`).toBeUndefined();
+    }
+  });
+
+  it("highlight tooltipLabelForVariant returns palette label for known hex", () => {
+    const fn = TOOL_REGISTRY.highlight!.tooltipLabelForVariant!;
+    // First palette entry — yellow, matches HIGHLIGHT_COLORS[0].
+    expect(fn("#ffe100", "Yellow")).toBe("Yellow");
+    // Case-insensitive: uppercase hex still resolves.
+    expect(fn("#FFE100", "Yellow")).toBe("Yellow");
+    // Mid-palette spot-check.
+    expect(fn("#7be0ff", "Blue")).toBe("Blue");
+  });
+
+  it("highlight tooltipLabelForVariant returns empty for ad-hoc hex", () => {
+    // Ad-hoc hex outside the 6-color palette — fallback to empty
+    // string triggers the "no parens" tooltip path in Phase 3 so
+    // the tooltip becomes the bare "Highlight" instead of leaking
+    // the raw hex.
+    const fn = TOOL_REGISTRY.highlight!.tooltipLabelForVariant!;
+    expect(fn("#123456", "")).toBe("");
+  });
+
+  it("highlight chipColorForVariant is omitted (identity fallback)", () => {
+    // Highlight's variant value IS the hex string, so callers can
+    // fall through to `?? variantValue` instead of round-tripping
+    // an identity closure. Other tools omit the field entirely.
+    expect(TOOL_REGISTRY.highlight!.chipColorForVariant).toBeUndefined();
+  });
+});
+
 describe("TOOL_REGISTRY variantKeyForElement spot-checks", () => {
   // These are NOT exhaustive behaviour tests — that's Phase 5's job
   // when the classifier becomes the sole replacement for
