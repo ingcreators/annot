@@ -1,7 +1,0 @@
----
-source: src/commands/clipboard_test.rs
-assertion_line: 288
-expression: xml
----
-<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/lockedCanvas"><lc:lockedCanvas xmlns:lc="http://schemas.openxmlformats.org/drawingml/2006/lockedCanvas"><a:nvGrpSpPr><a:cNvPr id="0" name=""/><a:cNvGrpSpPr/></a:nvGrpSpPr><a:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="7620000" cy="5715000"/><a:chOff x="0" y="0"/><a:chExt cx="7620000" cy="5715000"/></a:xfrm></a:grpSpPr><a:sp><a:nvSpPr><a:cNvPr id="2" name="R2"/><a:cNvSpPr/></a:nvSpPr><a:spPr><a:xfrm><a:off x="476250" y="4762500"/><a:ext cx="1143000" cy="285750"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:solidFill><a:srgbClr val="000000"/></a:solidFill><a:ln><a:noFill/></a:ln></a:spPr></a:sp></lc:lockedCanvas></a:graphicData></a:graphic>

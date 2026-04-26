@@ -1,238 +1,127 @@
-//! Golden-snapshot regression net for the GVML drawing XML produced
-//! by `copy_as_office`. Exercises every emitter
-//! (`rect` / `ellipse` / `arrow` / `marker` / `text` / `freehand` /
-//! `mosaic_image`) so any future change to the drawing output is
-//! either intentional (and called out in the PR) or caught here.
+//! Smoke test for the GVML OPC ZIP packaging.
+//!
+//! Per-shape OOXML construction lives on the TS side now (see
+//! `packages/render/src/drawingml/`); the Rust crate only
+//! packages a pre-built `drawing_xml` string + a list of
+//! mosaic media into the GVML clipboard ZIP. The test asserts:
+//!
+//! 1. The ZIP can be built without error.
+//! 2. The expected entries are present (`[Content_Types].xml`,
+//!    `_rels/.rels`, `clipboard/drawings/drawing1.xml`,
+//!    `clipboard/drawings/_rels/drawing1.xml.rels`,
+//!    `clipboard/theme/theme1.xml`).
+//! 3. The drawing XML and mosaic media land at their declared
+//!    paths with the exact bytes the caller passed in.
+//! 4. The drawing rels file references rId entries for both
+//!    the screenshot (when present) and each mosaic file in
+//!    order.
 
-use super::clipboard::{build_drawing_xml, AnnotationShape};
+use super::clipboard::{build_gvml_zip, MosaicMedia};
+use std::io::Read;
 
-fn rect_shape() -> AnnotationShape {
-    AnnotationShape {
-        shape_type: "rect".into(),
-        x: Some(10.0),
-        y: Some(20.0),
-        width: Some(100.0),
-        height: Some(80.0),
-        stroke: Some("#ff0000".into()),
-        stroke_width: Some(3.0),
-        fill: Some("#ffeeaa".into()),
-        fill_opacity: Some(0.5),
-        ..Default::default()
-    }
+fn read_zip_entry(zip_bytes: &[u8], path: &str) -> Option<Vec<u8>> {
+    let cursor = std::io::Cursor::new(zip_bytes);
+    let mut archive = zip::ZipArchive::new(cursor).ok()?;
+    let mut entry = archive.by_name(path).ok()?;
+    let mut out = Vec::new();
+    entry.read_to_end(&mut out).ok()?;
+    Some(out)
 }
 
-fn rounded_rect_shape() -> AnnotationShape {
-    AnnotationShape {
-        shape_type: "rect".into(),
-        x: Some(120.0),
-        y: Some(20.0),
-        width: Some(100.0),
-        height: Some(80.0),
-        stroke: Some("#0000ff".into()),
-        stroke_width: Some(2.0),
-        fill: Some("none".into()),
-        corner_radius: Some(8.0),
-        ..Default::default()
+fn list_zip_entries(zip_bytes: &[u8]) -> Vec<String> {
+    let cursor = std::io::Cursor::new(zip_bytes);
+    let mut archive = zip::ZipArchive::new(cursor).expect("ZIP must parse");
+    let mut out = Vec::with_capacity(archive.len());
+    for i in 0..archive.len() {
+        let entry = archive.by_index(i).expect("entry by index");
+        out.push(entry.name().to_string());
     }
+    out
 }
 
-fn ellipse_shape() -> AnnotationShape {
-    AnnotationShape {
-        shape_type: "ellipse".into(),
-        cx: Some(300.0),
-        cy: Some(60.0),
-        rx: Some(50.0),
-        ry: Some(40.0),
-        stroke: Some("#00ff00".into()),
-        stroke_width: Some(3.0),
-        fill: Some("none".into()),
-        ..Default::default()
-    }
-}
+const SAMPLE_DRAWING_XML: &str = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/lockedCanvas"><lc:lockedCanvas xmlns:lc="http://schemas.openxmlformats.org/drawingml/2006/lockedCanvas"><a:nvGrpSpPr><a:cNvPr id="0" name=""/><a:cNvGrpSpPr/></a:nvGrpSpPr><a:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="7620000" cy="5715000"/><a:chOff x="0" y="0"/><a:chExt cx="7620000" cy="5715000"/></a:xfrm></a:grpSpPr></lc:lockedCanvas></a:graphicData></a:graphic>"#;
 
-fn arrow_shape() -> AnnotationShape {
-    AnnotationShape {
-        shape_type: "arrow".into(),
-        x1: Some(10.0),
-        y1: Some(150.0),
-        x2: Some(210.0),
-        y2: Some(250.0),
-        stroke: Some("#ff0000".into()),
-        stroke_width: Some(3.0),
-        has_arrow: Some(true),
-        arrow_shape_end: Some("triangle".into()),
-        arrow_width_end: Some("med".into()),
-        arrow_length_end: Some("med".into()),
-        ..Default::default()
-    }
-}
+#[test]
+fn build_gvml_zip_includes_drawing_xml_and_theme() {
+    let zip_bytes = build_gvml_zip(SAMPLE_DRAWING_XML, &[], None).expect("zip builds");
+    let drawing = read_zip_entry(&zip_bytes, "clipboard/drawings/drawing1.xml")
+        .expect("drawing1.xml present");
+    assert_eq!(String::from_utf8_lossy(&drawing), SAMPLE_DRAWING_XML);
 
-fn marker_shape() -> AnnotationShape {
-    AnnotationShape {
-        shape_type: "marker".into(),
-        cx: Some(400.0),
-        cy: Some(300.0),
-        font_size: Some(13.0),
-        fill: Some("#ff0000".into()),
-        label: Some("1".into()),
-        marker_shape: Some("rect".into()),
-        ..Default::default()
-    }
-}
-
-fn marker_rounded_shape() -> AnnotationShape {
-    // `marker_shape: "rounded"` emits `roundRect` with adj=30000 so
-    // the OOXML preset visibly matches the SVG-side
-    // `cornerRadius = r * 0.6` rendering.
-    AnnotationShape {
-        shape_type: "marker".into(),
-        cx: Some(500.0),
-        cy: Some(300.0),
-        font_size: Some(13.0),
-        fill: Some("#0000ff".into()),
-        label: Some("2".into()),
-        marker_shape: Some("rounded".into()),
-        ..Default::default()
-    }
-}
-
-fn text_shape() -> AnnotationShape {
-    AnnotationShape {
-        shape_type: "text".into(),
-        x: Some(10.0),
-        y: Some(400.0),
-        width: Some(200.0),
-        height: Some(50.0),
-        font_size: Some(24.0),
-        fill: Some("#000000".into()),
-        text: Some("Hello".into()),
-        text_bg_color: Some("rgba(255,255,200,0.92)".into()),
-        ..Default::default()
-    }
-}
-
-fn redact_solid_shape() -> AnnotationShape {
-    // Solid-fill redaction bar — `gvml_rect` emits
-    // `<a:ln><a:noFill/></a:ln>` regardless of any populated
-    // `stroke_*` fields, matching PowerPoint's "rectangle (no
-    // outline)" preset.
-    AnnotationShape {
-        shape_type: "rect".into(),
-        x: Some(50.0),
-        y: Some(500.0),
-        width: Some(120.0),
-        height: Some(30.0),
-        stroke: Some("#ff0000".into()),
-        stroke_width: Some(3.0),
-        fill: Some("#000000".into()),
-        fill_opacity: Some(1.0),
-        redact_style: Some("solid".into()),
-        ..Default::default()
-    }
-}
-
-fn callout_shape() -> AnnotationShape {
-    // Callout textbox with tail at (300, 470) — outside the bbox to
-    // its bottom-right. `gvml_text` switches `prstGeom` from
-    // `roundRect` to `wedgeRoundRectCallout` when `text_variant`
-    // and `tail_x` / `tail_y` are populated.
-    AnnotationShape {
-        shape_type: "text".into(),
-        x: Some(100.0),
-        y: Some(400.0),
-        width: Some(150.0),
-        height: Some(50.0),
-        font_size: Some(20.0),
-        fill: Some("#000000".into()),
-        text: Some("Callout!".into()),
-        text_bg_color: Some("rgba(255,255,200,0.92)".into()),
-        text_variant: Some("callout".into()),
-        tail_x: Some(300.0),
-        tail_y: Some(470.0),
-        ..Default::default()
-    }
-}
-
-fn freehand_shape() -> AnnotationShape {
-    AnnotationShape {
-        shape_type: "freehand".into(),
-        stroke: Some("#ff00ff".into()),
-        stroke_width: Some(2.0),
-        text: Some("M 0 0 L 10 10 L 20 5".into()),
-        ..Default::default()
-    }
-}
-
-/// 1x1 transparent PNG data URL. Bytes are irrelevant for the XML
-/// snapshot — only `parse_data_url_bytes` success matters.
-const TEST_PNG_DATA_URL: &str = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
-
-fn mosaic_shape() -> AnnotationShape {
-    AnnotationShape {
-        shape_type: "mosaic_image".into(),
-        x: Some(500.0),
-        y: Some(400.0),
-        width: Some(100.0),
-        height: Some(80.0),
-        image_data_url: Some(TEST_PNG_DATA_URL.into()),
-        ..Default::default()
+    let entries = list_zip_entries(&zip_bytes);
+    for required in [
+        "[Content_Types].xml",
+        "_rels/.rels",
+        "clipboard/drawings/drawing1.xml",
+        "clipboard/drawings/_rels/drawing1.xml.rels",
+        "clipboard/theme/theme1.xml",
+    ] {
+        assert!(entries.iter().any(|e| e == required), "missing: {required}");
     }
 }
 
 #[test]
-fn drawing_xml_pins_every_emitter() {
-    let shapes = vec![
-        rect_shape(),
-        rounded_rect_shape(),
-        ellipse_shape(),
-        arrow_shape(),
-        marker_shape(),
-        text_shape(),
-        freehand_shape(),
-        mosaic_shape(),
+fn build_gvml_zip_writes_mosaic_media_under_clipboard_media() {
+    let media = vec![
+        MosaicMedia { filename: "mosaic_0.png".into(), bytes: vec![0xDE, 0xAD] },
+        MosaicMedia { filename: "mosaic_1.jpeg".into(), bytes: vec![0xCA, 0xFE] },
     ];
-    let (xml, media_files) = build_drawing_xml(&shapes, 800.0, 600.0, false);
-
-    // The mosaic emitter is the only one that pushes a media file.
-    assert_eq!(media_files.len(), 1);
-    assert!(media_files[0].0.starts_with("mosaic_"));
-
-    insta::assert_snapshot!("drawing_xml_all_emitters", xml);
+    let zip_bytes = build_gvml_zip(SAMPLE_DRAWING_XML, &media, None).expect("zip builds");
+    let m0 = read_zip_entry(&zip_bytes, "clipboard/media/mosaic_0.png").expect("mosaic_0");
+    let m1 = read_zip_entry(&zip_bytes, "clipboard/media/mosaic_1.jpeg").expect("mosaic_1");
+    assert_eq!(m0, vec![0xDE, 0xAD]);
+    assert_eq!(m1, vec![0xCA, 0xFE]);
 }
 
 #[test]
-fn drawing_xml_redact_solid_emits_no_outline() {
-    // A `type: "rect"` + `redact_style: "solid"` rect must emit
-    // `<a:ln><a:noFill/></a:ln>` instead of the user-supplied stroke
-    // paint, matching PowerPoint's "rectangle (no outline)" preset.
-    // Plain rects keep their outline.
-    let (xml, _) = build_drawing_xml(&[redact_solid_shape()], 800.0, 600.0, false);
-    insta::assert_snapshot!("drawing_xml_redact_solid_no_outline", xml);
+fn build_gvml_zip_writes_screenshot_at_image1_jpeg() {
+    let img = vec![0xFF, 0xD8, 0xFF, 0xE0]; // JPEG magic bytes
+    let zip_bytes =
+        build_gvml_zip(SAMPLE_DRAWING_XML, &[], Some(&img)).expect("zip builds");
+    let stored = read_zip_entry(&zip_bytes, "clipboard/media/image1.jpeg")
+        .expect("image1.jpeg present");
+    assert_eq!(stored, img);
 }
 
 #[test]
-fn drawing_xml_callout_emits_wedge_round_rect_callout() {
-    // For a 150x50 bbox at (100,400) and tail at (300,470), the
-    // signed adj1/adj2 percentages are dx = +125 (≈+83333),
-    // dy = +45 (≈+90000).
-    let (xml, _) = build_drawing_xml(&[callout_shape()], 800.0, 600.0, false);
-    insta::assert_snapshot!("drawing_xml_callout_with_tail", xml);
+fn build_gvml_zip_drawing_rels_index_screenshot_and_mosaics() {
+    // rId numbering: rId1=theme, rId2=screenshot (when present),
+    // rId3+ = mosaic media in declaration order. The TS-side
+    // builder relies on this order to write the matching `<a:blip
+    // r:embed="rId{N}"/>` references in `drawing_xml`.
+    let media = vec![
+        MosaicMedia { filename: "mosaic_0.png".into(), bytes: vec![0x01] },
+        MosaicMedia { filename: "mosaic_1.jpeg".into(), bytes: vec![0x02] },
+    ];
+    let img = vec![0xFF, 0xD8];
+    let zip_bytes =
+        build_gvml_zip(SAMPLE_DRAWING_XML, &media, Some(&img)).expect("zip builds");
+
+    let rels = read_zip_entry(&zip_bytes, "clipboard/drawings/_rels/drawing1.xml.rels")
+        .expect("rels present");
+    let rels_str = String::from_utf8_lossy(&rels);
+    assert!(rels_str.contains(r#"Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme""#));
+    assert!(rels_str.contains(r#"Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image1.jpeg""#));
+    assert!(rels_str.contains(r#"Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/mosaic_0.png""#));
+    assert!(rels_str.contains(r#"Id="rId4" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/mosaic_1.jpeg""#));
 }
 
 #[test]
-fn drawing_xml_marker_rounded_emits_high_adj_round_rect() {
-    let (xml, _) = build_drawing_xml(&[marker_rounded_shape()], 800.0, 600.0, false);
-    insta::assert_snapshot!("drawing_xml_marker_rounded", xml);
+fn build_gvml_zip_omits_image_content_types_when_no_image_or_media() {
+    let zip_bytes = build_gvml_zip(SAMPLE_DRAWING_XML, &[], None).expect("zip builds");
+    let ct = read_zip_entry(&zip_bytes, "[Content_Types].xml").expect("ct present");
+    let ct_str = String::from_utf8_lossy(&ct);
+    assert!(!ct_str.contains(r#"Extension="jpeg""#));
+    assert!(!ct_str.contains(r#"Extension="png""#));
 }
 
 #[test]
-fn drawing_xml_with_background_screenshot() {
-    // `has_image: true` prepends an <a:pic> for the rId2-bound
-    // screenshot. Pin its XML separately so the wrapping envelope
-    // stays untouched.
-    let shapes = vec![rect_shape()];
-    let (xml, media_files) = build_drawing_xml(&shapes, 1024.0, 768.0, true);
-
-    assert!(media_files.is_empty());
-    insta::assert_snapshot!("drawing_xml_with_screenshot", xml);
+fn build_gvml_zip_includes_image_content_types_when_screenshot_present() {
+    let zip_bytes =
+        build_gvml_zip(SAMPLE_DRAWING_XML, &[], Some(&[0xFF])).expect("zip builds");
+    let ct = read_zip_entry(&zip_bytes, "[Content_Types].xml").expect("ct present");
+    let ct_str = String::from_utf8_lossy(&ct);
+    assert!(ct_str.contains(r#"Extension="jpeg""#));
+    assert!(ct_str.contains(r#"Extension="png""#));
 }
