@@ -182,11 +182,15 @@ export interface StorageProvider {
 
   /** Return folder records from root down to `path` (inclusive). Empty for root. */
   getBreadcrumb(path: string): Promise<FolderRecord[]>;
-
-  // ---- Utility ----
-
-  generateThumbnail(dataUrl: string, maxWidth?: number): Promise<string>;
 }
+
+// `generateThumbnail` deliberately does NOT live on the contract:
+// every backend's implementation now collapses to a 1-line delegate
+// over the shared `generateThumbnailFromDataUrl` helper in
+// `@ingcreators/annot-web/storage/image-thumbnail`. Callers that
+// previously did `storage.generateThumbnail(...)` should import the
+// free function directly. Storage backends are free to skip the
+// delegate method entirely.
 
 // ─── Capability interfaces ────────────────────────────────────────────
 // These describe optional behaviour a store may implement on top of the
@@ -215,19 +219,56 @@ export interface StorageWithForceRefresh {
 }
 
 /**
- * Register a callback the store calls on a 401 to ask the host for a
- * fresh authentication token. The refresher resolves to the new token
- * string, or `null` if the user dismissed the auth banner / declined
- * to re-auth. The store then retries the failed request once with the
- * new token and gives up if `null` came back.
+ * Token-management hooks for network-backed stores. Bundles two
+ * conceptually-related operations the host may need to invoke:
+ *
+ *   - `setToken(token)` directly injects a fresh access token —
+ *     used after the host performs a silent refresh outside the
+ *     store's own 401 path.
+ *   - `setTokenRefresher(fn)` registers the host's 401 recovery
+ *     callback. The refresher resolves to a new token string, or
+ *     `null` if the user dismissed the auth banner / declined to
+ *     re-auth. The store retries the failed request once with the
+ *     new token and gives up if `null` came back.
  *
  * Today implemented by the network-backed built-ins (`GoogleDriveStore`,
  * `GitHubStore`); local stores (`BrowserStore`, `DeviceStore`, the
- * extension proxy) skip it. Plugin stores opt in by implementing this
- * interface and calling the registered refresher from their own 401 path.
+ * extension proxy) skip it. Plugin stores opt in by implementing
+ * this interface and calling the registered refresher from their
+ * own 401 path.
  */
 export interface StorageWithTokenRefresher {
+  setToken(token: string): void;
   setTokenRefresher(refresher: () => Promise<string | null>): void;
+}
+
+/**
+ * Initialisation hook for stores whose lifecycle includes work that
+ * can't run in the constructor — typically because it does I/O the
+ * caller wants to await separately. `DeviceStore` uses this to load
+ * its on-disk index, run crash-recovery scans, and reconcile against
+ * the file tree. Stores whose construction is fully synchronous
+ * (Browser, GitHub, Drive) skip this capability.
+ */
+export interface StorageWithInit {
+  init(): Promise<void>;
+}
+
+/**
+ * Rate-limit telemetry. Backends that surface a quota window (e.g.
+ * GitHub's `X-RateLimit-Remaining`) implement this so the host can
+ * render an advisory banner before requests start hard-failing.
+ *
+ * `getRateLimit()` is a synchronous read of the most recent values
+ * the store has observed; `setRateLimitListener` registers a
+ * push-notification callback the store fires when the budget drops
+ * below an internal threshold (at most once per reset window).
+ */
+export interface StorageWithRateLimit {
+  getRateLimit(): { remaining: number | null; resetAt: number | null };
+  setRateLimitListener(
+    listener: (info: { remaining: number; resetAt: number | null }) => void,
+  ): void;
 }
 
 // ─── Capability predicates ────────────────────────────────────────────
@@ -249,5 +290,23 @@ export function supportsForceRefresh(
 export function supportsTokenRefresher(
   store: StorageProvider,
 ): store is StorageProvider & StorageWithTokenRefresher {
-  return typeof (store as Partial<StorageWithTokenRefresher>).setTokenRefresher === "function";
+  return (
+    typeof (store as Partial<StorageWithTokenRefresher>).setTokenRefresher === "function" &&
+    typeof (store as Partial<StorageWithTokenRefresher>).setToken === "function"
+  );
+}
+
+export function supportsInit(
+  store: StorageProvider,
+): store is StorageProvider & StorageWithInit {
+  return typeof (store as Partial<StorageWithInit>).init === "function";
+}
+
+export function supportsRateLimit(
+  store: StorageProvider,
+): store is StorageProvider & StorageWithRateLimit {
+  return (
+    typeof (store as Partial<StorageWithRateLimit>).getRateLimit === "function" &&
+    typeof (store as Partial<StorageWithRateLimit>).setRateLimitListener === "function"
+  );
 }

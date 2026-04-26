@@ -18,6 +18,7 @@ import {
 } from "@ingcreators/annot-editor";
 import type { StorageProvider } from "@ingcreators/annot-core/storage";
 import type { AnnotSaveStatusElement } from "../editor/save-status-indicator.js";
+import { generateThumbnailFromDataUrl } from "../storage/image-thumbnail.js";
 import { hideError, showSaveError } from "../ui/error-bar.js";
 
 export interface SavePipelineDeps {
@@ -171,7 +172,7 @@ export class SavePipeline {
     const path = this.deps.getCurrentImagePath();
     if (!canvas || !storage || !path) return;
     const renderedDataUrl = await getPngDataUrl(canvas);
-    const thumbnailDataUrl = await storage.generateThumbnail(renderedDataUrl);
+    const thumbnailDataUrl = await generateThumbnailFromDataUrl(renderedDataUrl);
     await storage.updateImage(path, { thumbnailDataUrl });
   }
 

@@ -23,6 +23,7 @@ import {
 } from "../capture/interval-dialog.js";
 import { captureScreen, pasteFromClipboard, startIntervalCapture } from "../capture/pwa-capture.js";
 import type { FileManager } from "../gallery/file-manager.js";
+import { generateThumbnailFromDataUrl } from "../storage/image-thumbnail.js";
 import { showSaveError } from "../ui/error-bar.js";
 import { fileToDataUrl, loadImage } from "./image-utils.js";
 
@@ -79,7 +80,7 @@ export class CaptureHost {
       onFrame: async (dataUrl, index) => {
         try {
           const img = await loadImage(dataUrl);
-          const thumbnailDataUrl = await storage.generateThumbnail(dataUrl);
+          const thumbnailDataUrl = await generateThumbnailFromDataUrl(dataUrl);
           const now = new Date().toISOString();
           const sec = String(index + 1).padStart(3, "0");
           await storage.saveImage({
@@ -191,7 +192,7 @@ export class CaptureHost {
       h = meta.height || h;
     }
 
-    const thumbnailDataUrl = await storage.generateThumbnail(originalUrl);
+    const thumbnailDataUrl = await generateThumbnailFromDataUrl(originalUrl);
     const now = new Date().toISOString();
     const path = await storage.saveImage({
       originalDataUrl: originalUrl,
@@ -222,7 +223,7 @@ export class CaptureHost {
     const storage = this.deps.getStorage();
     if (!storage) return;
     const img = await loadImage(dataUrl);
-    const thumbnailDataUrl = await storage.generateThumbnail(dataUrl);
+    const thumbnailDataUrl = await generateThumbnailFromDataUrl(dataUrl);
     const now = new Date().toISOString();
     const path = await storage.saveImage({
       originalDataUrl: dataUrl,
