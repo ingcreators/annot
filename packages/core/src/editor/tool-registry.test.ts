@@ -665,10 +665,17 @@ describe("TOOL_REGISTRY applyStyleToElement", () => {
   it("crop has no applyStyleToElement (no on-canvas element)", () => {
     expect(TOOL_REGISTRY.crop!.applyStyleToElement).toBeUndefined();
   });
+});
 
-  it("each tool with extractStyleFromElement also has applyStyleToElement", () => {
-    // Phase-4-shape symmetry guard, eagerly enforced in Phase 2 so
-    // adding a new tool with a one-sided callback fails the build.
+describe("TOOL_REGISTRY extract/apply symmetry", () => {
+  // Phase 4 of `docs/plans/toolbar-apply-style-to-element.md`.
+  // Structural guard: every tool with a `extractStyleFromElement`
+  // must have a paired `applyStyleToElement`, and vice versa. Adding
+  // a new tool with a one-sided callback (or removing one half of an
+  // existing pair without removing the other) fails the build here
+  // instead of silently diverging at runtime when the read side and
+  // the write side drift apart.
+  it("every tool with extractStyleFromElement has applyStyleToElement (and vice versa)", () => {
     for (const [id, entry] of Object.entries(TOOL_REGISTRY)) {
       if (entry.extractStyleFromElement) {
         expect(
