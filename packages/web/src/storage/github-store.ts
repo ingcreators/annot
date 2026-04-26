@@ -68,6 +68,14 @@ import {
   type GitHubApiClient,
   type RateLimitListener,
 } from "./github-api-client.js";
+import {
+  commitMessage as buildCommitMessage,
+  contentsUrl as buildContentsUrl,
+  encodePath,
+  fullPath as toFullPath,
+  relPath as toRelPath,
+} from "./github-paths.js";
+import { GitHubTreeState } from "./github-tree-state.js";
 
 interface TreeEntry {
   path: string; // repo-relative
@@ -122,37 +130,16 @@ export class GitHubStore
   // ---- Tree state (keys are relative paths, i.e. basePath-relative) ----
 
   /**
-   * Blob path → current SHA. Populated from the initial tree fetch
-   * and kept in sync by every PUT / DELETE. Holds every blob Annot
-   * cares about: image files (listed in the gallery) plus `.gitkeep`
-   * markers (needed only so `deleteFolder` can find their SHAs).
-   * Non-image blobs that Annot doesn't touch (READMEs, source code,
-   * config) are never added here. `#shaByPath.keys()` is the
-   * authoritative "file set" for listImages / rename / move checks.
+   * In-memory mirror of the GitHub tree the store maintains — blob
+   * SHAs by basePath-relative path + every visible folder path +
+   * the loading lifecycle. Populated by the initial
+   * `GET /git/trees/{branch}?recursive=1` and kept in sync by every
+   * mutation, so reads + write planning don't trigger fresh tree
+   * fetches. Implementation lives in `./github-tree-state.ts` so
+   * the mutation surface is unit-testable independently of the
+   * stateful HTTP layer.
    */
-  #shaByPath = new Map<string, string>();
-  /**
-   * All folder paths visible to the caller, relative to basePath.
-   * Populated directly from the git tree's `type === "tree"` entries
-   * so every folder the repo actually contains under basePath appears
-   * in the sidebar, matching BrowserStore / DeviceStore / Drive
-   * semantics where folders exist regardless of their contents.
-   * Also updated incrementally by createFolder / deleteFolder /
-   * renameFolder / moveFolder / saveImage so the cache stays
-   * authoritative without a post-write tree re-fetch.
-   */
-  #allFolderPaths = new Set<string>();
-  /** Guard: `#loadTree` only runs once per session unless the user
-   *  explicitly clicks Refresh (which routes through `forceRefresh`).
-   *  Every mutation updates the in-memory tree incrementally, so the
-   *  cache stays authoritative without a post-write re-fetch — and
-   *  we specifically avoid that re-fetch because GitHub's tree
-   *  endpoint can briefly lag behind a just-made commit, which would
-   *  make the sidebar drop the folder the user just created. */
-  #treeLoaded = false;
-  /** Same dedupe pattern as Drive's refresh — multiple concurrent
-   *  first-listImages calls share a single `#loadTree` promise. */
-  #treeLoadInFlight: Promise<void> | null = null;
+  #tree = new GitHubTreeState();
 
   /** Last-known commit info per file, surfaced to the editor header
    *  (Phase 4). Populated opportunistically on `getImage`. */
@@ -254,54 +241,38 @@ export class GitHubStore
    * `forceRefresh` before falling back to `resync`).
    */
   async forceRefresh(): Promise<void> {
-    this.#shaByPath.clear();
-    this.#allFolderPaths.clear();
+    this.#tree.clear();
     this.#fileMeta.clear();
     this.#recordCache.clear();
     this.#thumbnailCache.clear();
     this.#thumbnailInFlight.clear();
-    this.#treeLoaded = false;
-    this.#treeLoadInFlight = null;
   }
 
   // ===========================================================================
-  // Path helpers — convert between the caller's basePath-relative paths and
-  // the repo-absolute paths GitHub's API wants.
+  // Path helpers — thin wrappers around the pure functions in
+  // `./github-paths.ts` so call sites read naturally (`this.#fullPath(rel)`)
+  // without spreading `this.#basePath` / `this.#owner` / `this.#repo` to
+  // every location.
   // ===========================================================================
 
-  /** basePath-relative path → repo-absolute path. */
   #fullPath(relPath: string): string {
-    if (!relPath) return this.#basePath;
-    return this.#basePath ? `${this.#basePath}/${relPath}` : relPath;
+    return toFullPath(this.#basePath, relPath);
   }
 
-  /** repo-absolute path → basePath-relative path, or `null` if
-   *  outside basePath. */
   #relPath(fullPath: string): string | null {
-    if (!this.#basePath) return fullPath;
-    if (fullPath === this.#basePath) return "";
-    const prefix = `${this.#basePath}/`;
-    if (fullPath.startsWith(prefix)) return fullPath.slice(prefix.length);
-    return null;
+    return toRelPath(this.#basePath, fullPath);
   }
 
   #encodePath(path: string): string {
-    // Percent-encode each segment separately so slashes stay intact.
-    return path
-      .split("/")
-      .map((s) => encodeURIComponent(s))
-      .join("/");
+    return encodePath(path);
   }
 
   #contentsUrl(fullPath: string): string {
-    const owner = encodeURIComponent(this.#owner);
-    const repo = encodeURIComponent(this.#repo);
-    return `${GITHUB_API}/repos/${owner}/${repo}/contents/${this.#encodePath(fullPath)}`;
+    return buildContentsUrl(this.#owner, this.#repo, fullPath);
   }
 
   #commitMessage(verb: "add" | "update" | "delete", relPath: string): string {
-    const name = getFilename(relPath) || relPath;
-    return `annot: ${verb} ${name}`;
+    return buildCommitMessage(verb, relPath);
   }
 
   // ===========================================================================
@@ -321,10 +292,15 @@ export class GitHubStore
   // ===========================================================================
 
   #ensureTreeLoaded(): Promise<void> {
-    if (this.#treeLoaded) return Promise.resolve();
-    return (this.#treeLoadInFlight ??= this.#loadTree().finally(() => {
-      this.#treeLoadInFlight = null;
-    }));
+    if (this.#tree.isLoaded()) return Promise.resolve();
+    let inFlight = this.#tree.getLoadInFlight();
+    if (!inFlight) {
+      inFlight = this.#loadTree().finally(() => {
+        this.#tree.setLoadInFlight(null);
+      });
+      this.#tree.setLoadInFlight(inFlight);
+    }
+    return inFlight;
   }
 
   async #loadTree(): Promise<void> {
@@ -362,7 +338,7 @@ export class GitHubStore
         // sidebar folder entry, just like DeviceStore / Drive /
         // Browser — no need for image contents or a `.gitkeep`
         // marker to materialise it.
-        if (rel) this.#allFolderPaths.add(rel);
+        if (rel) this.#tree.addFolderExact(rel);
         continue;
       }
       if (entry.type !== "blob") continue;
@@ -371,31 +347,17 @@ export class GitHubStore
         // Track the gitkeep SHA so `deleteFolder` can remove it.
         // No special "empty folder" flag needed — the folder itself
         // shows up via its `type === "tree"` entry above.
-        this.#shaByPath.set(rel, entry.sha);
+        this.#tree.setBlobSha(rel, entry.sha);
         continue;
       }
       // Non-image blobs (READMEs, source code, configs) are visible
       // in the folder tree via their containing folder's tree entry,
       // but never listed in the gallery — Annot can't render them.
       if (!isImageFilename(name)) continue;
-      this.#shaByPath.set(rel, entry.sha);
+      this.#tree.setBlobSha(rel, entry.sha);
     }
 
-    this.#treeLoaded = true;
-  }
-
-  /**
-   * Add `path` and all ancestor paths to `#allFolderPaths`. Used by
-   * saveImage so a capture into `a/b/c/foo.png` materialises `a`,
-   * `a/b`, `a/b/c` in the sidebar tree without waiting for a
-   * re-fetch.
-   */
-  #registerFolder(path: string): void {
-    let p = path;
-    while (p) {
-      this.#allFolderPaths.add(p);
-      p = getParentPath(p);
-    }
+    this.#tree.markLoaded();
   }
 
   // ===========================================================================
@@ -430,10 +392,10 @@ export class GitHubStore
     const data = await resp.json();
     const newSha: string | undefined = data?.content?.sha;
     if (!newSha) throw githubError("GitHub PUT returned no content SHA.");
-    this.#shaByPath.set(relPath, newSha);
+    this.#tree.setBlobSha(relPath, newSha);
     // Materialise the containing folder (and ancestors) in the
     // sidebar tree without waiting for a tree re-fetch.
-    this.#registerFolder(getParentPath(relPath));
+    this.#tree.addFolderWithAncestors(getParentPath(relPath));
     return newSha;
   }
 
@@ -592,8 +554,8 @@ export class GitHubStore
     if (!patchResp) return null;
 
     // Refresh local state to reflect the new blob.
-    this.#shaByPath.set(relPath, newBlobSha);
-    this.#registerFolder(getParentPath(relPath));
+    this.#tree.setBlobSha(relPath, newBlobSha);
+    this.#tree.addFolderWithAncestors(getParentPath(relPath));
     return newBlobSha;
   }
 
@@ -748,7 +710,7 @@ export class GitHubStore
       // of every cache for this path.
       for (const op of ops) {
         if (op.deleteOnly) {
-          this.#shaByPath.delete(op.relPath);
+          this.#tree.removeBlob(op.relPath);
           this.#recordCache.delete(op.relPath);
           this.#fileMeta.delete(op.relPath);
           this.#thumbnailCache.delete(op.relPath);
@@ -756,8 +718,8 @@ export class GitHubStore
           continue;
         }
         const newBlobSha = op.existingBlobSha ?? blobShaByRelPath.get(op.relPath);
-        if (newBlobSha) this.#shaByPath.set(op.relPath, newBlobSha);
-        this.#registerFolder(getParentPath(op.relPath));
+        if (newBlobSha) this.#tree.setBlobSha(op.relPath, newBlobSha);
+        this.#tree.addFolderWithAncestors(getParentPath(op.relPath));
       }
       return newCommitSha;
     } catch (e) {
@@ -778,16 +740,16 @@ export class GitHubStore
         branch: this.#branch,
       }),
     });
-    this.#shaByPath.delete(relPath);
+    this.#tree.removeBlob(relPath);
     // We intentionally don't prune ancestor folders here — other
     // stores (Drive, Device, Browser) leave the folder visible after
     // its last child is deleted, and we mirror that behaviour.
   }
 
   /**
-   * Fetch a blob by path. Pure read — does NOT mutate `#shaByPath`.
+   * Fetch a blob by path. Pure read — does NOT mutate `tree-state SHA cache`.
    *
-   * Writing to `#shaByPath` from here was the source of a 409
+   * Writing to `tree-state SHA cache` from here was the source of a 409
    * conflict bug: a background thumbnail prefetch (launched by a
    * prior `listImages`) would eventually return with a now-stale
    * SHA and overwrite the freshly-saved one in the cache, so the
@@ -830,7 +792,7 @@ export class GitHubStore
     validateName(desired);
 
     const filename = uniquifyFilename(desired, (candidate) => {
-      return this.#shaByPath.has(joinPath(folderPath, candidate));
+      return this.#tree.hasBlob(joinPath(folderPath, candidate));
     });
     const relPath = joinPath(folderPath, filename);
 
@@ -884,13 +846,13 @@ export class GitHubStore
     await this.#ensureTreeLoaded();
     // Snapshot the cached SHA before fetching so we can apply a
     // compare-and-set on the way out. Without this a concurrent
-    // mutation that advances `#shaByPath` while our GET is in flight
+    // mutation that advances `tree-state SHA cache` while our GET is in flight
     // would be clobbered on our return path.
-    const before = this.#shaByPath.get(path);
+    const before = this.#tree.getBlobSha(path);
     const result = await this.#getContents(path);
     if (!result) return undefined;
-    if (this.#shaByPath.get(path) === before) {
-      this.#shaByPath.set(path, result.sha);
+    if (this.#tree.getBlobSha(path) === before) {
+      this.#tree.setBlobSha(path, result.sha);
     }
     return this.#decodeRecord(path, result.bytes);
   }
@@ -922,7 +884,7 @@ export class GitHubStore
     await this.#ensureTreeLoaded();
     const results: ImageRecord[] = [];
     const uncachedPaths: string[] = [];
-    for (const path of this.#shaByPath.keys()) {
+    for (const path of this.#tree.blobPaths()) {
       const name = getFilename(path);
       if (name === GITKEEP) continue;
       if (!isImageFilename(name)) continue;
@@ -978,10 +940,10 @@ export class GitHubStore
         // was in flight, our bytes are already stale — skip caching
         // the thumbnail so the next `listImages` / post-save trigger
         // schedules a fresh fetch against the up-to-date blob.
-        const before = this.#shaByPath.get(relPath);
+        const before = this.#tree.getBlobSha(relPath);
         const fetched = await this.#getContents(relPath);
         if (!fetched) return;
-        if (this.#shaByPath.get(relPath) !== before) return;
+        if (this.#tree.getBlobSha(relPath) !== before) return;
 
         const mime = inferMimeFromPath(relPath);
         const blob = new Blob([fetched.bytes as BlobPart], { type: mime });
@@ -997,7 +959,7 @@ export class GitHubStore
         // Re-check after the (synchronous-ish but yielding) encode —
         // a save could have finished between our SHA snapshot and
         // the canvas work.
-        if (this.#shaByPath.get(relPath) !== before) return;
+        if (this.#tree.getBlobSha(relPath) !== before) return;
         // Don't clobber a freshly-seeded thumbnail from the editor
         // (`updateImage({ thumbnailDataUrl })` → seed → clear
         // in-flight). Its render reflects the current canvas state,
@@ -1078,7 +1040,7 @@ export class GitHubStore
         isJpeg ? "jpg" : "png",
       );
 
-      const existingSha = this.#shaByPath.get(currentPath);
+      const existingSha = this.#tree.getBlobSha(currentPath);
       try {
         // Use the amend-aware commit path so a sequence of debounced
         // updates collapses into a single commit on the branch's
@@ -1101,7 +1063,7 @@ export class GitHubStore
         if (!err.conflict) throw e;
         const fresh = await this.#getContents(currentPath);
         if (!fresh) throw e;
-        this.#shaByPath.set(currentPath, fresh.sha);
+        this.#tree.setBlobSha(currentPath, fresh.sha);
         await this.#commitFileAmendable(
           currentPath,
           blob,
@@ -1141,11 +1103,11 @@ export class GitHubStore
       const newFolderPath = updates.folderPath;
       const newPath = joinPath(newFolderPath, getFilename(currentPath));
       if (newPath === currentPath) return currentPath;
-      if (this.#shaByPath.has(newPath)) {
+      if (this.#tree.hasBlob(newPath)) {
         throw githubError(`Destination already exists: ${newPath}`);
       }
 
-      const oldSha = this.#shaByPath.get(currentPath);
+      const oldSha = this.#tree.getBlobSha(currentPath);
 
       // Atomic move: single commit that re-targets the existing
       // blob at the new path and drops the old entry. Reuses the
@@ -1204,16 +1166,16 @@ export class GitHubStore
   async renameImage(path: string, newName: string): Promise<string> {
     validateName(newName);
     await this.#ensureTreeLoaded();
-    if (!this.#shaByPath.has(path)) return path;
+    if (!this.#tree.hasBlob(path)) return path;
 
     const folderPath = getParentPath(path);
     const newPath = joinPath(folderPath, newName);
     if (newPath === path) return path;
-    if (this.#shaByPath.has(newPath)) {
+    if (this.#tree.hasBlob(newPath)) {
       throw githubError(`Image already exists: ${newPath}`);
     }
 
-    const oldSha = this.#shaByPath.get(path);
+    const oldSha = this.#tree.getBlobSha(path);
 
     // Atomic path: one commit that references the existing blob at
     // the new path and removes the old entry. No blob upload, no
@@ -1274,7 +1236,7 @@ export class GitHubStore
 
   async deleteImage(path: string): Promise<void> {
     await this.#ensureTreeLoaded();
-    const sha = this.#shaByPath.get(path);
+    const sha = this.#tree.getBlobSha(path);
     if (!sha) return;
     await this.#deleteContents(path, sha, this.#commitMessage("delete", path));
     this.#recordCache.delete(path);
@@ -1295,20 +1257,20 @@ export class GitHubStore
     }
     // Git has no "empty directory" concept, so we commit a zero-byte
     // `.gitkeep` to materialise the folder in the tree. The folder
-    // path itself is registered in `#allFolderPaths` so the sidebar
+    // path itself is registered in the tree state so the sidebar
     // sees it immediately without waiting for a tree re-fetch (which
     // can briefly lag behind the just-made commit anyway).
     const gitkeepRel = joinPath(fullPath, GITKEEP);
     const blob = new Blob([""], { type: "application/octet-stream" });
     await this.#putContents(gitkeepRel, blob, `annot: create folder ${fullPath}`);
-    this.#registerFolder(fullPath);
+    this.#tree.addFolderWithAncestors(fullPath);
     return fullPath;
   }
 
   async listFolders(parentPath: string): Promise<FolderRecord[]> {
     await this.#ensureTreeLoaded();
     const results: FolderRecord[] = [];
-    for (const folder of this.#allFolderPaths) {
+    for (const folder of this.#tree.folderPaths()) {
       if (!folder) continue;
       if (getParentPath(folder) !== parentPath) continue;
       results.push({
@@ -1359,8 +1321,8 @@ export class GitHubStore
     // Collect every blob we track under the old path — images and
     // any `.gitkeep` markers that materialised empty subfolders.
     // Iterate a snapshot so the in-flight PUT / DELETE mutations of
-    // `#shaByPath` don't invalidate iteration.
-    const entries = Array.from(this.#shaByPath.keys()).filter(
+    // `tree-state SHA cache` don't invalidate iteration.
+    const entries = Array.from(this.#tree.blobPaths()).filter(
       (p) => p === oldPath || p.startsWith(`${oldPath}/`),
     );
 
@@ -1377,7 +1339,7 @@ export class GitHubStore
     const treeOps: TreeOp[] = [];
     for (const oldFile of entries) {
       const newFile = rewritePathPrefix(oldFile, oldPath, newPath);
-      const sha = this.#shaByPath.get(oldFile);
+      const sha = this.#tree.getBlobSha(oldFile);
       if (!sha) continue;
       treeOps.push({ relPath: newFile, existingBlobSha: sha });
       treeOps.push({ relPath: oldFile, deleteOnly: true });
@@ -1421,7 +1383,7 @@ export class GitHubStore
     const isJpeg = record.originalDataUrl.startsWith("data:image/jpeg");
     const blob = await this.#buildXmpBlob(record, isJpeg ? "jpg" : "png");
     await this.#putContents(newRelPath, blob, message);
-    const oldSha = this.#shaByPath.get(oldRelPath);
+    const oldSha = this.#tree.getBlobSha(oldRelPath);
     if (oldSha) {
       await this.#deleteContents(oldRelPath, oldSha, this.#commitMessage("delete", oldRelPath));
     }
@@ -1453,15 +1415,10 @@ export class GitHubStore
       }
     }
     // folder set
-    for (const f of Array.from(this.#allFolderPaths)) {
-      if (f === oldPath || f.startsWith(`${oldPath}/`)) {
-        this.#allFolderPaths.delete(f);
-        this.#allFolderPaths.add(rewritePathPrefix(f, oldPath, newPath));
-      }
-    }
+    this.#tree.rewriteFolderPrefix(oldPath, newPath);
     // Ensure every ancestor of the new path is present too (in case
     // the parent itself wasn't in the set yet).
-    this.#registerFolder(newPath);
+    this.#tree.addFolderWithAncestors(newPath);
   }
 
   async deleteFolder(path: string): Promise<void> {
@@ -1471,7 +1428,7 @@ export class GitHubStore
 
     // Collect every tracked blob under the folder — images plus
     // any `.gitkeep` markers for empty subfolders.
-    const entries = Array.from(this.#shaByPath.keys()).filter(
+    const entries = Array.from(this.#tree.blobPaths()).filter(
       (p) => p === path || p.startsWith(`${path}/`),
     );
 
@@ -1489,7 +1446,7 @@ export class GitHubStore
         // commits but guarantees the folder is gone even when
         // the atomic path is refused (branch protection etc.).
         for (const rel of entries) {
-          const sha = this.#shaByPath.get(rel);
+          const sha = this.#tree.getBlobSha(rel);
           if (!sha) continue;
           await this.#deleteContents(rel, sha, this.#commitMessage("delete", rel));
           this.#recordCache.delete(rel);
@@ -1501,9 +1458,7 @@ export class GitHubStore
 
     // Remove the folder itself and every subfolder from the visible
     // tree. (Ancestor folders stay — they may still contain siblings.)
-    for (const f of Array.from(this.#allFolderPaths)) {
-      if (f === path || f.startsWith(`${path}/`)) this.#allFolderPaths.delete(f);
-    }
+    this.#tree.removeFolderTree(path);
   }
 
   async getBreadcrumb(path: string): Promise<FolderRecord[]> {
@@ -1518,14 +1473,14 @@ export class GitHubStore
   }
 
   // ===========================================================================
-  // Folder-existence logic — driven directly by `#allFolderPaths`,
+  // Folder-existence logic — driven directly by the tree state,
   // which is populated from the git tree's `type === "tree"` entries
   // plus any createFolder calls made locally.
   // ===========================================================================
 
   #folderExists(path: string): boolean {
     if (!path) return true; // root always exists
-    return this.#allFolderPaths.has(path);
+    return this.#tree.hasFolder(path);
   }
 
   // ===========================================================================
