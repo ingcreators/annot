@@ -136,6 +136,28 @@ fn text_shape() -> AnnotationShape {
     }
 }
 
+fn redact_solid_shape() -> AnnotationShape {
+    // Solid-fill redaction bar. Phase 5 makes Rust read
+    // `redact_style` and emit `<a:ln><a:noFill/></a:ln>` regardless
+    // of any `stroke_*` fields the preset carries — matching
+    // PowerPoint's "rectangle (no outline)" preset.
+    AnnotationShape {
+        shape_type: "rect".into(),
+        x: Some(50.0),
+        y: Some(500.0),
+        width: Some(120.0),
+        height: Some(30.0),
+        // Stroke fields populated to prove they get suppressed when
+        // `redact_style: "solid"` is set.
+        stroke: Some("#ff0000".into()),
+        stroke_width: Some(3.0),
+        fill: Some("#000000".into()),
+        fill_opacity: Some(1.0),
+        redact_style: Some("solid".into()),
+        ..Default::default()
+    }
+}
+
 fn callout_shape() -> AnnotationShape {
     // Callout textbox with tail at (300, 470) — outside the bbox to
     // its bottom-right. Phase 4 makes Rust read `tail_x` / `tail_y`
@@ -254,6 +276,16 @@ fn drawing_xml_marker_legacy_stroke_carrier_matches_canonical() {
     let canonical = build_drawing_xml(&[marker_shape()], 800.0, 600.0, false).0;
     let legacy = build_drawing_xml(&[marker_shape_legacy_carrier()], 800.0, 600.0, false).0;
     assert_eq!(canonical, legacy);
+}
+
+#[test]
+fn drawing_xml_redact_solid_emits_no_outline() {
+    // Phase 5: a `type: "rect"` + `redact_style: "solid"` rect must
+    // emit `<a:ln><a:noFill/></a:ln>` instead of the user-supplied
+    // stroke paint, matching PowerPoint's "rectangle (no outline)"
+    // preset. Plain rects keep their outline.
+    let (xml, _) = build_drawing_xml(&[redact_solid_shape()], 800.0, 600.0, false);
+    insta::assert_snapshot!("drawing_xml_redact_solid_no_outline", xml);
 }
 
 #[test]

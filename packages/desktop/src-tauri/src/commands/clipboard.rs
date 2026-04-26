@@ -83,6 +83,15 @@ pub struct AnnotationShape {
     /// degrades the shape to a plain rounded textbox.
     pub tail_x: Option<f64>,
     pub tail_y: Option<f64>,
+
+    // ---- Redact discriminator ----
+    /// Redaction style: `solid` | `mosaic` | `blur`. `gvml_rect`
+    /// branches on this to drop the outline for solid bars (matches
+    /// PowerPoint's "rectangle (no outline)" preset). Mosaic / blur
+    /// already route through their own emitter via the `type`
+    /// discriminator, so this field only matters when paired with
+    /// `type === "rect"`.
+    pub redact_style: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -551,12 +560,21 @@ fn gvml_rect(s: &AnnotationShape, id: u32, rounded: bool) -> String {
     };
     let dash = dash_to_drawingml(s.stroke_dasharray.as_deref().unwrap_or(""));
     let xf = xfrm_attrs(s, false);
-    let paint = stroke_paint_xml(s, &stroke);
     let cap = cap_attr(s.stroke_linecap.as_deref());
     let join = join_xml(s.stroke_linejoin.as_deref());
     // If the shape has a fill gradient, override the solid/noFill fill.
     let f_final = if let Some(fg) = &s.fill_gradient { grad_fill_xml(fg) } else { f };
-    format!(r#"<a:sp><a:nvSpPr><a:cNvPr id="{id}" name="R{id}"/><a:cNvSpPr/></a:nvSpPr><a:spPr><a:xfrm{xf}><a:off x="{x}" y="{y}"/><a:ext cx="{w}" cy="{h}"/></a:xfrm>{geom}{f_final}<a:ln w="{sw}"{cap}>{paint}{join}{dash}</a:ln></a:spPr></a:sp>"#)
+    // Solid redactions are visually a filled rectangle with NO
+    // outline — matching PowerPoint's "rectangle (no outline)"
+    // preset. Suppress `<a:ln>` regardless of the inbound
+    // `stroke_*` fields so the bar reads cleanly.
+    let line = if s.redact_style.as_deref() == Some("solid") {
+        r#"<a:ln><a:noFill/></a:ln>"#.to_string()
+    } else {
+        let paint = stroke_paint_xml(s, &stroke);
+        format!(r#"<a:ln w="{sw}"{cap}>{paint}{join}{dash}</a:ln>"#)
+    };
+    format!(r#"<a:sp><a:nvSpPr><a:cNvPr id="{id}" name="R{id}"/><a:cNvSpPr/></a:nvSpPr><a:spPr><a:xfrm{xf}><a:off x="{x}" y="{y}"/><a:ext cx="{w}" cy="{h}"/></a:xfrm>{geom}{f_final}{line}</a:spPr></a:sp>"#)
 }
 
 fn gvml_ellipse(s: &AnnotationShape, id: u32) -> String {
