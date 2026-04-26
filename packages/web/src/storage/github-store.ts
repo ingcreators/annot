@@ -1,4 +1,3 @@
-import { renderImageRecord } from "@ingcreators/annot-render";
 /**
  * GitHub storage provider — commits images to a user-picked repo.
  *
@@ -43,9 +42,6 @@ import {
   uniquifyFilename,
   validateName,
 } from "@ingcreators/annot-core/storage";
-import { createEditableImage } from "@ingcreators/annot-core/xmp";
-import { loadEncodeOptions } from "../encode-options.js";
-import { encodeCaptureInWorker } from "../workers/encode-client.js";
 import type { GitHubCommitSummary, GitHubRepoRef } from "./github-auth.js";
 import { getLastCommitForPath } from "./github-auth.js";
 
@@ -67,6 +63,7 @@ import {
 } from "./github-api-client.js";
 import { GitHubBlobCache } from "./github-blob-cache.js";
 import { decodeImageRecord } from "./github-image-codec.js";
+import { buildEditableImageBlob } from "./image-encode.js";
 import {
   commitMessage as buildCommitMessage,
   contentsUrl as buildContentsUrl,
@@ -1425,46 +1422,12 @@ export class GitHubStore
   }
 
   // ===========================================================================
-  // XMP build helper (mirrors GoogleDriveStore.#buildXmpBlob).
-  // TODO(oss-cloud-split): factor into a shared helper when a second
-  // non-Drive store needs it — this copy exists to keep Phase 2's
-  // diff focused on the GitHub-specific pieces.
+  // XMP build helper — delegates to the shared `image-encode.ts`
+  // pipeline (Browser / Device / Drive / GitHub all use it).
   // ===========================================================================
 
   async #buildXmpBlob(record: Partial<ImageRecord>, format: "jpg" | "png"): Promise<Blob> {
-    let renderedBlob: Blob;
-    if (record.annotationsSvg && record.annotationsSvg.length > 10 && record.originalDataUrl) {
-      const renderedDataUrl = await renderImageRecord(
-        record.originalDataUrl,
-        record.annotationsSvg,
-        record.width || 0,
-        record.height || 0,
-      );
-      let finalDataUrl = renderedDataUrl;
-      if (format === "png") {
-        try {
-          const opts = loadEncodeOptions();
-          const encoded = await encodeCaptureInWorker(renderedDataUrl, opts);
-          finalDataUrl = encoded.dataUrl;
-        } catch (e) {
-          console.warn("[github-store] rendered-image re-encode failed, keeping PNG-24:", e);
-        }
-      }
-      renderedBlob = await (await fetch(finalDataUrl)).blob();
-    } else if (record.originalDataUrl) {
-      renderedBlob = await (await fetch(record.originalDataUrl)).blob();
-    } else {
-      renderedBlob = new Blob([]);
-    }
-    return createEditableImage({
-      renderedBlob,
-      originalDataUrl: record.originalDataUrl || "",
-      annotationsSvg: record.annotationsSvg || "",
-      width: record.width || 0,
-      height: record.height || 0,
-      format,
-      tags: record.tags || {},
-    });
+    return buildEditableImageBlob(record, format);
   }
 }
 

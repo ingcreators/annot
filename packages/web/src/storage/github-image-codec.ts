@@ -8,10 +8,9 @@
  * synthetic XMP / non-XMP byte sequences without standing up the
  * stateful HTTP layer + caches.
  *
- * Encode (the `#buildXmpBlob` side) stays in the store for now: it
- * depends on `annot-render` + the web worker encode pipeline, whose
- * mock surface would dominate any testability benefit. Reserved
- * for a follow-up if/when the worker pipeline gains its own DI seam.
+ * Encode (the `#buildXmpBlob` side) lives in `./image-encode.ts`
+ * — shared across Browser / Device / Drive / GitHub now that the
+ * 4 stores all use the same strategy + DI seam.
  */
 
 import type { ImageRecord } from "@ingcreators/annot-core/storage";

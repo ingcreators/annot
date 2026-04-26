@@ -1,6 +1,5 @@
 /// <reference path="../types/fs-access-extras.d.ts" />
 
-import { renderImageRecord } from "@ingcreators/annot-render";
 import { logger } from "../logger.js";
 /**
  * Device (File System Access API) storage provider — path-based
@@ -33,9 +32,8 @@ import {
   uniquifyFilenameAsync,
   validateName,
 } from "@ingcreators/annot-core/storage";
-import { createEditableImage, readEditableImage } from "@ingcreators/annot-core/xmp";
-import { loadEncodeOptions } from "../encode-options.js";
-import { encodeCaptureInWorker } from "../workers/encode-client.js";
+import { readEditableImage } from "@ingcreators/annot-core/xmp";
+import { buildEditableImageBlob } from "./image-encode.js";
 import { generateThumbnailFromDataUrl } from "./image-thumbnail.js";
 
 const INDEX_FILE = ".annot.json";
@@ -728,45 +726,7 @@ export class DeviceStore implements StorageProvider, StorageWithResync, StorageW
   // ---- Helpers ----
 
   async #buildXmpBlob(record: Partial<ImageRecord>, format: "jpg" | "png"): Promise<Blob> {
-    let renderedBlob: Blob;
-    if (record.annotationsSvg && record.annotationsSvg.length > 10 && record.originalDataUrl) {
-      const renderedDataUrl = await renderImageRecord(
-        record.originalDataUrl,
-        record.annotationsSvg,
-        record.width || 0,
-        record.height || 0,
-      );
-      // The rendered image is a freshly-rasterized PNG-24 (or JPEG q=92).
-      // Pipe it through the shared encoder so PNG output benefits from
-      // PNG-8 quantization the same way the original capture did. Skip
-      // re-encoding for JPEG — it's already small.
-      let finalDataUrl = renderedDataUrl;
-      if (format === "png") {
-        try {
-          const opts = loadEncodeOptions();
-          const encoded = await encodeCaptureInWorker(renderedDataUrl, opts);
-          finalDataUrl = encoded.dataUrl;
-        } catch (e) {
-          console.warn("[device-store] rendered-image re-encode failed, keeping PNG-24:", e);
-        }
-      }
-      renderedBlob = await (await fetch(finalDataUrl)).blob();
-    } else if (record.originalDataUrl) {
-      const resp = await fetch(record.originalDataUrl);
-      renderedBlob = await resp.blob();
-    } else {
-      renderedBlob = new Blob([]);
-    }
-
-    return createEditableImage({
-      renderedBlob,
-      originalDataUrl: record.originalDataUrl || "",
-      annotationsSvg: record.annotationsSvg || "",
-      width: record.width || 0,
-      height: record.height || 0,
-      format,
-      tags: record.tags || {},
-    });
+    return buildEditableImageBlob(record, format);
   }
 
   async #fileToDataUrl(file: File): Promise<string> {

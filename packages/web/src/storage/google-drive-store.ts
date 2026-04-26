@@ -1,4 +1,3 @@
-import { renderImageRecord } from "@ingcreators/annot-render";
 /**
  * Google Drive storage provider — path-based interface.
  * Reads/writes image files to a user-selected Drive folder.
@@ -27,9 +26,8 @@ import {
   uniquifyFilename,
   validateName,
 } from "@ingcreators/annot-core/storage";
-import { createEditableImage, readEditableImage } from "@ingcreators/annot-core/xmp";
-import { loadEncodeOptions } from "../encode-options.js";
-import { encodeCaptureInWorker } from "../workers/encode-client.js";
+import { readEditableImage } from "@ingcreators/annot-core/xmp";
+import { buildEditableImageBlob } from "./image-encode.js";
 import { generateThumbnailFromDataUrl } from "./image-thumbnail.js";
 
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
@@ -774,41 +772,7 @@ export class GoogleDriveStore
   }
 
   async #buildXmpBlob(record: Partial<ImageRecord>, format: "jpg" | "png"): Promise<Blob> {
-    let renderedBlob: Blob;
-    if (record.annotationsSvg && record.annotationsSvg.length > 10 && record.originalDataUrl) {
-      const renderedDataUrl = await renderImageRecord(
-        record.originalDataUrl,
-        record.annotationsSvg,
-        record.width || 0,
-        record.height || 0,
-      );
-      // Re-encode rendered PNG via shared encoder (PNG-8 smart fallback).
-      // Skip JPEG — already small at q=92.
-      let finalDataUrl = renderedDataUrl;
-      if (format === "png") {
-        try {
-          const opts = loadEncodeOptions();
-          const encoded = await encodeCaptureInWorker(renderedDataUrl, opts);
-          finalDataUrl = encoded.dataUrl;
-        } catch (e) {
-          console.warn("[drive-store] rendered-image re-encode failed, keeping PNG-24:", e);
-        }
-      }
-      renderedBlob = await (await fetch(finalDataUrl)).blob();
-    } else if (record.originalDataUrl) {
-      renderedBlob = await (await fetch(record.originalDataUrl)).blob();
-    } else {
-      renderedBlob = new Blob([]);
-    }
-    return createEditableImage({
-      renderedBlob,
-      originalDataUrl: record.originalDataUrl || "",
-      annotationsSvg: record.annotationsSvg || "",
-      width: record.width || 0,
-      height: record.height || 0,
-      format,
-      tags: record.tags || {},
-    });
+    return buildEditableImageBlob(record, format);
   }
 
   #blobToDataUrl(blob: Blob): Promise<string> {
