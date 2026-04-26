@@ -50,27 +50,17 @@ pub struct AnnotationShape {
     pub fill_gradient: Option<GradientSpec>,
 
     // ---- Marker (counter) ----
-    /// Counter background shape. `circle` | `rect` | `rounded`. The
-    /// canonical discriminator since
-    /// [office-paste-abi-modernisation phase 1]; older callers that
-    /// only set `stroke` to `"rect"` still dispatch correctly via the
-    /// fallback in `gvml_marker`.
+    /// Counter background shape: `circle` | `rect` | `rounded`.
     pub marker_shape: Option<String>,
 
     // ---- Mosaic / blur redact image ----
     /// Self-contained PNG / JPEG data URL for mosaic / blur
-    /// redactions. The canonical carrier since
-    /// [office-paste-abi-modernisation phase 2]; older callers that
-    /// stash the data URL in `text` still parse via the fallback in
-    /// `build_drawing_xml`.
+    /// redactions.
     pub image_data_url: Option<String>,
 
     // ---- Textbox sticky / callout bg ----
     /// Sticky / callout background color (`rgba(...)` or `#rrggbb`).
-    /// The canonical carrier since
-    /// [office-paste-abi-modernisation phase 3]; older callers that
-    /// stash the color in `stroke` still render via the fallback in
-    /// `gvml_text`.
+    /// Omitted for plain-variant textboxes.
     pub text_bg_color: Option<String>,
 
     // ---- Textbox variant ----
@@ -96,10 +86,7 @@ pub struct AnnotationShape {
     // ---- Rectangle corner radius ----
     /// Corner radius (canvas-space px). `>0` triggers the `roundRect`
     /// preset inside `gvml_rect`; `None` / `0` keeps the sharp
-    /// `rect` preset. The canonical form since
-    /// [office-paste-abi-modernisation phase 6]; older callers that
-    /// emit `type: "rounded-rect"` still dispatch via the legacy
-    /// match arm.
+    /// `rect` preset.
     pub corner_radius: Option<f64>,
 }
 
@@ -266,14 +253,13 @@ fn parse_data_url_bytes(data_url: &str) -> Option<Vec<u8>> {
     STANDARD.decode(&data_url[pos + 1..]).ok()
 }
 
-/// Build the GVML drawing XML string and the mosaic media files list.
+/// Build the GVML drawing XML string and the mosaic media files
+/// list.
 ///
 /// The XML half is reachable from a Rust unit test (see
 /// `clipboard_test.rs`); the wrapper `build_gvml_zip` keeps the
 /// existing public entry point and packs this output into the OPC
-/// ZIP. Extracted as the regression net for the Office-paste ABI
-/// modernisation plan — see
-/// `docs/plans/office-paste-abi-modernisation.md`.
+/// ZIP.
 pub(crate) fn build_drawing_xml(
     shapes: &[AnnotationShape],
     w: f64,
@@ -299,13 +285,7 @@ pub(crate) fn build_drawing_xml(
 
     for shape in shapes {
         let xml = match shape.shape_type.as_str() {
-            "rect" => { let s = gvml_rect(shape, id, false); id += 1; s }
-            // Legacy dispatch — payloads built before
-            // office-paste-abi-modernisation phase 6 emit
-            // `type: "rounded-rect"`. New payloads use
-            // `type: "rect"` + `corner_radius > 0` instead. Phase 8
-            // removes this arm.
-            "rounded-rect" => { let s = gvml_rect(shape, id, true); id += 1; s }
+            "rect" => { let s = gvml_rect(shape, id); id += 1; s }
             "ellipse" => { let s = gvml_ellipse(shape, id); id += 1; s }
             "line" | "arrow" => { let s = gvml_line(shape, id); id += 1; s }
             "marker" => { let s = gvml_marker(shape, id); id += 1; s }
@@ -314,15 +294,7 @@ pub(crate) fn build_drawing_xml(
             "mosaic_image" => {
                 let rid = next_rid;
                 next_rid += 1;
-                // Prefer the canonical `image_data_url`; fall back to
-                // `text` for payloads built before
-                // office-paste-abi-modernisation phase 2. Phase 8
-                // removes the fallback.
-                let data_url = shape
-                    .image_data_url
-                    .as_deref()
-                    .or(shape.text.as_deref())
-                    .unwrap_or("");
+                let data_url = shape.image_data_url.as_deref().unwrap_or("");
                 if let Some(bytes) = parse_data_url_bytes(data_url) {
                     let ext = if data_url.contains("image/png") { "png" } else { "jpeg" };
                     let fname = format!("mosaic_{}.{}", media_files.len(), ext);
@@ -559,7 +531,7 @@ fn build_fill_xml(fill: &str, opacity: f64) -> String {
     }
 }
 
-fn gvml_rect(s: &AnnotationShape, id: u32, rounded: bool) -> String {
+fn gvml_rect(s: &AnnotationShape, id: u32) -> String {
     let x = px(s.x.unwrap_or(0.0)); let y = px(s.y.unwrap_or(0.0));
     let w = px(s.width.unwrap_or(0.0)); let h = px(s.height.unwrap_or(0.0));
     let stroke = chex(s.stroke.as_deref().unwrap_or("#ff0000"));
@@ -567,11 +539,7 @@ fn gvml_rect(s: &AnnotationShape, id: u32, rounded: bool) -> String {
     let fill = s.fill.as_deref().unwrap_or("none");
     let opacity = s.fill_opacity.unwrap_or(1.0);
     let f = build_fill_xml(fill, opacity);
-    // Either the legacy `type: "rounded-rect"` dispatch (rounded=true)
-    // or the canonical `corner_radius > 0` form picks the `roundRect`
-    // preset. Phase 8 drops the legacy form's match arm.
-    let is_rounded = rounded || s.corner_radius.unwrap_or(0.0) > 0.0;
-    let geom = if is_rounded {
+    let geom = if s.corner_radius.unwrap_or(0.0) > 0.0 {
         r#"<a:prstGeom prst="roundRect"><a:avLst/></a:prstGeom>"#
     } else {
         r#"<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>"#
@@ -654,12 +622,7 @@ fn gvml_text(s: &AnnotationShape, id: u32) -> String {
     let bw = s.width.map(|w| px(w)).unwrap_or_else(|| px((text.len() as f64 * fs * 0.6).max(200.0)));
     let bh = s.height.map(|h| px(h)).unwrap_or_else(|| px(fs * 1.5 * text.lines().count().max(1) as f64));
 
-    // Prefer the canonical `text_bg_color`; fall back to the legacy
-    // `stroke`-as-bg-color carrier for payloads built before
-    // office-paste-abi-modernisation phase 3. Phase 8 removes the
-    // fallback.
-    let bg_carrier = s.text_bg_color.as_deref().or(s.stroke.as_deref());
-    let bg_fill = match bg_carrier {
+    let bg_fill = match s.text_bg_color.as_deref() {
         Some(bg) if !bg.is_empty() => {
             let (r, g, b, a) = parse_rgba(bg);
             if a > 0 {
@@ -743,18 +706,7 @@ fn gvml_marker(s: &AnnotationShape, id: u32) -> String {
     let fill = chex(s.fill.as_deref().unwrap_or("#ff0000"));
     let label = s.label.as_deref().unwrap_or("");
     let pt = (fs * 75.0_f64).round() as i64;
-    // Prefer the canonical `marker_shape` field; fall back to the
-    // legacy `stroke == "rect"` carrier so payloads built before
-    // office-paste-abi-modernisation phase 1 still dispatch.
-    // Phase 8 removes the fallback once no live caller relies on it.
-    let shape = s
-        .marker_shape
-        .as_deref()
-        .or_else(|| match s.stroke.as_deref() {
-            Some("rect") => Some("rect"),
-            _ => None,
-        });
-    let geom = match shape {
+    let geom = match s.marker_shape.as_deref() {
         Some("rect") => {
             r#"<a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val 10000"/></a:avLst></a:prstGeom>"#
         }

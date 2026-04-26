@@ -260,29 +260,30 @@ export async function captureRegion(
  * Unified annotation-shape payload sent to the desktop (Tauri) side
  * for Office clipboard export (`copy_as_office`).
  *
- * The shape taxonomy mirrors the editor's unified object model after
- * Phase 4 refactor:
+ * Each TS field is mirrored 1:1 by the Rust `AnnotationShape` struct
+ * in `packages/desktop/src-tauri/src/commands/clipboard.rs` — names
+ * match exactly, and every field that travels through the wire
+ * dispatches to a code path that reads it. Shape taxonomy:
  *
  *   type="rect"         Rectangle. Use `corner_radius>0` for rounded
  *                       variant. Use `redact_style="solid"` for an
- *                       opaque solid-bar redaction.
+ *                       opaque solid-bar redaction (no outline).
  *   type="ellipse"      Ellipse.
  *   type="line" | "arrow"
  *                       Line. Use `arrow_head_start / arrow_head_end`
  *                       to describe heads (the legacy `has_arrow`
  *                       stays equivalent to arrow_head_end=true).
  *   type="text"         Textbox. Use `text_variant` for plain / sticky
- *                       / callout. `tail_x`/`tail_y` set for callout.
+ *                       / callout. `text_bg_color` carries the bg
+ *                       fill; `tail_x`/`tail_y` set for callout (the
+ *                       Rust side then emits `wedgeRoundRectCallout`).
  *   type="freehand"     Freehand path. Use `draw_style` for pen vs
  *                       highlighter. `stroke_opacity_value` carries
  *                       the semi-transparent highlighter alpha.
- *   type="mosaic_image" Mosaic-redaction PNG, embedded via data URL in
- *                       `image_data_url` (legacy: in `text`).
+ *   type="mosaic_image" Mosaic-redaction PNG, embedded via data URL
+ *                       in `image_data_url`.
  *   type="blur_image"   Blur-redaction PNG, same shape as mosaic_image.
  *   type="marker"       Counter marker; `marker_shape` + `label`.
- *
- * All new fields are optional so existing Rust handlers keep working;
- * they can adopt the richer metadata incrementally.
  */
 export interface AnnotationShape {
   type: string;
