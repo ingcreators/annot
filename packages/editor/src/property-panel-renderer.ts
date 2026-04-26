@@ -163,7 +163,12 @@ function renderSelect(
   targets: SVGElement[],
   deps: RenderControlDeps,
 ): HTMLElement {
-  const baseOpts = def.options ?? [];
+  // Dynamic `getOptions` overrides the static `options` field — the
+  // per-end arrow Type pulldowns use this to filter the OOXML preset
+  // list by the current line variant ("Line" hides all non-"none";
+  // "Arrow" splits the rule per-end; etc.). Recomputed per render so
+  // a variant change re-renders into the new option set.
+  const baseOpts = def.getOptions ? def.getOptions(targets[0]!) : (def.options ?? []);
   const current = String(def.getValue(targets[0]!));
   // Preserve a non-preset current value so it survives a round-trip
   // through the dropdown — without this, an Office-pasted custom
@@ -178,9 +183,20 @@ function renderSelect(
     options: opts.map((o) => ({
       value: String(o.value),
       label: o.label,
+      // Inline SVG previews — populated for per-end arrow shape /
+      // size grids via the registry's `iconSvg` option field.
+      // `createCustomSelect` falls back to the label text when this
+      // is absent (the dash type / cap type rows lean on that
+      // fallback).
+      ...(o.iconSvg ? { preview: o.iconSvg } : {}),
     })),
     current,
     ariaLabel: def.label,
+    // Optional grid layout — per-end arrow defs set 3 cols + a px
+    // popup width to match PowerPoint's compact icon grid. When
+    // omitted createCustomSelect produces its default vertical list.
+    ...(def.selectColumns != null ? { columns: def.selectColumns } : {}),
+    ...(def.selectPopupWidth != null ? { popupWidth: def.selectPopupWidth } : {}),
     onChange: async (v) => {
       const replacements = await dispatchMutation(def, targets, v, deps);
       deps.onCommit({ replacements, variantChange: false });

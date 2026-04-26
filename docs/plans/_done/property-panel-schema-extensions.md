@@ -1,11 +1,28 @@
 # PropertyPanel — Schema-driven Render Extensions
 
-> **Status:** Queued (Phase A in progress). Continuation of
-> [`_done/property-panel-schema.md`](./_done/property-panel-schema.md)
-> (PRs #153–#161). The original migration left three categories of
+> **Status:** Done — Phases A / B / C landed in PRs #162 / #163 /
+> #164 (April 2026). Continuation of
+> [`property-panel-schema.md`](./property-panel-schema.md) (PRs
+> #153–#161). The original migration left three categories of
 > imperative rows untouched because they didn't fit the registry's
-> shape at the time. This plan extends the registry to cover them
-> and migrates the matching panel code.
+> shape at the time. This plan extended the registry to cover them
+> and migrated the matching panel code.
+>
+> **PR map:**
+> - #162 — Phase A: marker bg-primitive controls (5 new ids)
+> - #163 — Phase B: shape transparency + cap type + arrow-aware
+>   strokeColor / strokeWidth augmentations (3 new ids, 3
+>   augmented setters)
+> - #164 — Phase C: per-end arrow type + size pulldowns (4 new
+>   ids; renderer gained `getOptions` / `selectColumns` /
+>   `selectPopupWidth`; arrow preview helpers moved to Tier B)
+>
+> **Outcome:** every row in `#renderShapeControls` /
+> `#renderMarkerControls` is schema-driven now. `property-panel.ts`
+> shrank from 1,377 → ~991 LOC across the three phases (and from
+> the original 1,817 baseline → -826 total). The `#renderXxx
+> Controls` methods are now small enough to inline directly into
+> `show()`'s switch if a future cleanup wants to.
 >
 > **Scope:** Three independently-merge-able phases that close out
 > the residual imperative `#addXxx` chains in

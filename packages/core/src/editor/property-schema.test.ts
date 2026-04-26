@@ -156,11 +156,11 @@ describe("PROPERTY_CONTROLS registry", () => {
     // Phase 1 landed 17 entries; Phase A of the extensions plan
     // (`property-panel-schema-extensions.md`) added 5 marker bg-
     // primitive ids → 22; Phase B added 3 shape transparency / cap
-    // type ids → 25. Pinning the count guards against a new id
-    // landing without a matching def — the entry-count shape test
-    // alone won't catch that if the new id accidentally duplicates
-    // another.
-    expect(ALL_IDS).toHaveLength(25);
+    // type ids → 25; Phase C added 4 per-end arrow ids → 29.
+    // Pinning the count guards against a new id landing without a
+    // matching def — the entry-count shape test alone won't catch
+    // that if the new id accidentally duplicates another.
+    expect(ALL_IDS).toHaveLength(29);
     for (const id of ALL_IDS) {
       expect(PROPERTY_CONTROLS[id], `missing def for "${id}"`).toBeDefined();
       expect(PROPERTY_CONTROLS[id].id).toBe(id);
@@ -210,12 +210,19 @@ describe("PROPERTY_CONTROLS registry", () => {
     }
   });
 
-  it("every variantPicker / select def carries options", () => {
+  it("every variantPicker / select def carries options OR getOptions", () => {
     for (const id of ALL_IDS) {
       const def = PROPERTY_CONTROLS[id];
       if (def.type === "variantPicker" || def.type === "select") {
-        expect(def.options, `def "${id}" of type "${def.type}" missing options`).toBeDefined();
-        expect(def.options?.length ?? 0, `def "${id}" has empty options`).toBeGreaterThan(0);
+        // Phase C added `getOptions` for dynamic option lists (per-
+        // end arrow shape pulldowns filter by current variant). A
+        // def must carry static `options` OR a `getOptions` fn.
+        const hasOptions = (def.options?.length ?? 0) > 0;
+        const hasGetOptions = typeof def.getOptions === "function";
+        expect(
+          hasOptions || hasGetOptions,
+          `def "${id}" of type "${def.type}" must declare options or getOptions`,
+        ).toBe(true);
       }
     }
   });
@@ -281,6 +288,80 @@ describe("PROPERTY_CONTROLS registry", () => {
     // Solid (no data-dash-key, no stroke-dasharray) → ""
     expect(PROPERTY_CONTROLS.markerBgStrokeStyle.getValue(marker)).toBe("");
     expect(PROPERTY_CONTROLS.markerLabelValue.getValue(marker)).toBe(1);
+  });
+
+  it("Phase C per-end arrow defs read per-end shape + size from data attrs", () => {
+    // Composed-arrow group with "Double arrow" variant (both ends
+    // non-"none"). The per-end defs read the canonical
+    // `data-arrow-{start,end}-{shape,w,l}` attrs.
+    const arrow = svg("g", {
+      "data-type": "arrow",
+      "data-arrow-start-shape": "diamond",
+      "data-arrow-start-width": "lg",
+      "data-arrow-start-length": "sm",
+      "data-arrow-end-shape": "triangle",
+      "data-arrow-end-width": "md",
+      "data-arrow-end-length": "lg",
+    });
+    expect(PROPERTY_CONTROLS.arrowStartShape.getValue(arrow)).toBe("diamond");
+    expect(PROPERTY_CONTROLS.arrowStartSize.getValue(arrow)).toBe("lg-sm");
+    expect(PROPERTY_CONTROLS.arrowEndShape.getValue(arrow)).toBe("triangle");
+    expect(PROPERTY_CONTROLS.arrowEndSize.getValue(arrow)).toBe("md-lg");
+  });
+
+  it("Phase C arrow shape getOptions filters by current line variant", () => {
+    // Variant "Line" (both ends none): both Type pulldowns show
+    // ONLY "none".
+    const line = svg("line");
+    const startOpts1 = PROPERTY_CONTROLS.arrowStartShape.getOptions?.(line) ?? [];
+    const endOpts1 = PROPERTY_CONTROLS.arrowEndShape.getOptions?.(line) ?? [];
+    expect(startOpts1.map((o) => o.value)).toEqual(["none"]);
+    expect(endOpts1.map((o) => o.value)).toEqual(["none"]);
+
+    // Variant "Arrow" (start none, end triangle): start shows ONLY
+    // "none", end shows non-"none" presets.
+    const arrow = svg("g", {
+      "data-type": "arrow",
+      "data-arrow-start-shape": "none",
+      "data-arrow-end-shape": "triangle",
+    });
+    const startOpts2 = PROPERTY_CONTROLS.arrowStartShape.getOptions?.(arrow) ?? [];
+    const endOpts2 = PROPERTY_CONTROLS.arrowEndShape.getOptions?.(arrow) ?? [];
+    expect(startOpts2.map((o) => o.value)).toEqual(["none"]);
+    expect(endOpts2.map((o) => o.value)).toEqual([
+      "triangle",
+      "arrow",
+      "stealth",
+      "diamond",
+      "oval",
+    ]);
+
+    // Variant "Double arrow" (both non-"none"): both pulldowns
+    // show all 5 non-"none" presets.
+    const doubleArrow = svg("g", {
+      "data-type": "arrow",
+      "data-arrow-start-shape": "diamond",
+      "data-arrow-end-shape": "triangle",
+    });
+    const startOpts3 = PROPERTY_CONTROLS.arrowStartShape.getOptions?.(doubleArrow) ?? [];
+    const endOpts3 = PROPERTY_CONTROLS.arrowEndShape.getOptions?.(doubleArrow) ?? [];
+    expect(startOpts3.map((o) => o.value)).toEqual([
+      "triangle",
+      "arrow",
+      "stealth",
+      "diamond",
+      "oval",
+    ]);
+    expect(endOpts3.map((o) => o.value)).toEqual(startOpts3.map((o) => o.value));
+  });
+
+  it("Phase C per-end arrow defs gate visibility to line-like targets only", () => {
+    expect(PROPERTY_CONTROLS.arrowStartShape.visibleWhen?.(svg("line"))).toBe(true);
+    const arrow = svg("g", { "data-type": "arrow" });
+    expect(PROPERTY_CONTROLS.arrowStartSize.visibleWhen?.(arrow)).toBe(true);
+    // Non-line: hidden
+    expect(PROPERTY_CONTROLS.arrowEndShape.visibleWhen?.(svg("rect"))).toBe(false);
+    expect(PROPERTY_CONTROLS.arrowEndSize.visibleWhen?.(svg("ellipse"))).toBe(false);
   });
 
   it("Phase B fillOpacity / strokeOpacity / strokeLinecap getValue/setValue", () => {

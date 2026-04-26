@@ -12,7 +12,12 @@
 // duplicating a four-line attribute read here is preferable to a
 // circular-package import.
 
-import { refreshArrowPath } from "./arrow-markers.js";
+import {
+  arrowPreview,
+  arrowSizePreview,
+  detectArrowSpec,
+  refreshArrowPath,
+} from "./arrow-markers.js";
 import { computeDasharray, detectDashKey } from "../utils/dash-utils.js";
 import { convertShape, detectShapeType } from "./shape-utils.js";
 import { convertTextVariant, detectTextVariant } from "./text-utils.js";
@@ -23,7 +28,9 @@ import {
   SHAPE_ICON_SVG,
 } from "./toolbar-icons.js";
 import type {
+  ArrowDim,
   ArrowHead,
+  ArrowShape,
   DrawStyle,
   MarkerShape,
   RedactStyle,
@@ -76,6 +83,10 @@ export const PROPERTY_CONTROL_IDS = {
   fillOpacity: "fillOpacity",
   strokeOpacity: "strokeOpacity",
   strokeLinecap: "strokeLinecap",
+  arrowStartShape: "arrowStartShape",
+  arrowStartSize: "arrowStartSize",
+  arrowEndShape: "arrowEndShape",
+  arrowEndSize: "arrowEndSize",
 } as const;
 export type PropertyControlId =
   (typeof PROPERTY_CONTROL_IDS)[keyof typeof PROPERTY_CONTROL_IDS];
@@ -128,6 +139,10 @@ export const CATEGORY_CONTROL_SHAPE: Readonly<
     PROPERTY_CONTROL_IDS.strokeWidth,
     PROPERTY_CONTROL_IDS.strokeStyle,
     PROPERTY_CONTROL_IDS.strokeLinecap,
+    PROPERTY_CONTROL_IDS.arrowStartShape,
+    PROPERTY_CONTROL_IDS.arrowStartSize,
+    PROPERTY_CONTROL_IDS.arrowEndShape,
+    PROPERTY_CONTROL_IDS.arrowEndSize,
   ],
 };
 
@@ -179,6 +194,16 @@ export const PROPERTY_EFFECT_IDS = {
    *  a fresh element so the per-target `oldEl !== newEl` swap is
    *  picked up by `onTargetReplaced`. */
   applyTextColor: "applyTextColor",
+  /** Per-end arrow effect handlers (Phase C). Each updates a single
+   *  field of `detectArrowEnds(el)` and re-applies the spec via
+   *  `applyArrowHead`. Split into 4 ids (rather than one shared
+   *  handler with a diff-object value) so each registry def's
+   *  `effect` field still encodes "which end + which field" without
+   *  the renderer needing to thread extra context to the handler. */
+  applyArrowStartShape: "applyArrowStartShape",
+  applyArrowStartSize: "applyArrowStartSize",
+  applyArrowEndShape: "applyArrowEndShape",
+  applyArrowEndSize: "applyArrowEndSize",
 } as const;
 export type PropertyEffectId = (typeof PROPERTY_EFFECT_IDS)[keyof typeof PROPERTY_EFFECT_IDS];
 
@@ -245,6 +270,23 @@ export interface PropertyControlDef<T = unknown> {
   visibleWhen?: (el: SVGElement) => boolean;
   /** Optional metadata for variant pickers / select dropdowns. */
   options?: ReadonlyArray<PropertyControlOption<T>>;
+  /** Dynamically-computed options. When present AND the def's
+   *  `type === "select"` (or future "variantPicker"), the renderer
+   *  calls this with the current sample target instead of reading
+   *  the static `options` field. Lets per-end arrow shape pickers
+   *  filter by the current variant without forcing the registry
+   *  to know about cross-control state. Functions receive the same
+   *  `Element` instance the renderer passes to `getValue` /
+   *  `visibleWhen`. */
+  getOptions?: (el: SVGElement) => ReadonlyArray<PropertyControlOption<T>>;
+  /** Number of columns for the select popup grid. Defaults to 1
+   *  (vertical list). Used by per-end arrow shape (3 cols for the
+   *  6-shape OOXML grid) and size (3 cols for the 3×3 width × length
+   *  grid) selects to match PowerPoint's layout exactly. */
+  selectColumns?: number;
+  /** Width hint (px) for the select popup. Used alongside
+   *  `selectColumns` to size the per-end arrow grids. */
+  selectPopupWidth?: number;
   // ─── Number-input metadata (meaningful when `type === "number"`) ──
   /** Inclusive lower bound for a number input. */
   min?: number;
@@ -351,6 +393,75 @@ function groupAttrRead(el: SVGElement, attr: string): string | null {
  *  (head-filled fill propagation; `refreshArrowPath` regen). */
 function isComposedArrow(el: Element): boolean {
   return el.tagName === "g" && el.getAttribute("data-type") === "arrow";
+}
+
+/** Classify the current per-end state into the 3-state `ArrowHead`
+ *  variant used by both the toolbar and the panel:
+ *    - "none" (Line)        — both ends "none"
+ *    - "end" (Arrow)        — one end has a marker, the other is "none"
+ *    - "both" (Double arrow) — both ends have markers
+ *  Used by the per-end `arrow{Start,End}Shape` defs' `getOptions`
+ *  to filter the shape pulldown so users can't pick an
+ *  inconsistent state (e.g. "Line" with a triangle on the start). */
+function lineVariantOf(el: SVGElement): "none" | "end" | "both" {
+  const startNone = detectArrowSpec(el, "start").shape === "none";
+  const endNone = detectArrowSpec(el, "end").shape === "none";
+  if (startNone && endNone) return "none";
+  if (!startNone && !endNone) return "both";
+  return "end";
+}
+
+/** Six OOXML preset shapes for the per-end Type pulldown, filtered
+ *  by the current line variant so the user can't pick an
+ *  inconsistent state. The preview SVG faces the right direction
+ *  for each end (left for Begin, right for End) so the option list
+ *  reads naturally. */
+function arrowShapeOptionsFor(
+  end: "start" | "end",
+  variant: "none" | "end" | "both",
+): ReadonlyArray<PropertyControlOption<ArrowShape>> {
+  const dir: "left" | "right" = end === "start" ? "left" : "right";
+  const all: ReadonlyArray<{ value: ArrowShape; label: string }> = [
+    { value: "none", label: "None" },
+    { value: "triangle", label: "Triangle" },
+    { value: "arrow", label: "Arrow" },
+    { value: "stealth", label: "Stealth" },
+    { value: "diamond", label: "Diamond" },
+    { value: "oval", label: "Oval" },
+  ];
+  return all
+    .filter((s) => {
+      const isNone = s.value === "none";
+      if (variant === "none") return isNone;
+      if (variant === "both") return !isNone;
+      // variant === "end" (Arrow): start is "none" only, end is non-"none" only
+      return end === "start" ? isNone : !isNone;
+    })
+    .map((s) => ({
+      value: s.value,
+      label: s.label,
+      iconSvg: arrowPreview(s.value, dir),
+    }));
+}
+
+/** 3×3 width × length grid for the per-end Size pulldown. Values
+ *  are encoded as `"w-l"` strings (e.g. `"md-lg"`); the panel-side
+ *  effect handler splits them back into per-axis dims. The preview
+ *  SVG faces the right direction for each end. */
+function arrowSizeOptionsFor(end: "start" | "end"): ReadonlyArray<PropertyControlOption<string>> {
+  const dir: "left" | "right" = end === "start" ? "left" : "right";
+  const DIMS: ArrowDim[] = ["sm", "md", "lg"];
+  const out: PropertyControlOption<string>[] = [];
+  for (const w of DIMS) {
+    for (const l of DIMS) {
+      out.push({
+        value: `${w}-${l}`,
+        label: `W:${w.toUpperCase()}  L:${l.toUpperCase()}`,
+        iconSvg: arrowSizePreview(w, l, dir),
+      });
+    }
+  }
+  return out;
 }
 
 function markerSizeOf(g: SVGElement): number {
@@ -880,6 +991,71 @@ export const PROPERTY_CONTROLS: Readonly<{
       { value: "round", label: "Round" },
       { value: "butt", label: "Flat" },
     ],
+  },
+
+  // ─── Per-end arrow type & size pulldowns ─────────────────────────
+  // Phase C of `property-panel-schema-extensions.md`. The four defs
+  // model the PowerPoint per-end arrow grids: each end (Begin /
+  // End) gets a Type pulldown (6 OOXML preset shapes, variant-
+  // filtered) and a Size pulldown (3×3 width × length grid). Type
+  // options are dynamic via `getOptions` because the option list
+  // depends on the OTHER end's current shape (e.g. selecting the
+  // start shape for an "Arrow" variant must hide all non-"none"
+  // options). All four use `effect` because the setter calls
+  // `applyArrowHead` (Tier C — lives in `tools/arrow-tool.ts`)
+  // with the modified spec; the panel binds the four handlers in
+  // its constructor. `visibleWhen: isLineLike` hides the rows for
+  // anything that isn't a `<line>` or composed `<g data-type=
+  // "arrow">`.
+  arrowStartShape: {
+    id: PROPERTY_CONTROL_IDS.arrowStartShape,
+    type: "select",
+    label: "Begin arrow type",
+    getValue: (el) => detectArrowSpec(el, "start").shape,
+    effect: PROPERTY_EFFECT_IDS.applyArrowStartShape,
+    visibleWhen: isLineLike,
+    getOptions: (el) => arrowShapeOptionsFor("start", lineVariantOf(el)),
+    selectColumns: 3,
+    selectPopupWidth: 170,
+  },
+  arrowStartSize: {
+    id: PROPERTY_CONTROL_IDS.arrowStartSize,
+    type: "select",
+    label: "Begin arrow size",
+    getValue: (el) => {
+      const spec = detectArrowSpec(el, "start");
+      return `${spec.width}-${spec.length}`;
+    },
+    effect: PROPERTY_EFFECT_IDS.applyArrowStartSize,
+    visibleWhen: isLineLike,
+    options: arrowSizeOptionsFor("start"),
+    selectColumns: 3,
+    selectPopupWidth: 180,
+  },
+  arrowEndShape: {
+    id: PROPERTY_CONTROL_IDS.arrowEndShape,
+    type: "select",
+    label: "End arrow type",
+    getValue: (el) => detectArrowSpec(el, "end").shape,
+    effect: PROPERTY_EFFECT_IDS.applyArrowEndShape,
+    visibleWhen: isLineLike,
+    getOptions: (el) => arrowShapeOptionsFor("end", lineVariantOf(el)),
+    selectColumns: 3,
+    selectPopupWidth: 170,
+  },
+  arrowEndSize: {
+    id: PROPERTY_CONTROL_IDS.arrowEndSize,
+    type: "select",
+    label: "End arrow size",
+    getValue: (el) => {
+      const spec = detectArrowSpec(el, "end");
+      return `${spec.width}-${spec.length}`;
+    },
+    effect: PROPERTY_EFFECT_IDS.applyArrowEndSize,
+    visibleWhen: isLineLike,
+    options: arrowSizeOptionsFor("end"),
+    selectColumns: 3,
+    selectPopupWidth: 180,
   },
 };
 

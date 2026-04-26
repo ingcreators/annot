@@ -12,98 +12,15 @@
  */
 
 import { computeDasharray } from "@ingcreators/annot-core/utils";
-import { type ArrowSpec, computeArrowParts } from "@ingcreators/annot-core/editor/arrow-markers";
-import type { ArrowDim, ArrowShape } from "@ingcreators/annot-core/editor/tool-options";
 
-/**
- * Inline SVG for an arrow-end shape used by the per-end pulldown
- * cells. Shared 40×14 viewBox with `arrowSizePreview` so Begin/End
- * type and size buttons render at the same apparent stem length —
- * the four rows line up visually in the right panel instead of
- * looking like mismatched pairs.
- */
-export function arrowPreview(shape: ArrowShape, dir: "left" | "right" = "right"): string {
-  const content = arrowPreviewContent(shape);
-  const wrap =
-    dir === "left" ? `<g transform="translate(40,0) scale(-1,1)">${content}</g>` : content;
-  return `<svg width="40" height="14" viewBox="0 0 40 14">${wrap}</svg>`;
-}
-
-/**
- * Inner SVG for `arrowPreview` — the head + stem geometry without
- * the wrapping `<svg>` element. Exposed separately so callers can
- * compose it inside their own `<svg>` (used by the toolbar's
- * variant flyout).
- *
- * 40×14 viewBox. Stem along y=7, head occupies x∈[28,38], 10-unit
- * long × 10-unit wide (tip at x=38, base at x=28). The stem's
- * right endpoint varies per shape so it touches the marker's
- * attachment point (chevron tip, stealth notch, filled base, etc).
- */
-export function arrowPreviewContent(shape: ArrowShape): string {
-  const mkStem = (x2: number) =>
-    `<line x1="2" y1="7" x2="${x2}" y2="7" stroke="currentColor" stroke-width="1.6" stroke-linecap="butt"/>`;
-  switch (shape) {
-    case "none":
-      // Plain line, full width.
-      return `<line x1="2" y1="7" x2="38" y2="7" stroke="currentColor" stroke-width="1.6" stroke-linecap="butt"/>`;
-    case "triangle":
-      return `${mkStem(28)}<polygon points="28 2, 38 7, 28 12" fill="currentColor"/>`;
-    case "arrow":
-      // Open chevron with thick rounded outline — matches
-      // PowerPoint's "arrow" preset. Stem extends through to the
-      // tip so the stem line has no visible gap at the opening.
-      return `${mkStem(38)}<polyline points="26 1, 38 7, 26 13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>`;
-    case "stealth":
-      // Notch at ~30% of length → x = 28 + 10*0.3 = 31.
-      return `${mkStem(31)}<polygon points="28 2, 38 7, 28 12, 31 7" fill="currentColor"/>`;
-    case "diamond":
-      return `${mkStem(28)}<polygon points="24 7, 31 2, 38 7, 31 12" fill="currentColor"/>`;
-    case "oval":
-      return `${mkStem(28)}<circle cx="33" cy="7" r="5" fill="currentColor"/>`;
-  }
-}
-
-/**
- * Render an arrow head preview at the requested width × length so
- * the per-end size pulldown's cells accurately reflect the actual
- * canvas rendering. Uses the same `computeArrowParts` engine the
- * canvas uses, eliminating the previous ad-hoc scale table that
- * tended to drift from real geometry.
- */
-export function arrowSizePreview(
-  w: ArrowDim,
-  l: ArrowDim,
-  dir: "left" | "right" = "right",
-): string {
-  const VB_W = 40;
-  const VB_H = 14;
-  const cy = VB_H / 2;
-  // A moderate preview stroke so the ~12×8 viewBox comfortably
-  // shows the head; arrow-markers' output scales with this value.
-  const previewStroke = 1.2;
-  const x1 = 2;
-  const x2 = VB_W - 2;
-  const specStart: ArrowSpec = { shape: "none", width: w, length: l };
-  const specEnd: ArrowSpec = { shape: "triangle", width: w, length: l };
-  const { stemD, headFilledD, headOpenD } = computeArrowParts(
-    x1,
-    cy,
-    x2,
-    cy,
-    specStart,
-    specEnd,
-    previewStroke,
-  );
-  const headAttrs = `stroke="currentColor" stroke-width="${previewStroke}" stroke-linecap="round" stroke-linejoin="miter"`;
-  const content =
-    `<path d="${stemD}" fill="none" stroke="currentColor" stroke-width="${previewStroke}" stroke-linecap="butt"/>` +
-    `<path d="${headFilledD}" fill="currentColor" ${headAttrs}/>` +
-    `<path d="${headOpenD}" fill="none" ${headAttrs}/>`;
-  const wrap =
-    dir === "left" ? `<g transform="translate(${VB_W},0) scale(-1,1)">${content}</g>` : content;
-  return `<svg width="${VB_W}" height="${VB_H}" viewBox="0 0 ${VB_W} ${VB_H}">${wrap}</svg>`;
-}
+// `arrowPreview` / `arrowPreviewContent` / `arrowSizePreview` moved
+// to `@ingcreators/annot-core/editor/arrow-markers` (Tier B) by
+// Phase C of `docs/plans/property-panel-schema-extensions.md` — the
+// per-end arrow registry defs need them for `iconSvg` option fields,
+// and Tier B can't import from Tier C without breaking the cycle
+// invariant. The functions are pure SVG-string builders, jsdom-
+// friendly, and have no side effects at module load. Importers should
+// switch to `@ingcreators/annot-core/editor/arrow-markers`.
 
 /**
  * Inline SVG showing a sample line in the requested dash style.

@@ -8,8 +8,7 @@ import {
   type PropertyEffectId,
 } from "@ingcreators/annot-core/editor/property-schema";
 import type { CanvasManager } from "./canvas-manager.js";
-import { createCustomSelect } from "./custom-select.js";
-import { arrowPreview, arrowSizePreview, ppNumberInput } from "./property-panel-helpers.js";
+import { ppNumberInput } from "./property-panel-helpers.js";
 import type { History } from "./history.js";
 import { createColorPullButton } from "@ingcreators/annot-editor/property-controls";
 import { convertRedactStyle } from "@ingcreators/annot-editor/redact-utils";
@@ -39,6 +38,50 @@ import type {
 function isLineLike(el: Element): boolean {
   if (el.tagName === "line") return true;
   return el.tagName === "g" && el.getAttribute("data-type") === "arrow";
+}
+
+/** Per-end arrow effect handler — mutates a single shape field of
+ *  an arrow's per-end spec and re-applies via `applyArrowHead`.
+ *  Returns identity replacements; the outer `<g>` keeps DOM
+ *  identity so `onTargetReplaced` is correctly skipped. Shared by
+ *  the `applyArrowStartShape` / `applyArrowEndShape` effect
+ *  handlers bound in the PropertyPanel constructor. */
+function applyArrowEndField(
+  els: readonly SVGElement[],
+  end: "start" | "end",
+  field: "shape",
+  value: ArrowShape,
+): ElementReplacement[] {
+  const out: ElementReplacement[] = [];
+  for (const el of els) {
+    const spec = detectArrowEnds(el);
+    const next = { start: { ...spec.start }, end: { ...spec.end } };
+    next[end][field] = value;
+    applyArrowHead(el, next);
+    out.push({ oldEl: el, newEl: el });
+  }
+  return out;
+}
+
+/** Per-end arrow size handler — splits the `"w-l"` value back into
+ *  per-axis dims, mutates both, re-applies. Same identity-
+ *  replacement shape as the shape handler. */
+function applyArrowEndSizeField(
+  els: readonly SVGElement[],
+  end: "start" | "end",
+  value: string,
+): ElementReplacement[] {
+  const [w, l] = value.split("-") as [ArrowDim, ArrowDim];
+  const out: ElementReplacement[] = [];
+  for (const el of els) {
+    const spec = detectArrowEnds(el);
+    const next = { start: { ...spec.start }, end: { ...spec.end } };
+    next[end].width = w;
+    next[end].length = l;
+    applyArrowHead(el, next);
+    out.push({ oldEl: el, newEl: el });
+  }
+  return out;
 }
 
 /**
@@ -223,6 +266,24 @@ export class PropertyPanel {
         }
         return out;
       },
+      // Per-end arrow type / size effect handlers (Phase C). Each
+      // reads the current per-end spec, mutates a single field, and
+      // re-applies via `applyArrowHead` — same per-element mutation
+      // shape the imperative `#addPPArrowRows` callbacks used.
+      // Returned identity replacements skip `onTargetReplaced` (the
+      // outer `<g data-type="arrow">` keeps DOM identity); the
+      // commit routes through `onStyleChanged` because per-end Type
+      // / Size edits are non-variant (changing one end's shape /
+      // size doesn't trigger preset rubber-band, mirroring the
+      // imperative `#commit()` behaviour).
+      applyArrowStartShape: (els, value) =>
+        applyArrowEndField(els, "start", "shape", value as ArrowShape),
+      applyArrowStartSize: (els, value) =>
+        applyArrowEndSizeField(els, "start", value as string),
+      applyArrowEndShape: (els, value) =>
+        applyArrowEndField(els, "end", "shape", value as ArrowShape),
+      applyArrowEndSize: (els, value) =>
+        applyArrowEndSizeField(els, "end", value as string),
     };
   }
 
@@ -419,24 +480,23 @@ export class PropertyPanel {
       this.#renderRegistryControl(PROPERTY_CONTROL_IDS.fillOpacity);
     });
 
-    // Line section — schema-driven Color / Transparency / Width /
-    // Dash type / Cap type. The per-end arrow type + size grids
-    // (lines only) stay imperative; Phase C of
-    // `property-panel-schema-extensions.md` will model them as
-    // either 4 separate select ids or one compound control.
+    // Line section — fully schema-driven now. Per-end arrow Type /
+    // Size pulldowns landed in Phase C of
+    // `property-panel-schema-extensions.md`; their `visibleWhen:
+    // isLineLike` gate hides them for non-line targets, and the
+    // shape pulldowns' dynamic `getOptions` filters the OOXML
+    // preset list by the current variant ("Line" hides all non-
+    // "none"; "Arrow" splits the rule per-end).
     this.#inSection("Line", () => {
       this.#renderRegistryControl(PROPERTY_CONTROL_IDS.strokeColor);
       this.#renderRegistryControl(PROPERTY_CONTROL_IDS.strokeOpacity);
       this.#renderRegistryControl(PROPERTY_CONTROL_IDS.strokeWidth);
       this.#renderRegistryControl(PROPERTY_CONTROL_IDS.strokeStyle);
       this.#renderRegistryControl(PROPERTY_CONTROL_IDS.strokeLinecap);
-      // Per-end arrow rows: visible only when ALL targets are line-
-      // like (so "edit per-end shape" makes sense). Mirrors the
-      // imperative `#addPPLineSection`'s gating.
-      if (isLineLike(el) && this.#targets.every((t) => isLineLike(t))) {
-        const spec = detectArrowEnds(el);
-        this.#addPPArrowRows(this.#target(), spec);
-      }
+      this.#renderRegistryControl(PROPERTY_CONTROL_IDS.arrowStartShape);
+      this.#renderRegistryControl(PROPERTY_CONTROL_IDS.arrowStartSize);
+      this.#renderRegistryControl(PROPERTY_CONTROL_IDS.arrowEndShape);
+      this.#renderRegistryControl(PROPERTY_CONTROL_IDS.arrowEndSize);
     });
   }
 
@@ -915,140 +975,15 @@ export class PropertyPanel {
   // empty" cleanup. Per-end arrow type+size grids stay imperative
   // (`#addPPArrowRows`); Phase C will model them.
 
-  /** Two rows of pulldowns per endpoint (type + size).
-   *
-   *  PowerPoint parity:
-   *    Type  — 6 options (none / arrow / triangle / stealth / diamond
-   *            / oval), matching the 6 OOXML preset shapes.
-   *    Size  — 9 options arranged as a 3×3 grid (width × length).
-   *            Width = perpendicular thickness (OOXML `w`),
-   *            length = along-stem extent (OOXML `len`). Values are
-   *            encoded as `"w-l"` strings (e.g. "md-lg"). */
-  #addPPArrowRows(body: HTMLElement, current: ReturnType<typeof detectArrowEnds>): void {
-    const DIMS: ArrowDim[] = ["sm", "md", "lg"];
-
-    // Classify the current per-end state into a variant:
-    //   Line         = both ends "none"
-    //   Arrow        = begin "none", end non-"none"
-    //   Double arrow = both ends non-"none"
-    // (The "reverse arrow" case of begin non-"none", end "none" is
-    //  not one of the 3 variants; classifier treats it as Arrow to
-    //  surface the "this end has a marker" shortcut.)
-    const hStart = current.start.shape !== "none";
-    const hEnd = current.end.shape !== "none";
-    const lineVariant: "none" | "end" | "both" =
-      !hStart && !hEnd ? "none" : hStart && hEnd ? "both" : "end";
-
-    // Rebuild the shape list for a specific endpoint, FILTERED by
-    // the variant's rule:
-    //   Line:         both ends "none" only
-    //   Arrow:        begin "none" only, end non-"none" only
-    //   Double arrow: both ends non-"none" only
-    // Previews face the correct direction:
-    //   Begin arrow (start of line) → arrows point LEFT
-    //   End arrow   (end of line)   → arrows point RIGHT
-    const shapesFor = (end: "start" | "end") => {
-      const dir: "left" | "right" = end === "start" ? "left" : "right";
-      const allShapes = [
-        { value: "none", label: "None", preview: arrowPreview("none", dir) },
-        { value: "triangle", label: "Triangle", preview: arrowPreview("triangle", dir) },
-        { value: "arrow", label: "Arrow", preview: arrowPreview("arrow", dir) },
-        { value: "stealth", label: "Stealth", preview: arrowPreview("stealth", dir) },
-        { value: "diamond", label: "Diamond", preview: arrowPreview("diamond", dir) },
-        { value: "oval", label: "Oval", preview: arrowPreview("oval", dir) },
-      ] as Array<{ value: ArrowShape; label: string; preview: string }>;
-      // Filter rule: "none" is a MARKER ABSENCE, every other shape
-      // is a MARKER PRESENCE. Each end must match what the variant
-      // requires.
-      return allShapes.filter((s) => {
-        const isNone = s.value === "none";
-        if (lineVariant === "none") return isNone;
-        if (lineVariant === "both") return !isNone;
-        // Arrow (lineVariant === "end"): begin is none-only, end is non-none
-        return end === "start" ? isNone : !isNone;
-      });
-    };
-
-    const sizesFor = (end: "start" | "end") => {
-      const dir: "left" | "right" = end === "start" ? "left" : "right";
-      const out: Array<{ value: string; label: string; preview: string }> = [];
-      for (const w of DIMS) {
-        for (const l of DIMS) {
-          out.push({
-            value: `${w}-${l}`,
-            label: `W:${w.toUpperCase()}  L:${l.toUpperCase()}`,
-            preview: arrowSizePreview(w, l, dir),
-          });
-        }
-      }
-      return out;
-    };
-
-    const push = (end: "start" | "end", typeLabel: string, sizeLabel: string) => {
-      body.appendChild(
-        this.#ppRow(
-          typeLabel,
-          createCustomSelect({
-            options: shapesFor(end),
-            current: current[end].shape,
-            ariaLabel: typeLabel,
-            // PowerPoint arranges the 6 preset shapes as a 3-wide × 2-tall
-            // grid of icon buttons, not a vertical list. Pass columns: 3
-            // so the custom-select popup matches the layout exactly.
-            columns: 3,
-            popupWidth: 170,
-            onChange: (v) => {
-              const next = { start: { ...current.start }, end: { ...current.end } };
-              next[end].shape = v as ArrowShape;
-              for (const t of this.#targets) applyArrowHead(t, next);
-              current[end].shape = v as ArrowShape;
-              this.#commit();
-            },
-          }),
-        ),
-      );
-      body.appendChild(
-        this.#ppRow(
-          sizeLabel,
-          createCustomSelect({
-            options: sizesFor(end),
-            current: `${current[end].width}-${current[end].length}`,
-            ariaLabel: sizeLabel,
-            columns: 3, // 3×3 grid
-            popupWidth: 180,
-            onChange: (v) => {
-              const [w, l] = v.split("-") as [ArrowDim, ArrowDim];
-              const next = { start: { ...current.start }, end: { ...current.end } };
-              next[end].width = w;
-              next[end].length = l;
-              for (const t of this.#targets) applyArrowHead(t, next);
-              current[end].width = w;
-              current[end].length = l;
-              this.#commit();
-            },
-          }),
-        ),
-      );
-    };
-    push("start", "Begin arrow type", "Begin arrow size");
-    push("end", "End arrow type", "End arrow size");
-  }
-
-  /** Small SVG preview for the 3×3 arrow size grid. PowerPoint's
-   *  grid shows short stems and big, readable arrow heads so the
-   *  w × l proportions are immediately distinguishable; our earlier
-   *  version had too much stem and too-small heads, making the cells
-   *  look nearly identical. This rewrite:
-   *    - expands the dimensional scale range (sm=0.4, lg=1.7) so
-   *      `sm-sm` vs `lg-lg` differ by over 4×
-   *    - bumps the base head geometry (W=7, L=14) so even the
-   *      smallest cell has a legible arrow head
-   *    - keeps the stem short (fixed ~10px) so the head dominates
-   *      each cell, matching PowerPoint's visual priority
-   *  The preview is horizontally mirrored for the Begin-arrow picker
-   *  so the arrow faces the same way it will render on the line. */
-  // `#arrowSizePreview`, `#ppNumberInput`, `#ppSliderRow`, `#dashPreview`
-  // extracted to `./property-panel-helpers.ts` (Stage 3b-1).
+  // `#addPPArrowRows` removed in Extensions Phase C — the 4
+  // per-end pulldowns (Begin / End × Type / Size) are now schema-
+  // driven via the `arrowStartShape` / `arrowStartSize` /
+  // `arrowEndShape` / `arrowEndSize` registry defs. The variant-
+  // filter logic (Type options change based on the OTHER end's
+  // shape) lives in each shape def's `getOptions(el)` callback;
+  // the size 3×3 width × length grid is a static `options` field.
+  // Effect handlers bound in the constructor call
+  // `applyArrowHead` per target with the modified spec.
 }
 
 // `openAnchoredPopoverForColor` now lives in property-controls.ts so
