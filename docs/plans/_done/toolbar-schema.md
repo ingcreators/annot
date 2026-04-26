@@ -1,10 +1,19 @@
 # Toolbar — Schema-driven Refactor
 
-> **Status:** Queued. Sibling to the just-landed property-panel
-> schema-driven migration ([`_done/property-panel-schema.md`](./_done/property-panel-schema.md)
-> + [`_done/property-panel-schema-extensions.md`](./_done/property-panel-schema-extensions.md),
+> **Status:** Done (2026-04-26). Landed across PRs #166 (Phase 1),
+> #167 (Phase 2), #168 (Phase 3), #169 (Phase 4), #170 (Phase 5),
+> #171 (Phase 6 — this archival). Sibling to the property-panel
+> schema-driven migration ([`property-panel-schema.md`](./property-panel-schema.md)
+> + [`property-panel-schema-extensions.md`](./property-panel-schema-extensions.md),
 > PRs #153–#164). Same imperative-chain → declarative-registry
 > pattern, applied to `packages/web/src/editor/toolbar.ts`.
+>
+> **Outcome:** `toolbar.ts` shrank from 2,181 → ~1,996 LOC. All
+> tool metadata (id / label / icon / variants / preset fields /
+> element classifier / style extractor) consolidated into
+> `TOOL_REGISTRY` in core's Tier B. `toolbar-variants.ts` deleted.
+> Adding a new tool / variant / preset field is now one registry
+> entry away from working — `toolbar.ts` itself never changes.
 >
 > **Scope:** Replace the imperative wiring in `Toolbar` (tool
 > registration, preset (de)serialization, variant flyout, preset-

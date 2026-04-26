@@ -219,6 +219,35 @@ property control:
 History: the schema-driven refactor landed across PRs #153–#161,
 following [`docs/plans/_done/property-panel-schema.md`](./docs/plans/_done/property-panel-schema.md).
 
+The toolbar applies the same imperative-chain → declarative-
+registry pattern via `TOOL_REGISTRY` in
+[`packages/core/src/editor/tool-registry.ts`](./packages/core/src/editor/tool-registry.ts):
+
+- **One Tier B entry per tool** carries `id` / `label` / `icon`,
+  the variant catalog (`variants` + `variantField` +
+  `defaultVariant`), the persisted-fields list (`presetFields`),
+  the element classifier (`variantKeyForElement`), and the rubber-
+  band reader (`extractStyleFromElement`). Adding a new tool means
+  one entry here + one entry in
+  [`packages/web/src/editor/tool-factories.ts`](./packages/web/src/editor/tool-factories.ts)
+  (Tier C, holds the `CanvasManager`-bound factory). `Toolbar`
+  itself never changes.
+- **Persistence is generic.** `presetToWire` / `presetFromWire`
+  in [`packages/core/src/editor/tool-preset-serde.ts`](./packages/core/src/editor/tool-preset-serde.ts)
+  walk `presetFields` and convert via the shared `FIELD_TO_SNAKE`
+  table. Adding a new persisted attribute is one entry in the
+  matching tool's `presetFields` — the file/localStorage/
+  chrome.storage marshallers pick it up automatically.
+- **Rubber-band is generic.** `Toolbar.syncPresetFromElement`
+  runs the universal style reader (stroke / fill / dasharray /
+  opacity / linecap / linejoin) and then dispatches to
+  `TOOL_REGISTRY[toolId]?.extractStyleFromElement?.(el, preset)`
+  for tool-specific reads. The per-tool `if (toolId === "...")`
+  cascade is gone.
+
+History: PRs #166–TBD, following
+[`docs/plans/_done/toolbar-schema.md`](./docs/plans/_done/toolbar-schema.md).
+
 ### 7. Reply and commit language
 
 - Replies to the user: **Japanese**.
