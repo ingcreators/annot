@@ -446,10 +446,11 @@ export function populateToolPropertyPanel(
 
   // --- Highlight: Type = color swatch chips, Fill = Transparency -
   // The Highlight "variant" concept IS the color itself (see
-  // TOOL_VARIANTS.highlight). Each swatch routes through the
-  // standard ctx.handlePanelVariantChange path so the preset system
-  // keeps a separate Transparency value per color — yellow at 60%
-  // and red at 40% can coexist.
+  // `TOOL_REGISTRY.highlight` — `variantField: "highlightColor"`,
+  // `variants` mapped from `HIGHLIGHT_COLORS`). Each swatch routes
+  // through the standard ctx.handlePanelVariantChange path so the
+  // preset system keeps a separate Transparency value per color —
+  // yellow at 60% and red at 40% can coexist.
   if (isHighlight) {
     const currentColor = (preset.highlightColor || HIGHLIGHT_COLORS[0]!.value).toLowerCase();
     const { section: typeSection, body: typeBody } = createPropertySection("Type");

@@ -18,12 +18,9 @@ import type { ToolOptions } from "@ingcreators/annot-core/editor/tool-options";
 import { computeDasharray } from "@ingcreators/annot-core/utils";
 import { refreshArrowPath } from "@ingcreators/annot-core/editor/arrow-markers";
 
-// Phase 5 of `docs/plans/toolbar-schema.md`: `normalizeVariantSideFields`
-// moved to `tool-registry.ts` (Tier B) so the registry's
-// `extractStyleFromElement` callbacks can call it without a
-// Tier B → Tier C cycle. Re-exported here for back-compat with
-// existing callers of this file.
-export { normalizeVariantSideFields };
+// `normalizeVariantSideFields` lives in `@ingcreators/annot-core/editor`
+// (relocated in Phase 5 of `_done/toolbar-schema.md`). Callers should
+// import it from core directly; this file no longer re-exports it.
 
 /** Map a legacy tool-ID-keyed preset entry to the matching element
  *  key. `"shape"` → `"shape.rect"` (the shape tool's fallback
