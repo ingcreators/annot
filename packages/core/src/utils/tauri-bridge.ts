@@ -103,15 +103,30 @@ export async function deleteImage(id: number): Promise<void> {
 
 // --- Tool Presets ---
 
+/**
+ * Documentation type for the on-disk tool-preset shape. The Rust
+ * side (`packages/desktop/src-tauri/src/commands/settings.rs`)
+ * persists each tool's preset as an opaque YAML mapping, so any
+ * key the JS toolbar emits round-trips through Rust unchanged. The
+ * canonical schema — which keys belong to which tool — lives in
+ * `packages/core/src/editor/tool-registry.ts` (`presetFields`
+ * arrays per tool) and `packages/core/src/editor/tool-preset-serde.ts`
+ * (`FIELD_TO_SNAKE` table). The fields enumerated here are the
+ * union of what every tool's `presetFields` resolves to today,
+ * pinned for IDE autocomplete + cross-language schema discoverability.
+ *
+ * History: this interface used to declare a NARROWER schema mirroring
+ * a Rust struct that named only six fields with `#[serde(default = …)]`
+ * — but the Rust struct silently dropped all other fields on save,
+ * orphaning every variant discriminator (shape_type / arrow_head /
+ * text_variant / draw_style / redact_style / marker_shape /
+ * highlight_color), the per-end arrow shape / width / length, and
+ * stroke opacity / cap / join. The Rust struct is now schema-
+ * transparent (`HashMap<String, serde_yaml::Value>`) so all keys
+ * round-trip; the TS interface has been re-aligned to enumerate the
+ * full set toolbar.ts emits, matching reality.
+ */
 export interface ToolPreset {
-  // All fields are optional because the Rust side
-  // (`packages/desktop/src-tauri/src/commands/settings.rs`) declares
-  // every field with `#[serde(default = …)]` — missing keys round-trip
-  // as the type's default value, not as a deserialization error. This
-  // matches reality, lets per-tool `presetFields` arrays drive the
-  // wire schema (Phase 2 of `docs/plans/toolbar-schema.md`), and lets
-  // a Highlight or Redact preset persist without carrying the six
-  // historical "always-write" universal fields it doesn't read.
   stroke_color?: string;
   fill_color?: string;
   stroke_width?: number;
@@ -142,11 +157,7 @@ export interface ToolPreset {
   highlight_color?: string;
   /** Shape for the Counter (Marker) tool — circle / rect / rounded. */
   marker_shape?: string;
-  /** Stroke opacity / cap / join — added in Phase 2 of
-   *  `docs/plans/toolbar-schema.md` so per-tool presetFields can
-   *  persist them without a separate schema change. The Rust struct
-   *  doesn't model these yet, so they're silently dropped on disk
-   *  via Tauri today; localStorage / chrome.storage do persist them. */
+  /** Stroke opacity / cap / join. */
   stroke_opacity?: number;
   stroke_linecap?: string;
   stroke_linejoin?: string;
