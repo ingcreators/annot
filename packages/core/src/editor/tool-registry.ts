@@ -265,6 +265,56 @@ export interface ToolRegistryEntry {
    *  (Tier B) so the registry can call it without crossing
    *  package boundaries. */
   applyStyleToElement?: (el: SVGElement, preset: ToolOptions) => void;
+  /** How the tool's variant flyout / variant badge / toolbox-menu
+   *  submenu present each variant chip:
+   *    - `"variant"` (default): icon glyph (Material Symbols
+   *      ligature) or inline SVG, matching the chip's
+   *      `icon` / `svg` fields.
+   *    - `"color"`: filled color swatch driven by the chip's
+   *      `chipColorForVariant` accessor (or, for the legacy
+   *      Highlight catalog, the variant's `value` itself when
+   *      it's a hex string).
+   *
+   *  Default is `"variant"` for tools without sub-variants
+   *  (Crop) and for tools whose variants are SHAPE-discriminated
+   *  (shape / arrow / text / freehand / marker / redact).
+   *  Highlight is the lone `"color"` today.
+   *
+   *  Phase 1 of `docs/plans/toolbar-highlight-flyout-kind.md`:
+   *  data only — no consumer reads it yet. Phases 2–4 lift the
+   *  three `if (toolId === "highlight")` callsites in
+   *  `toolbar.ts` + `toolbar-canvas-menu.ts` onto this
+   *  discriminator. */
+  flyoutKind?: "variant" | "color";
+  /** Chip color resolver — only meaningful when
+   *  `flyoutKind === "color"`. Returns the swatch fill color for
+   *  a given variant value. When undefined, callers fall back to
+   *  the variant value itself (the identity case — works for
+   *  Highlight today because the variant value IS the hex
+   *  string). Future tools whose variant value is an opaque id
+   *  (e.g. `"red"` instead of `"#ff0000"`) override to map
+   *  through their palette.
+   *
+   *  Tier B — pure `(string) => string`; no DOM access. */
+  chipColorForVariant?: (variantValue: string) => string;
+  /** Tooltip-label resolver — overrides the default
+   *  `${label} (${variantLabel})` formatter for tools whose
+   *  variant LABEL doesn't render usefully. Receives both the
+   *  raw variant VALUE (e.g. a hex string) and the variant's
+   *  `label` field (which may not match the user-facing name).
+   *
+   *  Highlight uses this to map ad-hoc hexes (saved in legacy
+   *  documents outside the 6-color palette) to an empty string
+   *  so the tooltip falls back to the bare tool name without
+   *  parens, instead of showing "Highlight (#123456)". For
+   *  palette colors it returns the palette label ("Yellow",
+   *  "Green", …) which matches the Selection-side
+   *  "Selected Highlight (Yellow)" formatter.
+   *
+   *  When undefined, the default `${variantLabel}` format
+   *  applies. Tier B — pure `(string, string) => string`; no
+   *  DOM access. */
+  tooltipLabelForVariant?: (variantValue: string, variantLabel: string) => string;
 }
 
 /** Universal style fields most tools persist. Pulled out so each
@@ -531,6 +581,21 @@ export const TOOL_REGISTRY: Readonly<Record<string, ToolRegistryEntry>> = {
       icon: "ink_highlighter",
       label: c.label,
     })),
+    // Highlight is the lone "color" flyout — variant chips render as
+    // filled color swatches instead of icon glyphs. `chipColorForVariant`
+    // is omitted because the variant value IS the hex string (the
+    // identity case Phase 2's dispatch handles via `?? variantValue`).
+    // `tooltipLabelForVariant` returns the palette label so the
+    // toolbar button's title reads "Highlight (Yellow)" — matching
+    // the Selection-side "Selected Highlight (Yellow)" formatter —
+    // and falls back to empty for ad-hoc hexes (legacy documents
+    // outside the 6-color palette) so the tooltip becomes the bare
+    // "Highlight" instead of leaking a raw hex into the UI.
+    flyoutKind: "color",
+    tooltipLabelForVariant: (value) => {
+      const lc = value.toLowerCase();
+      return HIGHLIGHT_COLORS.find((c) => c.value === lc)?.label ?? "";
+    },
     // Highlight only persists its color + transparency — stroke
     // attrs aren't drawn on highlight rects.
     presetFields: ["highlightColor", "fillOpacity"],
