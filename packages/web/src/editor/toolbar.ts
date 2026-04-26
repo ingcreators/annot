@@ -72,14 +72,9 @@ import {
   type ToolPreset,
 } from "@ingcreators/annot-core/tauri-bridge";
 import { setTooltip } from "@ingcreators/annot-editor/tooltip";
-import { ArrowTool } from "@ingcreators/annot-editor/tools/arrow-tool";
-import { CropTool } from "@ingcreators/annot-editor/tools/crop-tool";
-import { FreehandTool, isFreehandGroup } from "@ingcreators/annot-editor/tools/freehand-tool";
-import { MarkerTool } from "@ingcreators/annot-editor/tools/marker-tool";
-import { RedactTool } from "@ingcreators/annot-editor/tools/redact-tool";
-import { ShapeTool } from "@ingcreators/annot-editor/tools/shape-tool";
-import { TextTool } from "@ingcreators/annot-editor/tools/text-tool";
+import { isFreehandGroup } from "@ingcreators/annot-editor/tools/freehand-tool";
 import type { AnnotToolbarButtonElement, AnnotToolbarElement } from "./annot-toolbar.js";
+import { TOOL_FACTORIES, type ToolFactoryDeps } from "./tool-factories.js";
 import { populateToolPropertyPanel } from "./tool-property-renderer.js";
 import { openCanvasRightClickMenu } from "./toolbar-canvas-menu.js";
 import {
@@ -279,62 +274,25 @@ export class Toolbar {
   }
 
   #registerTools(): void {
-    const defs: [string, string, string, (o: ToolOptions) => ToolBase][] = [
-      // Unified line tool — defaults to arrow-end (Arrow behavior) but
-      // the right panel exposes "none / end / both" so the same tool
-      // covers plain lines + bi-directional arrows too.
-      ["arrow", "Line", "north_east", (o) => new ArrowTool(this.#canvas, this.#history, o)],
-      // Single unified shape tool — pick rect / rounded / ellipse via
-      // the shapeType property in the right panel. Replaces what used
-      // to be three separate toolbar buttons.
-      ["shape", "Shape", "shapes", (o) => new ShapeTool(this.#canvas, this.#history, o)],
-      // Highlight — dedicated tool for semi-transparent highlight
-      // rectangles. Internally a ShapeTool with `shapeType="highlight"`
-      // forced on; the separate button lets us attach a 6-swatch
-      // color flyout (distinct from the Shape tool's icon-chip flyout)
-      // and keep the preset's `highlightColor` independent from the
-      // Shape tool's fillColor. UX modeled after PDF-annotator
-      // highlighter pens.
-      [
-        "highlight",
-        "Highlight",
-        "ink_highlighter",
-        (o) => {
-          // Force the highlight shape regardless of any stale preset
-          // state; users expect the Highlight button to always highlight.
-          o.shapeType = "highlight";
-          return new ShapeTool(this.#canvas, this.#history, o);
-        },
-      ],
-      // Unified Text tool — property panel chooses variant
-      // (plain / sticky / callout) + font family + size + color.
-      [
-        "text",
-        "Text",
-        "title",
-        (o) => {
-          const t = new TextTool(this.#canvas, this.#history, o);
-          t.onTextBoxChanged = (el) => this.#selection.select(el);
-          return t;
-        },
-      ],
-      // Unified Draw tool — pen vs highlighter picked via the
-      // right panel's drawStyle property.
-      ["freehand", "Draw", "draw", (o) => new FreehandTool(this.#canvas, this.#history, o)],
-      ["marker", "Counter", "counter_1", (o) => new MarkerTool(this.#canvas, this.#history, o)],
-      // Unified Redact tool — pick mosaic / solid / blur via the
-      // right panel's redactStyle property.
-      // Icon = `visibility_off` (eye-with-slash) rather than `blur_on`,
-      // because the tool covers mosaic / solid / blur — `blur_on`
-      // suggests only the blur variant and hurts discoverability of
-      // the other two. `visibility_off` is the universal "hide this"
-      // metaphor (used by Google Drive, YouTube, OS settings, etc.)
-      // and abstracts over all three redaction techniques.
-      ["redact", "Redact", "visibility_off", (o) => new RedactTool(this.#canvas, this.#history, o)],
-      ["crop", "Crop", "crop", (o) => new CropTool(this.#canvas, this.#history, o)],
-    ];
-    for (const [id, label, icon, factory] of defs) {
-      this.#tools.set(id, { label, icon, factory });
+    // Phase 3 of `docs/plans/toolbar-schema.md`. Loops over every
+    // entry in core's `TOOL_REGISTRY` and pairs the metadata
+    // (`label` / `icon`) with the matching Tier C factory in
+    // `TOOL_FACTORIES`. Adding a new tool is one entry in each —
+    // the toolbar registration code never changes.
+    const deps: ToolFactoryDeps = {
+      canvas: this.#canvas,
+      history: this.#history,
+      selection: this.#selection,
+    };
+    for (const id of Object.keys(TOOL_REGISTRY)) {
+      const meta = TOOL_REGISTRY[id]!;
+      const factory = TOOL_FACTORIES[id];
+      if (!factory) continue; // metadata-only registry entries (none today)
+      this.#tools.set(id, {
+        label: meta.label,
+        icon: meta.icon,
+        factory: (opts) => factory(opts, deps),
+      });
     }
   }
 
