@@ -16,6 +16,7 @@
  * here, instead of an N-ary tuple wedged into a literal.
  */
 
+import { TOOL_REGISTRY } from "@ingcreators/annot-core/editor";
 import type { ToolOptions } from "@ingcreators/annot-core/editor/tool-options";
 import type {
   CanvasManager,
@@ -76,3 +77,34 @@ export const TOOL_FACTORIES: Record<string, ToolFactory> = {
   redact: (o, { canvas, history }) => new RedactTool(canvas, history, o),
   crop: (o, { canvas, history }) => new CropTool(canvas, history, o),
 };
+
+/** Toolbar `ToolDef` shape — what `Toolbar` stores in its
+ *  `Map<toolId, ToolDef>` after registration. The factory is bound
+ *  to the toolbar's `ToolFactoryDeps` at registration time so the
+ *  per-tool callsite (button click handler) can stay
+ *  `def.factory(opts)`. Relocated here from the deleted
+ *  `toolbar-variants.ts` (Phase 4 of `docs/plans/toolbar-schema.md`). */
+export interface ToolDef {
+  label: string;
+  icon: string;
+  factory: (opts: ToolOptions) => ToolBase;
+}
+
+/** Map an annotation element back to the toolbar id that creates it.
+ *  Used for rubber-band style propagation — when the user edits an
+ *  existing shape, we want to know which tool's preset should absorb
+ *  that change. Returns `null` for elements the toolbar doesn't own.
+ *
+ *  Implemented as a thin loop over `TOOL_REGISTRY[*].variantKeyForElement`:
+ *  the registry's per-tool classifier is the single source of truth,
+ *  and any tool that returns a non-null variant key claims the
+ *  element. The first match wins, so the registry's iteration order
+ *  encodes the legacy precedence (solid-rect-redact > highlight-rect
+ *  > shape-rect, etc.). */
+export function toolIdForElement(el: SVGElement): string | null {
+  for (const [id, entry] of Object.entries(TOOL_REGISTRY)) {
+    const key = entry.variantKeyForElement?.(el);
+    if (key) return id;
+  }
+  return null;
+}

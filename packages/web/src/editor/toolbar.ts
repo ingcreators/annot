@@ -74,7 +74,6 @@ import {
 import { setTooltip } from "@ingcreators/annot-editor/tooltip";
 import { isFreehandGroup } from "@ingcreators/annot-editor/tools/freehand-tool";
 import type { AnnotToolbarButtonElement, AnnotToolbarElement } from "./annot-toolbar.js";
-import { TOOL_FACTORIES, type ToolFactoryDeps } from "./tool-factories.js";
 import { populateToolPropertyPanel } from "./tool-property-renderer.js";
 import { openCanvasRightClickMenu } from "./toolbar-canvas-menu.js";
 import {
@@ -87,11 +86,11 @@ import {
 } from "./toolbar-preset-helpers.js";
 import { openToolbarSaveMenu } from "./toolbar-save-menu.js";
 import {
-  DEFAULT_HIGHLIGHT_COLOR,
-  TOOL_VARIANTS,
+  TOOL_FACTORIES,
   type ToolDef,
+  type ToolFactoryDeps,
   toolIdForElement,
-} from "./toolbar-variants.js";
+} from "./tool-factories.js";
 
 // Minimal ambient declaration for the Chrome extension API surface
 // referenced at runtime below (all call sites are gated by
@@ -234,15 +233,17 @@ export class Toolbar {
 
     // Seed the Highlight tool preset with the default yellow color +
     // 40% fill opacity + no stroke. Keyed by `highlight.<color>` so
-    // it matches the per-color preset scheme (TOOL_VARIANTS.highlight
-    // uses the fill hex as the variant identifier). Without this,
-    // the first click on the Highlight button would pick up the
-    // global fillColor (the user's last Rect fill) and look like a
-    // normal filled rect, not a highlighter.
-    this.#presets.set(`highlight.${DEFAULT_HIGHLIGHT_COLOR}`, {
+    // it matches the per-color preset scheme — Highlight's variant
+    // IS its fill hex (`TOOL_REGISTRY.highlight.defaultVariant`
+    // resolves to the first palette entry). Without this, the first
+    // click on the Highlight button would pick up the global
+    // fillColor (the user's last Rect fill) and look like a normal
+    // filled rect, not a highlighter.
+    const defaultHighlightColor = TOOL_REGISTRY.highlight!.defaultVariant!;
+    this.#presets.set(`highlight.${defaultHighlightColor}`, {
       ...this.#options,
       shapeType: "highlight",
-      highlightColor: DEFAULT_HIGHLIGHT_COLOR,
+      highlightColor: defaultHighlightColor,
       fillOpacity: 0.4,
       strokeColor: "none",
       strokeWidth: 0,
@@ -397,7 +398,10 @@ export class Toolbar {
       // `#syncToolButtonIcon` (where the badge is created). The badge
       // stops propagation so the main tool-activation click on the
       // button doesn't also fire.
-      const hasVariantFlyout = TOOL_VARIANTS[id] || id === "highlight";
+      // Highlight's variants ARE registered in TOOL_REGISTRY (one
+      // entry per palette color) so the legacy `id === "highlight"`
+      // OR is no longer needed.
+      const hasVariantFlyout = (TOOL_REGISTRY[id]?.variants?.length ?? 0) > 0;
       // Mark the wrap so #syncToolButtonIcon knows to make its badge
       // interactive. (Tools without a flyout, e.g. Crop, don't have
       // badges at all, so this is a no-op for them.)
@@ -1191,11 +1195,11 @@ export class Toolbar {
    *  "start drawing it". Full property editing lives in the right
    *  panel; this is intentionally NOT a miniature property panel. */
   #showVariantFlyout(toolId: string, anchor: HTMLElement): void {
-    const group = TOOL_VARIANTS[toolId];
-    if (!group) return;
+    const meta = TOOL_REGISTRY[toolId];
+    if (!meta?.variants || !meta.variantField || !meta.defaultVariant) return;
 
     const preset = this.#getCurrentPreset(toolId);
-    const current = (preset[group.field] as string) || group.fallback;
+    const current = (preset[meta.variantField] as string) || meta.defaultVariant;
     const placement = this.#orientation === "vertical" ? "right" : "below";
 
     const close = openAnchoredPopover(
@@ -1204,7 +1208,7 @@ export class Toolbar {
         const flyout = document.createElement("annot-tool-flyout");
         flyout.layout = "variant";
         flyout.active = current;
-        flyout.chips = group.variants.map((v) => ({
+        flyout.chips = meta.variants!.map((v) => ({
           value: v.value,
           icon: v.icon,
           svg: v.svg,
@@ -1321,7 +1325,8 @@ export class Toolbar {
     // indicator, which was visually inconsistent.
     if (toolId === "highlight") {
       const preset = this.#getCurrentPreset(toolId);
-      const color = (preset.highlightColor as string) || DEFAULT_HIGHLIGHT_COLOR;
+      const color =
+        (preset.highlightColor as string) || TOOL_REGISTRY.highlight!.defaultVariant!;
       const badge = this.#ensureBadge(btn, toolId);
       badge.className = "tool-btn-badge tool-btn-badge-color";
       badge.textContent = ""; // no glyph — color lives in ::after
@@ -1350,11 +1355,11 @@ export class Toolbar {
       return;
     }
 
-    const group = TOOL_VARIANTS[toolId];
-    if (!group) return;
+    const meta = TOOL_REGISTRY[toolId];
+    if (!meta?.variants || !meta.variantField || !meta.defaultVariant) return;
     const preset = this.#getCurrentPreset(toolId);
-    const current = (preset[group.field] as string) || group.fallback;
-    const variant = group.variants.find((v) => v.value === current);
+    const current = (preset[meta.variantField] as string) || meta.defaultVariant;
+    const variant = meta.variants.find((v) => v.value === current);
     if (!variant) return;
 
     const badge = this.#ensureBadge(btn, toolId);
@@ -1389,7 +1394,8 @@ export class Toolbar {
   #showHighlightColorFlyout(anchor: HTMLElement): void {
     const toolId = "highlight";
     const preset = this.#getCurrentPreset(toolId);
-    const current = (preset.highlightColor as string) || DEFAULT_HIGHLIGHT_COLOR;
+    const current =
+      (preset.highlightColor as string) || TOOL_REGISTRY.highlight!.defaultVariant!;
     const placement = this.#orientation === "vertical" ? "right" : "below";
 
     const close = openAnchoredPopover(
@@ -1609,8 +1615,8 @@ export class Toolbar {
     // the last-used variant tracking so re-selecting this tool picks
     // the same variant the user just edited.
     this.#presets.set(elementKey, preset);
-    const group = TOOL_VARIANTS[toolId];
-    if (group && elementKey.includes(".")) {
+    const meta = TOOL_REGISTRY[toolId];
+    if (meta?.variants && elementKey.includes(".")) {
       const variant = elementKey.slice(elementKey.indexOf(".") + 1);
       this.#lastVariantByTool.set(toolId, variant);
     }
@@ -1915,9 +1921,9 @@ export class Toolbar {
    *  last-used variant. Returns the bare tool ID for tools without
    *  variants. */
   #currentElementKey(toolId: string): string {
-    const group = TOOL_VARIANTS[toolId];
-    if (!group) return toolId;
-    const variant = this.#lastVariantByTool.get(toolId) || group.fallback;
+    const meta = TOOL_REGISTRY[toolId];
+    if (!meta?.variants || !meta.defaultVariant) return toolId;
+    const variant = this.#lastVariantByTool.get(toolId) || meta.defaultVariant;
     return `${toolId}.${variant}`;
   }
 
@@ -1947,8 +1953,8 @@ export class Toolbar {
    *  mutate their local preset object) and then re-activate the tool
    *  so the change takes effect. */
   #changeVariant(toolId: string, newVariant: string, currentPreset: ToolOptions): ToolOptions {
-    const group = TOOL_VARIANTS[toolId];
-    if (!group) {
+    const meta = TOOL_REGISTRY[toolId];
+    if (!meta?.variants) {
       // No-op for tools without variants — just return current preset.
       return currentPreset;
     }
@@ -2088,7 +2094,7 @@ export class Toolbar {
    *      creates the tool instance, wires `onShapeComplete`, and
    *      marks the button active. */
   #activateToolWithVariant(toolId: string, variant: string | undefined): void {
-    if (variant !== undefined && TOOL_VARIANTS[toolId]) {
+    if (variant !== undefined && TOOL_REGISTRY[toolId]?.variants) {
       this.#lastVariantByTool.set(toolId, variant);
       this.#syncToolButtonIcon(toolId);
     }
