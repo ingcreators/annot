@@ -173,6 +173,32 @@ describe("buildPptxFiles slide XML", () => {
     const slide = decode(files["ppt/slides/slide1.xml"]!);
     expect(slide).toMatchSnapshot();
   });
+
+  it("curved arrow emits <a:custGeom> with quadratic Bezier", () => {
+    // ArrowTool emits a `<g data-type="arrow">` with `data-cx` /
+    // `data-cy` for the quadratic-Bezier control point when the
+    // user drags a curved arrow. PPTX export's `buildLine`
+    // detects the curve via `getEffectiveLineEndpoints` (which
+    // routes through `readArrowControl`) and swaps the
+    // `<a:prstGeom prst="line">` for `<a:custGeom>` with a
+    // `<a:moveTo>` + `<a:quadBezTo>` path so the curve survives
+    // the paste. Pin the current XML so phase 3's migration to
+    // the shared builder produces the same output.
+    const annotations = makeAnnotationGroup(
+      makeArrowGroup({
+        x1: 50,
+        y1: 100,
+        x2: 250,
+        y2: 100,
+        endShape: "triangle",
+        controlX: 150,
+        controlY: 30,
+      }),
+    );
+    const files = buildPptxFiles(buildInput(annotations));
+    const slide = decode(files["ppt/slides/slide1.xml"]!);
+    expect(slide).toMatchSnapshot();
+  });
 });
 
 function makeArrowGroup(opts: {
@@ -181,11 +207,17 @@ function makeArrowGroup(opts: {
   x2: number;
   y2: number;
   endShape: string;
+  /** Optional quadratic-Bezier control point. Set together
+   *  with `controlY`; when populated, the arrow renders as a
+   *  curve via `<a:custGeom>` instead of `<a:prstGeom prst="line">`. */
+  controlX?: number;
+  controlY?: number;
 }): SVGGElement {
   // Mirror of ArrowTool's `<g data-type="arrow">` skeleton. The
   // PPTX export's `buildLine` reads endpoints from `data-x1` /
-  // `data-y1` / `data-x2` / `data-y2` and arrow spec from the
-  // `data-arrow-*-shape` attrs.
+  // `data-y1` / `data-x2` / `data-y2`, arrow spec from the
+  // `data-arrow-*-shape` attrs, and (when curved) the control
+  // point from `data-cx` / `data-cy` via `readArrowControl`.
   const g = svg("g");
   g.setAttribute("data-type", "arrow");
   g.setAttribute("data-x1", String(opts.x1));
@@ -197,6 +229,10 @@ function makeArrowGroup(opts: {
   g.setAttribute("data-arrow-end-shape", opts.endShape);
   g.setAttribute("data-arrow-end-width", "med");
   g.setAttribute("data-arrow-end-length", "med");
+  if (opts.controlX != null && opts.controlY != null) {
+    g.setAttribute("data-cx", String(opts.controlX));
+    g.setAttribute("data-cy", String(opts.controlY));
+  }
   return g;
 }
 
