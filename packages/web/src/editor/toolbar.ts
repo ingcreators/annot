@@ -1014,7 +1014,13 @@ export class Toolbar {
    * mode) or when the host decides (e.g. when switching tools).
    */
   renderToolProperties(toolId: string, container: HTMLElement): void {
-    this.#populateToolProperties(toolId, container);
+    populateToolPropertyPanel(toolId, container, {
+      canvas: this.#canvas,
+      options: this.#options,
+      getCurrentPreset: (id) => this.#getCurrentPreset(id),
+      saveCurrentPreset: (id, p) => this.#saveCurrentPreset(id, p),
+      handlePanelVariantChange: (id, v, p) => this.#handlePanelVariantChange(id, v, p),
+    });
   }
 
   /** Concrete, user-facing ELEMENT name for what the tool is about to
@@ -1147,7 +1153,7 @@ export class Toolbar {
       // variant-change machinery (that only touches variant-defining
       // attrs like data-arrow-*-shape), so reading them off `el`
       // yields the user's pre-conversion style.
-      preset = this.#seedPresetFromElement(el, toolId, elementKey);
+      preset = seedPresetFromElement(el, toolId, elementKey, this.#options);
       this.#presets.set(elementKey, preset);
       this.#savePresetsToFile();
     }
@@ -1157,37 +1163,13 @@ export class Toolbar {
       const variant = elementKey.slice(elementKey.indexOf(".") + 1);
       this.#lastVariantByTool.set(toolId, variant);
     }
-    this.#applyPresetStyleAttrs(el, preset);
+    applyPresetStyleAttrs(el, preset);
     // Refresh the tool button's badge so the sidebar reflects the
     // newly-active variant. Without this, converting a Counter from
     // Circle → Rounded via the property-panel Type picker leaves the
     // toolbar badge still showing the circle glyph, which confuses
     // the "what's next click going to create?" reading.
     this.#syncToolButtonIcon(toolId);
-  }
-
-  /** Construct a ToolOptions seed by reading style attrs off an
-   *  existing element. Used by applyElementVariantPreset when the
-   *  target variant has no saved preset yet — the new preset
-   *  inherits the element's current look so variant conversion
-   *  doesn't surprise the user with unrelated defaults. */
-  #seedPresetFromElement(el: SVGElement, toolId: string, elementKey: string): ToolOptions {
-    return seedPresetFromElement(el, toolId, elementKey, this.#options);
-  }
-
-  /** Write the "style" fields of a preset (color / width / dash /
-   *  opacity / linecap / linejoin) onto an existing element.
-   *  Deliberately does NOT touch fields that define the element's
-   *  type/variant (shapeType, arrowHead, textVariant, etc.) because
-   *  those were already established by the variant-change path that
-   *  invoked this helper.
-   *
-   *  Some tools store their "color" on a child element rather than
-   *  the outer wrapper `<g>` (marker: bg primitive's `fill`; text:
-   *  `<text>`'s `fill`). For those cases we dispatch to a tool-
-   *  specific helper instead of writing stroke/fill directly to `el`. */
-  #applyPresetStyleAttrs(el: SVGElement, preset: ToolOptions): void {
-    applyPresetStyleAttrs(el, preset);
   }
 
   /** Show a compact variant picker for tools whose flyout is just a
@@ -1290,8 +1272,8 @@ export class Toolbar {
     // marked as having a flyout (set in #render). Tools without a
     // flyout (Crop) never reach this codepath anyway — the badge is
     // only created from inside #syncToolButtonIcon, which is only
-    // called for tools in TOOL_VARIANTS or for Highlight. Still,
-    // guard for safety.
+    // called for tools whose `TOOL_REGISTRY` entry carries a
+    // `variants` catalogue. Still, guard for safety.
     const wrap = btn.closest<HTMLElement>(".tool-btn-wrap");
     if (wrap?.dataset.hasFlyout === "1") {
       badge.addEventListener("click", (e) => {
@@ -1557,39 +1539,6 @@ export class Toolbar {
     return btn;
   }
 
-  /**
-   * Build the property-control DOM for a given tool into `container`.
-   *
-   * Layout mirrors the SELECTION-side property panel so the user sees
-   * the same controls, same labels, same pulldown style regardless of
-   * whether they're configuring "next draw" (Tool mode) or editing an
-   * existing shape (Selection mode). The helpers come from
-   * `property-controls.ts` which is the single source of truth for
-   * pp-row / pp-section / pp-color-btn / pp-number / createCustomSelect
-   * construction.
-   *
-   * Every tool renders:
-   *   1. A "Type" section — chip row for the variant picker (kept as
-   *      chips for now because variants are icon-dense and benefit
-   *      from always-visible choices rather than a pulldown).
-   *   2. Tool-specific appearance controls — Color / Width / Dash
-   *      type / Cap type / Fill / Opacity / Font / Size as
-   *      applicable. All use the shared pp-* helpers.
-   *
-   * Labels are unified with the selection panel:
-   *   "Type" (variant picker), "Color", "Transparency", "Width",
-   *   "Dash type", "Cap type", "Fill", "Opacity", "Font", "Size".
-   */
-  #populateToolProperties(toolId: string, menu: HTMLElement): void {
-    populateToolPropertyPanel(toolId, menu, {
-      canvas: this.#canvas,
-      options: this.#options,
-      getCurrentPreset: (id) => this.#getCurrentPreset(id),
-      saveCurrentPreset: (id, p) => this.#saveCurrentPreset(id, p),
-      handlePanelVariantChange: (id, v, p) => this.#handlePanelVariantChange(id, v, p),
-    });
-  }
-
   // --- Preset persistence ---
   //
   // Phase 2 of `docs/plans/toolbar-schema.md`. The four save / load
@@ -1644,11 +1593,6 @@ export class Toolbar {
       // No file or parse error, use defaults
     }
   }
-
-  // `#migrateLegacyPresetKey` extracted to `./toolbar-preset-helpers.ts`
-  // (Stage 3a-5). Calls below use the imported `migrateLegacyPresetKey`
-  // directly; no per-instance method wrapper is needed since the helper
-  // has no `this.#` dependencies.
 
   #savePresetsToFile(): void {
     if (isTauri) {
@@ -1877,28 +1821,6 @@ export class Toolbar {
     return result;
   }
 
-  /** Clamp tool-specific "override" fields into the newly-picked
-   *  variant's valid range. For Arrow this enforces the rule:
-   *    - Line:         begin "none",   end "none"
-   *    - Arrow:        begin "none",   end != "none"
-   *    - Double arrow: begin != "none", end != "none"
-   *
-   *  CLAMP semantics (not full reset): if a per-end shape is already
-   *  valid for the new variant (e.g. end=diamond when switching to
-   *  Double arrow), we KEEP it. Only invalid values get adjusted:
-   *    - If the variant requires "none" at this end → force "none"
-   *    - If the variant requires non-"none" at this end and current
-   *      is "none" → default to "triangle" (canonical marker)
-   *
-   *  This design lets variant be the "type constraint" while per-end
-   *  shapes are free customization within the constraint — matching
-   *  how Shape's variant defines the element type while color/width
-   *  stay independently customizable.
-   */
-  // `#normalizeVariantSideFields` extracted to `./toolbar-preset-helpers.ts`
-  // (Stage 3a-5). Call sites use the imported `normalizeVariantSideFields`
-  // directly.
-
   /** In-panel variant chip handler — swap the tool's variant, mutate
    *  the captured preset reference so sibling controls stay in sync,
    *  persist, and re-activate the tool so the right panel re-renders
@@ -1919,10 +1841,6 @@ export class Toolbar {
     // property controls would still show the OLD variant's values.
     this.#activateToolById(toolId);
   }
-
-  // `#elementKeyFromElement` extracted to `./toolbar-preset-helpers.ts`
-  // (Stage 3a-5). Call sites use the imported `elementKeyFromElement`
-  // directly.
 
   #btn(icon: string, title: string): HTMLButtonElement {
     const b = document.createElement("button");
