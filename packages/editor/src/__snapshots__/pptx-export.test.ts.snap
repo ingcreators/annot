@@ -1,5 +1,48 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
+exports[`buildPptxFiles slide XML > curved arrow emits <a:custGeom> with quadratic Bezier 1`] = `
+"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+  <p:cSld>
+    <p:spTree>
+      <p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>
+      <p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="7620000" cy="5715000"/><a:chOff x="0" y="0"/><a:chExt cx="7620000" cy="5715000"/></a:xfrm></p:grpSpPr>
+      
+      <p:sp>
+  <p:nvSpPr>
+    <p:cNvPr id="2" name="CurvedArrow 2"/>
+    <p:cNvSpPr/>
+    <p:nvPr/>
+  </p:nvSpPr>
+  <p:spPr>
+    <a:xfrm>
+      <a:off x="476250" y="285750"/>
+      <a:ext cx="1905000" cy="666750"/>
+    </a:xfrm>
+    <a:custGeom>
+      <a:avLst/>
+      <a:gdLst/>
+      <a:ahLst/>
+      <a:cxnLst/>
+      <a:rect l="0" t="0" r="1905000" b="666750"/>
+      <a:pathLst>
+        <a:path w="1905000" h="666750">
+          <a:moveTo><a:pt x="0" y="666750"/></a:moveTo>
+          <a:quadBezTo>
+            <a:pt x="952500" y="0"/>
+            <a:pt x="1905000" y="666750"/>
+          </a:quadBezTo>
+        </a:path>
+      </a:pathLst>
+    </a:custGeom>
+    <a:ln w="38100"><a:solidFill><a:srgbClr val="FF0000"></a:srgbClr></a:solidFill><a:tailEnd type="triangle" w="med" len="med"/></a:ln>
+  </p:spPr>
+</p:sp>
+    </p:spTree>
+  </p:cSld>
+</p:sld>"
+`;
+
 exports[`buildPptxFiles slide XML > emits <p:pic> background when the canvas has an image 1`] = `
 "<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
