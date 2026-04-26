@@ -30,6 +30,7 @@ import type {
   ImageRecordUpdate,
   StorageProvider,
   StorageWithForceRefresh,
+  StorageWithRateLimit,
   StorageWithResync,
   StorageWithTokenRefresher,
 } from "@ingcreators/annot-core/storage";
@@ -74,7 +75,6 @@ import {
 import { GitHubTreeState } from "./github-tree-state.js";
 import {
   generateThumbnailFromBlob,
-  generateThumbnailFromDataUrl,
 } from "./image-thumbnail.js";
 
 interface TreeEntry {
@@ -113,7 +113,8 @@ export class GitHubStore
     StorageProvider,
     StorageWithResync,
     StorageWithForceRefresh,
-    StorageWithTokenRefresher
+    StorageWithTokenRefresher,
+    StorageWithRateLimit
 {
   /** HTTP layer — owns token, token-refresh, rate-limit state, and
    *  the GitHub-specific error mapping. Synthesised in the public
@@ -1413,13 +1414,6 @@ export class GitHubStore
     return this.#tree.hasFolder(path);
   }
 
-  // ===========================================================================
-  // Thumbnail (client-side; identical to other stores)
-  // ===========================================================================
-
-  async generateThumbnail(dataUrl: string, maxWidth = 480): Promise<string> {
-    return generateThumbnailFromDataUrl(dataUrl, maxWidth);
-  }
 
   // ===========================================================================
   // XMP build helper — delegates to the shared `image-encode.ts`

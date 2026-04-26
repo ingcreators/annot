@@ -21,6 +21,7 @@ import type {
   ImageRecordUpdate,
   StorageProvider,
   StorageWithForceRefresh,
+  StorageWithInit,
   StorageWithResync,
 } from "@ingcreators/annot-core/storage";
 import {
@@ -56,7 +57,9 @@ interface IndexData {
   images: Record<string, IndexEntry>;
 }
 
-export class DeviceStore implements StorageProvider, StorageWithResync, StorageWithForceRefresh {
+export class DeviceStore
+  implements StorageProvider, StorageWithInit, StorageWithResync, StorageWithForceRefresh
+{
   #root: FileSystemDirectoryHandle;
   #index: IndexData = { images: {} };
 
@@ -156,7 +159,7 @@ export class DeviceStore implements StorageProvider, StorageWithResync, StorageW
         entry.height = meta?.height || entry.height || 0;
         try {
           const dataUrl = await this.#fileToDataUrl(file);
-          entry.thumbnailDataUrl = await this.generateThumbnail(dataUrl);
+          entry.thumbnailDataUrl = await generateThumbnailFromDataUrl(dataUrl);
         } catch {
           /* keep old thumbnail on failure */
         }
@@ -258,7 +261,7 @@ export class DeviceStore implements StorageProvider, StorageWithResync, StorageW
               height = meta.height || 0;
             }
             const dataUrl = await this.#fileToDataUrl(file);
-            thumbnailDataUrl = await this.generateThumbnail(dataUrl);
+            thumbnailDataUrl = await generateThumbnailFromDataUrl(dataUrl);
           } catch {
             /* skip on error — entry still added with empty tags */
           }
@@ -363,7 +366,7 @@ export class DeviceStore implements StorageProvider, StorageWithResync, StorageW
       throw e;
     }
 
-    const thumbnailDataUrl = await this.generateThumbnail(data.originalDataUrl);
+    const thumbnailDataUrl = await generateThumbnailFromDataUrl(data.originalDataUrl);
     let mtime = 0;
     try {
       mtime = (await fileHandle.getFile()).lastModified;
@@ -689,12 +692,6 @@ export class DeviceStore implements StorageProvider, StorageWithResync, StorageW
       if (f) result.push(f);
     }
     return result;
-  }
-
-  // ---- Thumbnail ----
-
-  async generateThumbnail(dataUrl: string, maxWidth = 480): Promise<string> {
-    return generateThumbnailFromDataUrl(dataUrl, maxWidth);
   }
 
   // ---- Helpers ----

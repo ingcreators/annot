@@ -607,8 +607,8 @@ const extensionStorage: StorageProvider = {
   async getBreadcrumb(path) {
     return send({ action: "getBreadcrumb", path });
   },
-
-  async generateThumbnail(dataUrl, maxWidth) {
-    return registry.getBrowserStore().generateThumbnail(dataUrl, maxWidth);
-  },
 };
+// (Thumbnail generation is now a free function — see
+//  `image-thumbnail.ts`'s `generateThumbnailFromDataUrl`. Callers
+//  that previously did `storage.generateThumbnail(...)` import the
+//  helper directly.)

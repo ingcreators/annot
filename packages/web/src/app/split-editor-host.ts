@@ -15,6 +15,7 @@ import { getFilename } from "@ingcreators/annot-core/storage";
 import { assertNonNull, newIdB58 } from "@ingcreators/annot-core/utils";
 import type { SplitEditor, SplitEditorSlice } from "../editor/split-editor.js";
 import { loadEncodeOptions } from "../encode-options.js";
+import { generateThumbnailFromDataUrl } from "../storage/image-thumbnail.js";
 import { showAlertDialog } from "../ui/dialog.js";
 import { encodeCaptureInWorker } from "../workers/encode-client.js";
 import { bumpFilenameSuffix, retryFsOp } from "./fs-utils.js";
@@ -186,7 +187,7 @@ export class SplitEditorHost {
       const encoded = await encodeCaptureInWorker(slice.dataUrl, encodeOptions);
       const finalDataUrl = encoded.dataUrl;
       const ext = encoded.chosen === "jpeg" ? ".jpg" : ".png";
-      const thumb = await storage.generateThumbnail(finalDataUrl);
+      const thumb = await generateThumbnailFromDataUrl(finalDataUrl);
       const page = String(i + 1).padStart(pad, "0");
       const tmpFilename = `${tempPrefix}${stem}-p${page}${ext}`;
       const savedPath = await retryFsOp(() =>

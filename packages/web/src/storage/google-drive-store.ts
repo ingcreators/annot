@@ -32,7 +32,6 @@ import {
   type GoogleDriveApiClient,
 } from "./google-drive-api-client.js";
 import { buildEditableImageBlob } from "./image-encode.js";
-import { generateThumbnailFromDataUrl } from "./image-thumbnail.js";
 
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
 const UPLOAD_API = "https://www.googleapis.com/upload/drive/v3";
@@ -682,12 +681,6 @@ export class GoogleDriveStore
       if (f) result.push(f);
     }
     return result;
-  }
-
-  // ---- Thumbnail ----
-
-  async generateThumbnail(dataUrl: string, maxWidth = 480): Promise<string> {
-    return generateThumbnailFromDataUrl(dataUrl, maxWidth);
   }
 
   // ---- Helpers ----

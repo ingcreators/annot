@@ -122,11 +122,15 @@ export type {
   PageMetadata,
   StorageProvider,
   StorageWithForceRefresh,
+  StorageWithInit,
+  StorageWithRateLimit,
   StorageWithResync,
   StorageWithTokenRefresher,
 } from "./storage/types.js";
 export {
   supportsForceRefresh,
+  supportsInit,
+  supportsRateLimit,
   supportsResync,
   supportsTokenRefresher,
 } from "./storage/types.js";

@@ -20,7 +20,6 @@ import {
   uniquifyFilenameAsync,
   validateName,
 } from "@ingcreators/annot-core/storage";
-import { generateThumbnailFromDataUrl } from "./image-thumbnail.js";
 
 const DB_NAME = "annot";
 const DB_VERSION = 2; // v2: path-based keys
@@ -410,9 +409,7 @@ export class BrowserStore implements StorageProvider {
     return result;
   }
 
-  // ---- Utility ----
-
-  async generateThumbnail(dataUrl: string, maxWidth = 480): Promise<string> {
-    return generateThumbnailFromDataUrl(dataUrl, maxWidth);
-  }
+  // (Thumbnail generation lives in
+  //  `@ingcreators/annot-web/storage/image-thumbnail` —
+  //  callers import `generateThumbnailFromDataUrl` directly.)
 }
