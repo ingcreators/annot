@@ -36,7 +36,6 @@ import type {
 } from "@ingcreators/annot-core/storage";
 import {
   ancestorPaths,
-  drawToThumbCanvas,
   getFilename,
   getParentPath,
   joinPath,
@@ -44,7 +43,7 @@ import {
   uniquifyFilename,
   validateName,
 } from "@ingcreators/annot-core/storage";
-import { createEditableImage, readEditableImage } from "@ingcreators/annot-core/xmp";
+import { createEditableImage } from "@ingcreators/annot-core/xmp";
 import { loadEncodeOptions } from "../encode-options.js";
 import { encodeCaptureInWorker } from "../workers/encode-client.js";
 import type { GitHubCommitSummary, GitHubRepoRef } from "./github-auth.js";
@@ -52,9 +51,7 @@ import { getLastCommitForPath } from "./github-auth.js";
 
 import {
   blobToBase64,
-  blobToDataUrl,
   base64ToBytes,
-  bytesToDataUrl,
   inferMimeFromPath,
   type GitHubError,
   GITHUB_API,
@@ -69,6 +66,7 @@ import {
   type RateLimitListener,
 } from "./github-api-client.js";
 import { GitHubBlobCache } from "./github-blob-cache.js";
+import { decodeImageRecord } from "./github-image-codec.js";
 import {
   commitMessage as buildCommitMessage,
   contentsUrl as buildContentsUrl,
@@ -77,6 +75,10 @@ import {
   relPath as toRelPath,
 } from "./github-paths.js";
 import { GitHubTreeState } from "./github-tree-state.js";
+import {
+  generateThumbnailFromBlob,
+  generateThumbnailFromDataUrl,
+} from "./image-thumbnail.js";
 
 interface TreeEntry {
   path: string; // repo-relative
@@ -850,24 +852,10 @@ export class GitHubStore
   }
 
   #decodeRecord(relPath: string, bytes: Uint8Array): ImageRecord {
-    const folderPath = getParentPath(relPath);
-    const xmp = readEditableImage(bytes);
-    const meta = this.#cache.getMeta(relPath);
-    const originalDataUrl =
-      xmp?.originalImageDataUrl || bytesToDataUrl(bytes, inferMimeFromPath(relPath));
-    const record: ImageRecord = {
-      path: relPath,
-      folderPath,
-      originalDataUrl,
-      thumbnailDataUrl: "",
-      annotationsSvg: xmp?.annotationsSvg || "",
-      width: xmp?.width || 0,
-      height: xmp?.height || 0,
-      sourceUrl: "",
-      tags: xmp?.tags || {},
-      createdAt: meta?.createdAt || "",
-      updatedAt: meta?.updatedAt || "",
-    };
+    // Pure decode lives in `./github-image-codec.ts`; the cache
+    // write stays here because it's tied to this store instance's
+    // cache, not the codec.
+    const record = decodeImageRecord(relPath, bytes, this.#cache.getMeta(relPath));
     this.#cache.setRecord(relPath, record);
     return record;
   }
@@ -939,15 +927,11 @@ export class GitHubStore
 
         const mime = inferMimeFromPath(relPath);
         const blob = new Blob([fetched.bytes as BlobPart], { type: mime });
-        const bmp = await createImageBitmap(blob);
-        const canvas = new OffscreenCanvas(1, 1);
-        const ctx = canvas.getContext("2d")!;
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = "high";
-        drawToThumbCanvas(ctx, canvas, bmp, bmp.width, bmp.height, 480);
-        bmp.close();
-        const outBlob = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.85 });
-        const dataUrl = await blobToDataUrl(outBlob);
+        const dataUrl = await generateThumbnailFromBlob(blob);
+        // Empty string signals decode/resize failure inside the
+        // helper — skip caching so the gallery falls through to its
+        // placeholder UI instead of remembering an unrenderable thumb.
+        if (!dataUrl) return;
         // Re-check after the (synchronous-ish but yielding) encode —
         // a save could have finished between our SHA snapshot and
         // the canvas work.
@@ -1437,21 +1421,7 @@ export class GitHubStore
   // ===========================================================================
 
   async generateThumbnail(dataUrl: string, maxWidth = 480): Promise<string> {
-    try {
-      const resp = await fetch(dataUrl);
-      const blob = await resp.blob();
-      const bmp = await createImageBitmap(blob);
-      const canvas = new OffscreenCanvas(1, 1);
-      const ctx = canvas.getContext("2d")!;
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = "high";
-      drawToThumbCanvas(ctx, canvas, bmp, bmp.width, bmp.height, maxWidth);
-      bmp.close();
-      const outBlob = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.85 });
-      return blobToDataUrl(outBlob);
-    } catch {
-      return "";
-    }
+    return generateThumbnailFromDataUrl(dataUrl, maxWidth);
   }
 
   // ===========================================================================
