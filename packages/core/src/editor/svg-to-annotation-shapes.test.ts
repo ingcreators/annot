@@ -19,6 +19,18 @@ import {
   svgElementToAnnotationShape,
 } from "./svg-to-annotation-shapes.js";
 
+// happy-dom ships `DOMPoint` but not `DOMPoint.prototype.matrixTransform`
+// (used by `getEffectiveLineEndpoints` for the rotation / flip / non-zero
+// translate path). Patch in a 2-D affine-transform implementation so the
+// arrow-group tests below can exercise the matrix branch.
+if (typeof DOMPoint !== "undefined" && !DOMPoint.prototype.matrixTransform) {
+  DOMPoint.prototype.matrixTransform = function (this: DOMPoint, m: DOMMatrix) {
+    const x = this.x;
+    const y = this.y;
+    return new DOMPoint(m.a * x + m.c * y + m.e, m.b * x + m.d * y + m.f);
+  };
+}
+
 const SVG_NS = "http://www.w3.org/2000/svg";
 
 function svg<K extends keyof SVGElementTagNameMap>(

@@ -323,6 +323,15 @@ export interface AnnotationShape {
   has_arrow?: boolean;
   arrow_head_start?: boolean;
   arrow_head_end?: boolean;
+  /** Quadratic-Bezier control-point coordinates for a curved
+   *  arrow, in the same canvas space as `x1/y1/x2/y2`. Both
+   *  populated together; either being absent renders the arrow
+   *  as a straight `<a:prstGeom prst="line">` connector. When
+   *  populated the shared builder swaps to `<a:custGeom>` with a
+   *  `<a:moveTo>` + `<a:quadBezTo>` path so the curve survives
+   *  the paste. */
+  arrow_curve_cx?: number;
+  arrow_curve_cy?: number;
 
   // ---- Text variant ----
   text?: string;

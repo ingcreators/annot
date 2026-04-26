@@ -8,36 +8,7 @@ exports[`buildPptxFiles slide XML > curved arrow emits <a:custGeom> with quadrat
       <p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>
       <p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="7620000" cy="5715000"/><a:chOff x="0" y="0"/><a:chExt cx="7620000" cy="5715000"/></a:xfrm></p:grpSpPr>
       
-      <p:sp>
-  <p:nvSpPr>
-    <p:cNvPr id="2" name="CurvedArrow 2"/>
-    <p:cNvSpPr/>
-    <p:nvPr/>
-  </p:nvSpPr>
-  <p:spPr>
-    <a:xfrm>
-      <a:off x="476250" y="285750"/>
-      <a:ext cx="1905000" cy="666750"/>
-    </a:xfrm>
-    <a:custGeom>
-      <a:avLst/>
-      <a:gdLst/>
-      <a:ahLst/>
-      <a:cxnLst/>
-      <a:rect l="0" t="0" r="1905000" b="666750"/>
-      <a:pathLst>
-        <a:path w="1905000" h="666750">
-          <a:moveTo><a:pt x="0" y="666750"/></a:moveTo>
-          <a:quadBezTo>
-            <a:pt x="952500" y="0"/>
-            <a:pt x="1905000" y="666750"/>
-          </a:quadBezTo>
-        </a:path>
-      </a:pathLst>
-    </a:custGeom>
-    <a:ln w="38100"><a:solidFill><a:srgbClr val="FF0000"></a:srgbClr></a:solidFill><a:tailEnd type="triangle" w="med" len="med"/></a:ln>
-  </p:spPr>
-</p:sp>
+      <p:sp><p:nvSpPr><p:cNvPr id="2" name="L2"/><p:cNvSpPr/></p:nvSpPr><a:spPr><a:xfrm><a:off x="476250" y="285750"/><a:ext cx="1905000" cy="666750"/></a:xfrm><a:custGeom><a:avLst/><a:gdLst/><a:ahLst/><a:cxnLst/><a:rect l="0" t="0" r="1905000" b="666750"/><a:pathLst><a:path w="1905000" h="666750"><a:moveTo><a:pt x="0" y="666750"/></a:moveTo><a:quadBezTo><a:pt x="952500" y="0"/><a:pt x="1905000" y="666750"/></a:quadBezTo></a:path></a:pathLst></a:custGeom><a:ln w="38100"><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill><a:tailEnd type="triangle" w="med" len="med"/></a:ln></a:spPr></p:sp>
     </p:spTree>
   </p:cSld>
 </p:sld>"
@@ -85,21 +56,7 @@ exports[`buildPptxFiles slide XML > pins the current output for every emitter 1`
       <p:sp><p:nvSpPr><p:cNvPr id="2" name="R2"/><p:cNvSpPr/></p:nvSpPr><a:spPr><a:xfrm><a:off x="95250" y="190500"/><a:ext cx="952500" cy="762000"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:solidFill><a:srgbClr val="FFEEAA"><a:alpha val="50000"/></a:srgbClr></a:solidFill><a:ln w="38100"><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill></a:ln></a:spPr></p:sp>
 <p:sp><p:nvSpPr><p:cNvPr id="3" name="R3"/><p:cNvSpPr/></p:nvSpPr><a:spPr><a:xfrm><a:off x="1143000" y="190500"/><a:ext cx="952500" cy="762000"/></a:xfrm><a:prstGeom prst="roundRect"><a:avLst/></a:prstGeom><a:noFill/><a:ln w="25400"><a:solidFill><a:srgbClr val="0000FF"/></a:solidFill></a:ln></a:spPr></p:sp>
 <p:sp><p:nvSpPr><p:cNvPr id="4" name="E4"/><p:cNvSpPr/></p:nvSpPr><a:spPr><a:xfrm><a:off x="2381250" y="190500"/><a:ext cx="952500" cy="762000"/></a:xfrm><a:prstGeom prst="ellipse"><a:avLst/></a:prstGeom><a:noFill/><a:ln w="38100"><a:solidFill><a:srgbClr val="00FF00"/></a:solidFill></a:ln></a:spPr></p:sp>
-<p:cxnSp>
-  <p:nvCxnSpPr>
-    <p:cNvPr id="5" name="Line 5"/>
-    <p:cNvCxnSpPr/>
-    <p:nvPr/>
-  </p:nvCxnSpPr>
-  <p:spPr>
-    <a:xfrm>
-      <a:off x="95250" y="2381250"/>
-      <a:ext cx="1905000" cy="9525"/>
-    </a:xfrm>
-    <a:prstGeom prst="line"><a:avLst/></a:prstGeom>
-    <a:ln w="38100"><a:solidFill><a:srgbClr val="FF0000"></a:srgbClr></a:solidFill><a:tailEnd type="triangle" w="med" len="med"/></a:ln>
-  </p:spPr>
-</p:cxnSp>
+<p:cxnSp><p:nvCxnSpPr><p:cNvPr id="5" name="L5"/><p:cNvCxnSpPr/></p:nvCxnSpPr><a:spPr><a:xfrm><a:off x="95250" y="2381250"/><a:ext cx="1905000" cy="9525"/></a:xfrm><a:prstGeom prst="line"><a:avLst/></a:prstGeom><a:ln w="38100"><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill><a:tailEnd type="triangle" w="med" len="med"/></a:ln></a:spPr></p:cxnSp>
 <p:sp><p:nvSpPr><p:cNvPr id="6" name="T6"/><p:cNvSpPr txBox="1"/></p:nvSpPr><a:spPr><a:xfrm><a:off x="95250" y="3333750"/><a:ext cx="1905000" cy="342900"/></a:xfrm><a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val 5000"/></a:avLst></a:prstGeom><a:noFill/><a:ln w="9525"><a:solidFill><a:srgbClr val="BFBFBF"/></a:solidFill></a:ln></a:spPr><p:txBody><a:bodyPr wrap="square" rtlCol="0" lIns="91440" tIns="45720" rIns="91440" bIns="45720"/><a:lstStyle/><a:p><a:r><a:rPr lang="ja-JP" sz="1800" dirty="0"><a:solidFill><a:srgbClr val="000000"/></a:solidFill></a:rPr><a:t></a:t></a:r></a:p></p:txBody></p:sp>
 <p:sp><p:nvSpPr><p:cNvPr id="7" name="F7"/><p:cNvSpPr/></p:nvSpPr><a:spPr><a:xfrm><a:off x="0" y="3810000"/><a:ext cx="1905000" cy="95250"/></a:xfrm><a:custGeom><a:avLst/><a:gdLst/><a:ahLst/><a:cxnLst/><a:rect l="0" t="0" r="1905000" b="95250"/><a:pathLst><a:path w="1905000" h="95250"><a:moveTo><a:pt x="0" y="0"/></a:moveTo><a:lnTo><a:pt x="952500" y="95250"/></a:lnTo><a:lnTo><a:pt x="1905000" y="47625"/></a:lnTo></a:path></a:pathLst></a:custGeom><a:noFill/><a:ln w="25400" cap="rnd"><a:solidFill><a:srgbClr val="FF00FF"/></a:solidFill><a:round/></a:ln></a:spPr></p:sp>
 <p:grpSp>

@@ -90,6 +90,27 @@ function arrow(): AnnotationShape {
   };
 }
 
+function curvedArrow(): AnnotationShape {
+  // Quadratic Bezier with the control point at (150, 30) — outside
+  // the straight-line bbox, so the bbox computation must include
+  // the control point or the curve gets clipped on paste.
+  return {
+    type: "arrow",
+    x1: 50,
+    y1: 100,
+    x2: 250,
+    y2: 100,
+    arrow_curve_cx: 150,
+    arrow_curve_cy: 30,
+    stroke: "#ff0000",
+    stroke_width: 3,
+    has_arrow: true,
+    arrow_shape_end: "triangle",
+    arrow_width_end: "md",
+    arrow_length_end: "md",
+  };
+}
+
 function marker(): AnnotationShape {
   return {
     type: "marker",
@@ -248,6 +269,30 @@ describe("buildDrawingXml byte-equivalence with Rust GVML goldens", () => {
       hasImage: false,
     });
     expect(drawing).toBe(EXPECTED_CALLOUT_WITH_TAIL);
+  });
+
+  it("emits <a:custGeom> with quadratic Bezier for curved arrows", () => {
+    // The Rust GVML emitter never modeled curved arrows
+    // (clipboard.rs's gvml_line had no curve branch); after
+    // pptx-export-shared-builder-finish phase 3 the shared
+    // builder gains the `arrow_curve_cx` / `arrow_curve_cy`
+    // path. This fixture pins the new XML so subsequent
+    // changes can't silently drop the control point.
+    const { drawing } = buildDrawingXml({
+      shapes: [curvedArrow()],
+      width: 800,
+      height: 600,
+      hasImage: false,
+    });
+    // Bbox includes the control point: xs=[50, 150, 250],
+    // ys=[100, 30, 100] → left=50, top=30, w=200, h=70.
+    // EMU: left=476250, top=285750, w=1905000, h=666750.
+    // Local path coords: moveTo (0,667750), quadBezTo control
+    // (952500,0), end (1905000,667750). (Local y origin at
+    // top=30; world y=100 → 100-30=70 → 70*9525=666750 EMU.)
+    const expected = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/lockedCanvas"><lc:lockedCanvas xmlns:lc="http://schemas.openxmlformats.org/drawingml/2006/lockedCanvas"><a:nvGrpSpPr><a:cNvPr id="0" name=""/><a:cNvGrpSpPr/></a:nvGrpSpPr><a:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="7620000" cy="5715000"/><a:chOff x="0" y="0"/><a:chExt cx="7620000" cy="5715000"/></a:xfrm></a:grpSpPr><a:sp><a:nvSpPr><a:cNvPr id="2" name="L2"/><a:cNvSpPr/></a:nvSpPr><a:spPr><a:xfrm><a:off x="476250" y="285750"/><a:ext cx="1905000" cy="666750"/></a:xfrm><a:custGeom><a:avLst/><a:gdLst/><a:ahLst/><a:cxnLst/><a:rect l="0" t="0" r="1905000" b="666750"/><a:pathLst><a:path w="1905000" h="666750"><a:moveTo><a:pt x="0" y="666750"/></a:moveTo><a:quadBezTo><a:pt x="952500" y="0"/><a:pt x="1905000" y="666750"/></a:quadBezTo></a:path></a:pathLst></a:custGeom><a:ln w="38100"><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill><a:tailEnd type="triangle" w="med" len="med"/></a:ln></a:spPr></a:sp></lc:lockedCanvas></a:graphicData></a:graphic>`;
+    expect(drawing).toBe(expected);
   });
 
   it("matches the Rust drawing_xml_redact_solid_no_outline snapshot", () => {
