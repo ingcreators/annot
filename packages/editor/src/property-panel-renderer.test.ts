@@ -82,7 +82,7 @@ describe("renderControl — per-category DOM golden", () => {
     t.textContent = "hi";
     g.appendChild(t);
     expect(renderCategory(CATEGORY_CONTROL_SHAPE.textbox, g)).toMatchInlineSnapshot(`
-      "<div class="pp-type-row"><div class="prop-choice-chip material-symbols-outlined" data-tooltip="Plain text" aria-label="Plain text" data-value="plain" data-category="Text type">text_fields</div><div class="prop-choice-chip material-symbols-outlined active" data-tooltip="Sticky note" aria-label="Sticky note" data-value="sticky" data-category="Text type">sticky_note_2</div><div class="prop-choice-chip material-symbols-outlined" data-tooltip="Callout" aria-label="Callout" data-value="callout" data-category="Text type">chat_bubble</div></div>
+      "<div class="pp-type-row"><div class="prop-choice-chip material-symbols-outlined" data-tooltip="Plain text" aria-label="Plain text">text_fields</div><div class="prop-choice-chip material-symbols-outlined active" data-tooltip="Sticky note" aria-label="Sticky note">sticky_note_2</div><div class="prop-choice-chip material-symbols-outlined" data-tooltip="Callout" aria-label="Callout">chat_bubble</div></div>
       <div class="pp-row"><div class="pp-row-label">Color</div><button type="button" class="pp-color-btn"><span class="pp-color-swatch" style="background: #ff0000;"></span><span class="material-symbols-outlined">expand_more</span></button></div>
       <div class="pp-row"><div class="pp-row-label">Font</div><button type="button" class="pp-select" aria-label="Font" data-tooltip="Font"><span class="pp-select-preview">Sans-serif</span><span class="pp-select-caret material-symbols-outlined">expand_more</span></button></div>
       <div class="pp-row"><div class="pp-row-label">Size</div><div class="pp-number"><input type="number" min="8" max="96" step="1"><span class="pp-number-unit">pt</span><div class="pp-number-spinner"><button type="button" class="pp-number-spin-up" aria-label="Increase" tabindex="-1"></button><button type="button" class="pp-number-spin-down" aria-label="Decrease" tabindex="-1"></button></div></div></div>"
@@ -96,7 +96,7 @@ describe("renderControl — per-category DOM golden", () => {
     text.textContent = "1";
     g.appendChild(text);
     expect(renderCategory(CATEGORY_CONTROL_SHAPE.marker, g)).toMatchInlineSnapshot(`
-      "<div class="pp-type-row"><div class="prop-choice-chip active" data-tooltip="Circle" aria-label="Circle" data-value="circle" data-category="Counter shape"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><ellipse cx="12" cy="12" rx="8" ry="8"></ellipse><text x="12" y="17" text-anchor="middle" font-size="14" font-weight="800" font-family="system-ui, sans-serif" fill="currentColor" stroke="none">1</text></svg></div><div class="prop-choice-chip" data-tooltip="Square" aria-label="Square" data-value="rect" data-category="Counter shape"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="miter" aria-hidden="true"><rect x="4" y="4" width="16" height="16"></rect><text x="12" y="17" text-anchor="middle" font-size="14" font-weight="800" font-family="system-ui, sans-serif" fill="currentColor" stroke="none">1</text></svg></div><div class="prop-choice-chip" data-tooltip="Rounded square" aria-label="Rounded square" data-value="rounded" data-category="Counter shape"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="5"></rect><text x="12" y="17" text-anchor="middle" font-size="14" font-weight="800" font-family="system-ui, sans-serif" fill="currentColor" stroke="none">1</text></svg></div></div>
+      "<div class="pp-type-row"><div class="prop-choice-chip active" data-tooltip="Circle" aria-label="Circle"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><ellipse cx="12" cy="12" rx="8" ry="8"></ellipse><text x="12" y="17" text-anchor="middle" font-size="14" font-weight="800" font-family="system-ui, sans-serif" fill="currentColor" stroke="none">1</text></svg></div><div class="prop-choice-chip" data-tooltip="Square" aria-label="Square"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="miter" aria-hidden="true"><rect x="4" y="4" width="16" height="16"></rect><text x="12" y="17" text-anchor="middle" font-size="14" font-weight="800" font-family="system-ui, sans-serif" fill="currentColor" stroke="none">1</text></svg></div><div class="prop-choice-chip" data-tooltip="Rounded square" aria-label="Rounded square"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="5"></rect><text x="12" y="17" text-anchor="middle" font-size="14" font-weight="800" font-family="system-ui, sans-serif" fill="currentColor" stroke="none">1</text></svg></div></div>
       <div class="pp-row"><div class="pp-row-label">Size</div><div class="pp-number"><input type="number" min="8" max="96" step="1"><span class="pp-number-unit">pt</span><div class="pp-number-spinner"><button type="button" class="pp-number-spin-up" aria-label="Increase" tabindex="-1"></button><button type="button" class="pp-number-spin-down" aria-label="Decrease" tabindex="-1"></button></div></div></div>"
     `);
   });
@@ -104,20 +104,20 @@ describe("renderControl — per-category DOM golden", () => {
   it("renders the redact-solid category controls (style picker + solid color)", () => {
     const r = svg("rect", { "data-redact-style": "solid", fill: "#222222" });
     expect(renderCategory(CATEGORY_CONTROL_SHAPE["redact-solid"], r)).toMatchInlineSnapshot(`
-      "<div class="pp-type-row"><div class="prop-choice-chip material-symbols-outlined" data-tooltip="Mosaic (pixelate)" aria-label="Mosaic (pixelate)" data-value="mosaic" data-category="Redact style">grid_view</div><div class="prop-choice-chip material-symbols-outlined active" data-tooltip="Solid bar" aria-label="Solid bar" data-value="solid" data-category="Redact style">check_box</div><div class="prop-choice-chip material-symbols-outlined" data-tooltip="Blur" aria-label="Blur" data-value="blur" data-category="Redact style">blur_on</div></div>
+      "<div class="pp-type-row"><div class="prop-choice-chip material-symbols-outlined" data-tooltip="Mosaic (pixelate)" aria-label="Mosaic (pixelate)">grid_view</div><div class="prop-choice-chip material-symbols-outlined active" data-tooltip="Solid bar" aria-label="Solid bar">check_box</div><div class="prop-choice-chip material-symbols-outlined" data-tooltip="Blur" aria-label="Blur">blur_on</div></div>
       <div class="pp-row"><div class="pp-row-label">Color</div><button type="button" class="pp-color-btn"><span class="pp-color-swatch" style="background: #222222;"></span><span class="material-symbols-outlined">expand_more</span></button></div>"
     `);
   });
 
   it("renders the redact-mosaic category controls (style picker only)", () => {
     const i = svg("image", { "data-redact-style": "mosaic" });
-    expect(renderCategory(CATEGORY_CONTROL_SHAPE["redact-mosaic"], i)).toMatchInlineSnapshot(`"<div class="pp-type-row"><div class="prop-choice-chip material-symbols-outlined active" data-tooltip="Mosaic (pixelate)" aria-label="Mosaic (pixelate)" data-value="mosaic" data-category="Redact style">grid_view</div><div class="prop-choice-chip material-symbols-outlined" data-tooltip="Solid bar" aria-label="Solid bar" data-value="solid" data-category="Redact style">check_box</div><div class="prop-choice-chip material-symbols-outlined" data-tooltip="Blur" aria-label="Blur" data-value="blur" data-category="Redact style">blur_on</div></div>"`);
+    expect(renderCategory(CATEGORY_CONTROL_SHAPE["redact-mosaic"], i)).toMatchInlineSnapshot(`"<div class="pp-type-row"><div class="prop-choice-chip material-symbols-outlined active" data-tooltip="Mosaic (pixelate)" aria-label="Mosaic (pixelate)">grid_view</div><div class="prop-choice-chip material-symbols-outlined" data-tooltip="Solid bar" aria-label="Solid bar">check_box</div><div class="prop-choice-chip material-symbols-outlined" data-tooltip="Blur" aria-label="Blur">blur_on</div></div>"`);
   });
 
   it("renders the highlight category controls", () => {
     const r = svg("rect", { "data-highlight": "1", fill: "#ffff00", "fill-opacity": "0.4" });
     expect(renderCategory(CATEGORY_CONTROL_SHAPE.highlight, r)).toMatchInlineSnapshot(`
-      "<div class="pp-type-row"><div class="prop-choice-chip pp-color-chip" style="--swatch-color: #ffe100;" data-tooltip="Yellow" aria-label="Yellow" data-value="#ffe100" data-category="Highlight color"></div><div class="prop-choice-chip pp-color-chip" style="--swatch-color: #7bff7b;" data-tooltip="Green" aria-label="Green" data-value="#7bff7b" data-category="Highlight color"></div><div class="prop-choice-chip pp-color-chip" style="--swatch-color: #ff91e0;" data-tooltip="Pink" aria-label="Pink" data-value="#ff91e0" data-category="Highlight color"></div><div class="prop-choice-chip pp-color-chip" style="--swatch-color: #7be0ff;" data-tooltip="Blue" aria-label="Blue" data-value="#7be0ff" data-category="Highlight color"></div><div class="prop-choice-chip pp-color-chip" style="--swatch-color: #ffb84c;" data-tooltip="Orange" aria-label="Orange" data-value="#ffb84c" data-category="Highlight color"></div><div class="prop-choice-chip pp-color-chip" style="--swatch-color: #c991ff;" data-tooltip="Purple" aria-label="Purple" data-value="#c991ff" data-category="Highlight color"></div></div>
+      "<div class="pp-type-row"><div class="prop-choice-chip pp-color-chip" style="--swatch-color: #ffe100;" data-tooltip="Yellow" aria-label="Yellow"></div><div class="prop-choice-chip pp-color-chip" style="--swatch-color: #7bff7b;" data-tooltip="Green" aria-label="Green"></div><div class="prop-choice-chip pp-color-chip" style="--swatch-color: #ff91e0;" data-tooltip="Pink" aria-label="Pink"></div><div class="prop-choice-chip pp-color-chip" style="--swatch-color: #7be0ff;" data-tooltip="Blue" aria-label="Blue"></div><div class="prop-choice-chip pp-color-chip" style="--swatch-color: #ffb84c;" data-tooltip="Orange" aria-label="Orange"></div><div class="prop-choice-chip pp-color-chip" style="--swatch-color: #c991ff;" data-tooltip="Purple" aria-label="Purple"></div></div>
       <div class="pp-row"><div class="pp-row-label">Transparency</div><div class="pp-number"><input type="number" min="0" max="100" step="5"><span class="pp-number-unit">%</span><div class="pp-number-spinner"><button type="button" class="pp-number-spin-up" aria-label="Increase" tabindex="-1"></button><button type="button" class="pp-number-spin-down" aria-label="Decrease" tabindex="-1"></button></div></div></div>"
     `);
   });
@@ -133,7 +133,7 @@ describe("renderControl — per-category DOM golden", () => {
       "stroke-width": "3",
     });
     expect(renderCategory(CATEGORY_CONTROL_SHAPE.shape, r)).toMatchInlineSnapshot(`
-      "<div class="pp-type-row"><div class="prop-choice-chip active" data-tooltip="Rectangle" aria-label="Rectangle" data-value="rect" data-category="Shape type"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="miter" aria-hidden="true"><rect x="4" y="4" width="16" height="16"></rect></svg></div><div class="prop-choice-chip" data-tooltip="Rounded" aria-label="Rounded" data-value="rounded" data-category="Shape type"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="5"></rect></svg></div><div class="prop-choice-chip" data-tooltip="Ellipse" aria-label="Ellipse" data-value="ellipse" data-category="Shape type"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><ellipse cx="12" cy="12" rx="8" ry="8"></ellipse></svg></div></div>
+      "<div class="pp-type-row"><div class="prop-choice-chip active" data-tooltip="Rectangle" aria-label="Rectangle"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="miter" aria-hidden="true"><rect x="4" y="4" width="16" height="16"></rect></svg></div><div class="prop-choice-chip" data-tooltip="Rounded" aria-label="Rounded"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="5"></rect></svg></div><div class="prop-choice-chip" data-tooltip="Ellipse" aria-label="Ellipse"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><ellipse cx="12" cy="12" rx="8" ry="8"></ellipse></svg></div></div>
       <div class="pp-row"><div class="pp-row-label">Color</div><button type="button" class="pp-color-btn"><span class="pp-color-swatch" style="background: #ff0000;"></span><span class="material-symbols-outlined">expand_more</span></button></div>
       <div class="pp-row"><div class="pp-row-label">Color</div><button type="button" class="pp-color-btn"><span class="pp-color-swatch" style="background: #000000;"></span><span class="material-symbols-outlined">expand_more</span></button></div>
       <div class="pp-row"><div class="pp-row-label">Width</div><div class="pp-number"><input type="number" min="0.25" max="200" step="0.25"><span class="pp-number-unit">pt</span><div class="pp-number-spinner"><button type="button" class="pp-number-spin-up" aria-label="Increase" tabindex="-1"></button><button type="button" class="pp-number-spin-down" aria-label="Decrease" tabindex="-1"></button></div></div></div>
@@ -195,7 +195,7 @@ describe("renderControl — mutation routing", () => {
     const deps = makeDeps();
     const row = renderControl(PROPERTY_CONTROLS.shapeTypePicker, [r], deps);
     expect(row).not.toBeNull();
-    const ellipseChip = row!.querySelector<HTMLElement>('[data-value="ellipse"]');
+    const ellipseChip = row!.querySelector<HTMLElement>('[data-tooltip="Ellipse"]');
     expect(ellipseChip).not.toBeNull();
     ellipseChip!.click();
     // convertShape is sync — onCommit fires on the same tick.
@@ -217,7 +217,7 @@ describe("renderControl — mutation routing", () => {
     deps.effects.applyArrowVariant = handler;
     const row = renderControl(PROPERTY_CONTROLS.arrowVariantPicker, [r], deps);
     expect(row).not.toBeNull();
-    const bothChip = row!.querySelector<HTMLElement>('[data-value="both"]');
+    const bothChip = row!.querySelector<HTMLElement>('[data-tooltip="Double arrow"]');
     expect(bothChip).not.toBeNull();
     bothChip!.click();
     // The click handler is async (awaits the effect handler).
@@ -278,8 +278,8 @@ describe("renderControl — mutation routing", () => {
     deps.effects.applyArrowVariant = handler;
     const row = renderControl(PROPERTY_CONTROLS.arrowVariantPicker, [r], deps);
     expect(row).not.toBeNull();
-    const noneChip = row!.querySelector<HTMLElement>('[data-value="none"]');
-    const bothChip = row!.querySelector<HTMLElement>('[data-value="both"]');
+    const noneChip = row!.querySelector<HTMLElement>('[data-tooltip="Line"]');
+    const bothChip = row!.querySelector<HTMLElement>('[data-tooltip="Double arrow"]');
     // "none" starts active; clicking "both" should fail and revert.
     expect(noneChip!.classList.contains("active")).toBe(true);
     bothChip!.click();
@@ -301,7 +301,7 @@ describe("renderControl — effect handler binding", () => {
     // Wipe the handler so the renderer's lookup misses.
     delete deps.effects.applyArrowVariant;
     const row = renderControl(PROPERTY_CONTROLS.arrowVariantPicker, [r], deps);
-    const bothChip = row!.querySelector<HTMLElement>('[data-value="both"]');
+    const bothChip = row!.querySelector<HTMLElement>('[data-tooltip="Double arrow"]');
     // The click handler logs the error then rolls back; we can't
     // throw from the click directly, but the failure surfaces as
     // a rolled-back active state + zero onCommit calls.
@@ -337,7 +337,7 @@ describe("renderControl — replace target tracking", () => {
     const row = renderControl(PROPERTY_CONTROLS.shapeTypePicker, [r], deps);
     expect(row).not.toBeNull();
 
-    row!.querySelector<HTMLElement>('[data-value="rounded"]')!.click();
+    row!.querySelector<HTMLElement>('[data-tooltip="Rounded"]')!.click();
     await Promise.resolve();
     let info = deps.onCommit.mock.calls[0]![0];
     expect(info.replacements).toHaveLength(1);
@@ -345,7 +345,7 @@ describe("renderControl — replace target tracking", () => {
     expect(info.replacements[0]!.newEl.hasAttribute("data-rounded")).toBe(true);
     r = info.replacements[0]!.newEl;
 
-    row!.querySelector<HTMLElement>('[data-value="ellipse"]')!.click();
+    row!.querySelector<HTMLElement>('[data-tooltip="Ellipse"]')!.click();
     await Promise.resolve();
     info = deps.onCommit.mock.calls[1]![0];
     expect(info.replacements).toHaveLength(1);
