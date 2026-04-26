@@ -191,25 +191,27 @@ export class SplitEditorHost {
       const page = String(i + 1).padStart(pad, "0");
       const tmpFilename = `${tempPrefix}${stem}-p${page}${ext}`;
       const savedPath = await retryFsOp(() =>
-        storage.saveImage({
-          originalDataUrl: finalDataUrl,
-          thumbnailDataUrl: thumb,
-          annotationsSvg: "",
-          width: slice.width,
-          height: slice.height,
-          sourceUrl: first.sourceUrl || "",
-          tags: {
-            ...inheritedTags,
-            captureId: newIdB58(),
-            page: String(i + 1),
-            sessionIndex: String(i),
-            sessionTotal: String(total),
+        storage.saveImage(
+          {
+            originalDataUrl: finalDataUrl,
+            thumbnailDataUrl: thumb,
+            annotationsSvg: "",
+            width: slice.width,
+            height: slice.height,
+            sourceUrl: first.sourceUrl || "",
+            tags: {
+              ...inheritedTags,
+              captureId: newIdB58(),
+              page: String(i + 1),
+              sessionIndex: String(i),
+              sessionTotal: String(total),
+            },
+            folderPath: first.folderPath,
+            createdAt: first.createdAt || now,
+            updatedAt: now,
           },
-          folderPath: first.folderPath,
-          filename: tmpFilename,
-          createdAt: first.createdAt || now,
-          updatedAt: now,
-        }),
+          { filename: tmpFilename },
+        ),
       );
       savedSlicePaths.push(savedPath);
     }

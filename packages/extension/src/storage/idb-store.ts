@@ -59,9 +59,10 @@ function defaultFilename(data: { originalDataUrl: string }): string {
 // ---- Image CRUD ----
 
 export async function saveImage(
-  data: Omit<ImageRecord, "path"> & { filename?: string },
+  data: Omit<ImageRecord, "path">,
+  opts?: { filename?: string },
 ): Promise<string> {
-  const filename = data.filename || defaultFilename(data);
+  const filename = opts?.filename || defaultFilename(data);
   validateName(filename);
   const folderPath = data.folderPath || "";
 

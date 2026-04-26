@@ -67,8 +67,11 @@ function defaultFilename(data: { originalDataUrl: string }): string {
 export class BrowserStore implements StorageProvider {
   // ---- Images ----
 
-  async saveImage(data: Omit<ImageRecord, "path"> & { filename?: string }): Promise<string> {
-    const filename = data.filename || defaultFilename(data);
+  async saveImage(
+    data: Omit<ImageRecord, "path">,
+    opts?: { filename?: string },
+  ): Promise<string> {
+    const filename = opts?.filename || defaultFilename(data);
     validateName(filename);
     const folderPath = data.folderPath || "";
 

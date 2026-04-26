@@ -83,27 +83,29 @@ export class CaptureHost {
           const thumbnailDataUrl = await generateThumbnailFromDataUrl(dataUrl);
           const now = new Date().toISOString();
           const sec = String(index + 1).padStart(3, "0");
-          await storage.saveImage({
-            originalDataUrl: dataUrl,
-            thumbnailDataUrl,
-            annotationsSvg: "",
-            width: img.naturalWidth,
-            height: img.naturalHeight,
-            sourceUrl: "",
-            tags: {
-              timed: "1",
-              seq: sec,
-              captureId: newIdB58(),
-              session: sessionId,
-              sessionKind: "interval",
-              sessionIndex: String(index),
-              sessionTotal: String(total),
+          await storage.saveImage(
+            {
+              originalDataUrl: dataUrl,
+              thumbnailDataUrl,
+              annotationsSvg: "",
+              width: img.naturalWidth,
+              height: img.naturalHeight,
+              sourceUrl: "",
+              tags: {
+                timed: "1",
+                seq: sec,
+                captureId: newIdB58(),
+                session: sessionId,
+                sessionKind: "interval",
+                sessionIndex: String(index),
+                sessionTotal: String(total),
+              },
+              folderPath,
+              createdAt: now,
+              updatedAt: now,
             },
-            folderPath,
-            filename: `capture-${now.replace(/[:.]/g, "-")}-${sec}.jpg`,
-            createdAt: now,
-            updatedAt: now,
-          });
+            { filename: `capture-${now.replace(/[:.]/g, "-")}-${sec}.jpg` },
+          );
           savedFrames++;
         } catch (e) {
           console.error("[timed-capture] save error:", e);
@@ -194,19 +196,21 @@ export class CaptureHost {
 
     const thumbnailDataUrl = await generateThumbnailFromDataUrl(originalUrl);
     const now = new Date().toISOString();
-    const path = await storage.saveImage({
-      originalDataUrl: originalUrl,
-      thumbnailDataUrl,
-      annotationsSvg: annotations,
-      width: w,
-      height: h,
-      sourceUrl: "",
-      tags,
-      folderPath: this.deps.getCurrentFolderPath(),
-      filename: file.name || undefined,
-      createdAt: now,
-      updatedAt: now,
-    });
+    const path = await storage.saveImage(
+      {
+        originalDataUrl: originalUrl,
+        thumbnailDataUrl,
+        annotationsSvg: annotations,
+        width: w,
+        height: h,
+        sourceUrl: "",
+        tags,
+        folderPath: this.deps.getCurrentFolderPath(),
+        createdAt: now,
+        updatedAt: now,
+      },
+      { filename: file.name || undefined },
+    );
 
     this.deps.openEditor({
       path,
