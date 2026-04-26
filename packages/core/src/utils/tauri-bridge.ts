@@ -323,6 +323,10 @@ export interface AnnotationShape {
   font_size?: number;
   font_family?: string;
   text_variant?: "plain" | "sticky" | "callout";
+  /** Sticky / callout background color, in CSS `rgba(...)` or `#rrggbb`
+   *  form. Populated for `text_variant === "sticky" | "callout"`;
+   *  omitted for plain text. */
+  text_bg_color?: string;
   /** Callout tail-tip coordinates (canvas space). */
   tail_x?: number;
   tail_y?: number;

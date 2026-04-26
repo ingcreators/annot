@@ -892,11 +892,7 @@ export class Toolbar {
                 el.getAttribute("data-font-family") ||
                 undefined,
               fill: textEl.getAttribute("fill") || el.getAttribute("data-color") || "#ff0000",
-              // The Rust-side OOXML emitter reads the textbox's
-              // sticky bg color off `stroke`. Carrier field — keep
-              // populated until the ABI is widened to a dedicated
-              // bg-color field.
-              stroke: variant === "plain" ? "" : bgRect?.getAttribute("fill") || "",
+              text_bg_color: variant === "plain" ? undefined : bgRect?.getAttribute("fill") || "",
               text_variant: variant,
               tail_x: tailXRaw != null ? Number.parseFloat(tailXRaw) + tx : undefined,
               tail_y: tailYRaw != null ? Number.parseFloat(tailYRaw) + ty : undefined,

@@ -64,6 +64,14 @@ pub struct AnnotationShape {
     /// stash the data URL in `text` still parse via the fallback in
     /// `build_drawing_xml`.
     pub image_data_url: Option<String>,
+
+    // ---- Textbox sticky / callout bg ----
+    /// Sticky / callout background color (`rgba(...)` or `#rrggbb`).
+    /// The canonical carrier since
+    /// [office-paste-abi-modernisation phase 3]; older callers that
+    /// stash the color in `stroke` still render via the fallback in
+    /// `gvml_text`.
+    pub text_bg_color: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -599,8 +607,12 @@ fn gvml_text(s: &AnnotationShape, id: u32) -> String {
     let bw = s.width.map(|w| px(w)).unwrap_or_else(|| px((text.len() as f64 * fs * 0.6).max(200.0)));
     let bh = s.height.map(|h| px(h)).unwrap_or_else(|| px(fs * 1.5 * text.lines().count().max(1) as f64));
 
-    // Background fill from stroke field (carries the rgba sticky color)
-    let bg_fill = match s.stroke.as_deref() {
+    // Prefer the canonical `text_bg_color`; fall back to the legacy
+    // `stroke`-as-bg-color carrier for payloads built before
+    // office-paste-abi-modernisation phase 3. Phase 8 removes the
+    // fallback.
+    let bg_carrier = s.text_bg_color.as_deref().or(s.stroke.as_deref());
+    let bg_fill = match bg_carrier {
         Some(bg) if !bg.is_empty() => {
             let (r, g, b, a) = parse_rgba(bg);
             if a > 0 {
