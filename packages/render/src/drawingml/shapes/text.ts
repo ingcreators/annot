@@ -65,7 +65,7 @@ export function buildText(s: AnnotationShape, id: number, ns: NamespaceOpts): st
     geom = `<a:prstGeom prst="wedgeRoundRectCallout"><a:avLst><a:gd name="adj1" fmla="val ${adj1}"/><a:gd name="adj2" fmla="val ${adj2}"/><a:gd name="adj3" fmla="val 5000"/></a:avLst></a:prstGeom>`;
   }
 
-  return `<${ns.shape}><${ns.nvShape}><${ns.cnvPr} id="${id}" name="T${id}"/><${ns.cnvSp} txBox="1"/>${ns.nvPrSuffix}</${ns.nvShape}><a:spPr><a:xfrm${xf}><a:off x="${x}" y="${y}"/><a:ext cx="${bw}" cy="${bh}"/></a:xfrm>${geom}${bgFill}<a:ln w="9525"><a:solidFill><a:srgbClr val="BFBFBF"/></a:solidFill></a:ln></a:spPr>${ns.txBodyOpen}<a:bodyPr wrap="square" rtlCol="0" lIns="91440" tIns="45720" rIns="91440" bIns="45720"/><a:lstStyle/>${paragraphs}${ns.txBodyClose}</${ns.shape}>`;
+  return `<${ns.shape}><${ns.nvShape}><${ns.cnvPr} id="${id}" name="T${id}"/><${ns.cnvSp} txBox="1"/>${ns.nvPrSuffix}</${ns.nvShape}><${ns.spPr}><a:xfrm${xf}><a:off x="${x}" y="${y}"/><a:ext cx="${bw}" cy="${bh}"/></a:xfrm>${geom}${bgFill}<a:ln w="9525"><a:solidFill><a:srgbClr val="BFBFBF"/></a:solidFill></a:ln></${ns.spPr}>${ns.txBodyOpen}<a:bodyPr wrap="square" rtlCol="0" lIns="91440" tIns="45720" rIns="91440" bIns="45720"/><a:lstStyle/>${paragraphs}${ns.txBodyClose}</${ns.shape}>`;
 }
 
 function buildBgFill(bgCarrier: string): string {

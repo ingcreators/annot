@@ -66,7 +66,7 @@ export function buildLine(s: AnnotationShape, id: number, ns: NamespaceOpts): st
     const hEmu = px(h);
     const localX = (wx: number) => px(wx - left);
     const localY = (wy: number) => px(wy - top);
-    return `<${ns.shape}><${ns.nvShape}><${ns.cnvPr} id="${id}" name="L${id}"/><${ns.cnvSp}/>${ns.nvPrSuffix}</${ns.nvShape}><a:spPr><a:xfrm><a:off x="${px(left)}" y="${px(top)}"/><a:ext cx="${wEmu}" cy="${hEmu}"/></a:xfrm><a:custGeom><a:avLst/><a:gdLst/><a:ahLst/><a:cxnLst/><a:rect l="0" t="0" r="${wEmu}" b="${hEmu}"/><a:pathLst><a:path w="${wEmu}" h="${hEmu}"><a:moveTo><a:pt x="${localX(x1)}" y="${localY(y1)}"/></a:moveTo><a:quadBezTo><a:pt x="${localX(cxC)}" y="${localY(cyC)}"/><a:pt x="${localX(x2)}" y="${localY(y2)}"/></a:quadBezTo></a:path></a:pathLst></a:custGeom><a:ln w="${sw}"${cap}>${strokePaintXml(s, stroke)}${join}${dash}${head}${tail}</a:ln></a:spPr></${ns.shape}>`;
+    return `<${ns.shape}><${ns.nvShape}><${ns.cnvPr} id="${id}" name="L${id}"/><${ns.cnvSp}/>${ns.nvPrSuffix}</${ns.nvShape}><${ns.spPr}><a:xfrm><a:off x="${px(left)}" y="${px(top)}"/><a:ext cx="${wEmu}" cy="${hEmu}"/></a:xfrm><a:custGeom><a:avLst/><a:gdLst/><a:ahLst/><a:cxnLst/><a:rect l="0" t="0" r="${wEmu}" b="${hEmu}"/><a:pathLst><a:path w="${wEmu}" h="${hEmu}"><a:moveTo><a:pt x="${localX(x1)}" y="${localY(y1)}"/></a:moveTo><a:quadBezTo><a:pt x="${localX(cxC)}" y="${localY(cyC)}"/><a:pt x="${localX(x2)}" y="${localY(y2)}"/></a:quadBezTo></a:path></a:pathLst></a:custGeom><a:ln w="${sw}"${cap}>${strokePaintXml(s, stroke)}${join}${dash}${head}${tail}</a:ln></${ns.spPr}></${ns.shape}>`;
   }
 
   // Straight line / arrow — `<{ns}:cxnSp>` + `prst="line"`.
@@ -78,5 +78,5 @@ export function buildLine(s: AnnotationShape, id: number, ns: NamespaceOpts): st
   const fv = y2 < y1 ? ' flipV="1"' : "";
   const xf = xfrmAttrs(s, /* excludeFlip */ true);
 
-  return `<${ns.connector}><${ns.nvConnector}><${ns.cnvPr} id="${id}" name="L${id}"/><${ns.cnvCxnSp}/>${ns.nvPrSuffix}</${ns.nvConnector}><a:spPr><a:xfrm${fh}${fv}${xf}><a:off x="${px(left)}" y="${px(top)}"/><a:ext cx="${px(w)}" cy="${px(h)}"/></a:xfrm><a:prstGeom prst="line"><a:avLst/></a:prstGeom><a:ln w="${sw}"${cap}>${strokePaintXml(s, stroke)}${join}${dash}${head}${tail}</a:ln></a:spPr></${ns.connector}>`;
+  return `<${ns.connector}><${ns.nvConnector}><${ns.cnvPr} id="${id}" name="L${id}"/><${ns.cnvCxnSp}/>${ns.nvPrSuffix}</${ns.nvConnector}><${ns.spPr}><a:xfrm${fh}${fv}${xf}><a:off x="${px(left)}" y="${px(top)}"/><a:ext cx="${px(w)}" cy="${px(h)}"/></a:xfrm><a:prstGeom prst="line"><a:avLst/></a:prstGeom><a:ln w="${sw}"${cap}>${strokePaintXml(s, stroke)}${join}${dash}${head}${tail}</a:ln></${ns.spPr}></${ns.connector}>`;
 }
