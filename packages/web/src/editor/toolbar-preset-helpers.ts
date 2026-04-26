@@ -19,8 +19,6 @@ import {
   TOOL_REGISTRY,
 } from "@ingcreators/annot-core/editor";
 import type { ToolOptions } from "@ingcreators/annot-core/editor/tool-options";
-import { computeDasharray } from "@ingcreators/annot-core/utils";
-import { refreshArrowPath } from "@ingcreators/annot-core/editor/arrow-markers";
 
 // `normalizeVariantSideFields` lives in `@ingcreators/annot-core/editor`
 // (relocated in Phase 5 of `_done/toolbar-schema.md`). Callers should
@@ -190,124 +188,32 @@ export function seedPresetFromElement(
  *  those were already established by the variant-change path that
  *  invoked this helper.
  *
- *  Some tools store their "color" on a child element rather than
- *  the outer wrapper `<g>` (marker: bg primitive's `fill`; text:
- *  `<text>`'s `fill`). For those cases we dispatch to a tool-
- *  specific helper instead of writing stroke/fill directly to `el`. */
+ *  Generic dispatch: walks `TOOL_REGISTRY` looking for the entry
+ *  whose `variantKeyForElement` claims `el`, then routes to that
+ *  tool's `applyStyleToElement` callback. The per-tool handlers
+ *  (registered in `tool-registry.ts`) own the tool-specific quirks
+ *  — marker walks the bg primitive, textbox writes data-color +
+ *  text fill, highlight routes fill through `highlightColor`,
+ *  arrow runs `refreshArrowPath` after the universal write, etc.
+ *
+ *  Phase 3 of `docs/plans/toolbar-apply-style-to-element.md`:
+ *  the imperative element-tag cascade that used to live here was
+ *  replaced by registry dispatch — symmetric with how Phase 5 of
+ *  `_done/toolbar-schema.md` collapsed the read-side cascade in
+ *  `Toolbar.syncPresetFromElement`. */
 export function applyPresetStyleAttrs(el: SVGElement, preset: ToolOptions): void {
-  // Tool-specific style application for composite elements.
-  if (el.tagName === "g" && el.hasAttribute("data-marker")) {
-    applyMarkerPresetStyle(el, preset);
+  for (const entry of Object.values(TOOL_REGISTRY)) {
+    if (!entry.variantKeyForElement) continue;
+    if (entry.variantKeyForElement(el) === null) continue;
+    entry.applyStyleToElement?.(el, preset);
     return;
   }
-  if (el.tagName === "g" && el.getAttribute("data-type") === "textbox") {
-    applyTextboxPresetStyle(el, preset);
-    return;
-  }
-  // Highlight rects: the visual color is `highlightColor`, NOT
-  // `fillColor`. ShapeTool's createShape uses `highlightColor` for
-  // the rect's `fill` attribute (and leaves `fillColor` untouched,
-  // since `fillColor` tracks the Shape tool's filled-rect color).
-  // Without this branch, loading a Highlight preset whose
-  // `fillColor` was inherited from global defaults (e.g. "#ffffff")
-  // would overwrite the element's highlight color with white,
-  // making the rect effectively invisible. Route fill through
-  // `highlightColor` to mirror ShapeTool's creation logic.
-  if (el.tagName === "rect" && el.getAttribute("data-highlight") === "1") {
-    if (preset.highlightColor) el.setAttribute("fill", preset.highlightColor);
-    if (preset.fillOpacity != null) {
-      el.setAttribute("fill-opacity", String(preset.fillOpacity));
-    }
-    return;
-  }
-
-  // Generic path for shape / arrow / path / line / etc.
-  if (preset.strokeColor) el.setAttribute("stroke", preset.strokeColor);
-  if (preset.strokeWidth != null) {
-    el.setAttribute("stroke-width", String(preset.strokeWidth));
-  }
-  if (preset.strokeDasharray != null) {
-    el.setAttribute(
-      "stroke-dasharray",
-      computeDasharray(preset.strokeDasharray, preset.strokeWidth),
-    );
-    el.setAttribute("data-dash-key", preset.strokeDasharray);
-  }
-  if (preset.fillColor) el.setAttribute("fill", preset.fillColor);
-  if (preset.fillOpacity != null) {
-    el.setAttribute("fill-opacity", String(preset.fillOpacity));
-  }
-  if (preset.strokeLinecap) {
-    el.setAttribute("stroke-linecap", preset.strokeLinecap);
-  }
-  if (preset.strokeLinejoin) {
-    el.setAttribute("stroke-linejoin", preset.strokeLinejoin);
-  }
-  if (preset.strokeOpacity != null) {
-    // Lines carry transparency via `opacity` so markers fade too;
-    // other shapes use `stroke-opacity`. Mirror the same rule as
-    // syncPresetFromElement's reader.
-    if (
-      el.tagName === "line" ||
-      (el.tagName === "g" && el.getAttribute("data-type") === "arrow")
-    ) {
-      el.setAttribute("opacity", String(preset.strokeOpacity));
-    } else {
-      el.setAttribute("stroke-opacity", String(preset.strokeOpacity));
-    }
-  }
-  // Arrow groups: the head <path>'s `fill` attribute was set
-  // explicitly at refreshArrowPath time from the `<g>`'s stroke
-  // color. Since we just changed the stroke color, the head's
-  // fill is stale — refresh to re-derive it from the new stroke.
-  if (el.tagName === "g" && el.getAttribute("data-type") === "arrow") {
-    refreshArrowPath(el);
-  }
-}
-
-/** Marker/counter preset application. Standard color semantics:
- *  `fillColor` = bg interior, `strokeColor` = bg border. Same fields
- *  every other tool uses for fill / stroke. */
-export function applyMarkerPresetStyle(g: SVGElement, preset: ToolOptions): void {
-  const bg = g.querySelector("circle, rect");
-  if (!bg) return;
-  // --- bg fill ---
-  if (preset.fillColor) bg.setAttribute("fill", preset.fillColor);
-  // --- bg border ---
-  if (preset.strokeColor) bg.setAttribute("stroke", preset.strokeColor);
-  if (preset.strokeWidth != null) {
-    bg.setAttribute("stroke-width", String(preset.strokeWidth));
-  }
-  if (preset.strokeDasharray != null) {
-    const w = preset.strokeWidth ?? Number.parseFloat(bg.getAttribute("stroke-width") || "1.5");
-    bg.setAttribute("stroke-dasharray", computeDasharray(preset.strokeDasharray, w));
-    bg.setAttribute("data-dash-key", preset.strokeDasharray);
-  }
-  if (preset.fontSize != null) {
-    const text = g.querySelector("text");
-    if (text) text.setAttribute("font-size", String(preset.fontSize));
-  }
-}
-
-/** Textbox preset application: text color is the `<text>` child's
- *  `fill` (TextTool's convention); font family / size also live on
- *  the `<text>`. The bg `<rect>` (for sticky / callout variants)
- *  derives its color from the text color via `stickyBgFor` at
- *  rebuild time — here we just update the data-color attr + text
- *  fill; a full rebuild happens elsewhere if needed. */
-export function applyTextboxPresetStyle(g: SVGElement, preset: ToolOptions): void {
-  if (preset.strokeColor) {
-    g.setAttribute("data-color", preset.strokeColor);
-    const text = g.querySelector("text");
-    if (text) text.setAttribute("fill", preset.strokeColor);
-  }
-  if (preset.fontFamily) {
-    g.setAttribute("data-font-family", preset.fontFamily);
-    const text = g.querySelector("text");
-    if (text) text.setAttribute("font-family", preset.fontFamily);
-  }
-  if (preset.fontSize != null) {
-    const text = g.querySelector("text");
-    if (text) text.setAttribute("font-size", String(preset.fontSize));
-  }
+  // No tool claimed the element. The legacy implementation fell
+  // through to the universal generic path here, but every concrete
+  // on-canvas element today is claimed by some tool's classifier
+  // (see `TOOL_REGISTRY variantKeyForElement spot-checks` in
+  // `tool-registry.test.ts`). Leaving this as a silent no-op
+  // matches the closed-set assumption — if a future element type
+  // shows up unclaimed, the missing write will be visibly broken
+  // and a new registry entry needs to be added.
 }
