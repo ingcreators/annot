@@ -22,7 +22,6 @@ import type { History } from "./history.js";
 import { createColorPullButton, openAnchoredPopoverForColor } from "@ingcreators/annot-editor/property-controls";
 import { convertRedactStyle } from "@ingcreators/annot-editor/redact-utils";
 import { convertTextVariant, detectTextVariant } from "@ingcreators/annot-core/editor/text-utils";
-import { COUNTER_ICON_SVG } from "@ingcreators/annot-core/editor/toolbar-icons";
 import {
   type CommitInfo,
   type ElementReplacement,
@@ -32,7 +31,7 @@ import {
 } from "./property-panel-renderer.js";
 import { applyArrowHead, detectArrowEnds } from "./tools/arrow-tool.js";
 import { applyDrawStyle, isFreehandGroup } from "./tools/freehand-tool.js";
-import { convertMarkerShape, detectMarkerShape, resizeMarker } from "./tools/marker-tool.js";
+import { convertMarkerShape, resizeMarker } from "./tools/marker-tool.js";
 import type {
   ArrowDim,
   ArrowHead,
@@ -639,14 +638,28 @@ export class PropertyPanel {
       bgEl?.getAttribute("data-dash-key") ??
       detectDashKey(bgEl?.getAttribute("stroke-dasharray") || "", bgStrokeWidth) ??
       "";
-    const textEl = g.querySelector("text");
-    const fontSize = Number.parseFloat(textEl?.getAttribute("font-size") || "13");
     const currentVal = Number.parseInt(g.getAttribute("data-marker") || "1", 10);
 
-    // Type section: Circle / Square / Rounded square.
+    // Type section: schema-driven via `markerShapePicker.effect =
+    // applyMarkerShape`. The effect handler bound in the constructor
+    // calls `convertMarkerShape(t, v)` per target — the outer `<g>`
+    // keeps identity (only the inner bg primitive swaps), so the
+    // returned identity replacements skip `onTargetReplaced` and the
+    // commit routes through `onVariantChanged` via the variantPicker
+    // dispatch. Matches the imperative chip handler one-for-one.
     this.#inSection("Type", () => {
-      this.#addMarkerShapePicker(detectMarkerShape(g));
+      this.#renderRegistryControl(PROPERTY_CONTROL_IDS.markerShapePicker);
     });
+
+    // Fill / Line / Label-Value sections are still imperative because
+    // they write to the inner `<circle>` / `<rect>` bg primitive —
+    // a target shape the registry's standard `fillColor` /
+    // `strokeColor` / `strokeWidth` controls don't model (they all
+    // operate on the outer element via `el.setAttribute`). A future
+    // phase can extend the registry with `markerBgFillColor` /
+    // `markerBgStrokeColor` / etc. ids and migrate these too. The
+    // Size sub-row in the Label section IS schema-driven below
+    // (markerSize uses `effect: resizeMarker`).
 
     // Fill section: the bg primitive's color. The Counter's interior
     // paint lives here, mirroring Shape / Highlight. `allowNone`
@@ -738,8 +751,12 @@ export class PropertyPanel {
     });
 
     // Label section: the displayed number + its rendered size. "Label"
-    // covers both the textual content (Value) and the font size that
-    // drives the counter's overall visual size.
+    // covers both the textual content (Value, imperative — the
+    // `data-marker` attribute + `<text>` content tweak isn't a
+    // standard "set attribute on element" the registry models) and
+    // the font size that drives the counter's overall visual size
+    // (Size, schema-driven via `markerSize.effect = resizeMarker`,
+    // which rescales bg + text geometry together).
     this.#inSection("Label", () => {
       this.#addNumberInput("Value", currentVal, 1, 999, (v) => {
         for (const t of this.#targets) {
@@ -749,67 +766,19 @@ export class PropertyPanel {
         }
         this.#commit();
       });
-      // Counter-specific Size row: `resizeMarker` rescales the entire
-      // counter (bg primitive + text) so changing Size grows/shrinks
-      // the whole element proportionally, not just the digit. Using
-      // the shared `#addFontSizePicker` would only touch font-size,
-      // leaving the ring unchanged — visually awkward (tiny label in
-      // big bubble).
-      const sizeInput = ppNumberInput(fontSize, "pt", 8, 96, 1, (v) => {
-        for (const t of this.#targets) resizeMarker(t, v);
-        // #commit rubber-bands the style to the tool preset so a
-        // subsequent Counter draw uses the new size.
-        this.#commit();
-        // Selection handles were computed against the OLD bbox —
-        // refresh them so drag-resize grabs the new bounds.
-        this.onTargetMutated?.();
-      });
-      this.#target().appendChild(this.#ppRow("Size", sizeInput));
+      this.#renderRegistryControl(PROPERTY_CONTROL_IDS.markerSize);
     });
   }
 
-  /**
-   * Counter (marker) shape picker — Circle / Square / Rounded chips
-   * at the top of a marker's selection properties. Unlike the Shape
-   * or Text pickers, converting a marker does NOT replace the outer
-   * `<g>` — only the inner `<circle>` / `<rect>` bg is swapped, so
-   * no onTargetReplaced signal is needed.
-   */
-  #addMarkerShapePicker(current: MarkerShape): void {
-    // Chip row only — category header comes from `#inSection("Type",…)`.
-    const row = document.createElement("div");
-    row.className = "pp-type-row";
-    const options: Array<{ value: MarkerShape; label: string; svg: string }> = [
-      { value: "circle", label: "Circle", svg: COUNTER_ICON_SVG.circle },
-      { value: "rect", label: "Square", svg: COUNTER_ICON_SVG.rect },
-      { value: "rounded", label: "Rounded square", svg: COUNTER_ICON_SVG.rounded },
-    ];
-    for (const opt of options) {
-      const chip = document.createElement("div");
-      chip.className = `prop-choice-chip${current === opt.value ? " active" : ""}`;
-      chip.innerHTML = opt.svg;
-      setTooltip(chip, opt.label);
-      chip.addEventListener("click", () => {
-        if (opt.value === current) return;
-        for (const t of this.#targets) {
-          convertMarkerShape(t, opt.value);
-        }
-        // Skip rubber-band (#commit) — the marker's style attrs
-        // (fill / font-size) haven't changed, and we want the NEW
-        // variant's preset to drive any color/size updates via
-        // onVariantChanged. See the arrow variant picker for the
-        // same rationale.
-        this.#history.save();
-        if (this.onVariantChanged) {
-          this.onVariantChanged(this.#targets);
-        } else {
-          this.show(this.#targets);
-        }
-      });
-      row.appendChild(chip);
-    }
-    this.#target().appendChild(row);
-  }
+  // `#addMarkerShapePicker` removed in Phase 3e — the chip row is now
+  // produced by the schema-driven renderer
+  // (`PROPERTY_CONTROLS.markerShapePicker.effect = "applyMarkerShape"`)
+  // and the effect handler bound in the constructor calls
+  // `convertMarkerShape(t, v)` per target. The outer `<g>` keeps
+  // identity, so the returned identity replacements skip
+  // `onTargetReplaced` while the variantPicker dispatch fires
+  // `onVariantChanged` for preset rubber-band — same rationale as
+  // the deleted imperative click handler.
 
   // `#addShapeTypePicker` removed in Phase 3b of
   // `docs/plans/property-panel-schema.md` — the chip row is now
