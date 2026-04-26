@@ -826,8 +826,9 @@ export class Toolbar {
           ...xform,
         });
       } else if (tag === "path") {
-        // Freehand — pen or highlighter. stroke_opacity carries the
-        // transparency so Office can render a translucent shape.
+        // Freehand — pen or highlighter. The semi-transparent
+        // highlighter alpha rides on `stroke_opacity_value`,
+        // populated inside the universal `transformOf` helper above.
         const drawStyle =
           (el.getAttribute("data-draw-style") as "pen" | "highlighter" | null) ||
           (Number.parseFloat(el.getAttribute("stroke-opacity") || "1") < 0.99
@@ -839,7 +840,6 @@ export class Toolbar {
           stroke: el.getAttribute("stroke") || "#ff0000",
           stroke_width: Number.parseFloat(el.getAttribute("stroke-width") || "3"),
           stroke_dasharray: el.getAttribute("stroke-dasharray") || "",
-          stroke_opacity: Number.parseFloat(el.getAttribute("stroke-opacity") || "1"),
           draw_style: drawStyle,
           ...xform,
         });

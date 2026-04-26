@@ -274,8 +274,8 @@ export async function captureRegion(
  *   type="text"         Textbox. Use `text_variant` for plain / sticky
  *                       / callout. `tail_x`/`tail_y` set for callout.
  *   type="freehand"     Freehand path. Use `draw_style` for pen vs
- *                       highlighter. `stroke_opacity` carries the
- *                       semi-transparent highlighter alpha.
+ *                       highlighter. `stroke_opacity_value` carries
+ *                       the semi-transparent highlighter alpha.
  *   type="mosaic_image" Mosaic-redaction PNG, embedded via data URL in
  *                       `image_data_url` (legacy: in `text`).
  *   type="blur_image"   Blur-redaction PNG, same shape as mosaic_image.
@@ -304,7 +304,6 @@ export interface AnnotationShape {
   stroke?: string;
   stroke_width?: number;
   stroke_dasharray?: string;
-  stroke_opacity?: number;
   fill?: string;
   fill_opacity?: number;
 
