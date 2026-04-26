@@ -79,9 +79,11 @@ export class CanvasManager {
     // svg-format.ts + docs/svg-format.md for the versioning contract.
     stampAnnotVersion(svg);
 
-    // Defs
+    // Defs (currently empty — ArrowTool produces self-contained
+    // composed-path `<g data-type="arrow">` elements, no `<marker>`
+    // refs are needed). Kept as a top-level slot so future
+    // gradients / patterns can attach without restructuring.
     this.defs = document.createElementNS(SVG_NS, "defs");
-    this.#createArrowMarker();
     svg.appendChild(this.defs);
 
     // Base image
@@ -198,40 +200,6 @@ export class CanvasManager {
     this.svg.style.width = `${w}px`;
     this.svg.style.height = `${h}px`;
     this.onZoomChange?.(this.#zoom);
-  }
-
-  /**
-   * Legacy `anno-arrowhead` marker def.
-   *
-   * Historically this file generated a 45-marker matrix (6 shapes ×
-   * 3 widths × 3 lengths) for the old SVG-marker-based arrow
-   * rendering. After the arrow-markers.ts refactor, ArrowTool now
-   * produces self-contained composed-path `<g data-type="arrow">`
-   * elements that don't reference any marker id, so those 45
-   * markers are no longer needed.
-   *
-   * We keep the single `anno-arrowhead` def as a safety net for
-   * annotation content drawn by the pre-refactor toolbar (which
-   * wrote `marker-end="url(#anno-arrowhead)"` on `<line>` elements).
-   * When such content is loaded, this marker lets it render without
-   * a migration step.
-   */
-  #createArrowMarker(): void {
-    // Legacy alias. Keeps old saved files with `url(#anno-arrowhead)`
-    // rendering correctly — renders identically to an "md/md" triangle.
-    const legacy = document.createElementNS(SVG_NS, "marker");
-    legacy.id = "anno-arrowhead";
-    legacy.setAttribute("markerWidth", "12");
-    legacy.setAttribute("markerHeight", "8");
-    legacy.setAttribute("refX", "11");
-    legacy.setAttribute("refY", "4");
-    legacy.setAttribute("orient", "auto-start-reverse");
-    legacy.setAttribute("markerUnits", "strokeWidth");
-    const polygon = document.createElementNS(SVG_NS, "polygon");
-    polygon.setAttribute("points", "0 0, 12 4, 0 8");
-    polygon.setAttribute("fill", "context-stroke");
-    legacy.appendChild(polygon);
-    this.defs.appendChild(legacy);
   }
 
   #setupEvents(): void {
