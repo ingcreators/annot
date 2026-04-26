@@ -22,7 +22,7 @@ import type { History } from "./history.js";
 import { createColorPullButton, openAnchoredPopoverForColor } from "@ingcreators/annot-editor/property-controls";
 import { convertRedactStyle } from "@ingcreators/annot-editor/redact-utils";
 import { convertTextVariant, detectTextVariant } from "@ingcreators/annot-core/editor/text-utils";
-import { COUNTER_ICON_SVG, HIGHLIGHT_COLORS } from "@ingcreators/annot-core/editor/toolbar-icons";
+import { COUNTER_ICON_SVG } from "@ingcreators/annot-core/editor/toolbar-icons";
 import {
   type CommitInfo,
   type ElementReplacement,
@@ -593,61 +593,33 @@ export class PropertyPanel {
   }
 
   /** Highlight properties — mirrors the Tool mode Highlight layout.
-   *  Type section exposes the color-swatch chips (the Highlight
-   *  "variant" IS the color); Fill section carries only Transparency.
+   *  Schema-driven via Phase 3d of
+   *  `docs/plans/property-panel-schema.md`:
+   *
+   *    - `highlightColorPicker` (variantPicker) — swatch chips. The
+   *      registry's `setValue` writes the new `fill` color in place;
+   *      because the def's `type === "variantPicker"`, the renderer
+   *      flags the commit as `variantChange: true`, which routes
+   *      through `#handleRendererCommit`'s onVariantChanged branch
+   *      so the host loads the new color's saved Transparency
+   *      preset instead of rubber-banding the previous one. Matches
+   *      the imperative chain's `#history.save() + onVariantChanged`
+   *      sequence one-for-one.
+   *
+   *    - `highlightTransparency` (number) — `fill-opacity` slider
+   *      with the 0..100 percentage / inverse-opacity conversion
+   *      baked into the registry's getValue / setValue. Routes
+   *      through the standard onCommit (variantChange: false) path
+   *      so the rubber-band carries Transparency into the next
+   *      Highlight tool draw — same as the imperative `#commit()`.
+   *
    *  No Line section — highlight rects are strokeless paints. */
-  #renderHighlightControls(el: SVGElement): void {
-    // `HIGHLIGHT_COLORS` is a non-empty constant; `[0]` is always defined.
-    const currentFill = (el.getAttribute("fill") || HIGHLIGHT_COLORS[0]!.value).toLowerCase();
-
-    // Type section — swatch chips routed through onVariantChanged so
-    // the new color's preset (including its saved Transparency) gets
-    // applied via applyElementVariantPreset.
+  #renderHighlightControls(_el: SVGElement): void {
     this.#inSection("Type", () => {
-      const row = document.createElement("div");
-      row.className = "pp-type-row";
-      for (const opt of HIGHLIGHT_COLORS) {
-        const chip = document.createElement("div");
-        chip.className = `prop-choice-chip pp-color-chip${currentFill === opt.value ? " active" : ""}`;
-        // Color goes on the inner swatch (.pp-color-chip::before); the
-        // chip frame stays transparent so active state matches other
-        // Type chips (accent border + bg tint).
-        chip.style.setProperty("--swatch-color", opt.value);
-        setTooltip(chip, opt.label);
-        chip.addEventListener("click", () => {
-          if (opt.value === currentFill) return;
-          for (const t of this.#targets) {
-            t.setAttribute("fill", opt.value);
-          }
-          // Skip #commit rubber-band (would push the OLD preset's
-          // transparency onto the NEW color's preset). applyElement-
-          // VariantPreset on the onVariantChanged path will load the
-          // new color's saved Transparency instead.
-          this.#history.save();
-          if (this.onVariantChanged) {
-            this.onVariantChanged(this.#targets);
-          } else {
-            this.show(this.#targets);
-          }
-        });
-        row.appendChild(chip);
-      }
-      this.#target().appendChild(row);
+      this.#renderRegistryControl(PROPERTY_CONTROL_IDS.highlightColorPicker);
     });
-
-    // Fill section — Transparency only. 1 - fill-opacity, so 60% means
-    // the rect is 40% opaque (the classic highlighter feel).
     this.#inSection("Fill", () => {
-      const fo = Number.parseFloat(el.getAttribute("fill-opacity") || "0.4");
-      const transparency = Math.round((1 - (Number.isFinite(fo) ? fo : 0.4)) * 100);
-      const input = ppNumberInput(transparency, "%", 0, 100, 5, (v) => {
-        const nextOpacity = 1 - v / 100;
-        for (const t of this.#targets) {
-          t.setAttribute("fill-opacity", String(nextOpacity));
-        }
-        this.#commit();
-      });
-      this.#target().appendChild(this.#ppRow("Transparency", input));
+      this.#renderRegistryControl(PROPERTY_CONTROL_IDS.highlightTransparency);
     });
   }
 
