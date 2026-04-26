@@ -20,7 +20,7 @@ import {
 } from "./property-panel-helpers.js";
 import type { History } from "./history.js";
 import { createColorPullButton, openAnchoredPopoverForColor } from "@ingcreators/annot-editor/property-controls";
-import { convertRedactStyle, detectRedactStyle } from "@ingcreators/annot-editor/redact-utils";
+import { convertRedactStyle } from "@ingcreators/annot-editor/redact-utils";
 import { convertTextVariant, detectTextVariant } from "@ingcreators/annot-core/editor/text-utils";
 import { COUNTER_ICON_SVG, HIGHLIGHT_COLORS } from "@ingcreators/annot-core/editor/toolbar-icons";
 import {
@@ -559,33 +559,37 @@ export class PropertyPanel {
 
   /**
    * Redact properties — style picker + solid color picker (only
-   * relevant for the solid variant). Converting between styles
-   * generates new <image> content when switching to/from mosaic or
-   * blur, which is async because it samples the underlying base image.
+   * relevant for the solid variant). Schema-driven via Phase 3c of
+   * `docs/plans/property-panel-schema.md`:
+   *
+   *   - `redactStylePicker` uses `effect: applyRedactStyle`, the
+   *     async handler bound in the constructor that calls
+   *     `convertRedactStyle(t, v, this.#canvas)` per target. Mosaic
+   *     and blur variants regenerate `<image>` content from
+   *     resampled canvas pixels, so the handler is genuinely async;
+   *     the renderer awaits before firing onCommit.
+   *
+   *   - `redactSolidColor` uses `setValue` (sync `fill` attribute
+   *     write) and gates itself via `visibleWhen: (el) =>
+   *     redactStyleOf(el) === "solid"`. With the renderer's all-
+   *     targets gate that means the Fill section materialises only
+   *     when EVERY selected target is a solid redact — matching the
+   *     legacy `if (detectRedactStyle(t) === "solid")` per-target
+   *     filter inside the imperative color callback (which silently
+   *     skipped mixed-variant targets).
+   *
+   * The Fill `pp-section` wrapper is left unconditional here:
+   * `#inSection`'s "remove root if body has no children" cleanup
+   * makes the empty section disappear when `redactSolidColor`'s
+   * `visibleWhen` returns `null` for mosaic / blur selections.
    */
-  #renderRedactControls(el: SVGElement): void {
-    const current = detectRedactStyle(el) || "mosaic";
-    // Type section
+  #renderRedactControls(_el: SVGElement): void {
     this.#inSection("Type", () => {
-      this.#addRedactStylePicker(current);
+      this.#renderRegistryControl(PROPERTY_CONTROL_IDS.redactStylePicker);
     });
-    // Fill section — only the solid variant has an editable paint
-    // (mosaic / blur bake pixels into an <image>, so there's no color
-    // attribute to drive). Placed under "Fill" because it sets the
-    // `fill` attribute of the solid rect.
-    if (current === "solid") {
-      this.#inSection("Fill", () => {
-        const fill = el.getAttribute("fill") || "#111111";
-        this.#addColorPicker("Color", fill, (v) => {
-          for (const t of this.#targets) {
-            if (detectRedactStyle(t) === "solid") {
-              t.setAttribute("fill", v);
-            }
-          }
-          this.#commit();
-        });
-      });
-    }
+    this.#inSection("Fill", () => {
+      this.#renderRegistryControl(PROPERTY_CONTROL_IDS.redactSolidColor);
+    });
   }
 
   /** Highlight properties — mirrors the Tool mode Highlight layout.
@@ -647,55 +651,12 @@ export class PropertyPanel {
     });
   }
 
-  #addRedactStylePicker(current: RedactStyle): void {
-    // Just the chip row — category header is handled by `#inSection("Type",…)`.
-    const row = document.createElement("div");
-    row.className = "pp-type-row";
-    const options: Array<{ value: RedactStyle; icon: string; label: string }> = [
-      { value: "mosaic", icon: "grid_view", label: "Mosaic (pixelate)" },
-      { value: "solid", icon: "check_box", label: "Solid bar" },
-      { value: "blur", icon: "blur_on", label: "Blur" },
-    ];
-    for (const opt of options) {
-      const chip = document.createElement("div");
-      chip.className = `prop-choice-chip material-symbols-outlined${current === opt.value ? " active" : ""}`;
-      chip.textContent = opt.icon;
-      setTooltip(chip, opt.label);
-      chip.addEventListener("click", async () => {
-        if (opt.value === current) return;
-        row.querySelectorAll(".prop-choice-chip").forEach((c) => c.classList.remove("active"));
-        chip.classList.add("active");
-        // Convert is async (mosaic / blur need to resample pixels).
-        // Process targets sequentially to avoid N concurrent image
-        // decodes on low-end machines.
-        const replacements: { oldEl: SVGElement; newEl: SVGElement }[] = [];
-        const nextTargets: SVGElement[] = [];
-        for (const t of this.#targets) {
-          try {
-            const newEl = await convertRedactStyle(t, opt.value, this.#canvas);
-            replacements.push({ oldEl: t, newEl });
-            nextTargets.push(newEl);
-          } catch (err) {
-            console.error("[redact] style convert failed", err);
-          }
-        }
-        this.#targets = nextTargets;
-        // Skip style rubber-band (mosaic / blur elements are <image>s
-        // with baked pixels — their "style" isn't a user-editable set
-        // of attrs anyway). Just save history and fire the variant-
-        // changed path for title / panel refresh.
-        this.#history.save();
-        this.onTargetReplaced?.(replacements);
-        if (this.onVariantChanged) {
-          this.onVariantChanged(nextTargets);
-        } else {
-          this.show(nextTargets);
-        }
-      });
-      row.appendChild(chip);
-    }
-    this.#target().appendChild(row);
-  }
+  // `#addRedactStylePicker` removed in Phase 3c — the chip row is
+  // now produced by the schema-driven renderer
+  // (`PROPERTY_CONTROLS.redactStylePicker.effect = "applyRedactStyle"`)
+  // and the async effect handler bound in the constructor calls
+  // `convertRedactStyle(t, v, this.#canvas)` per target with the
+  // same sequential-await pattern the imperative click handler used.
 
   #renderMarkerControls(g: SVGElement): void {
     const bgEl = g.querySelector("circle") || g.querySelector("rect");
