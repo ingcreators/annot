@@ -12,6 +12,7 @@
 // duplicating a four-line attribute read here is preferable to a
 // circular-package import.
 
+import { refreshArrowPath } from "./arrow-markers.js";
 import { computeDasharray, detectDashKey } from "../utils/dash-utils.js";
 import { convertShape, detectShapeType } from "./shape-utils.js";
 import { convertTextVariant, detectTextVariant } from "./text-utils.js";
@@ -72,6 +73,9 @@ export const PROPERTY_CONTROL_IDS = {
   markerBgStrokeWidth: "markerBgStrokeWidth",
   markerBgStrokeStyle: "markerBgStrokeStyle",
   markerLabelValue: "markerLabelValue",
+  fillOpacity: "fillOpacity",
+  strokeOpacity: "strokeOpacity",
+  strokeLinecap: "strokeLinecap",
 } as const;
 export type PropertyControlId =
   (typeof PROPERTY_CONTROL_IDS)[keyof typeof PROPERTY_CONTROL_IDS];
@@ -118,9 +122,12 @@ export const CATEGORY_CONTROL_SHAPE: Readonly<
     PROPERTY_CONTROL_IDS.arrowVariantPicker,
     PROPERTY_CONTROL_IDS.drawStylePicker,
     PROPERTY_CONTROL_IDS.fillColor,
+    PROPERTY_CONTROL_IDS.fillOpacity,
     PROPERTY_CONTROL_IDS.strokeColor,
+    PROPERTY_CONTROL_IDS.strokeOpacity,
     PROPERTY_CONTROL_IDS.strokeWidth,
     PROPERTY_CONTROL_IDS.strokeStyle,
+    PROPERTY_CONTROL_IDS.strokeLinecap,
   ],
 };
 
@@ -304,6 +311,48 @@ function markerBgEl(g: SVGElement): Element | null {
   return g.querySelector("circle") ?? g.querySelector("rect");
 }
 
+/** Expansion target list for stroke-attr writes. Freehand `<g>`
+ *  wrappers surface their `<path>` children — the children
+ *  explicitly set their own stroke attributes, so writing on the
+ *  wrapper alone wouldn't take effect (the children's per-element
+ *  stroke wins over the inherited value). Mirrors the imperative
+ *  panel's `#strokeTargets()` / `#setAll()` expansion. */
+function strokeWriteTargets(el: SVGElement): SVGElement[] {
+  if (el.tagName === "g" && el.getAttribute("data-type") === "freehand") {
+    const out: SVGElement[] = [];
+    for (const child of Array.from(el.children)) {
+      if (child.tagName.toLowerCase() === "path") out.push(child as SVGElement);
+    }
+    return out;
+  }
+  return [el];
+}
+
+/** Read an attribute that conventionally lives on the inner shape
+ *  primitive of a `<g>` wrapper (arrow / freehand groups). For
+ *  non-`<g>` elements, falls back to a direct attribute read.
+ *  Mirrors the imperative panel's `#getAttr()` walk. */
+function groupAttrRead(el: SVGElement, attr: string): string | null {
+  if (el.tagName === "g") {
+    const inner = el.querySelector("path, rect, line, circle");
+    return inner?.getAttribute(attr) ?? el.getAttribute(attr);
+  }
+  return el.getAttribute(attr);
+}
+
+// `isLineLike` (single-element predicate) lives further up the file;
+// `strokeOpacity`'s setValue uses it to choose between writing
+// `opacity` (so SVG-marker arrowheads fade with the stem) and
+// `stroke-opacity`.
+
+/** Composed-arrow marker — true ONLY for `<g data-type="arrow">`,
+ *  the wrapper produced by ArrowTool. Used by `strokeColor` /
+ *  `strokeWidth` to drive arrow-specific augmentations
+ *  (head-filled fill propagation; `refreshArrowPath` regen). */
+function isComposedArrow(el: Element): boolean {
+  return el.tagName === "g" && el.getAttribute("data-type") === "arrow";
+}
+
 function markerSizeOf(g: SVGElement): number {
   const text = g.querySelector("text");
   return Number.parseFloat(text?.getAttribute("font-size") || "13");
@@ -400,24 +449,44 @@ export const PROPERTY_CONTROLS: Readonly<{
     id: PROPERTY_CONTROL_IDS.strokeColor,
     type: "color",
     label: "Color",
-    getValue: (el) => el.getAttribute("stroke") ?? "#000000",
+    getValue: (el) => groupAttrRead(el, "stroke") ?? "#000000",
     setValue: (el, value) => {
-      el.setAttribute("stroke", String(value));
+      const v = String(value);
+      // Freehand <g> wrappers expand to their <path> children so the
+      // children's per-element stroke writes take effect.
+      for (const t of strokeWriteTargets(el)) t.setAttribute("stroke", v);
+      // Composed arrow groups: the head <path> carries its own
+      // colored `fill` (the filled triangle / diamond / oval). Keep
+      // it locked to the stroke color so heads track the stem.
+      // Open heads keep `fill="none"` and aren't matched by the
+      // selector — only the data-role="head-filled" subpath is
+      // touched.
+      if (isComposedArrow(el)) {
+        const headFilled = el.querySelector(':scope > [data-role="head-filled"]');
+        if (headFilled) headFilled.setAttribute("fill", v);
+      }
     },
   },
   strokeWidth: {
     id: PROPERTY_CONTROL_IDS.strokeWidth,
     type: "number",
     label: "Width",
-    getValue: (el) => Number.parseFloat(el.getAttribute("stroke-width") || "0"),
+    getValue: (el) => Number.parseFloat(groupAttrRead(el, "stroke-width") || "0"),
     setValue: (el, value) => {
       const w = Number(value);
-      el.setAttribute("stroke-width", String(w));
-      // Re-express dasharray against the new width so dots / dashes
-      // stay proportional. Mirrors the imperative `#addPPLineSection`
-      // branch.
-      const key = el.getAttribute("data-dash-key");
-      if (key) el.setAttribute("stroke-dasharray", computeDasharray(key, w));
+      for (const t of strokeWriteTargets(el)) {
+        t.setAttribute("stroke-width", String(w));
+        // Re-express dasharray against the new width so dots /
+        // dashes stay proportional. Mirrors the imperative
+        // `#addPPLineSection` branch.
+        const key = t.getAttribute("data-dash-key");
+        if (key) t.setAttribute("stroke-dasharray", computeDasharray(key, w));
+      }
+      // Composed arrow groups compute their stem-shortening offsets
+      // from the stroke width (the trig constants multiply `sw`).
+      // Regenerate stem + head `d` so the alignment stays flush
+      // after a width change. Mirrors the imperative chain.
+      if (isComposedArrow(el)) refreshArrowPath(el);
     },
     min: 0.25,
     max: 200,
@@ -429,21 +498,23 @@ export const PROPERTY_CONTROLS: Readonly<{
     type: "select",
     label: "Dash type",
     getValue: (el) => {
-      const stored = el.getAttribute("data-dash-key");
+      const stored = groupAttrRead(el, "data-dash-key");
       if (stored != null) return stored;
-      const sw = Number.parseFloat(el.getAttribute("stroke-width") || "1");
-      const raw = el.getAttribute("stroke-dasharray") || "";
+      const sw = Number.parseFloat(groupAttrRead(el, "stroke-width") || "1");
+      const raw = groupAttrRead(el, "stroke-dasharray") || "";
       return detectDashKey(raw, sw) ?? "";
     },
     setValue: (el, value) => {
       const key = String(value);
-      const sw = Number.parseFloat(el.getAttribute("stroke-width") || "1");
-      if (key) {
-        el.setAttribute("data-dash-key", key);
-        el.setAttribute("stroke-dasharray", computeDasharray(key, sw));
-      } else {
-        el.removeAttribute("data-dash-key");
-        el.removeAttribute("stroke-dasharray");
+      for (const t of strokeWriteTargets(el)) {
+        const sw = Number.parseFloat(t.getAttribute("stroke-width") || "1");
+        if (key) {
+          t.setAttribute("data-dash-key", key);
+          t.setAttribute("stroke-dasharray", computeDasharray(key, sw));
+        } else {
+          t.removeAttribute("data-dash-key");
+          t.removeAttribute("stroke-dasharray");
+        }
       }
     },
     options: [
@@ -724,6 +795,91 @@ export const PROPERTY_CONTROLS: Readonly<{
     min: 1,
     max: 999,
     step: 1,
+  },
+
+  // ─── Shape transparency + cap type ───────────────────────────────
+  // Phase B of `property-panel-schema-extensions.md`. The three rows
+  // below cover the imperative `#addPPLineSection` /
+  // `#addPPFillSection` content the original migration left
+  // behind. All three use the inverse-percentage convention
+  // (transparency 0..100% = inverse of opacity 0..1) so a freshly
+  // drawn shape with `fill-opacity="1"` reads as 0% transparent.
+  fillOpacity: {
+    id: PROPERTY_CONTROL_IDS.fillOpacity,
+    type: "number",
+    label: "Transparency",
+    getValue: (el) => {
+      const fo = Number.parseFloat(groupAttrRead(el, "fill-opacity") || "1");
+      const safe = Number.isFinite(fo) ? fo : 1;
+      return Math.round((1 - safe) * 100);
+    },
+    setValue: (el, value) => {
+      const op = 1 - Number(value) / 100;
+      el.setAttribute("fill-opacity", String(op));
+    },
+    // Stroke-only families don't have a fillable region, so the
+    // opacity row hides alongside `fillColor`.
+    visibleWhen: (el) =>
+      !isLineLike(el) && el.tagName !== "path" && !isFreehandGroupEl(el),
+    min: 0,
+    max: 100,
+    step: 1,
+    unit: "%",
+  },
+  strokeOpacity: {
+    id: PROPERTY_CONTROL_IDS.strokeOpacity,
+    type: "number",
+    label: "Transparency",
+    // Read prefers the element's own `opacity` (line-like uses this
+    // so SVG-marker arrowheads fade with the stem) and falls back
+    // to `stroke-opacity` everywhere else. Mirrors the imperative
+    // `readOp()` walk in `#addPPLineSection`.
+    getValue: (el) => {
+      const direct = el.getAttribute("opacity");
+      const raw = direct != null ? direct : groupAttrRead(el, "stroke-opacity") || "1";
+      const v = Number.parseFloat(raw);
+      const safe = Number.isFinite(v) ? v : 1;
+      return Math.round((1 - safe) * 100);
+    },
+    setValue: (el, value) => {
+      const op = 1 - Number(value) / 100;
+      // For line-like targets, write `opacity` and drop any legacy
+      // `stroke-opacity` so the two paint channels don't compound
+      // into an unexpectedly faint line. For other shapes,
+      // `stroke-opacity` is the right channel (leaves fill alone).
+      // Freehand groups expand to their <path> children so the
+      // children's per-element stroke writes take effect.
+      for (const t of strokeWriteTargets(el)) {
+        if (isLineLike(t)) {
+          t.setAttribute("opacity", String(op));
+          t.removeAttribute("stroke-opacity");
+        } else {
+          t.setAttribute("stroke-opacity", String(op));
+        }
+      }
+    },
+    min: 0,
+    max: 100,
+    step: 1,
+    unit: "%",
+  },
+  strokeLinecap: {
+    id: PROPERTY_CONTROL_IDS.strokeLinecap,
+    type: "select",
+    label: "Cap type",
+    // Default to "butt" — SVG's actual rendering when no
+    // stroke-linecap attribute is present. Order mirrors
+    // PowerPoint's Square → Round → Flat (Flat = SVG "butt").
+    getValue: (el) => groupAttrRead(el, "stroke-linecap") ?? "butt",
+    setValue: (el, value) => {
+      const v = String(value);
+      for (const t of strokeWriteTargets(el)) t.setAttribute("stroke-linecap", v);
+    },
+    options: [
+      { value: "square", label: "Square" },
+      { value: "round", label: "Round" },
+      { value: "butt", label: "Flat" },
+    ],
   },
 };
 

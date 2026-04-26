@@ -7,18 +7,11 @@ import {
   type PropertyControlId,
   type PropertyEffectId,
 } from "@ingcreators/annot-core/editor/property-schema";
-import { computeDasharray, detectDashKey } from "@ingcreators/annot-core/utils";
-import { refreshArrowPath } from "@ingcreators/annot-core/editor/arrow-markers";
 import type { CanvasManager } from "./canvas-manager.js";
 import { createCustomSelect } from "./custom-select.js";
-import {
-  arrowPreview,
-  arrowSizePreview,
-  dashPreview,
-  ppNumberInput,
-} from "./property-panel-helpers.js";
+import { arrowPreview, arrowSizePreview, ppNumberInput } from "./property-panel-helpers.js";
 import type { History } from "./history.js";
-import { createColorPullButton, openAnchoredPopoverForColor } from "@ingcreators/annot-editor/property-controls";
+import { createColorPullButton } from "@ingcreators/annot-editor/property-controls";
 import { convertRedactStyle } from "@ingcreators/annot-editor/redact-utils";
 import { convertTextVariant, detectTextVariant } from "@ingcreators/annot-core/editor/text-utils";
 import {
@@ -36,7 +29,6 @@ import type {
   ArrowHead,
   ArrowShape,
   DrawStyle,
-  LineCap,
   MarkerShape,
   RedactStyle,
 } from "./tools/tool-base.js";
@@ -400,38 +392,85 @@ export class PropertyPanel {
   }
 
   #renderShapeControls(el: SVGElement): void {
-    // Type section: variant picker appropriate to the selected element
-    // family (shape / arrow-like / freehand path). Each picker is now
-    // schema-driven — the registry's `visibleWhen` predicates encode
-    // the same gating the imperative chain used (`detectShapeType !==
-    // null`, `isLineLike`, `path || freehand-group`), and the
-    // renderer's all-targets check covers the multi-select rule.
-    // The pp-section wrapper is preserved here at the panel layer
-    // because the registry doesn't model section grouping.
+    // Type section — schema-driven variant pickers (Phase 3b).
     this.#inSection("Type", () => {
       this.#renderRegistryControl(PROPERTY_CONTROL_IDS.shapeTypePicker);
       this.#renderRegistryControl(PROPERTY_CONTROL_IDS.arrowVariantPicker);
       this.#renderRegistryControl(PROPERTY_CONTROL_IDS.drawStylePicker);
     });
 
-    // Fill paint — rendered ABOVE the Line section, matching the tool
-    // panel's category order (Type → Fill → Line). Hidden for strokes-
-    // only elements (line / path / freehand group) so we don't show a
-    // useless "No fill" button for them.
-    //
-    // Fill / Line sections still go through `#addPPFillSection` /
-    // `#addPPLineSection` because they include rows the registry
-    // doesn't yet model (fill transparency, stroke transparency,
-    // cap type, per-end arrow type+size grids). A future Phase 3b-N
-    // can extend the registry to cover those and migrate these
-    // sections too.
-    if (!isLineLike(el) && el.tagName !== "path" && !isFreehandGroup(el)) {
-      this.#addPPFillSection(el);
-    }
+    // One-shot legacy data migrations the imperative panel used to
+    // perform inline at render time:
+    //   - "Normalize stray non-solid stroke" (legacy `stroke="none"`
+    //     and dropped-gradient `url(#...)` references → visible red).
+    //   - "Migrate legacy stroke-opacity → opacity" for line-like
+    //     targets so the new transparency setter doesn't compound
+    //     two paint channels.
+    // Run BEFORE rendering so the registry's getValue reads the
+    // post-migration attribute values.
+    this.#migrateLegacyStrokeAttrs(el);
 
-    // Stroke paint (Line section). #addPPLineSection already builds
-    // its own `pp-section` card via `#ppSection("Line")`.
-    this.#addPPLineSection(el);
+    // Fill section — fillColor + fillOpacity. Hidden entirely for
+    // stroke-only families (line / path / freehand group) via
+    // `#inSection`'s "remove root if empty body" cleanup, since both
+    // defs' `visibleWhen` excludes those families.
+    this.#inSection("Fill", () => {
+      this.#renderRegistryControl(PROPERTY_CONTROL_IDS.fillColor);
+      this.#renderRegistryControl(PROPERTY_CONTROL_IDS.fillOpacity);
+    });
+
+    // Line section — schema-driven Color / Transparency / Width /
+    // Dash type / Cap type. The per-end arrow type + size grids
+    // (lines only) stay imperative; Phase C of
+    // `property-panel-schema-extensions.md` will model them as
+    // either 4 separate select ids or one compound control.
+    this.#inSection("Line", () => {
+      this.#renderRegistryControl(PROPERTY_CONTROL_IDS.strokeColor);
+      this.#renderRegistryControl(PROPERTY_CONTROL_IDS.strokeOpacity);
+      this.#renderRegistryControl(PROPERTY_CONTROL_IDS.strokeWidth);
+      this.#renderRegistryControl(PROPERTY_CONTROL_IDS.strokeStyle);
+      this.#renderRegistryControl(PROPERTY_CONTROL_IDS.strokeLinecap);
+      // Per-end arrow rows: visible only when ALL targets are line-
+      // like (so "edit per-end shape" makes sense). Mirrors the
+      // imperative `#addPPLineSection`'s gating.
+      if (isLineLike(el) && this.#targets.every((t) => isLineLike(t))) {
+        const spec = detectArrowEnds(el);
+        this.#addPPArrowRows(this.#target(), spec);
+      }
+    });
+  }
+
+  /** One-shot data migration run before the Line section renders.
+   *  Cleans two legacy attribute states the imperative panel used to
+   *  fix up inline:
+   *    - `stroke="none"` or legacy `url(...)` gradient references →
+   *      visible red default. The gradient editor was dropped years
+   *      ago; the references no longer round-trip.
+   *    - Line-like targets carrying a legacy `stroke-opacity` (from
+   *      a build that didn't yet use `opacity` to fade SVG markers)
+   *      → migrate the value to `opacity` and drop the legacy
+   *      attribute. Stops the new transparency setter from
+   *      compounding two paint channels into a faint line. */
+  #migrateLegacyStrokeAttrs(sample: SVGElement): void {
+    const targets = this.#strokeTargets();
+    const sampleStroke = this.#getAttr(sample, "stroke") || "#ff0000";
+    if (sampleStroke === "none" || /^url\(/.test(sampleStroke)) {
+      for (const t of targets) t.setAttribute("stroke", "#ff0000");
+    }
+    if (
+      isLineLike(sample) &&
+      sample.hasAttribute("stroke-opacity") &&
+      !sample.hasAttribute("opacity")
+    ) {
+      for (const t of targets) {
+        if (!isLineLike(t)) continue;
+        const legacy = t.getAttribute("stroke-opacity");
+        if (legacy != null) {
+          t.setAttribute("opacity", legacy);
+          t.removeAttribute("stroke-opacity");
+        }
+      }
+    }
   }
 
   /**
@@ -865,275 +904,16 @@ export class PropertyPanel {
    *  needs either, and keeping a single-option radio would just add
    *  visual noise. If either mode is ever needed back, restore the
    *  paint-type radio and the gradient editor branch below. */
-  #addPPLineSection(el: SVGElement): void {
-    const { body } = this.#ppSection("Line");
-    // For freehand sessions, edits target the individual <path>
-    // strokes inside the <g> wrapper (they're where stroke attrs
-    // actually live). `targets()` returns that expanded list so each
-    // callback below can iterate the right elements.
-    const targets = () => this.#strokeTargets();
-    const isLineEl = isLineLike(el) && this.#targets.every((t) => isLineLike(t));
-
-    // Normalize any stray non-solid stroke to a solid color so the
-    // rest of the section has a real paint to bind to. "none" and
-    // legacy url(...) gradient references (no longer authored — the
-    // gradient editor was dropped) flip to a visible default red.
-    let strokeAttr = this.#getAttr(el, "stroke") || "#ff0000";
-    if (strokeAttr === "none" || /^url\(/.test(strokeAttr)) {
-      const fallback = "#ff0000";
-      for (const t of targets()) {
-        t.setAttribute("stroke", fallback);
-      }
-      strokeAttr = fallback;
-    }
-
-    // --- Color pulldown --------------------------------------------
-    const colorBtn = document.createElement("button");
-    colorBtn.type = "button";
-    colorBtn.className = "pp-color-btn";
-    const swatch = document.createElement("span");
-    swatch.className = "pp-color-swatch";
-    swatch.style.background = strokeAttr;
-    colorBtn.appendChild(swatch);
-    const caret = document.createElement("span");
-    caret.className = "material-symbols-outlined";
-    caret.textContent = "expand_more";
-    colorBtn.appendChild(caret);
-    colorBtn.addEventListener("click", () => {
-      openAnchoredPopoverForColor(colorBtn, strokeAttr, (color) => {
-        for (const t of targets()) {
-          t.setAttribute("stroke", color);
-          // Arrow groups: the head <path> holds its own `fill` (the
-          // filled triangle / diamond / oval interior). Keep it
-          // locked to the stroke color so heads track the stem.
-          if (t.tagName === "g" && t.getAttribute("data-type") === "arrow") {
-            // Only the filled head carries a colored fill; the open
-            // head path keeps fill="none" and should stay untouched.
-            const headFilled = t.querySelector<SVGPathElement>(
-              ':scope > [data-role="head-filled"]',
-            );
-            if (headFilled) headFilled.setAttribute("fill", color);
-          }
-        }
-        swatch.style.background = color;
-        this.#commit();
-      });
-    });
-    body.appendChild(this.#ppRow("Color", colorBtn));
-
-    // --- Transparency slider + number -------------------------------
-    // For <line> we set `opacity` on the element itself rather than
-    // `stroke-opacity`. SVG markers referenced via `url(#...)` pick up
-    // the stroke COLOR via `context-stroke`, but NOT the stroke
-    // opacity, so setting stroke-opacity alone leaves arrow heads /
-    // diamonds fully opaque while the line fades. Applying `opacity`
-    // cascades through to the markers (lines have no fill, so the
-    // dual-property trade-off doesn't matter here).
-    //
-    // One-shot migration: if a line carries a legacy `stroke-opacity`
-    // (written by an older build that didn't know about the marker
-    // propagation issue), move the value to `opacity` on first edit
-    // so any subsequent slider change doesn't compound the two.
-    if (isLineLike(el) && el.hasAttribute("stroke-opacity") && !el.hasAttribute("opacity")) {
-      for (const t of targets()) {
-        if (isLineLike(t)) {
-          const legacy = t.getAttribute("stroke-opacity");
-          if (legacy != null) {
-            t.setAttribute("opacity", legacy);
-            t.removeAttribute("stroke-opacity");
-          }
-        }
-      }
-    }
-    const readOp = (e: SVGElement) => {
-      const direct = e.getAttribute("opacity");
-      if (direct != null) return Number.parseFloat(direct);
-      return Number.parseFloat(this.#getAttr(e, "stroke-opacity") || "1");
-    };
-    const strokeOp = readOp(el);
-    body.appendChild(
-      this.#ppRow(
-        "Transparency",
-        ppNumberInput(Math.round((1 - strokeOp) * 100), "%", 0, 100, 1, (transparencyPct) => {
-          const op = 1 - transparencyPct / 100;
-          for (const t of targets()) {
-            if (t.tagName === "line") {
-              t.setAttribute("opacity", String(op));
-              // Drop any lingering stroke-opacity so the two don't
-              // multiply into an unexpectedly faint line.
-              t.removeAttribute("stroke-opacity");
-            } else {
-              t.setAttribute("stroke-opacity", String(op));
-            }
-          }
-          this.#commit();
-        }),
-      ),
-    );
-
-    // --- Width number input (pt) -----------------------------------
-    const sw = Number.parseFloat(this.#getAttr(el, "stroke-width") || "3");
-    body.appendChild(
-      this.#ppRow(
-        "Width",
-        ppNumberInput(sw, "pt", 0.25, 200, 0.25, (v) => {
-          for (const t of targets()) {
-            t.setAttribute("stroke-width", String(v));
-            // Dashes are derived from the width — recompute so the pattern
-            // stays visually consistent across width changes.
-            const key = t.getAttribute("data-dash-key") || "";
-            if (key) t.setAttribute("stroke-dasharray", computeDasharray(key, v));
-            // Arrow groups compute their shortening offsets from the
-            // stroke width (the trig constants multiply `sw`). Regenerate
-            // stem + head `d` so the alignment stays flush after a width
-            // change.
-            if (t.tagName === "g" && t.getAttribute("data-type") === "arrow") {
-              refreshArrowPath(t);
-            }
-          }
-          this.#commit();
-        }),
-      ),
-    );
-
-    // --- Dash type pulldown ----------------------------------------
-    const dashRaw = this.#getAttr(el, "stroke-dasharray") || "";
-    const dashKey = this.#getAttr(el, "data-dash-key") || detectDashKey(dashRaw, sw);
-    const DASH_OPTIONS: Array<{ value: string; label: string; preview: string }> = [
-      { value: "", label: "Solid", preview: dashPreview("") },
-      { value: "dash", label: "Dashed", preview: dashPreview("dash") },
-      { value: "dot", label: "Dotted", preview: dashPreview("dot") },
-      { value: "dashDot", label: "Dash-Dot", preview: dashPreview("dashDot") },
-      { value: "lgDash", label: "Long Dash", preview: dashPreview("lgDash") },
-    ];
-    body.appendChild(
-      this.#ppRow(
-        "Dash type",
-        createCustomSelect({
-          options: DASH_OPTIONS,
-          current: dashKey,
-          ariaLabel: "Dash type",
-          onChange: (v) => {
-            for (const t of targets()) {
-              t.setAttribute("data-dash-key", v);
-              const elSw = Number.parseFloat(t.getAttribute("stroke-width") || String(sw));
-              t.setAttribute("stroke-dasharray", computeDasharray(v, elSw));
-            }
-            this.#commit();
-          },
-        }),
-      ),
-    );
-
-    // --- Cap type pulldown -----------------------------------------
-    // Fallback is "butt" to match SVG's actual rendering when no
-    // stroke-linecap attribute is present. The old "round" fallback
-    // made the picker show Round-active for freshly-drawn lines that
-    // were actually rendering flat. Order mirrors PowerPoint's
-    // Square → Round → Flat ordering.
-    const currentCap = (this.#getAttr(el, "stroke-linecap") as LineCap | null) || "butt";
-    body.appendChild(
-      this.#ppRow(
-        "Cap type",
-        createCustomSelect({
-          options: [
-            {
-              value: "square",
-              label: "Square",
-              preview: `<svg width="32" height="12" viewBox="0 0 32 12"><line x1="4" y1="6" x2="28" y2="6" stroke="currentColor" stroke-width="4" stroke-linecap="square"/></svg>`,
-            },
-            {
-              value: "round",
-              label: "Round",
-              preview: `<svg width="32" height="12" viewBox="0 0 32 12"><line x1="4" y1="6" x2="28" y2="6" stroke="currentColor" stroke-width="4" stroke-linecap="round"/></svg>`,
-            },
-            {
-              value: "butt",
-              label: "Flat",
-              preview: `<svg width="32" height="12" viewBox="0 0 32 12"><line x1="4" y1="6" x2="28" y2="6" stroke="currentColor" stroke-width="4" stroke-linecap="butt"/></svg>`,
-            },
-          ],
-          current: currentCap,
-          ariaLabel: "Line cap",
-          onChange: (v) => this.#setAll("stroke-linecap", v),
-        }),
-      ),
-    );
-
-    // Join type (stroke-linejoin) intentionally omitted from the UI.
-    // At casual annotation widths (~3 pt default) the visible effect
-    // is only 1-2 px at each corner — below the noise floor for most
-    // users — and the concept ("how two stroke segments meet") is
-    // more confusing than useful. SVG's default is `miter`, which we
-    // leave untouched so rectangles keep sharp stroke corners. Users
-    // wanting genuinely rounded corners should pick the Rounded
-    // variant (modifies rect geometry) rather than tweaking linejoin.
-
-    // --- Arrow type & size pulldowns (lines only) ------------------
-    if (isLineEl) {
-      const spec = detectArrowEnds(el);
-      this.#addPPArrowRows(body, spec);
-    }
-  }
-
-  /** Fill section (PowerPoint-style). Solid-only + "No fill" via the
-   *  color pulldown's built-in `allowNone` affordance — gradient fill
-   *  was dropped (rarely useful for screenshot annotation, adds a
-   *  notable amount of complex UI: paint-type radios, angle slider,
-   *  stop editor). Users who need multi-color fills can overlay
-   *  multiple shapes. */
-  #addPPFillSection(el: SVGElement): void {
-    const { body } = this.#ppSection("Fill");
-    const fill = this.#getAttr(el, "fill") || "none";
-
-    // Fill color (supports "No fill" as a sentinel via allowNone)
-    const colorBtn = document.createElement("button");
-    colorBtn.type = "button";
-    colorBtn.className = "pp-color-btn";
-    const swatch = document.createElement("span");
-    swatch.className = "pp-color-swatch";
-    const applySwatch = (c: string) => {
-      if (c === "none") {
-        swatch.classList.add("pp-color-swatch-none");
-        swatch.style.background = "transparent";
-      } else {
-        swatch.classList.remove("pp-color-swatch-none");
-        swatch.style.background = c;
-      }
-    };
-    applySwatch(fill);
-    colorBtn.appendChild(swatch);
-    const caret = document.createElement("span");
-    caret.className = "material-symbols-outlined";
-    caret.textContent = "expand_more";
-    colorBtn.appendChild(caret);
-    colorBtn.addEventListener("click", () => {
-      openAnchoredPopoverForColor(
-        colorBtn,
-        fill,
-        (color) => {
-          for (const t of this.#targets) t.setAttribute("fill", color);
-          applySwatch(color);
-          this.#commit();
-        },
-        { allowNone: true },
-      );
-    });
-    body.appendChild(this.#ppRow("Color", colorBtn));
-
-    // Fill transparency (0 = fully opaque, 100 = fully transparent)
-    const fillOp = Number.parseFloat(this.#getAttr(el, "fill-opacity") || "1");
-    body.appendChild(
-      this.#ppRow(
-        "Transparency",
-        ppNumberInput(Math.round((1 - fillOp) * 100), "%", 0, 100, 1, (transparencyPct) => {
-          const op = 1 - transparencyPct / 100;
-          for (const t of this.#targets) t.setAttribute("fill-opacity", String(op));
-          this.#commit();
-        }),
-      ),
-    );
-  }
+  // `#addPPLineSection` and `#addPPFillSection` removed in
+  // Extensions Phase B — both sections are now schema-driven via
+  // `#renderShapeControls` calling `#renderRegistryControl` per id.
+  // The registry's strokeColor / strokeWidth setValues internally
+  // expand to freehand <path> children + handle composed-arrow
+  // augmentations (head-filled fill propagation, refreshArrowPath
+  // regen). Fill / Line / per-end-arrow gating uses each def's
+  // `visibleWhen` predicate plus `#inSection`'s "remove root if
+  // empty" cleanup. Per-end arrow type+size grids stay imperative
+  // (`#addPPArrowRows`); Phase C will model them.
 
   /** Two rows of pulldowns per endpoint (type + size).
    *
