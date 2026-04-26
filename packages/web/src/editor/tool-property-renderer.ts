@@ -41,8 +41,10 @@
 import {
   HIGHLIGHT_COLORS,
   PROPERTY_CONTROL_IDS,
+  selectionDefMetadata,
   TOOL_REGISTRY,
   type ToolPanelAdapterId,
+  type ToolPanelAdapterMetadata,
   type ToolPanelControlDef,
   type ToolPanelSection,
 } from "@ingcreators/annot-core/editor";
@@ -366,14 +368,19 @@ function renderHighlightTypeChipsRow(
 // ─── Transparency / opacity number rows ──────────────────────────────
 
 function renderTransparencyPercent(preset: ToolOptions, sync: () => void): HTMLElement {
+  // Adapter `tool.transparencyPercent` borrows from SELECTION's
+  // `strokeOpacity` def (min=0, max=100, step=1, unit="%", label
+  // "Transparency"). Range matches exactly — every byte of metadata
+  // flows through unchanged.
+  const meta = metaFor("tool.transparencyPercent");
   return createPropertyRow(
-    "Transparency",
+    meta.label ?? "Transparency",
     createNumberInput({
       current: Math.round((1 - (preset.strokeOpacity ?? 1)) * 100),
-      unit: "%",
-      min: 0,
-      max: 100,
-      step: 1,
+      unit: meta.unit ?? "%",
+      min: meta.min ?? 0,
+      max: meta.max ?? 100,
+      step: meta.step ?? 1,
       onChange: (v) => {
         preset.strokeOpacity = 1 - v / 100;
         sync();
@@ -383,13 +390,19 @@ function renderTransparencyPercent(preset: ToolOptions, sync: () => void): HTMLE
 }
 
 function renderFillTransparencyPercent(preset: ToolOptions, sync: () => void): HTMLElement {
+  // Adapter `tool.fillTransparencyPercent` borrows from SELECTION's
+  // `fillOpacity` def for label / range / unit; the Tool side
+  // overrides `step` to 5 (Highlight's bands are coarser — 5%
+  // transparency increments give the user enough granularity
+  // without 100 distinct values cluttering the input).
+  const meta = metaFor("tool.fillTransparencyPercent");
   return createPropertyRow(
-    "Transparency",
+    meta.label ?? "Transparency",
     createNumberInput({
       current: Math.round((1 - (preset.fillOpacity ?? 0.4)) * 100),
-      unit: "%",
-      min: 0,
-      max: 100,
+      unit: meta.unit ?? "%",
+      min: meta.min ?? 0,
+      max: meta.max ?? 100,
       step: 5,
       onChange: (v) => {
         preset.fillOpacity = 1 - v / 100;
@@ -400,6 +413,13 @@ function renderFillTransparencyPercent(preset: ToolOptions, sync: () => void): H
 }
 
 function renderFillOpacityPercent(preset: ToolOptions, sync: () => void): HTMLElement {
+  // No SELECTION-side analogue: the SELECTION panel uses Transparency
+  // (inverse), the Tool side's Shape Fill section uses Opacity
+  // (direct). Adapter `tool.fillOpacityPercent.selectionDef` is
+  // `null`, so `metaFor` returns an empty metadata object — every
+  // value below is hardcoded. Kept here rather than added to the
+  // SELECTION registry so the SELECTION panel doesn't grow a second
+  // (redundant) "Opacity" row.
   return createPropertyRow(
     "Opacity",
     createNumberInput({
@@ -438,43 +458,68 @@ function renderFreehandDoneRow(ctx: ToolPropertyRendererContext): HTMLElement {
 
 // ─── SELECTION-side ids ──────────────────────────────────────────────
 
+/** Resolve the SELECTION-side metadata an adapter borrows. Centralised
+ *  so every per-id renderer below reads the same fallback shape; the
+ *  empty object lets per-id code use `meta.label ?? "Width"` etc.
+ *  without juggling `null` everywhere. */
+function metaFor(id: ToolPanelAdapterId): ToolPanelAdapterMetadata {
+  return selectionDefMetadata(id) ?? ({} as ToolPanelAdapterMetadata);
+}
+
 function renderStrokeColorRow(
   toolId: string,
   preset: ToolOptions,
   sync: () => void,
 ): HTMLElement {
   // Marker's Line > Color falls back to white when strokeColor is
-  // empty; every other tool uses the literal preset value. Matches
-  // the imperative `preset.strokeColor || "#ffffff"` for marker,
-  // `preset.strokeColor` everywhere else.
+  // empty; every other tool uses the literal preset value.
   const initial = toolId === "marker" ? preset.strokeColor || "#ffffff" : preset.strokeColor;
+  const meta = metaFor(PROPERTY_CONTROL_IDS.strokeColor);
   const btn = createColorPullButton(initial, (color) => {
     preset.strokeColor = color;
     sync();
   });
-  return createPropertyRow("Color", btn);
+  return createPropertyRow(meta.label ?? "Color", btn);
 }
+
+/** Marker's Line > Width has tighter bounds than every other stroke-
+ *  bearing tool (and the SELECTION-side def): 0..20 pt instead of
+ *  0.25..200. Counter borders aren't meaningful much past ~10pt and
+ *  the marker tool's own creation-time defaults stay inside this
+ *  range. Documented as a deliberate per-tool override against the
+ *  SELECTION metadata rather than a registry change so the
+ *  SELECTION-side strokeWidth doesn't lose its 200pt ceiling for
+ *  shapes that genuinely use thick borders. */
+const MARKER_STROKE_WIDTH_OVERRIDE = { min: 0, max: 20, defaultValue: 1.5 };
 
 function renderStrokeWidthRow(
   toolId: string,
   preset: ToolOptions,
   sync: () => void,
 ): HTMLElement {
-  // Marker's Line > Width allows 0 (matches the imperative's
-  // `min: 0, max: 20`); every stroke-bearing tool else uses
-  // `min: 0.25, max: 40`. Step = 0.25, unit = "pt" everywhere.
+  const meta = metaFor(PROPERTY_CONTROL_IDS.strokeWidth);
   const isMarker = toolId === "marker";
-  const min = isMarker ? 0 : 0.25;
-  const max = isMarker ? 20 : 40;
-  const initial = isMarker ? preset.strokeWidth ?? 1.5 : preset.strokeWidth;
+  // The Tool side uses a tighter `max` for non-marker tools too
+  // (40pt — anything wider would overflow the canvas at typical
+  // paper sizes). The override stays here rather than in the
+  // SELECTION registry because the SELECTION panel deliberately
+  // permits the wider 200pt range for users editing existing
+  // shapes who started outside Annot. Phase 5 cleanup may revisit.
+  const min = isMarker ? MARKER_STROKE_WIDTH_OVERRIDE.min : meta.min ?? 0.25;
+  const max = isMarker ? MARKER_STROKE_WIDTH_OVERRIDE.max : 40;
+  const step = meta.step ?? 0.25;
+  const unit = meta.unit ?? "pt";
+  const initial = isMarker
+    ? preset.strokeWidth ?? MARKER_STROKE_WIDTH_OVERRIDE.defaultValue
+    : preset.strokeWidth;
   return createPropertyRow(
-    "Width",
+    meta.label ?? "Width",
     createNumberInput({
       current: initial,
-      unit: "pt",
+      unit,
       min,
       max,
-      step: 0.25,
+      step,
       onChange: (v) => {
         preset.strokeWidth = v;
         sync();
@@ -484,18 +529,25 @@ function renderStrokeWidthRow(
 }
 
 function renderDashTypeRow(preset: ToolOptions, sync: () => void): HTMLElement {
+  const meta = metaFor(PROPERTY_CONTROL_IDS.strokeStyle);
+  const label = meta.label ?? "Dash type";
+  // Decorate the SELECTION-side `value`/`label` pair with a per-key
+  // dash preview SVG; Tool + SELECTION surfaces share the option set
+  // but build their own previews (the SELECTION renderer's preview
+  // call is symmetric — a UX edit to add e.g. "Dot-Dash-Dot" goes
+  // into PROPERTY_CONTROLS.strokeStyle.options once and both surfaces
+  // pick it up).
+  const options = (meta.options ?? []).map((opt) => ({
+    value: String(opt.value),
+    label: opt.label,
+    preview: dashPreview(String(opt.value)),
+  }));
   return createPropertyRow(
-    "Dash type",
+    label,
     createCustomSelect({
-      options: [
-        { value: "", label: "Solid", preview: dashPreview("") },
-        { value: "dash", label: "Dashed", preview: dashPreview("dash") },
-        { value: "dot", label: "Dotted", preview: dashPreview("dot") },
-        { value: "dashDot", label: "Dash-Dot", preview: dashPreview("dashDot") },
-        { value: "lgDash", label: "Long Dash", preview: dashPreview("lgDash") },
-      ],
+      options,
       current: preset.strokeDasharray ?? "",
-      ariaLabel: "Dash type",
+      ariaLabel: label,
       onChange: (v) => {
         preset.strokeDasharray = v;
         sync();
@@ -505,16 +557,19 @@ function renderDashTypeRow(preset: ToolOptions, sync: () => void): HTMLElement {
 }
 
 function renderCapTypeRow(preset: ToolOptions, sync: () => void): HTMLElement {
+  const meta = metaFor(PROPERTY_CONTROL_IDS.strokeLinecap);
+  const label = meta.label ?? "Cap type";
+  const options = (meta.options ?? []).map((opt) => ({
+    value: String(opt.value),
+    label: opt.label,
+    preview: capPreview(String(opt.value) as LineCap),
+  }));
   return createPropertyRow(
-    "Cap type",
+    label,
     createCustomSelect({
-      options: [
-        { value: "square", label: "Square", preview: capPreview("square") },
-        { value: "round", label: "Round", preview: capPreview("round") },
-        { value: "butt", label: "Flat", preview: capPreview("butt") },
-      ],
+      options,
       current: preset.strokeLinecap ?? "butt",
-      ariaLabel: "Cap type",
+      ariaLabel: label,
       onChange: (v) => {
         preset.strokeLinecap = v as LineCap;
         sync();
@@ -523,41 +578,41 @@ function renderCapTypeRow(preset: ToolOptions, sync: () => void): HTMLElement {
   );
 }
 
+/** Per-tool overrides against the SELECTION-side `fillColor` def.
+ *  The SELECTION def carries `label: "Color"` and `allowNone: true`;
+ *  the Tool side diverges in three ways:
+ *    - shape uses `label: "Fill"` (the section header is "Fill" so
+ *      the row label being "Fill" too is intentional doubling — that
+ *      visual choice predates this refactor).
+ *    - redact disables `allowNone` (a redact bar can't be transparent;
+ *      the user should pick a color).
+ *    - Each tool has a different "freshly-displayed" fallback when
+ *      the preset's fillColor is `"none"` or unset (#ff0000, #ffffff,
+ *      #111111). The fallback is per-tool semantic and stays here. */
+const FILL_COLOR_OVERRIDES: Readonly<
+  Record<string, { label?: string; allowNone?: boolean; fallback: (preset: ToolOptions) => string }>
+> = {
+  marker: { fallback: (p) => p.fillColor ?? "#ff0000" },
+  shape: {
+    label: "Fill",
+    fallback: (p) => (p.fillColor === "none" ? "#ffffff" : p.fillColor),
+  },
+  redact: {
+    allowNone: false,
+    fallback: (p) => (p.fillColor === "none" ? "#111111" : p.fillColor),
+  },
+};
+
 function renderFillColorRow(
   toolId: string,
   preset: ToolOptions,
   sync: () => void,
 ): HTMLElement {
-  // Per-tool fallbacks match the imperative renderer:
-  //   marker:  preset.fillColor ?? "#ff0000"        (allowNone)
-  //   shape:   "none" → "#ffffff", else preset      (allowNone)
-  //   redact:  "none" → "#111111", else preset      (no allowNone)
-  // Label varies too: marker / redact use "Color"; shape uses "Fill".
-  let initial: string;
-  let allowNone: boolean;
-  let label: string;
-  switch (toolId) {
-    case "marker":
-      initial = preset.fillColor ?? "#ff0000";
-      allowNone = true;
-      label = "Color";
-      break;
-    case "shape":
-      initial = preset.fillColor === "none" ? "#ffffff" : preset.fillColor;
-      allowNone = true;
-      label = "Fill";
-      break;
-    case "redact":
-      initial = preset.fillColor === "none" ? "#111111" : preset.fillColor;
-      allowNone = false;
-      label = "Color";
-      break;
-    default:
-      initial = preset.fillColor;
-      allowNone = false;
-      label = "Color";
-      break;
-  }
+  const meta = metaFor(PROPERTY_CONTROL_IDS.fillColor);
+  const ovr = FILL_COLOR_OVERRIDES[toolId];
+  const label = ovr?.label ?? meta.label ?? "Color";
+  const allowNone = ovr?.allowNone ?? meta.allowNone ?? false;
+  const initial = ovr?.fallback ? ovr.fallback(preset) : preset.fillColor;
   const btn = createColorPullButton(
     initial,
     (color) => {
@@ -569,21 +624,30 @@ function renderFillColorRow(
   return createPropertyRow(label, btn);
 }
 
+/** Per-tool font-size override. SELECTION's def runs 8..96; the
+ *  Counter (marker) Label section caps at 48 because counter
+ *  numerals beyond that don't fit the bg primitive at typical
+ *  zoom levels. Documented as a per-tool override the same way
+ *  `MARKER_STROKE_WIDTH_OVERRIDE` is. */
+const FONT_SIZE_TOOL_MAX: Readonly<Record<string, number>> = {
+  marker: 48,
+};
+
 function renderFontSizeRow(
   toolId: string,
   preset: ToolOptions,
   sync: () => void,
 ): HTMLElement {
-  // Text > Line > Size: 8..96. Marker > Label > Size: 8..48. Step 1.
-  const max = toolId === "marker" ? 48 : 96;
+  const meta = metaFor(PROPERTY_CONTROL_IDS.fontSize);
+  const max = FONT_SIZE_TOOL_MAX[toolId] ?? meta.max ?? 96;
   return createPropertyRow(
-    "Size",
+    meta.label ?? "Size",
     createNumberInput({
       current: preset.fontSize,
-      unit: "pt",
-      min: 8,
+      unit: meta.unit ?? "pt",
+      min: meta.min ?? 8,
       max,
-      step: 1,
+      step: meta.step ?? 1,
       onChange: (v) => {
         preset.fontSize = v;
         sync();
@@ -593,20 +657,19 @@ function renderFontSizeRow(
 }
 
 function renderFontFamilyRow(preset: ToolOptions, sync: () => void): HTMLElement {
-  // Standard 4-option set. Phase 4 will read this from
-  // PROPERTY_CONTROLS.fontFamily.options.
+  const meta = metaFor(PROPERTY_CONTROL_IDS.fontFamily);
   if (!preset.fontFamily) preset.fontFamily = "sans-serif";
+  const label = meta.label ?? "Font";
+  const options = (meta.options ?? []).map((opt) => ({
+    value: String(opt.value),
+    label: opt.label,
+  }));
   return createPropertyRow(
-    "Font",
+    label,
     createCustomSelect({
-      options: [
-        { value: "sans-serif", label: "Sans-serif" },
-        { value: "serif", label: "Serif" },
-        { value: "monospace", label: "Monospace" },
-        { value: "system-ui, -apple-system, sans-serif", label: "System UI" },
-      ],
+      options,
       current: preset.fontFamily,
-      ariaLabel: "Font",
+      ariaLabel: label,
       onChange: (v) => {
         preset.fontFamily = v;
         sync();

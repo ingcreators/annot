@@ -11,8 +11,10 @@
 // and `toolId`. No Element / DOM access at all.
 
 import { describe, expect, it } from "vitest";
+import { PROPERTY_CONTROL_IDS, PROPERTY_CONTROLS } from "./property-schema.js";
 import type { ToolOptions } from "./tool-options.js";
 import {
+  selectionDefMetadata,
   TOOL_PANEL_ADAPTER_IDS,
   TOOL_PANEL_ADAPTERS,
   type ToolPanelAdapterId,
@@ -287,5 +289,81 @@ describe("TOOL_REGISTRY.panelControls — shape invariants", () => {
       expect(first, `${toolId}.panelControls must start with a Type entry`).toBeDefined();
       expect(first?.section, `${toolId}.panelControls[0].section`).toBe("Type");
     }
+  });
+});
+
+describe("selectionDefMetadata — Tool ↔ SELECTION metadata bridge", () => {
+  // Phase 4 of `tool-property-renderer-schema.md` makes
+  // `PROPERTY_CONTROLS` the single source of truth for option arrays
+  // (dash / cap / font), labels, ranges, and the color-picker
+  // `allowNone` flag. These tests pin the bridge so a regression in
+  // either side surfaces here, not as a UI drift.
+
+  it("returns null for adapters without a selectionDef (Tool-only ids)", () => {
+    // `tool.typeChips` / `tool.freehandDone` / `tool.fillOpacityPercent`
+    // declare `selectionDef: null` because they have no SELECTION-
+    // side analogue. Renderers fall back to per-id hardcoded metadata
+    // when this returns null.
+    expect(selectionDefMetadata("tool.typeChips")).toBeNull();
+    expect(selectionDefMetadata("tool.freehandDone")).toBeNull();
+    expect(selectionDefMetadata("tool.fillOpacityPercent")).toBeNull();
+  });
+
+  it("strokeStyle: pulls the dash option list from PROPERTY_CONTROLS", () => {
+    const meta = selectionDefMetadata(PROPERTY_CONTROL_IDS.strokeStyle);
+    expect(meta).not.toBeNull();
+    const expectedValues = (PROPERTY_CONTROLS.strokeStyle.options ?? []).map((o) => o.value);
+    const actualValues = (meta?.options ?? []).map((o) => o.value);
+    expect(actualValues).toEqual(expectedValues);
+  });
+
+  it("strokeLinecap: pulls the cap option list from PROPERTY_CONTROLS", () => {
+    const meta = selectionDefMetadata(PROPERTY_CONTROL_IDS.strokeLinecap);
+    const expectedValues = (PROPERTY_CONTROLS.strokeLinecap.options ?? []).map((o) => o.value);
+    const actualValues = (meta?.options ?? []).map((o) => o.value);
+    expect(actualValues).toEqual(expectedValues);
+  });
+
+  it("fontFamily: pulls the font option list from PROPERTY_CONTROLS", () => {
+    const meta = selectionDefMetadata(PROPERTY_CONTROL_IDS.fontFamily);
+    const expectedValues = (PROPERTY_CONTROLS.fontFamily.options ?? []).map((o) => o.value);
+    const actualValues = (meta?.options ?? []).map((o) => o.value);
+    expect(actualValues).toEqual(expectedValues);
+  });
+
+  it("strokeWidth: pulls min / step / unit / label from PROPERTY_CONTROLS", () => {
+    // Tool overrides `max` per tool (40 for shape/arrow/freehand, 20
+    // for marker — both narrower than SELECTION's 200). Min / step /
+    // unit / label flow through unchanged.
+    const meta = selectionDefMetadata(PROPERTY_CONTROL_IDS.strokeWidth);
+    expect(meta?.label).toBe(PROPERTY_CONTROLS.strokeWidth.label);
+    expect(meta?.min).toBe(PROPERTY_CONTROLS.strokeWidth.min);
+    expect(meta?.step).toBe(PROPERTY_CONTROLS.strokeWidth.step);
+    expect(meta?.unit).toBe(PROPERTY_CONTROLS.strokeWidth.unit);
+  });
+
+  it("fontSize: pulls min / step / unit / label from PROPERTY_CONTROLS", () => {
+    const meta = selectionDefMetadata(PROPERTY_CONTROL_IDS.fontSize);
+    expect(meta?.label).toBe(PROPERTY_CONTROLS.fontSize.label);
+    expect(meta?.min).toBe(PROPERTY_CONTROLS.fontSize.min);
+    expect(meta?.step).toBe(PROPERTY_CONTROLS.fontSize.step);
+    expect(meta?.unit).toBe(PROPERTY_CONTROLS.fontSize.unit);
+  });
+
+  it("fillColor: pulls allowNone + label from PROPERTY_CONTROLS", () => {
+    const meta = selectionDefMetadata(PROPERTY_CONTROL_IDS.fillColor);
+    expect(meta?.label).toBe(PROPERTY_CONTROLS.fillColor.label);
+    expect(meta?.allowNone).toBe(PROPERTY_CONTROLS.fillColor.allowNone);
+  });
+
+  it("transparency adapters reuse the SELECTION fillOpacity / strokeOpacity defs", () => {
+    const stroke = selectionDefMetadata("tool.transparencyPercent");
+    expect(stroke?.label).toBe(PROPERTY_CONTROLS.strokeOpacity.label);
+    expect(stroke?.unit).toBe(PROPERTY_CONTROLS.strokeOpacity.unit);
+    expect(stroke?.min).toBe(PROPERTY_CONTROLS.strokeOpacity.min);
+    expect(stroke?.max).toBe(PROPERTY_CONTROLS.strokeOpacity.max);
+    const fill = selectionDefMetadata("tool.fillTransparencyPercent");
+    expect(fill?.label).toBe(PROPERTY_CONTROLS.fillOpacity.label);
+    expect(fill?.unit).toBe(PROPERTY_CONTROLS.fillOpacity.unit);
   });
 });

@@ -24,7 +24,10 @@
 
 import {
   PROPERTY_CONTROL_IDS,
+  PROPERTY_CONTROLS,
+  type PropertyControlDef,
   type PropertyControlId,
+  type PropertyControlOption,
 } from "./property-schema.js";
 import {
   TOOL_PANEL_EXTRA_CONTROL_IDS,
@@ -339,6 +342,62 @@ export const TOOL_PANEL_ADAPTERS: Readonly<
     selectionDef: null,
   },
 };
+
+/** Static metadata an adapter borrows from its SELECTION-side def.
+ *  Phase 4 makes this the single source of truth for option arrays
+ *  (dash / cap / font), labels, number-input ranges, and the
+ *  `allowNone` color-picker flag — so a UX edit to (say)
+ *  `PROPERTY_CONTROLS.strokeStyle.options` flows through to BOTH
+ *  the SELECTION-side panel AND the Tool-side panel without a
+ *  parallel edit.
+ *
+ *  Per-tool divergences (marker's narrower strokeWidth + fontSize
+ *  ranges, redact's `allowNone: false`, shape's "Fill" label
+ *  override) stay in the renderer as documented exceptions on top
+ *  of this metadata — there's no SELECTION-side equivalent to
+ *  override against. */
+export interface ToolPanelAdapterMetadata {
+  /** SELECTION-side label (e.g. "Color", "Width", "Dash type"). */
+  label: string;
+  /** Option list for `select` / `variantPicker` controls. Tool-side
+   *  consumers decorate each option with a per-id preview SVG
+   *  (dash sample, cap sample, etc.) at render time. */
+  options?: ReadonlyArray<PropertyControlOption>;
+  /** Inclusive lower bound for a number input. */
+  min?: number;
+  /** Inclusive upper bound for a number input. */
+  max?: number;
+  /** Spinner / arrow-key step granularity. */
+  step?: number;
+  /** Trailing unit label (e.g. "pt", "%"). */
+  unit?: string;
+  /** Whether a "No fill" sentinel is offered for color pickers. */
+  allowNone?: boolean;
+}
+
+/** Look up the SELECTION-side metadata an adapter borrows. Returns
+ *  `null` when the adapter has no `selectionDef` (Tool-only ids
+ *  like `tool.typeChips` / `tool.freehandDone`) or when the named
+ *  def doesn't exist (which would be a registry typo — guarded
+ *  defensively rather than throwing).
+ *
+ *  Tier B — pure: no DOM access, no Element-taking; the returned
+ *  metadata is just the static fields off `PROPERTY_CONTROLS`. */
+export function selectionDefMetadata(id: ToolPanelAdapterId): ToolPanelAdapterMetadata | null {
+  const adapter = TOOL_PANEL_ADAPTERS[id];
+  if (!adapter?.selectionDef) return null;
+  const def: PropertyControlDef | undefined = PROPERTY_CONTROLS[adapter.selectionDef];
+  if (!def) return null;
+  return {
+    label: def.label,
+    options: def.options,
+    min: def.min,
+    max: def.max,
+    step: def.step,
+    unit: def.unit,
+    allowNone: def.allowNone,
+  };
+}
 
 /** Convenience: list of every adapter id present in the registry.
  *  Used by the test file to enumerate the adapters without depending

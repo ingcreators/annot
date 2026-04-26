@@ -119,10 +119,12 @@ export {
 // `docs/plans/tool-property-renderer-schema.md` ships the data only;
 // Phase 2's renderer (Tier C) is the first reader.
 export {
+  selectionDefMetadata,
   TOOL_PANEL_ADAPTER_IDS,
   TOOL_PANEL_ADAPTERS,
   type ToolPanelAdapter,
   type ToolPanelAdapterId,
+  type ToolPanelAdapterMetadata,
 } from "./editor/tool-panel-adapter.js";
 
 // ─── Toolbar preset (de)serializer (pure data conversion) ─────────────

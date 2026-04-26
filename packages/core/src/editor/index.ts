@@ -76,10 +76,12 @@ export {
   type ToolRegistryVariant,
 } from "./tool-registry.js";
 export {
+  selectionDefMetadata,
   TOOL_PANEL_ADAPTER_IDS,
   TOOL_PANEL_ADAPTERS,
   type ToolPanelAdapter,
   type ToolPanelAdapterId,
+  type ToolPanelAdapterMetadata,
 } from "./tool-panel-adapter.js";
 export {
   fieldForSnakeKey,
