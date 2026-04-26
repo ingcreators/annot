@@ -76,11 +76,44 @@ fn marker_shape() -> AnnotationShape {
         font_size: Some(13.0),
         fill: Some("#ff0000".into()),
         label: Some("1".into()),
-        // Today the marker shape ("circle" vs "rect") rides on the
-        // `stroke` field; phase 1 of the ABI plan moves it to a
-        // dedicated `marker_shape`. The snapshot pins the legacy form
-        // so the rename stays output-equivalent.
+        // Phase 1 of the office-paste ABI plan made `marker_shape`
+        // the canonical discriminator; the legacy `stroke == "rect"`
+        // carrier is still honored as a fallback (phase 8 drops it).
+        marker_shape: Some("rect".into()),
+        ..Default::default()
+    }
+}
+
+fn marker_shape_legacy_carrier() -> AnnotationShape {
+    // Mirror of `marker_shape()` but using only the legacy carrier
+    // (`stroke == "rect"`) — lets us prove the fallback in
+    // `gvml_marker` produces byte-equivalent XML to the canonical
+    // form. Phase 8 will delete the fallback and this fixture.
+    AnnotationShape {
+        shape_type: "marker".into(),
+        cx: Some(400.0),
+        cy: Some(300.0),
+        font_size: Some(13.0),
+        fill: Some("#ff0000".into()),
+        label: Some("1".into()),
         stroke: Some("rect".into()),
+        ..Default::default()
+    }
+}
+
+fn marker_rounded_shape() -> AnnotationShape {
+    // New variant unlocked by phase 1 — `marker_shape: "rounded"`
+    // emits `roundRect` with a higher `adj` value so the counter
+    // looks visibly rounded in PowerPoint, matching the
+    // SVG-side `cornerRadius = r * 0.6` rendering.
+    AnnotationShape {
+        shape_type: "marker".into(),
+        cx: Some(500.0),
+        cy: Some(300.0),
+        font_size: Some(13.0),
+        fill: Some("#0000ff".into()),
+        label: Some("2".into()),
+        marker_shape: Some("rounded".into()),
         ..Default::default()
     }
 }
@@ -156,6 +189,23 @@ fn drawing_xml_pins_every_emitter() {
     assert!(media_files[0].0.starts_with("mosaic_"));
 
     insta::assert_snapshot!("drawing_xml_all_emitters", xml);
+}
+
+#[test]
+fn drawing_xml_marker_legacy_stroke_carrier_matches_canonical() {
+    // Output-equivalence check for phase 1's fallback: the legacy
+    // `stroke == "rect"` form must produce the same XML body as
+    // `marker_shape: "rect"`. Once phase 8 drops the fallback, this
+    // test (and the helper) goes away.
+    let canonical = build_drawing_xml(&[marker_shape()], 800.0, 600.0, false).0;
+    let legacy = build_drawing_xml(&[marker_shape_legacy_carrier()], 800.0, 600.0, false).0;
+    assert_eq!(canonical, legacy);
+}
+
+#[test]
+fn drawing_xml_marker_rounded_emits_high_adj_round_rect() {
+    let (xml, _) = build_drawing_xml(&[marker_rounded_shape()], 800.0, 600.0, false);
+    insta::assert_snapshot!("drawing_xml_marker_rounded", xml);
 }
 
 #[test]
