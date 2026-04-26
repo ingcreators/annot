@@ -36,9 +36,6 @@ export async function renderImageRecord(
   // editor's writes (see svg-format.ts).
   let svgString = `<svg xmlns="${SVG_NS}" xmlns:xlink="${XLINK}" ${ANNOT_SVG_VERSION_ATTR}="${ANNOT_SVG_VERSION}" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">`;
 
-  // Arrowhead marker def
-  svgString += `<defs><marker id="anno-arrowhead" markerWidth="12" markerHeight="8" refX="11" refY="4" orient="auto" markerUnits="strokeWidth"><polygon points="0 0, 12 4, 0 8" fill="context-stroke"/></marker></defs>`;
-
   // Base image
   svgString += `<image href="${originalDataUrl}" width="${width}" height="${height}"/>`;
 

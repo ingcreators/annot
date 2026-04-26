@@ -825,7 +825,11 @@ export class Toolbar {
           width: Number.parseFloat(el.getAttribute("width") || "0"),
           height: Number.parseFloat(el.getAttribute("height") || "0"),
           image_data_url: href,
-          text: href, // legacy field — Rust side can still read it here
+          // The Rust-side OOXML emitter currently reads the data URL
+          // off `text` (its `AnnotationShape` struct doesn't model
+          // `image_data_url`). Both fields carry the same value
+          // until that ABI is widened.
+          text: href,
           redact_style: style || "mosaic",
           ...xform,
         });
@@ -894,8 +898,10 @@ export class Toolbar {
                 el.getAttribute("data-font-family") ||
                 undefined,
               fill: textEl.getAttribute("fill") || el.getAttribute("data-color") || "#ff0000",
-              // Legacy field — sticky's pale background color. Desktop
-              // code historically reads this from `stroke`.
+              // The Rust-side OOXML emitter reads the textbox's
+              // sticky bg color off `stroke`. Carrier field — keep
+              // populated until the ABI is widened to a dedicated
+              // bg-color field.
               stroke: variant === "plain" ? "" : bgRect?.getAttribute("fill") || "",
               text_variant: variant,
               tail_x: tailXRaw != null ? Number.parseFloat(tailXRaw) + tx : undefined,
@@ -951,12 +957,10 @@ export class Toolbar {
               label: textEl?.textContent || "",
               font_size: fs,
               marker_shape: shapeName,
-              // Legacy: Rust side used to read the shape name from
-              // `stroke`. Keep it populated for back-compat until the
-              // desktop side switches to marker_shape. Rust code that
-              // doesn't yet understand "rounded" will treat it as an
-              // unknown shape (defaulting to circle) — acceptable
-              // graceful degradation.
+              // The Rust-side OOXML emitter reads the marker's
+              // shape name off `stroke` (its `AnnotationShape` struct
+              // doesn't model `marker_shape`). Both fields carry the
+              // same value until that ABI is widened.
               stroke: shapeName,
               ...xform,
             });
