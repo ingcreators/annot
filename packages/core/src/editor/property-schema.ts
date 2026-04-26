@@ -152,6 +152,13 @@ export const PROPERTY_EFFECT_IDS = {
    *  needs `CanvasManager` access to sample the underlying base image
    *  for mosaic / blur baking. */
   applyRedactStyle: "applyRedactStyle",
+  /** Set a textbox's text color and (for sticky / callout variants
+   *  whose bg is derived from the text color) regenerate the bg via
+   *  `convertTextVariant`. Plain textboxes get the simple attribute
+   *  write; sticky / callout get a bg-recreation pass that produces
+   *  a fresh element so the per-target `oldEl !== newEl` swap is
+   *  picked up by `onTargetReplaced`. */
+  applyTextColor: "applyTextColor",
 } as const;
 export type PropertyEffectId = (typeof PROPERTY_EFFECT_IDS)[keyof typeof PROPERTY_EFFECT_IDS];
 
@@ -446,18 +453,15 @@ export const PROPERTY_CONTROLS: Readonly<{
     type: "color",
     label: "Color",
     getValue: (el) => el.querySelector("text")?.getAttribute("fill") ?? "#ff0000",
-    setValue: (el, value) => {
-      const v = String(value);
-      el.querySelector("text")?.setAttribute("fill", v);
-      // The data-color marker drives bg derivation for sticky / callout
-      // variants — keep it in sync. Sticky / callout bg recreation is
-      // handled by the renderer (it requires `recreateTextbox`, which
-      // wraps `convertTextVariant` and lives at the renderer layer
-      // because the panel needs the resulting target-replacement
-      // signal to fire). Here we only mutate the attributes a Tier B
-      // setter can safely own.
-      el.setAttribute("data-color", v);
-    },
+    // Goes through `applyTextColor` (Tier C) instead of a plain
+    // `setValue` because sticky / callout textboxes derive their bg
+    // tint from `data-color`; after the color attr writes the bg
+    // primitive needs regeneration via `convertTextVariant`. The
+    // effect handler bound in PropertyPanel does both — sets the
+    // text fill + data-color, then for non-plain variants returns
+    // the post-recreation element so the renderer threads the swap
+    // through `onTargetReplaced`. Plain textboxes return identity.
+    effect: PROPERTY_EFFECT_IDS.applyTextColor,
   },
   fontFamily: {
     id: PROPERTY_CONTROL_IDS.fontFamily,

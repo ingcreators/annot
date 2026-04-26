@@ -132,9 +132,8 @@ function renderColor(
   const current = String(def.getValue(targets[0]!));
   const btn = createColorPullButton(
     current,
-    (color) => {
-      const replacements = applySync(def, targets, color);
-      // Color setValue mutates in place — replacements is empty.
+    async (color) => {
+      const replacements = await dispatchMutation(def, targets, color, deps);
       deps.onCommit({ replacements, variantChange: false });
     },
     { allowNone: def.allowNone },
@@ -153,14 +152,8 @@ function renderNumber(
   const step = def.step ?? 1;
   const unit = def.unit ?? "";
   const input = ppNumberInput(current, unit, min, max, step, async (v) => {
-    if (def.effect) {
-      const replacements = await runEffect(def.effect, deps, targets, v);
-      syncTargets(targets, replacements);
-      deps.onCommit({ replacements, variantChange: false });
-    } else {
-      const replacements = applySync(def, targets, v);
-      deps.onCommit({ replacements, variantChange: false });
-    }
+    const replacements = await dispatchMutation(def, targets, v, deps);
+    deps.onCommit({ replacements, variantChange: false });
   });
   return ppRow(def.label, input);
 }
@@ -170,8 +163,17 @@ function renderSelect(
   targets: SVGElement[],
   deps: RenderControlDeps,
 ): HTMLElement {
-  const opts = def.options ?? [];
+  const baseOpts = def.options ?? [];
   const current = String(def.getValue(targets[0]!));
+  // Preserve a non-preset current value so it survives a round-trip
+  // through the dropdown — without this, an Office-pasted custom
+  // font (or any externally-supplied select value not in the
+  // registry's options) would silently snap back to the first
+  // preset on the next render. Mirrors the imperative
+  // `#addFontFamilyPicker`'s "preserve any non-preset value" branch.
+  const opts = baseOpts.some((o) => String(o.value) === current)
+    ? baseOpts
+    : [...baseOpts, { value: current, label: current } as PropertyControlOption];
   const select = createCustomSelect({
     options: opts.map((o) => ({
       value: String(o.value),
@@ -179,8 +181,8 @@ function renderSelect(
     })),
     current,
     ariaLabel: def.label,
-    onChange: (v) => {
-      const replacements = applySync(def, targets, v);
+    onChange: async (v) => {
+      const replacements = await dispatchMutation(def, targets, v, deps);
       deps.onCommit({ replacements, variantChange: false });
     },
   });
@@ -221,15 +223,7 @@ function renderVariantPicker(
       chip.classList.add("active");
 
       try {
-        let replacements: ElementReplacement[] = [];
-        if (def.effect) {
-          replacements = await runEffect(def.effect, deps, targets, value);
-        } else if (def.replace) {
-          replacements = applyReplace(def, targets, value);
-        } else if (def.setValue) {
-          replacements = applySync(def, targets, value);
-        }
-        syncTargets(targets, replacements);
+        const replacements = await dispatchMutation(def, targets, value, deps);
         current = stringifyValue(value);
         deps.onCommit({ replacements, variantChange: true });
       } catch (err) {
@@ -293,6 +287,35 @@ function ppRow(label: string, control: HTMLElement): HTMLElement {
 }
 
 // ─── Mutation dispatch ──────────────────────────────────────────────
+
+/** Unified per-type mutation dispatch — every renderer (color,
+ *  number, select, variantPicker) routes user input through this so
+ *  `setValue` / `replace` / `effect` paths behave identically across
+ *  control types. The control's `def` decides which branch fires; the
+ *  renderer doesn't have to special-case anything.
+ *
+ *  Returns the replacement batch (empty for pure `setValue`, one per
+ *  target for `replace` / `effect`). The caller passes that to
+ *  `deps.onCommit` so PropertyPanel can fire `onTargetReplaced` for
+ *  genuine swaps. */
+async function dispatchMutation(
+  def: PropertyControlDef,
+  targets: SVGElement[],
+  value: unknown,
+  deps: RenderControlDeps,
+): Promise<ElementReplacement[]> {
+  if (def.effect) {
+    const replacements = await runEffect(def.effect, deps, targets, value);
+    syncTargets(targets, replacements);
+    return replacements;
+  }
+  if (def.replace) {
+    const replacements = applyReplace(def, targets, value);
+    syncTargets(targets, replacements);
+    return replacements;
+  }
+  return applySync(def, targets, value);
+}
 
 /** Apply `def.setValue` to every target in place. Returns identity
  *  replacements (`oldEl === newEl`) so the caller's `onCommit` can

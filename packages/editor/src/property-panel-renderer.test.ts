@@ -55,6 +55,7 @@ function makeDeps(): TestDeps {
       applyMarkerShape: passthrough,
       resizeMarker: passthrough,
       applyRedactStyle: passthrough,
+      applyTextColor: passthrough,
     },
     onCommit: vi.fn() as TestDeps["onCommit"],
   };
@@ -222,9 +223,10 @@ describe("renderControl — mutation routing", () => {
     bothChip!.click();
     // The click handler is async (awaits the effect handler).
     // Microtask flush is enough since our handler is sync inside.
-    // The variant-picker click handler awaits runEffect, which itself
-    // awaits the handler — needs two microtask drains before onCommit
-    // resolves on the next tick.
+    // The variant-picker click handler awaits dispatchMutation,
+    // which awaits runEffect, which awaits the handler — three
+    // microtask drains before onCommit resolves on the next tick.
+    await Promise.resolve();
     await Promise.resolve();
     await Promise.resolve();
     expect(handler).toHaveBeenCalledOnce();
