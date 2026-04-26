@@ -169,20 +169,23 @@ describe("buildPptxFiles slide XML", () => {
     expect(slide).toMatchSnapshot();
   });
 
-  it("every PPTX non-visual props container carries <p:nvPr/>", () => {
-    // PPTX's `CT_ShapeNonVisual` / `CT_ConnectorNonVisual` /
-    // `CT_PictureNonVisual` schemas REQUIRE `<p:nvPr/>` as the
-    // third child (after `cNvPr` and `cNv{type}Pr`). PowerPoint
-    // refuses to open files where it's missing — a regression
-    // we hit on 2026-04-27 with anno-1777242607432.pptx.
+  it("PPTX slide uses p: namespace for spPr / blipFill / nvPr (not a:)", () => {
+    // PPTX's `CT_Shape` / `CT_Connector` / `CT_Picture` schemas
+    // declare `spPr` / `blipFill` / `nvPr` locally — so the
+    // qualified element name follows the parent's namespace
+    // (`<p:spPr>` inside `<p:sp>`, never `<a:spPr>`). Same for
+    // the required `<p:nvPr/>` child of each
+    // non-visual-props container. PowerPoint refuses to open
+    // files that mismatch (verified on
+    // anno-1777242607432.pptx and anno-1777243471425.pptx,
+    // 2026-04-27).
     //
-    // Structural guard: the every-emitter slide must contain a
-    // `<p:nvPr/>` immediately after each `<p:cNvSpPr*/>` /
-    // `<p:cNvCxnSpPr/>` / `</p:cNvPicPr>`. If a future namespace
-    // refactor drops the suffix on one of the emitters, this
-    // test fails before the snapshot one does — making the
-    // failure mode obvious instead of silently producing a
-    // PowerPoint-rejected file.
+    // Structural guard: the every-emitter slide must NOT
+    // contain `<a:spPr>` or `<a:blipFill>` (those are
+    // GVML-only); every shape's non-visual-props container
+    // must include `<p:nvPr/>`. Fails LOUDLY before the
+    // snapshot tests if a future namespace refactor regresses
+    // any of these.
     const annotations = makeAnnotationGroup(
       svg("rect", {
         x: "10",
@@ -213,6 +216,17 @@ describe("buildPptxFiles slide XML", () => {
     );
     const files = buildPptxFiles(buildInput(annotations, { hasImage: true }));
     const slide = decode(files["ppt/slides/slide1.xml"]!);
+
+    // PPTX shapes must not use the `a:` namespace for spPr /
+    // blipFill — those element names are locally declared in
+    // PPTX's CT_Shape / CT_Connector / CT_Picture, so they
+    // qualify as `<p:spPr>` / `<p:blipFill>`. (Their CONTENTS
+    // —`<a:xfrm>`, `<a:blip>`, etc. — stay `a:` because those
+    // inner elements ARE DML-defined.)
+    expect(slide).not.toContain("<a:spPr>");
+    expect(slide).not.toContain("</a:spPr>");
+    expect(slide).not.toContain("<a:blipFill>");
+    expect(slide).not.toContain("</a:blipFill>");
 
     // Strip whitespace so we can match the patterns regardless
     // of how the slide envelope chooses to format itself.

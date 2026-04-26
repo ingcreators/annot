@@ -35,6 +35,28 @@ export interface NamespaceOpts {
   cnvCxnSp: "a:cNvCxnSpPr" | "p:cNvCxnSpPr";
   /** `<{ns}:cNvPicPr>` open tag. */
   cnvPic: "a:cNvPicPr" | "p:cNvPicPr";
+  /** `<{ns}:spPr>` open tag. The element name is locally
+   *  declared in each schema (PPTX's `CT_Shape` /
+   *  `CT_Connector` / `CT_Picture` and GVML's `CT_GvmlShape`
+   *  / `CT_GvmlConnector` / `CT_GvmlPicture` all have a child
+   *  `spPr` of type `a:CT_ShapeProperties`), so the qualified
+   *  name follows the parent's namespace — `<p:spPr>` inside
+   *  `<p:sp>` / `<p:cxnSp>` / `<p:pic>`, `<a:spPr>` inside the
+   *  GVML equivalents. The CONTENT (`<a:xfrm>`, `<a:prstGeom>`,
+   *  `<a:ln>`, etc.) stays in `a:` either way because those
+   *  inner elements are defined directly in DML.
+   *
+   *  Mismatching this (e.g. emitting `<a:spPr>` inside `<p:sp>`)
+   *  produces a schema violation that PowerPoint rejects with
+   *  "found a problem with content" — verified on
+   *  anno-1777243471425.pptx (2026-04-27). */
+  spPr: "a:spPr" | "p:spPr";
+  /** `<{ns}:blipFill>` open tag for picture shapes. Same
+   *  story as `spPr`: locally declared in each schema, so
+   *  `<p:pic>`'s child is `<p:blipFill>` and `<a:pic>`'s child
+   *  is `<a:blipFill>`. The inner `<a:blip>` / `<a:stretch>` /
+   *  `<a:fillRect>` etc. are DML-defined and stay `a:`. */
+  blipFill: "a:blipFill" | "p:blipFill";
   /** Open tag(s) for the text-body wrapper inside a shape.
    *  GVML wraps text in `<a:txSp><a:txBody>` (the locked-canvas
    *  text primitive); PPTX puts `<p:txBody>` directly under
@@ -69,6 +91,8 @@ export const NS_GVML: NamespaceOpts = {
   cnvSp: "a:cNvSpPr",
   cnvCxnSp: "a:cNvCxnSpPr",
   cnvPic: "a:cNvPicPr",
+  spPr: "a:spPr",
+  blipFill: "a:blipFill",
   txBodyOpen: "<a:txSp><a:txBody>",
   txBodyClose: "</a:txBody><a:useSpRect/></a:txSp>",
   nvPrSuffix: "",
@@ -85,6 +109,8 @@ export const NS_PPTX: NamespaceOpts = {
   cnvSp: "p:cNvSpPr",
   cnvCxnSp: "p:cNvCxnSpPr",
   cnvPic: "p:cNvPicPr",
+  spPr: "p:spPr",
+  blipFill: "p:blipFill",
   txBodyOpen: "<p:txBody>",
   txBodyClose: "</p:txBody>",
   nvPrSuffix: "<p:nvPr/>",

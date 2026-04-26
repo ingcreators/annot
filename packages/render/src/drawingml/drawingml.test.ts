@@ -25,6 +25,7 @@
 import type { AnnotationShape } from "@ingcreators/annot-core/tauri-bridge";
 import { describe, expect, it } from "vitest";
 import { buildDrawingXml } from "./drawing-envelope.js";
+import { buildShapeXml } from "./index.js";
 
 const TEST_PNG_DATA_URL =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
@@ -303,5 +304,157 @@ describe("buildDrawingXml byte-equivalence with Rust GVML goldens", () => {
       hasImage: false,
     });
     expect(drawing).toBe(EXPECTED_REDACT_SOLID_NO_OUTLINE);
+  });
+});
+
+// PPTX namespace contract: PPTX's `CT_Shape` / `CT_Connector` /
+// `CT_Picture` schemas declare `spPr` / `blipFill` / `nvPr` locally,
+// so the qualified element name follows the parent's namespace
+// (`<p:spPr>` etc., never `<a:spPr>` in the PPTX wrapper).
+// PowerPoint refuses to open files that mismatch — a regression
+// hit on 2026-04-27 with anno-1777242607432.pptx and
+// anno-1777243471425.pptx. These tests pin the contract so a
+// future refactor can't reintroduce the bug.
+describe("buildShapeXml PPTX namespace contract", () => {
+  function expectPptxNamespaces(xml: string, kind: "shape" | "connector" | "pic") {
+    // No `<a:*>` for elements that should be in PPTX namespace.
+    expect(xml).not.toContain("<a:spPr>");
+    expect(xml).not.toContain("</a:spPr>");
+    expect(xml).not.toContain("<a:blipFill>");
+    expect(xml).not.toContain("</a:blipFill>");
+    expect(xml).not.toContain("<a:nvSpPr>");
+    expect(xml).not.toContain("<a:nvCxnSpPr>");
+    expect(xml).not.toContain("<a:nvPicPr>");
+    // Every shape's non-visual props container must include
+    // `<p:nvPr/>` as the third child (after `cNvPr` + `cNv*Pr`).
+    expect(xml).toContain("<p:nvPr/>");
+    // Wrapper element name matches the requested kind.
+    if (kind === "shape") expect(xml).toMatch(/^<p:sp>/);
+    if (kind === "connector") expect(xml).toMatch(/^<p:cxnSp>/);
+    if (kind === "pic") expect(xml).toMatch(/^<p:pic>/);
+  }
+
+  it("rect: spPr in p: namespace, no a: leaks", () => {
+    const xml = buildShapeXml(
+      {
+        type: "rect",
+        x: 0,
+        y: 0,
+        width: 10,
+        height: 10,
+        stroke: "#ff0000",
+        stroke_width: 1,
+        fill: "#ffeeaa",
+      },
+      { ns: "p", id: 2 },
+    );
+    expectPptxNamespaces(xml, "shape");
+    expect(xml).toContain("<p:spPr>");
+    expect(xml).toContain("</p:spPr>");
+  });
+
+  it("connector (line/arrow): spPr in p: namespace", () => {
+    const xml = buildShapeXml(
+      {
+        type: "arrow",
+        x1: 0,
+        y1: 0,
+        x2: 100,
+        y2: 0,
+        stroke: "#ff0000",
+        stroke_width: 3,
+        has_arrow: true,
+      },
+      { ns: "p", id: 3 },
+    );
+    expectPptxNamespaces(xml, "connector");
+    expect(xml).toContain("<p:spPr>");
+  });
+
+  it("mosaic picture: spPr AND blipFill in p: namespace", () => {
+    const xml = buildShapeXml(
+      {
+        type: "mosaic_image",
+        x: 0,
+        y: 0,
+        width: 100,
+        height: 80,
+        image_data_url: "data:image/png;base64,iVBORw0KGgoAAAA",
+      },
+      { ns: "p", id: 4, picRid: 5 },
+    );
+    expectPptxNamespaces(xml, "pic");
+    expect(xml).toContain("<p:blipFill>");
+    expect(xml).toContain("</p:blipFill>");
+    expect(xml).toContain("<p:spPr>");
+  });
+
+  it("freehand: spPr in p: namespace", () => {
+    const xml = buildShapeXml(
+      {
+        type: "freehand",
+        text: "M 0 0 L 10 10",
+        stroke: "#000000",
+        stroke_width: 2,
+      },
+      { ns: "p", id: 6 },
+    );
+    expectPptxNamespaces(xml, "shape");
+    expect(xml).toContain("<p:spPr>");
+  });
+
+  it("text (sticky): spPr in p: namespace", () => {
+    const xml = buildShapeXml(
+      {
+        type: "text",
+        x: 0,
+        y: 0,
+        width: 100,
+        height: 30,
+        font_size: 18,
+        text: "Hello",
+        text_variant: "sticky",
+        text_bg_color: "rgba(255,255,200,1)",
+        fill: "#000000",
+      },
+      { ns: "p", id: 7 },
+    );
+    expectPptxNamespaces(xml, "shape");
+    expect(xml).toContain("<p:spPr>");
+  });
+
+  it("marker: spPr in p: namespace", () => {
+    const xml = buildShapeXml(
+      {
+        type: "marker",
+        cx: 50,
+        cy: 50,
+        font_size: 13,
+        fill: "#ff0000",
+        label: "1",
+        marker_shape: "circle",
+      },
+      { ns: "p", id: 8 },
+    );
+    expectPptxNamespaces(xml, "shape");
+    expect(xml).toContain("<p:spPr>");
+  });
+
+  it("ellipse: spPr in p: namespace", () => {
+    const xml = buildShapeXml(
+      {
+        type: "ellipse",
+        cx: 100,
+        cy: 100,
+        rx: 50,
+        ry: 50,
+        stroke: "#00ff00",
+        stroke_width: 2,
+        fill: "none",
+      },
+      { ns: "p", id: 9 },
+    );
+    expectPptxNamespaces(xml, "shape");
+    expect(xml).toContain("<p:spPr>");
   });
 });
