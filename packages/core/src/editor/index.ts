@@ -91,6 +91,12 @@ export {
 } from "./tool-preset-serde.js";
 export { readUniversalStyleAttrs, resolveStyleReadSource } from "./tool-style-reader.js";
 export { writeUniversalStyleAttrs } from "./tool-style-writer.js";
+export {
+  svgAnnotationsToShapes,
+  svgElementToAnnotationShape,
+  transformOf,
+  translateOf,
+} from "./svg-to-annotation-shapes.js";
 
 // ╭─ Editor UI (browser / DOM required) ────────────────────────────╮
 // │ These hit `document` / `window`, subscribe to pointer events,   │
