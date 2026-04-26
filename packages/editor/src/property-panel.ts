@@ -32,13 +32,6 @@ import type {
   RedactStyle,
 } from "./tools/tool-base.js";
 
-/** True for any element that represents a line-with-optional-arrowheads:
- *  a classic `<line>` OR the new composed `<g data-type="arrow">`
- *  wrapper produced by ArrowTool (stem + head paths inside). */
-function isLineLike(el: Element): boolean {
-  if (el.tagName === "line") return true;
-  return el.tagName === "g" && el.getAttribute("data-type") === "arrow";
-}
 
 /** Per-end arrow effect handler — mutates a single shape field of
  *  an arrow's per-end spec and re-applies via `applyArrowHead`.
@@ -452,24 +445,13 @@ export class PropertyPanel {
     }
   }
 
-  #renderShapeControls(el: SVGElement): void {
+  #renderShapeControls(_el: SVGElement): void {
     // Type section — schema-driven variant pickers (Phase 3b).
     this.#inSection("Type", () => {
       this.#renderRegistryControl(PROPERTY_CONTROL_IDS.shapeTypePicker);
       this.#renderRegistryControl(PROPERTY_CONTROL_IDS.arrowVariantPicker);
       this.#renderRegistryControl(PROPERTY_CONTROL_IDS.drawStylePicker);
     });
-
-    // One-shot legacy data migrations the imperative panel used to
-    // perform inline at render time:
-    //   - "Normalize stray non-solid stroke" (legacy `stroke="none"`
-    //     and dropped-gradient `url(#...)` references → visible red).
-    //   - "Migrate legacy stroke-opacity → opacity" for line-like
-    //     targets so the new transparency setter doesn't compound
-    //     two paint channels.
-    // Run BEFORE rendering so the registry's getValue reads the
-    // post-migration attribute values.
-    this.#migrateLegacyStrokeAttrs(el);
 
     // Fill section — fillColor + fillOpacity. Hidden entirely for
     // stroke-only families (line / path / freehand group) via
@@ -498,39 +480,6 @@ export class PropertyPanel {
       this.#renderRegistryControl(PROPERTY_CONTROL_IDS.arrowEndShape);
       this.#renderRegistryControl(PROPERTY_CONTROL_IDS.arrowEndSize);
     });
-  }
-
-  /** One-shot data migration run before the Line section renders.
-   *  Cleans two legacy attribute states the imperative panel used to
-   *  fix up inline:
-   *    - `stroke="none"` or legacy `url(...)` gradient references →
-   *      visible red default. The gradient editor was dropped years
-   *      ago; the references no longer round-trip.
-   *    - Line-like targets carrying a legacy `stroke-opacity` (from
-   *      a build that didn't yet use `opacity` to fade SVG markers)
-   *      → migrate the value to `opacity` and drop the legacy
-   *      attribute. Stops the new transparency setter from
-   *      compounding two paint channels into a faint line. */
-  #migrateLegacyStrokeAttrs(sample: SVGElement): void {
-    const targets = this.#strokeTargets();
-    const sampleStroke = this.#getAttr(sample, "stroke") || "#ff0000";
-    if (sampleStroke === "none" || /^url\(/.test(sampleStroke)) {
-      for (const t of targets) t.setAttribute("stroke", "#ff0000");
-    }
-    if (
-      isLineLike(sample) &&
-      sample.hasAttribute("stroke-opacity") &&
-      !sample.hasAttribute("opacity")
-    ) {
-      for (const t of targets) {
-        if (!isLineLike(t)) continue;
-        const legacy = t.getAttribute("stroke-opacity");
-        if (legacy != null) {
-          t.setAttribute("opacity", legacy);
-          t.removeAttribute("stroke-opacity");
-        }
-      }
-    }
   }
 
   /**
