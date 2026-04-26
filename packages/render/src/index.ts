@@ -12,3 +12,17 @@
 // rendering without dragging the live editor into their bundle.
 
 export { renderImageRecord } from "./render-image-record.js";
+export {
+  buildBackgroundPic,
+  type BuildShapeOpts,
+  buildShapeXml,
+  type Namespace,
+  type NamespaceOpts,
+  namespaceFor,
+} from "./drawingml/index.js";
+export {
+  type BuildDrawingXmlOpts,
+  type BuildDrawingXmlResult,
+  buildDrawingXml,
+  type MosaicMedia,
+} from "./drawingml/drawing-envelope.js";
