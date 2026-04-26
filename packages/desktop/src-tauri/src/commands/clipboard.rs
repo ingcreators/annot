@@ -25,9 +25,8 @@ pub struct AnnotationShape {
     pub flip_v: Option<bool>,
 
     // ---- Line polish ----
-    /// SVG arrow-shape names per end — now matching OOXML's six
-    /// preset types exactly. Legacy names (triangle-open, tbar,
-    /// reverse) are remapped in `end_xml`.
+    /// SVG arrow-shape names per end — matching OOXML's six preset
+    /// types exactly: none / arrow / triangle / stealth / diamond / oval.
     pub arrow_shape_start: Option<String>,
     pub arrow_shape_end: Option<String>,
     /// Per-dimension widths (perpendicular to stem, OOXML `w`).
@@ -65,10 +64,9 @@ pub struct GradientStop {
 }
 
 /// Build the OOXML `<a:headEnd>` or `<a:tailEnd>` element for one end
-/// of a line/arrow. The SVG shape set now mirrors OOXML's six preset
-/// types; legacy names are remapped to the closest visual match.
-/// Width and length are passed through independently (OOXML's native
-/// model: `w="sm|med|lg" len="sm|med|lg"`).
+/// of a line/arrow. The SVG shape set mirrors OOXML's six preset
+/// types one-to-one. Width and length are passed through independently
+/// (OOXML's native model: `w="sm|med|lg" len="sm|med|lg"`).
 fn end_xml(
     which: &str,
     shape: Option<&str>,
@@ -82,10 +80,6 @@ fn end_xml(
         "stealth" => "stealth",
         "diamond" => "diamond",
         "oval" => "oval",
-        // Legacy shapes remapped.
-        "triangle-open" => "arrow",
-        "tbar" => "stealth",
-        "reverse" => "arrow",
         _ => "triangle",
     };
     let map = |s: Option<&str>| match s {

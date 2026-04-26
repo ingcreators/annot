@@ -42,22 +42,11 @@ export function exportExcelSVG(canvas: CanvasManager): string {
     const el = node as SVGElement;
     const tag = el.tagName;
 
-    if (tag === "line") {
-      const hasArrow = el.getAttribute("marker-end");
-      if (hasArrow) {
-        // Convert line+marker to path group with arrowhead
-        const group = convertArrowToPath(el as SVGLineElement, SVG_NS);
-        svg.appendChild(group);
-      } else {
-        const copy = el.cloneNode(true) as SVGElement;
-        copy.removeAttribute("marker-end");
-        copy.removeAttribute("marker-start");
-        svg.appendChild(copy);
-      }
-    } else if (tag === "rect" || tag === "ellipse" || tag === "path" || tag === "text") {
+    if (tag === "rect" || tag === "ellipse" || tag === "path" || tag === "text") {
       svg.appendChild(el.cloneNode(true));
     } else if (tag === "g") {
-      // Marker groups (circle+text) - clone as-is, Excel handles basic groups
+      // Marker / textbox / arrow groups — clone as-is, Excel handles
+      // basic groups.
       const clone = el.cloneNode(true) as SVGElement;
       // Remove any image children inside the group
       for (const img of Array.from(clone.querySelectorAll("image"))) {
@@ -73,64 +62,6 @@ export function exportExcelSVG(canvas: CanvasManager): string {
   // Clean up: remove xmlns:xlink if present
   result = result.replace(/\s*xmlns:xlink="[^"]*"/g, "");
   return `<?xml version="1.0" encoding="UTF-8"?>\n${result}`;
-}
-
-/** Convert a <line> with marker-end into a <path> with arrowhead polygon */
-function convertArrowToPath(line: SVGLineElement, SVG_NS: string): SVGElement {
-  const x1 = Number.parseFloat(line.getAttribute("x1") || "0");
-  const y1 = Number.parseFloat(line.getAttribute("y1") || "0");
-  const x2 = Number.parseFloat(line.getAttribute("x2") || "0");
-  const y2 = Number.parseFloat(line.getAttribute("y2") || "0");
-  const stroke = line.getAttribute("stroke") || "#ff0000";
-  const sw = Number.parseFloat(line.getAttribute("stroke-width") || "3");
-
-  // Direction vector
-  const dx = x2 - x1;
-  const dy = y2 - y1;
-  const len = Math.sqrt(dx * dx + dy * dy);
-  if (len === 0) {
-    return document.createElementNS(SVG_NS, "g") as unknown as SVGElement;
-  }
-  const ux = dx / len;
-  const uy = dy / len;
-
-  // Arrowhead size proportional to stroke width
-  const headLen = sw * 4;
-  const headW = sw * 2.5;
-
-  // Shorten line so it ends at arrowhead base
-  const lineEndX = x2 - ux * headLen;
-  const lineEndY = y2 - uy * headLen;
-
-  // Perpendicular vector
-  const px = -uy;
-  const py = ux;
-
-  // Arrowhead triangle points
-  const p1x = lineEndX + px * headW;
-  const p1y = lineEndY + py * headW;
-  const p2x = lineEndX - px * headW;
-  const p2y = lineEndY - py * headW;
-
-  const g = document.createElementNS(SVG_NS, "g");
-
-  // Line body
-  const path = document.createElementNS(SVG_NS, "line");
-  path.setAttribute("x1", String(x1));
-  path.setAttribute("y1", String(y1));
-  path.setAttribute("x2", String(lineEndX));
-  path.setAttribute("y2", String(lineEndY));
-  path.setAttribute("stroke", stroke);
-  path.setAttribute("stroke-width", String(sw));
-  g.appendChild(path);
-
-  // Arrowhead as polygon
-  const arrow = document.createElementNS(SVG_NS, "polygon");
-  arrow.setAttribute("points", `${x2},${y2} ${p1x},${p1y} ${p2x},${p2y}`);
-  arrow.setAttribute("fill", stroke);
-  g.appendChild(arrow);
-
-  return g as unknown as SVGElement;
 }
 
 function flattenAnnotations(svg: SVGSVGElement): void {

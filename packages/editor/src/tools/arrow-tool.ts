@@ -6,7 +6,7 @@ import {
   writeArrowEndpoints,
   writeArrowSpec,
 } from "@ingcreators/annot-core/editor/arrow-markers";
-import type { ArrowHead, ArrowShape } from "./tool-base.js";
+import type { ArrowShape } from "./tool-base.js";
 /**
  * ArrowTool — unified Line / Arrow tool.
  *
@@ -33,8 +33,8 @@ export interface ArrowEndsSpec {
   end: ArrowSpec;
 }
 
-/** Remap legacy / pre-refactor shape names to the PowerPoint-parity
- *  six-shape set. */
+/** Coerce an `ArrowShape` value off an element attribute, defaulting
+ *  to `"none"` when the attribute is absent / unrecognised. */
 function canonicalShape(value: string | null): ArrowShape {
   switch (value) {
     case "arrow":
@@ -44,29 +44,8 @@ function canonicalShape(value: string | null): ArrowShape {
     case "oval":
     case "none":
       return value;
-    case "triangle-open":
-      return "arrow";
-    case "tbar":
-      return "stealth";
-    case "reverse":
-      return "arrow";
     default:
-      return "triangle";
-  }
-}
-
-/** Translate the legacy 3-state `ArrowHead` value into a full
- *  per-end ArrowEndsSpec (default md/md dimensions). */
-export function fromLegacyArrowHead(head: ArrowHead | undefined): ArrowEndsSpec {
-  const none: ArrowSpec = { shape: "none", width: "md", length: "md" };
-  const tri: ArrowSpec = { shape: "triangle", width: "md", length: "md" };
-  switch (head) {
-    case "none":
-      return { start: none, end: none };
-    case "both":
-      return { start: tri, end: tri };
-    default:
-      return { start: none, end: tri };
+      return "none";
   }
 }
 
@@ -75,66 +54,29 @@ export function fromLegacyArrowHead(head: ArrowHead | undefined): ArrowEndsSpec 
  *   - writes data-arrow-*-{shape,width,length} attributes
  *   - regenerates the path's `d` (stem + heads)
  *   - updates `fill` (= stroke color if any filled head, else "none")
- *
- * Accepts either an `ArrowHead` (legacy 3-state) or an
- * `ArrowEndsSpec` (new per-end / per-dim).
  */
-export function applyArrowHead(el: SVGElement, head: ArrowHead): void;
-export function applyArrowHead(el: SVGElement, spec: ArrowEndsSpec): void;
-export function applyArrowHead(el: SVGElement, v: ArrowHead | ArrowEndsSpec): void {
-  const spec: ArrowEndsSpec = typeof v === "string" ? fromLegacyArrowHead(v) : v;
+export function applyArrowHead(el: SVGElement, spec: ArrowEndsSpec): void {
   writeArrowSpec(el, "start", spec.start);
   writeArrowSpec(el, "end", spec.end);
-
-  // Legacy single-field discriminator for code paths that haven't
-  // migrated (Office paste fallback, `detectArrowHead`).
-  const hasStart = spec.start.shape !== "none";
-  const hasEnd = spec.end.shape !== "none";
-  const legacy: ArrowHead = hasStart && hasEnd ? "both" : hasStart || hasEnd ? "end" : "none";
-  el.setAttribute("data-arrow-head", legacy);
-
   refreshArrowPath(el);
 }
 
-/** Read the full per-end descriptor off an arrow element, falling
- *  back through layered legacy attributes for pre-refactor content. */
+/** Read the full per-end descriptor off an arrow element. */
 export function detectArrowEnds(el: SVGElement): ArrowEndsSpec {
-  // Prefer the canonical data attrs from arrow-markers' detectArrowSpec.
   const startRaw = el.getAttribute("data-arrow-start-shape");
   const endRaw = el.getAttribute("data-arrow-end-shape");
-  if (startRaw || endRaw) {
-    return {
-      start: {
-        shape: canonicalShape(startRaw),
-        width: detectArrowSpec(el, "start").width,
-        length: detectArrowSpec(el, "start").length,
-      },
-      end: {
-        shape: canonicalShape(endRaw),
-        width: detectArrowSpec(el, "end").width,
-        length: detectArrowSpec(el, "end").length,
-      },
-    };
-  }
-  // Legacy: element has the 3-state `data-arrow-head` or plain marker
-  // attributes.
-  const legacy =
-    (el.getAttribute("data-arrow-head") as ArrowHead | null) ||
-    (el.hasAttribute("marker-start") && el.hasAttribute("marker-end")
-      ? "both"
-      : el.hasAttribute("marker-end") || el.hasAttribute("marker-start")
-        ? "end"
-        : "none");
-  return fromLegacyArrowHead(legacy);
-}
-
-/** Legacy 3-state detector — still used by Office-paste paths that
- *  haven't migrated to reading the per-end spec. */
-export function detectArrowHead(el: SVGElement): ArrowHead {
-  const spec = detectArrowEnds(el);
-  const hasStart = spec.start.shape !== "none";
-  const hasEnd = spec.end.shape !== "none";
-  return hasStart && hasEnd ? "both" : hasEnd || hasStart ? "end" : "none";
+  return {
+    start: {
+      shape: canonicalShape(startRaw),
+      width: detectArrowSpec(el, "start").width,
+      length: detectArrowSpec(el, "start").length,
+    },
+    end: {
+      shape: canonicalShape(endRaw),
+      width: detectArrowSpec(el, "end").width,
+      length: detectArrowSpec(el, "end").length,
+    },
+  };
 }
 
 export class ArrowTool extends ToolBase {
@@ -165,16 +107,6 @@ export class ArrowTool extends ToolBase {
         length: this.options.arrowLengthEnd ?? "md",
       },
     };
-    if (
-      this.options.arrowHeadStart == null &&
-      this.options.arrowHeadEnd == null &&
-      this.options.arrowHead
-    ) {
-      const legacy = fromLegacyArrowHead(this.options.arrowHead);
-      spec.start = legacy.start;
-      spec.end = legacy.end;
-    }
-
     const sw = this.options.strokeWidth;
     // Shared stroke attributes live on the <g> so they cascade to
     // both the stem <path> and the head <path>. The head overrides
@@ -197,13 +129,6 @@ export class ArrowTool extends ToolBase {
     writeArrowEndpoints(g, pt.x, pt.y, pt.x, pt.y);
     writeArrowSpec(g, "start", spec.start);
     writeArrowSpec(g, "end", spec.end);
-    // Legacy 3-state discriminator (Office-paste back-compat).
-    const hasStart = spec.start.shape !== "none";
-    const hasEnd = spec.end.shape !== "none";
-    g.setAttribute(
-      "data-arrow-head",
-      hasStart && hasEnd ? "both" : hasStart || hasEnd ? "end" : "none",
-    );
 
     // refreshArrowPath creates the stem + head <path> children on
     // demand and populates their `d` + fill. Calling it here sets up

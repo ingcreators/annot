@@ -744,37 +744,18 @@ export class Toolbar {
       const xform = transformOf(el);
 
       const isArrowPath = tag === "g" && el.getAttribute("data-type") === "arrow";
-      if (tag === "line" || isArrowPath) {
-        // Unified Line/Arrow — may be the legacy <line marker-end=...>
-        // form or the new composed <path data-type="arrow"> form. Both
-        // encode their geometric endpoints + per-end arrow specs so
-        // Office paste sees the same shape payload either way.
-        let x1 = 0;
-        let y1 = 0;
-        let x2 = 0;
-        let y2 = 0;
-        if (isArrowPath) {
-          x1 = Number.parseFloat(el.getAttribute("data-x1") || "0");
-          y1 = Number.parseFloat(el.getAttribute("data-y1") || "0");
-          x2 = Number.parseFloat(el.getAttribute("data-x2") || "0");
-          y2 = Number.parseFloat(el.getAttribute("data-y2") || "0");
-        } else {
-          x1 = Number.parseFloat(el.getAttribute("x1") || "0");
-          y1 = Number.parseFloat(el.getAttribute("y1") || "0");
-          x2 = Number.parseFloat(el.getAttribute("x2") || "0");
-          y2 = Number.parseFloat(el.getAttribute("y2") || "0");
-        }
-        // Arrow-head presence is whichever end has shape ≠ "none" (for
-        // path arrows) OR which marker attribute is present (for the
-        // legacy line form).
-        const endShape = el.getAttribute("data-arrow-end-shape");
+      if (isArrowPath) {
+        // ArrowTool's composed `<g data-type="arrow">` — endpoints +
+        // per-end shape attrs in `data-*` form, so Office paste can
+        // emit the matching OOXML preset.
+        const x1 = Number.parseFloat(el.getAttribute("data-x1") || "0");
+        const y1 = Number.parseFloat(el.getAttribute("data-y1") || "0");
+        const x2 = Number.parseFloat(el.getAttribute("data-x2") || "0");
+        const y2 = Number.parseFloat(el.getAttribute("data-y2") || "0");
         const startShape = el.getAttribute("data-arrow-start-shape");
-        const headEnd = isArrowPath
-          ? endShape != null && endShape !== "none"
-          : !!el.getAttribute("marker-end");
-        const headStart = isArrowPath
-          ? startShape != null && startShape !== "none"
-          : !!el.getAttribute("marker-start");
+        const endShape = el.getAttribute("data-arrow-end-shape");
+        const headStart = startShape != null && startShape !== "none";
+        const headEnd = endShape != null && endShape !== "none";
         shapes.push({
           type: headEnd || headStart ? "arrow" : "line",
           x1: x1 + tx,

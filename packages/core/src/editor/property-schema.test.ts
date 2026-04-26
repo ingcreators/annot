@@ -243,7 +243,7 @@ describe("PROPERTY_CONTROLS registry", () => {
     expect(() => PROPERTY_CONTROLS.strokeStyle.getValue(rect)).not.toThrow();
     expect(() => PROPERTY_CONTROLS.shapeTypePicker.getValue(rect)).not.toThrow();
 
-    const arrow = svg("g", { "data-type": "arrow", "data-arrow-head": "end" });
+    const arrow = svg("g", { "data-type": "arrow", "data-arrow-end-shape": "triangle" });
     expect(PROPERTY_CONTROLS.arrowVariantPicker.getValue(arrow)).toBe("end");
 
     const freehand = svg("path", { "data-draw-style": "highlighter" });

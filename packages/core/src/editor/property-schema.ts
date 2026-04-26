@@ -312,13 +312,10 @@ export interface PropertyControlDef<T = unknown> {
 // here without dragging the wrappers across the package boundary.
 
 function arrowVariantOf(el: SVGElement): ArrowHead {
-  // Read the canonical 3-state discriminator written by ArrowTool.
-  // `data-arrow-head` is the simplest source of truth; per-end
-  // shapes live on `data-arrow-{start,end}-shape`.
-  const legacy = el.getAttribute("data-arrow-head");
-  if (legacy === "none" || legacy === "end" || legacy === "both") return legacy;
-  const startNone = (el.getAttribute("data-arrow-start-shape") || "none") === "none";
-  const endNone = (el.getAttribute("data-arrow-end-shape") || "none") === "none";
+  // Derive the 3-state discriminator from the per-end shape attrs
+  // ArrowTool writes (`data-arrow-{start,end}-shape`).
+  const startNone = (el.getAttribute("data-arrow-start-shape") ?? "none") === "none";
+  const endNone = (el.getAttribute("data-arrow-end-shape") ?? "none") === "none";
   if (startNone && endNone) return "none";
   if (!startNone && !endNone) return "both";
   return "end";

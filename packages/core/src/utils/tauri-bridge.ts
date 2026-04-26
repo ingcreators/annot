@@ -355,10 +355,8 @@ export interface AnnotationShape {
   flip_v?: boolean;
 
   // ---- Line polish (PowerPoint-equivalent arrow + cap/join + opacity) ----
-  /** Per-end arrow head shapes (SVG names). Desktop translates these
-   *  into OOXML preset types on the way out (triangle→triangle,
-   *  triangle-open→stealth, oval→oval, diamond→diamond, tbar→stealth
-   *  w/ sm len, reverse→arrow reverse). */
+  /** Per-end arrow head shapes — matching OOXML's six preset types
+   *  one-to-one. */
   arrow_shape_start?: "none" | "arrow" | "triangle" | "stealth" | "diamond" | "oval";
   arrow_shape_end?: "none" | "arrow" | "triangle" | "stealth" | "diamond" | "oval";
   /** Per-dimension arrow widths (perpendicular to stem, OOXML `w`). */
