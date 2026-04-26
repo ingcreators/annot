@@ -155,11 +155,12 @@ describe("PROPERTY_CONTROLS registry", () => {
   it("covers every PropertyControlId", () => {
     // Phase 1 landed 17 entries; Phase A of the extensions plan
     // (`property-panel-schema-extensions.md`) added 5 marker bg-
-    // primitive ids → 22. Pinning the count guards against a new
-    // id landing without a matching def — the entry-count shape
-    // test alone won't catch that if the new id accidentally
-    // duplicates another.
-    expect(ALL_IDS).toHaveLength(22);
+    // primitive ids → 22; Phase B added 3 shape transparency / cap
+    // type ids → 25. Pinning the count guards against a new id
+    // landing without a matching def — the entry-count shape test
+    // alone won't catch that if the new id accidentally duplicates
+    // another.
+    expect(ALL_IDS).toHaveLength(25);
     for (const id of ALL_IDS) {
       expect(PROPERTY_CONTROLS[id], `missing def for "${id}"`).toBeDefined();
       expect(PROPERTY_CONTROLS[id].id).toBe(id);
@@ -280,6 +281,71 @@ describe("PROPERTY_CONTROLS registry", () => {
     // Solid (no data-dash-key, no stroke-dasharray) → ""
     expect(PROPERTY_CONTROLS.markerBgStrokeStyle.getValue(marker)).toBe("");
     expect(PROPERTY_CONTROLS.markerLabelValue.getValue(marker)).toBe(1);
+  });
+
+  it("Phase B fillOpacity / strokeOpacity / strokeLinecap getValue/setValue", () => {
+    const r = svg("rect", { fill: "#ff0000", "fill-opacity": "0.4" });
+    expect(PROPERTY_CONTROLS.fillOpacity.getValue(r)).toBe(60);
+    PROPERTY_CONTROLS.fillOpacity.setValue?.(r, 25);
+    // 25% transparent ↔ 0.75 opacity
+    expect(Number.parseFloat(r.getAttribute("fill-opacity") || "0")).toBeCloseTo(0.75, 3);
+
+    // strokeOpacity: shapes write to `stroke-opacity`
+    expect(PROPERTY_CONTROLS.strokeOpacity.getValue(r)).toBe(0); // default 1 → 0% transparent
+    PROPERTY_CONTROLS.strokeOpacity.setValue?.(r, 40);
+    expect(Number.parseFloat(r.getAttribute("stroke-opacity") || "0")).toBeCloseTo(0.6, 3);
+
+    // strokeOpacity: line-like writes to `opacity` AND drops legacy `stroke-opacity`
+    const line = svg("line", { "stroke-opacity": "0.3" });
+    PROPERTY_CONTROLS.strokeOpacity.setValue?.(line, 20);
+    expect(line.getAttribute("opacity")).toBeTruthy();
+    expect(Number.parseFloat(line.getAttribute("opacity") || "0")).toBeCloseTo(0.8, 3);
+    expect(line.hasAttribute("stroke-opacity")).toBe(false);
+
+    // strokeLinecap: select with default "butt"
+    expect(PROPERTY_CONTROLS.strokeLinecap.getValue(r)).toBe("butt");
+    PROPERTY_CONTROLS.strokeLinecap.setValue?.(r, "round");
+    expect(r.getAttribute("stroke-linecap")).toBe("round");
+  });
+
+  it("Phase B strokeColor / strokeWidth augmentations expand to freehand children + arrow head-fill / refreshArrowPath", () => {
+    // Freehand <g> wrapper — writes propagate to <path> children.
+    const fh = svg("g", { "data-type": "freehand" });
+    const p1 = svg("path", { stroke: "#000000", "stroke-width": "2" });
+    const p2 = svg("path", { stroke: "#000000", "stroke-width": "2" });
+    fh.appendChild(p1);
+    fh.appendChild(p2);
+    PROPERTY_CONTROLS.strokeColor.setValue?.(fh, "#abcdef");
+    expect(p1.getAttribute("stroke")).toBe("#abcdef");
+    expect(p2.getAttribute("stroke")).toBe("#abcdef");
+
+    PROPERTY_CONTROLS.strokeWidth.setValue?.(fh, 5);
+    expect(p1.getAttribute("stroke-width")).toBe("5");
+    expect(p2.getAttribute("stroke-width")).toBe("5");
+
+    // Composed arrow group — strokeColor also paints the head-filled
+    // subpath; strokeWidth triggers refreshArrowPath which generates
+    // a stem `<path data-role="stem">` (creating it if missing).
+    const arrow = svg("g", {
+      "data-type": "arrow",
+      stroke: "#222",
+      "stroke-width": "3",
+      "data-x1": "0",
+      "data-y1": "0",
+      "data-x2": "100",
+      "data-y2": "0",
+    });
+    const headFilled = svg("path", { "data-role": "head-filled", fill: "#222" });
+    arrow.appendChild(headFilled);
+    PROPERTY_CONTROLS.strokeColor.setValue?.(arrow, "#cafe00");
+    expect(headFilled.getAttribute("fill")).toBe("#cafe00");
+
+    PROPERTY_CONTROLS.strokeWidth.setValue?.(arrow, 4);
+    // refreshArrowPath upserts a `[data-role="stem"]` child with a
+    // non-empty `d` attribute — proves the regen ran.
+    const stem = arrow.querySelector('[data-role="stem"]');
+    expect(stem).not.toBeNull();
+    expect(stem?.getAttribute("d")?.length ?? 0).toBeGreaterThan(0);
   });
 
   it("marker bg-primitive setValues mutate the inner element + keep label/text in sync", () => {
