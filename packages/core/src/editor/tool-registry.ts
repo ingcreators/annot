@@ -28,6 +28,7 @@
  * phases consume the registry one site at a time.
  */
 
+import { PROPERTY_CONTROL_IDS, type PropertyControlId } from "./property-schema.js";
 import {
   ARROW_ICON_SVG,
   COUNTER_ICON_SVG,
@@ -35,6 +36,100 @@ import {
   SHAPE_ICON_SVG,
 } from "./toolbar-icons.js";
 import type { ToolOptions } from "./tool-options.js";
+
+/** Tool-side panel sections. The Tool property panel uses the same
+ *  four pp-section buckets as the SELECTION-side property panel, in
+ *  the same visual order (Type → Fill → Line → Label). The renderer
+ *  groups consecutive entries with the same section into a single
+ *  `pp-section` card; section ORDER follows first-encounter in the
+ *  per-tool `panelControls` array. */
+export type ToolPanelSection = "Type" | "Fill" | "Line" | "Label";
+
+/** Tool-only control ids — affordances the Tool panel renders that
+ *  the SELECTION registry doesn't model. Distinct from
+ *  `PropertyControlId` so the schema-driven renderer in Phase 2 can
+ *  dispatch on whichever id family it sees.
+ *
+ *  `tool.typeChips`
+ *      Type-row chip picker driven by `TOOL_REGISTRY[toolId].variants`.
+ *      ONE entry per tool with a variant flyout. Reads / writes
+ *      `preset[TOOL_REGISTRY[toolId].variantField]` (the only adapter
+ *      that genuinely needs `toolId` at read/write time — every other
+ *      adapter ignores it).
+ *
+ *  `tool.transparencyPercent`
+ *      0..100% inverse of `preset.strokeOpacity` (so "60% transparent"
+ *      reads as 60, not 0.4). The SELECTION-side `strokeOpacity` def
+ *      uses the same convention; the Tool panel always shows percent
+ *      directly without the helper, so this id keeps its own adapter.
+ *
+ *  `tool.fillTransparencyPercent`
+ *      0..100% inverse of `preset.fillOpacity`. Used by Highlight
+ *      (default 0.4 ↔ 60% transparent) where the visual language is
+ *      "transparency" — the larger the number, the see-throughier.
+ *
+ *  `tool.fillOpacityPercent`
+ *      0..100% DIRECT of `preset.fillOpacity`. Used by Shape (default
+ *      1.0 ↔ 100% opaque) where the imperative renderer used the
+ *      "Opacity" label. Distinct from `tool.fillTransparencyPercent`
+ *      so Phase 2 can preserve byte-equivalent DOM (label string +
+ *      number direction) per tool. Whether to unify the two surfaces
+ *      onto a single "Transparency" idiom is a UX decision, not a
+ *      refactor concern — out of scope for this plan.
+ *
+ *  `tool.freehandDone`
+ *      Click-action button that ends the active freehand drawing
+ *      session. No persisted value — the adapter's read/write are
+ *      a no-op pair (read returns null, write does nothing) so the
+ *      shape-invariant test treats it uniformly with the rest. */
+export type ToolPanelExtraControlId =
+  | "tool.typeChips"
+  | "tool.transparencyPercent"
+  | "tool.fillTransparencyPercent"
+  | "tool.fillOpacityPercent"
+  | "tool.freehandDone";
+
+/** Frozen tuple of every `ToolPanelExtraControlId`. Drives the
+ *  shape-invariant test that asserts every extra id has a matching
+ *  adapter. Keep in sync with the union above when adding new ids. */
+export const TOOL_PANEL_EXTRA_CONTROL_IDS: ReadonlyArray<ToolPanelExtraControlId> = [
+  "tool.typeChips",
+  "tool.transparencyPercent",
+  "tool.fillTransparencyPercent",
+  "tool.fillOpacityPercent",
+  "tool.freehandDone",
+] as const;
+
+/** A single Tool-side panel control. The renderer (Phase 2, Tier C)
+ *  consumes `panelControls` arrays to produce the per-tool side
+ *  panel. The id either reuses a `PropertyControlId` (when the
+ *  SELECTION registry can supply label / options / min / max
+ *  metadata) or names a Tool-only affordance via
+ *  `ToolPanelExtraControlId`.
+ *
+ *  Plain data — no closures over canvas state, no DOM globals at
+ *  module load. The optional `visibleWhen` predicate runs against
+ *  the CURRENT preset (NOT an SVGElement — this is the Tool side,
+ *  no element exists yet) so a control like Redact's Color row can
+ *  hide unless `preset.redactStyle === "solid"`. */
+export interface ToolPanelControlDef {
+  /** Section header. Renderer batches consecutive entries with the
+   *  same section into one `pp-section`. Order in the registry
+   *  controls visual order. */
+  section: ToolPanelSection;
+  /** Control id. Either a SELECTION-side id (`fillColor`,
+   *  `strokeWidth`, …) where the adapter routes the mutation onto
+   *  the matching `ToolOptions` field, or a Tool-only id
+   *  (`tool.typeChips`, `tool.transparencyPercent`, …) the renderer
+   *  resolves via its Tier C-local table. */
+  id: PropertyControlId | ToolPanelExtraControlId;
+  /** Optional gating predicate against the CURRENT preset. Returning
+   *  `false` tells the renderer to skip this control for the active
+   *  tool (e.g. "Redact Color row only when redactStyle === 'solid'").
+   *
+   *  Pure — no DOM access, no `Toolbar` access. Tier B-safe. */
+  visibleWhen?: (preset: ToolOptions) => boolean;
+}
 
 /** A single sub-shape pickable from a tool's variant flyout. Mirrors
  *  the shape of `ToolVariant` in the legacy `toolbar-variants.ts`
@@ -110,6 +205,19 @@ export interface ToolRegistryEntry {
    *  (`tagName`, `getAttribute`, `hasAttribute`, `querySelector`).
    *  No `document` / `window` access. */
   variantKeyForElement?: (el: SVGElement) => string | null;
+  /** Tool-side panel control list. Drives the schema-driven renderer
+   *  in `tool-property-renderer-schema.ts` (Phase 2 of
+   *  `docs/plans/tool-property-renderer-schema.md`). Order is render
+   *  order; the renderer groups consecutive entries with the same
+   *  `section` into one `pp-section`.
+   *
+   *  Crop omits this field — its activation is a transient overlay,
+   *  not a per-tool side panel.
+   *
+   *  Today (Phase 1) it's data only — no consumer reads it yet.
+   *  Phase 2 adds the schema-driven renderer alongside the imperative
+   *  one; Phase 3 swaps the live callsite. */
+  panelControls?: ReadonlyArray<ToolPanelControlDef>;
   /** Tool-specific style reader. Mutates `preset` in place with
    *  values harvested from `el`'s attributes / children. The
    *  generic universal-style reader (stroke / fill / stroke-width /
@@ -240,6 +348,25 @@ export const TOOL_REGISTRY: Readonly<Record<string, ToolRegistryEntry>> = {
       "arrowLengthStart",
       "arrowLengthEnd",
     ],
+    // Type → Line. Per-end arrow shape / size pulldowns delegate to
+    // the SELECTION-side `arrow{Start,End}{Shape,Size}` ids — Phase 2
+    // can either render them as four pulldowns (matching SELECTION)
+    // or aggregate via the legacy `createArrowEndsRows` widget;
+    // either is byte-equivalent to the imperative output as long as
+    // the eventual DOM matches the snapshots in
+    // `tool-property-renderer-schema.test.ts`.
+    panelControls: [
+      { section: "Type", id: "tool.typeChips" },
+      { section: "Line", id: PROPERTY_CONTROL_IDS.strokeColor },
+      { section: "Line", id: "tool.transparencyPercent" },
+      { section: "Line", id: PROPERTY_CONTROL_IDS.strokeWidth },
+      { section: "Line", id: PROPERTY_CONTROL_IDS.strokeStyle },
+      { section: "Line", id: PROPERTY_CONTROL_IDS.strokeLinecap },
+      { section: "Line", id: PROPERTY_CONTROL_IDS.arrowStartShape },
+      { section: "Line", id: PROPERTY_CONTROL_IDS.arrowStartSize },
+      { section: "Line", id: PROPERTY_CONTROL_IDS.arrowEndShape },
+      { section: "Line", id: PROPERTY_CONTROL_IDS.arrowEndSize },
+    ],
     variantKeyForElement(el) {
       if (el.tagName === "line") return `arrow.${arrowVariantFromAttrs(el)}`;
       if (el.tagName === "g" && el.getAttribute("data-type") === "arrow") {
@@ -306,6 +433,22 @@ export const TOOL_REGISTRY: Readonly<Record<string, ToolRegistryEntry>> = {
       "shapeType",
       "strokeLinejoin",
     ],
+    // Type → Fill → Line. The imperative renderer creates Line first
+    // then INSERTS Fill before it (`getFillBody`'s lazy section
+    // ordering); listing Fill before Line in the array gives the
+    // same final DOM. `tool.fillOpacityPercent` carries the imperative
+    // "Opacity" label + DIRECT mapping (default 1.0 ↔ 100%) — distinct
+    // from highlight's `tool.fillTransparencyPercent` (inverse).
+    panelControls: [
+      { section: "Type", id: "tool.typeChips" },
+      { section: "Fill", id: PROPERTY_CONTROL_IDS.fillColor },
+      { section: "Fill", id: "tool.fillOpacityPercent" },
+      { section: "Line", id: PROPERTY_CONTROL_IDS.strokeColor },
+      { section: "Line", id: "tool.transparencyPercent" },
+      { section: "Line", id: PROPERTY_CONTROL_IDS.strokeWidth },
+      { section: "Line", id: PROPERTY_CONTROL_IDS.strokeStyle },
+      { section: "Line", id: PROPERTY_CONTROL_IDS.strokeLinecap },
+    ],
     variantKeyForElement(el) {
       if (el.tagName === "ellipse") return "shape.ellipse";
       if (el.tagName === "rect") {
@@ -343,6 +486,16 @@ export const TOOL_REGISTRY: Readonly<Record<string, ToolRegistryEntry>> = {
     // Highlight only persists its color + transparency — stroke
     // attrs aren't drawn on highlight rects.
     presetFields: ["highlightColor", "fillOpacity"],
+    // Type → Fill. The imperative Type row uses color-swatch chips
+    // (a `pp-color-chip` variant) instead of icon chips, so Phase 2's
+    // renderer for `tool.typeChips` will need to branch on toolId or
+    // on the variant entries' shape — same registry id, different
+    // chip rendering. The Fill section is just Transparency
+    // (inverse-percent). Default fillOpacity 0.4 ↔ displayed 60%.
+    panelControls: [
+      { section: "Type", id: "tool.typeChips" },
+      { section: "Fill", id: "tool.fillTransparencyPercent" },
+    ],
     variantKeyForElement(el) {
       if (el.tagName !== "rect" || el.getAttribute("data-highlight") !== "1") return null;
       // Highlight's variant is its fill color itself, normalized to
@@ -377,6 +530,15 @@ export const TOOL_REGISTRY: Readonly<Record<string, ToolRegistryEntry>> = {
     // following TextTool's "text color = stroke" convention) plus
     // sticky/callout bg in `fillColor`.
     presetFields: ["strokeColor", "fillColor", "fontSize", "fontFamily", "textVariant"],
+    // Type → Line (Color, Font, Size). No Fill or Label sections —
+    // sticky/callout bg color is computed from text color rather
+    // than picked separately on the Tool side.
+    panelControls: [
+      { section: "Type", id: "tool.typeChips" },
+      { section: "Line", id: PROPERTY_CONTROL_IDS.strokeColor },
+      { section: "Line", id: PROPERTY_CONTROL_IDS.fontFamily },
+      { section: "Line", id: PROPERTY_CONTROL_IDS.fontSize },
+    ],
     variantKeyForElement(el) {
       if (el.tagName === "text") {
         // Plain `<text>` outside a `<g>` wrapper falls through to the
@@ -425,6 +587,21 @@ export const TOOL_REGISTRY: Readonly<Record<string, ToolRegistryEntry>> = {
       { value: "highlighter", icon: "ink_highlighter", label: "Highlighter" },
     ],
     presetFields: [...UNIVERSAL_STROKE_FIELDS, "drawStyle"],
+    // Type → Line + a "Done drawing" action. `tool.freehandDone` is
+    // declared in section "Line" for ordering purposes (it follows
+    // the line controls in the imperative renderer); the Phase 2
+    // renderer special-cases this id to render OUTSIDE any
+    // pp-section, matching the imperative `pp-done-row` button at
+    // the menu tail.
+    panelControls: [
+      { section: "Type", id: "tool.typeChips" },
+      { section: "Line", id: PROPERTY_CONTROL_IDS.strokeColor },
+      { section: "Line", id: "tool.transparencyPercent" },
+      { section: "Line", id: PROPERTY_CONTROL_IDS.strokeWidth },
+      { section: "Line", id: PROPERTY_CONTROL_IDS.strokeStyle },
+      { section: "Line", id: PROPERTY_CONTROL_IDS.strokeLinecap },
+      { section: "Line", id: "tool.freehandDone" },
+    ],
     variantKeyForElement(el) {
       if (el.tagName === "path") {
         const ds = el.getAttribute("data-draw-style");
@@ -470,6 +647,18 @@ export const TOOL_REGISTRY: Readonly<Record<string, ToolRegistryEntry>> = {
       "fillColor",
       "fontSize",
       "markerShape",
+    ],
+    // Type → Fill → Line → Label. The Counter is the only tool that
+    // needs all four sections — its label (the counter number's
+    // font-size, NOT a value picker on the Tool side) lives in its
+    // own pp-section.
+    panelControls: [
+      { section: "Type", id: "tool.typeChips" },
+      { section: "Fill", id: PROPERTY_CONTROL_IDS.fillColor },
+      { section: "Line", id: PROPERTY_CONTROL_IDS.strokeColor },
+      { section: "Line", id: PROPERTY_CONTROL_IDS.strokeWidth },
+      { section: "Line", id: PROPERTY_CONTROL_IDS.strokeStyle },
+      { section: "Label", id: PROPERTY_CONTROL_IDS.fontSize },
     ],
     variantKeyForElement(el) {
       if (el.tagName !== "g" || !el.hasAttribute("data-marker")) return null;
@@ -529,6 +718,18 @@ export const TOOL_REGISTRY: Readonly<Record<string, ToolRegistryEntry>> = {
     // bake a PNG so they don't need style fields at all — the union
     // is what actually gets persisted.
     presetFields: ["fillColor", "redactStyle"],
+    // Type only by default; Fill > Color appears solely for the
+    // "solid bar" variant. The `visibleWhen` predicate against the
+    // CURRENT preset (NOT an element) keeps the panel reactive to
+    // variant switches without re-rendering from scratch.
+    panelControls: [
+      { section: "Type", id: "tool.typeChips" },
+      {
+        section: "Fill",
+        id: PROPERTY_CONTROL_IDS.fillColor,
+        visibleWhen: (preset) => preset.redactStyle === "solid",
+      },
+    ],
     variantKeyForElement(el) {
       if (el.tagName === "rect" && el.getAttribute("data-redact-style") === "solid") {
         return "redact.solid";

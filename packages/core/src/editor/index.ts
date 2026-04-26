@@ -65,12 +65,22 @@ export {
 } from "./tool-lifecycle.js";
 export {
   normalizeVariantSideFields,
+  TOOL_PANEL_EXTRA_CONTROL_IDS,
   TOOL_REGISTRY,
   TOOL_REGISTRY_IDS,
+  type ToolPanelControlDef,
+  type ToolPanelExtraControlId,
+  type ToolPanelSection,
   type ToolRegistryEntry,
   type ToolRegistryId,
   type ToolRegistryVariant,
 } from "./tool-registry.js";
+export {
+  TOOL_PANEL_ADAPTER_IDS,
+  TOOL_PANEL_ADAPTERS,
+  type ToolPanelAdapter,
+  type ToolPanelAdapterId,
+} from "./tool-panel-adapter.js";
 export {
   fieldForSnakeKey,
   type PresetWireFormat,

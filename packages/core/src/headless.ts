@@ -101,12 +101,29 @@ export {
 // registry replacing imperative chains) applied to the toolbar.
 export {
   normalizeVariantSideFields,
+  TOOL_PANEL_EXTRA_CONTROL_IDS,
   TOOL_REGISTRY,
   TOOL_REGISTRY_IDS,
+  type ToolPanelControlDef,
+  type ToolPanelExtraControlId,
+  type ToolPanelSection,
   type ToolRegistryEntry,
   type ToolRegistryId,
   type ToolRegistryVariant,
 } from "./editor/tool-registry.js";
+
+// ─── Tool-side panel value adapters (pure data + closures) ────────────
+// Companion to `panelControls` in `tool-registry`: maps each id used
+// in those arrays onto a `(preset, value, toolId) => void` mutation
+// against `ToolOptions`. Phase 1 of
+// `docs/plans/tool-property-renderer-schema.md` ships the data only;
+// Phase 2's renderer (Tier C) is the first reader.
+export {
+  TOOL_PANEL_ADAPTER_IDS,
+  TOOL_PANEL_ADAPTERS,
+  type ToolPanelAdapter,
+  type ToolPanelAdapterId,
+} from "./editor/tool-panel-adapter.js";
 
 // ─── Toolbar preset (de)serializer (pure data conversion) ─────────────
 // Companion to `tool-registry`: walks `presetFields` and converts a
