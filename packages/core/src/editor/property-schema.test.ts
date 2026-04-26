@@ -153,12 +153,13 @@ describe("PROPERTY_CONTROLS registry", () => {
   const ALL_IDS: PropertyControlId[] = Object.values(PROPERTY_CONTROL_IDS);
 
   it("covers every PropertyControlId", () => {
-    // Phase 1 acceptance: ≥17 entries (every id in PROPERTY_CONTROL_IDS).
-    // Pinning the count guards against an id being added to
-    // PROPERTY_CONTROL_IDS without a matching def — the entry-count
-    // shape test alone won't catch that if the new id duplicates
-    // another by accident.
-    expect(ALL_IDS).toHaveLength(17);
+    // Phase 1 landed 17 entries; Phase A of the extensions plan
+    // (`property-panel-schema-extensions.md`) added 5 marker bg-
+    // primitive ids → 22. Pinning the count guards against a new
+    // id landing without a matching def — the entry-count shape
+    // test alone won't catch that if the new id accidentally
+    // duplicates another.
+    expect(ALL_IDS).toHaveLength(22);
     for (const id of ALL_IDS) {
       expect(PROPERTY_CONTROLS[id], `missing def for "${id}"`).toBeDefined();
       expect(PROPERTY_CONTROLS[id].id).toBe(id);
@@ -257,13 +258,58 @@ describe("PROPERTY_CONTROLS registry", () => {
     expect(PROPERTY_CONTROLS.highlightTransparency.getValue(highlight)).toBe(60);
 
     const marker = svg("g", { "data-marker": "1", "data-shape": "rounded" });
-    const bg = svg("rect", { x: "0", y: "0", width: "24", height: "24" });
+    const bg = svg("rect", {
+      x: "0",
+      y: "0",
+      width: "24",
+      height: "24",
+      fill: "#aabbcc",
+      stroke: "#112233",
+      "stroke-width": "2",
+    });
     const mtext = svg("text", { "font-size": "13" });
     mtext.textContent = "1";
     marker.appendChild(bg);
     marker.appendChild(mtext);
     expect(PROPERTY_CONTROLS.markerShapePicker.getValue(marker)).toBe("rounded");
     expect(PROPERTY_CONTROLS.markerSize.getValue(marker)).toBe(13);
+    // Phase A bg-primitive defs read from the inner <circle>/<rect>
+    expect(PROPERTY_CONTROLS.markerBgFillColor.getValue(marker)).toBe("#aabbcc");
+    expect(PROPERTY_CONTROLS.markerBgStrokeColor.getValue(marker)).toBe("#112233");
+    expect(PROPERTY_CONTROLS.markerBgStrokeWidth.getValue(marker)).toBe(2);
+    // Solid (no data-dash-key, no stroke-dasharray) → ""
+    expect(PROPERTY_CONTROLS.markerBgStrokeStyle.getValue(marker)).toBe("");
+    expect(PROPERTY_CONTROLS.markerLabelValue.getValue(marker)).toBe(1);
+  });
+
+  it("marker bg-primitive setValues mutate the inner element + keep label/text in sync", () => {
+    const marker = svg("g", { "data-marker": "1", "data-shape": "circle" });
+    const bg = svg("circle", { cx: "12", cy: "12", r: "12", "stroke-width": "1.5" });
+    const t = svg("text", { "font-size": "13" });
+    t.textContent = "1";
+    marker.appendChild(bg);
+    marker.appendChild(t);
+
+    PROPERTY_CONTROLS.markerBgFillColor.setValue?.(marker, "#deadbe");
+    expect(bg.getAttribute("fill")).toBe("#deadbe");
+    PROPERTY_CONTROLS.markerBgStrokeColor.setValue?.(marker, "#cafe00");
+    expect(bg.getAttribute("stroke")).toBe("#cafe00");
+
+    // Width also recomputes dasharray when a data-dash-key is set.
+    bg.setAttribute("data-dash-key", "dash");
+    PROPERTY_CONTROLS.markerBgStrokeWidth.setValue?.(marker, 3);
+    expect(bg.getAttribute("stroke-width")).toBe("3");
+    expect(bg.getAttribute("stroke-dasharray")).toBeTruthy();
+
+    // Style "" removes the dash key.
+    PROPERTY_CONTROLS.markerBgStrokeStyle.setValue?.(marker, "");
+    expect(bg.hasAttribute("data-dash-key")).toBe(false);
+    expect(bg.hasAttribute("stroke-dasharray")).toBe(false);
+
+    // Label value: outer data-marker AND inner text content move together.
+    PROPERTY_CONTROLS.markerLabelValue.setValue?.(marker, 42);
+    expect(marker.getAttribute("data-marker")).toBe("42");
+    expect(t.textContent).toBe("42");
   });
 
   it("setValue mutates element attributes for the simple Tier B controls", () => {
