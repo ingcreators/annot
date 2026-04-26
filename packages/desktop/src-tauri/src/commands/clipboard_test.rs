@@ -147,6 +147,10 @@ fn freehand_shape() -> AnnotationShape {
     }
 }
 
+/// 1x1 transparent PNG data URL. Bytes are irrelevant for the XML
+/// snapshot — only `parse_data_url_bytes` success matters.
+const TEST_PNG_DATA_URL: &str = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+
 fn mosaic_shape() -> AnnotationShape {
     AnnotationShape {
         shape_type: "mosaic_image".into(),
@@ -154,16 +158,25 @@ fn mosaic_shape() -> AnnotationShape {
         y: Some(400.0),
         width: Some(100.0),
         height: Some(80.0),
-        // 1x1 transparent PNG data URL. The bytes themselves don't
-        // matter for the XML snapshot — only that
-        // `parse_data_url_bytes` succeeds so the emitter runs.
-        // Phase 2 of the ABI plan moves this off `text` to a dedicated
-        // `image_data_url` field.
-        text: Some(
-            "data:image/png;base64,\
-             iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
-                .into(),
-        ),
+        // Phase 2 of the office-paste ABI plan made `image_data_url`
+        // the canonical carrier; the legacy `text`-as-data-URL path
+        // is still honored as a fallback (phase 8 drops it).
+        image_data_url: Some(TEST_PNG_DATA_URL.into()),
+        ..Default::default()
+    }
+}
+
+fn mosaic_shape_legacy_carrier() -> AnnotationShape {
+    // Mirror of `mosaic_shape()` but using only the legacy carrier
+    // (`text` field) — proves the fallback in `build_drawing_xml`
+    // produces byte-equivalent XML to the canonical form.
+    AnnotationShape {
+        shape_type: "mosaic_image".into(),
+        x: Some(500.0),
+        y: Some(400.0),
+        width: Some(100.0),
+        height: Some(80.0),
+        text: Some(TEST_PNG_DATA_URL.into()),
         ..Default::default()
     }
 }
@@ -199,6 +212,17 @@ fn drawing_xml_marker_legacy_stroke_carrier_matches_canonical() {
     // test (and the helper) goes away.
     let canonical = build_drawing_xml(&[marker_shape()], 800.0, 600.0, false).0;
     let legacy = build_drawing_xml(&[marker_shape_legacy_carrier()], 800.0, 600.0, false).0;
+    assert_eq!(canonical, legacy);
+}
+
+#[test]
+fn drawing_xml_mosaic_legacy_text_carrier_matches_canonical() {
+    // Phase 2 fallback equivalence: a payload that stashes the data
+    // URL in `text` (pre-phase-2 form) must produce the same XML
+    // body as the canonical `image_data_url` form. Phase 8 drops
+    // both this test and the helper.
+    let canonical = build_drawing_xml(&[mosaic_shape()], 800.0, 600.0, false).0;
+    let legacy = build_drawing_xml(&[mosaic_shape_legacy_carrier()], 800.0, 600.0, false).0;
     assert_eq!(canonical, legacy);
 }
 

@@ -56,6 +56,14 @@ pub struct AnnotationShape {
     /// only set `stroke` to `"rect"` still dispatch correctly via the
     /// fallback in `gvml_marker`.
     pub marker_shape: Option<String>,
+
+    // ---- Mosaic / blur redact image ----
+    /// Self-contained PNG / JPEG data URL for mosaic / blur
+    /// redactions. The canonical carrier since
+    /// [office-paste-abi-modernisation phase 2]; older callers that
+    /// stash the data URL in `text` still parse via the fallback in
+    /// `build_drawing_xml`.
+    pub image_data_url: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -264,7 +272,15 @@ pub(crate) fn build_drawing_xml(
             "mosaic_image" => {
                 let rid = next_rid;
                 next_rid += 1;
-                let data_url = shape.text.as_deref().unwrap_or("");
+                // Prefer the canonical `image_data_url`; fall back to
+                // `text` for payloads built before
+                // office-paste-abi-modernisation phase 2. Phase 8
+                // removes the fallback.
+                let data_url = shape
+                    .image_data_url
+                    .as_deref()
+                    .or(shape.text.as_deref())
+                    .unwrap_or("");
                 if let Some(bytes) = parse_data_url_bytes(data_url) {
                     let ext = if data_url.contains("image/png") { "png" } else { "jpeg" };
                     let fname = format!("mosaic_{}.{}", media_files.len(), ext);
