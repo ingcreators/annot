@@ -56,6 +56,10 @@ function makeDeps(): TestDeps {
       resizeMarker: passthrough,
       applyRedactStyle: passthrough,
       applyTextColor: passthrough,
+      applyArrowStartShape: passthrough,
+      applyArrowStartSize: passthrough,
+      applyArrowEndShape: passthrough,
+      applyArrowEndSize: passthrough,
     },
     onCommit: vi.fn() as TestDeps["onCommit"],
   };
@@ -153,6 +157,35 @@ describe("renderControl — per-category DOM golden", () => {
   it("renders the group category as nothing (zero controls)", () => {
     const g = svg("g", { "data-type": "group" });
     expect(renderCategory(CATEGORY_CONTROL_SHAPE.group, g)).toBe("");
+  });
+
+  it("renders the shape category for a line-like target (per-end arrow rows visible)", () => {
+    // Composed-arrow group with "Arrow" variant: start "none", end
+    // "triangle". The 4 per-end pulldowns should render — start
+    // shape filtered to "none" only, end shape filtered to non-
+    // "none" presets, and both Size pulldowns showing the full
+    // 3×3 width × length grid. Other shape rows that gate to
+    // fillable (`fillColor` / `fillOpacity`) drop out via
+    // `visibleWhen`.
+    const arrow = svg("g", {
+      "data-type": "arrow",
+      stroke: "#444",
+      "stroke-width": "3",
+      "data-arrow-start-shape": "none",
+      "data-arrow-end-shape": "triangle",
+      "data-arrow-end-width": "md",
+      "data-arrow-end-length": "lg",
+    });
+    const out = renderCategory(CATEGORY_CONTROL_SHAPE.shape, arrow);
+    // Verify presence of each per-end row label rather than pinning
+    // the full DOM string — the inline SVG previews push the
+    // snapshot past 4 KB and obscure intent.
+    expect(out).toContain('class="pp-row-label">Begin arrow type<');
+    expect(out).toContain('class="pp-row-label">Begin arrow size<');
+    expect(out).toContain('class="pp-row-label">End arrow type<');
+    expect(out).toContain('class="pp-row-label">End arrow size<');
+    // Fill section gates out for line-like targets.
+    expect(out).not.toContain('class="pp-row-label">Color</div><button type="button" class="pp-color-btn"><span class="pp-color-swatch" style="background: #ff0000;');
   });
 });
 
