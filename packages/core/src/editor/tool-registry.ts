@@ -315,6 +315,22 @@ export interface ToolRegistryEntry {
    *  applies. Tier B — pure `(string, string) => string`; no
    *  DOM access. */
   tooltipLabelForVariant?: (variantValue: string, variantLabel: string) => string;
+  /** After the user picks a variant in the FLYOUT (color or
+   *  icon), fix up cross-field invariants on the preset that the
+   *  variantField alone can't capture. The variantField write is
+   *  applied first; this hook then mutates other fields the tool
+   *  needs to render correctly.
+   *
+   *  Today's only consumer: Highlight, which sets
+   *  `shapeType = "highlight"` so the underlying ShapeTool's
+   *  rendering dispatch sees the flag (the Highlight tool is
+   *  internally a ShapeTool with shapeType forced on).
+   *
+   *  Phase 5 of `docs/plans/toolbar-highlight-flyout-kind.md`:
+   *  removes the last `if (toolId === "highlight")` literal from
+   *  `Toolbar.#showColorFlyout`. Tier B — pure
+   *  `(preset, variantValue) => void`; no DOM access. */
+  ensurePresetForVariantChange?: (preset: ToolOptions, variantValue: string) => void;
 }
 
 /** Universal style fields most tools persist. Pulled out so each
@@ -595,6 +611,14 @@ export const TOOL_REGISTRY: Readonly<Record<string, ToolRegistryEntry>> = {
     tooltipLabelForVariant: (value) => {
       const lc = value.toLowerCase();
       return HIGHLIGHT_COLORS.find((c) => c.value === lc)?.label ?? "";
+    },
+    // Highlight is internally a ShapeTool with `shapeType="highlight"`
+    // forced on. The toolbar constructor seeds the initial preset with
+    // shapeType, but the color flyout's chip-select handler only writes
+    // `highlightColor` (the variantField) — so re-affirm shapeType here
+    // to defensively cover loaded presets that drift.
+    ensurePresetForVariantChange: (preset) => {
+      preset.shapeType = "highlight";
     },
     // Highlight only persists its color + transparency — stroke
     // attrs aren't drawn on highlight rects.
