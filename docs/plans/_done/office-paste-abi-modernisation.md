@@ -1,13 +1,12 @@
 # Office-paste ABI — modernise the TS↔Rust shape contract
 
-> **Status:** Queued. Spun out of the pre-release schema-lock
-> series ([#180](https://github.com/ingcreators/annot/pull/180)–
-> [#186](https://github.com/ingcreators/annot/pull/186)) as the
-> one item that couldn't ship as a "delete legacy fallback"
-> commit: the seemingly-legacy `text` / `stroke` carriers in
-> `web/toolbar.ts:transformOf` are actually the **active**
-> TS→Rust ABI for fields the Rust `AnnotationShape` struct
-> doesn't model.
+> **Status:** Done. Landed across PRs
+> [#202](https://github.com/ingcreators/annot/pull/202)–
+> [#210](https://github.com/ingcreators/annot/pull/210). Each
+> phase landed as its own squash-merge with the same
+> "byte-equivalent unless the PR description calls out a
+> change" contract, verified by an `insta` golden snapshot of
+> the GVML drawing XML.
 >
 > **Risk:** Low-medium. The Office-paste path is exercised
 > only on Tauri desktop (`Ctrl+C` → paste into PowerPoint /
