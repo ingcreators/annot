@@ -52,6 +52,28 @@ interface ShapeInfo {
   id: number;
 }
 
+/** One mosaic / blur image embedded in the PPTX package. The
+ *  filename lands at `ppt/media/{filename}` and is referenced
+ *  from `ppt/slides/_rels/slide1.xml.rels` with the matching
+ *  `rId{rid}` — the per-shape `<a:blip r:embed="rId..."/>` inside
+ *  the slide XML points at it. */
+interface MosaicMedia {
+  filename: string;
+  bytes: Uint8Array;
+  /** rId on the slide rels. Slide rIds: rId1 = slideLayout,
+   *  rId2 = screenshot (when present), rId3+ = mosaic media in
+   *  declaration order. */
+  rid: number;
+}
+
+/** Result of walking the canvas annotation tree: the per-shape
+ *  XML fragments plus the mosaic media files that need to be
+ *  embedded alongside the slide XML. */
+interface BuiltShapes {
+  shapes: ShapeInfo[];
+  mosaicMedia: MosaicMedia[];
+}
+
 /**
  * Structural input for `buildPptxFiles` — the subset of
  * `CanvasManager` that PPTX export actually reads. Lets the unit
@@ -73,7 +95,6 @@ export interface PptxExportInput {
 export function buildPptxFiles(input: PptxExportInput): Record<string, Uint8Array> {
   const w = input.imageWidth;
   const h = input.imageHeight;
-  const shapes = buildShapes(input);
 
   // Extract JPEG / PNG binary from data URI.
   const dataUrl = input.imageEl.getAttribute("href") || "";
@@ -81,15 +102,25 @@ export function buildPptxFiles(input: PptxExportInput): Record<string, Uint8Arra
   const imageExt = dataUrl.startsWith("data:image/png") ? "png" : "jpeg";
   const hasImage = imageBytes.length > 0;
 
+  const { shapes, mosaicMedia } = buildShapes(input, hasImage);
   const slideXml = buildSlide(w, h, shapes, hasImage);
 
+  // Image-extension defaults for `[Content_Types].xml`. Always
+  // declare both png + jpeg when ANY image is present (screenshot
+  // is typically PNG; mosaic patches arrive as PNG today but
+  // could be jpeg if the redact tool ever produces it).
+  const usesPng =
+    (hasImage && imageExt === "png") || mosaicMedia.some((m) => m.filename.endsWith(".png"));
+  const usesJpeg =
+    (hasImage && imageExt === "jpeg") || mosaicMedia.some((m) => m.filename.endsWith(".jpeg"));
+
   const files: Record<string, Uint8Array> = {
-    "[Content_Types].xml": strToU8(contentTypes(hasImage, imageExt)),
+    "[Content_Types].xml": strToU8(contentTypes(usesPng, usesJpeg)),
     "_rels/.rels": strToU8(rootRels()),
     "ppt/presentation.xml": strToU8(presentation(w, h)),
     "ppt/_rels/presentation.xml.rels": strToU8(presentationRels()),
     "ppt/slides/slide1.xml": strToU8(slideXml),
-    "ppt/slides/_rels/slide1.xml.rels": strToU8(slideRels(hasImage, imageExt)),
+    "ppt/slides/_rels/slide1.xml.rels": strToU8(slideRels(hasImage, imageExt, mosaicMedia)),
     "ppt/slideLayouts/slideLayout1.xml": strToU8(slideLayout()),
     "ppt/slideLayouts/_rels/slideLayout1.xml.rels": strToU8(slideLayoutRels()),
     "ppt/slideMasters/slideMaster1.xml": strToU8(slideMaster()),
@@ -101,6 +132,9 @@ export function buildPptxFiles(input: PptxExportInput): Record<string, Uint8Arra
 
   if (hasImage) {
     files[`ppt/media/screenshot.${imageExt}`] = imageBytes;
+  }
+  for (const media of mosaicMedia) {
+    files[`ppt/media/${media.filename}`] = media.bytes;
   }
 
   return files;
@@ -124,9 +158,15 @@ export function exportPptx(canvas: CanvasManager): void {
   URL.revokeObjectURL(url);
 }
 
-function buildShapes(input: PptxExportInput): ShapeInfo[] {
+function buildShapes(input: PptxExportInput, hasImage: boolean): BuiltShapes {
   const shapes: ShapeInfo[] = [];
+  const mosaicMedia: MosaicMedia[] = [];
   let id = 2; // id=1 is reserved for slide background
+  // rId allocation on the slide rels:
+  //   rId1 = slideLayout
+  //   rId2 = screenshot (when present)
+  //   rId3+ = mosaic media in declaration order
+  let nextMosaicRid = hasImage ? 3 : 2;
 
   const annos = input.annotations.childNodes;
   for (const node of Array.from(annos)) {
@@ -152,13 +192,37 @@ function buildShapes(input: PptxExportInput): ShapeInfo[] {
     // shared per-shape emitter know about it.
     const shape = svgElementToAnnotationShape(el);
     if (!shape) continue;
+
+    // Mosaic / blur images need an OPC media entry + an rId
+    // pointing at it before the shape XML can reference the
+    // image via `<a:blip r:embed="rId..."/>`. Parse the data
+    // URL into bytes, allocate the next rId, accumulate the
+    // media for the packager, and pass `picRid` so the shared
+    // builder emits a `<p:pic>` instead of dropping the shape.
+    if (shape.type === "mosaic_image" || shape.type === "blur_image") {
+      const dataUrl = shape.image_data_url ?? "";
+      const bytes = dataUrlToUint8Array(dataUrl);
+      if (bytes.length === 0) continue; // un-parseable → skip
+      const ext = dataUrl.startsWith("data:image/png") ? "png" : "jpeg";
+      const filename = `mosaic_${mosaicMedia.length}.${ext}`;
+      const rid = nextMosaicRid;
+      nextMosaicRid += 1;
+      mosaicMedia.push({ filename, bytes, rid });
+      const xml = buildShapeXml(shape, { ns: "p", id, picRid: rid });
+      if (xml) {
+        shapes.push({ xml, id });
+        id += 1;
+      }
+      continue;
+    }
+
     const xml = buildShapeXml(shape, { ns: "p", id });
     if (xml) {
       shapes.push({ xml, id });
       id++;
     }
   }
-  return shapes;
+  return { shapes, mosaicMedia };
 }
 
 /** Wrap a freehand session `<g>` as an OOXML group shape (`<p:grpSp>`)
@@ -262,14 +326,15 @@ function dataUrlToUint8Array(dataUrl: string): Uint8Array {
 
 // --- OOXML boilerplate ---
 
-function contentTypes(hasImage: boolean, imageExt: string): string {
-  const imgDefault = hasImage
-    ? `\n  <Default Extension="${imageExt}" ContentType="image/${imageExt === "png" ? "png" : "jpeg"}"/>`
+function contentTypes(usesPng: boolean, usesJpeg: boolean): string {
+  const pngDefault = usesPng ? `\n  <Default Extension="png" ContentType="image/png"/>` : "";
+  const jpegDefault = usesJpeg
+    ? `\n  <Default Extension="jpeg" ContentType="image/jpeg"/>`
     : "";
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
-  <Default Extension="xml" ContentType="application/xml"/>${imgDefault}
+  <Default Extension="xml" ContentType="application/xml"/>${pngDefault}${jpegDefault}
   <Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>
   <Override PartName="/ppt/slides/slide1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>
   <Override PartName="/ppt/slideLayouts/slideLayout1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/>
@@ -364,13 +429,23 @@ function buildSlide(w: number, h: number, shapes: ShapeInfo[], hasImage: boolean
 </p:sld>`;
 }
 
-function slideRels(hasImage: boolean, imageExt = "jpeg"): string {
+function slideRels(
+  hasImage: boolean,
+  imageExt = "jpeg",
+  mosaicMedia: ReadonlyArray<MosaicMedia> = [],
+): string {
   const imgRel = hasImage
     ? `\n  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/screenshot.${imageExt}"/>`
     : "";
+  const mosaicRels = mosaicMedia
+    .map(
+      (m) =>
+        `\n  <Relationship Id="rId${m.rid}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/${m.filename}"/>`,
+    )
+    .join("");
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>${imgRel}
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>${imgRel}${mosaicRels}
 </Relationships>`;
 }
 
