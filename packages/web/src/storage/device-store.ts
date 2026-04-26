@@ -312,13 +312,16 @@ export class DeviceStore
 
   // ---- Images ----
 
-  async saveImage(data: Omit<ImageRecord, "path"> & { filename?: string }): Promise<string> {
+  async saveImage(
+    data: Omit<ImageRecord, "path">,
+    opts?: { filename?: string },
+  ): Promise<string> {
     const isJpeg = data.originalDataUrl.startsWith("data:image/jpeg");
     // No explicit filename = annot-native capture → use the shared
     // `annot-<ts>.annot.<ext>` shape. External-file saves pass their
     // original filename and keep it unchanged.
     const ext = isJpeg ? "annot.jpg" : "annot.png";
-    const desiredFilename = data.filename || `annot-${Date.now()}.${ext}`;
+    const desiredFilename = opts?.filename || `annot-${Date.now()}.${ext}`;
     validateName(desiredFilename);
     const folderPath = data.folderPath || "";
 

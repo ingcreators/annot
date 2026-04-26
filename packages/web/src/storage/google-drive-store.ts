@@ -269,14 +269,17 @@ export class GoogleDriveStore
 
   // ---- Images ----
 
-  async saveImage(data: Omit<ImageRecord, "path"> & { filename?: string }): Promise<string> {
+  async saveImage(
+    data: Omit<ImageRecord, "path">,
+    opts?: { filename?: string },
+  ): Promise<string> {
     const folderPath = data.folderPath || "";
     const parentId = await this.#resolveFolderId(folderPath);
     if (!parentId) throw new Error(`Folder not found: ${folderPath}`);
 
     const isJpeg = data.originalDataUrl.startsWith("data:image/jpeg");
     const ext = isJpeg ? "annot.jpg" : "annot.png";
-    const desired = data.filename || `annot-${Date.now()}.${ext}`;
+    const desired = opts?.filename || `annot-${Date.now()}.${ext}`;
     validateName(desired);
 
     // Uniquify against current cache + live siblings

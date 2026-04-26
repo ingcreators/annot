@@ -54,7 +54,11 @@ import { describe, expect, it } from "vitest";
  */
 export type StorageFactory = () => Promise<StorageProvider> | StorageProvider;
 
-/** Minimal valid `ImageRecord` payload. Tests extend this as needed. */
+/** Minimal valid `ImageRecord` payload. Tests extend this as needed.
+ *  The optional `filename` is sliced out at save time by
+ *  {@link savePayload} — it travels alongside the record fields here
+ *  for ergonomics, even though the public `StorageProvider.saveImage`
+ *  accepts it as a separate `opts` argument. */
 export function makeImagePayload(
   overrides: Partial<ImageRecord & { filename?: string }> = {},
 ): Omit<ImageRecord, "path"> & { filename?: string } {
@@ -79,6 +83,19 @@ export function makeImagePayload(
 }
 
 /**
+ * Save a {@link makeImagePayload} payload through `StorageProvider.saveImage`'s
+ * `(record, opts?)` shape. Splits the inline `filename` off the
+ * record before passing them to the store.
+ */
+async function savePayload(
+  store: StorageProvider,
+  payload: Omit<ImageRecord, "path"> & { filename?: string },
+): Promise<string> {
+  const { filename, ...record } = payload;
+  return store.saveImage(record, filename ? { filename } : undefined);
+}
+
+/**
  * Run the full contract suite against the given factory.
  *
  * @param backend Label used in the `describe` block — "BrowserStore",
@@ -96,7 +113,7 @@ export function runStorageContract(backend: string, factory: StorageFactory): vo
         annotationsSvg: "<g/>",
         tags: { a: "1" },
       });
-      const path = await store.saveImage(payload);
+      const path = await savePayload(store,payload);
       expect(path).toBe("one.annot.png");
 
       const back = await store.getImage(path);
@@ -109,7 +126,7 @@ export function runStorageContract(backend: string, factory: StorageFactory): vo
 
     it("saveImage chooses a filename when one isn't provided", async () => {
       const store = await factory();
-      const path = await store.saveImage(makeImagePayload());
+      const path = await savePayload(store,makeImagePayload());
       expect(path).not.toBe("");
       expect(path).not.toContain("/"); // no folder, just a name
     });
@@ -121,18 +138,18 @@ export function runStorageContract(backend: string, factory: StorageFactory): vo
       // backend must match that rule, or round-tripping across stores
       // would produce different names for the same input.
       const store = await factory();
-      await store.saveImage(makeImagePayload({ filename: "dup.annot.png" }));
-      const p2 = await store.saveImage(makeImagePayload({ filename: "dup.annot.png" }));
-      const p3 = await store.saveImage(makeImagePayload({ filename: "dup.annot.png" }));
+      await savePayload(store,makeImagePayload({ filename: "dup.annot.png" }));
+      const p2 = await savePayload(store,makeImagePayload({ filename: "dup.annot.png" }));
+      const p3 = await savePayload(store,makeImagePayload({ filename: "dup.annot.png" }));
       expect(p2).toBe("dup.annot (2).png");
       expect(p3).toBe("dup.annot (3).png");
     });
 
     it("listImages returns images in the requested folder only", async () => {
       const store = await factory();
-      await store.saveImage(makeImagePayload({ filename: "root.annot.png" }));
+      await savePayload(store,makeImagePayload({ filename: "root.annot.png" }));
       await store.createFolder("", "A");
-      await store.saveImage(makeImagePayload({ filename: "a.annot.png", folderPath: "A" }));
+      await savePayload(store,makeImagePayload({ filename: "a.annot.png", folderPath: "A" }));
 
       const rootImgs = await store.listImages("");
       const aImgs = await store.listImages("A");
@@ -155,7 +172,7 @@ export function runStorageContract(backend: string, factory: StorageFactory): vo
       // into the test harness for no new coverage — the round-trip
       // itself is what's being exercised here.
       const store = await factory();
-      const path = await store.saveImage(
+      const path = await savePayload(store,
         makeImagePayload({ filename: "u.annot.png", annotationsSvg: "<o/>", tags: {} }),
       );
       await store.updateImage(path, {
@@ -173,7 +190,7 @@ export function runStorageContract(backend: string, factory: StorageFactory): vo
     it("moveImage relocates the image to a new folder and returns the new path", async () => {
       const store = await factory();
       await store.createFolder("", "Dest");
-      const path = await store.saveImage(makeImagePayload({ filename: "mv.annot.png" }));
+      const path = await savePayload(store,makeImagePayload({ filename: "mv.annot.png" }));
 
       const newPath = await store.moveImage(path, "Dest");
       expect(newPath).toBe("Dest/mv.annot.png");
@@ -185,7 +202,7 @@ export function runStorageContract(backend: string, factory: StorageFactory): vo
 
     it("moveImage to the current folder is a no-op", async () => {
       const store = await factory();
-      const path = await store.saveImage(makeImagePayload({ filename: "stay.annot.png" }));
+      const path = await savePayload(store,makeImagePayload({ filename: "stay.annot.png" }));
       const out = await store.moveImage(path, "");
       expect(out).toBe(path);
       expect(await store.getImage(path)).toBeDefined();
@@ -195,7 +212,7 @@ export function runStorageContract(backend: string, factory: StorageFactory): vo
 
     it("renameImage changes the filename and preserves contents", async () => {
       const store = await factory();
-      const path = await store.saveImage(
+      const path = await savePayload(store,
         makeImagePayload({ filename: "old.annot.png", annotationsSvg: "<a/>" }),
       );
       const newPath = await store.renameImage(path, "new.annot.png");
@@ -209,7 +226,7 @@ export function runStorageContract(backend: string, factory: StorageFactory): vo
 
     it("deleteImage removes the record", async () => {
       const store = await factory();
-      const path = await store.saveImage(makeImagePayload({ filename: "doomed.annot.png" }));
+      const path = await savePayload(store,makeImagePayload({ filename: "doomed.annot.png" }));
       await store.deleteImage(path);
       expect(await store.getImage(path)).toBeUndefined();
       const listed = await store.listImages("");
@@ -256,7 +273,7 @@ export function runStorageContract(backend: string, factory: StorageFactory): vo
     it("renameFolder updates paths of the folder and its children", async () => {
       const store = await factory();
       await store.createFolder("", "Before");
-      await store.saveImage(
+      await savePayload(store,
         makeImagePayload({ filename: "inside.annot.png", folderPath: "Before" }),
       );
       const newPath = await store.renameFolder("Before", "After");
@@ -270,7 +287,7 @@ export function runStorageContract(backend: string, factory: StorageFactory): vo
       const store = await factory();
       await store.createFolder("", "Src");
       await store.createFolder("", "Dest");
-      await store.saveImage(makeImagePayload({ filename: "x.annot.png", folderPath: "Src" }));
+      await savePayload(store,makeImagePayload({ filename: "x.annot.png", folderPath: "Src" }));
       const newPath = await store.moveFolder("Src", "Dest");
       expect(newPath).toBe("Dest/Src");
       const listed = await store.listImages("Dest/Src");
@@ -282,8 +299,8 @@ export function runStorageContract(backend: string, factory: StorageFactory): vo
     it("deleteFolder cascades: images + sub-folders gone after delete", async () => {
       const store = await factory();
       await store.createFolder("", "Bulk");
-      await store.saveImage(makeImagePayload({ filename: "a.annot.png", folderPath: "Bulk" }));
-      await store.saveImage(makeImagePayload({ filename: "b.annot.png", folderPath: "Bulk" }));
+      await savePayload(store,makeImagePayload({ filename: "a.annot.png", folderPath: "Bulk" }));
+      await savePayload(store,makeImagePayload({ filename: "b.annot.png", folderPath: "Bulk" }));
       await store.deleteFolder("Bulk");
       expect(await store.getFolder("Bulk")).toBeUndefined();
       expect(await store.getImage("Bulk/a.annot.png")).toBeUndefined();

@@ -774,13 +774,16 @@ export class GitHubStore
   // StorageProvider — Images
   // ===========================================================================
 
-  async saveImage(data: Omit<ImageRecord, "path"> & { filename?: string }): Promise<string> {
+  async saveImage(
+    data: Omit<ImageRecord, "path">,
+    opts?: { filename?: string },
+  ): Promise<string> {
     await this.#ensureTreeLoaded();
     const folderPath = data.folderPath || "";
 
     const isJpeg = data.originalDataUrl.startsWith("data:image/jpeg");
     const ext = isJpeg ? "annot.jpg" : "annot.png";
-    const desired = data.filename || `annot-${Date.now()}.${ext}`;
+    const desired = opts?.filename || `annot-${Date.now()}.${ext}`;
     validateName(desired);
 
     const filename = uniquifyFilename(desired, (candidate) => {

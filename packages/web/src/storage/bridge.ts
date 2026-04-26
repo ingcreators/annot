@@ -567,8 +567,8 @@ export function loadLastStorage(): StorageMode | null {
  * to the extension's IDB. The extension must be connected (see setExtensionId).
  */
 const extensionStorage: StorageProvider = {
-  async saveImage(data) {
-    return send({ action: "saveImage", data });
+  async saveImage(data, opts) {
+    return send({ action: "saveImage", data, opts });
   },
   async getImage(path) {
     return send({ action: "getImage", path });

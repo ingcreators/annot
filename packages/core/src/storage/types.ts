@@ -143,12 +143,19 @@ export interface StorageProvider {
   // ---- Images ----
 
   /**
-   * Save a new image. If `filename` is omitted, the store picks one
-   * (e.g. `image-<timestamp>.png`). If the resulting path already exists,
+   * Save a new image. The `record` argument carries every field of
+   * the saved entity except its path (which the store assigns).
+   * The optional `opts.filename` lets the caller suggest a filename;
+   * when omitted, the store picks one (e.g.
+   * `image-<timestamp>.png`). If the resulting path already exists,
    * the store uniquifies with " (2)", " (3)" suffixes.
-   * Returns the actual path assigned.
+   *
+   * Returns the actual path assigned (post-uniquification).
    */
-  saveImage(data: Omit<ImageRecord, "path"> & { filename?: string }): Promise<string>;
+  saveImage(
+    record: Omit<ImageRecord, "path">,
+    opts?: { filename?: string },
+  ): Promise<string>;
 
   getImage(path: string): Promise<ImageRecord | undefined>;
 

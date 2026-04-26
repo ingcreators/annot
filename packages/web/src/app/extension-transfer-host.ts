@@ -88,24 +88,26 @@ export class ExtensionTransferHost {
           // Wrap in retry: rapid back-to-back saves into a fresh FS handle
           // can hit Chrome's "stale cached state" issue (InvalidStateError).
           await retryFsOp(() =>
-            targetStore.saveImage({
-              originalDataUrl: full.originalDataUrl,
-              thumbnailDataUrl: full.thumbnailDataUrl || "",
-              annotationsSvg: full.annotationsSvg || "",
-              width: w,
-              height: h,
-              sourceUrl: full.sourceUrl || "",
-              tags: full.tags || {},
-              folderPath,
-              filename,
-              createdAt: full.createdAt || now,
-              updatedAt: now,
-              // Carry DOM element metadata through the extension → app
-              // hand-off so the Elements sidebar works on captures that
-              // came in through this bulk-transfer path (which is how
-              // the extension typically hands screenshots over).
-              pageMetadata: full.pageMetadata,
-            }),
+            targetStore.saveImage(
+              {
+                originalDataUrl: full.originalDataUrl,
+                thumbnailDataUrl: full.thumbnailDataUrl || "",
+                annotationsSvg: full.annotationsSvg || "",
+                width: w,
+                height: h,
+                sourceUrl: full.sourceUrl || "",
+                tags: full.tags || {},
+                folderPath,
+                createdAt: full.createdAt || now,
+                updatedAt: now,
+                // Carry DOM element metadata through the extension → app
+                // hand-off so the Elements sidebar works on captures that
+                // came in through this bulk-transfer path (which is how
+                // the extension typically hands screenshots over).
+                pageMetadata: full.pageMetadata,
+              },
+              { filename },
+            ),
           );
 
           deleteExtensionImage(img.path);

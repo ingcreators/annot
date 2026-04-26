@@ -43,7 +43,7 @@ class MemoryStore implements StorageProvider {
   constructor(seed: ImageRecord[] = []) {
     for (const img of seed) this.#images.set(img.path, img);
   }
-  saveImage(): Promise<string> {
+  saveImage(_record: Omit<ImageRecord, "path">, _opts?: { filename?: string }): Promise<string> {
     throw new Error("not implemented");
   }
   async getImage(path: string): Promise<ImageRecord | undefined> {
@@ -99,6 +99,17 @@ const TINY_PNG =
 /** Build the full `Omit<ImageRecord, "path">` shape `saveImage`
  *  expects — most fields are uninteresting for this test, but
  *  the type is strict so we fill them with sensible empties. */
+/** Save a {@link makeRecord} payload through `StorageProvider.saveImage`'s
+ *  `(record, opts?)` shape — splits the inline `filename` off the
+ *  record before passing them to the store. */
+async function saveTestRecord(
+  store: import("@ingcreators/annot-core/storage").StorageProvider,
+  payload: ReturnType<typeof makeRecord>,
+): Promise<string> {
+  const { filename, ...record } = payload;
+  return store.saveImage(record, { filename });
+}
+
 function makeRecord(
   filename: string,
   folderPath: string,
@@ -139,7 +150,7 @@ describe("FileManager — storage-switch racing path", () => {
     // a setStorage → refresh sequence — the exact path the
     // production `handleStorageSelect` follows.
     const store = new BrowserStore();
-    const path = await store.saveImage(makeRecord("fixture.png", ""));
+    const path = await saveTestRecord(store, makeRecord("fixture.png", ""));
     expect(path).toBe("fixture.png");
 
     const sidebarHost = document.createElement("div");
@@ -178,7 +189,7 @@ describe("FileManager — storage-switch racing path", () => {
     // that `setStorage` swaps it cleanly + the post-switch
     // refresh lists the new store's files.
     const browserStore = new BrowserStore();
-    await browserStore.saveImage(makeRecord("from-browser.png", ""));
+    await saveTestRecord(browserStore, makeRecord("from-browser.png", ""));
 
     const sidebarHost = document.createElement("div");
     const mainHost = document.createElement("div");
@@ -253,7 +264,7 @@ describe("FileManager — storage-switch racing path", () => {
     // regression.
     const store = new BrowserStore();
     await store.createFolder("", "Sub");
-    await store.saveImage(makeRecord("deep.png", "Sub"));
+    await saveTestRecord(store, makeRecord("deep.png", "Sub"));
 
     const sidebarHost = document.createElement("div");
     const mainHost = document.createElement("div");
