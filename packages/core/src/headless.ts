@@ -150,6 +150,14 @@ export {
   resolveStyleReadSource,
 } from "./editor/tool-style-reader.js";
 
+// ─── Toolbar universal-style attribute writer (pure Element-taker) ────
+// Inverse of `readUniversalStyleAttrs`: takes a preset and writes the
+// stroke / fill / dasharray / opacity / linecap / linejoin attrs onto
+// an Element. Phase 1 of `docs/plans/toolbar-apply-style-to-element.md`
+// — used by per-tool `applyStyleToElement` callbacks (Phase 2) and the
+// future generic dispatch in `applyPresetStyleAttrs` (Phase 3).
+export { writeUniversalStyleAttrs } from "./editor/tool-style-writer.js";
+
 // ─── Tool lifecycle DOM surface ───────────────────────────────────────
 // Three-method abstraction every editor tool depends on for canvas
 // access. Live-canvas adapters live in

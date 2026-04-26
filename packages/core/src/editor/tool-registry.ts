@@ -236,6 +236,32 @@ export interface ToolRegistryEntry {
    *  Tier B — implementations live in `tool-registry.ts` itself
    *  and may only use jsdom-friendly Element APIs. */
   extractStyleFromElement?: (el: SVGElement, preset: ToolOptions) => void;
+  /** Tool-specific style writer. Inverse of
+   *  `extractStyleFromElement`: writes the preset's style fields
+   *  onto `el` (or its tool-specific child elements — marker's
+   *  bg primitive, textbox's `<text>`, etc.).
+   *
+   *  Deliberately does NOT touch fields that define the element's
+   *  type / variant (shapeType, arrowHead, textVariant) — those
+   *  were already established by the variant-change path that
+   *  invoked the writer.
+   *
+   *  Phase 3 of `docs/plans/toolbar-apply-style-to-element.md`:
+   *  the imperative element-tag cascade in
+   *  `applyPresetStyleAttrs` (in
+   *  `packages/web/src/editor/toolbar-preset-helpers.ts`)
+   *  collapses to a single
+   *  `TOOL_REGISTRY[toolId]?.applyStyleToElement?.(el, preset)`
+   *  dispatch — symmetric with how Phase 5 of
+   *  `_done/toolbar-schema.md` collapsed the read side.
+   *
+   *  Tier B — implementations live in `tool-registry.ts` itself
+   *  and may only use jsdom-friendly Element APIs. The
+   *  `refreshArrowPath` regen for arrow groups is the one
+   *  exception: it lives in `core/editor/arrow-markers.ts`
+   *  (Tier B) so the registry can call it without crossing
+   *  package boundaries. */
+  applyStyleToElement?: (el: SVGElement, preset: ToolOptions) => void;
 }
 
 /** Universal style fields most tools persist. Pulled out so each
