@@ -43,6 +43,19 @@ export interface NamespaceOpts {
   txBodyOpen: "<a:txSp><a:txBody>" | "<p:txBody>";
   /** Matching close tag(s) for `txBodyOpen`. */
   txBodyClose: "</a:txBody><a:useSpRect/></a:txSp>" | "</p:txBody>";
+  /** Suffix appended inside the non-visual property container
+   *  (`<{ns}:nvSpPr>` / `<{ns}:nvCxnSpPr>` / `<{ns}:nvPicPr>`)
+   *  after `<{ns}:cNvSpPr/>` / `<{ns}:cNvCxnSpPr/>` / `<{ns}:cNvPicPr/>`.
+   *
+   *  PPTX's `CT_ShapeNonVisual` / `CT_ConnectorNonVisual` /
+   *  `CT_PictureNonVisual` schemas REQUIRE `<p:nvPr/>` as the
+   *  third child (after `cNvPr` and `cNv{type}Pr`); PowerPoint
+   *  refuses to open files where it's missing. The GVML
+   *  lockedCanvas equivalents (`CT_GvmlShapeNonVisual` etc) do
+   *  NOT have an `nvPr` element — emitting it there is a schema
+   *  violation in the opposite direction. So the suffix is
+   *  conditionally `<p:nvPr/>` for PPTX and empty for GVML. */
+  nvPrSuffix: "" | "<p:nvPr/>";
 }
 
 export const NS_GVML: NamespaceOpts = {
@@ -58,6 +71,7 @@ export const NS_GVML: NamespaceOpts = {
   cnvPic: "a:cNvPicPr",
   txBodyOpen: "<a:txSp><a:txBody>",
   txBodyClose: "</a:txBody><a:useSpRect/></a:txSp>",
+  nvPrSuffix: "",
 };
 
 export const NS_PPTX: NamespaceOpts = {
@@ -73,6 +87,7 @@ export const NS_PPTX: NamespaceOpts = {
   cnvPic: "p:cNvPicPr",
   txBodyOpen: "<p:txBody>",
   txBodyClose: "</p:txBody>",
+  nvPrSuffix: "<p:nvPr/>",
 };
 
 export type Namespace = "a" | "p";
