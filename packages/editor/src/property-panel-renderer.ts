@@ -90,8 +90,16 @@ export function renderControl(
   deps: RenderControlDeps,
 ): HTMLElement | null {
   if (initialTargets.length === 0) return null;
-  const sample = initialTargets[0]!;
-  if (def.visibleWhen && !def.visibleWhen(sample)) return null;
+  // visibleWhen acts as an ALL-targets gate: every selected element
+  // must pass the predicate for the control to render. Mirrors the
+  // imperative panel's `this.#targets.every((t) => ...)` pattern
+  // (e.g. "show the arrow variant picker only when EVERY selected
+  //  element is line-like, not just the sample one").
+  if (def.visibleWhen) {
+    for (const t of initialTargets) {
+      if (!def.visibleWhen(t)) return null;
+    }
+  }
 
   // Mutable target list — `replace` / `effect` swaps update this so
   // subsequent edits route to the post-swap elements. The host
@@ -200,7 +208,7 @@ function renderVariantPicker(
   const chips: HTMLElement[] = [];
 
   for (const opt of opts) {
-    const chip = renderChip(opt, current === stringifyValue(opt.value), def.label);
+    const chip = renderChip(opt, current === stringifyValue(opt.value));
     chip.addEventListener("click", async () => {
       const value = opt.value;
       if (stringifyValue(value) === current) return;
@@ -246,12 +254,14 @@ function renderVariantPicker(
 /** Chip element matching the imperative panel's three flavours:
  *    materialIcon → `.material-symbols-outlined` ligature
  *    iconSvg      → inline SVG via innerHTML
- *    swatchColor  → `.pp-color-chip` with --swatch-color custom prop */
-function renderChip(
-  opt: PropertyControlOption,
-  active: boolean,
-  category: string,
-): HTMLElement {
+ *    swatchColor  → `.pp-color-chip` with --swatch-color custom prop
+ *
+ *  Output is byte-equivalent to the imperative `#addXxxPicker`
+ *  helpers in `property-panel.ts` — no extra test-affordance
+ *  attributes, so a Phase 3 migration's DOM byte-diff stays empty.
+ *  Tests address chips via the tooltip text (`[data-tooltip="..."]`)
+ *  which `setTooltip` writes verbatim. */
+function renderChip(opt: PropertyControlOption, active: boolean): HTMLElement {
   const chip = document.createElement("div");
   if (opt.swatchColor) {
     chip.className = `prop-choice-chip pp-color-chip${active ? " active" : ""}`;
@@ -267,12 +277,6 @@ function renderChip(
     chip.textContent = opt.label;
   }
   setTooltip(chip, opt.label);
-  // Stamp the value as a data attribute so test fixtures can address
-  // chips by their option value without parsing the icon markup.
-  chip.dataset.value = stringifyValue(opt.value);
-  // Stamp the category so multiple variant pickers in one panel
-  // remain distinguishable in the DOM.
-  chip.dataset.category = category;
   return chip;
 }
 

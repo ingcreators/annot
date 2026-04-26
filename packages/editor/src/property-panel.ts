@@ -2,7 +2,9 @@ import {
   CATEGORY_CONTROL_SHAPE,
   classifyPropertyElement,
   type PropertyCategory,
+  PROPERTY_CONTROL_IDS,
   PROPERTY_CONTROLS,
+  type PropertyControlId,
   type PropertyEffectId,
 } from "@ingcreators/annot-core/editor/property-schema";
 import { computeDasharray, detectDashKey } from "@ingcreators/annot-core/utils";
@@ -19,14 +21,8 @@ import {
 import type { History } from "./history.js";
 import { createColorPullButton, openAnchoredPopoverForColor } from "@ingcreators/annot-editor/property-controls";
 import { convertRedactStyle, detectRedactStyle } from "@ingcreators/annot-editor/redact-utils";
-import { convertShape, detectShapeType } from "@ingcreators/annot-core/editor/shape-utils";
 import { convertTextVariant, detectTextVariant } from "@ingcreators/annot-core/editor/text-utils";
-import {
-  ARROW_ICON_SVG,
-  COUNTER_ICON_SVG,
-  HIGHLIGHT_COLORS,
-  SHAPE_ICON_SVG,
-} from "@ingcreators/annot-core/editor/toolbar-icons";
+import { COUNTER_ICON_SVG, HIGHLIGHT_COLORS } from "@ingcreators/annot-core/editor/toolbar-icons";
 import {
   type CommitInfo,
   type ElementReplacement,
@@ -35,7 +31,7 @@ import {
   type RenderControlDeps,
 } from "./property-panel-renderer.js";
 import { applyArrowHead, detectArrowEnds } from "./tools/arrow-tool.js";
-import { applyDrawStyle, detectDrawStyle, isFreehandGroup } from "./tools/freehand-tool.js";
+import { applyDrawStyle, isFreehandGroup } from "./tools/freehand-tool.js";
 import { convertMarkerShape, detectMarkerShape, resizeMarker } from "./tools/marker-tool.js";
 import type {
   ArrowDim,
@@ -45,7 +41,6 @@ import type {
   LineCap,
   MarkerShape,
   RedactStyle,
-  ShapeType,
   TextVariant,
 } from "./tools/tool-base.js";
 import { readTransformState, setRotation, toggleFlip } from "@ingcreators/annot-core/editor/transform-utils";
@@ -327,14 +322,29 @@ export class PropertyPanel {
    */
   #renderViaRegistry(category: PropertyCategory): void {
     if (this.#targets.length === 0) return;
+    for (const id of CATEGORY_CONTROL_SHAPE[category]) {
+      this.#renderRegistryControl(id);
+    }
+  }
+
+  /**
+   * Render a single registry control under the current
+   * `#appendTarget`. Used by category renderers that mix schema-
+   * driven rows (chip pickers, color pulldowns, number inputs) with
+   * imperative rows the registry doesn't yet model (transparency
+   * sliders, cap type, per-end arrow grids). Phase 3 migrations
+   * pull each `#addXxx` chip / color / number row into the
+   * corresponding registry id and call this helper in its place,
+   * letting `visibleWhen` handle multi-target gating uniformly.
+   */
+  #renderRegistryControl(id: PropertyControlId): void {
+    if (this.#targets.length === 0) return;
     const deps: RenderControlDeps = {
       effects: this.#effects,
       onCommit: (info) => this.#handleRendererCommit(info),
     };
-    for (const id of CATEGORY_CONTROL_SHAPE[category]) {
-      const el = renderControl(PROPERTY_CONTROLS[id], this.#targets, deps);
-      if (el) this.#target().appendChild(el);
-    }
+    const el = renderControl(PROPERTY_CONTROLS[id], this.#targets, deps);
+    if (el) this.#target().appendChild(el);
   }
 
   /**
@@ -391,34 +401,30 @@ export class PropertyPanel {
 
   #renderShapeControls(el: SVGElement): void {
     // Type section: variant picker appropriate to the selected element
-    // family (shape / arrow-like / freehand path). Wrapped in a Type
-    // pp-section for visual parity with Tool mode.
+    // family (shape / arrow-like / freehand path). Each picker is now
+    // schema-driven — the registry's `visibleWhen` predicates encode
+    // the same gating the imperative chain used (`detectShapeType !==
+    // null`, `isLineLike`, `path || freehand-group`), and the
+    // renderer's all-targets check covers the multi-select rule.
+    // The pp-section wrapper is preserved here at the panel layer
+    // because the registry doesn't model section grouping.
     this.#inSection("Type", () => {
-      const currentType = detectShapeType(el);
-      if (currentType && this.#targets.every((t) => detectShapeType(t) !== null)) {
-        this.#addShapeTypePicker(currentType);
-      }
-      if (isLineLike(el) && this.#targets.every((t) => isLineLike(t))) {
-        const ends = detectArrowEnds(el);
-        const hStart = ends.start.shape !== "none";
-        const hEnd = ends.end.shape !== "none";
-        const current: ArrowHead = !hStart && !hEnd ? "none" : hStart && hEnd ? "both" : "end";
-        this.#addArrowVariantPicker(current);
-      }
-      // Draw style picker: shown for both bare <path> elements (legacy
-      // / single-stroke) and freehand <g> groups (new multi-stroke
-      // session wrapper). Detection is uniform because detectDrawStyle
-      // handles both shapes.
-      const isFreehandEl = (t: SVGElement) => t.tagName === "path" || isFreehandGroup(t);
-      if (isFreehandEl(el) && this.#targets.every(isFreehandEl)) {
-        this.#addDrawStylePicker(detectDrawStyle(el));
-      }
+      this.#renderRegistryControl(PROPERTY_CONTROL_IDS.shapeTypePicker);
+      this.#renderRegistryControl(PROPERTY_CONTROL_IDS.arrowVariantPicker);
+      this.#renderRegistryControl(PROPERTY_CONTROL_IDS.drawStylePicker);
     });
 
     // Fill paint — rendered ABOVE the Line section, matching the tool
     // panel's category order (Type → Fill → Line). Hidden for strokes-
     // only elements (line / path / freehand group) so we don't show a
     // useless "No fill" button for them.
+    //
+    // Fill / Line sections still go through `#addPPFillSection` /
+    // `#addPPLineSection` because they include rows the registry
+    // doesn't yet model (fill transparency, stroke transparency,
+    // cap type, per-end arrow type+size grids). A future Phase 3b-N
+    // can extend the registry to cover those and migrate these
+    // sections too.
     if (!isLineLike(el) && el.tagName !== "path" && !isFreehandGroup(el)) {
       this.#addPPFillSection(el);
     }
@@ -872,66 +878,12 @@ export class PropertyPanel {
     this.#target().appendChild(row);
   }
 
-  /**
-   * Shape type picker — rect / rounded / ellipse chips at the top of
-   * the selection properties. Clicking a chip calls convertShape() on
-   * every selected target (all of which are Shape elements at this
-   * point), replaces them in the DOM, updates #targets so subsequent
-   * property edits go to the new elements, and notifies the host via
-   * onTargetReplaced so SelectionManager can update its selectedSet.
-   */
-  #addShapeTypePicker(current: ShapeType): void {
-    // Chip row only — category header comes from `#inSection("Type",…)`.
-    const row = document.createElement("div");
-    row.className = "pp-type-row";
-    // SVG glyphs (not Material Symbols ligatures) so the chip set
-    // matches the toolbar badge + Tool panel Type row exactly. The
-    // three shared glyphs (rect / rounded / ellipse) all use
-    // stroke-width 2 in SHAPE_ICON_SVG so they read as a coherent
-    // icon family, fixing the previous inconsistency where the
-    // "circle" ligature rendered visibly thinner than the hand-
-    // rolled rect / rounded outlines.
-    const options: Array<{ value: ShapeType; svg: string; label: string }> = [
-      { value: "rect", svg: SHAPE_ICON_SVG.rect, label: "Rectangle" },
-      { value: "rounded", svg: SHAPE_ICON_SVG.rounded, label: "Rounded" },
-      { value: "ellipse", svg: SHAPE_ICON_SVG.ellipse, label: "Ellipse" },
-    ];
-    for (const opt of options) {
-      const chip = document.createElement("div");
-      chip.className = `prop-choice-chip${current === opt.value ? " active" : ""}`;
-      chip.innerHTML = opt.svg;
-      setTooltip(chip, opt.label);
-      chip.addEventListener("click", () => {
-        if (opt.value === current) return;
-        const replacements: { oldEl: SVGElement; newEl: SVGElement }[] = [];
-        const nextTargets: SVGElement[] = [];
-        for (const t of this.#targets) {
-          const newEl = convertShape(t, opt.value);
-          replacements.push({ oldEl: t, newEl });
-          nextTargets.push(newEl);
-        }
-        this.#targets = nextTargets;
-        // Skip #commit (rubber-band) — it would overwrite the new
-        // variant's preset with the converted element's carried-over
-        // old style. applyElementVariantPreset will load the NEW
-        // variant's saved style on the onVariantChanged path below.
-        this.#history.save();
-        this.onTargetReplaced?.(replacements);
-        // Apply the new variant's preset style (color / width / dash
-        // / …) so the converted element reflects how that variant
-        // was last drawn. Parallels the arrow variant picker and
-        // keeps "change type → get that type's saved defaults"
-        // consistent across tools.
-        if (this.onVariantChanged) {
-          this.onVariantChanged(nextTargets);
-        } else {
-          this.show(nextTargets);
-        }
-      });
-      row.appendChild(chip);
-    }
-    this.#target().appendChild(row);
-  }
+  // `#addShapeTypePicker` removed in Phase 3b of
+  // `docs/plans/property-panel-schema.md` — the chip row is now
+  // produced by the schema-driven renderer
+  // (`PROPERTY_CONTROLS.shapeTypePicker.replace = convertShape`)
+  // wired through `#renderRegistryControl` from
+  // `#renderShapeControls`'s Type section.
 
   /** Inline SVG preview for an arrow-shape dropdown row. Matches
    *  PowerPoint's visual scheme: right-pointing for End arrow
@@ -1001,78 +953,23 @@ export class PropertyPanel {
     this.#el.appendChild(wrap);
   }
 
-  /**
-   * Arrow variant picker — "Type" row at the top of the properties
-   * panel when an arrow-ish element is selected. Lets the user
-   * convert between the 3 canonical variants without losing detailed
-   * per-end customizations beyond what the new variant requires:
-   *
-   *   Line         → begin + end forced to "none"
-   *   Arrow        → begin forced to "none"; if end was "none", seed
-   *                  "triangle", else keep (preserves e.g. diamond)
-   *   Double arrow → any "none" ends get seeded "triangle"; non-none
-   *                  ends (triangle / diamond / oval / …) are kept
-   *
-   * Mirrors the toolbar flyout's 3-state picker so the user can reach
-   * the same operation from either entry point — critical for the
-   * "selected X → change X's type" use case.
-   */
-  #addArrowVariantPicker(current: ArrowHead): void {
-    // Chip row only — category header comes from `#inSection("Type",…)`.
-    const row = document.createElement("div");
-    row.className = "pp-type-row";
-    // Use ARROW_ICON_SVG (same constants the toolbar uses) so the
-    // variant glyph is bit-for-bit identical across toolbar badge /
-    // flyout / Selection panel Type row.
-    const options: Array<{ value: ArrowHead; label: string; svg: string }> = [
-      { value: "none", label: "Line", svg: ARROW_ICON_SVG.none },
-      { value: "end", label: "Arrow", svg: ARROW_ICON_SVG.end },
-      { value: "both", label: "Double arrow", svg: ARROW_ICON_SVG.both },
-    ];
-    for (const opt of options) {
-      const chip = document.createElement("div");
-      chip.className = `prop-choice-chip${current === opt.value ? " active" : ""}`;
-      chip.innerHTML = opt.svg;
-      setTooltip(chip, opt.label);
-      chip.addEventListener("click", () => {
-        if (opt.value === current) return;
-        // Step 1: clamp per-end shapes into the new variant's valid
-        // range (preserves already-valid customizations).
-        for (const t of this.#targets) {
-          const ends = detectArrowEnds(t);
-          const clamped = this.#clampArrowEndsToVariant(ends, opt.value);
-          applyArrowHead(t, clamped);
-        }
-        // Step 2: save history, but INTENTIONALLY SKIP the style
-        // rubber-band (#commit would fire onStyleChanged which in
-        // turn calls syncPresetFromElement — that reads the element's
-        // OLD stroke / fill values and writes them into the NEW
-        // variant's preset, overwriting any saved color for the new
-        // variant. Here we want the opposite: load the NEW variant's
-        // preset and apply it, NOT push stale style into it).
-        this.#history.save();
-        // Step 3: notify the host. The host loads the new variant's
-        // preset (so the element's style reflects the variant's
-        // saved defaults) and triggers a full panel re-render — the
-        // title updates to "Selected Double arrow" (etc.) and the
-        // per-end shape pickers rebuild with the new filter.
-        // If the host doesn't wire onVariantChanged, we still refresh
-        // our own internals so the filtered pickers stay consistent.
-        if (this.onVariantChanged) {
-          this.onVariantChanged(this.#targets);
-        } else {
-          this.show(this.#targets);
-        }
-      });
-      row.appendChild(chip);
-    }
-    this.#target().appendChild(row);
-  }
+  // `#addArrowVariantPicker` removed in Phase 3b — the chip row is
+  // now produced by the schema-driven renderer
+  // (`PROPERTY_CONTROLS.arrowVariantPicker.effect = "applyArrowVariant"`)
+  // and the effect handler bound in the constructor calls
+  // `#clampArrowEndsToVariant` + `applyArrowHead` per target. The
+  // clamp helper below stays — it's still used by that handler.
 
   /** Adjust per-end shapes to fit a variant's constraint, preserving
-   *  already-valid values. See the `#addArrowVariantPicker` comment
-   *  for the clamp rules per variant. Width / length are always
-   *  carried over unchanged — only shape values get adjusted. */
+   *  already-valid values. The clamp rules per variant:
+   *    Line         → begin + end forced to "none"
+   *    Arrow        → begin forced to "none"; if end was "none", seed
+   *                   "triangle", else keep (preserves e.g. diamond)
+   *    Double arrow → any "none" ends get seeded "triangle"; non-
+   *                   none ends (triangle / diamond / oval / …) kept
+   *  Width / length are always carried over unchanged — only shape
+   *  values get adjusted. Called from the `applyArrowVariant` effect
+   *  handler bound in the constructor. */
   #clampArrowEndsToVariant(
     spec: ReturnType<typeof detectArrowEnds>,
     variant: ArrowHead,
@@ -1098,46 +995,11 @@ export class PropertyPanel {
     return next;
   }
 
-  /**
-   * Draw-style picker for freehand <path> selections. Toggles between
-   * pen and highlighter via applyDrawStyle(), which is the same
-   * helper FreehandTool uses at creation time so both paths (no pun
-   * intended) produce consistent attribute sets.
-   */
-  #addDrawStylePicker(current: DrawStyle): void {
-    // Chip row only — category header comes from `#inSection("Type",…)`.
-    // Note: label unified from "Style" to "Type" across all variant
-    // pickers; the picker itself just emits chips now, no label.
-    const row = document.createElement("div");
-    row.className = "pp-type-row";
-    const options: Array<{ value: DrawStyle; icon: string; label: string }> = [
-      { value: "pen", icon: "edit", label: "Pen" },
-      { value: "highlighter", icon: "ink_highlighter", label: "Highlighter" },
-    ];
-    for (const opt of options) {
-      const chip = document.createElement("div");
-      chip.className = `prop-choice-chip material-symbols-outlined${current === opt.value ? " active" : ""}`;
-      chip.textContent = opt.icon;
-      setTooltip(chip, opt.label);
-      chip.addEventListener("click", () => {
-        if (opt.value === current) return;
-        row.querySelectorAll(".prop-choice-chip").forEach((c) => c.classList.remove("active"));
-        chip.classList.add("active");
-        for (const t of this.#targets) applyDrawStyle(t, opt.value);
-        // Skip #commit (rubber-band) — it would overwrite the new
-        // variant's preset with the element's current (pre-switch)
-        // style, defeating the "apply new variant's preset" intent.
-        this.#history.save();
-        // Load the new variant's preset (Pen / Highlighter have their
-        // own saved style — e.g. Highlighter's wider default width +
-        // lower opacity — and should re-apply on variant switch so
-        // the conversion isn't just a data-attr toggle).
-        this.onVariantChanged?.(this.#targets);
-      });
-      row.appendChild(chip);
-    }
-    this.#target().appendChild(row);
-  }
+  // `#addDrawStylePicker` removed in Phase 3b — the chip row is now
+  // produced by the schema-driven renderer
+  // (`PROPERTY_CONTROLS.drawStylePicker.effect = "applyDrawStyle"`)
+  // and the effect handler bound in the constructor calls
+  // `applyDrawStyle` per target.
 
   #addOpacityPicker(current: number): void {
     const wrap = document.createElement("div");
