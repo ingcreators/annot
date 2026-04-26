@@ -18,7 +18,7 @@ export function buildMosaicPic(
   const w = px(s.width ?? 0);
   const h = px(s.height ?? 0);
   const xf = xfrmAttrs(s);
-  return `<${ns.pic}><${ns.nvPic}><${ns.cnvPr} id="${id}" name="Mosaic${id}"/><${ns.cnvPic}><a:picLocks noChangeAspect="1"/></${ns.cnvPic}></${ns.nvPic}><a:blipFill><a:blip xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:embed="rId${rid}"/><a:stretch><a:fillRect/></a:stretch></a:blipFill><a:spPr><a:xfrm${xf}><a:off x="${x}" y="${y}"/><a:ext cx="${w}" cy="${h}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></a:spPr></${ns.pic}>`;
+  return `<${ns.pic}><${ns.nvPic}><${ns.cnvPr} id="${id}" name="Mosaic${id}"/><${ns.cnvPic}><a:picLocks noChangeAspect="1"/></${ns.cnvPic}>${ns.nvPrSuffix}</${ns.nvPic}><a:blipFill><a:blip xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:embed="rId${rid}"/><a:stretch><a:fillRect/></a:stretch></a:blipFill><a:spPr><a:xfrm${xf}><a:off x="${x}" y="${y}"/><a:ext cx="${w}" cy="${h}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></a:spPr></${ns.pic}>`;
 }
 
 /** Build the full-canvas background `<{ns}:pic>` element for the
@@ -36,5 +36,5 @@ export function buildBackgroundPic(opts: {
   const { rid, width, height, ns } = opts;
   const cnvId = opts.cNvPrId ?? 1000;
   const name = opts.name ?? "Screenshot";
-  return `<${ns.pic}><${ns.nvPic}><${ns.cnvPr} id="${cnvId}" name="${name}"/><${ns.cnvPic}><a:picLocks noChangeAspect="1"/></${ns.cnvPic}></${ns.nvPic}><a:blipFill><a:blip xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:embed="rId${rid}"/><a:stretch><a:fillRect/></a:stretch></a:blipFill><a:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${px(width)}" cy="${px(height)}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></a:spPr></${ns.pic}>`;
+  return `<${ns.pic}><${ns.nvPic}><${ns.cnvPr} id="${cnvId}" name="${name}"/><${ns.cnvPic}><a:picLocks noChangeAspect="1"/></${ns.cnvPic}>${ns.nvPrSuffix}</${ns.nvPic}><a:blipFill><a:blip xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:embed="rId${rid}"/><a:stretch><a:fillRect/></a:stretch></a:blipFill><a:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${px(width)}" cy="${px(height)}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></a:spPr></${ns.pic}>`;
 }

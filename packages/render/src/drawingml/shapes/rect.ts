@@ -40,5 +40,5 @@ export function buildRect(s: AnnotationShape, id: number, ns: NamespaceOpts): st
     s.redact_style === "solid"
       ? "<a:ln><a:noFill/></a:ln>"
       : `<a:ln w="${sw}"${cap}>${strokePaintXml(s, stroke)}${join}${dash}</a:ln>`;
-  return `<${ns.shape}><${ns.nvShape}><${ns.cnvPr} id="${id}" name="R${id}"/><${ns.cnvSp}/></${ns.nvShape}><a:spPr><a:xfrm${xf}><a:off x="${x}" y="${y}"/><a:ext cx="${w}" cy="${h}"/></a:xfrm>${geom}${fillXml}${line}</a:spPr></${ns.shape}>`;
+  return `<${ns.shape}><${ns.nvShape}><${ns.cnvPr} id="${id}" name="R${id}"/><${ns.cnvSp}/>${ns.nvPrSuffix}</${ns.nvShape}><a:spPr><a:xfrm${xf}><a:off x="${x}" y="${y}"/><a:ext cx="${w}" cy="${h}"/></a:xfrm>${geom}${fillXml}${line}</a:spPr></${ns.shape}>`;
 }

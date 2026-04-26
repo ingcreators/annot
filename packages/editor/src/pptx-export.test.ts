@@ -169,6 +169,73 @@ describe("buildPptxFiles slide XML", () => {
     expect(slide).toMatchSnapshot();
   });
 
+  it("every PPTX non-visual props container carries <p:nvPr/>", () => {
+    // PPTX's `CT_ShapeNonVisual` / `CT_ConnectorNonVisual` /
+    // `CT_PictureNonVisual` schemas REQUIRE `<p:nvPr/>` as the
+    // third child (after `cNvPr` and `cNv{type}Pr`). PowerPoint
+    // refuses to open files where it's missing — a regression
+    // we hit on 2026-04-27 with anno-1777242607432.pptx.
+    //
+    // Structural guard: the every-emitter slide must contain a
+    // `<p:nvPr/>` immediately after each `<p:cNvSpPr*/>` /
+    // `<p:cNvCxnSpPr/>` / `</p:cNvPicPr>`. If a future namespace
+    // refactor drops the suffix on one of the emitters, this
+    // test fails before the snapshot one does — making the
+    // failure mode obvious instead of silently producing a
+    // PowerPoint-rejected file.
+    const annotations = makeAnnotationGroup(
+      svg("rect", {
+        x: "10",
+        y: "20",
+        width: "100",
+        height: "80",
+        stroke: "#ff0000",
+        "stroke-width": "3",
+        fill: "#ffeeaa",
+      }),
+      svg("ellipse", {
+        cx: "300",
+        cy: "60",
+        rx: "50",
+        ry: "40",
+        stroke: "#00ff00",
+        "stroke-width": "3",
+        fill: "none",
+      }),
+      makeArrowGroup({
+        x1: 10,
+        y1: 250,
+        x2: 210,
+        y2: 250,
+        endShape: "triangle",
+      }),
+      makeMarkerGroup({ shape: "rect", cx: 400, cy: 500, label: "1" }),
+    );
+    const files = buildPptxFiles(buildInput(annotations, { hasImage: true }));
+    const slide = decode(files["ppt/slides/slide1.xml"]!);
+
+    // Strip whitespace so we can match the patterns regardless
+    // of how the slide envelope chooses to format itself.
+    const compact = slide.replace(/\s+/g, "");
+
+    // Every `<p:cNvSpPr.../>` must be followed by `<p:nvPr/>`
+    // before the closing `</p:nvSpPr>`.
+    const cnvSpRegex = /<p:cNvSpPr[^/]*\/>([^<]*<[^>]*>)*?<\/p:nvSpPr>/g;
+    for (const match of compact.matchAll(cnvSpRegex)) {
+      expect(match[0]).toContain("<p:nvPr/>");
+    }
+    // Every `<p:cNvCxnSpPr/>` must be followed by `<p:nvPr/>`.
+    const cnvCxnRegex = /<p:cNvCxnSpPr\/>([^<]*<[^>]*>)*?<\/p:nvCxnSpPr>/g;
+    for (const match of compact.matchAll(cnvCxnRegex)) {
+      expect(match[0]).toContain("<p:nvPr/>");
+    }
+    // Every `</p:cNvPicPr>` must be followed by `<p:nvPr/>`.
+    const cnvPicRegex = /<\/p:cNvPicPr>([^<]*<[^>]*>)*?<\/p:nvPicPr>/g;
+    for (const match of compact.matchAll(cnvPicRegex)) {
+      expect(match[0]).toContain("<p:nvPr/>");
+    }
+  });
+
   it("curved arrow emits <a:custGeom> with quadratic Bezier", () => {
     // ArrowTool emits a `<g data-type="arrow">` with `data-cx` /
     // `data-cy` for the quadratic-Bezier control point when the
