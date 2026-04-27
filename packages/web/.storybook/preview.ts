@@ -4,10 +4,14 @@
  * Pulls in the same CSS the PWA boots with so stories render
  * against the production design tokens (light / dark variables,
  * toolbar styles, file-manager layout, Material Symbols font).
- * Once the Lit migration has populated per-component `static
- * styles`, most of these imports will be scoped inside the
- * elements themselves — but today's vanilla components rely on
- * global stylesheets, so preview parity requires loading them.
+ *
+ * Annot's Lit components intentionally render to **light DOM**
+ * (per CLAUDE.md's "Hybrid CSS" stance — see
+ * `_done/lit-migration.md`), so global stylesheet matching
+ * survives the migration unchanged. These imports therefore
+ * remain authoritative for both Lit and any residual vanilla
+ * surfaces; they are NOT a transitional scaffold awaiting
+ * per-component `static styles`.
  */
 
 import "@ingcreators/annot-core/styles/material-symbols.css";
