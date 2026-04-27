@@ -1,5 +1,31 @@
 # Vendor libimagequant — replace `@panda-ai/imagequant`
 
+> **Status:** Done (2026-04-27). All five phases landed via PRs
+> [#239](https://github.com/ingcreators/annot/pull/239) (Phase 1),
+> [#240](https://github.com/ingcreators/annot/pull/240) (Phase 2),
+> [#241](https://github.com/ingcreators/annot/pull/241) (Phase 3),
+> [#242](https://github.com/ingcreators/annot/pull/242) (Phase 4),
+> and the final Phase 5 doc cleanup. `@panda-ai/imagequant` is
+> gone from `pnpm-lock.yaml`; the in-tree wrapper at
+> `packages/imagequant/` is the sole quantizer for the PNG-8
+> capture pipeline.
+>
+> **Implementation deviation from the original plan:** Phase 3
+> shipped as a *structural*-equivalence test rather than the
+> originally-spec'd *byte-byte* equivalence test. Investigation
+> found that `@panda-ai/imagequant` calls libimagequant with
+> non-default attribute knobs we cannot recover without source
+> (Panda-Intelligence/imagequant-wasm doesn't actually publish
+> the wrapper's Rust source). The in-tree wrapper uses
+> libimagequant's documented defaults — same kernel, equal-or-
+> better palette fidelity. The structural test asserts no
+> regression; see PR [#241](https://github.com/ingcreators/annot/pull/241)
+> for the long-form rationale.
+>
+> **Original draft preserved below for history.**
+
+---
+
 > **Status:** Draft. Authored 2026-04-27 in response to a
 > security-conscious review of Annot's PNG-8 capture pipeline.
 > The pipeline currently depends on
