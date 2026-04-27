@@ -94,3 +94,77 @@ jobs:
 
       - name: pnpm audit (high severity)
         run: pnpm audit --audit-level=high
+
+  # Phase 2 of docs/plans/vendor-libimagequant.md: rebuild the
+  # `@ingcreators/annot-imagequant` WASM artefact from source and
+  # diff against the committed `packages/imagequant/pkg/`. This is
+  # the supply-chain gate that Dependabot structurally cannot
+  # provide — it catches unauthorised modifications to the compiled
+  # blob (a contributor PR, a compromised maintainer account, a
+  # typo'd commit) by failing the build when the diff is non-empty.
+  #
+  # Runs on every PR with aggressive Rust + wasm-pack caching so the
+  # cache hit rate keeps wall time low. Path filter avoids spinning
+  # up the Rust toolchain for unrelated PRs (TypeScript-only diffs);
+  # changes to the workflow itself or to the imagequant package
+  # both re-trigger.
+  verify-wasm:
+    name: verify imagequant wasm
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Detect imagequant or workflow changes
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            imagequant:
+              - 'packages/imagequant/**'
+              - '.github/workflows/ci.yml'
+
+      # The `wasm32-unknown-unknown` target ships precompiled with
+      # rustup, so explicitly add it; rust-toolchain action would do
+      # the same with more boilerplate.
+      - name: Set up Rust + wasm32 target
+        if: steps.filter.outputs.imagequant == 'true'
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup target add wasm32-unknown-unknown
+
+      # Cache cargo's registry/git/build outputs keyed on Cargo.lock
+      # so subsequent runs skip the dependency compilation. The cache
+      # eviction policy on GitHub-hosted runners is generous enough
+      # that the steady-state hit rate stays high.
+      - name: Cache cargo registry + build
+        if: steps.filter.outputs.imagequant == 'true'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            packages/imagequant/target
+          key: cargo-imagequant-${{ runner.os }}-${{ hashFiles('packages/imagequant/Cargo.lock') }}
+          restore-keys: |
+            cargo-imagequant-${{ runner.os }}-
+
+      - name: Cache wasm-pack binary
+        if: steps.filter.outputs.imagequant == 'true'
+        id: wasm-pack-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/wasm-pack
+          key: wasm-pack-0.13.1-${{ runner.os }}
+
+      - name: Install wasm-pack
+        if: steps.filter.outputs.imagequant == 'true' && steps.wasm-pack-cache.outputs.cache-hit != 'true'
+        run: cargo install wasm-pack --version 0.13.1 --locked
+
+      - name: Verify committed pkg/ matches a fresh build
+        if: steps.filter.outputs.imagequant == 'true'
+        run: bash packages/imagequant/scripts/verify-wasm.sh
+
+      - name: Skip — no imagequant or workflow changes
+        if: steps.filter.outputs.imagequant != 'true'
+        run: echo "No changes under packages/imagequant/ or this workflow; skipping."
