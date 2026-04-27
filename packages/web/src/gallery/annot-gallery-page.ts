@@ -30,7 +30,7 @@ import { getFilename, supportsResync } from "@ingcreators/annot-core/storage";
 import { html, LitElement, nothing } from "../lit.js";
 import { logger } from "../logger.js";
 import { showAlertDialog, showConfirmDialog, showPromptDialog } from "../ui/dialog.js";
-import { type MenuItem, openContextMenu } from "./context-menu.js";
+import { type MenuItem, openContextMenu } from "./annot-context-menu.js";
 
 export interface GallerySelection {
   images: ImageRecord[];
