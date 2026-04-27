@@ -138,70 +138,270 @@ export interface FolderRecord {
  * force-refresh of cached state) live on separate `StorageWith*`
  * interfaces below; use the matching `supports*()` type predicate to
  * narrow before calling.
+ *
+ * ## Error contract
+ *
+ * Read methods (`getImage`, `getFolder`, `listImages`, `listFolders`,
+ * `getBreadcrumb`) return `undefined` / `[]` for missing paths
+ * rather than throwing — "missing" is not a discriminable error
+ * here, so callers handle the absence directly. Update / delete
+ * methods are idempotent on missing source: `updateImage`,
+ * `deleteImage`, and `deleteFolder` return silently when the target
+ * path doesn't exist. `saveImage` and `moveImage` auto-uniquify
+ * collisions with " (2)", " (3)" suffixes and never throw on
+ * conflict.
+ *
+ * Mutation methods that DO throw discriminate failures via the
+ * `StorageError` hierarchy in
+ * `@ingcreators/annot-core/storage/errors`:
+ *
+ *   - `StorageConflictError` — a path collision the backend
+ *     can't auto-resolve. `createFolder` throws on duplicate name;
+ *     `renameImage`, `renameFolder`, and `moveFolder` throw on
+ *     destination collision (they don't auto-uniquify because the
+ *     caller picked the new name explicitly, so the conflict is
+ *     surfaced for them to retry / prompt).
+ *   - `StorageNotFoundError` — a `rename*` / `move*` couldn't
+ *     find its source path. The idempotent methods above don't
+ *     throw this.
+ *   - `StoragePermissionError` — backend rejected the op for auth
+ *     / ACL reasons (expired token, revoked scope, FSA permission
+ *     lapse). Any mutating method may throw this.
+ *   - `StorageQuotaError` — backend reports out-of-space or
+ *     out-of-quota. Any mutating method may throw this.
+ *
+ * Other failure modes (network errors, parse errors, generic IO
+ * errors) surface as plain `Error` and are NOT captured by
+ * `instanceof StorageError`. Backend-specific subclasses
+ * (`GitHubRateLimitError`, `DriveAuthError`, etc.) live inside each
+ * backend file and don't extend the shared `StorageError` hierarchy
+ * — they remain backend-internal concerns.
+ *
+ * Callers that want to react to a structured failure should
+ * `instanceof`-check the subclass; never substring-match on
+ * `e.message`.
  */
 export interface StorageProvider {
   // ---- Images ----
 
   /**
-   * Save a new image. The `record` argument carries every field of
-   * the saved entity except its path (which the store assigns).
-   * The optional `opts.filename` lets the caller suggest a filename;
-   * when omitted, the store picks one (e.g.
-   * `image-<timestamp>.png`). If the resulting path already exists,
-   * the store uniquifies with " (2)", " (3)" suffixes.
+   * Save a new image. The `record` carries every field of the
+   * saved entity except its path (which the store assigns). When
+   * `opts.filename` is provided the store uses it as the suggested
+   * leaf name; when omitted the store picks one
+   * (e.g. `image-<timestamp>.png`). On collision the store
+   * uniquifies with " (2)", " (3)" suffixes — `saveImage` NEVER
+   * throws `StorageConflictError`; the returned path IS the
+   * post-uniquification path the caller should hand to subsequent
+   * reads / writes.
    *
-   * Returns the actual path assigned (post-uniquification).
+   * @returns the actual path assigned (post-uniquification).
+   * @throws `StoragePermissionError` when the backend rejects the
+   *   write for auth / ACL reasons (expired GitHub token, revoked
+   *   Drive scope, FSA permission lapse).
+   * @throws `StorageQuotaError` when the backend reports
+   *   out-of-space or out-of-quota.
+   * @throws `Error` for unstructured backend / IO / network
+   *   failures.
    */
   saveImage(
     record: Omit<ImageRecord, "path">,
     opts?: { filename?: string },
   ): Promise<string>;
 
+  /**
+   * Read a single image by path. Missing is not an error here —
+   * callers get `undefined` and handle it directly without
+   * `try` / `catch`.
+   *
+   * @returns the image record, or `undefined` if no image exists
+   *   at that path.
+   * @throws `Error` for backend / IO / parse failures (e.g. an
+   *   on-disk file is corrupt, a network request fails).
+   */
   getImage(path: string): Promise<ImageRecord | undefined>;
 
-  /** List images within a folder. Use `""` for the root folder. */
+  /**
+   * List images directly inside `folderPath`. Use `""` for the
+   * root folder. Does NOT recurse into subfolders.
+   *
+   * @returns image records for that folder. Returns `[]` when the
+   *   folder is empty or missing — missing folders are not an
+   *   error here.
+   * @throws `Error` for backend / IO / parse failures.
+   */
   listImages(folderPath: string): Promise<ImageRecord[]>;
 
   /**
-   * Update an image's annotations / tags / thumbnail / updatedAt
-   * in place. Path stays the same — to move the image, use
-   * {@link moveImage}.
+   * In-place update of an existing image's annotations / tags /
+   * thumbnail / `updatedAt`. Path stays the same — to relocate
+   * the image, use {@link moveImage} or {@link renameImage}.
+   *
+   * Idempotent on missing source: returns silently when no image
+   * exists at `path`. Callers that must distinguish "updated" from
+   * "no-such-image" should `getImage` first.
+   *
+   * @throws `StoragePermissionError` for backend auth / ACL
+   *   rejection.
+   * @throws `StorageQuotaError` when the backend reports
+   *   out-of-space.
+   * @throws `Error` for unstructured backend / IO failures.
    */
   updateImage(path: string, updates: ImageRecordUpdate): Promise<void>;
 
   /**
-   * Move an image to a different folder. Returns the new path
-   * (filename unchanged; only the folder portion changes). The
-   * destination folder must already exist. No-op (returns the
-   * original path) when `newFolderPath` matches the current folder.
+   * Move an image to `newFolderPath`. Filename is preserved; only
+   * the parent-folder portion of the path changes. The destination
+   * folder must already exist (callers create it first via
+   * {@link createFolder}). On collision (a file with the same name
+   * already exists at the destination) the store auto-uniquifies
+   * with " (2)", " (3)" suffixes — `moveImage` NEVER throws
+   * `StorageConflictError`. No-op (returns the original path) when
+   * `newFolderPath` matches the current folder.
+   *
+   * @returns the new path.
+   * @throws `StorageNotFoundError` when no image exists at `path`.
+   * @throws `StoragePermissionError` for backend auth / ACL
+   *   rejection.
+   * @throws `Error` for unstructured backend / IO failures.
    */
   moveImage(path: string, newFolderPath: string): Promise<string>;
 
-  /** Rename image in place. Returns the new path. */
+  /**
+   * Rename an image in place. Folder portion of the path stays the
+   * same; only the leaf filename changes. No-op (returns the
+   * original path) when `newName` matches the current filename.
+   *
+   * Unlike {@link moveImage}, `renameImage` does NOT auto-uniquify
+   * — the caller picked the new name explicitly, so a conflict is
+   * surfaced for them to handle (e.g. show a "name taken, choose
+   * another?" prompt).
+   *
+   * @returns the new path.
+   * @throws `StorageNotFoundError` when no image exists at `path`.
+   * @throws `StorageConflictError` when an image already exists at
+   *   the renamed path.
+   * @throws `StoragePermissionError` for backend auth / ACL
+   *   rejection.
+   * @throws `Error` for unstructured backend / IO failures.
+   */
   renameImage(path: string, newName: string): Promise<string>;
 
+  /**
+   * Delete an image.
+   *
+   * Idempotent on missing source: returns silently when no image
+   * exists at `path`. Callers that must distinguish "deleted" from
+   * "no-such-image" should `getImage` first.
+   *
+   * @throws `StoragePermissionError` for backend auth / ACL
+   *   rejection.
+   * @throws `Error` for unstructured backend / IO failures.
+   */
   deleteImage(path: string): Promise<void>;
 
   // ---- Folders ----
 
-  /** Create a folder. Throws if a folder with the same name already exists. */
+  /**
+   * Create a folder named `name` directly under `parentPath`. Use
+   * `""` for `parentPath` to create at the root.
+   *
+   * Unlike {@link saveImage}, `createFolder` does NOT auto-uniquify
+   * — the caller picked the name explicitly, so a conflict is
+   * surfaced for them to handle.
+   *
+   * @returns the new folder's full path.
+   * @throws `StorageConflictError` when a folder named `name`
+   *   already exists under `parentPath`.
+   * @throws `StoragePermissionError` for backend auth / ACL
+   *   rejection.
+   * @throws `Error` for unstructured backend / IO failures,
+   *   including `parentPath` not existing on backends that
+   *   validate it.
+   */
   createFolder(parentPath: string, name: string): Promise<string>;
 
-  /** List subfolders of `parentPath`. Use `""` for the root folder. */
+  /**
+   * List subfolders directly inside `parentPath`. Use `""` for the
+   * root folder. Does NOT recurse.
+   *
+   * @returns folder records sorted alphabetically by name. Returns
+   *   `[]` when the folder is empty or missing — missing folders
+   *   are not an error here.
+   * @throws `Error` for backend / IO failures.
+   */
   listFolders(parentPath: string): Promise<FolderRecord[]>;
 
+  /**
+   * Read a folder record by path. The root folder (`""`) is NOT a
+   * record — `getFolder("")` returns `undefined` by contract.
+   *
+   * @returns the folder record, or `undefined` if no folder exists
+   *   at that path. Missing paths are not an error here.
+   * @throws `Error` for backend / IO failures.
+   */
   getFolder(path: string): Promise<FolderRecord | undefined>;
 
-  /** Rename folder in place. Returns the new path. */
+  /**
+   * Rename a folder in place. Parent stays the same; only the leaf
+   * name changes. All descendant image and folder paths are
+   * rewritten to share the new prefix. No-op (returns the original
+   * path) when `newName` matches the current name.
+   *
+   * Does NOT auto-uniquify (same rationale as {@link renameImage}).
+   *
+   * @returns the new folder path.
+   * @throws `StorageNotFoundError` when no folder exists at `path`.
+   * @throws `StorageConflictError` when a folder with the new name
+   *   already exists alongside the source.
+   * @throws `StoragePermissionError` for backend auth / ACL
+   *   rejection.
+   * @throws `Error` for unstructured backend / IO failures.
+   */
   renameFolder(path: string, newName: string): Promise<string>;
 
-  /** Move folder to a new parent. Returns the new path. */
+  /**
+   * Move a folder to a new parent. Leaf name stays the same; only
+   * the parent portion of the path changes. All descendant image
+   * and folder paths are rewritten to share the new prefix. No-op
+   * (returns the original path) when `newParentPath` matches the
+   * current parent.
+   *
+   * Does NOT auto-uniquify (same rationale as {@link renameImage}).
+   *
+   * @returns the new folder path.
+   * @throws `StorageNotFoundError` when no folder exists at `path`.
+   * @throws `StorageConflictError` when a folder with the same
+   *   leaf name already exists under `newParentPath`.
+   * @throws `StoragePermissionError` for backend auth / ACL
+   *   rejection.
+   * @throws `Error` for unstructured backend / IO failures.
+   */
   moveFolder(path: string, newParentPath: string): Promise<string>;
 
-  /** Delete folder and all nested content (images + subfolders). */
+  /**
+   * Recursively delete a folder and every image / subfolder under
+   * it.
+   *
+   * Idempotent on missing source: returns silently when no folder
+   * exists at `path`.
+   *
+   * @throws `StoragePermissionError` for backend auth / ACL
+   *   rejection.
+   * @throws `Error` for unstructured backend / IO failures.
+   */
   deleteFolder(path: string): Promise<void>;
 
-  /** Return folder records from root down to `path` (inclusive). Empty for root. */
+  /**
+   * Read the chain of folder records from the root (exclusive)
+   * down to `path` (inclusive). Used for breadcrumb UIs.
+   *
+   * @returns one record per existing ancestor, in root-to-leaf
+   *   order. Returns `[]` for the root (`""`). Missing intermediate
+   *   ancestors are silently skipped — `getBreadcrumb` never
+   *   throws on a missing path.
+   * @throws `Error` for backend / IO failures.
+   */
   getBreadcrumb(path: string): Promise<FolderRecord[]>;
 }
 
