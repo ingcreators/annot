@@ -123,20 +123,26 @@ export class AnnotDialogElement extends LitElement {
 
   /** Light-DOM `<slot>` doesn't relocate children — but since the
    *  element renders to light DOM, native `<slot>` won't work
-   *  declaratively. Instead, after the first update we move any
-   *  pre-existing slotted children INTO the `.app-dialog-body`
-   *  container. Subsequent imperative additions to the body are
+   *  declaratively. Pre-existing children appended before mount
+   *  (e.g. the prompt's `<input>` + error `<div>`) end up as
+   *  direct siblings of the rendered overlay, NOT inside the
+   *  body. After the first update we relocate those orphaned
+   *  children into `.app-dialog-body`, replacing the `<slot>`
+   *  placeholder. Subsequent imperative additions to the body are
    *  also accepted (consumers query `.app-dialog-body` directly). */
   protected override firstUpdated(): void {
-    const slot = this.querySelector("slot");
     const body = this.querySelector<HTMLElement>(".app-dialog-body");
-    if (!slot || !body) return;
-    // Move pre-slotted children (added before connectedCallback)
-    // from the slot's parent (the body) — we put them after the
-    // `<slot>` placeholder. Since light DOM `<slot>` is inert, the
-    // children are already siblings; we just remove the slot
-    // placeholder so the body class targets its real children.
-    slot.remove();
+    const overlay = this.querySelector<HTMLElement>(".app-dialog-overlay");
+    if (!body || !overlay) return;
+    const slot = body.querySelector("slot");
+    // Direct element children of `this` other than the rendered
+    // overlay are pre-slotted body content — move them in front of
+    // the slot placeholder, preserving document order.
+    for (const child of Array.from(this.children)) {
+      if (child === overlay) continue;
+      body.insertBefore(child, slot);
+    }
+    slot?.remove();
   }
 
   /** Convenience accessor for orchestrators that want to inject
