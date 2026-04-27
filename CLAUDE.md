@@ -368,44 +368,56 @@ Run locally with `pnpm --filter @ingcreators/annot-web storybook`.
 **CI builds the static bundle on every PR and the build is
 blocking** — a story that fails to compile fails the PR.
 
-- **Stories are required for new built-in Lit components, and
-  strongly encouraged for changes to existing ones.** The
-  `lit-migration-completion.md` follow-up (PRs #244–#250)
-  closed the prior 5/22 gap by adding stories for every
-  newly-migrated component (`<annot-tag-editor>`,
-  `<annot-scratchpad-section>`, `<annot-split-editor>`,
-  `<annot-gallery-page>`, `<annot-context-menu>`,
-  `<annot-save-menu>` got promoted to a self-contained
-  orchestrator with its own stories), bringing the ratio to
-  ~12/27. Going forward, a new built-in `LitElement` should
-  ship at least a `Default` story with the visible-state
-  variants the component renders (loading / empty / populated
-  / error). Trivial render-path components (e.g.
-  `<annot-toolbar-button>` with one icon + label path) may
-  still skip the story — the rule of thumb is "if a reviewer
-  would want to see this in isolation before the diff, write
-  the story."
-- **Existing pre-Phase-6 LitElements without a story aren't a
-  TODO.** Some of the original 22 from
-  `_done/lit-migration.md`'s Phases 0–5b still don't ship
-  stories. Add one only if you're about to make a non-trivial
-  visual change to the component, not as a retroactive
-  cleanup pass.
-- **Vanilla (non-Lit) components don't need retroactive
-  stories.** Same rule as for Lit — opportunistic, not
-  obligatory.
+- **Stories are required for ALL built-in Lit components.**
+  The `litelement-stories-coverage.md` follow-up (PRs
+  #253–#256) closed the gap that `lit-migration-completion.md`
+  left open: every `LitElement` subclass under
+  `packages/web/src/` ships at least one co-located
+  `*.stories.ts`. The current ratio is **27/27** (every
+  LitElement has a story; some have multiple stories for
+  multiple visible states). Adding a new built-in
+  `LitElement` requires shipping at least a `Default` story
+  in the same PR — the next audit's check is a simple
+  symmetry assertion (`stories count >= LitElement count`).
+- **Story authoring conventions.** Each story:
+    - Lives next to the component (`foo.ts` →
+      `foo.stories.ts`).
+    - Sets `title:` to mirror the directory:
+      `Editor / FooBar`, `Gallery / FooBar`,
+      `UI / FooBar`, `Capture / FooBar`. Drawer + right-panel
+      sections keep `Editor / DrawerSections / drawer.<id>`
+      and `Editor / RightPanelSections / right-panel.<id>`.
+    - Wraps the element in a host that mirrors the in-app
+      context (panel background, fixed-width drawer,
+      breadcrumb container, etc.). Components that use
+      `display: contents` (e.g. `<annot-editor-header>`,
+      `<annot-editor-statusbar>`, `<annot-file-manager-shell>`)
+      need a wrapper with the production parent's flex
+      layout.
+    - Sets reactive properties imperatively after
+      `document.createElement(...)` since most use
+      `attribute: false`.
+    - Adds `console.log("[story] <event>", …)` listeners for
+      arg-flow tracing.
+    - Exports named stories per visible state (`Default` /
+      `Empty` / `Populated` / `Loading` / `Error` / etc.).
+- **Vanilla (non-Lit) components don't need stories.**
+  Opportunistic, not obligatory.
 - **Stories are not test replacements.** Vitest stays the
   unit-test home; Storybook is the visual + interactive
   surface for reviewers + future plugin authors.
 
 History: PRs [#236](https://github.com/ingcreators/annot/pull/236)
-(Storybook CI blocking + 5/22 acknowledgement) and
-[#244–#250](https://github.com/ingcreators/annot/pull/244)
-(`lit-migration-completion.md`'s six phases) shaped the
-current "required for new, opportunistic for existing" stance.
-If broader visual-regression coverage becomes valuable later
-(e.g. when Chromatic-style review lands per Phase 3 of the
-Storybook plan), revisit this section as part of that work.
+(Storybook CI blocking + 5/22 acknowledgement),
+[#244–#251](https://github.com/ingcreators/annot/pull/244)
+(`lit-migration-completion.md`'s six phases — ratio 12/27),
+and [#253–#256](https://github.com/ingcreators/annot/pull/253)
+(`litelement-stories-coverage.md`'s four phases — ratio
+27/27) shaped the current "required for all built-in"
+stance. If broader visual-regression coverage becomes
+valuable later (e.g. when Chromatic-style review lands per
+Phase 3 of the Storybook plan), revisit this section as
+part of that work.
 
 ## Lit conventions
 
