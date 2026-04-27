@@ -30,6 +30,8 @@ import {
   getParentPath,
   joinPath,
   rewritePathPrefix,
+  StorageConflictError,
+  StorageNotFoundError,
   uniquifyFilenameAsync,
   validateName,
 } from "@ingcreators/annot-core/storage";
@@ -482,7 +484,7 @@ export class DeviceStore
   async moveImage(path: string, newFolderPath: string): Promise<string> {
     if (newFolderPath === getParentPath(path)) return path;
     const entry = this.#index.images[path];
-    if (!entry) return path;
+    if (!entry) throw new StorageNotFoundError(path, `Image not found: ${path}`);
 
     const filename = getFilename(path);
     const oldDir = await this.#getDirHandle(getParentPath(path));
@@ -508,13 +510,16 @@ export class DeviceStore
 
   async renameImage(path: string, newName: string): Promise<string> {
     validateName(newName);
+    if (!this.#index.images[path]) {
+      throw new StorageNotFoundError(path, `Image not found: ${path}`);
+    }
     const folderPath = getParentPath(path);
     const newPath = joinPath(folderPath, newName);
     if (newPath === path) return path;
 
     const dir = await this.#getDirHandle(folderPath);
     if (await this.#fileExists(dir, newName)) {
-      throw new Error(`Image already exists: ${newPath}`);
+      throw new StorageConflictError(newPath, `Image already exists: ${newPath}`);
     }
 
     const oldFilename = getFilename(path);
@@ -563,14 +568,16 @@ export class DeviceStore
     // Throw if already exists
     try {
       await parentDir.getDirectoryHandle(name);
-      throw new Error(`Folder already exists: ${joinPath(parentPath, name)}`);
+      throw new StorageConflictError(
+        joinPath(parentPath, name),
+        `Folder already exists: ${joinPath(parentPath, name)}`,
+      );
     } catch (e: unknown) {
-      const name = (e as { name?: string }).name;
-      const message = String((e as { message?: unknown }).message ?? "");
-      if (name !== "NotFoundError" && !message.startsWith("Folder already")) {
+      if (e instanceof StorageConflictError) throw e;
+      const errName = (e as { name?: string }).name;
+      if (errName !== "NotFoundError") {
         throw e;
       }
-      if (message.startsWith("Folder already")) throw e;
     }
     await parentDir.getDirectoryHandle(name, { create: true });
     return joinPath(parentPath, name);
@@ -610,6 +617,9 @@ export class DeviceStore
 
   async renameFolder(path: string, newName: string): Promise<string> {
     validateName(newName);
+    if (!(await this.getFolder(path))) {
+      throw new StorageNotFoundError(path, `Folder not found: ${path}`);
+    }
     const parentPath = getParentPath(path);
     const newPath = joinPath(parentPath, newName);
     if (newPath === path) return path;
@@ -617,6 +627,9 @@ export class DeviceStore
   }
 
   async moveFolder(path: string, newParentPath: string): Promise<string> {
+    if (!(await this.getFolder(path))) {
+      throw new StorageNotFoundError(path, `Folder not found: ${path}`);
+    }
     const newPath = joinPath(newParentPath, getFilename(path));
     if (newPath === path) return path;
     return this.#moveFolderImpl(path, newPath);
@@ -625,7 +638,7 @@ export class DeviceStore
   async #moveFolderImpl(oldPath: string, newPath: string): Promise<string> {
     // Collision check
     if (await this.getFolder(newPath)) {
-      throw new Error(`Folder already exists: ${newPath}`);
+      throw new StorageConflictError(newPath, `Folder already exists: ${newPath}`);
     }
 
     // Copy recursively from oldPath to newPath

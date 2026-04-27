@@ -17,6 +17,8 @@ import {
   getParentPath,
   joinPath,
   rewritePathPrefix,
+  StorageConflictError,
+  StorageNotFoundError,
   uniquifyFilenameAsync,
   validateName,
 } from "@ingcreators/annot-core/storage";
@@ -153,7 +155,7 @@ export class BrowserStore implements StorageProvider {
 
   async moveImage(path: string, newFolderPath: string): Promise<string> {
     const record = await this.getImage(path);
-    if (!record) return path;
+    if (!record) throw new StorageNotFoundError(path, `Image not found: ${path}`);
     if (newFolderPath === record.folderPath) return path;
 
     const filename = getFilename(record.path);
@@ -187,10 +189,12 @@ export class BrowserStore implements StorageProvider {
   async renameImage(path: string, newName: string): Promise<string> {
     validateName(newName);
     const record = await this.getImage(path);
-    if (!record) return path;
+    if (!record) throw new StorageNotFoundError(path, `Image not found: ${path}`);
     const newPath = joinPath(record.folderPath, newName);
     if (newPath === path) return path;
-    if (await this.getImage(newPath)) throw new Error(`Image already exists: ${newPath}`);
+    if (await this.getImage(newPath)) {
+      throw new StorageConflictError(newPath, `Image already exists: ${newPath}`);
+    }
 
     const db = await openDB();
     const tx = db.transaction(IMG_STORE, "readwrite");
@@ -225,7 +229,7 @@ export class BrowserStore implements StorageProvider {
     validateName(name);
     const path = joinPath(parentPath, name);
     const existing = await this.getFolder(path);
-    if (existing) throw new Error(`Folder already exists: ${path}`);
+    if (existing) throw new StorageConflictError(path, `Folder already exists: ${path}`);
 
     const record: FolderRecord = {
       path,
@@ -276,21 +280,25 @@ export class BrowserStore implements StorageProvider {
   async renameFolder(path: string, newName: string): Promise<string> {
     validateName(newName);
     const folder = await this.getFolder(path);
-    if (!folder) return path;
+    if (!folder) throw new StorageNotFoundError(path, `Folder not found: ${path}`);
     const newPath = joinPath(folder.parentPath, newName);
     if (newPath === path) return path;
     const collision = await this.getFolder(newPath);
-    if (collision) throw new Error(`Folder already exists: ${newPath}`);
+    if (collision) {
+      throw new StorageConflictError(newPath, `Folder already exists: ${newPath}`);
+    }
     return this.#moveFolderImpl(path, newPath, folder.parentPath, newName);
   }
 
   async moveFolder(path: string, newParentPath: string): Promise<string> {
     const folder = await this.getFolder(path);
-    if (!folder) return path;
+    if (!folder) throw new StorageNotFoundError(path, `Folder not found: ${path}`);
     const newPath = joinPath(newParentPath, folder.name);
     if (newPath === path) return path;
     const collision = await this.getFolder(newPath);
-    if (collision) throw new Error(`Folder already exists: ${newPath}`);
+    if (collision) {
+      throw new StorageConflictError(newPath, `Folder already exists: ${newPath}`);
+    }
     return this.#moveFolderImpl(path, newPath, newParentPath, folder.name);
   }
 

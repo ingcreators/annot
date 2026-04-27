@@ -23,6 +23,8 @@ import {
   getParentPath,
   joinPath,
   rewritePathPrefix,
+  StorageConflictError,
+  StorageNotFoundError,
   uniquifyFilename,
   validateName,
 } from "@ingcreators/annot-core/storage";
@@ -455,7 +457,7 @@ export class GoogleDriveStore
 
   async moveImage(path: string, newFolderPath: string): Promise<string> {
     const driveId = this.#pathToFileId.get(path);
-    if (!driveId) return path;
+    if (!driveId) throw new StorageNotFoundError(path, `Image not found: ${path}`);
     if (newFolderPath === getParentPath(path)) return path;
 
     const newParentId = await this.#resolveFolderId(newFolderPath);
@@ -486,11 +488,13 @@ export class GoogleDriveStore
   async renameImage(path: string, newName: string): Promise<string> {
     validateName(newName);
     const driveId = this.#pathToFileId.get(path);
-    if (!driveId) return path;
+    if (!driveId) throw new StorageNotFoundError(path, `Image not found: ${path}`);
     const folderPath = getParentPath(path);
     const newPath = joinPath(folderPath, newName);
     if (newPath === path) return path;
-    if (this.#pathToFileId.has(newPath)) throw new Error(`Image already exists: ${newPath}`);
+    if (this.#pathToFileId.has(newPath)) {
+      throw new StorageConflictError(newPath, `Image already exists: ${newPath}`);
+    }
 
     await this.#fetch(`${DRIVE_API}/files/${driveId}`, {
       method: "PATCH",
@@ -526,7 +530,9 @@ export class GoogleDriveStore
     if (!parentId) throw new Error(`Parent folder not found: ${parentPath}`);
 
     const fullPath = joinPath(parentPath, name);
-    if (this.#pathToFolderId.has(fullPath)) throw new Error(`Folder already exists: ${fullPath}`);
+    if (this.#pathToFolderId.has(fullPath)) {
+      throw new StorageConflictError(fullPath, `Folder already exists: ${fullPath}`);
+    }
 
     const resp = await this.#fetch(`${DRIVE_API}/files`, {
       method: "POST",
@@ -575,11 +581,13 @@ export class GoogleDriveStore
   async renameFolder(path: string, newName: string): Promise<string> {
     validateName(newName);
     const driveId = this.#pathToFolderId.get(path);
-    if (!driveId) return path;
+    if (!driveId) throw new StorageNotFoundError(path, `Folder not found: ${path}`);
     const parentPath = getParentPath(path);
     const newPath = joinPath(parentPath, newName);
     if (newPath === path) return path;
-    if (this.#pathToFolderId.has(newPath)) throw new Error(`Folder already exists: ${newPath}`);
+    if (this.#pathToFolderId.has(newPath)) {
+      throw new StorageConflictError(newPath, `Folder already exists: ${newPath}`);
+    }
 
     await this.#fetch(`${DRIVE_API}/files/${driveId}`, {
       method: "PATCH",
@@ -592,13 +600,15 @@ export class GoogleDriveStore
 
   async moveFolder(path: string, newParentPath: string): Promise<string> {
     const driveId = this.#pathToFolderId.get(path);
-    if (!driveId) return path;
+    if (!driveId) throw new StorageNotFoundError(path, `Folder not found: ${path}`);
     const newParentId = await this.#resolveFolderId(newParentPath);
     if (!newParentId) throw new Error(`Parent folder not found: ${newParentPath}`);
 
     const newPath = joinPath(newParentPath, getFilename(path));
     if (newPath === path) return path;
-    if (this.#pathToFolderId.has(newPath)) throw new Error(`Folder already exists: ${newPath}`);
+    if (this.#pathToFolderId.has(newPath)) {
+      throw new StorageConflictError(newPath, `Folder already exists: ${newPath}`);
+    }
 
     // Get current parents
     const metaResp = await this.#fetch(`${DRIVE_API}/files/${driveId}?fields=parents`);
