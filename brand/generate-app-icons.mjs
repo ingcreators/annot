@@ -50,6 +50,13 @@ const targets = [
   ["annot-icon.svg",    "brand/generated/drive-ui-128.png", 128],
   ["annot-icon.svg",    "brand/generated/drive-ui-256.png", 256],
   ["annot-icon.svg",    "brand/generated/marketplace-512.png", 512],
+
+  // GitHub org / repo avatars. GitHub recommends ≥ 500 px square; we
+  // ship 1024 so the avatar stays crisp in PR / commit lists on
+  // high-DPI displays. Uploaded manually via Settings → Profile
+  // (org) or Settings → General → Social preview (repo).
+  ["ingcreators-icon.svg", "brand/generated/github-avatar-ingcreators-1024.png", 1024],
+  ["annot-icon.svg",       "brand/generated/github-avatar-annot-1024.png", 1024],
 ];
 
 for (const [src, outRel, size] of targets) {
