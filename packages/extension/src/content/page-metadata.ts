@@ -54,6 +54,29 @@ export interface CaptureRegion {
  *  "in the screenshot" so area captures don't end up listing
  *  off-frame elements with garbage coordinates in the editor. */
 export function capturePageMetadata(region?: CaptureRegion): PageMetadata {
+  // Force a synchronous layout / style pass before walking.
+  //
+  // Why: pages that use `content-visibility: auto` (modern news
+  // feeds, infinite-scroll listings, b.hatena.ne.jp, etc.) defer
+  // layout AND `getBoundingClientRect` for descendants of cards
+  // that are currently outside the viewport. Without forcing, those
+  // descendants' bboxes come back 0×0 and `serializeElement` rejects
+  // them via the `width * height < MIN_AREA` check — even though
+  // they're real DOM nodes the user can scroll to and that belong
+  // in the Elements panel.
+  //
+  // Reading `offsetHeight` triggers Chrome's "force sync layout"
+  // path. `document.body` is enough — Chrome lays out the entire
+  // body subtree, which populates `content-visibility: auto`
+  // descendants' bboxes for the upcoming `getBoundingClientRect`
+  // calls. Empirically this turns "0 elements found on
+  // b.hatena.ne.jp" into "952 elements found".
+  //
+  // The cost is one synchronous layout pass per capture — equivalent
+  // to what the page's own `requestAnimationFrame` callbacks do.
+  // The user is already paying ~400ms of capture-prep delay, so the
+  // few-millisecond layout cost is invisible.
+  void document.body.offsetHeight;
   const elements: PageElement[] = [];
   const scrollX = window.scrollX;
   const scrollY = window.scrollY;
