@@ -228,6 +228,65 @@ The repo gains:
   [`README.md`](../../README.md)'s "Engineering posture"
   table once the migration completes.
 
+### Vulnerability detection after the migration
+
+The current setup has two automated bot/CI gates that cover
+the npm side of the dependency graph:
+
+- **Dependabot** ([`.github/dependabot.yml`](../../.github/dependabot.yml))
+  watches `npm` (weekly grouped) and `github-actions` (monthly).
+  Security advisories from the GitHub Advisory Database bypass
+  the grouping and open individual PRs immediately.
+- **`pnpm audit --audit-level=high`** runs as a separate
+  non-blocking CI job ([`.github/workflows/ci.yml:75-96`](../../.github/workflows/ci.yml:75)).
+
+After this plan lands the dependency graph **adds Rust crates**
+(via the new [`packages/imagequant/Cargo.toml`](../../packages/imagequant/Cargo.toml)
+once Phase 1 ships) but **removes** `@panda-ai/imagequant` and
+its transitive npm closure. To keep coverage symmetric:
+
+- **Phase 1 includes adding a `cargo` section to
+  [`.github/dependabot.yml`](../../.github/dependabot.yml)**
+  pointing at `/packages/imagequant`. Dependabot's `cargo`
+  ecosystem reads `Cargo.lock` and checks every transitive
+  crate against the GitHub Advisory Database, which mirrors
+  [RustSec](https://rustsec.org/) advisories. Same UX as the
+  existing npm gates: weekly grouped PRs + immediate
+  individual PRs for security advisories.
+- **The committed `.wasm` blob is opaque to advisory
+  scanners** — Dependabot doesn't inspect compiled artifacts.
+  This is what the Phase 2 `verify-wasm` CI job exists for:
+  if anyone (a contributor PR, a compromised maintainer
+  account, a typo'd commit) modifies `packages/imagequant/pkg/`
+  without re-running the build script, the diff fails the
+  build. **The CI job is the WASM equivalent of an advisory
+  bot — it catches the supply-chain vector that Dependabot
+  structurally cannot.**
+- **The `pako` JS dep stays** under the existing npm Dependabot
+  watch.
+
+Honest disclosure of what is **not** covered:
+
+- **GHSA mirroring lag.** RustSec advisories typically appear
+  in GHSA within hours but occasionally take days. For the
+  rare critical-severity case where this lag matters, a
+  human-driven check at https://rustsec.org/ during incident
+  response is the fallback — same situation as today for
+  every other Cargo-using project on GitHub.
+- **The new `cargo` Dependabot watch only covers
+  `packages/imagequant/`.** The existing
+  [`packages/desktop/src-tauri/`](../../packages/desktop/src-tauri/)
+  Cargo workspace stays uncovered after this plan — Tauri
+  crates are not part of this plan's scope. Adding a second
+  `cargo` watch for the Tauri crate is a worthwhile follow-up
+  but lives in its own PR (one-line addition to dependabot.yml).
+- **No bot detects "the upstream `imagequant` crate was
+  yanked or relabeled" until an advisory is published.** Same
+  for any pinned dependency. This is why the plan defaults to
+  an **exact version pin** (`=4.x.y`) — yanks become loud
+  during the next `cargo update` rather than silent at
+  install time.
+
 ### Why an in-tree workspace package, not a separate repo
 
 Considered and rejected: split the Rust crate into
@@ -250,8 +309,8 @@ work.
 
 | Phase | Scope | PRs | Depends on |
 |-------|-------|-----|------------|
-| 1 | New `packages/imagequant/` workspace package: Rust crate + wasm-bindgen wrapper + committed `pkg/` artifact + README + build script. Not yet wired in. | 1 | — |
-| 2 | CI: add a `verify-wasm` job that runs the build script and diffs against the committed artifact. Decide blocking vs informational based on first-run cost. | 1 | 1 done |
+| 1 | New `packages/imagequant/` workspace package: Rust crate + wasm-bindgen wrapper + committed `pkg/` artifact + README + build script. Add a `cargo` section to [`.github/dependabot.yml`](../../.github/dependabot.yml) pointing at `/packages/imagequant` so the new Rust deps land under the same advisory bot coverage as everything else. Not yet wired into the call site. | 1 | — |
+| 2 | CI: add a `verify-wasm` job that runs the build script and diffs against the committed artifact. Runs on every PR (decision below). | 1 | 1 done |
 | 3 | Golden-image byte-equivalence test: feed N representative captures (UI-heavy, photo-heavy, high-DPI scrollshot, alpha-channel) through both `@panda-ai/imagequant` and the new package, assert PNG-8 output bytes match. Lives in `packages/core/src/encode/equivalence.test.ts`, runs once during the migration window. | 1 | 1 done |
 | 4 | Swap the import in [`packages/core/src/encode/index.ts:19`](../../packages/core/src/encode/index.ts:19) from `@panda-ai/imagequant` to `@ingcreators/annot-imagequant`. Drop `@panda-ai/imagequant` from `packages/core/package.json` deps. Re-run the golden equivalence test inline as a regression guard going forward. | 1 | 2 + 3 done |
 | 5 | Cleanup: remove `@panda-ai/imagequant` from `pnpm-lock.yaml` (auto via `pnpm install`), update [`README.md`](../../README.md)'s Engineering Posture table to mention the in-house WASM build, update [`CLAUDE.md`](../../CLAUDE.md) to document `packages/imagequant/` as Tier A from a runtime perspective (the JS glue is pure, the WASM has no DOM access). | 1 | 4 done |
@@ -308,23 +367,22 @@ For each phase, the standard checklist
   Cargo workspace. The new `packages/imagequant/Cargo.toml`
   is a leaf crate.
 
+## Decisions
+
+These were called out as open questions during the original
+draft and resolved on first review (2026-04-27):
+
+- **Build verification cadence: every PR.** The Phase 2
+  `verify-wasm` job runs on every PR with aggressive
+  Rust + wasm-pack caching. Drift is caught immediately
+  rather than accumulating up to a week. Flip to weekly
+  scheduling only if the cache hit rate proves poor.
+- **Pin strategy: exact (`=4.x.y`).** Upstream patch
+  releases require a deliberate bump PR. The whole point of
+  this plan is supply-chain trust — explicit beats implicit.
+
 ## Open questions
 
-- **Build verification cadence.** Phase 2 lands a `verify-wasm`
-  CI job. Two options:
-    1. Run on every PR (catches drift immediately, costs ~30s
-       of Rust + wasm-pack install per CI run if cached).
-    2. Run weekly via scheduled workflow (cheaper, accepts
-       up-to-7-day drift before a contributor notices).
-  Plan defaults to option 1 with aggressive caching; flip to
-  option 2 if the cache hit rate is poor.
-- **Pin strategy for the upstream `imagequant` crate.** Pin
-  to `=4.x.y` (exact) for reproducibility, accepting that
-  upstream patch releases require a deliberate bump PR. Or
-  use `^4.x` and rely on `Cargo.lock` for runtime pin while
-  letting `cargo update` move minor versions on cadence.
-  Plan defaults to `=4.x.y` (exact) — explicit beats
-  implicit when the whole point is supply-chain trust.
 - **Should `packages/imagequant/` ship a tiny TypeScript
   wrapper layer** (`packages/imagequant/src/index.ts`) on
   top of the wasm-pack output to massage the ABI into the
@@ -332,9 +390,8 @@ For each phase, the standard checklist
   `encode/index.ts` adapt to whatever wasm-bindgen produces?
   Plan defers this to the implementation PR; the answer
   depends on whether wasm-bindgen's default `JsValue` →
-  `{ palette, indices }` conversion matches the
-  current ABI literally or needs a one-line `as any`
-  smoother.
+  `{ palette, indices }` conversion matches the current ABI
+  literally or needs a one-line `as any` smoother.
 - **Scope creep guard:** when this lands, we will be tempted
   to also vendor or audit `pako`. The plan explicitly does
   not. `pako` is in a different supply-chain trust tier
@@ -354,5 +411,12 @@ For each phase, the standard checklist
   is a worthwhile follow-up, but it's its own plan.
 - **Publishing the new package to npm.** Internal vendor
   only. The `private: true` flag is load-bearing.
+- **Adding the existing
+  [`packages/desktop/src-tauri/`](../../packages/desktop/src-tauri/)
+  Cargo workspace to Dependabot.** Worth doing — it's a
+  one-line addition to
+  [`.github/dependabot.yml`](../../.github/dependabot.yml) — but
+  it's an existing-coverage gap separate from this plan's
+  vendor-swap goal. Lives in its own PR.
 - **WebGPU or Web Workers parallelism for the quantizer.**
   libimagequant is fast enough; out of scope.
