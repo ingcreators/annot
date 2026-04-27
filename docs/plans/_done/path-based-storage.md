@@ -1,9 +1,7 @@
 # Path-based Storage Refactor
 
-> **Status:** Queued. Prerequisite for `GitHubStore` and Playwright /
-> headless integration (numeric IDs don't map to git SHAs or to
-> `locator()` references; paths do). Raising priority once element-
-> snap integration lands.
+> **Status:** Done. All 7 phases landed; `GitHubStore` shipped on
+> top of the path-based interface as planned.
 >
 > **Compatibility:** PWA / extension only. Brings the storage layer
 > in line with `PRODUCT_DIRECTION.md` principles P4 (stable
@@ -13,6 +11,48 @@
 > because the core type change breaks every downstream package). IDB
 > data is dropped on DB version bump — acceptable since the project
 > is pre-GA.
+
+## Outcome (2026-04-27)
+
+- **Phase 1 — Core types + path utilities:** **Done.**
+  [`packages/core/src/storage/path.ts`](../../../packages/core/src/storage/path.ts)
+  ships `ROOT_PATH`, `joinPath`, `getParentPath`, `getFilename`,
+  `splitPath`, `ancestorPaths`, `validateName`, `uniquifyFilename`.
+  [`packages/core/src/storage/types.ts`](../../../packages/core/src/storage/types.ts)'s
+  `StorageProvider` is path-keyed throughout; `path` is the primary
+  key on both `ImageRecord` and `FolderRecord`.
+- **Phase 2 — IDB implementations:** **Done.** Both stores were
+  rebuilt against the path-keyed schema. (The packages were
+  subsequently renamed to `@ingcreators/annot-web` and
+  `@ingcreators/annot-extension` — the `web-annotation` /
+  `browser-extension` paths quoted in the original plan body
+  below now resolve under those new names.)
+- **Phase 3 — Extension messaging:** **Done.** The service
+  worker speaks paths to the PWA.
+- **Phase 4 — Router:** **Done.** `?p=<path>` is the canonical
+  edit/gallery URL shape;
+  [`packages/web/src/router.ts`](../../../packages/web/src/router.ts)
+  parses it and the gallery / app code uses it pervasively.
+- **Phase 5 — Bridge + FS Store + Drive Store:** **Done.** The
+  `fsFileMap` / `fsFolderMap` / `fsEncodeId` / `fsDecodeId`
+  facade was deleted. Google Drive's `pathToDriveFolderId` /
+  `driveFolderIdToPath` mapping is internal only and externally
+  invisible.
+- **Phase 6 — UI:** **Done.** Gallery / FileManager / Sidebar /
+  App use `currentFolderPath` / `currentImagePath`; the old
+  numeric-ID state is gone (no occurrences of `#currentFolderId`
+  or `#currentImageId` remain in `packages/web/src/`).
+- **Phase 7 — Verification:** **Done.** `pnpm -r typecheck` /
+  `pnpm test` / `pnpm -r build` are green; the storage acceptance
+  matrix has been exercised across Local IDB, Extension IDB,
+  FileSystem direct, FS via Extension, and Google Drive modes
+  during the GitHubStore integration work.
+
+GitHubStore subsequently landed on top of this interface (see
+[`../github-integration.md`](../github-integration.md)) without
+needing a numeric-ID shim — exactly what this refactor unlocked.
+
+---
 
 ## Context
 
