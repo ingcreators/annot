@@ -170,7 +170,21 @@ jobs:
 
       - name: Verify committed pkg/ matches a fresh build
         if: steps.filter.outputs.imagequant == 'true'
+        env:
+          VERIFY_WASM_OUT_DIR: ${{ runner.temp }}/imagequant-fresh
         run: bash packages/imagequant/scripts/verify-wasm.sh
+
+      # On failure, expose the fresh pkg/ as a downloadable artefact
+      # so the canonical Linux build can be inspected (or re-committed
+      # if the diff is a legitimate platform-determinism difference
+      # between the contributor's local OS and the CI Linux runner).
+      - name: Upload fresh pkg/ on diff
+        if: steps.filter.outputs.imagequant == 'true' && failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: imagequant-fresh-pkg
+          path: ${{ runner.temp }}/imagequant-fresh/pkg
+          if-no-files-found: error
 
       - name: Skip — no imagequant or workflow changes
         if: steps.filter.outputs.imagequant != 'true'
