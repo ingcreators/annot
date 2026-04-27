@@ -1282,8 +1282,24 @@ async function injectContentScript(tabId: number): Promise<void> {
       target: { tabId },
       files: ["content.js"],
     });
-  } catch {
-    // Cannot inject (chrome:// / extension page / etc.) — non-fatal.
+  } catch (err) {
+    // chrome:// / extension page URLs can't host content scripts —
+    // those throws are expected and silenced. Anything else (parse
+    // error in content.js, missing file, manifest-permission gap,
+    // etc.) is the kind of silent failure that leaves area-select /
+    // sticky-hide / scroll-to broken with no user-visible signal.
+    // Log it so the service-worker DevTools console surfaces the
+    // root cause instead of "no overlay, no logs".
+    const message = err instanceof Error ? err.message : String(err);
+    if (
+      /Cannot access (?:contents of )?(?:url|chrome:\/\/|chrome-extension:\/\/)/.test(message) ||
+      /The extensions gallery cannot be scripted/.test(message)
+    ) {
+      // Expected — page is non-injectable. Quiet.
+      logger.debug("[injectContentScript] non-injectable URL:", message);
+    } else {
+      console.error("[injectContentScript] failed:", message, err);
+    }
   }
 }
 
