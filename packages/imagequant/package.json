@@ -1,0 +1,26 @@
+{
+  "name": "@ingcreators/annot-imagequant",
+  "version": "0.1.0",
+  "private": true,
+  "description": "In-tree wasm-bindgen wrapper around ImageOptim/libimagequant. Replaces @panda-ai/imagequant for the PNG-8 capture pipeline.",
+  "license": "GPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ingcreators/annot.git",
+    "directory": "packages/imagequant"
+  },
+  "type": "module",
+  "main": "./pkg/annot_imagequant.js",
+  "types": "./pkg/annot_imagequant.d.ts",
+  "files": [
+    "pkg/annot_imagequant.js",
+    "pkg/annot_imagequant.d.ts",
+    "pkg/annot_imagequant_bg.wasm",
+    "pkg/annot_imagequant_bg.wasm.d.ts"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build:wasm": "bash scripts/build-wasm.sh",
+    "verify:wasm": "bash scripts/verify-wasm.sh"
+  }
+}
