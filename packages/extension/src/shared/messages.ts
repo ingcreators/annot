@@ -9,6 +9,8 @@ export type PopupMessage =
   | { type: "capture-visible" }
   | { type: "capture-area" }
   | { type: "capture-full" }
+  | { type: "capture-pages" }
+  | { type: "open-gallery" }
   | { type: "click-capture-start" }
   | { type: "click-capture-stop" }
   | { type: "click-capture-status" }

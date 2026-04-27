@@ -24,17 +24,17 @@ document.getElementById("btn-full")!.addEventListener("click", () => {
 });
 
 document.getElementById("btn-pages")!.addEventListener("click", () => {
-  sendAndClose({ type: "capture-pages" as any });
+  sendAndClose({ type: "capture-pages" });
 });
 
 document.getElementById("btn-gallery")!.addEventListener("click", () => {
-  sendAndClose({ type: "open-gallery" as any });
+  sendAndClose({ type: "open-gallery" });
 });
 document.getElementById("btn-gallery-active")!.addEventListener("click", () => {
-  sendAndClose({ type: "open-gallery" as any });
+  sendAndClose({ type: "open-gallery" });
 });
 document.getElementById("btn-gallery-hotkey-active")!.addEventListener("click", () => {
-  sendAndClose({ type: "open-gallery" as any });
+  sendAndClose({ type: "open-gallery" });
 });
 
 document.getElementById("btn-click-capture")!.addEventListener("click", () => {
