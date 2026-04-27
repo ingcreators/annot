@@ -70,8 +70,16 @@ function iifeWrapContentScript(): Plugin {
   };
 }
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [iifeWrapContentScript()],
+  // Mirror the main `vite.config.ts` define block: override the
+  // `import.meta.env.PROD` / `DEV` constants that Vite hardcodes to
+  // production values during `vite build`, so `--mode development`
+  // actually flips the logger module's default level to `debug`.
+  define: {
+    "import.meta.env.PROD": JSON.stringify(mode !== "development"),
+    "import.meta.env.DEV": JSON.stringify(mode === "development"),
+  },
   build: {
     modulePreload: { polyfill: false },
     // Don't wipe `dist/` — the main `vite build` already populated
@@ -100,4 +108,4 @@ export default defineConfig({
   },
   publicDir: false,
   base: "./",
-});
+}));
