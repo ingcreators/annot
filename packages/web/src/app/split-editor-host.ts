@@ -13,7 +13,10 @@
 import type { ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
 import { getFilename } from "@ingcreators/annot-core/storage";
 import { assertNonNull, newIdB58 } from "@ingcreators/annot-core/utils";
-import type { SplitEditor, SplitEditorSlice } from "../editor/split-editor.js";
+import type {
+  AnnotSplitEditorElement,
+  SplitEditorSlice,
+} from "../editor/annot-split-editor.js";
 import { loadEncodeOptions } from "../encode-options.js";
 import { generateThumbnailFromDataUrl } from "../storage/image-thumbnail.js";
 import { showAlertDialog } from "../ui/dialog.js";
@@ -28,7 +31,7 @@ export interface SplitEditorHostDeps {
 }
 
 export class SplitEditorHost {
-  #splitEditor: SplitEditor | null = null;
+  #splitEditor: AnnotSplitEditorElement | null = null;
 
   constructor(private readonly deps: SplitEditorHostDeps) {}
 
@@ -101,27 +104,29 @@ export class SplitEditorHost {
     };
 
     try {
-      const { SplitEditor: SplitEditorCtor } = await import("../editor/split-editor.js");
-      this.#splitEditor = new SplitEditorCtor(records, {
-        onCancel: () => closeAndGoHome(),
-        onApply: async (slices) => {
-          try {
-            await this.#applySlicesToStorage(records, slices, sessionId);
-            // After apply, session content changed — go back to gallery in
-            // the folder that owned the session.
-            closeAndGoHome();
-          } catch (e: unknown) {
-            console.error("[split-editor] apply failed:", e);
-            await showAlertDialog({
-              title: "Couldn't apply splits",
-              message:
-                (e as { message?: string })?.message ||
-                "An error occurred while saving the new slices.",
-            });
-          }
-        },
-      });
-      await this.#splitEditor.mount();
+      await import("../editor/annot-split-editor.js");
+      const el = document.createElement("annot-split-editor");
+      el.records = records;
+      el.onCancel = () => closeAndGoHome();
+      el.onApply = async (slices) => {
+        try {
+          await this.#applySlicesToStorage(records, slices, sessionId);
+          // After apply, session content changed — go back to gallery in
+          // the folder that owned the session.
+          closeAndGoHome();
+        } catch (e: unknown) {
+          console.error("[split-editor] apply failed:", e);
+          await showAlertDialog({
+            title: "Couldn't apply splits",
+            message:
+              (e as { message?: string })?.message ||
+              "An error occurred while saving the new slices.",
+          });
+        }
+      };
+      document.body.appendChild(el);
+      this.#splitEditor = el;
+      await el.mount();
     } catch (e: unknown) {
       console.error("[split-editor] mount failed:", e);
       await showAlertDialog({
