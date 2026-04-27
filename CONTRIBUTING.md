@@ -25,7 +25,8 @@ By participating in this project you agree to abide by its terms.
 ## Development setup
 
 ```bash
-# Requires Node 20+ and pnpm 9+. We pin pnpm via the
+# Requires Node 24+ and pnpm 9+. The Node version is pinned in
+# `.nvmrc` (matches what CI runs); pnpm is pinned via the
 # `packageManager` field in package.json so corepack picks the
 # right version automatically.
 pnpm install
