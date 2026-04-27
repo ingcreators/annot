@@ -19,6 +19,9 @@ export type PopupMessage =
 
 // Background -> Content
 export type BackgroundToContentMessage =
+  /** Health-check used by `injectContentScript` to distinguish
+   *  "listener alive" from "no listener" / "orphaned listener". */
+  | { type: "ping" }
   | { type: "start-area-select" }
   | { type: "get-page-dimensions" }
   | { type: "scroll-to"; x: number; y: number }

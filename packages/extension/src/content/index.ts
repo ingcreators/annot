@@ -21,6 +21,14 @@ if ((window as any).__anno_injected) {
 
   chrome.runtime.onMessage.addListener((msg: BackgroundToContentMessage, _sender, sendResponse) => {
     switch (msg.type) {
+      // Health-check: lets the service worker's `injectContentScript`
+      // distinguish "listener alive" from "no listener" / "orphaned
+      // listener" cases. See the comment block on `injectContentScript`
+      // in the service worker for the full rationale.
+      case "ping":
+        sendResponse({ ok: true });
+        return false;
+
       case "start-area-select":
         startAreaSelection();
         break;

@@ -1264,38 +1264,70 @@ async function capturePagesInner(tab: CaptureTab, settings: Settings): Promise<v
 
 async function injectContentScript(tabId: number): Promise<void> {
   try {
-    // Check whether the content script is ALREADY running in the tab
-    // before injecting again. content.js declares top-level `let` /
-    // `const` variables (standard ES-module output from Vite), and
-    // re-executing the file in the same window throws
-    // `SyntaxError: Identifier 'X' has already been declared`. The
-    // guard flag `__anno_injected` is set once by the content script
-    // itself, so we can cheaply detect a prior injection via
-    // `executeScript({ func })` which always runs in ISOLATED world
-    // and never redeclares script-level identifiers.
-    const probe = await chrome.scripting.executeScript({
+    // Probe: ping the existing content script. If it responds, the
+    // listener is alive and we can skip re-injection.
+    //
+    // The previous flag-based probe (`window.__anno_injected ===
+    // true`) was wrong in two cases:
+    //
+    //   1. After an extension reload without page F5: the OLD content
+    //      script's listener is orphaned (chrome.runtime is dead) but
+    //      `window.__anno_injected` is still true — probe returned
+    //      true, no re-inject, and `chrome.tabs.sendMessage` to the
+    //      orphaned listener silently failed.
+    //
+    //   2. After a build update where the IIFE wrapper's
+    //      `globalThis.__anno_content_loaded` flag persisted from a
+    //      previous version: the new content.js's IIFE early-
+    //      returned, the inner listener-registration code never ran,
+    //      and `window.__anno_injected` stayed `undefined`. Probe
+    //      returned false → re-injection ran → SAME early-return →
+    //      no listener was ever registered. Silent failure.
+    //
+    // A ping that EXPECTS a response from the listener catches both
+    // cases — orphaned listeners can't respond (chrome.runtime is
+    // dead), and missing listeners can't respond (nothing handles
+    // the message). Either way the catch fires, we clear the flags,
+    // and force-reinject.
+    let alive = false;
+    try {
+      const res: { ok?: boolean } | undefined = await chrome.tabs.sendMessage(tabId, {
+        type: "ping",
+      });
+      alive = res?.ok === true;
+    } catch {
+      alive = false;
+    }
+    if (alive) return;
+    // Clear both guard flags so the IIFE wrapper + inner code
+    // re-register fresh. After page F5 the flags are naturally gone;
+    // this handles the "extension was reloaded but page wasn't F5'd"
+    // / "previous build's flag persisted" cases.
+    await chrome.scripting.executeScript({
       target: { tabId },
-      func: () => (window as unknown as { __anno_injected?: boolean }).__anno_injected === true,
+      func: () => {
+        try {
+          delete (globalThis as { __anno_content_loaded?: boolean }).__anno_content_loaded;
+        } catch {
+          /* may be non-configurable in strict cases — ignore */
+        }
+        try {
+          delete (window as { __anno_injected?: boolean }).__anno_injected;
+        } catch {
+          /* same */
+        }
+      },
     });
-    if (probe[0]?.result === true) return;
     await chrome.scripting.executeScript({
       target: { tabId },
       files: ["content.js"],
     });
   } catch (err) {
-    // chrome:// / extension page URLs can't host content scripts —
-    // those throws are expected and silenced. Anything else (parse
-    // error in content.js, missing file, manifest-permission gap,
-    // etc.) is the kind of silent failure that leaves area-select /
-    // sticky-hide / scroll-to broken with no user-visible signal.
-    // Log it so the service-worker DevTools console surfaces the
-    // root cause instead of "no overlay, no logs".
     const message = err instanceof Error ? err.message : String(err);
     if (
       /Cannot access (?:contents of )?(?:url|chrome:\/\/|chrome-extension:\/\/)/.test(message) ||
       /The extensions gallery cannot be scripted/.test(message)
     ) {
-      // Expected — page is non-injectable. Quiet.
       logger.debug("[injectContentScript] non-injectable URL:", message);
     } else {
       console.error("[injectContentScript] failed:", message, err);
