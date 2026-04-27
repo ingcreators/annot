@@ -528,40 +528,41 @@ async function captureVisible(): Promise<void> {
       // them into the screenshot. The scroll / per-page paths already
       // waited via POST_HIDE_PAINT_MS; visible was missing it.
       await delay(POST_HIDE_PAINT_MS);
-      let pngDataUrl: string | undefined;
       try {
-        pngDataUrl = await chrome.tabs.captureVisibleTab(tab.windowId!, { format: "png" });
+        const pngDataUrl = await chrome.tabs.captureVisibleTab(tab.windowId!, {
+          format: "png",
+        });
+        const encoded = await encodeCapture(pngDataUrl, settings);
+        // Snapshot DOM metadata AFTER `captureVisibleTab` but BEFORE
+        // `endCapturePrep` (in the `finally` below). This ordering is
+        // load-bearing on two axes:
+        //
+        //  1. captureVisibleTab forces the browser to commit a paint
+        //     of the visible viewport. That paint lays out any
+        //     `content-visibility: auto` descendants currently on
+        //     screen (modern news / feed pages put `content-visibility:
+        //     auto` on every card so off-screen rows don't pay layout
+        //     cost). Without that commit, `getBoundingClientRect()`
+        //     on a skipped descendant returns 0×0 and serializeElement
+        //     filters every interactive element out as "too small".
+        //     Empirically: b.hatena.ne.jp returned 0 elements with the
+        //     metadata snapshotted BEFORE captureVisibleTab; with this
+        //     ordering, ~950 elements survive.
+        //
+        //  2. Stickies are STILL hidden at metadata time (they're
+        //     restored by endCapturePrep below, after this snapshot).
+        //     `visibility: hidden` cascades to descendants, so
+        //     checkVisibility correctly filters out sticky-header /
+        //     fixed-overlay descendants — exactly the elements that
+        //     are also hidden in the screenshot pixels. The metadata's
+        //     element list therefore matches the screenshot's
+        //     contents 1:1; no "Element panel surfaces a sticky row
+        //     that's not in the image" mismatch.
+        const meta = await requestPageMetadata(tab.id!);
+        openEditor(encoded.dataUrl, undefined, undefined, meta);
       } finally {
         await endCapturePrep(tab.id!);
       }
-      if (!pngDataUrl) return;
-      const encoded = await encodeCapture(pngDataUrl, settings);
-      // Snapshot DOM metadata AFTER endCapturePrep so:
-      //
-      //  1. `chrome.tabs.captureVisibleTab` has already forced a paint
-      //     of the visible viewport. That paint COMMITS layout for any
-      //     `content-visibility: auto` descendants currently on screen
-      //     (modern news / feed pages put `content-visibility: auto`
-      //     on every card so off-screen rows don't pay layout cost).
-      //     Without this commit, `getBoundingClientRect()` on a
-      //     skipped descendant returns 0×0 and `serializeElement`
-      //     filters every interactive element out as "too small".
-      //     Empirically: b.hatena.ne.jp returned 0 elements when
-      //     metadata was snapshotted before `captureVisibleTab`;
-      //     after, ~950 elements survive.
-      //
-      //  2. `endCapturePrep` has restored stickies / scrollbars, so
-      //     the `visibility: hidden` cascade from a sticky/fixed
-      //     ancestor doesn't filter its descendants.
-      //
-      // The trade-off vs. the older "metadata while stickies hidden"
-      // approach: a sticky-header link is now visible to metadata but
-      // ABSENT from the screenshot pixels. The Elements panel can
-      // surface a row that, when clicked, draws an annotation rect
-      // at the sticky's intended (post-restore) bbox. That's a minor
-      // cosmetic offset compared to "the entire panel is empty".
-      const meta = await requestPageMetadata(tab.id!);
-      openEditor(encoded.dataUrl, undefined, undefined, meta);
     });
   } catch (err) {
     console.error("SVGShot: captureVisible failed", err);
@@ -600,46 +601,39 @@ async function captureArea(): Promise<void> {
               // pre-hide frame and bake the scrollbar / fixed elements
               // into the screenshot.
               await delay(POST_HIDE_PAINT_MS);
-              let pngDataUrl: string | undefined;
               try {
-                pngDataUrl = await chrome.tabs.captureVisibleTab(tab.windowId!, {
+                const pngDataUrl = await chrome.tabs.captureVisibleTab(tab.windowId!, {
                   format: "png",
                 });
+                // Metadata snapshot AFTER captureVisibleTab (forces
+                // paint of `content-visibility: auto` descendants) but
+                // BEFORE endCapturePrep below (stickies remain hidden,
+                // so their descendants are filtered out of metadata to
+                // match the screenshot pixels exactly). See
+                // captureVisible for the full rationale.
+                const areaMeta = await requestPageMetadata(tab.id!, {
+                  x: msg.rect.x,
+                  y: msg.rect.y,
+                  width: msg.rect.width,
+                  height: msg.rect.height,
+                });
+                await ensureOffscreen();
+                const result = await chrome.runtime.sendMessage({
+                  type: "offscreen-crop",
+                  dataUrl: pngDataUrl,
+                  rect: msg.rect,
+                  dpr: msg.dpr,
+                });
+                if (result?.dataUrl) {
+                  const encoded = await encodeCapture(result.dataUrl, settings);
+                  const croppedW = Math.round(msg.rect.width * msg.dpr);
+                  const croppedH = Math.round(msg.rect.height * msg.dpr);
+                  openEditor(encoded.dataUrl, croppedW, croppedH, areaMeta);
+                }
               } catch (err) {
                 console.error("SVGShot: captureArea failed", err);
               } finally {
                 await endCapturePrep(tab.id!);
-              }
-              if (pngDataUrl) {
-                try {
-                  await ensureOffscreen();
-                  const result = await chrome.runtime.sendMessage({
-                    type: "offscreen-crop",
-                    dataUrl: pngDataUrl,
-                    rect: msg.rect,
-                    dpr: msg.dpr,
-                  });
-                  if (result?.dataUrl) {
-                    // Metadata AFTER endCapturePrep — see captureVisible
-                    // for the rationale (captureVisibleTab forces paint
-                    // of `content-visibility: auto` descendants;
-                    // endCapturePrep restores stickies). The user-
-                    // selected rect is passed so `captureRect` matches
-                    // the cropped image's coverage.
-                    const areaMeta = await requestPageMetadata(tab.id!, {
-                      x: msg.rect.x,
-                      y: msg.rect.y,
-                      width: msg.rect.width,
-                      height: msg.rect.height,
-                    });
-                    const encoded = await encodeCapture(result.dataUrl, settings);
-                    const croppedW = Math.round(msg.rect.width * msg.dpr);
-                    const croppedH = Math.round(msg.rect.height * msg.dpr);
-                    openEditor(encoded.dataUrl, croppedW, croppedH, areaMeta);
-                  }
-                } catch (err) {
-                  console.error("SVGShot: captureArea failed", err);
-                }
               }
               resolve();
             })();
@@ -716,6 +710,25 @@ async function captureFullPageInner(tab: CaptureTab, settings: Settings): Promis
     await delay(settings.timing.interSegmentMs);
   }
 
+  // Snapshot DOM metadata for the WHOLE stitched document AFTER the
+  // last `captureVisibleTab` (the most recently-visible
+  // `content-visibility: auto` descendants are laid out) but BEFORE
+  // `endCapturePrep` (stickies stay hidden, matching the screenshots
+  // taken throughout the loop). The `area` argument rewrites
+  // `captureRect` in document coords to span the entire stitched
+  // image: `region` is viewport-relative, so we offset by the
+  // CURRENT scroll (= last segment's scrollY) to make
+  // `captureRect.y` land at 0 in document coords.
+  const dimsAtEnd: PageDimensions = await sendToTab(tab.id, {
+    type: "get-page-dimensions",
+  });
+  const stitchedMeta = await requestPageMetadata(tab.id, {
+    x: -dimsAtEnd.scrollX,
+    y: -dimsAtEnd.scrollY,
+    width: dimsAtEnd.scrollWidth,
+    height: dimsAtEnd.scrollHeight,
+  });
+
   await endCapturePrep(tab.id);
   await sendToTab(tab.id, { type: "scroll-to", x: 0, y: originalScrollY });
 
@@ -733,7 +746,13 @@ async function captureFullPageInner(tab: CaptureTab, settings: Settings): Promis
     await showProgress(tab.id, "Compressing full-page image…");
     const encoded = await encodeCapture(result.dataUrl, settings);
     await showProgress(tab.id, "Saving…");
-    await saveAsScrollSession(encoded.dataUrl, plan.stitchWidth, plan.stitchHeight, tab.url || "");
+    await saveAsScrollSession(
+      encoded.dataUrl,
+      plan.stitchWidth,
+      plan.stitchHeight,
+      tab.url || "",
+      stitchedMeta ?? undefined,
+    );
   }
   await hideProgress(tab.id);
 }
@@ -748,6 +767,7 @@ async function saveAsScrollSession(
   width: number,
   height: number,
   sourceUrl: string,
+  pageMetadata?: import("@ingcreators/annot-core").PageMetadata,
 ): Promise<void> {
   const thumbnailDataUrl = await idbStore.generateThumbnail(dataUrl);
   const now = new Date().toISOString();
@@ -771,6 +791,7 @@ async function saveAsScrollSession(
     folderPath: "",
     createdAt: now,
     updatedAt: now,
+    pageMetadata,
   });
   await openOrReuseAnnotTab(chrome.runtime.id, sessionId);
 }
@@ -812,6 +833,10 @@ async function capturePagesInner(tab: CaptureTab, settings: Settings): Promise<v
     pngDataUrl: string;
     srcYpx: number;
     sliceHeightPx: number;
+    /** Per-page DOM metadata snapshotted while stickies are still
+     *  hidden — sticky-cascade filters their descendants out so the
+     *  metadata's elements list 1:1 matches the screenshot pixels. */
+    pageMetadata?: import("@ingcreators/annot-core").PageMetadata;
   }
   const rawPages: RawPage[] = [];
   let nextDocTop = 0;
@@ -845,10 +870,24 @@ async function capturePagesInner(tab: CaptureTab, settings: Settings): Promise<v
     lastActualScrollY = after.scrollY;
 
     const pngDataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: "png" });
+    // Snapshot per-page DOM metadata AFTER captureVisibleTab forced
+    // a paint of this viewport (lays out `content-visibility: auto`
+    // descendants currently on screen) but BEFORE the next iteration
+    // restores stickies. The `area` argument narrows captureRect to
+    // the slice this page contributes to the final image, so the
+    // editor's Elements panel filters off-frame elements correctly.
+    const dprNow = after.devicePixelRatio || dpr;
+    const pageMeta = await requestPageMetadata(tab.id, {
+      x: 0,
+      y: decision.slice.srcYpx / dprNow,
+      width: dims.viewportWidth,
+      height: decision.slice.sliceHeightPx / dprNow,
+    });
     rawPages.push({
       pngDataUrl,
       srcYpx: decision.slice.srcYpx,
       sliceHeightPx: decision.slice.sliceHeightPx,
+      pageMetadata: pageMeta ?? undefined,
     });
 
     pageIndex += 1;
@@ -910,9 +949,14 @@ async function capturePagesInner(tab: CaptureTab, settings: Settings): Promise<v
     }
   }
 
-  const pages: { dataUrl: string; height: number }[] = batchResults.map((r, i) => ({
+  const pages: {
+    dataUrl: string;
+    height: number;
+    pageMetadata?: import("@ingcreators/annot-core").PageMetadata;
+  }[] = batchResults.map((r, i) => ({
     dataUrl: r.dataUrl,
     height: rawPages[i]!.sliceHeightPx,
+    pageMetadata: rawPages[i]!.pageMetadata,
   }));
 
   await showProgress(tab.id, `Saving ${pages.length} page${pages.length === 1 ? "" : "s"}…`);
@@ -949,6 +993,7 @@ async function capturePagesInner(tab: CaptureTab, settings: Settings): Promise<v
       folderPath: "",
       createdAt: now,
       updatedAt: now,
+      pageMetadata: page.pageMetadata,
     });
   }
 
