@@ -39,6 +39,15 @@ describe("@ingcreators/annot-core/headless boundary", () => {
     // proves it doesn't reach for `document` / `window` at import time.
     expect(typeof headless.TOOL_REGISTRY).toBe("object");
     expect(Array.isArray(headless.TOOL_REGISTRY_IDS)).toBe(true);
+    // Storage error hierarchy — Phase 2 of
+    // `docs/plans/storage-error-contract.md`. Exporting the base
+    // class plus all four subclasses through headless makes them
+    // usable from headless backends and Node-side test fixtures.
+    expect(typeof headless.StorageError).toBe("function");
+    expect(typeof headless.StorageConflictError).toBe("function");
+    expect(typeof headless.StorageNotFoundError).toBe("function");
+    expect(typeof headless.StoragePermissionError).toBe("function");
+    expect(typeof headless.StorageQuotaError).toBe("function");
   });
 
   it("does not leak `document` / `window` into the importing context", () => {

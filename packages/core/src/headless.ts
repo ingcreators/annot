@@ -207,6 +207,19 @@ export {
   supportsTokenRefresher,
 } from "./storage/types.js";
 
+// ─── Storage error hierarchy (pure ES2022 classes) ────────────────────
+// Phase 2 of `docs/plans/storage-error-contract.md`. Backs the
+// `@throws` clauses documented on each `StorageProvider` method.
+// Tier A — no DOM, no Node-only APIs; safe under jsdom / pure Node.
+export {
+  StorageConflictError,
+  StorageError,
+  StorageNotFoundError,
+  StoragePermissionError,
+  StorageQuotaError,
+  type StorageErrorCode,
+} from "./storage/errors.js";
+
 // ─── Style constants + dash utilities ─────────────────────────────────
 // Shared defaults so headless and UI-driven annotations produce the
 // same defaults unless explicitly overridden.
