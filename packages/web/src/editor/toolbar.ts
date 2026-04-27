@@ -83,7 +83,7 @@ import {
   migrateLegacyPresetKey,
   seedPresetFromElement,
 } from "./toolbar-preset-helpers.js";
-import { openToolbarSaveMenu } from "./toolbar-save-menu.js";
+import { AnnotSaveMenuElement } from "./annot-save-menu.js";
 import {
   TOOL_FACTORIES,
   type ToolDef,
@@ -631,7 +631,7 @@ export class Toolbar {
   }
 
   #showSaveMenu(anchor: HTMLElement): void {
-    openToolbarSaveMenu(anchor, {
+    AnnotSaveMenuElement.openFor(anchor, {
       canvas: this.#canvas,
       getCurrentFilename: this.#getCurrentFilename,
     });
