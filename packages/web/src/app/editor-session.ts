@@ -30,8 +30,9 @@ import "../editor/annot-file-details-drawer.js";
 import { installKeyboardHelp } from "../editor/keyboard-help.js";
 import type { AnnotEditorRightPanelElement } from "../editor/right-panel.js";
 import "../editor/right-panel.js";
+import type { AnnotScratchpadSectionElement } from "../editor/annot-scratchpad-section.js";
+import "../editor/annot-scratchpad-section.js";
 import { ScratchpadPasteTool } from "../editor/scratchpad-paste-tool.js";
-import { ScratchpadSection } from "../editor/scratchpad-section.js";
 import type { ScratchpadStore } from "../editor/scratchpad-store.js";
 import { renderThumbnail, serializeSelection } from "../editor/scratchpad-utils.js";
 import { getStorageMode } from "../storage/bridge.js";
@@ -100,11 +101,11 @@ export class EditorSession {
   /** Reference to the Scratchpad toolbar button — kept so future hooks
    *  (e.g. highlighting when armed) have a stable anchor. */
   #scratchpadToolbarBtn: HTMLButtonElement | null = null;
-  /** Live ScratchpadSection instance while its popover is open; null
-   *  otherwise. Lets external events (selection change, tool change)
-   *  push state in even if the popover is currently closed (they just
-   *  become no-ops). */
-  #openScratchpadSection: ScratchpadSection | null = null;
+  /** Live `<annot-scratchpad-section>` element while its popover is
+   *  open; null otherwise. Lets external events (selection change,
+   *  tool change) push state in even if the popover is currently
+   *  closed (they just become no-ops). */
+  #openScratchpadSection: AnnotScratchpadSectionElement | null = null;
   /** Cached "is selection non-empty in Select mode" so a freshly
    *  opened scratchpad popover can reflect the save-enabled state
    *  without waiting for the next selection event. */
@@ -301,7 +302,9 @@ export class EditorSession {
         // to drop. (The popover may not currently be open; the
         // section instance is tracked separately so we can still
         // clear its state if the user reopens it.)
-        this.#openScratchpadSection?.setActiveItem(null);
+        if (this.#openScratchpadSection) {
+          this.#openScratchpadSection.activeItemId = null;
+        }
         this.#armedScratchpadItemId = null;
       },
       {
@@ -383,7 +386,9 @@ export class EditorSession {
       // least one element). Stored so the popover can consult it when
       // it opens later.
       this.#scratchpadCanSave = els.length > 0 && !canvas.activeTool;
-      this.#openScratchpadSection?.setSaveEnabled(this.#scratchpadCanSave);
+      if (this.#openScratchpadSection) {
+        this.#openScratchpadSection.saveEnabled = this.#scratchpadCanSave;
+      }
     };
 
     // Seed initial canvas state BEFORE wiring the autosave hook.
@@ -477,7 +482,7 @@ export class EditorSession {
 
   /**
    * Open the Scratchpad library popover anchored to the toolbar
-   * button. Reuses the existing ScratchpadSection (thumbnail grid +
+   * button. Reuses the existing `<annot-scratchpad-section>` (thumbnail grid +
    * save button) — just in a popover instead of the right panel.
    *
    * The section is stored on `this.#openScratchpadSection` while the
@@ -494,17 +499,20 @@ export class EditorSession {
     openAnchoredPopover(
       anchor,
       (root) => {
-        const section = new ScratchpadSection(root, this.scratchpadStore);
-        section.onSaveRequested = () => {
+        const section = document.createElement("annot-scratchpad-section");
+        section.store = this.scratchpadStore;
+        section.saveEnabled = this.#scratchpadCanSave;
+        section.activeItemId = this.#armedScratchpadItemId;
+        section.addEventListener("annot-scratchpad-save-request", () => {
           void this.#saveSelectionToScratchpad(selection);
-        };
-        section.onInsert = (item) => {
+        });
+        section.addEventListener("annot-scratchpad-insert", (e) => {
+          const { item } = e.detail;
           this.#armScratchpadPaste(canvas, selection, history, item);
           this.#armedScratchpadItemId = item.id;
-          section.setActiveItem(item.id);
-        };
-        section.setSaveEnabled(this.#scratchpadCanSave);
-        section.setActiveItem(this.#armedScratchpadItemId);
+          section.activeItemId = item.id;
+        });
+        root.appendChild(section);
         this.#openScratchpadSection = section;
         // Cleanup when the popover closes — the MutationObserver on
         // <body> catches the helper's `remove()` regardless of WHY the
