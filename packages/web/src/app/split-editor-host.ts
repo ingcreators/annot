@@ -11,7 +11,7 @@
  */
 
 import type { ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
-import { getFilename } from "@ingcreators/annot-core/storage";
+import { getFilename, StorageConflictError } from "@ingcreators/annot-core/storage";
 import { assertNonNull, newIdB58 } from "@ingcreators/annot-core/utils";
 import type {
   AnnotSplitEditorElement,
@@ -246,9 +246,7 @@ export class SplitEditorHost {
           success = true;
           break;
         } catch (e: unknown) {
-          const err = e as { message?: string; name?: string };
-          const msg = String(err?.message || "");
-          if (msg.includes("already exists") || err?.name === "ConstraintError") {
+          if (e instanceof StorageConflictError) {
             // Bump the suffix and retry: "name.png" → "name (2).png" → "name (3).png" ...
             finalName = bumpFilenameSuffix(baseFinalName, attempt + 2);
             continue;

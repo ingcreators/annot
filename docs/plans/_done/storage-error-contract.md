@@ -1,11 +1,24 @@
 # StorageProvider error contract
 
-> **Status:** Draft. Authored 2026-04-27 in response to the
-> 2026-04-27 friction audit (item 8 — "Storage backends のエラー
-> ハンドリング不一致") that produced
+> **Status:** Done (2026-04-27). All four phases shipped in PRs
+> [#258](https://github.com/ingcreators/annot/pull/258)–[#261](https://github.com/ingcreators/annot/pull/261).
+> Authored 2026-04-27 in response to the 2026-04-27 friction
+> audit (item 8 — "Storage backends のエラー ハンドリング不一致")
+> that produced
 > [#227](https://github.com/ingcreators/annot/pull/227)–[#234](https://github.com/ingcreators/annot/pull/234).
 > The audit's framing was inaccurate (see "Investigation" below);
-> the real problem is narrower and easier to fix.
+> the real problem was narrower and easier to fix.
+>
+> **Phase 3 deviation from plan:** the investigation table at
+> "What is actually wrong" claimed `rename*` / `move*` already
+> threw on missing source across all four backends. In reality
+> `browser-store` and `github-store` silently returned the
+> original path, and `device-store` leaked the FSA `NotFoundError`
+> `DOMException`. Phase 3 normalised all four backends to throw
+> `StorageNotFoundError` uniformly, matching the JSDoc target
+> documented in Phase 1. The contract test gained six structured-
+> error assertions (one per relevant op × instance check) rather
+> than the planned four.
 >
 > **Compatibility:** `@ingcreators/annot-core/storage` ABI grows
 > (new exported error classes + JSDoc on existing `StorageProvider`
