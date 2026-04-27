@@ -1,0 +1,34 @@
+# Repository-wide line-ending policy.
+#
+# Goal: every text file is LF in BOTH the index and the working copy,
+# on every platform. This makes contributor `core.autocrlf` settings
+# irrelevant — Windows / macOS / Linux / CI all see identical bytes —
+# and stops the "LF will be replaced by CRLF the next time Git touches
+# it" warning that fires when files written by tools like Vitest's
+# snapshot writer are read back on a Windows checkout configured with
+# `core.autocrlf=true`.
+#
+# Toolchain confirmed LF-clean: pnpm, vite, vitest, biome, lit,
+# Tauri, Storybook. CI runs on Linux.
+#
+# Override per-pattern below if a file genuinely needs CRLF (no such
+# files in this repo today — Windows shell scripts like `.bat` /
+# `.cmd` / `.ps1` are not tracked).
+* text=auto eol=lf
+
+# Binary files. Auto-detection works for these, but pinning the
+# attribute prevents a future contributor / tool from accidentally
+# treating them as text and corrupting the bytes.
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.webp  binary
+*.wasm  binary
+*.zip   binary
+*.pdf   binary
+*.woff  binary
+*.woff2 binary
+*.ttf   binary
+*.otf   binary
