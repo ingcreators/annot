@@ -221,13 +221,17 @@ describe("FileManager — storage-switch racing path", () => {
     // with a different fixture and re-run the production
     // "setStorage + refresh('')" sequence.
     //
-    // Pre-fix bug: `GalleryPage`'s constructor wrote
+    // Pre-fix bug: `GalleryPage`'s constructor (pre-Lit) wrote
     // `container.className = "gallery-panel"`, which clobbered
     // the `.file-manager-grid-host` class on the Lit shell's
     // grid host. The shell's class-based `getGridHost()` lookup
     // then returned null on the second mount, `#rebuildGallery`
     // returned early, and the gallery kept rendering the OLD
-    // storage's items.
+    // storage's items. Phase 4 of the lit-migration-completion
+    // plan moved the gallery into `<annot-gallery-page>`, which
+    // adds `gallery-panel` to its own classList instead of the
+    // host — so the `getGridHost()` selector can stay id-based
+    // without the regression risk.
     const now = new Date().toISOString();
     const secondStore = new MemoryStore([
       {
