@@ -520,6 +520,17 @@ async function captureVisible(): Promise<void> {
     const settings = await loadSettings();
     await injectContentScript(tab.id);
     await withWindowResize(tab.id, tab.windowId, settings, async () => {
+      // Snapshot DOM metadata BEFORE `beginCapturePrep`. The prep step
+      // hides `position: fixed` / `position: sticky` elements with
+      // `visibility: hidden`, and that style INHERITS to descendants —
+      // so on pages where the main content lives under a sticky/fixed
+      // wrapper (or even just a sticky header that contains many
+      // links), `checkVisibility({ checkVisibilityCSS: true })` reports
+      // every descendant as not visible and `capturePageMetadata`
+      // returns `elements: []`. The window has already been resized
+      // by `withWindowResize`, so the viewport / scroll position the
+      // metadata snapshot sees matches the about-to-be-taken screenshot.
+      const meta = await requestPageMetadata(tab.id!);
       await beginCapturePrep(tab.id!, "visible", 0, settings);
       // Give the browser a chance to paint the scrollbar-hiding /
       // sticky-hiding style that beginCapturePrep just injected.
@@ -531,14 +542,6 @@ async function captureVisible(): Promise<void> {
       try {
         const pngDataUrl = await chrome.tabs.captureVisibleTab(tab.windowId!, { format: "png" });
         const encoded = await encodeCapture(pngDataUrl, settings);
-        // Snapshot DOM metadata HERE — while the layout (scroll
-        // position, hidden stickies, emulated viewport) still matches
-        // the just-taken screenshot. Doing it inside openEditor would
-        // race with `endCapturePrep` below: that runs immediately
-        // after this `try` block (without awaiting openEditor), which
-        // restores stickies + may reset scroll, making captureRect
-        // / bboxes inconsistent with the screenshot.
-        const meta = await requestPageMetadata(tab.id!);
         openEditor(encoded.dataUrl, undefined, undefined, meta);
       } finally {
         await endCapturePrep(tab.id!);
@@ -574,6 +577,19 @@ async function captureArea(): Promise<void> {
           if (msg.type === "area-selected") {
             chrome.runtime.onMessage.removeListener(handler);
             (async () => {
+              // Snapshot DOM metadata BEFORE `beginCapturePrep` to
+              // avoid `visibility: hidden` cascading from sticky/fixed
+              // ancestors and zero-ing out the elements list. See
+              // captureVisible for the same fix's full rationale.
+              // Area captures pass the user-selected rect so off-frame
+              // elements get filtered and bbox/captureRect mapping uses
+              // the right origin.
+              const areaMeta = await requestPageMetadata(tab.id!, {
+                x: msg.rect.x,
+                y: msg.rect.y,
+                width: msg.rect.width,
+                height: msg.rect.height,
+              });
               await beginCapturePrep(tab.id!, "area", 0, settings);
               // Paint delay so the scrollbar-hiding / sticky-hiding styles
               // injected by beginCapturePrep are reflected in the captured
@@ -582,17 +598,6 @@ async function captureArea(): Promise<void> {
               // into the screenshot.
               await delay(POST_HIDE_PAINT_MS);
               try {
-                // Snapshot DOM metadata BEFORE the crop pipeline so the
-                // captureRect lines up with the SAME area the user
-                // selected. Done up-front (rather than letting openEditor
-                // do its default no-area request) because area captures
-                // need the area dimensions to filter off-frame elements.
-                const areaMeta = await requestPageMetadata(tab.id!, {
-                  x: msg.rect.x,
-                  y: msg.rect.y,
-                  width: msg.rect.width,
-                  height: msg.rect.height,
-                });
                 const pngDataUrl = await chrome.tabs.captureVisibleTab(tab.windowId!, {
                   format: "png",
                 });
