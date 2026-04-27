@@ -520,17 +520,6 @@ async function captureVisible(): Promise<void> {
     const settings = await loadSettings();
     await injectContentScript(tab.id);
     await withWindowResize(tab.id, tab.windowId, settings, async () => {
-      // Snapshot DOM metadata BEFORE `beginCapturePrep`. The prep step
-      // hides `position: fixed` / `position: sticky` elements with
-      // `visibility: hidden`, and that style INHERITS to descendants —
-      // so on pages where the main content lives under a sticky/fixed
-      // wrapper (or even just a sticky header that contains many
-      // links), `checkVisibility({ checkVisibilityCSS: true })` reports
-      // every descendant as not visible and `capturePageMetadata`
-      // returns `elements: []`. The window has already been resized
-      // by `withWindowResize`, so the viewport / scroll position the
-      // metadata snapshot sees matches the about-to-be-taken screenshot.
-      const meta = await requestPageMetadata(tab.id!);
       await beginCapturePrep(tab.id!, "visible", 0, settings);
       // Give the browser a chance to paint the scrollbar-hiding /
       // sticky-hiding style that beginCapturePrep just injected.
@@ -539,13 +528,40 @@ async function captureVisible(): Promise<void> {
       // them into the screenshot. The scroll / per-page paths already
       // waited via POST_HIDE_PAINT_MS; visible was missing it.
       await delay(POST_HIDE_PAINT_MS);
+      let pngDataUrl: string | undefined;
       try {
-        const pngDataUrl = await chrome.tabs.captureVisibleTab(tab.windowId!, { format: "png" });
-        const encoded = await encodeCapture(pngDataUrl, settings);
-        openEditor(encoded.dataUrl, undefined, undefined, meta);
+        pngDataUrl = await chrome.tabs.captureVisibleTab(tab.windowId!, { format: "png" });
       } finally {
         await endCapturePrep(tab.id!);
       }
+      if (!pngDataUrl) return;
+      const encoded = await encodeCapture(pngDataUrl, settings);
+      // Snapshot DOM metadata AFTER endCapturePrep so:
+      //
+      //  1. `chrome.tabs.captureVisibleTab` has already forced a paint
+      //     of the visible viewport. That paint COMMITS layout for any
+      //     `content-visibility: auto` descendants currently on screen
+      //     (modern news / feed pages put `content-visibility: auto`
+      //     on every card so off-screen rows don't pay layout cost).
+      //     Without this commit, `getBoundingClientRect()` on a
+      //     skipped descendant returns 0×0 and `serializeElement`
+      //     filters every interactive element out as "too small".
+      //     Empirically: b.hatena.ne.jp returned 0 elements when
+      //     metadata was snapshotted before `captureVisibleTab`;
+      //     after, ~950 elements survive.
+      //
+      //  2. `endCapturePrep` has restored stickies / scrollbars, so
+      //     the `visibility: hidden` cascade from a sticky/fixed
+      //     ancestor doesn't filter its descendants.
+      //
+      // The trade-off vs. the older "metadata while stickies hidden"
+      // approach: a sticky-header link is now visible to metadata but
+      // ABSENT from the screenshot pixels. The Elements panel can
+      // surface a row that, when clicked, draws an annotation rect
+      // at the sticky's intended (post-restore) bbox. That's a minor
+      // cosmetic offset compared to "the entire panel is empty".
+      const meta = await requestPageMetadata(tab.id!);
+      openEditor(encoded.dataUrl, undefined, undefined, meta);
     });
   } catch (err) {
     console.error("SVGShot: captureVisible failed", err);
@@ -577,19 +593,6 @@ async function captureArea(): Promise<void> {
           if (msg.type === "area-selected") {
             chrome.runtime.onMessage.removeListener(handler);
             (async () => {
-              // Snapshot DOM metadata BEFORE `beginCapturePrep` to
-              // avoid `visibility: hidden` cascading from sticky/fixed
-              // ancestors and zero-ing out the elements list. See
-              // captureVisible for the same fix's full rationale.
-              // Area captures pass the user-selected rect so off-frame
-              // elements get filtered and bbox/captureRect mapping uses
-              // the right origin.
-              const areaMeta = await requestPageMetadata(tab.id!, {
-                x: msg.rect.x,
-                y: msg.rect.y,
-                width: msg.rect.width,
-                height: msg.rect.height,
-              });
               await beginCapturePrep(tab.id!, "area", 0, settings);
               // Paint delay so the scrollbar-hiding / sticky-hiding styles
               // injected by beginCapturePrep are reflected in the captured
@@ -597,27 +600,46 @@ async function captureArea(): Promise<void> {
               // pre-hide frame and bake the scrollbar / fixed elements
               // into the screenshot.
               await delay(POST_HIDE_PAINT_MS);
+              let pngDataUrl: string | undefined;
               try {
-                const pngDataUrl = await chrome.tabs.captureVisibleTab(tab.windowId!, {
+                pngDataUrl = await chrome.tabs.captureVisibleTab(tab.windowId!, {
                   format: "png",
                 });
-                await ensureOffscreen();
-                const result = await chrome.runtime.sendMessage({
-                  type: "offscreen-crop",
-                  dataUrl: pngDataUrl,
-                  rect: msg.rect,
-                  dpr: msg.dpr,
-                });
-                if (result?.dataUrl) {
-                  const encoded = await encodeCapture(result.dataUrl, settings);
-                  const croppedW = Math.round(msg.rect.width * msg.dpr);
-                  const croppedH = Math.round(msg.rect.height * msg.dpr);
-                  openEditor(encoded.dataUrl, croppedW, croppedH, areaMeta);
-                }
               } catch (err) {
                 console.error("SVGShot: captureArea failed", err);
               } finally {
                 await endCapturePrep(tab.id!);
+              }
+              if (pngDataUrl) {
+                try {
+                  await ensureOffscreen();
+                  const result = await chrome.runtime.sendMessage({
+                    type: "offscreen-crop",
+                    dataUrl: pngDataUrl,
+                    rect: msg.rect,
+                    dpr: msg.dpr,
+                  });
+                  if (result?.dataUrl) {
+                    // Metadata AFTER endCapturePrep — see captureVisible
+                    // for the rationale (captureVisibleTab forces paint
+                    // of `content-visibility: auto` descendants;
+                    // endCapturePrep restores stickies). The user-
+                    // selected rect is passed so `captureRect` matches
+                    // the cropped image's coverage.
+                    const areaMeta = await requestPageMetadata(tab.id!, {
+                      x: msg.rect.x,
+                      y: msg.rect.y,
+                      width: msg.rect.width,
+                      height: msg.rect.height,
+                    });
+                    const encoded = await encodeCapture(result.dataUrl, settings);
+                    const croppedW = Math.round(msg.rect.width * msg.dpr);
+                    const croppedH = Math.round(msg.rect.height * msg.dpr);
+                    openEditor(encoded.dataUrl, croppedW, croppedH, areaMeta);
+                  }
+                } catch (err) {
+                  console.error("SVGShot: captureArea failed", err);
+                }
               }
               resolve();
             })();
