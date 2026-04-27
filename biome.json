@@ -64,7 +64,7 @@
         "noUselessElse": "warn"
       },
       "suspicious": {
-        "noExplicitAny": "off",
+        "noExplicitAny": "warn",
         "noArrayIndexKey": "off",
         "noConsole": "off",
         "noAssignInExpressions": "off",
@@ -94,16 +94,6 @@
     }
   },
   "overrides": [
-    {
-      "includes": ["**/packages/extension/**/*.ts"],
-      "linter": {
-        "rules": {
-          "suspicious": {
-            "noExplicitAny": "off"
-          }
-        }
-      }
-    },
     {
       "includes": ["**/vite.config.ts", "**/vitest.config.ts", "**/*.config.ts"],
       "linter": {
