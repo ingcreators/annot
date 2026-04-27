@@ -82,13 +82,19 @@ export default defineConfig({
       output: {
         entryFileNames: "content.js",
         format: "es",
-        // The KEY setting: inline every module reachable from the
-        // single input into content.js itself, so the output has no
-        // `import` statements at all. The trailing `export{}` is
-        // stripped by the IIFE wrapper plugin above.
-        inlineDynamicImports: true,
       },
     },
+    // Disable code splitting entirely so every module reachable from
+    // the single input gets inlined into content.js — the output then
+    // has no `import` statements at all. The trailing `export{}` is
+    // stripped by the IIFE wrapper plugin above. Replaces Rollup's
+    // legacy `inlineDynamicImports: true`, which Vite 8 / Rolldown
+    // deprecated in favour of this build-level flag.
+    cssCodeSplit: false,
+    // @ts-expect-error — `codeSplitting` is a Vite 8 / Rolldown build
+    // option not yet in @types/vite. Documented at
+    // https://vite.dev/config/build-options.html#build-codesplitting.
+    codeSplitting: false,
     outDir: "dist",
     target: "es2022",
   },
