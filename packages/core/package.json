@@ -30,15 +30,13 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@ingcreators/annot-imagequant": "workspace:*",
-    "@types/node": "^25.6.0",
     "@types/pako": "^2.0.4",
     "typescript": "catalog:",
     "vite": "catalog:",
     "vite-plugin-dts": "^4.5.0"
   },
   "dependencies": {
-    "@panda-ai/imagequant": "^0.2.0",
+    "@ingcreators/annot-imagequant": "workspace:*",
     "@tauri-apps/api": "^2.10.1",
     "@tauri-apps/plugin-dialog": "^2.2.0",
     "@tauri-apps/plugin-fs": "^2.2.0",

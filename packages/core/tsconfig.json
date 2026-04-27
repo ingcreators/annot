@@ -3,12 +3,7 @@
   "compilerOptions": {
     "rootDir": "src",
     "outDir": "dist",
-    // Node types are needed by `src/encode/equivalence.test.ts`
-    // (Phase 3 of vendor-libimagequant.md). The test loads .wasm
-    // bytes via `node:fs` to feed both quantizer wrappers; goes
-    // away in Phase 5 along with the panda-ai dep, at which point
-    // this can revert to `[]`.
-    "types": ["node"]
+    "types": []
   },
   "include": ["src/**/*.ts"]
 }
