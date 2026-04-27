@@ -19,7 +19,17 @@ import { defineConfig } from "vite";
  * `vite.content.config.ts` (writes `content.js` over the top).
  */
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
+  // `vite build` defaults `import.meta.env.PROD` to `true` regardless of
+  // `--mode`, so `pnpm build:dev` (mode: "development") still produces
+  // production-mode runtime output. Override the constants explicitly so
+  // the logger module's `isProd` check picks up dev mode and the default
+  // log level becomes `debug` — needed to see the content script's
+  // `[annot] sending metadata: …` line in the page console.
+  define: {
+    "import.meta.env.PROD": JSON.stringify(mode !== "development"),
+    "import.meta.env.DEV": JSON.stringify(mode === "development"),
+  },
   build: {
     modulePreload: { polyfill: false },
     rollupOptions: {
@@ -41,4 +51,4 @@ export default defineConfig({
   },
   publicDir: "public",
   base: "./",
-});
+}));
