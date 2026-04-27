@@ -51,3 +51,24 @@ updates:
       - ci
     commit-message:
       prefix: chore(ci)
+
+  # Vendored libimagequant wrapper. Cargo.lock is committed in this
+  # leaf crate so Dependabot's `cargo` ecosystem can read the full
+  # transitive closure and check every crate against the GitHub
+  # Advisory Database (which mirrors RustSec). The packages/desktop
+  # tauri crate stays uncovered for now — adding a second cargo
+  # watch is a separate one-line PR (see vendor-libimagequant.md
+  # "Out of scope").
+  - package-ecosystem: cargo
+    directory: "/packages/imagequant"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Asia/Tokyo
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - rust
+    commit-message:
+      prefix: chore(deps)
