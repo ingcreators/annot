@@ -8,7 +8,7 @@ import "./styles/file-manager.css";
 
 import { registerSW } from "virtual:pwa-register";
 import { App } from "./app.js";
-import { showError } from "./ui/error-bar.js";
+import { hideError, showError } from "./ui/error-bar.js";
 
 // Register the PWA service worker with manual update prompt. When a
 // new SW is installed and waiting, Workbox fires `onNeedRefresh`;
@@ -37,6 +37,15 @@ const updateSW = registerSW({
       action: {
         label: "Reload",
         onClick: () => {
+          // Close the banner the moment the user clicks. Without
+          // this, the banner sits with an "armed" Reload button
+          // until the page actually navigates (up to 1.5 s away,
+          // longer if the SW handoff stalls), which reads as a
+          // dead button and triggers re-clicks. Hiding it on
+          // click acknowledges the gesture immediately and matches
+          // the user's mental model of "Reload = the banner goes
+          // away".
+          hideError();
           // Belt-and-braces fallback — fires regardless of whether
           // workbox's `controlling` listener gets there first. The
           // worst-case race is two reloads, which is fine.
