@@ -1,12 +1,36 @@
+import { logger } from "../logger.js";
 import type { CaptureRect } from "@ingcreators/annot-core/utils/types";
 
 let overlay: HTMLDivElement | null = null;
+const OVERLAY_ID = "anno-overlay";
 
 export function startAreaSelection(): void {
-  if (overlay) return;
+  // Idempotent entry: if a previous invocation left state behind
+  // (overlay variable still set from an aborted selection, or a stray
+  // overlay div in the DOM that we don't have a reference to because
+  // a re-injected content-script's closure was reset), tear it down
+  // before creating a fresh one. The previous `if (overlay) return;`
+  // early-out silently no-op'd in those cases — visible symptom was
+  // "Capture selected area does nothing on the second click" or
+  // "Capture selected area does nothing after extension reload".
+  logger.debug(
+    "[annot/area-select] startAreaSelection invoked; previous overlay variable:",
+    !!overlay,
+    "stray DOM node:",
+    !!document.getElementById(OVERLAY_ID),
+  );
+  if (overlay) {
+    overlay.remove();
+    overlay = null;
+  }
+  // Belt-and-suspenders: if a stray overlay div exists in the DOM
+  // without a JS reference (e.g. the previous content-script context
+  // got torn down), remove it too. This won't restore the lost event
+  // listeners, but at least the visible blocker is gone.
+  document.getElementById(OVERLAY_ID)?.remove();
 
   overlay = document.createElement("div");
-  overlay.id = "anno-overlay";
+  overlay.id = OVERLAY_ID;
   Object.assign(overlay.style, {
     position: "fixed",
     inset: "0",
