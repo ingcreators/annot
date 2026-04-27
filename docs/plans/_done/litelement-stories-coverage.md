@@ -1,6 +1,21 @@
 # LitElement stories coverage
 
-> **Status:** Draft. Authored 2026-04-27 immediately after
+> **Status:** Done (2026-04-27). All four phases landed:
+> [#253](https://github.com/ingcreators/annot/pull/253) (Phase
+> 1 drawer-sections, +3 stories),
+> [#254](https://github.com/ingcreators/annot/pull/254) (Phase
+> 2 editor-header / status / filename / file-manager-shell,
+> +4), [#255](https://github.com/ingcreators/annot/pull/255)
+> (Phase 3 right-panel host + sections, +4), and
+> [#256](https://github.com/ingcreators/annot/pull/256) (Phase
+> 4 capture / dialog / tool-flyout / toolbar + CLAUDE.md
+> framing edit, +5). Storybook story count rose from 11 to
+> 27, matching the LitElement count one-for-one. CLAUDE.md's
+> Storybook section now requires stories for ALL built-in Lit
+> components, with the next audit check reduced to a symmetry
+> assertion.
+>
+> Originally authored 2026-04-27 immediately after
 > [`_done/lit-migration-completion.md`](./_done/lit-migration-completion.md)
 > closed (PRs [#244](https://github.com/ingcreators/annot/pull/244)–[#251](https://github.com/ingcreators/annot/pull/251)).
 > That plan tightened the CLAUDE.md Storybook stance to
