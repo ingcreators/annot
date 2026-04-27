@@ -609,12 +609,65 @@ Before declaring a feature done:
 
 ### Visibility detection (DOM metadata)
 
-- Use `Element.checkVisibility({ checkOpacity, checkVisibilityCSS,
-  contentVisibilityAuto })` — it walks the ancestor chain and catches
-  hover-menu-hidden elements the own-element style check misses.
+- Use `Element.checkVisibility({ checkOpacity, checkVisibilityCSS })`
+  — it walks the ancestor chain and catches hover-menu-hidden
+  elements the own-element style check misses.
+- `contentVisibilityAuto: true` is INTENTIONALLY OMITTED. The strict
+  flag reports `content-visibility: auto` skipped descendants as not
+  visible, which zeroes the Elements panel on common content sites
+  (b.hatena.ne.jp / news feeds / infinite-scroll listings). The
+  over-filter protection the original intent was about — overlays
+  hidden via `visibility: hidden` / `opacity: 0` higher up the tree
+  — still works through `checkVisibilityCSS: true` + `checkOpacity:
+  true`. See PR #273 for the regression-driven removal.
 - `aria-hidden` on ANCESTORS is deliberately NOT checked — decorative
   wrappers use it and over-filter kills valid interactive elements.
   Only the element's OWN `aria-hidden` is honored.
+
+### DOM metadata collection runs in MAIN world
+
+The walker that produces `PageMetadata` for the editor's Elements
+panel lives in `requestPageMetadata` in
+[`packages/extension/src/background/service-worker.ts`](./packages/extension/src/background/service-worker.ts)
+and is injected via `chrome.scripting.executeScript({world:
+"MAIN"})`. The function body is intentionally inlined and self-
+contained (no module imports) because `executeScript({func})`
+cannot accept closures or external references.
+
+**Don't move this back into the isolated-world content script.**
+Empirically (b.hatena.ne.jp/hotentry/it on Chrome 134), the
+isolated world's `getBoundingClientRect()` returned 0×0 for every
+descendant of `content-visibility: auto` cards even after
+`captureVisibleTab` forced a paint and even with per-element bbox
+pre-walks. The MAIN-world execution returns real bboxes on the
+identical page state at the identical viewport. The exact Chrome
+mechanism isn't documented; we paid for the duplication of walker
+logic between content script and the inlined `func` to make it
+work, and removed the content-script-side handler in this cleanup
+PR. History: PRs #273 / #274 / #277 (failed isolated-world fixes)
++ #278 (MAIN-world rewrite).
+
+### Capture-prep order: metadata after captureVisibleTab
+
+In `captureVisible` / `captureArea` / `capturePages` /
+`captureFullPage`, the metadata snapshot MUST happen AFTER
+`chrome.tabs.captureVisibleTab` and BEFORE `endCapturePrep`:
+
+  1. `captureVisibleTab` forces a paint of the visible viewport,
+     committing layout for `content-visibility: auto` descendants
+     currently on screen.
+  2. Stickies are still hidden (haven't been restored by
+     `endCapturePrep` yet). The `visibility: hidden` cascade
+     filters out sticky-header / fixed-overlay descendants —
+     exactly the elements absent from the screenshot pixels.
+     Metadata's element list matches the screenshot 1:1.
+  3. `endCapturePrep` then restores stickies.
+
+If you find yourself wanting to take metadata BEFORE
+`beginCapturePrep` (to avoid the sticky-cascade filtering),
+reconsider — sticky-cascade IS the feature, not a bug. PR #272
+made that mistake; #275 / #276 walked it back. History noted in
+the PR comments.
 
 ### Right-click context menu
 

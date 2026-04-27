@@ -38,14 +38,7 @@ export type BackgroundToContentMessage =
   | { type: "hide-progress" }
   | { type: "click-capture-enable" }
   | { type: "click-capture-disable" }
-  | { type: "get-capture-context" }
-  /** Ask the content script for a DOM snapshot (detected
-   *  interactive elements + their bboxes) to store alongside a
-   *  screenshot. Response is a PageMetadata object. `area` (when
-   *  set) is the viewport-relative rectangle the screenshot covers
-   *  — used by area captures so off-frame elements get filtered
-   *  out and bbox→screenshot mapping uses the right origin. */
-  | { type: "get-page-metadata"; area?: { x: number; y: number; width: number; height: number } };
+  | { type: "get-capture-context" };
 
 // Content -> Background
 export type ContentToBackgroundMessage =
