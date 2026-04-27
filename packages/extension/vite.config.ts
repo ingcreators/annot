@@ -42,8 +42,75 @@ function iifeWrapContentScript(): Plugin {
   };
 }
 
+/**
+ * Force content.js to be a SINGLE self-contained file.
+ *
+ * Why: `chrome.scripting.executeScript({ files: ["content.js"] })`
+ * runs the file as a CLASSIC SCRIPT, not an ES module. Static `import`
+ * statements throw `SyntaxError: Cannot use import statement outside a
+ * module` at runtime, which silently kills the content script (no
+ * listener registers, every `chrome.tabs.sendMessage` to it returns
+ * "Could not establish connection. Receiving end does not exist", and
+ * features that depend on it — DOM-element metadata for the editor's
+ * Elements panel, area-select messaging, sticky hiding — all fail).
+ *
+ * This `manualChunks` walks the import graph reachable from the
+ * `content` entry and forces every reachable module into the same
+ * 'content' output chunk. Modules that are ALSO reachable from a
+ * different entry (logger, shared message types) get duplicated into
+ * each entry, which is what we want — the cost is a few KB per
+ * entry, the alternative is an unloadable content script.
+ *
+ * Other entries (service-worker, popup, options, offscreen) load via
+ * `<script type="module">` (popup/options HTML) or as MV3 service-
+ * worker modules and accept ES `import` fine, so they keep the
+ * default chunking behaviour.
+ */
+function inlineContentChunks(): Plugin {
+  let contentReachable: Set<string> | null = null;
+
+  return {
+    name: "inline-content-chunks",
+    buildStart() {
+      contentReachable = null;
+    },
+    outputOptions(opts) {
+      const entryId = resolve(__dirname, "src/content/index.ts").replace(/\\/g, "/");
+      const baseManualChunks = opts.manualChunks;
+      return {
+        ...opts,
+        manualChunks: (id, api) => {
+          // Lazily build the set of modules reachable from src/content/index.ts.
+          // `getModuleIds` returns every loaded module; for each, walk imports.
+          if (!contentReachable) {
+            contentReachable = new Set();
+            const queue: string[] = [entryId];
+            while (queue.length > 0) {
+              const cur = queue.pop()!;
+              const norm = cur.replace(/\\/g, "/");
+              if (contentReachable.has(norm)) continue;
+              contentReachable.add(norm);
+              const info = api.getModuleInfo(cur);
+              if (!info) continue;
+              for (const imp of info.importedIds) queue.push(imp);
+              for (const imp of info.dynamicallyImportedIds) queue.push(imp);
+            }
+          }
+          const norm = id.replace(/\\/g, "/");
+          if (contentReachable.has(norm)) return "content";
+          if (typeof baseManualChunks === "function") {
+            // Defer to any caller-supplied manualChunks for non-content modules.
+            return baseManualChunks(id, api);
+          }
+          return undefined;
+        },
+      };
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [iifeWrapContentScript()],
+  plugins: [inlineContentChunks(), iifeWrapContentScript()],
   build: {
     modulePreload: { polyfill: false },
     rollupOptions: {
@@ -58,11 +125,6 @@ export default defineConfig({
         entryFileNames: "[name].js",
         chunkFileNames: "chunks/[name]-[hash].js",
         assetFileNames: "assets/[name]-[hash][extname]",
-        // Prevent service-worker from importing chunks that use DOM APIs
-        manualChunks(_id) {
-          // Keep service-worker self-contained (no shared chunks)
-          return undefined;
-        },
       },
     },
     outDir: "dist",
