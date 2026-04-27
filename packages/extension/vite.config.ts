@@ -31,11 +31,26 @@ function iifeWrapContentScript(): Plugin {
       for (const [fileName, chunk] of Object.entries(bundle)) {
         if (chunk.type !== "chunk") continue;
         if (chunk.name !== "content") continue;
+        // Rollup's default ES output ends every entry chunk with a
+        // re-export hoist (`export{X as Y};`) so the entry's exports
+        // are reachable to whatever imports it. Nothing imports
+        // content.js — `chrome.scripting.executeScript({ files })`
+        // loads it as a CLASSIC script — and a top-level `export`
+        // throws `SyntaxError: Unexpected token 'export'` at parse
+        // time, killing the entire script (no listener registers,
+        // every `chrome.tabs.sendMessage` to the content script
+        // returns "Receiving end does not exist"). Strip them.
+        // The minifier concatenates `export{...};` directly onto the
+        // preceding statement, so we can't anchor on line boundaries.
+        // The pattern is narrow enough that no in-source `export{}`
+        // template-literal hits the regex (the content script doesn't
+        // contain any literal `export{` strings).
+        const stripped = chunk.code.replace(/export\s*\{[^}]*\}\s*;?/g, "");
         // IIFE with a guard — `return` is legal inside the function,
         // giving us an early-out on repeat executions without touching
         // user code. `globalThis` works in browsers (window) and
         // isolated worlds alike.
-        chunk.code = `(function(){\nif(globalThis.__anno_content_loaded)return;\nglobalThis.__anno_content_loaded=true;\n${chunk.code}\n})();\n`;
+        chunk.code = `(function(){\nif(globalThis.__anno_content_loaded)return;\nglobalThis.__anno_content_loaded=true;\n${stripped}\n})();\n`;
         void fileName;
       }
     },
