@@ -2,12 +2,18 @@
  * `<annot-toolbar>` and `<annot-toolbar-button>` — the editor
  * toolbar's outer shell and per-tool button primitives.
  *
- * Lit Phase 5b — replaces `Toolbar.#btn()` (imperative button
- * factory) and `Toolbar.#render()`'s container-class shuffling
- * with declarative custom elements. The complex internals
- * (variant flyouts, badge population, preset persistence,
- * keyboard shortcuts) stay imperative within the `Toolbar`
- * class itself — they're scheduled for Phase 5c.
+ * History: Lit migration Phase 5b (`_done/lit-migration.md`)
+ * replaced `Toolbar.#btn()` (imperative button factory) and
+ * `Toolbar.#render()`'s container-class shuffling with
+ * declarative custom elements. The remaining internals
+ * (variant + color flyouts, save dropdown, badge population,
+ * preset persistence, keyboard shortcuts, canvas context-menu)
+ * landed across Phase 6a / 6b / 6c of
+ * `_done/lit-migration-completion.md`: variant + color flyouts
+ * unified into a single `#showFlyout` / `<annot-tool-flyout>`
+ * pair (6a), the save dropdown's orchestration absorbed into
+ * `<annot-save-menu>` (6b). `Toolbar` is now a thin orchestrator
+ * over those Lit collaborators.
  *
  * Both elements use **light DOM** so the existing
  * `.toolbar-vertical` / `.toolbar-btn` rules in `editor.css`

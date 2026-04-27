@@ -368,23 +368,29 @@ Run locally with `pnpm --filter @ingcreators/annot-web storybook`.
 **CI builds the static bundle on every PR and the build is
 blocking** — a story that fails to compile fails the PR.
 
-- **Stories are encouraged, not required, for Lit components.**
-  The five bootstrap stories (`SaveStatusIndicator`, `ErrorBar`,
-  `drawer.file`, `FileDetailsDrawer`, `Sidebar`) were written
-  during the Storybook introduction; the Lit migration that
-  followed didn't add stories for every migrated component, and
-  the current ratio (5 stories / 22 `LitElement` subclasses) is
-  the de-facto state — there is no plan to retroactively cover
-  the gap. Add a story when:
-    1. The component has multiple visible states that benefit
-       from being viewed in isolation (loading / empty /
-       populated / error variants).
-    2. You're about to land a non-trivial visual change and want
-       a before/after artifact in the PR description.
-    3. The component is on a path likely to be touched by
-       contributors who don't know its full state space.
-  For tiny components with one render path (`<annot-toolbar>`'s
-  flyout chips, etc.), skip the story.
+- **Stories are required for new built-in Lit components, and
+  strongly encouraged for changes to existing ones.** The
+  `lit-migration-completion.md` follow-up (PRs #244–#250)
+  closed the prior 5/22 gap by adding stories for every
+  newly-migrated component (`<annot-tag-editor>`,
+  `<annot-scratchpad-section>`, `<annot-split-editor>`,
+  `<annot-gallery-page>`, `<annot-context-menu>`,
+  `<annot-save-menu>` got promoted to a self-contained
+  orchestrator with its own stories), bringing the ratio to
+  ~12/27. Going forward, a new built-in `LitElement` should
+  ship at least a `Default` story with the visible-state
+  variants the component renders (loading / empty / populated
+  / error). Trivial render-path components (e.g.
+  `<annot-toolbar-button>` with one icon + label path) may
+  still skip the story — the rule of thumb is "if a reviewer
+  would want to see this in isolation before the diff, write
+  the story."
+- **Existing pre-Phase-6 LitElements without a story aren't a
+  TODO.** Some of the original 22 from
+  `_done/lit-migration.md`'s Phases 0–5b still don't ship
+  stories. Add one only if you're about to make a non-trivial
+  visual change to the component, not as a retroactive
+  cleanup pass.
 - **Vanilla (non-Lit) components don't need retroactive
   stories.** Same rule as for Lit — opportunistic, not
   obligatory.
@@ -392,9 +398,13 @@ blocking** — a story that fails to compile fails the PR.
   unit-test home; Storybook is the visual + interactive
   surface for reviewers + future plugin authors.
 
-The 5/22 gap is documented as a known state, not a TODO. If
-broader story coverage becomes valuable later (e.g. when
-Chromatic-style visual regression lands per Phase 3 of the
+History: PRs [#236](https://github.com/ingcreators/annot/pull/236)
+(Storybook CI blocking + 5/22 acknowledgement) and
+[#244–#250](https://github.com/ingcreators/annot/pull/244)
+(`lit-migration-completion.md`'s six phases) shaped the
+current "required for new, opportunistic for existing" stance.
+If broader visual-regression coverage becomes valuable later
+(e.g. when Chromatic-style review lands per Phase 3 of the
 Storybook plan), revisit this section as part of that work.
 
 ## Lit conventions

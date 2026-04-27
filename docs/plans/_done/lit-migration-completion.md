@@ -1,6 +1,27 @@
 # Lit migration completion
 
-> **Status:** Draft. Authored 2026-04-27 in response to the
+> **Status:** Done (2026-04-27). All six phases landed as PRs
+> [#244](https://github.com/ingcreators/annot/pull/244) (Phase 1
+> tag-editor), [#245](https://github.com/ingcreators/annot/pull/245)
+> (Phase 2 scratchpad-section),
+> [#246](https://github.com/ingcreators/annot/pull/246)
+> (Phase 3 split-editor),
+> [#247](https://github.com/ingcreators/annot/pull/247)
+> (Phase 4 gallery-page),
+> [#248](https://github.com/ingcreators/annot/pull/248)
+> (Phase 5 context-menu),
+> [#249](https://github.com/ingcreators/annot/pull/249)
+> (Phase 6a flyout consolidation),
+> [#250](https://github.com/ingcreators/annot/pull/250)
+> (Phase 6b save-menu orchestration), and
+> [#251](https://github.com/ingcreators/annot/pull/251)
+> (Phase 6c CLAUDE.md update + plan archive). LitElement count in
+> `packages/web/src/` rose from 22 to 27 across the six new
+> elements; the `<annot-toolbar>` carve-out comment is gone, and
+> the CLAUDE.md Storybook section now requires stories for new
+> built-in Lit components going forward.
+>
+> Originally authored 2026-04-27 in response to the
 > 2026-04-27 friction-audit follow-up that produced
 > [#236](https://github.com/ingcreators/annot/pull/236) (Storybook
 > CI blocking + CLAUDE.md alignment to the de-facto
