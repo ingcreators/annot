@@ -33,8 +33,8 @@
     "@storybook/web-components-vite": "^10.3.5",
     "chrome-types": "^0.1.327",
     "storybook": "^10.3.5",
-    "typescript": "^6.0.3",
-    "vite": "^8.0.10",
+    "typescript": "catalog:",
+    "vite": "catalog:",
     "vite-plugin-pwa": "^1.2.0",
     "workbox-window": "^7.4.0"
   }
