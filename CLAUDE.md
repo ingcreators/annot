@@ -44,6 +44,15 @@ packages/
               npm name: @ingcreators/annot-extension
   desktop/    Tauri desktop wrapper.
               npm name: @ingcreators/annot-desktop
+  imagequant/ In-tree wasm-bindgen wrapper around upstream
+              ImageOptim/libimagequant. Tier A from the runtime
+              tier model (the JS glue is pure, the .wasm has no
+              DOM access; runs identically in browser, web worker,
+              extension service worker, and Node test). Replaces
+              the third-party `@panda-ai/imagequant` npm package
+              for supply-chain reasons; see
+              `docs/plans/_done/vendor-libimagequant.md`.
+              npm name: @ingcreators/annot-imagequant (private)
 ```
 
 Naming convention: **`@ingcreators/annot-<role>`** for every package.

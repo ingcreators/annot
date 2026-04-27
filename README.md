@@ -29,7 +29,7 @@ optional team / billing / PR-automation features when those land — see
 [`docs/plans/oss-cloud-split.md`](./docs/plans/oss-cloud-split.md) for
 the long-form rationale and the guardrails that already apply.
 
-**Engineering posture (snapshot, 2026-04-25).**
+**Engineering posture (snapshot, 2026-04-27).**
 
 | Signal | Value |
 |--------|-------|
@@ -37,7 +37,8 @@ the long-form rationale and the guardrails that already apply.
 | Lint | Biome 2, 0 findings; CI blocks on this |
 | TypeScript | strict + `override` + `noFallthroughCasesInSwitch` + `noUncheckedIndexedAccess`, every package |
 | Public API | two stable entry points: `@ingcreators/annot-core` (full) and `/headless` (DOM-free) |
-| Dependency hygiene | Dependabot + `pnpm audit --audit-level=high` on every PR |
+| Dependency hygiene | Dependabot (npm + cargo + github-actions) + `pnpm audit --audit-level=high` on every PR |
+| Verified WASM build | `packages/imagequant/` — Rust + wasm-bindgen wrapper built in-tree, committed `.wasm` re-verified against a fresh build on every PR (`verify-wasm` CI job) |
 | Documentation | `PRODUCT_DIRECTION.md` (strategy), per-feature `docs/plans/*` design docs, `CHANGELOG.md` (every PR landed) |
 
 **Documents an auditor will want.**
