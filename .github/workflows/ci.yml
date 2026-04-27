@@ -57,13 +57,13 @@ jobs:
           --filter @ingcreators/annot-extension
           build
 
-      # Storybook build. Phase 1 of docs/plans/_done/storybook-introduction.md ships
-      # this as `continue-on-error: true` so a flaky story doesn't
-      # stall unrelated PRs while the team gets used to the
-      # workflow. Flipped to blocking in the follow-up once the
-      # initial five stories have stabilized in CI.
+      # Storybook build. Originally landed as `continue-on-error: true`
+      # in Phase 1 of docs/plans/_done/storybook-introduction.md so the
+      # team could get used to the workflow without a flaky story
+      # stalling unrelated PRs. The five bootstrap stories have been
+      # stable on every CI run for months, so the gate is now
+      # blocking — a story that fails to build now fails the PR.
       - name: Build Storybook
-        continue-on-error: true
         run: pnpm --filter @ingcreators/annot-web build-storybook
 
   # Run `pnpm audit` as a separate non-blocking job so findings surface
