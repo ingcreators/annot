@@ -9,9 +9,9 @@
   },
   "type": "module",
   "scripts": {
-    "build": "vite build && node -e \"require('fs').copyFileSync('manifests/chrome.json','dist/manifest.json')\"",
-    "build:chrome": "vite build && node -e \"require('fs').copyFileSync('manifests/chrome.json','dist/manifest.json')\"",
-    "build:edge": "vite build && node -e \"require('fs').copyFileSync('manifests/chrome.json','dist/manifest.json')\"",
+    "build": "vite build && vite build --config vite.content.config.ts && node -e \"require('fs').copyFileSync('manifests/chrome.json','dist/manifest.json')\"",
+    "build:chrome": "vite build && vite build --config vite.content.config.ts && node -e \"require('fs').copyFileSync('manifests/chrome.json','dist/manifest.json')\"",
+    "build:edge": "vite build && vite build --config vite.content.config.ts && node -e \"require('fs').copyFileSync('manifests/chrome.json','dist/manifest.json')\"",
     "package:chrome": "pnpm build:chrome && node scripts/zip-dist.mjs chrome",
     "package:edge": "pnpm build:edge && node scripts/zip-dist.mjs edge",
     "dev": "vite",
