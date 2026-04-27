@@ -242,41 +242,298 @@ async function ensureOffscreen(): Promise<void> {
 }
 
 
-/** Ask the content script running in `tabId` for a DOM-element
- *  snapshot. `area` (when set, in viewport CSS pixels) narrows the
- *  captureRect so area screenshots don't surface off-frame elements
- *  in the editor. Returns null if the request fails (e.g. the
- *  content script isn't injectable on this URL, or the tab has
- *  navigated away). Failures are non-fatal — capture continues
- *  without metadata and the editor falls back to "pixels only" mode. */
+/** Snapshot DOM-element metadata by injecting a self-contained
+ *  walker into the TARGET PAGE'S MAIN world (NOT the content
+ *  script's isolated world).
+ *
+ *  Why MAIN world: empirically, `getBoundingClientRect()` calls in
+ *  the isolated world return 0×0 for descendants of cards using
+ *  `content-visibility: auto` — even after `captureVisibleTab`
+ *  forces a paint of the visible viewport, even after a per-element
+ *  `getBoundingClientRect()` pre-walk in the isolated world. Page-
+ *  side diagnostics (run in MAIN world via DevTools) on the SAME
+ *  page state at the SAME viewport returned 1326 interactive
+ *  elements; the isolated-world content script returned 0.
+ *  Running the walker in MAIN world bypasses whatever Chrome
+ *  isolation boundary causes that — page-world DOM access on cv:auto
+ *  descendants returns real bboxes.
+ *
+ *  `area` (when set, in viewport CSS pixels) narrows the captureRect
+ *  so area / per-page / scroll-stitch captures don't surface
+ *  off-frame elements in the editor. Returns null if the injection
+ *  fails (e.g. the URL isn't injectable). Failures are non-fatal —
+ *  capture continues without metadata. */
 async function requestPageMetadata(
   tabId: number,
   area?: { x: number; y: number; width: number; height: number },
 ): Promise<import("@ingcreators/annot-core").PageMetadata | null> {
+  // chrome-types' `executeScript` overload pins `func` to `() => void`
+  // and doesn't model the `args` -> `func` parameter relationship; cast
+  // the call to bypass the overhead of writing a typed wrapper that
+  // wouldn't gain anything at runtime.
   try {
-    const res = await chrome.tabs.sendMessage(tabId, { type: "get-page-metadata", area });
-    if (res && typeof res === "object" && Array.isArray(res.elements)) {
-      return res;
+    const results = await (
+      chrome.scripting.executeScript as unknown as (
+        i: Record<string, unknown>,
+      ) => Promise<unknown[]>
+    )({
+      target: { tabId },
+      world: "MAIN",
+      // Args are structured-cloned into the page; no closure.
+      args: [area ?? null],
+      // Keep the full walker logic inline — chrome.scripting.executeScript
+      // requires the function to be self-contained.
+      func: (
+        regionArg: { x: number; y: number; width: number; height: number } | null,
+      ): import("@ingcreators/annot-core").PageMetadata => {
+        const MAX_ELEMENTS = 2000;
+        const MIN_AREA = 16;
+        const region = regionArg ?? undefined;
+        const scrollX = window.scrollX;
+        const scrollY = window.scrollY;
+        const captureRect = region
+          ? {
+              x: region.x + scrollX,
+              y: region.y + scrollY,
+              width: region.width,
+              height: region.height,
+            }
+          : {
+              x: scrollX,
+              y: scrollY,
+              width: window.innerWidth,
+              height: window.innerHeight,
+            };
+
+        function isInteresting(el: Element): boolean {
+          const tag = el.tagName.toLowerCase();
+          switch (tag) {
+            case "button":
+            case "a":
+            case "input":
+            case "select":
+            case "textarea":
+            case "label":
+            case "h1":
+            case "h2":
+            case "h3":
+            case "h4":
+            case "h5":
+            case "h6":
+              return true;
+          }
+          const role = el.getAttribute("role");
+          if (
+            role &&
+            /^(button|link|tab|menuitem|checkbox|radio|switch|textbox|combobox|searchbox|option|treeitem|slider|spinbutton)$/.test(
+              role,
+            )
+          )
+            return true;
+          if (el.hasAttribute("tabindex") && el.getAttribute("tabindex") !== "-1") return true;
+          if (
+            (el as HTMLElement).isContentEditable &&
+            el.getAttribute("contenteditable") !== "inherit"
+          )
+            return true;
+          return false;
+        }
+
+        function isVisuallyOnScreen(el: HTMLElement): boolean {
+          try {
+            if (el.getAttribute("aria-hidden") === "true") return false;
+            const cv = (el as { checkVisibility?: (opts: object) => boolean }).checkVisibility;
+            if (typeof cv === "function") {
+              if (!cv.call(el, { checkOpacity: true, checkVisibilityCSS: true })) return false;
+            } else {
+              const style = window.getComputedStyle(el);
+              if (style.display === "none") return false;
+              if (style.visibility === "hidden" || style.visibility === "collapse") return false;
+              if (Number.parseFloat(style.opacity || "1") <= 0.05) return false;
+            }
+            const r = el.getBoundingClientRect();
+            if (r.width * r.height < MIN_AREA) return false;
+            const docW = Math.max(document.documentElement.scrollWidth, window.innerWidth);
+            const docH = Math.max(document.documentElement.scrollHeight, window.innerHeight);
+            if (r.right < -5000 || r.left > docW + 5000) return false;
+            if (r.bottom < -5000 || r.top > docH + 5000) return false;
+            return true;
+          } catch {
+            return true;
+          }
+        }
+
+        function implicitRole(el: Element): string | null {
+          switch (el.tagName.toLowerCase()) {
+            case "button":
+              return "button";
+            case "a":
+              return (el as HTMLAnchorElement).href ? "link" : null;
+            case "input": {
+              const t = (el as HTMLInputElement).type;
+              if (t === "button" || t === "submit" || t === "reset") return "button";
+              if (t === "checkbox") return "checkbox";
+              if (t === "radio") return "radio";
+              if (t === "range") return "slider";
+              if (t === "search") return "searchbox";
+              return "textbox";
+            }
+            case "textarea":
+              return "textbox";
+            case "select":
+              return "combobox";
+            case "label":
+              return null;
+            case "h1":
+            case "h2":
+            case "h3":
+            case "h4":
+            case "h5":
+            case "h6":
+              return "heading";
+          }
+          return null;
+        }
+
+        function labelTextFor(el: HTMLElement): string | null {
+          const id = el.id;
+          if (id) {
+            const lab = document.querySelector(`label[for="${CSS.escape(id)}"]`);
+            if (lab?.textContent) return lab.textContent.trim().replace(/\s+/g, " ");
+          }
+          const closest = el.closest("label");
+          if (closest?.textContent) return closest.textContent.trim().replace(/\s+/g, " ");
+          return null;
+        }
+
+        function extractText(el: HTMLElement): string | undefined {
+          const tag = el.tagName.toLowerCase();
+          if (tag === "input") {
+            const inp = el as HTMLInputElement;
+            if (inp.type === "submit" || inp.type === "button" || inp.type === "reset") {
+              return inp.value || undefined;
+            }
+            return labelTextFor(el) || undefined;
+          }
+          if (tag === "textarea") return labelTextFor(el) || undefined;
+          if (tag === "select") {
+            const sel = el as HTMLSelectElement;
+            return sel.options[sel.selectedIndex]?.text || labelTextFor(el) || undefined;
+          }
+          const text = (el.textContent || "").trim().replace(/\s+/g, " ");
+          if (!text) return undefined;
+          return text.length > 120 ? `${text.slice(0, 117)}…` : text;
+        }
+
+        function cssSelector(el: Element): string {
+          if (el.id) return `#${CSS.escape(el.id)}`;
+          const parts: string[] = [];
+          let cur: Element | null = el;
+          while (cur && cur.nodeType === 1 && cur !== document.body && parts.length < 6) {
+            let part = cur.tagName.toLowerCase();
+            const testId =
+              cur.getAttribute("data-testid") || cur.getAttribute("data-test-id");
+            if (testId) {
+              part += `[data-testid="${CSS.escape(testId)}"]`;
+              parts.unshift(part);
+              break;
+            }
+            if (cur.parentElement) {
+              const sibs = Array.from(cur.parentElement.children).filter(
+                (c) => c.tagName === cur!.tagName,
+              );
+              if (sibs.length > 1) part += `:nth-of-type(${sibs.indexOf(cur) + 1})`;
+            }
+            parts.unshift(part);
+            cur = cur.parentElement;
+          }
+          return parts.join(" > ") || el.tagName.toLowerCase();
+        }
+
+        const elements: import("@ingcreators/annot-core").PageElement[] = [];
+        let id = 0;
+        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT, {
+          acceptNode: (node) => {
+            const el = node as Element;
+            if (el.hasAttribute("data-annot-ui")) return NodeFilter.FILTER_REJECT;
+            const tag = el.tagName.toLowerCase();
+            if (
+              tag === "script" ||
+              tag === "style" ||
+              tag === "noscript" ||
+              tag === "link" ||
+              tag === "meta"
+            )
+              return NodeFilter.FILTER_REJECT;
+            return isInteresting(el) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP;
+          },
+        });
+
+        let node: Node | null;
+        while ((node = walker.nextNode()) !== null && elements.length < MAX_ELEMENTS) {
+          const el = node as HTMLElement;
+          if (!isVisuallyOnScreen(el)) continue;
+          const r = el.getBoundingClientRect();
+          const tag = el.tagName.toLowerCase();
+          const role = el.getAttribute("role") || implicitRole(el) || undefined;
+          const text = extractText(el);
+          const ariaLabel = el.getAttribute("aria-label") || undefined;
+          const domId = el.id || undefined;
+          const selector = cssSelector(el);
+          let inputType: string | undefined;
+          let placeholder: string | undefined;
+          if (tag === "input") {
+            inputType = (el as HTMLInputElement).type || "text";
+            placeholder = (el as HTMLInputElement).placeholder || undefined;
+          } else if (tag === "textarea") {
+            placeholder = (el as HTMLTextAreaElement).placeholder || undefined;
+          }
+          let href: string | undefined;
+          if (tag === "a") href = (el as HTMLAnchorElement).href || undefined;
+          elements.push({
+            id: `e${id++}`,
+            tag,
+            role,
+            text,
+            ariaLabel,
+            inputType,
+            placeholder,
+            href,
+            domId,
+            bbox: [
+              Math.round(r.left + scrollX),
+              Math.round(r.top + scrollY),
+              Math.round(r.width),
+              Math.round(r.height),
+            ],
+            selector,
+            visible: true,
+          });
+        }
+
+        return {
+          version: 1,
+          url: location.href,
+          viewport: { width: window.innerWidth, height: window.innerHeight },
+          devicePixelRatio: window.devicePixelRatio || 1,
+          scrollOffset: { x: scrollX, y: scrollY },
+          captureRect,
+          capturedAt: new Date().toISOString(),
+          elements,
+        };
+      },
+    });
+    const result = (results?.[0] as { result?: unknown } | undefined)?.result;
+    if (
+      result &&
+      typeof result === "object" &&
+      Array.isArray((result as { elements?: unknown }).elements)
+    ) {
+      return result as import("@ingcreators/annot-core").PageMetadata;
     }
-    // Most common cause when this fires: the target tab still has an
-    // OLD injected content script from before the extension was
-    // reloaded. The old script doesn't know the "get-page-metadata"
-    // message type and returns undefined. Reloading the target tab
-    // pulls in the new content script and fixes it.
-    console.warn(
-      "[annot] page metadata unavailable — target tab may have a stale content script. " +
-        "Reload the page (F5) and re-capture.",
-      res,
-    );
     return null;
   } catch (err) {
-    // Same root cause as above when err.message contains "Could not
-    // establish connection" — content script not present / mismatched.
-    console.warn(
-      "[annot] page metadata request failed — target tab may need to be reloaded. " +
-        "Reload the page (F5) after re-loading the extension and try again.",
-      err,
-    );
+    console.warn("[annot] page metadata MAIN-world injection failed:", err);
     return null;
   }
 }
