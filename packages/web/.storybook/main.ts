@@ -1,15 +1,22 @@
 /**
  * Storybook config for `@ingcreators/annot-web`.
  *
- * Phase 1 of `docs/plans/_done/storybook-introduction.md`. The
+ * Originally Phase 1 of
+ * `docs/plans/_done/storybook-introduction.md`. The
  * `web-components-vite` framework is the canonical Storybook
- * path for Lit components (Lit elements are web components);
- * it also renders today's vanilla DOM components so the five
- * initial stories can bootstrap before the Lit migration lands.
+ * path for Lit components (Lit elements are web components).
+ * After `_done/lit-migration.md` and
+ * `_done/lit-migration-completion.md` landed, every covered
+ * component is a `LitElement`; after
+ * `_done/litelement-stories-coverage.md` landed, every
+ * `LitElement` under `src/` ships at least one story.
  *
  * Stories are co-located with their source — `foo.stories.ts`
  * next to `foo.ts` — matching the existing `foo.test.ts`
- * convention. The glob catches everything under `src/`.
+ * convention. The glob catches everything under `src/`. Every
+ * `LitElement` subclass under `src/` must ship at least one
+ * `*.stories.ts`; the symmetry check runs as a Vitest case in
+ * `src/storybook-coverage.test.ts`.
  */
 
 import type { StorybookConfig } from "@storybook/web-components-vite";
