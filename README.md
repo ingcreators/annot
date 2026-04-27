@@ -88,7 +88,7 @@ omissions.
 
 ## Requirements
 
-- Node.js 20+
+- Node.js 24+ (pinned via `.nvmrc`; CI builds on the same version)
 - pnpm 9+ (pinned via `packageManager` in the root `package.json`)
 - Rust toolchain + Tauri prerequisites, only if building the desktop host
 
