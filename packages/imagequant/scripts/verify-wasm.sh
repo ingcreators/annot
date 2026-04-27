@@ -16,21 +16,29 @@ if ! command -v wasm-pack >/dev/null 2>&1; then
   exit 1
 fi
 
-tmp="$(mktemp -d)"
-trap 'rm -rf "$tmp"' EXIT
+out_dir="${VERIFY_WASM_OUT_DIR:-}"
+if [[ -n "$out_dir" ]]; then
+  mkdir -p "$out_dir"
+  fresh_pkg="$out_dir/pkg"
+  rm -rf "$fresh_pkg"
+else
+  tmp="$(mktemp -d)"
+  trap 'rm -rf "$tmp"' EXIT
+  fresh_pkg="$tmp/pkg"
+fi
 
 wasm-pack build \
   --release \
   --target web \
-  --out-dir "$tmp/pkg" \
+  --out-dir "$fresh_pkg" \
   --out-name annot_imagequant \
   -- --locked
 
-rm -f "$tmp/pkg/.gitignore" "$tmp/pkg/package.json" "$tmp/pkg/README.md" "$tmp/pkg/LICENSE"
+rm -f "$fresh_pkg/.gitignore" "$fresh_pkg/package.json" "$fresh_pkg/README.md" "$fresh_pkg/LICENSE"
 
-if ! diff -ruN pkg "$tmp/pkg" >/dev/null; then
+if ! diff -ruN pkg "$fresh_pkg" >/dev/null; then
   echo "verify-wasm: committed pkg/ differs from a fresh build." >&2
-  diff -ruN pkg "$tmp/pkg" >&2 || true
+  diff -ruN pkg "$fresh_pkg" >&2 || true
   exit 1
 fi
 
