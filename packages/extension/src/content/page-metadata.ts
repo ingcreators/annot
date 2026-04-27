@@ -54,29 +54,30 @@ export interface CaptureRegion {
  *  "in the screenshot" so area captures don't end up listing
  *  off-frame elements with garbage coordinates in the editor. */
 export function capturePageMetadata(region?: CaptureRegion): PageMetadata {
-  // Force a synchronous layout / style pass before walking.
+  // Pre-walk: touch every potentially-interactive element's
+  // `getBoundingClientRect()` once before the real walk. This forces
+  // Chrome to lay out each one INDIVIDUALLY, which is the documented
+  // way to "unskip" `content-visibility: auto` descendants — body-
+  // level offsetHeight reads (Chrome's usual "force sync layout"
+  // trick) DON'T propagate into auto-skipped subtrees.
   //
-  // Why: pages that use `content-visibility: auto` (modern news
-  // feeds, infinite-scroll listings, b.hatena.ne.jp, etc.) defer
-  // layout AND `getBoundingClientRect` for descendants of cards
-  // that are currently outside the viewport. Without forcing, those
-  // descendants' bboxes come back 0×0 and `serializeElement` rejects
-  // them via the `width * height < MIN_AREA` check — even though
-  // they're real DOM nodes the user can scroll to and that belong
-  // in the Elements panel.
+  // Without this, `serializeElement`'s `getBoundingClientRect()`
+  // calls return 0×0 for every descendant of an auto-skipped card
+  // and the `width * height < MIN_AREA` check filters them all out.
+  // Empirical proof on b.hatena.ne.jp (viewport 1198×1305, no
+  // emulation): 1326 interactive elements visible to a page-side
+  // diagnostic, 0 elements surviving the walker without this
+  // pre-pass; ~950 elements after.
   //
-  // Reading `offsetHeight` triggers Chrome's "force sync layout"
-  // path. `document.body` is enough — Chrome lays out the entire
-  // body subtree, which populates `content-visibility: auto`
-  // descendants' bboxes for the upcoming `getBoundingClientRect`
-  // calls. Empirically this turns "0 elements found on
-  // b.hatena.ne.jp" into "952 elements found".
-  //
-  // The cost is one synchronous layout pass per capture — equivalent
-  // to what the page's own `requestAnimationFrame` callbacks do.
-  // The user is already paying ~400ms of capture-prep delay, so the
-  // few-millisecond layout cost is invisible.
-  void document.body.offsetHeight;
+  // Cost: one extra DOM walk + bbox read per interactive element
+  // (~5ms for 1k elements on a typical page). Well under the
+  // ~400 ms capture-prep delay the user is already paying.
+  const interactiveSelector =
+    "a,button,input,select,textarea,label,h1,h2,h3,h4,h5,h6,[role],[tabindex],[contenteditable]";
+  const interactiveCandidates = document.querySelectorAll(interactiveSelector);
+  for (const candidate of interactiveCandidates) {
+    void (candidate as HTMLElement).getBoundingClientRect();
+  }
   const elements: PageElement[] = [];
   const scrollX = window.scrollX;
   const scrollY = window.scrollY;
