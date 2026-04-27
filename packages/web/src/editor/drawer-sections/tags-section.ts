@@ -1,22 +1,22 @@
 /**
- * Built-in `drawer.tags` section — embeds the `TagEditor` so users
+ * Built-in `drawer.tags` section — embeds the tag editor so users
  * can add / remove / edit tags on the open image.
  *
- * Lit Phase 1 — the section is now a
- * `<annot-drawer-tags-section>` element whose `firstUpdated`
- * instantiates the existing vanilla `TagEditor` into a child node.
- * `TagEditor` stays vanilla per the plan's Phase 1 scope —
- * migrating it is a separate follow-up.
+ * The tag editor itself is `<annot-tag-editor>` (Lit). This section
+ * is a thin Lit wrapper that owns the section frame inside the
+ * drawer host, listens for `annot-tag-change`, and forwards the
+ * change to the host through `onTagsChange`.
  *
- * Reactive lifecycle: assigning `.tags` pushes the latest tags
- * into the existing `TagEditor` instance via `setTags`,
- * preserving the editor's mid-edit state where possible.
+ * Reactive lifecycle: assigning `.tags` updates the child element
+ * via Lit's reactive property pipeline; the `annot-tag-change`
+ * event keeps the parent state in sync without imperative
+ * `setTags` calls.
  */
 
 import type { UISection } from "../../app/plugin-host.js";
 import { html, LitElement } from "../../lit.js";
+import "../annot-tag-editor.js";
 import type { FileDetailsData } from "../file-details-drawer-types.js";
-import { TagEditor } from "../tag-editor.js";
 
 export class AnnotDrawerTagsSectionElement extends LitElement {
   static override properties = {
@@ -26,7 +26,6 @@ export class AnnotDrawerTagsSectionElement extends LitElement {
 
   declare tags: Record<string, string>;
   declare onTagsChange: ((tags: Record<string, string>) => void) | null;
-  #editor: TagEditor | null = null;
 
   constructor() {
     super();
@@ -39,35 +38,19 @@ export class AnnotDrawerTagsSectionElement extends LitElement {
   }
 
   override render() {
-    // Render once; the real content is populated imperatively by
-    // `firstUpdated` because `TagEditor` is a vanilla class that
-    // builds its own DOM inside the host container.
-    return html`<div class="file-details-tags-editor"></div>`;
+    return html`
+      <div class="file-details-tags-editor">
+        <annot-tag-editor
+          .tags=${this.tags}
+          @annot-tag-change=${this.#onTagChange}
+        ></annot-tag-editor>
+      </div>
+    `;
   }
 
-  protected override firstUpdated(): void {
-    const host = this.querySelector(".file-details-tags-editor") as HTMLElement | null;
-    if (!host) return;
-    this.#editor = new TagEditor(host);
-    this.#editor.setTags(this.tags);
-    this.#editor.onTagsChange = (t) => this.onTagsChange?.(t);
-  }
-
-  protected override updated(changed: Map<string, unknown>): void {
-    if (this.#editor && changed.has("tags")) {
-      // Push the latest tags into the existing TagEditor — it
-      // preserves its UI state where possible, so this is cheaper
-      // than rebuilding from scratch on every drawer-data change.
-      this.#editor.setTags(this.tags);
-    }
-  }
-
-  override disconnectedCallback(): void {
-    super.disconnectedCallback();
-    // TagEditor doesn't register window-level listeners; the DOM
-    // drop is enough. Null the ref so a reconnect rebuilds.
-    this.#editor = null;
-  }
+  #onTagChange = (e: CustomEvent<{ tags: Record<string, string> }>): void => {
+    this.onTagsChange?.(e.detail.tags);
+  };
 }
 
 if (!customElements.get("annot-drawer-tags-section")) {
@@ -82,8 +65,8 @@ declare global {
 
 export interface TagsSectionDeps {
   getData(): FileDetailsData;
-  /** Forwarded to the TagEditor's `onTagsChange` so the host can
-   *  persist the edit + propagate updates elsewhere (e.g. the
+  /** Forwarded to the editor's `annot-tag-change` event so the host
+   *  can persist the edit + propagate updates elsewhere (e.g. the
    *  save pipeline). */
   onTagsChange?(tags: Record<string, string>): void;
 }
