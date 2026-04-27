@@ -14,15 +14,17 @@
 > rewritten to use `instanceof`. No SVG schema change. No data
 > migration. Plugin-registered storage backends (per
 > [`_done/plugin-storage-registration.md`](./_done/plugin-storage-registration.md))
-> need to opt in by throwing the new types — wrapped fallback
-> means a plugin throwing `Error` keeps working but loses the
-> structured-error UX.
+> are expected to throw the new types from day one — Annot is
+> still pre-release, so there is no shipped plugin to keep
+> compatible.
 >
 > **Risk:** Phased, four phases, each independently revertable.
 > Phase 1 is JSDoc-only (zero runtime change). Phases 2–4 each
 > touch one slice (error-class definitions / 4 backends / 1
 > caller). The largest single PR is Phase 3 (4 backends, ~30
-> throw-site rewrites total).
+> throw-site rewrites total). Annot is still pre-release with no
+> published plugins, so the migration drops the new types in
+> directly without a back-compat shim.
 
 ## Context
 
@@ -237,22 +239,13 @@ so the contract is in one place.
 ### Plugin-storage compatibility
 
 [`_done/plugin-storage-registration.md`](./_done/plugin-storage-registration.md)
-opens `storage/bridge.ts` to plugin-registered backends. Plugin
-authors today throw plain `Error` and the message is shown to
-the user as-is. Phase 4 of this plan adds an opt-in adapter:
-
-- If a plugin backend throws `StorageError`, it propagates
-  unchanged.
-- If a plugin backend throws plain `Error` whose message matches
-  the legacy substring patterns (`"already exists"`,
-  `"not found"`), bridge.ts wraps it in the matching
-  `StorageError` for the duration of one release. After that the
-  fallback is removed and plugins that haven't migrated keep
-  working but lose structured-error UX.
-
-This keeps the door open for `annot-cloud`'s pointer-commit
-store (the original consumer of plugin-registration) to migrate
-on its own schedule.
+opens `storage/bridge.ts` to plugin-registered backends. Annot
+is still pre-release and no plugin ships yet — the only
+forthcoming consumer (`annot-cloud`'s pointer-commit store) is
+in-house, so it adopts the new error types from day one. No
+shim, no fallback wrapper. Plugins land already-conformant or
+they throw plain `Error` and lose structured-error UX, same as
+any unconforming user code.
 
 ## Phased plan
 
@@ -261,7 +254,7 @@ on its own schedule.
 | 1 | JSDoc rewrite of every `StorageProvider` method (zero runtime change) | 1 | — |
 | 2 | Add `StorageError` hierarchy in `packages/core/src/storage/errors.ts`, export from `headless.ts` | 1 | 1 done |
 | 3 | Migrate the four first-party backends to throw the new types at conflict / not-found sites | 1 (or 4 if they get review-heavy) | 2 done |
-| 4 | Replace the `msg.includes("already exists")` block in [`split-editor-host.ts:246`](../../packages/web/src/app/split-editor-host.ts:246) with `instanceof StorageConflictError`. Add the legacy-message wrapper in `bridge.ts` for plugin backends. | 1 | 3 done |
+| 4 | Replace the `msg.includes("already exists")` block in [`split-editor-host.ts:246`](../../packages/web/src/app/split-editor-host.ts:246) with `instanceof StorageConflictError`. | 1 | 3 done |
 
 Each phase is independently revertable and lands on `main`
 before the next starts. Phases 1 and 2 can land in parallel if
@@ -304,15 +297,18 @@ desired; Phase 3 must wait for Phase 2's exports.
   type (`StorageErrorCode`) to
   `@ingcreators/annot-core/storage`. Mirror in
   `packages/core/src/headless.ts`.
-- **Backwards compat:** existing call sites that do `catch (e)
-  { console.error(e.message) }` are unaffected — the new error
-  classes still expose `.message`. The only callers that need
-  updating are those that introspect by substring (one site
-  today).
-- **Plugin backends:** no immediate migration required; the
-  legacy-message wrapper in `bridge.ts` (Phase 4) keeps them
-  functional. Drop the wrapper one release after first-party
-  Phase 3 lands.
+- **Pre-release stance:** Annot has not been published. There
+  is no shipped plugin, no external caller depending on the
+  current error wording, no npm consumer with a pinned version.
+  The migration drops the new types in directly — no
+  back-compat shim, no soft-landing wrapper, no deprecation
+  cycle.
+- **In-repo callers:** the only call site that introspects
+  errors today is the substring match in
+  [`split-editor-host.ts:246`](../../packages/web/src/app/split-editor-host.ts:246),
+  which Phase 4 rewrites. Generic `catch (e) {
+  console.error(e.message) }` sites stay unchanged — the new
+  error classes still expose `.message`.
 
 ## Open questions
 
