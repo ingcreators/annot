@@ -1,6 +1,6 @@
 # Pre-release cleanup
 
-> **Status:** Queued
+> **Status:** Done (Stages 1, 2, 4 fully landed; Stage 3 split off — see note below).
 > **Compatibility:** Touches every package. Mostly internal — no
 >                    public API breakage in stages 1–2; stages 3–4
 >                    rearrange `@ingcreators/annot-core` exports,
@@ -8,6 +8,57 @@
 > **Risk:** Phased, four stages, each independently revertable.
 >           No data migration. The largest stage (4) only fires
 >           after stages 1–3 have settled.
+
+## Outcome (2026-04-27)
+
+Most of this plan is in `main`. The remaining god-module
+decomposition work (Stage 3) is being re-scoped into a separate
+plan because the picture has shifted since this doc was written:
+
+- **Stage 1 — Hygiene:** **Done.** Service-worker `catch {}`
+  blocks are gone (0 occurrences in
+  [`packages/extension/src/background/service-worker.ts`](../../../packages/extension/src/background/service-worker.ts)),
+  the two `as any` casts in `github-store.ts` are gone, and Lit
+  element files follow the `annot-` prefix
+  (`annot-file-details-drawer.ts`, `annot-page-elements-section.ts`,
+  `annot-selection-properties-section.ts`,
+  `annot-tool-properties-section.ts`).
+- **Stage 2 — `StorageProvider` capability split:** **Done.**
+  [`packages/core/src/storage/types.ts`](../../../packages/core/src/storage/types.ts)
+  narrows `StorageProvider` to the methods every backend implements;
+  `StorageWithResync` / `StorageWithForceRefresh` /
+  `StorageWithRename` / `StorageWithAuth` are separate capability
+  interfaces; `supportsResync` / `supportsForceRefresh` /
+  `supportsTokenRefresher` type predicates ship in the headless
+  surface (verified by
+  [`packages/core/src/headless.test.ts`](../../../packages/core/src/headless.test.ts)).
+- **Stage 4 — `core` ↔ `web` boundary:** **Done.**
+  [`packages/core/src/index.ts`](../../../packages/core/src/index.ts)
+  is one line (`export * from "./headless.js"`) — headless by
+  construction. `property-panel.ts` now lives in
+  [`packages/editor/src/`](../../../packages/editor/src/) (Tier C);
+  `property-controls.ts` and `tooltip.ts` are gone from
+  `packages/core/`. The headless boundary test is in place and
+  CI-enforced.
+- **Stage 3 — God-module decomposition:** **Re-scoped.** Partial
+  progress is on `main` (toolbar.ts dropped from 3,610 → 1,604 LOC
+  with `toolbar-canvas-menu.ts` / `toolbar-save-menu.ts` /
+  `toolbar-preset-helpers.ts` sidecars; property-panel.ts from
+  1,995 → 940 LOC; github-store.ts from 1,818 → 1,426 LOC), but
+  two files barely moved (selection.ts at 1,859 LOC,
+  service-worker.ts at 1,519 LOC), and the schema-driven refactors
+  landed since this plan was written produced two NEW god-modules
+  of their own:
+  [`property-schema.ts`](../../../packages/core/src/editor/property-schema.ts)
+  (1,102 LOC) and
+  [`tool-registry.ts`](../../../packages/core/src/editor/tool-registry.ts)
+  (1,007 LOC). The remaining decomposition work is being designed
+  as a fresh plan rather than continued under this one.
+
+The Stage-3 sub-list below is preserved verbatim for archival
+reference; do not treat it as the active task list.
+
+---
 
 ## Context
 
