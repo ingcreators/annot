@@ -1,7 +1,6 @@
 import { logger } from "../logger.js";
 import type { BackgroundToContentMessage } from "../shared/messages.js";
 import { startAreaSelection } from "./area-selector.js";
-import { capturePageMetadata } from "./page-metadata.js";
 import { hideProgress, showProgress } from "./progress-overlay.js";
 import { getPageDimensions, scrollTo } from "./scroll-controller.js";
 import {
@@ -85,29 +84,6 @@ if ((window as any).__anno_injected) {
 
       case "get-capture-context":
         sendResponse(getCaptureContext());
-        return false;
-
-      case "get-page-metadata":
-        // Runs synchronously — capture is O(interactive elements),
-        // typically a few ms. The optional `area` (viewport coords)
-        // narrows the captureRect for area / region screenshots so
-        // the editor doesn't list elements outside the captured
-        // region with garbage coordinates.
-        try {
-          const meta = capturePageMetadata(msg.area);
-          logger.debug(
-            "[annot] sending metadata:",
-            meta.elements.length,
-            "elements, captureRect:",
-            meta.captureRect,
-          );
-          sendResponse(meta);
-        } catch (err) {
-          // Never let a metadata failure derail capture. Log + send
-          // null so the caller uses the "no metadata" fallback path.
-          console.warn("[annot] page metadata capture failed", err);
-          sendResponse(null);
-        }
         return false;
     }
 
