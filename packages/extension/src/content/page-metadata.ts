@@ -160,13 +160,30 @@ function isVisuallyOnScreen(el: HTMLElement): boolean {
     //
     // checkVisibility is Chrome 105+ / Firefox 125+; absence is
     // treated as "unknown" and we fall through to the manual checks
-    // below. `contentVisibilityAuto` also excludes the `content-
-    // visibility: auto` rendering skip used by modern long pages.
+    // below.
+    //
+    // `contentVisibilityAuto: true` is INTENTIONALLY OMITTED.
+    // Long content sites (b.hatena.ne.jp/hotentry/it, news feeds,
+    // infinite-scroll listings) increasingly mark every card with
+    // `content-visibility: auto`, so the browser can skip rendering
+    // descendants that are not currently in the viewport. With the
+    // strict flag set, `checkVisibility` reports those skipped
+    // descendants as "not visible" — even though they are real DOM
+    // nodes the user can scroll to and that belong in the Elements
+    // panel. Empirically this zeroed the Elements list on
+    // b.hatena.ne.jp (1337 walker-accepted interactive elements,
+    // ALL filtered out by the strict flag); without it, 958
+    // elements survive and the panel populates correctly.
+    //
+    // The over-filter protection the original intent was about —
+    // "an overlay kept in the DOM but hidden via visibility:hidden
+    // / opacity:0 higher up the tree" — still works through
+    // `checkVisibilityCSS: true` and `checkOpacity: true`, which
+    // walk the ancestor chain for those properties.
     if (typeof el.checkVisibility === "function") {
       const visible = el.checkVisibility({
         checkOpacity: true,
         checkVisibilityCSS: true,
-        contentVisibilityAuto: true,
       } as CheckVisibilityOptions);
       if (!visible) return false;
     } else {
