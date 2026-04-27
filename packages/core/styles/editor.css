@@ -1418,6 +1418,11 @@ body.editor-mode.has-right-panel .file-details-backdrop {
 /* #gallery-container removed — gallery now renders inside #file-manager > #main-content */
 
 .gallery-panel {
+  /* Block display is required because `.gallery-panel` is now applied
+   * to `<annot-gallery-page>` (a custom element, defaults to inline);
+   * without this the horizontal padding collapses around the block
+   * `.gallery-grid` child and the left/right gutter disappears. */
+  display: block;
   padding: 16px 24px;
   /* Fill the available main-content area — let the gallery grid wrap
    * naturally instead of clamping to a fixed max-width. */
