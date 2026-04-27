@@ -161,6 +161,13 @@ export class ExtensionTransferHost {
       folderPath: this.deps.getCurrentFolderPath(),
       createdAt: now,
       updatedAt: now,
+      // Carry DOM-element metadata through the single-record handoff
+      // so the Elements right-panel section is restored on reload (the
+      // first open works either way because setupEditor receives
+      // `record.pageMetadata` directly below — but reopening from the
+      // gallery later goes through `getImage`, which only sees what
+      // was actually persisted here).
+      pageMetadata: record.pageMetadata,
     });
 
     this.deps.setCurrentImagePath(savedPath);
