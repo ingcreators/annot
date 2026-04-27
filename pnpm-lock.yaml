@@ -4,6 +4,15 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+catalogs:
+  default:
+    typescript:
+      specifier: ^6.0.3
+      version: 6.0.3
+    vite:
+      specifier: ^8.0.10
+      version: 8.0.10
+
 overrides:
   serialize-javascript@<7.0.3: '>=7.0.3'
 
@@ -52,10 +61,10 @@ importers:
         specifier: ^2.0.4
         version: 2.0.4
       typescript:
-        specifier: ^6.0.3
+        specifier: 'catalog:'
         version: 6.0.3
       vite:
-        specifier: ^8.0.10
+        specifier: 'catalog:'
         version: 8.0.10(@types/node@25.6.0)(terser@5.46.2)
       vite-plugin-dts:
         specifier: ^4.5.0
@@ -89,10 +98,10 @@ importers:
         specifier: ^2.10.1
         version: 2.10.1
       typescript:
-        specifier: ^6.0.3
+        specifier: 'catalog:'
         version: 6.0.3
       vite:
-        specifier: ^8.0.10
+        specifier: 'catalog:'
         version: 8.0.10(@types/node@25.6.0)(terser@5.46.2)
 
   packages/editor:
@@ -111,10 +120,10 @@ importers:
         version: 2.5.0
     devDependencies:
       typescript:
-        specifier: ^6.0.3
+        specifier: 'catalog:'
         version: 6.0.3
       vite:
-        specifier: ^8.0.10
+        specifier: 'catalog:'
         version: 8.0.10(@types/node@25.6.0)(terser@5.46.2)
 
   packages/extension:
@@ -130,10 +139,10 @@ importers:
         specifier: ^0.1.327
         version: 0.1.425
       typescript:
-        specifier: ^6.0.3
+        specifier: 'catalog:'
         version: 6.0.3
       vite:
-        specifier: ^8.0.10
+        specifier: 'catalog:'
         version: 8.0.10(@types/node@25.6.0)(terser@5.46.2)
 
   packages/render:
@@ -143,10 +152,10 @@ importers:
         version: link:../core
     devDependencies:
       typescript:
-        specifier: ^6.0.3
+        specifier: 'catalog:'
         version: 6.0.3
       vite:
-        specifier: ^8.0.10
+        specifier: 'catalog:'
         version: 8.0.10(@types/node@25.6.0)(terser@5.46.2)
 
   packages/web:
@@ -180,10 +189,10 @@ importers:
         specifier: ^10.3.5
         version: 10.3.5(@testing-library/dom@10.4.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       typescript:
-        specifier: ^6.0.3
+        specifier: 'catalog:'
         version: 6.0.3
       vite:
-        specifier: ^8.0.10
+        specifier: 'catalog:'
         version: 8.0.10(@types/node@25.6.0)(terser@5.46.2)
       vite-plugin-pwa:
         specifier: ^1.2.0
