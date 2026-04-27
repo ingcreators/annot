@@ -356,27 +356,37 @@ Storybook lives in
 [`packages/web/.storybook/`](./packages/web/.storybook/) per
 [`docs/plans/_done/storybook-introduction.md`](./docs/plans/_done/storybook-introduction.md).
 Run locally with `pnpm --filter @ingcreators/annot-web storybook`.
-CI builds the static bundle on every PR (currently
-non-blocking); flipped to blocking in a later phase.
+**CI builds the static bundle on every PR and the build is
+blocking** — a story that fails to compile fails the PR.
 
-- **New Lit components ship with a co-located
-  `*.stories.ts`** next to their `*.ts` source. Story
-  variants cover every visible state the component can land
-  in (idle / loading / empty / populated / error etc.). The
-  rule is documented in
-  [`docs/plans/_done/lit-migration.md`](./docs/plans/_done/lit-migration.md)
-  — every Lit migration PR's test plan expects Storybook
-  screenshots demonstrating pre-Lit / post-Lit visual
-  equivalence.
-- **Vanilla components don't need retroactive stories.** The
-  five initial stories (`SaveStatusIndicator`, `ErrorBar`,
-  `drawer.file`, `FileDetailsDrawer`, `Sidebar`) were
-  written to bootstrap Storybook; further vanilla-component
-  stories are optional and land opportunistically when a
-  component is about to be Lit-migrated.
+- **Stories are encouraged, not required, for Lit components.**
+  The five bootstrap stories (`SaveStatusIndicator`, `ErrorBar`,
+  `drawer.file`, `FileDetailsDrawer`, `Sidebar`) were written
+  during the Storybook introduction; the Lit migration that
+  followed didn't add stories for every migrated component, and
+  the current ratio (5 stories / 22 `LitElement` subclasses) is
+  the de-facto state — there is no plan to retroactively cover
+  the gap. Add a story when:
+    1. The component has multiple visible states that benefit
+       from being viewed in isolation (loading / empty /
+       populated / error variants).
+    2. You're about to land a non-trivial visual change and want
+       a before/after artifact in the PR description.
+    3. The component is on a path likely to be touched by
+       contributors who don't know its full state space.
+  For tiny components with one render path (`<annot-toolbar>`'s
+  flyout chips, etc.), skip the story.
+- **Vanilla (non-Lit) components don't need retroactive
+  stories.** Same rule as for Lit — opportunistic, not
+  obligatory.
 - **Stories are not test replacements.** Vitest stays the
   unit-test home; Storybook is the visual + interactive
   surface for reviewers + future plugin authors.
+
+The 5/22 gap is documented as a known state, not a TODO. If
+broader story coverage becomes valuable later (e.g. when
+Chromatic-style visual regression lands per Phase 3 of the
+Storybook plan), revisit this section as part of that work.
 
 ## Lit conventions
 
