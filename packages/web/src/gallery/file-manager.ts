@@ -6,7 +6,7 @@
  * Lit Phase 3 — the shell DOM construction moved into the
  * `<annot-sidebar>` and `<annot-file-manager-shell>` Lit
  * elements. `FileManager` keeps its orchestrator role: storage
- * + GalleryPage + sidebar wiring + breadcrumb / count refresh.
+ * + `<annot-gallery-page>` + sidebar wiring + breadcrumb / count refresh.
  */
 import type { ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
 import { supportsForceRefresh, supportsResync } from "@ingcreators/annot-core/storage";
@@ -18,7 +18,8 @@ import type {
   AnnotFileManagerShellElement,
   BreadcrumbEntry,
 } from "./file-manager-shell.js";
-import { GalleryPage } from "./gallery-page.js";
+import type { AnnotGalleryPageElement } from "./annot-gallery-page.js";
+import "./annot-gallery-page.js";
 import "./sidebar.js";
 import type {
   AnnotSidebarElement,
@@ -59,7 +60,7 @@ export class FileManager {
   #mainContentEl: HTMLElement;
   #sidebar: AnnotSidebarElement;
   #shell: AnnotFileManagerShellElement;
-  #gallery: GalleryPage | null = null;
+  #gallery: AnnotGalleryPageElement | null = null;
   #storage: StorageProvider | null = null;
   #storageMode: StorageMode = "browser";
   #currentFolderPath = "";
@@ -232,33 +233,41 @@ export class FileManager {
     // before replacing it.
     this.#gallery?.destroy();
     gridHost.innerHTML = "";
-    this.#gallery = new GalleryPage(gridHost, this.#storage);
-    this.#gallery.onOpenImage = (record) => this.#callbacks.onOpenImage(record);
-    this.#gallery.onFolderChange = (folderPath) => {
+    const el = document.createElement("annot-gallery-page");
+    el.storage = this.#storage;
+    el.viewMode = this.#viewMode;
+    el.addEventListener("annot-gallery-open-image", (e) => {
+      this.#callbacks.onOpenImage(e.detail.record);
+    });
+    el.addEventListener("annot-gallery-folder-change", (e) => {
+      const folderPath = e.detail.folderPath;
       this.#currentFolderPath = folderPath;
       this.#sidebar.setActiveFolderPath(folderPath);
       this.#callbacks.onFolderChange(folderPath);
       this.#updateSearchPlaceholder();
       void this.#refreshBreadcrumbs();
       void this.#sidebar.refreshFolderTree();
-    };
-    this.#gallery.onCountChange = (total, filtered) => {
+    });
+    el.addEventListener("annot-gallery-count-change", (e) => {
+      const { total, filtered } = e.detail;
       this.#shell.countText =
         total === filtered
           ? `${total} image${total !== 1 ? "s" : ""}`
           : `${filtered} / ${total} images`;
-    };
-    this.#gallery.onFoldersChanged = () => void this.#sidebar.refreshFolderTree();
-    this.#gallery.onSelectionChange = (sel) => {
+    });
+    el.addEventListener("annot-gallery-folders-changed", () => {
+      void this.#sidebar.refreshFolderTree();
+    });
+    el.addEventListener("annot-gallery-selection-change", (e) => {
+      const sel = e.detail.selection;
       const count = sel.images.length + sel.folders.length;
       this.#shell.selection =
         count > 0 ? { folders: sel.folders.length, images: sel.images.length } : null;
-    };
+    });
+    gridHost.appendChild(el);
+    this.#gallery = el;
 
-    if (this.#searchInput) this.#gallery.setSearchInput(this.#searchInput);
-
-    const grid = gridHost.querySelector(".gallery-grid");
-    if (grid && this.#viewMode === "list") grid.classList.add("list-view");
+    if (this.#searchInput) el.setSearchInput(this.#searchInput);
   }
 
   async #refreshBreadcrumbs(): Promise<void> {
