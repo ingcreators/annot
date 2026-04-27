@@ -40,6 +40,8 @@ import {
   getParentPath,
   joinPath,
   rewritePathPrefix,
+  StorageConflictError,
+  StorageNotFoundError,
   uniquifyFilename,
   validateName,
 } from "@ingcreators/annot-core/storage";
@@ -1084,11 +1086,14 @@ export class GitHubStore
    */
   async moveImage(path: string, newFolderPath: string): Promise<string> {
     await this.#ensureTreeLoaded();
+    if (!this.#tree.hasBlob(path)) {
+      throw new StorageNotFoundError(path, `Image not found: ${path}`);
+    }
     if (newFolderPath === getParentPath(path)) return path;
     const newPath = joinPath(newFolderPath, getFilename(path));
     if (newPath === path) return path;
     if (this.#tree.hasBlob(newPath)) {
-      throw githubError(`Destination already exists: ${newPath}`);
+      throw new StorageConflictError(newPath, `Destination already exists: ${newPath}`);
     }
 
     const oldSha = this.#tree.getBlobSha(path);
@@ -1108,7 +1113,7 @@ export class GitHubStore
       // Fallback to the two-commit Contents-API path.
       const record = await this.getImage(path);
       if (!record?.originalDataUrl) {
-        throw githubError(`Cannot move missing image: ${path}`);
+        throw new StorageNotFoundError(path, `Cannot move missing image: ${path}`);
       }
       const isJpeg = record.originalDataUrl.startsWith("data:image/jpeg");
       const blob = await this.#buildXmpBlob(record, isJpeg ? "jpg" : "png");
@@ -1129,13 +1134,15 @@ export class GitHubStore
   async renameImage(path: string, newName: string): Promise<string> {
     validateName(newName);
     await this.#ensureTreeLoaded();
-    if (!this.#tree.hasBlob(path)) return path;
+    if (!this.#tree.hasBlob(path)) {
+      throw new StorageNotFoundError(path, `Image not found: ${path}`);
+    }
 
     const folderPath = getParentPath(path);
     const newPath = joinPath(folderPath, newName);
     if (newPath === path) return path;
     if (this.#tree.hasBlob(newPath)) {
-      throw githubError(`Image already exists: ${newPath}`);
+      throw new StorageConflictError(newPath, `Image already exists: ${newPath}`);
     }
 
     const oldSha = this.#tree.getBlobSha(path);
@@ -1162,7 +1169,7 @@ export class GitHubStore
     // two-commit path. Preserves the historical semantics.
     const record = await this.getImage(path);
     if (!record?.originalDataUrl) {
-      throw githubError(`Cannot rename missing image: ${path}`);
+      throw new StorageNotFoundError(path, `Cannot rename missing image: ${path}`);
     }
     const isJpeg = record.originalDataUrl.startsWith("data:image/jpeg");
     const blob = await this.#buildXmpBlob(record, isJpeg ? "jpg" : "png");
@@ -1200,7 +1207,7 @@ export class GitHubStore
     await this.#ensureTreeLoaded();
     const fullPath = joinPath(parentPath, name);
     if (this.#folderExists(fullPath)) {
-      throw githubError(`Folder already exists: ${fullPath}`);
+      throw new StorageConflictError(fullPath, `Folder already exists: ${fullPath}`);
     }
     // Git has no "empty directory" concept, so we commit a zero-byte
     // `.gitkeep` to materialise the folder in the tree. The folder
@@ -1260,9 +1267,11 @@ export class GitHubStore
 
   async #moveFolderContents(oldPath: string, newPath: string): Promise<void> {
     await this.#ensureTreeLoaded();
-    if (!this.#folderExists(oldPath)) return;
+    if (!this.#folderExists(oldPath)) {
+      throw new StorageNotFoundError(oldPath, `Folder not found: ${oldPath}`);
+    }
     if (this.#folderExists(newPath)) {
-      throw githubError(`Folder already exists: ${newPath}`);
+      throw new StorageConflictError(newPath, `Folder already exists: ${newPath}`);
     }
 
     // Collect every blob we track under the old path — images and

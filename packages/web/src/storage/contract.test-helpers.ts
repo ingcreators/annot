@@ -1,4 +1,9 @@
-import type { ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
+import {
+  type ImageRecord,
+  StorageConflictError,
+  StorageNotFoundError,
+  type StorageProvider,
+} from "@ingcreators/annot-core/storage";
 import { describe, expect, it } from "vitest";
 
 /**
@@ -158,9 +163,43 @@ export function runStorageContract(backend: string, factory: StorageFactory): vo
     });
 
     it("getImage returns undefined for an unknown path", async () => {
+      // Regression guard: reads stay undefined-on-missing even after
+      // the Phase 3 error-class migration normalised mutation throws.
       const store = await factory();
       const back = await store.getImage("does/not/exist.annot.png");
       expect(back).toBeUndefined();
+    });
+
+    it("renameImage of a missing path throws StorageNotFoundError", async () => {
+      const store = await factory();
+      await expect(
+        store.renameImage("missing.annot.png", "renamed.annot.png"),
+      ).rejects.toBeInstanceOf(StorageNotFoundError);
+    });
+
+    it("renameImage to an existing name throws StorageConflictError", async () => {
+      const store = await factory();
+      const a = await savePayload(store, makeImagePayload({ filename: "a.annot.png" }));
+      await savePayload(store, makeImagePayload({ filename: "b.annot.png" }));
+      await expect(store.renameImage(a, "b.annot.png")).rejects.toBeInstanceOf(
+        StorageConflictError,
+      );
+    });
+
+    it("renameFolder of a missing path throws StorageNotFoundError", async () => {
+      const store = await factory();
+      await expect(store.renameFolder("missing", "renamed")).rejects.toBeInstanceOf(
+        StorageNotFoundError,
+      );
+    });
+
+    it("renameFolder to an existing name throws StorageConflictError", async () => {
+      const store = await factory();
+      await store.createFolder("", "First");
+      await store.createFolder("", "Second");
+      await expect(store.renameFolder("First", "Second")).rejects.toBeInstanceOf(
+        StorageConflictError,
+      );
     });
 
     // ---- updateImage ----
@@ -252,10 +291,12 @@ export function runStorageContract(backend: string, factory: StorageFactory): vo
       expect(children.map((f) => f.path)).toContain("Alpha/Beta");
     });
 
-    it("createFolder throws when the same name already exists", async () => {
+    it("createFolder throws StorageConflictError when the same name already exists", async () => {
       const store = await factory();
       await store.createFolder("", "Dup");
-      await expect(store.createFolder("", "Dup")).rejects.toThrow();
+      await expect(store.createFolder("", "Dup")).rejects.toBeInstanceOf(
+        StorageConflictError,
+      );
     });
 
     it("getFolder returns a record for an existing folder, undefined otherwise", async () => {
