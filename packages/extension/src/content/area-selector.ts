@@ -20,7 +20,16 @@ export function startAreaSelection(): void {
     !!document.getElementById(OVERLAY_ID),
   );
   if (overlay) {
-    overlay.remove();
+    // Defensive: in production, `overlay` was observed to be truthy
+    // BUT lacking `.remove` (TypeError seen on b.hatena.ne.jp). The
+    // exact root cause hasn't been pinned (likely a minifier-collision
+    // edge case where the module-level slot got reused for an unrelated
+    // value across content-script re-injection cycles), but the safety
+    // check is cheap and lets us recover instead of throwing through
+    // the message handler.
+    if (typeof (overlay as { remove?: unknown })?.remove === "function") {
+      overlay.remove();
+    }
     overlay = null;
   }
   // Belt-and-suspenders: if a stray overlay div exists in the DOM
