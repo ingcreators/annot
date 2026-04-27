@@ -16,7 +16,7 @@
  * are written directly into a PNG-8 file via a small in-house encoder
  * (Pako DEFLATE level 9) — no re-quantization, no RGBA round-trip.
  */
-import init, { quantize_image } from "@panda-ai/imagequant";
+import init, { quantize_image } from "@ingcreators/annot-imagequant";
 import { encodePng8 } from "./png8.js";
 
 export type EncodeFormat = "smart" | "png" | "jpeg";
@@ -151,11 +151,12 @@ async function quantizeToPng8(imageData: ImageData): Promise<Uint8Array> {
   );
   const result: any = quantize_image(pixels, w, h, 256);
 
-  // The `@panda-ai/imagequant` wasm-bindgen binding returns a plain object
-  // `{ palette: Uint8Array, indices: Uint8Array }` (NOT the QuantResult
-  // class shown in the .d.ts — that class is never instantiated by the
-  // generated JS). The arrays are already standalone copies of the
-  // WASM-allocated buffers, so no extra slice() is needed.
+  // The `@ingcreators/annot-imagequant` wasm-bindgen binding returns
+  // `{ palette: Uint8Array, indices: Uint8Array }` — palette is
+  // flattened RGBA bytes, indices is one byte per pixel. Arrays are
+  // already standalone copies of the WASM-allocated buffers (the
+  // wrapper does the `Uint8Array::copy_from` itself), so no extra
+  // slice() is needed at the call site.
   const palette: Uint8Array = result?.palette;
   const indices: Uint8Array = result?.indices;
 

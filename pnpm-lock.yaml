@@ -41,9 +41,9 @@ importers:
 
   packages/core:
     dependencies:
-      '@panda-ai/imagequant':
-        specifier: ^0.2.0
-        version: 0.2.0
+      '@ingcreators/annot-imagequant':
+        specifier: workspace:*
+        version: link:../imagequant
       '@tauri-apps/api':
         specifier: ^2.10.1
         version: 2.10.1
@@ -57,12 +57,6 @@ importers:
         specifier: ^2.1.0
         version: 2.1.0
     devDependencies:
-      '@ingcreators/annot-imagequant':
-        specifier: workspace:*
-        version: link:../imagequant
-      '@types/node':
-        specifier: ^25.6.0
-        version: 25.6.0
       '@types/pako':
         specifier: ^2.0.4
         version: 2.0.4
@@ -1034,9 +1028,6 @@ packages:
 
   '@oxc-project/types@0.127.0':
     resolution: {integrity: sha512-aIYXQBo4lCbO4z0R3FHeucQHpF46l2LbMdxRvqvuRuW2OxdnSkcng5B8+K12spgLDj93rtN3+J2Vac/TIO+ciQ==}
-
-  '@panda-ai/imagequant@0.2.0':
-    resolution: {integrity: sha512-MMe6eOa6Z/myfKW1cCvApfi+NVQIuSBB164qRfzexqx7mhqWK3gHQLKItoiWgUJkm9B9yR6EYE9P9zpF2uI1WA==}
 
   '@resvg/resvg-js-android-arm-eabi@2.6.2':
     resolution: {integrity: sha512-FrJibrAk6v29eabIPgcTUMPXiEz8ssrAk7TXxsiZzww9UTQ1Z5KAbFJs+Z0Ez+VZTYgnE5IQJqBcoSiMebtPHA==}
@@ -4276,8 +4267,6 @@ snapshots:
   '@open-draft/until@2.1.0': {}
 
   '@oxc-project/types@0.127.0': {}
-
-  '@panda-ai/imagequant@0.2.0': {}
 
   '@resvg/resvg-js-android-arm-eabi@2.6.2':
     optional: true
