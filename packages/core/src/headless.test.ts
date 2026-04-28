@@ -59,6 +59,20 @@ describe("@ingcreators/annot-core/headless boundary", () => {
     expect(typeof headless.isBuiltinIcon).toBe("function");
     expect(typeof headless.isSvgIcon).toBe("function");
     expect(typeof headless.isUrlIcon).toBe("function");
+    // Icon registry — Phase 2 of
+    // `docs/plans/svg-icons-and-plugin-icon-spec.md`. Pure data,
+    // jsdom-loadable.
+    expect(typeof headless.BUILTIN_ICONS).toBe("object");
+    expect(Array.isArray(headless.BUILTIN_ICON_IDS)).toBe(true);
+    expect(typeof headless.resolveBuiltinIcon).toBe("function");
+    // Icon renderer + sanitiser — Phase 3 of the same plan. Tier-B
+    // Element-takers; the actual DOMParser-driven path is exercised
+    // in their own happy-dom-environment tests, so here we just
+    // assert the surface is present and the import doesn't reach
+    // for `document` at module load time.
+    expect(typeof headless.renderIconHtml).toBe("function");
+    expect(typeof headless.renderIconElement).toBe("function");
+    expect(typeof headless.sanitizeIconSvg).toBe("function");
   });
 
   it("does not leak `document` / `window` into the importing context", () => {

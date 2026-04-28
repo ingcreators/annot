@@ -288,3 +288,13 @@ export {
   type BuiltinIconId,
   resolveBuiltinIcon,
 } from "./editor/icons/registry.js";
+
+// ─── Icon renderer + sanitiser (Tier B Element-takers) ────────────────
+// Phase 3 of `docs/plans/svg-icons-and-plugin-icon-spec.md`.
+// `renderIconHtml(spec)` dispatches on `IconSpec.kind` and produces
+// the markup string Lit `unsafeHTML` / `<annot-icon>` consume.
+// `sanitizeIconSvg(input)` is the allow-list walker that gates plugin-
+// supplied `kind: "svg"` markup. Both are Tier-B (jsdom-friendly
+// DOMParser usage); loadable in pure Node + jsdom for tests.
+export { renderIconElement, renderIconHtml } from "./editor/icons/render.js";
+export { sanitizeIconSvg } from "./editor/icons/sanitize.js";
