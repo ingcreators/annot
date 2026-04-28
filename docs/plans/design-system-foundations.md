@@ -1,33 +1,55 @@
 # Design system foundations
 
-> **Status:** In progress (2026-04-28). Phase 1 landed in
-> [#286](https://github.com/ingcreators/annot/pull/286). Phase 2
-> in branch `refactor/design-system-annot-namespace`. Phases 3–5
-> pending.
+> **Status:** Partially landed (2026-04-28). Phase 1 in
+> [#286](https://github.com/ingcreators/annot/pull/286), Phase 2
+> in [#287](https://github.com/ingcreators/annot/pull/287).
+> Phases 3–5 are deferred to future sessions — the user
+> accepted the Phase 1+2 outcome as sufficient for the original
+> "明確化＋整理＋ユーザカスタマイズ" goal, since self-hosted
+> users can already brand the UI via either (a) a `:root`
+> override block in their own stylesheet (no Annot code change
+> needed), (b) a one-shot `setThemeOverrides({...})` call from
+> a startup script (with `localStorage` persistence and
+> reload-restoration), or (c) DevTools tinkering. A Settings
+> UI (Phase 3) is pure UX-on-top; opening it should only happen
+> when there's a concrete user-facing trigger (support
+> requests, user feedback, brand-customisation docs work).
+>
+> **When to resume Phases 3–5:** any of the following triggers
+> are good signals.
+>
+> - **Phase 3** (Settings UI): a user / customer asks "how do I
+>   change colours without writing CSS?" or the marketing /
+>   docs team writes a "white-label your Annot deployment"
+>   guide and wants a UI screenshot rather than a JS snippet.
+> - **Phase 4** (plugin theme presets): the first plugin author
+>   ships a theme as part of their plugin (e.g. an
+>   `annot-cloud-enterprise` plugin bundling a corporate
+>   palette). Today there's no consumer.
+> - **Phase 5** (`prefers-color-scheme`): user feedback on
+>   "Annot doesn't follow my OS dark mode" — likely the most
+>   commonly-requested of the three. Smallest change of all.
+>
+> Each remaining phase is self-contained and can be picked up
+> from this doc alone after a context reset.
 >
 > **Phase 2 deviation from plan:** the original plan called for
 > three sub-PRs with one-cycle backwards-compat aliases, on the
 > theory that external plugin authors deserved a heads-up window.
 > Annot is still pre-release with no published plugins, so the
-> alias bridge is wasted work. Phase 2 lands as a single hard
+> alias bridge is wasted work. Phase 2 landed as a single hard
 > rename PR; if breakage hits a future plugin, the
 > `@ingcreators/annot-editor` major version bump is the sole
 > contract.
 >
-> **Compatibility:** Phase 2 renames every CSS variable from
-> `--<token>` to `--annot-<token>`. The override API surface is
-> stable — `setThemeOverrides({ accent: "..." })` still uses the
+> **Phase 1+2 compatibility:** Phase 2 renamed every CSS variable
+> from `--<token>` to `--annot-<token>`. The override API surface
+> is stable — `setThemeOverrides({ accent: "..." })` uses the
 > short suffix as the public key; the `--annot-` prefix is added
 > at the wire boundary in `applyOverridesToDom`. Any external CSS
-> referencing the old `--accent` etc. names will break (no aliases
-> shipped). `THEME_TOKEN_NAMES` and `THEME_TOKEN_SECTIONS`
+> referencing the old `--accent` etc. names will break (no
+> aliases shipped). `THEME_TOKEN_NAMES` and `THEME_TOKEN_SECTIONS`
 > unchanged.
->
-> **Risk:** Medium and mechanical. Phase 2's rename is wide (~25
-> tokens × 30+ files) but every change is the same shape:
-> `--<tok>` → `--annot-<tok>`. The CSS↔TS symmetry test
-> (`theme-overrides.test.ts`) catches drift; the visual regression
-> surface is covered by the Storybook build (CI-blocking).
 
 ## Context
 
