@@ -1,3 +1,5 @@
+import { builtinIcon } from "@ingcreators/annot-core";
+import "../ui/annot-icon.js";
 /**
  * `<annot-editor-header>` — editor header bar:
  *
@@ -130,8 +132,7 @@ export class AnnotEditorHeaderElement extends LitElement {
   override render() {
     const hasFile = !!this.filename;
     return html`
-      <button
-        type="button"
+      <button type="button"
         class="editor-header-brand"
         data-tooltip="Back to Gallery"
         aria-label="Back to Gallery"
@@ -155,12 +156,12 @@ export class AnnotEditorHeaderElement extends LitElement {
               ></annot-editable-filename>
               <button
                 type="button"
-                class="editor-header-info-btn material-symbols-outlined"
+                class="editor-header-info-btn"
                 data-tooltip="Show file details and all tags"
                 aria-label="Show file details and all tags"
                 @click=${() => this.callbacks.onToggleInfo()}
               >
-                info
+                <annot-icon .spec=${builtinIcon("info")}></annot-icon>
               </button>
             `
           : nothing}
@@ -173,62 +174,52 @@ export class AnnotEditorHeaderElement extends LitElement {
       <div class="editor-header-file-actions">
         ${this.callbacks.onOpenFile
           ? html`
-              <button
-                type="button"
-                class="header-info-btn material-symbols-outlined"
+              <button type="button"
+                class="header-info-btn"
                 data-tooltip="Open File"
                 aria-label="Open File"
-                @click=${() => this.callbacks.onOpenFile?.()}
-              >
-                folder_open
-              </button>
+                @click=${() => this.callbacks.onOpenFile?.()}>
+            <annot-icon .spec=${builtinIcon("folder_open")}></annot-icon>
+          </button>
             `
           : nothing}
 
-        <button
-          type="button"
-          class="header-info-btn material-symbols-outlined"
+        <button type="button"
+          class="header-info-btn"
           data-tooltip="Copy (Ctrl+C)"
           aria-label="Copy"
-          @click=${() => this.callbacks.onCopy()}
-        >
-          content_copy
-        </button>
+          @click=${() => this.callbacks.onCopy()}>
+            <annot-icon .spec=${builtinIcon("content_copy")}></annot-icon>
+          </button>
 
         <div class="tool-btn-wrap header-save-wrap">
-          <button
-            type="button"
-            class="header-info-btn material-symbols-outlined"
+          <button type="button"
+            class="header-info-btn"
             data-tooltip="Save (Ctrl+S)"
             aria-label="Save"
-            @click=${() => this.callbacks.onSave()}
-          >
-            save
+            @click=${() => this.callbacks.onSave()}>
+            <annot-icon .spec=${builtinIcon("save")}></annot-icon>
           </button>
-          <button
-            type="button"
-            class="tool-dropdown-arrow material-symbols-outlined"
+          <button type="button"
+            class="tool-dropdown-arrow"
             data-tooltip="Save options"
             aria-label="Save options"
             @click=${(e: MouseEvent) => {
               e.stopPropagation();
               const wrap = (e.currentTarget as HTMLElement).parentElement;
               if (wrap) this.callbacks.onSaveMenu(wrap);
-            }}
-          >
-            expand_more
+            }}>
+            <annot-icon .spec=${builtinIcon("expand_more")}></annot-icon>
           </button>
         </div>
       </div>
 
-      <button
-        type="button"
-        class="header-info-btn material-symbols-outlined"
+      <button type="button"
+        class="header-info-btn"
         data-tooltip="Help"
-        aria-label="Help"
-      >
-        help_outline
-      </button>
+        aria-label="Help">
+            <annot-icon .spec=${builtinIcon("help_outline")}></annot-icon>
+          </button>
 
       ${this.#renderThemeToggle()}
     `;
@@ -257,7 +248,7 @@ export class AnnotEditorHeaderElement extends LitElement {
   #themeToggleEl: HTMLElement | null = null;
   #renderThemeToggle() {
     if (!this.#themeToggleEl) {
-      this.#themeToggleEl = createThemeToggle("header-info-btn material-symbols-outlined");
+      this.#themeToggleEl = createThemeToggle("header-info-btn");
     }
     return this.#themeToggleEl;
   }

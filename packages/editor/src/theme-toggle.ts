@@ -14,12 +14,11 @@
  * restoration happens in `applyPersistedTheme()` (called from the host's
  * entry point); see `theme-overrides.ts` for both helpers.
  */
+import { builtinIcon, renderIconHtml } from "@ingcreators/annot-core";
 import { persistThemeChoice } from "./theme-overrides.js";
 import { setTooltip } from "./tooltip.js";
 
-export function createThemeToggle(
-  className = "toolbar-btn material-symbols-outlined",
-): HTMLButtonElement {
+export function createThemeToggle(className = "toolbar-btn"): HTMLButtonElement {
   const btn = document.createElement("button");
   btn.type = "button";
   btn.className = className;
@@ -27,7 +26,10 @@ export function createThemeToggle(
 
   const refreshIcon = () => {
     const isLight = document.documentElement.classList.contains("light");
-    btn.textContent = isLight ? "light_mode" : "dark_mode";
+    // The renderer returns a sanitised SVG string for builtin ids;
+    // assigning to `innerHTML` is safe — the markup originates from
+    // our own registry, not user input.
+    btn.innerHTML = renderIconHtml(builtinIcon(isLight ? "light_mode" : "dark_mode"));
     btn.setAttribute("aria-pressed", String(isLight));
   };
   refreshIcon();

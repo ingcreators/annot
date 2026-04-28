@@ -1,3 +1,5 @@
+import { builtinIcon } from "@ingcreators/annot-core";
+import "../ui/annot-icon.js";
 /**
  * `<annot-editor-statusbar>` — editor footer bar:
  *
@@ -134,18 +136,15 @@ export class AnnotEditorStatusbarElement extends LitElement {
   #renderZoomControls() {
     return html`
       <div id="zoom-controls">
-        <button
-          type="button"
-          class="zoom-btn material-symbols-outlined"
+        <button type="button"
+          class="zoom-btn"
           data-tooltip="Zoom out (\u221210%)"
           aria-label="Zoom out"
-          @click=${() => this.canvas?.setZoom(this.zoomValue - 0.1)}
-        >
-          remove
-        </button>
+          @click=${() => this.canvas?.setZoom(this.zoomValue - 0.1)}>
+            <annot-icon .spec=${builtinIcon("remove")}></annot-icon>
+          </button>
         <div class="zoom-select-wrap">
-          <button
-            type="button"
+          <button type="button"
             class="zoom-label"
             data-tooltip="Zoom level — click to choose a preset"
             aria-label="Zoom level — click to choose a preset"
@@ -155,15 +154,13 @@ export class AnnotEditorStatusbarElement extends LitElement {
           </button>
           ${this.zoomMenuOpen ? this.#renderZoomMenu() : nothing}
         </div>
-        <button
-          type="button"
-          class="zoom-btn material-symbols-outlined"
+        <button type="button"
+          class="zoom-btn"
           data-tooltip="Zoom in (+10%)"
           aria-label="Zoom in"
-          @click=${() => this.canvas?.setZoom(this.zoomValue + 0.1)}
-        >
-          add
-        </button>
+          @click=${() => this.canvas?.setZoom(this.zoomValue + 0.1)}>
+            <annot-icon .spec=${builtinIcon("add")}></annot-icon>
+          </button>
       </div>
     `;
   }

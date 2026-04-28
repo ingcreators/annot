@@ -1,5 +1,45 @@
 /* Annot — web app styles (by ingcreators) */
 
+/* ---- Icon element ---------------------------------------------------
+ *
+ * `<annot-icon>` is the canonical render handle for `IconSpec` values
+ * (see `packages/web/src/ui/annot-icon.ts`). Phase 4 of
+ * `docs/plans/svg-icons-and-plugin-icon-spec.md` migrates every
+ * `<span class="material-symbols-outlined">…</span>` site onto this
+ * element. The defaults below match Material's font-icon optical
+ * weight at 20px so call sites can swap 1:1 without rebalancing
+ * surrounding layout — sizing override at the call site (e.g. via
+ * `font-size: 24px;` on the parent) propagates through `1em`.
+ */
+annot-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* Match Material Symbols' default of font-size 20px. */
+  width: 1em;
+  height: 1em;
+  line-height: 1;
+  vertical-align: middle;
+  color: currentColor;
+}
+
+annot-icon > svg,
+annot-icon > img {
+  width: 100%;
+  height: 100%;
+  fill: currentColor;
+  flex: none;
+}
+
+/* The url-kind <img> render path uses this class so it never picks
+ * up the inline-svg `fill` rule (it's a raster surface), and so a
+ * future style for plugin-asset-backed icons has a stable hook. */
+.annot-icon-img {
+  width: 100%;
+  height: 100%;
+  flex: none;
+}
+
 /* ---- Error bar (draw.io style) ---- */
 
 .error-bar {

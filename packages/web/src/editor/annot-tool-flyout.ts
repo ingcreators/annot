@@ -14,7 +14,9 @@
  * `Toolbar.#showHighlightColorFlyout`.
  */
 
+import { builtinIcon } from "@ingcreators/annot-core";
 import { html, LitElement, nothing, unsafeHTML } from "../lit.js";
+import "../ui/annot-icon.js";
 
 export interface ToolFlyoutChip {
   /** Identifier passed back in the `chip-select` event detail. */
@@ -75,7 +77,7 @@ export class AnnotToolFlyoutElement extends LitElement {
     const isColor = chip.color !== undefined;
     const cls = isColor
       ? `tool-flyout-color-chip${isActive ? " active" : ""}`
-      : `tool-flyout-chip${chip.svg ? " tool-flyout-chip-svg" : " material-symbols-outlined"}${
+      : `tool-flyout-chip${chip.svg ? " tool-flyout-chip-svg" : ""}${
           isActive ? " active" : ""
         }`;
     const onClick = () => {
@@ -95,7 +97,15 @@ export class AnnotToolFlyoutElement extends LitElement {
         style=${isColor ? `--swatch-color: ${chip.color}` : ""}
         @click=${onClick}
       >
-        ${isColor ? nothing : chip.svg ? unsafeHTML(chip.svg) : (chip.icon ?? "")}
+        ${
+          isColor
+            ? nothing
+            : chip.svg
+              ? unsafeHTML(chip.svg)
+              : chip.icon
+                ? html`<annot-icon .spec=${builtinIcon(chip.icon)}></annot-icon>`
+                : nothing
+        }
       </button>
     `;
   }

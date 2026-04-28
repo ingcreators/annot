@@ -19,9 +19,11 @@
 import type { CanvasManager } from "@ingcreators/annot-editor";
 import type { History } from "@ingcreators/annot-editor";
 import type { SelectionManager } from "@ingcreators/annot-editor";
+import { builtinIcon } from "@ingcreators/annot-core";
 import type { PageElement } from "@ingcreators/annot-core/storage";
 import type { UISection } from "../../app/plugin-host.js";
 import { html, LitElement } from "../../lit.js";
+import "../../ui/annot-icon.js";
 import {
   fullDescriptionFor,
   iconForElement,
@@ -90,9 +92,10 @@ export class AnnotRightPanelPageElementsSectionElement extends LitElement {
                     @mouseleave=${() => this.#clearHoverHighlight()}
                     @click=${() => this.#annotateElement(el)}
                   >
-                    <span class="editor-right-panel-element-icon material-symbols-outlined"
-                      >${iconForElement(el)}</span
-                    >
+                    <annot-icon
+                      class="editor-right-panel-element-icon"
+                      .spec=${builtinIcon(iconForElement(el))}
+                    ></annot-icon>
                     <span class="editor-right-panel-element-label"
                       >${primaryLabelFor(el)}</span
                     >

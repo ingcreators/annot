@@ -1,3 +1,5 @@
+import { builtinIcon } from "@ingcreators/annot-core";
+import "../ui/annot-icon.js";
 /**
  * `<annot-scratchpad-section>` — thumbnail grid + "+ Save selection"
  * button used in the right-panel's Scratchpad popover.
@@ -64,15 +66,14 @@ export class AnnotScratchpadSectionElement extends LitElement {
     return html`
       <div class="scratchpad-section-header">
         <h3 class="editor-right-panel-section-title">Scratchpad</h3>
-        <button
-          type="button"
+        <button type="button"
           class="scratchpad-save-btn"
           data-tooltip=${saveTooltip}
           aria-label="Save selection to Scratchpad"
           ?disabled=${!this.saveEnabled}
           @click=${this.#onSaveClick}
         >
-          <span class="material-symbols-outlined" aria-hidden="true">add</span>
+          <annot-icon aria-hidden="true" .spec=${builtinIcon("add")}></annot-icon>
         </button>
       </div>
       <div class="scratchpad-grid">
@@ -102,12 +103,12 @@ export class AnnotScratchpadSectionElement extends LitElement {
         />
         <button
           type="button"
-          class="scratchpad-item-delete material-symbols-outlined"
+          class="scratchpad-item-delete"
           data-tooltip="Delete"
           aria-label="Delete scratchpad item"
           @click=${(e: Event) => this.#onDeleteItem(e, item.id)}
         >
-          close
+          <annot-icon .spec=${builtinIcon("close")}></annot-icon>
         </button>
       </div>
     `;

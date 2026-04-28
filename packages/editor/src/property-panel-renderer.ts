@@ -13,6 +13,7 @@
  * inside the single returned element.
  */
 
+import { builtinIcon, renderIconHtml } from "@ingcreators/annot-core";
 import type {
   PropertyControlDef,
   PropertyControlOption,
@@ -277,8 +278,8 @@ function renderChip(opt: PropertyControlOption, active: boolean): HTMLElement {
     chip.className = `prop-choice-chip pp-color-chip${active ? " active" : ""}`;
     chip.style.setProperty("--swatch-color", opt.swatchColor);
   } else if (opt.materialIcon) {
-    chip.className = `prop-choice-chip material-symbols-outlined${active ? " active" : ""}`;
-    chip.textContent = opt.materialIcon;
+    chip.className = `prop-choice-chip${active ? " active" : ""}`;
+    chip.innerHTML = renderIconHtml(builtinIcon(opt.materialIcon));
   } else if (opt.iconSvg) {
     chip.className = `prop-choice-chip${active ? " active" : ""}`;
     chip.innerHTML = opt.iconSvg;

@@ -24,7 +24,9 @@
  * state (active, tooltip, icon) is reactive.
  */
 
+import { builtinIcon } from "@ingcreators/annot-core";
 import { html, LitElement } from "../lit.js";
+import "../ui/annot-icon.js";
 
 /** Plain custom element — not a Lit element — because the
  *  toolbar's children are populated imperatively by the
@@ -111,9 +113,7 @@ export class AnnotToolbarButtonElement extends LitElement {
   }
 
   override render() {
-    const cls = this.active
-      ? "toolbar-btn material-symbols-outlined active"
-      : "toolbar-btn material-symbols-outlined";
+    const cls = this.active ? "toolbar-btn active" : "toolbar-btn";
     return html`
       <button
         type="button"
@@ -122,7 +122,7 @@ export class AnnotToolbarButtonElement extends LitElement {
         aria-label=${this.tooltip}
         data-tool=${this.dataTool}
       >
-        ${this.icon}
+        <annot-icon .spec=${builtinIcon(this.icon)}></annot-icon>
       </button>
     `;
   }

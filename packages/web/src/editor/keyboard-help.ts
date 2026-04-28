@@ -15,6 +15,8 @@
  * standard overlay conventions so users never feel trapped.
  */
 
+import { createBuiltinIcon } from "../ui/annot-icon-imperative.js";
+
 interface ShortcutEntry {
   keys: string[]; // e.g. ["Ctrl", "Shift", "]"]
   description: string;
@@ -152,8 +154,8 @@ function buildModal(onClose: () => void): HTMLElement {
   header.appendChild(title);
   const closeBtn = document.createElement("button");
   closeBtn.type = "button";
-  closeBtn.className = "keyboard-help-close material-symbols-outlined";
-  closeBtn.textContent = "close";
+  closeBtn.className = "keyboard-help-close";
+  closeBtn.appendChild(createBuiltinIcon("close"));
   closeBtn.setAttribute("aria-label", "Close");
   closeBtn.addEventListener("click", onClose);
   header.appendChild(closeBtn);

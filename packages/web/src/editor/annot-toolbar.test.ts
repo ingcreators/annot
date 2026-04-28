@@ -40,7 +40,15 @@ describe("<annot-toolbar-button> — synchronous getButton() contract", () => {
     expect(btn?.classList.contains("toolbar-btn")).toBe(true);
     expect(btn?.dataset["tool"]).toBe("shape");
     expect(btn?.getAttribute("aria-label")).toBe("Shape");
-    expect(btn?.textContent?.trim()).toBe("shapes");
+    // Post-Phase-4: the button renders an `<annot-icon>` instead of
+    // a Material-Symbols ligature. Assert the icon element + its
+    // builtin spec rather than text content.
+    const icon = btn?.querySelector("annot-icon");
+    expect(icon).not.toBeNull();
+    expect((icon as { spec?: { kind: string; id: string } } | null)?.spec).toEqual({
+      kind: "builtin",
+      id: "shapes",
+    });
 
     el.remove();
   });

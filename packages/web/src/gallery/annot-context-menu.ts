@@ -25,7 +25,9 @@
  * unchanged.
  */
 
+import { builtinIcon } from "@ingcreators/annot-core";
 import { html, LitElement } from "../lit.js";
+import "../ui/annot-icon.js";
 
 export interface MenuItem {
   /** Material Symbols icon name. */
@@ -98,9 +100,10 @@ export class AnnotContextMenuElement extends LitElement {
             class=${`context-menu-item${item.danger ? " context-menu-item-danger" : ""}`}
             @click=${(e: MouseEvent) => this.#onItemClick(e, item)}
           >
-            <span class="material-symbols-outlined context-menu-icon" aria-hidden="true"
-              >${item.icon}</span
-            >
+            <annot-icon
+              class="context-menu-icon"
+              .spec=${builtinIcon(item.icon)}
+            ></annot-icon>
             <span>${item.label}</span>
           </button>
         `,

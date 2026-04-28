@@ -25,6 +25,8 @@
  * submenu from an earlier sibling before opening its own.
  */
 
+import { builtinIcon, renderIconHtml } from "@ingcreators/annot-core";
+
 export interface CanvasMenuItem {
   /** Material Symbols ligature name. Optional — when absent, no icon
    *  column is rendered for that row. Used for section separators and
@@ -201,10 +203,7 @@ function ensureStyle(): void {
   color: var(--annot-text-primary, #0b1020);
   box-sizing: border-box;
 }
-.annot-canvas-ctx-badge.material-symbols-outlined {
-  font-size: 9px;
-  line-height: 1;
-}
+.annot-canvas-ctx-badge annot-icon,
 .annot-canvas-ctx-badge svg {
   width: 9px;
   height: 9px;
@@ -217,10 +216,7 @@ function ensureStyle(): void {
 .annot-canvas-ctx-item.is-parent-open .annot-canvas-ctx-icon {
   color: var(--annot-text-primary, #0b1020);
 }
-.annot-canvas-ctx-icon.material-symbols-outlined {
-  font-size: 20px;
-  line-height: 1;
-}
+.annot-canvas-ctx-icon annot-icon,
 .annot-canvas-ctx-icon svg {
   width: 20px;
   height: 20px;
@@ -322,9 +318,9 @@ function renderMenu(
       row.appendChild(iconSpan);
     } else if (item.icon) {
       iconSpan = document.createElement("span");
-      iconSpan.className = "annot-canvas-ctx-icon material-symbols-outlined";
+      iconSpan.className = "annot-canvas-ctx-icon";
       iconSpan.setAttribute("aria-hidden", "true");
-      iconSpan.textContent = item.icon;
+      iconSpan.innerHTML = renderIconHtml(builtinIcon(item.icon));
       row.appendChild(iconSpan);
     }
 
@@ -342,8 +338,8 @@ function renderMenu(
         badge.className = "annot-canvas-ctx-badge";
         badge.innerHTML = item.badge.svg;
       } else if (item.badge.icon) {
-        badge.className = "annot-canvas-ctx-badge material-symbols-outlined";
-        badge.textContent = item.badge.icon;
+        badge.className = "annot-canvas-ctx-badge";
+        badge.innerHTML = renderIconHtml(builtinIcon(item.badge.icon));
       } else {
         badge.className = "annot-canvas-ctx-badge";
       }
@@ -360,9 +356,9 @@ function renderMenu(
       // Material Symbols "chevron_right" glyph keeps us consistent
       // with the rest of the editor's iconography.
       const chev = document.createElement("span");
-      chev.className = "annot-canvas-ctx-chevron material-symbols-outlined";
+      chev.className = "annot-canvas-ctx-chevron";
       chev.setAttribute("aria-hidden", "true");
-      chev.textContent = "chevron_right";
+      chev.innerHTML = renderIconHtml(builtinIcon("chevron_right"));
       row.appendChild(chev);
     } else if (item.hint) {
       const hintSpan = document.createElement("span");

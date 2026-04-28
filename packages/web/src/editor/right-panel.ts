@@ -1,3 +1,5 @@
+import { builtinIcon } from "@ingcreators/annot-core";
+import "../ui/annot-icon.js";
 /**
  * `<annot-editor-right-panel>` — unified context-aware properties
  * panel.
@@ -213,23 +215,19 @@ export class AnnotEditorRightPanelElement extends LitElement {
       >
         <div class="editor-right-panel-actions-group-label">Transform</div>
         <div class="editor-right-panel-actions-row">
-          <button
-            type="button"
-            class="toolbar-btn material-symbols-outlined"
+          <button type="button"
+            class="toolbar-btn"
             data-tooltip="Rotate 90° counter-clockwise"
             aria-label="Rotate 90° counter-clockwise"
-            @click=${() => this.#rotate(-90)}
-          >
-            rotate_left
+            @click=${() => this.#rotate(-90)}>
+            <annot-icon .spec=${builtinIcon("rotate_left")}></annot-icon>
           </button>
-          <button
-            type="button"
-            class="toolbar-btn material-symbols-outlined"
+          <button type="button"
+            class="toolbar-btn"
             data-tooltip="Rotate 90° clockwise"
             aria-label="Rotate 90° clockwise"
-            @click=${() => this.#rotate(90)}
-          >
-            rotate_right
+            @click=${() => this.#rotate(90)}>
+            <annot-icon .spec=${builtinIcon("rotate_right")}></annot-icon>
           </button>
           ${this.#svgActionBtn(FLIP_H_SVG, "Flip Horizontal (Shift+H)", () => this.#flip("h"))}
           ${this.#svgActionBtn(FLIP_V_SVG, "Flip Vertical (Shift+V)", () => this.#flip("v"))}
@@ -253,101 +251,81 @@ export class AnnotEditorRightPanelElement extends LitElement {
 
         <div class="editor-right-panel-actions-group-label">Align</div>
         <div class="editor-right-panel-actions-row">
-          <button
-            type="button"
-            class="toolbar-btn material-symbols-outlined"
+          <button type="button"
+            class="toolbar-btn"
             data-tooltip="Align left"
             aria-label="Align left"
-            @click=${() => this.selection?.alignSelected("left")}
-          >
-            align_horizontal_left
+            @click=${() => this.selection?.alignSelected("left")}>
+            <annot-icon .spec=${builtinIcon("align_horizontal_left")}></annot-icon>
           </button>
-          <button
-            type="button"
-            class="toolbar-btn material-symbols-outlined"
+          <button type="button"
+            class="toolbar-btn"
             data-tooltip="Align center"
             aria-label="Align center"
-            @click=${() => this.selection?.alignSelected("center-h")}
-          >
-            align_horizontal_center
+            @click=${() => this.selection?.alignSelected("center-h")}>
+            <annot-icon .spec=${builtinIcon("align_horizontal_center")}></annot-icon>
           </button>
-          <button
-            type="button"
-            class="toolbar-btn material-symbols-outlined"
+          <button type="button"
+            class="toolbar-btn"
             data-tooltip="Align right"
             aria-label="Align right"
-            @click=${() => this.selection?.alignSelected("right")}
-          >
-            align_horizontal_right
+            @click=${() => this.selection?.alignSelected("right")}>
+            <annot-icon .spec=${builtinIcon("align_horizontal_right")}></annot-icon>
           </button>
-          <button
-            type="button"
-            class="toolbar-btn material-symbols-outlined"
+          <button type="button"
+            class="toolbar-btn"
             data-tooltip="Distribute horizontally (needs 3+)"
             aria-label="Distribute horizontally (needs 3+)"
-            @click=${() => this.selection?.distributeSelected("horizontal")}
-          >
-            horizontal_distribute
+            @click=${() => this.selection?.distributeSelected("horizontal")}>
+            <annot-icon .spec=${builtinIcon("horizontal_distribute")}></annot-icon>
           </button>
         </div>
         <div class="editor-right-panel-actions-row">
-          <button
-            type="button"
-            class="toolbar-btn material-symbols-outlined"
+          <button type="button"
+            class="toolbar-btn"
             data-tooltip="Align top"
             aria-label="Align top"
-            @click=${() => this.selection?.alignSelected("top")}
-          >
-            align_vertical_top
+            @click=${() => this.selection?.alignSelected("top")}>
+            <annot-icon .spec=${builtinIcon("align_vertical_top")}></annot-icon>
           </button>
-          <button
-            type="button"
-            class="toolbar-btn material-symbols-outlined"
+          <button type="button"
+            class="toolbar-btn"
             data-tooltip="Align middle"
             aria-label="Align middle"
-            @click=${() => this.selection?.alignSelected("middle-v")}
-          >
-            align_vertical_center
+            @click=${() => this.selection?.alignSelected("middle-v")}>
+            <annot-icon .spec=${builtinIcon("align_vertical_center")}></annot-icon>
           </button>
-          <button
-            type="button"
-            class="toolbar-btn material-symbols-outlined"
+          <button type="button"
+            class="toolbar-btn"
             data-tooltip="Align bottom"
             aria-label="Align bottom"
-            @click=${() => this.selection?.alignSelected("bottom")}
-          >
-            align_vertical_bottom
+            @click=${() => this.selection?.alignSelected("bottom")}>
+            <annot-icon .spec=${builtinIcon("align_vertical_bottom")}></annot-icon>
           </button>
-          <button
-            type="button"
-            class="toolbar-btn material-symbols-outlined"
+          <button type="button"
+            class="toolbar-btn"
             data-tooltip="Distribute vertically (needs 3+)"
             aria-label="Distribute vertically (needs 3+)"
-            @click=${() => this.selection?.distributeSelected("vertical")}
-          >
-            vertical_distribute
+            @click=${() => this.selection?.distributeSelected("vertical")}>
+            <annot-icon .spec=${builtinIcon("vertical_distribute")}></annot-icon>
           </button>
         </div>
 
         <div class="editor-right-panel-actions-group-label">Group</div>
         <div class="editor-right-panel-actions-row">
-          <button
-            type="button"
-            class="toolbar-btn material-symbols-outlined"
+          <button type="button"
+            class="toolbar-btn"
             data-tooltip="Group (Ctrl+G)"
             aria-label="Group"
-            @click=${() => this.selection?.groupSelected()}
-          >
-            join_inner
+            @click=${() => this.selection?.groupSelected()}>
+            <annot-icon .spec=${builtinIcon("join_inner")}></annot-icon>
           </button>
-          <button
-            type="button"
-            class="toolbar-btn material-symbols-outlined"
+          <button type="button"
+            class="toolbar-btn"
             data-tooltip="Ungroup (Ctrl+Shift+G)"
             aria-label="Ungroup"
-            @click=${() => this.selection?.ungroupSelected()}
-          >
-            join_left
+            @click=${() => this.selection?.ungroupSelected()}>
+            <annot-icon .spec=${builtinIcon("join_left")}></annot-icon>
           </button>
         </div>
       </section>
@@ -355,7 +333,7 @@ export class AnnotEditorRightPanelElement extends LitElement {
       <div class="editor-right-panel-sections-host"></div>
 
       <div class="editor-right-panel-empty">
-        <span class="editor-right-panel-empty-icon material-symbols-outlined">tune</span>
+        <annot-icon class="editor-right-panel-empty-icon" .spec=${builtinIcon("tune")}></annot-icon>
         <p class="editor-right-panel-empty-title">Properties</p>
         <p class="editor-right-panel-empty-hint">
           Pick a tool or select a shape to see its properties here.
@@ -598,7 +576,7 @@ export class AnnotEditorRightPanelElement extends LitElement {
       banner = document.createElement("div");
       banner.id = id;
       banner.innerHTML = `
-        <span class="material-symbols-outlined">edit</span>
+        <annot-icon .spec=${builtinIcon("edit")}></annot-icon>
         <span>Drawing — press <kbd>Esc</kbd> or <b>Done</b> to finish</span>
       `;
       document.body.appendChild(banner);

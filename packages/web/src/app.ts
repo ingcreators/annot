@@ -7,6 +7,7 @@ import { createThemeToggle } from "@ingcreators/annot-editor";
 import type { ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
 import { assertNonNull } from "@ingcreators/annot-core/utils";
 import { setTooltip } from "@ingcreators/annot-editor/tooltip";
+import { createBuiltinIcon } from "./ui/annot-icon-imperative.js";
 import { ScratchpadStore } from "./editor/scratchpad-store.js";
 import { FileManager } from "./gallery/file-manager.js";
 import { logger } from "./logger.js";
@@ -595,10 +596,7 @@ export class App {
 
     const searchWrap = document.createElement("div");
     searchWrap.className = "header-search-wrap";
-    const searchIcon = document.createElement("span");
-    searchIcon.className = "material-symbols-outlined header-search-icon";
-    searchIcon.textContent = "search";
-    searchWrap.appendChild(searchIcon);
+    searchWrap.appendChild(createBuiltinIcon("search", "header-search-icon"));
 
     const search = document.createElement("input");
     search.type = "search";
@@ -616,15 +614,15 @@ export class App {
 
     const helpBtn = document.createElement("button");
     helpBtn.type = "button";
-    helpBtn.className = "header-info-btn material-symbols-outlined";
-    helpBtn.textContent = "help_outline";
+    helpBtn.className = "header-info-btn";
+    helpBtn.appendChild(createBuiltinIcon("help_outline"));
     setTooltip(helpBtn, "Help");
     helpBtn.setAttribute("aria-label", "Help");
     toolbarEl.appendChild(helpBtn);
 
     // Shared theme toggle factory (from @ingcreators/annot-core) — same behavior
     // as the editor toolbar's toggle so both stay in sync.
-    toolbarEl.appendChild(createThemeToggle("header-info-btn material-symbols-outlined"));
+    toolbarEl.appendChild(createThemeToggle("header-info-btn"));
   }
 
   /** Display name for the root of the currently-active storage.
