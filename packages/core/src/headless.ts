@@ -259,15 +259,8 @@ export { buildZip, dataUrlExt, dataUrlToBytes } from "./zip/zip-builder.js";
 // for "render this icon here". Hosts and plugins both produce `IconSpec`
 // values; the renderer (Phase 3, Tier B) consumes them. Pure types +
 // constructor helpers + type guards — no DOM, no Element imports.
-//
-// The narrow `BuiltinIconId = keyof typeof BUILTIN_ICONS` literal
-// union is exported from the registry (Phase 2,
-// `@ingcreators/annot-core/editor/icons/registry`) and re-exported
-// from the `@ingcreators/annot-core/icons` subpath. Plugin authors who
-// want autocomplete on builtin ids should import from that subpath.
 export {
   builtinIcon,
-  type BuiltinIconId,
   type IconSpec,
   isBuiltinIcon,
   isSvgIcon,
@@ -275,3 +268,23 @@ export {
   svgIcon,
   urlIcon,
 } from "./icons/types.js";
+
+// ─── Builtin icon registry (Tier B pure data) ─────────────────────────
+// Phase 2 of `docs/plans/svg-icons-and-plugin-icon-spec.md`. Single
+// source of truth for the SVG strings backing every
+// `IconSpec({ kind: "builtin", id })` look-up. Material Symbols glyphs
+// (Apache-2.0, Copyright Google LLC) extracted via
+// `scripts/extract-material-symbols.mjs`, plus the hand-rolled
+// `shape.*` / `arrow.*` / `counter.*` groups previously in
+// `toolbar-icons.ts`.
+//
+// Note: `BuiltinIconId` here is the NARROW `keyof typeof
+// BUILTIN_ICONS` literal union — autocomplete + compile-time typo
+// errors flow to every consumer that imports from this entry point
+// (or from the `/icons` subpath, which re-exports it).
+export {
+  BUILTIN_ICON_IDS,
+  BUILTIN_ICONS,
+  type BuiltinIconId,
+  resolveBuiltinIcon,
+} from "./editor/icons/registry.js";

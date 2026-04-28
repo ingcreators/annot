@@ -39,6 +39,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.13",
+    "@material-symbols/svg-400": "^0.44.4",
     "fake-indexeddb": "^6",
     "happy-dom": "^20",
     "msw": "^2.13",
