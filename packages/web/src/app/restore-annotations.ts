@@ -37,8 +37,8 @@ export function restoreAnnotations(canvas: CanvasManager, svgString: string): vo
     if (tag === "defs" || (tag === "image" && !child.closest("g"))) continue;
     if (child.id === "ui-overlay") continue;
     if (child.id === "annotations") {
-      for (const anno of Array.from(child.children)) {
-        canvas.annotations.appendChild(document.importNode(anno, true));
+      for (const annotation of Array.from(child.children)) {
+        canvas.annotations.appendChild(document.importNode(annotation, true));
       }
       continue;
     }

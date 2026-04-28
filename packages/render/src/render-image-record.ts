@@ -51,8 +51,8 @@ export async function renderImageRecord(
       if (tag === "image" && !child.closest("g")) continue;
       if (child.id === "ui-overlay") continue;
       if (child.id === "annotations") {
-        for (const anno of Array.from(child.children)) {
-          svgString += new XMLSerializer().serializeToString(anno);
+        for (const annotation of Array.from(child.children)) {
+          svgString += new XMLSerializer().serializeToString(annotation);
         }
         continue;
       }

@@ -308,8 +308,8 @@ function restoreAnnotationsFromSvgRoot(svgRoot: Element): void {
 
     if (child.id === "annotations") {
       // Flatten annotations group
-      for (const anno of Array.from(child.children)) {
-        const imported = document.importNode(anno, true) as SVGElement;
+      for (const annotation of Array.from(child.children)) {
+        const imported = document.importNode(annotation, true) as SVGElement;
         currentCanvas.annotations.appendChild(imported);
       }
     } else {
