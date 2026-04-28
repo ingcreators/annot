@@ -1267,20 +1267,20 @@ async function injectContentScript(tabId: number): Promise<void> {
     // Probe: ping the existing content script. If it responds, the
     // listener is alive and we can skip re-injection.
     //
-    // The previous flag-based probe (`window.__anno_injected ===
+    // The previous flag-based probe (`window.__annot_injected ===
     // true`) was wrong in two cases:
     //
     //   1. After an extension reload without page F5: the OLD content
     //      script's listener is orphaned (chrome.runtime is dead) but
-    //      `window.__anno_injected` is still true — probe returned
+    //      `window.__annot_injected` is still true — probe returned
     //      true, no re-inject, and `chrome.tabs.sendMessage` to the
     //      orphaned listener silently failed.
     //
     //   2. After a build update where the IIFE wrapper's
-    //      `globalThis.__anno_content_loaded` flag persisted from a
+    //      `globalThis.__annot_content_loaded` flag persisted from a
     //      previous version: the new content.js's IIFE early-
     //      returned, the inner listener-registration code never ran,
-    //      and `window.__anno_injected` stayed `undefined`. Probe
+    //      and `window.__annot_injected` stayed `undefined`. Probe
     //      returned false → re-injection ran → SAME early-return →
     //      no listener was ever registered. Silent failure.
     //
@@ -1307,12 +1307,12 @@ async function injectContentScript(tabId: number): Promise<void> {
       target: { tabId },
       func: () => {
         try {
-          delete (globalThis as { __anno_content_loaded?: boolean }).__anno_content_loaded;
+          delete (globalThis as { __annot_content_loaded?: boolean }).__annot_content_loaded;
         } catch {
           /* may be non-configurable in strict cases — ignore */
         }
         try {
-          delete (window as { __anno_injected?: boolean }).__anno_injected;
+          delete (window as { __annot_injected?: boolean }).__annot_injected;
         } catch {
           /* same */
         }

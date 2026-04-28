@@ -11,11 +11,11 @@ import {
 } from "./sticky-handler.js";
 
 // Guard against double injection
-if ((window as any).__anno_injected) {
+if ((window as any).__annot_injected) {
   // Already injected, skip
   logger.debug("[annot] content script reinjected — guard active");
 } else {
-  (window as any).__anno_injected = true;
+  (window as any).__annot_injected = true;
   logger.debug("[annot] content script loaded");
 
   chrome.runtime.onMessage.addListener((msg: BackgroundToContentMessage, _sender, sendResponse) => {

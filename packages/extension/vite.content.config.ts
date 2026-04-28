@@ -64,7 +64,7 @@ function iifeWrapContentScript(): Plugin {
         // giving us an early-out on repeat executions without touching
         // user code. `globalThis` works in browsers (window) and
         // isolated worlds alike.
-        chunk.code = `(function(){\nif(globalThis.__anno_content_loaded)return;\nglobalThis.__anno_content_loaded=true;\n${stripped}\n})();\n`;
+        chunk.code = `(function(){\nif(globalThis.__annot_content_loaded)return;\nglobalThis.__annot_content_loaded=true;\n${stripped}\n})();\n`;
       }
     },
   };

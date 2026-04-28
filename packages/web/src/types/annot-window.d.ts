@@ -1,5 +1,5 @@
 /**
- * Ambient declarations for the `__anno_*` window globals the
+ * Ambient declarations for the `__annot_*` window globals the
  * Tauri desktop shell + the PWA host wire onto `window`.
  *
  * Why ambient: the toolbar (and a couple of related UI files)
@@ -8,7 +8,7 @@
  * `window` to `any` to silence the TS error — typing the
  * globals here makes those casts unnecessary and lets a
  * reader find every entry point with a single `grep` for
- * `window.__anno_`.
+ * `window.__annot_`.
  *
  * Sign-off (Phase 4 of `docs/plans/source-audit-cleanup.md`):
  * the globals stay in `packages/web` — only the PWA + the
@@ -24,17 +24,17 @@ declare global {
   interface Window {
     /** Open-file action installed by the Tauri shell.
      *  PWA host: never present (file open lives in the gallery). */
-    __anno_openFile?: () => void;
+    __annot_openFile?: () => void;
     /** Save-current-annotations action installed by the Tauri
      *  shell so the toolbar's Save button can drive the host's
      *  XMP save flow.
      *  PWA host: never present (save is auto-debounced). */
-    __anno_saveAnnotations?: () => void;
+    __annot_saveAnnotations?: () => void;
     /** Show-gallery action installed by the Tauri shell so the
      *  toolbar can switch back to gallery without owning routing.
      *  PWA host: never present (gallery is a route the editor
      *  navigates to via History.pushState). */
-    __anno_showGallery?: () => void;
+    __annot_showGallery?: () => void;
   }
 }
 
