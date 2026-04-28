@@ -1475,12 +1475,10 @@ html.light .gallery-item.selected::after {
   border-radius: 50%;
   background: transparent;
   color: var(--annot-text-primary);
+  /* Drives the 1em sizing of the inline-SVG icon child via the
+   * registry's `width="1em" height="1em"` wrapper; the result is
+   * a 22 × 22 px glyph centered inside the 36 px round button. */
   font-size: 22px;
-  font-variation-settings:
-    "FILL" 0,
-    "wght" 500,
-    "GRAD" 0,
-    "opsz" 24;
   cursor: pointer;
   display: flex;
   align-items: center;

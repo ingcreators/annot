@@ -236,9 +236,18 @@ function extractInnerContent(svgString) {
  * theme-aware; `aria-hidden="true"` keeps screen readers quiet on
  * decorative icon spans (consumers wanting an accessible label
  * wrap with `<button aria-label=…>` at the call site).
+ *
+ * `width="1em" height="1em"` makes the rendered SVG size to the
+ * surrounding text size BY DEFAULT — important for call sites that
+ * inject the markup directly via `renderIconHtml(spec)` without a
+ * wrapping `<annot-icon>` element (e.g. `packages/editor`'s theme
+ * toggle, which lives in a Tier-C package that can't depend on
+ * web's `<annot-icon>`). Parent CSS that wants a specific pixel
+ * size sets `font-size` on the parent and the `1em` defaults
+ * follow.
  */
 function wrap(inner) {
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" fill="currentColor" aria-hidden="true">${inner}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" width="1em" height="1em" fill="currentColor" aria-hidden="true">${inner}</svg>`;
 }
 
 const entries = GLYPH_NAMES.slice()
