@@ -1,6 +1,6 @@
 {
   "identifier": "default",
-  "description": "Default capabilities for SVGShot",
+  "description": "Default capabilities for Annot",
   "windows": ["main", "capture-overlay"],
   "permissions": [
     "core:default",

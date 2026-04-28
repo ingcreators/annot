@@ -359,8 +359,8 @@ function coreProps(): string {
   const now = new Date().toISOString().replace(/\.\d+Z/, "Z");
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
-  <dc:title>SVGShot</dc:title>
-  <dc:creator>SVGShot</dc:creator>
+  <dc:title>Annot</dc:title>
+  <dc:creator>Annot</dc:creator>
   <dcterms:created xsi:type="dcterms:W3CDTF">${now}</dcterms:created>
   <dcterms:modified xsi:type="dcterms:W3CDTF">${now}</dcterms:modified>
 </cp:coreProperties>`;
@@ -369,7 +369,7 @@ function coreProps(): string {
 function appProps(): string {
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
-  <Application>SVGShot</Application>
+  <Application>Annot</Application>
   <Slides>1</Slides>
 </Properties>`;
 }
@@ -484,9 +484,9 @@ function slideMasterRels(): string {
 
 function theme(): string {
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="SVGShot">
+<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Annot">
   <a:themeElements>
-    <a:clrScheme name="SVGShot">
+    <a:clrScheme name="Annot">
       <a:dk1><a:srgbClr val="000000"/></a:dk1>
       <a:lt1><a:srgbClr val="FFFFFF"/></a:lt1>
       <a:dk2><a:srgbClr val="44546A"/></a:dk2>
@@ -500,11 +500,11 @@ function theme(): string {
       <a:hlink><a:srgbClr val="0563C1"/></a:hlink>
       <a:folHlink><a:srgbClr val="954F72"/></a:folHlink>
     </a:clrScheme>
-    <a:fontScheme name="SVGShot">
+    <a:fontScheme name="Annot">
       <a:majorFont><a:latin typeface="Calibri"/><a:ea typeface=""/><a:cs typeface=""/></a:majorFont>
       <a:minorFont><a:latin typeface="Calibri"/><a:ea typeface=""/><a:cs typeface=""/></a:minorFont>
     </a:fontScheme>
-    <a:fmtScheme name="SVGShot">
+    <a:fmtScheme name="Annot">
       <a:fillStyleLst>
         <a:solidFill><a:schemeClr val="phClr"/></a:solidFill>
         <a:solidFill><a:schemeClr val="phClr"/></a:solidFill>

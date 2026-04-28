@@ -822,7 +822,7 @@ async function captureVisible(): Promise<void> {
       }
     });
   } catch (err) {
-    console.error("SVGShot: captureVisible failed", err);
+    console.error("Annot: captureVisible failed", err);
   }
 }
 
@@ -888,7 +888,7 @@ async function captureArea(): Promise<void> {
                   openEditor(encoded.dataUrl, croppedW, croppedH, areaMeta);
                 }
               } catch (err) {
-                console.error("SVGShot: captureArea failed", err);
+                console.error("Annot: captureArea failed", err);
               } finally {
                 await endCapturePrep(tab.id!);
               }
