@@ -1,11 +1,11 @@
-// Pull in the `__anno_*` window-global declarations so the four
+// Pull in the `__annot_*` window-global declarations so the four
 // host-bridge reads below typecheck without `(window as any)` casts.
 // The `<reference>` directive is needed because downstream packages
 // that compile this file (e.g. `@ingcreators/annot-desktop` via the
 // `Toolbar` import) don't see web's `.d.ts` files through their own
 // tsconfig `include` glob — only files explicitly referenced by the
 // compiled module are picked up.
-/// <reference path="../types/anno-window.d.ts" />
+/// <reference path="../types/annot-window.d.ts" />
 
 /**
  * `Toolbar` — the editor's vertical tool rail (Select / Crop /
@@ -449,10 +449,10 @@ export class Toolbar {
     histGroup.appendChild(redoBtn);
     shell.appendChild(histGroup);
 
-    // Whether the host provides the __anno_showGallery hook that
+    // Whether the host provides the __annot_showGallery hook that
     // gates the Gallery button. Pre-computed so the two places that
     // need the check (condition below + actual render) stay in sync.
-    const hasGalleryHook = !isTauri && typeof window.__anno_showGallery === "function";
+    const hasGalleryHook = !isTauri && typeof window.__annot_showGallery === "function";
 
     // Open / Copy / Save group. The host can suppress this if it
     // renders these actions at the document-chrome level (e.g. the
@@ -461,9 +461,9 @@ export class Toolbar {
       shell.appendChild(this.#sep());
       const exportGroup = this.#div("toolbar-group");
 
-      if (!isTauri && typeof window.__anno_openFile === "function") {
+      if (!isTauri && typeof window.__annot_openFile === "function") {
         const openBtn = this.#btn("folder_open", "Open File");
-        openBtn.addEventListener("click", () => window.__anno_openFile?.());
+        openBtn.addEventListener("click", () => window.__annot_openFile?.());
         exportGroup.appendChild(openBtn);
       }
 
@@ -475,8 +475,8 @@ export class Toolbar {
       saveWrap.className = "tool-btn-wrap";
       const saveBtn = this.#btn("save", "Save (Ctrl+S)");
       saveBtn.addEventListener("click", () => {
-        if (!isTauri && typeof window.__anno_saveAnnotations === "function") {
-          window.__anno_saveAnnotations();
+        if (!isTauri && typeof window.__annot_saveAnnotations === "function") {
+          window.__annot_saveAnnotations();
         } else {
           saveToFile(this.#canvas, this.#getCurrentFilename?.());
         }
@@ -513,7 +513,7 @@ export class Toolbar {
     // of a breadcrumb / back-link rendered outside the toolbar.
     if (this.#showGalleryButton && hasGalleryHook) {
       const galleryBtn = this.#btn("grid_view", "Gallery");
-      galleryBtn.addEventListener("click", () => window.__anno_showGallery?.());
+      galleryBtn.addEventListener("click", () => window.__annot_showGallery?.());
       shell.appendChild(galleryBtn);
     }
 
@@ -569,8 +569,8 @@ export class Toolbar {
         this.#history.redo();
       } else if (e.ctrlKey && e.key === "s") {
         e.preventDefault();
-        if (!isTauri && typeof window.__anno_saveAnnotations === "function") {
-          window.__anno_saveAnnotations();
+        if (!isTauri && typeof window.__annot_saveAnnotations === "function") {
+          window.__annot_saveAnnotations();
         } else {
           saveToFile(this.#canvas, this.#getCurrentFilename?.());
         }
@@ -617,8 +617,8 @@ export class Toolbar {
   /** Exposed so host-rendered save buttons can trigger the canonical
    *  save path instead of re-implementing it. */
   saveNow(): void {
-    if (!isTauri && typeof window.__anno_saveAnnotations === "function") {
-      window.__anno_saveAnnotations();
+    if (!isTauri && typeof window.__annot_saveAnnotations === "function") {
+      window.__annot_saveAnnotations();
     } else {
       saveToFile(this.#canvas, this.#getCurrentFilename?.());
     }

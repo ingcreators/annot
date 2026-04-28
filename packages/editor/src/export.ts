@@ -261,7 +261,7 @@ export async function downloadAsImage(
 
   // Get current tags from editor
   const tags: Record<string, string> =
-    typeof (window as any).__anno_getTags === "function" ? (window as any).__anno_getTags() : {};
+    typeof (window as any).__annot_getTags === "function" ? (window as any).__annot_getTags() : {};
 
   // Embed XMP metadata for re-editing
   const editableBlob = await createEditableImage({

@@ -81,8 +81,8 @@ export class HeaderHost {
       onToggleInfo: () => this.deps.getFileDetailsDrawer()?.toggle(),
       onRename: (newName) => this.renameCurrentImage(newName),
       onOpenFile:
-        typeof (window as unknown as { __anno_openFile?: () => void }).__anno_openFile === "function"
-          ? () => (window as unknown as { __anno_openFile: () => void }).__anno_openFile()
+        typeof (window as unknown as { __annot_openFile?: () => void }).__annot_openFile === "function"
+          ? () => (window as unknown as { __annot_openFile: () => void }).__annot_openFile()
           : undefined,
       onCopy: () => {
         this.deps.getToolbar()?.copyNow().catch((e) => console.error("[copy]", e));
