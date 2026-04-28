@@ -236,6 +236,17 @@ export { computeDasharray, detectDashKey } from "./utils/dash-utils.js";
 // ─── Assertions (pure runtime guard for non-null invariants) ──────────
 export { assertNonNull } from "./utils/assert.js";
 
+// ─── Default filename helpers (pure date math + string concat) ───────
+// Single source of truth for the `annot-YYYYMMDD-HHMMSS-SSS` shape that
+// every storage backend (browser, device, GitHub, Drive, extension IDB)
+// uses when the caller doesn't supply a filename.
+export {
+  ANNOT_FILENAME_PREFIX,
+  defaultAnnotFilenameStem,
+  defaultAnnotImageFilename,
+  formatLocalTimestamp,
+} from "./utils/filename.js";
+
 // ─── ID generation (Web Crypto, Node 19+ or `node:crypto` webcrypto) ──
 export { newIdB58 } from "./utils/id.js";
 

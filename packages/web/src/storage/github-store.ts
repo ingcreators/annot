@@ -45,6 +45,7 @@ import {
   uniquifyFilename,
   validateName,
 } from "@ingcreators/annot-core/storage";
+import { defaultAnnotImageFilename } from "@ingcreators/annot-core/utils";
 import type { GitHubCommitSummary, GitHubRepoRef } from "./github-auth.js";
 import { getLastCommitForPath } from "./github-auth.js";
 
@@ -784,8 +785,7 @@ export class GitHubStore
     const folderPath = data.folderPath || "";
 
     const isJpeg = data.originalDataUrl.startsWith("data:image/jpeg");
-    const ext = isJpeg ? "annot.jpg" : "annot.png";
-    const desired = opts?.filename || `annot-${Date.now()}.${ext}`;
+    const desired = opts?.filename || defaultAnnotImageFilename(data.originalDataUrl);
     validateName(desired);
 
     const filename = uniquifyFilename(desired, (candidate) => {

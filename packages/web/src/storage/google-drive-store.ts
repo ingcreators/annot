@@ -28,6 +28,7 @@ import {
   uniquifyFilename,
   validateName,
 } from "@ingcreators/annot-core/storage";
+import { defaultAnnotImageFilename } from "@ingcreators/annot-core/utils";
 import { readEditableImage } from "@ingcreators/annot-core/xmp";
 import {
   createGoogleDriveApiClient,
@@ -280,8 +281,7 @@ export class GoogleDriveStore
     if (!parentId) throw new Error(`Folder not found: ${folderPath}`);
 
     const isJpeg = data.originalDataUrl.startsWith("data:image/jpeg");
-    const ext = isJpeg ? "annot.jpg" : "annot.png";
-    const desired = opts?.filename || `annot-${Date.now()}.${ext}`;
+    const desired = opts?.filename || defaultAnnotImageFilename(data.originalDataUrl);
     validateName(desired);
 
     // Uniquify against current cache + live siblings

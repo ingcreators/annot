@@ -13,6 +13,7 @@ import {
   uniquifyFilenameAsync,
   validateName,
 } from "@ingcreators/annot-core/storage";
+import { defaultAnnotFilenameStem } from "@ingcreators/annot-core/utils";
 
 export type { FolderRecord, ImageRecord, ImageRecordUpdate };
 
@@ -53,7 +54,7 @@ function folderStoreT(db: IDBDatabase, mode: IDBTransactionMode): IDBObjectStore
 
 function defaultFilename(data: { originalDataUrl: string }): string {
   const ext = data.originalDataUrl.startsWith("data:image/png") ? "png" : "jpg";
-  return `image-${Date.now()}.${ext}`;
+  return `${defaultAnnotFilenameStem()}.${ext}`;
 }
 
 // ---- Image CRUD ----

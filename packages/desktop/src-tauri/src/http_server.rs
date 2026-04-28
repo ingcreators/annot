@@ -145,8 +145,12 @@ fn save_incoming(capture: &CaptureRequest) -> Result<String, String> {
     let b64 = capture.data.split(',').nth(1).unwrap_or(&capture.data);
     let bytes = STANDARD.decode(b64).map_err(|e| e.to_string())?;
 
-    let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S_%3f").to_string();
-    let filename = format!("anno_{timestamp}.jpg");
+    // Mirror the `defaultAnnotFilenameStem` shape used by the web /
+    // extension stores (`annot-YYYYMMDD-HHMMSS-SSS`). Single source of
+    // truth lives in `packages/core/src/utils/filename.ts`; the Rust
+    // side stays in sync by string contract.
+    let timestamp = chrono::Local::now().format("%Y%m%d-%H%M%S-%3f").to_string();
+    let filename = format!("annot-{timestamp}.jpg");
     let path = incoming_dir.join(&filename);
 
     std::fs::write(&path, &bytes).map_err(|e| e.to_string())?;

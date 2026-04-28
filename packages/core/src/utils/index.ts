@@ -10,6 +10,12 @@ export {
   REDACT_SOLID_COLOR,
 } from "./constants.js";
 export { computeDasharray, detectDashKey } from "./dash-utils.js";
+export {
+  ANNOT_FILENAME_PREFIX,
+  defaultAnnotFilenameStem,
+  defaultAnnotImageFilename,
+  formatLocalTimestamp,
+} from "./filename.js";
 export { newIdB58 } from "./id.js";
 // `tauri-bridge` symbols moved to the dedicated
 // `@ingcreators/annot-core/tauri-bridge` subpath in Stage 4-3 of

@@ -35,6 +35,7 @@ import {
   uniquifyFilenameAsync,
   validateName,
 } from "@ingcreators/annot-core/storage";
+import { defaultAnnotImageFilename } from "@ingcreators/annot-core/utils";
 import { readEditableImage } from "@ingcreators/annot-core/xmp";
 import { fileExists, getDirHandle, purgeEmptyFiles } from "./device-fs.js";
 import { buildEditableImageBlob } from "./image-encode.js";
@@ -322,8 +323,7 @@ export class DeviceStore
     // No explicit filename = annot-native capture → use the shared
     // `annot-<ts>.annot.<ext>` shape. External-file saves pass their
     // original filename and keep it unchanged.
-    const ext = isJpeg ? "annot.jpg" : "annot.png";
-    const desiredFilename = opts?.filename || `annot-${Date.now()}.${ext}`;
+    const desiredFilename = opts?.filename || defaultAnnotImageFilename(data.originalDataUrl);
     validateName(desiredFilename);
     const folderPath = data.folderPath || "";
 
