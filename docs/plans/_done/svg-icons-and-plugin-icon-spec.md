@@ -1,10 +1,38 @@
 # SVG Icon Unification + Plugin `IconSpec` I/F
 
-> **Status:** Queued. Authored 2026-04-28 from a chat-room discussion
-> about consolidating Material Symbols + ad-hoc inline SVG into a
-> single icon system that is also exposed to plugins. Sign-off
-> received 2026-04-28 on the five "Decisions to confirm" questions
-> at the bottom — see "Decisions" section for the locked answers.
+> **Status:** Done (2026-04-28). All 8 phases shipped in a
+> single session. PRs:
+> [#298](https://github.com/ingcreators/annot/pull/298) (plan),
+> [#299](https://github.com/ingcreators/annot/pull/299) (Phase 0
+> NOTICE),
+> [#300](https://github.com/ingcreators/annot/pull/300) (Phase 1
+> `IconSpec` types + `/icons` subpath),
+> [#301](https://github.com/ingcreators/annot/pull/301) (Phase 2
+> registry + extraction script),
+> [#302](https://github.com/ingcreators/annot/pull/302) (Phase 3
+> sanitiser + renderer + attack-vector tests),
+> [#303](https://github.com/ingcreators/annot/pull/303) (Phase 4a
+> `<annot-icon>` Lit element),
+> [#304](https://github.com/ingcreators/annot/pull/304) (Phase
+> 4b–4g first-party migration — combined into a single PR per
+> the deviation noted below),
+> [#305](https://github.com/ingcreators/annot/pull/305) (Phase 5
+> plugin-API rename),
+> [#306](https://github.com/ingcreators/annot/pull/306) (Phase 6
+> font deletion),
+> Phase 7 (plugin-author guide + plan archive — this PR). The
+> plugin-author surface lives at
+> [`docs/plugin-api/icons.md`](../../plugin-api/icons.md).
+>
+> **Deviation from the plan:** Phases 4b–4g were authored as
+> seven independent sub-PRs in the original plan; the
+> implementation collapsed them into a single PR (#304) because
+> the per-file work was uniformly mechanical (a regex bulk
+> replace + import-add scripts) and seven sub-PRs would have
+> multiplied review overhead without proportional benefit. The
+> single PR carries clean per-file commits + a `Verified:`
+> checklist; the plan's split is preserved here for historical
+> readability.
 >
 > **Compatibility:** Touches every UI surface that currently renders
 > a Material Symbols glyph (~131 occurrences across 41 files; 72

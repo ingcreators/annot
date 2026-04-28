@@ -28,6 +28,7 @@
 | [`docs/svg-format.md`](./docs/svg-format.md) | Canonical SVG annotation format reference |
 | [`docs/url-schemes.md`](./docs/url-schemes.md) | Web routes + reserved `annot://` scheme |
 | [`docs/design-system.md`](./docs/design-system.md) | Design tokens, theme switching, user-override API |
+| [`docs/plugin-api/icons.md`](./docs/plugin-api/icons.md) | Plugin-author guide for `IconSpec` + the host icon registry |
 | [`docs/plans/`](./docs/plans/) | Queued / in-progress design plans |
 
 ## Monorepo layout
