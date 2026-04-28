@@ -103,7 +103,7 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
-.sidebar-new-btn .material-symbols-outlined {
+.sidebar-new-btn  annot-icon {
   font-size: 22px;
   color: var(--annot-accent);
 }
@@ -147,12 +147,12 @@
   color: var(--annot-accent);
 }
 
-.new-menu-item .material-symbols-outlined {
+.new-menu-item  annot-icon {
   font-size: 20px;
   color: var(--annot-text-secondary);
 }
 
-.new-menu-item:hover .material-symbols-outlined {
+.new-menu-item:hover  annot-icon {
   color: var(--annot-accent);
 }
 
@@ -924,7 +924,7 @@ html.light .view-toggle-btn.active {
     color 0.1s;
 }
 
-.selection-bar-btn .material-symbols-outlined {
+.selection-bar-btn  annot-icon {
   font-size: 18px;
 }
 
@@ -1284,7 +1284,7 @@ html.light .gallery-item.selected::after {
   padding: 0;
 }
 
-.gallery-folder-card-delete .material-symbols-outlined {
+.gallery-folder-card-delete  annot-icon {
   font-size: 16px;
 }
 
@@ -1325,7 +1325,7 @@ html.light .gallery-item.selected::after {
   height: 48px;
 }
 
-.gallery-grid.list-view .gallery-folder-icon .material-symbols-outlined {
+.gallery-grid.list-view .gallery-folder-icon  annot-icon {
   font-size: 28px;
 }
 
@@ -1365,7 +1365,7 @@ html.light .gallery-item.selected::after {
   text-align: center;
 }
 
-.file-manager-placeholder .material-symbols-outlined {
+.file-manager-placeholder  annot-icon {
   font-size: 64px;
   opacity: 0.3;
 }

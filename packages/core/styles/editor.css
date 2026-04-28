@@ -638,7 +638,7 @@ a.file-details-row-value:hover {
 .file-details-external-link:hover {
   text-decoration: underline;
 }
-.file-details-external-link .material-symbols-outlined {
+.file-details-external-link annot-icon {
   font-size: 16px;
 }
 
@@ -1168,13 +1168,8 @@ body.editor-mode.has-right-panel .file-details-backdrop {
   opacity: 0.35;
   cursor: not-allowed;
 }
-.scratchpad-save-btn .material-symbols-outlined {
+.scratchpad-save-btn annot-icon {
   font-size: 16px;
-  font-variation-settings:
-    "FILL" 0,
-    "wght" 400,
-    "GRAD" 0,
-    "opsz" 20;
 }
 
 .scratchpad-grid {
@@ -1586,7 +1581,7 @@ body.editor-mode.has-right-panel .file-details-backdrop {
   z-index: 2;
 }
 
-.gallery-checkbox .material-symbols-outlined {
+.gallery-checkbox annot-icon {
   font-size: 18px;
 }
 

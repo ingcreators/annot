@@ -1,5 +1,4 @@
 // CSS imports
-import "@ingcreators/annot-core/styles/material-symbols.css";
 import "@ingcreators/annot-core/styles/editor.css";
 import "@ingcreators/annot-core/styles/toolbar.css";
 import "@ingcreators/annot-core/styles/property-panel.css";
