@@ -70,10 +70,18 @@ export class GoogleDriveStore
    * filename collision causes the exposed path to shift its " (2)"
    * suffix.
    *
-   * Populated by `saveImage`, `getImage`, and `updateImage({
-   * thumbnailDataUrl })`. Pruned in `deleteImage`.
+   * Populated by `saveImage`, `getImage`, `updateImage({
+   * thumbnailDataUrl })`, and the background `#ensureThumbnail`
+   * prefetch fired from `listImages` (mirrors `GitHubStore`'s
+   * pattern — neither store ever surfaces a server-rendered
+   * thumbnail, so the gallery looks identical regardless of
+   * backend). Pruned in `deleteImage`.
    */
   #thumbnailByDriveId = new Map<string, string>();
+
+  /** Dedup map for in-flight `#ensureThumbnail` fetches, keyed by
+   *  Drive file ID. Mirrors `GitHubBlobCache#thumbnailInFlight`. */
+  #thumbnailInFlightByDriveId = new Map<string, Promise<void>>();
 
   // Token refresh + dedup live inside `#api`.
 
@@ -396,15 +404,14 @@ export class GoogleDriveStore
 
       const xmp = readEditableImage(bytes);
       const dataUrl = xmp?.originalImageDataUrl || (await this.#blobToDataUrl(new Blob([bytes])));
-      const cachedMeta = this.#fileMeta.get(driveId);
 
       // Generate a local thumbnail from the just-fetched bytes so
       // the gallery has an aspect-preserving render. We've already
       // paid the bandwidth for the full-resolution download above,
       // so this only adds a single OffscreenCanvas resize on top of
-      // the existing IO. Falls back to Drive's letterboxed
-      // `thumbnailLink` if the local resize fails (e.g. unsupported
-      // codec on this browser).
+      // the existing IO. We deliberately do NOT fall back to Drive's
+      // letterboxed `thumbnailLink` on resize failure — the gallery
+      // would rather show a placeholder than the black-bar version.
       const localThumb = await generateThumbnailFromBlob(new Blob([bytes]));
       if (localThumb) this.#thumbnailByDriveId.set(driveId, localThumb);
 
@@ -412,7 +419,7 @@ export class GoogleDriveStore
         path,
         folderPath,
         originalDataUrl: dataUrl,
-        thumbnailDataUrl: localThumb || cachedMeta?.thumbnailLink || "",
+        thumbnailDataUrl: localThumb,
         annotationsSvg: xmp?.annotationsSvg || "",
         width: xmp?.width || 0,
         height: xmp?.height || 0,
@@ -431,28 +438,26 @@ export class GoogleDriveStore
   async listImages(folderPath: string): Promise<ImageRecord[]> {
     await this.#ensureFolderListed(folderPath);
     const results: ImageRecord[] = [];
+    const uncachedPaths: string[] = [];
     for (const [path] of this.#pathToFileId) {
       if (getParentPath(path) !== folderPath) continue;
       const driveId = this.#pathToFileId.get(path)!;
       const m = this.#fileMeta.get(driveId) || {};
-      // Prefer the locally-generated thumbnail seeded by `saveImage`
-      // / `getImage` (aspect-preserving) over Drive's `thumbnailLink`
-      // (letterboxed with black bars baked in). The Drive-ID-keyed
-      // `#thumbnailByDriveId` map outlives `resync()` (which the
-      // gallery calls on every navigation), so once we've rendered
-      // a clean thumbnail for a file it survives subsequent resync
-      // cycles instead of falling back to the letterboxed version.
-      // Files we've never saved or opened still fall through to
-      // Drive's thumbnail URL.
+      // Surface ONLY the locally-generated, aspect-preserving
+      // thumbnail. Drive's `thumbnailLink` is intentionally NOT
+      // used as a fallback — it bakes black letterbox bars into
+      // the pixels, and we mirror GitHubStore's pattern (no server-
+      // rendered thumbs, ever). Cards with no cached local thumb
+      // render blank for one tick, then patch in via the
+      // `annot-thumbnail-ready` event the prefetch dispatches
+      // below.
       const cached = this.#recordCache.get(path);
       const localThumb = this.#thumbnailByDriveId.get(driveId);
-      const thumb = localThumb || cached?.thumbnailDataUrl || m.thumbnailLink || "";
-      // Prefer the cached record's dimensions (read from XMP on
-      // open / set on save). Fall back to Drive's image metadata
-      // (`imageMediaMetadata.width|height`, populated by Drive for
-      // every image MIME) so the gallery card's `WxH • date` line
-      // renders for files we haven't opened yet — without this the
-      // gallery hid dimensions for every Drive item.
+      const thumb = localThumb || cached?.thumbnailDataUrl || "";
+      if (!thumb) uncachedPaths.push(path);
+      // Drive's image-meta is populated for every image MIME so the
+      // gallery's `WxH • date` line lights up immediately, even
+      // before the thumbnail prefetch finishes.
       const imd = m.imageMediaMetadata || {};
       const width = cached?.width || imd.width || 0;
       const height = cached?.height || imd.height || 0;
@@ -471,7 +476,74 @@ export class GoogleDriveStore
       });
     }
     results.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+    // Fire-and-forget background prefetches. Each one downloads
+    // the file via `alt=media`, generates a 480px JPEG thumbnail,
+    // caches it on `#thumbnailByDriveId`, and emits
+    // `annot-thumbnail-ready` so the gallery card patches its
+    // `<img src>` in place. This matches `GitHubStore`'s pattern
+    // exactly — both stores eventually converge to the same
+    // local-only thumbnail surface.
+    for (const p of uncachedPaths) {
+      void this.#ensureThumbnail(p);
+    }
     return results;
+  }
+
+  /**
+   * Background-fetch the file's bytes, generate a local thumbnail,
+   * cache it on `#thumbnailByDriveId`, and emit
+   * `annot-thumbnail-ready` so a rendered gallery card swaps in
+   * the new dataUrl without remounting the grid.
+   *
+   * Mirrors `GitHubStore#ensureThumbnail` deliberately — both
+   * paths share the same lifecycle (dedup via in-flight map,
+   * `annot-thumbnail-ready` event shape, no-op on success when a
+   * fresher thumbnail seeded by `saveImage` / `updateImage` raced
+   * in). The duplication is the price of avoiding cross-store
+   * coupling for now; a future refactor could lift the prefetcher
+   * into a shared helper.
+   */
+  async #ensureThumbnail(path: string): Promise<void> {
+    const driveId = this.#pathToFileId.get(path);
+    if (!driveId) return;
+    if (this.#thumbnailByDriveId.has(driveId)) return;
+    const existing = this.#thumbnailInFlightByDriveId.get(driveId);
+    if (existing) return existing;
+    let inFlight: Promise<void> | undefined;
+    inFlight = (async () => {
+      try {
+        const resp = await this.#fetch(`${DRIVE_API}/files/${driveId}?alt=media`);
+        const arrayBuf = await resp.arrayBuffer();
+        const blob = new Blob([new Uint8Array(arrayBuf)]);
+        const dataUrl = await generateThumbnailFromBlob(blob);
+        if (!dataUrl) return;
+        // Don't clobber a freshly-seeded thumbnail from the editor
+        // (`updateImage({ thumbnailDataUrl })`). Its render reflects
+        // the current canvas state, which may include edits newer
+        // than what our GET saw.
+        if (this.#thumbnailByDriveId.has(driveId)) return;
+        // The file may have been deleted while our fetch was in
+        // flight — drop the result rather than caching against a
+        // stale Drive ID.
+        if (!this.#fileIdToPath.has(driveId)) return;
+        this.#thumbnailByDriveId.set(driveId, dataUrl);
+        const currentPath = this.#fileIdToPath.get(driveId) || path;
+        window.dispatchEvent(
+          new CustomEvent("annot-thumbnail-ready", {
+            detail: { path: currentPath, dataUrl },
+          }),
+        );
+      } catch {
+        // Swallow — the gallery just keeps showing the placeholder.
+        // A subsequent forceRefresh / navigation retries.
+      } finally {
+        if (this.#thumbnailInFlightByDriveId.get(driveId) === inFlight) {
+          this.#thumbnailInFlightByDriveId.delete(driveId);
+        }
+      }
+    })();
+    this.#thumbnailInFlightByDriveId.set(driveId, inFlight);
+    return inFlight;
   }
 
   async updateImage(path: string, updates: ImageRecordUpdate): Promise<void> {
@@ -606,6 +678,7 @@ export class GoogleDriveStore
     this.#fileMeta.delete(driveId);
     this.#recordCache.delete(path);
     this.#thumbnailByDriveId.delete(driveId);
+    this.#thumbnailInFlightByDriveId.delete(driveId);
   }
 
   // ---- Folders ----
@@ -768,6 +841,7 @@ export class GoogleDriveStore
         this.#fileMeta.delete(id);
         this.#recordCache.delete(p);
         this.#thumbnailByDriveId.delete(id);
+        this.#thumbnailInFlightByDriveId.delete(id);
       }
     }
   }
