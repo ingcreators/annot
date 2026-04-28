@@ -70,7 +70,7 @@ host-internal and may grow / change without an API-version bump:
 | Prefix | Owner | What lives here |
 |--|--|--|
 | `arrow.*`, `counter.*`, `shape.*` | host toolbar | Tool-variant glyphs that mirror toolbar button states. |
-| `brand.*` | host storage chips | Third-party trademarks (GitHub Mark, Google Drive logo) bundled verbatim from each vendor's published assets, used to identify the corresponding storage backend per each vendor's brand guidelines. **Plugin-supplied storage backends MUST NOT reuse `brand.github` / `brand.google_drive` for non-GitHub / non-Drive backends** — the marks belong to those vendors and reusing them would mislead users. Bring your own logomark via `kind: "svg"` or `kind: "url"` instead. |
+| `brand.*` | host storage chips | Third-party trademarks (currently the GitHub Mark) bundled verbatim from the vendor's published asset, used to identify the corresponding storage backend per the vendor's brand guidelines. **Plugin-supplied storage backends MUST NOT reuse `brand.github` for non-GitHub backends** — the mark belongs to GitHub, Inc. and reusing it would mislead users. Bring your own logomark via `kind: "svg"` or `kind: "url"` instead. |
 
 ### Plugin-owned SVG (logomark)
 

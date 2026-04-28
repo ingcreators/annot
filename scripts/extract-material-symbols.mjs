@@ -88,6 +88,7 @@ const upstreamVersion = JSON.parse(
  */
 const GLYPH_NAMES = [
   "add",
+  "add_to_drive",
   "align_horizontal_center",
   "align_horizontal_left",
   "align_horizontal_right",

@@ -36,7 +36,7 @@
  */
 
 import { ARROW_ICON_SVG, COUNTER_ICON_SVG, SHAPE_ICON_SVG } from "../toolbar-icons.js";
-import { BRAND_GITHUB_SVG, BRAND_GOOGLE_DRIVE_SVG } from "./brand-icons.js";
+import { BRAND_GITHUB_SVG } from "./brand-icons.js";
 import { MATERIAL_SYMBOL_GLYPHS } from "./material-symbols.js";
 
 /**
@@ -70,14 +70,14 @@ const HAND_ROLLED_GLYPHS = {
   "counter.circle": COUNTER_ICON_SVG.circle,
   "counter.rect": COUNTER_ICON_SVG.rect,
   "counter.rounded": COUNTER_ICON_SVG.rounded,
-  // Storage-backend brand marks. Geometry + colours are verbatim
-  // from the upstream-published assets so the marks comply with
-  // each vendor's brand guidelines (don't modify, don't recolour
-  // multi-colour marks). See `brand-icons.ts` for the trademark
-  // notice and the rationale for the `currentColor` vs. fixed-
-  // palette split.
+  // GitHub brand mark for the storage chip. Geometry verbatim
+  // from `github.com/logos`; rendered in `currentColor` (the
+  // monochrome usage GitHub explicitly permits in their logo
+  // guidelines). See `brand-icons.ts` for the trademark notice.
+  // Drive's chip uses Material Symbols' `add_to_drive` glyph
+  // instead — the official multi-colour Drive logo would clash
+  // visually with every other monochrome icon in the sidebar.
   "brand.github": BRAND_GITHUB_SVG,
-  "brand.google_drive": BRAND_GOOGLE_DRIVE_SVG,
 } as const;
 
 /**

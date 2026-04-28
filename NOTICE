@@ -42,13 +42,10 @@ NOT licensed):
     and is used to identify the GitHub storage backend per the
     GitHub Logos & Usage policy. No endorsement by or affiliation
     with GitHub, Inc. is implied.
-  - "Google Drive" and the Drive logo are trademarks of Google LLC.
-    The multi-colour mark bundled in
-    `packages/core/src/editor/icons/brand-icons.ts` is rendered
-    verbatim (geometry + brand colours preserved) from the asset
-    published by Google and is used to identify the Google Drive
-    storage backend per the Google Drive Branding Guidelines
-    (https://developers.google.com/drive/api/guides/branding). No
+  - "Google Drive" is a trademark of Google LLC. The Google Drive
+    storage backend is identified in the gallery sidebar via the
+    Material Symbols glyph `add_to_drive` (Apache-2.0, see above);
+    the official multi-colour Drive logo is NOT shipped here. No
     endorsement by or affiliation with Google LLC is implied.
 
 This NOTICE is a "informational only" attribution file as
