@@ -10,6 +10,7 @@ import type {
   ImageRecord,
   ImageRecordUpdate,
   StorageProvider,
+  StorageWithThumbnailCache,
 } from "@ingcreators/annot-core/storage";
 import {
   ancestorPaths,
@@ -57,13 +58,10 @@ function folderStore(db: IDBDatabase, mode: IDBTransactionMode) {
   return db.transaction(FOLDER_STORE, mode).objectStore(FOLDER_STORE);
 }
 
-export class BrowserStore implements StorageProvider {
+export class BrowserStore implements StorageProvider, StorageWithThumbnailCache {
   // ---- Images ----
 
-  async saveImage(
-    data: Omit<ImageRecord, "path">,
-    opts?: { filename?: string },
-  ): Promise<string> {
+  async saveImage(data: Omit<ImageRecord, "path">, opts?: { filename?: string }): Promise<string> {
     // No explicit filename from the caller → treat as an annot-native
     // capture and use the shared `annot-<ts>.annot.<ext>` shape (see
     // `defaultAnnotImageFilename` in `@ingcreators/annot-core/utils`).
@@ -85,7 +83,11 @@ export class BrowserStore implements StorageProvider {
       path,
       folderPath,
       originalDataUrl: data.originalDataUrl,
-      thumbnailDataUrl: data.thumbnailDataUrl,
+      // Thumbnail bytes are owned by the unified `ThumbnailManager`
+      // — the host's `tm.write(provider, path, dataUrl, dims)` call
+      // in the capture / save flow seeds it. We store `""` in IDB
+      // so the gallery's hydration path goes through the manager.
+      thumbnailDataUrl: "",
       annotationsSvg: data.annotationsSvg,
       width: data.width,
       height: data.height,
@@ -416,7 +418,48 @@ export class BrowserStore implements StorageProvider {
     return result;
   }
 
-  // (Thumbnail generation lives in
-  //  `@ingcreators/annot-web/storage/image-thumbnail` —
-  //  callers import `generateThumbnailFromDataUrl` directly.)
+  // ── StorageWithThumbnailCache ────────────────────────────────
+
+  /**
+   * Stable per-image identifier for the unified thumbnail cache.
+   * Browser store is the only writer for its IndexedDB, so the
+   * path itself (which includes the folder + uniquified filename)
+   * uniquely identifies a record across a single install.
+   */
+  thumbnailKey(path: string): string | undefined {
+    return `browser:${path}`;
+  }
+
+  /**
+   * `updatedAt` advances on every `updateImage` call (set in
+   * `updateImage`'s `Object.assign`), so cache hits stay fresh
+   * across edits. No external mutation possible — the only writer
+   * is this same `BrowserStore` instance.
+   */
+  thumbnailVersion(_path: string): string {
+    // Read-time deferred to keep this synchronous; the manager
+    // calls `thumbnailVersion` per record during `attach`, so an
+    // async lookup would balloon to N parallel IDB reads. Empty
+    // string means "no version mismatch detection" — fine here
+    // because no external writer exists. The cache key itself
+    // (path) changes when the file is renamed / moved (cache
+    // becomes orphan and the LRU sweep reclaims it).
+    return "";
+  }
+
+  /**
+   * Source bytes for thumbnail regeneration come from the IDB
+   * record's `originalDataUrl`. The manager runs the result
+   * through `generateThumbnailFromBlob` when the cache misses.
+   */
+  async fetchThumbnailSource(path: string): Promise<Blob | undefined> {
+    const record = await this.getImage(path);
+    if (!record?.originalDataUrl) return undefined;
+    try {
+      const resp = await fetch(record.originalDataUrl);
+      return await resp.blob();
+    } catch {
+      return undefined;
+    }
+  }
 }

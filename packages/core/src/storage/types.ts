@@ -32,10 +32,14 @@ export interface ImageRecord {
  * is intentionally NOT in this set — moving an image to a different
  * folder goes through {@link StorageProvider.moveImage}, which has
  * a clearer contract (returns the new path; `updateImage` doesn't).
+ *
+ * `thumbnailDataUrl` is also intentionally absent — thumbnail bytes
+ * are owned by the host-side `ThumbnailManager` (see
+ * [`docs/plans/_done/unified-thumbnail-cache.md`](../../../../docs/plans/unified-thumbnail-cache.md));
+ * callers seed the cache via `tm.write(provider, path, dataUrl,
+ * dims)` rather than going through `updateImage`.
  */
-export type ImageRecordUpdate = Partial<
-  Pick<ImageRecord, "annotationsSvg" | "tags" | "thumbnailDataUrl" | "updatedAt">
->;
+export type ImageRecordUpdate = Partial<Pick<ImageRecord, "annotationsSvg" | "tags" | "updatedAt">>;
 
 // =============================================================================
 // Page metadata — DOM structure captured alongside a browser screenshot.
