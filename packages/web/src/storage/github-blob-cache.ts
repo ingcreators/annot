@@ -41,11 +41,23 @@ export interface GitHubFileMeta {
   updatedAt?: string;
 }
 
+/** Image natural dimensions. Populated by the thumbnail prefetch
+ *  (`createImageBitmap` / XMP decode) so the gallery's `WxH • date`
+ *  line can render before any `getImage` round-trip has taken
+ *  place. Stored separately from the record cache because a stub
+ *  record with empty `originalDataUrl` would shortcut `getImage`'s
+ *  cache check and surface a blank-canvas editor. */
+export interface ImageDimensions {
+  width: number;
+  height: number;
+}
+
 export class GitHubBlobCache {
   #record = new Map<string, ImageRecord>();
   #meta = new Map<string, GitHubFileMeta>();
   #thumbnail = new Map<string, string>();
   #thumbnailInFlight = new Map<string, Promise<void>>();
+  #dimensions = new Map<string, ImageDimensions>();
 
   // ─── Record cache ─────────────────────────────────────────────────
 
@@ -101,6 +113,18 @@ export class GitHubBlobCache {
     return this.#thumbnailInFlight.delete(path);
   }
 
+  // ─── Dimensions cache ─────────────────────────────────────────────
+
+  setDimensions(path: string, dims: ImageDimensions): void {
+    this.#dimensions.set(path, dims);
+  }
+  getDimensions(path: string): ImageDimensions | undefined {
+    return this.#dimensions.get(path);
+  }
+  deleteDimensions(path: string): boolean {
+    return this.#dimensions.delete(path);
+  }
+
   // ─── Compound operations ──────────────────────────────────────────
 
   /**
@@ -113,6 +137,7 @@ export class GitHubBlobCache {
     this.#meta.delete(path);
     this.#thumbnail.delete(path);
     this.#thumbnailInFlight.delete(path);
+    this.#dimensions.delete(path);
   }
 
   /**
@@ -148,6 +173,11 @@ export class GitHubBlobCache {
     if (thumb) {
       this.#thumbnail.delete(oldPath);
       this.#thumbnail.set(newPath, thumb);
+    }
+    const dims = this.#dimensions.get(oldPath);
+    if (dims) {
+      this.#dimensions.delete(oldPath);
+      this.#dimensions.set(newPath, dims);
     }
   }
 
@@ -190,13 +220,21 @@ export class GitHubBlobCache {
         this.#thumbnail.set(np, t);
       }
     }
+    for (const [p, d] of Array.from(this.#dimensions.entries())) {
+      if (p === oldPrefix || p.startsWith(`${oldPrefix}/`)) {
+        const np = rewritePathPrefix(p, oldPrefix, newPrefix);
+        this.#dimensions.delete(p);
+        this.#dimensions.set(np, d);
+      }
+    }
   }
 
-  /** Drop every entry across all four caches. Used by forceRefresh. */
+  /** Drop every entry across all five caches. Used by forceRefresh. */
   clear(): void {
     this.#record.clear();
     this.#meta.clear();
     this.#thumbnail.clear();
     this.#thumbnailInFlight.clear();
+    this.#dimensions.clear();
   }
 }
