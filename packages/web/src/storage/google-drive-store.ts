@@ -59,6 +59,22 @@ export class GoogleDriveStore
   // Track children loaded per folder (for invalidation purposes)
   #loadedFolders = new Set<string>();
 
+  /**
+   * Locally-generated, aspect-preserving thumbnails keyed by Drive
+   * file ID. Outlives `resync()` so the gallery doesn't fall back to
+   * Drive's letterboxed `thumbnailLink` every time the file-manager
+   * refreshes (which happens on every navigation back to the gallery
+   * — `annot-gallery-page.refresh()` calls `storage.resync()`
+   * unconditionally before `listImages`). Drive IDs are stable
+   * across resyncs, so keying off the ID stays correct even if a
+   * filename collision causes the exposed path to shift its " (2)"
+   * suffix.
+   *
+   * Populated by `saveImage`, `getImage`, and `updateImage({
+   * thumbnailDataUrl })`. Pruned in `deleteImage`.
+   */
+  #thumbnailByDriveId = new Map<string, string>();
+
   // Token refresh + dedup live inside `#api`.
 
   constructor(token: string, rootFolderId: string, apiClient?: GoogleDriveApiClient) {
@@ -311,6 +327,7 @@ export class GoogleDriveStore
     // this is a pure OffscreenCanvas resize — no extra network.
     const localThumb =
       data.thumbnailDataUrl || (await generateThumbnailFromDataUrl(data.originalDataUrl));
+    if (localThumb) this.#thumbnailByDriveId.set(driveId, localThumb);
     // Seed the cache so the first edit on a freshly saved image
     // doesn't have to round-trip to Drive for the original data.
     const now = new Date().toISOString();
@@ -389,6 +406,7 @@ export class GoogleDriveStore
       // `thumbnailLink` if the local resize fails (e.g. unsupported
       // codec on this browser).
       const localThumb = await generateThumbnailFromBlob(new Blob([bytes]));
+      if (localThumb) this.#thumbnailByDriveId.set(driveId, localThumb);
 
       const record: ImageRecord = {
         path,
@@ -419,11 +437,16 @@ export class GoogleDriveStore
       const m = this.#fileMeta.get(driveId) || {};
       // Prefer the locally-generated thumbnail seeded by `saveImage`
       // / `getImage` (aspect-preserving) over Drive's `thumbnailLink`
-      // (letterboxed with black bars baked in). Files we've never
-      // saved or opened in this session still fall through to the
-      // Drive-served thumbnail.
+      // (letterboxed with black bars baked in). The Drive-ID-keyed
+      // `#thumbnailByDriveId` map outlives `resync()` (which the
+      // gallery calls on every navigation), so once we've rendered
+      // a clean thumbnail for a file it survives subsequent resync
+      // cycles instead of falling back to the letterboxed version.
+      // Files we've never saved or opened still fall through to
+      // Drive's thumbnail URL.
       const cached = this.#recordCache.get(path);
-      const thumb = cached?.thumbnailDataUrl || m.thumbnailLink || "";
+      const localThumb = this.#thumbnailByDriveId.get(driveId);
+      const thumb = localThumb || cached?.thumbnailDataUrl || m.thumbnailLink || "";
       // Prefer the cached record's dimensions (read from XMP on
       // open / set on save). Fall back to Drive's image metadata
       // (`imageMediaMetadata.width|height`, populated by Drive for
@@ -470,6 +493,15 @@ export class GoogleDriveStore
           ...existing,
           thumbnailDataUrl: updates.thumbnailDataUrl,
         });
+      }
+      // Seed the resync-surviving Drive-ID-keyed map too, so the
+      // gallery's next refresh (which clears `#recordCache`) still
+      // picks up this thumbnail instead of falling back to Drive's
+      // letterboxed `thumbnailLink`.
+      if (updates.thumbnailDataUrl) {
+        this.#thumbnailByDriveId.set(driveId, updates.thumbnailDataUrl);
+      } else {
+        this.#thumbnailByDriveId.delete(driveId);
       }
       window.dispatchEvent(
         new CustomEvent("annot-thumbnail-ready", {
@@ -573,6 +605,7 @@ export class GoogleDriveStore
     this.#fileIdToPath.delete(driveId);
     this.#fileMeta.delete(driveId);
     this.#recordCache.delete(path);
+    this.#thumbnailByDriveId.delete(driveId);
   }
 
   // ---- Folders ----
@@ -734,6 +767,7 @@ export class GoogleDriveStore
         this.#fileIdToPath.delete(id);
         this.#fileMeta.delete(id);
         this.#recordCache.delete(p);
+        this.#thumbnailByDriveId.delete(id);
       }
     }
   }
