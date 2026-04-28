@@ -126,10 +126,50 @@ class StorageRegistry {
   /** Stash the active plugin-mode store so subsequent `active()` /
    *  `getStorage()` calls find it. Replaces any previous store for
    *  the same mode (fine — a re-`connect` is the supported way to
-   *  recover from a session expiry). */
+   *  recover from a session expiry).
+   *
+   *  Wraps the store's `thumbnailKey` (if present) to enforce the
+   *  `plugin:<mode>:<plugin-defined>` namespace convention so two
+   *  plugins can't accidentally collide on identical keys, and so
+   *  plugins can't read or evict built-in (`browser:` / `device:` /
+   *  `github:` / `googledrive:`) cache entries. The plugin author
+   *  doesn't need to know about the prefix — they return whatever
+   *  identifier is convenient (path, id, hash) and the host
+   *  prepends. Plugin uninstall fires
+   *  `ThumbnailManager.invalidatePrefix("plugin:<mode>:")` to
+   *  cleanup. */
   registerPluginStore(mode: string, store: StorageProvider): void {
-    this.pluginStores.set(mode, store);
+    this.pluginStores.set(mode, namespaceThumbnailKeys(mode, store));
   }
+}
+
+/**
+ * If `store` implements `StorageWithThumbnailCache`, return a
+ * proxy that prepends `plugin:<mode>:` to whatever key the store's
+ * `thumbnailKey` returns (idempotent — already-prefixed keys pass
+ * through unchanged). Returns the store untouched when it doesn't
+ * participate.
+ */
+function namespaceThumbnailKeys(mode: string, store: StorageProvider): StorageProvider {
+  const target = store as StorageProvider & {
+    thumbnailKey?: (path: string) => string | undefined;
+  };
+  const tk = target.thumbnailKey;
+  if (typeof tk !== "function") return store;
+  const prefix = `plugin:${mode}:`;
+  // We mutate the store's `thumbnailKey` in place rather than
+  // creating a wrapping Proxy: the rest of the storage interface
+  // (24+ async methods) shouldn't pay a per-call function-table
+  // hop, and the wrap is one-shot at registration time so identity
+  // preservation isn't a concern.
+  const original = tk.bind(store);
+  target.thumbnailKey = (path) => {
+    const raw = original(path);
+    if (!raw) return raw;
+    if (raw.startsWith(prefix)) return raw;
+    return `${prefix}${raw}`;
+  };
+  return store;
 }
 
 const registry = new StorageRegistry();
