@@ -182,10 +182,16 @@ Readers treat missing attribute as v0 and re-stamp on save.
 - [ ] Should `PageMetadata` be embeddable inside the SVG as a
       `<metadata>` element for single-file portability? Trades file
       size against simplicity of the storage contract.
-- [ ] Namespacing: do we want `xmlns:annot="https://annot.work/ns"`
-      and `<annot:*>` elements instead of `data-*` attributes? More
+- [ ] Namespacing: do we want
+      `xmlns:annot="https://ingcreators.com/annot/ns/1.0/"` and
+      `<annot:*>` elements instead of `data-*` attributes? More
       principled but harder for downstream tools that assume plain
-      SVG.
+      SVG. If adopted, reuse the XMP namespace URI (already shared
+      between `packages/core/src/xmp/xmp-browser.ts` and the Rust
+      side in `src-tauri/src/commands/xmp.rs`) so SVG and XMP refer
+      to the same vocabulary — `ingcreators.com` is the stable
+      schema domain, `annot.work` is reserved for user-facing
+      hosting / routing only.
 - [ ] `<filter>` definitions for drop-shadow / glow are inlined into
       each use — dedup into `<defs>`?
 
