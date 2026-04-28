@@ -16,7 +16,7 @@ export default defineConfig({
       injectRegister: null,
       includeAssets: ["fonts/**/*", "icons/**/*"],
       manifest: {
-        name: "Annot (by ingcreators)",
+        name: "Annot by ingcreators",
         short_name: "Annot",
         description: "Annot — screenshot & annotate, by ingcreators",
         theme_color: "#0f1730",

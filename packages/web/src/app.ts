@@ -1,5 +1,5 @@
 /**
- * Annot (by ingcreators) — main application.
+ * Annot by ingcreators — main application.
  * File Manager (gallery) ↔ Editor switching with path-based StorageProvider.
  */
 
