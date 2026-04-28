@@ -288,12 +288,12 @@ export class DeviceStore
 
   #isImageFile(name: string): boolean {
     const lower = name.toLowerCase();
-    // Accept any PNG / JPEG / SVG. `.annot.*` and legacy `.anno.*`
-    // are subsumed by the plain extension checks below. Listing is
-    // intentionally permissive so external screenshots dropped into
-    // the folder appear in the Annot gallery alongside annot-native
-    // captures — editor save-back preserves the original name for
-    // external files and uses `.annot.*` only for fresh captures.
+    // Accept any PNG / JPEG / SVG. `.annot.*` is subsumed by the
+    // plain extension checks below. Listing is intentionally
+    // permissive so external screenshots dropped into the folder
+    // appear in the Annot gallery alongside annot-native captures —
+    // editor save-back preserves the original name for external
+    // files and uses `.annot.*` only for fresh captures.
     return (
       lower.endsWith(".jpg") ||
       lower.endsWith(".jpeg") ||

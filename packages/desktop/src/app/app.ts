@@ -157,8 +157,7 @@ async function openImageFile(): Promise<void> {
       // `annot.png` / `annot.jpg` / `annot.svg` are the annot-native
       // variants (XMP metadata + embedded original). Plain `png` /
       // `jpg` / `webp` etc. also match so users can bring in any
-      // screenshot. `anno.png` / `anno.jpg` kept for backward
-      // compatibility with files captured before the naming switch.
+      // screenshot.
       filters: [
         {
           name: "Images",
@@ -170,8 +169,6 @@ async function openImageFile(): Promise<void> {
             "annot.png",
             "annot.jpg",
             "annot.svg",
-            "anno.png",
-            "anno.jpg",
             "webp",
             "bmp",
           ],

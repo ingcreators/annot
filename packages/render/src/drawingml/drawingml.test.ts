@@ -311,10 +311,10 @@ describe("buildDrawingXml byte-equivalence with Rust GVML goldens", () => {
 // `CT_Picture` schemas declare `spPr` / `blipFill` / `nvPr` locally,
 // so the qualified element name follows the parent's namespace
 // (`<p:spPr>` etc., never `<a:spPr>` in the PPTX wrapper).
-// PowerPoint refuses to open files that mismatch — a regression
-// hit on 2026-04-27 with anno-1777242607432.pptx and
-// anno-1777243471425.pptx. These tests pin the contract so a
-// future refactor can't reintroduce the bug.
+// PowerPoint refuses to open files that mismatch (regression hit
+// on 2026-04-27 — generated PPTX failed to open until the namespace
+// was corrected). These tests pin the contract so a future refactor
+// can't reintroduce the bug.
 describe("buildShapeXml PPTX namespace contract", () => {
   function expectPptxNamespaces(xml: string, kind: "shape" | "connector" | "pic") {
     // No `<a:*>` for elements that should be in PPTX namespace.
