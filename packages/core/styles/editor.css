@@ -26,83 +26,83 @@
 /* Dark theme (default) ----------------------------------------- */
 :root {
   /* === Surface — page / panel backdrops + chromeless decoration === */
-  --bg-primary: #0f1730;
-  --bg-secondary: #0b1020;
-  --bg-panel: #121933;
-  --bg-panel-deep: #0f1730;
-  --border-color: rgba(255, 255, 255, 0.22); /* bumped from 0.08 for ≥3:1 on interactive */
-  --border-subtle: rgba(255, 255, 255, 0.08); /* keeps old value for decorative dividers */
-  --shadow: 0 20px 50px rgba(0, 0, 0, 0.28);
+  --annot-bg-primary: #0f1730;
+  --annot-bg-secondary: #0b1020;
+  --annot-bg-panel: #121933;
+  --annot-bg-panel-deep: #0f1730;
+  --annot-border-color: rgba(255, 255, 255, 0.22); /* bumped from 0.08 for ≥3:1 on interactive */
+  --annot-border-subtle: rgba(255, 255, 255, 0.08); /* keeps old value for decorative dividers */
+  --annot-shadow: 0 20px 50px rgba(0, 0, 0, 0.28);
 
   /* === Content — foreground text + reading primitives === */
-  --text-primary: #eef2ff; /* ~18:1 on bg-primary (AAA) */
-  --text-secondary: #b7c0e0; /* ~10:1 on bg-primary (AAA) */
-  --text-muted: #9097b8; /* ~6.2:1 on bg-primary (AA) — was 5.3:1 */
-  --preview-line: #b7c0e0;
+  --annot-text-primary: #eef2ff; /* ~18:1 on bg-primary (AAA) */
+  --annot-text-secondary: #b7c0e0; /* ~10:1 on bg-primary (AAA) */
+  --annot-text-muted: #9097b8; /* ~6.2:1 on bg-primary (AA) — was 5.3:1 */
+  --annot-preview-line: #b7c0e0;
 
   /* === Accent — brand colour, active highlight, focus indicator === */
-  --accent: #7c9cff; /* ~7.5:1 on bg-primary (AAA) */
-  --accent-2: #7ef0c5;
-  --accent-bg: rgba(124, 156, 255, 0.18);
-  --accent-hover: rgba(124, 156, 255, 0.26);
-  --active-bg: rgba(124, 156, 255, 0.18);
-  --active-border: #7c9cff;
-  --chip-bg: rgba(124, 156, 255, 0.14);
-  --focus-ring: #7ef0c5; /* accent-2 green contrasts against blue accent for clarity */
+  --annot-accent: #7c9cff; /* ~7.5:1 on bg-primary (AAA) */
+  --annot-accent-2: #7ef0c5;
+  --annot-accent-bg: rgba(124, 156, 255, 0.18);
+  --annot-accent-hover: rgba(124, 156, 255, 0.26);
+  --annot-active-bg: rgba(124, 156, 255, 0.18);
+  --annot-active-border: #7c9cff;
+  --annot-chip-bg: rgba(124, 156, 255, 0.14);
+  --annot-focus-ring: #7ef0c5; /* accent-2 green contrasts against blue accent for clarity */
 
   /* === Interaction — pointer + form states === */
-  --hover-bg: rgba(255, 255, 255, 0.08);
-  --hover-border: rgba(255, 255, 255, 0.22);
-  --choice-bg: transparent;
-  --choice-hover: rgba(124, 156, 255, 0.1);
-  --choice-active: rgba(124, 156, 255, 0.18);
-  --input-bg: rgba(255, 255, 255, 0.06);
-  --input-border: rgba(255, 255, 255, 0.22); /* ≥3:1 for form borders */
+  --annot-hover-bg: rgba(255, 255, 255, 0.08);
+  --annot-hover-border: rgba(255, 255, 255, 0.22);
+  --annot-choice-bg: transparent;
+  --annot-choice-hover: rgba(124, 156, 255, 0.1);
+  --annot-choice-active: rgba(124, 156, 255, 0.18);
+  --annot-input-bg: rgba(255, 255, 255, 0.06);
+  --annot-input-border: rgba(255, 255, 255, 0.22); /* ≥3:1 for form borders */
 
   /* === Canvas — editor backdrop + transparency-grid checkerboard === */
-  --canvas-bg: #0b1020;
-  --canvas-check: #121933;
+  --annot-canvas-bg: #0b1020;
+  --annot-canvas-check: #121933;
 }
 
 /* Light theme -------------------------------------------------- */
 :root.light {
   /* === Surface === */
-  --bg-primary: #f5f7ff;
-  --bg-secondary: #ffffff;
-  --bg-panel: #ffffff;
-  --bg-panel-deep: #fafbff;
-  --border-color: #bfc6de; /* ~3:1 against bg-primary for visible UI boundaries */
-  --border-subtle: #d8ddef; /* fainter dividers */
-  --shadow: rgba(0, 0, 0, 0.08);
+  --annot-bg-primary: #f5f7ff;
+  --annot-bg-secondary: #ffffff;
+  --annot-bg-panel: #ffffff;
+  --annot-bg-panel-deep: #fafbff;
+  --annot-border-color: #bfc6de; /* ~3:1 against bg-primary for visible UI boundaries */
+  --annot-border-subtle: #d8ddef; /* fainter dividers */
+  --annot-shadow: rgba(0, 0, 0, 0.08);
 
   /* === Content === */
-  --text-primary: #0b1020; /* ~16:1 on bg-primary (AAA) */
-  --text-secondary: #3a4568; /* ~8:1 on bg-primary (AAA) — was #4a5580 (~6:1) */
-  --text-muted: #616984; /* ~4.6:1 on bg-primary (AA) — was #8890b0 (~3.2:1 FAIL) */
-  --preview-line: #2a3050;
+  --annot-text-primary: #0b1020; /* ~16:1 on bg-primary (AAA) */
+  --annot-text-secondary: #3a4568; /* ~8:1 on bg-primary (AAA) — was #4a5580 (~6:1) */
+  --annot-text-muted: #616984; /* ~4.6:1 on bg-primary (AA) — was #8890b0 (~3.2:1 FAIL) */
+  --annot-preview-line: #2a3050;
 
   /* === Accent === */
-  --accent: #3456c9; /* ~6.3:1 on bg-primary (AA+) — was #5b7ee5 (~4.2:1 marginal) */
-  --accent-2: #188a5c; /* ~5.2:1 for secondary accent */
-  --accent-bg: #edf1ff;
-  --accent-hover: #dce4ff;
-  --active-bg: #dce4ff;
-  --active-border: #3456c9;
-  --chip-bg: #edf1ff;
-  --focus-ring: #3456c9;
+  --annot-accent: #3456c9; /* ~6.3:1 on bg-primary (AA+) — was #5b7ee5 (~4.2:1 marginal) */
+  --annot-accent-2: #188a5c; /* ~5.2:1 for secondary accent */
+  --annot-accent-bg: #edf1ff;
+  --annot-accent-hover: #dce4ff;
+  --annot-active-bg: #dce4ff;
+  --annot-active-border: #3456c9;
+  --annot-chip-bg: #edf1ff;
+  --annot-focus-ring: #3456c9;
 
   /* === Interaction === */
-  --hover-bg: #eef1fa;
-  --hover-border: #8893b8;
-  --choice-bg: transparent;
-  --choice-hover: #eef1fa;
-  --choice-active: #dce4ff;
-  --input-bg: #ffffff;
-  --input-border: #8893b8;
+  --annot-hover-bg: #eef1fa;
+  --annot-hover-border: #8893b8;
+  --annot-choice-bg: transparent;
+  --annot-choice-hover: #eef1fa;
+  --annot-choice-active: #dce4ff;
+  --annot-input-bg: #ffffff;
+  --annot-input-border: #8893b8;
 
   /* === Canvas === */
-  --canvas-bg: #e8ecf5;
-  --canvas-check: #dde2ef;
+  --annot-canvas-bg: #e8ecf5;
+  --annot-canvas-check: #dde2ef;
 }
 
 * {
@@ -117,8 +117,8 @@ body {
   height: 100%;
   overflow: hidden;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  background: var(--bg-primary, #2a2a2a);
-  color: var(--text-primary, #e0e0e0);
+  background: var(--annot-bg-primary, #2a2a2a);
+  color: var(--annot-text-primary, #e0e0e0);
 }
 
 #canvas-container {
@@ -128,12 +128,12 @@ body {
   right: 0;
   bottom: 28px;
   overflow: auto;
-  background: var(--canvas-bg);
+  background: var(--annot-canvas-bg);
   background-image:
-    linear-gradient(45deg, var(--canvas-check) 25%, transparent 25%),
-    linear-gradient(-45deg, var(--canvas-check) 25%, transparent 25%),
-    linear-gradient(45deg, transparent 75%, var(--canvas-check) 75%),
-    linear-gradient(-45deg, transparent 75%, var(--canvas-check) 75%);
+    linear-gradient(45deg, var(--annot-canvas-check) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--annot-canvas-check) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--annot-canvas-check) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--annot-canvas-check) 75%);
   background-size: 20px 20px;
   background-position:
     0 0,
@@ -156,8 +156,8 @@ body {
   left: 0;
   right: 0;
   height: 28px;
-  background: var(--bg-panel, #1e1e1e);
-  border-top: 1px solid var(--border-color, #333);
+  background: var(--annot-bg-panel, #1e1e1e);
+  border-top: 1px solid var(--annot-border-color, #333);
   display: flex;
   align-items: center;
   padding: 0 12px;
@@ -172,7 +172,7 @@ body {
   bottom: 48px;
   left: 50%;
   transform: translateX(-50%) translateY(20px);
-  background: var(--accent, #00d4ff);
+  background: var(--annot-accent, #00d4ff);
   color: #000;
   padding: 6px 24px;
   border-radius: 20px;
@@ -212,11 +212,11 @@ body {
   gap: 2px;
   padding: 1px 6px;
   border-radius: 10px;
-  background: var(--chip-bg, #16213e);
-  color: var(--text-primary);
+  background: var(--annot-chip-bg, #16213e);
+  color: var(--annot-text-primary);
   font-size: 11px;
   white-space: nowrap;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--annot-border-color);
 }
 
 .tag-chip-label {
@@ -226,7 +226,7 @@ body {
 .tag-chip-delete {
   border: none;
   background: none;
-  color: var(--text-muted);
+  color: var(--annot-text-muted);
   font-size: 12px;
   cursor: pointer;
   padding: 0 1px;
@@ -238,9 +238,9 @@ body {
 }
 
 .tag-add-btn {
-  border: 1px dashed var(--border-color);
+  border: 1px dashed var(--annot-border-color);
   background: transparent;
-  color: var(--text-muted);
+  color: var(--annot-text-muted);
   font-size: 11px;
   padding: 1px 8px;
   border-radius: 10px;
@@ -249,8 +249,8 @@ body {
 }
 
 .tag-add-btn:hover {
-  border-color: var(--accent);
-  color: var(--accent);
+  border-color: var(--annot-accent);
+  color: var(--annot-accent);
 }
 
 .tag-input-row {
@@ -260,20 +260,20 @@ body {
   margin-bottom: 4px;
   display: flex;
   gap: 4px;
-  background: var(--bg-panel-deep, #1e1e2e);
-  border: 1px solid var(--border-color);
+  background: var(--annot-bg-panel-deep, #1e1e2e);
+  border: 1px solid var(--annot-border-color);
   border-radius: 6px;
   padding: 6px 8px;
-  box-shadow: 0 -4px 12px var(--shadow);
+  box-shadow: 0 -4px 12px var(--annot-shadow);
   z-index: 200;
 }
 
 .tag-input {
   height: 24px;
-  border: 1px solid var(--input-border, #444);
+  border: 1px solid var(--annot-input-border, #444);
   border-radius: 4px;
-  background: var(--input-bg, #2a2a2a);
-  color: var(--text-primary);
+  background: var(--annot-input-bg, #2a2a2a);
+  color: var(--annot-text-primary);
   font-size: 12px;
   padding: 0 6px;
   outline: none;
@@ -288,7 +288,7 @@ body {
 }
 
 .tag-input:focus {
-  border-color: var(--accent);
+  border-color: var(--annot-accent);
 }
 
 .tag-ok-btn,
@@ -305,7 +305,7 @@ body {
 }
 
 .tag-ok-btn {
-  background: var(--accent);
+  background: var(--annot-accent);
   color: #000;
 }
 
@@ -315,7 +315,7 @@ body {
 
 .tag-cancel-btn {
   background: transparent;
-  color: var(--text-muted);
+  color: var(--annot-text-muted);
 }
 
 .tag-cancel-btn:hover {
@@ -334,9 +334,9 @@ body {
   font-size: 10px;
   padding: 0 5px;
   border-radius: 8px;
-  background: var(--chip-bg, #16213e);
-  color: var(--text-secondary);
-  border: 1px solid var(--border-color);
+  background: var(--annot-chip-bg, #16213e);
+  color: var(--annot-text-secondary);
+  border: 1px solid var(--annot-border-color);
   white-space: nowrap;
 }
 
@@ -349,8 +349,8 @@ body {
   display: flex;
   align-items: center;
   gap: 2px;
-  background: var(--input-bg, #2a2a2a);
-  border: 1px solid var(--border-color, #444);
+  background: var(--annot-input-bg, #2a2a2a);
+  border: 1px solid var(--annot-border-color, #444);
   border-radius: 4px;
   padding: 0 2px;
 }
@@ -360,7 +360,7 @@ body {
   height: 22px;
   border: none;
   background: transparent;
-  color: var(--text-secondary, #888);
+  color: var(--annot-text-secondary, #888);
   font-size: 16px;
   cursor: pointer;
   display: flex;
@@ -370,8 +370,8 @@ body {
 }
 
 .zoom-btn:hover {
-  background: var(--hover-bg, #333);
-  color: var(--accent, #00d4ff);
+  background: var(--annot-hover-bg, #333);
+  color: var(--annot-accent, #00d4ff);
 }
 
 .zoom-label {
@@ -379,7 +379,7 @@ body {
   height: 22px;
   border: none;
   background: transparent;
-  color: var(--text-primary, #ccc);
+  color: var(--annot-text-primary, #ccc);
   font-size: 11px;
   cursor: pointer;
   text-align: center;
@@ -387,7 +387,7 @@ body {
 }
 
 .zoom-label:hover {
-  color: var(--accent, #00d4ff);
+  color: var(--annot-accent, #00d4ff);
 }
 
 .zoom-select-wrap {
@@ -400,11 +400,11 @@ body {
   left: 50%;
   transform: translateX(-50%);
   margin-bottom: 4px;
-  background: var(--bg-panel-deep, #1e1e2e);
-  border: 1px solid var(--border-color, #444);
+  background: var(--annot-bg-panel-deep, #1e1e2e);
+  border: 1px solid var(--annot-border-color, #444);
   border-radius: 6px;
   overflow: hidden;
-  box-shadow: 0 -4px 16px var(--shadow, rgba(0, 0, 0, 0.4));
+  box-shadow: 0 -4px 16px var(--annot-shadow, rgba(0, 0, 0, 0.4));
   z-index: 200;
   min-width: 90px;
 }
@@ -415,7 +415,7 @@ body {
   padding: 6px 14px;
   border: none;
   background: transparent;
-  color: var(--text-primary, #ccc);
+  color: var(--annot-text-primary, #ccc);
   font-size: 12px;
   text-align: left;
   cursor: pointer;
@@ -423,18 +423,18 @@ body {
 }
 
 .zoom-menu-item:hover {
-  background: var(--choice-hover, #2a2a40);
-  color: var(--accent, #00d4ff);
+  background: var(--annot-choice-hover, #2a2a40);
+  color: var(--annot-accent, #00d4ff);
 }
 
 .zoom-menu-item.active {
-  color: var(--accent, #00d4ff);
+  color: var(--annot-accent, #00d4ff);
   font-weight: bold;
 }
 
 .zoom-menu-sep {
   height: 1px;
-  background: var(--border-color, #444);
+  background: var(--annot-border-color, #444);
   margin: 2px 0;
 }
 
@@ -443,7 +443,7 @@ body {
 .gallery-toolbar-title {
   font-size: 16px;
   font-weight: 700;
-  color: var(--accent);
+  color: var(--annot-accent);
   padding: 0 4px;
   white-space: nowrap;
 }
@@ -453,16 +453,16 @@ body {
   max-width: 360px;
   height: 32px;
   padding: 0 10px;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--annot-border-color);
   border-radius: 6px;
-  background: var(--input-bg);
-  color: var(--text-primary);
+  background: var(--annot-input-bg);
+  color: var(--annot-text-primary);
   font-size: 13px;
   outline: none;
 }
 
 .gallery-toolbar-search:focus {
-  border-color: var(--accent);
+  border-color: var(--annot-accent);
 }
 
 /* ---- File details drawer ----
@@ -494,8 +494,8 @@ body {
   bottom: 28px;
   width: 360px;
   max-width: 80vw;
-  background: var(--bg-panel);
-  border-left: 1px solid var(--border-color);
+  background: var(--annot-bg-panel);
+  border-left: 1px solid var(--annot-border-color);
   box-shadow: -4px 0 28px rgba(0, 0, 0, 0.35);
   transform: translateX(calc(100% + 28px)); /* include shadow in off-screen */
   transition: transform 0.22s ease-out;
@@ -513,7 +513,7 @@ body {
   align-items: center;
   justify-content: space-between;
   padding: 14px 18px;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--annot-border-color);
   flex-shrink: 0;
 }
 .file-details-title {
@@ -521,14 +521,14 @@ body {
   font-size: 15px;
   font-weight: 700;
   letter-spacing: -0.02em;
-  color: var(--text-primary);
+  color: var(--annot-text-primary);
 }
 .file-details-close {
   width: 32px;
   height: 32px;
   border: none;
   background: transparent;
-  color: var(--text-secondary);
+  color: var(--annot-text-secondary);
   border-radius: 6px;
   cursor: pointer;
   font-size: 20px;
@@ -537,13 +537,13 @@ body {
   justify-content: center;
 }
 .file-details-close:hover {
-  background: var(--hover-bg);
-  color: var(--text-primary);
+  background: var(--annot-hover-bg);
+  color: var(--annot-text-primary);
 }
 
 .file-details-section {
   padding: 14px 18px;
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--annot-border-subtle);
 }
 .file-details-section:last-child {
   border-bottom: none;
@@ -554,7 +554,7 @@ body {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--text-muted);
+  color: var(--annot-text-muted);
 }
 
 .file-details-row {
@@ -566,10 +566,10 @@ body {
   line-height: 1.45;
 }
 .file-details-row-label {
-  color: var(--text-muted);
+  color: var(--annot-text-muted);
 }
 .file-details-row-value {
-  color: var(--text-primary);
+  color: var(--annot-text-primary);
   word-break: break-word;
   min-width: 0;
 }
@@ -585,7 +585,7 @@ body {
   user-select: text;
 }
 a.file-details-row-value {
-  color: var(--accent);
+  color: var(--annot-accent);
   text-decoration: none;
 }
 a.file-details-row-value:hover {
@@ -614,10 +614,10 @@ a.file-details-row-value:hover {
 .file-details-sha {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 11px;
-  color: var(--text-secondary);
+  color: var(--annot-text-secondary);
   padding: 1px 4px;
   border-radius: 3px;
-  background: var(--input-bg, rgba(255, 255, 255, 0.04));
+  background: var(--annot-input-bg, rgba(255, 255, 255, 0.04));
 }
 
 /* External-link section ("View on GitHub", etc). One link per row,
@@ -630,7 +630,7 @@ a.file-details-row-value:hover {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: var(--accent);
+  color: var(--annot-accent);
   text-decoration: none;
   font-size: 13px;
   padding: 4px 0;
@@ -650,7 +650,7 @@ a.file-details-row-value:hover {
  * top-level Source link. */
 .file-details-row-value a,
 .file-details-row-value a:visited {
-  color: var(--accent);
+  color: var(--annot-accent);
   text-decoration: underline;
 }
 .file-details-row-value a:hover {
@@ -673,7 +673,7 @@ a.file-details-row-value:hover {
   border: none;
   outline: none;
   background: transparent;
-  color: var(--text-primary);
+  color: var(--annot-text-primary);
   font: inherit;
   font-size: 13px;
   line-height: 1.45;
@@ -687,12 +687,12 @@ a.file-details-row-value:hover {
   text-overflow: ellipsis;
 }
 .file-details-name-input:hover:not(:focus) {
-  background: var(--hover-bg);
-  box-shadow: inset 0 -1px 0 var(--border-subtle);
+  background: var(--annot-hover-bg);
+  box-shadow: inset 0 -1px 0 var(--annot-border-subtle);
 }
 .file-details-name-input:focus {
-  background: var(--input-bg, rgba(255, 255, 255, 0.04));
-  box-shadow: inset 0 0 0 1px var(--accent);
+  background: var(--annot-input-bg, rgba(255, 255, 255, 0.04));
+  box-shadow: inset 0 0 0 1px var(--annot-accent);
   text-overflow: clip;
 }
 .file-details-name-input:disabled {
@@ -749,8 +749,8 @@ body.editor-mode #editor-header {
    * "action surface". Same palette in both themes (dark: #0f1730
    * vs #121933; light: #fafbff vs #ffffff) — subtle, just enough
    * to establish hierarchy without adding visual noise. */
-  background: var(--bg-panel-deep);
-  border-bottom: 1px solid var(--border-color);
+  background: var(--annot-bg-panel-deep);
+  border-bottom: 1px solid var(--annot-border-color);
   z-index: 11;
   /* `overflow: visible` so the custom CSS tooltip on header buttons
    * (positioned at `bottom: -40px`) can extend below the 48px header
@@ -777,10 +777,10 @@ body.editor-mode #editor-header {
   transition: background 0.15s;
 }
 .editor-header-brand:hover {
-  background: var(--hover-bg);
+  background: var(--annot-hover-bg);
 }
 .editor-header-brand:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--annot-accent);
   outline-offset: 2px;
 }
 
@@ -812,11 +812,11 @@ body.editor-mode #editor-header {
 .editor-header-path .breadcrumb-filename {
   flex-shrink: 0;
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--annot-text-primary);
 }
 .editor-header-path .breadcrumb-filename:hover {
   background: none;
-  color: var(--text-primary);
+  color: var(--annot-text-primary);
   cursor: default;
 }
 .editor-header-path .editor-header-info-btn {
@@ -834,7 +834,7 @@ body.editor-mode #editor-header {
   gap: 2px;
   margin-right: 4px;
   padding-right: 4px;
-  border-right: 1px solid var(--border-subtle);
+  border-right: 1px solid var(--annot-border-subtle);
   flex-shrink: 0;
 }
 /* The header Save dropdown arrow needs its own layout — the shared
@@ -852,7 +852,7 @@ body.editor-mode #editor-header {
   width: 14px;
   height: 28px;
   background: transparent;
-  color: var(--text-muted);
+  color: var(--annot-text-muted);
   border: none;
   font-size: 14px;
   cursor: pointer;
@@ -862,8 +862,8 @@ body.editor-mode #editor-header {
   margin-left: -4px;
 }
 .header-save-wrap .tool-dropdown-arrow:hover {
-  color: var(--accent);
-  background: var(--hover-bg);
+  color: var(--annot-accent);
+  background: var(--annot-hover-bg);
   border-radius: 4px;
 }
 
@@ -879,9 +879,9 @@ body.editor-mode #editor-header {
   font-weight: 600;
   font-size: 13px;
   line-height: 1.4;
-  color: var(--text-primary);
-  background: var(--input-bg, rgba(255, 255, 255, 0.04));
-  border: 1px solid var(--accent);
+  color: var(--annot-text-primary);
+  background: var(--annot-input-bg, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--annot-accent);
   border-radius: 4px;
   padding: 1px 6px;
   outline: none;
@@ -906,8 +906,8 @@ body.editor-mode #editor-sidebar {
   left: 0;
   bottom: 28px;
   width: 48px;
-  background: var(--bg-panel);
-  border-right: 1px solid var(--border-color);
+  background: var(--annot-bg-panel);
+  border-right: 1px solid var(--annot-border-color);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -952,8 +952,8 @@ body.editor-mode.has-right-panel #editor-right-panel {
   right: 0;
   bottom: 28px;
   width: 280px;
-  background: var(--bg-panel);
-  border-left: 1px solid var(--border-color);
+  background: var(--annot-bg-panel);
+  border-left: 1px solid var(--annot-border-color);
   display: flex;
   flex-direction: column;
   z-index: 10;
@@ -972,7 +972,7 @@ body.editor-mode.has-right-panel .file-details-backdrop {
 
 .editor-right-panel-section {
   padding: 14px 16px;
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--annot-border-subtle);
 }
 /* Dynamic section title (e.g. "Rectangle" / "Arrow" / "Callout").
  * Rendered as a readable, sentence-case heading rather than the
@@ -984,7 +984,7 @@ body.editor-mode.has-right-panel .file-details-backdrop {
   margin: 0 0 10px;
   font-size: 13px;
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--annot-text-primary);
 }
 
 /* Actions section — compact transform button row (rotate / flip).
@@ -994,7 +994,7 @@ body.editor-mode.has-right-panel .file-details-backdrop {
  * "controls for actions" not "properties to edit". */
 .editor-right-panel-actions {
   padding: 10px 16px;
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--annot-border-subtle);
 }
 /* Group label above each action row ("Transform" / "Arrange") —
  * shares the uppercase / muted / tracked typography with the
@@ -1008,7 +1008,7 @@ body.editor-mode.has-right-panel .file-details-backdrop {
   font-weight: 700;
   letter-spacing: 0.7px;
   text-transform: uppercase;
-  color: var(--text-muted);
+  color: var(--annot-text-muted);
   padding: 0 0 4px 0;
   margin-top: 14px;
   user-select: none;
@@ -1096,7 +1096,7 @@ body.editor-mode.has-right-panel .file-details-backdrop {
   gap: 8px;
   padding: 48px 24px;
   text-align: center;
-  color: var(--text-muted);
+  color: var(--annot-text-muted);
 }
 .editor-right-panel-empty-icon {
   font-size: 36px;
@@ -1111,7 +1111,7 @@ body.editor-mode.has-right-panel .file-details-backdrop {
   margin: 0;
   font-size: 13px;
   font-weight: 600;
-  color: var(--text-secondary);
+  color: var(--annot-text-secondary);
 }
 .editor-right-panel-empty-hint {
   margin: 0;
@@ -1126,9 +1126,9 @@ body.editor-mode.has-right-panel .file-details-backdrop {
  * stays anchored. Top border differentiates it as a distinct area. */
 .editor-right-panel-scratchpad {
   margin-top: auto;
-  border-top: 1px solid var(--border-color);
+  border-top: 1px solid var(--annot-border-color);
   border-bottom: none;
-  background: var(--bg-panel-deep);
+  background: var(--annot-bg-panel-deep);
   flex-shrink: 0;
 }
 
@@ -1145,10 +1145,10 @@ body.editor-mode.has-right-panel .file-details-backdrop {
 .scratchpad-save-btn {
   width: 22px;
   height: 22px;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--annot-border-color);
   border-radius: 4px;
   background: transparent;
-  color: var(--text-secondary);
+  color: var(--annot-text-secondary);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -1160,9 +1160,9 @@ body.editor-mode.has-right-panel .file-details-backdrop {
     color 0.15s;
 }
 .scratchpad-save-btn:not(:disabled):hover {
-  background: var(--accent-bg);
-  border-color: var(--accent);
-  color: var(--accent);
+  background: var(--annot-accent-bg);
+  border-color: var(--annot-accent);
+  color: var(--annot-accent);
 }
 .scratchpad-save-btn:disabled {
   opacity: 0.35;
@@ -1186,8 +1186,8 @@ body.editor-mode.has-right-panel .file-details-backdrop {
 .scratchpad-item {
   position: relative;
   aspect-ratio: 1 / 1;
-  background: var(--canvas-bg, #0b1020);
-  border: 1px solid var(--border-subtle);
+  background: var(--annot-canvas-bg, #0b1020);
+  border: 1px solid var(--annot-border-subtle);
   border-radius: 6px;
   cursor: pointer;
   overflow: hidden;
@@ -1199,16 +1199,16 @@ body.editor-mode.has-right-panel .file-details-backdrop {
     transform 0.15s;
 }
 .scratchpad-item:hover {
-  border-color: var(--accent);
+  border-color: var(--annot-accent);
   transform: translateY(-1px);
 }
 /* Armed state — the user clicked this item and the paste tool is
  * waiting for a canvas click. Stronger accent so the "which item
  * will land next?" question is answered at a glance. */
 .scratchpad-item.active {
-  border-color: var(--accent);
-  background: var(--accent-bg);
-  box-shadow: 0 0 0 1px var(--accent) inset;
+  border-color: var(--annot-accent);
+  background: var(--annot-accent-bg);
+  box-shadow: 0 0 0 1px var(--annot-accent) inset;
 }
 .scratchpad-item-thumb {
   max-width: 80%;
@@ -1251,7 +1251,7 @@ body.editor-mode.has-right-panel .file-details-backdrop {
 .scratchpad-empty {
   margin: 0;
   font-size: 12px;
-  color: var(--text-muted);
+  color: var(--annot-text-muted);
   line-height: 1.5;
 }
 
@@ -1277,7 +1277,7 @@ body.editor-mode.has-right-panel .file-details-backdrop {
   white-space: nowrap;
   user-select: none;
   flex-shrink: 0; /* stays intact next to the filename */
-  color: var(--text-muted);
+  color: var(--annot-text-muted);
   transition:
     color 0.15s,
     background 0.15s;
@@ -1293,17 +1293,17 @@ body.editor-mode.has-right-panel .file-details-backdrop {
 
 /* Saved — neutral, at rest */
 .save-status.save-status-saved {
-  color: var(--text-muted);
+  color: var(--annot-text-muted);
 }
 
 /* Edited — slightly brighter than saved, signals "something's queued" */
 .save-status.save-status-pending {
-  color: var(--text-secondary);
+  color: var(--annot-text-secondary);
 }
 
 /* Saving — accent color + spinning icon */
 .save-status.save-status-saving {
-  color: var(--accent);
+  color: var(--annot-accent);
 }
 .save-status.save-status-saving .save-status-icon {
   animation: save-status-spin 1s linear infinite;
@@ -1335,7 +1335,7 @@ body.editor-mode.has-right-panel .file-details-backdrop {
   height: 28px;
   border: none;
   background: transparent;
-  color: var(--text-muted);
+  color: var(--annot-text-muted);
   border-radius: 4px;
   cursor: pointer;
   font-size: 18px;
@@ -1353,11 +1353,11 @@ body.editor-mode.has-right-panel .file-details-backdrop {
     color 0.15s;
 }
 .editor-header-info-btn:hover {
-  background: var(--hover-bg);
-  color: var(--accent);
+  background: var(--annot-hover-bg);
+  color: var(--annot-accent);
 }
 .editor-header-info-btn:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--annot-accent);
   outline-offset: 2px;
 }
 
@@ -1397,7 +1397,7 @@ body.editor-mode.has-right-panel .file-details-backdrop {
   align-items: center;
   border: none;
   background: none;
-  color: var(--text-secondary);
+  color: var(--annot-text-secondary);
   cursor: pointer;
   padding: 2px 6px;
   border-radius: 4px;
@@ -1405,23 +1405,23 @@ body.editor-mode.has-right-panel .file-details-backdrop {
 }
 
 .breadcrumb-item:hover {
-  background: var(--hover-bg);
-  color: var(--accent);
+  background: var(--annot-hover-bg);
+  color: var(--annot-accent);
 }
 
 .breadcrumb-item.active {
-  color: var(--text-primary);
+  color: var(--annot-text-primary);
   font-weight: 600;
   cursor: default;
 }
 
 .breadcrumb-item.active:hover {
   background: none;
-  color: var(--text-primary);
+  color: var(--annot-text-primary);
 }
 
 .breadcrumb-sep {
-  color: var(--text-muted);
+  color: var(--annot-text-muted);
   font-size: 16px;
   user-select: none;
 }
@@ -1440,7 +1440,7 @@ body.editor-mode.has-right-panel .file-details-backdrop {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--bg-secondary);
+  background: var(--annot-bg-secondary);
 }
 
 .gallery-folder-name {
@@ -1473,15 +1473,15 @@ body.editor-mode.has-right-panel .file-details-backdrop {
   grid-column: 1 / -1;
   text-align: center;
   padding: 60px 20px;
-  color: var(--text-muted);
+  color: var(--annot-text-muted);
   font-size: 14px;
 }
 
 .gallery-item {
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--annot-border-color);
   border-radius: 8px;
   overflow: hidden;
-  background: var(--bg-panel);
+  background: var(--annot-bg-panel);
   cursor: pointer;
   transition:
     border-color 0.15s,
@@ -1489,7 +1489,7 @@ body.editor-mode.has-right-panel .file-details-backdrop {
 }
 
 .gallery-item:hover {
-  border-color: var(--accent);
+  border-color: var(--annot-accent);
   transform: translateY(-2px);
 }
 
@@ -1526,7 +1526,7 @@ body.editor-mode.has-right-panel .file-details-backdrop {
 
 .gallery-item-name {
   font-size: 12px;
-  color: var(--text-primary);
+  color: var(--annot-text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1535,7 +1535,7 @@ body.editor-mode.has-right-panel .file-details-backdrop {
 
 .gallery-item-meta {
   font-size: 11px;
-  color: var(--text-muted);
+  color: var(--annot-text-muted);
   margin-top: 2px;
 }
 
@@ -1596,13 +1596,13 @@ body.editor-mode.has-right-panel .file-details-backdrop {
 }
 
 .gallery-item.selected .gallery-checkbox {
-  background: var(--accent);
+  background: var(--annot-accent);
   color: #000;
 }
 
 .gallery-item.selected {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--accent);
+  border-color: var(--annot-accent);
+  box-shadow: 0 0 0 2px var(--annot-accent);
 }
 
 .gallery-item {
@@ -1619,14 +1619,14 @@ body.editor-mode.has-right-panel .file-details-backdrop {
 
 .gallery-footer-text {
   font-size: 12px;
-  color: var(--text-secondary);
+  color: var(--annot-text-secondary);
   white-space: nowrap;
 }
 
 .gallery-action-btn {
-  border: 1px solid var(--border-color);
-  background: var(--bg-panel);
-  color: var(--text-primary);
+  border: 1px solid var(--annot-border-color);
+  background: var(--annot-bg-panel);
+  color: var(--annot-text-primary);
   font-size: 12px;
   padding: 2px 10px;
   border-radius: 4px;
@@ -1638,8 +1638,8 @@ body.editor-mode.has-right-panel .file-details-backdrop {
 }
 
 .gallery-action-btn:hover {
-  border-color: var(--accent);
-  color: var(--accent);
+  border-color: var(--annot-accent);
+  color: var(--annot-accent);
 }
 
 .gallery-action-danger:hover {
@@ -1660,8 +1660,8 @@ body.editor-mode.has-right-panel .file-details-backdrop {
 }
 
 .folder-picker-dialog {
-  background: var(--bg-panel);
-  border: 1px solid var(--border-color);
+  background: var(--annot-bg-panel);
+  border: 1px solid var(--annot-border-color);
   border-radius: 10px;
   padding: 16px;
   min-width: 300px;
@@ -1675,7 +1675,7 @@ body.editor-mode.has-right-panel .file-details-backdrop {
 .folder-picker-title {
   font-size: 15px;
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--annot-text-primary);
   margin-bottom: 12px;
 }
 
@@ -1695,7 +1695,7 @@ body.editor-mode.has-right-panel .file-details-backdrop {
   border: none;
   border-radius: 6px;
   background: transparent;
-  color: var(--text-primary);
+  color: var(--annot-text-primary);
   font-size: 13px;
   text-align: left;
   cursor: pointer;
@@ -1705,15 +1705,15 @@ body.editor-mode.has-right-panel .file-details-backdrop {
 }
 
 .folder-picker-item:hover {
-  background: var(--choice-hover);
-  color: var(--accent);
+  background: var(--annot-choice-hover);
+  color: var(--annot-accent);
 }
 
 .folder-picker-cancel {
   align-self: flex-end;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--annot-border-color);
   background: transparent;
-  color: var(--text-secondary);
+  color: var(--annot-text-secondary);
   font-size: 13px;
   padding: 6px 16px;
   border-radius: 6px;
@@ -1721,8 +1721,8 @@ body.editor-mode.has-right-panel .file-details-backdrop {
 }
 
 .folder-picker-cancel:hover {
-  border-color: var(--accent);
-  color: var(--accent);
+  border-color: var(--annot-accent);
+  color: var(--annot-accent);
 }
 
 /* =============================================================================
@@ -1738,23 +1738,23 @@ body.editor-mode.has-right-panel .file-details-backdrop {
 .editor-right-panel-elements-hint {
   margin: 0 0 8px 0;
   font-size: 11px;
-  color: var(--text-muted);
+  color: var(--annot-text-muted);
 }
 .editor-right-panel-elements-search {
   width: 100%;
   height: 28px;
   padding: 0 8px;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--annot-border-color);
   border-radius: 6px;
-  background: var(--bg-panel-deep);
-  color: var(--text-primary);
+  background: var(--annot-bg-panel-deep);
+  color: var(--annot-text-primary);
   font-size: 12px;
   margin-bottom: 8px;
   box-sizing: border-box;
 }
 .editor-right-panel-elements-search:focus {
   outline: none;
-  border-color: var(--accent);
+  border-color: var(--annot-accent);
 }
 .editor-right-panel-elements-list {
   display: flex;
@@ -1777,16 +1777,16 @@ body.editor-mode.has-right-panel .file-details-backdrop {
   cursor: pointer;
   text-align: left;
   font-size: 12px;
-  color: var(--text-primary);
+  color: var(--annot-text-primary);
   transition: background 0.1s;
   width: 100%;
 }
 .editor-right-panel-element-row:hover {
-  background: var(--hover-bg);
+  background: var(--annot-hover-bg);
 }
 .editor-right-panel-element-icon {
   font-size: 16px;
-  color: var(--text-secondary);
+  color: var(--annot-text-secondary);
   flex-shrink: 0;
 }
 .editor-right-panel-element-label {
@@ -1798,13 +1798,13 @@ body.editor-mode.has-right-panel .file-details-backdrop {
 }
 .editor-right-panel-element-sub {
   font-size: 10px;
-  color: var(--text-muted);
+  color: var(--annot-text-muted);
   text-transform: lowercase;
   flex-shrink: 0;
 }
 .editor-right-panel-elements-empty {
   padding: 12px 4px;
   font-size: 11px;
-  color: var(--text-muted);
+  color: var(--annot-text-muted);
   text-align: center;
 }

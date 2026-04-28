@@ -1,19 +1,33 @@
 # Design system foundations
 
-> **Status:** In progress (2026-04-28). Phase 1 implementation in
-> branch `claude/pedantic-raman-a71a24` (this PR).
+> **Status:** In progress (2026-04-28). Phase 1 landed in
+> [#286](https://github.com/ingcreators/annot/pull/286). Phase 2
+> in branch `refactor/design-system-annot-namespace`. Phases 3–5
+> pending.
 >
-> **Compatibility:** No breaking changes for any package. CSS
-> token names stay identical in Phase 1 — only grouping comments,
-> persistence, a small new public API in
-> `@ingcreators/annot-editor`, and a new top-level
-> [`docs/design-system.md`](../design-system.md) reference are
-> introduced. SVG schema unchanged. `StorageProvider` unchanged.
+> **Phase 2 deviation from plan:** the original plan called for
+> three sub-PRs with one-cycle backwards-compat aliases, on the
+> theory that external plugin authors deserved a heads-up window.
+> Annot is still pre-release with no published plugins, so the
+> alias bridge is wasted work. Phase 2 lands as a single hard
+> rename PR; if breakage hits a future plugin, the
+> `@ingcreators/annot-editor` major version bump is the sole
+> contract.
 >
-> **Risk:** Low and phased. Phase 1 is additive (no token
-> renames). Later phases that DO rename — Phase 2's `--annot-*`
-> namespace migration — are gated behind one-cycle backwards-
-> compatibility aliases and ship as their own PRs.
+> **Compatibility:** Phase 2 renames every CSS variable from
+> `--<token>` to `--annot-<token>`. The override API surface is
+> stable — `setThemeOverrides({ accent: "..." })` still uses the
+> short suffix as the public key; the `--annot-` prefix is added
+> at the wire boundary in `applyOverridesToDom`. Any external CSS
+> referencing the old `--accent` etc. names will break (no aliases
+> shipped). `THEME_TOKEN_NAMES` and `THEME_TOKEN_SECTIONS`
+> unchanged.
+>
+> **Risk:** Medium and mechanical. Phase 2's rename is wide (~25
+> tokens × 30+ files) but every change is the same shape:
+> `--<tok>` → `--annot-<tok>`. The CSS↔TS symmetry test
+> (`theme-overrides.test.ts`) catches drift; the visual regression
+> surface is covered by the Storybook build (CI-blocking).
 
 ## Context
 

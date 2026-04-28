@@ -219,9 +219,9 @@ function runPatFlow(): Promise<boolean> {
     const help = document.createElement("div");
     help.style.fontSize = "12px";
     help.style.lineHeight = "1.6";
-    help.style.color = "var(--text-secondary)";
+    help.style.color = "var(--annot-text-secondary)";
     help.innerHTML = `
-      <strong style="color:var(--text-primary);">Recommended: fine-grained token</strong> —
+      <strong style="color:var(--annot-text-primary);">Recommended: fine-grained token</strong> —
       tighter scope than a classic token, limited to the single repo you
       pick. On the token creation page, set:
       <ul style="margin:6px 0 8px 18px;padding:0;">
@@ -230,13 +230,13 @@ function runPatFlow(): Promise<boolean> {
       </ul>
       <a href="https://github.com/settings/personal-access-tokens/new"
          target="_blank" rel="noopener noreferrer"
-         style="color:var(--accent);text-decoration:underline;">
+         style="color:var(--annot-accent);text-decoration:underline;">
          Open GitHub — New fine-grained token ↗
       </a>
       <br/>
       <a href="https://github.com/settings/tokens/new?scopes=repo&description=Annot"
          target="_blank" rel="noopener noreferrer"
-         style="color:var(--accent);text-decoration:underline;font-size:11px;">
+         style="color:var(--annot-accent);text-decoration:underline;font-size:11px;">
          Or create a classic token with the <code>repo</code> scope ↗
       </a>
     `;
@@ -341,15 +341,15 @@ function showRepoPicker(userLogin: string): Promise<GitHubRepoSummary | null> {
     const list = document.createElement("div");
     list.style.maxHeight = "340px";
     list.style.overflowY = "auto";
-    list.style.border = "1px solid var(--border-color)";
+    list.style.border = "1px solid var(--annot-border-color)";
     list.style.borderRadius = "8px";
-    list.style.background = "var(--input-bg)";
+    list.style.background = "var(--annot-input-bg)";
     list.setAttribute("role", "listbox");
     body.appendChild(list);
 
     const manual = document.createElement("div");
     manual.style.fontSize = "12px";
-    manual.style.color = "var(--text-secondary)";
+    manual.style.color = "var(--annot-text-secondary)";
     manual.style.marginTop = "4px";
     manual.innerHTML = `
       Or enter manually:
@@ -374,7 +374,7 @@ function showRepoPicker(userLogin: string): Promise<GitHubRepoSummary | null> {
     const rotateRow = document.createElement("div");
     rotateRow.style.fontSize = "12px";
     rotateRow.style.marginTop = "4px";
-    rotateRow.innerHTML = `<a href="#" style="color:var(--accent);">Use a different personal access token</a>`;
+    rotateRow.innerHTML = `<a href="#" style="color:var(--annot-accent);">Use a different personal access token</a>`;
     body.appendChild(rotateRow);
     rotateRow.querySelector("a")?.addEventListener("click", async (e) => {
       e.preventDefault();
@@ -439,7 +439,7 @@ function showRepoPicker(userLogin: string): Promise<GitHubRepoSummary | null> {
         const empty = document.createElement("div");
         empty.style.padding = "20px";
         empty.style.textAlign = "center";
-        empty.style.color = "var(--text-secondary)";
+        empty.style.color = "var(--annot-text-secondary)";
         empty.style.fontSize = "13px";
         empty.textContent = emptyMsg;
         list.appendChild(empty);
@@ -454,21 +454,21 @@ function showRepoPicker(userLogin: string): Promise<GitHubRepoSummary | null> {
         row.style.padding = "10px 12px";
         row.style.background = "transparent";
         row.style.border = "none";
-        row.style.borderBottom = "1px solid var(--border-color)";
-        row.style.color = "var(--text-primary)";
+        row.style.borderBottom = "1px solid var(--annot-border-color)";
+        row.style.color = "var(--annot-text-primary)";
         row.style.cursor = "pointer";
         row.addEventListener("mouseenter", () => {
-          row.style.background = "var(--hover-bg)";
+          row.style.background = "var(--annot-hover-bg)";
         });
         row.addEventListener("mouseleave", () => {
           row.style.background = "transparent";
         });
         const badge = r.private
-          ? `<span style="font-size:10px;background:var(--border-color);color:var(--text-secondary);padding:1px 6px;border-radius:999px;margin-left:6px;">private</span>`
+          ? `<span style="font-size:10px;background:var(--annot-border-color);color:var(--annot-text-secondary);padding:1px 6px;border-radius:999px;margin-left:6px;">private</span>`
           : "";
         row.innerHTML = `
           <div style="font-size:13px;font-weight:600;">${escapeHtml(r.fullName)}${badge}</div>
-          <div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">
+          <div style="font-size:11px;color:var(--annot-text-secondary);margin-top:2px;">
             ${escapeHtml(r.description ?? "")} ${r.description ? "·" : ""} default: ${escapeHtml(r.defaultBranch)}
           </div>
         `;
@@ -484,7 +484,7 @@ function showRepoPicker(userLogin: string): Promise<GitHubRepoSummary | null> {
       const div = document.createElement("div");
       div.style.padding = "20px";
       div.style.textAlign = "center";
-      div.style.color = "var(--text-secondary)";
+      div.style.color = "var(--annot-text-secondary)";
       div.style.fontSize = "13px";
       div.textContent = msg;
       list.appendChild(div);
@@ -654,7 +654,7 @@ function showBasePathPrompt(repo: GitHubRepoSummary, branch: string): Promise<st
 
     const preview = document.createElement("div");
     preview.style.fontSize = "12px";
-    preview.style.color = "var(--text-secondary)";
+    preview.style.color = "var(--annot-text-secondary)";
     preview.style.marginTop = "4px";
     body.appendChild(preview);
 

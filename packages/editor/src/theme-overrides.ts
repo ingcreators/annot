@@ -191,14 +191,24 @@ function applyMode(mode: ThemeMode): void {
   else root.classList.remove("light");
 }
 
+/**
+ * Every CSS variable in the design system carries the `--annot-`
+ * prefix as of Phase 2 of `docs/plans/design-system-foundations.md`.
+ * The override API keeps the short suffix as the public key
+ * (`setThemeOverrides({ accent: "..." })`) — only the wire-level
+ * `--<name>` translation grows the prefix.
+ */
+const CSS_VAR_PREFIX = "--annot-";
+
 function applyOverridesToDom(overrides: ThemeOverrides): void {
   const style = document.documentElement.style;
   for (const token of THEME_TOKEN_NAMES) {
     const value = overrides[token];
+    const cssName = `${CSS_VAR_PREFIX}${token}`;
     if (value === undefined) {
-      style.removeProperty(`--${token}`);
+      style.removeProperty(cssName);
     } else {
-      style.setProperty(`--${token}`, value);
+      style.setProperty(cssName, value);
     }
   }
 }

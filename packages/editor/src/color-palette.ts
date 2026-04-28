@@ -170,7 +170,7 @@ function createColorRow(colors: string[], opts: ColorPaletteOptions): HTMLDivEle
 
     // White swatch needs a visible border
     if (color.toUpperCase() === "#FFFFFF") {
-      swatch.style.borderColor = "var(--border-color)";
+      swatch.style.borderColor = "var(--annot-border-color)";
     }
 
     setTooltip(swatch, color);

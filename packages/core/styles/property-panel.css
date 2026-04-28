@@ -2,15 +2,15 @@
   position: absolute;
   top: 52px;
   right: 8px;
-  background: var(--bg-panel-deep);
-  border: 1px solid var(--border-color);
+  background: var(--annot-bg-panel-deep);
+  border: 1px solid var(--annot-border-color);
   border-radius: 8px;
   padding: 10px 12px;
   display: flex;
   flex-direction: column;
   gap: 8px;
   z-index: 20;
-  box-shadow: 0 4px 16px var(--shadow);
+  box-shadow: 0 4px 16px var(--annot-shadow);
   min-width: 200px;
   max-height: calc(100vh - 100px);
   overflow-y: auto;
@@ -42,7 +42,7 @@
 
 .prop-label {
   font-size: 11px;
-  color: var(--text-secondary);
+  color: var(--annot-text-secondary);
   width: 36px;
   flex-shrink: 0;
 }
@@ -50,7 +50,7 @@
 .prop-color {
   width: 26px;
   height: 26px;
-  border: 1px solid var(--input-border);
+  border: 1px solid var(--annot-input-border);
   border-radius: 4px;
   padding: 0;
   cursor: pointer;
@@ -68,10 +68,10 @@
 .prop-btn {
   width: 26px;
   height: 26px;
-  border: 1px solid var(--input-border);
+  border: 1px solid var(--annot-input-border);
   border-radius: 4px;
-  background: var(--chip-bg);
-  color: var(--text-secondary);
+  background: var(--annot-chip-bg);
+  color: var(--annot-text-secondary);
   font-size: 13px;
   cursor: pointer;
   display: flex;
@@ -80,8 +80,8 @@
 }
 
 .prop-btn:hover {
-  border-color: var(--accent);
-  color: var(--accent);
+  border-color: var(--annot-accent);
+  color: var(--annot-accent);
 }
 
 /* Section with label + choice list */
@@ -93,9 +93,9 @@
 
 .prop-section-label {
   font-size: 11px;
-  color: var(--text-secondary);
+  color: var(--annot-text-secondary);
   padding-bottom: 2px;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--annot-border-color);
 }
 
 /* Vertical choice list (width / style) */
@@ -116,11 +116,11 @@
 }
 
 .prop-choice-item:hover {
-  background: var(--choice-hover);
+  background: var(--annot-choice-hover);
 }
 
 .prop-choice-item.active {
-  background: var(--choice-active);
+  background: var(--annot-choice-active);
 }
 
 .prop-choice-item svg {
@@ -129,11 +129,11 @@
 
 .prop-choice-label {
   font-size: 11px;
-  color: var(--text-secondary);
+  color: var(--annot-text-secondary);
 }
 
 .prop-choice-item.active .prop-choice-label {
-  color: var(--accent);
+  color: var(--annot-accent);
 }
 
 /* Horizontal chip list (font size) */
@@ -157,7 +157,7 @@
   border: 1px solid transparent;
   border-radius: 6px;
   background: transparent;
-  color: var(--text-primary);
+  color: var(--annot-text-primary);
   font-size: 22px;
   cursor: pointer;
   display: inline-flex;
@@ -181,24 +181,24 @@
 }
 
 .prop-choice-chip:hover {
-  background: var(--hover-bg);
-  border-color: var(--accent);
-  color: var(--accent);
+  background: var(--annot-hover-bg);
+  border-color: var(--annot-accent);
+  color: var(--annot-accent);
 }
 
 .prop-choice-chip.active {
-  background: var(--choice-active, var(--choice-hover, var(--hover-bg)));
-  border-color: var(--accent);
-  color: var(--accent);
+  background: var(--annot-choice-active, var(--annot-choice-hover, var(--annot-hover-bg)));
+  border-color: var(--annot-accent);
+  color: var(--annot-accent);
 }
 
 .prop-number-input {
   width: 52px;
   height: 26px;
-  border: 1px solid var(--input-border);
+  border: 1px solid var(--annot-input-border);
   border-radius: 4px;
-  background: var(--input-bg);
-  color: var(--text-primary);
+  background: var(--annot-input-bg);
+  color: var(--annot-text-primary);
   font-size: 13px;
   padding: 0 6px;
   text-align: center;
@@ -206,7 +206,7 @@
 
 /* Preview line color adapts to theme */
 .preview-line {
-  stroke: var(--preview-line);
+  stroke: var(--annot-preview-line);
 }
 
 /* Color palette */
@@ -218,7 +218,7 @@
 
 .color-palette-label {
   font-size: 10px;
-  color: var(--text-muted);
+  color: var(--annot-text-muted);
   padding: 2px 0;
 }
 
@@ -239,11 +239,11 @@
 .color-swatch:hover {
   transform: scale(1.25);
   z-index: 1;
-  border-color: var(--accent);
+  border-color: var(--annot-accent);
 }
 
 .color-swatch.active {
-  border: 2px solid var(--accent);
+  border: 2px solid var(--annot-accent);
   border-radius: 3px;
 }
 
@@ -255,7 +255,7 @@
 
 .color-palette-custom-btn {
   font-size: 11px;
-  color: var(--accent);
+  color: var(--annot-accent);
   background: none;
   border: none;
   cursor: pointer;
@@ -321,7 +321,7 @@
   font-weight: 700;
   letter-spacing: 0.7px;
   text-transform: uppercase;
-  color: var(--text-muted);
+  color: var(--annot-text-muted);
   padding: 0 0 4px 0;
 }
 .pp-section-body {
@@ -346,12 +346,12 @@
   align-items: center;
   gap: 6px;
   font-size: 13px;
-  color: var(--text-primary);
+  color: var(--annot-text-primary);
   cursor: pointer;
   user-select: none;
 }
 .pp-radio input[type="radio"] {
-  accent-color: var(--accent);
+  accent-color: var(--annot-accent);
   margin: 0;
   cursor: pointer;
 }
@@ -378,7 +378,7 @@
    * matching professional design-tool property panels. */
   font-size: 12px;
   font-weight: 400;
-  color: var(--text-secondary);
+  color: var(--annot-text-secondary);
   white-space: nowrap;
 }
 
@@ -386,9 +386,9 @@
 .pp-number {
   display: inline-flex;
   align-items: center;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--annot-border-color);
   border-radius: 4px;
-  background: var(--bg-input, var(--bg-panel));
+  background: var(--bg-input, var(--annot-bg-panel));
   overflow: hidden;
   height: 24px;
   min-width: 0;
@@ -397,7 +397,7 @@
   border: none;
   outline: none;
   background: transparent;
-  color: var(--text-primary);
+  color: var(--annot-text-primary);
   font-size: 12px;
   text-align: right;
   width: 100%;
@@ -413,7 +413,7 @@
   -moz-appearance: textfield;
 }
 .pp-number-unit {
-  color: var(--text-muted);
+  color: var(--annot-text-muted);
   font-size: 11px;
   padding-right: 4px;
   user-select: none;
@@ -434,7 +434,7 @@
 .pp-slider-row input[type="range"] {
   width: 100%;
   margin: 0;
-  accent-color: var(--accent);
+  accent-color: var(--annot-accent);
 }
 
 /* PowerPoint-style dropdown button — visual preview + caret. Popup
@@ -446,15 +446,15 @@
   gap: 4px;
   height: 24px;
   padding: 0 2px 0 6px;
-  background: var(--bg-input, var(--bg-panel));
-  border: 1px solid var(--border-color);
+  background: var(--bg-input, var(--annot-bg-panel));
+  border: 1px solid var(--annot-border-color);
   border-radius: 4px;
-  color: var(--text-primary);
+  color: var(--annot-text-primary);
   cursor: pointer;
   font-size: 12px;
 }
 .pp-select:hover {
-  border-color: var(--accent);
+  border-color: var(--annot-accent);
 }
 .pp-select:disabled {
   opacity: 0.5;
@@ -472,7 +472,7 @@
 }
 .pp-select-caret {
   font-size: 16px;
-  color: var(--text-muted);
+  color: var(--annot-text-muted);
 }
 
 /* Popup content for pp-select. Grid layout so icon galleries
@@ -500,18 +500,18 @@
   border: 1px solid transparent;
   border-radius: 4px;
   background: transparent;
-  color: var(--text-primary);
+  color: var(--annot-text-primary);
   font-size: 12px;
   cursor: pointer;
   text-align: left;
 }
 .pp-select-item:hover {
-  background: var(--hover-bg);
+  background: var(--annot-hover-bg);
 }
 .pp-select-item.active {
-  background: var(--choice-hover, var(--hover-bg));
-  border-color: var(--accent);
-  color: var(--accent);
+  background: var(--annot-choice-hover, var(--annot-hover-bg));
+  border-color: var(--annot-accent);
+  color: var(--annot-accent);
 }
 .pp-select-item svg {
   display: block;
@@ -523,8 +523,8 @@
   width: 100%;
   height: 24px;
   padding: 2px;
-  background: var(--bg-input, var(--bg-panel));
-  border: 1px solid var(--border-color);
+  background: var(--bg-input, var(--annot-bg-panel));
+  border: 1px solid var(--annot-border-color);
   border-radius: 4px;
   cursor: pointer;
   display: flex;
@@ -535,12 +535,12 @@
   width: 20px;
   height: 16px;
   border-radius: 2px;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--annot-border-color);
   flex-shrink: 0;
 }
 .pp-color-btn .material-symbols-outlined {
   font-size: 16px;
-  color: var(--text-muted);
+  color: var(--annot-text-muted);
   margin-left: auto;
 }
 
@@ -552,7 +552,7 @@
     linear-gradient(
       to top left,
       transparent 0 calc(50% - 0.8px),
-      var(--accent, #e74c3c) calc(50% - 0.8px) calc(50% + 0.8px),
+      var(--annot-accent, #e74c3c) calc(50% - 0.8px) calc(50% + 0.8px),
       transparent calc(50% + 0.8px) 100%
     ),
     #ffffff;
@@ -566,17 +566,17 @@
   width: 100%;
   padding: 6px 8px;
   margin-bottom: 8px;
-  background: var(--bg-input, var(--bg-panel));
-  color: var(--text-primary);
-  border: 1px solid var(--border-color);
+  background: var(--bg-input, var(--annot-bg-panel));
+  color: var(--annot-text-primary);
+  border: 1px solid var(--annot-border-color);
   border-radius: 4px;
   cursor: pointer;
   font-size: 12px;
   text-align: left;
 }
 .pp-color-none-btn:hover {
-  background: var(--hover-bg);
-  border-color: var(--accent);
+  background: var(--annot-hover-bg);
+  border-color: var(--annot-accent);
 }
 
 /* Chip-row container for variant/type pickers inside a pp-section.
@@ -622,10 +622,10 @@
 .pp-done-btn {
   width: 100%;
   padding: 8px 12px;
-  border: 1px solid var(--accent);
+  border: 1px solid var(--annot-accent);
   border-radius: 6px;
-  background: var(--accent);
-  color: var(--bg-panel, #fff);
+  background: var(--annot-accent);
+  color: var(--annot-bg-panel, #fff);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -690,7 +690,7 @@
 .pp-number-spinner {
   display: flex;
   flex-direction: column;
-  border-left: 1px solid var(--border-color);
+  border-left: 1px solid var(--annot-border-color);
   align-self: stretch;
 }
 .pp-number-spinner button {
@@ -701,7 +701,7 @@
   margin: 0;
   border: none;
   background: transparent;
-  color: var(--text-muted);
+  color: var(--annot-text-muted);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -711,11 +711,11 @@
     color 0.1s;
 }
 .pp-number-spinner button:hover {
-  background: var(--hover-bg);
-  color: var(--accent);
+  background: var(--annot-hover-bg);
+  color: var(--annot-accent);
 }
 .pp-number-spinner button:active {
-  background: var(--choice-hover, var(--hover-bg));
+  background: var(--annot-choice-hover, var(--annot-hover-bg));
 }
 .pp-number-spin-up::before,
 .pp-number-spin-down::before {

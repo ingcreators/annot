@@ -47,7 +47,7 @@ const meta: Meta<Args> = {
   render: (args) => {
     const wrapper = document.createElement("div");
     wrapper.style.padding = "16px";
-    wrapper.style.background = "var(--bg-panel, #1e1e2e)";
+    wrapper.style.background = "var(--annot-bg-panel, #1e1e2e)";
     wrapper.style.display = "inline-block";
     const toolbar = document.createElement("annot-toolbar");
     toolbar.setAttribute("orientation", args.orientation);

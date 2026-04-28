@@ -19,7 +19,7 @@ const meta: Meta<Args> = {
   render: (args) => {
     const wrapper = document.createElement("div");
     wrapper.style.padding = "8px 16px";
-    wrapper.style.background = "var(--bg-panel, #1e1e2e)";
+    wrapper.style.background = "var(--annot-bg-panel, #1e1e2e)";
     // Use the breadcrumb container so the inline-rename styling
     // matches what the user sees in the editor header.
     const nav = document.createElement("nav");

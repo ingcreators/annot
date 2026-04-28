@@ -21,7 +21,7 @@
 #file-manager .header-info-btn:focus-visible,
 #file-manager .header-search:focus-visible,
 #file-manager .breadcrumb-item:focus-visible {
-  outline: 2px solid var(--focus-ring, var(--accent));
+  outline: 2px solid var(--annot-focus-ring, var(--annot-accent));
   outline-offset: 2px;
   z-index: 5; /* keep ring above neighbouring borders */
 }
@@ -50,7 +50,7 @@
   bottom: 0;
   display: grid;
   grid-template-columns: 240px 1fr;
-  background: var(--bg-primary);
+  background: var(--annot-bg-primary);
 }
 
 /* Slightly wider sidebar on very large screens so long folder names fit */
@@ -68,8 +68,8 @@
 /* ---- Sidebar ---- */
 
 #sidebar {
-  background: var(--bg-secondary);
-  border-right: 1px solid var(--border-color);
+  background: var(--annot-bg-secondary);
+  border-right: 1px solid var(--annot-border-color);
   display: flex;
   flex-direction: column;
   overflow-y: auto;
@@ -83,10 +83,10 @@
   gap: 8px;
   width: 100%;
   padding: 10px 16px;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--annot-border-color);
   border-radius: 16px;
-  background: var(--bg-panel);
-  color: var(--text-primary);
+  background: var(--annot-bg-panel);
+  color: var(--annot-text-primary);
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
@@ -99,13 +99,13 @@
 }
 
 .sidebar-new-btn:hover {
-  background: var(--hover-bg);
+  background: var(--annot-hover-bg);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
 .sidebar-new-btn .material-symbols-outlined {
   font-size: 22px;
-  color: var(--accent);
+  color: var(--annot-accent);
 }
 
 /* New menu dropdown */
@@ -118,8 +118,8 @@
   top: 100%;
   left: 0;
   margin-top: 4px;
-  background: var(--bg-panel);
-  border: 1px solid var(--border-color);
+  background: var(--annot-bg-panel);
+  border: 1px solid var(--annot-border-color);
   border-radius: 8px;
   overflow: hidden;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
@@ -135,7 +135,7 @@
   padding: 10px 16px;
   border: none;
   background: transparent;
-  color: var(--text-primary);
+  color: var(--annot-text-primary);
   font-size: 13px;
   text-align: left;
   cursor: pointer;
@@ -143,17 +143,17 @@
 }
 
 .new-menu-item:hover {
-  background: var(--choice-hover);
-  color: var(--accent);
+  background: var(--annot-choice-hover);
+  color: var(--annot-accent);
 }
 
 .new-menu-item .material-symbols-outlined {
   font-size: 20px;
-  color: var(--text-secondary);
+  color: var(--annot-text-secondary);
 }
 
 .new-menu-item:hover .material-symbols-outlined {
-  color: var(--accent);
+  color: var(--annot-accent);
 }
 
 /* Storage section */
@@ -162,7 +162,7 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--text-muted);
+  color: var(--annot-text-muted);
   padding: 8px 8px 4px;
 }
 
@@ -175,7 +175,7 @@
   border: none;
   border-radius: 8px;
   background: transparent;
-  color: var(--text-primary);
+  color: var(--annot-text-primary);
   font-size: 13px;
   text-align: left;
   cursor: pointer;
@@ -184,12 +184,12 @@
 }
 
 .sidebar-storage-item:hover {
-  background: var(--hover-bg);
+  background: var(--annot-hover-bg);
 }
 
 .sidebar-storage-item.active {
-  background: var(--accent-bg);
-  color: var(--accent);
+  background: var(--annot-accent-bg);
+  color: var(--annot-accent);
 }
 
 .sidebar-storage-item.active::before {
@@ -200,7 +200,7 @@
   bottom: 4px;
   width: 3px;
   border-radius: 0 3px 3px 0;
-  background: var(--accent);
+  background: var(--annot-accent);
 }
 
 .sidebar-storage-icon {
@@ -208,7 +208,7 @@
   flex-shrink: 0;
   width: 24px;
   text-align: center;
-  color: var(--text-primary);
+  color: var(--annot-text-primary);
   font-variation-settings:
     "FILL" 0,
     "wght" 400,
@@ -217,7 +217,7 @@
 }
 
 .sidebar-storage-item.active .sidebar-storage-icon {
-  color: var(--accent);
+  color: var(--annot-accent);
 }
 
 .sidebar-storage-info {
@@ -234,14 +234,14 @@
 
 .sidebar-storage-status {
   font-size: 12px; /* was 11px — improve legibility */
-  color: var(--text-muted);
+  color: var(--annot-text-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .sidebar-storage-item.active .sidebar-storage-status {
-  color: var(--accent);
+  color: var(--annot-accent);
   opacity: 0.7;
 }
 
@@ -252,10 +252,10 @@
   flex-shrink: 0;
   width: 28px;
   height: 28px;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--annot-border-color);
   border-radius: 6px;
-  background: var(--bg-panel);
-  color: var(--text-primary);
+  background: var(--annot-bg-panel);
+  color: var(--annot-text-primary);
   font-size: 18px;
   font-variation-settings:
     "FILL" 0,
@@ -274,22 +274,22 @@
 }
 
 .sidebar-storage-reselect:hover {
-  background: var(--accent-bg);
-  border-color: var(--accent);
-  color: var(--accent);
+  background: var(--annot-accent-bg);
+  border-color: var(--annot-accent);
+  color: var(--annot-accent);
 }
 
 /* On the active (selected) storage item, keep the button visible against
  * the accent-tinted background by giving it a solid panel fill. */
 .sidebar-storage-item.active .sidebar-storage-reselect {
-  background: var(--bg-panel);
-  border-color: var(--accent);
-  color: var(--accent);
+  background: var(--annot-bg-panel);
+  border-color: var(--annot-accent);
+  color: var(--annot-accent);
 }
 
 .sidebar-storage-item.active .sidebar-storage-reselect:hover {
-  background: var(--accent);
-  color: var(--bg-panel);
+  background: var(--annot-accent);
+  color: var(--annot-bg-panel);
 }
 
 /* ---- Folder Tree ---- */
@@ -307,7 +307,7 @@
   border-radius: 6px;
   cursor: pointer;
   font-size: 13px;
-  color: var(--text-secondary);
+  color: var(--annot-text-secondary);
   transition: background 0.1s;
   white-space: nowrap;
   overflow: hidden;
@@ -316,13 +316,13 @@
 }
 
 .folder-tree-item:hover {
-  background: var(--hover-bg);
-  color: var(--text-primary);
+  background: var(--annot-hover-bg);
+  color: var(--annot-text-primary);
 }
 
 .folder-tree-item.active {
-  background: var(--accent-bg);
-  color: var(--accent);
+  background: var(--annot-accent-bg);
+  color: var(--annot-accent);
 }
 
 .folder-tree-chevron {
@@ -331,7 +331,7 @@
   height: 20px;
   border: none;
   background: none;
-  color: var(--text-primary);
+  color: var(--annot-text-primary);
   font-size: 18px;
   font-variation-settings:
     "FILL" 0,
@@ -347,14 +347,14 @@
 }
 
 .folder-tree-chevron:hover {
-  background: var(--hover-bg);
-  color: var(--accent);
+  background: var(--annot-hover-bg);
+  color: var(--annot-accent);
 }
 
 .folder-tree-icon {
   flex-shrink: 0;
   font-size: 18px;
-  color: var(--text-primary);
+  color: var(--annot-text-primary);
   font-variation-settings:
     "FILL" 0,
     "wght" 400,
@@ -363,7 +363,7 @@
 }
 
 .folder-tree-item.active .folder-tree-icon {
-  color: var(--accent);
+  color: var(--annot-accent);
 }
 
 .folder-tree-name {
@@ -381,7 +381,7 @@
 
 .folder-tree-root-sub {
   font-size: 11px; /* was 10px — min readable */
-  color: var(--text-muted);
+  color: var(--annot-text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -389,7 +389,7 @@
 }
 
 .folder-tree-item.active .folder-tree-root-sub {
-  color: var(--accent);
+  color: var(--annot-accent);
   opacity: 0.7;
 }
 
@@ -410,7 +410,7 @@
   align-items: center;
   gap: 8px;
   padding: 8px 16px;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--annot-border-color);
   flex-shrink: 0;
   height: 44px; /* fixed height so swap with selection-bar is stable */
 }
@@ -423,10 +423,10 @@
 .header-refresh-btn {
   width: 36px;
   height: 32px;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--annot-border-color);
   border-radius: 6px;
   background: transparent;
-  color: var(--text-primary);
+  color: var(--annot-text-primary);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -445,9 +445,9 @@
 }
 
 .header-refresh-btn:hover {
-  background: var(--hover-bg);
-  border-color: var(--accent);
-  color: var(--accent);
+  background: var(--annot-hover-bg);
+  border-color: var(--annot-accent);
+  color: var(--annot-accent);
 }
 
 .header-refresh-btn:active {
@@ -459,7 +459,7 @@
 .view-toggle {
   display: flex;
   align-items: center;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--annot-border-color);
   border-radius: 6px;
   overflow: hidden;
   flex-shrink: 0;
@@ -472,7 +472,7 @@
   background: transparent;
   /* Dimmer than body text so inactive icons read as "available" rather
    * than "currently on". */
-  color: var(--text-muted, var(--text-primary));
+  color: var(--annot-text-muted, var(--annot-text-primary));
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -489,8 +489,8 @@
 }
 
 .view-toggle-btn:hover {
-  background: var(--hover-bg);
-  color: var(--text-primary);
+  background: var(--annot-hover-bg);
+  color: var(--annot-text-primary);
 }
 
 /* Google Drive / Gmail pattern: moderate tint + saturated accent color
@@ -498,13 +498,13 @@
  * supporting control rather than shouting for attention. */
 .view-toggle-btn.active {
   background: rgba(124, 156, 255, 0.22);
-  color: var(--accent);
+  color: var(--annot-accent);
   font-variation-settings: "wght" 600;
 }
 
 html.light .view-toggle-btn.active {
   background: rgba(124, 156, 255, 0.22);
-  color: var(--accent);
+  color: var(--annot-accent);
 }
 
 /* The global focus-ring block at the top of this file includes
@@ -514,13 +514,13 @@ html.light .view-toggle-btn.active {
  * descending-specificity suppression. */
 /* biome-ignore lint/style/noDescendingSpecificity: intentional base fallback for use outside #file-manager */
 .view-toggle-btn:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--annot-accent);
   outline-offset: -2px;
   z-index: 1;
 }
 
 .view-toggle-btn + .view-toggle-btn {
-  border-left: 1px solid var(--border-color);
+  border-left: 1px solid var(--annot-border-color);
 }
 
 /* ---- App dialog (shared prompt / confirm / alert) ---- */
@@ -546,8 +546,8 @@ html.light .view-toggle-btn.active {
 }
 
 .app-dialog {
-  background: var(--bg-panel);
-  border: 1px solid var(--border-color);
+  background: var(--annot-bg-panel);
+  border: 1px solid var(--annot-border-color);
   border-radius: 12px;
   padding: 22px 24px 18px;
   min-width: 360px;
@@ -573,13 +573,13 @@ html.light .view-toggle-btn.active {
 .app-dialog-title {
   font-size: 17px;
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--annot-text-primary);
   line-height: 1.3;
 }
 
 .app-dialog-message {
   font-size: 13px;
-  color: var(--text-secondary);
+  color: var(--annot-text-secondary);
   line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-word;
@@ -595,18 +595,18 @@ html.light .view-toggle-btn.active {
   width: 100%;
   height: 40px;
   padding: 0 12px;
-  border: 1px solid var(--input-border);
+  border: 1px solid var(--annot-input-border);
   border-radius: 8px;
-  background: var(--input-bg);
-  color: var(--text-primary);
+  background: var(--annot-input-bg);
+  color: var(--annot-text-primary);
   font-size: 14px;
   outline: none;
   transition: border-color 0.15s;
 }
 
 .app-dialog-input:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--accent-bg);
+  border-color: var(--annot-accent);
+  box-shadow: 0 0 0 2px var(--annot-accent-bg);
 }
 
 .app-dialog-input[aria-invalid="true"] {
@@ -632,10 +632,10 @@ html.light .view-toggle-btn.active {
   min-width: 84px;
   height: 36px;
   padding: 0 16px;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--annot-border-color);
   border-radius: 8px;
   background: transparent;
-  color: var(--text-primary);
+  color: var(--annot-text-primary);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
@@ -646,13 +646,13 @@ html.light .view-toggle-btn.active {
 }
 
 .app-dialog-cancel:hover {
-  background: var(--hover-bg);
-  border-color: var(--hover-border);
+  background: var(--annot-hover-bg);
+  border-color: var(--annot-hover-border);
 }
 
 .app-dialog-primary {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: var(--annot-accent);
+  border-color: var(--annot-accent);
   color: #0b1020;
 }
 
@@ -675,7 +675,7 @@ html.light .view-toggle-btn.active {
  * For dialogs outside that scope, add an explicit one: */
 .app-dialog-btn:focus-visible,
 .app-dialog-input:focus-visible {
-  outline: 2px solid var(--focus-ring, var(--accent));
+  outline: 2px solid var(--annot-focus-ring, var(--annot-accent));
   outline-offset: 2px;
 }
 
@@ -692,8 +692,8 @@ html.light .view-toggle-btn.active {
 }
 
 .capture-dialog {
-  background: var(--bg-panel);
-  border: 1px solid var(--border-color);
+  background: var(--annot-bg-panel);
+  border: 1px solid var(--annot-border-color);
   border-radius: 12px;
   padding: 20px 22px;
   min-width: 340px;
@@ -707,12 +707,12 @@ html.light .view-toggle-btn.active {
 .capture-dialog-title {
   font-size: 16px;
   font-weight: 700;
-  color: var(--text-primary);
+  color: var(--annot-text-primary);
 }
 
 .capture-dialog-desc {
   font-size: 12px;
-  color: var(--text-secondary);
+  color: var(--annot-text-secondary);
   line-height: 1.5;
 }
 
@@ -725,41 +725,41 @@ html.light .view-toggle-btn.active {
 
 .capture-dialog-label {
   font-size: 13px;
-  color: var(--text-primary);
+  color: var(--annot-text-primary);
 }
 
 .capture-dialog-input {
   width: 100px;
   height: 32px;
   padding: 0 10px;
-  background: var(--input-bg);
-  border: 1px solid var(--input-border);
+  background: var(--annot-input-bg);
+  border: 1px solid var(--annot-input-border);
   border-radius: 6px;
-  color: var(--text-primary);
+  color: var(--annot-text-primary);
   font-size: 13px;
   outline: none;
   text-align: right;
 }
 
 .capture-dialog-input:focus {
-  border-color: var(--accent);
+  border-color: var(--annot-accent);
 }
 
 .capture-dialog-select {
   width: 150px;
   height: 32px;
   padding: 0 8px;
-  background: var(--input-bg);
-  border: 1px solid var(--input-border);
+  background: var(--annot-input-bg);
+  border: 1px solid var(--annot-input-border);
   border-radius: 6px;
-  color: var(--text-primary);
+  color: var(--annot-text-primary);
   font-size: 13px;
   outline: none;
   cursor: pointer;
 }
 
 .capture-dialog-select:focus {
-  border-color: var(--accent);
+  border-color: var(--annot-accent);
 }
 
 .capture-dialog-actions {
@@ -771,28 +771,28 @@ html.light .view-toggle-btn.active {
 
 .capture-dialog-btn {
   padding: 7px 16px;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--annot-border-color);
   border-radius: 6px;
   background: transparent;
-  color: var(--text-primary);
+  color: var(--annot-text-primary);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
 }
 
 .capture-dialog-btn:hover {
-  background: var(--hover-bg);
-  border-color: var(--hover-border);
+  background: var(--annot-hover-bg);
+  border-color: var(--annot-hover-border);
 }
 
 .capture-dialog-btn-primary {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: var(--annot-accent);
+  border-color: var(--annot-accent);
   color: #0b1020;
 }
 
 .capture-dialog-btn-primary:hover {
-  background: var(--accent);
+  background: var(--annot-accent);
   opacity: 0.85;
 }
 
@@ -803,8 +803,8 @@ html.light .view-toggle-btn.active {
   bottom: 20px;
   left: 50%;
   transform: translateX(-50%);
-  background: var(--bg-panel);
-  border: 1px solid var(--border-color);
+  background: var(--annot-bg-panel);
+  border: 1px solid var(--annot-border-color);
   border-radius: 10px;
   padding: 10px 14px;
   display: flex;
@@ -817,12 +817,12 @@ html.light .view-toggle-btn.active {
 
 .capture-progress-icon {
   font-size: 20px;
-  color: var(--accent);
+  color: var(--annot-accent);
 }
 
 .capture-progress-text {
   font-size: 13px;
-  color: var(--text-primary);
+  color: var(--annot-text-primary);
   flex: 1;
   white-space: nowrap;
 }
@@ -830,7 +830,7 @@ html.light .view-toggle-btn.active {
 .capture-progress-bar {
   width: 120px;
   height: 4px;
-  background: var(--border-color);
+  background: var(--annot-border-color);
   border-radius: 2px;
   overflow: hidden;
   flex-shrink: 0;
@@ -839,16 +839,16 @@ html.light .view-toggle-btn.active {
 .capture-progress-bar-fill {
   height: 100%;
   width: 0%;
-  background: var(--accent);
+  background: var(--annot-accent);
   transition: width 0.25s ease;
 }
 
 .capture-progress-cancel {
   padding: 4px 10px;
   background: transparent;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--annot-border-color);
   border-radius: 4px;
-  color: var(--text-secondary);
+  color: var(--annot-text-secondary);
   font-size: 12px;
   cursor: pointer;
 }
@@ -865,9 +865,9 @@ html.light .view-toggle-btn.active {
   align-items: center;
   gap: 12px;
   padding: 8px 16px;
-  background: var(--accent-bg);
-  border-bottom: 1px solid var(--border-color);
-  color: var(--text-primary);
+  background: var(--annot-accent-bg);
+  border-bottom: 1px solid var(--annot-border-color);
+  color: var(--annot-text-primary);
   flex-shrink: 0;
   height: 44px; /* fixed height so swapping doesn't shift layout */
   overflow: hidden;
@@ -876,7 +876,7 @@ html.light .view-toggle-btn.active {
 
 .selection-bar-close {
   font-size: 20px;
-  color: var(--text-primary);
+  color: var(--annot-text-primary);
   background: transparent;
   border: none;
   border-radius: 50%;
@@ -890,13 +890,13 @@ html.light .view-toggle-btn.active {
 }
 
 .selection-bar-close:hover {
-  background: var(--hover-bg);
+  background: var(--annot-hover-bg);
 }
 
 .selection-bar-count {
   font-size: 14px;
   font-weight: 500;
-  color: var(--text-primary);
+  color: var(--annot-text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   min-width: 0;
@@ -911,10 +911,10 @@ html.light .view-toggle-btn.active {
   align-items: center;
   gap: 6px;
   padding: 6px 12px;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--annot-border-color);
   border-radius: 6px;
-  background: var(--bg-panel);
-  color: var(--text-primary);
+  background: var(--annot-bg-panel);
+  color: var(--annot-text-primary);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
@@ -929,9 +929,9 @@ html.light .view-toggle-btn.active {
 }
 
 .selection-bar-btn:hover {
-  background: var(--hover-bg);
-  border-color: var(--accent);
-  color: var(--accent);
+  background: var(--annot-hover-bg);
+  border-color: var(--annot-accent);
+  color: var(--annot-accent);
 }
 
 .selection-bar-btn-danger:hover {
@@ -949,7 +949,7 @@ html.light .view-toggle-btn.active {
   border: none;
   border-radius: 50%;
   background: transparent;
-  color: var(--text-primary);
+  color: var(--annot-text-primary);
   font-size: 18px;
   font-variation-settings:
     "FILL" 0,
@@ -1013,8 +1013,8 @@ html.light .view-toggle-btn.active {
   position: fixed;
   min-width: 180px;
   padding: 4px;
-  background: var(--bg-panel);
-  border: 1px solid var(--border-color);
+  background: var(--annot-bg-panel);
+  border: 1px solid var(--annot-border-color);
   border-radius: 8px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
   z-index: 2000;
@@ -1032,7 +1032,7 @@ html.light .view-toggle-btn.active {
   border: none;
   border-radius: 6px;
   background: transparent;
-  color: var(--text-primary);
+  color: var(--annot-text-primary);
   font-size: 13px;
   text-align: left;
   cursor: pointer;
@@ -1041,18 +1041,18 @@ html.light .view-toggle-btn.active {
 
 .context-menu-item:hover,
 .context-menu-item:focus-visible {
-  background: var(--hover-bg);
+  background: var(--annot-hover-bg);
   outline: none;
 }
 
 .context-menu-icon {
   font-size: 18px;
-  color: var(--text-secondary);
+  color: var(--annot-text-secondary);
   flex-shrink: 0;
 }
 
 .context-menu-item:hover .context-menu-icon {
-  color: var(--accent);
+  color: var(--annot-accent);
 }
 
 .context-menu-item-danger {
@@ -1084,16 +1084,16 @@ html.light .view-toggle-btn.active {
 
 .gallery-folder-card.selected,
 .gallery-item.selected {
-  border-color: var(--accent);
+  border-color: var(--annot-accent);
   background: rgba(124, 156, 255, 0.12);
   /* 2px ring matches industry norms (Drive / Photos / Finder / Figma).
    * The check badge is the primary signal, so the ring can stay subtle
    * to avoid visual noise when many cards are selected. */
-  box-shadow: 0 0 0 2px var(--accent);
+  box-shadow: 0 0 0 2px var(--annot-accent);
 }
 
 .gallery-folder-card.selected .gallery-folder-card-icon {
-  color: var(--accent);
+  color: var(--annot-accent);
 }
 
 /* Solid filled badge with a white check — works over any thumbnail.
@@ -1118,7 +1118,7 @@ html.light .view-toggle-btn.active {
   text-align: center;
   font-size: 16px;
   color: #fff;
-  background: var(--accent);
+  background: var(--annot-accent);
   border-radius: 50%;
   box-shadow:
     0 0 0 1px rgba(0, 0, 0, 0.18), /* hairline edge for crisp readability */
@@ -1143,7 +1143,7 @@ html.light .gallery-item.selected::after {
 .main-content-body {
   flex: 1;
   overflow-y: auto;
-  background: var(--bg-primary);
+  background: var(--annot-bg-primary);
 }
 
 /* Count footer inside main content */
@@ -1151,7 +1151,7 @@ html.light .gallery-item.selected::after {
   display: flex;
   align-items: center;
   padding: 4px 16px;
-  border-top: 1px solid var(--border-color);
+  border-top: 1px solid var(--annot-border-color);
   flex-shrink: 0;
   min-height: 28px;
 }
@@ -1166,13 +1166,13 @@ html.light .gallery-item.selected::after {
 .gallery-grid .gallery-empty {
   text-align: center;
   padding: 60px 20px;
-  color: var(--text-muted);
+  color: var(--annot-text-muted);
 }
 
 .gallery-section-header {
   font-size: 13px;
   font-weight: 600;
-  color: var(--text-secondary);
+  color: var(--annot-text-secondary);
   padding: 12px 4px 8px;
   letter-spacing: 0.02em;
 }
@@ -1216,9 +1216,9 @@ html.light .gallery-item.selected::after {
   align-items: center;
   gap: 10px;
   padding: 10px 12px;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--annot-border-color);
   border-radius: 8px;
-  background: var(--bg-panel);
+  background: var(--annot-bg-panel);
   cursor: pointer;
   transition:
     background 0.1s,
@@ -1228,8 +1228,8 @@ html.light .gallery-item.selected::after {
 }
 
 .gallery-folder-card:hover {
-  background: var(--hover-bg);
-  border-color: var(--accent);
+  background: var(--annot-hover-bg);
+  border-color: var(--annot-accent);
 }
 
 /* `.gallery-folder-card.selected .gallery-folder-card-icon` earlier
@@ -1240,7 +1240,7 @@ html.light .gallery-item.selected::after {
 /* biome-ignore lint/style/noDescendingSpecificity: base rule deliberately follows contextual .selected descendant */
 .gallery-folder-card-icon {
   font-size: 24px;
-  color: var(--text-primary);
+  color: var(--annot-text-primary);
   font-variation-settings:
     "FILL" 0,
     "wght" 400,
@@ -1250,7 +1250,7 @@ html.light .gallery-item.selected::after {
 }
 
 .gallery-folder-card:hover .gallery-folder-card-icon {
-  color: var(--accent);
+  color: var(--annot-accent);
 }
 
 .gallery-folder-card-name {
@@ -1258,7 +1258,7 @@ html.light .gallery-item.selected::after {
   min-width: 0;
   font-size: 13px;
   font-weight: 500;
-  color: var(--text-primary);
+  color: var(--annot-text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1270,7 +1270,7 @@ html.light .gallery-item.selected::after {
   border: none;
   border-radius: 50%;
   background: transparent;
-  color: var(--text-secondary);
+  color: var(--annot-text-secondary);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -1359,7 +1359,7 @@ html.light .gallery-item.selected::after {
   align-items: center;
   justify-content: center;
   height: 100%;
-  color: var(--text-muted);
+  color: var(--annot-text-muted);
   gap: 12px;
   padding: 40px;
   text-align: center;
@@ -1385,17 +1385,17 @@ html.light .gallery-item.selected::after {
   width: 100%;
   height: 38px;
   padding: 0 12px 0 38px;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--annot-border-color);
   border-radius: 8px;
-  background: var(--input-bg);
-  color: var(--text-primary);
+  background: var(--annot-input-bg);
+  color: var(--annot-text-primary);
   font-size: 14px;
   outline: none;
   transition: border-color 0.15s;
 }
 
 .header-search:focus {
-  border-color: var(--accent);
+  border-color: var(--annot-accent);
 }
 
 /* Brand in the gallery header occupies the sidebar's column width, so the
@@ -1454,7 +1454,7 @@ html.light .gallery-item.selected::after {
   position: absolute;
   left: 12px;
   font-size: 20px;
-  color: var(--text-secondary);
+  color: var(--annot-text-secondary);
   pointer-events: none;
 }
 
@@ -1474,7 +1474,7 @@ html.light .gallery-item.selected::after {
   border: none;
   border-radius: 50%;
   background: transparent;
-  color: var(--text-primary);
+  color: var(--annot-text-primary);
   font-size: 22px;
   font-variation-settings:
     "FILL" 0,
@@ -1488,6 +1488,6 @@ html.light .gallery-item.selected::after {
 }
 
 .header-info-btn:hover {
-  background: var(--hover-bg);
-  color: var(--text-primary);
+  background: var(--annot-hover-bg);
+  color: var(--annot-text-primary);
 }

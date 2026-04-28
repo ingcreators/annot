@@ -13,11 +13,21 @@
 > the build fails if a token exists in one but not the other.
 >
 > See [`docs/plans/design-system-foundations.md`](./plans/design-system-foundations.md)
-> for the roadmap. Phase 1 (this doc) covers tokens + persistence
-> + the runtime override API. Phase 2 introduces the `--annot-*`
-> namespace (the section names below ARE the future prefixes).
-> Phase 3 ships a Settings UI on top of the override API. Phase 4
-> opens the API to plugin-authored theme presets.
+> for the roadmap. Phase 1 covered token grouping + persistence +
+> the runtime override API. Phase 2 (this doc reflects it) renamed
+> every CSS variable to the `--annot-*` namespace so Annot's design
+> surface can be embedded into a host page without colliding with
+> the host's own custom properties. Phase 3 ships a Settings UI on
+> top of the override API. Phase 4 opens the API to
+> plugin-authored theme presets. Phase 5 adds a "follow system
+> preference" mode.
+>
+> **Override API keys remain unprefixed.** Even though every CSS
+> variable is now `--annot-bg-primary`, the public API still uses
+> the short suffix as the key:
+> `setThemeOverrides({ "bg-primary": "..." })`. The `--annot-`
+> prefix is an implementation detail of the wire-level
+> `style.setProperty(...)` call.
 
 ## TL;DR
 
@@ -53,54 +63,54 @@ brand accent goes under `Accent`, not invented as
 
 | Token | Role |
 |-------|------|
-| `--bg-primary` | Page / app shell background. AAA contrast vs `--text-primary`. |
-| `--bg-secondary` | Recessed regions (sidebars, settings drawers). |
-| `--bg-panel` | Floating panels, dropdowns, popovers. |
-| `--bg-panel-deep` | Deepest layer (e.g. modal backdrops, status bar). |
-| `--border-color` | Visible UI boundaries. ≥3:1 against `--bg-primary` for non-text contrast. |
-| `--border-subtle` | Decorative dividers. Below 3:1; do not gate interactivity on these. |
-| `--shadow` | Drop-shadow value (full CSS shadow shorthand, not just colour). |
+| `--annot-bg-primary` | Page / app shell background. AAA contrast vs `--annot-text-primary`. |
+| `--annot-bg-secondary` | Recessed regions (sidebars, settings drawers). |
+| `--annot-bg-panel` | Floating panels, dropdowns, popovers. |
+| `--annot-bg-panel-deep` | Deepest layer (e.g. modal backdrops, status bar). |
+| `--annot-border-color` | Visible UI boundaries. ≥3:1 against `--annot-bg-primary` for non-text contrast. |
+| `--annot-border-subtle` | Decorative dividers. Below 3:1; do not gate interactivity on these. |
+| `--annot-shadow` | Drop-shadow value (full CSS shadow shorthand, not just colour). |
 
 ### Content — foreground reading primitives
 
 | Token | Role |
 |-------|------|
-| `--text-primary` | Body text. AAA contrast vs `--bg-primary`. |
-| `--text-secondary` | Labels, secondary metadata. AAA where possible, AA floor. |
-| `--text-muted` | Placeholder, disabled-state, lowest-importance text. AA floor. |
-| `--preview-line` | Stroke colour for editor preview overlays (line previews, marquee). |
+| `--annot-text-primary` | Body text. AAA contrast vs `--annot-bg-primary`. |
+| `--annot-text-secondary` | Labels, secondary metadata. AAA where possible, AA floor. |
+| `--annot-text-muted` | Placeholder, disabled-state, lowest-importance text. AA floor. |
+| `--annot-preview-line` | Stroke colour for editor preview overlays (line previews, marquee). |
 
 ### Accent — brand colour, active highlight, focus
 
 | Token | Role |
 |-------|------|
-| `--accent` | Primary brand colour. Used for active nav, primary buttons, focused links. |
-| `--accent-2` | Secondary brand colour (Annot uses green to contrast the blue accent). |
-| `--accent-bg` | Subtle accent-tinted backdrop (selected list rows, light-touch highlights). |
-| `--accent-hover` | Accent backdrop on hover — slightly stronger than `--accent-bg`. |
-| `--active-bg` | Background for the currently-active toolbar/tab item. |
-| `--active-border` | Border for the currently-active item; usually equals `--accent`. |
-| `--chip-bg` | Pill / chip backgrounds (tags, filter chips). |
-| `--focus-ring` | Keyboard focus indicator. Annot deliberately uses `--accent-2` (green) so it stands out from the blue `--accent`. ≥3:1 and ≥2px thick. |
+| `--annot-accent` | Primary brand colour. Used for active nav, primary buttons, focused links. |
+| `--annot-accent-2` | Secondary brand colour (Annot uses green to contrast the blue accent). |
+| `--annot-accent-bg` | Subtle accent-tinted backdrop (selected list rows, light-touch highlights). |
+| `--annot-accent-hover` | Accent backdrop on hover — slightly stronger than `--annot-accent-bg`. |
+| `--annot-active-bg` | Background for the currently-active toolbar/tab item. |
+| `--annot-active-border` | Border for the currently-active item; usually equals `--annot-accent`. |
+| `--annot-chip-bg` | Pill / chip backgrounds (tags, filter chips). |
+| `--annot-focus-ring` | Keyboard focus indicator. Annot deliberately uses `--annot-accent-2` (green) so it stands out from the blue `--annot-accent`. ≥3:1 and ≥2px thick. |
 
 ### Interaction — pointer / form states
 
 | Token | Role |
 |-------|------|
-| `--hover-bg` | Pointer-hover backdrop (neutral, not accent-tinted). |
-| `--hover-border` | Pointer-hover border bump (e.g. hovered toolbar buttons). |
-| `--choice-bg` | Idle background for radio-like "choice" lists. Default `transparent`. |
-| `--choice-hover` | Hover backdrop on a choice list item. |
-| `--choice-active` | Selected backdrop on a choice list item. |
-| `--input-bg` | Form-input background. |
-| `--input-border` | Form-input border. ≥3:1 for visible field boundaries. |
+| `--annot-hover-bg` | Pointer-hover backdrop (neutral, not accent-tinted). |
+| `--annot-hover-border` | Pointer-hover border bump (e.g. hovered toolbar buttons). |
+| `--annot-choice-bg` | Idle background for radio-like "choice" lists. Default `transparent`. |
+| `--annot-choice-hover` | Hover backdrop on a choice list item. |
+| `--annot-choice-active` | Selected backdrop on a choice list item. |
+| `--annot-input-bg` | Form-input background. |
+| `--annot-input-border` | Form-input border. ≥3:1 for visible field boundaries. |
 
 ### Canvas — editor backdrop + transparency grid
 
 | Token | Role |
 |-------|------|
-| `--canvas-bg` | Solid backdrop behind the editor's `<svg>` viewport. |
-| `--canvas-check` | Second colour in the transparency-grid checkerboard. |
+| `--annot-canvas-bg` | Solid backdrop behind the editor's `<svg>` viewport. |
+| `--annot-canvas-check` | Second colour in the transparency-grid checkerboard. |
 
 ## Theme switching (`light` / `dark`)
 
@@ -192,31 +202,30 @@ sandboxed iframes) or full (quota exceeded), the API silently
 no-ops on writes. Reads return defaults. This matches the rest
 of Annot's storage philosophy — UI state is a nicety, not data.
 
-## Adding or renaming a token
+## Adding a token
 
-Phase 1 of the design system intentionally keeps the existing
-unprefixed token names (`--accent`, not `--annot-color-accent`)
-to avoid a wide-blast-radius rename. Phase 2 introduces the
-`--annot-*` namespace with one-cycle backwards-compat aliases.
-
-To add a new token in Phase 1:
+To add a new design-system token:
 
 1. Decide which section it belongs to (Surface / Content /
    Accent / Interaction / Canvas).
 2. Add it to BOTH `:root` and `:root.light` blocks in
    [`packages/core/styles/editor.css`](../packages/core/styles/editor.css),
    at the bottom of the matching `/* === <Section> === */`
-   group.
-3. Add it to the corresponding section constant in
+   group, with the `--annot-` prefix.
+3. Add the SHORT name (without `--annot-` prefix) to the
+   corresponding section constant in
    [`packages/editor/src/theme-overrides.ts`](../packages/editor/src/theme-overrides.ts)
    (`SURFACE_TOKENS` / `CONTENT_TOKENS` / `ACCENT_TOKENS` /
    `INTERACTION_TOKENS` / `CANVAS_TOKENS`).
-4. Update the table in this file.
+4. Update the table in this file (use the prefixed name).
 5. Run `pnpm test` — the symmetry test fails the build if you
-   missed step 3.
+   missed step 3 (it parses `:root` for `--annot-<name>`
+   declarations and asserts the suffix set equals
+   `THEME_TOKEN_NAMES`).
 
-Renaming requires deprecating the old name as an alias for
-one cycle (see Phase 2 of the plan).
+Renaming a token is a breaking change for any plugin that
+overrides it. Bump the major version of `@ingcreators/annot-editor`
+and document the rename in `CHANGELOG.md`.
 
 ## What NOT to override
 
@@ -231,10 +240,10 @@ Specific cautions:
   Always use a contrast checker (e.g. WebAIM
   <https://webaim.org/resources/contrastchecker/>) when
   changing either side of a pair.
-- **`focus-ring`.** Must be ≥3:1 against `--bg-primary` AND
-  visually distinct from `--accent`. The default uses
-  `--accent-2` (green) precisely to guarantee separation from
-  the blue `--accent`. If you change `accent` to something
+- **`focus-ring`.** Must be ≥3:1 against `--annot-bg-primary` AND
+  visually distinct from `--annot-accent`. The default uses
+  `--annot-accent-2` (green) precisely to guarantee separation from
+  the blue `--annot-accent`. If you change `accent` to something
   greenish, also change `focus-ring`.
 - **`canvas-bg` / `canvas-check`.** These define the
   transparency checkerboard the user sees behind their image.
