@@ -48,6 +48,17 @@ describe("@ingcreators/annot-core/headless boundary", () => {
     expect(typeof headless.StorageNotFoundError).toBe("function");
     expect(typeof headless.StoragePermissionError).toBe("function");
     expect(typeof headless.StorageQuotaError).toBe("function");
+    // Icon spec descriptors — Phase 1 of
+    // `docs/plans/svg-icons-and-plugin-icon-spec.md`. Tier A pure
+    // types + constructor helpers + type guards — importing them
+    // through headless proves they don't reach for DOM at module
+    // load time.
+    expect(typeof headless.builtinIcon).toBe("function");
+    expect(typeof headless.svgIcon).toBe("function");
+    expect(typeof headless.urlIcon).toBe("function");
+    expect(typeof headless.isBuiltinIcon).toBe("function");
+    expect(typeof headless.isSvgIcon).toBe("function");
+    expect(typeof headless.isUrlIcon).toBe("function");
   });
 
   it("does not leak `document` / `window` into the importing context", () => {
@@ -90,6 +101,7 @@ describe("@ingcreators/annot-core ↔ @ingcreators/annot-editor cycle prevention
     await import("@ingcreators/annot-core/headless");
     await import("@ingcreators/annot-core/storage");
     await import("@ingcreators/annot-core/utils");
+    await import("@ingcreators/annot-core/icons");
 
     // Vitest's loader exposes the resolved module list via the
     // CJS-side `require.cache`. We avoid pulling `@types/node` into
