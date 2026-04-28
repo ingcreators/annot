@@ -83,3 +83,44 @@ export async function generateThumbnailFromDataUrl(
     return "";
   }
 }
+
+/**
+ * Single-decode helper that returns BOTH the thumbnail data URL
+ * AND the source's natural dimensions. Used by `ThumbnailManager`
+ * to populate the cache's `width` / `height` fields from the same
+ * `createImageBitmap` decode the thumbnail render already does —
+ * one decode, two outputs.
+ *
+ * On any failure (decode, no `OffscreenCanvas`, JPEG encode), the
+ * result has `dataUrl: ""` and dimensions zeroed; the manager
+ * treats that as "skip caching" and the gallery falls back to its
+ * placeholder UI.
+ */
+export async function renderThumbnailWithDims(
+  blob: Blob,
+  maxWidth: number = DEFAULT_THUMBNAIL_WIDTH,
+): Promise<{ dataUrl: string; width: number; height: number }> {
+  try {
+    const bmp = await createImageBitmap(blob);
+    const srcW = bmp.width;
+    const srcH = bmp.height;
+    const canvas = new OffscreenCanvas(1, 1);
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      bmp.close();
+      return { dataUrl: "", width: 0, height: 0 };
+    }
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    drawToThumbCanvas(ctx, canvas, bmp, srcW, srcH, maxWidth);
+    bmp.close();
+    const outBlob = await canvas.convertToBlob({
+      type: "image/jpeg",
+      quality: THUMBNAIL_JPEG_QUALITY,
+    });
+    const dataUrl = await blobToDataUrl(outBlob);
+    return { dataUrl, width: srcW, height: srcH };
+  } catch {
+    return { dataUrl: "", width: 0, height: 0 };
+  }
+}

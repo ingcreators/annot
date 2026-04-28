@@ -204,10 +204,7 @@ export interface StorageProvider {
    * @throws `Error` for unstructured backend / IO / network
    *   failures.
    */
-  saveImage(
-    record: Omit<ImageRecord, "path">,
-    opts?: { filename?: string },
-  ): Promise<string>;
+  saveImage(record: Omit<ImageRecord, "path">, opts?: { filename?: string }): Promise<string>;
 
   /**
    * Read a single image by path. Missing is not an error here —
@@ -492,6 +489,57 @@ export interface StorageWithRateLimit {
   ): void;
 }
 
+/**
+ * Opt into the unified thumbnail cache (the host-side
+ * `ThumbnailManager` + `ThumbnailCache` infrastructure introduced
+ * by [`docs/plans/unified-thumbnail-cache.md`](../../../../docs/plans/unified-thumbnail-cache.md)).
+ *
+ * Stores that implement all three methods participate in the shared
+ * cache: the host owns the prefetch lifecycle (in-flight dedup,
+ * persistence, LRU eviction, `annot-thumbnail-ready` dispatch);
+ * the store just answers "what's the stable key", "what's the
+ * version", and "where do the source bytes live".
+ *
+ * Stores that don't implement this interface continue to populate
+ * `record.thumbnailDataUrl` themselves (legacy inline-thumbnail
+ * shape). The host's `ThumbnailManager.attach` is a no-op for
+ * non-participating providers, so adoption is per-store.
+ *
+ * Built-in prefix conventions match the `StorageMode` strings used
+ * in URL handoff and storage selection — `browser:` / `device:` /
+ * `github:` / `googledrive:`. Plugin-registered providers must use
+ * the `plugin:<pluginId>:` prefix the host enforces at registration.
+ */
+export interface StorageWithThumbnailCache {
+  /**
+   * Stable per-image identifier independent of path renames /
+   * collision-suffixing. Returning `undefined` opts that path out
+   * of the unified cache (the host treats it as a non-participating
+   * record for that one item).
+   */
+  thumbnailKey(path: string): string | undefined;
+
+  /**
+   * Opaque "version" — must change whenever the file's bytes
+   * change. Cache hits require a version match; mismatches trigger
+   * eviction + re-prefetch. Stores that don't observe external
+   * mutation may return `""` constant.
+   */
+  thumbnailVersion(path: string): string;
+
+  /**
+   * Cache-miss source fetcher. Returns the bytes the manager runs
+   * through `generateThumbnailFromBlob`. Implementations should
+   * pick the cheapest path that yields a renderable image — Drive
+   * and GitHub bypass the full record decode and just stream the
+   * raw bytes.
+   *
+   * @returns the source `Blob`, or `undefined` if the file no
+   *   longer exists (deleted between listing and fetch).
+   */
+  fetchThumbnailSource(path: string): Promise<Blob | undefined>;
+}
+
 // ─── Capability predicates ────────────────────────────────────────────
 // Use these instead of `if (store.method)` so the narrow is type-safe
 // and the optional behaviour is documented at the call site.
@@ -517,9 +565,7 @@ export function supportsTokenRefresher(
   );
 }
 
-export function supportsInit(
-  store: StorageProvider,
-): store is StorageProvider & StorageWithInit {
+export function supportsInit(store: StorageProvider): store is StorageProvider & StorageWithInit {
   return typeof (store as Partial<StorageWithInit>).init === "function";
 }
 
@@ -529,5 +575,16 @@ export function supportsRateLimit(
   return (
     typeof (store as Partial<StorageWithRateLimit>).getRateLimit === "function" &&
     typeof (store as Partial<StorageWithRateLimit>).setRateLimitListener === "function"
+  );
+}
+
+export function supportsThumbnailCache(
+  store: StorageProvider,
+): store is StorageProvider & StorageWithThumbnailCache {
+  const s = store as Partial<StorageWithThumbnailCache>;
+  return (
+    typeof s.thumbnailKey === "function" &&
+    typeof s.thumbnailVersion === "function" &&
+    typeof s.fetchThumbnailSource === "function"
   );
 }
