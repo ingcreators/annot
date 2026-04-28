@@ -35,6 +35,7 @@ import {
   type GoogleDriveApiClient,
 } from "./google-drive-api-client.js";
 import { buildEditableImageBlob } from "./image-encode.js";
+import { generateThumbnailFromBlob, generateThumbnailFromDataUrl } from "./image-thumbnail.js";
 
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
 const UPLOAD_API = "https://www.googleapis.com/upload/drive/v3";
@@ -272,10 +273,7 @@ export class GoogleDriveStore
 
   // ---- Images ----
 
-  async saveImage(
-    data: Omit<ImageRecord, "path">,
-    opts?: { filename?: string },
-  ): Promise<string> {
+  async saveImage(data: Omit<ImageRecord, "path">, opts?: { filename?: string }): Promise<string> {
     const folderPath = data.folderPath || "";
     const parentId = await this.#resolveFolderId(folderPath);
     if (!parentId) throw new Error(`Folder not found: ${folderPath}`);
@@ -306,6 +304,13 @@ export class GoogleDriveStore
     const driveId = await this.#uploadFile(filename, blob, parentId);
     this.#pathToFileId.set(path, driveId);
     this.#fileIdToPath.set(driveId, path);
+    // Generate a local thumbnail when the caller didn't provide one,
+    // so the gallery shows an aspect-preserving render instead of
+    // Drive's letterboxed `thumbnailLink` (which bakes black bars
+    // into the pixels). The originalDataUrl is already in memory so
+    // this is a pure OffscreenCanvas resize — no extra network.
+    const localThumb =
+      data.thumbnailDataUrl || (await generateThumbnailFromDataUrl(data.originalDataUrl));
     // Seed the cache so the first edit on a freshly saved image
     // doesn't have to round-trip to Drive for the original data.
     const now = new Date().toISOString();
@@ -313,7 +318,7 @@ export class GoogleDriveStore
       path,
       folderPath,
       originalDataUrl: data.originalDataUrl,
-      thumbnailDataUrl: data.thumbnailDataUrl || "",
+      thumbnailDataUrl: localThumb,
       annotationsSvg: data.annotationsSvg || "",
       width: data.width,
       height: data.height,
@@ -376,11 +381,20 @@ export class GoogleDriveStore
       const dataUrl = xmp?.originalImageDataUrl || (await this.#blobToDataUrl(new Blob([bytes])));
       const cachedMeta = this.#fileMeta.get(driveId);
 
+      // Generate a local thumbnail from the just-fetched bytes so
+      // the gallery has an aspect-preserving render. We've already
+      // paid the bandwidth for the full-resolution download above,
+      // so this only adds a single OffscreenCanvas resize on top of
+      // the existing IO. Falls back to Drive's letterboxed
+      // `thumbnailLink` if the local resize fails (e.g. unsupported
+      // codec on this browser).
+      const localThumb = await generateThumbnailFromBlob(new Blob([bytes]));
+
       const record: ImageRecord = {
         path,
         folderPath,
         originalDataUrl: dataUrl,
-        thumbnailDataUrl: cachedMeta?.thumbnailLink || "",
+        thumbnailDataUrl: localThumb || cachedMeta?.thumbnailLink || "",
         annotationsSvg: xmp?.annotationsSvg || "",
         width: xmp?.width || 0,
         height: xmp?.height || 0,
@@ -403,11 +417,18 @@ export class GoogleDriveStore
       if (getParentPath(path) !== folderPath) continue;
       const driveId = this.#pathToFileId.get(path)!;
       const m = this.#fileMeta.get(driveId) || {};
+      // Prefer the locally-generated thumbnail seeded by `saveImage`
+      // / `getImage` (aspect-preserving) over Drive's `thumbnailLink`
+      // (letterboxed with black bars baked in). Files we've never
+      // saved or opened in this session still fall through to the
+      // Drive-served thumbnail.
+      const cached = this.#recordCache.get(path);
+      const thumb = cached?.thumbnailDataUrl || m.thumbnailLink || "";
       results.push({
         path,
         folderPath,
         originalDataUrl: "",
-        thumbnailDataUrl: m.thumbnailLink || "",
+        thumbnailDataUrl: thumb,
         annotationsSvg: "",
         width: 0,
         height: 0,
