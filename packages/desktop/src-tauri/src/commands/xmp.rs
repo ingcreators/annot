@@ -10,7 +10,7 @@ const PNG_XMP_KEYWORD: &[u8] = b"XML:com.adobe.xmp";
 const ANNOT_APP2_PREFIX: &[u8] = b"annot:OriginalImage\0";
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct SvgshotMetadata {
+pub struct AnnotMetadata {
     pub original_image_b64: String,
     pub annotations_svg: String,
     pub width: u32,
@@ -45,13 +45,13 @@ fn build_xmp(annotations_svg: &str, width: u32, height: u32, tags: &str) -> Stri
     )
 }
 
-fn parse_xmp(xmp: &str, original_b64: &str) -> Option<SvgshotMetadata> {
+fn parse_xmp(xmp: &str, original_b64: &str) -> Option<AnnotMetadata> {
     let svg = extract_tag(xmp, "annotations")?;
     let svg = svg.trim_start_matches("<![CDATA[").trim_end_matches("]]>").to_string();
     let width = extract_tag(xmp, "width").and_then(|s| s.parse().ok()).unwrap_or(0);
     let height = extract_tag(xmp, "height").and_then(|s| s.parse().ok()).unwrap_or(0);
     let tags = extract_tag(xmp, "tags").unwrap_or_default();
-    Some(SvgshotMetadata {
+    Some(AnnotMetadata {
         original_image_b64: original_b64.to_string(),
         annotations_svg: svg,
         width,
@@ -105,7 +105,7 @@ pub async fn save_with_xmp(
 
 /// Read XMP metadata from image file
 #[command]
-pub async fn read_xmp(file_path: String) -> Result<Option<SvgshotMetadata>, String> {
+pub async fn read_xmp(file_path: String) -> Result<Option<AnnotMetadata>, String> {
     let data = std::fs::read(&file_path).map_err(|e| e.to_string())?;
     if file_path.ends_with(".png") {
         let xmp_str = read_png_xmp(&data);

@@ -139,9 +139,9 @@ function removeJpegMetadata(data: Uint8Array): Uint8Array {
     if (segEnd > data.length) break;
 
     const isXmp = marker === 0xe1 && startsWith(data, pos + 4, XMP_APP1_PREFIX);
-    const isSvgshot = marker === 0xe2 && startsWith(data, pos + 4, ANNOT_APP2_PREFIX);
+    const isAnnotApp2 = marker === 0xe2 && startsWith(data, pos + 4, ANNOT_APP2_PREFIX);
 
-    if (!isXmp && !isSvgshot) {
+    if (!isXmp && !isAnnotApp2) {
       parts.push(data.slice(pos, segEnd));
     }
     pos = segEnd;
@@ -311,7 +311,7 @@ async function pngBlobToJpegBlob(pngBlob: Blob, width: number, height: number): 
 
 // ---- Reading XMP (for re-editing in browser) ----
 
-export interface SvgshotMetadata {
+export interface AnnotMetadata {
   originalImageDataUrl: string;
   annotationsSvg: string;
   width: number;
@@ -323,7 +323,7 @@ export interface SvgshotMetadata {
  * Read XMP metadata from a re-editable image file (JPEG or PNG).
  * Pass the file as an ArrayBuffer or Uint8Array.
  */
-export function readEditableImage(data: Uint8Array): SvgshotMetadata | null {
+export function readEditableImage(data: Uint8Array): AnnotMetadata | null {
   if (data[0] === 0xff && data[1] === 0xd8) {
     return readJpegMetadata(data);
   }
@@ -333,21 +333,21 @@ export function readEditableImage(data: Uint8Array): SvgshotMetadata | null {
   return null;
 }
 
-function readJpegMetadata(data: Uint8Array): SvgshotMetadata | null {
+function readJpegMetadata(data: Uint8Array): AnnotMetadata | null {
   const xmpStr = readJpegXmp(data);
   const originalBytes = readJpegOriginal(data);
   if (!xmpStr) return null;
   return parseXmpToMetadata(xmpStr, originalBytes);
 }
 
-function readPngMetadata(data: Uint8Array): SvgshotMetadata | null {
+function readPngMetadata(data: Uint8Array): AnnotMetadata | null {
   const xmpStr = readPngXmp(data);
   const originalBytes = readPngOriginal(data);
   if (!xmpStr) return null;
   return parseXmpToMetadata(xmpStr, originalBytes);
 }
 
-function parseXmpToMetadata(xmp: string, originalBytes: Uint8Array | null): SvgshotMetadata | null {
+function parseXmpToMetadata(xmp: string, originalBytes: Uint8Array | null): AnnotMetadata | null {
   const svg = extractTag(xmp, "annotations");
   if (!svg) return null;
   const annotationsSvg = svg.replace(/^<!\[CDATA\[/, "").replace(/\]\]>$/, "");
