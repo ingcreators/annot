@@ -33,6 +33,7 @@ import type { ChipSelectDetail } from "./annot-tool-flyout.js";
 import "./annot-save-menu.js";
 import "./annot-tool-flyout.js";
 import "./annot-toolbar.js";
+import { createBuiltinIcon } from "../ui/annot-icon-imperative.js";
 
 // Cross-package imports use the published `@ingcreators/annot-core`
 // surface where available; deep subpaths (`./editor/*`,
@@ -484,8 +485,8 @@ export class Toolbar {
       saveWrap.appendChild(saveBtn);
 
       const saveArrow = document.createElement("button");
-      saveArrow.className = "tool-dropdown-arrow material-symbols-outlined";
-      saveArrow.textContent = "expand_more";
+      saveArrow.className = "tool-dropdown-arrow";
+      saveArrow.appendChild(createBuiltinIcon("expand_more"));
       setTooltip(saveArrow, "Save options");
       saveArrow.addEventListener("click", (e) => {
         e.stopPropagation();
@@ -1085,8 +1086,8 @@ export class Toolbar {
         badge.className = "tool-btn-badge tool-btn-badge-svg";
         badge.innerHTML = variant.svg;
       } else {
-        badge.className = "tool-btn-badge material-symbols-outlined";
-        badge.textContent = variant.icon;
+        badge.className = "tool-btn-badge";
+        badge.replaceChildren(createBuiltinIcon(variant.icon));
       }
     }
 
@@ -1498,11 +1499,11 @@ export class Toolbar {
 
   #btn(icon: string, title: string): HTMLButtonElement {
     const b = document.createElement("button");
-    b.className = "toolbar-btn material-symbols-outlined";
+    b.className = "toolbar-btn";
     // Custom CSS tooltip (via data-tooltip) + aria-label, NOT the
     // native `title` attribute. See utils/tooltip.ts for rationale.
     setTooltip(b, title);
-    b.textContent = icon;
+    b.appendChild(createBuiltinIcon(icon));
     return b;
   }
 

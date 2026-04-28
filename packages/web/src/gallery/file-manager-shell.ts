@@ -1,3 +1,5 @@
+import { builtinIcon } from "@ingcreators/annot-core";
+import "../ui/annot-icon.js";
 /**
  * `<annot-file-manager-shell>` — gallery main-content chrome:
  * breadcrumb + refresh button + view-mode toggle + selection bar
@@ -112,39 +114,32 @@ export class AnnotFileManagerShellElement extends LitElement {
               : html`<span class="breadcrumb-sep">\u203a</span>${this.#renderCrumb(entry)}`,
           )}
         </nav>
-        <button
-          type="button"
-          class="header-refresh-btn material-symbols-outlined"
+        <button type="button"
+          class="header-refresh-btn"
           data-tooltip="Refresh"
           aria-label="Refresh gallery"
-          @click=${() => this.callbacks.onRefresh()}
-        >
-          refresh
-        </button>
+          @click=${() => this.callbacks.onRefresh()}>
+            <annot-icon .spec=${builtinIcon("refresh")}></annot-icon>
+          </button>
         <div class="view-toggle" role="group" aria-label="View mode">
-          <button
-            type="button"
-            class=${this.viewMode === "grid"
-              ? "view-toggle-btn material-symbols-outlined active"
-              : "view-toggle-btn material-symbols-outlined"}
+          <button type="button"
+            class=${this.viewMode === "grid" ? "view-toggle-btn active" : "view-toggle-btn"}
             data-tooltip="Grid view"
             aria-label="Grid view"
             aria-pressed=${this.viewMode === "grid" ? "true" : "false"}
             @click=${() => this.callbacks.onSetViewMode("grid")}
           >
-            grid_view
+            <annot-icon .spec=${builtinIcon("grid_view")}></annot-icon>
           </button>
           <button
             type="button"
-            class=${this.viewMode === "list"
-              ? "view-toggle-btn material-symbols-outlined active"
-              : "view-toggle-btn material-symbols-outlined"}
+            class=${this.viewMode === "list" ? "view-toggle-btn active" : "view-toggle-btn"}
             data-tooltip="List view"
             aria-label="List view"
             aria-pressed=${this.viewMode === "list" ? "true" : "false"}
             @click=${() => this.callbacks.onSetViewMode("list")}
           >
-            view_list
+            <annot-icon .spec=${builtinIcon("view_list")}></annot-icon>
           </button>
         </div>
       </div>
@@ -157,12 +152,12 @@ export class AnnotFileManagerShellElement extends LitElement {
       >
         <button
           type="button"
-          class="selection-bar-close material-symbols-outlined"
+          class="selection-bar-close"
           data-tooltip="Clear selection"
           aria-label="Clear selection"
           @click=${() => this.callbacks.onClearSelection()}
         >
-          close
+          <annot-icon .spec=${builtinIcon("close")}></annot-icon>
         </button>
         <span class="selection-bar-count" aria-live="polite"
           >${this.#renderSelectionCount()}</span
@@ -175,7 +170,7 @@ export class AnnotFileManagerShellElement extends LitElement {
           aria-label="Delete selected items"
           @click=${() => this.callbacks.onDeleteSelection()}
         >
-          <span class="material-symbols-outlined" aria-hidden="true">delete</span>Delete
+          <annot-icon aria-hidden="true" .spec=${builtinIcon("delete")}></annot-icon>Delete
         </button>
       </div>
 

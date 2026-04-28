@@ -24,7 +24,9 @@
  * independent.
  */
 
+import { builtinIcon } from "@ingcreators/annot-core";
 import { html, LitElement, nothing } from "../lit.js";
+import "./annot-icon.js";
 
 export type ErrorSeverity = "error" | "warning" | "info";
 
@@ -75,7 +77,7 @@ export class AnnotErrorBarElement extends LitElement {
     const iconName =
       this.severity === "warning" ? "warning" : this.severity === "info" ? "info" : "error";
     return html`
-      <span class="error-bar-icon material-symbols-outlined">${iconName}</span>
+      <annot-icon class="error-bar-icon" .spec=${builtinIcon(iconName)}></annot-icon>
       <span class="error-bar-message">${this.message}</span>
       ${this.action
         ? html`<button

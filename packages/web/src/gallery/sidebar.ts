@@ -1,3 +1,6 @@
+import { builtinIcon } from "@ingcreators/annot-core";
+import { createBuiltinIcon } from "../ui/annot-icon-imperative.js";
+import "../ui/annot-icon.js";
 /**
  * `<annot-sidebar>` — storage tree + folder tree + "New" button
  * for the file manager. Path-based identification for folders.
@@ -245,11 +248,7 @@ export class AnnotSidebarElement extends LitElement {
     rootRow.setAttribute("aria-selected", String(this.activeFolderPath === ""));
     rootRow.tabIndex = 0;
 
-    const rootIcon = document.createElement("span");
-    rootIcon.className = "material-symbols-outlined folder-tree-icon";
-    rootIcon.textContent = "home_storage";
-    rootIcon.setAttribute("aria-hidden", "true");
-    rootRow.appendChild(rootIcon);
+    rootRow.appendChild(createBuiltinIcon("home_storage", "folder-tree-icon"));
 
     const rootInfo = document.createElement("div");
     rootInfo.className = "folder-tree-root-info";
@@ -361,16 +360,16 @@ export class AnnotSidebarElement extends LitElement {
     const showReselect = chip.reselectTitle && status.connected;
     const isActive = chip.mode === this.activeMode;
     return html`
-      <button
-        type="button"
+      <button type="button"
         class=${isActive ? "sidebar-storage-item active" : "sidebar-storage-item"}
         data-mode=${chip.mode}
         aria-label=${`${chip.label} storage \u2014 ${subtitle}`}
         @click=${() => this.callbacks.onStorageSelect(chip.mode as StorageMode)}
       >
-        <span class="material-symbols-outlined sidebar-storage-icon" aria-hidden="true"
-          >${chip.icon}</span
-        >
+        <annot-icon
+          class="sidebar-storage-icon"
+          .spec=${builtinIcon(chip.icon)}
+        ></annot-icon>
         <div class="sidebar-storage-info">
           <div class="sidebar-storage-label">${chip.label}</div>
           <div class="sidebar-storage-status">${subtitle}</div>
@@ -378,16 +377,15 @@ export class AnnotSidebarElement extends LitElement {
         ${showReselect
           ? html`<button
               type="button"
-              class="sidebar-storage-reselect material-symbols-outlined"
+              class="sidebar-storage-reselect"
               data-tooltip=${chip.reselectTitle ?? "Change folder"}
               aria-label=${chip.reselectTitle ?? "Change folder"}
               @click=${(e: MouseEvent) => {
                 e.stopPropagation();
                 this.callbacks.onStorageReselect(chip.mode as StorageMode);
-              }}
-            >
-              drive_folder_upload
-            </button>`
+              }}>
+            <annot-icon .spec=${builtinIcon("drive_folder_upload")}></annot-icon>
+          </button>`
           : nothing}
       </button>
     `;
@@ -423,7 +421,7 @@ export class AnnotSidebarElement extends LitElement {
           }
         }}
       >
-        <span class="material-symbols-outlined">${tab.icon || "view_module"}</span>
+        <annot-icon .spec=${builtinIcon(tab.icon || "view_module")}></annot-icon>
         <span class="sidebar-storage-label">${tab.label}</span>
         ${tab.badge ? html`<span class="sidebar-tab-badge">${tab.badge}</span>` : nothing}
       </button>
@@ -454,7 +452,7 @@ export class AnnotSidebarElement extends LitElement {
             this.#toggleNewMenu();
           }}
         >
-          <span class="material-symbols-outlined">add</span> New
+          <annot-icon .spec=${builtinIcon("add")}></annot-icon> New
         </button>
         ${this.newMenuOpen ? this.#renderNewMenu() : nothing}
       </div>
@@ -502,7 +500,7 @@ export class AnnotSidebarElement extends LitElement {
                   item.action();
                 }}
               >
-                <span class="material-symbols-outlined">${item.icon}</span> ${item.label}
+                <annot-icon .spec=${builtinIcon(item.icon)}></annot-icon> ${item.label}
               </button>
             `,
           )}
@@ -562,8 +560,10 @@ export class AnnotSidebarElement extends LitElement {
 
         const chevron = document.createElement("button");
         chevron.type = "button";
-        chevron.className = "folder-tree-chevron material-symbols-outlined";
-        chevron.textContent = isExpanded ? "expand_more" : "chevron_right";
+        chevron.className = "folder-tree-chevron";
+        chevron.appendChild(
+          createBuiltinIcon(isExpanded ? "expand_more" : "chevron_right"),
+        );
         chevron.setAttribute(
           "aria-label",
           isExpanded ? `Collapse ${folder.name}` : `Expand ${folder.name}`,
@@ -575,11 +575,9 @@ export class AnnotSidebarElement extends LitElement {
         });
         row.appendChild(chevron);
 
-        const icon = document.createElement("span");
-        icon.className = "material-symbols-outlined folder-tree-icon";
-        icon.textContent = isExpanded ? "folder_open" : "folder";
-        icon.setAttribute("aria-hidden", "true");
-        row.appendChild(icon);
+        row.appendChild(
+          createBuiltinIcon(isExpanded ? "folder_open" : "folder", "folder-tree-icon"),
+        );
 
         const name = document.createElement("span");
         name.className = "folder-tree-name";

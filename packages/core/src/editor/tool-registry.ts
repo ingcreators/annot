@@ -145,8 +145,9 @@ export interface ToolRegistryVariant {
    *  is selected. Also forms the suffix of the preset-storage key
    *  (`shape.rect`, `arrow.both`, …). */
   value: string;
-  /** Material Symbols ligature name. Rendered as text with the
-   *  `material-symbols-outlined` class when no `svg` is provided. */
+  /** Builtin icon id (registry key from
+   *  `@ingcreators/annot-core/editor/icons/registry`). Rendered via
+   *  the toolbar's `<annot-icon>` element when no `svg` is provided. */
   icon: string;
   /** Human-readable label for tooltips + a11y. */
   label: string;

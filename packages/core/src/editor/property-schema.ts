@@ -214,8 +214,11 @@ export type PropertyEffectId = (typeof PROPERTY_EFFECT_IDS)[keyof typeof PROPERT
 export interface PropertyControlOption<T = unknown> {
   value: T;
   label: string;
-  /** Material Symbols ligature name (e.g. "text_fields"). Rendered
-   *  as `<span class="material-symbols-outlined">{materialIcon}</span>`. */
+  /** Builtin icon id (e.g. "text_fields"). Rendered via
+   *  `renderIconHtml(builtinIcon(materialIcon))` from the
+   *  `@ingcreators/annot-core/editor/icons` registry. The legacy
+   *  `materialIcon` field name is preserved so `PROPERTY_CONTROLS`
+   *  data tables don't have to be rewritten. */
   materialIcon?: string;
   /** Inline SVG markup (already-serialized string). Used when the
    *  glyph isn't available as a Material Symbol or where the icon

@@ -18,6 +18,7 @@
  */
 
 import { setTooltip } from "./tooltip.js";
+import { builtinIcon, renderIconHtml } from "@ingcreators/annot-core";
 import type { ArrowSpec } from "@ingcreators/annot-core/editor/arrow-markers";
 import { computeArrowParts } from "@ingcreators/annot-core/editor/arrow-markers";
 import { createColorPalette } from "./color-palette.js";
@@ -169,8 +170,7 @@ export function createColorPullButton(
   applySwatch(current);
   btn.appendChild(swatch);
   const caret = document.createElement("span");
-  caret.className = "material-symbols-outlined";
-  caret.textContent = "expand_more";
+  caret.innerHTML = renderIconHtml(builtinIcon("expand_more"));
   btn.appendChild(caret);
   btn.addEventListener("click", () => {
     openAnchoredPopoverForColor(

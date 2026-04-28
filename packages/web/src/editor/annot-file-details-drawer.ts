@@ -1,3 +1,5 @@
+import { builtinIcon } from "@ingcreators/annot-core";
+import "../ui/annot-icon.js";
 /**
  * `<annot-file-details-drawer>` — right-side slide-in panel that
  * consolidates every piece of information about the currently-open
@@ -169,14 +171,12 @@ export class AnnotFileDetailsDrawerElement extends LitElement {
       >
         <div class="file-details-header">
           <h2 class="file-details-title">Details</h2>
-          <button
-            type="button"
-            class="file-details-close material-symbols-outlined"
+          <button type="button"
+            class="file-details-close"
             data-tooltip="Close details (Esc)"
             aria-label="Close details panel"
-            @click=${this.close}
-          >
-            close
+            @click=${this.close}>
+            <annot-icon .spec=${builtinIcon("close")}></annot-icon>
           </button>
         </div>
         <div class="file-details-sections"></div>

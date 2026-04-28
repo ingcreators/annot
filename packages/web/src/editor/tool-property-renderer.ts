@@ -58,6 +58,7 @@ import type {
 import { computeDasharray } from "@ingcreators/annot-core/utils";
 import { createCustomSelect } from "@ingcreators/annot-editor/custom-select";
 import { setTooltip } from "@ingcreators/annot-editor/tooltip";
+import { createBuiltinIcon } from "../ui/annot-icon-imperative.js";
 import {
   createArrowEndsRows,
   createColorPullButton,
@@ -296,14 +297,11 @@ function renderTypeChipsRow(
     const chip = document.createElement("div");
     const useSvg = !!opt.svg;
     const isActive = current === opt.value;
-    chip.className =
-      `prop-choice-chip${useSvg ? "" : " material-symbols-outlined"}${
-        isActive ? " active" : ""
-      }`;
+    chip.className = `prop-choice-chip${isActive ? " active" : ""}`;
     if (useSvg) {
       chip.innerHTML = opt.svg!;
     } else {
-      chip.textContent = opt.icon;
+      chip.appendChild(createBuiltinIcon(opt.icon));
     }
     setTooltip(chip, opt.label);
     chip.addEventListener("click", () => {

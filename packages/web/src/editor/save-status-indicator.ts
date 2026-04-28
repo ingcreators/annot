@@ -28,12 +28,14 @@
  * independent.
  */
 
+import { type BuiltinIconId, builtinIcon } from "@ingcreators/annot-core";
 import { html, LitElement } from "../lit.js";
+import "../ui/annot-icon.js";
 
 export type SaveStatus = "saved" | "pending" | "saving" | "error";
 
 interface StatusSpec {
-  icon: string; // Material Symbols icon name
+  icon: BuiltinIconId;
   label: string;
   className: string;
   ariaLabel: string;
@@ -90,7 +92,7 @@ export class AnnotSaveStatusElement extends LitElement {
   override render() {
     const spec = STATUS_SPECS[this.status];
     return html`
-      <span class="save-status-icon material-symbols-outlined">${spec.icon}</span>
+      <annot-icon class="save-status-icon" .spec=${builtinIcon(spec.icon)}></annot-icon>
       <span class="save-status-label">${spec.label}</span>
     `;
   }

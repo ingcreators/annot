@@ -1,3 +1,5 @@
+import { builtinIcon } from "@ingcreators/annot-core";
+import "../ui/annot-icon.js";
 /**
  * `<annot-capture-progress-toast>` — floating progress indicator
  * shown during interval capture. Renders a screenshot icon, the
@@ -40,7 +42,7 @@ export class AnnotCaptureProgressToastElement extends LitElement {
   override render() {
     const pct = this.total > 0 ? Math.min(100, Math.round((this.current / this.total) * 100)) : 0;
     return html`
-      <span class="material-symbols-outlined capture-progress-icon">screenshot_monitor</span>
+      <annot-icon class="capture-progress-icon" .spec=${builtinIcon("screenshot_monitor")}></annot-icon>
       <span class="capture-progress-text">Capturing ${this.current} / ${this.total}\u2026</span>
       <div class="capture-progress-bar">
         <div class="capture-progress-bar-fill" style="width: ${pct}%"></div>

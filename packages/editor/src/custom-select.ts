@@ -15,6 +15,7 @@
  * the button and the popup row.
  */
 
+import { builtinIcon, renderIconHtml } from "@ingcreators/annot-core";
 import { setTooltip } from "./tooltip.js";
 import { openAnchoredPopover } from "./anchored-popover.js";
 
@@ -60,8 +61,8 @@ export function createCustomSelect(opts: CustomSelectOpts): HTMLElement {
   previewEl.className = "pp-select-preview";
   btn.appendChild(previewEl);
   const caret = document.createElement("span");
-  caret.className = "pp-select-caret material-symbols-outlined";
-  caret.textContent = "expand_more";
+  caret.className = "pp-select-caret";
+  caret.innerHTML = renderIconHtml(builtinIcon("expand_more"));
   btn.appendChild(caret);
 
   const renderPreview = (value: string) => {

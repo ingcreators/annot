@@ -1,3 +1,5 @@
+import { builtinIcon } from "@ingcreators/annot-core";
+import "../ui/annot-icon.js";
 /**
  * `<annot-gallery-page>` — folder + file grid that backs the file
  * manager's main pane. Path-based identification throughout.
@@ -190,21 +192,20 @@ export class AnnotGalleryPageElement extends LitElement {
         @contextmenu=${(e: MouseEvent) => this.#onFolderContextMenu(e, folder)}
         @keydown=${(e: KeyboardEvent) => this.#onFolderKeydown(e, folder)}
       >
-        <span class="material-symbols-outlined gallery-folder-card-icon" aria-hidden="true"
-          >folder</span
-        >
+        <annot-icon
+          class="gallery-folder-card-icon"
+          .spec=${builtinIcon("folder")}
+        ></annot-icon>
         <div class="gallery-folder-card-name" data-tooltip=${folder.name} aria-label=${folder.name}>
           ${folder.name}
         </div>
-        <button
-          type="button"
-          class="gallery-card-more material-symbols-outlined"
+        <button type="button"
+          class="gallery-card-more"
           data-tooltip="More actions"
           aria-label=${`Actions for folder ${folder.name}`}
-          @click=${(e: MouseEvent) => this.#onFolderMore(e, folder)}
-        >
-          more_vert
-        </button>
+          @click=${(e: MouseEvent) => this.#onFolderMore(e, folder)}>
+            <annot-icon .spec=${builtinIcon("more_vert")}></annot-icon>
+          </button>
       </div>
     `;
   }
@@ -250,15 +251,13 @@ export class AnnotGalleryPageElement extends LitElement {
               </div>`
             : nothing}
         </div>
-        <button
-          type="button"
-          class="gallery-card-more material-symbols-outlined"
+        <button type="button"
+          class="gallery-card-more"
           data-tooltip="More actions"
           aria-label=${`Actions for image ${filename}`}
-          @click=${(e: MouseEvent) => this.#onImageMore(e, img)}
-        >
-          more_vert
-        </button>
+          @click=${(e: MouseEvent) => this.#onImageMore(e, img)}>
+            <annot-icon .spec=${builtinIcon("more_vert")}></annot-icon>
+          </button>
       </div>
     `;
   }
