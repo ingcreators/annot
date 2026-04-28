@@ -137,7 +137,7 @@ fn write_jpeg_with_metadata(jpeg_data: &[u8], xmp: &[u8], original: &[u8], path:
     // Build original image APP2 segments (split into ~60KB chunks)
     let app2_segments = build_app2_segments(original);
 
-    // Clean JPEG: remove old XMP APP1 and SVGShot APP2
+    // Clean JPEG: remove old XMP APP1 and Annot APP2
     let cleaned = remove_jpeg_metadata(jpeg_data);
 
     let mut output = Vec::with_capacity(cleaned.len() + xmp_seg.len() + app2_segments.len());

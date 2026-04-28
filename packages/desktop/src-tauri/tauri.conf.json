@@ -1,6 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/nickelpack/schema-store/refs/heads/main/schemas/tauri/tauri.conf.json-v2.json",
-  "productName": "SVGShot",
+  "productName": "Annot",
   "version": "1.0.0",
   "identifier": "com.ingcreators.annot",
   "build": {
@@ -13,7 +13,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "SVGShot",
+        "title": "Annot by ingcreators",
         "width": 1280,
         "height": 800,
         "resizable": true,

@@ -62,7 +62,7 @@ pub fn run() {
             http_server::start(app.handle().clone());
 
             // System tray
-            let show = MenuItemBuilder::with_id("show", "Show SVGShot").build(app)?;
+            let show = MenuItemBuilder::with_id("show", "Show Annot").build(app)?;
             let quit = MenuItemBuilder::with_id("quit", "Quit").build(app)?;
             let menu = MenuBuilder::new(app).items(&[&show, &quit]).build()?;
 
@@ -71,7 +71,7 @@ pub fn run() {
             let _tray = TrayIconBuilder::new()
                 .icon(icon)
                 .menu(&menu)
-                .tooltip("SVGShot")
+                .tooltip("Annot")
                 .show_menu_on_left_click(false)
                 .on_tray_icon_event(|tray, event| {
                     if let tauri::tray::TrayIconEvent::Click { button, .. } = event {

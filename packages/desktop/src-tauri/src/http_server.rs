@@ -22,7 +22,7 @@ pub fn start(app: AppHandle) {
         let addr = format!("127.0.0.1:{PORT}");
         let server = match tiny_http::Server::http(&addr) {
             Ok(s) => {
-                println!("SVGShot HTTP server listening on {addr}");
+                println!("Annot HTTP server listening on {addr}");
                 Arc::new(s)
             }
             Err(e) => {
