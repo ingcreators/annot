@@ -178,7 +178,7 @@ export interface ToolPresets {
 
 // --- XMP (re-editable image save/load) ---
 
-export interface SvgshotMetadata {
+export interface AnnotMetadata {
   original_image_b64: string;
   annotations_svg: string;
   width: number;
@@ -203,8 +203,8 @@ export async function saveWithXmp(
   });
 }
 
-export async function readXmp(filePath: string): Promise<SvgshotMetadata | null> {
-  return invoke<SvgshotMetadata | null>("read_xmp", { filePath });
+export async function readXmp(filePath: string): Promise<AnnotMetadata | null> {
+  return invoke<AnnotMetadata | null>("read_xmp", { filePath });
 }
 
 export async function loadToolPresets(): Promise<ToolPresets> {
