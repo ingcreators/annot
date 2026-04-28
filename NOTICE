@@ -32,6 +32,25 @@ for the full dependency list. Major runtime dependencies:
     file's header records the upstream package version + the
     extraction date for provenance.
 
+Trademarks (used unmodified for product-integration purposes,
+NOT licensed):
+
+  - "GitHub" and the GitHub Mark are trademarks of GitHub, Inc.
+    The Mark SVG bundled in
+    `packages/core/src/editor/icons/brand-icons.ts` is rendered
+    verbatim from the asset published at https://github.com/logos
+    and is used to identify the GitHub storage backend per the
+    GitHub Logos & Usage policy. No endorsement by or affiliation
+    with GitHub, Inc. is implied.
+  - "Google Drive" and the Drive logo are trademarks of Google LLC.
+    The multi-colour mark bundled in
+    `packages/core/src/editor/icons/brand-icons.ts` is rendered
+    verbatim (geometry + brand colours preserved) from the asset
+    published by Google and is used to identify the Google Drive
+    storage backend per the Google Drive Branding Guidelines
+    (https://developers.google.com/drive/api/guides/branding). No
+    endorsement by or affiliation with Google LLC is implied.
+
 This NOTICE is a "informational only" attribution file as
 described in §4(d) of the Apache License, Version 2.0. It
 does not modify the License.

@@ -101,14 +101,19 @@ const BUILTIN_CHIP_DESCRIPTORS: readonly ChipDescriptor[] = [
   },
   {
     mode: "googledrive",
-    icon: builtinIcon("cloud"),
+    // Official multi-colour Drive mark; see
+    // `packages/core/src/editor/icons/brand-icons.ts` for the
+    // brand-guideline rationale.
+    icon: builtinIcon("brand.google_drive"),
     label: "Google Drive",
     priority: 30,
     reselectTitle: "Change Drive folder",
   },
   {
     mode: "github",
-    icon: builtinIcon("hub"),
+    // Official GitHub Mark (Invertocat); rendered in
+    // `currentColor` so it picks up the surrounding text colour.
+    icon: builtinIcon("brand.github"),
     label: "GitHub",
     priority: 40,
     reselectTitle: "Change repository",

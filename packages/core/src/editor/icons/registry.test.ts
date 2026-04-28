@@ -30,6 +30,8 @@ describe("BUILTIN_ICONS registry", () => {
         "arrow_right_alt",
         "arrow_selector_tool",
         "blur_on",
+        "brand.github",
+        "brand.google_drive",
         "chat",
         "chat_bubble",
         "check_box",
