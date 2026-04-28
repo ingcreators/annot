@@ -19,7 +19,7 @@ export function showProgress(text: string): void {
   if (!el) {
     el = document.createElement("div");
     el.id = OVERLAY_ID;
-    el.setAttribute("data-anno-ui", "1");
+    el.setAttribute("data-annot-ui", "1");
     el.style.cssText = [
       "position: fixed",
       "top: 12px",

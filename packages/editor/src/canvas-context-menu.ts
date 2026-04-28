@@ -120,11 +120,11 @@ function closeAll(): void {
 }
 
 function ensureStyle(): void {
-  if (document.getElementById("anno-canvas-ctx-style")) return;
+  if (document.getElementById("annot-canvas-ctx-style")) return;
   const style = document.createElement("style");
-  style.id = "anno-canvas-ctx-style";
+  style.id = "annot-canvas-ctx-style";
   style.textContent = `
-.anno-canvas-ctx {
+.annot-canvas-ctx {
   position: fixed;
   z-index: 9999;
   background: var(--annot-bg-panel, #fff);
@@ -137,7 +137,7 @@ function ensureStyle(): void {
   user-select: none;
   -webkit-user-select: none;
 }
-.anno-canvas-ctx-item {
+.annot-canvas-ctx-item {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -153,17 +153,17 @@ function ensureStyle(): void {
   min-height: 28px;
   box-sizing: border-box;
 }
-.anno-canvas-ctx-item:hover:not([disabled]),
-.anno-canvas-ctx-item:focus-visible:not([disabled]),
-.anno-canvas-ctx-item.is-parent-open {
+.annot-canvas-ctx-item:hover:not([disabled]),
+.annot-canvas-ctx-item:focus-visible:not([disabled]),
+.annot-canvas-ctx-item.is-parent-open {
   background: var(--annot-hover-bg, rgba(0,0,0,0.06));
   outline: none;
 }
-.anno-canvas-ctx-item[disabled] {
+.annot-canvas-ctx-item[disabled] {
   opacity: 0.6;
   cursor: default;
 }
-.anno-canvas-ctx-item.is-header {
+.annot-canvas-ctx-item.is-header {
   cursor: default;
   color: var(--annot-text-secondary, #666);
   font-size: 11px;
@@ -173,8 +173,8 @@ function ensureStyle(): void {
   padding: 6px 10px 4px;
   min-height: 0;
 }
-.anno-canvas-ctx-item.is-header:hover { background: none; }
-.anno-canvas-ctx-icon {
+.annot-canvas-ctx-item.is-header:hover { background: none; }
+.annot-canvas-ctx-icon {
   position: relative;
   width: 20px;
   height: 20px;
@@ -184,7 +184,7 @@ function ensureStyle(): void {
   flex: 0 0 auto;
   color: var(--annot-text-secondary, #555);
 }
-.anno-canvas-ctx-badge {
+.annot-canvas-ctx-badge {
   position: absolute;
   right: -5px;
   bottom: -5px;
@@ -201,32 +201,32 @@ function ensureStyle(): void {
   color: var(--annot-text-primary, #0b1020);
   box-sizing: border-box;
 }
-.anno-canvas-ctx-badge.material-symbols-outlined {
+.annot-canvas-ctx-badge.material-symbols-outlined {
   font-size: 9px;
   line-height: 1;
 }
-.anno-canvas-ctx-badge svg {
+.annot-canvas-ctx-badge svg {
   width: 9px;
   height: 9px;
   display: block;
 }
-.anno-canvas-ctx-badge-swatch {
+.annot-canvas-ctx-badge-swatch {
   border-radius: 50%;
 }
-.anno-canvas-ctx-item:hover:not([disabled]) .anno-canvas-ctx-icon,
-.anno-canvas-ctx-item.is-parent-open .anno-canvas-ctx-icon {
+.annot-canvas-ctx-item:hover:not([disabled]) .annot-canvas-ctx-icon,
+.annot-canvas-ctx-item.is-parent-open .annot-canvas-ctx-icon {
   color: var(--annot-text-primary, #0b1020);
 }
-.anno-canvas-ctx-icon.material-symbols-outlined {
+.annot-canvas-ctx-icon.material-symbols-outlined {
   font-size: 20px;
   line-height: 1;
 }
-.anno-canvas-ctx-icon svg {
+.annot-canvas-ctx-icon svg {
   width: 20px;
   height: 20px;
   display: block;
 }
-.anno-canvas-ctx-swatch {
+.annot-canvas-ctx-swatch {
   width: 14px;
   height: 14px;
   border-radius: 3px;
@@ -234,25 +234,25 @@ function ensureStyle(): void {
   display: inline-block;
   flex: 0 0 auto;
 }
-.anno-canvas-ctx-label { flex: 1 1 auto; white-space: nowrap; }
-.anno-canvas-ctx-hint {
+.annot-canvas-ctx-label { flex: 1 1 auto; white-space: nowrap; }
+.annot-canvas-ctx-hint {
   flex: 0 0 auto;
   color: var(--annot-text-secondary, #666);
   font-size: 11px;
   margin-left: 8px;
 }
-.anno-canvas-ctx-chevron {
+.annot-canvas-ctx-chevron {
   flex: 0 0 auto;
   color: var(--annot-text-secondary, #666);
   font-size: 18px;
   line-height: 1;
   margin-left: 8px;
 }
-.anno-canvas-ctx-item:hover:not([disabled]) .anno-canvas-ctx-chevron,
-.anno-canvas-ctx-item.is-parent-open .anno-canvas-ctx-chevron {
+.annot-canvas-ctx-item:hover:not([disabled]) .annot-canvas-ctx-chevron,
+.annot-canvas-ctx-item.is-parent-open .annot-canvas-ctx-chevron {
   color: var(--annot-text-primary, #0b1020);
 }
-.anno-canvas-ctx-sep {
+.annot-canvas-ctx-sep {
   height: 1px;
   background: var(--annot-border-subtle, rgba(0,0,0,0.1));
   margin: 4px 2px;
@@ -276,7 +276,7 @@ function renderMenu(
   parentRowIdx: number,
 ): MenuLevel {
   const menu = document.createElement("div");
-  menu.className = "anno-canvas-ctx";
+  menu.className = "annot-canvas-ctx";
   menu.setAttribute("role", "menu");
 
   const level: MenuLevel = {
@@ -289,40 +289,40 @@ function renderMenu(
   items.forEach((item, rowIdx) => {
     if (item.separatorAbove) {
       const sep = document.createElement("div");
-      sep.className = "anno-canvas-ctx-sep";
+      sep.className = "annot-canvas-ctx-sep";
       menu.appendChild(sep);
     }
 
     const row = document.createElement("button");
     row.type = "button";
     row.setAttribute("role", item.header ? "presentation" : "menuitem");
-    row.className = `anno-canvas-ctx-item${item.header ? " is-header" : ""}`;
+    row.className = `annot-canvas-ctx-item${item.header ? " is-header" : ""}`;
     const hasSubmenu = !!(item.submenu && item.submenu.length > 0);
     if (item.disabled || item.header) row.setAttribute("disabled", "");
     if (hasSubmenu) row.setAttribute("aria-haspopup", "menu");
 
     // --- Leading visual: swatch > svg > icon -----------------------------
-    // The container is kept on `.anno-canvas-ctx-icon` so the optional
+    // The container is kept on `.annot-canvas-ctx-icon` so the optional
     // variant badge (appended below) can position itself in that
     // element's bottom-right corner just like the toolbar button badge.
     let iconSpan: HTMLElement | null = null;
     if (item.swatch) {
       iconSpan = document.createElement("span");
-      iconSpan.className = "anno-canvas-ctx-icon";
+      iconSpan.className = "annot-canvas-ctx-icon";
       const inner = document.createElement("span");
-      inner.className = "anno-canvas-ctx-swatch";
+      inner.className = "annot-canvas-ctx-swatch";
       inner.style.background = item.swatch;
       iconSpan.appendChild(inner);
       row.appendChild(iconSpan);
     } else if (item.svg) {
       iconSpan = document.createElement("span");
-      iconSpan.className = "anno-canvas-ctx-icon";
+      iconSpan.className = "annot-canvas-ctx-icon";
       iconSpan.setAttribute("aria-hidden", "true");
       iconSpan.innerHTML = item.svg;
       row.appendChild(iconSpan);
     } else if (item.icon) {
       iconSpan = document.createElement("span");
-      iconSpan.className = "anno-canvas-ctx-icon material-symbols-outlined";
+      iconSpan.className = "annot-canvas-ctx-icon material-symbols-outlined";
       iconSpan.setAttribute("aria-hidden", "true");
       iconSpan.textContent = item.icon;
       row.appendChild(iconSpan);
@@ -336,22 +336,22 @@ function renderMenu(
       const badge = document.createElement("span");
       badge.setAttribute("aria-hidden", "true");
       if (item.badge.swatch) {
-        badge.className = "anno-canvas-ctx-badge anno-canvas-ctx-badge-swatch";
+        badge.className = "annot-canvas-ctx-badge annot-canvas-ctx-badge-swatch";
         badge.style.background = item.badge.swatch;
       } else if (item.badge.svg) {
-        badge.className = "anno-canvas-ctx-badge";
+        badge.className = "annot-canvas-ctx-badge";
         badge.innerHTML = item.badge.svg;
       } else if (item.badge.icon) {
-        badge.className = "anno-canvas-ctx-badge material-symbols-outlined";
+        badge.className = "annot-canvas-ctx-badge material-symbols-outlined";
         badge.textContent = item.badge.icon;
       } else {
-        badge.className = "anno-canvas-ctx-badge";
+        badge.className = "annot-canvas-ctx-badge";
       }
       iconSpan.appendChild(badge);
     }
 
     const labelSpan = document.createElement("span");
-    labelSpan.className = "anno-canvas-ctx-label";
+    labelSpan.className = "annot-canvas-ctx-label";
     labelSpan.textContent = item.label;
     row.appendChild(labelSpan);
 
@@ -360,13 +360,13 @@ function renderMenu(
       // Material Symbols "chevron_right" glyph keeps us consistent
       // with the rest of the editor's iconography.
       const chev = document.createElement("span");
-      chev.className = "anno-canvas-ctx-chevron material-symbols-outlined";
+      chev.className = "annot-canvas-ctx-chevron material-symbols-outlined";
       chev.setAttribute("aria-hidden", "true");
       chev.textContent = "chevron_right";
       row.appendChild(chev);
     } else if (item.hint) {
       const hintSpan = document.createElement("span");
-      hintSpan.className = "anno-canvas-ctx-hint";
+      hintSpan.className = "annot-canvas-ctx-hint";
       hintSpan.textContent = item.hint;
       row.appendChild(hintSpan);
     }
@@ -463,7 +463,7 @@ function renderMenu(
       // Expose the openSubmenu hook on the element so the outer
       // keyboard handler (ArrowRight) can trigger it without having
       // to reach back into this closure through DOM attributes.
-      (row as any).__annoOpenSubmenu = () => openSubmenu(true);
+      (row as any).__annotOpenSubmenu = () => openSubmenu(true);
     }
 
     menu.appendChild(row);
@@ -532,7 +532,7 @@ function renderMenu(
         // action. Using the hook bypasses the default click handler
         // (which would trigger the action on action-bearing rows).
         e.preventDefault();
-        const openHook = (active as any).__annoOpenSubmenu as (() => void) | undefined;
+        const openHook = (active as any).__annotOpenSubmenu as (() => void) | undefined;
         if (openHook) openHook();
         else active.click();
       }

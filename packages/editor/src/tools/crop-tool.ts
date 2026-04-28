@@ -74,7 +74,7 @@ export class CropTool extends ToolBase {
     // Update overlay clip to show crop area clearly
     if (this.#overlay) {
       // Use clip-path to punch a hole
-      const clipId = "anno-crop-clip";
+      const clipId = "annot-crop-clip";
       let clipPath = this.canvas.defs.querySelector(`#${clipId}`);
       if (!clipPath) {
         clipPath = document.createElementNS(SVG_NS, "clipPath");
@@ -138,6 +138,6 @@ export class CropTool extends ToolBase {
     this.#overlay = null;
     this.#confirmHint?.remove();
     this.#confirmHint = null;
-    this.canvas.defs.querySelector("#anno-crop-clip")?.remove();
+    this.canvas.defs.querySelector("#annot-crop-clip")?.remove();
   }
 }
