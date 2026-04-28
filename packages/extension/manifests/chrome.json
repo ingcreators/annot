@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Annot — by ingcreators",
+  "name": "Annot by ingcreators",
   "version": "1.0.0",
   "description": "Annot — screenshot & annotate, by ingcreators",
   "permissions": ["activeTab", "offscreen", "storage", "scripting", "tabs"],
