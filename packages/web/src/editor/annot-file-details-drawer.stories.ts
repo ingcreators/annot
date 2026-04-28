@@ -11,6 +11,7 @@
  * populated panel without having to click "toggle".
  */
 
+import { builtinIcon } from "@ingcreators/annot-core";
 import type { Meta, StoryObj } from "@storybook/web-components-vite";
 import "./annot-file-details-drawer.js";
 import type { FileDetailsData } from "./annot-file-details-drawer.js";
@@ -92,7 +93,7 @@ export const EverySectionVisible: Story = {
         {
           label: "View on GitHub",
           url: "https://github.com/ingcreators/annot/blob/main/image.png",
-          icon: "open_in_new",
+          icon: builtinIcon("open_in_new"),
         },
       ],
     },
@@ -124,9 +125,9 @@ export const MultipleExternalLinks: Story = {
     data: {
       ...TYPICAL_DATA,
       externalLinks: [
-        { label: "View on GitHub", url: "https://github.com/foo", icon: "open_in_new" },
-        { label: "JIRA ticket", url: "https://example.atlassian.net/browse/FOO-123", icon: "task" },
-        { label: "Team thread", url: "https://example.slack.com/archives/ABC", icon: "chat" },
+        { label: "View on GitHub", url: "https://github.com/foo", icon: builtinIcon("open_in_new") },
+        { label: "JIRA ticket", url: "https://example.atlassian.net/browse/FOO-123", icon: builtinIcon("task") },
+        { label: "Team thread", url: "https://example.slack.com/archives/ABC", icon: builtinIcon("chat") },
       ],
     },
   },

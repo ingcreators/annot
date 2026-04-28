@@ -10,6 +10,7 @@
  *     stack into a single drawer section)
  */
 
+import { builtinIcon } from "@ingcreators/annot-core";
 import type { StorageProvider } from "@ingcreators/annot-core/storage";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -447,7 +448,7 @@ describe("PluginHost", () => {
         {
           name: "p",
           register(ctx) {
-            ctx.addSidebarTab(fakeTab("recent", { label: "Recent", icon: "history" }));
+            ctx.addSidebarTab(fakeTab("recent", { label: "Recent", icon: builtinIcon("history") }));
             captured = ctx.updateSidebarTab;
           },
         },
@@ -455,7 +456,7 @@ describe("PluginHost", () => {
       captured!("recent", { badge: "12" });
       const tab = host.findSidebarTab("recent")!;
       expect(tab.label).toBe("Recent");
-      expect(tab.icon).toBe("history");
+      expect(tab.icon).toEqual({ kind: "builtin", id: "history" });
       expect(tab.badge).toBe("12");
     });
 

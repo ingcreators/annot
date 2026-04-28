@@ -10,6 +10,7 @@
  * plus variants that show / hide plugin chips and sidebar tabs.
  */
 
+import { builtinIcon } from "@ingcreators/annot-core";
 import type { Meta, StoryObj } from "@storybook/web-components-vite";
 import type { SidebarTab, StorageRegistration } from "../app/plugin-host.js";
 import type { StorageMode } from "../storage/bridge.js";
@@ -125,7 +126,7 @@ export const WithPluginStorage: Story = {
       {
         mode: "cloud",
         label: "Annot Cloud",
-        icon: "cloud_queue",
+        icon: builtinIcon("cloud_queue"),
         priority: 25, // lands between Device (20) and Drive (30)
         connect: async () => null,
         restore: () => null,
@@ -143,14 +144,14 @@ export const WithSidebarTabs: Story = {
       {
         id: "recent",
         label: "Recent",
-        icon: "history",
+        icon: builtinIcon("history"),
         priority: 10,
         onClick: () => console.log("[story] Recent clicked"),
       },
       {
         id: "team-library",
         label: "Team library",
-        icon: "groups",
+        icon: builtinIcon("groups"),
         priority: 20,
         isActive: true,
         badge: "12",

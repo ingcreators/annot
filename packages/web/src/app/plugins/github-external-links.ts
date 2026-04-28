@@ -9,6 +9,7 @@
  * express this, the API shape isn't right.
  */
 
+import { builtinIcon } from "@ingcreators/annot-core";
 import type { AnnotPlugin } from "../plugin-host.js";
 import { GitHubStore } from "../../storage/github-store.js";
 
@@ -19,7 +20,7 @@ export const githubExternalLinksPlugin: AnnotPlugin = {
       if (!(storage instanceof GitHubStore)) return undefined;
       const url = storage.getViewUrl(path);
       if (!url) return undefined;
-      return [{ label: "View on GitHub", url, icon: "open_in_new" }];
+      return [{ label: "View on GitHub", url, icon: builtinIcon("open_in_new") }];
     });
   },
 };

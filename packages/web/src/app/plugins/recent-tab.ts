@@ -17,6 +17,7 @@
  * even for users who churn through many images.
  */
 
+import { builtinIcon } from "@ingcreators/annot-core";
 import type { AnnotPlugin } from "../plugin-host.js";
 import { galleryUrl } from "../../router.js";
 import { getStorageMode } from "../../storage/bridge.js";
@@ -81,7 +82,7 @@ export const recentTabPlugin: AnnotPlugin = {
     ctx.addSidebarTab({
       id: "recent",
       label: "Recent",
-      icon: "history",
+      icon: builtinIcon("history"),
       // Built-in priority slot. Plugins that want to land before
       // Recent can pick anything < 10.
       priority: 10,

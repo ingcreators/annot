@@ -97,7 +97,7 @@ describe("recent-tab plugin", () => {
       const tab = host.findSidebarTab("recent");
       expect(tab).toBeDefined();
       expect(tab?.priority).toBe(10);
-      expect(tab?.icon).toBe("history");
+      expect(tab?.icon).toEqual({ kind: "builtin", id: "history" });
       expect(tab?.label).toBe("Recent");
     });
 

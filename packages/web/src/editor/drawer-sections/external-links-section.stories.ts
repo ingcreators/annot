@@ -10,6 +10,7 @@
  * land in the same chrome users see in the app.
  */
 
+import { builtinIcon } from "@ingcreators/annot-core";
 import type { Meta, StoryObj } from "@storybook/web-components-vite";
 import "./external-links-section.js";
 import type { ExternalLinkEntry } from "./external-links-section.js";
@@ -39,7 +40,7 @@ const meta: Meta<Args> = {
       {
         label: "View on GitHub",
         url: "https://github.com/ingcreators/annot/blob/main/image.png",
-        icon: "open_in_new",
+        icon: builtinIcon("open_in_new"),
       },
     ],
   },
@@ -54,7 +55,7 @@ export const SingleLink: Story = {
       {
         label: "View on GitHub",
         url: "https://github.com/ingcreators/annot/blob/main/image.png",
-        icon: "open_in_new",
+        icon: builtinIcon("open_in_new"),
       },
     ],
   },
@@ -63,9 +64,9 @@ export const SingleLink: Story = {
 export const MultiplePluginLinks: Story = {
   args: {
     links: [
-      { label: "View on GitHub", url: "https://github.com/foo", icon: "open_in_new" },
-      { label: "JIRA ticket", url: "https://example.atlassian.net/browse/FOO-123", icon: "task" },
-      { label: "Team thread", url: "https://example.slack.com/archives/ABC", icon: "chat" },
+      { label: "View on GitHub", url: "https://github.com/foo", icon: builtinIcon("open_in_new") },
+      { label: "JIRA ticket", url: "https://example.atlassian.net/browse/FOO-123", icon: builtinIcon("task") },
+      { label: "Team thread", url: "https://example.slack.com/archives/ABC", icon: builtinIcon("chat") },
     ],
   },
 };

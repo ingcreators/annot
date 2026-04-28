@@ -16,8 +16,8 @@
  * which triggers a Lit re-render.
  */
 
-import { builtinIcon } from "@ingcreators/annot-core";
 import type { UISection } from "../../app/plugin-host.js";
+import type { IconSpec } from "@ingcreators/annot-core";
 import { html, LitElement, nothing } from "../../lit.js";
 import "../../ui/annot-icon.js";
 import type { FileDetailsData } from "../file-details-drawer-types.js";
@@ -25,7 +25,7 @@ import type { FileDetailsData } from "../file-details-drawer-types.js";
 export interface ExternalLinkEntry {
   label: string;
   url: string;
-  icon?: string;
+  icon?: IconSpec;
 }
 
 export class AnnotDrawerExternalLinksSectionElement extends LitElement {
@@ -59,7 +59,7 @@ export class AnnotDrawerExternalLinksSectionElement extends LitElement {
               aria-label=${link.url}
             >
               ${link.icon
-                ? html`<annot-icon .spec=${builtinIcon(link.icon)}></annot-icon>`
+                ? html`<annot-icon .spec=${link.icon}></annot-icon>`
                 : nothing}${link.label}
             </a>
           </div>

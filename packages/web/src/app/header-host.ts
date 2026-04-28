@@ -20,6 +20,7 @@
  */
 
 import type { Toolbar } from "../editor/toolbar.js";
+import type { IconSpec } from "@ingcreators/annot-core";
 import type { ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
 import { getFilename } from "@ingcreators/annot-core/storage";
 import "../editor/editor-header.js";
@@ -56,7 +57,7 @@ export interface HeaderHostDeps {
    *  Delegated to `PluginHost.collectExternalLinks`. */
   collectExternalLinks(
     path: string | null,
-  ): Array<{ label: string; url: string; icon?: string }> | undefined;
+  ): Array<{ label: string; url: string; icon?: IconSpec }> | undefined;
 }
 
 export class HeaderHost {
@@ -145,7 +146,7 @@ export class HeaderHost {
    */
   buildExternalLinksFor(
     path: string | null,
-  ): Array<{ label: string; url: string; icon?: string }> | undefined {
+  ): Array<{ label: string; url: string; icon?: IconSpec }> | undefined {
     return this.deps.collectExternalLinks(path);
   }
 
