@@ -11,14 +11,15 @@
  * routes subsequent saves to the new store without re-wiring.
  */
 
+import type { StorageProvider } from "@ingcreators/annot-core/storage";
 import {
   type CanvasManager,
   exportAnnotationsSvgForIdb,
   getPngDataUrl,
 } from "@ingcreators/annot-editor";
-import type { StorageProvider } from "@ingcreators/annot-core/storage";
 import type { AnnotSaveStatusElement } from "../editor/save-status-indicator.js";
 import { generateThumbnailFromDataUrl } from "../storage/image-thumbnail.js";
+import type { ThumbnailManager } from "../storage/thumbnail-manager.js";
 import { hideError, showSaveError } from "../ui/error-bar.js";
 
 export interface SavePipelineDeps {
@@ -27,6 +28,12 @@ export interface SavePipelineDeps {
   getCurrentImagePath(): string | null;
   getCurrentTags(): Record<string, string>;
   getStatusIndicator(): AnnotSaveStatusElement | null;
+  /** Unified thumbnail cache. `writeThumbnail` seeds it via
+   *  `tm.write(provider, path, dataUrl, dims)` so the gallery
+   *  picks up the latest editor render across the
+   *  `annot-thumbnail-ready` event the manager dispatches.
+   *  Null in tests / setups that haven't booted the manager. */
+  getThumbnailManager(): ThumbnailManager | null;
   /** Ask the plugin host if the save should proceed. Rejects if any
    *  `onBeforeSave` listener throws/rejects — the SavePipeline
    *  surfaces that through its normal error-banner path. */
@@ -172,6 +179,21 @@ export class SavePipeline {
     if (!canvas || !storage || !path) return;
     const renderedDataUrl = await getPngDataUrl(canvas);
     const thumbnailDataUrl = await generateThumbnailFromDataUrl(renderedDataUrl);
+    if (!thumbnailDataUrl) return;
+    // Route through the unified ThumbnailManager when the host
+    // has wired one up AND the provider participates in the
+    // shared cache (`StorageWithThumbnailCache`). Falls back to
+    // the legacy `updateImage(path, { thumbnailDataUrl })` shape
+    // for stores that haven't been migrated yet (Phase 5
+    // removes the fallback once Browser / Device / GitHub all
+    // implement the optional methods).
+    const tm = this.deps.getThumbnailManager();
+    if (tm) {
+      await tm.write(storage, path, thumbnailDataUrl, {
+        width: canvas.imageWidth,
+        height: canvas.imageHeight,
+      });
+    }
     await storage.updateImage(path, { thumbnailDataUrl });
   }
 

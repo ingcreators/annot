@@ -31,6 +31,7 @@ import type { FolderRecord, ImageRecord, StorageProvider } from "@ingcreators/an
 import { getFilename, supportsResync } from "@ingcreators/annot-core/storage";
 import { html, LitElement, nothing } from "../lit.js";
 import { logger } from "../logger.js";
+import type { ThumbnailManager } from "../storage/thumbnail-manager.js";
 import { showAlertDialog, showConfirmDialog, showPromptDialog } from "../ui/dialog.js";
 import { type MenuItem, openContextMenu } from "./annot-context-menu.js";
 
@@ -42,6 +43,7 @@ export interface GallerySelection {
 export class AnnotGalleryPageElement extends LitElement {
   static override properties = {
     storage: { attribute: false },
+    thumbnailManager: { attribute: false },
     viewMode: { attribute: false },
     images: { state: true },
     folders: { state: true },
@@ -52,6 +54,12 @@ export class AnnotGalleryPageElement extends LitElement {
   };
 
   declare storage: StorageProvider | null;
+  /** Optional unified thumbnail cache. When provided, the gallery
+   *  calls `attach(provider, records)` after every list to hydrate
+   *  thumbnails / dimensions from the cache and schedule prefetches
+   *  for misses. Set by the host (`FileManager` constructor) once
+   *  per session — null only in tests / Storybook. */
+  declare thumbnailManager: ThumbnailManager | null;
   declare viewMode: "grid" | "list";
   declare images: ImageRecord[];
   declare folders: FolderRecord[];
@@ -70,6 +78,7 @@ export class AnnotGalleryPageElement extends LitElement {
   constructor() {
     super();
     this.storage = null;
+    this.thumbnailManager = null;
     this.viewMode = "grid";
     this.images = [];
     this.folders = [];
@@ -128,33 +137,37 @@ export class AnnotGalleryPageElement extends LitElement {
     const empty =
       filteredItems === 0
         ? html`<div class="gallery-empty">
-            ${this.images.length === 0 && this.folders.length === 0
-              ? "No images yet. Upload an image or capture with the extension."
-              : "No matches found."}
+            ${
+              this.images.length === 0 && this.folders.length === 0
+                ? "No images yet. Upload an image or capture with the extension."
+                : "No matches found."
+            }
           </div>`
         : nothing;
 
     return html`
       <div class=${gridClass} @click=${this.#onGridClick}>
         ${empty}
-        ${showFolders && this.folders.length > 0
-          ? html`
+        ${
+          showFolders && this.folders.length > 0
+            ? html`
               <div class="gallery-section-header">Folders</div>
               <div class="gallery-folder-grid">
                 ${this.folders.map((f) => this.#renderFolderCard(f))}
               </div>
             `
-          : nothing}
-        ${filteredImages.length > 0
-          ? html`
-              ${showFolders
-                ? html`<div class="gallery-section-header">Files</div>`
-                : nothing}
+            : nothing
+        }
+        ${
+          filteredImages.length > 0
+            ? html`
+              ${showFolders ? html`<div class="gallery-section-header">Files</div>` : nothing}
               <div class="gallery-image-grid">
                 ${filteredImages.map((img) => this.#renderImageCard(img))}
               </div>
             `
-          : nothing}
+            : nothing
+        }
       </div>
     `;
   }
@@ -230,9 +243,11 @@ export class AnnotGalleryPageElement extends LitElement {
         @keydown=${(e: KeyboardEvent) => this.#onImageKeydown(e, img)}
       >
         <div class="gallery-thumb">
-          ${img.thumbnailDataUrl
-            ? html`<img src=${img.thumbnailDataUrl} loading="lazy" alt="" />`
-            : nothing}
+          ${
+            img.thumbnailDataUrl
+              ? html`<img src=${img.thumbnailDataUrl} loading="lazy" alt="" />`
+              : nothing
+          }
         </div>
         <div class="gallery-item-info">
           <div
@@ -243,13 +258,15 @@ export class AnnotGalleryPageElement extends LitElement {
             ${getFilename(img.path) || this.#displayUrl(img.sourceUrl)}
           </div>
           <div class="gallery-item-meta">${dims}${this.#formatDate(img.createdAt)}</div>
-          ${tagKeys.length > 0
-            ? html`<div class="gallery-tag-chips">
-                ${tagKeys.slice(0, 3).map(
-                  (k) => html`<span class="gallery-tag">${k}: ${tags[k]}</span>`,
-                )}
+          ${
+            tagKeys.length > 0
+              ? html`<div class="gallery-tag-chips">
+                ${tagKeys
+                  .slice(0, 3)
+                  .map((k) => html`<span class="gallery-tag">${k}: ${tags[k]}</span>`)}
               </div>`
-            : nothing}
+              : nothing
+          }
         </div>
         <button type="button"
           class="gallery-card-more"
@@ -314,6 +331,14 @@ export class AnnotGalleryPageElement extends LitElement {
         this.images = await this.storage.listImages(this.currentFolderPath);
         this.folders = await this.storage.listFolders(this.currentFolderPath);
       }
+      // Hydrate thumbnails / dimensions from the unified cache and
+      // schedule background prefetches for misses. No-op for stores
+      // that don't implement `StorageWithThumbnailCache` (currently
+      // every backend except Drive after Phase 3); Phases 4–5 add
+      // GitHub / Browser / Device.
+      if (this.thumbnailManager) {
+        await this.thumbnailManager.attach(this.storage, this.images);
+      }
       logger.debug(
         "[gallery] refresh: images:",
         this.images.length,
@@ -332,15 +357,17 @@ export class AnnotGalleryPageElement extends LitElement {
     const folderPaths = new Set(this.folders.map((f) => f.path));
     let mutated = false;
     const nextImgs = new Set(this.selectedImagePaths);
-    for (const p of Array.from(nextImgs)) if (!imgPaths.has(p)) {
-      nextImgs.delete(p);
-      mutated = true;
-    }
+    for (const p of Array.from(nextImgs))
+      if (!imgPaths.has(p)) {
+        nextImgs.delete(p);
+        mutated = true;
+      }
     const nextFolders = new Set(this.selectedFolderPaths);
-    for (const p of Array.from(nextFolders)) if (!folderPaths.has(p)) {
-      nextFolders.delete(p);
-      mutated = true;
-    }
+    for (const p of Array.from(nextFolders))
+      if (!folderPaths.has(p)) {
+        nextFolders.delete(p);
+        mutated = true;
+      }
     if (mutated) {
       this.selectedImagePaths = nextImgs;
       this.selectedFolderPaths = nextFolders;

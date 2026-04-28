@@ -124,12 +124,14 @@ export class App {
       onAfterSave: (path) => {
         this.#pluginHost.dispatchAfterSave({ path, mode: getStorageMode() });
       },
+      getThumbnailManager: () => this.#thumbnailManager,
     });
     this.#captureHost = new CaptureHost({
       getStorage: () => this.#storage,
       getCurrentFolderPath: () => this.#currentFolderPath,
       getFileManager: () => this.#fileManager,
       openEditor: (args) => this.#openEditorFor(args),
+      getThumbnailManager: () => this.#thumbnailManager,
     });
     this.#headerHost = new HeaderHost({
       getStorage: () => this.#storage,
@@ -536,6 +538,7 @@ export class App {
         isBuiltinDisabled: (mode) => this.#disabledBuiltinStorage.has(mode),
         getSidebarTabs: () => this.#pluginHost.listSidebarTabs(),
         getSidebarSectionOrder: () => this.#sidebarSectionOrder,
+        getThumbnailManager: () => this.#thumbnailManager,
       });
 
       this.#storageBridge.updateSidebarStatus(getStorageMode());

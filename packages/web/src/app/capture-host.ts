@@ -12,9 +12,9 @@
  * the save to the newly-selected backend.
  */
 
-import { readEditableImage } from "@ingcreators/annot-core/xmp";
 import type { StorageProvider } from "@ingcreators/annot-core/storage";
 import { newIdB58 } from "@ingcreators/annot-core/utils";
+import { readEditableImage } from "@ingcreators/annot-core/xmp";
 import {
   loadCursorPreference,
   saveCursorPreference,
@@ -24,6 +24,7 @@ import {
 import { captureScreen, pasteFromClipboard, startIntervalCapture } from "../capture/pwa-capture.js";
 import type { FileManager } from "../gallery/file-manager.js";
 import { generateThumbnailFromDataUrl } from "../storage/image-thumbnail.js";
+import type { ThumbnailManager } from "../storage/thumbnail-manager.js";
 import { showSaveError } from "../ui/error-bar.js";
 import { fileToDataUrl, loadImage } from "./image-utils.js";
 
@@ -41,6 +42,12 @@ export interface CaptureHostDeps {
   getStorage(): StorageProvider | null;
   getCurrentFolderPath(): string;
   getFileManager(): FileManager | null;
+  /** Unified thumbnail cache. Capture flows seed it via
+   *  `tm.write(provider, path, dataUrl, dims)` after `saveImage`
+   *  resolves so the gallery card has a thumbnail before any
+   *  background prefetch round-trip. Null in tests / hosts that
+   *  haven't booted the manager. */
+  getThumbnailManager(): ThumbnailManager | null;
   /** Invoked after a successful save to switch the app into the editor
    *  view for the new image. The callback owns `setCurrentImagePath`,
    *  `setupEditor`, and the URL push. */
@@ -83,7 +90,7 @@ export class CaptureHost {
           const thumbnailDataUrl = await generateThumbnailFromDataUrl(dataUrl);
           const now = new Date().toISOString();
           const sec = String(index + 1).padStart(3, "0");
-          await storage.saveImage(
+          const savedPath = await storage.saveImage(
             {
               originalDataUrl: dataUrl,
               thumbnailDataUrl,
@@ -106,6 +113,13 @@ export class CaptureHost {
             },
             { filename: `capture-${now.replace(/[:.]/g, "-")}-${sec}.jpg` },
           );
+          // Seed the unified thumbnail cache so the gallery card
+          // renders immediately without a prefetch round-trip.
+          // No-op for stores that don't participate.
+          await this.deps.getThumbnailManager()?.write(storage, savedPath, thumbnailDataUrl, {
+            width: img.naturalWidth,
+            height: img.naturalHeight,
+          });
           savedFrames++;
         } catch (e) {
           console.error("[timed-capture] save error:", e);
@@ -211,6 +225,10 @@ export class CaptureHost {
       },
       { filename: file.name || undefined },
     );
+    await this.deps.getThumbnailManager()?.write(storage, path, thumbnailDataUrl, {
+      width: w,
+      height: h,
+    });
 
     this.deps.openEditor({
       path,
@@ -240,6 +258,10 @@ export class CaptureHost {
       folderPath: this.deps.getCurrentFolderPath(),
       createdAt: now,
       updatedAt: now,
+    });
+    await this.deps.getThumbnailManager()?.write(storage, path, thumbnailDataUrl, {
+      width: img.naturalWidth,
+      height: img.naturalHeight,
     });
 
     this.deps.openEditor({
