@@ -32,6 +32,7 @@ import type {
   StorageWithForceRefresh,
   StorageWithRateLimit,
   StorageWithResync,
+  StorageWithThumbnailCache,
   StorageWithTokenRefresher,
 } from "@ingcreators/annot-core/storage";
 import {
@@ -46,7 +47,6 @@ import {
   validateName,
 } from "@ingcreators/annot-core/storage";
 import { defaultAnnotImageFilename } from "@ingcreators/annot-core/utils";
-import { readEditableImage } from "@ingcreators/annot-core/xmp";
 import {
   createGitHubApiClient,
   type GitHubApiClient,
@@ -76,7 +76,6 @@ import {
 } from "./github-paths.js";
 import { GitHubTreeState } from "./github-tree-state.js";
 import { buildEditableImageBlob } from "./image-encode.js";
-import { generateThumbnailFromBlob } from "./image-thumbnail.js";
 
 interface TreeEntry {
   path: string; // repo-relative
@@ -114,7 +113,8 @@ export class GitHubStore
     StorageWithResync,
     StorageWithForceRefresh,
     StorageWithTokenRefresher,
-    StorageWithRateLimit
+    StorageWithRateLimit,
+    StorageWithThumbnailCache
 {
   /** HTTP layer — owns token, token-refresh, rate-limit state, and
    *  the GitHub-specific error mapping. Synthesised in the public
@@ -821,12 +821,10 @@ export class GitHubStore
     };
     this.#cache.setRecord(relPath, record);
     this.#cache.setMeta(relPath, { createdAt: record.createdAt, updatedAt: record.updatedAt });
-    // Pre-seed the thumbnail cache from the caller-provided one so
-    // the new entry shows up in the gallery immediately. `listImages`
-    // will still fetch-and-cache for entries we never saved locally.
-    if (data.thumbnailDataUrl) {
-      this.#cache.setThumbnail(relPath, data.thumbnailDataUrl);
-    }
+    // Thumbnail bytes are owned by the unified `ThumbnailManager`:
+    // capture-host calls `tm.write(provider, path, dataUrl, dims)`
+    // after `saveImage` resolves, so the gallery card has its
+    // thumbnail before the next listing.
     return relPath;
   }
 
@@ -860,30 +858,28 @@ export class GitHubStore
   async listImages(folderPath: string): Promise<ImageRecord[]> {
     await this.#ensureTreeLoaded();
     const results: ImageRecord[] = [];
-    const uncachedPaths: string[] = [];
     for (const path of this.#tree.blobPaths()) {
       const name = getFilename(path);
       if (name === GITKEEP) continue;
       if (!isImageFilename(name)) continue;
       if (getParentPath(path) !== folderPath) continue;
       const meta = this.#cache.getMeta(path);
-      const cachedThumb = this.#cache.getThumbnail(path);
       const cachedRecord = this.#cache.getRecord(path);
-      const cachedDims = this.#cache.getDimensions(path);
-      if (!cachedThumb) uncachedPaths.push(path);
+      // Thumbnail bytes are owned by the unified `ThumbnailManager`.
+      // The gallery calls `tm.attach(provider, records)` after
+      // this returns and fills `thumbnailDataUrl` from the cache
+      // (or schedules a prefetch via `fetchThumbnailSource` on
+      // miss). Dimensions land via the cached record (when
+      // `getImage` has decoded XMP) or via the manager's own
+      // dimension extraction during prefetch.
       results.push({
         path,
         folderPath,
         originalDataUrl: "",
-        thumbnailDataUrl: cachedThumb || "",
+        thumbnailDataUrl: "",
         annotationsSvg: "",
-        // Dimensions surface from either (a) a full `getImage`
-        // round-trip (cached record's width/height) or (b) the
-        // thumbnail prefetch's side-map (`setDimensions`). Cold
-        // listing falls back to 0 — the gallery's `WxH • date`
-        // line hides the WxH segment when 0.
-        width: cachedRecord?.width || cachedDims?.width || 0,
-        height: cachedRecord?.height || cachedDims?.height || 0,
+        width: cachedRecord?.width || 0,
+        height: cachedRecord?.height || 0,
         sourceUrl: "",
         tags: {},
         createdAt: meta?.createdAt || "",
@@ -891,159 +887,56 @@ export class GitHubStore
       });
     }
     results.sort((a, b) => a.path.localeCompare(b.path));
-    // Fire-and-forget thumbnail prefetch. Each one emits a DOM event
-    // on completion (see `#ensureThumbnail`) so the gallery can patch
-    // the card's `<img src>` in place without awaiting here.
-    for (const p of uncachedPaths) {
-      void this.#ensureThumbnail(p);
-    }
     return results;
   }
 
-  /**
-   * Fetch `path`'s blob, generate a 480px JPEG thumbnail, cache the
-   * resulting data URL, and emit an `annot-thumbnail-ready` window
-   * event so any rendered gallery card for this path can swap in the
-   * real thumbnail. Idempotent: duplicate calls share the in-flight
-   * promise and cache hits return immediately.
-   */
-  async #ensureThumbnail(relPath: string): Promise<void> {
-    if (this.#cache.hasThumbnail(relPath)) return;
-    const existing = this.#cache.getThumbnailInFlight(relPath);
-    if (existing) return existing;
-    // `inFlight` is captured so the `finally` block can confirm
-    // ownership of the in-flight slot before clearing it. Without
-    // this check, an orphaned pre-save prefetch would clobber the
-    // newer prefetch's entry when its `finally` ran.
-    let inFlight: Promise<void> | undefined;
-    inFlight = (async () => {
-      try {
-        // Snapshot the SHA so we can detect a concurrent mutation
-        // during the fetch. If the file was re-committed locally
-        // (e.g. via `updateImage` → `#putContents`) while our GET
-        // was in flight, our bytes are already stale — skip caching
-        // the thumbnail so the next `listImages` / post-save trigger
-        // schedules a fresh fetch against the up-to-date blob.
-        const before = this.#tree.getBlobSha(relPath);
-        const fetched = await this.#getContents(relPath);
-        if (!fetched) return;
-        if (this.#tree.getBlobSha(relPath) !== before) return;
+  // ── StorageWithThumbnailCache ────────────────────────────────
 
-        const mime = inferMimeFromPath(relPath);
-        const blob = new Blob([fetched.bytes as BlobPart], { type: mime });
-        const dataUrl = await generateThumbnailFromBlob(blob);
-        // Empty string signals decode/resize failure inside the
-        // helper — skip caching so the gallery falls through to its
-        // placeholder UI instead of remembering an unrenderable thumb.
-        if (!dataUrl) return;
-        // Decode natural dimensions for the gallery's `WxH • date`
-        // line. For annot-native files the XMP carries the canonical
-        // size; fall back to a one-shot `createImageBitmap` so plain
-        // images dropped into the repo also get dimensions populated.
-        // Both decodes are best-effort — failure just leaves
-        // dimensions zeroed (the gallery hides the WxH segment).
-        let imgW = 0;
-        let imgH = 0;
-        const xmp = readEditableImage(fetched.bytes);
-        if (xmp?.width && xmp.height) {
-          imgW = xmp.width;
-          imgH = xmp.height;
-        } else {
-          try {
-            const bmp = await createImageBitmap(blob);
-            imgW = bmp.width;
-            imgH = bmp.height;
-            bmp.close();
-          } catch {
-            /* leave 0; gallery hides WxH segment */
-          }
-        }
-        // Re-check after the (synchronous-ish but yielding) encode —
-        // a save could have finished between our SHA snapshot and
-        // the canvas work.
-        if (this.#tree.getBlobSha(relPath) !== before) return;
-        // Don't clobber a freshly-seeded thumbnail from the editor
-        // (`updateImage({ thumbnailDataUrl })` → seed → clear
-        // in-flight). Its render reflects the current canvas state,
-        // which may include edits newer than what our GET saw.
-        if (this.#cache.hasThumbnail(relPath)) return;
-        this.#cache.setThumbnail(relPath, dataUrl);
-        // Stash dimensions in the side map so `listImages` can
-        // surface them even if `getImage` was never called for this
-        // path. We do NOT seed `#cache.setRecord` with a stub —
-        // `getImage` short-circuits on any cached record, and a
-        // stub with empty `originalDataUrl` would drive the editor
-        // to a blank canvas (regression: PR #312 → fixed here).
-        if (imgW && imgH) {
-          this.#cache.setDimensions(relPath, { width: imgW, height: imgH });
-          const existingRecord = this.#cache.getRecord(relPath);
-          if (existingRecord) {
-            this.#cache.setRecord(relPath, {
-              ...existingRecord,
-              width: imgW,
-              height: imgH,
-            });
-          }
-        }
-        // CustomEvent is typed loosely here because we don't augment
-        // the WindowEventMap globally for a storage-specific event.
-        window.dispatchEvent(
-          new CustomEvent("annot-thumbnail-ready", {
-            detail: { path: relPath, dataUrl },
-          }),
-        );
-      } catch {
-        // Swallow — the gallery just keeps showing the placeholder.
-        // A subsequent forceRefresh / navigation retries.
-      } finally {
-        // Only clear the in-flight slot if it's still ours. A save
-        // that raced in may have already removed this entry and
-        // launched a replacement prefetch.
-        if (this.#cache.getThumbnailInFlight(relPath) === inFlight) {
-          this.#cache.deleteThumbnailInFlight(relPath);
-        }
-      }
-    })();
-    this.#cache.setThumbnailInFlight(relPath, inFlight);
-    return inFlight;
+  /**
+   * Stable per-image identifier for the unified thumbnail cache.
+   * Repo + branch + relative path uniquely identify a blob within
+   * GitHub's namespace; the basePath is folded in so two repos
+   * (or two basePaths inside one repo) can't collide.
+   */
+  thumbnailKey(path: string): string | undefined {
+    if (!this.#tree.hasBlob(path)) return undefined;
+    return `github:${this.#owner}/${this.#repo}/${this.#branch}:${this.#basePath}:${path}`;
+  }
+
+  /**
+   * Blob SHA — advances on every commit. Cache hits require a
+   * matching SHA; mismatches evict and re-prefetch. `""` when the
+   * tree hasn't been loaded yet (manager treats as constant; the
+   * first listing's prefetch lands the canonical SHA, so cross-
+   * session continuity works as long as the tree state is fresh).
+   */
+  thumbnailVersion(path: string): string {
+    return this.#tree.getBlobSha(path) || "";
+  }
+
+  /**
+   * Fetch the blob's bytes. Returns the raw bytes wrapped in a
+   * `Blob` with the inferred mime so the manager's
+   * `createImageBitmap` decode succeeds for both annot-native
+   * `.annot.png|jpg` files and plain images dropped into the repo.
+   */
+  async fetchThumbnailSource(path: string): Promise<Blob | undefined> {
+    await this.#ensureTreeLoaded();
+    const fetched = await this.#getContents(path);
+    if (!fetched) return undefined;
+    const mime = inferMimeFromPath(path);
+    return new Blob([fetched.bytes as BlobPart], { type: mime });
   }
 
   async updateImage(path: string, updates: ImageRecordUpdate): Promise<void> {
     await this.#ensureTreeLoaded();
 
-    // -- Thumbnail-only update from the editor (every 2s during
-    // editing, also flushed on navigation boundaries). Thumbnails
-    // aren't persisted in the repo — we just seed the in-memory
-    // cache so the gallery sees the caller-provided render directly
-    // without waiting on the background prefetch's round-trip.
-    if (updates.thumbnailDataUrl !== undefined) {
-      if (updates.thumbnailDataUrl) {
-        this.#cache.setThumbnail(path, updates.thumbnailDataUrl);
-        // Stop any still-in-flight prefetch from clobbering this
-        // freshly-rendered thumbnail — the editor canvas is the
-        // source of truth at this moment.
-        this.#cache.deleteThumbnailInFlight(path);
-        window.dispatchEvent(
-          new CustomEvent("annot-thumbnail-ready", {
-            detail: { path, dataUrl: updates.thumbnailDataUrl },
-          }),
-        );
-      } else {
-        // Caller passed empty (generator failed) — don't leave a
-        // stale entry hanging around. Wipe so the next listImages
-        // schedules a fresh prefetch from the just-committed blob.
-        this.#cache.deleteThumbnail(path);
-        this.#cache.deleteThumbnailInFlight(path);
-        void this.#ensureThumbnail(path);
-      }
-      const existingRecord = this.#cache.getRecord(path);
-      if (existingRecord) {
-        this.#cache.setRecord(path, {
-          ...existingRecord,
-          thumbnailDataUrl: updates.thumbnailDataUrl,
-        });
-      }
-    }
+    // `updates.thumbnailDataUrl` is intentionally NOT handled here.
+    // Thumbnails are owned by the unified `ThumbnailManager` —
+    // callers seed it via `tm.write(provider, path, dataUrl, dims)`,
+    // which dispatches the `annot-thumbnail-ready` event the
+    // gallery listens for. Phase 5 of the unified-thumbnail-cache
+    // plan removes the field from `ImageRecordUpdate` entirely.
 
     // -- Annotation / tag update: re-render + PUT in place.
     if (updates.annotationsSvg !== undefined || updates.tags !== undefined) {
@@ -1091,22 +984,14 @@ export class GitHubStore
         tags,
         updatedAt: new Date().toISOString(),
       });
-      // Don't invalidate the thumbnail cache here. The editor runs
-      // its own `writeThumbnailToStorage` (2 s debounce) which fires
-      // before this annotation save (10 s debounce) and seeds the
-      // cache with a render of the exact same canvas state we're
-      // committing now — so the cache already matches the just-
-      // committed blob. A blanket `delete` + re-prefetch would leave
-      // the cache empty for the network round-trip it takes the
-      // prefetch to complete, producing a black-tile flash if the
-      // user navigates into that window.
-      //
-      // Still kick off `#ensureThumbnail` as a *fallback*: the
-      // `cache.has` guard inside makes it a no-op when the editor
-      // thumbnail is present, and it populates the cache when
-      // `writeThumbnailToStorage` didn't run (e.g. the generator
-      // errored or the editor was torn down before the 2 s timer).
-      void this.#ensureThumbnail(path);
+      // Thumbnail cache invalidation / re-prefetch is the
+      // `ThumbnailManager`'s concern: the next `attach` cycle
+      // checks the new blob SHA (returned by `thumbnailVersion`)
+      // against the cached entry and evicts on mismatch. The
+      // editor's `writeThumbnailToStorage` runs before this PUT
+      // and routes through `tm.write`, so the freshly-rendered
+      // thumbnail already lands under the new SHA before the
+      // gallery re-lists.
     }
   }
 
