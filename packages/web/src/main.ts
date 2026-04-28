@@ -6,9 +6,16 @@ import "@ingcreators/annot-core/styles/property-panel.css";
 import "./styles/app.css";
 import "./styles/file-manager.css";
 
+import { applyPersistedTheme } from "@ingcreators/annot-editor";
 import { registerSW } from "virtual:pwa-register";
 import { App } from "./app.js";
 import { hideError, showError } from "./ui/error-bar.js";
+
+// Restore the user's last-chosen theme + any saved token overrides
+// before the first paint that depends on them. Call sites that
+// later flip the theme (`createThemeToggle`) persist via
+// `persistThemeChoice()` for the next boot.
+applyPersistedTheme();
 
 // Register the PWA service worker with manual update prompt. When a
 // new SW is installed and waiting, Workbox fires `onNeedRefresh`;

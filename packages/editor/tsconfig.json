@@ -3,7 +3,12 @@
   "compilerOptions": {
     "rootDir": "src",
     "outDir": "dist",
-    "types": []
+    // `node` is loaded so `theme-overrides.test.ts` can read
+    // `editor.css` from disk for the CSS↔TS token symmetry check.
+    // Production code must not rely on Node-only APIs (this is
+    // Tier C — runs in the browser); guard via runtime feature
+    // detection if a future case needs it.
+    "types": ["node"]
   },
   "include": ["src/**/*.ts"]
 }
