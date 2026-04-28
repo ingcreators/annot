@@ -101,14 +101,23 @@ const BUILTIN_CHIP_DESCRIPTORS: readonly ChipDescriptor[] = [
   },
   {
     mode: "googledrive",
-    icon: builtinIcon("cloud"),
+    // Material Symbols' `add_to_drive` (Drive triangle silhouette
+    // with a "+" affordance). Picked over the official multi-colour
+    // Drive mark because the rest of the storage chip rail is
+    // monochrome — the colour-locked logo would visually shout next
+    // to every other `currentColor` glyph. When the multi-colour
+    // mark is genuinely required (Workspace Marketplace listing,
+    // dedicated Drive CTA), that surface ships its own asset.
+    icon: builtinIcon("add_to_drive"),
     label: "Google Drive",
     priority: 30,
     reselectTitle: "Change Drive folder",
   },
   {
     mode: "github",
-    icon: builtinIcon("hub"),
+    // Official GitHub Mark (Invertocat); rendered in
+    // `currentColor` so it picks up the surrounding text colour.
+    icon: builtinIcon("brand.github"),
     label: "GitHub",
     priority: 40,
     reselectTitle: "Change repository",

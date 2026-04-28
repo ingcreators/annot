@@ -63,6 +63,15 @@ the registry (`packages/core/src/editor/icons/registry.ts`); typo
 protection comes from the narrow `BuiltinIconId` literal union
 exported from `@ingcreators/annot-core/icons`.
 
+**Reserved id namespaces.** Plugin authors should not assume the
+following dotted prefixes will keep their current shape; they are
+host-internal and may grow / change without an API-version bump:
+
+| Prefix | Owner | What lives here |
+|--|--|--|
+| `arrow.*`, `counter.*`, `shape.*` | host toolbar | Tool-variant glyphs that mirror toolbar button states. |
+| `brand.*` | host storage chips | Third-party trademarks (currently the GitHub Mark) bundled verbatim from the vendor's published asset, used to identify the corresponding storage backend per the vendor's brand guidelines. **Plugin-supplied storage backends MUST NOT reuse `brand.github` for non-GitHub backends** — the mark belongs to GitHub, Inc. and reusing it would mislead users. Bring your own logomark via `kind: "svg"` or `kind: "url"` instead. |
+
 ### Plugin-owned SVG (logomark)
 
 ```ts

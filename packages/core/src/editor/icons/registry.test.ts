@@ -18,6 +18,7 @@ describe("BUILTIN_ICONS registry", () => {
     expect([...BUILTIN_ICON_IDS].sort()).toMatchInlineSnapshot(`
       [
         "add",
+        "add_to_drive",
         "align_horizontal_center",
         "align_horizontal_left",
         "align_horizontal_right",
@@ -30,6 +31,7 @@ describe("BUILTIN_ICONS registry", () => {
         "arrow_right_alt",
         "arrow_selector_tool",
         "blur_on",
+        "brand.github",
         "chat",
         "chat_bubble",
         "check_box",
