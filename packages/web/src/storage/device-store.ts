@@ -1,6 +1,5 @@
 /// <reference path="../types/fs-access-extras.d.ts" />
 
-import { logger } from "../logger.js";
 /**
  * Device (File System Access API) storage provider — path-based
  * identification. Reads/writes image files to a user-selected local
@@ -23,6 +22,7 @@ import type {
   StorageWithForceRefresh,
   StorageWithInit,
   StorageWithResync,
+  StorageWithThumbnailCache,
 } from "@ingcreators/annot-core/storage";
 import {
   ancestorPaths,
@@ -37,14 +37,13 @@ import {
 } from "@ingcreators/annot-core/storage";
 import { defaultAnnotImageFilename } from "@ingcreators/annot-core/utils";
 import { readEditableImage } from "@ingcreators/annot-core/xmp";
+import { logger } from "../logger.js";
 import { fileExists, getDirHandle, purgeEmptyFiles } from "./device-fs.js";
 import { buildEditableImageBlob } from "./image-encode.js";
-import { generateThumbnailFromDataUrl } from "./image-thumbnail.js";
 
 const INDEX_FILE = ".annot.json";
 
 interface IndexEntry {
-  thumbnailDataUrl: string;
   createdAt: string;
   /** XMP-extracted tags, cached so the gallery can show them without reading the file. */
   tags?: Record<string, string>;
@@ -61,7 +60,12 @@ interface IndexData {
 }
 
 export class DeviceStore
-  implements StorageProvider, StorageWithInit, StorageWithResync, StorageWithForceRefresh
+  implements
+    StorageProvider,
+    StorageWithInit,
+    StorageWithResync,
+    StorageWithForceRefresh,
+    StorageWithThumbnailCache
 {
   #root: FileSystemDirectoryHandle;
   #index: IndexData = { images: {} };
@@ -154,18 +158,15 @@ export class DeviceStore
         if (entry.mtime !== undefined && file.lastModified === entry.mtime) {
           continue; // unchanged
         }
-        // File was added/modified externally — refresh cached metadata
+        // File was added/modified externally — refresh cached metadata.
+        // Thumbnail bytes are owned by the unified `ThumbnailManager`;
+        // the next gallery `attach` call detects the version mismatch
+        // (mtime changed) and re-prefetches via `fetchThumbnailSource`.
         const bytes = new Uint8Array(await file.arrayBuffer());
         const meta = readEditableImage(bytes);
         entry.tags = meta?.tags || {};
         entry.width = meta?.width || entry.width || 0;
         entry.height = meta?.height || entry.height || 0;
-        try {
-          const dataUrl = await this.#fileToDataUrl(file);
-          entry.thumbnailDataUrl = await generateThumbnailFromDataUrl(dataUrl);
-        } catch {
-          /* keep old thumbnail on failure */
-        }
         entry.mtime = file.lastModified;
         changed = true;
       } catch {
@@ -247,7 +248,6 @@ export class DeviceStore
       if (handle.kind === "file" && this.#isImageFile(name)) {
         const path = joinPath(folderPath, name);
         if (!known.has(path)) {
-          let thumbnailDataUrl = "";
           let tags: Record<string, string> = {};
           let width = 0;
           let height = 0;
@@ -255,7 +255,10 @@ export class DeviceStore
           try {
             const file = await (handle as FileSystemFileHandle).getFile();
             mtime = file.lastModified;
-            // Read once; extract XMP (tags + dimensions) AND make thumbnail.
+            // Read once; extract XMP (tags + dimensions). Thumbnail
+            // generation is deferred to the unified `ThumbnailManager`
+            // — the gallery's `attach` call schedules a prefetch via
+            // `fetchThumbnailSource(path)` for any cache miss.
             const bytes = new Uint8Array(await file.arrayBuffer());
             const meta = readEditableImage(bytes);
             if (meta) {
@@ -263,14 +266,11 @@ export class DeviceStore
               width = meta.width || 0;
               height = meta.height || 0;
             }
-            const dataUrl = await this.#fileToDataUrl(file);
-            thumbnailDataUrl = await generateThumbnailFromDataUrl(dataUrl);
           } catch {
             /* skip on error — entry still added with empty tags */
           }
 
           this.#index.images[path] = {
-            thumbnailDataUrl,
             createdAt: new Date().toISOString(),
             tags,
             width,
@@ -315,10 +315,7 @@ export class DeviceStore
 
   // ---- Images ----
 
-  async saveImage(
-    data: Omit<ImageRecord, "path">,
-    opts?: { filename?: string },
-  ): Promise<string> {
+  async saveImage(data: Omit<ImageRecord, "path">, opts?: { filename?: string }): Promise<string> {
     const isJpeg = data.originalDataUrl.startsWith("data:image/jpeg");
     // No explicit filename = annot-native capture → use the shared
     // `annot-<ts>.annot.<ext>` shape. External-file saves pass their
@@ -371,7 +368,6 @@ export class DeviceStore
       throw e;
     }
 
-    const thumbnailDataUrl = await generateThumbnailFromDataUrl(data.originalDataUrl);
     let mtime = 0;
     try {
       mtime = (await fileHandle.getFile()).lastModified;
@@ -380,7 +376,6 @@ export class DeviceStore
     }
 
     this.#index.images[path] = {
-      thumbnailDataUrl,
       createdAt: data.createdAt || new Date().toISOString(),
       tags: data.tags || {},
       width: data.width || 0,
@@ -408,7 +403,8 @@ export class DeviceStore
         path,
         folderPath: getParentPath(path),
         originalDataUrl: meta?.originalImageDataUrl || (await this.#fileToDataUrl(file)),
-        thumbnailDataUrl: entry.thumbnailDataUrl || "",
+        // Thumbnail bytes owned by the unified `ThumbnailManager`.
+        thumbnailDataUrl: "",
         annotationsSvg: meta?.annotationsSvg || "",
         width: meta?.width || 0,
         height: meta?.height || 0,
@@ -430,7 +426,9 @@ export class DeviceStore
         path,
         folderPath,
         originalDataUrl: "", // lazy — loaded on getImage
-        thumbnailDataUrl: entry.thumbnailDataUrl || "",
+        // Thumbnail bytes owned by the unified `ThumbnailManager`;
+        // gallery hydrates via `attach` after this returns.
+        thumbnailDataUrl: "",
         annotationsSvg: "",
         width: entry.width || 0,
         height: entry.height || 0,
@@ -470,9 +468,8 @@ export class DeviceStore
       }
     }
 
-    if (updates.thumbnailDataUrl) {
-      entry.thumbnailDataUrl = updates.thumbnailDataUrl;
-    }
+    // `updates.thumbnailDataUrl` is no longer handled — thumbnail
+    // bytes are owned by the unified `ThumbnailManager`.
     // Cache tag edits in the index so the gallery sees them without reopening the file
     if (updates.tags !== undefined) {
       entry.tags = { ...updates.tags };
@@ -709,6 +706,44 @@ export class DeviceStore
       if (f) result.push(f);
     }
     return result;
+  }
+
+  // ── StorageWithThumbnailCache ────────────────────────────────
+
+  /**
+   * Stable per-image identifier. Folds in the rootHandle's name so
+   * two distinct user-picked folders don't collide on identical
+   * relative paths (e.g. two `Screenshots/foo.png` entries from
+   * different parent folders).
+   */
+  thumbnailKey(path: string): string | undefined {
+    if (!this.#index.images[path]) return undefined;
+    return `device:${this.#root.name}:${path}`;
+  }
+
+  /**
+   * `mtime` advances on every write — both this store's own
+   * `saveImage` / `updateImage` and external edits picked up by
+   * `#revalidateModified`. Cache hits require a matching mtime;
+   * mismatches evict and re-prefetch.
+   */
+  thumbnailVersion(path: string): string {
+    return String(this.#index.images[path]?.mtime ?? 0);
+  }
+
+  /**
+   * Source bytes for thumbnail regeneration. Reads the file from
+   * disk; manager runs the result through
+   * `generateThumbnailFromBlob` when the cache misses.
+   */
+  async fetchThumbnailSource(path: string): Promise<Blob | undefined> {
+    try {
+      const dir = await this.#getDirHandle(getParentPath(path));
+      const fh = await dir.getFileHandle(getFilename(path));
+      return await fh.getFile();
+    } catch {
+      return undefined;
+    }
   }
 
   // ---- Helpers ----

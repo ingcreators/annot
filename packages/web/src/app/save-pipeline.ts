@@ -177,24 +177,15 @@ export class SavePipeline {
     const canvas = this.deps.getCanvas();
     const path = this.deps.getCurrentImagePath();
     if (!canvas || !storage || !path) return;
+    const tm = this.deps.getThumbnailManager();
+    if (!tm) return; // host hasn't wired the manager — no-op
     const renderedDataUrl = await getPngDataUrl(canvas);
     const thumbnailDataUrl = await generateThumbnailFromDataUrl(renderedDataUrl);
     if (!thumbnailDataUrl) return;
-    // Route through the unified ThumbnailManager when the host
-    // has wired one up AND the provider participates in the
-    // shared cache (`StorageWithThumbnailCache`). Falls back to
-    // the legacy `updateImage(path, { thumbnailDataUrl })` shape
-    // for stores that haven't been migrated yet (Phase 5
-    // removes the fallback once Browser / Device / GitHub all
-    // implement the optional methods).
-    const tm = this.deps.getThumbnailManager();
-    if (tm) {
-      await tm.write(storage, path, thumbnailDataUrl, {
-        width: canvas.imageWidth,
-        height: canvas.imageHeight,
-      });
-    }
-    await storage.updateImage(path, { thumbnailDataUrl });
+    await tm.write(storage, path, thumbnailDataUrl, {
+      width: canvas.imageWidth,
+      height: canvas.imageHeight,
+    });
   }
 
   /**
