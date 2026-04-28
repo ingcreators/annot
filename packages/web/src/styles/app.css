@@ -646,7 +646,7 @@ html.light .split-editor-handle-size {
   pointer-events: none;
   animation: draw-indicator-in 0.2s ease-out;
 }
-#draw-session-indicator .material-symbols-outlined {
+#draw-session-indicator annot-icon {
   font-size: 16px;
 }
 #draw-session-indicator kbd {

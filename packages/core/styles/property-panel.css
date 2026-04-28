@@ -538,7 +538,8 @@
   border: 1px solid var(--annot-border-color);
   flex-shrink: 0;
 }
-.pp-color-btn .material-symbols-outlined {
+.pp-color-btn span:has(svg),
+.pp-color-btn > span:last-child {
   font-size: 16px;
   color: var(--annot-text-muted);
   margin-left: auto;

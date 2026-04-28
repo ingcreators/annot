@@ -24,8 +24,7 @@
     "./tauri-bridge": "./src/utils/tauri-bridge.ts",
     "./storage": "./src/storage/index.ts",
     "./encode": "./src/encode/index.ts",
-    "./styles/*": "./styles/*",
-    "./fonts/*": "./fonts/*"
+    "./styles/*": "./styles/*"
   },
   "scripts": {
     "build": "vite build",
