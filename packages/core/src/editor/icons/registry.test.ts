@@ -59,6 +59,7 @@ describe("BUILTIN_ICONS registry", () => {
         "edit",
         "error",
         "expand_more",
+        "extension",
         "file_copy",
         "flip",
         "flip_to_back",

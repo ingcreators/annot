@@ -7,6 +7,8 @@
  * would otherwise form (drawer → sections → drawer).
  */
 
+import type { IconSpec } from "@ingcreators/annot-core";
+
 export interface FileDetailsData {
   filename: string;
   folderPath: string; // "" = root
@@ -22,7 +24,7 @@ export interface FileDetailsData {
    * own section at the bottom of the drawer. Populated by the host
    * when the active storage exposes such links.
    */
-  externalLinks?: Array<{ label: string; url: string; icon?: string }>;
+  externalLinks?: Array<{ label: string; url: string; icon?: IconSpec }>;
   /**
    * Last-commit metadata for the current file. Populated
    * asynchronously by the host after the drawer is constructed —

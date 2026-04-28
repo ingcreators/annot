@@ -1,4 +1,4 @@
-import { builtinIcon } from "@ingcreators/annot-core";
+import { builtinIcon, type IconSpec } from "@ingcreators/annot-core";
 import { createBuiltinIcon } from "../ui/annot-icon-imperative.js";
 import "../ui/annot-icon.js";
 /**
@@ -72,7 +72,7 @@ export interface SidebarCallbacks {
  *  fields out of the `StorageRegistration` they came from. */
 interface ChipDescriptor {
   mode: string;
-  icon: string;
+  icon: IconSpec;
   label: string;
   priority: number;
   /** Optional: hide the chip when this returns false. Used by the
@@ -85,13 +85,13 @@ interface ChipDescriptor {
 const BUILTIN_CHIP_DESCRIPTORS: readonly ChipDescriptor[] = [
   {
     mode: "browser",
-    icon: "database",
+    icon: builtinIcon("database"),
     label: "Browser",
     priority: 10,
   },
   {
     mode: "device",
-    icon: "laptop",
+    icon: builtinIcon("laptop"),
     label: "Device",
     priority: 20,
     visible: () =>
@@ -101,14 +101,14 @@ const BUILTIN_CHIP_DESCRIPTORS: readonly ChipDescriptor[] = [
   },
   {
     mode: "googledrive",
-    icon: "cloud",
+    icon: builtinIcon("cloud"),
     label: "Google Drive",
     priority: 30,
     reselectTitle: "Change Drive folder",
   },
   {
     mode: "github",
-    icon: "hub",
+    icon: builtinIcon("hub"),
     label: "GitHub",
     priority: 40,
     reselectTitle: "Change repository",
@@ -335,7 +335,7 @@ export class AnnotSidebarElement extends LitElement {
     const plugins: ChipDescriptor[] = (this.callbacks.getPluginStorages?.() ?? []).map(
       (reg) => ({
         mode: reg.mode,
-        icon: reg.icon ?? "extension",
+        icon: reg.icon ?? builtinIcon("extension"),
         label: reg.label,
         priority: Number.isFinite(reg.priority) ? reg.priority : Number.POSITIVE_INFINITY,
         visible: reg.visible ? () => reg.visible!() : undefined,
@@ -366,10 +366,7 @@ export class AnnotSidebarElement extends LitElement {
         aria-label=${`${chip.label} storage \u2014 ${subtitle}`}
         @click=${() => this.callbacks.onStorageSelect(chip.mode as StorageMode)}
       >
-        <annot-icon
-          class="sidebar-storage-icon"
-          .spec=${builtinIcon(chip.icon)}
-        ></annot-icon>
+        <annot-icon class="sidebar-storage-icon" .spec=${chip.icon}></annot-icon>
         <div class="sidebar-storage-info">
           <div class="sidebar-storage-label">${chip.label}</div>
           <div class="sidebar-storage-status">${subtitle}</div>
@@ -421,7 +418,7 @@ export class AnnotSidebarElement extends LitElement {
           }
         }}
       >
-        <annot-icon .spec=${builtinIcon(tab.icon || "view_module")}></annot-icon>
+        <annot-icon .spec=${tab.icon ?? builtinIcon("view_module")}></annot-icon>
         <span class="sidebar-storage-label">${tab.label}</span>
         ${tab.badge ? html`<span class="sidebar-tab-badge">${tab.badge}</span>` : nothing}
       </button>

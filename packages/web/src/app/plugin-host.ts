@@ -51,10 +51,11 @@
  *   "UI slot" shape across both surfaces.
  */
 
+import type { IconSpec } from "@ingcreators/annot-core";
 import type { StorageProvider } from "@ingcreators/annot-core/storage";
 import { BUILT_IN_STORAGE_MODES } from "../storage/bridge.js";
 
-export type ExternalLink = { label: string; url: string; icon?: string };
+export type ExternalLink = { label: string; url: string; icon?: IconSpec };
 
 /** A contributor function invoked each time the drawer rebuilds its
  *  "External links" section for an open image. Returns zero or more
@@ -110,8 +111,10 @@ export interface StorageRegistration {
   readonly mode: string;
   /** Sidebar chip label (visible to the user). */
   readonly label: string;
-  /** Material-symbols icon name (e.g. `"database"`, `"hub"`). */
-  readonly icon?: string;
+  /** Icon descriptor — pass `{ kind: "builtin", id: "database" }` for
+   *  a host registry icon, or `{ kind: "svg", svg: "<svg…/>" }` for
+   *  a plugin-owned logomark. The host renders via `<annot-icon>`. */
+  readonly icon?: IconSpec;
   /** Sidebar order. Lower numbers render first. Built-ins reserve
    *  Browser=10, Device=20, Drive=30, GitHub=40. Plugins choose any
    *  number; missing / falsy = `+Infinity` (appended last). Stable
@@ -163,9 +166,11 @@ export interface SidebarTab {
   /** Visible label. */
   readonly label: string;
 
-  /** Material-symbols icon name (e.g. `"groups"`, `"history"`,
-   *  `"star"`). Optional; falls back to a generic glyph. */
-  readonly icon?: string;
+  /** Icon descriptor — pass `{ kind: "builtin", id: "history" }`
+   *  for a host registry icon, or `{ kind: "svg", svg: "…" }` for
+   *  a plugin-owned logomark. Optional; falls back to
+   *  `view_module` when omitted. */
+  readonly icon?: IconSpec;
 
   /** Render order within the "Views" section. Lower numbers
    *  render first. Falsy = `+Infinity` (appended last). Stable
