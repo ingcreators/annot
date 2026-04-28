@@ -9,6 +9,11 @@ import "./styles/file-manager.css";
 import { applyPersistedTheme } from "@ingcreators/annot-editor";
 import { registerSW } from "virtual:pwa-register";
 import { App } from "./app.js";
+// Register `<annot-icon>` early so consumers (built-in panels +
+// plugins) can use the element without explicitly importing the
+// module themselves. Phase 4a of
+// `docs/plans/svg-icons-and-plugin-icon-spec.md`.
+import "./ui/annot-icon.js";
 import { hideError, showError } from "./ui/error-bar.js";
 
 // Restore the user's last-chosen theme + any saved token overrides
