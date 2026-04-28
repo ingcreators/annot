@@ -1213,18 +1213,18 @@ export class SelectionManager {
         // Check if clicking an annotation element
         // First try DOM hit test
         const target = e.target as SVGElement;
-        let anno = target.closest("#annotations > *") as SVGElement | null;
+        let annotation = target.closest("#annotations > *") as SVGElement | null;
 
         // If DOM miss, try BBox hit test (catches pointer-events:none children, thin lines, etc.)
-        if (!anno) {
-          anno = this.#hitTestBBox(pt);
+        if (!annotation) {
+          annotation = this.#hitTestBBox(pt);
         }
 
-        if (anno) {
+        if (annotation) {
           if (e.shiftKey) {
-            this.toggleSelect(anno);
-          } else if (!this.#selectedSet.has(anno)) {
-            this.select(anno);
+            this.toggleSelect(annotation);
+          } else if (!this.#selectedSet.has(annotation)) {
+            this.select(annotation);
           }
           this.#dragging = true;
           this.#gestureChangedContent = false;
