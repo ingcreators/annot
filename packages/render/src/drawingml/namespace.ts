@@ -48,8 +48,8 @@ export interface NamespaceOpts {
    *
    *  Mismatching this (e.g. emitting `<a:spPr>` inside `<p:sp>`)
    *  produces a schema violation that PowerPoint rejects with
-   *  "found a problem with content" — verified on
-   *  anno-1777243471425.pptx (2026-04-27). */
+   *  "found a problem with content" — regression hit and fixed
+   *  2026-04-27. */
   spPr: "a:spPr" | "p:spPr";
   /** `<{ns}:blipFill>` open tag for picture shapes. Same
    *  story as `spPr`: locally declared in each schema, so

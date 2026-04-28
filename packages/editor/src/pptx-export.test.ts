@@ -243,9 +243,7 @@ describe("buildPptxFiles slide XML", () => {
     // (`<p:spPr>` inside `<p:sp>`, never `<a:spPr>`). Same for
     // the required `<p:nvPr/>` child of each
     // non-visual-props container. PowerPoint refuses to open
-    // files that mismatch (verified on
-    // anno-1777242607432.pptx and anno-1777243471425.pptx,
-    // 2026-04-27).
+    // files that mismatch (regression hit and fixed 2026-04-27).
     //
     // Structural guard: the every-emitter slide must NOT
     // contain `<a:spPr>` or `<a:blipFill>` (those are
