@@ -15,6 +15,8 @@
     "./headless": "./src/headless.ts",
     "./editor": "./src/editor/index.ts",
     "./editor/*": "./src/editor/*.ts",
+    "./icons": "./src/icons/index.ts",
+    "./icons/*": "./src/icons/*.ts",
     "./xmp": "./src/xmp/xmp-browser.ts",
     "./zip": "./src/zip/zip-builder.ts",
     "./utils": "./src/utils/index.ts",

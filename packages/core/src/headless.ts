@@ -252,3 +252,26 @@ export { newIdB58 } from "./utils/id.js";
 
 // ─── ZIP builder (Uint8Array + Blob; no DOM) ──────────────────────────
 export { buildZip, dataUrlExt, dataUrlToBytes } from "./zip/zip-builder.js";
+
+// ─── Icon descriptor (Tier A pure types + value-level helpers) ────────
+// Phase 1 of `docs/plans/svg-icons-and-plugin-icon-spec.md`. The
+// `IconSpec` discriminated union is the public, plugin-facing handle
+// for "render this icon here". Hosts and plugins both produce `IconSpec`
+// values; the renderer (Phase 3, Tier B) consumes them. Pure types +
+// constructor helpers + type guards — no DOM, no Element imports.
+//
+// The narrow `BuiltinIconId = keyof typeof BUILTIN_ICONS` literal
+// union is exported from the registry (Phase 2,
+// `@ingcreators/annot-core/editor/icons/registry`) and re-exported
+// from the `@ingcreators/annot-core/icons` subpath. Plugin authors who
+// want autocomplete on builtin ids should import from that subpath.
+export {
+  builtinIcon,
+  type BuiltinIconId,
+  type IconSpec,
+  isBuiltinIcon,
+  isSvgIcon,
+  isUrlIcon,
+  svgIcon,
+  urlIcon,
+} from "./icons/types.js";
