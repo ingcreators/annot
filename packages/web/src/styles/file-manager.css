@@ -1101,24 +1101,27 @@ html.light .view-toggle-btn.active {
  * ring: the hairline gives a crisp edge against busy photo thumbnails,
  * and the soft drop shadow gives the "lift" from the card surface.
  * This keeps folder cards (no thumbnail) and image cards visually
- * identical — no context-dependent ring that only shows on one. */
+ * identical — no context-dependent ring that only shows on one.
+ *
+ * The check glyph is inlined as an SVG `data:` URL pointing at the
+ * Material Symbols `check` path — encoded directly here because a
+ * CSS `::after` pseudo-element can't host a child element (so we
+ * can't reuse `<annot-icon>` from this layer). The SVG path comes
+ * from `@material-symbols/svg-400`'s `outlined/check.svg` (Apache-
+ * 2.0, Google LLC; see /NOTICE). */
 .gallery-folder-card.selected::after,
 .gallery-item.selected::after {
-  content: "check";
-  font-family: "Material Symbols Outlined";
-  font-variation-settings:
-    "FILL" 1,
-    "wght" 700;
+  content: "";
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 -960 960 960' fill='%23fff'><path d='M378-246 154-470l43-43 181 181 384-384 43 43-427 427Z'/></svg>");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 16px 16px;
+  background-color: var(--annot-accent);
   position: absolute;
   top: 8px;
   left: 8px;
   width: 24px;
   height: 24px;
-  line-height: 24px;
-  text-align: center;
-  font-size: 16px;
-  color: #fff;
-  background: var(--annot-accent);
   border-radius: 50%;
   box-shadow:
     0 0 0 1px rgba(0, 0, 0, 0.18), /* hairline edge for crisp readability */

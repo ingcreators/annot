@@ -28,6 +28,7 @@ describe("BUILTIN_ICONS registry", () => {
         "arrow.end",
         "arrow.none",
         "arrow_right_alt",
+        "arrow_selector_tool",
         "blur_on",
         "chat",
         "chat_bubble",
