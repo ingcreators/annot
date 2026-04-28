@@ -191,7 +191,7 @@ export class GoogleDriveStore
 
   async #listDrive(
     query: string,
-    fields = "files(id,name,mimeType,createdTime,thumbnailLink,parents)",
+    fields = "files(id,name,mimeType,createdTime,thumbnailLink,imageMediaMetadata,parents)",
   ): Promise<any[]> {
     const q = encodeURIComponent(query);
     const f = encodeURIComponent(fields);
@@ -336,7 +336,7 @@ export class GoogleDriveStore
     if (!parentId) return;
     const children = await this.#listDrive(
       `'${parentId}' in parents and trashed = false and mimeType != '${FOLDER_MIME}'`,
-      "files(id,name,createdTime,thumbnailLink)",
+      "files(id,name,createdTime,thumbnailLink,imageMediaMetadata)",
     );
     this.#registerFileChildren(folderPath, children);
     // Also cache metadata per file (createdTime, thumbnail) in a side map
@@ -424,14 +424,23 @@ export class GoogleDriveStore
       // Drive-served thumbnail.
       const cached = this.#recordCache.get(path);
       const thumb = cached?.thumbnailDataUrl || m.thumbnailLink || "";
+      // Prefer the cached record's dimensions (read from XMP on
+      // open / set on save). Fall back to Drive's image metadata
+      // (`imageMediaMetadata.width|height`, populated by Drive for
+      // every image MIME) so the gallery card's `WxH • date` line
+      // renders for files we haven't opened yet — without this the
+      // gallery hid dimensions for every Drive item.
+      const imd = m.imageMediaMetadata || {};
+      const width = cached?.width || imd.width || 0;
+      const height = cached?.height || imd.height || 0;
       results.push({
         path,
         folderPath,
         originalDataUrl: "",
         thumbnailDataUrl: thumb,
         annotationsSvg: "",
-        width: 0,
-        height: 0,
+        width,
+        height,
         sourceUrl: "",
         tags: {},
         createdAt: m.createdTime || "",
@@ -445,6 +454,29 @@ export class GoogleDriveStore
   async updateImage(path: string, updates: ImageRecordUpdate): Promise<void> {
     const driveId = this.#pathToFileId.get(path);
     if (!driveId) return;
+
+    // Thumbnail-only update from the editor's save pipeline (fires
+    // every few seconds during editing). Drive's `thumbnailLink`
+    // can't be overwritten, so we just patch the in-memory record
+    // cache and emit the same `annot-thumbnail-ready` event GitHub
+    // uses — that's enough to keep the gallery card in sync without
+    // re-uploading the file. Dispatched even if the path has no
+    // cached record yet (cold open during editing): the gallery
+    // listens on the path and will pick the dataUrl up regardless.
+    if (updates.thumbnailDataUrl !== undefined) {
+      const existing = this.#recordCache.get(path);
+      if (existing) {
+        this.#recordCache.set(path, {
+          ...existing,
+          thumbnailDataUrl: updates.thumbnailDataUrl,
+        });
+      }
+      window.dispatchEvent(
+        new CustomEvent("annot-thumbnail-ready", {
+          detail: { path, dataUrl: updates.thumbnailDataUrl },
+        }),
+      );
+    }
 
     if (updates.annotationsSvg !== undefined || updates.tags !== undefined) {
       const record = await this.getImage(path);

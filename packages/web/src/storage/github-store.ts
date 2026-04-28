@@ -46,28 +46,27 @@ import {
   validateName,
 } from "@ingcreators/annot-core/storage";
 import { defaultAnnotImageFilename } from "@ingcreators/annot-core/utils";
-import type { GitHubCommitSummary, GitHubRepoRef } from "./github-auth.js";
-import { getLastCommitForPath } from "./github-auth.js";
-
-import {
-  blobToBase64,
-  base64ToBytes,
-  inferMimeFromPath,
-  type GitHubError,
-  GITHUB_API,
-  GITKEEP,
-  githubError,
-  isImageFilename,
-  MAX_CONTENTS_BYTES,
-} from "./github-helpers.js";
+import { readEditableImage } from "@ingcreators/annot-core/xmp";
 import {
   createGitHubApiClient,
   type GitHubApiClient,
   type RateLimitListener,
 } from "./github-api-client.js";
+import type { GitHubCommitSummary, GitHubRepoRef } from "./github-auth.js";
+import { getLastCommitForPath } from "./github-auth.js";
 import { GitHubBlobCache } from "./github-blob-cache.js";
+import {
+  base64ToBytes,
+  blobToBase64,
+  GITHUB_API,
+  GITKEEP,
+  type GitHubError,
+  githubError,
+  inferMimeFromPath,
+  isImageFilename,
+  MAX_CONTENTS_BYTES,
+} from "./github-helpers.js";
 import { decodeImageRecord } from "./github-image-codec.js";
-import { buildEditableImageBlob } from "./image-encode.js";
 import {
   commitMessage as buildCommitMessage,
   contentsUrl as buildContentsUrl,
@@ -76,9 +75,8 @@ import {
   relPath as toRelPath,
 } from "./github-paths.js";
 import { GitHubTreeState } from "./github-tree-state.js";
-import {
-  generateThumbnailFromBlob,
-} from "./image-thumbnail.js";
+import { buildEditableImageBlob } from "./image-encode.js";
+import { generateThumbnailFromBlob } from "./image-thumbnail.js";
 
 interface TreeEntry {
   path: string; // repo-relative
@@ -109,7 +107,6 @@ interface TreeOp {
   existingBlobSha?: string;
   deleteOnly?: boolean;
 }
-
 
 export class GitHubStore
   implements
@@ -777,10 +774,7 @@ export class GitHubStore
   // StorageProvider — Images
   // ===========================================================================
 
-  async saveImage(
-    data: Omit<ImageRecord, "path">,
-    opts?: { filename?: string },
-  ): Promise<string> {
+  async saveImage(data: Omit<ImageRecord, "path">, opts?: { filename?: string }): Promise<string> {
     await this.#ensureTreeLoaded();
     const folderPath = data.folderPath || "";
 
@@ -874,6 +868,7 @@ export class GitHubStore
       if (getParentPath(path) !== folderPath) continue;
       const meta = this.#cache.getMeta(path);
       const cachedThumb = this.#cache.getThumbnail(path);
+      const cachedRecord = this.#cache.getRecord(path);
       if (!cachedThumb) uncachedPaths.push(path);
       results.push({
         path,
@@ -881,8 +876,12 @@ export class GitHubStore
         originalDataUrl: "",
         thumbnailDataUrl: cachedThumb || "",
         annotationsSvg: "",
-        width: 0,
-        height: 0,
+        // Dimensions become available once the file has been opened
+        // (`getImage` decodes XMP) or the thumbnail prefetch
+        // populated `setRecord`. Cold listing falls back to 0 — the
+        // gallery's `WxH • date` line hides the WxH segment when 0.
+        width: cachedRecord?.width || 0,
+        height: cachedRecord?.height || 0,
         sourceUrl: "",
         tags: {},
         createdAt: meta?.createdAt || "",
@@ -935,6 +934,28 @@ export class GitHubStore
         // helper — skip caching so the gallery falls through to its
         // placeholder UI instead of remembering an unrenderable thumb.
         if (!dataUrl) return;
+        // Decode natural dimensions for the gallery's `WxH • date`
+        // line. For annot-native files the XMP carries the canonical
+        // size; fall back to a one-shot `createImageBitmap` so plain
+        // images dropped into the repo also get dimensions populated.
+        // Both decodes are best-effort — failure just leaves
+        // dimensions zeroed (the gallery hides the WxH segment).
+        let imgW = 0;
+        let imgH = 0;
+        const xmp = readEditableImage(fetched.bytes);
+        if (xmp?.width && xmp.height) {
+          imgW = xmp.width;
+          imgH = xmp.height;
+        } else {
+          try {
+            const bmp = await createImageBitmap(blob);
+            imgW = bmp.width;
+            imgH = bmp.height;
+            bmp.close();
+          } catch {
+            /* leave 0; gallery hides WxH segment */
+          }
+        }
         // Re-check after the (synchronous-ish but yielding) encode —
         // a save could have finished between our SHA snapshot and
         // the canvas work.
@@ -945,6 +966,33 @@ export class GitHubStore
         // which may include edits newer than what our GET saw.
         if (this.#cache.hasThumbnail(relPath)) return;
         this.#cache.setThumbnail(relPath, dataUrl);
+        // Stash dimensions so the next `listImages` returns them
+        // even if `getImage` was never called for this path.
+        if (imgW && imgH) {
+          const existingRecord = this.#cache.getRecord(relPath);
+          if (existingRecord) {
+            this.#cache.setRecord(relPath, {
+              ...existingRecord,
+              width: imgW,
+              height: imgH,
+            });
+          } else {
+            const meta = this.#cache.getMeta(relPath);
+            this.#cache.setRecord(relPath, {
+              path: relPath,
+              folderPath: getParentPath(relPath),
+              originalDataUrl: "",
+              thumbnailDataUrl: dataUrl,
+              annotationsSvg: "",
+              width: imgW,
+              height: imgH,
+              sourceUrl: "",
+              tags: {},
+              createdAt: meta?.createdAt || "",
+              updatedAt: meta?.updatedAt || "",
+            });
+          }
+        }
         // CustomEvent is typed loosely here because we don't augment
         // the WindowEventMap globally for a storage-specific event.
         window.dispatchEvent(
@@ -1042,12 +1090,7 @@ export class GitHubStore
         const fresh = await this.#getContents(path);
         if (!fresh) throw e;
         this.#tree.setBlobSha(path, fresh.sha);
-        await this.#commitFileAmendable(
-          path,
-          blob,
-          this.#commitMessage("update", path),
-          fresh.sha,
-        );
+        await this.#commitFileAmendable(path, blob, this.#commitMessage("update", path), fresh.sha);
       }
 
       this.#cache.setRecord(path, {
@@ -1422,7 +1465,6 @@ export class GitHubStore
     return this.#tree.hasFolder(path);
   }
 
-
   // ===========================================================================
   // XMP build helper — delegates to the shared `image-encode.ts`
   // pipeline (Browser / Device / Drive / GitHub all use it).
@@ -1432,4 +1474,3 @@ export class GitHubStore
     return buildEditableImageBlob(record, format);
   }
 }
-
