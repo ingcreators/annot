@@ -869,6 +869,7 @@ export class GitHubStore
       const meta = this.#cache.getMeta(path);
       const cachedThumb = this.#cache.getThumbnail(path);
       const cachedRecord = this.#cache.getRecord(path);
+      const cachedDims = this.#cache.getDimensions(path);
       if (!cachedThumb) uncachedPaths.push(path);
       results.push({
         path,
@@ -876,12 +877,13 @@ export class GitHubStore
         originalDataUrl: "",
         thumbnailDataUrl: cachedThumb || "",
         annotationsSvg: "",
-        // Dimensions become available once the file has been opened
-        // (`getImage` decodes XMP) or the thumbnail prefetch
-        // populated `setRecord`. Cold listing falls back to 0 — the
-        // gallery's `WxH • date` line hides the WxH segment when 0.
-        width: cachedRecord?.width || 0,
-        height: cachedRecord?.height || 0,
+        // Dimensions surface from either (a) a full `getImage`
+        // round-trip (cached record's width/height) or (b) the
+        // thumbnail prefetch's side-map (`setDimensions`). Cold
+        // listing falls back to 0 — the gallery's `WxH • date`
+        // line hides the WxH segment when 0.
+        width: cachedRecord?.width || cachedDims?.width || 0,
+        height: cachedRecord?.height || cachedDims?.height || 0,
         sourceUrl: "",
         tags: {},
         createdAt: meta?.createdAt || "",
@@ -966,30 +968,20 @@ export class GitHubStore
         // which may include edits newer than what our GET saw.
         if (this.#cache.hasThumbnail(relPath)) return;
         this.#cache.setThumbnail(relPath, dataUrl);
-        // Stash dimensions so the next `listImages` returns them
-        // even if `getImage` was never called for this path.
+        // Stash dimensions in the side map so `listImages` can
+        // surface them even if `getImage` was never called for this
+        // path. We do NOT seed `#cache.setRecord` with a stub —
+        // `getImage` short-circuits on any cached record, and a
+        // stub with empty `originalDataUrl` would drive the editor
+        // to a blank canvas (regression: PR #312 → fixed here).
         if (imgW && imgH) {
+          this.#cache.setDimensions(relPath, { width: imgW, height: imgH });
           const existingRecord = this.#cache.getRecord(relPath);
           if (existingRecord) {
             this.#cache.setRecord(relPath, {
               ...existingRecord,
               width: imgW,
               height: imgH,
-            });
-          } else {
-            const meta = this.#cache.getMeta(relPath);
-            this.#cache.setRecord(relPath, {
-              path: relPath,
-              folderPath: getParentPath(relPath),
-              originalDataUrl: "",
-              thumbnailDataUrl: dataUrl,
-              annotationsSvg: "",
-              width: imgW,
-              height: imgH,
-              sourceUrl: "",
-              tags: {},
-              createdAt: meta?.createdAt || "",
-              updatedAt: meta?.updatedAt || "",
             });
           }
         }
