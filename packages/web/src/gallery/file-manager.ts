@@ -12,20 +12,14 @@ import type { ImageRecord, StorageProvider } from "@ingcreators/annot-core/stora
 import { supportsForceRefresh, supportsResync } from "@ingcreators/annot-core/storage";
 import type { SidebarTab, StorageRegistration } from "../app/plugin-host.js";
 import type { StorageMode } from "../storage/bridge.js";
+import type { ThumbnailManager } from "../storage/thumbnail-manager.js";
 import { showAlertDialog, showPromptDialog } from "../ui/dialog.js";
 import "./file-manager-shell.js";
-import type {
-  AnnotFileManagerShellElement,
-  BreadcrumbEntry,
-} from "./file-manager-shell.js";
 import type { AnnotGalleryPageElement } from "./annot-gallery-page.js";
+import type { AnnotFileManagerShellElement, BreadcrumbEntry } from "./file-manager-shell.js";
 import "./annot-gallery-page.js";
 import "./sidebar.js";
-import type {
-  AnnotSidebarElement,
-  SidebarCallbacks,
-  SidebarSectionOrder,
-} from "./sidebar.js";
+import type { AnnotSidebarElement, SidebarCallbacks, SidebarSectionOrder } from "./sidebar.js";
 
 export interface FileManagerCallbacks {
   onStorageSelect: (mode: StorageMode) => Promise<void>;
@@ -53,6 +47,12 @@ export interface FileManagerCallbacks {
   /** Section ordering override for the sidebar (Storage / Views /
    *  Folders). Optional. */
   getSidebarSectionOrder?: () => SidebarSectionOrder;
+  /** Unified thumbnail cache manager. Threaded into the
+   *  `<annot-gallery-page>` so cards can be hydrated from the
+   *  cache and prefetches scheduled for misses. Optional —
+   *  tests / Storybook may omit it (gallery still renders, just
+   *  without cache participation). */
+  getThumbnailManager?: () => ThumbnailManager | null;
 }
 
 export class FileManager {
@@ -235,6 +235,7 @@ export class FileManager {
     gridHost.innerHTML = "";
     const el = document.createElement("annot-gallery-page");
     el.storage = this.#storage;
+    el.thumbnailManager = this.#callbacks.getThumbnailManager?.() ?? null;
     el.viewMode = this.#viewMode;
     el.addEventListener("annot-gallery-open-image", (e) => {
       this.#callbacks.onOpenImage(e.detail.record);

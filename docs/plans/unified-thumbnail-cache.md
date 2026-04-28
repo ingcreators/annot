@@ -1,6 +1,6 @@
 # Unified thumbnail cache
 
-> **Status:** In progress (Phase 2)
+> **Status:** In progress (Phase 3)
 > **Compatibility:** Affects every `StorageProvider` implementation
 >   (`Browser` / `Device` / `GitHub` / `Drive`) and the gallery /
 >   file-manager / save-pipeline glue. Plugin-author-facing surface
