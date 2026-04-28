@@ -119,11 +119,11 @@ interface StorageProvider {
    * `record.thumbnailDataUrl` itself, mirroring the legacy
    * inline-thumbnail shape).
    *
-   * Examples:
-   *   Browser: path
-   *   Device:  `<rootHandleId>:<path>`
-   *   GitHub:  `<owner>/<repo>/<branch>:<basePath>:<relPath>`
-   *   Drive:   driveId
+   * Examples (full keys after host-side prefixing):
+   *   Browser:     `browser:<path>`
+   *   Device:      `device:<rootHandleId>:<path>`
+   *   GitHub:      `github:<owner>/<repo>/<branch>:<basePath>:<relPath>`
+   *   GoogleDrive: `googledrive:<rootFolderId>:<driveId>`
    */
   thumbnailKey?(path: string): string | undefined;
 
@@ -134,10 +134,10 @@ interface StorageProvider {
    * external mutation may return `""` constant.
    *
    * Examples:
-   *   Browser: record.updatedAt (or "")
-   *   Device:  file.lastModified.toString()
-   *   GitHub:  blob sha
-   *   Drive:   modifiedTime
+   *   Browser:     record.updatedAt (or "")
+   *   Device:      file.lastModified.toString()
+   *   GitHub:      blob sha
+   *   GoogleDrive: modifiedTime
    */
   thumbnailVersion?(path: string): string;
 
@@ -168,6 +168,18 @@ shared invalidation contract.
 | `IndexedDBThumbnailCache` (impl) | C | `@ingcreators/annot-web/storage/idb-thumbnail-cache` | depends on `indexedDB` |
 | `ThumbnailManager` (host-side prefetcher) | C | `@ingcreators/annot-web/storage/thumbnail-manager` | depends on `window.dispatchEvent` + IDB cache |
 | `generateThumbnailFromBlob` / `drawToThumbCanvas` (existing) | B / A | unchanged | no movement |
+
+### Naming convention
+
+Built-in namespace prefixes match the existing `StorageMode`
+strings used throughout the app (URL `?source=` handoff in
+`router-host.ts`, `setStorageMode` / `saveLastStorage` in
+`storage-bridge.ts`, sidebar `mode` column in `sidebar.ts`):
+`browser` / `device` / `github` / `googledrive`. Anticipated
+additions (OneDrive, Dropbox, S3, ...) would slot in as their
+own discrete prefixes (`onedrive:`, `dropbox:`, `s3:`) rather
+than being squeezed under a generic `drive:` umbrella, so the
+storage mode is unambiguous from the cache key alone.
 
 Rationale: keeping `StorageProvider` and `ThumbnailCache` typed in
 core means plugins can import them without pulling browser-only
@@ -419,15 +431,22 @@ they're not part of the thumbnail contract.
 ### Key namespace conventions
 
 ```
-built-in (host-reserved):
+built-in (host-reserved, matches StorageMode strings):
   browser:<path>
   device:<rootHandleId>:<path>
   github:<owner>/<repo>/<branch>:<basePath>:<relPath>
-  drive:<rootFolderId>:<driveId>
+  googledrive:<rootFolderId>:<driveId>
 
 plugin (plugin-author-managed):
   plugin:<pluginId>:<plugin-defined>
 ```
+
+Each built-in prefix is exactly the storage's `StorageMode` /
+URL `?source=` value (`browser` / `device` / `github` /
+`googledrive`), so the cache key is unambiguous about which
+backend produced it. Future cloud-storage additions slot in as
+their own discrete prefixes (`onedrive:`, `dropbox:`, `s3:`)
+rather than under a generic `drive:` umbrella.
 
 The host enforces the `plugin:<pluginId>:` prefix at registration
 time so plugin A can't read or evict plugin B's entries.
