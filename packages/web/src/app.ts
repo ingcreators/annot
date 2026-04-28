@@ -3,25 +3,10 @@
  * File Manager (gallery) ↔ Editor switching with path-based StorageProvider.
  */
 
-import { createThemeToggle } from "@ingcreators/annot-editor";
 import type { ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
 import { assertNonNull } from "@ingcreators/annot-core/utils";
+import { createThemeToggle } from "@ingcreators/annot-editor";
 import { setTooltip } from "@ingcreators/annot-editor/tooltip";
-import { createBuiltinIcon } from "./ui/annot-icon-imperative.js";
-import { ScratchpadStore } from "./editor/scratchpad-store.js";
-import { FileManager } from "./gallery/file-manager.js";
-import { logger } from "./logger.js";
-import {
-  type BuiltInStorageMode,
-  deleteExtensionImage,
-  getStorage,
-  getStorageMode,
-  loadLastFolder,
-  saveLastFolder,
-  setExtensionId,
-  setStorageMode,
-  type StorageMode,
-} from "./storage/bridge.js";
 import { CaptureHost, type OpenEditorArgs } from "./app/capture-host.js";
 import { EditorSession } from "./app/editor-session.js";
 import { ExtensionTransferHost } from "./app/extension-transfer-host.js";
@@ -35,10 +20,26 @@ import { SavePipeline } from "./app/save-pipeline.js";
 import { SplitEditorHost } from "./app/split-editor-host.js";
 import { StatusHost } from "./app/status-host.js";
 import { StorageBridge } from "./app/storage-bridge.js";
-import type { SidebarSectionOrder } from "./gallery/sidebar.js";
-
 import { pasteFromClipboard } from "./capture/pwa-capture.js";
+import { ScratchpadStore } from "./editor/scratchpad-store.js";
+import { FileManager } from "./gallery/file-manager.js";
+import type { SidebarSectionOrder } from "./gallery/sidebar.js";
+import { logger } from "./logger.js";
 import { editUrl, galleryUrl, pushRoute } from "./router.js";
+import {
+  type BuiltInStorageMode,
+  deleteExtensionImage,
+  getStorage,
+  getStorageMode,
+  loadLastFolder,
+  type StorageMode,
+  saveLastFolder,
+  setExtensionId,
+  setStorageMode,
+} from "./storage/bridge.js";
+import { IndexedDBThumbnailCache } from "./storage/idb-thumbnail-cache.js";
+import { ThumbnailManager } from "./storage/thumbnail-manager.js";
+import { createBuiltinIcon } from "./ui/annot-icon-imperative.js";
 
 export class App {
   #storage: StorageProvider | null = null;
@@ -56,6 +57,13 @@ export class App {
   /** Scratchpad persistence — shared across editor sessions (the
    *  store itself is stateless, just a thin wrapper around IndexedDB). */
   #scratchpadStore = new ScratchpadStore();
+
+  /** Unified thumbnail cache — shared across every storage backend
+   *  that implements `StorageWithThumbnailCache`. Persistent IDB
+   *  layer with an in-memory LRU front-cache. Phase 2 of
+   *  [`docs/plans/unified-thumbnail-cache.md`](../../../docs/plans/unified-thumbnail-cache.md);
+   *  built-in store integrations land in Phases 3–5. */
+  #thumbnailManager = new ThumbnailManager(new IndexedDBThumbnailCache());
 
   /** Save pipeline — owns the annotation-save + thumbnail-regen debounce
    *  state machine. */
@@ -282,9 +290,7 @@ export class App {
     const knownTabIds = new Set(builtinTabPlugins.map((b) => b.tabId));
     for (const id of disabledTabIds) {
       if (!knownTabIds.has(id)) {
-        console.warn(
-          `[init] disableBuiltinTabs: "${id}" is not a known built-in tab; ignoring.`,
-        );
+        console.warn(`[init] disableBuiltinTabs: "${id}" is not a known built-in tab; ignoring.`);
       }
     }
 
@@ -304,9 +310,7 @@ export class App {
         );
       }
     }
-    const activeBuiltinPlugins = allBuiltinPlugins.filter(
-      (p) => !disabledPluginNames.has(p.name),
-    );
+    const activeBuiltinPlugins = allBuiltinPlugins.filter((p) => !disabledPluginNames.has(p.name));
 
     // Stash the section-order override so the sidebar callbacks
     // can read it on every render. `App.init` is called once at
@@ -541,7 +545,11 @@ export class App {
 
     if (this.#storage) {
       if (this.#fileManager.storage !== this.#storage) {
-        this.#fileManager.setStorage(this.#storage, getStorageMode(), this.#storageBridge.currentRootName());
+        this.#fileManager.setStorage(
+          this.#storage,
+          getStorageMode(),
+          this.#storageBridge.currentRootName(),
+        );
       }
       this.#fileManager.navigateToFolder(this.#currentFolderPath);
     }
@@ -650,8 +658,6 @@ export class App {
       this.#fileManager.refresh("");
     }
   }
-
-
 
   async openFromGallery(record: ImageRecord): Promise<void> {
     if (!this.#storage) return;
