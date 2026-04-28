@@ -22,6 +22,7 @@ import {
   uniquifyFilenameAsync,
   validateName,
 } from "@ingcreators/annot-core/storage";
+import { defaultAnnotImageFilename } from "@ingcreators/annot-core/utils";
 
 const DB_NAME = "annot";
 const DB_VERSION = 2; // v2: path-based keys
@@ -56,16 +57,6 @@ function folderStore(db: IDBDatabase, mode: IDBTransactionMode) {
   return db.transaction(FOLDER_STORE, mode).objectStore(FOLDER_STORE);
 }
 
-function defaultFilename(data: { originalDataUrl: string }): string {
-  // No explicit filename from the caller → treat as an annot-native
-  // capture and use the shared `annot-<ts>.annot.<ext>` shape. Callers
-  // that already have a filename (drag-and-drop, extension transfer
-  // preserving the user's capture name, etc.) pass it through and
-  // their original name wins.
-  const ext = data.originalDataUrl.startsWith("data:image/png") ? "png" : "jpg";
-  return `annot-${Date.now()}.annot.${ext}`;
-}
-
 export class BrowserStore implements StorageProvider {
   // ---- Images ----
 
@@ -73,7 +64,13 @@ export class BrowserStore implements StorageProvider {
     data: Omit<ImageRecord, "path">,
     opts?: { filename?: string },
   ): Promise<string> {
-    const filename = opts?.filename || defaultFilename(data);
+    // No explicit filename from the caller → treat as an annot-native
+    // capture and use the shared `annot-<ts>.annot.<ext>` shape (see
+    // `defaultAnnotImageFilename` in `@ingcreators/annot-core/utils`).
+    // Callers that already have a filename (drag-and-drop, extension
+    // transfer preserving the user's capture name, etc.) pass it
+    // through and their original name wins.
+    const filename = opts?.filename || defaultAnnotImageFilename(data.originalDataUrl);
     validateName(filename);
     const folderPath = data.folderPath || "";
 

@@ -1,6 +1,7 @@
 import { createEditableImage } from "@ingcreators/annot-core/xmp";
 import type { CanvasManager } from "./canvas-manager.js";
 import { stampAnnotVersion } from "@ingcreators/annot-core/editor/svg-format";
+import { defaultAnnotFilenameStem } from "@ingcreators/annot-core/utils";
 
 export function exportSVGString(canvas: CanvasManager): string {
   const clone = canvas.svg.cloneNode(true) as SVGSVGElement;
@@ -91,7 +92,7 @@ function buildDownloadName(desiredExt: string, baseName?: string): string {
     const stem = dot > 0 ? baseName.slice(0, dot) : baseName;
     return `${stem}.${desiredExt}`;
   }
-  return `annot-${Date.now()}.annot.${desiredExt}`;
+  return `${defaultAnnotFilenameStem()}.annot.${desiredExt}`;
 }
 
 /** Save full SVG (screenshot + annotations) */

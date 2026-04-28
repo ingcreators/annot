@@ -17,6 +17,7 @@ import {
   svgElementToAnnotationShape,
   translateOf,
 } from "@ingcreators/annot-core/editor/svg-to-annotation-shapes";
+import { defaultAnnotFilenameStem } from "@ingcreators/annot-core/utils";
 import { buildZip } from "@ingcreators/annot-core/zip";
 import { buildShapeXml, parseSvgPath, px } from "@ingcreators/annot-render";
 import type { CanvasManager } from "./canvas-manager.js";
@@ -151,7 +152,7 @@ export function exportPptx(canvas: CanvasManager): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `anno-${Date.now()}.pptx`;
+  a.download = `${defaultAnnotFilenameStem()}.pptx`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);

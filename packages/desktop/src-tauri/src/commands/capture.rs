@@ -1,10 +1,9 @@
 use crate::db::Database;
 use base64::{engine::general_purpose::STANDARD, Engine};
-use chrono::Utc;
+use chrono::Local;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use tauri::{command, State};
-use uuid::Uuid;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SaveResult {
@@ -32,8 +31,12 @@ pub async fn save_screenshot(
     base_dir: String,
 ) -> Result<SaveResult, String> {
     let project = project_id.unwrap_or(1);
-    let timestamp = Utc::now().format("%Y%m%d_%H%M%S").to_string();
-    let uid = &Uuid::new_v4().to_string()[..8];
+    // Local-time stamp with millisecond precision to mirror the
+    // `defaultAnnotFilenameStem` shape used by the web/extension stores
+    // (`annot-YYYYMMDD-HHMMSS-SSS`). Single source of truth lives in
+    // `packages/core/src/utils/filename.ts`; the Rust side stays in
+    // sync by string contract.
+    let timestamp = Local::now().format("%Y%m%d-%H%M%S-%3f").to_string();
 
     // Parse data URL
     let (mime, base64_data) = parse_data_url(&data).map_err(|e| e.to_string())?;
@@ -48,7 +51,7 @@ pub async fn save_screenshot(
     } else {
         (bytes, "jpg")
     };
-    let filename = format!("anno_{}_{}.{}", timestamp, uid, ext);
+    let filename = format!("annot-{}.{}", timestamp, ext);
 
     // Save to project directory
     let dir = PathBuf::from(&base_dir).join(format!("project_{}", project));
