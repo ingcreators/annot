@@ -177,7 +177,7 @@ if ((window as any).__annot_injected) {
 
   function onClickCapture(e: MouseEvent) {
     // Ignore clicks from our own content-script UI overlays
-    if ((e.target as HTMLElement)?.closest?.("[data-anno-ui]")) return;
+    if ((e.target as HTMLElement)?.closest?.("[data-annot-ui]")) return;
 
     const target = e.target as HTMLElement | null;
 

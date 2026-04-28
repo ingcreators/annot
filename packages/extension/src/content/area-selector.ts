@@ -2,7 +2,7 @@ import { logger } from "../logger.js";
 import type { CaptureRect } from "@ingcreators/annot-core/utils/types";
 
 let overlay: HTMLDivElement | null = null;
-const OVERLAY_ID = "anno-overlay";
+const OVERLAY_ID = "annot-overlay";
 
 export function startAreaSelection(): void {
   // Idempotent entry: if a previous invocation left state behind
@@ -49,7 +49,7 @@ export function startAreaSelection(): void {
   });
 
   const selection = document.createElement("div");
-  selection.id = "anno-selection";
+  selection.id = "annot-selection";
   Object.assign(selection.style, {
     position: "absolute",
     border: "2px dashed #00d4ff",
