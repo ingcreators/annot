@@ -22,6 +22,27 @@
 export { openCanvasContextMenu } from "./canvas-context-menu.js";
 export type { CanvasMenuItem } from "./canvas-context-menu.js";
 export { createThemeToggle } from "./theme-toggle.js";
+// Theme persistence + user-driven token overrides. Boot once with
+// `applyPersistedTheme()`; runtime customisation via
+// `setThemeOverrides({ accent: "#ff00aa" })`. See
+// `docs/design-system.md` for the full token reference.
+export {
+  applyPersistedTheme,
+  clearThemeOverrides,
+  getThemeOverrides,
+  persistThemeChoice,
+  setThemeOverrides,
+  THEME_OVERRIDES_STORAGE_KEY,
+  THEME_STORAGE_KEY,
+  THEME_TOKEN_NAMES,
+  THEME_TOKEN_SECTIONS,
+} from "./theme-overrides.js";
+export type {
+  ThemeMode,
+  ThemeOverrides,
+  ThemeTokenName,
+  ThemeTokenSection,
+} from "./theme-overrides.js";
 // Tool hierarchy moved in Phase 2. `ToolBase` is the abstract
 // pointer-event-driven primitive every concrete tool extends;
 // `ToolOptions` is the styled-options contract the toolbar reads

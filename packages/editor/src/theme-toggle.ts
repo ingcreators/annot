@@ -9,7 +9,12 @@
  *
  * Call sites pass their own className so the button can match the surrounding
  * toolbar (editor: "toolbar-btn", gallery: "header-info-btn").
+ *
+ * The choice persists across reloads via `persistThemeChoice()`. Boot-time
+ * restoration happens in `applyPersistedTheme()` (called from the host's
+ * entry point); see `theme-overrides.ts` for both helpers.
  */
+import { persistThemeChoice } from "./theme-overrides.js";
 import { setTooltip } from "./tooltip.js";
 
 export function createThemeToggle(
@@ -29,6 +34,7 @@ export function createThemeToggle(
 
   btn.addEventListener("click", () => {
     document.documentElement.classList.toggle("light");
+    persistThemeChoice();
     refreshIcon();
   });
 

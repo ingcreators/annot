@@ -1,4 +1,13 @@
-/* ingcreators brand theme — Dark (default)
+/* ingcreators brand theme — design tokens.
+ *
+ * The two `:root` blocks below define the dark (default) and light
+ * palettes. Tokens are grouped into five semantic sections in the
+ * SAME ORDER in both blocks so a side-by-side diff between palettes
+ * stays readable. Adding a new token? Pick the section that matches
+ * its USE, not its colour family. Adding a new section? Reflect it
+ * in `docs/design-system.md` and in `ThemeTokenName` in
+ * `packages/editor/src/theme-overrides.ts` (the symmetry test in
+ * `theme-overrides.test.ts` fails the build if you forget).
  *
  * Contrast targets (WCAG 2.1 AA):
  *   text-primary on bg-primary: ≥ 7:1 (AAA)
@@ -7,68 +16,93 @@
  *   accent (interactive) on bg-primary: ≥ 4.5:1
  *   borders: ≥ 3:1 for non-text UI
  *   focus ring: ≥ 3:1 and ≥ 2px thick
+ *
+ * See `docs/design-system.md` for the full token reference and
+ * `docs/plans/design-system-foundations.md` for the roadmap (the
+ * `--annot-*` Phase 2 namespace migration is what these grouping
+ * comments anticipate).
  */
+
+/* Dark theme (default) ----------------------------------------- */
 :root {
+  /* === Surface — page / panel backdrops + chromeless decoration === */
   --bg-primary: #0f1730;
   --bg-secondary: #0b1020;
   --bg-panel: #121933;
   --bg-panel-deep: #0f1730;
+  --border-color: rgba(255, 255, 255, 0.22); /* bumped from 0.08 for ≥3:1 on interactive */
+  --border-subtle: rgba(255, 255, 255, 0.08); /* keeps old value for decorative dividers */
+  --shadow: 0 20px 50px rgba(0, 0, 0, 0.28);
+
+  /* === Content — foreground text + reading primitives === */
   --text-primary: #eef2ff; /* ~18:1 on bg-primary (AAA) */
   --text-secondary: #b7c0e0; /* ~10:1 on bg-primary (AAA) */
   --text-muted: #9097b8; /* ~6.2:1 on bg-primary (AA) — was 5.3:1 */
-  --border-color: rgba(255, 255, 255, 0.22); /* bumped from 0.08 for ≥3:1 on interactive */
-  --border-subtle: rgba(255, 255, 255, 0.08); /* keeps old value for decorative dividers */
+  --preview-line: #b7c0e0;
+
+  /* === Accent — brand colour, active highlight, focus indicator === */
   --accent: #7c9cff; /* ~7.5:1 on bg-primary (AAA) */
   --accent-2: #7ef0c5;
   --accent-bg: rgba(124, 156, 255, 0.18);
   --accent-hover: rgba(124, 156, 255, 0.26);
-  --hover-bg: rgba(255, 255, 255, 0.08);
-  --hover-border: rgba(255, 255, 255, 0.22);
   --active-bg: rgba(124, 156, 255, 0.18);
   --active-border: #7c9cff;
-  --preview-line: #b7c0e0;
-  --shadow: 0 20px 50px rgba(0, 0, 0, 0.28);
+  --chip-bg: rgba(124, 156, 255, 0.14);
+  --focus-ring: #7ef0c5; /* accent-2 green contrasts against blue accent for clarity */
+
+  /* === Interaction — pointer + form states === */
+  --hover-bg: rgba(255, 255, 255, 0.08);
+  --hover-border: rgba(255, 255, 255, 0.22);
   --choice-bg: transparent;
   --choice-hover: rgba(124, 156, 255, 0.1);
   --choice-active: rgba(124, 156, 255, 0.18);
   --input-bg: rgba(255, 255, 255, 0.06);
   --input-border: rgba(255, 255, 255, 0.22); /* ≥3:1 for form borders */
-  --chip-bg: rgba(124, 156, 255, 0.14);
+
+  /* === Canvas — editor backdrop + transparency-grid checkerboard === */
   --canvas-bg: #0b1020;
   --canvas-check: #121933;
-  --focus-ring: #7ef0c5; /* accent-2 green contrasts against blue accent for clarity */
 }
 
-/* ingcreators brand theme — Light */
+/* Light theme -------------------------------------------------- */
 :root.light {
+  /* === Surface === */
   --bg-primary: #f5f7ff;
   --bg-secondary: #ffffff;
   --bg-panel: #ffffff;
   --bg-panel-deep: #fafbff;
+  --border-color: #bfc6de; /* ~3:1 against bg-primary for visible UI boundaries */
+  --border-subtle: #d8ddef; /* fainter dividers */
+  --shadow: rgba(0, 0, 0, 0.08);
+
+  /* === Content === */
   --text-primary: #0b1020; /* ~16:1 on bg-primary (AAA) */
   --text-secondary: #3a4568; /* ~8:1 on bg-primary (AAA) — was #4a5580 (~6:1) */
   --text-muted: #616984; /* ~4.6:1 on bg-primary (AA) — was #8890b0 (~3.2:1 FAIL) */
-  --border-color: #bfc6de; /* ~3:1 against bg-primary for visible UI boundaries */
-  --border-subtle: #d8ddef; /* fainter dividers */
+  --preview-line: #2a3050;
+
+  /* === Accent === */
   --accent: #3456c9; /* ~6.3:1 on bg-primary (AA+) — was #5b7ee5 (~4.2:1 marginal) */
   --accent-2: #188a5c; /* ~5.2:1 for secondary accent */
   --accent-bg: #edf1ff;
   --accent-hover: #dce4ff;
-  --hover-bg: #eef1fa;
-  --hover-border: #8893b8;
   --active-bg: #dce4ff;
   --active-border: #3456c9;
-  --preview-line: #2a3050;
-  --shadow: rgba(0, 0, 0, 0.08);
+  --chip-bg: #edf1ff;
+  --focus-ring: #3456c9;
+
+  /* === Interaction === */
+  --hover-bg: #eef1fa;
+  --hover-border: #8893b8;
   --choice-bg: transparent;
   --choice-hover: #eef1fa;
   --choice-active: #dce4ff;
   --input-bg: #ffffff;
   --input-border: #8893b8;
-  --chip-bg: #edf1ff;
+
+  /* === Canvas === */
   --canvas-bg: #e8ecf5;
   --canvas-check: #dde2ef;
-  --focus-ring: #3456c9;
 }
 
 * {

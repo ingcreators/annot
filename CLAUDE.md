@@ -27,6 +27,7 @@
 | [`CLAUDE.md`](./CLAUDE.md) (this file) | Operational guidance for Claude Code |
 | [`docs/svg-format.md`](./docs/svg-format.md) | Canonical SVG annotation format reference |
 | [`docs/url-schemes.md`](./docs/url-schemes.md) | Web routes + reserved `annot://` scheme |
+| [`docs/design-system.md`](./docs/design-system.md) | Design tokens, theme switching, user-override API |
 | [`docs/plans/`](./docs/plans/) | Queued / in-progress design plans |
 
 ## Monorepo layout
