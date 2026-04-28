@@ -88,7 +88,12 @@ function extractTokenNamesFromRootBlock(
   }
   const body = bodyLines.join("\n");
   const names = new Set<string>();
-  const re = /--([a-z][a-z0-9-]*)\s*:/g;
+  // Phase 2 of `design-system-foundations.md` namespaced every CSS
+  // variable as `--annot-<token>`. The override API keeps the short
+  // suffix (`accent`, not `annot-accent`) as the public key, so
+  // strip the prefix here before comparing against
+  // `THEME_TOKEN_NAMES`.
+  const re = /--annot-([a-z][a-z0-9-]*)\s*:/g;
   let m: RegExpExecArray | null;
   m = re.exec(body);
   while (m !== null) {
@@ -144,29 +149,29 @@ describe("THEME_TOKEN_NAMES <-> editor.css symmetry", () => {
 describe("setThemeOverrides", () => {
   it("writes inline custom properties on <html>", () => {
     setThemeOverrides({ accent: "#ff00aa", "bg-primary": "#101010" });
-    expect(document.documentElement.style.getPropertyValue("--accent")).toBe(
+    expect(document.documentElement.style.getPropertyValue("--annot-accent")).toBe(
       "#ff00aa",
     );
     expect(
-      document.documentElement.style.getPropertyValue("--bg-primary"),
+      document.documentElement.style.getPropertyValue("--annot-bg-primary"),
     ).toBe("#101010");
   });
 
   it("merges instead of replacing", () => {
     setThemeOverrides({ accent: "#aaa" });
     setThemeOverrides({ "bg-primary": "#bbb" });
-    expect(document.documentElement.style.getPropertyValue("--accent")).toBe(
+    expect(document.documentElement.style.getPropertyValue("--annot-accent")).toBe(
       "#aaa",
     );
     expect(
-      document.documentElement.style.getPropertyValue("--bg-primary"),
+      document.documentElement.style.getPropertyValue("--annot-bg-primary"),
     ).toBe("#bbb");
   });
 
   it("treats undefined / empty string as a clear", () => {
     setThemeOverrides({ accent: "#aaa" });
     setThemeOverrides({ accent: "" });
-    expect(document.documentElement.style.getPropertyValue("--accent")).toBe(
+    expect(document.documentElement.style.getPropertyValue("--annot-accent")).toBe(
       "",
     );
   });
@@ -193,11 +198,11 @@ describe("clearThemeOverrides", () => {
   it("removes inline styles + storage entry", () => {
     setThemeOverrides({ accent: "#dd00dd", "bg-primary": "#101010" });
     clearThemeOverrides();
-    expect(document.documentElement.style.getPropertyValue("--accent")).toBe(
+    expect(document.documentElement.style.getPropertyValue("--annot-accent")).toBe(
       "",
     );
     expect(
-      document.documentElement.style.getPropertyValue("--bg-primary"),
+      document.documentElement.style.getPropertyValue("--annot-bg-primary"),
     ).toBe("");
     expect(
       globalThis.localStorage.getItem(THEME_OVERRIDES_STORAGE_KEY),
@@ -233,11 +238,11 @@ describe("applyPersistedTheme", () => {
     // Simulate a reload: drop in-memory caches, scrub the DOM,
     // then re-boot via applyPersistedTheme.
     document.documentElement.removeAttribute("style");
-    expect(document.documentElement.style.getPropertyValue("--accent")).toBe(
+    expect(document.documentElement.style.getPropertyValue("--annot-accent")).toBe(
       "",
     );
     applyPersistedTheme();
-    expect(document.documentElement.style.getPropertyValue("--accent")).toBe(
+    expect(document.documentElement.style.getPropertyValue("--annot-accent")).toBe(
       "#cc00ff",
     );
   });

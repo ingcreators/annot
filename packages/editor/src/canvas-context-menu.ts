@@ -127,9 +127,9 @@ function ensureStyle(): void {
 .anno-canvas-ctx {
   position: fixed;
   z-index: 9999;
-  background: var(--bg-panel, #fff);
-  color: var(--text-primary, #0b1020);
-  border: 1px solid var(--border-color, rgba(0,0,0,0.15));
+  background: var(--annot-bg-panel, #fff);
+  color: var(--annot-text-primary, #0b1020);
+  border: 1px solid var(--annot-border-color, rgba(0,0,0,0.15));
   border-radius: 6px;
   box-shadow: 0 8px 24px rgba(0,0,0,0.28);
   padding: 4px;
@@ -146,7 +146,7 @@ function ensureStyle(): void {
   background: none;
   border: 0;
   text-align: left;
-  color: var(--text-primary, #0b1020);
+  color: var(--annot-text-primary, #0b1020);
   font: inherit;
   cursor: pointer;
   border-radius: 4px;
@@ -156,7 +156,7 @@ function ensureStyle(): void {
 .anno-canvas-ctx-item:hover:not([disabled]),
 .anno-canvas-ctx-item:focus-visible:not([disabled]),
 .anno-canvas-ctx-item.is-parent-open {
-  background: var(--hover-bg, rgba(0,0,0,0.06));
+  background: var(--annot-hover-bg, rgba(0,0,0,0.06));
   outline: none;
 }
 .anno-canvas-ctx-item[disabled] {
@@ -165,7 +165,7 @@ function ensureStyle(): void {
 }
 .anno-canvas-ctx-item.is-header {
   cursor: default;
-  color: var(--text-secondary, #666);
+  color: var(--annot-text-secondary, #666);
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -182,7 +182,7 @@ function ensureStyle(): void {
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
-  color: var(--text-secondary, #555);
+  color: var(--annot-text-secondary, #555);
 }
 .anno-canvas-ctx-badge {
   position: absolute;
@@ -191,14 +191,14 @@ function ensureStyle(): void {
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background: var(--bg-panel, #fff);
-  border: 1.5px solid var(--bg-panel, #fff);
-  box-shadow: 0 0 0 1px var(--border-color, rgba(0,0,0,0.25));
+  background: var(--annot-bg-panel, #fff);
+  border: 1.5px solid var(--annot-bg-panel, #fff);
+  box-shadow: 0 0 0 1px var(--annot-border-color, rgba(0,0,0,0.25));
   display: inline-flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  color: var(--text-primary, #0b1020);
+  color: var(--annot-text-primary, #0b1020);
   box-sizing: border-box;
 }
 .anno-canvas-ctx-badge.material-symbols-outlined {
@@ -215,7 +215,7 @@ function ensureStyle(): void {
 }
 .anno-canvas-ctx-item:hover:not([disabled]) .anno-canvas-ctx-icon,
 .anno-canvas-ctx-item.is-parent-open .anno-canvas-ctx-icon {
-  color: var(--text-primary, #0b1020);
+  color: var(--annot-text-primary, #0b1020);
 }
 .anno-canvas-ctx-icon.material-symbols-outlined {
   font-size: 20px;
@@ -230,31 +230,31 @@ function ensureStyle(): void {
   width: 14px;
   height: 14px;
   border-radius: 3px;
-  border: 1px solid var(--border-color, rgba(0,0,0,0.25));
+  border: 1px solid var(--annot-border-color, rgba(0,0,0,0.25));
   display: inline-block;
   flex: 0 0 auto;
 }
 .anno-canvas-ctx-label { flex: 1 1 auto; white-space: nowrap; }
 .anno-canvas-ctx-hint {
   flex: 0 0 auto;
-  color: var(--text-secondary, #666);
+  color: var(--annot-text-secondary, #666);
   font-size: 11px;
   margin-left: 8px;
 }
 .anno-canvas-ctx-chevron {
   flex: 0 0 auto;
-  color: var(--text-secondary, #666);
+  color: var(--annot-text-secondary, #666);
   font-size: 18px;
   line-height: 1;
   margin-left: 8px;
 }
 .anno-canvas-ctx-item:hover:not([disabled]) .anno-canvas-ctx-chevron,
 .anno-canvas-ctx-item.is-parent-open .anno-canvas-ctx-chevron {
-  color: var(--text-primary, #0b1020);
+  color: var(--annot-text-primary, #0b1020);
 }
 .anno-canvas-ctx-sep {
   height: 1px;
-  background: var(--border-subtle, rgba(0,0,0,0.1));
+  background: var(--annot-border-subtle, rgba(0,0,0,0.1));
   margin: 4px 2px;
 }
 `;

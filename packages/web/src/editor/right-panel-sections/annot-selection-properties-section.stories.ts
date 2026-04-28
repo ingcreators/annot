@@ -33,7 +33,7 @@ function makePropPanelHost(rowCount: number): HTMLElement {
     row.style.gap = "12px";
     row.style.alignItems = "center";
     const label = document.createElement("span");
-    label.style.color = "var(--text-muted, #9097b8)";
+    label.style.color = "var(--annot-text-muted, #9097b8)";
     label.style.fontSize = "12px";
     label.textContent = ["Fill", "Stroke", "Width", "Opacity", "Dash"][i % 5] ?? "Property";
     const value = document.createElement("span");
@@ -53,7 +53,7 @@ const meta: Meta<Args> = {
     wrapper.id = "editor-right-panel";
     wrapper.style.width = "280px";
     wrapper.style.padding = "12px";
-    wrapper.style.background = "var(--bg-panel, #1e1e2e)";
+    wrapper.style.background = "var(--annot-bg-panel, #1e1e2e)";
     const heading = document.createElement("h3");
     heading.className = "editor-right-panel-section-title";
     heading.textContent = args.title;

@@ -20,7 +20,7 @@ import { hideError, showError, showInfo, showSaveError } from "./error-bar.js";
  *  stories mutate the document.body-mounted bar, not a local tree. */
 function hint(text: string): HTMLElement {
   const p = document.createElement("p");
-  p.style.color = "var(--text-muted, #666)";
+  p.style.color = "var(--annot-text-muted, #666)";
   p.style.fontSize = "13px";
   p.textContent = text;
   return p;

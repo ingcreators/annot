@@ -98,7 +98,7 @@ const BRING_TO_FRONT_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="current
 
 const SEND_TO_BACK_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true">
   <rect x="4" y="4" width="11" height="11" fill="currentColor"/>
-  <rect x="9" y="9" width="11" height="11" fill="var(--bg-panel, #fff)" stroke-opacity="0.9"/>
+  <rect x="9" y="9" width="11" height="11" fill="var(--annot-bg-panel, #fff)" stroke-opacity="0.9"/>
 </svg>`;
 
 const BRING_FORWARD_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">

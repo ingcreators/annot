@@ -26,10 +26,10 @@ function makeStubToolbar(args: Args): Toolbar {
     renderToolProperties(toolId: string, host: HTMLElement) {
       const banner = document.createElement("div");
       banner.style.padding = "12px";
-      banner.style.background = "var(--bg-panel-deep, #16213e)";
+      banner.style.background = "var(--annot-bg-panel-deep, #16213e)";
       banner.style.borderRadius = "6px";
       banner.style.fontSize = "12px";
-      banner.style.color = "var(--text-muted, #9097b8)";
+      banner.style.color = "var(--annot-text-muted, #9097b8)";
       banner.textContent = `[story] Toolbar.renderToolProperties("${toolId}") would build the tool's controls here. ${args.body}`;
       host.appendChild(banner);
     },
@@ -46,7 +46,7 @@ const meta: Meta<Args> = {
     wrapper.id = "editor-right-panel";
     wrapper.style.width = "280px";
     wrapper.style.padding = "12px";
-    wrapper.style.background = "var(--bg-panel, #1e1e2e)";
+    wrapper.style.background = "var(--annot-bg-panel, #1e1e2e)";
     const heading = document.createElement("h3");
     heading.className = "editor-right-panel-section-title";
     heading.textContent = args.title;
