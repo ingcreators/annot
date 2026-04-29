@@ -69,6 +69,15 @@ export const PROPERTY_CONTROL_IDS = {
   textColor: "textColor",
   fontFamily: "fontFamily",
   fontSize: "fontSize",
+  /** Per-character bold toggle for the selected textbox. Phase 4
+   *  of `docs/plans/rich-text-and-shape-text.md`. Modelled as a
+   *  two-option `select` ("Off" / "On") so the existing
+   *  `select`-type renderer is reused; future Phase-4-prime work
+   *  can introduce a dedicated `toggle` control type if visual
+   *  polish demands a different affordance. */
+  textBold: "textBold",
+  textItalic: "textItalic",
+  textUnderline: "textUnderline",
   redactStylePicker: "redactStylePicker",
   redactSolidColor: "redactSolidColor",
   highlightColorPicker: "highlightColorPicker",
@@ -106,6 +115,9 @@ export const CATEGORY_CONTROL_SHAPE: Readonly<
     PROPERTY_CONTROL_IDS.textColor,
     PROPERTY_CONTROL_IDS.fontFamily,
     PROPERTY_CONTROL_IDS.fontSize,
+    PROPERTY_CONTROL_IDS.textBold,
+    PROPERTY_CONTROL_IDS.textItalic,
+    PROPERTY_CONTROL_IDS.textUnderline,
   ],
   marker: [
     PROPERTY_CONTROL_IDS.markerShapePicker,
@@ -697,6 +709,27 @@ export const PROPERTY_CONTROLS: Readonly<{
     step: 1,
     unit: "pt",
   },
+  textBold: makeTspanFlagControl(
+    PROPERTY_CONTROL_IDS.textBold,
+    "Bold",
+    "font-weight",
+    "bold",
+    (v) => v === "bold" || v === "700",
+  ),
+  textItalic: makeTspanFlagControl(
+    PROPERTY_CONTROL_IDS.textItalic,
+    "Italic",
+    "font-style",
+    "italic",
+    (v) => v === "italic",
+  ),
+  textUnderline: makeTspanFlagControl(
+    PROPERTY_CONTROL_IDS.textUnderline,
+    "Underline",
+    "text-decoration",
+    "underline",
+    (v) => v.includes("underline"),
+  ),
 
   // ─── Redact controls ──────────────────────────────────────────────
   redactStylePicker: {
@@ -1077,6 +1110,56 @@ export function classifyPropertyElement(el: Element): PropertyCategory {
   if (redact === "solid") return "redact-solid";
   if (redact === "blur") return "redact-blur";
   return "shape";
+}
+
+/** Build a `select`-typed control descriptor for a per-tspan
+ *  formatting flag (bold / italic / underline) on a text-bearing
+ *  shape. The control reads "On" when EVERY `<tspan>` in the
+ *  element carries the flag, "Off" otherwise; setting "On" /
+ *  "Off" applies / removes the flag uniformly across every
+ *  tspan.
+ *
+ *  Modelled as a two-option `select` so the existing renderer's
+ *  select arm renders the chip without needing a fresh
+ *  PropertyControlType. PowerPoint-style "mixed" tri-state can
+ *  follow once the renderer grows a dedicated toggle widget. */
+function makeTspanFlagControl(
+  id: PropertyControlId,
+  label: string,
+  attr: string,
+  onValue: string,
+  isOn: (value: string) => boolean,
+): PropertyControlDef<unknown> {
+  return {
+    id,
+    type: "select",
+    label,
+    getValue: (el) => {
+      const tspans = Array.from(el.querySelectorAll("tspan"));
+      if (tspans.length === 0) return "off";
+      return tspans.every((t) => {
+        const v = t.getAttribute(attr);
+        return v != null && isOn(v);
+      })
+        ? "on"
+        : "off";
+    },
+    setValue: (el, value) => {
+      const turnOn = String(value) === "on";
+      const tspans = Array.from(el.querySelectorAll("tspan"));
+      for (const t of tspans) {
+        if (turnOn) {
+          t.setAttribute(attr, onValue);
+        } else {
+          t.removeAttribute(attr);
+        }
+      }
+    },
+    options: [
+      { value: "off", label: "Off" },
+      { value: "on", label: "On" },
+    ],
+  };
 }
 
 /**
