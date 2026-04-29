@@ -1,17 +1,20 @@
 # Rich text + text-on-shape (PowerPoint-style text handling)
 
 > **Status:** Draft
-> **Compatibility:** `@ingcreators/annot-core` (svg-format, text-utils,
+> **Compatibility:** `@ingcreators/annot-core` (text-utils,
 > property-schema, tool-registry), `@ingcreators/annot-editor`
 > (text-tool, shape-tool, property-panel, contentEditable host),
 > `@ingcreators/annot-render` (pptx-export text builder), Tauri Office
 > paste (no Rust changes — emits via the shared TS builder per
 > `_done/office-paste-shared-drawing-builder.md`).
 > **Risk:** Large surface area; phased migration is essential. SVG
-> format bump v1 → v2 is **additive only** (existing v1 documents
-> render unchanged). PPTX/Office round-trip is gated by goldens.
-> Editor UX changes are the riskiest part — `contentEditable` ↔
-> `<tspan>` mapping is the load-bearing piece and gets its own phase.
+> format stays at **v1** — Annot is pre-release, the schema is still
+> mutable, the new attributes / structure are added in place without
+> a version bump. Best-effort tolerance for older v1 dumps lives in
+> the same readers we ship today (no `if (version >= 2)` branches).
+> PPTX/Office round-trip is gated by goldens. Editor UX changes are
+> the riskiest part — `contentEditable` ↔ `<tspan>` mapping is the
+> load-bearing piece and gets its own phase.
 
 ## How to resume in a fresh session
 
@@ -111,41 +114,50 @@ Key shifts vs today:
   font-family / fill); `<tspan>` overrides cascade. A textbox
   with uniform styling has no per-tspan override attrs and looks
   identical to today's output.
-- **`data-text` shadow attribute is dropped.** The plain-text
-  body is reconstructable from `<tspan>` `textContent`; carrying
-  it in two places breaks the single-source-of-truth invariant.
-  Readers fall back to it for v1 documents.
+- **`data-text` shadow attribute is dropped on new writes.** The
+  plain-text body is reconstructable from `<tspan>` `textContent`;
+  carrying it in two places breaks the single-source-of-truth
+  invariant. Readers still tolerate it on legacy textbox dumps as
+  a fallback when no `<tspan>`s are present.
 - **`data-text-anchor` / `data-text-vanchor` control layout.**
   Default `middle` / `middle` (PowerPoint's default for text
   inside a shape). Sticky/callout legacy: `start` / `top`. The
   text-utils layout pass computes `x` / `y` for each `<tspan>`
   from these anchors + the geometry bbox.
 
-### 2. SVG format v2
+### 2. SVG format stays at v1
 
-`data-annot-version="2"` is stamped on save when ANY of:
+Annot is pre-release, so the schema is treated as mutable: the new
+attributes (`data-shape-kind` on the wrapping `<g>`, per-`<tspan>`
+formatting attrs, `data-text-anchor` / `data-text-vanchor`) are
+added in place without bumping `data-annot-version`. The stamp
+stays `1`. There's no `if (version >= 2)` reader branch and no
+permanent legacy path.
 
-- A textbox has at least one `<tspan>` carrying per-tspan
-  formatting (bold, italic, underline, mixed font, mixed color,
-  mixed size).
-- A shape (`data-shape-kind` ∈ `{rect, rounded, ellipse}`) has a
-  `<text>` child.
+That said, **best-effort tolerance for older v1 dumps still
+matters** during the rollout — a user editing in a stale tab
+shouldn't crash on a freshly-saved doc, and a freshly-saved doc
+shouldn't lose data when read by a stale tab. Concretely:
 
-Otherwise documents stay on `data-annot-version="1"` — no forced
-migration. The reader handles both:
-
-| Doc version | Reader path |
+| Document shape (all stamped `v=1`) | Reader behaviour |
 |---|---|
-| v0 (no version) | Best-effort, re-stamped to v2 if anything qualifies, else v1 (existing v0 → v1 logic continues unchanged). |
-| v1 (legacy textbox / no text-on-shape / uniform formatting) | Read `data-text` + parent `<text>` attrs as before. `<tspan>`s without per-tspan attrs treated as inheriting parent. |
-| v2 | `<tspan>` per-attr formatting honoured. `data-shape-kind` honoured. Missing `data-text` is normal (reconstruct from `<tspan>` content). |
+| Pre-rich-text textbox (`data-type="textbox"`, single `<text>` with one `<tspan>` per line, no per-tspan attrs, `data-text` shadow attr present) | Existing path. `<tspan>`s without per-tspan attrs inherit the parent `<text>`'s attrs. |
+| Post-rich-text shape (`data-type="shape"`, `data-shape-kind="..."`, per-`<tspan>` attrs may be present, no `data-text` shadow) | New path. Reconstruct plain text from `<tspan>` content. Missing `data-shape-kind` falls back to `data-text-variant` for the legacy textbox case. |
+| v0 (no `data-annot-version`) | Existing v0 → v1 logic unchanged; re-stamped `v=1` on save. |
 
-Format spec doc ([`docs/svg-format.md`](../svg-format.md)) gets a
-new "Per-character formatting" subsection + a "Version 2"
-history entry covering the additions. The existing "Text /
-sticky / callout" section is rewritten as "Text-bearing shapes"
-covering both the legacy textbox variants and the new
-text-on-shape variants under one schema.
+The reader treats `data-shape-kind` as a hint rather than a
+required attribute — its absence triggers the legacy textbox
+fallback. This keeps the format spec doc's "Version 1" entry as
+the only history row; the spec is amended in place to describe
+the unified text-bearing shape schema.
+
+Format spec doc ([`docs/svg-format.md`](../svg-format.md)) is
+amended in place: the existing "Text / sticky / callout" section
+is rewritten as "Text-bearing shapes" covering both the legacy
+textbox variants and the new text-on-shape variants under one
+schema, with a new "Per-character formatting" subsection. The
+"Version history" entry for v1 is updated to reflect the final
+pre-release shape; no v2 row is added.
 
 ### 3. Editor UX
 
@@ -238,7 +250,10 @@ their own `<a:rPr>`. The plan:
 - `AnnotationShape.text` (the carrier on the TS↔Rust ABI from
   `_done/office-paste-abi-modernisation.md`) gains a sibling
   `runs?: TextRun[]` field. When present, `runs` is the source
-  of truth; `text` becomes a fallback for v1 readers.
+  of truth; `text` is a redundant convenience for callers that
+  only want the plain string (mirrors the on-disk relationship
+  between `<tspan>` content and the dropped `data-text` shadow
+  attr).
 - `TextRun` shape:
   ```ts
   interface TextRun {
@@ -259,8 +274,8 @@ their own `<a:rPr>`. The plan:
   textbox transformer) walks the SVG `<tspan>`s and emits the
   matching `runs` array.
 - For a uniformly-styled shape, `runs` is one entry per line
-  with no formatting flags — output is byte-identical to v1
-  (validated by the existing PPTX golden test).
+  with no formatting flags — output is byte-identical to the
+  current shape (validated by the existing PPTX golden test).
 - Office paste path uses the same `buildShapeXml` + `runs` since
   the shared builder migration. **No Rust changes required.**
   Confirms the "one transformer + one builder" contract from
@@ -299,13 +314,15 @@ Five PRs, each independently revertable. The recommended order
 runs the lowest-risk pieces (schema + format) first so later
 phases can build on a stable on-disk shape.
 
-### Phase 1 — SVG schema v2 + reader/writer changes (text-bearing shape skeleton)
+### Phase 1 — Unified text-bearing shape skeleton + reader/writer changes
 
 **Goal:** Land the unified `<g data-type="shape" data-shape-kind="...">`
-skeleton + the v2 reader/writer + spec doc. No new UI; the
-TextTool keeps emitting today's uniform formatting via the new
-skeleton. Existing v1 docs read unchanged. Behaviour-preserving
-under the existing test suite + a new round-trip golden.
+skeleton + the rich-text-aware reader/writer + spec doc edits.
+No new UI; the TextTool keeps emitting today's uniform
+formatting via the new skeleton. Pre-existing textbox dumps
+read unchanged via the legacy fallback. The format version
+stamp stays `1`. Behaviour-preserving under the existing test
+suite + a new round-trip golden.
 
 **Files:**
 
@@ -316,15 +333,18 @@ under the existing test suite + a new round-trip golden.
     in Phase 2).
   - `readTextBoxSpec` becomes `readTextShapeSpec` returning
     `runs: TextRun[]` (one entry per `<tspan>`) plus the
-    shape-level metadata. v1 fallback: read `data-text` + parent
-    `<text>` attrs, synthesize one run per line.
+    shape-level metadata. Legacy fallback: when the element is a
+    `data-type="textbox"` with no `data-shape-kind`, read
+    `data-text` + parent `<text>` attrs and synthesize one run
+    per line.
   - `convertTextVariant` continues to work; under the hood
     delegates to `createTextShape` with the new variant.
 - `packages/core/src/editor/svg-format.ts` —
-  - Stamp `data-annot-version="2"` when the shape has any
-    `<tspan>` formatting attr OR `data-shape-kind` ∈ `{rect,
-    rounded, ellipse}`. Keep stamping `1` otherwise. Add unit
-    test pinning the trigger conditions.
+  - No version-stamp logic changes. The format version stays
+    `1`; the new `data-shape-kind` / per-tspan attrs are absorbed
+    into the existing v1 schema. Confirm with a unit test that
+    saving a rich-formatted document still emits
+    `data-annot-version="1"`.
 - `packages/render/src/drawingml/shapes/text.ts` —
   - Accept `runs?: TextRun[]` on `AnnotationShape`; when
     populated, walk runs (one `<a:r>` per run, paragraph break
@@ -337,26 +357,31 @@ under the existing test suite + a new round-trip golden.
 - `docs/svg-format.md` —
   - Rewrite "Text / sticky / callout" → "Text-bearing shapes"
     covering both legacy textbox and text-on-shape under one
-    schema. Add "Per-character formatting" subsection. Add
-    "Version 2" history entry.
+    schema. Add "Per-character formatting" subsection. Update
+    the "Version 1" history entry in place to reflect the final
+    pre-release shape — no v2 row added.
 - `packages/core/src/editor/text-shape.test.ts` (new) —
   - Round-trip: build a shape with mixed bold/italic/underline,
     serialize, parse, compare runs structurally.
-  - v1 fallback: parse a v1 textbox SVG, confirm `runs` length
-    matches line count.
+  - Legacy fallback: parse an old `data-type="textbox"` SVG with
+    no `data-shape-kind`, confirm `runs` length matches line
+    count and the parent `<text>`'s attrs are propagated into
+    each run.
 
 **Acceptance:**
 
 - `pnpm -r typecheck` green
-- `pnpm test` green; new round-trip + version-stamp tests pass
+- `pnpm test` green; new round-trip test passes; the version-
+  stamp test confirms `data-annot-version="1"` regardless of
+  whether the document carries rich formatting
 - `pnpm --filter @ingcreators/annot-core build` /
   `--filter @ingcreators/annot-render build` /
   `--filter @ingcreators/annot-web build` green
 - Existing PPTX golden unchanged (no rich formatting input)
-- Manual: open a v1 sticky note, save, confirm SVG stamps `v="2"`
-  ONLY if the structural promotion to `<g data-type="shape">`
-  occurred (it does — Phase 1 opts every textbox into the new
-  skeleton). Documented as expected; v2 readers handle both.
+- Manual: open an existing sticky note, save, confirm the SVG
+  is structurally promoted to `<g data-type="shape" data-shape-kind="sticky">`
+  AND still stamps `data-annot-version="1"`. Re-open the
+  resulting document, confirm it renders identically.
 
 ### Phase 2 — Rich-text editing in TextTool's contentEditable host
 
@@ -436,9 +461,9 @@ as Phase 2. Promote bare `<rect>` / `<ellipse>` to
     shapes; the registry's `variantKeyForElement` for shape
     still returns the geometry shape kind.
 - `packages/core/src/editor/svg-format.ts` —
-  - `data-annot-version="2"` stamping condition includes "any
-    shape has text" (already covered by the Phase 1 trigger;
-    add the explicit test case).
+  - No version-stamp logic changes (format stays at v1). Add a
+    test case confirming "shape promoted from a bare `<rect>`
+    via Pattern A still stamps `v=1`".
 - `packages/editor/src/tools/text-tool.test.ts` (new) —
   - happy-dom: draw a rect, double-click, type "x", finish,
     confirm SVG is `<g data-type="shape" data-shape-kind="rect">`.
@@ -537,8 +562,9 @@ export and Office clipboard paste.
     the assertion is "Rust-side packaging stays byte-identical
     when handed the Phase 5 rich-text XML".
 - `docs/svg-format.md` — Polish "Per-character formatting"
-  section with the final attribute set. Cross-link to the
-  "Version 2" history entry.
+  section with the final attribute set. The "Version 1" history
+  entry already covers the new schema additions in place (no v2
+  added per the pre-release schema-fluidity stance).
 
 **Acceptance:**
 
@@ -581,10 +607,16 @@ spec doc, archive the plan.
 Each phase's "Acceptance" block is a hard gate; in addition the
 following invariants hold across the whole feature:
 
-- **Format additivity**: a v1 SVG that contains only legacy
-  textboxes with uniform formatting reads, edits with no
-  formatting changes, and re-saves byte-identically (modulo
-  whitespace). Tested by a fixture round-trip.
+- **Format remains v1**: every saved document continues to stamp
+  `data-annot-version="1"`. There is no v2 in the spec / code /
+  test fixtures. Rich formatting + text-on-shape are absorbed
+  into v1.
+- **Legacy-textbox tolerance**: an SVG written by an older Annot
+  (`data-type="textbox"`, no `data-shape-kind`, no per-tspan
+  attrs) reads, edits with no formatting changes, and re-saves
+  through the new writer. The new writer may restructure the
+  element to `<g data-type="shape" data-shape-kind="...">` on
+  resave; tested by a fixture round-trip.
 - **No `annot-core` DOM regressions**: the headless cycle test
   in [`packages/core/src/headless.test.ts`](../../packages/core/src/headless.test.ts)
   stays green — `rich-text-mapper.ts` is jsdom-friendly Tier B
@@ -599,14 +631,29 @@ following invariants hold across the whole feature:
 
 ## Migration notes
 
-- **Existing v1 documents**: read unchanged forever (the v1
-  fallback path in the reader is a permanent first-class code
-  path, not a one-shot migration shim).
+- **Pre-release schema fluidity**: Annot has not shipped a 1.0
+  release, so the schema is treated as mutable. The new
+  attributes are absorbed into v1 in place; there is no v2 and
+  no `if (version >= 2)` reader branch to maintain. After 1.0
+  ships the schema-freeze rule from CLAUDE.md kicks in (bump
+  the version on any non-additive change), but until then the
+  whole text-handling redesign is one v1 amendment.
+- **Legacy-textbox tolerance during the rollout**: a user with
+  a stale tab can still load a doc saved by the new writer —
+  it sees a `<g data-type="shape" data-shape-kind="sticky">`
+  it doesn't recognise, falls through to the legacy
+  `data-type="textbox"` reader (which returns nothing useful),
+  and renders the element as a generic group. Acceptable: stale
+  tabs were already at risk of subtle drift across pre-release
+  iterations. The pre-rich-text → rich-text writer-side
+  promotion does NOT happen on read; it happens on edit /
+  resave, so stale-tab readers never have to invent missing
+  data.
 - **Phase 1 → Phase 2 in-flight**: a user who saves between the
-  phases gets v2-stamped SVG with the new skeleton but uniform
-  formatting (no Phase 2 mini-toolbar yet). The on-disk shape
-  is forward-compatible; Phase 2 adds the editor UX without
-  changing the stored format further.
+  phases gets the new skeleton with uniform formatting (no
+  Phase 2 mini-toolbar yet). The on-disk shape is forward-
+  compatible; Phase 2 adds the editor UX without changing the
+  stored format further.
 - **Plugin storage backends**: the `StorageProvider` contract
   doesn't change. Plugins receive serialized SVG/`ImageRecord`
   blobs; the format change is transparent to them.
@@ -655,3 +702,9 @@ Before starting, read these in this order:
   formatting. Six phases scoped; OSS-side feature (no
   annot-cloud overlap per `oss-cloud-split.md` — text editing
   is the OSS product's core capability).
+- 2026-04-29 — Schema-version stance updated per user feedback:
+  Annot is pre-release, so the new attributes / structure are
+  absorbed into `data-annot-version="1"` in place rather than
+  bumping to v2. Updated §2 "SVG format stays at v1", the
+  Phase 1 / Phase 3 acceptance blocks, the Verification
+  invariants, and the Migration notes accordingly.
