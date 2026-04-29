@@ -77,6 +77,16 @@ export function plainTextToRuns(text: string): TextRun[] {
   return runs;
 }
 
+/** Horizontal text alignment inside the shape box. Maps onto
+ *  SVG's `text-anchor` (`start` / `middle` / `end`). */
+export type TextAnchor = "start" | "middle" | "end";
+
+/** Vertical text alignment inside the shape box. SVG has no
+ *  built-in vertical-anchor attribute on `<text>`, so the
+ *  layout pass computes the y-origin from total run height +
+ *  the vanchor value (`top` / `middle` / `bottom`). */
+export type TextVerticalAnchor = "top" | "middle" | "bottom";
+
 export interface TextShapeSpec {
   x: number;
   y: number;
@@ -92,11 +102,104 @@ export interface TextShapeSpec {
   fontFamily: string;
   /** Default text color for runs without a per-run override. */
   color: string;
+  /** Horizontal alignment inside the shape box. Defaults to
+   *  `start` for legacy plain / sticky / callout (matches the
+   *  pre-Phase-3 layout) and to `middle` for the Pattern A
+   *  text-on-shape kinds (PowerPoint default). */
+  textAnchor?: TextAnchor;
+  /** Vertical alignment inside the shape box. Defaults to
+   *  `top` for legacy plain / sticky / callout, `middle` for
+   *  Pattern A. */
+  textVerticalAnchor?: TextVerticalAnchor;
   /** Callout tail tip in canvas coordinates. If undefined and the
    *  variant is "callout", a default position (below-left of the box)
    *  is picked. */
   tailX?: number;
   tailY?: number;
+}
+
+/** Pick a sensible default horizontal anchor when the spec
+ *  doesn't supply one. Legacy text variants keep their pre-anchor
+ *  layout (start); Pattern A kinds default to PowerPoint's
+ *  middle. */
+function defaultTextAnchor(variant: string | null | undefined): TextAnchor {
+  if (variant === "rect" || variant === "rounded" || variant === "ellipse") return "middle";
+  return "start";
+}
+
+function defaultTextVerticalAnchor(variant: string | null | undefined): TextVerticalAnchor {
+  if (variant === "rect" || variant === "rounded" || variant === "ellipse") return "middle";
+  return "top";
+}
+
+/** Count the visible lines in a run array (paragraph breaks +
+ *  the implicit final paragraph). */
+function countLines(runs: readonly TextRun[]): number {
+  if (runs.length === 0) return 0;
+  let n = 1;
+  for (let i = 0; i < runs.length - 1; i++) {
+    if (runs[i]!.line_break_after) n += 1;
+  }
+  return n;
+}
+
+/** Compute the (x, y) of a `<tspan>` that starts a new line +
+ *  the SVG `text-anchor` value to put on the parent `<text>`,
+ *  given the box bounds, padding, line height, anchor settings,
+ *  and the line index (0-based) within the run array. */
+interface TspanLayout {
+  /** SVG `text-anchor` to set on the parent `<text>` element. */
+  textAnchorAttr: TextAnchor;
+  /** x coordinate for the line's first tspan. */
+  xForLine: number;
+  /** y coordinate for line N (0-based). */
+  yForLine: (lineIndex: number) => number;
+}
+
+function buildTspanLayout(opts: {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  fontSize: number;
+  lineCount: number;
+  padLeft: number;
+  padTop: number;
+  textAnchor: TextAnchor;
+  textVerticalAnchor: TextVerticalAnchor;
+}): TspanLayout {
+  const { x, y, w, h, fontSize, lineCount, padLeft, padTop, textAnchor, textVerticalAnchor } = opts;
+  const lineHeight = fontSize * 1.4;
+
+  // Horizontal — text-anchor handles the alignment, so all we
+  // need is the x of the alignment reference point.
+  let xForLine: number;
+  if (textAnchor === "start") {
+    xForLine = x + padLeft;
+  } else if (textAnchor === "end") {
+    xForLine = x + w - padLeft;
+  } else {
+    xForLine = x + w / 2;
+  }
+
+  // Vertical — SVG has no native vertical anchor; pre-compute
+  // the y-origin so the run block sits in the right band of
+  // the box.
+  const totalH = Math.max(1, lineCount) * lineHeight;
+  let firstBaselineY: number;
+  if (textVerticalAnchor === "top") {
+    firstBaselineY = y + fontSize + padTop;
+  } else if (textVerticalAnchor === "bottom") {
+    firstBaselineY = y + h - padTop - totalH + fontSize;
+  } else {
+    firstBaselineY = y + (h - totalH) / 2 + fontSize;
+  }
+
+  return {
+    textAnchorAttr: textAnchor,
+    xForLine,
+    yForLine: (lineIndex: number) => firstBaselineY + lineIndex * lineHeight,
+  };
 }
 
 /**
@@ -215,8 +318,11 @@ export function readTextShapeSpec(g: SVGElement): TextShapeSpec {
   const fontFamily = g.getAttribute("data-font-family") || "sans-serif";
   const color = g.getAttribute("data-color") || "#ff0000";
   const variant = detectTextVariant(g);
+  const shapeKindRaw = g.getAttribute("data-shape-kind");
   const tailXRaw = g.getAttribute("data-tail-x");
   const tailYRaw = g.getAttribute("data-tail-y");
+  const textAnchorAttr = g.getAttribute("data-text-anchor") as TextAnchor | null;
+  const textVAnchorAttr = g.getAttribute("data-text-vanchor") as TextVerticalAnchor | null;
   return {
     x,
     y,
@@ -227,6 +333,8 @@ export function readTextShapeSpec(g: SVGElement): TextShapeSpec {
     fontSize,
     fontFamily,
     color,
+    textAnchor: textAnchorAttr ?? defaultTextAnchor(shapeKindRaw),
+    textVerticalAnchor: textVAnchorAttr ?? defaultTextVerticalAnchor(shapeKindRaw),
     tailX: tailXRaw != null ? Number.parseFloat(tailXRaw) : undefined,
     tailY: tailYRaw != null ? Number.parseFloat(tailYRaw) : undefined,
   };
@@ -243,6 +351,10 @@ export function createTextShape(spec: TextShapeSpec): SVGGElement {
   g.setAttribute("data-font-size", String(spec.fontSize));
   g.setAttribute("data-font-family", spec.fontFamily);
   g.setAttribute("data-color", spec.color);
+  const textAnchor = spec.textAnchor ?? defaultTextAnchor(spec.variant);
+  const textVerticalAnchor = spec.textVerticalAnchor ?? defaultTextVerticalAnchor(spec.variant);
+  g.setAttribute("data-text-anchor", textAnchor);
+  g.setAttribute("data-text-vanchor", textVerticalAnchor);
 
   // Background <rect> — always present so SelectionManager's resize
   // logic has a consistent target. Appearance depends on variant.
@@ -305,20 +417,31 @@ export function createTextShape(spec: TextShapeSpec): SVGGElement {
 
   // Text content — one `<tspan>` per run. Run order maps directly
   // onto `<tspan>` order; `line_break_after` advances the y-offset
-  // by one line height. Phase 1 emits one run per line (no inline
-  // styled runs), but the layout below already supports the
-  // multi-run-per-paragraph case Phase 2 introduces.
+  // by one line height. Layout consults the resolved horizontal +
+  // vertical anchors so the run block sits in the right band of
+  // the box (e.g. `middle` / `middle` for PowerPoint-style
+  // text-on-rect).
   const padLeft = spec.variant === "plain" ? 2 : 10;
   const padTop = spec.variant === "plain" ? 0 : 8;
-  const lineHeight = spec.fontSize * 1.4;
-  const baseX = spec.x + padLeft;
-  const firstY = spec.y + spec.fontSize + padTop;
+  const layout = buildTspanLayout({
+    x: spec.x,
+    y: spec.y,
+    w: spec.w,
+    h: spec.h,
+    fontSize: spec.fontSize,
+    lineCount: countLines(spec.runs),
+    padLeft,
+    padTop,
+    textAnchor,
+    textVerticalAnchor,
+  });
 
   const textEl = document.createElementNS(SVG_NS, "text");
   textEl.setAttribute("font-size", String(spec.fontSize));
   textEl.setAttribute("fill", spec.color);
   textEl.setAttribute("font-family", spec.fontFamily);
   textEl.setAttribute("clip-path", `url(#${clipId})`);
+  textEl.setAttribute("text-anchor", layout.textAnchorAttr);
   textEl.style.pointerEvents = "none";
 
   let lineIndex = 0;
@@ -326,8 +449,8 @@ export function createTextShape(spec: TextShapeSpec): SVGGElement {
   for (const run of spec.runs) {
     const tspan = document.createElementNS(SVG_NS, "tspan");
     if (isStartOfLine) {
-      tspan.setAttribute("x", String(baseX));
-      tspan.setAttribute("y", String(firstY + lineIndex * lineHeight));
+      tspan.setAttribute("x", String(layout.xForLine));
+      tspan.setAttribute("y", String(layout.yForLine(lineIndex)));
     }
     if (run.bold) tspan.setAttribute("font-weight", "bold");
     if (run.italic) tspan.setAttribute("font-style", "italic");
@@ -460,6 +583,11 @@ export function wrapBareRectForText(rect: SVGRectElement): SVGGElement {
   g.setAttribute("data-font-size", "16");
   g.setAttribute("data-font-family", "sans-serif");
   g.setAttribute("data-color", rect.getAttribute("stroke") || "#000000");
+  // Pattern A defaults to PowerPoint-style centered text inside
+  // the shape geometry. The user can change either anchor via the
+  // PropertyPanel after the shape is promoted.
+  g.setAttribute("data-text-anchor", defaultTextAnchor(shapeKind));
+  g.setAttribute("data-text-vanchor", defaultTextVerticalAnchor(shapeKind));
 
   // Move the original geometry under the wrapper.
   parent.replaceChild(g, rect);
@@ -507,10 +635,11 @@ export function replaceRunsInPlace(g: SVGElement, runs: readonly TextRun[]): voi
   })();
   const baseX = firstRect ? Number.parseFloat(firstRect.getAttribute("x") || "0") : 0;
   const baseY = firstRect ? Number.parseFloat(firstRect.getAttribute("y") || "0") : 0;
+  const boxW = firstRect ? Number.parseFloat(firstRect.getAttribute("width") || "0") : 0;
+  const boxH = firstRect ? Number.parseFloat(firstRect.getAttribute("height") || "0") : 0;
   const fontSize = Number.parseFloat(g.getAttribute("data-font-size") || "16");
   const fontFamily = g.getAttribute("data-font-family") || "sans-serif";
   const color = g.getAttribute("data-color") || "#000000";
-  const lineHeight = fontSize * 1.4;
 
   // Padding mirrors `createTextShape` — `plain` insets to 2px so
   // text hugs the box edge; every other kind insets ~10px to
@@ -520,6 +649,24 @@ export function replaceRunsInPlace(g: SVGElement, runs: readonly TextRun[]): voi
   const variant = g.getAttribute("data-shape-kind");
   const padLeft = variant === "plain" ? 2 : 10;
   const padTop = variant === "plain" ? 0 : 8;
+  const textAnchor =
+    (g.getAttribute("data-text-anchor") as TextAnchor | null) ?? defaultTextAnchor(variant);
+  const textVerticalAnchor =
+    (g.getAttribute("data-text-vanchor") as TextVerticalAnchor | null) ??
+    defaultTextVerticalAnchor(variant);
+
+  const layout = buildTspanLayout({
+    x: baseX,
+    y: baseY,
+    w: boxW,
+    h: boxH,
+    fontSize,
+    lineCount: countLines(runs),
+    padLeft,
+    padTop,
+    textAnchor,
+    textVerticalAnchor,
+  });
 
   // Find or build the existing <text> child. Preserve its
   // clip-path attribute when possible — the clipPath element's
@@ -540,6 +687,7 @@ export function replaceRunsInPlace(g: SVGElement, runs: readonly TextRun[]): voi
   textEl.setAttribute("font-size", String(fontSize));
   textEl.setAttribute("font-family", fontFamily);
   textEl.setAttribute("fill", color);
+  textEl.setAttribute("text-anchor", layout.textAnchorAttr);
   textEl.style.pointerEvents = "none";
   while (textEl.firstChild) textEl.removeChild(textEl.firstChild);
 
@@ -548,8 +696,8 @@ export function replaceRunsInPlace(g: SVGElement, runs: readonly TextRun[]): voi
   for (const run of runs) {
     const tspan = document.createElementNS(SVG_NS, "tspan");
     if (isStartOfLine) {
-      tspan.setAttribute("x", String(baseX + padLeft));
-      tspan.setAttribute("y", String(baseY + fontSize + padTop + lineIndex * lineHeight));
+      tspan.setAttribute("x", String(layout.xForLine));
+      tspan.setAttribute("y", String(layout.yForLine(lineIndex)));
     }
     if (run.bold) tspan.setAttribute("font-weight", "bold");
     if (run.italic) tspan.setAttribute("font-style", "italic");

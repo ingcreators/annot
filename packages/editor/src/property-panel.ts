@@ -1,24 +1,24 @@
 import {
   CATEGORY_CONTROL_SHAPE,
   classifyPropertyElement,
-  type PropertyCategory,
   PROPERTY_CONTROL_IDS,
   PROPERTY_CONTROLS,
+  type PropertyCategory,
   type PropertyControlId,
   type PropertyEffectId,
 } from "@ingcreators/annot-core/editor/property-schema";
-import type { CanvasManager } from "./canvas-manager.js";
-import { ppNumberInput } from "./property-panel-helpers.js";
-import type { History } from "./history.js";
+import { convertTextVariant, detectTextVariant } from "@ingcreators/annot-core/editor/text-utils";
 import { createColorPullButton } from "@ingcreators/annot-editor/property-controls";
 import { convertRedactStyle } from "@ingcreators/annot-editor/redact-utils";
-import { convertTextVariant, detectTextVariant } from "@ingcreators/annot-core/editor/text-utils";
+import type { CanvasManager } from "./canvas-manager.js";
+import type { History } from "./history.js";
+import { ppNumberInput } from "./property-panel-helpers.js";
 import {
   type CommitInfo,
   type ElementReplacement,
   type PropertyEffectHandler,
-  renderControl,
   type RenderControlDeps,
+  renderControl,
 } from "./property-panel-renderer.js";
 import { applyArrowHead, detectArrowEnds } from "./tools/arrow-tool.js";
 import { applyDrawStyle, isFreehandGroup } from "./tools/freehand-tool.js";
@@ -31,7 +31,6 @@ import type {
   MarkerShape,
   RedactStyle,
 } from "./tools/tool-base.js";
-
 
 /** Per-end arrow effect handler — mutates a single shape field of
  *  an arrow's per-end spec and re-applies via `applyArrowHead`.
@@ -271,12 +270,10 @@ export class PropertyPanel {
       // imperative `#commit()` behaviour).
       applyArrowStartShape: (els, value) =>
         applyArrowEndField(els, "start", "shape", value as ArrowShape),
-      applyArrowStartSize: (els, value) =>
-        applyArrowEndSizeField(els, "start", value as string),
+      applyArrowStartSize: (els, value) => applyArrowEndSizeField(els, "start", value as string),
       applyArrowEndShape: (els, value) =>
         applyArrowEndField(els, "end", "shape", value as ArrowShape),
-      applyArrowEndSize: (els, value) =>
-        applyArrowEndSizeField(els, "end", value as string),
+      applyArrowEndSize: (els, value) => applyArrowEndSizeField(els, "end", value as string),
     };
   }
 
@@ -520,6 +517,14 @@ export class PropertyPanel {
       this.#renderRegistryControl(PROPERTY_CONTROL_IDS.textColor);
       this.#renderRegistryControl(PROPERTY_CONTROL_IDS.fontFamily);
       this.#renderRegistryControl(PROPERTY_CONTROL_IDS.fontSize);
+      // Per-character formatting toggles + text alignment, all
+      // surfaced under the existing Line section so users see the
+      // text-related controls grouped together.
+      this.#renderRegistryControl(PROPERTY_CONTROL_IDS.textBold);
+      this.#renderRegistryControl(PROPERTY_CONTROL_IDS.textItalic);
+      this.#renderRegistryControl(PROPERTY_CONTROL_IDS.textUnderline);
+      this.#renderRegistryControl(PROPERTY_CONTROL_IDS.textAnchor);
+      this.#renderRegistryControl(PROPERTY_CONTROL_IDS.textVerticalAnchor);
     });
   }
 

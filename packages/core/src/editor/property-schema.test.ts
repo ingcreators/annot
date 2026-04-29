@@ -121,7 +121,7 @@ describe("CATEGORY_CONTROL_SHAPE", () => {
     expect(CATEGORY_CONTROL_SHAPE.group).toHaveLength(0);
   });
 
-  it("declares the textbox shape as variant + color + font + size + per-character toggles", () => {
+  it("declares the textbox shape as variant + color + font + size + per-character toggles + alignment", () => {
     expect(CATEGORY_CONTROL_SHAPE.textbox).toEqual([
       PROPERTY_CONTROL_IDS.textVariantPicker,
       PROPERTY_CONTROL_IDS.textColor,
@@ -130,6 +130,8 @@ describe("CATEGORY_CONTROL_SHAPE", () => {
       PROPERTY_CONTROL_IDS.textBold,
       PROPERTY_CONTROL_IDS.textItalic,
       PROPERTY_CONTROL_IDS.textUnderline,
+      PROPERTY_CONTROL_IDS.textAnchor,
+      PROPERTY_CONTROL_IDS.textVerticalAnchor,
     ]);
   });
 
@@ -161,11 +163,13 @@ describe("PROPERTY_CONTROLS registry", () => {
     // primitive ids → 22; Phase B added 3 shape transparency / cap
     // type ids → 25; Phase C added 4 per-end arrow ids → 29; Phase
     // 4 of `rich-text-and-shape-text.md` added 3 per-tspan
-    // formatting toggles (textBold / textItalic / textUnderline) → 32.
-    // Pinning the count guards against a new id landing without a
-    // matching def — the entry-count shape test alone won't catch
-    // that if the new id accidentally duplicates another.
-    expect(ALL_IDS).toHaveLength(32);
+    // formatting toggles (textBold / textItalic / textUnderline) → 32;
+    // the rich-text alignment follow-up added textAnchor +
+    // textVerticalAnchor → 34. Pinning the count guards against a
+    // new id landing without a matching def — the entry-count
+    // shape test alone won't catch that if the new id accidentally
+    // duplicates another.
+    expect(ALL_IDS).toHaveLength(34);
     for (const id of ALL_IDS) {
       expect(PROPERTY_CONTROLS[id], `missing def for "${id}"`).toBeDefined();
       expect(PROPERTY_CONTROLS[id].id).toBe(id);
