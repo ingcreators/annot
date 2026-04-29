@@ -20,7 +20,14 @@ import {
   refreshArrowPath,
 } from "./arrow-markers.js";
 import { convertShape, detectShapeType } from "./shape-utils.js";
-import { convertTextVariant, detectTextVariant } from "./text-utils.js";
+import {
+  convertTextVariant,
+  detectTextVariant,
+  readTextShapeSpec,
+  replaceRunsInPlace,
+  type TextAnchor,
+  type TextVerticalAnchor,
+} from "./text-utils.js";
 import type {
   ArrowDim,
   ArrowHead,
@@ -78,6 +85,14 @@ export const PROPERTY_CONTROL_IDS = {
   textBold: "textBold",
   textItalic: "textItalic",
   textUnderline: "textUnderline",
+  /** Horizontal text alignment inside the shape — start / middle /
+   *  end. Writes `data-text-anchor` on the wrapper `<g>` and
+   *  re-runs the layout pass. */
+  textAnchor: "textAnchor",
+  /** Vertical text alignment inside the shape — top / middle /
+   *  bottom. Writes `data-text-vanchor` on the wrapper `<g>` and
+   *  re-runs the layout pass. */
+  textVerticalAnchor: "textVerticalAnchor",
   redactStylePicker: "redactStylePicker",
   redactSolidColor: "redactSolidColor",
   highlightColorPicker: "highlightColorPicker",
@@ -118,6 +133,8 @@ export const CATEGORY_CONTROL_SHAPE: Readonly<
     PROPERTY_CONTROL_IDS.textBold,
     PROPERTY_CONTROL_IDS.textItalic,
     PROPERTY_CONTROL_IDS.textUnderline,
+    PROPERTY_CONTROL_IDS.textAnchor,
+    PROPERTY_CONTROL_IDS.textVerticalAnchor,
   ],
   marker: [
     PROPERTY_CONTROL_IDS.markerShapePicker,
@@ -708,6 +725,45 @@ export const PROPERTY_CONTROLS: Readonly<{
     max: 96,
     step: 1,
     unit: "pt",
+  },
+  textAnchor: {
+    id: PROPERTY_CONTROL_IDS.textAnchor,
+    type: "select",
+    label: "Align",
+    getValue: (el) => (el.getAttribute("data-text-anchor") as TextAnchor | null) ?? "start",
+    setValue: (el, value) => {
+      const next = String(value) as TextAnchor;
+      el.setAttribute("data-text-anchor", next);
+      // Re-layout the existing runs against the new anchor so the
+      // visual updates immediately. `replaceRunsInPlace` reads the
+      // attribute back via `getAttribute`, so writing first +
+      // re-laying out matches the behaviour of every other Tier B
+      // attribute writer.
+      const runs = readTextShapeSpec(el).runs;
+      replaceRunsInPlace(el, runs);
+    },
+    options: [
+      { value: "start", label: "Left", materialIcon: "format_align_left" },
+      { value: "middle", label: "Center", materialIcon: "format_align_center" },
+      { value: "end", label: "Right", materialIcon: "format_align_right" },
+    ],
+  },
+  textVerticalAnchor: {
+    id: PROPERTY_CONTROL_IDS.textVerticalAnchor,
+    type: "select",
+    label: "V-Align",
+    getValue: (el) => (el.getAttribute("data-text-vanchor") as TextVerticalAnchor | null) ?? "top",
+    setValue: (el, value) => {
+      const next = String(value) as TextVerticalAnchor;
+      el.setAttribute("data-text-vanchor", next);
+      const runs = readTextShapeSpec(el).runs;
+      replaceRunsInPlace(el, runs);
+    },
+    options: [
+      { value: "top", label: "Top", materialIcon: "vertical_align_top" },
+      { value: "middle", label: "Middle", materialIcon: "vertical_align_center" },
+      { value: "bottom", label: "Bottom", materialIcon: "vertical_align_bottom" },
+    ],
   },
   textBold: makeTspanFlagControl(
     PROPERTY_CONTROL_IDS.textBold,

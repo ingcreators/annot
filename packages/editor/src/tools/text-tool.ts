@@ -31,6 +31,29 @@ const SVG_NS = "http://www.w3.org/2000/svg";
 const DEFAULT_WIDTH = 200;
 const DEFAULT_HEIGHT = 80;
 
+/** Per-SVG state pinned to the dblclick singleton listener. The
+ *  listener stays armed for the lifetime of the SVG; the `active`
+ *  pointer changes every time a fresh `TextTool` is constructed
+ *  so the latest instance owns the edit flow. */
+interface TextToolDblclickMeta {
+  installed: boolean;
+  active: TextTool | null;
+}
+
+const TEXT_TOOL_DBLCLICK_META = Symbol("annot:text-tool-dblclick");
+
+function textToolDblclickMeta(svg: SVGSVGElement): TextToolDblclickMeta {
+  const carrier = svg as SVGSVGElement & {
+    [TEXT_TOOL_DBLCLICK_META]?: TextToolDblclickMeta;
+  };
+  let meta = carrier[TEXT_TOOL_DBLCLICK_META];
+  if (!meta) {
+    meta = { installed: false, active: null };
+    carrier[TEXT_TOOL_DBLCLICK_META] = meta;
+  }
+  return meta;
+}
+
 export class TextTool extends ToolBase {
   readonly name = "text";
   #editing = false;
@@ -43,17 +66,6 @@ export class TextTool extends ToolBase {
    *  typing we roll the promotion back via `unwrapBareTextShape`
    *  so the canvas stays clean. */
   #promotedFromBareRect = false;
-  /** Bound dblclick handler — kept around so `onDeactivate` can
-   *  detach the same listener `#setupDoubleClick` attached. The
-   *  Toolbar instantiates a fresh `TextTool` on every activation,
-   *  so without explicit cleanup each prior instance keeps its
-   *  listener and a single dblclick fires the edit flow once per
-   *  stale instance. The visible symptom is the textbox
-   *  apparently "duplicating" at the original position (the
-   *  legacy edit path removes the original and appends the new
-   *  copy at end-of-paint-order, so N stale listeners produce
-   *  N-1 visible copies). */
-  #onDblclick: ((e: Event) => void) | null = null;
 
   onTextBoxChanged?: (newEl: SVGElement) => void;
 
@@ -75,53 +87,68 @@ export class TextTool extends ToolBase {
 
   override onDeactivate(): void {
     if (this.#editing) this.#finishEditing();
-    // Detach the dblclick listener so a future activation that
-    // builds a fresh `TextTool` doesn't leave the old instance's
-    // handler armed alongside it. Without this, every TextTool
-    // activation accumulates one more listener; the user-visible
-    // symptom is dblclick "duplicating" the textbox (each stale
-    // listener fires `#editExisting`, the legacy commit path
-    // removes the original and appends a fresh copy at
-    // end-of-paint-order) and dblclick on a remote object
-    // moving the cursor into a still-stale edit session on a
-    // previously-targeted element.
-    if (this.#onDblclick) {
-      this.canvas.svg.removeEventListener("dblclick", this.#onDblclick);
-      this.#onDblclick = null;
-    }
+    // Intentionally KEEP `meta.active` pointing at this instance
+    // (or whichever later TextTool reclaimed ownership). The
+    // listener stays installed on the SVG and the active pointer
+    // stays valid so re-editing existing text works even when
+    // another tool is the user's current pick on the toolbar
+    // (PowerPoint-style: dblclick a textbox always opens its
+    // editor, regardless of what's selected on the toolbar).
+    // The next TextTool activation reclaims ownership in
+    // `#setupDoubleClick`.
   }
 
   #setupDoubleClick(): void {
-    const handler = (e: Event): void => {
-      const target = e.target as SVGElement;
+    // Singleton listener pattern: every TextTool instance points
+    // the SVG-level "active TextTool" pointer at itself, but the
+    // dblclick listener is installed exactly once per SVG. The
+    // listener delegates to whichever instance currently owns
+    // the pointer, so:
+    //   - The latest TextTool's options / private state drive
+    //     the edit flow (a fresh activation supersedes the prior
+    //     instance without leaving stale handlers behind).
+    //   - The listener stays armed across tool deactivations so
+    //     dblclick-to-edit works regardless of the active tool.
+    //   - No duplication symptom from N parallel listeners
+    //     racing on the same dblclick.
+    const meta = textToolDblclickMeta(this.canvas.svg);
+    meta.active = this;
+    if (meta.installed) return;
+    meta.installed = true;
+    this.canvas.svg.addEventListener("dblclick", (e) => {
+      const tool = textToolDblclickMeta(this.canvas.svg).active;
+      if (!tool) return;
+      tool.#handleDblclick(e);
+    });
+  }
 
-      // Existing text-bearing shape — straight to the edit flow.
-      const g = target.closest("g[data-type='shape']") as SVGGElement | null;
-      if (g && this.canvas.annotations.contains(g)) {
-        e.stopPropagation();
-        this.#editExisting(g);
-        return;
-      }
+  #handleDblclick(e: Event): void {
+    const target = e.target as SVGElement;
 
-      // Pattern A — promote a bare `<rect>` drawn by ShapeTool /
-      // HighlightTool into the unified shape skeleton, then enter
-      // the same edit flow. Redact rects (`data-redact-style`)
-      // are excluded; the user's expectation for those is "the
-      // black box hides content" not "labelled shape".
-      const bareRect = target.closest("rect") as SVGRectElement | null;
-      if (
-        bareRect &&
-        bareRect.parentNode === this.canvas.annotations &&
-        !bareRect.hasAttribute("data-redact-style")
-      ) {
-        e.stopPropagation();
-        const wrapper = wrapBareRectForText(bareRect);
-        this.#promotedFromBareRect = true;
-        this.#editExisting(wrapper);
-      }
-    };
-    this.#onDblclick = handler;
-    this.canvas.svg.addEventListener("dblclick", handler);
+    // Existing text-bearing shape — straight to the edit flow.
+    const g = target.closest("g[data-type='shape']") as SVGGElement | null;
+    if (g && this.canvas.annotations.contains(g)) {
+      e.stopPropagation();
+      this.#editExisting(g);
+      return;
+    }
+
+    // Pattern A — promote a bare `<rect>` drawn by ShapeTool /
+    // HighlightTool into the unified shape skeleton, then enter
+    // the same edit flow. Redact rects (`data-redact-style`)
+    // are excluded; the user's expectation for those is "the
+    // black box hides content" not "labelled shape".
+    const bareRect = target.closest("rect") as SVGRectElement | null;
+    if (
+      bareRect &&
+      bareRect.parentNode === this.canvas.annotations &&
+      !bareRect.hasAttribute("data-redact-style")
+    ) {
+      e.stopPropagation();
+      const wrapper = wrapBareRectForText(bareRect);
+      this.#promotedFromBareRect = true;
+      this.#editExisting(wrapper);
+    }
   }
 
   #editExisting(g: SVGGElement): void {
