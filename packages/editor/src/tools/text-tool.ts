@@ -2,7 +2,10 @@ import { htmlToRuns, runsToHtml } from "@ingcreators/annot-core/editor/rich-text
 import {
   createTextShape,
   readTextShapeSpec,
+  replaceRunsInPlace,
   stickyBgFor,
+  unwrapBareTextShape,
+  wrapBareRectForText,
 } from "@ingcreators/annot-core/editor/text-utils";
 import type { TextRun } from "@ingcreators/annot-core/tauri-bridge";
 import type { CanvasManager } from "../canvas-manager.js";
@@ -35,6 +38,11 @@ export class TextTool extends ToolBase {
   #foreignObject: SVGForeignObjectElement | null = null;
   #editDiv: HTMLDivElement | null = null;
   #miniToolbar: TextMiniToolbarHandle | null = null;
+  /** Set when the current edit session was opened by promoting a
+   *  bare `<rect>` (Pattern A double-click). On cancel-without-
+   *  typing we roll the promotion back via `unwrapBareTextShape`
+   *  so the canvas stays clean. */
+  #promotedFromBareRect = false;
 
   onTextBoxChanged?: (newEl: SVGElement) => void;
 
@@ -61,10 +69,31 @@ export class TextTool extends ToolBase {
   #setupDoubleClick(): void {
     this.canvas.svg.addEventListener("dblclick", (e) => {
       const target = e.target as SVGElement;
+
+      // Existing text-bearing shape — straight to the edit flow.
       const g = target.closest("g[data-type='shape']") as SVGGElement | null;
-      if (!g || !this.canvas.annotations.contains(g)) return;
-      e.stopPropagation();
-      this.#editExisting(g);
+      if (g && this.canvas.annotations.contains(g)) {
+        e.stopPropagation();
+        this.#editExisting(g);
+        return;
+      }
+
+      // Pattern A — promote a bare `<rect>` drawn by ShapeTool /
+      // HighlightTool into the unified shape skeleton, then enter
+      // the same edit flow. Redact rects (`data-redact-style`)
+      // are excluded; the user's expectation for those is "the
+      // black box hides content" not "labelled shape".
+      const bareRect = target.closest("rect") as SVGRectElement | null;
+      if (
+        bareRect &&
+        bareRect.parentNode === this.canvas.annotations &&
+        !bareRect.hasAttribute("data-redact-style")
+      ) {
+        e.stopPropagation();
+        const wrapper = wrapBareRectForText(bareRect);
+        this.#promotedFromBareRect = true;
+        this.#editExisting(wrapper);
+      }
     });
   }
 
@@ -216,6 +245,7 @@ export class TextTool extends ToolBase {
     const foY = Number.parseFloat(this.#foreignObject.getAttribute("y")!);
     const foW = Number.parseFloat(this.#foreignObject.getAttribute("width")!);
     const foH = Number.parseFloat(this.#foreignObject.getAttribute("height")!);
+
     // Preserve existing styling on edit; fall back to tool options on new.
     const fontSize = this.#editTarget
       ? Number.parseFloat(
@@ -229,9 +259,9 @@ export class TextTool extends ToolBase {
     const color = this.#editTarget
       ? this.#editTarget.getAttribute("data-color") || this.options.strokeColor
       : this.options.strokeColor;
-    const variant: TextVariant = this.#editTarget
-      ? (this.#editTarget.getAttribute("data-shape-kind") as TextVariant) || "sticky"
-      : (this.options.textVariant ?? "sticky");
+    const shapeKindAttr = this.#editTarget?.getAttribute("data-shape-kind") ?? null;
+    const isPatternA =
+      shapeKindAttr === "rect" || shapeKindAttr === "rounded" || shapeKindAttr === "ellipse";
 
     this.#miniToolbar?.close();
     this.#miniToolbar = null;
@@ -239,10 +269,52 @@ export class TextTool extends ToolBase {
     this.#foreignObject = null;
     this.#editDiv = null;
 
+    // Pattern A path — the user double-clicked a bare shape;
+    // we wrapped it then opened the editor. The wrapper carries
+    // the shape's geometry (rect / rounded / ellipse) so we
+    // rewrite the `<text>` content in place rather than building
+    // a fresh sticky / callout `<g>` that would replace the
+    // user's original geometry.
+    if (this.#editTarget && isPatternA) {
+      const wrapper = this.#editTarget;
+      this.#editTarget = null;
+      const promoted = this.#promotedFromBareRect;
+      this.#promotedFromBareRect = false;
+
+      if (!flatText) {
+        // Cancel-without-typing on a freshly-promoted shape →
+        // roll back the promotion so the canvas stays clean.
+        if (promoted) unwrapBareTextShape(wrapper);
+        else wrapper.style.display = ""; // existing wrapped shape — just unhide
+        return;
+      }
+
+      // Persist text formatting on the wrapper so a later
+      // re-edit reads the same defaults.
+      wrapper.setAttribute("data-font-size", String(fontSize));
+      wrapper.setAttribute("data-font-family", fontFamily);
+      wrapper.setAttribute("data-color", color);
+      replaceRunsInPlace(wrapper, runs);
+      wrapper.style.display = "";
+
+      this.history.save();
+      this.onTextBoxChanged?.(wrapper);
+      this.onShapeComplete?.(wrapper);
+      return;
+    }
+
+    // Legacy plain / sticky / callout path — the entire wrapper
+    // gets rebuilt from scratch via `createTextShape` so the bg
+    // tint follows any color change made during the edit.
+    const variant: TextVariant = this.#editTarget
+      ? (shapeKindAttr as TextVariant) || "sticky"
+      : (this.options.textVariant ?? "sticky");
+
     if (this.#editTarget) {
       this.#editTarget.remove();
       this.#editTarget = null;
     }
+    this.#promotedFromBareRect = false;
 
     if (!flatText) return;
 

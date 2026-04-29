@@ -15,7 +15,10 @@ import {
   isTextShapeElement,
   plainTextToRuns,
   readTextShapeSpec,
+  replaceRunsInPlace,
   runsToPlainText,
+  unwrapBareTextShape,
+  wrapBareRectForText,
 } from "./text-utils.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -194,6 +197,122 @@ describe("legacy rejection", () => {
     g.setAttribute("data-type", "textbox");
     g.setAttribute("data-text-variant", "sticky");
     expect(isTextShapeElement(g)).toBe(false);
+  });
+});
+
+describe("Pattern A — wrap / unwrap a bare <rect> for text-on-shape", () => {
+  it("wrapBareRectForText replaces the rect with a <g data-type=shape>", () => {
+    const root = freshSvgRoot();
+    const rect = document.createElementNS(SVG_NS, "rect") as SVGRectElement;
+    rect.setAttribute("x", "10");
+    rect.setAttribute("y", "20");
+    rect.setAttribute("width", "100");
+    rect.setAttribute("height", "60");
+    rect.setAttribute("stroke", "#ff0000");
+    root.appendChild(rect);
+
+    const wrapper = wrapBareRectForText(rect);
+    expect(wrapper.tagName).toBe("g");
+    expect(wrapper.getAttribute("data-type")).toBe("shape");
+    expect(wrapper.getAttribute("data-shape-kind")).toBe("rect");
+    // Original rect is now the wrapper's first child, NOT replaced.
+    expect(wrapper.firstElementChild).toBe(rect);
+    // Wrapper sits in the parent slot the rect used to occupy.
+    expect(root.firstElementChild).toBe(wrapper);
+    // ClipPath + empty <text> attached.
+    expect(wrapper.querySelector("clipPath")).not.toBeNull();
+    expect(wrapper.querySelector("text")).not.toBeNull();
+    // Text colour seeded from the rect's stroke (the most likely
+    // "ink colour" for a freshly-promoted shape).
+    expect(wrapper.getAttribute("data-color")).toBe("#ff0000");
+  });
+
+  it("rect with rx > 0 wraps as data-shape-kind='rounded'", () => {
+    const root = freshSvgRoot();
+    const rect = document.createElementNS(SVG_NS, "rect") as SVGRectElement;
+    rect.setAttribute("x", "0");
+    rect.setAttribute("y", "0");
+    rect.setAttribute("width", "60");
+    rect.setAttribute("height", "40");
+    rect.setAttribute("rx", "8");
+    root.appendChild(rect);
+    const wrapper = wrapBareRectForText(rect);
+    expect(wrapper.getAttribute("data-shape-kind")).toBe("rounded");
+  });
+
+  it("rect with data-rounded='true' wraps as data-shape-kind='rounded'", () => {
+    const root = freshSvgRoot();
+    const rect = document.createElementNS(SVG_NS, "rect") as SVGRectElement;
+    rect.setAttribute("x", "0");
+    rect.setAttribute("y", "0");
+    rect.setAttribute("width", "60");
+    rect.setAttribute("height", "40");
+    rect.setAttribute("data-rounded", "true");
+    root.appendChild(rect);
+    const wrapper = wrapBareRectForText(rect);
+    expect(wrapper.getAttribute("data-shape-kind")).toBe("rounded");
+  });
+
+  it("unwrapBareTextShape restores the original rect", () => {
+    const root = freshSvgRoot();
+    const rect = document.createElementNS(SVG_NS, "rect") as SVGRectElement;
+    rect.setAttribute("x", "5");
+    rect.setAttribute("y", "5");
+    rect.setAttribute("width", "50");
+    rect.setAttribute("height", "30");
+    root.appendChild(rect);
+
+    const wrapper = wrapBareRectForText(rect);
+    expect(root.firstElementChild).toBe(wrapper);
+    const restored = unwrapBareTextShape(wrapper);
+    expect(restored).toBe(rect);
+    expect(root.firstElementChild).toBe(rect);
+  });
+
+  it("unwrapBareTextShape is a no-op on a non-wrapper element", () => {
+    const root = freshSvgRoot();
+    const rect = document.createElementNS(SVG_NS, "rect") as SVGRectElement;
+    root.appendChild(rect);
+    expect(unwrapBareTextShape(rect)).toBe(rect);
+    expect(root.firstElementChild).toBe(rect);
+  });
+
+  it("replaceRunsInPlace writes per-run tspans into the wrapper's <text>", () => {
+    const root = freshSvgRoot();
+    const rect = document.createElementNS(SVG_NS, "rect") as SVGRectElement;
+    rect.setAttribute("x", "0");
+    rect.setAttribute("y", "0");
+    rect.setAttribute("width", "120");
+    rect.setAttribute("height", "60");
+    root.appendChild(rect);
+    const wrapper = wrapBareRectForText(rect);
+
+    replaceRunsInPlace(wrapper, [
+      { text: "Hello ", bold: true },
+      { text: "world", italic: true },
+    ]);
+    const tspans = Array.from(wrapper.querySelectorAll("tspan"));
+    expect(tspans).toHaveLength(2);
+    expect(tspans[0]!.getAttribute("font-weight")).toBe("bold");
+    expect(tspans[1]!.getAttribute("font-style")).toBe("italic");
+  });
+
+  it("readTextShapeSpec on a Pattern A wrapper returns x/y/w/h from the geometry rect", () => {
+    const root = freshSvgRoot();
+    const rect = document.createElementNS(SVG_NS, "rect") as SVGRectElement;
+    rect.setAttribute("x", "12");
+    rect.setAttribute("y", "34");
+    rect.setAttribute("width", "200");
+    rect.setAttribute("height", "100");
+    root.appendChild(rect);
+    const wrapper = wrapBareRectForText(rect);
+    replaceRunsInPlace(wrapper, [{ text: "label" }]);
+    const spec = readTextShapeSpec(wrapper);
+    expect(spec.x).toBe(12);
+    expect(spec.y).toBe(34);
+    expect(spec.w).toBe(200);
+    expect(spec.h).toBe(100);
+    expect(spec.runs).toEqual([{ text: "label", line_break_after: false }]);
   });
 });
 
