@@ -43,6 +43,17 @@ export class TextTool extends ToolBase {
    *  typing we roll the promotion back via `unwrapBareTextShape`
    *  so the canvas stays clean. */
   #promotedFromBareRect = false;
+  /** Bound dblclick handler — kept around so `onDeactivate` can
+   *  detach the same listener `#setupDoubleClick` attached. The
+   *  Toolbar instantiates a fresh `TextTool` on every activation,
+   *  so without explicit cleanup each prior instance keeps its
+   *  listener and a single dblclick fires the edit flow once per
+   *  stale instance. The visible symptom is the textbox
+   *  apparently "duplicating" at the original position (the
+   *  legacy edit path removes the original and appends the new
+   *  copy at end-of-paint-order, so N stale listeners produce
+   *  N-1 visible copies). */
+  #onDblclick: ((e: Event) => void) | null = null;
 
   onTextBoxChanged?: (newEl: SVGElement) => void;
 
@@ -64,10 +75,24 @@ export class TextTool extends ToolBase {
 
   override onDeactivate(): void {
     if (this.#editing) this.#finishEditing();
+    // Detach the dblclick listener so a future activation that
+    // builds a fresh `TextTool` doesn't leave the old instance's
+    // handler armed alongside it. Without this, every TextTool
+    // activation accumulates one more listener; the user-visible
+    // symptom is dblclick "duplicating" the textbox (each stale
+    // listener fires `#editExisting`, the legacy commit path
+    // removes the original and appends a fresh copy at
+    // end-of-paint-order) and dblclick on a remote object
+    // moving the cursor into a still-stale edit session on a
+    // previously-targeted element.
+    if (this.#onDblclick) {
+      this.canvas.svg.removeEventListener("dblclick", this.#onDblclick);
+      this.#onDblclick = null;
+    }
   }
 
   #setupDoubleClick(): void {
-    this.canvas.svg.addEventListener("dblclick", (e) => {
+    const handler = (e: Event): void => {
       const target = e.target as SVGElement;
 
       // Existing text-bearing shape — straight to the edit flow.
@@ -94,7 +119,9 @@ export class TextTool extends ToolBase {
         this.#promotedFromBareRect = true;
         this.#editExisting(wrapper);
       }
-    });
+    };
+    this.#onDblclick = handler;
+    this.canvas.svg.addEventListener("dblclick", handler);
   }
 
   #editExisting(g: SVGGElement): void {
