@@ -356,6 +356,17 @@ export class TextTool extends ToolBase {
     // SelectionManager's pointerdown gets a chance to start a
     // drag; the same pointerdown then bubbles down (foreignObject
     // gone) and the user's drag on the shape proceeds normally.
+    //
+    // Scoping: only canvas-SVG pointerdowns commit. Clicks on the
+    // right panel (Align / Type / Fill controls), the floating
+    // mini-toolbar in `document.body`, the top toolbar — anything
+    // outside the canvas — must NOT commit, because the user may
+    // be adjusting text-side properties of the active edit. The
+    // SelectionManager's drag handlers live on the canvas SVG, so
+    // restricting the commit to canvas-targeted pointerdowns
+    // preserves the original drag-protection behaviour while
+    // letting UI panels function normally during edit.
+    const canvasSvg = this.canvas.svg;
     const onOutsidePointerDown = (e: PointerEvent): void => {
       if (!this.#foreignObject) return;
       const target = e.target as Node | null;
@@ -366,6 +377,11 @@ export class TextTool extends ToolBase {
       // treated as "inside" so the click doesn't accidentally
       // commit when the user is just clicking near the edge.
       if (target instanceof Node && fo.contains(target)) return;
+      // Clicks outside the canvas SVG (right panel, mini-toolbar,
+      // top toolbar, etc.) don't trigger drags and don't need to
+      // commit. PowerPoint's textbox edit session stays open while
+      // the user adjusts properties on the ribbon / format pane.
+      if (!(target instanceof Node) || !canvasSvg.contains(target)) return;
       this.#finishEditing();
     };
     this.#onOutsidePointerDown = onOutsidePointerDown;
