@@ -216,122 +216,142 @@ export class AnnotEditorRightPanelElement extends LitElement {
         style=${hasSelection ? "" : "display: none"}
       >
         <h3 class="editor-right-panel-section-title">Actions</h3>
-        <div class="editor-right-panel-section-body">
-        <div class="editor-right-panel-actions-group-label">Transform</div>
-        <div class="editor-right-panel-actions-row">
-          <button type="button"
-            class="toolbar-btn"
-            data-tooltip="Rotate 90° counter-clockwise"
-            aria-label="Rotate 90° counter-clockwise"
-            @click=${() => this.#rotate(-90)}>
-            <annot-icon .spec=${builtinIcon("rotate_left")}></annot-icon>
-          </button>
-          <button type="button"
-            class="toolbar-btn"
-            data-tooltip="Rotate 90° clockwise"
-            aria-label="Rotate 90° clockwise"
-            @click=${() => this.#rotate(90)}>
-            <annot-icon .spec=${builtinIcon("rotate_right")}></annot-icon>
-          </button>
-          ${this.#svgActionBtn(FLIP_H_SVG, "Flip Horizontal (Shift+H)", () => this.#flip("h"))}
-          ${this.#svgActionBtn(FLIP_V_SVG, "Flip Vertical (Shift+V)", () => this.#flip("v"))}
-        </div>
+        <!--
+          Body wrapper mirrors the Selected card's .prop-panel-docked
+          inner column so level-2 sub-section headers (Transform /
+          Arrange / Align / Group) line up horizontally with the
+          Selected side's TYPE / FILL / LINE — same nesting, same
+          CSS, no Actions-specific override. Each sub-group is a
+          regular .pp-section with a .pp-section-header for the
+          label; only the button row stays
+          .editor-right-panel-actions-row because its tighter 2 px
+          button gap (vs .pp-section-body's 6 px) is intentional for
+          icon-button rows.
+        -->
+        <div class="prop-panel prop-panel-docked">
+          <div class="pp-section">
+            <div class="pp-section-header">Transform</div>
+            <div class="editor-right-panel-actions-row">
+              <button type="button"
+                class="toolbar-btn"
+                data-tooltip="Rotate 90° counter-clockwise"
+                aria-label="Rotate 90° counter-clockwise"
+                @click=${() => this.#rotate(-90)}>
+                <annot-icon .spec=${builtinIcon("rotate_left")}></annot-icon>
+              </button>
+              <button type="button"
+                class="toolbar-btn"
+                data-tooltip="Rotate 90° clockwise"
+                aria-label="Rotate 90° clockwise"
+                @click=${() => this.#rotate(90)}>
+                <annot-icon .spec=${builtinIcon("rotate_right")}></annot-icon>
+              </button>
+              ${this.#svgActionBtn(FLIP_H_SVG, "Flip Horizontal (Shift+H)", () => this.#flip("h"))}
+              ${this.#svgActionBtn(FLIP_V_SVG, "Flip Vertical (Shift+V)", () => this.#flip("v"))}
+            </div>
+          </div>
 
-        <div class="editor-right-panel-actions-group-label">Arrange</div>
-        <div class="editor-right-panel-actions-row">
-          ${this.#svgActionBtn(BRING_TO_FRONT_SVG, "Bring to Front (Ctrl+Shift+])", () =>
-            this.selection?.bringToFront(),
-          )}
-          ${this.#svgActionBtn(BRING_FORWARD_SVG, "Bring Forward (Ctrl+])", () =>
-            this.selection?.bringForward(),
-          )}
-          ${this.#svgActionBtn(SEND_BACKWARD_SVG, "Send Backward (Ctrl+[)", () =>
-            this.selection?.sendBackward(),
-          )}
-          ${this.#svgActionBtn(SEND_TO_BACK_SVG, "Send to Back (Ctrl+Shift+[)", () =>
-            this.selection?.sendToBack(),
-          )}
-        </div>
+          <div class="pp-section">
+            <div class="pp-section-header">Arrange</div>
+            <div class="editor-right-panel-actions-row">
+              ${this.#svgActionBtn(BRING_TO_FRONT_SVG, "Bring to Front (Ctrl+Shift+])", () =>
+                this.selection?.bringToFront(),
+              )}
+              ${this.#svgActionBtn(BRING_FORWARD_SVG, "Bring Forward (Ctrl+])", () =>
+                this.selection?.bringForward(),
+              )}
+              ${this.#svgActionBtn(SEND_BACKWARD_SVG, "Send Backward (Ctrl+[)", () =>
+                this.selection?.sendBackward(),
+              )}
+              ${this.#svgActionBtn(SEND_TO_BACK_SVG, "Send to Back (Ctrl+Shift+[)", () =>
+                this.selection?.sendToBack(),
+              )}
+            </div>
+          </div>
 
-        <div class="editor-right-panel-actions-group-label">Align</div>
-        <div class="editor-right-panel-actions-row">
-          <button type="button"
-            class="toolbar-btn"
-            data-tooltip="Align left"
-            aria-label="Align left"
-            @click=${() => this.selection?.alignSelected("left")}>
-            <annot-icon .spec=${builtinIcon("align_horizontal_left")}></annot-icon>
-          </button>
-          <button type="button"
-            class="toolbar-btn"
-            data-tooltip="Align center"
-            aria-label="Align center"
-            @click=${() => this.selection?.alignSelected("center-h")}>
-            <annot-icon .spec=${builtinIcon("align_horizontal_center")}></annot-icon>
-          </button>
-          <button type="button"
-            class="toolbar-btn"
-            data-tooltip="Align right"
-            aria-label="Align right"
-            @click=${() => this.selection?.alignSelected("right")}>
-            <annot-icon .spec=${builtinIcon("align_horizontal_right")}></annot-icon>
-          </button>
-          <button type="button"
-            class="toolbar-btn"
-            data-tooltip="Distribute horizontally (needs 3+)"
-            aria-label="Distribute horizontally (needs 3+)"
-            @click=${() => this.selection?.distributeSelected("horizontal")}>
-            <annot-icon .spec=${builtinIcon("horizontal_distribute")}></annot-icon>
-          </button>
-        </div>
-        <div class="editor-right-panel-actions-row">
-          <button type="button"
-            class="toolbar-btn"
-            data-tooltip="Align top"
-            aria-label="Align top"
-            @click=${() => this.selection?.alignSelected("top")}>
-            <annot-icon .spec=${builtinIcon("align_vertical_top")}></annot-icon>
-          </button>
-          <button type="button"
-            class="toolbar-btn"
-            data-tooltip="Align middle"
-            aria-label="Align middle"
-            @click=${() => this.selection?.alignSelected("middle-v")}>
-            <annot-icon .spec=${builtinIcon("align_vertical_center")}></annot-icon>
-          </button>
-          <button type="button"
-            class="toolbar-btn"
-            data-tooltip="Align bottom"
-            aria-label="Align bottom"
-            @click=${() => this.selection?.alignSelected("bottom")}>
-            <annot-icon .spec=${builtinIcon("align_vertical_bottom")}></annot-icon>
-          </button>
-          <button type="button"
-            class="toolbar-btn"
-            data-tooltip="Distribute vertically (needs 3+)"
-            aria-label="Distribute vertically (needs 3+)"
-            @click=${() => this.selection?.distributeSelected("vertical")}>
-            <annot-icon .spec=${builtinIcon("vertical_distribute")}></annot-icon>
-          </button>
-        </div>
+          <div class="pp-section">
+            <div class="pp-section-header">Align</div>
+            <div class="editor-right-panel-actions-row">
+              <button type="button"
+                class="toolbar-btn"
+                data-tooltip="Align left"
+                aria-label="Align left"
+                @click=${() => this.selection?.alignSelected("left")}>
+                <annot-icon .spec=${builtinIcon("align_horizontal_left")}></annot-icon>
+              </button>
+              <button type="button"
+                class="toolbar-btn"
+                data-tooltip="Align center"
+                aria-label="Align center"
+                @click=${() => this.selection?.alignSelected("center-h")}>
+                <annot-icon .spec=${builtinIcon("align_horizontal_center")}></annot-icon>
+              </button>
+              <button type="button"
+                class="toolbar-btn"
+                data-tooltip="Align right"
+                aria-label="Align right"
+                @click=${() => this.selection?.alignSelected("right")}>
+                <annot-icon .spec=${builtinIcon("align_horizontal_right")}></annot-icon>
+              </button>
+              <button type="button"
+                class="toolbar-btn"
+                data-tooltip="Distribute horizontally (needs 3+)"
+                aria-label="Distribute horizontally (needs 3+)"
+                @click=${() => this.selection?.distributeSelected("horizontal")}>
+                <annot-icon .spec=${builtinIcon("horizontal_distribute")}></annot-icon>
+              </button>
+            </div>
+            <div class="editor-right-panel-actions-row">
+              <button type="button"
+                class="toolbar-btn"
+                data-tooltip="Align top"
+                aria-label="Align top"
+                @click=${() => this.selection?.alignSelected("top")}>
+                <annot-icon .spec=${builtinIcon("align_vertical_top")}></annot-icon>
+              </button>
+              <button type="button"
+                class="toolbar-btn"
+                data-tooltip="Align middle"
+                aria-label="Align middle"
+                @click=${() => this.selection?.alignSelected("middle-v")}>
+                <annot-icon .spec=${builtinIcon("align_vertical_center")}></annot-icon>
+              </button>
+              <button type="button"
+                class="toolbar-btn"
+                data-tooltip="Align bottom"
+                aria-label="Align bottom"
+                @click=${() => this.selection?.alignSelected("bottom")}>
+                <annot-icon .spec=${builtinIcon("align_vertical_bottom")}></annot-icon>
+              </button>
+              <button type="button"
+                class="toolbar-btn"
+                data-tooltip="Distribute vertically (needs 3+)"
+                aria-label="Distribute vertically (needs 3+)"
+                @click=${() => this.selection?.distributeSelected("vertical")}>
+                <annot-icon .spec=${builtinIcon("vertical_distribute")}></annot-icon>
+              </button>
+            </div>
+          </div>
 
-        <div class="editor-right-panel-actions-group-label">Group</div>
-        <div class="editor-right-panel-actions-row">
-          <button type="button"
-            class="toolbar-btn"
-            data-tooltip="Group (Ctrl+G)"
-            aria-label="Group"
-            @click=${() => this.selection?.groupSelected()}>
-            <annot-icon .spec=${builtinIcon("join_inner")}></annot-icon>
-          </button>
-          <button type="button"
-            class="toolbar-btn"
-            data-tooltip="Ungroup (Ctrl+Shift+G)"
-            aria-label="Ungroup"
-            @click=${() => this.selection?.ungroupSelected()}>
-            <annot-icon .spec=${builtinIcon("join_left")}></annot-icon>
-          </button>
-        </div>
+          <div class="pp-section">
+            <div class="pp-section-header">Group</div>
+            <div class="editor-right-panel-actions-row">
+              <button type="button"
+                class="toolbar-btn"
+                data-tooltip="Group (Ctrl+G)"
+                aria-label="Group"
+                @click=${() => this.selection?.groupSelected()}>
+                <annot-icon .spec=${builtinIcon("join_inner")}></annot-icon>
+              </button>
+              <button type="button"
+                class="toolbar-btn"
+                data-tooltip="Ungroup (Ctrl+Shift+G)"
+                aria-label="Ungroup"
+                @click=${() => this.selection?.ungroupSelected()}>
+                <annot-icon .spec=${builtinIcon("join_left")}></annot-icon>
+              </button>
+            </div>
+          </div>
         </div>
       </section>
 
