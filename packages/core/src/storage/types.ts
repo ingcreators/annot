@@ -35,7 +35,7 @@ export interface ImageRecord {
  *
  * `thumbnailDataUrl` is also intentionally absent — thumbnail bytes
  * are owned by the host-side `ThumbnailManager` (see
- * [`docs/plans/_done/unified-thumbnail-cache.md`](../../../../docs/plans/unified-thumbnail-cache.md));
+ * [`docs/plans/_done/unified-thumbnail-cache.md`](../../../../docs/plans/_done/unified-thumbnail-cache.md));
  * callers seed the cache via `tm.write(provider, path, dataUrl,
  * dims)` rather than going through `updateImage`.
  */
@@ -496,7 +496,7 @@ export interface StorageWithRateLimit {
 /**
  * Opt into the unified thumbnail cache (the host-side
  * `ThumbnailManager` + `ThumbnailCache` infrastructure introduced
- * by [`docs/plans/unified-thumbnail-cache.md`](../../../../docs/plans/unified-thumbnail-cache.md)).
+ * by [`docs/plans/_done/unified-thumbnail-cache.md`](../../../../docs/plans/_done/unified-thumbnail-cache.md)).
  *
  * Stores that implement all three methods participate in the shared
  * cache: the host owns the prefetch lifecycle (in-flight dedup,

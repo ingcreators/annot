@@ -61,7 +61,7 @@ export class App {
   /** Unified thumbnail cache — shared across every storage backend
    *  that implements `StorageWithThumbnailCache`. Persistent IDB
    *  layer with an in-memory LRU front-cache. Phase 2 of
-   *  [`docs/plans/unified-thumbnail-cache.md`](../../../docs/plans/unified-thumbnail-cache.md);
+   *  [`docs/plans/_done/unified-thumbnail-cache.md`](../../../docs/plans/_done/unified-thumbnail-cache.md);
    *  built-in store integrations land in Phases 3–5. */
   #thumbnailManager = new ThumbnailManager(new IndexedDBThumbnailCache());
 

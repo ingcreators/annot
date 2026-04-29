@@ -4,7 +4,7 @@
 // `rewriteEntriesForPrefix` helpers.
 //
 // History: thumbnail and dimension caches lived here through
-// Phase 3 of `docs/plans/unified-thumbnail-cache.md` and were
+// Phase 3 of `docs/plans/_done/unified-thumbnail-cache.md` and were
 // lifted into the host-side `ThumbnailManager` +
 // `IndexedDBThumbnailCache` in Phase 4. The cache surface is now
 // record + meta only.

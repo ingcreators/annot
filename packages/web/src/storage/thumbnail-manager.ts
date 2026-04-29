@@ -18,7 +18,7 @@
  * `height` fields patched in place from the cache (hits) or
  * scheduled for prefetch (misses).
  *
- * Per [`docs/plans/unified-thumbnail-cache.md`](../../../../docs/plans/unified-thumbnail-cache.md).
+ * Per [`docs/plans/_done/unified-thumbnail-cache.md`](../../../../docs/plans/_done/unified-thumbnail-cache.md).
  */
 
 import type { ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";

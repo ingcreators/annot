@@ -10,7 +10,7 @@
  * same surface.
  *
  * The unified-thumbnail-cache plan
- * ([`docs/plans/unified-thumbnail-cache.md`](../../../../docs/plans/unified-thumbnail-cache.md))
+ * ([`docs/plans/_done/unified-thumbnail-cache.md`](../../../../docs/plans/_done/unified-thumbnail-cache.md))
  * lifts the per-store `#ensureThumbnail` lifecycle into a single
  * host-side `ThumbnailManager` that talks to one `ThumbnailCache`
  * instance shared across every backend; this file is the Tier A

@@ -21,7 +21,7 @@
  * in-memory only for this session.
  *
  * Per the unified-thumbnail-cache plan
- * ([`docs/plans/unified-thumbnail-cache.md`](../../../../docs/plans/unified-thumbnail-cache.md)).
+ * ([`docs/plans/_done/unified-thumbnail-cache.md`](../../../../docs/plans/_done/unified-thumbnail-cache.md)).
  */
 
 import {
