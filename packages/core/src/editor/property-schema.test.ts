@@ -121,12 +121,15 @@ describe("CATEGORY_CONTROL_SHAPE", () => {
     expect(CATEGORY_CONTROL_SHAPE.group).toHaveLength(0);
   });
 
-  it("declares the textbox shape as variant + color + font + size", () => {
+  it("declares the textbox shape as variant + color + font + size + per-character toggles", () => {
     expect(CATEGORY_CONTROL_SHAPE.textbox).toEqual([
       PROPERTY_CONTROL_IDS.textVariantPicker,
       PROPERTY_CONTROL_IDS.textColor,
       PROPERTY_CONTROL_IDS.fontFamily,
       PROPERTY_CONTROL_IDS.fontSize,
+      PROPERTY_CONTROL_IDS.textBold,
+      PROPERTY_CONTROL_IDS.textItalic,
+      PROPERTY_CONTROL_IDS.textUnderline,
     ]);
   });
 
@@ -156,11 +159,13 @@ describe("PROPERTY_CONTROLS registry", () => {
     // Phase 1 landed 17 entries; Phase A of the extensions plan
     // (`property-panel-schema-extensions.md`) added 5 marker bg-
     // primitive ids → 22; Phase B added 3 shape transparency / cap
-    // type ids → 25; Phase C added 4 per-end arrow ids → 29.
+    // type ids → 25; Phase C added 4 per-end arrow ids → 29; Phase
+    // 4 of `rich-text-and-shape-text.md` added 3 per-tspan
+    // formatting toggles (textBold / textItalic / textUnderline) → 32.
     // Pinning the count guards against a new id landing without a
     // matching def — the entry-count shape test alone won't catch
     // that if the new id accidentally duplicates another.
-    expect(ALL_IDS).toHaveLength(29);
+    expect(ALL_IDS).toHaveLength(32);
     for (const id of ALL_IDS) {
       expect(PROPERTY_CONTROLS[id], `missing def for "${id}"`).toBeDefined();
       expect(PROPERTY_CONTROLS[id].id).toBe(id);
@@ -295,6 +300,65 @@ describe("PROPERTY_CONTROLS registry", () => {
     // Solid (no data-dash-key, no stroke-dasharray) → ""
     expect(PROPERTY_CONTROLS.markerBgStrokeStyle.getValue(marker)).toBe("");
     expect(PROPERTY_CONTROLS.markerLabelValue.getValue(marker)).toBe(1);
+  });
+
+  it("textBold / textItalic / textUnderline read 'on' iff every tspan carries the flag", () => {
+    function shape(...tspans: SVGElement[]): SVGElement {
+      const g = svg("g", { "data-type": "shape", "data-shape-kind": "sticky" });
+      const t = svg("text");
+      for (const ts of tspans) t.appendChild(ts);
+      g.appendChild(t);
+      return g;
+    }
+    function tspan(attrs: Record<string, string> = {}): SVGElement {
+      const t = svg("tspan", attrs);
+      t.textContent = "x";
+      return t;
+    }
+
+    // Empty → "off"
+    expect(PROPERTY_CONTROLS.textBold.getValue(shape())).toBe("off");
+    // Mixed bold → "off" (only "every tspan has it" reads as "on")
+    expect(
+      PROPERTY_CONTROLS.textBold.getValue(shape(tspan({ "font-weight": "bold" }), tspan())),
+    ).toBe("off");
+    // All bold → "on"
+    expect(
+      PROPERTY_CONTROLS.textBold.getValue(
+        shape(tspan({ "font-weight": "bold" }), tspan({ "font-weight": "bold" })),
+      ),
+    ).toBe("on");
+    // Italic mirror
+    expect(PROPERTY_CONTROLS.textItalic.getValue(shape(tspan({ "font-style": "italic" })))).toBe(
+      "on",
+    );
+    // Underline reads any text-decoration value containing "underline"
+    expect(
+      PROPERTY_CONTROLS.textUnderline.getValue(shape(tspan({ "text-decoration": "underline" }))),
+    ).toBe("on");
+    expect(
+      PROPERTY_CONTROLS.textUnderline.getValue(
+        shape(tspan({ "text-decoration": "underline overline" })),
+      ),
+    ).toBe("on");
+  });
+
+  it("textBold setValue writes / removes font-weight on every tspan uniformly", () => {
+    const g = svg("g", { "data-type": "shape", "data-shape-kind": "plain" });
+    const text = svg("text");
+    const a = svg("tspan");
+    const b = svg("tspan");
+    text.appendChild(a);
+    text.appendChild(b);
+    g.appendChild(text);
+
+    PROPERTY_CONTROLS.textBold.setValue?.(g, "on");
+    expect(a.getAttribute("font-weight")).toBe("bold");
+    expect(b.getAttribute("font-weight")).toBe("bold");
+
+    PROPERTY_CONTROLS.textBold.setValue?.(g, "off");
+    expect(a.getAttribute("font-weight")).toBeNull();
+    expect(b.getAttribute("font-weight")).toBeNull();
   });
 
   it("Phase C per-end arrow defs read per-end shape + size from data attrs", () => {
