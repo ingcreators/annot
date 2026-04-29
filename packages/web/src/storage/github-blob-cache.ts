@@ -15,7 +15,7 @@
  * unit-tested independently of the HTTP layer + I/O pipeline.
  *
  * History: thumbnail and dimension caches lived here through Phase
- * 3 of `docs/plans/unified-thumbnail-cache.md` and were lifted into
+ * 3 of `docs/plans/_done/unified-thumbnail-cache.md` and were lifted into
  * the host-side `ThumbnailManager` + `IndexedDBThumbnailCache` in
  * Phase 4 — the cache surface is now record + meta only.
  *
