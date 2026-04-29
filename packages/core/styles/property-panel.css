@@ -27,7 +27,12 @@
   right: auto;
   border: none;
   border-radius: 0;
-  padding: 14px 16px;
+  /* Tight inner pad — the outer `.editor-right-panel-section`
+   * already supplies its own 10 px vertical, so 6 px here keeps
+   * the docked-panel column compact without doubling up. The
+   * 16 px horizontal nests inside the section's 16 px to
+   * establish the level-2 column gutter. */
+  padding: 6px 16px;
   box-shadow: none;
   max-height: none;
   min-width: 0;
@@ -294,17 +299,23 @@
  * and uncluttered.
  */
 
-/* Vertical rhythm — Gestalt proximity principle:
- *   Section → Section : 20px (widest — clear category break)
- *   Row → Row         : 6px  (moderate — list items)
- *   Header → Body     : 4px  (tightest — parent-child grouping)
+/* Vertical rhythm — Gestalt proximity principle, dense:
+ *   Section → Section : 8px  (clear category break)
+ *   Row → Row         : 4px  (list items)
+ *   Header → Body     : 4px  (parent-child grouping)
  *
- * The ratio 20 : 6 : 4 makes the hierarchy readable at a glance:
- * biggest gaps separate unrelated groups, smallest gaps bind a
- * header to its rows. Equal spacing (which the panel previously
- * had) dissolves the grouping into a flat list. */
+ * Annot's right panel is a tool surface that competes with the
+ * canvas for screen real estate; users adjust properties dozens
+ * of times per session, so density-over-airiness wins. Original
+ * 20 : 6 : 4 ratio (PowerPoint-class) was halved on the section-
+ * to-section gap (Figma is closer to 8 px). The header-to-body
+ * gap stays 4 px because that proximity is already at the floor —
+ * making it any tighter would merge into the header.
+ *
+ * If you find yourself wanting more breathing room, the right
+ * fix is usually to drop a row, not to widen the gap. */
 .pp-section {
-  margin: 20px 0 0 0;
+  margin: 8px 0 0 0;
 }
 .pp-section:first-child {
   margin-top: 0;
@@ -327,7 +338,12 @@
 .pp-section-body {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  /* Was 6 px — tightened to 4 px (Figma-class density) so the
+   * Color / Width / Dash type / etc. property rows pack closer.
+   * Each row is already a complete visual unit (label + control
+   * with its own border/background) so it doesn't need much
+   * gap to stay readable. */
+  gap: 4px;
   /* Indent rows so they hang off their category header. The
    * uppercase tracked header stays flush at the section's left
    * edge, establishing the outer column. */
@@ -368,7 +384,11 @@
   grid-template-columns: 120px 1fr;
   align-items: center;
   gap: 6px;
-  min-height: 28px;
+  /* Was 28 px — tightened to 24 px to match the natural height
+   * of the in-row controls (`.pp-number` is 24 px, `.pp-color`
+   * 26 px). 28 px was adding dead vertical above/below each row
+   * for no visual benefit. */
+  min-height: 24px;
 }
 .pp-row-label {
   /* Row / attribute label — subdued secondary color so the VALUE

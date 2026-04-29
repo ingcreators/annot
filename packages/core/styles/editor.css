@@ -971,7 +971,11 @@ body.editor-mode.has-right-panel .file-details-backdrop {
 }
 
 .editor-right-panel-section {
-  padding: 14px 16px;
+  /* Tightened from 14 px → 10 px vertical to densify the right
+   * panel for the screenshot-annotation flow (Figma-class
+   * density). Horizontal stays at 16 px so the level-2 column
+   * alignment with `.prop-panel-docked` is preserved. */
+  padding: 10px 16px;
   border-bottom: 1px solid var(--annot-border-subtle);
 }
 /* Dynamic section title (e.g. "Rectangle" / "Arrow" / "Callout").
@@ -981,7 +985,9 @@ body.editor-mode.has-right-panel .file-details-backdrop {
  * emphasis. Sentence case + slightly larger weight makes it read as
  * "this IS the thing" rather than "a section labeled …". */
 .editor-right-panel-section-title {
-  margin: 0 0 10px;
+  /* Was 0 0 10px — tightened to 6 px so the section title binds
+   * closer to the first level-2 sub-section header below it. */
+  margin: 0 0 6px;
   font-size: 13px;
   font-weight: 600;
   color: var(--annot-text-primary);
