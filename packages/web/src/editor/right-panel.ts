@@ -211,9 +211,12 @@ export class AnnotEditorRightPanelElement extends LitElement {
     const hasSelection = this.currentSelection.length > 0;
     return html`
       <section
-        class="editor-right-panel-actions"
+        class="editor-right-panel-section editor-right-panel-actions"
+        data-section-id="right-panel.actions"
         style=${hasSelection ? "" : "display: none"}
       >
+        <h3 class="editor-right-panel-section-title">Actions</h3>
+        <div class="editor-right-panel-section-body">
         <div class="editor-right-panel-actions-group-label">Transform</div>
         <div class="editor-right-panel-actions-row">
           <button type="button"
@@ -328,6 +331,7 @@ export class AnnotEditorRightPanelElement extends LitElement {
             @click=${() => this.selection?.ungroupSelected()}>
             <annot-icon .spec=${builtinIcon("join_left")}></annot-icon>
           </button>
+        </div>
         </div>
       </section>
 
