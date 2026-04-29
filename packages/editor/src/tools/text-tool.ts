@@ -310,6 +310,23 @@ export class TextTool extends ToolBase {
     this.#foreignObject = fo;
     this.#editDiv = div;
 
+    // Notify the PropertyPanel (and any other observer) that a
+    // text edit session has begun. The panel flips into "Selected
+    // Text" mode showing only the Text + Text box property
+    // sections — the underlying shape's object-mode properties
+    // (fill / stroke / variant picker) stay hidden until the
+    // user commits / cancels the edit. The mode split matches
+    // PowerPoint's "click selects the shape, dblclick enters text
+    // editing" UX.
+    if (this.#editTarget) {
+      this.canvas.svg.dispatchEvent(
+        new CustomEvent("annot:text-edit-start", {
+          detail: { target: this.#editTarget },
+          bubbles: false,
+        }),
+      );
+    }
+
     // PowerPoint-style mini toolbar — Bold / Italic / Underline
     // toggles, font family / size dropdowns, A+ / A−, alignment,
     // color picker. Hovers above the active selection while a
@@ -459,6 +476,12 @@ export class TextTool extends ToolBase {
         // Cancel-without-typing on a freshly-promoted shape →
         // roll back the promotion so the canvas stays clean.
         if (promoted) unwrapBareTextShape(wrapper);
+        this.canvas.svg.dispatchEvent(
+          new CustomEvent("annot:text-edit-end", {
+            detail: { target: wrapper },
+            bubbles: false,
+          }),
+        );
         return;
       }
 
@@ -472,6 +495,9 @@ export class TextTool extends ToolBase {
       this.history.save();
       this.onTextBoxChanged?.(wrapper);
       this.onShapeComplete?.(wrapper);
+      this.canvas.svg.dispatchEvent(
+        new CustomEvent("annot:text-edit-end", { detail: { target: wrapper }, bubbles: false }),
+      );
       return;
     }
 
@@ -482,13 +508,22 @@ export class TextTool extends ToolBase {
       ? (shapeKindAttr as TextVariant) || "sticky"
       : (this.options.textVariant ?? "sticky");
 
+    const removedLegacyTarget = this.#editTarget;
     if (this.#editTarget) {
       this.#editTarget.remove();
       this.#editTarget = null;
     }
     this.#promotedFromBareRect = false;
 
-    if (!flatText) return;
+    if (!flatText) {
+      this.canvas.svg.dispatchEvent(
+        new CustomEvent("annot:text-edit-end", {
+          detail: { target: removedLegacyTarget },
+          bubbles: false,
+        }),
+      );
+      return;
+    }
 
     const newEl = createTextShape({
       x: foX,
@@ -505,5 +540,8 @@ export class TextTool extends ToolBase {
     this.history.save();
     this.onTextBoxChanged?.(newEl);
     this.onShapeComplete?.(newEl);
+    this.canvas.svg.dispatchEvent(
+      new CustomEvent("annot:text-edit-end", { detail: { target: newEl }, bubbles: false }),
+    );
   }
 }
