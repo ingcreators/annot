@@ -987,14 +987,18 @@ body.editor-mode.has-right-panel .file-details-backdrop {
   color: var(--annot-text-primary);
 }
 
-/* Actions section — compact transform button row (rotate / flip).
- * Shown only when selection is non-empty. Padding matches
- * .editor-right-panel-section so the panel reads as one unified
- * column, but the thinner vertical padding hints that this is
- * "controls for actions" not "properties to edit". */
-.editor-right-panel-actions {
+/* Actions section — compact transform / arrange / align / group
+ * button rows (rotate / flip / z-order / align / distribute /
+ * group / ungroup). Shown only when selection is non-empty.
+ * Renders as a regular `.editor-right-panel-section` card with
+ * the heading "Actions"; this rule narrows the body padding so
+ * the dense action grid feels distinct from the property-edit
+ * sections below it. */
+.editor-right-panel-actions.editor-right-panel-section {
   padding: 10px 16px;
-  border-bottom: 1px solid var(--annot-border-subtle);
+}
+.editor-right-panel-actions .editor-right-panel-section-title {
+  margin-bottom: 6px;
 }
 /* Group label above each action row ("Transform" / "Arrange") —
  * shares the uppercase / muted / tracked typography with the
@@ -1013,7 +1017,8 @@ body.editor-mode.has-right-panel .file-details-backdrop {
   margin-top: 14px;
   user-select: none;
 }
-.editor-right-panel-actions-group-label:first-child {
+.editor-right-panel-actions-group-label:first-child,
+.editor-right-panel-section-body > .editor-right-panel-actions-group-label:first-child {
   margin-top: 0;
 }
 
