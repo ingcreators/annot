@@ -166,7 +166,27 @@ export class TextTool extends ToolBase {
     const ty = match ? Number.parseFloat(match[2]!) : 0;
 
     this.#editTarget = g;
-    g.style.display = "none";
+
+    // Pattern A wrappers (`data-shape-kind` ∈ rect / rounded /
+    // ellipse) carry the user's drawn geometry as the visible
+    // shape. Hiding the wrapper while editing would erase that
+    // geometry from view, leaving only the editor overlay —
+    // which then looks like a sticky note (the contentEditable's
+    // styling). Instead, hide ONLY the existing `<text>` child
+    // so the text doesn't double up while the user types, and
+    // overlay a transparent contentEditable on top of the still-
+    // visible shape. Legacy plain / sticky / callout textboxes
+    // keep the wrapper-hidden behaviour because their visible
+    // styling IS the contentEditable's styling.
+    const shapeKindAttr = g.getAttribute("data-shape-kind");
+    const isPatternA =
+      shapeKindAttr === "rect" || shapeKindAttr === "rounded" || shapeKindAttr === "ellipse";
+    if (isPatternA) {
+      const existingText = g.querySelector("text");
+      if (existingText instanceof SVGElement) existingText.style.display = "none";
+    } else {
+      g.style.display = "none";
+    }
 
     this.#startEditing(spec.x + tx, spec.y + ty, {
       runs: spec.runs,
@@ -197,7 +217,18 @@ export class TextTool extends ToolBase {
     const color = existing?.color || this.options.strokeColor;
     const w = existing?.width || DEFAULT_WIDTH;
     const h = existing?.height || DEFAULT_HEIGHT;
+    // For Pattern A (text-on-shape) the underlying geometry is the
+    // visible "frame" and stays in the DOM during edit — the editor
+    // overlay must NOT paint a sticky-yellow background on top of
+    // it. Branch on the wrapper's `data-shape-kind` so legacy
+    // plain / sticky / callout still get their stylized overlay
+    // (those wrappers are HIDDEN during edit, so the overlay IS
+    // the visible thing the user sees).
+    const editTargetKind = this.#editTarget?.getAttribute("data-shape-kind") ?? null;
+    const isPatternA =
+      editTargetKind === "rect" || editTargetKind === "rounded" || editTargetKind === "ellipse";
     const variant: TextVariant = this.options.textVariant ?? "sticky";
+    const showBg = !isPatternA && variant !== "plain";
 
     const fo = document.createElementNS(SVG_NS, "foreignObject");
     fo.setAttribute("x", String(x));
@@ -205,10 +236,36 @@ export class TextTool extends ToolBase {
     fo.setAttribute("width", String(w));
     fo.setAttribute("height", String(h));
 
-    const showBg = variant !== "plain";
     const div = document.createElement("div");
     div.contentEditable = "true";
-    div.style.cssText = `
+    // Pattern A: transparent overlay aligned with the shape, no
+    // border / shadow / padding — so the user sees the original
+    // shape's stroke / fill behind the cursor.
+    // Legacy variants: stylized panel as before.
+    // `overflow: hidden` matches PowerPoint's behaviour (text
+    // larger than the box clips); the user can resize the shape
+    // or shrink the text via the autofit options. Browser-default
+    // scrollbars no longer appear during edit.
+    div.style.cssText = isPatternA
+      ? `
+      color: ${color};
+      font-size: ${fontSize}px;
+      font-family: ${fontFamily};
+      background: transparent;
+      border: 1px dashed rgba(0,0,0,0.35);
+      border-radius: 0;
+      box-shadow: none;
+      padding: 8px 10px;
+      width: ${w}px;
+      height: ${h}px;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      line-height: 1.4;
+      outline: none;
+      overflow: hidden;
+      box-sizing: border-box;
+    `
+      : `
       color: ${color};
       font-size: ${fontSize}px;
       font-family: ${fontFamily};
@@ -223,7 +280,7 @@ export class TextTool extends ToolBase {
       word-wrap: break-word;
       line-height: 1.4;
       outline: none;
-      overflow-y: auto;
+      overflow: hidden;
       box-sizing: border-box;
     `;
 
@@ -349,11 +406,16 @@ export class TextTool extends ToolBase {
       const promoted = this.#promotedFromBareRect;
       this.#promotedFromBareRect = false;
 
+      // Restore the inner `<text>` visibility — it was hidden
+      // during edit so the user only saw the contentEditable
+      // overlay, not double-rendered text behind it.
+      const innerText = wrapper.querySelector("text");
+      if (innerText instanceof SVGElement) innerText.style.display = "";
+
       if (!flatText) {
         // Cancel-without-typing on a freshly-promoted shape →
         // roll back the promotion so the canvas stays clean.
         if (promoted) unwrapBareTextShape(wrapper);
-        else wrapper.style.display = ""; // existing wrapped shape — just unhide
         return;
       }
 
@@ -363,7 +425,6 @@ export class TextTool extends ToolBase {
       wrapper.setAttribute("data-font-family", fontFamily);
       wrapper.setAttribute("data-color", color);
       replaceRunsInPlace(wrapper, runs);
-      wrapper.style.display = "";
 
       this.history.save();
       this.onTextBoxChanged?.(wrapper);

@@ -93,6 +93,22 @@ export const PROPERTY_CONTROL_IDS = {
    *  bottom. Writes `data-text-vanchor` on the wrapper `<g>` and
    *  re-runs the layout pass. */
   textVerticalAnchor: "textVerticalAnchor",
+  /** PowerPoint-style autofit policy — none / shrink / resize.
+   *  `resize` extends the wrapper geometry's height so the
+   *  rendered run block fits without clipping; `shrink` records
+   *  the intent (the layout side that scales the font-size is a
+   *  follow-up); `none` lets the box clip to its current
+   *  dimensions. Stored as `data-text-autofit` on the wrapper. */
+  textAutofit: "textAutofit",
+  /** Per-side text-box margin in user-space units (mirrors
+   *  PowerPoint's left / right / top / bottom margins). Stored
+   *  as `data-text-margin-{l,r,t,b}` on the wrapper; the layout
+   *  pass reserves the matching pixel inset around the run
+   *  block. */
+  textMarginLeft: "textMarginLeft",
+  textMarginRight: "textMarginRight",
+  textMarginTop: "textMarginTop",
+  textMarginBottom: "textMarginBottom",
   redactStylePicker: "redactStylePicker",
   redactSolidColor: "redactSolidColor",
   highlightColorPicker: "highlightColorPicker",
@@ -135,6 +151,11 @@ export const CATEGORY_CONTROL_SHAPE: Readonly<
     PROPERTY_CONTROL_IDS.textUnderline,
     PROPERTY_CONTROL_IDS.textAnchor,
     PROPERTY_CONTROL_IDS.textVerticalAnchor,
+    PROPERTY_CONTROL_IDS.textAutofit,
+    PROPERTY_CONTROL_IDS.textMarginLeft,
+    PROPERTY_CONTROL_IDS.textMarginRight,
+    PROPERTY_CONTROL_IDS.textMarginTop,
+    PROPERTY_CONTROL_IDS.textMarginBottom,
   ],
   marker: [
     PROPERTY_CONTROL_IDS.markerShapePicker,
@@ -765,6 +786,47 @@ export const PROPERTY_CONTROLS: Readonly<{
       { value: "bottom", label: "Bottom", materialIcon: "vertical_align_bottom" },
     ],
   },
+  textAutofit: {
+    id: PROPERTY_CONTROL_IDS.textAutofit,
+    type: "select",
+    label: "Autofit",
+    getValue: (el) => el.getAttribute("data-text-autofit") || "none",
+    setValue: (el, value) => {
+      const next = String(value);
+      if (next === "none") {
+        el.removeAttribute("data-text-autofit");
+      } else {
+        el.setAttribute("data-text-autofit", next);
+      }
+      const runs = readTextShapeSpec(el).runs;
+      replaceRunsInPlace(el, runs);
+    },
+    options: [
+      { value: "none", label: "Do not autofit" },
+      { value: "shrink", label: "Shrink text on overflow" },
+      { value: "resize", label: "Resize shape to fit text" },
+    ],
+  },
+  textMarginLeft: makeMarginControl(
+    PROPERTY_CONTROL_IDS.textMarginLeft,
+    "Margin L",
+    "data-text-margin-l",
+  ),
+  textMarginRight: makeMarginControl(
+    PROPERTY_CONTROL_IDS.textMarginRight,
+    "Margin R",
+    "data-text-margin-r",
+  ),
+  textMarginTop: makeMarginControl(
+    PROPERTY_CONTROL_IDS.textMarginTop,
+    "Margin T",
+    "data-text-margin-t",
+  ),
+  textMarginBottom: makeMarginControl(
+    PROPERTY_CONTROL_IDS.textMarginBottom,
+    "Margin B",
+    "data-text-margin-b",
+  ),
   textBold: makeTspanFlagControl(
     PROPERTY_CONTROL_IDS.textBold,
     "Bold",
@@ -1166,6 +1228,43 @@ export function classifyPropertyElement(el: Element): PropertyCategory {
   if (redact === "solid") return "redact-solid";
   if (redact === "blur") return "redact-blur";
   return "shape";
+}
+
+/** Build a `number` control descriptor for a per-side text-box
+ *  margin attribute (`data-text-margin-{l,r,t,b}`). Setting the
+ *  margin re-runs `replaceRunsInPlace` so the run block re-flows
+ *  immediately. Stored value is in user-space units (px).
+ *  Mirrors PowerPoint's "Text Box → Margins" surface. */
+function makeMarginControl(
+  id: PropertyControlId,
+  label: string,
+  attr: string,
+): PropertyControlDef<unknown> {
+  return {
+    id,
+    type: "number",
+    label,
+    getValue: (el) => {
+      const variant = el.getAttribute("data-shape-kind");
+      const isLR = attr === "data-text-margin-l" || attr === "data-text-margin-r";
+      const fallback = variant === "plain" ? (isLR ? 2 : 0) : isLR ? 10 : 8;
+      const raw = el.getAttribute(attr);
+      if (raw == null) return fallback;
+      const n = Number.parseFloat(raw);
+      return Number.isFinite(n) && n >= 0 ? n : fallback;
+    },
+    setValue: (el, value) => {
+      const n = Number(value);
+      if (!Number.isFinite(n) || n < 0) return;
+      el.setAttribute(attr, String(n));
+      const runs = readTextShapeSpec(el).runs;
+      replaceRunsInPlace(el, runs);
+    },
+    min: 0,
+    max: 200,
+    step: 1,
+    unit: "px",
+  };
 }
 
 /** Build a `select`-typed control descriptor for a per-tspan
