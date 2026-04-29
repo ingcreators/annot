@@ -1,6 +1,27 @@
 # Rich text + text-on-shape (PowerPoint-style text handling)
 
-> **Status:** Draft
+> **Status:** Done — landed 2026-04-29 across PRs
+> [#326](https://github.com/ingcreators/annot/pull/326)
+> (Phase 1: unified `<g data-type="shape">` skeleton +
+> `runs[]` ABI carrier + spec doc),
+> [#327](https://github.com/ingcreators/annot/pull/327)
+> (Phase 2: contentEditable ↔ TextRun mapper + Ctrl+B/I/U
+> shortcuts + floating mini-toolbar),
+> [#328](https://github.com/ingcreators/annot/pull/328)
+> (Phase 3: Pattern A — double-click a bare rect to add text;
+> lazy promotion + cancel-without-typing rollback),
+> [#329](https://github.com/ingcreators/annot/pull/329)
+> (Phase 4: textBold / textItalic / textUnderline toggles in
+> the PropertyPanel's textbox category card), and
+> [#330](https://github.com/ingcreators/annot/pull/330)
+> (Phase 5: OOXML rich-text goldens — runs walker output
+> pinned in `drawingml-rich-text.test.ts`).
+>
+> Phase 6 (this archival PR) tightens CLAUDE.md's rich-text
+> mention and moves the plan to `_done/`.
+
+> **Original status header (kept for historical reference):**
+> Draft
 > **Compatibility:** `@ingcreators/annot-core` (text-utils,
 > property-schema, tool-registry), `@ingcreators/annot-editor`
 > (text-tool, shape-tool, property-panel, contentEditable host),

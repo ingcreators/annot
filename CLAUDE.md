@@ -155,7 +155,7 @@ in section 2 above.
 | Subpath | Surface |
 |---------|---------|
 | `@ingcreators/annot-core` (or `/headless`) | Tier A. DOM-free: SVG format versioning, storage types, path utilities, capability predicates, dash utils, constants, id, assertNonNull, ZIP builder. **Importable in pure Node.** |
-| `@ingcreators/annot-core/editor` | Tier B. jsdom-friendly element-taking helpers: `arrow-markers`, `transform-utils`, `shape-utils`, `text-utils`, `gradient-utils`, `tool-options` types, svg-format, toolbar-icons. No `<canvas>`. |
+| `@ingcreators/annot-core/editor` | Tier B. jsdom-friendly element-taking helpers: `arrow-markers`, `transform-utils`, `shape-utils`, `text-utils` (unified text-bearing shape skeleton — every text-carrying element is `<g data-type="shape" data-shape-kind="...">` with per-`<tspan>` formatting on bold / italic / underline / size / family / color), `rich-text-mapper` (contentEditable HTML ↔ `TextRun[]`), `gradient-utils`, `tool-options` types, svg-format, toolbar-icons. No `<canvas>`. |
 | `@ingcreators/annot-core/storage` | Tier A. Storage value types (`ImageRecord`, `FolderRecord`, `PageElement`, `PageMetadata`, `StorageProvider`). |
 | `@ingcreators/annot-core/utils` | Tier A. Pure utilities: `assertNonNull`, `computeDasharray`, `detectDashKey`, `newIdB58`, `DEFAULT_*` constants. |
 | `@ingcreators/annot-core/xmp` | Browser-side. `createEditableImage` / `readEditableImage` round-trip. |
