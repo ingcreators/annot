@@ -27,12 +27,57 @@ import type { ToolOptions } from "@ingcreators/annot-core/editor/tool-options";
 /** Map a legacy tool-ID-keyed preset entry to the matching element
  *  key. `"shape"` → `"shape.rect"` (the shape tool's fallback
  *  variant), `"arrow"` → `"arrow.end"`, etc. New-format keys that
- *  already contain "." pass through unchanged. */
+ *  already contain "." pass through unchanged.
+ *
+ *  NOTE: this only rewrites the KEY. Callers that hold the matching
+ *  preset value should also call {@link healPresetVariantField}
+ *  on the value so the stored variant field agrees with the new
+ *  key — without that, a pre-per-color `"highlight"` preset whose
+ *  `highlightColor` reflects the user's last-drawn color (Pink, say)
+ *  ends up cached under `"highlight.#ffe100"` (Yellow) with a Pink
+ *  payload. Applying that mismatched preset back to a Yellow-keyed
+ *  element flips its fill to Pink — the bug behind the user-reported
+ *  "clicking Yellow makes it Pink" symptom. */
 export function migrateLegacyPresetKey(rawKey: string): string {
   if (rawKey.includes(".")) return rawKey;
   const meta = TOOL_REGISTRY[rawKey];
   if (!meta?.variants || !meta.defaultVariant) return rawKey;
   return `${rawKey}.${meta.defaultVariant}`;
+}
+
+/** Auto-heal a stored preset's variant-defining field so it agrees
+ *  with the key it lives under. The legacy `migrateLegacyPresetKey`
+ *  path appends `defaultVariant` to bare tool-id keys (e.g.
+ *  `"highlight"` → `"highlight.#ffe100"`) without touching the
+ *  preset's value, so a per-color preset can end up with a value
+ *  whose `highlightColor` doesn't match the new key's variant. The
+ *  `applyElementVariantPreset` and load-from-storage paths both call
+ *  this so the corruption gets corrected the first time the preset
+ *  is touched.
+ *
+ *  Pure mutation — returns `true` if a write happened (so callers
+ *  can persist the corrected preset back to disk), `false` if the
+ *  preset was already consistent. No-op for tools without a
+ *  `variantField` or for keys without a `.<variant>` segment.
+ *
+ *  Mirrors the variant-field write that
+ *  {@link mergePresetForVariantChange} performs after a flyout pick
+ *  — sharing the contract keeps "stored preset's variant field is
+ *  authoritative under its key" as a single invariant. */
+export function healPresetVariantField(
+  preset: ToolOptions,
+  toolId: string,
+  presetKey: string,
+): boolean {
+  const meta = TOOL_REGISTRY[toolId];
+  if (!meta?.variantField) return false;
+  const dotIdx = presetKey.indexOf(".");
+  if (dotIdx < 0) return false;
+  const variant = presetKey.slice(dotIdx + 1);
+  const presetRec = preset as unknown as Record<string, unknown>;
+  if (presetRec[meta.variantField as string] === variant) return false;
+  presetRec[meta.variantField as string] = variant;
+  return true;
 }
 
 /** Compute the element key for an existing SVG element. Used by

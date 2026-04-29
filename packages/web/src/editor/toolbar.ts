@@ -87,6 +87,7 @@ import { openCanvasRightClickMenu } from "./toolbar-canvas-menu.js";
 import {
   applyPresetStyleAttrs,
   elementKeyFromElement,
+  healPresetVariantField,
   mergePresetForVariantChange,
   migrateLegacyPresetKey,
   seedPresetFromElement,
@@ -865,6 +866,12 @@ export class Toolbar {
       preset = seedPresetFromElement(el, toolId, elementKey, this.#options);
       this.#presets.set(elementKey, preset);
       this.#savePresetsToFile();
+    } else if (healPresetVariantField(preset, toolId, elementKey)) {
+      // The stored preset's variant field disagreed with its key
+      // — see `healPresetVariantField` doc-comment for the legacy
+      // migration corruption it covers. Persist the healed preset
+      // so the next reload starts from consistent state.
+      this.#savePresetsToFile();
     }
     // Update the last-used variant tracking so the next toolbar
     // activation for this tool picks the same variant.
@@ -1268,7 +1275,12 @@ export class Toolbar {
           const fields = this.#presetFieldsForKey(key);
           if (fields.length === 0) continue;
           const partial = presetFromWire(p as Record<string, unknown>, fields, "snake");
-          this.#presets.set(key, this.#presetFromPartial(partial));
+          const preset = this.#presetFromPartial(partial);
+          // Heal any legacy-migration variant-field mismatch (see
+          // healPresetVariantField doc-comment).
+          const toolId = key.includes(".") ? key.slice(0, key.indexOf(".")) : key;
+          healPresetVariantField(preset, toolId, key);
+          this.#presets.set(key, preset);
         }
       }
       if (data.last_variants) {
@@ -1313,7 +1325,12 @@ export class Toolbar {
           const fields = this.#presetFieldsForKey(id);
           if (fields.length === 0) continue;
           const partial = presetFromWire(p as Record<string, unknown>, fields, "camel");
-          this.#presets.set(id, this.#presetFromPartial(partial));
+          const preset = this.#presetFromPartial(partial);
+          // Heal any legacy-migration variant-field mismatch (see
+          // healPresetVariantField doc-comment).
+          const toolId = id.includes(".") ? id.slice(0, id.indexOf(".")) : id;
+          healPresetVariantField(preset, toolId, id);
+          this.#presets.set(id, preset);
         }
       }
       const lastVariants = data.toolLastVariants as Record<string, string> | undefined;
@@ -1370,7 +1387,13 @@ export class Toolbar {
           const fields = this.#presetFieldsForKey(key);
           if (fields.length === 0) continue;
           const partial = presetFromWire(p, fields, "camel");
-          this.#presets.set(key, this.#presetFromPartial(partial));
+          const preset = this.#presetFromPartial(partial);
+          // Heal any legacy-migration variant-field mismatch so the
+          // first apply doesn't paint the wrong color (see
+          // healPresetVariantField doc-comment).
+          const toolId = key.includes(".") ? key.slice(0, key.indexOf(".")) : key;
+          healPresetVariantField(preset, toolId, key);
+          this.#presets.set(key, preset);
         }
       }
       if (data.lastVariants) {
