@@ -239,10 +239,24 @@ export class TextTool extends ToolBase {
     this.#foreignObject = fo;
     this.#editDiv = div;
 
-    // Floating Bold / Italic / Underline toolbar — shows above the
-    // active selection while a non-empty range is selected. Closes
-    // automatically on `#finishEditing`.
-    this.#miniToolbar = createTextMiniToolbar({ host: div });
+    // PowerPoint-style mini toolbar — Bold / Italic / Underline
+    // toggles, font family / size dropdowns, A+ / A−, alignment,
+    // color picker. Hovers above the active selection while a
+    // non-empty range is selected; closes on `#finishEditing`.
+    //
+    // Alignment writes route to the OUTER wrapper element (the
+    // `<g data-type="shape">`) rather than the contentEditable
+    // span tree — Annot's text alignment is a shape-level layout
+    // attribute (`data-text-anchor`), not a per-character span
+    // style. The wrapper's `data-text-anchor` is consumed by
+    // `replaceRunsInPlace` on commit.
+    this.#miniToolbar = createTextMiniToolbar({
+      host: div,
+      onAlignmentChange: (anchor) => {
+        const wrapper = this.#editTarget;
+        if (wrapper) wrapper.setAttribute("data-text-anchor", anchor);
+      },
+    });
 
     requestAnimationFrame(() => {
       div.focus();
