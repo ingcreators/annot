@@ -1,10 +1,13 @@
+import { htmlToRuns, runsToHtml } from "@ingcreators/annot-core/editor/rich-text-mapper";
 import {
   createTextShape,
-  plainTextToRuns,
+  readTextShapeSpec,
   stickyBgFor,
 } from "@ingcreators/annot-core/editor/text-utils";
+import type { TextRun } from "@ingcreators/annot-core/tauri-bridge";
 import type { CanvasManager } from "../canvas-manager.js";
 import type { History } from "../history.js";
+import { createTextMiniToolbar, type TextMiniToolbarHandle } from "../text-mini-toolbar.js";
 import type { TextVariant, ToolOptions } from "./tool-base.js";
 /**
  * TextTool — unified Text / Sticky Note / Callout tool.
@@ -31,6 +34,7 @@ export class TextTool extends ToolBase {
   #editTarget: SVGGElement | null = null;
   #foreignObject: SVGForeignObjectElement | null = null;
   #editDiv: HTMLDivElement | null = null;
+  #miniToolbar: TextMiniToolbarHandle | null = null;
 
   onTextBoxChanged?: (newEl: SVGElement) => void;
 
@@ -67,24 +71,9 @@ export class TextTool extends ToolBase {
   #editExisting(g: SVGGElement): void {
     if (this.#editing) this.#finishEditing();
 
-    const bg = g.querySelector("rect") as SVGRectElement | null;
-    const x = Number.parseFloat(bg?.getAttribute("x") || "0");
-    const y = Number.parseFloat(bg?.getAttribute("y") || "0");
-    const w = Number.parseFloat(bg?.getAttribute("width") || String(DEFAULT_WIDTH));
-    const h = Number.parseFloat(bg?.getAttribute("height") || String(DEFAULT_HEIGHT));
-    // Plain-text view of the existing runs — Phase 2 will swap this
-    // for the rich-text mapper that preserves per-tspan formatting.
-    const tspans = Array.from(g.querySelectorAll("tspan"));
-    const text =
-      tspans.length > 0
-        ? tspans.map((t) => t.textContent ?? "").join("\n")
-        : g.querySelector("text")?.textContent || "";
-    const fontSize = Number.parseFloat(
-      g.getAttribute("data-font-size") || String(this.options.fontSize),
-    );
-    const fontFamily =
-      g.getAttribute("data-font-family") || (this.options.fontFamily ?? "sans-serif");
-    const color = g.getAttribute("data-color") || this.options.strokeColor;
+    // Read the spec via the canonical text-utils reader so per-tspan
+    // formatting flows into the contentEditable as styled HTML.
+    const spec = readTextShapeSpec(g);
 
     const transform = g.getAttribute("transform") || "";
     const match = transform.match(/translate\(([\d.-]+),\s*([\d.-]+)\)/);
@@ -96,14 +85,21 @@ export class TextTool extends ToolBase {
     this.#editTarget = g;
     g.style.display = "none";
 
-    this.#startEditing(x + tx, y + ty, { text, fontSize, fontFamily, color, width: w, height: h });
+    this.#startEditing(spec.x + tx, spec.y + ty, {
+      runs: spec.runs,
+      fontSize: spec.fontSize,
+      fontFamily: spec.fontFamily,
+      color: spec.color,
+      width: spec.w,
+      height: spec.h,
+    });
   }
 
   #startEditing(
     x: number,
     y: number,
     existing: {
-      text: string;
+      runs: TextRun[];
       fontSize: number;
       fontFamily: string;
       color: string;
@@ -148,13 +144,22 @@ export class TextTool extends ToolBase {
       box-sizing: border-box;
     `;
 
-    if (existing?.text) div.innerText = existing.text;
+    // Seed the contentEditable from the run array so per-character
+    // formatting (bold / italic / underline) survives the round-trip.
+    if (existing?.runs && existing.runs.length > 0) {
+      div.innerHTML = runsToHtml(existing.runs);
+    }
 
     fo.appendChild(div);
     this.canvas.annotations.appendChild(fo);
 
     this.#foreignObject = fo;
     this.#editDiv = div;
+
+    // Floating Bold / Italic / Underline toolbar — shows above the
+    // active selection while a non-empty range is selected. Closes
+    // automatically on `#finishEditing`.
+    this.#miniToolbar = createTextMiniToolbar({ host: div });
 
     requestAnimationFrame(() => {
       div.focus();
@@ -166,7 +171,32 @@ export class TextTool extends ToolBase {
     });
 
     div.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") this.#finishEditing();
+      if (e.key === "Escape") {
+        this.#finishEditing();
+        return;
+      }
+      // Phase 2: Ctrl+B / Ctrl+I / Ctrl+U toggle inline formatting
+      // on the active selection (or the next-typed character if the
+      // selection is collapsed). Uses the deprecated-but-still-canonical
+      // execCommand path that contentEditable hosts continue to
+      // support; the floating mini-toolbar offers a fallback affordance.
+      if (e.ctrlKey || e.metaKey) {
+        const cmd =
+          e.key === "b" || e.key === "B"
+            ? "bold"
+            : e.key === "i" || e.key === "I"
+              ? "italic"
+              : e.key === "u" || e.key === "U"
+                ? "underline"
+                : null;
+        if (cmd) {
+          e.preventDefault();
+          if (typeof document.execCommand === "function") {
+            document.execCommand(cmd);
+          }
+          return;
+        }
+      }
       e.stopPropagation();
     });
   }
@@ -175,7 +205,13 @@ export class TextTool extends ToolBase {
     if (!this.#foreignObject || !this.#editDiv) return;
     this.#editing = false;
 
-    const text = this.#editDiv.innerText.trim();
+    // Read styled runs from the contentEditable's HTML so inline
+    // bold / italic / underline / span overrides survive the commit.
+    const runs = htmlToRuns(this.#editDiv);
+    const flatText = runs
+      .map((r) => r.text)
+      .join("")
+      .trim();
     const foX = Number.parseFloat(this.#foreignObject.getAttribute("x")!);
     const foY = Number.parseFloat(this.#foreignObject.getAttribute("y")!);
     const foW = Number.parseFloat(this.#foreignObject.getAttribute("width")!);
@@ -197,6 +233,8 @@ export class TextTool extends ToolBase {
       ? (this.#editTarget.getAttribute("data-shape-kind") as TextVariant) || "sticky"
       : (this.options.textVariant ?? "sticky");
 
+    this.#miniToolbar?.close();
+    this.#miniToolbar = null;
     this.#foreignObject.remove();
     this.#foreignObject = null;
     this.#editDiv = null;
@@ -206,7 +244,7 @@ export class TextTool extends ToolBase {
       this.#editTarget = null;
     }
 
-    if (!text) return;
+    if (!flatText) return;
 
     const newEl = createTextShape({
       x: foX,
@@ -214,7 +252,7 @@ export class TextTool extends ToolBase {
       w: foW,
       h: foH,
       variant,
-      runs: plainTextToRuns(text),
+      runs,
       fontSize,
       fontFamily,
       color,
