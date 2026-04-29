@@ -482,6 +482,30 @@ export class PropertyPanel {
         info.replacements.map((r) => [r.oldEl, r.newEl] as const),
       );
       this.#targets = this.#targets.map((t) => map.get(t) ?? t);
+      // Pattern A wrapper-sync: when the user converts the
+      // inner geometry of a text-bearing shape via the
+      // shapeTypePicker (rect ↔ ellipse), the wrapper `<g>`
+      // itself stays in `#targets` but its `data-shape-kind`
+      // attribute now lies about the inner element's tag.
+      // Update it so downstream readers (right-panel title,
+      // Pattern A detection in #renderTextboxControls, etc.)
+      // see consistent state.
+      for (const r of info.replacements) {
+        if (r.oldEl === r.newEl) continue;
+        const parent = r.newEl.parentElement as SVGElement | null;
+        if (
+          parent &&
+          parent.tagName === "g" &&
+          parent.getAttribute("data-type") === "shape"
+        ) {
+          const tag = r.newEl.tagName;
+          const rounded = r.newEl.hasAttribute("data-rounded");
+          const kind = tag === "ellipse" ? "ellipse" : rounded ? "rounded" : "rect";
+          if (parent.getAttribute("data-shape-kind") !== kind) {
+            parent.setAttribute("data-shape-kind", kind);
+          }
+        }
+      }
       const real = info.replacements.filter((r) => r.oldEl !== r.newEl);
       if (real.length > 0) this.onTargetReplaced?.(real);
     }
@@ -630,8 +654,21 @@ export class PropertyPanel {
     if (innerGeometry) {
       // Pattern A — the shape is fundamentally a rectangle /
       // ellipse. Surface its Shape-tool properties so the user
-      // can tweak fill / stroke without entering text-edit mode.
-      // No text controls visible until they double-click.
+      // can tweak type / fill / stroke without entering
+      // text-edit mode. No text controls visible until they
+      // double-click.
+      //
+      // Type / Fill / Line controls are scoped to the inner
+      // geometry primitive (`<rect>` / `<ellipse>` child of
+      // the wrapper `<g>`) so the same registry defs that
+      // power bare Shape elements work unchanged. The
+      // shapeTypePicker.replace path swaps the inner element
+      // (rect ↔ ellipse) inside the wrapper; the wrapper's
+      // own `data-shape-kind` attr is kept in sync after the
+      // swap by the post-replace hook below.
+      this.#inSection("Type", () => {
+        this.#renderRegistryControlAgainst([innerGeometry], PROPERTY_CONTROL_IDS.shapeTypePicker);
+      });
       this.#inSection("Fill", () => {
         this.#renderRegistryControlAgainst([innerGeometry], PROPERTY_CONTROL_IDS.fillColor);
         this.#renderRegistryControlAgainst([innerGeometry], PROPERTY_CONTROL_IDS.fillOpacity);
