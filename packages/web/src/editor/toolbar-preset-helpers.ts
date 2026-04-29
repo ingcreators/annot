@@ -24,17 +24,6 @@ import type { ToolOptions } from "@ingcreators/annot-core/editor/tool-options";
 // (relocated in Phase 5 of `_done/toolbar-schema.md`). Callers should
 // import it from core directly; this file no longer re-exports it.
 
-/** Map a legacy tool-ID-keyed preset entry to the matching element
- *  key. `"shape"` → `"shape.rect"` (the shape tool's fallback
- *  variant), `"arrow"` → `"arrow.end"`, etc. New-format keys that
- *  already contain "." pass through unchanged. */
-export function migrateLegacyPresetKey(rawKey: string): string {
-  if (rawKey.includes(".")) return rawKey;
-  const meta = TOOL_REGISTRY[rawKey];
-  if (!meta?.variants || !meta.defaultVariant) return rawKey;
-  return `${rawKey}.${meta.defaultVariant}`;
-}
-
 /** Compute the element key for an existing SVG element. Used by
  *  `syncPresetFromElement` so that rubber-band style propagation
  *  targets the RIGHT variant's preset — e.g. editing a rounded
