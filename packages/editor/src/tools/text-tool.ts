@@ -291,7 +291,13 @@ export class TextTool extends ToolBase {
     }
 
     fo.appendChild(div);
-    this.canvas.annotations.appendChild(fo);
+    // The contentEditable overlay is editor-session UI, NOT a
+    // user-visible annotation. Live in `canvas.uiOverlay` so the
+    // SelectionManager / annotation enumerators don't pick it up
+    // as a draggable shape — appending to `canvas.annotations`
+    // would let the user grab the overlay's bbox handles and
+    // move it independently of the underlying shape.
+    this.canvas.uiOverlay.appendChild(fo);
 
     this.#foreignObject = fo;
     this.#editDiv = div;
