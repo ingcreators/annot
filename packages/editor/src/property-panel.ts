@@ -131,6 +131,24 @@ export class PropertyPanel {
    *       and variant-dependent controls refresh. */
   onVariantChanged?: (targets: SVGElement[]) => void;
 
+  /** When non-null, the panel is in TEXT EDIT MODE for the
+   *  pointed-at wrapper element. Object-mode properties (the
+   *  shape's fill / stroke / variant picker) are hidden; the
+   *  panel renders ONLY the Text + Text box sections so the user
+   *  can tweak the formatting without seeing the underlying
+   *  shape's geometric properties.
+   *
+   *  Object-selection mode (the default, `#editTarget === null`)
+   *  is the inverse: the panel renders the shape's normal
+   *  property surface but never the Text / Text box sections.
+   *
+   *  Toggled via custom DOM events on the canvas SVG —
+   *  `annot:text-edit-start` (with the wrapper as
+   *  `event.detail`) flips into edit mode; `annot:text-edit-end`
+   *  flips back. TextTool dispatches these so the panel doesn't
+   *  need a direct reference to the tool. */
+  #editTarget: SVGElement | null = null;
+
   /** Effect-handler table consumed by the schema-driven renderer
    *  (see `property-panel-renderer.ts`). Built once in the constructor
    *  so each `#renderViaRegistry` call reuses the same bound handlers
@@ -162,6 +180,36 @@ export class PropertyPanel {
     container.appendChild(this.#el);
 
     this.#el.addEventListener("pointerdown", (e) => e.stopPropagation());
+
+    // Listen for TextTool's edit-session lifecycle events so the
+    // panel can flip into "text edit mode" — render only the Text
+    // + Text box sections — and back. The events dispatch on the
+    // canvas SVG so any number of TextTool instances throughout
+    // the session feed into the single panel without per-tool
+    // wiring.
+    this.#canvas.svg.addEventListener("annot:text-edit-start", (e) => {
+      const detail = (e as CustomEvent).detail as { target?: SVGElement } | null;
+      const target = detail?.target ?? null;
+      if (!target) return;
+      this.#editTarget = target;
+      this.show([target]);
+    });
+    this.#canvas.svg.addEventListener("annot:text-edit-end", () => {
+      const target = this.#editTarget;
+      this.#editTarget = null;
+      // Re-render in object-selection mode against the same
+      // wrapper so the user sees the shape's normal properties
+      // without re-clicking. If the wrapper was unwrapped (cancel
+      // without typing on a freshly-promoted shape), the host
+      // will follow up with its own selection update — falling
+      // back to `hide()` here keeps the panel out of a stale
+      // edit-mode render.
+      if (target?.isConnected) {
+        this.show([target]);
+      } else {
+        this.hide();
+      }
+    });
 
     // Bind once — the renderer re-uses the same handlers across every
     // `show()` call. `convertRedactStyle` closes over `this.#canvas`,
@@ -526,62 +574,82 @@ export class PropertyPanel {
    *     and the outer `data-font-size` marker.
    */
   #renderTextboxControls(g: SVGElement): void {
-    // Pattern A wrappers (data-shape-kind ∈ rect / rounded /
-    // ellipse) carry a user-drawn geometry primitive whose
-    // stroke / fill the user originally configured via the Shape
-    // toolbar. After the dblclick promotion they expect those
-    // controls to remain accessible alongside the new text
-    // controls — otherwise the impression is that "the Shape's
-    // colors got replaced by Text's". Surface the geometry's
-    // fill / stroke controls scoped to the inner primitive.
     const shapeKind = g.getAttribute("data-shape-kind");
     const isPatternA = shapeKind === "rect" || shapeKind === "rounded" || shapeKind === "ellipse";
     const innerGeometry = isPatternA
       ? (g.querySelector(":scope > rect, :scope > ellipse") as SVGElement | null)
       : null;
 
-    this.#inSection("Type", () => {
-      this.#renderRegistryControl(PROPERTY_CONTROL_IDS.textVariantPicker);
-    });
+    // Two presentation modes for text-bearing shapes:
+    //
+    // 1. **Object selection mode** (the default — `#editTarget`
+    //    is null OR points elsewhere): the user clicked the
+    //    shape on the canvas. Render the shape's "object"
+    //    properties only — geometry, fill, stroke, variant
+    //    picker — never the text formatting controls. The user
+    //    enters text-formatting mode by double-clicking, which
+    //    the TextTool dispatches as `annot:text-edit-start`.
+    //
+    // 2. **Text edit mode** (`#editTarget === g`): TextTool has
+    //    an active edit session on this wrapper. Render ONLY the
+    //    Text + Text box sections — the user is focused on
+    //    typing / formatting characters, not on resizing the
+    //    shape.
+    //
+    // The mode split mirrors PowerPoint: clicking a shape shows
+    // shape properties, double-clicking enters text editing and
+    // shows text properties.
+    const isEditMode = this.#editTarget === g;
 
+    if (isEditMode) {
+      // Text section — text formatting that operates on the
+      // wrapper or its tspans.
+      this.#inSection("Text", () => {
+        this.#renderRegistryControl(PROPERTY_CONTROL_IDS.textColor);
+        this.#renderRegistryControl(PROPERTY_CONTROL_IDS.fontFamily);
+        this.#renderRegistryControl(PROPERTY_CONTROL_IDS.fontSize);
+        this.#renderRegistryControl(PROPERTY_CONTROL_IDS.textBold);
+        this.#renderRegistryControl(PROPERTY_CONTROL_IDS.textItalic);
+        this.#renderRegistryControl(PROPERTY_CONTROL_IDS.textUnderline);
+        this.#renderRegistryControl(PROPERTY_CONTROL_IDS.textAnchor);
+        this.#renderRegistryControl(PROPERTY_CONTROL_IDS.textVerticalAnchor);
+      });
+      // Text box section — PowerPoint's "Format Shape → Text Box"
+      // surface (Autofit + per-side Margins).
+      this.#inSection("Text box", () => {
+        this.#renderRegistryControl(PROPERTY_CONTROL_IDS.textAutofit);
+        this.#renderRegistryControl(PROPERTY_CONTROL_IDS.textMarginLeft);
+        this.#renderRegistryControl(PROPERTY_CONTROL_IDS.textMarginRight);
+        this.#renderRegistryControl(PROPERTY_CONTROL_IDS.textMarginTop);
+        this.#renderRegistryControl(PROPERTY_CONTROL_IDS.textMarginBottom);
+      });
+      return;
+    }
+
+    // ─── Object selection mode ─────────────────────────────
     if (innerGeometry) {
-      // Fill section — colour + opacity of the underlying shape.
+      // Pattern A — the shape is fundamentally a rectangle /
+      // ellipse. Surface its Shape-tool properties so the user
+      // can tweak fill / stroke without entering text-edit mode.
+      // No text controls visible until they double-click.
       this.#inSection("Fill", () => {
         this.#renderRegistryControlAgainst([innerGeometry], PROPERTY_CONTROL_IDS.fillColor);
         this.#renderRegistryControlAgainst([innerGeometry], PROPERTY_CONTROL_IDS.fillOpacity);
       });
-      // Line section — stroke colour / width / dash style.
       this.#inSection("Line", () => {
         this.#renderRegistryControlAgainst([innerGeometry], PROPERTY_CONTROL_IDS.strokeColor);
         this.#renderRegistryControlAgainst([innerGeometry], PROPERTY_CONTROL_IDS.strokeWidth);
         this.#renderRegistryControlAgainst([innerGeometry], PROPERTY_CONTROL_IDS.strokeStyle);
       });
+      return;
     }
 
-    // Text section — applies to the wrapper itself (text colour,
-    // font, per-character toggles, alignment).
-    this.#inSection("Text", () => {
-      this.#renderRegistryControl(PROPERTY_CONTROL_IDS.textColor);
-      this.#renderRegistryControl(PROPERTY_CONTROL_IDS.fontFamily);
-      this.#renderRegistryControl(PROPERTY_CONTROL_IDS.fontSize);
-      this.#renderRegistryControl(PROPERTY_CONTROL_IDS.textBold);
-      this.#renderRegistryControl(PROPERTY_CONTROL_IDS.textItalic);
-      this.#renderRegistryControl(PROPERTY_CONTROL_IDS.textUnderline);
-      this.#renderRegistryControl(PROPERTY_CONTROL_IDS.textAnchor);
-      this.#renderRegistryControl(PROPERTY_CONTROL_IDS.textVerticalAnchor);
-    });
-
-    // Text box section — PowerPoint's "Format Shape → Text Box"
-    // surface. Vertical alignment was already covered above; the
-    // remaining options (Autofit + per-side Margins) live here so
-    // the user can tune the layout independently of the styling
-    // they pick for the run content itself.
-    this.#inSection("Text box", () => {
-      this.#renderRegistryControl(PROPERTY_CONTROL_IDS.textAutofit);
-      this.#renderRegistryControl(PROPERTY_CONTROL_IDS.textMarginLeft);
-      this.#renderRegistryControl(PROPERTY_CONTROL_IDS.textMarginRight);
-      this.#renderRegistryControl(PROPERTY_CONTROL_IDS.textMarginTop);
-      this.#renderRegistryControl(PROPERTY_CONTROL_IDS.textMarginBottom);
+    // Legacy text variants (plain / sticky / callout) — the
+    // shape's "object" properties are basically the variant
+    // picker (the bg colour for sticky / callout is derived from
+    // the text colour, which the user adjusts in edit mode).
+    this.#inSection("Type", () => {
+      this.#renderRegistryControl(PROPERTY_CONTROL_IDS.textVariantPicker);
     });
   }
 
