@@ -484,14 +484,14 @@
  *   - Hover state (ring + slight zoom) signals interactivity. */
 .tool-btn-badge {
   position: absolute;
-  right: 1px;
-  bottom: 1px;
-  width: 16px;
-  height: 16px;
+  right: -2px;
+  bottom: -2px;
+  width: 12px;
+  height: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
+  font-size: 10px;
   line-height: 1;
   color: var(--annot-accent);
   background: var(--annot-bg-panel);
@@ -499,11 +499,10 @@
   box-shadow: 0 0 0 1.5px var(--annot-bg-panel);
   pointer-events: auto;
   cursor: pointer;
-  /* Make the hit area larger than the visual bounds without enlarging
-   * the visible badge — easier to click reliably, Fitts-law friendly.
-   * The invisible padding extends the clickable rect by 4px in every
-   * direction (16+8 = 24×24 effective), while the visual circle stays
-   * 16×16 via width/height above. */
+  /* Visual badge stays small so it floats outside the main icon's
+   * visual bounds (right/bottom -2px) without occluding it. The
+   * `::before` rule below extends the hit area back out to the
+   * button corner so clickability matches the larger 16×16 era. */
   padding: 0;
   border: none;
   transition:
@@ -553,8 +552,8 @@
  * inline SVG. Size scales with the badge's 16px bounds so visual
  * weight matches the ligature glyphs next to it. */
 .tool-btn-badge-svg > svg {
-  width: 13px;
-  height: 13px;
+  width: 10px;
+  height: 10px;
   color: var(--annot-accent);
   stroke: currentColor;
 }
@@ -567,6 +566,9 @@
  * the "color = variant" reading lines up visually across all three
  * surfaces. `--swatch-color` is set inline by #syncToolButtonIcon. */
 .tool-btn-badge-color {
+  /* Shares the variant-badge sizing + offset (12×12 floating outside
+   * the icon at right/bottom -2px) so the toolbar reads consistently
+   * across all tools. Only the inner swatch chip differs. */
   font-size: 0;
   color: transparent;
   /* Inherits background (panel color) + border-radius (50%) from
@@ -576,14 +578,13 @@
 }
 
 .tool-btn-badge-color::after {
-  /* Inner rounded square showing the current highlight color. Size
-   * chosen to leave a ~2px ring of badge-bg visible all around for a
-   * clear frame; border-radius matches the flyout / property-panel
-   * swatches (4px scaled down to fit 10px). */
+  /* Inner rounded square showing the current highlight color. Sized
+   * to fit the 12×12 frame with a thin ring of badge-bg visible all
+   * around. */
   content: "";
   display: block;
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
   border-radius: 2px;
   background: var(--swatch-color, transparent);
   box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.25);
