@@ -22,12 +22,8 @@
 import { describe, expect, it } from "vitest";
 import { computeDasharray } from "../utils/dash-utils.js";
 import type { ToolOptions } from "./tool-options.js";
+import { normalizeVariantSideFields, TOOL_REGISTRY, TOOL_REGISTRY_IDS } from "./tool-registry.js";
 import { readUniversalStyleAttrs } from "./tool-style-reader.js";
-import {
-  normalizeVariantSideFields,
-  TOOL_REGISTRY,
-  TOOL_REGISTRY_IDS,
-} from "./tool-registry.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -52,10 +48,7 @@ function emptyPreset(): ToolOptions {
  *  `tagName`, `getAttribute`, `hasAttribute`, `querySelector` —
  *  emulate that surface without dragging happy-dom in for a node
  *  test. */
-function fakeEl(
-  tagName: string,
-  attrs: Record<string, string> = {},
-): SVGElement {
+function fakeEl(tagName: string, attrs: Record<string, string> = {}): SVGElement {
   return {
     tagName,
     getAttribute: (name: string) => (name in attrs ? attrs[name]! : null),
@@ -273,9 +266,7 @@ describe("TOOL_REGISTRY variantKeyForElement spot-checks", () => {
       TOOL_REGISTRY.shape!.variantKeyForElement!(fakeEl("rect", { "data-highlight": "1" })),
     ).toBeNull();
     expect(
-      TOOL_REGISTRY.shape!.variantKeyForElement!(
-        fakeEl("rect", { "data-redact-style": "solid" }),
-      ),
+      TOOL_REGISTRY.shape!.variantKeyForElement!(fakeEl("rect", { "data-redact-style": "solid" })),
     ).toBeNull();
   });
 
@@ -309,10 +300,10 @@ describe("TOOL_REGISTRY variantKeyForElement spot-checks", () => {
     ).toBe("arrow.both");
   });
 
-  it("text: <g data-type=textbox> reads data-text-variant", () => {
+  it("text: <g data-type=shape> reads data-shape-kind", () => {
     expect(
       TOOL_REGISTRY.text!.variantKeyForElement!(
-        fakeEl("g", { "data-type": "textbox", "data-text-variant": "callout" }),
+        fakeEl("g", { "data-type": "shape", "data-shape-kind": "callout" }),
       ),
     ).toBe("text.callout");
   });
@@ -335,9 +326,7 @@ describe("TOOL_REGISTRY variantKeyForElement spot-checks", () => {
 
   it("redact: rect[data-redact-style=solid] + image[mosaic/blur]", () => {
     expect(
-      TOOL_REGISTRY.redact!.variantKeyForElement!(
-        fakeEl("rect", { "data-redact-style": "solid" }),
-      ),
+      TOOL_REGISTRY.redact!.variantKeyForElement!(fakeEl("rect", { "data-redact-style": "solid" })),
     ).toBe("redact.solid");
     expect(
       TOOL_REGISTRY.redact!.variantKeyForElement!(
@@ -345,9 +334,7 @@ describe("TOOL_REGISTRY variantKeyForElement spot-checks", () => {
       ),
     ).toBe("redact.mosaic");
     expect(
-      TOOL_REGISTRY.redact!.variantKeyForElement!(
-        fakeEl("image", { "data-redact-style": "blur" }),
-      ),
+      TOOL_REGISTRY.redact!.variantKeyForElement!(fakeEl("image", { "data-redact-style": "blur" })),
     ).toBe("redact.blur");
   });
 
@@ -357,9 +344,7 @@ describe("TOOL_REGISTRY variantKeyForElement spot-checks", () => {
     // default variant ("mosaic"). Without this branch a redact image
     // saved before the redact-style attribute existed would fail
     // tool routing.
-    expect(TOOL_REGISTRY.redact!.variantKeyForElement!(fakeEl("image"))).toBe(
-      "redact.mosaic",
-    );
+    expect(TOOL_REGISTRY.redact!.variantKeyForElement!(fakeEl("image"))).toBe("redact.mosaic");
   });
 
   it("crop: has no variantKeyForElement (no on-canvas element)", () => {
@@ -419,10 +404,10 @@ describe("TOOL_REGISTRY extractStyleFromElement", () => {
     expect(preset.redactStyle).toBe("solid");
   });
 
-  it("text: <g data-type=textbox> reads variant + font + text-color", () => {
+  it("text: <g data-type=shape> reads kind + font + text-color", () => {
     const g = svg("g", {
-      "data-type": "textbox",
-      "data-text-variant": "callout",
+      "data-type": "shape",
+      "data-shape-kind": "callout",
       "data-color": "#222222",
     });
     const t = svg("text", { "font-size": "20", "font-family": "Inter", fill: "#222222" });
@@ -552,18 +537,18 @@ describe("TOOL_REGISTRY applyStyleToElement", () => {
   });
 
   describe("text", () => {
-    it("<g data-type=textbox>: round-trips strokeColor / fontFamily / fontSize", () => {
+    it("<g data-type=shape>: round-trips strokeColor / fontFamily / fontSize", () => {
       const original = svg("g", {
-        "data-type": "textbox",
-        "data-text-variant": "callout",
+        "data-type": "shape",
+        "data-shape-kind": "callout",
         "data-color": "#222222",
         "data-font-family": "Inter",
       });
       const t = svg("text", { fill: "#222222", "font-family": "Inter", "font-size": "20" });
       original.appendChild(t);
       const preset = harvest("text", original);
-      // Build a fresh textbox <g> with an empty inner <text>.
-      const fresh = svg("g", { "data-type": "textbox", "data-text-variant": "callout" });
+      // Build a fresh text-bearing shape <g> with an empty inner <text>.
+      const fresh = svg("g", { "data-type": "shape", "data-shape-kind": "callout" });
       const freshT = svg("text");
       fresh.appendChild(freshT);
       TOOL_REGISTRY.text!.applyStyleToElement!(fresh, preset);
@@ -629,9 +614,7 @@ describe("TOOL_REGISTRY applyStyleToElement", () => {
       expect(freshBg.getAttribute("stroke")).toBe("#123456");
       expect(freshBg.getAttribute("stroke-width")).toBe("2.5");
       expect(freshBg.getAttribute("data-dash-key")).toBe("dash");
-      expect(freshBg.getAttribute("stroke-dasharray")).toBe(
-        computeDasharray("dash", 2.5),
-      );
+      expect(freshBg.getAttribute("stroke-dasharray")).toBe(computeDasharray("dash", 2.5));
       // Counter <text> picks up font-size.
       expect(freshT.getAttribute("font-size")).toBe("18");
       // Re-harvest round-trip.
@@ -657,9 +640,7 @@ describe("TOOL_REGISTRY applyStyleToElement", () => {
       TOOL_REGISTRY.marker!.applyStyleToElement!(fresh, preset);
       // Dash is computed against the bg's existing stroke-width (4),
       // NOT the preset's missing one.
-      expect(freshBg.getAttribute("stroke-dasharray")).toBe(
-        computeDasharray("lgDash", 4),
-      );
+      expect(freshBg.getAttribute("stroke-dasharray")).toBe(computeDasharray("lgDash", 4));
     });
   });
 

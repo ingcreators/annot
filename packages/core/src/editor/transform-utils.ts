@@ -96,7 +96,6 @@ function setLineEndpoints(el: SVGElement, x1: number, y1: number, x2: number, y2
   el.setAttribute("y2", String(y2));
 }
 
-
 /** Compose the element's current transform state into a DOMMatrix.
  *  Shared by the endpoint+control-point transformation helpers so the
  *  math is identical everywhere. */
@@ -348,8 +347,8 @@ export function writeTransformState(el: SVGElement, patch: Partial<TransformStat
   // unrotated bg rect. Recompute defensively so visual stays consistent.
   if (
     el.tagName === "g" &&
-    el.getAttribute("data-type") === "textbox" &&
-    el.getAttribute("data-text-variant") === "callout"
+    el.getAttribute("data-type") === "shape" &&
+    el.getAttribute("data-shape-kind") === "callout"
   ) {
     rebuildCalloutTail(el);
   }

@@ -1,5 +1,6 @@
 import { builtinIcon } from "@ingcreators/annot-core";
 import "../ui/annot-icon.js";
+
 /**
  * `<annot-editor-right-panel>` — unified context-aware properties
  * panel.
@@ -54,22 +55,22 @@ import "../ui/annot-icon.js";
  *      survive mode switches.
  */
 
-import type { SelectionManager } from "@ingcreators/annot-editor";
-import type { Toolbar } from "./toolbar.js";
 import { highlightColorLabel } from "@ingcreators/annot-core/editor";
-import { type CanvasManager, type History, PropertyPanel } from "@ingcreators/annot-editor";
-import type { PageMetadata } from "@ingcreators/annot-core/storage";
 import {
   readTransformState,
   setRotation,
   toggleFlip,
 } from "@ingcreators/annot-core/editor/transform-utils";
+import type { PageMetadata } from "@ingcreators/annot-core/storage";
+import type { SelectionManager } from "@ingcreators/annot-editor";
+import { type CanvasManager, type History, PropertyPanel } from "@ingcreators/annot-editor";
 import type { UISection, UISectionContext, UISectionLifecycle } from "../app/plugin-host.js";
 import { html, LitElement, unsafeHTML } from "../lit.js";
 import { logger } from "../logger.js";
 import { createPageElementsSection } from "./right-panel-sections/annot-page-elements-section.js";
 import { createSelectionPropertiesSection } from "./right-panel-sections/annot-selection-properties-section.js";
 import { createToolPropertiesSection } from "./right-panel-sections/annot-tool-properties-section.js";
+import type { Toolbar } from "./toolbar.js";
 
 // =============================================================================
 // Action-button SVGs — custom glyphs modeled on PowerPoint's ribbon
@@ -374,12 +375,7 @@ export class AnnotEditorRightPanelElement extends LitElement {
     if (this.#propPanel || !this.canvas || !this.history || !this.selection) return;
     const selection = this.selection;
     const toolbar = this.toolbar;
-    this.#propPanel = new PropertyPanel(
-      this.#propPanelHost,
-      this.canvas,
-      this.history,
-      "docked",
-    );
+    this.#propPanel = new PropertyPanel(this.#propPanelHost, this.canvas, this.history, "docked");
     this.#propPanel.onTargetReplaced = (replacements) => {
       const newEls = replacements.map((r) => r.newEl);
       if (newEls.length === 1) selection.select(newEls[0]!);
@@ -676,10 +672,10 @@ export class AnnotEditorRightPanelElement extends LitElement {
         if (hasEnd || hasStart) return "Arrow";
         return "Line";
       }
-      if (type === "textbox") {
-        const variant = el.getAttribute("data-text-variant");
-        if (variant === "callout") return "Callout";
-        if (variant === "sticky") return "Sticky note";
+      if (type === "shape") {
+        const kind = el.getAttribute("data-shape-kind");
+        if (kind === "callout") return "Callout";
+        if (kind === "sticky") return "Sticky note";
         return "Text";
       }
       if (el.hasAttribute("data-marker")) {

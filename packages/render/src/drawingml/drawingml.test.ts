@@ -145,7 +145,8 @@ function text(): AnnotationShape {
     height: 50,
     font_size: 24,
     fill: "#000000",
-    text: "Hello",
+    runs: [{ text: "Hello" }],
+    shape_kind: "sticky",
     text_bg_color: "rgba(255,255,200,0.92)",
   };
 }
@@ -159,9 +160,9 @@ function callout(): AnnotationShape {
     height: 50,
     font_size: 20,
     fill: "#000000",
-    text: "Callout!",
+    runs: [{ text: "Callout!" }],
     text_bg_color: "rgba(255,255,200,0.92)",
-    text_variant: "callout",
+    shape_kind: "callout",
     tail_x: 300,
     tail_y: 470,
   };
@@ -172,7 +173,7 @@ function freehand(): AnnotationShape {
     type: "freehand",
     stroke: "#ff00ff",
     stroke_width: 2,
-    text: "M 0 0 L 10 10 L 20 5",
+    path_d: "M 0 0 L 10 10 L 20 5",
   };
 }
 
@@ -222,16 +223,7 @@ const EXPECTED_REDACT_SOLID_NO_OUTLINE = `<?xml version="1.0" encoding="UTF-8" s
 describe("buildDrawingXml byte-equivalence with Rust GVML goldens", () => {
   it("matches the Rust drawing_xml_all_emitters snapshot", () => {
     const { drawing, mediaFiles } = buildDrawingXml({
-      shapes: [
-        rect(),
-        roundedRect(),
-        ellipse(),
-        arrow(),
-        marker(),
-        text(),
-        freehand(),
-        mosaic(),
-      ],
+      shapes: [rect(), roundedRect(), ellipse(), arrow(), marker(), text(), freehand(), mosaic()],
       width: 800,
       height: 600,
       hasImage: false,
@@ -393,7 +385,7 @@ describe("buildShapeXml PPTX namespace contract", () => {
     const xml = buildShapeXml(
       {
         type: "freehand",
-        text: "M 0 0 L 10 10",
+        path_d: "M 0 0 L 10 10",
         stroke: "#000000",
         stroke_width: 2,
       },
@@ -412,8 +404,8 @@ describe("buildShapeXml PPTX namespace contract", () => {
         width: 100,
         height: 30,
         font_size: 18,
-        text: "Hello",
-        text_variant: "sticky",
+        runs: [{ text: "Hello" }],
+        shape_kind: "sticky",
         text_bg_color: "rgba(255,255,200,1)",
         fill: "#000000",
       },

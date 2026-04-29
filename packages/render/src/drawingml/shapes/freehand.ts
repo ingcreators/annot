@@ -4,11 +4,11 @@ import type { NamespaceOpts } from "../namespace.js";
 
 /** Build a `<{ns}:sp>` with `<a:custGeom>` for a
  *  `type === "freehand"` AnnotationShape. The SVG path d-string
- *  rides on `text`; we re-parse the M / L points and emit them
+ *  rides on `path_d`; we re-parse the M / L points and emit them
  *  as `<a:moveTo>` / `<a:lnTo>` in EMU coords. Returns "" when
  *  fewer than 2 points are present (no shape to render). */
 export function buildFreehand(s: AnnotationShape, id: number, ns: NamespaceOpts): string {
-  const d = s.text ?? "";
+  const d = s.path_d ?? "";
   const stroke = chex(s.stroke ?? "#ff0000");
   const sw = pt(s.stroke_width ?? 3);
 

@@ -11,13 +11,9 @@
 // the old `#savePresetsToFile` would have produced for each tool's
 // per-tool field set (i.e. `presetFields` ⊂ the old 20-field union).
 import { describe, expect, it } from "vitest";
-import { TOOL_REGISTRY } from "./tool-registry.js";
 import type { ToolOptions } from "./tool-options.js";
-import {
-  fieldForSnakeKey,
-  presetFromWire,
-  presetToWire,
-} from "./tool-preset-serde.js";
+import { fieldForSnakeKey, presetFromWire, presetToWire } from "./tool-preset-serde.js";
+import { TOOL_REGISTRY } from "./tool-registry.js";
 
 /** Synthetic full-fat preset with EVERY field a tool might persist
  *  set to a distinct value. Each per-tool round-trip filters this
@@ -77,11 +73,7 @@ describe("presetToWire / presetFromWire round-trip", () => {
 
   it("undefined fields are dropped from the wire output", () => {
     const sparse: Partial<ToolOptions> = { strokeColor: "#abcdef" };
-    const wire = presetToWire(
-      sparse,
-      ["strokeColor", "fillColor", "strokeWidth"],
-      "snake",
-    );
+    const wire = presetToWire(sparse, ["strokeColor", "fillColor", "strokeWidth"], "snake");
     expect(wire).toEqual({ stroke_color: "#abcdef" });
   });
 
@@ -160,7 +152,7 @@ describe("presetToWire — golden snapshot per tool", () => {
       fill_color: "#445566",
       font_size: 18,
       font_family: "Inter, sans-serif",
-      text_variant: "callout",
+      shape_kind: "callout",
     });
   });
 

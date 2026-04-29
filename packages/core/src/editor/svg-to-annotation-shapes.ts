@@ -16,7 +16,7 @@
  * (`copyAsOffice`, `isTauri`) of the same module.
  */
 
-import type { AnnotationShape } from "../utils/tauri-bridge.js";
+import type { AnnotationShape, TextRun } from "../utils/tauri-bridge.js";
 import { getEffectiveLineEndpoints } from "./transform-utils.js";
 
 /** Apply a group's `transform="translate(tx, ty)"` (or the
@@ -38,9 +38,7 @@ export function translateOf(el: SVGElement): { tx: number; ty: number } {
   }
   const t = el.getAttribute("transform") || "";
   const m = t.match(/translate\(([\d.-]+),?\s*([\d.-]+)\)/);
-  return m
-    ? { tx: Number.parseFloat(m[1]!), ty: Number.parseFloat(m[2]!) }
-    : { tx: 0, ty: 0 };
+  return m ? { tx: Number.parseFloat(m[1]!), ty: Number.parseFloat(m[2]!) } : { tx: 0, ty: 0 };
 }
 
 /** Pull rotation / flip / line-polish state into the AnnotationShape
@@ -221,16 +219,14 @@ export function svgElementToAnnotationShape(el: SVGElement): AnnotationShape | n
   if (tag === "path") {
     // Freehand — pen or highlighter. The semi-transparent
     // highlighter alpha rides on `stroke_opacity_value`, populated
-    // by `transformOf` above. `text` carries the SVG path d-string
-    // (the canonical path-data carrier today; no rename is queued).
+    // by `transformOf` above. `path_d` carries the SVG path
+    // d-string.
     const drawStyle =
       (el.getAttribute("data-draw-style") as "pen" | "highlighter" | null) ||
-      (Number.parseFloat(el.getAttribute("stroke-opacity") || "1") < 0.99
-        ? "highlighter"
-        : "pen");
+      (Number.parseFloat(el.getAttribute("stroke-opacity") || "1") < 0.99 ? "highlighter" : "pen");
     return {
       type: "freehand",
-      text: el.getAttribute("d") || "",
+      path_d: el.getAttribute("d") || "",
       stroke: el.getAttribute("stroke") || "#ff0000",
       stroke_width: Number.parseFloat(el.getAttribute("stroke-width") || "3"),
       stroke_dasharray: el.getAttribute("stroke-dasharray") || "",
@@ -240,31 +236,69 @@ export function svgElementToAnnotationShape(el: SVGElement): AnnotationShape | n
   }
 
   if (tag === "text") {
+    const body = el.textContent || "";
     return {
       type: "text",
       x: Number.parseFloat(el.getAttribute("x") || "0") + tx,
       y: Number.parseFloat(el.getAttribute("y") || "0") + ty,
-      text: el.textContent || "",
+      runs: body ? [{ text: body }] : [],
       font_size: Number.parseFloat(el.getAttribute("font-size") || "24"),
       font_family: el.getAttribute("font-family") || undefined,
       fill: el.getAttribute("fill") || "#ff0000",
-      text_variant: "plain",
+      shape_kind: "plain",
       ...xform,
     };
   }
 
   if (tag === "g") {
-    if (el.getAttribute("data-type") === "textbox") {
-      // Unified Textbox — plain / sticky / callout. All three share
-      // the same `<g>` skeleton with a `<rect>` + optional `<path>`
-      // tail; the variant is the discriminator for Office.
+    if (el.getAttribute("data-type") === "shape") {
+      // Unified text-bearing shape — plain / sticky / callout
+      // (and, in Phase 3, rect / rounded / ellipse for
+      // text-on-shape). All variants share the same `<g>`
+      // skeleton with a `<rect>` + optional `<path>` tail;
+      // `data-shape-kind` is the discriminator for OOXML.
+      const shapeKind = el.getAttribute("data-shape-kind") as AnnotationShape["shape_kind"] | null;
+      if (!shapeKind) return null;
       const textEl = el.querySelector("text");
       const bgRect = el.querySelector("rect");
-      const variant =
-        (el.getAttribute("data-text-variant") as "plain" | "sticky" | "callout" | null) ||
-        "sticky";
       if (!textEl) return null;
-      const tspans = textEl.querySelectorAll("tspan");
+      const tspans = Array.from(textEl.querySelectorAll("tspan"));
+      const runs: TextRun[] = [];
+      if (tspans.length === 0) {
+        const body = textEl.textContent || "";
+        if (body) runs.push({ text: body });
+      } else {
+        for (let i = 0; i < tspans.length; i++) {
+          const tspan = tspans[i]!;
+          const run: TextRun = { text: tspan.textContent ?? "" };
+          const fw = tspan.getAttribute("font-weight");
+          if (fw === "bold" || fw === "700") run.bold = true;
+          const fs = tspan.getAttribute("font-style");
+          if (fs === "italic") run.italic = true;
+          const td = tspan.getAttribute("text-decoration");
+          if (td?.includes("underline")) run.underline = true;
+          const sz = tspan.getAttribute("font-size");
+          if (sz) {
+            const n = Number.parseFloat(sz);
+            if (Number.isFinite(n)) run.font_size = n;
+          }
+          const ff = tspan.getAttribute("font-family");
+          if (ff) run.font_family = ff;
+          const fill = tspan.getAttribute("fill");
+          if (fill) run.color = fill;
+          // `line_break_after` flips on whenever the next tspan
+          // starts a new line (has its own x or y). Phase 1 emits
+          // one tspan per line so every successor qualifies; Phase
+          // 2's rich-text mapper packs styled runs into
+          // continuation tspans (no x / y) without changing this
+          // reader.
+          const next = tspans[i + 1];
+          if (next != null && (next.hasAttribute("x") || next.hasAttribute("y"))) {
+            run.line_break_after = true;
+          }
+          runs.push(run);
+        }
+      }
       const bx =
         Number.parseFloat(bgRect?.getAttribute("x") || tspans[0]?.getAttribute("x") || "0") + tx;
       const by = Number.parseFloat(bgRect?.getAttribute("y") || "0") + ty;
@@ -278,17 +312,15 @@ export function svgElementToAnnotationShape(el: SVGElement): AnnotationShape | n
         y: by,
         width: bw,
         height: bh,
-        text: el.getAttribute("data-text") || textEl.textContent || "",
+        runs,
         font_size: Number.parseFloat(
           textEl.getAttribute("font-size") || el.getAttribute("data-font-size") || "24",
         ),
         font_family:
-          textEl.getAttribute("font-family") ||
-          el.getAttribute("data-font-family") ||
-          undefined,
+          textEl.getAttribute("font-family") || el.getAttribute("data-font-family") || undefined,
         fill: textEl.getAttribute("fill") || el.getAttribute("data-color") || "#ff0000",
-        text_bg_color: variant === "plain" ? undefined : bgRect?.getAttribute("fill") || "",
-        text_variant: variant,
+        text_bg_color: shapeKind === "plain" ? undefined : bgRect?.getAttribute("fill") || "",
+        shape_kind: shapeKind,
         tail_x: tailXRaw != null ? Number.parseFloat(tailXRaw) + tx : undefined,
         tail_y: tailYRaw != null ? Number.parseFloat(tailYRaw) + ty : undefined,
         ...xform,

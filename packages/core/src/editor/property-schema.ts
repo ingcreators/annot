@@ -12,21 +12,15 @@
 // duplicating a four-line attribute read here is preferable to a
 // circular-package import.
 
+import { computeDasharray, detectDashKey } from "../utils/dash-utils.js";
 import {
   arrowPreview,
   arrowSizePreview,
   detectArrowSpec,
   refreshArrowPath,
 } from "./arrow-markers.js";
-import { computeDasharray, detectDashKey } from "../utils/dash-utils.js";
 import { convertShape, detectShapeType } from "./shape-utils.js";
 import { convertTextVariant, detectTextVariant } from "./text-utils.js";
-import {
-  ARROW_ICON_SVG,
-  COUNTER_ICON_SVG,
-  HIGHLIGHT_COLORS,
-  SHAPE_ICON_SVG,
-} from "./toolbar-icons.js";
 import type {
   ArrowDim,
   ArrowHead,
@@ -37,6 +31,12 @@ import type {
   ShapeType,
   TextVariant,
 } from "./tool-options.js";
+import {
+  ARROW_ICON_SVG,
+  COUNTER_ICON_SVG,
+  HIGHLIGHT_COLORS,
+  SHAPE_ICON_SVG,
+} from "./toolbar-icons.js";
 
 /**
  * Coarse property-panel category an SVG element falls into. The
@@ -88,8 +88,7 @@ export const PROPERTY_CONTROL_IDS = {
   arrowEndShape: "arrowEndShape",
   arrowEndSize: "arrowEndSize",
 } as const;
-export type PropertyControlId =
-  (typeof PROPERTY_CONTROL_IDS)[keyof typeof PROPERTY_CONTROL_IDS];
+export type PropertyControlId = (typeof PROPERTY_CONTROL_IDS)[keyof typeof PROPERTY_CONTROL_IDS];
 
 /**
  * The (potentially-applicable) controls for each category. Whether
@@ -118,10 +117,7 @@ export const CATEGORY_CONTROL_SHAPE: Readonly<
     PROPERTY_CONTROL_IDS.markerSize,
   ],
   "redact-mosaic": [PROPERTY_CONTROL_IDS.redactStylePicker],
-  "redact-solid": [
-    PROPERTY_CONTROL_IDS.redactStylePicker,
-    PROPERTY_CONTROL_IDS.redactSolidColor,
-  ],
+  "redact-solid": [PROPERTY_CONTROL_IDS.redactStylePicker, PROPERTY_CONTROL_IDS.redactSolidColor],
   "redact-blur": [PROPERTY_CONTROL_IDS.redactStylePicker],
   highlight: [
     PROPERTY_CONTROL_IDS.highlightColorPicker,
@@ -930,8 +926,7 @@ export const PROPERTY_CONTROLS: Readonly<{
     },
     // Stroke-only families don't have a fillable region, so the
     // opacity row hides alongside `fillColor`.
-    visibleWhen: (el) =>
-      !isLineLike(el) && el.tagName !== "path" && !isFreehandGroupEl(el),
+    visibleWhen: (el) => !isLineLike(el) && el.tagName !== "path" && !isFreehandGroupEl(el),
     min: 0,
     max: 100,
     step: 1,
@@ -1064,7 +1059,10 @@ export function classifyPropertyElement(el: Element): PropertyCategory {
   const tag = el.tagName;
   if (tag === "g") {
     const dataType = el.getAttribute("data-type");
-    if (dataType === "textbox") return "textbox";
+    // Unified text-bearing shape — `data-shape-kind` carries the
+    // discriminator (plain / sticky / callout in Phase 1; rect /
+    // rounded / ellipse once Pattern A lands).
+    if (dataType === "shape") return "textbox";
     if (dataType === "group") return "group";
     if (el.hasAttribute("data-marker")) return "marker";
     if (dataType === "arrow") return "shape"; // composed arrow
@@ -1090,9 +1088,10 @@ export function classifyPropertyElement(el: Element): PropertyCategory {
  * exposing the "are they all the same?" check for any future
  * "edit shared properties only" mode.
  */
-export function classifyPropertySelection(
-  elements: readonly Element[],
-): { category: PropertyCategory | null; uniform: boolean } {
+export function classifyPropertySelection(elements: readonly Element[]): {
+  category: PropertyCategory | null;
+  uniform: boolean;
+} {
   if (elements.length === 0) return { category: null, uniform: true };
   // `elements.length >= 1`, so `elements[0]` is defined.
   const first = classifyPropertyElement(elements[0]!);
