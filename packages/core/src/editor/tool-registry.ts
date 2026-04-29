@@ -31,14 +31,14 @@
 import { computeDasharray } from "../utils/dash-utils.js";
 import { refreshArrowPath } from "./arrow-markers.js";
 import { PROPERTY_CONTROL_IDS, type PropertyControlId } from "./property-schema.js";
+import type { ToolOptions } from "./tool-options.js";
+import { writeUniversalStyleAttrs } from "./tool-style-writer.js";
 import {
   ARROW_ICON_SVG,
   COUNTER_ICON_SVG,
   HIGHLIGHT_COLORS,
   SHAPE_ICON_SVG,
 } from "./toolbar-icons.js";
-import type { ToolOptions } from "./tool-options.js";
-import { writeUniversalStyleAttrs } from "./tool-style-writer.js";
 
 /** Tool-side panel sections. The Tool property panel uses the same
  *  four pp-section buckets as the SELECTION-side property panel, in
@@ -694,25 +694,26 @@ export const TOOL_REGISTRY: Readonly<Record<string, ToolRegistryEntry>> = {
         // Plain `<text>` outside a `<g>` wrapper falls through to the
         // group fallback in `elementKeyFromElement` — preserve that
         // behaviour exactly.
-        const variant = el.getAttribute("data-text-variant");
+        const variant = el.getAttribute("data-shape-kind");
         return `text.${variant ?? "sticky"}`;
       }
-      if (el.tagName === "g" && el.getAttribute("data-type") === "textbox") {
-        const variant = el.getAttribute("data-text-variant");
+      if (el.tagName === "g" && el.getAttribute("data-type") === "shape") {
+        const variant = el.getAttribute("data-shape-kind");
         return `text.${variant ?? "sticky"}`;
       }
       return null;
     },
     extractStyleFromElement(el, preset) {
-      // Textbox composite: <g data-type=textbox> with a <text> child.
-      // Plain text: bare <text>. In both cases font + color live on
-      // the <text>; the variant + data-color cache live on the wrapper.
+      // Text-bearing composite: <g data-type=shape data-shape-kind=...>
+      // with a <text> child. Plain `<text>`: bare <text>. In both cases
+      // font + color live on the <text>; the kind + data-color cache
+      // live on the wrapper.
       const tEl = el.tagName === "g" ? el.querySelector("text") : el;
       const fs = Number.parseFloat(tEl?.getAttribute("font-size") || "");
       if (Number.isFinite(fs) && fs > 0) preset.fontSize = fs;
       const ff = tEl?.getAttribute("font-family") || el.getAttribute("data-font-family");
       if (ff) preset.fontFamily = ff;
-      const variant = el.getAttribute("data-text-variant");
+      const variant = el.getAttribute("data-shape-kind");
       if (variant === "plain" || variant === "sticky" || variant === "callout") {
         preset.textVariant = variant;
       }
@@ -729,7 +730,7 @@ export const TOOL_REGISTRY: Readonly<Record<string, ToolRegistryEntry>> = {
       // / Office round-trips when the <text> child gets re-rendered;
       // the <text>'s own attrs are what the SVG renderer actually
       // uses. Mirrors the legacy `applyTextboxPresetStyle` exactly.
-      if (el.tagName === "g" && el.getAttribute("data-type") === "textbox") {
+      if (el.tagName === "g" && el.getAttribute("data-type") === "shape") {
         if (preset.strokeColor) {
           el.setAttribute("data-color", preset.strokeColor);
           const text = el.querySelector("text");
@@ -832,12 +833,7 @@ export const TOOL_REGISTRY: Readonly<Record<string, ToolRegistryEntry>> = {
     ],
     // Marker uses standard color semantics: `fillColor` = bg
     // interior, `strokeColor` = bg border.
-    presetFields: [
-      ...UNIVERSAL_STROKE_FIELDS,
-      "fillColor",
-      "fontSize",
-      "markerShape",
-    ],
+    presetFields: [...UNIVERSAL_STROKE_FIELDS, "fillColor", "fontSize", "markerShape"],
     // Type → Fill → Line → Label. The Counter is the only tool that
     // needs all four sections — its label (the counter number's
     // font-size, NOT a value picker on the Tool side) lives in its
@@ -901,8 +897,7 @@ export const TOOL_REGISTRY: Readonly<Record<string, ToolRegistryEntry>> = {
         // Fall back to the bg's existing stroke-width when the preset
         // doesn't carry one — keeps dashes proportional even on a
         // partially-populated preset (matches the legacy helper).
-        const w =
-          preset.strokeWidth ?? Number.parseFloat(bg.getAttribute("stroke-width") || "1.5");
+        const w = preset.strokeWidth ?? Number.parseFloat(bg.getAttribute("stroke-width") || "1.5");
         bg.setAttribute("stroke-dasharray", computeDasharray(preset.strokeDasharray, w));
         bg.setAttribute("data-dash-key", preset.strokeDasharray);
       }

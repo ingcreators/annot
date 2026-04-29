@@ -22,8 +22,8 @@ function svg(tag: string, attrs: Record<string, string> = {}): SVGElement {
 }
 
 describe("classifyPropertyElement", () => {
-  it("classifies <g data-type=textbox> as textbox", () => {
-    expect(classifyPropertyElement(svg("g", { "data-type": "textbox" }))).toBe("textbox");
+  it("classifies <g data-type=shape> as textbox", () => {
+    expect(classifyPropertyElement(svg("g", { "data-type": "shape" }))).toBe("textbox");
   });
 
   it("classifies <g data-type=group> as group", () => {
@@ -94,7 +94,7 @@ describe("classifyPropertySelection", () => {
   });
 
   it("reports uniform=false when categories differ, with category=first", () => {
-    const a = svg("g", { "data-type": "textbox" });
+    const a = svg("g", { "data-type": "shape" });
     const b = svg("rect");
     expect(classifyPropertySelection([a, b])).toEqual({ category: "textbox", uniform: false });
   });
@@ -205,7 +205,10 @@ describe("PROPERTY_CONTROLS registry", () => {
   it("every id listed in CATEGORY_CONTROL_SHAPE has a matching def", () => {
     for (const [category, ids] of Object.entries(CATEGORY_CONTROL_SHAPE)) {
       for (const id of ids) {
-        expect(PROPERTY_CONTROLS[id], `category "${category}" references missing def "${id}"`).toBeDefined();
+        expect(
+          PROPERTY_CONTROLS[id],
+          `category "${category}" references missing def "${id}"`,
+        ).toBeDefined();
       }
     }
   });
@@ -249,7 +252,7 @@ describe("PROPERTY_CONTROLS registry", () => {
     const freehand = svg("path", { "data-draw-style": "highlighter" });
     expect(PROPERTY_CONTROLS.drawStylePicker.getValue(freehand)).toBe("highlighter");
 
-    const textbox = svg("g", { "data-type": "textbox" });
+    const textbox = svg("g", { "data-type": "shape", "data-shape-kind": "sticky" });
     const text = svg("text", { fill: "#123456", "font-size": "20", "font-family": "serif" });
     text.textContent = "hi";
     textbox.appendChild(text);
@@ -261,7 +264,11 @@ describe("PROPERTY_CONTROLS registry", () => {
     expect(PROPERTY_CONTROLS.redactStylePicker.getValue(redactSolid)).toBe("solid");
     expect(PROPERTY_CONTROLS.redactSolidColor.getValue(redactSolid)).toBe("#222");
 
-    const highlight = svg("rect", { "data-highlight": "1", fill: "#ffff00", "fill-opacity": "0.4" });
+    const highlight = svg("rect", {
+      "data-highlight": "1",
+      fill: "#ffff00",
+      "fill-opacity": "0.4",
+    });
     expect(PROPERTY_CONTROLS.highlightColorPicker.getValue(highlight)).toBe("#ffff00");
     expect(PROPERTY_CONTROLS.highlightTransparency.getValue(highlight)).toBe(60);
 

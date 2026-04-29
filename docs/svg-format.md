@@ -98,14 +98,55 @@ Emitted as `<path data-type="arrow">` carrying:
 
 See `packages/core/src/editor/arrow-markers.ts` for the shape set.
 
-### Text / sticky / callout
+### Text-bearing shapes
 
-`<g data-type="textbox">` wrapping `<rect>` (background) + `<text>`.
-Variant selected by:
+`<g data-type="shape">` wrapping a geometry primitive
+(`<rect>` / `<ellipse>` / `<path>`) + an optional callout tail
++ `<clipPath>` + a `<text>` element holding one or more
+`<tspan>` runs. The discriminator lives on `data-shape-kind`:
 
-- `data-variant="plain"` — no bg
-- `data-variant="sticky"` — opaque bg
-- `data-variant="callout"` — bg + pointer tail
+- `data-shape-kind="plain"` — no bg
+- `data-shape-kind="sticky"` — opaque bg
+- `data-shape-kind="callout"` — bg + pointer tail
+- `data-shape-kind="rect"` / `"rounded"` / `"ellipse"` —
+  reserved for the Pattern A "text-on-shape" feature (Phase 3
+  of the rich-text plan; not emitted yet).
+
+Shape-level defaults sit on the `<g>` (`data-font-size`,
+`data-font-family`, `data-color`); per-character formatting is
+expressed via the standard SVG attributes on each `<tspan>`:
+`font-weight`, `font-style`, `text-decoration`, `font-size`,
+`font-family`, `fill`. A uniformly-styled textbox emits no
+per-tspan overrides — the tspans inherit the shape-level
+defaults.
+
+Callout tail metadata (when `data-shape-kind="callout"`):
+
+- `data-tail-x` / `data-tail-y` — tip coordinates in canvas
+  space.
+- The tail polygon lives as a `<path>` sibling of the
+  background rect; geometry is recomputed by `rebuildCalloutTail`
+  in [`packages/core/src/editor/text-utils.ts`](../packages/core/src/editor/text-utils.ts)
+  on every resize / tail-drag.
+
+#### Per-character formatting
+
+Each `<tspan>` is one styled run. Style transitions split runs;
+runs that share a paragraph are adjacent within the same
+`<text>` parent and share their (x, y) baseline. A new line is
+expressed as a fresh `<tspan>` with its own `x` / `y` (the
+current writer in
+[`packages/core/src/editor/text-utils.ts`](../packages/core/src/editor/text-utils.ts)
+emits one tspan per line; future Phase 2 introduces multiple
+runs per line).
+
+The `runs[]` carrier on the `AnnotationShape` ABI mirrors the
+`<tspan>` set 1:1, with each run optionally carrying:
+
+- `bold` / `italic` / `underline` (per-run flags)
+- `font_size` / `font_family` / `color` (per-run overrides)
+- `line_break_after` (true on every run except the last; the
+  OOXML emit opens a new `<a:p>` whenever it sees this flag)
 
 ### Counter (numbered marker)
 

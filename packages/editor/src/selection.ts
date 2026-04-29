@@ -4,6 +4,16 @@ import {
   refreshArrowPath,
   writeArrowControl,
 } from "@ingcreators/annot-core/editor/arrow-markers";
+import { rebuildCalloutTail, setCalloutTail } from "@ingcreators/annot-core/editor/text-utils";
+import {
+  applyTransformState,
+  bakeLineTransform,
+  isLineLike,
+  nudgeTranslate,
+  readTransformState,
+  setRotation,
+  toggleFlip,
+} from "@ingcreators/annot-core/editor/transform-utils";
 import type { CanvasManager } from "./canvas-manager.js";
 import type { History } from "./history.js";
 import {
@@ -16,21 +26,10 @@ import {
   PASTE_OFFSET,
   pointToLocal,
   rotateAround,
-  setLineEndpoints,
   SVG_NS,
+  setLineEndpoints,
 } from "./selection-helpers.js";
 import { computeSnap, SmartGuideOverlay } from "./smart-guides.js";
-import { rebuildCalloutTail, setCalloutTail } from "@ingcreators/annot-core/editor/text-utils";
-import {
-  applyTransformState,
-  bakeLineTransform,
-  isLineLike,
-  nudgeTranslate,
-  readTransformState,
-  setRotation,
-  toggleFlip,
-} from "@ingcreators/annot-core/editor/transform-utils";
-
 
 export class SelectionManager {
   #canvas: CanvasManager;
@@ -667,11 +666,11 @@ export class SelectionManager {
     // Callout tail-tip handle — drawn on top of bbox handles so the
     // user has direct control over the speech-bubble pointer. Without
     // this, the tail is locked to its initial position and the callout
-    // is essentially decorative. See readTextBoxSpec for coord space.
+    // is essentially decorative. See readTextShapeSpec for coord space.
     if (
       el.tagName === "g" &&
-      el.getAttribute("data-type") === "textbox" &&
-      el.getAttribute("data-text-variant") === "callout"
+      el.getAttribute("data-type") === "shape" &&
+      el.getAttribute("data-shape-kind") === "callout"
     ) {
       this.#drawCalloutTailHandle(el);
     }
@@ -1719,8 +1718,9 @@ export class SelectionManager {
       return;
     }
 
-    // Textbox group: resize box with directional constraints (same as rect)
-    if (tag === "g" && el.getAttribute("data-type") === "textbox") {
+    // Text-bearing shape group: resize box with directional constraints
+    // (same as rect)
+    if (tag === "g" && el.getAttribute("data-type") === "shape") {
       const bgRect = el.querySelector("rect");
       if (!bgRect) return;
 

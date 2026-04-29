@@ -14,10 +14,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import {
-  svgAnnotationsToShapes,
-  svgElementToAnnotationShape,
-} from "./svg-to-annotation-shapes.js";
+import { svgAnnotationsToShapes, svgElementToAnnotationShape } from "./svg-to-annotation-shapes.js";
 
 // happy-dom ships `DOMPoint` but not `DOMPoint.prototype.matrixTransform`
 // (used by `getEffectiveLineEndpoints` for the rotation / flip / non-zero
@@ -166,7 +163,7 @@ describe("svgElementToAnnotationShape", () => {
     expect(svgElementToAnnotationShape(g)?.type).toBe("line");
   });
 
-  it("path emits type=freehand with the d-string in `text`", () => {
+  it("path emits type=freehand with the d-string in `path_d`", () => {
     const el = svg("path", {
       d: "M 0 0 L 10 10 L 20 5",
       stroke: "#ff00ff",
@@ -175,7 +172,7 @@ describe("svgElementToAnnotationShape", () => {
     });
     const out = svgElementToAnnotationShape(el)!;
     expect(out.type).toBe("freehand");
-    expect(out.text).toBe("M 0 0 L 10 10 L 20 5");
+    expect(out.path_d).toBe("M 0 0 L 10 10 L 20 5");
     // stroke-opacity < 0.99 → highlighter draw style.
     expect(out.draw_style).toBe("highlighter");
     // The transformOf helper folds the stroke opacity into the
@@ -183,7 +180,7 @@ describe("svgElementToAnnotationShape", () => {
     expect(out.stroke_opacity_value).toBe(0.5);
   });
 
-  it("plain <text> emits text_variant='plain'", () => {
+  it("plain <text> emits shape_kind='plain' with one run", () => {
     const el = svg("text", {
       x: "10",
       y: "400",
@@ -191,21 +188,22 @@ describe("svgElementToAnnotationShape", () => {
       fill: "#000000",
     });
     el.textContent = "Hello";
-    expect(svgElementToAnnotationShape(el)).toMatchObject({
+    const out = svgElementToAnnotationShape(el)!;
+    expect(out).toMatchObject({
       type: "text",
       x: 10,
       y: 400,
-      text: "Hello",
       font_size: 24,
       fill: "#000000",
-      text_variant: "plain",
+      shape_kind: "plain",
     });
+    expect(out.runs).toEqual([{ text: "Hello" }]);
   });
 
-  it("textbox <g> with sticky variant carries text_bg_color from the bg rect", () => {
+  it("text-bearing shape <g> with sticky kind carries text_bg_color from the bg rect", () => {
     const g = svg("g");
-    g.setAttribute("data-type", "textbox");
-    g.setAttribute("data-text-variant", "sticky");
+    g.setAttribute("data-type", "shape");
+    g.setAttribute("data-shape-kind", "sticky");
     const bgRect = svg("rect", {
       x: "10",
       y: "400",
@@ -217,7 +215,9 @@ describe("svgElementToAnnotationShape", () => {
       "font-size": "24",
       fill: "#000000",
     });
-    t.textContent = "Sticky";
+    const ts = svg("tspan");
+    ts.textContent = "Sticky";
+    t.appendChild(ts);
     g.appendChild(bgRect);
     g.appendChild(t);
     const out = svgElementToAnnotationShape(g)!;
@@ -227,28 +227,49 @@ describe("svgElementToAnnotationShape", () => {
       y: 400,
       width: 200,
       height: 50,
-      text: "Sticky",
-      text_variant: "sticky",
+      shape_kind: "sticky",
       text_bg_color: "rgba(255,255,200,0.92)",
     });
+    expect(out.runs).toEqual([{ text: "Sticky" }]);
   });
 
-  it("textbox callout populates tail_x / tail_y", () => {
+  it("text-bearing shape callout populates tail_x / tail_y", () => {
     const g = svg("g");
-    g.setAttribute("data-type", "textbox");
-    g.setAttribute("data-text-variant", "callout");
+    g.setAttribute("data-type", "shape");
+    g.setAttribute("data-shape-kind", "callout");
     g.setAttribute("data-tail-x", "300");
     g.setAttribute("data-tail-y", "470");
-    g.appendChild(
-      svg("rect", { x: "100", y: "400", width: "150", height: "50", fill: "#ffffaa" }),
-    );
+    g.appendChild(svg("rect", { x: "100", y: "400", width: "150", height: "50", fill: "#ffffaa" }));
     const t = svg("text", { "font-size": "20" });
-    t.textContent = "Callout!";
+    const ts = svg("tspan");
+    ts.textContent = "Callout!";
+    t.appendChild(ts);
     g.appendChild(t);
     const out = svgElementToAnnotationShape(g)!;
-    expect(out.text_variant).toBe("callout");
+    expect(out.shape_kind).toBe("callout");
     expect(out.tail_x).toBe(300);
     expect(out.tail_y).toBe(470);
+    expect(out.runs).toEqual([{ text: "Callout!" }]);
+  });
+
+  it("text-bearing shape with multi-line tspans collapses runs to one-per-line with line_break_after", () => {
+    const g = svg("g");
+    g.setAttribute("data-type", "shape");
+    g.setAttribute("data-shape-kind", "plain");
+    g.appendChild(svg("rect", { x: "0", y: "0", width: "100", height: "60" }));
+    const t = svg("text", { "font-size": "16", fill: "#000" });
+    // Each line's first tspan carries x / y to mark a new paragraph;
+    // continuation tspans within the same paragraph (Phase 2) would
+    // omit them and inherit the parent's flow position.
+    const a = svg("tspan", { x: "0", y: "16" });
+    a.textContent = "Line A";
+    const b = svg("tspan", { x: "0", y: "32" });
+    b.textContent = "Line B";
+    t.appendChild(a);
+    t.appendChild(b);
+    g.appendChild(t);
+    const out = svgElementToAnnotationShape(g)!;
+    expect(out.runs).toEqual([{ text: "Line A", line_break_after: true }, { text: "Line B" }]);
   });
 
   it("marker <g> with data-shape='rect' picks the rect counter form", () => {
@@ -371,9 +392,7 @@ describe("svgAnnotationsToShapes", () => {
     // Add a text node (a stray whitespace string between elements
     // is the common case in real annotation trees).
     parent.appendChild(document.createTextNode("\n  "));
-    parent.appendChild(
-      svg("rect", { x: "0", y: "0", width: "1", height: "1", fill: "#000" }),
-    );
+    parent.appendChild(svg("rect", { x: "0", y: "0", width: "1", height: "1", fill: "#000" }));
     parent.appendChild(document.createTextNode("\n"));
     const shapes = svgAnnotationsToShapes(parent);
     expect(shapes).toHaveLength(1);

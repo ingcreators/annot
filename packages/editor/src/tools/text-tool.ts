@@ -1,13 +1,17 @@
+import {
+  createTextShape,
+  plainTextToRuns,
+  stickyBgFor,
+} from "@ingcreators/annot-core/editor/text-utils";
 import type { CanvasManager } from "../canvas-manager.js";
 import type { History } from "../history.js";
-import { createTextBox, stickyBgFor } from "@ingcreators/annot-core/editor/text-utils";
 import type { TextVariant, ToolOptions } from "./tool-base.js";
 /**
  * TextTool — unified Text / Sticky Note / Callout tool.
  *
  * Drag out a box (or click for default size), a contenteditable
  * overlay appears for input. On finish, the overlay is replaced by
- * a textbox <g> matching the tool's configured variant:
+ * a text-bearing shape <g> matching the tool's configured variant:
  *    plain   → text only, transparent background
  *    sticky  → text + colored background (classic sticky note)
  *    callout → text + background + pointer tail
@@ -53,7 +57,7 @@ export class TextTool extends ToolBase {
   #setupDoubleClick(): void {
     this.canvas.svg.addEventListener("dblclick", (e) => {
       const target = e.target as SVGElement;
-      const g = target.closest("g[data-type='textbox']") as SVGGElement | null;
+      const g = target.closest("g[data-type='shape']") as SVGGElement | null;
       if (!g || !this.canvas.annotations.contains(g)) return;
       e.stopPropagation();
       this.#editExisting(g);
@@ -68,7 +72,13 @@ export class TextTool extends ToolBase {
     const y = Number.parseFloat(bg?.getAttribute("y") || "0");
     const w = Number.parseFloat(bg?.getAttribute("width") || String(DEFAULT_WIDTH));
     const h = Number.parseFloat(bg?.getAttribute("height") || String(DEFAULT_HEIGHT));
-    const text = g.getAttribute("data-text") || g.querySelector("text")?.textContent || "";
+    // Plain-text view of the existing runs — Phase 2 will swap this
+    // for the rich-text mapper that preserves per-tspan formatting.
+    const tspans = Array.from(g.querySelectorAll("tspan"));
+    const text =
+      tspans.length > 0
+        ? tspans.map((t) => t.textContent ?? "").join("\n")
+        : g.querySelector("text")?.textContent || "";
     const fontSize = Number.parseFloat(
       g.getAttribute("data-font-size") || String(this.options.fontSize),
     );
@@ -184,7 +194,7 @@ export class TextTool extends ToolBase {
       ? this.#editTarget.getAttribute("data-color") || this.options.strokeColor
       : this.options.strokeColor;
     const variant: TextVariant = this.#editTarget
-      ? (this.#editTarget.getAttribute("data-text-variant") as TextVariant) || "sticky"
+      ? (this.#editTarget.getAttribute("data-shape-kind") as TextVariant) || "sticky"
       : (this.options.textVariant ?? "sticky");
 
     this.#foreignObject.remove();
@@ -198,13 +208,13 @@ export class TextTool extends ToolBase {
 
     if (!text) return;
 
-    const newEl = createTextBox({
+    const newEl = createTextShape({
       x: foX,
       y: foY,
       w: foW,
       h: foH,
       variant,
-      text,
+      runs: plainTextToRuns(text),
       fontSize,
       fontFamily,
       color,

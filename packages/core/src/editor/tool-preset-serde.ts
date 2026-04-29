@@ -50,7 +50,7 @@ const FIELD_TO_SNAKE = {
   fillOpacity: "fill_opacity",
   shapeType: "shape_type",
   arrowHead: "arrow_head",
-  textVariant: "text_variant",
+  textVariant: "shape_kind",
   fontFamily: "font_family",
   drawStyle: "draw_style",
   redactStyle: "redact_style",

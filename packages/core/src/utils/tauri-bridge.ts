@@ -119,7 +119,7 @@ export async function deleteImage(id: number): Promise<void> {
  * a Rust struct that named only six fields with `#[serde(default = …)]`
  * — but the Rust struct silently dropped all other fields on save,
  * orphaning every variant discriminator (shape_type / arrow_head /
- * text_variant / draw_style / redact_style / marker_shape /
+ * shape_kind / draw_style / redact_style / marker_shape /
  * highlight_color), the per-end arrow shape / width / length, and
  * stroke opacity / cap / join. The Rust struct is now schema-
  * transparent (`HashMap<String, serde_yaml::Value>`) so all keys
@@ -137,8 +137,8 @@ export interface ToolPreset {
   shape_type?: string;
   /** Head variant for the unified Line/Arrow tool (none / end / both). */
   arrow_head?: string;
-  /** Variant for the unified Text tool (plain / sticky / callout). */
-  text_variant?: string;
+  /** Shape kind for text-bearing shapes (plain / sticky / callout). */
+  shape_kind?: string;
   /** Font family CSS value for the Text tool. */
   font_family?: string;
   /** Style for the unified Draw tool (pen / highlighter). */
@@ -279,18 +279,63 @@ export async function captureRegion(
  *                       Line. Use `arrow_head_start / arrow_head_end`
  *                       to describe heads (the legacy `has_arrow`
  *                       stays equivalent to arrow_head_end=true).
- *   type="text"         Textbox. Use `text_variant` for plain / sticky
- *                       / callout. `text_bg_color` carries the bg
- *                       fill; `tail_x`/`tail_y` set for callout (the
- *                       Rust side then emits `wedgeRoundRectCallout`).
- *   type="freehand"     Freehand path. Use `draw_style` for pen vs
- *                       highlighter. `stroke_opacity_value` carries
+ *   type="text"         Text-bearing shape. `shape_kind` is the
+ *                       discriminator — `plain` / `sticky` / `callout`
+ *                       today; expanded to `rect` / `rounded` /
+ *                       `ellipse` once Pattern A (text on bare
+ *                       shapes) lands. `runs[]` holds the per-run
+ *                       text content + per-character formatting
+ *                       (bold / italic / underline / mixed font /
+ *                       size / color); for a uniformly-styled
+ *                       textbox `runs` collapses to one entry per
+ *                       line with no formatting flags.
+ *                       `text_bg_color` carries the bg fill;
+ *                       `tail_x` / `tail_y` set for callout (the
+ *                       OOXML emit then uses `wedgeRoundRectCallout`).
+ *   type="freehand"     Freehand path. The SVG path d-string rides
+ *                       on `path_d`. Use `draw_style` for pen vs
+ *                       highlighter; `stroke_opacity_value` carries
  *                       the semi-transparent highlighter alpha.
  *   type="mosaic_image" Mosaic-redaction PNG, embedded via data URL
  *                       in `image_data_url`.
  *   type="blur_image"   Blur-redaction PNG, same shape as mosaic_image.
  *   type="marker"       Counter marker; `marker_shape` + `label`.
  */
+/** A single styled text run inside a text-bearing shape.
+ *
+ * On disk each run corresponds to one `<tspan>` child of the
+ * shape's `<text>` element. Transitions in any of the formatting
+ * fields split the source text into separate runs; runs adjacent
+ * within the same paragraph share an `<a:p>` on the OOXML side,
+ * while `line_break_after === true` ends the paragraph and starts
+ * a new `<a:p>` for the following run.
+ *
+ * Per-run formatting is OPTIONAL — when omitted, the run inherits
+ * the shape-level defaults (`font_size` / `font_family` / `fill`
+ * on the parent `AnnotationShape`). A uniformly-styled textbox
+ * therefore collapses to one run per line with only `text` +
+ * `line_break_after` populated.
+ */
+export interface TextRun {
+  /** Plain text content of this run. Newlines are NOT permitted —
+   *  use `line_break_after` to end a paragraph. */
+  text: string;
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+  /** Per-run font size override (px). Omit to inherit the shape-
+   *  level `font_size`. */
+  font_size?: number;
+  /** Per-run font family override. */
+  font_family?: string;
+  /** Per-run text color (`#rrggbb`). Omit to inherit the shape-
+   *  level `fill`. */
+  color?: string;
+  /** When true, ends the current paragraph after this run. The
+   *  next run starts in a fresh `<a:p>` on the OOXML side. */
+  line_break_after?: boolean;
+}
+
 export interface AnnotationShape {
   type: string;
   // ---- Geometry ----
@@ -334,12 +379,21 @@ export interface AnnotationShape {
   arrow_curve_cy?: number;
 
   // ---- Text variant ----
-  text?: string;
+  /** One entry per `<tspan>` in the source SVG. Style transitions
+   *  split runs; uniformly-styled text collapses to one entry per
+   *  line with no formatting flags. The OOXML emit walks this
+   *  array, opening a new `<a:p>` after each run with
+   *  `line_break_after === true`, otherwise emitting the run as
+   *  one `<a:r>` inside the current paragraph. */
+  runs?: TextRun[];
   font_size?: number;
   font_family?: string;
-  text_variant?: "plain" | "sticky" | "callout";
+  /** Discriminator for text-bearing shapes. Phase 1 supports the
+   *  three text-variant values; Phase 3 adds `rect` / `rounded` /
+   *  `ellipse` for text-on-shape. */
+  shape_kind?: "plain" | "sticky" | "callout" | "rect" | "rounded" | "ellipse";
   /** Sticky / callout background color, in CSS `rgba(...)` or `#rrggbb`
-   *  form. Populated for `text_variant === "sticky" | "callout"`;
+   *  form. Populated for `shape_kind === "sticky" | "callout"`;
    *  omitted for plain text. */
   text_bg_color?: string;
   /** Callout tail-tip coordinates (canvas space). */
@@ -347,6 +401,8 @@ export interface AnnotationShape {
   tail_y?: number;
 
   // ---- Freehand / Path variant ----
+  /** SVG path d-string for freehand strokes. */
+  path_d?: string;
   draw_style?: "pen" | "highlighter";
 
   // ---- Redact variants ----
