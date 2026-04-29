@@ -33,7 +33,6 @@ import type { ChipSelectDetail } from "./annot-tool-flyout.js";
 import "./annot-save-menu.js";
 import "./annot-tool-flyout.js";
 import "./annot-toolbar.js";
-import { createBuiltinIcon } from "../ui/annot-icon-imperative.js";
 
 // Cross-package imports use the published `@ingcreators/annot-core`
 // surface where available; deep subpaths (`./editor/*`,
@@ -46,25 +45,8 @@ import {
   readUniversalStyleAttrs,
   TOOL_REGISTRY,
 } from "@ingcreators/annot-core/editor";
-import type { ToolOptions } from "@ingcreators/annot-core/editor/tool-options";
-import {
-  type CanvasManager,
-  copyAsImage,
-  createThemeToggle,
-  getPngDataUrl,
-  type History,
-  openAnchoredPopover,
-  saveToFile,
-  type SelectionManager,
-  type ToolBase,
-} from "@ingcreators/annot-editor";
-import {
-  DEFAULT_FILL_COLOR,
-  DEFAULT_FONT_SIZE,
-  DEFAULT_STROKE_COLOR,
-  DEFAULT_STROKE_WIDTH,
-} from "@ingcreators/annot-core/utils";
 import { svgAnnotationsToShapes } from "@ingcreators/annot-core/editor/svg-to-annotation-shapes";
+import type { ToolOptions } from "@ingcreators/annot-core/editor/tool-options";
 import {
   copyAsOffice,
   isTauri,
@@ -72,9 +54,34 @@ import {
   saveToolPresets,
   type ToolPreset,
 } from "@ingcreators/annot-core/tauri-bridge";
+import {
+  DEFAULT_FILL_COLOR,
+  DEFAULT_FONT_SIZE,
+  DEFAULT_STROKE_COLOR,
+  DEFAULT_STROKE_WIDTH,
+} from "@ingcreators/annot-core/utils";
+import {
+  type CanvasManager,
+  copyAsImage,
+  createThemeToggle,
+  getPngDataUrl,
+  type History,
+  openAnchoredPopover,
+  type SelectionManager,
+  saveToFile,
+  type ToolBase,
+} from "@ingcreators/annot-editor";
 import { setTooltip } from "@ingcreators/annot-editor/tooltip";
 import { buildDrawingXml } from "@ingcreators/annot-render";
+import { createBuiltinIcon } from "../ui/annot-icon-imperative.js";
+import { AnnotSaveMenuElement } from "./annot-save-menu.js";
 import type { AnnotToolbarButtonElement, AnnotToolbarElement } from "./annot-toolbar.js";
+import {
+  TOOL_FACTORIES,
+  type ToolDef,
+  type ToolFactoryDeps,
+  toolIdForElement,
+} from "./tool-factories.js";
 import { populateToolPropertyPanel } from "./tool-property-renderer.js";
 import { openCanvasRightClickMenu } from "./toolbar-canvas-menu.js";
 import {
@@ -84,13 +91,6 @@ import {
   migrateLegacyPresetKey,
   seedPresetFromElement,
 } from "./toolbar-preset-helpers.js";
-import { AnnotSaveMenuElement } from "./annot-save-menu.js";
-import {
-  TOOL_FACTORIES,
-  type ToolDef,
-  type ToolFactoryDeps,
-  toolIdForElement,
-} from "./tool-factories.js";
 
 // Minimal ambient declaration for the Chrome extension API surface
 // referenced at runtime below (all call sites are gated by
@@ -299,7 +299,39 @@ export class Toolbar {
         factory: (opts) => factory(opts, deps),
       });
     }
+
+    // Eagerly construct the Text tool exactly once per editor session
+    // so its singleton dblclick-to-edit listener is armed from page
+    // load — *before* the user has activated any toolbar button.
+    // Without this, opening a saved image from the gallery and
+    // double-clicking an existing textbox doesn't enter edit mode
+    // (no TextTool exists yet, no listener attached). The result of
+    // the factory is intentionally retained on `#eagerTools` so the
+    // garbage collector doesn't reclaim the instance the SVG-level
+    // singleton points at.
+    const textFactory = TOOL_FACTORIES.text;
+    if (textFactory) {
+      // The text factory always returns a `TextTool`, which carries
+      // the `onTextBoxChanged` callback hook. The factory's return
+      // type is the broader `ToolBase` so the registry can carry
+      // every tool's factory in one map; cast through the
+      // shape-only interface here so the eager wiring stays
+      // type-safe without dragging the TextTool class import into
+      // toolbar.ts.
+      const eagerText = textFactory(this.#options, deps) as unknown as {
+        onTextBoxChanged?: (el: SVGElement) => void;
+      };
+      eagerText.onTextBoxChanged = (el) => this.#selection.select(el);
+      this.#eagerTools.push(eagerText);
+    }
   }
+
+  /** Long-lived tool instances created at init time so their
+   *  side-effect setup (dblclick handlers etc.) is armed regardless
+   *  of which toolbar tool is currently active. Holding the
+   *  reference here pins the instance from GC so the SVG-level
+   *  listener singleton always has a live tool to dispatch to. */
+  #eagerTools: Array<{ onTextBoxChanged?: (el: SVGElement) => void }> = [];
 
   /** Reference to the `<annot-toolbar>` host that wraps the
    *  buttons. Created in `#render` and reused by code paths that
@@ -1064,17 +1096,13 @@ export class Toolbar {
       // Clear any legacy inline background from before the
       // circle-containing-square redesign.
       badge.style.background = "";
-      badge.style.setProperty(
-        "--swatch-color",
-        meta.chipColorForVariant?.(current) ?? current,
-      );
+      badge.style.setProperty("--swatch-color", meta.chipColorForVariant?.(current) ?? current);
       // Look up the variant for the tooltip resolver. Falls through
       // to "" for ad-hoc hexes outside the palette — the resolver
       // (Highlight's `tooltipLabelForVariant`) collapses both cases
       // into the right tooltip ("Yellow" for palette, "" for ad-hoc).
       variantLabel =
-        meta.variants.find((v) => v.value.toLowerCase() === current.toLowerCase())?.label ??
-        "";
+        meta.variants.find((v) => v.value.toLowerCase() === current.toLowerCase())?.label ?? "";
     } else {
       const variant = meta.variants.find((v) => v.value === current);
       if (!variant) return;

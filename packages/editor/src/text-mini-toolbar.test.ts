@@ -34,18 +34,24 @@ function selectAll(host: HTMLDivElement): void {
 }
 
 describe("createTextMiniToolbar", () => {
-  it("appends a toolbar element to <body> with B/I/U buttons + family / size / color affordances", () => {
+  it("appends a toolbar element to <body> with B/I/U + family / size / size-step / alignment / color affordances", () => {
     const host = createHost();
     const handle = createTextMiniToolbar({ host });
     cleanup.push(() => handle.close());
     const tb = document.body.querySelector(".annot-text-mini-toolbar");
     expect(tb).not.toBeNull();
-    // Three flag toggles
-    expect(tb!.querySelectorAll("button")).toHaveLength(3);
+    // Buttons: 3 flag toggles + 2 size step buttons + 3 alignment
+    // buttons = 8 button elements.
+    expect(tb!.querySelectorAll("button")).toHaveLength(8);
     // Family + size dropdowns
     expect(tb!.querySelectorAll("select")).toHaveLength(2);
     // Color picker
     expect(tb!.querySelector('input[type="color"]')).not.toBeNull();
+    // Alignment buttons carry the matching `data-align` attribute
+    const aligns = Array.from(tb!.querySelectorAll<HTMLButtonElement>("button[data-align]")).map(
+      (b) => b.dataset["align"],
+    );
+    expect(aligns.sort()).toEqual(["end", "middle", "start"]);
   });
 
   it("each B/I/U button carries one of bold / italic / underline as data-cmd", () => {
@@ -53,9 +59,25 @@ describe("createTextMiniToolbar", () => {
     const handle = createTextMiniToolbar({ host });
     cleanup.push(() => handle.close());
     const cmds = Array.from(
-      document.body.querySelectorAll<HTMLButtonElement>(".annot-text-mini-toolbar button"),
+      document.body.querySelectorAll<HTMLButtonElement>(
+        ".annot-text-mini-toolbar button[data-cmd]",
+      ),
     ).map((b) => b.dataset["cmd"]);
     expect(cmds.sort()).toEqual(["bold", "italic", "underline"]);
+  });
+
+  it("clicking an alignment button fires onAlignmentChange + onCommand with textAnchor + value", () => {
+    const host = createHost();
+    const onAlignmentChange = vi.fn();
+    const onCommand = vi.fn();
+    const handle = createTextMiniToolbar({ host, onAlignmentChange, onCommand });
+    cleanup.push(() => handle.close());
+    const middle = document.body.querySelector<HTMLButtonElement>(
+      '.annot-text-mini-toolbar button[data-align="middle"]',
+    )!;
+    middle.click();
+    expect(onAlignmentChange).toHaveBeenCalledWith("middle");
+    expect(onCommand).toHaveBeenCalledWith("textAnchor", "middle");
   });
 
   it("clicking a button fires onCommand with the right cmd id", () => {

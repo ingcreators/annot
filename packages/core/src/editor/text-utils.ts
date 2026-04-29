@@ -580,9 +580,18 @@ export function wrapBareRectForText(rect: SVGRectElement): SVGGElement {
   // these from `ToolOptions` on commit, but having sane defaults
   // here means `readTextShapeSpec` doesn't throw before the user
   // enters any text.
+  //
+  // Text color is independent of the rect's stroke / fill —
+  // PowerPoint's text-on-shape uses an automatic ink color
+  // (typically black on light backgrounds, white on dark). We
+  // pick black as a single deterministic default; the user can
+  // change it via the mini-toolbar / PropertyPanel. The rect
+  // itself keeps its original stroke / fill / opacity / etc.
+  // attributes intact so the Shape-tool styling survives the
+  // promotion.
   g.setAttribute("data-font-size", "16");
   g.setAttribute("data-font-family", "sans-serif");
-  g.setAttribute("data-color", rect.getAttribute("stroke") || "#000000");
+  g.setAttribute("data-color", "#000000");
   // Pattern A defaults to PowerPoint-style centered text inside
   // the shape geometry. The user can change either anchor via the
   // PropertyPanel after the shape is promoted.

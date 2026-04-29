@@ -390,6 +390,22 @@ export class PropertyPanel {
     if (el) this.#target().appendChild(el);
   }
 
+  /** Render a control against an explicit target list rather than
+   *  `this.#targets`. Used by the Pattern A "shape-with-text"
+   *  surface to wire the existing fill / stroke / etc. controls
+   *  to the inner geometry primitive (`<rect>` / `<ellipse>` …)
+   *  while the wrapper `<g>` itself stays the host element for
+   *  the text-side controls. */
+  #renderRegistryControlAgainst(targets: SVGElement[], id: PropertyControlId): void {
+    if (targets.length === 0) return;
+    const deps: RenderControlDeps = {
+      effects: this.#effects,
+      onCommit: (info) => this.#handleRendererCommit(info),
+    };
+    const el = renderControl(PROPERTY_CONTROLS[id], targets, deps);
+    if (el) this.#target().appendChild(el);
+  }
+
   /**
    * Bridge from the renderer's `onCommit(info)` callback to the
    * panel's existing host-callback contract:
@@ -509,17 +525,45 @@ export class PropertyPanel {
    *     registry's setValue writes both the `<text>`'s `font-size`
    *     and the outer `data-font-size` marker.
    */
-  #renderTextboxControls(_g: SVGElement): void {
+  #renderTextboxControls(g: SVGElement): void {
+    // Pattern A wrappers (data-shape-kind ∈ rect / rounded /
+    // ellipse) carry a user-drawn geometry primitive whose
+    // stroke / fill the user originally configured via the Shape
+    // toolbar. After the dblclick promotion they expect those
+    // controls to remain accessible alongside the new text
+    // controls — otherwise the impression is that "the Shape's
+    // colors got replaced by Text's". Surface the geometry's
+    // fill / stroke controls scoped to the inner primitive.
+    const shapeKind = g.getAttribute("data-shape-kind");
+    const isPatternA = shapeKind === "rect" || shapeKind === "rounded" || shapeKind === "ellipse";
+    const innerGeometry = isPatternA
+      ? (g.querySelector(":scope > rect, :scope > ellipse") as SVGElement | null)
+      : null;
+
     this.#inSection("Type", () => {
       this.#renderRegistryControl(PROPERTY_CONTROL_IDS.textVariantPicker);
     });
-    this.#inSection("Line", () => {
+
+    if (innerGeometry) {
+      // Fill section — colour + opacity of the underlying shape.
+      this.#inSection("Fill", () => {
+        this.#renderRegistryControlAgainst([innerGeometry], PROPERTY_CONTROL_IDS.fillColor);
+        this.#renderRegistryControlAgainst([innerGeometry], PROPERTY_CONTROL_IDS.fillOpacity);
+      });
+      // Line section — stroke colour / width / dash style.
+      this.#inSection("Line", () => {
+        this.#renderRegistryControlAgainst([innerGeometry], PROPERTY_CONTROL_IDS.strokeColor);
+        this.#renderRegistryControlAgainst([innerGeometry], PROPERTY_CONTROL_IDS.strokeWidth);
+        this.#renderRegistryControlAgainst([innerGeometry], PROPERTY_CONTROL_IDS.strokeStyle);
+      });
+    }
+
+    // Text section — applies to the wrapper itself (text colour,
+    // font, per-character toggles, alignment).
+    this.#inSection("Text", () => {
       this.#renderRegistryControl(PROPERTY_CONTROL_IDS.textColor);
       this.#renderRegistryControl(PROPERTY_CONTROL_IDS.fontFamily);
       this.#renderRegistryControl(PROPERTY_CONTROL_IDS.fontSize);
-      // Per-character formatting toggles + text alignment, all
-      // surfaced under the existing Line section so users see the
-      // text-related controls grouped together.
       this.#renderRegistryControl(PROPERTY_CONTROL_IDS.textBold);
       this.#renderRegistryControl(PROPERTY_CONTROL_IDS.textItalic);
       this.#renderRegistryControl(PROPERTY_CONTROL_IDS.textUnderline);

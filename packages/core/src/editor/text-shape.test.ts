@@ -222,9 +222,12 @@ describe("Pattern A — wrap / unwrap a bare <rect> for text-on-shape", () => {
     // ClipPath + empty <text> attached.
     expect(wrapper.querySelector("clipPath")).not.toBeNull();
     expect(wrapper.querySelector("text")).not.toBeNull();
-    // Text colour seeded from the rect's stroke (the most likely
-    // "ink colour" for a freshly-promoted shape).
-    expect(wrapper.getAttribute("data-color")).toBe("#ff0000");
+    // Text colour defaults to black (PowerPoint-style) and is
+    // intentionally INDEPENDENT of the rect's stroke — preserving
+    // the user's Shape-tool colour settings on the underlying
+    // geometry while letting them control the text colour
+    // separately via the mini-toolbar / PropertyPanel.
+    expect(wrapper.getAttribute("data-color")).toBe("#000000");
   });
 
   it("rect with rx > 0 wraps as data-shape-kind='rounded'", () => {
