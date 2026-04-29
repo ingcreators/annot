@@ -987,47 +987,23 @@ body.editor-mode.has-right-panel .file-details-backdrop {
   color: var(--annot-text-primary);
 }
 
-/* Actions section — compact transform / arrange / align / group
- * button rows (rotate / flip / z-order / align / distribute /
- * group / ungroup). Shown only when selection is non-empty.
- * Renders as a regular `.editor-right-panel-section` card with
- * the heading "Actions"; this rule narrows the body padding so
- * the dense action grid feels distinct from the property-edit
- * sections below it. */
-.editor-right-panel-actions.editor-right-panel-section {
-  padding: 10px 16px;
-}
-.editor-right-panel-actions .editor-right-panel-section-title {
-  margin-bottom: 6px;
-}
-/* Group label above each action row ("Transform" / "Arrange") —
- * shares the uppercase / muted / tracked typography with the
- * property panel's pp-section-header so both surfaces read as one
- * hierarchy: TYPE / FILL / LINE (properties) + TRANSFORM / ARRANGE
- * (actions). Tight 4 px gap to its row (parent-child proximity)
- * and larger 14 px margin-top above the header to separate it from
- * the prior action group (sibling distance). */
-.editor-right-panel-actions-group-label {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.7px;
-  text-transform: uppercase;
-  color: var(--annot-text-muted);
-  padding: 0 0 4px 0;
-  margin-top: 14px;
-  user-select: none;
-}
-.editor-right-panel-actions-group-label:first-child,
-.editor-right-panel-section-body > .editor-right-panel-actions-group-label:first-child {
-  margin-top: 0;
-}
-
+/* Actions section — transform / arrange / align / group button
+ * rows (rotate / flip / z-order / align / distribute / group /
+ * ungroup). Shown only when selection is non-empty. Markup
+ * mirrors the Selected card: the section's body wrapper is a
+ * `.prop-panel.prop-panel-docked`, and each sub-group is a
+ * `.pp-section` with a `.pp-section-header` label. That gives
+ * Actions the same level-2 alignment as TYPE / FILL / LINE for
+ * free, no Actions-specific overrides required. The only thing
+ * still needing a custom class is the row container, where the
+ * tight 2 px button gap (vs `.pp-section-body`'s 6 px) is
+ * intentional for icon-button rows. */
 .editor-right-panel-actions-row {
   display: flex;
   gap: 2px;
   /* Indent the action row slightly so it visually hangs off the
-   * group label above, matching pp-section-body's 10 px indent in
-   * the property panel. */
+   * `.pp-section-header` above, matching `.pp-section-body`'s 10
+   * px indent in the property panel. */
   padding-left: 10px;
 }
 .editor-right-panel-actions-row:not(:last-child) {
