@@ -66,6 +66,14 @@ export class TextTool extends ToolBase {
    *  typing we roll the promotion back via `unwrapBareTextShape`
    *  so the canvas stays clean. */
   #promotedFromBareRect = false;
+  /** Capture-phase pointerdown handler installed for the lifetime
+   *  of an edit session so a click outside the contentEditable
+   *  commits the edit (PowerPoint-style "outside click finishes
+   *  text editing"). Without this, the user can drag the
+   *  underlying shape while the editor is still open — the
+   *  shape's transform changes but the editor overlay stays
+   *  pinned to the original position. */
+  #onOutsidePointerDown: ((e: PointerEvent) => void) | null = null;
 
   onTextBoxChanged?: (newEl: SVGElement) => void;
 
@@ -321,6 +329,31 @@ export class TextTool extends ToolBase {
       },
     });
 
+    // Outside-click commits the edit (PowerPoint-style). Without
+    // this, the user could press-and-drag the underlying shape
+    // while the editor is still open — the wrapper would move via
+    // SelectionManager but the foreignObject stays pinned in the
+    // ui-overlay layer at its original position, leaving the
+    // textbox visually orphaned from the shape it belongs to.
+    // Capture phase + pointerdown so the commit runs BEFORE the
+    // SelectionManager's pointerdown gets a chance to start a
+    // drag; the same pointerdown then bubbles down (foreignObject
+    // gone) and the user's drag on the shape proceeds normally.
+    const onOutsidePointerDown = (e: PointerEvent): void => {
+      if (!this.#foreignObject) return;
+      const target = e.target as Node | null;
+      if (target && this.#foreignObject.contains(target)) return;
+      // Editor overlays in ui-overlay aren't reached by `contains`
+      // when the click lands on the bare `<foreignObject>` rect
+      // outside the inner contentEditable div. Both should be
+      // treated as "inside" so the click doesn't accidentally
+      // commit when the user is just clicking near the edge.
+      if (target instanceof Node && fo.contains(target)) return;
+      this.#finishEditing();
+    };
+    this.#onOutsidePointerDown = onOutsidePointerDown;
+    document.addEventListener("pointerdown", onOutsidePointerDown, true);
+
     requestAnimationFrame(() => {
       div.focus();
       const sel = window.getSelection();
@@ -399,6 +432,10 @@ export class TextTool extends ToolBase {
     this.#foreignObject.remove();
     this.#foreignObject = null;
     this.#editDiv = null;
+    if (this.#onOutsidePointerDown) {
+      document.removeEventListener("pointerdown", this.#onOutsidePointerDown, true);
+      this.#onOutsidePointerDown = null;
+    }
 
     // Pattern A path — the user double-clicked a bare shape;
     // we wrapped it then opened the editor. The wrapper carries
