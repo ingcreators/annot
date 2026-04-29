@@ -87,6 +87,55 @@ export type TextAnchor = "start" | "middle" | "end";
  *  the vanchor value (`top` / `middle` / `bottom`). */
 export type TextVerticalAnchor = "top" | "middle" | "bottom";
 
+/** Auto-fit policy for a text-bearing shape (matches PowerPoint's
+ *  three radio options under Format Shape → Text Box):
+ *
+ *    "none"   — text is clipped to the box; the user resizes
+ *               the box to make room. Default.
+ *    "shrink" — text shrinks (scales font-size down) when it
+ *               overflows so it always fits. Currently records
+ *               intent only — the layout pass that does the
+ *               actual scaling is a follow-up.
+ *    "resize" — the box grows (height) so the text always fits
+ *               without clipping. Width stays fixed.
+ *
+ *  Stored on the wrapper as `data-text-autofit`. */
+export type TextAutofit = "none" | "shrink" | "resize";
+
+/** Per-side text-box padding in user-space units. PowerPoint's
+ *  "Text Box → Margins" surface; defaults map to the legacy
+ *  hard-coded inset (10 px on plain & callout, 2 px on plain).
+ *  Stored on the wrapper as `data-text-margin-{l,r,t,b}` so the
+ *  per-side margins survive variant changes / re-edits. */
+export interface TextMargins {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+}
+
+function readMargin(g: Element, attr: string, fallback: number): number {
+  const raw = g.getAttribute(attr);
+  if (raw == null) return fallback;
+  const n = Number.parseFloat(raw);
+  return Number.isFinite(n) && n >= 0 ? n : fallback;
+}
+
+/** Pull the per-side margins off a wrapper, falling back to the
+ *  variant-specific defaults that previously lived as constants
+ *  in `createTextShape` / `replaceRunsInPlace`. */
+function readTextMargins(g: Element): TextMargins {
+  const variant = g.getAttribute("data-shape-kind");
+  const padDefault = variant === "plain" ? 2 : 10;
+  const padTopDefault = variant === "plain" ? 0 : 8;
+  return {
+    left: readMargin(g, "data-text-margin-l", padDefault),
+    right: readMargin(g, "data-text-margin-r", padDefault),
+    top: readMargin(g, "data-text-margin-t", padTopDefault),
+    bottom: readMargin(g, "data-text-margin-b", padTopDefault),
+  };
+}
+
 export interface TextShapeSpec {
   x: number;
   y: number;
@@ -163,36 +212,38 @@ function buildTspanLayout(opts: {
   h: number;
   fontSize: number;
   lineCount: number;
-  padLeft: number;
-  padTop: number;
+  margins: TextMargins;
   textAnchor: TextAnchor;
   textVerticalAnchor: TextVerticalAnchor;
 }): TspanLayout {
-  const { x, y, w, h, fontSize, lineCount, padLeft, padTop, textAnchor, textVerticalAnchor } = opts;
+  const { x, y, w, h, fontSize, lineCount, margins, textAnchor, textVerticalAnchor } = opts;
   const lineHeight = fontSize * 1.4;
 
   // Horizontal — text-anchor handles the alignment, so all we
   // need is the x of the alignment reference point.
   let xForLine: number;
   if (textAnchor === "start") {
-    xForLine = x + padLeft;
+    xForLine = x + margins.left;
   } else if (textAnchor === "end") {
-    xForLine = x + w - padLeft;
+    xForLine = x + w - margins.right;
   } else {
-    xForLine = x + w / 2;
+    xForLine = x + (margins.left + (w - margins.right)) / 2;
   }
 
   // Vertical — SVG has no native vertical anchor; pre-compute
   // the y-origin so the run block sits in the right band of
-  // the box.
+  // the box. Margins reserve space at the top / bottom edges
+  // so the run block never paints inside them.
   const totalH = Math.max(1, lineCount) * lineHeight;
   let firstBaselineY: number;
   if (textVerticalAnchor === "top") {
-    firstBaselineY = y + fontSize + padTop;
+    firstBaselineY = y + margins.top + fontSize;
   } else if (textVerticalAnchor === "bottom") {
-    firstBaselineY = y + h - padTop - totalH + fontSize;
+    firstBaselineY = y + h - margins.bottom - totalH + fontSize;
   } else {
-    firstBaselineY = y + (h - totalH) / 2 + fontSize;
+    const innerTop = y + margins.top;
+    const innerH = Math.max(0, h - margins.top - margins.bottom);
+    firstBaselineY = innerTop + (innerH - totalH) / 2 + fontSize;
   }
 
   return {
@@ -420,9 +471,10 @@ export function createTextShape(spec: TextShapeSpec): SVGGElement {
   // by one line height. Layout consults the resolved horizontal +
   // vertical anchors so the run block sits in the right band of
   // the box (e.g. `middle` / `middle` for PowerPoint-style
-  // text-on-rect).
-  const padLeft = spec.variant === "plain" ? 2 : 10;
-  const padTop = spec.variant === "plain" ? 0 : 8;
+  // text-on-rect). Margins come from `data-text-margin-{l,r,t,b}`
+  // when present, falling back to the legacy variant-specific
+  // padding constants for plain (2 / 0) and the others (10 / 8).
+  const margins = readTextMargins(g);
   const layout = buildTspanLayout({
     x: spec.x,
     y: spec.y,
@@ -430,8 +482,7 @@ export function createTextShape(spec: TextShapeSpec): SVGGElement {
     h: spec.h,
     fontSize: spec.fontSize,
     lineCount: countLines(spec.runs),
-    padLeft,
-    padTop,
+    margins,
     textAnchor,
     textVerticalAnchor,
   });
@@ -650,14 +701,14 @@ export function replaceRunsInPlace(g: SVGElement, runs: readonly TextRun[]): voi
   const fontFamily = g.getAttribute("data-font-family") || "sans-serif";
   const color = g.getAttribute("data-color") || "#000000";
 
-  // Padding mirrors `createTextShape` — `plain` insets to 2px so
-  // text hugs the box edge; every other kind insets ~10px to
-  // leave breathing room from the bg / border. Pattern A uses the
-  // 10px inset since the user's geometry IS a deliberate visible
-  // box.
+  // Margins follow the per-side `data-text-margin-{l,r,t,b}`
+  // attributes, falling back to the legacy variant-specific
+  // padding constants (plain = 2/0, others = 10/8). Pattern A's
+  // 10/8 default echoes the user-visible breathing room around
+  // a deliberately drawn shape; legacy plain text hugs its
+  // bounds to mirror the pre-Phase-3 layout.
   const variant = g.getAttribute("data-shape-kind");
-  const padLeft = variant === "plain" ? 2 : 10;
-  const padTop = variant === "plain" ? 0 : 8;
+  const margins = readTextMargins(g);
   const textAnchor =
     (g.getAttribute("data-text-anchor") as TextAnchor | null) ?? defaultTextAnchor(variant);
   const textVerticalAnchor =
@@ -671,8 +722,7 @@ export function replaceRunsInPlace(g: SVGElement, runs: readonly TextRun[]): voi
     h: boxH,
     fontSize,
     lineCount: countLines(runs),
-    padLeft,
-    padTop,
+    margins,
     textAnchor,
     textVerticalAnchor,
   });
@@ -722,6 +772,31 @@ export function replaceRunsInPlace(g: SVGElement, runs: readonly TextRun[]): voi
       isStartOfLine = true;
     } else {
       isStartOfLine = false;
+    }
+  }
+
+  // Autofit (`data-text-autofit="resize"`) — grow the geometry
+  // primitive's height so the run block fits inside margins +
+  // bbox. Width stays fixed to match PowerPoint's "Resize shape
+  // to fit text" default. The shrink mode is recorded as intent
+  // only at the moment; a follow-up will scale the font-size
+  // down when the text overflows.
+  const autofit = g.getAttribute("data-text-autofit");
+  if (autofit === "resize" && firstRect) {
+    const lineHeight = fontSize * 1.4;
+    const totalH = Math.max(1, countLines(runs)) * lineHeight;
+    const requiredH = totalH + margins.top + margins.bottom;
+    if (requiredH > boxH) {
+      firstRect.setAttribute("height", String(requiredH));
+      // Keep the clipPath in sync so the visible run block
+      // doesn't get cut at the previous box bottom.
+      const clipRect = g.querySelector("clipPath > rect");
+      if (clipRect instanceof Element) clipRect.setAttribute("height", String(requiredH));
+      // Re-run layout once with the grown box so middle / bottom
+      // anchors recompute against the new height. Recursive call
+      // is safe because the autofit branch is a no-op once the
+      // box is large enough.
+      replaceRunsInPlace(g, runs);
     }
   }
 }

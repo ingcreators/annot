@@ -570,6 +570,19 @@ export class PropertyPanel {
       this.#renderRegistryControl(PROPERTY_CONTROL_IDS.textAnchor);
       this.#renderRegistryControl(PROPERTY_CONTROL_IDS.textVerticalAnchor);
     });
+
+    // Text box section — PowerPoint's "Format Shape → Text Box"
+    // surface. Vertical alignment was already covered above; the
+    // remaining options (Autofit + per-side Margins) live here so
+    // the user can tune the layout independently of the styling
+    // they pick for the run content itself.
+    this.#inSection("Text box", () => {
+      this.#renderRegistryControl(PROPERTY_CONTROL_IDS.textAutofit);
+      this.#renderRegistryControl(PROPERTY_CONTROL_IDS.textMarginLeft);
+      this.#renderRegistryControl(PROPERTY_CONTROL_IDS.textMarginRight);
+      this.#renderRegistryControl(PROPERTY_CONTROL_IDS.textMarginTop);
+      this.#renderRegistryControl(PROPERTY_CONTROL_IDS.textMarginBottom);
+    });
   }
 
   // `#recreateTextbox`, `#addTextVariantPicker`, `#addFontFamilyPicker`,

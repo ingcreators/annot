@@ -121,7 +121,7 @@ describe("CATEGORY_CONTROL_SHAPE", () => {
     expect(CATEGORY_CONTROL_SHAPE.group).toHaveLength(0);
   });
 
-  it("declares the textbox shape as variant + color + font + size + per-character toggles + alignment", () => {
+  it("declares the textbox shape as variant + color + font + size + per-character toggles + alignment + autofit + margins", () => {
     expect(CATEGORY_CONTROL_SHAPE.textbox).toEqual([
       PROPERTY_CONTROL_IDS.textVariantPicker,
       PROPERTY_CONTROL_IDS.textColor,
@@ -132,6 +132,11 @@ describe("CATEGORY_CONTROL_SHAPE", () => {
       PROPERTY_CONTROL_IDS.textUnderline,
       PROPERTY_CONTROL_IDS.textAnchor,
       PROPERTY_CONTROL_IDS.textVerticalAnchor,
+      PROPERTY_CONTROL_IDS.textAutofit,
+      PROPERTY_CONTROL_IDS.textMarginLeft,
+      PROPERTY_CONTROL_IDS.textMarginRight,
+      PROPERTY_CONTROL_IDS.textMarginTop,
+      PROPERTY_CONTROL_IDS.textMarginBottom,
     ]);
   });
 
@@ -165,11 +170,12 @@ describe("PROPERTY_CONTROLS registry", () => {
     // 4 of `rich-text-and-shape-text.md` added 3 per-tspan
     // formatting toggles (textBold / textItalic / textUnderline) → 32;
     // the rich-text alignment follow-up added textAnchor +
-    // textVerticalAnchor → 34. Pinning the count guards against a
-    // new id landing without a matching def — the entry-count
-    // shape test alone won't catch that if the new id accidentally
-    // duplicates another.
-    expect(ALL_IDS).toHaveLength(34);
+    // textVerticalAnchor → 34; the PowerPoint-style textbox-options
+    // follow-up added textAutofit + 4 per-side margin ids → 39.
+    // Pinning the count guards against a new id landing without a
+    // matching def — the entry-count shape test alone won't catch
+    // that if the new id accidentally duplicates another.
+    expect(ALL_IDS).toHaveLength(39);
     for (const id of ALL_IDS) {
       expect(PROPERTY_CONTROLS[id], `missing def for "${id}"`).toBeDefined();
       expect(PROPERTY_CONTROLS[id].id).toBe(id);
