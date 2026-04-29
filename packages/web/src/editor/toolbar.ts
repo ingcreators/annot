@@ -581,7 +581,13 @@ export class Toolbar {
     this.#savePresetsToFile();
     // Pass both label (for status text) and toolId (for hosts rendering
     // tool properties). Select / deactivation → toolId is null.
-    const toolId = btn.dataset.tool ?? null;
+    // The Select button sets `data-tool=""` (Lit's reflected default
+    // for `dataTool: ""`), so `??` alone leaves toolId as `""` and
+    // any consumer testing `id !== null` mis-classifies Select mode
+    // as "an active tool" — the Tool right-panel section visibly
+    // renders an empty card. Coerce empty strings to null too.
+    const rawToolId = btn.dataset.tool ?? null;
+    const toolId = rawToolId === "" ? null : rawToolId;
     this.#onToolChange?.(label, toolId);
   }
 

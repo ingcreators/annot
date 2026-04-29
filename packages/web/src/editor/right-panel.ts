@@ -438,16 +438,24 @@ export class AnnotEditorRightPanelElement extends LitElement {
    *  the right-panel doesn't directly receive them; a future
    *  follow-up can plumb them via properties if a plugin section
    *  needs them. */
-  #ctx(): UISectionContext {
+  /** Build a context object scoped to a specific section's heading
+   *  element. Each `mount(container, ctx)` call gets its OWN ctx
+   *  whose `setTitle` writes to that section's `<h3>` and no other.
+   *
+   *  The previous shared-ctx implementation looked up "the last
+   *  mounted section" inside `setTitle` — a race that, after the
+   *  Actions section landed, started writing the Selection
+   *  section's dynamic title ("Selected Ellipse") onto the
+   *  page-elements section's heading. The user-visible symptom
+   *  was a "Selection" / "Tool" header pair appearing empty while
+   *  "Selected Ellipse" leaked onto the page-elements card. */
+  #ctxFor(headingEl: HTMLElement): UISectionContext {
     return {
       path: "",
       mode: "",
       tags: {},
       setTitle: (newTitle) => {
-        const last = this.#mounted[this.#mounted.length - 1];
-        if (!last) return;
-        const heading = last.sectionEl.querySelector(".editor-right-panel-section-title");
-        if (heading) heading.textContent = newTitle;
+        headingEl.textContent = newTitle;
       },
     };
   }
@@ -470,9 +478,7 @@ export class AnnotEditorRightPanelElement extends LitElement {
     this.#disposeSections();
     host.innerHTML = "";
 
-    const ctx = this.#ctx();
     for (const section of this.#composeSections()) {
-      if (section.visible && !section.visible(ctx)) continue;
       const sectionEl = document.createElement("section");
       sectionEl.className = "editor-right-panel-section";
       sectionEl.dataset["sectionId"] = section.id;
@@ -483,6 +489,13 @@ export class AnnotEditorRightPanelElement extends LitElement {
       const body = document.createElement("div");
       body.className = "editor-right-panel-section-body";
       sectionEl.appendChild(body);
+      // Per-section ctx so `setTitle(...)` writes to THIS section's
+      // own heading instead of leaking onto a sibling. The
+      // visibility predicate also runs against the per-section ctx
+      // so it matches the value `mount` will see — no shared-ctx
+      // surprise.
+      const ctx = this.#ctxFor(heading);
+      if (section.visible && !section.visible(ctx)) continue;
       host.appendChild(sectionEl);
       try {
         const lifecycle = section.mount(body, ctx);
@@ -550,13 +563,18 @@ export class AnnotEditorRightPanelElement extends LitElement {
    * existing section changed and visibility didn't flip.
    */
   notifyUpdate(): void {
-    const ctx = this.#ctx();
     for (const state of this.#mounted) {
       if (state.reactive) {
         const lifecycle = state.lifecycle as { update?(c: UISectionContext): void };
         if (lifecycle.update) {
+          // Each section gets a ctx scoped to its own heading so
+          // a late `setTitle(...)` doesn't leak onto a sibling.
+          const heading = state.sectionEl.querySelector<HTMLElement>(
+            ".editor-right-panel-section-title",
+          );
+          if (!heading) continue;
           try {
-            lifecycle.update(ctx);
+            lifecycle.update(this.#ctxFor(heading));
           } catch (e) {
             console.error(`[right-panel] section "${state.section.id}" update threw:`, e);
           }
