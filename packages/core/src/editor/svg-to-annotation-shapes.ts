@@ -306,6 +306,27 @@ export function svgElementToAnnotationShape(el: SVGElement): AnnotationShape | n
       const bh = Number.parseFloat(bgRect?.getAttribute("height") || "40");
       const tailXRaw = el.getAttribute("data-tail-x");
       const tailYRaw = el.getAttribute("data-tail-y");
+      // Pattern A wrappers (rect / rounded / ellipse) carry the
+      // user's drawn geometry primitive; preserve its stroke so the
+      // OOXML output matches what Annot displays. Legacy variants
+      // (plain / sticky / callout) keep the builder's hardcoded
+      // light-gray border — that's their identity in PowerPoint and
+      // changing it would regress the existing snapshot fixtures.
+      const isPatternA =
+        shapeKind === "rect" || shapeKind === "rounded" || shapeKind === "ellipse";
+      const bgStroke = bgRect?.getAttribute("stroke");
+      const bgStrokeWidth = bgRect?.getAttribute("stroke-width");
+      const bgStrokeDasharray = bgRect?.getAttribute("stroke-dasharray");
+      const textAnchor = el.getAttribute("data-text-anchor") as
+        | "start"
+        | "middle"
+        | "end"
+        | null;
+      const textVerticalAnchor = el.getAttribute("data-text-vanchor") as
+        | "top"
+        | "middle"
+        | "bottom"
+        | null;
       return {
         type: "text",
         x: bx,
@@ -321,6 +342,15 @@ export function svgElementToAnnotationShape(el: SVGElement): AnnotationShape | n
         fill: textEl.getAttribute("fill") || el.getAttribute("data-color") || "#ff0000",
         text_bg_color: shapeKind === "plain" ? undefined : bgRect?.getAttribute("fill") || "",
         shape_kind: shapeKind,
+        // Pattern A: pass the geometry primitive's actual stroke so
+        // the OOXML side's `<a:ln>` matches what the user drew.
+        ...(isPatternA && bgStroke ? { stroke: bgStroke } : {}),
+        ...(isPatternA && bgStrokeWidth
+          ? { stroke_width: Number.parseFloat(bgStrokeWidth) }
+          : {}),
+        ...(isPatternA && bgStrokeDasharray ? { stroke_dasharray: bgStrokeDasharray } : {}),
+        ...(textAnchor ? { text_anchor: textAnchor } : {}),
+        ...(textVerticalAnchor ? { text_vertical_anchor: textVerticalAnchor } : {}),
         tail_x: tailXRaw != null ? Number.parseFloat(tailXRaw) + tx : undefined,
         tail_y: tailYRaw != null ? Number.parseFloat(tailYRaw) + ty : undefined,
         ...xform,

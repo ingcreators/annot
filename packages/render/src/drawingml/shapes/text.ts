@@ -1,18 +1,36 @@
 import type { AnnotationShape, TextRun } from "@ingcreators/annot-core/tauri-bridge";
-import { chex, exml, parseRgba, px, xfrmAttrs } from "../helpers.js";
+import {
+  capAttr,
+  chex,
+  dashToDrawingml,
+  exml,
+  joinXml,
+  parseRgba,
+  pt,
+  px,
+  strokePaintXml,
+  xfrmAttrs,
+} from "../helpers.js";
 import type { NamespaceOpts } from "../namespace.js";
 
 /** Build a `<{ns}:sp>` for a `type === "text"` AnnotationShape.
- *  Branches on `shape_kind === "callout"` plus populated tail
- *  coords for the `wedgeRoundRectCallout` preset; otherwise emits
- *  `roundRect adj=5000` (the standard sticky/plain textbox).
+ *  Branches on `shape_kind` for the geometry preset:
+ *    plain / sticky → roundRect adj=5000 (legacy text variants)
+ *    callout (with tail) → wedgeRoundRectCallout
+ *    rect → rect (sharp corners — Pattern A text-on-shape)
+ *    rounded → roundRect (Pattern A rounded text-on-shape)
+ *    ellipse → ellipse (Pattern A elliptical text-on-shape)
  *
  *  Walks `runs[]` to emit one `<a:r>` per text run and starts a
  *  fresh `<a:p>` after each run with `line_break_after === true`.
  *  Per-run formatting (bold / italic / underline / size / family /
  *  color) lifts onto the `<a:rPr>` block so PowerPoint receives
  *  the matching mixed formatting. Run-level overrides fall back
- *  to the shape-level `font_size` / `font_family` / `fill`. */
+ *  to the shape-level `font_size` / `font_family` / `fill`.
+ *
+ *  Text alignment (`text_anchor` / `text_vertical_anchor`) flows
+ *  to OOXML as `<a:pPr algn>` per paragraph and `<a:bodyPr
+ *  anchor>` on the body container. */
 export function buildText(s: AnnotationShape, id: number, ns: NamespaceOpts): string {
   const x = px(s.x ?? 0);
   const y = px(s.y ?? 0);
@@ -34,17 +52,32 @@ export function buildText(s: AnnotationShape, id: number, ns: NamespaceOpts): st
   const bgCarrier = s.text_bg_color;
   const bgFill = bgCarrier ? buildBgFill(bgCarrier) : "<a:noFill/>";
 
-  const paragraphs = buildParagraphs(runs, fs, defaultFill, defaultFamily);
+  const algnAttr = pPrAlgnAttr(s.text_anchor);
+  const paragraphs = buildParagraphs(runs, fs, defaultFill, defaultFamily, algnAttr);
   const xf = xfrmAttrs(s);
 
-  // Callouts with a populated tail tip switch from `roundRect` to
-  // `wedgeRoundRectCallout`. adj1/adj2 express the tail tip as a
-  // signed percentage offset from the bbox center; values can
-  // exceed ±50% when the tail tip lands outside the bbox (the
-  // typical case for callouts). adj3 keeps the same corner-rounding
-  // constant as the non-callout `roundRect` form.
-  let geom =
-    '<a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val 5000"/></a:avLst></a:prstGeom>';
+  // Geometry preset per shape_kind. Pattern A kinds (rect / rounded
+  // / ellipse) reflect the user's drawn primitive; legacy variants
+  // (plain / sticky) keep the historical `roundRect` look that
+  // PowerPoint users expect for sticky-note text. Callouts with a
+  // populated tail tip override to `wedgeRoundRectCallout`; adj1 /
+  // adj2 express the tail tip as a signed percentage offset from
+  // the bbox center (values can exceed ±50% when the tip lands
+  // outside the bbox).
+  const isPatternA =
+    s.shape_kind === "rect" || s.shape_kind === "rounded" || s.shape_kind === "ellipse";
+  let geom: string;
+  if (s.shape_kind === "rect") {
+    geom = '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>';
+  } else if (s.shape_kind === "ellipse") {
+    geom = '<a:prstGeom prst="ellipse"><a:avLst/></a:prstGeom>';
+  } else if (s.shape_kind === "rounded") {
+    geom =
+      '<a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val 5000"/></a:avLst></a:prstGeom>';
+  } else {
+    geom =
+      '<a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val 5000"/></a:avLst></a:prstGeom>';
+  }
   if (
     s.shape_kind === "callout" &&
     s.tail_x != null &&
@@ -63,7 +96,51 @@ export function buildText(s: AnnotationShape, id: number, ns: NamespaceOpts): st
     geom = `<a:prstGeom prst="wedgeRoundRectCallout"><a:avLst><a:gd name="adj1" fmla="val ${adj1}"/><a:gd name="adj2" fmla="val ${adj2}"/><a:gd name="adj3" fmla="val 5000"/></a:avLst></a:prstGeom>`;
   }
 
-  return `<${ns.shape}><${ns.nvShape}><${ns.cnvPr} id="${id}" name="T${id}"/><${ns.cnvSp} txBox="1"/>${ns.nvPrSuffix}</${ns.nvShape}><${ns.spPr}><a:xfrm${xf}><a:off x="${x}" y="${y}"/><a:ext cx="${bw}" cy="${bh}"/></a:xfrm>${geom}${bgFill}<a:ln w="9525"><a:solidFill><a:srgbClr val="BFBFBF"/></a:solidFill></a:ln></${ns.spPr}>${ns.txBodyOpen}<a:bodyPr wrap="square" rtlCol="0" lIns="91440" tIns="45720" rIns="91440" bIns="45720"/><a:lstStyle/>${paragraphs}${ns.txBodyClose}</${ns.shape}>`;
+  // Stroke: Pattern A reflects the user-drawn primitive; legacy
+  // text variants (plain / sticky / callout) keep the historical
+  // light-gray border that defines their PowerPoint identity.
+  const line = isPatternA && s.stroke ? buildPatternALine(s) : LEGACY_TEXT_LINE;
+
+  // Vertical anchor on the body container — top is the OOXML
+  // default, so omit the attribute for top to keep existing
+  // snapshots stable.
+  const vAttr = bodyPrAnchorAttr(s.text_vertical_anchor);
+
+  return `<${ns.shape}><${ns.nvShape}><${ns.cnvPr} id="${id}" name="T${id}"/><${ns.cnvSp} txBox="1"/>${ns.nvPrSuffix}</${ns.nvShape}><${ns.spPr}><a:xfrm${xf}><a:off x="${x}" y="${y}"/><a:ext cx="${bw}" cy="${bh}"/></a:xfrm>${geom}${bgFill}${line}</${ns.spPr}>${ns.txBodyOpen}<a:bodyPr wrap="square" rtlCol="0" lIns="91440" tIns="45720" rIns="91440" bIns="45720"${vAttr}/><a:lstStyle/>${paragraphs}${ns.txBodyClose}</${ns.shape}>`;
+}
+
+/** The historical light-gray hairline border legacy text variants
+ *  (plain / sticky / callout) ship with — defines their PowerPoint
+ *  identity, so Pattern A overrides this only when it has a real
+ *  stroke from the user's drawn primitive. */
+const LEGACY_TEXT_LINE = '<a:ln w="9525"><a:solidFill><a:srgbClr val="BFBFBF"/></a:solidFill></a:ln>';
+
+function buildPatternALine(s: AnnotationShape): string {
+  const stroke = chex(s.stroke ?? "#000000");
+  const sw = pt(s.stroke_width ?? 1);
+  const cap = capAttr(s.stroke_linecap);
+  const join = joinXml(s.stroke_linejoin);
+  const dash = dashToDrawingml(s.stroke_dasharray);
+  return `<a:ln w="${sw}"${cap}>${strokePaintXml(s, stroke)}${join}${dash}</a:ln>`;
+}
+
+/** Map `text_vertical_anchor` to an OOXML `<a:bodyPr anchor>`
+ *  attribute fragment. Top (default) is omitted to keep existing
+ *  snapshot fixtures stable. */
+function bodyPrAnchorAttr(v: AnnotationShape["text_vertical_anchor"]): string {
+  if (v === "middle") return ' anchor="ctr"';
+  if (v === "bottom") return ' anchor="b"';
+  return "";
+}
+
+/** Map `text_anchor` to an OOXML `<a:pPr algn>` attribute fragment.
+ *  Empty when unset / "start" so paragraphs that don't need an
+ *  override don't carry a redundant `algn="l"` (also matches the
+ *  pre-Phase-3 fixtures). */
+function pPrAlgnAttr(h: AnnotationShape["text_anchor"]): string {
+  if (h === "middle") return ' algn="ctr"';
+  if (h === "end") return ' algn="r"';
+  return "";
 }
 
 /** Count distinct paragraphs in the run array — every
@@ -88,9 +165,11 @@ function buildParagraphs(
   defaultSize: number,
   defaultFillHex: string,
   defaultFamily: string | undefined,
+  algnAttr: string,
 ): string {
+  const pPr = algnAttr ? `<a:pPr${algnAttr}/>` : "";
   if (runs.length === 0) {
-    return `<a:p>${renderRun({ text: "" }, defaultSize, defaultFillHex, defaultFamily)}</a:p>`;
+    return `<a:p>${pPr}${renderRun({ text: "" }, defaultSize, defaultFillHex, defaultFamily)}</a:p>`;
   }
 
   // Walk runs accumulating into paragraphs. A run with
@@ -102,7 +181,7 @@ function buildParagraphs(
     const run = runs[i]!;
     current += renderRun(run, defaultSize, defaultFillHex, defaultFamily);
     if (run.line_break_after || i === runs.length - 1) {
-      paragraphs.push(`<a:p>${current}</a:p>`);
+      paragraphs.push(`<a:p>${pPr}${current}</a:p>`);
       current = "";
     }
   }
@@ -129,6 +208,11 @@ function renderRun(
 
 function buildBgFill(bgCarrier: string): string {
   if (!bgCarrier) return "<a:noFill/>";
+  // `fill="none"` on the geometry primitive (Pattern A) means the
+  // shape is transparent — `parseRgba("none")` would otherwise fall
+  // through to the sticky-yellow default and paint a tinted
+  // background in PowerPoint that Annot never showed.
+  if (bgCarrier === "none" || bgCarrier === "transparent") return "<a:noFill/>";
   const [r, g, b, a] = parseRgba(bgCarrier);
   if (a <= 0) return "<a:noFill/>";
   const hex = `${pad2(r)}${pad2(g)}${pad2(b)}`;
