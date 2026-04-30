@@ -1073,6 +1073,15 @@ export class SelectionManager {
       (e) => {
         if (this.#canvas.activeTool) return;
         if (e.button !== 0) return;
+        // Skip pointerdowns that land inside a text-edit foreignObject
+        // overlay. The overlay lives in `canvas.uiOverlay` (not under
+        // the wrapper), so the bbox hit test below would otherwise
+        // pick the underlying wrapper and start dragging it — leaving
+        // the contentEditable orphaned at its original position. The
+        // text-tool's own outside-pointerdown handler ignores clicks
+        // inside the foreignObject (they're caret/selection clicks for
+        // the editor), so we mirror that decision here for drags.
+        if ((e.target as Element | null)?.closest?.("foreignObject")) return;
 
         const pt = this.#canvas.svgPoint(e);
 
