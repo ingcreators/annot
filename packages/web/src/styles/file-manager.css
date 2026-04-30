@@ -72,6 +72,12 @@
   border-right: 1px solid var(--annot-border-color);
   display: flex;
   flex-direction: column;
+  /* Vertical scroll only — declaring overflow-y alone implicitly turns
+   * overflow-x into auto, which surfaces a stray horizontal scrollbar
+   * whenever a deeply-indented folder row, a long folder name, or a
+   * sub-pixel rounding nudges scrollWidth past clientWidth. Folder names
+   * already ellipsize via text-overflow on .folder-tree-name. */
+  overflow-x: hidden;
   overflow-y: auto;
   padding: 12px;
   gap: 4px;
