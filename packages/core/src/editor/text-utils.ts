@@ -192,6 +192,23 @@ function countLines(runs: readonly TextRun[]): number {
   return n;
 }
 
+/** The effective font size used for line-height layout: max of the
+ *  wrapper's `data-font-size` and any per-run `font_size` overrides.
+ *  Without this, runs whose mini-toolbar-applied size exceeds the
+ *  wrapper default get rendered at their own size but spaced as if
+ *  every line were at the smaller wrapper size, causing the bigger
+ *  glyphs to overlap vertically. PowerPoint's behaviour for a run
+ *  block is "line height tracks the largest run size present"; we
+ *  approximate that with a single block-wide max so multi-size
+ *  documents at least don't collide. */
+function effectiveLayoutFontSize(baseFontSize: number, runs: readonly TextRun[]): number {
+  let max = baseFontSize;
+  for (const run of runs) {
+    if (run.font_size != null && run.font_size > max) max = run.font_size;
+  }
+  return max;
+}
+
 /** Compute the (x, y) of a `<tspan>` that starts a new line +
  *  the SVG `text-anchor` value to put on the parent `<text>`,
  *  given the box bounds, padding, line height, anchor settings,
@@ -475,12 +492,13 @@ export function createTextShape(spec: TextShapeSpec): SVGGElement {
   // when present, falling back to the legacy variant-specific
   // padding constants for plain (2 / 0) and the others (10 / 8).
   const margins = readTextMargins(g);
+  const layoutFontSize = effectiveLayoutFontSize(spec.fontSize, spec.runs);
   const layout = buildTspanLayout({
     x: spec.x,
     y: spec.y,
     w: spec.w,
     h: spec.h,
-    fontSize: spec.fontSize,
+    fontSize: layoutFontSize,
     lineCount: countLines(spec.runs),
     margins,
     textAnchor,
@@ -715,12 +733,13 @@ export function replaceRunsInPlace(g: SVGElement, runs: readonly TextRun[]): voi
     (g.getAttribute("data-text-vanchor") as TextVerticalAnchor | null) ??
     defaultTextVerticalAnchor(variant);
 
+  const layoutFontSize = effectiveLayoutFontSize(fontSize, runs);
   const layout = buildTspanLayout({
     x: baseX,
     y: baseY,
     w: boxW,
     h: boxH,
-    fontSize,
+    fontSize: layoutFontSize,
     lineCount: countLines(runs),
     margins,
     textAnchor,
@@ -783,7 +802,7 @@ export function replaceRunsInPlace(g: SVGElement, runs: readonly TextRun[]): voi
   // down when the text overflows.
   const autofit = g.getAttribute("data-text-autofit");
   if (autofit === "resize" && firstRect) {
-    const lineHeight = fontSize * 1.4;
+    const lineHeight = layoutFontSize * 1.4;
     const totalH = Math.max(1, countLines(runs)) * lineHeight;
     const requiredH = totalH + margins.top + margins.bottom;
     if (requiredH > boxH) {

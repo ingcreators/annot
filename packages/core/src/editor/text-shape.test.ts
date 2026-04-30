@@ -300,6 +300,35 @@ describe("Pattern A — wrap / unwrap a bare <rect> for text-on-shape", () => {
     expect(tspans[1]!.getAttribute("font-style")).toBe("italic");
   });
 
+  it("replaceRunsInPlace spaces lines by the largest run font_size, not just the wrapper default", () => {
+    // Mini-toolbar font-size changes attach a per-run `font_size`
+    // override (rendered as tspan font-size). Without scaling the
+    // line height to match, two-line text where the runs are bigger
+    // than the wrapper's `data-font-size` (16) would render with
+    // overlapping baselines — the visible glyphs collide because
+    // the SVG line height stayed at 16*1.4 = 22.4.
+    const root = freshSvgRoot();
+    const rect = document.createElementNS(SVG_NS, "rect") as SVGRectElement;
+    rect.setAttribute("x", "0");
+    rect.setAttribute("y", "0");
+    rect.setAttribute("width", "200");
+    rect.setAttribute("height", "200");
+    root.appendChild(rect);
+    const wrapper = wrapBareRectForText(rect);
+
+    replaceRunsInPlace(wrapper, [
+      { text: "aaaas", font_size: 48, line_break_after: true },
+      { text: "afafs", font_size: 48 },
+    ]);
+    const tspans = Array.from(wrapper.querySelectorAll("tspan"));
+    expect(tspans).toHaveLength(2);
+    const y0 = Number.parseFloat(tspans[0]!.getAttribute("y") ?? "");
+    const y1 = Number.parseFloat(tspans[1]!.getAttribute("y") ?? "");
+    // Baselines must be at least the run's own font size apart so
+    // glyph bounding boxes don't intersect.
+    expect(y1 - y0).toBeGreaterThanOrEqual(48);
+  });
+
   it("readTextShapeSpec on a Pattern A wrapper returns x/y/w/h from the geometry rect", () => {
     const root = freshSvgRoot();
     const rect = document.createElementNS(SVG_NS, "rect") as SVGRectElement;
