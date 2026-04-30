@@ -4,6 +4,8 @@ import {
   readTextShapeSpec,
   replaceRunsInPlace,
   stickyBgFor,
+  type TextAnchor,
+  type TextVerticalAnchor,
   unwrapBareTextShape,
   wrapBareRectForText,
 } from "@ingcreators/annot-core/editor/text-utils";
@@ -203,6 +205,8 @@ export class TextTool extends ToolBase {
       color: spec.color,
       width: spec.w,
       height: spec.h,
+      textAnchor: spec.textAnchor,
+      textVerticalAnchor: spec.textVerticalAnchor,
     });
   }
 
@@ -216,6 +220,8 @@ export class TextTool extends ToolBase {
       color: string;
       width: number;
       height: number;
+      textAnchor?: TextAnchor;
+      textVerticalAnchor?: TextVerticalAnchor;
     } | null,
   ): void {
     this.#editing = true;
@@ -238,27 +244,36 @@ export class TextTool extends ToolBase {
     const variant: TextVariant = this.options.textVariant ?? "sticky";
     const showBg = !isPatternA && variant !== "plain";
 
+    // Resolve the wrapper's stored anchors so the editor's visible
+    // layout matches the committed shape. Without this, a centered
+    // shape would jump to top-left while the user is editing it,
+    // which is visually disorienting AND moves the caret out of the
+    // glyph the user clicked on.
+    const hAnchor: TextAnchor = existing?.textAnchor ?? "start";
+    const vAnchor: TextVerticalAnchor = existing?.textVerticalAnchor ?? "top";
+    const textAlign =
+      hAnchor === "middle" ? "center" : hAnchor === "end" ? "right" : "left";
+    const justifyContent =
+      vAnchor === "middle" ? "center" : vAnchor === "bottom" ? "flex-end" : "flex-start";
+
     const fo = document.createElementNS(SVG_NS, "foreignObject");
     fo.setAttribute("x", String(x));
     fo.setAttribute("y", String(y));
     fo.setAttribute("width", String(w));
     fo.setAttribute("height", String(h));
 
-    const div = document.createElement("div");
-    div.contentEditable = "true";
-    // Pattern A: transparent overlay aligned with the shape, no
-    // border / shadow / padding — so the user sees the original
-    // shape's stroke / fill behind the cursor.
-    // Legacy variants: stylized panel as before.
-    // `overflow: hidden` matches PowerPoint's behaviour (text
-    // larger than the box clips); the user can resize the shape
-    // or shrink the text via the autofit options. Browser-default
-    // scrollbars no longer appear during edit.
-    div.style.cssText = isPatternA
+    // Outer flex container handles VERTICAL alignment + the visible
+    // chrome (border / background / padding). The inner div is the
+    // contentEditable that handles HORIZONTAL alignment via
+    // text-align. Splitting the two layers keeps the contentEditable
+    // free of `display: flex`, which is known to cause caret-
+    // placement quirks under contenteditable in some browsers.
+    const outer = document.createElement("div");
+    outer.style.cssText = isPatternA
       ? `
-      color: ${color};
-      font-size: ${fontSize}px;
-      font-family: ${fontFamily};
+      display: flex;
+      flex-direction: column;
+      justify-content: ${justifyContent};
       background: transparent;
       border: 1px dashed rgba(0,0,0,0.35);
       border-radius: 0;
@@ -266,17 +281,13 @@ export class TextTool extends ToolBase {
       padding: 8px 10px;
       width: ${w}px;
       height: ${h}px;
-      white-space: pre-wrap;
-      word-wrap: break-word;
-      line-height: 1.4;
-      outline: none;
-      overflow: hidden;
       box-sizing: border-box;
+      overflow: hidden;
     `
       : `
-      color: ${color};
-      font-size: ${fontSize}px;
-      font-family: ${fontFamily};
+      display: flex;
+      flex-direction: column;
+      justify-content: ${justifyContent};
       background: ${showBg ? stickyBgFor(color) : "transparent"};
       border: ${showBg ? "1px solid rgba(0,0,0,0.15)" : "1px dashed rgba(0,0,0,0.25)"};
       border-radius: 4px;
@@ -284,11 +295,26 @@ export class TextTool extends ToolBase {
       padding: 8px 10px;
       width: ${w - 2}px;
       height: ${h - 2}px;
+      box-sizing: border-box;
+      overflow: hidden;
+    `;
+
+    const div = document.createElement("div");
+    div.contentEditable = "true";
+    // `overflow: hidden` matches PowerPoint's behaviour (text
+    // larger than the box clips); the user can resize the shape
+    // or shrink the text via the autofit options. Browser-default
+    // scrollbars no longer appear during edit.
+    div.style.cssText = `
+      color: ${color};
+      font-size: ${fontSize}px;
+      font-family: ${fontFamily};
+      text-align: ${textAlign};
+      width: 100%;
       white-space: pre-wrap;
       word-wrap: break-word;
       line-height: 1.4;
       outline: none;
-      overflow: hidden;
       box-sizing: border-box;
     `;
 
@@ -298,7 +324,8 @@ export class TextTool extends ToolBase {
       div.innerHTML = runsToHtml(existing.runs);
     }
 
-    fo.appendChild(div);
+    outer.appendChild(div);
+    fo.appendChild(outer);
     // The contentEditable overlay is editor-session UI, NOT a
     // user-visible annotation. Live in `canvas.uiOverlay` so the
     // SelectionManager / annotation enumerators don't pick it up

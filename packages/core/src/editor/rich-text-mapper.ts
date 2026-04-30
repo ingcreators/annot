@@ -122,22 +122,29 @@ function walk(node: Node, ctx: RunContext, out: TextRun[]): void {
   }
 
   // Block boundaries — Chrome / Edge wrap each line in `<div>` on
-  // Enter; some browsers use `<p>`. Each closes a paragraph.
+  // Enter; some browsers use `<p>`. Each block element starts a
+  // new paragraph BEFORE its content (when there's already
+  // preceding content); marking the break AFTER would land it on
+  // the wrong run for the common Chrome shape `abc<div>def</div>`
+  // (initial bare text node + Enter wraps the rest in a div),
+  // because the trailing-flag strip in htmlToRuns would then drop
+  // the break entirely.
   if (tag === "DIV" || tag === "P") {
-    // The very first <div> child is implicit (it just IS the
-    // first line); the BREAK comes BEFORE not AFTER the FIRST
-    // div only if there's already content. Walking children
-    // first then tagging line_break_after handles both shapes.
-    const startedEmpty = out.length === 0;
+    const lastBefore = out.length > 0 ? out[out.length - 1]! : null;
+    if (lastBefore && !lastBefore.line_break_after) {
+      lastBefore.line_break_after = true;
+    }
+    const beforeLen = out.length;
     for (const child of Array.from(el.childNodes)) {
       walk(child, ctx, out);
     }
-    // If the block produced no runs, it's an empty paragraph —
-    // emit an explicit empty run so the line gap survives.
-    if (out.length === 0 || (startedEmpty && out.length === 0)) {
-      out.push(makeRun(ctx, ""));
+    // Empty block (`<div></div>` / `<div><br></div>` between
+    // siblings) → emit a placeholder so the line gap survives.
+    // The check is "no new run was appended"; a `<br>` child
+    // appends an empty-run marker via markLineBreak, which counts.
+    if (out.length === beforeLen) {
+      out.push({ ...makeRun(ctx, ""), line_break_after: true });
     }
-    markLineBreak(ctx, out);
     return;
   }
 

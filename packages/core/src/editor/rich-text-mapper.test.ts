@@ -102,6 +102,32 @@ describe("htmlToRuns", () => {
     ]);
   });
 
+  it("Chrome-style bare-text + `<div>` continuation preserves the break", () => {
+    // This is what Chrome's contentEditable produces when the user
+    // starts with a fresh editor (bare text node), types "abc",
+    // presses Enter, then types "def": the FIRST line stays as a
+    // bare text node and only the continuation gets wrapped in a
+    // <div>. Previously the walker tagged line_break_after on
+    // "def" instead of "abc", which the trailing-strip then dropped
+    // entirely — so the typed line break was silently lost on
+    // commit.
+    expect(htmlToRuns(div("abc<div>def</div>"))).toEqual([
+      { text: "abc", line_break_after: true },
+      { text: "def" },
+    ]);
+  });
+
+  it("empty `<div>` between content emits a blank-line placeholder", () => {
+    // Two Enters between text → an empty paragraph in the middle.
+    // The blank line is its own run with text="" + line_break_after
+    // so the gap survives the round-trip.
+    expect(htmlToRuns(div("abc<div></div><div>def</div>"))).toEqual([
+      { text: "abc", line_break_after: true },
+      { text: "", line_break_after: true },
+      { text: "def" },
+    ]);
+  });
+
   it("trailing block boundary doesn't produce a phantom empty run", () => {
     // When a contentEditable's outer div *itself* is a block, the
     // walker's last `markLineBreak` would otherwise leave a stale
