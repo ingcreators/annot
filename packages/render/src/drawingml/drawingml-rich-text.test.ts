@@ -105,6 +105,91 @@ describe("buildShapeXml — rich-text textbox snapshots", () => {
     expect(xml).toContain("<a:t>&lt;&amp;&gt;</a:t>");
   });
 
+  it("Pattern A rect shape emits sharp-corner geometry, not roundRect", () => {
+    // Pattern A "rect" represents the user's drawn sharp rectangle
+    // promoted to carry text. Emitting `roundRect` here would round
+    // the corners visibly in PowerPoint — Annot draws sharp ones.
+    const xml = buildShapeXml(
+      richTextbox({
+        shape_kind: "rect",
+        stroke: "#ff0000",
+        stroke_width: 2,
+        runs: [{ text: "centered" }],
+      }),
+      { ns: "p", id: 10 },
+    );
+    expect(xml).toContain('<a:prstGeom prst="rect">');
+    expect(xml).not.toContain('<a:prstGeom prst="roundRect">');
+  });
+
+  it("Pattern A rounded shape emits roundRect; ellipse emits ellipse", () => {
+    const rounded = buildShapeXml(
+      richTextbox({ shape_kind: "rounded", stroke: "#00ff00", runs: [{ text: "x" }] }),
+      { ns: "p", id: 11 },
+    );
+    expect(rounded).toContain('<a:prstGeom prst="roundRect">');
+    const ellipse = buildShapeXml(
+      richTextbox({ shape_kind: "ellipse", stroke: "#0000ff", runs: [{ text: "x" }] }),
+      { ns: "p", id: 12 },
+    );
+    expect(ellipse).toContain('<a:prstGeom prst="ellipse">');
+  });
+
+  it("Pattern A preserves the user's stroke color + width on `<a:ln>`", () => {
+    const xml = buildShapeXml(
+      richTextbox({
+        shape_kind: "rect",
+        stroke: "#ff0000",
+        stroke_width: 4,
+        runs: [{ text: "x" }],
+      }),
+      { ns: "p", id: 13 },
+    );
+    // Pattern A skips the legacy hardcoded BFBFBF border; the user's
+    // red stroke shows through `<a:solidFill><a:srgbClr val="FF0000">`.
+    expect(xml).not.toContain('<a:srgbClr val="BFBFBF"/>');
+    expect(xml).toContain('<a:srgbClr val="FF0000"/>');
+  });
+
+  it("text_anchor='middle' lifts <a:pPr algn=\"ctr\"/> on every paragraph", () => {
+    const xml = buildShapeXml(
+      richTextbox({
+        shape_kind: "rect",
+        stroke: "#000000",
+        text_anchor: "middle",
+        runs: [
+          { text: "para1", line_break_after: true },
+          { text: "para2" },
+        ],
+      }),
+      { ns: "p", id: 14 },
+    );
+    // Both paragraphs carry the explicit center alignment.
+    const matches = xml.match(/<a:pPr algn="ctr"\/>/g) ?? [];
+    expect(matches).toHaveLength(2);
+  });
+
+  it("text_vertical_anchor='middle' lifts anchor=\"ctr\" onto <a:bodyPr>", () => {
+    const xml = buildShapeXml(
+      richTextbox({
+        shape_kind: "rect",
+        stroke: "#000000",
+        text_vertical_anchor: "middle",
+        runs: [{ text: "x" }],
+      }),
+      { ns: "p", id: 15 },
+    );
+    expect(xml).toContain('<a:bodyPr wrap="square" rtlCol="0" lIns="91440" tIns="45720" rIns="91440" bIns="45720" anchor="ctr"/>');
+  });
+
+  it("text_vertical_anchor='top' (default) omits the anchor attribute", () => {
+    const xml = buildShapeXml(
+      richTextbox({ shape_kind: "rect", stroke: "#000000", runs: [{ text: "x" }] }),
+      { ns: "p", id: 16 },
+    );
+    expect(xml).not.toContain("anchor=");
+  });
+
   it("callout shape with rich text preserves the wedgeRoundRectCallout preset", () => {
     const xml = buildShapeXml(
       richTextbox({

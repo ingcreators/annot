@@ -396,6 +396,16 @@ export interface AnnotationShape {
    *  form. Populated for `shape_kind === "sticky" | "callout"`;
    *  omitted for plain text. */
   text_bg_color?: string;
+  /** Horizontal alignment of the run block within the shape. Mirrors
+   *  the wrapper's `data-text-anchor` attribute and flows through to
+   *  OOXML as `<a:pPr algn="…">` per paragraph. Omitted = no
+   *  per-paragraph alignment override (PowerPoint inherits from the
+   *  paragraph default, i.e. left). */
+  text_anchor?: "start" | "middle" | "end";
+  /** Vertical alignment of the run block within the shape. Mirrors
+   *  the wrapper's `data-text-vanchor` attribute and flows through
+   *  to OOXML as `<a:bodyPr anchor="…">`. Omitted = top. */
+  text_vertical_anchor?: "top" | "middle" | "bottom";
   /** Callout tail-tip coordinates (canvas space). */
   tail_x?: number;
   tail_y?: number;
