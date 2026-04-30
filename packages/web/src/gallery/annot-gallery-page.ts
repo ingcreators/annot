@@ -322,13 +322,14 @@ export class AnnotGalleryPageElement extends LitElement {
       if (supportsResync(this.storage)) await this.storage.resync();
 
       const q = (this.#searchInput?.value || "").trim();
+      let images: ImageRecord[];
       if (q) {
         // Search across the current folder and all subfolders so deeply
         // nested images can be found from any starting point.
-        this.images = await this.#listImagesRecursive(this.currentFolderPath);
+        images = await this.#listImagesRecursive(this.currentFolderPath);
         this.folders = [];
       } else {
-        this.images = await this.storage.listImages(this.currentFolderPath);
+        images = await this.storage.listImages(this.currentFolderPath);
         this.folders = await this.storage.listFolders(this.currentFolderPath);
       }
       // Hydrate thumbnails / dimensions from the unified cache and
@@ -336,9 +337,17 @@ export class AnnotGalleryPageElement extends LitElement {
       // that don't implement `StorageWithThumbnailCache` (currently
       // every backend except Drive after Phase 3); Phases 4–5 add
       // GitHub / Browser / Device.
+      //
+      // Run BEFORE the `this.images` assignment: cache hits mutate
+      // records in place, and Lit's reactive update is keyed off the
+      // array-reference change, not deep-property mutation. Assigning
+      // first would let Lit render the cards with empty thumbs during
+      // the `attach()` await, leaving them blank until the next
+      // unrelated re-render (selection change, etc.).
       if (this.thumbnailManager) {
-        await this.thumbnailManager.attach(this.storage, this.images);
+        await this.thumbnailManager.attach(this.storage, images);
       }
+      this.images = images;
       logger.debug(
         "[gallery] refresh: images:",
         this.images.length,
