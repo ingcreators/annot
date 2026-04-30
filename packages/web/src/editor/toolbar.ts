@@ -88,7 +88,6 @@ import {
   applyPresetStyleAttrs,
   elementKeyFromElement,
   mergePresetForVariantChange,
-  migrateLegacyPresetKey,
   seedPresetFromElement,
 } from "./toolbar-preset-helpers.js";
 
@@ -1239,13 +1238,21 @@ export class Toolbar {
 
   /** Look up a preset key's tool id and resolve its `presetFields`.
    *  The element-key format is `${toolId}.${variant}` (or just
-   *  `${toolId}` for variantless tools). Returns an empty array for
-   *  unknown tool ids — callers skip those entries so corrupt /
-   *  stale storage doesn't pollute the in-memory preset map. */
+   *  `${toolId}` for variantless tools — `crop` is the only one
+   *  today). Returns an empty array for unknown tool ids OR for
+   *  bare-tool-id keys belonging to a tool that DOES have variants —
+   *  the latter would be a key from before the per-variant scheme
+   *  landed, and storing it under the bare key would either shadow
+   *  the per-variant defaults or get applied with the wrong variant
+   *  on next use. Callers skip those entries so corrupt / stale
+   *  storage doesn't pollute the in-memory preset map. */
   #presetFieldsForKey(elementKey: string): ReadonlyArray<keyof ToolOptions> {
     const dotIdx = elementKey.indexOf(".");
     const toolId = dotIdx === -1 ? elementKey : elementKey.slice(0, dotIdx);
-    return TOOL_REGISTRY[toolId]?.presetFields ?? [];
+    const meta = TOOL_REGISTRY[toolId];
+    if (!meta) return [];
+    if (dotIdx === -1 && meta.variants && meta.variants.length > 0) return [];
+    return meta.presetFields ?? [];
   }
 
   /** Merge a wire-loaded partial onto a defaults base so the stored
@@ -1261,10 +1268,7 @@ export class Toolbar {
     try {
       const data = await loadToolPresets();
       if (data.tools) {
-        for (const [rawKey, p] of Object.entries(data.tools)) {
-          // Migrate legacy tool-ID-keyed entries (e.g. "shape") to
-          // the tool's default-variant element key (e.g. "shape.rect").
-          const key = migrateLegacyPresetKey(rawKey);
+        for (const [key, p] of Object.entries(data.tools)) {
           const fields = this.#presetFieldsForKey(key);
           if (fields.length === 0) continue;
           const partial = presetFromWire(p as Record<string, unknown>, fields, "snake");
@@ -1308,8 +1312,7 @@ export class Toolbar {
       const data = await chrome.storage.local.get(["toolPresets", "toolLastVariants"]);
       const presets = data.toolPresets as Record<string, unknown> | undefined;
       if (presets) {
-        for (const [rawId, p] of Object.entries(presets)) {
-          const id = migrateLegacyPresetKey(rawId);
+        for (const [id, p] of Object.entries(presets)) {
           const fields = this.#presetFieldsForKey(id);
           if (fields.length === 0) continue;
           const partial = presetFromWire(p as Record<string, unknown>, fields, "camel");
@@ -1365,8 +1368,7 @@ export class Toolbar {
         lastVariants?: Record<string, string>;
       };
       if (data.tools) {
-        for (const [rawKey, p] of Object.entries(data.tools)) {
-          const key = migrateLegacyPresetKey(rawKey);
+        for (const [key, p] of Object.entries(data.tools)) {
           const fields = this.#presetFieldsForKey(key);
           if (fields.length === 0) continue;
           const partial = presetFromWire(p, fields, "camel");
