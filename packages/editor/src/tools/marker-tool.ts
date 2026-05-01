@@ -11,7 +11,18 @@ export class MarkerTool extends ToolBase {
     const r = fontSize * 0.8;
     // `fillColor` = bg interior, `strokeColor` = bg border (the
     // canonical color semantics every tool uses).
-    const color = this.options.fillColor || "#ff0000";
+    //
+    // Defensive guard: the global `ToolOptions` default carries
+    // `fillColor: "none"` (sensible for shape outlines, wrong for
+    // a counter badge). The truthy string `"none"` would short-
+    // circuit the simple `||` fallback and paint an invisible
+    // background — explicitly check both null/empty AND the
+    // `"none"` sentinel. Toolbar's per-tool seed (in
+    // `toolbar-initial-presets.ts`) avoids hitting this path for
+    // first-time use; the guard protects legacy stored presets
+    // saved before that seed landed.
+    const fillRaw = this.options.fillColor;
+    const color = fillRaw && fillRaw !== "none" ? fillRaw : "#ff0000";
     const shape = this.options.markerShape ?? "circle";
 
     // Find next counter value: max of same style + 1
