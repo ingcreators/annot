@@ -84,6 +84,7 @@ import {
 } from "./tool-factories.js";
 import { populateToolPropertyPanel } from "./tool-property-renderer.js";
 import { openCanvasRightClickMenu } from "./toolbar-canvas-menu.js";
+import { buildInitialPresets } from "./toolbar-initial-presets.js";
 import {
   applyPresetStyleAttrs,
   elementKeyFromElement,
@@ -234,23 +235,15 @@ export class Toolbar {
 
     this.#registerTools();
 
-    // Seed the Highlight tool preset with the default yellow color +
-    // 40% fill opacity + no stroke. Keyed by `highlight.<color>` so
-    // it matches the per-color preset scheme — Highlight's variant
-    // IS its fill hex (`TOOL_REGISTRY.highlight.defaultVariant`
-    // resolves to the first palette entry). Without this, the first
-    // click on the Highlight button would pick up the global
-    // fillColor (the user's last Rect fill) and look like a normal
-    // filled rect, not a highlighter.
-    const defaultHighlightColor = TOOL_REGISTRY.highlight!.defaultVariant!;
-    this.#presets.set(`highlight.${defaultHighlightColor}`, {
-      ...this.#options,
-      shapeType: "highlight",
-      highlightColor: defaultHighlightColor,
-      fillOpacity: 0.4,
-      strokeColor: "none",
-      strokeWidth: 0,
-    });
+    // Seed per-tool / per-variant initial presets. The seed map lives
+    // in `toolbar-initial-presets.ts` so it can be unit-tested without
+    // standing up a `Toolbar`; see that file for per-tool rationale.
+    // Stored presets loaded later from disk / chrome.storage /
+    // localStorage take precedence over these seeds via plain `Map.set`
+    // overwrite.
+    for (const [key, preset] of buildInitialPresets(this.#options)) {
+      this.#presets.set(key, preset);
+    }
 
     this.#render();
 
