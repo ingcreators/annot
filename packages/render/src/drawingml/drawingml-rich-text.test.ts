@@ -105,10 +105,11 @@ describe("buildShapeXml — rich-text textbox snapshots", () => {
     expect(xml).toContain("<a:t>&lt;&amp;&gt;</a:t>");
   });
 
-  it("Pattern A rect shape emits sharp-corner geometry, not roundRect", () => {
-    // Pattern A "rect" represents the user's drawn sharp rectangle
-    // promoted to carry text. Emitting `roundRect` here would round
-    // the corners visibly in PowerPoint — Annot draws sharp ones.
+  it("text-on-shape rect emits sharp-corner geometry, not roundRect", () => {
+    // shape_kind="rect" represents the user's drawn sharp
+    // rectangle promoted to carry text. Emitting `roundRect`
+    // here would round the corners visibly in PowerPoint — Annot
+    // draws sharp ones.
     const xml = buildShapeXml(
       richTextbox({
         shape_kind: "rect",
@@ -122,7 +123,7 @@ describe("buildShapeXml — rich-text textbox snapshots", () => {
     expect(xml).not.toContain('<a:prstGeom prst="roundRect">');
   });
 
-  it("Pattern A rounded shape emits roundRect; ellipse emits ellipse", () => {
+  it("text-on-shape rounded emits roundRect; ellipse emits ellipse", () => {
     const rounded = buildShapeXml(
       richTextbox({ shape_kind: "rounded", stroke: "#00ff00", runs: [{ text: "x" }] }),
       { ns: "p", id: 11 },
@@ -135,7 +136,7 @@ describe("buildShapeXml — rich-text textbox snapshots", () => {
     expect(ellipse).toContain('<a:prstGeom prst="ellipse">');
   });
 
-  it("Pattern A preserves the user's stroke color + width on `<a:ln>`", () => {
+  it("text-on-shape preserves the user's stroke color + width on `<a:ln>`", () => {
     const xml = buildShapeXml(
       richTextbox({
         shape_kind: "rect",
@@ -145,8 +146,9 @@ describe("buildShapeXml — rich-text textbox snapshots", () => {
       }),
       { ns: "p", id: 13 },
     );
-    // Pattern A skips the legacy hardcoded BFBFBF border; the user's
-    // red stroke shows through `<a:solidFill><a:srgbClr val="FF0000">`.
+    // text-on-shape skips the auto-bg-variant hardcoded BFBFBF
+    // border; the user's red stroke shows through
+    // `<a:solidFill><a:srgbClr val="FF0000">`.
     expect(xml).not.toContain('<a:srgbClr val="BFBFBF"/>');
     expect(xml).toContain('<a:srgbClr val="FF0000"/>');
   });

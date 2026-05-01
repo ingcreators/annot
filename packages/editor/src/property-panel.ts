@@ -7,7 +7,11 @@ import {
   type PropertyControlId,
   type PropertyEffectId,
 } from "@ingcreators/annot-core/editor/property-schema";
-import { convertTextVariant, detectTextVariant } from "@ingcreators/annot-core/editor/text-utils";
+import {
+  convertTextVariant,
+  detectTextVariant,
+  isTextOnShape,
+} from "@ingcreators/annot-core/editor/text-utils";
 import { createColorPullButton } from "@ingcreators/annot-editor/property-controls";
 import { convertRedactStyle } from "@ingcreators/annot-editor/redact-utils";
 import type { CanvasManager } from "./canvas-manager.js";
@@ -439,11 +443,11 @@ export class PropertyPanel {
   }
 
   /** Render a control against an explicit target list rather than
-   *  `this.#targets`. Used by the Pattern A "shape-with-text"
-   *  surface to wire the existing fill / stroke / etc. controls
-   *  to the inner geometry primitive (`<rect>` / `<ellipse>` …)
-   *  while the wrapper `<g>` itself stays the host element for
-   *  the text-side controls. */
+   *  `this.#targets`. Used by the text-on-shape surface to wire
+   *  the existing fill / stroke / etc. controls to the inner
+   *  geometry primitive (`<rect>` / `<ellipse>` …) while the
+   *  wrapper `<g>` itself stays the host element for the text-
+   *  side controls. */
   #renderRegistryControlAgainst(targets: SVGElement[], id: PropertyControlId): void {
     if (targets.length === 0) return;
     const deps: RenderControlDeps = {
@@ -482,14 +486,13 @@ export class PropertyPanel {
         info.replacements.map((r) => [r.oldEl, r.newEl] as const),
       );
       this.#targets = this.#targets.map((t) => map.get(t) ?? t);
-      // Pattern A wrapper-sync: when the user converts the
-      // inner geometry of a text-bearing shape via the
-      // shapeTypePicker (rect ↔ ellipse), the wrapper `<g>`
-      // itself stays in `#targets` but its `data-shape-kind`
-      // attribute now lies about the inner element's tag.
-      // Update it so downstream readers (right-panel title,
-      // Pattern A detection in #renderTextboxControls, etc.)
-      // see consistent state.
+      // Wrapper-sync for text-on-shape: when the user converts
+      // the inner geometry via the shapeTypePicker (rect ↔
+      // ellipse), the wrapper `<g>` itself stays in `#targets`
+      // but its `data-shape-kind` attribute now lies about the
+      // inner element's tag. Update it so downstream readers
+      // (right-panel title, `isTextOnShape` checks, etc.) see
+      // consistent state.
       for (const r of info.replacements) {
         if (r.oldEl === r.newEl) continue;
         const parent = r.newEl.parentElement as SVGElement | null;
@@ -598,9 +601,7 @@ export class PropertyPanel {
    *     and the outer `data-font-size` marker.
    */
   #renderTextboxControls(g: SVGElement): void {
-    const shapeKind = g.getAttribute("data-shape-kind");
-    const isPatternA = shapeKind === "rect" || shapeKind === "rounded" || shapeKind === "ellipse";
-    const innerGeometry = isPatternA
+    const innerGeometry = isTextOnShape(g)
       ? (g.querySelector(":scope > rect, :scope > ellipse") as SVGElement | null)
       : null;
 
@@ -652,11 +653,11 @@ export class PropertyPanel {
 
     // ─── Object selection mode ─────────────────────────────
     if (innerGeometry) {
-      // Pattern A — the shape is fundamentally a rectangle /
-      // ellipse. Surface its Shape-tool properties so the user
-      // can tweak type / fill / stroke without entering
-      // text-edit mode. No text controls visible until they
-      // double-click.
+      // Text-on-shape — the wrapper is fundamentally a rectangle
+      // / ellipse drawn with the Shape tool. Surface its Shape-
+      // tool properties so the user can tweak type / fill /
+      // stroke without entering text-edit mode. No text controls
+      // visible until they double-click.
       //
       // Type / Fill / Line controls are scoped to the inner
       // geometry primitive (`<rect>` / `<ellipse>` child of
@@ -681,10 +682,10 @@ export class PropertyPanel {
       return;
     }
 
-    // Legacy text variants (plain / sticky / callout) — the
-    // shape's "object" properties are basically the variant
-    // picker (the bg colour for sticky / callout is derived from
-    // the text colour, which the user adjusts in edit mode).
+    // Auto-bg variants (plain / sticky / callout) — the shape's
+    // "object" properties are basically the variant picker (the
+    // bg colour for sticky / callout is derived from the text
+    // colour, which the user adjusts in edit mode).
     this.#inSection("Type", () => {
       this.#renderRegistryControl(PROPERTY_CONTROL_IDS.textVariantPicker);
     });

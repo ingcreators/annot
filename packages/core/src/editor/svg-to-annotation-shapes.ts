@@ -147,9 +147,6 @@ export function svgElementToAnnotationShape(el: SVGElement): AnnotationShape | n
       stroke: el.getAttribute("stroke") || "#ff0000",
       stroke_width: Number.parseFloat(el.getAttribute("stroke-width") || "3"),
       stroke_dasharray: el.getAttribute("stroke-dasharray") || "",
-      has_arrow: headEnd,
-      arrow_head_start: headStart,
-      arrow_head_end: headEnd,
       ...lineXform,
     };
   }
@@ -306,13 +303,14 @@ export function svgElementToAnnotationShape(el: SVGElement): AnnotationShape | n
       const bh = Number.parseFloat(bgRect?.getAttribute("height") || "40");
       const tailXRaw = el.getAttribute("data-tail-x");
       const tailYRaw = el.getAttribute("data-tail-y");
-      // Pattern A wrappers (rect / rounded / ellipse) carry the
-      // user's drawn geometry primitive; preserve its stroke so the
-      // OOXML output matches what Annot displays. Legacy variants
-      // (plain / sticky / callout) keep the builder's hardcoded
-      // light-gray border — that's their identity in PowerPoint and
-      // changing it would regress the existing snapshot fixtures.
-      const isPatternA =
+      // Text-on-shape wrappers (rect / rounded / ellipse — see
+      // `isTextOnShape`) carry the user's drawn geometry primitive;
+      // preserve its stroke so the OOXML output matches what Annot
+      // displays. Auto-bg variants (plain / sticky / callout) keep
+      // the builder's hardcoded light-gray border — that's their
+      // identity in PowerPoint and changing it would regress the
+      // existing snapshot fixtures.
+      const isTextOnShapeWrapper =
         shapeKind === "rect" || shapeKind === "rounded" || shapeKind === "ellipse";
       const bgStroke = bgRect?.getAttribute("stroke");
       const bgStrokeWidth = bgRect?.getAttribute("stroke-width");
@@ -342,13 +340,16 @@ export function svgElementToAnnotationShape(el: SVGElement): AnnotationShape | n
         fill: textEl.getAttribute("fill") || el.getAttribute("data-color") || "#ff0000",
         text_bg_color: shapeKind === "plain" ? undefined : bgRect?.getAttribute("fill") || "",
         shape_kind: shapeKind,
-        // Pattern A: pass the geometry primitive's actual stroke so
-        // the OOXML side's `<a:ln>` matches what the user drew.
-        ...(isPatternA && bgStroke ? { stroke: bgStroke } : {}),
-        ...(isPatternA && bgStrokeWidth
+        // Text-on-shape: pass the geometry primitive's actual
+        // stroke so the OOXML side's `<a:ln>` matches what the
+        // user drew.
+        ...(isTextOnShapeWrapper && bgStroke ? { stroke: bgStroke } : {}),
+        ...(isTextOnShapeWrapper && bgStrokeWidth
           ? { stroke_width: Number.parseFloat(bgStrokeWidth) }
           : {}),
-        ...(isPatternA && bgStrokeDasharray ? { stroke_dasharray: bgStrokeDasharray } : {}),
+        ...(isTextOnShapeWrapper && bgStrokeDasharray
+          ? { stroke_dasharray: bgStrokeDasharray }
+          : {}),
         ...(textAnchor ? { text_anchor: textAnchor } : {}),
         ...(textVerticalAnchor ? { text_vertical_anchor: textVerticalAnchor } : {}),
         tail_x: tailXRaw != null ? Number.parseFloat(tailXRaw) + tx : undefined,

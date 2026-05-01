@@ -714,17 +714,18 @@ export const TOOL_REGISTRY: Readonly<Record<string, ToolRegistryEntry>> = {
       }
       if (el.tagName === "g" && el.getAttribute("data-type") === "shape") {
         const variant = el.getAttribute("data-shape-kind");
-        // Pattern A wrappers (`data-shape-kind` ∈ rect / rounded /
-        // ellipse) carry user-drawn geometry — the Shape tool owns
-        // their stroke / fill / size presets. Returning a key here
-        // would (a) pollute the Text tool's `last_variants` so the
+        // Text-on-shape wrappers (see `isTextOnShape` —
+        // `data-shape-kind` ∈ rect / rounded / ellipse) carry
+        // user-drawn geometry; the Shape tool owns their stroke
+        // / fill / size presets. Returning a key here would
+        // (a) pollute the Text tool's `last_variants` so the
         // next Text-tool activation drops into a "rect" variant
         // that doesn't match the Type chips, and (b) stomp the
         // tool's color preset with the per-element `data-color`
-        // (which Pattern A intentionally defaults to black,
+        // (which text-on-shape intentionally defaults to black,
         // independent of the user's chosen Text-tool color).
-        // Only the legacy text variants participate in the Text
-        // tool's preset namespace.
+        // Only the auto-bg variants (plain / sticky / callout)
+        // participate in the Text tool's preset namespace.
         if (variant !== "plain" && variant !== "sticky" && variant !== "callout") {
           return null;
         }

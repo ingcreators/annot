@@ -15,11 +15,11 @@ import type { NamespaceOpts } from "../namespace.js";
 
 /** Build a `<{ns}:sp>` for a `type === "text"` AnnotationShape.
  *  Branches on `shape_kind` for the geometry preset:
- *    plain / sticky → roundRect adj=5000 (legacy text variants)
+ *    plain / sticky → roundRect adj=5000 (auto-bg variants)
  *    callout (with tail) → wedgeRoundRectCallout
- *    rect → rect (sharp corners — Pattern A text-on-shape)
- *    rounded → roundRect (Pattern A rounded text-on-shape)
- *    ellipse → ellipse (Pattern A elliptical text-on-shape)
+ *    rect → rect (sharp corners — text-on-shape)
+ *    rounded → roundRect (rounded text-on-shape)
+ *    ellipse → ellipse (elliptical text-on-shape)
  *
  *  Walks `runs[]` to emit one `<a:r>` per text run and starts a
  *  fresh `<a:p>` after each run with `line_break_after === true`.
@@ -56,15 +56,15 @@ export function buildText(s: AnnotationShape, id: number, ns: NamespaceOpts): st
   const paragraphs = buildParagraphs(runs, fs, defaultFill, defaultFamily, algnAttr);
   const xf = xfrmAttrs(s);
 
-  // Geometry preset per shape_kind. Pattern A kinds (rect / rounded
-  // / ellipse) reflect the user's drawn primitive; legacy variants
-  // (plain / sticky) keep the historical `roundRect` look that
-  // PowerPoint users expect for sticky-note text. Callouts with a
-  // populated tail tip override to `wedgeRoundRectCallout`; adj1 /
-  // adj2 express the tail tip as a signed percentage offset from
-  // the bbox center (values can exceed ±50% when the tip lands
-  // outside the bbox).
-  const isPatternA =
+  // Geometry preset per shape_kind. Text-on-shape kinds (rect /
+  // rounded / ellipse) reflect the user's drawn primitive; auto-bg
+  // variants (plain / sticky) keep the historical `roundRect` look
+  // that PowerPoint users expect for sticky-note text. Callouts
+  // with a populated tail tip override to `wedgeRoundRectCallout`;
+  // adj1 / adj2 express the tail tip as a signed percentage offset
+  // from the bbox center (values can exceed ±50% when the tip
+  // lands outside the bbox).
+  const isTextOnShape =
     s.shape_kind === "rect" || s.shape_kind === "rounded" || s.shape_kind === "ellipse";
   let geom: string;
   if (s.shape_kind === "rect") {
@@ -96,10 +96,10 @@ export function buildText(s: AnnotationShape, id: number, ns: NamespaceOpts): st
     geom = `<a:prstGeom prst="wedgeRoundRectCallout"><a:avLst><a:gd name="adj1" fmla="val ${adj1}"/><a:gd name="adj2" fmla="val ${adj2}"/><a:gd name="adj3" fmla="val 5000"/></a:avLst></a:prstGeom>`;
   }
 
-  // Stroke: Pattern A reflects the user-drawn primitive; legacy
-  // text variants (plain / sticky / callout) keep the historical
+  // Stroke: text-on-shape reflects the user-drawn primitive; the
+  // auto-bg variants (plain / sticky / callout) keep the historical
   // light-gray border that defines their PowerPoint identity.
-  const line = isPatternA && s.stroke ? buildPatternALine(s) : LEGACY_TEXT_LINE;
+  const line = isTextOnShape && s.stroke ? buildTextOnShapeLine(s) : AUTO_BG_TEXT_LINE;
 
   // Vertical anchor on the body container — top is the OOXML
   // default, so omit the attribute for top to keep existing
@@ -109,13 +109,13 @@ export function buildText(s: AnnotationShape, id: number, ns: NamespaceOpts): st
   return `<${ns.shape}><${ns.nvShape}><${ns.cnvPr} id="${id}" name="T${id}"/><${ns.cnvSp} txBox="1"/>${ns.nvPrSuffix}</${ns.nvShape}><${ns.spPr}><a:xfrm${xf}><a:off x="${x}" y="${y}"/><a:ext cx="${bw}" cy="${bh}"/></a:xfrm>${geom}${bgFill}${line}</${ns.spPr}>${ns.txBodyOpen}<a:bodyPr wrap="square" rtlCol="0" lIns="91440" tIns="45720" rIns="91440" bIns="45720"${vAttr}/><a:lstStyle/>${paragraphs}${ns.txBodyClose}</${ns.shape}>`;
 }
 
-/** The historical light-gray hairline border legacy text variants
- *  (plain / sticky / callout) ship with — defines their PowerPoint
- *  identity, so Pattern A overrides this only when it has a real
- *  stroke from the user's drawn primitive. */
-const LEGACY_TEXT_LINE = '<a:ln w="9525"><a:solidFill><a:srgbClr val="BFBFBF"/></a:solidFill></a:ln>';
+/** The historical light-gray hairline border the auto-bg text
+ *  variants (plain / sticky / callout) ship with — defines their
+ *  PowerPoint identity, so text-on-shape overrides this only
+ *  when it has a real stroke from the user's drawn primitive. */
+const AUTO_BG_TEXT_LINE = '<a:ln w="9525"><a:solidFill><a:srgbClr val="BFBFBF"/></a:solidFill></a:ln>';
 
-function buildPatternALine(s: AnnotationShape): string {
+function buildTextOnShapeLine(s: AnnotationShape): string {
   const stroke = chex(s.stroke ?? "#000000");
   const sw = pt(s.stroke_width ?? 1);
   const cap = capAttr(s.stroke_linecap);
@@ -208,9 +208,9 @@ function renderRun(
 
 function buildBgFill(bgCarrier: string): string {
   if (!bgCarrier) return "<a:noFill/>";
-  // `fill="none"` on the geometry primitive (Pattern A) means the
-  // shape is transparent — `parseRgba("none")` would otherwise fall
-  // through to the sticky-yellow default and paint a tinted
+  // `fill="none"` on the geometry primitive (text-on-shape) means
+  // the shape is transparent — `parseRgba("none")` would otherwise
+  // fall through to the sticky-yellow default and paint a tinted
   // background in PowerPoint that Annot never showed.
   if (bgCarrier === "none" || bgCarrier === "transparent") return "<a:noFill/>";
   const [r, g, b, a] = parseRgba(bgCarrier);

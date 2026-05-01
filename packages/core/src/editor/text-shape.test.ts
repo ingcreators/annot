@@ -9,14 +9,17 @@ import { describe, expect, it } from "vitest";
 import type { TextRun } from "../utils/tauri-bridge.js";
 import { ANNOT_SVG_VERSION, ANNOT_SVG_VERSION_ATTR, stampAnnotVersion } from "./svg-format.js";
 import {
+  applyTextShapeColor,
   convertTextVariant,
   createTextShape,
   detectTextVariant,
+  isTextOnShape,
   isTextShapeElement,
   plainTextToRuns,
   readTextShapeSpec,
   replaceRunsInPlace,
   runsToPlainText,
+  stickyBgFor,
   unwrapBareTextShape,
   wrapBareRectForText,
 } from "./text-utils.js";
@@ -46,10 +49,6 @@ describe("createTextShape / readTextShapeSpec round-trip", () => {
     expect(g.getAttribute("data-shape-kind")).toBe("sticky");
     expect(g.getAttribute("data-color")).toBe("#ff0000");
     expect(g.getAttribute("data-font-size")).toBe("16");
-    // No legacy attributes leak in.
-    expect(g.getAttribute("data-type")).not.toBe("textbox");
-    expect(g.getAttribute("data-text-variant")).toBeNull();
-    expect(g.getAttribute("data-text")).toBeNull();
   });
 
   it("uniform-collapse: one tspan per line, no per-tspan formatting attrs", () => {
@@ -178,29 +177,36 @@ describe("convertTextVariant preserves runs across kind changes", () => {
   });
 });
 
-describe("legacy rejection", () => {
-  it("readTextShapeSpec throws on <g data-type=textbox>", () => {
-    const g = document.createElementNS(SVG_NS, "g") as SVGGElement;
-    g.setAttribute("data-type", "textbox");
-    g.setAttribute("data-text-variant", "sticky");
-    expect(() => readTextShapeSpec(g)).toThrow(/Legacy <g data-type="textbox">/);
+describe("isTextOnShape", () => {
+  it("returns true for rect / rounded / ellipse wrappers", () => {
+    for (const kind of ["rect", "rounded", "ellipse"] as const) {
+      const g = document.createElementNS(SVG_NS, "g") as SVGGElement;
+      g.setAttribute("data-type", "shape");
+      g.setAttribute("data-shape-kind", kind);
+      expect(isTextOnShape(g)).toBe(true);
+    }
   });
 
-  it("detectTextVariant throws on <g data-type=textbox>", () => {
-    const g = document.createElementNS(SVG_NS, "g") as SVGGElement;
-    g.setAttribute("data-type", "textbox");
-    expect(() => detectTextVariant(g as SVGElement)).toThrow(/Legacy/);
+  it("returns false for plain / sticky / callout (auto-bg variants)", () => {
+    for (const kind of ["plain", "sticky", "callout"] as const) {
+      const g = document.createElementNS(SVG_NS, "g") as SVGGElement;
+      g.setAttribute("data-type", "shape");
+      g.setAttribute("data-shape-kind", kind);
+      expect(isTextOnShape(g)).toBe(false);
+    }
   });
 
-  it("isTextShapeElement returns false for the legacy skeleton", () => {
-    const g = document.createElementNS(SVG_NS, "g") as SVGGElement;
-    g.setAttribute("data-type", "textbox");
-    g.setAttribute("data-text-variant", "sticky");
-    expect(isTextShapeElement(g)).toBe(false);
+  it("returns false for non-text-shape elements", () => {
+    // Bare rect (pre-promotion).
+    const rect = document.createElementNS(SVG_NS, "rect") as SVGRectElement;
+    expect(isTextOnShape(rect)).toBe(false);
+    // <g> with no data-type.
+    const plainG = document.createElementNS(SVG_NS, "g") as SVGGElement;
+    expect(isTextOnShape(plainG)).toBe(false);
   });
 });
 
-describe("Pattern A — wrap / unwrap a bare <rect> for text-on-shape", () => {
+describe("text-on-shape — wrap / unwrap a bare <rect>", () => {
   it("wrapBareRectForText replaces the rect with a <g data-type=shape>", () => {
     const root = freshSvgRoot();
     const rect = document.createElementNS(SVG_NS, "rect") as SVGRectElement;
@@ -395,7 +401,7 @@ describe("Pattern A — wrap / unwrap a bare <rect> for text-on-shape", () => {
     expect(newH).toBeLessThan(170);
   });
 
-  it("readTextShapeSpec on a Pattern A wrapper returns x/y/w/h from the geometry rect", () => {
+  it("readTextShapeSpec on a text-on-shape wrapper returns x/y/w/h from the geometry rect", () => {
     const root = freshSvgRoot();
     const rect = document.createElementNS(SVG_NS, "rect") as SVGRectElement;
     rect.setAttribute("x", "12");
@@ -411,6 +417,72 @@ describe("Pattern A — wrap / unwrap a bare <rect> for text-on-shape", () => {
     expect(spec.w).toBe(200);
     expect(spec.h).toBe(100);
     expect(spec.runs).toEqual([{ text: "label", line_break_after: false }]);
+  });
+});
+
+describe("applyTextShapeColor", () => {
+  it("sticky: writes data-color, <text> fill, and refreshes bg fill via stickyBgFor", () => {
+    const g = createTextShape({
+      x: 0,
+      y: 0,
+      w: 200,
+      h: 80,
+      variant: "sticky",
+      runs: [{ text: "x" }],
+      fontSize: 16,
+      fontFamily: "sans-serif",
+      color: "#ff0000",
+    });
+    expect(g.getAttribute("data-color")).toBe("#ff0000");
+    const bg = g.querySelector("rect")!;
+    expect(bg.getAttribute("fill")).toBe(stickyBgFor("#ff0000"));
+
+    applyTextShapeColor(g, "#0000ff");
+    expect(g.getAttribute("data-color")).toBe("#0000ff");
+    expect(g.querySelector("text")!.getAttribute("fill")).toBe("#0000ff");
+    expect(bg.getAttribute("fill")).toBe(stickyBgFor("#0000ff"));
+  });
+
+  it("callout: bg rect AND tail path both follow stickyBgFor on color change", () => {
+    const g = createTextShape({
+      x: 0,
+      y: 0,
+      w: 200,
+      h: 80,
+      variant: "callout",
+      runs: [{ text: "x" }],
+      fontSize: 16,
+      fontFamily: "sans-serif",
+      color: "#ff0000",
+    });
+    const bg = g.querySelector("rect")!;
+    const tail = g.querySelector("path")!;
+    expect(bg.getAttribute("fill")).toBe(stickyBgFor("#ff0000"));
+    expect(tail.getAttribute("fill")).toBe(stickyBgFor("#ff0000"));
+
+    applyTextShapeColor(g, "#00ff00");
+    expect(bg.getAttribute("fill")).toBe(stickyBgFor("#00ff00"));
+    expect(tail.getAttribute("fill")).toBe(stickyBgFor("#00ff00"));
+  });
+
+  it("text-on-shape (rect/rounded/ellipse) preserves the user's drawn fill", () => {
+    // wrapBareRectForText keeps the original rect's stroke / fill;
+    // a text-color change must NOT overwrite the user-set fill.
+    const root = freshSvgRoot();
+    const rect = document.createElementNS(SVG_NS, "rect") as SVGRectElement;
+    rect.setAttribute("x", "0");
+    rect.setAttribute("y", "0");
+    rect.setAttribute("width", "120");
+    rect.setAttribute("height", "60");
+    rect.setAttribute("fill", "#abcdef");
+    root.appendChild(rect);
+    const wrapper = wrapBareRectForText(rect);
+
+    applyTextShapeColor(wrapper, "#ff0000");
+    expect(wrapper.getAttribute("data-color")).toBe("#ff0000");
+    // bg rect's fill is intact — the text-on-shape geometry
+    // primitive owns its own color.
+    expect(rect.getAttribute("fill")).toBe("#abcdef");
   });
 });
 

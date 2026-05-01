@@ -80,7 +80,6 @@ function arrow(): AnnotationShape {
     y2: 250,
     stroke: "#ff0000",
     stroke_width: 3,
-    has_arrow: true,
     arrow_shape_end: "triangle",
     // The TS interface lists `"sm" | "md" | "lg"` but the
     // OOXML wire form is `"sm" | "med" | "lg"` — `endXml`
@@ -105,7 +104,6 @@ function curvedArrow(): AnnotationShape {
     arrow_curve_cy: 30,
     stroke: "#ff0000",
     stroke_width: 3,
-    has_arrow: true,
     arrow_shape_end: "triangle",
     arrow_width_end: "md",
     arrow_length_end: "md",
@@ -355,7 +353,7 @@ describe("buildShapeXml PPTX namespace contract", () => {
         y2: 0,
         stroke: "#ff0000",
         stroke_width: 3,
-        has_arrow: true,
+        arrow_shape_end: "triangle",
       },
       { ns: "p", id: 3 },
     );
