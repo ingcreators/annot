@@ -4,7 +4,12 @@ import {
   refreshArrowPath,
   writeArrowControl,
 } from "@ingcreators/annot-core/editor/arrow-markers";
-import { rebuildCalloutTail, setCalloutTail } from "@ingcreators/annot-core/editor/text-utils";
+import {
+  readTextShapeSpec,
+  rebuildCalloutTail,
+  replaceRunsInPlace,
+  setCalloutTail,
+} from "@ingcreators/annot-core/editor/text-utils";
 import {
   applyTransformState,
   bakeLineTransform,
@@ -1781,6 +1786,21 @@ export class SelectionManager {
       // Without this, the bg rect moves but the triangle still anchors
       // at the OLD edge midpoint, leaving a visible gap.
       rebuildCalloutTail(el);
+
+      // Re-flow the inner <text> tspans against the new box bounds.
+      // Without this, every per-tspan x/y stays pinned to the original
+      // layout: a left-anchored run resized leftward stops hugging the
+      // new left edge; a centered run drifts off-center; the run block
+      // can clip outside the new clipPath. `replaceRunsInPlace` reads
+      // the current bg `<rect>` bounds + wrapper data-* attrs (font,
+      // anchors, margins) and re-emits the tspan layout — same path
+      // text edits / variant conversions / margin adjustments take.
+      const hasInnerText = el.querySelector("text") != null;
+      if (hasInnerText) {
+        const runs = readTextShapeSpec(el).runs;
+        replaceRunsInPlace(el, runs);
+      }
+
       // Re-apply the composite transform so rotation/flip pivot
       // tracks the new bbox center.
       applyTransformState(el);

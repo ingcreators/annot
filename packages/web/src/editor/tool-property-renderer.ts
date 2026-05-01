@@ -53,6 +53,8 @@ import type {
   ArrowDim,
   ArrowShape,
   LineCap,
+  TextAnchor,
+  TextVerticalAnchor,
   ToolOptions,
 } from "@ingcreators/annot-core/editor/tool-options";
 import { computeDasharray } from "@ingcreators/annot-core/utils";
@@ -252,6 +254,10 @@ function renderPerIdControl(
       return renderFontSizeRow(toolId, preset, sync);
     case PROPERTY_CONTROL_IDS.fontFamily:
       return renderFontFamilyRow(preset, sync);
+    case PROPERTY_CONTROL_IDS.textAnchor:
+      return renderTextAnchorRow(preset, sync);
+    case PROPERTY_CONTROL_IDS.textVerticalAnchor:
+      return renderTextVerticalAnchorRow(preset, sync);
     default:
       // Per-end arrow ids reach here only when the section doesn't
       // have the full 4-id group — which the registry today never
@@ -648,6 +654,51 @@ function renderFontFamilyRow(preset: ToolOptions, sync: () => void): HTMLElement
       ariaLabel: label,
       onChange: (v) => {
         preset.fontFamily = v;
+        sync();
+      },
+    }),
+  );
+}
+
+function renderTextAnchorRow(preset: ToolOptions, sync: () => void): HTMLElement {
+  // Mirrors the SELECTION-side def — no per-option preview, the
+  // dropdown falls back to the label text. Adding icon previews is a
+  // future enhancement that should land on BOTH surfaces in lockstep.
+  const meta = metaFor(PROPERTY_CONTROL_IDS.textAnchor);
+  const label = meta.label ?? "Align";
+  const options = (meta.options ?? []).map((opt) => ({
+    value: String(opt.value),
+    label: opt.label,
+  }));
+  return createPropertyRow(
+    label,
+    createCustomSelect({
+      options,
+      current: preset.textAnchor ?? "start",
+      ariaLabel: label,
+      onChange: (v) => {
+        preset.textAnchor = v as TextAnchor;
+        sync();
+      },
+    }),
+  );
+}
+
+function renderTextVerticalAnchorRow(preset: ToolOptions, sync: () => void): HTMLElement {
+  const meta = metaFor(PROPERTY_CONTROL_IDS.textVerticalAnchor);
+  const label = meta.label ?? "V-Align";
+  const options = (meta.options ?? []).map((opt) => ({
+    value: String(opt.value),
+    label: opt.label,
+  }));
+  return createPropertyRow(
+    label,
+    createCustomSelect({
+      options,
+      current: preset.textVerticalAnchor ?? "top",
+      ariaLabel: label,
+      onChange: (v) => {
+        preset.textVerticalAnchor = v as TextVerticalAnchor;
         sync();
       },
     }),

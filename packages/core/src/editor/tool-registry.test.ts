@@ -74,6 +74,8 @@ const VALID_TOOL_OPTIONS_KEYS = new Set<keyof ToolOptions>([
   "arrowHead",
   "textVariant",
   "fontFamily",
+  "textAnchor",
+  "textVerticalAnchor",
   "drawStyle",
   "redactStyle",
   "arrowHeadStart",

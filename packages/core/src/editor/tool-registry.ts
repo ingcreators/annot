@@ -678,16 +678,31 @@ export const TOOL_REGISTRY: Readonly<Record<string, ToolRegistryEntry>> = {
     ],
     // Text stores its color on `<text>`'s `fill` (via `strokeColor`,
     // following TextTool's "text color = stroke" convention) plus
-    // sticky/callout bg in `fillColor`.
-    presetFields: ["strokeColor", "fillColor", "fontSize", "fontFamily", "textVariant"],
-    // Type → Line (Color, Font, Size). No Fill or Label sections —
-    // sticky/callout bg color is computed from text color rather
-    // than picked separately on the Tool side.
+    // sticky/callout bg in `fillColor`. textAnchor / textVerticalAnchor
+    // mirror the SELECTION-side `data-text-anchor` / `data-text-vanchor`
+    // wrapper attrs so the next-draw alignment matches what the user
+    // last picked on a selected shape.
+    presetFields: [
+      "strokeColor",
+      "fillColor",
+      "fontSize",
+      "fontFamily",
+      "textVariant",
+      "textAnchor",
+      "textVerticalAnchor",
+    ],
+    // Type → Line (Color, Font, Size) → Label (Align, V-Align). No
+    // Fill section — sticky/callout bg color is computed from text
+    // color rather than picked separately on the Tool side. Bold /
+    // Italic / Underline are per-character runs (set via execCommand
+    // during edit), so they're a SELECTION-only concern.
     panelControls: [
       { section: "Type", id: "tool.typeChips" },
       { section: "Line", id: PROPERTY_CONTROL_IDS.strokeColor },
       { section: "Line", id: PROPERTY_CONTROL_IDS.fontFamily },
       { section: "Line", id: PROPERTY_CONTROL_IDS.fontSize },
+      { section: "Label", id: PROPERTY_CONTROL_IDS.textAnchor },
+      { section: "Label", id: PROPERTY_CONTROL_IDS.textVerticalAnchor },
     ],
     variantKeyForElement(el) {
       if (el.tagName === "text") {
@@ -736,6 +751,17 @@ export const TOOL_REGISTRY: Readonly<Record<string, ToolRegistryEntry>> = {
       // textbox <rect>'s bg-color doesn't leak into the preset.
       const textFill = tEl?.getAttribute("fill") || el.getAttribute("data-color");
       if (textFill) preset.strokeColor = textFill;
+      // Mirror the wrapper's alignment attrs into the preset so the
+      // next text the user draws inherits the alignment they last
+      // picked on a selected shape.
+      const anchor = el.getAttribute("data-text-anchor");
+      if (anchor === "start" || anchor === "middle" || anchor === "end") {
+        preset.textAnchor = anchor;
+      }
+      const vanchor = el.getAttribute("data-text-vanchor");
+      if (vanchor === "top" || vanchor === "middle" || vanchor === "bottom") {
+        preset.textVerticalAnchor = vanchor;
+      }
     },
     applyStyleToElement(el, preset) {
       // Textbox composite: write color/font onto BOTH the <g>'s

@@ -52,6 +52,8 @@ const FIELD_TO_SNAKE = {
   arrowHead: "arrow_head",
   textVariant: "shape_kind",
   fontFamily: "font_family",
+  textAnchor: "text_anchor",
+  textVerticalAnchor: "text_vanchor",
   drawStyle: "draw_style",
   redactStyle: "redact_style",
   arrowHeadStart: "arrow_head_start",

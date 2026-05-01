@@ -248,9 +248,12 @@ export class TextTool extends ToolBase {
     // layout matches the committed shape. Without this, a centered
     // shape would jump to top-left while the user is editing it,
     // which is visually disorienting AND moves the caret out of the
-    // glyph the user clicked on.
-    const hAnchor: TextAnchor = existing?.textAnchor ?? "start";
-    const vAnchor: TextVerticalAnchor = existing?.textVerticalAnchor ?? "top";
+    // glyph the user clicked on. For a fresh draw the wrapper doesn't
+    // exist yet — fall back to the active tool preset so the overlay
+    // matches the alignment the user last picked on the Tool panel.
+    const hAnchor: TextAnchor = existing?.textAnchor ?? this.options.textAnchor ?? "start";
+    const vAnchor: TextVerticalAnchor =
+      existing?.textVerticalAnchor ?? this.options.textVerticalAnchor ?? "top";
     const textAlign =
       hAnchor === "middle" ? "center" : hAnchor === "end" ? "right" : "left";
     const justifyContent =
@@ -568,6 +571,20 @@ export class TextTool extends ToolBase {
       return;
     }
 
+    // For a fresh draw, seed the wrapper's alignment from the active
+    // tool preset so the user's last picked anchor on the Tool panel
+    // takes effect. For a re-edit, preserve the existing wrapper's
+    // anchors (read off the element pre-remove via `editTargetAnchor`
+    // captured below) so a re-edit doesn't silently revert alignment.
+    const editTargetAnchor =
+      (removedLegacyTarget?.getAttribute("data-text-anchor") as TextAnchor | null) ?? undefined;
+    const editTargetVAnchor =
+      (removedLegacyTarget?.getAttribute("data-text-vanchor") as TextVerticalAnchor | null) ??
+      undefined;
+    const textAnchor: TextAnchor | undefined = editTargetAnchor ?? this.options.textAnchor;
+    const textVerticalAnchor: TextVerticalAnchor | undefined =
+      editTargetVAnchor ?? this.options.textVerticalAnchor;
+
     const newEl = createTextShape({
       x: foX,
       y: foY,
@@ -578,6 +595,8 @@ export class TextTool extends ToolBase {
       fontSize,
       fontFamily,
       color,
+      textAnchor,
+      textVerticalAnchor,
     });
     this.canvas.annotations.appendChild(newEl);
     this.history.save();
