@@ -690,7 +690,30 @@ export class SelectionManager {
     if (!g.getBBox) return;
     let bb: DOMRect;
     try {
-      bb = g.getBBox();
+      // Text-bearing composite shapes (`<g data-type="shape">` for
+      // plain / sticky / callout, plus Pattern A wrappers) clip their
+      // inner `<text>` to the bg `<rect>` via `clip-path`. SVG's
+      // `getBBox()` ignores clip-path, so a multi-line run that
+      // overflows a freshly-shrunk box reports an unclipped text
+      // bbox larger than the visible body — the selection outline +
+      // resize handles then drift below the yellow body, which looks
+      // like the text and the box "don't match" anymore.
+      //
+      // Read the bg rect (the FIRST child `<rect>`, which is also the
+      // resize target in `#resizeElement`) instead so the selection
+      // chrome tracks the visible body. The callout tail's tip lives
+      // on its own dedicated handle, so excluding it from the bbox
+      // here doesn't hide any otherwise-orphan affordance.
+      if (el.tagName === "g" && el.getAttribute("data-type") === "shape") {
+        const bgRect = el.querySelector("rect");
+        if (bgRect) {
+          bb = (bgRect as SVGGraphicsElement).getBBox();
+        } else {
+          bb = g.getBBox();
+        }
+      } else {
+        bb = g.getBBox();
+      }
     } catch {
       return;
     }
