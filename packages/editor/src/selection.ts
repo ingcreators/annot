@@ -4,7 +4,12 @@ import {
   refreshArrowPath,
   writeArrowControl,
 } from "@ingcreators/annot-core/editor/arrow-markers";
-import { rebuildCalloutTail, setCalloutTail } from "@ingcreators/annot-core/editor/text-utils";
+import {
+  readTextShapeSpec,
+  rebuildCalloutTail,
+  replaceRunsInPlace,
+  setCalloutTail,
+} from "@ingcreators/annot-core/editor/text-utils";
 import {
   applyTransformState,
   bakeLineTransform,
@@ -723,13 +728,41 @@ export class SelectionManager {
     this.#canvas.uiOverlay.appendChild(outline);
     this.#handles.push(outline as unknown as SVGRectElement);
 
-    const screenCenter = localToSvgPoint(el, new DOMPoint(cxL, cyL), this.#canvas.svg);
+    // Cursor direction is derived from each handle's CANONICAL position
+    // (TL=NW, TC=N, …) plus the element's rotation / flip — NOT from the
+    // screen-space angle of (handle - center). The latter looked correct
+    // for square shapes but, for a wide-and-short rectangle (a 200×80
+    // sticky note is the canonical case), the geometric angle from
+    // center to TL leans closer to W than to NW, so all four corners
+    // ended up bucketed into ew-resize. Using the index-keyed angle
+    // decouples cursor pick from the bbox aspect ratio. (Indices follow
+    // the resize-logic order: 0=TL, 1=TC, 2=TR, 3=MR, 4=BR, 5=BC,
+    // 6=BL, 7=ML — same ordering `localPts` uses above.)
+    const LOCAL_HANDLE_ANGLES = [
+      (Math.PI * 5) / 4, // 0 TL → NW
+      (Math.PI * 3) / 2, // 1 TC → N
+      (Math.PI * 7) / 4, // 2 TR → NE
+      0, // 3 MR → E
+      Math.PI / 4, // 4 BR → SE
+      Math.PI / 2, // 5 BC → S
+      (Math.PI * 3) / 4, // 6 BL → SW
+      Math.PI, // 7 ML → W
+    ];
+    const tState = readTransformState(el);
+    const rotRad = (tState.rotation * Math.PI) / 180;
 
     const hs = HANDLE_SIZE / this.#canvas.zoom;
     for (let i = 0; i < localPts.length; i++) {
       const [lx, ly] = localPts[i]!;
       const sp = localToSvgPoint(el, new DOMPoint(lx, ly), this.#canvas.svg);
-      const ang = Math.atan2(sp.y - screenCenter.y, sp.x - screenCenter.x);
+      // Canonical local angle for this handle index, reflected by any
+      // active flip(s) so a horizontally-flipped shape's TL handle (now
+      // visually at the TR position) shows the NE diagonal cursor, not
+      // the NW one.
+      let cursorAng = LOCAL_HANDLE_ANGLES[i]!;
+      if (tState.flipH) cursorAng = Math.PI - cursorAng;
+      if (tState.flipV) cursorAng = -cursorAng;
+      cursorAng += rotRad;
       const rect = document.createElementNS(SVG_NS, "rect");
       rect.setAttribute("x", String(sp.x - hs / 2));
       rect.setAttribute("y", String(sp.y - hs / 2));
@@ -738,7 +771,7 @@ export class SelectionManager {
       rect.setAttribute("fill", "#00d4ff");
       rect.setAttribute("stroke", "#fff");
       rect.setAttribute("stroke-width", String(1 / this.#canvas.zoom));
-      rect.style.cursor = cursorForAngle(ang);
+      rect.style.cursor = cursorForAngle(cursorAng);
       rect.style.pointerEvents = "all";
       this.#canvas.uiOverlay.appendChild(rect);
       this.#resizeHandles.push(rect);
@@ -1781,6 +1814,21 @@ export class SelectionManager {
       // Without this, the bg rect moves but the triangle still anchors
       // at the OLD edge midpoint, leaving a visible gap.
       rebuildCalloutTail(el);
+
+      // Re-flow the inner <text> tspans against the new box bounds.
+      // Without this, every per-tspan x/y stays pinned to the original
+      // layout: a left-anchored run resized leftward stops hugging the
+      // new left edge; a centered run drifts off-center; the run block
+      // can clip outside the new clipPath. `replaceRunsInPlace` reads
+      // the current bg `<rect>` bounds + wrapper data-* attrs (font,
+      // anchors, margins) and re-emits the tspan layout — same path
+      // text edits / variant conversions / margin adjustments take.
+      const hasInnerText = el.querySelector("text") != null;
+      if (hasInnerText) {
+        const runs = readTextShapeSpec(el).runs;
+        replaceRunsInPlace(el, runs);
+      }
+
       // Re-apply the composite transform so rotation/flip pivot
       // tracks the new bbox center.
       applyTransformState(el);

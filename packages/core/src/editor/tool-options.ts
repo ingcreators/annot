@@ -48,6 +48,15 @@ export type ArrowDim = "sm" | "md" | "lg";
 export type LineCap = "butt" | "round" | "square";
 export type LineJoin = "miter" | "round" | "bevel";
 
+/** Horizontal text alignment inside a text-bearing shape. Mirrors
+ *  the SELECTION-side `data-text-anchor` (start / middle / end)
+ *  exactly; the Text tool seeds new shapes with this value when set. */
+export type TextAnchor = "start" | "middle" | "end";
+
+/** Vertical text alignment inside a text-bearing shape. Mirrors
+ *  the SELECTION-side `data-text-vanchor` (top / middle / bottom). */
+export type TextVerticalAnchor = "top" | "middle" | "bottom";
+
 /** A single gradient stop — color + 0..1 position along the gradient,
  *  optional transparency. The 2-stop case covers the common PowerPoint
  *  "fade from A to B" workflow; 3+ stops render fine too. */
@@ -90,6 +99,12 @@ export interface ToolOptions {
    *  when not specified. Stored on the textbox as `data-font-family`
    *  so it survives save / reopen / Office paste. */
   fontFamily?: string;
+  /** Horizontal text alignment for newly-drawn Text shapes. Defaults
+   *  to "start" (left-aligned) when not specified. */
+  textAnchor?: TextAnchor;
+  /** Vertical text alignment for newly-drawn Text shapes. Defaults
+   *  to "top" when not specified. */
+  textVerticalAnchor?: TextVerticalAnchor;
   /** Style for the Draw tool: normal pen vs highlighter. */
   drawStyle?: DrawStyle;
   /** Style for the unified Redact tool. */

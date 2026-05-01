@@ -38,6 +38,8 @@ import type {
   ArrowDim,
   ArrowShape,
   LineCap,
+  TextAnchor,
+  TextVerticalAnchor,
   ToolOptions,
 } from "./tool-options.js";
 
@@ -214,6 +216,26 @@ export const TOOL_PANEL_ADAPTERS: Readonly<
       preset.fontFamily = String(value);
     },
     selectionDef: PROPERTY_CONTROL_IDS.fontFamily,
+  },
+
+  [PROPERTY_CONTROL_IDS.textAnchor]: {
+    // Horizontal text alignment for the next-drawn Text shape. The
+    // SELECTION-side def writes `data-text-anchor` + re-flows the
+    // tspans; the Tool-side adapter just persists the value into
+    // `ToolOptions` so `createTextShape` picks it up at draw time.
+    read: (preset) => preset.textAnchor ?? "start",
+    write: (preset, value) => {
+      preset.textAnchor = value as TextAnchor;
+    },
+    selectionDef: PROPERTY_CONTROL_IDS.textAnchor,
+  },
+
+  [PROPERTY_CONTROL_IDS.textVerticalAnchor]: {
+    read: (preset) => preset.textVerticalAnchor ?? "top",
+    write: (preset, value) => {
+      preset.textVerticalAnchor = value as TextVerticalAnchor;
+    },
+    selectionDef: PROPERTY_CONTROL_IDS.textVerticalAnchor,
   },
 
   [PROPERTY_CONTROL_IDS.arrowStartShape]: {
@@ -410,6 +432,8 @@ export const TOOL_PANEL_ADAPTER_IDS: ReadonlyArray<ToolPanelAdapterId> = [
   PROPERTY_CONTROL_IDS.fillColor,
   PROPERTY_CONTROL_IDS.fontSize,
   PROPERTY_CONTROL_IDS.fontFamily,
+  PROPERTY_CONTROL_IDS.textAnchor,
+  PROPERTY_CONTROL_IDS.textVerticalAnchor,
   PROPERTY_CONTROL_IDS.arrowStartShape,
   PROPERTY_CONTROL_IDS.arrowEndShape,
   PROPERTY_CONTROL_IDS.arrowStartSize,
