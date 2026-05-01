@@ -124,7 +124,7 @@ jobs:
 
       - name: Detect imagequant or workflow changes
         id: filter
-        uses: dorny/paths-filter@v3
+        uses: dorny/paths-filter@v4
         with:
           filters: |
             imagequant:
@@ -146,7 +146,7 @@ jobs:
       # that the steady-state hit rate stays high.
       - name: Cache cargo registry + build
         if: steps.filter.outputs.imagequant == 'true'
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/registry
@@ -159,7 +159,7 @@ jobs:
       - name: Cache wasm-pack binary
         if: steps.filter.outputs.imagequant == 'true'
         id: wasm-pack-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.cargo/bin/wasm-pack
           key: wasm-pack-0.13.1-${{ runner.os }}
@@ -180,7 +180,7 @@ jobs:
       # between the contributor's local OS and the CI Linux runner).
       - name: Upload fresh pkg/ on diff
         if: steps.filter.outputs.imagequant == 'true' && failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: imagequant-fresh-pkg
           path: ${{ runner.temp }}/imagequant-fresh/pkg
