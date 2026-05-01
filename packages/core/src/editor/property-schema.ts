@@ -23,6 +23,7 @@ import { convertShape, detectShapeType } from "./shape-utils.js";
 import {
   convertTextVariant,
   detectTextVariant,
+  isTextShapeElement,
   readTextShapeSpec,
   replaceRunsInPlace,
   type TextAnchor,
@@ -741,6 +742,19 @@ export const PROPERTY_CONTROLS: Readonly<{
       const v = Number(value);
       el.querySelector("text")?.setAttribute("font-size", String(v));
       el.setAttribute("data-font-size", String(v));
+      // Re-flow tspans for text-bearing shapes so the per-line layout
+      // (and the autofit grow-to-fit pass for `data-text-autofit="resize"`)
+      // pick up the new size. Without this, enlarging the font on a
+      // selected sticky / callout / Pattern A wrapper bumps the visible
+      // glyphs but leaves the bg rect pinned to its old height — autofit
+      // never fires, so "Resize shape to fit text" silently does nothing
+      // when the trigger is a font-size change rather than a text-content
+      // change. Non-text shapes (markers etc.) skip the re-flow because
+      // they don't carry a text-shape skeleton.
+      if (isTextShapeElement(el)) {
+        const runs = readTextShapeSpec(el).runs;
+        replaceRunsInPlace(el, runs);
+      }
     },
     min: 8,
     max: 96,
