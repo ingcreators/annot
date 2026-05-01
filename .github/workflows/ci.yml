@@ -180,7 +180,7 @@ jobs:
       # between the contributor's local OS and the CI Linux runner).
       - name: Upload fresh pkg/ on diff
         if: steps.filter.outputs.imagequant == 'true' && failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: imagequant-fresh-pkg
           path: ${{ runner.temp }}/imagequant-fresh/pkg
