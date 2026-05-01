@@ -36,6 +36,65 @@ import {
 } from "./selection-helpers.js";
 import { computeSnap, SmartGuideOverlay } from "./smart-guides.js";
 
+/**
+ * Bbox to use when drawing the SELECTION CHROME (outline polygon,
+ * resize handles, rotation handle stem) for a given element. For
+ * text-bearing composite shapes — `<g data-type="shape">` (plain /
+ * sticky / callout + Pattern A text-on-shape wrappers) — return
+ * the FIRST child `<rect>`'s bbox instead of the wrapper's union
+ * bbox.
+ *
+ * SVG's `getBBox()` ignores `clip-path`, so a multi-line run that
+ * overflows a freshly-shrunk box reports an unclipped text bbox
+ * larger than the visible body. The chrome then drifted below the
+ * visible (yellow) sticky body — users described it as "the
+ * yellow gets smaller, but the object size doesn't match anymore".
+ *
+ * The bg rect is the same target `#resizeElement` mutates AND the
+ * same target the inner `<text>` is clipped to via `clip-path`.
+ * Tracking it here makes outline + handles + rotation stem all
+ * follow the visible body in lockstep.
+ *
+ * The callout tail's tip stays grabbable through its own dedicated
+ * `#drawCalloutTailHandle`, so excluding it from the chrome bbox
+ * doesn't orphan that affordance.
+ *
+ * Non-text shapes (`<g data-type="arrow">`, freehand groups,
+ * markers, line / arrow primitives, redact wrappers, etc.) fall
+ * through to `getBBox()` unchanged.
+ */
+function chromeBBox(el: SVGElement): DOMRect | null {
+  const g = el as SVGGraphicsElement;
+  if (!g.getBBox) return null;
+  if (el.tagName === "g" && el.getAttribute("data-type") === "shape") {
+    // Direct-child rect only — `querySelector("rect")` would also
+    // match the nested rect inside the wrapper's own `<clipPath>`,
+    // which has a stable position regardless of the bg rect's
+    // attributes and could mask out a real shrink at chrome-draw
+    // time. Iterating direct children keeps the lookup intent-
+    // explicit.
+    let bgRect: SVGRectElement | null = null;
+    for (const child of Array.from(el.children)) {
+      if (child.tagName === "rect") {
+        bgRect = child as SVGRectElement;
+        break;
+      }
+    }
+    if (bgRect) {
+      try {
+        return bgRect.getBBox();
+      } catch {
+        // fall through to wrapper bbox
+      }
+    }
+  }
+  try {
+    return g.getBBox();
+  } catch {
+    return null;
+  }
+}
+
 export class SelectionManager {
   #canvas: CanvasManager;
   #history: History;
@@ -686,37 +745,8 @@ export class SelectionManager {
    *  (sector lookup over the angle from element center to handle in
    *  screen space). */
   #drawRotatedBBoxHandles(el: SVGElement): void {
-    const g = el as SVGGraphicsElement;
-    if (!g.getBBox) return;
-    let bb: DOMRect;
-    try {
-      // Text-bearing composite shapes (`<g data-type="shape">` for
-      // plain / sticky / callout, plus Pattern A wrappers) clip their
-      // inner `<text>` to the bg `<rect>` via `clip-path`. SVG's
-      // `getBBox()` ignores clip-path, so a multi-line run that
-      // overflows a freshly-shrunk box reports an unclipped text
-      // bbox larger than the visible body — the selection outline +
-      // resize handles then drift below the yellow body, which looks
-      // like the text and the box "don't match" anymore.
-      //
-      // Read the bg rect (the FIRST child `<rect>`, which is also the
-      // resize target in `#resizeElement`) instead so the selection
-      // chrome tracks the visible body. The callout tail's tip lives
-      // on its own dedicated handle, so excluding it from the bbox
-      // here doesn't hide any otherwise-orphan affordance.
-      if (el.tagName === "g" && el.getAttribute("data-type") === "shape") {
-        const bgRect = el.querySelector("rect");
-        if (bgRect) {
-          bb = (bgRect as SVGGraphicsElement).getBBox();
-        } else {
-          bb = g.getBBox();
-        }
-      } else {
-        bb = g.getBBox();
-      }
-    } catch {
-      return;
-    }
+    const bb = chromeBBox(el);
+    if (!bb) return;
     const cxL = bb.x + bb.width / 2;
     const cyL = bb.y + bb.height / 2;
 
@@ -806,14 +836,8 @@ export class SelectionManager {
    *  variant (which sat above the AABB rather than above the visual
    *  top of a rotated shape). */
   #drawRotationHandleAlong(el: SVGElement): void {
-    const g = el as SVGGraphicsElement;
-    if (!g.getBBox) return;
-    let bb: DOMRect;
-    try {
-      bb = g.getBBox();
-    } catch {
-      return;
-    }
+    const bb = chromeBBox(el);
+    if (!bb) return;
     const cxL = bb.x + bb.width / 2;
 
     // The top-center anchor in local coords. We want the handle a
