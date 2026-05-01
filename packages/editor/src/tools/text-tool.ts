@@ -621,6 +621,20 @@ export class TextTool extends ToolBase {
     for (const [name, value] of carryOverAttrs) {
       if (value != null) newEl.setAttribute(name, value);
     }
+    // If `data-text-autofit="resize"` was carried over, trigger the
+    // grow-to-fit pass so the wrapper's bg rect / clipPath height
+    // expands to fit text the user added or enlarged in this edit
+    // session. `createTextShape` lays the runs out at the foreign-
+    // object's fixed size; the autofit growth lives only in
+    // `replaceRunsInPlace`, so without this re-pass the bg rect
+    // stays pinned to the foreignObject's pre-edit dimensions even
+    // when the runs need more room. Re-laying out is idempotent
+    // when autofit is "none" / unset, so the cost is one extra
+    // tspan rebuild on commit — cheap relative to the user-visible
+    // round-trip.
+    if (newEl.getAttribute("data-text-autofit") === "resize") {
+      replaceRunsInPlace(newEl, runs);
+    }
     this.canvas.annotations.appendChild(newEl);
     this.history.save();
     this.onTextBoxChanged?.(newEl);

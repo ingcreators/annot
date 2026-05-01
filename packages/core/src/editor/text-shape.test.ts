@@ -329,6 +329,72 @@ describe("Pattern A — wrap / unwrap a bare <rect> for text-on-shape", () => {
     expect(y1 - y0).toBeGreaterThanOrEqual(48);
   });
 
+  it("autofit=resize grows the bg rect when the run block exceeds the box height", () => {
+    const root = freshSvgRoot();
+    const g = createTextShape({
+      x: 0,
+      y: 0,
+      w: 100,
+      h: 40,
+      variant: "sticky",
+      runs: [{ text: "one" }],
+      fontSize: 16,
+      fontFamily: "sans-serif",
+      color: "#000",
+    });
+    root.appendChild(g);
+    g.setAttribute("data-text-autofit", "resize");
+
+    // Replace with seven 16pt lines — at 1.4 line-height that's
+    // 7 × 22.4 = 156.8px of run block, plus 8/8 sticky margins =
+    // 172.8 required. The starting box is only 40px tall.
+    const lines: TextRun[] = [];
+    for (let i = 1; i <= 7; i++) {
+      lines.push({ text: `line${i}`, line_break_after: i < 7 });
+    }
+    replaceRunsInPlace(g, lines);
+
+    const bgRect = g.querySelector("rect")!;
+    const newH = Number.parseFloat(bgRect.getAttribute("height")!);
+    expect(newH).toBeGreaterThanOrEqual(170);
+    // ClipPath rect should have grown in lockstep.
+    const clipRect = g.querySelector("clipPath > rect")!;
+    expect(clipRect.getAttribute("height")).toBe(bgRect.getAttribute("height"));
+  });
+
+  it("autofit=resize grows for mixed-size runs by per-line height sum", () => {
+    const root = freshSvgRoot();
+    const g = createTextShape({
+      x: 0,
+      y: 0,
+      w: 200,
+      h: 40,
+      variant: "sticky",
+      runs: [{ text: "tiny" }],
+      fontSize: 16,
+      fontFamily: "sans-serif",
+      color: "#000",
+    });
+    root.appendChild(g);
+    g.setAttribute("data-text-autofit", "resize");
+
+    // One 48pt line + three 16pt lines:
+    //   per-line heights = [48*1.4, 16*1.4, 16*1.4, 16*1.4]
+    //                    = [67.2, 22.4, 22.4, 22.4]   sum = 134.4
+    //   plus 8/8 sticky margins = 150.4 required. Box starts at 40.
+    replaceRunsInPlace(g, [
+      { text: "BIG", font_size: 48, line_break_after: true },
+      { text: "small1", line_break_after: true },
+      { text: "small2", line_break_after: true },
+      { text: "small3" },
+    ]);
+
+    const bgRect = g.querySelector("rect")!;
+    const newH = Number.parseFloat(bgRect.getAttribute("height")!);
+    expect(newH).toBeGreaterThan(140);
+    expect(newH).toBeLessThan(170);
+  });
+
   it("readTextShapeSpec on a Pattern A wrapper returns x/y/w/h from the geometry rect", () => {
     const root = freshSvgRoot();
     const rect = document.createElementNS(SVG_NS, "rect") as SVGRectElement;
