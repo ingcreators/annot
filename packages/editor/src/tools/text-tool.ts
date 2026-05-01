@@ -1,5 +1,6 @@
 import { htmlToRuns, runsToHtml } from "@ingcreators/annot-core/editor/rich-text-mapper";
 import {
+  applyTextShapeColor,
   createTextShape,
   readTextShapeSpec,
   replaceRunsInPlace,
@@ -457,6 +458,33 @@ export class TextTool extends ToolBase {
     });
   }
 
+  /**
+   * Commit the active edit session. One unified path for every
+   * text-shape variant — the wrapper is mutated in place if it
+   * already exists (re-edit), or created via `createTextShape`
+   * if not (fresh draw).
+   *
+   * Earlier revisions split the re-edit path into two: an in-place
+   * mutation for "Pattern A" wrappers (the ones built by promoting
+   * a Shape-tool rect via `wrapBareRectForText` — `data-shape-kind`
+   * ∈ rect / rounded / ellipse) and a remove-then-rebuild via
+   * `createTextShape` for the variants the Text tool drew directly
+   * (plain / sticky / callout). The rebuild path was a shortcut to
+   * refresh the sticky / callout body tint after a text-color
+   * change, but the rebuild also dropped any wrapper-level attribute
+   * not reflected in `TextShapeSpec` (autofit, per-side margins, …),
+   * forcing a hand-maintained carry-over list and producing the
+   * "Autofit setting doesn't persist" symptom users reported.
+   *
+   * Mutating the wrapper in place across every variant fixes that
+   * by construction: the wrapper's element identity is preserved,
+   * so every `data-*` attribute, transform, and history reference
+   * carries through automatically. The body-tint update that the
+   * rebuild path used to provide moves into `applyTextShapeColor`
+   * — a Tier B helper that derives the sticky / callout bg fill
+   * from `stickyBgFor(textColor)` and skips the geometry primitive
+   * for variants whose bg is the user's deliberate drawn color.
+   */
   #finishEditing(): void {
     if (!this.#foreignObject || !this.#editDiv) return;
     this.#editing = false;
@@ -473,23 +501,6 @@ export class TextTool extends ToolBase {
     const foW = Number.parseFloat(this.#foreignObject.getAttribute("width")!);
     const foH = Number.parseFloat(this.#foreignObject.getAttribute("height")!);
 
-    // Preserve existing styling on edit; fall back to tool options on new.
-    const fontSize = this.#editTarget
-      ? Number.parseFloat(
-          this.#editTarget.getAttribute("data-font-size") || String(this.options.fontSize),
-        )
-      : this.options.fontSize;
-    const fontFamily = this.#editTarget
-      ? this.#editTarget.getAttribute("data-font-family") ||
-        (this.options.fontFamily ?? "sans-serif")
-      : (this.options.fontFamily ?? "sans-serif");
-    const color = this.#editTarget
-      ? this.#editTarget.getAttribute("data-color") || this.options.strokeColor
-      : this.options.strokeColor;
-    const shapeKindAttr = this.#editTarget?.getAttribute("data-shape-kind") ?? null;
-    const isPatternA =
-      shapeKindAttr === "rect" || shapeKindAttr === "rounded" || shapeKindAttr === "ellipse";
-
     this.#miniToolbar?.close();
     this.#miniToolbar = null;
     this.#foreignObject.remove();
@@ -500,141 +511,109 @@ export class TextTool extends ToolBase {
       this.#onOutsidePointerDown = null;
     }
 
-    // Pattern A path — the user double-clicked a bare shape;
-    // we wrapped it then opened the editor. The wrapper carries
-    // the shape's geometry (rect / rounded / ellipse) so we
-    // rewrite the `<text>` content in place rather than building
-    // a fresh sticky / callout `<g>` that would replace the
-    // user's original geometry.
-    if (this.#editTarget && isPatternA) {
-      const wrapper = this.#editTarget;
-      this.#editTarget = null;
-      const promoted = this.#promotedFromBareRect;
-      this.#promotedFromBareRect = false;
-
-      // Restore the inner `<text>` visibility — it was hidden
-      // during edit so the user only saw the contentEditable
-      // overlay, not double-rendered text behind it.
-      const innerText = wrapper.querySelector("text");
-      if (innerText instanceof SVGElement) innerText.style.display = "";
-
-      if (!flatText) {
-        // Cancel-without-typing on a freshly-promoted shape →
-        // roll back the promotion so the canvas stays clean.
-        if (promoted) unwrapBareTextShape(wrapper);
-        this.canvas.svg.dispatchEvent(
-          new CustomEvent("annot:text-edit-end", {
-            detail: { target: wrapper },
-            bubbles: false,
-          }),
-        );
-        return;
-      }
-
-      // Persist text formatting on the wrapper so a later
-      // re-edit reads the same defaults.
-      wrapper.setAttribute("data-font-size", String(fontSize));
-      wrapper.setAttribute("data-font-family", fontFamily);
-      wrapper.setAttribute("data-color", color);
-      replaceRunsInPlace(wrapper, runs);
-
-      this.history.save();
-      this.onTextBoxChanged?.(wrapper);
-      this.onShapeComplete?.(wrapper);
-      this.canvas.svg.dispatchEvent(
-        new CustomEvent("annot:text-edit-end", { detail: { target: wrapper }, bubbles: false }),
-      );
-      return;
-    }
-
-    // Legacy plain / sticky / callout path — the entire wrapper
-    // gets rebuilt from scratch via `createTextShape` so the bg
-    // tint follows any color change made during the edit.
-    const variant: TextVariant = this.#editTarget
-      ? (shapeKindAttr as TextVariant) || "sticky"
-      : (this.options.textVariant ?? "sticky");
-
-    const removedLegacyTarget = this.#editTarget;
     if (this.#editTarget) {
-      this.#editTarget.remove();
-      this.#editTarget = null;
+      this.#commitReEdit(this.#editTarget, runs, flatText);
+    } else {
+      this.#commitFreshDraw(foX, foY, foW, foH, runs, flatText);
     }
+  }
+
+  /** Re-edit commit path. Mutates the existing wrapper in place
+   *  so every wrapper-level attribute (transform, autofit, margins,
+   *  variant-specific data-*) survives without an explicit carry-
+   *  over list — element identity is preserved. */
+  #commitReEdit(wrapper: SVGGElement, runs: TextRun[], flatText: string): void {
+    this.#editTarget = null;
+    const promoted = this.#promotedFromBareRect;
     this.#promotedFromBareRect = false;
 
+    // Restore the inner `<text>` visibility — it was hidden during
+    // edit so the user only saw the contentEditable overlay, not
+    // double-rendered text behind it.
+    const innerText = wrapper.querySelector("text");
+    if (innerText instanceof SVGElement) innerText.style.display = "";
+
     if (!flatText) {
+      // Cancel-without-typing on a freshly-promoted bare-rect →
+      // roll back the promotion so the canvas stays clean.
+      if (promoted) unwrapBareTextShape(wrapper);
       this.canvas.svg.dispatchEvent(
         new CustomEvent("annot:text-edit-end", {
-          detail: { target: removedLegacyTarget },
+          detail: { target: wrapper },
           bubbles: false,
         }),
       );
       return;
     }
 
-    // For a fresh draw, seed the wrapper's alignment from the active
-    // tool preset so the user's last picked anchor on the Tool panel
-    // takes effect. For a re-edit, preserve the existing wrapper's
-    // anchors (read off the element pre-remove via `editTargetAnchor`
-    // captured below) so a re-edit doesn't silently revert alignment.
-    const editTargetAnchor =
-      (removedLegacyTarget?.getAttribute("data-text-anchor") as TextAnchor | null) ?? undefined;
-    const editTargetVAnchor =
-      (removedLegacyTarget?.getAttribute("data-text-vanchor") as TextVerticalAnchor | null) ??
-      undefined;
-    const textAnchor: TextAnchor | undefined = editTargetAnchor ?? this.options.textAnchor;
-    const textVerticalAnchor: TextVerticalAnchor | undefined =
-      editTargetVAnchor ?? this.options.textVerticalAnchor;
+    // Read the wrapper's existing styling so a re-edit doesn't
+    // silently revert font / color choices made via the property
+    // panel between sessions.
+    const fontSize = Number.parseFloat(
+      wrapper.getAttribute("data-font-size") || String(this.options.fontSize),
+    );
+    const fontFamily =
+      wrapper.getAttribute("data-font-family") || (this.options.fontFamily ?? "sans-serif");
+    const color = wrapper.getAttribute("data-color") || this.options.strokeColor;
 
-    // Preserve attributes that aren't part of `TextShapeSpec` —
-    // autofit and per-side text margins live as `data-*` attrs on
-    // the wrapper. The legacy commit path rebuilds the wrapper from
-    // scratch via `createTextShape`, which would otherwise drop
-    // these on every re-edit (the user reported "Autofit doesn't
-    // persist"). Pattern A's commit path mutates the wrapper in
-    // place, so it isn't affected.
-    const carryOverAttrs: Array<[string, string | null]> = [];
-    if (removedLegacyTarget) {
-      for (const name of [
-        "data-text-autofit",
-        "data-text-margin-l",
-        "data-text-margin-r",
-        "data-text-margin-t",
-        "data-text-margin-b",
-      ] as const) {
-        carryOverAttrs.push([name, removedLegacyTarget.getAttribute(name)]);
-      }
+    wrapper.setAttribute("data-font-size", String(fontSize));
+    wrapper.setAttribute("data-font-family", fontFamily);
+    // `applyTextShapeColor` writes `data-color` + the inner
+    // `<text>` fill, AND for sticky / callout variants also
+    // refreshes the bg rect / tail fill so the body tint tracks
+    // the text color the way it would after a fresh `createTextShape`.
+    applyTextShapeColor(wrapper, color);
+    replaceRunsInPlace(wrapper, runs);
+
+    this.history.save();
+    this.onTextBoxChanged?.(wrapper);
+    this.onShapeComplete?.(wrapper);
+    this.canvas.svg.dispatchEvent(
+      new CustomEvent("annot:text-edit-end", { detail: { target: wrapper }, bubbles: false }),
+    );
+  }
+
+  /** Fresh-draw commit path. No existing wrapper, so `createTextShape`
+   *  builds one from the active tool preset and the foreignObject's
+   *  bounds. */
+  #commitFreshDraw(
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    runs: TextRun[],
+    flatText: string,
+  ): void {
+    this.#promotedFromBareRect = false;
+
+    if (!flatText) {
+      this.canvas.svg.dispatchEvent(
+        new CustomEvent("annot:text-edit-end", {
+          detail: { target: null },
+          bubbles: false,
+        }),
+      );
+      return;
     }
 
+    const fontSize = this.options.fontSize;
+    const fontFamily = this.options.fontFamily ?? "sans-serif";
+    const color = this.options.strokeColor;
+    const variant: TextVariant = this.options.textVariant ?? "sticky";
+
     const newEl = createTextShape({
-      x: foX,
-      y: foY,
-      w: foW,
-      h: foH,
+      x,
+      y,
+      w,
+      h,
       variant,
       runs,
       fontSize,
       fontFamily,
       color,
-      textAnchor,
-      textVerticalAnchor,
+      textAnchor: this.options.textAnchor,
+      textVerticalAnchor: this.options.textVerticalAnchor,
     });
-    for (const [name, value] of carryOverAttrs) {
-      if (value != null) newEl.setAttribute(name, value);
-    }
-    // If `data-text-autofit="resize"` was carried over, trigger the
-    // grow-to-fit pass so the wrapper's bg rect / clipPath height
-    // expands to fit text the user added or enlarged in this edit
-    // session. `createTextShape` lays the runs out at the foreign-
-    // object's fixed size; the autofit growth lives only in
-    // `replaceRunsInPlace`, so without this re-pass the bg rect
-    // stays pinned to the foreignObject's pre-edit dimensions even
-    // when the runs need more room. Re-laying out is idempotent
-    // when autofit is "none" / unset, so the cost is one extra
-    // tspan rebuild on commit — cheap relative to the user-visible
-    // round-trip.
-    if (newEl.getAttribute("data-text-autofit") === "resize") {
-      replaceRunsInPlace(newEl, runs);
-    }
     this.canvas.annotations.appendChild(newEl);
     this.history.save();
     this.onTextBoxChanged?.(newEl);

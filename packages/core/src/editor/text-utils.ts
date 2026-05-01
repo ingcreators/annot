@@ -50,6 +50,59 @@ export function stickyBgFor(color: string): string {
   return STICKY_BG[color.toLowerCase()] || "rgba(255,255,200,0.92)";
 }
 
+/** In-place text-shape color update.
+ *
+ *  Writes the color to:
+ *    - `data-color` on the wrapper (the cache attr that survives
+ *      save / paste / Office round-trips when the inner `<text>`
+ *      gets re-rendered).
+ *    - `fill` on the inner `<text>` child (what the SVG renderer
+ *      paints).
+ *    - For sticky / callout variants: `fill` on the bg `<rect>`
+ *      and the tail `<path>` derived from `stickyBgFor(color)`,
+ *      so the body tint follows the text color the way it would
+ *      if the wrapper were freshly built.
+ *
+ *  Pattern A wrappers (`data-shape-kind` ∈ rect / rounded /
+ *  ellipse) carry the user's drawn fill on the geometry primitive;
+ *  the bg fill stays untouched here so a deliberate
+ *  user-set color isn't overwritten by the text-color change.
+ *
+ *  Tier B — pure jsdom-friendly element manipulation, no live-
+ *  canvas dependency. Used by both PropertyPanel's textColor
+ *  effect and TextTool's commit path so a sticky's body tint
+ *  stays in lockstep with its text color across both surfaces. */
+export function applyTextShapeColor(g: SVGElement, color: string): void {
+  g.setAttribute("data-color", color);
+  const text = g.querySelector("text");
+  if (text) text.setAttribute("fill", color);
+
+  const variant = g.getAttribute("data-shape-kind");
+  if (variant === "sticky" || variant === "callout") {
+    const bg = stickyBgFor(color);
+    // First direct child rect — the bg geometry primitive. The
+    // clipPath's nested rect lives under `<clipPath>` and isn't a
+    // direct child, so iterating skips past it without false
+    // matches.
+    for (const child of Array.from(g.children)) {
+      if (child.tagName === "rect") {
+        (child as SVGRectElement).setAttribute("fill", bg);
+        break;
+      }
+    }
+    // Callout tail — direct-child `<path>`. Only one tail per
+    // callout, so the first match is the right one.
+    if (variant === "callout") {
+      for (const child of Array.from(g.children)) {
+        if (child.tagName === "path") {
+          (child as SVGPathElement).setAttribute("fill", bg);
+          break;
+        }
+      }
+    }
+  }
+}
+
 /** Plain-text view of a run array — joins runs in order with `\n`
  *  inserted at every `line_break_after`. Useful when an editor
  *  wants the unstyled body (e.g. for the contentEditable seed). */
