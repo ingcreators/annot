@@ -585,6 +585,26 @@ export class TextTool extends ToolBase {
     const textVerticalAnchor: TextVerticalAnchor | undefined =
       editTargetVAnchor ?? this.options.textVerticalAnchor;
 
+    // Preserve attributes that aren't part of `TextShapeSpec` —
+    // autofit and per-side text margins live as `data-*` attrs on
+    // the wrapper. The legacy commit path rebuilds the wrapper from
+    // scratch via `createTextShape`, which would otherwise drop
+    // these on every re-edit (the user reported "Autofit doesn't
+    // persist"). Pattern A's commit path mutates the wrapper in
+    // place, so it isn't affected.
+    const carryOverAttrs: Array<[string, string | null]> = [];
+    if (removedLegacyTarget) {
+      for (const name of [
+        "data-text-autofit",
+        "data-text-margin-l",
+        "data-text-margin-r",
+        "data-text-margin-t",
+        "data-text-margin-b",
+      ] as const) {
+        carryOverAttrs.push([name, removedLegacyTarget.getAttribute(name)]);
+      }
+    }
+
     const newEl = createTextShape({
       x: foX,
       y: foY,
@@ -598,6 +618,9 @@ export class TextTool extends ToolBase {
       textAnchor,
       textVerticalAnchor,
     });
+    for (const [name, value] of carryOverAttrs) {
+      if (value != null) newEl.setAttribute(name, value);
+    }
     this.canvas.annotations.appendChild(newEl);
     this.history.save();
     this.onTextBoxChanged?.(newEl);
