@@ -280,10 +280,11 @@ export async function captureRegion(
  *                       to describe heads (the legacy `has_arrow`
  *                       stays equivalent to arrow_head_end=true).
  *   type="text"         Text-bearing shape. `shape_kind` is the
- *                       discriminator — `plain` / `sticky` / `callout`
- *                       today; expanded to `rect` / `rounded` /
- *                       `ellipse` once Pattern A (text on bare
- *                       shapes) lands. `runs[]` holds the per-run
+ *                       discriminator — auto-bg variants (`plain`
+ *                       / `sticky` / `callout`) plus the text-on-
+ *                       shape kinds (`rect` / `rounded` /
+ *                       `ellipse`, see `isTextOnShape`).
+ *                       `runs[]` holds the per-run
  *                       text content + per-character formatting
  *                       (bold / italic / underline / mixed font /
  *                       size / color); for a uniformly-styled

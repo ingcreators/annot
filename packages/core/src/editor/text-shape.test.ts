@@ -13,6 +13,7 @@ import {
   convertTextVariant,
   createTextShape,
   detectTextVariant,
+  isTextOnShape,
   isTextShapeElement,
   plainTextToRuns,
   readTextShapeSpec,
@@ -202,7 +203,40 @@ describe("legacy rejection", () => {
   });
 });
 
-describe("Pattern A — wrap / unwrap a bare <rect> for text-on-shape", () => {
+describe("isTextOnShape", () => {
+  it("returns true for rect / rounded / ellipse wrappers", () => {
+    for (const kind of ["rect", "rounded", "ellipse"] as const) {
+      const g = document.createElementNS(SVG_NS, "g") as SVGGElement;
+      g.setAttribute("data-type", "shape");
+      g.setAttribute("data-shape-kind", kind);
+      expect(isTextOnShape(g)).toBe(true);
+    }
+  });
+
+  it("returns false for plain / sticky / callout (auto-bg variants)", () => {
+    for (const kind of ["plain", "sticky", "callout"] as const) {
+      const g = document.createElementNS(SVG_NS, "g") as SVGGElement;
+      g.setAttribute("data-type", "shape");
+      g.setAttribute("data-shape-kind", kind);
+      expect(isTextOnShape(g)).toBe(false);
+    }
+  });
+
+  it("returns false for non-text-shape elements", () => {
+    // Bare rect (pre-promotion).
+    const rect = document.createElementNS(SVG_NS, "rect") as SVGRectElement;
+    expect(isTextOnShape(rect)).toBe(false);
+    // <g> with no data-type.
+    const plainG = document.createElementNS(SVG_NS, "g") as SVGGElement;
+    expect(isTextOnShape(plainG)).toBe(false);
+    // Legacy <g data-type="textbox"> schema.
+    const legacy = document.createElementNS(SVG_NS, "g") as SVGGElement;
+    legacy.setAttribute("data-type", "textbox");
+    expect(isTextOnShape(legacy)).toBe(false);
+  });
+});
+
+describe("text-on-shape — wrap / unwrap a bare <rect>", () => {
   it("wrapBareRectForText replaces the rect with a <g data-type=shape>", () => {
     const root = freshSvgRoot();
     const rect = document.createElementNS(SVG_NS, "rect") as SVGRectElement;
@@ -476,8 +510,8 @@ describe("applyTextShapeColor", () => {
 
     applyTextShapeColor(wrapper, "#ff0000");
     expect(wrapper.getAttribute("data-color")).toBe("#ff0000");
-    // bg rect's fill is intact — Pattern A geometry primitive
-    // owns its own color.
+    // bg rect's fill is intact — the text-on-shape geometry
+    // primitive owns its own color.
     expect(rect.getAttribute("fill")).toBe("#abcdef");
   });
 });

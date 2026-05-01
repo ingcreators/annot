@@ -745,12 +745,13 @@ export const PROPERTY_CONTROLS: Readonly<{
       // Re-flow tspans for text-bearing shapes so the per-line layout
       // (and the autofit grow-to-fit pass for `data-text-autofit="resize"`)
       // pick up the new size. Without this, enlarging the font on a
-      // selected sticky / callout / Pattern A wrapper bumps the visible
-      // glyphs but leaves the bg rect pinned to its old height — autofit
-      // never fires, so "Resize shape to fit text" silently does nothing
-      // when the trigger is a font-size change rather than a text-content
-      // change. Non-text shapes (markers etc.) skip the re-flow because
-      // they don't carry a text-shape skeleton.
+      // selected text-shape (sticky / callout / text-on-shape) bumps
+      // the visible glyphs but leaves the bg rect pinned to its old
+      // height — autofit never fires, so "Resize shape to fit text"
+      // silently does nothing when the trigger is a font-size change
+      // rather than a text-content change. Non-text shapes (markers
+      // etc.) skip the re-flow because they don't carry a text-shape
+      // skeleton.
       if (isTextShapeElement(el)) {
         const runs = readTextShapeSpec(el).runs;
         replaceRunsInPlace(el, runs);
@@ -1225,8 +1226,8 @@ export function classifyPropertyElement(el: Element): PropertyCategory {
   if (tag === "g") {
     const dataType = el.getAttribute("data-type");
     // Unified text-bearing shape — `data-shape-kind` carries the
-    // discriminator (plain / sticky / callout in Phase 1; rect /
-    // rounded / ellipse once Pattern A lands).
+    // discriminator (auto-bg variants plain / sticky / callout +
+    // text-on-shape rect / rounded / ellipse — see `isTextOnShape`).
     if (dataType === "shape") return "textbox";
     if (dataType === "group") return "group";
     if (el.hasAttribute("data-marker")) return "marker";

@@ -2,6 +2,7 @@ import { htmlToRuns, runsToHtml } from "@ingcreators/annot-core/editor/rich-text
 import {
   applyTextShapeColor,
   createTextShape,
+  isTextOnShape,
   readTextShapeSpec,
   replaceRunsInPlace,
   stickyBgFor,
@@ -65,7 +66,8 @@ export class TextTool extends ToolBase {
   #editDiv: HTMLDivElement | null = null;
   #miniToolbar: TextMiniToolbarHandle | null = null;
   /** Set when the current edit session was opened by promoting a
-   *  bare `<rect>` (Pattern A double-click). On cancel-without-
+   *  bare `<rect>` to a text-on-shape wrapper (the user double-
+   *  clicked a Shape-tool rect to add a label). On cancel-without-
    *  typing we roll the promotion back via `unwrapBareTextShape`
    *  so the canvas stays clean. */
   #promotedFromBareRect = false;
@@ -144,11 +146,11 @@ export class TextTool extends ToolBase {
       return;
     }
 
-    // Pattern A — promote a bare `<rect>` drawn by ShapeTool /
-    // HighlightTool into the unified shape skeleton, then enter
-    // the same edit flow. Redact rects (`data-redact-style`)
-    // are excluded; the user's expectation for those is "the
-    // black box hides content" not "labelled shape".
+    // Promote a bare `<rect>` drawn by ShapeTool / HighlightTool
+    // to a text-on-shape wrapper, then enter the same edit flow.
+    // Redact rects (`data-redact-style`) are excluded; the user's
+    // expectation for those is "the black box hides content" not
+    // "labelled shape".
     const bareRect = target.closest("rect") as SVGRectElement | null;
     if (
       bareRect &&
@@ -178,7 +180,7 @@ export class TextTool extends ToolBase {
 
     this.#editTarget = g;
 
-    // Pattern A wrappers (`data-shape-kind` ∈ rect / rounded /
+    // Text-on-shape wrappers (`data-shape-kind` ∈ rect / rounded /
     // ellipse) carry the user's drawn geometry as the visible
     // shape. Hiding the wrapper while editing would erase that
     // geometry from view, leaving only the editor overlay —
@@ -186,13 +188,10 @@ export class TextTool extends ToolBase {
     // styling). Instead, hide ONLY the existing `<text>` child
     // so the text doesn't double up while the user types, and
     // overlay a transparent contentEditable on top of the still-
-    // visible shape. Legacy plain / sticky / callout textboxes
+    // visible shape. Auto-bg variants (plain / sticky / callout)
     // keep the wrapper-hidden behaviour because their visible
     // styling IS the contentEditable's styling.
-    const shapeKindAttr = g.getAttribute("data-shape-kind");
-    const isPatternA =
-      shapeKindAttr === "rect" || shapeKindAttr === "rounded" || shapeKindAttr === "ellipse";
-    if (isPatternA) {
+    if (isTextOnShape(g)) {
       const existingText = g.querySelector("text");
       if (existingText instanceof SVGElement) existingText.style.display = "none";
     } else {
@@ -232,18 +231,16 @@ export class TextTool extends ToolBase {
     const color = existing?.color || this.options.strokeColor;
     const w = existing?.width || DEFAULT_WIDTH;
     const h = existing?.height || DEFAULT_HEIGHT;
-    // For Pattern A (text-on-shape) the underlying geometry is the
+    // For text-on-shape wrappers the underlying geometry is the
     // visible "frame" and stays in the DOM during edit — the editor
     // overlay must NOT paint a sticky-yellow background on top of
-    // it. Branch on the wrapper's `data-shape-kind` so legacy
-    // plain / sticky / callout still get their stylized overlay
-    // (those wrappers are HIDDEN during edit, so the overlay IS
-    // the visible thing the user sees).
-    const editTargetKind = this.#editTarget?.getAttribute("data-shape-kind") ?? null;
-    const isPatternA =
-      editTargetKind === "rect" || editTargetKind === "rounded" || editTargetKind === "ellipse";
+    // it. Branch on the wrapper's `data-shape-kind` so the auto-bg
+    // variants (plain / sticky / callout) still get their stylized
+    // overlay (those wrappers are HIDDEN during edit, so the
+    // overlay IS the visible thing the user sees).
+    const editingTextOnShape = this.#editTarget != null && isTextOnShape(this.#editTarget);
     const variant: TextVariant = this.options.textVariant ?? "sticky";
-    const showBg = !isPatternA && variant !== "plain";
+    const showBg = !editingTextOnShape && variant !== "plain";
 
     // Resolve the wrapper's stored anchors so the editor's visible
     // layout matches the committed shape. Without this, a centered
@@ -273,7 +270,7 @@ export class TextTool extends ToolBase {
     // free of `display: flex`, which is known to cause caret-
     // placement quirks under contenteditable in some browsers.
     const outer = document.createElement("div");
-    outer.style.cssText = isPatternA
+    outer.style.cssText = editingTextOnShape
       ? `
       display: flex;
       flex-direction: column;
@@ -465,9 +462,10 @@ export class TextTool extends ToolBase {
    * if not (fresh draw).
    *
    * Earlier revisions split the re-edit path into two: an in-place
-   * mutation for "Pattern A" wrappers (the ones built by promoting
-   * a Shape-tool rect via `wrapBareRectForText` — `data-shape-kind`
-   * ∈ rect / rounded / ellipse) and a remove-then-rebuild via
+   * mutation for text-on-shape wrappers (the ones built by
+   * promoting a Shape-tool rect via `wrapBareRectForText` —
+   * `data-shape-kind` ∈ rect / rounded / ellipse, see
+   * `isTextOnShape`) and a remove-then-rebuild via
    * `createTextShape` for the variants the Text tool drew directly
    * (plain / sticky / callout). The rebuild path was a shortcut to
    * refresh the sticky / callout body tint after a text-color

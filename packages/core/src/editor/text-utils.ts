@@ -63,10 +63,10 @@ export function stickyBgFor(color: string): string {
  *      so the body tint follows the text color the way it would
  *      if the wrapper were freshly built.
  *
- *  Pattern A wrappers (`data-shape-kind` ∈ rect / rounded /
- *  ellipse) carry the user's drawn fill on the geometry primitive;
- *  the bg fill stays untouched here so a deliberate
- *  user-set color isn't overwritten by the text-color change.
+ *  Text-on-shape wrappers (see `isTextOnShape`) carry the user's
+ *  drawn fill on the geometry primitive; the bg fill stays
+ *  untouched here so a deliberate user-set color isn't
+ *  overwritten by the text-color change.
  *
  *  Tier B — pure jsdom-friendly element manipulation, no live-
  *  canvas dependency. Used by both PropertyPanel's textColor
@@ -205,13 +205,12 @@ export interface TextShapeSpec {
   /** Default text color for runs without a per-run override. */
   color: string;
   /** Horizontal alignment inside the shape box. Defaults to
-   *  `start` for legacy plain / sticky / callout (matches the
-   *  pre-Phase-3 layout) and to `middle` for the Pattern A
+   *  `start` for the auto-bg variants (plain / sticky / callout,
+   *  matching the pre-Phase-3 layout) and to `middle` for
    *  text-on-shape kinds (PowerPoint default). */
   textAnchor?: TextAnchor;
   /** Vertical alignment inside the shape box. Defaults to
-   *  `top` for legacy plain / sticky / callout, `middle` for
-   *  Pattern A. */
+   *  `top` for the auto-bg variants, `middle` for text-on-shape. */
   textVerticalAnchor?: TextVerticalAnchor;
   /** Callout tail tip in canvas coordinates. If undefined and the
    *  variant is "callout", a default position (below-left of the box)
@@ -221,8 +220,8 @@ export interface TextShapeSpec {
 }
 
 /** Pick a sensible default horizontal anchor when the spec
- *  doesn't supply one. Legacy text variants keep their pre-anchor
- *  layout (start); Pattern A kinds default to PowerPoint's
+ *  doesn't supply one. Auto-bg variants keep their pre-anchor
+ *  layout (start); text-on-shape kinds default to PowerPoint's
  *  middle. */
 function defaultTextAnchor(variant: string | null | undefined): TextAnchor {
   if (variant === "rect" || variant === "rounded" || variant === "ellipse") return "middle";
@@ -337,6 +336,32 @@ function buildTspanLayout(opts: {
       return blockTop + lineTops[idx]! + sizes[idx]!;
     },
   };
+}
+
+/** Returns true when the wrapper is a text-on-shape variant —
+ *  i.e. the wrapper was promoted from a Shape-tool primitive
+ *  (`rect` / `rounded` / `ellipse`) via `wrapBareRectForText`,
+ *  so the geometry primitive carries the user's drawn fill /
+ *  stroke. The other text-bearing variants (`plain` / `sticky` /
+ *  `callout`) carry an auto-generated bg whose tint follows the
+ *  text color via `stickyBgFor`.
+ *
+ *  Used by:
+ *    - `applyTextShapeColor` (above) to skip the bg-fill refresh
+ *      for user-drawn geometry.
+ *    - `TextTool` to decide whether to hide the wrapper or just
+ *      its `<text>` child during edit, and whether the editor
+ *      overlay should paint its own yellow background or stay
+ *      transparent.
+ *
+ *  Returns false for non-text-shape elements (no `data-type`,
+ *  legacy `<g data-type="textbox">`, raw `<rect>` etc.) so
+ *  callers can use it as a discriminator without an outer
+ *  `isTextShapeElement` guard. */
+export function isTextOnShape(el: Element): boolean {
+  if (el.tagName !== "g" || el.getAttribute("data-type") !== "shape") return false;
+  const kind = el.getAttribute("data-shape-kind");
+  return kind === "rect" || kind === "rounded" || kind === "ellipse";
 }
 
 /**
@@ -683,10 +708,12 @@ export function setCalloutTail(g: SVGElement, localTailX: number, localTailY: nu
  *  TextTool's edit flow reads / writes through the same skeleton
  *  it uses for plain / sticky / callout textboxes.
  *
- *  Pattern A entry path — Phase 3 of
- *  `docs/plans/rich-text-and-shape-text.md`. The wrapper REPLACES
- *  the original element in its parent; the caller should reassign
- *  any selection / undo state to the returned `<g>`.
+ *  Text-on-shape entry path — landed in Phase 3 of
+ *  `docs/plans/_done/rich-text-and-shape-text.md`. The wrapper
+ *  REPLACES the original element in its parent; the caller
+ *  should reassign any selection / undo state to the returned
+ *  `<g>`. See `isTextOnShape` for the runtime predicate that
+ *  matches the resulting wrapper kinds.
  *
  *  The matching {@link unwrapBareTextShape} reverses this
  *  transformation when the user cancels a freshly-opened text
@@ -729,9 +756,9 @@ export function wrapBareRectForText(rect: SVGRectElement): SVGGElement {
   g.setAttribute("data-font-size", "16");
   g.setAttribute("data-font-family", "sans-serif");
   g.setAttribute("data-color", "#000000");
-  // Pattern A defaults to PowerPoint-style centered text inside
-  // the shape geometry. The user can change either anchor via the
-  // PropertyPanel after the shape is promoted.
+  // Text-on-shape defaults to PowerPoint-style centered text
+  // inside the shape geometry. The user can change either anchor
+  // via the PropertyPanel after the shape is promoted.
   g.setAttribute("data-text-anchor", defaultTextAnchor(shapeKind));
   g.setAttribute("data-text-vanchor", defaultTextVerticalAnchor(shapeKind));
 
@@ -764,14 +791,16 @@ export function wrapBareRectForText(rect: SVGRectElement): SVGGElement {
 }
 
 /** Replace the `<text>` content of an existing text-bearing shape
- *  in-place — used by Pattern A (text-on-shape) where the
- *  geometry primitive is the user's bare rect, not the bg
- *  generated by `createTextShape`. The wrapper's other children
- *  (geometry, clipPath, callout tail) are left untouched.
+ *  in-place. Used by every TextTool re-edit commit and by the
+ *  PropertyPanel's text effects (color / variant / autofit /
+ *  margins). The wrapper's other children (geometry, clipPath,
+ *  callout tail) are left untouched.
  *
  *  Tspan layout follows the same anchor / line-height rules as
  *  `createTextShape`. Layout reads its origin from the FIRST
- *  `<rect>` direct child (the geometry primitive). */
+ *  `<rect>` direct child (the geometry primitive — the user's
+ *  drawn rect for text-on-shape, or the auto-generated bg for
+ *  the plain / sticky / callout variants). */
 export function replaceRunsInPlace(g: SVGElement, runs: readonly TextRun[]): void {
   const firstRect = (() => {
     for (const child of Array.from(g.children)) {
@@ -788,11 +817,11 @@ export function replaceRunsInPlace(g: SVGElement, runs: readonly TextRun[]): voi
   const color = g.getAttribute("data-color") || "#000000";
 
   // Margins follow the per-side `data-text-margin-{l,r,t,b}`
-  // attributes, falling back to the legacy variant-specific
-  // padding constants (plain = 2/0, others = 10/8). Pattern A's
+  // attributes, falling back to the per-variant padding
+  // constants (plain = 2/0, others = 10/8). Text-on-shape's
   // 10/8 default echoes the user-visible breathing room around
-  // a deliberately drawn shape; legacy plain text hugs its
-  // bounds to mirror the pre-Phase-3 layout.
+  // a deliberately drawn shape; plain text hugs its bounds to
+  // mirror the pre-anchor-aware layout from Phase 1.
   const variant = g.getAttribute("data-shape-kind");
   const margins = readTextMargins(g);
   const textAnchor =

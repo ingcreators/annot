@@ -40,7 +40,7 @@ import { computeSnap, SmartGuideOverlay } from "./smart-guides.js";
  * Bbox to use when drawing the SELECTION CHROME (outline polygon,
  * resize handles, rotation handle stem) for a given element. For
  * text-bearing composite shapes — `<g data-type="shape">` (plain /
- * sticky / callout + Pattern A text-on-shape wrappers) — return
+ * sticky / callout + text-on-shape wrappers) — return
  * the FIRST child `<rect>`'s bbox instead of the wrapper's union
  * bbox.
  *

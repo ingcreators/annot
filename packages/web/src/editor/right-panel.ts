@@ -716,12 +716,12 @@ export class AnnotEditorRightPanelElement extends LitElement {
       }
       if (type === "shape") {
         const kind = el.getAttribute("data-shape-kind");
-        // Pattern A — text-on-shape wrappers carry the original
-        // geometry's identity: rect / rounded / ellipse stay
-        // labelled by their shape kind ("Selected Rectangle"),
-        // not the text content they may also contain. Single-
-        // click selects the SHAPE; double-click enters text edit
-        // mode and the panel re-renders text-side controls.
+        // Text-on-shape wrappers carry the original geometry's
+        // identity: rect / rounded / ellipse stay labelled by
+        // their shape kind ("Selected Rectangle"), not the text
+        // content they may also contain. Single-click selects
+        // the SHAPE; double-click enters text edit mode and the
+        // panel re-renders text-side controls.
         if (kind === "rect") return "Rectangle";
         if (kind === "rounded") return "Rounded rectangle";
         if (kind === "ellipse") return "Ellipse";
