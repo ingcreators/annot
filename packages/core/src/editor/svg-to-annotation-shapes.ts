@@ -147,9 +147,6 @@ export function svgElementToAnnotationShape(el: SVGElement): AnnotationShape | n
       stroke: el.getAttribute("stroke") || "#ff0000",
       stroke_width: Number.parseFloat(el.getAttribute("stroke-width") || "3"),
       stroke_dasharray: el.getAttribute("stroke-dasharray") || "",
-      has_arrow: headEnd,
-      arrow_head_start: headStart,
-      arrow_head_end: headEnd,
       ...lineXform,
     };
   }

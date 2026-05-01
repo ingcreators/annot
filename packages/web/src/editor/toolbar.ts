@@ -172,9 +172,7 @@ export class Toolbar {
    *  each other via rubber-band propagation.
    *
    *  Tools WITHOUT variants (crop, highlight) use the bare tool ID as
-   *  the element key. Legacy preset files that stored presets keyed
-   *  by tool ID are migrated on load by promoting each entry to the
-   *  tool's DEFAULT variant key (see `#loadPresetsFromFile`). */
+   *  the element key. */
   #presets: Map<string, ToolOptions> = new Map();
   /** Which variant was last active per tool. Used to decide which
    *  variant's preset to load when the tool is re-selected from the

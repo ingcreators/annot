@@ -276,9 +276,11 @@ export async function captureRegion(
  *                       opaque solid-bar redaction (no outline).
  *   type="ellipse"      Ellipse.
  *   type="line" | "arrow"
- *                       Line. Use `arrow_head_start / arrow_head_end`
- *                       to describe heads (the legacy `has_arrow`
- *                       stays equivalent to arrow_head_end=true).
+ *                       Line. Use `arrow_shape_start / arrow_shape_end`
+ *                       to describe heads (`"none"` or undefined for
+ *                       no head; `"triangle"` / `"arrow"` / `"stealth"`
+ *                       / `"diamond"` / `"oval"` for the OOXML preset
+ *                       head shapes).
  *   type="text"         Text-bearing shape. `shape_kind` is the
  *                       discriminator — auto-bg variants (`plain`
  *                       / `sticky` / `callout`) plus the text-on-
@@ -365,10 +367,6 @@ export interface AnnotationShape {
   corner_radius?: number;
 
   // ---- Line variant ----
-  /** Legacy: true iff there is any arrow head (maps to arrow_head_end). */
-  has_arrow?: boolean;
-  arrow_head_start?: boolean;
-  arrow_head_end?: boolean;
   /** Quadratic-Bezier control-point coordinates for a curved
    *  arrow, in the same canvas space as `x1/y1/x2/y2`. Both
    *  populated together; either being absent renders the arrow

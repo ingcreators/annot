@@ -471,9 +471,6 @@ export function writeArrowSpec(el: SVGElement, end: "start" | "end", spec: Arrow
   el.setAttribute(`data-arrow-${end}-shape`, spec.shape);
   el.setAttribute(`data-arrow-${end}-width`, spec.width);
   el.setAttribute(`data-arrow-${end}-length`, spec.length);
-  // Legacy single-size attr (length is what PowerPoint's "size"
-  // dropdown shows).
-  el.setAttribute(`data-arrow-${end}-size`, spec.length);
 }
 
 /** Read the geometric endpoints of an arrow `<path>` element. The
@@ -567,9 +564,6 @@ export function refreshArrowPath(el: SVGElement): void {
     sw,
     control,
   );
-
-  // Drop any legacy single-head path that older DOM may carry.
-  el.querySelector(':scope > [data-role="head"]')?.remove();
 
   let stem = el.querySelector<SVGPathElement>(':scope > [data-role="stem"]');
   if (!stem) {

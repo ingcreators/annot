@@ -37,9 +37,7 @@ export function buildLine(s: AnnotationShape, id: number, ns: NamespaceOpts): st
   );
   const tail = s.arrow_shape_end
     ? endXml("tailEnd", s.arrow_shape_end, s.arrow_width_end, s.arrow_length_end)
-    : s.has_arrow
-      ? '<a:tailEnd type="triangle" w="med" len="med"/>'
-      : "";
+    : "";
 
   const dash = dashToDrawingml(s.stroke_dasharray);
   const cap = capAttr(s.stroke_linecap);

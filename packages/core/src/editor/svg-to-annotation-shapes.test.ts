@@ -147,8 +147,6 @@ describe("svgElementToAnnotationShape", () => {
       y1: 150,
       x2: 210,
       y2: 250,
-      has_arrow: true,
-      arrow_head_end: true,
       arrow_shape_end: "triangle",
     });
   });
