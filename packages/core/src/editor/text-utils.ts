@@ -355,25 +355,16 @@ function buildTspanLayout(opts: {
  *      transparent.
  *
  *  Returns false for non-text-shape elements (no `data-type`,
- *  legacy `<g data-type="textbox">`, raw `<rect>` etc.) so
- *  callers can use it as a discriminator without an outer
- *  `isTextShapeElement` guard. */
+ *  raw `<rect>`, etc.) so callers can use it as a discriminator
+ *  without an outer `isTextShapeElement` guard. */
 export function isTextOnShape(el: Element): boolean {
   if (el.tagName !== "g" || el.getAttribute("data-type") !== "shape") return false;
   const kind = el.getAttribute("data-shape-kind");
   return kind === "rect" || kind === "rounded" || kind === "ellipse";
 }
 
-/**
- * Returns true when the element is a unified text-bearing shape
- * (`<g data-type="shape" data-shape-kind="...">`).
- *
- * The legacy `<g data-type="textbox">` produced by older Annot
- * builds is NOT recognised — see CLAUDE.md and the
- * `rich-text-and-shape-text` plan: pre-release dumps are
- * disposable, the reader rejects legacy elements loudly so
- * stray data fails fast rather than silently degrading.
- */
+/** Returns true when the element is a unified text-bearing shape
+ *  (`<g data-type="shape" data-shape-kind="...">`). */
 export function isTextShapeElement(el: Element): boolean {
   return (
     el.tagName === "g" &&
@@ -382,28 +373,13 @@ export function isTextShapeElement(el: Element): boolean {
   );
 }
 
-/** Throws when an old `<g data-type="textbox">` element shows up
- *  in a code path that expects the unified skeleton. Used by
- *  `readTextShapeSpec` and `convertTextVariant` to surface the
- *  schema break loudly. */
-function rejectLegacyTextbox(el: Element): void {
-  if (el.tagName === "g" && el.getAttribute("data-type") === "textbox") {
-    throw new Error(
-      'Legacy <g data-type="textbox"> is not supported. ' +
-        "Pre-rich-text Annot dumps must be re-created — see " +
-        "docs/plans/_done/rich-text-and-shape-text.md.",
-    );
-  }
-}
-
 export function detectTextVariant(g: SVGElement): TextVariant {
-  rejectLegacyTextbox(g);
   const v = g.getAttribute("data-shape-kind") as TextVariant | null;
   if (v === "plain" || v === "sticky" || v === "callout") return v;
-  // Defensive default — same as before the rename. Keeps
-  // unrecognised future kinds (Phase 3 rect / rounded / ellipse)
-  // from crashing the variant picker; callers that need to
-  // discriminate the broader union should branch on the raw attr.
+  // Defensive default. Keeps the text-on-shape kinds (rect /
+  // rounded / ellipse) from crashing the variant picker;
+  // callers that need to discriminate the broader union should
+  // branch on the raw attr.
   return "sticky";
 }
 
@@ -464,13 +440,9 @@ function readRuns(g: SVGElement): TextRun[] {
   return runs;
 }
 
-/**
- * Read the spec off an existing text-bearing shape. Used when
- * converting variant or re-rendering after an edit. Throws on
- * the legacy `<g data-type="textbox">` skeleton.
- */
+/** Read the spec off an existing text-bearing shape. Used when
+ *  converting variant or re-rendering after an edit. */
 export function readTextShapeSpec(g: SVGElement): TextShapeSpec {
-  rejectLegacyTextbox(g);
   const bg = g.querySelector("rect");
   const x = Number.parseFloat(bg?.getAttribute("x") || "0");
   const y = Number.parseFloat(bg?.getAttribute("y") || "0");
@@ -951,7 +923,6 @@ export function unwrapBareTextShape(g: SVGElement): SVGElement {
  * onTargetReplaced callback).
  */
 export function convertTextVariant(oldG: SVGElement, newVariant: TextVariant): SVGElement {
-  rejectLegacyTextbox(oldG);
   const parent = oldG.parentNode;
   if (!parent) throw new Error("convertTextVariant: element is detached");
   const spec = readTextShapeSpec(oldG);

@@ -49,10 +49,6 @@ describe("createTextShape / readTextShapeSpec round-trip", () => {
     expect(g.getAttribute("data-shape-kind")).toBe("sticky");
     expect(g.getAttribute("data-color")).toBe("#ff0000");
     expect(g.getAttribute("data-font-size")).toBe("16");
-    // No legacy attributes leak in.
-    expect(g.getAttribute("data-type")).not.toBe("textbox");
-    expect(g.getAttribute("data-text-variant")).toBeNull();
-    expect(g.getAttribute("data-text")).toBeNull();
   });
 
   it("uniform-collapse: one tspan per line, no per-tspan formatting attrs", () => {
@@ -181,28 +177,6 @@ describe("convertTextVariant preserves runs across kind changes", () => {
   });
 });
 
-describe("legacy rejection", () => {
-  it("readTextShapeSpec throws on <g data-type=textbox>", () => {
-    const g = document.createElementNS(SVG_NS, "g") as SVGGElement;
-    g.setAttribute("data-type", "textbox");
-    g.setAttribute("data-text-variant", "sticky");
-    expect(() => readTextShapeSpec(g)).toThrow(/Legacy <g data-type="textbox">/);
-  });
-
-  it("detectTextVariant throws on <g data-type=textbox>", () => {
-    const g = document.createElementNS(SVG_NS, "g") as SVGGElement;
-    g.setAttribute("data-type", "textbox");
-    expect(() => detectTextVariant(g as SVGElement)).toThrow(/Legacy/);
-  });
-
-  it("isTextShapeElement returns false for the legacy skeleton", () => {
-    const g = document.createElementNS(SVG_NS, "g") as SVGGElement;
-    g.setAttribute("data-type", "textbox");
-    g.setAttribute("data-text-variant", "sticky");
-    expect(isTextShapeElement(g)).toBe(false);
-  });
-});
-
 describe("isTextOnShape", () => {
   it("returns true for rect / rounded / ellipse wrappers", () => {
     for (const kind of ["rect", "rounded", "ellipse"] as const) {
@@ -229,10 +203,6 @@ describe("isTextOnShape", () => {
     // <g> with no data-type.
     const plainG = document.createElementNS(SVG_NS, "g") as SVGGElement;
     expect(isTextOnShape(plainG)).toBe(false);
-    // Legacy <g data-type="textbox"> schema.
-    const legacy = document.createElementNS(SVG_NS, "g") as SVGGElement;
-    legacy.setAttribute("data-type", "textbox");
-    expect(isTextOnShape(legacy)).toBe(false);
   });
 });
 
