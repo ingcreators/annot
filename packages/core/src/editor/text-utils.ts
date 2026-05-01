@@ -181,32 +181,35 @@ function defaultTextVerticalAnchor(variant: string | null | undefined): TextVert
   return "top";
 }
 
-/** Count the visible lines in a run array (paragraph breaks +
- *  the implicit final paragraph). */
-function countLines(runs: readonly TextRun[]): number {
-  if (runs.length === 0) return 0;
-  let n = 1;
-  for (let i = 0; i < runs.length - 1; i++) {
-    if (runs[i]!.line_break_after) n += 1;
-  }
-  return n;
-}
-
-/** The effective font size used for line-height layout: max of the
- *  wrapper's `data-font-size` and any per-run `font_size` overrides.
- *  Without this, runs whose mini-toolbar-applied size exceeds the
- *  wrapper default get rendered at their own size but spaced as if
- *  every line were at the smaller wrapper size, causing the bigger
- *  glyphs to overlap vertically. PowerPoint's behaviour for a run
- *  block is "line height tracks the largest run size present"; we
- *  approximate that with a single block-wide max so multi-size
- *  documents at least don't collide. */
-function effectiveLayoutFontSize(baseFontSize: number, runs: readonly TextRun[]): number {
-  let max = baseFontSize;
+/** Per-line max font size used for line-height layout. Each line's
+ *  height tracks the LARGEST run on that line (PowerPoint's "single"
+ *  line spacing semantics), and the total run block stacks per-line
+ *  heights — so a small run block under a single large heading doesn't
+ *  inherit the heading's spacing for the rest of the lines.
+ *
+ *  Without per-line resolution, a single global max made every line
+ *  in the block as tall as the largest run anywhere, leaving wide
+ *  gaps between small subsequent lines (visible after commit but not
+ *  during the contentEditable edit, since the editor's CSS
+ *  `line-height: 1.4` already resolves per-line).
+ *
+ *  The wrapper's `data-font-size` is the floor for any line that has
+ *  no per-run override — empty / lone-run lines still match the
+ *  document's baseline rhythm. */
+function perLineMaxFontSizes(baseFontSize: number, runs: readonly TextRun[]): number[] {
+  if (runs.length === 0) return [baseFontSize];
+  const sizes: number[] = [];
+  let cur = baseFontSize;
   for (const run of runs) {
-    if (run.font_size != null && run.font_size > max) max = run.font_size;
+    if (run.font_size != null && run.font_size > cur) cur = run.font_size;
+    if (run.line_break_after) {
+      sizes.push(cur);
+      cur = baseFontSize;
+    }
   }
-  return max;
+  // Final line (no trailing line_break_after).
+  sizes.push(cur);
+  return sizes;
 }
 
 /** Compute the (x, y) of a `<tspan>` that starts a new line +
@@ -227,14 +230,25 @@ function buildTspanLayout(opts: {
   y: number;
   w: number;
   h: number;
-  fontSize: number;
-  lineCount: number;
+  /** Per-line max font size — one entry per line. Length determines
+   *  the line count (replacing the previous separate `lineCount` +
+   *  single `fontSize` pair). */
+  lineFontSizes: number[];
   margins: TextMargins;
   textAnchor: TextAnchor;
   textVerticalAnchor: TextVerticalAnchor;
 }): TspanLayout {
-  const { x, y, w, h, fontSize, lineCount, margins, textAnchor, textVerticalAnchor } = opts;
-  const lineHeight = fontSize * 1.4;
+  const { x, y, w, h, lineFontSizes, margins, textAnchor, textVerticalAnchor } = opts;
+  // Per-line height = font size × 1.4 (matches the contentEditable's
+  // CSS line-height during edit). Cumulative offsets: line 0 starts
+  // at the inner top, line i starts where line i-1's box ended.
+  const sizes = lineFontSizes.length > 0 ? lineFontSizes : [16];
+  const lineHeights = sizes.map((s) => s * 1.4);
+  // baseline[i] = top_of_line[i] + lineFontSize[i] (font size ≈ ascent).
+  const lineTops: number[] = new Array(sizes.length);
+  lineTops[0] = 0;
+  for (let i = 1; i < sizes.length; i++) lineTops[i] = lineTops[i - 1]! + lineHeights[i - 1]!;
+  const totalH = lineTops[sizes.length - 1]! + lineHeights[sizes.length - 1]!;
 
   // Horizontal — text-anchor handles the alignment, so all we
   // need is the x of the alignment reference point.
@@ -251,22 +265,24 @@ function buildTspanLayout(opts: {
   // the y-origin so the run block sits in the right band of
   // the box. Margins reserve space at the top / bottom edges
   // so the run block never paints inside them.
-  const totalH = Math.max(1, lineCount) * lineHeight;
-  let firstBaselineY: number;
+  let blockTop: number;
   if (textVerticalAnchor === "top") {
-    firstBaselineY = y + margins.top + fontSize;
+    blockTop = y + margins.top;
   } else if (textVerticalAnchor === "bottom") {
-    firstBaselineY = y + h - margins.bottom - totalH + fontSize;
+    blockTop = y + h - margins.bottom - totalH;
   } else {
     const innerTop = y + margins.top;
     const innerH = Math.max(0, h - margins.top - margins.bottom);
-    firstBaselineY = innerTop + (innerH - totalH) / 2 + fontSize;
+    blockTop = innerTop + (innerH - totalH) / 2;
   }
 
   return {
     textAnchorAttr: textAnchor,
     xForLine,
-    yForLine: (lineIndex: number) => firstBaselineY + lineIndex * lineHeight,
+    yForLine: (lineIndex: number) => {
+      const idx = Math.max(0, Math.min(sizes.length - 1, lineIndex));
+      return blockTop + lineTops[idx]! + sizes[idx]!;
+    },
   };
 }
 
@@ -492,14 +508,13 @@ export function createTextShape(spec: TextShapeSpec): SVGGElement {
   // when present, falling back to the legacy variant-specific
   // padding constants for plain (2 / 0) and the others (10 / 8).
   const margins = readTextMargins(g);
-  const layoutFontSize = effectiveLayoutFontSize(spec.fontSize, spec.runs);
+  const lineFontSizes = perLineMaxFontSizes(spec.fontSize, spec.runs);
   const layout = buildTspanLayout({
     x: spec.x,
     y: spec.y,
     w: spec.w,
     h: spec.h,
-    fontSize: layoutFontSize,
-    lineCount: countLines(spec.runs),
+    lineFontSizes,
     margins,
     textAnchor,
     textVerticalAnchor,
@@ -733,14 +748,13 @@ export function replaceRunsInPlace(g: SVGElement, runs: readonly TextRun[]): voi
     (g.getAttribute("data-text-vanchor") as TextVerticalAnchor | null) ??
     defaultTextVerticalAnchor(variant);
 
-  const layoutFontSize = effectiveLayoutFontSize(fontSize, runs);
+  const lineFontSizes = perLineMaxFontSizes(fontSize, runs);
   const layout = buildTspanLayout({
     x: baseX,
     y: baseY,
     w: boxW,
     h: boxH,
-    fontSize: layoutFontSize,
-    lineCount: countLines(runs),
+    lineFontSizes,
     margins,
     textAnchor,
     textVerticalAnchor,
@@ -802,8 +816,12 @@ export function replaceRunsInPlace(g: SVGElement, runs: readonly TextRun[]): voi
   // down when the text overflows.
   const autofit = g.getAttribute("data-text-autofit");
   if (autofit === "resize" && firstRect) {
-    const lineHeight = layoutFontSize * 1.4;
-    const totalH = Math.max(1, countLines(runs)) * lineHeight;
+    // Sum per-line heights — same scheme as `buildTspanLayout`'s
+    // vertical layout, so the autofit grow-to-fit calculation
+    // matches the actual painted run block exactly.
+    let totalH = 0;
+    for (const s of lineFontSizes) totalH += s * 1.4;
+    if (totalH === 0) totalH = fontSize * 1.4;
     const requiredH = totalH + margins.top + margins.bottom;
     if (requiredH > boxH) {
       firstRect.setAttribute("height", String(requiredH));
