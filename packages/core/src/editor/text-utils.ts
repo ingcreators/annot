@@ -642,16 +642,14 @@ export function rebuildCalloutTail(g: SVGElement): void {
   const edge: "top" | "right" | "bottom" | "left" =
     Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : dy > 0 ? "bottom" : "top";
 
-  // Tail base spans the FULL straight portion of the chosen edge
-  // — between the two rounded corners, with a small inset so the
-  // arcs stay intact. The user reads the callout as "the tail
-  // exits from two distinct points NEAR the top and bottom of
-  // the edge" (matching PowerPoint's `wedgeRoundRectCallout` at
-  // its widest base setting); a narrow centered base looks like
-  // the tail "snipped out" of the middle instead.
-  const BASE_INSET = 2;
-  const halfH = Math.max(0, (w - 2 * rx) / 2 - BASE_INSET);
-  const halfV = Math.max(0, (h - 2 * rx) / 2 - BASE_INSET);
+  // Tail base width — narrow (PowerPoint default). The base is
+  // POSITIONED along the chosen edge so its midpoint follows the
+  // perpendicular projection of the tail tip onto the edge, then
+  // clamped to keep the base inside the straight portion (no
+  // spillover into the rounded corners). Tip in the upper-left
+  // → tail exits the upper portion of the left edge; tip moves
+  // down → base slides down along the same edge.
+  const BASE_HALF = 8;
 
   // Build a single closed outline for `<rect rx>` + tail wedge:
   // trace the rounded perimeter, but on the tail-base edge replace
@@ -663,51 +661,53 @@ export function rebuildCalloutTail(g: SVGElement): void {
   const xR = x + w;
   const yT = y;
   const yB = y + h;
+  // Allowed range for the base midpoint on each edge — leave room
+  // for the rounded corners on either side AND for the half-base
+  // width itself.
+  const horizMidMin = xL + rx + BASE_HALF;
+  const horizMidMax = xR - rx - BASE_HALF;
+  const vertMidMin = yT + rx + BASE_HALF;
+  const vertMidMax = yB - rx - BASE_HALF;
+  const baseMidH = horizMidMax > horizMidMin ? Math.max(horizMidMin, Math.min(horizMidMax, tailX)) : (xL + xR) / 2;
+  const baseMidV = vertMidMax > vertMidMin ? Math.max(vertMidMin, Math.min(vertMidMax, tailY)) : (yT + yB) / 2;
   const segs: string[] = [];
   // Start just after the TL corner and trace clockwise.
   segs.push(`M ${xL + rx} ${yT}`);
 
   // Top edge (left → right). When the tail exits the top, divert
-  // to the tip between the two base points.
+  // to the tip between the two base points (base midpoint tracks
+  // tailX).
   if (edge === "top") {
-    const baseLeftX = Math.max(xL + rx, cx - halfH);
-    const baseRightX = Math.min(xR - rx, cx + halfH);
-    segs.push(`L ${baseLeftX} ${yT}`);
+    segs.push(`L ${baseMidH - BASE_HALF} ${yT}`);
     segs.push(`L ${tailX} ${tailY}`);
-    segs.push(`L ${baseRightX} ${yT}`);
+    segs.push(`L ${baseMidH + BASE_HALF} ${yT}`);
   }
   segs.push(`L ${xR - rx} ${yT}`);
   if (rx > 0) segs.push(`A ${rx} ${rx} 0 0 1 ${xR} ${yT + rx}`);
 
-  // Right edge (top → bottom).
+  // Right edge (top → bottom). Base midpoint tracks tailY.
   if (edge === "right") {
-    const baseTopY = Math.max(yT + rx, cy - halfV);
-    const baseBottomY = Math.min(yB - rx, cy + halfV);
-    segs.push(`L ${xR} ${baseTopY}`);
+    segs.push(`L ${xR} ${baseMidV - BASE_HALF}`);
     segs.push(`L ${tailX} ${tailY}`);
-    segs.push(`L ${xR} ${baseBottomY}`);
+    segs.push(`L ${xR} ${baseMidV + BASE_HALF}`);
   }
   segs.push(`L ${xR} ${yB - rx}`);
   if (rx > 0) segs.push(`A ${rx} ${rx} 0 0 1 ${xR - rx} ${yB}`);
 
-  // Bottom edge (right → left).
+  // Bottom edge (right → left). Base midpoint tracks tailX.
   if (edge === "bottom") {
-    const baseRightX = Math.min(xR - rx, cx + halfH);
-    const baseLeftX = Math.max(xL + rx, cx - halfH);
-    segs.push(`L ${baseRightX} ${yB}`);
+    segs.push(`L ${baseMidH + BASE_HALF} ${yB}`);
     segs.push(`L ${tailX} ${tailY}`);
-    segs.push(`L ${baseLeftX} ${yB}`);
+    segs.push(`L ${baseMidH - BASE_HALF} ${yB}`);
   }
   segs.push(`L ${xL + rx} ${yB}`);
   if (rx > 0) segs.push(`A ${rx} ${rx} 0 0 1 ${xL} ${yB - rx}`);
 
-  // Left edge (bottom → top).
+  // Left edge (bottom → top). Base midpoint tracks tailY.
   if (edge === "left") {
-    const baseBottomY = Math.min(yB - rx, cy + halfV);
-    const baseTopY = Math.max(yT + rx, cy - halfV);
-    segs.push(`L ${xL} ${baseBottomY}`);
+    segs.push(`L ${xL} ${baseMidV + BASE_HALF}`);
     segs.push(`L ${tailX} ${tailY}`);
-    segs.push(`L ${xL} ${baseTopY}`);
+    segs.push(`L ${xL} ${baseMidV - BASE_HALF}`);
   }
   segs.push(`L ${xL} ${yT + rx}`);
   if (rx > 0) segs.push(`A ${rx} ${rx} 0 0 1 ${xL + rx} ${yT}`);
