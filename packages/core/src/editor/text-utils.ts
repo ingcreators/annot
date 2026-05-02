@@ -666,69 +666,91 @@ export function rebuildCalloutTail(g: SVGElement): void {
     edge = tailY < y ? "top" : "bottom";
   }
 
-  // Tail base — narrow (PowerPoint default), SNAPPED to the
-  // corner of the chosen edge nearer to the tip's perpendicular
-  // projection. Two positions per edge (one per adjacent corner)
-  // → 8 discrete attachment points around the rect. The base
-  // doesn't slide continuously with the tip; small tip movements
-  // within one quadrant keep the same exit point on the edge,
-  // matching PowerPoint's `wedgeRoundRectCallout` behaviour the
-  // user asked for ("常に辺から出る吹き出しのポイントが移動する
-  // わけではありません").
-  const BASE_HALF = 8;
-
-  // Build a single closed outline for `<rect rx>` + tail wedge:
-  // trace the rounded perimeter, but on the tail-base edge replace
-  // the straight segment between the two base points with a
-  // detour out to the tail tip and back.
+  // PowerPoint `wedgeRoundRectCallout` — base width is 16.67% of
+  // the chosen edge length (the preset's default `adj3 = 16667`),
+  // and the base ATTACHES at the corner closer to the tip's
+  // perpendicular projection: one base point sits right at the
+  // corner-arc end, the other extends `BASE_WIDTH` along the
+  // edge. Anchoring the base at the corner (rather than centering
+  // it on the tip's projection) is what makes a slight tip move
+  // within a quadrant leave the exit point fixed.
+  const BASE_RATIO = 0.1667;
   const xL = x;
   const xR = x + w;
   const yT = y;
   const yB = y + h;
-  // Base midpoint sits just inside the rounded corner closer to
-  // the tip — `corner edge inset (rx) + half-base width` away
-  // from the corner so the base abuts the corner arc.
-  const NEAR_CORNER = rx + BASE_HALF;
-  const baseMidH = tailX < cx ? xL + NEAR_CORNER : xR - NEAR_CORNER;
-  const baseMidV = tailY < cy ? yT + NEAR_CORNER : yB - NEAR_CORNER;
+  // Base length per edge — 16.67% of the chosen edge's length.
+  // Capped to the straight portion (between the two corner arcs)
+  // so it never spills past the rounded corners on a tiny rect.
+  const baseLenH = Math.max(0, Math.min(w * BASE_RATIO, w - 2 * rx));
+  const baseLenV = Math.max(0, Math.min(h * BASE_RATIO, h - 2 * rx));
+
+  // For each edge, the base CENTER sits halfway between the
+  // edge's midpoint and the corner closer to the tip's
+  // perpendicular projection — NOT at the corner itself. So
+  // small tip movements within a quadrant keep the same exit
+  // region (the base doesn't slide), but the base sits
+  // visually between the edge midpoint and the corner endpoint
+  // (matching the user's PowerPoint reference).
+  const halfLenH = baseLenH / 2;
+  const halfLenV = baseLenV / 2;
+  // Quadrant midpoint = halfway between edge midpoint (cx / cy)
+  // and the chosen corner endpoint (xL + rx, xR - rx, yT + rx,
+  // yB - rx). Reading out which corner the tip is closer to:
+  //   tailX < cx → left corner  (top / bottom edges)
+  //   tailY < cy → top corner   (left / right edges)
+  const baseMidH =
+    tailX < cx ? (cx + (xL + rx)) / 2 : (cx + (xR - rx)) / 2;
+  const baseMidV =
+    tailY < cy ? (cy + (yT + rx)) / 2 : (cy + (yB - rx)) / 2;
+  // Resolve to the two base points on each axis. Order picked
+  // along the edge (smaller coord first, larger second) so the
+  // path-emit branches below can pick first / second by
+  // direction of travel without rederiving.
+  const baseHLow = baseMidH - halfLenH;
+  const baseHHigh = baseMidH + halfLenH;
+  const baseVLow = baseMidV - halfLenV;
+  const baseVHigh = baseMidV + halfLenV;
+
   const segs: string[] = [];
   // Start just after the TL corner and trace clockwise.
   segs.push(`M ${xL + rx} ${yT}`);
 
-  // Top edge (left → right). When the tail exits the top, divert
-  // to the tip between the two base points (base midpoint tracks
-  // tailX).
+  // Top edge (left → right). Direction of travel is
+  // increasing-X, so the first hit base point is the lower-X one.
   if (edge === "top") {
-    segs.push(`L ${baseMidH - BASE_HALF} ${yT}`);
+    segs.push(`L ${baseHLow} ${yT}`);
     segs.push(`L ${tailX} ${tailY}`);
-    segs.push(`L ${baseMidH + BASE_HALF} ${yT}`);
+    segs.push(`L ${baseHHigh} ${yT}`);
   }
   segs.push(`L ${xR - rx} ${yT}`);
   if (rx > 0) segs.push(`A ${rx} ${rx} 0 0 1 ${xR} ${yT + rx}`);
 
-  // Right edge (top → bottom). Base midpoint tracks tailY.
+  // Right edge (top → bottom). Direction is increasing-Y.
   if (edge === "right") {
-    segs.push(`L ${xR} ${baseMidV - BASE_HALF}`);
+    segs.push(`L ${xR} ${baseVLow}`);
     segs.push(`L ${tailX} ${tailY}`);
-    segs.push(`L ${xR} ${baseMidV + BASE_HALF}`);
+    segs.push(`L ${xR} ${baseVHigh}`);
   }
   segs.push(`L ${xR} ${yB - rx}`);
   if (rx > 0) segs.push(`A ${rx} ${rx} 0 0 1 ${xR - rx} ${yB}`);
 
-  // Bottom edge (right → left). Base midpoint tracks tailX.
+  // Bottom edge (right → left). Direction reverses → larger-X
+  // base point first.
   if (edge === "bottom") {
-    segs.push(`L ${baseMidH + BASE_HALF} ${yB}`);
+    segs.push(`L ${baseHHigh} ${yB}`);
     segs.push(`L ${tailX} ${tailY}`);
-    segs.push(`L ${baseMidH - BASE_HALF} ${yB}`);
+    segs.push(`L ${baseHLow} ${yB}`);
   }
   segs.push(`L ${xL + rx} ${yB}`);
   if (rx > 0) segs.push(`A ${rx} ${rx} 0 0 1 ${xL} ${yB - rx}`);
 
-  // Left edge (bottom → top). Base midpoint tracks tailY.
+  // Left edge (bottom → top). Direction reverses → larger-Y
+  // base point first.
   if (edge === "left") {
-    segs.push(`L ${xL} ${baseMidV + BASE_HALF}`);
+    segs.push(`L ${xL} ${baseVHigh}`);
     segs.push(`L ${tailX} ${tailY}`);
-    segs.push(`L ${xL} ${baseMidV - BASE_HALF}`);
+    segs.push(`L ${xL} ${baseVLow}`);
   }
   segs.push(`L ${xL} ${yT + rx}`);
   if (rx > 0) segs.push(`A ${rx} ${rx} 0 0 1 ${xL + rx} ${yT}`);
