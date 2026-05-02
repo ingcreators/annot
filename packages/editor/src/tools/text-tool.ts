@@ -180,18 +180,23 @@ export class TextTool extends ToolBase {
 
     this.#editTarget = g;
 
-    // Text-on-shape wrappers (`data-shape-kind` ∈ rect / rounded /
-    // ellipse) carry the user's drawn geometry as the visible
-    // shape. Hiding the wrapper while editing would erase that
-    // geometry from view, leaving only the editor overlay —
-    // which then looks like a sticky note (the contentEditable's
-    // styling). Instead, hide ONLY the existing `<text>` child
-    // so the text doesn't double up while the user types, and
-    // overlay a transparent contentEditable on top of the still-
-    // visible shape. Auto-bg variants (plain / sticky / callout)
-    // keep the wrapper-hidden behaviour because their visible
-    // styling IS the contentEditable's styling.
-    if (isTextOnShape(g)) {
+    // Wrappers that already paint a visible body — text-on-shape
+    // (rect / rounded / ellipse), sticky (yellow rounded body),
+    // and callout (yellow body + tail wedge) — stay visible
+    // during edit. Hiding ONLY the inner `<text>` child stops
+    // the text from double-rendering behind the contentEditable
+    // overlay; the overlay itself paints transparently on top
+    // (see `#startEditing`'s `wrapperHasVisibleBody` branch),
+    // so the body stays in view (callout's tail in particular).
+    //
+    // The `plain` variant is the lone outlier: its bg rect is
+    // `fill="none" stroke="none"`, so there's no visible body
+    // to keep. Hide the whole wrapper so the contentEditable
+    // overlay's own dashed border is the only edit-mode chrome
+    // the user sees.
+    const shapeKind = g.getAttribute("data-shape-kind");
+    const wrapperHasVisibleBody = isTextOnShape(g) || shapeKind === "sticky" || shapeKind === "callout";
+    if (wrapperHasVisibleBody) {
       const existingText = g.querySelector("text");
       if (existingText instanceof SVGElement) existingText.style.display = "none";
     } else {
@@ -231,16 +236,24 @@ export class TextTool extends ToolBase {
     const color = existing?.color || this.options.strokeColor;
     const w = existing?.width || DEFAULT_WIDTH;
     const h = existing?.height || DEFAULT_HEIGHT;
-    // For text-on-shape wrappers the underlying geometry is the
-    // visible "frame" and stays in the DOM during edit — the editor
-    // overlay must NOT paint a sticky-yellow background on top of
-    // it. Branch on the wrapper's `data-shape-kind` so the auto-bg
-    // variants (plain / sticky / callout) still get their stylized
-    // overlay (those wrappers are HIDDEN during edit, so the
-    // overlay IS the visible thing the user sees).
-    const editingTextOnShape = this.#editTarget != null && isTextOnShape(this.#editTarget);
+    // The contentEditable overlay paints a transparent body
+    // whenever the underlying wrapper already has a visible body
+    // (text-on-shape geometry, sticky's yellow rect, callout's
+    // yellow rect + tail wedge — see `#editExisting`'s
+    // `wrapperHasVisibleBody` branch). Painting a yellow bg on
+    // top of those wrappers would either double-tint the body
+    // or hide the callout's tail. The `plain` variant is the
+    // lone wrapper-hidden case — the overlay needs its own
+    // dashed border there to give the user some visual indication
+    // of the edit area.
+    const editTargetKind = this.#editTarget?.getAttribute("data-shape-kind") ?? null;
+    const wrapperHasVisibleBody =
+      this.#editTarget != null &&
+      (isTextOnShape(this.#editTarget) ||
+        editTargetKind === "sticky" ||
+        editTargetKind === "callout");
     const variant: TextVariant = this.options.textVariant ?? "sticky";
-    const showBg = !editingTextOnShape && variant !== "plain";
+    const showBg = !wrapperHasVisibleBody && variant !== "plain";
 
     // Resolve the wrapper's stored anchors so the editor's visible
     // layout matches the committed shape. Without this, a centered
@@ -270,7 +283,7 @@ export class TextTool extends ToolBase {
     // free of `display: flex`, which is known to cause caret-
     // placement quirks under contenteditable in some browsers.
     const outer = document.createElement("div");
-    outer.style.cssText = editingTextOnShape
+    outer.style.cssText = wrapperHasVisibleBody
       ? `
       display: flex;
       flex-direction: column;
