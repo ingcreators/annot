@@ -233,35 +233,216 @@ function defaultTextVerticalAnchor(variant: string | null | undefined): TextVert
   return "top";
 }
 
-/** Per-line max font size used for line-height layout. Each line's
- *  height tracks the LARGEST run on that line (PowerPoint's "single"
- *  line spacing semantics), and the total run block stacks per-line
- *  heights — so a small run block under a single large heading doesn't
- *  inherit the heading's spacing for the rest of the lines.
- *
- *  Without per-line resolution, a single global max made every line
- *  in the block as tall as the largest run anywhere, leaving wide
- *  gaps between small subsequent lines (visible after commit but not
- *  during the contentEditable edit, since the editor's CSS
- *  `line-height: 1.4` already resolves per-line).
- *
- *  The wrapper's `data-font-size` is the floor for any line that has
- *  no per-run override — empty / lone-run lines still match the
- *  document's baseline rhythm. */
-function perLineMaxFontSizes(baseFontSize: number, runs: readonly TextRun[]): number[] {
-  if (runs.length === 0) return [baseFontSize];
-  const sizes: number[] = [];
-  let cur = baseFontSize;
-  for (const run of runs) {
-    if (run.font_size != null && run.font_size > cur) cur = run.font_size;
-    if (run.line_break_after) {
-      sizes.push(cur);
-      cur = baseFontSize;
-    }
+// ─── Word-wrap (PowerPoint `bodyPr wrap="square"` equivalent) ────
+//
+// Lay runs out into "visual lines" at the wrapper's inner width.
+// Each visual line is what the renderer paints as a single tspan
+// row — explicit `line_break_after` always starts a new line; in
+// addition, runs that exceed the inner-width get split at locale-
+// aware word boundaries (`Intl.Segmenter`) so long sentences flow
+// onto subsequent lines without the user having to insert manual
+// breaks. The contentEditable overlay already wraps via CSS while
+// the user is typing; this matches the committed-state rendering.
+//
+// The runs themselves are NOT modified — wrapping is a layout-time
+// concern. Resizing the box re-runs `replaceRunsInPlace` which
+// re-wraps with the new width.
+
+/** A single tspan-equivalent fragment within a wrapped visual line:
+ *  carries its origin run's formatting along with the segment text
+ *  the wrapper computed for this line. */
+interface WrappedSegment {
+  text: string;
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+  font_size?: number;
+  font_family?: string;
+  color?: string;
+}
+
+/** A visual line — a list of segments that share a baseline. */
+interface WrappedLine {
+  segments: WrappedSegment[];
+  /** Per-line max font size (largest segment's effective font_size,
+   *  falling back to the wrapper's `data-font-size`). Drives the
+   *  line height in `buildTspanLayout`. */
+  maxFontSize: number;
+}
+
+/** Lazily-cached canvas 2D context for `measureText`. Returns null
+ *  in environments without a real canvas (jsdom, SSR) — callers
+ *  fall back to "no wrap" so the existing `<text>` layout still
+ *  renders, just without auto-wrap semantics. */
+let cachedMeasureCtx: CanvasRenderingContext2D | null | undefined = undefined;
+function getMeasureCtx(): CanvasRenderingContext2D | null {
+  if (cachedMeasureCtx !== undefined) return cachedMeasureCtx;
+  if (typeof document === "undefined") return (cachedMeasureCtx = null);
+  try {
+    const c = document.createElement("canvas");
+    cachedMeasureCtx = c.getContext("2d");
+  } catch {
+    cachedMeasureCtx = null;
   }
-  // Final line (no trailing line_break_after).
-  sizes.push(cur);
-  return sizes;
+  return cachedMeasureCtx;
+}
+
+function measureTextWidth(
+  text: string,
+  fontSize: number,
+  fontFamily: string,
+  bold: boolean,
+  italic: boolean,
+): number {
+  const ctx = getMeasureCtx();
+  if (!ctx) return 0;
+  const style = `${italic ? "italic " : ""}${bold ? "bold " : ""}`;
+  ctx.font = `${style}${fontSize}px ${fontFamily}`;
+  return ctx.measureText(text).width;
+}
+
+/** Locale-aware word segmenter. Reuses one instance — `Intl.Segmenter`
+ *  construction is non-trivial. Falls back to undefined when the
+ *  runtime doesn't expose `Intl.Segmenter` (older browsers / Node
+ *  without ICU); the wrap loop then degrades to "no segmentation"
+ *  and only respects explicit line breaks, which is fine. */
+let cachedSegmenter: Intl.Segmenter | null | undefined = undefined;
+function getWordSegmenter(): Intl.Segmenter | null {
+  if (cachedSegmenter !== undefined) return cachedSegmenter;
+  if (typeof Intl === "undefined" || typeof Intl.Segmenter === "undefined") {
+    return (cachedSegmenter = null);
+  }
+  try {
+    const locale = typeof navigator !== "undefined" ? navigator.language : undefined;
+    cachedSegmenter = new Intl.Segmenter(locale, { granularity: "word" });
+  } catch {
+    cachedSegmenter = null;
+  }
+  return cachedSegmenter;
+}
+
+const WHITESPACE_RE = /^[\s　]+$/;
+
+/** Split `runs` into visual lines bounded by `innerW`. Soft-breaks
+ *  use `Intl.Segmenter` for locale-aware word boundaries; hard-breaks
+ *  (`run.line_break_after`) always start a new line.
+ *
+ *  Leading whitespace at the start of a wrapped line is dropped (so
+ *  long sentences don't paint with an awkward leading space after
+ *  flowing onto a new visual line). Trailing whitespace stays — it
+ *  reflects the user's typing intent. */
+function wrapRunsToLines(
+  runs: readonly TextRun[],
+  innerW: number,
+  baseFontSize: number,
+  baseFontFamily: string,
+): WrappedLine[] {
+  const lines: WrappedLine[] = [];
+  let line: WrappedLine = { segments: [], maxFontSize: 0 };
+  let lineW = 0;
+  const segmenter = getWordSegmenter();
+  const pushLine = (): void => {
+    lines.push(line);
+    line = { segments: [], maxFontSize: 0 };
+    lineW = 0;
+  };
+
+  for (const run of runs) {
+    const fontSize = run.font_size ?? baseFontSize;
+    const fontFamily = run.font_family ?? baseFontFamily;
+    const bold = !!run.bold;
+    const italic = !!run.italic;
+
+    // Empty-text run on a paragraph break — still register it so the
+    // visual line carries the run's font-size (drives the empty
+    // line's height for the user-typed "blank line between paragraphs"
+    // pattern).
+    const segments: string[] = [];
+    if (run.text) {
+      if (segmenter) {
+        for (const seg of segmenter.segment(run.text)) segments.push(seg.segment);
+      } else {
+        // Coarse fallback — split on runs of whitespace, keep the
+        // whitespace as its own segment so trailing whitespace
+        // survives the round-trip. Matches what `Intl.Segmenter`'s
+        // `granularity: "word"` produces for ASCII.
+        let i = 0;
+        while (i < run.text.length) {
+          const ws = WHITESPACE_RE.test(run.text[i]!);
+          let j = i + 1;
+          while (j < run.text.length && WHITESPACE_RE.test(run.text[j]!) === ws) j++;
+          segments.push(run.text.slice(i, j));
+          i = j;
+        }
+      }
+    }
+
+    let buf = "";
+    let bufW = 0;
+    const pushBuf = (): void => {
+      if (!buf) return;
+      line.segments.push({
+        text: buf,
+        bold: run.bold,
+        italic: run.italic,
+        underline: run.underline,
+        font_size: run.font_size,
+        font_family: run.font_family,
+        color: run.color,
+      });
+      if (fontSize > line.maxFontSize) line.maxFontSize = fontSize;
+      buf = "";
+      bufW = 0;
+    };
+
+    for (const seg of segments) {
+      const isStartOfLine = line.segments.length === 0 && buf === "";
+      // Drop leading whitespace at the start of a freshly-wrapped
+      // line — a soft-broken sentence shouldn't paint with a stray
+      // leading space.
+      if (isStartOfLine && WHITESPACE_RE.test(seg)) continue;
+      const w = measureTextWidth(seg, fontSize, fontFamily, bold, italic);
+      // Soft-wrap: if adding this segment would push the line past
+      // the inner width AND the line already has content, flush the
+      // buffer to the line and start a new one. The check uses
+      // `>` (not `>=`) so segments that exactly fit don't trigger a
+      // gratuitous wrap on the next character.
+      if (lineW + w > innerW && (lineW > 0 || buf !== "")) {
+        pushBuf();
+        pushLine();
+        if (WHITESPACE_RE.test(seg)) continue;
+      }
+      buf += seg;
+      bufW += w;
+      lineW += w;
+    }
+
+    pushBuf();
+
+    // For an empty-text run with `line_break_after`, ensure the
+    // empty line still records the run's font size so the rendered
+    // gap matches the user's typing.
+    if (run.text === "" && line.segments.length === 0 && fontSize > line.maxFontSize) {
+      line.maxFontSize = fontSize;
+    }
+
+    if (run.line_break_after) pushLine();
+  }
+
+  // Flush the in-progress final line. Empty `runs` (no text at all)
+  // → keep one empty line so the layout still emits a baseline.
+  if (line.segments.length > 0 || lines.length === 0) {
+    if (line.maxFontSize === 0) line.maxFontSize = baseFontSize;
+    lines.push(line);
+  }
+
+  // Empty-line max-size fallback to keep the gap consistent with
+  // the wrapper's baseline font.
+  for (const l of lines) {
+    if (l.maxFontSize === 0) l.maxFontSize = baseFontSize;
+  }
+
+  return lines;
 }
 
 /** Compute the (x, y) of a `<tspan>` that starts a new line +
@@ -562,13 +743,14 @@ export function createTextShape(spec: TextShapeSpec): SVGGElement {
   // when present, falling back to the legacy variant-specific
   // padding constants for plain (2 / 0) and the others (10 / 8).
   const margins = readTextMargins(g);
-  const lineFontSizes = perLineMaxFontSizes(spec.fontSize, spec.runs);
+  const innerW = Math.max(0, spec.w - margins.left - margins.right);
+  const wrappedLines = wrapRunsToLines(spec.runs, innerW, spec.fontSize, spec.fontFamily);
   const layout = buildTspanLayout({
     x: spec.x,
     y: spec.y,
     w: spec.w,
     h: spec.h,
-    lineFontSizes,
+    lineFontSizes: wrappedLines.map((l) => l.maxFontSize),
     margins,
     textAnchor,
     textVerticalAnchor,
@@ -581,34 +763,57 @@ export function createTextShape(spec: TextShapeSpec): SVGGElement {
   textEl.setAttribute("clip-path", `url(#${clipId})`);
   textEl.setAttribute("text-anchor", layout.textAnchorAttr);
   textEl.style.pointerEvents = "none";
-
-  let lineIndex = 0;
-  let isStartOfLine = true;
-  for (const run of spec.runs) {
-    const tspan = document.createElementNS(SVG_NS, "tspan");
-    if (isStartOfLine) {
-      tspan.setAttribute("x", String(layout.xForLine));
-      tspan.setAttribute("y", String(layout.yForLine(lineIndex)));
-    }
-    if (run.bold) tspan.setAttribute("font-weight", "bold");
-    if (run.italic) tspan.setAttribute("font-style", "italic");
-    if (run.underline) tspan.setAttribute("text-decoration", "underline");
-    if (run.font_size != null) tspan.setAttribute("font-size", String(run.font_size));
-    if (run.font_family != null) tspan.setAttribute("font-family", run.font_family);
-    if (run.color != null) tspan.setAttribute("fill", run.color);
-    tspan.textContent = run.text;
-    textEl.appendChild(tspan);
-
-    if (run.line_break_after) {
-      lineIndex += 1;
-      isStartOfLine = true;
-    } else {
-      isStartOfLine = false;
-    }
-  }
+  emitWrappedLineTspans(textEl, wrappedLines, layout);
   g.appendChild(textEl);
 
   return g;
+}
+
+/** Emit one or more `<tspan>` elements per wrapped visual line into
+ *  the parent `<text>`. The first segment of each line carries the
+ *  explicit `x` / `y` attrs; later segments on the same line inherit
+ *  position via SVG's text-flow rules. Used by both `createTextShape`
+ *  and `replaceRunsInPlace` so the wrap layout is identical across
+ *  the create / re-flow paths. */
+function emitWrappedLineTspans(
+  textEl: SVGTextElement,
+  lines: readonly WrappedLine[],
+  layout: TspanLayout,
+): void {
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!;
+    const x = layout.xForLine;
+    const y = layout.yForLine(i);
+    if (line.segments.length === 0) {
+      // Empty line — emit a placeholder tspan so the line still
+      // takes up its slot in the run block. Without it,
+      // `<text>` collapses adjacent baselines and the user-typed
+      // empty line vanishes from the rendered output.
+      const tspan = document.createElementNS(SVG_NS, "tspan");
+      tspan.setAttribute("x", String(x));
+      tspan.setAttribute("y", String(y));
+      tspan.textContent = "";
+      textEl.appendChild(tspan);
+      continue;
+    }
+    let isFirst = true;
+    for (const seg of line.segments) {
+      const tspan = document.createElementNS(SVG_NS, "tspan");
+      if (isFirst) {
+        tspan.setAttribute("x", String(x));
+        tspan.setAttribute("y", String(y));
+        isFirst = false;
+      }
+      if (seg.bold) tspan.setAttribute("font-weight", "bold");
+      if (seg.italic) tspan.setAttribute("font-style", "italic");
+      if (seg.underline) tspan.setAttribute("text-decoration", "underline");
+      if (seg.font_size != null) tspan.setAttribute("font-size", String(seg.font_size));
+      if (seg.font_family != null) tspan.setAttribute("font-family", seg.font_family);
+      if (seg.color != null) tspan.setAttribute("fill", seg.color);
+      tspan.textContent = seg.text;
+      textEl.appendChild(tspan);
+    }
+  }
 }
 
 /**
@@ -901,7 +1106,9 @@ export function replaceRunsInPlace(g: SVGElement, runs: readonly TextRun[]): voi
     (g.getAttribute("data-text-vanchor") as TextVerticalAnchor | null) ??
     defaultTextVerticalAnchor(variant);
 
-  const lineFontSizes = perLineMaxFontSizes(fontSize, runs);
+  const innerW = Math.max(0, boxW - margins.left - margins.right);
+  const wrappedLines = wrapRunsToLines(runs, innerW, fontSize, fontFamily);
+  const lineFontSizes = wrappedLines.map((l) => l.maxFontSize);
   const layout = buildTspanLayout({
     x: baseX,
     y: baseY,
@@ -935,31 +1142,7 @@ export function replaceRunsInPlace(g: SVGElement, runs: readonly TextRun[]): voi
   textEl.setAttribute("text-anchor", layout.textAnchorAttr);
   textEl.style.pointerEvents = "none";
   while (textEl.firstChild) textEl.removeChild(textEl.firstChild);
-
-  let lineIndex = 0;
-  let isStartOfLine = true;
-  for (const run of runs) {
-    const tspan = document.createElementNS(SVG_NS, "tspan");
-    if (isStartOfLine) {
-      tspan.setAttribute("x", String(layout.xForLine));
-      tspan.setAttribute("y", String(layout.yForLine(lineIndex)));
-    }
-    if (run.bold) tspan.setAttribute("font-weight", "bold");
-    if (run.italic) tspan.setAttribute("font-style", "italic");
-    if (run.underline) tspan.setAttribute("text-decoration", "underline");
-    if (run.font_size != null) tspan.setAttribute("font-size", String(run.font_size));
-    if (run.font_family != null) tspan.setAttribute("font-family", run.font_family);
-    if (run.color != null) tspan.setAttribute("fill", run.color);
-    tspan.textContent = run.text;
-    textEl.appendChild(tspan);
-
-    if (run.line_break_after) {
-      lineIndex += 1;
-      isStartOfLine = true;
-    } else {
-      isStartOfLine = false;
-    }
-  }
+  emitWrappedLineTspans(textEl, wrappedLines, layout);
 
   // Autofit (`data-text-autofit="resize"`) — grow the geometry
   // primitive's height so the run block fits inside margins +
