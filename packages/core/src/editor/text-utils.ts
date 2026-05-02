@@ -685,67 +685,72 @@ export function rebuildCalloutTail(g: SVGElement): void {
   const baseLenH = Math.max(0, Math.min(w * BASE_RATIO, w - 2 * rx));
   const baseLenV = Math.max(0, Math.min(h * BASE_RATIO, h - 2 * rx));
 
-  // For each edge, the base attaches AT the rounded-corner end
-  // closer to the tip's perpendicular projection and extends
-  // along the edge for `baseLen{H,V}`.
-  //   - Top / bottom edges: corner picked by `tailX vs cx`. Base
-  //     near corner means one end at `xL + rx` or `xR - rx`.
-  //   - Left / right edges: corner picked by `tailY vs cy`.
-  // The "base near" coordinate is the one AT the corner; the
-  // "base far" coordinate is `BASE_LEN` further along the edge.
-  const baseHNear = tailX < cx ? xL + rx : xR - rx;
-  const baseHFar = tailX < cx ? xL + rx + baseLenH : xR - rx - baseLenH;
-  const baseVNear = tailY < cy ? yT + rx : yB - rx;
-  const baseVFar = tailY < cy ? yT + rx + baseLenV : yB - rx - baseLenV;
+  // For each edge, the base CENTER sits halfway between the
+  // edge's midpoint and the corner closer to the tip's
+  // perpendicular projection — NOT at the corner itself. So
+  // small tip movements within a quadrant keep the same exit
+  // region (the base doesn't slide), but the base sits
+  // visually between the edge midpoint and the corner endpoint
+  // (matching the user's PowerPoint reference).
+  const halfLenH = baseLenH / 2;
+  const halfLenV = baseLenV / 2;
+  // Quadrant midpoint = halfway between edge midpoint (cx / cy)
+  // and the chosen corner endpoint (xL + rx, xR - rx, yT + rx,
+  // yB - rx). Reading out which corner the tip is closer to:
+  //   tailX < cx → left corner  (top / bottom edges)
+  //   tailY < cy → top corner   (left / right edges)
+  const baseMidH =
+    tailX < cx ? (cx + (xL + rx)) / 2 : (cx + (xR - rx)) / 2;
+  const baseMidV =
+    tailY < cy ? (cy + (yT + rx)) / 2 : (cy + (yB - rx)) / 2;
+  // Resolve to the two base points on each axis. Order picked
+  // along the edge (smaller coord first, larger second) so the
+  // path-emit branches below can pick first / second by
+  // direction of travel without rederiving.
+  const baseHLow = baseMidH - halfLenH;
+  const baseHHigh = baseMidH + halfLenH;
+  const baseVLow = baseMidV - halfLenV;
+  const baseVHigh = baseMidV + halfLenV;
 
   const segs: string[] = [];
   // Start just after the TL corner and trace clockwise.
   segs.push(`M ${xL + rx} ${yT}`);
 
-  // Top edge (left → right). When the tail exits the top, divert
-  // to the tip between the two base points. Order along the
-  // direction of travel: first the base point we hit first, then
-  // tip, then the other base point.
+  // Top edge (left → right). Direction of travel is
+  // increasing-X, so the first hit base point is the lower-X one.
   if (edge === "top") {
-    const first = Math.min(baseHNear, baseHFar);
-    const second = Math.max(baseHNear, baseHFar);
-    segs.push(`L ${first} ${yT}`);
+    segs.push(`L ${baseHLow} ${yT}`);
     segs.push(`L ${tailX} ${tailY}`);
-    segs.push(`L ${second} ${yT}`);
+    segs.push(`L ${baseHHigh} ${yT}`);
   }
   segs.push(`L ${xR - rx} ${yT}`);
   if (rx > 0) segs.push(`A ${rx} ${rx} 0 0 1 ${xR} ${yT + rx}`);
 
-  // Right edge (top → bottom).
+  // Right edge (top → bottom). Direction is increasing-Y.
   if (edge === "right") {
-    const first = Math.min(baseVNear, baseVFar);
-    const second = Math.max(baseVNear, baseVFar);
-    segs.push(`L ${xR} ${first}`);
+    segs.push(`L ${xR} ${baseVLow}`);
     segs.push(`L ${tailX} ${tailY}`);
-    segs.push(`L ${xR} ${second}`);
+    segs.push(`L ${xR} ${baseVHigh}`);
   }
   segs.push(`L ${xR} ${yB - rx}`);
   if (rx > 0) segs.push(`A ${rx} ${rx} 0 0 1 ${xR - rx} ${yB}`);
 
-  // Bottom edge (right → left). Direction is reversed, so the
-  // first/second swap mirrors that.
+  // Bottom edge (right → left). Direction reverses → larger-X
+  // base point first.
   if (edge === "bottom") {
-    const first = Math.max(baseHNear, baseHFar);
-    const second = Math.min(baseHNear, baseHFar);
-    segs.push(`L ${first} ${yB}`);
+    segs.push(`L ${baseHHigh} ${yB}`);
     segs.push(`L ${tailX} ${tailY}`);
-    segs.push(`L ${second} ${yB}`);
+    segs.push(`L ${baseHLow} ${yB}`);
   }
   segs.push(`L ${xL + rx} ${yB}`);
   if (rx > 0) segs.push(`A ${rx} ${rx} 0 0 1 ${xL} ${yB - rx}`);
 
-  // Left edge (bottom → top).
+  // Left edge (bottom → top). Direction reverses → larger-Y
+  // base point first.
   if (edge === "left") {
-    const first = Math.max(baseVNear, baseVFar);
-    const second = Math.min(baseVNear, baseVFar);
-    segs.push(`L ${xL} ${first}`);
+    segs.push(`L ${xL} ${baseVHigh}`);
     segs.push(`L ${tailX} ${tailY}`);
-    segs.push(`L ${xL} ${second}`);
+    segs.push(`L ${xL} ${baseVLow}`);
   }
   segs.push(`L ${xL} ${yT + rx}`);
   if (rx > 0) segs.push(`A ${rx} ${rx} 0 0 1 ${xL + rx} ${yT}`);
