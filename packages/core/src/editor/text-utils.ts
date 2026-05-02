@@ -509,11 +509,15 @@ export function createTextShape(spec: TextShapeSpec): SVGGElement {
     bg.setAttribute("stroke", "rgba(0,0,0,0.15)");
     bg.setAttribute("stroke-width", "1");
   } else {
-    // callout
+    // callout — bg rect carries the FILL only; the visible outer
+    // outline (rect + tail combined into a single seamless
+    // perimeter, with no divider line where the tail meets the
+    // rect edge) is drawn by the sibling `<path>` built in
+    // `rebuildCalloutTail`. PowerPoint's `wedgeRoundRectCallout`
+    // preset paints the same way.
     bg.setAttribute("rx", "8");
     bg.setAttribute("fill", stickyBgFor(spec.color));
-    bg.setAttribute("stroke", "rgba(0,0,0,0.25)");
-    bg.setAttribute("stroke-width", "1");
+    bg.setAttribute("stroke", "none");
   }
   g.appendChild(bg);
 
@@ -624,40 +628,86 @@ export function rebuildCalloutTail(g: SVGElement): void {
   const y = Number.parseFloat(bg.getAttribute("y") || "0");
   const w = Number.parseFloat(bg.getAttribute("width") || "0");
   const h = Number.parseFloat(bg.getAttribute("height") || "0");
+  const rx = Number.parseFloat(bg.getAttribute("rx") || "0");
   const tailX = Number.parseFloat(g.getAttribute("data-tail-x") || String(x - 30));
   const tailY = Number.parseFloat(g.getAttribute("data-tail-y") || String(y + h + 40));
 
-  // Pick the closest edge midpoint as the base. The tail looks most
-  // natural when it grows from the side facing the tip — bottom edge
-  // for tips below the box, top for tips above, etc.
+  // Pick the closest edge as the tail base. The tail looks most
+  // natural when it grows from the side facing the tip — bottom
+  // edge for tips below the box, top for tips above, etc.
   const cx = x + w / 2;
   const cy = y + h / 2;
   const dx = tailX - cx;
   const dy = tailY - cy;
-  const horizontal = Math.abs(dx) > Math.abs(dy);
+  const edge: "top" | "right" | "bottom" | "left" =
+    Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : dy > 0 ? "bottom" : "top";
 
-  let baseX1: number;
-  let baseY1: number;
-  let baseX2: number;
-  let baseY2: number;
-  if (horizontal) {
-    // Tail exits the left or right edge, base spans vertically.
-    const baseX = dx > 0 ? x + w : x;
-    const half = Math.min(16, h * 0.2);
-    baseX1 = baseX;
-    baseY1 = cy - half;
-    baseX2 = baseX;
-    baseY2 = cy + half;
-  } else {
-    // Tail exits the top or bottom edge, base spans horizontally.
-    const baseY = dy > 0 ? y + h : y;
-    const half = Math.min(16, w * 0.2);
-    baseX1 = cx - half;
-    baseY1 = baseY;
-    baseX2 = cx + half;
-    baseY2 = baseY;
+  // Half-width of the tail base on the chosen edge — keeps the
+  // base from spilling past the rect's rounded corners.
+  const halfH = Math.max(0, Math.min(16, (w - 2 * rx) * 0.5, w * 0.2));
+  const halfV = Math.max(0, Math.min(16, (h - 2 * rx) * 0.5, h * 0.2));
+
+  // Build a single closed outline for `<rect rx>` + tail wedge:
+  // trace the rounded perimeter, but on the tail-base edge replace
+  // the straight segment between the two base points with a
+  // detour out to the tail tip and back. PowerPoint's
+  // `wedgeRoundRectCallout` paints the same way — no inner divider
+  // line where the tail meets the rect.
+  const xL = x;
+  const xR = x + w;
+  const yT = y;
+  const yB = y + h;
+  const segs: string[] = [];
+  // Start just after the TL corner and trace clockwise.
+  segs.push(`M ${xL + rx} ${yT}`);
+
+  // Top edge (left → right). When the tail exits the top, divert
+  // to the tip between the two base points.
+  if (edge === "top") {
+    const baseLeftX = Math.max(xL + rx, cx - halfH);
+    const baseRightX = Math.min(xR - rx, cx + halfH);
+    segs.push(`L ${baseLeftX} ${yT}`);
+    segs.push(`L ${tailX} ${tailY}`);
+    segs.push(`L ${baseRightX} ${yT}`);
   }
-  tail.setAttribute("d", `M ${baseX1} ${baseY1} L ${tailX} ${tailY} L ${baseX2} ${baseY2} Z`);
+  segs.push(`L ${xR - rx} ${yT}`);
+  if (rx > 0) segs.push(`A ${rx} ${rx} 0 0 1 ${xR} ${yT + rx}`);
+
+  // Right edge (top → bottom).
+  if (edge === "right") {
+    const baseTopY = Math.max(yT + rx, cy - halfV);
+    const baseBottomY = Math.min(yB - rx, cy + halfV);
+    segs.push(`L ${xR} ${baseTopY}`);
+    segs.push(`L ${tailX} ${tailY}`);
+    segs.push(`L ${xR} ${baseBottomY}`);
+  }
+  segs.push(`L ${xR} ${yB - rx}`);
+  if (rx > 0) segs.push(`A ${rx} ${rx} 0 0 1 ${xR - rx} ${yB}`);
+
+  // Bottom edge (right → left).
+  if (edge === "bottom") {
+    const baseRightX = Math.min(xR - rx, cx + halfH);
+    const baseLeftX = Math.max(xL + rx, cx - halfH);
+    segs.push(`L ${baseRightX} ${yB}`);
+    segs.push(`L ${tailX} ${tailY}`);
+    segs.push(`L ${baseLeftX} ${yB}`);
+  }
+  segs.push(`L ${xL + rx} ${yB}`);
+  if (rx > 0) segs.push(`A ${rx} ${rx} 0 0 1 ${xL} ${yB - rx}`);
+
+  // Left edge (bottom → top).
+  if (edge === "left") {
+    const baseBottomY = Math.min(yB - rx, cy + halfV);
+    const baseTopY = Math.max(yT + rx, cy - halfV);
+    segs.push(`L ${xL} ${baseBottomY}`);
+    segs.push(`L ${tailX} ${tailY}`);
+    segs.push(`L ${xL} ${baseTopY}`);
+  }
+  segs.push(`L ${xL} ${yT + rx}`);
+  if (rx > 0) segs.push(`A ${rx} ${rx} 0 0 1 ${xL + rx} ${yT}`);
+
+  segs.push("Z");
+  tail.setAttribute("d", segs.join(" "));
 }
 
 /**
