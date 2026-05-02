@@ -666,69 +666,86 @@ export function rebuildCalloutTail(g: SVGElement): void {
     edge = tailY < y ? "top" : "bottom";
   }
 
-  // Tail base — narrow (PowerPoint default), SNAPPED to the
-  // corner of the chosen edge nearer to the tip's perpendicular
-  // projection. Two positions per edge (one per adjacent corner)
-  // → 8 discrete attachment points around the rect. The base
-  // doesn't slide continuously with the tip; small tip movements
-  // within one quadrant keep the same exit point on the edge,
-  // matching PowerPoint's `wedgeRoundRectCallout` behaviour the
-  // user asked for ("常に辺から出る吹き出しのポイントが移動する
-  // わけではありません").
-  const BASE_HALF = 8;
-
-  // Build a single closed outline for `<rect rx>` + tail wedge:
-  // trace the rounded perimeter, but on the tail-base edge replace
-  // the straight segment between the two base points with a
-  // detour out to the tail tip and back.
+  // PowerPoint `wedgeRoundRectCallout` — base width is 16.67% of
+  // the chosen edge length (the preset's default `adj3 = 16667`),
+  // and the base ATTACHES at the corner closer to the tip's
+  // perpendicular projection: one base point sits right at the
+  // corner-arc end, the other extends `BASE_WIDTH` along the
+  // edge. Anchoring the base at the corner (rather than centering
+  // it on the tip's projection) is what makes a slight tip move
+  // within a quadrant leave the exit point fixed.
+  const BASE_RATIO = 0.1667;
   const xL = x;
   const xR = x + w;
   const yT = y;
   const yB = y + h;
-  // Base midpoint sits just inside the rounded corner closer to
-  // the tip — `corner edge inset (rx) + half-base width` away
-  // from the corner so the base abuts the corner arc.
-  const NEAR_CORNER = rx + BASE_HALF;
-  const baseMidH = tailX < cx ? xL + NEAR_CORNER : xR - NEAR_CORNER;
-  const baseMidV = tailY < cy ? yT + NEAR_CORNER : yB - NEAR_CORNER;
+  // Base length per edge — 16.67% of the chosen edge's length.
+  // Capped to the straight portion (between the two corner arcs)
+  // so it never spills past the rounded corners on a tiny rect.
+  const baseLenH = Math.max(0, Math.min(w * BASE_RATIO, w - 2 * rx));
+  const baseLenV = Math.max(0, Math.min(h * BASE_RATIO, h - 2 * rx));
+
+  // For each edge, the base attaches AT the rounded-corner end
+  // closer to the tip's perpendicular projection and extends
+  // along the edge for `baseLen{H,V}`.
+  //   - Top / bottom edges: corner picked by `tailX vs cx`. Base
+  //     near corner means one end at `xL + rx` or `xR - rx`.
+  //   - Left / right edges: corner picked by `tailY vs cy`.
+  // The "base near" coordinate is the one AT the corner; the
+  // "base far" coordinate is `BASE_LEN` further along the edge.
+  const baseHNear = tailX < cx ? xL + rx : xR - rx;
+  const baseHFar = tailX < cx ? xL + rx + baseLenH : xR - rx - baseLenH;
+  const baseVNear = tailY < cy ? yT + rx : yB - rx;
+  const baseVFar = tailY < cy ? yT + rx + baseLenV : yB - rx - baseLenV;
+
   const segs: string[] = [];
   // Start just after the TL corner and trace clockwise.
   segs.push(`M ${xL + rx} ${yT}`);
 
   // Top edge (left → right). When the tail exits the top, divert
-  // to the tip between the two base points (base midpoint tracks
-  // tailX).
+  // to the tip between the two base points. Order along the
+  // direction of travel: first the base point we hit first, then
+  // tip, then the other base point.
   if (edge === "top") {
-    segs.push(`L ${baseMidH - BASE_HALF} ${yT}`);
+    const first = Math.min(baseHNear, baseHFar);
+    const second = Math.max(baseHNear, baseHFar);
+    segs.push(`L ${first} ${yT}`);
     segs.push(`L ${tailX} ${tailY}`);
-    segs.push(`L ${baseMidH + BASE_HALF} ${yT}`);
+    segs.push(`L ${second} ${yT}`);
   }
   segs.push(`L ${xR - rx} ${yT}`);
   if (rx > 0) segs.push(`A ${rx} ${rx} 0 0 1 ${xR} ${yT + rx}`);
 
-  // Right edge (top → bottom). Base midpoint tracks tailY.
+  // Right edge (top → bottom).
   if (edge === "right") {
-    segs.push(`L ${xR} ${baseMidV - BASE_HALF}`);
+    const first = Math.min(baseVNear, baseVFar);
+    const second = Math.max(baseVNear, baseVFar);
+    segs.push(`L ${xR} ${first}`);
     segs.push(`L ${tailX} ${tailY}`);
-    segs.push(`L ${xR} ${baseMidV + BASE_HALF}`);
+    segs.push(`L ${xR} ${second}`);
   }
   segs.push(`L ${xR} ${yB - rx}`);
   if (rx > 0) segs.push(`A ${rx} ${rx} 0 0 1 ${xR - rx} ${yB}`);
 
-  // Bottom edge (right → left). Base midpoint tracks tailX.
+  // Bottom edge (right → left). Direction is reversed, so the
+  // first/second swap mirrors that.
   if (edge === "bottom") {
-    segs.push(`L ${baseMidH + BASE_HALF} ${yB}`);
+    const first = Math.max(baseHNear, baseHFar);
+    const second = Math.min(baseHNear, baseHFar);
+    segs.push(`L ${first} ${yB}`);
     segs.push(`L ${tailX} ${tailY}`);
-    segs.push(`L ${baseMidH - BASE_HALF} ${yB}`);
+    segs.push(`L ${second} ${yB}`);
   }
   segs.push(`L ${xL + rx} ${yB}`);
   if (rx > 0) segs.push(`A ${rx} ${rx} 0 0 1 ${xL} ${yB - rx}`);
 
-  // Left edge (bottom → top). Base midpoint tracks tailY.
+  // Left edge (bottom → top).
   if (edge === "left") {
-    segs.push(`L ${xL} ${baseMidV + BASE_HALF}`);
+    const first = Math.max(baseVNear, baseVFar);
+    const second = Math.min(baseVNear, baseVFar);
+    segs.push(`L ${xL} ${first}`);
     segs.push(`L ${tailX} ${tailY}`);
-    segs.push(`L ${xL} ${baseMidV - BASE_HALF}`);
+    segs.push(`L ${xL} ${second}`);
   }
   segs.push(`L ${xL} ${yT + rx}`);
   if (rx > 0) segs.push(`A ${rx} ${rx} 0 0 1 ${xL + rx} ${yT}`);
