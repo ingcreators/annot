@@ -642,10 +642,16 @@ export function rebuildCalloutTail(g: SVGElement): void {
   const edge: "top" | "right" | "bottom" | "left" =
     Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : dy > 0 ? "bottom" : "top";
 
-  // Half-width of the tail base on the chosen edge — keeps the
-  // base from spilling past the rect's rounded corners.
-  const halfH = Math.max(0, Math.min(16, (w - 2 * rx) * 0.5, w * 0.2));
-  const halfV = Math.max(0, Math.min(16, (h - 2 * rx) * 0.5, h * 0.2));
+  // Tail base spans the FULL straight portion of the chosen edge
+  // — between the two rounded corners, with a small inset so the
+  // arcs stay intact. The user reads the callout as "the tail
+  // exits from two distinct points NEAR the top and bottom of
+  // the edge" (matching PowerPoint's `wedgeRoundRectCallout` at
+  // its widest base setting); a narrow centered base looks like
+  // the tail "snipped out" of the middle instead.
+  const BASE_INSET = 2;
+  const halfH = Math.max(0, (w - 2 * rx) / 2 - BASE_INSET);
+  const halfV = Math.max(0, (h - 2 * rx) / 2 - BASE_INSET);
 
   // Build a single closed outline for `<rect rx>` + tail wedge:
   // trace the rounded perimeter, but on the tail-base edge replace
