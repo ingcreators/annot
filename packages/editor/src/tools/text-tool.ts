@@ -525,9 +525,23 @@ export class TextTool extends ToolBase {
     const promoted = this.#promotedFromBareRect;
     this.#promotedFromBareRect = false;
 
-    // Restore the inner `<text>` visibility — it was hidden during
-    // edit so the user only saw the contentEditable overlay, not
-    // double-rendered text behind it.
+    // Restore the wrapper's visibility — `#editExisting` hides the
+    // WHOLE wrapper for auto-bg variants (plain / sticky / callout)
+    // so only the contentEditable overlay paints the yellow bg
+    // during edit. Without restoring it on commit, the wrapper stays
+    // `display: none` and the yellow area + text both vanish (user
+    // bug: "Sticky note の Autofit を変更すると黄色いエリアが透明
+    // になって文字も見えなくなる" — the autofit / margin / color /
+    // anchor changes during edit are fine; the symptom shows up
+    // when the user commits the edit and the wrapper that's been
+    // hidden the whole time fails to come back).
+    //
+    // Text-on-shape wrappers don't have `g.style.display` set
+    // (only the inner `<text>` was hidden, so the user-drawn shape
+    // stays visible underneath the overlay), but clearing
+    // `g.style.display` is a no-op there — clearing both is
+    // idempotent and keeps this branch single-path.
+    wrapper.style.display = "";
     const innerText = wrapper.querySelector("text");
     if (innerText instanceof SVGElement) innerText.style.display = "";
 
