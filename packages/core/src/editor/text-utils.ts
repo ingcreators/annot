@@ -982,6 +982,12 @@ export function replaceRunsInPlace(g: SVGElement, runs: readonly TextRun[]): voi
       // doesn't get cut at the previous box bottom.
       const clipRect = g.querySelector("clipPath > rect");
       if (clipRect instanceof Element) clipRect.setAttribute("height", String(requiredH));
+      // Callout outline path is built off the bg `<rect>`'s
+      // current bounds — without this, an autofit grow leaves
+      // the outline at the OLD bounds and the user sees a
+      // residual horizontal line where the rect used to end.
+      // No-op for plain / sticky / non-callout variants.
+      rebuildCalloutTail(g);
       // Re-run layout once with the grown box so middle / bottom
       // anchors recompute against the new height. Recursive call
       // is safe because the autofit branch is a no-op once the
