@@ -148,6 +148,22 @@ body {
   cursor: default;
   display: block;
   margin: 20px auto;
+  /* SVG `<text>` is selectable by default. During a drag — especially
+     when smart-guide overlays appear and the cursor crosses an
+     annotation's text — the browser would otherwise interpret the
+     pointer travel as a text-selection range and paint the blue
+     highlight on the just-touched run. The contentEditable text-edit
+     overlay opts back in via its own inline `user-select: text`. */
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* The contentEditable overlay lives inside a `<foreignObject>` —
+   bring text selection back so the user can mark / replace runs
+   while editing. */
+#svg-root foreignObject [contenteditable="true"] {
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 #statusbar {
