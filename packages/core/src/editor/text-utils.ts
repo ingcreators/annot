@@ -632,15 +632,39 @@ export function rebuildCalloutTail(g: SVGElement): void {
   const tailX = Number.parseFloat(g.getAttribute("data-tail-x") || String(x - 30));
   const tailY = Number.parseFloat(g.getAttribute("data-tail-y") || String(y + h + 40));
 
-  // Pick the closest edge as the tail base. The tail looks most
-  // natural when it grows from the side facing the tip — bottom
-  // edge for tips below the box, top for tips above, etc.
+  // Pick the edge by the tip's OVERHANG — how far the tip sits
+  // outside the rect on each axis. PowerPoint's
+  // `wedgeRoundRectCallout` exits whichever side faces the tip:
+  //
+  //   - Tip outside the X range only → exits left / right edge
+  //   - Tip outside the Y range only → exits top / bottom edge
+  //   - Tip outside in BOTH directions (corner zone) → exits
+  //     whichever side has the larger overhang. So a tip below
+  //     and slightly right of the box exits the BOTTOM edge,
+  //     not the right edge — matching PowerPoint and the user's
+  //     reference screenshots.
+  //
+  // Earlier revisions used `|dx| vs |dy|` from the box CENTER,
+  // which incorrectly picks left/right for any tip more than
+  // half-w to the side, even when the tip is way below or
+  // above the box.
   const cx = x + w / 2;
   const cy = y + h / 2;
-  const dx = tailX - cx;
-  const dy = tailY - cy;
-  const edge: "top" | "right" | "bottom" | "left" =
-    Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : dy > 0 ? "bottom" : "top";
+  const horizOverhang = tailX < x ? x - tailX : tailX > x + w ? tailX - (x + w) : 0;
+  const vertOverhang = tailY < y ? y - tailY : tailY > y + h ? tailY - (y + h) : 0;
+  let edge: "top" | "right" | "bottom" | "left";
+  if (horizOverhang === 0 && vertOverhang === 0) {
+    // Tip inside the rect — degenerate. Fall back to a center-
+    // relative pick so a freshly-promoted callout with the
+    // default tail at the corner still draws something.
+    const dx = tailX - cx;
+    const dy = tailY - cy;
+    edge = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : dy > 0 ? "bottom" : "top";
+  } else if (horizOverhang > vertOverhang) {
+    edge = tailX < x ? "left" : "right";
+  } else {
+    edge = tailY < y ? "top" : "bottom";
+  }
 
   // Tail base — narrow (PowerPoint default), SNAPPED to the
   // corner of the chosen edge nearer to the tip's perpendicular
