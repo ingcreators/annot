@@ -642,34 +642,31 @@ export function rebuildCalloutTail(g: SVGElement): void {
   const edge: "top" | "right" | "bottom" | "left" =
     Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : dy > 0 ? "bottom" : "top";
 
-  // Tail base width — narrow (PowerPoint default). The base is
-  // POSITIONED along the chosen edge so its midpoint follows the
-  // perpendicular projection of the tail tip onto the edge, then
-  // clamped to keep the base inside the straight portion (no
-  // spillover into the rounded corners). Tip in the upper-left
-  // → tail exits the upper portion of the left edge; tip moves
-  // down → base slides down along the same edge.
+  // Tail base — narrow (PowerPoint default), SNAPPED to the
+  // corner of the chosen edge nearer to the tip's perpendicular
+  // projection. Two positions per edge (one per adjacent corner)
+  // → 8 discrete attachment points around the rect. The base
+  // doesn't slide continuously with the tip; small tip movements
+  // within one quadrant keep the same exit point on the edge,
+  // matching PowerPoint's `wedgeRoundRectCallout` behaviour the
+  // user asked for ("常に辺から出る吹き出しのポイントが移動する
+  // わけではありません").
   const BASE_HALF = 8;
 
   // Build a single closed outline for `<rect rx>` + tail wedge:
   // trace the rounded perimeter, but on the tail-base edge replace
   // the straight segment between the two base points with a
-  // detour out to the tail tip and back. PowerPoint's
-  // `wedgeRoundRectCallout` paints the same way — no inner divider
-  // line where the tail meets the rect.
+  // detour out to the tail tip and back.
   const xL = x;
   const xR = x + w;
   const yT = y;
   const yB = y + h;
-  // Allowed range for the base midpoint on each edge — leave room
-  // for the rounded corners on either side AND for the half-base
-  // width itself.
-  const horizMidMin = xL + rx + BASE_HALF;
-  const horizMidMax = xR - rx - BASE_HALF;
-  const vertMidMin = yT + rx + BASE_HALF;
-  const vertMidMax = yB - rx - BASE_HALF;
-  const baseMidH = horizMidMax > horizMidMin ? Math.max(horizMidMin, Math.min(horizMidMax, tailX)) : (xL + xR) / 2;
-  const baseMidV = vertMidMax > vertMidMin ? Math.max(vertMidMin, Math.min(vertMidMax, tailY)) : (yT + yB) / 2;
+  // Base midpoint sits just inside the rounded corner closer to
+  // the tip — `corner edge inset (rx) + half-base width` away
+  // from the corner so the base abuts the corner arc.
+  const NEAR_CORNER = rx + BASE_HALF;
+  const baseMidH = tailX < cx ? xL + NEAR_CORNER : xR - NEAR_CORNER;
+  const baseMidV = tailY < cy ? yT + NEAR_CORNER : yB - NEAR_CORNER;
   const segs: string[] = [];
   // Start just after the TL corner and trace clockwise.
   segs.push(`M ${xL + rx} ${yT}`);
