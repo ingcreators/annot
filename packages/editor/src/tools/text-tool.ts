@@ -5,7 +5,6 @@ import {
   isTextOnShape,
   readTextShapeSpec,
   replaceRunsInPlace,
-  stickyBgFor,
   type TextAnchor,
   type TextVerticalAnchor,
   unwrapBareTextShape,
@@ -266,24 +265,20 @@ export class TextTool extends ToolBase {
     const color = existing?.color || this.options.strokeColor;
     const w = existing?.width || DEFAULT_WIDTH;
     const h = existing?.height || DEFAULT_HEIGHT;
-    // The contentEditable overlay paints a transparent body
-    // whenever the underlying wrapper already has a visible body
-    // (text-on-shape geometry, sticky's yellow rect, callout's
-    // yellow rect + tail wedge — see `#editExisting`'s
-    // `wrapperHasVisibleBody` branch). Painting a yellow bg on
-    // top of those wrappers would either double-tint the body
-    // or hide the callout's tail. The `plain` variant is the
-    // lone wrapper-hidden case — the overlay needs its own
-    // dashed border there to give the user some visual indication
-    // of the edit area.
-    const editTargetKind = this.#editTarget?.getAttribute("data-shape-kind") ?? null;
-    const wrapperHasVisibleBody =
-      this.#editTarget != null &&
-      (isTextOnShape(this.#editTarget) ||
-        editTargetKind === "sticky" ||
-        editTargetKind === "callout");
-    const variant: TextVariant = this.options.textVariant ?? "sticky";
-    const showBg = !wrapperHasVisibleBody && variant !== "plain";
+    // The contentEditable overlay always paints transparently —
+    // any body fill the user should see comes from the underlying
+    // wrapper (sticky's yellow rect, callout's body + tail wedge,
+    // text-on-shape geometry). The `plain` variant intentionally
+    // has no underlying body; the overlay's dashed border alone
+    // signals the edit area.
+    //
+    // Earlier revisions painted a fake yellow bg on the overlay
+    // for fresh draws (when no wrapper existed yet); that branch
+    // became dead once `onPointerDown` started building the
+    // wrapper upfront. It also fired wrong for re-editing a Plain
+    // text shape while a sticky-variant tool was active — the
+    // overlay tinted the box yellow even though the underlying
+    // shape was plain. Always-transparent removes that footgun.
 
     // Resolve the wrapper's stored anchors so the editor's visible
     // layout matches the committed shape. Without this, a centered
@@ -306,15 +301,17 @@ export class TextTool extends ToolBase {
     fo.setAttribute("width", String(w));
     fo.setAttribute("height", String(h));
 
-    // Outer flex container handles VERTICAL alignment + the visible
-    // chrome (border / background / padding). The inner div is the
-    // contentEditable that handles HORIZONTAL alignment via
-    // text-align. Splitting the two layers keeps the contentEditable
-    // free of `display: flex`, which is known to cause caret-
-    // placement quirks under contenteditable in some browsers.
+    // Outer flex container handles VERTICAL alignment + the dashed
+    // edit-area border. The inner div is the contentEditable that
+    // handles HORIZONTAL alignment via text-align. Splitting the
+    // two layers keeps the contentEditable free of `display: flex`,
+    // which is known to cause caret-placement quirks under
+    // contenteditable in some browsers. Background is always
+    // transparent so the underlying wrapper's body fill (sticky's
+    // yellow rect, callout's body + tail wedge, or nothing for
+    // plain) shows through unmodified.
     const outer = document.createElement("div");
-    outer.style.cssText = wrapperHasVisibleBody
-      ? `
+    outer.style.cssText = `
       display: flex;
       flex-direction: column;
       justify-content: ${justifyContent};
@@ -325,20 +322,6 @@ export class TextTool extends ToolBase {
       padding: 8px 10px;
       width: ${w}px;
       height: ${h}px;
-      box-sizing: border-box;
-      overflow: hidden;
-    `
-      : `
-      display: flex;
-      flex-direction: column;
-      justify-content: ${justifyContent};
-      background: ${showBg ? stickyBgFor(color) : "transparent"};
-      border: ${showBg ? "1px solid rgba(0,0,0,0.15)" : "1px dashed rgba(0,0,0,0.25)"};
-      border-radius: 4px;
-      box-shadow: ${showBg ? "2px 2px 6px rgba(0,0,0,0.15)" : "none"};
-      padding: 8px 10px;
-      width: ${w - 2}px;
-      height: ${h - 2}px;
       box-sizing: border-box;
       overflow: hidden;
     `;

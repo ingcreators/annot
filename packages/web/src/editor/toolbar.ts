@@ -314,6 +314,21 @@ export class Toolbar {
       eagerText.onTextBoxChanged = (el) => this.#selection.select(el);
       this.#eagerTools.push(eagerText);
     }
+
+    // Mirror re-edit's selection state into fresh-draw and dblclick
+    // edit sessions: TextTool dispatches `annot:text-edit-start`
+    // when an edit session opens, with the wrapper as detail.target.
+    // Selecting the wrapper makes the cyan selection handles visible
+    // throughout the edit — re-edits already had this because the
+    // user typically clicks (and selects) the shape before the
+    // dblclick that opens the editor; fresh draws had nothing
+    // selected, so the user couldn't tell the new shape was the
+    // "active" object on the canvas.
+    this.#canvas.svg.addEventListener("annot:text-edit-start", (e) => {
+      const detail = (e as CustomEvent).detail as { target?: SVGElement } | null;
+      const target = detail?.target ?? null;
+      if (target) this.#selection.select(target);
+    });
   }
 
   /** Long-lived tool instances created at init time so their
