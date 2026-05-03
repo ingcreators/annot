@@ -105,6 +105,43 @@ describe("buildShapeXml — rich-text textbox snapshots", () => {
     expect(xml).toContain("<a:t>&lt;&amp;&gt;</a:t>");
   });
 
+  it("logical Annot Sans family expands to <a:latin> + <a:ea> + <a:cs> triple", () => {
+    // Phase 4 of `docs/plans/multilingual-fonts-os-stack.md`:
+    // when the font-family is one of the three logical tokens,
+    // emit all three OOXML typeface attributes so PowerPoint's
+    // per-script fallback applies (Latin / East Asian / complex
+    // script). Non-token raw families fall back to single
+    // `<a:latin>` (covered by the "per-run color / size /
+    // family" test above with "Inter, sans-serif").
+    const xml = buildShapeXml(
+      richTextbox({ runs: [{ text: "Hello 日本語 العربية", font_family: "Annot Sans" }] }),
+      { ns: "p", id: 20 },
+    );
+    expect(xml).toContain('<a:latin typeface="Calibri"/>');
+    expect(xml).toContain('<a:ea typeface="Yu Gothic UI"/>');
+    expect(xml).toContain('<a:cs typeface="Arial"/>');
+  });
+
+  it("logical Annot Serif family expands to Cambria / Yu Mincho / Times New Roman", () => {
+    const xml = buildShapeXml(
+      richTextbox({ runs: [{ text: "x", font_family: "Annot Serif" }] }),
+      { ns: "p", id: 21 },
+    );
+    expect(xml).toContain('<a:latin typeface="Cambria"/>');
+    expect(xml).toContain('<a:ea typeface="Yu Mincho"/>');
+    expect(xml).toContain('<a:cs typeface="Times New Roman"/>');
+  });
+
+  it("logical Annot Mono family expands to Consolas / MS Gothic / Courier New", () => {
+    const xml = buildShapeXml(
+      richTextbox({ runs: [{ text: "x", font_family: "Annot Mono" }] }),
+      { ns: "p", id: 22 },
+    );
+    expect(xml).toContain('<a:latin typeface="Consolas"/>');
+    expect(xml).toContain('<a:ea typeface="MS Gothic"/>');
+    expect(xml).toContain('<a:cs typeface="Courier New"/>');
+  });
+
   it("text-on-shape rect emits sharp-corner geometry, not roundRect", () => {
     // shape_kind="rect" represents the user's drawn sharp
     // rectangle promoted to carry text. Emitting `roundRect`

@@ -1,3 +1,4 @@
+import { isLogicalFamily, ooxmlTypefacesFor } from "@ingcreators/annot-core/headless";
 import type { AnnotationShape, TextRun } from "@ingcreators/annot-core/tauri-bridge";
 import {
   capAttr,
@@ -197,13 +198,39 @@ function renderRun(
   const sizeVal = Math.round((run.font_size ?? defaultSize) * 75);
   const fillHex = run.color ? chex(run.color) : defaultFillHex;
   const family = run.font_family ?? defaultFamily;
-  const familyAttr = family ? `<a:latin typeface="${exml(family)}"/>` : "";
+  // Phase 4 of `docs/plans/multilingual-fonts-os-stack.md`: when
+  // the family is one of the three Annot logical tokens
+  // (`Annot Sans` / `Annot Serif` / `Annot Mono`) we expand it
+  // to the full OOXML triple so PowerPoint applies per-script
+  // fallback (`<a:latin>` for Latin / `<a:ea>` for East Asian /
+  // `<a:cs>` for complex script — Arabic / Hebrew / Indic /
+  // Thai). Non-token raw families (legacy stored values, plugin-
+  // author overrides) emit only `<a:latin>` so the legacy
+  // single-typeface output stays unchanged.
+  const familyAttr = familyTypefaceXml(family);
   const flags = [
     run.bold ? ` b="1"` : "",
     run.italic ? ` i="1"` : "",
     run.underline ? ` u="sng"` : "",
   ].join("");
   return `<a:r><a:rPr lang="ja-JP" sz="${sizeVal}"${flags} dirty="0"><a:solidFill><a:srgbClr val="${fillHex}"/></a:solidFill>${familyAttr}</a:rPr><a:t>${exml(run.text)}</a:t></a:r>`;
+}
+
+/** Resolve a font-family value to OOXML typeface XML. Logical
+ *  Annot tokens expand to the latin / ea / cs triple so
+ *  PowerPoint's per-script fallback applies; other values emit
+ *  the single legacy `<a:latin>` attribute. */
+function familyTypefaceXml(family: string | undefined): string {
+  if (!family) return "";
+  if (isLogicalFamily(family)) {
+    const t = ooxmlTypefacesFor(family);
+    return [
+      `<a:latin typeface="${exml(t.latin)}"/>`,
+      `<a:ea typeface="${exml(t.ea)}"/>`,
+      `<a:cs typeface="${exml(t.cs)}"/>`,
+    ].join("");
+  }
+  return `<a:latin typeface="${exml(family)}"/>`;
 }
 
 function buildBgFill(bgCarrier: string): string {
