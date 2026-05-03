@@ -4,6 +4,7 @@ import {
   refreshArrowPath,
   writeArrowControl,
 } from "@ingcreators/annot-core/editor/arrow-markers";
+import { bakeTranslate } from "@ingcreators/annot-core/editor/bake-translate";
 import {
   readTextShapeSpec,
   rebuildCalloutTail,
@@ -1811,19 +1812,12 @@ export class SelectionManager {
   }
 
   #moveElement(el: SVGElement, dx: number, dy: number): void {
-    const tag = el.tagName;
-    if (tag === "rect" || tag === "image") {
-      el.setAttribute("x", String(Number.parseFloat(el.getAttribute("x") || "0") + dx));
-      el.setAttribute("y", String(Number.parseFloat(el.getAttribute("y") || "0") + dy));
-    } else if (tag === "ellipse") {
-      el.setAttribute("cx", String(Number.parseFloat(el.getAttribute("cx") || "0") + dx));
-      el.setAttribute("cy", String(Number.parseFloat(el.getAttribute("cy") || "0") + dy));
-    } else if (isLineLike(el)) {
-      // Line / arrow: rotation is baked into endpoints, so no
-      // transform attribute exists and local space == world space.
-      // Just shift the endpoints by the world-space drag delta.
-      // (bakeLineTransform normalizes any legacy saved content that
-      //  still carries a transform — see the pointerdown hook below.)
+    // Line / arrow: rotation is baked into endpoints, so no
+    // transform attribute exists and local space == world space.
+    // Just shift the endpoints by the world-space drag delta.
+    // (bakeLineTransform normalizes any legacy saved content that
+    //  still carries a transform — see the pointerdown hook below.)
+    if (isLineLike(el)) {
       bakeLineTransform(el);
       const ep = lineEndpointsOf(el);
       setLineEndpoints(el, ep.x1 + dx, ep.y1 + dy, ep.x2 + dx, ep.y2 + dy);
@@ -1837,18 +1831,60 @@ export class SelectionManager {
         }
       }
       return;
-    } else if (tag === "text" || tag === "foreignObject") {
+    }
+
+    // Phase 3 of `move-bakes-coordinates.md`: when there's no
+    // rotation / flip, bake the translate into the children's
+    // geometry attrs so `getBBox()` returns the post-move visual
+    // bounds directly. The wrapper carries no `transform=
+    // "translate(...)"` and no `data-tx` / `data-ty` after the
+    // bake — identical to a freshly placed shape.
+    //
+    // For rotated / flipped shapes the legacy data-tx/ty + matrix
+    // path stays in place: the rotation pivot needs both
+    // translate and rotate components, and the safest way to
+    // keep the visual stable across drags is to leave the
+    // children's local geometry alone and let the matrix carry
+    // every move.
+    const state = readTransformState(el);
+    const noRotationOrFlip = state.rotation === 0 && !state.flipH && !state.flipV;
+    if (noRotationOrFlip) {
+      // Fold any leftover `data-tx` / `data-ty` from an earlier
+      // rotated drag (rotation since cleared) into the bake delta
+      // and clear the data attrs. After this call the element has
+      // no transform attribute and no `data-tx` / `data-ty` —
+      // identical to "user just placed this at the new position".
+      const totalDx = state.tx + dx;
+      const totalDy = state.ty + dy;
+      bakeTranslate(el, totalDx, totalDy);
+      if (state.tx !== 0 || state.ty !== 0) {
+        el.removeAttribute("data-tx");
+        el.removeAttribute("data-ty");
+      }
+      // applyTransformState defends against future state mutations
+      // and re-emits cleanly — for the identity state this just
+      // removes any stale transform attribute the element may
+      // still carry.
+      applyTransformState(el);
+      return;
+    }
+
+    // Rotated / flipped fallback: legacy translate-via-data-attr +
+    // matrix emission. Geometry-positioned shapes still need an
+    // explicit attr shift here because their position lives in
+    // x/y/cx/cy, not in `data-tx` / `data-ty` — the legacy
+    // `nudgeTranslate(el, 0, 0)` only refreshes the pivot.
+    const tag = el.tagName;
+    if (tag === "rect" || tag === "image" || tag === "text" || tag === "foreignObject") {
       el.setAttribute("x", String(Number.parseFloat(el.getAttribute("x") || "0") + dx));
       el.setAttribute("y", String(Number.parseFloat(el.getAttribute("y") || "0") + dy));
+    } else if (tag === "ellipse" || tag === "circle") {
+      el.setAttribute("cx", String(Number.parseFloat(el.getAttribute("cx") || "0") + dx));
+      el.setAttribute("cy", String(Number.parseFloat(el.getAttribute("cy") || "0") + dy));
     } else if (tag === "path" || tag === "g") {
-      // Translate-positioned: nudge data-tx/data-ty and let
-      // applyTransformState rebuild the composite transform.
       nudgeTranslate(el, dx, dy);
       return;
     }
-    // Geometry-positioned: re-apply transform so the rotation/flip
-    // pivot tracks the new bbox center (otherwise rotated elements
-    // would drift toward their former pivot).
     nudgeTranslate(el, 0, 0);
   }
 
