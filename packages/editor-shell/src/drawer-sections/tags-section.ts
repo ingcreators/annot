@@ -13,8 +13,8 @@
  * `setTags` calls.
  */
 
-import type { UISection } from "../../app/plugin-host.js";
-import { html, LitElement } from "../../lit.js";
+import { html, LitElement } from "../lit.js";
+import type { UISection } from "../ui-section.js";
 import "../annot-tag-editor.js";
 import type { FileDetailsData } from "../file-details-drawer-types.js";
 

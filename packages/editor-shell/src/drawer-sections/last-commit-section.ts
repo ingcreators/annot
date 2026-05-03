@@ -13,8 +13,8 @@
  * (whose `mount` is still an opaque callback).
  */
 
-import type { UISection } from "../../app/plugin-host.js";
-import { html, LitElement, nothing } from "../../lit.js";
+import { html, LitElement, nothing } from "../lit.js";
+import type { UISection } from "../ui-section.js";
 import type { FileDetailsData, LastCommitInfo } from "../file-details-drawer-types.js";
 import { formatDate } from "./helpers.js";
 

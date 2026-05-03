@@ -28,3 +28,18 @@ export type {
   EditorShellHost,
 } from "./editor-shell.js";
 export { installKeyboardHelp } from "./keyboard-help.js";
+export type { UISection, UISectionContext, UISectionLifecycle } from "./ui-section.js";
+export type { AnnotIconElement } from "./annot-icon.js";
+export { createBuiltinIcon, createIcon } from "./annot-icon-imperative.js";
+import "./annot-icon.js";
+export type { AnnotTagEditorElement } from "./annot-tag-editor.js";
+import "./annot-tag-editor.js";
+export {
+  type AnnotFileDetailsDrawerElement,
+  BUILTIN_DRAWER_SECTION_IDS,
+  estimateDataUrlBytes,
+  type FileDetailsData,
+  type LastCommitInfo,
+  validateFilename,
+} from "./annot-file-details-drawer.js";
+import "./annot-file-details-drawer.js";

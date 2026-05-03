@@ -2,27 +2,19 @@
  * Re-export of the Lit runtime + decorators under the
  * `@ingcreators/annot-web/lit` subpath.
  *
- * Plugin authors import from here so they don't take their own
- * `lit` dependency — Annot controls the version centrally, and
- * host + plugin code share the same `LitElement` identity
- * (`instanceof` checks work across the boundary).
+ * Plugin authors continue to import from here so they don't take
+ * their own `lit` dependency — Annot controls the version
+ * centrally, and host + plugin code share the same `LitElement`
+ * identity (`instanceof` checks work across the boundary).
  *
- * Introduced in Phase 0 of `docs/plans/_done/lit-migration.md`.
- * Subsequent phases migrate built-in UI surfaces to Lit; those
- * internal modules import from here too so the single-version
- * invariant holds end-to-end.
+ * Originally introduced in Phase 0 of
+ * `docs/plans/_done/lit-migration.md` and lived in this file as
+ * the source of truth for the project. Phase 2b of
+ * `docs/plans/_done/vscode-extension-host.md` moved the source of
+ * truth to `@ingcreators/annot-editor-shell/lit` so the
+ * host-neutral shell can compose Lit components, and this file
+ * collapsed to a re-export. Plugin authors keep importing
+ * `@ingcreators/annot-web/lit` — the surface is unchanged.
  */
 
-export {
-  LitElement,
-  css,
-  html,
-  nothing,
-  render,
-  svg,
-  type CSSResultGroup,
-  type PropertyValues,
-  type TemplateResult,
-} from "lit";
-export { customElement, property, query, queryAll, state } from "lit/decorators.js";
-export { unsafeHTML } from "lit/directives/unsafe-html.js";
+export * from "@ingcreators/annot-editor-shell/lit";

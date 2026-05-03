@@ -14,7 +14,7 @@
  */
 
 import { html, LitElement, nothing } from "../lit.js";
-import { validateFilename } from "./file-details-drawer-types.js";
+import { validateFilename } from "@ingcreators/annot-editor-shell/annot-file-details-drawer";
 
 export class AnnotEditableFilenameElement extends LitElement {
   static override properties = {
