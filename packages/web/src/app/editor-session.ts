@@ -30,11 +30,14 @@ import "@ingcreators/annot-editor-shell/annot-file-details-drawer";
 import { installKeyboardHelp } from "@ingcreators/annot-editor-shell";
 import type { AnnotEditorRightPanelElement } from "@ingcreators/annot-editor-shell/right-panel";
 import "@ingcreators/annot-editor-shell/right-panel";
-import type { AnnotScratchpadSectionElement } from "../editor/annot-scratchpad-section.js";
-import "../editor/annot-scratchpad-section.js";
-import { ScratchpadPasteTool } from "../editor/scratchpad-paste-tool.js";
+import {
+  type AnnotScratchpadSectionElement,
+  renderThumbnail,
+  ScratchpadPasteTool,
+  serializeSelection,
+} from "@ingcreators/annot-editor-shell";
+import "@ingcreators/annot-editor-shell/annot-scratchpad-section";
 import type { ScratchpadStore } from "../editor/scratchpad-store.js";
-import { renderThumbnail, serializeSelection } from "../editor/scratchpad-utils.js";
 import { getStorageMode } from "../storage/bridge.js";
 import { addClickMarker } from "./click-marker.js";
 import type { HeaderHost } from "./header-host.js";

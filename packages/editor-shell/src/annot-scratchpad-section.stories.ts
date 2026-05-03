@@ -11,7 +11,7 @@
 
 import type { Meta, StoryObj } from "@storybook/web-components-vite";
 import "./annot-scratchpad-section.js";
-import type { ScratchpadItem, ScratchpadStore } from "./scratchpad-store.js";
+import type { ScratchpadItem, ScratchpadStoreLike } from "./scratchpad-types.js";
 
 interface Args {
   items: ScratchpadItem[];
@@ -28,7 +28,7 @@ const PLACEHOLDER_THUMB =
       "</svg>",
   );
 
-function makeMockStore(items: ScratchpadItem[]): ScratchpadStore {
+function makeMockStore(items: ScratchpadItem[]): ScratchpadStoreLike {
   let state = [...items];
   return {
     async list() {
@@ -40,7 +40,7 @@ function makeMockStore(items: ScratchpadItem[]): ScratchpadStore {
     async delete(id: string) {
       state = state.filter((i) => i.id !== id);
     },
-  } as unknown as ScratchpadStore;
+  } as unknown as ScratchpadStoreLike;
 }
 
 function makeItem(id: string, name: string): ScratchpadItem {

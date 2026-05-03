@@ -21,16 +21,14 @@
  */
 
 import { newIdB58 } from "@ingcreators/annot-core/utils";
-
-export interface ScratchpadItem {
-  id: string;
-  name?: string;
-  svgMarkup: string;
-  thumbnail: string;
-  width: number;
-  height: number;
-  createdAt: string;
-}
+// `ScratchpadItem` moved to `@ingcreators/annot-editor-shell/scratchpad-types`
+// in Phase 2e of `docs/plans/_done/vscode-extension-host.md`. Re-export
+// keeps existing `import { ScratchpadItem } from "./scratchpad-store.js"`
+// sites compiling untouched. The `ScratchpadStore` class below
+// implements `ScratchpadStoreLike` structurally — TypeScript's
+// structural typing means no `implements` clause is needed.
+export type { ScratchpadItem } from "@ingcreators/annot-editor-shell/scratchpad-types";
+import type { ScratchpadItem } from "@ingcreators/annot-editor-shell/scratchpad-types";
 
 const DB_NAME = "annot-scratchpad";
 const DB_VERSION = 1;

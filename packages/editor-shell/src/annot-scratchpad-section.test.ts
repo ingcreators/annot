@@ -11,7 +11,7 @@
 import { describe, expect, it, vi } from "vitest";
 import "./annot-scratchpad-section.js";
 import type { AnnotScratchpadSectionElement } from "./annot-scratchpad-section.js";
-import type { ScratchpadItem, ScratchpadStore } from "./scratchpad-store.js";
+import type { ScratchpadItem, ScratchpadStoreLike } from "./scratchpad-types.js";
 
 function makeItem(overrides: Partial<ScratchpadItem> = {}): ScratchpadItem {
   return {
@@ -25,7 +25,7 @@ function makeItem(overrides: Partial<ScratchpadItem> = {}): ScratchpadItem {
   };
 }
 
-function makeStore(initial: ScratchpadItem[] = []): ScratchpadStore {
+function makeStore(initial: ScratchpadItem[] = []): ScratchpadStoreLike {
   let items = [...initial];
   return {
     async save(data: Omit<ScratchpadItem, "id" | "createdAt">): Promise<ScratchpadItem> {
@@ -43,11 +43,11 @@ function makeStore(initial: ScratchpadItem[] = []): ScratchpadStore {
     async delete(id: string): Promise<void> {
       items = items.filter((i) => i.id !== id);
     },
-  } as unknown as ScratchpadStore;
+  } as unknown as ScratchpadStoreLike;
 }
 
 async function mount(
-  store: ScratchpadStore,
+  store: ScratchpadStoreLike,
   opts: { saveEnabled?: boolean; activeItemId?: string | null } = {},
 ): Promise<AnnotScratchpadSectionElement> {
   const el = document.createElement("annot-scratchpad-section");

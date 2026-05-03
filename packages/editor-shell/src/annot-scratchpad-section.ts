@@ -1,5 +1,5 @@
 import { builtinIcon } from "@ingcreators/annot-core";
-import "../ui/annot-icon.js";
+import "./annot-icon.js";
 /**
  * `<annot-scratchpad-section>` — thumbnail grid + "+ Save selection"
  * button used in the right-panel's Scratchpad popover.
@@ -21,8 +21,8 @@ import "../ui/annot-icon.js";
  * `.scratchpad-item` rules in `editor.css` apply unchanged.
  */
 
-import { html, LitElement, nothing } from "../lit.js";
-import type { ScratchpadItem, ScratchpadStore } from "./scratchpad-store.js";
+import { html, LitElement, nothing } from "./lit.js";
+import type { ScratchpadItem, ScratchpadStoreLike } from "./scratchpad-types.js";
 
 const EMPTY_HINT =
   "No saved items yet. Select a shape on the canvas and click + to save it for reuse.";
@@ -35,7 +35,7 @@ export class AnnotScratchpadSectionElement extends LitElement {
     items: { state: true },
   };
 
-  declare store: ScratchpadStore | null;
+  declare store: ScratchpadStoreLike | null;
   declare saveEnabled: boolean;
   declare activeItemId: string | null;
   declare items: ScratchpadItem[];
