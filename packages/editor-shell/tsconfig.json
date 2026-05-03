@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    // No `types` entry — the shell doesn't read files from disk
+    // and its tests run under jsdom (Phase 3+) or node-with-no-DOM
+    // (Phase 1 stub test). If a Node-only test surface lands later
+    // (e.g. Playwright fixture compatibility check), add `"node"`
+    // back and pin `@types/node` like `packages/editor` does.
+    "types": []
+  },
+  "include": ["src/**/*.ts"]
+}
