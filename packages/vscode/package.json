@@ -1,0 +1,52 @@
+{
+  "name": "@ingcreators/annot-vscode",
+  "version": "0.1.0",
+  "private": true,
+  "displayName": "Annot",
+  "description": "Edit Annot screenshot annotation files (.annot.svg / .annot.png / .annot.jpeg / .annot.jpg) directly inside VSCode.",
+  "publisher": "ingcreators",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ingcreators/annot.git",
+    "directory": "packages/vscode"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "type": "module",
+  "main": "./dist/extension.js",
+  "categories": ["Visualization", "Other"],
+  "activationEvents": [],
+  "contributes": {
+    "customEditors": [
+      {
+        "viewType": "annot.editor",
+        "displayName": "Annot Editor",
+        "selector": [
+          { "filenamePattern": "*.annot.svg" },
+          { "filenamePattern": "*.annot.png" },
+          { "filenamePattern": "*.annot.jpeg" },
+          { "filenamePattern": "*.annot.jpg" }
+        ],
+        "priority": "default"
+      }
+    ]
+  },
+  "scripts": {
+    "build:extension": "vite build --config vite.extension.config.ts",
+    "build:webview": "vite build --config vite.webview.config.ts",
+    "build": "pnpm run build:extension && pnpm run build:webview",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^25",
+    "@types/vscode": "^1.85.0",
+    "typescript": "catalog:",
+    "vite": "catalog:"
+  },
+  "dependencies": {
+    "@ingcreators/annot-core": "workspace:*",
+    "@ingcreators/annot-editor": "workspace:*",
+    "@ingcreators/annot-editor-shell": "workspace:*"
+  }
+}

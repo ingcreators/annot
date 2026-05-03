@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    // `vscode` types for the extension-host (Node) entry; the webview
+    // entry under `src/webview/` is browser-side and uses DOM types
+    // (already in the base lib config).
+    "types": ["node", "vscode"]
+  },
+  "include": ["src/**/*.ts"]
+}
