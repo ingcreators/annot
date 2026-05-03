@@ -23,7 +23,7 @@
  * call `updated()`.
  */
 
-import type { Toolbar } from "../toolbar.js";
+import type { Toolbar } from "@ingcreators/annot-editor-shell/toolbar";
 import { describe, expect, it, vi } from "vitest";
 import type { UISectionContext } from "../../app/plugin-host.js";
 import "./annot-page-elements-section.js";

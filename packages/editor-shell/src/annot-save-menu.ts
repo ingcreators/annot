@@ -27,7 +27,7 @@ import {
   saveToFile,
 } from "@ingcreators/annot-editor";
 import { isTauri } from "@ingcreators/annot-core/tauri-bridge";
-import { html, LitElement } from "../lit.js";
+import { html, LitElement } from "./lit.js";
 
 export interface SaveMenuItem {
   /** Identifier passed back in the `menu-select` event detail

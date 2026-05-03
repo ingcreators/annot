@@ -6,7 +6,7 @@ import { SelectionManager } from "@ingcreators/annot-editor";
 // so core stays DOM-free. The Tauri shell now picks it up from
 // web's editor surface — the rest of the imports below remain in
 // core because PropertyPanel + Canvas + History stay there.
-import { Toolbar } from "@ingcreators/annot-web/editor/toolbar";
+import { Toolbar } from "@ingcreators/annot-editor-shell/toolbar";
 import {
   isTauri,
   loadScreenshot,

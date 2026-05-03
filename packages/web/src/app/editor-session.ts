@@ -20,7 +20,7 @@ import {
   openAnchoredPopover,
   SelectionManager,
 } from "@ingcreators/annot-editor";
-import { Toolbar } from "../editor/toolbar.js";
+import { Toolbar } from "@ingcreators/annot-editor-shell/toolbar";
 import type { ImageRecord, PageMetadata, StorageProvider } from "@ingcreators/annot-core/storage";
 import { getFilename } from "@ingcreators/annot-core/storage";
 import { assertNonNull } from "@ingcreators/annot-core/utils";

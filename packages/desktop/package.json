@@ -19,6 +19,7 @@
   "dependencies": {
     "@ingcreators/annot-core": "workspace:*",
     "@ingcreators/annot-editor": "workspace:*",
+    "@ingcreators/annot-editor-shell": "workspace:*",
     "@ingcreators/annot-web": "workspace:*",
     "@tauri-apps/api": "^2.10.1",
     "@tauri-apps/plugin-dialog": "^2.2.0",

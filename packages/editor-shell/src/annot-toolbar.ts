@@ -25,8 +25,8 @@
  */
 
 import { builtinIcon } from "@ingcreators/annot-core";
-import { html, LitElement } from "../lit.js";
-import "../ui/annot-icon.js";
+import { html, LitElement } from "./lit.js";
+import "./annot-icon.js";
 
 /** Plain custom element — not a Lit element — because the
  *  toolbar's children are populated imperatively by the
