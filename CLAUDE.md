@@ -394,7 +394,59 @@ in `bake-translate.ts:bakeTranslate`. The
 [`move-bakes-coordinates`](./docs/plans/_done/move-bakes-coordinates.md)
 plan in `_done/` walks the design.
 
-### 8. Reply and commit language
+### 8. Font family is a logical token; OS resolves per script
+
+The editor stores exactly three font-family tokens in
+`data-font-family`: `Annot Sans`, `Annot Serif`, `Annot Mono`.
+Resolution to actual typefaces is delegated:
+
+- **CSS rendering** (live editor / saved SVG / PNG raster):
+  the host's
+  [`packages/core/styles/fonts.css`](./packages/core/styles/fonts.css)
+  maps each token to an OS-aware family stack interleaving
+  Latin / CJK / Arabic / Indic / Thai families so the
+  browser's per-codepoint font selection lands on the OS
+  native script font without any web-font download. The
+  same stacks live in
+  [`packages/core/src/editor/font-registry.ts`](./packages/core/src/editor/font-registry.ts)
+  via `cssStackFor(token)` for code paths that need the
+  string (PNG raster inlines it into the SVG `<defs><style>`
+  so the file is self-contained).
+
+- **OOXML** (PPTX export / Office paste): each token expands
+  to a 3-typeface triple (`<a:latin>` + `<a:ea>` + `<a:cs>`)
+  via `ooxmlTypefacesFor(token)`. PowerPoint applies per-
+  codepoint Latin / East Asian / complex script fallback
+  symmetrically. Standard Office typefaces (Calibri / Yu
+  Gothic UI / Arial etc.) are chosen so cross-environment
+  sharing without embedded fonts stays "good enough."
+
+When reading a font-family value back from storage, ALWAYS
+route through `coerceToLogicalFamily(s)` from the same file —
+unknown / null / empty values normalise to `Annot Sans` so
+downstream consumers always get a valid token. Pre-release:
+legacy raw CSS family strings (`"sans-serif"`, `"system-ui,
+..."`) get coerced silently on next save.
+
+When adding new code that touches font-family:
+
+- Editor pickers: pull the option list from `LOGICAL_FAMILIES`,
+  not hard-coded strings. Read / write via `coerceToLogicalFamily`.
+- PPTX text-run emit: route through `ooxmlTypefacesFor` so
+  PowerPoint receives the triple (single `<a:latin>` is the
+  legacy fallback for raw families, kept for back-compat with
+  plugin-author overrides).
+- Self-contained SVG output: use `injectLogicalFontStyles`
+  (or call `cssStackFor` directly) to inline the rules so the
+  exported file isn't dependent on the host's stylesheet
+  being loaded.
+
+The
+[`multilingual-fonts-os-stack`](./docs/plans/_done/multilingual-fonts-os-stack.md)
+plan in `_done/` walks the design and the per-OS family
+choices.
+
+### 9. Reply and commit language
 
 - Replies to the user: **Japanese**.
 - Code, comments, commit messages, PR descriptions: **English**.
