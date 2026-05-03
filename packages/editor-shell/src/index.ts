@@ -43,3 +43,14 @@ export {
   validateFilename,
 } from "./annot-file-details-drawer.js";
 import "./annot-file-details-drawer.js";
+export type { ScratchpadItem, ScratchpadStoreLike } from "./scratchpad-types.js";
+export type { AnnotScratchpadSectionElement } from "./annot-scratchpad-section.js";
+import "./annot-scratchpad-section.js";
+export { ScratchpadPasteTool } from "./scratchpad-paste-tool.js";
+export {
+  type SerializedSelection,
+  parseStoredItem,
+  renderThumbnail,
+  serializeSelection,
+  translateElement,
+} from "./scratchpad-utils.js";
