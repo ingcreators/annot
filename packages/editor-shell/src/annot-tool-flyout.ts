@@ -15,8 +15,8 @@
  */
 
 import { builtinIcon } from "@ingcreators/annot-core";
-import { html, LitElement, nothing, unsafeHTML } from "../lit.js";
-import "../ui/annot-icon.js";
+import { html, LitElement, nothing, unsafeHTML } from "./lit.js";
+import "./annot-icon.js";
 
 export interface ToolFlyoutChip {
   /** Identifier passed back in the `chip-select` event detail. */

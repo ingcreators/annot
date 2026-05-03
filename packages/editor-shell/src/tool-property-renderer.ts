@@ -61,7 +61,7 @@ import type {
 import { computeDasharray } from "@ingcreators/annot-core/utils";
 import { createCustomSelect } from "@ingcreators/annot-editor/custom-select";
 import { setTooltip } from "@ingcreators/annot-editor/tooltip";
-import { createBuiltinIcon } from "../ui/annot-icon-imperative.js";
+import { createBuiltinIcon } from "./annot-icon-imperative.js";
 import {
   createArrowEndsRows,
   createColorPullButton,

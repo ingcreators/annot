@@ -70,7 +70,7 @@ import { logger } from "../logger.js";
 import { createPageElementsSection } from "./right-panel-sections/annot-page-elements-section.js";
 import { createSelectionPropertiesSection } from "./right-panel-sections/annot-selection-properties-section.js";
 import { createToolPropertiesSection } from "./right-panel-sections/annot-tool-properties-section.js";
-import type { Toolbar } from "./toolbar.js";
+import type { Toolbar } from "@ingcreators/annot-editor-shell/toolbar";
 
 // =============================================================================
 // Action-button SVGs — custom glyphs modeled on PowerPoint's ribbon

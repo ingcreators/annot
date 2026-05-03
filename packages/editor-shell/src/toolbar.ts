@@ -5,7 +5,7 @@
 // `Toolbar` import) don't see web's `.d.ts` files through their own
 // tsconfig `include` glob — only files explicitly referenced by the
 // compiled module are picked up.
-/// <reference path="../types/annot-window.d.ts" />
+/// <reference path="./types/annot-window.d.ts" />
 
 /**
  * `Toolbar` — the editor's vertical tool rail (Select / Crop /
@@ -73,7 +73,7 @@ import {
 } from "@ingcreators/annot-editor";
 import { setTooltip } from "@ingcreators/annot-editor/tooltip";
 import { buildDrawingXml } from "@ingcreators/annot-render";
-import { createBuiltinIcon } from "../ui/annot-icon-imperative.js";
+import { createBuiltinIcon } from "./annot-icon-imperative.js";
 import { AnnotSaveMenuElement } from "./annot-save-menu.js";
 import type { AnnotToolbarButtonElement, AnnotToolbarElement } from "./annot-toolbar.js";
 import {

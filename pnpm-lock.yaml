@@ -81,6 +81,9 @@ importers:
       '@ingcreators/annot-editor':
         specifier: workspace:*
         version: link:../editor
+      '@ingcreators/annot-editor-shell':
+        specifier: workspace:*
+        version: link:../editor-shell
       '@ingcreators/annot-web':
         specifier: workspace:*
         version: link:../web
@@ -140,6 +143,9 @@ importers:
       '@ingcreators/annot-editor':
         specifier: workspace:*
         version: link:../editor
+      '@ingcreators/annot-render':
+        specifier: workspace:*
+        version: link:../render
       lit:
         specifier: ^3.3.2
         version: 3.3.2
