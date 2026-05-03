@@ -272,7 +272,11 @@ describe("PROPERTY_CONTROLS registry", () => {
     text.textContent = "hi";
     textbox.appendChild(text);
     expect(PROPERTY_CONTROLS.textColor.getValue(textbox)).toBe("#123456");
-    expect(PROPERTY_CONTROLS.fontFamily.getValue(textbox)).toBe("serif");
+    // `getValue` runs the legacy raw family ("serif") through
+    // `coerceToLogicalFamily`, which collapses unknown values to
+    // `Annot Sans`. The migration is intentional — see
+    // `docs/plans/multilingual-fonts-os-stack.md` phase 3.
+    expect(PROPERTY_CONTROLS.fontFamily.getValue(textbox)).toBe("Annot Sans");
     expect(PROPERTY_CONTROLS.fontSize.getValue(textbox)).toBe(20);
 
     const redactSolid = svg("rect", { "data-redact-style": "solid", fill: "#222" });

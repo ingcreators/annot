@@ -133,9 +133,9 @@ describe("createTextMiniToolbar", () => {
     const familySelect = document.body.querySelectorAll<HTMLSelectElement>(
       ".annot-text-mini-toolbar select",
     )[0]!;
-    familySelect.value = "monospace";
+    familySelect.value = "Annot Mono";
     familySelect.dispatchEvent(new Event("change"));
-    expect(onCommand).toHaveBeenCalledWith("fontFamily", "monospace");
+    expect(onCommand).toHaveBeenCalledWith("fontFamily", "Annot Mono");
   });
 
   it("ignores selections outside the host element", () => {
