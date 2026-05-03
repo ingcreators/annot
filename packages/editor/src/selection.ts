@@ -1787,9 +1787,17 @@ export class SelectionManager {
     const children = this.#canvas.annotations.children;
     for (let i = 0; i < children.length; i++) {
       const el = children[i] as SVGElement;
-      const bbox = (el as SVGGraphicsElement).getBBox?.();
+      // Use world-space (post-transform) bbox so a moved element's
+      // marquee hit-box matches its CURRENT visual position. Plain
+      // `el.getBBox()` returns LOCAL coordinates — for a sticky note
+      // dragged via `transform="translate(...)"` it still reports
+      // the original (pre-move) bounds, so marquee-selecting the
+      // OLD position would hit the sticky even though it visually
+      // sits elsewhere. `#worldBBox` applies the element's
+      // transform chain (incl. group rotations / nested transforms).
+      const bbox = this.#worldBBox(el as SVGGraphicsElement);
       if (!bbox) continue;
-      // Check intersection
+      // Axis-aligned overlap test in world space.
       if (
         bbox.x + bbox.width > rx &&
         bbox.y + bbox.height > ry &&
