@@ -247,7 +247,9 @@ the storage shape (raw SVG vs. editable raster).
   table above). Files lacking the `.annot.` infix continue to
   open in their default editors.
 - **Command palette entries.** `Annot: New annotation from clipboard
-  image`, `Annot: Open annotation`, `Annot: Save as PNG…`
+  image`, `Annot: New annotation from image…` (open + save-as +
+  XMP recovery — see Phase 5 image-import flow below),
+  `Annot: Open annotation`, `Annot: Save as PNG…`
   (writes `*.annot.png`), `Annot: Save as JPEG…`
   (writes `*.annot.jpeg`), `Annot: Export to PowerPoint…`,
   `Annot: Reveal in Explorer`.
@@ -430,11 +432,37 @@ infix) still opens in the default image viewer. **One PR.**
 - Theme bridging: shell `themeOverrides` populated from
   `--vscode-*` CSS vars at activation and on
   `vscode.window.onDidChangeActiveColorTheme`.
-- Drag-drop intake: dropping a plain `.png` / `.jpg` / `.jpeg` /
-  `.svg` (no `.annot.` infix) on the editor area creates a sibling
-  file with the `.annot.` infix inserted before the extension
-  (`screenshot.png` → `screenshot.annot.png`) and opens it. The
-  user picks the conversion vs. the upstream file is preserved.
+- Image-import flow via command palette
+  (`Annot: New annotation from image…`). Mirrors the PWA's
+  existing `CaptureHost.openFileDialog` →
+  [`openFile(file)`](../../packages/web/src/app/capture-host.ts:188)
+  flow exactly:
+    1. `vscode.window.showOpenDialog` lets the user pick an image
+       (`*.png` / `*.jpg` / `*.jpeg` / `*.svg`).
+    2. The extension reads the file bytes; if the source is an
+       editable image with an XMP-embedded annotation, the
+       annotation is recovered via the existing `readEditableImage`
+       round-trip (PWA does the same).
+    3. `vscode.window.showSaveDialog` asks where to save the new
+       Annot file, defaulting the filename to the source's
+       basename with the `.annot.` infix inserted before the
+       extension (`screenshot.png` → `screenshot.annot.png`). The
+       user is free to change the path / name / extension before
+       confirming — no implicit sibling file ever appears without
+       explicit confirmation.
+    4. `VSCodeStore.saveImage` writes the new file via
+       `vscode.workspace.fs.writeFile` and the editor opens it.
+    5. The source file is never modified. Same model as PWA:
+       "import as a new ImageRecord; the upstream file is the
+       user's, not Annot's."
+
+  No drag-drop intake in this plan. PWA does not implement
+  drag-drop today (verified — the `.upload-area.dragover` CSS
+  selector in [`app.css`](../../packages/web/src/styles/app.css)
+  has no JS handler binding); adding one to VSCode unilaterally
+  would put the two hosts out of sync. A follow-up plan can add
+  drag-drop **simultaneously to both PWA and VSCode** so the
+  intake UX stays consistent across hosts.
 - README + extension marketplace metadata.
 
 Each bullet is a sub-PR.
