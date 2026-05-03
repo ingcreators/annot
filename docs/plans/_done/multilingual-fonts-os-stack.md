@@ -1,6 +1,6 @@
 # Multilingual fonts via OS stack — no embedding
 
-> **Status:** Draft
+> **Status:** Done — landed across PRs [#388](https://github.com/ingcreators/annot/pull/388)–[#393](https://github.com/ingcreators/annot/pull/393) (phases 1–6).
 > **Compatibility:** **Pre-release; no backward-compat shims.**
 >   `data-font-family` semantics change from "raw CSS family" to
 >   "logical family token" (`Annot Sans` / `Annot Serif` /
