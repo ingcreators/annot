@@ -18,17 +18,17 @@
 [`PRODUCT_DIRECTION.md`](../../PRODUCT_DIRECTION.md) commits to two
 adjacent growth vectors: **Playwright / headless automation** and
 **GitHub as the collaboration hub**. Both lean developer-ward. A
-VSCode extension that lets users open `.svg` annotation files
-directly inside their editor — alongside the Playwright tests that
-referenced the screenshot, alongside the source code that the
-screenshot documents — is a natural extension of that direction:
+VSCode extension that lets users open Annot files directly inside
+their editor — alongside the Playwright tests that referenced the
+screenshot, alongside the source code that the screenshot
+documents — is a natural extension of that direction:
 
 - The annotation file lives in the repo (already enabled by
   `GitHubStore` and the path-based storage refactor) so it's
   already in the workspace.
 - Editing should not require a context switch to a separate web
-  app — opening `tests/__annotations__/login-flow.svg` inside
-  VSCode and editing it in place removes the round-trip.
+  app — opening `tests/__annotations__/login-flow.annot.svg`
+  inside VSCode and editing it in place removes the round-trip.
 - The `PageMetadata.locator?: string` field reserved by **P5** in
   `PRODUCT_DIRECTION.md` becomes a clickable link from the
   annotation back to the test source code — uniquely valuable
@@ -205,16 +205,52 @@ remains a Tauri wrap of the PWA. A future plan can teach the desktop
 to host the shell directly (no PWA wrapper) once the VSCode work has
 proven the extraction's boundaries.
 
+### File extensions and the custom-editor association
+
+Annot files use a **double-extension** convention so the VSCode
+custom-editor association can be filename-based — no content
+sniffing, no risk of grabbing every `.svg` / `.png` in the
+workspace:
+
+| Extension | Meaning |
+|-----------|---------|
+| `*.annot.svg` | Annotation source. The canonical SVG with `data-annot-version` on the root + the embedded base64 image (current `<image href="data:...">` carrier) + every `<g data-type="...">` annotation layer. The "source of truth" per **P1** in `PRODUCT_DIRECTION.md`. |
+| `*.annot.png` | Editable PNG export. Carries the SVG annotation source inside an XMP packet via the existing `xmp` subpath round-trip (`createEditableImage` / `readEditableImage`). Opening one in VSCode reads the XMP back, edits the annotations, and re-encodes the PNG on save. |
+| `*.annot.jpeg` / `*.annot.jpg` | Same as `*.annot.png` but JPEG-encoded; XMP packet preserved by the encoder. Both extensions are first-class so the convention matches whatever the user named the upstream screenshot. |
+
+The `.annot.` infix is the disambiguator. Files without it are
+ordinary images / SVGs and continue to open in their default
+editors. The custom-editor `contributes.customEditors.selector`
+entries glob exactly `**/*.annot.{svg,png,jpeg,jpg}` — VSCode
+matches on filename, no in-process content inspection needed.
+
+Save semantics differ by extension:
+
+- `*.annot.svg` — write the SVG string directly via
+  `vscode.workspace.fs.writeFile`. Round-trip is byte-stable for
+  the SVG itself (the editor's existing `exportSVGString` is
+  deterministic).
+- `*.annot.png` / `*.annot.jpeg` / `*.annot.jpg` — re-render the
+  current canvas to a bitmap, embed the SVG annotation source as
+  XMP, and write the encoded image. The PNG / JPEG path goes
+  through the existing `saveAsEditableImage` helper in
+  `@ingcreators/annot-editor`.
+
+**New annotation creation** in VSCode is a "Save As" step from one
+of the command-palette entries below — picking the extension picks
+the storage shape (raw SVG vs. editable raster).
+
 ### VSCode-specific surfaces
 
-- **Custom editor for `.svg` files matching the annotation pattern.**
-  Activation event: opening any `.svg` whose root element carries
-  `data-annot-version`. Non-Annot SVGs continue to open in the
-  default text editor. (The pattern is conservative on purpose —
-  no `*.svg` association blanket-grab.)
+- **Custom editor for `*.annot.{svg,png,jpeg,jpg}` files.**
+  Activation event: opening any file matching the glob (per the
+  table above). Files lacking the `.annot.` infix continue to
+  open in their default editors.
 - **Command palette entries.** `Annot: New annotation from clipboard
-  image`, `Annot: Open annotation`, `Annot: Save as PNG…`,
-  `Annot: Export to PowerPoint…`, `Annot: Reveal in Explorer`.
+  image`, `Annot: Open annotation`, `Annot: Save as PNG…`
+  (writes `*.annot.png`), `Annot: Save as JPEG…`
+  (writes `*.annot.jpeg`), `Annot: Export to PowerPoint…`,
+  `Annot: Reveal in Explorer`.
 - **Status bar item.** Save status (synced / dirty / saving / error)
   mirroring the PWA's `<annot-save-status>` element.
 - **Workspace contribution.** The extension contributes a default
@@ -364,7 +400,9 @@ plus the existing test suite. **One PR.**
 Create the VSCode extension package:
 
 - `package.json` with VSCode `engines` + `contributes.customEditors`
-  for the annotation `.svg` pattern + commands.
+  globbing `**/*.annot.{svg,png,jpeg,jpg}` (one custom-editor
+  contribution covers all four; the webview branches on extension
+  to pick the SVG-direct vs. XMP-embedded read path) + commands.
 - `src/extension.ts` — extension-host entry. Activates on the
   custom-editor contribution; opens a webview per editor.
 - `src/webview/index.html` + `src/webview/main.ts` — webview entry
@@ -377,9 +415,11 @@ Create the VSCode extension package:
   bundle by tsup or Vite library mode (Node target).
 
 Acceptance: `code --extensionDevelopmentPath=packages/vscode`
-opens a workspace, double-clicking `tests/__annotations__/foo.svg`
-opens the Annot editor in a tab, and a freehand stroke survives a
-save + reload. **One PR.**
+opens a workspace; double-clicking each of `foo.annot.svg`,
+`bar.annot.png`, and `baz.annot.jpg` opens the Annot editor in a
+tab; a freehand stroke survives save + reload on all three
+extensions; opening a plain `screenshot.png` (no `.annot.`
+infix) still opens in the default image viewer. **One PR.**
 
 ### Phase 5 — VSCode UX polish
 
@@ -390,8 +430,11 @@ save + reload. **One PR.**
 - Theme bridging: shell `themeOverrides` populated from
   `--vscode-*` CSS vars at activation and on
   `vscode.window.onDidChangeActiveColorTheme`.
-- Drag-drop intake: dropping a `.png` on the editor area creates
-  a sibling `.svg` annotation file and opens it.
+- Drag-drop intake: dropping a plain `.png` / `.jpg` / `.jpeg` /
+  `.svg` (no `.annot.` infix) on the editor area creates a sibling
+  file with the `.annot.` infix inserted before the extension
+  (`screenshot.png` → `screenshot.annot.png`) and opens it. The
+  user picks the conversion vs. the upstream file is preserved.
 - README + extension marketplace metadata.
 
 Each bullet is a sub-PR.
