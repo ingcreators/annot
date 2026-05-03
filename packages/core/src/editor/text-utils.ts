@@ -817,6 +817,93 @@ function emitWrappedLineTspans(
 }
 
 /**
+ * Translate a text-bearing shape's children (bg `<rect>`, optional
+ * callout tail `<path>` + `data-tail-*` attrs, optional clipPath
+ * `<rect>`, every positioned `<tspan>` inside the inner `<text>`)
+ * by (dx, dy) in world space.
+ *
+ * Phase 2 of `docs/plans/move-bakes-coordinates.md`. The text-shape
+ * skeleton stores positions in child geometry attrs only; the outer
+ * `<g>` carries no x/y of its own. Shifting all those attrs in place
+ * leaves the visual unchanged when the OLD wrapper transform is
+ * removed and the children are re-read at their new world coords —
+ * which is exactly what the move-baker wants for the move-only
+ * case (no rotation / no flip).
+ *
+ * No-op for non-text-shape inputs. The caller is expected to have
+ * confirmed `g.getAttribute("data-type") === "shape"` before
+ * dispatching here.
+ *
+ * Tier B — pure Element manipulation, jsdom-friendly. The path
+ * shifter routes via `translatePathD` (Tier A), which keeps this
+ * helper independent of any browser-only path APIs.
+ */
+export function bakeTextShapeTranslate(g: SVGElement, dx: number, dy: number): void {
+  if (dx === 0 && dy === 0) return;
+  if (g.getAttribute("data-type") !== "shape") return;
+  // bg <rect> (sticky / callout / text-on-shape rect / rounded) OR
+  // bg <ellipse> (text-on-shape ellipse) — both via the dedicated
+  // bg accessor (firstElementChild for the wrapper). Plain text
+  // also has a (transparent) bg <rect>; treat it identically.
+  const bg = g.querySelector("rect");
+  if (bg) {
+    bg.setAttribute("x", String(Number.parseFloat(bg.getAttribute("x") || "0") + dx));
+    bg.setAttribute("y", String(Number.parseFloat(bg.getAttribute("y") || "0") + dy));
+  }
+  const bgEllipse = g.querySelector(":scope > ellipse");
+  if (bgEllipse) {
+    bgEllipse.setAttribute(
+      "cx",
+      String(Number.parseFloat(bgEllipse.getAttribute("cx") || "0") + dx),
+    );
+    bgEllipse.setAttribute(
+      "cy",
+      String(Number.parseFloat(bgEllipse.getAttribute("cy") || "0") + dy),
+    );
+  }
+  // clipPath > rect — keeps the clip aligned with the bg.
+  const clipRect = g.querySelector("clipPath > rect");
+  if (clipRect) {
+    clipRect.setAttribute(
+      "x",
+      String(Number.parseFloat(clipRect.getAttribute("x") || "0") + dx),
+    );
+    clipRect.setAttribute(
+      "y",
+      String(Number.parseFloat(clipRect.getAttribute("y") || "0") + dy),
+    );
+  }
+  // Callout tail — path's `d` is rebuilt by `rebuildCalloutTail`
+  // off the bg rect + data-tail-* attrs, so shifting those two
+  // anchors and re-running the rebuild keeps the tail tip and base
+  // in their correct visual positions. Avoids parsing the existing
+  // path geometry — `rebuildCalloutTail` is the canonical builder.
+  if (g.getAttribute("data-shape-kind") === "callout") {
+    const tx = g.getAttribute("data-tail-x");
+    const ty = g.getAttribute("data-tail-y");
+    if (tx != null) g.setAttribute("data-tail-x", String(Number.parseFloat(tx) + dx));
+    if (ty != null) g.setAttribute("data-tail-y", String(Number.parseFloat(ty) + dy));
+    rebuildCalloutTail(g);
+  }
+  // Inner <text> — the element itself never carries x/y in our
+  // skeleton (createTextShape doesn't set them); only the
+  // descendant <tspan>s with explicit x/y attrs need shifting.
+  const text = g.querySelector("text");
+  if (text) {
+    const textX = text.getAttribute("x");
+    const textY = text.getAttribute("y");
+    if (textX != null) text.setAttribute("x", String(Number.parseFloat(textX) + dx));
+    if (textY != null) text.setAttribute("y", String(Number.parseFloat(textY) + dy));
+    for (const tspan of Array.from(text.querySelectorAll("tspan"))) {
+      const sx = tspan.getAttribute("x");
+      const sy = tspan.getAttribute("y");
+      if (sx != null) tspan.setAttribute("x", String(Number.parseFloat(sx) + dx));
+      if (sy != null) tspan.setAttribute("y", String(Number.parseFloat(sy) + dy));
+    }
+  }
+}
+
+/**
  * Rebuild the callout tail <path> off the current bg <rect> bounds and
  * the stored data-tail-x / data-tail-y. Call after any change that
  * affects either input — resize (bg rect changed) or tail-tip drag
