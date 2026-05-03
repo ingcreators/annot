@@ -2,6 +2,7 @@
 import "@ingcreators/annot-core/styles/editor.css";
 import "@ingcreators/annot-core/styles/toolbar.css";
 import "@ingcreators/annot-core/styles/property-panel.css";
+import "@ingcreators/annot-core/styles/fonts.css";
 import "./styles/app.css";
 import "./styles/file-manager.css";
 

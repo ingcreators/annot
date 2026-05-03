@@ -1,0 +1,50 @@
+/* Logical font-family stacks — Phase 2 of
+ * `docs/plans/multilingual-fonts-os-stack.md`.
+ *
+ * Three logical tokens (`Annot Sans` / `Annot Serif` / `Annot Mono`)
+ * the editor stores in `data-font-family` (and on the inner `<text>`'s
+ * `font-family` attribute). The CSS rules below resolve each token to
+ * an OS-aware family stack interleaving Latin / CJK / Arabic / Indic /
+ * Thai families so the browser's per-codepoint font selection lands on
+ * the OS native script font without any web-font download.
+ *
+ * Stack order matters: Latin families come FIRST so English text in
+ * mixed content uses native Latin glyphs (Helvetica Neue, Segoe UI),
+ * and CJK families come second so Japanese / Chinese / Korean fall
+ * through to the OS native CJK font without dragging the Latin glyphs
+ * into a CJK Latin variant.
+ *
+ * Keep these stacks in sync with `cssStackFor` in
+ * `packages/core/src/editor/font-registry.ts` — the registry version
+ * is the single source of truth for code paths that need the stack as
+ * a string (PNG export inlines it into the SVG `<defs><style>`); this
+ * stylesheet ships the same stacks as static CSS for the live editor
+ * + gallery + thumbnail panes that just need a stylesheet import.
+ */
+
+text[font-family="Annot Sans"],
+foreignObject [data-font-family="Annot Sans"] {
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial,
+    "Hiragino Sans", "Yu Gothic UI", "Yu Gothic", Meiryo, "MS PGothic",
+    "PingFang SC", "Microsoft YaHei", "Apple SD Gothic Neo", "Malgun Gothic",
+    "Nirmala UI", Tahoma,
+    sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+}
+
+text[font-family="Annot Serif"],
+foreignObject [data-font-family="Annot Serif"] {
+  font-family:
+    Cambria, Georgia,
+    "Yu Mincho", "Hiragino Mincho ProN",
+    SimSun, "Noto Serif CJK SC",
+    serif;
+}
+
+text[font-family="Annot Mono"],
+foreignObject [data-font-family="Annot Mono"] {
+  font-family:
+    "SF Mono", Menlo, Consolas, "Cascadia Mono",
+    "Yu Gothic Mono", "Noto Sans Mono CJK JP",
+    monospace;
+}
