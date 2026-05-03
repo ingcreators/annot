@@ -288,17 +288,34 @@ Verified by:
   have the new coords directly; no `transform="translate(...)"`
   on the wrapper.
 
-### Phase 4 — Opportunistic `#worldBBox` → `getBBox` simplification
+### Phase 4 — `#worldBBox` audit (no simplification safe)
 
-Sweep the known `#worldBBox` callers in `selection.ts` (8
-sites at last count) and replace with `getBBox` where the
-caller only ever needs the visual bbox of a single element
-(no rotation handling). Sites that handle multi-select with
-mixed rotation, group fitting, or smart-guide projection
-keep `#worldBBox`.
+Audit done. Every `#worldBBox` (and direct `getWorldBBox`) call
+site in `selection.ts` is one of:
 
-Independent of the move refactor proper — purely a cleanup.
-Skip if it surfaces unexpected coupling.
+| Site (line) | Purpose | Why `#worldBBox` stays |
+|---|---|---|
+| `alignSelected` (465) | multi-element align | mixed-rotation possible |
+| `distributeSelected` (520) | multi-element distribute | mixed-rotation possible |
+| `#collectSnapCandidates` (567) | snap-target bboxes | candidates may be rotated |
+| smart-guide drag bbox (1424) | dragged-set bbox per frame | dragged set may include rotated |
+| drag-start `origBBox` capture (1077, 1242, 1309, 1769) | drag anchor frame | element being dragged may be rotated |
+| `#findInRect` marquee (1799) | hit-test against rotated AABBs | marquee should still select rotated shapes |
+
+After phase 3, an unrotated shape's `getBBox()` already equals
+its world bbox (geometry == world). For those shapes the
+existing `getWorldBBox` wrapper does an identity CTM compose
+and returns the same rect — no perf concern, just an extra
+function call. Switching to `getBBox()` at any of these sites
+would silently break the moment a rotated shape lands in the
+same code path, and there's no convenient "single-element
+guaranteed unrotated" caller to migrate.
+
+So phase 4 ships as a doc-only PR (this audit table) plus the
+plan-status update. The phase-3 fix already removed the
+`getBBox` mismatch for unrotated shapes at the source — the
+remaining `#worldBBox` calls are correct by design, not a
+holdover.
 
 ### Phase 5 — Cleanup + plan archival
 
