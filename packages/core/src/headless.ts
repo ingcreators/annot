@@ -167,6 +167,12 @@ export {
   readUniversalStyleAttrs,
   resolveStyleReadSource,
 } from "./editor/tool-style-reader.js";
+// ─── SVG path-data utilities (pure string-in/string-out) ─────────────
+// Phase 1 of `docs/plans/move-bakes-coordinates.md`. Translates every
+// absolute coordinate inside a `<path>` element's `d` attribute by a
+// world-space (dx, dy) delta — used by the move-baker for Freehand /
+// Redact-path / future Focus-mask shapes. No DOM dependency.
+export { translatePathD } from "./editor/path-utils.js";
 // ─── Toolbar universal-style attribute writer (pure Element-taker) ────
 // Inverse of `readUniversalStyleAttrs`: takes a preset and writes the
 // stroke / fill / dasharray / opacity / linecap / linejoin attrs onto

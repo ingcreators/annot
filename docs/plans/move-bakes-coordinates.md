@@ -1,6 +1,6 @@
 # Move bakes coordinates — transform reserved for rotation / flip
 
-> **Status:** Draft
+> **Status:** In progress (Phase 1 PR open)
 > **Compatibility:** **Pre-release; no backward-compat shims.**
 >   Existing `<g>` / `<path>` annotations saved with
 >   `data-tx` / `data-ty` carrying the position will, on first
