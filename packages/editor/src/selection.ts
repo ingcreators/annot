@@ -223,6 +223,21 @@ export class SelectionManager {
     this.onChange?.();
   }
 
+  /** Drop the in-progress marquee rect (if any) and reset the
+   *  marquee gesture flags. Idempotent — safe to call when no
+   *  marquee is in flight. The pointerup happy-path, the
+   *  pointercancel handler, and the defensive cleanup at the
+   *  start of a new marquee gesture all route through here so
+   *  there's exactly one place to look when debugging "the cyan
+   *  selection box stayed on the canvas". */
+  #cancelMarquee(): void {
+    if (this.#marquee) {
+      this.#marquee.remove();
+      this.#marquee = null;
+    }
+    this.#isMarquee = false;
+  }
+
   selectMultiple(els: SVGElement[]): void {
     this.clearHandles();
     this.#selectedSet.clear();
@@ -1329,6 +1344,12 @@ export class SelectionManager {
         if (!e.shiftKey) {
           this.select(null);
         }
+        // Defensive cleanup — if a previous marquee gesture was
+        // interrupted (e.g. pointerup fired outside the SVG before
+        // pointer capture was wired up), the leftover rect would
+        // still be in `ui-overlay`. Drop it before opening the new
+        // marquee so two boxes can never coexist.
+        this.#cancelMarquee();
         this.#isMarquee = true;
         this.#marqueeStartX = pt.x;
         this.#marqueeStartY = pt.y;
@@ -1344,6 +1365,25 @@ export class SelectionManager {
         this.#marquee.setAttribute("stroke-dasharray", `${3 / this.#canvas.zoom}`);
         this.#marquee.style.pointerEvents = "none";
         this.#canvas.uiOverlay.appendChild(this.#marquee);
+
+        // Capture pointer events so subsequent pointermove /
+        // pointerup land on the SVG even if the cursor leaves the
+        // canvas bounds. Without this, dragging the marquee out
+        // past the canvas edge and releasing there sends pointerup
+        // to whichever element is under the cursor (document,
+        // sidebar, devtools), and the marquee rect is never
+        // removed — the cyan dashed box stays painted on the
+        // canvas across subsequent edits. `releasePointerCapture`
+        // happens implicitly on pointerup / pointercancel, but
+        // we also clear via `#cancelMarquee` below for belt-and-
+        // suspenders.
+        try {
+          svg.setPointerCapture(e.pointerId);
+        } catch {
+          // setPointerCapture can throw if the pointer is no longer
+          // active by the time we try (rare race); the marquee still
+          // works without capture, so just continue.
+        }
       },
       opts,
     );
@@ -1527,9 +1567,7 @@ export class SelectionManager {
           const my = Number.parseFloat(this.#marquee.getAttribute("y")!);
           const mw = Number.parseFloat(this.#marquee.getAttribute("width")!);
           const mh = Number.parseFloat(this.#marquee.getAttribute("height")!);
-          this.#marquee.remove();
-          this.#marquee = null;
-          this.#isMarquee = false;
+          this.#cancelMarquee();
 
           if (mw > 3 && mh > 3) {
             // Find all annotations intersecting the marquee
@@ -1574,6 +1612,21 @@ export class SelectionManager {
         // Clear smart-guide overlay — guides are only meaningful mid-drag.
         this.#smartGuides?.clear();
         this.#snapCandidates = null;
+      },
+      opts,
+    );
+
+    // Pointer-cancel cleanup. The browser fires `pointercancel` when
+    // it interrupts a pointer interaction the user started — common
+    // triggers include OS-level gestures (touchpad swipes, panning),
+    // a context-menu invocation mid-drag, or losing input focus to
+    // another window. Without this handler, the marquee rect created
+    // in `pointerdown` stays painted in `ui-overlay` because no
+    // matching `pointerup` ever arrives.
+    svg.addEventListener(
+      "pointercancel",
+      () => {
+        this.#cancelMarquee();
       },
       opts,
     );
