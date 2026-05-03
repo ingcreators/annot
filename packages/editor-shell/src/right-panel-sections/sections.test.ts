@@ -25,7 +25,7 @@
 
 import type { Toolbar } from "@ingcreators/annot-editor-shell/toolbar";
 import { describe, expect, it, vi } from "vitest";
-import type { UISectionContext } from "../../app/plugin-host.js";
+import type { UISectionContext } from "../ui-section.js";
 import "./annot-page-elements-section.js";
 import { createPageElementsSection } from "./annot-page-elements-section.js";
 import "./annot-selection-properties-section.js";

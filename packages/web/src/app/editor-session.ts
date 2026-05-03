@@ -28,8 +28,8 @@ import type { AnnotFileDetailsDrawerElement } from "@ingcreators/annot-editor-sh
 import { estimateDataUrlBytes } from "@ingcreators/annot-editor-shell/annot-file-details-drawer";
 import "@ingcreators/annot-editor-shell/annot-file-details-drawer";
 import { installKeyboardHelp } from "@ingcreators/annot-editor-shell";
-import type { AnnotEditorRightPanelElement } from "../editor/right-panel.js";
-import "../editor/right-panel.js";
+import type { AnnotEditorRightPanelElement } from "@ingcreators/annot-editor-shell/right-panel";
+import "@ingcreators/annot-editor-shell/right-panel";
 import type { AnnotScratchpadSectionElement } from "../editor/annot-scratchpad-section.js";
 import "../editor/annot-scratchpad-section.js";
 import { ScratchpadPasteTool } from "../editor/scratchpad-paste-tool.js";
