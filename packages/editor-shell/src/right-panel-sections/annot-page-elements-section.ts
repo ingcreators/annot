@@ -21,9 +21,9 @@ import type { History } from "@ingcreators/annot-editor";
 import type { SelectionManager } from "@ingcreators/annot-editor";
 import { builtinIcon } from "@ingcreators/annot-core";
 import type { PageElement } from "@ingcreators/annot-core/storage";
-import type { UISection } from "../../app/plugin-host.js";
-import { html, LitElement } from "../../lit.js";
-import "../../ui/annot-icon.js";
+import type { UISection } from "../ui-section.js";
+import { html, LitElement } from "../lit.js";
+import "../annot-icon.js";
 import {
   fullDescriptionFor,
   iconForElement,

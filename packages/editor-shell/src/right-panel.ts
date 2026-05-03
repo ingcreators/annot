@@ -1,5 +1,5 @@
 import { builtinIcon } from "@ingcreators/annot-core";
-import "../ui/annot-icon.js";
+import "./annot-icon.js";
 
 /**
  * `<annot-editor-right-panel>` — unified context-aware properties
@@ -64,9 +64,14 @@ import {
 import type { PageMetadata } from "@ingcreators/annot-core/storage";
 import type { SelectionManager } from "@ingcreators/annot-editor";
 import { type CanvasManager, type History, PropertyPanel } from "@ingcreators/annot-editor";
-import type { UISection, UISectionContext, UISectionLifecycle } from "../app/plugin-host.js";
-import { html, LitElement, unsafeHTML } from "../lit.js";
-import { logger } from "../logger.js";
+import type { UISection, UISectionContext, UISectionLifecycle } from "./ui-section.js";
+import { html, LitElement, unsafeHTML } from "./lit.js";
+// `logger` (PWA's centralised log shim from `packages/web/src/logger.ts`)
+// is a host-side concern — editor-shell stays host-neutral, so the
+// single `logger.debug` call below uses `console.debug` directly.
+// If multiple shell modules ever need the level-control wrapper, add a
+// `@ingcreators/annot-editor-shell/logger` of our own (or accept one
+// as a host dep).
 import { createPageElementsSection } from "./right-panel-sections/annot-page-elements-section.js";
 import { createSelectionPropertiesSection } from "./right-panel-sections/annot-selection-properties-section.js";
 import { createToolPropertiesSection } from "./right-panel-sections/annot-tool-properties-section.js";
@@ -563,7 +568,7 @@ export class AnnotEditorRightPanelElement extends LitElement {
    *  session. */
   setPageMetadata(meta: PageMetadata | null | undefined): void {
     this.pageMetadata = meta ?? null;
-    logger.debug(
+    console.debug(
       "[annot/editor] setPageMetadata:",
       meta ? `${meta.elements.length} elements` : "null/undefined",
       meta?.captureRect,

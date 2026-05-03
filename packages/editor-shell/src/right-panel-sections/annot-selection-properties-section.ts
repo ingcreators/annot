@@ -18,8 +18,8 @@
  * listeners survive mode switches.
  */
 
-import type { UISection } from "../../app/plugin-host.js";
-import { html, LitElement } from "../../lit.js";
+import type { UISection } from "../ui-section.js";
+import { html, LitElement } from "../lit.js";
 
 export class AnnotRightPanelSelectionPropertiesSectionElement extends LitElement {
   static override properties = {

@@ -324,7 +324,7 @@ export class App {
     // entries log a warning + no-op for forward-compat with
     // newer-than-config deployments.
     const { BUILTIN_DRAWER_SECTION_IDS } = await import("@ingcreators/annot-editor-shell/annot-file-details-drawer");
-    const { BUILTIN_RIGHT_PANEL_SECTION_IDS } = await import("./editor/right-panel.js");
+    const { BUILTIN_RIGHT_PANEL_SECTION_IDS } = await import("@ingcreators/annot-editor-shell/right-panel");
     const knownIds = new Set<string>([
       ...BUILTIN_DRAWER_SECTION_IDS,
       ...BUILTIN_RIGHT_PANEL_SECTION_IDS,
