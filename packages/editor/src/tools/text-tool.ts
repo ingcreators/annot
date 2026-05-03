@@ -183,7 +183,7 @@ export class TextTool extends ToolBase {
     //
     // DOM-first hit test catches the common case where the dblclick
     // landed directly on the rect's stroke or filled interior.
-    let bareRect = target.closest("rect") as SVGRectElement | null;
+    const bareRect = target.closest("rect") as SVGRectElement | null;
     if (
       bareRect &&
       bareRect.parentNode === this.canvas.annotations &&
@@ -197,51 +197,93 @@ export class TextTool extends ToolBase {
     }
 
     // Bbox fallback — covers the common Shape-tool case where the
-    // user drew an unfilled rect (`fill="none"`) and dblclicked
-    // inside the bounded area. SVG's default `pointer-events:
-    // visiblePainted` means the click passes through the unfilled
-    // interior to whatever's behind (typically the underlying
-    // image), so `target.closest("rect")` returns null. Mirror the
-    // bbox-based fallback `SelectionManager`'s pointerdown uses for
-    // the same scenario: walk `canvas.annotations.children`, find
-    // a bare `<rect>` whose world bbox contains the dblclick point,
-    // and promote that one. Skips redact rects for the same reason
-    // as the primary path.
+    // user dblclicks inside an unfilled rect (`fill="none"`). SVG's
+    // default `pointer-events: visiblePainted` means the click
+    // passes through the unfilled interior to whatever's behind
+    // (typically the underlying image), so the DOM-level target
+    // resolution above misses both:
+    //   - Bare Shape-tool rects (need promote → editExisting), AND
+    //   - Already-promoted text-on-shape wrappers whose inner bg
+    //     rect inherited the same `fill="none"` styling (need
+    //     editExisting against the wrapper directly).
+    // The fallback walks `canvas.annotations.children` topmost-
+    // first, finding the first hit by the world-space bbox of
+    // either a bare rect (→ promote) or a wrapper's bg rect (→
+    // re-edit). Without this branch, re-editing the same shape
+    // a second time was order-of-magnitude flaky for users:
+    // direct hits on stroke / typed glyphs worked, hits on the
+    // unfilled interior fell through to the background image and
+    // did nothing.
     if (e instanceof MouseEvent) {
       const pt = this.canvas.svgPoint(e);
-      bareRect = this.#findRectAtPoint(pt.x, pt.y);
-      if (
-        bareRect &&
-        bareRect.parentNode === this.canvas.annotations &&
-        !bareRect.hasAttribute("data-redact-style")
-      ) {
-        e.stopPropagation();
-        const wrapper = wrapBareRectForText(bareRect);
+      const hit = this.#findShapeAtPoint(pt.x, pt.y);
+      if (!hit) return;
+      e.stopPropagation();
+      if (hit.kind === "bareRect") {
+        const wrapper = wrapBareRectForText(hit.rect);
         this.#promotedFromBareRect = true;
         this.#editExisting(wrapper);
+      } else {
+        this.#editExisting(hit.wrapper);
       }
     }
   }
 
-  /** Walk the annotation children for a bare `<rect>` whose world
-   *  bbox contains (px, py). Used by `#handleDblclick`'s fallback
-   *  path when the DOM-level dblclick target was an unfilled rect's
-   *  pass-through (the cursor was inside the rect, but `fill="none"`
-   *  meant the rect didn't capture the click). Topmost match wins
-   *  so a smaller rect on top of a larger one promotes correctly. */
-  #findRectAtPoint(px: number, py: number): SVGRectElement | null {
+  /** Walk the annotation children topmost-first, returning either a
+   *  bare `<rect>` (for promote) or a `<g data-type="shape">`
+   *  wrapper (for re-edit) whose world-space bbox contains
+   *  (px, py). Used by `#handleDblclick`'s fallback when the DOM
+   *  target was the underlying image (click passed through an
+   *  unfilled rect interior).
+   *
+   *  Topmost-first matches DOM hit semantics — a smaller shape
+   *  drawn on top of a larger one wins. Bare redact rects are
+   *  skipped (they shouldn't promote — the user's expectation is
+   *  "this black box hides content," not "this is a labelled
+   *  shape"). Wrapper hits are unconditional: every text-bearing
+   *  shape can re-enter edit mode. */
+  #findShapeAtPoint(
+    px: number,
+    py: number,
+  ):
+    | { kind: "bareRect"; rect: SVGRectElement }
+    | { kind: "wrapper"; wrapper: SVGGElement }
+    | null {
     const children = this.canvas.annotations.children;
     for (let i = children.length - 1; i >= 0; i--) {
       const el = children[i] as SVGElement;
-      if (el.tagName !== "rect") continue;
-      const rect = el as SVGRectElement;
-      const x = Number.parseFloat(rect.getAttribute("x") || "0");
-      const y = Number.parseFloat(rect.getAttribute("y") || "0");
-      const w = Number.parseFloat(rect.getAttribute("width") || "0");
-      const h = Number.parseFloat(rect.getAttribute("height") || "0");
-      if (px >= x && px <= x + w && py >= y && py <= y + h) return rect;
+      if (el.tagName === "rect") {
+        if (el.hasAttribute("data-redact-style")) continue;
+        const rect = el as SVGRectElement;
+        if (this.#rectContains(rect, px, py)) return { kind: "bareRect", rect };
+        continue;
+      }
+      if (el.tagName === "g" && el.getAttribute("data-type") === "shape") {
+        const bg = el.querySelector(":scope > rect");
+        if (bg && this.#rectContains(bg as SVGRectElement, px, py)) {
+          return { kind: "wrapper", wrapper: el as SVGGElement };
+        }
+      }
     }
     return null;
+  }
+
+  /** True when the rect's world-space bounds (x..x+w, y..y+h)
+   *  contain (px, py). After the move-bakes-coordinates work
+   *  (`docs/plans/_done/move-bakes-coordinates.md`) every
+   *  unrotated shape stores its position directly in the rect's
+   *  `x` / `y` attrs, so this comparison is in world coords
+   *  without further transform composition. Rotated shapes route
+   *  through the legacy data-tx/ty + matrix path and don't
+   *  match here — but rotated text-shapes are rare and
+   *  re-editable via the DOM-target fast path on a stroke /
+   *  glyph hit. */
+  #rectContains(rect: SVGRectElement, px: number, py: number): boolean {
+    const x = Number.parseFloat(rect.getAttribute("x") || "0");
+    const y = Number.parseFloat(rect.getAttribute("y") || "0");
+    const w = Number.parseFloat(rect.getAttribute("width") || "0");
+    const h = Number.parseFloat(rect.getAttribute("height") || "0");
+    return px >= x && px <= x + w && py >= y && py <= y + h;
   }
 
   #editExisting(g: SVGGElement): void {
