@@ -13,9 +13,18 @@
  *
  * Dismissed by `Esc`, the × button, or clicking the backdrop — the
  * standard overlay conventions so users never feel trapped.
+ *
+ * Phase 2a of `docs/plans/_done/vscode-extension-host.md` moved this
+ * out of `packages/web/src/editor/` and onto the host-neutral
+ * `@ingcreators/annot-core`-rooted icon API (`renderIconElement` +
+ * `builtinIcon`) so the shell no longer depends on
+ * `packages/web/src/ui/annot-icon-imperative.ts`. The matching CSS
+ * lives in `packages/web/src/styles/app.css` (`keyboard-help-*`
+ * class names); hosts other than the PWA copy / re-import the
+ * subset they want when they integrate the shell.
  */
 
-import { createBuiltinIcon } from "../ui/annot-icon-imperative.js";
+import { builtinIcon, renderIconElement } from "@ingcreators/annot-core";
 
 interface ShortcutEntry {
   keys: string[]; // e.g. ["Ctrl", "Shift", "]"]
@@ -155,7 +164,8 @@ function buildModal(onClose: () => void): HTMLElement {
   const closeBtn = document.createElement("button");
   closeBtn.type = "button";
   closeBtn.className = "keyboard-help-close";
-  closeBtn.appendChild(createBuiltinIcon("close"));
+  const closeIcon = renderIconElement(builtinIcon("close"));
+  if (closeIcon) closeBtn.appendChild(closeIcon);
   closeBtn.setAttribute("aria-label", "Close");
   closeBtn.addEventListener("click", onClose);
   header.appendChild(closeBtn);

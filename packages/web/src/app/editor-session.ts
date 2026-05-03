@@ -27,7 +27,7 @@ import { assertNonNull } from "@ingcreators/annot-core/utils";
 import type { AnnotFileDetailsDrawerElement } from "../editor/annot-file-details-drawer.js";
 import { estimateDataUrlBytes } from "../editor/annot-file-details-drawer.js";
 import "../editor/annot-file-details-drawer.js";
-import { installKeyboardHelp } from "../editor/keyboard-help.js";
+import { installKeyboardHelp } from "@ingcreators/annot-editor-shell";
 import type { AnnotEditorRightPanelElement } from "../editor/right-panel.js";
 import "../editor/right-panel.js";
 import type { AnnotScratchpadSectionElement } from "../editor/annot-scratchpad-section.js";

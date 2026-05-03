@@ -190,6 +190,9 @@ importers:
       '@ingcreators/annot-editor':
         specifier: workspace:*
         version: link:../editor
+      '@ingcreators/annot-editor-shell':
+        specifier: workspace:*
+        version: link:../editor-shell
       '@ingcreators/annot-render':
         specifier: workspace:*
         version: link:../render

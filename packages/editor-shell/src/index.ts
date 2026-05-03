@@ -27,3 +27,4 @@ export type {
   EditorShellFeatures,
   EditorShellHost,
 } from "./editor-shell.js";
+export { installKeyboardHelp } from "./keyboard-help.js";
