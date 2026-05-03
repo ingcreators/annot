@@ -1,3 +1,4 @@
+import { cssStackFor, LOGICAL_FAMILIES } from "@ingcreators/annot-core/headless";
 import { createEditableImage } from "@ingcreators/annot-core/xmp";
 import type { CanvasManager } from "./canvas-manager.js";
 import { stampAnnotVersion } from "@ingcreators/annot-core/editor/svg-format";
@@ -11,6 +12,13 @@ export function exportSVGString(canvas: CanvasManager): string {
   // Flatten annotations
   flattenAnnotations(clone);
 
+  // Inline the logical font-family stacks so the saved SVG is
+  // self-contained — the host's `fonts.css` won't be reachable
+  // when the SVG is loaded standalone (PNG raster via `<img>`,
+  // user-saved .svg opened in a different viewer, OOXML embed,
+  // etc.). Phase 5 of `docs/plans/multilingual-fonts-os-stack.md`.
+  injectLogicalFontStyles(clone);
+
   clone.removeAttribute("style");
   clone.setAttribute("width", String(canvas.imageWidth));
   clone.setAttribute("height", String(canvas.imageHeight));
@@ -19,6 +27,37 @@ export function exportSVGString(canvas: CanvasManager): string {
   let svgString = serializer.serializeToString(clone);
   svgString = `<?xml version="1.0" encoding="UTF-8"?>\n${svgString}`;
   return svgString;
+}
+
+/** Add a `<defs><style>` block to the SVG with one rule per
+ *  logical Annot family token, mapping each to the per-OS family
+ *  stack from `cssStackFor`. Idempotent — if a `<defs><style
+ *  data-annot-fonts>` already exists, it gets replaced.
+ *
+ *  The CSS selector targets both `<text>` (committed annotations)
+ *  and `foreignObject [data-font-family="..."]` (the contentEditable
+ *  text-edit overlay) so a serialised mid-edit SVG also resolves
+ *  consistently. */
+function injectLogicalFontStyles(svg: SVGSVGElement): void {
+  const SVG_NS = "http://www.w3.org/2000/svg";
+  let defs = svg.querySelector("defs");
+  if (!defs) {
+    defs = svg.ownerDocument.createElementNS(SVG_NS, "defs");
+    svg.insertBefore(defs, svg.firstChild);
+  }
+  // Drop any prior injection so re-export stays idempotent.
+  defs.querySelector("style[data-annot-fonts]")?.remove();
+  const style = svg.ownerDocument.createElementNS(SVG_NS, "style");
+  style.setAttribute("data-annot-fonts", "");
+  const rules: string[] = [];
+  for (const family of LOGICAL_FAMILIES) {
+    const stack = cssStackFor(family);
+    rules.push(
+      `text[font-family="${family}"], foreignObject [data-font-family="${family}"] { font-family: ${stack}; }`,
+    );
+  }
+  style.textContent = rules.join("\n");
+  defs.appendChild(style);
 }
 
 /**
@@ -287,6 +326,20 @@ export async function downloadAsImage(
 
 
 async function rasterizeSVG(svgString: string, width: number, height: number): Promise<Blob> {
+  // Phase 5 of `docs/plans/multilingual-fonts-os-stack.md`:
+  // wait for the host document's fonts to settle before
+  // rasterising. OS-only fonts make this resolve immediately,
+  // but the guard defends against future web-font additions and
+  // against intermittent OS-font pre-load delays on cold
+  // browser profiles.
+  if (typeof document !== "undefined" && document.fonts?.ready) {
+    try {
+      await document.fonts.ready;
+    } catch {
+      // `fonts.ready` rejecting is rare — keep rasterising even
+      // if the font loader itself errored.
+    }
+  }
   const img = new Image();
   const svgBlob = new Blob([svgString], { type: "image/svg+xml" });
   const url = URL.createObjectURL(svgBlob);
