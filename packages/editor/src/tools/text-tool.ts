@@ -71,6 +71,13 @@ export class TextTool extends ToolBase {
    *  typing we roll the promotion back via `unwrapBareTextShape`
    *  so the canvas stays clean. */
   #promotedFromBareRect = false;
+  /** Set when the current edit session was opened by a fresh draw
+   *  (Toolbox → click on canvas) — the wrapper was built upfront
+   *  in `onPointerDown` so the user sees the actual sticky body /
+   *  callout tail underneath the contentEditable overlay during
+   *  the very first edit session. On cancel-without-typing we drop
+   *  the wrapper so an empty placeholder isn't left on the canvas. */
+  #freshDrawShape = false;
   /** Capture-phase pointerdown handler installed for the lifetime
    *  of an edit session so a click outside the contentEditable
    *  commits the edit (PowerPoint-style "outside click finishes
@@ -92,7 +99,30 @@ export class TextTool extends ToolBase {
       this.#finishEditing();
       return;
     }
-    this.#startEditing(pt.x, pt.y, null);
+    // Build the final shape upfront and drop into the same edit
+    // flow re-edit uses. The user sees the actual variant body
+    // (sticky's yellow rect, callout's body + tail wedge) under
+    // the transparent contentEditable overlay from the very first
+    // edit session — without this, fresh-draw editing of a
+    // callout shows only an empty dashed rectangle and the user
+    // can't tell they're drawing the variant they picked.
+    const variant: TextVariant = this.options.textVariant ?? "sticky";
+    const newEl = createTextShape({
+      x: pt.x,
+      y: pt.y,
+      w: DEFAULT_WIDTH,
+      h: DEFAULT_HEIGHT,
+      variant,
+      runs: [],
+      fontSize: this.options.fontSize,
+      fontFamily: this.options.fontFamily ?? "sans-serif",
+      color: this.options.strokeColor,
+      textAnchor: this.options.textAnchor,
+      textVerticalAnchor: this.options.textVerticalAnchor,
+    });
+    this.canvas.annotations.appendChild(newEl);
+    this.#freshDrawShape = true;
+    this.#editExisting(newEl);
   }
 
   onPointerMove(_e: PointerEvent, _pt: DOMPoint): void {}
@@ -470,31 +500,28 @@ export class TextTool extends ToolBase {
 
   /**
    * Commit the active edit session. One unified path for every
-   * text-shape variant — the wrapper is mutated in place if it
-   * already exists (re-edit), or created via `createTextShape`
-   * if not (fresh draw).
+   * text-shape variant — the wrapper is always mutated in place,
+   * since fresh-draw sessions also build the wrapper upfront in
+   * `onPointerDown` so the user sees the actual variant body
+   * (sticky's yellow rect, callout's body + tail wedge) under
+   * the contentEditable overlay during the very first edit.
    *
-   * Earlier revisions split the re-edit path into two: an in-place
-   * mutation for text-on-shape wrappers (the ones built by
-   * promoting a Shape-tool rect via `wrapBareRectForText` —
-   * `data-shape-kind` ∈ rect / rounded / ellipse, see
-   * `isTextOnShape`) and a remove-then-rebuild via
-   * `createTextShape` for the variants the Text tool drew directly
-   * (plain / sticky / callout). The rebuild path was a shortcut to
-   * refresh the sticky / callout body tint after a text-color
-   * change, but the rebuild also dropped any wrapper-level attribute
-   * not reflected in `TextShapeSpec` (autofit, per-side margins, …),
-   * forcing a hand-maintained carry-over list and producing the
-   * "Autofit setting doesn't persist" symptom users reported.
+   * Earlier revisions split the commit into two paths: an
+   * in-place mutation for re-edit and a separate `createTextShape`
+   * call for fresh draw. The fresh-draw branch was redundant once
+   * `onPointerDown` started building the wrapper upfront — both
+   * routes now converge on `#commitReEdit`, which owns both the
+   * happy-path (replaceRunsInPlace) and the cancel-without-typing
+   * cleanup (drop the upfront wrapper for a fresh draw, roll back
+   * the bare-rect promotion for a Shape-tool dblclick).
    *
-   * Mutating the wrapper in place across every variant fixes that
-   * by construction: the wrapper's element identity is preserved,
-   * so every `data-*` attribute, transform, and history reference
-   * carries through automatically. The body-tint update that the
-   * rebuild path used to provide moves into `applyTextShapeColor`
-   * — a Tier B helper that derives the sticky / callout bg fill
-   * from `stickyBgFor(textColor)` and skips the geometry primitive
-   * for variants whose bg is the user's deliberate drawn color.
+   * The earlier note about preserving wrapper identity across
+   * autofit / margin / per-side data-* still applies: the wrapper
+   * mutates in place, so every wrapper-level attribute carries
+   * through without an explicit carry-over list. The body-tint
+   * update that the legacy rebuild path used to provide lives in
+   * `applyTextShapeColor` — a Tier B helper that derives the
+   * sticky / callout bg fill from `stickyBgFor(textColor)`.
    */
   #finishEditing(): void {
     if (!this.#foreignObject || !this.#editDiv) return;
@@ -507,10 +534,6 @@ export class TextTool extends ToolBase {
       .map((r) => r.text)
       .join("")
       .trim();
-    const foX = Number.parseFloat(this.#foreignObject.getAttribute("x")!);
-    const foY = Number.parseFloat(this.#foreignObject.getAttribute("y")!);
-    const foW = Number.parseFloat(this.#foreignObject.getAttribute("width")!);
-    const foH = Number.parseFloat(this.#foreignObject.getAttribute("height")!);
 
     this.#miniToolbar?.close();
     this.#miniToolbar = null;
@@ -522,11 +545,14 @@ export class TextTool extends ToolBase {
       this.#onOutsidePointerDown = null;
     }
 
-    if (this.#editTarget) {
-      this.#commitReEdit(this.#editTarget, runs, flatText);
-    } else {
-      this.#commitFreshDraw(foX, foY, foW, foH, runs, flatText);
-    }
+    // Both fresh-draw (created upfront in `onPointerDown`) and
+    // re-edit / promotion sessions arrive here with `#editTarget`
+    // set, so the commit always routes through `#commitReEdit` —
+    // the wrapper is mutated in place. The cancel-without-typing
+    // branch in `#commitReEdit` owns the cleanup that used to live
+    // in the separate fresh-draw path (drop the upfront wrapper).
+    if (!this.#editTarget) return;
+    this.#commitReEdit(this.#editTarget, runs, flatText);
   }
 
   /** Re-edit commit path. Mutates the existing wrapper in place
@@ -537,6 +563,8 @@ export class TextTool extends ToolBase {
     this.#editTarget = null;
     const promoted = this.#promotedFromBareRect;
     this.#promotedFromBareRect = false;
+    const freshDraw = this.#freshDrawShape;
+    this.#freshDrawShape = false;
 
     // Restore the wrapper's visibility — `#editExisting` hides the
     // WHOLE wrapper for auto-bg variants (plain / sticky / callout)
@@ -562,9 +590,13 @@ export class TextTool extends ToolBase {
       // Cancel-without-typing on a freshly-promoted bare-rect →
       // roll back the promotion so the canvas stays clean.
       if (promoted) unwrapBareTextShape(wrapper);
+      // Cancel-without-typing on a fresh-draw → drop the wrapper
+      // we built upfront in `onPointerDown` so an empty placeholder
+      // isn't left on the canvas.
+      if (freshDraw) wrapper.remove();
       this.canvas.svg.dispatchEvent(
         new CustomEvent("annot:text-edit-end", {
-          detail: { target: wrapper },
+          detail: { target: freshDraw ? null : wrapper },
           bubbles: false,
         }),
       );
@@ -598,53 +630,4 @@ export class TextTool extends ToolBase {
     );
   }
 
-  /** Fresh-draw commit path. No existing wrapper, so `createTextShape`
-   *  builds one from the active tool preset and the foreignObject's
-   *  bounds. */
-  #commitFreshDraw(
-    x: number,
-    y: number,
-    w: number,
-    h: number,
-    runs: TextRun[],
-    flatText: string,
-  ): void {
-    this.#promotedFromBareRect = false;
-
-    if (!flatText) {
-      this.canvas.svg.dispatchEvent(
-        new CustomEvent("annot:text-edit-end", {
-          detail: { target: null },
-          bubbles: false,
-        }),
-      );
-      return;
-    }
-
-    const fontSize = this.options.fontSize;
-    const fontFamily = this.options.fontFamily ?? "sans-serif";
-    const color = this.options.strokeColor;
-    const variant: TextVariant = this.options.textVariant ?? "sticky";
-
-    const newEl = createTextShape({
-      x,
-      y,
-      w,
-      h,
-      variant,
-      runs,
-      fontSize,
-      fontFamily,
-      color,
-      textAnchor: this.options.textAnchor,
-      textVerticalAnchor: this.options.textVerticalAnchor,
-    });
-    this.canvas.annotations.appendChild(newEl);
-    this.history.save();
-    this.onTextBoxChanged?.(newEl);
-    this.onShapeComplete?.(newEl);
-    this.canvas.svg.dispatchEvent(
-      new CustomEvent("annot:text-edit-end", { detail: { target: newEl }, bubbles: false }),
-    );
-  }
 }
