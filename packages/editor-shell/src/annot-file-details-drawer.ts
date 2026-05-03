@@ -1,5 +1,5 @@
 import { builtinIcon } from "@ingcreators/annot-core";
-import "../ui/annot-icon.js";
+import "./annot-icon.js";
 /**
  * `<annot-file-details-drawer>` — right-side slide-in panel that
  * consolidates every piece of information about the currently-open
@@ -34,8 +34,8 @@ import "../ui/annot-icon.js";
  * learn a new affordance.
  */
 
-import type { UISection, UISectionContext, UISectionLifecycle } from "../app/plugin-host.js";
-import { html, LitElement } from "../lit.js";
+import { html, LitElement } from "./lit.js";
+import type { UISection, UISectionContext, UISectionLifecycle } from "./ui-section.js";
 import { createExternalLinksSection } from "./drawer-sections/external-links-section.js";
 import { createFileSection } from "./drawer-sections/file-section.js";
 import { createLastCommitSection } from "./drawer-sections/last-commit-section.js";

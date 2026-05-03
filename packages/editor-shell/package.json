@@ -19,11 +19,14 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "@storybook/web-components-vite": "^10.3.5",
+    "storybook": "^10.3.5",
     "typescript": "catalog:",
     "vite": "catalog:"
   },
   "dependencies": {
     "@ingcreators/annot-core": "workspace:*",
-    "@ingcreators/annot-editor": "workspace:*"
+    "@ingcreators/annot-editor": "workspace:*",
+    "lit": "^3.3.2"
   }
 }

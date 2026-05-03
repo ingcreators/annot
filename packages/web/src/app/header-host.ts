@@ -25,8 +25,8 @@ import type { ImageRecord, StorageProvider } from "@ingcreators/annot-core/stora
 import { getFilename } from "@ingcreators/annot-core/storage";
 import "../editor/editor-header.js";
 import type { AnnotEditorHeaderElement } from "../editor/editor-header.js";
-import type { AnnotFileDetailsDrawerElement } from "../editor/annot-file-details-drawer.js";
-import { estimateDataUrlBytes } from "../editor/annot-file-details-drawer.js";
+import type { AnnotFileDetailsDrawerElement } from "@ingcreators/annot-editor-shell/annot-file-details-drawer";
+import { estimateDataUrlBytes } from "@ingcreators/annot-editor-shell/annot-file-details-drawer";
 import type { AnnotSaveStatusElement } from "../editor/save-status-indicator.js";
 import { editUrl, pushRoute } from "../router.js";
 import { getStorageMode } from "../storage/bridge.js";

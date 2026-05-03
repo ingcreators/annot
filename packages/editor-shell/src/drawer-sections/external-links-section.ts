@@ -16,10 +16,10 @@
  * which triggers a Lit re-render.
  */
 
-import type { UISection } from "../../app/plugin-host.js";
 import type { IconSpec } from "@ingcreators/annot-core";
-import { html, LitElement, nothing } from "../../lit.js";
-import "../../ui/annot-icon.js";
+import { html, LitElement, nothing } from "../lit.js";
+import type { UISection } from "../ui-section.js";
+import "../annot-icon.js";
 import type { FileDetailsData } from "../file-details-drawer-types.js";
 
 export interface ExternalLinkEntry {

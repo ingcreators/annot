@@ -323,7 +323,7 @@ export class App {
     // ids — drawer (Phase 2) + right-panel (Phase 3). Unknown
     // entries log a warning + no-op for forward-compat with
     // newer-than-config deployments.
-    const { BUILTIN_DRAWER_SECTION_IDS } = await import("./editor/annot-file-details-drawer.js");
+    const { BUILTIN_DRAWER_SECTION_IDS } = await import("@ingcreators/annot-editor-shell/annot-file-details-drawer");
     const { BUILTIN_RIGHT_PANEL_SECTION_IDS } = await import("./editor/right-panel.js");
     const knownIds = new Set<string>([
       ...BUILTIN_DRAWER_SECTION_IDS,

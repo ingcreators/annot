@@ -28,7 +28,7 @@
  *   </annot-tag-editor>
  */
 
-import { html, LitElement, nothing } from "../lit.js";
+import { html, LitElement, nothing } from "./lit.js";
 
 export class AnnotTagEditorElement extends LitElement {
   static override properties = {

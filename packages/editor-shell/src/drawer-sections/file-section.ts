@@ -13,8 +13,8 @@
  * `deps.getData()` and reassigns the property.
  */
 
-import type { UISection } from "../../app/plugin-host.js";
-import { html, LitElement, nothing } from "../../lit.js";
+import { html, LitElement, nothing } from "../lit.js";
+import type { UISection } from "../ui-section.js";
 import type { FileDetailsData } from "../file-details-drawer-types.js";
 import { validateFilename } from "../file-details-drawer-types.js";
 import { formatBytes, formatDate } from "./helpers.js";

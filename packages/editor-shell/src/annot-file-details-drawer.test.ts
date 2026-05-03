@@ -13,7 +13,7 @@
  */
 
 import { describe, expect, it, vi } from "vitest";
-import type { UISection, UISectionLifecycle } from "../app/plugin-host.js";
+import type { UISection, UISectionLifecycle } from "./ui-section.js";
 import "./annot-file-details-drawer.js";
 import {
   type AnnotFileDetailsDrawerElement,
