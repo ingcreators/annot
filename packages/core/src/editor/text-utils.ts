@@ -630,7 +630,7 @@ export function readTextShapeSpec(g: SVGElement): TextShapeSpec {
   const w = Number.parseFloat(bg?.getAttribute("width") || "200");
   const h = Number.parseFloat(bg?.getAttribute("height") || "80");
   const fontSize = Number.parseFloat(g.getAttribute("data-font-size") || "16");
-  const fontFamily = g.getAttribute("data-font-family") || "sans-serif";
+  const fontFamily = g.getAttribute("data-font-family") || "Annot Sans";
   const color = g.getAttribute("data-color") || "#ff0000";
   const variant = detectTextVariant(g);
   const shapeKindRaw = g.getAttribute("data-shape-kind");
@@ -1117,7 +1117,7 @@ export function wrapBareRectForText(rect: SVGRectElement): SVGGElement {
   // attributes intact so the Shape-tool styling survives the
   // promotion.
   g.setAttribute("data-font-size", "16");
-  g.setAttribute("data-font-family", "sans-serif");
+  g.setAttribute("data-font-family", "Annot Sans");
   g.setAttribute("data-color", "#000000");
   // Text-on-shape defaults to PowerPoint-style centered text
   // inside the shape geometry. The user can change either anchor
@@ -1144,7 +1144,7 @@ export function wrapBareRectForText(rect: SVGRectElement): SVGGElement {
 
   const textEl = document.createElementNS(SVG_NS, "text");
   textEl.setAttribute("font-size", "16");
-  textEl.setAttribute("font-family", "sans-serif");
+  textEl.setAttribute("font-family", "Annot Sans");
   textEl.setAttribute("fill", g.getAttribute("data-color") || "#000000");
   textEl.setAttribute("clip-path", `url(#${clipId})`);
   textEl.style.pointerEvents = "none";
@@ -1176,7 +1176,7 @@ export function replaceRunsInPlace(g: SVGElement, runs: readonly TextRun[]): voi
   const boxW = firstRect ? Number.parseFloat(firstRect.getAttribute("width") || "0") : 0;
   const boxH = firstRect ? Number.parseFloat(firstRect.getAttribute("height") || "0") : 0;
   const fontSize = Number.parseFloat(g.getAttribute("data-font-size") || "16");
-  const fontFamily = g.getAttribute("data-font-family") || "sans-serif";
+  const fontFamily = g.getAttribute("data-font-family") || "Annot Sans";
   const color = g.getAttribute("data-color") || "#000000";
 
   // Margins follow the per-side `data-text-margin-{l,r,t,b}`

@@ -48,6 +48,7 @@ import {
   type ToolPanelControlDef,
   type ToolPanelSection,
 } from "@ingcreators/annot-core/editor";
+import { coerceToLogicalFamily } from "@ingcreators/annot-core/headless";
 import type { CanvasManager } from "@ingcreators/annot-editor";
 import type {
   ArrowDim,
@@ -640,7 +641,10 @@ function renderFontSizeRow(
 
 function renderFontFamilyRow(preset: ToolOptions, sync: () => void): HTMLElement {
   const meta = metaFor(PROPERTY_CONTROL_IDS.fontFamily);
-  if (!preset.fontFamily) preset.fontFamily = "sans-serif";
+  // Normalise legacy raw font-family strings (`"sans-serif"`,
+  // `"system-ui, ..."`, etc.) to a logical token. Any value not in
+  // the registry's three-token set falls back to `Annot Sans`.
+  preset.fontFamily = coerceToLogicalFamily(preset.fontFamily);
   const label = meta.label ?? "Font";
   const options = (meta.options ?? []).map((opt) => ({
     value: String(opt.value),
@@ -653,7 +657,7 @@ function renderFontFamilyRow(preset: ToolOptions, sync: () => void): HTMLElement
       current: preset.fontFamily,
       ariaLabel: label,
       onChange: (v) => {
-        preset.fontFamily = v;
+        preset.fontFamily = coerceToLogicalFamily(v);
         sync();
       },
     }),

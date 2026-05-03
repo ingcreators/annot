@@ -19,6 +19,7 @@ import {
   detectArrowSpec,
   refreshArrowPath,
 } from "./arrow-markers.js";
+import { coerceToLogicalFamily } from "./font-registry.js";
 import { convertShape, detectShapeType } from "./shape-utils.js";
 import {
   convertTextVariant,
@@ -716,20 +717,30 @@ export const PROPERTY_CONTROLS: Readonly<{
     id: PROPERTY_CONTROL_IDS.fontFamily,
     type: "select",
     label: "Font",
+    // Logical-family token only (`Annot Sans` / `Annot Serif` /
+    // `Annot Mono`). The `coerceToLogicalFamily` reader below
+    // normalises any legacy raw CSS family strings (e.g.
+    // `"sans-serif"`, `"system-ui, -apple-system, sans-serif"`)
+    // to the matching token so existing saves render predictably
+    // until the next edit overwrites the attribute. See
+    // `docs/plans/_done/multilingual-fonts-os-stack.md` (or its
+    // active draft) for the per-token CSS stack and the OOXML
+    // `<a:latin>` + `<a:ea>` + `<a:cs>` triple emit on PPTX
+    // export.
     getValue: (el) =>
-      el.getAttribute("data-font-family") ??
-      el.querySelector("text")?.getAttribute("font-family") ??
-      "sans-serif",
+      coerceToLogicalFamily(
+        el.getAttribute("data-font-family") ??
+          el.querySelector("text")?.getAttribute("font-family"),
+      ),
     setValue: (el, value) => {
-      const v = String(value);
+      const v = coerceToLogicalFamily(String(value));
       el.setAttribute("data-font-family", v);
       el.querySelector("text")?.setAttribute("font-family", v);
     },
     options: [
-      { value: "sans-serif", label: "Sans-serif" },
-      { value: "serif", label: "Serif" },
-      { value: "monospace", label: "Monospace" },
-      { value: "system-ui, -apple-system, sans-serif", label: "System UI" },
+      { value: "Annot Sans", label: "Sans (Multilingual)" },
+      { value: "Annot Serif", label: "Serif" },
+      { value: "Annot Mono", label: "Mono" },
     ],
   },
   fontSize: {

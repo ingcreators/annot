@@ -72,12 +72,14 @@ const SIZE_LADDER_PX = [8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48, 60
 
 /** Family dropdown — mirrors the SELECTION-side `fontFamily`
  *  PropertyPanel control's option set so users see the same label
- *  ladder in both places. */
+ *  ladder in both places. Three logical tokens; the host's
+ *  `fonts.css` resolves each to an OS-aware family stack
+ *  (Latin / CJK / Arabic / Indic / Thai). See
+ *  `packages/core/src/editor/font-registry.ts`. */
 const FAMILY_PRESETS = [
-  { value: "sans-serif", label: "Sans-serif" },
-  { value: "serif", label: "Serif" },
-  { value: "monospace", label: "Monospace" },
-  { value: "system-ui, -apple-system, sans-serif", label: "System UI" },
+  { value: "Annot Sans", label: "Sans (Multilingual)" },
+  { value: "Annot Serif", label: "Serif" },
+  { value: "Annot Mono", label: "Mono" },
 ] as const;
 
 /** Compact single-character / glyph button styling. PowerPoint-style:

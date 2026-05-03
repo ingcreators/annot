@@ -1,3 +1,4 @@
+import { coerceToLogicalFamily } from "@ingcreators/annot-core/editor/font-registry";
 import { htmlToRuns, runsToHtml } from "@ingcreators/annot-core/editor/rich-text-mapper";
 import {
   applyTextShapeColor,
@@ -114,7 +115,7 @@ export class TextTool extends ToolBase {
       variant,
       runs: [],
       fontSize: this.options.fontSize,
-      fontFamily: this.options.fontFamily ?? "sans-serif",
+      fontFamily: coerceToLogicalFamily(this.options.fontFamily),
       color: this.options.strokeColor,
       textAnchor: this.options.textAnchor,
       textVerticalAnchor: this.options.textVerticalAnchor,
@@ -354,7 +355,7 @@ export class TextTool extends ToolBase {
     this.#editing = true;
 
     const fontSize = existing?.fontSize || this.options.fontSize;
-    const fontFamily = existing?.fontFamily || (this.options.fontFamily ?? "sans-serif");
+    const fontFamily = existing?.fontFamily || (coerceToLogicalFamily(this.options.fontFamily));
     const color = existing?.color || this.options.strokeColor;
     const w = existing?.width || DEFAULT_WIDTH;
     const h = existing?.height || DEFAULT_HEIGHT;
@@ -686,7 +687,7 @@ export class TextTool extends ToolBase {
       wrapper.getAttribute("data-font-size") || String(this.options.fontSize),
     );
     const fontFamily =
-      wrapper.getAttribute("data-font-family") || (this.options.fontFamily ?? "sans-serif");
+      wrapper.getAttribute("data-font-family") || (coerceToLogicalFamily(this.options.fontFamily));
     const color = wrapper.getAttribute("data-color") || this.options.strokeColor;
 
     wrapper.setAttribute("data-font-size", String(fontSize));

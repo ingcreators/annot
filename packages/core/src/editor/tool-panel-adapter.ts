@@ -22,6 +22,7 @@
  * dependencies, no `CanvasManager`, no `Toolbar` access.
  */
 
+import { coerceToLogicalFamily } from "./font-registry.js";
 import {
   PROPERTY_CONTROL_IDS,
   PROPERTY_CONTROLS,
@@ -208,12 +209,15 @@ export const TOOL_PANEL_ADAPTERS: Readonly<
   },
 
   [PROPERTY_CONTROL_IDS.fontFamily]: {
-    // The text tool seeds `fontFamily` lazily ("sans-serif" when
-    // missing); the adapter returns the same fallback so the read /
-    // write round-trip is well-defined regardless of preset state.
-    read: (preset) => preset.fontFamily ?? "sans-serif",
+    // Logical-family token (`Annot Sans` / `Annot Serif` /
+    // `Annot Mono`). The text tool seeds `fontFamily` lazily; the
+    // adapter normalises any legacy raw CSS family ("sans-serif",
+    // "system-ui, ...", etc.) to the matching token via
+    // `coerceToLogicalFamily` so the read / write round-trip is
+    // well-defined regardless of preset state.
+    read: (preset) => coerceToLogicalFamily(preset.fontFamily),
     write: (preset, value) => {
-      preset.fontFamily = String(value);
+      preset.fontFamily = coerceToLogicalFamily(String(value));
     },
     selectionDef: PROPERTY_CONTROL_IDS.fontFamily,
   },
