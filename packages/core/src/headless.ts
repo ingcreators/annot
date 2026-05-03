@@ -167,6 +167,22 @@ export {
   readUniversalStyleAttrs,
   resolveStyleReadSource,
 } from "./editor/tool-style-reader.js";
+// ─── Logical font-family registry (Tier A) ───────────────────────────
+// Phase 1 of `docs/plans/multilingual-fonts-os-stack.md`. Three logical
+// tokens (`Annot Sans` / `Annot Serif` / `Annot Mono`) the editor
+// stores in `data-font-family`. Resolvers map each token to:
+//   - a CSS font stack (per-OS Latin / CJK / complex script fallback)
+//   - an OOXML typeface triple (`<a:latin>` + `<a:ea>` + `<a:cs>`)
+// Pure strings + lookups, no DOM. Importable from the pptx exporter
+// + the editor UI alike.
+export {
+  coerceToLogicalFamily,
+  cssStackFor,
+  isLogicalFamily,
+  LOGICAL_FAMILIES,
+  type LogicalFamily,
+  ooxmlTypefacesFor,
+} from "./editor/font-registry.js";
 // ─── SVG path-data utilities (pure string-in/string-out) ─────────────
 // Phase 1 of `docs/plans/move-bakes-coordinates.md`. Translates every
 // absolute coordinate inside a `<path>` element's `d` attribute by a
