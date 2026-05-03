@@ -180,7 +180,10 @@ export class TextTool extends ToolBase {
     // Redact rects (`data-redact-style`) are excluded; the user's
     // expectation for those is "the black box hides content" not
     // "labelled shape".
-    const bareRect = target.closest("rect") as SVGRectElement | null;
+    //
+    // DOM-first hit test catches the common case where the dblclick
+    // landed directly on the rect's stroke or filled interior.
+    let bareRect = target.closest("rect") as SVGRectElement | null;
     if (
       bareRect &&
       bareRect.parentNode === this.canvas.annotations &&
@@ -190,7 +193,55 @@ export class TextTool extends ToolBase {
       const wrapper = wrapBareRectForText(bareRect);
       this.#promotedFromBareRect = true;
       this.#editExisting(wrapper);
+      return;
     }
+
+    // Bbox fallback — covers the common Shape-tool case where the
+    // user drew an unfilled rect (`fill="none"`) and dblclicked
+    // inside the bounded area. SVG's default `pointer-events:
+    // visiblePainted` means the click passes through the unfilled
+    // interior to whatever's behind (typically the underlying
+    // image), so `target.closest("rect")` returns null. Mirror the
+    // bbox-based fallback `SelectionManager`'s pointerdown uses for
+    // the same scenario: walk `canvas.annotations.children`, find
+    // a bare `<rect>` whose world bbox contains the dblclick point,
+    // and promote that one. Skips redact rects for the same reason
+    // as the primary path.
+    if (e instanceof MouseEvent) {
+      const pt = this.canvas.svgPoint(e);
+      bareRect = this.#findRectAtPoint(pt.x, pt.y);
+      if (
+        bareRect &&
+        bareRect.parentNode === this.canvas.annotations &&
+        !bareRect.hasAttribute("data-redact-style")
+      ) {
+        e.stopPropagation();
+        const wrapper = wrapBareRectForText(bareRect);
+        this.#promotedFromBareRect = true;
+        this.#editExisting(wrapper);
+      }
+    }
+  }
+
+  /** Walk the annotation children for a bare `<rect>` whose world
+   *  bbox contains (px, py). Used by `#handleDblclick`'s fallback
+   *  path when the DOM-level dblclick target was an unfilled rect's
+   *  pass-through (the cursor was inside the rect, but `fill="none"`
+   *  meant the rect didn't capture the click). Topmost match wins
+   *  so a smaller rect on top of a larger one promotes correctly. */
+  #findRectAtPoint(px: number, py: number): SVGRectElement | null {
+    const children = this.canvas.annotations.children;
+    for (let i = children.length - 1; i >= 0; i--) {
+      const el = children[i] as SVGElement;
+      if (el.tagName !== "rect") continue;
+      const rect = el as SVGRectElement;
+      const x = Number.parseFloat(rect.getAttribute("x") || "0");
+      const y = Number.parseFloat(rect.getAttribute("y") || "0");
+      const w = Number.parseFloat(rect.getAttribute("width") || "0");
+      const h = Number.parseFloat(rect.getAttribute("height") || "0");
+      if (px >= x && px <= x + w && py >= y && py <= y + h) return rect;
+    }
+    return null;
   }
 
   #editExisting(g: SVGGElement): void {
