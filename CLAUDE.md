@@ -354,7 +354,47 @@ entry, with the schema-driven renderer in
 History: PRs #188–TBD, following
 [`docs/plans/_done/tool-property-renderer-schema.md`](./docs/plans/_done/tool-property-renderer-schema.md).
 
-### 7. Reply and commit language
+### 7. Move bakes coordinates; transform carries rotation / flip only
+
+Drag-move on every annotation kind writes the new position into
+the children's geometry attrs (rect / image / text / foreignObject
+`x` `y`; ellipse / circle `cx` `cy`; tspan `x` `y`; line / arrow
+endpoints + arrow control point; path `d`; `<g data-type="shape">`
+walks bg primitive + clipPath + tail anchors + tspans;
+`<g data-marker>` walks bg primitive + numeral). The wrapper's
+`transform` attribute is reserved for **rotation + flip** only —
+no `transform="translate(...)"` and no `data-tx` / `data-ty` on
+unrotated shapes.
+
+Consequences:
+
+- `el.getBBox()` returns the visual position for every unrotated
+  shape. For rotated shapes it returns the **local pre-rotation**
+  bounds; the `getWorldBBox` helper composes the rotation into
+  an axis-aligned world bbox when callers need that.
+- Saved SVG reads "what you see is the geometry" — no mental
+  transform composition required when debugging captures, OOXML
+  output, or extension transfers.
+- The dispatcher lives in
+  [`packages/core/src/editor/bake-translate.ts`](./packages/core/src/editor/bake-translate.ts);
+  per-shape bakers live in
+  [`text-utils.ts:bakeTextShapeTranslate`](./packages/core/src/editor/text-utils.ts)
+  for sticky / callout / text-on-shape / textbox, the dispatcher
+  itself for marker / path / group, and the existing
+  `bakeLineTransform` for line / arrow.
+- `selection.ts:#moveElement` routes the no-rotation / no-flip
+  case through `bakeTranslate`. For rotated / flipped shapes
+  the legacy `nudgeTranslate` (data-tx / ty + matrix emit) path
+  stays in place — pivot tracking still needs both translate
+  and rotate components in one matrix.
+
+When adding a new annotation kind that lives in `<g>` or
+`<path>`, plumb a per-shape baker into the dispatcher's switch
+in `bake-translate.ts:bakeTranslate`. The
+[`move-bakes-coordinates`](./docs/plans/_done/move-bakes-coordinates.md)
+plan in `_done/` walks the design.
+
+### 8. Reply and commit language
 
 - Replies to the user: **Japanese**.
 - Code, comments, commit messages, PR descriptions: **English**.
