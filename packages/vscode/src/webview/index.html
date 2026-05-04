@@ -59,7 +59,22 @@
        */
       #annot-shell-toolbar {
         grid-column: 1;
-        overflow: hidden;
+        /*
+         * `overflow: visible` (both axes) so the variant badges
+         * — positioned at `right: -2px; bottom: -2px;` per
+         * `.tool-btn-badge` in `core/styles/toolbar.css` —
+         * can poke past the cell boundary without getting
+         * clipped. Mirrors the PWA's `#editor-sidebar
+         * { overflow: visible }` rule. Per CSS spec, mixing
+         * `overflow-x: visible` with `overflow-y: auto`
+         * promotes `visible` to `auto` and re-introduces the
+         * clipping, so we stay fully visible. Trade-off: with
+         * a very short viewport the bottom-most tool can
+         * extend past the visual end of the strip, but the
+         * Annot toolbar's ~9 tools × 38 px fits comfortably
+         * in any modern editor pane.
+         */
+        overflow: visible;
         min-height: 0;
         border-right: 1px solid
           var(--vscode-panel-border, var(--vscode-contrastBorder, transparent));
@@ -90,6 +105,33 @@
       }
       .annot-placeholder {
         padding: 24px;
+      }
+
+      /*
+       * VSCode-specific contrast overrides.
+       *
+       * `core/styles/toolbar.css` paints the active tool with
+       * `background: var(--annot-active-bg)` +
+       * `color: var(--annot-accent)`. In our token map both
+       * resolve to blue `--vscode-*` variables
+       * (list-activeSelectionBackground + button-background),
+       * so on Light + many other themes the icon disappears
+       * against the active background. Switch the active
+       * foreground to `--vscode-list-activeSelectionForeground`
+       * which is the workbench's canonical "text over active
+       * selection" colour and guarantees ≥4.5:1 contrast.
+       *
+       * Same fix for the variant flyout chips + colour chips —
+       * they inherit the same blue-on-blue problem.
+       */
+      .toolbar-btn.active,
+      .tool-flyout-chip.active,
+      .tool-flyout-chip-svg.active,
+      .tool-flyout-color-chip.active {
+        color: var(
+          --vscode-list-activeSelectionForeground,
+          var(--vscode-foreground)
+        );
       }
     </style>
   </head>
