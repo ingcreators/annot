@@ -19,8 +19,8 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@storybook/web-components-vite": "^10.3.5",
-    "storybook": "^10.3.5",
+    "@storybook/web-components-vite": "^10.3.6",
+    "storybook": "^10.3.6",
     "typescript": "catalog:",
     "vite": "catalog:"
   },
