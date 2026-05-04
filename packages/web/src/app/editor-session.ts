@@ -14,12 +14,12 @@
  */
 
 import type { ToolOptions } from "@ingcreators/annot-core/editor/tool-options";
-import {
+import type {
   CanvasManager,
   History,
-  openAnchoredPopover,
   SelectionManager,
 } from "@ingcreators/annot-editor";
+import { openAnchoredPopover } from "@ingcreators/annot-editor";
 import { Toolbar } from "@ingcreators/annot-editor-shell/toolbar";
 import type { ImageRecord, PageMetadata, StorageProvider } from "@ingcreators/annot-core/storage";
 import { getFilename } from "@ingcreators/annot-core/storage";
@@ -27,7 +27,7 @@ import { assertNonNull } from "@ingcreators/annot-core/utils";
 import type { AnnotFileDetailsDrawerElement } from "@ingcreators/annot-editor-shell/annot-file-details-drawer";
 import { estimateDataUrlBytes } from "@ingcreators/annot-editor-shell/annot-file-details-drawer";
 import "@ingcreators/annot-editor-shell/annot-file-details-drawer";
-import { installKeyboardHelp } from "@ingcreators/annot-editor-shell";
+import { EditorShell, installKeyboardHelp } from "@ingcreators/annot-editor-shell";
 import type { AnnotEditorRightPanelElement } from "@ingcreators/annot-editor-shell/right-panel";
 import "@ingcreators/annot-editor-shell/right-panel";
 import {
@@ -42,7 +42,6 @@ import { getStorageMode } from "../storage/bridge.js";
 import { addClickMarker } from "./click-marker.js";
 import type { HeaderHost } from "./header-host.js";
 import type { UISection } from "./plugin-host.js";
-import { restoreAnnotations } from "./restore-annotations.js";
 import type { SavePipeline } from "./save-pipeline.js";
 import type { StatusHost } from "./status-host.js";
 
@@ -79,6 +78,19 @@ export interface EditorSessionDeps {
 
 export class EditorSession {
   #currentEditor: EditorHandle | null = null;
+  /** Host-neutral editor lifecycle owner. Lazy-constructed on first
+   *  `setupEditor` call (storage provider isn't resolved at
+   *  EditorSession construction time, and the shell's `<svg>`
+   *  adoption needs the index.html-shipped element which only the
+   *  host can locate). Reused across image opens — `mountFromRecord`
+   *  disposes the prior canvas / selection internally. */
+  #shell: EditorShell | null = null;
+  /** Disposers for shell event subscriptions. Re-installed at the
+   *  end of every `setupEditor` so PWA-side wiring (right-panel
+   *  selection sync, autosave debounce on dirty) reflects the
+   *  current canvas + history references the shell just produced. */
+  #unsubSelectionChange: (() => void) | null = null;
+  #unsubDirty: (() => void) | null = null;
   /** ResizeObserver that keeps the canvas fitted to the viewport
    *  while "Fit to window" mode is active. Observes #canvas-container
    *  so panel open/close, window resize, and toolbar height changes
@@ -153,16 +165,27 @@ export class EditorSession {
     return { width: canvas?.imageWidth ?? 0, height: canvas?.imageHeight ?? 0 };
   }
 
-  /** Tear down the previous editor session's DOM listeners so they
-   *  don't accumulate on the reused #svg-root element. Without this,
-   *  each reopen adds another SelectionManager/CanvasManager listening
-   *  to the same pointer events — dragging a shape would apply
-   *  #moveElement N times per mouse tick and the shape appears to
-   *  move N× faster than the cursor. */
+  /** Tear down the previous editor session's PWA-side state.
+   *
+   *  Canvas / Selection / History listeners — those are owned by
+   *  `EditorShell` after the `editor-session-shell-switchover` plan,
+   *  and the next `mountFromRecord` call disposes them
+   *  automatically. So `disposePreviousEditor` no longer needs to
+   *  call `selection.destroy()` / `canvas.destroy()` itself; it
+   *  just clears the local handle + unsubscribes shell event
+   *  listeners + drops the fit observer.
+   *
+   *  Called from `resetSessionUI` (gallery-return) and from
+   *  `setupEditor` (defensive — the shell's mount path also
+   *  cleans up, but `disposePreviousEditor` keeps the explicit
+   *  contract that no stale `EditorHandle` survives across
+   *  back-to-back opens). */
   disposePreviousEditor(): void {
     if (!this.#currentEditor) return;
-    this.#currentEditor.selection.destroy();
-    this.#currentEditor.canvas.destroy();
+    this.#unsubSelectionChange?.();
+    this.#unsubSelectionChange = null;
+    this.#unsubDirty?.();
+    this.#unsubDirty = null;
     this.#currentEditor = null;
     this.#fitObserver?.disconnect();
     this.#fitObserver = null;
@@ -190,9 +213,10 @@ export class EditorSession {
     this.#currentImageDataUrl = dataUrl;
     this.#pageMetadata = pageMetadata ?? null;
 
-    // Clean up any previous editor session's listeners before creating
-    // new CanvasManager / SelectionManager. Critical because the
-    // #svg-root element is reused across sessions.
+    // Clear local handles + shell-event subscriptions from the
+    // previous open. The shell itself disposes its CanvasManager /
+    // SelectionManager / History on the upcoming `mountFromRecord`,
+    // so the cleanup here is purely PWA-side bookkeeping.
     this.disposePreviousEditor();
 
     const canvasContainer = assertNonNull(
@@ -212,6 +236,15 @@ export class EditorSession {
     );
     statusbar.style.display = "";
 
+    // Resolve / create the SVG element the shell will mount into.
+    // The PWA's `index.html` ships `<svg id="svg-root">` so first-
+    // render CSS hits the styled element before JS boots; the
+    // fallback creation path covers the case where the shell HTML
+    // was substituted for something custom (and gallery → editor
+    // re-entry, since the SVG persists on `#canvas-container`
+    // across sessions). The shell tags the element with
+    // `data-annot-shell-root="1"` and clears children + inline
+    // style on each mount, mirroring the legacy in-place reset.
     let svg = document.getElementById("svg-root") as unknown as SVGSVGElement | null;
     if (!svg) {
       canvasContainer.innerHTML = "";
@@ -220,15 +253,48 @@ export class EditorSession {
       svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
       svg.setAttribute("xmlns:xlink", "http://www.w3.org/1999/xlink");
       canvasContainer.appendChild(svg);
-    } else {
-      svg.innerHTML = "";
-      svg.removeAttribute("style");
     }
     canvasContainer.querySelector(".property-panel")?.remove();
 
-    const canvas = new CanvasManager(svg, dataUrl, width, height);
-    const history = new History(canvas.annotations);
-    const selection = new SelectionManager(canvas, history);
+    // Lazy-construct the shell on first setupEditor call. Storage
+    // isn't resolved at EditorSession construction time so the
+    // shell can't be built in the constructor. Reused across opens
+    // — `mountFromRecord` disposes the prior canvas / selection /
+    // history internally and rebuilds against the supplied SVG.
+    const shell = this.#ensureShell(canvasContainer, svg);
+
+    // Synthesize a sparse ImageRecord from the per-call (dataUrl,
+    // width, height, annotations) plus the deps' currently-open
+    // record context (so any `saveNow()` the shell triggers — not
+    // wired to PWA's autosave today, but a future migration of the
+    // savePipeline through the shell would expect it — preserves
+    // tags / sourceUrl / createdAt). The shell's `mountFromRecord`
+    // only reads `originalDataUrl` / `width` / `height` /
+    // `annotationsSvg` for the canvas and stashes the rest.
+    const currentPath = this.deps.getCurrentImagePath();
+    const currentRecord = this.deps.getCurrentImageRecord();
+    const record = synthesizeShellRecord(
+      dataUrl,
+      width,
+      height,
+      annotations ?? "",
+      currentRecord,
+    );
+    shell.mountFromRecord(currentPath, record);
+    shell.setPageMetadata(this.#pageMetadata);
+
+    const canvas = assertNonNull(
+      shell.getCanvas(),
+      "EditorSession: shell.getCanvas() returned null after mountFromRecord",
+    );
+    const history = assertNonNull(
+      shell.getHistory(),
+      "EditorSession: shell.getHistory() returned null after mountFromRecord",
+    );
+    const selection = assertNonNull(
+      shell.getSelection(),
+      "EditorSession: shell.getSelection() returned null after mountFromRecord",
+    );
 
     // Keep "Fit to window" tracking the viewport size: re-fit whenever
     // #canvas-container resizes. This covers window resize, right-panel
@@ -247,8 +313,6 @@ export class EditorSession {
     // fresh one for this image. Attached to document.body so it uses the
     // same absolute-positioning coordinate space as toolbar/canvas/statusbar.
     this.#fileDetailsDrawer?.destroy();
-    const currentPath = this.deps.getCurrentImagePath();
-    const currentRecord = this.deps.getCurrentImageRecord();
     const drawer = document.createElement("annot-file-details-drawer");
     drawer.data = {
       filename: currentPath ? getFilename(currentPath) : "(untitled)",
@@ -374,7 +438,15 @@ export class EditorSession {
     this.#keyboardHelpUninstall?.();
     this.#keyboardHelpUninstall = installKeyboardHelp();
 
-    selection.onChange = () => {
+    // Selection-change → right-panel selection-properties refresh +
+    // scratchpad save-enabled tracking. Subscribed via `shell.on`
+    // (the shell's own emit drives the bridge from
+    // `SelectionManager.onChange`), which keeps the PWA symmetric
+    // with the VSCode webview and lets the shell layer something
+    // additional later without changing every consumer. Disposer
+    // stored so the next `setupEditor` can swap in fresh handlers
+    // bound to the new canvas / selection refs.
+    this.#unsubSelectionChange = shell.on("selection-change", () => {
       const els = selection.selectedElements;
       // Selection-based properties only show while Select is active;
       // during a drawing tool, we keep the tool's defaults visible
@@ -392,20 +464,18 @@ export class EditorSession {
       if (this.#openScratchpadSection) {
         this.#openScratchpadSection.saveEnabled = this.#scratchpadCanSave;
       }
-    };
+    });
 
-    // Seed initial canvas state BEFORE wiring the autosave hook.
-    // Otherwise the `history.save()` that records the restored
-    // annotations (or the just-added click marker) fires
-    // `onStateChange`, and the autosave timer commits a no-op copy
-    // of the file ~10 seconds after the user simply opens it — a
-    // real problem on GitHub where each commit shows in git log.
-    // The click-marker path still persists explicitly below, so
-    // delaying the hook doesn't lose that save.
-    if (annotations) {
-      restoreAnnotations(canvas, annotations);
-      history.save();
-    } else {
+    // Click-marker path. The shell's `mountFromRecord` already
+    // restored `record.annotationsSvg` (when non-empty) before
+    // wiring its internal `dirty` emit, so an annotated open does
+    // NOT reach this branch. For un-annotated opens of click-
+    // captured screenshots, draw the target marker once and persist
+    // it. We do this BEFORE subscribing to `dirty` below — the
+    // explicit `writeAnnotations()` call already covers the save,
+    // and we don't want the debounced autosave path to also fire
+    // for the seeded history.save().
+    if (!record.annotationsSvg) {
       const tags = this.deps.getCurrentTags();
       if (
         tags["click.x"] !== undefined &&
@@ -423,7 +493,12 @@ export class EditorSession {
       }
     }
 
-    history.onStateChange = () => {
+    // Dirty (autosave debounce). Subscribed via `shell.on` instead
+    // of writing `history.onStateChange` directly so the shell's
+    // single-slot callback (set by `#mountCanvas`) keeps emitting
+    // events to all subscribers. The shell snapshots its handler
+    // list before each emit, so unsubscribe-during-emit is safe.
+    this.#unsubDirty = shell.on("dirty", () => {
       // Reflect "edits made" immediately — the debounce hides latency
       // but the user should know something will be saved soon.
       const statusEl = this.headerHost.getSaveStatusIndicator();
@@ -443,7 +518,7 @@ export class EditorSession {
       const saveDebounceMs = mode === "github" || mode === "googledrive" ? 1500 : 500;
       this.savePipeline.scheduleAnnotationSave(saveDebounceMs);
       this.savePipeline.scheduleThumbnailRegen(2000);
-    };
+    });
 
     this.#currentEditor = { canvas, history, selection };
 
@@ -595,4 +670,87 @@ export class EditorSession {
     // user can identify the context at a glance.
     this.#editorToolbar?.setExternalToolActive("Scratchpad", null);
   }
+
+  /** Resolve (or lazily construct) the per-session `EditorShell`.
+   *
+   *  Called from `setupEditor` with the current `<svg id="svg-root">`
+   *  + `#canvas-container` references. Constructs the shell once per
+   *  EditorSession instance — subsequent calls just return the
+   *  existing shell. The shell's `mountFromRecord` handles per-image
+   *  canvas / history / selection construction and disposal.
+   *
+   *  The shell's storage reference is whatever `deps.getStorage()`
+   *  returns at first-call time. The PWA's storage IS dynamic
+   *  (mode-switch can swap between LocalStore / DriveStore /
+   *  GitHubStore), but switching modes navigates back to the
+   *  gallery first, and editor sessions don't span mode swaps.
+   *  The shell's `saveNow` is also not on the PWA's autosave path
+   *  today (savePipeline.writeAnnotations owns that), so the stored
+   *  reference being slightly stale matters less than it would for
+   *  a host that drives saves through the shell. */
+  #ensureShell(container: HTMLElement, svgRoot: SVGSVGElement): EditorShell {
+    if (this.#shell) return this.#shell;
+    const storage = assertNonNull(
+      this.deps.getStorage(),
+      "EditorSession: storage not yet resolved when constructing EditorShell",
+    );
+    this.#shell = new EditorShell({
+      container,
+      storage,
+      svgRoot,
+      // Defaults favour the PWA — capture pipeline, file manager,
+      // scratchpad popover, keyboard-help overlay all on. Today
+      // the shell doesn't act on these flags itself (they're
+      // declarative for now, intended for future feature gating);
+      // listing them explicitly documents the PWA's surface.
+      features: {
+        capture: true,
+        fileManager: true,
+        scratchpad: true,
+        keyboardHelp: true,
+      },
+    });
+    return this.#shell;
+  }
+}
+
+/** Build a sparse `ImageRecord` from the (`dataUrl`, `width`,
+ *  `height`, `annotations`) call args + the deps' currently-open
+ *  record context. The shell's `mountFromRecord` only reads
+ *  `originalDataUrl` / `width` / `height` / `annotationsSvg` for
+ *  the canvas — the other fields ride along so a future
+ *  `shell.saveNow()` call would `updateImage` against a record
+ *  with the live tags / sourceUrl / createdAt instead of an
+ *  empty stub. The PWA today drives saves through `savePipeline`
+ *  rather than `shell.saveNow`, so this preservation is forward-
+ *  looking, not behaviour-critical for this PR. */
+function synthesizeShellRecord(
+  dataUrl: string,
+  width: number,
+  height: number,
+  annotations: string,
+  currentRecord: ImageRecord | null,
+): ImageRecord {
+  const now = new Date().toISOString();
+  if (currentRecord) {
+    return {
+      ...currentRecord,
+      originalDataUrl: dataUrl,
+      annotationsSvg: annotations,
+      width,
+      height,
+    };
+  }
+  return {
+    path: "",
+    folderPath: "",
+    width,
+    height,
+    originalDataUrl: dataUrl,
+    annotationsSvg: annotations,
+    sourceUrl: "",
+    tags: {},
+    createdAt: now,
+    updatedAt: now,
+  } as ImageRecord;
 }
