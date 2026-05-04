@@ -14,7 +14,7 @@
     "vscode": "^1.85.0"
   },
   "type": "module",
-  "main": "./dist/extension.js",
+  "main": "./dist/extension.cjs",
   "categories": ["Visualization", "Other"],
   "keywords": ["annot", "annotation", "screenshot", "svg", "playwright"],
   "license": "Apache-2.0",
