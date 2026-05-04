@@ -134,7 +134,10 @@ The `build` script runs the extension config (CJS bundle for the
 extension host) and the webview config (ESM bundle for the
 sandboxed iframe) sequentially. Output:
 
-- `dist/extension.js` — loaded by VSCode via `package.json#main`.
+- `dist/extension.cjs` — loaded by VSCode via `package.json#main`.
+  CommonJS (`.cjs` mandatory) because the package's `"type":
+  "module"` would otherwise have VSCode load the file as ESM,
+  which the extension activation host doesn't support.
 - `dist/webview/index.html` + `dist/webview/index.js` — loaded
   by the webview.
 
