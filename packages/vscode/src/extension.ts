@@ -1,7 +1,6 @@
 /**
  * Annot — VSCode extension entry (extension-host / Node side).
  *
- * Phase 4 of `docs/plans/_done/vscode-extension-host.md` skeleton.
  * Registers a `CustomEditorProvider` for the
  * `*.annot.{svg,png,jpeg,jpg}` glob (declared in
  * `package.json#contributes.customEditors`).
@@ -20,14 +19,22 @@
  *        to `webview.asWebviewUri(...)` URIs, and assigns to
  *        `webviewPanel.webview.html`.
  *   3. The webview boots, posts `{type: "ready"}`, and the
- *      extension responds with the document's bytes + path so
- *      the webview-side `EditorShell` can mount.
- *   4. Subsequent webview ↔ extension messages drive
- *      `getImage` / `updateImage` calls through
- *      `vscode.workspace.fs`.
+ *      extension responds with `{type: "open", path, filename}`
+ *      (path-only — the webview pulls bytes via `fs.read`).
+ *   4. Webview ↔ extension messages drive a small RPC protocol:
+ *      `{type: "fs.read", id, path}` → `{type: "fs.read.result",
+ *      id, bytes / error}`, `{type: "fs.write", id, path, bytes}`
+ *      → `{type: "fs.write.result", id, error?}`. All XMP
+ *      encoding / decoding lives in the webview (where the
+ *      canvas + the `@ingcreators/annot-core/xmp` helpers run);
+ *      the extension's role is plain `vscode.workspace.fs` I/O.
  *
- * Phase 4 ships the structural skeleton; the message protocol +
- * full bidirectional flow lands in Phase 5 polish.
+ * The extension also brokers two side-band messages:
+ *   - `{type: "dirty"}` from the webview → flips the status bar
+ *     to the unsaved indicator.
+ *   - `{type: "theme", kind}` from the extension → forwards the
+ *     active `ColorThemeKind` so the shell stays in sync with
+ *     workbench theming.
  */
 
 import * as path from "node:path";
@@ -104,42 +111,63 @@ class AnnotEditorProvider implements vscode.CustomReadonlyEditorProvider<AnnotDo
     sendTheme: () => void,
   ): Promise<void> {
     if (typeof msg !== "object" || msg === null) return;
-    const m = msg as { type?: string };
+    const m = msg as { type?: string; id?: number; path?: string; bytes?: number[] };
     switch (m.type) {
       case "ready": {
-        // Send the document's bytes + path so the webview-side
-        // EditorShell can `mountFromRecord`. Then immediately
-        // sync the current workbench theme so the editor lands
-        // with the right palette on first paint.
-        const bytes = await vscode.workspace.fs.readFile(document.uri);
+        // Tell the webview which file is open. The webview's
+        // `EditorShell.open(path)` then routes through its
+        // `MessageProxyStorageProvider`, which sends `fs.read` to
+        // pull the bytes. The message-protocol round-trip for
+        // I/O lives entirely in the webview-side proxy so the
+        // extension host stays a plain `vscode.workspace.fs`
+        // shim.
         const filename = path.basename(document.uri.fsPath);
         webview.postMessage({
           type: "open",
           path: document.uri.fsPath,
           filename,
-          bytes: Array.from(bytes),
         });
         sendTheme();
         setStatus("$(check)", "Annot");
         break;
       }
-      case "save": {
-        const payload = msg as { type: "save"; bytes?: number[] };
-        if (!payload.bytes) return;
+      case "fs.read": {
+        if (typeof m.id !== "number" || typeof m.path !== "string") return;
+        try {
+          const uri = this.#resolvePath(document, m.path);
+          const bytes = await vscode.workspace.fs.readFile(uri);
+          webview.postMessage({
+            type: "fs.read.result",
+            id: m.id,
+            bytes: Array.from(bytes),
+          });
+        } catch (err) {
+          webview.postMessage({
+            type: "fs.read.result",
+            id: m.id,
+            error: String(err),
+          });
+        }
+        break;
+      }
+      case "fs.write": {
+        if (typeof m.id !== "number" || typeof m.path !== "string" || !m.bytes) return;
         setStatus("$(sync~spin)", "Saving…");
         try {
-          await vscode.workspace.fs.writeFile(
-            document.uri,
-            new Uint8Array(payload.bytes),
-          );
-          webview.postMessage({ type: "saved" });
+          const uri = this.#resolvePath(document, m.path);
+          await vscode.workspace.fs.writeFile(uri, new Uint8Array(m.bytes));
+          webview.postMessage({ type: "fs.write.result", id: m.id });
           setStatus("$(check)", "Saved");
         } catch (err) {
+          webview.postMessage({
+            type: "fs.write.result",
+            id: m.id,
+            error: String(err),
+          });
           setStatus("$(error)", "Save failed");
           void vscode.window.showErrorMessage(
             `Annot: failed to save ${path.basename(document.uri.fsPath)}: ${err}`,
           );
-          webview.postMessage({ type: "save-error", message: String(err) });
         }
         break;
       }
@@ -148,6 +176,21 @@ class AnnotEditorProvider implements vscode.CustomReadonlyEditorProvider<AnnotDo
         break;
       }
     }
+  }
+
+  /** Resolve a path the webview asked for. The webview passes
+   *  the open document's `uri.fsPath` back as-is in the typical
+   *  case; for safety we still resolve through `vscode.Uri` so
+   *  any edge case (custom URI scheme, network-mounted folder)
+   *  is handled correctly. We refuse paths that don't match the
+   *  document's path so a future "open arbitrary file from a
+   *  webview" command can't be triggered by the current
+   *  webview's storage proxy. */
+  #resolvePath(document: AnnotDocument, requested: string): vscode.Uri {
+    if (requested === document.uri.fsPath) return document.uri;
+    throw new Error(
+      `Annot: webview requested unauthorized path ${requested}; only ${document.uri.fsPath} is allowed.`,
+    );
   }
 
   async #renderHtml(webview: vscode.Webview): Promise<string> {
