@@ -46,7 +46,23 @@ import { buildZip } from "@ingcreators/annot-core";
 import { EditorShell } from "@ingcreators/annot-editor-shell";
 import { exportSVGString, getPngDataUrl } from "@ingcreators/annot-editor";
 import { buildPptxFiles } from "@ingcreators/annot-editor/pptx-export";
+import { Toolbar } from "@ingcreators/annot-editor-shell/toolbar";
+// `<annot-editor-right-panel>` registers a custom element on import.
+import "@ingcreators/annot-editor-shell/right-panel";
+import type { AnnotEditorRightPanelElement } from "@ingcreators/annot-editor-shell/right-panel";
 import type { ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
+
+// Pull in the host-side stylesheets that the toolbar +
+// property panel + canvas (#svg-root / [data-annot-shell-root])
+// rely on. These ship alongside `@ingcreators/annot-core` and
+// the editor-shell's components emit class names targeted by
+// them. Without these the toolbar is unstyled (no background,
+// no spacing) and the property panel renders as raw labels +
+// inputs.
+import "@ingcreators/annot-core/styles/editor.css";
+import "@ingcreators/annot-core/styles/toolbar.css";
+import "@ingcreators/annot-core/styles/property-panel.css";
+import "@ingcreators/annot-core/styles/fonts.css";
 
 declare function acquireVsCodeApi(): {
   postMessage(msg: unknown): void;
@@ -54,6 +70,8 @@ declare function acquireVsCodeApi(): {
 
 const vscode = acquireVsCodeApi();
 const container = document.getElementById("annot-shell-container") as HTMLElement;
+const toolbarMount = document.getElementById("annot-shell-toolbar") as HTMLElement;
+const rightPanelMount = document.getElementById("annot-shell-right-panel") as HTMLElement;
 
 // ─── Message types ─────────────────────────────────────────────
 
@@ -328,6 +346,82 @@ function scheduleSave(): void {
   });
 }
 
+// ─── Toolbar + right-panel mount (per shell.open) ──────────────
+
+let activeToolbar: Toolbar | null = null;
+let activeRightPanel: AnnotEditorRightPanelElement | null = null;
+
+function mountToolbarAndRightPanel(): void {
+  const canvas = shell.getCanvas();
+  const history = shell.getHistory();
+  const selection = shell.getSelection();
+  if (!canvas || !history || !selection) return;
+
+  // Tear down any toolbar / right-panel from a previous open.
+  // `Toolbar` doesn't expose a `destroy()` — clearing the host
+  // div + dropping the reference is sufficient (the toolbar's
+  // listeners on `canvas` go away when the SelectionManager /
+  // CanvasManager get disposed by the next `shell.mountFromRecord`).
+  toolbarMount.innerHTML = "";
+  rightPanelMount.innerHTML = "";
+  activeRightPanel?.destroy();
+
+  // Right-panel first so the toolbar's `onToolChange` callback
+  // (which calls `panel.showToolProperties`) has a target.
+  const panel = document.createElement(
+    "annot-editor-right-panel",
+  ) as AnnotEditorRightPanelElement;
+  panel.canvas = canvas;
+  panel.history = history;
+  panel.selection = selection;
+  panel.getPluginSections = null;
+  panel.isBuiltinSectionDisabled = null;
+  rightPanelMount.appendChild(panel);
+  activeRightPanel = panel;
+  panel.setPageMetadata(shell.getCurrentPageMetadata());
+
+  // Toolbar — vertical strip on the left, mirroring the PWA's
+  // layout. Theme toggle / gallery button / save group hidden
+  // because VSCode supplies those affordances itself.
+  activeToolbar = new Toolbar(
+    toolbarMount,
+    canvas,
+    history,
+    selection,
+    (_toolName, toolId) => {
+      activeRightPanel?.showToolProperties(toolId);
+    },
+    {
+      orientation: "vertical",
+      showThemeToggle: false,
+      showGalleryButton: false,
+      showSaveGroup: false,
+      hideToolDropdowns: false,
+      getCurrentFilename: () => activeFilename || undefined,
+    },
+  );
+  // Wire the toolbar to the right-panel ref so the panel can
+  // call back into it (the panel's tool-properties section needs
+  // a Toolbar handle to read the current preset).
+  panel.toolbar = activeToolbar;
+
+  // Selection-change → right-panel's selection-properties section.
+  // The shell installs its own single-slot `selection.onChange`
+  // callback (which fans out to `shell.on("selection-change",
+  // ...)` subscribers); chain the previous callback so we don't
+  // shadow it.
+  const previousOnChange = selection.onChange;
+  selection.onChange = () => {
+    previousOnChange?.();
+    const els = selection.selectedElements;
+    if (els.length > 0 && !canvas.activeTool) {
+      activeRightPanel?.showSelectionProperties(els);
+    } else {
+      activeRightPanel?.showSelectionProperties([]);
+    }
+  };
+}
+
 // ─── Extension → webview message handler ───────────────────────
 
 window.addEventListener("message", (event) => {
@@ -349,6 +443,13 @@ window.addEventListener("message", (event) => {
             child.remove();
           }
         }
+        // Mount the toolbar + right-panel now that the shell has
+        // canvas / history / selection ready. Mirrors the PWA's
+        // `EditorSession.setupEditor` pattern but stripped of
+        // PWA-shell-specific bits (no editor-header, no
+        // gallery button, no scratchpad — VSCode owns those
+        // surfaces or doesn't have them at all).
+        mountToolbarAndRightPanel();
         // `cmdNewFromClipboard` (extension-side) writes a 1×1
         // transparent PNG as a placeholder so the file exists for
         // `vscode.openWith`. Detect that exact placeholder here
