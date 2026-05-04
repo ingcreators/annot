@@ -1,49 +1,43 @@
 /**
  * Annot — VSCode extension entry (extension-host / Node side).
  *
- * Registers a `CustomEditorProvider` for the
- * `*.annot.{svg,png,jpeg,jpg}` glob (declared in
- * `package.json#contributes.customEditors`).
+ * Registers a `CustomEditorProvider` (NOT the readonly variant)
+ * for the `*.annot.{svg,png,jpeg,jpg}` glob (declared in
+ * `package.json#contributes.customEditors`). Going through the
+ * full provider integrates the editor with VSCode's native
+ * dirty / save / revert / backup workflow:
  *
- * Lifecycle:
+ *   - `Ctrl+S` triggers `saveCustomDocument` → extension posts
+ *     `{type: "save", id}` to the webview → webview answers
+ *     with `{type: "save.result", id, bytes}` → extension
+ *     writes via `vscode.workspace.fs.writeFile`.
+ *   - `files.autoSave` (the workbench-level setting) drives the
+ *     same `saveCustomDocument` call on the user's chosen
+ *     cadence (`afterDelay` / `onFocusChange` / etc.).
+ *   - `File → Revert File` calls `revertCustomDocument` →
+ *     extension posts `{type: "revert"}` → webview re-opens
+ *     the file from disk via `shell.open(path)`.
+ *   - Hot-exit support is handled by `backupCustomDocument` —
+ *     same flow as save but writes to the backup destination
+ *     VSCode supplies; restored automatically next session.
  *
- *   1. User opens an `*.annot.*` file → VSCode calls
- *      `resolveCustomEditor(document, webviewPanel, token)`.
- *   2. The provider:
- *      - Enables scripts in the webview (needed for the bundled
- *        EditorShell entry).
- *      - Sets the webview's `localResourceRoots` to the
- *        extension's `dist/webview/` so the bundled JS / CSS
- *        loads.
- *      - Reads `dist/webview/index.html`, rewrites asset paths
- *        to `webview.asWebviewUri(...)` URIs, and assigns to
- *        `webviewPanel.webview.html`.
- *   3. The webview boots, posts `{type: "ready"}`, and the
- *      extension responds with `{type: "open", path, filename}`
- *      (path-only — the webview pulls bytes via `fs.read`).
- *   4. Webview ↔ extension messages drive a small RPC protocol:
- *      `{type: "fs.read", id, path}` → `{type: "fs.read.result",
- *      id, bytes / error}`, `{type: "fs.write", id, path, bytes}`
- *      → `{type: "fs.write.result", id, error?}`. All XMP
- *      encoding / decoding lives in the webview (where the
- *      canvas + the `@ingcreators/annot-core/xmp` helpers run);
- *      the extension's role is plain `vscode.workspace.fs` I/O.
+ * Webview-side state remains the source of truth for the
+ * in-progress edit; the document instance is just a handle.
+ * Edit signals from the webview (`{type: "edit"}`) make the
+ * extension fire `onDidChangeCustomDocument`, which is what
+ * makes VSCode show the `●` dirty marker on the tab.
  *
- * The extension also brokers two side-band messages:
- *   - `{type: "dirty"}` from the webview → flips the status bar
- *     to the unsaved indicator.
- *   - `{type: "theme", kind}` from the extension → forwards the
- *     active `ColorThemeKind` so the shell stays in sync with
- *     workbench theming.
- *
- * Command-driven export RPC (Save as PNG / JPEG / Export to
- * PowerPoint…): the extension posts
- * `{type: "export", id, format}` to the active webview; the
- * webview renders + encodes via `getPngDataUrl` /
- * `createEditableImage` / `buildPptxFiles`+`buildZip` and
- * answers with `{type: "export.result", id, bytes / error,
- * suggestedFilename}`. The extension then drives
- * `vscode.window.showSaveDialog` + `vscode.workspace.fs.writeFile`.
+ * Other RPCs:
+ *   - `{type: "fs.read", id, path}` → `{type: "fs.read.result",
+ *     id, bytes}` — initial file load by the webview-side
+ *     `MessageProxyStorageProvider`.
+ *   - `{type: "theme", kind}` from extension to webview —
+ *     workbench theme follow.
+ *   - `{type: "show-file-details"}` from extension to webview —
+ *     opens the file-details drawer.
+ *   - `{type: "export", id, format}` → `{type: "export.result",
+ *     id, bytes, suggestedFilename}` — palette-driven Save as
+ *     PNG / JPEG / Export to PowerPoint.
  */
 
 import * as path from "node:path";
@@ -85,10 +79,58 @@ class ActiveWebviewRegistry {
 
 const activeRegistry = new ActiveWebviewRegistry();
 
-class AnnotEditorProvider implements vscode.CustomReadonlyEditorProvider<AnnotDocument> {
+/**
+ * Per-panel status-bar setter so the provider's
+ * `saveCustomDocument` (which only knows the document, not the
+ * panel directly) can drive the per-panel status bar item from
+ * outside `resolveCustomEditor`'s closure.
+ */
+const statusSetterByPanel = new WeakMap<
+  vscode.WebviewPanel,
+  (icon: string, label: string) => void
+>();
+
+/**
+ * Pending save round-trips: extension posts `{type: "save", id}`
+ * to the webview, webview replies with `{type: "save.result",
+ * id, bytes / error}`. Correlation by monotonic id; the
+ * `tryHandleSaveResult` listener installed per-panel resolves
+ * the matching Promise.
+ */
+let nextSaveRequestId = 1;
+const pendingSaveRequests = new Map<
+  number,
+  { resolve: (bytes: Uint8Array) => void; reject: (err: Error) => void }
+>();
+
+/**
+ * Map document → live webview panel that holds the in-progress
+ * editing state. The provider's `saveCustomDocument` /
+ * `revertCustomDocument` / `backupCustomDocument` look the panel
+ * up here to drive the webview-side encode + read-back. A
+ * `WeakMap` so panels GC naturally when VSCode disposes them.
+ */
+const panelByDocument = new WeakMap<AnnotDocument, vscode.WebviewPanel>();
+
+class AnnotEditorProvider implements vscode.CustomEditorProvider<AnnotDocument> {
   static readonly viewType = VIEW_TYPE;
 
   constructor(private readonly context: vscode.ExtensionContext) {}
+
+  // ─── CustomEditorProvider event surface ──────────────────────
+  //
+  // VSCode tracks dirty / clean per-document by listening to this
+  // event. We fire a `CustomDocumentContentChangeEvent` (no undo
+  // / redo callbacks — Annot keeps undo internal to its own
+  // History so VSCode `Ctrl+Z` doesn't fight the toolbar's undo
+  // button) on every edit message from the webview. VSCode then
+  // shows the `●` dirty marker on the tab and prompts on close
+  // if unsaved.
+
+  readonly #onDidChangeCustomDocument = new vscode.EventEmitter<
+    vscode.CustomDocumentContentChangeEvent<AnnotDocument>
+  >();
+  readonly onDidChangeCustomDocument = this.#onDidChangeCustomDocument.event;
 
   async openCustomDocument(
     uri: vscode.Uri,
@@ -128,6 +170,8 @@ class AnnotEditorProvider implements vscode.CustomReadonlyEditorProvider<AnnotDo
     const setStatus = (icon: string, label: string): void => {
       statusItem.text = `${icon} ${label}`;
     };
+    statusSetterByPanel.set(webviewPanel, setStatus);
+    webviewPanel.onDidDispose(() => statusSetterByPanel.delete(webviewPanel));
 
     // Theme bridging: forward the current ColorThemeKind on
     // activation + re-forward on changes so the shell's
@@ -149,11 +193,126 @@ class AnnotEditorProvider implements vscode.CustomReadonlyEditorProvider<AnnotDo
     webviewPanel.onDidChangeViewState(() => {
       if (webviewPanel.active) activeRegistry.setActive(webviewPanel, document);
     });
-    webviewPanel.onDidDispose(() => activeRegistry.clearIfActive(webviewPanel));
+
+    // Document → panel registration so save / revert / backup
+    // can find the live editing state. Registered for the
+    // panel's lifetime; cleared on dispose.
+    panelByDocument.set(document, webviewPanel);
+    webviewPanel.onDidDispose(() => {
+      activeRegistry.clearIfActive(webviewPanel);
+      if (panelByDocument.get(document) === webviewPanel) {
+        panelByDocument.delete(document);
+      }
+    });
 
     webview.onDidReceiveMessage((msg) => {
       void this.#handleMessage(msg, document, webview, setStatus, sendTheme);
     });
+  }
+
+  // ─── CustomEditorProvider save / revert / backup ─────────────
+
+  async saveCustomDocument(
+    document: AnnotDocument,
+    cancellation: vscode.CancellationToken,
+  ): Promise<void> {
+    const bytes = await this.#requestBytes(document, cancellation);
+    await vscode.workspace.fs.writeFile(document.uri, bytes);
+    this.#setStatusForPanel(document, "$(check)", "Saved");
+  }
+
+  async saveCustomDocumentAs(
+    document: AnnotDocument,
+    destination: vscode.Uri,
+    cancellation: vscode.CancellationToken,
+  ): Promise<void> {
+    const bytes = await this.#requestBytes(document, cancellation);
+    await vscode.workspace.fs.writeFile(destination, bytes);
+    this.#setStatusForPanel(document, "$(check)", "Saved");
+  }
+
+  async revertCustomDocument(
+    document: AnnotDocument,
+    _cancellation: vscode.CancellationToken,
+  ): Promise<void> {
+    // Tell the webview to drop in-memory edits + re-fetch the
+    // file via fs.read. The webview's `revert` handler calls
+    // `shell.open(path)` again which routes through the
+    // proxy storage's getImage → fs.read → mount.
+    const panel = panelByDocument.get(document);
+    if (!panel) return;
+    panel.webview.postMessage({ type: "revert" });
+    this.#setStatusForPanel(document, "$(check)", "Annot");
+  }
+
+  async backupCustomDocument(
+    document: AnnotDocument,
+    context: vscode.CustomDocumentBackupContext,
+    cancellation: vscode.CancellationToken,
+  ): Promise<vscode.CustomDocumentBackup> {
+    const bytes = await this.#requestBytes(document, cancellation);
+    await vscode.workspace.fs.writeFile(context.destination, bytes);
+    return {
+      id: context.destination.toString(),
+      delete: async () => {
+        try {
+          await vscode.workspace.fs.delete(context.destination);
+        } catch {
+          // Backup already removed (e.g. by a successful save) —
+          // no-op.
+        }
+      },
+    };
+  }
+
+  /** Send a `save` request to the document's webview and await
+   *  the `save.result` reply with the encoded bytes. The webview
+   *  decides what bytes to produce (SVG text encode vs raster +
+   *  XMP embed) based on the file extension.
+   *
+   *  Throws if the panel isn't available (closed) or the webview
+   *  errors / times out at 30 s. */
+  async #requestBytes(
+    document: AnnotDocument,
+    _cancellation: vscode.CancellationToken,
+  ): Promise<Uint8Array> {
+    const panel = panelByDocument.get(document);
+    if (!panel) {
+      throw new Error(
+        `Annot: no live webview for ${path.basename(document.uri.fsPath)}`,
+      );
+    }
+    const id = nextSaveRequestId++;
+    return new Promise<Uint8Array>((resolve, reject) => {
+      pendingSaveRequests.set(id, { resolve, reject });
+      const timer = setTimeout(() => {
+        if (pendingSaveRequests.has(id)) {
+          pendingSaveRequests.delete(id);
+          reject(new Error("Annot: save timed out (30 s)"));
+        }
+      }, 30_000);
+      const dispose = () => clearTimeout(timer);
+      // Wrap so the timer clears whichever way we resolve.
+      const wrapped = pendingSaveRequests.get(id)!;
+      pendingSaveRequests.set(id, {
+        resolve: (b) => { dispose(); wrapped.resolve(b); },
+        reject: (e) => { dispose(); wrapped.reject(e); },
+      });
+      void panel.webview.postMessage({ type: "save", id });
+    });
+  }
+
+  /** Update the status bar item attached to the document's
+   *  panel. No-op when the panel isn't active or has been
+   *  disposed. */
+  #setStatusForPanel(
+    document: AnnotDocument,
+    icon: string,
+    label: string,
+  ): void {
+    const panel = panelByDocument.get(document);
+    const setStatus = panel ? statusSetterByPanel.get(panel) : null;
+    setStatus?.(icon, label);
   }
 
   async #handleMessage(
@@ -164,7 +323,13 @@ class AnnotEditorProvider implements vscode.CustomReadonlyEditorProvider<AnnotDo
     sendTheme: () => void,
   ): Promise<void> {
     if (typeof msg !== "object" || msg === null) return;
-    const m = msg as { type?: string; id?: number; path?: string; bytes?: number[] };
+    const m = msg as {
+      type?: string;
+      id?: number;
+      path?: string;
+      bytes?: number[];
+      error?: string;
+    };
     switch (m.type) {
       case "ready": {
         const filename = path.basename(document.uri.fsPath);
@@ -196,29 +361,35 @@ class AnnotEditorProvider implements vscode.CustomReadonlyEditorProvider<AnnotDo
         }
         break;
       }
-      case "fs.write": {
-        if (typeof m.id !== "number" || typeof m.path !== "string" || !m.bytes) return;
-        setStatus("$(sync~spin)", "Saving…");
-        try {
-          const uri = this.#resolvePath(document, m.path);
-          await vscode.workspace.fs.writeFile(uri, new Uint8Array(m.bytes));
-          webview.postMessage({ type: "fs.write.result", id: m.id });
-          setStatus("$(check)", "Saved");
-        } catch (err) {
-          webview.postMessage({
-            type: "fs.write.result",
-            id: m.id,
-            error: String(err),
-          });
-          setStatus("$(error)", "Save failed");
-          void vscode.window.showErrorMessage(
-            `Annot: failed to save ${path.basename(document.uri.fsPath)}: ${err}`,
-          );
-        }
+      case "edit": {
+        // Webview edit signal — drive both the VSCode dirty
+        // marker (via onDidChangeCustomDocument) AND the
+        // status bar item. VSCode then surfaces the `●` on
+        // the tab and prompts on close-with-unsaved.
+        this.#onDidChangeCustomDocument.fire({ document });
+        setStatus("$(circle-filled)", "Unsaved");
         break;
       }
-      case "dirty": {
-        setStatus("$(circle-filled)", "Unsaved");
+      case "save.result": {
+        // Webview's reply to our `{type: "save", id}` request.
+        // Resolve / reject the matching pending Promise so the
+        // outer `saveCustomDocument` / `saveCustomDocumentAs` /
+        // `backupCustomDocument` can complete.
+        if (typeof m.id !== "number") return;
+        const pending = pendingSaveRequests.get(m.id);
+        if (!pending) return;
+        pendingSaveRequests.delete(m.id);
+        if (m.error) {
+          pending.reject(new Error(m.error));
+          setStatus("$(error)", "Save failed");
+          void vscode.window.showErrorMessage(
+            `Annot: failed to save ${path.basename(document.uri.fsPath)}: ${m.error}`,
+          );
+        } else if (m.bytes) {
+          pending.resolve(new Uint8Array(m.bytes));
+        } else {
+          pending.reject(new Error("save.result: missing bytes + error"));
+        }
         break;
       }
     }
