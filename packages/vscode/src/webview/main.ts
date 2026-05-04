@@ -309,6 +309,28 @@ const proxyStorage: StorageProvider = {
 
 // ─── Shell construction ────────────────────────────────────────
 
+// Apply the Annot ↔ VSCode token mapping at `:root` (i.e. the
+// `<html>` element) BEFORE the shell mounts. Why not pass it
+// through `EditorShell({themeOverrides: ...})`? Because the
+// shell applies the override map to its container element only,
+// which is `#annot-shell-container` — the canvas pane. Toolbar,
+// right-panel, statusbar (siblings of the container in the
+// webview HTML) and the file-details drawer (appended to
+// `document.body`) all live OUTSIDE that subtree, so they would
+// keep seeing the `--annot-*` defaults from `editor.css`'s
+// `:root` block instead of the VSCode-mapped ones. Setting the
+// overrides on `<html>` itself is one cascade level higher than
+// `editor.css`'s `:root` rule (inline > stylesheet) so they
+// cleanly take precedence everywhere in the iframe.
+applyThemeMap();
+
+function applyThemeMap(): void {
+  const root = document.documentElement;
+  for (const [name, value] of Object.entries(VSCODE_THEME_MAP)) {
+    root.style.setProperty(name, value);
+  }
+}
+
 const shell = new EditorShell({
   container,
   storage: proxyStorage,
@@ -318,13 +340,9 @@ const shell = new EditorShell({
     scratchpad: false,
     keyboardHelp: true,
   },
-  // Full Annot ↔ VSCode token map (see `theme-map.ts`). Every
-  // `--annot-*` design-system token routes through a
-  // semantically-matching `--vscode-*` workbench colour, so
-  // toolbar / right-panel / drawer / canvas all follow the
-  // active theme — including third-party themes from the
-  // marketplace.
-  themeOverrides: VSCODE_THEME_MAP,
+  // No `themeOverrides` here — `applyThemeMap()` above already
+  // installed the full mapping on `<html>`, which covers every
+  // descendant (canvas + toolbar + right-panel + drawer).
 });
 
 // VSCode-native save integration: webview just signals "edit
