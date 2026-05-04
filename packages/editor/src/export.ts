@@ -2,6 +2,18 @@ import { cssStackFor, LOGICAL_FAMILIES } from "@ingcreators/annot-core/headless"
 import { createEditableImage } from "@ingcreators/annot-core/xmp";
 import type { CanvasManager } from "./canvas-manager.js";
 import { stampAnnotVersion } from "@ingcreators/annot-core/editor/svg-format";
+// `tauri-bridge` is statically imported so the bundler can
+// dedupe with the equally-static imports in
+// `@ingcreators/annot-editor-shell/{toolbar,annot-save-menu}`.
+// A dynamic import here used to look like an "only-loaded-in-Tauri"
+// optimisation, but the static consumers above already pull
+// `tauri-bridge` into every browser bundle, so the dynamic
+// import was a wash AND triggered Vite's
+// `[INEFFECTIVE_DYNAMIC_IMPORT]` warning. Tauri-only entry
+// points (`@tauri-apps/plugin-dialog`, the `@tauri-apps/api/core`
+// invoke loader inside `tauri-bridge` itself) stay dynamic —
+// those genuinely don't ship in the non-Tauri bundles.
+import { isTauri, saveWithXmp } from "@ingcreators/annot-core/tauri-bridge";
 import { defaultAnnotFilenameStem } from "@ingcreators/annot-core/utils";
 
 export function exportSVGString(canvas: CanvasManager): string {
@@ -146,12 +158,15 @@ export async function saveAsEditableImage(
   format: "jpg" | "png",
   baseName?: string,
 ): Promise<void> {
-  const isTauri = typeof window !== "undefined" && !!(window as any).__TAURI_INTERNALS__;
   if (!isTauri) return;
 
   try {
+    // `@tauri-apps/plugin-dialog` stays dynamic — its IPC
+    // handshake only resolves inside a Tauri shell. Browser /
+    // VSCode-webview bundles never reach this branch (gated by
+    // `isTauri`) so the dynamic import keeps it out of those
+    // bundles' module graph.
     const { save } = await import("@tauri-apps/plugin-dialog");
-    const { saveWithXmp } = await import("@ingcreators/annot-core/tauri-bridge");
 
     const ext = format === "jpg" ? "jpg" : "png";
     const filterName = format === "jpg" ? "JPEG" : "PNG";
@@ -220,8 +235,6 @@ function exportAnnotationsSVGString(canvas: CanvasManager): string {
 }
 
 async function downloadFile(content: string, _mime: string, filename: string): Promise<void> {
-  const isTauri = typeof window !== "undefined" && !!(window as any).__TAURI_INTERNALS__;
-
   if (isTauri) {
     // Use Tauri save dialog
     try {
