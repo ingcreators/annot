@@ -367,6 +367,13 @@ let activeRightPanel: AnnotEditorRightPanelElement | null = null;
 let activeStatusbar: AnnotEditorStatusbarElement | null = null;
 let activeDrawer: AnnotFileDetailsDrawerElement | null = null;
 let activeFileBytes = 0;
+// ResizeObserver that re-fits the canvas whenever the
+// container's box changes — VSCode webview is hosted in a
+// resizable iframe (split panes / sidebar toggle / window
+// resize all change the available width / height), and
+// `canvas.refitIfFitMode()` re-runs the fit math so "Fit to
+// window" stays accurate as the user reshapes the editor.
+let activeFitObserver: ResizeObserver | null = null;
 
 function mountToolbarAndRightPanel(): void {
   const canvas = shell.getCanvas();
@@ -386,6 +393,8 @@ function mountToolbarAndRightPanel(): void {
   activeRightPanel?.destroy();
   activeDrawer?.destroy();
   activeDrawer = null;
+  activeFitObserver?.disconnect();
+  activeFitObserver = null;
 
   // Right-panel first so the toolbar's `onToolChange` callback
   // (which calls `panel.showToolProperties`) has a target.
@@ -453,6 +462,16 @@ function mountToolbarAndRightPanel(): void {
       activeRightPanel?.showSelectionProperties([]);
     }
   };
+
+  // Re-fit the canvas whenever the container resizes — VSCode
+  // panel splits, sidebar toggles, window resizes all change
+  // the available width / height. `refitIfFitMode` is a no-op
+  // when the user is on a fixed zoom level (e.g. 100%, 200%);
+  // it only re-runs the fit math when "Fit to window" is the
+  // active zoom mode. Mirrors the PWA's `EditorSession`
+  // ResizeObserver pattern.
+  activeFitObserver = new ResizeObserver(() => canvas.refitIfFitMode());
+  activeFitObserver.observe(container);
 }
 
 // ─── File-details drawer ───────────────────────────────────────
