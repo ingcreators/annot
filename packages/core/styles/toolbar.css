@@ -372,7 +372,18 @@
 }
 
 .tool-flyout-chip.active {
-  background: var(--annot-choice-hover, var(--annot-hover-bg));
+  /* Prefer `--annot-choice-active` (the active-state token) over the
+   * weaker `--annot-choice-hover`. PWA defaults differ only by 8 % of
+   * blue tint (10% → 18%), but the VSCode token map points
+   * `--annot-choice-hover` at the subtle `list-hoverBackground` and
+   * `--annot-choice-active` at the strong `list-activeSelectionBackground`
+   * — using the active token keeps active-vs-hover visually distinct
+   * across both. The hover/hover-bg fallbacks remain for any
+   * downstream theme that doesn't define `--annot-choice-active`. */
+  background: var(
+    --annot-choice-active,
+    var(--annot-choice-hover, var(--annot-hover-bg))
+  );
   border-color: var(--annot-accent);
   color: var(--annot-accent);
 }
@@ -406,7 +417,11 @@
   color: var(--annot-accent);
 }
 .tool-flyout-chip-svg.active {
-  background: var(--annot-choice-hover, var(--annot-hover-bg));
+  /* Match `.tool-flyout-chip.active` — see the comment there. */
+  background: var(
+    --annot-choice-active,
+    var(--annot-choice-hover, var(--annot-hover-bg))
+  );
   border-color: var(--annot-accent);
   color: var(--annot-accent);
 }
@@ -460,7 +475,11 @@
 }
 
 .tool-flyout-color-chip.active {
-  background: var(--annot-choice-hover, var(--annot-hover-bg));
+  /* Match `.tool-flyout-chip.active` — see the comment there. */
+  background: var(
+    --annot-choice-active,
+    var(--annot-choice-hover, var(--annot-hover-bg))
+  );
   border-color: var(--annot-accent);
 }
 

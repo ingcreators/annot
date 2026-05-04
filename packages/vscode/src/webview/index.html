@@ -122,30 +122,35 @@
        * `core/styles/toolbar.css` + `property-panel.css` paint
        * `color: var(--annot-accent)` on every `.active` chip. In
        * our token map `--annot-accent` resolves to
-       * `--vscode-button-background` (blue). On the surfaces below
-       * the chip background ALSO resolves to a `--vscode-list-*`
-       * blue (`activeSelectionBackground`), so the icon
-       * disappears against the chip — switch the foreground to
+       * `--vscode-button-background` (blue). The surfaces below
+       * resolve their active background via
+       * `--annot-choice-active` → `--vscode-list-activeSelectionBackground`
+       * (also blue), so the glyph disappears against the chip —
+       * switch the foreground to
        * `--vscode-list-activeSelectionForeground` (workbench
        * canonical "text over active selection", ≥ 4.5:1).
        *
-       *   .toolbar-btn.active                       — bg = --annot-active-bg     (list-activeSelectionBackground, dark)
-       *   .prop-choice-chip.active                  — bg = --annot-choice-active (list-activeSelectionBackground, dark)
-       *   .prop-choice-item.active .prop-choice-label
-       *                                             — bg = --annot-choice-active (list-activeSelectionBackground, dark)
+       *   .toolbar-btn.active                          — bg = --annot-active-bg     (list-activeSelectionBackground)
+       *   .prop-choice-chip.active                     — bg = --annot-choice-active (list-activeSelectionBackground)
+       *   .prop-choice-item.active .prop-choice-label  — bg = --annot-choice-active (list-activeSelectionBackground)
+       *   .tool-flyout-chip.active                     — bg = --annot-choice-active (list-activeSelectionBackground)
+       *   .tool-flyout-chip-svg.active                 — bg = --annot-choice-active (list-activeSelectionBackground)
        *
-       * NOT covered (deliberately): the variant flyout chips
-       * (`.tool-flyout-chip.active`, `.tool-flyout-chip-svg.active`,
-       * `.tool-flyout-color-chip.active`) and `.pp-select-item.active`
-       * — those resolve their backgrounds via
-       * `--annot-choice-hover` → `--vscode-list-hoverBackground`,
-       * which is a LIGHT hover-tint. The original
-       * `color: var(--annot-accent)` (blue) on a light bg has
-       * fine contrast; forcing it to white-ish
-       * `list-activeSelectionForeground` makes the glyph vanish
-       * the other way. (Earlier iterations of this override
-       * over-reached and broke those surfaces — see #429
-       * follow-up.)
+       * NOT covered (deliberately):
+       *
+       *   `.tool-flyout-color-chip.active` — no glyph; the
+       *   visible swatch is the `::before` rounded square
+       *   showing `--swatch-color`. The frame's blue border is
+       *   what conveys "active"; foreground colour on the chip
+       *   itself is irrelevant.
+       *
+       *   `.pp-select-item.active` — uses
+       *   `--annot-choice-hover` (LIGHT hover tint, not the
+       *   active selection blue). The original
+       *   `color: var(--annot-accent)` blue on the light hover
+       *   tint has fine contrast; an early iteration of this
+       *   override over-reached onto it and made the row
+       *   illegible (see #430).
        *
        * The leading `html` prefix bumps specificity from (0,2,0)
        * to (0,2,1) so this rule beats `toolbar.css` /
@@ -158,7 +163,9 @@
        */
       html .toolbar-btn.active,
       html .prop-choice-chip.active,
-      html .prop-choice-item.active .prop-choice-label {
+      html .prop-choice-item.active .prop-choice-label,
+      html .tool-flyout-chip.active,
+      html .tool-flyout-chip-svg.active {
         color: var(
           --vscode-list-activeSelectionForeground,
           var(--vscode-foreground)
