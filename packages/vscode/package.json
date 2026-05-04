@@ -16,6 +16,8 @@
   "type": "module",
   "main": "./dist/extension.js",
   "categories": ["Visualization", "Other"],
+  "keywords": ["annot", "annotation", "screenshot", "svg", "playwright"],
+  "license": "Apache-2.0",
   "activationEvents": [],
   "contributes": {
     "customEditors": [
@@ -29,6 +31,43 @@
           { "filenamePattern": "*.annot.jpg" }
         ],
         "priority": "default"
+      }
+    ],
+    "commands": [
+      {
+        "command": "annot.openAnnotation",
+        "title": "Open annotation",
+        "category": "Annot"
+      },
+      {
+        "command": "annot.newFromClipboard",
+        "title": "New annotation from clipboard image",
+        "category": "Annot"
+      },
+      {
+        "command": "annot.newFromImage",
+        "title": "New annotation from image…",
+        "category": "Annot"
+      },
+      {
+        "command": "annot.saveAsPng",
+        "title": "Save as PNG…",
+        "category": "Annot"
+      },
+      {
+        "command": "annot.saveAsJpeg",
+        "title": "Save as JPEG…",
+        "category": "Annot"
+      },
+      {
+        "command": "annot.exportPptx",
+        "title": "Export to PowerPoint…",
+        "category": "Annot"
+      },
+      {
+        "command": "annot.revealInExplorer",
+        "title": "Reveal in Explorer",
+        "category": "Annot"
       }
     ]
   },

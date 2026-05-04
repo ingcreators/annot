@@ -45,7 +45,21 @@ interface SavedMessage {
   type: "saved";
 }
 
-type ExtensionMessage = OpenMessage | SavedMessage;
+interface SaveErrorMessage {
+  type: "save-error";
+  message: string;
+}
+
+interface ThemeMessage {
+  type: "theme";
+  // VSCode's `ColorThemeKind` enum values: Light=1, Dark=2,
+  // HighContrast=3, HighContrastLight=4. The webview doesn't
+  // import the enum (it would drag the @types/vscode runtime
+  // shape into the bundle), so the message uses raw integers.
+  kind: 1 | 2 | 3 | 4;
+}
+
+type ExtensionMessage = OpenMessage | SavedMessage | SaveErrorMessage | ThemeMessage;
 
 const vscode = acquireVsCodeApi();
 
@@ -90,8 +104,8 @@ const shell = new EditorShell({
 });
 
 shell.on("dirty", () => {
-  // Phase 5: forward to the extension to drive the editor's
-  // dirty-mark + autosave debounce.
+  // Phase 5: forward to the extension's status bar item.
+  vscode.postMessage({ type: "dirty" });
 });
 
 shell.on("error", (err) => {
@@ -100,14 +114,39 @@ shell.on("error", (err) => {
 
 window.addEventListener("message", (event) => {
   const msg = event.data as ExtensionMessage;
-  if (msg.type === "open") {
-    const record = bytesToImageRecord(msg);
-    shell.mountFromRecord(msg.path, record);
-    // Clear the placeholder text once the canvas is mounted.
-    for (const child of Array.from(container.children)) {
-      if (child instanceof HTMLElement && child.classList.contains("annot-placeholder")) {
-        child.remove();
+  switch (msg.type) {
+    case "open": {
+      const record = bytesToImageRecord(msg);
+      shell.mountFromRecord(msg.path, record);
+      // Clear the placeholder text once the canvas is mounted.
+      for (const child of Array.from(container.children)) {
+        if (
+          child instanceof HTMLElement &&
+          child.classList.contains("annot-placeholder")
+        ) {
+          child.remove();
+        }
       }
+      break;
+    }
+    case "theme": {
+      // ColorThemeKind: 1=Light, 2=Dark, 3=HighContrast, 4=HighContrastLight.
+      // Toggle a class on the container so future per-theme CSS can
+      // adjust palette nuances beyond what `--vscode-*` vars cover.
+      const isDark = msg.kind === 2 || msg.kind === 3;
+      container.classList.toggle("annot-theme-dark", isDark);
+      container.classList.toggle("annot-theme-light", !isDark);
+      break;
+    }
+    case "saved": {
+      // The extension confirmed the write; `EditorShell.saveNow`
+      // already emitted its own `saved` event when the in-memory
+      // write resolved. No-op here, kept for protocol symmetry.
+      break;
+    }
+    case "save-error": {
+      console.error("[annot/vscode] save-error from extension:", msg.message);
+      break;
     }
   }
 });
