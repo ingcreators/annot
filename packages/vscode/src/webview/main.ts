@@ -1,40 +1,48 @@
 /**
  * Annot — VSCode webview entry.
  *
- * Wires the EditorShell into the sandboxed iframe + brokers
- * filesystem I/O through a `postMessage` proxy to the extension
- * host. Every storage call from the shell crosses the boundary
- * via correlated request / response messages:
+ * Wires the EditorShell into the sandboxed iframe + integrates
+ * with VSCode's CustomEditorProvider save / dirty / revert /
+ * backup model. Encoding / decoding (text SVG, raster + XMP)
+ * lives entirely in the webview because the canvas + the
+ * `@ingcreators/annot-core/xmp` helpers are browser-side; the
+ * extension host's role is plain `vscode.workspace.fs` I/O.
+ *
+ * Message protocol:
  *
  *   webview                                 extension host
- *     │   {type: "fs.read", id, path}    →     │
- *     │                                         vscode.workspace.fs.readFile
- *     │   ←  {type: "fs.read.result", id, bytes / error}
+ *     │   {type: "ready"}                →     │
+ *     │   ←  {type: "open", path, filename}    │  (boot)
  *     │
- *     │   {type: "fs.write", id, path, bytes} →
+ *     │   {type: "fs.read", id, path}    →     │  (load file bytes)
+ *     │   ←  {type: "fs.read.result", id, bytes}
+ *     │
+ *     │   {type: "edit"}                 →     │  (mark dirty)
+ *     │                                         vscode fires onDidChangeCustomDocument
+ *     │
+ *     │   ←  {type: "save", id}                │  (Ctrl+S / autosave / hot-exit)
+ *     │   {type: "save.result", id, bytes} →
  *     │                                         vscode.workspace.fs.writeFile
- *     │   ←  {type: "fs.write.result", id, error?}
+ *     │
+ *     │   ←  {type: "revert"}                  │  (file → revert / git checkout)
+ *     │   shell.open(path) again              │
+ *     │
+ *     │   ←  {type: "export", id, format}      │  (palette: Save as PNG / JPEG / PPTX)
+ *     │   {type: "export.result", id, bytes} →
+ *     │
+ *     │   ←  {type: "show-file-details"}       │  (palette: Show file details)
+ *     │   ←  {type: "theme", kind}             │  (workbench theme follow)
  *
- * Encoding / decoding (text SVG, raster + XMP) lives entirely in
- * the webview because the canvas + the `@ingcreators/annot-core/xmp`
- * helpers are browser-side. The extension host's role is plain
- * file I/O — it doesn't know what an Annot file looks like.
- *
- * Boot sequence:
- *   1. Webview posts `{type: "ready"}`.
- *   2. Extension posts `{type: "open", path, filename}`.
- *   3. Webview calls `shell.open(path)` → triggers
- *      `proxyStorage.getImage(path)` → `fs.read` round-trip.
- *   4. Webview decodes bytes (XMP-recovery for raster, plain
- *      string for SVG), constructs an `ImageRecord`, mounts via
- *      `EditorShell.mountFromRecord(...)`.
- *
- * Save flow (debounced on `shell.on("dirty", ...)`):
- *   1. Webview-side save callback reads `shell.getCanvas()` and
- *      builds the file bytes per extension (SVG: text encode;
- *      raster: render canvas + `createEditableImage` + bytes).
- *   2. Webview posts `{type: "fs.write", id, path, bytes}`.
- *   3. Extension acknowledges via `{type: "fs.write.result", ...}`.
+ * Save flow:
+ *   1. Webview detects `shell.dirty` → posts `{type: "edit"}`.
+ *   2. Extension fires `onDidChangeCustomDocument` → VSCode
+ *      marks the tab dirty (●) and starts honouring
+ *      `files.autoSave` if configured.
+ *   3. When VSCode wants the bytes (Ctrl+S, autosave debounce
+ *      fires, hot-exit backup), extension posts
+ *      `{type: "save", id}` and awaits `save.result`.
+ *   4. Webview encodes the live canvas via `encodeBytesForSave`
+ *      and replies with the bytes.
  */
 
 import {
@@ -91,11 +99,6 @@ interface FsReadResultMessage {
   bytes?: number[];
   error?: string;
 }
-interface FsWriteResultMessage {
-  type: "fs.write.result";
-  id: number;
-  error?: string;
-}
 interface ThemeMessage {
   type: "theme";
   // ColorThemeKind: 1=Light, 2=Dark, 3=HighContrast, 4=HighContrastLight.
@@ -109,13 +112,21 @@ interface ExportMessage {
 interface ShowFileDetailsMessage {
   type: "show-file-details";
 }
+interface SaveRequestMessage {
+  type: "save";
+  id: number;
+}
+interface RevertMessage {
+  type: "revert";
+}
 type ExtensionMessage =
   | OpenMessage
   | FsReadResultMessage
-  | FsWriteResultMessage
   | ThemeMessage
   | ExportMessage
-  | ShowFileDetailsMessage;
+  | ShowFileDetailsMessage
+  | SaveRequestMessage
+  | RevertMessage;
 
 // ─── postMessage round-trip helpers ────────────────────────────
 
@@ -124,33 +135,12 @@ const pendingReads = new Map<
   number,
   { resolve: (bytes: Uint8Array) => void; reject: (err: Error) => void }
 >();
-const pendingWrites = new Map<
-  number,
-  { resolve: () => void; reject: (err: Error) => void }
->();
 
 function fsRead(path: string): Promise<Uint8Array> {
   const id = nextRequestId++;
   return new Promise((resolve, reject) => {
     pendingReads.set(id, { resolve, reject });
     vscode.postMessage({ type: "fs.read", id, path });
-  });
-}
-
-function fsWrite(path: string, bytes: Uint8Array): Promise<void> {
-  const id = nextRequestId++;
-  return new Promise((resolve, reject) => {
-    pendingWrites.set(id, { resolve, reject });
-    vscode.postMessage({
-      type: "fs.write",
-      id,
-      path,
-      // The structured-clone postMessage protocol handles
-      // `Uint8Array` directly, but a plain number array is the
-      // safest cross-runtime shape (the Phase 4 path used the
-      // same shape for the boot bytes; preserving for symmetry).
-      bytes: Array.from(bytes),
-    });
   });
 }
 
@@ -287,17 +277,14 @@ const proxyStorage: StorageProvider = {
       return undefined;
     }
   },
-  async updateImage(path: string): Promise<void> {
-    // `updates` is ignored — for VSCode we always re-serialize
-    // the live canvas (which matches the user's screen) rather
-    // than trusting whatever subset the EditorShell handed us.
-    // This is the safer choice when the file format embeds
-    // multiple things (SVG = self-contained; raster = original +
-    // XMP); the `updates` parameter only carries
-    // `annotationsSvg` + `updatedAt` and is not enough on its
-    // own to reconstruct a raster file.
-    const bytes = await encodeBytesForSave(path, activeFilename || path);
-    await fsWrite(path, bytes);
+  async updateImage(): Promise<void> {
+    // No-op. With the `CustomEditorProvider` switch, save is
+    // VSCode-driven — the extension posts `{type: "save", id}`
+    // which `runSave` (below) answers with encoded bytes. The
+    // shell's `saveNow()` would have called this method on the
+    // legacy autosave path, but no code path in this webview
+    // calls `shell.saveNow()` anymore. Kept as a no-op so the
+    // `StorageProvider` interface is still satisfied.
   },
   // EditorShell only calls `getImage` + `updateImage`. The
   // remaining surface throws so a future caller (gallery view
@@ -337,33 +324,20 @@ const shell = new EditorShell({
   },
 });
 
-// Debounced autosave on every `dirty`. 500 ms matches the
-// magnitude of PWA's `SavePipeline` debounce; tweak if needed.
-let saveTimer: ReturnType<typeof setTimeout> | null = null;
-let saveInFlight: Promise<void> | null = null;
-
+// VSCode-native save integration: webview just signals "edit
+// happened"; the extension fires `onDidChangeCustomDocument`
+// → VSCode marks dirty (●) on the tab. The actual save is
+// driven by VSCode (`Ctrl+S`, `files.autoSave`, hot-exit
+// backup, etc.); the extension posts `{type: "save", id}`
+// when it needs bytes, and the webview answers with
+// `{type: "save.result", id, bytes}` (handled below).
 shell.on("dirty", () => {
-  vscode.postMessage({ type: "dirty" });
-  if (saveTimer) clearTimeout(saveTimer);
-  saveTimer = setTimeout(scheduleSave, 500);
+  vscode.postMessage({ type: "edit" });
 });
 
 shell.on("error", (err) => {
   console.error("[annot/vscode] EditorShell error:", err);
 });
-
-function scheduleSave(): void {
-  // Coalesce: if a save is currently flying, defer this trigger
-  // until it lands (the next dirty after success kicks off the
-  // followup; saveInFlight chaining keeps this simple).
-  if (saveInFlight) {
-    saveInFlight = saveInFlight.then(scheduleSave);
-    return;
-  }
-  saveInFlight = shell.saveNow().finally(() => {
-    saveInFlight = null;
-  });
-}
 
 // ─── Toolbar + right-panel + statusbar + drawer mount ─────────
 
@@ -549,6 +523,14 @@ window.addEventListener("message", (event) => {
       showFileDetails();
       break;
     }
+    case "save": {
+      void runSave(msg.id);
+      break;
+    }
+    case "revert": {
+      void runRevert();
+      break;
+    }
     case "fs.read.result": {
       const pending = pendingReads.get(msg.id);
       if (!pending) return;
@@ -560,14 +542,6 @@ window.addEventListener("message", (event) => {
       } else {
         pending.reject(new Error("fs.read.result: missing bytes + error"));
       }
-      break;
-    }
-    case "fs.write.result": {
-      const pending = pendingWrites.get(msg.id);
-      if (!pending) return;
-      pendingWrites.delete(msg.id);
-      if (msg.error) pending.reject(new Error(msg.error));
-      else pending.resolve();
       break;
     }
     case "theme": {
@@ -601,6 +575,56 @@ function bytesToBase64(bytes: Uint8Array): string {
 async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
   const r = await fetch(dataUrl);
   return r.blob();
+}
+
+// ─── Save / revert RPC (driven by VSCode Ctrl+S / autosave) ────
+
+/**
+ * Encode the live canvas to bytes for the open file's extension
+ * and reply with `save.result`. The extension's
+ * `saveCustomDocument` / `saveCustomDocumentAs` /
+ * `backupCustomDocument` await this reply, then write the bytes
+ * via `vscode.workspace.fs.writeFile`. If we can't encode (no
+ * canvas / unknown extension), we reply with an error so VSCode
+ * surfaces "Save failed" instead of writing empty bytes.
+ */
+async function runSave(id: number): Promise<void> {
+  try {
+    const bytes = await encodeBytesForSave(activeFilePath, activeFilename);
+    vscode.postMessage({
+      type: "save.result",
+      id,
+      bytes: Array.from(bytes),
+    });
+  } catch (err) {
+    vscode.postMessage({
+      type: "save.result",
+      id,
+      error: String(err),
+    });
+  }
+}
+
+/**
+ * Discard in-memory edits and re-fetch the file from disk.
+ * Triggered by VSCode's Revert command (`File → Revert File`,
+ * `git checkout` of the open file, etc.). Routes through
+ * `shell.open(path)` again — same boot path as the initial
+ * file open, so the proxy storage's `getImage` re-runs `fs.read`
+ * and `mountFromRecord` rebuilds the canvas state.
+ *
+ * After revert the toolbar / right-panel / statusbar may need
+ * remounting because the previous CanvasManager instance is
+ * gone — call `mountToolbarAndRightPanel()` again.
+ */
+async function runRevert(): Promise<void> {
+  if (!activeFilePath) return;
+  try {
+    await shell.open(activeFilePath);
+    mountToolbarAndRightPanel();
+  } catch (err) {
+    console.error("[annot/vscode] revert failed:", err);
+  }
 }
 
 // ─── Export RPC ────────────────────────────────────────────────
