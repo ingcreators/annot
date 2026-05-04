@@ -46,10 +46,23 @@
         min-width: 0;
         min-height: 0;
       }
+      /*
+       * Pane separators — explicit 1px lines between toolbar /
+       * canvas / right-panel / statusbar. Without these, the
+       * VSCode-mapped surface tokens (sideBar-background ≈
+       * editor-background in many themes) leave the panes
+       * visually fused: in Default Dark+ the difference is one
+       * shade (`#252526` vs `#1e1e1e`), barely perceptible.
+       * `--vscode-panel-border` is the workbench's canonical
+       * inter-pane separator colour and stays visible across
+       * Light / Dark / High Contrast.
+       */
       #annot-shell-toolbar {
         grid-column: 1;
         overflow: hidden;
         min-height: 0;
+        border-right: 1px solid
+          var(--vscode-panel-border, var(--vscode-contrastBorder, transparent));
       }
       #annot-shell-centre {
         grid-column: 2;
@@ -65,12 +78,15 @@
         min-height: 0;
       }
       #annot-shell-statusbar {
-        border-top: 1px solid var(--annot-border-color);
+        border-top: 1px solid
+          var(--vscode-panel-border, var(--vscode-contrastBorder, transparent));
       }
       #annot-shell-right-panel {
         grid-column: 3;
         overflow: auto;
         min-height: 0;
+        border-left: 1px solid
+          var(--vscode-panel-border, var(--vscode-contrastBorder, transparent));
       }
       .annot-placeholder {
         padding: 24px;
