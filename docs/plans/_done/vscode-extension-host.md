@@ -1,6 +1,31 @@
 # VSCode extension as a first-class editor host
 
-> **Status:** Draft
+> **Status:** Done — landed 2026-05-04 across PRs [#395](https://github.com/ingcreators/annot/pull/395)–[#404](https://github.com/ingcreators/annot/pull/404).
+>
+> **Carry-overs deferred to follow-up tickets:**
+> - PWA `EditorSession` still constructs `CanvasManager` / `History` /
+>   `SelectionManager` directly. The plan called for it to "shrink to
+>   a thin adapter" via the `EditorShell`; doing so cleanly requires a
+>   coordinated CSS update (the PWA's `app.css` targets `#svg-root`,
+>   the shell's anonymous `[data-annot-shell-root]` doesn't) plus a
+>   record-synthesis refactor of `setupEditor`. The shell architecture
+>   is proven by 8 happy-dom tests + the VSCode webview consuming the
+>   same surface; PWA switchover queued as a follow-up.
+> - Phase 5's command-palette entries (`Annot: New annotation from
+>   clipboard image`, `Annot: New annotation from image…`,
+>   `Annot: Save as PNG…`, `Annot: Save as JPEG…`,
+>   `Annot: Export to PowerPoint…`) register the surface and emit
+>   "lands in a follow-up" info messages — full implementation is a
+>   follow-up.
+> - Webview-side `StorageProvider` proxy (forwarding every `getImage`
+>   / `updateImage` to the extension host via postMessage) — Phase 4
+>   ships bytes once at boot via `mountFromRecord`; the proxy lands
+>   in a follow-up.
+> - XMP round-trip for `*.annot.{png,jpeg,jpg}` (recover annotation
+>   SVG from the XMP packet on read; embed on write) — `VSCodeStore`
+>   currently round-trips the original bytes only.
+>
+> **Original status:** Draft
 > **Compatibility:** Adds new packages (`@ingcreators/annot-editor-shell`,
 >                    `@ingcreators/annot-vscode`); no renames to
 >                    existing packages. `StorageProvider` unchanged
