@@ -62,6 +62,7 @@ import "@ingcreators/annot-editor-shell/editor-statusbar";
 import type { AnnotEditorStatusbarElement } from "@ingcreators/annot-editor-shell/editor-statusbar";
 import "@ingcreators/annot-editor-shell/annot-file-details-drawer";
 import type { AnnotFileDetailsDrawerElement } from "@ingcreators/annot-editor-shell/annot-file-details-drawer";
+import { VSCODE_THEME_MAP } from "./theme-map.js";
 import type { ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
 
 // Pull in the host-side stylesheets that the toolbar +
@@ -317,11 +318,13 @@ const shell = new EditorShell({
     scratchpad: false,
     keyboardHelp: true,
   },
-  themeOverrides: {
-    "--annot-bg-canvas": "var(--vscode-editor-background)",
-    "--annot-text-primary": "var(--vscode-editor-foreground)",
-    "--annot-border-color": "var(--vscode-panel-border)",
-  },
+  // Full Annot ↔ VSCode token map (see `theme-map.ts`). Every
+  // `--annot-*` design-system token routes through a
+  // semantically-matching `--vscode-*` workbench colour, so
+  // toolbar / right-panel / drawer / canvas all follow the
+  // active theme — including third-party themes from the
+  // marketplace.
+  themeOverrides: VSCODE_THEME_MAP,
 });
 
 // VSCode-native save integration: webview just signals "edit

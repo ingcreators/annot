@@ -6,18 +6,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Annot</title>
     <style>
-      :root {
-        --annot-bg-canvas: var(--vscode-editor-background, #1e1e1e);
-        --annot-text-primary: var(--vscode-editor-foreground, #ddd);
-        --annot-border-color: var(--vscode-panel-border, #444);
-      }
+      /*
+       * Pre-script paint: use VSCode's own variables directly
+       * so the iframe shows the right background even before
+       * the bundled `main.ts` runs and the EditorShell
+       * applies the full `--annot-*` token mapping. The mapped
+       * `--annot-*` tokens take over once the script boots.
+       */
       html,
       body {
         margin: 0;
         padding: 0;
         height: 100%;
-        background: var(--annot-bg-canvas);
-        color: var(--annot-text-primary);
+        background: var(--vscode-editor-background);
+        color: var(--vscode-foreground);
         font: 13px/1.5 var(--vscode-editor-font-family, system-ui);
       }
       /*
