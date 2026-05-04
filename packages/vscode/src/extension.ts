@@ -62,12 +62,37 @@ class AnnotEditorProvider implements vscode.CustomReadonlyEditorProvider<AnnotDo
     };
     webview.html = await this.#renderHtml(webview);
 
-    // Phase 5 wires the message protocol (ready / read / write /
-    // dirty / saved). Phase 4 leaves the channel set up but
-    // unused — opening an `*.annot.svg` file boots the webview
-    // and shows the placeholder UI.
+    // Phase 5: status bar + dirty state per webview, cleaned up
+    // when the panel is disposed. The status item is owned by
+    // the webview lifecycle so two open editors don't fight over
+    // a single global item.
+    const statusItem = vscode.window.createStatusBarItem(
+      vscode.StatusBarAlignment.Right,
+      100,
+    );
+    statusItem.text = "$(sync~spin) Annot";
+    statusItem.tooltip = `Annot — ${path.basename(document.uri.fsPath)}`;
+    statusItem.show();
+    webviewPanel.onDidDispose(() => statusItem.dispose());
+
+    const setStatus = (icon: string, label: string): void => {
+      statusItem.text = `${icon} ${label}`;
+    };
+
+    // Theme bridging: forward the current ColorThemeKind on
+    // activation + re-forward on changes so the shell's
+    // `themeOverrides` stays in sync with the workbench theme.
+    const sendTheme = (): void => {
+      void webview.postMessage({
+        type: "theme",
+        kind: vscode.window.activeColorTheme.kind,
+      });
+    };
+    const themeSub = vscode.window.onDidChangeActiveColorTheme(sendTheme);
+    webviewPanel.onDidDispose(() => themeSub.dispose());
+
     webview.onDidReceiveMessage((msg) => {
-      void this.#handleMessage(msg, document, webview);
+      void this.#handleMessage(msg, document, webview, setStatus, sendTheme);
     });
   }
 
@@ -75,15 +100,17 @@ class AnnotEditorProvider implements vscode.CustomReadonlyEditorProvider<AnnotDo
     msg: unknown,
     document: AnnotDocument,
     webview: vscode.Webview,
+    setStatus: (icon: string, label: string) => void,
+    sendTheme: () => void,
   ): Promise<void> {
     if (typeof msg !== "object" || msg === null) return;
     const m = msg as { type?: string };
     switch (m.type) {
       case "ready": {
         // Send the document's bytes + path so the webview-side
-        // EditorShell can `mountFromRecord`. Phase 5 will route
-        // this through `VSCodeStore.getImage(path)` so the
-        // webview takes the same code path as `EditorShell.open`.
+        // EditorShell can `mountFromRecord`. Then immediately
+        // sync the current workbench theme so the editor lands
+        // with the right palette on first paint.
         const bytes = await vscode.workspace.fs.readFile(document.uri);
         const filename = path.basename(document.uri.fsPath);
         webview.postMessage({
@@ -92,16 +119,32 @@ class AnnotEditorProvider implements vscode.CustomReadonlyEditorProvider<AnnotDo
           filename,
           bytes: Array.from(bytes),
         });
+        sendTheme();
+        setStatus("$(check)", "Annot");
         break;
       }
       case "save": {
         const payload = msg as { type: "save"; bytes?: number[] };
         if (!payload.bytes) return;
-        await vscode.workspace.fs.writeFile(
-          document.uri,
-          new Uint8Array(payload.bytes),
-        );
-        webview.postMessage({ type: "saved" });
+        setStatus("$(sync~spin)", "Saving…");
+        try {
+          await vscode.workspace.fs.writeFile(
+            document.uri,
+            new Uint8Array(payload.bytes),
+          );
+          webview.postMessage({ type: "saved" });
+          setStatus("$(check)", "Saved");
+        } catch (err) {
+          setStatus("$(error)", "Save failed");
+          void vscode.window.showErrorMessage(
+            `Annot: failed to save ${path.basename(document.uri.fsPath)}: ${err}`,
+          );
+          webview.postMessage({ type: "save-error", message: String(err) });
+        }
+        break;
+      }
+      case "dirty": {
+        setStatus("$(circle-filled)", "Unsaved");
         break;
       }
     }
@@ -160,19 +203,81 @@ function placeholderHtml(): string {
 </body></html>`;
 }
 
+// ─── Command implementations ───────────────────────────────────
+//
+// Phase 5 lands the command palette entries declared in
+// `package.json#contributes.commands`. The `Open annotation` /
+// `Reveal in Explorer` commands are fully wired (delegating to
+// VSCode's native APIs); the new-from-image / save-as-* / export
+// commands stub with an info message indicating which Phase will
+// land them — the structural surface is in place so future work
+// fills behaviour, not registration.
+
+async function cmdOpenAnnotation(): Promise<void> {
+  const uris = await vscode.window.showOpenDialog({
+    title: "Open Annot annotation",
+    canSelectMany: false,
+    filters: {
+      "Annot files": ["annot.svg", "annot.png", "annot.jpeg", "annot.jpg"],
+    },
+  });
+  if (!uris || uris.length === 0) return;
+  await vscode.commands.executeCommand("vscode.openWith", uris[0]!, VIEW_TYPE);
+}
+
+async function cmdRevealInExplorer(): Promise<void> {
+  const editor = vscode.window.activeTextEditor;
+  const uri = editor?.document.uri ?? vscode.window.tabGroups.activeTabGroup?.activeTab?.input;
+  if (uri instanceof vscode.Uri) {
+    await vscode.commands.executeCommand("revealFileInOS", uri);
+    return;
+  }
+  void vscode.window.showInformationMessage(
+    "Annot: no Annot file is currently active.",
+  );
+}
+
+function cmdNewFromClipboard(): void {
+  void vscode.window.showInformationMessage(
+    "Annot: New annotation from clipboard image — implementation lands in a follow-up. " +
+      "(Phase 5 ships the command registration so the surface is reviewable; the actual " +
+      "clipboard read + Save-As + open flow follows.)",
+  );
+}
+
+function cmdNewFromImage(): void {
+  void vscode.window.showInformationMessage(
+    "Annot: New annotation from image — implementation lands in a follow-up. " +
+      "(Mirrors the PWA's `CaptureHost.openFile` flow per the plan: showOpenDialog → " +
+      "XMP recovery → showSaveDialog with the `.annot.` infix → write via VSCodeStore.)",
+  );
+}
+
+function cmdSaveAs(format: "png" | "jpeg" | "pptx"): void {
+  void vscode.window.showInformationMessage(
+    `Annot: Save as ${format.toUpperCase()} — implementation lands in a follow-up. ` +
+      `(Webview serializes via the editor package's existing save helpers; extension routes ` +
+      `the bytes to showSaveDialog + workspace.fs.)`,
+  );
+}
+
 export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.window.registerCustomEditorProvider(
       AnnotEditorProvider.viewType,
       new AnnotEditorProvider(context),
       {
-        // Phase 4: keep one webview per file (no shared state
-        // across re-opens). Phase 5 can tune this if cross-file
-        // state matters.
         webviewOptions: { retainContextWhenHidden: true },
         supportsMultipleEditorsPerDocument: false,
       },
     ),
+    vscode.commands.registerCommand("annot.openAnnotation", cmdOpenAnnotation),
+    vscode.commands.registerCommand("annot.newFromClipboard", cmdNewFromClipboard),
+    vscode.commands.registerCommand("annot.newFromImage", cmdNewFromImage),
+    vscode.commands.registerCommand("annot.saveAsPng", () => cmdSaveAs("png")),
+    vscode.commands.registerCommand("annot.saveAsJpeg", () => cmdSaveAs("jpeg")),
+    vscode.commands.registerCommand("annot.exportPptx", () => cmdSaveAs("pptx")),
+    vscode.commands.registerCommand("annot.revealInExplorer", cmdRevealInExplorer),
   );
 }
 
