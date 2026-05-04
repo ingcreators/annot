@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Annot</title>
+    <style>
+      :root {
+        --annot-bg-canvas: var(--vscode-editor-background, #1e1e1e);
+        --annot-text-primary: var(--vscode-editor-foreground, #ddd);
+        --annot-border-color: var(--vscode-panel-border, #444);
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        background: var(--annot-bg-canvas);
+        color: var(--annot-text-primary);
+        font: 13px/1.5 var(--vscode-editor-font-family, system-ui);
+      }
+      #annot-shell-container {
+        position: absolute;
+        inset: 0;
+      }
+      .annot-placeholder {
+        padding: 24px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="annot-shell-container">
+      <div class="annot-placeholder">
+        Loading Annot editor… (Phase 4 skeleton — full message protocol arrives in Phase 5)
+      </div>
+    </div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
