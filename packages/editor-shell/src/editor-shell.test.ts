@@ -171,6 +171,42 @@ describe("EditorShell — Phase 3 implementation", () => {
     expect(container.style.getPropertyValue("--annot-accent")).toBe("#ff00aa");
   });
 
+  // Phase 3 of `docs/plans/editor-session-shell-switchover.md` —
+  // `mountFromRecord` now restores the persisted annotation tree
+  // when the record carries `annotationsSvg`, instead of the host
+  // having to call `restoreAnnotations` itself. Verifies the
+  // annotation children land on `canvas.annotations` AND that the
+  // seed `history.save()` runs before `history.onStateChange` is
+  // wired (so opening an annotated file does NOT immediately fire
+  // a `dirty` event that would commit a no-op autosave).
+  it("mountFromRecord restores annotationsSvg without firing dirty", async () => {
+    const container = makeContainer();
+    const annotationsSvg = `<?xml version="1.0"?>
+<svg xmlns="http://www.w3.org/2000/svg" data-annot-version="1">
+  <g id="annotations">
+    <rect data-test="restored" x="10" y="10" width="50" height="50" fill="red"/>
+    <circle data-test="restored" cx="80" cy="80" r="20" fill="blue"/>
+  </g>
+</svg>`;
+    const { storage } = makeStorage(makeRecord({ annotationsSvg }));
+    const shell = new EditorShell({ container, storage });
+    const dirtyHandler = vi.fn();
+    shell.on("dirty", dirtyHandler);
+
+    await shell.open("/test.annot.svg");
+
+    const canvas = shell.getCanvas();
+    expect(canvas).not.toBeNull();
+    const restored = canvas?.annotations.querySelectorAll('[data-test="restored"]');
+    expect(restored?.length).toBe(2);
+
+    // The seed history.save() ran before history.onStateChange was
+    // wired. No dirty event reaches the host on open.
+    expect(dirtyHandler).not.toHaveBeenCalled();
+
+    shell.destroy();
+  });
+
   // Phase 2 of `docs/plans/editor-session-shell-switchover.md` —
   // the host can pre-supply an `<svg>` and the shell adopts it
   // instead of creating an anonymous one. The PWA's index.html

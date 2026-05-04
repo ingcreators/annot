@@ -42,6 +42,7 @@ import type {
   PageMetadata,
   StorageProvider,
 } from "@ingcreators/annot-core/storage";
+import { restoreAnnotations } from "./restore-annotations.js";
 
 /**
  * Feature opt-out bag the host passes at construction. Defaults
@@ -233,6 +234,19 @@ export class EditorShell {
     this.#history = history;
     this.#selection = selection;
 
+    // Restore the persisted annotation tree BEFORE wiring
+    // `history.onStateChange` so the seed `history.save()` doesn't
+    // fire a `dirty` event the host's autosave pipeline would
+    // interpret as "user edited" and commit on open. Mirrors the
+    // seed-before-wire discipline `EditorSession.setupEditor`
+    // applied via its own restoreAnnotations call site (Phase 4 of
+    // `docs/plans/editor-session-shell-switchover.md` removes the
+    // duplicate PWA call once the boot path goes through here).
+    if (record.annotationsSvg) {
+      restoreAnnotations(canvas, record.annotationsSvg);
+      history.save();
+    }
+
     // Selection-change → forward as a shell event so the host
     // (PWA's right-panel selection-properties section, future
     // VSCode status-bar selection summary) can drop its own
@@ -253,15 +267,6 @@ export class EditorShell {
     history.onStateChange = () => {
       this.#emit("dirty");
     };
-
-    // The persisted annotations SVG (if present) is restored by
-    // the host today through `restoreAnnotations`. The shell
-    // doesn't take that responsibility yet — restoring annotations
-    // requires DOM-string parsing + element re-attachment that's
-    // PWA-side today and would force a Tier B migration to lift
-    // here cleanly. Tracked as a follow-up; for now the host's
-    // existing call site keeps working since it operates on
-    // `getCanvas().annotations` directly.
   }
 
   /** Resolve the `<svg>` root the shell mounts the canvas into.
