@@ -1,24 +1,25 @@
 # PWA `EditorSession` shell switchover
 
-> **Status:** Draft
+> **Status:** Done — landed 2026-05-04 across PRs #411–TBD.
 > **Compatibility:** Refactor inside `packages/web` only. Public
 >                    behaviour (PWA editor opens, edits, saves;
 >                    extension transfer / paste / capture flows
 >                    work) unchanged. No `StorageProvider` change,
 >                    no SVG schema change, no `PageMetadata`
->                    change. The `EditorShell` API gains one
+>                    change. The `EditorShell` API gained one
 >                    optional knob (`svgRoot?: SVGSVGElement`).
-> **Risk:** Medium — touches the editor boot path on every
+> **Risk:** Medium — touched the editor boot path on every
 >           open. Mitigated by (a) fully-additive API change to
 >           `EditorShell`, (b) the existing 1146-test suite +
->           shell host-boundary invariant, (c) keeping
->           `index.html`'s pre-baked `<svg id="svg-root">` so
->           there's no chicken-and-egg with first-render CSS.
+>           shell host-boundary invariant + four new shell tests
+>           (svgRoot adoption × 3, restoreAnnotations × 1), (c)
+>           keeping `index.html`'s pre-baked `<svg id="svg-root">`
+>           so there's no chicken-and-egg with first-render CSS.
 
 ## Context
 
 The
-[`vscode-extension-host.md`](./_done/vscode-extension-host.md)
+[`vscode-extension-host.md`](./vscode-extension-host.md)
 plan series landed `EditorShell` as the host-neutral editor
 surface and proved it from the VSCode side (PRs #395–#404,
 plus #408 / #409 for the Phase 5 deferreds). The PWA
