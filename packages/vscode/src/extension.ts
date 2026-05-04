@@ -548,6 +548,21 @@ async function requestExport(format: ExportFormat): Promise<void> {
   }
 }
 
+/** `Annot: Show file details` — toggles the file-details drawer
+ *  in the active webview. The drawer itself lives in the webview
+ *  (it needs the canvas dimensions / data URL) so the extension
+ *  just posts a message. */
+function cmdShowFileDetails(): void {
+  const active = activeRegistry.getActive();
+  if (!active) {
+    void vscode.window.showInformationMessage(
+      "Annot: no Annot editor is currently active. Open a file first.",
+    );
+    return;
+  }
+  void active.panel.webview.postMessage({ type: "show-file-details" });
+}
+
 function saveDialogFiltersFor(format: ExportFormat): Record<string, string[]> {
   switch (format) {
     case "png":
@@ -638,6 +653,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("annot.saveAsJpeg", () => requestExport("jpeg")),
     vscode.commands.registerCommand("annot.exportPptx", () => requestExport("pptx")),
     vscode.commands.registerCommand("annot.revealInExplorer", cmdRevealInExplorer),
+    vscode.commands.registerCommand("annot.showFileDetails", cmdShowFileDetails),
   );
 }
 

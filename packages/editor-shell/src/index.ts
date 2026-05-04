@@ -54,3 +54,8 @@ export {
   serializeSelection,
   translateElement,
 } from "./scratchpad-utils.js";
+export {
+  type AnnotEditorStatusbarElement,
+  ZOOM_OPTIONS,
+} from "./editor-statusbar.js";
+import "./editor-statusbar.js";
