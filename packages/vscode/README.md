@@ -43,19 +43,40 @@ What works:
 - Theme bridging: extension forwards
   `onDidChangeActiveColorTheme` to the webview, which toggles
   `annot-theme-dark` / `annot-theme-light` classes.
-- Command palette entries (`Annot: Open annotation`,
-  `Annot: Reveal in Explorer` are fully wired; the other
-  entries register the surface but their bodies are
-  follow-ups).
+- **Command palette** entries fully wired:
+    - `Annot: Open annotation` — `showOpenDialog` →
+      `vscode.openWith`.
+    - `Annot: Reveal in Explorer` — `revealFileInOS` on the
+      active editor / active Annot panel.
+    - `Annot: New annotation from image…` —
+      `showOpenDialog` (source image) → `showSaveDialog` with
+      the `.annot.` infix inserted before the extension →
+      copy bytes → `vscode.openWith`. The webview's storage
+      proxy auto-recovers any embedded XMP packet on open;
+      raw raster sources gain XMP on first save.
+    - `Annot: New annotation from clipboard image` —
+      `showSaveDialog` for the destination → write a 1×1
+      placeholder PNG → `vscode.openWith`. The webview detects
+      the placeholder length on open and auto-replaces the
+      canvas background by reading
+      `navigator.clipboard.read()`. Falls back to a blank
+      canvas if the clipboard doesn't carry an image / the
+      user denies the permission prompt.
+    - `Annot: Save as PNG…` / `Save as JPEG…` — extension
+      posts `{type: "export", id, format}` to the active
+      webview; webview renders via `getPngDataUrl` + builds a
+      re-editable image via `createEditableImage`; extension
+      shows save dialog + writes via `vscode.workspace.fs`.
+      The exported file is itself a valid `.annot.png` /
+      `.annot.jpg` (XMP-bearing) so re-opening it round-trips
+      the annotations.
+    - `Annot: Export to PowerPoint…` — same RPC pattern;
+      webview calls `buildPptxFiles` + `buildZip` from the
+      editor / core packages; extension drives save dialog +
+      write.
 
 Follow-ups (out of this package's scope today):
 
-- Implementation bodies for `Annot: New annotation from
-  clipboard image`, `New annotation from image…`,
-  `Save as PNG…`, `Save as JPEG…`,
-  `Export to PowerPoint…`. The command IDs are registered and
-  discoverable; their handlers currently surface a "lands in
-  a follow-up" info message.
 - README screenshots + Marketplace publish step.
 
 ## Architecture

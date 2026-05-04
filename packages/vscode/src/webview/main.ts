@@ -42,8 +42,10 @@ import {
   readEditableImage,
   type AnnotMetadata,
 } from "@ingcreators/annot-core/xmp";
+import { buildZip } from "@ingcreators/annot-core";
 import { EditorShell } from "@ingcreators/annot-editor-shell";
 import { exportSVGString, getPngDataUrl } from "@ingcreators/annot-editor";
+import { buildPptxFiles } from "@ingcreators/annot-editor/pptx-export";
 import type { ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
 
 declare function acquireVsCodeApi(): {
@@ -76,11 +78,17 @@ interface ThemeMessage {
   // ColorThemeKind: 1=Light, 2=Dark, 3=HighContrast, 4=HighContrastLight.
   kind: 1 | 2 | 3 | 4;
 }
+interface ExportMessage {
+  type: "export";
+  id: number;
+  format: "png" | "jpeg" | "pptx";
+}
 type ExtensionMessage =
   | OpenMessage
   | FsReadResultMessage
   | FsWriteResultMessage
-  | ThemeMessage;
+  | ThemeMessage
+  | ExportMessage;
 
 // ─── postMessage round-trip helpers ────────────────────────────
 
@@ -341,7 +349,20 @@ window.addEventListener("message", (event) => {
             child.remove();
           }
         }
+        // `cmdNewFromClipboard` (extension-side) writes a 1×1
+        // transparent PNG as a placeholder so the file exists for
+        // `vscode.openWith`. Detect that exact placeholder here
+        // and try to overwrite the canvas's background with the
+        // OS clipboard image. If the clipboard doesn't carry an
+        // image (or the user denies the permission prompt), the
+        // placeholder remains and the user gets a blank canvas
+        // they can draw on.
+        void maybeBootstrapFromClipboard();
       });
+      break;
+    }
+    case "export": {
+      void runExport(msg.id, msg.format);
       break;
     }
     case "fs.read.result": {
@@ -396,4 +417,139 @@ function bytesToBase64(bytes: Uint8Array): string {
 async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
   const r = await fetch(dataUrl);
   return r.blob();
+}
+
+// ─── Export RPC ────────────────────────────────────────────────
+
+async function runExport(id: number, format: "png" | "jpeg" | "pptx"): Promise<void> {
+  try {
+    const canvas = shell.getCanvas();
+    if (!canvas) throw new Error("no canvas mounted");
+    const stem = activeFilename.replace(/\.annot\.[^.]+$/i, "").replace(/\.[^.]+$/, "");
+    const safeStem = stem || "annotation";
+
+    let bytes: Uint8Array;
+    let suggestedFilename: string;
+    if (format === "pptx") {
+      const files = buildPptxFiles(canvas);
+      const entries = Object.entries(files).map(([name, data]) => ({ name, data }));
+      const zipBlob = buildZip(entries);
+      bytes = new Uint8Array(await zipBlob.arrayBuffer());
+      suggestedFilename = `${safeStem}.pptx`;
+    } else {
+      // For raster export, build a re-editable image (XMP-bearing)
+      // so the produced file can be re-opened in Annot. This
+      // matches the PWA's `saveAsEditableImage` semantics.
+      const renderedDataUrl = await getPngDataUrl(canvas);
+      const renderedBlob = await dataUrlToBlob(renderedDataUrl);
+      const originalDataUrl = canvas.imageEl.getAttribute("href") ?? "";
+      const annotationsSvg = exportAnnotationsOnlySvg(canvas);
+      const editable = await createEditableImage({
+        renderedBlob,
+        originalDataUrl,
+        annotationsSvg,
+        width: canvas.imageWidth,
+        height: canvas.imageHeight,
+        format: format === "jpeg" ? "jpg" : "png",
+      });
+      bytes = new Uint8Array(await editable.arrayBuffer());
+      suggestedFilename = `${safeStem}.${format === "jpeg" ? "jpg" : "png"}`;
+    }
+
+    vscode.postMessage({
+      type: "export.result",
+      id,
+      bytes: Array.from(bytes),
+      suggestedFilename,
+    });
+  } catch (err) {
+    vscode.postMessage({
+      type: "export.result",
+      id,
+      error: String(err),
+    });
+  }
+}
+
+// ─── Clipboard bootstrap (`Annot: New annotation from clipboard image`)
+
+const PLACEHOLDER_PNG_LENGTH = 67;
+
+async function maybeBootstrapFromClipboard(): Promise<void> {
+  // The placeholder the extension writes for the clipboard
+  // bootstrap is exactly 67 bytes. After `shell.open(path)`
+  // resolves, the canvas's `<image href>` carries the file's
+  // raw bytes as a data URL — short-circuit if it doesn't
+  // match the placeholder length.
+  const canvas = shell.getCanvas();
+  if (!canvas) return;
+  const href = canvas.imageEl.getAttribute("href") ?? "";
+  const m = href.match(/^data:[^;]+;base64,(.+)$/);
+  if (!m) return;
+  let placeholderBytes: Uint8Array;
+  try {
+    placeholderBytes = base64ToBytes(m[1]!);
+  } catch {
+    return;
+  }
+  if (placeholderBytes.length !== PLACEHOLDER_PNG_LENGTH) return;
+
+  if (!navigator.clipboard || typeof navigator.clipboard.read !== "function") {
+    console.warn("[annot/vscode] clipboard.read unavailable; placeholder remains.");
+    return;
+  }
+
+  try {
+    const items = await navigator.clipboard.read();
+    for (const item of items) {
+      const imageType = item.types.find((t) => t.startsWith("image/"));
+      if (!imageType) continue;
+      const blob = await item.getType(imageType);
+      const dataUrl = await blobToDataUrl(blob);
+      const dims = await loadImageDims(dataUrl);
+      // Replace the canvas's background image + dimensions with
+      // the clipboard image. The shell's `dirty` event fires
+      // automatically because we mutate the SVG; the autosave
+      // pipeline picks it up.
+      canvas.imageEl.setAttribute("href", dataUrl);
+      canvas.imageEl.setAttribute("width", String(dims.width));
+      canvas.imageEl.setAttribute("height", String(dims.height));
+      canvas.svg.setAttribute("viewBox", `0 0 ${dims.width} ${dims.height}`);
+      canvas.svg.setAttribute("width", String(dims.width));
+      canvas.svg.setAttribute("height", String(dims.height));
+      // Trigger a save so the placeholder file gets replaced
+      // immediately. The history record stays empty (we didn't
+      // edit annotations, just swapped the background) so this
+      // is a one-shot side-channel save.
+      void shell.saveNow();
+      return;
+    }
+  } catch (err) {
+    console.warn("[annot/vscode] clipboard.read failed:", err);
+  }
+}
+
+function base64ToBytes(b64: string): Uint8Array {
+  const binary = atob(b64);
+  const out = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i);
+  return out;
+}
+
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error ?? new Error("FileReader failed"));
+    reader.readAsDataURL(blob);
+  });
+}
+
+function loadImageDims(dataUrl: string): Promise<{ width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+    img.onerror = () => reject(new Error("clipboard image failed to load"));
+    img.src = dataUrl;
+  });
 }
