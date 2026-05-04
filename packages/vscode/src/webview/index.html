@@ -116,38 +116,49 @@
       }
 
       /*
-       * VSCode-specific contrast overrides.
+       * VSCode-specific contrast overrides — DARK-BACKGROUND
+       * active states only.
        *
-       * `core/styles/toolbar.css` paints the active tool with
-       * `background: var(--annot-active-bg)` +
-       * `color: var(--annot-accent)`. In our token map both
-       * resolve to blue `--vscode-*` variables
-       * (list-activeSelectionBackground + button-background),
-       * so on Light + many other themes the icon disappears
-       * against the active background. Switch the active
-       * foreground to `--vscode-list-activeSelectionForeground`
-       * which is the workbench's canonical "text over active
-       * selection" colour and guarantees ≥4.5:1 contrast.
+       * `core/styles/toolbar.css` + `property-panel.css` paint
+       * `color: var(--annot-accent)` on every `.active` chip. In
+       * our token map `--annot-accent` resolves to
+       * `--vscode-button-background` (blue). On the surfaces below
+       * the chip background ALSO resolves to a `--vscode-list-*`
+       * blue (`activeSelectionBackground`), so the icon
+       * disappears against the chip — switch the foreground to
+       * `--vscode-list-activeSelectionForeground` (workbench
+       * canonical "text over active selection", ≥ 4.5:1).
        *
-       * Same fix for the variant flyout chips + colour chips —
-       * they inherit the same blue-on-blue problem.
+       *   .toolbar-btn.active                       — bg = --annot-active-bg     (list-activeSelectionBackground, dark)
+       *   .prop-choice-chip.active                  — bg = --annot-choice-active (list-activeSelectionBackground, dark)
+       *   .prop-choice-item.active .prop-choice-label
+       *                                             — bg = --annot-choice-active (list-activeSelectionBackground, dark)
+       *
+       * NOT covered (deliberately): the variant flyout chips
+       * (`.tool-flyout-chip.active`, `.tool-flyout-chip-svg.active`,
+       * `.tool-flyout-color-chip.active`) and `.pp-select-item.active`
+       * — those resolve their backgrounds via
+       * `--annot-choice-hover` → `--vscode-list-hoverBackground`,
+       * which is a LIGHT hover-tint. The original
+       * `color: var(--annot-accent)` (blue) on a light bg has
+       * fine contrast; forcing it to white-ish
+       * `list-activeSelectionForeground` makes the glyph vanish
+       * the other way. (Earlier iterations of this override
+       * over-reached and broke those surfaces — see #429
+       * follow-up.)
        *
        * The leading `html` prefix bumps specificity from (0,2,0)
-       * to (0,2,1) so this rule beats `core/styles/toolbar.css`'s
-       * own `.toolbar-btn.active { color: var(--annot-accent) }`.
-       * Without the bump the two rules tie on specificity and
-       * `toolbar.css` wins on source order — Vite injects
-       * imported CSS into `<head>` AFTER this inline `<style>`,
-       * so the override would silently lose. Verified in #426
-       * post-mortem: the rule was authored but never applied.
+       * to (0,2,1) so this rule beats `toolbar.css` /
+       * `property-panel.css`'s own `.foo.active { color:
+       * var(--annot-accent) }`. Without the bump the rules tie
+       * on specificity and the imported stylesheet wins on
+       * source order — Vite injects imported CSS into `<head>`
+       * AFTER this inline `<style>`, so the override silently
+       * loses (verified in #426 post-mortem).
        */
       html .toolbar-btn.active,
-      html .tool-flyout-chip.active,
-      html .tool-flyout-chip-svg.active,
-      html .tool-flyout-color-chip.active,
       html .prop-choice-chip.active,
-      html .prop-choice-item.active .prop-choice-label,
-      html .pp-select-item.active {
+      html .prop-choice-item.active .prop-choice-label {
         color: var(
           --vscode-list-activeSelectionForeground,
           var(--vscode-foreground)
