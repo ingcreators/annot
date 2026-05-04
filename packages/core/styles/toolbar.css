@@ -184,6 +184,13 @@
   flex-direction: column;
   padding: 6px 0;
   gap: 2px;
+  /* Centre direct children on the cross axis so a 28px separator
+   * (or any non-`toolbar-group` child narrower than the 36px tool
+   * buttons) lines up with the button centres. The toolbar shrinks
+   * to its widest child (36px) regardless of the strip width, so
+   * without this rule a smaller child sits at the start (left) of
+   * the toolbar — visibly off-centre relative to the buttons. */
+  align-items: center;
 }
 .toolbar-vertical .toolbar-group {
   flex-direction: column;

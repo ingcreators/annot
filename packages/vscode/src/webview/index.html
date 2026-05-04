@@ -131,11 +131,20 @@
        *
        * Same fix for the variant flyout chips + colour chips —
        * they inherit the same blue-on-blue problem.
+       *
+       * The leading `html` prefix bumps specificity from (0,2,0)
+       * to (0,2,1) so this rule beats `core/styles/toolbar.css`'s
+       * own `.toolbar-btn.active { color: var(--annot-accent) }`.
+       * Without the bump the two rules tie on specificity and
+       * `toolbar.css` wins on source order — Vite injects
+       * imported CSS into `<head>` AFTER this inline `<style>`,
+       * so the override would silently lose. Verified in #426
+       * post-mortem: the rule was authored but never applied.
        */
-      .toolbar-btn.active,
-      .tool-flyout-chip.active,
-      .tool-flyout-chip-svg.active,
-      .tool-flyout-color-chip.active {
+      html .toolbar-btn.active,
+      html .tool-flyout-chip.active,
+      html .tool-flyout-chip-svg.active,
+      html .tool-flyout-color-chip.active {
         color: var(
           --vscode-list-activeSelectionForeground,
           var(--vscode-foreground)
