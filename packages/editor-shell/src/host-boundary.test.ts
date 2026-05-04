@@ -132,6 +132,7 @@ describe("editor-shell host-boundary invariant", () => {
     await import("./scratchpad-utils.js");
     await import("./scratchpad-types.js");
     await import("./restore-annotations.js");
+    await import("./editor-statusbar.js");
 
     const violations = queriedIds.filter((id) => FORBIDDEN_IDS.has(id));
     expect(

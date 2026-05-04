@@ -21,11 +21,11 @@
         font: 13px/1.5 var(--vscode-editor-font-family, system-ui);
       }
       /*
-       * Three-pane layout: left toolbar (vertical strip) │
-       * center canvas (scroll) │ right property-panel.
-       * Mirrors the PWA's Draw.io / Figma pattern but stripped
-       * of the editor-header + statusbar (VSCode supplies the
-       * tab title + status bar item itself).
+       * Layout: left toolbar (vertical strip) │ centre column
+       * (canvas on top + statusbar at the bottom) │ right
+       * property-panel. Mirrors the PWA's Draw.io / Figma
+       * pattern but stripped of the editor-header (VSCode
+       * supplies the tab title itself).
        */
       #annot-shell-root {
         position: absolute;
@@ -38,10 +38,18 @@
         grid-column: 1;
         overflow: hidden;
       }
-      #annot-shell-container {
+      #annot-shell-centre {
         grid-column: 2;
+        display: grid;
+        grid-template-rows: 1fr auto;
+        min-width: 0;
+      }
+      #annot-shell-container {
         overflow: auto;
         position: relative;
+      }
+      #annot-shell-statusbar {
+        border-top: 1px solid var(--annot-border-color);
       }
       #annot-shell-right-panel {
         grid-column: 3;
@@ -55,8 +63,11 @@
   <body>
     <div id="annot-shell-root">
       <div id="annot-shell-toolbar"></div>
-      <div id="annot-shell-container">
-        <div class="annot-placeholder">Loading Annot editor…</div>
+      <div id="annot-shell-centre">
+        <div id="annot-shell-container">
+          <div class="annot-placeholder">Loading Annot editor…</div>
+        </div>
+        <div id="annot-shell-statusbar"></div>
       </div>
       <div id="annot-shell-right-panel"></div>
     </div>

@@ -50,6 +50,10 @@ import { Toolbar } from "@ingcreators/annot-editor-shell/toolbar";
 // `<annot-editor-right-panel>` registers a custom element on import.
 import "@ingcreators/annot-editor-shell/right-panel";
 import type { AnnotEditorRightPanelElement } from "@ingcreators/annot-editor-shell/right-panel";
+import "@ingcreators/annot-editor-shell/editor-statusbar";
+import type { AnnotEditorStatusbarElement } from "@ingcreators/annot-editor-shell/editor-statusbar";
+import "@ingcreators/annot-editor-shell/annot-file-details-drawer";
+import type { AnnotFileDetailsDrawerElement } from "@ingcreators/annot-editor-shell/annot-file-details-drawer";
 import type { ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
 
 // Pull in the host-side stylesheets that the toolbar +
@@ -72,6 +76,7 @@ const vscode = acquireVsCodeApi();
 const container = document.getElementById("annot-shell-container") as HTMLElement;
 const toolbarMount = document.getElementById("annot-shell-toolbar") as HTMLElement;
 const rightPanelMount = document.getElementById("annot-shell-right-panel") as HTMLElement;
+const statusbarMount = document.getElementById("annot-shell-statusbar") as HTMLElement;
 
 // ─── Message types ─────────────────────────────────────────────
 
@@ -101,12 +106,16 @@ interface ExportMessage {
   id: number;
   format: "png" | "jpeg" | "pptx";
 }
+interface ShowFileDetailsMessage {
+  type: "show-file-details";
+}
 type ExtensionMessage =
   | OpenMessage
   | FsReadResultMessage
   | FsWriteResultMessage
   | ThemeMessage
-  | ExportMessage;
+  | ExportMessage
+  | ShowFileDetailsMessage;
 
 // ─── postMessage round-trip helpers ────────────────────────────
 
@@ -257,11 +266,21 @@ function exportAnnotationsOnlySvg(canvas: ReturnType<typeof shell.getCanvas> & {
 // ─── StorageProvider proxy ─────────────────────────────────────
 
 let activeFilename = "";
+// On-disk path of the open file. Set from the extension's
+// `open` message so the file-details drawer + the future
+// "Reveal in test file" command can use it.
+let activeFilePath = "";
 
 const proxyStorage: StorageProvider = {
   async getImage(path: string): Promise<ImageRecord | undefined> {
     try {
       const bytes = await fsRead(path);
+      // Track the on-disk file size so the file-details drawer
+      // can show "File size: 12.3 kB" without rounding through
+      // the data-URL estimate. Updates on every fetch — the
+      // most recently-loaded file's bytes are what the drawer
+      // surfaces.
+      activeFileBytes = bytes.length;
       return decodeRecord(path, activeFilename || path, bytes);
     } catch (err) {
       console.error("[annot/vscode] getImage failed:", err);
@@ -346,10 +365,13 @@ function scheduleSave(): void {
   });
 }
 
-// ─── Toolbar + right-panel mount (per shell.open) ──────────────
+// ─── Toolbar + right-panel + statusbar + drawer mount ─────────
 
 let activeToolbar: Toolbar | null = null;
 let activeRightPanel: AnnotEditorRightPanelElement | null = null;
+let activeStatusbar: AnnotEditorStatusbarElement | null = null;
+let activeDrawer: AnnotFileDetailsDrawerElement | null = null;
+let activeFileBytes = 0;
 
 function mountToolbarAndRightPanel(): void {
   const canvas = shell.getCanvas();
@@ -357,14 +379,18 @@ function mountToolbarAndRightPanel(): void {
   const selection = shell.getSelection();
   if (!canvas || !history || !selection) return;
 
-  // Tear down any toolbar / right-panel from a previous open.
-  // `Toolbar` doesn't expose a `destroy()` — clearing the host
-  // div + dropping the reference is sufficient (the toolbar's
-  // listeners on `canvas` go away when the SelectionManager /
-  // CanvasManager get disposed by the next `shell.mountFromRecord`).
+  // Tear down any toolbar / right-panel / statusbar from a
+  // previous open. `Toolbar` doesn't expose a `destroy()` —
+  // clearing the host div + dropping the reference is
+  // sufficient (the toolbar's listeners on `canvas` go away
+  // when the SelectionManager / CanvasManager get disposed by
+  // the next `shell.mountFromRecord`).
   toolbarMount.innerHTML = "";
   rightPanelMount.innerHTML = "";
+  statusbarMount.innerHTML = "";
   activeRightPanel?.destroy();
+  activeDrawer?.destroy();
+  activeDrawer = null;
 
   // Right-panel first so the toolbar's `onToolChange` callback
   // (which calls `panel.showToolProperties`) has a target.
@@ -390,6 +416,7 @@ function mountToolbarAndRightPanel(): void {
     selection,
     (_toolName, toolId) => {
       activeRightPanel?.showToolProperties(toolId);
+      activeStatusbar?.setActiveTool(_toolName);
     },
     {
       orientation: "vertical",
@@ -404,6 +431,17 @@ function mountToolbarAndRightPanel(): void {
   // call back into it (the panel's tool-properties section needs
   // a Toolbar handle to read the current preset).
   panel.toolbar = activeToolbar;
+
+  // Statusbar — `[zoom] [dimensions] ───── [current tool]`.
+  // Mirrors the PWA's `StatusHost.build(canvas, w, h)`.
+  const statusbar = document.createElement(
+    "annot-editor-statusbar",
+  ) as AnnotEditorStatusbarElement;
+  statusbar.canvas = canvas;
+  statusbar.width = canvas.imageWidth;
+  statusbar.height = canvas.imageHeight;
+  statusbarMount.appendChild(statusbar);
+  activeStatusbar = statusbar;
 
   // Selection-change → right-panel's selection-properties section.
   // The shell installs its own single-slot `selection.onChange`
@@ -422,6 +460,46 @@ function mountToolbarAndRightPanel(): void {
   };
 }
 
+// ─── File-details drawer ───────────────────────────────────────
+
+function showFileDetails(): void {
+  const canvas = shell.getCanvas();
+  if (!canvas) return;
+  // Build a fresh drawer per open. The drawer mounts itself on
+  // `document.body` so its absolute-positioning chrome (backdrop
+  // + panel) overlays the entire webview.
+  activeDrawer?.destroy();
+  const drawer = document.createElement(
+    "annot-file-details-drawer",
+  ) as AnnotFileDetailsDrawerElement;
+  drawer.data = {
+    filename: activeFilename || "(untitled)",
+    folderPath: foldernameFromPath(activeFilePath),
+    width: canvas.imageWidth,
+    height: canvas.imageHeight,
+    fileSizeBytes: activeFileBytes,
+    createdAt: undefined,
+    updatedAt: undefined,
+    sourceUrl: undefined,
+    tags: {},
+    externalLinks: [],
+  };
+  drawer.getPluginSections = null;
+  drawer.isBuiltinSectionDisabled = null;
+  // VSCode owns the filename via the tab title; don't expose
+  // rename in the webview drawer (the user renames via the
+  // VSCode Explorer / "Rename" command).
+  drawer.onRename = null;
+  drawer.onTagsChange = null;
+  document.body.appendChild(drawer);
+  activeDrawer = drawer;
+  drawer.open();
+}
+
+function foldernameFromPath(p: string): string {
+  return p.replace(/\\/g, "/").replace(/\/[^/]+$/, "/");
+}
+
 // ─── Extension → webview message handler ───────────────────────
 
 window.addEventListener("message", (event) => {
@@ -429,6 +507,7 @@ window.addEventListener("message", (event) => {
   switch (msg.type) {
     case "open": {
       activeFilename = msg.filename;
+      activeFilePath = msg.path;
       // `shell.open(path)` triggers `proxyStorage.getImage(path)`
       // which round-trips through `fs.read`. `shell.open` rejects
       // on missing files; we surface that via the `error` event
@@ -464,6 +543,10 @@ window.addEventListener("message", (event) => {
     }
     case "export": {
       void runExport(msg.id, msg.format);
+      break;
+    }
+    case "show-file-details": {
+      showFileDetails();
       break;
     }
     case "fs.read.result": {
