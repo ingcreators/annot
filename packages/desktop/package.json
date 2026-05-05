@@ -21,9 +21,9 @@
     "@ingcreators/annot-editor": "workspace:*",
     "@ingcreators/annot-editor-shell": "workspace:*",
     "@ingcreators/annot-web": "workspace:*",
-    "@tauri-apps/api": "^2.10.1",
-    "@tauri-apps/plugin-dialog": "^2.2.0",
-    "@tauri-apps/plugin-fs": "^2.2.0",
+    "@tauri-apps/api": "^2.11.0",
+    "@tauri-apps/plugin-dialog": "^2.7.1",
+    "@tauri-apps/plugin-fs": "^2.5.1",
     "@tauri-apps/plugin-shell": "^2.2.0"
   },
   "devDependencies": {
