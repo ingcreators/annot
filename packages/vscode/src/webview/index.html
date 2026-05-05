@@ -134,7 +134,6 @@
        *   .toolbar-btn.active .tool-btn-badge,
        *   .toolbar-btn.active .tool-btn-badge-svg > svg
        *                                                — bg = --annot-active-bg     (badge blends with the active button)
-       *   .prop-choice-chip.active                     — bg = --annot-choice-active (list-activeSelectionBackground)
        *   .prop-choice-item.active .prop-choice-label  — bg = --annot-choice-active (list-activeSelectionBackground)
        *
        * Filled-accent surfaces — bg = --annot-accent
@@ -144,6 +143,7 @@
        *
        *   .tool-flyout-chip.active                     — bg = --annot-accent (button-background)
        *   .tool-flyout-chip-svg.active                 — bg = --annot-accent (button-background)
+       *   .prop-choice-chip.active                     — bg = --annot-accent (button-background)
        *
        * NOT covered (deliberately):
        *
@@ -174,7 +174,6 @@
        * (paired with list-activeSelectionForeground in workbench
        * themes for ≥ 4.5:1 contrast). */
       html .toolbar-btn.active,
-      html .prop-choice-chip.active,
       html .prop-choice-item.active .prop-choice-label,
       html .toolbar-btn.active .tool-btn-badge {
         color: var(
@@ -182,14 +181,17 @@
           var(--vscode-foreground)
         );
       }
-      /* Filled-accent flyout chips (bg = `--annot-accent` =
-       * `--vscode-button-background` after the toolbar.css refactor
-       * that made active flyout chips a solid filled state). VSCode
-       * themes pair button-background with button-foreground; using
-       * the matching token guarantees the contrast budget the
+      /* Filled-accent surfaces (bg = `--annot-accent` =
+       * `--vscode-button-background` after the *.css refactors
+       * that made active chips solid filled tiles — flyout chips
+       * in #434, prop-choice chip in the follow-up that ships
+       * alongside this override edit). VSCode themes pair
+       * button-background with button-foreground; using the
+       * matching token guarantees the contrast budget the
        * workbench designer chose for the theme. */
       html .tool-flyout-chip.active,
-      html .tool-flyout-chip-svg.active {
+      html .tool-flyout-chip-svg.active,
+      html .prop-choice-chip.active {
         color: var(
           --vscode-button-foreground,
           var(--vscode-list-activeSelectionForeground, var(--vscode-foreground))
