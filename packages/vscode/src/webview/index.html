@@ -207,6 +207,39 @@
           var(--vscode-foreground)
         );
       }
+
+      /* WCAG-driven contrast fixes for surfaces where
+       * `--annot-accent` (= `--vscode-button-background`, a dim
+       * `#0E639C` in Dark+) lands on a low-contrast partner:
+       *
+       *   - Inactive `.tool-btn-badge` glyph on `--annot-bg-panel`
+       *     (= `editorWidget-background`, `#252526` in Dark+):
+       *     `#0E639C` on `#252526` ≈ 2.57:1 — fails AA UI (3:1).
+       *   - `.tool-flyout-chip:hover` glyph on
+       *     `toolbar-hoverBackground` overlay (~`#494B4C` over the
+       *     `input-background` flyout panel in Dark+):
+       *     `#0E639C` on `#494B4C` ≈ 1.23:1 — fails badly.
+       *
+       * Switching the glyph (and the SVG-badge `currentColor`
+       * channel) to `--vscode-foreground` (`#CCCCCC` in Dark+)
+       * lifts both well past AA: ~6.5:1 on the panel and ~3.6:1
+       * on the hover overlay. The badge's blue background ring
+       * + the chip's blue border still convey the "this is the
+       * variant indicator / hover affordance" signal — the glyph
+       * itself now reads regardless of theme. */
+      html .tool-btn-badge,
+      html .tool-btn-badge-svg > svg,
+      html .tool-flyout-chip:hover:not(.active),
+      html .tool-flyout-chip-svg:hover:not(.active) {
+        /* `:not(.active)` keeps the filled-active styling
+         * (button-background + button-foreground from the rules
+         * above) intact when the user hovers the currently-active
+         * chip. Without it the same-specificity hover rule wins on
+         * source order and the active chip's glyph drops back to
+         * `--vscode-foreground`, breaking the active-vs-hover
+         * hierarchy momentarily. */
+        color: var(--vscode-foreground);
+      }
     </style>
   </head>
   <body>
