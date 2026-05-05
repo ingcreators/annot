@@ -210,34 +210,45 @@
 
       /* WCAG-driven contrast fixes for surfaces where
        * `--annot-accent` (= `--vscode-button-background`, a dim
-       * `#0E639C` in Dark+) lands on a low-contrast partner:
+       * `#0E639C` in Dark+) lands on a low-contrast partner.
+       * Every selector below paints a glyph / icon in
+       * `--annot-accent` on hover or in the inactive badge state.
+       * Listed with the actual Dark+ contrast ratio it produces:
        *
-       *   - Inactive `.tool-btn-badge` glyph on `--annot-bg-panel`
-       *     (= `editorWidget-background`, `#252526` in Dark+):
-       *     `#0E639C` on `#252526` ≈ 2.57:1 — fails AA UI (3:1).
-       *   - `.tool-flyout-chip:hover` glyph on
-       *     `toolbar-hoverBackground` overlay (~`#494B4C` over the
-       *     `input-background` flyout panel in Dark+):
-       *     `#0E639C` on `#494B4C` ≈ 1.23:1 — fails badly.
+       *   .tool-btn-badge                              — bg `#252526` → `#0E639C` ≈ 2.57:1 ❌
+       *   .tool-btn-badge-svg > svg                    — same          ≈ 2.57:1 ❌
+       *   .tool-flyout-chip:hover                      — bg `#494B4C` → `#0E639C` ≈ 1.23:1 ❌
+       *   .tool-flyout-chip-svg:hover                  — same          ≈ 1.23:1 ❌
+       *   .prop-choice-chip:hover                      — bg `#363637` → `#0E639C` ≈ 1.99:1 ❌
+       *   .prop-btn:hover                              — bg `#4D4D4D` → `#0E639C` ≈ 1.36:1 ❌
+       *   .pp-number-spinner button:hover              — bg ~panel    → `#0E639C` ≈ 2.0:1 ❌
        *
-       * Switching the glyph (and the SVG-badge `currentColor`
-       * channel) to `--vscode-foreground` (`#CCCCCC` in Dark+)
-       * lifts both well past AA: ~6.5:1 on the panel and ~3.6:1
-       * on the hover overlay. The badge's blue background ring
-       * + the chip's blue border still convey the "this is the
-       * variant indicator / hover affordance" signal — the glyph
-       * itself now reads regardless of theme. */
+       * Switching the glyph to `--vscode-foreground` (`#CCCCCC`
+       * in Dark+) lifts every one well past AA's 3:1 minimum for
+       * non-text UI components. Light+ + High Contrast themes
+       * paint a brighter foreground so ratios only go up.
+       *
+       * Bg / border / outline rings stay `--annot-accent` so the
+       * "variant indicator / hover affordance" semantics still
+       * read — only the glyph itself gets neutralised so it
+       * actually has contrast to read on the dim button-bg. */
       html .tool-btn-badge,
       html .tool-btn-badge-svg > svg,
       html .tool-flyout-chip:hover:not(.active),
-      html .tool-flyout-chip-svg:hover:not(.active) {
-        /* `:not(.active)` keeps the filled-active styling
-         * (button-background + button-foreground from the rules
-         * above) intact when the user hovers the currently-active
-         * chip. Without it the same-specificity hover rule wins on
-         * source order and the active chip's glyph drops back to
+      html .tool-flyout-chip-svg:hover:not(.active),
+      html .prop-choice-chip:hover:not(.active),
+      html .prop-btn:hover,
+      html .pp-number-spinner button:hover {
+        /* `:not(.active)` on the chip selectors keeps the
+         * filled-active styling (button-background +
+         * button-foreground from the rules above) intact when
+         * the user hovers the currently-active chip — without it
+         * the same-specificity hover rule wins on source order
+         * and the active chip's glyph drops back to
          * `--vscode-foreground`, breaking the active-vs-hover
-         * hierarchy momentarily. */
+         * hierarchy momentarily. `.prop-btn` /
+         * `.pp-number-spinner button` don't carry an `.active`
+         * state so the hover guard is unconditional. */
         color: var(--vscode-foreground);
       }
     </style>
