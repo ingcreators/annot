@@ -367,7 +367,14 @@
 }
 
 .tool-flyout-chip:hover {
+  /* Border on hover mirrors `.tool-flyout-color-chip:hover` and gives
+   * the user a clear "this row is targetable" signal even when the
+   * `--annot-hover-bg` token resolves to a very subtle tint (e.g.
+   * VSCode's `--vscode-list-hoverBackground`). Without the border
+   * the bg-only delta looked nearly identical to the inactive chip
+   * under VSCode's theme map. */
   background: var(--annot-hover-bg);
+  border-color: var(--annot-accent);
   color: var(--annot-accent);
 }
 
@@ -413,7 +420,10 @@
     color 0.12s;
 }
 .tool-flyout-chip-svg:hover {
+  /* Match `.tool-flyout-chip:hover` — border for hover affordance
+   * even when `--annot-hover-bg` resolves to a very subtle tint. */
   background: var(--annot-hover-bg);
+  border-color: var(--annot-accent);
   color: var(--annot-accent);
 }
 .tool-flyout-chip-svg.active {
@@ -562,13 +572,32 @@
 
 /* When the parent button is active (tool selected), accentuate the
  * badge so it stays visible against the active-state background. */
+/* Active-state badge: blend the badge frame with the active button
+ * background so the badge feels integral to the active tool rather
+ * than a separate panel-coloured callout. The original token name
+ * was `--bg-active` but no such variable existed (typo of
+ * `--annot-active-bg`), so until now the rule fell through to
+ * `--annot-bg-panel` and the badge stayed panel-coloured under
+ * every state. Pointing at the real `--annot-active-bg` token
+ * restores the intended "blend" look:
+ *
+ *   PWA dark    — rgba(124,156,255,0.18) tint over the active
+ *                 button background; blue glyph reads fine.
+ *   PWA light   — pale-blue active tint; blue glyph reads fine.
+ *   VSCode      — list-activeSelectionBackground (strong selection
+ *                 blue); the `.tool-btn-badge` glyph stays
+ *                 `var(--annot-accent)` (also blue) and would
+ *                 vanish, so the inline VSCode override in
+ *                 `packages/vscode/src/webview/index.html` switches
+ *                 the active-badge foreground to
+ *                 `--vscode-list-activeSelectionForeground`. */
 .toolbar-btn.active .tool-btn-badge {
-  background: var(--bg-active, var(--annot-bg-panel));
-  box-shadow: 0 0 0 1.5px var(--bg-active, var(--annot-bg-panel));
+  background: var(--annot-active-bg, var(--annot-bg-panel));
+  box-shadow: 0 0 0 1.5px var(--annot-active-bg, var(--annot-bg-panel));
 }
 .toolbar-btn.active .tool-btn-badge:hover {
   box-shadow:
-    0 0 0 1.5px var(--bg-active, var(--annot-bg-panel)),
+    0 0 0 1.5px var(--annot-active-bg, var(--annot-bg-panel)),
     0 0 0 3px var(--annot-accent);
 }
 
@@ -617,7 +646,7 @@
 }
 
 .toolbar-btn.active .tool-btn-badge-color {
-  box-shadow: 0 0 0 1.5px var(--bg-active, var(--annot-bg-panel));
+  box-shadow: 0 0 0 1.5px var(--annot-active-bg, var(--annot-bg-panel));
 }
 
 /* Larger popover used by the Scratchpad button — holds a scrollable

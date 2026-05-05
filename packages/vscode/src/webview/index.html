@@ -131,6 +131,9 @@
        * canonical "text over active selection", ≥ 4.5:1).
        *
        *   .toolbar-btn.active                          — bg = --annot-active-bg     (list-activeSelectionBackground)
+       *   .toolbar-btn.active .tool-btn-badge,
+       *   .toolbar-btn.active .tool-btn-badge-svg > svg
+       *                                                — bg = --annot-active-bg     (badge blends with the active button)
        *   .prop-choice-chip.active                     — bg = --annot-choice-active (list-activeSelectionBackground)
        *   .prop-choice-item.active .prop-choice-label  — bg = --annot-choice-active (list-activeSelectionBackground)
        *   .tool-flyout-chip.active                     — bg = --annot-choice-active (list-activeSelectionBackground)
@@ -165,7 +168,20 @@
       html .prop-choice-chip.active,
       html .prop-choice-item.active .prop-choice-label,
       html .tool-flyout-chip.active,
-      html .tool-flyout-chip-svg.active {
+      html .tool-flyout-chip-svg.active,
+      html .toolbar-btn.active .tool-btn-badge {
+        color: var(
+          --vscode-list-activeSelectionForeground,
+          var(--vscode-foreground)
+        );
+      }
+      /* SVG-glyph variant of the badge: the inline SVG inherits the
+       * badge's `color` for `currentColor` strokes, but its own rule
+       * (`.tool-btn-badge-svg > svg { color: var(--annot-accent) }`)
+       * resets it back to blue. Bump specificity here too so the
+       * white-on-blue contrast holds for arrow / rect / counter SVG
+       * badges as well. */
+      html .toolbar-btn.active .tool-btn-badge-svg > svg {
         color: var(
           --vscode-list-activeSelectionForeground,
           var(--vscode-foreground)
