@@ -181,15 +181,26 @@
  * rotate 90°.
  */
 .toolbar-vertical {
+  /* `<annot-toolbar>` is a custom element with no UA stylesheet, so
+   * its default `display` is `inline`. The horizontal toolbar mode
+   * worked accidentally because inline-block children flowed
+   * horizontally on their own; the vertical mode worked accidentally
+   * because `<div class="tool-btn-wrap">` is block-level and stacks
+   * naturally. In both modes every flex-related declaration below
+   * (`flex-direction`, `gap`, `align-items`, `flex: 1` on the
+   * spacer) was silently no-op'd until `display: flex` was set on
+   * the host. #428 added `align-items: center` to fix the
+   * separator off-centre but it never took effect for that reason —
+   * the storybook DOM inspection in the follow-up PR confirmed
+   * `parentDisplay: "inline"` on the toolbar. Promoting to flex
+   * here turns every previously-silent rule on at once: gap
+   * spacing, centre-aligned narrower children, and the spacer
+   * actually pushing the history group to the bottom of the
+   * strip. */
+  display: flex;
   flex-direction: column;
   padding: 6px 0;
   gap: 2px;
-  /* Centre direct children on the cross axis so a 28px separator
-   * (or any non-`toolbar-group` child narrower than the 36px tool
-   * buttons) lines up with the button centres. The toolbar shrinks
-   * to its widest child (36px) regardless of the strip width, so
-   * without this rule a smaller child sits at the start (left) of
-   * the toolbar — visibly off-centre relative to the buttons. */
   align-items: center;
 }
 .toolbar-vertical .toolbar-group {

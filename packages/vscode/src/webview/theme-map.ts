@@ -78,7 +78,20 @@ export const VSCODE_THEME_MAP: Record<string, string> = {
     "var(--vscode-focusBorder, var(--vscode-button-background))",
 
   // === Interaction — pointer + form states ===
-  "--annot-hover-bg": "var(--vscode-list-hoverBackground, transparent)",
+  // Prefer `--vscode-toolbar-hoverBackground` over
+  // `--vscode-list-hoverBackground`. Workbench themes use the
+  // former for "hover state on interactive toolbar / button
+  // surfaces" — it's a translucent overlay (e.g.
+  // `rgba(90,93,94,0.31)` in Dark+) that paints brighter on dark
+  // panels and darker on light ones, so it always reads as a
+  // highlight. The list-* token is calibrated for tree row hover
+  // and is a SOLID colour that's frequently darker than the
+  // surrounding panel in dark themes (e.g. `#2A2D2E` over the
+  // `#3C3C3C` `input-background` flyout panel) — the hover
+  // surface ends up recessed instead of highlighted, which the
+  // variant-flyout dark-mode screenshot exposed.
+  "--annot-hover-bg":
+    "var(--vscode-toolbar-hoverBackground, var(--vscode-list-hoverBackground, transparent))",
   "--annot-hover-border":
     "var(--vscode-contrastActiveBorder, var(--vscode-panel-border, transparent))",
   // Annot's `choice-bg` is intentionally transparent in both
