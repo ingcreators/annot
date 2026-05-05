@@ -1,5 +1,5 @@
 import { builtinIcon } from "@ingcreators/annot-core";
-import "../ui/annot-icon.js";
+import "./annot-icon.js";
 /**
  * `<annot-editor-statusbar>` — editor footer bar:
  *
@@ -13,7 +13,7 @@ import "../ui/annot-icon.js";
  */
 
 import type { CanvasManager } from "@ingcreators/annot-editor";
-import { html, LitElement, nothing } from "../lit.js";
+import { html, LitElement, nothing } from "./lit.js";
 
 export const ZOOM_OPTIONS: { label: string; value: number | "fit" }[] = [
   { label: "Fit to window", value: "fit" },

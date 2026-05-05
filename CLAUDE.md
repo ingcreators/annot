@@ -525,8 +525,26 @@ the test — at which point the right move is either to inject
 the value as a host parameter or to leave the call in the
 consumer.
 
+**PWA bootstrap path.** `EditorSession.setupEditor` boots the
+canvas through `EditorShell.mountFromRecord`, not direct
+`CanvasManager` / `History` / `SelectionManager` construction
+(refactored by [`_done/editor-session-shell-switchover.md`](./docs/plans/_done/editor-session-shell-switchover.md)).
+The PWA passes the index.html-shipped `<svg id="svg-root">`
+via the shell's `svgRoot` host knob so first-render CSS still
+hits the styled element before JS boots; the shell tags the
+adopted SVG with `data-annot-shell-root="1"` so the attribute-
+keyed CSS rules in
+[`packages/core/styles/editor.css`](./packages/core/styles/editor.css)
+apply alongside the existing `#svg-root` rules. The PWA-shell
+orchestration the shell intentionally doesn't model
+(file-details drawer, header, status bar, toolbar, right-panel,
+scratchpad popover, keyboard-help install, body-class toggling)
+stays in `EditorSession`.
+
 History: [`_done/vscode-extension-host.md`](./docs/plans/_done/vscode-extension-host.md)
-(PRs [#395](https://github.com/ingcreators/annot/pull/395)–#404).
+(PRs [#395](https://github.com/ingcreators/annot/pull/395)–#404),
+followed by [`_done/editor-session-shell-switchover.md`](./docs/plans/_done/editor-session-shell-switchover.md)
+(PRs #411–TBD).
 
 ## Component stories (Storybook)
 

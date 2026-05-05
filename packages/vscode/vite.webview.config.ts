@@ -16,6 +16,13 @@ import { defineConfig } from "vite";
  */
 export default defineConfig({
   root: resolve(__dirname, "src/webview"),
+  // Emit relative asset URLs (`./assets/index-XXX.js`) instead of
+  // root-absolute (`/assets/index-XXX.js`). The extension host's
+  // `webview.asWebviewUri` rewrite in `extension.ts` only matches
+  // paths that don't start with `/`; absolute paths would 404 in
+  // the sandboxed iframe because the webview root is the
+  // `vscode-webview://...` URI scheme, not the workspace root.
+  base: "./",
   build: {
     outDir: resolve(__dirname, "dist/webview"),
     emptyOutDir: true,

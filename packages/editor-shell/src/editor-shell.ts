@@ -42,6 +42,7 @@ import type {
   PageMetadata,
   StorageProvider,
 } from "@ingcreators/annot-core/storage";
+import { restoreAnnotations } from "./restore-annotations.js";
 
 /**
  * Feature opt-out bag the host passes at construction. Defaults
@@ -84,6 +85,31 @@ export interface EditorShellHost {
    *  with `var(--vscode-*)` references mapped to `--annot-*` token
    *  names so the editor follows the workbench theme. */
   themeOverrides?: Record<string, string>;
+  /**
+   * Optional pre-existing `<svg>` element the shell should adopt
+   * instead of creating an anonymous one inside `container`. Lets
+   * a host that ships an `<svg id="svg-root">` in its index.html
+   * (today: PWA + Tauri desktop) preserve its existing CSS
+   * selectors. If omitted (today: VSCode webview + happy-dom
+   * tests), the shell creates an anonymous
+   * `<svg data-annot-shell-root="1">` inside `container`.
+   *
+   * When supplied, the shell:
+   *   - tags the element with `data-annot-shell-root="1"` so the
+   *     attribute-keyed CSS rules in
+   *     `packages/core/styles/editor.css` apply alongside any
+   *     existing id-based rules;
+   *   - clears its children + inline `style` on each mount so
+   *     subsequent reopens start from a known state, mirroring
+   *     the behaviour of the anonymous-SVG path;
+   *   - leaves the element in place on `destroy()` (the host owns
+   *     the SVG and is responsible for removing it from the DOM).
+   *
+   * The shell's host-boundary invariant is preserved — the shell
+   * still does NOT call `document.getElementById(...)`. The host
+   * passes the element in directly.
+   */
+  svgRoot?: SVGSVGElement;
 }
 
 /**
@@ -108,6 +134,12 @@ export type EditorShellEventHandler = (...args: unknown[]) => void;
 export class EditorShell {
   readonly #host: EditorShellHost;
   #svg: SVGSVGElement | null = null;
+  // True when the shell created `#svg` itself (the anonymous-root
+  // path used by VSCode + happy-dom tests). False when the host
+  // supplied `host.svgRoot` (the PWA / Tauri-desktop path that
+  // pre-bakes the element in `index.html`). Drives `destroy()` —
+  // host-owned SVGs stay in the DOM after teardown.
+  #ownsSvg = false;
   #canvas: CanvasManager | null = null;
   #history: History | null = null;
   #selection: SelectionManager | null = null;
@@ -202,6 +234,19 @@ export class EditorShell {
     this.#history = history;
     this.#selection = selection;
 
+    // Restore the persisted annotation tree BEFORE wiring
+    // `history.onStateChange` so the seed `history.save()` doesn't
+    // fire a `dirty` event the host's autosave pipeline would
+    // interpret as "user edited" and commit on open. Mirrors the
+    // seed-before-wire discipline `EditorSession.setupEditor`
+    // applied via its own restoreAnnotations call site (Phase 4 of
+    // `docs/plans/editor-session-shell-switchover.md` removes the
+    // duplicate PWA call once the boot path goes through here).
+    if (record.annotationsSvg) {
+      restoreAnnotations(canvas, record.annotationsSvg);
+      history.save();
+    }
+
     // Selection-change → forward as a shell event so the host
     // (PWA's right-panel selection-properties section, future
     // VSCode status-bar selection summary) can drop its own
@@ -222,32 +267,44 @@ export class EditorShell {
     history.onStateChange = () => {
       this.#emit("dirty");
     };
-
-    // The persisted annotations SVG (if present) is restored by
-    // the host today through `restoreAnnotations`. The shell
-    // doesn't take that responsibility yet — restoring annotations
-    // requires DOM-string parsing + element re-attachment that's
-    // PWA-side today and would force a Tier B migration to lift
-    // here cleanly. Tracked as a follow-up; for now the host's
-    // existing call site keeps working since it operates on
-    // `getCanvas().annotations` directly.
   }
 
-  /** Create the `<svg>` root inside `host.container` if there
-   *  isn't one yet, or reuse + clear an existing one. The id is
-   *  intentionally NOT `svg-root` — that's a PWA-shell
-   *  convention. The shell owns its own anonymous root so a host
-   *  page can have multiple shells on different elements without
-   *  id collisions. */
+  /** Resolve the `<svg>` root the shell mounts the canvas into.
+   *
+   *  Three branches:
+   *    1. First mount, host supplied `svgRoot` — adopt it. Tag with
+   *       `data-annot-shell-root="1"` so the attribute-keyed CSS
+   *       rules apply alongside whatever id the host already has.
+   *       Mark `#ownsSvg = false` so `destroy()` leaves it in place.
+   *    2. First mount, no `svgRoot` — create an anonymous SVG inside
+   *       `host.container`. Mark `#ownsSvg = true` so `destroy()`
+   *       removes it.
+   *    3. Subsequent mount — reuse the already-resolved `#svg`,
+   *       clearing children + inline `style` so the next image
+   *       starts from a known state. Same regardless of branch.
+   *
+   *  The shell never queries the DOM for its root — for the host-
+   *  supplied path the host passes the element in via
+   *  `EditorShellHost.svgRoot`. Preserves the host-boundary
+   *  invariant in `host-boundary.test.ts`. */
   #ensureSvgRoot(): SVGSVGElement {
-    const container = this.#host.container;
     let svg = this.#svg;
     if (!svg) {
-      svg = document.createElementNS("http://www.w3.org/2000/svg", "svg") as SVGSVGElement;
-      svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
-      svg.setAttribute("xmlns:xlink", "http://www.w3.org/1999/xlink");
-      svg.dataset.annotShellRoot = "1";
-      container.appendChild(svg);
+      const supplied = this.#host.svgRoot;
+      if (supplied) {
+        svg = supplied;
+        svg.dataset.annotShellRoot = "1";
+        svg.innerHTML = "";
+        svg.removeAttribute("style");
+        this.#ownsSvg = false;
+      } else {
+        svg = document.createElementNS("http://www.w3.org/2000/svg", "svg") as SVGSVGElement;
+        svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+        svg.setAttribute("xmlns:xlink", "http://www.w3.org/1999/xlink");
+        svg.dataset.annotShellRoot = "1";
+        this.#host.container.appendChild(svg);
+        this.#ownsSvg = true;
+      }
       this.#svg = svg;
     } else {
       svg.innerHTML = "";
@@ -326,17 +383,28 @@ export class EditorShell {
     return this.#selection;
   }
 
-  /** Tear down per-session DOM listeners + remove the shell's
-   *  children from `host.container`. The shell is single-use
-   *  after destroy(); construct a new one for the next image. */
+  /** Tear down per-session DOM listeners + remove the shell-owned
+   *  `<svg>` from `host.container`. When the host supplied
+   *  `svgRoot`, the SVG stays in the DOM (the host owns it) — the
+   *  shell only clears its children + inline `style` so the host
+   *  sees a clean element afterward. The shell is single-use after
+   *  destroy(); construct a new one for the next image. */
   destroy(): void {
     if (this.#destroyed) return;
     this.#destroyed = true;
     this.#disposeCanvas();
-    if (this.#svg && this.#svg.parentElement === this.#host.container) {
-      this.#host.container.removeChild(this.#svg);
+    if (this.#svg) {
+      if (this.#ownsSvg) {
+        if (this.#svg.parentElement === this.#host.container) {
+          this.#host.container.removeChild(this.#svg);
+        }
+      } else {
+        this.#svg.innerHTML = "";
+        this.#svg.removeAttribute("style");
+      }
     }
     this.#svg = null;
+    this.#ownsSvg = false;
     for (const key of Object.keys(this.#handlers) as EditorShellEvent[]) {
       this.#handlers[key].length = 0;
     }

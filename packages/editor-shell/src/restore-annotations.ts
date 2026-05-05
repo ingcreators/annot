@@ -1,10 +1,16 @@
 /**
- * SVG annotation restoration — parses a saved Annot SVG and adopts its
- * annotation elements into the active canvas.
+ * SVG annotation restoration — parses a saved Annot SVG and adopts
+ * its annotation elements into the active canvas.
  *
- * Extracted from `app.ts` as part of the Phase 0 decomposition
- * (see `docs/plans/_done/app-decomposition.md`). Touches DOM (DOMParser,
- * document.importNode), but has no app-state dependencies.
+ * Originally extracted from `packages/web/src/app.ts` as part of the
+ * `app-decomposition` plan; moved into the host-neutral editor-shell
+ * package by Phase 3 of `docs/plans/editor-session-shell-switchover.md`
+ * so `EditorShell.mountFromRecord` can rebuild the saved annotation
+ * tree the same way the PWA used to do imperatively. Pure DOM
+ * manipulation (DOMParser + importNode); depends only on
+ * `@ingcreators/annot-core/editor` for the format-version stamp and
+ * on `@ingcreators/annot-editor`'s `CanvasManager` type for the
+ * annotation-group reference.
  */
 
 import { ANNOT_SVG_VERSION, readAnnotVersion } from "@ingcreators/annot-core/editor";

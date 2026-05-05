@@ -7,6 +7,14 @@ import type { ImageRecord, StorageProvider } from "@ingcreators/annot-core/stora
 import { assertNonNull } from "@ingcreators/annot-core/utils";
 import { createThemeToggle } from "@ingcreators/annot-editor";
 import { setTooltip } from "@ingcreators/annot-editor/tooltip";
+// Section-id whitelists for the `disableBuiltinUISections`
+// validator below. Static imports because both modules are
+// already in the bundle via `EditorSession.setupEditor` —
+// dynamic imports here just trip Vite's
+// `[INEFFECTIVE_DYNAMIC_IMPORT]` warning without saving any
+// bytes.
+import { BUILTIN_DRAWER_SECTION_IDS } from "@ingcreators/annot-editor-shell/annot-file-details-drawer";
+import { BUILTIN_RIGHT_PANEL_SECTION_IDS } from "@ingcreators/annot-editor-shell/right-panel";
 import { CaptureHost, type OpenEditorArgs } from "./app/capture-host.js";
 import { EditorSession } from "./app/editor-session.js";
 import { ExtensionTransferHost } from "./app/extension-transfer-host.js";
@@ -323,8 +331,6 @@ export class App {
     // ids — drawer (Phase 2) + right-panel (Phase 3). Unknown
     // entries log a warning + no-op for forward-compat with
     // newer-than-config deployments.
-    const { BUILTIN_DRAWER_SECTION_IDS } = await import("@ingcreators/annot-editor-shell/annot-file-details-drawer");
-    const { BUILTIN_RIGHT_PANEL_SECTION_IDS } = await import("@ingcreators/annot-editor-shell/right-panel");
     const knownIds = new Set<string>([
       ...BUILTIN_DRAWER_SECTION_IDS,
       ...BUILTIN_RIGHT_PANEL_SECTION_IDS,

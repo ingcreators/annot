@@ -3,14 +3,13 @@
 > **Status:** Done — landed 2026-05-04 across PRs [#395](https://github.com/ingcreators/annot/pull/395)–[#404](https://github.com/ingcreators/annot/pull/404).
 >
 > **Carry-overs deferred to follow-up tickets:**
-> - PWA `EditorSession` still constructs `CanvasManager` / `History` /
->   `SelectionManager` directly. The plan called for it to "shrink to
->   a thin adapter" via the `EditorShell`; doing so cleanly requires a
->   coordinated CSS update (the PWA's `app.css` targets `#svg-root`,
->   the shell's anonymous `[data-annot-shell-root]` doesn't) plus a
->   record-synthesis refactor of `setupEditor`. The shell architecture
->   is proven by 8 happy-dom tests + the VSCode webview consuming the
->   same surface; PWA switchover queued as a follow-up.
+> - ~~PWA `EditorSession` still constructs `CanvasManager` / `History` /
+>   `SelectionManager` directly.~~ **Done** —
+>   [`_done/editor-session-shell-switchover.md`](./editor-session-shell-switchover.md)
+>   lands the CSS dual-selector + the `EditorShell.svgRoot` host
+>   knob + the `restoreAnnotations` move + the `setupEditor`
+>   delegation through `mountFromRecord`. The PWA now boots through
+>   the shell on every image open.
 > - Phase 5's command-palette entries (`Annot: New annotation from
 >   clipboard image`, `Annot: New annotation from image…`,
 >   `Annot: Save as PNG…`, `Annot: Save as JPEG…`,

@@ -7,40 +7,77 @@ files (`*.annot.svg` / `*.annot.png` / `*.annot.jpeg` /
 ## Status
 
 **Phase 4 skeleton** of [`docs/plans/_done/vscode-extension-host.md`](../../docs/plans/_done/vscode-extension-host.md).
-The package builds, the extension entry registers a custom
-editor for the file glob, the webview boots an `EditorShell`
-against `<div id="annot-shell-container">`, and the
-extension-host receives a `{type: "ready"}` message + responds
-with the file's bytes via `{type: "open", path, filename, bytes}`.
+The extension entry registers a custom editor for the file glob,
+the webview boots an `EditorShell` against
+`<div id="annot-shell-container">` with a webview-side
+`MessageProxyStorageProvider` that forwards every `getImage` /
+`updateImage` call to the extension host via a postMessage RPC
+protocol. All XMP encoding / decoding lives in the webview (where
+the canvas + the `@ingcreators/annot-core/xmp` helpers run); the
+extension's role is plain `vscode.workspace.fs` I/O.
 
-What works in Phase 4:
+What works:
 
 - `code --extensionDevelopmentPath=packages/vscode` opens a
-  workspace; double-clicking `foo.annot.svg` (or `.annot.png` /
-  `.annot.jpeg` / `.annot.jpg`) opens the Annot editor in a tab.
+  workspace; double-clicking any `*.annot.{svg,png,jpeg,jpg}`
+  file opens the Annot editor in a tab.
 - The webview hosts a real `EditorShell` against a host-supplied
   container — proves the architecture from the opposite side
   (PWA being the first consumer).
-- `VSCodeStore` (`src/storage/vscode-store.ts`) implements the
-  `getImage` / `updateImage` methods of `StorageProvider` over
-  `vscode.workspace.fs` so the shell's standard `open(path)` /
-  `saveNow()` calls work end-to-end. The remaining 11
-  `StorageProvider` methods throw `NotImplementedError` — Phase 5
-  fills them as the gallery / multi-file UX expands.
+- **Save is wired end-to-end.** Editing fires `dirty` →
+  debounced (500 ms) `shell.saveNow()` → webview proxy renders
+  + encodes (raster: full XMP round-trip via
+  `createEditableImage`; SVG: text encode of `exportSVGString`)
+  → extension writes via `vscode.workspace.fs.writeFile`. Status
+  bar transitions through `Saving…` → `Saved` (or
+  `Save failed`).
+- **XMP round-trip for raster files**:
+  `*.annot.{png,jpeg,jpg}` re-edit cleanly: `readEditableImage`
+  recovers the original screenshot + the annotation SVG on
+  open; `createEditableImage` re-embeds them on save. Files
+  without an XMP packet load with the raster bytes as a plain
+  background (the editor still works; saving will add the XMP
+  packet on the way out).
+- Status bar item per webview tracking `Annot` / `Unsaved` /
+  `Saving…` / `Saved` / `Save failed`.
+- Theme bridging: extension forwards
+  `onDidChangeActiveColorTheme` to the webview, which toggles
+  `annot-theme-dark` / `annot-theme-light` classes.
+- **Command palette** entries fully wired:
+    - `Annot: Open annotation` — `showOpenDialog` →
+      `vscode.openWith`.
+    - `Annot: Reveal in Explorer` — `revealFileInOS` on the
+      active editor / active Annot panel.
+    - `Annot: New annotation from image…` —
+      `showOpenDialog` (source image) → `showSaveDialog` with
+      the `.annot.` infix inserted before the extension →
+      copy bytes → `vscode.openWith`. The webview's storage
+      proxy auto-recovers any embedded XMP packet on open;
+      raw raster sources gain XMP on first save.
+    - `Annot: New annotation from clipboard image` —
+      `showSaveDialog` for the destination → write a 1×1
+      placeholder PNG → `vscode.openWith`. The webview detects
+      the placeholder length on open and auto-replaces the
+      canvas background by reading
+      `navigator.clipboard.read()`. Falls back to a blank
+      canvas if the clipboard doesn't carry an image / the
+      user denies the permission prompt.
+    - `Annot: Save as PNG…` / `Save as JPEG…` — extension
+      posts `{type: "export", id, format}` to the active
+      webview; webview renders via `getPngDataUrl` + builds a
+      re-editable image via `createEditableImage`; extension
+      shows save dialog + writes via `vscode.workspace.fs`.
+      The exported file is itself a valid `.annot.png` /
+      `.annot.jpg` (XMP-bearing) so re-opening it round-trips
+      the annotations.
+    - `Annot: Export to PowerPoint…` — same RPC pattern;
+      webview calls `buildPptxFiles` + `buildZip` from the
+      editor / core packages; extension drives save dialog +
+      write.
 
-What lands in Phase 5:
+Follow-ups (out of this package's scope today):
 
-- Full message protocol (webview ↔ extension `getImage` /
-  `updateImage` / save / dirty / error notifications).
-- Status bar item driven by shell `dirty` / `saved` events.
-- Command palette entries (`Annot: New annotation from
-  clipboard image`, `Annot: New annotation from image…`,
-  `Annot: Save as PNG…`, `Annot: Save as JPEG…`,
-  `Annot: Export to PowerPoint…`, `Annot: Reveal in
-  Explorer`).
-- Theme bridging: receive `vscode.window.onDidChangeActiveColorTheme`
-  events and update the shell's `themeOverrides`.
-- README screenshots + marketplace metadata.
+- README screenshots + Marketplace publish step.
 
 ## Architecture
 
@@ -55,26 +92,33 @@ The extension uses VSCode's CustomEditorProvider pattern:
 │  │   CustomReadonlyEditorProvider                       │   │
 │  │     - resolveCustomEditor → builds a webview         │   │
 │  │     - reads + rewrites dist/webview/index.html       │   │
-│  │     - handles webview messages (read/write file)     │   │
-│  │                                                      │   │
-│  │ storage/vscode-store.ts                              │   │
-│  │   VSCodeStore implements StorageProvider over        │   │
-│  │   vscode.workspace.fs                                │   │
+│  │     - handles fs.read / fs.write / dirty messages    │   │
+│  │       via vscode.workspace.fs (no Annot-format       │   │
+│  │       knowledge — plain bytes I/O)                   │   │
+│  │     - status bar item + theme forwarding             │   │
 │  └──────────────────────────────────────────────────────┘   │
 │                            │                                │
-│                postMessage │ onDidReceiveMessage            │
+│        postMessage RPC ↕   │   correlated by id             │
 │                            ▼                                │
 │  ┌──────────────────────────────────────────────────────┐   │
 │  │ Webview (sandboxed iframe)                           │   │
 │  │ webview/main.ts                                      │   │
+│  │   MessageProxyStorageProvider                        │   │
+│  │     getImage(path)  → fs.read → readEditableImage    │   │
+│  │                                  (raster) or text    │   │
+│  │                                  decode (svg)        │   │
+│  │     updateImage(path) → render + createEditableImage │   │
+│  │                         (raster) or exportSVGString  │   │
+│  │                         (svg) → fs.write             │   │
+│  │                                                      │   │
 │  │   const shell = new EditorShell({                    │   │
 │  │     container: #annot-shell-container,               │   │
-│  │     storage: messageProxyStorage,  // Phase 5        │   │
+│  │     storage: proxyStorage,                           │   │
 │  │     features: { capture: false, ... },               │   │
 │  │     themeOverrides: { --annot-* → --vscode-* },      │   │
 │  │   });                                                │   │
-│  │   on "ready" → extension sends file bytes            │   │
-│  │   shell.mountFromRecord(path, record)                │   │
+│  │   on "open" message → shell.open(path)               │   │
+│  │   on shell.dirty → debounced shell.saveNow() → write │   │
 │  └──────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -90,7 +134,10 @@ The `build` script runs the extension config (CJS bundle for the
 extension host) and the webview config (ESM bundle for the
 sandboxed iframe) sequentially. Output:
 
-- `dist/extension.js` — loaded by VSCode via `package.json#main`.
+- `dist/extension.cjs` — loaded by VSCode via `package.json#main`.
+  CommonJS (`.cjs` mandatory) because the package's `"type":
+  "module"` would otherwise have VSCode load the file as ESM,
+  which the extension activation host doesn't support.
 - `dist/webview/index.html` + `dist/webview/index.js` — loaded
   by the webview.
 
@@ -102,10 +149,10 @@ without the `.annot.` infix (`screenshot.png`,
 `drawing.svg`, …) continue to open in their default editor — no
 content sniffing, no `*.svg` blanket-grab.
 
-| Extension | Source of truth | Phase 4 status |
-|-----------|----------------|----------------|
-| `*.annot.svg` | The SVG itself (with embedded `<image href="data:...">` for the screenshot). | Loads end-to-end; extension reads bytes, webview mounts via `EditorShell.mountFromRecord`. |
-| `*.annot.png` / `*.annot.jpeg` / `*.annot.jpg` | The raster file with the annotation SVG embedded as XMP (round-tripped via `@ingcreators/annot-core/xmp`). | Loads bytes; XMP recovery wired in Phase 5. |
+| Extension | Source of truth | Status |
+|-----------|----------------|--------|
+| `*.annot.svg` | The SVG itself (with embedded `<image href="data:...">` for the screenshot). | Open + edit + save round-trips via `exportSVGString` ↔ text decode. |
+| `*.annot.png` / `*.annot.jpeg` / `*.annot.jpg` | The raster file with the annotation SVG embedded as XMP (round-tripped via `@ingcreators/annot-core/xmp`). | Open + edit + save round-trips via `readEditableImage` ↔ `createEditableImage`. |
 
 ## Depends on
 

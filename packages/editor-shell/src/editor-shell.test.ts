@@ -170,4 +170,135 @@ describe("EditorShell — Phase 3 implementation", () => {
     });
     expect(container.style.getPropertyValue("--annot-accent")).toBe("#ff00aa");
   });
+
+  // Phase 3 of `docs/plans/editor-session-shell-switchover.md` —
+  // `mountFromRecord` now restores the persisted annotation tree
+  // when the record carries `annotationsSvg`, instead of the host
+  // having to call `restoreAnnotations` itself. Verifies the
+  // annotation children land on `canvas.annotations` AND that the
+  // seed `history.save()` runs before `history.onStateChange` is
+  // wired (so opening an annotated file does NOT immediately fire
+  // a `dirty` event that would commit a no-op autosave).
+  it("mountFromRecord restores annotationsSvg without firing dirty", async () => {
+    const container = makeContainer();
+    const annotationsSvg = `<?xml version="1.0"?>
+<svg xmlns="http://www.w3.org/2000/svg" data-annot-version="1">
+  <g id="annotations">
+    <rect data-test="restored" x="10" y="10" width="50" height="50" fill="red"/>
+    <circle data-test="restored" cx="80" cy="80" r="20" fill="blue"/>
+  </g>
+</svg>`;
+    const { storage } = makeStorage(makeRecord({ annotationsSvg }));
+    const shell = new EditorShell({ container, storage });
+    const dirtyHandler = vi.fn();
+    shell.on("dirty", dirtyHandler);
+
+    await shell.open("/test.annot.svg");
+
+    const canvas = shell.getCanvas();
+    expect(canvas).not.toBeNull();
+    const restored = canvas?.annotations.querySelectorAll('[data-test="restored"]');
+    expect(restored?.length).toBe(2);
+
+    // The seed history.save() ran before history.onStateChange was
+    // wired. No dirty event reaches the host on open.
+    expect(dirtyHandler).not.toHaveBeenCalled();
+
+    shell.destroy();
+  });
+
+  // Phase 2 of `docs/plans/editor-session-shell-switchover.md` —
+  // the host can pre-supply an `<svg>` and the shell adopts it
+  // instead of creating an anonymous one. The PWA's index.html
+  // ships `<svg id="svg-root">` so first-render CSS hits the
+  // styled element before JS boots; this knob lets the shell
+  // mount into that element while preserving its id-based
+  // selectors.
+  describe("svgRoot host knob", () => {
+    function makeSvgRoot(): SVGSVGElement {
+      const svg = document.createElementNS(
+        "http://www.w3.org/2000/svg",
+        "svg",
+      ) as SVGSVGElement;
+      svg.id = "svg-root";
+      return svg;
+    }
+
+    it("adopts a host-supplied SVG, tags it, and leaves it in place on destroy", async () => {
+      const container = makeContainer();
+      const supplied = makeSvgRoot();
+      // Host owns the placement: SVG sits next to (or inside) the
+      // container in the host's layout. The shell must not move it.
+      container.appendChild(supplied);
+      const { storage } = makeStorage();
+      const shell = new EditorShell({ container, storage, svgRoot: supplied });
+
+      await shell.open("/test.annot.svg");
+
+      // Shell mounted the canvas inside the supplied SVG, not a
+      // new anonymous root.
+      expect(shell.getCanvas()?.svg).toBe(supplied);
+      // Tagged for the attribute-keyed CSS rule, while keeping its
+      // existing id (so legacy `#svg-root` rules still match).
+      expect(supplied.dataset.annotShellRoot).toBe("1");
+      expect(supplied.id).toBe("svg-root");
+      // No second SVG created — the count stays at 1.
+      expect(container.querySelectorAll("svg").length).toBe(1);
+
+      shell.destroy();
+
+      // The shell removed listeners + cleared children, but did
+      // NOT remove the host-owned SVG from the DOM.
+      expect(supplied.parentElement).toBe(container);
+      expect(supplied.children.length).toBe(0);
+    });
+
+    it("clears the supplied SVG between reopens — no orphan listeners", async () => {
+      const container = makeContainer();
+      const supplied = makeSvgRoot();
+      container.appendChild(supplied);
+      const { storage } = makeStorage();
+      const shell = new EditorShell({ container, storage, svgRoot: supplied });
+
+      await shell.open("/test.annot.svg");
+      const firstCanvas = shell.getCanvas();
+      const firstSelection = shell.getSelection();
+      const firstChildCount = supplied.children.length;
+      expect(firstCanvas).not.toBeNull();
+      expect(firstSelection).not.toBeNull();
+      expect(firstChildCount).toBeGreaterThan(0);
+
+      // Re-open the same image — same shell, same supplied SVG.
+      // The shell must dispose the previous CanvasManager /
+      // SelectionManager (matching `disposePreviousEditor` from
+      // the legacy PWA boot path) and reuse the SVG element with
+      // a fresh set of listeners.
+      await shell.open("/test.annot.svg");
+      const secondCanvas = shell.getCanvas();
+      const secondSelection = shell.getSelection();
+      expect(secondCanvas).not.toBe(firstCanvas);
+      expect(secondSelection).not.toBe(firstSelection);
+      expect(secondCanvas?.svg).toBe(supplied);
+      // Still exactly one SVG inside the container.
+      expect(container.querySelectorAll("svg").length).toBe(1);
+
+      shell.destroy();
+      expect(supplied.parentElement).toBe(container);
+    });
+
+    it("falls back to an anonymous SVG when svgRoot is omitted (legacy behaviour)", async () => {
+      const container = makeContainer();
+      const { storage } = makeStorage();
+      const shell = new EditorShell({ container, storage });
+
+      await shell.open("/test.annot.svg");
+      const created = container.querySelector("svg[data-annot-shell-root]");
+      expect(created).not.toBeNull();
+      expect(created?.id).toBe("");
+
+      shell.destroy();
+      // Anonymous SVG goes away on destroy.
+      expect(container.querySelector("svg[data-annot-shell-root]")).toBeNull();
+    });
+  });
 });

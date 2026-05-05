@@ -6,34 +6,199 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Annot</title>
     <style>
-      :root {
-        --annot-bg-canvas: var(--vscode-editor-background, #1e1e1e);
-        --annot-text-primary: var(--vscode-editor-foreground, #ddd);
-        --annot-border-color: var(--vscode-panel-border, #444);
-      }
+      /*
+       * Pre-script paint: use VSCode's own variables directly
+       * so the iframe shows the right background even before
+       * the bundled `main.ts` runs and the EditorShell
+       * applies the full `--annot-*` token mapping. The mapped
+       * `--annot-*` tokens take over once the script boots.
+       */
       html,
       body {
         margin: 0;
         padding: 0;
         height: 100%;
-        background: var(--annot-bg-canvas);
-        color: var(--annot-text-primary);
+        background: var(--vscode-editor-background);
+        color: var(--vscode-foreground);
         font: 13px/1.5 var(--vscode-editor-font-family, system-ui);
       }
-      #annot-shell-container {
+      /*
+       * Layout: left toolbar (vertical strip) │ centre column
+       * (canvas on top + statusbar at the bottom) │ right
+       * property-panel. Mirrors the PWA's Draw.io / Figma
+       * pattern but stripped of the editor-header (VSCode
+       * supplies the tab title itself).
+       *
+       * `min-width: 0` / `min-height: 0` on every grid item is
+       * required so children that exceed the cell size (e.g.
+       * the canvas SVG at 200% zoom) get clipped instead of
+       * pushing the cell wider/taller. Without these, the
+       * grid item's default `min-*: auto` pins the cell to
+       * the intrinsic content size and `overflow: auto` on
+       * the inner container never kicks in.
+       */
+      #annot-shell-root {
         position: absolute;
         inset: 0;
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        grid-template-rows: 1fr;
+        min-width: 0;
+        min-height: 0;
+      }
+      /*
+       * Pane separators — explicit 1px lines between toolbar /
+       * canvas / right-panel / statusbar. Without these, the
+       * VSCode-mapped surface tokens (sideBar-background ≈
+       * editor-background in many themes) leave the panes
+       * visually fused: in Default Dark+ the difference is one
+       * shade (`#252526` vs `#1e1e1e`), barely perceptible.
+       * `--vscode-panel-border` is the workbench's canonical
+       * inter-pane separator colour and stays visible across
+       * Light / Dark / High Contrast.
+       */
+      #annot-shell-toolbar {
+        grid-column: 1;
+        /*
+         * Explicit 48 px width + flex-center to match the PWA's
+         * `#editor-sidebar { width: 48px; align-items: center; }`
+         * surround. Without this, the cell auto-sizes to the
+         * 36 px buttons exactly — the variant badges (12 px
+         * circles anchored at `right: -2px; bottom: -2px;` per
+         * `.tool-btn-badge`) end up flush with the right edge
+         * with zero breathing room. The 6 px on each side
+         * mirrors the PWA's button-vs-strip gutter.
+         */
+        width: 48px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        /*
+         * `overflow: visible` (both axes) so the badges +
+         * tooltip bubbles can extend past the strip without
+         * getting clipped. Mirrors the PWA's `#editor-sidebar
+         * { overflow: visible }` rule. Per CSS spec, mixing
+         * `overflow-x: visible` with `overflow-y: auto`
+         * promotes `visible` to `auto` and re-introduces
+         * clipping, so we stay fully visible.
+         */
+        overflow: visible;
+        min-height: 0;
+        border-right: 1px solid
+          var(--vscode-panel-border, var(--vscode-contrastBorder, transparent));
+      }
+      #annot-shell-centre {
+        grid-column: 2;
+        display: grid;
+        grid-template-rows: 1fr auto;
+        min-width: 0;
+        min-height: 0;
+      }
+      #annot-shell-container {
+        overflow: auto;
+        position: relative;
+        min-width: 0;
+        min-height: 0;
+      }
+      #annot-shell-statusbar {
+        border-top: 1px solid
+          var(--vscode-panel-border, var(--vscode-contrastBorder, transparent));
+      }
+      #annot-shell-right-panel {
+        grid-column: 3;
+        overflow: auto;
+        min-height: 0;
+        border-left: 1px solid
+          var(--vscode-panel-border, var(--vscode-contrastBorder, transparent));
       }
       .annot-placeholder {
         padding: 24px;
       }
+
+      /*
+       * VSCode-specific contrast overrides — DARK-BACKGROUND
+       * active states only.
+       *
+       * `core/styles/toolbar.css` + `property-panel.css` paint
+       * `color: var(--annot-accent)` on every `.active` chip. In
+       * our token map `--annot-accent` resolves to
+       * `--vscode-button-background` (blue). The surfaces below
+       * resolve their active background via
+       * `--annot-choice-active` → `--vscode-list-activeSelectionBackground`
+       * (also blue), so the glyph disappears against the chip —
+       * switch the foreground to
+       * `--vscode-list-activeSelectionForeground` (workbench
+       * canonical "text over active selection", ≥ 4.5:1).
+       *
+       *   .toolbar-btn.active                          — bg = --annot-active-bg     (list-activeSelectionBackground)
+       *   .toolbar-btn.active .tool-btn-badge,
+       *   .toolbar-btn.active .tool-btn-badge-svg > svg
+       *                                                — bg = --annot-active-bg     (badge blends with the active button)
+       *   .prop-choice-chip.active                     — bg = --annot-choice-active (list-activeSelectionBackground)
+       *   .prop-choice-item.active .prop-choice-label  — bg = --annot-choice-active (list-activeSelectionBackground)
+       *   .tool-flyout-chip.active                     — bg = --annot-choice-active (list-activeSelectionBackground)
+       *   .tool-flyout-chip-svg.active                 — bg = --annot-choice-active (list-activeSelectionBackground)
+       *
+       * NOT covered (deliberately):
+       *
+       *   `.tool-flyout-color-chip.active` — no glyph; the
+       *   visible swatch is the `::before` rounded square
+       *   showing `--swatch-color`. The frame's blue border is
+       *   what conveys "active"; foreground colour on the chip
+       *   itself is irrelevant.
+       *
+       *   `.pp-select-item.active` — uses
+       *   `--annot-choice-hover` (LIGHT hover tint, not the
+       *   active selection blue). The original
+       *   `color: var(--annot-accent)` blue on the light hover
+       *   tint has fine contrast; an early iteration of this
+       *   override over-reached onto it and made the row
+       *   illegible (see #430).
+       *
+       * The leading `html` prefix bumps specificity from (0,2,0)
+       * to (0,2,1) so this rule beats `toolbar.css` /
+       * `property-panel.css`'s own `.foo.active { color:
+       * var(--annot-accent) }`. Without the bump the rules tie
+       * on specificity and the imported stylesheet wins on
+       * source order — Vite injects imported CSS into `<head>`
+       * AFTER this inline `<style>`, so the override silently
+       * loses (verified in #426 post-mortem).
+       */
+      html .toolbar-btn.active,
+      html .prop-choice-chip.active,
+      html .prop-choice-item.active .prop-choice-label,
+      html .tool-flyout-chip.active,
+      html .tool-flyout-chip-svg.active,
+      html .toolbar-btn.active .tool-btn-badge {
+        color: var(
+          --vscode-list-activeSelectionForeground,
+          var(--vscode-foreground)
+        );
+      }
+      /* SVG-glyph variant of the badge: the inline SVG inherits the
+       * badge's `color` for `currentColor` strokes, but its own rule
+       * (`.tool-btn-badge-svg > svg { color: var(--annot-accent) }`)
+       * resets it back to blue. Bump specificity here too so the
+       * white-on-blue contrast holds for arrow / rect / counter SVG
+       * badges as well. */
+      html .toolbar-btn.active .tool-btn-badge-svg > svg {
+        color: var(
+          --vscode-list-activeSelectionForeground,
+          var(--vscode-foreground)
+        );
+      }
     </style>
   </head>
   <body>
-    <div id="annot-shell-container">
-      <div class="annot-placeholder">
-        Loading Annot editor… (Phase 4 skeleton — full message protocol arrives in Phase 5)
+    <div id="annot-shell-root">
+      <div id="annot-shell-toolbar"></div>
+      <div id="annot-shell-centre">
+        <div id="annot-shell-container">
+          <div class="annot-placeholder">Loading Annot editor…</div>
+        </div>
+        <div id="annot-shell-statusbar"></div>
       </div>
+      <div id="annot-shell-right-panel"></div>
     </div>
     <script type="module" src="./main.ts"></script>
   </body>

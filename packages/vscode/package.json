@@ -14,7 +14,7 @@
     "vscode": "^1.85.0"
   },
   "type": "module",
-  "main": "./dist/extension.js",
+  "main": "./dist/extension.cjs",
   "categories": ["Visualization", "Other"],
   "keywords": ["annot", "annotation", "screenshot", "svg", "playwright"],
   "license": "Apache-2.0",
@@ -67,6 +67,11 @@
       {
         "command": "annot.revealInExplorer",
         "title": "Reveal in Explorer",
+        "category": "Annot"
+      },
+      {
+        "command": "annot.showFileDetails",
+        "title": "Show file details",
         "category": "Annot"
       }
     ]

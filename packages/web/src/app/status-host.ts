@@ -10,10 +10,10 @@
  */
 
 import type { CanvasManager } from "@ingcreators/annot-editor";
-import "../editor/editor-statusbar.js";
-import type { AnnotEditorStatusbarElement } from "../editor/editor-statusbar.js";
+import "@ingcreators/annot-editor-shell/editor-statusbar";
+import type { AnnotEditorStatusbarElement } from "@ingcreators/annot-editor-shell/editor-statusbar";
 
-export { ZOOM_OPTIONS } from "../editor/editor-statusbar.js";
+export { ZOOM_OPTIONS } from "@ingcreators/annot-editor-shell/editor-statusbar";
 
 export class StatusHost {
   #statusbarEl: AnnotEditorStatusbarElement | null = null;
