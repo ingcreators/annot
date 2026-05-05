@@ -251,6 +251,48 @@
          * state so the hover guard is unconditional. */
         color: var(--vscode-foreground);
       }
+
+      /* Hover ring contrast — every hover rule above paints
+       * `border-color: var(--annot-accent)` (=
+       * `--vscode-button-background`, `#0E639C` in Dark+). That
+       * dim blue lands at 1.2-2:1 against the chip's hover bg,
+       * which fails WCAG SC 1.4.11 (≥ 3:1 for non-text UI
+       * components). Switching the ring to
+       * `--vscode-focusBorder` (`#007FD4` in Dark+, the
+       * workbench's canonical "focus ring" colour designed for
+       * visibility) lifts the contrast to ≈ 3:1 — borderline AA
+       * UI in isolation, but combined with the glyph-foreground
+       * override above and the bg tint, the overall hover state
+       * is clearly identifiable as an active state.
+       *
+       * Surfaces covered (visible inside the VSCode webview):
+       *
+       *   .tool-flyout-chip:hover                     (variant flyout)
+       *   .tool-flyout-chip-svg:hover                 (variant flyout)
+       *   .tool-flyout-color-chip:hover               (highlight flyout)
+       *   .prop-btn:hover                             (right panel mini buttons)
+       *   .prop-choice-chip:hover                     (right panel TYPE picker)
+       *   .color-swatch:hover                         (palette swatch picker)
+       *   .pp-select:hover                            (right panel <pp-select>)
+       *   .pp-color-none-btn:hover                    (color-none button)
+       *   .tag-add-btn:hover                          (file-details drawer)
+       *
+       * `:not(.active)` mirrors the glyph-color guard above for
+       * surfaces that have an active state (chips + color
+       * swatch). `.prop-btn`, `.pp-select`,
+       * `.pp-color-none-btn`, `.tag-add-btn` don't carry
+       * `.active`, so the hover rule applies unconditionally. */
+      html .tool-flyout-chip:hover:not(.active),
+      html .tool-flyout-chip-svg:hover:not(.active),
+      html .tool-flyout-color-chip:hover:not(.active),
+      html .prop-btn:hover,
+      html .prop-choice-chip:hover:not(.active),
+      html .color-swatch:hover:not(.active),
+      html .pp-select:hover,
+      html .pp-color-none-btn:hover,
+      html .tag-add-btn:hover {
+        border-color: var(--vscode-focusBorder, var(--annot-accent));
+      }
     </style>
   </head>
   <body>
