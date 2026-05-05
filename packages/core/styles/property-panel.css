@@ -192,9 +192,33 @@
 }
 
 .prop-choice-chip.active {
-  background: var(--annot-choice-active, var(--annot-choice-hover, var(--annot-hover-bg)));
+  /* "Filled" active state — solid `--annot-accent` background +
+   * contrasting glyph. Mirrors the variant flyout chip's
+   * active treatment (`.tool-flyout-chip.active` in
+   * `core/styles/toolbar.css`) so the right panel's TYPE
+   * picker reads with the same three-state hierarchy:
+   *
+   *   Inactive — no border, default glyph
+   *   Hover    — accent border + tinted bg + accent glyph
+   *   Active   — accent fill + contrasting glyph (filled chip)
+   *
+   * The earlier "tinted bg + blue glyph" pattern shared every
+   * visual property with the hover state apart from a small
+   * delta in bg saturation (PWA dark: 18 % blue active vs 8 %
+   * white hover overlay). On screens / themes where the
+   * hover-bg / choice-active difference is subtle, the two
+   * states became visually indistinguishable — TYPE pickers
+   * lost their "what's currently selected" cue.
+   *
+   * VSCode contrast budget: bg = `--annot-accent` =
+   * `--vscode-button-background`; the inline override in
+   * `packages/vscode/src/webview/index.html` switches glyph to
+   * `--vscode-button-foreground` (the workbench-paired ≥4.5:1
+   * partner) so the white-on-blue contrast holds across
+   * every shipping theme. */
+  background: var(--annot-accent);
   border-color: var(--annot-accent);
-  color: var(--annot-accent);
+  color: var(--annot-bg-panel);
 }
 
 .prop-number-input {
