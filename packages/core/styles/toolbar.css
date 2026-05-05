@@ -390,20 +390,28 @@
 }
 
 .tool-flyout-chip.active {
-  /* Prefer `--annot-choice-active` (the active-state token) over the
-   * weaker `--annot-choice-hover`. PWA defaults differ only by 8 % of
-   * blue tint (10% → 18%), but the VSCode token map points
-   * `--annot-choice-hover` at the subtle `list-hoverBackground` and
-   * `--annot-choice-active` at the strong `list-activeSelectionBackground`
-   * — using the active token keeps active-vs-hover visually distinct
-   * across both. The hover/hover-bg fallbacks remain for any
-   * downstream theme that doesn't define `--annot-choice-active`. */
-  background: var(
-    --annot-choice-active,
-    var(--annot-choice-hover, var(--annot-hover-bg))
-  );
+  /* "Filled" active state — solid `--annot-accent` background +
+   * contrasting glyph. The earlier "tinted bg + blue glyph" pattern
+   * (`--annot-choice-active` 18 % blue tint vs the hover state's
+   * 6-10 % tint) left active and hover too close to read apart at a
+   * glance, especially in PWA Light where the hover token resolves
+   * to `#eef1fa` and the active token to `#dce4ff` — both pale
+   * blues. Switching to a solid fill makes active visually dominant
+   * across themes:
+   *
+   *   PWA dark   — bg `#7c9cff` (light blue) + glyph `#121933` (navy)  ≈ 9:1
+   *   PWA light  — bg `#3456c9` (dark blue) + glyph `#ffffff` (white) ≈ 9:1
+   *   VSCode     — bg button-bg + glyph button-foreground (overridden
+   *                in the webview's inline `<style>` so the paired
+   *                tokens hold ≥ 4.5:1 even when the workbench theme
+   *                picks a low-contrast button-background).
+   *
+   * Hover keeps the outlined-with-blue-glyph look — a clear
+   * three-state hierarchy (inactive → outlined hover → filled
+   * active). */
+  background: var(--annot-accent);
   border-color: var(--annot-accent);
-  color: var(--annot-accent);
+  color: var(--annot-bg-panel);
 }
 
 /* Chips whose glyph is an inline SVG (rather than a Material Symbols
@@ -439,12 +447,9 @@
 }
 .tool-flyout-chip-svg.active {
   /* Match `.tool-flyout-chip.active` — see the comment there. */
-  background: var(
-    --annot-choice-active,
-    var(--annot-choice-hover, var(--annot-hover-bg))
-  );
+  background: var(--annot-accent);
   border-color: var(--annot-accent);
-  color: var(--annot-accent);
+  color: var(--annot-bg-panel);
 }
 .tool-flyout-chip-svg > svg {
   width: 22px;

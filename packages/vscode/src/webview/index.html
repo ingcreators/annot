@@ -136,8 +136,14 @@
        *                                                — bg = --annot-active-bg     (badge blends with the active button)
        *   .prop-choice-chip.active                     — bg = --annot-choice-active (list-activeSelectionBackground)
        *   .prop-choice-item.active .prop-choice-label  — bg = --annot-choice-active (list-activeSelectionBackground)
-       *   .tool-flyout-chip.active                     — bg = --annot-choice-active (list-activeSelectionBackground)
-       *   .tool-flyout-chip-svg.active                 — bg = --annot-choice-active (list-activeSelectionBackground)
+       *
+       * Filled-accent surfaces — bg = --annot-accent
+       * (--vscode-button-background); paired with
+       * `--vscode-button-foreground` (a separate rule below) so the
+       * workbench's button contrast budget applies:
+       *
+       *   .tool-flyout-chip.active                     — bg = --annot-accent (button-background)
+       *   .tool-flyout-chip-svg.active                 — bg = --annot-accent (button-background)
        *
        * NOT covered (deliberately):
        *
@@ -164,15 +170,29 @@
        * AFTER this inline `<style>`, so the override silently
        * loses (verified in #426 post-mortem).
        */
+      /* Surfaces with bg = `--vscode-list-activeSelectionBackground`
+       * (paired with list-activeSelectionForeground in workbench
+       * themes for ≥ 4.5:1 contrast). */
       html .toolbar-btn.active,
       html .prop-choice-chip.active,
       html .prop-choice-item.active .prop-choice-label,
-      html .tool-flyout-chip.active,
-      html .tool-flyout-chip-svg.active,
       html .toolbar-btn.active .tool-btn-badge {
         color: var(
           --vscode-list-activeSelectionForeground,
           var(--vscode-foreground)
+        );
+      }
+      /* Filled-accent flyout chips (bg = `--annot-accent` =
+       * `--vscode-button-background` after the toolbar.css refactor
+       * that made active flyout chips a solid filled state). VSCode
+       * themes pair button-background with button-foreground; using
+       * the matching token guarantees the contrast budget the
+       * workbench designer chose for the theme. */
+      html .tool-flyout-chip.active,
+      html .tool-flyout-chip-svg.active {
+        color: var(
+          --vscode-button-foreground,
+          var(--vscode-list-activeSelectionForeground, var(--vscode-foreground))
         );
       }
       /* SVG-glyph variant of the badge: the inline SVG inherits the
