@@ -259,10 +259,11 @@ and writes it.
 
 The migration:
 
-- **Phase 4**: a small Rust+`napi-rs` (or C++ `node-addon-api`)
-  module `packages/desktop/src-electron/addons/office-clipboard/`
+- **Phase 4**: a small Rust+`napi-rs` module
+  `packages/desktop/src-electron/addons/office-clipboard/`
   exposing `writeOfficeClipboard(drawingXml, mediaList,
-  pngDataUrl?)`. Windows-only, prebuilt for `x64-pc-windows-msvc`.
+  pngDataUrl?)`. Windows-only at landing; prebuilt for
+  `x86_64-pc-windows-msvc`.
 - The packaging logic (ZIP build + format registration) is
   ported line-by-line from `clipboard.rs`. The TS surface
   (`copyAsOffice`) doesn't change.
@@ -270,6 +271,26 @@ The migration:
   supported either. A follow-up plan adds an `NSPasteboard`
   variant to the same addon.
 - Linux remains unsupported (matches today).
+
+**Distribution**: built from source on every release via
+GitHub Actions (`windows-latest` runner) and published as
+platform-specific subpackages (`@ingcreators/annot-office-clipboard-win32-x64`)
+following the standard `napi-rs` workflow. The main package
+detects the platform at install time and pulls the matching
+prebuilt binary. Contributors do **not** need a Rust toolchain
+to develop the desktop host — they receive the prebuilt
+`.node` binary at `pnpm install` time. A `verify-office-clipboard`
+job (analogous to `verify-wasm` from
+[`_done/vendor-libimagequant.md`](./_done/vendor-libimagequant.md))
+rebuilds from source on every PR that touches the addon
+directory and asserts byte-equivalence with the published
+prebuilt. Marginal CI cost for the `ingcreators` org (private
+repo, Team plan with 3,000 GitHub Actions minutes/month
+included): ~20–60 Windows billing-minutes per month at
+expected release cadence — under 2% of quota; effectively $0.
+If the repo migrates to public per
+[`oss-cloud-split.md`](./oss-cloud-split.md), GitHub-hosted
+standard runners become free/unlimited.
 
 Why not a fresh Rust *standalone binary* invoked via subprocess?
 Considered and rejected: clipboard ownership in Win32 is
@@ -280,6 +301,14 @@ runs inside the Electron main process which stays alive.
 Why not pure Win32 from Node via `koffi` / `node-ffi-napi`?
 Considered: it works for simple FFI but not for Win32 COM
 patterns the GVML write needs. An addon is cleaner.
+
+Why not check in prebuilt binaries instead of CI build?
+Considered and rejected: the supply-chain audit cost (a
+reviewer can't easily verify the binary matches source) and
+staleness risk (developer must remember to rebuild + commit
+on every change) outweigh the few-minute CI wallclock saved
+per release. Same reasoning as
+[`_done/vendor-libimagequant.md`](./_done/vendor-libimagequant.md).
 
 ### Screen capture: Chromium-uniform path
 
@@ -776,23 +805,29 @@ Whole-plan acceptance criteria:
   - Auto-update via `electron-updater` is a natural follow-up
     once code signing + notarization are stable.
 
-## Open questions for sign-off
+## Resolved decisions
+
+All sign-off questions resolved 2026-05-06:
 
 - **Sequencing with `desktop-storage-provider-migration.md`**:
-  recommended order is storage-provider first, then this plan
-  (Phase 1 collapses from "DB + 8 IPC commands" to "fs
-  primitives"). Confirm the user is happy taking the two
-  plans in that order.
-- **Bundle-size acceptance**: is the ~10× installer-size jump
-  acceptable for the desktop host's role? If not, the
-  alternative is staying on Tauri and accepting the per-OS
-  capture-API research cost (effectively the existing
-  `desktop-browser-mode.md` plan).
-- **N-API addon prebuild policy**: do we check in prebuilt
-  binaries, or run a build step in CI per release? Prebuilt
-  is simpler; CI build is more auditable.
-- **macOS notarization timing**: do we want to land Phase 7's
-  manual notarization recipe alongside Phase 5's cutover, or
-  ship Phase 5 unsigned-on-macOS first and follow up with
-  Phase 7? Affects how visible the Mac value is at the
-  cutover boundary.
+  storage-provider lands first, then this plan. Phase 1
+  collapses from "DB + 8 IPC commands" to "fs primitives".
+- **Bundle-size acceptance**: ~10× installer-size jump
+  accepted (10 MB → 80–120 MB; ~250–400 MB on disk;
+  ~150–250 MB resident). Trade is worthwhile for
+  cross-platform parity.
+- **N-API addon prebuild policy**: CI build via GitHub
+  Actions (`windows-latest` runner; later `macos-latest`
+  for the NSPasteboard variant); published as platform-
+  specific `napi-rs` subpackages. Marginal cost ~20–60
+  Windows billing-min/month at expected cadence —
+  effectively $0 against the `ingcreators` Team plan's
+  3,000 included minutes/month. Goes free/unlimited if the
+  repo migrates to public. Same supply-chain rationale as
+  [`_done/vendor-libimagequant.md`](./_done/vendor-libimagequant.md).
+- **macOS notarization timing**: Phase 7 lands as a
+  follow-up after Phase 5 cutover, not bundled with it.
+  Acceptable that the Phase 5 Electron build shows the
+  "unidentified developer" warning on macOS until Phase 7;
+  the developer's Mac box accepts unsigned builds for
+  test purposes.
