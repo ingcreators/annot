@@ -29,7 +29,12 @@ import { FileManager, type FileManagerCallbacks } from "@ingcreators/annot-web/g
 import type { StorageMode } from "@ingcreators/annot-web/storage/bridge";
 import { IndexedDBThumbnailCache } from "@ingcreators/annot-web/storage/idb-thumbnail-cache";
 import { ThumbnailManager } from "@ingcreators/annot-web/storage/thumbnail-manager";
-import { createTauriDesktopFs, type DesktopFs } from "./desktop-fs.js";
+import {
+  createElectronDesktopFs,
+  createTauriDesktopFs,
+  type DesktopFs,
+  type ElectronApi,
+} from "./desktop-fs.js";
 import { DesktopStore } from "./desktop-store.js";
 
 /** Sub-directory under `<userData>` that holds the Annot library.
@@ -86,18 +91,46 @@ export interface BootstrapOptions {
   onUploadImage: () => void;
 }
 
+/** Detect whether the renderer is running under the Electron host
+ *  scaffolded by `docs/plans/desktop-electron-migration.md`. The
+ *  preload script sets `window.__ANNOT_DESKTOP__ = true`; absence
+ *  means we're either in Tauri (the legacy host) or in a pure-
+ *  browser test context. */
+function isElectron(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    !!(window as unknown as { __ANNOT_DESKTOP__?: boolean }).__ANNOT_DESKTOP__
+  );
+}
+
 /**
- * Resolve `<userData>/library/`. On Tauri, calls `appDataDir()`
- * (which returns a per-OS path like `%APPDATA%/Annot/` on
- * Windows, `~/Library/Application Support/Annot/` on macOS,
- * `~/.config/Annot/` on Linux). Outside Tauri (storybook, tests)
- * the caller is expected to pass an explicit `libraryRoot`.
+ * Resolve `<userData>/library/`. Three host paths today:
+ *
+ *   - **Electron** (Phase 1+ of the migration plan): asks the main
+ *     process via the `app.getLibraryRoot` IPC channel. The main
+ *     process resolves it under `app.getPath('userData')` and
+ *     ensures the skeleton (`Inbox/`) exists before returning.
+ *   - **Tauri** (current default through Phase 4): calls
+ *     `appDataDir()` from `@tauri-apps/api/path` and joins
+ *     `library/`.
+ *   - **Outside both** (storybook, tests): the caller is expected
+ *     to pass an explicit `libraryRoot`.
  */
 async function resolveLibraryRoot(): Promise<string> {
+  if (isElectron()) {
+    const api = (window as unknown as { electronAPI?: ElectronApi }).electronAPI;
+    if (!api) {
+      throw new Error(
+        "[desktop-bootstrap] window.electronAPI is missing — preload script " +
+          "did not run? Re-launch via `pnpm dev:electron`.",
+      );
+    }
+    return api.invoke<string>("app.getLibraryRoot");
+  }
   if (!isTauri) {
     throw new Error(
-      "[desktop-bootstrap] resolveLibraryRoot requires a Tauri context — " +
-        "pass an explicit `libraryRoot` to bypass.",
+      "[desktop-bootstrap] resolveLibraryRoot requires a Tauri or Electron " +
+        "context — pass an explicit `libraryRoot` to bypass.",
     );
   }
   const { appDataDir, join } = await import("@tauri-apps/api/path");
@@ -141,7 +174,14 @@ export async function bootstrapDesktopFsGallery(
   opts: BootstrapOptions,
 ): Promise<DesktopGalleryHandle> {
   const libraryRoot = opts.libraryRoot ?? (await resolveLibraryRoot());
-  const fs = opts.fs ?? createTauriDesktopFs(libraryRoot);
+  // Under Electron the IPC handlers in
+  // `packages/desktop/src-electron/ipc/fs.ts` resolve every path
+  // server-side against the canonical library root, so the
+  // renderer-side factory takes no `libraryRoot` argument. Under
+  // Tauri the plugin-fs API wants absolute paths from the
+  // renderer, so the existing factory keeps its `libraryRoot`
+  // parameter.
+  const fs = opts.fs ?? (isElectron() ? createElectronDesktopFs() : createTauriDesktopFs(libraryRoot));
 
   await ensureLibrarySkeleton(fs);
 

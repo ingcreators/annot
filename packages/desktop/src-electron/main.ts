@@ -1,35 +1,40 @@
 /**
- * Electron main process — Phase 0 scaffold.
+ * Electron main process — Phase 1 of
+ * `docs/plans/desktop-electron-migration.md`.
  *
- * This is the side-by-side opt-in entry point introduced by Phase 0
- * of `docs/plans/desktop-electron-migration.md`. It boots a single
- * `BrowserWindow`, loads the Vite-built renderer (the same
- * `index.html` the Tauri host uses), and registers a single `ping`
- * IPC handler so the preload's contextBridge surface has something
- * concrete to exercise.
+ * Boots a single `BrowserWindow`, resolves the library root under
+ * `app.getPath('userData')`, and registers the Phase 1 IPC handler
+ * surface (`fs.*` filesystem primitives + `app.getLibraryRoot`).
+ * The renderer-side `bootstrap.ts` reads the library root via the
+ * `app.getLibraryRoot` channel and constructs an Electron-backed
+ * `DesktopFs` against the `fs.*` channels — same `DesktopStore`
+ * contract the Tauri host satisfies, just over a different
+ * transport.
  *
- * What this file deliberately does NOT do at Phase 0:
+ * What this file deliberately still doesn't do (lands in later
+ * phases):
  *
- *   - Implement any of the real IPC channels (`fs.*`, `xmp.*`,
- *     `capture_*`, `copy_as_office`, `load_tool_presets`,
- *     `get_portable_dir`, …). Those land in Phases 1–4.
- *   - Start the extension-handoff HTTP server on :19530.
- *     That lands in Phase 2.
- *   - Spawn the capture overlay window. That lands in Phase 3.
+ *   - XMP read/write IPC channels, the tool-presets persistence,
+ *     and the http-server that catches extension-handoff captures
+ *     on :19530. Phase 2.
+ *   - Screen capture (`capture_screen` / `capture_window` / region
+ *     overlay). Phase 3.
+ *   - Office clipboard copy (`copy_as_office`). Phase 4.
  *
  * The Tauri build remains the default `pnpm dev` / `pnpm build`
- * target until Phase 5's cutover, so this scaffold loads the
- * renderer in Tauri-incompatible mode (`__TAURI_INTERNALS__` is
- * absent) — which means every `tauri-bridge.ts` call from the
- * renderer throws "Not running in Tauri" and the gallery / capture
- * surfaces don't function. That's expected for Phase 0; the goal
- * is "the Electron window opens and the renderer mounts," not
- * functional parity.
+ * target until Phase 5's cutover; the renderer's existing
+ * `tauri-bridge.ts` call sites still address those (now-gone-on-
+ * Electron) channels and surface "no handler registered" errors
+ * here. That's expected — the Phase 5 cutover swaps imports to
+ * `desktop-bridge.ts` and the Phase-2/3/4 handlers come online by
+ * then.
  */
 
+import { promises as fsPromises } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { app, BrowserWindow, ipcMain } from "electron";
+import { registerAllIpcHandlers } from "./ipc/index.js";
 
 // `__dirname` isn't defined in ESM; recover the equivalent from
 // `import.meta.url`. The bundled output sits at
@@ -42,6 +47,17 @@ import { app, BrowserWindow, ipcMain } from "electron";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const RENDERER_DEV_URL = process.env["ELECTRON_RENDERER_URL"];
+
+/** Sub-directory under `<userData>` that holds the Annot library.
+ *  Mirrors the renderer-side `LIBRARY_SUBDIR` constant in
+ *  `packages/desktop/src/storage/bootstrap.ts` so the on-disk path
+ *  stays human-predictable across platforms. */
+const LIBRARY_SUBDIR = "library";
+
+/** Default top-level folder created on first launch so the gallery
+ *  doesn't open into a totally empty tree. Matches the renderer-
+ *  side `DEFAULT_INBOX_FOLDER` for the same reason. */
+const DEFAULT_INBOX_FOLDER = "Inbox";
 
 function createMainWindow(): BrowserWindow {
   const win = new BrowserWindow({
@@ -65,12 +81,29 @@ function createMainWindow(): BrowserWindow {
   return win;
 }
 
-function registerPlaceholderIpc(): void {
-  ipcMain.handle("ping", () => "pong");
+/** Resolve `<userData>/library/` and ensure the skeleton (root +
+ *  default `Inbox/`) exists. First launch: both directories are
+ *  created empty. Per the plan's "no auto-import" decision, the
+ *  legacy Tauri-era library at `<portable_dir>/library/` is left
+ *  alone — surfacing the path to the user is the renderer's job
+ *  (one-time toast), not the main process's. */
+async function ensureLibrarySkeleton(): Promise<string> {
+  const libraryRoot = join(app.getPath("userData"), LIBRARY_SUBDIR);
+  await fsPromises.mkdir(libraryRoot, { recursive: true });
+  await fsPromises.mkdir(join(libraryRoot, DEFAULT_INBOX_FOLDER), { recursive: true });
+  return libraryRoot;
 }
 
-void app.whenReady().then(() => {
-  registerPlaceholderIpc();
+void app.whenReady().then(async () => {
+  // Phase 0's `ping` placeholder stays for the moment so the
+  // preload's contextBridge surface has at least one channel that
+  // doesn't depend on the Phase 1 wiring. It's removed in the
+  // Phase 5 cleanup.
+  ipcMain.handle("ping", () => "pong");
+
+  const libraryRoot = await ensureLibrarySkeleton();
+  registerAllIpcHandlers(ipcMain, { libraryRoot });
+
   createMainWindow();
 
   app.on("activate", () => {

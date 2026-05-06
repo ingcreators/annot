@@ -11,7 +11,15 @@
     // strips the actual chrome.* call sites at build time (the
     // desktop never reaches that code path); the types are
     // typecheck-only.
-    "types": ["chrome-types"]
+    //
+    // `node` is here because Phase 1 of
+    // `desktop-electron-migration.md` adds renderer-side tests
+    // (`desktop-fs.electron.test.ts`) that exercise the
+    // Node-side `fs.*` IPC handlers against a tmpdir. Production
+    // renderer code doesn't import from `node:*`; the types are
+    // a typecheck-only seam for the test files that round-trip
+    // through `src-electron/ipc/fs.ts`.
+    "types": ["chrome-types", "node"]
   },
   "include": ["src/**/*.ts"]
 }
