@@ -9,7 +9,7 @@
 ## TL;DR
 
 - **Annot** is a screenshot annotation tool (PWA + Chrome extension +
-  Tauri desktop), built on a shared SVG-first core.
+  Electron desktop), built on a shared SVG-first core.
 - The **strategic direction** is to extract that core as a headless
   library usable from Playwright / Node and integrate it tightly with
   GitHub. See [`PRODUCT_DIRECTION.md`](./PRODUCT_DIRECTION.md).
@@ -64,13 +64,16 @@ packages/
   extension/    Chrome MV3 extension. Capture pipeline + offscreen
                 encode + content-script DOM metadata.
                 npm name: @ingcreators/annot-extension
-  desktop/      Tauri desktop host. Mounts the unified
+  desktop/      Electron desktop host. Mounts the unified
                 `<annot-file-manager-shell>` (from
                 `@ingcreators/annot-web/gallery`) against
                 `DesktopStore` — a `StorageProvider` backed by a
                 filesystem library at `<userData>/library/` with
                 per-file XMP metadata (mirrors `DeviceStore`'s
-                model). See
+                model). The Electron main process lives in
+                `src-electron/`; the legacy Tauri crate at
+                `src-tauri/` is the rollback target until Phase 9
+                of `docs/plans/desktop-electron-migration.md`. See
                 `docs/plans/_done/desktop-storage-provider-migration.md`.
                 npm name: @ingcreators/annot-desktop
   imagequant/   In-tree wasm-bindgen wrapper around upstream
@@ -186,7 +189,7 @@ in section 2 above.
 | `@ingcreators/annot-core/storage` | Tier A. Storage value types (`ImageRecord`, `FolderRecord`, `PageElement`, `PageMetadata`, `StorageProvider`). |
 | `@ingcreators/annot-core/utils` | Tier A. Pure utilities: `assertNonNull`, `computeDasharray`, `detectDashKey`, `newIdB58`, `DEFAULT_*` constants. |
 | `@ingcreators/annot-core/xmp` | Browser-side. `createEditableImage` / `readEditableImage` round-trip. |
-| `@ingcreators/annot-core/tauri-bridge` | Browser-side. Tauri IPC + `isTauri` detection. |
+| `@ingcreators/annot-core/desktop-bridge` | Browser-side. Desktop-host IPC + `isDesktop` detection. Dual-transport: dispatches to Electron's `window.electronAPI.invoke` (default after Phase 5 of `desktop-electron-migration.md`) or Tauri's `__TAURI_INTERNALS__.invoke` (rollback path). `@ingcreators/annot-core/tauri-bridge` is a re-export shim that lives until Phase 9; the canonical name is `desktop-bridge`. |
 | `@ingcreators/annot-editor` | Tier C. `CanvasManager`, `SelectionManager`, `PropertyPanel`, `History`, `ToolBase`, the tool hierarchy, save/copy/download helpers (`saveToFile`, `getPngDataUrl`, `copyAsImage`, `saveAsEditableImage`, `exportSVGString`, `exportPptx`, `downloadAsImage`, …), leaf widgets (`setTooltip`, `createThemeToggle`, `createCustomSelect`, `createColorPalette`, `openAnchoredPopover`), context menu (`openCanvasContextMenu`). |
 | `@ingcreators/annot-editor/<file>` | Per-file deep imports for editor internals (`tools/freehand-tool`, `property-controls`, etc.). Use sparingly. |
 | `@ingcreators/annot-render` | Tier C-render. `renderImageRecord` plus the shared OOXML DrawingML builder (`buildShapeXml(shape, { ns: "a" \| "p", id })`, `buildDrawingXml`, `buildBackgroundPic`) used by both `pptx-export` (PPTX slides) and `toolbar.ts:#copyForOffice` (Office clipboard). Future home of gallery bulk-export. **Does NOT depend on `annot-editor`.** |

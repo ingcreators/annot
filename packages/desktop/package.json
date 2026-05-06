@@ -10,12 +10,12 @@
   },
   "type": "module",
   "scripts": {
-    "dev": "tauri dev",
-    "build": "tauri build",
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "dev:tauri": "tauri dev",
+    "build:tauri": "tauri build",
     "dev:frontend": "vite",
     "build:frontend": "vite build",
-    "dev:electron": "electron-vite dev",
-    "build:electron": "electron-vite build",
     "typecheck": "tsc --noEmit && tsc -p src-electron/tsconfig.json --noEmit",
     "tauri": "tauri"
   },
