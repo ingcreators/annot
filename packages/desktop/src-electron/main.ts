@@ -70,6 +70,17 @@ declare const __dirname: string;
 
 const RENDERER_DEV_URL = process.env["ELECTRON_RENDERER_URL"];
 
+/** CI smoke-boot mode. The release workflow's smoke step launches
+ *  the packaged binary with `--smoke-test` after `electron-builder`
+ *  emits it; the goal is to assert the main bundle parses + boots
+ *  (the `__dirname`-already-declared SyntaxError fixed in #459 was
+ *  the canonical "build emits, runtime crashes" miss the previous
+ *  build-only CI couldn't catch). The flag schedules a clean
+ *  `app.quit()` shortly after the main window opens so the smoke
+ *  step gets a deterministic exit-0 from a healthy boot. */
+const SMOKE_TEST = process.argv.includes("--smoke-test");
+const SMOKE_TEST_QUIT_DELAY_MS = 3000;
+
 /** Sub-directory under `<userData>` that holds the Annot library.
  *  Mirrors the renderer-side `LIBRARY_SUBDIR` constant in
  *  `packages/desktop/src/storage/bootstrap.ts` so the on-disk path
@@ -455,6 +466,19 @@ void app.whenReady().then(async () => {
   Menu.setApplicationMenu(buildAppMenu());
 
   createMainWindow();
+
+  if (SMOKE_TEST) {
+    // Reaching this line means module parse + every synchronous main-
+    // process boot path above (IPC handlers, library skeleton,
+    // BrowserWindow construction) succeeded — exactly the "did the
+    // packaged bundle's runtime survive its own boot?" question the
+    // release workflow's smoke step asks. Quit cleanly so the launcher
+    // sees a deterministic exit code 0.
+    console.log(
+      `[smoke] --smoke-test detected; quitting in ${SMOKE_TEST_QUIT_DELAY_MS}ms`,
+    );
+    setTimeout(() => app.quit(), SMOKE_TEST_QUIT_DELAY_MS);
+  }
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
