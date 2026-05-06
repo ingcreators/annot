@@ -84,8 +84,11 @@ pnpm --filter @ingcreators/annot-desktop tauri          # invoke the tauri CLI d
   Hardened-runtime entitlements live at
   [`build/entitlements.mac.plist`](./build/entitlements.mac.plist)
   with each key justified inline.
-- **Linux**: AppImage + deb + rpm via `electron-builder` (Phase
-  8 of the Electron migration).
+- **Linux**: see [`docs/linux-packaging.md`](./docs/linux-packaging.md)
+  for AppImage + deb + rpm build instructions (`electron-builder`
+  config in [`package.json`](./package.json#L82-L120)), smoke-
+  test recipe on Ubuntu LTS, and known Wayland / PipeWire /
+  fractional-DPI compatibility notes.
 
 ## See also
 

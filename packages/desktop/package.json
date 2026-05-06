@@ -51,6 +51,47 @@
     },
     "dmg": {
       "sign": false
+    },
+    "linux": {
+      "category": "Graphics;Utility",
+      "synopsis": "SVG-first screenshot annotation tool",
+      "description": "Annot is a screenshot annotation tool that lets you mark up captures with arrows, text, blur, mosaic, and more. Annotations stay editable — they're saved alongside the original image as XMP metadata so you can revisit and tweak them later.",
+      "maintainer": "ingcreators <support@ingcreators.com>",
+      "executableName": "annot",
+      "target": [
+        "AppImage",
+        "deb",
+        "rpm"
+      ]
+    },
+    "appImage": {
+      "license": "../../LICENSE"
+    },
+    "deb": {
+      "depends": [
+        "libgtk-3-0",
+        "libnotify4",
+        "libnss3",
+        "libxss1",
+        "libxtst6",
+        "xdg-utils",
+        "libatspi2.0-0",
+        "libuuid1",
+        "libsecret-1-0"
+      ]
+    },
+    "rpm": {
+      "depends": [
+        "gtk3",
+        "libnotify",
+        "nss",
+        "libXScrnSaver",
+        "libXtst",
+        "xdg-utils",
+        "at-spi2-core",
+        "libuuid",
+        "libsecret"
+      ]
     }
   },
   "dependencies": {
