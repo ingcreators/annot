@@ -297,13 +297,18 @@ export class FileManager {
   }
 
   #rootLabel(): string {
-    return this.#storageMode === "device"
-      ? "Device"
-      : this.#storageMode === "googledrive"
-        ? "Google Drive"
-        : this.#storageMode === "github"
-          ? "GitHub"
-          : "Browser";
+    switch (this.#storageMode) {
+      case "device":
+        return "Device";
+      case "googledrive":
+        return "Google Drive";
+      case "github":
+        return "GitHub";
+      case "desktop":
+        return "Desktop";
+      default:
+        return "Browser";
+    }
   }
 
   #setViewMode(mode: "grid" | "list"): void {

@@ -28,6 +28,7 @@
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.11.0",
+    "chrome-types": "^0.1.327",
     "typescript": "catalog:",
     "vite": "catalog:"
   }

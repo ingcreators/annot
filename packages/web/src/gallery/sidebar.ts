@@ -122,6 +122,19 @@ const BUILTIN_CHIP_DESCRIPTORS: readonly ChipDescriptor[] = [
     priority: 40,
     reselectTitle: "Change repository",
   },
+  {
+    // Tauri / Electron desktop host's filesystem-backed library
+    // (`@ingcreators/annot-desktop`'s `DesktopStore`). The PWA
+    // never instantiates a `DesktopStore`, but the desktop host
+    // typically passes `disableBuiltinStorage: ["browser",
+    // "device", "googledrive", "github", "extension"]` at
+    // bootstrap so this is the only chip that renders — matching
+    // VSCode's "single-storage host" UX.
+    mode: "desktop",
+    icon: builtinIcon("desktop_windows"),
+    label: "Desktop",
+    priority: 50,
+  },
 ];
 
 interface StorageStatus {
@@ -238,15 +251,25 @@ export class AnnotSidebarElement extends LitElement {
     treeContainer.setAttribute("aria-label", "Folders");
 
     // Root node — always shows storage type name; folder/repo name
-    // as subtitle for Device / Drive / GitHub.
-    const rootLabel =
-      this.activeMode === "device"
-        ? "Device"
-        : this.activeMode === "googledrive"
-          ? "Google Drive"
-          : this.activeMode === "github"
-            ? "GitHub"
-            : "Browser";
+    // as subtitle for Device / Drive / GitHub / Desktop.
+    let rootLabel: string;
+    switch (this.activeMode) {
+      case "device":
+        rootLabel = "Device";
+        break;
+      case "googledrive":
+        rootLabel = "Google Drive";
+        break;
+      case "github":
+        rootLabel = "GitHub";
+        break;
+      case "desktop":
+        rootLabel = "Desktop";
+        break;
+      default:
+        rootLabel = "Browser";
+        break;
+    }
 
     const rootRow = document.createElement("div");
     rootRow.className = `folder-tree-item${this.activeFolderPath === "" ? " active" : ""}`;

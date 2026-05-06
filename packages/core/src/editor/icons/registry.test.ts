@@ -55,6 +55,7 @@ describe("BUILTIN_ICONS registry", () => {
         "dark_mode",
         "database",
         "delete",
+        "desktop_windows",
         "download",
         "draw",
         "drive_file_rename_outline",
