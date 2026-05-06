@@ -35,8 +35,15 @@ Errors from any Win32 call (`OpenClipboard`, `EmptyClipboard`,
 ## Building
 
 The committed `prebuilds/win-clipboard.win32-x64.node` is the
-authoritative artefact at PR-review time. To rebuild from
-source on a Windows host with the Rust MSVC toolchain installed:
+authoritative artefact at PR-review time. **The canonical build
+is the one produced by the `verify-win-clipboard` CI job on
+GitHub's `windows-latest` runner** — a developer-local
+`bash scripts/build-addon.sh` may produce a slightly different
+binary because the MSVC `link.exe` / Windows SDK versions on a
+contributor's machine rarely match the runner exactly.
+
+To rebuild from source on a Windows host with the Rust MSVC
+toolchain installed:
 
 ```bash
 bash scripts/build-addon.sh
@@ -53,6 +60,24 @@ bash scripts/verify-addon.sh
 fails. The model mirrors `packages/imagequant/scripts/verify-wasm.sh` —
 same supply-chain rationale (a tampered binary can't slip past
 review because CI rebuilds from source).
+
+### Updating the prebuild
+
+When the addon source changes, push the PR and let
+`verify-win-clipboard` produce the canonical binary:
+
+1. Push the source change with a stale prebuild. CI's
+   `verify-win-clipboard` job will fail with "committed differs
+   from a fresh build" and upload the fresh `.node` as a
+   `win-clipboard-fresh-prebuild` artefact.
+2. `gh run download <run-id> -n win-clipboard-fresh-prebuild` —
+   download the CI-built binary.
+3. Replace `prebuilds/win-clipboard.win32-x64.node` with the
+   downloaded file and push the update commit. CI will pass.
+
+This handshake mirrors how a contributor on a non-canonical OS
+updates the imagequant `pkg/` — the local build is fine for
+quick iteration, but the committed artefact must match CI.
 
 ## Distribution
 
