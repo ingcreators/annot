@@ -141,15 +141,26 @@ PipeWire 1.0+ which is rock-solid. If you're on a niche distro
 shipping older PipeWire, upgrade or avoid multi-monitor capture
 until the upgrade.
 
+## App icon
+
+[`build/icon.png`](../build/icon.png) is a 1024×1024 PNG
+rasterised from [`brand/annot-icon.svg`](../../../brand/annot-icon.svg)
+via [`brand/generate-app-icons.mjs`](../../../brand/generate-app-icons.mjs).
+`electron-builder` reads it for the Linux `.desktop` entry +
+dock thumbnails directly, and auto-derives the
+`.icns` (macOS) / `.ico` (Windows) variants from the same
+source — so brand updates to `annot-icon.svg` flow into every
+host with one regeneration run:
+
+```bash
+node brand/generate-app-icons.mjs
+```
+
+(Same script generates the PWA + extension icons, so the
+desktop icon stays visually identical to those.)
+
 ## Known follow-ups
 
-- **Higher-resolution app icon.** The current
-  [`build/icon.png`](../build/icon.png) is 128×128, copied from
-  the Tauri-era assets. Modern Linux desktops use up to 512×512
-  for app launchers + dock thumbnails; smaller icons render
-  fuzzy at HiDPI. A re-rendered 512×512 (and ideally an SVG
-  source for sharp vector scaling) is queued as a brand-asset
-  pass.
 - **Snap + Flatpak**. `electron-builder` supports both targets
   via additional `linux.target` entries (`snap`, `flatpak`).
   Not enabled in Phase 8 — sandbox model needs review against
