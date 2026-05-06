@@ -1,6 +1,6 @@
 # Desktop StorageProvider migration — Phase 0 audit
 
-> **Status:** Draft (review pending)
+> **Status:** Done (2026-05-06)
 >
 > **Companion to:** [`desktop-storage-provider-migration.md`](./desktop-storage-provider-migration.md)
 >

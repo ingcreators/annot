@@ -11,94 +11,20 @@ async function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T
   return tauriInvoke<T>(cmd, args);
 }
 
-// --- Screenshots ---
-
-export interface SaveResult {
-  id: number;
-  path: string;
-  thumbnail_path: string;
-}
+// --- Portable directory ---
+//
+// Phase 5 of `docs/plans/_done/desktop-storage-provider-migration.md`
+// dropped the SQLite-backed gallery + the
+// `saveScreenshot` / `loadScreenshot` / `listProjects` /
+// `createProject` / `deleteProject` / `listImages` / `updateImage` /
+// `deleteImage` exports that the bespoke gallery used.
+// `getPortableDir` survived because the renderer still resolves
+// `<portable_dir>/data/incoming/` for the extension-capture sweep
+// and `<portable_dir>/data/annot.db` for the one-time legacy-data
+// notice.
 
 export async function getPortableDir(): Promise<string> {
   return invoke<string>("get_portable_dir");
-}
-
-export async function saveScreenshot(
-  data: string,
-  projectId?: number,
-  sourceUrl?: string,
-): Promise<SaveResult> {
-  const baseDir = await getPortableDir();
-  return invoke<SaveResult>("save_screenshot", {
-    data,
-    projectId: projectId ?? 1,
-    sourceUrl: sourceUrl ?? "",
-    baseDir: `${baseDir}/images`,
-  });
-}
-
-export async function loadScreenshot(path: string): Promise<string> {
-  return invoke<string>("load_screenshot", { path });
-}
-
-// --- Projects ---
-
-export interface Project {
-  id: number;
-  name: string;
-  description: string;
-  created_at: string;
-  updated_at: string;
-  image_count: number;
-}
-
-export async function listProjects(): Promise<Project[]> {
-  return invoke<Project[]>("list_projects");
-}
-
-export async function createProject(name: string, description?: string): Promise<Project> {
-  return invoke<Project>("create_project", { name, description });
-}
-
-export async function deleteProject(id: number): Promise<void> {
-  return invoke<void>("delete_project", { id });
-}
-
-// --- Images ---
-
-export interface ImageInfo {
-  id: number;
-  project_id: number | null;
-  filename: string;
-  path: string;
-  svg_path: string | null;
-  width: number;
-  height: number;
-  thumbnail_path: string | null;
-  tags: string;
-  source_url: string;
-  notes: string;
-  created_at: string;
-}
-
-export async function listImages(projectId?: number, search?: string): Promise<ImageInfo[]> {
-  return invoke<ImageInfo[]>("list_images", { projectId, search });
-}
-
-export async function updateImage(
-  id: number,
-  updates: {
-    tags?: string;
-    notes?: string;
-    svgPath?: string;
-    projectId?: number;
-  },
-): Promise<void> {
-  return invoke<void>("update_image", { id, ...updates });
-}
-
-export async function deleteImage(id: number): Promise<void> {
-  return invoke<void>("delete_image", { id });
 }
 
 // --- Tool Presets ---

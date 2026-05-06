@@ -1,6 +1,6 @@
 # Desktop: replace SQLite gallery with `DesktopStore` (StorageProvider)
 
-> **Status:** Draft
+> **Status:** Done (2026-05-06)
 >
 > **Compatibility:** Replaces the desktop host's bespoke SQLite-backed
 > gallery (`projects` + `images` tables in
