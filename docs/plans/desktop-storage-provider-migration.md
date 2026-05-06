@@ -14,9 +14,19 @@
 > the model `DeviceStore`
 > ([`packages/web/src/storage/device-store.ts`](../../packages/web/src/storage/device-store.ts))
 > already uses for the PWA's "Device" mode (File System Access API)
-> and `VSCodeStore` uses for the VSCode host. Existing user data
-> migrates one-shot at first launch from SQLite + flat `data/`
-> directory layout to the path-based fs library.
+> and `VSCodeStore` uses for the VSCode host.
+>
+> **No data migration.** Confirmed 2026-05-06: existing
+> SQLite-rooted captures are NOT auto-imported into the new
+> library. Users start fresh in `<userData>/library/`; the
+> legacy `data/` directory is left in place for the user to
+> back up or delete manually. Rationale: pre-release, the
+> install in active use has only the auto-created `Default`
+> project with no production data. Adding a migrator would
+> spend implementation budget on a path that yields no user
+> value here. (If a future user surfaces preserved-data
+> requirements, a migrator is straightforward to add later as
+> a separate plan — `DesktopStore` is its only dependency.)
 >
 > The desktop renderer's bespoke gallery UI
 > (`gallery.ts` + `project-manager.ts`) is replaced by mounting the
@@ -26,20 +36,15 @@
 > share once this plan lands.
 >
 > **Risk:** Largest UX-visible change to `packages/desktop` since its
-> inception. Three categories of risk:
+> inception. Two categories of risk (data-migration risk is
+> eliminated by skipping the migrator):
 >
-> 1. **Data migration** — users with existing libraries lose data
->    if the one-shot migrator gets it wrong. Mitigated by Phase 4's
->    "non-destructive" migrator: it copies the SQLite-rooted layout
->    into the new fs layout while preserving the original; a manual
->    "delete legacy" step at the end is gated behind explicit user
->    action.
-> 2. **UX regression** — the desktop's current gallery has its own
+> 1. **UX regression** — the desktop's current gallery has its own
 >    project picker, search, and tag-edit affordances. Replacing it
 >    with `<annot-file-manager-shell>` means the desktop adopts the
 >    PWA's gallery UX wholesale. Inventory in Phase 0 confirms
 >    feature parity (or surfaces gaps to address before cutover).
-> 3. **Path-based-storage compliance** — the desktop has been the
+> 2. **Path-based-storage compliance** — the desktop has been the
 >    holdout since [`_done/path-based-storage.md`](./_done/path-based-storage.md)
 >    landed. This plan brings it into compliance. The risk is
 >    discovering that the bespoke desktop gallery exposed
@@ -47,7 +52,7 @@
 >    Phase 0's audit catches this.
 >
 > Phases 0–3 are pure additions (DesktopStore lives alongside the
-> SQLite stack); Phase 4 is the cutover. Phase 5 deletes the
+> SQLite stack); Phase 4 flips the default. Phase 5 deletes the
 > SQLite + bespoke-gallery code paths.
 
 ## Context
@@ -180,8 +185,10 @@ name. Subfolders on disk are gallery folders 1:1.
 
 `<userData>` resolves via the platform-native location (Tauri's
 `portable_dir()/data/` on the current build,
-`app.getPath('userData')` on Electron). The migrator in Phase 4
-copies/moves the existing layout into the new one.
+`app.getPath('userData')` on Electron). On first launch the
+library directory is created empty (as `Inbox/`); no
+auto-import from the legacy `data/project_<id>/` layout
+happens.
 
 ### Metadata: per-file XMP
 
@@ -280,14 +287,14 @@ public API. The Tauri commands themselves stay registered for
 one cycle (Phase 4 cutover) so a rollback path exists; Phase 5
 deletes them.
 
-### Capture → save flow (after migration)
+### Capture → save flow (after cutover)
 
 Today: extension hits `localhost:19530/capture` → Rust HTTP
 server emits `capture-from-extension` event → renderer's
 listener calls `saveScreenshot(dataUrl, projectId)` → Rust
 writes file + INSERT row + thumbnail.
 
-After migration: extension hits `localhost:19530/capture` →
+After cutover: extension hits `localhost:19530/capture` →
 Rust HTTP server emits the same event → renderer's listener
 calls `desktopStore.saveImage({ ... })` → DesktopStore writes
 the file (with XMP), `ThumbnailManager` lazily produces the
@@ -299,17 +306,11 @@ thumbnail lifecycle is the unified one.
 ### Folders ≠ projects: a UX simplification
 
 The current desktop has a "Project" abstraction with an
-explicit picker. After migration, projects ARE folders — there's
+explicit picker. After cutover, projects ARE folders — there's
 no separate concept. Users see their library as a tree of
 folders, with the default "Inbox" folder serving as the
 landing place for incoming captures (the equivalent of
 today's `id=1, name='Default'` project).
-
-A migration consideration: today's `id=1` Default project's
-images move to `Inbox/`; named projects migrate to
-`<project name>/` with name-collisions handled by the same
-uniquification rules `DeviceStore` already uses (` (2)`,
-` (3)` suffixes).
 
 ### Thumbnails
 
@@ -322,9 +323,10 @@ After: `ThumbnailManager` produces thumbnails lazily from the
 full image, caches them in `IndexedDBThumbnailCache` (the
 unified cache established by
 [`_done/unified-thumbnail-cache.md`](./_done/unified-thumbnail-cache.md)).
-The on-disk per-image thumbnail file is no longer written;
-the migrator deletes the orphaned `thumb_*.{png,jpg}` files
-from the legacy layout in Phase 5's cleanup.
+The on-disk per-image thumbnail file is no longer written.
+Orphaned `thumb_*.{png,jpg}` files in the legacy `data/`
+directory are not touched — the user manages that directory
+manually since no migrator runs.
 
 ## Phased plan
 
@@ -342,20 +344,16 @@ is the cutover. Phase 5 deletes the legacy code.
   (project picker, search, tag editor, delete confirmation,
   thumbnail layout, sort order, multi-select, drag-and-drop)
   and confirm parity in `<annot-file-manager-shell>` —
-  flagging gaps for follow-up before cutover.
-- Confirm the metadata-storage decision: per-file XMP (the
-  `DeviceStore` model). If that turns out to be unfit for any
-  category of files surfaced by the audit, alternatives are
-  sidecar `.annot.json` files or a per-folder `index.json`.
-- Confirm the `<userData>/library/` root choice and document
-  the migration mapping: `data/project_<id>/<file>` →
-  `library/<project name>/<file>`, `data/project_1/<file>` →
-  `library/Inbox/<file>`, name-collision rules.
-- Document SQL queries the legacy code performs so the
-  migrator's reconstructed `ImageRecord` is faithful (tags
-  array preserved, source_url preserved, notes preserved,
-  width/height preserved, source SVG preserved as a
-  pre-existing `*.svg` file → migrated as XMP).
+  flagging gaps for follow-up before cutover. The current
+  `<annot-file-manager-shell>` already covers most of these
+  for PWA / VSCode; the audit confirms desktop-specific
+  affordances (e.g. project picker → folder breadcrumb)
+  translate cleanly.
+- Confirm the resolved decisions (sequencing, per-file XMP
+  metadata, `<userData>/library/` root) match the user's
+  understanding before locking implementation in.
+- No data-migration design needed — confirmed there's no
+  legacy data to preserve.
 
 **Verify**: audit doc reviewed by user; gaps in
 `<annot-file-manager-shell>` either accepted or follow-up
@@ -427,36 +425,34 @@ overlay, drag-drop import) land as files in
 `<userData>/library/Inbox/` with correct XMP metadata. Tags
 applied via the unified gallery round-trip on next load.
 
-### Phase 4 — one-shot data migrator + flag flip to default
+### Phase 4 — flag flip to default + legacy-data documentation
 
-- New `desktop-data-migrator.ts` runs at first launch (and
-  is idempotent — checks a `migration-state.json` marker):
-  - Reads every row from the legacy SQLite `images` table.
-  - For each row:
-    - Resolves the source file (`row.path`).
-    - Computes the target folder (`Inbox/` for `project_id =
-      1`, `<project name>/` otherwise; uniquified on
-      collision).
-    - Reads the source SVG sidecar if `row.svg_path` is set,
-      embeds it + the row's tags / source_url / notes into
-      the file's XMP.
-    - Copies the file into `<userData>/library/<folder>/<filename>`
-      (preserving original names; uniquifies if needed).
-  - **Non-destructive**: leaves the original `data/`
-    directory in place. Writes `migration-state.json`
-    recording the mapping.
 - Default-flips the feature flag: new launches default to
-  `"fs"`. A "rollback to legacy gallery" toggle stays in
-  the desktop's settings UI for one release cycle.
+  `"fs"` (DesktopStore). A "rollback to legacy gallery"
+  toggle stays in the desktop's settings UI for one release
+  cycle as the rollback path.
 - Replace the bespoke gallery's launch sites with the
-  unified shell unconditionally; the bespoke files stay in
-  the tree but unreferenced.
+  unified shell unconditionally for the `"fs"` codepath; the
+  bespoke files stay in the tree (referenced only from the
+  rollback codepath) until Phase 5.
+- The new library at `<userData>/library/` is created empty
+  (`Inbox/` only) on first launch. **No auto-import** of the
+  legacy `data/project_<id>/` layout.
+- A one-time first-launch toast/dialog notes that the
+  legacy data is at `<portable_dir>/data/` (path shown
+  literally, with a "Reveal in Finder/Explorer" affordance
+  on supported platforms) so users who have meaningful
+  captures there can back them up or import them manually.
+  The toast does NOT delete the legacy directory — the user
+  owns that decision.
 
-**Verify**: a Tauri install with N projects and M images
-across them lands cleanly in the new layout; every image
-opens in the editor with the same annotations / tags /
-notes / source URL it had before. The legacy `data/` is
-preserved as a read-only fallback.
+**Verify**: with the flag at default, a clean upgrade from
+the SQLite-era build opens the desktop into an empty
+`Inbox/` library. The legacy-data toast surfaces once; the
+legacy `data/` directory is untouched. New captures from
+all six entry points land correctly in the new library.
+The rollback toggle, when flipped, shows the bespoke
+gallery against the unchanged legacy `data/`.
 
 ### Phase 5 — delete SQLite + bespoke gallery + IPC commands
 
@@ -474,9 +470,12 @@ preserved as a read-only fallback.
   exports from `tauri-bridge.ts` (and from the
   `desktop-bridge.ts` rename in the Electron-migration plan,
   if that's already merged).
-- Delete the migrator's "rollback to legacy" toggle.
-- Sweep `data/` for orphaned `thumb_*.{png,jpg}` files (the
-  migrator left them; they're unused now).
+- Delete the "rollback to legacy gallery" toggle from the
+  settings UI; the legacy gallery codepath is gone.
+- The legacy `data/` directory remains untouched. If the
+  user has not deleted it manually, the desktop simply
+  ignores its existence — Phase 4's one-time toast is the
+  only mention this plan ever surfaces.
 - Update CLAUDE.md monorepo-layout `desktop` row to drop the
   "SQLite-backed" framing.
 
@@ -495,15 +494,20 @@ Whole-plan acceptance criteria:
   `BrowserStore` / `DeviceStore` / `VSCodeStore` / `GitHubStore`
   (every `StorageProvider` method's documented behaviour
   exercised + every `Storage*Error` class properly thrown).
-- One-shot migrator preserves: file count, file bytes (no
-  re-encoding), tags array, source_url, notes, width/height,
-  source SVG annotations.
-- Round-trip on real user data: a Tauri-saved annotated PNG
-  opens in the unified editor with identical annotations
-  before and after migration.
 - The unified gallery (`<annot-file-manager-shell>`) operates
   identically on the desktop as on the PWA against
   `DeviceStore` (modulo the FSA-permission-grant prompt).
+- After Phase 4 cutover, a clean upgrade from the SQLite-era
+  build opens an empty `Inbox/` library at
+  `<userData>/library/`; the legacy `data/` directory is
+  untouched on disk; the one-time legacy-data toast surfaces
+  exactly once and the path it shows resolves on the
+  user's system.
+- New captures from all six entry points (extension HTTP
+  push, full-screen, window, region, area-overlay, drag-drop
+  import) round-trip via `DesktopStore.saveImage` →
+  per-file XMP → next-load-via-`getImage` with identical
+  tags / source URL / annotations.
 - `pnpm -r typecheck` / `pnpm test` / `pnpm lint` all green
   after each phase.
 - `pnpm --filter @ingcreators/annot-desktop build` produces
@@ -514,10 +518,14 @@ Whole-plan acceptance criteria:
 
 ## Migration notes
 
-- **User data**: Phase 4 migrator is non-destructive. Users
-  retain their `data/` directory until Phase 5; rollback via
-  the toggle is supported for one release cycle. Migrator
-  state is logged so re-running is idempotent.
+- **User data**: no auto-import. The legacy `data/` directory
+  remains in place; the user owns the back-up / delete
+  decision. Phase 4's one-time toast surfaces the path so
+  the user can locate it. Rollback via the "legacy gallery"
+  toggle is supported for one release cycle (Phase 5 deletes
+  it). Pre-release context: the install in active use today
+  has no production captures, so the cost of skipping the
+  migrator is zero in practice.
 - **`PageMetadata` schema**: untouched; this plan is
   storage-side only. CLAUDE.md guardrail #4 holds.
 - **`StorageProvider`**: `DesktopStore` is a new implementation
@@ -581,19 +589,12 @@ Whole-plan acceptance criteria:
   (`<exe-dir>/library/` fallback) is out of scope for v1
   but the directory-resolution logic is structured so that
   enabling it later is a single check.
-
-## Open questions for sign-off
-
-- **Project-name → folder-name mapping**: pending — depends on
-  whether the user's actual desktop install has any
-  non-`Default` projects. If only `Default` is in use,
-  Phase 4's migrator simplifies to "`data/project_1/*` →
-  `library/Inbox/*`, done; abandon the multi-project codepath
-  unless / until needed." If non-`Default` projects exist,
-  recommended treatment is **lossy sanitisation** of forbidden
-  filesystem characters (`<`, `>`, `:`, `"`, `/`, `\`, `|`,
-  `?`, `*`, control chars; reserved names like `CON` / `PRN`
-  on Windows) replaced with `_`, with the original-vs-mapped
-  table written to `migration-state.json` for diagnostics.
-  Collisions resolved via the same ` (2)` / ` (3)`
-  uniquification rules `DeviceStore` already uses.
+- **Data migration**: none — confirmed 2026-05-06. The
+  pre-release install has no production captures worth
+  preserving; spending budget on a migrator yields no user
+  value. The legacy `data/` directory is left untouched on
+  disk; Phase 4's one-time toast tells the user where it
+  lives so they can back up or delete manually. Project-name
+  → folder-name sanitisation is moot under this decision:
+  there are no project names to map, only an empty `Inbox/`
+  to create.

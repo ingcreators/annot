@@ -349,11 +349,21 @@ Node fs/promises  (Electron main)
 Files are byte-identical to what `DeviceStore` writes for the
 PWA's "Device" mode; per-file XMP carries tags / notes /
 source URL / annotations. No database, no schema migration
-between Tauri and Electron — the file tree copies as-is.
+between Tauri and Electron — the file tree carries forward
+as-is.
 
 `<userData>` resolves via `app.getPath('userData')` on the
-Electron side; the Phase 1 migrator copies the Tauri-era
-library tree on first launch.
+Electron side. Per the
+[storage-provider plan](./desktop-storage-provider-migration.md)'s
+"no data migration" decision, the Tauri-era library at
+`<portable_dir>/library/` is NOT auto-imported into the
+Electron-era library at `<userData>/library/` — the user is
+shown the legacy path via a one-time toast (mirroring the
+storage-provider plan's Phase 4 toast) and decides whether to
+copy / move / delete manually. Under the typical pre-release
+install (no production captures), the toast is informational
+only and the user simply proceeds with an empty Electron-era
+`Inbox/`.
 
 **Fallback note**: if for any reason the storage-provider
 migration is deferred and SQLite must be ported, the original
@@ -491,10 +501,12 @@ done first), this phase is small:
   re-exports are the smaller post-DesktopStore surface
   (XMP, screen capture, Office clipboard, tool presets, http
   server emit, window controls).
-- One-shot migration of the user's library directory: detect
-  the Tauri-era `<portable_dir>/data/library/` and copy it
-  to `<userData>/library/` if the Electron-side library
-  doesn't yet exist. Pure file-tree copy; no schema work.
+- No automatic library migration. On Electron first launch
+  the new library at `<userData>/library/` is created empty
+  (just `Inbox/`); a one-time toast surfaces the legacy
+  Tauri-era library path so the user can copy / move /
+  delete manually. Mirrors the storage-provider plan's
+  "no migrator" decision.
 
 **Fallback (if `DesktopStore` is not yet landed)**:
 extends to porting `db.rs` to `better-sqlite3`, implementing
@@ -710,16 +722,21 @@ Whole-plan acceptance criteria:
   both Tauri and Electron builds in Phase 3 produce visually
   matching PNGs (modulo unavoidable DPR differences flagged
   in the test).
-- Existing user data migration: a Tauri install's `data/`
-  directory copied into the Electron userData on first launch,
-  with the gallery showing the existing screenshots.
+- No-migration confirmation: a clean Electron first launch
+  opens an empty `<userData>/library/Inbox/`; the legacy
+  Tauri `<portable_dir>/library/` directory is untouched on
+  disk; the one-time legacy-data toast surfaces exactly
+  once with the path resolvable on the user's system.
 
 ## Migration notes
 
-- **User data**: Phase 1 ships a one-shot copy from the Tauri
-  install path into Electron's userData. Documented in the
-  Phase 5 release notes. Users who never ran Tauri get a
-  fresh-install path.
+- **User data**: no auto-import. Per the storage-provider
+  plan's "no migration" decision, Phase 1's Electron first
+  launch creates an empty `<userData>/library/` and surfaces
+  a one-time toast pointing to the legacy
+  `<portable_dir>/library/` path so the user can copy / move
+  / delete manually. The legacy directory is never touched
+  by the app.
 - **Bundle size**: ~10 MB → ~80–120 MB installer; ~80 MB →
   ~250–400 MB on disk; ~80 MB → ~150–250 MB resident memory
   at idle. Acceptable trade for cross-platform parity.
