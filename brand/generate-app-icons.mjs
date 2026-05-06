@@ -32,6 +32,20 @@ const targets = [
   ["annot-icon.svg",          "packages/web/public/icons/icon-512.png", 512],
   ["annot-icon-maskable.svg", "packages/web/public/icons/icon-512-maskable.png", 512],
 
+  // Electron desktop. `electron-builder` reads `build/icon.png`
+  // and auto-generates the per-OS variants from it:
+  //   • Linux: uses the PNG directly for the .desktop entry +
+  //     dock thumbnails. 512 px is the minimum modern Linux
+  //     desktops sample for high-DPI; 1024 gives headroom.
+  //   • macOS: derives the .icns icon set when `build/icon.icns`
+  //     is absent. Apple recommends the source be ≥ 1024 px so
+  //     the @2x Retina variants stay crisp.
+  //   • Windows: derives `icon.ico` (multi-resolution) when
+  //     `build/icon.ico` is absent.
+  // One 1024 × 1024 source therefore covers all three platforms
+  // without per-OS conversion steps.
+  ["annot-icon.svg", "packages/desktop/build/icon.png", 1024],
+
   // Not bundled — uploaded to Google Cloud Console / Marketplace.
   // Kept under brand/generated/ so we can regenerate from the SVG
   // source when the brand evolves.
