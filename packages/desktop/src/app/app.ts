@@ -380,6 +380,29 @@ async function tauriInvoke<T = any>(cmd: string, args?: any): Promise<T> {
 
 type CaptureModeType = "fullscreen" | "window" | "rect";
 
+/**
+ * Persist a freshly-captured data URL through the active storage
+ * backend. Phase 3 of `desktop-storage-provider-migration.md`:
+ * when the FS-mode flag is on, route through `DesktopStore` so
+ * captures land in `<userData>/library/` and show up in the
+ * unified gallery; otherwise legacy SQLite path keeps writing to
+ * `<portable_dir>/data/project_<id>/`.
+ *
+ * The capture-pipeline-side logic (overlay invocation, cropping,
+ * minimize/restore choreography) lives one level up in
+ * `doCapture`; this helper is purely the persist + open-editor
+ * step the two flag branches diverge on.
+ */
+async function persistCaptureResult(dataUrl: string, w: number, h: number): Promise<void> {
+  if (getDesktopStorageMode() === "fs") {
+    await persistViaDesktopStore({ dataUrl, width: w, height: h });
+    return;
+  }
+  const saved = await saveScreenshot(dataUrl, activeProjectId());
+  openEditor(dataUrl, w, h, saved.id);
+  gallery?.refresh();
+}
+
 async function doCapture(mode: CaptureModeType): Promise<void> {
   try {
     if (mode === "fullscreen") {
@@ -390,9 +413,7 @@ async function doCapture(mode: CaptureModeType): Promise<void> {
         "capture_screen",
       );
       await tauriInvoke("restore_main_window");
-      const saved = await saveScreenshot(result.data_url, activeProjectId());
-      openEditor(result.data_url, result.width, result.height, saved.id);
-      gallery?.refresh();
+      await persistCaptureResult(result.data_url, result.width, result.height);
       return;
     }
 
@@ -409,9 +430,7 @@ async function doCapture(mode: CaptureModeType): Promise<void> {
     // Crop from the ORIGINAL screenshot (taken before overlay was shown)
     const { region, screenshot_data_url } = overlayResult;
     const cropped = await cropImage(screenshot_data_url, region.x, region.y, region.w, region.h);
-    const saved = await saveScreenshot(cropped, activeProjectId());
-    openEditor(cropped, region.w, region.h, saved.id);
-    gallery?.refresh();
+    await persistCaptureResult(cropped, region.w, region.h);
   } catch (err) {
     try {
       await tauriInvoke("restore_main_window");
@@ -465,18 +484,20 @@ async function initFsMode(): Promise<void> {
       openEditor(full.originalDataUrl, img.naturalWidth, img.naturalHeight);
     },
     onCaptureScreen: async () => {
-      // Phase 2 stop-gap: the legacy `doCapture` path lands the
-      // file in `<portable_dir>/data/`, not `<userData>/library/`,
-      // so the unified gallery doesn't see it. QA flipping the
-      // flag should use Upload / Paste for end-to-end verification
-      // until Phase 3 reroutes capture through `DesktopStore`.
+      // Phase 3: `doCapture` checks the storage flag and persists
+      // through `DesktopStore` when FS-mode is active, so the
+      // captured file lands in `<userData>/library/` and shows up
+      // in the unified gallery on the post-save refresh.
       await doCapture("fullscreen");
     },
     onTimedCapture: async () => {
-      // Timed capture isn't implemented in the legacy desktop
-      // host; Phase 3 introduces it natively against
-      // `DesktopStore`. Stub for now so the menu item doesn't
-      // crash if surfaced by `isScreenCaptureSupported()`.
+      // Timed capture (delayed Capture Screen) isn't implemented
+      // on the desktop host yet — the legacy code never had it.
+      // The unified sidebar's "Timed Capture" item surfaces only
+      // when `isScreenCaptureSupported()` returns true (the
+      // browser API is technically present in the Tauri webview),
+      // so we stub it instead of letting the click fall through
+      // and emit an undefined-callback warning.
     },
     onPasteClipboard: async () => {
       try {
@@ -487,7 +508,11 @@ async function initFsMode(): Promise<void> {
             const blob = await item.getType(type);
             const dataUrl = await blobToDataUrl(blob);
             const img = await loadImage(dataUrl);
-            await persistViaDesktopStore(dataUrl, img.naturalWidth, img.naturalHeight);
+            await persistViaDesktopStore({
+              dataUrl,
+              width: img.naturalWidth,
+              height: img.naturalHeight,
+            });
             return;
           }
         }
@@ -504,7 +529,12 @@ async function initFsMode(): Promise<void> {
         if (!file) return;
         const dataUrl = await blobToDataUrl(file);
         const img = await loadImage(dataUrl);
-        await persistViaDesktopStore(dataUrl, img.naturalWidth, img.naturalHeight, file.name);
+        await persistViaDesktopStore({
+          dataUrl,
+          width: img.naturalWidth,
+          height: img.naturalHeight,
+          filename: file.name,
+        });
       };
       input.click();
     },
@@ -512,8 +542,9 @@ async function initFsMode(): Promise<void> {
 
   // Wire the back button + the Window/Region capture row that
   // sits OUTSIDE the unified gallery (per Phase 0 audit
-  // recommendation #1). Capture results still go through the
-  // legacy SQLite path until Phase 3 reroutes them.
+  // recommendation #1). `doCapture` is now flag-aware (Phase 3),
+  // so these buttons persist through `DesktopStore` when the
+  // FS-mode flag is on.
   document.getElementById("btn-back")!.addEventListener("click", () => {
     showView("gallery");
     fsGallery?.showGallery();
@@ -536,39 +567,96 @@ async function initFsMode(): Promise<void> {
         void doCapture("rect");
       }
     });
+
+    // Phase 3: dispatch the extension-capture HTTP push + Native
+    // Messaging handoff sweep. `processIncoming` checks the flag
+    // at every call and routes through `DesktopStore` when FS-mode
+    // is on, so it's safe to start the listener here.
+    void startIncomingListener();
   }
+
+  // Document-level paste listener for FS-mode. The legacy
+  // `init()` registers an equivalent that gates on
+  // `#gallery-view` visibility — that DOM is permanently hidden
+  // when FS-mode is on, so the listener never fires from there.
+  // Mirror the behaviour against the editor view's hidden state.
+  document.addEventListener("paste", async (e) => {
+    if (document.getElementById("editor-view")!.style.display !== "none") return;
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of Array.from(items)) {
+      if (!item.type.startsWith("image/")) continue;
+      const blob = item.getAsFile();
+      if (!blob) continue;
+      const dataUrl = await blobToDataUrl(blob);
+      const img = await loadImage(dataUrl);
+      await persistViaDesktopStore({
+        dataUrl,
+        width: img.naturalWidth,
+        height: img.naturalHeight,
+      });
+      return;
+    }
+  });
 }
 
-/** Persist a captured / uploaded data URL via `DesktopStore` and
- *  open it in the editor. Used by FS-mode upload + paste paths
- *  (Phase 2). Phase 3 wires capture screen / window / region /
- *  extension-handoff through this same helper. */
-async function persistViaDesktopStore(
-  dataUrl: string,
-  w: number,
-  h: number,
-  filename?: string,
-): Promise<void> {
-  if (!fsGallery) return;
+interface PersistOpts {
+  dataUrl: string;
+  width: number;
+  height: number;
+  /** Filename to suggest. Without one, `DesktopStore` picks
+   *  `annot-<ts>.annot.{png,jpg}` per the shared filename utility. */
+  filename?: string;
+  /** Source URL — propagated to `ImageRecord.sourceUrl` so the
+   *  Elements panel + external-links plugin can resolve back to the
+   *  page that was captured. Empty when the capture has no source
+   *  (in-app screenshot, paste, drag-drop import). */
+  sourceUrl?: string;
+  /** Destination folder. Defaults to the file manager's current
+   *  folder, falling back to `Inbox/` when navigating at the root.
+   *  Phase 3 incoming-sweep callers force this to `"Inbox"` so
+   *  asynchronous extension captures don't land in whichever folder
+   *  the user was browsing at the time. */
+  folderPath?: string;
+  /** Open the saved image in the editor on success. Default true.
+   *  Phase 3 batch incoming sweeps set this to false for files
+   *  2..N so a single capture batch doesn't fire-hose the editor. */
+  openInEditor?: boolean;
+}
+
+/** Persist a captured / uploaded / imported data URL via
+ *  `DesktopStore` and (optionally) open it in the editor.
+ *
+ *  Used by every FS-mode entry point that produces image bytes:
+ *  capture (full-screen / window / region) — Phase 3, paste — Phase
+ *  2, upload — Phase 2, extension HTTP / Native Messaging handoff
+ *  — Phase 3. Returns the persisted path so callers can choose
+ *  whether to refresh / open / batch-continue. */
+async function persistViaDesktopStore(opts: PersistOpts): Promise<string | null> {
+  if (!fsGallery) return null;
   const now = new Date().toISOString();
-  const folderPath = fsGallery.fileManager.currentFolderPath || "Inbox";
-  await fsGallery.store.saveImage(
+  const folderPath =
+    opts.folderPath ?? (fsGallery.fileManager.currentFolderPath || "Inbox");
+  const path = await fsGallery.store.saveImage(
     {
       folderPath,
-      originalDataUrl: dataUrl,
+      originalDataUrl: opts.dataUrl,
       thumbnailDataUrl: "",
       annotationsSvg: "",
-      width: w,
-      height: h,
-      sourceUrl: "",
+      width: opts.width,
+      height: opts.height,
+      sourceUrl: opts.sourceUrl ?? "",
       tags: {},
       createdAt: now,
       updatedAt: now,
     },
-    filename ? { filename } : undefined,
+    opts.filename ? { filename: opts.filename } : undefined,
   );
   await fsGallery.refresh();
-  openEditor(dataUrl, w, h);
+  if (opts.openInEditor !== false) {
+    openEditor(opts.dataUrl, opts.width, opts.height);
+  }
+  return path;
 }
 
 function init(): void {
@@ -676,6 +764,10 @@ async function startIncomingListener(): Promise<void> {
 }
 
 async function processIncoming(baseDir: string): Promise<void> {
+  if (getDesktopStorageMode() === "fs") {
+    await processIncomingFs();
+    return;
+  }
   try {
     const results: any[] = await tauriInvoke("check_incoming", { baseDir });
     if (results.length > 0) {
@@ -686,6 +778,146 @@ async function processIncoming(baseDir: string): Promise<void> {
       openEditor(dataUrl, img.naturalWidth, img.naturalHeight, first.id);
     }
   } catch {}
+}
+
+/** Shape of `<portable_dir>/data/incoming/<name>.json` written by
+ *  `packages/desktop/src-tauri/src/http_server.rs:save_incoming`.
+ *  The image file lives at `path` (absolute). */
+interface IncomingMeta {
+  filename: string;
+  path: string;
+  source_url: string;
+  width: number;
+  height: number;
+}
+
+/**
+ * FS-mode equivalent of `check_incoming`: scan
+ * `<portable_dir>/data/incoming/` from the JS side via
+ * `@tauri-apps/plugin-fs`, save each image through `DesktopStore`
+ * (lands in `Inbox/`), delete the source .json + image. The first
+ * file in the batch opens in the editor (matching the legacy
+ * single-image flow); subsequent files in the same batch persist
+ * silently.
+ *
+ * Phase 3 of `desktop-storage-provider-migration.md`. The Rust
+ * `check_incoming` IPC stays in place for the SQLite default; this
+ * branch runs only when the FS-mode flag is on.
+ */
+async function processIncomingFs(): Promise<void> {
+  if (!fsGallery) return;
+  let incomingDir: string;
+  try {
+    const portableDir = await tauriInvoke<string>("get_portable_dir");
+    incomingDir = `${portableDir}/data/incoming`;
+  } catch {
+    return;
+  }
+
+  const fs = await import("@tauri-apps/plugin-fs");
+
+  let entries: { name: string; isFile: boolean }[];
+  try {
+    const dirEntries = await fs.readDir(incomingDir);
+    entries = dirEntries.map((e) => ({ name: e.name, isFile: e.isFile }));
+  } catch {
+    // Directory doesn't exist yet — nothing to sweep.
+    return;
+  }
+
+  // Match the Rust `check_incoming` logic: drive the loop off the
+  // .json metadata files, with the image file at `meta.path`. The
+  // JSON-driven approach also catches orphan .json files (writes
+  // that completed the metadata but lost the image) and prunes
+  // them.
+  const metaFiles = entries
+    .filter((e) => e.isFile && e.name.toLowerCase().endsWith(".json"))
+    .map((e) => `${incomingDir}/${e.name}`);
+
+  let firstSavedDataUrl: string | null = null;
+  let firstSavedDims: { w: number; h: number } | null = null;
+
+  for (let i = 0; i < metaFiles.length; i++) {
+    const metaPath = metaFiles[i]!;
+    try {
+      const text = await fs.readTextFile(metaPath);
+      const meta = JSON.parse(text) as Partial<IncomingMeta>;
+      const imagePath = meta.path;
+      if (!imagePath) {
+        await fs.remove(metaPath).catch(() => {});
+        continue;
+      }
+      // Read source image as bytes → base64 data URL. Rust always
+      // writes JPEG (per `http_server.rs:save_incoming`) so the
+      // MIME prefix is hard-coded.
+      let bytes: Uint8Array;
+      try {
+        bytes = (await fs.readFile(imagePath)) as Uint8Array;
+      } catch {
+        // Orphan metadata — image vanished. Clean up and skip.
+        await fs.remove(metaPath).catch(() => {});
+        continue;
+      }
+      const base64 = bytesToBase64(bytes);
+      const dataUrl = `data:image/jpeg;base64,${base64}`;
+
+      // Resolve dimensions: use the metadata when present, fall
+      // back to decoding the image (rare — Rust populates them).
+      let w = meta.width ?? 0;
+      let h = meta.height ?? 0;
+      if (!w || !h) {
+        const img = await loadImage(dataUrl);
+        w = img.naturalWidth;
+        h = img.naturalHeight;
+      }
+
+      await persistViaDesktopStore({
+        dataUrl,
+        width: w,
+        height: h,
+        sourceUrl: meta.source_url ?? "",
+        folderPath: "Inbox",
+        // Open only the first file — matches the legacy flow's
+        // "newest capture takes focus" behavior. Files 2..N in
+        // the same batch land in the gallery silently.
+        openInEditor: i === 0,
+      });
+
+      if (i === 0) {
+        firstSavedDataUrl = dataUrl;
+        firstSavedDims = { w, h };
+      }
+
+      // Best-effort cleanup of the source files. Failures here
+      // don't block the save; the next sweep will see them again
+      // and retry.
+      await fs.remove(imagePath).catch(() => {});
+      await fs.remove(metaPath).catch(() => {});
+    } catch (e) {
+      console.error("[fs-mode] processIncoming entry failed:", e);
+    }
+  }
+
+  // The persistViaDesktopStore call already opened the editor for
+  // the first file via its `openInEditor: true` branch — the locals
+  // above remain for future use (e.g. a notification toast saying
+  // "Captured page X loaded"). Suppress unused-var noise.
+  void firstSavedDataUrl;
+  void firstSavedDims;
+}
+
+/** Convert raw bytes to a base64 string. Used when building data
+ *  URLs from filesystem-read bytes (incoming sweep, etc.). Avoids
+ *  the `String.fromCharCode(...arr)` arg-spread limit by chunking
+ *  the input — multi-megapixel JPEGs blow past 100k bytes easily. */
+function bytesToBase64(bytes: Uint8Array): string {
+  const chunkSize = 0x8000;
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, i + chunkSize);
+    binary += String.fromCharCode.apply(null, Array.from(chunk));
+  }
+  return btoa(binary);
 }
 
 init();
