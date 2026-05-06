@@ -22,6 +22,11 @@
 import type { IpcMain } from "electron";
 import { APP_CHANNEL_TO_HANDLER, createAppHandlers } from "./app.js";
 import {
+  BROWSE_CHANNEL_TO_HANDLER,
+  type BrowseDeps,
+  createBrowseHandlers,
+} from "./browse.js";
+import {
   CLIPBOARD_CHANNEL_TO_HANDLER,
   type ClipboardDeps,
   createClipboardHandlers,
@@ -60,6 +65,10 @@ export interface RegisterAllOptions {
   /** Office-clipboard dependencies — Win32 clipboard.writeBuffer
    *  adapter, PNG→JPEG converter, and a platform-support gate. */
   clipboard: ClipboardDeps;
+  /** Browse-window dependencies — BrowserWindow factory,
+   *  webContents.capturePage adapter, library root for capture
+   *  persistence. */
+  browse: BrowseDeps;
   /** Resolves the current main window for the minimize / restore
    *  IPC handlers. May return `undefined` during shutdown — the
    *  handlers no-op in that case to mirror the Rust impl's
@@ -91,6 +100,7 @@ export function registerAllIpcHandlers(
   const screenCapture = createScreenCaptureHandlers(opts.screenCapture);
   registerSet(ipcMain, screenCapture, SCREEN_CAPTURE_CHANNEL_TO_HANDLER);
   registerSet(ipcMain, createClipboardHandlers(opts.clipboard), CLIPBOARD_CHANNEL_TO_HANDLER);
+  registerSet(ipcMain, createBrowseHandlers(opts.browse), BROWSE_CHANNEL_TO_HANDLER);
   return { screenCapture };
 }
 

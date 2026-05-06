@@ -64,6 +64,7 @@ export default defineConfig({
         input: {
           main: resolve(__dirname, "index.html"),
           "capture-overlay": resolve(__dirname, "capture-overlay.html"),
+          browse: resolve(__dirname, "browse.html"),
         },
       },
     },
