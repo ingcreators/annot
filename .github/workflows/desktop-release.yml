@@ -1,0 +1,210 @@
+name: Desktop Release
+
+# Builds platform installers for `@ingcreators/annot-desktop` via
+# `electron-builder` on a Win / macOS / Linux matrix and uploads
+# them to a GitHub Release.
+#
+# The macOS leg signs + notarizes when the `APPLE_*` + `CSC_*`
+# secrets are present; absent secrets degrade gracefully to an
+# unsigned `.dmg` so the workflow file itself stays runnable in
+# forks. Linux is unsigned by default — AppImage / deb / rpm
+# don't require code signing for end-user install.
+#
+# Triggers:
+#   - push of a `release/desktop-*` tag (the standard release path)
+#   - `workflow_dispatch` (manual run for ad-hoc release-candidate
+#     builds, e.g. notarization smoke tests)
+#
+# History: queued behind Phase 9 of
+# `docs/plans/_done/desktop-electron-migration.md` ("CI release
+# pipeline" follow-up). The macOS notarization recipe in
+# `packages/desktop/docs/notarization.md` is the manual
+# counterpart this workflow automates.
+
+on:
+  push:
+    tags:
+      - "release/desktop-*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to build (e.g. release/desktop-v0.2.0). Required for workflow_dispatch."
+        required: true
+        type: string
+
+concurrency:
+  # One release build per tag; cancel any in-flight earlier run if
+  # the tag is re-pushed (rare but useful when iterating on the
+  # workflow itself).
+  group: desktop-release-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  build:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      # Don't cancel sibling matrix legs when one fails — a Linux
+      # build failure shouldn't lose the parallel macOS notarized
+      # output, especially since notarization can take 5–30 min.
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact-glob: |
+              packages/desktop/dist-electron/*.AppImage
+              packages/desktop/dist-electron/*.deb
+              packages/desktop/dist-electron/*.rpm
+          - os: macos-latest
+            artifact-glob: |
+              packages/desktop/dist-electron/*.dmg
+              packages/desktop/dist-electron/*.zip
+          - os: windows-latest
+            artifact-glob: |
+              packages/desktop/dist-electron/*.exe
+              packages/desktop/dist-electron/*.msi
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Linux deb/rpm packaging needs `fakeroot` + `rpm`. Both ship
+      # in the Ubuntu archive but aren't preinstalled on
+      # `ubuntu-latest` runners.
+      - name: Install Linux packaging tools
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fakeroot rpm
+
+      # The renderer + main + preload bundles are built first
+      # (pure JS, runs on any OS). `electron-builder` then
+      # consumes `dist-electron/` and packages it for the matrix
+      # OS.
+      - name: Build renderer + main + preload (electron-vite)
+        run: pnpm --filter @ingcreators/annot-desktop build
+
+      # ---- macOS: signing + notarization ----
+      #
+      # `electron-builder` reads the standard env-var triplet for
+      # Developer-ID signing + notary submission:
+      #   • CSC_LINK + CSC_KEY_PASSWORD: base64-encoded .p12
+      #     Developer ID Application certificate + its passphrase.
+      #     See `packages/desktop/docs/notarization.md` for the
+      #     one-time export/encode recipe.
+      #   • APPLE_ID + APPLE_APP_SPECIFIC_PASSWORD + APPLE_TEAM_ID:
+      #     notary-service auth (app-specific password path).
+      #     The API-key path uses APPLE_API_KEY / _ID / _ISSUER
+      #     instead — `electron-builder` auto-detects which is set.
+      #
+      # The `-c.mac.notarize` override flips the package.json
+      # default of `notarize: false` ON only when `APPLE_TEAM_ID`
+      # is non-empty. Forks without secrets get a signed-or-unsigned
+      # build with no notary call (= no Apple-side wall-time + no
+      # secret-leak risk).
+      - name: Package + sign + notarize (macOS)
+        if: matrix.os == 'macos-latest'
+        env:
+          CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -n "$APPLE_TEAM_ID" ]; then
+            echo "[release] notarization enabled (APPLE_TEAM_ID set)"
+            pnpm --filter @ingcreators/annot-desktop exec electron-builder \
+              --mac \
+              -c.mac.notarize.teamId="$APPLE_TEAM_ID"
+          else
+            echo "[release] APPLE_TEAM_ID unset — building unsigned dmg/zip"
+            pnpm --filter @ingcreators/annot-desktop exec electron-builder --mac
+          fi
+
+      # ---- Linux: AppImage + deb + rpm ----
+      #
+      # Linux builds don't need code signing for end-user install
+      # (the AppImage runs as a regular file; `apt`/`dnf` install
+      # the deb/rpm with sudo). The `electron-builder` config in
+      # `packages/desktop/package.json` already declares the three
+      # targets + the runtime-library dependency lists; this just
+      # invokes it.
+      - name: Package (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: pnpm --filter @ingcreators/annot-desktop exec electron-builder --linux
+
+      # ---- Windows: NSIS installer + zip ----
+      #
+      # Windows code signing via `WIN_CSC_LINK` (base64-encoded
+      # .pfx) + `WIN_CSC_KEY_PASSWORD`. Same gracefully-degrades
+      # contract as macOS — secrets absent → unsigned installer
+      # (Windows shows a SmartScreen warning on first install,
+      # which is the same UX the legacy Tauri-era unsigned build
+      # had).
+      - name: Package + sign (Windows)
+        if: matrix.os == 'windows-latest'
+        env:
+          CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+        run: pnpm --filter @ingcreators/annot-desktop exec electron-builder --win
+
+      # Per-OS artifact upload. The artifact name carries the OS
+      # so the Release-publish step downstream can grep them
+      # apart. `if-no-files-found: error` catches a silent
+      # electron-builder failure where the build "succeeds" but
+      # emits no installer (typically a code-signing skip that
+      # invalidated the output without erroring).
+      - name: Upload installers
+        uses: actions/upload-artifact@v7
+        with:
+          name: desktop-${{ matrix.os }}
+          path: ${{ matrix.artifact-glob }}
+          if-no-files-found: error
+          retention-days: 14
+
+  # Aggregate the per-OS installers + attach to a GitHub Release.
+  # Only fires on tag pushes (workflow_dispatch runs are RC builds
+  # the maintainer downloads from artifact storage manually).
+  publish:
+    name: publish github release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/release/desktop-')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # `softprops/action-gh-release` needs this
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Download all installer artifacts
+        uses: actions/download-artifact@v7
+        with:
+          path: artifacts
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          # The `release/desktop-vX.Y.Z` tag drives the release
+          # title + tag-name in the GitHub UI. Body left blank
+          # for the maintainer to fill in (manual changelog
+          # curation is the right call until the desktop build
+          # has its own release-notes generator).
+          name: ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          draft: true
+          prerelease: false
+          files: artifacts/**/*

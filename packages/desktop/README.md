@@ -64,12 +64,25 @@ output) packages installers — see Distribution below.
 
 ## Distribution
 
+[`.github/workflows/desktop-release.yml`](../../.github/workflows/desktop-release.yml)
+runs a Win / macOS / Linux matrix build on every
+`release/desktop-*` tag push (and on manual
+`workflow_dispatch`), uploads the per-OS installers as
+artifacts, and on tag pushes attaches them to a draft GitHub
+Release. macOS notarization + Windows code-signing happen
+automatically when the matching repo secrets are configured;
+absent secrets degrade gracefully to unsigned outputs so forks
+can still iterate on the workflow.
+
+Per-OS detail:
+
 - **Windows**: `electron-builder` produces NSIS installer + zip.
-  Code signing via the existing certificate setup.
+  Code signing via `WIN_CSC_LINK` + `WIN_CSC_KEY_PASSWORD`
+  secrets when present.
 - **macOS**: see [`docs/notarization.md`](./docs/notarization.md)
-  for the manual signing + notarization recipe (Apple Developer
-  ID setup, env vars, build steps, troubleshooting).
-  Hardened-runtime entitlements live at
+  for the signing + notarization recipe (Apple Developer ID
+  setup, required CI secrets, manual + automated build steps,
+  troubleshooting). Hardened-runtime entitlements live at
   [`build/entitlements.mac.plist`](./build/entitlements.mac.plist)
   with each key justified inline.
 - **Linux**: see [`docs/linux-packaging.md`](./docs/linux-packaging.md)

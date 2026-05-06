@@ -192,11 +192,61 @@ xcrun stapler staple packages/desktop/dist-electron/mac/Annot.app
 | `Annot quit unexpectedly` on first launch on a fresh Mac                                       | Hardened-runtime entitlement missing. Symbolicate the crash report from `~/Library/Logs/DiagnosticReports/`; look for `EXC_BAD_ACCESS` and "JIT" or "library validation" errors and add the matching entitlement to `entitlements.mac.plist`. |
 | `notarization started` then hangs > 15 min                                                    | Apple's notary service is intermittently slow. Up to 24 hours is normal during peak times. Don't kill the build — the notary call resumes if your shell stays open.                           |
 
+## CI automation
+
+The
+[`desktop-release.yml`](../../../.github/workflows/desktop-release.yml)
+GitHub Actions workflow runs the same recipe on every
+`release/desktop-*` tag push (and on manual
+`workflow_dispatch`). The macOS leg auto-detects whether
+notarization secrets are configured and degrades gracefully to
+unsigned `.dmg` + `.zip` outputs when they aren't.
+
+### Required secrets
+
+Add the following at **Settings → Secrets and variables →
+Actions** on the `ingcreators/annot` repository (only the
+maintainer with admin access can do this; once added, the
+secrets are write-only — the value never reappears in the UI):
+
+| Secret name                     | Value                                                                                                                                              |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `MAC_CSC_LINK`                  | Base64-encoded Developer ID Application `.p12` certificate. Export from Keychain → drop into `base64 -i cert.p12 -o cert.p12.b64`; paste contents. |
+| `MAC_CSC_KEY_PASSWORD`          | Passphrase for the `.p12`.                                                                                                                          |
+| `APPLE_ID`                      | Apple Developer email (the account that owns the certificate).                                                                                     |
+| `APPLE_APP_SPECIFIC_PASSWORD`   | App-specific password from [appleid.apple.com](https://appleid.apple.com/) → "App-Specific Passwords".                                              |
+| `APPLE_TEAM_ID`                 | 10-char Team ID — the parenthetical in `Developer ID Application: Name (TEAMID)`.                                                                   |
+
+**`APPLE_TEAM_ID` is the gate**. If it's empty (e.g. on a fork
+without secrets), the workflow's macOS leg builds an unsigned
+bundle and skips the notary call entirely. This keeps the
+workflow file itself runnable without leaking signing
+credentials to fork PRs.
+
+For Windows code signing, the matrix's Windows leg consumes
+`WIN_CSC_LINK` (base64-encoded `.pfx`) +
+`WIN_CSC_KEY_PASSWORD`. Same gracefully-degrades contract.
+
+### Triggering a release
+
+```bash
+# 1. Bump the version in packages/desktop/package.json + commit.
+# 2. Tag.
+git tag release/desktop-v0.2.0
+git push origin release/desktop-v0.2.0
+```
+
+The workflow runs the matrix build + uploads installers as
+draft GitHub Release assets. The maintainer reviews the draft,
+adds the changelog body, and publishes.
+
+For ad-hoc release-candidate builds (e.g. notarization smoke
+tests), use the workflow's `workflow_dispatch` trigger from the
+GitHub Actions UI; the artifacts go to the run's artifact
+storage instead of a release.
+
 ## Out of scope
 
-- **CI automation**. Adding `APPLE_*` env vars to GitHub
-  Actions secrets needs the org's security review. Tracked as
-  a separate plan.
 - **Apple Silicon-specific arch builds**. The default
   `electron-builder` config emits universal binaries when both
   Intel and ARM are required — see
