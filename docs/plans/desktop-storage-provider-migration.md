@@ -30,10 +30,15 @@
 >
 > The desktop renderer's bespoke gallery UI
 > (`gallery.ts` + `project-manager.ts`) is replaced by mounting the
-> unified `<annot-file-manager-shell>` from
-> `@ingcreators/annot-editor-shell` — the same gallery surface the
-> PWA, VSCode host, and (eventually) the Tauri/Electron desktop all
-> share once this plan lands.
+> unified `<annot-file-manager-shell>` + `FileManager` orchestrator
+> from `@ingcreators/annot-web/gallery/...` — the same gallery
+> surface the PWA already uses, with the Tauri/Electron desktop
+> joining the PWA as a second consumer once this plan lands. The
+> long-term convergence goal (gallery surface lives in
+> `@ingcreators/annot-editor-shell` so VSCode and future hosts
+> share it too) is a separate follow-up plan, not a prerequisite
+> here — see Phase 0 audit's gap #2 and the forward-looking note
+> in `Migration notes` below.
 >
 > **Risk:** Largest UX-visible change to `packages/desktop` since its
 > inception. Two categories of risk (data-migration risk is
@@ -271,10 +276,31 @@ bespoke implementation:
 - `packages/desktop/src/app/project-manager.ts` (99 LOC) →
   deleted.
 - `packages/desktop/src/app/app.ts` swaps the imports and
-  mounts `<annot-file-manager-shell>` (Lit component from
-  `@ingcreators/annot-editor-shell`), passing it the
+  mounts the unified `FileManager` orchestrator + the Lit
+  `<annot-file-manager-shell>` from
+  `@ingcreators/annot-web/gallery/file-manager` (and its
+  re-exported deep imports for `<annot-file-manager-shell>` /
+  `<annot-sidebar>` / `<annot-gallery-page>`), passing the
   `DesktopStore` instance produced by the new
-  `packages/desktop/src/storage/bootstrap.ts`.
+  `packages/desktop/src/storage/bootstrap.ts`. The desktop
+  becomes the second consumer of `@ingcreators/annot-web`'s
+  gallery surface (the PWA being the first) — that workspace
+  dependency is already declared in
+  [`packages/desktop/package.json:23`](../../packages/desktop/package.json:23),
+  so no new package edge is added.
+- The desktop-only "Capture Window" / "Capture Region" buttons
+  stay in the desktop's `index.html` action row (outside the
+  unified gallery's "New" menu) for the first cycle. Capture
+  Screen / Timed Capture / Paste from Clipboard / Open Image
+  flow through the unified sidebar's "New" menu. A follow-up
+  can introduce a `getNewMenuExtras?` host hook on
+  `<annot-sidebar>` to fold Window / Region into the unified
+  surface — out of scope for this plan.
+- The desktop's bootstrap passes
+  `disableBuiltinStorage: ["browser", "device", "googledrive",
+  "github", "extension"]` so only the new `desktop` chip
+  renders in the sidebar's storage strip — matching the
+  "single-storage host" UX VSCode already uses.
 - The path-based URL routes (`/edit/desktop/...`) are
   registered in the storage `bridge.ts` with the same shape
   PWA / Device / GitHub already use.
@@ -388,14 +414,28 @@ unit-test only — no UI integration yet.
   `packages/web/src/storage/bridge.ts` style — adding a
   `desktop` storage mode (analogous to `device` / `browser`
   / `github` / `drive`).
+- Add a `desktop` chip entry to
+  [`BUILTIN_CHIP_DESCRIPTORS`](../../packages/web/src/gallery/sidebar.ts:85)
+  with an appropriate icon (`desktop_windows` or similar from
+  the Material Symbols set) and label.
 - Wire bootstrap in `packages/desktop/src/storage/bootstrap.ts`
   that constructs the store from `<userData>/library/` and
-  registers it with `bridge.ts`.
+  registers it with `bridge.ts`. The bootstrap also passes
+  `disableBuiltinStorage: ["browser", "device", "googledrive",
+  "github", "extension"]` to whichever host hook the desktop's
+  `App.init` analogue exposes, leaving only the `desktop` chip
+  visible in the sidebar.
 - Add a feature flag (`localStorage.annotDesktopStorageMode`
   = `"sqlite" | "fs"`, default `"sqlite"`) that the desktop's
   `app.ts` consults at startup. When `"fs"`, the renderer
-  mounts `<annot-file-manager-shell>` against `DesktopStore`
-  instead of the bespoke gallery.
+  mounts the unified `FileManager` (which in turn mounts
+  `<annot-file-manager-shell>` + `<annot-sidebar>` +
+  `<annot-gallery-page>`) against `DesktopStore` instead of
+  the bespoke gallery. The desktop's `index.html` gains the
+  sidebar / main-content container DOM the `FileManager`
+  expects (mirroring the PWA's
+  [`#editor-sidebar` + `#file-manager`](../../packages/web/src/app.ts:491)
+  pair).
 - The bespoke gallery + project manager remain in place;
   toggling the flag is a developer affordance for QA.
 
@@ -440,11 +480,23 @@ applied via the unified gallery round-trip on next load.
   legacy `data/project_<id>/` layout.
 - A one-time first-launch toast/dialog notes that the
   legacy data is at `<portable_dir>/data/` (path shown
-  literally, with a "Reveal in Finder/Explorer" affordance
-  on supported platforms) so users who have meaningful
-  captures there can back them up or import them manually.
-  The toast does NOT delete the legacy directory — the user
-  owns that decision.
+  literally — for the Tauri build cycle this resolves via
+  [`portable_dir()` in `lib.rs:14`](../../packages/desktop/src-tauri/src/lib.rs:14),
+  i.e. `current_exe().parent()`; for the post-Electron build
+  cycle the equivalent path is whatever
+  [`desktop-electron-migration.md`](./desktop-electron-migration.md)
+  Phase 1 settles on for the Electron build's install-dir
+  resolution) with a "Reveal in Finder/Explorer" affordance
+  via [`@tauri-apps/plugin-shell`'s `revealItemInDir`](https://v2.tauri.app/plugin/shell/)
+  on the Tauri cycle, so users who have meaningful captures
+  there can back them up or import them manually. The toast
+  does NOT delete the legacy directory — the user owns that
+  decision.
+- Toast wording (proposed, finalise during implementation):
+  "Your previous Annot library lives at `<portable_dir>/data/`.
+  This update moved the active library to a new location at
+  `<userData>/library/`. The old data is unchanged on disk —
+  back it up or remove it at your convenience."
 
 **Verify**: with the flag at default, a clean upgrade from
 the SQLite-era build opens the desktop into an empty
@@ -464,6 +516,10 @@ gallery against the unchanged legacy `data/`.
   Tauri IPC commands are removed; the renderer no longer
   calls them.
 - Delete `db.rs`, `Database`, `rusqlite` from `Cargo.toml`.
+  The `images.notes` column drops along with the table — no
+  migration code needed because no UI ever populated the
+  field (Phase 0 audit § "`notes` field — present in the
+  schema, not exposed in the UI" confirmed this).
 - Remove the `listProjects` / `createProject` / `deleteProject`
   / `listImages` / `updateImage` / `deleteImage` /
   `saveScreenshot` / `loadScreenshot` / `checkIncoming`
@@ -565,6 +621,35 @@ Whole-plan acceptance criteria:
     the desktop renderer goes through `bridge.ts`. The
     `annot-cloud` pointer-commit store, in particular,
     can land on the desktop with no extra work.
+  - **File-manager extraction into `@ingcreators/annot-editor-shell`**:
+    today the unified gallery surface
+    (`<annot-file-manager-shell>` / `<annot-sidebar>` /
+    `<annot-gallery-page>` / `FileManager`) lives under
+    `packages/web/src/gallery/` and the desktop consumes it
+    via `@ingcreators/annot-web`. This is fine — the
+    workspace dependency already exists — but a follow-up
+    plan can mirror the
+    [`_done/vscode-extension-host.md`](./_done/vscode-extension-host.md)
+    and
+    [`_done/editor-session-shell-switchover.md`](./_done/editor-session-shell-switchover.md)
+    pattern: lift the gallery into `@ingcreators/annot-editor-shell`
+    so VSCode and future hosts can mount the same chrome
+    against their own `StorageProvider` the way they already
+    do with `EditorShell.mountFromRecord`. Recommended timing:
+    after `desktop-electron-migration.md` lands; before any
+    plan that wants the VSCode host to host a real gallery
+    (today VSCode is one-image-per-tab via the custom-editor
+    contribution, so the pressure is low).
+  - **`getNewMenuExtras` host hook on `<annot-sidebar>`**: the
+    sidebar's "New" menu items are hardcoded today. The
+    desktop's Phase 2 wiring keeps Window / Region capture as
+    desktop-shell action-row buttons outside the unified
+    gallery; folding them into the unified "New" menu requires
+    a small follow-up adding a `getNewMenuExtras?: () =>
+    NewMenuItem[]` callback to `SidebarCallbacks`. Out of
+    scope for this plan — file as a follow-up before Phase 5
+    deletes the bespoke header if you want the desktop to
+    fully consolidate around the unified surface.
 
 ## Resolved decisions
 
