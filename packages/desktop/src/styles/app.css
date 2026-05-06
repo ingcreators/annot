@@ -8,6 +8,28 @@
   height: 100%;
 }
 
+/*
+ * Editor-mode layout overrides.
+ *
+ * The PWA reserves the top 48px for `#editor-header` (brand /
+ * breadcrumb / save+copy / theme). The desktop omits editor-header
+ * — the native window menu (File / Edit / View / Window) plus the
+ * save + theme buttons inside the vertical toolbar already cover
+ * those actions. Pull `#editor-sidebar` and `#canvas-container` up
+ * to `top: 0` so we don't waste 48px on an empty header bar.
+ *
+ * Without these overrides, `body.editor-mode #editor-sidebar` from
+ * `@ingcreators/annot-core/styles/editor.css` lands at `top: 48px`
+ * and the canvas opens with a blank dark band on top.
+ */
+body.editor-mode #editor-sidebar {
+  top: 0;
+}
+body.editor-mode #canvas-container,
+body.editor-mode.has-right-panel #canvas-container {
+  top: 0;
+}
+
 /* Action-row buttons (Capture Window / Region) + the
    legacy-data notice's "Open old folder" / "Dismiss" pair.
    Phase 5 deleted the bespoke gallery's `#btn-capture-screen` /
