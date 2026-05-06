@@ -39,8 +39,7 @@
  */
 
 import { promises as fsPromises } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import {
   app,
   BrowserWindow,
@@ -59,7 +58,15 @@ import type { CapturedImage } from "./ipc/browse.js";
 import { registerAllIpcHandlers, type RegisteredIpc } from "./ipc/index.js";
 import type { CapturerSourceLite, OverlayHandle } from "./ipc/screen-capture.js";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
+// `__dirname` is provided by electron-vite's CJS-shim wrapper
+// (`const __dirname = import.meta.dirname;` at the top of the
+// bundled `main.js` output). Declaring our own here would clash
+// with the wrapper at runtime — `SyntaxError: Identifier
+// '__dirname' has already been declared`. The bundled output
+// resolves `__dirname` to `<package>/dist-electron/main/`, so
+// the `join(__dirname, "../preload/preload.cjs")` references
+// below climb one level up + into `preload/` as expected.
+declare const __dirname: string;
 
 const RENDERER_DEV_URL = process.env["ELECTRON_RENDERER_URL"];
 
