@@ -8,10 +8,11 @@ storybook-static/
 # Rust
 target/
 Cargo.lock
-# Reproducible builds for the in-tree libimagequant wrapper need a
-# committed lockfile (cargo --locked). The leaf-crate scope means
-# this exception is safe.
+# Reproducible builds for in-tree native crates need a committed
+# lockfile (cargo --locked). The leaf-crate scope means these
+# exceptions are safe.
 !packages/imagequant/Cargo.lock
+!packages/desktop/native/win-clipboard/Cargo.lock
 
 # OS
 .DS_Store

@@ -1,12 +1,14 @@
 /**
- * Goldens test for the Phase 4 GVML clipboard packaging.
+ * Goldens test for the GVML + CF_DIB clipboard packaging.
  *
  * Direct port of
- * `packages/desktop/src-tauri/src/commands/clipboard_test.rs`.
- * Asserts (without touching a real OS clipboard):
+ * `packages/desktop/src-tauri/src/commands/clipboard_test.rs`,
+ * extended to cover the CF_DIB fallback that was deliberately
+ * omitted in the Phase 4 Electron port. Asserts (without
+ * touching a real OS clipboard):
  *
- *   1. The ZIP can be built without error.
- *   2. The expected entries are present (`[Content_Types].xml`,
+ *   1. The GVML ZIP can be built without error.
+ *   2. The expected GVML entries are present (`[Content_Types].xml`,
  *      `_rels/.rels`, `clipboard/drawings/drawing1.xml`,
  *      `clipboard/drawings/_rels/drawing1.xml.rels`,
  *      `clipboard/theme/theme1.xml`).
@@ -18,8 +20,11 @@
  *      when no image / mosaic media are passed; includes them when
  *      either is.
  *   6. `copy_as_office` writes the GVML buffer to the clipboard via
- *      the dependency-injected `writeBuffer`, and rejects with a
+ *      the dependency-injected `writeFormats`, and rejects with a
  *      clear error on non-Windows hosts.
+ *   7. `copy_as_office` also writes a `CF_DIB` entry whenever the
+ *      caller supplies `pngDataUrl`, with a valid 24-bit
+ *      BITMAPINFOHEADER + bottom-up BGR scanlines.
  */
 
 import { describe, expect, it, vi } from "vitest";
@@ -29,10 +34,12 @@ import {
   GVML_FORMAT_NAME,
   createClipboardHandlers,
   type ClipboardDeps,
+  type ClipboardFormatWrite,
   type MosaicMedia,
 } from "./clipboard.js";
+import { CF_DIB } from "./dib.js";
 
-/** Minimal ZIP entry reader. The pure-JS `buildZip` we use
+/** Minimal ZIP entry reader. The pure-JS `buildZipBytes` we use
  *  produces Stored (uncompressed) entries, so we can scan the
  *  Local-File-Header sequence directly without a deflate
  *  dependency. */
@@ -55,9 +62,9 @@ function readZipEntries(zipBytes: Uint8Array): Map<string, Uint8Array> {
     if (compressionMethod === 0) {
       data = compressed;
     } else if (compressionMethod === 8) {
-      // Defensive — `buildZip` is Stored-only today, but keep
-      // the deflate fallback so a future encoding change doesn't
-      // break the test.
+      // Defensive — `buildZipBytes` is Stored-only today, but
+      // keep the deflate fallback so a future encoding change
+      // doesn't break the test.
       data = new Uint8Array(unzipSync(Buffer.from(compressed)));
     } else {
       throw new Error(`unsupported compression method: ${compressionMethod}`);
@@ -177,21 +184,36 @@ describe("buildGvmlZip — drawing rels rId numbering", () => {
 describe("copy_as_office handler", () => {
   function makeDeps(opts?: { isSupported?: boolean }): {
     deps: ClipboardDeps;
-    writeBuffer: ReturnType<typeof vi.fn>;
+    writeFormats: ReturnType<typeof vi.fn>;
     pngToJpeg: ReturnType<typeof vi.fn>;
+    pngToBgra: ReturnType<typeof vi.fn>;
   } {
-    const writeBuffer = vi.fn();
+    const writeFormats = vi.fn();
     const pngToJpeg = vi.fn(async (png: Uint8Array) =>
       // Stub: prepend a marker byte so the test can prove the
       // PNG path went through conversion.
       new Uint8Array([0xff, ...png]),
     );
+    // Stub PNG decoder: returns a deterministic 2×2 BGRA block
+    // regardless of input bytes, so the test can verify the
+    // entire CF_DIB pipeline without dragging in `nativeImage`.
+    const pngToBgra = vi.fn(() => ({
+      data: new Uint8Array([
+        // top row: red, green
+        0x00, 0x00, 0xff, 0xff, 0x00, 0xff, 0x00, 0xff,
+        // bottom row: blue, white
+        0xff, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff,
+      ]),
+      width: 2,
+      height: 2,
+    }));
     const deps: ClipboardDeps = {
-      writeBuffer,
+      writeFormats,
       pngToJpeg,
+      pngToBgra,
       isSupported: () => opts?.isSupported ?? true,
     };
-    return { deps, writeBuffer, pngToJpeg };
+    return { deps, writeFormats, pngToJpeg, pngToBgra };
   }
 
   it("writes the GVML buffer under the Art::GVML ClipFormat name", async () => {
@@ -202,13 +224,69 @@ describe("copy_as_office handler", () => {
       mosaicMedia: [],
     });
 
-    expect(ctrl.writeBuffer).toHaveBeenCalledTimes(1);
-    expect(ctrl.writeBuffer).toHaveBeenCalledWith(GVML_FORMAT_NAME, expect.any(Uint8Array));
+    expect(ctrl.writeFormats).toHaveBeenCalledTimes(1);
+    const call = ctrl.writeFormats.mock.calls[0]![0] as ClipboardFormatWrite[];
+    expect(call).toHaveLength(1);
+    expect(call[0]!.format).toBe(GVML_FORMAT_NAME);
+    expect(call[0]!.data).toBeInstanceOf(Uint8Array);
 
-    // Validate the buffer is a valid GVML ZIP.
-    const callArg = ctrl.writeBuffer.mock.calls[0]![1] as Uint8Array;
-    const entries = readZipEntries(callArg);
+    // Validate the GVML buffer is a valid OPC ZIP.
+    const entries = readZipEntries(call[0]!.data);
     expect(entries.has("clipboard/drawings/drawing1.xml")).toBe(true);
+  });
+
+  it("writes GVML + CF_DIB atomically when pngDataUrl is provided", async () => {
+    const ctrl = makeDeps();
+    const handlers = createClipboardHandlers(ctrl.deps);
+    const pngB64 = Buffer.from([0x89, 0x50, 0x4e, 0x47]).toString("base64");
+    await handlers.copyAsOffice({
+      drawingXml: SAMPLE_DRAWING_XML,
+      mosaicMedia: [],
+      pngDataUrl: `data:image/png;base64,${pngB64}`,
+    });
+
+    // Both formats land in a single writeFormats call so the
+    // native addon can drive Win32 with one
+    // OpenClipboard/EmptyClipboard/Set/Set/Close cycle.
+    expect(ctrl.writeFormats).toHaveBeenCalledTimes(1);
+    const call = ctrl.writeFormats.mock.calls[0]![0] as ClipboardFormatWrite[];
+    expect(call).toHaveLength(2);
+    expect(call[0]!.format).toBe(GVML_FORMAT_NAME);
+    expect(call[1]!.format).toBe(CF_DIB);
+
+    // CF_DIB payload starts with a 40-byte BITMAPINFOHEADER
+    // describing a 2×2 24-bit bitmap.
+    const dib = call[1]!.data;
+    const view = new DataView(dib.buffer, dib.byteOffset, dib.byteLength);
+    expect(view.getUint32(0, true)).toBe(40); // biSize
+    expect(view.getInt32(4, true)).toBe(2); // biWidth
+    expect(view.getInt32(8, true)).toBe(2); // biHeight (positive)
+    expect(view.getUint16(14, true)).toBe(24); // biBitCount
+    expect(view.getUint32(16, true)).toBe(0); // biCompression = BI_RGB
+    // 2-pixel rows: 6 BGR bytes padded to 8 ⇒ 16 bytes pixel data.
+    expect(view.getUint32(20, true)).toBe(16);
+    expect(dib.length).toBe(40 + 16);
+  });
+
+  it("falls back to GVML-only when PNG decode throws", async () => {
+    const ctrl = makeDeps();
+    ctrl.pngToBgra.mockImplementation(() => {
+      throw new Error("decode failed");
+    });
+    const handlers = createClipboardHandlers(ctrl.deps);
+    const pngB64 = Buffer.from([0x89, 0x50, 0x4e, 0x47]).toString("base64");
+    await handlers.copyAsOffice({
+      drawingXml: SAMPLE_DRAWING_XML,
+      mosaicMedia: [],
+      pngDataUrl: `data:image/png;base64,${pngB64}`,
+    });
+
+    // Office paste still works (GVML present); only the bitmap
+    // fallback is missing — better than throwing.
+    expect(ctrl.writeFormats).toHaveBeenCalledTimes(1);
+    const call = ctrl.writeFormats.mock.calls[0]![0] as ClipboardFormatWrite[];
+    expect(call).toHaveLength(1);
+    expect(call[0]!.format).toBe(GVML_FORMAT_NAME);
   });
 
   it("converts a PNG screenshot via the host pngToJpeg adapter", async () => {
@@ -225,8 +303,8 @@ describe("copy_as_office handler", () => {
     });
 
     expect(ctrl.pngToJpeg).toHaveBeenCalledTimes(1);
-    const buf = ctrl.writeBuffer.mock.calls[0]![1] as Uint8Array;
-    const entries = readZipEntries(buf);
+    const call = ctrl.writeFormats.mock.calls[0]![0] as ClipboardFormatWrite[];
+    const entries = readZipEntries(call[0]!.data);
     const img = entries.get("clipboard/media/image1.jpeg")!;
     expect(img[0]).toBe(0xff); // From the stub's marker.
   });
@@ -250,6 +328,6 @@ describe("copy_as_office handler", () => {
     await expect(
       handlers.copyAsOffice({ drawingXml: SAMPLE_DRAWING_XML, mosaicMedia: [] }),
     ).rejects.toThrow(/Windows-only/);
-    expect(ctrl.writeBuffer).not.toHaveBeenCalled();
+    expect(ctrl.writeFormats).not.toHaveBeenCalled();
   });
 });

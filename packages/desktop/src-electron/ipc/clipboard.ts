@@ -1,54 +1,48 @@
 /**
- * Office-clipboard IPC — Phase 4 of
- * `docs/plans/desktop-electron-migration.md`.
+ * Office-clipboard IPC.
  *
- * Direct port of the GVML packaging from
+ * Direct port of the GVML packaging from the deleted
  * `packages/desktop/src-tauri/src/commands/clipboard.rs`. One
  * channel:
  *
  *   - `copy_as_office(drawing_xml, mosaic_media, screenshot, png)`
  *     → builds the GVML OPC ZIP envelope (content_types + rels +
- *       theme + drawing + media) and writes it to the system
- *       clipboard under the `Art::GVML ClipFormat` custom format
- *       that Word / PowerPoint / Excel recognise as native shape
- *       paste.
+ *       theme + drawing + media), packs the source PNG into a
+ *       `CF_DIB` payload, and writes BOTH formats to the system
+ *       clipboard atomically. Office / Word / PowerPoint paste
+ *       the GVML side as native shapes; Paint, browsers, Google
+ *       Sheets, and other consumers paste the `CF_DIB` side as
+ *       a bitmap.
  *
- * **Architectural deviation from the plan.** The migration doc
- * specifies a `napi-rs` Rust addon that does the Win32 clipboard
- * write. The plan's reasoning ("Win32 COM patterns the GVML
- * write needs") doesn't actually apply — the write is just
- * `RegisterClipboardFormat` + `OpenClipboard` + `EmptyClipboard`
- * + `GlobalAlloc` + `SetClipboardData` + `CloseClipboard`. None of
- * those are COM. Electron's `clipboard.writeBuffer(format, buf)`
- * invokes the exact same Win32 sequence internally, so this port
- * uses the built-in API. Net effect:
- *
- *   - No new native artefact to compile, prebuild, sign, or
- *     publish to a per-OS subpackage.
- *   - No `electron-rebuild` step in `pnpm install`.
- *   - No supply-chain audit cost on a binary; the only signed
- *     artefact remains Electron itself.
- *   - Cross-platform foundation: the same API maps to
- *     `NSPasteboard` on macOS and X11 selections on Linux. The
- *     Phase 4 implementation is Windows-functional today; macOS
- *     wiring is a small follow-up that doesn't change this file.
- *
- * **Phase 4 known issue: no CF_DIB fallback.** The Rust impl
- * also writes `CF_DIB` so non-Office consumers (Paint, browsers,
- * Google Sheets) get a paste-as-image fallback. Electron's
- * `clipboard.writeBuffer` runs an internal
+ * **How the atomic multi-format write works.** Win32 does not
+ * accumulate clipboard formats across calls — each
  * `OpenClipboard + EmptyClipboard + SetClipboardData +
- * CloseClipboard` sequence per call, so back-to-back calls
- * **don't** accumulate formats — the second call wipes the
- * first. Phase 4 ships GVML only; CF_DIB ships in a follow-up
- * that adds atomic multi-format clipboard write (either via a
- * small native addon scoped just to that, or whenever Electron
- * adds custom-format support to `clipboard.write({...})`).
+ * CloseClipboard` cycle replaces whatever was on the clipboard
+ * before. Electron's `clipboard.writeBuffer(format, buffer)` runs
+ * exactly that sequence per call, so back-to-back calls
+ * structurally cannot accumulate. To set GVML + CF_DIB together
+ * we drive Win32 directly through a small native addon that does
+ * one `OpenClipboard + EmptyClipboard + N×SetClipboardData +
+ * CloseClipboard` cycle per `writeFormats` invocation. The host
+ * adapter loads
+ * `packages/desktop/native/win-clipboard/prebuilds/win-clipboard.win32-x64.node`
+ * and exposes the resulting function via the
+ * `ClipboardDeps.writeFormats` callback below; tests inject a
+ * fake. The `writeBuffer` shape from the Phase 4 single-format
+ * implementation is gone — callers always go through
+ * `writeFormats`.
+ *
+ * **macOS / Linux** still throw with the same Windows-only error
+ * — `NSPasteboard` and X11 selection wiring stay queued for a
+ * follow-up. The native addon is Windows-x64-only by
+ * construction (its source uses `windows::Win32::*`); the
+ * `isSupported` gate keeps non-Windows hosts from reaching it.
  */
 
 import { buildZipBytes } from "@ingcreators/annot-core/zip-bytes";
+import { bgraToDib, CF_DIB } from "./dib.js";
 
-// ---- Types matching the Rust IPC channel ───────────────────────
+// ---- Types matching the renderer-side IPC payload ──────────────
 
 export interface MosaicMedia {
   filename: string;
@@ -66,8 +60,10 @@ export interface CopyAsOfficeInput {
    *  the visible-fallback image. Word / PowerPoint show this when
    *  the `<a:graphicData>` payload isn't fully understood. */
   screenshotData?: string;
-  /** Optional PNG data URL for the `CF_DIB` clipboard fallback.
-   *  Phase 4 ignores this — see file-level "Phase 4 known issue". */
+  /** Optional PNG data URL for the `CF_DIB` clipboard fallback
+   *  (Paint, browsers, Sheets, …). When absent, only the GVML
+   *  format is written and non-Office consumers see an empty
+   *  paste. */
   pngDataUrl?: string;
 }
 
@@ -75,20 +71,44 @@ export interface ClipboardHandlers {
   copyAsOffice(input: CopyAsOfficeInput): Promise<void>;
 }
 
+// ---- Multi-format clipboard write ──────────────────────────────
+
+/** One format/payload pair fed to `writeFormats`. The format may
+ *  be either:
+ *
+ *   - A `string` — the addon registers it via
+ *     `RegisterClipboardFormatW` (custom Win32 format like
+ *     `Art::GVML ClipFormat`).
+ *   - A `number` — the addon uses it directly as a Win32 format
+ *     id (standard formats like `CF_DIB = 8`).
+ */
+export interface ClipboardFormatWrite {
+  format: string | number;
+  data: Uint8Array;
+}
+
 // ---- Dependency injection seam ─────────────────────────────────
 
 export interface ClipboardDeps {
-  /** Write `data` under `format` to the system clipboard. The
-   *  production wiring calls Electron's
-   *  `clipboard.writeBuffer(format, buffer)`; tests pass a fake
-   *  that records the calls. */
-  writeBuffer(format: string, data: Uint8Array): void;
-  /** Convert PNG bytes → JPEG bytes. Reuses the same `nativeImage.toJPEG(90)`
-   *  callback the Phase 2 XMP handler is constructed with. The
-   *  GVML envelope embeds the screenshot as JPEG (smaller than
-   *  PNG) so Office's paste-fallback rendering doesn't bloat the
-   *  clipboard payload. */
+  /** Atomically write every entry in `formats` to the system
+   *  clipboard in one Win32 transaction
+   *  (`OpenClipboard + EmptyClipboard + N×SetClipboardData +
+   *  CloseClipboard`). The production wiring loads the in-tree
+   *  `win-clipboard` napi addon; tests pass a fake that records
+   *  the calls. */
+  writeFormats(formats: ClipboardFormatWrite[]): void;
+  /** Convert PNG bytes → JPEG bytes. Reuses the same
+   *  `nativeImage.toJPEG(90)` callback the Phase 2 XMP handler is
+   *  constructed with. The GVML envelope embeds the screenshot as
+   *  JPEG (smaller than PNG) so Office's paste-fallback rendering
+   *  doesn't bloat the clipboard payload. */
   pngToJpeg(png: Uint8Array): Promise<Uint8Array>;
+  /** Decode PNG bytes → 4-channel BGRA pixel data + dimensions.
+   *  The host wiring uses
+   *  `nativeImage.createFromBuffer(png).toBitmap()` (BGRA layout
+   *  on Windows / Linux). Used for the `CF_DIB` fallback — see
+   *  `bgraToDib` in `./dib.ts` for the encoder. */
+  pngToBgra(png: Uint8Array): { data: Uint8Array; width: number; height: number };
   /** Whether the host can actually write to the system
    *  clipboard. macOS / Linux return `false` until a follow-up
    *  wires up the matching native paths; the handler surfaces a
@@ -102,15 +122,15 @@ export function createClipboardHandlers(deps: ClipboardDeps): ClipboardHandlers 
       if (!deps.isSupported()) {
         throw new Error(
           "Office clipboard paste is currently Windows-only on the Electron build. " +
-            "macOS / Linux support is tracked as a Phase 4 follow-up.",
+            "macOS / Linux support is tracked as a follow-up.",
         );
       }
 
-      // Optional source screenshot. The Rust impl converts PNG
-      // → progressive JPEG before embedding. The Electron port
-      // uses the host-supplied `pngToJpeg` (which under
-      // `nativeImage.toJPEG` produces baseline Q90 JPEG). Other
-      // formats are embedded as-is.
+      // Optional source screenshot for the GVML envelope. The
+      // Rust impl converted PNG → progressive JPEG before
+      // embedding; the Electron port uses the host-supplied
+      // `pngToJpeg` (which under `nativeImage.toJPEG` produces
+      // baseline Q90 JPEG). Other formats are embedded as-is.
       let imageBytes: Uint8Array | undefined;
       if (input.screenshotData) {
         const raw = parseDataUrlBytes(input.screenshotData);
@@ -131,8 +151,29 @@ export function createClipboardHandlers(deps: ClipboardDeps): ClipboardHandlers 
         }
       }
 
-      const zipBytes = buildGvmlZip(input.drawingXml, input.mosaicMedia, imageBytes);
-      deps.writeBuffer(GVML_FORMAT_NAME, zipBytes);
+      const gvmlBytes = buildGvmlZip(input.drawingXml, input.mosaicMedia, imageBytes);
+      const formats: ClipboardFormatWrite[] = [{ format: GVML_FORMAT_NAME, data: gvmlBytes }];
+
+      // Add CF_DIB so non-Office consumers (Paint, browsers,
+      // Sheets, …) can paste a bitmap. The PNG passes through
+      // the host's `pngToBgra` (Electron's `nativeImage.toBitmap`)
+      // and the in-tree `bgraToDib` encoder. Errors here
+      // degrade to GVML-only — Office paste still works, only
+      // the bitmap fallback is missing.
+      if (input.pngDataUrl) {
+        const png = parseDataUrlBytes(input.pngDataUrl);
+        if (png) {
+          try {
+            const { data, width, height } = deps.pngToBgra(png);
+            const dib = bgraToDib(data, width, height);
+            formats.push({ format: CF_DIB, data: dib });
+          } catch {
+            // PNG decode failure — fall back to GVML-only.
+          }
+        }
+      }
+
+      deps.writeFormats(formats);
     },
   };
 }
@@ -140,15 +181,17 @@ export function createClipboardHandlers(deps: ClipboardDeps): ClipboardHandlers 
 // ---- GVML packaging ────────────────────────────────────────────
 
 /** Custom Windows clipboard format name registered by Microsoft
- *  Office for native shape paste. Tauri's Rust impl registers it
- *  via `RegisterClipboardFormatW`; Electron's `writeBuffer` does
- *  the same internally via Chromium's clipboard glue. */
+ *  Office for native shape paste. The native addon registers it
+ *  via `RegisterClipboardFormatW` on each
+ *  `writeFormats({format: "Art::GVML ClipFormat", ...})` call —
+ *  Win32 caches the registration per-session, so repeat calls are
+ *  cheap. */
 export const GVML_FORMAT_NAME = "Art::GVML ClipFormat";
 
 /** Pack the pre-built drawing XML + mosaic media + optional
  *  background screenshot into the GVML OPC ZIP that the Office
- *  clipboard expects. Direct port of `build_gvml_zip` in
- *  `clipboard.rs`. The ZIP is a Stored-method package (no
+ *  clipboard expects. Direct port of `build_gvml_zip` in the
+ *  deleted `clipboard.rs`. The ZIP is a Stored-method package (no
  *  Deflate); Office accepts both. */
 export function buildGvmlZip(
   drawingXml: string,

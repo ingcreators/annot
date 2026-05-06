@@ -192,3 +192,78 @@ jobs:
       - name: Skip — no imagequant or workflow changes
         if: steps.filter.outputs.imagequant != 'true'
         run: echo "No changes under packages/imagequant/ or this workflow; skipping."
+
+  # Same supply-chain stance as `verify-wasm` above, applied to the
+  # `annot-win-clipboard` napi-rs addon at
+  # `packages/desktop/native/win-clipboard/`. The committed
+  # `prebuilds/win-clipboard.win32-x64.node` is the artefact
+  # `electron-builder` ships in the Windows installer; CI rebuilds
+  # from source on a `windows-latest` runner and diffs byte-for-byte
+  # against the committed prebuild. A single byte of drift fails the
+  # build — the same gate that catches a tampered `.wasm` here
+  # catches a tampered `.node`.
+  #
+  # `windows-latest` is required because the addon links against
+  # `windows::Win32::*` and produces an `x86_64-pc-windows-msvc` DLL.
+  # No-op for PRs that don't touch the addon directory or this
+  # workflow.
+  verify-win-clipboard:
+    name: verify win-clipboard addon
+    runs-on: windows-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Detect win-clipboard or workflow changes
+        id: filter
+        uses: dorny/paths-filter@v4
+        with:
+          filters: |
+            win-clipboard:
+              - 'packages/desktop/native/win-clipboard/**'
+              - '.github/workflows/ci.yml'
+
+      - name: Set up Rust + MSVC target
+        if: steps.filter.outputs.win-clipboard == 'true'
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup target add x86_64-pc-windows-msvc
+
+      - name: Cache cargo registry + build
+        if: steps.filter.outputs.win-clipboard == 'true'
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            packages/desktop/native/win-clipboard/target
+          key: cargo-win-clipboard-${{ runner.os }}-${{ hashFiles('packages/desktop/native/win-clipboard/Cargo.lock') }}
+          restore-keys: |
+            cargo-win-clipboard-${{ runner.os }}-
+
+      - name: Verify committed prebuild matches a fresh build
+        if: steps.filter.outputs.win-clipboard == 'true'
+        shell: bash
+        env:
+          VERIFY_ADDON_OUT_DIR: ${{ runner.temp }}/win-clipboard-fresh
+        run: bash packages/desktop/native/win-clipboard/scripts/verify-addon.sh
+
+      # On failure, expose the fresh `.node` as a downloadable
+      # artefact so the canonical CI build can be inspected — same
+      # treatment `verify-wasm` gives the imagequant `pkg/` on
+      # divergence.
+      - name: Upload fresh prebuild on diff
+        if: steps.filter.outputs.win-clipboard == 'true' && failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: win-clipboard-fresh-prebuild
+          path: ${{ runner.temp }}/win-clipboard-fresh
+          if-no-files-found: error
+
+      - name: Skip — no win-clipboard or workflow changes
+        if: steps.filter.outputs.win-clipboard != 'true'
+        shell: bash
+        run: echo "No changes under packages/desktop/native/win-clipboard/ or this workflow; skipping."

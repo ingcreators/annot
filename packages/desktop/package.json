@@ -24,6 +24,10 @@
       {
         "from": "build/tool-presets.yml",
         "to": "tool-presets.yml"
+      },
+      {
+        "from": "native/win-clipboard/prebuilds/win-clipboard.win32-x64.node",
+        "to": "win-clipboard.node"
       }
     ],
     "mac": {
