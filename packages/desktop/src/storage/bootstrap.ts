@@ -118,19 +118,19 @@ async function ensureLibrarySkeleton(fs: DesktopFs): Promise<void> {
 
 /**
  * Mount the unified gallery against `DesktopStore`. Caller is
- * responsible for ensuring the host DOM (`#desktop-fs-sidebar` +
- * `#desktop-fs-main-content`, see `index.html`) exists before
- * calling.
+ * responsible for ensuring the host DOM (`#sidebar` +
+ * `#main-content` inside `#file-manager`, see `index.html`) exists
+ * before calling. The ids mirror the PWA so file-manager.css's
+ * id-scoped rules apply unchanged.
  *
  * Side effects:
- *   1. Resolves the library root (Tauri `appDataDir()` +
- *      `library/`) unless `opts.libraryRoot` overrides.
- *   2. Constructs `DesktopFs` (Tauri-backed by default,
+ *   1. Resolves the library root (Electron `app.getPath('userData')`
+ *      + `library/`) unless `opts.libraryRoot` overrides.
+ *   2. Constructs `DesktopFs` (Electron-backed by default,
  *      caller-overridable for tests).
  *   3. Constructs `DesktopStore` and runs `init()` (loads index,
  *      backfills metadata, prunes orphans).
- *   4. Mounts `FileManager` against `#desktop-fs-sidebar` +
- *      `#desktop-fs-main-content`.
+ *   4. Mounts `FileManager` against `#sidebar` + `#main-content`.
  *   5. Calls `setStorage` with `mode = "desktop"` so the sidebar
  *      chip strip + breadcrumb know which built-in is active.
  */
@@ -160,12 +160,12 @@ export async function bootstrapDesktopFsGallery(
   // `ThumbnailManager.attach`.
   const thumbnailManager = new ThumbnailManager(new IndexedDBThumbnailCache());
 
-  const sidebarEl = document.getElementById("desktop-fs-sidebar");
-  const mainContentEl = document.getElementById("desktop-fs-main-content");
+  const sidebarEl = document.getElementById("sidebar");
+  const mainContentEl = document.getElementById("main-content");
   if (!sidebarEl || !mainContentEl) {
     throw new Error(
-      "[desktop-bootstrap] expected #desktop-fs-sidebar + " +
-        "#desktop-fs-main-content in the host DOM — check index.html",
+      "[desktop-bootstrap] expected #sidebar + #main-content " +
+        "(inside #file-manager) in the host DOM — check index.html",
     );
   }
 
@@ -212,7 +212,7 @@ export async function bootstrapDesktopFsGallery(
   const bespokeGallery = document.getElementById("gallery-view");
   if (bespokeGallery) bespokeGallery.style.display = "none";
 
-  const galleryRoot = document.getElementById("desktop-fs-gallery");
+  const galleryRoot = document.getElementById("desktop-shell");
   const showGallery = (): void => {
     if (galleryRoot) galleryRoot.style.display = "";
   };

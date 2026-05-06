@@ -4,10 +4,15 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Annot by ingcreators</title>
-  <link rel="stylesheet" href="./src/styles/editor.css">
-  <link rel="stylesheet" href="./src/styles/toolbar.css">
-  <link rel="stylesheet" href="./src/styles/property-panel.css">
-  <link rel="stylesheet" href="./src/styles/app.css">
+  <!--
+    CSS is imported from `src/app/app.ts` (mirroring the PWA's
+    `packages/web/src/main.ts` pattern + the VSCode webview entry).
+    Vite resolves the workspace-package paths
+    (`@ingcreators/annot-core/styles/*`,
+    `@ingcreators/annot-web/styles/*`) at build time. Don't add
+    `<link>` tags here — the relative paths don't survive the
+    `dist-electron/renderer/` build output and would 404 silently.
+  -->
 </head>
 <body>
   <div id="app-root">
@@ -42,8 +47,16 @@
       `docs/plans/_done/desktop-storage-provider-migration.md`
       deleted the bespoke SQLite-backed `#gallery-view` that
       previously sat alongside this container.
+
+      The inner `#file-manager` / `#sidebar` / `#main-content` ids
+      mirror the PWA's `packages/web/index.html`. file-manager.css
+      from `@ingcreators/annot-web` scopes most of its rules under
+      those ids; renaming them in the desktop host would silently
+      drop the styling. The desktop's app.css overrides
+      `#file-manager`'s absolute positioning so it lays out below
+      the action-row in flow.
     -->
-    <div id="desktop-fs-gallery" style="display:none;">
+    <div id="desktop-shell" style="display:none;">
       <div class="desktop-fs-action-row">
         <!--
           Window / Region capture stay outside the unified "New"
@@ -54,9 +67,9 @@
         <button id="btn-fs-capture-window" class="action-btn action-btn-primary">Capture Window</button>
         <button id="btn-fs-capture-region" class="action-btn action-btn-primary">Capture Region</button>
       </div>
-      <div class="desktop-fs-gallery-body">
-        <div id="desktop-fs-sidebar" class="desktop-fs-sidebar"></div>
-        <div id="desktop-fs-main-content" class="desktop-fs-main-content"></div>
+      <div id="file-manager">
+        <div id="sidebar"></div>
+        <div id="main-content"></div>
       </div>
     </div>
   </div>

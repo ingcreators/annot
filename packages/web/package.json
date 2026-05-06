@@ -13,7 +13,8 @@
     "./lit": "./src/lit.ts",
     "./editor/*": "./src/editor/*.ts",
     "./gallery/*": "./src/gallery/*.ts",
-    "./storage/*": "./src/storage/*.ts"
+    "./storage/*": "./src/storage/*.ts",
+    "./styles/*": "./src/styles/*"
   },
   "scripts": {
     "dev": "vite",

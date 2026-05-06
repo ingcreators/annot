@@ -1,4 +1,17 @@
-import { CanvasManager } from "@ingcreators/annot-editor";
+// CSS imports — mirror packages/web/src/main.ts. The desktop's
+// index.html intentionally has no <link> tags; Vite resolves the
+// workspace-package paths at build time and inlines the styles
+// into the renderer bundle. file-manager.css scopes its rules
+// under #file-manager / #sidebar / #main-content; the host DOM
+// in index.html uses those exact ids so the rules apply.
+import "@ingcreators/annot-core/styles/editor.css";
+import "@ingcreators/annot-core/styles/toolbar.css";
+import "@ingcreators/annot-core/styles/property-panel.css";
+import "@ingcreators/annot-core/styles/fonts.css";
+import "@ingcreators/annot-web/styles/file-manager.css";
+import "../styles/app.css";
+
+import { applyPersistedTheme, CanvasManager } from "@ingcreators/annot-editor";
 import { History } from "@ingcreators/annot-editor";
 import { PropertyPanel } from "@ingcreators/annot-editor";
 import { SelectionManager } from "@ingcreators/annot-editor";
@@ -17,6 +30,10 @@ import {
   bootstrapDesktopFsGallery,
   type DesktopGalleryHandle,
 } from "../storage/bootstrap.js";
+
+// Restore the user's last-chosen theme + any saved token overrides
+// before first paint. Mirrors the PWA's main.ts flow.
+applyPersistedTheme();
 
 interface ElectronApi {
   invoke<T = unknown>(channel: string, args?: unknown): Promise<T>;
@@ -66,7 +83,7 @@ function hideEditorView(): void {
 
 function openEditor(dataUrl: string, width: number, height: number): void {
   showEditorView();
-  // The unified gallery sits in `#desktop-fs-gallery`; hide it
+  // The unified gallery sits in `#desktop-shell`; hide it
   // explicitly while the editor is up so the canvas isn't sitting
   // on top of a stale gallery list.
   fsGallery?.hideGallery();
@@ -576,7 +593,7 @@ async function maybeShowLegacyDataNotice(): Promise<void> {
 }
 
 function renderLegacyDataNotice(legacyDataDir: string): void {
-  const galleryRoot = document.getElementById("desktop-fs-gallery");
+  const galleryRoot = document.getElementById("desktop-shell");
   if (!galleryRoot) return;
 
   // Avoid double-rendering if the function gets called twice
