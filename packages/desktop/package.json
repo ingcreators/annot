@@ -17,6 +17,7 @@
   "build": {
     "appId": "com.ingcreators.annot",
     "productName": "Annot",
+    "artifactName": "annot-${version}-${arch}.${ext}",
     "files": [
       "dist-electron/**/*"
     ],

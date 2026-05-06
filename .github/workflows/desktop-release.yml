@@ -54,19 +54,24 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # `electron-builder`'s default output dir (when no
+          # `directories.output` override is set) is `dist/`
+          # under the package directory, NOT `dist-electron/`.
+          # The `dist-electron/` tree is the electron-vite
+          # output (renderer + main + preload bundles).
           - os: ubuntu-latest
             artifact-glob: |
-              packages/desktop/dist-electron/*.AppImage
-              packages/desktop/dist-electron/*.deb
-              packages/desktop/dist-electron/*.rpm
+              packages/desktop/dist/*.AppImage
+              packages/desktop/dist/*.deb
+              packages/desktop/dist/*.rpm
           - os: macos-latest
             artifact-glob: |
-              packages/desktop/dist-electron/*.dmg
-              packages/desktop/dist-electron/*.zip
+              packages/desktop/dist/*.dmg
+              packages/desktop/dist/*.zip
           - os: windows-latest
             artifact-glob: |
-              packages/desktop/dist-electron/*.exe
-              packages/desktop/dist-electron/*.msi
+              packages/desktop/dist/*.exe
+              packages/desktop/dist/*.msi
 
     steps:
       - uses: actions/checkout@v6
@@ -112,28 +117,39 @@ jobs:
       #     The API-key path uses APPLE_API_KEY / _ID / _ISSUER
       #     instead — `electron-builder` auto-detects which is set.
       #
-      # The `-c.mac.notarize` override flips the package.json
-      # default of `notarize: false` ON only when `APPLE_TEAM_ID`
-      # is non-empty. Forks without secrets get a signed-or-unsigned
-      # build with no notary call (= no Apple-side wall-time + no
-      # secret-leak risk).
+      # `--publish never` is mandatory: `electron-builder` v26's
+      # CI auto-detect would otherwise try to publish to GitHub
+      # Releases without `GH_TOKEN`. The `publish` job below
+      # handles that explicitly via `softprops/action-gh-release`.
+      #
+      # `CSC_LINK` is set conditionally — empty-string means
+      # "no signing", but `electron-builder` mistakes it for a
+      # path lookup (resolves to the project dir, errors with
+      # "not a file"). So we only export it when the secret is
+      # non-empty; the `${{ secrets.X || '' }}` default is just
+      # for the env-var initialization order.
       - name: Package + sign + notarize (macOS)
         if: matrix.os == 'macos-latest'
         env:
-          CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          MAC_CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          MAC_CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
+          if [ -n "$MAC_CSC_LINK" ]; then
+            export CSC_LINK="$MAC_CSC_LINK"
+            export CSC_KEY_PASSWORD="$MAC_CSC_KEY_PASSWORD"
+          fi
           if [ -n "$APPLE_TEAM_ID" ]; then
             echo "[release] notarization enabled (APPLE_TEAM_ID set)"
             pnpm --filter @ingcreators/annot-desktop exec electron-builder \
               --mac \
+              --publish never \
               -c.mac.notarize.teamId="$APPLE_TEAM_ID"
           else
             echo "[release] APPLE_TEAM_ID unset — building unsigned dmg/zip"
-            pnpm --filter @ingcreators/annot-desktop exec electron-builder --mac
+            pnpm --filter @ingcreators/annot-desktop exec electron-builder --mac --publish never
           fi
 
       # ---- Linux: AppImage + deb + rpm ----
@@ -146,22 +162,28 @@ jobs:
       # invokes it.
       - name: Package (Linux)
         if: matrix.os == 'ubuntu-latest'
-        run: pnpm --filter @ingcreators/annot-desktop exec electron-builder --linux
+        run: pnpm --filter @ingcreators/annot-desktop exec electron-builder --linux --publish never
 
       # ---- Windows: NSIS installer + zip ----
       #
       # Windows code signing via `WIN_CSC_LINK` (base64-encoded
       # .pfx) + `WIN_CSC_KEY_PASSWORD`. Same gracefully-degrades
       # contract as macOS — secrets absent → unsigned installer
-      # (Windows shows a SmartScreen warning on first install,
-      # which is the same UX the legacy Tauri-era unsigned build
-      # had).
+      # (Windows shows a SmartScreen warning on first install).
+      # `CSC_LINK` is exported conditionally for the same reason
+      # documented on the macOS step.
       - name: Package + sign (Windows)
         if: matrix.os == 'windows-latest'
+        shell: bash
         env:
-          CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
-        run: pnpm --filter @ingcreators/annot-desktop exec electron-builder --win
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+        run: |
+          if [ -n "$WIN_CSC_LINK" ]; then
+            export CSC_LINK="$WIN_CSC_LINK"
+            export CSC_KEY_PASSWORD="$WIN_CSC_KEY_PASSWORD"
+          fi
+          pnpm --filter @ingcreators/annot-desktop exec electron-builder --win --publish never
 
       # Per-OS artifact upload. The artifact name carries the OS
       # so the Release-publish step downstream can grep them
