@@ -64,7 +64,14 @@ packages/
   extension/    Chrome MV3 extension. Capture pipeline + offscreen
                 encode + content-script DOM metadata.
                 npm name: @ingcreators/annot-extension
-  desktop/      Tauri desktop wrapper.
+  desktop/      Tauri desktop host. Mounts the unified
+                `<annot-file-manager-shell>` (from
+                `@ingcreators/annot-web/gallery`) against
+                `DesktopStore` — a `StorageProvider` backed by a
+                filesystem library at `<userData>/library/` with
+                per-file XMP metadata (mirrors `DeviceStore`'s
+                model). See
+                `docs/plans/_done/desktop-storage-provider-migration.md`.
                 npm name: @ingcreators/annot-desktop
   imagequant/   In-tree wasm-bindgen wrapper around upstream
                 ImageOptim/libimagequant. Tier A from the runtime

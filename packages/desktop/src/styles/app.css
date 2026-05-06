@@ -8,32 +8,12 @@
   height: 100%;
 }
 
-/* Gallery view */
-#gallery-view {
-  padding: 24px;
-  height: 100%;
-  overflow-y: auto;
-  background: #1a1a2e;
-}
-
-.gallery-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 24px;
-}
-
-.app-title {
-  font-size: 24px;
-  font-weight: 700;
-  color: #00d4ff;
-}
-
-.gallery-actions {
-  display: flex;
-  gap: 8px;
-}
-
+/* Action-row buttons (Capture Window / Region) + the
+   legacy-data notice's "Open old folder" / "Dismiss" pair.
+   Phase 5 deleted the bespoke gallery's `#btn-capture-screen` /
+   `#btn-open-image` / `#btn-paste-image` / Projects buttons but
+   the same visual style still applies to the surviving
+   action-row pair and notice actions. */
 .action-btn {
   padding: 8px 16px;
   border: 1px solid #333;
@@ -62,56 +42,6 @@
   background: #1a4a80;
 }
 
-.gallery-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 16px;
-}
-
-.gallery-empty {
-  grid-column: 1 / -1;
-  text-align: center;
-  padding: 60px 20px;
-  color: #666;
-  font-size: 14px;
-}
-
-.gallery-empty p {
-  margin: 8px 0;
-}
-
-.gallery-item {
-  border: 1px solid #333;
-  border-radius: 8px;
-  overflow: hidden;
-  background: #16213e;
-  cursor: pointer;
-  transition:
-    border-color 0.15s,
-    transform 0.1s;
-}
-
-.gallery-item:hover {
-  border-color: #00d4ff;
-  transform: translateY(-2px);
-}
-
-.gallery-item img {
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  object-fit: cover;
-  display: block;
-}
-
-.gallery-item-info {
-  padding: 8px 12px;
-  font-size: 12px;
-  color: #aaa;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 /* Status bar back button */
 .status-btn {
   background: none;
@@ -128,192 +58,10 @@
   color: #00d4ff;
 }
 
-/* Gallery controls */
-.gallery-project-select {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.gallery-label {
-  font-size: 13px;
-  color: #888;
-}
-
-.gallery-select {
-  padding: 6px 10px;
-  border: 1px solid #333;
-  border-radius: 6px;
-  background: #16213e;
-  color: #e0e0e0;
-  font-size: 13px;
-}
-
-.gallery-search {
-  padding: 6px 12px;
-  border: 1px solid #333;
-  border-radius: 6px;
-  background: #16213e;
-  color: #e0e0e0;
-  font-size: 13px;
-  width: 180px;
-}
-
-.gallery-search::placeholder {
-  color: #666;
-}
-
-.gallery-thumb img {
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  object-fit: cover;
-  display: block;
-}
-
-.gallery-item-name {
-  font-size: 12px;
-  color: #ccc;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.gallery-item-meta {
-  font-size: 11px;
-  color: #666;
-  margin-top: 2px;
-}
-
-.gallery-item-info {
-  padding: 8px 12px;
-  position: relative;
-}
-
-.gallery-item-delete {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  width: 20px;
-  height: 20px;
-  border: none;
-  border-radius: 50%;
-  background: rgba(255, 0, 0, 0.2);
-  color: #ff6666;
-  font-size: 14px;
-  cursor: pointer;
-  display: none;
-  align-items: center;
-  justify-content: center;
-}
-
-.gallery-item:hover .gallery-item-delete {
-  display: flex;
-}
-
-.gallery-item-delete:hover {
-  background: rgba(255, 0, 0, 0.5);
-}
-
-/* Project manager dialog */
-.pm-dialog {
-  background: #1e1e2e;
-  color: #e0e0e0;
-  border: 1px solid #444;
-  border-radius: 12px;
-  padding: 0;
-  min-width: 400px;
-  max-width: 500px;
-}
-
-.pm-dialog::backdrop {
-  background: rgba(0, 0, 0, 0.6);
-}
-
-.pm-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px 20px;
-  border-bottom: 1px solid #333;
-}
-
-.pm-header h2 {
-  font-size: 18px;
-  margin: 0;
-  color: #00d4ff;
-}
-
-.pm-close {
-  background: none;
-  border: none;
-  color: #888;
-  font-size: 20px;
-  cursor: pointer;
-}
-
-.pm-body {
-  padding: 16px 20px;
-}
-
-.pm-list {
-  max-height: 300px;
-  overflow-y: auto;
-}
-
-.pm-row {
-  display: flex;
-  align-items: center;
-  padding: 10px 0;
-  border-bottom: 1px solid #2a2a3a;
-}
-
-.pm-name {
-  flex: 1;
-  font-size: 14px;
-}
-.pm-count {
-  font-size: 12px;
-  color: #666;
-  margin-right: 10px;
-}
-
-.pm-del {
-  background: none;
-  border: none;
-  color: #ff6666;
-  font-size: 16px;
-  cursor: pointer;
-}
-
-.pm-new {
-  display: flex;
-  gap: 8px;
-  margin-top: 16px;
-}
-
-.pm-input {
-  flex: 1;
-  padding: 8px 12px;
-  border: 1px solid #444;
-  border-radius: 6px;
-  background: #16213e;
-  color: #e0e0e0;
-  font-size: 14px;
-}
-
-.pm-add-btn {
-  padding: 8px 16px;
-  border: 1px solid #00d4ff;
-  border-radius: 6px;
-  background: #0f3460;
-  color: #00d4ff;
-  cursor: pointer;
-}
-
 /*
- * Phase 2 of `docs/plans/desktop-storage-provider-migration.md`:
- * layout for `#desktop-fs-gallery` (the unified gallery surface
- * mounted when `localStorage.annotDesktopStorageMode === "fs"`).
- * The unified `FileManager` ships its own theming via
+ * Layout for `#desktop-fs-gallery` (the unified gallery surface
+ * mounted by `bootstrap.ts` against `DesktopStore`). The unified
+ * `FileManager` ships its own theming via
  * `@ingcreators/annot-web`'s editor / app stylesheets — the rules
  * here just lay out the shell (action row + sidebar + main
  * content) inside the desktop's existing window chrome.
@@ -333,10 +81,6 @@
   padding: 12px 16px;
   border-bottom: 1px solid var(--annot-color-border, #333);
   align-items: center;
-}
-
-.desktop-fs-action-spacer {
-  flex: 1 1 auto;
 }
 
 .desktop-fs-gallery-body {
@@ -362,12 +106,11 @@
 }
 
 /*
- * Phase 4 of `docs/plans/desktop-storage-provider-migration.md`:
- * one-time legacy-data notice banner (`#fs-legacy-data-notice`) and
- * the rollback-to-legacy-gallery dialog (`#fs-settings-dialog`).
- * Both stay desktop-host-local rather than living in the unified
- * gallery's design system because they're temporary surfaces —
- * Phase 5 deletes them along with the SQLite codepath.
+ * One-time legacy-data notice banner (`#fs-legacy-data-notice`).
+ * The last surface that mentions `<portable_dir>/data/` —
+ * surfaces only when the SQLite db file exists from a pre-Phase-4
+ * install. Stays desktop-host-local rather than living in the
+ * unified gallery's design system.
  */
 .fs-legacy-notice {
   flex: 0 0 auto;
@@ -404,91 +147,4 @@
   flex: 0 0 auto;
   display: flex;
   gap: 8px;
-}
-
-.fs-settings-dialog {
-  /* Reset the native dialog box-model so the inner header/body/
-   * footer layout has predictable sizing. Tauri webview honors
-   * <dialog> + showModal() so the ::backdrop pseudo handles the
-   * dim overlay automatically. */
-  width: min(480px, 90vw);
-  padding: 0;
-  border: 1px solid #00d4ff;
-  border-radius: 8px;
-  background: #16213e;
-  color: #e0e0e0;
-}
-
-.fs-settings-dialog::backdrop {
-  background: rgba(0, 0, 0, 0.55);
-}
-
-.fs-settings-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 18px;
-  border-bottom: 1px solid #333;
-}
-
-.fs-settings-header h2 {
-  margin: 0;
-  font-size: 16px;
-  color: #00d4ff;
-}
-
-.fs-settings-close {
-  background: transparent;
-  border: none;
-  color: #888;
-  font-size: 22px;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.fs-settings-close:hover {
-  color: #e0e0e0;
-}
-
-.fs-settings-body {
-  padding: 18px;
-}
-
-.fs-settings-row {
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-  cursor: pointer;
-}
-
-.fs-settings-row input[type="checkbox"] {
-  margin-top: 3px;
-}
-
-.fs-settings-label {
-  display: block;
-  font-size: 14px;
-  margin-bottom: 4px;
-}
-
-.fs-settings-hint {
-  display: block;
-  font-size: 12px;
-  color: #888;
-  line-height: 1.5;
-}
-
-.fs-settings-hint code {
-  background: #0a0f1f;
-  padding: 1px 4px;
-  border-radius: 2px;
-  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-}
-
-.fs-settings-footer {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
-  padding: 12px 18px;
-  border-top: 1px solid #333;
 }

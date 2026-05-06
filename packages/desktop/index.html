@@ -35,52 +35,24 @@
       </div>
     </div>
 
-    <!-- Welcome / Gallery view (shown by default) -->
-    <div id="gallery-view">
-      <div class="gallery-header">
-        <h1 class="app-title">Annot</h1>
-        <div class="gallery-actions">
-          <button id="btn-capture-screen" class="action-btn action-btn-primary">Capture Screen</button>
-          <button id="btn-capture-window" class="action-btn action-btn-primary">Capture Window</button>
-          <button id="btn-capture-region" class="action-btn action-btn-primary">Capture Region</button>
-          <button id="btn-open-image" class="action-btn">Open Image</button>
-          <button id="btn-paste-image" class="action-btn">Paste from Clipboard</button>
-        </div>
-      </div>
-      <div id="gallery-grid" class="gallery-grid">
-        <div class="gallery-empty">
-          <p>No screenshots yet.</p>
-          <p>Use the Chrome extension to capture, or open an image file.</p>
-        </div>
-      </div>
-    </div>
-
     <!--
-      Phase 2 of `docs/plans/desktop-storage-provider-migration.md`:
-      host DOM for the unified `<annot-file-manager-shell>` +
-      `<annot-sidebar>` mounted by `bootstrap.ts` when
-      `localStorage.annotDesktopStorageMode === "fs"`. Hidden by
-      default (the bootstrap toggles it visible after construction);
-      Phase 4 default-flips, Phase 5 deletes the bespoke
-      `#gallery-view` above and the `display:none` here.
+      Gallery view: the unified `<annot-file-manager-shell>` +
+      `<annot-sidebar>` from `@ingcreators/annot-web/gallery`,
+      mounted by `bootstrap.ts` against `DesktopStore`. Phase 5 of
+      `docs/plans/_done/desktop-storage-provider-migration.md`
+      deleted the bespoke SQLite-backed `#gallery-view` that
+      previously sat alongside this container.
     -->
     <div id="desktop-fs-gallery" style="display:none;">
       <div class="desktop-fs-action-row">
         <!--
           Window / Region capture stay outside the unified "New"
-          menu for the first cycle (per Phase 0 audit gap #1) until
-          a `getNewMenuExtras?` host hook lands on `<annot-sidebar>`.
+          menu (per Phase 0 audit gap #1) until a `getNewMenuExtras?`
+          host hook lands on `<annot-sidebar>`. Tracked as a
+          follow-up.
         -->
         <button id="btn-fs-capture-window" class="action-btn action-btn-primary">Capture Window</button>
         <button id="btn-fs-capture-region" class="action-btn action-btn-primary">Capture Region</button>
-        <span class="desktop-fs-action-spacer"></span>
-        <!--
-          Phase 4 settings entry point — opens the rollback dialog
-          that lets the user revert to the SQLite-backed bespoke
-          gallery for one release cycle. Phase 5 deletes the button
-          + dialog along with the legacy codepath.
-        -->
-        <button id="btn-fs-settings" class="action-btn">Settings</button>
       </div>
       <div class="desktop-fs-gallery-body">
         <div id="desktop-fs-sidebar" class="desktop-fs-sidebar"></div>
