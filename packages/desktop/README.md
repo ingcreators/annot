@@ -73,6 +73,20 @@ pnpm --filter @ingcreators/annot-desktop tauri          # invoke the tauri CLI d
 - [`@ingcreators/annot-editor-shell`](../editor-shell)
 - [`@ingcreators/annot-web`](../web)
 
+## Distribution
+
+- **Windows**: `electron-builder` produces NSIS installer + zip.
+  Code signing via the existing certificate setup (the same one
+  the legacy Tauri build used).
+- **macOS**: see [`docs/notarization.md`](./docs/notarization.md)
+  for the manual signing + notarization recipe (Apple Developer
+  ID setup, env vars, build steps, troubleshooting).
+  Hardened-runtime entitlements live at
+  [`build/entitlements.mac.plist`](./build/entitlements.mac.plist)
+  with each key justified inline.
+- **Linux**: AppImage + deb + rpm via `electron-builder` (Phase
+  8 of the Electron migration).
+
 ## See also
 
 - [`docs/plans/desktop-electron-migration.md`](../../docs/plans/desktop-electron-migration.md)
