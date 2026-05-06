@@ -163,6 +163,86 @@ jobs:
           CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
         run: pnpm --filter @ingcreators/annot-desktop exec electron-builder --win
 
+      # ---- Smoke-boot the packaged app ----
+      #
+      # `electron-builder` emits installers AND an unpacked layout
+      # next to them (`dist/<plat>-unpacked/`, plus `dist/mac-<arch>/
+      # Annot.app` on macOS). Launching the unpacked binary with
+      # `--smoke-test` exercises the same module-parse + main-process
+      # boot the end user hits when they double-click the installed
+      # app — `main.ts` schedules `app.quit()` shortly after the
+      # window opens so a healthy boot yields exit code 0.
+      #
+      # This catches the class of bug fixed in #459 (a bundler-shim
+      # vs. source-level `__dirname` collision that surfaced as a
+      # parse-time SyntaxError on first launch). Pre-#459 the build
+      # leg "passed" because it only exercised electron-builder's
+      # emit step — the runtime parse step never ran in CI.
+      #
+      # Linux runs under `xvfb-run` because the AppImage's renderer
+      # still requires an X display even when the smoke step never
+      # interacts with the UI. macOS launches the inner Mach-O
+      # binary inside the `.app` bundle directly so we get the
+      # actual Electron exit code (`open -W` returns the launch
+      # status, not the app's exit code). Windows launches the
+      # `.exe` directly. The Node wrapper enforces a hard timeout
+      # so a hung boot can't pin the runner for the matrix
+      # leg's 30-minute budget.
+      - name: Smoke-boot packaged app
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$RUNNER_OS" in
+            Linux)
+              SMOKE_PREFIX="xvfb-run -a "
+              SMOKE_BINARY="packages/desktop/dist/linux-unpacked/annot"
+              ;;
+            macOS)
+              SMOKE_PREFIX=""
+              # `mac-arm64/` on the current macos-latest runner;
+              # glob covers the (unlikely) macos-x64 / macos-
+              # universal switch without forcing a workflow edit.
+              SMOKE_BINARY=$(ls -d packages/desktop/dist/mac*/Annot.app/Contents/MacOS/Annot 2>/dev/null | head -n1 || true)
+              ;;
+            Windows)
+              SMOKE_PREFIX=""
+              SMOKE_BINARY="packages/desktop/dist/win-unpacked/Annot.exe"
+              ;;
+            *)
+              echo "[smoke] unknown RUNNER_OS=$RUNNER_OS" >&2
+              exit 1
+              ;;
+          esac
+
+          if [ -z "$SMOKE_BINARY" ] || [ ! -e "$SMOKE_BINARY" ]; then
+            echo "[smoke] packaged binary not found at: '$SMOKE_BINARY'" >&2
+            ls -la packages/desktop/dist/ || true
+            exit 1
+          fi
+
+          echo "[smoke] launcher='${SMOKE_PREFIX}node' binary='$SMOKE_BINARY'"
+          SMOKE_BIN="$SMOKE_BINARY" ${SMOKE_PREFIX}node -e '
+            const { spawn } = require("node:child_process");
+            const bin = process.env.SMOKE_BIN;
+            const TIMEOUT_MS = 20000;
+            const child = spawn(bin, ["--smoke-test"], { stdio: "inherit" });
+            const timer = setTimeout(() => {
+              process.stderr.write("[smoke] timeout after " + (TIMEOUT_MS/1000) + "s; sending SIGKILL\n");
+              child.kill("SIGKILL");
+            }, TIMEOUT_MS);
+            child.on("error", (err) => {
+              clearTimeout(timer);
+              process.stderr.write("[smoke] spawn error: " + err.message + "\n");
+              process.exit(1);
+            });
+            child.on("exit", (code, signal) => {
+              clearTimeout(timer);
+              process.stdout.write("[smoke] exited code=" + code + " signal=" + signal + "\n");
+              if (signal === "SIGKILL") { process.exit(1); }
+              process.exit(code === null ? 1 : code);
+            });
+          '
+
       # Per-OS artifact upload. The artifact name carries the OS
       # so the Release-publish step downstream can grep them
       # apart. `if-no-files-found: error` catches a silent
