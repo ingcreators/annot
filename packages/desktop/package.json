@@ -30,7 +30,28 @@
         "from": "build/tool-presets.yml",
         "to": "tool-presets.yml"
       }
-    ]
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "notarize": false,
+      "extendInfo": {
+        "NSScreenCaptureUsageDescription": "Annot captures screenshots of the screen and individual windows for annotation. Granting permission lets the in-app capture buttons (and the Chrome extension's send-to-local-desktop handoff) reach the pixels they need.",
+        "NSCameraUsageDescription": "Annot does not use the camera; this entry exists only to satisfy macOS's hardened-runtime metadata expectations.",
+        "NSMicrophoneUsageDescription": "Annot does not use the microphone; this entry exists only to satisfy macOS's hardened-runtime metadata expectations.",
+        "LSMinimumSystemVersion": "11.0.0"
+      }
+    },
+    "dmg": {
+      "sign": false
+    }
   },
   "dependencies": {
     "@ingcreators/annot-core": "workspace:*",

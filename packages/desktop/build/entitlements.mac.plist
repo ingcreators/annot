@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- ==========================================================
+         macOS hardened-runtime entitlements for Annot.
+
+         Phase 7 of `docs/plans/desktop-electron-migration.md`. The
+         entitlements here are the MINIMUM set Annot needs to run
+         under hardened runtime (a notarization prerequisite). Each
+         key is justified inline so future trims/additions stay
+         deliberate.
+
+         Apple's "default deny" model means anything not listed
+         here is blocked. If a feature stops working under
+         hardened runtime, that's the first place to look.
+         ========================================================== -->
+
+    <!-- Chromium uses V8's JIT compiler. Without this the
+         renderer process can't generate native code → every page
+         crashes on first JS execution. Required for every Electron
+         app that runs HTML/JS in a renderer. -->
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+
+    <!-- V8's code-cache + WASM compilation marks pages
+         executable that weren't part of the signed binary.
+         Hardened runtime blocks this without the entitlement. -->
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+
+    <!-- Electron loads several dynamic frameworks (Chromium libs,
+         FFmpeg, ImageQuant wasm, Node addons) that aren't signed
+         by Apple. Disabling library validation is the standard
+         Electron-app entitlement for this. -->
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+
+    <!-- Outbound HTTPS (extension OAuth callbacks, future remote
+         storage backends, asset fetches). -->
+    <key>com.apple.security.network.client</key>
+    <true/>
+
+    <!-- Annot runs a localhost-bound HTTP server on :19530 to
+         catch the Chrome extension's "send to local desktop"
+         handoff. macOS treats `127.0.0.1` listeners as a network
+         server, hence this entitlement. The server NEVER binds
+         to 0.0.0.0; this isn't an Internet-facing surface. -->
+    <key>com.apple.security.network.server</key>
+    <true/>
+
+    <!--
+        Notably NOT enabled (kept blocked):
+
+        - com.apple.security.app-sandbox: Annot writes the user's
+          library at `~/Library/Application Support/Annot/library/`
+          via Node fs/promises; sandboxing breaks that path.
+          Hardened runtime + notarization satisfies the App Store
+          alternative pathway (Developer ID distribution outside
+          the App Store).
+        - com.apple.security.device.camera /
+          com.apple.security.device.audio-input: Annot doesn't
+          capture from the camera or microphone — the
+          `desktopCapturer` screen capture path doesn't need
+          either. macOS prompts for "Screen Recording" via TCC at
+          first capture; that's a runtime grant, not an
+          entitlement.
+        - com.apple.security.cs.allow-dyld-environment-variables:
+          electron-builder's signing flow doesn't need DYLD_*
+          overrides on macOS in the published artifacts.
+    -->
+</dict>
+</plist>
