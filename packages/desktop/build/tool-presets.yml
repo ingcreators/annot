@@ -1,0 +1,46 @@
+# Annot Tool Presets - Default Configuration
+# This file is shipped with the app as the default.
+# User changes are saved to a separate file in the app data directory.
+
+tools:
+  arrow:
+    stroke_color: "#ff0000"
+    fill_color: "none"
+    stroke_width: 3
+    font_size: 24
+    stroke_dasharray: ""
+
+  rect:
+    stroke_color: "#ff0000"
+    fill_color: "none"
+    stroke_width: 3
+    font_size: 24
+    stroke_dasharray: ""
+
+  ellipse:
+    stroke_color: "#ff0000"
+    fill_color: "none"
+    stroke_width: 3
+    font_size: 24
+    stroke_dasharray: ""
+
+  text:
+    stroke_color: "#ff0000"
+    fill_color: "none"
+    stroke_width: 3
+    font_size: 16
+    stroke_dasharray: ""
+
+  freehand:
+    stroke_color: "#ff0000"
+    fill_color: "none"
+    stroke_width: 3
+    font_size: 24
+    stroke_dasharray: ""
+
+  marker:
+    stroke_color: "#ff0000"
+    fill_color: "none"       # "none" = circle, "rect" = square
+    stroke_width: 3
+    font_size: 13
+    stroke_dasharray: ""
