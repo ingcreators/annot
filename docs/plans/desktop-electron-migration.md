@@ -19,6 +19,19 @@
 > and the Phase 6 ("macOS + Linux capture commands") work
 > disappears as a parity gate.
 >
+> **Sequencing prerequisite:** This plan assumes
+> [`desktop-storage-provider-migration.md`](./desktop-storage-provider-migration.md)
+> has landed first — i.e. the desktop renderer talks to a
+> `DesktopStore` (`StorageProvider` implementation) over fs
+> primitives, and the SQLite-backed gallery + projects/images
+> IPC commands are gone. Under that prerequisite, the Electron
+> migration's Phase 1 collapses from "port SQLite + 6
+> command modules" to "fs primitives + 1 small IPC module". If
+> for any reason the storage-provider plan is deferred, the
+> alternative-Phase-1 outline below ("If `DesktopStore` is NOT
+> yet landed") describes the larger port that replaces this
+> phase.
+>
 > **Risk:** Largest single architectural shift in `packages/desktop`
 > since its inception. Three categories of risk:
 >
@@ -200,18 +213,30 @@ Each Tauri command maps to one IPC channel; the main-process
 handler is registered in `app.whenReady()` via
 `ipcMain.handle(channel, async (_evt, args) => …)`.
 
-| Tauri command (today) | Electron channel (after) | Implementation |
+**With `DesktopStore` already landed** (recommended), the
+renderer's gallery / projects / images / capture lifecycle
+goes through `DesktopStore` → `DesktopFs` → fs IPC primitives,
+**not** through the legacy SQLite-backed commands. The Tauri
+SQLite commands are already deleted by the time this plan
+starts.
+
+| Tauri command (today, post-DesktopStore) | Electron channel (after) | Implementation |
 |---|---|---|
-| `save_screenshot` | `save_screenshot` | Node `fs/promises` write + `better-sqlite3` row insert |
-| `load_screenshot` | `load_screenshot` | `fs.readFile` → base64 |
-| `check_incoming` | `check_incoming` | Same DB query as today |
-| `list_projects` / `create_project` / `delete_project` | identical names | `better-sqlite3` |
-| `list_images` / `update_image` / `delete_image` | identical names | `better-sqlite3` |
+| `fs.read` / `fs.write` / `fs.list` / `fs.mkdir` / `fs.rename` / `fs.unlink` / `fs.stat` (the `DesktopFs` primitive set) | identical names | Node `fs/promises` |
 | `copy_as_office` | `copy_as_office` | N-API addon → Win32 `OpenClipboard` / `SetClipboardData` |
 | `capture_screen` / `capture_window` / `list_windows` / `capture_region` / `start_capture_overlay` / `get_capture_params` / `capture_overlay_result` | identical names | `desktopCapturer` + a `BrowserWindow` overlay (replaces `capture-overlay.html` Tauri window) |
 | `load_tool_presets` / `save_tool_presets` / `get_portable_dir` | identical names | `fs` + `js-yaml` |
-| `save_with_xmp` / `read_xmp` | identical names | Pure-JS port of `commands/xmp.rs` (PNG iTXt + JPEG APP1/APP2 handling). The Rust impl is straightforward byte manipulation; porting is mechanical. |
+| `save_with_xmp` / `read_xmp` | identical names | Pure-JS port of `commands/xmp.rs` (PNG iTXt + JPEG APP1/APP2 handling). The Rust impl is straightforward byte manipulation; porting is mechanical. The `DesktopStore` reuses the same JS-side helpers internally. |
 | `minimize_main_window` / `restore_main_window` | identical names | `BrowserWindow.minimize()` / `restore()` / `show()` / `focus()` |
+
+**If `DesktopStore` is NOT yet landed** (fallback path), the
+Phase 1 surface expands to include a `better-sqlite3` port
+of `db.rs` plus the eight legacy IPC commands
+(`save_screenshot`, `load_screenshot`, `check_incoming`,
+`list_projects` / `create_project` / `delete_project`,
+`list_images` / `update_image` / `delete_image`). This plan
+strongly recommends landing the storage-provider migration
+first to avoid this work.
 
 The HTTP server (extension handoff on `localhost:19530`) maps
 to a Node `http.createServer` instance started during
@@ -300,31 +325,42 @@ DPR is read from the `MediaStreamTrack.getSettings()` width
 vs. the source's logical size — same approach the
 extension uses, kept centralized in the host adapter.
 
-### SQLite via better-sqlite3
+### Storage layer: `DesktopStore` over fs primitives
 
-`db.rs` is a thin `rusqlite` wrapper with a fixed schema
-(`projects`, `images`, `incoming_captures` tables). The
-port is mechanical:
+Under the recommended sequencing, **there is no SQLite layer**
+to port — [`desktop-storage-provider-migration.md`](./desktop-storage-provider-migration.md)
+deletes the SQLite-backed gallery before this plan starts.
+The desktop's storage path is:
 
-- Same SQL DDL, executed at first launch in a transaction.
-- Same prepared statements, written against `better-sqlite3`'s
-  synchronous API.
-- The DB file lives at `<userData>/data/annot.db` (Electron's
-  `app.getPath('userData')`), preserving Tauri's
-  `portable_dir/data/annot.db` semantics for the
-  *new install* path. **Existing Tauri installs migrate by
-  copying** — Phase 5 ships a one-shot migration that, on
-  first Electron launch, looks for a Tauri install's
-  `data/annot.db` and copies it into the Electron userData
-  dir if no Electron-side DB exists. Same for `tool-presets.yml`
-  and the captured `images/` directory.
+```
+<annot-file-manager-shell>  (UI)
+   ↓
+DesktopStore (StorageProvider)  (renderer)
+   ↓
+DesktopFs (interface)  (renderer)
+   ↓
+ipcRenderer.invoke('fs.*', …)  (transport)
+   ↓
+Node fs/promises  (Electron main)
+   ↓
+<userData>/library/<folders>/<files.{png,jpg}>  (with XMP metadata)
+```
 
-`better-sqlite3` is the right choice (vs `node:sqlite` or
-`sql.js`):
-- Synchronous API matches the existing Rust call sites.
-- Bundles SQLite, no system dependency.
-- Works in Electron with `electron-rebuild`.
-- Mature, used in shipping Electron apps.
+Files are byte-identical to what `DeviceStore` writes for the
+PWA's "Device" mode; per-file XMP carries tags / notes /
+source URL / annotations. No database, no schema migration
+between Tauri and Electron — the file tree copies as-is.
+
+`<userData>` resolves via `app.getPath('userData')` on the
+Electron side; the Phase 1 migrator copies the Tauri-era
+library tree on first launch.
+
+**Fallback note**: if for any reason the storage-provider
+migration is deferred and SQLite must be ported, the original
+`better-sqlite3` design (synchronous API matching the
+`rusqlite` call sites; bundles SQLite; Electron-rebuild
+compatible) is the right pick. This section's prior wording
+documenting that path is preserved in the plan history.
 
 ### Build & packaging
 
@@ -413,26 +449,46 @@ the default. Phases 6–8 supersede the existing
 opens an Electron window with the renderer. Tauri build still
 works. CI changes: none (desktop excluded from default).
 
-### Phase 1 — DB + projects + images IPC parity
+### Phase 1 — fs primitives IPC parity (assumes `DesktopStore` already landed)
 
-- Port `db.rs` to `db.ts` (`better-sqlite3`).
-- Implement `list_projects` / `create_project` / `delete_project`
-  / `list_images` / `update_image` / `delete_image` /
-  `save_screenshot` / `load_screenshot` / `check_incoming` IPC
-  handlers in `src-electron/ipc/`.
-- Ship a one-shot migration that detects a Tauri install's
-  `data/annot.db` and copies it on first Electron launch (no
-  schema changes).
+Under the recommended sequencing (storage-provider migration
+done first), this phase is small:
+
+- Implement `fs.read` / `fs.write` / `fs.list` / `fs.mkdir` /
+  `fs.rename` / `fs.unlink` / `fs.stat` IPC handlers in
+  `src-electron/ipc/fs.ts`. Each is a thin wrapper over the
+  matching Node `fs/promises` call, with path-traversal
+  validation rooted at `<userData>/library/`.
+- The renderer-side `DesktopFs` interface from
+  [`desktop-storage-provider-migration.md`](./desktop-storage-provider-migration.md)
+  Phase 1 swaps its Tauri-backed implementation for an
+  Electron-backed one. The `DesktopStore` class on top
+  doesn't change.
 - Add `desktop-bridge.ts` next to `tauri-bridge.ts` (NOT
   renaming yet — the `tauri-bridge.ts` file stays in place
   and untouched in this phase). The new file calls
   `window.electronAPI.invoke` and re-exports the same symbol
-  names.
+  names. Because the SQLite-era commands are gone, the
+  re-exports are the smaller post-DesktopStore surface
+  (XMP, screen capture, Office clipboard, tool presets, http
+  server emit, window controls).
+- One-shot migration of the user's library directory: detect
+  the Tauri-era `<portable_dir>/data/library/` and copy it
+  to `<userData>/library/` if the Electron-side library
+  doesn't yet exist. Pure file-tree copy; no schema work.
 
-**Verify**: a renderer harness in `packages/desktop` that
-imports `desktop-bridge.ts` (via a feature-flag toggle) lists
-projects, creates one, captures a placeholder screenshot,
-loads it back. DB round-trips against a known fixture pass.
+**Fallback (if `DesktopStore` is not yet landed)**:
+extends to porting `db.rs` to `better-sqlite3`, implementing
+the eight SQLite-backed IPC handlers, and shipping a one-shot
+DB-file copy migration. This is the larger Phase 1 outlined
+in the IPC mapping section above.
+
+**Verify**: a renderer harness in `packages/desktop` mounts
+`<annot-file-manager-shell>` against a `DesktopStore` rooted
+at the Electron `<userData>/library/`. List/create/save/read/
+delete a folder + image round-trips against a fixture
+library. (Fallback: the SQLite version of this verification
+matches the original plan's wording.)
 
 ### Phase 2 — Settings, XMP, http-server, window controls
 
@@ -686,6 +742,11 @@ Whole-plan acceptance criteria:
 
 ## Open questions for sign-off
 
+- **Sequencing with `desktop-storage-provider-migration.md`**:
+  recommended order is storage-provider first, then this plan
+  (Phase 1 collapses from "DB + 8 IPC commands" to "fs
+  primitives"). Confirm the user is happy taking the two
+  plans in that order.
 - **Bundle-size acceptance**: is the ~10× installer-size jump
   acceptable for the desktop host's role? If not, the
   alternative is staying on Tauri and accepting the per-OS
