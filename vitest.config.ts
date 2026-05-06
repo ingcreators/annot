@@ -18,17 +18,28 @@ export default defineConfig({
   test: {
     globals: false,
     environment: "node",
-    include: ["packages/*/src/**/*.{test,spec}.ts"],
+    include: [
+      "packages/*/src/**/*.{test,spec}.ts",
+      // `packages/desktop/src-electron/` houses the Electron main-
+      // process IPC handlers introduced by Phase 1 of
+      // `docs/plans/desktop-electron-migration.md`. Tests live next
+      // to sources here, same as in `src/`.
+      "packages/desktop/src-electron/**/*.{test,spec}.ts",
+    ],
     exclude: [
       "**/node_modules/**",
       "**/dist/**",
+      "**/dist-electron/**",
       "**/.turbo/**",
       "packages/desktop/src-tauri/**",
     ],
     coverage: {
       provider: "v8",
       reporter: ["text", "html"],
-      include: ["packages/*/src/**/*.ts"],
+      include: [
+        "packages/*/src/**/*.ts",
+        "packages/desktop/src-electron/**/*.ts",
+      ],
       exclude: [
         "**/*.test.ts",
         "**/*.spec.ts",

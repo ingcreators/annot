@@ -173,3 +173,112 @@ export function createTauriDesktopFs(libraryRoot: string): DesktopFs {
     },
   };
 }
+
+// ---- Electron-backed implementation ─────────────────────────────
+
+/**
+ * Shape of the IPC bridge exposed by the Electron preload script
+ * (see `packages/desktop/src-electron/preload.ts`). Phase 1 of
+ * `docs/plans/desktop-electron-migration.md` adds the `fs.*`
+ * handlers consumed below; subsequent phases extend the channel
+ * inventory (XMP, screen capture, Office clipboard, …) without
+ * widening this bridge interface — each channel stays a string
+ * passed through `invoke`.
+ */
+export interface ElectronApi {
+  invoke<T = unknown>(channel: string, args?: unknown): Promise<T>;
+}
+
+/** Default invoker that pulls `window.electronAPI.invoke` off the
+ *  current global. Tests pass a stub via the `invoker` parameter so
+ *  the round-trip can be exercised without ambient Electron. */
+function defaultInvoker(): ElectronApi {
+  const api = (window as unknown as { electronAPI?: ElectronApi }).electronAPI;
+  if (!api) {
+    throw new Error(
+      "[desktop-fs] window.electronAPI is missing — is the Electron preload " +
+        "script loaded? createElectronDesktopFs is renderer-only.",
+    );
+  }
+  return api;
+}
+
+interface ElectronStat {
+  kind: "file" | "directory";
+  size: number;
+  mtime: number;
+}
+
+interface ElectronEntry {
+  name: string;
+  kind: "file" | "directory";
+}
+
+/**
+ * Electron-backed `DesktopFs`. Every primitive translates to a
+ * single `ipcRenderer.invoke('fs.*', payload)` round-trip. The main-
+ * process handler resolves the library-relative path against the
+ * absolute library root (`<userData>/library/`) and validates that
+ * the result stays inside the root — see
+ * `packages/desktop/src-electron/ipc/fs.ts:resolveSafe` for the
+ * traversal-guard rules.
+ *
+ * Path semantics match {@link createTauriDesktopFs}: the `path`
+ * argument is forward-slash, library-relative (`""` = root,
+ * `"Inbox"` = top-level folder, `"Inbox/cap.annot.png"` = leaf).
+ * `DesktopStore` doesn't change at the Tauri-to-Electron cutover.
+ */
+export function createElectronDesktopFs(
+  invoker: ElectronApi = defaultInvoker(),
+): DesktopFs {
+  return {
+    async readDir(path) {
+      try {
+        const entries = await invoker.invoke<ElectronEntry[]>("fs.list", { path });
+        return entries.map((e) => ({ name: e.name, kind: e.kind }));
+      } catch {
+        // Mirror `createTauriDesktopFs` and the
+        // `StorageProvider.listFolders` contract: missing
+        // directories surface as empty rather than error.
+        return [];
+      }
+    },
+
+    async readFile(path) {
+      const bytes = await invoker.invoke<Uint8Array>("fs.read", { path });
+      // Defensive copy: the structured-clone IPC may share the
+      // backing ArrayBuffer with the renderer-side cache. Caller
+      // expectations match the Tauri impl (returns plain
+      // `Uint8Array`).
+      return new Uint8Array(bytes);
+    },
+
+    async writeFile(path, bytes) {
+      await invoker.invoke<void>("fs.write", { path, bytes });
+    },
+
+    async mkdir(path, opts) {
+      await invoker.invoke<void>("fs.mkdir", {
+        path,
+        recursive: opts?.recursive ?? false,
+      });
+    },
+
+    async rename(from, to) {
+      await invoker.invoke<void>("fs.rename", { from, to });
+    },
+
+    async remove(path, opts) {
+      await invoker.invoke<void>("fs.unlink", {
+        path,
+        recursive: opts?.recursive ?? false,
+      });
+    },
+
+    async stat(path) {
+      const info = await invoker.invoke<ElectronStat | null>("fs.stat", { path });
+      if (!info) return undefined;
+      return { kind: info.kind, size: info.size, mtime: info.mtime };
+    },
+  };
+}
