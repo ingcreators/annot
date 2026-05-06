@@ -25,21 +25,56 @@ let gallery: Gallery | null = null;
 let fsGallery: DesktopGalleryHandle | null = null;
 
 /**
- * Phase 2 of `docs/plans/desktop-storage-provider-migration.md`:
- * developer feature flag toggling between the bespoke SQLite
- * gallery (`"sqlite"`, default) and the unified
- * `<annot-file-manager-shell>` against `DesktopStore` (`"fs"`).
- *
- * Set via DevTools — `localStorage.annotDesktopStorageMode = "fs"`
- * — then reload. Phase 4 default-flips to `"fs"`; Phase 5 deletes
- * the SQLite codepath and the flag itself.
+ * `docs/plans/desktop-storage-provider-migration.md` storage-backend
+ * selector. Phase 2 introduced the flag with `"sqlite"` default;
+ * Phase 4 (this PR) flipped the default to `"fs"` so a fresh
+ * install lands on the unified gallery + `DesktopStore` against
+ * `<userData>/library/`. Users who flipped the flag explicitly
+ * during Phase 2/3 keep their setting; a new "rollback to legacy
+ * gallery" toggle in Settings sets the flag back to `"sqlite"` for
+ * one release cycle. Phase 5 deletes the SQLite codepath + the
+ * flag entirely.
  */
 function getDesktopStorageMode(): "sqlite" | "fs" {
   try {
-    return window.localStorage.getItem("annotDesktopStorageMode") === "fs" ? "fs" : "sqlite";
+    const value = window.localStorage.getItem("annotDesktopStorageMode");
+    // Explicit `"sqlite"` opt-out (set by Phase 4's rollback
+    // toggle) keeps the bespoke gallery active. Any other value —
+    // including the historical Phase 2/3 `"fs"` value — and the
+    // unset case both resolve to `"fs"`.
+    return value === "sqlite" ? "sqlite" : "fs";
   } catch {
-    return "sqlite";
+    return "fs";
   }
+}
+
+/** localStorage key for the one-time legacy-data notice dismissal
+ *  flag. Set to `"1"` once the user closes the toast. */
+const LEGACY_NOTICE_KEY = "annotLegacyDataNoticeDismissed";
+
+function legacyNoticeAlreadyDismissed(): boolean {
+  try {
+    return window.localStorage.getItem(LEGACY_NOTICE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function dismissLegacyNotice(): void {
+  try {
+    window.localStorage.setItem(LEGACY_NOTICE_KEY, "1");
+  } catch {
+    /* ignore */
+  }
+}
+
+function setStorageModeAndReload(mode: "sqlite" | "fs"): void {
+  try {
+    window.localStorage.setItem("annotDesktopStorageMode", mode);
+  } catch {
+    /* ignore */
+  }
+  window.location.reload();
 }
 
 function showView(view: "gallery" | "editor"): void {
@@ -597,6 +632,170 @@ async function initFsMode(): Promise<void> {
       });
       return;
     }
+  });
+
+  // Phase 4: settings button (rollback to legacy gallery) + the
+  // one-time legacy-data notice. Both are gated to Tauri builds —
+  // a non-Tauri rendering of `index.html` (storybook, devtools
+  // standalone) has no portable_dir to reference.
+  if (isTauri) {
+    wireSettingsButton();
+    void maybeShowLegacyDataNotice();
+  }
+}
+
+/**
+ * Wire the "Settings" button in `#desktop-fs-action-row` to open
+ * the rollback-to-legacy-gallery dialog. The button is in the
+ * Phase 2 host DOM but inert until this listener attaches.
+ */
+function wireSettingsButton(): void {
+  const btn = document.getElementById("btn-fs-settings");
+  if (!btn) return;
+  btn.addEventListener("click", () => {
+    showRollbackDialog();
+  });
+}
+
+/**
+ * Show the Phase 4 rollback dialog. A single checkbox toggles the
+ * storage flag back to `"sqlite"` and reloads. The dialog is
+ * built imperatively so it can be re-mounted without leaking
+ * stale listeners — there's no persistent dialog DOM in
+ * index.html.
+ */
+function showRollbackDialog(): void {
+  const existing = document.getElementById("fs-settings-dialog");
+  if (existing) existing.remove();
+
+  const dialog = document.createElement("dialog");
+  dialog.id = "fs-settings-dialog";
+  dialog.className = "fs-settings-dialog";
+  dialog.innerHTML = `
+    <div class="fs-settings-header">
+      <h2>Desktop Settings</h2>
+      <button class="fs-settings-close" aria-label="Close">&times;</button>
+    </div>
+    <div class="fs-settings-body">
+      <label class="fs-settings-row">
+        <input type="checkbox" id="fs-settings-rollback" />
+        <span>
+          <span class="fs-settings-label">Use legacy gallery (SQLite-backed)</span>
+          <span class="fs-settings-hint">
+            Reverts to the previous gallery implementation. The new
+            filesystem-backed library at <code>&lt;userData&gt;/library/</code>
+            stays unchanged. This toggle will be removed in a future release.
+          </span>
+        </span>
+      </label>
+    </div>
+    <div class="fs-settings-footer">
+      <button class="action-btn" id="fs-settings-cancel">Cancel</button>
+      <button class="action-btn action-btn-primary" id="fs-settings-apply">Apply</button>
+    </div>
+  `;
+  document.body.appendChild(dialog);
+
+  const closeDialog = (): void => {
+    dialog.close();
+    dialog.remove();
+  };
+
+  dialog.querySelector(".fs-settings-close")!.addEventListener("click", closeDialog);
+  dialog.querySelector("#fs-settings-cancel")!.addEventListener("click", closeDialog);
+  dialog.querySelector("#fs-settings-apply")!.addEventListener("click", () => {
+    const checked = (dialog.querySelector<HTMLInputElement>("#fs-settings-rollback"))!.checked;
+    if (checked) {
+      // User opted in to the legacy gallery — set the explicit
+      // `"sqlite"` flag and reload so `getDesktopStorageMode()`
+      // picks it up at boot. Without the explicit value the new
+      // default is `"fs"`.
+      setStorageModeAndReload("sqlite");
+      return;
+    }
+    closeDialog();
+  });
+
+  dialog.showModal();
+}
+
+/**
+ * Phase 4 one-time notice: when the FS-mode default kicks in on
+ * a build that previously used the SQLite gallery, surface a
+ * banner explaining where the legacy data lives. The banner has
+ * a "Reveal in Finder/Explorer" button (via
+ * `@tauri-apps/plugin-shell`'s `open(path)`) and a dismiss button
+ * that persists `localStorage.annotLegacyDataNoticeDismissed`.
+ *
+ * The notice is gated on the legacy `<portable_dir>/data/annot.db`
+ * file existing — a fresh install with no prior history skips
+ * the banner entirely.
+ */
+async function maybeShowLegacyDataNotice(): Promise<void> {
+  if (legacyNoticeAlreadyDismissed()) return;
+  let portableDir: string;
+  try {
+    portableDir = await tauriInvoke<string>("get_portable_dir");
+  } catch {
+    return;
+  }
+  const legacyDataDir = `${portableDir}/data`;
+  const legacyDbPath = `${legacyDataDir}/annot.db`;
+
+  // Only surface the notice if the user has prior SQLite data.
+  // A fresh install ships with neither the directory nor the db
+  // file; suppress the banner so the first-launch UX stays clean.
+  let hasLegacyDb = false;
+  try {
+    const fs = await import("@tauri-apps/plugin-fs");
+    hasLegacyDb = await fs.exists(legacyDbPath);
+  } catch {
+    return;
+  }
+  if (!hasLegacyDb) return;
+
+  renderLegacyDataNotice(legacyDataDir);
+}
+
+function renderLegacyDataNotice(legacyDataDir: string): void {
+  const galleryRoot = document.getElementById("desktop-fs-gallery");
+  if (!galleryRoot) return;
+
+  // Avoid double-rendering if the function gets called twice
+  // (e.g. polling fired before init finished).
+  if (document.getElementById("fs-legacy-data-notice")) return;
+
+  const banner = document.createElement("div");
+  banner.id = "fs-legacy-data-notice";
+  banner.className = "fs-legacy-notice";
+  banner.setAttribute("role", "status");
+  banner.innerHTML = `
+    <div class="fs-legacy-notice-body">
+      <strong>Your previous Annot library has moved.</strong>
+      The active library is now at <code>&lt;userData&gt;/library/</code>;
+      the previous data lives at <code class="fs-legacy-notice-path"></code>.
+      Back it up or remove it at your convenience — Annot won't touch it.
+    </div>
+    <div class="fs-legacy-notice-actions">
+      <button class="action-btn" id="fs-legacy-notice-reveal">Open old folder</button>
+      <button class="action-btn" id="fs-legacy-notice-dismiss">Dismiss</button>
+    </div>
+  `;
+  banner.querySelector(".fs-legacy-notice-path")!.textContent = legacyDataDir;
+  galleryRoot.insertBefore(banner, galleryRoot.firstChild);
+
+  banner.querySelector("#fs-legacy-notice-reveal")!.addEventListener("click", async () => {
+    try {
+      const shell = await import("@tauri-apps/plugin-shell");
+      await shell.open(legacyDataDir);
+    } catch (e) {
+      console.error("[fs-mode] reveal legacy data dir failed:", e);
+    }
+  });
+
+  banner.querySelector("#fs-legacy-notice-dismiss")!.addEventListener("click", () => {
+    dismissLegacyNotice();
+    banner.remove();
   });
 }
 
