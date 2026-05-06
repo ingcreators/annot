@@ -1,5 +1,5 @@
 /**
- * IPC registration — Phases 1+2+3+4 of
+ * IPC registration — Phases 1–9 of
  * `docs/plans/desktop-electron-migration.md`.
  *
  * Single entry point that wires every per-channel handler defined
@@ -9,14 +9,13 @@
  *   - keeps `main.ts` short: it calls `registerAllIpcHandlers(...)`
  *     once during `app.whenReady()`.
  *   - makes the channel inventory greppable from one place.
- *   - keeps the per-handler files (`fs.ts`, `app.ts`, `xmp.ts`,
- *     `settings.ts`, `window.ts`, `screen-capture.ts`,
- *     `clipboard.ts`) free of Electron imports so unit tests can
- *     construct them in a plain Node environment. `window.ts`,
- *     `screen-capture.ts`, and `clipboard.ts` take dependency-
- *     injection callbacks for the bits that need real
- *     `BrowserWindow` / `desktopCapturer` / `clipboard.writeBuffer`
- *     access; tests inject fakes.
+ *   - keeps the per-handler files free of Electron imports so
+ *     unit tests can construct them in a plain Node environment.
+ *     `window.ts`, `screen-capture.ts`, `clipboard.ts`, and
+ *     `shell.ts` take dependency-injection callbacks for the
+ *     bits that need real `BrowserWindow` / `desktopCapturer` /
+ *     `clipboard.writeBuffer` / `shell.openPath` access; tests
+ *     inject fakes.
  */
 
 import type { IpcMain } from "electron";
@@ -31,6 +30,11 @@ import {
   type ClipboardDeps,
   createClipboardHandlers,
 } from "./clipboard.js";
+import {
+  EXTENSION_CHANNEL_TO_HANDLER,
+  type ExtensionDeps,
+  createExtensionHandlers,
+} from "./extension.js";
 import { FS_CHANNEL_TO_HANDLER, createFsHandlers } from "./fs.js";
 import {
   SCREEN_CAPTURE_CHANNEL_TO_HANDLER,
@@ -43,6 +47,11 @@ import {
   createSettingsHandlers,
   type SettingsHandlerOptions,
 } from "./settings.js";
+import {
+  SHELL_CHANNEL_TO_HANDLER,
+  type ShellDeps,
+  createShellHandlers,
+} from "./shell.js";
 import {
   WINDOW_CHANNEL_TO_HANDLER,
   createWindowHandlers,
@@ -69,10 +78,15 @@ export interface RegisterAllOptions {
    *  webContents.capturePage adapter, library root for capture
    *  persistence. */
   browse: BrowseDeps;
+  /** Extension-handoff dependencies — `<userData>/` root for
+   *  draining `data/incoming/` + checking the legacy-data path. */
+  extension: ExtensionDeps;
+  /** Shell dependencies — Electron's `shell.openPath` adapter
+   *  for the legacy-data toast's "Open old folder" affordance. */
+  shell: ShellDeps;
   /** Resolves the current main window for the minimize / restore
    *  IPC handlers. May return `undefined` during shutdown — the
-   *  handlers no-op in that case to mirror the Rust impl's
-   *  `if let Some(win)` defensive pattern. */
+   *  handlers no-op in that case. */
   getMainWindow(): WindowController | undefined;
 }
 
@@ -101,6 +115,8 @@ export function registerAllIpcHandlers(
   registerSet(ipcMain, screenCapture, SCREEN_CAPTURE_CHANNEL_TO_HANDLER);
   registerSet(ipcMain, createClipboardHandlers(opts.clipboard), CLIPBOARD_CHANNEL_TO_HANDLER);
   registerSet(ipcMain, createBrowseHandlers(opts.browse), BROWSE_CHANNEL_TO_HANDLER);
+  registerSet(ipcMain, createExtensionHandlers(opts.extension), EXTENSION_CHANNEL_TO_HANDLER);
+  registerSet(ipcMain, createShellHandlers(opts.shell), SHELL_CHANNEL_TO_HANDLER);
   return { screenCapture };
 }
 

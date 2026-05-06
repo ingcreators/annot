@@ -3,15 +3,33 @@ import { History } from "@ingcreators/annot-editor";
 import { PropertyPanel } from "@ingcreators/annot-editor";
 import { SelectionManager } from "@ingcreators/annot-editor";
 // Phase 5a moved the Toolbar class from `annot-core` to `annot-web`
-// so core stays DOM-free. The Tauri shell now picks it up from
-// web's editor surface — the rest of the imports below remain in
-// core because PropertyPanel + Canvas + History stay there.
+// so core stays DOM-free. The desktop shell picks it up from web's
+// editor surface — the rest of the imports below remain in core
+// because PropertyPanel + Canvas + History stay there.
 import { Toolbar } from "@ingcreators/annot-editor-shell/toolbar";
-import { isTauri } from "@ingcreators/annot-core/tauri-bridge";
+import {
+  captureScreen,
+  isDesktop,
+  minimizeMainWindow,
+  restoreMainWindow,
+} from "@ingcreators/annot-core/desktop-bridge";
 import {
   bootstrapDesktopFsGallery,
   type DesktopGalleryHandle,
 } from "../storage/bootstrap.js";
+
+interface ElectronApi {
+  invoke<T = unknown>(channel: string, args?: unknown): Promise<T>;
+  on(channel: string, listener: (payload: unknown) => void): () => void;
+}
+
+function api(): ElectronApi | null {
+  return (
+    (typeof window !== "undefined"
+      ? (window as unknown as { electronAPI?: ElectronApi }).electronAPI
+      : undefined) ?? null
+  );
+}
 
 let fsGallery: DesktopGalleryHandle | null = null;
 
@@ -183,25 +201,17 @@ function blobToDataUrl(blob: Blob): Promise<string> {
 
 // --- Unified screen capture (Snipping Tool style) ---
 
-async function tauriInvoke<T = any>(cmd: string, args?: any): Promise<T> {
-  const internals = (window as any).__TAURI_INTERNALS__;
-  if (internals?.invoke) return internals.invoke(cmd, args);
-  const { invoke } = await import("@tauri-apps/api/core");
-  return invoke(cmd, args);
-}
-
 type CaptureModeType = "fullscreen" | "window" | "rect";
 
 async function doCapture(mode: CaptureModeType): Promise<void> {
+  const ipc = api();
   try {
     if (mode === "fullscreen") {
       // Simple: minimize, capture, restore
-      await tauriInvoke("minimize_main_window");
+      await minimizeMainWindow();
       await new Promise((r) => setTimeout(r, 400));
-      const result = await tauriInvoke<{ data_url: string; width: number; height: number }>(
-        "capture_screen",
-      );
-      await tauriInvoke("restore_main_window");
+      const result = await captureScreen();
+      await restoreMainWindow();
       await persistViaDesktopStore({
         dataUrl: result.data_url,
         width: result.width,
@@ -210,8 +220,12 @@ async function doCapture(mode: CaptureModeType): Promise<void> {
       return;
     }
 
-    // rect / window: use overlay window on the actual screen
-    const overlayResult = await tauriInvoke<{
+    // rect / window: use overlay window on the actual screen.
+    // `start_capture_overlay` isn't surfaced as a typed export on
+    // `desktop-bridge` (the orchestration is host-internal), so
+    // the renderer drops to the raw `electronAPI.invoke` for it.
+    if (!ipc) throw new Error("[desktop] electronAPI unavailable");
+    const overlayResult = await ipc.invoke<{
       region: { x: number; y: number; w: number; h: number };
       screenshot_data_url: string;
       screen_width: number;
@@ -230,8 +244,10 @@ async function doCapture(mode: CaptureModeType): Promise<void> {
     });
   } catch (err) {
     try {
-      await tauriInvoke("restore_main_window");
-    } catch {}
+      await restoreMainWindow();
+    } catch {
+      /* ignore */
+    }
     if (String(err) !== "Capture cancelled") {
       alert(`Capture failed: ${err}`);
     }
@@ -345,7 +361,7 @@ async function init(): Promise<void> {
     void fsGallery?.refresh();
   });
 
-  if (isTauri) {
+  if (isDesktop) {
     document
       .getElementById("btn-fs-capture-window")
       ?.addEventListener("click", () => doCapture("window"));
@@ -361,11 +377,12 @@ async function init(): Promise<void> {
     });
 
     // Extension-capture HTTP push + Native Messaging handoff sweep.
-    // Walks `<portable_dir>/data/incoming/` and persists each file
+    // Drains `<userData>/data/incoming/` via the Phase 9
+    // `extension.drainIncoming` IPC and persists each capture
     // through `DesktopStore.saveImage` (lands in `Inbox/`).
     void startIncomingListener();
     // One-time toast surfacing the legacy SQLite directory's path
-    // for users upgrading from the pre-Phase-4 build.
+    // for users upgrading from the pre-Electron build.
     void maybeShowLegacyDataNotice();
   }
 
@@ -450,179 +467,112 @@ async function persistViaDesktopStore(opts: PersistOpts): Promise<string | null>
 }
 
 async function startIncomingListener(): Promise<void> {
-  // Listen for real-time events from the Rust HTTP server (the
-  // browser extension POSTs captures there).
-  try {
-    const { listen } = await import("@tauri-apps/api/event");
-    await listen("chrome-capture", async () => {
-      // Small delay to let file be written
-      await new Promise((r) => setTimeout(r, 500));
-      await processIncomingFs();
+  // Listen for real-time events from the Electron HTTP server
+  // (the browser extension POSTs captures there). The main
+  // process emits `chrome-capture` after writing each capture
+  // to `<userData>/data/incoming/`; the renderer then drains
+  // the staging directory via the Phase 9 `extension.drainIncoming`
+  // IPC.
+  const ipc = api();
+  if (ipc) {
+    ipc.on("chrome-capture", () => {
+      void (async () => {
+        // Small delay to let the file be flushed before draining.
+        await new Promise((r) => setTimeout(r, 500));
+        await processIncomingFs();
+      })();
     });
-  } catch {
-    // Fallback: if event listening fails, use polling
   }
 
-  // Also poll periodically (catches missed events, Native
+  // Also poll periodically (catches missed events + Native
   // Messaging fallback).
   setInterval(() => void processIncomingFs(), 5000);
 }
 
-/** Shape of `<portable_dir>/data/incoming/<name>.json` written by
- *  `packages/desktop/src-tauri/src/http_server.rs:save_incoming`.
- *  The image file lives at `path` (absolute). */
-interface IncomingMeta {
+interface DrainedCapture {
   filename: string;
-  path: string;
   source_url: string;
   width: number;
   height: number;
+  data_url: string;
 }
 
 /**
- * Sweep `<portable_dir>/data/incoming/` from the JS side via
- * `@tauri-apps/plugin-fs`, save each image through `DesktopStore`
- * (lands in `Inbox/`), delete the source .json + image. The first
- * file in the batch opens in the editor (matching the original
- * single-image flow); subsequent files in the same batch persist
+ * Drain `<userData>/data/incoming/` via the
+ * `extension.drainIncoming` IPC, save each capture through
+ * `DesktopStore` (lands in `Inbox/`). The first capture in the
+ * batch opens in the editor (matching the historical "newest
+ * capture takes focus" behaviour); subsequent ones persist
  * silently.
+ *
+ * The renderer never touches the disk directly — Phase 9 of
+ * `desktop-electron-migration.md` moved the file IO into the
+ * main process so the renderer can drop the
+ * `@tauri-apps/plugin-fs` runtime dep entirely.
  */
 async function processIncomingFs(): Promise<void> {
   if (!fsGallery) return;
-  let incomingDir: string;
+  const ipc = api();
+  if (!ipc) return;
+  let captures: DrainedCapture[];
   try {
-    const portableDir = await tauriInvoke<string>("get_portable_dir");
-    incomingDir = `${portableDir}/data/incoming`;
-  } catch {
+    captures = await ipc.invoke<DrainedCapture[]>("extension.drainIncoming");
+  } catch (err) {
+    console.error("[desktop] extension.drainIncoming failed:", err);
     return;
   }
-
-  const fs = await import("@tauri-apps/plugin-fs");
-
-  let entries: { name: string; isFile: boolean }[];
-  try {
-    const dirEntries = await fs.readDir(incomingDir);
-    entries = dirEntries.map((e) => ({ name: e.name, isFile: e.isFile }));
-  } catch {
-    // Directory doesn't exist yet — nothing to sweep.
-    return;
-  }
-
-  // Drive the loop off the .json metadata files, with the image
-  // file at `meta.path`. The JSON-driven approach also catches
-  // orphan .json files (writes that completed the metadata but
-  // lost the image) and prunes them.
-  const metaFiles = entries
-    .filter((e) => e.isFile && e.name.toLowerCase().endsWith(".json"))
-    .map((e) => `${incomingDir}/${e.name}`);
-
-  for (let i = 0; i < metaFiles.length; i++) {
-    const metaPath = metaFiles[i]!;
+  for (let i = 0; i < captures.length; i++) {
+    const cap = captures[i]!;
     try {
-      const text = await fs.readTextFile(metaPath);
-      const meta = JSON.parse(text) as Partial<IncomingMeta>;
-      const imagePath = meta.path;
-      if (!imagePath) {
-        await fs.remove(metaPath).catch(() => {});
-        continue;
-      }
-      // Read source image as bytes → base64 data URL. Rust always
-      // writes JPEG (per `http_server.rs:save_incoming`) so the
-      // MIME prefix is hard-coded.
-      let bytes: Uint8Array;
-      try {
-        bytes = (await fs.readFile(imagePath)) as Uint8Array;
-      } catch {
-        // Orphan metadata — image vanished. Clean up and skip.
-        await fs.remove(metaPath).catch(() => {});
-        continue;
-      }
-      const base64 = bytesToBase64(bytes);
-      const dataUrl = `data:image/jpeg;base64,${base64}`;
-
       // Resolve dimensions: use the metadata when present, fall
-      // back to decoding the image (rare — Rust populates them).
-      let w = meta.width ?? 0;
-      let h = meta.height ?? 0;
+      // back to decoding the image (rare — main-process always
+      // populates them).
+      let w = cap.width;
+      let h = cap.height;
       if (!w || !h) {
-        const img = await loadImage(dataUrl);
+        const img = await loadImage(cap.data_url);
         w = img.naturalWidth;
         h = img.naturalHeight;
       }
-
       await persistViaDesktopStore({
-        dataUrl,
+        dataUrl: cap.data_url,
         width: w,
         height: h,
-        sourceUrl: meta.source_url ?? "",
+        sourceUrl: cap.source_url,
         folderPath: "Inbox",
-        // Open only the first file — matches the historical
-        // "newest capture takes focus" behaviour. Files 2..N in
-        // the same batch land in the gallery silently.
         openInEditor: i === 0,
       });
-
-      // Best-effort cleanup of the source files. Failures here
-      // don't block the save; the next sweep will see them again
-      // and retry.
-      await fs.remove(imagePath).catch(() => {});
-      await fs.remove(metaPath).catch(() => {});
     } catch (e) {
       console.error("[desktop] processIncoming entry failed:", e);
     }
   }
 }
 
-/** Convert raw bytes to a base64 string. Used when building data
- *  URLs from filesystem-read bytes (incoming sweep, etc.). Avoids
- *  the `String.fromCharCode(...arr)` arg-spread limit by chunking
- *  the input — multi-megapixel JPEGs blow past 100k bytes easily. */
-function bytesToBase64(bytes: Uint8Array): string {
-  const chunkSize = 0x8000;
-  let binary = "";
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    const chunk = bytes.subarray(i, i + chunkSize);
-    binary += String.fromCharCode.apply(null, Array.from(chunk));
-  }
-  return btoa(binary);
-}
-
 /**
  * Surface a one-time banner explaining where the legacy SQLite
- * data lives. Shown on FS-mode boot when
+ * data lives. Shown on Electron-mode boot when
  * `<portable_dir>/data/annot.db` exists (= the user has prior
  * SQLite captures) AND the dismissal flag isn't set.
  *
- * The banner has a "Reveal in Finder/Explorer" affordance (via
- * `@tauri-apps/plugin-shell`'s `open(path)`) and a Dismiss
- * button that persists `localStorage.annotLegacyDataNoticeDismissed`.
- * It does NOT delete the legacy directory — the user owns that
- * decision.
+ * Phase 9 of `desktop-electron-migration.md` moved the
+ * existence check into the `extension.legacyDataInfo` IPC — the
+ * renderer doesn't touch the filesystem directly. The Reveal
+ * button calls `shell.openPath` (also IPC) for the OS file-
+ * manager open. It does NOT delete the legacy directory — the
+ * user owns that decision.
  */
 async function maybeShowLegacyDataNotice(): Promise<void> {
   if (legacyNoticeAlreadyDismissed()) return;
-  let portableDir: string;
+  const ipc = api();
+  if (!ipc) return;
+  let info: { exists: boolean; path: string };
   try {
-    portableDir = await tauriInvoke<string>("get_portable_dir");
+    info = await ipc.invoke<{ exists: boolean; path: string }>("extension.legacyDataInfo");
   } catch {
     return;
   }
-  const legacyDataDir = `${portableDir}/data`;
-  const legacyDbPath = `${legacyDataDir}/annot.db`;
-
-  // Only surface the notice if the user has prior SQLite data.
-  // A fresh install ships with neither the directory nor the db
-  // file; suppress the banner so the first-launch UX stays clean.
-  let hasLegacyDb = false;
-  try {
-    const fs = await import("@tauri-apps/plugin-fs");
-    hasLegacyDb = await fs.exists(legacyDbPath);
-  } catch {
-    return;
-  }
-  if (!hasLegacyDb) return;
-
-  renderLegacyDataNotice(legacyDataDir);
+  if (!info.exists) return;
+  renderLegacyDataNotice(info.path);
 }
 
 function renderLegacyDataNotice(legacyDataDir: string): void {
@@ -653,9 +603,15 @@ function renderLegacyDataNotice(legacyDataDir: string): void {
   galleryRoot.insertBefore(banner, galleryRoot.firstChild);
 
   banner.querySelector("#fs-legacy-notice-reveal")!.addEventListener("click", async () => {
+    const ipc = api();
+    if (!ipc) return;
     try {
-      const shell = await import("@tauri-apps/plugin-shell");
-      await shell.open(legacyDataDir);
+      const result = await ipc.invoke<{ ok: boolean; error?: string }>("shell.openPath", {
+        path: legacyDataDir,
+      });
+      if (!result.ok) {
+        console.error("[desktop] reveal legacy data dir failed:", result.error);
+      }
     } catch (e) {
       console.error("[desktop] reveal legacy data dir failed:", e);
     }

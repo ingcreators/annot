@@ -10,7 +10,7 @@
  * collapses Rust to packaging-only.
  */
 
-import type { AnnotationShape } from "@ingcreators/annot-core/tauri-bridge";
+import type { AnnotationShape } from "@ingcreators/annot-core/desktop-bridge";
 import { buildShapeXml } from "./index.js";
 import { px } from "./helpers.js";
 import { buildBackgroundPic } from "./shapes/mosaic-image.js";

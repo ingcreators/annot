@@ -11,7 +11,7 @@ import {
   unwrapBareTextShape,
   wrapBareRectForText,
 } from "@ingcreators/annot-core/editor/text-utils";
-import type { TextRun } from "@ingcreators/annot-core/tauri-bridge";
+import type { TextRun } from "@ingcreators/annot-core/desktop-bridge";
 import type { CanvasManager } from "../canvas-manager.js";
 import type { History } from "../history.js";
 import { createTextMiniToolbar, type TextMiniToolbarHandle } from "../text-mini-toolbar.js";

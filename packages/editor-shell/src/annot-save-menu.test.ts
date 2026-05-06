@@ -3,10 +3,15 @@
  *
  * `<annot-save-menu>` tests covering the orchestration the
  * element absorbed from the pre-Phase-6b
- * `openToolbarSaveMenu` helper: items + actions assembly
- * branches on `isTauri`, anchor-relative positioning, the
- * toggle-close behaviour, and the action dispatch on
- * menu-item click.
+ * `openToolbarSaveMenu` helper: items + actions assembly,
+ * anchor-relative positioning, the toggle-close behaviour, and
+ * the action dispatch on menu-item click.
+ *
+ * Phase 9 of `desktop-electron-migration.md` collapsed the prior
+ * Tauri-specific branch (system save dialog +
+ * `saveAsEditableImage`) — every host now downloads via
+ * `downloadAsImage` (which produces XMP'd output through
+ * `createEditableImage`).
  *
  * The export helpers (`saveToFile` / `downloadAsImage` / …) are
  * mocked so the tests don't need a real `CanvasManager`.
@@ -17,21 +22,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const exportMocks = vi.hoisted(() => ({
   saveToFile: vi.fn(),
   downloadAsImage: vi.fn(),
-  saveAsEditableImage: vi.fn(),
   exportPptx: vi.fn(),
 }));
 
 vi.mock("@ingcreators/annot-editor", () => ({
   saveToFile: exportMocks.saveToFile,
   downloadAsImage: exportMocks.downloadAsImage,
-  saveAsEditableImage: exportMocks.saveAsEditableImage,
   exportPptx: exportMocks.exportPptx,
 }));
 
-const tauriBridge = vi.hoisted(() => ({ isTauri: false }));
-vi.mock("@ingcreators/annot-core/tauri-bridge", () => tauriBridge);
-
-const { saveToFile, downloadAsImage, saveAsEditableImage, exportPptx } = exportMocks;
+const { saveToFile, downloadAsImage, exportPptx } = exportMocks;
 
 import "./annot-save-menu.js";
 import {
@@ -62,12 +62,10 @@ describe("AnnotSaveMenuElement.openFor", () => {
     document.body.innerHTML = "";
     saveToFile.mockClear();
     downloadAsImage.mockClear();
-    saveAsEditableImage.mockClear();
     exportPptx.mockClear();
-    tauriBridge.isTauri = false;
   });
 
-  it("creates a menu with browser-side items (download paths)", async () => {
+  it("creates a menu with the four browser-style download items", async () => {
     const anchor = makeAnchor();
     AnnotSaveMenuElement.openFor(anchor, fakeCtx());
     const menu = document.querySelector("annot-save-menu") as AnnotSaveMenuElement;
@@ -94,6 +92,16 @@ describe("AnnotSaveMenuElement.openFor", () => {
     expect(document.querySelector("annot-save-menu")).toBeNull();
   });
 
+  it("clicking JPG/PNG runs downloadAsImage with the requested format", async () => {
+    const anchor = makeAnchor();
+    AnnotSaveMenuElement.openFor(anchor, fakeCtx());
+    const menu = document.querySelector("annot-save-menu") as AnnotSaveMenuElement;
+    await menu.updateComplete;
+    const items = Array.from(menu.querySelectorAll<HTMLButtonElement>(".copy-dropdown-item"));
+    items[1]!.click();
+    expect(downloadAsImage).toHaveBeenLastCalledWith(expect.anything(), "jpg", "doc.png");
+  });
+
   it("clicking PPTX runs exportPptx", async () => {
     const anchor = makeAnchor();
     AnnotSaveMenuElement.openFor(anchor, fakeCtx());
@@ -102,25 +110,6 @@ describe("AnnotSaveMenuElement.openFor", () => {
     const items = Array.from(menu.querySelectorAll<HTMLButtonElement>(".copy-dropdown-item"));
     items[3]!.click();
     expect(exportPptx).toHaveBeenCalledTimes(1);
-  });
-
-  it("Tauri host swaps download paths for saveAsEditableImage", async () => {
-    tauriBridge.isTauri = true;
-    const anchor = makeAnchor();
-    AnnotSaveMenuElement.openFor(anchor, fakeCtx());
-    const menu = document.querySelector("annot-save-menu") as AnnotSaveMenuElement;
-    await menu.updateComplete;
-    const labels = Array.from(
-      menu.querySelectorAll<HTMLButtonElement>(".copy-dropdown-item"),
-    ).map((b) => b.textContent?.trim());
-    expect(labels).toContain("Save as JPG (re-editable)");
-    expect(labels).toContain("Save as PNG (re-editable)");
-    // JPG path now goes through saveAsEditableImage
-    const jpgBtn = Array.from(menu.querySelectorAll<HTMLButtonElement>(".copy-dropdown-item")).find(
-      (b) => b.textContent?.includes("JPG"),
-    )!;
-    jpgBtn.click();
-    expect(saveAsEditableImage).toHaveBeenCalledWith(expect.anything(), "jpg", "doc.png");
   });
 
   it("a second openFor with an open menu toggles it closed", async () => {

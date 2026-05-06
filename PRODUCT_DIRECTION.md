@@ -123,7 +123,7 @@ Current:
 @ingcreators/annot-core         Editor logic + SVG + PPTX export (browser)
 @ingcreators/annot-web          PWA host
 @ingcreators/annot-extension    Chrome extension (capture + handoff)
-@ingcreators/annot-desktop      Tauri desktop host
+@ingcreators/annot-desktop      Electron desktop host
 ```
 
 Target (additive, no renames to existing packages):

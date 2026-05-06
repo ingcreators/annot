@@ -22,7 +22,6 @@
     "./zip-bytes": "./src/zip/zip-bytes.ts",
     "./utils": "./src/utils/index.ts",
     "./utils/*": "./src/utils/*.ts",
-    "./tauri-bridge": "./src/utils/tauri-bridge.ts",
     "./desktop-bridge": "./src/utils/desktop-bridge.ts",
     "./storage": "./src/storage/index.ts",
     "./encode": "./src/encode/index.ts",
@@ -40,9 +39,6 @@
   },
   "dependencies": {
     "@ingcreators/annot-imagequant": "workspace:*",
-    "@tauri-apps/api": "^2.11.0",
-    "@tauri-apps/plugin-dialog": "^2.7.1",
-    "@tauri-apps/plugin-fs": "^2.5.1",
     "pako": "^2.1.0"
   }
 }

@@ -1,17 +1,16 @@
 /**
- * Desktop (Tauri / future-Electron) storage provider — path-based
- * identification, per-file XMP metadata, filesystem-as-folder-tree.
+ * Desktop (Electron) storage provider — path-based identification,
+ * per-file XMP metadata, filesystem-as-folder-tree.
  *
  * Direct sibling of {@link DeviceStore} from
  * `@ingcreators/annot-web/storage/device-store`. Where DeviceStore
  * targets the browser File System Access API (talks to a
  * `FileSystemDirectoryHandle`), DesktopStore targets a host-supplied
- * {@link DesktopFs} (today: `@tauri-apps/plugin-fs`; post-Electron-
- * migration: an `ipcRenderer.invoke('fs.*')` bridge). Everything
- * above the FS adapter — XMP encode pipeline, path validation,
- * uniquification on save, `ImageRecord` round-trip,
- * `ThumbnailManager` integration, contract-test compliance — is
- * shared.
+ * {@link DesktopFs} backed by an `ipcRenderer.invoke('fs.*')`
+ * bridge into Node `fs/promises`. Everything above the FS adapter —
+ * XMP encode pipeline, path validation, uniquification on save,
+ * `ImageRecord` round-trip, `ThumbnailManager` integration,
+ * contract-test compliance — is shared.
  *
  * Annot-native captures save as `annot-<ts>.annot.{jpg,png}`;
  * images coming from outside (drag-dropped from the OS, imported

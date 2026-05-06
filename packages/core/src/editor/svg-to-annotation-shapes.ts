@@ -16,7 +16,7 @@
  * (`copyAsOffice`, `isTauri`) of the same module.
  */
 
-import type { AnnotationShape, TextRun } from "../utils/tauri-bridge.js";
+import type { AnnotationShape, TextRun } from "../utils/desktop-bridge.js";
 import { getEffectiveLineEndpoints } from "./transform-utils.js";
 
 /** Apply a group's `transform="translate(tx, ty)"` (or the

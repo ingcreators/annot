@@ -73,7 +73,6 @@ export {
   exportExcelSVG,
   exportSVGString,
   getPngDataUrl,
-  saveAsEditableImage,
   saveToFile,
 } from "./export.js";
 // PowerPoint export. Today coupled to a live `CanvasManager`;

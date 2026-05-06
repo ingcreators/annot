@@ -49,11 +49,11 @@ import { svgAnnotationsToShapes } from "@ingcreators/annot-core/editor/svg-to-an
 import type { ToolOptions } from "@ingcreators/annot-core/editor/tool-options";
 import {
   copyAsOffice,
-  isTauri,
+  isDesktop,
   loadToolPresets,
   saveToolPresets,
   type ToolPreset,
-} from "@ingcreators/annot-core/tauri-bridge";
+} from "@ingcreators/annot-core/desktop-bridge";
 import {
   DEFAULT_FILL_COLOR,
   DEFAULT_FONT_SIZE,
@@ -250,7 +250,7 @@ export class Toolbar {
     //   Browser ext    → chrome.storage.local
     //   Plain web / PWA → localStorage (fallback so dev & deployed
     //                     Web still remember per-variant defaults)
-    if (isTauri) {
+    if (isDesktop) {
       this.#loadPresetsFromFile();
     } else if (chrome?.storage?.local) {
       this.#loadPresetsFromStorage();
@@ -490,7 +490,7 @@ export class Toolbar {
     // Whether the host provides the __annot_showGallery hook that
     // gates the Gallery button. Pre-computed so the two places that
     // need the check (condition below + actual render) stay in sync.
-    const hasGalleryHook = !isTauri && typeof window.__annot_showGallery === "function";
+    const hasGalleryHook = !isDesktop && typeof window.__annot_showGallery === "function";
 
     // Open / Copy / Save group. The host can suppress this if it
     // renders these actions at the document-chrome level (e.g. the
@@ -499,7 +499,7 @@ export class Toolbar {
       shell.appendChild(this.#sep());
       const exportGroup = this.#div("toolbar-group");
 
-      if (!isTauri && typeof window.__annot_openFile === "function") {
+      if (!isDesktop && typeof window.__annot_openFile === "function") {
         const openBtn = this.#btn("folder_open", "Open File");
         openBtn.addEventListener("click", () => window.__annot_openFile?.());
         exportGroup.appendChild(openBtn);
@@ -513,7 +513,7 @@ export class Toolbar {
       saveWrap.className = "tool-btn-wrap";
       const saveBtn = this.#btn("save", "Save (Ctrl+S)");
       saveBtn.addEventListener("click", () => {
-        if (!isTauri && typeof window.__annot_saveAnnotations === "function") {
+        if (!isDesktop && typeof window.__annot_saveAnnotations === "function") {
           window.__annot_saveAnnotations();
         } else {
           saveToFile(this.#canvas, this.#getCurrentFilename?.());
@@ -613,7 +613,7 @@ export class Toolbar {
         this.#history.redo();
       } else if (e.ctrlKey && e.key === "s") {
         e.preventDefault();
-        if (!isTauri && typeof window.__annot_saveAnnotations === "function") {
+        if (!isDesktop && typeof window.__annot_saveAnnotations === "function") {
           window.__annot_saveAnnotations();
         } else {
           saveToFile(this.#canvas, this.#getCurrentFilename?.());
@@ -661,7 +661,7 @@ export class Toolbar {
   /** Exposed so host-rendered save buttons can trigger the canonical
    *  save path instead of re-implementing it. */
   saveNow(): void {
-    if (!isTauri && typeof window.__annot_saveAnnotations === "function") {
+    if (!isDesktop && typeof window.__annot_saveAnnotations === "function") {
       window.__annot_saveAnnotations();
     } else {
       saveToFile(this.#canvas, this.#getCurrentFilename?.());
@@ -683,7 +683,7 @@ export class Toolbar {
 
   /** Copy: GVML + PNG via Win32 API in one clipboard session */
   async #copyAll(): Promise<void> {
-    if (isTauri) {
+    if (isDesktop) {
       try {
         await this.#copyForOffice();
       } catch (err) {
@@ -1294,7 +1294,7 @@ export class Toolbar {
   }
 
   #savePresetsToFile(): void {
-    if (isTauri) {
+    if (isDesktop) {
       const tools: Record<string, ToolPreset> = {};
       for (const [id, opts] of this.#presets) {
         const fields = this.#presetFieldsForKey(id);

@@ -10,7 +10,7 @@
  * `<canvas>` / live-DOM dependence.
  */
 
-import type { AnnotationShape } from "@ingcreators/annot-core/tauri-bridge";
+import type { AnnotationShape } from "@ingcreators/annot-core/desktop-bridge";
 
 /** EMU per pixel (96 DPI). */
 export const PX_EMU = 9525;

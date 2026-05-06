@@ -71,10 +71,10 @@ packages/
                 filesystem library at `<userData>/library/` with
                 per-file XMP metadata (mirrors `DeviceStore`'s
                 model). The Electron main process lives in
-                `src-electron/`; the legacy Tauri crate at
-                `src-tauri/` is the rollback target until Phase 9
-                of `docs/plans/desktop-electron-migration.md`. See
-                `docs/plans/_done/desktop-storage-provider-migration.md`.
+                `src-electron/`. See
+                `docs/plans/_done/desktop-storage-provider-migration.md`
+                and
+                `docs/plans/_done/desktop-electron-migration.md`.
                 npm name: @ingcreators/annot-desktop
   imagequant/   In-tree wasm-bindgen wrapper around upstream
                 ImageOptim/libimagequant. Tier A from the runtime
@@ -189,7 +189,7 @@ in section 2 above.
 | `@ingcreators/annot-core/storage` | Tier A. Storage value types (`ImageRecord`, `FolderRecord`, `PageElement`, `PageMetadata`, `StorageProvider`). |
 | `@ingcreators/annot-core/utils` | Tier A. Pure utilities: `assertNonNull`, `computeDasharray`, `detectDashKey`, `newIdB58`, `DEFAULT_*` constants. |
 | `@ingcreators/annot-core/xmp` | Browser-side. `createEditableImage` / `readEditableImage` round-trip. |
-| `@ingcreators/annot-core/desktop-bridge` | Browser-side. Desktop-host IPC + `isDesktop` detection. Dual-transport: dispatches to Electron's `window.electronAPI.invoke` (default after Phase 5 of `desktop-electron-migration.md`) or Tauri's `__TAURI_INTERNALS__.invoke` (rollback path). `@ingcreators/annot-core/tauri-bridge` is a re-export shim that lives until Phase 9; the canonical name is `desktop-bridge`. |
+| `@ingcreators/annot-core/desktop-bridge` | Browser-side. Desktop-host IPC + `isDesktop` detection. Speaks Electron via `window.electronAPI.invoke` (Phase 9 of `_done/desktop-electron-migration.md` removed the Tauri sources + the dual-transport fallback). |
 | `@ingcreators/annot-editor` | Tier C. `CanvasManager`, `SelectionManager`, `PropertyPanel`, `History`, `ToolBase`, the tool hierarchy, save/copy/download helpers (`saveToFile`, `getPngDataUrl`, `copyAsImage`, `saveAsEditableImage`, `exportSVGString`, `exportPptx`, `downloadAsImage`, …), leaf widgets (`setTooltip`, `createThemeToggle`, `createCustomSelect`, `createColorPalette`, `openAnchoredPopover`), context menu (`openCanvasContextMenu`). |
 | `@ingcreators/annot-editor/<file>` | Per-file deep imports for editor internals (`tools/freehand-tool`, `property-controls`, etc.). Use sparingly. |
 | `@ingcreators/annot-render` | Tier C-render. `renderImageRecord` plus the shared OOXML DrawingML builder (`buildShapeXml(shape, { ns: "a" \| "p", id })`, `buildDrawingXml`, `buildBackgroundPic`) used by both `pptx-export` (PPTX slides) and `toolbar.ts:#copyForOffice` (Office clipboard). Future home of gallery bulk-export. **Does NOT depend on `annot-editor`.** |
@@ -210,11 +210,11 @@ Rules when adding public symbols:
   [`packages/core/src/editor/svg-to-annotation-shapes.ts`](./packages/core/src/editor/svg-to-annotation-shapes.ts)
   (Tier B) plus one per-shape builder under
   [`packages/render/src/drawingml/shapes/`](./packages/render/src/drawingml/shapes/).
-  Both surfaces — the Tauri Office-clipboard path (`ns: "a"`) and
-  the PPTX export path (`ns: "p"`) — pick the new shape up
-  automatically. Don't add per-shape OOXML to the Rust crate
-  (`packages/desktop/src-tauri/src/commands/clipboard.rs`) — Rust
-  is packaging-only since
+  Both surfaces — the Office-clipboard path (`ns: "a"`) and the
+  PPTX export path (`ns: "p"`) — pick the new shape up
+  automatically. The Electron-side host
+  (`packages/desktop/src-electron/ipc/clipboard.ts`) is
+  packaging-only since
   [`_done/office-paste-shared-drawing-builder` phase 3](./docs/plans/_done/office-paste-shared-drawing-builder.md).
 - The boundaries are CI-enforced by
   `packages/core/src/headless.test.ts`. Add a probe there if you

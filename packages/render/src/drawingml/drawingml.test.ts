@@ -22,7 +22,7 @@
  * forces the TS side to update in lockstep.
  */
 
-import type { AnnotationShape } from "@ingcreators/annot-core/tauri-bridge";
+import type { AnnotationShape } from "@ingcreators/annot-core/desktop-bridge";
 import { describe, expect, it } from "vitest";
 import { buildDrawingXml } from "./drawing-envelope.js";
 import { buildShapeXml } from "./index.js";

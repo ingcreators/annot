@@ -6,7 +6,7 @@
  * - "fullscreen": immediately returns the full image
  */
 
-import type { CaptureResult, WindowInfo } from "@ingcreators/annot-core/utils/tauri-bridge";
+import type { CaptureResult, WindowInfo } from "@ingcreators/annot-core/desktop-bridge";
 
 export type CaptureMode = "rect" | "window" | "fullscreen";
 

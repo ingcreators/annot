@@ -26,8 +26,6 @@
   },
   "dependencies": {
     "@ingcreators/annot-core": "workspace:*",
-    "@ingcreators/annot-render": "workspace:*",
-    "@tauri-apps/plugin-dialog": "^2.7.1",
-    "@tauri-apps/plugin-fs": "^2.5.1"
+    "@ingcreators/annot-render": "workspace:*"
   }
 }

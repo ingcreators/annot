@@ -6,7 +6,7 @@
  * + targeted shape tests for each formatting flag.
  */
 import { describe, expect, it } from "vitest";
-import type { TextRun } from "../utils/tauri-bridge.js";
+import type { TextRun } from "../utils/desktop-bridge.js";
 import { htmlToRuns, runsToHtml } from "./rich-text-mapper.js";
 
 function div(html: string): HTMLDivElement {

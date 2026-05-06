@@ -17,7 +17,7 @@
  * golden IS the Office-paste golden.
  */
 
-import type { AnnotationShape } from "@ingcreators/annot-core/tauri-bridge";
+import type { AnnotationShape } from "@ingcreators/annot-core/desktop-bridge";
 import { describe, expect, it } from "vitest";
 import { buildShapeXml } from "./index.js";
 

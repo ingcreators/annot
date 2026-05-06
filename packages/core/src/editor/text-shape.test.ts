@@ -6,7 +6,7 @@
  * `rich-text-and-shape-text` plan.
  */
 import { describe, expect, it } from "vitest";
-import type { TextRun } from "../utils/tauri-bridge.js";
+import type { TextRun } from "../utils/desktop-bridge.js";
 import { ANNOT_SVG_VERSION, ANNOT_SVG_VERSION_ATTR, stampAnnotVersion } from "./svg-format.js";
 import {
   applyTextShapeColor,

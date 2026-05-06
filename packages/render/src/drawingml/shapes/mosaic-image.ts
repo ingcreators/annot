@@ -1,4 +1,4 @@
-import type { AnnotationShape } from "@ingcreators/annot-core/tauri-bridge";
+import type { AnnotationShape } from "@ingcreators/annot-core/desktop-bridge";
 import { px, xfrmAttrs } from "../helpers.js";
 import type { NamespaceOpts } from "../namespace.js";
 
