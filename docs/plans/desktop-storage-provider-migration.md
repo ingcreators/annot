@@ -558,24 +558,42 @@ Whole-plan acceptance criteria:
     `annot-cloud` pointer-commit store, in particular,
     can land on the desktop with no extra work.
 
+## Resolved decisions
+
+- **Sequencing**: this plan lands first; the Electron migration
+  follows. Confirmed 2026-05-06.
+- **Metadata storage**: per-file XMP, matching `DeviceStore`.
+  Confirmed 2026-05-06.
+- **Library root location**: `<userData>/library/` (OS
+  conventions). Confirmed 2026-05-06. Rationale: works for
+  non-admin installs and survives auto-update across
+  versions on every platform —
+  - Windows: `%APPDATA%/Annot/library/`
+  - macOS: `~/Library/Application Support/Annot/library/`
+  - Linux: `~/.config/Annot/library/`
+  Pairs with a per-user app install
+  (`electron-builder`'s `nsis: { oneClick: true,
+  perMachine: false }` on Windows, `~/Applications/` on
+  macOS, AppImage on Linux) so the entire stack works
+  without admin rights. Auto-update writes only the install
+  dir, never `userData`, so the library is preserved across
+  updates by definition. A future "portable mode"
+  (`<exe-dir>/library/` fallback) is out of scope for v1
+  but the directory-resolution logic is structured so that
+  enabling it later is a single check.
+
 ## Open questions for sign-off
 
-- **Metadata storage**: per-file XMP (recommended, matches
-  `DeviceStore`) vs sidecar `.annot.json` (cleaner for users
-  who manually inspect files but doubles the file count) vs
-  per-folder `index.json` (faster bulk-load but breaks the
-  "drag-and-drop a single image" model). Phase 0's audit
-  documents the trade-off explicitly before locking it in.
-- **Library root location**: `<userData>/library/`
-  (recommended, follows OS conventions) vs `<portable_dir>/library/`
-  (matches today's portable-install ethos). Affects
-  multi-user installs and the migration mapping.
-- **Project-name → folder-name mapping**: lossy migration
-  (sanitise non-FS-safe characters) vs strict (refuse to
-  migrate, surface the conflict to the user). Recommended:
-  sanitise + log the mapping into `migration-state.json`
-  for diagnostics.
-- **Order vs Electron migration**: confirm landing this plan
-  first (which collapses the Electron plan's Phase 1).
-  Alternative is to land Electron first and port SQLite as
-  written — feasible but loses the convergence benefit.
+- **Project-name → folder-name mapping**: pending — depends on
+  whether the user's actual desktop install has any
+  non-`Default` projects. If only `Default` is in use,
+  Phase 4's migrator simplifies to "`data/project_1/*` →
+  `library/Inbox/*`, done; abandon the multi-project codepath
+  unless / until needed." If non-`Default` projects exist,
+  recommended treatment is **lossy sanitisation** of forbidden
+  filesystem characters (`<`, `>`, `:`, `"`, `/`, `\`, `|`,
+  `?`, `*`, control chars; reserved names like `CON` / `PRN`
+  on Windows) replaced with `_`, with the original-vs-mapped
+  table written to `migration-state.json` for diagnostics.
+  Collisions resolved via the same ` (2)` / ` (3)`
+  uniquification rules `DeviceStore` already uses.

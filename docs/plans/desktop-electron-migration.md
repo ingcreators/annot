@@ -393,6 +393,25 @@ installs, survives app-bundle moves on macOS, etc.). The
 `get_portable_dir` IPC keeps its name and contract (returns a
 path string) but now returns the userData root.
 
+**Non-admin install + auto-update**: paired with an
+`electron-builder` config that targets per-user install
+locations:
+
+- Windows: `nsis: { oneClick: true, perMachine: false }`
+  installs to `%LOCALAPPDATA%\Programs\Annot` — no UAC
+  prompt, no admin needed. Same scheme VSCode's "User
+  Installer" uses.
+- macOS: distributed as a `.dmg` whose drag-to-`Applications`
+  target is `~/Applications/` (per-user) by default.
+- Linux: AppImage (per-user `~/.local/bin/` or wherever the
+  user drops it), deb / rpm for system-wide installs.
+
+Auto-update via `electron-updater` writes to the install
+directory only — never to `userData`. Because the install
+dir is per-user, updates never need admin either. The
+library at `<userData>/library/` is preserved across
+versions by Electron's userData-survives-updates contract.
+
 ### Developer ergonomics: the Tauri detection global
 
 [`packages/core/src/utils/tauri-bridge.ts:1`](../../packages/core/src/utils/tauri-bridge.ts:1)
