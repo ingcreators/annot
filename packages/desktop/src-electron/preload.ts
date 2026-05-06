@@ -1,28 +1,39 @@
 /**
- * Electron preload — Phase 0 scaffold.
+ * Electron preload — Phases 0–2 of
+ * `docs/plans/desktop-electron-migration.md`.
  *
  * Runs in an isolated Chromium context with access to a small slice
  * of the Node API (`ipcRenderer`, `contextBridge`). Exposes:
  *
- *   - `window.electronAPI.invoke(channel, args)` — a thin pass-through
- *     over `ipcRenderer.invoke`. The Phase 0 scaffold ships exactly
- *     one functional channel (`ping` → `"pong"`); every other channel
- *     surfaces the main process's "no handler registered" error
- *     verbatim until Phases 1–4 land their respective handlers.
- *   - `window.__ANNOT_DESKTOP__ = true` — the runtime detection flag
- *     the renderer's `desktop-bridge.ts` (Phase 1) will check. The
- *     legacy `tauri-bridge.ts` checks `__TAURI_INTERNALS__`, which
- *     is *not* set by this preload, so the existing Tauri bridge
- *     correctly reports "Not running in Tauri" when the renderer
- *     loads under Electron. This is the intended behaviour for
- *     Phase 0 — gallery / capture / Office paste don't work yet.
+ *   - `window.electronAPI.invoke(channel, args)` — request/response
+ *     IPC, a thin pass-through over `ipcRenderer.invoke`.
+ *   - `window.electronAPI.on(channel, listener)` — main→renderer
+ *     event subscription. Phase 2 introduces this for the
+ *     `chrome-capture` event the http-server emits when the
+ *     extension's "send to local desktop" button POSTs to
+ *     `http://localhost:19530/capture`. Returns an
+ *     unsubscribe callback so the renderer doesn't have to thread
+ *     `removeListener` calls back through the bridge.
+ *   - `window.__ANNOT_DESKTOP__ = true` — the runtime detection
+ *     flag the renderer's `desktop-bridge.ts` checks.
  */
 
-import { contextBridge, ipcRenderer } from "electron";
+import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
 
 const electronAPI = {
   invoke: (channel: string, args?: unknown): Promise<unknown> =>
     ipcRenderer.invoke(channel, args),
+
+  /** Subscribe to a main→renderer event. Returns an unsubscribe
+   *  fn; the renderer-side listener receives only the IPC
+   *  `payload`, not the underlying Electron `IpcRendererEvent`
+   *  (which carries `sender` references that contextBridge
+   *  refuses to clone anyway). */
+  on(channel: string, listener: (payload: unknown) => void): () => void {
+    const wrapped = (_evt: IpcRendererEvent, payload: unknown): void => listener(payload);
+    ipcRenderer.on(channel, wrapped);
+    return () => ipcRenderer.removeListener(channel, wrapped);
+  },
 } as const;
 
 contextBridge.exposeInMainWorld("electronAPI", electronAPI);
