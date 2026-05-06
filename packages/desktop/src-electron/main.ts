@@ -1,11 +1,12 @@
 /**
- * Electron main process — Phases 1+2+3+4 of
+ * Electron main process — Phases 1+2+3+4+5+6 of
  * `docs/plans/desktop-electron-migration.md`.
  *
- * Boots a single `BrowserWindow`, resolves the library root under
+ * Boots the main `BrowserWindow`, resolves the library root under
  * `app.getPath('userData')`, registers the Phase 1+2+3+4 IPC handler
- * surface, and starts the localhost HTTP server on :19530 that
- * catches extension-handoff captures.
+ * surface plus the Phase 6 Browse window factory, and starts the
+ * localhost HTTP server on :19530 that catches extension-handoff
+ * captures.
  *
  * Phase 1 surface: `fs.*` filesystem primitives + `app.getLibraryRoot`.
  *
@@ -46,10 +47,14 @@ import {
   clipboard,
   desktopCapturer,
   ipcMain,
+  Menu,
   nativeImage,
   screen,
+  webContents,
+  type MenuItemConstructorOptions,
 } from "electron";
 import { startHttpServer } from "./http-server.js";
+import type { CapturedImage } from "./ipc/browse.js";
 import { registerAllIpcHandlers, type RegisteredIpc } from "./ipc/index.js";
 import type { CapturerSourceLite, OverlayHandle } from "./ipc/screen-capture.js";
 
@@ -82,6 +87,7 @@ const OVERLAY_WINDOW_TITLE = "annot-capture-overlay";
 
 let mainWindow: BrowserWindow | null = null;
 let overlayWindow: BrowserWindow | null = null;
+let browseWindow: BrowserWindow | null = null;
 
 function createMainWindow(): BrowserWindow {
   const win = new BrowserWindow({
@@ -213,6 +219,115 @@ function spawnCaptureOverlay(
   };
 }
 
+/** Spawn (or focus + navigate) the Browse window — Phase 6 of
+ *  `desktop-electron-migration.md`. Loads the chrome from
+ *  `browse.html`, which embeds an `<webview>` for the user-
+ *  navigated URL. The IPC `browse.captureVisible` then
+ *  captures that webview via `webContents.fromId().capturePage()`. */
+async function openOrFocusBrowseWindow(opts: { url?: string } = {}): Promise<void> {
+  if (browseWindow && !browseWindow.isDestroyed()) {
+    if (browseWindow.isMinimized()) browseWindow.restore();
+    browseWindow.show();
+    browseWindow.focus();
+    if (opts.url) {
+      browseWindow.webContents.send("browse.navigate", { url: opts.url });
+    }
+    return;
+  }
+
+  const win = new BrowserWindow({
+    width: 1280,
+    height: 800,
+    title: "Annot Browse",
+    webPreferences: {
+      preload: join(__dirname, "../preload/preload.cjs"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+      // The `<webview>` tag inside `browse.html` requires this
+      // permission. Without it the tag renders as a no-op `div`.
+      webviewTag: true,
+    },
+  });
+
+  if (RENDERER_DEV_URL) {
+    void win.loadURL(`${RENDERER_DEV_URL}/browse.html`);
+  } else {
+    void win.loadFile(join(__dirname, "../renderer/browse.html"));
+  }
+
+  browseWindow = win;
+  win.on("closed", () => {
+    if (browseWindow === win) browseWindow = null;
+  });
+
+  // Pop-up handling — `window.open()` and `<a target="_blank">`
+  // currently route to the Browse window's own webview rather
+  // than spawning OS-level windows. The plan notes a multi-tab
+  // follow-up; for now, deny new windows so OAuth flows that
+  // expect a popup show a clear error rather than silently
+  // failing.
+  win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+
+  // Send the navigation request once the chrome's renderer
+  // signals ready. Browser renderer dispatches a one-shot
+  // `browse.ready` IPC after `DOMContentLoaded`; until then
+  // queue the navigation.
+  if (opts.url) {
+    win.webContents.once("did-finish-load", () => {
+      win.webContents.send("browse.navigate", { url: opts.url });
+    });
+  }
+}
+
+/** Build the application menu bar. The Phase 6 surface adds a
+ *  single "Browse → New Browse Window" item; the rest mirrors
+ *  Electron's default menu so platform-standard shortcuts
+ *  (Cmd-Q, Ctrl-Shift-I, etc.) keep working. */
+function buildAppMenu(): Menu {
+  const isMac = process.platform === "darwin";
+  const fileMenu: MenuItemConstructorOptions = {
+    label: "File",
+    submenu: [
+      {
+        label: "New Browse Window",
+        accelerator: "CmdOrCtrl+B",
+        click: () => void openOrFocusBrowseWindow(),
+      },
+      { type: "separator" },
+      isMac ? { role: "close" } : { role: "quit" },
+    ],
+  };
+  const template: MenuItemConstructorOptions[] = [
+    ...(isMac ? [{ role: "appMenu" } as MenuItemConstructorOptions] : []),
+    fileMenu,
+    { role: "editMenu" },
+    { role: "viewMenu" },
+    { role: "windowMenu" },
+  ];
+  return Menu.buildFromTemplate(template);
+}
+
+/** Capture the visible viewport of a `<webview>` by its
+ *  webContentsId. The renderer-side `browse.ts` calls
+ *  `<webview>.getWebContentsId()` and forwards the id; this main-
+ *  side lookup uses `webContents.fromId()` to resolve the actual
+ *  capture target. */
+async function captureWebContentsById(webContentsId: number): Promise<CapturedImage> {
+  const wc = webContents.fromId(webContentsId);
+  if (!wc) {
+    throw new Error(`[browse] webContents id ${webContentsId} not found`);
+  }
+  const image = await wc.capturePage();
+  const png = image.toPNG();
+  const size = image.getSize();
+  return {
+    png: new Uint8Array(png.buffer, png.byteOffset, png.byteLength),
+    width: size.width,
+    height: size.height,
+  };
+}
+
 void app.whenReady().then(async () => {
   ipcMain.handle("ping", () => "pong");
 
@@ -237,6 +352,11 @@ void app.whenReady().then(async () => {
         show: () => win.show(),
         focus: () => win.focus(),
       };
+    },
+    browse: {
+      libraryRoot,
+      openBrowseWindow: (browseOpts) => openOrFocusBrowseWindow(browseOpts),
+      captureWebContents: captureWebContentsById,
     },
     clipboard: {
       writeBuffer: (format, data) => {
@@ -319,6 +439,8 @@ void app.whenReady().then(async () => {
   } catch (err) {
     console.error("[annot-http] failed to start:", err);
   }
+
+  Menu.setApplicationMenu(buildAppMenu());
 
   createMainWindow();
 
