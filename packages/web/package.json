@@ -11,7 +11,8 @@
   "type": "module",
   "exports": {
     "./lit": "./src/lit.ts",
-    "./editor/*": "./src/editor/*.ts"
+    "./editor/*": "./src/editor/*.ts",
+    "./storage/*": "./src/storage/*.ts"
   },
   "scripts": {
     "dev": "vite",
