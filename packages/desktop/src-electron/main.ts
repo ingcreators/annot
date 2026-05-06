@@ -1,9 +1,9 @@
 /**
- * Electron main process — Phases 1+2+3 of
+ * Electron main process — Phases 1+2+3+4 of
  * `docs/plans/desktop-electron-migration.md`.
  *
  * Boots a single `BrowserWindow`, resolves the library root under
- * `app.getPath('userData')`, registers the Phase 1+2+3 IPC handler
+ * `app.getPath('userData')`, registers the Phase 1+2+3+4 IPC handler
  * surface, and starts the localhost HTTP server on :19530 that
  * catches extension-handoff captures.
  *
@@ -16,14 +16,18 @@
  * extension-capture HTTP server (`POST /capture` →
  * `chrome-capture` IPC event).
  *
- * Phase 3 surface (this file): screen capture
+ * Phase 3 surface: screen capture
  * (`capture_screen` / `list_windows` / `capture_window` /
- * `capture_region` / `start_capture_overlay` / `get_capture_params`
- * / `capture_overlay_result`). Cross-platform via Electron's
- * `desktopCapturer.getSources` with an explicit `thumbnailSize`.
+ * `capture_region` / `start_capture_overlay` /
+ * `get_capture_params` / `capture_overlay_result`). Cross-
+ * platform via Electron's `desktopCapturer.getSources` with an
+ * explicit `thumbnailSize`.
  *
- * Still pending:
- *   - Office clipboard copy (`copy_as_office`). Phase 4.
+ * Phase 4 surface (this file): Office clipboard
+ * (`copy_as_office`). Builds a GVML OPC ZIP envelope in pure JS
+ * and writes it under `Art::GVML ClipFormat` via Electron's
+ * built-in `clipboard.writeBuffer` (no native addon — see
+ * `ipc/clipboard.ts` for the architectural rationale).
  *
  * The Tauri build remains the default `pnpm dev` / `pnpm build`
  * target until Phase 5's cutover; the renderer's existing
@@ -39,6 +43,7 @@ import { fileURLToPath } from "node:url";
 import {
   app,
   BrowserWindow,
+  clipboard,
   desktopCapturer,
   ipcMain,
   nativeImage,
@@ -232,6 +237,19 @@ void app.whenReady().then(async () => {
         show: () => win.show(),
         focus: () => win.focus(),
       };
+    },
+    clipboard: {
+      writeBuffer: (format, data) => {
+        // `clipboard.writeBuffer` expects a Node `Buffer`. Convert
+        // the Uint8Array via `Buffer.from(view, byteOffset,
+        // byteLength)` so the underlying ArrayBuffer isn't
+        // copied — `clipboard.writeBuffer` finishes synchronously,
+        // so the lifetime is fine.
+        const buf = Buffer.from(data.buffer, data.byteOffset, data.byteLength);
+        clipboard.writeBuffer(format, buf);
+      },
+      pngToJpeg: pngToJpegViaNativeImage,
+      isSupported: () => process.platform === "win32",
     },
     screenCapture: {
       getPrimaryDisplay: () => {
