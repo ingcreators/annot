@@ -3,7 +3,15 @@
   "compilerOptions": {
     "rootDir": "src",
     "outDir": "dist",
-    "types": []
+    // `chrome-types` covers the `chrome.runtime` symbols
+    // `@ingcreators/annot-web/storage/bridge` references — needed
+    // because Phase 2 of `desktop-storage-provider-migration.md`
+    // imports the unified gallery's `FileManager` from the web
+    // package, which transitively pulls those types in. Vite
+    // strips the actual chrome.* call sites at build time (the
+    // desktop never reaches that code path); the types are
+    // typecheck-only.
+    "types": ["chrome-types"]
   },
   "include": ["src/**/*.ts"]
 }

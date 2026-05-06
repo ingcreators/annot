@@ -51,6 +51,15 @@ export const BUILT_IN_STORAGE_MODES = [
   "googledrive",
   "github",
   "extension",
+  // Tauri / Electron desktop host's filesystem-backed library
+  // (`@ingcreators/annot-desktop`'s `DesktopStore`). The PWA never
+  // instantiates a `DesktopStore`; the mode is registered here so
+  // shared consumers (sidebar chip strip, breadcrumb root label,
+  // `disableBuiltinStorage` validation, plugin-vs-built-in check)
+  // recognise it. The desktop host owns the store lifecycle in its
+  // own bootstrap; the bridge below intentionally has no `desktop`
+  // slot in its `active()` switch — it's never asked for one.
+  "desktop",
 ] as const;
 
 export type BuiltInStorageMode = (typeof BUILT_IN_STORAGE_MODES)[number];

@@ -103,6 +103,9 @@ importers:
       '@tauri-apps/cli':
         specifier: ^2.11.0
         version: 2.11.0
+      chrome-types:
+        specifier: ^0.1.327
+        version: 0.1.425
       typescript:
         specifier: 'catalog:'
         version: 6.0.3

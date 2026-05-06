@@ -54,6 +54,31 @@
         </div>
       </div>
     </div>
+
+    <!--
+      Phase 2 of `docs/plans/desktop-storage-provider-migration.md`:
+      host DOM for the unified `<annot-file-manager-shell>` +
+      `<annot-sidebar>` mounted by `bootstrap.ts` when
+      `localStorage.annotDesktopStorageMode === "fs"`. Hidden by
+      default (the bootstrap toggles it visible after construction);
+      Phase 4 default-flips, Phase 5 deletes the bespoke
+      `#gallery-view` above and the `display:none` here.
+    -->
+    <div id="desktop-fs-gallery" style="display:none;">
+      <div class="desktop-fs-action-row">
+        <!--
+          Window / Region capture stay outside the unified "New"
+          menu for the first cycle (per Phase 0 audit gap #1) until
+          a `getNewMenuExtras?` host hook lands on `<annot-sidebar>`.
+        -->
+        <button id="btn-fs-capture-window" class="action-btn action-btn-primary">Capture Window</button>
+        <button id="btn-fs-capture-region" class="action-btn action-btn-primary">Capture Region</button>
+      </div>
+      <div class="desktop-fs-gallery-body">
+        <div id="desktop-fs-sidebar" class="desktop-fs-sidebar"></div>
+        <div id="desktop-fs-main-content" class="desktop-fs-main-content"></div>
+      </div>
+    </div>
   </div>
   <script type="module" src="./src/app/app.ts"></script>
 </body>

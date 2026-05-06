@@ -12,12 +12,35 @@ import {
   loadScreenshot,
   saveScreenshot,
 } from "@ingcreators/annot-core/tauri-bridge";
+import {
+  bootstrapDesktopFsGallery,
+  type DesktopGalleryHandle,
+} from "../storage/bootstrap.js";
 import { Gallery } from "./gallery.js";
 import { ProjectManager } from "./project-manager.js";
 
 let currentCanvas: CanvasManager | null = null;
 let _currentImageId: number | undefined;
 let gallery: Gallery | null = null;
+let fsGallery: DesktopGalleryHandle | null = null;
+
+/**
+ * Phase 2 of `docs/plans/desktop-storage-provider-migration.md`:
+ * developer feature flag toggling between the bespoke SQLite
+ * gallery (`"sqlite"`, default) and the unified
+ * `<annot-file-manager-shell>` against `DesktopStore` (`"fs"`).
+ *
+ * Set via DevTools — `localStorage.annotDesktopStorageMode = "fs"`
+ * — then reload. Phase 4 default-flips to `"fs"`; Phase 5 deletes
+ * the SQLite codepath and the flag itself.
+ */
+function getDesktopStorageMode(): "sqlite" | "fs" {
+  try {
+    return window.localStorage.getItem("annotDesktopStorageMode") === "fs" ? "fs" : "sqlite";
+  } catch {
+    return "sqlite";
+  }
+}
 
 function showView(view: "gallery" | "editor"): void {
   document.getElementById("gallery-view")!.style.display = view === "gallery" ? "" : "none";
@@ -26,6 +49,11 @@ function showView(view: "gallery" | "editor"): void {
 
 function openEditor(dataUrl: string, width: number, height: number, imageId?: number): void {
   showView("editor");
+  // FS-mode keeps its gallery in `#desktop-fs-gallery`, separate
+  // from the bespoke `#gallery-view` `showView` toggles. Hide it
+  // explicitly while the editor is up so the canvas isn't sitting
+  // on top of a stale gallery list.
+  fsGallery?.hideGallery();
   _currentImageId = imageId;
 
   const svg = document.getElementById("svg-root") as unknown as SVGSVGElement;
@@ -417,7 +445,142 @@ function cropImage(
 
 // --- Init ---
 
+/**
+ * Phase 2 FS-mode boot path: hide the bespoke gallery DOM, mount
+ * the unified `FileManager` against `DesktopStore`, wire the
+ * sidebar's "New" menu callbacks. The bespoke header buttons
+ * (Capture Screen / Window / Region / Open / Paste) stay reachable
+ * via the top-of-viewport action row outside the unified gallery
+ * surface so QA can still exercise them; Phase 3 reroutes those
+ * capture pipelines through `DesktopStore` as well.
+ */
+async function initFsMode(): Promise<void> {
+  showView("gallery");
+  fsGallery = await bootstrapDesktopFsGallery({
+    onOpenImage: async (record) => {
+      if (!fsGallery) return;
+      const full = await fsGallery.store.getImage(record.path);
+      if (!full?.originalDataUrl) return;
+      const img = await loadImage(full.originalDataUrl);
+      openEditor(full.originalDataUrl, img.naturalWidth, img.naturalHeight);
+    },
+    onCaptureScreen: async () => {
+      // Phase 2 stop-gap: the legacy `doCapture` path lands the
+      // file in `<portable_dir>/data/`, not `<userData>/library/`,
+      // so the unified gallery doesn't see it. QA flipping the
+      // flag should use Upload / Paste for end-to-end verification
+      // until Phase 3 reroutes capture through `DesktopStore`.
+      await doCapture("fullscreen");
+    },
+    onTimedCapture: async () => {
+      // Timed capture isn't implemented in the legacy desktop
+      // host; Phase 3 introduces it natively against
+      // `DesktopStore`. Stub for now so the menu item doesn't
+      // crash if surfaced by `isScreenCaptureSupported()`.
+    },
+    onPasteClipboard: async () => {
+      try {
+        const items = await navigator.clipboard.read();
+        for (const item of items) {
+          for (const type of item.types) {
+            if (!type.startsWith("image/")) continue;
+            const blob = await item.getType(type);
+            const dataUrl = await blobToDataUrl(blob);
+            const img = await loadImage(dataUrl);
+            await persistViaDesktopStore(dataUrl, img.naturalWidth, img.naturalHeight);
+            return;
+          }
+        }
+      } catch (e) {
+        console.error("[fs-mode] paste failed:", e);
+      }
+    },
+    onUploadImage: () => {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = "image/*";
+      input.onchange = async () => {
+        const file = input.files?.[0];
+        if (!file) return;
+        const dataUrl = await blobToDataUrl(file);
+        const img = await loadImage(dataUrl);
+        await persistViaDesktopStore(dataUrl, img.naturalWidth, img.naturalHeight, file.name);
+      };
+      input.click();
+    },
+  });
+
+  // Wire the back button + the Window/Region capture row that
+  // sits OUTSIDE the unified gallery (per Phase 0 audit
+  // recommendation #1). Capture results still go through the
+  // legacy SQLite path until Phase 3 reroutes them.
+  document.getElementById("btn-back")!.addEventListener("click", () => {
+    showView("gallery");
+    fsGallery?.showGallery();
+    currentCanvas = null;
+    _currentImageId = undefined;
+    void fsGallery?.refresh();
+  });
+
+  if (isTauri) {
+    document
+      .getElementById("btn-fs-capture-window")
+      ?.addEventListener("click", () => doCapture("window"));
+    document
+      .getElementById("btn-fs-capture-region")
+      ?.addEventListener("click", () => doCapture("rect"));
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "PrintScreen") {
+        e.preventDefault();
+        void doCapture("rect");
+      }
+    });
+  }
+}
+
+/** Persist a captured / uploaded data URL via `DesktopStore` and
+ *  open it in the editor. Used by FS-mode upload + paste paths
+ *  (Phase 2). Phase 3 wires capture screen / window / region /
+ *  extension-handoff through this same helper. */
+async function persistViaDesktopStore(
+  dataUrl: string,
+  w: number,
+  h: number,
+  filename?: string,
+): Promise<void> {
+  if (!fsGallery) return;
+  const now = new Date().toISOString();
+  const folderPath = fsGallery.fileManager.currentFolderPath || "Inbox";
+  await fsGallery.store.saveImage(
+    {
+      folderPath,
+      originalDataUrl: dataUrl,
+      thumbnailDataUrl: "",
+      annotationsSvg: "",
+      width: w,
+      height: h,
+      sourceUrl: "",
+      tags: {},
+      createdAt: now,
+      updatedAt: now,
+    },
+    filename ? { filename } : undefined,
+  );
+  await fsGallery.refresh();
+  openEditor(dataUrl, w, h);
+}
+
 function init(): void {
+  // Phase 2 feature flag: when set, mount the unified gallery
+  // against `DesktopStore` instead of the bespoke SQLite-backed
+  // one. Defaults to the legacy path so an unset flag is a
+  // no-op upgrade.
+  if (getDesktopStorageMode() === "fs") {
+    void initFsMode();
+    return;
+  }
+
   showView("gallery");
 
   const galleryView = document.getElementById("gallery-view")!;
