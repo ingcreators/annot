@@ -75,10 +75,19 @@ function dismissLegacyNotice(): void {
 
 function showEditorView(): void {
   document.getElementById("editor-view")!.style.display = "";
+  // `body.editor-mode` is the switch the editor.css rules in
+  // `@ingcreators/annot-core/styles/editor.css` watch for. It
+  // promotes `#editor-sidebar` from `display: none` to a 48 px
+  // vertical strip, hides the gallery `#toolbar`, and shifts
+  // `#canvas-container` to make room for the sidebar. `app.css`
+  // overrides `top: 48px` (PWA reserves that for editor-header)
+  // back to `0` since the desktop has no editor-header.
+  document.body.classList.add("editor-mode");
 }
 
 function hideEditorView(): void {
   document.getElementById("editor-view")!.style.display = "none";
+  document.body.classList.remove("editor-mode");
 }
 
 function openEditor(dataUrl: string, width: number, height: number): void {
@@ -171,11 +180,32 @@ function openEditor(dataUrl: string, width: number, height: number): void {
     zoomMenu.style.display = "none";
   });
 
-  const toolbarEl = document.getElementById("toolbar")!;
-  toolbarEl.innerHTML = "";
-  const toolbar = new Toolbar(toolbarEl, canvas, history, selection, (toolName) => {
-    statusTool.textContent = toolName;
-  });
+  const sidebarEl = document.getElementById("editor-sidebar")!;
+  sidebarEl.innerHTML = "";
+  // Mirror the PWA's editor-mode toolbar shape: vertical left
+  // strip, no gallery button (the desktop has a Back button in
+  // statusbar). Save / theme stay enabled because the desktop
+  // doesn't ship an editor-header where those would otherwise live.
+  // Horizontal mode is effectively dead code post-Lit-migration —
+  // `<annot-toolbar>` defaults to `display: inline` and only the
+  // vertical path explicitly promotes to `display: flex`, so a
+  // horizontal toolbar collapses into a vertical stack of mis-laid
+  // children. Keeping desktop on the same orientation as the PWA
+  // editor avoids that pitfall and keeps the visual contract
+  // identical across hosts.
+  const toolbar = new Toolbar(
+    sidebarEl,
+    canvas,
+    history,
+    selection,
+    (toolName) => {
+      statusTool.textContent = toolName;
+    },
+    {
+      orientation: "vertical",
+      showGalleryButton: false,
+    },
+  );
 
   // Property panel for selected shapes
   const canvasContainer = document.getElementById("canvas-container")!;

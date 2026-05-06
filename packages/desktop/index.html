@@ -16,9 +16,23 @@
 </head>
 <body>
   <div id="app-root">
-    <!-- Editor view (shown when editing) -->
+    <!--
+      Editor view (shown when editing). Mirrors the PWA's editor-mode
+      layout: vertical tool strip on the left (`#editor-sidebar` from
+      `@ingcreators/annot-core/styles/editor.css`), canvas in the
+      middle, statusbar at the bottom.
+
+      The PWA also has an `<div id="editor-header">` at the top
+      carrying brand + breadcrumb + save/copy + theme. The desktop
+      omits it because the native window menu (File / Edit / View /
+      Window) plus the per-tool save / theme buttons already inside
+      the vertical toolbar (showSaveGroup + showThemeToggle on the
+      Toolbar options) cover those actions. `app.css` overrides
+      `top: 0` on the sidebar + canvas to reclaim the 48px the PWA
+      reserves for editor-header.
+    -->
     <div id="editor-view" style="display:none;">
-      <div id="toolbar"></div>
+      <div id="editor-sidebar"></div>
       <div id="canvas-container">
         <svg id="svg-root" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"></svg>
       </div>
