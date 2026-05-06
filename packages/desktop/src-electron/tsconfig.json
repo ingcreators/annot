@@ -1,0 +1,15 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "../dist-electron",
+    // The Electron main + preload run in Node, not the browser. Drop
+    // the DOM libs the base tsconfig pulls in so we can't accidentally
+    // call `document` / `window` from a context where they're absent.
+    // The renderer keeps the package's root tsconfig, which still
+    // includes DOM.
+    "lib": ["ES2022"],
+    "types": ["node"]
+  },
+  "include": ["**/*.ts"]
+}
