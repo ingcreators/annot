@@ -46,15 +46,18 @@ jobs:
       - name: Tests (vitest)
         run: pnpm test
 
-      # Desktop is excluded from the build job: it runs `tauri build`,
-      # which needs Rust + platform-specific Win32 APIs and is better
-      # suited for a dedicated release workflow than a general CI check.
-      - name: Build (core, web, extension)
+      # The desktop electron-vite build is platform-agnostic JS
+      # bundling — emits `dist-electron/{main,preload,renderer}/`.
+      # The platform-specific installer packaging lives in
+      # `desktop-release.yml`, which runs the matching
+      # `electron-builder` invocation on a matrix of OSes.
+      - name: Build (core, web, extension, desktop)
         run: >
           pnpm
           --filter @ingcreators/annot-core
           --filter @ingcreators/annot-web
           --filter @ingcreators/annot-extension
+          --filter @ingcreators/annot-desktop
           build
 
       # Storybook build. Originally landed as `continue-on-error: true`

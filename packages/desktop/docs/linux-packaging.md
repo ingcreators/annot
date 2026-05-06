@@ -159,6 +159,29 @@ node brand/generate-app-icons.mjs
 (Same script generates the PWA + extension icons, so the
 desktop icon stays visually identical to those.)
 
+## CI automation
+
+The
+[`desktop-release.yml`](../../../.github/workflows/desktop-release.yml)
+GitHub Actions workflow runs the AppImage / deb / rpm build on
+every `release/desktop-*` tag push (and on manual
+`workflow_dispatch`). The Ubuntu runner installs `fakeroot` +
+`rpm` automatically — no extra configuration needed for the
+Linux matrix leg. Outputs upload as artifacts and (on tag
+pushes) attach to a draft GitHub Release.
+
+To trigger a release:
+
+```bash
+git tag release/desktop-v0.2.0
+git push origin release/desktop-v0.2.0
+```
+
+See [`notarization.md`](./notarization.md#ci-automation) for
+the matching macOS leg + the secrets the maintainer needs to
+configure for signed / notarized builds. (Linux outputs don't
+need code signing for end-user install.)
+
 ## Known follow-ups
 
 - **Snap + Flatpak**. `electron-builder` supports both targets
