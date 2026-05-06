@@ -19,6 +19,7 @@
     "./icons/*": "./src/icons/*.ts",
     "./xmp": "./src/xmp/xmp-browser.ts",
     "./zip": "./src/zip/zip-builder.ts",
+    "./zip-bytes": "./src/zip/zip-bytes.ts",
     "./utils": "./src/utils/index.ts",
     "./utils/*": "./src/utils/*.ts",
     "./tauri-bridge": "./src/utils/tauri-bridge.ts",

@@ -1,5 +1,5 @@
 /**
- * IPC registration — Phases 1+2+3 of
+ * IPC registration — Phases 1+2+3+4 of
  * `docs/plans/desktop-electron-migration.md`.
  *
  * Single entry point that wires every per-channel handler defined
@@ -8,20 +8,24 @@
  *
  *   - keeps `main.ts` short: it calls `registerAllIpcHandlers(...)`
  *     once during `app.whenReady()`.
- *   - makes the channel inventory greppable from one place. Adding
- *     a new channel in Phase 4 means one factory + one entry
- *     in this file.
+ *   - makes the channel inventory greppable from one place.
  *   - keeps the per-handler files (`fs.ts`, `app.ts`, `xmp.ts`,
- *     `settings.ts`, `window.ts`, `screen-capture.ts`, …) free of
- *     Electron imports so unit tests can construct them in a plain
- *     Node environment. `window.ts` and `screen-capture.ts` take
- *     dependency-injection callbacks for the bits that need real
- *     `BrowserWindow` / `desktopCapturer` access; tests inject
- *     fakes.
+ *     `settings.ts`, `window.ts`, `screen-capture.ts`,
+ *     `clipboard.ts`) free of Electron imports so unit tests can
+ *     construct them in a plain Node environment. `window.ts`,
+ *     `screen-capture.ts`, and `clipboard.ts` take dependency-
+ *     injection callbacks for the bits that need real
+ *     `BrowserWindow` / `desktopCapturer` / `clipboard.writeBuffer`
+ *     access; tests inject fakes.
  */
 
 import type { IpcMain } from "electron";
 import { APP_CHANNEL_TO_HANDLER, createAppHandlers } from "./app.js";
+import {
+  CLIPBOARD_CHANNEL_TO_HANDLER,
+  type ClipboardDeps,
+  createClipboardHandlers,
+} from "./clipboard.js";
 import { FS_CHANNEL_TO_HANDLER, createFsHandlers } from "./fs.js";
 import {
   SCREEN_CAPTURE_CHANNEL_TO_HANDLER,
@@ -53,6 +57,9 @@ export interface RegisterAllOptions {
    *  desktopCapturer adapter, main-window minimize/restore,
    *  overlay-window factory. */
   screenCapture: ScreenCaptureDeps;
+  /** Office-clipboard dependencies — Win32 clipboard.writeBuffer
+   *  adapter, PNG→JPEG converter, and a platform-support gate. */
+  clipboard: ClipboardDeps;
   /** Resolves the current main window for the minimize / restore
    *  IPC handlers. May return `undefined` during shutdown — the
    *  handlers no-op in that case to mirror the Rust impl's
@@ -83,6 +90,7 @@ export function registerAllIpcHandlers(
   );
   const screenCapture = createScreenCaptureHandlers(opts.screenCapture);
   registerSet(ipcMain, screenCapture, SCREEN_CAPTURE_CHANNEL_TO_HANDLER);
+  registerSet(ipcMain, createClipboardHandlers(opts.clipboard), CLIPBOARD_CHANNEL_TO_HANDLER);
   return { screenCapture };
 }
 
