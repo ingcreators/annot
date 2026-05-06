@@ -24,7 +24,13 @@ html, body { width:100vw; height:100vh; overflow:hidden; cursor:crosshair; backg
 
 <script>
 (async () => {
-  const invoke = window.__TAURI_INTERNALS__?.invoke;
+  // Dual-host detection: Tauri (current default) sets
+  // `__TAURI_INTERNALS__`; Electron's preload sets
+  // `electronAPI.invoke`. Both expose a `(channel, args)` →
+  // `Promise<T>` shape, so the rest of this file is host-agnostic.
+  // Phase 9 of `desktop-electron-migration.md` deletes the Tauri
+  // branch when the Rust crate is removed.
+  const invoke = window.electronAPI?.invoke || window.__TAURI_INTERNALS__?.invoke;
   if (!invoke) return;
 
   const params = await invoke("get_capture_params");

@@ -1,26 +1,28 @@
 /**
- * Electron main process — Phases 1+2 of
+ * Electron main process — Phases 1+2+3 of
  * `docs/plans/desktop-electron-migration.md`.
  *
  * Boots a single `BrowserWindow`, resolves the library root under
- * `app.getPath('userData')`, registers the Phase 1+2 IPC handler
+ * `app.getPath('userData')`, registers the Phase 1+2+3 IPC handler
  * surface, and starts the localhost HTTP server on :19530 that
  * catches extension-handoff captures.
  *
- * Phase 1 surface (already merged): `fs.*` filesystem primitives
- * + `app.getLibraryRoot`.
+ * Phase 1 surface: `fs.*` filesystem primitives + `app.getLibraryRoot`.
  *
- * Phase 2 surface (this file): tool-presets persistence
- * (`load_tool_presets` / `save_tool_presets` /
- * `get_portable_dir`), XMP read/write
+ * Phase 2 surface: tool-presets persistence (`load_tool_presets` /
+ * `save_tool_presets` / `get_portable_dir`), XMP read/write
  * (`save_with_xmp` / `read_xmp`), main-window controls
  * (`minimize_main_window` / `restore_main_window`), and the
  * extension-capture HTTP server (`POST /capture` →
  * `chrome-capture` IPC event).
  *
+ * Phase 3 surface (this file): screen capture
+ * (`capture_screen` / `list_windows` / `capture_window` /
+ * `capture_region` / `start_capture_overlay` / `get_capture_params`
+ * / `capture_overlay_result`). Cross-platform via Electron's
+ * `desktopCapturer.getSources` with an explicit `thumbnailSize`.
+ *
  * Still pending:
- *   - Screen capture (`capture_screen` / `capture_window` /
- *     `capture_region` / overlay). Phase 3.
  *   - Office clipboard copy (`copy_as_office`). Phase 4.
  *
  * The Tauri build remains the default `pnpm dev` / `pnpm build`
@@ -34,9 +36,17 @@
 import { promises as fsPromises } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { app, BrowserWindow, ipcMain, nativeImage } from "electron";
+import {
+  app,
+  BrowserWindow,
+  desktopCapturer,
+  ipcMain,
+  nativeImage,
+  screen,
+} from "electron";
 import { startHttpServer } from "./http-server.js";
-import { registerAllIpcHandlers } from "./ipc/index.js";
+import { registerAllIpcHandlers, type RegisteredIpc } from "./ipc/index.js";
+import type { CapturerSourceLite, OverlayHandle } from "./ipc/screen-capture.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -59,7 +69,14 @@ const DEFAULT_INBOX_FOLDER = "Inbox";
  *  (Phase 2 preload addition). */
 const CHROME_CAPTURE_EVENT = "chrome-capture";
 
+/** Stable id for the capture overlay BrowserWindow. The Tauri
+ *  impl identifies its overlay window by name; the Electron
+ *  equivalent keeps the handle in `overlayWindow` rather than
+ *  re-querying — but the id matches for log-grep parity. */
+const OVERLAY_WINDOW_TITLE = "annot-capture-overlay";
+
 let mainWindow: BrowserWindow | null = null;
+let overlayWindow: BrowserWindow | null = null;
 
 function createMainWindow(): BrowserWindow {
   const win = new BrowserWindow({
@@ -111,13 +128,8 @@ function defaultPresetsPath(): string {
     join(process.resourcesPath ?? "", "tool-presets.yml"),
     join(__dirname, "../../build/tool-presets.yml"),
   ];
-  // Return the first candidate that exists synchronously. The
-  // settings handler tolerates a missing file (returns empty
-  // presets) so even if both paths are absent the renderer
-  // falls back to its hardcoded defaults.
   for (const p of candidates) {
     try {
-      // Synchronous existence check at boot is fine — runs once.
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const fs = require("node:fs") as typeof import("node:fs");
       if (fs.existsSync(p)) return p;
@@ -142,17 +154,69 @@ async function pngToJpegViaNativeImage(png: Uint8Array): Promise<Uint8Array> {
   return new Uint8Array(jpeg.buffer, jpeg.byteOffset, jpeg.byteLength);
 }
 
+/** Spawn the fullscreen capture overlay. Loads
+ *  `capture-overlay.html` from the same dist as `index.html` (dev:
+ *  Vite serves it; prod: bundled by electron-vite into
+ *  `dist-electron/renderer/`). */
+function spawnCaptureOverlay(
+  onClosed: () => void,
+): OverlayHandle {
+  const primary = screen.getPrimaryDisplay();
+  const win = new BrowserWindow({
+    width: primary.size.width,
+    height: primary.size.height,
+    x: primary.bounds.x,
+    y: primary.bounds.y,
+    title: OVERLAY_WINDOW_TITLE,
+    frame: false,
+    transparent: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    fullscreen: false,
+    resizable: false,
+    movable: false,
+    minimizable: false,
+    maximizable: false,
+    webPreferences: {
+      preload: join(__dirname, "../preload/preload.cjs"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+    },
+  });
+  // Maximize so the overlay covers the full primary display.
+  win.maximize();
+  win.setAlwaysOnTop(true, "screen-saver");
+  win.focus();
+
+  if (RENDERER_DEV_URL) {
+    void win.loadURL(`${RENDERER_DEV_URL}/capture-overlay.html`);
+  } else {
+    void win.loadFile(join(__dirname, "../renderer/capture-overlay.html"));
+  }
+
+  overlayWindow = win;
+  win.on("closed", () => {
+    if (overlayWindow === win) overlayWindow = null;
+    onClosed();
+  });
+
+  return {
+    destroy: () => {
+      if (!win.isDestroyed()) win.destroy();
+    },
+  };
+}
+
 void app.whenReady().then(async () => {
-  // Phase 0's `ping` placeholder stays for the moment so the
-  // preload's contextBridge surface has at least one channel that
-  // doesn't depend on the Phase 1+ wiring. It's removed in the
-  // Phase 5 cleanup.
   ipcMain.handle("ping", () => "pong");
 
   const userDataDir = app.getPath("userData");
   const libraryRoot = await ensureLibrarySkeleton();
 
-  registerAllIpcHandlers(ipcMain, {
+  let registered: RegisteredIpc | null = null;
+
+  registered = registerAllIpcHandlers(ipcMain, {
     libraryRoot,
     settings: {
       userDataDir,
@@ -169,12 +233,57 @@ void app.whenReady().then(async () => {
         focus: () => win.focus(),
       };
     },
+    screenCapture: {
+      getPrimaryDisplay: () => {
+        const d = screen.getPrimaryDisplay();
+        return { size: d.size, scaleFactor: d.scaleFactor };
+      },
+      getSources: async (opts) => {
+        const sources = await desktopCapturer.getSources({
+          types: opts.types,
+          thumbnailSize: opts.thumbnailSize,
+        });
+        return sources.map(
+          (s): CapturerSourceLite => ({
+            id: s.id,
+            name: s.name,
+            // The real `NativeImage` already satisfies the
+            // `NativeImageLite` shape used downstream.
+            thumbnail: s.thumbnail,
+          }),
+        );
+      },
+      minimizeMain: () => mainWindow?.minimize(),
+      restoreMain: () => {
+        const win = mainWindow;
+        if (!win) return;
+        if (win.isMinimized()) win.restore();
+        win.show();
+        win.focus();
+      },
+      openOverlay: () =>
+        spawnCaptureOverlay(() => {
+          // The handler is the source of truth for the overlay
+          // promise's lifecycle. `notifyOverlayClosed` rejects
+          // the in-flight promise with `null` (cancelled).
+          registered?.screenCapture.notifyOverlayClosed();
+        }),
+    },
   });
+
+  // The capture overlay's renderer-side script can't address the
+  // overlay window's webContents.id from inside the contextBridge,
+  // so the `capture_overlay_result` channel comes in via the
+  // standard ipc registration. The overlay also fires a
+  // `capture_overlay_result` send (no-handle) via
+  // `ipcRenderer.send` — relay that into the registered handler so
+  // the existing capture-overlay.html script keeps working when
+  // ported to electronAPI.invoke (which it does — `invoke` over
+  // `ipcRenderer.invoke` reaches the same handler).
 
   // Start the extension-capture HTTP server. Failures here are
   // logged + non-fatal — the gallery still works without the
-  // extension handoff, same as the Rust impl which `eprintln!`s
-  // and returns from the spawned thread on bind failure.
+  // extension handoff.
   try {
     await startHttpServer({
       userDataDir,
