@@ -73,6 +73,14 @@
         -->
         <button id="btn-fs-capture-window" class="action-btn action-btn-primary">Capture Window</button>
         <button id="btn-fs-capture-region" class="action-btn action-btn-primary">Capture Region</button>
+        <span class="desktop-fs-action-spacer"></span>
+        <!--
+          Phase 4 settings entry point — opens the rollback dialog
+          that lets the user revert to the SQLite-backed bespoke
+          gallery for one release cycle. Phase 5 deletes the button
+          + dialog along with the legacy codepath.
+        -->
+        <button id="btn-fs-settings" class="action-btn">Settings</button>
       </div>
       <div class="desktop-fs-gallery-body">
         <div id="desktop-fs-sidebar" class="desktop-fs-sidebar"></div>

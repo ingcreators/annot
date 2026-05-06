@@ -332,6 +332,11 @@
   gap: 8px;
   padding: 12px 16px;
   border-bottom: 1px solid var(--annot-color-border, #333);
+  align-items: center;
+}
+
+.desktop-fs-action-spacer {
+  flex: 1 1 auto;
 }
 
 .desktop-fs-gallery-body {
@@ -354,4 +359,136 @@
   flex-direction: column;
   min-width: 0;
   overflow: hidden;
+}
+
+/*
+ * Phase 4 of `docs/plans/desktop-storage-provider-migration.md`:
+ * one-time legacy-data notice banner (`#fs-legacy-data-notice`) and
+ * the rollback-to-legacy-gallery dialog (`#fs-settings-dialog`).
+ * Both stay desktop-host-local rather than living in the unified
+ * gallery's design system because they're temporary surfaces —
+ * Phase 5 deletes them along with the SQLite codepath.
+ */
+.fs-legacy-notice {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 16px;
+  padding: 12px 16px;
+  background: #1a2540;
+  border-bottom: 1px solid #00d4ff;
+  color: #e0e0e0;
+  font-size: 13px;
+  line-height: 1.5;
+  align-items: center;
+}
+
+.fs-legacy-notice-body {
+  flex: 1 1 auto;
+}
+
+.fs-legacy-notice-body strong {
+  display: block;
+  color: #00d4ff;
+  margin-bottom: 4px;
+}
+
+.fs-legacy-notice-path {
+  background: #0a0f1f;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 12px;
+}
+
+.fs-legacy-notice-actions {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 8px;
+}
+
+.fs-settings-dialog {
+  /* Reset the native dialog box-model so the inner header/body/
+   * footer layout has predictable sizing. Tauri webview honors
+   * <dialog> + showModal() so the ::backdrop pseudo handles the
+   * dim overlay automatically. */
+  width: min(480px, 90vw);
+  padding: 0;
+  border: 1px solid #00d4ff;
+  border-radius: 8px;
+  background: #16213e;
+  color: #e0e0e0;
+}
+
+.fs-settings-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.fs-settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid #333;
+}
+
+.fs-settings-header h2 {
+  margin: 0;
+  font-size: 16px;
+  color: #00d4ff;
+}
+
+.fs-settings-close {
+  background: transparent;
+  border: none;
+  color: #888;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.fs-settings-close:hover {
+  color: #e0e0e0;
+}
+
+.fs-settings-body {
+  padding: 18px;
+}
+
+.fs-settings-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  cursor: pointer;
+}
+
+.fs-settings-row input[type="checkbox"] {
+  margin-top: 3px;
+}
+
+.fs-settings-label {
+  display: block;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.fs-settings-hint {
+  display: block;
+  font-size: 12px;
+  color: #888;
+  line-height: 1.5;
+}
+
+.fs-settings-hint code {
+  background: #0a0f1f;
+  padding: 1px 4px;
+  border-radius: 2px;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.fs-settings-footer {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  padding: 12px 18px;
+  border-top: 1px solid #333;
 }
