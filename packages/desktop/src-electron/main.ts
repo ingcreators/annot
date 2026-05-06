@@ -25,10 +25,12 @@
  * explicit `thumbnailSize`.
  *
  * Phase 4 surface (this file): Office clipboard
- * (`copy_as_office`). Builds a GVML OPC ZIP envelope in pure JS
- * and writes it under `Art::GVML ClipFormat` via Electron's
- * built-in `clipboard.writeBuffer` (no native addon — see
- * `ipc/clipboard.ts` for the architectural rationale).
+ * (`copy_as_office`). Builds a GVML OPC ZIP envelope plus a
+ * `CF_DIB` bitmap in pure JS and writes them atomically via the
+ * in-tree `annot-win-clipboard` napi addon (one
+ * `OpenClipboard + EmptyClipboard + N×SetClipboardData +
+ * CloseClipboard` cycle). See `ipc/clipboard.ts` and
+ * `native/win-clipboard/` for the architectural rationale.
  *
  * The Tauri build remains the default `pnpm dev` / `pnpm build`
  * target until Phase 5's cutover; the renderer's existing
@@ -43,7 +45,6 @@ import { join } from "node:path";
 import {
   app,
   BrowserWindow,
-  clipboard,
   desktopCapturer,
   ipcMain,
   Menu,
@@ -182,6 +183,68 @@ async function pngToJpegViaNativeImage(png: Uint8Array): Promise<Uint8Array> {
   }
   const jpeg = img.toJPEG(90);
   return new Uint8Array(jpeg.buffer, jpeg.byteOffset, jpeg.byteLength);
+}
+
+/** Decode PNG bytes into raw 4-channel BGRA pixels via Electron's
+ *  `nativeImage.toBitmap()`. The byte order on Windows / Linux is
+ *  BGRA (Skia's native layout); on macOS it can vary on Apple
+ *  Silicon — but the Office-clipboard handler that calls this
+ *  is gated on Windows (`isSupported`), so the BGRA assumption
+ *  always holds at the call site. The caller (`bgraToDib` in
+ *  `ipc/dib.ts`) drops the alpha channel and packs the BGR rows
+ *  bottom-up with 4-byte scanline padding for `CF_DIB`. */
+function pngToBgraViaNativeImage(png: Uint8Array): {
+  data: Uint8Array;
+  width: number;
+  height: number;
+} {
+  const buf = Buffer.from(png.buffer, png.byteOffset, png.byteLength);
+  const img = nativeImage.createFromBuffer(buf);
+  if (img.isEmpty()) {
+    throw new Error("[clipboard] nativeImage failed to decode PNG for CF_DIB fallback");
+  }
+  const size = img.getSize();
+  const bitmap = img.toBitmap();
+  return {
+    data: new Uint8Array(bitmap.buffer, bitmap.byteOffset, bitmap.byteLength),
+    width: size.width,
+    height: size.height,
+  };
+}
+
+/** Resolve the path to the `annot-win-clipboard` napi addon and
+ *  load it. Returns `null` on non-Windows hosts (the addon is
+ *  Win32-only and will fail to load on macOS / Linux); the
+ *  clipboard handler's `isSupported` gate keeps callers off the
+ *  null path.
+ *
+ *  Resolution order (matches `defaultPresetsPath` above):
+ *    1. `process.resourcesPath` — production build, where
+ *       `electron-builder`'s `extraResources` puts the file next
+ *       to `tool-presets.yml`.
+ *    2. `<dist-electron>/../../native/win-clipboard/prebuilds/`
+ *       — dev (`electron-vite dev`) where `__dirname` resolves
+ *       under `dist-electron/main/`. */
+function loadWinClipboardAddon(): { writeMultiFormat: (formats: unknown) => void } | null {
+  if (process.platform !== "win32") return null;
+  const candidates = [
+    join(process.resourcesPath ?? "", "win-clipboard.node"),
+    join(__dirname, "../../native/win-clipboard/prebuilds/win-clipboard.win32-x64.node"),
+  ];
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const fs = require("node:fs") as typeof import("node:fs");
+  for (const p of candidates) {
+    try {
+      if (fs.existsSync(p)) {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        return require(p) as { writeMultiFormat: (formats: unknown) => void };
+      }
+    } catch {
+      /* try next */
+    }
+  }
+  console.warn("[clipboard] win-clipboard addon not found; Office paste will be unavailable");
+  return null;
 }
 
 /** Spawn the fullscreen capture overlay. Loads
@@ -347,11 +410,20 @@ async function captureWebContentsById(webContentsId: number): Promise<CapturedIm
   };
 }
 
+/** Lazily-loaded `annot-win-clipboard` addon. Resolved once at
+ *  app-ready time; the resolved handle is captured in the
+ *  `clipboard` deps closure below. Stays `null` on macOS / Linux
+ *  (the addon is Win32-only) and on Windows builds where the
+ *  prebuilt `.node` is missing — the `clipboard.isSupported`
+ *  gate throws a clear "Windows-only" error in that case. */
+let winClipboardAddon: { writeMultiFormat: (formats: unknown) => void } | null = null;
+
 void app.whenReady().then(async () => {
   ipcMain.handle("ping", () => "pong");
 
   const userDataDir = app.getPath("userData");
   const libraryRoot = await ensureLibrarySkeleton();
+  winClipboardAddon = loadWinClipboardAddon();
 
   let registered: RegisteredIpc | null = null;
 
@@ -382,17 +454,25 @@ void app.whenReady().then(async () => {
       openPath: (absPath) => electronShell.openPath(absPath),
     },
     clipboard: {
-      writeBuffer: (format, data) => {
-        // `clipboard.writeBuffer` expects a Node `Buffer`. Convert
-        // the Uint8Array via `Buffer.from(view, byteOffset,
-        // byteLength)` so the underlying ArrayBuffer isn't
-        // copied — `clipboard.writeBuffer` finishes synchronously,
-        // so the lifetime is fine.
-        const buf = Buffer.from(data.buffer, data.byteOffset, data.byteLength);
-        clipboard.writeBuffer(format, buf);
+      writeFormats: (formats) => {
+        if (!winClipboardAddon) {
+          throw new Error(
+            "Office clipboard paste requires the win-clipboard addon, which is " +
+              "Windows-only and was not found in the current build.",
+          );
+        }
+        // The napi addon expects `data: Buffer`, not `Uint8Array`
+        // — translate at the boundary so the renderer / handler
+        // can stay platform-neutral.
+        const wireFormats = formats.map((f) => ({
+          format: f.format,
+          data: Buffer.from(f.data.buffer, f.data.byteOffset, f.data.byteLength),
+        }));
+        winClipboardAddon.writeMultiFormat(wireFormats);
       },
       pngToJpeg: pngToJpegViaNativeImage,
-      isSupported: () => process.platform === "win32",
+      pngToBgra: pngToBgraViaNativeImage,
+      isSupported: () => process.platform === "win32" && winClipboardAddon !== null,
     },
     screenCapture: {
       getPrimaryDisplay: () => {

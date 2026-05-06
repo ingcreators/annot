@@ -1,0 +1,21 @@
+# Reproducible Windows-MSVC builds for the verify-build CI gate.
+#
+# By default `link.exe` stamps the PE header with the current time
+# (`IMAGE_FILE_HEADER.TimeDateStamp`) and embeds a fresh PDB GUID
+# every link, so two builds of the same source produce different
+# bytes. The verify-win-clipboard CI job is a byte-exact diff
+# against the committed `prebuilds/win-clipboard.win32-x64.node`,
+# so this non-determinism would fail on every run.
+#
+# `/Brepro` (https://learn.microsoft.com/en-us/cpp/build/reference/brepro)
+# replaces those random fields with a deterministic hash of the
+# inputs. With this flag, two consecutive builds of the same
+# source on the same toolchain produce byte-identical output —
+# exactly the invariant the verify gate needs.
+#
+# Scope: this config only applies inside this addon directory
+# because Cargo discovers `.cargo/config.toml` by walking up from
+# the manifest. The imagequant crate's wasm target is unaffected.
+
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "link-arg=/Brepro"]
