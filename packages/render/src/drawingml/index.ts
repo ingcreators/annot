@@ -21,7 +21,7 @@
  *  this way without losing the whole drawing.
  */
 
-import type { AnnotationShape } from "@ingcreators/annot-core/tauri-bridge";
+import type { AnnotationShape } from "@ingcreators/annot-core/desktop-bridge";
 import type { Namespace, NamespaceOpts } from "./namespace.js";
 import { namespaceFor } from "./namespace.js";
 import { buildEllipse } from "./shapes/ellipse.js";

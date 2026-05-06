@@ -2,7 +2,7 @@
   "name": "annot",
   "version": "0.0.0",
   "private": true,
-  "description": "SVG-first screenshot annotation toolkit — PWA, Chrome extension, and Tauri desktop sharing a single editor core.",
+  "description": "SVG-first screenshot annotation toolkit — PWA, Chrome extension, and Electron desktop sharing a single editor core.",
   "license": "Apache-2.0",
   "author": "ingcreators",
   "homepage": "https://github.com/ingcreators/annot#readme",
@@ -19,7 +19,7 @@
     "svg",
     "pwa",
     "chrome-extension",
-    "tauri",
+    "electron",
     "lit",
     "monorepo"
   ],

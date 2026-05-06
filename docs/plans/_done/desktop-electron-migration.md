@@ -1,6 +1,16 @@
 # Desktop: migrate from Tauri to Electron
 
-> **Status:** Draft
+> **Status:** Done. Phase 0 → Phase 9 landed in PRs
+> [#446](https://github.com/ingcreators/annot/pull/446) (Phase 0),
+> [#447](https://github.com/ingcreators/annot/pull/447) (Phase 1),
+> [#448](https://github.com/ingcreators/annot/pull/448) (Phase 2),
+> [#449](https://github.com/ingcreators/annot/pull/449) (Phase 3),
+> [#450](https://github.com/ingcreators/annot/pull/450) (Phase 4),
+> [#451](https://github.com/ingcreators/annot/pull/451) (Phase 5),
+> [#452](https://github.com/ingcreators/annot/pull/452) (Phase 6),
+> [#453](https://github.com/ingcreators/annot/pull/453) (Phase 7),
+> [#454](https://github.com/ingcreators/annot/pull/454) (Phase 8),
+> and the Phase 9 PR landing this status flip.
 >
 > **Compatibility:** Replaces the entire `packages/desktop/src-tauri`
 > Rust crate with a Node-side Electron main process. The renderer-

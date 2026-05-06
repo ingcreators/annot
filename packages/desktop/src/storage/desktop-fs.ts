@@ -1,29 +1,24 @@
 /**
- * `DesktopFs` — the file-system seam `DesktopStore` operates against.
+ * `DesktopFs` — the file-system seam `DesktopStore` operates
+ * against. Two implementations share this shape:
  *
- * Three host implementations share this shape over the migration's
- * lifetime:
- *
- *   - **Tauri** (today): {@link createTauriDesktopFs} delegates to
- *     `@tauri-apps/plugin-fs` for every primitive. Resolves paths
- *     against an absolute `libraryRoot` so `DesktopStore` itself
- *     never traffics in absolute paths — every store-side path is
- *     a forward-slash, library-relative key (`""` = root,
- *     `"Inbox"` = top-level folder, `"Inbox/cap.annot.png"` = leaf).
- *   - **Electron** (after `desktop-electron-migration.md` Phase 1):
- *     a sibling factory swaps `@tauri-apps/plugin-fs` for an
- *     `ipcRenderer.invoke('fs.*')` IPC bridge backed by Node
- *     `fs/promises` in the main process. `DesktopStore` itself
- *     doesn't change at the cutover.
+ *   - **Electron** (production): {@link createElectronDesktopFs}
+ *     delegates each primitive to a `ipcRenderer.invoke('fs.*')`
+ *     IPC bridge backed by Node `fs/promises` in the Electron
+ *     main process. Every store-side path is a forward-slash,
+ *     library-relative key (`""` = root, `"Inbox"` =
+ *     top-level folder, `"Inbox/cap.annot.png"` = leaf); the
+ *     main process resolves them against the canonical library
+ *     root and rejects path-traversal attempts.
  *   - **Tests**: {@link createMockDesktopFs} in
  *     `desktop-fs.test-mock.ts` keeps a plain in-memory tree so
  *     the contract suite runs under happy-dom without ambient
- *     Tauri.
+ *     Electron.
  *
  * The interface stays narrow on purpose — every method maps 1:1 to
- * a primitive Node `fs/promises` call so the Electron port stays
- * obvious. Higher-level concepts (`uniquify`, `recursive-copy`,
- * `walk-with-XMP`) live in `desktop-store.ts` on top.
+ * a primitive Node `fs/promises` call. Higher-level concepts
+ * (`uniquify`, `recursive-copy`, `walk-with-XMP`) live in
+ * `desktop-store.ts` on top.
  */
 
 export type DesktopFsEntryKind = "file" | "directory";
@@ -85,93 +80,6 @@ export interface DesktopFs {
   /** Stat a path. Returns `undefined` on `ENOENT` / `NotFound`;
    *  rethrows other errors so they don't get silently swallowed. */
   stat(path: string): Promise<DesktopFsStat | undefined>;
-}
-
-// ---- Tauri-backed implementation ────────────────────────────────
-
-/**
- * Resolve a library-relative `path` against `libraryRoot`. The
- * empty string maps to `libraryRoot` itself; non-empty paths are
- * appended with a forward slash. We keep the join string-level
- * (no `path.join`) because `@tauri-apps/plugin-fs` wants OS-native
- * separators only at the OS boundary, and forward slashes work
- * everywhere it's invoked.
- */
-function joinAbsolute(libraryRoot: string, path: string): string {
-  if (!path) return libraryRoot;
-  return `${libraryRoot}/${path}`;
-}
-
-/**
- * Tauri-backed `DesktopFs`. Lazily imports `@tauri-apps/plugin-fs`
- * so the module loads cleanly in test environments without ambient
- * Tauri (the lazy `import()` only runs when a method is actually
- * called; tests use {@link createMockDesktopFs} and never reach the
- * import).
- */
-export function createTauriDesktopFs(libraryRoot: string): DesktopFs {
-  const resolve = (p: string) => joinAbsolute(libraryRoot, p);
-  const fs = () => import("@tauri-apps/plugin-fs");
-
-  return {
-    async readDir(path) {
-      const mod = await fs();
-      try {
-        const entries = await mod.readDir(resolve(path));
-        return entries.map((e) => ({
-          name: e.name,
-          kind: e.isDirectory ? ("directory" as const) : ("file" as const),
-        }));
-      } catch {
-        // Match `StorageProvider.listFolders` semantics: missing
-        // directories surface as empty rather than error.
-        return [];
-      }
-    },
-
-    async readFile(path) {
-      const mod = await fs();
-      const bytes = await mod.readFile(resolve(path));
-      // tauri-plugin-fs returns `Uint8Array<ArrayBuffer>` — narrow
-      // for callers that want plain `Uint8Array`. Same bytes, same
-      // identity; just a structural-typing relaxation.
-      return bytes as Uint8Array;
-    },
-
-    async writeFile(path, bytes) {
-      const mod = await fs();
-      await mod.writeFile(resolve(path), bytes);
-    },
-
-    async mkdir(path, opts) {
-      const mod = await fs();
-      await mod.mkdir(resolve(path), { recursive: opts?.recursive ?? false });
-    },
-
-    async rename(from, to) {
-      const mod = await fs();
-      await mod.rename(resolve(from), resolve(to));
-    },
-
-    async remove(path, opts) {
-      const mod = await fs();
-      await mod.remove(resolve(path), { recursive: opts?.recursive ?? false });
-    },
-
-    async stat(path) {
-      const mod = await fs();
-      try {
-        const info = await mod.stat(resolve(path));
-        return {
-          kind: info.isDirectory ? ("directory" as const) : ("file" as const),
-          size: info.size ?? 0,
-          mtime: info.mtime instanceof Date ? info.mtime.getTime() : 0,
-        };
-      } catch {
-        return undefined;
-      }
-    },
-  };
 }
 
 // ---- Electron-backed implementation ─────────────────────────────

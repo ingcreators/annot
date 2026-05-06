@@ -29,7 +29,7 @@
  * its own property test.
  */
 
-import type { TextRun } from "../utils/tauri-bridge.js";
+import type { TextRun } from "../utils/desktop-bridge.js";
 
 /** Cascading formatting context — accumulated as the walker
  *  descends into nested inline elements (`<b><i><span style="color: red">`).

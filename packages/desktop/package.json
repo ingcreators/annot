@@ -12,12 +12,7 @@
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
-    "dev:tauri": "tauri dev",
-    "build:tauri": "tauri build",
-    "dev:frontend": "vite",
-    "build:frontend": "vite build",
-    "typecheck": "tsc --noEmit && tsc -p src-electron/tsconfig.json --noEmit",
-    "tauri": "tauri"
+    "typecheck": "tsc --noEmit && tsc -p src-electron/tsconfig.json --noEmit"
   },
   "build": {
     "appId": "com.ingcreators.annot",
@@ -99,14 +94,9 @@
     "@ingcreators/annot-editor": "workspace:*",
     "@ingcreators/annot-editor-shell": "workspace:*",
     "@ingcreators/annot-web": "workspace:*",
-    "@tauri-apps/api": "^2.11.0",
-    "@tauri-apps/plugin-dialog": "^2.7.1",
-    "@tauri-apps/plugin-fs": "^2.5.1",
-    "@tauri-apps/plugin-shell": "^2.2.0",
     "js-yaml": "^4.1.1"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2.11.0",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^25",
     "chrome-types": "^0.1.327",

@@ -10,8 +10,7 @@ target/
 Cargo.lock
 # Reproducible builds for the in-tree libimagequant wrapper need a
 # committed lockfile (cargo --locked). The leaf-crate scope means
-# this exception is safe; the desktop tauri crate keeps its lockfile
-# regenerated.
+# this exception is safe.
 !packages/imagequant/Cargo.lock
 
 # OS

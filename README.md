@@ -1,8 +1,8 @@
 # Annot
 
 Screenshot annotation system built around a portable SVG format —
-shipped today as a PWA and Chrome extension, with a Tauri desktop host
-and a shared SVG-first core. The long-term direction is a headless
+shipped today as a PWA and Chrome extension, with an Electron desktop
+host and a shared SVG-first core. The long-term direction is a headless
 annotator callable from Playwright / Node and tight GitHub integration.
 
 See [PRODUCT_DIRECTION.md](./PRODUCT_DIRECTION.md) for the strategic
@@ -16,7 +16,7 @@ need without making you read the rest of the repo first.
 
 **What it is.** A monorepo housing the editor core
 (`@ingcreators/annot-core`) plus three first-party hosts (web PWA,
-Chrome extension, Tauri desktop). Annotations are persisted as SVG;
+Chrome extension, Electron desktop). Annotations are persisted as SVG;
 storage backends are pluggable (browser IDB, local filesystem, Google
 Drive, GitHub). Every host shares the same editor and the same SVG
 format, so an annotation captured in the extension opens identically
@@ -79,7 +79,7 @@ omissions.
 | [`packages/core`](./packages/core) | `@ingcreators/annot-core` | Editor core — SVG tools, PPTX export, storage types. Shared by every host. |
 | [`packages/web`](./packages/web) | `@ingcreators/annot-web` | PWA host. Routing, storage implementations, right panel. |
 | [`packages/extension`](./packages/extension) | `@ingcreators/annot-extension` | Chrome MV3 extension. Capture pipeline + content-script DOM metadata. |
-| [`packages/desktop`](./packages/desktop) | `@ingcreators/annot-desktop` | Tauri desktop wrapper. |
+| [`packages/desktop`](./packages/desktop) | `@ingcreators/annot-desktop` | Electron desktop wrapper. |
 
 `@ingcreators/annot-core` exposes two public entry points:
 
@@ -91,7 +91,6 @@ omissions.
 
 - Node.js 24+ (pinned via `.nvmrc`; CI builds on the same version)
 - pnpm 9+ (pinned via `packageManager` in the root `package.json`)
-- Rust toolchain + Tauri prerequisites, only if building the desktop host
 
 ## Getting started
 
@@ -106,7 +105,7 @@ pnpm -r build
 ```bash
 pnpm --filter @ingcreators/annot-web dev          # PWA dev server
 pnpm --filter @ingcreators/annot-extension dev    # extension build (watch)
-pnpm --filter @ingcreators/annot-desktop dev      # Tauri dev (requires Rust)
+pnpm --filter @ingcreators/annot-desktop dev      # Electron dev (electron-vite)
 pnpm --filter @ingcreators/annot-web storybook    # component stories (Storybook)
 ```
 

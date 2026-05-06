@@ -24,24 +24,12 @@
  */
 
 import type { ImageRecord } from "@ingcreators/annot-core/storage";
-import { isTauri } from "@ingcreators/annot-core/tauri-bridge";
 import { FileManager, type FileManagerCallbacks } from "@ingcreators/annot-web/gallery/file-manager";
 import type { StorageMode } from "@ingcreators/annot-web/storage/bridge";
 import { IndexedDBThumbnailCache } from "@ingcreators/annot-web/storage/idb-thumbnail-cache";
 import { ThumbnailManager } from "@ingcreators/annot-web/storage/thumbnail-manager";
-import {
-  createElectronDesktopFs,
-  createTauriDesktopFs,
-  type DesktopFs,
-  type ElectronApi,
-} from "./desktop-fs.js";
+import { createElectronDesktopFs, type DesktopFs, type ElectronApi } from "./desktop-fs.js";
 import { DesktopStore } from "./desktop-store.js";
-
-/** Sub-directory under `<userData>` that holds the Annot library.
- *  Hard-coded to keep the path human-predictable across platforms
- *  (per `docs/plans/desktop-storage-provider-migration.md` § "Library
- *  root location"). */
-const LIBRARY_SUBDIR = "library";
 
 /** Default top-level folder created on first launch so the gallery
  *  doesn't open into a totally empty tree. Phase 4's "no
@@ -69,13 +57,15 @@ export interface DesktopGalleryHandle {
 
 export interface BootstrapOptions {
   /** Absolute path to the library root. Pass `undefined` and the
-   *  bootstrap resolves it via Tauri's `appDataDir()` +
-   *  `LIBRARY_SUBDIR`. Tests pass an explicit path + a custom
-   *  `fs` to avoid touching the real filesystem. */
+   *  bootstrap asks the Electron main process for it via
+   *  `electronAPI.invoke('app.getLibraryRoot')`. Tests pass an
+   *  explicit path + a custom `fs` to avoid touching the real
+   *  filesystem. */
   libraryRoot?: string;
-  /** Filesystem adapter override. Defaults to a Tauri-backed
-   *  `DesktopFs` resolved against `libraryRoot`. Tests pass an
-   *  in-memory adapter from `desktop-fs.test-mock.ts`. */
+  /** Filesystem adapter override. Defaults to the Electron-backed
+   *  `DesktopFs` (every primitive round-trips through
+   *  `ipcRenderer.invoke('fs.*')`). Tests pass an in-memory
+   *  adapter from `desktop-fs.test-mock.ts`. */
   fs?: DesktopFs;
   /** Callback fired when the user clicks an image card. The host's
    *  `app.ts` routes this into the existing `openEditor` flow. */
@@ -91,51 +81,25 @@ export interface BootstrapOptions {
   onUploadImage: () => void;
 }
 
-/** Detect whether the renderer is running under the Electron host
- *  scaffolded by `docs/plans/desktop-electron-migration.md`. The
- *  preload script sets `window.__ANNOT_DESKTOP__ = true`; absence
- *  means we're either in Tauri (the legacy host) or in a pure-
- *  browser test context. */
-function isElectron(): boolean {
-  return (
-    typeof window !== "undefined" &&
-    !!(window as unknown as { __ANNOT_DESKTOP__?: boolean }).__ANNOT_DESKTOP__
-  );
-}
-
 /**
- * Resolve `<userData>/library/`. Three host paths today:
- *
- *   - **Electron** (Phase 1+ of the migration plan): asks the main
- *     process via the `app.getLibraryRoot` IPC channel. The main
- *     process resolves it under `app.getPath('userData')` and
- *     ensures the skeleton (`Inbox/`) exists before returning.
- *   - **Tauri** (current default through Phase 4): calls
- *     `appDataDir()` from `@tauri-apps/api/path` and joins
- *     `library/`.
- *   - **Outside both** (storybook, tests): the caller is expected
- *     to pass an explicit `libraryRoot`.
+ * Resolve `<userData>/library/` via the Electron main process.
+ * Phase 9 of `desktop-electron-migration.md` removed the Tauri
+ * fallback; the legacy `appDataDir()` path is gone. Storybook /
+ * test contexts pass an explicit `libraryRoot` to bypass this
+ * call.
  */
 async function resolveLibraryRoot(): Promise<string> {
-  if (isElectron()) {
-    const api = (window as unknown as { electronAPI?: ElectronApi }).electronAPI;
-    if (!api) {
-      throw new Error(
-        "[desktop-bootstrap] window.electronAPI is missing — preload script " +
-          "did not run? Re-launch via `pnpm dev:electron`.",
-      );
-    }
-    return api.invoke<string>("app.getLibraryRoot");
-  }
-  if (!isTauri) {
+  const api =
+    typeof window !== "undefined"
+      ? (window as unknown as { electronAPI?: ElectronApi }).electronAPI
+      : undefined;
+  if (!api) {
     throw new Error(
-      "[desktop-bootstrap] resolveLibraryRoot requires a Tauri or Electron " +
-        "context — pass an explicit `libraryRoot` to bypass.",
+      "[desktop-bootstrap] window.electronAPI is missing — preload script " +
+        "did not run? Re-launch via `pnpm dev`.",
     );
   }
-  const { appDataDir, join } = await import("@tauri-apps/api/path");
-  const data = await appDataDir();
-  return join(data, LIBRARY_SUBDIR);
+  return api.invoke<string>("app.getLibraryRoot");
 }
 
 /** Ensure the library root + `Inbox/` exist on first launch. The
@@ -174,14 +138,11 @@ export async function bootstrapDesktopFsGallery(
   opts: BootstrapOptions,
 ): Promise<DesktopGalleryHandle> {
   const libraryRoot = opts.libraryRoot ?? (await resolveLibraryRoot());
-  // Under Electron the IPC handlers in
+  // The Electron-backed IPC handlers in
   // `packages/desktop/src-electron/ipc/fs.ts` resolve every path
   // server-side against the canonical library root, so the
-  // renderer-side factory takes no `libraryRoot` argument. Under
-  // Tauri the plugin-fs API wants absolute paths from the
-  // renderer, so the existing factory keeps its `libraryRoot`
-  // parameter.
-  const fs = opts.fs ?? (isElectron() ? createElectronDesktopFs() : createTauriDesktopFs(libraryRoot));
+  // renderer-side factory takes no `libraryRoot` argument.
+  const fs = opts.fs ?? createElectronDesktopFs();
 
   await ensureLibrarySkeleton(fs);
 

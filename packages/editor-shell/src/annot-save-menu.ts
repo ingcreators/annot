@@ -23,10 +23,8 @@ import {
   type CanvasManager,
   downloadAsImage,
   exportPptx,
-  saveAsEditableImage,
   saveToFile,
 } from "@ingcreators/annot-editor";
-import { isTauri } from "@ingcreators/annot-core/tauri-bridge";
 import { html, LitElement } from "./lit.js";
 
 export interface SaveMenuItem {
@@ -96,41 +94,29 @@ export class AnnotSaveMenuElement extends LitElement {
       svg: () => saveToFile(ctx.canvas, ctx.getCurrentFilename?.()),
       pptx: () => exportPptx(ctx.canvas),
     };
-    if (isTauri) {
-      actions["jpg-editable"] = () =>
-        saveAsEditableImage(ctx.canvas, "jpg", ctx.getCurrentFilename?.());
-      actions["png-editable"] = () =>
-        saveAsEditableImage(ctx.canvas, "png", ctx.getCurrentFilename?.());
-      items.push(
-        {
-          id: "jpg-editable",
-          label: "Save as JPG (re-editable)",
-          description: "JPEG with embedded annotations",
-        },
-        {
-          id: "png-editable",
-          label: "Save as PNG (re-editable)",
-          description: "PNG with embedded annotations",
-        },
-      );
-    } else {
-      actions["jpg-editable"] = () =>
-        downloadAsImage(ctx.canvas, "jpg", ctx.getCurrentFilename?.());
-      actions["png-editable"] = () =>
-        downloadAsImage(ctx.canvas, "png", ctx.getCurrentFilename?.());
-      items.push(
-        {
-          id: "jpg-editable",
-          label: "Download JPG (re-editable)",
-          description: "JPEG with embedded annotations",
-        },
-        {
-          id: "png-editable",
-          label: "Download PNG (re-editable)",
-          description: "PNG with embedded annotations",
-        },
-      );
-    }
+    // `downloadAsImage` already builds an XMP-bearing Blob via
+    // `createEditableImage` and triggers a browser download. Phase
+    // 9 of `desktop-electron-migration.md` collapses the prior
+    // Tauri-specific `saveAsEditableImage` branch (system save
+    // dialog + plugin-fs write) — Electron handles the
+    // `<a download>` event natively, so the same browser-style
+    // download path serves the desktop host too.
+    actions["jpg-editable"] = () =>
+      downloadAsImage(ctx.canvas, "jpg", ctx.getCurrentFilename?.());
+    actions["png-editable"] = () =>
+      downloadAsImage(ctx.canvas, "png", ctx.getCurrentFilename?.());
+    items.push(
+      {
+        id: "jpg-editable",
+        label: "Download JPG (re-editable)",
+        description: "JPEG with embedded annotations",
+      },
+      {
+        id: "png-editable",
+        label: "Download PNG (re-editable)",
+        description: "PNG with embedded annotations",
+      },
+    );
     items.push({
       id: "pptx",
       label: "Download PPTX (PowerPoint)",

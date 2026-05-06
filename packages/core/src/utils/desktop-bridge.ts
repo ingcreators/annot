@@ -1,36 +1,19 @@
 /**
- * Unified desktop IPC bridge — Phase 5 of
- * `docs/plans/desktop-electron-migration.md`.
+ * Desktop IPC bridge — the renderer-side seam every desktop-host
+ * IPC call goes through.
  *
- * This module is the canonical renderer-side IPC seam after the
- * Phase 5 cutover. It transparently dispatches to whichever
- * desktop host is currently active:
+ * Production transport is Electron's
+ * `window.electronAPI.invoke(channel, args)` exposed by the
+ * preload script in `packages/desktop/src-electron/preload.ts`.
  *
- *   - **Electron** (the default after Phase 5) — uses
- *     `window.electronAPI.invoke(channel, args)` exposed by the
- *     preload script in
- *     `packages/desktop/src-electron/preload.ts`.
- *   - **Tauri** (the rollback path via `pnpm dev:tauri`) — uses
- *     `window.__TAURI_INTERNALS__.invoke` (when Tauri is built
- *     with `withGlobalTauri: true`) or the dynamic
- *     `@tauri-apps/api/core` import as a fallback.
- *
- * Both transports share IPC channel names + payload shapes
- * byte-for-byte, so this module exports a single function per
- * logical operation and the dispatch is invisible to callers.
- *
- * **History**: This file used to be the Tauri-only bridge at
- * `tauri-bridge.ts`. Phase 1 of the migration introduced a
- * sibling `desktop-bridge.ts` that was Electron-only. Phase 5
- * unifies the two: types + functions live here, the Electron-
- * specific stub is gone, and `tauri-bridge.ts` becomes a one-
- * cycle re-export shim. Phase 9 deletes `tauri-bridge.ts`
- * entirely.
- *
- * **Compatibility aliases**: `isTauri` is exported as an alias of
- * `isDesktop` so renderer call sites that read `if (isTauri)`
- * keep working unchanged. The alias is removed in the Phase 9
- * cleanup.
+ * **History**: This file's earlier life as `tauri-bridge.ts`
+ * supported a dual Electron / Tauri dispatch during the
+ * Phase 1–8 migration. Phase 9 of
+ * `docs/plans/_done/desktop-electron-migration.md` removed the
+ * Tauri sources + the dual-transport fallback; the bridge now
+ * speaks Electron only. The `isTauri` back-compat alias and the
+ * dynamic `@tauri-apps/api/core` import are gone in this PR
+ * cycle.
  */
 
 // ---- Host detection + invoke dispatch ──────────────────────────
@@ -39,78 +22,40 @@ interface ElectronApi {
   invoke<T = unknown>(channel: string, args?: unknown): Promise<T>;
 }
 
-interface TauriInternals {
-  invoke?<T = unknown>(channel: string, args?: Record<string, unknown>): Promise<T>;
-}
-
 const isDesktop =
   typeof window !== "undefined" &&
-  (
-    !!(window as unknown as { __ANNOT_DESKTOP__?: boolean }).__ANNOT_DESKTOP__ ||
-    !!(window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__
-  );
+  !!(window as unknown as { __ANNOT_DESKTOP__?: boolean }).__ANNOT_DESKTOP__;
 
 async function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
   if (typeof window === "undefined") {
     throw new Error("[desktop-bridge] not running in a browser-like context");
   }
-  const w = window as unknown as {
-    electronAPI?: ElectronApi;
-    __TAURI_INTERNALS__?: TauriInternals;
-  };
-  // Electron preferred — it's the default after Phase 5.
-  if (w.electronAPI?.invoke) {
-    return w.electronAPI.invoke<T>(cmd, args);
+  const api = (window as unknown as { electronAPI?: ElectronApi }).electronAPI;
+  if (!api) {
+    throw new Error(
+      "[desktop-bridge] window.electronAPI is missing — preload script not loaded?",
+    );
   }
-  // Tauri rollback (`pnpm dev:tauri`).
-  if (w.__TAURI_INTERNALS__?.invoke) {
-    return w.__TAURI_INTERNALS__.invoke<T>(cmd, args);
-  }
-  // Last-ditch: dynamic import. Only resolves under Tauri (where
-  // `@tauri-apps/api` is a runtime dep). Keeps the legacy
-  // `withGlobalTauri: false` configuration runnable; benign
-  // bundle bloat under Electron because the dynamic import only
-  // executes when `__TAURI_INTERNALS__.invoke` is missing.
-  if (!isDesktop) {
-    throw new Error("Not running in a desktop host");
-  }
-  const { invoke: tauriInvoke } = await import("@tauri-apps/api/core");
-  return tauriInvoke<T>(cmd, args);
+  return api.invoke<T>(cmd, args);
 }
 
 export { isDesktop };
 
-/**
- * Back-compat alias. Phase 5's "default-to-Electron" cutover
- * leaves every existing `if (isTauri)` call site untouched —
- * the renderer's logic should fire under either Tauri or
- * Electron, so the alias points to `isDesktop` (true under
- * either host). Removed in the Phase 9 cleanup per the plan's
- * "remove the `isTauri` back-compat alias" step.
- */
-export const isTauri = isDesktop;
-
 // ---- Library root + portable directory ─────────────────────────
 //
-// Under Electron the main process resolves these against
+// The Electron main process resolves these against
 // `app.getPath('userData')`:
 //   - `app.getLibraryRoot` → `<userData>/library/`
 //   - `get_portable_dir`   → `<userData>/data/`
-//
-// Under Tauri the legacy `portable_dir` model under
-// `current_exe()/data/` still applies; the renderer's call sites
-// don't need to know which host is active because both honour the
-// same channel names.
 
 /** Library root under the desktop host. Used by `bootstrap.ts`
- *  to construct `DesktopFs`. Phase 1 channel. */
+ *  to construct `DesktopFs`. */
 export async function getLibraryRoot(): Promise<string> {
   return invoke<string>("app.getLibraryRoot");
 }
 
 /** Portable data directory (extension-handoff sweep + legacy-
- *  data toast). Original Tauri channel; the Phase 2 Electron
- *  port preserves the contract. */
+ *  data toast). */
 export async function getPortableDir(): Promise<string> {
   return invoke<string>("get_portable_dir");
 }
@@ -237,13 +182,10 @@ export interface CaptureResult {
 }
 
 export interface WindowInfo {
-  /** Source identifier. Tauri uses Win32 HWND (`isize`); the
-   *  Electron port uses `desktopCapturer`'s opaque source id
-   *  string (`"window:1234:5"`). The renderer treats it as
-   *  opaque and passes it through to `capture_window`. The field
-   *  is typed `number | string` for the migration window; Phase 9
-   *  cleanup narrows to `string` once the Tauri host is gone. */
-  hwnd: number | string;
+  /** `desktopCapturer` source id, an opaque string like
+   *  `"window:1234:5"`. The renderer passes it through to
+   *  `capture_window`. */
+  hwnd: string;
   title: string;
   class: string;
   x: number;
@@ -260,7 +202,7 @@ export async function listWindows(): Promise<WindowInfo[]> {
   return invoke<WindowInfo[]>("list_windows");
 }
 
-export async function captureWindow(hwnd: number | string): Promise<CaptureResult> {
+export async function captureWindow(hwnd: string): Promise<CaptureResult> {
   return invoke<CaptureResult>("capture_window", { hwnd });
 }
 
@@ -294,10 +236,9 @@ export async function restoreMainWindow(): Promise<void> {
  * (`packages/editor-shell/src/toolbar.ts:#copyForOffice`,
  * `ns: "a"`).
  *
- * The Tauri-side Rust crate
- * (`packages/desktop/src-tauri/src/commands/clipboard.rs`) and the
- * Electron-side port (`packages/desktop/src-electron/ipc/clipboard.ts`)
- * are both packaging-only since
+ * The Electron-side handler
+ * (`packages/desktop/src-electron/ipc/clipboard.ts`) is
+ * packaging-only since
  * [`office-paste-shared-drawing-builder` phase 3](../../../../docs/plans/_done/office-paste-shared-drawing-builder.md):
  * the per-shape OOXML is built TS-side and passed to the host as
  * a pre-assembled drawing XML string. The shape taxonomy below is

@@ -50,6 +50,7 @@ import {
   Menu,
   nativeImage,
   screen,
+  shell as electronShell,
   webContents,
   type MenuItemConstructorOptions,
 } from "electron";
@@ -357,6 +358,10 @@ void app.whenReady().then(async () => {
       libraryRoot,
       openBrowseWindow: (browseOpts) => openOrFocusBrowseWindow(browseOpts),
       captureWebContents: captureWebContentsById,
+    },
+    extension: { userDataDir },
+    shell: {
+      openPath: (absPath) => electronShell.openPath(absPath),
     },
     clipboard: {
       writeBuffer: (format, data) => {

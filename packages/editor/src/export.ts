@@ -2,18 +2,6 @@ import { cssStackFor, LOGICAL_FAMILIES } from "@ingcreators/annot-core/headless"
 import { createEditableImage } from "@ingcreators/annot-core/xmp";
 import type { CanvasManager } from "./canvas-manager.js";
 import { stampAnnotVersion } from "@ingcreators/annot-core/editor/svg-format";
-// `tauri-bridge` is statically imported so the bundler can
-// dedupe with the equally-static imports in
-// `@ingcreators/annot-editor-shell/{toolbar,annot-save-menu}`.
-// A dynamic import here used to look like an "only-loaded-in-Tauri"
-// optimisation, but the static consumers above already pull
-// `tauri-bridge` into every browser bundle, so the dynamic
-// import was a wash AND triggered Vite's
-// `[INEFFECTIVE_DYNAMIC_IMPORT]` warning. Tauri-only entry
-// points (`@tauri-apps/plugin-dialog`, the `@tauri-apps/api/core`
-// invoke loader inside `tauri-bridge` itself) stay dynamic —
-// those genuinely don't ship in the non-Tauri bundles.
-import { isTauri, saveWithXmp } from "@ingcreators/annot-core/tauri-bridge";
 import { defaultAnnotFilenameStem } from "@ingcreators/annot-core/utils";
 
 export function exportSVGString(canvas: CanvasManager): string {
@@ -152,57 +140,6 @@ export function saveToFile(canvas: CanvasManager, baseName?: string): void {
   downloadFile(svgString, "image/svg+xml", buildDownloadName("svg", baseName));
 }
 
-/** Save as re-editable JPEG or PNG with XMP metadata */
-export async function saveAsEditableImage(
-  canvas: CanvasManager,
-  format: "jpg" | "png",
-  baseName?: string,
-): Promise<void> {
-  if (!isTauri) return;
-
-  try {
-    // `@tauri-apps/plugin-dialog` stays dynamic — its IPC
-    // handshake only resolves inside a Tauri shell. Browser /
-    // VSCode-webview bundles never reach this branch (gated by
-    // `isTauri`) so the dynamic import keeps it out of those
-    // bundles' module graph.
-    const { save } = await import("@tauri-apps/plugin-dialog");
-
-    const ext = format === "jpg" ? "jpg" : "png";
-    const filterName = format === "jpg" ? "JPEG" : "PNG";
-    const path = await save({
-      defaultPath: buildDownloadName(ext, baseName),
-      filters: [{ name: filterName, extensions: [ext] }],
-    });
-    if (!path) return;
-
-    // Render the full image as PNG (Rust converts to JPEG if needed)
-    const renderedDataUrl = await getPngDataUrl(canvas);
-    // `getPngDataUrl` always returns a well-formed data URL; the
-    // comma-split has two parts. Default to "" so a malformed URL
-    // short-circuits later in `saveWithXmp` rather than crashing.
-    const renderedB64 = renderedDataUrl.split(",")[1] ?? "";
-
-    // Get original capture image (without annotations)
-    const originalDataUrl = canvas.imageEl.getAttribute("href") || "";
-    const originalB64 = originalDataUrl.split(",")[1] || "";
-
-    // Get annotations SVG (without the base image)
-    const annotationsSvg = exportAnnotationsSVGString(canvas);
-
-    await saveWithXmp(
-      renderedB64,
-      originalB64,
-      annotationsSvg,
-      canvas.imageWidth,
-      canvas.imageHeight,
-      path,
-    );
-  } catch (e) {
-    console.error("Save failed:", e);
-  }
-}
-
 /** Export annotations only as SVG string (no base image). Public alias for IDB save. */
 export function exportAnnotationsSvgForIdb(canvas: CanvasManager): string {
   return exportAnnotationsSVGString(canvas);
@@ -234,34 +171,21 @@ function exportAnnotationsSVGString(canvas: CanvasManager): string {
   return new XMLSerializer().serializeToString(clone);
 }
 
-async function downloadFile(content: string, _mime: string, filename: string): Promise<void> {
-  if (isTauri) {
-    // Use Tauri save dialog
-    try {
-      const { save } = await import("@tauri-apps/plugin-dialog");
-      const { writeTextFile } = await import("@tauri-apps/plugin-fs");
-      const path = await save({
-        defaultPath: filename,
-        filters: [{ name: "SVG", extensions: ["svg"] }],
-      });
-      if (path) {
-        await writeTextFile(path, content);
-      }
-    } catch (e) {
-      console.error("Save failed:", e);
-    }
-  } else {
-    // Browser fallback
-    const blob = new Blob([content], { type: "image/svg+xml" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }
+function downloadFile(content: string, _mime: string, filename: string): void {
+  // Browser-style download — Electron handles the `<a download>`
+  // event natively (the system save dialog), so this same code
+  // path serves both the PWA and the desktop host. Phase 9 of
+  // `desktop-electron-migration.md` collapsed the prior Tauri-
+  // specific branch (`@tauri-apps/plugin-dialog` + `plugin-fs`).
+  const blob = new Blob([content], { type: "image/svg+xml" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 /** Get full screenshot + annotations as PNG data URL */

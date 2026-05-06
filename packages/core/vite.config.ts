@@ -11,8 +11,5 @@ export default defineConfig({
     outDir: "dist",
     emptyOutDir: true,
     target: "es2022",
-    rollupOptions: {
-      external: [/^@tauri-apps\//],
-    },
   },
 });

@@ -28,7 +28,7 @@ DrawingML builder) lives in [`@ingcreators/annot-render`](../render).
 | `@ingcreators/annot-core/encode` | A | Image encode helpers |
 | `@ingcreators/annot-core/editor` | B | jsdom-friendly element helpers + `TOOL_REGISTRY` / `PROPERTY_CONTROLS` |
 | `@ingcreators/annot-core/xmp` | browser | `createEditableImage` / `readEditableImage` round-trip |
-| `@ingcreators/annot-core/tauri-bridge` | browser | Tauri IPC + `isTauri` detection |
+| `@ingcreators/annot-core/desktop-bridge` | browser | Electron desktop-host IPC + `isDesktop` detection |
 
 The Tier A surface is CI-enforced by
 [`src/headless.test.ts`](./src/headless.test.ts): it imports every

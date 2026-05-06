@@ -1,5 +1,5 @@
 import { isLogicalFamily, ooxmlTypefacesFor } from "@ingcreators/annot-core/headless";
-import type { AnnotationShape, TextRun } from "@ingcreators/annot-core/tauri-bridge";
+import type { AnnotationShape, TextRun } from "@ingcreators/annot-core/desktop-bridge";
 import {
   capAttr,
   chex,

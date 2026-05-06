@@ -31,7 +31,7 @@
  * shape-level defaults are inherited.
  */
 
-import type { TextRun } from "../utils/tauri-bridge.js";
+import type { TextRun } from "../utils/desktop-bridge.js";
 import type { TextVariant } from "./tool-options.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
