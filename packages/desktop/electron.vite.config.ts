@@ -33,9 +33,34 @@
 import { resolve } from "node:path";
 import { defineConfig, externalizeDepsPlugin } from "electron-vite";
 
+// `@ingcreators/*` workspace packages declare their `exports` field
+// pointing at `.ts` SOURCE files (Vite-and-friends transpile on the
+// fly, so this is the natural shape for the renderer build). When
+// `electron-builder` packages the app, those packages are copied
+// into `app.asar/node_modules/@ingcreators/<pkg>/` — at which point
+// Node's "type stripping is unsupported under node_modules" rule
+// kicks in and `import { … } from "@ingcreators/annot-core/zip-bytes"`
+// crashes the main process at first launch with
+// `ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`. (In dev the symlink
+// to `packages/core/` realpaths OUTSIDE `node_modules`, so Node 22+'s
+// experimental type-stripping IS allowed and the bug doesn't surface.)
+//
+// Exclude the workspace packages from the externalize list so Vite
+// bundles them INLINE into `main.js` / `preload.cjs`. The compiled
+// output is plain JS, lands in `dist-electron/`, and survives
+// electron-builder's asar packaging unchanged. Real npm dependencies
+// (`js-yaml` etc.) stay externalized — they ship pre-compiled JS in
+// `node_modules` and the asar can resolve them at runtime.
+const WORKSPACE_PACKAGES_TO_BUNDLE = [
+  "@ingcreators/annot-core",
+  "@ingcreators/annot-editor",
+  "@ingcreators/annot-editor-shell",
+  "@ingcreators/annot-web",
+];
+
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin()],
+    plugins: [externalizeDepsPlugin({ exclude: WORKSPACE_PACKAGES_TO_BUNDLE })],
     build: {
       outDir: resolve(__dirname, "dist-electron/main"),
       lib: {
@@ -45,7 +70,7 @@ export default defineConfig({
     },
   },
   preload: {
-    plugins: [externalizeDepsPlugin()],
+    plugins: [externalizeDepsPlugin({ exclude: WORKSPACE_PACKAGES_TO_BUNDLE })],
     build: {
       outDir: resolve(__dirname, "dist-electron/preload"),
       lib: {
