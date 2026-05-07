@@ -45,6 +45,17 @@ export default defineConfig({
         "**/*.spec.ts",
         "**/*.d.ts",
         "packages/*/src/env.d.ts",
+        // Storybook showroom files — visual surfaces for reviewers,
+        // not production code paths. Counting them as "uncovered"
+        // distorts the per-package totals (every Lit component
+        // ships at least one story per CLAUDE.md).
+        "**/*.stories.ts",
+        // Test-only mocks that ship in src/ alongside the storage
+        // backends so the contract test suites can import them
+        // without crossing the package boundary. Pure test fixtures
+        // — coverage of the implementation under test, not the mock,
+        // is what matters.
+        "**/*.test-mock.ts",
       ],
     },
   },
