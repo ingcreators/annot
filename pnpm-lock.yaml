@@ -79,6 +79,9 @@ importers:
 
   packages/desktop:
     dependencies:
+      '@ingcreators/annot-capture':
+        specifier: workspace:*
+        version: link:../capture
       '@ingcreators/annot-core':
         specifier: workspace:*
         version: link:../core

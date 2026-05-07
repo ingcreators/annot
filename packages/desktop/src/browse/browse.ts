@@ -1,37 +1,30 @@
 /**
- * Browse window renderer — Phase 6 of
- * `docs/plans/desktop-electron-migration.md`.
+ * Browse window renderer.
  *
- * Wires the chrome (address bar, nav buttons, capture toolbar)
- * to the embedded `<webview>` that loads the user-navigated URL.
- * Visible capture goes through `browse.captureVisible` IPC: the
- * main process receives the webview's `webContentsId` and calls
- * `webContents.capturePage()` on it, returning a PNG data URL.
+ * Phase 3 of `docs/plans/desktop-browser-mode.md`: the bespoke
+ * `browse.captureVisible` + `browse.persistVisible` IPC pair from
+ * the Phase 6 MVP is gone. Visible-mode capture now flows through
+ * the shared orchestrator from
+ * `@ingcreators/annot-capture/orchestrate` against a renderer-side
+ * `DesktopCaptureHost` (`./host.ts`); persistence routes through
+ * `DesktopStore.saveImage` so the main editor's gallery picks the
+ * new record up via its existing resync logic.
  *
- * **Phase 6 minimum-viable scope.** Single tab. Visible mode
- * only. Captures save into `<userData>/library/Inbox/` via the
- * `browse.persistVisible` IPC (which writes the PNG plus a JSON
- * sidecar through Node fs). Multi-tab + Area / Full-Page /
- * Per-Page / Click / Hotkey modes are deferred to a follow-up
- * that lands the `@ingcreators/annot-capture` package extraction
- * (`docs/plans/desktop-browser-mode.md` Phase 1).
+ * Phase 3 minimum-viable scope: single tab, visible mode only.
+ * Multi-tab + Area / Full-Page / Per-Page / Click / Hotkey land
+ * in Phase 4 alongside the `<webview>` preload that bridges the
+ * content-script bus.
  */
+
+import { runVisibleCapture } from "@ingcreators/annot-capture/orchestrate";
+import { newIdB58 } from "@ingcreators/annot-core/utils";
+import type { DesktopStore } from "../storage/desktop-store.js";
+import { createStandaloneDesktopStore } from "../storage/bootstrap.js";
+import { createBrowseCaptureHost } from "./host.js";
 
 interface ElectronApi {
   invoke<T = unknown>(channel: string, args?: unknown): Promise<T>;
   on(channel: string, listener: (payload: unknown) => void): () => void;
-}
-
-interface CaptureVisibleResult {
-  /** PNG data URL of the visible viewport. */
-  data_url: string;
-  width: number;
-  height: number;
-}
-
-interface PersistVisibleResult {
-  /** Library-relative path of the saved file. */
-  path: string;
 }
 
 const ELECTRON_API_KEY = "electronAPI" as const;
@@ -47,6 +40,10 @@ function api(): ElectronApi {
 }
 
 const HOME_URL = "about:blank";
+
+/** Default folder under the library where Browse-window captures
+ *  land. Mirrors the Phase 6 MVP. */
+const INBOX_FOLDER = "Inbox";
 
 interface BrowseDom {
   webview: WebviewElement;
@@ -89,6 +86,19 @@ function resolveDom(): BrowseDom {
 
 document.addEventListener("DOMContentLoaded", () => {
   const dom = resolveDom();
+
+  // Lazy-init the DesktopStore on first capture. Construction reads
+  // the library root via IPC + initialises the index file, both of
+  // which take a few hundred ms — defer until the user actually
+  // clicks "Capture Visible" so the chrome's first paint isn't
+  // gated on it.
+  let storePromise: Promise<DesktopStore> | null = null;
+  function getStore(): Promise<DesktopStore> {
+    if (!storePromise) {
+      storePromise = createStandaloneDesktopStore();
+    }
+    return storePromise;
+  }
 
   // ---- Navigation wiring ────────────────────────────────────────
 
@@ -155,22 +165,63 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // ---- Capture wiring ────────────────────────────────────────────
 
+  // The host wraps the `<webview>` so the orchestrator can resolve
+  // a `CaptureTargetRef`, capture the viewport, and run the
+  // metadata walker. `getURL()` reads the live URL — preferable
+  // to the stale `<webview>.src` after history-driven navigations.
+  const host = createBrowseCaptureHost({
+    webview: {
+      getWebContentsId: () => dom.webview.getWebContentsId(),
+      getURL: () => dom.webview.getURL?.() ?? dom.webview.src,
+      getTitle: () => document.title,
+      src: dom.webview.src,
+    },
+  });
+
   async function captureVisible(): Promise<void> {
     dom.btnCaptureVisible.disabled = true;
     setStatus("Capturing visible viewport…", "busy");
     try {
-      const webContentsId = dom.webview.getWebContentsId();
-      const captured = await api().invoke<CaptureVisibleResult>("browse.captureVisible", {
-        webContentsId,
+      const result = await runVisibleCapture(host);
+      if (!result || result.frames.length === 0) {
+        setStatus("Capture cancelled", null);
+        return;
+      }
+      const frame = result.frames[0]!;
+      // Probe dimensions if the orchestrator left them at 0
+      // (visible-mode does that — the encoder doesn't surface them).
+      let { width, height } = frame;
+      if (!width || !height) {
+        const probed = await probeDataUrlDimensions(frame.dataUrl);
+        width = probed.width;
+        height = probed.height;
+      }
+      const sourceUrl = result.target.url;
+      const title = result.target.title ?? "";
+      const tags: Record<string, string> = {
+        ...urlTags(sourceUrl),
+        captureId: newIdB58(),
+      };
+
+      const store = await getStore();
+      const path = await store.saveImage({
+        originalDataUrl: frame.dataUrl,
+        // `thumbnailDataUrl` is owned by the host's
+        // ThumbnailManager — `DesktopStore.saveImage` ignores any
+        // value passed here. Keep it empty so callers don't waste
+        // a `generateThumbnail` round-trip just to populate it.
+        thumbnailDataUrl: "",
+        annotationsSvg: "",
+        width,
+        height,
+        sourceUrl,
+        tags,
+        folderPath: INBOX_FOLDER,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        pageMetadata: frame.pageMetadata,
       });
-      const persisted = await api().invoke<PersistVisibleResult>("browse.persistVisible", {
-        dataUrl: captured.data_url,
-        width: captured.width,
-        height: captured.height,
-        sourceUrl: dom.webview.src,
-        title: document.title,
-      });
-      setStatus(`Saved to ${persisted.path}`, "success");
+      setStatus(`Saved to ${path} (${title || sourceUrl})`, "success");
     } catch (err) {
       setStatus(`Capture failed: ${(err as Error).message}`, "error");
     } finally {
@@ -205,6 +256,38 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 });
 
+async function probeDataUrlDimensions(
+  dataUrl: string,
+): Promise<{ width: number; height: number }> {
+  try {
+    const blob = await (await fetch(dataUrl)).blob();
+    const bmp = await createImageBitmap(blob);
+    const out = { width: bmp.width, height: bmp.height };
+    bmp.close();
+    return out;
+  } catch {
+    return { width: 0, height: 0 };
+  }
+}
+
+/** URL → tag bag. Mirrors the chrome extension's `urlTags` so saved
+ *  records carry the same per-host / -path / -query / -fragment
+ *  metadata regardless of which host produced them. */
+function urlTags(sourceUrl: string | undefined | null): Record<string, string> {
+  if (!sourceUrl) return {};
+  try {
+    const u = new URL(sourceUrl);
+    const t: Record<string, string> = {};
+    if (u.hostname) t.host = u.hostname;
+    if (u.pathname && u.pathname !== "/") t.path = u.pathname;
+    if (u.search) t.query = u.search.slice(1);
+    if (u.hash) t.fragment = u.hash.slice(1);
+    return t;
+  } catch {
+    return {};
+  }
+}
+
 // ---- `<webview>` element type ──────────────────────────────────
 //
 // Electron's `<webview>` tag isn't part of TS's standard DOM lib.
@@ -223,4 +306,7 @@ interface WebviewElement extends HTMLElement {
    *  this to resolve the webview from `webContents.fromId(id)`
    *  for `capturePage()`. */
   getWebContentsId(): number;
+  /** Live URL (vs. the static `src` attribute, which doesn't
+   *  update on history-driven navigations). */
+  getURL?(): string;
 }

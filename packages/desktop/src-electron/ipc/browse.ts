@@ -1,70 +1,59 @@
 /**
- * Browse-window IPC — Phase 6 of
- * `docs/plans/desktop-electron-migration.md`.
+ * Browse-window IPC.
  *
- * Three channels:
+ * Phase 6 of `_done/desktop-electron-migration.md` shipped a
+ * minimum-viable `browse.captureVisible` + `browse.persistVisible`
+ * pair. Phase 3 of `desktop-browser-mode.md` (this PR) replaces
+ * those with the host-primitive pair the orchestrators in
+ * `@ingcreators/annot-capture` consume:
  *
- *   - `browse.open(url?)`           → spawn (or focus) the Browse
- *                                      window. Optionally
- *                                      navigates to `url` after
- *                                      load.
- *   - `browse.captureVisible(id)`   → call `webContents.capturePage()`
- *                                      on the webview identified
- *                                      by `webContentsId`. Returns
- *                                      a PNG data URL + size.
- *   - `browse.persistVisible(...)`  → write the captured PNG into
- *                                      `<userData>/library/Inbox/`
- *                                      with a deterministic
- *                                      `annot-<ts>.annot.png`
- *                                      filename. Returns the
- *                                      library-relative path.
+ *   - `browse.open(url?)`                       — spawn (or focus)
+ *     the Browse window. Optionally navigates to `url` once the
+ *     chrome finishes loading.
+ *   - `browse.host.captureViewport(webContentsId)` — call
+ *     `webContents.fromId(id).capturePage()`. Returns a PNG data
+ *     URL plus the host-authoritative DPR (Phase 2 of
+ *     `desktop-browser-mode.md` — read via
+ *     `executeJavaScript("window.devicePixelRatio")`).
+ *   - `browse.host.executeMainWorld(webContentsId, expression)` —
+ *     run a JavaScript expression in the target's MAIN world.
+ *     The renderer-side host calls this with a stringified
+ *     `walkPageMetadata` IIFE for `requestPageMetadata`, but the
+ *     channel itself is generic so future orchestrator surfaces
+ *     (e.g. element-picker pre-fetch, area-snap probes) can
+ *     reuse it.
  *
- * **Phase 6 minimum-viable scope.** Single tab, visible-only
- * capture. Multi-tab orchestration + the Area / Full-Page /
- * Per-Page / Click / Hotkey modes are deferred to a follow-up
- * that lands the `@ingcreators/annot-capture` package extraction
- * (`docs/plans/desktop-browser-mode.md` Phase 1). That extraction
- * powers the orchestrator-driven capture state machines, which
- * the Browse window will consume verbatim once available.
+ * Persistence routes through `DesktopStore.saveImage` rather than
+ * a one-off filesystem write IPC, so the editor / gallery / sync
+ * mechanism that already observes `<userData>/library/` picks the
+ * new record up for free.
  *
- * The handler factory takes a `BrowseDeps` adapter so unit tests
- * exercise the IPC logic without booting Electron.
+ * Phase 3 minimum-viable scope: visible-mode capture only.
+ * Multi-tab + the Area / Full-Page / Per-Page / Click / Hotkey
+ * orchestrators land in Phase 4 along with the `<webview>`
+ * preload that bridges the content-script bus.
  */
 
-import { promises as fs } from "node:fs";
-import { join } from "node:path";
-
-export interface CaptureVisibleResult {
-  data_url: string;
-  width: number;
-  height: number;
+export interface CapturedViewportResult {
+  /** PNG data URL of the captured viewport. */
+  pngDataUrl: string;
+  /** Authoritative DPR for this capture (read via
+   *  `executeJavaScript("window.devicePixelRatio")`). */
+  dpr: number;
 }
 
-export interface PersistVisibleInput {
-  /** PNG data URL produced by `browse.captureVisible`. */
-  dataUrl: string;
-  width: number;
-  height: number;
-  /** Source URL the capture came from (recorded in the XMP-like
-   *  metadata sidecar). Empty string when unavailable. */
-  sourceUrl?: string;
-  /** Optional page title for the library entry. */
-  title?: string;
-}
-
-export interface PersistVisibleResult {
-  /** Library-relative forward-slash path of the saved file. */
-  path: string;
-  /** Absolute path on disk. */
-  abs_path: string;
-  /** Filename (no directory). */
-  filename: string;
+export interface ExecuteMainWorldInput {
+  webContentsId: number;
+  /** A JavaScript expression to evaluate. The renderer-side host
+   *  is responsible for assembling closure-free expressions; the
+   *  main process is a thin pass-through. */
+  expression: string;
 }
 
 export interface BrowseHandlers {
   open(input: { url?: string }): Promise<void>;
-  captureVisible(input: { webContentsId: number }): Promise<CaptureVisibleResult>;
-  persistVisible(input: PersistVisibleInput): Promise<PersistVisibleResult>;
+  captureViewport(input: { webContentsId: number }): Promise<CapturedViewportResult>;
+  executeMainWorld(input: ExecuteMainWorldInput): Promise<unknown>;
 }
 
 // ---- Dependency injection seam ─────────────────────────────────
@@ -74,6 +63,9 @@ export interface CapturedImage {
   png: Uint8Array;
   width: number;
   height: number;
+  /** DPR at capture time, read in the same event-loop turn as
+   *  `capturePage()` so the value matches the captured pixels. */
+  dpr: number;
 }
 
 export interface BrowseDeps {
@@ -82,30 +74,22 @@ export interface BrowseDeps {
    *  in `main.ts` spawns a `BrowserWindow` loading `browse.html`. */
   openBrowseWindow(opts: { url?: string }): Promise<void>;
   /** Resolve the `webContents` for the given id and run
-   *  `capturePage()` against it. Returns PNG bytes + size. */
+   *  `capturePage()` against it. Returns PNG bytes + size + DPR. */
   captureWebContents(webContentsId: number): Promise<CapturedImage>;
-  /** Absolute path to `<userData>/library/`. The persist handler
-   *  joins this with `Inbox/<filename>`. */
-  libraryRoot: string;
-  /** Override the timestamp source (tests inject a fixed clock so
-   *  filename round-trips are deterministic). Production uses
-   *  `Date.now()` via `() => new Date()`. */
-  now?: () => Date;
+  /** Run a MAIN-world JavaScript expression against the target
+   *  `webContents`. Production wiring uses
+   *  `webContents.fromId(id).executeJavaScript(expression, true)`;
+   *  tests inject a fake. */
+  executeJavaScriptInTarget(webContentsId: number, expression: string): Promise<unknown>;
 }
 
-/** Default Inbox folder under `<userData>/library/`. The renderer-
- *  side `bootstrap.ts` ensures this exists at first launch. */
-const INBOX_FOLDER = "Inbox";
-
 export function createBrowseHandlers(deps: BrowseDeps): BrowseHandlers {
-  const now = deps.now ?? (() => new Date());
-
   return {
     async open(input) {
       await deps.openBrowseWindow({ url: input.url });
     },
 
-    async captureVisible(input) {
+    async captureViewport(input): Promise<CapturedViewportResult> {
       const captured = await deps.captureWebContents(input.webContentsId);
       const b64 = Buffer.from(
         captured.png.buffer,
@@ -113,78 +97,29 @@ export function createBrowseHandlers(deps: BrowseDeps): BrowseHandlers {
         captured.png.byteLength,
       ).toString("base64");
       return {
-        data_url: `data:image/png;base64,${b64}`,
-        width: captured.width,
-        height: captured.height,
+        pngDataUrl: `data:image/png;base64,${b64}`,
+        dpr: captured.dpr,
       };
     },
 
-    async persistVisible(input) {
-      const bytes = parseDataUrl(input.dataUrl);
-      const stem = formatLocalTimestampStem(now());
-      const filename = `${stem}.annot.png`;
-      const inboxDir = join(deps.libraryRoot, INBOX_FOLDER);
-      await fs.mkdir(inboxDir, { recursive: true });
-      const absPath = join(inboxDir, filename);
-      await fs.writeFile(absPath, bytes);
-      // Sidecar metadata — best-effort. The renderer's gallery
-      // doesn't yet read this; it's a forward-looking record so
-      // future XMP-on-PNG porting can pick up the source URL.
-      const meta = {
-        source_url: input.sourceUrl ?? "",
-        title: input.title ?? "",
-        width: input.width,
-        height: input.height,
-      };
-      try {
-        await fs.writeFile(`${absPath}.json`, JSON.stringify(meta, null, 2), "utf-8");
-      } catch {
-        /* ignore — sidecar is decorative */
-      }
-      return {
-        path: `${INBOX_FOLDER}/${filename}`,
-        abs_path: absPath,
-        filename,
-      };
+    async executeMainWorld(input): Promise<unknown> {
+      return deps.executeJavaScriptInTarget(input.webContentsId, input.expression);
     },
   };
-}
-
-function parseDataUrl(dataUrl: string): Uint8Array {
-  const comma = dataUrl.indexOf(",");
-  if (comma < 0) throw new Error("[browse] invalid data URL");
-  const b64 = dataUrl.slice(comma + 1);
-  return new Uint8Array(Buffer.from(b64, "base64"));
-}
-
-/** Mirrors `defaultAnnotFilenameStem` in
- *  `packages/core/src/utils/filename.ts`. Local time, not UTC —
- *  the capture stem is user-visible and stable across host
- *  languages. */
-function formatLocalTimestampStem(now: Date): string {
-  const pad = (n: number, w = 2) => String(n).padStart(w, "0");
-  const y = now.getFullYear();
-  const mo = pad(now.getMonth() + 1);
-  const d = pad(now.getDate());
-  const h = pad(now.getHours());
-  const mi = pad(now.getMinutes());
-  const s = pad(now.getSeconds());
-  const ms = pad(now.getMilliseconds(), 3);
-  return `annot-${y}${mo}${d}-${h}${mi}${s}-${ms}`;
 }
 
 // ---- IPC channel inventory ──────────────────────────────────────
 
 export const BROWSE_CHANNELS = {
   open: "browse.open",
-  captureVisible: "browse.captureVisible",
-  persistVisible: "browse.persistVisible",
+  captureViewport: "browse.host.captureViewport",
+  executeMainWorld: "browse.host.executeMainWorld",
 } as const;
 
 export type BrowseChannel = (typeof BROWSE_CHANNELS)[keyof typeof BROWSE_CHANNELS];
 
 export const BROWSE_CHANNEL_TO_HANDLER: Record<BrowseChannel, keyof BrowseHandlers> = {
   [BROWSE_CHANNELS.open]: "open",
-  [BROWSE_CHANNELS.captureVisible]: "captureVisible",
-  [BROWSE_CHANNELS.persistVisible]: "persistVisible",
+  [BROWSE_CHANNELS.captureViewport]: "captureViewport",
+  [BROWSE_CHANNELS.executeMainWorld]: "executeMainWorld",
 };

@@ -453,7 +453,18 @@ function buildAppMenu(): Menu {
  *  webContentsId. The renderer-side `browse.ts` calls
  *  `<webview>.getWebContentsId()` and forwards the id; this main-
  *  side lookup uses `webContents.fromId()` to resolve the actual
- *  capture target. */
+ *  capture target.
+ *
+ *  The DPR is read from the page's `window.devicePixelRatio` via
+ *  `executeJavaScript` IN THE SAME EVENT-LOOP TURN as the
+ *  `capturePage()` call, so the value matches the capture's
+ *  pixel density (Phase 2 of `desktop-browser-mode.md` —
+ *  host-authoritative DPR). `nativeImage.getScaleFactor()` /
+ *  `getScaleFactors()` were considered but neither reliably
+ *  reports the page's DPR for `capturePage()` output across
+ *  Electron versions; the executeJavaScript probe matches the
+ *  chrome extension's content-side approach and stays consistent
+ *  with what Chromium actually rendered. */
 async function captureWebContentsById(webContentsId: number): Promise<CapturedImage> {
   const wc = webContents.fromId(webContentsId);
   if (!wc) {
@@ -462,11 +473,42 @@ async function captureWebContentsById(webContentsId: number): Promise<CapturedIm
   const image = await wc.capturePage();
   const png = image.toPNG();
   const size = image.getSize();
+  let dpr = 1;
+  try {
+    const probed = (await wc.executeJavaScript(
+      "window.devicePixelRatio || 1",
+      true,
+    )) as unknown;
+    const probedNum = typeof probed === "number" ? probed : Number(probed);
+    if (Number.isFinite(probedNum) && probedNum > 0) dpr = probedNum;
+  } catch {
+    /* page navigated mid-capture or executeJavaScript rejected — fall back to 1 */
+  }
   return {
     png: new Uint8Array(png.buffer, png.byteOffset, png.byteLength),
     width: size.width,
     height: size.height,
+    dpr,
   };
+}
+
+/** Run a MAIN-world JavaScript expression against the target
+ *  `webContents`. Used by `browse.host.requestPageMetadata` to
+ *  drive the capture-package walker. The `userGesture` flag is
+ *  `true` so the executed code can call APIs that require a user
+ *  activation (the walker doesn't, but the chrome host's
+ *  `chrome.scripting.executeScript({ world: "MAIN" })` runs with
+ *  the same kind of elevated permissions, so this matches the
+ *  semantics). */
+async function executeJavaScriptInTarget(
+  webContentsId: number,
+  expression: string,
+): Promise<unknown> {
+  const wc = webContents.fromId(webContentsId);
+  if (!wc) {
+    throw new Error(`[browse] webContents id ${webContentsId} not found`);
+  }
+  return wc.executeJavaScript(expression, true);
 }
 
 /** Lazily-loaded `annot-win-clipboard` addon. Resolved once at
@@ -504,9 +546,9 @@ void app.whenReady().then(async () => {
       };
     },
     browse: {
-      libraryRoot,
       openBrowseWindow: (browseOpts) => openOrFocusBrowseWindow(browseOpts),
       captureWebContents: captureWebContentsById,
+      executeJavaScriptInTarget,
     },
     extension: { userDataDir },
     shell: {

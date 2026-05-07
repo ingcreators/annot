@@ -128,6 +128,30 @@ async function ensureLibrarySkeleton(fs: DesktopFs): Promise<void> {
 }
 
 /**
+ * Construct + initialise a standalone `DesktopStore` against the
+ * shared library root, WITHOUT mounting a `FileManager` UI. Used by
+ * the Browse window (Phase 3 of `desktop-browser-mode.md`) so its
+ * capture pipeline can route through the same StorageProvider as
+ * the main editor's gallery.
+ *
+ * The two stores (main editor's + browse's) are separate in-memory
+ * instances. The main editor picks up newly-saved files from
+ * cross-window writes via its own `resync()` / `forceRefresh()`
+ * code paths, same as the Phase 6 MVP's bespoke filesystem-write
+ * IPC.
+ */
+export async function createStandaloneDesktopStore(
+  opts: { libraryRoot?: string; fs?: DesktopFs } = {},
+): Promise<DesktopStore> {
+  const libraryRoot = opts.libraryRoot ?? (await resolveLibraryRoot());
+  const fs = opts.fs ?? createElectronDesktopFs();
+  await ensureLibrarySkeleton(fs);
+  const store = new DesktopStore(fs, leafNameOf(libraryRoot));
+  await store.init();
+  return store;
+}
+
+/**
  * Mount the unified gallery against `DesktopStore`. Caller is
  * responsible for ensuring the host DOM (`#sidebar` +
  * `#main-content` inside `#file-manager`, see `index.html`) exists

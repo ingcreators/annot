@@ -52,6 +52,7 @@ import { defineConfig, externalizeDepsPlugin } from "electron-vite";
 // (`js-yaml` etc.) stay externalized — they ship pre-compiled JS in
 // `node_modules` and the asar can resolve them at runtime.
 const WORKSPACE_PACKAGES_TO_BUNDLE = [
+  "@ingcreators/annot-capture",
   "@ingcreators/annot-core",
   "@ingcreators/annot-editor",
   "@ingcreators/annot-host-ui",

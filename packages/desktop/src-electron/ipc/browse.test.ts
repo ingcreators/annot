@@ -1,159 +1,113 @@
 /**
- * Unit tests for the Phase 6 Browse-window IPC handlers.
+ * Unit tests for the Browse-window IPC handlers.
  *
- * Exercises the dependency-injected handlers without booting
- * Electron: a fake `captureWebContents` returns a synthetic PNG
- * payload, the `openBrowseWindow` callback is just a recorder,
- * and `persistVisible` writes through real Node fs into a tmp
- * directory standing in for `<userData>/library/`.
+ * Phase 3 of `desktop-browser-mode.md` replaces the bespoke
+ * `browse.captureVisible` + `browse.persistVisible` pair (Phase 6
+ * MVP) with the host-primitive pair the orchestrators consume:
+ * `browse.host.captureViewport` and `browse.host.executeMainWorld`.
+ * Persistence moved renderer-side (`DesktopStore.saveImage`).
+ *
+ * These tests exercise the dependency-injected handlers without
+ * booting Electron: a fake `captureWebContents` returns a
+ * synthetic PNG payload + DPR, and a fake
+ * `executeJavaScriptInTarget` records the expression so the
+ * channel's pass-through contract can be asserted.
  */
 
-import { promises as fs } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   BROWSE_CHANNELS,
   createBrowseHandlers,
   type BrowseDeps,
-  type BrowseHandlers,
   type CapturedImage,
 } from "./browse.js";
-
-let libraryRoot: string;
-let openBrowseWindow: BrowseDeps["openBrowseWindow"] & ReturnType<typeof vi.fn>;
-let captureWebContents: BrowseDeps["captureWebContents"] & ReturnType<typeof vi.fn>;
-let handlers: BrowseHandlers;
 
 const FAKE_PNG = new Uint8Array([
   0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x01, 0x02, 0x03, 0x04,
 ]);
 
-function fixedClock(): Date {
-  return new Date("2026-05-06T12:34:56.789");
-}
-
-beforeEach(async () => {
-  libraryRoot = await fs.mkdtemp(join(tmpdir(), "annot-browse-"));
-  openBrowseWindow = vi.fn(async (_opts: { url?: string }) => undefined) as typeof openBrowseWindow;
-  captureWebContents = vi.fn(async (_id: number): Promise<CapturedImage> => ({
+function buildHandlers(deps: Partial<BrowseDeps> = {}) {
+  const openBrowseWindow = vi.fn(async (_opts: { url?: string }) => undefined);
+  const captureWebContents = vi.fn(async (_id: number): Promise<CapturedImage> => ({
     png: FAKE_PNG,
     width: 1280,
     height: 720,
-  })) as typeof captureWebContents;
-  const deps: BrowseDeps = {
-    libraryRoot,
+    dpr: 2,
+  }));
+  const executeJavaScriptInTarget = vi.fn(async (_id: number, _expr: string) => null);
+  const merged: BrowseDeps = {
     openBrowseWindow,
     captureWebContents,
-    now: fixedClock,
+    executeJavaScriptInTarget,
+    ...deps,
   };
-  handlers = createBrowseHandlers(deps);
-});
-
-afterEach(async () => {
-  await fs.rm(libraryRoot, { recursive: true, force: true });
-});
+  const handlers = createBrowseHandlers(merged);
+  return { handlers, openBrowseWindow, captureWebContents, executeJavaScriptInTarget };
+}
 
 describe("browse.open", () => {
   it("forwards the URL to the deps callback", async () => {
+    const { handlers, openBrowseWindow } = buildHandlers();
     await handlers.open({ url: "https://example.com/article" });
     expect(openBrowseWindow).toHaveBeenCalledWith({ url: "https://example.com/article" });
   });
 
   it("opens with no URL when none is supplied", async () => {
+    const { handlers, openBrowseWindow } = buildHandlers();
     await handlers.open({});
     expect(openBrowseWindow).toHaveBeenCalledWith({ url: undefined });
   });
 });
 
-describe("browse.captureVisible", () => {
-  it("returns a PNG data URL with the captured size", async () => {
-    const result = await handlers.captureVisible({ webContentsId: 42 });
+describe("browse.host.captureViewport", () => {
+  it("returns a PNG data URL plus the host-authoritative DPR", async () => {
+    const { handlers, captureWebContents } = buildHandlers();
+    const result = await handlers.captureViewport({ webContentsId: 42 });
     expect(captureWebContents).toHaveBeenCalledWith(42);
-    expect(result.width).toBe(1280);
-    expect(result.height).toBe(720);
-    expect(result.data_url).toMatch(/^data:image\/png;base64,/);
+    expect(result.dpr).toBe(2);
+    expect(result.pngDataUrl).toMatch(/^data:image\/png;base64,/);
 
-    const recovered = Buffer.from(result.data_url.split(",")[1] ?? "", "base64");
+    // Verify the base64 round-trips back to the original PNG bytes.
+    const recovered = Buffer.from(result.pngDataUrl.split(",")[1] ?? "", "base64");
     expect(new Uint8Array(recovered)).toEqual(FAKE_PNG);
   });
 });
 
-describe("browse.persistVisible", () => {
-  it("writes the PNG into <library>/Inbox/ with annot-<ts>.annot.png filename", async () => {
-    const captured = await handlers.captureVisible({ webContentsId: 1 });
-    const persisted = await handlers.persistVisible({
-      dataUrl: captured.data_url,
-      width: captured.width,
-      height: captured.height,
-      sourceUrl: "https://example.com/article",
-      title: "An Example Article",
+describe("browse.host.executeMainWorld", () => {
+  it("passes the expression and webContentsId through to deps", async () => {
+    const fakeReturn = { ok: true } as unknown;
+    const customExec = vi.fn(async () => fakeReturn);
+    const { handlers } = buildHandlers({ executeJavaScriptInTarget: customExec });
+    const result = await handlers.executeMainWorld({
+      webContentsId: 5,
+      expression: "1 + 2",
     });
-
-    expect(persisted.filename).toBe("annot-20260506-123456-789.annot.png");
-    expect(persisted.path).toBe("Inbox/annot-20260506-123456-789.annot.png");
-    expect(persisted.abs_path).toBe(join(libraryRoot, "Inbox", persisted.filename));
-
-    const written = await fs.readFile(persisted.abs_path);
-    expect(new Uint8Array(written)).toEqual(FAKE_PNG);
+    expect(customExec).toHaveBeenCalledWith(5, "1 + 2");
+    expect(result).toBe(fakeReturn);
   });
 
-  it("writes the sidecar JSON metadata next to the PNG", async () => {
-    const captured = await handlers.captureVisible({ webContentsId: 1 });
-    const persisted = await handlers.persistVisible({
-      dataUrl: captured.data_url,
-      width: captured.width,
-      height: captured.height,
-      sourceUrl: "https://example.com/article",
-      title: "An Example Article",
-    });
-
-    const meta = JSON.parse(
-      await fs.readFile(`${persisted.abs_path}.json`, "utf-8"),
-    ) as {
-      source_url: string;
-      title: string;
-      width: number;
-      height: number;
-    };
-    expect(meta.source_url).toBe("https://example.com/article");
-    expect(meta.title).toBe("An Example Article");
-    expect(meta.width).toBe(1280);
-    expect(meta.height).toBe(720);
-  });
-
-  it("creates the Inbox folder when it doesn't exist yet", async () => {
-    // The mkdtemp libraryRoot starts empty — no Inbox/.
-    const captured = await handlers.captureVisible({ webContentsId: 1 });
-    await handlers.persistVisible({
-      dataUrl: captured.data_url,
-      width: captured.width,
-      height: captured.height,
-    });
-    const stat = await fs.stat(join(libraryRoot, "Inbox"));
-    expect(stat.isDirectory()).toBe(true);
-  });
-
-  it("rejects malformed data URLs", async () => {
-    await expect(
-      handlers.persistVisible({
-        dataUrl: "not-a-data-url",
-        width: 1,
-        height: 1,
+  it("propagates rejection from the deps callback", async () => {
+    const { handlers } = buildHandlers({
+      executeJavaScriptInTarget: vi.fn(async () => {
+        throw new Error("Web contents navigated");
       }),
-    ).rejects.toThrow(/invalid data URL/);
+    });
+    await expect(
+      handlers.executeMainWorld({ webContentsId: 1, expression: "1+2" }),
+    ).rejects.toThrow(/navigated/);
   });
 });
 
 describe("browse channel inventory", () => {
   it("exposes a stable channel-name set", () => {
-    // Renderer-side bindings (`browse.ts` in src/browse/) depend on
-    // these exact names. Pin them here so a typo surfaces at unit-
-    // test time rather than as a silent runtime no-op.
+    // Renderer-side bindings (`browse.ts` + `host.ts` in
+    // src/browse/) depend on these exact names. Pin them here so a
+    // typo surfaces at unit-test time rather than as a silent
+    // runtime no-op.
     expect(BROWSE_CHANNELS).toEqual({
       open: "browse.open",
-      captureVisible: "browse.captureVisible",
-      persistVisible: "browse.persistVisible",
+      captureViewport: "browse.host.captureViewport",
+      executeMainWorld: "browse.host.executeMainWorld",
     });
   });
 });
