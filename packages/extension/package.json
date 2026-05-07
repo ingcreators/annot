@@ -21,7 +21,9 @@
   },
   "dependencies": {
     "@ingcreators/annot-capture": "workspace:*",
-    "@ingcreators/annot-core": "workspace:*"
+    "@ingcreators/annot-core": "workspace:*",
+    "@ingcreators/annot-host-ui": "workspace:*",
+    "lit": "^3.3.2"
   },
   "devDependencies": {
     "@resvg/resvg-js": "^2.6.2",
