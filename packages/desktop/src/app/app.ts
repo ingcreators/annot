@@ -11,15 +11,32 @@ import "@ingcreators/annot-core/styles/fonts.css";
 import "@ingcreators/annot-web/styles/file-manager.css";
 import "../styles/app.css";
 
-import { applyPersistedTheme, CanvasManager } from "@ingcreators/annot-editor";
-import { History } from "@ingcreators/annot-editor";
-import { PropertyPanel } from "@ingcreators/annot-editor";
-import { SelectionManager } from "@ingcreators/annot-editor";
-// Phase 5a moved the Toolbar class from `annot-core` to `annot-web`
-// so core stays DOM-free. The desktop shell picks it up from web's
-// editor surface — the rest of the imports below remain in core
-// because PropertyPanel + Canvas + History stay there.
+import { applyPersistedTheme } from "@ingcreators/annot-editor";
+// Phase 1 of `docs/plans/host-convergence.md` swapped the desktop's
+// imperative `new CanvasManager / new History / new SelectionManager`
+// chain for `EditorShell.mountFromRecord`. The shell owns the per-image
+// canvas / history / selection lifecycle; the desktop adapter wires
+// the surrounding chrome (editor-header / right-panel / drawer /
+// statusbar) to the shell's events.
+import {
+  EditorShell,
+  installKeyboardHelp,
+  type AnnotFileDetailsDrawerElement,
+} from "@ingcreators/annot-editor-shell";
+import type { AnnotEditorRightPanelElement } from "@ingcreators/annot-editor-shell/right-panel";
+import "@ingcreators/annot-editor-shell/right-panel";
+import "@ingcreators/annot-editor-shell/editor-statusbar";
+import { estimateDataUrlBytes } from "@ingcreators/annot-editor-shell";
 import { Toolbar } from "@ingcreators/annot-editor-shell/toolbar";
+// Reuse PWA's editor-header Lit element directly. Phase 3 of the
+// host-convergence plan moves the orchestrator (HeaderHost) into
+// `editor-shell/orchestrators/`; until then the underlying Lit
+// element is the only PWA-side surface we touch and it works
+// off plain callbacks + props that the desktop populates itself.
+import "@ingcreators/annot-web/editor/editor-header";
+import type { AnnotEditorHeaderElement } from "@ingcreators/annot-web/editor/editor-header";
+import type { AnnotEditorStatusbarElement } from "@ingcreators/annot-editor-shell/editor-statusbar";
+import { getFilename, type ImageRecord } from "@ingcreators/annot-core/storage";
 import {
   captureScreen,
   isDesktop,
@@ -73,15 +90,51 @@ function dismissLegacyNotice(): void {
   }
 }
 
+// =============================================================
+// Editor session — one open image at a time.
+// =============================================================
+//
+// The desktop now follows the same shape as the PWA's editor:
+// `EditorShell` owns canvas / history / selection per-image,
+// and the desktop wires the surrounding chrome (editor-header /
+// right-panel / drawer / statusbar) to the shell's events.
+//
+// Phase 3 of `docs/plans/host-convergence.md` collapses the
+// debounce + status-indicator + header builders below into the
+// shared `HeaderHost` / `StatusHost` / `SavePipeline` primitives.
+// Until that lands, the desktop carries throwaway equivalents
+// that talk directly to the shell.
+
+interface EditorSession {
+  shell: EditorShell;
+  toolbar: Toolbar;
+  header: AnnotEditorHeaderElement;
+  rightPanel: AnnotEditorRightPanelElement;
+  statusbar: AnnotEditorStatusbarElement;
+  drawer: AnnotFileDetailsDrawerElement;
+  /** Disposers run when leaving the editor for the gallery. Keeps
+   *  the teardown sequence explicit so a future refactor can verify
+   *  that nothing leaks across editor sessions. */
+  disposers: Array<() => void>;
+  /** ResizeObserver that keeps "Fit to window" tracking the
+   *  viewport size. Mirrors the PWA's behaviour. */
+  fitObserver: ResizeObserver | null;
+  /** The image path currently open. Used by autosave + rename. */
+  path: string;
+  /** The full ImageRecord at open time. Updated on rename so the
+   *  drawer's File / Tags sections stay in sync. */
+  record: ImageRecord;
+}
+
+let session: EditorSession | null = null;
+
 function showEditorView(): void {
   document.getElementById("editor-view")!.style.display = "";
   // `body.editor-mode` is the switch the editor.css rules in
   // `@ingcreators/annot-core/styles/editor.css` watch for. It
   // promotes `#editor-sidebar` from `display: none` to a 48 px
   // vertical strip, hides the gallery `#toolbar`, and shifts
-  // `#canvas-container` to make room for the sidebar. `app.css`
-  // overrides `top: 48px` (PWA reserves that for editor-header)
-  // back to `0` since the desktop has no editor-header.
+  // `#canvas-container` to make room for the sidebar.
   document.body.classList.add("editor-mode");
 }
 
@@ -90,144 +143,376 @@ function hideEditorView(): void {
   document.body.classList.remove("editor-mode");
 }
 
-function openEditor(dataUrl: string, width: number, height: number): void {
+/**
+ * Open an image in the editor. Builds an `EditorShell` session
+ * around the supplied `ImageRecord` and wires every chrome
+ * surface (header / right-panel / drawer / statusbar) plus
+ * autosave + error-banner.
+ *
+ * Idempotent: if an editor session is already open, it's torn
+ * down first so the new image starts from a clean state.
+ */
+function openEditor(record: ImageRecord): void {
+  if (!fsGallery) {
+    console.error("[desktop] openEditor before gallery bootstrap finished");
+    return;
+  }
+  // Tear down any prior editor session so we don't leak listeners
+  // / timers / DOM into the next image. `mountFromRecord` already
+  // disposes the shell's CanvasManager / SelectionManager / History,
+  // but the surrounding chrome (drawer, observers, error banner,
+  // autosave timers) needs explicit cleanup.
+  closeEditorSession();
+
   showEditorView();
-  // The unified gallery sits in `#desktop-shell`; hide it
-  // explicitly while the editor is up so the canvas isn't sitting
-  // on top of a stale gallery list.
-  fsGallery?.hideGallery();
+  fsGallery.hideGallery();
 
+  const headerEl = document.getElementById("editor-header")!;
+  const sidebarEl = document.getElementById("editor-sidebar")!;
+  const canvasContainer = document.getElementById("canvas-container")!;
+  const rightPanelHostEl = document.getElementById("editor-right-panel")!;
+  const statusbarHostEl = document.getElementById("statusbar")!;
   const svg = document.getElementById("svg-root") as unknown as SVGSVGElement;
-  svg.innerHTML = "";
 
-  const canvas = new CanvasManager(svg, dataUrl, width, height);
+  // Reset chrome containers — Lit elements use `display: contents`
+  // as their host wrapper, so flex children of the host land
+  // directly inside the host div on append.
+  headerEl.innerHTML = "";
+  rightPanelHostEl.innerHTML = "";
+  statusbarHostEl.innerHTML = "";
+  sidebarEl.innerHTML = "";
 
-  const history = new History(canvas.annotations);
-  const selection = new SelectionManager(canvas, history);
-
-  const zoomLabel = document.getElementById("btn-zoom-label")!;
-  const zoomMenu = document.getElementById("zoom-menu")!;
-  const statusSize = document.getElementById("status-size")!;
-  const statusTool = document.getElementById("status-tool")!;
-
-  statusSize.textContent = `${width} × ${height}`;
-  canvas.onZoomChange = (z) => {
-    zoomLabel.textContent = `${Math.round(z * 100)}%`;
-  };
-  zoomLabel.textContent = `${Math.round(canvas.zoom * 100)}%`;
-
-  // Zoom +/-
-  document.getElementById("btn-zoom-in")!.addEventListener("click", () => {
-    canvas.setZoom(canvas.zoom + 0.1);
+  const shell = new EditorShell({
+    container: canvasContainer,
+    storage: fsGallery.store,
+    svgRoot: svg,
   });
-  document.getElementById("btn-zoom-out")!.addEventListener("click", () => {
-    canvas.setZoom(canvas.zoom - 0.1);
-  });
+  shell.mountFromRecord(record.path, record);
 
-  // Zoom dropdown
-  const ZOOM_OPTIONS: { label: string; value: number | "fit" }[] = [
-    { label: "Fit", value: "fit" },
-    { label: "25%", value: 0.25 },
-    { label: "50%", value: 0.5 },
-    { label: "75%", value: 0.75 },
-    { label: "100%", value: 1.0 },
-    { label: "150%", value: 1.5 },
-    { label: "200%", value: 2.0 },
-    { label: "300%", value: 3.0 },
-    { label: "400%", value: 4.0 },
-  ];
-
-  function buildZoomMenu(): void {
-    zoomMenu.innerHTML = "";
-    for (const opt of ZOOM_OPTIONS) {
-      if (opt.value === "fit") {
-        const item = document.createElement("button");
-        item.className = "zoom-menu-item";
-        item.textContent = "Fit to window";
-        item.addEventListener("click", () => {
-          canvas.fitToView();
-          zoomMenu.style.display = "none";
-        });
-        zoomMenu.appendChild(item);
-        const sep = document.createElement("div");
-        sep.className = "zoom-menu-sep";
-        zoomMenu.appendChild(sep);
-      } else {
-        const item = document.createElement("button");
-        item.className = "zoom-menu-item";
-        const curZoom = Math.round(canvas.zoom * 100);
-        if (Math.round((opt.value as number) * 100) === curZoom) item.classList.add("active");
-        item.textContent = opt.label;
-        item.addEventListener("click", () => {
-          canvas.setZoom(opt.value as number);
-          zoomMenu.style.display = "none";
-        });
-        zoomMenu.appendChild(item);
-      }
-    }
+  const canvas = shell.getCanvas();
+  const history = shell.getHistory();
+  const selection = shell.getSelection();
+  if (!canvas || !history || !selection) {
+    console.error("[desktop] EditorShell.mountFromRecord did not produce a canvas");
+    return;
   }
 
-  zoomLabel.addEventListener("click", (e) => {
-    e.stopPropagation();
-    if (zoomMenu.style.display === "none") {
-      buildZoomMenu();
-      zoomMenu.style.display = "block";
-    } else {
-      zoomMenu.style.display = "none";
-    }
-  });
-  document.addEventListener("click", () => {
-    zoomMenu.style.display = "none";
-  });
+  // ---- Statusbar ----------------------------------------------
+  const statusbar = document.createElement("annot-editor-statusbar");
+  statusbar.canvas = canvas;
+  statusbar.width = record.width;
+  statusbar.height = record.height;
+  statusbarHostEl.appendChild(statusbar);
 
-  const sidebarEl = document.getElementById("editor-sidebar")!;
-  sidebarEl.innerHTML = "";
+  // ---- Toolbar (vertical sidebar) -----------------------------
   // Mirror the PWA's editor-mode toolbar shape: vertical left
-  // strip, no gallery button (the desktop has a Back button in
-  // statusbar). Save / theme stay enabled because the desktop
-  // doesn't ship an editor-header where those would otherwise live.
-  // Horizontal mode is effectively dead code post-Lit-migration —
-  // `<annot-toolbar>` defaults to `display: inline` and only the
-  // vertical path explicitly promotes to `display: flex`, so a
-  // horizontal toolbar collapses into a vertical stack of mis-laid
-  // children. Keeping desktop on the same orientation as the PWA
-  // editor avoids that pitfall and keeps the visual contract
-  // identical across hosts.
+  // strip, no gallery / theme / save buttons (those live in
+  // `<annot-editor-header>` now). Tool ▼ dropdowns stay enabled
+  // because the right panel renders tool properties persistently
+  // and the variant flyouts still ship a faster picker.
   const toolbar = new Toolbar(
     sidebarEl,
     canvas,
     history,
     selection,
-    (toolName) => {
-      statusTool.textContent = toolName;
+    (toolName, toolId) => {
+      statusbar.setActiveTool(toolName);
+      rightPanel.showToolProperties(toolId);
     },
     {
       orientation: "vertical",
+      showThemeToggle: false,
       showGalleryButton: false,
+      showSaveGroup: false,
+      hideToolDropdowns: false,
+      getCurrentFilename: () => getFilename(session?.path ?? record.path),
     },
   );
 
-  // Property panel for selected shapes
-  const canvasContainer = document.getElementById("canvas-container")!;
-  const propPanel = new PropertyPanel(canvasContainer, canvas, history);
-  // Rotate / flip from the property panel mutates targets in place;
-  // refresh selection handles so they follow the new visual frame.
-  propPanel.onTargetMutated = () => selection.refreshHandles();
-  // Rubber-band: color/width/variant edits on a selected shape
-  // propagate back into the matching tool's preset so the next
-  // shape drawn with that tool matches the user's last choice.
-  propPanel.onStyleChanged = (targets) => {
-    for (const t of targets) toolbar.syncPresetFromElement(t);
+  // ---- Right panel --------------------------------------------
+  const rightPanel = document.createElement("annot-editor-right-panel");
+  rightPanel.toolbar = toolbar;
+  rightPanel.canvas = canvas;
+  rightPanel.history = history;
+  rightPanel.selection = selection;
+  rightPanel.getPluginSections = null;
+  rightPanel.isBuiltinSectionDisabled = null;
+  rightPanelHostEl.appendChild(rightPanel);
+
+  // ---- File details drawer ------------------------------------
+  const drawer = document.createElement("annot-file-details-drawer");
+  drawer.data = {
+    filename: getFilename(record.path),
+    folderPath: record.folderPath,
+    width: record.width,
+    height: record.height,
+    fileSizeBytes: estimateDataUrlBytes(record.originalDataUrl),
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
+    sourceUrl: record.sourceUrl,
+    tags: record.tags,
   };
-  selection.onChange = () => {
+  drawer.getPluginSections = null;
+  drawer.isBuiltinSectionDisabled = null;
+  drawer.onRename = (newName) => renameCurrentImage(newName);
+  drawer.onTagsChange = (tags) => {
+    if (!session) return;
+    session.record = { ...session.record, tags };
+    void fsGallery!.store
+      .updateImage(session.path, { tags })
+      .catch((e) => surfaceEditorError("Tag save failed", e));
+  };
+  document.body.appendChild(drawer);
+
+  // ---- Editor header ------------------------------------------
+  const header = document.createElement("annot-editor-header");
+  header.callbacks = {
+    onNavigateToFolder: (folderPath) => void backToGallery(folderPath),
+    onToggleInfo: () => drawer.toggle(),
+    onRename: (newName) => renameCurrentImage(newName),
+    onCopy: () => {
+      toolbar.copyNow().catch((e) => surfaceEditorError("Copy failed", e));
+    },
+    onSave: () => {
+      void runSaveNow();
+    },
+    onSaveMenu: (anchor) => toolbar.showSaveMenu(anchor),
+  };
+  populateHeaderProps(header, record);
+  headerEl.appendChild(header);
+
+  // ---- Selection sync → right-panel ---------------------------
+  const unsubSelection = shell.on("selection-change", () => {
     const els = selection.selectedElements;
     if (els.length > 0 && !canvas.activeTool) {
-      propPanel.show(els);
+      rightPanel.showSelectionProperties(els);
     } else {
-      propPanel.hide();
+      rightPanel.showSelectionProperties([]);
+    }
+  });
+
+  // ---- Autosave debounce --------------------------------------
+  // Throwaway desktop-local debounce per Phase 1 / Decision 2 of
+  // `docs/plans/host-convergence.md`. Phase 3 collapses this into
+  // the shared `SavePipeline` once the orchestrator is extracted
+  // into `@ingcreators/annot-editor-shell`.
+  const SAVE_DEBOUNCE_MS = 500;
+  let saveTimer: number | undefined;
+  let saveInFlight = false;
+  let savePending = false;
+
+  async function runSaveNow(): Promise<void> {
+    if (saveInFlight) {
+      savePending = true;
+      return;
+    }
+    saveInFlight = true;
+    const status = header.getSaveStatusIndicator();
+    if (status) status.status = "saving";
+    try {
+      await shell.saveNow();
+      const s = header.getSaveStatusIndicator();
+      if (s) s.status = "saved";
+      hideEditorError();
+    } catch (e) {
+      const s = header.getSaveStatusIndicator();
+      if (s) s.status = "error";
+      surfaceEditorError("Save failed", e);
+    } finally {
+      saveInFlight = false;
+      if (savePending) {
+        savePending = false;
+        void runSaveNow();
+      }
+    }
+  }
+
+  const unsubDirty = shell.on("dirty", () => {
+    const status = header.getSaveStatusIndicator();
+    if (status) status.status = "pending";
+    if (saveTimer !== undefined) clearTimeout(saveTimer);
+    saveTimer = window.setTimeout(() => {
+      saveTimer = undefined;
+      void runSaveNow();
+    }, SAVE_DEBOUNCE_MS);
+  });
+
+  // Surface mount + save errors from the shell's own emit (covers
+  // the `await shell.open(...)` path; `runSaveNow` already shows
+  // a banner on direct save throws).
+  const unsubError = shell.on("error", (err) => {
+    surfaceEditorError("Editor error", err);
+  });
+
+  // ---- Fit-to-window observer --------------------------------
+  // Re-fit the canvas whenever #canvas-container resizes. Covers
+  // window resize, right-panel toggle, devtools open/close.
+  const fitObserver = new ResizeObserver(() => canvas.refitIfFitMode());
+  fitObserver.observe(canvasContainer);
+
+  // ---- Keyboard shortcuts (?) -------------------------------
+  const uninstallKeyboardHelp = installKeyboardHelp();
+
+  // ---- Esc / Ctrl+S keyboard handlers (PWA parity) ----------
+  const onKeyDown = (e: KeyboardEvent): void => {
+    // Ctrl+S / Cmd+S → flush save now (cancel debounce, save in
+    // place). Match the PWA's eager-save-on-Ctrl+S behaviour so
+    // users have a manual checkpoint affordance.
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+      e.preventDefault();
+      if (saveTimer !== undefined) {
+        clearTimeout(saveTimer);
+        saveTimer = undefined;
+      }
+      void runSaveNow();
     }
   };
+  document.addEventListener("keydown", onKeyDown);
+
+  session = {
+    shell,
+    toolbar,
+    header,
+    rightPanel,
+    statusbar,
+    drawer,
+    fitObserver,
+    path: record.path,
+    record,
+    disposers: [
+      unsubSelection,
+      unsubDirty,
+      unsubError,
+      uninstallKeyboardHelp,
+      () => document.removeEventListener("keydown", onKeyDown),
+      () => {
+        if (saveTimer !== undefined) clearTimeout(saveTimer);
+      },
+      // Flush any pending save BEFORE the shell tears down so the
+      // user doesn't lose the last keystroke when going back to
+      // gallery. The session-cleanup sequence runs disposers in
+      // order, so this needs to land before `shell.destroy()` below.
+      () => {
+        if (saveTimer !== undefined) {
+          clearTimeout(saveTimer);
+          saveTimer = undefined;
+          void runSaveNow();
+        }
+      },
+    ],
+  };
 }
+
+function populateHeaderProps(header: AnnotEditorHeaderElement, record: ImageRecord): void {
+  // The desktop has a single storage backend; the breadcrumb root
+  // mirrors the gallery sidebar's "Desktop" label so the user sees
+  // the same anchor in both surfaces.
+  header.rootLabel = "Desktop";
+  const segments = record.folderPath ? record.folderPath.split("/").filter(Boolean) : [];
+  let acc = "";
+  header.crumbs = segments.map((seg) => {
+    acc = acc ? `${acc}/${seg}` : seg;
+    return { label: seg, path: acc };
+  });
+  header.filename = getFilename(record.path);
+  header.fullPath = record.path;
+}
+
+async function renameCurrentImage(newName: string): Promise<void> {
+  if (!session || !fsGallery) {
+    throw new Error("No active file to rename.");
+  }
+  const newPath = await fsGallery.store.renameImage(session.path, newName);
+  session.path = newPath;
+  session.record = { ...session.record, path: newPath };
+  populateHeaderProps(session.header, session.record);
+  // Keep the drawer's File section in sync.
+  session.drawer.setData({
+    filename: getFilename(newPath),
+    folderPath: session.record.folderPath,
+    width: session.record.width,
+    height: session.record.height,
+    fileSizeBytes: estimateDataUrlBytes(session.record.originalDataUrl),
+    createdAt: session.record.createdAt,
+    updatedAt: session.record.updatedAt,
+    sourceUrl: session.record.sourceUrl,
+    tags: session.record.tags,
+  });
+}
+
+/**
+ * Tear down the active editor session. Called on every navigation
+ * away from the editor (Back button, Browse window open, brand
+ * click). Runs disposers in order, destroys the shell, and clears
+ * chrome containers so the next open starts from a known-clean
+ * state.
+ */
+function closeEditorSession(): void {
+  if (!session) return;
+  for (const dispose of session.disposers) {
+    try {
+      dispose();
+    } catch (e) {
+      console.error("[desktop] editor session disposer threw:", e);
+    }
+  }
+  session.fitObserver?.disconnect();
+  session.drawer.destroy();
+  session.rightPanel.destroy();
+  session.shell.destroy();
+  session = null;
+  hideEditorError();
+  // Lit elements also live in the host divs — strip them so the
+  // next open starts from a clean state without stale event
+  // listeners attached to the same custom-element nodes.
+  document.getElementById("editor-header")!.innerHTML = "";
+  document.getElementById("editor-right-panel")!.innerHTML = "";
+  document.getElementById("statusbar")!.innerHTML = "";
+  document.getElementById("editor-sidebar")!.innerHTML = "";
+  // The shell's `destroy()` already cleared #svg-root's children.
+  // `body.has-right-panel` is removed by the right-panel's own
+  // disconnectedCallback when it leaves the DOM.
+}
+
+async function backToGallery(folderPath: string): Promise<void> {
+  closeEditorSession();
+  hideEditorView();
+  fsGallery?.showGallery();
+  await fsGallery?.fileManager.refresh(folderPath);
+}
+
+// =============================================================
+// Editor error banner (Decision: reuse `.fs-legacy-notice`-style
+// chrome scoped under #editor-error-banner — see app.css).
+// =============================================================
+
+function surfaceEditorError(label: string, err: unknown): void {
+  const message = err instanceof Error ? err.message : String(err);
+  console.error("[desktop]", `${label}:`, err);
+  let banner = document.getElementById("editor-error-banner");
+  if (!banner) {
+    banner = document.createElement("div");
+    banner.id = "editor-error-banner";
+    banner.setAttribute("role", "alert");
+    banner.innerHTML =
+      '<span id="editor-error-banner-message"></span>' +
+      '<button class="action-btn" id="editor-error-banner-dismiss" type="button">Dismiss</button>';
+    document.getElementById("editor-view")!.appendChild(banner);
+    banner
+      .querySelector("#editor-error-banner-dismiss")!
+      .addEventListener("click", () => hideEditorError());
+  }
+  banner.querySelector("#editor-error-banner-message")!.textContent = `${label}: ${message}`;
+  banner.classList.add("visible");
+}
+
+function hideEditorError(): void {
+  document.getElementById("editor-error-banner")?.classList.remove("visible");
+}
+
+// =============================================================
+// Image / capture helpers (unchanged from pre-Phase-1).
+// =============================================================
 
 function loadImage(dataUrl: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -257,9 +542,12 @@ function blobToDataUrl(blob: Blob): Promise<string> {
  * The IPC channel is `browse.open` (per
  * `packages/desktop/src-electron/ipc/browse.ts`); on success the
  * main process either focuses the existing window or spawns a
- * fresh one.
+ * fresh one. The editor session — if any — is torn down first
+ * so the user doesn't return to a stale canvas after the Browse
+ * window closes.
  */
 async function openBrowseWindow(): Promise<void> {
+  closeEditorSession();
   const ipc = api();
   if (!ipc) {
     console.error("[desktop] openBrowseWindow: electronAPI unavailable");
@@ -366,10 +654,11 @@ async function init(): Promise<void> {
   fsGallery = await bootstrapDesktopFsGallery({
     onOpenImage: async (record) => {
       if (!fsGallery) return;
+      // The gallery's `record` is the index entry; refetch the
+      // full one (with `originalDataUrl`) before opening the editor.
       const full = await fsGallery.store.getImage(record.path);
-      if (!full?.originalDataUrl) return;
-      const img = await loadImage(full.originalDataUrl);
-      openEditor(full.originalDataUrl, img.naturalWidth, img.naturalHeight);
+      if (!full) return;
+      openEditor(full);
     },
     onCaptureScreen: async () => {
       await doCapture("fullscreen");
@@ -445,12 +734,6 @@ async function init(): Promise<void> {
         action: () => void openBrowseWindow(),
       },
     ],
-  });
-
-  document.getElementById("btn-back")!.addEventListener("click", () => {
-    hideEditorView();
-    fsGallery?.showGallery();
-    void fsGallery?.refresh();
   });
 
   if (isDesktop) {
@@ -546,7 +829,13 @@ async function persistViaDesktopStore(opts: PersistOpts): Promise<string | null>
   );
   await fsGallery.refresh();
   if (opts.openInEditor !== false) {
-    openEditor(opts.dataUrl, opts.width, opts.height);
+    // Re-fetch through `getImage` — `saveImage` returns the path,
+    // not the full record. The fresh fetch is also defensive
+    // against the writeFile / index-rebuild race so the editor
+    // sees the canonical record (XMP-encoded `tags`, computed
+    // `createdAt`/`updatedAt`).
+    const record = await fsGallery.store.getImage(path);
+    if (record) openEditor(record);
   }
   return path;
 }

@@ -9,26 +9,17 @@
 }
 
 /*
- * Editor-mode layout overrides.
+ * Editor-mode layout — Phase 1 of `docs/plans/host-convergence.md`
+ * adopted PWA's full editor-header (brand / breadcrumb / save-status
+ * / save+copy / theme / help). The PWA-side rules in
+ * `@ingcreators/annot-core/styles/editor.css` already reserve
+ * `top: 48px` on `#editor-sidebar` / `#canvas-container` /
+ * `#editor-right-panel` so the chrome lands right under the header.
  *
- * The PWA reserves the top 48px for `#editor-header` (brand /
- * breadcrumb / save+copy / theme). The desktop omits editor-header
- * — the native window menu (File / Edit / View / Window) plus the
- * save + theme buttons inside the vertical toolbar already cover
- * those actions. Pull `#editor-sidebar` and `#canvas-container` up
- * to `top: 0` so we don't waste 48px on an empty header bar.
- *
- * Without these overrides, `body.editor-mode #editor-sidebar` from
- * `@ingcreators/annot-core/styles/editor.css` lands at `top: 48px`
- * and the canvas opens with a blank dark band on top.
+ * The pre-Phase-1 desktop overrode those to `top: 0` because there
+ * was no editor-header above. Now that the desktop carries one,
+ * those overrides are gone — the PWA's defaults apply unchanged.
  */
-body.editor-mode #editor-sidebar {
-  top: 0;
-}
-body.editor-mode #canvas-container,
-body.editor-mode.has-right-panel #canvas-container {
-  top: 0;
-}
 
 /* `.action-btn` — used by the legacy-data notice's
    "Open old folder" / "Dismiss" pair. The Window / Region capture
@@ -53,20 +44,41 @@ body.editor-mode.has-right-panel #canvas-container {
   border-color: #00d4ff;
 }
 
-/* Status bar back button */
-.status-btn {
-  background: none;
-  border: 1px solid #444;
-  border-radius: 4px;
-  color: #aaa;
-  font-size: 12px;
-  padding: 2px 8px;
-  cursor: pointer;
+/*
+ * Editor-mode error banner. Sits inside `#editor-view` (above
+ * `#canvas-container`, below `#editor-header`) when a save /
+ * mount error fires through `EditorShell.on("error", …)`. Same
+ * vocabulary as `.fs-legacy-notice` so the desktop's two
+ * banners stay visually consistent without dragging in PWA's
+ * full `.error-bar` design system.
+ */
+#editor-error-banner {
+  position: absolute;
+  top: 48px; /* under #editor-header */
+  left: 48px; /* right of #editor-sidebar */
+  right: 0;
+  z-index: 12;
+  display: none;
+  gap: 16px;
+  padding: 8px 16px;
+  background: #3a1a1a;
+  border-bottom: 1px solid #d44;
+  color: #f0e0e0;
+  font-size: 13px;
+  line-height: 1.5;
+  align-items: center;
 }
-
-.status-btn:hover {
-  border-color: #00d4ff;
-  color: #00d4ff;
+#editor-error-banner.visible {
+  display: flex;
+}
+body.editor-mode.has-right-panel #editor-error-banner {
+  right: 280px; /* leave room for the right panel */
+}
+#editor-error-banner-message {
+  flex: 1 1 auto;
+}
+#editor-error-banner-dismiss {
+  flex: 0 0 auto;
 }
 
 /*
