@@ -14,6 +14,7 @@ import { builtinIcon } from "@ingcreators/annot-core";
 import type { Meta, StoryObj } from "@storybook/web-components-vite";
 import type { SidebarTab, StorageRegistration } from "../app/plugin-host.js";
 import type { StorageMode } from "../storage/bridge.js";
+import type { NewMenuItem } from "./sidebar.js";
 import "./sidebar.js";
 
 interface Args {
@@ -24,6 +25,7 @@ interface Args {
   pluginStorages: StorageRegistration[];
   sidebarTabs: SidebarTab[];
   disabledBuiltins: StorageMode[];
+  newMenuExtras: NewMenuItem[];
 }
 
 function mountSidebar(args: Args): HTMLElement {
@@ -54,6 +56,7 @@ function mountSidebar(args: Args): HTMLElement {
     getPluginStorages: () => args.pluginStorages,
     getSidebarTabs: () => args.sidebarTabs,
     isBuiltinDisabled: (mode) => args.disabledBuiltins.includes(mode as StorageMode),
+    getNewMenuExtras: () => args.newMenuExtras,
   };
   sidebar.setActiveMode(args.activeMode);
   if (args.deviceConnected) sidebar.setStorageStatus("device", true, "My Screenshots");
@@ -79,6 +82,7 @@ const meta: Meta<Args> = {
     pluginStorages: { control: false },
     sidebarTabs: { control: false },
     disabledBuiltins: { control: false },
+    newMenuExtras: { control: false },
   },
   args: {
     activeMode: "browser",
@@ -88,6 +92,7 @@ const meta: Meta<Args> = {
     pluginStorages: [],
     sidebarTabs: [],
     disabledBuiltins: [],
+    newMenuExtras: [],
   },
 };
 export default meta;
@@ -166,5 +171,33 @@ export const GithubDisabled: Story = {
   args: {
     activeMode: "browser",
     disabledBuiltins: ["github"],
+  },
+};
+
+export const WithNewMenuExtras: Story = {
+  name: "New menu — host extras",
+  // Mirrors the desktop's wiring: Window / Region capture and an
+  // "Open Browse Window" entry that the desktop host appends after
+  // the built-in items. Click `+ New` in the rendered sidebar to
+  // see the merged menu; arg-flow goes through the console.
+  args: {
+    activeMode: "browser",
+    newMenuExtras: [
+      {
+        icon: "desktop_windows",
+        label: "Capture Window",
+        action: () => console.log("[story] Capture Window"),
+      },
+      {
+        icon: "crop",
+        label: "Capture Region",
+        action: () => console.log("[story] Capture Region"),
+      },
+      {
+        icon: "open_in_new",
+        label: "Open Browse Window",
+        action: () => console.log("[story] Open Browse Window"),
+      },
+    ],
   },
 };

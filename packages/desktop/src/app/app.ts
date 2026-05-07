@@ -246,6 +246,32 @@ function blobToDataUrl(blob: Blob): Promise<string> {
   });
 }
 
+/**
+ * Spawn (or focus) the Browse window. The Browse window embeds an
+ * `<webview>` for arbitrary URLs and ships its own
+ * back/forward/reload + URL bar + Capture Visible chrome — see
+ * `packages/desktop/browse.html` + `src/browse/browse.ts`. Phase 6
+ * of `desktop-electron-migration.md` set up the IPC; this helper
+ * just calls into it from the renderer's New menu entry.
+ *
+ * The IPC channel is `browse.open` (per
+ * `packages/desktop/src-electron/ipc/browse.ts`); on success the
+ * main process either focuses the existing window or spawns a
+ * fresh one.
+ */
+async function openBrowseWindow(): Promise<void> {
+  const ipc = api();
+  if (!ipc) {
+    console.error("[desktop] openBrowseWindow: electronAPI unavailable");
+    return;
+  }
+  try {
+    await ipc.invoke("browse.open", { url: undefined });
+  } catch (err) {
+    console.error("[desktop] browse.open failed:", err);
+  }
+}
+
 // --- Unified screen capture (Snipping Tool style) ---
 
 type CaptureModeType = "fullscreen" | "window" | "rect";
@@ -395,13 +421,32 @@ async function init(): Promise<void> {
       };
       input.click();
     },
+    // Desktop-only entries appended to the New menu's built-ins.
+    // Window / Region capture and the Browse window used to live
+    // as a separate `<div class="desktop-fs-action-row">` above
+    // the gallery and the OS File menu's "New Browse Window";
+    // folding them into the unified New menu lets the desktop's
+    // gallery chrome match the PWA's surface 1:1. The OS File
+    // menu's Browse entry was dropped in the same PR.
+    getNewMenuExtras: () => [
+      {
+        icon: "desktop_windows",
+        label: "Capture Window",
+        action: () => void doCapture("window"),
+      },
+      {
+        icon: "crop",
+        label: "Capture Region",
+        action: () => void doCapture("rect"),
+      },
+      {
+        icon: "open_in_new",
+        label: "Open Browse Window",
+        action: () => void openBrowseWindow(),
+      },
+    ],
   });
 
-  // Back button + the Window/Region capture row that sits OUTSIDE
-  // the unified gallery (per the Phase 0 audit's recommendation
-  // #1 — folding these into the unified "New" menu needs a
-  // `getNewMenuExtras?` host hook on `<annot-sidebar>`, tracked as
-  // a follow-up).
   document.getElementById("btn-back")!.addEventListener("click", () => {
     hideEditorView();
     fsGallery?.showGallery();
@@ -409,13 +454,6 @@ async function init(): Promise<void> {
   });
 
   if (isDesktop) {
-    document
-      .getElementById("btn-fs-capture-window")
-      ?.addEventListener("click", () => doCapture("window"));
-    document
-      .getElementById("btn-fs-capture-region")
-      ?.addEventListener("click", () => doCapture("rect"));
-
     document.addEventListener("keydown", (e) => {
       if (e.key === "PrintScreen") {
         e.preventDefault();

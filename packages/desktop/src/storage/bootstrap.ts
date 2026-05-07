@@ -25,6 +25,7 @@
 
 import type { ImageRecord } from "@ingcreators/annot-core/storage";
 import { FileManager, type FileManagerCallbacks } from "@ingcreators/annot-web/gallery/file-manager";
+import type { NewMenuItem } from "@ingcreators/annot-web/gallery/sidebar";
 import type { StorageMode } from "@ingcreators/annot-web/storage/bridge";
 import { IndexedDBThumbnailCache } from "@ingcreators/annot-web/storage/idb-thumbnail-cache";
 import { ThumbnailManager } from "@ingcreators/annot-web/storage/thumbnail-manager";
@@ -70,15 +71,22 @@ export interface BootstrapOptions {
   /** Callback fired when the user clicks an image card. The host's
    *  `app.ts` routes this into the existing `openEditor` flow. */
   onOpenImage: (record: ImageRecord) => void;
-  /** Callbacks for the unified sidebar's "New" menu items (Capture
-   *  Screen / Timed Capture / Paste Clipboard / Upload Image).
-   *  Window / Region capture stay as desktop-only action-row
-   *  buttons outside the unified gallery for the first cycle (per
-   *  Phase 0 audit gap #1). */
+  /** Callbacks for the unified sidebar's built-in "New" menu items
+   *  (Capture Screen / Timed Capture / Paste Clipboard / Upload
+   *  Image). Desktop-only entries (Capture Window / Capture Region
+   *  / Open Browse Window) are appended via `getNewMenuExtras`
+   *  below — they used to live as a separate action-row above the
+   *  gallery (`<div class="desktop-fs-action-row">`); folding them
+   *  into the New menu lets the desktop's gallery chrome match the
+   *  PWA's. */
   onCaptureScreen: () => Promise<void>;
   onTimedCapture: () => Promise<void>;
   onPasteClipboard: () => Promise<void>;
   onUploadImage: () => void;
+  /** Host-supplied extras for the New menu. The desktop wires
+   *  Window / Region capture and "Open Browse Window" here.
+   *  Optional — tests / Storybook can omit it. */
+  getNewMenuExtras?: () => NewMenuItem[];
 }
 
 /**
@@ -196,6 +204,7 @@ export async function bootstrapDesktopFsGallery(
     onTimedCapture: () => opts.onTimedCapture(),
     onPasteClipboard: () => opts.onPasteClipboard(),
     isBuiltinDisabled: (mode: string) => DISABLED_BUILTINS.has(mode),
+    getNewMenuExtras: opts.getNewMenuExtras,
     getThumbnailManager: () => thumbnailManager,
   };
   const fileManager: FileManager = new FileManager(sidebarEl, mainContentEl, callbacks);

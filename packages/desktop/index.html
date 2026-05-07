@@ -60,27 +60,22 @@
       mounted by `bootstrap.ts` against `DesktopStore`. Phase 5 of
       `docs/plans/_done/desktop-storage-provider-migration.md`
       deleted the bespoke SQLite-backed `#gallery-view` that
-      previously sat alongside this container.
+      previously sat alongside this container; a follow-up landed
+      `getNewMenuExtras?` on `<annot-sidebar>`'s callbacks so the
+      desktop's Window / Region capture + Open Browse Window now
+      surface inside the unified New menu instead of a separate
+      `<div class="desktop-fs-action-row">` chrome above.
 
       The inner `#file-manager` / `#sidebar` / `#main-content` ids
       mirror the PWA's `packages/web/index.html`. file-manager.css
       from `@ingcreators/annot-web` scopes most of its rules under
       those ids; renaming them in the desktop host would silently
-      drop the styling. The desktop's app.css overrides
-      `#file-manager`'s absolute positioning so it lays out below
-      the action-row in flow.
+      drop the styling. The `#desktop-shell` wrapper carries the
+      flex column the `#file-manager` override depends on plus the
+      gallery's surface background; it's also the show/hide target
+      `bootstrap.ts` toggles when the editor takes over.
     -->
     <div id="desktop-shell" style="display:none;">
-      <div class="desktop-fs-action-row">
-        <!--
-          Window / Region capture stay outside the unified "New"
-          menu (per Phase 0 audit gap #1) until a `getNewMenuExtras?`
-          host hook lands on `<annot-sidebar>`. Tracked as a
-          follow-up.
-        -->
-        <button id="btn-fs-capture-window" class="action-btn action-btn-primary">Capture Window</button>
-        <button id="btn-fs-capture-region" class="action-btn action-btn-primary">Capture Region</button>
-      </div>
       <div id="file-manager">
         <div id="sidebar"></div>
         <div id="main-content"></div>

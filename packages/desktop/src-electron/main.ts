@@ -402,8 +402,14 @@ async function openOrFocusBrowseWindow(opts: { url?: string } = {}): Promise<voi
  *      non-mac platforms.
  *
  *  Menu shape:
- *    - File: "New Browse Window" (until the New menu absorbs it
- *      via `getNewMenuExtras` in a follow-up PR) + Close/Quit.
+ *    - File: just Close (Mac) / Quit (Win/Linux). "New Browse
+ *      Window" used to live here (with `Cmd-B` / `Ctrl-B`); it
+ *      moved into the unified New menu inside the gallery
+ *      sidebar via `getNewMenuExtras` so capture entry points
+ *      (Capture Screen / Window / Region / Open Browse Window)
+ *      sit together. The keyboard accelerator went away with the
+ *      menu entry — re-adding it via a renderer-side keydown
+ *      listener is a future tweak if the shortcut is missed.
  *    - Edit (role): standard Cut / Copy / Paste / Select All so
  *      `<input>`-bound shortcuts work in panels and dialogs.
  *      `Undo` / `Redo` from this role conflict with the editor's
@@ -423,15 +429,7 @@ function buildAppMenu(): Menu {
   const isMac = process.platform === "darwin";
   const fileMenu: MenuItemConstructorOptions = {
     label: "File",
-    submenu: [
-      {
-        label: "New Browse Window",
-        accelerator: "CmdOrCtrl+B",
-        click: () => void openOrFocusBrowseWindow(),
-      },
-      { type: "separator" },
-      isMac ? { role: "close" } : { role: "quit" },
-    ],
+    submenu: [isMac ? { role: "close" } : { role: "quit" }],
   };
   const viewMenu: MenuItemConstructorOptions = {
     label: "View",
