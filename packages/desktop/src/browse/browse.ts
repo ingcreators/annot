@@ -1,19 +1,19 @@
 /**
  * Browse window renderer.
  *
- * Phase 3 of `docs/plans/desktop-browser-mode.md`: the bespoke
- * `browse.captureVisible` + `browse.persistVisible` IPC pair from
- * the Phase 6 MVP is gone. Visible-mode capture now flows through
- * the shared orchestrator from
- * `@ingcreators/annot-capture/orchestrate` against a renderer-side
- * `DesktopCaptureHost` (`./host.ts`); persistence routes through
- * `DesktopStore.saveImage` so the main editor's gallery picks the
- * new record up via its existing resync logic.
+ * Phase 5 of `docs/plans/desktop-browser-mode.md` lifts the
+ * single-`<webview>` setup into a `TabsManager` that owns N
+ * webviews. The chrome's URL bar / nav buttons / capture buttons
+ * route to the manager's active tab; `new-window` events from any
+ * tab spawn a new tab in the same Browse window. The capture
+ * orchestrator host (`./host.ts`) takes accessor callbacks
+ * (`getActiveWebview` / `getWebviewByContentsId` /
+ * `onAnyTabIpcMessage`) so a capture started against tab A
+ * survives a mid-capture tab switch.
  *
- * Phase 3 minimum-viable scope: single tab, visible mode only.
- * Multi-tab + Area / Full-Page / Per-Page / Click / Hotkey land
- * in Phase 4 alongside the `<webview>` preload that bridges the
- * content-script bus.
+ * Persistence still routes through `DesktopStore.saveImage` so
+ * the main editor's gallery picks up Browse-window captures via
+ * its existing resync logic.
  */
 
 import {
@@ -28,7 +28,8 @@ import { newIdB58 } from "@ingcreators/annot-core/utils";
 import type { DesktopStore } from "../storage/desktop-store.js";
 import { createStandaloneDesktopStore } from "../storage/bootstrap.js";
 import { installClickHotkeyHandlers } from "./click-hotkey.js";
-import { createBrowseCaptureHost } from "./host.js";
+import { createBrowseCaptureHost, type BrowseTargetWebview } from "./host.js";
+import { TabsManager, type Tab } from "./tabs.js";
 
 interface ElectronApi {
   invoke<T = unknown>(channel: string, args?: unknown): Promise<T>;
@@ -54,7 +55,9 @@ const HOME_URL = "about:blank";
 const INBOX_FOLDER = "Inbox";
 
 interface BrowseDom {
-  webview: WebviewElement;
+  tabBar: HTMLDivElement;
+  newTabBtn: HTMLButtonElement;
+  webviewContainer: HTMLDivElement;
   btnBack: HTMLButtonElement;
   btnForward: HTMLButtonElement;
   btnReload: HTMLButtonElement;
@@ -71,7 +74,11 @@ interface BrowseDom {
 }
 
 function resolveDom(): BrowseDom {
-  const webview = document.getElementById("browse-target") as WebviewElement | null;
+  const tabBar = document.getElementById("browse-tabs") as HTMLDivElement | null;
+  const newTabBtn = document.getElementById("btn-new-tab") as HTMLButtonElement | null;
+  const webviewContainer = document.getElementById(
+    "browse-target-host",
+  ) as HTMLDivElement | null;
   const btnBack = document.getElementById("btn-back") as HTMLButtonElement | null;
   const btnForward = document.getElementById("btn-forward") as HTMLButtonElement | null;
   const btnReload = document.getElementById("btn-reload") as HTMLButtonElement | null;
@@ -101,7 +108,9 @@ function resolveDom(): BrowseDom {
   const statusText = document.getElementById("browse-status-text") as HTMLSpanElement | null;
 
   if (
-    !webview ||
+    !tabBar ||
+    !newTabBtn ||
+    !webviewContainer ||
     !btnBack ||
     !btnForward ||
     !btnReload ||
@@ -120,7 +129,9 @@ function resolveDom(): BrowseDom {
   }
 
   return {
-    webview,
+    tabBar,
+    newTabBtn,
+    webviewContainer,
     btnBack,
     btnForward,
     btnReload,
@@ -140,22 +151,22 @@ function resolveDom(): BrowseDom {
 document.addEventListener("DOMContentLoaded", () => {
   const dom = resolveDom();
 
-  // Lazy-init the DesktopStore on first capture. Construction reads
-  // the library root via IPC + initialises the index file, both of
-  // which take a few hundred ms — defer until the user actually
-  // clicks "Capture Visible" so the chrome's first paint isn't
-  // gated on it.
-  let storePromise: Promise<DesktopStore> | null = null;
-  function getStore(): Promise<DesktopStore> {
-    if (!storePromise) {
-      storePromise = createStandaloneDesktopStore();
-    }
-    return storePromise;
-  }
+  // ---- TabsManager (Phase 5) ─────────────────────────────────────
 
-  // ---- Navigation wiring ────────────────────────────────────────
+  const tabs = new TabsManager({
+    container: dom.webviewContainer,
+    tabBar: dom.tabBar,
+    newTabBtn: dom.newTabBtn,
+    defaultUrl: HOME_URL,
+  });
 
-  function navigateTo(rawUrl: string): void {
+  // Open the initial tab. The user-visible URL bar starts at
+  // `HOME_URL` (about:blank); the user types a URL to navigate.
+  const initialTab = tabs.openTab(HOME_URL, { active: true });
+
+  // ---- Wire URL bar + nav buttons to the ACTIVE tab ─────────────
+
+  function navigateActiveTo(rawUrl: string): void {
     const trimmed = rawUrl.trim();
     if (!trimmed) return;
     // Be permissive: accept bare hostnames and prepend `https://`,
@@ -164,80 +175,125 @@ document.addEventListener("DOMContentLoaded", () => {
       /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmed) || trimmed.startsWith("about:")
         ? trimmed
         : `https://${trimmed}`;
-    dom.webview.src = url;
+    const active = tabs.getActiveTab();
+    if (active) active.webview.src = url;
   }
 
   dom.urlInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
       e.preventDefault();
-      navigateTo(dom.urlInput.value);
+      navigateActiveTo(dom.urlInput.value);
     }
   });
 
   dom.btnBack.addEventListener("click", () => {
-    if (dom.webview.canGoBack()) dom.webview.goBack();
+    const t = tabs.getActiveTab();
+    if (t?.webview.canGoBack()) t.webview.goBack();
   });
   dom.btnForward.addEventListener("click", () => {
-    if (dom.webview.canGoForward()) dom.webview.goForward();
+    const t = tabs.getActiveTab();
+    if (t?.webview.canGoForward()) t.webview.goForward();
   });
-  dom.btnReload.addEventListener("click", () => dom.webview.reload());
+  dom.btnReload.addEventListener("click", () => {
+    const t = tabs.getActiveTab();
+    if (t) t.webview.reload();
+  });
 
-  function refreshNavState(): void {
-    dom.btnBack.disabled = !dom.webview.canGoBack();
-    dom.btnForward.disabled = !dom.webview.canGoForward();
+  function refreshNavButtonsAgainst(tab: Tab | null): void {
+    dom.btnBack.disabled = !(tab?.canGoBack ?? false);
+    dom.btnForward.disabled = !(tab?.canGoForward ?? false);
   }
 
-  dom.webview.addEventListener("did-navigate", (event) => {
-    const e = event as unknown as { url: string };
-    dom.urlInput.value = e.url;
-    refreshNavState();
-    setStatus(`Loaded ${e.url}`, "success");
+  function setUrlBar(tab: Tab | null): void {
+    dom.urlInput.value = tab?.url ?? "";
+  }
+
+  // ---- TabsManager event subscriptions ───────────────────────────
+
+  tabs.addEventListener("active-tab-changed", (event: Event) => {
+    const tab = (event as CustomEvent<Tab | null>).detail;
+    setUrlBar(tab);
+    refreshNavButtonsAgainst(tab);
+    if (tab) {
+      document.title = tab.title ? `${tab.title} · Annot Browse` : "Annot Browse";
+      setStatus(tab.loading ? `Loading ${tab.url}…` : `Active: ${tab.url}`, tab.loading ? "busy" : null);
+    } else {
+      document.title = "Annot Browse";
+      setStatus("No tabs open", null);
+    }
   });
 
-  dom.webview.addEventListener("did-navigate-in-page", (event) => {
-    const e = event as unknown as { url: string };
-    dom.urlInput.value = e.url;
-    refreshNavState();
+  tabs.addEventListener("url-changed", (event: Event) => {
+    const { tab, url } = (event as CustomEvent<{ tab: Tab; url: string }>).detail;
+    if (tab.id !== tabs.activeTabId) return;
+    setUrlBar(tab);
+    setStatus(`Loaded ${url}`, "success");
   });
 
-  dom.webview.addEventListener("did-start-loading", () => setStatus("Loading…", "busy"));
-  dom.webview.addEventListener("did-stop-loading", () => refreshNavState());
-  dom.webview.addEventListener("did-fail-load", (event) => {
-    const e = event as unknown as { errorCode: number; errorDescription: string };
-    // -3 (ERR_ABORTED) fires on every Back/Forward navigation that
-    // a user explicitly cancels via clicking another link mid-load;
-    // not a user-visible failure.
-    if (e.errorCode === -3) return;
-    setStatus(`Load failed: ${e.errorDescription}`, "error");
+  tabs.addEventListener("loading-changed", (event: Event) => {
+    const { tab, loading } = (event as CustomEvent<{ tab: Tab; loading: boolean }>).detail;
+    if (tab.id !== tabs.activeTabId) return;
+    if (loading) setStatus("Loading…", "busy");
   });
 
-  dom.webview.addEventListener("page-title-updated", (event) => {
-    const e = event as unknown as { title: string };
-    document.title = e.title ? `${e.title} · Annot Browse` : "Annot Browse";
+  tabs.addEventListener("title-changed", (event: Event) => {
+    const { tab, title } = (event as CustomEvent<{ tab: Tab; title: string }>).detail;
+    if (tab.id !== tabs.activeTabId) return;
+    document.title = title ? `${title} · Annot Browse` : "Annot Browse";
   });
+
+  tabs.addEventListener("nav-state-changed", (event: Event) => {
+    const tab = (event as CustomEvent<Tab>).detail;
+    if (tab.id !== tabs.activeTabId) return;
+    refreshNavButtonsAgainst(tab);
+  });
+
+  tabs.addEventListener("load-failed", (event: Event) => {
+    const { tab, errorDescription } = (
+      event as CustomEvent<{ tab: Tab; errorCode: number; errorDescription: string }>
+    ).detail;
+    if (tab.id !== tabs.activeTabId) return;
+    setStatus(`Load failed: ${errorDescription}`, "error");
+  });
+
+  // Detach a tab via its right-click — the TabsManager fires this
+  // event and the renderer asks the main process to spawn a fresh
+  // Browse window pointed at the tab's URL. The tab itself is
+  // already removed by the manager.
+  tabs.addEventListener("detach-requested", (event: Event) => {
+    const { url } = (event as CustomEvent<{ url: string }>).detail;
+    void api().invoke("browse.open", { url });
+  });
+
+  // Initialise the URL bar / nav state from the initial tab.
+  setUrlBar(initialTab);
+  refreshNavButtonsAgainst(initialTab);
 
   // ---- Capture wiring ────────────────────────────────────────────
 
-  // The host wraps the `<webview>` so the orchestrator can resolve
-  // a `CaptureTargetRef`, capture the viewport, run the metadata
-  // walker, and bridge `ContentBus` over Electron IPC (Phase 4A).
-  // `getURL()` reads the live URL — preferable to the stale
-  // `<webview>.src` after history-driven navigations.
-  //
-  // The element is passed directly so the host's `sendToContent` /
-  // `onContentMessage` / `setEmulatedViewport` primitives can use
-  // `webview.send` / `addEventListener("ipc-message", ...)` /
-  // inline-`style` without re-wrapping. The `BrowseTargetWebview`
-  // interface is structurally satisfied by the live element; cast
-  // through `unknown` because TS doesn't model the `<webview>`
-  // tag's `send` / `getURL` / `getTitle` extras.
+  // The host receives accessor callbacks rather than a single
+  // webview reference (Phase 5). `getActiveWebview` resolves to the
+  // currently-active tab; `getWebviewByContentsId` looks up the
+  // originating tab when an in-flight capture sends back to a
+  // specific webContents id; `onAnyTabIpcMessage` forwards events
+  // from every tab so the host's request-response correlation map
+  // settles regardless of which tab responded.
   const host = createBrowseCaptureHost({
-    webview: dom.webview as unknown as Parameters<typeof createBrowseCaptureHost>[0]["webview"],
+    getActiveWebview: () => {
+      const t = tabs.getActiveWebview();
+      return t ? (t as unknown as BrowseTargetWebview) : null;
+    },
+    getWebviewByContentsId: (id) => {
+      const w = tabs.getWebviewByContentsId(id);
+      return w ? (w as unknown as BrowseTargetWebview) : null;
+    },
+    onAnyTabIpcMessage: (handler) => tabs.onAnyTabIpcMessage(handler),
   });
 
   /** Disable every capture button while a capture is in flight so
-   *  multi-segment runs can't be retriggered mid-flow. The 3 modes
-   *  share a single guard. */
+   *  multi-segment runs can't be retriggered mid-flow. The 4
+   *  single-shot modes share a single guard; click + hotkey use
+   *  the click-hotkey module's own button-state logic. */
   function setCaptureBusy(busy: boolean): void {
     dom.btnCaptureVisible.disabled = busy;
     dom.btnCaptureArea.disabled = busy;
@@ -247,8 +303,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
   type ModeRunner = (host: ReturnType<typeof createBrowseCaptureHost>) => Promise<CaptureResult | null>;
 
+  /** Modes that span multiple captures or scroll the page; the
+   *  user can't safely close / switch tabs mid-flow without
+   *  orphaning the orchestrator. */
+  const MULTI_SEGMENT_MODES = new Set<string>(["full page", "per-page"]);
+
   async function runMode(label: string, runner: ModeRunner): Promise<void> {
     setCaptureBusy(true);
+    const lockTabs = MULTI_SEGMENT_MODES.has(label);
+    if (lockTabs) tabs.setLocked(true);
     setStatus(`Capturing ${label}…`, "busy");
     try {
       const result = await runner(host);
@@ -268,11 +331,6 @@ document.addEventListener("DOMContentLoaded", () => {
           frame,
           sourceUrl,
           store,
-          // Per-page sessions tag every frame with the same
-          // `session` + `sessionKind`; single-frame captures
-          // (visible / area / scroll) skip session tagging
-          // because the editor surfaces them as standalone
-          // records.
           sessionTags:
             sessionId !== null
               ? {
@@ -298,8 +356,22 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch (err) {
       setStatus(`Capture failed: ${(err as Error).message}`, "error");
     } finally {
+      if (lockTabs) tabs.setLocked(false);
       setCaptureBusy(false);
     }
+  }
+
+  // Lazy-init the DesktopStore on first capture. Construction reads
+  // the library root via IPC + initialises the index file, both of
+  // which take a few hundred ms — defer until the user actually
+  // clicks a capture button so the chrome's first paint isn't
+  // gated on it.
+  let storePromise: Promise<DesktopStore> | null = null;
+  function getStore(): Promise<DesktopStore> {
+    if (!storePromise) {
+      storePromise = createStandaloneDesktopStore();
+    }
+    return storePromise;
   }
 
   async function persistFrame(input: {
@@ -321,10 +393,6 @@ document.addEventListener("DOMContentLoaded", () => {
     };
     return input.store.saveImage({
       originalDataUrl: input.frame.dataUrl,
-      // `thumbnailDataUrl` is owned by the host's
-      // ThumbnailManager — `DesktopStore.saveImage` ignores any
-      // value passed here. Keep it empty so callers don't waste
-      // a `generateThumbnail` round-trip just to populate it.
       thumbnailDataUrl: "",
       annotationsSvg: "",
       width,
@@ -356,9 +424,12 @@ document.addEventListener("DOMContentLoaded", () => {
   const clickHotkey = installClickHotkeyHandlers({
     host,
     webview: {
-      getURL: () => dom.webview.getURL?.() ?? dom.webview.src,
+      // Resolve from the active tab on each call so URL/title
+      // reflect the user's current context (e.g. a click captured
+      // on tab B uses tab B's URL, not the tab the session started
+      // on).
+      getURL: () => tabs.getActiveTab()?.webview.getURL?.() ?? tabs.getActiveTab()?.url ?? "",
       getTitle: () => document.title,
-      src: dom.webview.src,
     },
     getStore,
     inboxFolder: INBOX_FOLDER,
@@ -367,15 +438,30 @@ document.addEventListener("DOMContentLoaded", () => {
     setStatus,
   });
 
-  // Re-enable click capture in the webview's preload realm after
-  // every navigation. The preload runs fresh on each page load, so
-  // its `clickListenerActive` resets to false; the chrome carries
-  // the user-facing "click capture is recording" flag and re-issues
+  // Re-enable click capture in any tab's preload realm after every
+  // navigation. The preload runs fresh on each page load, so its
+  // `clickListenerActive` resets to false; the chrome carries the
+  // user-facing "click capture is recording" flag and re-issues
   // `click-capture-enable` so the listener comes back up before the
-  // user starts clicking around the new page.
-  dom.webview.addEventListener("did-finish-load", () => {
+  // user starts clicking around the new page. Phase 5: also
+  // re-enables on the NEW active tab after a tab switch.
+  function reEnableClickCaptureSoon(): void {
     void clickHotkey.reEnableClickCaptureAfterNavigation();
+  }
+
+  // Per-tab navigation events: TabsManager doesn't expose
+  // `did-finish-load` directly, but it emits `loading-changed`
+  // which transitions to `false` once the page settles. We can
+  // leverage that for the "navigation done" trigger.
+  tabs.addEventListener("loading-changed", (event: Event) => {
+    const { loading } = (event as CustomEvent<{ tab: Tab; loading: boolean }>).detail;
+    if (!loading) reEnableClickCaptureSoon();
   });
+  // Switching tabs effectively re-enters the new tab's preload
+  // realm from the click-listener's perspective; reissue
+  // click-capture-enable so the new active tab starts dispatching
+  // click-detected events.
+  tabs.addEventListener("active-tab-changed", reEnableClickCaptureSoon);
 
   // Hotkey shot delivered from main.ts when the user presses
   // Alt+Shift+C while the Browse window is focused.
@@ -384,24 +470,13 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // ---- Right-click context menu (Phase 4B) ──────────────────────
-  //
-  // The webview's preload posts a `context-menu-request` event
-  // when the user right-clicks anywhere in the embedded page. The
-  // host side renders an in-app menu that mirrors the toolbar's
-  // six modes; clicks on the menu either start a single-shot mode
-  // or toggle a session.
 
   function showContextMenu(viewportX: number, viewportY: number): void {
-    // The `<webview>` is positioned inside a flex container; map
-    // viewport-CSS coords (relative to webview) into chrome
-    // viewport coords by adding the webview's own bounding rect
-    // offset.
-    const rect = dom.webview.getBoundingClientRect();
+    const active = tabs.getActiveTab();
+    if (!active) return;
+    const rect = active.webview.getBoundingClientRect();
     const chromeX = rect.left + viewportX;
     const chromeY = rect.top + viewportY;
-    // Clamp to the chrome viewport so the menu doesn't render
-    // off-screen on a far-right click. The actual menu height is
-    // measured after positioning.
     dom.contextMenu.style.display = "block";
     dom.contextMenu.style.left = `${chromeX}px`;
     dom.contextMenu.style.top = `${chromeY}px`;
@@ -420,16 +495,12 @@ document.addEventListener("DOMContentLoaded", () => {
     dom.contextMenu.setAttribute("aria-hidden", "true");
   }
 
-  // Subscribe to context-menu-request events from the preload via
-  // the host's content-message channel.
   host.onContentMessage((msg) => {
     if (msg.type === "context-menu-request") {
       showContextMenu(msg.x, msg.y);
     }
   });
 
-  // Each menu button declares a `data-mode` matching one of the
-  // six entry points. Click delegation keeps the wiring compact.
   dom.contextMenu.addEventListener("click", (e) => {
     const target = e.target as HTMLElement | null;
     const button = target?.closest("button[data-mode]") as HTMLButtonElement | null;
@@ -458,9 +529,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // Dismiss on click outside / Escape / scroll. Use capture-phase
-  // so the dismiss runs before the user's click on something that
-  // might re-open the menu.
   document.addEventListener(
     "click",
     (e) => {
@@ -476,24 +544,22 @@ document.addEventListener("DOMContentLoaded", () => {
       hideContextMenu();
     }
   });
-  // Scrolling the chrome (rare; the chrome's flex layout doesn't
-  // scroll today, but if it ever does the menu shouldn't drift).
   window.addEventListener("scroll", hideContextMenu, true);
 
   // ---- Programmatic navigation from main process ────────────────
   //
   // The main process broadcasts `browse.navigate` when a user
   // chooses "Open URL in Browse" or when the menu spawns a new
-  // window with a URL. The renderer just forwards to navigateTo.
+  // window with a URL. Phase 5: open the URL in a NEW tab rather
+  // than replacing the active tab — matches the convention of
+  // routing external open-URL requests as their own tabs.
   api().on("browse.navigate", (payload) => {
     const p = payload as { url?: string } | undefined;
-    if (p?.url) navigateTo(p.url);
+    if (p?.url) tabs.openTab(p.url, { active: true });
   });
 
   // ---- Initial state ────────────────────────────────────────────
 
-  dom.urlInput.value = HOME_URL;
-  refreshNavState();
   setStatus("Ready", null);
 
   // ---- Helpers ──────────────────────────────────────────────────
@@ -503,6 +569,13 @@ document.addEventListener("DOMContentLoaded", () => {
     dom.statusBar.classList.remove("busy", "success", "error");
     if (kind) dom.statusBar.classList.add(kind);
   }
+
+  // Tear down listeners on window close so HMR / reload doesn't
+  // accumulate orphaned subscribers.
+  window.addEventListener("beforeunload", () => {
+    clickHotkey.dispose();
+    tabs.dispose();
+  });
 });
 
 async function probeDataUrlDimensions(
@@ -535,27 +608,4 @@ function urlTags(sourceUrl: string | undefined | null): Record<string, string> {
   } catch {
     return {};
   }
-}
-
-// ---- `<webview>` element type ──────────────────────────────────
-//
-// Electron's `<webview>` tag isn't part of TS's standard DOM lib.
-// Declare just the methods this file uses; production code can
-// pull `electron`'s `WebviewTag` type from a host adapter later
-// if more methods are needed.
-
-interface WebviewElement extends HTMLElement {
-  src: string;
-  canGoBack(): boolean;
-  canGoForward(): boolean;
-  goBack(): void;
-  goForward(): void;
-  reload(): void;
-  /** ID of the embedder's `webContents`. The main process uses
-   *  this to resolve the webview from `webContents.fromId(id)`
-   *  for `capturePage()`. */
-  getWebContentsId(): number;
-  /** Live URL (vs. the static `src` attribute, which doesn't
-   *  update on history-driven navigations). */
-  getURL?(): string;
 }

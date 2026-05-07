@@ -140,9 +140,26 @@ interface ElectronApi {
 const NO_TARGET_ID = -1;
 
 export interface CreateBrowseCaptureHostOpts {
-  /** The active `<webview>` to target. Phase 3+ supports a single
-   *  tab; Phase 5 lifts this to a "currently-active tab" lookup. */
-  webview: BrowseTargetWebview;
+  /** Resolve the currently-active tab's `<webview>`. Called per
+   *  host-method invocation so tab switches between captures are
+   *  picked up atomically. Returns `null` when no tabs are open
+   *  (the orchestrators short-circuit on `resolveTarget`'s
+   *  null). Phase 5 of `desktop-browser-mode.md`. */
+  getActiveWebview: () => BrowseTargetWebview | null;
+  /** Find a `<webview>` by its `getWebContentsId()` value. Used
+   *  by `sendToContent(target, msg)` so a capture started against
+   *  tab A keeps targeting tab A even after the user switches to
+   *  tab B mid-capture. Returns `null` if the tab was closed (the
+   *  send will reject — the orchestrator's surrounding try/catch
+   *  swallows the rejection). */
+  getWebviewByContentsId: (id: number) => BrowseTargetWebview | null;
+  /** Subscribe to `ipc-message` events on every existing AND
+   *  future tab's webview. The host fans the events out to
+   *  request-response correlation + content-event listeners.
+   *  Returns an unsubscribe fn the host calls on dispose. */
+  onAnyTabIpcMessage: (
+    handler: (event: WebviewIpcMessageEvent) => void,
+  ) => () => void;
   /** Required Electron preload bridge. Defaults to
    *  `(window as { electronAPI?: ElectronApi }).electronAPI`. */
   api?: ElectronApi;
@@ -184,6 +201,8 @@ export function createBrowseCaptureHost(opts: CreateBrowseCaptureHostOpts): Capt
 
   // Single ipc-message listener fans out to either the request-
   // response correlation map or the event-listener set, by channel.
+  // The TabsManager hooks every tab's webview and forwards events
+  // here, so tab-switches between captures don't drop responses.
   const onIpcMessage = (event: WebviewIpcMessageEvent): void => {
     if (event.channel === CONTENT_RESPONSE_CHANNEL) {
       const envelope = event.args[0] as ResponseEnvelope | undefined;
@@ -211,13 +230,15 @@ export function createBrowseCaptureHost(opts: CreateBrowseCaptureHostOpts): Capt
       }
     }
   };
-  opts.webview.addEventListener("ipc-message", onIpcMessage);
+  opts.onAnyTabIpcMessage(onIpcMessage);
 
   return {
     async resolveTarget(): Promise<CaptureTargetRef | null> {
+      const webview = opts.getActiveWebview();
+      if (!webview) return null;
       let id: number;
       try {
-        id = opts.webview.getWebContentsId();
+        id = webview.getWebContentsId();
       } catch {
         return null;
       }
@@ -225,10 +246,9 @@ export function createBrowseCaptureHost(opts: CreateBrowseCaptureHostOpts): Capt
         return null;
       }
       const url =
-        (typeof opts.webview.getURL === "function" ? opts.webview.getURL() : opts.webview.src) ??
-        "";
+        (typeof webview.getURL === "function" ? webview.getURL() : webview.src) ?? "";
       const title =
-        typeof opts.webview.getTitle === "function" ? opts.webview.getTitle() : undefined;
+        typeof webview.getTitle === "function" ? webview.getTitle() : undefined;
       return { id, windowId: undefined, url, title };
     },
 
@@ -240,24 +260,39 @@ export function createBrowseCaptureHost(opts: CreateBrowseCaptureHostOpts): Capt
     },
 
     async setEmulatedViewport(_target, size) {
-      // Flip the `<webview>` element's inline size. The chrome's
-      // flex layout collapses around the new dimensions; the
-      // embedded webContents re-lays-out the page at the new
-      // viewport. The orchestrator's `withEmulatedViewport`
-      // already pairs `set(size)` … `set(null)` for restore.
+      // Flip the active tab's `<webview>` element's inline size.
+      // The chrome's flex layout collapses around the new
+      // dimensions; the embedded webContents re-lays-out the page
+      // at the new viewport. The orchestrator's
+      // `withEmulatedViewport` already pairs `set(size)` …
+      // `set(null)` for restore.
+      const webview = opts.getActiveWebview();
+      if (!webview) return;
       if (size === null) {
-        opts.webview.style.width = "";
-        opts.webview.style.height = "";
+        webview.style.width = "";
+        webview.style.height = "";
         return;
       }
-      opts.webview.style.width = `${size.width}px`;
-      opts.webview.style.height = `${size.height}px`;
+      webview.style.width = `${size.width}px`;
+      webview.style.height = `${size.height}px`;
     },
 
     async sendToContent<T = unknown>(
-      _target: CaptureTargetRef,
+      target: CaptureTargetRef,
       msg: BackgroundToContentMessage,
     ): Promise<T> {
+      // Route to the originating tab's webview by `target.id`
+      // (its webContentsId). If the user switched tabs since the
+      // capture started, the originating tab's webview is still
+      // resolvable — only its visibility changed. The send fails
+      // (rejecting the pending promise) only if the tab was
+      // closed.
+      const webview = opts.getWebviewByContentsId(target.id);
+      if (!webview) {
+        throw new Error(
+          `[browse-host] sendToContent(${msg.type}): tab ${target.id} no longer exists`,
+        );
+      }
       const reqId = String(nextReqId++);
       return new Promise<T>((resolve, reject) => {
         const timer = setTimeout(() => {
@@ -275,7 +310,7 @@ export function createBrowseCaptureHost(opts: CreateBrowseCaptureHostOpts): Capt
           timer,
         });
         try {
-          opts.webview.send(HOST_REQUEST_CHANNEL, { reqId, msg });
+          webview.send(HOST_REQUEST_CHANNEL, { reqId, msg });
         } catch (err) {
           // `webview.send` throws synchronously when the embedded
           // webContents is gone (navigation in flight, window
