@@ -65,6 +65,12 @@ import type {
 } from "./shared/messages.js";
 import type { Settings } from "./shared/settings.js";
 
+// Re-export `BatchItem` so consumers reaching for the host
+// surface (`@ingcreators/annot-capture/host`) don't have to also
+// import from `@ingcreators/annot-capture/encode` just to type a
+// host implementation that calls `host.encodeBatch(items)`.
+export type { BatchItem };
+
 /** A single captured PNG plus the host-reported DPR at capture time. */
 export interface CapturedViewport {
   pngDataUrl: string;
