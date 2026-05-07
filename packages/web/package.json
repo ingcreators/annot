@@ -38,8 +38,6 @@
     "chrome-types": "^0.1.327",
     "storybook": "^10.3.6",
     "typescript": "catalog:",
-    "vite": "catalog:",
-    "vite-plugin-pwa": "^1.2.0",
-    "workbox-window": "^7.4.0"
+    "vite": "catalog:"
   }
 }
