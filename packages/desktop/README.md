@@ -29,10 +29,10 @@ What lives here:
 - **Browse window** ([`browse.html`](./browse.html)) — separate
   `BrowserWindow` with an embedded `<webview>`. Address bar +
   capture toolbar drive a one-click capture flow into the
-  gallery's Inbox folder. Multi-tab + per-page / area / scroll
-  modes are queued behind the
-  [`@ingcreators/annot-capture`](../../docs/plans/desktop-browser-mode.md)
-  package extraction.
+  gallery's Inbox folder. All six capture modes (visible / area /
+  full-page / per-page / click / hotkey) plus multi-tab + OAuth
+  popup routing ship at extension parity via
+  [`@ingcreators/annot-capture`](../../docs/plans/_done/desktop-browser-mode.md).
 
 ## Requirements
 
@@ -96,10 +96,10 @@ Per-OS detail:
 
 - [`docs/plans/_done/desktop-electron-migration.md`](../../docs/plans/_done/desktop-electron-migration.md)
   — the migration plan that landed this stack.
-- [`docs/plans/desktop-browser-mode.md`](../../docs/plans/desktop-browser-mode.md)
-  — superseded by Phase 6 of the Electron migration; the
-  remaining `@ingcreators/annot-capture` package extraction
-  (its Phases 1–2) is queued separately.
+- [`docs/plans/_done/desktop-browser-mode.md`](../../docs/plans/_done/desktop-browser-mode.md)
+  — `@ingcreators/annot-capture` extraction + Electron-side
+  full capture-mode parity. Nine phase-PRs landed 2026-05-07
+  ([#478](https://github.com/ingcreators/annot/pull/478)–[#487](https://github.com/ingcreators/annot/pull/487)).
 
 ## License
 

@@ -1,12 +1,15 @@
 # Desktop Browser Mode (full extension parity, shared core)
 
-> **Status:** Queued (Phases 1–2 + the new Phases 3–5; the original
-> Phases 3–6 that allocated per-OS WebView API work are deleted —
-> superseded by [`_done/desktop-electron-migration.md`](./_done/desktop-electron-migration.md)
+> **Status:** Done (all six phases shipped 2026-05-07 — PRs
+> [#478](https://github.com/ingcreators/annot/pull/478)–[#487](https://github.com/ingcreators/annot/pull/487);
+> see "Phased plan" below for the per-phase PR numbers).
+> The original Phases 3–6 that allocated per-OS WebView API work
+> are deleted — superseded by
+> [`desktop-electron-migration.md`](./desktop-electron-migration.md)
 > Phase 6, which shipped a minimum-viable Browse window
-> (`browse.html` + [`packages/desktop/src/browse/browse.ts`](../../packages/desktop/src/browse/browse.ts)
-> + [`packages/desktop/src-electron/ipc/browse.ts`](../../packages/desktop/src-electron/ipc/browse.ts))
-> on uniform Chromium).
+> (`browse.html` + [`packages/desktop/src/browse/browse.ts`](../../../packages/desktop/src/browse/browse.ts)
+> + [`packages/desktop/src-electron/ipc/browse.ts`](../../../packages/desktop/src-electron/ipc/browse.ts))
+> on uniform Chromium.
 >
 > **Compatibility:** New shared package `@ingcreators/annot-capture`
 > extracted from `packages/extension`. `packages/extension` and
@@ -48,10 +51,10 @@ The desktop already has:
 
 - **OS-level screen capture** (full screen / window / region) via
   `desktopCapturer` + a transparent overlay `BrowserWindow` in
-  [`packages/desktop/src-electron/ipc/screen-capture.ts`](../../packages/desktop/src-electron/ipc/screen-capture.ts).
-- **Browse window MVP** ([`browse.html`](../../packages/desktop/browse.html)
-  + [`src/browse/browse.ts`](../../packages/desktop/src/browse/browse.ts)
-  + [`src-electron/ipc/browse.ts`](../../packages/desktop/src-electron/ipc/browse.ts))
+  [`packages/desktop/src-electron/ipc/screen-capture.ts`](../../../packages/desktop/src-electron/ipc/screen-capture.ts).
+- **Browse window MVP** ([`browse.html`](../../../packages/desktop/browse.html)
+  + [`src/browse/browse.ts`](../../../packages/desktop/src/browse/browse.ts)
+  + [`src-electron/ipc/browse.ts`](../../../packages/desktop/src-electron/ipc/browse.ts))
   that opens a separate `BrowserWindow` with an `<webview>` tag,
   navigates to a URL, and captures the visible viewport via
   `webContents.capturePage()`. Single tab, visible mode only. The
@@ -167,7 +170,7 @@ Rationale for shape:
   side this maps to `chrome.tabs.captureVisibleTab`; on the
   Electron side to `webContents.capturePage()` against the
   Browse window's child `<webview>` (today already wired in
-  [`browse.captureVisible`](../../packages/desktop/src-electron/ipc/browse.ts)).
+  [`browse.captureVisible`](../../../packages/desktop/src-electron/ipc/browse.ts)).
   An orchestrator-level alternative — `webContents.debugger.attach()`
   + CDP `Page.captureScreenshot { captureBeyondViewport: true }`
   — is available too, but that's an internal optimisation; the
@@ -323,7 +326,7 @@ focus disambiguates.
 **Main window role**: stays a library/editor surface only. The
 existing main-window gallery sidebar already has a "+ New
 Browse" entry under its New menu (added in
-[`_done/desktop-electron-migration.md`](./_done/desktop-electron-migration.md)
+[`desktop-electron-migration.md`](./desktop-electron-migration.md)
 Phase 6) that spawns a Browse window via `browse.open`. Capture
 itself is never initiated from the main window.
 
@@ -331,7 +334,7 @@ Captured images flow into the existing `DesktopStore` /
 `DesktopFs` filesystem-backed library
 (`<userData>/library/Inbox/<filename>.annot.png` plus the
 JSON sidecar — see
-[`_done/desktop-storage-provider-migration.md`](./_done/desktop-storage-provider-migration.md)),
+[`desktop-storage-provider-migration.md`](./desktop-storage-provider-migration.md)),
 so the main window's gallery picks them up with no schema
 change. The MVP's `browse.persistVisible` IPC already does this
 for the visible-mode path; the orchestrator-driven modes route
@@ -340,13 +343,13 @@ through the same primitive.
 ### Settings storage
 
 The shape stays identical to the extension's `Settings`
-([`packages/extension/src/shared/settings.ts`](../../packages/extension/src/shared/settings.ts)).
+([`packages/extension/src/shared/settings.ts`](../../../packages/extension/src/shared/settings.ts)).
 Persistence is host-owned:
 
 - Extension: `chrome.storage.sync` (existing).
 - Desktop: a JSON blob in the app's data dir, written via the
   existing `settings.ts` IPC layer
-  ([`packages/desktop/src-electron/ipc/settings.ts`](../../packages/desktop/src-electron/ipc/settings.ts)).
+  ([`packages/desktop/src-electron/ipc/settings.ts`](../../../packages/desktop/src-electron/ipc/settings.ts)).
   No cross-device sync in v1.
 
 A future consolidation (shared `BrowserModeSettings` schema in
@@ -380,7 +383,7 @@ The orchestrator never sees these — it only sees the
 
 ### Relationship to existing host-ui work
 
-The recently-extracted [`@ingcreators/annot-host-ui`](../../packages/host-ui)
+The recently-extracted [`@ingcreators/annot-host-ui`](../../../packages/host-ui)
 package owns the editor surface (`EditorShell`, `HeaderHost`,
 `SavePipeline`, `StatusHost`) and the unified gallery shell
 (`<annot-file-manager-shell>`). Browser mode does NOT live in
@@ -534,7 +537,7 @@ implementation that calls `runVisibleCapture` from
   `preload` attribute (single bundle from
   `@ingcreators/annot-capture/content`).
 - `browse.captureVisible` is removed in this phase; its
-  callsites in [`packages/desktop/src/browse/browse.ts`](../../packages/desktop/src/browse/browse.ts)
+  callsites in [`packages/desktop/src/browse/browse.ts`](../../../packages/desktop/src/browse/browse.ts)
   become `runVisibleCapture(host)` calls. `browse.persistVisible`
   is removed in favor of `DesktopStore.put`.
 - Visible-mode capture must remain byte-equivalent to the
@@ -743,7 +746,7 @@ Whole-plan acceptance criteria:
   is preserved as the default flow.
 - **OS-level desktop capture is untouched**. The `screen-
   capture.ts` IPC + `capture-overlay.html` window
-  ([`_done/desktop-electron-migration.md`](./_done/desktop-electron-migration.md)
+  ([`desktop-electron-migration.md`](./desktop-electron-migration.md)
   Phase 3) remain as a separate "capture the screen / a window /
   a region" path. Browser mode is purely about the *embedded
   webview*; the two flows coexist.
