@@ -19,7 +19,12 @@ import type { AnnotGalleryPageElement } from "./annot-gallery-page.js";
 import type { AnnotFileManagerShellElement, BreadcrumbEntry } from "./file-manager-shell.js";
 import "./annot-gallery-page.js";
 import "./sidebar.js";
-import type { AnnotSidebarElement, SidebarCallbacks, SidebarSectionOrder } from "./sidebar.js";
+import type {
+  AnnotSidebarElement,
+  NewMenuItem,
+  SidebarCallbacks,
+  SidebarSectionOrder,
+} from "./sidebar.js";
 
 export interface FileManagerCallbacks {
   onStorageSelect: (mode: StorageMode) => Promise<void>;
@@ -47,6 +52,11 @@ export interface FileManagerCallbacks {
   /** Section ordering override for the sidebar (Storage / Views /
    *  Folders). Optional. */
   getSidebarSectionOrder?: () => SidebarSectionOrder;
+  /** Extra items to append to the New menu after the built-ins.
+   *  Hosts (e.g. desktop's Window / Region capture + Open Browse
+   *  Window) and plugins surface platform-specific entry points
+   *  here. Optional. */
+  getNewMenuExtras?: () => NewMenuItem[];
   /** Unified thumbnail cache manager. Threaded into the
    *  `<annot-gallery-page>` so cards can be hydrated from the
    *  cache and prefetches scheduled for misses. Optional —
@@ -96,6 +106,7 @@ export class FileManager {
       isBuiltinDisabled: this.#callbacks.isBuiltinDisabled,
       getSidebarTabs: this.#callbacks.getSidebarTabs,
       getSidebarSectionOrder: this.#callbacks.getSidebarSectionOrder,
+      getNewMenuExtras: this.#callbacks.getNewMenuExtras,
     };
     sidebar.callbacks = sidebarCallbacks;
     this.#sidebarEl.appendChild(sidebar);

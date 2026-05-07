@@ -37,6 +37,39 @@ export const DEFAULT_SIDEBAR_SECTION_ORDER = {
 
 export type SidebarSectionOrder = Partial<typeof DEFAULT_SIDEBAR_SECTION_ORDER>;
 
+/**
+ * Host- or plugin-supplied entry appended to the New menu after
+ * the built-in items (New Folder, Upload Image, Capture Screen,
+ * Timed Capture, Paste from Clipboard).
+ *
+ * Today's consumers:
+ *   - **Desktop**: contributes "Capture Window" / "Capture Region" /
+ *     "Open Browse Window" — the platform-only capture entry points
+ *     that previously lived as a separate action-row in the
+ *     gallery's chrome.
+ *   - **Plugins (future)**: a plugin-registered storage backend can
+ *     surface "Import from \<service\>" or "New from template" here
+ *     once the plugin host plumbs the registration through.
+ *
+ * Each item renders as a regular new-menu row so it visually
+ * matches the built-ins. The host owns the action — the sidebar
+ * just dispatches on click and closes the menu.
+ */
+export interface NewMenuItem {
+  /** Icon for the row. A string is resolved as a builtin icon name
+   *  (e.g. `"language"`); an `IconSpec` is rendered as-is, which
+   *  is the path plugin authors take for non-builtin icons. */
+  icon: string | IconSpec;
+  /** Visible label, e.g. `"Open Browse Window"`. */
+  label: string;
+  /** Click handler. The sidebar closes the menu before invoking. */
+  action: () => void;
+  /** Hide the entry by returning false. Mirrors the built-in
+   *  items' `show` gate (e.g. `Capture Screen` is hidden when
+   *  `getDisplayMedia` is unsupported). Default: shown. */
+  show?: boolean;
+}
+
 export interface SidebarCallbacks {
   onStorageSelect: (mode: StorageMode) => void;
   /** Triggered by the "reselect" icon on a connected storage item (e.g. Device). */
@@ -65,6 +98,10 @@ export interface SidebarCallbacks {
    *  `DEFAULT_SIDEBAR_SECTION_ORDER`; missing fields keep their
    *  default. Optional. */
   getSidebarSectionOrder?: () => SidebarSectionOrder;
+  /** Extra items to append to the New menu after the built-ins.
+   *  Hosts (e.g. desktop) and plugins surface platform-specific
+   *  entry points here. Optional — omit to render only built-ins. */
+  getNewMenuExtras?: () => NewMenuItem[];
 }
 
 /** Internal chip descriptor shared across built-ins + plugins. The
@@ -489,7 +526,7 @@ export class AnnotSidebarElement extends LitElement {
   }
 
   #renderNewMenu() {
-    const items: Array<{ icon: string; label: string; action: () => void; show?: boolean }> = [
+    const builtins: NewMenuItem[] = [
       {
         icon: "create_new_folder",
         label: "New Folder",
@@ -515,6 +552,13 @@ export class AnnotSidebarElement extends LitElement {
         show: isClipboardReadSupported(),
       },
     ];
+    // Host- or plugin-supplied extras (e.g. desktop's "Capture
+    // Window" / "Capture Region" / "Open Browse Window") render
+    // after the built-ins. The hook is called every render so the
+    // host can return different items based on runtime state
+    // (e.g. hide Browse when the Browse window is already focused).
+    const extras = this.callbacks.getNewMenuExtras?.() ?? [];
+    const items = [...builtins, ...extras];
     return html`
       <div class="new-menu">
         ${items
@@ -529,7 +573,10 @@ export class AnnotSidebarElement extends LitElement {
                   item.action();
                 }}
               >
-                <annot-icon .spec=${builtinIcon(item.icon)}></annot-icon> ${item.label}
+                <annot-icon
+                  .spec=${typeof item.icon === "string" ? builtinIcon(item.icon) : item.icon}
+                ></annot-icon>
+                ${item.label}
               </button>
             `,
           )}
