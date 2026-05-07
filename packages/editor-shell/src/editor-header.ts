@@ -1,5 +1,5 @@
 import { builtinIcon } from "@ingcreators/annot-core";
-import "../ui/annot-icon.js";
+import "./annot-icon.js";
 /**
  * `<annot-editor-header>` — editor header bar:
  *
@@ -21,11 +21,11 @@ import "../ui/annot-icon.js";
  */
 
 import { createThemeToggle } from "@ingcreators/annot-editor";
-import { html, LitElement, nothing, unsafeHTML } from "../lit.js";
 import "./editable-filename.js";
 import type { AnnotEditableFilenameElement } from "./editable-filename.js";
-import "@ingcreators/annot-editor-shell/save-status-indicator";
-import type { AnnotSaveStatusElement } from "@ingcreators/annot-editor-shell/save-status-indicator";
+import { html, LitElement, nothing, unsafeHTML } from "./lit.js";
+import "./save-status-indicator.js";
+import type { AnnotSaveStatusElement } from "./save-status-indicator.js";
 
 /** Brand mark — 30×30 SVG matching the file-manager `.brand` so
  *  the logo stays at the same x/y position when the user

@@ -18,6 +18,7 @@ import { createBuiltinIcon } from "@ingcreators/annot-editor-shell/annot-icon-im
 import { FileManager } from "@ingcreators/annot-editor-shell/gallery/file-manager";
 import type { SidebarSectionOrder } from "@ingcreators/annot-editor-shell/gallery/sidebar";
 import { IndexedDBThumbnailCache } from "@ingcreators/annot-editor-shell/idb-thumbnail-cache";
+import { HeaderHost } from "@ingcreators/annot-editor-shell/orchestrators/header-host";
 import { SavePipeline } from "@ingcreators/annot-editor-shell/orchestrators/save-pipeline";
 import { StatusHost } from "@ingcreators/annot-editor-shell/orchestrators/status-host";
 import { BUILTIN_RIGHT_PANEL_SECTION_IDS } from "@ingcreators/annot-editor-shell/right-panel";
@@ -25,7 +26,6 @@ import { ThumbnailManager } from "@ingcreators/annot-editor-shell/thumbnail-mana
 import { CaptureHost, type OpenEditorArgs } from "./app/capture-host.js";
 import { EditorSession } from "./app/editor-session.js";
 import { ExtensionTransferHost } from "./app/extension-transfer-host.js";
-import { HeaderHost } from "./app/header-host.js";
 import { loadImage } from "./app/image-utils.js";
 import { type AnnotPlugin, PluginHost } from "./app/plugin-host.js";
 import { githubExternalLinksPlugin } from "./app/plugins/github-external-links.js";
@@ -48,6 +48,7 @@ import {
   setExtensionId,
   setStorageMode,
 } from "./storage/bridge.js";
+import { GitHubStore } from "./storage/github-store.js";
 import { hideError, showSaveError } from "./ui/error-bar.js";
 
 export class App {
@@ -159,28 +160,67 @@ export class App {
       openEditor: (args) => this.#openEditorFor(args),
       getThumbnailManager: () => this.#thumbnailManager,
     });
-    this.#headerHost = new HeaderHost({
-      getStorage: () => this.#storage,
-      getCurrentImagePath: () => this.#currentImagePath,
-      setCurrentImagePath: (p) => {
-        this.#currentImagePath = p;
+    this.#headerHost = new HeaderHost(
+      assertNonNull(
+        document.getElementById("editor-header"),
+        "#editor-header missing — check index.html shell",
+      ),
+      {
+        getStorage: () => this.#storage,
+        getCurrentImagePath: () => this.#currentImagePath,
+        setCurrentImagePath: (p) => {
+          this.#currentImagePath = p;
+        },
+        getCurrentImageRecord: () => this.#currentImageRecord,
+        setCurrentImageRecord: (r) => {
+          this.#currentImageRecord = r;
+        },
+        getCurrentTags: () => this.#currentTags,
+        getCurrentImageDataUrl: () => this.#editorSession.getCurrentImageDataUrl(),
+        getCurrentFolderPath: () => this.#currentFolderPath,
+        setCurrentFolderPath: (p) => {
+          this.#currentFolderPath = p;
+        },
+        getFileDetailsDrawer: () => this.#editorSession.getFileDetailsDrawer(),
+        getToolbar: () => this.#editorSession.getToolbar(),
+        getImageSize: () => this.#editorSession.getImageSize(),
+        showGallery: () => this.showGallery(),
+        collectExternalLinks: (path) => this.#pluginHost.collectExternalLinks(path, this.#storage),
+        // Phase 3 / PR C of `docs/plans/host-convergence.md` — host
+        // concerns lifted out of HeaderHost into deps callbacks so
+        // editor-shell stays host-neutral. PWA wires:
+        getRootLabel: () => {
+          const mode = getStorageMode();
+          return mode === "device"
+            ? "Device"
+            : mode === "googledrive"
+              ? "Google Drive"
+              : mode === "github"
+                ? "GitHub"
+                : "Browser";
+        },
+        pushEditRoute: (newPath) => pushRoute(editUrl(getStorageMode(), newPath)),
+        fetchLastCommit: async (path) => {
+          const storage = this.#storage;
+          if (!(storage instanceof GitHubStore)) return null;
+          const info = await storage.getLastCommit(path);
+          if (!info) return null;
+          return {
+            authorName: info.authorName,
+            authorAvatarUrl: info.authorAvatarUrl,
+            messageHeadline: info.messageHeadline,
+            date: info.date,
+            shortSha: info.shortSha,
+            url: info.url,
+          };
+        },
+        openFile:
+          typeof (window as unknown as { __annot_openFile?: () => void }).__annot_openFile ===
+          "function"
+            ? () => (window as unknown as { __annot_openFile: () => void }).__annot_openFile()
+            : undefined,
       },
-      getCurrentImageRecord: () => this.#currentImageRecord,
-      setCurrentImageRecord: (r) => {
-        this.#currentImageRecord = r;
-      },
-      getCurrentTags: () => this.#currentTags,
-      getCurrentImageDataUrl: () => this.#editorSession.getCurrentImageDataUrl(),
-      getCurrentFolderPath: () => this.#currentFolderPath,
-      setCurrentFolderPath: (p) => {
-        this.#currentFolderPath = p;
-      },
-      getFileDetailsDrawer: () => this.#editorSession.getFileDetailsDrawer(),
-      getToolbar: () => this.#editorSession.getToolbar(),
-      getImageSize: () => this.#editorSession.getImageSize(),
-      showGallery: () => this.showGallery(),
-      collectExternalLinks: (path) => this.#pluginHost.collectExternalLinks(path, this.#storage),
-    });
+    );
     this.#editorSession = new EditorSession(
       {
         getStorage: () => this.#storage,

@@ -13,8 +13,8 @@
  * section; consolidating the two is a follow-up beyond this PR.
  */
 
-import { html, LitElement, nothing } from "../lit.js";
-import { validateFilename } from "@ingcreators/annot-editor-shell/annot-file-details-drawer";
+import { validateFilename } from "./annot-file-details-drawer.js";
+import { html, LitElement, nothing } from "./lit.js";
 
 export class AnnotEditableFilenameElement extends LitElement {
   static override properties = {
@@ -79,9 +79,11 @@ export class AnnotEditableFilenameElement extends LitElement {
         @keydown=${this.#onKeydown}
         @blur=${this.#onBlur}
       />
-      ${this.error
-        ? html`<div class="breadcrumb-filename-error" aria-live="polite">${this.error}</div>`
-        : nothing}
+      ${
+        this.error
+          ? html`<div class="breadcrumb-filename-error" aria-live="polite">${this.error}</div>`
+          : nothing
+      }
     `;
   }
 
