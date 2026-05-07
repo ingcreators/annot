@@ -1,14 +1,42 @@
-import { logger } from "../logger.js";
-import type { BackgroundToContentMessage } from "../shared/messages.js";
-import { startAreaSelection } from "./area-selector.js";
-import { hideProgress, showProgress } from "./progress-overlay.js";
-import { getPageDimensions, scrollTo } from "./scroll-controller.js";
+/**
+ * Chrome extension's content-script entry. Wires
+ * `chrome.runtime.onMessage` / `chrome.runtime.sendMessage` to the
+ * host-neutral helpers in `@ingcreators/annot-capture/content`.
+ *
+ * Phase 1A of `docs/plans/desktop-browser-mode.md`: the DOM-/canvas-
+ * side capture helpers (sticky-handler, scroll-controller,
+ * area-selector, progress-overlay) moved into the shared package and
+ * this file became a thin chrome adapter. The package never imports
+ * `chrome.*` itself; the `ContentBus` adapter below is the seam.
+ */
+
 import {
+  type ContentBus,
   hideForCapture,
+  hideProgress,
   hideStickies,
+  getPageDimensions,
   restoreAfterCapture,
   restoreStickies,
-} from "./sticky-handler.js";
+  scrollTo,
+  showProgress,
+  startAreaSelection,
+} from "@ingcreators/annot-capture/content";
+import type {
+  BackgroundToContentMessage,
+  ContentToBackgroundMessage,
+} from "@ingcreators/annot-capture/shared";
+import { logger } from "../logger.js";
+
+const chromeContentBus: ContentBus = {
+  send(msg: ContentToBackgroundMessage): void {
+    try {
+      chrome.runtime.sendMessage(msg);
+    } catch {
+      // Service worker may have been reloaded; ignore.
+    }
+  },
+};
 
 // Guard against double injection
 if ((window as any).__annot_injected) {
@@ -29,7 +57,7 @@ if ((window as any).__annot_injected) {
         return false;
 
       case "start-area-select":
-        startAreaSelection();
+        startAreaSelection({ bus: chromeContentBus, log: logger.debug });
         break;
 
       case "get-page-dimensions":
@@ -214,22 +242,18 @@ if ((window as any).__annot_injected) {
       /* ignore */
     }
 
-    try {
-      chrome.runtime.sendMessage({
-        type: "click-detected",
-        x: e.clientX,
-        y: e.clientY,
-        pageX: e.pageX,
-        pageY: e.pageY,
-        dpr: window.devicePixelRatio || 1,
-        target: rectEl?.tagName || target?.tagName || "",
-        url: location.href,
-        title: document.title,
-        rect,
-      });
-    } catch {
-      // Service worker may have been reloaded; ignore
-    }
+    chromeContentBus.send({
+      type: "click-detected",
+      x: e.clientX,
+      y: e.clientY,
+      pageX: e.pageX,
+      pageY: e.pageY,
+      dpr: window.devicePixelRatio || 1,
+      target: rectEl?.tagName || target?.tagName || "",
+      url: location.href,
+      title: document.title,
+      rect,
+    });
   }
 
   function enableClickCapture(): void {

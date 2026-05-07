@@ -1,22 +1,9 @@
 /**
- * Extension-side adapter for the shared image encoder.
- *
- * Maps the extension's `Settings.quality` shape to the core encode
- * options. The actual encoder (libimagequant WASM + UPNG.js) lives in
- * `@ingcreators/annot-core/encode` so both the extension and the Annot web
- * app share one canonical implementation.
+ * Settings-driven encode adapter — moved into
+ * `@ingcreators/annot-capture/shared/encode` in Phase 1A of
+ * `docs/plans/desktop-browser-mode.md`. This file is kept as a
+ * back-compat re-export so callers within the extension don't have
+ * to rewrite import paths in lockstep.
  */
-import { encodeCapture as coreEncode, type EncodeResult } from "@ingcreators/annot-core/encode";
-import type { Settings } from "./settings.js";
 
-export type { EncodeResult };
-
-/** Encode per current extension settings. */
-export function encodeCapture(pngDataUrl: string, settings: Settings): Promise<EncodeResult> {
-  return coreEncode(pngDataUrl, {
-    format: settings.quality.format,
-    smartFallback: settings.quality.smartFallback,
-    smartColorThreshold: settings.quality.smartColorThreshold,
-    jpegPercent: settings.quality.jpegPercent,
-  });
-}
+export { encodeCapture, type EncodeResult } from "@ingcreators/annot-capture/shared";

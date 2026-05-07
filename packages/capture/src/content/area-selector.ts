@@ -1,10 +1,29 @@
-import { logger } from "../logger.js";
 import type { CaptureRect } from "@ingcreators/annot-core/utils/types";
+import type { ContentBus } from "./content-bus.js";
 
 let overlay: HTMLDivElement | null = null;
 const OVERLAY_ID = "annot-overlay";
 
-export function startAreaSelection(): void {
+/**
+ * Optional debug logger. Default is silent so the package stays
+ * console-quiet by default; the host can plug in `logger.debug` when
+ * it needs to trace area-selection state across content-script
+ * re-injection cycles.
+ */
+export type AreaSelectorLog = (message: string, ...args: unknown[]) => void;
+
+export interface StartAreaSelectionOpts {
+  /** Bus the area selector posts `area-selected` / `area-cancelled`
+   *  events on. Required; without it the host has no way to learn
+   *  the result. */
+  bus: ContentBus;
+  /** Optional debug logger; defaults to a no-op. */
+  log?: AreaSelectorLog;
+}
+
+export function startAreaSelection(opts: StartAreaSelectionOpts): void {
+  const { bus } = opts;
+  const log = opts.log ?? (() => {});
   // Idempotent entry: if a previous invocation left state behind
   // (overlay variable still set from an aborted selection, or a stray
   // overlay div in the DOM that we don't have a reference to because
@@ -13,7 +32,7 @@ export function startAreaSelection(): void {
   // early-out silently no-op'd in those cases — visible symptom was
   // "Capture selected area does nothing on the second click" or
   // "Capture selected area does nothing after extension reload".
-  logger.debug(
+  log(
     "[annot/area-select] startAreaSelection invoked; previous overlay variable:",
     !!overlay,
     "stray DOM node:",
@@ -116,20 +135,20 @@ export function startAreaSelection(): void {
     cleanup();
 
     if (rect.width > 5 && rect.height > 5) {
-      chrome.runtime.sendMessage({
+      bus.send({
         type: "area-selected",
         rect,
         dpr: window.devicePixelRatio,
       });
     } else {
-      chrome.runtime.sendMessage({ type: "area-cancelled" });
+      bus.send({ type: "area-cancelled" });
     }
   };
 
   const onKeyDown = (e: KeyboardEvent) => {
     if (e.key === "Escape") {
       cleanup();
-      chrome.runtime.sendMessage({ type: "area-cancelled" });
+      bus.send({ type: "area-cancelled" });
     }
   };
 

@@ -407,30 +407,96 @@ the only consumer; Phase 3+ adds the Electron consumer.
 
 ### Phase 1 — extract `@ingcreators/annot-capture`, extension stays the only consumer
 
-- Create `packages/capture/` with `package.json`, `tsconfig.json`,
-  Vite config (library mode, ESM only).
-- Move `packages/extension/src/content/*` and the offscreen worker
-  source into `packages/capture/src/content/*` and
-  `packages/capture/src/encode/*`. Replace `chrome.runtime`
-  references with a `MessagePort`-shaped abstraction
-  (`ContentBus`).
-- Move shared `encode.ts`, `messages.ts`, `settings.ts` into
-  `packages/capture/src/shared/*`.
-- Define `CaptureHost` interface in
-  `packages/capture/src/host.ts`.
-- Extract the capture state machines from
-  `service-worker.ts` + `capture-strategy.ts` (1.5k+ LOC → ~6
-  orchestrator modules) into
-  `packages/capture/src/orchestrate/*`. Tested with the
-  extension's existing manual capture flows; no new behavior.
-- `packages/extension` becomes a thin host adapter:
-  - `background/host.ts` implements `CaptureHost` over `chrome.*`.
-  - `service-worker.ts` shrinks to wiring + lifecycle (popup
-    messages → orchestrator calls).
-  - Existing manifest, popup UI, options UI unchanged.
+The extraction is split into two PRs because the capture
+state-machine code in `service-worker.ts` (~1.9k LOC, with deep
+`chrome.*` coupling) is too large to land safely in one
+mechanical move. The split keeps each PR independently
+revertable per CLAUDE.md's "one PR per phase" rule (we treat
+the two sub-PRs as a phase pair the way other plans split
+big phases into PR A / PR B / PR C).
 
-**Verify**: extension installs and all 6 capture modes work
-exactly as before; visual regression on the popup; end-to-end
+**Phase 1A — Scaffolding + chrome-free moves.** Lands the
+package, the seam, and every piece that doesn't need
+`chrome.*` to compile.
+
+- Create `packages/capture/` with `package.json`, `tsconfig.json`,
+  Vite config (library mode, ESM only) and subpath exports
+  (`./content`, `./encode`, `./shared`, `./orchestrate`,
+  `./host`).
+- Move shared types: `messages.ts` (verbatim — pure types),
+  `encode.ts` (verbatim — already pure), and the **pure half**
+  of `settings.ts` (the `Settings` shape, `DEFAULT_SETTINGS`,
+  `mergeSettings`, `parseSelectorList`, `resolveEmulation`,
+  `shouldHideOverlaysFor`, `EMULATION_PRESETS` and their
+  types). The chrome.storage-bound `loadSettings` /
+  `saveSettings` / `onSettingsChange` stay in
+  `packages/extension/src/shared/settings.ts` as a thin
+  re-export layer, since they're host I/O.
+- Move content modules: `sticky-handler.ts`,
+  `scroll-controller.ts`, `progress-overlay.ts` move verbatim
+  (no `chrome.*` references in their bodies).
+  `area-selector.ts` moves with its `chrome.runtime.sendMessage`
+  call abstracted into a `ContentBus` parameter (interface
+  defined in `packages/capture/src/content/content-bus.ts`).
+- Move encode pipeline: `offscreen/encode-worker.ts` moves
+  verbatim. The worker pool + `handleStitch` / `handleCrop` /
+  `handleMosaic` move into `packages/capture/src/encode/image-ops.ts`
+  as pure functions; the chrome.runtime.onMessage listener
+  in `offscreen.ts` stays in extension and dispatches to the
+  moved functions.
+- Move `capture-strategy.ts` to
+  `packages/capture/src/orchestrate/strategy.ts` (already pure).
+- Define `CaptureHost` interface in `packages/capture/src/host.ts`
+  (consumed by Phase 1B's orchestrators; not yet wired from
+  the service worker).
+- Extension's content `index.ts` keeps the `chrome.runtime.onMessage`
+  listener wiring; it imports the moved pieces from
+  `@ingcreators/annot-capture/content/*`.
+- Extension's offscreen `offscreen.ts` keeps the
+  `chrome.runtime.onMessage` listener wiring; it imports the
+  moved pieces from `@ingcreators/annot-capture/encode/*`.
+- **No service-worker.ts orchestrator extraction yet** — the
+  state machines (visible / area / scroll / perPage / click /
+  hotkey) stay in the extension and call into the moved
+  helpers. They'll move in Phase 1B.
+
+**Verify (Phase 1A)**: extension installs and all 6 capture
+modes work exactly as before; the bundled `content.js` /
+`offscreen.js` / `service-worker.js` byte-diff against the
+pre-PR build is small and obviously mechanical (just the
+import paths change). `pnpm -r typecheck` + `pnpm test` pass.
+
+**Phase 1B — Orchestrator extraction + extension as thin host
+adapter.** Lifts the six state machines from `service-worker.ts`
+into `packages/capture/src/orchestrate/*` and rewires the
+extension as a thin `CaptureHost` consumer.
+
+- Extract the capture state machines from
+  `service-worker.ts` (~1.5k LOC across `captureVisible` /
+  `captureArea` / `captureFullPageInner` / `capturePagesInner` /
+  `handleClickDetected` / `hotkeyCaptureShot` plus their
+  helpers) into `packages/capture/src/orchestrate/*` (one file
+  per mode plus a shared `runCapture.ts` for the common
+  setup / teardown / persistence dance).
+- Page metadata walker (`requestPageMetadata`'s inline `func`
+  in `service-worker.ts`) moves to
+  `packages/capture/src/content/page-metadata-walker.ts` as a
+  self-contained, closure-free function so
+  `chrome.scripting.executeScript({ func, world: "MAIN" })`
+  picks it up via `func.toString()` without bundler-injected
+  references.
+- `packages/extension/src/background/host.ts` implements
+  `CaptureHost` over `chrome.*` (tabs, windows, scripting,
+  runtime, offscreen). The chrome-side persistence layer
+  (`idbStore.saveImage` + thumbnail + tags) is exposed
+  through `host.appendCapture(record)`.
+- `service-worker.ts` shrinks to wiring + lifecycle: popup
+  / external / command listener → orchestrator call. Existing
+  manifest, popup UI, options UI unchanged.
+
+**Verify (Phase 1B)**: extension installs and all 6 capture
+modes still work. Service-worker LOC drops from ~1.9k to a
+few hundred lines (wiring + lifecycle only). End-to-end
 capture saved to PWA arrives byte-equivalent to pre-refactor.
 
 ### Phase 2 — DPR-from-host correction
