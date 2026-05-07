@@ -16,7 +16,14 @@
  * content-script bus.
  */
 
-import { runVisibleCapture } from "@ingcreators/annot-capture/orchestrate";
+import {
+  runAreaCapture,
+  runPerPageCapture,
+  runScrollCapture,
+  runVisibleCapture,
+  type CaptureFrame,
+  type CaptureResult,
+} from "@ingcreators/annot-capture/orchestrate";
 import { newIdB58 } from "@ingcreators/annot-core/utils";
 import type { DesktopStore } from "../storage/desktop-store.js";
 import { createStandaloneDesktopStore } from "../storage/bootstrap.js";
@@ -52,6 +59,9 @@ interface BrowseDom {
   btnReload: HTMLButtonElement;
   urlInput: HTMLInputElement;
   btnCaptureVisible: HTMLButtonElement;
+  btnCaptureArea: HTMLButtonElement;
+  btnCaptureFull: HTMLButtonElement;
+  btnCapturePages: HTMLButtonElement;
   statusBar: HTMLDivElement;
   statusText: HTMLSpanElement;
 }
@@ -65,6 +75,15 @@ function resolveDom(): BrowseDom {
   const btnCaptureVisible = document.getElementById(
     "btn-capture-visible",
   ) as HTMLButtonElement | null;
+  const btnCaptureArea = document.getElementById(
+    "btn-capture-area",
+  ) as HTMLButtonElement | null;
+  const btnCaptureFull = document.getElementById(
+    "btn-capture-full",
+  ) as HTMLButtonElement | null;
+  const btnCapturePages = document.getElementById(
+    "btn-capture-pages",
+  ) as HTMLButtonElement | null;
   const statusBar = document.getElementById("browse-status") as HTMLDivElement | null;
   const statusText = document.getElementById("browse-status-text") as HTMLSpanElement | null;
 
@@ -75,13 +94,28 @@ function resolveDom(): BrowseDom {
     !btnReload ||
     !urlInput ||
     !btnCaptureVisible ||
+    !btnCaptureArea ||
+    !btnCaptureFull ||
+    !btnCapturePages ||
     !statusBar ||
     !statusText
   ) {
     throw new Error("[browse] expected DOM elements not found in browse.html");
   }
 
-  return { webview, btnBack, btnForward, btnReload, urlInput, btnCaptureVisible, statusBar, statusText };
+  return {
+    webview,
+    btnBack,
+    btnForward,
+    btnReload,
+    urlInput,
+    btnCaptureVisible,
+    btnCaptureArea,
+    btnCaptureFull,
+    btnCapturePages,
+    statusBar,
+    statusText,
+  };
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -166,70 +200,137 @@ document.addEventListener("DOMContentLoaded", () => {
   // ---- Capture wiring ────────────────────────────────────────────
 
   // The host wraps the `<webview>` so the orchestrator can resolve
-  // a `CaptureTargetRef`, capture the viewport, and run the
-  // metadata walker. `getURL()` reads the live URL — preferable
-  // to the stale `<webview>.src` after history-driven navigations.
+  // a `CaptureTargetRef`, capture the viewport, run the metadata
+  // walker, and bridge `ContentBus` over Electron IPC (Phase 4A).
+  // `getURL()` reads the live URL — preferable to the stale
+  // `<webview>.src` after history-driven navigations.
+  //
+  // The element is passed directly so the host's `sendToContent` /
+  // `onContentMessage` / `setEmulatedViewport` primitives can use
+  // `webview.send` / `addEventListener("ipc-message", ...)` /
+  // inline-`style` without re-wrapping. The `BrowseTargetWebview`
+  // interface is structurally satisfied by the live element; cast
+  // through `unknown` because TS doesn't model the `<webview>`
+  // tag's `send` / `getURL` / `getTitle` extras.
   const host = createBrowseCaptureHost({
-    webview: {
-      getWebContentsId: () => dom.webview.getWebContentsId(),
-      getURL: () => dom.webview.getURL?.() ?? dom.webview.src,
-      getTitle: () => document.title,
-      src: dom.webview.src,
-    },
+    webview: dom.webview as unknown as Parameters<typeof createBrowseCaptureHost>[0]["webview"],
   });
 
-  async function captureVisible(): Promise<void> {
-    dom.btnCaptureVisible.disabled = true;
-    setStatus("Capturing visible viewport…", "busy");
+  /** Disable every capture button while a capture is in flight so
+   *  multi-segment runs can't be retriggered mid-flow. The 3 modes
+   *  share a single guard. */
+  function setCaptureBusy(busy: boolean): void {
+    dom.btnCaptureVisible.disabled = busy;
+    dom.btnCaptureArea.disabled = busy;
+    dom.btnCaptureFull.disabled = busy;
+    dom.btnCapturePages.disabled = busy;
+  }
+
+  type ModeRunner = (host: ReturnType<typeof createBrowseCaptureHost>) => Promise<CaptureResult | null>;
+
+  async function runMode(label: string, runner: ModeRunner): Promise<void> {
+    setCaptureBusy(true);
+    setStatus(`Capturing ${label}…`, "busy");
     try {
-      const result = await runVisibleCapture(host);
+      const result = await runner(host);
       if (!result || result.frames.length === 0) {
         setStatus("Capture cancelled", null);
         return;
       }
-      const frame = result.frames[0]!;
-      // Probe dimensions if the orchestrator left them at 0
-      // (visible-mode does that — the encoder doesn't surface them).
-      let { width, height } = frame;
-      if (!width || !height) {
-        const probed = await probeDataUrlDimensions(frame.dataUrl);
-        width = probed.width;
-        height = probed.height;
-      }
       const sourceUrl = result.target.url;
       const title = result.target.title ?? "";
-      const tags: Record<string, string> = {
-        ...urlTags(sourceUrl),
-        captureId: newIdB58(),
-      };
-
+      const sessionId = result.frames.length > 1 ? newIdB58() : null;
       const store = await getStore();
-      const path = await store.saveImage({
-        originalDataUrl: frame.dataUrl,
-        // `thumbnailDataUrl` is owned by the host's
-        // ThumbnailManager — `DesktopStore.saveImage` ignores any
-        // value passed here. Keep it empty so callers don't waste
-        // a `generateThumbnail` round-trip just to populate it.
-        thumbnailDataUrl: "",
-        annotationsSvg: "",
-        width,
-        height,
-        sourceUrl,
-        tags,
-        folderPath: INBOX_FOLDER,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        pageMetadata: frame.pageMetadata,
-      });
-      setStatus(`Saved to ${path} (${title || sourceUrl})`, "success");
+
+      const savedPaths: string[] = [];
+      for (let i = 0; i < result.frames.length; i++) {
+        const frame = result.frames[i]!;
+        const path = await persistFrame({
+          frame,
+          sourceUrl,
+          store,
+          // Per-page sessions tag every frame with the same
+          // `session` + `sessionKind`; single-frame captures
+          // (visible / area / scroll) skip session tagging
+          // because the editor surfaces them as standalone
+          // records.
+          sessionTags:
+            sessionId !== null
+              ? {
+                  session: sessionId,
+                  sessionKind: result.kind,
+                  sessionIndex: String(i),
+                  sessionTotal: String(result.frames.length),
+                  page: String(i + 1),
+                }
+              : null,
+        });
+        savedPaths.push(path);
+      }
+
+      if (savedPaths.length === 1) {
+        setStatus(`Saved to ${savedPaths[0]} (${title || sourceUrl})`, "success");
+      } else {
+        setStatus(
+          `Saved ${savedPaths.length} pages to ${INBOX_FOLDER}/ (${title || sourceUrl})`,
+          "success",
+        );
+      }
     } catch (err) {
       setStatus(`Capture failed: ${(err as Error).message}`, "error");
     } finally {
-      dom.btnCaptureVisible.disabled = false;
+      setCaptureBusy(false);
     }
   }
 
-  dom.btnCaptureVisible.addEventListener("click", () => void captureVisible());
+  async function persistFrame(input: {
+    frame: CaptureFrame;
+    sourceUrl: string;
+    store: DesktopStore;
+    sessionTags: Record<string, string> | null;
+  }): Promise<string> {
+    let { width, height } = input.frame;
+    if (!width || !height) {
+      const probed = await probeDataUrlDimensions(input.frame.dataUrl);
+      width = probed.width;
+      height = probed.height;
+    }
+    const tags: Record<string, string> = {
+      ...urlTags(input.sourceUrl),
+      captureId: newIdB58(),
+      ...(input.sessionTags ?? {}),
+    };
+    return input.store.saveImage({
+      originalDataUrl: input.frame.dataUrl,
+      // `thumbnailDataUrl` is owned by the host's
+      // ThumbnailManager — `DesktopStore.saveImage` ignores any
+      // value passed here. Keep it empty so callers don't waste
+      // a `generateThumbnail` round-trip just to populate it.
+      thumbnailDataUrl: "",
+      annotationsSvg: "",
+      width,
+      height,
+      sourceUrl: input.sourceUrl,
+      tags,
+      folderPath: INBOX_FOLDER,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      pageMetadata: input.frame.pageMetadata,
+    });
+  }
+
+  dom.btnCaptureVisible.addEventListener("click", () =>
+    void runMode("visible viewport", runVisibleCapture),
+  );
+  dom.btnCaptureArea.addEventListener("click", () =>
+    void runMode("selected area", runAreaCapture),
+  );
+  dom.btnCaptureFull.addEventListener("click", () =>
+    void runMode("full page", runScrollCapture),
+  );
+  dom.btnCapturePages.addEventListener("click", () =>
+    void runMode("per-page", runPerPageCapture),
+  );
 
   // ---- Programmatic navigation from main process ────────────────
   //

@@ -549,32 +549,87 @@ orchestrator instead of the bespoke IPC.
 
 ### Phase 4 — full capture-mode parity on Electron
 
-Bring the remaining 5 modes online by exercising the shared
-orchestrators against the Electron host:
+The Electron Browse window grows from "visible-mode-only" to
+support all six modes via the shared orchestrators. Like Phase 1,
+this is split into two PRs because the foundation (the
+`<webview>` content-script preload bridging `ContentBus` over
+Electron IPC) is non-trivial enough that landing it alongside
+five new mode entry points exceeds the safe-revert ceiling.
 
-- Area capture (drag-select uses existing `area-selector`
-  unchanged).
-- Full-page scroll capture (stitch).
-- Per-page scroll capture (N independent records).
-- Click capture (passes through `__annot.dispatch` event
-  channel).
-- Hotkey capture via Electron's `globalShortcut` API:
-  registered at app level; the currently-focused Browse
-  window is the target. No-op when no Browse window has
-  focus. Multiple Browse windows disambiguated by focus.
-- Right-click context menu inside the target webview
-  (content-script-driven, mirrors the extension's in-page
-  menu) exposes the same six modes.
-- Capture toolbar in `browse.html` grows from one button (📷
-  Visible) to six.
+**Phase 4A — Content preload + Area / Full-Page / Per-Page.**
+Lands the `<webview>` preload that bridges `ContentBus` and
+brings the three single-shot orchestrator modes online.
 
-**Verify**: each mode tested against three reference pages
-(docs site, marketing landing page with sticky header, long
-report). Diffs against extension output are documented;
-remaining gaps (if any) noted in the release notes. Cross-
-platform smoke: at least one full-page run on a macOS box +
-one on Linux confirms uniform behaviour (no per-OS branches
-to gate on).
+- New `packages/desktop/src/browse/content-preload.ts`: bundled
+  via electron-vite's preload sub-build to
+  `dist-electron/preload/content-preload.cjs`. Imports the
+  capture-package content modules + sets up a ContentBus over
+  `ipcRenderer.sendToHost(channel, ...)`; listens for chrome-
+  side requests via `ipcRenderer.on("annot.host.request", ...)`
+  with reqId correlation. Wire format:
+  - `annot.host.request` (chrome → preload): `{ reqId, msg }`
+  - `annot.content.response` (preload → chrome): `{ reqId, ok,
+    result?, error? }`
+  - `annot.content.event` (preload → chrome): one-shot events
+    (area-selected / area-cancelled / page-dimensions /
+    scroll-done / click-detected) — no reqId.
+- `main.ts`'s `will-attach-webview` listener sets the preload
+  path on the embedded webview's `webPreferences`. Done
+  server-side so the renderer doesn't have to thread the
+  preload-URL through IPC at boot.
+- `DesktopCaptureHost` (Phase 3 stub → real implementation):
+  - `sendToContent` becomes a request-response wrapper around
+    `webview.send("annot.host.request", { reqId, msg })` with a
+    timeout-bound pending-promise map.
+  - `onContentMessage` subscribes to `webview`'s `ipc-message`
+    event and dispatches `annot.content.event` payloads to
+    listeners.
+  - `setEmulatedViewport` flips the `<webview>` element's
+    inline `width` / `height` styles.
+  - `injectContentScript` stays a no-op — the preload mechanism
+    is declarative, no per-capture re-injection.
+- `browse.html`: the toolbar grows from one button (📷 Capture
+  Visible) to four (📷 Visible / ⬚ Area / 📄 Full Page / 🗒 Per
+  Page). The 5th + 6th buttons (Click / Hotkey toggles) ship
+  in 4B.
+- `browse.ts`: wires Area / Full-Page / Per-Page buttons to
+  `runAreaCapture` / `runScrollCapture` / `runPerPageCapture`
+  from `@ingcreators/annot-capture/orchestrate`. Each result
+  flows through `DesktopStore.saveImage` (single frame for
+  visible / area / scroll; N frames for per-page).
+
+**Verify (Phase 4A)**: visible-mode capture continues to work.
+Area-mode drag-select cancels cleanly on Escape and produces a
+cropped image on drag-end. Full-page scroll-stitch produces a
+single tall image. Per-page produces N records (one per
+viewport). Sticky / scrollbar hiding kicks in (preload's
+`hide-for-capture` handler runs).
+
+**Phase 4B — Click / Hotkey + right-click context menu.** Builds
+on 4A's preload + IPC plumbing.
+
+- Click-capture state machine in `browse.ts` (mirrors the
+  extension's `clickState` shape — start / stop session
+  bookkeeping, badge count, per-frame `click.*` tags).
+  Content-side: preload's `bus.send({type: "click-detected",
+  ...})` accumulates clicks while click-capture is active.
+- Hotkey-capture state machine + Electron's `globalShortcut`
+  registered at app level. The currently-focused Browse window
+  is the target. No-op when no Browse window has focus.
+- Right-click context menu inside the target webview: preload
+  installs a `contextmenu` listener that posts a
+  `context-menu-request` event to the host, which renders the
+  same six-mode menu the toolbar exposes.
+- Capture toolbar in `browse.html` grows to six entries (Click
+  ▶/■ + Hotkey ▶/■ toggles join the 4 from 4A).
+
+**Verify (Phase 4B)**: each mode tested against three
+reference pages (docs site, marketing landing page with sticky
+header, long report). Diffs against extension output are
+documented; remaining gaps (if any) noted in the release
+notes. Cross-platform smoke: at least one full-page run on a
+macOS box + one on Linux confirms uniform behaviour (no
+per-OS branches to gate on).
 
 ### Phase 5 — multi-tab + `window.open` routing
 

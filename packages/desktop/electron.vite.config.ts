@@ -74,8 +74,17 @@ export default defineConfig({
     plugins: [externalizeDepsPlugin({ exclude: WORKSPACE_PACKAGES_TO_BUNDLE })],
     build: {
       outDir: resolve(__dirname, "dist-electron/preload"),
+      // Two preload bundles:
+      //   - `preload.cjs` — chrome's preload (electronAPI bridge)
+      //   - `content-preload.cjs` — webview preload that runs
+      //     inside the embedded `<webview>` to bridge the
+      //     capture-package's `ContentBus` over IPC. Phase 4A of
+      //     `desktop-browser-mode.md`.
       lib: {
-        entry: resolve(__dirname, "src-electron/preload.ts"),
+        entry: {
+          preload: resolve(__dirname, "src-electron/preload.ts"),
+          "content-preload": resolve(__dirname, "src/browse/content-preload.ts"),
+        },
         formats: ["cjs"],
       },
     },
