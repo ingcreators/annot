@@ -13,7 +13,7 @@
 
 import type { Meta, StoryObj } from "@storybook/web-components-vite";
 import "./annot-tool-properties-section.js";
-import type { Toolbar } from "@ingcreators/annot-editor-shell/toolbar";
+import type { Toolbar } from "@ingcreators/annot-host-ui/toolbar";
 
 interface Args {
   toolId: string;

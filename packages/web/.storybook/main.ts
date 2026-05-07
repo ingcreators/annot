@@ -22,14 +22,14 @@
 import type { StorybookConfig } from "@storybook/web-components-vite";
 
 const config: StorybookConfig = {
-  // Both `packages/web/src/` and `packages/editor-shell/src/` so
+  // Both `packages/web/src/` and `packages/host-ui/src/` so
   // built-in Lit components migrated out of the web package per
   // `docs/plans/_done/vscode-extension-host.md` continue to appear
   // in the same Storybook bundle. Stories stay co-located with
   // their component source per CLAUDE.md.
   stories: [
     "../src/**/*.stories.ts",
-    "../../editor-shell/src/**/*.stories.ts",
+    "../../host-ui/src/**/*.stories.ts",
   ],
   framework: {
     name: "@storybook/web-components-vite",

@@ -35,7 +35,7 @@
 > surface the PWA already uses, with the Tauri/Electron desktop
 > joining the PWA as a second consumer once this plan lands. The
 > long-term convergence goal (gallery surface lives in
-> `@ingcreators/annot-editor-shell` so VSCode and future hosts
+> `@ingcreators/annot-host-ui` so VSCode and future hosts
 > share it too) is a separate follow-up plan, not a prerequisite
 > here — see Phase 0 audit's gap #2 and the forward-looking note
 > in `Migration notes` below.
@@ -106,7 +106,7 @@ has stayed numeric-ID-keyed ever since.
 This is fine in isolation, but causes friction:
 
 - The desktop renderer's gallery code can't reuse any UI from
-  `@ingcreators/annot-editor-shell` /
+  `@ingcreators/annot-host-ui` /
   `@ingcreators/annot-web` — every other host gets the unified
   `<annot-file-manager-shell>` for free; desktop reimplements.
 - New gallery features (search refinements, sort orders, batch
@@ -621,7 +621,7 @@ Whole-plan acceptance criteria:
     the desktop renderer goes through `bridge.ts`. The
     `annot-cloud` pointer-commit store, in particular,
     can land on the desktop with no extra work.
-  - **File-manager extraction into `@ingcreators/annot-editor-shell`**:
+  - **File-manager extraction into `@ingcreators/annot-host-ui`**:
     today the unified gallery surface
     (`<annot-file-manager-shell>` / `<annot-sidebar>` /
     `<annot-gallery-page>` / `FileManager`) lives under
@@ -632,7 +632,7 @@ Whole-plan acceptance criteria:
     [`_done/vscode-extension-host.md`](./_done/vscode-extension-host.md)
     and
     [`_done/editor-session-shell-switchover.md`](./_done/editor-session-shell-switchover.md)
-    pattern: lift the gallery into `@ingcreators/annot-editor-shell`
+    pattern: lift the gallery into `@ingcreators/annot-host-ui`
     so VSCode and future hosts can mount the same chrome
     against their own `StorageProvider` the way they already
     do with `EditorShell.mountFromRecord`. Recommended timing:

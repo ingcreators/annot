@@ -25,7 +25,7 @@
 >   currently round-trips the original bytes only.
 >
 > **Original status:** Draft
-> **Compatibility:** Adds new packages (`@ingcreators/annot-editor-shell`,
+> **Compatibility:** Adds new packages (`@ingcreators/annot-host-ui`,
 >                    `@ingcreators/annot-vscode`); no renames to
 >                    existing packages. `StorageProvider` unchanged
 >                    (VSCodeStore is just another implementation).
@@ -97,7 +97,7 @@ host, different `StorageProvider`.
 ### New packages
 
 ```
-@ingcreators/annot-editor-shell   NEW: per-image editor lifecycle,
+@ingcreators/annot-host-ui   NEW: per-image editor lifecycle,
                                    host-neutral. Mounts into a host-
                                    provided HTMLElement; takes a
                                    StorageProvider and a feature-flag
@@ -353,7 +353,7 @@ This phase exists because the extraction is large enough that
 guessing wrong about the boundary will cause Phase 1 to balloon.
 A dedicated read-only pass de-risks the rest.
 
-### Phase 1 — Scaffold `@ingcreators/annot-editor-shell`
+### Phase 1 — Scaffold `@ingcreators/annot-host-ui`
 
 Create the package with:
 
@@ -362,7 +362,7 @@ Create the package with:
 - `src/index.ts` re-exporting `EditorShell` (initially a stub class
   with the agreed signature, throwing in `open()`).
 - A round-trip test that asserts `import { EditorShell } from
-  "@ingcreators/annot-editor-shell"` resolves and the constructor
+  "@ingcreators/annot-host-ui"` resolves and the constructor
   type-checks against the documented `EditorShellHost` shape.
 - CI workspace-build entry; the pnpm filter recognises the new
   package.
@@ -497,7 +497,7 @@ Each bullet is a sub-PR.
   landed table.
 - Add a CLAUDE.md guardrail: "the editor shell mounts into a
   host-supplied container and never reaches into PWA-shell DOM
-  ids; new editor UI lives in `@ingcreators/annot-editor-shell`,
+  ids; new editor UI lives in `@ingcreators/annot-host-ui`,
   not in `packages/web/src/editor/`".
 - Add a CI invariant to the `headless.test.ts` family: load
   `editor-shell` under jsdom with a synthetic container; assert
@@ -510,7 +510,7 @@ Per phase:
 
 - Phase 0: coupling audit doc reviewed; no code changes.
 - Phase 1: `pnpm -r typecheck` + `pnpm -r build` green;
-  `import { EditorShell } from "@ingcreators/annot-editor-shell"`
+  `import { EditorShell } from "@ingcreators/annot-host-ui"`
   resolves.
 - Phase 2 (each sub-PR): `pnpm -r typecheck`, Storybook bundle
   builds, renderer goldens unchanged, manual click-test of the

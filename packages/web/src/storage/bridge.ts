@@ -35,7 +35,7 @@ declare global {
 
 // Phase 2 of `docs/plans/host-convergence.md` lifted the
 // `BUILT_IN_STORAGE_MODES` / `StorageMode` / `BuiltInStorageMode`
-// surface into `@ingcreators/annot-editor-shell/storage-mode` so
+// surface into `@ingcreators/annot-host-ui/storage-mode` so
 // the gallery (now in editor-shell) sees the same source of truth.
 // Re-export keeps existing `import { … } from "./bridge.js"` /
 // `from "../storage/bridge.js"` call sites compiling untouched.
@@ -43,10 +43,10 @@ export {
   BUILT_IN_STORAGE_MODES,
   type BuiltInStorageMode,
   type StorageMode,
-} from "@ingcreators/annot-editor-shell/storage-mode";
+} from "@ingcreators/annot-host-ui/storage-mode";
 
-import type { StorageMode } from "@ingcreators/annot-editor-shell/storage-mode";
-import { BUILT_IN_STORAGE_MODES } from "@ingcreators/annot-editor-shell/storage-mode";
+import type { StorageMode } from "@ingcreators/annot-host-ui/storage-mode";
+import { BUILT_IN_STORAGE_MODES } from "@ingcreators/annot-host-ui/storage-mode";
 
 /**
  * State container for the bridge — collapses the per-backend

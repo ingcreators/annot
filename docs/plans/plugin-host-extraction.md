@@ -1,4 +1,4 @@
-# Plugin host extraction (`PluginHost` class → editor-shell)
+# Plugin host extraction (`PluginHost` class → host-ui)
 
 > **Status:** Draft
 >
@@ -11,7 +11,7 @@
 > The `AnnotPlugin` shape and `PluginContext` surface stay byte-for-
 > byte equivalent. Only the import path changes
 > (`@ingcreators/annot-web/app/plugin-host` →
-> `@ingcreators/annot-editor-shell/plugin-host`); plugin authors
+> `@ingcreators/annot-host-ui/plugin-host`); plugin authors
 > who import the old path get a re-export shim during the migration
 > that gets cleaned up in the final phase.
 >
@@ -25,8 +25,8 @@
 [`host-convergence.md`](./host-convergence.md) Phase 4 moves the
 plugin-host **types** (`SidebarTab`, `StorageRegistration`,
 `NewMenuItem`, `UISection*`, `ExternalLink*`, etc.) into
-`@ingcreators/annot-editor-shell` so the gallery (also moving to
-editor-shell in Phase 2) can import them without back-channelling
+`@ingcreators/annot-host-ui` so the gallery (also moving to
+host-ui in Phase 2) can import them without back-channelling
 through `annot-web`. That's the minimum needed for the gallery
 move.
 
@@ -44,7 +44,7 @@ The plan is queued separately because:
   the extension manifest's `contributes` field) lands, this plan
   becomes the prerequisite.
 - Until that trigger, [`host-convergence.md`](./host-convergence.md)
-  Phase 4 is a clean stopping point: types in editor-shell, class
+  Phase 4 is a clean stopping point: types in host-ui, class
   in `annot-web`, no host beyond PWA needs the class.
 
 ## Current state
@@ -68,7 +68,7 @@ Imports today:
 import type { IconSpec } from "@ingcreators/annot-core";                       // shared
 import type { StorageProvider } from "@ingcreators/annot-core/storage";        // shared
 import { BUILT_IN_STORAGE_MODES } from "../storage/bridge.js";                  // PWA-only
-import type { ... } from "@ingcreators/annot-editor-shell/ui-section";         // already shared
+import type { ... } from "@ingcreators/annot-host-ui/ui-section";         // already shared
 ```
 
 The lone PWA-internal dependency is `BUILT_IN_STORAGE_MODES`, used
@@ -78,7 +78,7 @@ built-in storage backends.
 ## Convergence target
 
 ```
-packages/editor-shell/src/
+packages/host-ui/src/
   plugin-host-types.ts           ← from host-convergence Phase 4
   plugin-host.ts                 ← NEW (this plan)
 ```
@@ -99,8 +99,8 @@ phase:
 
 ```ts
 // During migration (Phase 1):
-export { PluginHost } from "@ingcreators/annot-editor-shell/plugin-host";
-export type { ... } from "@ingcreators/annot-editor-shell/plugin-host";
+export { PluginHost } from "@ingcreators/annot-host-ui/plugin-host";
+export type { ... } from "@ingcreators/annot-host-ui/plugin-host";
 
 // After cleanup (Phase 2):
 // (file deleted)
@@ -110,7 +110,7 @@ export type { ... } from "@ingcreators/annot-editor-shell/plugin-host";
 
 ### Phase 1 — Move + inject
 
-1. Copy `packages/web/src/app/plugin-host.ts` → `packages/editor-shell/src/plugin-host.ts`.
+1. Copy `packages/web/src/app/plugin-host.ts` → `packages/host-ui/src/plugin-host.ts`.
 2. Replace the `BUILT_IN_STORAGE_MODES` import with a constructor option:
    ```ts
    constructor(opts: { builtinStorageModes?: readonly string[] } = {}) {
@@ -118,10 +118,10 @@ export type { ... } from "@ingcreators/annot-editor-shell/plugin-host";
    }
    ```
 3. Update `registerStorage` to read `this.#builtinStorageModes` instead of the imported constant.
-4. Add the new subpath export to `packages/editor-shell/package.json` (`"./plugin-host": "./src/plugin-host.ts"`).
+4. Add the new subpath export to `packages/host-ui/package.json` (`"./plugin-host": "./src/plugin-host.ts"`).
 5. Replace `packages/web/src/app/plugin-host.ts` with a re-export shim.
 6. PWA's `app.ts` updates `new PluginHost()` → `new PluginHost({ builtinStorageModes: BUILT_IN_STORAGE_MODES })`.
-7. PWA's tests (`plugin-host.test.ts`) move with the class to `editor-shell/src/plugin-host.test.ts`. Tests pass with the same fixtures because the constructor option default-empty matches the legacy "no built-ins" code path the tests already use.
+7. PWA's tests (`plugin-host.test.ts`) move with the class to `host-ui/src/plugin-host.test.ts`. Tests pass with the same fixtures because the constructor option default-empty matches the legacy "no built-ins" code path the tests already use.
 
 **Verification.**
 - `pnpm -r typecheck`, `pnpm test`.
@@ -130,7 +130,7 @@ export type { ... } from "@ingcreators/annot-editor-shell/plugin-host";
 
 ### Phase 2 — PWA migrates off the shim
 
-1. Rewrite PWA imports of `./app/plugin-host.js` to `@ingcreators/annot-editor-shell/plugin-host`.
+1. Rewrite PWA imports of `./app/plugin-host.js` to `@ingcreators/annot-host-ui/plugin-host`.
 2. Delete the re-export shim at `packages/web/src/app/plugin-host.ts`.
 
 **Verification.**
@@ -140,7 +140,7 @@ export type { ... } from "@ingcreators/annot-editor-shell/plugin-host";
 ### Phase 3 — Documentation + plan archival
 
 1. Update [`docs/plugin-api/storage.md`](../plugin-api/storage.md) and any other plugin-author docs that reference the old import path.
-2. Update CLAUDE.md's "Public API of `@ingcreators/annot-editor-shell`" guardrail to mention the new `plugin-host` subpath.
+2. Update CLAUDE.md's "Public API of `@ingcreators/annot-host-ui`" guardrail to mention the new `plugin-host` subpath.
 3. Move this plan to `_done/` with a `Done (YYYY-MM-DD)` status header.
 
 ## Concrete consumer scenarios
@@ -195,6 +195,6 @@ plan's Phase 1.
 
 ## Resolved decisions
 
-- **Class moves to editor-shell, not a new dedicated package.** Recommendation captured here: the class is small (~580 LOC including types) and has zero external dependencies beyond `annot-core` + `editor-shell/ui-section`. Spinning up a new `@ingcreators/annot-plugin-host` package would add publishing + versioning overhead with no payoff. Editor-shell is the right home — every plugin-loading host already consumes editor-shell.
-- **Built-in storage modes injected as constructor option.** Avoids circular dependency (`editor-shell` → `web/storage/bridge`) and keeps the class host-agnostic. Default-empty preserves test fixtures.
+- **Class moves to host-ui, not a new dedicated package.** Recommendation captured here: the class is small (~580 LOC including types) and has zero external dependencies beyond `annot-core` + `host-ui/ui-section`. Spinning up a new `@ingcreators/annot-plugin-host` package would add publishing + versioning overhead with no payoff. Editor-shell is the right home — every plugin-loading host already consumes host-ui.
+- **Built-in storage modes injected as constructor option.** Avoids circular dependency (`host-ui` → `web/storage/bridge`) and keeps the class host-agnostic. Default-empty preserves test fixtures.
 - **PWA's plugin entry-point shape (`App.init({ plugins })`) unchanged.** The class moves; the integration point stays in `AnnotApp`. No plugin author rewrites their manifest.

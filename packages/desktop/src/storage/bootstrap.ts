@@ -27,11 +27,11 @@ import type { ImageRecord } from "@ingcreators/annot-core/storage";
 import {
   FileManager,
   type FileManagerCallbacks,
-} from "@ingcreators/annot-editor-shell/gallery/file-manager";
-import type { NewMenuItem } from "@ingcreators/annot-editor-shell/gallery/sidebar";
-import { IndexedDBThumbnailCache } from "@ingcreators/annot-editor-shell/idb-thumbnail-cache";
-import type { StorageMode } from "@ingcreators/annot-editor-shell/storage-mode";
-import { ThumbnailManager } from "@ingcreators/annot-editor-shell/thumbnail-manager";
+} from "@ingcreators/annot-host-ui/gallery/file-manager";
+import type { NewMenuItem } from "@ingcreators/annot-host-ui/gallery/sidebar";
+import { IndexedDBThumbnailCache } from "@ingcreators/annot-host-ui/idb-thumbnail-cache";
+import type { StorageMode } from "@ingcreators/annot-host-ui/storage-mode";
+import { ThumbnailManager } from "@ingcreators/annot-host-ui/thumbnail-manager";
 import { createElectronDesktopFs, type DesktopFs, type ElectronApi } from "./desktop-fs.js";
 import { DesktopStore } from "./desktop-store.js";
 

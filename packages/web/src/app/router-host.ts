@@ -15,7 +15,7 @@
  */
 
 import type { ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
-import type { FileManager } from "@ingcreators/annot-editor-shell/gallery/file-manager";
+import type { FileManager } from "@ingcreators/annot-host-ui/gallery/file-manager";
 import { logger } from "../logger.js";
 import { editUrl, galleryUrl, parseRoute, pushRoute, sessionEditUrl } from "../router.js";
 import {

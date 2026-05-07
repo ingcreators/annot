@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 //
-// Phase 3 implementation tests for `@ingcreators/annot-editor-shell`.
+// Phase 3 implementation tests for `@ingcreators/annot-host-ui`.
 // happy-dom supplies the DOM + customElements registry the shell's
 // internal CanvasManager / SelectionManager / History need to wire
 // up listeners on a real `<svg>`.

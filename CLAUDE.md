@@ -45,16 +45,16 @@ packages/
   render/       Tier C-render. Data-driven `ImageRecord`
                 rasterisation + the shared OOXML DrawingML builder.
                 npm name: @ingcreators/annot-render
-  editor-shell/ Host-neutral editor surface — toolbar, drawer,
+  host-ui/ Host-neutral editor surface — toolbar, drawer,
                 right-panel, scratchpad UI, file-details, the
                 <annot-*> Lit components, the lit.ts re-export,
                 the UISection types, the EditorShell per-image
                 lifecycle. Hosts (web, vscode, future desktop)
                 consume it via `import { EditorShell, ... } from
-                "@ingcreators/annot-editor-shell"`.
-                npm name: @ingcreators/annot-editor-shell
+                "@ingcreators/annot-host-ui"`.
+                npm name: @ingcreators/annot-host-ui
   web/          PWA host. Owns routing, storage impls, right panel
-                (mounts editor-shell components).
+                (mounts host-ui components).
                 npm name: @ingcreators/annot-web
   vscode/       VSCode extension host. Custom editor for
                 `*.annot.{svg,png,jpeg,jpg}` files; webview hosts
@@ -483,16 +483,16 @@ choices.
 - When in doubt, match the language of surrounding text in the file
   being edited.
 
-### 10. Editor surface lives in `@ingcreators/annot-editor-shell`
+### 10. Editor surface lives in `@ingcreators/annot-host-ui`
 
 The host-neutral editor surface (per-image lifecycle, toolbar,
 drawer, right-panel, scratchpad UI, file-details, the `<annot-*>`
 Lit components, the `lit.ts` re-export, the `UISection` types,
 the `<annot-icon>` Lit wrapper) lives in the
-`@ingcreators/annot-editor-shell` workspace package, not in
+`@ingcreators/annot-host-ui` workspace package, not in
 `packages/web/src/editor/`. Hosts (PWA, VSCode, future
 desktop-direct, …) consume it via `import { EditorShell, ... }
-from "@ingcreators/annot-editor-shell"`.
+from "@ingcreators/annot-host-ui"`.
 
 **The shell mounts into a host-supplied `HTMLElement` and reads
 / writes through a host-supplied `StorageProvider`.** It MUST
@@ -507,15 +507,15 @@ consumer (PWA's `EditorSession` etc.).
 
 When adding new editor UI:
 
-- New built-in Lit components → `packages/editor-shell/src/`.
+- New built-in Lit components → `packages/host-ui/src/`.
   They follow the same `annot-*` custom-element naming as
   before, the same hybrid-CSS migration stance, and the same
   Storybook coverage requirement (every LitElement under
-  `editor-shell/src/` ships at least one co-located
+  `host-ui/src/` ships at least one co-located
   `*.stories.ts`; the `packages/web/.storybook/main.ts`
   `stories` glob already covers
-  `../../editor-shell/src/**/*.stories.ts`).
-- New tools (`ToolBase` subclasses) → `packages/editor-shell/src/`
+  `../../host-ui/src/**/*.stories.ts`).
+- New tools (`ToolBase` subclasses) → `packages/host-ui/src/`
   (Tier C surface — they construct against `CanvasManager` which
   needs a real browser).
 - Pure data / Tier A or Tier B helpers stay in
@@ -526,11 +526,11 @@ When adding new editor UI:
   duplicate them.
 
 Boundary check: the CI invariant in
-[`packages/editor-shell/src/host-boundary.test.ts`](./packages/editor-shell/src/host-boundary.test.ts)
-exercises the editor-shell surface under happy-dom with a
+[`packages/host-ui/src/host-boundary.test.ts`](./packages/host-ui/src/host-boundary.test.ts)
+exercises the host-ui surface under happy-dom with a
 synthetic container and asserts no `document.getElementById`
 call ever queries one of the PWA-shell DOM ids listed above.
-Adding a new PWA-shell DOM id to the editor-shell source breaks
+Adding a new PWA-shell DOM id to the host-ui source breaks
 the test — at which point the right move is either to inject
 the value as a host parameter or to leave the call in the
 consumer.

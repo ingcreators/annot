@@ -54,7 +54,7 @@ import { defineConfig, externalizeDepsPlugin } from "electron-vite";
 const WORKSPACE_PACKAGES_TO_BUNDLE = [
   "@ingcreators/annot-core",
   "@ingcreators/annot-editor",
-  "@ingcreators/annot-editor-shell",
+  "@ingcreators/annot-host-ui",
   "@ingcreators/annot-web",
 ];
 

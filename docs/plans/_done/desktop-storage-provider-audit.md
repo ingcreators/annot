@@ -165,10 +165,10 @@ The migration is a **net feature gain**, not a parity break.
 
 2. **`<annot-file-manager-shell>` + `FileManager` are
    `@ingcreators/annot-web`-resident, not
-   `@ingcreators/annot-editor-shell`.** The parent plan's
+   `@ingcreators/annot-host-ui`.** The parent plan's
    Design / Renderer-integration section says "mounts
    `<annot-file-manager-shell>` (Lit component from
-   `@ingcreators/annot-editor-shell`)." Today the unified
+   `@ingcreators/annot-host-ui`)." Today the unified
    gallery shell, sidebar, gallery-page, and file-manager
    orchestrator all live under
    [`packages/web/src/gallery/`](../../packages/web/src/gallery/).
@@ -272,7 +272,7 @@ Summary of the pre-implementation actions that should land
 before Phase 1 starts:
 
 1. **Update the parent plan's import-path references** from
-   `@ingcreators/annot-editor-shell` to
+   `@ingcreators/annot-host-ui` to
    `@ingcreators/annot-web/gallery/...` (or file the
    file-manager-extraction follow-up plan and decide whether to
    block on it). See gap #2.

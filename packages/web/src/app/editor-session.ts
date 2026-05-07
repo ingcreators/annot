@@ -19,23 +19,23 @@ import { getFilename } from "@ingcreators/annot-core/storage";
 import { assertNonNull } from "@ingcreators/annot-core/utils";
 import type { CanvasManager, History, SelectionManager } from "@ingcreators/annot-editor";
 import { openAnchoredPopover } from "@ingcreators/annot-editor";
-import type { AnnotFileDetailsDrawerElement } from "@ingcreators/annot-editor-shell/annot-file-details-drawer";
-import { estimateDataUrlBytes } from "@ingcreators/annot-editor-shell/annot-file-details-drawer";
-import { Toolbar } from "@ingcreators/annot-editor-shell/toolbar";
-import "@ingcreators/annot-editor-shell/annot-file-details-drawer";
-import { EditorShell, installKeyboardHelp } from "@ingcreators/annot-editor-shell";
-import type { AnnotEditorRightPanelElement } from "@ingcreators/annot-editor-shell/right-panel";
-import "@ingcreators/annot-editor-shell/right-panel";
+import type { AnnotFileDetailsDrawerElement } from "@ingcreators/annot-host-ui/annot-file-details-drawer";
+import { estimateDataUrlBytes } from "@ingcreators/annot-host-ui/annot-file-details-drawer";
+import { Toolbar } from "@ingcreators/annot-host-ui/toolbar";
+import "@ingcreators/annot-host-ui/annot-file-details-drawer";
+import { EditorShell, installKeyboardHelp } from "@ingcreators/annot-host-ui";
+import type { AnnotEditorRightPanelElement } from "@ingcreators/annot-host-ui/right-panel";
+import "@ingcreators/annot-host-ui/right-panel";
 import {
   type AnnotScratchpadSectionElement,
   renderThumbnail,
   ScratchpadPasteTool,
   serializeSelection,
-} from "@ingcreators/annot-editor-shell";
-import "@ingcreators/annot-editor-shell/annot-scratchpad-section";
-import type { HeaderHost } from "@ingcreators/annot-editor-shell/orchestrators/header-host";
-import type { SavePipeline } from "@ingcreators/annot-editor-shell/orchestrators/save-pipeline";
-import type { StatusHost } from "@ingcreators/annot-editor-shell/orchestrators/status-host";
+} from "@ingcreators/annot-host-ui";
+import "@ingcreators/annot-host-ui/annot-scratchpad-section";
+import type { HeaderHost } from "@ingcreators/annot-host-ui/orchestrators/header-host";
+import type { SavePipeline } from "@ingcreators/annot-host-ui/orchestrators/save-pipeline";
+import type { StatusHost } from "@ingcreators/annot-host-ui/orchestrators/status-host";
 import type { ScratchpadStore } from "../editor/scratchpad-store.js";
 import { getStorageMode } from "../storage/bridge.js";
 import { addClickMarker } from "./click-marker.js";

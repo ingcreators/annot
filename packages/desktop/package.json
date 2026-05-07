@@ -97,7 +97,7 @@
   "dependencies": {
     "@ingcreators/annot-core": "workspace:*",
     "@ingcreators/annot-editor": "workspace:*",
-    "@ingcreators/annot-editor-shell": "workspace:*",
+    "@ingcreators/annot-host-ui": "workspace:*",
     "@ingcreators/annot-web": "workspace:*",
     "js-yaml": "^4.1.1"
   },

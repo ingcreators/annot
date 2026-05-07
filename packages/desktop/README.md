@@ -59,7 +59,7 @@ output) packages installers — see Distribution below.
 
 - [`@ingcreators/annot-core`](../core)
 - [`@ingcreators/annot-editor`](../editor)
-- [`@ingcreators/annot-editor-shell`](../editor-shell)
+- [`@ingcreators/annot-host-ui`](../editor-shell)
 - [`@ingcreators/annot-web`](../web)
 
 ## Distribution

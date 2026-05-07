@@ -15,9 +15,9 @@
 import type { StorageProvider } from "@ingcreators/annot-core/storage";
 import { newIdB58 } from "@ingcreators/annot-core/utils";
 import { readEditableImage } from "@ingcreators/annot-core/xmp";
-import type { FileManager } from "@ingcreators/annot-editor-shell/gallery/file-manager";
-import { generateThumbnailFromDataUrl } from "@ingcreators/annot-editor-shell/image-thumbnail";
-import type { ThumbnailManager } from "@ingcreators/annot-editor-shell/thumbnail-manager";
+import type { FileManager } from "@ingcreators/annot-host-ui/gallery/file-manager";
+import { generateThumbnailFromDataUrl } from "@ingcreators/annot-host-ui/image-thumbnail";
+import type { ThumbnailManager } from "@ingcreators/annot-host-ui/thumbnail-manager";
 import {
   loadCursorPreference,
   saveCursorPreference,

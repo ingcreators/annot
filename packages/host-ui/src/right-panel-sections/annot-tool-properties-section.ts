@@ -17,7 +17,7 @@
  * for tools that have no adjustable properties (`crop`).
  */
 
-import type { Toolbar } from "@ingcreators/annot-editor-shell/toolbar";
+import type { Toolbar } from "@ingcreators/annot-host-ui/toolbar";
 import type { UISection } from "../ui-section.js";
 import { html, LitElement } from "../lit.js";
 

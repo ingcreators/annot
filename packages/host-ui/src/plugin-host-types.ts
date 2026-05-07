@@ -1,7 +1,7 @@
 /**
  * Plugin-host structural types — host-neutral surface area shared
  * between `@ingcreators/annot-web`'s `PluginHost` class and the
- * gallery in `@ingcreators/annot-editor-shell/gallery/*`.
+ * gallery in `@ingcreators/annot-host-ui/gallery/*`.
  *
  * Phase 2 of `docs/plans/host-convergence.md` extracts these from
  * `packages/web/src/app/plugin-host.ts` (which still owns the

@@ -8,7 +8,7 @@ import "@ingcreators/annot-core/styles/editor.css";
 import "@ingcreators/annot-core/styles/toolbar.css";
 import "@ingcreators/annot-core/styles/property-panel.css";
 import "@ingcreators/annot-core/styles/fonts.css";
-import "@ingcreators/annot-editor-shell/styles/file-manager.css";
+import "@ingcreators/annot-host-ui/styles/file-manager.css";
 import "../styles/app.css";
 
 import { applyPersistedTheme } from "@ingcreators/annot-editor";
@@ -22,10 +22,10 @@ import {
   type AnnotFileDetailsDrawerElement,
   EditorShell,
   installKeyboardHelp,
-} from "@ingcreators/annot-editor-shell";
-import type { AnnotEditorRightPanelElement } from "@ingcreators/annot-editor-shell/right-panel";
-import "@ingcreators/annot-editor-shell/right-panel";
-import "@ingcreators/annot-editor-shell/editor-statusbar";
+} from "@ingcreators/annot-host-ui";
+import type { AnnotEditorRightPanelElement } from "@ingcreators/annot-host-ui/right-panel";
+import "@ingcreators/annot-host-ui/right-panel";
+import "@ingcreators/annot-host-ui/editor-statusbar";
 import {
   captureScreen,
   isDesktop,
@@ -33,11 +33,11 @@ import {
   restoreMainWindow,
 } from "@ingcreators/annot-core/desktop-bridge";
 import { getFilename, type ImageRecord } from "@ingcreators/annot-core/storage";
-import { estimateDataUrlBytes } from "@ingcreators/annot-editor-shell";
-import { HeaderHost } from "@ingcreators/annot-editor-shell/orchestrators/header-host";
-import { SavePipeline } from "@ingcreators/annot-editor-shell/orchestrators/save-pipeline";
-import { StatusHost } from "@ingcreators/annot-editor-shell/orchestrators/status-host";
-import { Toolbar } from "@ingcreators/annot-editor-shell/toolbar";
+import { estimateDataUrlBytes } from "@ingcreators/annot-host-ui";
+import { HeaderHost } from "@ingcreators/annot-host-ui/orchestrators/header-host";
+import { SavePipeline } from "@ingcreators/annot-host-ui/orchestrators/save-pipeline";
+import { StatusHost } from "@ingcreators/annot-host-ui/orchestrators/status-host";
+import { Toolbar } from "@ingcreators/annot-host-ui/toolbar";
 import { bootstrapDesktopFsGallery, type DesktopGalleryHandle } from "../storage/bootstrap.js";
 
 // Restore the user's last-chosen theme + any saved token overrides

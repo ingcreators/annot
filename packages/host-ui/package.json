@@ -1,11 +1,11 @@
 {
-  "name": "@ingcreators/annot-editor-shell",
+  "name": "@ingcreators/annot-host-ui",
   "version": "0.1.0",
   "private": true,
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ingcreators/annot.git",
-    "directory": "packages/editor-shell"
+    "directory": "packages/host-ui"
   },
   "type": "module",
   "main": "./dist/index.js",
