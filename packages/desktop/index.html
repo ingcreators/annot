@@ -18,40 +18,40 @@
   <div id="app-root">
     <!--
       Editor view (shown when editing). Mirrors the PWA's editor-mode
-      layout: vertical tool strip on the left (`#editor-sidebar` from
-      `@ingcreators/annot-core/styles/editor.css`), canvas in the
-      middle, statusbar at the bottom.
+      layout (Phase 1 of `docs/plans/host-convergence.md`):
 
-      The PWA also has an `<div id="editor-header">` at the top
-      carrying brand + breadcrumb + save/copy + theme. The desktop
-      omits it because the native window menu (File / Edit / View /
-      Window) plus the per-tool save / theme buttons already inside
-      the vertical toolbar (showSaveGroup + showThemeToggle on the
-      Toolbar options) cover those actions. `app.css` overrides
-      `top: 0` on the sidebar + canvas to reclaim the 48px the PWA
-      reserves for editor-header.
+        +-----------------------------------------------+
+        | #editor-header (48px)                         |
+        +----+--------------------------------+--------+
+        | #  |                                | #      |
+        | ed |        #canvas-container       | editor |
+        | it |                                | -right |
+        | or |                                | -panel |
+        | -s |                                |        |
+        | id |                                |        |
+        | eb |                                |        |
+        | ar |                                |        |
+        +----+--------------------------------+--------+
+        | #statusbar (28px)                              |
+        +-----------------------------------------------+
+
+      All five chrome surfaces are absolute-positioned children of
+      `#editor-view` (which is a static, full-viewport block). The
+      CSS in `@ingcreators/annot-core/styles/editor.css` watches
+      `body.editor-mode` and `body.has-right-panel` to show / hide
+      and lay out each surface; `app.ts` toggles `body.editor-mode`
+      on entry / exit, and the `<annot-editor-right-panel>` Lit
+      element toggles `body.has-right-panel` itself in its
+      connected / disconnected callbacks.
     -->
     <div id="editor-view" style="display:none;">
+      <div id="editor-header"></div>
       <div id="editor-sidebar"></div>
       <div id="canvas-container">
         <svg id="svg-root" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"></svg>
       </div>
-      <div id="statusbar">
-        <button id="btn-back" class="status-btn">&larr; Back</button>
-        <div id="zoom-controls">
-          <button id="btn-zoom-out" class="zoom-btn"
-            ><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" fill="currentColor" aria-hidden="true"><path d="M200-450v-60h560v60H200Z"/></svg></button>
-          <div class="zoom-select-wrap">
-            <button id="btn-zoom-label" class="zoom-label">100%</button>
-            <div id="zoom-menu" class="zoom-menu" style="display:none;"></div>
-          </div>
-          <button id="btn-zoom-in" class="zoom-btn"
-            ><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" fill="currentColor" aria-hidden="true"><path d="M450-450H200v-60h250v-250h60v250h250v60H510v250h-60v-250Z"/></svg></button>
-        </div>
-        <span id="status-size"></span>
-        <span class="toolbar-spacer"></span>
-        <span id="status-tool">Select</span>
-      </div>
+      <div id="editor-right-panel"></div>
+      <div id="statusbar"></div>
     </div>
 
     <!--
