@@ -66,11 +66,9 @@ export { History } from "./history.js";
 // `@ingcreators/annot-render` so storage backends and gallery
 // bulk-export can reach it without pulling in the editor.
 export {
-  copyAnnotationsAsImage,
   copyAsImage,
   downloadAsImage,
   exportAnnotationsSvgForIdb,
-  exportExcelSVG,
   exportSVGString,
   getPngDataUrl,
   saveToFile,

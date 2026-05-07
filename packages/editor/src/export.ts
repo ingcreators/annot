@@ -1,7 +1,6 @@
 import { cssStackFor, LOGICAL_FAMILIES } from "@ingcreators/annot-core/headless";
 import { createEditableImage } from "@ingcreators/annot-core/xmp";
 import type { CanvasManager } from "./canvas-manager.js";
-import { stampAnnotVersion } from "@ingcreators/annot-core/editor/svg-format";
 import { defaultAnnotFilenameStem } from "@ingcreators/annot-core/utils";
 
 export function exportSVGString(canvas: CanvasManager): string {
@@ -58,50 +57,6 @@ function injectLogicalFontStyles(svg: SVGSVGElement): void {
   }
   style.textContent = rules.join("\n");
   defs.appendChild(style);
-}
-
-/**
- * Excel-compatible SVG: only basic shapes, no defs/markers/images/xlink.
- * Arrows are converted from <line>+marker to <path> with arrowhead polygon.
- */
-export function exportExcelSVG(canvas: CanvasManager): string {
-  const SVG_NS = "http://www.w3.org/2000/svg";
-
-  const svg = document.createElementNS(SVG_NS, "svg");
-  svg.setAttribute("xmlns", SVG_NS);
-  svg.setAttribute("width", String(canvas.imageWidth));
-  svg.setAttribute("height", String(canvas.imageHeight));
-  // Freshly-constructed SVG (not a clone of the live canvas) — stamp
-  // the format version explicitly so Excel-bound exports still carry
-  // the versioning contract.
-  stampAnnotVersion(svg);
-
-  // Process each annotation element
-  const annos = canvas.annotations.childNodes;
-  for (const node of Array.from(annos)) {
-    const el = node as SVGElement;
-    const tag = el.tagName;
-
-    if (tag === "rect" || tag === "ellipse" || tag === "path" || tag === "text") {
-      svg.appendChild(el.cloneNode(true));
-    } else if (tag === "g") {
-      // Marker / textbox / arrow groups — clone as-is, Excel handles
-      // basic groups.
-      const clone = el.cloneNode(true) as SVGElement;
-      // Remove any image children inside the group
-      for (const img of Array.from(clone.querySelectorAll("image"))) {
-        img.remove();
-      }
-      svg.appendChild(clone);
-    }
-    // Skip <image> elements (mosaic, etc.) - not Excel compatible
-  }
-
-  const serializer = new XMLSerializer();
-  let result = serializer.serializeToString(svg);
-  // Clean up: remove xmlns:xlink if present
-  result = result.replace(/\s*xmlns:xlink="[^"]*"/g, "");
-  return `<?xml version="1.0" encoding="UTF-8"?>\n${result}`;
 }
 
 function flattenAnnotations(svg: SVGSVGElement): void {
@@ -209,13 +164,6 @@ export async function copyAsImage(canvas: CanvasManager): Promise<void> {
     canvas.imageWidth,
     canvas.imageHeight,
   );
-  await navigator.clipboard.write([new ClipboardItem({ "image/png": pngBlob })]);
-}
-
-/** Copy: annotations only as transparent PNG */
-export async function copyAnnotationsAsImage(canvas: CanvasManager): Promise<void> {
-  const annoSvg = exportExcelSVG(canvas);
-  const pngBlob = await rasterizeSVG(annoSvg, canvas.imageWidth, canvas.imageHeight);
   await navigator.clipboard.write([new ClipboardItem({ "image/png": pngBlob })]);
 }
 
