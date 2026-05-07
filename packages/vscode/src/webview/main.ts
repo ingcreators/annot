@@ -45,25 +45,24 @@
  *      and replies with the bytes.
  */
 
+import { buildZip } from "@ingcreators/annot-core";
 import {
+  type AnnotMetadata,
   createEditableImage,
   readEditableImage,
-  type AnnotMetadata,
 } from "@ingcreators/annot-core/xmp";
-import { buildZip } from "@ingcreators/annot-core";
-import { EditorShell } from "@ingcreators/annot-editor-shell";
 import { exportSVGString, getPngDataUrl } from "@ingcreators/annot-editor";
 import { buildPptxFiles } from "@ingcreators/annot-editor/pptx-export";
+import { EditorShell } from "@ingcreators/annot-editor-shell";
 import { Toolbar } from "@ingcreators/annot-editor-shell/toolbar";
 // `<annot-editor-right-panel>` registers a custom element on import.
 import "@ingcreators/annot-editor-shell/right-panel";
+import { StatusHost } from "@ingcreators/annot-editor-shell/orchestrators/status-host";
 import type { AnnotEditorRightPanelElement } from "@ingcreators/annot-editor-shell/right-panel";
-import "@ingcreators/annot-editor-shell/editor-statusbar";
-import type { AnnotEditorStatusbarElement } from "@ingcreators/annot-editor-shell/editor-statusbar";
 import "@ingcreators/annot-editor-shell/annot-file-details-drawer";
+import type { ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
 import type { AnnotFileDetailsDrawerElement } from "@ingcreators/annot-editor-shell/annot-file-details-drawer";
 import { VSCODE_THEME_MAP } from "./theme-map.js";
-import type { ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
 
 // Pull in the host-side stylesheets that the toolbar +
 // property panel + canvas (#svg-root / [data-annot-shell-root])
@@ -364,7 +363,7 @@ shell.on("error", (err) => {
 
 let activeToolbar: Toolbar | null = null;
 let activeRightPanel: AnnotEditorRightPanelElement | null = null;
-let activeStatusbar: AnnotEditorStatusbarElement | null = null;
+let activeStatusHost: StatusHost | null = null;
 let activeDrawer: AnnotFileDetailsDrawerElement | null = null;
 let activeFileBytes = 0;
 // ResizeObserver that re-fits the canvas whenever the
@@ -398,9 +397,7 @@ function mountToolbarAndRightPanel(): void {
 
   // Right-panel first so the toolbar's `onToolChange` callback
   // (which calls `panel.showToolProperties`) has a target.
-  const panel = document.createElement(
-    "annot-editor-right-panel",
-  ) as AnnotEditorRightPanelElement;
+  const panel = document.createElement("annot-editor-right-panel") as AnnotEditorRightPanelElement;
   panel.canvas = canvas;
   panel.history = history;
   panel.selection = selection;
@@ -420,7 +417,7 @@ function mountToolbarAndRightPanel(): void {
     selection,
     (_toolName, toolId) => {
       activeRightPanel?.showToolProperties(toolId);
-      activeStatusbar?.setActiveTool(_toolName);
+      activeStatusHost?.setActiveTool(_toolName);
     },
     {
       orientation: "vertical",
@@ -437,15 +434,11 @@ function mountToolbarAndRightPanel(): void {
   panel.toolbar = activeToolbar;
 
   // Statusbar — `[zoom] [dimensions] ───── [current tool]`.
-  // Mirrors the PWA's `StatusHost.build(canvas, w, h)`.
-  const statusbar = document.createElement(
-    "annot-editor-statusbar",
-  ) as AnnotEditorStatusbarElement;
-  statusbar.canvas = canvas;
-  statusbar.width = canvas.imageWidth;
-  statusbar.height = canvas.imageHeight;
-  statusbarMount.appendChild(statusbar);
-  activeStatusbar = statusbar;
+  // Phase 3 of `docs/plans/host-convergence.md` collapsed the inline
+  // build into the shared `StatusHost` primitive (PWA + Desktop +
+  // VSCode now share one implementation).
+  activeStatusHost = new StatusHost(statusbarMount);
+  activeStatusHost.build(canvas, canvas.imageWidth, canvas.imageHeight);
 
   // Selection-change → right-panel's selection-properties section.
   // The shell installs its own single-slot `selection.onChange`
@@ -529,10 +522,7 @@ window.addEventListener("message", (event) => {
       void shell.open(msg.path).then(() => {
         // Clear the placeholder text once the canvas is mounted.
         for (const child of Array.from(container.children)) {
-          if (
-            child instanceof HTMLElement &&
-            child.classList.contains("annot-placeholder")
-          ) {
+          if (child instanceof HTMLElement && child.classList.contains("annot-placeholder")) {
             child.remove();
           }
         }
