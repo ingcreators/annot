@@ -1,5 +1,5 @@
 import { builtinIcon } from "@ingcreators/annot-core";
-import "../ui/annot-icon.js";
+import "../annot-icon.js";
 /**
  * `<annot-file-manager-shell>` — gallery main-content chrome:
  * breadcrumb + refresh button + view-mode toggle + selection bar

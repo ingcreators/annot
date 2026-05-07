@@ -20,16 +20,16 @@
  * gallery after `setStorage` + `refresh("")`.
  */
 
-import { IDBFactory } from "fake-indexeddb";
 import type {
   FolderRecord,
   ImageRecord,
   ImageRecordUpdate,
   StorageProvider,
 } from "@ingcreators/annot-core/storage";
+import { FileManager } from "@ingcreators/annot-editor-shell/gallery/file-manager";
+import { IDBFactory } from "fake-indexeddb";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { BrowserStore } from "../storage/browser-store.js";
-import { FileManager } from "./file-manager.js";
+import { BrowserStore } from "./browser-store.js";
 
 /** Minimal in-memory `StorageProvider` for tests that need a
  *  storage backend distinct from `BrowserStore` — the gallery's
@@ -252,9 +252,9 @@ describe("FileManager — storage-switch racing path", () => {
     fm.setStorage(secondStore, "device");
     await fm.refresh("");
 
-    const after = Array.from(
-      mainHost.querySelectorAll<HTMLElement>(".gallery-item"),
-    ).map((el) => el.dataset["imagePath"]);
+    const after = Array.from(mainHost.querySelectorAll<HTMLElement>(".gallery-item")).map(
+      (el) => el.dataset["imagePath"],
+    );
     expect(after).toEqual(["from-second.png"]);
   });
 

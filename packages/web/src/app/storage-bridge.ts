@@ -17,7 +17,7 @@
  */
 
 import type { StorageProvider } from "@ingcreators/annot-core/storage";
-import type { FileManager } from "../gallery/file-manager.js";
+import type { FileManager } from "@ingcreators/annot-editor-shell/gallery/file-manager";
 import {
   BUILT_IN_STORAGE_MODES,
   connectGitHub,
@@ -32,10 +32,10 @@ import {
   restoreDevice,
   restoreGitHub,
   restoreGoogleDrive,
+  type StorageMode,
   saveLastStorage,
   setPluginStore,
   setStorageMode,
-  type StorageMode,
 } from "../storage/bridge.js";
 import {
   type GitHubRepoRef,
@@ -283,9 +283,7 @@ export class StorageBridge {
         // resulting store and persists the mode for next reload.
         const reg = this.deps.findPluginStorage(mode);
         if (!reg) {
-          console.warn(
-            `[storage-bridge] no plugin or built-in registered for mode "${mode}".`,
-          );
+          console.warn(`[storage-bridge] no plugin or built-in registered for mode "${mode}".`);
           return false;
         }
         const store = await reg.connect({ forcePicker });
@@ -335,11 +333,7 @@ export class StorageBridge {
     if (!fm) return;
     const sidebar = fm.sidebar;
     sidebar.setStorageStatus("browser", true, "Local");
-    sidebar.setStorageStatus(
-      "device",
-      !!this.#deviceStore,
-      getDeviceRootName() || "Not connected",
-    );
+    sidebar.setStorageStatus("device", !!this.#deviceStore, getDeviceRootName() || "Not connected");
     const driveRoot = loadDriveRoot();
     sidebar.setStorageStatus(
       "googledrive",

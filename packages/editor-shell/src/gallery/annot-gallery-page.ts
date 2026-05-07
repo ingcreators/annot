@@ -1,5 +1,5 @@
 import { builtinIcon } from "@ingcreators/annot-core";
-import "../ui/annot-icon.js";
+import "../annot-icon.js";
 /**
  * `<annot-gallery-page>` — folder + file grid that backs the file
  * manager's main pane. Path-based identification throughout.
@@ -30,9 +30,20 @@ import "../ui/annot-icon.js";
 import type { FolderRecord, ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
 import { getFilename, supportsResync } from "@ingcreators/annot-core/storage";
 import { html, LitElement, nothing } from "../lit.js";
-import { logger } from "../logger.js";
-import type { ThumbnailManager } from "../storage/thumbnail-manager.js";
+import type { ThumbnailManager } from "../thumbnail-manager.js";
 import { showAlertDialog, showConfirmDialog, showPromptDialog } from "../ui/dialog.js";
+
+// `logger` (PWA's centralised log shim from
+// `packages/web/src/logger.ts`) is a host-side concern — editor-shell
+// stays host-neutral, so the two `logger.{debug,error}` call sites
+// below use `console` directly. If multiple shell modules ever need
+// the level-control wrapper, add a `@ingcreators/annot-editor-shell/logger`
+// of our own (or accept one as a host dep).
+const logger = {
+  debug: (...args: unknown[]): void => console.debug(...args),
+  error: (...args: unknown[]): void => console.error(...args),
+};
+
 import { type MenuItem, openContextMenu } from "./annot-context-menu.js";
 
 export interface GallerySelection {

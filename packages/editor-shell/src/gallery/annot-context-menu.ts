@@ -27,7 +27,7 @@
 
 import { builtinIcon } from "@ingcreators/annot-core";
 import { html, LitElement } from "../lit.js";
-import "../ui/annot-icon.js";
+import "../annot-icon.js";
 
 export interface MenuItem {
   /** Material Symbols icon name. */

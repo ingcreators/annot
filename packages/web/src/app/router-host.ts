@@ -15,10 +15,15 @@
  */
 
 import type { ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
-import type { FileManager } from "../gallery/file-manager.js";
+import type { FileManager } from "@ingcreators/annot-editor-shell/gallery/file-manager";
 import { logger } from "../logger.js";
 import { editUrl, galleryUrl, parseRoute, pushRoute, sessionEditUrl } from "../router.js";
-import { getStorageMode, setExtensionId, setStorageMode, type StorageMode } from "../storage/bridge.js";
+import {
+  getStorageMode,
+  type StorageMode,
+  setExtensionId,
+  setStorageMode,
+} from "../storage/bridge.js";
 import { GoogleDriveStore } from "../storage/google-drive-store.js";
 import { showError, showInfo } from "../ui/error-bar.js";
 import { findSessionRecords } from "./session-slice.js";

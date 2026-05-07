@@ -13,13 +13,10 @@
 import type { ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
 import { getFilename, StorageConflictError } from "@ingcreators/annot-core/storage";
 import { assertNonNull, newIdB58 } from "@ingcreators/annot-core/utils";
-import type {
-  AnnotSplitEditorElement,
-  SplitEditorSlice,
-} from "../editor/annot-split-editor.js";
+import { generateThumbnailFromDataUrl } from "@ingcreators/annot-editor-shell/image-thumbnail";
+import { showAlertDialog } from "@ingcreators/annot-editor-shell/ui/dialog";
+import type { AnnotSplitEditorElement, SplitEditorSlice } from "../editor/annot-split-editor.js";
 import { loadEncodeOptions } from "../encode-options.js";
-import { generateThumbnailFromDataUrl } from "../storage/image-thumbnail.js";
-import { showAlertDialog } from "../ui/dialog.js";
 import { encodeCaptureInWorker } from "../workers/encode-client.js";
 import { bumpFilenameSuffix, retryFsOp } from "./fs-utils.js";
 

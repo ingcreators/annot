@@ -33,47 +33,20 @@ declare global {
   }
 }
 
-/**
- * Built-in backends bundled with `@ingcreators/annot-web`. Plugin
- * code can register additional modes alongside these via the
- * (Phase C) `PluginContext.registerStorage` API; once that lands,
- * `StorageMode` carries any of these strings PLUS plugin-supplied
- * ones, hence the type widening to plain `string` below.
- *
- * Consumers that need to know "is this a built-in?" should
- * iterate this array (or use `BuiltInStorageMode` for type narrowing
- * at the call site). Consumers that just need to compare modes can
- * keep using string literals — `"github"`, `"googledrive"`, etc.
- */
-export const BUILT_IN_STORAGE_MODES = [
-  "browser",
-  "device",
-  "googledrive",
-  "github",
-  "extension",
-  // Tauri / Electron desktop host's filesystem-backed library
-  // (`@ingcreators/annot-desktop`'s `DesktopStore`). The PWA never
-  // instantiates a `DesktopStore`; the mode is registered here so
-  // shared consumers (sidebar chip strip, breadcrumb root label,
-  // `disableBuiltinStorage` validation, plugin-vs-built-in check)
-  // recognise it. The desktop host owns the store lifecycle in its
-  // own bootstrap; the bridge below intentionally has no `desktop`
-  // slot in its `active()` switch — it's never asked for one.
-  "desktop",
-] as const;
+// Phase 2 of `docs/plans/host-convergence.md` lifted the
+// `BUILT_IN_STORAGE_MODES` / `StorageMode` / `BuiltInStorageMode`
+// surface into `@ingcreators/annot-editor-shell/storage-mode` so
+// the gallery (now in editor-shell) sees the same source of truth.
+// Re-export keeps existing `import { … } from "./bridge.js"` /
+// `from "../storage/bridge.js"` call sites compiling untouched.
+export {
+  BUILT_IN_STORAGE_MODES,
+  type BuiltInStorageMode,
+  type StorageMode,
+} from "@ingcreators/annot-editor-shell/storage-mode";
 
-export type BuiltInStorageMode = (typeof BUILT_IN_STORAGE_MODES)[number];
-
-/**
- * A storage mode key. Kept open as `string` so plugin-registered
- * backends (Phase C of `docs/plans/_done/plugin-storage-registration.md`)
- * can introduce their own modes without editing every consumer.
- *
- * Use `BuiltInStorageMode` if you specifically need to refer only
- * to the bundled backends (sidebar layout assertions, the
- * `loadLastStorage` validator, etc.).
- */
-export type StorageMode = string;
+import type { StorageMode } from "@ingcreators/annot-editor-shell/storage-mode";
+import { BUILT_IN_STORAGE_MODES } from "@ingcreators/annot-editor-shell/storage-mode";
 
 /**
  * State container for the bridge — collapses the per-backend

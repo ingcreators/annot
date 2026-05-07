@@ -8,7 +8,7 @@ import "@ingcreators/annot-core/styles/editor.css";
 import "@ingcreators/annot-core/styles/toolbar.css";
 import "@ingcreators/annot-core/styles/property-panel.css";
 import "@ingcreators/annot-core/styles/fonts.css";
-import "@ingcreators/annot-web/styles/file-manager.css";
+import "@ingcreators/annot-editor-shell/styles/file-manager.css";
 import "../styles/app.css";
 
 import { applyPersistedTheme } from "@ingcreators/annot-editor";
@@ -19,9 +19,9 @@ import { applyPersistedTheme } from "@ingcreators/annot-editor";
 // the surrounding chrome (editor-header / right-panel / drawer /
 // statusbar) to the shell's events.
 import {
+  type AnnotFileDetailsDrawerElement,
   EditorShell,
   installKeyboardHelp,
-  type AnnotFileDetailsDrawerElement,
 } from "@ingcreators/annot-editor-shell";
 import type { AnnotEditorRightPanelElement } from "@ingcreators/annot-editor-shell/right-panel";
 import "@ingcreators/annot-editor-shell/right-panel";
@@ -34,19 +34,16 @@ import { Toolbar } from "@ingcreators/annot-editor-shell/toolbar";
 // element is the only PWA-side surface we touch and it works
 // off plain callbacks + props that the desktop populates itself.
 import "@ingcreators/annot-web/editor/editor-header";
-import type { AnnotEditorHeaderElement } from "@ingcreators/annot-web/editor/editor-header";
-import type { AnnotEditorStatusbarElement } from "@ingcreators/annot-editor-shell/editor-statusbar";
-import { getFilename, type ImageRecord } from "@ingcreators/annot-core/storage";
 import {
   captureScreen,
   isDesktop,
   minimizeMainWindow,
   restoreMainWindow,
 } from "@ingcreators/annot-core/desktop-bridge";
-import {
-  bootstrapDesktopFsGallery,
-  type DesktopGalleryHandle,
-} from "../storage/bootstrap.js";
+import { getFilename, type ImageRecord } from "@ingcreators/annot-core/storage";
+import type { AnnotEditorStatusbarElement } from "@ingcreators/annot-editor-shell/editor-statusbar";
+import type { AnnotEditorHeaderElement } from "@ingcreators/annot-web/editor/editor-header";
+import { bootstrapDesktopFsGallery, type DesktopGalleryHandle } from "../storage/bootstrap.js";
 
 // Restore the user's last-chosen theme + any saved token overrides
 // before first paint. Mirrors the PWA's main.ts flow.
@@ -810,8 +807,7 @@ interface PersistOpts {
 async function persistViaDesktopStore(opts: PersistOpts): Promise<string | null> {
   if (!fsGallery) return null;
   const now = new Date().toISOString();
-  const folderPath =
-    opts.folderPath ?? (fsGallery.fileManager.currentFolderPath || "Inbox");
+  const folderPath = opts.folderPath ?? (fsGallery.fileManager.currentFolderPath || "Inbox");
   const path = await fsGallery.store.saveImage(
     {
       folderPath,

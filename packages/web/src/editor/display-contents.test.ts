@@ -32,7 +32,7 @@
  */
 
 import { afterEach, describe, expect, it } from "vitest";
-import "../gallery/file-manager-shell.js";
+import "@ingcreators/annot-editor-shell/gallery/file-manager-shell";
 import "./editor-header.js";
 import "@ingcreators/annot-editor-shell/editor-statusbar";
 import "@ingcreators/annot-editor-shell/right-panel";

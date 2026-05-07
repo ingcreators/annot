@@ -26,7 +26,20 @@
  */
 
 import { drawToThumbCanvas } from "@ingcreators/annot-core/storage";
-import { blobToDataUrl } from "./github-helpers.js";
+
+/** Local copy of `blobToDataUrl` (matches the helpers in
+ *  `packages/web/src/storage/github-helpers.ts` and
+ *  `packages/core/src/encode/index.ts`). Kept inline so editor-shell
+ *  doesn't reach back into annot-web — preserves the host-boundary
+ *  invariant captured in `editor-shell/src/host-boundary.test.ts`. */
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+}
 
 /** Default longest-edge target (in CSS pixels) for gallery cards. */
 export const DEFAULT_THUMBNAIL_WIDTH = 480;

@@ -24,11 +24,14 @@
  */
 
 import type { ImageRecord } from "@ingcreators/annot-core/storage";
-import { FileManager, type FileManagerCallbacks } from "@ingcreators/annot-web/gallery/file-manager";
-import type { NewMenuItem } from "@ingcreators/annot-web/gallery/sidebar";
-import type { StorageMode } from "@ingcreators/annot-web/storage/bridge";
-import { IndexedDBThumbnailCache } from "@ingcreators/annot-web/storage/idb-thumbnail-cache";
-import { ThumbnailManager } from "@ingcreators/annot-web/storage/thumbnail-manager";
+import {
+  FileManager,
+  type FileManagerCallbacks,
+} from "@ingcreators/annot-editor-shell/gallery/file-manager";
+import type { NewMenuItem } from "@ingcreators/annot-editor-shell/gallery/sidebar";
+import { IndexedDBThumbnailCache } from "@ingcreators/annot-editor-shell/idb-thumbnail-cache";
+import type { StorageMode } from "@ingcreators/annot-editor-shell/storage-mode";
+import { ThumbnailManager } from "@ingcreators/annot-editor-shell/thumbnail-manager";
 import { createElectronDesktopFs, type DesktopFs, type ElectronApi } from "./desktop-fs.js";
 import { DesktopStore } from "./desktop-store.js";
 

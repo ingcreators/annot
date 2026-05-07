@@ -14,7 +14,12 @@ import { setTooltip } from "@ingcreators/annot-editor/tooltip";
 // `[INEFFECTIVE_DYNAMIC_IMPORT]` warning without saving any
 // bytes.
 import { BUILTIN_DRAWER_SECTION_IDS } from "@ingcreators/annot-editor-shell/annot-file-details-drawer";
+import { createBuiltinIcon } from "@ingcreators/annot-editor-shell/annot-icon-imperative";
+import { FileManager } from "@ingcreators/annot-editor-shell/gallery/file-manager";
+import type { SidebarSectionOrder } from "@ingcreators/annot-editor-shell/gallery/sidebar";
+import { IndexedDBThumbnailCache } from "@ingcreators/annot-editor-shell/idb-thumbnail-cache";
 import { BUILTIN_RIGHT_PANEL_SECTION_IDS } from "@ingcreators/annot-editor-shell/right-panel";
+import { ThumbnailManager } from "@ingcreators/annot-editor-shell/thumbnail-manager";
 import { CaptureHost, type OpenEditorArgs } from "./app/capture-host.js";
 import { EditorSession } from "./app/editor-session.js";
 import { ExtensionTransferHost } from "./app/extension-transfer-host.js";
@@ -30,8 +35,6 @@ import { StatusHost } from "./app/status-host.js";
 import { StorageBridge } from "./app/storage-bridge.js";
 import { pasteFromClipboard } from "./capture/pwa-capture.js";
 import { ScratchpadStore } from "./editor/scratchpad-store.js";
-import { FileManager } from "./gallery/file-manager.js";
-import type { SidebarSectionOrder } from "./gallery/sidebar.js";
 import { logger } from "./logger.js";
 import { editUrl, galleryUrl, pushRoute } from "./router.js";
 import {
@@ -45,9 +48,6 @@ import {
   setExtensionId,
   setStorageMode,
 } from "./storage/bridge.js";
-import { IndexedDBThumbnailCache } from "./storage/idb-thumbnail-cache.js";
-import { ThumbnailManager } from "./storage/thumbnail-manager.js";
-import { createBuiltinIcon } from "./ui/annot-icon-imperative.js";
 
 export class App {
   #storage: StorageProvider | null = null;

@@ -1,6 +1,6 @@
 import { builtinIcon, type IconSpec } from "@ingcreators/annot-core";
-import { createBuiltinIcon } from "../ui/annot-icon-imperative.js";
-import "../ui/annot-icon.js";
+import { createBuiltinIcon } from "../annot-icon-imperative.js";
+import "../annot-icon.js";
 /**
  * `<annot-sidebar>` — storage tree + folder tree + "New" button
  * for the file manager. Path-based identification for folders.
@@ -19,10 +19,10 @@ import "../ui/annot-icon.js";
  * StorageBridge) don't move.
  */
 import type { StorageProvider } from "@ingcreators/annot-core/storage";
-import type { SidebarTab, StorageRegistration } from "../app/plugin-host.js";
-import { isClipboardReadSupported, isScreenCaptureSupported } from "../capture/pwa-capture.js";
+import { isClipboardReadSupported, isScreenCaptureSupported } from "../capture-predicates.js";
 import { html, LitElement, nothing } from "../lit.js";
-import type { StorageMode } from "../storage/bridge.js";
+import type { SidebarTab, StorageRegistration } from "../plugin-host-types.js";
+import type { StorageMode } from "../storage-mode.js";
 
 /** Default priorities the sidebar's three sections render in.
  *  `App.init({ sidebarSectionOrder })` overrides per-section to
@@ -401,16 +401,14 @@ export class AnnotSidebarElement extends LitElement {
     const builtins: ChipDescriptor[] = BUILTIN_CHIP_DESCRIPTORS.filter(
       (d) => !isBuiltinDisabled(d.mode),
     );
-    const plugins: ChipDescriptor[] = (this.callbacks.getPluginStorages?.() ?? []).map(
-      (reg) => ({
-        mode: reg.mode,
-        icon: reg.icon ?? builtinIcon("extension"),
-        label: reg.label,
-        priority: Number.isFinite(reg.priority) ? reg.priority : Number.POSITIVE_INFINITY,
-        visible: reg.visible ? () => reg.visible!() : undefined,
-        reselectTitle: reg.reselectTitle,
-      }),
-    );
+    const plugins: ChipDescriptor[] = (this.callbacks.getPluginStorages?.() ?? []).map((reg) => ({
+      mode: reg.mode,
+      icon: reg.icon ?? builtinIcon("extension"),
+      label: reg.label,
+      priority: Number.isFinite(reg.priority) ? reg.priority : Number.POSITIVE_INFINITY,
+      visible: reg.visible ? () => reg.visible!() : undefined,
+      reselectTitle: reg.reselectTitle,
+    }));
     const chips = [...builtins, ...plugins]
       .filter((d) => (d.visible ? d.visible() : true))
       .sort((a, b) => a.priority - b.priority);
@@ -440,8 +438,9 @@ export class AnnotSidebarElement extends LitElement {
           <div class="sidebar-storage-label">${chip.label}</div>
           <div class="sidebar-storage-status">${subtitle}</div>
         </div>
-        ${showReselect
-          ? html`<button
+        ${
+          showReselect
+            ? html`<button
               type="button"
               class="sidebar-storage-reselect"
               data-tooltip=${chip.reselectTitle ?? "Change folder"}
@@ -452,7 +451,8 @@ export class AnnotSidebarElement extends LitElement {
               }}>
             <annot-icon .spec=${builtinIcon("drive_folder_upload")}></annot-icon>
           </button>`
-          : nothing}
+            : nothing
+        }
       </button>
     `;
   }
@@ -610,11 +610,7 @@ export class AnnotSidebarElement extends LitElement {
 
   // ---- Folder tree (imperative; recursive + async) ----
 
-  async #buildFolderTree(
-    container: HTMLElement,
-    parentPath: string,
-    depth: number,
-  ): Promise<void> {
+  async #buildFolderTree(container: HTMLElement, parentPath: string, depth: number): Promise<void> {
     if (!this.storage) return;
     try {
       const folders = await this.storage.listFolders(parentPath);
@@ -637,9 +633,7 @@ export class AnnotSidebarElement extends LitElement {
         const chevron = document.createElement("button");
         chevron.type = "button";
         chevron.className = "folder-tree-chevron";
-        chevron.appendChild(
-          createBuiltinIcon(isExpanded ? "expand_more" : "chevron_right"),
-        );
+        chevron.appendChild(createBuiltinIcon(isExpanded ? "expand_more" : "chevron_right"));
         chevron.setAttribute(
           "aria-label",
           isExpanded ? `Collapse ${folder.name}` : `Expand ${folder.name}`,
