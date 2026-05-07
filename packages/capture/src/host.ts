@@ -68,10 +68,26 @@ import type { Settings } from "./shared/settings.js";
 /** A single captured PNG plus the host-reported DPR at capture time. */
 export interface CapturedViewport {
   pngDataUrl: string;
-  /** `MediaStreamTrack.getSettings()` ratio (Electron `desktopCapturer`),
-   *  `nativeImage.getScaleFactor()` (`webContents.capturePage`), or
-   *  capturedWidth / reportedViewportWidth (extension
-   *  `chrome.tabs.captureVisibleTab`). */
+  /**
+   * Authoritative device-pixel-ratio for THIS capture. Hosts must
+   * derive `dpr` from a source that's tied to the capture itself —
+   * not from a separate content-side probe that could drift between
+   * the read and the snapshot.
+   *
+   *   - Extension: `capturedWidth / reportedViewportWidth` once we
+   *     have the bitmap, OR a fresh `get-page-dimensions` probe
+   *     paired with the same `captureVisibleTab` call.
+   *   - Electron (Browse window): `nativeImage.getScaleFactor()` on
+   *     the `webContents.capturePage()` result.
+   *   - Electron (`desktopCapturer`): the
+   *     `MediaStreamTrack.getSettings()` ratio.
+   *
+   * Orchestrators consume this value for any post-capture math
+   * (crop physical-pixel rect, stitch offset, metadata-area
+   * conversion) — they MUST NOT use a separately-probed DPR for
+   * those calculations, since the two can drift mid-capture if the
+   * window moves between displays.
+   */
   dpr: number;
 }
 
