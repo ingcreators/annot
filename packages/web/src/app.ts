@@ -13,16 +13,16 @@ import { setTooltip } from "@ingcreators/annot-editor/tooltip";
 // dynamic imports here just trip Vite's
 // `[INEFFECTIVE_DYNAMIC_IMPORT]` warning without saving any
 // bytes.
-import { BUILTIN_DRAWER_SECTION_IDS } from "@ingcreators/annot-editor-shell/annot-file-details-drawer";
-import { createBuiltinIcon } from "@ingcreators/annot-editor-shell/annot-icon-imperative";
-import { FileManager } from "@ingcreators/annot-editor-shell/gallery/file-manager";
-import type { SidebarSectionOrder } from "@ingcreators/annot-editor-shell/gallery/sidebar";
-import { IndexedDBThumbnailCache } from "@ingcreators/annot-editor-shell/idb-thumbnail-cache";
-import { HeaderHost } from "@ingcreators/annot-editor-shell/orchestrators/header-host";
-import { SavePipeline } from "@ingcreators/annot-editor-shell/orchestrators/save-pipeline";
-import { StatusHost } from "@ingcreators/annot-editor-shell/orchestrators/status-host";
-import { BUILTIN_RIGHT_PANEL_SECTION_IDS } from "@ingcreators/annot-editor-shell/right-panel";
-import { ThumbnailManager } from "@ingcreators/annot-editor-shell/thumbnail-manager";
+import { BUILTIN_DRAWER_SECTION_IDS } from "@ingcreators/annot-host-ui/annot-file-details-drawer";
+import { createBuiltinIcon } from "@ingcreators/annot-host-ui/annot-icon-imperative";
+import { FileManager } from "@ingcreators/annot-host-ui/gallery/file-manager";
+import type { SidebarSectionOrder } from "@ingcreators/annot-host-ui/gallery/sidebar";
+import { IndexedDBThumbnailCache } from "@ingcreators/annot-host-ui/idb-thumbnail-cache";
+import { HeaderHost } from "@ingcreators/annot-host-ui/orchestrators/header-host";
+import { SavePipeline } from "@ingcreators/annot-host-ui/orchestrators/save-pipeline";
+import { StatusHost } from "@ingcreators/annot-host-ui/orchestrators/status-host";
+import { BUILTIN_RIGHT_PANEL_SECTION_IDS } from "@ingcreators/annot-host-ui/right-panel";
+import { ThumbnailManager } from "@ingcreators/annot-host-ui/thumbnail-manager";
 import { CaptureHost, type OpenEditorArgs } from "./app/capture-host.js";
 import { EditorSession } from "./app/editor-session.js";
 import { ExtensionTransferHost } from "./app/extension-transfer-host.js";

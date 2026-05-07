@@ -56,7 +56,7 @@ import { BUILT_IN_STORAGE_MODES } from "../storage/bridge.js";
 
 // Phase 2 of `docs/plans/host-convergence.md` (Decision 4 — fold-in)
 // moved every plugin-host structural type into
-// `@ingcreators/annot-editor-shell/plugin-host-types` so the gallery
+// `@ingcreators/annot-host-ui/plugin-host-types` so the gallery
 // (now in editor-shell) imports them directly. The class itself
 // (`PluginHost`, `#makeContext`, dispatchers) stays here in web —
 // `docs/plans/plugin-host-extraction.md` (Draft) covers eventually
@@ -80,7 +80,7 @@ export type {
   UISection,
   UISectionContext,
   UISectionLifecycle,
-} from "@ingcreators/annot-editor-shell/plugin-host-types";
+} from "@ingcreators/annot-host-ui/plugin-host-types";
 
 import type {
   AfterSaveEvent,
@@ -95,7 +95,7 @@ import type {
   SidebarTabUpdate,
   StorageRegistration,
   UISection,
-} from "@ingcreators/annot-editor-shell/plugin-host-types";
+} from "@ingcreators/annot-host-ui/plugin-host-types";
 
 export class PluginHost {
   readonly #externalLinkSources: ExternalLinkSource[] = [];

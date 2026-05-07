@@ -72,9 +72,9 @@ importers:
       '@ingcreators/annot-editor':
         specifier: workspace:*
         version: link:../editor
-      '@ingcreators/annot-editor-shell':
+      '@ingcreators/annot-host-ui':
         specifier: workspace:*
-        version: link:../editor-shell
+        version: link:../host-ui
       '@ingcreators/annot-web':
         specifier: workspace:*
         version: link:../web
@@ -126,7 +126,26 @@ importers:
         specifier: 'catalog:'
         version: 8.0.10(@types/node@25.6.0)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.46.2)
 
-  packages/editor-shell:
+  packages/extension:
+    dependencies:
+      '@ingcreators/annot-core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      '@resvg/resvg-js':
+        specifier: ^2.6.2
+        version: 2.6.2
+      chrome-types:
+        specifier: ^0.1.327
+        version: 0.1.425
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+      vite:
+        specifier: 'catalog:'
+        version: 8.0.10(@types/node@25.6.0)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.46.2)
+
+  packages/host-ui:
     dependencies:
       '@ingcreators/annot-core':
         specifier: workspace:*
@@ -147,25 +166,6 @@ importers:
       storybook:
         specifier: ^10.3.6
         version: 10.3.6(@testing-library/dom@10.4.1)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
-      typescript:
-        specifier: 'catalog:'
-        version: 6.0.3
-      vite:
-        specifier: 'catalog:'
-        version: 8.0.10(@types/node@25.6.0)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.46.2)
-
-  packages/extension:
-    dependencies:
-      '@ingcreators/annot-core':
-        specifier: workspace:*
-        version: link:../core
-    devDependencies:
-      '@resvg/resvg-js':
-        specifier: ^2.6.2
-        version: 2.6.2
-      chrome-types:
-        specifier: ^0.1.327
-        version: 0.1.425
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
@@ -196,9 +196,9 @@ importers:
       '@ingcreators/annot-editor':
         specifier: workspace:*
         version: link:../editor
-      '@ingcreators/annot-editor-shell':
+      '@ingcreators/annot-host-ui':
         specifier: workspace:*
-        version: link:../editor-shell
+        version: link:../host-ui
     devDependencies:
       '@types/node':
         specifier: ^25
@@ -221,9 +221,9 @@ importers:
       '@ingcreators/annot-editor':
         specifier: workspace:*
         version: link:../editor
-      '@ingcreators/annot-editor-shell':
+      '@ingcreators/annot-host-ui':
         specifier: workspace:*
-        version: link:../editor-shell
+        version: link:../host-ui
       '@ingcreators/annot-render':
         specifier: workspace:*
         version: link:../render

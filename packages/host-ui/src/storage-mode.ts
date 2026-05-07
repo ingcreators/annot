@@ -1,6 +1,6 @@
 /**
  * Storage-mode primitives — host-neutral surface shared between
- * the gallery (in `@ingcreators/annot-editor-shell/gallery/*`) and
+ * the gallery (in `@ingcreators/annot-host-ui/gallery/*`) and
  * `@ingcreators/annot-web`'s storage bridge.
  *
  * Phase 2 of `docs/plans/host-convergence.md` lifts these out of

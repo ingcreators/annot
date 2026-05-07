@@ -1,4 +1,4 @@
-// @ingcreators/annot-editor-shell — host-neutral editor surface.
+// @ingcreators/annot-host-ui — host-neutral editor surface.
 //
 // Phase 1 of `docs/plans/_done/vscode-extension-host.md` scaffolds
 // this package; subsequent phases move toolbar / right-panel /

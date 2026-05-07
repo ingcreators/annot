@@ -37,7 +37,7 @@ import { showAlertDialog, showConfirmDialog, showPromptDialog } from "../ui/dial
 // `packages/web/src/logger.ts`) is a host-side concern — editor-shell
 // stays host-neutral, so the two `logger.{debug,error}` call sites
 // below use `console` directly. If multiple shell modules ever need
-// the level-control wrapper, add a `@ingcreators/annot-editor-shell/logger`
+// the level-control wrapper, add a `@ingcreators/annot-host-ui/logger`
 // of our own (or accept one as a host dep).
 const logger = {
   debug: (...args: unknown[]): void => console.debug(...args),

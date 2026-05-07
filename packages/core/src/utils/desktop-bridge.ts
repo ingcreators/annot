@@ -233,7 +233,7 @@ export async function restoreMainWindow(): Promise<void> {
  * both the PPTX export path
  * (`packages/editor/src/pptx-export.ts`, `ns: "p"`) and the
  * Office-clipboard path
- * (`packages/editor-shell/src/toolbar.ts:#copyForOffice`,
+ * (`packages/host-ui/src/toolbar.ts:#copyForOffice`,
  * `ns: "a"`).
  *
  * The Electron-side handler

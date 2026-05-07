@@ -53,15 +53,15 @@ import {
 } from "@ingcreators/annot-core/xmp";
 import { exportSVGString, getPngDataUrl } from "@ingcreators/annot-editor";
 import { buildPptxFiles } from "@ingcreators/annot-editor/pptx-export";
-import { EditorShell } from "@ingcreators/annot-editor-shell";
-import { Toolbar } from "@ingcreators/annot-editor-shell/toolbar";
+import { EditorShell } from "@ingcreators/annot-host-ui";
+import { Toolbar } from "@ingcreators/annot-host-ui/toolbar";
 // `<annot-editor-right-panel>` registers a custom element on import.
-import "@ingcreators/annot-editor-shell/right-panel";
-import { StatusHost } from "@ingcreators/annot-editor-shell/orchestrators/status-host";
-import type { AnnotEditorRightPanelElement } from "@ingcreators/annot-editor-shell/right-panel";
-import "@ingcreators/annot-editor-shell/annot-file-details-drawer";
+import "@ingcreators/annot-host-ui/right-panel";
+import { StatusHost } from "@ingcreators/annot-host-ui/orchestrators/status-host";
+import type { AnnotEditorRightPanelElement } from "@ingcreators/annot-host-ui/right-panel";
+import "@ingcreators/annot-host-ui/annot-file-details-drawer";
 import type { ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
-import type { AnnotFileDetailsDrawerElement } from "@ingcreators/annot-editor-shell/annot-file-details-drawer";
+import type { AnnotFileDetailsDrawerElement } from "@ingcreators/annot-host-ui/annot-file-details-drawer";
 import { VSCODE_THEME_MAP } from "./theme-map.js";
 
 // Pull in the host-side stylesheets that the toolbar +

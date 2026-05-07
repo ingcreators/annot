@@ -32,10 +32,10 @@
  */
 
 import { afterEach, describe, expect, it } from "vitest";
-import "@ingcreators/annot-editor-shell/gallery/file-manager-shell";
-import "@ingcreators/annot-editor-shell/editor-header";
-import "@ingcreators/annot-editor-shell/editor-statusbar";
-import "@ingcreators/annot-editor-shell/right-panel";
+import "@ingcreators/annot-host-ui/gallery/file-manager-shell";
+import "@ingcreators/annot-host-ui/editor-header";
+import "@ingcreators/annot-host-ui/editor-statusbar";
+import "@ingcreators/annot-host-ui/right-panel";
 
 afterEach(() => {
   document.body.innerHTML = "";

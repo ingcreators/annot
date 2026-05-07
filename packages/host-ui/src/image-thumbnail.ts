@@ -29,9 +29,9 @@ import { drawToThumbCanvas } from "@ingcreators/annot-core/storage";
 
 /** Local copy of `blobToDataUrl` (matches the helpers in
  *  `packages/web/src/storage/github-helpers.ts` and
- *  `packages/core/src/encode/index.ts`). Kept inline so editor-shell
+ *  `packages/core/src/encode/index.ts`). Kept inline so host-ui
  *  doesn't reach back into annot-web — preserves the host-boundary
- *  invariant captured in `editor-shell/src/host-boundary.test.ts`. */
+ *  invariant captured in `host-ui/src/host-boundary.test.ts`. */
 function blobToDataUrl(blob: Blob): Promise<string> {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();

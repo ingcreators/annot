@@ -26,7 +26,7 @@ import type {
   ImageRecordUpdate,
   StorageProvider,
 } from "@ingcreators/annot-core/storage";
-import { FileManager } from "@ingcreators/annot-editor-shell/gallery/file-manager";
+import { FileManager } from "@ingcreators/annot-host-ui/gallery/file-manager";
 import { IDBFactory } from "fake-indexeddb";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { BrowserStore } from "./browser-store.js";

@@ -17,7 +17,7 @@
  */
 
 import type { StorageProvider } from "@ingcreators/annot-core/storage";
-import type { FileManager } from "@ingcreators/annot-editor-shell/gallery/file-manager";
+import type { FileManager } from "@ingcreators/annot-host-ui/gallery/file-manager";
 import {
   BUILT_IN_STORAGE_MODES,
   connectGitHub,

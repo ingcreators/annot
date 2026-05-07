@@ -12,8 +12,8 @@
  * of `packages/web/src/app/status-host.ts` so PWA + Desktop + VSCode
  * all share one orchestrator implementation. The earlier PWA-only
  * version queried `document.getElementById("statusbar")` itself,
- * which violates editor-shell's host-boundary invariant
- * (`packages/editor-shell/src/host-boundary.test.ts`); the host
+ * which violates host-ui's host-boundary invariant
+ * (`packages/host-ui/src/host-boundary.test.ts`); the host
  * element is now injected via the constructor instead. Hosts:
  *
  *   - **PWA**: `new StatusHost(document.getElementById("statusbar")!)`

@@ -25,7 +25,7 @@
   "dependencies": {
     "@ingcreators/annot-core": "workspace:*",
     "@ingcreators/annot-editor": "workspace:*",
-    "@ingcreators/annot-editor-shell": "workspace:*",
+    "@ingcreators/annot-host-ui": "workspace:*",
     "@ingcreators/annot-render": "workspace:*",
     "lit": "^3.3.2"
   },

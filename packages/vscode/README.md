@@ -158,7 +158,7 @@ content sniffing, no `*.svg` blanket-grab.
 
 - [`@ingcreators/annot-core`](../core) — Tier A storage types.
 - [`@ingcreators/annot-editor`](../editor) — Tier C primitives.
-- [`@ingcreators/annot-editor-shell`](../editor-shell) — the
+- [`@ingcreators/annot-host-ui`](../editor-shell) — the
   host-neutral editor surface this package consumes.
 
 ## See also

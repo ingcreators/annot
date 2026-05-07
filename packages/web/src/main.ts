@@ -4,7 +4,7 @@ import "@ingcreators/annot-core/styles/toolbar.css";
 import "@ingcreators/annot-core/styles/property-panel.css";
 import "@ingcreators/annot-core/styles/fonts.css";
 import "./styles/app.css";
-import "@ingcreators/annot-editor-shell/styles/file-manager.css";
+import "@ingcreators/annot-host-ui/styles/file-manager.css";
 
 import { applyPersistedTheme } from "@ingcreators/annot-editor";
 import { App } from "./app.js";

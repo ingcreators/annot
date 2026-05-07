@@ -70,12 +70,12 @@ import { html, LitElement, unsafeHTML } from "./lit.js";
 // is a host-side concern — editor-shell stays host-neutral, so the
 // single `logger.debug` call below uses `console.debug` directly.
 // If multiple shell modules ever need the level-control wrapper, add a
-// `@ingcreators/annot-editor-shell/logger` of our own (or accept one
+// `@ingcreators/annot-host-ui/logger` of our own (or accept one
 // as a host dep).
 import { createPageElementsSection } from "./right-panel-sections/annot-page-elements-section.js";
 import { createSelectionPropertiesSection } from "./right-panel-sections/annot-selection-properties-section.js";
 import { createToolPropertiesSection } from "./right-panel-sections/annot-tool-properties-section.js";
-import type { Toolbar } from "@ingcreators/annot-editor-shell/toolbar";
+import type { Toolbar } from "@ingcreators/annot-host-ui/toolbar";
 
 // =============================================================================
 // Action-button SVGs — custom glyphs modeled on PowerPoint's ribbon

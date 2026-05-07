@@ -15,7 +15,7 @@
 > **Compatibility:** Replaces the entire `packages/desktop/src-tauri`
 > Rust crate with a Node-side Electron main process. The renderer-
 > side TypeScript (`packages/desktop/src/`) and its dependence on
-> `@ingcreators/annot-editor-shell` / `@ingcreators/annot-web` /
+> `@ingcreators/annot-host-ui` / `@ingcreators/annot-web` /
 > `@ingcreators/annot-editor` / `@ingcreators/annot-core` is
 > preserved. The IPC surface defined in
 > [`packages/core/src/utils/tauri-bridge.ts`](../../packages/core/src/utils/tauri-bridge.ts)
@@ -121,7 +121,7 @@ Electron sidesteps the per-OS snapshot problem entirely:
 
 The renderer-side architecture stays the same:
 
-- `@ingcreators/annot-editor-shell` mounts the editor surface.
+- `@ingcreators/annot-host-ui` mounts the editor surface.
 - `@ingcreators/annot-web`'s editor session, gallery, and
   capture-overlay UI stay as-is.
 - `@ingcreators/annot-render` builds the DrawingML XML for

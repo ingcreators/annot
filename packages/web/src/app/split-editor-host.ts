@@ -13,8 +13,8 @@
 import type { ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
 import { getFilename, StorageConflictError } from "@ingcreators/annot-core/storage";
 import { assertNonNull, newIdB58 } from "@ingcreators/annot-core/utils";
-import { generateThumbnailFromDataUrl } from "@ingcreators/annot-editor-shell/image-thumbnail";
-import { showAlertDialog } from "@ingcreators/annot-editor-shell/ui/dialog";
+import { generateThumbnailFromDataUrl } from "@ingcreators/annot-host-ui/image-thumbnail";
+import { showAlertDialog } from "@ingcreators/annot-host-ui/ui/dialog";
 import type { AnnotSplitEditorElement, SplitEditorSlice } from "../editor/annot-split-editor.js";
 import { loadEncodeOptions } from "../encode-options.js";
 import { encodeCaptureInWorker } from "../workers/encode-client.js";

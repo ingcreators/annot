@@ -1,6 +1,6 @@
 /**
  * Re-export of the Lit runtime + decorators under the
- * `@ingcreators/annot-editor-shell/lit` subpath.
+ * `@ingcreators/annot-host-ui/lit` subpath.
  *
  * Phase 2b of `docs/plans/_done/vscode-extension-host.md` — moved
  * here from `packages/web/src/lit.ts` so that built-in Lit

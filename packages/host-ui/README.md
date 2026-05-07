@@ -1,4 +1,4 @@
-# @ingcreators/annot-editor-shell
+# @ingcreators/annot-host-ui
 
 Host-neutral editor surface for [Annot](../../README.md). This is
 **Tier C** — code here constructs `CanvasManager` /
@@ -22,8 +22,8 @@ user) fill the bodies.
 
 | Subpath | Surface |
 |---------|---------|
-| `@ingcreators/annot-editor-shell` | `EditorShell` class + `EditorShellHost` / `EditorShellFeatures` / `EditorShellEvent` types |
-| `@ingcreators/annot-editor-shell/<file>` | Per-file deep imports for shell internals (sparingly) |
+| `@ingcreators/annot-host-ui` | `EditorShell` class + `EditorShellHost` / `EditorShellFeatures` / `EditorShellEvent` types |
+| `@ingcreators/annot-host-ui/<file>` | Per-file deep imports for shell internals (sparingly) |
 
 ## Depends on
 
@@ -38,8 +38,8 @@ mount the same editor.
 ## Build
 
 ```bash
-pnpm --filter @ingcreators/annot-editor-shell build      # vite library build
-pnpm --filter @ingcreators/annot-editor-shell typecheck  # tsc --noEmit
+pnpm --filter @ingcreators/annot-host-ui build      # vite library build
+pnpm --filter @ingcreators/annot-host-ui typecheck  # tsc --noEmit
 ```
 
 ## See also
