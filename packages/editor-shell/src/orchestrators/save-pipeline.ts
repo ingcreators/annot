@@ -2,13 +2,24 @@
  * Save pipeline — owns the annotation-save + thumbnail-regen debounce
  * state machine and the "flush pending work before navigation" protocol.
  *
- * Extracted from `app.ts` as part of the Phase 1 decomposition
- * (see `docs/plans/_done/app-decomposition.md`). `AnnotApp` holds an instance
- * and forwards calls; all save-status state lives here.
+ * Originally extracted from `app.ts` as part of the Phase 1
+ * decomposition (see `docs/plans/_done/app-decomposition.md`). Phase 3
+ * of `docs/plans/host-convergence.md` lifted it into editor-shell so
+ * PWA + Desktop share one implementation; VSCode keeps its own
+ * `CustomEditorProvider`-driven save flow because the dirty / save
+ * cadence is owned by VSCode, not the storage backend.
  *
  * Storage is taken as a getter rather than a snapshot so a backend
  * mode-switch (device → drive, drive → github) during an edit session
  * routes subsequent saves to the new store without re-wiring.
+ *
+ * Error reporting is injected via the `onSaveError` / `onSaveSuccess`
+ * deps callbacks — earlier the pipeline imported `showSaveError` /
+ * `hideError` from `packages/web/src/ui/error-bar.ts`, but that
+ * surface is PWA-specific (the `<annot-error-bar>` singleton anchors
+ * itself with `document.getElementById("toolbar")`). Hosts wire the
+ * callbacks to whatever banner system they ship: PWA → `error-bar`,
+ * Desktop → `#editor-error-banner`, future hosts → their own.
  */
 
 import type { StorageProvider } from "@ingcreators/annot-core/storage";
@@ -17,10 +28,9 @@ import {
   exportAnnotationsSvgForIdb,
   getPngDataUrl,
 } from "@ingcreators/annot-editor";
-import { generateThumbnailFromDataUrl } from "@ingcreators/annot-editor-shell/image-thumbnail";
-import type { ThumbnailManager } from "@ingcreators/annot-editor-shell/thumbnail-manager";
-import type { AnnotSaveStatusElement } from "../editor/save-status-indicator.js";
-import { hideError, showSaveError } from "../ui/error-bar.js";
+import { generateThumbnailFromDataUrl } from "../image-thumbnail.js";
+import type { AnnotSaveStatusElement } from "../save-status-indicator.js";
+import type { ThumbnailManager } from "../thumbnail-manager.js";
 
 export interface SavePipelineDeps {
   getStorage(): StorageProvider | null;
@@ -43,6 +53,16 @@ export interface SavePipelineDeps {
    *  plugins read the canonical location. The dep closure is
    *  responsible for reading `getStorageMode()` itself. */
   onAfterSave(path: string): void;
+  /** Surface a save-error banner. The pipeline classifies the
+   *  failure (auth-expired / permission / not-found / offline /
+   *  generic) and hands a fully-formatted message + optional retry
+   *  callback to the host. Hosts wire this to whatever banner UI
+   *  they ship. */
+  onSaveError(message: string, retry?: () => void): void;
+  /** Hide any prior save-error banner — called when a subsequent
+   *  save lands successfully. Hosts wire this to their banner's
+   *  hide method (PWA's `hideError`, Desktop's `hideEditorError`). */
+  onSaveSuccess(): void;
 }
 
 export class SavePipeline {
@@ -125,7 +145,7 @@ export class SavePipeline {
       await storage.updateImage(path, updates);
       // `updateImage` is in-place — the path is unchanged. Folder
       // moves go through a separate `moveImage` codepath.
-      hideError();
+      this.deps.onSaveSuccess();
       const s = this.deps.getStatusIndicator();
       if (s) s.status = "saved";
       // Notify plugins — `annot-cloud` uses this for server-side
@@ -147,18 +167,18 @@ export class SavePipeline {
         // and come back, or try again once the store has a valid
         // session. The provider-labelled banner shown by the store's
         // refresher carries the correct UX for re-auth.
-        showSaveError(
+        this.deps.onSaveError(
           "Save failed — session expired. Sign in again from the sidebar and retry.",
           retry,
         );
       } else if (err.status === 403) {
-        showSaveError("Permission denied. You may not have write access to this folder.");
+        this.deps.onSaveError("Permission denied. You may not have write access to this folder.");
       } else if (err.status === 404) {
-        showSaveError("File or folder not found. It may have been deleted.");
+        this.deps.onSaveError("File or folder not found. It may have been deleted.");
       } else if (!navigator.onLine) {
-        showSaveError("You are offline. Changes will be lost.", retry);
+        this.deps.onSaveError("You are offline. Changes will be lost.", retry);
       } else {
-        showSaveError(`Save failed: ${err.message || "Unknown error"}`, retry);
+        this.deps.onSaveError(`Save failed: ${err.message || "Unknown error"}`, retry);
       }
     } finally {
       this.#saveInFlight = false;

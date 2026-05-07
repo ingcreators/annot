@@ -27,6 +27,7 @@ import type { AnnotEditorRightPanelElement } from "@ingcreators/annot-editor-she
 import "@ingcreators/annot-editor-shell/right-panel";
 import "@ingcreators/annot-editor-shell/editor-statusbar";
 import { estimateDataUrlBytes } from "@ingcreators/annot-editor-shell";
+import { SavePipeline } from "@ingcreators/annot-editor-shell/orchestrators/save-pipeline";
 import { StatusHost } from "@ingcreators/annot-editor-shell/orchestrators/status-host";
 import { Toolbar } from "@ingcreators/annot-editor-shell/toolbar";
 // Reuse PWA's editor-header Lit element directly. Phase 3 of the
@@ -108,6 +109,7 @@ interface EditorSession {
   header: AnnotEditorHeaderElement;
   rightPanel: AnnotEditorRightPanelElement;
   statusHost: StatusHost;
+  savePipeline: SavePipeline;
   drawer: AnnotFileDetailsDrawerElement;
   /** Disposers run when leaving the editor for the gallery. Keeps
    *  the teardown sequence explicit so a future refactor can verify
@@ -121,6 +123,11 @@ interface EditorSession {
   /** The full ImageRecord at open time. Updated on rename so the
    *  drawer's File / Tags sections stay in sync. */
   record: ImageRecord;
+  /** Mutable tag map driven by drawer edits. SavePipeline reads
+   *  via `getCurrentTags()` so tag edits ride alongside annotation
+   *  saves through the unified `storage.updateImage` call instead
+   *  of the previous separate-write path. */
+  tags: Record<string, string>;
 }
 
 let session: EditorSession | null = null;
@@ -254,12 +261,43 @@ function openEditor(record: ImageRecord): void {
   drawer.onRename = (newName) => renameCurrentImage(newName);
   drawer.onTagsChange = (tags) => {
     if (!session) return;
+    session.tags = tags;
     session.record = { ...session.record, tags };
-    void fsGallery!.store
-      .updateImage(session.path, { tags })
-      .catch((e) => surfaceEditorError("Tag save failed", e));
+    // Tag edits ride through the same SavePipeline path as
+    // annotation edits — `getCurrentTags()` returns the latest map
+    // and `writeAnnotations` folds both into one `updateImage`
+    // call. Phase 1's separate `store.updateImage(path, { tags })`
+    // shortcut is gone now that the pipeline is shared.
+    void session.savePipeline.writeAnnotations();
   };
   document.body.appendChild(drawer);
+
+  // ---- SavePipeline (shared autosave + dirty-debounce) -------
+  // Phase 3 / PR B of `docs/plans/host-convergence.md` swapped the
+  // throwaway desktop-local debounce shipped in Phase 1 for the
+  // shared `SavePipeline` orchestrator. The pipeline owns:
+  //   - dirty → debounce → writeAnnotations cadence
+  //   - concurrent-save guarding (queue while in-flight, catch up after)
+  //   - status-indicator transitions (saving → saved / error)
+  //   - flushPending() for navigation boundaries
+  // Banner UI is host-specific so it threads through callbacks.
+  const sessionTags = { ...record.tags };
+  const savePipeline = new SavePipeline({
+    getStorage: () => fsGallery!.store,
+    getCanvas: () => shell.getCanvas(),
+    getCurrentImagePath: () => session?.path ?? null,
+    getCurrentTags: () => session?.tags ?? sessionTags,
+    getStatusIndicator: () => header.getSaveStatusIndicator(),
+    getThumbnailManager: () => null,
+    notifyBeforeSave: async () => {
+      /* no plugin host on desktop yet — see plugin-host-extraction.md */
+    },
+    onAfterSave: () => {
+      /* no plugin host on desktop yet */
+    },
+    onSaveError: (message, retry) => surfaceSaveError(message, retry),
+    onSaveSuccess: () => hideEditorError(),
+  });
 
   // ---- Editor header ------------------------------------------
   const header = document.createElement("annot-editor-header");
@@ -271,7 +309,7 @@ function openEditor(record: ImageRecord): void {
       toolbar.copyNow().catch((e) => surfaceEditorError("Copy failed", e));
     },
     onSave: () => {
-      void runSaveNow();
+      void savePipeline.writeAnnotations();
     },
     onSaveMenu: (anchor) => toolbar.showSaveMenu(anchor),
   };
@@ -288,55 +326,20 @@ function openEditor(record: ImageRecord): void {
     }
   });
 
-  // ---- Autosave debounce --------------------------------------
-  // Throwaway desktop-local debounce per Phase 1 / Decision 2 of
-  // `docs/plans/host-convergence.md`. Phase 3 collapses this into
-  // the shared `SavePipeline` once the orchestrator is extracted
-  // into `@ingcreators/annot-editor-shell`.
+  // ---- Dirty → debounced autosave ----------------------------
+  // Local-only DesktopStore — 500 ms is fine. Network-backed stores
+  // (Drive / GitHub) use 1500 ms in the PWA; the desktop never
+  // sees those, so we don't need the conditional.
   const SAVE_DEBOUNCE_MS = 500;
-  let saveTimer: number | undefined;
-  let saveInFlight = false;
-  let savePending = false;
-
-  async function runSaveNow(): Promise<void> {
-    if (saveInFlight) {
-      savePending = true;
-      return;
-    }
-    saveInFlight = true;
-    const status = header.getSaveStatusIndicator();
-    if (status) status.status = "saving";
-    try {
-      await shell.saveNow();
-      const s = header.getSaveStatusIndicator();
-      if (s) s.status = "saved";
-      hideEditorError();
-    } catch (e) {
-      const s = header.getSaveStatusIndicator();
-      if (s) s.status = "error";
-      surfaceEditorError("Save failed", e);
-    } finally {
-      saveInFlight = false;
-      if (savePending) {
-        savePending = false;
-        void runSaveNow();
-      }
-    }
-  }
-
   const unsubDirty = shell.on("dirty", () => {
     const status = header.getSaveStatusIndicator();
     if (status) status.status = "pending";
-    if (saveTimer !== undefined) clearTimeout(saveTimer);
-    saveTimer = window.setTimeout(() => {
-      saveTimer = undefined;
-      void runSaveNow();
-    }, SAVE_DEBOUNCE_MS);
+    savePipeline.scheduleAnnotationSave(SAVE_DEBOUNCE_MS);
   });
 
-  // Surface mount + save errors from the shell's own emit (covers
-  // the `await shell.open(...)` path; `runSaveNow` already shows
-  // a banner on direct save throws).
+  // Surface mount errors from the shell's own emit (covers the
+  // `await shell.open(...)` path; SavePipeline's own onSaveError
+  // covers direct save throws via the deps callback).
   const unsubError = shell.on("error", (err) => {
     surfaceEditorError("Editor error", err);
   });
@@ -357,11 +360,7 @@ function openEditor(record: ImageRecord): void {
     // users have a manual checkpoint affordance.
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
       e.preventDefault();
-      if (saveTimer !== undefined) {
-        clearTimeout(saveTimer);
-        saveTimer = undefined;
-      }
-      void runSaveNow();
+      void savePipeline.flushPending();
     }
   };
   document.addEventListener("keydown", onKeyDown);
@@ -372,30 +371,18 @@ function openEditor(record: ImageRecord): void {
     header,
     rightPanel,
     statusHost,
+    savePipeline,
     drawer,
     fitObserver,
     path: record.path,
     record,
+    tags: sessionTags,
     disposers: [
       unsubSelection,
       unsubDirty,
       unsubError,
       uninstallKeyboardHelp,
       () => document.removeEventListener("keydown", onKeyDown),
-      () => {
-        if (saveTimer !== undefined) clearTimeout(saveTimer);
-      },
-      // Flush any pending save BEFORE the shell tears down so the
-      // user doesn't lose the last keystroke when going back to
-      // gallery. The session-cleanup sequence runs disposers in
-      // order, so this needs to land before `shell.destroy()` below.
-      () => {
-        if (saveTimer !== undefined) {
-          clearTimeout(saveTimer);
-          saveTimer = undefined;
-          void runSaveNow();
-        }
-      },
     ],
   };
 }
@@ -446,6 +433,13 @@ async function renameCurrentImage(newName: string): Promise<void> {
  */
 function closeEditorSession(): void {
   if (!session) return;
+  // Flush any pending save BEFORE we tear the shell down so the
+  // user doesn't lose the last keystroke when going back to
+  // gallery / opening a different image. Fire-and-forget — the
+  // SavePipeline owns its own concurrency gating, and the
+  // `getCanvas` / `getCurrentImagePath` deps still resolve until
+  // `shell.destroy()` runs below.
+  void session.savePipeline.flushPending();
   for (const dispose of session.disposers) {
     try {
       dispose();
@@ -486,6 +480,31 @@ async function backToGallery(folderPath: string): Promise<void> {
 function surfaceEditorError(label: string, err: unknown): void {
   const message = err instanceof Error ? err.message : String(err);
   console.error("[desktop]", `${label}:`, err);
+  showBannerMessage(`${label}: ${message}`);
+}
+
+/**
+ * SavePipeline-shaped variant: receives a pre-classified message
+ * (from the pipeline's 401/403/404/offline/generic decision tree)
+ * plus an optional retry callback. The current chrome doesn't yet
+ * surface the retry button — for parity with the PWA banner this
+ * could grow a "Retry" action button, but for Phase 3 / PR B we
+ * keep the banner shape unchanged and just log the retry option.
+ */
+function surfaceSaveError(message: string, retry?: () => void): void {
+  console.error("[desktop] save error:", message);
+  showBannerMessage(message);
+  if (retry) {
+    // Retry surfaces would need a button on the banner; for now
+    // the user-facing path is "edit again to retry" (any new edit
+    // re-arms the autosave debounce). Keep the retry callback
+    // available so a future banner refresh can wire it up
+    // without touching SavePipeline.
+    void retry;
+  }
+}
+
+function showBannerMessage(message: string): void {
   let banner = document.getElementById("editor-error-banner");
   if (!banner) {
     banner = document.createElement("div");
@@ -499,7 +518,7 @@ function surfaceEditorError(label: string, err: unknown): void {
       .querySelector("#editor-error-banner-dismiss")!
       .addEventListener("click", () => hideEditorError());
   }
-  banner.querySelector("#editor-error-banner-message")!.textContent = `${label}: ${message}`;
+  banner.querySelector("#editor-error-banner-message")!.textContent = message;
   banner.classList.add("visible");
 }
 

@@ -24,8 +24,8 @@ import { createThemeToggle } from "@ingcreators/annot-editor";
 import { html, LitElement, nothing, unsafeHTML } from "../lit.js";
 import "./editable-filename.js";
 import type { AnnotEditableFilenameElement } from "./editable-filename.js";
-import "./save-status-indicator.js";
-import type { AnnotSaveStatusElement } from "./save-status-indicator.js";
+import "@ingcreators/annot-editor-shell/save-status-indicator";
+import type { AnnotSaveStatusElement } from "@ingcreators/annot-editor-shell/save-status-indicator";
 
 /** Brand mark — 30×30 SVG matching the file-manager `.brand` so
  *  the logo stays at the same x/y position when the user
@@ -144,10 +144,12 @@ export class AnnotEditorHeaderElement extends LitElement {
       <nav class="breadcrumb editor-header-path" aria-label="Return to gallery">
         ${this.#renderCrumb({ label: this.rootLabel, path: "" })}
         ${this.crumbs.map(
-          (c) => html`<span class="breadcrumb-sep" aria-hidden="true">\u203a</span>${this.#renderCrumb(c)}`,
+          (c) =>
+            html`<span class="breadcrumb-sep" aria-hidden="true">\u203a</span>${this.#renderCrumb(c)}`,
         )}
-        ${hasFile
-          ? html`
+        ${
+          hasFile
+            ? html`
               <span class="breadcrumb-sep" aria-hidden="true">\u203a</span>
               <annot-editable-filename
                 .filename=${this.filename}
@@ -164,7 +166,8 @@ export class AnnotEditorHeaderElement extends LitElement {
                 <annot-icon .spec=${builtinIcon("info")}></annot-icon>
               </button>
             `
-          : nothing}
+            : nothing
+        }
       </nav>
 
       <annot-save-status></annot-save-status>
@@ -172,8 +175,9 @@ export class AnnotEditorHeaderElement extends LitElement {
       <span class="toolbar-spacer"></span>
 
       <div class="editor-header-file-actions">
-        ${this.callbacks.onOpenFile
-          ? html`
+        ${
+          this.callbacks.onOpenFile
+            ? html`
               <button type="button"
                 class="header-info-btn"
                 data-tooltip="Open File"
@@ -182,7 +186,8 @@ export class AnnotEditorHeaderElement extends LitElement {
             <annot-icon .spec=${builtinIcon("folder_open")}></annot-icon>
           </button>
             `
-          : nothing}
+            : nothing
+        }
 
         <button type="button"
           class="header-info-btn"
@@ -230,9 +235,9 @@ export class AnnotEditorHeaderElement extends LitElement {
       <button
         type="button"
         class="breadcrumb-item"
-        data-tooltip=${crumb.path
-          ? `Open "${crumb.label}" in gallery`
-          : `Open gallery root (${this.rootLabel})`}
+        data-tooltip=${
+          crumb.path ? `Open "${crumb.label}" in gallery` : `Open gallery root (${this.rootLabel})`
+        }
         @click=${() => this.callbacks.onNavigateToFolder(crumb.path)}
       >
         ${crumb.label}

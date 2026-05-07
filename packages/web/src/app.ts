@@ -18,6 +18,7 @@ import { createBuiltinIcon } from "@ingcreators/annot-editor-shell/annot-icon-im
 import { FileManager } from "@ingcreators/annot-editor-shell/gallery/file-manager";
 import type { SidebarSectionOrder } from "@ingcreators/annot-editor-shell/gallery/sidebar";
 import { IndexedDBThumbnailCache } from "@ingcreators/annot-editor-shell/idb-thumbnail-cache";
+import { SavePipeline } from "@ingcreators/annot-editor-shell/orchestrators/save-pipeline";
 import { StatusHost } from "@ingcreators/annot-editor-shell/orchestrators/status-host";
 import { BUILTIN_RIGHT_PANEL_SECTION_IDS } from "@ingcreators/annot-editor-shell/right-panel";
 import { ThumbnailManager } from "@ingcreators/annot-editor-shell/thumbnail-manager";
@@ -30,7 +31,6 @@ import { type AnnotPlugin, PluginHost } from "./app/plugin-host.js";
 import { githubExternalLinksPlugin } from "./app/plugins/github-external-links.js";
 import { recentTabPlugin } from "./app/plugins/recent-tab.js";
 import { RouterHost } from "./app/router-host.js";
-import { SavePipeline } from "./app/save-pipeline.js";
 import { SplitEditorHost } from "./app/split-editor-host.js";
 import { StorageBridge } from "./app/storage-bridge.js";
 import { pasteFromClipboard } from "./capture/pwa-capture.js";
@@ -48,6 +48,7 @@ import {
   setExtensionId,
   setStorageMode,
 } from "./storage/bridge.js";
+import { hideError, showSaveError } from "./ui/error-bar.js";
 
 export class App {
   #storage: StorageProvider | null = null;
@@ -144,6 +145,12 @@ export class App {
         this.#pluginHost.dispatchAfterSave({ path, mode: getStorageMode() });
       },
       getThumbnailManager: () => this.#thumbnailManager,
+      // Phase 3 / PR B of `docs/plans/host-convergence.md` — the
+      // SavePipeline orchestrator now lives in editor-shell and
+      // takes its banner UI through callbacks. Wire the PWA's
+      // `<annot-error-bar>` singleton (`./ui/error-bar.ts`) here.
+      onSaveError: (message, retry) => showSaveError(message, retry),
+      onSaveSuccess: () => hideError(),
     });
     this.#captureHost = new CaptureHost({
       getStorage: () => this.#storage,
