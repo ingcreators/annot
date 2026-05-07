@@ -49,11 +49,12 @@ What deliberately stays out:
 
 ## Status
 
-Phase 1A of [`docs/plans/desktop-browser-mode.md`](../../docs/plans/desktop-browser-mode.md):
-package scaffolding + chrome-free moves. The extension is the only
-consumer; service-worker.ts continues to drive orchestration. Phase
-1B lifts the state machines into [`src/orchestrate/`](./src/orchestrate/)
-and rewires the extension as a thin host adapter.
+Stable. Landed via [`docs/plans/_done/desktop-browser-mode.md`](../../docs/plans/_done/desktop-browser-mode.md)
+(nine phase-PRs, [#478](https://github.com/ingcreators/annot/pull/478)–[#487](https://github.com/ingcreators/annot/pull/487)).
+Both `packages/extension` and `packages/desktop` consume the package
+as host adapters; the orchestrators in [`src/orchestrate/`](./src/orchestrate/)
+own the per-mode state machines, with `chrome.*` bookkeeping
+delegated to the host's `CaptureHost` implementation.
 
 ## Scripts
 

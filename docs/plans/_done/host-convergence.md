@@ -10,7 +10,7 @@
 > | 2 | Gallery (`<annot-file-manager-shell>` / `<annot-sidebar>` / `<annot-gallery-page>` / `<annot-context-menu>` / `FileManager`) + thumbnail-manager + dialog + plugin-host structural types + capture predicates + `BUILT_IN_STORAGE_MODES` + `file-manager.css` moved into `@ingcreators/annot-host-ui`. Decision 4 (Phase 4 narrowed to structural types) folded in here. | [#471](https://github.com/ingcreators/annot/pull/471) |
 > | 3 | Orchestrator triple lifted into `@ingcreators/annot-host-ui/orchestrators/*` with constructor-injected host element + deps callbacks. PR A: StatusHost. PR B: SavePipeline + `<annot-save-status>` Lit element + Desktop autosave migration off the Phase 1 stopgap. PR C: HeaderHost + `<annot-editor-header>` + `<annot-editable-filename>` Lit elements + Desktop migration off the Phase 1 inline header build. | [#472](https://github.com/ingcreators/annot/pull/472), [#473](https://github.com/ingcreators/annot/pull/473), [#474](https://github.com/ingcreators/annot/pull/474) |
 > | 4 | Folded into Phase 2 (Decision 4). The runtime `PluginHost` class itself is tracked in [`plugin-host-extraction.md`](../plugin-host-extraction.md) (Draft, gated on Desktop / VSCode signalling intent to load plugins). | n/a |
-> | 5 | Deferred to [`desktop-browser-mode.md`](../desktop-browser-mode.md) Phases 1–2 (`@ingcreators/annot-capture` extraction). | n/a |
+> | 5 | Deferred to [`desktop-browser-mode.md`](./desktop-browser-mode.md) Phases 1–2 (`@ingcreators/annot-capture` extraction). | n/a |
 >
 > **Cosmetic rename** ([#475](https://github.com/ingcreators/annot/pull/475))
 > followed Phase 3: `@ingcreators/annot-editor-shell` →
@@ -54,7 +54,7 @@ indicator." This plan organises the unevenness into a target shape and
 phases the work to get there.
 
 The plan complements but does not absorb
-[`desktop-browser-mode.md`](../desktop-browser-mode.md) (capture
+[`desktop-browser-mode.md`](./desktop-browser-mode.md) (capture
 extraction); see Phase 5 below.
 
 ## Current state (audit)
@@ -246,7 +246,7 @@ The gallery has these intra-`annot-web` deps that need to move with it (or be in
 
 ### Phase 5 — Capture extraction (defer to existing plan)
 
-[`desktop-browser-mode.md`](../desktop-browser-mode.md) (Queued) covers
+[`desktop-browser-mode.md`](./desktop-browser-mode.md) (Queued) covers
 the extension → `@ingcreators/annot-capture` → desktop Browse-window
 adoption. This plan does NOT replace it; instead it sequences
 **after** Phase 4 so the capture extraction lands on a stable editor /

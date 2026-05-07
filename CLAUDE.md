@@ -569,12 +569,12 @@ blocking** — a story that fails to compile fails the PR.
   The `litelement-stories-coverage.md` follow-up (PRs
   #253–#256) closed the gap that `lit-migration-completion.md`
   left open: every `LitElement` subclass under
-  `packages/web/src/` ships at least one co-located
-  `*.stories.ts`. The current ratio is **27/27** (every
-  LitElement has a story; some have multiple stories for
-  multiple visible states). Adding a new built-in
-  `LitElement` requires shipping at least a `Default` story
-  in the same PR — the next audit's check is a simple
+  `packages/web/src/` and `packages/host-ui/src/` ships at
+  least one co-located `*.stories.ts`. The current ratio is
+  **29/29** (every LitElement has a story; some have
+  multiple stories for multiple visible states). Adding a new
+  built-in `LitElement` requires shipping at least a `Default`
+  story in the same PR — the next audit's check is a simple
   symmetry assertion (`stories count >= LitElement count`).
 - **Story authoring conventions.** Each story:
     - Lives next to the component (`foo.ts` →
@@ -610,7 +610,8 @@ History: PRs [#236](https://github.com/ingcreators/annot/pull/236)
 (`lit-migration-completion.md`'s six phases — ratio 12/27),
 and [#253–#256](https://github.com/ingcreators/annot/pull/253)
 (`litelement-stories-coverage.md`'s four phases — ratio
-27/27) shaped the current "required for all built-in"
+27/27 at the time, now 29/29 after the capture-settings + split-editor
+additions) shaped the current "required for all built-in"
 stance. If broader visual-regression coverage becomes
 valuable later (e.g. when Chromatic-style review lands per
 Phase 3 of the Storybook plan), revisit this section as
@@ -881,11 +882,10 @@ in that directory's [`README.md`](./docs/plans/README.md). Each plan
 is self-contained so Claude Code can resume work from the file alone
 after a context reset.
 
-Current active plan:
+Selected active plans worth knowing about (see
+[`docs/plans/README.md`](./docs/plans/README.md) for the full
+list with statuses):
 
-- [`docs/plans/path-based-storage.md`](./docs/plans/path-based-storage.md)
-  — drop numeric IDs in favor of filesystem-style paths. **Prerequisite
-  for GitHubStore** (numeric IDs don't map to git objects).
 - [`docs/plans/google-drive-integration.md`](./docs/plans/google-drive-integration.md)
   — rework Drive onto `drive.file` scope + Workspace Marketplace
   + Drive UI Integration. Phase 1 landed; Phases 2–4 gated on
