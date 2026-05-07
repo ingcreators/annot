@@ -26,6 +26,11 @@ import {
   createBrowseHandlers,
 } from "./browse.js";
 import {
+  CAPTURE_SETTINGS_CHANNEL_TO_HANDLER,
+  type CaptureSettingsOptions,
+  createCaptureSettingsHandlers,
+} from "./capture-settings.js";
+import {
   CLIPBOARD_CHANNEL_TO_HANDLER,
   type ClipboardDeps,
   createClipboardHandlers,
@@ -78,6 +83,10 @@ export interface RegisterAllOptions {
    *  webContents.capturePage adapter, library root for capture
    *  persistence. */
   browse: BrowseDeps;
+  /** Capture-settings dependencies — userData dir for the
+   *  `<userData>/capture-settings.json` persistence file
+   *  (Phase 6 of `desktop-browser-mode.md`). */
+  captureSettings: CaptureSettingsOptions;
   /** Extension-handoff dependencies — `<userData>/` root for
    *  draining `data/incoming/` + checking the legacy-data path. */
   extension: ExtensionDeps;
@@ -115,6 +124,11 @@ export function registerAllIpcHandlers(
   registerSet(ipcMain, screenCapture, SCREEN_CAPTURE_CHANNEL_TO_HANDLER);
   registerSet(ipcMain, createClipboardHandlers(opts.clipboard), CLIPBOARD_CHANNEL_TO_HANDLER);
   registerSet(ipcMain, createBrowseHandlers(opts.browse), BROWSE_CHANNEL_TO_HANDLER);
+  registerSet(
+    ipcMain,
+    createCaptureSettingsHandlers(opts.captureSettings),
+    CAPTURE_SETTINGS_CHANNEL_TO_HANDLER,
+  );
   registerSet(ipcMain, createExtensionHandlers(opts.extension), EXTENSION_CHANNEL_TO_HANDLER);
   registerSet(ipcMain, createShellHandlers(opts.shell), SHELL_CHANNEL_TO_HANDLER);
   return { screenCapture };
