@@ -633,26 +633,65 @@ per-OS branches to gate on).
 
 ### Phase 5 — multi-tab + `window.open` routing
 
-Replace the MVP's "deny all popups" `setWindowOpenHandler`
-with the multi-tab plumbing:
+Replaced the MVP's "deny all popups" `setWindowOpenHandler`
+with the multi-tab plumbing. Split into 5A (multi-tab core +
+navigation-intent routing into tabs; ships without
+`window.opener` preservation) and 5B (OAuth-pattern popup
+detection + popup BrowserWindow with `window.opener` preserved).
 
-- Tab bar component in `browse.html` (Lit) showing per-tab
-  favicon + title + close affordance.
-- `setWindowOpenHandler` returns `{ action: 'allow', ... }`
-  and the spawned `webContents` is adopted as a new tab in
-  the current Browse window. `window.opener` preserved.
+**Phase 5A — multi-tab core (shipped #484)**:
+
+- Tab bar in `browse.html` (plain DOM today; Lit migration is
+  a future no-op). Per-tab favicon / title / close affordance.
+- `webview` `new-window` event in the renderer routed
+  navigation-intent opens (target="_blank" / bare
+  `window.open(url)`) into new tabs in the same Browse window.
+  `window.opener` was lost on this path — OAuth flows that
+  rely on `opener.postMessage` couldn't complete.
 - Detach-to-new-window context-menu action per tab.
-- `CaptureHost` carries the **active tab's** webview id
-  internally; tab switch updates the id atomically.
-- During a multi-segment capture, tab-switching UI is
-  disabled.
+- `CaptureHost` carries the active tab's webview id
+  internally via `getActiveWebview` /
+  `getWebviewByContentsId` accessors; tab switch updates the
+  resolved target atomically. Captures started against tab A
+  keep targeting tab A even if the user switches tabs
+  mid-capture.
+- During a multi-segment capture (full-page / per-page),
+  tab-switching UI is disabled via `tabs.setLocked(true)`.
 
-**Verify**: opening a `target="_blank"` link adds a new tab
-in the same Browse window; an OAuth popup flow (e.g. Google
-sign-in on a test page) completes successfully with
-`window.opener` intact; closing the active tab mid-capture
-cancels with a visible error; tab switching is locked during
-a full-page capture and unlocked on completion.
+**Phase 5B — OAuth `window.opener` preservation (this PR)**:
+
+- Window-open routing moved to the chrome's main-process
+  `setWindowOpenHandler` (one per embedded webview, installed
+  via `did-attach-webview`). The classifier in
+  `webview-popup-policy.ts` distinguishes:
+  - **Popup intent** (features include `width=` / `height=`
+    — the OAuth pattern): return `{ action: "allow", ... }`
+    so Electron itself spawns the new BrowserWindow with the
+    spawned webContents. `window.opener` survives because
+    the parent / child webContents relationship is set up by
+    Chromium internally. The popup is sized per the
+    requested dimensions, parented to the Browse window, and
+    constrained to safe defaults (`contextIsolation: true`,
+    `nodeIntegration: false`, no annot content-preload).
+  - **Tab intent** (`target="_blank"` / bare
+    `window.open(url)` / no explicit dimensions): return
+    `{ action: "deny" }` and forward to the chrome renderer
+    via `browse.open-tab` IPC, which calls
+    `tabs.openTab(url, { active: true })`. `window.opener`
+    remains lost on this path because Chromium can't carry
+    opener across two unrelated webContents — but
+    navigation-intent opens don't need it.
+- Renderer-side `new-window` handler removed from
+  `TabsManager`. Main-process routing is the single source
+  of truth.
+
+**Verify (Phase 5)**: opening a `target="_blank"` link adds a
+new tab in the same Browse window; an OAuth popup flow (e.g.
+Google sign-in on a test page) completes successfully with
+`window.opener` intact and the popup auto-closing on flow
+completion; closing the active tab mid-capture cancels with a
+visible error; tab switching is locked during a full-page
+capture and unlocked on completion.
 
 ### Phase 6 — settings UI + emulation presets
 
