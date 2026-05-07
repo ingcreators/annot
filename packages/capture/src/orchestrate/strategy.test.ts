@@ -3,14 +3,14 @@
 // the segment plan + window-size math.
 
 import { describe, expect, it } from "vitest";
+import { MAX_CANVAS_DIMENSION } from "./constants.js";
 import {
   computeChromeDelta,
   computeDesiredWindowSize,
   MIN_WINDOW_DIMENSION,
   pixelToCssSize,
   planScrollSegments,
-} from "./capture-strategy.js";
-import { MAX_CANVAS_DIMENSION } from "./service-worker-helpers.js";
+} from "./strategy.js";
 
 // ─── computeChromeDelta ──────────────────────────────────────────────
 
@@ -213,7 +213,7 @@ import {
   DEFAULT_MIN_LAST_PAGE_CONTENT_PX,
   planPerPageStep,
   type PerPageStepInput,
-} from "./capture-strategy.js";
+} from "./strategy.js";
 
 const stepInput = (over: Partial<PerPageStepInput> = {}): PerPageStepInput => ({
   pageIndex: 0,

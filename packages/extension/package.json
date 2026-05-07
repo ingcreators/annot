@@ -20,6 +20,7 @@
     "icons": "node ../../brand/generate-app-icons.mjs"
   },
   "dependencies": {
+    "@ingcreators/annot-capture": "workspace:*",
     "@ingcreators/annot-core": "workspace:*"
   },
   "devDependencies": {

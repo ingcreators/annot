@@ -19,7 +19,7 @@ import {
   DEFAULT_MIN_LAST_PAGE_CONTENT_PX,
   planPerPageStep,
   planScrollSegments,
-} from "./capture-strategy.js";
+} from "@ingcreators/annot-capture/orchestrate";
 import {
   ANNOTATION_URL,
   buildEditUrl,

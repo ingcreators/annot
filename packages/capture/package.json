@@ -1,0 +1,36 @@
+{
+  "name": "@ingcreators/annot-capture",
+  "version": "0.1.0",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ingcreators/annot.git",
+    "directory": "packages/capture"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./host": "./src/host.ts",
+    "./content": "./src/content/index.ts",
+    "./content/*": "./src/content/*.ts",
+    "./encode": "./src/encode/index.ts",
+    "./encode/*": "./src/encode/*.ts",
+    "./shared": "./src/shared/index.ts",
+    "./shared/*": "./src/shared/*.ts",
+    "./orchestrate": "./src/orchestrate/index.ts",
+    "./orchestrate/*": "./src/orchestrate/*.ts"
+  },
+  "scripts": {
+    "build": "vite build",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "catalog:",
+    "vite": "catalog:"
+  },
+  "dependencies": {
+    "@ingcreators/annot-core": "workspace:*"
+  }
+}

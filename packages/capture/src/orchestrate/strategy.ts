@@ -1,22 +1,20 @@
 /**
- * Pure capture-orchestration math, extracted from `service-worker.ts`
- * so the segment plan, browser-chrome delta, and viewport-target
- * arithmetic can be unit-tested without `chrome.*` APIs.
+ * Pure capture-orchestration math.
  *
- * The service worker remains the I/O orchestrator (it actually scrolls
- * the page, calls `chrome.tabs.captureVisibleTab`, resizes windows);
- * this file owns the "what should we do?" decisions:
+ * The orchestrator owns the I/O (it actually scrolls the page, calls
+ * `chrome.tabs.captureVisibleTab` / `webContents.capturePage`, resizes
+ * windows). This file owns the "what should we do?" decisions:
  *   - How many scroll segments fit the page, and what scrollY for each?
  *   - What stitch canvas size results, capped at MAX_CANVAS_DIMENSION?
  *   - What window size do we need to land the captured viewport at the
  *     user's target pixel resolution given the current DPR + chrome
  *     framing delta?
  *
- * Companion test fixtures: `capture-strategy.test.ts` drives every
- * branch with plain numbers; no DOM, no Chrome runtime.
+ * Companion test fixtures: `strategy.test.ts` drives every branch
+ * with plain numbers; no DOM, no host runtime.
  */
 
-import { MAX_CANVAS_DIMENSION } from "./service-worker-helpers.js";
+import { MAX_CANVAS_DIMENSION } from "./constants.js";
 
 // ─── Window-size math (used by withWindowResize) ──────────────────────
 
@@ -34,9 +32,9 @@ export interface ChromeDelta {
   height: number;
 }
 
-/** Lower bound applied to every dimension before it lands at
- *  `chrome.windows.update`. Chrome silently ignores tiny values; the
- *  guard keeps captures sane when the user picks an absurd preset. */
+/** Lower bound applied to every dimension before it lands at the host's
+ *  window-resize API. Chrome silently ignores tiny values; the guard
+ *  keeps captures sane when the user picks an absurd preset. */
 export const MIN_WINDOW_DIMENSION = 320;
 
 /**
@@ -82,8 +80,8 @@ export function pixelToCssSize(pixelTarget: Size, devicePixelRatio: number): Siz
  * Compute the outer window size needed so the inner CSS viewport
  * lands at `pixelTarget / devicePixelRatio`, after accounting for the
  * browser-chrome `chromeDelta`. Each dimension is clamped to a
- * minimum so degenerate inputs don't ask Chrome for a zero-sized
- * window.
+ * minimum so degenerate inputs don't ask the host's window API for a
+ * zero-sized window.
  */
 export function computeDesiredWindowSize(
   pixelTarget: Size,
@@ -273,7 +271,7 @@ export type PerPageStepDecision =
  * The orchestrator is responsible for:
  *   - actually scrolling the page to `input.nextDocTop`
  *   - sleeping for `scrollSettleMs` + `POST_HIDE_PAINT_MS`
- *   - calling `chrome.tabs.captureVisibleTab` after a `capture`
+ *   - calling the host's viewport-capture API after a `capture`
  *     decision
  *   - propagating `slice.nextDocTopAfter` into the next call's
  *     `nextDocTop`
