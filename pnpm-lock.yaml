@@ -150,6 +150,12 @@ importers:
       '@ingcreators/annot-core':
         specifier: workspace:*
         version: link:../core
+      '@ingcreators/annot-host-ui':
+        specifier: workspace:*
+        version: link:../host-ui
+      lit:
+        specifier: ^3.3.2
+        version: 3.3.2
     devDependencies:
       '@resvg/resvg-js':
         specifier: ^2.6.2
