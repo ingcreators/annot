@@ -19,15 +19,15 @@
  * + plugin host.
  */
 
-import type { Toolbar } from "@ingcreators/annot-editor-shell/toolbar";
 import type { IconSpec } from "@ingcreators/annot-core";
 import type { ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
 import { getFilename } from "@ingcreators/annot-core/storage";
+import type { Toolbar } from "@ingcreators/annot-editor-shell/toolbar";
 import "../editor/editor-header.js";
-import type { AnnotEditorHeaderElement } from "../editor/editor-header.js";
 import type { AnnotFileDetailsDrawerElement } from "@ingcreators/annot-editor-shell/annot-file-details-drawer";
 import { estimateDataUrlBytes } from "@ingcreators/annot-editor-shell/annot-file-details-drawer";
-import type { AnnotSaveStatusElement } from "../editor/save-status-indicator.js";
+import type { AnnotSaveStatusElement } from "@ingcreators/annot-editor-shell/save-status-indicator";
+import type { AnnotEditorHeaderElement } from "../editor/editor-header.js";
 import { editUrl, pushRoute } from "../router.js";
 import { getStorageMode } from "../storage/bridge.js";
 import { GitHubStore } from "../storage/github-store.js";
@@ -82,11 +82,15 @@ export class HeaderHost {
       onToggleInfo: () => this.deps.getFileDetailsDrawer()?.toggle(),
       onRename: (newName) => this.renameCurrentImage(newName),
       onOpenFile:
-        typeof (window as unknown as { __annot_openFile?: () => void }).__annot_openFile === "function"
+        typeof (window as unknown as { __annot_openFile?: () => void }).__annot_openFile ===
+        "function"
           ? () => (window as unknown as { __annot_openFile: () => void }).__annot_openFile()
           : undefined,
       onCopy: () => {
-        this.deps.getToolbar()?.copyNow().catch((e) => console.error("[copy]", e));
+        this.deps
+          .getToolbar()
+          ?.copyNow()
+          .catch((e) => console.error("[copy]", e));
       },
       onSave: () => {
         this.deps.getToolbar()?.saveNow();

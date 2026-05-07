@@ -29,8 +29,8 @@
  */
 
 import { type BuiltinIconId, builtinIcon } from "@ingcreators/annot-core";
-import { html, LitElement } from "../lit.js";
-import "../ui/annot-icon.js";
+import "./annot-icon.js";
+import { html, LitElement } from "./lit.js";
 
 export type SaveStatus = "saved" | "pending" | "saving" | "error";
 
