@@ -145,11 +145,11 @@ packages/
 4. Toggle `body.editor-mode` on entry / exit (already wired in #465).
 5. Update the back-button + Browse window flow to call `shell.destroy()` before reopening the gallery.
 
-**Decisions inside this phase.**
+**Decisions locked-in for this phase** (per Resolved decisions 1 + 2):
 
-- **Editor-header on desktop?** Recommendation: yes. Brand + breadcrumb + save status + save/copy + theme + help are document-level affordances that desktop users expect. Without it, the user has no save-status indicator at all. Adopting it costs ~48 px at the top of the editor view (offsetting the sidebar / canvas accordingly via `app.css` overrides).
-- **Autosave on desktop?** Recommendation: yes. PWA + VSCode both autosave on dirty; manual-save-only on desktop is the odd one out and confuses cross-host muscle memory.
-- **Right-panel on desktop?** Recommendation: yes. Today the desktop's `PropertyPanel` floats over the canvas as a popover; the PWA-shape persistent right panel is more discoverable for tool-property editing.
+- **Editor-header**: yes. Brand + breadcrumb + save status + save/copy + theme + help. The desktop's `app.css` editor-mode overrides shipped in #465 (`top: 0` on `#editor-sidebar` + `#canvas-container`) get reverted to make room for the 48 px header.
+- **Autosave**: yes. Desktop-local debounce shipped here; collapses into the shared `SavePipeline` when Phase 3 lands.
+- **Right-panel**: yes. Replaces the floating-popover `PropertyPanel` with the persistent `<annot-editor-right-panel>` from `editor-shell`.
 
 **Verification.**
 
@@ -216,14 +216,14 @@ The gallery has these intra-`annot-web` deps that need to move with it (or be in
 
 ### Phase 4 — Plugin host structural types in editor-shell
 
-> **Goal:** `SidebarTab`, `StorageRegistration`, `NewMenuItem`, plugin manifest types live in editor-shell so other hosts (Desktop, future) can consume them without a back-channel through `annot-web`. The plugin RUNTIME (loader, sandbox, lifecycle, manifest fetch) stays in `annot-web` — it's tightly coupled to the PWA's routing + service-worker context, and no other host loads plugins yet.
+> **Goal:** `SidebarTab`, `StorageRegistration`, `NewMenuItem`, plugin manifest types live in editor-shell so the gallery (post-Phase 2) can import them without a back-channel through `annot-web`. **Types only**; the `PluginHost` class itself stays in `annot-web` for now and moves later under [`plugin-host-extraction.md`](./plugin-host-extraction.md) (Draft, trigger: "Desktop or VSCode wants to load plugins").
 
 **Steps.**
 
-1. Move type-only declarations (`SidebarTab`, `StorageRegistration`, manifest schema types) to `packages/editor-shell/src/plugin-host-types.ts`.
-2. `annot-web/app/plugin-host.ts` imports back from editor-shell; runtime stays.
-3. Gallery (now in editor-shell after Phase 2) imports types from the new home rather than from web.
-4. (Folded into Phase 2 if Phase 2 lands first; standalone otherwise.)
+1. Move type-only declarations (`SidebarTab`, `StorageRegistration`, `NewMenuItem`, `UISection*`, `ExternalLink*`, save / route / editor-ready event payloads, manifest schema types) to `packages/editor-shell/src/plugin-host-types.ts`.
+2. `annot-web/app/plugin-host.ts` re-imports the types and continues to own the `PluginHost` class.
+3. Gallery (now in editor-shell after Phase 2) imports types from the new home rather than reaching back into `annot-web/app/plugin-host`.
+4. (Naturally folds into Phase 2 if Phase 2 lands first; otherwise lands as a small standalone PR.)
 
 **Risk.** Low. Type-only move.
 
@@ -250,18 +250,23 @@ sections need updating to Electron's `webContents.capturePage` and
 - Renaming `@ingcreators/annot-web` to `@ingcreators/annot-pwa` post-extraction. Cosmetic; defer until after Phases 2 + 3 ship.
 - Headless / Playwright integration. Already a queued idea elsewhere; this plan unblocks it (a Playwright host would mount `EditorShell` + an in-memory `StorageProvider`) but doesn't deliver it.
 
-## Open questions (Phase 0 sign-off)
-
-1. **Desktop editor-header**: adopt PWA's full editor-header (brand / breadcrumb / save-status / save+copy / theme / help) in Phase 1? Or keep desktop chromeless above the canvas and rely on the statusbar + native window menu?
-2. **Desktop autosave**: introduce in Phase 1, or defer until after Phase 3 lands the shared `SavePipeline`? Doing it in Phase 1 means writing a desktop-local debounce that gets ripped out in Phase 3; deferring means desktop ships without autosave for 2 plan iterations.
-3. **Gallery CSS new home**: when `file-manager.css` moves with the gallery in Phase 2, does it land in `packages/editor-shell/styles/` (closer to the Lit elements) or `packages/core/styles/` (alongside `editor.css` + `toolbar.css` + `property-panel.css` + `fonts.css`)? Recommendation: `editor-shell/styles/`. Core's styles/ is design-tokens + the editor-canvas-itself; gallery is a higher-level surface.
-4. **Plugin runtime extraction timing**: do we schedule a follow-up plan now (`plugin-runtime-extraction.md`), or defer until a non-PWA host actually wants plugins?
-5. **`@ingcreators/annot-web` rename**: defer indefinitely, or schedule a cosmetic rename to `@ingcreators/annot-pwa` once gallery + orchestrators move out and `web` truly is the PWA-only host?
-6. **Phase ordering**: confirm the recommended sequence (1 → 2 → 3 → 4 → 5) or rebalance based on user-visible value vs. structural cleanliness?
-
 ## Resolved decisions
 
-- _(placeholder; populate as the user signs off on the Open Questions above)_
+1. **Desktop editor-header — adopt PWA's full editor-header.** Phase 1 wires `<div id="editor-header">` and populates it with brand + breadcrumb + save-status + save+copy + theme + help, mirroring the PWA. The desktop's `app.css` overrides the editor-sidebar / canvas-container `top` offsets to make room for it (replacing the `top: 0` overrides shipped in #465). Without an editor-header the desktop has no save-status indicator at all, which conflicts with decision 2 below.
+2. **Desktop autosave — introduce in Phase 1.** PWA + VSCode both autosave on dirty; manual-save-only on desktop is the odd one out. Phase 1 writes a small desktop-local debounce + `shell.saveNow()` loop that Phase 3 collapses into the shared `SavePipeline` once that's extracted. The throwaway debounce is ~30 LOC; the cost of writing-then-collapsing is less than the cost of shipping desktop without autosave for 2 plan iterations.
+3. **Gallery CSS lives in `editor-shell/styles/`.** When `file-manager.css` moves with the gallery in Phase 2, its new home is `packages/editor-shell/styles/file-manager.css`. Core's `styles/` stays the home for editor-canvas-level concerns (`editor.css`, `toolbar.css`, `property-panel.css`, `fonts.css` — all design tokens or canvas-coupled). Gallery is a higher-level surface; co-locating it with the gallery's Lit elements in editor-shell is the cleaner split.
+4. **Plugin host extraction — separate follow-up plan.** [`plugin-host-extraction.md`](./plugin-host-extraction.md) (Draft) captures the move of the `PluginHost` class itself (today in `packages/web/src/app/plugin-host.ts`) into editor-shell. The trigger to flip Draft → Queued is "Desktop or VSCode wants to load plugins"; until then the plan stays warm but unscheduled. Phase 4 of the present plan is narrowed to **structural types only** (`SidebarTab`, `StorageRegistration`, `NewMenuItem`, manifest schema types) — those move with the gallery in Phase 2 because the gallery imports them, and follow naturally without waiting on the trigger.
+5. **`@ingcreators/annot-web` rename — see Open Question Q1 below**, which subsumes the rename decision. (Q1 asks whether `web` should drop the PWA aspect entirely, in which case the rename to `annot-pwa` is moot — `web` becomes "just the web app".)
+6. **Phase ordering confirmed: 1 → 2 → 3 → 4 → 5.** Phase 1 first because it carries the highest user-visible value (desktop gains parity with PWA's editor surface). Phase 2 before Phase 3 because moving the gallery first means the orchestrator extraction in Phase 3 already has the gallery types living in editor-shell.
+
+## Open questions
+
+1. **`packages/web` PWA strategy**: today the web app ships as a PWA (manifest + workbox service worker + install prompt + apple-touch-icon). With Desktop covering the "installed app" experience, Browser Extension covering capture, and the web app being a "browser-tab editor" for users without Desktop, the PWA layer adds maintenance overhead (service-worker update flow, manifest, install promotion) without clear user-visible benefit. Three options:
+   - **A) Status quo** — keep full PWA (manifest + SW + install prompt). Pro: marginal cold-start benefit; install option for users on platforms without Desktop. Con: SW complexity is a real bug source ([#464](https://github.com/ingcreators/annot/pull/464) was an SW-induced fix); maintenance overhead.
+   - **B) Drop PWA entirely** — remove `vite-plugin-pwa`, the service worker, the manifest, the `registerSW` flow. Web app is just a SPA at a URL. Pro: simplest; least surface area; no SW update flow to debug. Con: small cold-start regression (precache gone); users who installed lose the install (browsers handle this gracefully).
+   - **C) Service worker for caching only** — keep `vite-plugin-pwa` precache but drop the manifest / install prompt. Pro: cold-start preserved; install promotion gone. Con: still has SW complexity; halfway state.
+   - **Recommendation:** **B** (drop PWA entirely). Strategic context: Desktop is positioned as the native install; Extension is positioned as the capture tool; Web is positioned as a tab-based fallback for users without Desktop. PWA-install of Web overlaps with Desktop and adds nothing the user couldn't get from Desktop. The SW update flow ([#464](https://github.com/ingcreators/annot/pull/464)) has been a real bug source — every reduction of moving parts pays back. If this is chosen, a separate small PR (~30–50 LOC change) drops the PWA infrastructure independent of the host-convergence phases.
+   - Side-effect on the previous Q5: if PWA is dropped, the speculated rename `@ingcreators/annot-web` → `@ingcreators/annot-pwa` becomes moot — the package stays `annot-web` because that's what it is.
 
 ## Forward-looking notes
 
