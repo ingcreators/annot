@@ -26,16 +26,6 @@ import {
 import type { AnnotEditorRightPanelElement } from "@ingcreators/annot-editor-shell/right-panel";
 import "@ingcreators/annot-editor-shell/right-panel";
 import "@ingcreators/annot-editor-shell/editor-statusbar";
-import { estimateDataUrlBytes } from "@ingcreators/annot-editor-shell";
-import { SavePipeline } from "@ingcreators/annot-editor-shell/orchestrators/save-pipeline";
-import { StatusHost } from "@ingcreators/annot-editor-shell/orchestrators/status-host";
-import { Toolbar } from "@ingcreators/annot-editor-shell/toolbar";
-// Reuse PWA's editor-header Lit element directly. Phase 3 of the
-// host-convergence plan moves the orchestrator (HeaderHost) into
-// `editor-shell/orchestrators/`; until then the underlying Lit
-// element is the only PWA-side surface we touch and it works
-// off plain callbacks + props that the desktop populates itself.
-import "@ingcreators/annot-web/editor/editor-header";
 import {
   captureScreen,
   isDesktop,
@@ -43,7 +33,11 @@ import {
   restoreMainWindow,
 } from "@ingcreators/annot-core/desktop-bridge";
 import { getFilename, type ImageRecord } from "@ingcreators/annot-core/storage";
-import type { AnnotEditorHeaderElement } from "@ingcreators/annot-web/editor/editor-header";
+import { estimateDataUrlBytes } from "@ingcreators/annot-editor-shell";
+import { HeaderHost } from "@ingcreators/annot-editor-shell/orchestrators/header-host";
+import { SavePipeline } from "@ingcreators/annot-editor-shell/orchestrators/save-pipeline";
+import { StatusHost } from "@ingcreators/annot-editor-shell/orchestrators/status-host";
+import { Toolbar } from "@ingcreators/annot-editor-shell/toolbar";
 import { bootstrapDesktopFsGallery, type DesktopGalleryHandle } from "../storage/bootstrap.js";
 
 // Restore the user's last-chosen theme + any saved token overrides
@@ -106,7 +100,7 @@ function dismissLegacyNotice(): void {
 interface EditorSession {
   shell: EditorShell;
   toolbar: Toolbar;
-  header: AnnotEditorHeaderElement;
+  headerHost: HeaderHost;
   rightPanel: AnnotEditorRightPanelElement;
   statusHost: StatusHost;
   savePipeline: SavePipeline;
@@ -258,7 +252,7 @@ function openEditor(record: ImageRecord): void {
   };
   drawer.getPluginSections = null;
   drawer.isBuiltinSectionDisabled = null;
-  drawer.onRename = (newName) => renameCurrentImage(newName);
+  drawer.onRename = (newName) => headerHost.renameCurrentImage(newName);
   drawer.onTagsChange = (tags) => {
     if (!session) return;
     session.tags = tags;
@@ -287,7 +281,7 @@ function openEditor(record: ImageRecord): void {
     getCanvas: () => shell.getCanvas(),
     getCurrentImagePath: () => session?.path ?? null,
     getCurrentTags: () => session?.tags ?? sessionTags,
-    getStatusIndicator: () => header.getSaveStatusIndicator(),
+    getStatusIndicator: () => headerHost.getSaveStatusIndicator(),
     getThumbnailManager: () => null,
     notifyBeforeSave: async () => {
       /* no plugin host on desktop yet — see plugin-host-extraction.md */
@@ -299,22 +293,46 @@ function openEditor(record: ImageRecord): void {
     onSaveSuccess: () => hideEditorError(),
   });
 
-  // ---- Editor header ------------------------------------------
-  const header = document.createElement("annot-editor-header");
-  header.callbacks = {
-    onNavigateToFolder: (folderPath) => void backToGallery(folderPath),
-    onToggleInfo: () => drawer.toggle(),
-    onRename: (newName) => renameCurrentImage(newName),
-    onCopy: () => {
-      toolbar.copyNow().catch((e) => surfaceEditorError("Copy failed", e));
+  // ---- Editor header (shared HeaderHost orchestrator) -------
+  // Phase 3 / PR C of `docs/plans/host-convergence.md` collapsed
+  // the inline `<annot-editor-header>` build + populateHeaderProps
+  // chain into the shared `HeaderHost` orchestrator. The desktop
+  // wires the host-specific concerns as deps callbacks: a constant
+  // "Desktop" root label, no-op routing (no router on desktop),
+  // and no last-commit fetch (no GitHub backend on desktop yet).
+  let pendingNavigationFolder = record.folderPath;
+  const headerHost = new HeaderHost(headerEl, {
+    getStorage: () => fsGallery!.store,
+    getCurrentImagePath: () => session?.path ?? record.path,
+    setCurrentImagePath: (p) => {
+      if (session) session.path = p;
     },
-    onSave: () => {
-      void savePipeline.writeAnnotations();
+    getCurrentImageRecord: () => session?.record ?? record,
+    setCurrentImageRecord: (r) => {
+      if (session) session.record = r;
     },
-    onSaveMenu: (anchor) => toolbar.showSaveMenu(anchor),
-  };
-  populateHeaderProps(header, record);
-  headerEl.appendChild(header);
+    getCurrentTags: () => session?.tags ?? sessionTags,
+    getCurrentImageDataUrl: () => session?.record.originalDataUrl ?? record.originalDataUrl,
+    getCurrentFolderPath: () => pendingNavigationFolder,
+    setCurrentFolderPath: (p) => {
+      pendingNavigationFolder = p;
+    },
+    getFileDetailsDrawer: () => drawer,
+    getToolbar: () => toolbar,
+    getImageSize: () => {
+      const c = shell.getCanvas();
+      return { width: c?.imageWidth ?? record.width, height: c?.imageHeight ?? record.height };
+    },
+    showGallery: async () => {
+      await backToGallery(pendingNavigationFolder);
+    },
+    collectExternalLinks: () => undefined,
+    getRootLabel: () => "Desktop",
+    // Desktop has no in-app router and no GitHub last-commit
+    // surface; both deps are intentionally omitted (HeaderHost
+    // treats them as no-ops via the optional-method shape).
+  });
+  headerHost.build();
 
   // ---- Selection sync → right-panel ---------------------------
   const unsubSelection = shell.on("selection-change", () => {
@@ -332,7 +350,7 @@ function openEditor(record: ImageRecord): void {
   // sees those, so we don't need the conditional.
   const SAVE_DEBOUNCE_MS = 500;
   const unsubDirty = shell.on("dirty", () => {
-    const status = header.getSaveStatusIndicator();
+    const status = headerHost.getSaveStatusIndicator();
     if (status) status.status = "pending";
     savePipeline.scheduleAnnotationSave(SAVE_DEBOUNCE_MS);
   });
@@ -368,7 +386,7 @@ function openEditor(record: ImageRecord): void {
   session = {
     shell,
     toolbar,
-    header,
+    headerHost,
     rightPanel,
     statusHost,
     savePipeline,
@@ -385,43 +403,6 @@ function openEditor(record: ImageRecord): void {
       () => document.removeEventListener("keydown", onKeyDown),
     ],
   };
-}
-
-function populateHeaderProps(header: AnnotEditorHeaderElement, record: ImageRecord): void {
-  // The desktop has a single storage backend; the breadcrumb root
-  // mirrors the gallery sidebar's "Desktop" label so the user sees
-  // the same anchor in both surfaces.
-  header.rootLabel = "Desktop";
-  const segments = record.folderPath ? record.folderPath.split("/").filter(Boolean) : [];
-  let acc = "";
-  header.crumbs = segments.map((seg) => {
-    acc = acc ? `${acc}/${seg}` : seg;
-    return { label: seg, path: acc };
-  });
-  header.filename = getFilename(record.path);
-  header.fullPath = record.path;
-}
-
-async function renameCurrentImage(newName: string): Promise<void> {
-  if (!session || !fsGallery) {
-    throw new Error("No active file to rename.");
-  }
-  const newPath = await fsGallery.store.renameImage(session.path, newName);
-  session.path = newPath;
-  session.record = { ...session.record, path: newPath };
-  populateHeaderProps(session.header, session.record);
-  // Keep the drawer's File section in sync.
-  session.drawer.setData({
-    filename: getFilename(newPath),
-    folderPath: session.record.folderPath,
-    width: session.record.width,
-    height: session.record.height,
-    fileSizeBytes: estimateDataUrlBytes(session.record.originalDataUrl),
-    createdAt: session.record.createdAt,
-    updatedAt: session.record.updatedAt,
-    sourceUrl: session.record.sourceUrl,
-    tags: session.record.tags,
-  });
 }
 
 /**

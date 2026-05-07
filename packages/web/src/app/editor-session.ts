@@ -33,12 +33,12 @@ import {
   serializeSelection,
 } from "@ingcreators/annot-editor-shell";
 import "@ingcreators/annot-editor-shell/annot-scratchpad-section";
+import type { HeaderHost } from "@ingcreators/annot-editor-shell/orchestrators/header-host";
 import type { SavePipeline } from "@ingcreators/annot-editor-shell/orchestrators/save-pipeline";
 import type { StatusHost } from "@ingcreators/annot-editor-shell/orchestrators/status-host";
 import type { ScratchpadStore } from "../editor/scratchpad-store.js";
 import { getStorageMode } from "../storage/bridge.js";
 import { addClickMarker } from "./click-marker.js";
-import type { HeaderHost } from "./header-host.js";
 import type { UISection } from "./plugin-host.js";
 
 export interface EditorHandle {
