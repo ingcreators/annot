@@ -563,6 +563,7 @@ void app.whenReady().then(async () => {
       captureWebContents: captureWebContentsById,
       executeJavaScriptInTarget,
     },
+    captureSettings: { userDataDir },
     extension: { userDataDir },
     shell: {
       openPath: (absPath) => electronShell.openPath(absPath),

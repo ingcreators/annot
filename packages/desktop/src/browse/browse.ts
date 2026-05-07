@@ -24,6 +24,11 @@ import {
   type CaptureFrame,
   type CaptureResult,
 } from "@ingcreators/annot-capture/orchestrate";
+import type {
+  AnnotCaptureSettingsElement,
+  CaptureSettingsChangeDetail,
+} from "@ingcreators/annot-host-ui/annot-capture-settings";
+import "@ingcreators/annot-host-ui/annot-capture-settings";
 import { newIdB58 } from "@ingcreators/annot-core/utils";
 import type { DesktopStore } from "../storage/desktop-store.js";
 import { createStandaloneDesktopStore } from "../storage/bootstrap.js";
@@ -68,7 +73,11 @@ interface BrowseDom {
   btnCapturePages: HTMLButtonElement;
   btnCaptureClick: HTMLButtonElement;
   btnCaptureHotkey: HTMLButtonElement;
+  btnSettings: HTMLButtonElement;
   contextMenu: HTMLDivElement;
+  settingsDialog: HTMLDialogElement;
+  settingsBody: HTMLDivElement;
+  btnSettingsClose: HTMLButtonElement;
   statusBar: HTMLDivElement;
   statusText: HTMLSpanElement;
 }
@@ -101,9 +110,21 @@ function resolveDom(): BrowseDom {
   const btnCaptureHotkey = document.getElementById(
     "btn-capture-hotkey",
   ) as HTMLButtonElement | null;
+  const btnSettings = document.getElementById(
+    "btn-settings",
+  ) as HTMLButtonElement | null;
   const contextMenu = document.getElementById(
     "annot-context-menu",
   ) as HTMLDivElement | null;
+  const settingsDialog = document.getElementById(
+    "capture-settings-dialog",
+  ) as HTMLDialogElement | null;
+  const settingsBody = document.getElementById(
+    "capture-settings-body",
+  ) as HTMLDivElement | null;
+  const btnSettingsClose = document.getElementById(
+    "btn-settings-close",
+  ) as HTMLButtonElement | null;
   const statusBar = document.getElementById("browse-status") as HTMLDivElement | null;
   const statusText = document.getElementById("browse-status-text") as HTMLSpanElement | null;
 
@@ -121,7 +142,11 @@ function resolveDom(): BrowseDom {
     !btnCapturePages ||
     !btnCaptureClick ||
     !btnCaptureHotkey ||
+    !btnSettings ||
     !contextMenu ||
+    !settingsDialog ||
+    !settingsBody ||
+    !btnSettingsClose ||
     !statusBar ||
     !statusText
   ) {
@@ -142,7 +167,11 @@ function resolveDom(): BrowseDom {
     btnCapturePages,
     btnCaptureClick,
     btnCaptureHotkey,
+    btnSettings,
     contextMenu,
+    settingsDialog,
+    settingsBody,
+    btnSettingsClose,
     statusBar,
     statusText,
   };
@@ -545,6 +574,57 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
   window.addEventListener("scroll", hideContextMenu, true);
+
+  // ---- Capture-settings dialog (Phase 6) ────────────────────────
+  //
+  // The settings UI is a Lit `<annot-capture-settings>` element
+  // embedded in a `<dialog>`. The element emits `settings-changed`
+  // on every input — we autosave through the host (which IPC's to
+  // the main process). No "Save" button: the form value IS the
+  // persisted state, mirroring the chrome extension's options.html
+  // ergonomics.
+
+  const settingsEl = document.createElement("annot-capture-settings") as AnnotCaptureSettingsElement;
+  dom.settingsBody.appendChild(settingsEl);
+
+  // Lazy-init the form on first open. Loading settings reads a
+  // file and merges defaults; deferring until the user clicks ⚙
+  // keeps boot fast.
+  let settingsLoaded = false;
+  async function ensureSettingsLoaded(): Promise<void> {
+    if (settingsLoaded) return;
+    settingsLoaded = true;
+    try {
+      settingsEl.settings = await host.loadSettings();
+    } catch (err) {
+      console.warn("[browse] settings load failed; using defaults:", err);
+    }
+  }
+
+  settingsEl.addEventListener("settings-changed", (e: Event) => {
+    const detail = (e as CustomEvent<CaptureSettingsChangeDetail>).detail;
+    void host.saveSettings(detail.settings).catch((err) => {
+      console.warn("[browse] settings save failed:", err);
+      setStatus(`Settings save failed: ${(err as Error).message}`, "error");
+    });
+  });
+
+  dom.btnSettings.addEventListener("click", () => {
+    void ensureSettingsLoaded().then(() => {
+      if (!dom.settingsDialog.open) dom.settingsDialog.showModal();
+    });
+  });
+  dom.btnSettingsClose.addEventListener("click", () => {
+    dom.settingsDialog.close();
+  });
+  // Native `<dialog>` close on click-outside isn't a default —
+  // wire it manually so click-on-backdrop dismisses (matching
+  // the right-click context menu's UX).
+  dom.settingsDialog.addEventListener("click", (e) => {
+    if (e.target === dom.settingsDialog) {
+      dom.settingsDialog.close();
+    }
+  });
 
   // ---- Programmatic navigation from main process ────────────────
   //

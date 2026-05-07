@@ -164,6 +164,56 @@
     }
     #annot-context-menu button:hover { background: #3b3e46; }
 
+    /* Capture-settings modal (Phase 6). The native `<dialog>`
+       element handles backdrop + Escape-to-close; we just style
+       the chrome around the embedded `<annot-capture-settings>`
+       element. */
+    .capture-settings-dialog {
+      max-width: 600px;
+      width: 90vw;
+      max-height: 85vh;
+      padding: 0;
+      background: #0b1020;
+      color: #e7ecf7;
+      border: 1px solid #1f2746;
+      border-radius: 12px;
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6);
+    }
+    .capture-settings-dialog::backdrop {
+      background: rgba(0, 0, 0, 0.55);
+    }
+    .capture-settings-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      border-bottom: 1px solid #1f2746;
+      position: sticky;
+      top: 0;
+      background: inherit;
+      z-index: 1;
+    }
+    .capture-settings-header h2 {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .capture-settings-header .nav-btn {
+      margin-left: auto;
+      background: transparent;
+      border: 0;
+      color: #9ca3af;
+      font-size: 18px;
+      padding: 0 8px;
+      cursor: pointer;
+    }
+    .capture-settings-header .nav-btn:hover { color: #f3f4f6; }
+    #capture-settings-body {
+      padding: 16px;
+      overflow-y: auto;
+      max-height: calc(85vh - 60px);
+    }
+
     #browse-target-host {
       position: relative;
       width: 100%;
@@ -216,6 +266,7 @@
     <button id="btn-capture-pages" class="capture-btn" title="Capture each viewport as a separate image (saves to Inbox)">🗒 Per Page</button>
     <button id="btn-capture-click" class="capture-btn" title="Click capture: save a capture on every click. Click again to stop.">🖱 Click ▶</button>
     <button id="btn-capture-hotkey" class="capture-btn" title="Hotkey capture: Alt+Shift+C takes a single shot. Click to start a session, click again to stop.">⌨ Hotkey ▶</button>
+    <button id="btn-settings" class="nav-btn" title="Capture settings (overlays, timing, format, emulation)" aria-label="Settings">⚙</button>
   </div>
   <!-- Right-click capture menu (Phase 4B). Hidden by default;
        browse.ts positions + reveals it when the preload posts a
@@ -228,6 +279,17 @@
     <button data-mode="click" type="button">🖱 Toggle Click Capture</button>
     <button data-mode="hotkey" type="button">⌨ Toggle Hotkey Capture</button>
   </div>
+  <!-- Capture-settings dialog (Phase 6). The `<dialog>` element
+       handles modal visibility + Escape-to-close natively. The
+       `<annot-capture-settings>` Lit element renders the form
+       body; browse.ts wires open/close + autosave. -->
+  <dialog id="capture-settings-dialog" class="capture-settings-dialog">
+    <header class="capture-settings-header">
+      <h2>Capture settings</h2>
+      <button id="btn-settings-close" class="nav-btn" type="button" title="Close" aria-label="Close">×</button>
+    </header>
+    <div id="capture-settings-body"></div>
+  </dialog>
   <!-- Tab bar (Phase 5). TabsManager owns the per-tab buttons +
        close affordances; the trailing "+" button is rendered here
        so its position is HTML-controlled. -->

@@ -26,6 +26,7 @@
     "vite": "catalog:"
   },
   "dependencies": {
+    "@ingcreators/annot-capture": "workspace:*",
     "@ingcreators/annot-core": "workspace:*",
     "@ingcreators/annot-editor": "workspace:*",
     "@ingcreators/annot-render": "workspace:*",

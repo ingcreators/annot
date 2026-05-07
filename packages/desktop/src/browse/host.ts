@@ -61,6 +61,7 @@ import type {
 } from "@ingcreators/annot-capture/host";
 import {
   DEFAULT_SETTINGS,
+  mergeSettings,
   type BackgroundToContentMessage,
   type ContentToBackgroundMessage,
   type Settings,
@@ -197,6 +198,7 @@ export function createBrowseCaptureHost(opts: CreateBrowseCaptureHostOpts): Capt
   // ---- Content-bridge state ────────────────────────────────────
   const pending = new Map<string, PendingRequest>();
   const contentListeners = new Set<(msg: ContentToBackgroundMessage) => void>();
+  const settingsListeners = new Set<(s: Settings) => void>();
   let nextReqId = 1;
 
   // Single ipc-message listener fans out to either the request-
@@ -403,18 +405,47 @@ export function createBrowseCaptureHost(opts: CreateBrowseCaptureHostOpts): Capt
     },
 
     async loadSettings(): Promise<Settings> {
-      // Phase 4A: defaults only. Phase 6 ports the settings UI and
-      // persists through `<userData>/browse-settings.json`.
-      return DEFAULT_SETTINGS;
+      // Phase 6: read `<userData>/capture-settings.json` via IPC,
+      // merge against `DEFAULT_SETTINGS` so the resulting object
+      // is guaranteed to be a fully-formed `Settings`. The first
+      // launch (no file) returns DEFAULT_SETTINGS unchanged.
+      try {
+        const blob = await api.invoke<unknown>("capture.settings.load");
+        return mergeSettings(blob);
+      } catch (err) {
+        log.warn("[browse-host] loadSettings failed; falling back to defaults:", err);
+        return DEFAULT_SETTINGS;
+      }
     },
 
-    async saveSettings() {
-      /* no-op until Phase 6 */
+    async saveSettings(settings) {
+      // Phase 6: persist via the main process. The renderer fires
+      // a synthetic `capture.settings.changed` event after a
+      // successful save so the in-process subscriber set
+      // (`onSettingsChange`) sees its own write — useful for
+      // multi-component coordination on the same renderer.
+      const normalised = mergeSettings(settings);
+      await api.invoke("capture.settings.save", { settings: normalised });
+      for (const cb of settingsListeners) {
+        try {
+          cb(normalised);
+        } catch (err) {
+          log.debug("[browse-host] settings-listener threw:", err);
+        }
+      }
     },
 
-    onSettingsChange() {
-      /* no-op subscriber until Phase 6 */
-      return () => {};
+    onSettingsChange(cb) {
+      // Phase 6: in-process subscription. Cross-window settings
+      // changes (e.g. main window Storybook flipping a value)
+      // would need a main-process broadcast — not in scope
+      // because the Browse window owns the only settings UI in
+      // Phase 6. A future cross-window sync can layer on without
+      // changing this signature.
+      settingsListeners.add(cb);
+      return () => {
+        settingsListeners.delete(cb);
+      };
     },
 
     log(level, ...args) {
