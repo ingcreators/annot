@@ -40,7 +40,16 @@ export async function runAreaCapture(host: CaptureHost): Promise<CaptureResult |
       // descendants are filtered out of metadata to match the
       // screenshot pixels exactly).
       const areaMeta = await host.requestPageMetadata(target, rect.rect);
-      const cropped = await host.cropRect(captured.pngDataUrl, rect.rect, rect.dpr);
+      // DPR-from-host (Phase 2 of `desktop-browser-mode.md`): the
+      // crop math scales the CSS-pixel rect to physical pixels in
+      // the captured PNG. `captured.dpr` is the host-authoritative
+      // capture-time DPR; `rect.dpr` was the click-time DPR
+      // reported by the area-selector overlay. The two only differ
+      // when the DPR drifted between drag-end and capture (window
+      // moved between displays mid-flow). Trust the capture-time
+      // value so the crop hits the right pixels.
+      const dpr = captured.dpr;
+      const cropped = await host.cropRect(captured.pngDataUrl, rect.rect, dpr);
       const [encoded] = await host.encodeBatch([
         {
           pngDataUrl: cropped,
@@ -55,8 +64,8 @@ export async function runAreaCapture(host: CaptureHost): Promise<CaptureResult |
           },
         },
       ]);
-      const croppedW = Math.round(rect.rect.width * rect.dpr);
-      const croppedH = Math.round(rect.rect.height * rect.dpr);
+      const croppedW = Math.round(rect.rect.width * dpr);
+      const croppedH = Math.round(rect.rect.height * dpr);
       const frame: CaptureFrame = {
         dataUrl: encoded?.dataUrl ?? cropped,
         width: croppedW,

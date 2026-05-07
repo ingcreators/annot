@@ -91,7 +91,14 @@ export async function runPerPageCapture(host: CaptureHost): Promise<CaptureResul
       // restores stickies. The `area` argument narrows captureRect to
       // the slice this page contributes to the final image, so the
       // editor's Elements panel filters off-frame elements correctly.
-      const dprNow = after.devicePixelRatio || dpr;
+      //
+      // DPR-from-host (Phase 2 of `desktop-browser-mode.md`): the
+      // metadata area math converts physical-pixel slice offsets
+      // back to CSS pixels for the walker. Trust the capture-time
+      // DPR returned by `captureViewport` so the area lines up
+      // with the actual pixel data, even if `after.devicePixelRatio`
+      // (read post-scroll, pre-capture) drifted.
+      const dprNow = captured.dpr || after.devicePixelRatio || dpr;
       const pageMeta = await host.requestPageMetadata(target, {
         x: 0,
         y: decision.slice.srcYpx / dprNow,
