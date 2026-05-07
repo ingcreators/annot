@@ -638,6 +638,21 @@ document.addEventListener("DOMContentLoaded", () => {
     if (p?.url) tabs.openTab(p.url, { active: true });
   });
 
+  // ---- Tab routing from embedded `<webview>` window-open ───────
+  //
+  // Phase 5B: the chrome's main-process `setWindowOpenHandler`
+  // (see `src-electron/main.ts`'s `did-attach-webview` block)
+  // classifies every `window.open` / `target="_blank"` request
+  // from an embedded page. OAuth-style popups (features include
+  // `width=` / `height=`) get a separate BrowserWindow with
+  // `window.opener` preserved; navigation-intent opens forward
+  // here as a `browse.open-tab` IPC, and TabsManager opens them
+  // as a new tab.
+  api().on("browse.open-tab", (payload) => {
+    const p = payload as { url?: string } | undefined;
+    if (p?.url) tabs.openTab(p.url, { active: true });
+  });
+
   // ---- Initial state ────────────────────────────────────────────
 
   setStatus("Ready", null);

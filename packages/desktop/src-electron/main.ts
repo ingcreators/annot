@@ -59,6 +59,7 @@ import { startHttpServer } from "./http-server.js";
 import type { CapturedImage } from "./ipc/browse.js";
 import { registerAllIpcHandlers, type RegisteredIpc } from "./ipc/index.js";
 import type { CapturerSourceLite, OverlayHandle } from "./ipc/screen-capture.js";
+import { classifyWindowOpenRequest } from "./webview-popup-policy.js";
 
 // `__dirname` is provided by electron-vite's CJS-shim wrapper
 // (`const __dirname = import.meta.dirname;` at the top of the
@@ -371,15 +372,12 @@ async function openOrFocusBrowseWindow(opts: { url?: string } = {}): Promise<voi
     if (browseWindow === win) browseWindow = null;
   });
 
-  // Pop-up handling — `window.open()` and `<a target="_blank">`
-  // currently route to the Browse window's own webview rather
-  // than spawning OS-level windows. The plan notes a multi-tab
-  // follow-up; for now, deny new windows so OAuth flows that
-  // expect a popup show a clear error rather than silently
-  // failing.
+  // The chrome's own `window.open` is denied: only embedded
+  // webviews open windows in a Browse window. Any chrome-side
+  // call would be a misbehaviour, not OAuth.
   win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
 
-  // Wire the capture-package's content-preload onto the embedded
+  // Wire the capture-package's content-preload onto every embedded
   // `<webview>` (Phase 4A of `desktop-browser-mode.md`). The
   // `will-attach-webview` event fires once per webview before it
   // attaches to the DOM, so listeners can rewrite its
@@ -389,6 +387,68 @@ async function openOrFocusBrowseWindow(opts: { url?: string } = {}): Promise<voi
   // `onContentMessage` primitives work uniformly across hosts.
   win.webContents.on("will-attach-webview", (_event, webPreferences) => {
     webPreferences.preload = join(__dirname, "../preload/content-preload.cjs");
+  });
+
+  // Per-webview window-open routing (Phase 5B of
+  // `desktop-browser-mode.md`). `setWindowOpenHandler` runs in
+  // main and decides every `window.open` / `target="_blank"`
+  // request from an embedded page. The classifier in
+  // `webview-popup-policy.ts` distinguishes:
+  //
+  //   - **Popup intent** (OAuth pattern: features include
+  //     `width=` / `height=`). Return `{action: 'allow'}` so
+  //     Electron itself spawns the new BrowserWindow with the
+  //     spawned webContents — `window.opener` is preserved
+  //     because the parent / child webContents relationship is
+  //     set up by Chromium internally. Apply safe webPreferences
+  //     (no annot content-preload, contextIsolation: true,
+  //     nodeIntegration: false) so the popup is a vanilla
+  //     Chromium window.
+  //
+  //   - **Tab intent** (target="_blank", bare window.open(url)).
+  //     Return `{action: 'deny'}` and forward to the chrome
+  //     renderer via `browse.open-tab` IPC — the renderer's
+  //     TabsManager opens it as a new tab in this Browse window.
+  //     Note: `window.opener` is intentionally NOT preserved
+  //     for tab-routed opens because Chromium can't carry
+  //     opener across two unrelated webContents.
+  win.webContents.on("did-attach-webview", (_event, contents) => {
+    contents.setWindowOpenHandler((details) => {
+      const decision = classifyWindowOpenRequest({
+        url: details.url,
+        features: details.features,
+        disposition: details.disposition,
+      });
+      if (decision.kind === "popup") {
+        return {
+          action: "allow",
+          overrideBrowserWindowOptions: {
+            // Parent the popup to the Browse window so it auto-
+            // closes if the user closes Browse mid-OAuth.
+            parent: win,
+            width: decision.width,
+            height: decision.height,
+            autoHideMenuBar: true,
+            // Preserve the title Chromium computes from the
+            // popup page (OAuth providers set sensible titles
+            // like "Sign in - Google Accounts").
+            title: "",
+            webPreferences: {
+              contextIsolation: true,
+              nodeIntegration: false,
+              // Crucially: NO annot content-preload here. The
+              // popup is a third-party OAuth surface; injecting
+              // our capture bus into Google's sign-in page would
+              // be both invasive and pointless.
+              sandbox: false,
+            },
+          },
+        };
+      }
+      // Tab intent — forward to the renderer's TabsManager.
+      win.webContents.send("browse.open-tab", { url: details.url });
+      return { action: "deny" };
+    });
   });
 
   // Send the navigation request once the chrome's renderer

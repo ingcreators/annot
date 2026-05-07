@@ -20,24 +20,30 @@
  *     a capture stay valid even if the user switches tabs
  *     mid-capture (the orchestrator addresses them by
  *     `webContentsId`, not by "currently active").
- *   - `<webview>` `new-window` events route through the manager to
- *     spawn new tabs (instead of the OS-default new-window
- *     behaviour).
+ *   - `<webview>` window-open requests route through the chrome's
+ *     main-process `setWindowOpenHandler` (see
+ *     `src-electron/main.ts` `did-attach-webview` block). The
+ *     handler classifies the request via
+ *     `webview-popup-policy.ts` and either:
+ *       (a) spawns a separate BrowserWindow with `window.opener`
+ *           preserved (OAuth-pattern popups — features include
+ *           `width=` / `height=`); OR
+ *       (b) sends `browse.open-tab` IPC to the chrome's renderer
+ *           which calls `tabs.openTab(url, { active: true })`
+ *           (target="_blank" / bare `window.open(url)` —
+ *           navigation intent without `window.opener`).
  *
- * Phase 5 minimum-viable scope:
+ * Capabilities:
  *   - Open / close / switch / detach tabs
- *   - new-window → new tab in the same Browse window
+ *   - Routing of `target="_blank"` / `window.open(url)` into new
+ *     tabs in the same Browse window (Phase 5)
+ *   - `window.opener` preservation for OAuth popup flows
+ *     (Phase 5B)
  *   - Lock tab interactions during multi-segment captures
  *
- * NOT in this scope:
- *   - `window.opener` preservation for OAuth popup flows.
- *     `<webview>` `new-window` doesn't expose the spawned
- *     `webContents`, and reattaching a separately-spawned
- *     `BrowserWindow`'s webContents into a webview tag is hacky.
- *     Documented as a known limitation; OAuth flows that rely on
- *     `opener.postMessage` won't complete in Phase 5.
- *   - Lit-based tab bar. Phase 5 ships a plain DOM tab bar; a
- *     future Lit migration would touch only this module.
+ * NOT in scope:
+ *   - Lit-based tab bar. Plain DOM today; a future Lit migration
+ *     would touch only this module.
  */
 
 import type { WebviewIpcMessageEvent } from "./host.js";
@@ -110,10 +116,6 @@ export interface TabsManagerEvents {
   "nav-state-changed": Tab;
   /** Embedded page failed to load. */
   "load-failed": { tab: Tab; errorCode: number; errorDescription: string };
-  /** Embedded page issued a `window.open` / `target="_blank"`.
-   *  The manager has already opened a new tab; the consumer can
-   *  log / surface telemetry. */
-  "new-tab-opened": Tab;
 }
 
 /** Strongly-typed `EventTarget` wrapper. We use `CustomEvent` with
@@ -151,7 +153,8 @@ export class TabsManager extends EventTarget {
      *  `click` handler internally — the host doesn't have to. */
     newTabBtn: HTMLButtonElement;
     /** Default URL for new tabs spawned manually (the "+"
-     *  button). `new-window`-spawned tabs use the requested URL.
+     *  button). Tabs spawned from main-process `browse.open-tab`
+     *  IPC events also use this entry point with the requested URL.
      *  Defaults to `about:blank`. */
     defaultUrl?: string;
   }) {
@@ -342,15 +345,23 @@ export class TabsManager extends EventTarget {
       this.#refreshTitleEl(tab, titleEl);
       this.#emit("title-changed", { tab, title: tab.title });
     };
-    const onNewWindow = (event: Event): void => {
-      const e = event as unknown as { url: string };
-      // Suppress the OS-default new-window behaviour (would
-      // spawn a separate top-level BrowserWindow). Open in a new
-      // tab in this Browse window instead.
-      event.preventDefault?.();
-      const opened = this.openTab(e.url, { active: true });
-      this.#emit("new-tab-opened", opened);
-    };
+    // Note: there's intentionally NO renderer-side `new-window`
+    // listener (Phase 5B of `desktop-browser-mode.md`). Window-
+    // open requests from embedded pages route through the
+    // chrome's main-process `setWindowOpenHandler` (see
+    // `main.ts`'s `did-attach-webview` block). The classifier
+    // there decides:
+    //
+    //   - OAuth-style popups (window features include
+    //     `width=` / `height=`) → Electron spawns a separate
+    //     BrowserWindow with `window.opener` preserved.
+    //   - Plain navigation (`target="_blank"` / bare
+    //     `window.open(url)`) → the main forwards via
+    //     `browse.open-tab` IPC, the chrome's renderer calls
+    //     `tabs.openTab(url, { active: true })`.
+    //
+    // Either way, the renderer's webview tag never sees a
+    // `new-window` event — main intercepts first.
     const onIpcMessage = (event: Event): void => {
       const e = event as unknown as WebviewIpcMessageEvent;
       for (const cb of this.#ipcListeners) {
@@ -369,7 +380,6 @@ export class TabsManager extends EventTarget {
     webview.addEventListener("did-stop-loading", onLoadStop);
     webview.addEventListener("did-fail-load", onLoadFail);
     webview.addEventListener("page-title-updated", onTitle);
-    webview.addEventListener("new-window", onNewWindow);
     webview.addEventListener("ipc-message", onIpcMessage);
 
     const cleanup = (): void => {
@@ -380,7 +390,6 @@ export class TabsManager extends EventTarget {
       webview.removeEventListener("did-stop-loading", onLoadStop);
       webview.removeEventListener("did-fail-load", onLoadFail);
       webview.removeEventListener("page-title-updated", onTitle);
-      webview.removeEventListener("new-window", onNewWindow);
       webview.removeEventListener("ipc-message", onIpcMessage);
       tabBarEl.removeEventListener("click", handleTabClick);
       tabBarEl.removeEventListener("contextmenu", handleContextMenu);
