@@ -1,6 +1,6 @@
 # Host convergence: desktop on EditorShell, gallery + orchestrators in editor-shell
 
-> **Status:** Draft
+> **Status:** Queued
 >
 > **Compatibility:** No public API change to `@ingcreators/annot-core`.
 > Adds new subpath exports on `@ingcreators/annot-editor-shell`. Phase
@@ -256,17 +256,20 @@ sections need updating to Electron's `webContents.capturePage` and
 2. **Desktop autosave — introduce in Phase 1.** PWA + VSCode both autosave on dirty; manual-save-only on desktop is the odd one out. Phase 1 writes a small desktop-local debounce + `shell.saveNow()` loop that Phase 3 collapses into the shared `SavePipeline` once that's extracted. The throwaway debounce is ~30 LOC; the cost of writing-then-collapsing is less than the cost of shipping desktop without autosave for 2 plan iterations.
 3. **Gallery CSS lives in `editor-shell/styles/`.** When `file-manager.css` moves with the gallery in Phase 2, its new home is `packages/editor-shell/styles/file-manager.css`. Core's `styles/` stays the home for editor-canvas-level concerns (`editor.css`, `toolbar.css`, `property-panel.css`, `fonts.css` — all design tokens or canvas-coupled). Gallery is a higher-level surface; co-locating it with the gallery's Lit elements in editor-shell is the cleaner split.
 4. **Plugin host extraction — separate follow-up plan.** [`plugin-host-extraction.md`](./plugin-host-extraction.md) (Draft) captures the move of the `PluginHost` class itself (today in `packages/web/src/app/plugin-host.ts`) into editor-shell. The trigger to flip Draft → Queued is "Desktop or VSCode wants to load plugins"; until then the plan stays warm but unscheduled. Phase 4 of the present plan is narrowed to **structural types only** (`SidebarTab`, `StorageRegistration`, `NewMenuItem`, manifest schema types) — those move with the gallery in Phase 2 because the gallery imports them, and follow naturally without waiting on the trigger.
-5. **`@ingcreators/annot-web` rename — see Open Question Q1 below**, which subsumes the rename decision. (Q1 asks whether `web` should drop the PWA aspect entirely, in which case the rename to `annot-pwa` is moot — `web` becomes "just the web app".)
+5. **`@ingcreators/annot-web` rename — declined.** Resolved by decision 7 below: with PWA dropped, the package stays `annot-web` because that's what it is — no need to rename to `annot-pwa`.
 6. **Phase ordering confirmed: 1 → 2 → 3 → 4 → 5.** Phase 1 first because it carries the highest user-visible value (desktop gains parity with PWA's editor surface). Phase 2 before Phase 3 because moving the gallery first means the orchestrator extraction in Phase 3 already has the gallery types living in editor-shell.
+7. **`packages/web` PWA strategy — drop PWA entirely.** Three options were considered:
+   - **A)** Status quo (keep `vite-plugin-pwa` + manifest + workbox SW + `registerSW` update prompt + apple-touch-icon)
+   - **B)** Drop the PWA layer entirely — web becomes a plain SPA at a URL
+   - **C)** Keep workbox SW for precaching only, drop the manifest / install prompt
+
+   **Decision: B.** Strategic context: each of the four hosts has a clean role — Desktop = native install, Extension = capture, Web = browser-tab fallback for users without Desktop, VSCode = in-editor annotation. PWA-install of the web app overlaps with Desktop and adds nothing the user couldn't get from Desktop. The SW update flow has been a real bug source ([#464](https://github.com/ingcreators/annot/pull/464) was an SW-induced fix); reducing moving parts pays back. The cold-start regression from dropping precache (~895 kB on first load) is acceptable on modern broadband (<1 s).
+
+   Lands as a small standalone PR (`feat(web): drop PWA layer`) **independent of the host-convergence phases** — touches only `packages/web/{vite.config.ts,src/main.ts,src/env.d.ts,index.html,package.json}`, removes `vite-plugin-pwa` + `workbox-window` from web's devDependencies, drops the now-dead `icon-512.png` + `icon-512-maskable.png` from `public/icons/` (`icon-192.png` stays as favicon) and the matching entries in `brand/generate-app-icons.mjs`.
 
 ## Open questions
 
-1. **`packages/web` PWA strategy**: today the web app ships as a PWA (manifest + workbox service worker + install prompt + apple-touch-icon). With Desktop covering the "installed app" experience, Browser Extension covering capture, and the web app being a "browser-tab editor" for users without Desktop, the PWA layer adds maintenance overhead (service-worker update flow, manifest, install promotion) without clear user-visible benefit. Three options:
-   - **A) Status quo** — keep full PWA (manifest + SW + install prompt). Pro: marginal cold-start benefit; install option for users on platforms without Desktop. Con: SW complexity is a real bug source ([#464](https://github.com/ingcreators/annot/pull/464) was an SW-induced fix); maintenance overhead.
-   - **B) Drop PWA entirely** — remove `vite-plugin-pwa`, the service worker, the manifest, the `registerSW` flow. Web app is just a SPA at a URL. Pro: simplest; least surface area; no SW update flow to debug. Con: small cold-start regression (precache gone); users who installed lose the install (browsers handle this gracefully).
-   - **C) Service worker for caching only** — keep `vite-plugin-pwa` precache but drop the manifest / install prompt. Pro: cold-start preserved; install promotion gone. Con: still has SW complexity; halfway state.
-   - **Recommendation:** **B** (drop PWA entirely). Strategic context: Desktop is positioned as the native install; Extension is positioned as the capture tool; Web is positioned as a tab-based fallback for users without Desktop. PWA-install of Web overlaps with Desktop and adds nothing the user couldn't get from Desktop. The SW update flow ([#464](https://github.com/ingcreators/annot/pull/464)) has been a real bug source — every reduction of moving parts pays back. If this is chosen, a separate small PR (~30–50 LOC change) drops the PWA infrastructure independent of the host-convergence phases.
-   - Side-effect on the previous Q5: if PWA is dropped, the speculated rename `@ingcreators/annot-web` → `@ingcreators/annot-pwa` becomes moot — the package stays `annot-web` because that's what it is.
+_All resolved during the Phase 0 sign-off round._ See **Resolved decisions 7** below for the PWA-strategy outcome (the last decision to land).
 
 ## Forward-looking notes
 
