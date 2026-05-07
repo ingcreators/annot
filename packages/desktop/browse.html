@@ -20,11 +20,75 @@
     html, body { width: 100vw; height: 100vh; overflow: hidden; }
     body {
       display: grid;
-      grid-template-rows: auto 1fr auto;
+      grid-template-rows: auto auto 1fr auto;
       font: 13px system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
       background: #1f2024;
       color: #f3f4f6;
     }
+
+    /* Tab bar — Phase 5 of `desktop-browser-mode.md`. Sits between
+       the toolbar and the embedded `<webview>` host; renders one
+       button per tab plus a trailing "+" new-tab affordance. The
+       active tab gets a subtle accent border. */
+    #browse-tabs {
+      display: flex;
+      gap: 2px;
+      padding: 4px 4px 0 4px;
+      background: #2b2d33;
+      border-bottom: 1px solid #3b3e46;
+      align-items: flex-end;
+      overflow-x: auto;
+    }
+    .browse-tab {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      max-width: 240px;
+      min-width: 120px;
+      padding: 6px 4px 6px 10px;
+      background: #1f2024;
+      border: 1px solid #3b3e46;
+      border-bottom: 1px solid transparent;
+      border-radius: 6px 6px 0 0;
+      cursor: pointer;
+      color: #d1d5db;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    .browse-tab .tab-title {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .browse-tab .tab-close {
+      background: transparent;
+      color: #9ca3af;
+      border: 0;
+      padding: 0 6px;
+      font: inherit;
+      cursor: pointer;
+      border-radius: 50%;
+    }
+    .browse-tab .tab-close:hover { background: #3b3e46; color: #f3f4f6; }
+    .browse-tab.tab-active {
+      background: #2b2d33;
+      color: #f3f4f6;
+      border-color: #4a4e58;
+      border-bottom-color: #2b2d33;
+    }
+    .browse-tab.tab-locked { opacity: 0.6; cursor: not-allowed; }
+    .browse-tab.tab-locked .tab-close { cursor: not-allowed; }
+    #btn-new-tab {
+      background: transparent;
+      color: #9ca3af;
+      border: 0;
+      padding: 6px 10px;
+      font-size: 16px;
+      cursor: pointer;
+      border-radius: 4px;
+    }
+    #btn-new-tab:hover { background: #3b3e46; color: #f3f4f6; }
+    #btn-new-tab:disabled { cursor: not-allowed; opacity: 0.5; }
 
     #browse-toolbar {
       display: flex;
@@ -106,7 +170,12 @@
       height: 100%;
       background: #fff;
     }
-    #browse-target {
+    /* Per-tab webview elements — TabsManager appends them here.
+       Only the active tab has `display: block` so background tabs
+       render off-screen invisibly. */
+    .browse-webview {
+      position: absolute;
+      inset: 0;
       width: 100%;
       height: 100%;
       border: 0;
@@ -159,9 +228,13 @@
     <button data-mode="click" type="button">🖱 Toggle Click Capture</button>
     <button data-mode="hotkey" type="button">⌨ Toggle Hotkey Capture</button>
   </div>
-  <div id="browse-target-host">
-    <webview id="browse-target" src="about:blank" allowpopups disablewebsecurity="false"></webview>
+  <!-- Tab bar (Phase 5). TabsManager owns the per-tab buttons +
+       close affordances; the trailing "+" button is rendered here
+       so its position is HTML-controlled. -->
+  <div id="browse-tabs" role="tablist">
+    <button id="btn-new-tab" type="button" title="New tab" aria-label="New tab">+</button>
   </div>
+  <div id="browse-target-host"></div>
   <div id="browse-status">
     <span class="indicator" aria-hidden="true"></span>
     <span id="browse-status-text">Ready</span>
