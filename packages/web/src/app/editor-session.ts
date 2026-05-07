@@ -14,18 +14,14 @@
  */
 
 import type { ToolOptions } from "@ingcreators/annot-core/editor/tool-options";
-import type {
-  CanvasManager,
-  History,
-  SelectionManager,
-} from "@ingcreators/annot-editor";
-import { openAnchoredPopover } from "@ingcreators/annot-editor";
-import { Toolbar } from "@ingcreators/annot-editor-shell/toolbar";
 import type { ImageRecord, PageMetadata, StorageProvider } from "@ingcreators/annot-core/storage";
 import { getFilename } from "@ingcreators/annot-core/storage";
 import { assertNonNull } from "@ingcreators/annot-core/utils";
+import type { CanvasManager, History, SelectionManager } from "@ingcreators/annot-editor";
+import { openAnchoredPopover } from "@ingcreators/annot-editor";
 import type { AnnotFileDetailsDrawerElement } from "@ingcreators/annot-editor-shell/annot-file-details-drawer";
 import { estimateDataUrlBytes } from "@ingcreators/annot-editor-shell/annot-file-details-drawer";
+import { Toolbar } from "@ingcreators/annot-editor-shell/toolbar";
 import "@ingcreators/annot-editor-shell/annot-file-details-drawer";
 import { EditorShell, installKeyboardHelp } from "@ingcreators/annot-editor-shell";
 import type { AnnotEditorRightPanelElement } from "@ingcreators/annot-editor-shell/right-panel";
@@ -37,13 +33,13 @@ import {
   serializeSelection,
 } from "@ingcreators/annot-editor-shell";
 import "@ingcreators/annot-editor-shell/annot-scratchpad-section";
+import type { StatusHost } from "@ingcreators/annot-editor-shell/orchestrators/status-host";
 import type { ScratchpadStore } from "../editor/scratchpad-store.js";
 import { getStorageMode } from "../storage/bridge.js";
 import { addClickMarker } from "./click-marker.js";
 import type { HeaderHost } from "./header-host.js";
 import type { UISection } from "./plugin-host.js";
 import type { SavePipeline } from "./save-pipeline.js";
-import type { StatusHost } from "./status-host.js";
 
 export interface EditorHandle {
   canvas: CanvasManager;
@@ -273,13 +269,7 @@ export class EditorSession {
     // `annotationsSvg` for the canvas and stashes the rest.
     const currentPath = this.deps.getCurrentImagePath();
     const currentRecord = this.deps.getCurrentImageRecord();
-    const record = synthesizeShellRecord(
-      dataUrl,
-      width,
-      height,
-      annotations ?? "",
-      currentRecord,
-    );
+    const record = synthesizeShellRecord(dataUrl, width, height, annotations ?? "", currentRecord);
     shell.mountFromRecord(currentPath, record);
     shell.setPageMetadata(this.#pageMetadata);
 

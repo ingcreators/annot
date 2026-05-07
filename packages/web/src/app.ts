@@ -18,6 +18,7 @@ import { createBuiltinIcon } from "@ingcreators/annot-editor-shell/annot-icon-im
 import { FileManager } from "@ingcreators/annot-editor-shell/gallery/file-manager";
 import type { SidebarSectionOrder } from "@ingcreators/annot-editor-shell/gallery/sidebar";
 import { IndexedDBThumbnailCache } from "@ingcreators/annot-editor-shell/idb-thumbnail-cache";
+import { StatusHost } from "@ingcreators/annot-editor-shell/orchestrators/status-host";
 import { BUILTIN_RIGHT_PANEL_SECTION_IDS } from "@ingcreators/annot-editor-shell/right-panel";
 import { ThumbnailManager } from "@ingcreators/annot-editor-shell/thumbnail-manager";
 import { CaptureHost, type OpenEditorArgs } from "./app/capture-host.js";
@@ -31,7 +32,6 @@ import { recentTabPlugin } from "./app/plugins/recent-tab.js";
 import { RouterHost } from "./app/router-host.js";
 import { SavePipeline } from "./app/save-pipeline.js";
 import { SplitEditorHost } from "./app/split-editor-host.js";
-import { StatusHost } from "./app/status-host.js";
 import { StorageBridge } from "./app/storage-bridge.js";
 import { pasteFromClipboard } from "./capture/pwa-capture.js";
 import { ScratchpadStore } from "./editor/scratchpad-store.js";
@@ -83,8 +83,19 @@ export class App {
   /** Header host — owns the editor header bar, inline rename, external
    *  links, and the `SaveStatusIndicator`. */
   #headerHost: HeaderHost;
-  /** Status host — owns the editor statusbar + zoom controls. */
-  #statusHost: StatusHost = new StatusHost();
+  /** Status host — owns the editor statusbar + zoom controls.
+   *  Lazy-resolved against `#statusbar` because Phase 3 of
+   *  `docs/plans/host-convergence.md` lifted `StatusHost` into
+   *  editor-shell with constructor-injected host element. The
+   *  index.html-shipped `<div id="statusbar">` is in the DOM before
+   *  `main.ts` runs `new App()`, so the field initializer resolves
+   *  cleanly. */
+  #statusHost: StatusHost = new StatusHost(
+    assertNonNull(
+      document.getElementById("statusbar"),
+      "#statusbar missing — check index.html shell",
+    ),
+  );
   /** Editor session — owns `setupEditor` + canvas/history/toolbar/
    *  right-panel/drawer/scratchpad lifecycle. */
   #editorSession: EditorSession;

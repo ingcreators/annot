@@ -27,6 +27,7 @@ import type { AnnotEditorRightPanelElement } from "@ingcreators/annot-editor-she
 import "@ingcreators/annot-editor-shell/right-panel";
 import "@ingcreators/annot-editor-shell/editor-statusbar";
 import { estimateDataUrlBytes } from "@ingcreators/annot-editor-shell";
+import { StatusHost } from "@ingcreators/annot-editor-shell/orchestrators/status-host";
 import { Toolbar } from "@ingcreators/annot-editor-shell/toolbar";
 // Reuse PWA's editor-header Lit element directly. Phase 3 of the
 // host-convergence plan moves the orchestrator (HeaderHost) into
@@ -41,7 +42,6 @@ import {
   restoreMainWindow,
 } from "@ingcreators/annot-core/desktop-bridge";
 import { getFilename, type ImageRecord } from "@ingcreators/annot-core/storage";
-import type { AnnotEditorStatusbarElement } from "@ingcreators/annot-editor-shell/editor-statusbar";
 import type { AnnotEditorHeaderElement } from "@ingcreators/annot-web/editor/editor-header";
 import { bootstrapDesktopFsGallery, type DesktopGalleryHandle } from "../storage/bootstrap.js";
 
@@ -107,7 +107,7 @@ interface EditorSession {
   toolbar: Toolbar;
   header: AnnotEditorHeaderElement;
   rightPanel: AnnotEditorRightPanelElement;
-  statusbar: AnnotEditorStatusbarElement;
+  statusHost: StatusHost;
   drawer: AnnotFileDetailsDrawerElement;
   /** Disposers run when leaving the editor for the gallery. Keeps
    *  the teardown sequence explicit so a future refactor can verify
@@ -195,11 +195,11 @@ function openEditor(record: ImageRecord): void {
   }
 
   // ---- Statusbar ----------------------------------------------
-  const statusbar = document.createElement("annot-editor-statusbar");
-  statusbar.canvas = canvas;
-  statusbar.width = record.width;
-  statusbar.height = record.height;
-  statusbarHostEl.appendChild(statusbar);
+  // Phase 3 of `docs/plans/host-convergence.md` collapsed the inline
+  // `<annot-editor-statusbar>` build into the shared `StatusHost`
+  // primitive that the PWA + VSCode also use.
+  const statusHost = new StatusHost(statusbarHostEl);
+  statusHost.build(canvas, record.width, record.height);
 
   // ---- Toolbar (vertical sidebar) -----------------------------
   // Mirror the PWA's editor-mode toolbar shape: vertical left
@@ -213,7 +213,7 @@ function openEditor(record: ImageRecord): void {
     history,
     selection,
     (toolName, toolId) => {
-      statusbar.setActiveTool(toolName);
+      statusHost.setActiveTool(toolName);
       rightPanel.showToolProperties(toolId);
     },
     {
@@ -371,7 +371,7 @@ function openEditor(record: ImageRecord): void {
     toolbar,
     header,
     rightPanel,
-    statusbar,
+    statusHost,
     drawer,
     fitObserver,
     path: record.path,
