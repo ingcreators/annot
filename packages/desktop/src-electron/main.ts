@@ -114,6 +114,21 @@ function createMainWindow(): BrowserWindow {
     width: 1280,
     height: 800,
     title: "Annot by ingcreators",
+    // Hide the OS menu bar on Windows / Linux. The application
+    // menu still exists logically (Electron promotes it to a
+    // per-window menu on these platforms) so accelerators like
+    // `CmdOrCtrl+B` keep firing; `setAutoHideMenuBar` lets power
+    // users press `Alt` to reveal it momentarily. macOS keeps the
+    // global menu bar — both system convention and the only place
+    // `appMenu` (About / Hide / Quit) lives.
+    //
+    // Constructor option (`autoHideMenuBar: true`) does the same
+    // job as the runtime call in current Electron versions, but
+    // setting both is harmless and keeps intent grouped with the
+    // other window options. The `false` visibility default
+    // suppresses the brief flash of the menu bar between
+    // `BrowserWindow` construction and `loadFile/URL`.
+    autoHideMenuBar: process.platform !== "darwin",
     webPreferences: {
       preload: join(__dirname, "../preload/preload.cjs"),
       contextIsolation: true,
@@ -121,6 +136,9 @@ function createMainWindow(): BrowserWindow {
       sandbox: false,
     },
   });
+  if (process.platform !== "darwin") {
+    win.setMenuBarVisibility(false);
+  }
 
   if (RENDERER_DEV_URL) {
     void win.loadURL(RENDERER_DEV_URL);
@@ -321,6 +339,12 @@ async function openOrFocusBrowseWindow(opts: { url?: string } = {}): Promise<voi
     width: 1280,
     height: 800,
     title: "Annot Browse",
+    // Same OS-menu treatment as the main window — see
+    // `createMainWindow` for rationale. The Browse window's chrome
+    // (back / forward / reload / URL bar / Capture Visible) lives
+    // inside browse.html, so the OS menu bar contributes nothing
+    // here either.
+    autoHideMenuBar: process.platform !== "darwin",
     webPreferences: {
       preload: join(__dirname, "../preload/preload.cjs"),
       contextIsolation: true,
@@ -331,6 +355,9 @@ async function openOrFocusBrowseWindow(opts: { url?: string } = {}): Promise<voi
       webviewTag: true,
     },
   });
+  if (process.platform !== "darwin") {
+    win.setMenuBarVisibility(false);
+  }
 
   if (RENDERER_DEV_URL) {
     void win.loadURL(`${RENDERER_DEV_URL}/browse.html`);
@@ -362,10 +389,36 @@ async function openOrFocusBrowseWindow(opts: { url?: string } = {}): Promise<voi
   }
 }
 
-/** Build the application menu bar. The Phase 6 surface adds a
- *  single "Browse → New Browse Window" item; the rest mirrors
- *  Electron's default menu so platform-standard shortcuts
- *  (Cmd-Q, Ctrl-Shift-I, etc.) keep working. */
+/** Build the application menu bar.
+ *
+ *  Visibility:
+ *    - macOS: always shown (system-managed; users expect it).
+ *    - Windows / Linux: hidden by default + auto-hide. The bar is
+ *      still present logically so accelerators (Ctrl+B, Cmd+W,
+ *      etc.) keep firing; pressing Alt momentarily reveals it for
+ *      power users who want the on-screen affordance. The hide is
+ *      applied per-window in `createMainWindow` because Electron
+ *      promotes the application menu to a per-window menu on
+ *      non-mac platforms.
+ *
+ *  Menu shape:
+ *    - File: "New Browse Window" (until the New menu absorbs it
+ *      via `getNewMenuExtras` in a follow-up PR) + Close/Quit.
+ *    - Edit (role): standard Cut / Copy / Paste / Select All so
+ *      `<input>`-bound shortcuts work in panels and dialogs.
+ *      `Undo` / `Redo` from this role conflict with the editor's
+ *      own history (Cmd-Z / Ctrl-Z); a follow-up wires those to
+ *      the editor session via IPC. Documented as a known
+ *      pre-existing issue rather than fixed here.
+ *    - View: trimmed to "Toggle Developer Tools" + "Toggle Full
+ *      Screen". The default `viewMenu` role bundles
+ *      `reload` / `forceReload` (data-loss risk during edit) and
+ *      `resetZoom` / `zoomIn` / `zoomOut` (page-level zoom that
+ *      conflicts with the editor's own zoom controls in the
+ *      statusbar) — neither belongs in an annotation app.
+ *    - Window (role): standard Minimize / Bring All to Front
+ *      (Mac) / Close.
+ */
 function buildAppMenu(): Menu {
   const isMac = process.platform === "darwin";
   const fileMenu: MenuItemConstructorOptions = {
@@ -380,11 +433,19 @@ function buildAppMenu(): Menu {
       isMac ? { role: "close" } : { role: "quit" },
     ],
   };
+  const viewMenu: MenuItemConstructorOptions = {
+    label: "View",
+    submenu: [
+      { role: "toggleDevTools" },
+      { type: "separator" },
+      { role: "togglefullscreen" },
+    ],
+  };
   const template: MenuItemConstructorOptions[] = [
     ...(isMac ? [{ role: "appMenu" } as MenuItemConstructorOptions] : []),
     fileMenu,
     { role: "editMenu" },
-    { role: "viewMenu" },
+    viewMenu,
     { role: "windowMenu" },
   ];
   return Menu.buildFromTemplate(template);
