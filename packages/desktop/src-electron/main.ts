@@ -378,6 +378,18 @@ async function openOrFocusBrowseWindow(opts: { url?: string } = {}): Promise<voi
   // failing.
   win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
 
+  // Wire the capture-package's content-preload onto the embedded
+  // `<webview>` (Phase 4A of `desktop-browser-mode.md`). The
+  // `will-attach-webview` event fires once per webview before it
+  // attaches to the DOM, so listeners can rewrite its
+  // `webPreferences`. The preload runs in the webview's renderer
+  // context and bridges `ContentBus` over `ipcRenderer.sendToHost`
+  // so the chrome-side `DesktopCaptureHost.sendToContent` /
+  // `onContentMessage` primitives work uniformly across hosts.
+  win.webContents.on("will-attach-webview", (_event, webPreferences) => {
+    webPreferences.preload = join(__dirname, "../preload/content-preload.cjs");
+  });
+
   // Send the navigation request once the chrome's renderer
   // signals ready. Browser renderer dispatches a one-shot
   // `browse.ready` IPC after `DOMContentLoaded`; until then
