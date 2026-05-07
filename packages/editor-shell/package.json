@@ -12,6 +12,7 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": "./src/index.ts",
+    "./styles/*": "./styles/*",
     "./*": "./src/*.ts"
   },
   "scripts": {

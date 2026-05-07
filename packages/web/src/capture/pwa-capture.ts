@@ -77,15 +77,13 @@ export async function pasteFromClipboard(): Promise<string | null> {
   }
 }
 
-/** Check if getDisplayMedia is available. */
-export function isScreenCaptureSupported(): boolean {
-  return !!navigator.mediaDevices?.getDisplayMedia;
-}
-
-/** Check if clipboard read is available. */
-export function isClipboardReadSupported(): boolean {
-  return !!navigator.clipboard?.read;
-}
+// Phase 2 of `docs/plans/host-convergence.md` lifted
+// `isScreenCaptureSupported` / `isClipboardReadSupported` into
+// `@ingcreators/annot-editor-shell/capture-predicates` so the
+// gallery (now in editor-shell) can import them without reaching
+// back into `@ingcreators/annot-web`. The runtime entry points
+// below (`captureScreen`, `pasteFromClipboard`,
+// `startIntervalCapture`, the PiP overlay) stay PWA-side.
 
 /** Control handle returned by startIntervalCapture. */
 export interface IntervalCaptureHandle {

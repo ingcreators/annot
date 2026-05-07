@@ -17,9 +17,9 @@ import {
   exportAnnotationsSvgForIdb,
   getPngDataUrl,
 } from "@ingcreators/annot-editor";
+import { generateThumbnailFromDataUrl } from "@ingcreators/annot-editor-shell/image-thumbnail";
+import type { ThumbnailManager } from "@ingcreators/annot-editor-shell/thumbnail-manager";
 import type { AnnotSaveStatusElement } from "../editor/save-status-indicator.js";
-import { generateThumbnailFromDataUrl } from "../storage/image-thumbnail.js";
-import type { ThumbnailManager } from "../storage/thumbnail-manager.js";
 import { hideError, showSaveError } from "../ui/error-bar.js";
 
 export interface SavePipelineDeps {

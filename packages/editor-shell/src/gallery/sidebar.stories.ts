@@ -12,8 +12,8 @@
 
 import { builtinIcon } from "@ingcreators/annot-core";
 import type { Meta, StoryObj } from "@storybook/web-components-vite";
-import type { SidebarTab, StorageRegistration } from "../app/plugin-host.js";
-import type { StorageMode } from "../storage/bridge.js";
+import type { SidebarTab, StorageRegistration } from "../plugin-host-types.js";
+import type { StorageMode } from "../storage-mode.js";
 import type { NewMenuItem } from "./sidebar.js";
 import "./sidebar.js";
 

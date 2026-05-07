@@ -10,9 +10,9 @@
  */
 import type { ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
 import { supportsForceRefresh, supportsResync } from "@ingcreators/annot-core/storage";
-import type { SidebarTab, StorageRegistration } from "../app/plugin-host.js";
-import type { StorageMode } from "../storage/bridge.js";
-import type { ThumbnailManager } from "../storage/thumbnail-manager.js";
+import type { SidebarTab, StorageRegistration } from "../plugin-host-types.js";
+import type { StorageMode } from "../storage-mode.js";
+import type { ThumbnailManager } from "../thumbnail-manager.js";
 import { showAlertDialog, showPromptDialog } from "../ui/dialog.js";
 import "./file-manager-shell.js";
 import type { AnnotGalleryPageElement } from "./annot-gallery-page.js";

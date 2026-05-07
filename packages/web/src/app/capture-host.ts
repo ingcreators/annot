@@ -15,6 +15,9 @@
 import type { StorageProvider } from "@ingcreators/annot-core/storage";
 import { newIdB58 } from "@ingcreators/annot-core/utils";
 import { readEditableImage } from "@ingcreators/annot-core/xmp";
+import type { FileManager } from "@ingcreators/annot-editor-shell/gallery/file-manager";
+import { generateThumbnailFromDataUrl } from "@ingcreators/annot-editor-shell/image-thumbnail";
+import type { ThumbnailManager } from "@ingcreators/annot-editor-shell/thumbnail-manager";
 import {
   loadCursorPreference,
   saveCursorPreference,
@@ -22,9 +25,6 @@ import {
   showIntervalCaptureProgress,
 } from "../capture/interval-dialog.js";
 import { captureScreen, pasteFromClipboard, startIntervalCapture } from "../capture/pwa-capture.js";
-import type { FileManager } from "../gallery/file-manager.js";
-import { generateThumbnailFromDataUrl } from "../storage/image-thumbnail.js";
-import type { ThumbnailManager } from "../storage/thumbnail-manager.js";
 import { showSaveError } from "../ui/error-bar.js";
 import { fileToDataUrl, loadImage } from "./image-utils.js";
 
