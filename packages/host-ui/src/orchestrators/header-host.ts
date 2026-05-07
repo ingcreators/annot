@@ -17,7 +17,7 @@
  * they're cross-cutting concerns that talk to storage + drawer
  * + plugin host.
  *
- * Phase 3 of `docs/plans/host-convergence.md` lifted this class
+ * Phase 3 of `docs/plans/_done/host-convergence.md` lifted this class
  * from `packages/web/src/app/header-host.ts` into editor-shell
  * so PWA + Desktop can share it. Three host-specific concerns
  * thread through the constructor `deps` instead of being

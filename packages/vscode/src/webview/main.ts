@@ -434,7 +434,7 @@ function mountToolbarAndRightPanel(): void {
   panel.toolbar = activeToolbar;
 
   // Statusbar — `[zoom] [dimensions] ───── [current tool]`.
-  // Phase 3 of `docs/plans/host-convergence.md` collapsed the inline
+  // Phase 3 of `docs/plans/_done/host-convergence.md` collapsed the inline
   // build into the shared `StatusHost` primitive (PWA + Desktop +
   // VSCode now share one implementation).
   activeStatusHost = new StatusHost(statusbarMount);

@@ -22,7 +22,7 @@
 
 ## Context
 
-[`host-convergence.md`](./host-convergence.md) Phase 4 moves the
+[`host-convergence.md`](./_done/host-convergence.md) Phase 4 moves the
 plugin-host **types** (`SidebarTab`, `StorageRegistration`,
 `NewMenuItem`, `UISection*`, `ExternalLink*`, etc.) into
 `@ingcreators/annot-host-ui` so the gallery (also moving to
@@ -43,7 +43,7 @@ The plan is queued separately because:
   plugins lands, OR when VSCode's plan to expose plugins (e.g. via
   the extension manifest's `contributes` field) lands, this plan
   becomes the prerequisite.
-- Until that trigger, [`host-convergence.md`](./host-convergence.md)
+- Until that trigger, [`host-convergence.md`](./_done/host-convergence.md)
   Phase 4 is a clean stopping point: types in host-ui, class
   in `annot-web`, no host beyond PWA needs the class.
 

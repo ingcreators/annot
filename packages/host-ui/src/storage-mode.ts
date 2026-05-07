@@ -3,7 +3,7 @@
  * the gallery (in `@ingcreators/annot-host-ui/gallery/*`) and
  * `@ingcreators/annot-web`'s storage bridge.
  *
- * Phase 2 of `docs/plans/host-convergence.md` lifts these out of
+ * Phase 2 of `docs/plans/_done/host-convergence.md` lifts these out of
  * `packages/web/src/storage/bridge.ts` so the gallery doesn't
  * back-channel into annot-web. The PWA's `bridge.ts` re-imports
  * from here, keeping `BUILT_IN_STORAGE_MODES` as the single source

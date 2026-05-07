@@ -1,20 +1,37 @@
 # Host convergence: desktop on EditorShell, gallery + orchestrators in host-ui
 
-> **Status:** Queued
+> **Status:** Done — archived 2026-05-07.
+>
+> **Outcomes per phase**
+>
+> | Phase | Outcome | PR(s) |
+> |---|---|---|
+> | 1 | Desktop adopts `EditorShell` + PWA-equivalent editor chrome (editor-header / right-panel / file-details drawer / autosave / dirty tracking / save-status indicator). Throwaway local autosave debounce shipped as a stopgap (collapsed in PR B). | [#470](https://github.com/ingcreators/annot/pull/470) |
+> | 2 | Gallery (`<annot-file-manager-shell>` / `<annot-sidebar>` / `<annot-gallery-page>` / `<annot-context-menu>` / `FileManager`) + thumbnail-manager + dialog + plugin-host structural types + capture predicates + `BUILT_IN_STORAGE_MODES` + `file-manager.css` moved into `@ingcreators/annot-host-ui`. Decision 4 (Phase 4 narrowed to structural types) folded in here. | [#471](https://github.com/ingcreators/annot/pull/471) |
+> | 3 | Orchestrator triple lifted into `@ingcreators/annot-host-ui/orchestrators/*` with constructor-injected host element + deps callbacks. PR A: StatusHost. PR B: SavePipeline + `<annot-save-status>` Lit element + Desktop autosave migration off the Phase 1 stopgap. PR C: HeaderHost + `<annot-editor-header>` + `<annot-editable-filename>` Lit elements + Desktop migration off the Phase 1 inline header build. | [#472](https://github.com/ingcreators/annot/pull/472), [#473](https://github.com/ingcreators/annot/pull/473), [#474](https://github.com/ingcreators/annot/pull/474) |
+> | 4 | Folded into Phase 2 (Decision 4). The runtime `PluginHost` class itself is tracked in [`plugin-host-extraction.md`](../plugin-host-extraction.md) (Draft, gated on Desktop / VSCode signalling intent to load plugins). | n/a |
+> | 5 | Deferred to [`desktop-browser-mode.md`](../desktop-browser-mode.md) Phases 1–2 (`@ingcreators/annot-capture` extraction). | n/a |
+>
+> **Cosmetic rename** ([#475](https://github.com/ingcreators/annot/pull/475))
+> followed Phase 3: `@ingcreators/annot-editor-shell` →
+> `@ingcreators/annot-host-ui` to match the package's post-Phase-3
+> scope (gallery + dialog + thumbnail-manager + plugin-host types +
+> orchestrators, not just the editor surface). The companion
+> `@ingcreators/annot-web` → `@ingcreators/annot-pwa` rename in this
+> plan's Forward-looking notes was **declined** — `annot-web` keeps
+> its name.
 >
 > **Compatibility:** No public API change to `@ingcreators/annot-core`.
-> Adds new subpath exports on `@ingcreators/annot-host-ui`. Phase
-> 2 moves gallery modules from `@ingcreators/annot-web/gallery/*` to
-> `@ingcreators/annot-host-ui/gallery/*` — PWA's import paths
-> change; the workspace dep absorbs it. No published-package consumers
-> exist yet (pre-release), so no compat shim is needed.
+> The `annot-host-ui` package gained substantial new exports (gallery,
+> orchestrators, dialog, thumbnail-manager, plugin-host structural
+> types). PWA's import paths changed for moved modules; workspace
+> deps absorbed it. No published-package consumers exist yet
+> (pre-release), so no compat shim was needed.
 >
-> **Risk:** Medium. Each phase is reversible and lands as its own PR;
-> the live PWA, VSCode webview, and extension keep working at every
-> commit. Phase 1 (desktop adopts EditorShell) is the biggest single
-> phase but the surface is small (`packages/desktop/src/app/app.ts` +
-> `index.html` + `app.css`) and gated by feature parity with the
-> current desktop editor.
+> **Risk:** Medium realised — every phase landed reversibly and the
+> live PWA, VSCode webview, and extension kept working at every
+> commit. Per-orchestrator PR mitigation in Phase 3 paid off (3
+> independent reviewable PRs instead of one big one).
 
 ## Context
 
@@ -23,10 +40,10 @@ onto shared machinery, but unevenly:
 
 | Plan | Outcome |
 |---|---|
-| [`vscode-extension-host.md`](./_done/vscode-extension-host.md) | Created `@ingcreators/annot-host-ui` and proved it from VSCode |
-| [`editor-session-shell-switchover.md`](./_done/editor-session-shell-switchover.md) | PWA's `EditorSession` boots via `EditorShell.mountFromRecord` |
-| [`desktop-storage-provider-migration.md`](./_done/desktop-storage-provider-migration.md) | Desktop gallery uses PWA's `<annot-file-manager-shell>` against `DesktopStore` |
-| [`desktop-electron-migration.md`](./_done/desktop-electron-migration.md) | Tauri → Electron with no editor-side changes |
+| [`vscode-extension-host.md`](../_done/vscode-extension-host.md) | Created `@ingcreators/annot-host-ui` and proved it from VSCode |
+| [`editor-session-shell-switchover.md`](../_done/editor-session-shell-switchover.md) | PWA's `EditorSession` boots via `EditorShell.mountFromRecord` |
+| [`desktop-storage-provider-migration.md`](../_done/desktop-storage-provider-migration.md) | Desktop gallery uses PWA's `<annot-file-manager-shell>` against `DesktopStore` |
+| [`desktop-electron-migration.md`](../_done/desktop-electron-migration.md) | Tauri → Electron with no editor-side changes |
 | [#464](https://github.com/ingcreators/annot/pull/464) – [#467](https://github.com/ingcreators/annot/pull/467) | Post-merge fixes — CSS imports, vertical toolbar, OS menu cleanup, Browser Capture in unified New menu |
 
 The visible chrome gaps are now closed. The remaining unevenness is
@@ -37,7 +54,7 @@ indicator." This plan organises the unevenness into a target shape and
 phases the work to get there.
 
 The plan complements but does not absorb
-[`desktop-browser-mode.md`](./desktop-browser-mode.md) (capture
+[`desktop-browser-mode.md`](../desktop-browser-mode.md) (capture
 extraction); see Phase 5 below.
 
 ## Current state (audit)
@@ -70,9 +87,9 @@ extraction); see Phase 5 below.
 
 ### Where each host's editor boot lives
 
-- PWA: [`packages/web/src/app/editor-session.ts`](../../packages/web/src/app/editor-session.ts) — calls `EditorShell.mountFromRecord`, then constructs `Toolbar` / `EditorRightPanel` / drawer / `HeaderHost.build` / `StatusHost.build` / `SavePipeline`.
-- VSCode: [`packages/vscode/src/webview/main.ts`](../../packages/vscode/src/webview/main.ts) — same `EditorShell` mount, then INLINE construction of toolbar / right-panel / statusbar / drawer + a custom save flow tied to VSCode's `CustomEditorProvider` lifecycle.
-- Desktop: [`packages/desktop/src/app/app.ts:openEditor`](../../packages/desktop/src/app/app.ts) — direct `new CanvasManager` / `new History` / `new SelectionManager` / `new Toolbar` / `new PropertyPanel`. No `EditorShell`, no editor-header, no right-panel, no drawer, no autosave, no dirty tracking.
+- PWA: [`packages/web/src/app/editor-session.ts`](../../../packages/web/src/app/editor-session.ts) — calls `EditorShell.mountFromRecord`, then constructs `Toolbar` / `EditorRightPanel` / drawer / `HeaderHost.build` / `StatusHost.build` / `SavePipeline`.
+- VSCode: [`packages/vscode/src/webview/main.ts`](../../../packages/vscode/src/webview/main.ts) — same `EditorShell` mount, then INLINE construction of toolbar / right-panel / statusbar / drawer + a custom save flow tied to VSCode's `CustomEditorProvider` lifecycle.
+- Desktop: [`packages/desktop/src/app/app.ts:openEditor`](../../../packages/desktop/src/app/app.ts) — direct `new CanvasManager` / `new History` / `new SelectionManager` / `new Toolbar` / `new PropertyPanel`. No `EditorShell`, no editor-header, no right-panel, no drawer, no autosave, no dirty tracking.
 
 ## Convergence target
 
@@ -216,7 +233,7 @@ The gallery has these intra-`annot-web` deps that need to move with it (or be in
 
 ### Phase 4 — Plugin host structural types in host-ui
 
-> **Goal:** `SidebarTab`, `StorageRegistration`, `NewMenuItem`, plugin manifest types live in host-ui so the gallery (post-Phase 2) can import them without a back-channel through `annot-web`. **Types only**; the `PluginHost` class itself stays in `annot-web` for now and moves later under [`plugin-host-extraction.md`](./plugin-host-extraction.md) (Draft, trigger: "Desktop or VSCode wants to load plugins").
+> **Goal:** `SidebarTab`, `StorageRegistration`, `NewMenuItem`, plugin manifest types live in host-ui so the gallery (post-Phase 2) can import them without a back-channel through `annot-web`. **Types only**; the `PluginHost` class itself stays in `annot-web` for now and moves later under [`plugin-host-extraction.md`](../plugin-host-extraction.md) (Draft, trigger: "Desktop or VSCode wants to load plugins").
 
 **Steps.**
 
@@ -229,7 +246,7 @@ The gallery has these intra-`annot-web` deps that need to move with it (or be in
 
 ### Phase 5 — Capture extraction (defer to existing plan)
 
-[`desktop-browser-mode.md`](./desktop-browser-mode.md) (Queued) covers
+[`desktop-browser-mode.md`](../desktop-browser-mode.md) (Queued) covers
 the extension → `@ingcreators/annot-capture` → desktop Browse-window
 adoption. This plan does NOT replace it; instead it sequences
 **after** Phase 4 so the capture extraction lands on a stable editor /
@@ -237,7 +254,7 @@ gallery convergence base.
 
 **Note.** That plan's design references Tauri + Rust capture commands;
 those parts need a refresh-pass when the plan is queued (the
-[`desktop-electron-migration.md`](./_done/desktop-electron-migration.md)
+[`desktop-electron-migration.md`](../_done/desktop-electron-migration.md)
 landed after `desktop-browser-mode.md` was drafted, so the per-OS
 sections need updating to Electron's `webContents.capturePage` and
 `<webview>` model).
@@ -255,7 +272,7 @@ sections need updating to Electron's `webContents.capturePage` and
 1. **Desktop editor-header — adopt PWA's full editor-header.** Phase 1 wires `<div id="editor-header">` and populates it with brand + breadcrumb + save-status + save+copy + theme + help, mirroring the PWA. The desktop's `app.css` overrides the editor-sidebar / canvas-container `top` offsets to make room for it (replacing the `top: 0` overrides shipped in #465). Without an editor-header the desktop has no save-status indicator at all, which conflicts with decision 2 below.
 2. **Desktop autosave — introduce in Phase 1.** PWA + VSCode both autosave on dirty; manual-save-only on desktop is the odd one out. Phase 1 writes a small desktop-local debounce + `shell.saveNow()` loop that Phase 3 collapses into the shared `SavePipeline` once that's extracted. The throwaway debounce is ~30 LOC; the cost of writing-then-collapsing is less than the cost of shipping desktop without autosave for 2 plan iterations.
 3. **Gallery CSS lives in `host-ui/styles/`.** When `file-manager.css` moves with the gallery in Phase 2, its new home is `packages/host-ui/styles/file-manager.css`. Core's `styles/` stays the home for editor-canvas-level concerns (`editor.css`, `toolbar.css`, `property-panel.css`, `fonts.css` — all design tokens or canvas-coupled). Gallery is a higher-level surface; co-locating it with the gallery's Lit elements in host-ui is the cleaner split.
-4. **Plugin host extraction — separate follow-up plan.** [`plugin-host-extraction.md`](./plugin-host-extraction.md) (Draft) captures the move of the `PluginHost` class itself (today in `packages/web/src/app/plugin-host.ts`) into host-ui. The trigger to flip Draft → Queued is "Desktop or VSCode wants to load plugins"; until then the plan stays warm but unscheduled. Phase 4 of the present plan is narrowed to **structural types only** (`SidebarTab`, `StorageRegistration`, `NewMenuItem`, manifest schema types) — those move with the gallery in Phase 2 because the gallery imports them, and follow naturally without waiting on the trigger.
+4. **Plugin host extraction — separate follow-up plan.** [`plugin-host-extraction.md`](../plugin-host-extraction.md) (Draft) captures the move of the `PluginHost` class itself (today in `packages/web/src/app/plugin-host.ts`) into host-ui. The trigger to flip Draft → Queued is "Desktop or VSCode wants to load plugins"; until then the plan stays warm but unscheduled. Phase 4 of the present plan is narrowed to **structural types only** (`SidebarTab`, `StorageRegistration`, `NewMenuItem`, manifest schema types) — those move with the gallery in Phase 2 because the gallery imports them, and follow naturally without waiting on the trigger.
 5. **`@ingcreators/annot-web` rename — declined.** Resolved by decision 7 below: with PWA dropped, the package stays `annot-web` because that's what it is — no need to rename to `annot-pwa`.
 6. **Phase ordering confirmed: 1 → 2 → 3 → 4 → 5.** Phase 1 first because it carries the highest user-visible value (desktop gains parity with PWA's editor surface). Phase 2 before Phase 3 because moving the gallery first means the orchestrator extraction in Phase 3 already has the gallery types living in host-ui.
 7. **`packages/web` PWA strategy — drop PWA entirely.** Three options were considered:

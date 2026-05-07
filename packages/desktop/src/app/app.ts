@@ -12,7 +12,7 @@ import "@ingcreators/annot-host-ui/styles/file-manager.css";
 import "../styles/app.css";
 
 import { applyPersistedTheme } from "@ingcreators/annot-editor";
-// Phase 1 of `docs/plans/host-convergence.md` swapped the desktop's
+// Phase 1 of `docs/plans/_done/host-convergence.md` swapped the desktop's
 // imperative `new CanvasManager / new History / new SelectionManager`
 // chain for `EditorShell.mountFromRecord`. The shell owns the per-image
 // canvas / history / selection lifecycle; the desktop adapter wires
@@ -91,7 +91,7 @@ function dismissLegacyNotice(): void {
 // and the desktop wires the surrounding chrome (editor-header /
 // right-panel / drawer / statusbar) to the shell's events.
 //
-// Phase 3 of `docs/plans/host-convergence.md` collapses the
+// Phase 3 of `docs/plans/_done/host-convergence.md` collapses the
 // debounce + status-indicator + header builders below into the
 // shared `HeaderHost` / `StatusHost` / `SavePipeline` primitives.
 // Until that lands, the desktop carries throwaway equivalents
@@ -196,7 +196,7 @@ function openEditor(record: ImageRecord): void {
   }
 
   // ---- Statusbar ----------------------------------------------
-  // Phase 3 of `docs/plans/host-convergence.md` collapsed the inline
+  // Phase 3 of `docs/plans/_done/host-convergence.md` collapsed the inline
   // `<annot-editor-statusbar>` build into the shared `StatusHost`
   // primitive that the PWA + VSCode also use.
   const statusHost = new StatusHost(statusbarHostEl);
@@ -267,7 +267,7 @@ function openEditor(record: ImageRecord): void {
   document.body.appendChild(drawer);
 
   // ---- SavePipeline (shared autosave + dirty-debounce) -------
-  // Phase 3 / PR B of `docs/plans/host-convergence.md` swapped the
+  // Phase 3 / PR B of `docs/plans/_done/host-convergence.md` swapped the
   // throwaway desktop-local debounce shipped in Phase 1 for the
   // shared `SavePipeline` orchestrator. The pipeline owns:
   //   - dirty → debounce → writeAnnotations cadence
@@ -294,7 +294,7 @@ function openEditor(record: ImageRecord): void {
   });
 
   // ---- Editor header (shared HeaderHost orchestrator) -------
-  // Phase 3 / PR C of `docs/plans/host-convergence.md` collapsed
+  // Phase 3 / PR C of `docs/plans/_done/host-convergence.md` collapsed
   // the inline `<annot-editor-header>` build + populateHeaderProps
   // chain into the shared `HeaderHost` orchestrator. The desktop
   // wires the host-specific concerns as deps callbacks: a constant

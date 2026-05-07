@@ -54,7 +54,7 @@
 import type { StorageProvider } from "@ingcreators/annot-core/storage";
 import { BUILT_IN_STORAGE_MODES } from "../storage/bridge.js";
 
-// Phase 2 of `docs/plans/host-convergence.md` (Decision 4 — fold-in)
+// Phase 2 of `docs/plans/_done/host-convergence.md` (Decision 4 — fold-in)
 // moved every plugin-host structural type into
 // `@ingcreators/annot-host-ui/plugin-host-types` so the gallery
 // (now in editor-shell) imports them directly. The class itself

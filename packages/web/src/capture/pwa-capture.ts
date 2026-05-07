@@ -77,7 +77,7 @@ export async function pasteFromClipboard(): Promise<string | null> {
   }
 }
 
-// Phase 2 of `docs/plans/host-convergence.md` lifted
+// Phase 2 of `docs/plans/_done/host-convergence.md` lifted
 // `isScreenCaptureSupported` / `isClipboardReadSupported` into
 // `@ingcreators/annot-host-ui/capture-predicates` so the
 // gallery (now in editor-shell) can import them without reaching

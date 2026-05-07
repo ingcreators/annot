@@ -33,7 +33,7 @@ declare global {
   }
 }
 
-// Phase 2 of `docs/plans/host-convergence.md` lifted the
+// Phase 2 of `docs/plans/_done/host-convergence.md` lifted the
 // `BUILT_IN_STORAGE_MODES` / `StorageMode` / `BuiltInStorageMode`
 // surface into `@ingcreators/annot-host-ui/storage-mode` so
 // the gallery (now in editor-shell) sees the same source of truth.

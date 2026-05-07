@@ -8,7 +8,7 @@
  * thin orchestrator so callers don't have to know which Lit element
  * to mount or how to mutate its props between mounts.
  *
- * Phase 3 of `docs/plans/host-convergence.md` lifted this class out
+ * Phase 3 of `docs/plans/_done/host-convergence.md` lifted this class out
  * of `packages/web/src/app/status-host.ts` so PWA + Desktop + VSCode
  * all share one orchestrator implementation. The earlier PWA-only
  * version queried `document.getElementById("statusbar")` itself,
