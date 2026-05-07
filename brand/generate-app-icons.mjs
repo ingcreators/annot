@@ -17,20 +17,22 @@ const repoRoot = resolve(here, "..");
 // [source SVG, output PNG path (repo-relative), pixel size]
 //
 // Which source to use:
-//   • annot-icon-16.svg       → for ≤ 24 px (pin removed, legible at 16)
-//   • annot-icon.svg          → for 25 – 399 px (full mark with pin)
-//   • annot-icon-maskable.svg → for PWA maskable purpose (full-bleed bg,
-//                               80% safe zone centered)
+//   • annot-icon-16.svg → for ≤ 24 px (pin removed, legible at 16)
+//   • annot-icon.svg    → for 25 – 399 px (full mark with pin)
+//
+// `annot-icon-maskable.svg` was used by the PWA `purpose:"maskable"`
+// icon for Android adaptive masks; dropped along with the PWA layer
+// (web app no longer ships a manifest). The source SVG stays in
+// `brand/` for future use.
 const targets = [
   // Chrome extension (manifest references these exact filenames)
   ["annot-icon-16.svg", "packages/extension/public/icons/icon-16.png", 16],
   ["annot-icon.svg",    "packages/extension/public/icons/icon-48.png", 48],
   ["annot-icon.svg",    "packages/extension/public/icons/icon-128.png", 128],
 
-  // PWA (vite-plugin-pwa references these)
-  ["annot-icon.svg",          "packages/web/public/icons/icon-192.png", 192],
-  ["annot-icon.svg",          "packages/web/public/icons/icon-512.png", 512],
-  ["annot-icon-maskable.svg", "packages/web/public/icons/icon-512-maskable.png", 512],
+  // Web app — favicon only. The PWA manifest used a 512 + maskable
+  // pair; both went away when the PWA layer was removed.
+  ["annot-icon.svg", "packages/web/public/icons/icon-192.png", 192],
 
   // Electron desktop. `electron-builder` reads `build/icon.png`
   // and auto-generates the per-OS variants from it:
