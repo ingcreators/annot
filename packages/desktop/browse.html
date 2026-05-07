@@ -63,6 +63,42 @@
     }
     .capture-btn:hover { background: #6aaaff; }
     .capture-btn:disabled { background: #4a4e58; border-color: #4a4e58; }
+    /* Click + Hotkey buttons toggle: when active, they switch from
+       the capture-btn blue to a recording red so the user has an
+       always-visible "we are recording" cue in the toolbar.  */
+    .capture-btn.recording {
+      background: #ef4444;
+      border-color: #ef4444;
+    }
+    .capture-btn.recording:hover { background: #f76262; }
+
+    /* In-app context menu — overlays on top of the webview when the
+       user right-clicks. Replaces the OS-native page menu (the
+       preload preventDefaults the contextmenu event); the menu
+       offers the same six modes the toolbar exposes. */
+    #annot-context-menu {
+      position: fixed;
+      background: #2b2d33;
+      border: 1px solid #3b3e46;
+      border-radius: 6px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+      padding: 4px 0;
+      min-width: 200px;
+      z-index: 10000;
+      display: none;
+    }
+    #annot-context-menu button {
+      display: block;
+      width: 100%;
+      text-align: left;
+      background: transparent;
+      color: #f3f4f6;
+      border: 0;
+      padding: 6px 14px;
+      font: inherit;
+      cursor: pointer;
+    }
+    #annot-context-menu button:hover { background: #3b3e46; }
 
     #browse-target-host {
       position: relative;
@@ -109,6 +145,19 @@
     <button id="btn-capture-area" class="capture-btn" title="Capture a drag-selected area (saves to Inbox)">⬚ Area</button>
     <button id="btn-capture-full" class="capture-btn" title="Scroll-stitch the entire page into one image (saves to Inbox)">📄 Full Page</button>
     <button id="btn-capture-pages" class="capture-btn" title="Capture each viewport as a separate image (saves to Inbox)">🗒 Per Page</button>
+    <button id="btn-capture-click" class="capture-btn" title="Click capture: save a capture on every click. Click again to stop.">🖱 Click ▶</button>
+    <button id="btn-capture-hotkey" class="capture-btn" title="Hotkey capture: Alt+Shift+C takes a single shot. Click to start a session, click again to stop.">⌨ Hotkey ▶</button>
+  </div>
+  <!-- Right-click capture menu (Phase 4B). Hidden by default;
+       browse.ts positions + reveals it when the preload posts a
+       `context-menu-request` event from the embedded webview. -->
+  <div id="annot-context-menu" role="menu" aria-hidden="true">
+    <button data-mode="visible" type="button">📷 Capture Visible</button>
+    <button data-mode="area" type="button">⬚ Capture Area</button>
+    <button data-mode="full" type="button">📄 Capture Full Page</button>
+    <button data-mode="pages" type="button">🗒 Capture Per Page</button>
+    <button data-mode="click" type="button">🖱 Toggle Click Capture</button>
+    <button data-mode="hotkey" type="button">⌨ Toggle Hotkey Capture</button>
   </div>
   <div id="browse-target-host">
     <webview id="browse-target" src="about:blank" allowpopups disablewebsecurity="false"></webview>

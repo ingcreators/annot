@@ -58,6 +58,17 @@ export type ContentToBackgroundMessage =
       title: string;
       /** Bounding rect of the clicked element in CSS pixels (viewport-relative). */
       rect?: { x: number; y: number; width: number; height: number };
+    }
+  | {
+      /** Right-click handler in the embedded webview asking the host
+       *  to render an in-app capture menu. The chrome extension uses
+       *  Chrome's runtime context-menu API for the same UX; the
+       *  desktop Browse window posts this event so the host renderer
+       *  can position a custom DOM menu near the cursor. Coords are
+       *  CSS pixels relative to the webview's own viewport. */
+      type: "context-menu-request";
+      x: number;
+      y: number;
     };
 
 // Background -> Offscreen
