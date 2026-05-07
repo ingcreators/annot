@@ -5,7 +5,7 @@
  * / "Timed Capture" / "Paste from Clipboard" entries on platform
  * availability.
  *
- * Phase 2 of `docs/plans/host-convergence.md` lifts these out of
+ * Phase 2 of `docs/plans/_done/host-convergence.md` lifts these out of
  * `packages/web/src/capture/pwa-capture.ts` so the gallery can
  * import them without a back-channel through `@ingcreators/annot-web`.
  * The PWA-specific runtime (`captureScreen`, `pasteFromClipboard`,

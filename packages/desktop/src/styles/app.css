@@ -9,7 +9,7 @@
 }
 
 /*
- * Editor-mode layout — Phase 1 of `docs/plans/host-convergence.md`
+ * Editor-mode layout — Phase 1 of `docs/plans/_done/host-convergence.md`
  * adopted PWA's full editor-header (brand / breadcrumb / save-status
  * / save+copy / theme / help). The PWA-side rules in
  * `@ingcreators/annot-core/styles/editor.css` already reserve

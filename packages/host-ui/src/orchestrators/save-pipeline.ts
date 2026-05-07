@@ -4,7 +4,7 @@
  *
  * Originally extracted from `app.ts` as part of the Phase 1
  * decomposition (see `docs/plans/_done/app-decomposition.md`). Phase 3
- * of `docs/plans/host-convergence.md` lifted it into editor-shell so
+ * of `docs/plans/_done/host-convergence.md` lifted it into editor-shell so
  * PWA + Desktop share one implementation; VSCode keeps its own
  * `CustomEditorProvider`-driven save flow because the dirty / save
  * cadence is owned by VSCode, not the storage backend.

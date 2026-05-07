@@ -3,7 +3,7 @@
  * between `@ingcreators/annot-web`'s `PluginHost` class and the
  * gallery in `@ingcreators/annot-host-ui/gallery/*`.
  *
- * Phase 2 of `docs/plans/host-convergence.md` extracts these from
+ * Phase 2 of `docs/plans/_done/host-convergence.md` extracts these from
  * `packages/web/src/app/plugin-host.ts` (which still owns the
  * `PluginHost` class itself) so the gallery — now living in
  * editor-shell — can import them without a back-channel through

@@ -87,7 +87,7 @@ export class App {
   #headerHost: HeaderHost;
   /** Status host — owns the editor statusbar + zoom controls.
    *  Lazy-resolved against `#statusbar` because Phase 3 of
-   *  `docs/plans/host-convergence.md` lifted `StatusHost` into
+   *  `docs/plans/_done/host-convergence.md` lifted `StatusHost` into
    *  editor-shell with constructor-injected host element. The
    *  index.html-shipped `<div id="statusbar">` is in the DOM before
    *  `main.ts` runs `new App()`, so the field initializer resolves
@@ -146,7 +146,7 @@ export class App {
         this.#pluginHost.dispatchAfterSave({ path, mode: getStorageMode() });
       },
       getThumbnailManager: () => this.#thumbnailManager,
-      // Phase 3 / PR B of `docs/plans/host-convergence.md` — the
+      // Phase 3 / PR B of `docs/plans/_done/host-convergence.md` — the
       // SavePipeline orchestrator now lives in editor-shell and
       // takes its banner UI through callbacks. Wire the PWA's
       // `<annot-error-bar>` singleton (`./ui/error-bar.ts`) here.
@@ -186,7 +186,7 @@ export class App {
         getImageSize: () => this.#editorSession.getImageSize(),
         showGallery: () => this.showGallery(),
         collectExternalLinks: (path) => this.#pluginHost.collectExternalLinks(path, this.#storage),
-        // Phase 3 / PR C of `docs/plans/host-convergence.md` — host
+        // Phase 3 / PR C of `docs/plans/_done/host-convergence.md` — host
         // concerns lifted out of HeaderHost into deps callbacks so
         // editor-shell stays host-neutral. PWA wires:
         getRootLabel: () => {
