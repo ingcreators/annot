@@ -27,6 +27,7 @@ import {
 import { newIdB58 } from "@ingcreators/annot-core/utils";
 import type { DesktopStore } from "../storage/desktop-store.js";
 import { createStandaloneDesktopStore } from "../storage/bootstrap.js";
+import { installClickHotkeyHandlers } from "./click-hotkey.js";
 import { createBrowseCaptureHost } from "./host.js";
 
 interface ElectronApi {
@@ -62,6 +63,9 @@ interface BrowseDom {
   btnCaptureArea: HTMLButtonElement;
   btnCaptureFull: HTMLButtonElement;
   btnCapturePages: HTMLButtonElement;
+  btnCaptureClick: HTMLButtonElement;
+  btnCaptureHotkey: HTMLButtonElement;
+  contextMenu: HTMLDivElement;
   statusBar: HTMLDivElement;
   statusText: HTMLSpanElement;
 }
@@ -84,6 +88,15 @@ function resolveDom(): BrowseDom {
   const btnCapturePages = document.getElementById(
     "btn-capture-pages",
   ) as HTMLButtonElement | null;
+  const btnCaptureClick = document.getElementById(
+    "btn-capture-click",
+  ) as HTMLButtonElement | null;
+  const btnCaptureHotkey = document.getElementById(
+    "btn-capture-hotkey",
+  ) as HTMLButtonElement | null;
+  const contextMenu = document.getElementById(
+    "annot-context-menu",
+  ) as HTMLDivElement | null;
   const statusBar = document.getElementById("browse-status") as HTMLDivElement | null;
   const statusText = document.getElementById("browse-status-text") as HTMLSpanElement | null;
 
@@ -97,6 +110,9 @@ function resolveDom(): BrowseDom {
     !btnCaptureArea ||
     !btnCaptureFull ||
     !btnCapturePages ||
+    !btnCaptureClick ||
+    !btnCaptureHotkey ||
+    !contextMenu ||
     !statusBar ||
     !statusText
   ) {
@@ -113,6 +129,9 @@ function resolveDom(): BrowseDom {
     btnCaptureArea,
     btnCaptureFull,
     btnCapturePages,
+    btnCaptureClick,
+    btnCaptureHotkey,
+    contextMenu,
     statusBar,
     statusText,
   };
@@ -331,6 +350,135 @@ document.addEventListener("DOMContentLoaded", () => {
   dom.btnCapturePages.addEventListener("click", () =>
     void runMode("per-page", runPerPageCapture),
   );
+
+  // ---- Click + Hotkey session machines (Phase 4B) ────────────────
+
+  const clickHotkey = installClickHotkeyHandlers({
+    host,
+    webview: {
+      getURL: () => dom.webview.getURL?.() ?? dom.webview.src,
+      getTitle: () => document.title,
+      src: dom.webview.src,
+    },
+    getStore,
+    inboxFolder: INBOX_FOLDER,
+    btnClick: dom.btnCaptureClick,
+    btnHotkey: dom.btnCaptureHotkey,
+    setStatus,
+  });
+
+  // Re-enable click capture in the webview's preload realm after
+  // every navigation. The preload runs fresh on each page load, so
+  // its `clickListenerActive` resets to false; the chrome carries
+  // the user-facing "click capture is recording" flag and re-issues
+  // `click-capture-enable` so the listener comes back up before the
+  // user starts clicking around the new page.
+  dom.webview.addEventListener("did-finish-load", () => {
+    void clickHotkey.reEnableClickCaptureAfterNavigation();
+  });
+
+  // Hotkey shot delivered from main.ts when the user presses
+  // Alt+Shift+C while the Browse window is focused.
+  api().on("hotkey-capture-shot", () => {
+    void clickHotkey.handleHotkeyShot();
+  });
+
+  // ---- Right-click context menu (Phase 4B) ──────────────────────
+  //
+  // The webview's preload posts a `context-menu-request` event
+  // when the user right-clicks anywhere in the embedded page. The
+  // host side renders an in-app menu that mirrors the toolbar's
+  // six modes; clicks on the menu either start a single-shot mode
+  // or toggle a session.
+
+  function showContextMenu(viewportX: number, viewportY: number): void {
+    // The `<webview>` is positioned inside a flex container; map
+    // viewport-CSS coords (relative to webview) into chrome
+    // viewport coords by adding the webview's own bounding rect
+    // offset.
+    const rect = dom.webview.getBoundingClientRect();
+    const chromeX = rect.left + viewportX;
+    const chromeY = rect.top + viewportY;
+    // Clamp to the chrome viewport so the menu doesn't render
+    // off-screen on a far-right click. The actual menu height is
+    // measured after positioning.
+    dom.contextMenu.style.display = "block";
+    dom.contextMenu.style.left = `${chromeX}px`;
+    dom.contextMenu.style.top = `${chromeY}px`;
+    const menuRect = dom.contextMenu.getBoundingClientRect();
+    if (chromeX + menuRect.width > window.innerWidth) {
+      dom.contextMenu.style.left = `${window.innerWidth - menuRect.width - 8}px`;
+    }
+    if (chromeY + menuRect.height > window.innerHeight) {
+      dom.contextMenu.style.top = `${window.innerHeight - menuRect.height - 8}px`;
+    }
+    dom.contextMenu.setAttribute("aria-hidden", "false");
+  }
+
+  function hideContextMenu(): void {
+    dom.contextMenu.style.display = "none";
+    dom.contextMenu.setAttribute("aria-hidden", "true");
+  }
+
+  // Subscribe to context-menu-request events from the preload via
+  // the host's content-message channel.
+  host.onContentMessage((msg) => {
+    if (msg.type === "context-menu-request") {
+      showContextMenu(msg.x, msg.y);
+    }
+  });
+
+  // Each menu button declares a `data-mode` matching one of the
+  // six entry points. Click delegation keeps the wiring compact.
+  dom.contextMenu.addEventListener("click", (e) => {
+    const target = e.target as HTMLElement | null;
+    const button = target?.closest("button[data-mode]") as HTMLButtonElement | null;
+    if (!button) return;
+    hideContextMenu();
+    const mode = button.dataset.mode;
+    switch (mode) {
+      case "visible":
+        void runMode("visible viewport", runVisibleCapture);
+        break;
+      case "area":
+        void runMode("selected area", runAreaCapture);
+        break;
+      case "full":
+        void runMode("full page", runScrollCapture);
+        break;
+      case "pages":
+        void runMode("per-page", runPerPageCapture);
+        break;
+      case "click":
+        void clickHotkey.toggleClickCapture();
+        break;
+      case "hotkey":
+        void clickHotkey.toggleHotkeyCapture();
+        break;
+    }
+  });
+
+  // Dismiss on click outside / Escape / scroll. Use capture-phase
+  // so the dismiss runs before the user's click on something that
+  // might re-open the menu.
+  document.addEventListener(
+    "click",
+    (e) => {
+      if (dom.contextMenu.style.display !== "block") return;
+      const target = e.target as HTMLElement | null;
+      if (target && dom.contextMenu.contains(target)) return;
+      hideContextMenu();
+    },
+    { capture: true },
+  );
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && dom.contextMenu.style.display === "block") {
+      hideContextMenu();
+    }
+  });
+  // Scrolling the chrome (rare; the chrome's flex layout doesn't
+  // scroll today, but if it ever does the menu shouldn't drift).
+  window.addEventListener("scroll", hideContextMenu, true);
 
   // ---- Programmatic navigation from main process ────────────────
   //

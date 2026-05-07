@@ -46,6 +46,7 @@ import {
   app,
   BrowserWindow,
   desktopCapturer,
+  globalShortcut,
   ipcMain,
   Menu,
   nativeImage,
@@ -658,6 +659,32 @@ void app.whenReady().then(async () => {
 
   Menu.setApplicationMenu(buildAppMenu());
 
+  // Global hotkey for Browse-window single-shot capture (Phase 4B
+  // of `desktop-browser-mode.md`). Registered at app level: when
+  // pressed, the focused Browse window receives a
+  // `hotkey-capture-shot` IPC event and runs the renderer-side
+  // hotkey-state machine. No-op when no Browse window has focus
+  // OR none is open.
+  //
+  // Failure paths are best-effort: `globalShortcut.register`
+  // returns `false` if the OS already bound the combo. We log
+  // and continue so the rest of the app still boots.
+  try {
+    const registered = globalShortcut.register("Alt+Shift+C", () => {
+      const focused = BrowserWindow.getFocusedWindow();
+      // Only fire when the focused window is one of OUR Browse
+      // windows (mainWindow / capture-overlay are excluded).
+      if (focused && browseWindow && focused === browseWindow) {
+        focused.webContents.send("hotkey-capture-shot");
+      }
+    });
+    if (!registered) {
+      console.warn("[hotkey] failed to register Alt+Shift+C — already bound?");
+    }
+  } catch (err) {
+    console.warn("[hotkey] globalShortcut registration threw:", err);
+  }
+
   createMainWindow();
 
   if (SMOKE_TEST) {
@@ -684,4 +711,12 @@ app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {
     app.quit();
   }
+});
+
+app.on("will-quit", () => {
+  // Release the Alt+Shift+C global hotkey. Electron auto-cleans
+  // these on app exit, but unregistering explicitly avoids a
+  // window where the OS still routes the chord to a tearing-down
+  // process.
+  globalShortcut.unregisterAll();
 });
