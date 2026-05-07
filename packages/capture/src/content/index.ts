@@ -9,6 +9,7 @@
 
 export * from "./area-selector.js";
 export * from "./content-bus.js";
+export * from "./page-metadata-walker.js";
 export * from "./progress-overlay.js";
 export * from "./scroll-controller.js";
 export * from "./sticky-handler.js";
