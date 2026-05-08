@@ -13,6 +13,11 @@
 
 export { renderImageRecord } from "./render-image-record.js";
 export {
+  burnRedactionsIntoBitmap,
+  classifyRedact,
+  type RedactKind,
+} from "./redact-burn.js";
+export {
   buildBackgroundPic,
   buildFillXml,
   type BuildShapeOpts,
