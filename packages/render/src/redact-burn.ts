@@ -1,7 +1,7 @@
 /**
  * Burn redactions into a base bitmap.
  *
- * Phase 1 of [`docs/plans/redact-burn-into-image.md`](../../../docs/plans/redact-burn-into-image.md).
+ * Phase 1 of [`docs/plans/_done/redact-burn-into-image.md`](../../../docs/plans/_done/redact-burn-into-image.md).
  *
  * Today's redact tool is overlay-only: solid / mosaic / blur each
  * render an SVG element on top of the base `<image>` while the

@@ -2,7 +2,7 @@
 // @vitest-environment happy-dom
 //
 // Unit tests for `burnRedactionsIntoBitmap` (Phase 1 of
-// `docs/plans/redact-burn-into-image.md`).
+// `docs/plans/_done/redact-burn-into-image.md`).
 //
 // happy-dom can build SVG element fixtures, but its `<canvas>` does
 // no actual rasterisation — `getImageData` returns zeros and `toBlob`

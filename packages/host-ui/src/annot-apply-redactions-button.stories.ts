@@ -1,7 +1,7 @@
 /**
  * Stories for `<annot-apply-redactions-button>`.
  *
- * Phase 3 of `docs/plans/redact-burn-into-image.md`. The button
+ * Phase 3 of `docs/plans/_done/redact-burn-into-image.md`. The button
  * gates on `count > 0`; the disabled-zero variant covers the
  * "host mounts the button regardless, lets the count drop to 0
  * after a successful burn" story.

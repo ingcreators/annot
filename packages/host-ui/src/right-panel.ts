@@ -159,7 +159,7 @@ export class AnnotEditorRightPanelElement extends LitElement {
   declare selection: SelectionManager | null;
   declare getPluginSections: (() => UISection[]) | null;
   declare isBuiltinSectionDisabled: ((id: string) => boolean) | null;
-  /** Phase 3 of `docs/plans/redact-burn-into-image.md` — host-
+  /** Phase 3 of `docs/plans/_done/redact-burn-into-image.md` — host-
    *  supplied callback bound to `EditorShell.applyAllRedactions`.
    *  When set + redactCount > 0, the panel surfaces an "Apply
    *  redactions to image" button under the page-elements section.
@@ -607,7 +607,7 @@ export class AnnotEditorRightPanelElement extends LitElement {
     this.currentSelection = elements;
   }
 
-  /** Phase 3 of `docs/plans/redact-burn-into-image.md` — host
+  /** Phase 3 of `docs/plans/_done/redact-burn-into-image.md` — host
    *  pushes the live redact-element count whenever the document
    *  changes (initial open + every `dirty` event from
    *  `EditorShell`). The panel hides the apply-redactions button
@@ -617,7 +617,7 @@ export class AnnotEditorRightPanelElement extends LitElement {
     this.redactCount = Math.max(0, n | 0);
   }
 
-  /** Phase 6 of `docs/plans/redact-burn-into-image.md` —
+  /** Phase 6 of `docs/plans/_done/redact-burn-into-image.md` —
    *  convenience method that walks the panel's own `canvas`
    *  reference (already wired by every host) and pushes the
    *  count via `setRedactCount`. Lets each host call ONE method

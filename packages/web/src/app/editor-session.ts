@@ -415,7 +415,7 @@ export class EditorSession {
     panel.selection = selection;
     panel.getPluginSections = this.deps.getRightPanelSections ?? null;
     panel.isBuiltinSectionDisabled = this.deps.isBuiltinUISectionDisabled ?? null;
-    // Phase 3 of `docs/plans/redact-burn-into-image.md` — wire the
+    // Phase 3 of `docs/plans/_done/redact-burn-into-image.md` — wire the
     // shell's burn-in orchestration so the right-panel can surface
     // an "Apply redactions to image" button when the document
     // carries one or more redactions.
@@ -515,7 +515,7 @@ export class EditorSession {
       // but the user should know something will be saved soon.
       const statusEl = this.headerHost.getSaveStatusIndicator();
       if (statusEl) statusEl.status = "pending";
-      // Phase 3 of `docs/plans/redact-burn-into-image.md` — keep the
+      // Phase 3 of `docs/plans/_done/redact-burn-into-image.md` — keep the
       // right-panel's redact count in sync. Cheap (a single
       // querySelectorAll on the annotations group) so the autosave
       // debounce path doesn't notice. The shell's burn itself fires
@@ -744,7 +744,7 @@ export class EditorSession {
  *  rather than `shell.saveNow`, so this preservation is forward-
  *  looking, not behaviour-critical for this PR. */
 /** Count `[data-redact-style]` elements on the canvas's annotations
- *  group. Phase 3 of `docs/plans/redact-burn-into-image.md` — used
+ *  group. Phase 3 of `docs/plans/_done/redact-burn-into-image.md` — used
  *  by the right-panel to gate the "Apply redactions to image"
  *  button. Cheap to call on every `dirty` event; the
  *  `querySelectorAll` walks only the annotations subtree. */

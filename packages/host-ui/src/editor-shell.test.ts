@@ -302,7 +302,7 @@ describe("EditorShell — Phase 3 implementation", () => {
     });
   });
 
-  // Phase 2 of `docs/plans/redact-burn-into-image.md` — the host-
+  // Phase 2 of `docs/plans/_done/redact-burn-into-image.md` — the host-
   // orchestration half of the privacy-driven "make redaction
   // permanent" action. Phase 1 added the Tier C-render helper
   // (`burnRedactionsIntoBitmap`); this phase wires the shell so a

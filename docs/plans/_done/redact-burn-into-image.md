@@ -1,6 +1,6 @@
 # Burn redactions into the original image
 
-> **Status:** Draft
+> **Status:** Done — landed across PRs [#505](https://github.com/ingcreators/annot/pull/505)–[#510](https://github.com/ingcreators/annot/pull/510) (Phases 1–6) plus the Phase 7 archive PR.
 > **Compatibility:** `@ingcreators/annot-editor`, `@ingcreators/annot-host-ui`
 > (EditorShell), every host (PWA / VSCode / Desktop) — opt-in UI per host.
 > Schema-touching: replaces the loaded image's `originalDataUrl` with a

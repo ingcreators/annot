@@ -2,7 +2,7 @@
  * `<annot-apply-redactions-button>` — "Apply redactions to image"
  * action surface.
  *
- * Phase 3 of [`docs/plans/redact-burn-into-image.md`](../../../docs/plans/redact-burn-into-image.md) —
+ * Phase 3 of [`docs/plans/_done/redact-burn-into-image.md`](../../../docs/plans/_done/redact-burn-into-image.md) —
  * the per-host UI half of the privacy-driven "make redaction
  * permanent" action. Phase 1 added the Tier C-render helper and
  * Phase 2 added `EditorShell.applyAllRedactions`; this component

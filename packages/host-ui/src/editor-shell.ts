@@ -357,7 +357,7 @@ export class EditorShell {
    * Permanently bake every redact element in the current document
    * into the underlying base bitmap.
    *
-   * Phase 2 of [`docs/plans/redact-burn-into-image.md`](../../../docs/plans/redact-burn-into-image.md) —
+   * Phase 2 of [`docs/plans/_done/redact-burn-into-image.md`](../../../docs/plans/_done/redact-burn-into-image.md) —
    * the host-orchestration half of the privacy-driven "make this
    * permanent" action. The Tier C-render side
    * (`burnRedactionsIntoBitmap`) does the pixel composition; this

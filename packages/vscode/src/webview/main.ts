@@ -353,7 +353,7 @@ const shell = new EditorShell({
 // `{type: "save.result", id, bytes}` (handled below).
 shell.on("dirty", () => {
   vscode.postMessage({ type: "edit" });
-  // Phase 6 of `docs/plans/redact-burn-into-image.md` — keep the
+  // Phase 6 of `docs/plans/_done/redact-burn-into-image.md` — keep the
   // right-panel's apply-redactions button in sync with the
   // document's redact-element count. Mirrors the PWA's
   // EditorSession dirty handler; the count drops to 0 right
@@ -411,7 +411,7 @@ function mountToolbarAndRightPanel(): void {
   panel.selection = selection;
   panel.getPluginSections = null;
   panel.isBuiltinSectionDisabled = null;
-  // Phase 6 of `docs/plans/redact-burn-into-image.md` — wire the
+  // Phase 6 of `docs/plans/_done/redact-burn-into-image.md` — wire the
   // shell's burn-in orchestration through the right-panel's
   // "Apply redactions to image" button. Mirrors the PWA's
   // EditorSession registration; no VSCode-specific code path

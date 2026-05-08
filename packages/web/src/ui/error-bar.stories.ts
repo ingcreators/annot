@@ -127,7 +127,7 @@ export const InfoShorthand: Story = {
   },
 };
 
-/** Phase 5 of `docs/plans/redact-burn-into-image.md` — visible
+/** Phase 5 of `docs/plans/_done/redact-burn-into-image.md` — visible
  *  regression pin for the toast wording the PWA's EditorSession
  *  emits after a successful burn. The error-bar's info-severity
  *  surface is the existing transient-message channel; "the
