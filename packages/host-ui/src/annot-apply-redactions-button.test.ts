@@ -56,7 +56,8 @@ describe("<annot-apply-redactions-button>", () => {
     const btn = el.querySelector("button");
     expect(btn).not.toBeNull();
     expect(btn?.disabled).toBe(true);
-    expect(btn?.getAttribute("data-tooltip")).toBe("No redactions to apply");
+    expect(btn?.getAttribute("title")).toBe("No redactions to apply");
+    expect(btn?.classList.contains("annot-apply-redactions-btn")).toBe(true);
   });
 
   it("renders a disabled button when onApply is null", async () => {
@@ -70,8 +71,17 @@ describe("<annot-apply-redactions-button>", () => {
     await el.updateComplete;
     const btn = el.querySelector("button");
     expect(btn?.disabled).toBe(false);
-    expect(btn?.getAttribute("data-tooltip")).toBe("Apply 2 redaction(s) to image");
+    expect(btn?.getAttribute("title")).toBe("Apply 2 redaction(s) to image");
     expect(btn?.getAttribute("aria-label")).toBe("Apply redactions to image");
+    expect(btn?.classList.contains("annot-apply-redactions-btn")).toBe(true);
+  });
+
+  it("renders a visible label inside the button", async () => {
+    const el = mountButton(2, async () => ({ count: 2 }));
+    await el.updateComplete;
+    const label = el.querySelector(".annot-apply-redactions-label");
+    expect(label).not.toBeNull();
+    expect(label?.textContent).toContain("Apply redactions to image");
   });
 
   it("opens confirm dialog with the plan's body text on click", async () => {

@@ -362,11 +362,23 @@ export class EditorShell {
    * permanent" action. The Tier C-render side
    * (`burnRedactionsIntoBitmap`) does the pixel composition; this
    * method snapshots the redact elements, drives the renderer,
-   * swaps the resulting bytes into both the live canvas
-   * (`imageEl.href`) and the in-memory `ImageRecord.originalDataUrl`,
-   * removes the redact elements from the annotations group, saves a
-   * history snapshot, and emits `dirty` so the host's save pipeline
-   * persists the change on the next save tick.
+   * swaps the resulting bytes into the live canvas
+   * (`imageEl.href`), removes the redact elements from the
+   * annotations group, AND explicitly persists the new bitmap +
+   * SVG via `storage.updateImage` before saving a history snapshot.
+   *
+   * The explicit persistence step is critical for the privacy
+   * contract. Without it, the host's debounced annotation-save path
+   * only writes `annotationsSvg` + `tags` (the legacy
+   * `ImageRecordUpdate` fields), and each storage backend's
+   * `updateImage` re-reads the OLD bitmap from disk + merges the
+   * new SVG — leaving the original pixels intact on disk while the
+   * canvas visually shows the burn. The user re-opens the file
+   * from the gallery and sees the pre-burn original; the
+   * "permanent" promise the dialog makes is broken. Persisting
+   * `originalDataUrl` alongside `annotationsSvg` here closes that
+   * gap (each backend's `updateImage` was extended to honor
+   * `updates.originalDataUrl` in lockstep with this fix).
    *
    * The action is **session-undoable**: the burned state is one
    * history snapshot, so Ctrl+Z reverts it within the open editor.
@@ -379,6 +391,15 @@ export class EditorShell {
    * present or no image is open. Callers that gate the UI on
    * "is there a redaction?" should use the count themselves rather
    * than relying on this no-op behaviour.
+   *
+   * If the explicit persistence step fails, the method
+   * re-throws after firing the `error` event so the calling
+   * host can surface a banner. The canvas stays in the burned
+   * state visually (Ctrl+Z reverts); the file on disk is still
+   * the pre-burn version, so a retry of the apply gesture WOULD
+   * re-apply (the redacts are gone, but the user can re-draw
+   * them — the wider rollback affordance is the standard undo
+   * stack).
    */
   async applyAllRedactions(): Promise<{ count: number }> {
     if (this.#destroyed) return { count: 0 };
@@ -415,14 +436,37 @@ export class EditorShell {
       el.remove();
     }
 
-    // Update the in-memory record so the next save persists both
-    // the new bitmap AND the redact-free SVG together. The host's
-    // existing save pipeline (PWA's `SavePipeline`, VSCode's
-    // `vscode.workspace.fs`, Desktop's filesystem-backed
-    // `DesktopStore`) picks this up via `dirty` without needing
-    // backend-specific glue — the storage layer already handles
-    // "the bitmap and the SVG both changed since last save".
+    // Update the in-memory record so a subsequent debounced save
+    // (fired by the `history.save()` below) sees the new bitmap if
+    // it ever needs the snapshot.
     this.#currentRecord = { ...record, originalDataUrl: dataUrl };
+
+    // Persist the new bitmap + SVG atomically. The host's debounced
+    // annotation-save path can't carry the bitmap on its own — the
+    // legacy `ImageRecordUpdate` only listed annotationsSvg + tags,
+    // and even after extending it to include `originalDataUrl`, the
+    // host has no way to know the bitmap mutated unless we say so
+    // explicitly. So we save right here, before the dirty event
+    // fires, with both fields populated. The host's subsequent
+    // debounced save then runs against the on-disk burned state and
+    // writes a no-op (or merges any further user edits, fine in
+    // either case).
+    const path = this.#currentPath;
+    if (path) {
+      try {
+        const updates = {
+          annotationsSvg: exportSVGString(canvas),
+          originalDataUrl: dataUrl,
+          updatedAt: new Date().toISOString(),
+        };
+        await this.#host.storage.updateImage(path, updates);
+        this.#currentRecord = { ...this.#currentRecord, ...updates };
+        this.#emit("saved", path);
+      } catch (err) {
+        this.#emit("error", err);
+        throw err;
+      }
+    }
 
     // Single history snapshot captures the burned state. Ctrl+Z
     // reverts to the pre-burn state within the session (the

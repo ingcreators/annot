@@ -1099,6 +1099,60 @@ body.editor-mode.has-right-panel .file-details-backdrop {
   text-align: right;
 }
 
+/* Apply-redactions-to-image button — labeled action surface in the
+ * right-panel's apply-redactions section (`#renderApplyRedactions`
+ * in `right-panel.ts`). Phase 3 of
+ * `_done/redact-burn-into-image.md` initially reused the
+ * `.toolbar-btn` class but that's a 36 × 36 icon-only chrome —
+ * dropping a label inside overflows the box. This is the dedicated
+ * labeled-button rule: full-width row, icon + label, opaque
+ * destructive background so the user recognises it as the
+ * irreversibility-confirming gesture. */
+.annot-apply-redactions-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 36px;
+  padding: 8px 12px;
+  border: 1px solid var(--annot-border-color);
+  border-radius: 8px;
+  background: var(--annot-bg-elevated, var(--annot-bg-panel));
+  color: var(--annot-text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background 0.1s,
+    border-color 0.1s;
+}
+.annot-apply-redactions-btn:hover:not(:disabled) {
+  background: var(--annot-hover-bg);
+  border-color: var(--annot-hover-border);
+}
+.annot-apply-redactions-btn:focus-visible {
+  outline: 2px solid var(--annot-focus-ring, var(--annot-accent));
+  outline-offset: 2px;
+}
+.annot-apply-redactions-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.annot-apply-redactions-btn > annot-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+.annot-apply-redactions-btn > .annot-apply-redactions-label {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  white-space: normal;
+  /* Allow up to two lines for a graceful long-language wrap; tall
+   * single-line containers (the common case) just stay one line. */
+  line-height: 1.3;
+}
+
 /* Empty-state shown when the panel has no active tool AND no
  * selection. Keeps the always-visible panel feeling intentional
  * rather than "broken / blank". */
