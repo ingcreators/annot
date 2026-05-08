@@ -235,6 +235,15 @@ function openEditor(record: ImageRecord): void {
   rightPanel.selection = selection;
   rightPanel.getPluginSections = null;
   rightPanel.isBuiltinSectionDisabled = null;
+  // Phase 6 of `docs/plans/redact-burn-into-image.md` — wire the
+  // shell's burn-in orchestration through the right-panel's
+  // "Apply redactions to image" button. Mirrors the PWA's
+  // EditorSession registration. The panel hides the button when
+  // `redactCount === 0`, so the initial refresh ensures it
+  // appears immediately when an annotated document with existing
+  // redactions opens.
+  rightPanel.applyAllRedactions = () => shell.applyAllRedactions();
+  rightPanel.refreshRedactCount();
   rightPanelHostEl.appendChild(rightPanel);
 
   // ---- File details drawer ------------------------------------
@@ -353,6 +362,12 @@ function openEditor(record: ImageRecord): void {
     const status = headerHost.getSaveStatusIndicator();
     if (status) status.status = "pending";
     savePipeline.scheduleAnnotationSave(SAVE_DEBOUNCE_MS);
+    // Phase 6 of `docs/plans/redact-burn-into-image.md` — keep
+    // the right-panel's apply-redactions button in sync with the
+    // document's redact-element count. The count drops to 0
+    // right after a successful burn so the button auto-hides
+    // without any explicit teardown.
+    rightPanel.refreshRedactCount();
   });
 
   // Surface mount errors from the shell's own emit (covers the

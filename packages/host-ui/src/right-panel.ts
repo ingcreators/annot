@@ -617,6 +617,28 @@ export class AnnotEditorRightPanelElement extends LitElement {
     this.redactCount = Math.max(0, n | 0);
   }
 
+  /** Phase 6 of `docs/plans/redact-burn-into-image.md` —
+   *  convenience method that walks the panel's own `canvas`
+   *  reference (already wired by every host) and pushes the
+   *  count via `setRedactCount`. Lets each host call ONE method
+   *  on `dirty` instead of duplicating the
+   *  `querySelectorAll("[data-redact-style]").length` walk. The
+   *  PWA's existing inline `countRedactions(canvas)` helper
+   *  predates this method; both produce identical results, so
+   *  the PWA can migrate to `panel.refreshRedactCount()` in a
+   *  follow-up without behaviour change. No-op when `canvas` is
+   *  not yet set so callers can fire it before the first
+   *  `mountFromRecord`. */
+  refreshRedactCount(): void {
+    const canvas = this.canvas;
+    if (!canvas) {
+      this.setRedactCount(0);
+      return;
+    }
+    const count = canvas.annotations.querySelectorAll("[data-redact-style]").length;
+    this.setRedactCount(count);
+  }
+
   /** Update / clear the DOM-element metadata for the current image.
    *  Pass `null` (or omit) when loading an image without metadata
    *  (paste, desktop capture, legacy) — the Elements section then
