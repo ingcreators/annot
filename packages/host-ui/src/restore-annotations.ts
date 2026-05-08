@@ -40,7 +40,19 @@ export function restoreAnnotations(canvas: CanvasManager, svgString: string): vo
 
   for (const child of Array.from(svgRoot.children)) {
     const tag = child.tagName;
-    if (tag === "defs" || (tag === "image" && !child.closest("g"))) continue;
+    // Skip the base bitmap (`<image>` at SVG root with no `<g>` ancestor)
+    // but NOT mosaic / blur redacts, which are also `<image>` elements
+    // and become top-level after `exportAnnotationsSvgForIdb`'s
+    // `flattenAnnotations` lifts them out of `<g id="annotations">`.
+    // The redact attribute is the discriminator — base bitmaps never
+    // carry it.
+    if (tag === "defs") continue;
+    if (
+      tag === "image" &&
+      !child.closest("g") &&
+      !child.hasAttribute("data-redact-style")
+    )
+      continue;
     if (child.id === "ui-overlay") continue;
     if (child.id === "annotations") {
       for (const annotation of Array.from(child.children)) {
