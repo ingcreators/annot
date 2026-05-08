@@ -38,6 +38,7 @@ import type { SavePipeline } from "@ingcreators/annot-host-ui/orchestrators/save
 import type { StatusHost } from "@ingcreators/annot-host-ui/orchestrators/status-host";
 import type { ScratchpadStore } from "../editor/scratchpad-store.js";
 import { getStorageMode } from "../storage/bridge.js";
+import { showInfo } from "../ui/error-bar.js";
 import { addClickMarker } from "./click-marker.js";
 import type { UISection } from "./plugin-host.js";
 
@@ -417,11 +418,24 @@ export class EditorSession {
     // Phase 3 of `docs/plans/redact-burn-into-image.md` — wire the
     // shell's burn-in orchestration so the right-panel can surface
     // an "Apply redactions to image" button when the document
-    // carries one or more redactions. The callback returns the
-    // burn count so a future Phase 5 toast can read it; for now
-    // the panel's button alone is the user-visible surface.
+    // carries one or more redactions.
     panel.applyAllRedactions = () => shell.applyAllRedactions();
     panel.setRedactCount(countRedactions(canvas));
+    // Phase 5 of the same plan — surface a transient info toast on
+    // a successful burn so the user knows: (a) the redactions are
+    // in the bitmap now, (b) saving is what makes that change
+    // permanent. The button bubbles `applied` events with
+    // `composed: true`, so attaching the listener to the panel
+    // catches the bubble before it leaves the right-panel
+    // subtree. Uses the existing `<annot-error-bar>` info-severity
+    // surface (5 s auto-dismiss) — the plan calls this "the
+    // existing status-bar toast", and showInfo IS that surface in
+    // the PWA. Duplicating it onto the editor's footer statusbar
+    // would split the user's notification mental model.
+    panel.addEventListener("applied", (e) => {
+      const { count } = (e as CustomEvent<{ count: number }>).detail;
+      showInfo(`${count} redaction(s) applied to image. Save to make permanent.`);
+    });
     rightPanelEl.appendChild(panel);
     this.#editorRightPanel = panel;
     // Push DOM-element metadata (captured by the browser extension)

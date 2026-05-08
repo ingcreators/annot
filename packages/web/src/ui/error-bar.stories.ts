@@ -127,6 +127,23 @@ export const InfoShorthand: Story = {
   },
 };
 
+/** Phase 5 of `docs/plans/redact-burn-into-image.md` — visible
+ *  regression pin for the toast wording the PWA's EditorSession
+ *  emits after a successful burn. The error-bar's info-severity
+ *  surface is the existing transient-message channel; "the
+ *  status-bar toast" the plan calls out IS this surface in the
+ *  PWA. Reviewers see the exact copy the user sees in production. */
+export const RedactionsAppliedToast: Story = {
+  name: "Shorthand — showInfo (redactions applied)",
+  render: () => {
+    hideError();
+    showInfo("3 redaction(s) applied to image. Save to make permanent.", 5000);
+    return hint(
+      "Fired by EditorSession after a successful applyAllRedactions burn. autoDismiss: 5000ms (the showInfo default).",
+    );
+  },
+};
+
 export const ErrorSingleton: Story = {
   name: "Shorthand — showError",
   render: () => {
