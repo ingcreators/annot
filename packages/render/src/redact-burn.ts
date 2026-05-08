@@ -25,8 +25,16 @@
  * the element's `href` (PR2 ensures these stay in sync with the
  * geometry after move + resize).
  *
- * Phase 1 is the axis-aligned MVP. Rotation / flip support — drawing
- * through a transformed canvas state — lands in Phase 4.
+ * Phase 4 of the same plan extends the helper to honour `data-rot`
+ * / `data-flip-h` / `data-flip-v` — the exact attribute set
+ * `transform-utils.ts` writes via `applyTransformState`. The
+ * renderer applies the same matrix `T(cx,cy) * R(rot) * S(sx,sy)
+ * * T(-cx,-cy)` to the canvas context before drawing each rect /
+ * image, so a 45°-rotated solid bar covers its rotated bounds and
+ * a flipped mosaic / blur composites onto the mirrored region.
+ * The pivot is the element's local bbox center
+ * `(x + w/2, y + h/2)`, matching `transform-utils`'
+ * geometry-positioned-element pivot.
  */
 
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -41,6 +49,19 @@ interface ClassifiedRedact {
   y: number;
   width: number;
   height: number;
+  /** Rotation in degrees (CW positive), as written by
+   *  `transform-utils.ts` to `data-rot`. Zero for axis-aligned
+   *  redactions. The renderer applies `R(rotation)` around the
+   *  element's local bbox center before drawing. */
+  rotation: number;
+  /** Horizontal flip flag (`data-flip-h="1"`). The renderer
+   *  applies `S(-1, 1)` around the bbox center before drawing
+   *  when set. */
+  flipH: boolean;
+  /** Vertical flip flag (`data-flip-v="1"`). The renderer
+   *  applies `S(1, -1)` around the bbox center before drawing
+   *  when set. */
+  flipV: boolean;
   /** Solid fill color (only set when `kind === "solid"`). */
   fill?: string;
   /** Embedded PNG data URL (only set when `kind === "mosaic"` or `"blur"`). */
@@ -127,14 +148,27 @@ export function classifyRedact(el: SVGElement): ClassifiedRedact | null {
   const height = parseAttrNumber(el, "height");
   if (width <= 0 || height <= 0) return null;
 
+  // Phase 4: read rotation / flip from the data-attrs that
+  // `transform-utils.ts:writeTransformState` persists. Inlined here
+  // (instead of importing `readTransformState` from
+  // `@ingcreators/annot-core/editor/transform-utils`) so the
+  // renderer doesn't pull in arrow-markers / text-utils transitively
+  // for what is just three attribute reads. The schema is
+  // documented in `transform-utils.ts:readTransformState`; the
+  // attribute names are the contract this read shares with that
+  // helper.
+  const rotation = parseAttrNumber(el, "data-rot");
+  const flipH = el.getAttribute("data-flip-h") === "1";
+  const flipV = el.getAttribute("data-flip-v") === "1";
+
   if (style === "solid") {
     const fill = el.getAttribute("fill") || "#000";
-    return { kind: "solid", x, y, width, height, fill };
+    return { kind: "solid", x, y, width, height, rotation, flipH, flipV, fill };
   }
   // mosaic / blur both ride on an <image> with the baked PNG.
   const href = el.getAttribute("href") || el.getAttributeNS(XLINK_NS, "href") || "";
   if (!href) return null;
-  return { kind: style, x, y, width, height, href };
+  return { kind: style, x, y, width, height, rotation, flipH, flipV, href };
 }
 
 const XLINK_NS = "http://www.w3.org/1999/xlink";
@@ -150,20 +184,60 @@ async function compositeOne(
   ctx: CanvasRenderingContext2D,
   el: ClassifiedRedact,
 ): Promise<void> {
+  // For mosaic / blur we need the embedded PNG decoded BEFORE the
+  // transform stack opens — happy-dom `Image` decoding is async, so
+  // resolving it after `ctx.save()` would push the restore() out of
+  // the natural matched-pair scope. Decode first, then transform-
+  // wrap the synchronous drawImage call.
+  let img: HTMLImageElement | null = null;
+  if (el.kind !== "solid") {
+    const href = el.href;
+    if (!href) return;
+    img = await loadImage(href);
+  }
+
+  ctx.save();
+  applyElementTransform(ctx, el);
   if (el.kind === "solid") {
-    ctx.save();
     ctx.fillStyle = el.fill ?? "#000";
     ctx.fillRect(el.x, el.y, el.width, el.height);
-    ctx.restore();
-    return;
+  } else if (img) {
+    ctx.drawImage(img, el.x, el.y, el.width, el.height);
   }
-  // mosaic / blur — load the embedded PNG and composite it.
-  const href = el.href;
-  if (!href) return;
-  const img = await loadImage(href);
-  ctx.save();
-  ctx.drawImage(img, el.x, el.y, el.width, el.height);
   ctx.restore();
+}
+
+/**
+ * Apply the element's rotation + flip to the canvas context.
+ *
+ * Mirrors `transform-utils.ts:applyTransformState` for the
+ * geometry-positioned redact subset (`<rect>` for solid,
+ * `<image>` for mosaic / blur). The pivot is the element's local
+ * bbox center `(x + w/2, y + h/2)`; `tx` / `ty` are always zero
+ * for these elements (the move-bakes-coordinates invariant lives
+ * in geometry attrs, not in a translate transform).
+ *
+ * Composite math (right-to-left in canvas, left-to-right in
+ * SVG matrix terms — same operator order):
+ *   M = T(cx, cy) * R(rotation) * S(sx, sy) * T(-cx, -cy)
+ *
+ * Identity case (no rotation, no flip) skips the transform stack
+ * entirely so the Phase 1 axis-aligned fast path stays intact.
+ */
+function applyElementTransform(
+  ctx: CanvasRenderingContext2D,
+  el: ClassifiedRedact,
+): void {
+  const isIdentity = el.rotation === 0 && !el.flipH && !el.flipV;
+  if (isIdentity) return;
+  const cx = el.x + el.width / 2;
+  const cy = el.y + el.height / 2;
+  const sx = el.flipH ? -1 : 1;
+  const sy = el.flipV ? -1 : 1;
+  ctx.translate(cx, cy);
+  if (el.rotation !== 0) ctx.rotate((el.rotation * Math.PI) / 180);
+  if (sx !== 1 || sy !== 1) ctx.scale(sx, sy);
+  ctx.translate(-cx, -cy);
 }
 
 function loadImage(src: string): Promise<HTMLImageElement> {
