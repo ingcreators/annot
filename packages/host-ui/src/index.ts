@@ -59,3 +59,8 @@ export {
   ZOOM_OPTIONS,
 } from "./editor-statusbar.js";
 import "./editor-statusbar.js";
+export type {
+  AnnotApplyRedactionsButtonElement,
+  ApplyRedactionsAppliedDetail,
+} from "./annot-apply-redactions-button.js";
+import "./annot-apply-redactions-button.js";

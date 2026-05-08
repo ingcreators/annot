@@ -414,6 +414,14 @@ export class EditorSession {
     panel.selection = selection;
     panel.getPluginSections = this.deps.getRightPanelSections ?? null;
     panel.isBuiltinSectionDisabled = this.deps.isBuiltinUISectionDisabled ?? null;
+    // Phase 3 of `docs/plans/redact-burn-into-image.md` — wire the
+    // shell's burn-in orchestration so the right-panel can surface
+    // an "Apply redactions to image" button when the document
+    // carries one or more redactions. The callback returns the
+    // burn count so a future Phase 5 toast can read it; for now
+    // the panel's button alone is the user-visible surface.
+    panel.applyAllRedactions = () => shell.applyAllRedactions();
+    panel.setRedactCount(countRedactions(canvas));
     rightPanelEl.appendChild(panel);
     this.#editorRightPanel = panel;
     // Push DOM-element metadata (captured by the browser extension)
@@ -493,6 +501,13 @@ export class EditorSession {
       // but the user should know something will be saved soon.
       const statusEl = this.headerHost.getSaveStatusIndicator();
       if (statusEl) statusEl.status = "pending";
+      // Phase 3 of `docs/plans/redact-burn-into-image.md` — keep the
+      // right-panel's redact count in sync. Cheap (a single
+      // querySelectorAll on the annotations group) so the autosave
+      // debounce path doesn't notice. The shell's burn itself fires
+      // `dirty`, so the count drops to 0 immediately after a burn
+      // and the apply-redactions section hides itself.
+      this.#editorRightPanel?.setRedactCount(countRedactions(canvas));
       // Network-backed stores (Drive, GitHub) get a longer debounce
       // than local ones so a rapid slider sweep / series of small
       // adjustments coalesces into a single upload instead of a
@@ -714,6 +729,15 @@ export class EditorSession {
  *  empty stub. The PWA today drives saves through `savePipeline`
  *  rather than `shell.saveNow`, so this preservation is forward-
  *  looking, not behaviour-critical for this PR. */
+/** Count `[data-redact-style]` elements on the canvas's annotations
+ *  group. Phase 3 of `docs/plans/redact-burn-into-image.md` — used
+ *  by the right-panel to gate the "Apply redactions to image"
+ *  button. Cheap to call on every `dirty` event; the
+ *  `querySelectorAll` walks only the annotations subtree. */
+function countRedactions(canvas: CanvasManager): number {
+  return canvas.annotations.querySelectorAll("[data-redact-style]").length;
+}
+
 function synthesizeShellRecord(
   dataUrl: string,
   width: number,

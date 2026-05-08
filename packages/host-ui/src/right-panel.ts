@@ -76,6 +76,7 @@ import { createPageElementsSection } from "./right-panel-sections/annot-page-ele
 import { createSelectionPropertiesSection } from "./right-panel-sections/annot-selection-properties-section.js";
 import { createToolPropertiesSection } from "./right-panel-sections/annot-tool-properties-section.js";
 import type { Toolbar } from "@ingcreators/annot-host-ui/toolbar";
+import "./annot-apply-redactions-button.js";
 
 // =============================================================================
 // Action-button SVGs — custom glyphs modeled on PowerPoint's ribbon
@@ -145,9 +146,11 @@ export class AnnotEditorRightPanelElement extends LitElement {
     selection: { attribute: false },
     getPluginSections: { attribute: false },
     isBuiltinSectionDisabled: { attribute: false },
+    applyAllRedactions: { attribute: false },
     activeToolId: { state: true },
     currentSelection: { state: true },
     pageMetadata: { state: true },
+    redactCount: { state: true },
   };
 
   declare toolbar: Toolbar | null;
@@ -156,9 +159,22 @@ export class AnnotEditorRightPanelElement extends LitElement {
   declare selection: SelectionManager | null;
   declare getPluginSections: (() => UISection[]) | null;
   declare isBuiltinSectionDisabled: ((id: string) => boolean) | null;
+  /** Phase 3 of `docs/plans/redact-burn-into-image.md` — host-
+   *  supplied callback bound to `EditorShell.applyAllRedactions`.
+   *  When set + redactCount > 0, the panel surfaces an "Apply
+   *  redactions to image" button under the page-elements section.
+   *  When null, the button hides regardless of redactCount. */
+  declare applyAllRedactions: (() => Promise<{ count: number }>) | null;
   declare activeToolId: string | null;
   declare currentSelection: SVGElement[];
   declare pageMetadata: PageMetadata | null;
+  /** Live count of `[data-redact-style]` elements on the canvas.
+   *  Pushed by the host (PWA's EditorSession listens to the
+   *  shell's `dirty` event) — the panel itself doesn't observe
+   *  the canvas, mirroring how `currentSelection` /
+   *  `pageMetadata` flow through `showSelectionProperties` /
+   *  `setPageMetadata`. */
+  declare redactCount: number;
 
   /** Inline, "docked" PropertyPanel — owned at the panel level so
    *  its internal observers / event listeners survive mode
@@ -180,9 +196,11 @@ export class AnnotEditorRightPanelElement extends LitElement {
     this.selection = null;
     this.getPluginSections = null;
     this.isBuiltinSectionDisabled = null;
+    this.applyAllRedactions = null;
     this.activeToolId = null;
     this.currentSelection = [];
     this.pageMetadata = null;
+    this.redactCount = 0;
     // Stable PropertyPanel host built once; the selection section
     // attaches / detaches it across mode switches.
     this.#propPanelHost = document.createElement("div");
@@ -362,6 +380,8 @@ export class AnnotEditorRightPanelElement extends LitElement {
 
       <div class="editor-right-panel-sections-host"></div>
 
+      ${this.#renderApplyRedactions()}
+
       <div class="editor-right-panel-empty">
         <annot-icon class="editor-right-panel-empty-icon" .spec=${builtinIcon("tune")}></annot-icon>
         <p class="editor-right-panel-empty-title">Properties</p>
@@ -369,6 +389,32 @@ export class AnnotEditorRightPanelElement extends LitElement {
           Pick a tool or select a shape to see its properties here.
         </p>
       </div>
+    `;
+  }
+
+  /** Render the "Apply redactions to image" section. Hidden when:
+   *   - The host hasn't supplied an `applyAllRedactions` callback
+   *     (typically a host that doesn't surface the action — VSCode +
+   *     Desktop will until Phase 6 wires them in too).
+   *   - The document has no redactions (`redactCount === 0`).
+   *
+   *  Lives between the variable section list (`#sections-host`)
+   *  and the empty-state placeholder so it's visually grouped
+   *  with the other panel sections — distinct from the
+   *  selection-bound "Actions" cluster at the top. */
+  #renderApplyRedactions() {
+    if (this.applyAllRedactions === null) return null;
+    if (this.redactCount === 0) return null;
+    return html`
+      <section
+        class="editor-right-panel-section editor-right-panel-apply-redactions"
+        data-section-id="right-panel.apply-redactions"
+      >
+        <annot-apply-redactions-button
+          .count=${this.redactCount}
+          .onApply=${this.applyAllRedactions}
+        ></annot-apply-redactions-button>
+      </section>
     `;
   }
 
@@ -559,6 +605,16 @@ export class AnnotEditorRightPanelElement extends LitElement {
   /** Called on selection change. Empty selection → hide section. */
   showSelectionProperties(elements: SVGElement[]): void {
     this.currentSelection = elements;
+  }
+
+  /** Phase 3 of `docs/plans/redact-burn-into-image.md` — host
+   *  pushes the live redact-element count whenever the document
+   *  changes (initial open + every `dirty` event from
+   *  `EditorShell`). The panel hides the apply-redactions button
+   *  when `n === 0`, mirroring the same gate the button itself
+   *  applies via `disabled=${count === 0}`. */
+  setRedactCount(n: number): void {
+    this.redactCount = Math.max(0, n | 0);
   }
 
   /** Update / clear the DOM-element metadata for the current image.
