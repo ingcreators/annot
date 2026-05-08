@@ -815,7 +815,12 @@ describe("SelectionManager — redact rebake on move (arrow-key path)", () => {
     // and the latest follow-up samples the live element.
     const utils = await import("./redact-utils.js");
 
-    let firstResolve: (() => void) | null = null;
+    // Wrap the deferred resolver in an object so TypeScript's control
+    // flow narrowing (which treats a `let` assigned inside a callback
+    // as never reassigned) doesn't reduce the type to `never` and
+    // forbid the later `()` call. Object-property mutation isn't
+    // narrowed the same way.
+    const gate: { resolveFirst: (() => void) | null } = { resolveFirst: null };
     let firstStarted = false;
     const calls: Array<{ x: string | null; y: string | null }> = [];
     const spy = vi.spyOn(utils, "convertRedactStyle").mockImplementation(async (oldEl) => {
@@ -825,7 +830,7 @@ describe("SelectionManager — redact rebake on move (arrow-key path)", () => {
       if (!firstStarted) {
         firstStarted = true;
         await new Promise<void>((resolve) => {
-          firstResolve = resolve;
+          gate.resolveFirst = resolve;
         });
       }
       const fresh = document.createElementNS(SVG_NS, "image") as SVGImageElement;
@@ -887,7 +892,7 @@ describe("SelectionManager — redact rebake on move (arrow-key path)", () => {
     expect(spy).toHaveBeenCalledTimes(1);
 
     // Release rebake A.
-    firstResolve?.();
+    gate.resolveFirst?.();
     // Drain microtasks: A finishes → follow-up B starts (synchronous
     // in this mock since firstStarted is now true) → swap → save.
     await Promise.resolve();
