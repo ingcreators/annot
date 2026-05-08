@@ -262,6 +262,46 @@ describe("renderMosaicRedact — out-of-bounds rebake transparency fix", () => {
   });
 });
 
+describe("buildImageRedact — preserveAspectRatio for race-window resilience", () => {
+  // Regression test for the user-reported "blurも連続してサイズ変更
+  // していると、オブジェクトとblurのエリアに差異が発生します。" bug.
+  //
+  // SVG `<image>` defaults to `preserveAspectRatio="xMidYMid meet"`,
+  // which fits the embedded raster inside the wrapper without
+  // distortion — leaving transparent padding when the wrapper's
+  // aspect ratio diverges from the embedded PNG's. During rapid
+  // continuous resize the wrapper is updated faster than the rebake
+  // PNG can be regenerated; the aspect ratios diverge for the
+  // duration of the in-flight rebake plus the queued follow-up,
+  // and `meet`-mode padding shows the underlying screenshot
+  // through the gap — a privacy violation.
+  //
+  // Setting `preserveAspectRatio="none"` makes the embedded raster
+  // ALWAYS stretch to fill the wrapper, eliminating the gap. The
+  // worst transient effect is a subtly stretched blur instead of a
+  // hole — privacy contract holds throughout the race.
+
+  it("renderMosaicRedact's resulting <image> carries preserveAspectRatio=\"none\"", async () => {
+    const { restore } = setupMockedCanvas();
+    teardown = restore;
+    const cm = makeCanvasManager();
+
+    const el = await renderMosaicRedact({ x: 10, y: 20, width: 100, height: 60 }, cm);
+    expect(el.tagName).toBe("image");
+    expect(el.getAttribute("preserveAspectRatio")).toBe("none");
+  });
+
+  it("renderBlurRedact's resulting <image> carries preserveAspectRatio=\"none\"", async () => {
+    const { restore } = setupMockedCanvas();
+    teardown = restore;
+    const cm = makeCanvasManager();
+
+    const el = await renderBlurRedact({ x: 10, y: 20, width: 100, height: 60 }, cm);
+    expect(el.tagName).toBe("image");
+    expect(el.getAttribute("preserveAspectRatio")).toBe("none");
+  });
+});
+
 describe("renderBlurRedact — out-of-bounds rebake transparency fix", () => {
   it("pre-fills the padded canvas with REDACT_SOLID_COLOR before setting blur filter", async () => {
     const { log, restore } = setupMockedCanvas();

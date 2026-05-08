@@ -133,6 +133,31 @@ function buildImageRedact(
   el.setAttribute("width", String(rect.width));
   el.setAttribute("height", String(rect.height));
   el.setAttribute("data-redact-style", style);
+  // SVG's `<image>` default is `preserveAspectRatio="xMidYMid meet"`
+  // — fit the embedded PNG inside the wrapper without distortion.
+  // For a redact `<image>` that means: when the wrapper's aspect
+  // ratio diverges from the embedded blur / mosaic PNG's aspect
+  // ratio, the difference reads as transparent padding INSIDE the
+  // selection bounds, with the underlying screenshot fully visible
+  // through the gap. Privacy violation.
+  //
+  // The aspect ratios diverge during continuous resize: rebake A
+  // captures the rect mid-drag, sample-PNG-renders at that
+  // (smaller) aspect, then later resizes update the wrapper's
+  // x/y/w/h while rebake A is still in flight. By the time
+  // rebake A completes, the wrapper is at gesture-N's aspect and
+  // the PNG is at gesture-A's aspect — meet padding shows the
+  // unredacted screenshot through the difference until the
+  // serialised follow-up rebake catches up. Reported by the user
+  // as: "blurも連続してサイズ変更していると、オブジェクトとblurの
+  // エリアに差異が発生します。"
+  //
+  // Setting `preserveAspectRatio="none"` makes the embedded image
+  // ALWAYS stretch to fill the wrapper, eliminating the gap. The
+  // worst transient effect is now a subtly stretched blur instead
+  // of a hole — the privacy contract holds throughout the race,
+  // and the follow-up rebake rerenders at the final aspect anyway.
+  el.setAttribute("preserveAspectRatio", "none");
   return el;
 }
 
