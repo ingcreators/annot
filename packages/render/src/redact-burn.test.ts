@@ -29,6 +29,17 @@ const TINY_PNG_DATA_URL =
 interface CanvasCallLog {
   drawImage: Array<{ src: string; x: number; y: number; w: number; h: number }>;
   fillRect: Array<{ fill: string; x: number; y: number; w: number; h: number }>;
+  /** Phase 4: every state-change call (save / restore / translate
+   *  / rotate / scale) in DOM order so tests can assert the
+   *  transform stack matches `T(cx,cy) * R(θ) * S(sx,sy) *
+   *  T(-cx,-cy)` for rotated / flipped redactions. */
+  state: Array<
+    | { kind: "save" }
+    | { kind: "restore" }
+    | { kind: "translate"; x: number; y: number }
+    | { kind: "rotate"; rad: number }
+    | { kind: "scale"; sx: number; sy: number }
+  >;
 }
 
 interface MockSetup {
@@ -38,7 +49,7 @@ interface MockSetup {
 }
 
 function setupMockedCanvas(naturalWidth = 200, naturalHeight = 100): MockSetup {
-  const log: CanvasCallLog = { drawImage: [], fillRect: [] };
+  const log: CanvasCallLog = { drawImage: [], fillRect: [], state: [] };
   const blob = new Blob(["mock-png"], { type: "image/png" });
 
   // Stub the 2D context returned by every newly-created canvas. The
@@ -53,8 +64,11 @@ function setupMockedCanvas(naturalWidth = 200, naturalHeight = 100): MockSetup {
     fillRect: (x: number, y: number, w: number, h: number) => {
       log.fillRect.push({ fill: ctxStub.fillStyle, x, y, w, h });
     },
-    save: () => {},
-    restore: () => {},
+    save: () => log.state.push({ kind: "save" }),
+    restore: () => log.state.push({ kind: "restore" }),
+    translate: (x: number, y: number) => log.state.push({ kind: "translate", x, y }),
+    rotate: (rad: number) => log.state.push({ kind: "rotate", rad }),
+    scale: (sx: number, sy: number) => log.state.push({ kind: "scale", sx, sy }),
     fillStyle: "" as string,
   };
 
@@ -150,6 +164,9 @@ describe("classifyRedact", () => {
       y: 6,
       width: 30,
       height: 40,
+      rotation: 0,
+      flipH: false,
+      flipV: false,
       fill: "#abcdef",
     });
   });
@@ -178,6 +195,9 @@ describe("classifyRedact", () => {
       y: 20,
       width: 100,
       height: 50,
+      rotation: 0,
+      flipH: false,
+      flipV: false,
       href: TINY_PNG_DATA_URL,
     });
   });
@@ -197,6 +217,52 @@ describe("classifyRedact", () => {
     el.setAttribute("width", "10");
     el.setAttribute("height", "10");
     expect(classifyRedact(el as unknown as SVGElement)).toBeNull();
+  });
+
+  // Phase 4: rotation / flip read from `data-rot` / `data-flip-{h,v}`,
+  // matching the schema `transform-utils.ts:writeTransformState`
+  // persists. Test the round-trip: a `<rect>` with each combination
+  // surfaces the right TransformState fields on the classified output.
+  it("reads data-rot as the rotation field", () => {
+    const el = document.createElementNS(SVG_NS, "rect");
+    el.setAttribute("data-redact-style", "solid");
+    el.setAttribute("width", "10");
+    el.setAttribute("height", "10");
+    el.setAttribute("data-rot", "45");
+    expect(classifyRedact(el as unknown as SVGElement)?.rotation).toBe(45);
+  });
+
+  it("treats data-rot=\"\" / non-numeric as 0", () => {
+    const el = document.createElementNS(SVG_NS, "rect");
+    el.setAttribute("data-redact-style", "solid");
+    el.setAttribute("width", "10");
+    el.setAttribute("height", "10");
+    el.setAttribute("data-rot", "");
+    expect(classifyRedact(el as unknown as SVGElement)?.rotation).toBe(0);
+  });
+
+  it("reads data-flip-h / data-flip-v as flipH / flipV (\"1\" = true)", () => {
+    const el = document.createElementNS(SVG_NS, "rect");
+    el.setAttribute("data-redact-style", "solid");
+    el.setAttribute("width", "10");
+    el.setAttribute("height", "10");
+    el.setAttribute("data-flip-h", "1");
+    el.setAttribute("data-flip-v", "1");
+    const out = classifyRedact(el as unknown as SVGElement);
+    expect(out?.flipH).toBe(true);
+    expect(out?.flipV).toBe(true);
+  });
+
+  it("treats any non-\"1\" value of data-flip-* as false", () => {
+    const el = document.createElementNS(SVG_NS, "rect");
+    el.setAttribute("data-redact-style", "solid");
+    el.setAttribute("width", "10");
+    el.setAttribute("height", "10");
+    el.setAttribute("data-flip-h", "true"); // not the canonical "1"
+    el.setAttribute("data-flip-v", "0");
+    const out = classifyRedact(el as unknown as SVGElement);
+    expect(out?.flipH).toBe(false);
+    expect(out?.flipV).toBe(false);
   });
 });
 
@@ -310,5 +376,165 @@ describe("burnRedactionsIntoBitmap dispatch", () => {
     await expect(burnRedactionsIntoBitmap(base, [])).rejects.toThrow(
       /zero dimension/,
     );
+  });
+});
+
+// ---- Phase 4 — rotation / flip parity ---------------------------------
+//
+// Phase 1's MVP rendered solid bars as axis-aligned `fillRect` calls.
+// Phase 4 extends the renderer to apply the wrapper's transform
+// (rotation + flip via `data-rot` / `data-flip-h` / `data-flip-v`)
+// to the canvas context before drawing. The math mirrors
+// `transform-utils.ts:applyTransformState` for geometry-positioned
+// elements: `M = T(cx, cy) * R(rot) * S(sx, sy) * T(-cx, -cy)`,
+// where `(cx, cy) = (x + w/2, y + h/2)`.
+//
+// happy-dom's <canvas> doesn't rasterise, so these tests assert the
+// transform-stack call sequence, not pixel output. The plan's
+// pixel-level assertion is deferred to a real-canvas integration
+// test under Playwright (see Phase 4's "test plan" comment).
+
+describe("burnRedactionsIntoBitmap — rotation + flip (Phase 4)", () => {
+  it("axis-aligned (no rotation, no flip) skips translate / rotate / scale", async () => {
+    const { log, base } = setupMockedCanvas(200, 100);
+
+    const solid = document.createElementNS(SVG_NS, "rect");
+    solid.setAttribute("data-redact-style", "solid");
+    solid.setAttribute("x", "10");
+    solid.setAttribute("y", "20");
+    solid.setAttribute("width", "30");
+    solid.setAttribute("height", "40");
+    solid.setAttribute("fill", "#000");
+
+    await burnRedactionsIntoBitmap(base, [solid as unknown as SVGElement]);
+
+    // Only save / restore — no transform stack at all.
+    const stateKinds = log.state.map((s) => s.kind);
+    expect(stateKinds).toEqual(["save", "restore"]);
+  });
+
+  it("rotated solid bar emits T(cx,cy) → R(θ) → T(-cx,-cy) before fillRect", async () => {
+    const { log, base } = setupMockedCanvas(200, 100);
+
+    // Solid bar at (10, 20) sized 30×40, rotated 45° CW.
+    // Center: (10 + 15, 20 + 20) = (25, 40).
+    const solid = document.createElementNS(SVG_NS, "rect");
+    solid.setAttribute("data-redact-style", "solid");
+    solid.setAttribute("x", "10");
+    solid.setAttribute("y", "20");
+    solid.setAttribute("width", "30");
+    solid.setAttribute("height", "40");
+    solid.setAttribute("fill", "#000");
+    solid.setAttribute("data-rot", "45");
+
+    await burnRedactionsIntoBitmap(base, [solid as unknown as SVGElement]);
+
+    const stateKinds = log.state.map((s) => s.kind);
+    // No flip → no scale call (the renderer skips identity scales).
+    expect(stateKinds).toEqual(["save", "translate", "rotate", "translate", "restore"]);
+
+    // Translate to center, rotate, translate back.
+    const t1 = log.state[1] as { x: number; y: number };
+    const r = log.state[2] as { rad: number };
+    const t2 = log.state[3] as { x: number; y: number };
+    expect(t1).toMatchObject({ x: 25, y: 40 });
+    expect(r.rad).toBeCloseTo((45 * Math.PI) / 180, 9);
+    expect(t2).toMatchObject({ x: -25, y: -40 });
+
+    // The fillRect coordinates are still the element's local rect
+    // — the canvas's transform stack maps them to the rotated
+    // bounds at raster time.
+    expect(log.fillRect).toEqual([{ fill: "#000", x: 10, y: 20, w: 30, h: 40 }]);
+  });
+
+  it("horizontally-flipped redaction emits scale(-1, 1) between the translates", async () => {
+    const { log, base } = setupMockedCanvas(200, 100);
+
+    const solid = document.createElementNS(SVG_NS, "rect");
+    solid.setAttribute("data-redact-style", "solid");
+    solid.setAttribute("x", "0");
+    solid.setAttribute("y", "0");
+    solid.setAttribute("width", "20");
+    solid.setAttribute("height", "20");
+    solid.setAttribute("fill", "#fff");
+    solid.setAttribute("data-flip-h", "1");
+
+    await burnRedactionsIntoBitmap(base, [solid as unknown as SVGElement]);
+
+    const stateKinds = log.state.map((s) => s.kind);
+    expect(stateKinds).toEqual(["save", "translate", "scale", "translate", "restore"]);
+    const s = log.state[2] as { sx: number; sy: number };
+    expect(s).toMatchObject({ sx: -1, sy: 1 });
+  });
+
+  it("vertically-flipped redaction emits scale(1, -1)", async () => {
+    const { log, base } = setupMockedCanvas(200, 100);
+
+    const solid = document.createElementNS(SVG_NS, "rect");
+    solid.setAttribute("data-redact-style", "solid");
+    solid.setAttribute("x", "0");
+    solid.setAttribute("y", "0");
+    solid.setAttribute("width", "20");
+    solid.setAttribute("height", "20");
+    solid.setAttribute("data-flip-v", "1");
+
+    await burnRedactionsIntoBitmap(base, [solid as unknown as SVGElement]);
+
+    const s = log.state.find((c) => c.kind === "scale") as { sx: number; sy: number };
+    expect(s).toMatchObject({ sx: 1, sy: -1 });
+  });
+
+  it("rotated mosaic image gets the same transform stack before drawImage", async () => {
+    const { log, base } = setupMockedCanvas(200, 100);
+
+    const mosaic = document.createElementNS(SVG_NS, "image");
+    mosaic.setAttribute("data-redact-style", "mosaic");
+    mosaic.setAttribute("href", "data:image/png;base64,MOSAIC");
+    mosaic.setAttribute("x", "0");
+    mosaic.setAttribute("y", "0");
+    mosaic.setAttribute("width", "10");
+    mosaic.setAttribute("height", "10");
+    mosaic.setAttribute("data-rot", "90");
+
+    await burnRedactionsIntoBitmap(base, [mosaic as unknown as SVGElement]);
+
+    const stateKinds = log.state.map((s) => s.kind);
+    expect(stateKinds).toEqual(["save", "translate", "rotate", "translate", "restore"]);
+    // drawImage call (the second one — the first is the base)
+    // still uses the local rect; the matrix above maps it.
+    expect(log.drawImage[1]).toMatchObject({
+      src: "data:image/png;base64,MOSAIC",
+      x: 0,
+      y: 0,
+      w: 10,
+      h: 10,
+    });
+  });
+
+  it("rotation + flip combine: translate(c) → rotate(θ) → scale(sx,sy) → translate(-c)", async () => {
+    const { log, base } = setupMockedCanvas(200, 100);
+
+    const solid = document.createElementNS(SVG_NS, "rect");
+    solid.setAttribute("data-redact-style", "solid");
+    solid.setAttribute("x", "10");
+    solid.setAttribute("y", "10");
+    solid.setAttribute("width", "20");
+    solid.setAttribute("height", "20");
+    solid.setAttribute("data-rot", "30");
+    solid.setAttribute("data-flip-h", "1");
+    solid.setAttribute("data-flip-v", "1");
+
+    await burnRedactionsIntoBitmap(base, [solid as unknown as SVGElement]);
+
+    // Operator order: T, R, S, T (right-to-left composition is
+    // canvas's left-to-right call order — same as the SVG matrix
+    // operator order in `applyTransformState`).
+    const kinds = log.state.map((s) => s.kind);
+    expect(kinds).toEqual(["save", "translate", "rotate", "scale", "translate", "restore"]);
+
+    const r = log.state[2] as { rad: number };
+    const sc = log.state[3] as { sx: number; sy: number };
+    expect(r.rad).toBeCloseTo((30 * Math.PI) / 180, 9);
+    expect(sc).toMatchObject({ sx: -1, sy: -1 });
   });
 });
