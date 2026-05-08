@@ -42,6 +42,7 @@ import type {
   PageMetadata,
   StorageProvider,
 } from "@ingcreators/annot-core/storage";
+import { burnRedactionsIntoBitmap } from "@ingcreators/annot-render";
 import { restoreAnnotations } from "./restore-annotations.js";
 
 /**
@@ -352,6 +353,86 @@ export class EditorShell {
     }
   }
 
+  /**
+   * Permanently bake every redact element in the current document
+   * into the underlying base bitmap.
+   *
+   * Phase 2 of [`docs/plans/redact-burn-into-image.md`](../../../docs/plans/redact-burn-into-image.md) —
+   * the host-orchestration half of the privacy-driven "make this
+   * permanent" action. The Tier C-render side
+   * (`burnRedactionsIntoBitmap`) does the pixel composition; this
+   * method snapshots the redact elements, drives the renderer,
+   * swaps the resulting bytes into both the live canvas
+   * (`imageEl.href`) and the in-memory `ImageRecord.originalDataUrl`,
+   * removes the redact elements from the annotations group, saves a
+   * history snapshot, and emits `dirty` so the host's save pipeline
+   * persists the change on the next save tick.
+   *
+   * The action is **session-undoable**: the burned state is one
+   * history snapshot, so Ctrl+Z reverts it within the open editor.
+   * **After save, the original pixels under the redactions are
+   * gone for good** — the host's confirmation dialog (Phase 3 / 6)
+   * is what surfaces that distinction to the user before this method
+   * runs.
+   *
+   * No-ops (returns `{ count: 0 }`) when no redact elements are
+   * present or no image is open. Callers that gate the UI on
+   * "is there a redaction?" should use the count themselves rather
+   * than relying on this no-op behaviour.
+   */
+  async applyAllRedactions(): Promise<{ count: number }> {
+    if (this.#destroyed) return { count: 0 };
+    const canvas = this.#canvas;
+    const history = this.#history;
+    const record = this.#currentRecord;
+    if (!canvas || !history || !record) return { count: 0 };
+
+    const redactEls = Array.from(
+      canvas.annotations.querySelectorAll<SVGElement>("[data-redact-style]"),
+    );
+    if (redactEls.length === 0) return { count: 0 };
+
+    // Load the current base image from the canvas's `imageEl` so the
+    // burn renders against exactly what the user is looking at — not
+    // a stale `originalDataUrl` from when the document was first
+    // opened. The two are usually equal, but a previous burn-in or
+    // any future feature that mutates the bitmap would diverge them.
+    const baseHref =
+      canvas.imageEl.getAttribute("href") || record.originalDataUrl;
+    const base = await loadHtmlImage(baseHref);
+
+    const blob = await burnRedactionsIntoBitmap(base, redactEls);
+    const dataUrl = await blobToDataUrl(blob);
+
+    // Live canvas reflects the burn immediately so the user sees
+    // the result without a reload.
+    canvas.imageEl.setAttribute("href", dataUrl);
+
+    // Remove the redact elements from the annotations group. They're
+    // baked into the bitmap now — re-applying the SVG-side overlay
+    // on top would double-apply the redaction.
+    for (const el of redactEls) {
+      el.remove();
+    }
+
+    // Update the in-memory record so the next save persists both
+    // the new bitmap AND the redact-free SVG together. The host's
+    // existing save pipeline (PWA's `SavePipeline`, VSCode's
+    // `vscode.workspace.fs`, Desktop's filesystem-backed
+    // `DesktopStore`) picks this up via `dirty` without needing
+    // backend-specific glue — the storage layer already handles
+    // "the bitmap and the SVG both changed since last save".
+    this.#currentRecord = { ...record, originalDataUrl: dataUrl };
+
+    // Single history snapshot captures the burned state. Ctrl+Z
+    // reverts to the pre-burn state within the session (the
+    // history's previous frame still holds the redact elements +
+    // the unburned bitmap href via the canvas's serialized form).
+    history.save();
+
+    return { count: redactEls.length };
+  }
+
   /** Page metadata setter for hosts that capture it out-of-band
    *  (PWA's extension-transfer flow). The shell stashes it; hosts
    *  that consume it (right-panel Elements section) read it back
@@ -436,4 +517,35 @@ export class EditorShell {
       }
     }
   }
+}
+
+// ---- internals (file-private; not exported from the package) ----
+
+/** Load a URL (data: or otherwise) into a decoded `HTMLImageElement`.
+ *  Mirrors the inline helpers in `redact-utils.ts` and
+ *  `image-thumbnail.ts` — kept inline here so the shell doesn't
+ *  reach back into `annot-editor`'s redact module just for one
+ *  three-line helper. */
+function loadHtmlImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () =>
+      reject(new Error(`EditorShell.applyAllRedactions: failed to load base image (${src.slice(0, 32)}…)`));
+    img.src = src;
+  });
+}
+
+/** Local copy of `blobToDataUrl` (matches the helpers in
+ *  `image-thumbnail.ts` and `packages/core/src/encode/index.ts`).
+ *  Kept inline so the shell doesn't reach back into annot-web —
+ *  preserves the host-boundary invariant captured in
+ *  `host-ui/src/host-boundary.test.ts`. */
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
 }

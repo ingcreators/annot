@@ -301,4 +301,200 @@ describe("EditorShell — Phase 3 implementation", () => {
       expect(container.querySelector("svg[data-annot-shell-root]")).toBeNull();
     });
   });
+
+  // Phase 2 of `docs/plans/redact-burn-into-image.md` — the host-
+  // orchestration half of the privacy-driven "make redaction
+  // permanent" action. Phase 1 added the Tier C-render helper
+  // (`burnRedactionsIntoBitmap`); this phase wires the shell so a
+  // host call to `applyAllRedactions()` snapshots the redact
+  // element list, drives the renderer, and swaps the resulting
+  // bytes into the live canvas + the in-memory `ImageRecord`.
+  //
+  // happy-dom's `<canvas>` doesn't actually rasterise — we stub
+  // `HTMLCanvasElement.prototype.getContext` + `.toBlob` and the
+  // `HTMLImageElement` `src` setter so the orchestration code path
+  // resolves without hitting a real raster pipeline. The pixel-
+  // level burn fidelity is exercised in Phase 4 (rotation parity
+  // test) and in the manual smoke check at the end of Phase 3.
+  describe("applyAllRedactions — Phase 2", () => {
+    interface CanvasStubBag {
+      blob: Blob;
+      drawImageCalls: Array<{ src: string; x: number; y: number }>;
+      restore: () => void;
+    }
+
+    function stubCanvasAndImage(): CanvasStubBag {
+      const blob = new Blob(["mock-burned-png"], { type: "image/png" });
+      const drawImageCalls: Array<{ src: string; x: number; y: number }> = [];
+      const ctxStub = {
+        drawImage: (img: CanvasImageSource, x: number, y: number) => {
+          const src = (img as HTMLImageElement).src ?? "";
+          drawImageCalls.push({ src, x, y });
+        },
+        fillRect: () => {},
+        save: () => {},
+        restore: () => {},
+        fillStyle: "" as string,
+      };
+      const canvasProto = HTMLCanvasElement.prototype as unknown as {
+        getContext: (kind: string) => unknown;
+        toBlob: (cb: (b: Blob | null) => void, type?: string) => void;
+      };
+      const origGetContext = canvasProto.getContext;
+      const origToBlob = canvasProto.toBlob;
+      canvasProto.getContext = () => ctxStub;
+      canvasProto.toBlob = (cb) => {
+        queueMicrotask(() => cb(blob));
+      };
+
+      // HTMLImageElement.src setter: fire onload after the next
+      // microtask so the helper's `await loadImage(...)` resolves
+      // without needing real network / data-URL decoding. Set
+      // synthetic naturalWidth / naturalHeight so the renderer's
+      // dimension check passes (it rejects 0×0 bases).
+      const imgProto = HTMLImageElement.prototype;
+      const origSrcDescriptor = Object.getOwnPropertyDescriptor(imgProto, "src");
+      Object.defineProperty(imgProto, "src", {
+        configurable: true,
+        set(this: HTMLImageElement & { _src?: string }, value: string) {
+          this._src = value;
+          // Force the natural dimensions to be non-zero so the
+          // renderer accepts the base image.
+          Object.defineProperty(this, "naturalWidth", {
+            value: 100,
+            configurable: true,
+          });
+          Object.defineProperty(this, "naturalHeight", {
+            value: 100,
+            configurable: true,
+          });
+          queueMicrotask(() => {
+            this.onload?.(new Event("load"));
+          });
+        },
+        get(this: HTMLImageElement & { _src?: string }) {
+          return this._src ?? "";
+        },
+      });
+
+      return {
+        blob,
+        drawImageCalls,
+        restore: () => {
+          canvasProto.getContext = origGetContext;
+          canvasProto.toBlob = origToBlob;
+          if (origSrcDescriptor) {
+            Object.defineProperty(imgProto, "src", origSrcDescriptor);
+          } else {
+            delete (imgProto as unknown as { src?: string }).src;
+          }
+        },
+      };
+    }
+
+    function recordWithSolidRedact(): ImageRecord {
+      // A persisted document carrying one solid-bar redact inside
+      // the `<g id="annotations">` element, the shape
+      // `restoreAnnotations` rebuilds onto `canvas.annotations`.
+      const annotationsSvg = `<?xml version="1.0"?>
+<svg xmlns="http://www.w3.org/2000/svg" data-annot-version="1">
+  <g id="annotations">
+    <rect data-redact-style="solid" x="10" y="20" width="30" height="40" fill="#000000"/>
+  </g>
+</svg>`;
+      return makeRecord({ annotationsSvg });
+    }
+
+    it("burns redactions, removes them, swaps imageEl.href, and fires dirty", async () => {
+      const stub = stubCanvasAndImage();
+      try {
+        const container = makeContainer();
+        const { storage } = makeStorage(recordWithSolidRedact());
+        const shell = new EditorShell({ container, storage });
+        await shell.open("/test.annot.svg");
+
+        // Sanity: the redact element is present BEFORE the burn.
+        const canvas = shell.getCanvas();
+        expect(
+          canvas?.annotations.querySelectorAll("[data-redact-style]").length,
+        ).toBe(1);
+        const hrefBefore = canvas?.imageEl.getAttribute("href");
+
+        // Wire dirty AFTER the seed history.save() the
+        // `mountFromRecord` flow already ran (per the existing
+        // restore-annotations-without-firing-dirty test) so we only
+        // see the dirty event the burn itself emits.
+        const dirtyHandler = vi.fn();
+        shell.on("dirty", dirtyHandler);
+
+        const result = await shell.applyAllRedactions();
+        expect(result.count).toBe(1);
+
+        // Redact element removed from the annotations group.
+        expect(
+          canvas?.annotations.querySelectorAll("[data-redact-style]").length,
+        ).toBe(0);
+
+        // Live canvas's imageEl.href swapped to the new bytes.
+        const hrefAfter = canvas?.imageEl.getAttribute("href");
+        expect(hrefAfter).not.toBe(hrefBefore);
+        expect(hrefAfter).toMatch(/^data:image\/png/);
+
+        // History snapshot fired → host receives a dirty event.
+        expect(dirtyHandler).toHaveBeenCalled();
+
+        shell.destroy();
+      } finally {
+        stub.restore();
+      }
+    });
+
+    it("returns count: 0 + no-op when the document has no redactions", async () => {
+      const stub = stubCanvasAndImage();
+      try {
+        const container = makeContainer();
+        // makeRecord() ships an empty annotationsSvg, so no redacts.
+        const { storage } = makeStorage();
+        const shell = new EditorShell({ container, storage });
+        await shell.open("/test.annot.svg");
+
+        const canvas = shell.getCanvas();
+        const hrefBefore = canvas?.imageEl.getAttribute("href");
+
+        const dirtyHandler = vi.fn();
+        shell.on("dirty", dirtyHandler);
+
+        const result = await shell.applyAllRedactions();
+        expect(result.count).toBe(0);
+        // imageEl.href unchanged — no burn happened.
+        expect(canvas?.imageEl.getAttribute("href")).toBe(hrefBefore);
+        // No history snapshot, no dirty.
+        expect(dirtyHandler).not.toHaveBeenCalled();
+
+        shell.destroy();
+      } finally {
+        stub.restore();
+      }
+    });
+
+    it("returns count: 0 when called before any image is open", async () => {
+      const container = makeContainer();
+      const { storage } = makeStorage();
+      const shell = new EditorShell({ container, storage });
+      // No `open()` call.
+      const result = await shell.applyAllRedactions();
+      expect(result.count).toBe(0);
+      shell.destroy();
+    });
+
+    it("returns count: 0 after destroy()", async () => {
+      const container = makeContainer();
+      const { storage } = makeStorage(recordWithSolidRedact());
+      const shell = new EditorShell({ container, storage });
+      await shell.open("/test.annot.svg");
+      shell.destroy();
+      const result = await shell.applyAllRedactions();
+      expect(result.count).toBe(0);
+    });
+  });
 });
