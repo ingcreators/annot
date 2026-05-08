@@ -1,3 +1,5 @@
+@import url("./sora-font.css");
+
 * {
   margin: 0;
   padding: 0;
@@ -38,6 +40,11 @@ body {
   line-height: 1.15;
 }
 .brand-name {
+  /* Sora is the canonical wordmark typeface — see `brand/
+     README.md`. The system-font fallback applies only while
+     the woff2 in /fonts/ is still loading (font-display: swap)
+     or in an environment where it can't be served. */
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   font-size: 18px;
   font-weight: 700;
   letter-spacing: -0.035em;

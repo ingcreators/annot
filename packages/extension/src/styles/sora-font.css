@@ -1,0 +1,21 @@
+/**
+ * Self-hosted Sora wordmark font for popup + options pages.
+ *
+ * Sora is the canonical Annot wordmark typeface (see
+ * `brand/README.md`). The PWA loads it via Google Fonts; the
+ * Chrome extension can't easily fetch external fonts under MV3
+ * CSP, so the woff2 ships in `public/fonts/` and is served from
+ * the extension origin (`chrome-extension://[id]/fonts/...`).
+ *
+ * Single variable-font file covers every weight Annot UI uses
+ * (400 / 600 / 700 / 800) — Latin subset only, ~25 KB. The
+ * popup and options pages only render English glyphs so the
+ * Latin-ext range isn't worth the extra ~12 KB.
+ */
+@font-face {
+  font-family: "Sora";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url(/fonts/Sora-VariableFont.woff2) format("woff2-variations");
+}
