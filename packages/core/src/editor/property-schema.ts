@@ -884,9 +884,12 @@ export const PROPERTY_CONTROLS: Readonly<{
     // `convertRedactStyle` is async + needs CanvasManager — the
     // renderer in Tier C supplies the implementation bound to this id.
     effect: PROPERTY_EFFECT_IDS.applyRedactStyle,
+    // Same icon set as `TOOL_REGISTRY.redact.variants` — the toolbar
+    // flyout and the selection-side variant picker are paired
+    // surfaces for the same tool, so they should look identical.
     options: [
-      { value: "mosaic", label: "Mosaic (pixelate)", materialIcon: "grid_view" },
-      { value: "solid", label: "Solid bar", materialIcon: "check_box" },
+      { value: "mosaic", label: "Mosaic (pixelate)", materialIcon: "apps" },
+      { value: "solid", label: "Solid bar", materialIcon: "rectangle" },
       { value: "blur", label: "Blur", materialIcon: "blur_on" },
     ],
   },
