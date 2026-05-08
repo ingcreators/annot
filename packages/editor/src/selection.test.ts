@@ -794,6 +794,131 @@ describe("SelectionManager — redact rebake on move (arrow-key path)", () => {
     expect(saveSpy).toHaveBeenCalledTimes(1);
     expect(annotations.firstElementChild).toBe(r);
   });
+
+  it("rapid concurrent rebake requests serialise — no replaceChild race, last writer wins", async () => {
+    // Regression test for the user-reported "mosaicの移動、サイズ変更
+    // での再mosaic化が行われない" bug. Without serialisation in the
+    // rebake gate, two pointerups (or two arrow nudges) fired before
+    // the first rebake's `await loadImage(...)` resolves both end up
+    // calling `parent.replaceChild(newEl, oldEl)` with the same
+    // `oldEl` reference — the first call succeeds, the second
+    // throws `NotFoundError` because `oldEl` is no longer a child.
+    // The catch path swallows the throw, so the user is left with
+    // gesture A's rebaked content pinned to the DOM and gesture B's
+    // rebake silently lost.
+    //
+    // The serialised queue (`#queueRebake`) coalesces concurrent
+    // requests into "in-flight + at-most-one follow-up." This test
+    // simulates the race by holding the first rebake's promise open
+    // while a second arrow-key gesture fires, then resolving them
+    // in order — no errors, both swap operations succeed in turn,
+    // and the latest follow-up samples the live element.
+    const utils = await import("./redact-utils.js");
+
+    let firstResolve: (() => void) | null = null;
+    let firstStarted = false;
+    const calls: Array<{ x: string | null; y: string | null }> = [];
+    const spy = vi.spyOn(utils, "convertRedactStyle").mockImplementation(async (oldEl) => {
+      calls.push({ x: oldEl.getAttribute("x"), y: oldEl.getAttribute("y") });
+      // Hold the first call open until the test releases it; later
+      // calls resolve immediately so they can run after the unblock.
+      if (!firstStarted) {
+        firstStarted = true;
+        await new Promise<void>((resolve) => {
+          firstResolve = resolve;
+        });
+      }
+      const fresh = document.createElementNS(SVG_NS, "image") as SVGImageElement;
+      const ds = oldEl.getAttribute("data-redact-style");
+      if (ds) fresh.setAttribute("data-redact-style", ds);
+      fresh.setAttribute("href", PNG);
+      // Mirror what the real `buildImageRedact` does — copy the
+      // sampled rect onto the fresh node so subsequent rebakes
+      // (which re-read these attrs) see the right geometry.
+      for (const attr of ["x", "y", "width", "height"] as const) {
+        const v = oldEl.getAttribute(attr);
+        if (v != null) fresh.setAttribute(attr, v);
+      }
+      // Mirror the real swap.
+      const parent = oldEl.parentNode;
+      if (parent) parent.replaceChild(fresh, oldEl);
+      return fresh;
+    });
+
+    const { selection, annotations, saveSpy } = setupSelection();
+    const img = document.createElementNS(SVG_NS, "image") as SVGImageElement;
+    img.setAttribute("x", "20");
+    img.setAttribute("y", "20");
+    img.setAttribute("width", "100");
+    img.setAttribute("height", "60");
+    img.setAttribute("href", PNG);
+    img.setAttribute("data-redact-style", "mosaic");
+    annotations.appendChild(img);
+    selection.select(img);
+
+    const svg = annotations.ownerSVGElement!;
+    const errors: unknown[] = [];
+    const errSpy = vi.spyOn(console, "error").mockImplementation((...args) => {
+      errors.push(args);
+    });
+    saveSpy.mockClear();
+
+    // Gesture 1: nudges right by 1px → schedules rebake A. The mock
+    // suspends inside the await so rebake A is now in flight.
+    svg.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    // Yield so the queueRebake → runRebakeOnce → convertRedactStyle
+    // chain reaches the suspended await.
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(firstStarted).toBe(true);
+    expect(spy).toHaveBeenCalledTimes(1);
+
+    // Gesture 2 + 3: two more arrow nudges fire WHILE rebake A is
+    // still suspended. The original race fired one
+    // `convertRedactStyle` call per gesture, leading to colliding
+    // `replaceChild` calls; the new queue must coalesce them into
+    // at most one follow-up.
+    svg.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    svg.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    await Promise.resolve();
+
+    // Still only ONE convertRedactStyle call so far — gestures 2/3
+    // are queued behind A, not racing it.
+    expect(spy).toHaveBeenCalledTimes(1);
+
+    // Release rebake A.
+    firstResolve?.();
+    // Drain microtasks: A finishes → follow-up B starts (synchronous
+    // in this mock since firstStarted is now true) → swap → save.
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // Exactly TWO rebakes ran (A + a single follow-up that covers
+    // both queued gestures), not three — N rapid gestures collapse
+    // to "in-flight + 1 follow-up."
+    expect(spy).toHaveBeenCalledTimes(2);
+    // The follow-up sampled the LATEST geometry (after all three
+    // arrow nudges), not a stale snapshot from when it was queued.
+    // ArrowRight = +1px each, three presses = x:20→23.
+    expect(calls[1]?.x).toBe("23");
+
+    // No `replaceChild` race: nothing was logged to console.error.
+    expect(errors).toHaveLength(0);
+
+    // Both rebakes called history.save exactly once each — pending
+    // edits eventually flush to the host's autosave path.
+    expect(saveSpy).toHaveBeenCalledTimes(2);
+
+    // Final DOM state: one fresh `<image>` (the follow-up's), no
+    // detached / leftover nodes.
+    expect(annotations.children).toHaveLength(1);
+    expect(annotations.firstElementChild?.getAttribute("data-redact-style")).toBe("mosaic");
+
+    spy.mockRestore();
+    errSpy.mockRestore();
+  });
 });
 
 describe("SelectionManager — onChange callback", () => {

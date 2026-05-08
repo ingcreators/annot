@@ -147,6 +147,29 @@ export class SelectionManager {
   /** Active during a curve-handle drag. */
   #draggingCurve = false;
 
+  /** In-flight redact rebake. `convertRedactStyle` awaits an image
+   *  load (~tens of ms), and a rapid sequence of moves / resizes /
+   *  arrow-key nudges produces multiple pointerup gestures while a
+   *  rebake is still mid-flight. Without serialisation, two
+   *  concurrent rebakes both capture the SAME `oldEl`, the first
+   *  one's `replaceChild` swaps it for `newElA`, and the second
+   *  one's `replaceChild` then throws `NotFoundError` because
+   *  `oldEl` is no longer a child of its parent. The catch block
+   *  in `#runRebakeOnce` swallows the throw, so the user sees the
+   *  mosaic visually pinned to gesture A's geometry (newElA was
+   *  built from rebake A's snapshot) with the latest geometry's
+   *  rebake silently lost — the symptom the user reported as
+   *  "再mosaic化が行われない."
+   *
+   *  Serialise via a one-slot queue: at most one rebake runs at a
+   *  time; concurrent requests collapse into a single follow-up
+   *  that re-collects the LATEST `#selectedSet` after the in-flight
+   *  rebake finishes. The follow-up samples the current geometry
+   *  so the mosaic always converges to the user's final
+   *  position / size. */
+  #rebakeInFlight: Promise<void> | null = null;
+  #rebakePending = false;
+
   /** Active when the user is dragging the rotation handle. */
   #rotating = false;
   /** Pivot of the current rotation gesture (SVG-root coords). */
@@ -247,45 +270,67 @@ export class SelectionManager {
    *  history. Called from the pointerup gesture-end handler when at
    *  least one moved / resized element is a mosaic / blur redaction.
    *
-   *  Async because the underlying image loads via a Promise; the
-   *  pointerup handler stays sync by `void`-ing the returned promise.
-   *  We defer history.save() until after the rebake completes so the
-   *  saved state contains the up-to-date PNG (one undo step reverts
-   *  the whole gesture, not "geometry-only then PNG-only"). If the
-   *  rebake throws (e.g. CORS-tainted base image), fall back to the
-   *  pre-rebake save so the user's drag at least keeps its new
-   *  geometry — the visual is then stale but the position survives a
-   *  reload.
-   *
    *  `convertRedactStyle(el, sameStyle, canvas)` does the heavy
    *  lifting: it samples the current `<image>`'s x/y/w/h from the
    *  base image, builds a fresh data URL via the matching renderer
    *  (mosaic block-average / blur padded-canvas), replaces the old
    *  `<image>` in the DOM, and returns the new node. The selection
    *  set is updated in lockstep so subsequent gestures still target
-   *  the live element. */
-  async #rebakeRedactImagesAndSave(els: SVGImageElement[]): Promise<void> {
-    try {
-      for (const old of els) {
-        if (!old.parentNode) continue; // user removed it mid-rebake
-        const style = detectRedactStyle(old);
-        if (style !== "mosaic" && style !== "blur") continue;
-        const fresh = await convertRedactStyle(old, style, this.#canvas);
-        if (this.#selectedSet.has(old)) {
-          this.#selectedSet.delete(old);
-          this.#selectedSet.add(fresh);
+   *  the live element.
+   *
+   *  Re-collects `#collectMovedRedactImages()` at execution time
+   *  (not capture time) so a follow-up rebake fired while the
+   *  previous one was in flight always operates on the LATEST live
+   *  elements rather than a stale snapshot — which is what guards
+   *  against the "rapid moves mid-rebake leave the mosaic stuck on
+   *  an old sample" race that the per-call serialisation in
+   *  `#queueRebake` orchestrates. */
+  async #runRebakeOnce(): Promise<void> {
+    const els = this.#collectMovedRedactImages();
+    if (els.length > 0) {
+      try {
+        for (const old of els) {
+          if (!old.parentNode) continue; // user removed it mid-rebake
+          const style = detectRedactStyle(old);
+          if (style !== "mosaic" && style !== "blur") continue;
+          const fresh = await convertRedactStyle(old, style, this.#canvas);
+          if (this.#selectedSet.has(old)) {
+            this.#selectedSet.delete(old);
+            this.#selectedSet.add(fresh);
+          }
         }
+        this.clearHandles();
+        this.#drawAllHandles();
+      } catch (err) {
+        // Don't swallow silently — the user should know the redaction
+        // didn't update. Fall through to the history.save() so the
+        // gesture's geometry change still gets recorded.
+        console.error("[selection] redact rebake failed", err);
       }
-      this.clearHandles();
-      this.#drawAllHandles();
-    } catch (err) {
-      // Don't swallow silently — the user should know the redaction
-      // didn't update. Fall through to the history.save() so the
-      // gesture's geometry change still gets recorded.
-      console.error("[selection] redact rebake failed", err);
     }
     this.#history.save();
     this.onChange?.();
+  }
+
+  /** Schedule a redact rebake. If one is already in flight, set the
+   *  pending flag so a single follow-up runs after it completes —
+   *  N rapid pointerups (or arrow-key nudges) coalesce into 2
+   *  rebakes (the in-flight one + ONE follow-up) rather than N
+   *  racing rebakes whose `replaceChild` calls collide. The
+   *  follow-up re-collects `#selectedSet` so it samples the LATEST
+   *  geometry, not the geometry at the time it was scheduled. */
+  #queueRebake(): void {
+    if (this.#rebakeInFlight) {
+      this.#rebakePending = true;
+      return;
+    }
+    this.#rebakeInFlight = this.#runRebakeOnce().finally(() => {
+      this.#rebakeInFlight = null;
+      if (this.#rebakePending) {
+        this.#rebakePending = false;
+        this.#queueRebake();
+      }
+    });
   }
 
   /** Drop the in-progress marquee rect (if any) and reset the
@@ -1678,9 +1723,15 @@ export class SelectionManager {
           // contains the freshly-baked PNG. If no redact-image was
           // affected, save synchronously as before — the common case
           // pays no async cost.
+          //
+          // `#queueRebake` serialises against any in-flight rebake
+          // so a rapid sequence of moves / resizes doesn't race
+          // multiple `replaceChild` calls into the same DOM slot
+          // (the `NotFoundError` regression behind the user-
+          // reported "再mosaic化が行われない").
           const movedRedactImages = this.#collectMovedRedactImages();
           if (movedRedactImages.length > 0) {
-            void this.#rebakeRedactImagesAndSave(movedRedactImages);
+            this.#queueRebake();
           } else {
             this.#history.save();
           }
@@ -1841,10 +1892,13 @@ export class SelectionManager {
           // mosaic / blur redaction must re-sample the base image at
           // the new position so the box keeps hiding the pixels
           // currently beneath it (otherwise the embedded PNG drifts
-          // away from the underlying region).
+          // away from the underlying region). `#queueRebake` is the
+          // serialised entry point — multiple held arrow keys
+          // coalesce into one in-flight rebake + one follow-up,
+          // never racing on the same `replaceChild` slot.
           const movedRedactImages = this.#collectMovedRedactImages();
           if (movedRedactImages.length > 0) {
-            void this.#rebakeRedactImagesAndSave(movedRedactImages);
+            this.#queueRebake();
           } else {
             this.#history.save();
           }
