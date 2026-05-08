@@ -140,6 +140,52 @@ describe("SavePipeline.scheduleAnnotationSave (debounce)", () => {
   });
 });
 
+describe("SavePipeline.cancelAutoSave", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("drops the pending debounce timer without firing the save", async () => {
+    // The redact-burn-into-image fix path: applyAllRedactions cancels
+    // any armed autosave so its own `storage.updateImage(BURNED)` is
+    // the only call that lands. Without this gate, on slow backends
+    // (Drive) the debounce timer fires DURING the apply's PATCH, the
+    // debounced save reads a stale `originalDataUrl` from the cache,
+    // and PATCHes pre-burn bytes — which can land AFTER apply's
+    // PATCH on the wire and overwrite the burned bitmap.
+    const updateImage = vi.fn().mockResolvedValue(undefined);
+    const { deps } = buildDeps({ storage: fakeStorage(updateImage) });
+    const sp = new SavePipeline(deps);
+    sp.scheduleAnnotationSave(500);
+    expect(sp.hasPendingWork()).toBe(true);
+    sp.cancelAutoSave();
+    expect(sp.hasPendingWork()).toBe(false);
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(updateImage).not.toHaveBeenCalled();
+  });
+
+  it("is a no-op when no timer is armed", () => {
+    const { deps } = buildDeps();
+    const sp = new SavePipeline(deps);
+    expect(() => sp.cancelAutoSave()).not.toThrow();
+    expect(sp.hasPendingWork()).toBe(false);
+  });
+
+  it("can be re-armed after cancellation (cancel doesn't poison the pipeline)", async () => {
+    const updateImage = vi.fn().mockResolvedValue(undefined);
+    const { deps } = buildDeps({ storage: fakeStorage(updateImage) });
+    const sp = new SavePipeline(deps);
+    sp.scheduleAnnotationSave(500);
+    sp.cancelAutoSave();
+    sp.scheduleAnnotationSave(500);
+    await vi.advanceTimersByTimeAsync(600);
+    expect(updateImage).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("SavePipeline.writeAnnotations — happy path", () => {
   it("returns early when storage is missing (no save attempt)", async () => {
     const updateImage = vi.fn();

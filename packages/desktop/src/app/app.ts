@@ -242,7 +242,15 @@ function openEditor(record: ImageRecord): void {
   // `redactCount === 0`, so the initial refresh ensures it
   // appears immediately when an annotated document with existing
   // redactions opens.
-  rightPanel.applyAllRedactions = () => shell.applyAllRedactions();
+  //
+  // The actual `applyAllRedactions` callback is wired below, AFTER
+  // `savePipeline` is constructed — the wiring needs to call
+  // `savePipeline.cancelAutoSave()` before the burn's explicit
+  // `storage.updateImage` to avoid a debounce-vs-apply race that
+  // would PATCH a stale `originalDataUrl` over the burned bytes.
+  // See the PWA-side comment in `editor-session.ts` for the full
+  // diagnosis. Desktop uses fast local writes so the race rarely
+  // triggers there, but the parity matters for correctness.
   rightPanel.refreshRedactCount();
   rightPanelHostEl.appendChild(rightPanel);
 
@@ -301,6 +309,16 @@ function openEditor(record: ImageRecord): void {
     onSaveError: (message, retry) => surfaceSaveError(message, retry),
     onSaveSuccess: () => hideEditorError(),
   });
+
+  // ---- Apply-redactions wiring (deferred until savePipeline exists) ----
+  // Cancel any pending debounced annotation autosave BEFORE the burn's
+  // explicit `storage.updateImage` runs so a draw-redact-then-Apply
+  // gesture doesn't leave the timer armed (see the comment block above
+  // `rightPanel.refreshRedactCount` for the full race diagnosis).
+  rightPanel.applyAllRedactions = () => {
+    savePipeline.cancelAutoSave();
+    return shell.applyAllRedactions();
+  };
 
   // ---- Editor header (shared HeaderHost orchestrator) -------
   // Phase 3 / PR C of `docs/plans/_done/host-convergence.md` collapsed

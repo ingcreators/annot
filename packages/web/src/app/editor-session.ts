@@ -419,7 +419,24 @@ export class EditorSession {
     // shell's burn-in orchestration so the right-panel can surface
     // an "Apply redactions to image" button when the document
     // carries one or more redactions.
-    panel.applyAllRedactions = () => shell.applyAllRedactions();
+    //
+    // Cancel any pending debounced annotation autosave BEFORE the burn's
+    // explicit `storage.updateImage` runs. Without this, a draw-redact
+    // gesture immediately followed by Apply (a common workflow) leaves
+    // the autosave timer armed; on slow network backends (Drive) the
+    // timer fires DURING the apply's PATCH, the debounced save reads a
+    // STALE `originalDataUrl` from the storage cache (the apply's
+    // cache update only fires AFTER its PATCH completes), and
+    // PATCHes pre-burn bytes. Whichever PATCH lands second on the
+    // backend wins — the user reopens from the gallery and sees the
+    // pre-burn image. The cancelled save's intent is fully captured
+    // by the apply's own `updateImage` (which carries both
+    // `annotationsSvg` and `originalDataUrl`), so dropping the timer
+    // doesn't lose any user data.
+    panel.applyAllRedactions = () => {
+      this.savePipeline.cancelAutoSave();
+      return shell.applyAllRedactions();
+    };
     panel.setRedactCount(countRedactions(canvas));
     // Phase 5 of the same plan — surface a transient info toast on
     // a successful burn so the user knows: (a) the redactions are
