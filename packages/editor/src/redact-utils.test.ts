@@ -206,6 +206,60 @@ describe("renderMosaicRedact — out-of-bounds rebake transparency fix", () => {
     );
     expect(preFill).toBeDefined();
   });
+
+  it("floors fractional rect dimensions before passing them to the typed-array index math", async () => {
+    // Regression test for the user-reported "サイズ拡大は透明になる"
+    // bug. SelectionManager's resize path computes width/height as
+    // `pt.x - x` where `pt` came from `svgPoint(e)`'s viewport
+    // transform — on a high-DPI base image where DOM-pixel-size /
+    // viewBox-size isn't exact, IEEE-754 rounding leaves tail bits
+    // like `670.0000000000002`. The mosaic block-average loop then
+    // computes `(sy * width + sx) * 4` as a typed-array index. For
+    // any sy > 0 the trailing bits push the index off-integer, and
+    // typed-array integer-indexed slots silently reject non-canonical
+    // numeric keys (reads return `undefined`, writes are no-ops).
+    // Only the sy=0 row's writes ever land — the rest of the canvas
+    // keeps the raw `drawImage`'d pixels (the unredacted base
+    // content showing straight through). Floor the dimensions so
+    // every index stays integer and the block-average loop pixelates
+    // the entire region.
+    const { log, restore } = setupMockedCanvas();
+    teardown = restore;
+    const cm = makeCanvasManager();
+
+    // Fractional dimensions exactly matching the pattern observed in
+    // the dev-server reproducer (SelectionManager resize on a
+    // 1200×600 base image).
+    await renderMosaicRedact(
+      { x: 430, y: 60, width: 670.0000000000002, height: 220.00000000000006 },
+      cm,
+    );
+
+    // The pre-fill rect must be flooring the dimensions, not passing
+    // them through verbatim — otherwise downstream getImageData /
+    // typed-array math hits the off-by-epsilon trap.
+    const preFill = log.ops.find(
+      (o) => o.kind === "fillRect" && o.x === 0 && o.y === 0 && o.w === 670 && o.h === 220,
+    );
+    expect(preFill).toBeDefined();
+
+    // getImageData must also receive integer dimensions so the
+    // returned `data.data` length matches what the block-average
+    // loop expects.
+    const getData = log.ops.find(
+      (o) => o.kind === "getImageData" && o.w === 670 && o.h === 220,
+    );
+    expect(getData).toBeDefined();
+
+    // No fillRect / getImageData call should leak the fractional
+    // values through.
+    const fractionalLeaks = log.ops.filter((o) => {
+      if (o.kind === "fillRect") return !Number.isInteger(o.w) || !Number.isInteger(o.h);
+      if (o.kind === "getImageData") return !Number.isInteger(o.w) || !Number.isInteger(o.h);
+      return false;
+    });
+    expect(fractionalLeaks).toHaveLength(0);
+  });
 });
 
 describe("renderBlurRedact — out-of-bounds rebake transparency fix", () => {

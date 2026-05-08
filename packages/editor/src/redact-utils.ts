@@ -141,7 +141,39 @@ async function sampleBlockAveragePng(
   rect: RedactRect,
   blockSize: number,
 ): Promise<string> {
-  const { x, y, width, height } = rect;
+  const { x, y } = rect;
+  // Floor the dimensions before they reach the typed-array math
+  // below. SelectionManager's resize path computes width/height as
+  // `pt.x - x` / `pt.y - y` against the SVG-space pointer, which
+  // routinely produces values like `670.0000000000002` after
+  // accumulating IEEE-754 rounding through `svgPoint(e)`'s viewport
+  // transform on a high-DPI base image (DOM canvas pixel size ÷
+  // viewBox isn't an exact ratio). The canvas's `width` setter
+  // floors that to 670 internally — but the local `width` /
+  // `height` variables stay fractional, and `(sy * width + sx) * 4`
+  // then yields non-integer indices into the `Uint8ClampedArray`
+  // returned by `getImageData`. Typed-array integer-indexed slots
+  // silently reject non-canonical numeric keys: reads return
+  // `undefined`, writes are no-ops. Result: only the integer-stride
+  // sy=0 row of the loop's writes ever lands; rows 1..N-1 keep the
+  // raw `drawImage`'d pixels (the unredacted base content). The
+  // mosaic looks "transparent" because the unblocked text shows
+  // straight through the failed averaging. Flooring here keeps
+  // every index integer so the loop pixelates the entire region.
+  // Reported by the user as: "サイズ拡大は透明になる."
+  const width = Math.floor(rect.width);
+  const height = Math.floor(rect.height);
+  if (width <= 0 || height <= 0) {
+    // Defensive: the resize path clamps to ≥ 10, but a future caller
+    // could pass a degenerate rect — return a 1×1 transparent PNG so
+    // we don't construct a 0×0 canvas (toDataURL on which is the
+    // empty-data-url sentinel and would re-trigger the regression
+    // the storage layer flags as "no annotations").
+    const off1 = document.createElement("canvas");
+    off1.width = 1;
+    off1.height = 1;
+    return off1.toDataURL("image/png");
+  }
   const baseImage = await loadImage(canvas.imageEl.getAttribute("href") || "");
 
   const off = document.createElement("canvas");
