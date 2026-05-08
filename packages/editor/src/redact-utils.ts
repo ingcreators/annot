@@ -148,6 +148,25 @@ async function sampleBlockAveragePng(
   off.width = width;
   off.height = height;
   const ctx = off.getContext("2d")!;
+  // Pre-fill with an opaque sentinel BEFORE drawImage so any
+  // out-of-base-image region (negative `x` / `y` after dragging the
+  // upper-left handle past 0; or `x + width` / `y + height` past
+  // the base image's natural dimensions after dragging the lower-
+  // right handle off the right / bottom edge) stays opaque rather
+  // than transparent. Without this, drawImage clips its source rect
+  // to the image bounds AND leaves the destination's out-of-source
+  // pixels in their initial transparent state — the block-average
+  // loop below then samples alpha=0 from the center pixel of any
+  // such block and the redaction becomes a transparent hole that
+  // shows whatever sits beneath it (defeating the redact tool's
+  // entire purpose). Using REDACT_SOLID_COLOR for the fallback
+  // matches the Solid bar variant: where there's no underlying
+  // bitmap content, the redaction reads as a solid bar instead of
+  // mosaic noise. See user-feedback regression caught after
+  // [`_done/redact-burn-into-image.md`](../../../docs/plans/_done/redact-burn-into-image.md)
+  // landed.
+  ctx.fillStyle = REDACT_SOLID_COLOR;
+  ctx.fillRect(0, 0, width, height);
   ctx.drawImage(baseImage, x, y, width, height, 0, 0, width, height);
 
   const data = ctx.getImageData(0, 0, width, height);
@@ -198,6 +217,18 @@ async function renderBlurPng(
   padded.width = paddedW;
   padded.height = paddedH;
   const pctx = padded.getContext("2d")!;
+  // Pre-fill with the same opaque sentinel as the mosaic path
+  // (sampleBlockAveragePng above) so the out-of-base-image region —
+  // when the redaction has been dragged or resized so its geometry
+  // extends past the base bitmap's bounds — stays opaque instead of
+  // bleeding the underlying canvas through the blur. The pre-fill
+  // runs BEFORE setting `filter = blur(...)` so the fillRect itself
+  // doesn't get blurred; the subsequent drawImage then runs WITH
+  // the blur filter active so its source pixels blur cleanly into
+  // the solid pre-fill at the boundary. See regression note in
+  // sampleBlockAveragePng.
+  pctx.fillStyle = REDACT_SOLID_COLOR;
+  pctx.fillRect(0, 0, paddedW, paddedH);
   pctx.filter = `blur(${blurRadius}px)`;
   // Draw the surrounding area (clamped to image bounds) so the blur
   // kernel has real pixels to blend.
