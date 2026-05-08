@@ -64,6 +64,30 @@ interface Setup {
   saveSpy: ReturnType<typeof vi.fn>;
 }
 
+/** Track every SelectionManager + container created via
+ *  `setupSelection` so afterEach can tear them down. SelectionManager's
+ *  keydown listener attaches to `document`, not the test's local SVG —
+ *  without explicit `destroy()` calls between tests, listeners from
+ *  prior SMs stay live and process keydown events from subsequent
+ *  tests, racing the spy assertions in the redact-rebake suite below.
+ *  History: the leak was masked for a long time because `loadImage`
+ *  hangs in happy-dom (no real image decode), keeping each SM's
+ *  `#rebakeInFlight` set forever — `#queueRebake` then short-circuits
+ *  on subsequent gestures and never reaches the spy. The
+ *  fractional-dimension fix in `redact-utils.ts` (Math.floor before
+ *  `loadImage` + early return for degenerate rects) lets stalled
+ *  rebakes complete, exposing the leak. The right answer is to
+ *  destroy the SM, not to bring back the hang. */
+const __activeSetups: Array<{ selection: SelectionManager; container: HTMLDivElement }> = [];
+
+afterEach(() => {
+  for (const { selection, container } of __activeSetups) {
+    selection.destroy();
+    container.remove();
+  }
+  __activeSetups.length = 0;
+});
+
 function setupSelection(): Setup {
   const container = makeContainer();
   const svg = document.createElementNS(SVG_NS, "svg") as SVGSVGElement;
@@ -79,6 +103,7 @@ function setupSelection(): Setup {
     realSave();
   }) as typeof history.save;
   const selection = new SelectionManager(canvas, history);
+  __activeSetups.push({ selection, container });
   return { canvas, selection, annotations: canvas.annotations, saveSpy };
 }
 
