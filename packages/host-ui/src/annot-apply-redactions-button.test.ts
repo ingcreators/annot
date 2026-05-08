@@ -2,7 +2,7 @@
  * @vitest-environment happy-dom
  *
  * Tests for `<annot-apply-redactions-button>` (Phase 3 of
- * `docs/plans/redact-burn-into-image.md`).
+ * `docs/plans/_done/redact-burn-into-image.md`).
  *
  * The component delegates the modal to
  * `showConfirmDialog` from `./ui/dialog.js`; we mock that helper

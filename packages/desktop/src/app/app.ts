@@ -235,7 +235,7 @@ function openEditor(record: ImageRecord): void {
   rightPanel.selection = selection;
   rightPanel.getPluginSections = null;
   rightPanel.isBuiltinSectionDisabled = null;
-  // Phase 6 of `docs/plans/redact-burn-into-image.md` — wire the
+  // Phase 6 of `docs/plans/_done/redact-burn-into-image.md` — wire the
   // shell's burn-in orchestration through the right-panel's
   // "Apply redactions to image" button. Mirrors the PWA's
   // EditorSession registration. The panel hides the button when
@@ -362,7 +362,7 @@ function openEditor(record: ImageRecord): void {
     const status = headerHost.getSaveStatusIndicator();
     if (status) status.status = "pending";
     savePipeline.scheduleAnnotationSave(SAVE_DEBOUNCE_MS);
-    // Phase 6 of `docs/plans/redact-burn-into-image.md` — keep
+    // Phase 6 of `docs/plans/_done/redact-burn-into-image.md` — keep
     // the right-panel's apply-redactions button in sync with the
     // document's redact-element count. The count drops to 0
     // right after a successful burn so the button auto-hides

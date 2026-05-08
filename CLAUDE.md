@@ -918,6 +918,18 @@ Queued work without a formal plan doc yet:
 - The `data-annot-version` attribute once set (bump, don't remove)
 - `brand/` — shared brand assets, regenerate via `render-previews.mjs`
   only when brand changes
+- The redact tool's burn-in path
+  ([`_done/redact-burn-into-image.md`](./docs/plans/_done/redact-burn-into-image.md)) —
+  `EditorShell.applyAllRedactions` + `<annot-apply-redactions-button>`
+  + the `<annot-dialog>`-backed `showConfirmDialog` confirmation are
+  load-bearing for the privacy contract: redactions must be
+  irreversible-after-save, AND the user must explicitly opt-in to
+  irreversibility. Any "destroy the source bitmap" feature added later
+  (e.g. a hypothetical "flatten all annotations" or "permanently apply
+  cropping") MUST go through the same destructive-confirmation pattern
+  before mutating `ImageRecord.originalDataUrl`. The reverse — adding a
+  silent / autosave-driven mutation of the underlying bitmap — would
+  invert the contract this plan stood up.
 
 ## When in doubt
 
