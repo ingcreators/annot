@@ -654,6 +654,9 @@ export class App {
     // the visual sweet spot for a 48px header (~62% fill ratio),
     // giving the brand clear presence without crowding the adjacent
     // controls.
+    // Brand lockup mirrors the extension popup's `<span class="brand-
+    // stack">` layout (product name primary, "by ingcreators" line
+    // secondary) so the attribution is visible on every host surface.
     brand.innerHTML = `
       <svg width="30" height="30" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
         <circle cx="24" cy="7" r="3.5" fill="#7c9cff"/>
@@ -661,7 +664,10 @@ export class App {
         <path d="M24 13 L35 38" stroke="#b391ff" stroke-width="4" stroke-linecap="round"/>
         <path d="M19 24 H29" stroke="#7c9cff" stroke-width="3.5" stroke-linecap="round"/>
       </svg>
-      <span class="brand-text">Annot</span>
+      <span class="brand-stack">
+        <span class="brand-text">Annot</span>
+        <span class="brand-org">by ingcreators</span>
+      </span>
     `;
     brand.addEventListener("click", (e) => {
       e.preventDefault();
