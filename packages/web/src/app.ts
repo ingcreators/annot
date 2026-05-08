@@ -645,20 +645,15 @@ export class App {
     const brand = document.createElement("a");
     brand.className = "brand";
     brand.href = "#";
-    // Logo dimensions (30×30) and left offset (via CSS padding) match
-    // the editor header's .editor-header-brand, so the logo stays at
-    // the exact same x/y position when navigating between file-manager
-    // and editor views. Navigation landmarks must not jump between
-    // views — cf. Figma / Miro / Google Drive, all of which keep the
-    // brand mark pinned to a single absolute position. 30×30 sits in
-    // the visual sweet spot for a 48px header (~62% fill ratio),
-    // giving the brand clear presence without crowding the adjacent
-    // controls.
-    // Brand lockup mirrors the extension popup's `<span class="brand-
-    // stack">` layout (product name primary, "by ingcreators" line
-    // secondary) so the attribution is visible on every host surface.
+    // Brand lockup matches the extension popup 1:1 — same 32×32
+    // logo, same 18px wordmark, same 10px attribution line, same
+    // letter-spacing — so users moving between popup and gallery
+    // perceive a single brand identity. The editor header's
+    // `.editor-header-brand` keeps its own 30×30 because it has
+    // no accompanying text and lives in a different visual context
+    // (just a back-to-gallery button).
     brand.innerHTML = `
-      <svg width="30" height="30" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <svg width="32" height="32" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
         <circle cx="24" cy="7" r="3.5" fill="#7c9cff"/>
         <path d="M24 13 L13 38" stroke="#7ef0c5" stroke-width="4" stroke-linecap="round"/>
         <path d="M24 13 L35 38" stroke="#b391ff" stroke-width="4" stroke-linecap="round"/>
