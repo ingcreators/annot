@@ -1,4 +1,5 @@
 import { builtinIcon, type IconSpec } from "@ingcreators/annot-core";
+import { isDesktop } from "@ingcreators/annot-core/desktop-bridge";
 import { createBuiltinIcon } from "../annot-icon-imperative.js";
 import "../annot-icon.js";
 /**
@@ -160,17 +161,22 @@ const BUILTIN_CHIP_DESCRIPTORS: readonly ChipDescriptor[] = [
     reselectTitle: "Change repository",
   },
   {
-    // Tauri / Electron desktop host's filesystem-backed library
-    // (`@ingcreators/annot-desktop`'s `DesktopStore`). The PWA
-    // never instantiates a `DesktopStore`, but the desktop host
-    // typically passes `disableBuiltinStorage: ["browser",
-    // "device", "googledrive", "github", "extension"]` at
-    // bootstrap so this is the only chip that renders — matching
-    // VSCode's "single-storage host" UX.
+    // Electron desktop host's filesystem-backed library
+    // (`@ingcreators/annot-desktop`'s `DesktopStore`). Gated on
+    // `isDesktop` (i.e. `window.__ANNOT_DESKTOP__` set by the
+    // Electron preload) so the chip only ever renders inside the
+    // desktop host — the PWA / VSCode / extension never instantiate
+    // a `DesktopStore`, and showing a non-functional chip there
+    // would just confuse users. The desktop host additionally
+    // passes `disableBuiltinStorage: ["browser", "device",
+    // "googledrive", "github", "extension"]` so this is the only
+    // chip that renders — matching VSCode's "single-storage host"
+    // UX.
     mode: "desktop",
     icon: builtinIcon("desktop_windows"),
     label: "Desktop",
     priority: 50,
+    visible: () => isDesktop,
   },
 ];
 
