@@ -35,6 +35,7 @@ import {
   SVG_NS,
   setLineEndpoints,
 } from "./selection-helpers.js";
+import { convertRedactStyle, detectRedactStyle } from "./redact-utils.js";
 import { computeSnap, SmartGuideOverlay } from "./smart-guides.js";
 
 /**
@@ -221,6 +222,69 @@ export class SelectionManager {
     }
     this.#drawAllHandles();
     this.#focusSVG();
+    this.onChange?.();
+  }
+
+  /** Walk the current selection and return the subset whose elements
+   *  are mosaic / blur redactions backed by an `<image>`. Solid redact
+   *  rects are intentionally skipped — the solid bar's `fill` doesn't
+   *  depend on the underlying image, so a move/resize doesn't need a
+   *  rebake. Pure read; no DOM mutation. */
+  #collectMovedRedactImages(): SVGImageElement[] {
+    const out: SVGImageElement[] = [];
+    for (const el of this.#selectedSet) {
+      if (el.tagName !== "image") continue;
+      const style = detectRedactStyle(el);
+      if (style === "mosaic" || style === "blur") {
+        out.push(el as SVGImageElement);
+      }
+    }
+    return out;
+  }
+
+  /** Re-sample the base image at each redact-image's CURRENT geometry,
+   *  swap the embedded PNG for the freshly-baked one, then save
+   *  history. Called from the pointerup gesture-end handler when at
+   *  least one moved / resized element is a mosaic / blur redaction.
+   *
+   *  Async because the underlying image loads via a Promise; the
+   *  pointerup handler stays sync by `void`-ing the returned promise.
+   *  We defer history.save() until after the rebake completes so the
+   *  saved state contains the up-to-date PNG (one undo step reverts
+   *  the whole gesture, not "geometry-only then PNG-only"). If the
+   *  rebake throws (e.g. CORS-tainted base image), fall back to the
+   *  pre-rebake save so the user's drag at least keeps its new
+   *  geometry — the visual is then stale but the position survives a
+   *  reload.
+   *
+   *  `convertRedactStyle(el, sameStyle, canvas)` does the heavy
+   *  lifting: it samples the current `<image>`'s x/y/w/h from the
+   *  base image, builds a fresh data URL via the matching renderer
+   *  (mosaic block-average / blur padded-canvas), replaces the old
+   *  `<image>` in the DOM, and returns the new node. The selection
+   *  set is updated in lockstep so subsequent gestures still target
+   *  the live element. */
+  async #rebakeRedactImagesAndSave(els: SVGImageElement[]): Promise<void> {
+    try {
+      for (const old of els) {
+        if (!old.parentNode) continue; // user removed it mid-rebake
+        const style = detectRedactStyle(old);
+        if (style !== "mosaic" && style !== "blur") continue;
+        const fresh = await convertRedactStyle(old, style, this.#canvas);
+        if (this.#selectedSet.has(old)) {
+          this.#selectedSet.delete(old);
+          this.#selectedSet.add(fresh);
+        }
+      }
+      this.clearHandles();
+      this.#drawAllHandles();
+    } catch (err) {
+      // Don't swallow silently — the user should know the redaction
+      // didn't update. Fall through to the history.save() so the
+      // gesture's geometry change still gets recorded.
+      console.error("[selection] redact rebake failed", err);
+    }
+    this.#history.save();
     this.onChange?.();
   }
 
@@ -1592,16 +1656,36 @@ export class SelectionManager {
         // content. A plain click (select → release without moving) sets
         // #dragging but leaves #gestureChangedContent false, so we skip
         // the save — no spurious "Edited" in the autosave indicator.
-        if (
+        const gestureModifiedContent =
           (this.#dragging ||
             this.#resizing ||
             this.#draggingTail ||
             this.#rotating ||
             this.#draggingCurve) &&
-          this.#gestureChangedContent
-        ) {
-          this.#history.save();
+          this.#gestureChangedContent;
+        if (gestureModifiedContent) {
+          // Mosaic / blur redactions bake a PNG snapshot at draw time.
+          // Moving / resizing the wrapper `<image>` only updates its
+          // x/y/width/height — the embedded data URL still shows pixels
+          // sampled from the ORIGINAL drawn region, which defeats the
+          // redaction once the user repositions the box. Re-sample the
+          // base image at the new geometry so the box keeps hiding
+          // whatever pixels currently sit beneath it.
+          //
+          // The rebake is async (the underlying image loads via a
+          // Promise) but pointerup must remain sync; defer the
+          // history.save() until after rebake so the saved state
+          // contains the freshly-baked PNG. If no redact-image was
+          // affected, save synchronously as before — the common case
+          // pays no async cost.
+          const movedRedactImages = this.#collectMovedRedactImages();
+          if (movedRedactImages.length > 0) {
+            void this.#rebakeRedactImagesAndSave(movedRedactImages);
+          } else {
+            this.#history.save();
+          }
         }
+        // (Both branches above leave the dragging flags reset below.)
         this.#dragging = false;
         this.#resizing = false;
         this.#draggingTail = false;
@@ -1753,7 +1837,17 @@ export class SelectionManager {
           }
           this.clearHandles();
           this.#drawAllHandles();
-          this.#history.save();
+          // Mirror the pointerup rebake gate: arrow-key nudges of a
+          // mosaic / blur redaction must re-sample the base image at
+          // the new position so the box keeps hiding the pixels
+          // currently beneath it (otherwise the embedded PNG drifts
+          // away from the underlying region).
+          const movedRedactImages = this.#collectMovedRedactImages();
+          if (movedRedactImages.length > 0) {
+            void this.#rebakeRedactImagesAndSave(movedRedactImages);
+          } else {
+            this.#history.save();
+          }
         }
       },
       opts,

@@ -697,6 +697,105 @@ describe("SelectionManager — distributeSelected", () => {
   });
 });
 
+describe("SelectionManager — redact rebake on move (arrow-key path)", () => {
+  // The mosaic / blur redaction PNG is baked at draw time. Without
+  // a post-move rebake, the embedded image continues to show pixels
+  // sampled from the original drawn region after the user nudges the
+  // box, defeating the redaction. The rebake gate detects the moved
+  // <image data-redact-style="mosaic|blur"> in the selection and
+  // calls `convertRedactStyle(el, sameStyle, canvas)` so the PNG
+  // matches the new geometry.
+  //
+  // We exercise the arrow-key path here (synchronous keydown gesture
+  // with no pointer plumbing) because the pointerup path needs the
+  // full pointer-event sequence to reach the gesture-end branch
+  // and that's covered by the manual smoke check on the dev server.
+  // The async `convertRedactStyle` is mocked because the real
+  // implementation requires a real <canvas> for raster sampling
+  // (out-of-reach under happy-dom — same constraint the
+  // RedactTool tests document).
+
+  it("mosaic <image> in selection: nudges fire the rebake path (deferred save, replacement)", async () => {
+    // Stub convertRedactStyle to swap the <image> for a fresh node
+    // with a sentinel `data-rebaked` attr, so we can confirm the
+    // post-rebake replacement happened without needing a real
+    // <canvas>. (The real renderer's pixel-sampling logic is
+    // covered separately in redact-utils.test.ts.)
+    const utils = await import("./redact-utils.js");
+    const spy = vi.spyOn(utils, "convertRedactStyle").mockImplementation(async (oldEl) => {
+      const fresh = document.createElementNS(SVG_NS, "image") as SVGImageElement;
+      const ds = oldEl.getAttribute("data-redact-style");
+      if (ds) fresh.setAttribute("data-redact-style", ds);
+      fresh.setAttribute("data-rebaked", "1");
+      // Mirror real behaviour: replace in DOM.
+      oldEl.parentNode?.replaceChild(fresh, oldEl);
+      return fresh;
+    });
+
+    const { selection, annotations, saveSpy } = setupSelection();
+    const img = document.createElementNS(SVG_NS, "image") as SVGImageElement;
+    img.setAttribute("x", "20");
+    img.setAttribute("y", "20");
+    img.setAttribute("width", "120");
+    img.setAttribute("height", "80");
+    img.setAttribute("href", PNG);
+    img.setAttribute("data-redact-style", "mosaic");
+    annotations.appendChild(img);
+    selection.select(img);
+
+    const svg = annotations.ownerSVGElement!;
+    saveSpy.mockClear();
+    svg.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+
+    // Synchronous save is skipped — rebake deferred it.
+    expect(saveSpy).not.toHaveBeenCalled();
+
+    // Wait one microtask for the async rebake to settle.
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // Saved exactly once, after the replacement landed.
+    expect(saveSpy).toHaveBeenCalledTimes(1);
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy.mock.calls[0]?.[1]).toBe("mosaic");
+    expect(annotations.firstElementChild?.getAttribute("data-rebaked")).toBe("1");
+
+    spy.mockRestore();
+  });
+
+  it("solid redact <rect> does NOT trigger rebake (only fill, no PNG to refresh)", async () => {
+    const { selection, annotations, saveSpy } = setupSelection();
+    const r = document.createElementNS(SVG_NS, "rect") as SVGRectElement;
+    r.setAttribute("x", "10");
+    r.setAttribute("y", "10");
+    r.setAttribute("width", "100");
+    r.setAttribute("height", "60");
+    r.setAttribute("fill", "#111");
+    r.setAttribute("data-redact-style", "solid");
+    annotations.appendChild(r);
+    selection.select(r);
+
+    const svg = annotations.ownerSVGElement!;
+    saveSpy.mockClear();
+    svg.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    // Solid rect: history.save fires synchronously, no async rebake.
+    expect(saveSpy).toHaveBeenCalledTimes(1);
+    expect(annotations.firstElementChild).toBe(r);
+  });
+
+  it("plain shapes (non-redact) do NOT trigger rebake — sync save only", async () => {
+    const { selection, annotations, saveSpy } = setupSelection();
+    const r = makeRect({ x: 0, y: 0, w: 10, h: 10 });
+    annotations.appendChild(r);
+    selection.select(r);
+    const svg = annotations.ownerSVGElement!;
+    saveSpy.mockClear();
+    svg.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+    expect(saveSpy).toHaveBeenCalledTimes(1);
+    expect(annotations.firstElementChild).toBe(r);
+  });
+});
+
 describe("SelectionManager — onChange callback", () => {
   it("fires on select / selectMultiple / toggleSelect / paste / delete / group / ungroup / z-order", () => {
     const { selection, annotations } = setupSelection();
