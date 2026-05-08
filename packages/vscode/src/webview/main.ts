@@ -353,6 +353,14 @@ const shell = new EditorShell({
 // `{type: "save.result", id, bytes}` (handled below).
 shell.on("dirty", () => {
   vscode.postMessage({ type: "edit" });
+  // Phase 6 of `docs/plans/redact-burn-into-image.md` — keep the
+  // right-panel's apply-redactions button in sync with the
+  // document's redact-element count. Mirrors the PWA's
+  // EditorSession dirty handler; the count drops to 0 right
+  // after a successful burn (the redact elements are removed
+  // from the annotations group), so the button auto-hides
+  // without any explicit teardown.
+  activeRightPanel?.refreshRedactCount();
 });
 
 shell.on("error", (err) => {
@@ -403,6 +411,16 @@ function mountToolbarAndRightPanel(): void {
   panel.selection = selection;
   panel.getPluginSections = null;
   panel.isBuiltinSectionDisabled = null;
+  // Phase 6 of `docs/plans/redact-burn-into-image.md` — wire the
+  // shell's burn-in orchestration through the right-panel's
+  // "Apply redactions to image" button. Mirrors the PWA's
+  // EditorSession registration; no VSCode-specific code path
+  // beyond binding the callback. The panel hides the button
+  // when `redactCount === 0`, so the initial refresh ensures
+  // it appears immediately when an annotated document with
+  // existing redactions opens.
+  panel.applyAllRedactions = () => shell.applyAllRedactions();
+  panel.refreshRedactCount();
   rightPanelMount.appendChild(panel);
   activeRightPanel = panel;
   panel.setPageMetadata(shell.getCurrentPageMetadata());
