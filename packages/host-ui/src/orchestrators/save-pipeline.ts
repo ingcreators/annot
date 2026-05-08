@@ -103,6 +103,26 @@ export class SavePipeline {
     }, debounceMs);
   }
 
+  /**
+   * Drop the pending annotation autosave WITHOUT firing it. Used when
+   * a higher-level save path is about to issue an `updateImage` call
+   * that supersedes whatever the debounce timer was going to write
+   * — e.g. `applyAllRedactions` writes both `annotationsSvg` AND
+   * `originalDataUrl`, while the debounce save would only carry
+   * `annotationsSvg` + `tags` and would re-merge a STALE
+   * `originalDataUrl` from the storage cache, racing the apply's
+   * upload on slow backends (Drive). See
+   * [`_done/redact-burn-into-image.md`](../../../../docs/plans/_done/redact-burn-into-image.md)
+   * + the post-archival fix for the symptom "Drive reopen shows
+   * pre-burn original".
+   */
+  cancelAutoSave(): void {
+    if (this.#autoSaveTimer !== undefined) {
+      clearTimeout(this.#autoSaveTimer);
+      this.#autoSaveTimer = undefined;
+    }
+  }
+
   /** Arm the thumbnail regeneration timer. Same coalescing behaviour. */
   scheduleThumbnailRegen(debounceMs: number): void {
     clearTimeout(this.#thumbTimer);
