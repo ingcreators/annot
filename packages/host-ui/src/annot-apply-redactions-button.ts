@@ -78,8 +78,8 @@ export class AnnotApplyRedactionsButtonElement extends LitElement {
     return html`
       <button
         type="button"
-        class="toolbar-btn"
-        data-tooltip=${this.count === 0
+        class="annot-apply-redactions-btn"
+        title=${this.count === 0
           ? "No redactions to apply"
           : `Apply ${this.count} redaction(s) to image`}
         aria-label="Apply redactions to image"

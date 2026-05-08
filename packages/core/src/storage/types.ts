@@ -38,8 +38,27 @@ export interface ImageRecord {
  * [`docs/plans/_done/unified-thumbnail-cache.md`](../../../../docs/plans/_done/unified-thumbnail-cache.md));
  * callers seed the cache via `tm.write(provider, path, dataUrl,
  * dims)` rather than going through `updateImage`.
+ *
+ * `originalDataUrl` is included so callers that mutate the
+ * underlying bitmap — currently the redact-burn-into-image
+ * `EditorShell.applyAllRedactions` path
+ * ([`_done/redact-burn-into-image.md`](../../../../docs/plans/_done/redact-burn-into-image.md))
+ * — can persist the new bytes alongside the matching annotation
+ * SVG. Backends that re-encode the file on save (XMP-based
+ * stores: DeviceStore, DesktopStore, GoogleDriveStore,
+ * GitHubStore) MUST honor a non-undefined `updates.originalDataUrl`
+ * by feeding it into the file rebuild instead of the storage's
+ * cached / on-disk value. Backends that store the bitmap
+ * separately (BrowserStore via IDB) just `Object.assign` it onto
+ * the record, which the next put writes back. Including this
+ * field on a normal annotation save (no bitmap mutation) is
+ * unnecessary and — for network-backed stores — wasteful, so the
+ * field is OPT-IN: leave it undefined unless the bitmap actually
+ * changed.
  */
-export type ImageRecordUpdate = Partial<Pick<ImageRecord, "annotationsSvg" | "tags" | "updatedAt">>;
+export type ImageRecordUpdate = Partial<
+  Pick<ImageRecord, "annotationsSvg" | "tags" | "updatedAt" | "originalDataUrl">
+>;
 
 // =============================================================================
 // Page metadata — DOM structure captured alongside a browser screenshot.

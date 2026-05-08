@@ -405,11 +405,11 @@ describe("EditorShell — Phase 3 implementation", () => {
       return makeRecord({ annotationsSvg });
     }
 
-    it("burns redactions, removes them, swaps imageEl.href, and fires dirty", async () => {
+    it("burns redactions, removes them, swaps imageEl.href, persists, and fires dirty", async () => {
       const stub = stubCanvasAndImage();
       try {
         const container = makeContainer();
-        const { storage } = makeStorage(recordWithSolidRedact());
+        const { storage, updateImage } = makeStorage(recordWithSolidRedact());
         const shell = new EditorShell({ container, storage });
         await shell.open("/test.annot.svg");
 
@@ -420,12 +420,17 @@ describe("EditorShell — Phase 3 implementation", () => {
         ).toBe(1);
         const hrefBefore = canvas?.imageEl.getAttribute("href");
 
-        // Wire dirty AFTER the seed history.save() the
+        // Wire dirty + saved AFTER the seed history.save() the
         // `mountFromRecord` flow already ran (per the existing
         // restore-annotations-without-firing-dirty test) so we only
-        // see the dirty event the burn itself emits.
+        // see the events the burn itself emits.
         const dirtyHandler = vi.fn();
+        const savedHandler = vi.fn();
         shell.on("dirty", dirtyHandler);
+        shell.on("saved", savedHandler);
+        // Reset updateImage so we only see the burn's persistence
+        // call (not any happen-to-fire saves from earlier setup).
+        updateImage.mockClear();
 
         const result = await shell.applyAllRedactions();
         expect(result.count).toBe(1);
@@ -440,8 +445,53 @@ describe("EditorShell — Phase 3 implementation", () => {
         expect(hrefAfter).not.toBe(hrefBefore);
         expect(hrefAfter).toMatch(/^data:image\/png/);
 
+        // Persistence: storage.updateImage MUST be called with the
+        // new bitmap AND the redact-free annotations SVG. Without
+        // this, the host's debounced annotation-save would write
+        // only annotationsSvg + tags, leaving the original bitmap
+        // on disk — defeating the privacy contract. (Reported by
+        // the user after Phase 7 archived the plan.)
+        expect(updateImage).toHaveBeenCalledTimes(1);
+        const call = updateImage.mock.calls[0] as unknown as [
+          string,
+          { annotationsSvg: string; originalDataUrl: string; updatedAt: string },
+        ];
+        expect(call[0]).toBe("/test.annot.svg");
+        expect(call[1].originalDataUrl).toBe(hrefAfter);
+        expect(call[1].annotationsSvg).toContain("<svg");
+        // The redact-free SVG should NOT carry the redact element.
+        expect(call[1].annotationsSvg).not.toContain("data-redact-style");
+        expect(call[1].updatedAt).toBeTypeOf("string");
+        expect(savedHandler).toHaveBeenCalledWith("/test.annot.svg");
+
         // History snapshot fired → host receives a dirty event.
         expect(dirtyHandler).toHaveBeenCalled();
+
+        shell.destroy();
+      } finally {
+        stub.restore();
+      }
+    });
+
+    it("re-throws + emits error when storage.updateImage rejects (so the host can surface a banner)", async () => {
+      const stub = stubCanvasAndImage();
+      try {
+        const container = makeContainer();
+        const updateImage = vi.fn(async () => {
+          throw new Error("storage offline");
+        });
+        const storage = {
+          getImage: vi.fn(async () => recordWithSolidRedact()),
+          updateImage,
+        } as unknown as StorageProvider;
+        const shell = new EditorShell({ container, storage });
+        await shell.open("/test.annot.svg");
+
+        const errorHandler = vi.fn();
+        shell.on("error", errorHandler);
+
+        await expect(shell.applyAllRedactions()).rejects.toThrow(/storage offline/);
+        expect(errorHandler).toHaveBeenCalled();
 
         shell.destroy();
       } finally {

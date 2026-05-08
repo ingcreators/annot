@@ -938,16 +938,26 @@ export class GitHubStore
     // gallery listens for. Phase 5 of the unified-thumbnail-cache
     // plan removes the field from `ImageRecordUpdate` entirely.
 
-    // -- Annotation / tag update: re-render + PUT in place.
-    if (updates.annotationsSvg !== undefined || updates.tags !== undefined) {
+    // -- Annotation / tag / underlying-bitmap update: re-render + PUT
+    //    in place. `originalDataUrl` carries the new bitmap when the
+    //    redact-burn path explicitly mutates the base image (see
+    //    `_done/redact-burn-into-image.md`); without it in the gate
+    //    condition, a bitmap-only update would skip the commit and
+    //    the new bytes never reach GitHub.
+    if (
+      updates.annotationsSvg !== undefined ||
+      updates.tags !== undefined ||
+      updates.originalDataUrl !== undefined
+    ) {
       const record = await this.getImage(path);
       if (!record?.originalDataUrl) return;
 
       const annotationsSvg = updates.annotationsSvg ?? record.annotationsSvg;
       const tags = updates.tags ?? record.tags;
-      const isJpeg = record.originalDataUrl.startsWith("data:image/jpeg");
+      const originalDataUrl = updates.originalDataUrl ?? record.originalDataUrl;
+      const isJpeg = originalDataUrl.startsWith("data:image/jpeg");
       const blob = await this.#buildXmpBlob(
-        { ...record, annotationsSvg, tags },
+        { ...record, annotationsSvg, tags, originalDataUrl },
         isJpeg ? "jpg" : "png",
       );
 
@@ -982,6 +992,7 @@ export class GitHubStore
         ...record,
         annotationsSvg,
         tags,
+        originalDataUrl,
         updatedAt: new Date().toISOString(),
       });
       // Thumbnail cache invalidation / re-prefetch is the

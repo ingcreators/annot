@@ -462,7 +462,17 @@ export class DesktopStore
     const entry = this.#index.images[path];
     if (!entry) return;
 
-    if (updates.annotationsSvg !== undefined || updates.tags !== undefined) {
+    // Rewrite file if annotations / tags / underlying bitmap changed.
+    // `originalDataUrl` carries the new bitmap when the redact-burn
+    // path explicitly mutates the base image (see
+    // `_done/redact-burn-into-image.md`); without it in the gate
+    // condition, a bitmap-only update would skip the rebuild and
+    // the new bytes never reach disk.
+    if (
+      updates.annotationsSvg !== undefined ||
+      updates.tags !== undefined ||
+      updates.originalDataUrl !== undefined
+    ) {
       const isJpeg = (record.originalDataUrl || "").startsWith("data:image/jpeg");
       const blob = await buildEditableImageBlob(
         record,
