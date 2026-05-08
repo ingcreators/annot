@@ -25,6 +25,7 @@ describe("BUILTIN_ICONS registry", () => {
         "align_vertical_bottom",
         "align_vertical_center",
         "align_vertical_top",
+        "apps",
         "arrow.both",
         "arrow.end",
         "arrow.none",

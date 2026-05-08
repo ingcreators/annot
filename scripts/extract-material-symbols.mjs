@@ -95,6 +95,7 @@ const GLYPH_NAMES = [
   "align_vertical_bottom",
   "align_vertical_center",
   "align_vertical_top",
+  "apps",
   "arrow_right_alt",
   "arrow_selector_tool",
   "blur_on",

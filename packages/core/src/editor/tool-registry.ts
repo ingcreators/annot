@@ -962,9 +962,16 @@ export const TOOL_REGISTRY: Readonly<Record<string, ToolRegistryEntry>> = {
     icon: "visibility_off",
     variantField: "redactStyle",
     defaultVariant: "mosaic",
+    // Variant icon choices (the previous set was a discoverability hit
+    // — "check_box" is a checkbox glyph, which doesn't read as a
+    // solid bar at all, and "grid_view"'s 2×2 grid is too sparse to
+    // suggest pixelation):
+    //   mosaic → "apps" (3×3 square grid; reads as pixelation density)
+    //   solid  → "rectangle" (filled rectangle; matches "Solid bar")
+    //   blur   → "blur_on" (kept; the canonical blur glyph)
     variants: [
-      { value: "mosaic", icon: "grid_view", label: "Mosaic (pixelate)" },
-      { value: "solid", icon: "check_box", label: "Solid bar" },
+      { value: "mosaic", icon: "apps", label: "Mosaic (pixelate)" },
+      { value: "solid", icon: "rectangle", label: "Solid bar" },
       { value: "blur", icon: "blur_on", label: "Blur" },
     ],
     // Solid redact reuses fillColor as the bar color; mosaic / blur
@@ -1004,15 +1011,36 @@ export const TOOL_REGISTRY: Readonly<Record<string, ToolRegistryEntry>> = {
       if (rs === "solid" || rs === "mosaic" || rs === "blur") preset.redactStyle = rs;
     },
     applyStyleToElement(el, preset) {
-      // Solid redact rects accept the universal style writes (mainly
-      // `fillColor` → bar color). Mosaic / blur variants bake a PNG
-      // into an `<image>` and have no stylable attrs; skipping the
-      // writer for those is a cosmetic no-op vs. the legacy generic
-      // path (which would `setAttribute("fill", …)` on the <image>,
-      // ignored by SVG rendering). Documented in
-      // `docs/plans/toolbar-apply-style-to-element.md` Out-of-scope.
+      // Solid redact bars are FILL-ONLY by design — they're an
+      // opaque rectangle that hides content. Routing through
+      // `writeUniversalStyleAttrs` (the previous behaviour) leaked
+      // every stroke field from the toolbar's universal preset
+      // (default `strokeColor: "#ff0000"`, `strokeWidth: 2`, …) onto
+      // the bar after a variant switch in the selection panel,
+      // rendering an unwanted red border around the redaction.
+      //
+      // Mosaic / blur variants bake a PNG into an `<image>` and
+      // have no stylable attrs at all — the writer is a no-op for
+      // those. Documented in
+      // `docs/plans/_done/toolbar-apply-style-to-element.md` (the
+      // "redact universal-style routing" carve-out is now actively
+      // an anti-feature for the solid case; only `fill` survives).
       if (el.tagName === "rect" && el.getAttribute("data-redact-style") === "solid") {
-        writeUniversalStyleAttrs(el, preset);
+        if (preset.fillColor && preset.fillColor !== "none") {
+          el.setAttribute("fill", preset.fillColor);
+        }
+        // Defensively clear stroke / opacity attrs that may have
+        // been written by the legacy `writeUniversalStyleAttrs`
+        // path on prior conversions of this same element.
+        el.removeAttribute("stroke");
+        el.removeAttribute("stroke-width");
+        el.removeAttribute("stroke-dasharray");
+        el.removeAttribute("data-dash-key");
+        el.removeAttribute("stroke-linecap");
+        el.removeAttribute("stroke-linejoin");
+        el.removeAttribute("stroke-opacity");
+        el.removeAttribute("opacity");
+        el.removeAttribute("fill-opacity");
       }
     },
   },
