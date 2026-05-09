@@ -5,6 +5,7 @@ import {
   writeArrowControl,
 } from "@ingcreators/annot-core/editor/arrow-markers";
 import { bakeTranslate } from "@ingcreators/annot-core/editor/bake-translate";
+import { freshenInternalIds } from "@ingcreators/annot-core/editor/svg-id-utils";
 import {
   readTextShapeSpec,
   rebuildCalloutTail,
@@ -385,6 +386,19 @@ export class SelectionManager {
       container.innerHTML = html;
       const el = container.firstElementChild as SVGElement;
       if (!el) continue;
+
+      // Freshen any internal ids (clipPath / linearGradient / etc.)
+      // before insertion so the clone doesn't share a document-scope
+      // id with the source. SVG resolves duplicate ids by document
+      // order; without this the pasted text-bearing shape's `<text>`
+      // ends up clipped against the SOURCE's clipPath (located at the
+      // source's geometry, far from the pasted position) and visually
+      // disappears even though the tspan content is intact. Same
+      // pattern covers `<linearGradient>` ids referenced from
+      // `stroke="url(#...)"` / `fill="url(#...)"` and any future
+      // `<use href="#...">`. duplicate() routes through paste(), so
+      // Ctrl+D is covered too.
+      freshenInternalIds(el);
 
       // Offset the pasted element
       this.#moveElement(el, offset, offset);
