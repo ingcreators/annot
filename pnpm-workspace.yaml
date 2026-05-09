@@ -1,6 +1,11 @@
 packages:
   - "packages/*"
 
+allowBuilds:
+  electron-winstaller: true
+  esbuild: true
+  msw: true
+
 # Centralised version pins for build-time tooling that every package
 # uses. Each package keeps its own devDependency entry (so the
 # `tsc` / `vite` binaries land in its `node_modules/.bin/` and the

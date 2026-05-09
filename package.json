@@ -23,7 +23,7 @@
     "lit",
     "monorepo"
   ],
-  "packageManager": "pnpm@9.15.0",
+  "packageManager": "pnpm@11.0.9",
   "scripts": {
     "build": "turbo build",
     "dev": "turbo dev",
