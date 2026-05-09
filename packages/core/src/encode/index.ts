@@ -17,39 +17,19 @@
  * (Pako DEFLATE level 9) — no re-quantization, no RGBA round-trip.
  */
 import init, { quantize_image } from "@ingcreators/annot-imagequant";
+import {
+  DEFAULT_ENCODE_OPTIONS,
+  type EncodeOptions,
+  type EncodeResult,
+} from "./options.js";
 import { encodePng8 } from "./png8.js";
 
-export type EncodeFormat = "smart" | "png" | "jpeg";
-
-export interface EncodeOptions {
-  /** "smart" | "png" | "jpeg" */
-  format: EncodeFormat;
-  /** Fallback format used by "smart" mode when the image is photo-heavy. */
-  smartFallback: "png" | "jpeg";
-  /**
-   * Heuristic: if a sampled pixel pass finds more unique RGBA colors than
-   * this threshold, treat the image as photo-heavy and skip PNG-8.
-   * Typical UI screenshots return <5000; photo-heavy pages return >20000.
-   */
-  smartColorThreshold: number;
-  /** JPEG quality 60–100 (%). Used for "jpeg" and smart's JPEG fallback. */
-  jpegPercent: number;
-}
-
-export const DEFAULT_ENCODE_OPTIONS: EncodeOptions = {
-  format: "smart",
-  smartFallback: "png",
-  smartColorThreshold: 15000,
-  jpegPercent: 92,
-};
-
-export interface EncodeResult {
-  dataUrl: string;
-  /** Actual format chosen (may differ from requested in "smart" mode). */
-  chosen: "png" | "jpeg";
-  /** Human-readable note (e.g. "png-8", "photo-fallback") — useful for logs. */
-  reason?: string;
-}
+export {
+  DEFAULT_ENCODE_OPTIONS,
+  type EncodeFormat,
+  type EncodeOptions,
+  type EncodeResult,
+} from "./options.js";
 
 /**
  * Upper bound on images we attempt to PNG-8-quantize. libimagequant's
