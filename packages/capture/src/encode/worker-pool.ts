@@ -51,7 +51,10 @@ interface PendingTask {
 
 const DEFAULT_WORKER_COUNT = Math.min(
   4,
-  Math.max(2, ((navigator as unknown as { hardwareConcurrency?: number }).hardwareConcurrency || 4) - 1),
+  Math.max(
+    2,
+    ((navigator as unknown as { hardwareConcurrency?: number }).hardwareConcurrency || 4) - 1,
+  ),
 );
 
 export function createEncodeWorkerPool(opts: PoolOptions): EncodeWorkerPool {
@@ -69,7 +72,9 @@ export function createEncodeWorkerPool(opts: PoolOptions): EncodeWorkerPool {
     initialised = true;
     for (let i = 0; i < workerCount; i++) {
       const w = opts.spawnWorker();
-      w.onmessage = (e: MessageEvent<{ reqId: number; ok?: boolean; result?: EncodeResult; error?: string }>) => {
+      w.onmessage = (
+        e: MessageEvent<{ reqId: number; ok?: boolean; result?: EncodeResult; error?: string }>,
+      ) => {
         const { reqId, ok, result, error } = e.data;
         const task = pendingByReqId.get(reqId);
         if (task) {

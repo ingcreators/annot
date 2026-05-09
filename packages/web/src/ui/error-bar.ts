@@ -79,15 +79,17 @@ export class AnnotErrorBarElement extends LitElement {
     return html`
       <annot-icon class="error-bar-icon" .spec=${builtinIcon(iconName)}></annot-icon>
       <span class="error-bar-message">${this.message}</span>
-      ${this.action
-        ? html`<button
+      ${
+        this.action
+          ? html`<button
             type="button"
             class="error-bar-action"
             @click=${this.action.onClick}
           >
             ${this.action.label}
           </button>`
-        : nothing}
+          : nothing
+      }
       <button
         type="button"
         class="error-bar-dismiss"

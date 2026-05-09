@@ -54,7 +54,7 @@ describe("serializeSelection", () => {
     expect(stored.hasAttribute("transform")).toBe(false);
   });
 
-  it("sticky `<g data-type=\"shape\">` — bakes inner geometry to origin, no leftover wrapper translate", () => {
+  it('sticky `<g data-type="shape">` — bakes inner geometry to origin, no leftover wrapper translate', () => {
     const svg = svgWithRoot();
     const g = createTextShape({
       x: 100,
@@ -197,7 +197,7 @@ describe("scratchpad save → paste → drag round-trip", () => {
     expect(Number.parseFloat(text.getAttribute("y")!)).toBe(cy0 - 25);
   });
 
-  it("rect with prior `transform=\"translate(...)\"` (legacy state) — serializer drops the wrapper translate", () => {
+  it('rect with prior `transform="translate(...)"` (legacy state) — serializer drops the wrapper translate', () => {
     // Defensive: if some pre-existing path produced a rect with a
     // wrapper translate, the serializer must STILL bake into geometry
     // so the stored fragment doesn't poison subsequent moves with a
@@ -248,9 +248,7 @@ describe("text-bearing shape: clipPath ids are freshened on every paste", () => 
     const sourceClip = source.querySelector("clipPath")!;
     const sourceClipId = sourceClip.id;
     expect(sourceClipId.length).toBeGreaterThan(0);
-    expect(source.querySelector("text")!.getAttribute("clip-path")).toBe(
-      `url(#${sourceClipId})`,
-    );
+    expect(source.querySelector("text")!.getAttribute("clip-path")).toBe(`url(#${sourceClipId})`);
 
     const result = serializeSelection([source as unknown as SVGElement])!;
 

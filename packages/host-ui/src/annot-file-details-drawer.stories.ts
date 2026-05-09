@@ -60,12 +60,7 @@ const meta: Meta<Args> = {
     data: { control: false },
     disabledSections: {
       control: "check",
-      options: [
-        "drawer.file",
-        "drawer.tags",
-        "drawer.last-commit",
-        "drawer.external-links",
-      ],
+      options: ["drawer.file", "drawer.tags", "drawer.last-commit", "drawer.external-links"],
     },
   },
   args: {
@@ -125,9 +120,21 @@ export const MultipleExternalLinks: Story = {
     data: {
       ...TYPICAL_DATA,
       externalLinks: [
-        { label: "View on GitHub", url: "https://github.com/foo", icon: builtinIcon("open_in_new") },
-        { label: "JIRA ticket", url: "https://example.atlassian.net/browse/FOO-123", icon: builtinIcon("task") },
-        { label: "Team thread", url: "https://example.slack.com/archives/ABC", icon: builtinIcon("chat") },
+        {
+          label: "View on GitHub",
+          url: "https://github.com/foo",
+          icon: builtinIcon("open_in_new"),
+        },
+        {
+          label: "JIRA ticket",
+          url: "https://example.atlassian.net/browse/FOO-123",
+          icon: builtinIcon("task"),
+        },
+        {
+          label: "Team thread",
+          url: "https://example.slack.com/archives/ABC",
+          icon: builtinIcon("chat"),
+        },
       ],
     },
   },

@@ -61,9 +61,7 @@ describe("generateThumbnailFromDataUrl — error paths", () => {
   it("forwards through to generateThumbnailFromBlob, returning '' on resize failure", async () => {
     // Real fetch on a data URL returns a Blob, then the helper hits
     // the same createImageBitmap-throws path as the prior test.
-    const out = await generateThumbnailFromDataUrl(
-      "data:application/octet-stream;base64,AAECAw==",
-    );
+    const out = await generateThumbnailFromDataUrl("data:application/octet-stream;base64,AAECAw==");
     expect(out).toBe("");
   });
 });

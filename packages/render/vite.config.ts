@@ -18,10 +18,7 @@ export default defineConfig({
       // depend on annot-editor (the whole point of the split). If it
       // ever appears here, that's a sign the dependency direction got
       // inverted.
-      external: [
-        /^@ingcreators\//,
-        /^@tauri-apps\//,
-      ],
+      external: [/^@ingcreators\//, /^@tauri-apps\//],
     },
   },
 });

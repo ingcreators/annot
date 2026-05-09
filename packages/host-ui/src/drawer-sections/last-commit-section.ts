@@ -13,9 +13,9 @@
  * (whose `mount` is still an opaque callback).
  */
 
+import type { FileDetailsData, LastCommitInfo } from "../file-details-drawer-types.js";
 import { html, LitElement, nothing } from "../lit.js";
 import type { UISection } from "../ui-section.js";
-import type { FileDetailsData, LastCommitInfo } from "../file-details-drawer-types.js";
 import { formatDate } from "./helpers.js";
 
 export class AnnotDrawerLastCommitSectionElement extends LitElement {
@@ -41,15 +41,17 @@ export class AnnotDrawerLastCommitSectionElement extends LitElement {
       <div class="file-details-row">
         <span class="file-details-row-label">Author</span>
         <span class="file-details-row-value selectable">
-          ${commit.authorAvatarUrl
-            ? html`<img
+          ${
+            commit.authorAvatarUrl
+              ? html`<img
                 class="file-details-avatar"
                 src=${commit.authorAvatarUrl}
                 alt=""
                 width="16"
                 height="16"
               />`
-            : nothing}${commit.authorName}
+              : nothing
+          }${commit.authorName}
         </span>
       </div>
       <div class="file-details-row">
@@ -68,11 +70,13 @@ export class AnnotDrawerLastCommitSectionElement extends LitElement {
           data-tooltip=${commit.messageHeadline}
           aria-label=${commit.messageHeadline}
         >
-          ${commit.url
-            ? html`<a href=${commit.url} target="_blank" rel="noopener noreferrer"
+          ${
+            commit.url
+              ? html`<a href=${commit.url} target="_blank" rel="noopener noreferrer"
                 >${commit.messageHeadline}</a
               >`
-            : commit.messageHeadline}
+              : commit.messageHeadline
+          }
           <code class="file-details-sha">${commit.shortSha}</code>
         </span>
       </div>
@@ -81,10 +85,7 @@ export class AnnotDrawerLastCommitSectionElement extends LitElement {
 }
 
 if (!customElements.get("annot-drawer-last-commit-section")) {
-  customElements.define(
-    "annot-drawer-last-commit-section",
-    AnnotDrawerLastCommitSectionElement,
-  );
+  customElements.define("annot-drawer-last-commit-section", AnnotDrawerLastCommitSectionElement);
 }
 
 declare global {

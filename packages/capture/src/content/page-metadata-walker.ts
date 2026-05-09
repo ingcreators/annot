@@ -112,10 +112,7 @@ export function walkPageMetadata(regionArg: WalkerRegion): WalkerPageMetadata {
     )
       return true;
     if (el.hasAttribute("tabindex") && el.getAttribute("tabindex") !== "-1") return true;
-    if (
-      (el as HTMLElement).isContentEditable &&
-      el.getAttribute("contenteditable") !== "inherit"
-    )
+    if ((el as HTMLElement).isContentEditable && el.getAttribute("contenteditable") !== "inherit")
       return true;
     return false;
   }

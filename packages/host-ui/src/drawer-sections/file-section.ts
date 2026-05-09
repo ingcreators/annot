@@ -13,10 +13,10 @@
  * `deps.getData()` and reassigns the property.
  */
 
-import { html, LitElement, nothing } from "../lit.js";
-import type { UISection } from "../ui-section.js";
 import type { FileDetailsData } from "../file-details-drawer-types.js";
 import { validateFilename } from "../file-details-drawer-types.js";
+import { html, LitElement, nothing } from "../lit.js";
+import type { UISection } from "../ui-section.js";
 import { formatBytes, formatDate } from "./helpers.js";
 
 export class AnnotDrawerFileSectionElement extends LitElement {
@@ -66,13 +66,15 @@ export class AnnotDrawerFileSectionElement extends LitElement {
       ${this.#renderRow("File size", formatBytes(data.fileSizeBytes))}
       ${data.createdAt ? this.#renderRow("Created", formatDate(data.createdAt)) : nothing}
       ${data.updatedAt ? this.#renderRow("Modified", formatDate(data.updatedAt)) : nothing}
-      ${data.sourceUrl
-        ? this.#renderRow("Source", data.sourceUrl, {
-            selectable: true,
-            mono: true,
-            link: true,
-          })
-        : nothing}
+      ${
+        data.sourceUrl
+          ? this.#renderRow("Source", data.sourceUrl, {
+              selectable: true,
+              mono: true,
+              link: true,
+            })
+          : nothing
+      }
     `;
   }
 
@@ -90,8 +92,9 @@ export class AnnotDrawerFileSectionElement extends LitElement {
     return html`
       <div class="file-details-row">
         <span class="file-details-row-label">${label}</span>
-        ${isHttpLink
-          ? html`<a
+        ${
+          isHttpLink
+            ? html`<a
               class=${cls}
               href=${value}
               target="_blank"
@@ -100,7 +103,8 @@ export class AnnotDrawerFileSectionElement extends LitElement {
               aria-label=${value}
               >${value}</a
             >`
-          : html`<span class=${cls} data-tooltip=${value} aria-label=${value}>${value}</span>`}
+            : html`<span class=${cls} data-tooltip=${value} aria-label=${value}>${value}</span>`
+        }
       </div>
     `;
   }

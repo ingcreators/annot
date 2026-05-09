@@ -9,11 +9,8 @@
  * sub-fields are visible.
  */
 
+import { DEFAULT_SETTINGS, type Settings } from "@ingcreators/annot-capture/shared";
 import type { Meta, StoryObj } from "@storybook/web-components-vite";
-import {
-  DEFAULT_SETTINGS,
-  type Settings,
-} from "@ingcreators/annot-capture/shared";
 import "./annot-capture-settings.js";
 import type { CaptureSettingsChangeDetail } from "./annot-capture-settings.js";
 

@@ -46,18 +46,18 @@ import {
   app,
   BrowserWindow,
   desktopCapturer,
+  shell as electronShell,
   globalShortcut,
   ipcMain,
   Menu,
+  type MenuItemConstructorOptions,
   nativeImage,
   screen,
-  shell as electronShell,
   webContents,
-  type MenuItemConstructorOptions,
 } from "electron";
 import { startHttpServer } from "./http-server.js";
 import type { CapturedImage } from "./ipc/browse.js";
-import { registerAllIpcHandlers, type RegisteredIpc } from "./ipc/index.js";
+import { type RegisteredIpc, registerAllIpcHandlers } from "./ipc/index.js";
 import type { CapturerSourceLite, OverlayHandle } from "./ipc/screen-capture.js";
 import { classifyWindowOpenRequest } from "./webview-popup-policy.js";
 
@@ -271,9 +271,7 @@ function loadWinClipboardAddon(): { writeMultiFormat: (formats: unknown) => void
  *  `capture-overlay.html` from the same dist as `index.html` (dev:
  *  Vite serves it; prod: bundled by electron-vite into
  *  `dist-electron/renderer/`). */
-function spawnCaptureOverlay(
-  onClosed: () => void,
-): OverlayHandle {
+function spawnCaptureOverlay(onClosed: () => void): OverlayHandle {
   const primary = screen.getPrimaryDisplay();
   const win = new BrowserWindow({
     width: primary.size.width,
@@ -506,11 +504,7 @@ function buildAppMenu(): Menu {
   };
   const viewMenu: MenuItemConstructorOptions = {
     label: "View",
-    submenu: [
-      { role: "toggleDevTools" },
-      { type: "separator" },
-      { role: "togglefullscreen" },
-    ],
+    submenu: [{ role: "toggleDevTools" }, { type: "separator" }, { role: "togglefullscreen" }],
   };
   const template: MenuItemConstructorOptions[] = [
     ...(isMac ? [{ role: "appMenu" } as MenuItemConstructorOptions] : []),
@@ -548,10 +542,7 @@ async function captureWebContentsById(webContentsId: number): Promise<CapturedIm
   const size = image.getSize();
   let dpr = 1;
   try {
-    const probed = (await wc.executeJavaScript(
-      "window.devicePixelRatio || 1",
-      true,
-    )) as unknown;
+    const probed = (await wc.executeJavaScript("window.devicePixelRatio || 1", true)) as unknown;
     const probedNum = typeof probed === "number" ? probed : Number(probed);
     if (Number.isFinite(probedNum) && probedNum > 0) dpr = probedNum;
   } catch {
@@ -755,9 +746,7 @@ void app.whenReady().then(async () => {
     // packaged bundle's runtime survive its own boot?" question the
     // release workflow's smoke step asks. Quit cleanly so the launcher
     // sees a deterministic exit code 0.
-    console.log(
-      `[smoke] --smoke-test detected; quitting in ${SMOKE_TEST_QUIT_DELAY_MS}ms`,
-    );
+    console.log(`[smoke] --smoke-test detected; quitting in ${SMOKE_TEST_QUIT_DELAY_MS}ms`);
     setTimeout(() => app.quit(), SMOKE_TEST_QUIT_DELAY_MS);
   }
 

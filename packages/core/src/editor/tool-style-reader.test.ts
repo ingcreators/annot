@@ -91,10 +91,7 @@ describe("readUniversalStyleAttrs", () => {
 
   it("prefers `opacity` over `stroke-opacity` for strokeOpacity capture", () => {
     const preset = emptyPreset();
-    readUniversalStyleAttrs(
-      svg("line", { opacity: "0.5", "stroke-opacity": "0.9" }),
-      preset,
-    );
+    readUniversalStyleAttrs(svg("line", { opacity: "0.5", "stroke-opacity": "0.9" }), preset);
     expect(preset.strokeOpacity).toBe(0.5);
   });
 

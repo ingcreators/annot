@@ -48,10 +48,7 @@ export class AnnotToolbarElement extends HTMLElement {
     // Apply the initial orientation class — `attributeChangedCallback`
     // alone misses the case where the attribute is set BEFORE the
     // element is upgraded.
-    this.classList.toggle(
-      "toolbar-vertical",
-      this.getAttribute("orientation") === "vertical",
-    );
+    this.classList.toggle("toolbar-vertical", this.getAttribute("orientation") === "vertical");
   }
 }
 

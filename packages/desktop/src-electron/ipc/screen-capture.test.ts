@@ -21,8 +21,8 @@
 
 import { describe, expect, it, vi } from "vitest";
 import {
-  createScreenCaptureHandlers,
   type CapturerSourceLite,
+  createScreenCaptureHandlers,
   type NativeImageLite,
   type ScreenCaptureDeps,
 } from "./screen-capture.js";
@@ -54,7 +54,9 @@ interface DepsControl {
   getSources: ReturnType<typeof vi.fn>;
   /** The screen source's image — exposed so tests can assert on
    *  the underlying `crop()` call log. */
-  screenImage: NativeImageLite & { _crops: Array<{ x: number; y: number; width: number; height: number }> };
+  screenImage: NativeImageLite & {
+    _crops: Array<{ x: number; y: number; width: number; height: number }>;
+  };
 }
 
 function makeDeps(opts?: {
@@ -71,29 +73,31 @@ function makeDeps(opts?: {
     _crops: Array<{ x: number; y: number; width: number; height: number }>;
   };
 
-  const getSources = vi.fn(async (opts2: {
-    types: Array<"screen" | "window">;
-    thumbnailSize?: { width: number; height: number };
-  }): Promise<CapturerSourceLite[]> => {
-    if (opts2.types.includes("window")) {
-      const list = opts?.windowSources ?? [
-        { id: "window:1:0", name: "Calculator" },
-        { id: "window:2:0", name: "Notepad" },
+  const getSources = vi.fn(
+    async (opts2: {
+      types: Array<"screen" | "window">;
+      thumbnailSize?: { width: number; height: number };
+    }): Promise<CapturerSourceLite[]> => {
+      if (opts2.types.includes("window")) {
+        const list = opts?.windowSources ?? [
+          { id: "window:1:0", name: "Calculator" },
+          { id: "window:2:0", name: "Notepad" },
+        ];
+        return list.map((s) => ({
+          id: s.id,
+          name: s.name,
+          thumbnail: fakeImage(`win-${s.id}`, 800, 600),
+        }));
+      }
+      return [
+        {
+          id: "screen:0:0",
+          name: "Entire Screen",
+          thumbnail: screenImage,
+        },
       ];
-      return list.map((s) => ({
-        id: s.id,
-        name: s.name,
-        thumbnail: fakeImage(`win-${s.id}`, 800, 600),
-      }));
-    }
-    return [
-      {
-        id: "screen:0:0",
-        name: "Entire Screen",
-        thumbnail: screenImage,
-      },
-    ];
-  });
+    },
+  );
 
   const deps: ScreenCaptureDeps = {
     getPrimaryDisplay: () => ({ size: { width: 1920, height: 1080 }, scaleFactor }),
@@ -205,12 +209,12 @@ describe("capture_region", () => {
 
   it("rejects invalid (zero / negative) regions", async () => {
     const handlers = createScreenCaptureHandlers(makeDeps().deps);
-    await expect(
-      handlers.captureRegion({ x: 0, y: 0, width: 0, height: 100 }),
-    ).rejects.toThrow(/invalid/i);
-    await expect(
-      handlers.captureRegion({ x: 0, y: 0, width: 100, height: -1 }),
-    ).rejects.toThrow(/invalid/i);
+    await expect(handlers.captureRegion({ x: 0, y: 0, width: 0, height: 100 })).rejects.toThrow(
+      /invalid/i,
+    );
+    await expect(handlers.captureRegion({ x: 0, y: 0, width: 100, height: -1 })).rejects.toThrow(
+      /invalid/i,
+    );
   });
 });
 

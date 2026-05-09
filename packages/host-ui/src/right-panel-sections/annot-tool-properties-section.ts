@@ -18,8 +18,8 @@
  */
 
 import type { Toolbar } from "@ingcreators/annot-host-ui/toolbar";
-import type { UISection } from "../ui-section.js";
 import { html, LitElement } from "../lit.js";
+import type { UISection } from "../ui-section.js";
 
 export class AnnotRightPanelToolPropertiesSectionElement extends LitElement {
   static override properties = {

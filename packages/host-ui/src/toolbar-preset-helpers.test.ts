@@ -9,10 +9,7 @@
 
 import type { ToolOptions } from "@ingcreators/annot-core/editor/tool-options";
 import { describe, expect, it } from "vitest";
-import {
-  mergePresetForVariantChange,
-  validatePresetForTool,
-} from "./toolbar-preset-helpers.js";
+import { mergePresetForVariantChange, validatePresetForTool } from "./toolbar-preset-helpers.js";
 
 /** Minimal full ToolOptions object — every field required at the
  *  type level gets a sensible default so test fixtures can spread

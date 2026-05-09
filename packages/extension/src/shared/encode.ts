@@ -6,4 +6,4 @@
  * to rewrite import paths in lockstep.
  */
 
-export { encodeCapture, type EncodeResult } from "@ingcreators/annot-capture/shared";
+export { type EncodeResult, encodeCapture } from "@ingcreators/annot-capture/shared";

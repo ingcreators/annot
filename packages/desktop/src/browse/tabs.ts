@@ -466,9 +466,7 @@ export class TabsManager extends EventTarget {
     const tab = this.#stateById.get(id)?.tab;
     if (!tab) return;
     const url = tab.url;
-    this.dispatchEvent(
-      new CustomEvent("detach-requested", { detail: { url } }),
-    );
+    this.dispatchEvent(new CustomEvent("detach-requested", { detail: { url } }));
     this.closeTab(id);
   }
 

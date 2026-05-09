@@ -136,9 +136,7 @@ interface ElectronEntry {
  * `"Inbox"` = top-level folder, `"Inbox/cap.annot.png"` = leaf).
  * `DesktopStore` doesn't change at the Tauri-to-Electron cutover.
  */
-export function createElectronDesktopFs(
-  invoker: ElectronApi = defaultInvoker(),
-): DesktopFs {
+export function createElectronDesktopFs(invoker: ElectronApi = defaultInvoker()): DesktopFs {
   return {
     async readDir(path) {
       try {

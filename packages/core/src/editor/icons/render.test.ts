@@ -47,7 +47,7 @@ describe("renderIconHtml — svg", () => {
 
   it("returns empty string for input that survives sanitisation as something we'd refuse", () => {
     // Plain text that isn't an <svg> root.
-    expect(renderIconHtml(svgIcon("<path d=\"M0 0\"/>"))).toBe("");
+    expect(renderIconHtml(svgIcon('<path d="M0 0"/>'))).toBe("");
   });
 });
 
@@ -78,7 +78,7 @@ describe("renderIconHtml — url", () => {
   });
 
   it("escapes ampersand / quote / less-than in the URL attribute", () => {
-    const out = renderIconHtml(urlIcon("/icons/foo&bar\"baz<.svg"));
+    const out = renderIconHtml(urlIcon('/icons/foo&bar"baz<.svg'));
     expect(out).toContain("&amp;");
     expect(out).toContain("&quot;");
     expect(out).toContain("&lt;");

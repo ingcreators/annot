@@ -72,7 +72,9 @@ describe("pixelToCssSize", () => {
 
 describe("computeDesiredWindowSize", () => {
   it("at DPR=1 with no chrome delta, returns the pixel target verbatim", () => {
-    expect(computeDesiredWindowSize({ width: 1280, height: 720 }, 1, { width: 0, height: 0 })).toEqual({
+    expect(
+      computeDesiredWindowSize({ width: 1280, height: 720 }, 1, { width: 0, height: 0 }),
+    ).toEqual({
       width: 1280,
       height: 720,
     });
@@ -97,9 +99,9 @@ describe("computeDesiredWindowSize", () => {
   it("clamps each dimension to MIN_WINDOW_DIMENSION", () => {
     // Tiny target: 50×50 → CSS 50×50 + 0 chrome → would be 50×50,
     // but clamps up to MIN_WINDOW_DIMENSION on each axis.
-    expect(
-      computeDesiredWindowSize({ width: 50, height: 50 }, 1, { width: 0, height: 0 }),
-    ).toEqual({ width: MIN_WINDOW_DIMENSION, height: MIN_WINDOW_DIMENSION });
+    expect(computeDesiredWindowSize({ width: 50, height: 50 }, 1, { width: 0, height: 0 })).toEqual(
+      { width: MIN_WINDOW_DIMENSION, height: MIN_WINDOW_DIMENSION },
+    );
   });
 
   it("respects an alternative minDim", () => {
@@ -211,8 +213,8 @@ describe("planScrollSegments — stitch dimensions", () => {
 
 import {
   DEFAULT_MIN_LAST_PAGE_CONTENT_PX,
-  planPerPageStep,
   type PerPageStepInput,
+  planPerPageStep,
 } from "./strategy.js";
 
 const stepInput = (over: Partial<PerPageStepInput> = {}): PerPageStepInput => ({

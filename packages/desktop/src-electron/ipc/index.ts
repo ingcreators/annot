@@ -20,11 +20,7 @@
 
 import type { IpcMain } from "electron";
 import { APP_CHANNEL_TO_HANDLER, createAppHandlers } from "./app.js";
-import {
-  BROWSE_CHANNEL_TO_HANDLER,
-  type BrowseDeps,
-  createBrowseHandlers,
-} from "./browse.js";
+import { BROWSE_CHANNEL_TO_HANDLER, type BrowseDeps, createBrowseHandlers } from "./browse.js";
 import {
   CAPTURE_SETTINGS_CHANNEL_TO_HANDLER,
   type CaptureSettingsOptions,
@@ -36,33 +32,29 @@ import {
   createClipboardHandlers,
 } from "./clipboard.js";
 import {
+  createExtensionHandlers,
   EXTENSION_CHANNEL_TO_HANDLER,
   type ExtensionDeps,
-  createExtensionHandlers,
 } from "./extension.js";
-import { FS_CHANNEL_TO_HANDLER, createFsHandlers } from "./fs.js";
+import { createFsHandlers, FS_CHANNEL_TO_HANDLER } from "./fs.js";
 import {
+  createScreenCaptureHandlers,
   SCREEN_CAPTURE_CHANNEL_TO_HANDLER,
   type ScreenCaptureDeps,
   type ScreenCaptureHandlers,
-  createScreenCaptureHandlers,
 } from "./screen-capture.js";
 import {
-  SETTINGS_CHANNEL_TO_HANDLER,
   createSettingsHandlers,
+  SETTINGS_CHANNEL_TO_HANDLER,
   type SettingsHandlerOptions,
 } from "./settings.js";
+import { createShellHandlers, SHELL_CHANNEL_TO_HANDLER, type ShellDeps } from "./shell.js";
 import {
-  SHELL_CHANNEL_TO_HANDLER,
-  type ShellDeps,
-  createShellHandlers,
-} from "./shell.js";
-import {
-  WINDOW_CHANNEL_TO_HANDLER,
   createWindowHandlers,
+  WINDOW_CHANNEL_TO_HANDLER,
   type WindowController,
 } from "./window.js";
-import { XMP_CHANNEL_TO_HANDLER, createXmpHandlers, type XmpHandlerOptions } from "./xmp.js";
+import { createXmpHandlers, XMP_CHANNEL_TO_HANDLER, type XmpHandlerOptions } from "./xmp.js";
 
 export interface RegisterAllOptions {
   /** Absolute path to the library root, already created on disk. */
@@ -107,19 +99,12 @@ export interface RegisteredIpc {
   screenCapture: ScreenCaptureHandlers;
 }
 
-export function registerAllIpcHandlers(
-  ipcMain: IpcMain,
-  opts: RegisterAllOptions,
-): RegisteredIpc {
+export function registerAllIpcHandlers(ipcMain: IpcMain, opts: RegisterAllOptions): RegisteredIpc {
   registerSet(ipcMain, createFsHandlers(opts.libraryRoot), FS_CHANNEL_TO_HANDLER);
   registerSet(ipcMain, createAppHandlers(opts.libraryRoot), APP_CHANNEL_TO_HANDLER);
   registerSet(ipcMain, createSettingsHandlers(opts.settings), SETTINGS_CHANNEL_TO_HANDLER);
   registerSet(ipcMain, createXmpHandlers(opts.xmp), XMP_CHANNEL_TO_HANDLER);
-  registerSet(
-    ipcMain,
-    createWindowHandlers(opts.getMainWindow),
-    WINDOW_CHANNEL_TO_HANDLER,
-  );
+  registerSet(ipcMain, createWindowHandlers(opts.getMainWindow), WINDOW_CHANNEL_TO_HANDLER);
   const screenCapture = createScreenCaptureHandlers(opts.screenCapture);
   registerSet(ipcMain, screenCapture, SCREEN_CAPTURE_CHANNEL_TO_HANDLER);
   registerSet(ipcMain, createClipboardHandlers(opts.clipboard), CLIPBOARD_CHANNEL_TO_HANDLER);

@@ -187,8 +187,7 @@ export class AnnotEditorStatusbarElement extends LitElement {
           }
           const numeric = opt.value;
           const isActive =
-            !this.isFitMode &&
-            Math.round(this.zoomValue * 100) === Math.round(numeric * 100);
+            !this.isFitMode && Math.round(this.zoomValue * 100) === Math.round(numeric * 100);
           return html`
             <button
               type="button"

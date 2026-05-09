@@ -1,3 +1,4 @@
+import type { TextRun } from "@ingcreators/annot-core/desktop-bridge";
 import { coerceToLogicalFamily } from "@ingcreators/annot-core/editor/font-registry";
 import { htmlToRuns, runsToHtml } from "@ingcreators/annot-core/editor/rich-text-mapper";
 import {
@@ -11,7 +12,6 @@ import {
   unwrapBareTextShape,
   wrapBareRectForText,
 } from "@ingcreators/annot-core/editor/text-utils";
-import type { TextRun } from "@ingcreators/annot-core/desktop-bridge";
 import type { CanvasManager } from "../canvas-manager.js";
 import type { History } from "../history.js";
 import { createTextMiniToolbar, type TextMiniToolbarHandle } from "../text-mini-toolbar.js";
@@ -246,10 +246,7 @@ export class TextTool extends ToolBase {
   #findShapeAtPoint(
     px: number,
     py: number,
-  ):
-    | { kind: "bareRect"; rect: SVGRectElement }
-    | { kind: "wrapper"; wrapper: SVGGElement }
-    | null {
+  ): { kind: "bareRect"; rect: SVGRectElement } | { kind: "wrapper"; wrapper: SVGGElement } | null {
     const children = this.canvas.annotations.children;
     for (let i = children.length - 1; i >= 0; i--) {
       const el = children[i] as SVGElement;
@@ -318,7 +315,8 @@ export class TextTool extends ToolBase {
     // overlay's own dashed border is the only edit-mode chrome
     // the user sees.
     const shapeKind = g.getAttribute("data-shape-kind");
-    const wrapperHasVisibleBody = isTextOnShape(g) || shapeKind === "sticky" || shapeKind === "callout";
+    const wrapperHasVisibleBody =
+      isTextOnShape(g) || shapeKind === "sticky" || shapeKind === "callout";
     if (wrapperHasVisibleBody) {
       const existingText = g.querySelector("text");
       if (existingText instanceof SVGElement) existingText.style.display = "none";
@@ -355,7 +353,7 @@ export class TextTool extends ToolBase {
     this.#editing = true;
 
     const fontSize = existing?.fontSize || this.options.fontSize;
-    const fontFamily = existing?.fontFamily || (coerceToLogicalFamily(this.options.fontFamily));
+    const fontFamily = existing?.fontFamily || coerceToLogicalFamily(this.options.fontFamily);
     const color = existing?.color || this.options.strokeColor;
     const w = existing?.width || DEFAULT_WIDTH;
     const h = existing?.height || DEFAULT_HEIGHT;
@@ -384,8 +382,7 @@ export class TextTool extends ToolBase {
     const hAnchor: TextAnchor = existing?.textAnchor ?? this.options.textAnchor ?? "start";
     const vAnchor: TextVerticalAnchor =
       existing?.textVerticalAnchor ?? this.options.textVerticalAnchor ?? "top";
-    const textAlign =
-      hAnchor === "middle" ? "center" : hAnchor === "end" ? "right" : "left";
+    const textAlign = hAnchor === "middle" ? "center" : hAnchor === "end" ? "right" : "left";
     const justifyContent =
       vAnchor === "middle" ? "center" : vAnchor === "bottom" ? "flex-end" : "flex-start";
 
@@ -687,7 +684,7 @@ export class TextTool extends ToolBase {
       wrapper.getAttribute("data-font-size") || String(this.options.fontSize),
     );
     const fontFamily =
-      wrapper.getAttribute("data-font-family") || (coerceToLogicalFamily(this.options.fontFamily));
+      wrapper.getAttribute("data-font-family") || coerceToLogicalFamily(this.options.fontFamily);
     const color = wrapper.getAttribute("data-color") || this.options.strokeColor;
 
     wrapper.setAttribute("data-font-size", String(fontSize));
@@ -706,5 +703,4 @@ export class TextTool extends ToolBase {
       new CustomEvent("annot:text-edit-end", { detail: { target: wrapper }, bubbles: false }),
     );
   }
-
 }

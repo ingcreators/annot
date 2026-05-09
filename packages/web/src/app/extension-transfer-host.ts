@@ -138,8 +138,7 @@ export class ExtensionTransferHost {
   async transferAndOpen(record: ImageRecord, extPath: string): Promise<void> {
     // Respect the user's currently selected storage
     const targetStore =
-      this.deps.getStorage() ||
-      new (await import("../storage/browser-store.js")).BrowserStore();
+      this.deps.getStorage() || new (await import("../storage/browser-store.js")).BrowserStore();
 
     let w = record.width;
     let h = record.height;
@@ -176,13 +175,15 @@ export class ExtensionTransferHost {
 
     pushRoute(editUrl(getStorageMode(), savedPath));
 
-    this.deps.getEditorSession().setupEditor(
-      record.originalDataUrl,
-      w,
-      h,
-      record.annotationsSvg || undefined,
-      record.pageMetadata,
-    );
+    this.deps
+      .getEditorSession()
+      .setupEditor(
+        record.originalDataUrl,
+        w,
+        h,
+        record.annotationsSvg || undefined,
+        record.pageMetadata,
+      );
 
     deleteExtensionImage(extPath);
   }

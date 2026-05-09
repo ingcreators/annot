@@ -15,10 +15,7 @@
 
 import type { Meta, StoryObj } from "@storybook/web-components-vite";
 import "./annot-save-menu.js";
-import type {
-  AnnotSaveMenuElement,
-  SaveMenuItem,
-} from "./annot-save-menu.js";
+import type { AnnotSaveMenuElement, SaveMenuItem } from "./annot-save-menu.js";
 
 interface Args {
   items: SaveMenuItem[];
@@ -68,10 +65,7 @@ const meta: Meta<Args> = {
       const el = document.createElement("annot-save-menu");
       el.items = args.items;
       el.actions = Object.fromEntries(
-        args.items.map((it) => [
-          it.id,
-          () => console.log("[story] save-menu action:", it.id),
-        ]),
+        args.items.map((it) => [it.id, () => console.log("[story] save-menu action:", it.id)]),
       );
       el.anchor = trigger;
       document.body.appendChild(el);

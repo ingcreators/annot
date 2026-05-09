@@ -7,28 +7,6 @@
 // See PRODUCT_DIRECTION.md principle P2 — headless independence is
 // a first-class concern for the future `@ingcreators/annot-annotator`.
 
-// ╭─ Headless-safe ─────────────────────────────────────────────────╮
-// │ Pure strings / constants / Element-taking helpers with no       │
-// │ reliance on browser globals. Also listed in `src/headless.ts`.  │
-// ╰─────────────────────────────────────────────────────────────────╯
-export {
-  ANNOT_SVG_VERSION,
-  ANNOT_SVG_VERSION_ATTR,
-  ANNOT_SVG_VERSION_UNSTAMPED,
-  getAnnotVersionFromString,
-  readAnnotVersion,
-  stampAnnotVersion,
-} from "./svg-format.js";
-export {
-  applyInverseAffine,
-  clampZoom,
-  computeFitZoom,
-  computeRenderedSize,
-  DEFAULT_MAX_ZOOM,
-  DEFAULT_MIN_ZOOM,
-  FIT_VIEW_PADDING,
-  type AffineMatrix,
-} from "./viewport-math.js";
 export {
   createHistoryCore,
   DEFAULT_HISTORY_DEPTH,
@@ -52,29 +30,35 @@ export {
 export {
   computeSnap,
   cursorForAngle,
-  rotateAround,
   type Rect,
+  rotateAround,
   type SnapGuide,
   type SnapInput,
   type SnapResult,
 } from "./selection-geometry.js";
+// ╭─ Headless-safe ─────────────────────────────────────────────────╮
+// │ Pure strings / constants / Element-taking helpers with no       │
+// │ reliance on browser globals. Also listed in `src/headless.ts`.  │
+// ╰─────────────────────────────────────────────────────────────────╯
+export {
+  ANNOT_SVG_VERSION,
+  ANNOT_SVG_VERSION_ATTR,
+  ANNOT_SVG_VERSION_UNSTAMPED,
+  getAnnotVersionFromString,
+  readAnnotVersion,
+  stampAnnotVersion,
+} from "./svg-format.js";
+export {
+  svgAnnotationsToShapes,
+  svgElementToAnnotationShape,
+  transformOf,
+  translateOf,
+} from "./svg-to-annotation-shapes.js";
 export {
   createMockToolSurface,
   type MockToolSurface,
   type ToolDOMSurface,
 } from "./tool-lifecycle.js";
-export {
-  normalizeVariantSideFields,
-  TOOL_PANEL_EXTRA_CONTROL_IDS,
-  TOOL_REGISTRY,
-  TOOL_REGISTRY_IDS,
-  type ToolPanelControlDef,
-  type ToolPanelExtraControlId,
-  type ToolPanelSection,
-  type ToolRegistryEntry,
-  type ToolRegistryId,
-  type ToolRegistryVariant,
-} from "./tool-registry.js";
 export {
   selectionDefMetadata,
   TOOL_PANEL_ADAPTER_IDS,
@@ -89,14 +73,30 @@ export {
   presetFromWire,
   presetToWire,
 } from "./tool-preset-serde.js";
+export {
+  normalizeVariantSideFields,
+  TOOL_PANEL_EXTRA_CONTROL_IDS,
+  TOOL_REGISTRY,
+  TOOL_REGISTRY_IDS,
+  type ToolPanelControlDef,
+  type ToolPanelExtraControlId,
+  type ToolPanelSection,
+  type ToolRegistryEntry,
+  type ToolRegistryId,
+  type ToolRegistryVariant,
+} from "./tool-registry.js";
 export { readUniversalStyleAttrs, resolveStyleReadSource } from "./tool-style-reader.js";
 export { writeUniversalStyleAttrs } from "./tool-style-writer.js";
 export {
-  svgAnnotationsToShapes,
-  svgElementToAnnotationShape,
-  transformOf,
-  translateOf,
-} from "./svg-to-annotation-shapes.js";
+  type AffineMatrix,
+  applyInverseAffine,
+  clampZoom,
+  computeFitZoom,
+  computeRenderedSize,
+  DEFAULT_MAX_ZOOM,
+  DEFAULT_MIN_ZOOM,
+  FIT_VIEW_PADDING,
+} from "./viewport-math.js";
 
 // ╭─ Editor UI (browser / DOM required) ────────────────────────────╮
 // │ These hit `document` / `window`, subscribe to pointer events,   │

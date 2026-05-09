@@ -95,9 +95,7 @@ export function validatePresetForTool(preset: ToolOptions, toolId: string): stri
   if (!meta?.variants || !meta.variantField) return errors;
 
   // The variant-defining field must hold a value the toolbar advertises.
-  const variantValue = (preset as unknown as Record<string, unknown>)[
-    meta.variantField as string
-  ];
+  const variantValue = (preset as unknown as Record<string, unknown>)[meta.variantField as string];
   if (variantValue !== undefined) {
     const known = meta.variants.some((v) => v.value === variantValue);
     if (!known) {

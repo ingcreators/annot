@@ -1,9 +1,9 @@
 import {
   applyMosaic,
-  cropRect,
-  createEncodeWorkerPool,
-  stitchSegments,
   type BatchItem,
+  createEncodeWorkerPool,
+  cropRect,
+  stitchSegments,
 } from "@ingcreators/annot-capture/encode";
 import { logger } from "../logger.js";
 
@@ -13,8 +13,7 @@ import { logger } from "../logger.js";
 // `self.onmessage` body); keeping a local entry file is what lets
 // Vite emit a chunk co-located with this offscreen entry.
 const pool = createEncodeWorkerPool({
-  spawnWorker: () =>
-    new Worker(new URL("./encode-worker.ts", import.meta.url), { type: "module" }),
+  spawnWorker: () => new Worker(new URL("./encode-worker.ts", import.meta.url), { type: "module" }),
   log: logger.debug,
 });
 

@@ -18,16 +18,14 @@
  * private-state coupling.
  */
 
-import type { CanvasManager } from "@ingcreators/annot-editor";
-import type { History } from "@ingcreators/annot-editor";
-import type { SelectionManager } from "@ingcreators/annot-editor";
+import { TOOL_REGISTRY } from "@ingcreators/annot-core/editor";
 import type { ToolOptions } from "@ingcreators/annot-core/editor/tool-options";
+import { toggleFlip } from "@ingcreators/annot-core/editor/transform-utils";
+import type { CanvasManager, History, SelectionManager } from "@ingcreators/annot-editor";
 import {
   type CanvasMenuItem,
   openCanvasContextMenu,
 } from "@ingcreators/annot-editor/canvas-context-menu";
-import { toggleFlip } from "@ingcreators/annot-core/editor/transform-utils";
-import { TOOL_REGISTRY } from "@ingcreators/annot-core/editor";
 import type { ToolDef } from "./tool-factories.js";
 
 /** A host-registered extra-tool entry (e.g. Scratchpad) surfaced on

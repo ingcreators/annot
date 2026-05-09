@@ -68,8 +68,7 @@ function makeFullCanvas(): {
     svg,
     annotations,
     uiOverlay,
-    svgPoint: (e: { clientX: number; clientY: number }) =>
-      new DOMPoint(e.clientX, e.clientY),
+    svgPoint: (e: { clientX: number; clientY: number }) => new DOMPoint(e.clientX, e.clientY),
   } as unknown as CanvasManager;
   const history = { save } as unknown as History;
   return { canvas, svg, annotations, uiOverlay, history, save };
@@ -170,7 +169,7 @@ afterEach(() => {
 });
 
 describe("TextTool — fresh draw via onPointerDown", () => {
-  it("appends a new <g data-type=\"shape\"> to canvas.annotations at the click point", () => {
+  it('appends a new <g data-type="shape"> to canvas.annotations at the click point', () => {
     const { canvas, annotations } = makeFullCanvas();
     const tool = new TextTool(canvas, makeHistory(), makeOptions());
     tool.onPointerDown(pointerEvent(), new DOMPoint(50, 100));
@@ -341,7 +340,9 @@ describe("TextTool — dblclick handler", () => {
     new TextTool(canvas, makeHistory(), makeOptions());
     makeStickyWrapper(annotations); // wrapper at (10,20)-(110,80)
     // Point (5, 5) is outside the wrapper bbox.
-    svg.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, cancelable: true, clientX: 5, clientY: 5 }));
+    svg.dispatchEvent(
+      new MouseEvent("dblclick", { bubbles: true, cancelable: true, clientX: 5, clientY: 5 }),
+    );
     expect(uiOverlay.querySelectorAll("foreignObject").length).toBe(0);
   });
 });
@@ -379,7 +380,12 @@ describe("TextTool — Ctrl+B / Ctrl+I / Ctrl+U formatting shortcuts", () => {
     await flushFrames();
     const ce = uiOverlay.querySelector('[contenteditable="true"]') as HTMLElement;
     const exec = vi.spyOn(document, "execCommand");
-    const ev = new KeyboardEvent("keydown", { key: "b", ctrlKey: true, bubbles: true, cancelable: true });
+    const ev = new KeyboardEvent("keydown", {
+      key: "b",
+      ctrlKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
     ce.dispatchEvent(ev);
     expect(exec).toHaveBeenCalledWith("bold");
     expect(ev.defaultPrevented).toBe(true);

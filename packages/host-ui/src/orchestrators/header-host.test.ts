@@ -72,10 +72,9 @@ function buildDeps(state: Partial<DepsState> = {}): {
     pushEditRoute: state.pushEditRoute,
     collectExternalLinks:
       state.collectExternalLinks ??
-      (vi.fn<HeaderHostDeps["collectExternalLinks"]>().mockReturnValue([])),
+      vi.fn<HeaderHostDeps["collectExternalLinks"]>().mockReturnValue([]),
     showGallery:
-      state.showGallery ??
-      (vi.fn<HeaderHostDeps["showGallery"]>().mockResolvedValue(undefined)),
+      state.showGallery ?? vi.fn<HeaderHostDeps["showGallery"]>().mockResolvedValue(undefined),
     openFile: state.openFile,
   };
 
@@ -95,8 +94,7 @@ function buildDeps(state: Partial<DepsState> = {}): {
     setCurrentFolderPath: (path) => {
       s.folderPath = path;
     },
-    getFileDetailsDrawer: () =>
-      s.drawer as unknown as AnnotFileDetailsDrawerElement | null,
+    getFileDetailsDrawer: () => s.drawer as unknown as AnnotFileDetailsDrawerElement | null,
     getToolbar: () => null,
     getImageSize: () => ({ width: 800, height: 600 }),
     showGallery: s.showGallery,
@@ -278,11 +276,11 @@ describe("HeaderHost.populateLastCommit", () => {
     // Resolve the fetch — but since current path no longer matches PathA,
     // the patch should be skipped.
     resolveFetch({
-        authorName: "alice",
-        messageHeadline: "stale",
-        date: "2026-01-01T00:00:00Z",
-        shortSha: "deadbee",
-      } as LastCommitInfo);
+      authorName: "alice",
+      messageHeadline: "stale",
+      date: "2026-01-01T00:00:00Z",
+      shortSha: "deadbee",
+    } as LastCommitInfo);
     await populating;
     expect(drawer.setLastCommit).not.toHaveBeenCalled();
   });

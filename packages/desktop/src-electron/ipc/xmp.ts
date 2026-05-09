@@ -84,12 +84,7 @@ export interface XmpHandlerOptions {
 export function createXmpHandlers(opts: XmpHandlerOptions): XmpHandlers {
   return {
     async saveWithXmp(input) {
-      const xmpXml = buildXmp(
-        input.annotationsSvg,
-        input.width,
-        input.height,
-        input.tags ?? "",
-      );
+      const xmpXml = buildXmp(input.annotationsSvg, input.width, input.height, input.tags ?? "");
       const xmpBytes = new TextEncoder().encode(xmpXml);
       const imgBytes = base64ToBytes(input.renderedImageB64);
       // The Rust impl runs the original through
@@ -135,10 +130,7 @@ export function createXmpHandlers(opts: XmpHandlerOptions): XmpHandlers {
 // ---- XMP XML build / parse ──────────────────────────────────────
 
 function buildXmp(annotationsSvg: string, width: number, height: number, tags: string): string {
-  const tagsLine =
-    !tags || tags === "{}"
-      ? ""
-      : `\n      <${XMP_NS}:tags>${tags}</${XMP_NS}:tags>`;
+  const tagsLine = !tags || tags === "{}" ? "" : `\n      <${XMP_NS}:tags>${tags}</${XMP_NS}:tags>`;
   return `<?xpacket begin="\\u{feff}" id="W5M0MpCehiHzreSzNTczkc9d"?>
 <x:xmpmeta xmlns:x="adobe:ns:meta/">
   <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
@@ -189,12 +181,7 @@ function u16be(n: number): Uint8Array {
 }
 
 function u32be(n: number): Uint8Array {
-  return new Uint8Array([
-    (n >>> 24) & 0xff,
-    (n >>> 16) & 0xff,
-    (n >>> 8) & 0xff,
-    n & 0xff,
-  ]);
+  return new Uint8Array([(n >>> 24) & 0xff, (n >>> 16) & 0xff, (n >>> 8) & 0xff, n & 0xff]);
 }
 
 function readU16be(data: Uint8Array, offset: number): number {
@@ -213,11 +200,7 @@ function readU32be(data: Uint8Array, offset: number): number {
 
 function startsWithPngSignature(data: Uint8Array): boolean {
   return (
-    data.length >= 4 &&
-    data[0] === 0x89 &&
-    data[1] === 0x50 &&
-    data[2] === 0x4e &&
-    data[3] === 0x47
+    data.length >= 4 && data[0] === 0x89 && data[1] === 0x50 && data[2] === 0x4e && data[3] === 0x47
   );
 }
 
@@ -270,12 +253,7 @@ function buildApp2Segments(data: Uint8Array): Uint8Array {
     const start = i * maxChunk;
     const end = Math.min(start + maxChunk, data.length);
     const chunk = data.subarray(start, end);
-    const payload = concat(
-      ANNOT_APP2_PREFIX,
-      u16be(i),
-      u16be(totalChunks),
-      chunk,
-    );
+    const payload = concat(ANNOT_APP2_PREFIX, u16be(i), u16be(totalChunks), chunk);
     parts.push(buildJpegSegment(0xe2, payload));
   }
   return concat(...parts);
@@ -430,12 +408,7 @@ function writePngWithMetadata(
   const cleaned = removePngMetadata(pngData);
   // IEND is the last 12 bytes (length(4) + type(4) + zero data + crc(4)).
   const insertPos = cleaned.length - 12;
-  return concat(
-    cleaned.subarray(0, insertPos),
-    itxtChunk,
-    origChunk,
-    cleaned.subarray(insertPos),
-  );
+  return concat(cleaned.subarray(0, insertPos), itxtChunk, origChunk, cleaned.subarray(insertPos));
 }
 
 function readPngXmp(data: Uint8Array): string | null {
@@ -458,7 +431,10 @@ function readPngXmp(data: Uint8Array): string | null {
     if (chunkEnd > data.length) break;
 
     if (bytesEqual(chunkType, iTXt) && startsWith(data, chunkDataStart, PNG_XMP_KEYWORD)) {
-      const after = data.subarray(chunkDataStart + PNG_XMP_KEYWORD.length, chunkDataStart + chunkLen);
+      const after = data.subarray(
+        chunkDataStart + PNG_XMP_KEYWORD.length,
+        chunkDataStart + chunkLen,
+      );
       // Skip the four nulls (keyword-terminator + compressionFlag +
       // compressionMethod + language + translatedKeyword) — total
       // 5 nulls; the loop counts the FIRST four and starts the XMP

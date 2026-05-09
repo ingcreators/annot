@@ -761,7 +761,10 @@ Before declaring a feature done:
       for a scoped change)
 - [ ] `pnpm test` passes — note the pass count in the commit's
       `Verified:` paragraph
-- [ ] `pnpm lint` (Biome) reports **0 findings**; CI blocks on this
+- [ ] `pnpm lint` (Biome `check` — linter + formatter + import-sort
+      assist) reports **0 findings**; CI blocks on this. Run
+      `pnpm lint:fix` to apply every auto-fix in one shot, or
+      `pnpm format` for formatter-only.
 - [ ] `pnpm --filter <pkg> build` passes for every package whose
       source changed (CI builds core / web / extension; desktop is
       opt-in)

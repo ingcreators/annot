@@ -31,8 +31,8 @@ import { createPageElementsSection } from "./annot-page-elements-section.js";
 import "./annot-selection-properties-section.js";
 import { createSelectionPropertiesSection } from "./annot-selection-properties-section.js";
 import "./annot-tool-properties-section.js";
-import { createToolPropertiesSection } from "./annot-tool-properties-section.js";
 import { BUILTIN_RIGHT_PANEL_SECTION_IDS } from "../right-panel.js";
+import { createToolPropertiesSection } from "./annot-tool-properties-section.js";
 
 function fakeCtx(overrides: Partial<UISectionContext> = {}): UISectionContext {
   return {

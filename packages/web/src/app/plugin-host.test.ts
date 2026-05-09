@@ -14,9 +14,9 @@ import { builtinIcon } from "@ingcreators/annot-core";
 import type { StorageProvider } from "@ingcreators/annot-core/storage";
 import { describe, expect, it, vi } from "vitest";
 import {
-  PluginHost,
   type AnnotPlugin,
   type ExternalLink,
+  PluginHost,
   type SidebarTab,
   type StorageRegistration,
   type UISection,
@@ -340,25 +340,28 @@ describe("PluginHost", () => {
       consoleErrorSpy.mockRestore();
     });
 
-    it.each(["browser", "device", "googledrive", "github", "extension"])(
-      "rejects collision with built-in mode %s",
-      (builtin) => {
-        const host = new PluginHost();
-        // Bypass `registerAll`'s error isolation by calling the
-        // ctx method directly via a captured reference — gives us
-        // a clean `expect(...).toThrow` assertion.
-        let captured: ((reg: StorageRegistration) => void) | undefined;
-        host.registerAll([
-          {
-            name: "capture",
-            register(ctx) {
-              captured = ctx.registerStorage;
-            },
+    it.each([
+      "browser",
+      "device",
+      "googledrive",
+      "github",
+      "extension",
+    ])("rejects collision with built-in mode %s", (builtin) => {
+      const host = new PluginHost();
+      // Bypass `registerAll`'s error isolation by calling the
+      // ctx method directly via a captured reference — gives us
+      // a clean `expect(...).toThrow` assertion.
+      let captured: ((reg: StorageRegistration) => void) | undefined;
+      host.registerAll([
+        {
+          name: "capture",
+          register(ctx) {
+            captured = ctx.registerStorage;
           },
-        ]);
-        expect(() => captured!(fakeStorageReg(builtin))).toThrow(/collides with a built-in/);
-      },
-    );
+        },
+      ]);
+      expect(() => captured!(fakeStorageReg(builtin))).toThrow(/collides with a built-in/);
+    });
 
     it("throws on duplicate plugin mode (collision with previously-registered plugin)", () => {
       const host = new PluginHost();
@@ -394,9 +397,7 @@ describe("PluginHost", () => {
       const reg = fakeStorageReg("cloud", 25, {
         connect: async () => fakeStore,
       });
-      host.registerAll([
-        { name: "cloud", register: (ctx) => ctx.registerStorage(reg) },
-      ]);
+      host.registerAll([{ name: "cloud", register: (ctx) => ctx.registerStorage(reg) }]);
       const back = host.findStorageRegistration("cloud");
       const result = await back!.connect({ forcePicker: false });
       expect(result).toBe(fakeStore);
@@ -407,9 +408,7 @@ describe("PluginHost", () => {
     it("registers a tab and resolves it via findSidebarTab", () => {
       const host = new PluginHost();
       const tab = fakeTab("recent", { priority: 10 });
-      host.registerAll([
-        { name: "p", register: (ctx) => ctx.addSidebarTab(tab) },
-      ]);
+      host.registerAll([{ name: "p", register: (ctx) => ctx.addSidebarTab(tab) }]);
       expect(host.findSidebarTab("recent")).toEqual(tab);
     });
 
@@ -560,18 +559,14 @@ describe("PluginHost", () => {
     it("registers a drawer section and resolves it via findDrawerSection", () => {
       const host = new PluginHost();
       const section = fakeSection("cloud.comments", { priority: 25 });
-      host.registerAll([
-        { name: "cloud", register: (ctx) => ctx.addDrawerSection(section) },
-      ]);
+      host.registerAll([{ name: "cloud", register: (ctx) => ctx.addDrawerSection(section) }]);
       expect(host.findDrawerSection("cloud.comments")).toBe(section);
     });
 
     it("registers a right-panel section and resolves it via findRightPanelSection", () => {
       const host = new PluginHost();
       const section = fakeSection("cloud.team-presence");
-      host.registerAll([
-        { name: "cloud", register: (ctx) => ctx.addRightPanelSection(section) },
-      ]);
+      host.registerAll([{ name: "cloud", register: (ctx) => ctx.addRightPanelSection(section) }]);
       expect(host.findRightPanelSection("cloud.team-presence")).toBe(section);
     });
 

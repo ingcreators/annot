@@ -191,11 +191,7 @@ export function createMockDesktopFs(libraryRoot: string = ROOT): DesktopFs {
       // Mirror Node fs.rename: replacing an existing FILE is allowed
       // (overwrites silently); replacing a non-empty directory rejects.
       const existing = toParent.children.get(toLeaf);
-      if (
-        existing &&
-        existing.kind === "directory" &&
-        existing.children.size > 0
-      ) {
+      if (existing && existing.kind === "directory" && existing.children.size > 0) {
         throw new Error(`ENOTEMPTY: ${to}`);
       }
 

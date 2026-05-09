@@ -30,10 +30,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 // on stylesheet files), so we fall back to a direct filesystem
 // read. Vitest runs from the repo root (`process.cwd()`); resolve
 // relative to that.
-const editorCss = readFileSync(
-  resolve(process.cwd(), "packages/core/styles/editor.css"),
-  "utf8",
-);
+const editorCss = readFileSync(resolve(process.cwd(), "packages/core/styles/editor.css"), "utf8");
+
 import {
   applyPersistedTheme,
   clearThemeOverrides,
@@ -119,10 +117,7 @@ afterEach(() => {
 
 describe("THEME_TOKEN_NAMES <-> editor.css symmetry", () => {
   const cssDarkTokens = extractTokenNamesFromRootBlock(editorCss, ":root");
-  const cssLightTokens = extractTokenNamesFromRootBlock(
-    editorCss,
-    ":root.light",
-  );
+  const cssLightTokens = extractTokenNamesFromRootBlock(editorCss, ":root.light");
   const tsTokens = new Set<string>(THEME_TOKEN_NAMES);
 
   it(":root and :root.light declare the same token set", () => {
@@ -149,40 +144,28 @@ describe("THEME_TOKEN_NAMES <-> editor.css symmetry", () => {
 describe("setThemeOverrides", () => {
   it("writes inline custom properties on <html>", () => {
     setThemeOverrides({ accent: "#ff00aa", "bg-primary": "#101010" });
-    expect(document.documentElement.style.getPropertyValue("--annot-accent")).toBe(
-      "#ff00aa",
-    );
-    expect(
-      document.documentElement.style.getPropertyValue("--annot-bg-primary"),
-    ).toBe("#101010");
+    expect(document.documentElement.style.getPropertyValue("--annot-accent")).toBe("#ff00aa");
+    expect(document.documentElement.style.getPropertyValue("--annot-bg-primary")).toBe("#101010");
   });
 
   it("merges instead of replacing", () => {
     setThemeOverrides({ accent: "#aaa" });
     setThemeOverrides({ "bg-primary": "#bbb" });
-    expect(document.documentElement.style.getPropertyValue("--annot-accent")).toBe(
-      "#aaa",
-    );
-    expect(
-      document.documentElement.style.getPropertyValue("--annot-bg-primary"),
-    ).toBe("#bbb");
+    expect(document.documentElement.style.getPropertyValue("--annot-accent")).toBe("#aaa");
+    expect(document.documentElement.style.getPropertyValue("--annot-bg-primary")).toBe("#bbb");
   });
 
   it("treats undefined / empty string as a clear", () => {
     setThemeOverrides({ accent: "#aaa" });
     setThemeOverrides({ accent: "" });
-    expect(document.documentElement.style.getPropertyValue("--annot-accent")).toBe(
-      "",
-    );
+    expect(document.documentElement.style.getPropertyValue("--annot-accent")).toBe("");
   });
 
   it("ignores unknown token names", () => {
     setThemeOverrides({
       "totally-not-a-token": "#ff0000",
     } as unknown as Parameters<typeof setThemeOverrides>[0]);
-    expect(
-      document.documentElement.style.getPropertyValue("--totally-not-a-token"),
-    ).toBe("");
+    expect(document.documentElement.style.getPropertyValue("--totally-not-a-token")).toBe("");
   });
 
   it("persists overrides to localStorage", () => {
@@ -198,15 +181,9 @@ describe("clearThemeOverrides", () => {
   it("removes inline styles + storage entry", () => {
     setThemeOverrides({ accent: "#dd00dd", "bg-primary": "#101010" });
     clearThemeOverrides();
-    expect(document.documentElement.style.getPropertyValue("--annot-accent")).toBe(
-      "",
-    );
-    expect(
-      document.documentElement.style.getPropertyValue("--annot-bg-primary"),
-    ).toBe("");
-    expect(
-      globalThis.localStorage.getItem(THEME_OVERRIDES_STORAGE_KEY),
-    ).toBeNull();
+    expect(document.documentElement.style.getPropertyValue("--annot-accent")).toBe("");
+    expect(document.documentElement.style.getPropertyValue("--annot-bg-primary")).toBe("");
+    expect(globalThis.localStorage.getItem(THEME_OVERRIDES_STORAGE_KEY)).toBeNull();
   });
 });
 
@@ -238,20 +215,13 @@ describe("applyPersistedTheme", () => {
     // Simulate a reload: drop in-memory caches, scrub the DOM,
     // then re-boot via applyPersistedTheme.
     document.documentElement.removeAttribute("style");
-    expect(document.documentElement.style.getPropertyValue("--annot-accent")).toBe(
-      "",
-    );
+    expect(document.documentElement.style.getPropertyValue("--annot-accent")).toBe("");
     applyPersistedTheme();
-    expect(document.documentElement.style.getPropertyValue("--annot-accent")).toBe(
-      "#cc00ff",
-    );
+    expect(document.documentElement.style.getPropertyValue("--annot-accent")).toBe("#cc00ff");
   });
 
   it("survives malformed JSON in storage without throwing", () => {
-    globalThis.localStorage.setItem(
-      THEME_OVERRIDES_STORAGE_KEY,
-      "{not valid json",
-    );
+    globalThis.localStorage.setItem(THEME_OVERRIDES_STORAGE_KEY, "{not valid json");
     expect(() => applyPersistedTheme()).not.toThrow();
     expect(getThemeOverrides()).toEqual({});
   });

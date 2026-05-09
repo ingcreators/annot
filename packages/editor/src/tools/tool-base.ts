@@ -25,6 +25,7 @@ export type {
   TextVariant,
   ToolOptions,
 } from "@ingcreators/annot-core/editor/tool-options";
+
 import type { ToolOptions } from "@ingcreators/annot-core/editor/tool-options";
 
 const SVG_NS = "http://www.w3.org/2000/svg";

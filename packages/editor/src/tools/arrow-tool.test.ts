@@ -24,7 +24,7 @@ import type { ToolOptions } from "@ingcreators/annot-core/editor/tool-options";
 import { describe, expect, it, vi } from "vitest";
 import type { CanvasManager } from "../canvas-manager.js";
 import type { History } from "../history.js";
-import { applyArrowHead, ArrowTool, detectArrowEnds } from "./arrow-tool.js";
+import { ArrowTool, applyArrowHead, detectArrowEnds } from "./arrow-tool.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -62,7 +62,7 @@ function pointerEvent(): PointerEvent {
 }
 
 describe("ArrowTool — pointerdown setup", () => {
-  it("attaches a <g data-type=\"arrow\"> with shared stroke attributes from options", () => {
+  it('attaches a <g data-type="arrow"> with shared stroke attributes from options', () => {
     const { canvas, annotations } = makeCanvas();
     const { history } = makeHistory();
     const tool = new ArrowTool(

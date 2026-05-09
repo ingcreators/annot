@@ -11,8 +11,7 @@
  */
 
 import { moveAnnotationElement } from "@ingcreators/annot-core/editor/bake-translate";
-import type { CanvasManager } from "@ingcreators/annot-editor";
-import type { History } from "@ingcreators/annot-editor";
+import type { CanvasManager, History } from "@ingcreators/annot-editor";
 import { ToolBase, type ToolOptions } from "@ingcreators/annot-editor";
 import { parseStoredItem } from "./scratchpad-utils.js";
 

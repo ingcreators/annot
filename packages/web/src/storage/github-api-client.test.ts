@@ -79,9 +79,7 @@ describe("GitHubApiClient.request — error mapping", () => {
   });
 
   it("flags 409 responses as conflicts", async () => {
-    const fetchImpl = scriptFetch([
-      { status: 409, body: JSON.stringify({ message: "Conflict" }) },
-    ]);
+    const fetchImpl = scriptFetch([{ status: 409, body: JSON.stringify({ message: "Conflict" }) }]);
     const client = createGitHubApiClient("tok-1", { fetchImpl });
     await expect(client.request("https://api.github.com/x")).rejects.toMatchObject({
       githubError: true,

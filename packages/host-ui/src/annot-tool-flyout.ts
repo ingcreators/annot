@@ -77,9 +77,7 @@ export class AnnotToolFlyoutElement extends LitElement {
     const isColor = chip.color !== undefined;
     const cls = isColor
       ? `tool-flyout-color-chip${isActive ? " active" : ""}`
-      : `tool-flyout-chip${chip.svg ? " tool-flyout-chip-svg" : ""}${
-          isActive ? " active" : ""
-        }`;
+      : `tool-flyout-chip${chip.svg ? " tool-flyout-chip-svg" : ""}${isActive ? " active" : ""}`;
     const onClick = () => {
       this.dispatchEvent(
         new CustomEvent<ChipSelectDetail>("chip-select", {

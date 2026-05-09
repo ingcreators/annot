@@ -12,8 +12,8 @@
 
 import type { Meta, StoryObj } from "@storybook/web-components-vite";
 import "./file-section.js";
-import { createDrawerSectionFrame } from "./helpers.js";
 import type { FileDetailsData } from "../file-details-drawer-types.js";
+import { createDrawerSectionFrame } from "./helpers.js";
 
 interface Args {
   filename: string;

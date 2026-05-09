@@ -45,8 +45,8 @@
  *     first-time seeds live in one place.
  */
 
-import type { ToolOptions } from "@ingcreators/annot-core/editor/tool-options";
 import { HIGHLIGHT_COLORS, TOOL_REGISTRY } from "@ingcreators/annot-core/editor";
+import type { ToolOptions } from "@ingcreators/annot-core/editor/tool-options";
 
 /** Build the per-tool initial preset map keyed by `${toolId}.${variant}`
  *  (or just `${toolId}` for variant-less tools). The map is consumed by

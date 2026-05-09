@@ -16,6 +16,7 @@ export {
   type SnapInput,
   type SnapResult,
 } from "@ingcreators/annot-core/editor/selection-geometry";
+
 import type { SnapResult } from "@ingcreators/annot-core/editor/selection-geometry";
 
 const SVG_NS = "http://www.w3.org/2000/svg";

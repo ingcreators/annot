@@ -105,15 +105,11 @@ export function isBuiltinIcon(
 }
 
 /** Type guard for the `"svg"` arm. */
-export function isSvgIcon(
-  spec: IconSpec,
-): spec is { readonly kind: "svg"; readonly svg: string } {
+export function isSvgIcon(spec: IconSpec): spec is { readonly kind: "svg"; readonly svg: string } {
   return spec.kind === "svg";
 }
 
 /** Type guard for the `"url"` arm. */
-export function isUrlIcon(
-  spec: IconSpec,
-): spec is { readonly kind: "url"; readonly url: string } {
+export function isUrlIcon(spec: IconSpec): spec is { readonly kind: "url"; readonly url: string } {
   return spec.kind === "url";
 }

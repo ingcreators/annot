@@ -54,11 +54,7 @@ export async function renderImageRecord(
       // `flattenAnnotations` lifts them out of `<g id="annotations">`.
       // The redact attribute is the discriminator — base bitmaps never
       // carry it.
-      if (
-        tag === "image" &&
-        !child.closest("g") &&
-        !child.hasAttribute("data-redact-style")
-      )
+      if (tag === "image" && !child.closest("g") && !child.hasAttribute("data-redact-style"))
         continue;
       if (child.id === "ui-overlay") continue;
       if (child.id === "annotations") {

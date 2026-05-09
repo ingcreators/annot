@@ -11,7 +11,12 @@
 import type { PageMetadata } from "@ingcreators/annot-core";
 import type { PageDimensions } from "@ingcreators/annot-core/utils/types";
 import type { CaptureHost } from "../host.js";
-import { beginCapturePrep, endCapturePrep, sendHideProgress, sendShowProgress } from "./capture-prep.js";
+import {
+  beginCapturePrep,
+  endCapturePrep,
+  sendHideProgress,
+  sendShowProgress,
+} from "./capture-prep.js";
 import { delay, POST_HIDE_PAINT_MS } from "./constants.js";
 import { withEmulatedViewport } from "./emulation.js";
 import type { CaptureFrame, CaptureResult } from "./frame.js";
@@ -76,10 +81,7 @@ export async function runPerPageCapture(host: CaptureHost): Promise<CaptureResul
       });
 
       if (decision.action === "stop") {
-        host.log(
-          "debug",
-          `[capture-pages] ${decision.reason} at page ${pageIndex + 1}, stopping`,
-        );
+        host.log("debug", `[capture-pages] ${decision.reason} at page ${pageIndex + 1}, stopping`);
         break;
       }
       lastActualScrollY = after.scrollY;

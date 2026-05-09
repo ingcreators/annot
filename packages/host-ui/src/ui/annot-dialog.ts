@@ -90,27 +90,29 @@ export class AnnotDialogElement extends LitElement {
       >
         <div class="app-dialog" role="dialog" aria-modal="true" aria-label=${this.title}>
           <div class="app-dialog-title">${this.title}</div>
-          ${this.message
-            ? html`<div class="app-dialog-message">${this.message}</div>`
-            : nothing}
+          ${this.message ? html`<div class="app-dialog-message">${this.message}</div>` : nothing}
           <div class="app-dialog-body">
             <slot></slot>
           </div>
           <div class="app-dialog-actions">
-            ${this.singleButton
-              ? nothing
-              : html`<button
+            ${
+              this.singleButton
+                ? nothing
+                : html`<button
                   type="button"
                   class="app-dialog-btn app-dialog-cancel"
                   @click=${this.#dispatchCancel}
                 >
                   ${this.cancelLabel}
-                </button>`}
+                </button>`
+            }
             <button
               type="button"
-              class=${this.danger
-                ? "app-dialog-btn app-dialog-ok app-dialog-danger"
-                : "app-dialog-btn app-dialog-ok app-dialog-primary"}
+              class=${
+                this.danger
+                  ? "app-dialog-btn app-dialog-ok app-dialog-danger"
+                  : "app-dialog-btn app-dialog-ok app-dialog-primary"
+              }
               @click=${this.#dispatchOk}
             >
               ${this.okLabel}

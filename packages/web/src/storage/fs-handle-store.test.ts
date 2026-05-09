@@ -96,6 +96,6 @@ describe("fs-handle-store — DB upgrade path", () => {
     // The functional sign is that the second saveHandle still
     // succeeds AND the value lands.
     await saveHandle(makeFakeHandle("Second"));
-    expect((await loadHandle() as { name: string }).name).toBe("Second");
+    expect(((await loadHandle()) as { name: string }).name).toBe("Second");
   });
 });

@@ -7,7 +7,7 @@
  * across the stitched image, not just the last viewport).
  */
 
-import type { PageDimensions, CaptureSegment } from "@ingcreators/annot-core/utils/types";
+import type { CaptureSegment, PageDimensions } from "@ingcreators/annot-core/utils/types";
 import type { CaptureHost } from "../host.js";
 import {
   beginCapturePrep,

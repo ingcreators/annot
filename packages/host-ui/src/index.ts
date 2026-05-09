@@ -20,20 +20,22 @@
 //      any other PWA-shell DOM id; those couplings are the whole
 //      reason the package exists.
 
-export { EditorShell } from "./editor-shell.js";
+export type { AnnotIconElement } from "./annot-icon.js";
+export { createBuiltinIcon, createIcon } from "./annot-icon-imperative.js";
 export type {
   EditorShellEvent,
   EditorShellEventHandler,
   EditorShellFeatures,
   EditorShellHost,
 } from "./editor-shell.js";
+export { EditorShell } from "./editor-shell.js";
 export { installKeyboardHelp } from "./keyboard-help.js";
 export type { UISection, UISectionContext, UISectionLifecycle } from "./ui-section.js";
-export type { AnnotIconElement } from "./annot-icon.js";
-export { createBuiltinIcon, createIcon } from "./annot-icon-imperative.js";
 import "./annot-icon.js";
+
 export type { AnnotTagEditorElement } from "./annot-tag-editor.js";
 import "./annot-tag-editor.js";
+
 export {
   type AnnotFileDetailsDrawerElement,
   BUILTIN_DRAWER_SECTION_IDS,
@@ -43,21 +45,24 @@ export {
   validateFilename,
 } from "./annot-file-details-drawer.js";
 import "./annot-file-details-drawer.js";
-export type { ScratchpadItem, ScratchpadStoreLike } from "./scratchpad-types.js";
+
 export type { AnnotScratchpadSectionElement } from "./annot-scratchpad-section.js";
+export type { ScratchpadItem, ScratchpadStoreLike } from "./scratchpad-types.js";
 import "./annot-scratchpad-section.js";
-export { ScratchpadPasteTool } from "./scratchpad-paste-tool.js";
-export {
-  type SerializedSelection,
-  parseStoredItem,
-  renderThumbnail,
-  serializeSelection,
-} from "./scratchpad-utils.js";
+
 export {
   type AnnotEditorStatusbarElement,
   ZOOM_OPTIONS,
 } from "./editor-statusbar.js";
+export { ScratchpadPasteTool } from "./scratchpad-paste-tool.js";
+export {
+  parseStoredItem,
+  renderThumbnail,
+  type SerializedSelection,
+  serializeSelection,
+} from "./scratchpad-utils.js";
 import "./editor-statusbar.js";
+
 export type {
   AnnotApplyRedactionsButtonElement,
   ApplyRedactionsAppliedDetail,

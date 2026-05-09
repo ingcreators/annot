@@ -12,7 +12,7 @@ import { promises as fs } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { startHttpServer, type HttpServerHandle } from "./http-server.js";
+import { type HttpServerHandle, startHttpServer } from "./http-server.js";
 
 let userDataDir: string;
 let server: HttpServerHandle;

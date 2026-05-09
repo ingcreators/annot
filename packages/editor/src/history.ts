@@ -1,7 +1,4 @@
-import {
-  createHistoryCore,
-  type HistoryCore,
-} from "@ingcreators/annot-core/editor/history-core";
+import { createHistoryCore, type HistoryCore } from "@ingcreators/annot-core/editor/history-core";
 
 /**
  * Browser-side undo/redo wrapper that snapshots an `<g>` annotations

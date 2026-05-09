@@ -502,10 +502,7 @@
 
 .tool-flyout-color-chip.active {
   /* Match `.tool-flyout-chip.active` — see the comment there. */
-  background: var(
-    --annot-choice-active,
-    var(--annot-choice-hover, var(--annot-hover-bg))
-  );
+  background: var(--annot-choice-active, var(--annot-choice-hover, var(--annot-hover-bg)));
   border-color: var(--annot-accent);
 }
 

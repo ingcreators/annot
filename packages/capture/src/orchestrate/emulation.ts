@@ -10,8 +10,8 @@
  */
 
 import type { CaptureHost, CaptureTargetRef } from "../host.js";
-import { delay } from "./constants.js";
 import { resolveEmulation, type Settings } from "../shared/settings.js";
+import { delay } from "./constants.js";
 
 /** Time to wait after the host's viewport resize so the page can
  *  reflow lazy images / media queries / flex layouts. The same

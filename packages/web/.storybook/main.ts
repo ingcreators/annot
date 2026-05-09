@@ -27,10 +27,7 @@ const config: StorybookConfig = {
   // `docs/plans/_done/vscode-extension-host.md` continue to appear
   // in the same Storybook bundle. Stories stay co-located with
   // their component source per CLAUDE.md.
-  stories: [
-    "../src/**/*.stories.ts",
-    "../../host-ui/src/**/*.stories.ts",
-  ],
+  stories: ["../src/**/*.stories.ts", "../../host-ui/src/**/*.stories.ts"],
   framework: {
     name: "@storybook/web-components-vite",
     options: {},

@@ -28,8 +28,8 @@
 //     and have the shell expose a primitive that the consumer
 //     drives.
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { EditorShell } from "./index.js";
 
 const FORBIDDEN_IDS = new Set([

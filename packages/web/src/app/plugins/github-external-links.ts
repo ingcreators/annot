@@ -10,8 +10,8 @@
  */
 
 import { builtinIcon } from "@ingcreators/annot-core";
-import type { AnnotPlugin } from "../plugin-host.js";
 import { GitHubStore } from "../../storage/github-store.js";
+import type { AnnotPlugin } from "../plugin-host.js";
 
 export const githubExternalLinksPlugin: AnnotPlugin = {
   name: "github-external-links",

@@ -972,5 +972,4 @@ describe("moveAnnotationElement", () => {
     expect(p.getAttribute("data-ty")).toBe("70");
     expect(p.hasAttribute("transform")).toBe(true);
   });
-
 });

@@ -11,10 +11,7 @@
  * sites compile unchanged.
  */
 
-import {
-  type Settings,
-  mergeSettings,
-} from "@ingcreators/annot-capture/shared";
+import { mergeSettings, type Settings } from "@ingcreators/annot-capture/shared";
 
 export {
   type CaptureKind,

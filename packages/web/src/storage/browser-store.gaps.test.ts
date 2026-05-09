@@ -16,9 +16,9 @@
  *     move-collision (line 299).
  */
 
+import { StorageConflictError } from "@ingcreators/annot-core/storage";
 import { IDBFactory } from "fake-indexeddb";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { StorageConflictError } from "@ingcreators/annot-core/storage";
 import { BrowserStore } from "./browser-store.js";
 
 beforeEach(() => {

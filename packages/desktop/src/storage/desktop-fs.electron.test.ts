@@ -21,14 +21,8 @@ import { promises as fs } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import {
-  createFsHandlers,
-  type FsHandlers,
-} from "../../src-electron/ipc/fs.js";
-import {
-  createElectronDesktopFs,
-  type ElectronApi,
-} from "./desktop-fs.js";
+import { createFsHandlers, type FsHandlers } from "../../src-electron/ipc/fs.js";
+import { createElectronDesktopFs, type ElectronApi } from "./desktop-fs.js";
 
 let root: string;
 let handlers: FsHandlers;
@@ -81,10 +75,7 @@ describe("createElectronDesktopFs ↔ fs.* IPC handlers round-trip", () => {
     const desktopFs = createElectronDesktopFs(api);
 
     await desktopFs.mkdir("Inbox", { recursive: true });
-    await desktopFs.writeFile(
-      "Inbox/cap.png",
-      new TextEncoder().encode("annot"),
-    );
+    await desktopFs.writeFile("Inbox/cap.png", new TextEncoder().encode("annot"));
 
     const entries = await desktopFs.readDir("Inbox");
     expect(entries).toEqual([{ name: "cap.png", kind: "file" }]);
@@ -113,7 +104,7 @@ describe("createElectronDesktopFs ↔ fs.* IPC handlers round-trip", () => {
     await desktopFs.writeFile("A/x.png", new TextEncoder().encode("x"));
 
     await desktopFs.rename("A/x.png", "A/y.png");
-    expect((await desktopFs.stat("A/x.png"))).toBeUndefined();
+    expect(await desktopFs.stat("A/x.png")).toBeUndefined();
     expect((await desktopFs.stat("A/y.png"))?.kind).toBe("file");
 
     await desktopFs.remove("A/y.png");
@@ -123,8 +114,6 @@ describe("createElectronDesktopFs ↔ fs.* IPC handlers round-trip", () => {
 
   it("propagates traversal-guard errors from the IPC layer", async () => {
     const desktopFs = createElectronDesktopFs(makeStubApi(handlers));
-    await expect(desktopFs.readFile("../escape")).rejects.toThrow(
-      /path-traversal/,
-    );
+    await expect(desktopFs.readFile("../escape")).rejects.toThrow(/path-traversal/);
   });
 });

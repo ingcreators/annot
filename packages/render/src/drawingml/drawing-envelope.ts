@@ -11,10 +11,10 @@
  */
 
 import type { AnnotationShape } from "@ingcreators/annot-core/desktop-bridge";
-import { buildShapeXml } from "./index.js";
 import { px } from "./helpers.js";
-import { buildBackgroundPic } from "./shapes/mosaic-image.js";
+import { buildShapeXml } from "./index.js";
 import { NS_GVML } from "./namespace.js";
+import { buildBackgroundPic } from "./shapes/mosaic-image.js";
 
 export interface MosaicMedia {
   /** Filename (within `clipboard/media/...`) the Rust packager

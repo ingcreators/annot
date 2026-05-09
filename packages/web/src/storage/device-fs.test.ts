@@ -9,8 +9,8 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { createMockRoot } from "./device-fs.test-mock.js";
 import { fileExists, getDirHandle, purgeEmptyFiles } from "./device-fs.js";
+import { createMockRoot } from "./device-fs.test-mock.js";
 
 async function writeFile(
   dir: FileSystemDirectoryHandle,

@@ -12,10 +12,10 @@
 
 import {
   type ContentBus,
+  getPageDimensions,
   hideForCapture,
   hideProgress,
   hideStickies,
-  getPageDimensions,
   restoreAfterCapture,
   restoreStickies,
   scrollTo,

@@ -17,10 +17,7 @@ import type { History } from "../history.js";
  * pair. The surface mounts every element into `canvas.annotations`
  * and routes saves into `history.save()`.
  */
-export function createCanvasToolSurface(
-  canvas: CanvasManager,
-  history: History,
-): ToolDOMSurface {
+export function createCanvasToolSurface(canvas: CanvasManager, history: History): ToolDOMSurface {
   return {
     attachDraft(el) {
       canvas.annotations.appendChild(el);

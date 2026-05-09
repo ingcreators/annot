@@ -15,6 +15,7 @@ import type {
 } from "./annot-interval-capture-dialog.js";
 
 export type { CursorMode, IntervalCaptureConfig } from "./annot-interval-capture-dialog.js";
+
 import type { CursorMode, IntervalCaptureConfig } from "./annot-interval-capture-dialog.js";
 
 const CURSOR_PREF_KEY = "annot-capture-cursor";

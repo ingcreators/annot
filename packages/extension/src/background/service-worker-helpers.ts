@@ -31,9 +31,7 @@ export const IDB_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
  * If a staging deploy ever needs a third target, promote this to a
  * VITE_ANNOTATION_URL env var.
  */
-export const ANNOTATION_URL = import.meta.env.DEV
-  ? "http://localhost:3000"
-  : "https://annot.work";
+export const ANNOTATION_URL = import.meta.env.DEV ? "http://localhost:3000" : "https://annot.work";
 
 /** Build edit URL with multi-segment image path. */
 export function buildEditUrl(path: string, extId: string): string {

@@ -21,6 +21,22 @@
 //   3. If no, add it ONLY in `src/index.ts`.
 // See PRODUCT_DIRECTION.md principle P2 for the underlying rule.
 
+// ─── Logical font-family registry (Tier A) ───────────────────────────
+// Phase 1 of `docs/plans/multilingual-fonts-os-stack.md`. Three logical
+// tokens (`Annot Sans` / `Annot Serif` / `Annot Mono`) the editor
+// stores in `data-font-family`. Resolvers map each token to:
+//   - a CSS font stack (per-OS Latin / CJK / complex script fallback)
+//   - an OOXML typeface triple (`<a:latin>` + `<a:ea>` + `<a:cs>`)
+// Pure strings + lookups, no DOM. Importable from the pptx exporter
+// + the editor UI alike.
+export {
+  coerceToLogicalFamily,
+  cssStackFor,
+  isLogicalFamily,
+  LOGICAL_FAMILIES,
+  type LogicalFamily,
+  ooxmlTypefacesFor,
+} from "./editor/font-registry.js";
 // ─── Undo/redo stack management (pure string snapshots) ───────────────
 // `History` (in `@ingcreators/annot-editor`) wraps this with the
 // `innerHTML` adapter; headless callers can drive the same logic
@@ -59,6 +75,12 @@ export {
 // DOMParser usage); loadable in pure Node + jsdom for tests.
 export { renderIconElement, renderIconHtml } from "./editor/icons/render.js";
 export { sanitizeIconSvg } from "./editor/icons/sanitize.js";
+// ─── SVG path-data utilities (pure string-in/string-out) ─────────────
+// Phase 1 of `docs/plans/move-bakes-coordinates.md`. Translates every
+// absolute coordinate inside a `<path>` element's `d` attribute by a
+// world-space (dx, dy) delta — used by the move-baker for Freehand /
+// Redact-path / future Focus-mask shapes. No DOM dependency.
+export { translatePathD } from "./editor/path-utils.js";
 // ─── Property-panel category classifier + control-shape registry ──────
 // Element-taking helpers (jsdom-friendly) used by the editor's
 // PropertyPanel to decide which control set to render. No DOM
@@ -167,28 +189,6 @@ export {
   readUniversalStyleAttrs,
   resolveStyleReadSource,
 } from "./editor/tool-style-reader.js";
-// ─── Logical font-family registry (Tier A) ───────────────────────────
-// Phase 1 of `docs/plans/multilingual-fonts-os-stack.md`. Three logical
-// tokens (`Annot Sans` / `Annot Serif` / `Annot Mono`) the editor
-// stores in `data-font-family`. Resolvers map each token to:
-//   - a CSS font stack (per-OS Latin / CJK / complex script fallback)
-//   - an OOXML typeface triple (`<a:latin>` + `<a:ea>` + `<a:cs>`)
-// Pure strings + lookups, no DOM. Importable from the pptx exporter
-// + the editor UI alike.
-export {
-  coerceToLogicalFamily,
-  cssStackFor,
-  isLogicalFamily,
-  LOGICAL_FAMILIES,
-  type LogicalFamily,
-  ooxmlTypefacesFor,
-} from "./editor/font-registry.js";
-// ─── SVG path-data utilities (pure string-in/string-out) ─────────────
-// Phase 1 of `docs/plans/move-bakes-coordinates.md`. Translates every
-// absolute coordinate inside a `<path>` element's `d` attribute by a
-// world-space (dx, dy) delta — used by the move-baker for Freehand /
-// Redact-path / future Focus-mask shapes. No DOM dependency.
-export { translatePathD } from "./editor/path-utils.js";
 // ─── Toolbar universal-style attribute writer (pure Element-taker) ────
 // Inverse of `readUniversalStyleAttrs`: takes a preset and writes the
 // stroke / fill / dasharray / opacity / linecap / linejoin attrs onto

@@ -58,9 +58,9 @@ export class AnnotDrawerExternalLinksSectionElement extends LitElement {
               data-tooltip=${link.url}
               aria-label=${link.url}
             >
-              ${link.icon
-                ? html`<annot-icon .spec=${link.icon}></annot-icon>`
-                : nothing}${link.label}
+              ${
+                link.icon ? html`<annot-icon .spec=${link.icon}></annot-icon>` : nothing
+              }${link.label}
             </a>
           </div>
         `,

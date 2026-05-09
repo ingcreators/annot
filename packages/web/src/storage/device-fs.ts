@@ -47,10 +47,7 @@ export async function getDirHandle(
  * revoked) also surfaces as `false` — callers shouldn't rely on
  * this helper to distinguish "missing" from "inaccessible".
  */
-export async function fileExists(
-  dir: FileSystemDirectoryHandle,
-  name: string,
-): Promise<boolean> {
+export async function fileExists(dir: FileSystemDirectoryHandle, name: string): Promise<boolean> {
   try {
     await dir.getFileHandle(name);
     return true;

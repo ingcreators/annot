@@ -8,8 +8,8 @@
 
 import { buildZipBytes, type ZipEntry } from "./zip-bytes.js";
 
-export { buildZipBytes };
 export type { ZipEntry };
+export { buildZipBytes };
 
 export function buildZip(entries: ZipEntry[]): Blob {
   const bytes = buildZipBytes(entries);

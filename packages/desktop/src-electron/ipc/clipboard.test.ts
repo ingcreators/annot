@@ -27,14 +27,14 @@
  *      BITMAPINFOHEADER + bottom-up BGR scanlines.
  */
 
-import { describe, expect, it, vi } from "vitest";
 import { unzipSync } from "node:zlib";
+import { describe, expect, it, vi } from "vitest";
 import {
   buildGvmlZip,
-  GVML_FORMAT_NAME,
-  createClipboardHandlers,
   type ClipboardDeps,
   type ClipboardFormatWrite,
+  createClipboardHandlers,
+  GVML_FORMAT_NAME,
   type MosaicMedia,
 } from "./clipboard.js";
 import { CF_DIB } from "./dib.js";
@@ -166,9 +166,7 @@ describe("buildGvmlZip — drawing rels rId numbering", () => {
   });
 
   it("starts mosaic rels at rId2 when no screenshot is present", async () => {
-    const media: MosaicMedia[] = [
-      { filename: "mosaic_0.png", bytes: new Uint8Array([0x01]) },
-    ];
+    const media: MosaicMedia[] = [{ filename: "mosaic_0.png", bytes: new Uint8Array([0x01]) }];
     const bytes = buildGvmlZip(SAMPLE_DRAWING_XML, media);
     const entries = readZip(bytes);
     const rels = new TextDecoder().decode(
@@ -189,10 +187,11 @@ describe("copy_as_office handler", () => {
     pngToBgra: ReturnType<typeof vi.fn>;
   } {
     const writeFormats = vi.fn();
-    const pngToJpeg = vi.fn(async (png: Uint8Array) =>
-      // Stub: prepend a marker byte so the test can prove the
-      // PNG path went through conversion.
-      new Uint8Array([0xff, ...png]),
+    const pngToJpeg = vi.fn(
+      async (png: Uint8Array) =>
+        // Stub: prepend a marker byte so the test can prove the
+        // PNG path went through conversion.
+        new Uint8Array([0xff, ...png]),
     );
     // Stub PNG decoder: returns a deterministic 2×2 BGRA block
     // regardless of input bytes, so the test can verify the

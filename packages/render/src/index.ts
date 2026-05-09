@@ -11,17 +11,17 @@
 // backends and the future gallery bulk-export view can pull
 // rendering without dragging the live editor into their bundle.
 
-export { renderImageRecord } from "./render-image-record.js";
-export {
-  burnRedactionsIntoBitmap,
-  classifyRedact,
-  type RedactKind,
-} from "./redact-burn.js";
 export { cropBitmap } from "./crop-bitmap.js";
 export {
+  type BuildDrawingXmlOpts,
+  type BuildDrawingXmlResult,
+  buildDrawingXml,
+  type MosaicMedia,
+} from "./drawingml/drawing-envelope.js";
+export {
+  type BuildShapeOpts,
   buildBackgroundPic,
   buildFillXml,
-  type BuildShapeOpts,
   buildShapeXml,
   capAttr,
   chex,
@@ -33,18 +33,18 @@ export {
   type Namespace,
   type NamespaceOpts,
   namespaceFor,
+  PT_EMU,
+  PX_EMU,
   parseRgba,
   parseSvgPath,
   pt,
-  PT_EMU,
   px,
-  PX_EMU,
   strokePaintXml,
   xfrmAttrs,
 } from "./drawingml/index.js";
 export {
-  type BuildDrawingXmlOpts,
-  type BuildDrawingXmlResult,
-  buildDrawingXml,
-  type MosaicMedia,
-} from "./drawingml/drawing-envelope.js";
+  burnRedactionsIntoBitmap,
+  classifyRedact,
+  type RedactKind,
+} from "./redact-burn.js";
+export { renderImageRecord } from "./render-image-record.js";

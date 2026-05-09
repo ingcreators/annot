@@ -19,10 +19,7 @@ import {
   TOOL_PANEL_ADAPTERS,
   type ToolPanelAdapterId,
 } from "./tool-panel-adapter.js";
-import {
-  TOOL_PANEL_EXTRA_CONTROL_IDS,
-  TOOL_REGISTRY,
-} from "./tool-registry.js";
+import { TOOL_PANEL_EXTRA_CONTROL_IDS, TOOL_REGISTRY } from "./tool-registry.js";
 
 /** A fully-populated `ToolOptions` covering every field the adapter
  *  registry might read. Round-trip tests use this so reads return
@@ -111,14 +108,13 @@ describe("TOOL_PANEL_ADAPTERS — coverage invariants", () => {
     const declared = new Set<string>(TOOL_PANEL_ADAPTER_IDS);
     const registered = new Set(Object.keys(TOOL_PANEL_ADAPTERS));
     for (const id of declared) {
-      expect(registered.has(id), `declared id "${id}" missing from TOOL_PANEL_ADAPTERS`).toBe(
-        true,
-      );
+      expect(registered.has(id), `declared id "${id}" missing from TOOL_PANEL_ADAPTERS`).toBe(true);
     }
     for (const id of registered) {
-      expect(declared.has(id), `registered adapter "${id}" missing from TOOL_PANEL_ADAPTER_IDS`).toBe(
-        true,
-      );
+      expect(
+        declared.has(id),
+        `registered adapter "${id}" missing from TOOL_PANEL_ADAPTER_IDS`,
+      ).toBe(true);
     }
   });
 });
@@ -256,10 +252,7 @@ describe("TOOL_REGISTRY.panelControls — shape invariants", () => {
         expect(entry.panelControls, "crop has no side panel").toBeUndefined();
         continue;
       }
-      expect(
-        entry.panelControls,
-        `${toolId}.panelControls must be defined`,
-      ).toBeDefined();
+      expect(entry.panelControls, `${toolId}.panelControls must be defined`).toBeDefined();
       expect(
         (entry.panelControls ?? []).length,
         `${toolId}.panelControls must be non-empty`,

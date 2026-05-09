@@ -285,9 +285,9 @@ describe("showPromptDialog", () => {
     await flushFrames();
     expect(document.querySelector(".app-dialog-ok")!.textContent!.trim()).toBe("Yes!");
     expect(document.querySelector(".app-dialog-cancel")!.textContent!.trim()).toBe("No way");
-    expect(
-      document.querySelector<HTMLInputElement>(".app-dialog-input")!.placeholder,
-    ).toBe("Type here");
+    expect(document.querySelector<HTMLInputElement>(".app-dialog-input")!.placeholder).toBe(
+      "Type here",
+    );
   });
 });
 

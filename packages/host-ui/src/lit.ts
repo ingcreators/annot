@@ -16,14 +16,14 @@
  */
 
 export {
-  LitElement,
+  type CSSResultGroup,
   css,
   html,
+  LitElement,
   nothing,
+  type PropertyValues,
   render,
   svg,
-  type CSSResultGroup,
-  type PropertyValues,
   type TemplateResult,
 } from "lit";
 export { customElement, property, query, queryAll, state } from "lit/decorators.js";

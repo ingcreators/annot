@@ -34,7 +34,7 @@ function makeStubCanvas(): {
 }
 
 describe("restoreAnnotations — top-level redact <image> survives reload", () => {
-  it("adopts a top-level <image data-redact-style=\"mosaic\"> as an annotation", () => {
+  it('adopts a top-level <image data-redact-style="mosaic"> as an annotation', () => {
     const stub = makeStubCanvas();
     // Mirrors what `exportAnnotationsSvgForIdb` produces after the
     // user draws a mosaic redact and the autosave debounce fires:
@@ -54,7 +54,7 @@ describe("restoreAnnotations — top-level redact <image> survives reload", () =
     expect(adopted[0]?.getAttribute("data-redact-style")).toBe("mosaic");
   });
 
-  it("adopts a top-level <image data-redact-style=\"blur\"> as an annotation", () => {
+  it('adopts a top-level <image data-redact-style="blur"> as an annotation', () => {
     const stub = makeStubCanvas();
     const svg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 240" width="320" height="240" data-annot-version="1">
