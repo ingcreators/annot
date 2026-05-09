@@ -2,11 +2,11 @@
  * `<annot-doc-block-toolbar>` — floating control row for a block
  * inside `<annot-doc-shell>` when in editing mode.
  *
- * Phase 4a of `docs/plans/annot-html-document.md`. Buttons:
- * delete, move up, move down. Insert above / insert below land
- * in Phase 4b together with the slash menu (block-kind picker)
- * since "insert paragraph" alone — the only kind reachable
- * without a kind picker — is too narrow to ship in isolation.
+ * Phases of `docs/plans/annot-html-document.md`:
+ * - Phase 4a landed delete / move-up / move-down.
+ * - Phase 4b (this file's update) adds insert-above /
+ *   insert-below buttons + the slash menu's discoverable
+ *   "+" affordance for empty paragraphs.
  *
  * Light DOM (Hybrid CSS) following the host-ui convention. The
  * shell positions the toolbar relative to its block; this
@@ -16,7 +16,7 @@
 
 import { html, LitElement, type TemplateResult } from "./lit.js";
 
-export type BlockToolbarAction = "delete" | "moveUp" | "moveDown";
+export type BlockToolbarAction = "delete" | "moveUp" | "moveDown" | "insertAbove" | "insertBelow";
 
 export interface BlockToolbarActionDetail {
   action: BlockToolbarAction;
@@ -44,6 +44,24 @@ export class AnnotDocBlockToolbarElement extends LitElement {
   override render(): TemplateResult {
     return html`
       <div class="annot-doc-block-toolbar" role="toolbar" aria-label="Block actions">
+        <button
+          type="button"
+          class="block-action"
+          aria-label="Insert block above"
+          title="Insert above"
+          @click=${() => this.#dispatch("insertAbove")}
+        >
+          ⤴
+        </button>
+        <button
+          type="button"
+          class="block-action"
+          aria-label="Insert block below"
+          title="Insert below"
+          @click=${() => this.#dispatch("insertBelow")}
+        >
+          ⤵
+        </button>
         <button
           type="button"
           class="block-action"
