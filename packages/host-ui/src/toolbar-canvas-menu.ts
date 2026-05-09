@@ -107,21 +107,34 @@ function findAnnotationAt(target: EventTarget | null, canvas: CanvasManager): SV
 }
 
 /** Build the toolbox menu (tool activators, exactly mirroring the
- *  toolbar button ordering + flyout variants). Host-registered extras
- *  (Scratchpad, …) follow the core tool rows under a separator so
- *  the menu reads "create stuff / reusable stuff" — the same visual
- *  rhythm the toolbar applies between the tool group and the
- *  extra-button group. */
+ *  toolbar button ordering + flyout variants). The menu reads
+ *  top-to-bottom in the same three-section layout the toolbar
+ *  renders left-to-right:
+ *
+ *    1. Host-registered extras (Scratchpad, …) — most-frequently-used
+ *       reusable affordance at the top, closest to the cursor on
+ *       right-click.
+ *    2. Annotation tools (Arrow / Shape / Highlight / Text / Draw /
+ *       Counter / Redact) — emit on-canvas SVG annotations.
+ *    3. Image-op tools (Crop) — destructively mutate the underlying
+ *       bitmap. Pushed to the bottom so the destructive operation
+ *       sits below the divider, away from the cursor's resting
+ *       position.
+ *
+ *  Each section is preceded by a divider when at least one section
+ *  above it rendered. */
 function openToolboxMenu(e: MouseEvent, ctx: ToolbarCanvasMenuContext): void {
   const items: CanvasMenuItem[] = [];
-  for (const [toolId, def] of ctx.tools) {
-    items.push(toolMenuEntry(toolId, def, ctx));
-  }
+
   const extras = ctx.extraTools ?? [];
-  for (let i = 0; i < extras.length; i++) {
-    const entry = extras[i]!;
+  const toolEntries = [...ctx.tools];
+  const annotationEntries = toolEntries.filter(
+    ([id]) => (TOOL_REGISTRY[id]?.category ?? "annotation") === "annotation",
+  );
+  const imageOpEntries = toolEntries.filter(([id]) => TOOL_REGISTRY[id]?.category === "image-op");
+
+  for (const entry of extras) {
     items.push({
-      separatorAbove: i === 0,
       icon: entry.icon,
       label: entry.label,
       // Pass the right-click cursor position so the host can anchor its
@@ -130,6 +143,27 @@ function openToolboxMenu(e: MouseEvent, ctx: ToolbarCanvasMenuContext): void {
       action: () => entry.invoke({ x: e.clientX, y: e.clientY }),
     });
   }
+
+  let needsSeparatorAboveNextSection = extras.length > 0;
+  for (let i = 0; i < annotationEntries.length; i++) {
+    const [toolId, def] = annotationEntries[i]!;
+    const entry = toolMenuEntry(toolId, def, ctx);
+    if (i === 0 && needsSeparatorAboveNextSection) {
+      entry.separatorAbove = true;
+    }
+    items.push(entry);
+  }
+  if (annotationEntries.length > 0) needsSeparatorAboveNextSection = true;
+
+  for (let i = 0; i < imageOpEntries.length; i++) {
+    const [toolId, def] = imageOpEntries[i]!;
+    const entry = toolMenuEntry(toolId, def, ctx);
+    if (i === 0 && needsSeparatorAboveNextSection) {
+      entry.separatorAbove = true;
+    }
+    items.push(entry);
+  }
+
   openCanvasContextMenu({ x: e.clientX, y: e.clientY, items });
 }
 
@@ -375,9 +409,7 @@ function toolMenuEntry(
     // button's badge — both use the value directly as the fill.
     badge = { swatch: meta.chipColorForVariant?.(currentValue) ?? currentValue };
   } else if (currentVariant) {
-    badge = currentVariant.svg
-      ? { svg: currentVariant.svg }
-      : { icon: currentVariant.icon };
+    badge = currentVariant.svg ? { svg: currentVariant.svg } : { icon: currentVariant.icon };
   }
 
   return {

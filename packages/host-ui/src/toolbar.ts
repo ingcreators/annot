@@ -231,6 +231,17 @@ export class Toolbar {
   /** The DOM group that the extra buttons live in, so registrations
    *  after initial render still attach to the right container. */
   #extraButtonGroup: HTMLElement | null = null;
+  /** Reference to the annotation-category tool group so post-render
+   *  `registerExtraToolButton` calls can slot the extras group in
+   *  RIGHT BEFORE the annotation tools (with a separator between),
+   *  matching the layout `#render` produces when extras existed at
+   *  render time. */
+  #annotationGroup: HTMLElement | null = null;
+  /** Reference to the image-op-category tool group, parallel to
+   *  `#annotationGroup`. Currently unused outside `#render` but kept
+   *  symmetric so future host-registered tools or right-panel
+   *  affordances can target it. */
+  #imageOpGroup: HTMLElement | null = null;
   /** Invoked whenever the active tool changes. `toolId` is the registered
    *  tool id (e.g. "rect", "arrow") or null for Select / deactivation. */
   #onToolChange?: (name: string, toolId: string | null) => void;
@@ -422,8 +433,39 @@ export class Toolbar {
 
     shell.appendChild(this.#sep());
 
-    // Tool buttons with dropdown
-    const toolGroup = this.#div("toolbar-group");
+    // Host-registered extras group (e.g. Scratchpad) — placed BEFORE
+    // the annotation tool group so the most-frequently-used reusable
+    // affordance sits closest to Select / cursor reach. Mirrors
+    // draw.io's persistent left-side shape library, just collapsed
+    // into a popover button. Empty at first render (extras are
+    // registered post-construction by the host); the trailing
+    // divider is emitted lazily on first registration so an extras-
+    // free host (e.g. a future minimal embed) doesn't get a
+    // dangling divider.
+    this.#extraButtonGroup = this.#div("toolbar-group toolbar-extra-group");
+    if (this.#extraButtons.length > 0) {
+      // Defensive: if a host populated the array before #render ran
+      // (no current call path does, but keep the wiring symmetric
+      // with the late-register path below).
+      for (const entry of this.#extraButtons) {
+        this.#extraButtonGroup.appendChild(entry.button);
+      }
+      shell.appendChild(this.#extraButtonGroup);
+      shell.appendChild(this.#sep());
+    }
+
+    // Tool buttons split into two groups by `TOOL_REGISTRY[id].category`:
+    //   - annotation tools (Arrow / Shape / Highlight / Text / Draw /
+    //     Counter / Redact) emit on-canvas SVG annotations
+    //   - image-op tools (Crop) destructively mutate the underlying
+    //     bitmap
+    // The two groups are separated by a divider so the boundary
+    // reads "above this line: add stuff to the canvas; below: change
+    // the image itself".
+    const annotationGroup = this.#div("toolbar-group toolbar-annotation-group");
+    const imageOpGroup = this.#div("toolbar-group toolbar-image-op-group");
+    this.#annotationGroup = annotationGroup;
+    this.#imageOpGroup = imageOpGroup;
     for (const [id, def] of this.#tools) {
       const wrap = document.createElement("div");
       wrap.className = "tool-btn-wrap";
@@ -492,25 +534,22 @@ export class Toolbar {
         wrap.dataset.hasFlyout = "1";
       }
 
-      toolGroup.appendChild(wrap);
+      const category = TOOL_REGISTRY[id]?.category ?? "annotation";
+      if (category === "image-op") {
+        imageOpGroup.appendChild(wrap);
+      } else {
+        annotationGroup.appendChild(wrap);
+      }
 
       // Initial icon sync — reflect any persisted variant from the
       // loaded preset. (Loaded async in the constructor, so this also
       // runs from #applyLoadedPreset once the storage read returns.)
       this.#syncToolButtonIcon(id);
     }
-    shell.appendChild(toolGroup);
-
-    // Host-registered extra buttons (e.g. Scratchpad). They live in
-    // their own group between the core tool buttons and the history
-    // group so the visual grouping reads "create stuff / reusable
-    // stuff / history".
-    this.#extraButtonGroup = this.#div("toolbar-group toolbar-extra-group");
-    for (const entry of this.#extraButtons) {
-      this.#extraButtonGroup.appendChild(entry.button);
-    }
-    if (this.#extraButtons.length > 0) {
-      shell.appendChild(this.#extraButtonGroup);
+    shell.appendChild(annotationGroup);
+    if (imageOpGroup.children.length > 0) {
+      shell.appendChild(this.#sep());
+      shell.appendChild(imageOpGroup);
     }
 
     // Spacer
@@ -1299,15 +1338,30 @@ export class Toolbar {
     if (this.#extraButtonGroup) {
       this.#extraButtonGroup.appendChild(btn);
       if (!this.#extraButtonGroup.isConnected) {
-        // If the group wasn't attached (no extras at render time),
-        // slot it in between the tool group and the undo/redo group.
-        // Lookup the spacer inside the `<annot-toolbar>` shell so
-        // the insertion lands in the right parent (the shell, not
-        // the outer host div).
+        // First registration after render: slot the extras group in
+        // RIGHT BEFORE the annotation tool group (with a trailing
+        // divider so the visual rhythm matches an extras-at-render-
+        // time setup). The result is:
+        //
+        //   [Select] | [extras] | [annotation tools] | [Crop] | …
+        //
+        // Lookup the annotation group inside the `<annot-toolbar>`
+        // shell so the insertion lands in the right parent (the
+        // shell, not the outer host div).
         const root = this.#shellEl ?? this.#container;
-        const sep = root.querySelector(".toolbar-spacer");
-        if (sep?.parentElement) sep.parentElement.insertBefore(this.#extraButtonGroup, sep);
-        else root.appendChild(this.#extraButtonGroup);
+        const annotationGroup =
+          this.#annotationGroup ?? root.querySelector<HTMLElement>(".toolbar-annotation-group");
+        if (annotationGroup?.parentElement) {
+          annotationGroup.parentElement.insertBefore(this.#extraButtonGroup, annotationGroup);
+          annotationGroup.parentElement.insertBefore(this.#sep(), annotationGroup);
+        } else {
+          // Pre-#render fallback (no annotation group yet) — defer to
+          // the legacy spacer-anchored insertion so we don't drop the
+          // extras off the toolbar entirely.
+          const sep = root.querySelector(".toolbar-spacer");
+          if (sep?.parentElement) sep.parentElement.insertBefore(this.#extraButtonGroup, sep);
+          else root.appendChild(this.#extraButtonGroup);
+        }
       }
     }
     return btn;
