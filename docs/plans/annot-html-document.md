@@ -1,6 +1,6 @@
 # `.annot.html` document — multi-image manual format
 
-> **Status:** In progress (Phase 0 in PR)
+> **Status:** In progress — Phases 0–1 landed; Phase 2 in PR.
 > **Compatibility:** New file format and new file extension; new
 > workspace package `@ingcreators/annot-doc` (Tier A); new editor
 > surface (`<annot-doc-shell>`) in `@ingcreators/annot-host-ui` (Tier C);

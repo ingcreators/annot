@@ -124,6 +124,10 @@ importers:
         version: 8.0.10(@types/node@25.6.0)(esbuild@0.27.7)(jiti@2.7.0)
 
   packages/doc:
+    dependencies:
+      '@ingcreators/annot-core':
+        specifier: workspace:*
+        version: link:../core
     devDependencies:
       '@types/node':
         specifier: ^25
