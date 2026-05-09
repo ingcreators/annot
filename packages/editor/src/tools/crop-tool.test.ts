@@ -1,25 +1,37 @@
 /**
  * @vitest-environment happy-dom
  *
- * CropTool — drag a rect, press Enter to apply (updates viewBox)
- * or Escape to cancel. Coverage focus:
+ * CropTool — drag a rect; releasing the pointer (or pressing Enter)
+ * opens the host's destructive-action confirmation dialog. The
+ * dialog's Crop / Cancel buttons replace the in-canvas buttons + hint
+ * a previous iteration shipped — those were redundant with the
+ * dialog itself. Coverage focus:
  *
  *   - onActivate paints a `<g data-crop-overlay>` group into
- *     ui-overlay containing an instructional hint anchored to the
- *     current viewBox top-left.
+ *     ui-overlay (no hint, no buttons — the dialog is the only
+ *     confirm UI).
  *   - onDeactivate removes the entire overlay group.
  *   - pointerdown adds an evenodd `<path>` (dim-outside-the-crop)
  *     and a teal dashed `<rect>` (the crop outline). Re-firing
- *     pointerdown reuses the same elements, no accumulation.
+ *     pointerdown on an existing rect resets it.
  *   - pointermove updates the crop rect's x/y/width/height
  *     (handles reverse-direction drags via min/abs) AND rewrites
  *     the path's `d` so the dim/clear regions track the drag.
- *   - pointerup terminates the drag (no commit yet).
- *   - keydown 'Enter' on a sized rect invokes
- *     canvas.updateViewBox + setZoom(1) + fitToView + history.save.
- *   - keydown 'Enter' on a too-small rect (<10×10) cleans up
- *     without applying.
- *   - keydown 'Escape' cleans up without applying.
+ *   - pointerup automatically invokes the host's `onCropConfirmed`
+ *     gate (no separate Apply button click needed). The overlay
+ *     STAYS visible while the dialog is open so the user can verify
+ *     the crop region before confirming.
+ *   - keydown 'Enter' on a sized rect routes through the same gate
+ *     (keyboard-equivalent of pointerup auto-trigger).
+ *   - On dialog confirm (gate resolves true): the overlay is torn
+ *     down AND `onShapeComplete` fires so the toolbar auto-switches
+ *     to Select.
+ *   - On dialog cancel (gate resolves false): the rect stays in
+ *     place — the user can drag a fresh rect to adjust.
+ *   - keydown 'Escape' immediately cleans up, bypassing the dialog.
+ *   - Tiny rect (<10×10) at pointerup discards silently — no dialog.
+ *   - Without `onCropConfirmed`, falls back to a session-only
+ *     viewBox crop (legacy path).
  */
 
 import type { ToolOptions } from "@ingcreators/annot-core/editor/tool-options";
@@ -93,25 +105,25 @@ function overlayGroup(canvas: FakeCanvas): SVGGElement | null {
   return canvas.uiOverlay.querySelector<SVGGElement>("g[data-crop-overlay]");
 }
 
+/** Yield long enough for a chained `await` inside `#applyCrop` to
+ *  drain into post-bake DOM mutations + onShapeComplete fires.
+ *  Two `await Promise.resolve()` ticks cover the typical
+ *  `await onCropConfirmed; if (applied) cleanup; onShapeComplete`
+ *  chain. */
+async function flushMicrotasks(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
 describe("CropTool — onActivate / onDeactivate", () => {
-  it("onActivate paints the overlay group + instructional hint into ui-overlay", () => {
+  it("onActivate paints an empty overlay group (no hint, no buttons — the dialog is the confirm UI)", () => {
     const { tool, canvas } = buildTool();
     tool.onActivate?.();
     const grp = overlayGroup(canvas);
     expect(grp).not.toBeNull();
-    const text = grp!.querySelector("text");
-    expect(text).not.toBeNull();
-    expect(text!.textContent).toMatch(/Apply.*Enter to confirm.*Cancel.*Escape/);
-    expect(text!.getAttribute("fill")).toBe("#00d4ff");
-  });
-
-  it("hint is positioned relative to the current viewBox so a previously-cropped image still shows it on screen", () => {
-    const { tool, canvas } = buildTool({ viewBox: "100 50 400 300" });
-    tool.onActivate?.();
-    const text = overlayGroup(canvas)!.querySelector("text")!;
-    // 10/30 offset from the viewBox's top-left origin.
-    expect(text.getAttribute("x")).toBe("110");
-    expect(text.getAttribute("y")).toBe("80");
+    expect(grp!.querySelector("text")).toBeNull();
+    expect(grp!.querySelector("foreignObject")).toBeNull();
   });
 
   it("onDeactivate removes the entire overlay group (hint + any in-flight crop rect)", () => {
@@ -212,105 +224,168 @@ describe("CropTool — pointermove resize", () => {
   });
 });
 
-describe("CropTool — pointerup", () => {
-  it("ends the drag without removing the crop rect (waits for Enter / Apply)", () => {
+describe("CropTool — pointerup auto-opens the dialog (no Apply button click needed)", () => {
+  it("routes through onCropConfirmed automatically when the rect is large enough", async () => {
     const { tool, canvas } = buildTool();
-    tool.onActivate?.();
-    tool.onPointerDown(pointerEvent(), new DOMPoint(10, 20));
-    tool.onPointerMove(pointerEvent(), new DOMPoint(110, 80));
-    tool.onPointerUp(pointerEvent(), new DOMPoint(110, 80));
-    // Crop rect persists, waiting for the user's Enter / Escape / Apply / Cancel.
-    const grp = overlayGroup(canvas)!;
-    expect(grp.querySelectorAll("rect").length).toBe(1);
-    expect(grp.querySelectorAll("path").length).toBe(1);
-  });
-
-  it("surfaces the Apply / Cancel button pair after the drag ends", () => {
-    const { tool, canvas } = buildTool();
-    tool.onActivate?.();
-    tool.onPointerDown(pointerEvent(), new DOMPoint(10, 20));
-    tool.onPointerMove(pointerEvent(), new DOMPoint(110, 80));
-    // Buttons are NOT visible during the drag — only after pointerup.
-    expect(overlayGroup(canvas)!.querySelector("foreignObject")).toBeNull();
-    tool.onPointerUp(pointerEvent(), new DOMPoint(110, 80));
-    const fo = overlayGroup(canvas)!.querySelector("foreignObject");
-    expect(fo).not.toBeNull();
-    expect(fo!.getAttribute("data-crop-buttons")).toBe("");
-    const buttons = fo!.querySelectorAll("button");
-    expect(buttons.length).toBe(2);
-    // Cancel first (Apply is the primary action; Cancel anchors left).
-    expect(buttons[0]!.textContent).toBe("Cancel");
-    expect(buttons[1]!.textContent).toBe("Apply");
-  });
-
-  it("anchors the buttons to the bottom-right corner of the crop rect", () => {
-    const { tool, canvas } = buildTool();
-    tool.onActivate?.();
-    tool.onPointerDown(pointerEvent(), new DOMPoint(50, 60));
-    tool.onPointerMove(pointerEvent(), new DOMPoint(250, 260));
-    tool.onPointerUp(pointerEvent(), new DOMPoint(250, 260));
-    const fo = overlayGroup(canvas)!.querySelector("foreignObject")!;
-    // Rect is 50,60..250,260 → bottom-right corner is (250, 260).
-    // Buttons host is 200×44 anchored so its right edge sits at the
-    // rect's right edge, with a 4px gap below.
-    expect(fo.getAttribute("x")).toBe("50"); // 250 - 200
-    expect(fo.getAttribute("y")).toBe("264"); // 260 + 4
-    expect(fo.getAttribute("width")).toBe("200");
-    expect(fo.getAttribute("height")).toBe("44");
-  });
-});
-
-describe("CropTool — keydown Enter (apply)", () => {
-  it("applies a sized crop: updateViewBox + setZoom(1) + fitToView + history.save", () => {
-    const { tool, canvas, save } = buildTool();
+    const onCropConfirmed = vi.fn(async () => true);
+    tool.onCropConfirmed = onCropConfirmed;
     tool.onActivate?.();
     tool.onPointerDown(pointerEvent(), new DOMPoint(10, 20));
     tool.onPointerMove(pointerEvent(), new DOMPoint(210, 220));
     tool.onPointerUp(pointerEvent(), new DOMPoint(210, 220));
-    tool.onKeyDown?.(new KeyboardEvent("keydown", { key: "Enter" }));
-    expect(canvas.updateViewBox).toHaveBeenCalledWith(10, 20, 200, 200);
-    expect(canvas.setZoom).toHaveBeenCalledWith(1);
-    expect(canvas.fitToView).toHaveBeenCalledTimes(1);
-    expect(save).toHaveBeenCalledTimes(1);
-    // After apply, the overlay is gone.
+    await flushMicrotasks();
+    expect(onCropConfirmed).toHaveBeenCalledTimes(1);
+    expect(onCropConfirmed).toHaveBeenCalledWith(10, 20, 200, 200);
+    // Successful bake → overlay torn down.
     expect(overlayGroup(canvas)).toBeNull();
   });
 
-  it("rejects a too-small crop (<10×10): cleans up without applying", () => {
-    const { tool, canvas, save } = buildTool();
+  it("discards a tiny (<10×10) rect silently — no dialog, no overlay residue", async () => {
+    const { tool, canvas } = buildTool();
+    const onCropConfirmed = vi.fn(async () => true);
+    tool.onCropConfirmed = onCropConfirmed;
     tool.onActivate?.();
     tool.onPointerDown(pointerEvent(), new DOMPoint(0, 0));
     tool.onPointerMove(pointerEvent(), new DOMPoint(5, 5));
     tool.onPointerUp(pointerEvent(), new DOMPoint(5, 5));
-    tool.onKeyDown?.(new KeyboardEvent("keydown", { key: "Enter" }));
-    expect(canvas.updateViewBox).not.toHaveBeenCalled();
-    expect(save).not.toHaveBeenCalled();
+    await flushMicrotasks();
+    expect(onCropConfirmed).not.toHaveBeenCalled();
     expect(overlayGroup(canvas)).toBeNull();
   });
 
-  it("Enter without a crop rect is a silent no-op", () => {
-    const { tool, canvas, save } = buildTool();
+  it("pointerup without a prior pointerdown is a silent no-op", async () => {
+    const { tool } = buildTool();
+    const onCropConfirmed = vi.fn(async () => true);
+    tool.onCropConfirmed = onCropConfirmed;
     tool.onActivate?.();
-    tool.onKeyDown?.(new KeyboardEvent("keydown", { key: "Enter" }));
-    expect(canvas.updateViewBox).not.toHaveBeenCalled();
-    expect(save).not.toHaveBeenCalled();
+    tool.onPointerUp(pointerEvent(), new DOMPoint(0, 0));
+    await flushMicrotasks();
+    expect(onCropConfirmed).not.toHaveBeenCalled();
   });
 });
 
-describe("CropTool — keydown Escape (cancel)", () => {
-  it("cleans up the overlay without applying", () => {
-    const { tool, canvas, save } = buildTool();
+describe("CropTool — onCropConfirmed gate (destructive bake path)", () => {
+  it("keeps the overlay visible while the dialog is open (so the user can see what gets cropped)", async () => {
+    const { tool, canvas } = buildTool();
+    let resolveDialog: (v: boolean) => void = () => {};
+    const dialogPromise = new Promise<boolean>((resolve) => {
+      resolveDialog = resolve;
+    });
+    tool.onCropConfirmed = vi.fn(async () => dialogPromise);
     tool.onActivate?.();
     tool.onPointerDown(pointerEvent(), new DOMPoint(10, 20));
     tool.onPointerMove(pointerEvent(), new DOMPoint(210, 220));
     tool.onPointerUp(pointerEvent(), new DOMPoint(210, 220));
-    tool.onKeyDown?.(new KeyboardEvent("keydown", { key: "Escape" }));
-    expect(canvas.updateViewBox).not.toHaveBeenCalled();
-    expect(save).not.toHaveBeenCalled();
+    // Dialog is "open" — overlay must STILL be present.
+    await Promise.resolve();
+    const grp = overlayGroup(canvas);
+    expect(grp).not.toBeNull();
+    expect(grp!.querySelector("path")).not.toBeNull();
+    expect(grp!.querySelector("rect")).not.toBeNull();
+    // Now resolve the dialog with confirm.
+    resolveDialog(true);
+    await flushMicrotasks();
     expect(overlayGroup(canvas)).toBeNull();
   });
 
-  it("Escape without a prior crop rect still cleans up the hint (defensive)", () => {
+  it("on dialog confirm: tears down the overlay AND fires onShapeComplete (toolbar auto-switches to Select)", async () => {
+    const { tool, canvas } = buildTool();
+    tool.onCropConfirmed = vi.fn(async () => true);
+    const onShapeComplete = vi.fn();
+    tool.onShapeComplete = onShapeComplete;
+    tool.onActivate?.();
+    tool.onPointerDown(pointerEvent(), new DOMPoint(10, 20));
+    tool.onPointerMove(pointerEvent(), new DOMPoint(210, 220));
+    tool.onPointerUp(pointerEvent(), new DOMPoint(210, 220));
+    await flushMicrotasks();
+    expect(overlayGroup(canvas)).toBeNull();
+    expect(onShapeComplete).toHaveBeenCalledTimes(1);
+  });
+
+  it("on dialog cancel: keeps the rect in place AND does NOT fire onShapeComplete (user can re-drag to adjust)", async () => {
+    const { tool, canvas } = buildTool();
+    tool.onCropConfirmed = vi.fn(async () => false);
+    const onShapeComplete = vi.fn();
+    tool.onShapeComplete = onShapeComplete;
+    tool.onActivate?.();
+    tool.onPointerDown(pointerEvent(), new DOMPoint(10, 20));
+    tool.onPointerMove(pointerEvent(), new DOMPoint(210, 220));
+    tool.onPointerUp(pointerEvent(), new DOMPoint(210, 220));
+    await flushMicrotasks();
+    // Overlay still in place — the user can adjust by re-dragging.
+    expect(overlayGroup(canvas)).not.toBeNull();
+    const rect = overlayGroup(canvas)!.querySelector("rect")!;
+    expect(rect.getAttribute("x")).toBe("10");
+    expect(rect.getAttribute("y")).toBe("20");
+    expect(rect.getAttribute("width")).toBe("200");
+    expect(rect.getAttribute("height")).toBe("200");
+    expect(onShapeComplete).not.toHaveBeenCalled();
+  });
+
+  it("locks input while the dialog is open (a second pointerup mid-flight is dropped)", async () => {
+    const { tool } = buildTool();
+    let resolveDialog: (v: boolean) => void = () => {};
+    const dialogPromise = new Promise<boolean>((resolve) => {
+      resolveDialog = resolve;
+    });
+    const onCropConfirmed = vi.fn(async () => dialogPromise);
+    tool.onCropConfirmed = onCropConfirmed;
+    tool.onActivate?.();
+    tool.onPointerDown(pointerEvent(), new DOMPoint(10, 20));
+    tool.onPointerMove(pointerEvent(), new DOMPoint(210, 220));
+    tool.onPointerUp(pointerEvent(), new DOMPoint(210, 220));
+    // Try a second pointerdown + up while the dialog is "open".
+    tool.onPointerDown(pointerEvent(), new DOMPoint(30, 40));
+    tool.onPointerUp(pointerEvent(), new DOMPoint(80, 80));
+    await Promise.resolve();
+    expect(onCropConfirmed).toHaveBeenCalledTimes(1);
+    resolveDialog(true);
+    await flushMicrotasks();
+  });
+});
+
+describe("CropTool — keydown Enter (apply via gate)", () => {
+  it("opens the gate on Enter when a rect is drawn", async () => {
+    const { tool, canvas } = buildTool();
+    tool.onCropConfirmed = vi.fn(async () => true);
+    tool.onActivate?.();
+    tool.onPointerDown(pointerEvent(), new DOMPoint(10, 20));
+    tool.onPointerMove(pointerEvent(), new DOMPoint(210, 220));
+    // Note: NOT calling onPointerUp — we want to test the
+    // keyboard-only path (Enter while still dragging would be
+    // unusual but still valid).
+    tool.onKeyDown?.(new KeyboardEvent("keydown", { key: "Enter" }));
+    await flushMicrotasks();
+    expect(tool.onCropConfirmed).toHaveBeenCalledWith(10, 20, 200, 200);
+    expect(overlayGroup(canvas)).toBeNull();
+  });
+
+  it("Enter without a crop rect is a silent no-op", async () => {
+    const { tool, canvas } = buildTool();
+    tool.onCropConfirmed = vi.fn(async () => true);
+    tool.onActivate?.();
+    tool.onKeyDown?.(new KeyboardEvent("keydown", { key: "Enter" }));
+    await flushMicrotasks();
+    expect(tool.onCropConfirmed).not.toHaveBeenCalled();
+    expect(overlayGroup(canvas)).not.toBeNull();
+  });
+});
+
+describe("CropTool — keydown Escape (immediate cancel, bypasses dialog)", () => {
+  it("cleans up the overlay without invoking the gate", async () => {
+    const { tool, canvas } = buildTool();
+    const onCropConfirmed = vi.fn(async () => true);
+    tool.onCropConfirmed = onCropConfirmed;
+    tool.onActivate?.();
+    tool.onPointerDown(pointerEvent(), new DOMPoint(10, 20));
+    tool.onPointerMove(pointerEvent(), new DOMPoint(210, 220));
+    tool.onKeyDown?.(new KeyboardEvent("keydown", { key: "Escape" }));
+    await flushMicrotasks();
+    expect(onCropConfirmed).not.toHaveBeenCalled();
+    expect(overlayGroup(canvas)).toBeNull();
+  });
+
+  it("Escape without a prior crop rect still cleans up the overlay group (defensive)", () => {
     const { tool, canvas } = buildTool();
     tool.onActivate?.();
     expect(overlayGroup(canvas)).not.toBeNull();
@@ -319,76 +394,49 @@ describe("CropTool — keydown Escape (cancel)", () => {
   });
 });
 
-describe("CropTool — onCropConfirmed (destructive bake gate)", () => {
-  it("Enter routes through the gate (not the legacy viewBox path) when wired", async () => {
+describe("CropTool — fallback (no onCropConfirmed): legacy session-only viewBox crop", () => {
+  it("on pointerup applies updateViewBox + setZoom(1) + fitToView + history.save + onShapeComplete", async () => {
     const { tool, canvas, save } = buildTool();
-    const onCropConfirmed = vi.fn(async () => true);
-    tool.onCropConfirmed = onCropConfirmed;
+    const onShapeComplete = vi.fn();
+    tool.onShapeComplete = onShapeComplete;
     tool.onActivate?.();
     tool.onPointerDown(pointerEvent(), new DOMPoint(10, 20));
     tool.onPointerMove(pointerEvent(), new DOMPoint(210, 220));
     tool.onPointerUp(pointerEvent(), new DOMPoint(210, 220));
-    tool.onKeyDown?.(new KeyboardEvent("keydown", { key: "Enter" }));
-    // Microtask drain so the async gate resolves before assertions.
-    await Promise.resolve();
-    await Promise.resolve();
-    expect(onCropConfirmed).toHaveBeenCalledWith(10, 20, 200, 200);
-    // Legacy viewBox + history path is bypassed when the gate is wired —
-    // the gate's bake (EditorShell.applyCrop) owns those calls now.
-    expect(canvas.updateViewBox).not.toHaveBeenCalled();
-    expect(canvas.setZoom).not.toHaveBeenCalled();
-    expect(canvas.fitToView).not.toHaveBeenCalled();
-    expect(save).not.toHaveBeenCalled();
-    // Overlay is cleaned up immediately so the dialog doesn't open
-    // on top of the dim/dashed visualization.
+    await flushMicrotasks();
+    expect(canvas.updateViewBox).toHaveBeenCalledWith(10, 20, 200, 200);
+    expect(canvas.setZoom).toHaveBeenCalledWith(1);
+    expect(canvas.fitToView).toHaveBeenCalledTimes(1);
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(onShapeComplete).toHaveBeenCalledTimes(1);
     expect(overlayGroup(canvas)).toBeNull();
   });
 
-  it("Apply button click also routes through the gate", async () => {
-    const { tool, canvas } = buildTool();
-    const onCropConfirmed = vi.fn(async () => true);
-    tool.onCropConfirmed = onCropConfirmed;
+  it("rejects a too-small crop (<10×10) without applying", async () => {
+    const { tool, canvas, save } = buildTool();
     tool.onActivate?.();
-    tool.onPointerDown(pointerEvent(), new DOMPoint(10, 20));
-    tool.onPointerMove(pointerEvent(), new DOMPoint(210, 220));
-    tool.onPointerUp(pointerEvent(), new DOMPoint(210, 220));
-    const apply = overlayGroup(canvas)!
-      .querySelector("foreignObject")!
-      .querySelectorAll("button")[1]!;
-    apply.click();
-    await Promise.resolve();
-    await Promise.resolve();
-    expect(onCropConfirmed).toHaveBeenCalledWith(10, 20, 200, 200);
-  });
-
-  it("Cancel button click cleans up without invoking the gate", async () => {
-    const { tool, canvas } = buildTool();
-    const onCropConfirmed = vi.fn(async () => true);
-    tool.onCropConfirmed = onCropConfirmed;
-    tool.onActivate?.();
-    tool.onPointerDown(pointerEvent(), new DOMPoint(10, 20));
-    tool.onPointerMove(pointerEvent(), new DOMPoint(210, 220));
-    tool.onPointerUp(pointerEvent(), new DOMPoint(210, 220));
-    const cancel = overlayGroup(canvas)!
-      .querySelector("foreignObject")!
-      .querySelectorAll("button")[0]!;
-    cancel.click();
-    await Promise.resolve();
-    expect(onCropConfirmed).not.toHaveBeenCalled();
+    tool.onPointerDown(pointerEvent(), new DOMPoint(0, 0));
+    tool.onPointerMove(pointerEvent(), new DOMPoint(5, 5));
+    tool.onPointerUp(pointerEvent(), new DOMPoint(5, 5));
+    await flushMicrotasks();
+    expect(canvas.updateViewBox).not.toHaveBeenCalled();
+    expect(save).not.toHaveBeenCalled();
     expect(overlayGroup(canvas)).toBeNull();
   });
 });
 
 describe("CropTool — non-Enter / Escape keys ignored", () => {
-  it("'a' / 'Tab' / etc. don't trigger apply or cleanup", () => {
+  it("'a' / 'Tab' / etc. don't trigger apply or cleanup", async () => {
     const { tool, canvas, save } = buildTool();
     tool.onActivate?.();
     tool.onPointerDown(pointerEvent(), new DOMPoint(0, 0));
     tool.onPointerMove(pointerEvent(), new DOMPoint(100, 100));
-    tool.onPointerUp(pointerEvent(), new DOMPoint(100, 100));
+    // NOT calling pointerup — we want the rect to stay in place
+    // for the keyboard-noise test.
     tool.onKeyDown?.(new KeyboardEvent("keydown", { key: "a" }));
     tool.onKeyDown?.(new KeyboardEvent("keydown", { key: "Tab" }));
     tool.onKeyDown?.(new KeyboardEvent("keydown", { key: " " }));
+    await flushMicrotasks();
     expect(canvas.updateViewBox).not.toHaveBeenCalled();
     expect(save).not.toHaveBeenCalled();
     // Crop overlay still in place.
