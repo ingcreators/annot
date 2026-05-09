@@ -514,7 +514,9 @@ export class GoogleDriveStore
     if (
       updates.annotationsSvg !== undefined ||
       updates.tags !== undefined ||
-      updates.originalDataUrl !== undefined
+      updates.originalDataUrl !== undefined ||
+      updates.width !== undefined ||
+      updates.height !== undefined
     ) {
       const record = await this.getImage(path);
       if (!record?.originalDataUrl) return;
@@ -522,10 +524,12 @@ export class GoogleDriveStore
       const annotationsSvg = updates.annotationsSvg ?? record.annotationsSvg;
       const tags = updates.tags ?? record.tags;
       const originalDataUrl = updates.originalDataUrl ?? record.originalDataUrl;
+      const width = updates.width ?? record.width;
+      const height = updates.height ?? record.height;
       const isJpeg = originalDataUrl.startsWith("data:image/jpeg");
 
       const blob = await this.#buildXmpBlob(
-        { ...record, annotationsSvg, tags, originalDataUrl },
+        { ...record, annotationsSvg, tags, originalDataUrl, width, height },
         isJpeg ? "jpg" : "png",
       );
 
@@ -542,6 +546,8 @@ export class GoogleDriveStore
         annotationsSvg,
         tags,
         originalDataUrl,
+        width,
+        height,
         updatedAt: new Date().toISOString(),
       });
     }

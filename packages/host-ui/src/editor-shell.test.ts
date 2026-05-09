@@ -19,8 +19,8 @@
 //      and renders subsequent calls to `open()` a no-op.
 //   6. Tear-down on `error` keeps the shell usable for `destroy()`.
 
-import { describe, expect, it, vi } from "vitest";
 import type { ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
+import { describe, expect, it, vi } from "vitest";
 import { EditorShell, type EditorShellHost } from "./index.js";
 
 const PNG_PIXEL =
@@ -142,7 +142,9 @@ describe("EditorShell — Phase 3 implementation", () => {
     const { storage } = makeStorage();
     const shell = new EditorShell({ container, storage });
     expect(shell.getCurrentPageMetadata()).toBeNull();
-    shell.setPageMetadata({ elements: [] } as unknown as Parameters<typeof shell.setPageMetadata>[0]);
+    shell.setPageMetadata({ elements: [] } as unknown as Parameters<
+      typeof shell.setPageMetadata
+    >[0]);
     expect(shell.getCurrentPageMetadata()).toEqual({ elements: [] });
     shell.setPageMetadata(null);
     expect(shell.getCurrentPageMetadata()).toBeNull();
@@ -216,10 +218,7 @@ describe("EditorShell — Phase 3 implementation", () => {
   // selectors.
   describe("svgRoot host knob", () => {
     function makeSvgRoot(): SVGSVGElement {
-      const svg = document.createElementNS(
-        "http://www.w3.org/2000/svg",
-        "svg",
-      ) as SVGSVGElement;
+      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg") as SVGSVGElement;
       svg.id = "svg-root";
       return svg;
     }
@@ -415,9 +414,7 @@ describe("EditorShell — Phase 3 implementation", () => {
 
         // Sanity: the redact element is present BEFORE the burn.
         const canvas = shell.getCanvas();
-        expect(
-          canvas?.annotations.querySelectorAll("[data-redact-style]").length,
-        ).toBe(1);
+        expect(canvas?.annotations.querySelectorAll("[data-redact-style]").length).toBe(1);
         const hrefBefore = canvas?.imageEl.getAttribute("href");
 
         // Wire dirty + saved AFTER the seed history.save() the
@@ -436,9 +433,7 @@ describe("EditorShell — Phase 3 implementation", () => {
         expect(result.count).toBe(1);
 
         // Redact element removed from the annotations group.
-        expect(
-          canvas?.annotations.querySelectorAll("[data-redact-style]").length,
-        ).toBe(0);
+        expect(canvas?.annotations.querySelectorAll("[data-redact-style]").length).toBe(0);
 
         // Live canvas's imageEl.href swapped to the new bytes.
         const hrefAfter = canvas?.imageEl.getAttribute("href");
@@ -545,6 +540,386 @@ describe("EditorShell — Phase 3 implementation", () => {
       shell.destroy();
       const result = await shell.applyAllRedactions();
       expect(result.count).toBe(0);
+    });
+  });
+
+  // Destructive-crop sibling of the redact-burn pipeline. The shell's
+  // `applyCrop(x, y, w, h)`:
+  //   1. Decodes the live `imageEl.href`.
+  //   2. Calls `cropBitmap` to produce the new PNG bytes.
+  //   3. Translates every annotation by (-x, -y) via
+  //      `bakeAnnotationsTranslate` so each shape stays anchored to
+  //      its target.
+  //   4. Updates `imageEl` (href / x / y / width / height), resets
+  //      the SVG viewBox to `0 0 newW newH`, refits.
+  //   5. Updates the in-memory record with the new bitmap +
+  //      dimensions, persists via `storage.updateImage`, fires the
+  //      `saved` event.
+  //   6. Calls `history.save()` so Ctrl+Z reverts within the session.
+  //
+  // happy-dom's `<canvas>` doesn't actually rasterise — we stub
+  // `HTMLCanvasElement.prototype.getContext` + `.toBlob`,
+  // `URL.createObjectURL`, and the `HTMLImageElement` `src` setter so
+  // the orchestration code path resolves without hitting a real
+  // raster pipeline. The dims-flow path (`measureBlob` → `<img>` →
+  // `naturalWidth/Height`) is the trickiest part: we route the
+  // canvas's pre-toBlob width/height through a Map keyed on the
+  // produced Blob, and the src setter looks it up so the cropped
+  // dims propagate back into the shell.
+  describe("applyCrop — destructive crop bake", () => {
+    interface CropStubBag {
+      drawImageCalls: Array<{
+        sx: number;
+        sy: number;
+        sw: number;
+        sh: number;
+        dx: number;
+        dy: number;
+        dw: number;
+        dh: number;
+      }>;
+      restore: () => void;
+    }
+
+    /**
+     * Stub canvas + URL + Image so the shell's `applyCrop` flow
+     * resolves end-to-end without a real raster pipeline. The base
+     * image (loaded from `imageEl.href`) reports `baseW × baseH`
+     * natural dims; the crop output (loaded from a `mock-blob:N`
+     * URL) reports the dims the canvas was sized to at toBlob time.
+     */
+    function stubCanvasAndImage(baseW: number, baseH: number): CropStubBag {
+      const blobToDims = new Map<Blob, { width: number; height: number }>();
+      const urlToBlob = new Map<string, Blob>();
+      const drawImageCalls: CropStubBag["drawImageCalls"] = [];
+
+      const ctxStub = {
+        // Both 5-arg and 9-arg forms — happy-dom doesn't enforce
+        // arity, so we record the 9-arg parameters and let the
+        // 5-arg form land as 5 + 4 undefined.
+        drawImage: (
+          _img: CanvasImageSource,
+          sx: number,
+          sy: number,
+          sw: number,
+          sh: number,
+          dx?: number,
+          dy?: number,
+          dw?: number,
+          dh?: number,
+        ) => {
+          drawImageCalls.push({
+            sx,
+            sy,
+            sw,
+            sh,
+            dx: dx ?? 0,
+            dy: dy ?? 0,
+            dw: dw ?? sw,
+            dh: dh ?? sh,
+          });
+        },
+      };
+      const canvasProto = HTMLCanvasElement.prototype as unknown as {
+        getContext: (kind: string) => unknown;
+        toBlob: (cb: (b: Blob | null) => void, type?: string) => void;
+      };
+      const origGetContext = canvasProto.getContext;
+      const origToBlob = canvasProto.toBlob;
+      canvasProto.getContext = () => ctxStub;
+      canvasProto.toBlob = function (this: HTMLCanvasElement, cb, type) {
+        const w = this.width;
+        const h = this.height;
+        const blob = new Blob(["mock-cropped"], { type: type || "image/png" });
+        blobToDims.set(blob, { width: w, height: h });
+        queueMicrotask(() => cb(blob));
+      };
+
+      // URL.createObjectURL → mint a synthetic mock-blob URL we can
+      // look up later from the Image src setter to recover the
+      // canvas dims that produced the blob.
+      const origCreateURL = URL.createObjectURL;
+      const origRevokeURL = URL.revokeObjectURL;
+      let urlCounter = 0;
+      URL.createObjectURL = ((blob: Blob) => {
+        const url = `mock-blob:${++urlCounter}`;
+        urlToBlob.set(url, blob);
+        return url;
+      }) as typeof URL.createObjectURL;
+      URL.revokeObjectURL = ((url: string) => {
+        urlToBlob.delete(url);
+      }) as typeof URL.revokeObjectURL;
+
+      // HTMLImageElement.src setter: dispatch onload after the next
+      // microtask. `naturalWidth` / `naturalHeight` come from the
+      // url→blob→dims map for cropped blobs, fall back to the test's
+      // baseW × baseH for the base image (the data: URL the shell
+      // reads off `imageEl.href`).
+      const imgProto = HTMLImageElement.prototype;
+      const origSrcDescriptor = Object.getOwnPropertyDescriptor(imgProto, "src");
+      Object.defineProperty(imgProto, "src", {
+        configurable: true,
+        set(this: HTMLImageElement & { _src?: string }, value: string) {
+          this._src = value;
+          let nw = baseW;
+          let nh = baseH;
+          const blob = urlToBlob.get(value);
+          if (blob) {
+            const dims = blobToDims.get(blob);
+            if (dims) {
+              nw = dims.width;
+              nh = dims.height;
+            }
+          }
+          Object.defineProperty(this, "naturalWidth", { value: nw, configurable: true });
+          Object.defineProperty(this, "naturalHeight", { value: nh, configurable: true });
+          queueMicrotask(() => {
+            this.onload?.(new Event("load"));
+          });
+        },
+        get(this: HTMLImageElement & { _src?: string }) {
+          return this._src ?? "";
+        },
+      });
+
+      return {
+        drawImageCalls,
+        restore: () => {
+          canvasProto.getContext = origGetContext;
+          canvasProto.toBlob = origToBlob;
+          URL.createObjectURL = origCreateURL;
+          URL.revokeObjectURL = origRevokeURL;
+          if (origSrcDescriptor) {
+            Object.defineProperty(imgProto, "src", origSrcDescriptor);
+          } else {
+            delete (imgProto as unknown as { src?: string }).src;
+          }
+        },
+      };
+    }
+
+    /** A persisted document with one rect annotation inside the
+     *  crop region — covers the bake-translate path. The rect's
+     *  world position is `(50, 30)`; cropping with origin `(10, 20)`
+     *  shifts the rect to `(40, 10)` so it stays anchored to the
+     *  same target. */
+    function recordWithRect(width = 100, height = 100): ImageRecord {
+      const annotationsSvg = `<?xml version="1.0"?>
+<svg xmlns="http://www.w3.org/2000/svg" data-annot-version="1">
+  <g id="annotations">
+    <rect x="50" y="30" width="20" height="10" fill="#ff0000"/>
+  </g>
+</svg>`;
+      return makeRecord({ width, height, annotationsSvg });
+    }
+
+    it("crops the bitmap, shifts annotations, resets viewBox, and persists with new dims", async () => {
+      const stub = stubCanvasAndImage(100, 100);
+      try {
+        const container = makeContainer();
+        const { storage, updateImage } = makeStorage(recordWithRect(100, 100));
+        const shell = new EditorShell({ container, storage });
+        await shell.open("/test.annot.svg");
+
+        const canvas = shell.getCanvas();
+        expect(canvas).not.toBeNull();
+        const hrefBefore = canvas?.imageEl.getAttribute("href");
+        // Sanity: rect starts at (50, 30) — pre-bake position.
+        const rectBefore = canvas?.annotations.querySelector("rect");
+        expect(rectBefore?.getAttribute("x")).toBe("50");
+        expect(rectBefore?.getAttribute("y")).toBe("30");
+
+        const savedHandler = vi.fn();
+        const dirtyHandler = vi.fn();
+        shell.on("saved", savedHandler);
+        shell.on("dirty", dirtyHandler);
+        updateImage.mockClear();
+
+        const result = await shell.applyCrop(10, 20, 60, 50);
+        expect(result.applied).toBe(true);
+        expect(result.width).toBe(60);
+        expect(result.height).toBe(50);
+
+        // Annotation tree shifted by (-10, -20) so the rect stays
+        // anchored to the same target.
+        const rectAfter = canvas?.annotations.querySelector("rect");
+        expect(rectAfter?.getAttribute("x")).toBe("40");
+        expect(rectAfter?.getAttribute("y")).toBe("10");
+
+        // Live canvas's imageEl swapped to the new bytes + dims.
+        const hrefAfter = canvas?.imageEl.getAttribute("href");
+        expect(hrefAfter).not.toBe(hrefBefore);
+        expect(hrefAfter).toMatch(/^data:image\/png/);
+        expect(canvas?.imageEl.getAttribute("width")).toBe("60");
+        expect(canvas?.imageEl.getAttribute("height")).toBe("50");
+        expect(canvas?.imageEl.getAttribute("x")).toBe("0");
+        expect(canvas?.imageEl.getAttribute("y")).toBe("0");
+
+        // SVG viewBox reset to the new origin + dims.
+        expect(canvas?.svg.getAttribute("viewBox")).toBe("0 0 60 50");
+        expect(canvas?.imageWidth).toBe(60);
+        expect(canvas?.imageHeight).toBe(50);
+
+        // 9-arg drawImage form: source-rect (10, 20, 60, 50) →
+        // dest-rect (0, 0, 60, 50).
+        expect(stub.drawImageCalls).toHaveLength(1);
+        expect(stub.drawImageCalls[0]).toMatchObject({
+          sx: 10,
+          sy: 20,
+          sw: 60,
+          sh: 50,
+          dx: 0,
+          dy: 0,
+          dw: 60,
+          dh: 50,
+        });
+
+        // Persistence: storage.updateImage MUST be called with the
+        // new bitmap, the shifted annotations, AND the new
+        // dimensions. Without width / height in the update, a
+        // reload would reconstruct the canvas at the OLD (pre-crop)
+        // size — leaving the document broken.
+        expect(updateImage).toHaveBeenCalledTimes(1);
+        const call = updateImage.mock.calls[0] as unknown as [
+          string,
+          {
+            annotationsSvg: string;
+            originalDataUrl: string;
+            width: number;
+            height: number;
+            updatedAt: string;
+          },
+        ];
+        expect(call[0]).toBe("/test.annot.svg");
+        expect(call[1].originalDataUrl).toBe(hrefAfter);
+        expect(call[1].width).toBe(60);
+        expect(call[1].height).toBe(50);
+        expect(call[1].annotationsSvg).toContain("<svg");
+        // The persisted SVG carries the SHIFTED rect (x=40, not x=50).
+        expect(call[1].annotationsSvg).toContain('x="40"');
+        expect(call[1].annotationsSvg).toContain('y="10"');
+        expect(call[1].updatedAt).toBeTypeOf("string");
+        expect(savedHandler).toHaveBeenCalledWith("/test.annot.svg");
+        // History snapshot fired → host receives a dirty event.
+        expect(dirtyHandler).toHaveBeenCalled();
+
+        shell.destroy();
+      } finally {
+        stub.restore();
+      }
+    });
+
+    it("re-throws + emits error when storage.updateImage rejects", async () => {
+      const stub = stubCanvasAndImage(100, 100);
+      try {
+        const container = makeContainer();
+        const updateImage = vi.fn(async () => {
+          throw new Error("storage offline");
+        });
+        const storage = {
+          getImage: vi.fn(async () => recordWithRect(100, 100)),
+          updateImage,
+        } as unknown as StorageProvider;
+        const shell = new EditorShell({ container, storage });
+        await shell.open("/test.annot.svg");
+
+        const errorHandler = vi.fn();
+        shell.on("error", errorHandler);
+
+        await expect(shell.applyCrop(10, 20, 60, 50)).rejects.toThrow(/storage offline/);
+        expect(errorHandler).toHaveBeenCalled();
+
+        shell.destroy();
+      } finally {
+        stub.restore();
+      }
+    });
+
+    it("returns applied: false when called before any image is open", async () => {
+      const container = makeContainer();
+      const { storage } = makeStorage();
+      const shell = new EditorShell({ container, storage });
+      // No `open()` call.
+      const result = await shell.applyCrop(10, 20, 60, 50);
+      expect(result.applied).toBe(false);
+      expect(result.width).toBe(0);
+      expect(result.height).toBe(0);
+      shell.destroy();
+    });
+
+    it("returns applied: false after destroy()", async () => {
+      const container = makeContainer();
+      const { storage } = makeStorage(recordWithRect(100, 100));
+      const shell = new EditorShell({ container, storage });
+      await shell.open("/test.annot.svg");
+      shell.destroy();
+      const result = await shell.applyCrop(10, 20, 60, 50);
+      expect(result.applied).toBe(false);
+    });
+
+    it.each([
+      [0, 0, 0, 0],
+      [10, 10, -50, 50],
+      [10, 10, 50, -50],
+      [Number.NaN, 10, 50, 50],
+      [10, Number.NaN, 50, 50],
+    ])("returns applied: false for degenerate rect (%d, %d, %d, %d)", async (x, y, w, h) => {
+      const stub = stubCanvasAndImage(100, 100);
+      try {
+        const container = makeContainer();
+        const { storage, updateImage } = makeStorage(recordWithRect(100, 100));
+        const shell = new EditorShell({ container, storage });
+        await shell.open("/test.annot.svg");
+        updateImage.mockClear();
+
+        const result = await shell.applyCrop(x, y, w, h);
+        expect(result.applied).toBe(false);
+        // Degenerate rect short-circuits BEFORE any storage write.
+        expect(updateImage).not.toHaveBeenCalled();
+
+        shell.destroy();
+      } finally {
+        stub.restore();
+      }
+    });
+
+    it("translates a `<line>` annotation alongside non-line shapes", async () => {
+      // Cover the line / arrow branch of bakeAnnotationsTranslate —
+      // the bakeTranslate dispatcher itself skips lines, so the
+      // annotation walker has to handle them via a separate path.
+      const stub = stubCanvasAndImage(200, 100);
+      try {
+        const annotationsSvg = `<?xml version="1.0"?>
+<svg xmlns="http://www.w3.org/2000/svg" data-annot-version="1">
+  <g id="annotations">
+    <line x1="50" y1="30" x2="100" y2="60"/>
+    <rect x="80" y="40" width="20" height="20" fill="#0f0"/>
+  </g>
+</svg>`;
+        const container = makeContainer();
+        const { storage } = makeStorage(makeRecord({ width: 200, height: 100, annotationsSvg }));
+        const shell = new EditorShell({ container, storage });
+        await shell.open("/test.annot.svg");
+
+        const canvas = shell.getCanvas();
+        const result = await shell.applyCrop(20, 10, 150, 70);
+        expect(result.applied).toBe(true);
+
+        // Line endpoints shifted by (-20, -10).
+        const line = canvas?.annotations.querySelector("line");
+        expect(line?.getAttribute("x1")).toBe("30");
+        expect(line?.getAttribute("y1")).toBe("20");
+        expect(line?.getAttribute("x2")).toBe("80");
+        expect(line?.getAttribute("y2")).toBe("50");
+        // Rect translated alongside the line.
+        const rect = canvas?.annotations.querySelector("rect");
+        expect(rect?.getAttribute("x")).toBe("60");
+        expect(rect?.getAttribute("y")).toBe("30");
+
+        shell.destroy();
+      } finally {
+        stub.restore();
+      }
     });
   });
 });

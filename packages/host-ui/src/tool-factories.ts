@@ -18,12 +18,7 @@
 
 import { TOOL_REGISTRY } from "@ingcreators/annot-core/editor";
 import type { ToolOptions } from "@ingcreators/annot-core/editor/tool-options";
-import type {
-  CanvasManager,
-  History,
-  SelectionManager,
-  ToolBase,
-} from "@ingcreators/annot-editor";
+import type { CanvasManager, History, SelectionManager, ToolBase } from "@ingcreators/annot-editor";
 import { ArrowTool } from "@ingcreators/annot-editor/tools/arrow-tool";
 import { CropTool } from "@ingcreators/annot-editor/tools/crop-tool";
 import { FreehandTool } from "@ingcreators/annot-editor/tools/freehand-tool";
@@ -42,6 +37,22 @@ export interface ToolFactoryDeps {
   /** Used by `text` so the post-edit `onTextBoxChanged` callback can
    *  re-select the textbox. Other tools ignore it. */
   selection: SelectionManager;
+  /** Confirm-then-apply gate the `crop` tool calls when the user
+   *  hits Enter / clicks Apply. The host (PWA / VSCode / desktop)
+   *  is responsible for showing a destructive-action confirmation
+   *  dialog AND for invoking `EditorShell.applyCrop(x, y, w, h)`
+   *  when the user agrees. The dialog cost is a one-time UX hit
+   *  per crop and is required by the destructive-mutation policy
+   *  in `CLAUDE.md` ("Any 'destroy the source bitmap' feature
+   *  added later — e.g. permanently apply cropping — MUST go
+   *  through the same destructive-confirmation pattern …").
+   *
+   *  When omitted (e.g. a host that hasn't wired the dialog yet),
+   *  the crop tool falls back to a session-only viewBox crop —
+   *  visually correct but lost on reload, matching the pre-Phase
+   *  behaviour. The omission is opt-in so existing callers stay
+   *  green during the rollout. */
+  applyCrop?: (x: number, y: number, w: number, h: number) => Promise<boolean>;
 }
 
 /** Build a live `ToolBase` for one tool id. `opts` is the
@@ -75,7 +86,18 @@ export const TOOL_FACTORIES: Record<string, ToolFactory> = {
   freehand: (o, { canvas, history }) => new FreehandTool(canvas, history, o),
   marker: (o, { canvas, history }) => new MarkerTool(canvas, history, o),
   redact: (o, { canvas, history }) => new RedactTool(canvas, history, o),
-  crop: (o, { canvas, history }) => new CropTool(canvas, history, o),
+  crop: (o, { canvas, history, applyCrop }) => {
+    const t = new CropTool(canvas, history, o);
+    // Bind the host-supplied confirm-then-apply gate so the tool's
+    // Enter / Apply path goes through the destructive-action dialog
+    // instead of falling back to the viewBox-only crop. When the
+    // host doesn't supply the gate, the tool's own fallback path
+    // applies (session-only crop, lost on reload).
+    if (applyCrop) {
+      t.onCropConfirmed = applyCrop;
+    }
+    return t;
+  },
 };
 
 /** Toolbar `ToolDef` shape — what `Toolbar` stores in its

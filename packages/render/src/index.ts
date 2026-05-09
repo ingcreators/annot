@@ -17,6 +17,7 @@ export {
   classifyRedact,
   type RedactKind,
 } from "./redact-burn.js";
+export { cropBitmap } from "./crop-bitmap.js";
 export {
   buildBackgroundPic,
   buildFillXml,

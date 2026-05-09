@@ -38,6 +38,7 @@ import { HeaderHost } from "@ingcreators/annot-host-ui/orchestrators/header-host
 import { SavePipeline } from "@ingcreators/annot-host-ui/orchestrators/save-pipeline";
 import { StatusHost } from "@ingcreators/annot-host-ui/orchestrators/status-host";
 import { Toolbar } from "@ingcreators/annot-host-ui/toolbar";
+import { showConfirmDialog } from "@ingcreators/annot-host-ui/ui/dialog";
 import { bootstrapDesktopFsGallery, type DesktopGalleryHandle } from "../storage/bootstrap.js";
 
 // Restore the user's last-chosen theme + any saved token overrides
@@ -208,6 +209,16 @@ function openEditor(record: ImageRecord): void {
   // `<annot-editor-header>` now). Tool ▼ dropdowns stay enabled
   // because the right panel renders tool properties persistently
   // and the variant flyouts still ship a faster picker.
+  //
+  // `savePipelineRef` forward-declares a writable handle so the
+  // `applyCrop` closure can call `cancelAutoSave()` before the
+  // destructive bake's explicit `storage.updateImage` runs (mirrors
+  // the PWA wiring + the deferred `applyAllRedactions` assignment
+  // below). The closure is only invoked AFTER the user clicks
+  // Apply on a drawn crop rect, by which point savePipelineRef has
+  // been pointed at the real instance — the null default keeps the
+  // type honest until then.
+  let savePipelineRef: SavePipeline | null = null;
   const toolbar = new Toolbar(
     sidebarEl,
     canvas,
@@ -224,6 +235,25 @@ function openEditor(record: ImageRecord): void {
       showSaveGroup: false,
       hideToolDropdowns: false,
       getCurrentFilename: () => getFilename(session?.path ?? record.path),
+      // Confirm-then-bake gate the CropTool calls when the user
+      // commits a crop rect. Mirrors the PWA wiring in
+      // `editor-session.ts` and the VSCode wiring in
+      // `webview/main.ts`.
+      applyCrop: async (x, y, w, h) => {
+        const ok = await showConfirmDialog({
+          title: "Crop image?",
+          message:
+            `The image will be permanently cropped to ${Math.round(w)}×${Math.round(h)} pixels. ` +
+            "The pixels outside the crop region can no longer be recovered after the next save. Continue?",
+          okLabel: "Crop",
+          cancelLabel: "Cancel",
+          danger: true,
+        });
+        if (!ok) return false;
+        savePipelineRef?.cancelAutoSave();
+        const result = await shell.applyCrop(x, y, w, h);
+        return result.applied;
+      },
     },
   );
 
@@ -309,6 +339,10 @@ function openEditor(record: ImageRecord): void {
     onSaveError: (message, retry) => surfaceSaveError(message, retry),
     onSaveSuccess: () => hideEditorError(),
   });
+  // Point the forward-declared `savePipelineRef` at the live
+  // pipeline so the toolbar's `applyCrop` closure (constructed
+  // before this point) can reach `cancelAutoSave()`.
+  savePipelineRef = savePipeline;
 
   // ---- Apply-redactions wiring (deferred until savePipeline exists) ----
   // Cancel any pending debounced annotation autosave BEFORE the burn's

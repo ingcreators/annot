@@ -9,6 +9,7 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  bakeAnnotationsTranslate,
   bakeGroupTranslate,
   bakeMarkerTranslate,
   bakePathTranslate,
@@ -363,5 +364,171 @@ describe("bakeTranslate dispatcher (geometry-positioned leaves)", () => {
     bakeTranslate(g, 25, 25);
     expect(g.querySelector("circle")!.getAttribute("cx")).toBe("75");
     expect(g.querySelector("circle")!.getAttribute("cy")).toBe("75");
+  });
+});
+
+describe("bakeAnnotationsTranslate (crop-bake walker)", () => {
+  it("walks every direct child and shifts geometry by (dx, dy)", () => {
+    const svg = svgWithRoot();
+    const group = document.createElementNS(SVG_NS, "g") as SVGGElement;
+    svg.appendChild(group);
+
+    const rect = document.createElementNS(SVG_NS, "rect") as SVGRectElement;
+    rect.setAttribute("x", "10");
+    rect.setAttribute("y", "20");
+    rect.setAttribute("width", "100");
+    rect.setAttribute("height", "50");
+    group.appendChild(rect);
+
+    const circle = document.createElementNS(SVG_NS, "circle") as SVGCircleElement;
+    circle.setAttribute("cx", "200");
+    circle.setAttribute("cy", "150");
+    circle.setAttribute("r", "30");
+    group.appendChild(circle);
+
+    const path = document.createElementNS(SVG_NS, "path") as SVGPathElement;
+    path.setAttribute("d", "M 10 20 L 30 40");
+    group.appendChild(path);
+
+    bakeAnnotationsTranslate(group, -5, -10);
+
+    expect(rect.getAttribute("x")).toBe("5");
+    expect(rect.getAttribute("y")).toBe("10");
+    expect(circle.getAttribute("cx")).toBe("195");
+    expect(circle.getAttribute("cy")).toBe("140");
+    expect(path.getAttribute("d")).toBe("M5 10 L25 30");
+  });
+
+  it("translates `<line>` endpoints (the bakeTranslate dispatcher skips lines)", () => {
+    const svg = svgWithRoot();
+    const group = document.createElementNS(SVG_NS, "g") as SVGGElement;
+    svg.appendChild(group);
+
+    const line = document.createElementNS(SVG_NS, "line") as SVGLineElement;
+    line.setAttribute("x1", "10");
+    line.setAttribute("y1", "20");
+    line.setAttribute("x2", "100");
+    line.setAttribute("y2", "200");
+    group.appendChild(line);
+
+    bakeAnnotationsTranslate(group, -5, -10);
+
+    expect(line.getAttribute("x1")).toBe("5");
+    expect(line.getAttribute("y1")).toBe("10");
+    expect(line.getAttribute("x2")).toBe("95");
+    expect(line.getAttribute("y2")).toBe("190");
+  });
+
+  it('translates a curved `<g data-type="arrow">` — endpoints AND the bezier control point', () => {
+    // Arrows store their endpoints + (optional) control point as data
+    // attrs (`data-x1` / `data-y1` / `data-x2` / `data-y2` / `data-cx`
+    // / `data-cy`). The composed stem / head `<path>` children are
+    // rebuilt by `refreshArrowPath` from those values; bakeAnnotations
+    // Translate routes arrows through `bakeLineTranslate` which shifts
+    // endpoints AND control then re-runs the path refresh.
+    const svg = svgWithRoot();
+    const group = document.createElementNS(SVG_NS, "g") as SVGGElement;
+    svg.appendChild(group);
+
+    const arrow = document.createElementNS(SVG_NS, "g") as SVGGElement;
+    arrow.setAttribute("data-type", "arrow");
+    arrow.setAttribute("data-x1", "100");
+    arrow.setAttribute("data-y1", "200");
+    arrow.setAttribute("data-x2", "300");
+    arrow.setAttribute("data-y2", "150");
+    arrow.setAttribute("data-cx", "200");
+    arrow.setAttribute("data-cy", "175");
+    arrow.setAttribute("stroke", "#000");
+    arrow.setAttribute("stroke-width", "3");
+    group.appendChild(arrow);
+
+    bakeAnnotationsTranslate(group, -50, -25);
+
+    expect(arrow.getAttribute("data-x1")).toBe("50");
+    expect(arrow.getAttribute("data-y1")).toBe("175");
+    expect(arrow.getAttribute("data-x2")).toBe("250");
+    expect(arrow.getAttribute("data-y2")).toBe("125");
+    expect(arrow.getAttribute("data-cx")).toBe("150");
+    expect(arrow.getAttribute("data-cy")).toBe("150");
+  });
+
+  it('translates a straight `<g data-type="arrow">` — no control point, no NaN leakage', () => {
+    // Straight arrows have no `data-cx` / `data-cy` (the writer
+    // omits them). The bake must NOT introduce a control point that
+    // wasn't there originally — `readArrowControl` returns null when
+    // the attrs are missing, so the writeArrowControl call is
+    // skipped.
+    const svg = svgWithRoot();
+    const group = document.createElementNS(SVG_NS, "g") as SVGGElement;
+    svg.appendChild(group);
+
+    const arrow = document.createElementNS(SVG_NS, "g") as SVGGElement;
+    arrow.setAttribute("data-type", "arrow");
+    arrow.setAttribute("data-x1", "100");
+    arrow.setAttribute("data-y1", "200");
+    arrow.setAttribute("data-x2", "300");
+    arrow.setAttribute("data-y2", "150");
+    arrow.setAttribute("stroke", "#000");
+    arrow.setAttribute("stroke-width", "3");
+    group.appendChild(arrow);
+
+    bakeAnnotationsTranslate(group, -50, -25);
+
+    expect(arrow.getAttribute("data-x1")).toBe("50");
+    expect(arrow.getAttribute("data-y1")).toBe("175");
+    expect(arrow.getAttribute("data-x2")).toBe("250");
+    expect(arrow.getAttribute("data-y2")).toBe("125");
+    // No control attrs introduced.
+    expect(arrow.hasAttribute("data-cx")).toBe(false);
+    expect(arrow.hasAttribute("data-cy")).toBe(false);
+  });
+
+  it("(0, 0) is a no-op — no children are touched", () => {
+    const svg = svgWithRoot();
+    const group = document.createElementNS(SVG_NS, "g") as SVGGElement;
+    svg.appendChild(group);
+    const rect = document.createElementNS(SVG_NS, "rect") as SVGRectElement;
+    rect.setAttribute("x", "10");
+    rect.setAttribute("y", "20");
+    group.appendChild(rect);
+
+    bakeAnnotationsTranslate(group, 0, 0);
+
+    expect(rect.getAttribute("x")).toBe("10");
+    expect(rect.getAttribute("y")).toBe("20");
+  });
+
+  it("handles a mixed annotation tree (line + rect + path) in one pass", () => {
+    const svg = svgWithRoot();
+    const group = document.createElementNS(SVG_NS, "g") as SVGGElement;
+    svg.appendChild(group);
+
+    const rect = document.createElementNS(SVG_NS, "rect") as SVGRectElement;
+    rect.setAttribute("x", "100");
+    rect.setAttribute("y", "100");
+    rect.setAttribute("width", "50");
+    rect.setAttribute("height", "30");
+    group.appendChild(rect);
+
+    const line = document.createElementNS(SVG_NS, "line") as SVGLineElement;
+    line.setAttribute("x1", "100");
+    line.setAttribute("y1", "100");
+    line.setAttribute("x2", "200");
+    line.setAttribute("y2", "150");
+    group.appendChild(line);
+
+    const path = document.createElementNS(SVG_NS, "path") as SVGPathElement;
+    path.setAttribute("d", "M 100 100 L 200 150");
+    group.appendChild(path);
+
+    bakeAnnotationsTranslate(group, -100, -100);
+
+    expect(rect.getAttribute("x")).toBe("0");
+    expect(rect.getAttribute("y")).toBe("0");
+    expect(line.getAttribute("x1")).toBe("0");
+    expect(line.getAttribute("y1")).toBe("0");
+    expect(line.getAttribute("x2")).toBe("100");
+    expect(line.getAttribute("y2")).toBe("50");
+    expect(path.getAttribute("d")).toBe("M0 0 L100 50");
   });
 });

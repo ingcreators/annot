@@ -925,11 +925,23 @@ Queued work without a formal plan doc yet:
   load-bearing for the privacy contract: redactions must be
   irreversible-after-save, AND the user must explicitly opt-in to
   irreversibility. Any "destroy the source bitmap" feature added later
-  (e.g. a hypothetical "flatten all annotations" or "permanently apply
-  cropping") MUST go through the same destructive-confirmation pattern
-  before mutating `ImageRecord.originalDataUrl`. The reverse — adding a
-  silent / autosave-driven mutation of the underlying bitmap — would
-  invert the contract this plan stood up.
+  (e.g. a hypothetical "flatten all annotations") MUST go through the
+  same destructive-confirmation pattern before mutating
+  `ImageRecord.originalDataUrl`. The reverse — adding a silent /
+  autosave-driven mutation of the underlying bitmap — would invert
+  the contract this plan stood up.
+- The crop tool's destructive bake path
+  ([`_done/destructive-crop-bake.md`](./docs/plans/_done/destructive-crop-bake.md)) —
+  `EditorShell.applyCrop` + the `Toolbar.options.applyCrop` →
+  `ToolFactoryDeps.applyCrop` → `CropTool.onCropConfirmed` chain +
+  `cropBitmap` (Tier C-render) + `bakeAnnotationsTranslate` (Tier B)
+  follow the SAME destructive-mutation contract as redact-burn.
+  Adding aspect-ratio locks / preset rectangles / per-element crop
+  scope is fine; bypassing the confirmation dialog or the
+  `storage.updateImage` persistence step (e.g. a "session-only
+  zoom-and-look crop" wired through the same `applyCrop` slot)
+  is not — that path silently mutates `originalDataUrl` and
+  inverts the destructive-action opt-in.
 
 ## When in doubt
 
