@@ -550,6 +550,18 @@ Within an element, attributes are emitted in this order:
 The parser ignores input attribute order and re-canonicalises on
 save.
 
+**Exception — `<meta>` elements.** The HTML idiom for `<meta>`
+puts the type-determining attribute (`charset` / `name` /
+`property` / `http-equiv`) before `content`. The canonical form
+honours that idiom:
+
+- `<meta charset="utf-8">`
+- `<meta name="annot-document" content="1">`
+- `<meta name="annot-template" content="1">`
+
+For any other attribute on `<meta>` outside this list, fall back
+to the alphabetical rule.
+
 ### Quote style
 
 - HTML attribute values: always `"` (double quote). Single quotes

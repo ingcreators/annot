@@ -123,6 +123,21 @@ importers:
         specifier: 'catalog:'
         version: 8.0.10(@types/node@25.6.0)(esbuild@0.27.7)(jiti@2.7.0)
 
+  packages/doc:
+    devDependencies:
+      '@types/node':
+        specifier: ^25
+        version: 25.6.0
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+      vite:
+        specifier: 'catalog:'
+        version: 8.0.10(@types/node@25.6.0)(esbuild@0.27.7)(jiti@2.7.0)
+      vite-plugin-dts:
+        specifier: ^5.0.0
+        version: 5.0.0(esbuild@0.27.7)(typescript@6.0.3)(vite@8.0.10(@types/node@25.6.0)(esbuild@0.27.7)(jiti@2.7.0))
+
   packages/editor:
     dependencies:
       '@ingcreators/annot-core':
