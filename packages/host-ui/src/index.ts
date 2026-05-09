@@ -52,7 +52,6 @@ export {
   parseStoredItem,
   renderThumbnail,
   serializeSelection,
-  translateElement,
 } from "./scratchpad-utils.js";
 export {
   type AnnotEditorStatusbarElement,

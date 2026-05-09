@@ -10,10 +10,11 @@
  * Escape cancels placement without inserting anything.
  */
 
+import { moveAnnotationElement } from "@ingcreators/annot-core/editor/bake-translate";
 import type { CanvasManager } from "@ingcreators/annot-editor";
 import type { History } from "@ingcreators/annot-editor";
 import { ToolBase, type ToolOptions } from "@ingcreators/annot-editor";
-import { parseStoredItem, translateElement } from "./scratchpad-utils.js";
+import { parseStoredItem } from "./scratchpad-utils.js";
 
 export class ScratchpadPasteTool extends ToolBase {
   readonly name = "ScratchpadPaste";
@@ -51,11 +52,18 @@ export class ScratchpadPasteTool extends ToolBase {
     const cx = pt.x;
     const cy = pt.y;
 
+    // Append THEN move so the move dispatcher's `applyTransformState`
+    // pivot fallback (which calls `getBBox()` for the rotated branch)
+    // sees a connected element. Stored children come out of the
+    // serializer with no rotation/flip data attrs (their geometry
+    // already absorbed the save offset), so the move walks the
+    // unrotated branch — but appending first costs nothing and keeps
+    // any future "rotated stamp" feature correct.
     const inserted: SVGElement[] = [];
     for (const child of children) {
       const clone = child.cloneNode(true) as SVGElement;
-      translateElement(clone, cx, cy);
       this.canvas.annotations.appendChild(clone);
+      moveAnnotationElement(clone, cx, cy);
       inserted.push(clone);
     }
 
