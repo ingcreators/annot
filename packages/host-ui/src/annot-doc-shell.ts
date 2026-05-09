@@ -38,6 +38,8 @@ import "./annot-doc-block-menu.js";
 import "./annot-doc-block-toolbar.js";
 import type { BlockToolbarActionDetail } from "./annot-doc-block-toolbar.js";
 import { DocumentHistory } from "./annot-doc-history.js";
+import { AnnotDocImageEditorModalElement } from "./annot-doc-image-editor-modal.js";
+import "./annot-doc-image-editor-modal.js";
 import {
   html,
   LitElement,
@@ -112,6 +114,27 @@ const SHELL_CSS = `
   margin: 0.25rem 0;
   border-radius: 4px;
   border: 1px solid transparent;
+}
+.annot-doc-shell.editing figure[data-annot-block="image"] {
+  cursor: pointer;
+  position: relative;
+}
+.annot-doc-shell.editing figure[data-annot-block="image"]::after {
+  content: "Click to edit";
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 4px 8px;
+  background: rgba(0, 0, 0, 0.65);
+  color: #ffffff;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  opacity: 0;
+  transition: opacity 0.12s ease-in;
+  pointer-events: none;
+}
+.annot-doc-shell.editing figure[data-annot-block="image"]:hover::after {
+  opacity: 1;
 }
 .annot-doc-shell.editing .annot-doc-block-host:hover,
 .annot-doc-shell.editing .annot-doc-block-host:focus-within {
@@ -628,7 +651,11 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
     total: number,
   ): TemplateResult {
     return html`
-      <div class="annot-doc-block-host" data-block-index=${index}>
+      <div
+        class="annot-doc-block-host"
+        data-block-index=${index}
+        @click=${(e: MouseEvent) => this.#onBlockHostClick(e, index)}
+      >
         ${renderBlockBody(block, ids, /* editable */ true)}
         <annot-doc-block-toolbar
           .canMoveUp=${index > 0}
@@ -638,6 +665,36 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
         ></annot-doc-block-toolbar>
       </div>
     `;
+  }
+
+  // -------------------------------------------------------------------------
+  // Image-block click → modal editor
+  // -------------------------------------------------------------------------
+
+  #onBlockHostClick(e: MouseEvent, index: number): void {
+    if (!this.document) return;
+    const block = this.document.blocks[index];
+    if (block?.kind !== "image") return;
+    // Toolbar lives inside the same host wrapper; clicks on the
+    // toolbar buttons must not bubble up into "edit image".
+    if ((e.target as HTMLElement | null)?.closest("annot-doc-block-toolbar")) return;
+    void this.#openImageEditor(block, index);
+  }
+
+  async #openImageEditor(block: ImageBlock, index: number): Promise<void> {
+    const result = await AnnotDocImageEditorModalElement.openFor({
+      id: block.id,
+      svg: block.svg,
+    });
+    if (result.kind !== "save") return;
+    if (!this.document) return;
+    const blocks = [...this.document.blocks];
+    const target = blocks[index];
+    if (target?.kind !== "image") return;
+    blocks[index] = { ...target, svg: result.svg };
+    const newDoc: AnnotDocument = { ...this.document, blocks };
+    this.#history?.push(newDoc);
+    this.#applyInternal(newDoc, "block-action");
   }
 }
 
