@@ -21,7 +21,7 @@ import type { CanvasManager, History, SelectionManager } from "@ingcreators/anno
 import { openAnchoredPopover } from "@ingcreators/annot-editor";
 import type { AnnotFileDetailsDrawerElement } from "@ingcreators/annot-host-ui/annot-file-details-drawer";
 import { estimateDataUrlBytes } from "@ingcreators/annot-host-ui/annot-file-details-drawer";
-import { Toolbar } from "@ingcreators/annot-host-ui/toolbar";
+import { Toolbar, type ExtraToolAnchor } from "@ingcreators/annot-host-ui/toolbar";
 import "@ingcreators/annot-host-ui/annot-file-details-drawer";
 import { EditorShell, installKeyboardHelp } from "@ingcreators/annot-host-ui";
 import type { AnnotEditorRightPanelElement } from "@ingcreators/annot-host-ui/right-panel";
@@ -418,7 +418,11 @@ export class EditorSession {
 
     // Scratchpad library lives on the toolbar (consistent with other
     // "add to canvas" actions). The popover is rendered against the
-    // button via core's shared popover helper.
+    // anchor via core's shared popover helper. `anchor` is the toolbar
+    // button when invoked from a direct toolbar click; it's a
+    // `{ point: { x, y } }` cursor position when invoked from the
+    // canvas right-click toolbox menu, so the popover comes up under
+    // the user's cursor instead of forcing a round-trip to the toolbar.
     const scratchpadBtn = toolbar.registerExtraToolButton({
       id: "scratchpad",
       icon: "collections_bookmark",
@@ -634,12 +638,15 @@ export class EditorSession {
    * cleared.
    */
   #openScratchpadPopover(
-    anchor: HTMLElement,
+    anchor: ExtraToolAnchor,
     canvas: CanvasManager,
     selection: SelectionManager,
     history: History,
   ): void {
-    openAnchoredPopover(
+    // Forward-decl so the insert handler can dismiss the popover —
+    // captured by closure below once `openAnchoredPopover` returns.
+    let close: (() => void) | null = null;
+    close = openAnchoredPopover(
       anchor,
       (root) => {
         const section = document.createElement("annot-scratchpad-section");
@@ -651,15 +658,27 @@ export class EditorSession {
         });
         section.addEventListener("annot-scratchpad-insert", (e) => {
           const { item } = e.detail;
+          // Arm BEFORE closing so `#armScratchpadPaste` can flip the
+          // toolbar Scratchpad button to its "armed" highlight while
+          // the section is still mounted (handler ordering doesn't
+          // depend on this, but it documents intent).
           this.#armScratchpadPaste(canvas, selection, history, item);
           this.#armedScratchpadItemId = item.id;
           section.activeItemId = item.id;
+          // Dismiss the popover — variant flyouts already do this on
+          // chip-pick, and Scratchpad now matches: keeping the popover
+          // open would either occlude the user's intended drop point
+          // (toolbar-anchored case) or strand the user far from the
+          // toolbar (right-click case). The toolbar Scratchpad button
+          // takes the .active highlight as the persistent armed
+          // indicator instead.
+          close?.();
         });
         root.appendChild(section);
         this.#openScratchpadSection = section;
         // Cleanup when the popover closes — the MutationObserver on
         // <body> catches the helper's `remove()` regardless of WHY the
-        // popover closed (outside click, Escape, resize-kill, etc).
+        // popover closed (outside click, Escape, insert-pick, etc).
         const obs = new MutationObserver(() => {
           if (!root.isConnected) {
             this.#openScratchpadSection = null;
@@ -730,10 +749,20 @@ export class EditorSession {
     canvas.setActiveTool(tool);
 
     // Sync the toolbar UI + footer status with the now-armed paste tool:
-    // no toolbar button highlighted, footer shows "Scratchpad".
-    // The label matches the sidebar area the armed item came from so the
-    // user can identify the context at a glance.
-    this.#editorToolbar?.setExternalToolActive("Scratchpad", null);
+    // the toolbar's Scratchpad button picks up the `.active` highlight
+    // (via the third arg to `setExternalToolActive`) so the user has a
+    // persistent visual indicator of "Scratchpad item armed — click
+    // canvas to drop" even after the popover closes on item-pick. The
+    // footer shows "Scratchpad" — the label matches the sidebar area
+    // the armed item came from so the user can identify the context
+    // at a glance. The next tool change (Select / any drawing tool /
+    // Esc-cancel via ScratchpadPasteTool) clears the highlight via
+    // Toolbar's `#activate` path.
+    this.#editorToolbar?.setExternalToolActive(
+      "Scratchpad",
+      null,
+      this.#scratchpadToolbarBtn,
+    );
   }
 
   /** Resolve (or lazily construct) the per-session `EditorShell`.

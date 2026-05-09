@@ -121,6 +121,17 @@ declare namespace chrome {
 // definition used to live before Phase 5a.
 
 /**
+ * Anchor passed to a `registerExtraToolButton` host's `onClick`.
+ *
+ * Either the toolbar button itself (the user clicked the button) or
+ * a `{ point }` value (the user picked the entry from the canvas
+ * right-click toolbox menu and the host should open its popover at
+ * the cursor instead of against the toolbar — the right-click point
+ * IS the user's intent, traveling to the toolbar would defeat it).
+ */
+export type ExtraToolAnchor = HTMLButtonElement | { point: { x: number; y: number } };
+
+/**
  * Constructor-time switches for hosts that provide some of the toolbar's
  * chrome themselves. Defaults keep backwards-compatible behavior so
  * existing callers (e.g. the desktop app) don't need changes.
@@ -187,6 +198,15 @@ export class Toolbar {
    *  Shape" (rect vs rounded vs ellipse) survives across sessions. */
   #lastVariantByTool: Map<string, string> = new Map();
   #activeBtn: HTMLButtonElement | null = null;
+  /** When a host-registered extra button (e.g. the Scratchpad library
+   *  while a paste is armed) is the visually "active" surface. Tracked
+   *  separately from `#activeBtn` because extras live in their own
+   *  toolbar group and aren't swapped through the same `#activate` /
+   *  `setActiveTool` path the core tool buttons use. Cleared whenever
+   *  `#activate` runs (any tool change disarms the extra) and
+   *  whenever `setExternalToolActive` is called without an extra-
+   *  button reference. */
+  #activeExtraBtn: HTMLButtonElement | null = null;
   #selectBtn: HTMLButtonElement | null = null;
   #tools: Map<string, ToolDef> = new Map();
   /** Per-tool main button refs so we can swap their icon when the user
@@ -197,12 +217,16 @@ export class Toolbar {
    *  the undo/redo group. Populated via `registerExtraToolButton`. The
    *  metadata (`id` / `icon` / `label`) lives alongside the button ref so
    *  the canvas right-click toolbox menu can mirror these entries the
-   *  same way it mirrors the core tool buttons. */
+   *  same way it mirrors the core tool buttons. `onClick` is stored so
+   *  the right-click menu path can forward a cursor-position anchor
+   *  (instead of the toolbar button) when the entry is invoked from
+   *  there. */
   #extraButtons: Array<{
     id: string;
     icon: string;
     label: string;
     button: HTMLButtonElement;
+    onClick: (anchor: ExtraToolAnchor) => void;
   }> = [];
   /** The DOM group that the extra buttons live in, so registrations
    *  after initial render still attach to the right container. */
@@ -586,6 +610,12 @@ export class Toolbar {
     this.#activeBtn?.classList.remove("active");
     btn.classList.add("active");
     this.#activeBtn = btn;
+    // Switching to ANY core tool button disarms whichever extra
+    // button (e.g. Scratchpad) had the visual armed indicator —
+    // there's only one active surface at a time, mirroring how the
+    // core tool buttons clear each other.
+    this.#activeExtraBtn?.classList.remove("active");
+    this.#activeExtraBtn = null;
     this.#canvas.setActiveTool(tool);
 
     // Clearing selection on any tool change unifies the UX: the old
@@ -662,11 +692,30 @@ export class Toolbar {
    *  the toolbar — e.g. scratchpad paste) so the toolbar UI + status
    *  indicator still reflect the active context.
    *
+   *  When `extraBtn` is supplied (a button the host previously
+   *  obtained via `registerExtraToolButton`), it gets the
+   *  `.active` highlight to signal that the host-driven action
+   *  (e.g. an armed Scratchpad paste) is currently the "active
+   *  surface" — same visual language as the core tool buttons.
+   *  The next `#activate` call (any core tool change) clears this
+   *  state automatically.
+   *
    *  Does NOT touch canvas.setActiveTool or selection — the caller
    *  has already set the canvas up. This method is UI-state only. */
-  setExternalToolActive(label: string, toolId: string | null): void {
+  setExternalToolActive(
+    label: string,
+    toolId: string | null,
+    extraBtn?: HTMLButtonElement | null,
+  ): void {
     this.#activeBtn?.classList.remove("active");
     this.#activeBtn = null;
+    this.#activeExtraBtn?.classList.remove("active");
+    if (extraBtn) {
+      extraBtn.classList.add("active");
+      this.#activeExtraBtn = extraBtn;
+    } else {
+      this.#activeExtraBtn = null;
+    }
     this.#onToolChange?.(label, toolId);
   }
 
@@ -1219,13 +1268,20 @@ export class Toolbar {
   /** Register a host-provided extra button on the toolbar (e.g. the
    *  Scratchpad library). The button is appended to a dedicated group
    *  between the tool group and the undo/redo group so the visual
-   *  rhythm stays "create / reusable / history". `onClick` gets the
-   *  anchor element so the host can open a popover against it. */
+   *  rhythm stays "create / reusable / history".
+   *
+   *  `onClick` receives an `ExtraToolAnchor`:
+   *   - The toolbar button itself when activated by a direct toolbar
+   *     click (the original behavior — popovers open against the button).
+   *   - A `{ point: { x, y } }` value when activated from the canvas
+   *     right-click toolbox menu — the host opens the popover at the
+   *     cursor position instead, so the user's mouse doesn't have to
+   *     travel back to the toolbar after the right-click. */
   registerExtraToolButton(opts: {
     id: string;
     icon: string;
     title: string;
-    onClick: (anchor: HTMLButtonElement) => void;
+    onClick: (anchor: ExtraToolAnchor) => void;
   }): HTMLButtonElement {
     const btn = this.#btn(opts.icon, opts.title);
     btn.dataset.extraTool = opts.id;
@@ -1233,7 +1289,13 @@ export class Toolbar {
       e.stopPropagation();
       opts.onClick(btn);
     });
-    this.#extraButtons.push({ id: opts.id, icon: opts.icon, label: opts.title, button: btn });
+    this.#extraButtons.push({
+      id: opts.id,
+      icon: opts.icon,
+      label: opts.title,
+      button: btn,
+      onClick: opts.onClick,
+    });
     if (this.#extraButtonGroup) {
       this.#extraButtonGroup.appendChild(btn);
       if (!this.#extraButtonGroup.isConnected) {
@@ -1610,15 +1672,20 @@ export class Toolbar {
       tools: this.#tools,
       // Extra-tool entries (e.g. Scratchpad) appear after the core tool
       // rows so the right-click toolbox menu mirrors the toolbar 1:1
-      // — including host-registered libraries. The action proxies to
-      // the actual toolbar button so the registered onClick (which
-      // typically opens an anchored popover against the button) runs
-      // unchanged.
+      // — including host-registered libraries. The action calls the
+      // host's registered `onClick` directly with a `{ point }` anchor
+      // so the host opens its popover at the cursor instead of
+      // synthesising a toolbar click — otherwise the popover would
+      // appear far from the user's right-click point and require an
+      // immediate cross-screen mouse move.
       extraTools: this.#extraButtons.map((entry) => ({
         id: entry.id,
         icon: entry.icon,
         label: entry.label,
-        invoke: () => entry.button.click(),
+        invoke: (atPoint) => {
+          if (atPoint) entry.onClick({ point: atPoint });
+          else entry.button.click();
+        },
       })),
       getCurrentPreset: (id) => this.#getCurrentPreset(id),
       activateToolWithVariant: (id, v) => this.#activateToolWithVariant(id, v),
