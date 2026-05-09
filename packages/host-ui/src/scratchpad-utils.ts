@@ -38,6 +38,7 @@ import {
   annotationBBox,
   moveAnnotationElement,
 } from "@ingcreators/annot-core/editor/bake-translate";
+import { freshenInternalIds } from "@ingcreators/annot-core/editor/svg-id-utils";
 
 export interface SerializedSelection {
   svgMarkup: string;
@@ -209,13 +210,27 @@ export async function renderThumbnail(svgMarkup: string, maxSize = 80): Promise<
 
 /**
  * Parse a stored scratchpad SVG and return its direct children (each
- * already at origin-relative coords thanks to the serializer). The
- * caller should clone them, translate by the drop point, and append
- * to the canvas annotations.
+ * already at origin-relative coords thanks to the serializer). Each
+ * returned child has its internal ids freshened so it can be appended
+ * into a canvas that already contains the original (or any prior
+ * paste of the same item) without `url(#...)` reference collisions —
+ * for a sticky / text-on-shape, the wrapper's `<clipPath>` shares its
+ * id with the source's clipPath, and SVG resolves duplicate ids by
+ * picking the FIRST in document order. Without this rewrite the
+ * pasted text would clip against the source's clip rect and visually
+ * disappear (the text content is still in the DOM, just clipped out
+ * by a rect that's now far from the pasted position).
+ *
+ * The caller should clone each child, translate by the drop point,
+ * and append to the canvas annotations.
  */
 export function parseStoredItem(svgMarkup: string): SVGElement[] {
   const parser = new DOMParser();
   const doc = parser.parseFromString(svgMarkup, "image/svg+xml");
   const root = doc.documentElement as unknown as SVGSVGElement;
-  return Array.from(root.children) as SVGElement[];
+  const children = Array.from(root.children) as SVGElement[];
+  for (const child of children) {
+    freshenInternalIds(child);
+  }
+  return children;
 }

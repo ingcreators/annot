@@ -220,3 +220,99 @@ describe("scratchpad save → paste → drag round-trip", () => {
     expect(stored.getAttribute("y")).toBe("4");
   });
 });
+
+describe("text-bearing shape: clipPath ids are freshened on every paste", () => {
+  // Regression: text-on-shape rectangles / stickies / callouts use
+  // `<clipPath id="clip-textshape-...">` to clip overflow, and the
+  // sibling `<text>` references it via `clip-path="url(#...)"`. SVG
+  // resolves duplicate ids by picking the FIRST in document order,
+  // so naive `cloneNode(true)` makes the pasted text clip against
+  // the SOURCE's clip rect — text appears blank because the rect
+  // is now far from the pasted position. `parseStoredItem` must
+  // freshen these ids per call.
+
+  it("the pasted child has a different clipPath id than the source AND its text references the new id", () => {
+    const sourceSvg = svgWithRoot();
+    const source = createTextShape({
+      x: 50,
+      y: 30,
+      w: 200,
+      h: 80,
+      variant: "sticky",
+      runs: [{ text: "hello", line_break_after: false }],
+      fontSize: 16,
+      fontFamily: "sans-serif",
+      color: "#000",
+    });
+    sourceSvg.appendChild(source);
+    const sourceClip = source.querySelector("clipPath")!;
+    const sourceClipId = sourceClip.id;
+    expect(sourceClipId.length).toBeGreaterThan(0);
+    expect(source.querySelector("text")!.getAttribute("clip-path")).toBe(
+      `url(#${sourceClipId})`,
+    );
+
+    const result = serializeSelection([source as unknown as SVGElement])!;
+
+    // First paste — clipPath id MUST differ from the source.
+    const stored1 = parseStoredItem(result.svgMarkup)[0]!;
+    const clip1 = stored1.querySelector("clipPath")!;
+    expect(clip1.id).not.toBe(sourceClipId);
+    expect(stored1.querySelector("text")!.getAttribute("clip-path")).toBe(`url(#${clip1.id})`);
+
+    // Second paste — clipPath id MUST also differ from the first paste
+    // (so two pastes from the same scratchpad item don't collide).
+    const stored2 = parseStoredItem(result.svgMarkup)[0]!;
+    const clip2 = stored2.querySelector("clipPath")!;
+    expect(clip2.id).not.toBe(clip1.id);
+    expect(stored2.querySelector("text")!.getAttribute("clip-path")).toBe(`url(#${clip2.id})`);
+  });
+
+  it("pasting alongside the source produces document-unique ids (so the browser's url(#) lookup is unambiguous)", () => {
+    const targetSvg = svgWithRoot();
+    const annotations = document.createElementNS(SVG_NS, "g");
+    targetSvg.appendChild(annotations);
+
+    // Original shape stays in the canvas.
+    const source = createTextShape({
+      x: 50,
+      y: 30,
+      w: 200,
+      h: 80,
+      variant: "sticky",
+      runs: [{ text: "hi", line_break_after: false }],
+      fontSize: 16,
+      fontFamily: "sans-serif",
+      color: "#000",
+    });
+    annotations.appendChild(source);
+
+    const result = serializeSelection([source as unknown as SVGElement])!;
+
+    // Paste twice into the same canvas alongside the source.
+    for (const stored of [
+      parseStoredItem(result.svgMarkup)[0]!,
+      parseStoredItem(result.svgMarkup)[0]!,
+    ]) {
+      const clone = stored.cloneNode(true) as SVGElement;
+      annotations.appendChild(clone);
+      moveAnnotationElement(clone, 100, 50);
+    }
+
+    // Three shapes in the canvas; every clipPath id MUST be unique.
+    const clips = Array.from(annotations.querySelectorAll("clipPath"));
+    expect(clips.length).toBe(3);
+    const ids = new Set(clips.map((c) => c.id));
+    expect(ids.size).toBe(3);
+
+    // And every text's `clip-path="url(#...)"` must match a clipPath
+    // id present in the SAME wrapper `<g>` (not a sibling shape's).
+    const groups = Array.from(annotations.querySelectorAll('g[data-type="shape"]'));
+    expect(groups.length).toBe(3);
+    for (const g of groups) {
+      const ownClip = g.querySelector("clipPath")!;
+      const text = g.querySelector("text")!;
+      expect(text.getAttribute("clip-path")).toBe(`url(#${ownClip.id})`);
+    }
+  });
+});
