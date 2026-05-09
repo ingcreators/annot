@@ -552,10 +552,17 @@ export class Toolbar {
       shell.appendChild(imageOpGroup);
     }
 
-    // Spacer
-    const spacer = document.createElement("div");
-    spacer.className = "toolbar-spacer";
-    shell.appendChild(spacer);
+    // Separator between drawing/image-op tools and the Undo/Redo
+    // history group. The vertical-mode toolbar lives in a flex
+    // column parent (`#editor-sidebar`) but `<annot-toolbar>`
+    // itself does NOT claim flex-grow on that parent, so an
+    // intervening `.toolbar-spacer` (flex: 1) collapses to height
+    // 0 — the bottom-pin pattern that worked in horizontal mode
+    // never engaged. A 1px separator with the standard 6px
+    // margin-block keeps the "history is a different category"
+    // boundary readable without inflating the space between
+    // closely-related actions (Crop ↔ Undo).
+    shell.appendChild(this.#sep());
 
     // Undo / Redo
     const histGroup = this.#div("toolbar-group");
