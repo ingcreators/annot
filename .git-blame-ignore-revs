@@ -1,0 +1,15 @@
+# Revisions listed here are skipped by `git blame` when configured via:
+#
+#     git config blame.ignoreRevsFile .git-blame-ignore-revs
+#
+# GitHub's blame view honors this file automatically (no per-clone
+# config needed).
+#
+# Add commits whose only change is whitespace / formatting / import
+# order — i.e. they obscure the real authorship of every line they
+# touch. Do NOT add commits that mix formatting with semantic edits.
+
+# chore(repo): enforce Biome formatter + import sort in CI (#535)
+# Reformatted ~194 files in one shot when CI was switched from
+# `biome lint` to `biome check` (formatter + lint + import-sort).
+c8e6888927394e4da27e2eabf357976e9af8a761
