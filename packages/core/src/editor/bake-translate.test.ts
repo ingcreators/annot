@@ -9,11 +9,13 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  annotationBBox,
   bakeAnnotationsTranslate,
   bakeGroupTranslate,
   bakeMarkerTranslate,
   bakePathTranslate,
   bakeTranslate,
+  pruneAnnotationsOutsideRect,
 } from "./bake-translate.js";
 import { createTextShape } from "./text-utils.js";
 
@@ -530,5 +532,296 @@ describe("bakeAnnotationsTranslate (crop-bake walker)", () => {
     expect(line.getAttribute("x2")).toBe("100");
     expect(line.getAttribute("y2")).toBe("50");
     expect(path.getAttribute("d")).toBe("M0 0 L100 50");
+  });
+});
+
+describe("annotationBBox", () => {
+  it("rect / image / foreignObject — reads x, y, width, height", () => {
+    const rect = document.createElementNS(SVG_NS, "rect");
+    rect.setAttribute("x", "10");
+    rect.setAttribute("y", "20");
+    rect.setAttribute("width", "100");
+    rect.setAttribute("height", "50");
+    expect(annotationBBox(rect as unknown as SVGElement)).toEqual({
+      x: 10,
+      y: 20,
+      w: 100,
+      h: 50,
+    });
+  });
+
+  it("circle — (cx-r, cy-r, 2r, 2r)", () => {
+    const c = document.createElementNS(SVG_NS, "circle");
+    c.setAttribute("cx", "100");
+    c.setAttribute("cy", "100");
+    c.setAttribute("r", "20");
+    expect(annotationBBox(c as unknown as SVGElement)).toEqual({
+      x: 80,
+      y: 80,
+      w: 40,
+      h: 40,
+    });
+  });
+
+  it("ellipse — (cx-rx, cy-ry, 2rx, 2ry)", () => {
+    const e = document.createElementNS(SVG_NS, "ellipse");
+    e.setAttribute("cx", "100");
+    e.setAttribute("cy", "100");
+    e.setAttribute("rx", "30");
+    e.setAttribute("ry", "20");
+    expect(annotationBBox(e as unknown as SVGElement)).toEqual({
+      x: 70,
+      y: 80,
+      w: 60,
+      h: 40,
+    });
+  });
+
+  it("line — bbox spans the two endpoints (handles reverse direction)", () => {
+    const l = document.createElementNS(SVG_NS, "line");
+    l.setAttribute("x1", "100");
+    l.setAttribute("y1", "200");
+    l.setAttribute("x2", "20");
+    l.setAttribute("y2", "30");
+    expect(annotationBBox(l as unknown as SVGElement)).toEqual({
+      x: 20,
+      y: 30,
+      w: 80,
+      h: 170,
+    });
+  });
+
+  it('`<g data-type="arrow">` — bbox includes endpoints + control point when curved', () => {
+    const arrow = document.createElementNS(SVG_NS, "g");
+    arrow.setAttribute("data-type", "arrow");
+    arrow.setAttribute("data-x1", "10");
+    arrow.setAttribute("data-y1", "20");
+    arrow.setAttribute("data-x2", "100");
+    arrow.setAttribute("data-y2", "60");
+    arrow.setAttribute("data-cx", "50");
+    arrow.setAttribute("data-cy", "200"); // control point pulls bbox down
+    expect(annotationBBox(arrow as unknown as SVGElement)).toEqual({
+      x: 10,
+      y: 20,
+      w: 90,
+      h: 180,
+    });
+  });
+
+  it("path — `M 10 20 L 100 50 L 30 80` → (10, 20, 90, 60)", () => {
+    const p = document.createElementNS(SVG_NS, "path");
+    p.setAttribute("d", "M 10 20 L 100 50 L 30 80");
+    expect(annotationBBox(p as unknown as SVGElement)).toEqual({
+      x: 10,
+      y: 20,
+      w: 90,
+      h: 60,
+    });
+  });
+
+  it("path — handles relative commands (m + l mix)", () => {
+    const p = document.createElementNS(SVG_NS, "path");
+    // M 10 20, then 'l 50 30' relative → (60, 50), 'l -20 10' relative → (40, 60)
+    p.setAttribute("d", "M 10 20 l 50 30 l -20 10");
+    expect(annotationBBox(p as unknown as SVGElement)).toEqual({
+      x: 10,
+      y: 20,
+      w: 50,
+      h: 40,
+    });
+  });
+
+  it("`<g data-marker>` — recurses into the bg circle", () => {
+    const g = document.createElementNS(SVG_NS, "g");
+    g.setAttribute("data-marker", "1");
+    const c = document.createElementNS(SVG_NS, "circle");
+    c.setAttribute("cx", "50");
+    c.setAttribute("cy", "50");
+    c.setAttribute("r", "16");
+    g.appendChild(c);
+    const t = document.createElementNS(SVG_NS, "text");
+    t.setAttribute("x", "50");
+    t.setAttribute("y", "50");
+    g.appendChild(t);
+    expect(annotationBBox(g as unknown as SVGElement)).toEqual({
+      x: 34,
+      y: 34,
+      w: 32,
+      h: 32,
+    });
+  });
+
+  it('`<g data-type="shape">` — bg rect + tail anchor union (callout)', () => {
+    const svg = svgWithRoot();
+    const g = createTextShape({
+      x: 100,
+      y: 100,
+      w: 80,
+      h: 40,
+      variant: "callout",
+      runs: [{ text: "C", line_break_after: false }],
+      fontSize: 14,
+      fontFamily: "sans-serif",
+      color: "#000",
+      tailX: 200,
+      tailY: 200,
+    });
+    svg.appendChild(g);
+    const bbox = annotationBBox(g as unknown as SVGElement);
+    // bg rect (100, 100, 80, 40) ∪ tail point (200, 200) →
+    // (100, 100, 100, 100).
+    expect(bbox).toEqual({ x: 100, y: 100, w: 100, h: 100 });
+  });
+
+  it("returns null for unknown leaf elements (defensive — caller treats as keep)", () => {
+    const u = document.createElementNS(SVG_NS, "title");
+    expect(annotationBBox(u as unknown as SVGElement)).toBeNull();
+  });
+
+  it("returns null for empty `<g>` with no children", () => {
+    const g = document.createElementNS(SVG_NS, "g");
+    expect(annotationBBox(g as unknown as SVGElement)).toBeNull();
+  });
+});
+
+describe("pruneAnnotationsOutsideRect", () => {
+  function newGroup(): SVGGElement {
+    return document.createElementNS(SVG_NS, "g") as SVGGElement;
+  }
+
+  it("removes children whose bbox is FULLY OUTSIDE the rect on every side", () => {
+    const group = newGroup();
+    // Rect inside (kept).
+    const inside = document.createElementNS(SVG_NS, "rect");
+    inside.setAttribute("x", "20");
+    inside.setAttribute("y", "20");
+    inside.setAttribute("width", "30");
+    inside.setAttribute("height", "30");
+    group.appendChild(inside);
+    // Rect to the LEFT of the rect (removed).
+    const left = document.createElementNS(SVG_NS, "rect");
+    left.setAttribute("x", "-50");
+    left.setAttribute("y", "20");
+    left.setAttribute("width", "20");
+    left.setAttribute("height", "20");
+    group.appendChild(left);
+    // Rect ABOVE (removed).
+    const above = document.createElementNS(SVG_NS, "rect");
+    above.setAttribute("x", "20");
+    above.setAttribute("y", "-50");
+    above.setAttribute("width", "20");
+    above.setAttribute("height", "20");
+    group.appendChild(above);
+    // Rect to the RIGHT (removed).
+    const right = document.createElementNS(SVG_NS, "rect");
+    right.setAttribute("x", "200");
+    right.setAttribute("y", "20");
+    right.setAttribute("width", "20");
+    right.setAttribute("height", "20");
+    group.appendChild(right);
+    // Rect BELOW (removed).
+    const below = document.createElementNS(SVG_NS, "rect");
+    below.setAttribute("x", "20");
+    below.setAttribute("y", "200");
+    below.setAttribute("width", "20");
+    below.setAttribute("height", "20");
+    group.appendChild(below);
+
+    const removed = pruneAnnotationsOutsideRect(group, { x: 0, y: 0, w: 100, h: 100 });
+    expect(removed).toBe(4);
+    // Only the inside rect survived.
+    expect(group.children.length).toBe(1);
+    expect(group.firstElementChild).toBe(inside);
+  });
+
+  it("KEEPS partially-overlapping annotations (boundary-straddling)", () => {
+    const group = newGroup();
+    // Straddles the LEFT edge — bbox spans x = -10 to 30, crop is 0..100.
+    const straddle = document.createElementNS(SVG_NS, "rect");
+    straddle.setAttribute("x", "-10");
+    straddle.setAttribute("y", "20");
+    straddle.setAttribute("width", "40");
+    straddle.setAttribute("height", "20");
+    group.appendChild(straddle);
+    const removed = pruneAnnotationsOutsideRect(group, { x: 0, y: 0, w: 100, h: 100 });
+    expect(removed).toBe(0);
+    expect(group.children.length).toBe(1);
+  });
+
+  it("KEEPS annotations whose bbox cannot be determined (defensive null)", () => {
+    const group = newGroup();
+    const unknown = document.createElementNS(SVG_NS, "title");
+    group.appendChild(unknown);
+    const removed = pruneAnnotationsOutsideRect(group, { x: 0, y: 0, w: 100, h: 100 });
+    expect(removed).toBe(0);
+    expect(group.children.length).toBe(1);
+  });
+
+  it("treats the rect's right / bottom edges as exclusive (touching = outside)", () => {
+    const group = newGroup();
+    // Rect TOUCHING the crop's right edge from outside — bbox.x = 100,
+    // crop right = 100 → fully outside.
+    const touch = document.createElementNS(SVG_NS, "rect");
+    touch.setAttribute("x", "100");
+    touch.setAttribute("y", "20");
+    touch.setAttribute("width", "20");
+    touch.setAttribute("height", "20");
+    group.appendChild(touch);
+    const removed = pruneAnnotationsOutsideRect(group, { x: 0, y: 0, w: 100, h: 100 });
+    expect(removed).toBe(1);
+  });
+
+  it("removes a `<line>` whose both endpoints sit outside the crop", () => {
+    const group = newGroup();
+    const l = document.createElementNS(SVG_NS, "line");
+    l.setAttribute("x1", "200");
+    l.setAttribute("y1", "200");
+    l.setAttribute("x2", "300");
+    l.setAttribute("y2", "300");
+    group.appendChild(l);
+    const removed = pruneAnnotationsOutsideRect(group, { x: 0, y: 0, w: 100, h: 100 });
+    expect(removed).toBe(1);
+    expect(group.children.length).toBe(0);
+  });
+
+  it('removes a `<g data-type="arrow">` whose endpoints + control are all outside', () => {
+    const group = newGroup();
+    const arrow = document.createElementNS(SVG_NS, "g");
+    arrow.setAttribute("data-type", "arrow");
+    arrow.setAttribute("data-x1", "200");
+    arrow.setAttribute("data-y1", "200");
+    arrow.setAttribute("data-x2", "300");
+    arrow.setAttribute("data-y2", "300");
+    group.appendChild(arrow);
+    const removed = pruneAnnotationsOutsideRect(group, { x: 0, y: 0, w: 100, h: 100 });
+    expect(removed).toBe(1);
+  });
+
+  it("removes a `<path>` whose every coordinate sits outside the crop", () => {
+    const group = newGroup();
+    const p = document.createElementNS(SVG_NS, "path");
+    p.setAttribute("d", "M 200 200 L 300 250 L 250 300");
+    group.appendChild(p);
+    const removed = pruneAnnotationsOutsideRect(group, { x: 0, y: 0, w: 100, h: 100 });
+    expect(removed).toBe(1);
+  });
+
+  it("returns 0 when every child is inside or partially overlapping", () => {
+    const group = newGroup();
+    const r1 = document.createElementNS(SVG_NS, "rect");
+    r1.setAttribute("x", "10");
+    r1.setAttribute("y", "10");
+    r1.setAttribute("width", "20");
+    r1.setAttribute("height", "20");
+    group.appendChild(r1);
+    const r2 = document.createElementNS(SVG_NS, "rect");
+    r2.setAttribute("x", "80");
+    r2.setAttribute("y", "80");
+    r2.setAttribute("width", "30");
+    r2.setAttribute("height", "30"); // straddles the right + bottom
+    group.appendChild(r2);
+    const removed = pruneAnnotationsOutsideRect(group, { x: 0, y: 0, w: 100, h: 100 });
+    expect(removed).toBe(0);
+    expect(group.children.length).toBe(2);
   });
 });
