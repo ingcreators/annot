@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    // `node` types loaded so `round-trip.test.ts` can read fixtures
+    // from disk via `node:fs`. Production code (parse / serialize /
+    // create-empty) is Tier A and never imports from `node:*`; the
+    // headless-boundary test in `headless.test.ts` guards that
+    // invariant at runtime.
+    "types": ["node"]
+  },
+  "include": ["src/**/*.ts"]
+}
