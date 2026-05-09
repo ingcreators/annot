@@ -159,6 +159,23 @@ export interface ToolRegistryVariant {
   svg?: string;
 }
 
+/** Tool semantic category. Drives toolbar / right-click menu grouping
+ *  + divider placement.
+ *
+ *    - `"annotation"` (default): tool emits an on-canvas SVG annotation
+ *      (Arrow / Shape / Highlight / Text / Draw / Counter / Redact).
+ *      Non-destructive — the underlying bitmap is untouched.
+ *    - `"image-op"`: tool destructively mutates the underlying
+ *      `ImageRecord` (Crop's `applyCrop` rewrites `originalDataUrl`).
+ *      Visually separated from annotation tools so the divider
+ *      signals "below this line, the tool changes the image itself".
+ *
+ *  Hosts may register additional categories in the future
+ *  (e.g. `"image-filter"` for non-annotation, non-bitmap-rewriting
+ *  tools); the toolbar treats anything other than `"annotation"` as
+ *  "trailing groups, separated by dividers in declaration order". */
+export type ToolCategory = "annotation" | "image-op";
+
 /** Full metadata for one tool. Plain data — no closures over canvas
  *  state, no DOM globals at module load.
  *
@@ -179,6 +196,11 @@ export interface ToolRegistryEntry {
    *  (overridden at runtime by the active variant's icon for tools
    *  with a flyout — see `Toolbar.#syncToolButtonIcon`). */
   icon: string;
+  /** Semantic category. Drives toolbar group placement + canvas
+   *  right-click toolbox menu divider placement. Defaults to
+   *  `"annotation"` when omitted (matches the legacy behavior — every
+   *  pre-category tool was treated as an annotation tool). */
+  category?: ToolCategory;
   /** Variant catalog. Empty / absent for tools without sub-variants. */
   variants?: ReadonlyArray<ToolRegistryVariant>;
   /** Which `ToolOptions` field discriminates the variant. Used by
@@ -1048,10 +1070,16 @@ export const TOOL_REGISTRY: Readonly<Record<string, ToolRegistryEntry>> = {
   // Crop has no variants and no on-canvas element to rubber-band
   // from — the crop overlay is transient. Listed here for
   // completeness so the registry covers all 8 toolbar entries.
+  // Category "image-op" gates Crop into its own toolbar / right-click
+  // menu group, with a divider above it, since Crop destructively
+  // rewrites the underlying `ImageRecord` (see CLAUDE.md "Things to
+  // leave alone" → destructive-crop-bake) instead of adding an
+  // annotation on top of the image.
   crop: {
     id: "crop",
     label: "Crop",
     icon: "crop",
+    category: "image-op",
     presetFields: [],
   },
 } as const;

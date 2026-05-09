@@ -176,6 +176,28 @@ describe("TOOL_REGISTRY shape invariants", () => {
   });
 });
 
+describe("TOOL_REGISTRY category discriminator", () => {
+  // Pin the per-tool semantic-category discriminator that drives
+  // toolbar / right-click toolbox menu group placement. Crop is the
+  // lone "image-op" today (destructive bitmap rewrite); every other
+  // tool is "annotation" (default). A regression — e.g. accidentally
+  // demoting Crop to annotation, or accidentally re-categorising one
+  // of the drawing tools — would unify the visually-separated groups
+  // and lose the divider above Crop.
+
+  it("crop has category = 'image-op'", () => {
+    expect(TOOL_REGISTRY.crop!.category).toBe("image-op");
+  });
+
+  it("every non-crop tool has category undefined or 'annotation'", () => {
+    for (const [id, entry] of Object.entries(TOOL_REGISTRY)) {
+      if (id === "crop") continue;
+      const category = entry.category ?? "annotation";
+      expect(category, `${id}.category`).toBe("annotation");
+    }
+  });
+});
+
 describe("TOOL_REGISTRY flyoutKind discriminator", () => {
   // Phase 1 of `docs/plans/toolbar-highlight-flyout-kind.md` — pin
   // the registry's per-tool presentation discriminator so a
