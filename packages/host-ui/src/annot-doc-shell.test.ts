@@ -1,11 +1,13 @@
 /**
  * @vitest-environment happy-dom
  *
- * `<annot-doc-shell>` tests — Phase 3 of
+ * `<annot-doc-shell>` tests — Phases 3 + 4a of
  * `docs/plans/annot-html-document.md`. Covers initial mount,
  * re-mount with a different document, the TOC scroll-into-view
- * behaviour, theme variants (light / dark / auto), and the
- * empty / no-document state.
+ * behaviour, theme variants (light / dark / auto), the
+ * empty / no-document state, and Phase 4a's editing-mode
+ * surface (contentEditable on heading / paragraph, block
+ * toolbar actions, undo / redo via DocumentHistory).
  */
 
 import type { AnnotDocument } from "@ingcreators/annot-doc";
@@ -13,7 +15,11 @@ import { createEmptyDocument, injectDocumentStyles } from "@ingcreators/annot-do
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import "./annot-doc-shell.js";
-import type { AnnotDocShellElement, DocHeadingActivatedDetail } from "./annot-doc-shell.js";
+import type {
+  AnnotDocShellElement,
+  DocChangedDetail,
+  DocHeadingActivatedDetail,
+} from "./annot-doc-shell.js";
 
 function mount(doc: AnnotDocument | null = null): AnnotDocShellElement {
   const el = document.createElement("annot-doc-shell") as AnnotDocShellElement;
@@ -245,5 +251,255 @@ describe("annot-doc-shell: theme + style block", () => {
     // styleBlock — both can co-exist without conflict.
     expect(el.querySelector("style")).not.toBeNull();
     expect(el.querySelector("article[data-annot-doc]")).not.toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 4a — editing mode
+// ---------------------------------------------------------------------------
+
+describe("annot-doc-shell: editing mode rendering", () => {
+  it("does not wrap blocks or set contenteditable when editing=false", async () => {
+    const el = mount(makeMixedDoc());
+    el.editing = false;
+    await el.updateComplete;
+    expect(el.querySelector(".annot-doc-block-host")).toBeNull();
+    expect(el.querySelector("annot-doc-block-toolbar")).toBeNull();
+    expect(el.querySelectorAll('[contenteditable="true"]')).toHaveLength(0);
+  });
+
+  it("wraps each block + sets contenteditable on text blocks when editing=true", async () => {
+    const el = mount(makeMixedDoc());
+    el.editing = true;
+    await el.updateComplete;
+    const wrappers = el.querySelectorAll(".annot-doc-block-host");
+    // Every block in the mixed doc gets a wrapper.
+    expect(wrappers.length).toBe(makeMixedDoc().blocks.length);
+    // Heading + paragraph blocks are contentEditable in Phase 4a.
+    const editable = el.querySelectorAll('[contenteditable="true"]');
+    // 3 headings + 2 paragraphs in the mixed doc.
+    expect(editable.length).toBe(5);
+    // Toolbars rendered for each wrapper.
+    expect(el.querySelectorAll("annot-doc-block-toolbar").length).toBe(wrappers.length);
+  });
+
+  it("does not mark non-text blocks as contentEditable in Phase 4a", async () => {
+    const el = mount(makeMixedDoc());
+    el.editing = true;
+    await el.updateComplete;
+    // Quote / callout / code / list / image / divider must NOT be
+    // contentEditable in Phase 4a (Phase 4b adds those).
+    const ce = (sel: string) =>
+      (el.querySelector(sel) as HTMLElement | null)?.getAttribute("contenteditable");
+    expect(ce('blockquote[data-annot-block="quote"]')).toBeNull();
+    expect(ce('aside[data-annot-block="callout"]')).toBeNull();
+    expect(ce('pre[data-annot-block="code"]')).toBeNull();
+    expect(ce('ul[data-annot-block="list"]')).toBeNull();
+    expect(ce('hr[data-annot-block="divider"]')).toBeNull();
+  });
+});
+
+describe("annot-doc-shell: block toolbar actions", () => {
+  function clickToolbarAction(el: AnnotDocShellElement, blockIndex: number, label: string): void {
+    const wrapper = el.querySelectorAll(".annot-doc-block-host")[blockIndex] as HTMLElement;
+    const button = wrapper.querySelector(
+      `annot-doc-block-toolbar button[aria-label="${label}"]`,
+    ) as HTMLButtonElement;
+    button.click();
+  }
+
+  it("delete removes the block + emits doc-changed", async () => {
+    const el = mount(makeMixedDoc());
+    el.editing = true;
+    await el.updateComplete;
+
+    const events: DocChangedDetail[] = [];
+    el.addEventListener("doc-changed", (e) =>
+      events.push((e as CustomEvent<DocChangedDetail>).detail),
+    );
+
+    const before = el.document!.blocks.length;
+    clickToolbarAction(el, 0, "Delete block");
+    await el.updateComplete;
+
+    expect(el.document!.blocks.length).toBe(before - 1);
+    expect(events).toHaveLength(1);
+    expect(events[0]?.reason).toBe("block-action");
+  });
+
+  it("delete on the only block keeps an empty placeholder paragraph", async () => {
+    const doc: AnnotDocument = {
+      version: 1,
+      lang: "en",
+      title: "Single",
+      meta: { title: "Single" },
+      styleBlock: null,
+      blocks: [{ kind: "heading", level: 1, inlineHtml: "Lonely" }],
+    };
+    const el = mount(doc);
+    el.editing = true;
+    await el.updateComplete;
+
+    clickToolbarAction(el, 0, "Delete block");
+    await el.updateComplete;
+
+    expect(el.document!.blocks).toHaveLength(1);
+    expect(el.document!.blocks[0]?.kind).toBe("paragraph");
+  });
+
+  it("moveUp + moveDown reorder blocks", async () => {
+    const el = mount(makeMixedDoc());
+    el.editing = true;
+    await el.updateComplete;
+
+    const blockKindAt = (i: number) => el.document!.blocks[i]?.kind;
+    const block1 = blockKindAt(1);
+    const block2 = blockKindAt(2);
+
+    clickToolbarAction(el, 2, "Move up");
+    await el.updateComplete;
+    expect(blockKindAt(1)).toBe(block2);
+    expect(blockKindAt(2)).toBe(block1);
+
+    clickToolbarAction(el, 1, "Move down");
+    await el.updateComplete;
+    expect(blockKindAt(1)).toBe(block1);
+    expect(blockKindAt(2)).toBe(block2);
+  });
+
+  it("first block has Move Up disabled; last has Move Down disabled", async () => {
+    const el = mount(makeMixedDoc());
+    el.editing = true;
+    await el.updateComplete;
+    const wrappers = el.querySelectorAll(".annot-doc-block-host");
+    const lastIdx = wrappers.length - 1;
+    const firstUp = wrappers[0]?.querySelector('[aria-label="Move up"]') as HTMLButtonElement;
+    const lastDown = wrappers[lastIdx]?.querySelector(
+      '[aria-label="Move down"]',
+    ) as HTMLButtonElement;
+    expect(firstUp.disabled).toBe(true);
+    expect(lastDown.disabled).toBe(true);
+  });
+});
+
+describe("annot-doc-shell: undo / redo", () => {
+  it("undo + redo walk the history after a delete", async () => {
+    const el = mount(makeMixedDoc());
+    el.editing = true;
+    await el.updateComplete;
+
+    const before = el.document!.blocks.length;
+    expect(el.canUndo()).toBe(false);
+
+    // Delete a block via the toolbar.
+    const wrapper = el.querySelectorAll(".annot-doc-block-host")[0] as HTMLElement;
+    const del = wrapper.querySelector(
+      'annot-doc-block-toolbar [aria-label="Delete block"]',
+    ) as HTMLButtonElement;
+    del.click();
+    await el.updateComplete;
+    expect(el.document!.blocks.length).toBe(before - 1);
+    expect(el.canUndo()).toBe(true);
+
+    expect(el.undo()).toBe(true);
+    await el.updateComplete;
+    expect(el.document!.blocks.length).toBe(before);
+    expect(el.canRedo()).toBe(true);
+
+    expect(el.redo()).toBe(true);
+    await el.updateComplete;
+    expect(el.document!.blocks.length).toBe(before - 1);
+  });
+
+  it("undo on a fresh document returns false", () => {
+    const el = mount(makeMixedDoc());
+    el.editing = true;
+    expect(el.canUndo()).toBe(false);
+    expect(el.undo()).toBe(false);
+  });
+
+  it("Ctrl+Z + Ctrl+Shift+Z keyboard shortcuts trigger undo/redo", async () => {
+    const el = mount(makeMixedDoc());
+    el.editing = true;
+    await el.updateComplete;
+
+    const before = el.document!.blocks.length;
+
+    const wrapper = el.querySelectorAll(".annot-doc-block-host")[0] as HTMLElement;
+    const del = wrapper.querySelector(
+      'annot-doc-block-toolbar [aria-label="Delete block"]',
+    ) as HTMLButtonElement;
+    del.click();
+    await el.updateComplete;
+    expect(el.document!.blocks.length).toBe(before - 1);
+
+    el.dispatchEvent(new KeyboardEvent("keydown", { key: "z", ctrlKey: true, bubbles: true }));
+    await el.updateComplete;
+    expect(el.document!.blocks.length).toBe(before);
+
+    el.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "z", ctrlKey: true, shiftKey: true, bubbles: true }),
+    );
+    await el.updateComplete;
+    expect(el.document!.blocks.length).toBe(before - 1);
+  });
+
+  it("setting document property externally resets the history", async () => {
+    const el = mount(makeMixedDoc());
+    el.editing = true;
+    await el.updateComplete;
+    // Trigger a mutation so undo becomes available.
+    const wrapper = el.querySelectorAll(".annot-doc-block-host")[0] as HTMLElement;
+    (
+      wrapper.querySelector(
+        'annot-doc-block-toolbar [aria-label="Delete block"]',
+      ) as HTMLButtonElement
+    ).click();
+    await el.updateComplete;
+    expect(el.canUndo()).toBe(true);
+
+    // External doc swap → history reset.
+    el.document = makeMixedDoc();
+    await el.updateComplete;
+    expect(el.canUndo()).toBe(false);
+  });
+});
+
+describe("annot-doc-shell: text editing", () => {
+  it("commit() folds DOM edits into the document", async () => {
+    const el = mount(makeMixedDoc());
+    el.editing = true;
+    await el.updateComplete;
+    const para = el.querySelector(
+      '.annot-doc-block-host:nth-child(2) p[data-annot-block="paragraph"]',
+    ) as HTMLElement;
+    expect(para).not.toBeNull();
+    para.innerHTML = "Edited paragraph";
+    el.commit();
+    expect(el.canUndo()).toBe(true);
+    // Paragraph at index 1 in the mixed doc.
+    const para1 = el.document!.blocks[1];
+    expect(para1?.kind).toBe("paragraph");
+    if (para1?.kind === "paragraph") {
+      expect(para1.inlineHtml).toBe("Edited paragraph");
+    }
+  });
+
+  it("debounced input commits to history after the configured idle window", async () => {
+    vi.useFakeTimers();
+    const el = mount(makeMixedDoc());
+    el.editing = true;
+    await el.updateComplete;
+    const para = el.querySelector('p[data-annot-block="paragraph"]') as HTMLElement;
+    para.innerHTML = "Mid-typing snapshot";
+    // Fire input event to start the debounce.
+    el.querySelector("article[data-annot-doc]")?.dispatchEvent(
+      new InputEvent("input", { bubbles: true }),
+    );
+    expect(el.canUndo()).toBe(false);
+    // Advance past the debounce window.
+    vi.advanceTimersByTime(700);
+    expect(el.canUndo()).toBe(true);
+    vi.useRealTimers();
   });
 });

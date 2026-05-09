@@ -21,6 +21,7 @@ import type { AnnotDocShellElement, DocHeadingActivatedDetail } from "./annot-do
 interface Args {
   document: AnnotDocument;
   showToc: boolean;
+  editing: boolean;
 }
 
 function makeMixedDoc(theme: AnnotDocument["meta"]["theme"] = "auto"): AnnotDocument {
@@ -142,11 +143,15 @@ const meta: Meta<Args> = {
     const shell = document.createElement("annot-doc-shell") as AnnotDocShellElement;
     shell.document = args.document;
     shell.showToc = args.showToc;
+    shell.editing = args.editing;
     shell.addEventListener("doc-heading-activated", (e) => {
       console.log(
         "[story] doc-heading-activated:",
         (e as CustomEvent<DocHeadingActivatedDetail>).detail,
       );
+    });
+    shell.addEventListener("doc-changed", (e) => {
+      console.log("[story] doc-changed:", (e as CustomEvent).detail);
     });
     wrapper.appendChild(shell);
     return wrapper;
@@ -154,10 +159,12 @@ const meta: Meta<Args> = {
   argTypes: {
     document: { control: false },
     showToc: { control: "boolean" },
+    editing: { control: "boolean" },
   },
   args: {
     document: makeMixedDoc(),
     showToc: true,
+    editing: false,
   },
 };
 export default meta;
@@ -165,28 +172,33 @@ export default meta;
 type Story = StoryObj<Args>;
 
 export const Default: Story = {
-  args: { document: makeMixedDoc(), showToc: true },
+  args: { document: makeMixedDoc(), showToc: true, editing: false },
 };
 
 export const Empty: Story = {
-  args: { document: makeEmptyDoc(), showToc: true },
+  args: { document: makeEmptyDoc(), showToc: true, editing: false },
 };
 
 export const Long: Story = {
-  args: { document: makeLongDoc(), showToc: true },
+  args: { document: makeLongDoc(), showToc: true, editing: false },
 };
 
 export const DarkTheme: Story = {
   name: "Dark theme",
-  args: { document: makeMixedDoc("dark"), showToc: true },
+  args: { document: makeMixedDoc("dark"), showToc: true, editing: false },
 };
 
 export const LightTheme: Story = {
   name: "Light theme",
-  args: { document: makeMixedDoc("light"), showToc: true },
+  args: { document: makeMixedDoc("light"), showToc: true, editing: false },
 };
 
 export const NoToc: Story = {
   name: "No TOC",
-  args: { document: makeMixedDoc(), showToc: false },
+  args: { document: makeMixedDoc(), showToc: false, editing: false },
+};
+
+export const Editing: Story = {
+  name: "Editing mode",
+  args: { document: makeMixedDoc(), showToc: true, editing: true },
 };
