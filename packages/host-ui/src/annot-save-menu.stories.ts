@@ -15,9 +15,9 @@
 
 import type { Meta, StoryObj } from "@storybook/web-components-vite";
 import "./annot-save-menu.js";
-import {
+import type {
   AnnotSaveMenuElement,
-  type SaveMenuItem,
+  SaveMenuItem,
 } from "./annot-save-menu.js";
 
 interface Args {

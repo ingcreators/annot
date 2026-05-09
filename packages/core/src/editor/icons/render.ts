@@ -11,7 +11,7 @@
  * cleanly when DOMParser is unavailable).
  */
 
-import { type IconSpec } from "../../icons/types.js";
+import type { IconSpec } from "../../icons/types.js";
 import { resolveBuiltinIcon } from "./registry.js";
 import { sanitizeIconSvg } from "./sanitize.js";
 

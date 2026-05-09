@@ -886,8 +886,6 @@ export class SelectionManager {
   #drawRotatedBBoxHandles(el: SVGElement): void {
     const bb = chromeBBox(el);
     if (!bb) return;
-    const cxL = bb.x + bb.width / 2;
-    const cyL = bb.y + bb.height / 2;
 
     // Local handle positions, indexed 0..7 in the same order the
     // resize-logic switch expects (0=TL, 1=TC, 2=TR, 3=MR, 4=BR,

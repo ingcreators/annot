@@ -211,7 +211,7 @@ function decodeRecord(filePath: string, filename: string, bytes: Uint8Array): Im
   };
 }
 
-async function encodeBytesForSave(filePath: string, filename: string): Promise<Uint8Array> {
+async function encodeBytesForSave(_filePath: string, filename: string): Promise<Uint8Array> {
   const ext = extOf(filename);
   const canvas = shell.getCanvas();
   if (!canvas) throw new Error("encodeBytesForSave: no canvas mounted");

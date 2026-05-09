@@ -103,8 +103,8 @@ describe("editor-shell host-boundary invariant", () => {
     expect(
       violations,
       `editor-shell queried PWA-shell DOM id(s): ${violations.join(", ")}. ` +
-        `These are host concerns; lift the call into the consumer or inject ` +
-        `the value via the EditorShellHost contract. See CLAUDE.md guardrail #10.`,
+        "These are host concerns; lift the call into the consumer or inject " +
+        "the value via the EditorShellHost contract. See CLAUDE.md guardrail #10.",
     ).toEqual([]);
   });
 

@@ -126,8 +126,8 @@ describe("AnnotSaveMenuElement.openFor", () => {
     const menu = document.querySelector("annot-save-menu") as AnnotSaveMenuElement;
     await menu.updateComplete;
     expect(menu.style.position).toBe("fixed");
-    expect(parseFloat(menu.style.top)).toBeGreaterThanOrEqual(0);
-    expect(parseFloat(menu.style.left)).toBeGreaterThanOrEqual(8);
+    expect(Number.parseFloat(menu.style.top)).toBeGreaterThanOrEqual(0);
+    expect(Number.parseFloat(menu.style.left)).toBeGreaterThanOrEqual(8);
   });
 
   it("close() removes the singleton", async () => {

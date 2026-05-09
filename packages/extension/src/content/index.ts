@@ -39,11 +39,12 @@ const chromeContentBus: ContentBus = {
 };
 
 // Guard against double injection
-if ((window as any).__annot_injected) {
+const guardWindow = window as Window & { __annot_injected?: boolean };
+if (guardWindow.__annot_injected) {
   // Already injected, skip
   logger.debug("[annot] content script reinjected — guard active");
 } else {
-  (window as any).__annot_injected = true;
+  guardWindow.__annot_injected = true;
   logger.debug("[annot] content script loaded");
 
   chrome.runtime.onMessage.addListener((msg: BackgroundToContentMessage, _sender, sendResponse) => {

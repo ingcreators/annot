@@ -459,7 +459,8 @@ function renderMenu(
       // Expose the openSubmenu hook on the element so the outer
       // keyboard handler (ArrowRight) can trigger it without having
       // to reach back into this closure through DOM attributes.
-      (row as any).__annotOpenSubmenu = () => openSubmenu(true);
+      (row as HTMLElement & { __annotOpenSubmenu?: () => void }).__annotOpenSubmenu = () =>
+        openSubmenu(true);
     }
 
     menu.appendChild(row);
@@ -528,7 +529,8 @@ function renderMenu(
         // action. Using the hook bypasses the default click handler
         // (which would trigger the action on action-bearing rows).
         e.preventDefault();
-        const openHook = (active as any).__annotOpenSubmenu as (() => void) | undefined;
+        const openHook = (active as HTMLElement & { __annotOpenSubmenu?: () => void })
+          .__annotOpenSubmenu;
         if (openHook) openHook();
         else active.click();
       }

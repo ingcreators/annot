@@ -274,7 +274,7 @@ interface WrappedLine {
  *  in environments without a real canvas (jsdom, SSR) — callers
  *  fall back to "no wrap" so the existing `<text>` layout still
  *  renders, just without auto-wrap semantics. */
-let cachedMeasureCtx: CanvasRenderingContext2D | null | undefined = undefined;
+let cachedMeasureCtx: CanvasRenderingContext2D | null | undefined;
 function getMeasureCtx(): CanvasRenderingContext2D | null {
   if (cachedMeasureCtx !== undefined) return cachedMeasureCtx;
   if (typeof document === "undefined") return (cachedMeasureCtx = null);
@@ -306,7 +306,7 @@ function measureTextWidth(
  *  runtime doesn't expose `Intl.Segmenter` (older browsers / Node
  *  without ICU); the wrap loop then degrades to "no segmentation"
  *  and only respects explicit line breaks, which is fine. */
-let cachedSegmenter: Intl.Segmenter | null | undefined = undefined;
+let cachedSegmenter: Intl.Segmenter | null | undefined;
 function getWordSegmenter(): Intl.Segmenter | null {
   if (cachedSegmenter !== undefined) return cachedSegmenter;
   if (typeof Intl === "undefined" || typeof Intl.Segmenter === "undefined") {
@@ -378,7 +378,6 @@ function wrapRunsToLines(
     }
 
     let buf = "";
-    let bufW = 0;
     const pushBuf = (): void => {
       if (!buf) return;
       line.segments.push({
@@ -392,7 +391,6 @@ function wrapRunsToLines(
       });
       if (fontSize > line.maxFontSize) line.maxFontSize = fontSize;
       buf = "";
-      bufW = 0;
     };
 
     for (const seg of segments) {
@@ -413,7 +411,6 @@ function wrapRunsToLines(
         if (WHITESPACE_RE.test(seg)) continue;
       }
       buf += seg;
-      bufW += w;
       lineW += w;
     }
 

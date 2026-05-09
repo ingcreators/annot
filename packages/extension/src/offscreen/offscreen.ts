@@ -42,8 +42,9 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           const items = msg.items as BatchItem[];
           const results = await pool.encodeBatch(items);
           sendResponse({ results });
-        } catch (e: any) {
-          sendResponse({ error: e?.message || String(e) });
+        } catch (e) {
+          const message = e instanceof Error ? e.message : String(e);
+          sendResponse({ error: message });
         }
         break;
       }

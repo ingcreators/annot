@@ -184,8 +184,9 @@ export async function downloadAsImage(
   const annotationsSvg = exportAnnotationsSVGString(canvas);
 
   // Get current tags from editor
+  const tagsHost = window as Window & { __annot_getTags?: () => Record<string, string> };
   const tags: Record<string, string> =
-    typeof (window as any).__annot_getTags === "function" ? (window as any).__annot_getTags() : {};
+    typeof tagsHost.__annot_getTags === "function" ? tagsHost.__annot_getTags() : {};
 
   // Embed XMP metadata for re-editing
   const editableBlob = await createEditableImage({

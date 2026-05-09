@@ -141,7 +141,6 @@ export class AnnotGalleryPageElement extends LitElement {
       ? this.images.filter((img) => this.#matchFilter(img, this.query.trim().toLowerCase()))
       : this.images;
     const showFolders = !this.query;
-    const totalItems = (showFolders ? this.folders.length : 0) + this.images.length;
     const filteredItems = (showFolders ? this.folders.length : 0) + filteredImages.length;
     const gridClass = `gallery-grid${this.viewMode === "list" ? " list-view" : ""}`;
 
