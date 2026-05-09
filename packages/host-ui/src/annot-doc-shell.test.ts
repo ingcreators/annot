@@ -632,3 +632,54 @@ describe("annot-doc-shell: slash menu", () => {
     expect(el.document!.blocks[1]?.kind).toBe("divider");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Phase 5a — image block click-to-edit modal
+// ---------------------------------------------------------------------------
+
+describe("annot-doc-shell: image block click-to-edit", () => {
+  it("clicking an image block in editing mode opens the editor modal", async () => {
+    const el = mount(makeMixedDoc());
+    el.editing = true;
+    await el.updateComplete;
+    const figure = el.querySelector('figure[data-annot-block="image"]') as HTMLElement;
+    expect(figure).not.toBeNull();
+    figure.click();
+    await el.updateComplete;
+    const modal = document.querySelector("annot-doc-image-editor-modal");
+    expect(modal).not.toBeNull();
+    // Cancel for a clean teardown.
+    (
+      modal!.querySelector(
+        ".annot-doc-image-editor-modal-footer button:not(.primary)",
+      ) as HTMLButtonElement
+    )?.click();
+  });
+
+  it("clicking the block toolbar inside an image block does NOT open the modal", async () => {
+    const el = mount(makeMixedDoc());
+    el.editing = true;
+    await el.updateComplete;
+    const wrappers = el.querySelectorAll(".annot-doc-block-host");
+    // Find the wrapper containing the image block.
+    const imageWrapper = Array.from(wrappers).find(
+      (w) => w.querySelector('figure[data-annot-block="image"]') !== null,
+    ) as HTMLElement;
+    const moveUpBtn = imageWrapper.querySelector(
+      'annot-doc-block-toolbar button[aria-label="Move up"]',
+    ) as HTMLButtonElement;
+    moveUpBtn.click();
+    await el.updateComplete;
+    expect(document.querySelector("annot-doc-image-editor-modal")).toBeNull();
+  });
+
+  it("clicking image blocks in non-editing mode does NOT open the modal", async () => {
+    const el = mount(makeMixedDoc());
+    el.editing = false;
+    await el.updateComplete;
+    const figure = el.querySelector('figure[data-annot-block="image"]') as HTMLElement;
+    figure.click();
+    await el.updateComplete;
+    expect(document.querySelector("annot-doc-image-editor-modal")).toBeNull();
+  });
+});
