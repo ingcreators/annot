@@ -14,7 +14,6 @@ import {
   createTextShape,
   detectTextVariant,
   isTextOnShape,
-  isTextShapeElement,
   plainTextToRuns,
   readTextShapeSpec,
   replaceRunsInPlace,

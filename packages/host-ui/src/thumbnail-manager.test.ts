@@ -135,7 +135,7 @@ function makeMockProvider(opts: MockProviderOptions = {}): StorageProvider {
       thumbnailVersion: (_path: string) => "v1",
       fetchThumbnailSource:
         opts.fetchOverride ??
-        (async (path: string) => new Blob([new Uint8Array([1, 2, 3, 4])], { type: "image/png" })),
+        (async (_path: string) => new Blob([new Uint8Array([1, 2, 3, 4])], { type: "image/png" })),
     });
   }
   return base as StorageProvider;

@@ -92,7 +92,6 @@ import type {
   PluginContext,
   RouteChangeEvent,
   SidebarTab,
-  SidebarTabUpdate,
   StorageRegistration,
   UISection,
 } from "@ingcreators/annot-host-ui/plugin-host-types";

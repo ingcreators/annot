@@ -53,7 +53,7 @@ describe("sanitizeIconSvg — accepts well-formed icons", () => {
     expect(sanitizeIconSvg("")).toBeNull();
     expect(sanitizeIconSvg("not an svg")).toBeNull();
     expect(sanitizeIconSvg("<div>not svg</div>")).toBeNull();
-    const huge = "<svg>" + "x".repeat(100_000) + "</svg>";
+    const huge = `<svg>${"x".repeat(100_000)}</svg>`;
     expect(sanitizeIconSvg(huge)).toBeNull();
   });
 });

@@ -90,8 +90,8 @@ describe("<annot-context-menu> — openContextMenu / closeContextMenu", () => {
     const menu = activeMenuEl()!;
     await (menu as unknown as { updateComplete: Promise<void> }).updateComplete;
     // Allow firstUpdated's positioning to settle.
-    expect(parseFloat(menu.style.left)).toBeGreaterThanOrEqual(8);
-    expect(parseFloat(menu.style.top)).toBeGreaterThanOrEqual(8);
+    expect(Number.parseFloat(menu.style.left)).toBeGreaterThanOrEqual(8);
+    expect(Number.parseFloat(menu.style.top)).toBeGreaterThanOrEqual(8);
     closeContextMenu();
   });
 

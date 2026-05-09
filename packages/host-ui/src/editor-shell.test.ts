@@ -21,7 +21,7 @@
 
 import type { ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
 import { describe, expect, it, vi } from "vitest";
-import { EditorShell, type EditorShellHost } from "./index.js";
+import { EditorShell } from "./index.js";
 
 const PNG_PIXEL =
   "data:image/png;base64," +
