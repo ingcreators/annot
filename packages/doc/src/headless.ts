@@ -12,6 +12,7 @@
 
 export type { CreateEmptyOptions } from "./create-empty.js";
 export { createEmptyDocument } from "./create-empty.js";
+export { buildStyleBlock, injectDocumentStyles } from "./inject-styles.js";
 export type { ParseOptions } from "./parse.js";
 export { AnnotDocParseError, parseDocument } from "./parse.js";
 

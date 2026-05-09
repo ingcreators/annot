@@ -25,5 +25,7 @@
     "vite": "catalog:",
     "vite-plugin-dts": "^5.0.0"
   },
-  "dependencies": {}
+  "dependencies": {
+    "@ingcreators/annot-core": "workspace:*"
+  }
 }
