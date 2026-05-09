@@ -36,11 +36,12 @@ export interface ToolbarExtraToolEntry {
   id: string;
   icon: string;
   label: string;
-  /** Invoke the entry — typically proxies to the registered toolbar
-   *  button's `click()` so the anchored popover (or other host action)
-   *  opens against the toolbar button as it does on a direct toolbar
-   *  click. */
-  invoke: () => void;
+  /** Invoke the entry. The right-click handler passes `atPoint` set to
+   *  the cursor's viewport coordinates so the host can open its popover
+   *  at the cursor instead of jumping to the toolbar button. Hosts that
+   *  don't care can ignore the argument and fall back to the toolbar-
+   *  click behavior (`entry.button.click()`). */
+  invoke: (atPoint?: { x: number; y: number }) => void;
 }
 
 /** Hooks the canvas menus need from the host toolbar. */
@@ -123,7 +124,10 @@ function openToolboxMenu(e: MouseEvent, ctx: ToolbarCanvasMenuContext): void {
       separatorAbove: i === 0,
       icon: entry.icon,
       label: entry.label,
-      action: () => entry.invoke(),
+      // Pass the right-click cursor position so the host can anchor its
+      // popover at the cursor — see the "scratchpad popover at cursor"
+      // contract on `ToolbarExtraToolEntry.invoke`.
+      action: () => entry.invoke({ x: e.clientX, y: e.clientY }),
     });
   }
   openCanvasContextMenu({ x: e.clientX, y: e.clientY, items });

@@ -178,3 +178,52 @@ describe("openAnchoredPopover placement", () => {
     expect(popover!.style.left).toMatch(/^\d+px$/);
   });
 });
+
+describe("openAnchoredPopover point anchor", () => {
+  it("opens at a cursor-position anchor with no element to track", () => {
+    openAnchoredPopover({ point: { x: 120, y: 80 } }, () => {});
+    const popover = document.body.querySelector<HTMLElement>("[data-anchor-popover]");
+    expect(popover).not.toBeNull();
+    expect(popover!.style.position).toBe("fixed");
+    // 'right' placement at point (120, 80) → left = 120 + 4 = 124, top = 80.
+    expect(popover!.style.left).toBe("124px");
+    expect(popover!.style.top).toBe("80px");
+  });
+
+  it("'below' placement at a point opens just below the cursor", () => {
+    openAnchoredPopover({ point: { x: 50, y: 200 } }, () => {}, { placement: "below" });
+    const popover = document.body.querySelector<HTMLElement>("[data-anchor-popover]");
+    // 'below' placement: top = point.y + 4 = 204, left = point.x = 50.
+    expect(popover!.style.top).toBe("204px");
+    expect(popover!.style.left).toBe("50px");
+  });
+
+  it("does NOT touch any anchor element's dataset (no element to track)", () => {
+    const sentinel = makeAnchor();
+    openAnchoredPopover({ point: { x: 10, y: 10 } }, () => {});
+    expect(sentinel.dataset["popoverId"] ?? "").toBe("");
+  });
+
+  it("returned cleanup() removes the point-anchored popover", () => {
+    const close = openAnchoredPopover({ point: { x: 10, y: 10 } }, () => {});
+    expect(document.body.querySelector("[data-anchor-popover]")).not.toBeNull();
+    close();
+    expect(document.body.querySelector("[data-anchor-popover]")).toBeNull();
+  });
+
+  it("Escape dismisses a point-anchored popover", async () => {
+    openAnchoredPopover({ point: { x: 10, y: 10 } }, () => {});
+    await new Promise((r) => setTimeout(r, 0));
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    expect(document.body.querySelector("[data-anchor-popover]")).toBeNull();
+  });
+
+  it("outside click dismisses a point-anchored popover", async () => {
+    openAnchoredPopover({ point: { x: 10, y: 10 } }, () => {});
+    await new Promise((r) => setTimeout(r, 0));
+    const elsewhere = document.createElement("div");
+    document.body.appendChild(elsewhere);
+    elsewhere.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(document.body.querySelector("[data-anchor-popover]")).toBeNull();
+  });
+});
