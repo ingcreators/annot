@@ -30,6 +30,8 @@
 // proves the architecture works without trying to swallow every
 // PWA-shell concern in one go.
 
+import { bakeAnnotationsTranslate } from "@ingcreators/annot-core/editor/bake-translate";
+import type { ImageRecord, PageMetadata, StorageProvider } from "@ingcreators/annot-core/storage";
 import type { CanvasManager, History, SelectionManager } from "@ingcreators/annot-editor";
 import {
   CanvasManager as CanvasManagerImpl,
@@ -37,12 +39,7 @@ import {
   History as HistoryImpl,
   SelectionManager as SelectionManagerImpl,
 } from "@ingcreators/annot-editor";
-import type {
-  ImageRecord,
-  PageMetadata,
-  StorageProvider,
-} from "@ingcreators/annot-core/storage";
-import { burnRedactionsIntoBitmap } from "@ingcreators/annot-render";
+import { burnRedactionsIntoBitmap, cropBitmap } from "@ingcreators/annot-render";
 import { restoreAnnotations } from "./restore-annotations.js";
 
 /**
@@ -120,11 +117,7 @@ export interface EditorShellHost {
  * stage — when richer payloads are required (e.g. error subclass
  * + path for the VSCode notifications), narrow per-event then.
  */
-export type EditorShellEvent =
-  | "dirty"
-  | "saved"
-  | "error"
-  | "selection-change";
+export type EditorShellEvent = "dirty" | "saved" | "error" | "selection-change";
 
 export type EditorShellEventHandler = (...args: unknown[]) => void;
 
@@ -418,8 +411,7 @@ export class EditorShell {
     // a stale `originalDataUrl` from when the document was first
     // opened. The two are usually equal, but a previous burn-in or
     // any future feature that mutates the bitmap would diverge them.
-    const baseHref =
-      canvas.imageEl.getAttribute("href") || record.originalDataUrl;
+    const baseHref = canvas.imageEl.getAttribute("href") || record.originalDataUrl;
     const base = await loadHtmlImage(baseHref);
 
     const blob = await burnRedactionsIntoBitmap(base, redactEls);
@@ -475,6 +467,142 @@ export class EditorShell {
     history.save();
 
     return { count: redactEls.length };
+  }
+
+  /**
+   * Permanently crop the current document's base bitmap to the
+   * supplied (x, y, w, h) rectangle in world (viewBox) coordinates.
+   *
+   * Mirrors {@link applyAllRedactions} for the destructive-crop
+   * pipeline:
+   *
+   *   1. Decode the live `imageEl.href` (which is normally equal
+   *      to the loaded `record.originalDataUrl`, but a previous
+   *      redact-burn / crop-bake will have already mutated it).
+   *   2. `cropBitmap` produces the cropped PNG / JPEG blob.
+   *   3. The annotation tree is shifted by `(-x, -y)` via
+   *      `bakeAnnotationsTranslate` so every shape stays visually
+   *      anchored to its target after the origin moves.
+   *   4. The live canvas's `imageEl` is repointed at the new bytes
+   *      and the SVG viewBox is reset to `0 0 w h` so the cropped
+   *      bitmap fills the canvas at native size.
+   *   5. The new `originalDataUrl` + `width` + `height` +
+   *      `annotationsSvg` get persisted via
+   *      `storage.updateImage` BEFORE the history snapshot, for
+   *      the same reason `applyAllRedactions` does — the host's
+   *      debounced annotation save would otherwise re-merge the
+   *      OLD bitmap from disk against the new SVG, leaving a
+   *      mismatched record on disk.
+   *
+   * The action is **session-undoable**: a single history snapshot
+   * captures the cropped state, so Ctrl+Z reverts it within the
+   * open editor (the previous frame still holds the pre-crop
+   * annotation positions; the bitmap restore happens via the
+   * canvas's serialised form). **After save, the cropped-out
+   * pixels are gone** — the calling host's confirmation dialog
+   * is what surfaces that distinction to the user before this
+   * method runs (per the destructive-action policy in
+   * `CLAUDE.md`).
+   *
+   * No-ops (returns `{ applied: false }`) when no image is open
+   * or the rect is degenerate. Callers that want to gate the UI
+   * on rect validity should check before invoking.
+   *
+   * If the explicit persistence step fails, the method re-throws
+   * after firing the `error` event so the calling host can
+   * surface a banner. The canvas stays in the cropped state
+   * visually (Ctrl+Z reverts); the file on disk is still the
+   * pre-crop version, so a retry of the apply gesture WOULD
+   * re-apply against an already-bitmap-mutated canvas (Ctrl+Z is
+   * the rollback affordance).
+   */
+  async applyCrop(
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+  ): Promise<{ applied: boolean; width: number; height: number }> {
+    if (this.#destroyed) return { applied: false, width: 0, height: 0 };
+    const canvas = this.#canvas;
+    const history = this.#history;
+    const record = this.#currentRecord;
+    if (!canvas || !history || !record) {
+      return { applied: false, width: 0, height: 0 };
+    }
+    if (!Number.isFinite(x) || !Number.isFinite(y) || !(w > 0) || !(h > 0)) {
+      return { applied: false, width: 0, height: 0 };
+    }
+
+    const baseHref = canvas.imageEl.getAttribute("href") || record.originalDataUrl;
+    const base = await loadHtmlImage(baseHref);
+
+    const blob = await cropBitmap(base, x, y, w, h);
+    const dataUrl = await blobToDataUrl(blob);
+
+    // Translate every annotation child by (-x, -y) so the visible
+    // positions stay anchored to whatever the user drew them on top
+    // of. Done BEFORE the viewBox / imageEl swap so a mid-bake error
+    // (e.g. a malformed line endpoint blowing up bakeLineTransform)
+    // doesn't leave the canvas with a cropped bitmap and stale
+    // annotations.
+    bakeAnnotationsTranslate(canvas.annotations, -x, -y);
+
+    // Live canvas reflects the crop immediately so the user sees
+    // the result without a reload.
+    canvas.imageEl.setAttribute("href", dataUrl);
+    canvas.imageEl.setAttribute("x", "0");
+    canvas.imageEl.setAttribute("y", "0");
+    // The cropped bitmap may not be exactly (w, h) — `cropBitmap`
+    // floors / clamps to integer dims that fit inside the source.
+    // Read back from the decoded blob instead of trusting the
+    // requested rect.
+    const dims = await measureBlob(blob);
+    const croppedW = dims.width;
+    const croppedH = dims.height;
+    canvas.imageEl.setAttribute("width", String(croppedW));
+    canvas.imageEl.setAttribute("height", String(croppedH));
+    canvas.updateViewBox(0, 0, croppedW, croppedH);
+    canvas.fitToView();
+
+    // Update the in-memory record so a subsequent debounced save
+    // (fired by the `history.save()` below) sees the new bitmap +
+    // dimensions if it ever needs the snapshot.
+    this.#currentRecord = {
+      ...record,
+      originalDataUrl: dataUrl,
+      width: croppedW,
+      height: croppedH,
+    };
+
+    // Persist atomically. The host's debounced annotation-save path
+    // can't carry the bitmap or new dimensions on its own — same
+    // reasoning as applyAllRedactions, just extended to width /
+    // height (which `ImageRecordUpdate` was extended to carry in
+    // lockstep with this method).
+    const path = this.#currentPath;
+    if (path) {
+      try {
+        const updates = {
+          annotationsSvg: exportSVGString(canvas),
+          originalDataUrl: dataUrl,
+          width: croppedW,
+          height: croppedH,
+          updatedAt: new Date().toISOString(),
+        };
+        await this.#host.storage.updateImage(path, updates);
+        this.#currentRecord = { ...this.#currentRecord, ...updates };
+        this.#emit("saved", path);
+      } catch (err) {
+        this.#emit("error", err);
+        throw err;
+      }
+    }
+
+    // Single history snapshot captures the cropped state. Ctrl+Z
+    // reverts to the pre-crop state within the session.
+    history.save();
+
+    return { applied: true, width: croppedW, height: croppedH };
   }
 
   /** Page metadata setter for hosts that capture it out-of-band
@@ -575,7 +703,11 @@ function loadHtmlImage(src: string): Promise<HTMLImageElement> {
     const img = new Image();
     img.onload = () => resolve(img);
     img.onerror = () =>
-      reject(new Error(`EditorShell.applyAllRedactions: failed to load base image (${src.slice(0, 32)}…)`));
+      reject(
+        new Error(
+          `EditorShell.applyAllRedactions: failed to load base image (${src.slice(0, 32)}…)`,
+        ),
+      );
     img.src = src;
   });
 }
@@ -592,4 +724,27 @@ function blobToDataUrl(blob: Blob): Promise<string> {
     reader.onerror = () => reject(reader.error);
     reader.readAsDataURL(blob);
   });
+}
+
+/** Decode an image blob and return its natural width / height.
+ *  Used by `applyCrop` to read the post-crop dimensions back from
+ *  `cropBitmap`'s output without trusting the requested rect (the
+ *  helper floors / clamps to integer dims that fit inside the
+ *  source, so the actual pixel size may differ by ±1 from the
+ *  user's drag). The two helpers are intentionally split so callers
+ *  that only need one dimension don't decode twice — they share the
+ *  same blob URL via the closures below. */
+async function measureBlob(blob: Blob): Promise<{ width: number; height: number }> {
+  const url = URL.createObjectURL(blob);
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const i = new Image();
+      i.onload = () => resolve(i);
+      i.onerror = () => reject(new Error("EditorShell.applyCrop: failed to decode cropped blob"));
+      i.src = url;
+    });
+    return { width: img.naturalWidth, height: img.naturalHeight };
+  } finally {
+    URL.revokeObjectURL(url);
+  }
 }

@@ -34,6 +34,13 @@ import "./annot-save-menu.js";
 import "./annot-tool-flyout.js";
 import "./annot-toolbar.js";
 
+import {
+  copyAsOffice,
+  isDesktop,
+  loadToolPresets,
+  saveToolPresets,
+  type ToolPreset,
+} from "@ingcreators/annot-core/desktop-bridge";
 // Cross-package imports use the published `@ingcreators/annot-core`
 // surface where available; deep subpaths (`./editor/*`,
 // `./editor/tools/*`) reach the bits that aren't re-exported via
@@ -47,13 +54,6 @@ import {
 } from "@ingcreators/annot-core/editor";
 import { svgAnnotationsToShapes } from "@ingcreators/annot-core/editor/svg-to-annotation-shapes";
 import type { ToolOptions } from "@ingcreators/annot-core/editor/tool-options";
-import {
-  copyAsOffice,
-  isDesktop,
-  loadToolPresets,
-  saveToolPresets,
-  type ToolPreset,
-} from "@ingcreators/annot-core/desktop-bridge";
 import {
   DEFAULT_FILL_COLOR,
   DEFAULT_FONT_SIZE,
@@ -155,6 +155,13 @@ export interface ToolbarOptions {
    *  been saved yet — the export functions fall back to the timestamp
    *  default in that case. */
   getCurrentFilename?: () => string | undefined;
+  /** Confirm-then-apply gate the `crop` tool calls when the user
+   *  hits Enter / clicks Apply. The host wires this to a
+   *  destructive-action confirmation dialog AND to
+   *  `EditorShell.applyCrop(x, y, w, h)`. Resolves `true` if the
+   *  bake was applied, `false` if the user cancelled. When omitted,
+   *  the crop tool falls back to a session-only viewBox crop. */
+  applyCrop?: (x: number, y: number, w: number, h: number) => Promise<boolean>;
 }
 
 // computeDasharray imported from shared/dash-utils
@@ -201,6 +208,7 @@ export class Toolbar {
   #orientation: "horizontal" | "vertical";
   #hideToolDropdowns: boolean;
   #getCurrentFilename?: () => string | undefined;
+  #applyCrop?: (x: number, y: number, w: number, h: number) => Promise<boolean>;
 
   constructor(
     container: HTMLElement,
@@ -221,6 +229,7 @@ export class Toolbar {
     this.#orientation = options.orientation ?? "horizontal";
     this.#hideToolDropdowns = options.hideToolDropdowns ?? false;
     this.#getCurrentFilename = options.getCurrentFilename;
+    this.#applyCrop = options.applyCrop;
 
     this.#options = {
       strokeColor: DEFAULT_STROKE_COLOR,
@@ -278,6 +287,7 @@ export class Toolbar {
       canvas: this.#canvas,
       history: this.#history,
       selection: this.#selection,
+      applyCrop: this.#applyCrop,
     };
     for (const id of Object.keys(TOOL_REGISTRY)) {
       const meta = TOOL_REGISTRY[id]!;

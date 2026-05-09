@@ -55,6 +55,7 @@ import { exportSVGString, getPngDataUrl } from "@ingcreators/annot-editor";
 import { buildPptxFiles } from "@ingcreators/annot-editor/pptx-export";
 import { EditorShell } from "@ingcreators/annot-host-ui";
 import { Toolbar } from "@ingcreators/annot-host-ui/toolbar";
+import { showConfirmDialog } from "@ingcreators/annot-host-ui/ui/dialog";
 // `<annot-editor-right-panel>` registers a custom element on import.
 import "@ingcreators/annot-host-ui/right-panel";
 import { StatusHost } from "@ingcreators/annot-host-ui/orchestrators/status-host";
@@ -444,6 +445,28 @@ function mountToolbarAndRightPanel(): void {
       showSaveGroup: false,
       hideToolDropdowns: false,
       getCurrentFilename: () => activeFilename || undefined,
+      // Confirm-then-bake gate the CropTool calls when the user
+      // commits a crop rect. Mirrors the PWA wiring in
+      // `editor-session.ts`: dialog → `shell.applyCrop` → save the
+      // new bitmap + dimensions through the VSCode storage proxy.
+      // The CustomEditorProvider's `updateImage` is a no-op (the
+      // host saves on its own schedule via the `save` IPC), so the
+      // shell's persistence call is harmless here — the bake mutation
+      // shows up on disk via the next host-driven save instead.
+      applyCrop: async (x, y, w, h) => {
+        const ok = await showConfirmDialog({
+          title: "Crop image?",
+          message:
+            `The image will be permanently cropped to ${Math.round(w)}×${Math.round(h)} pixels. ` +
+            "The pixels outside the crop region can no longer be recovered after the next save. Continue?",
+          okLabel: "Crop",
+          cancelLabel: "Cancel",
+          danger: true,
+        });
+        if (!ok) return false;
+        const result = await shell.applyCrop(x, y, w, h);
+        return result.applied;
+      },
     },
   );
   // Wire the toolbar to the right-panel ref so the panel can

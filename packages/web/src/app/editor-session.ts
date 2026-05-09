@@ -25,6 +25,7 @@ import { Toolbar } from "@ingcreators/annot-host-ui/toolbar";
 import "@ingcreators/annot-host-ui/annot-file-details-drawer";
 import { EditorShell, installKeyboardHelp } from "@ingcreators/annot-host-ui";
 import type { AnnotEditorRightPanelElement } from "@ingcreators/annot-host-ui/right-panel";
+import { showConfirmDialog } from "@ingcreators/annot-host-ui/ui/dialog";
 import "@ingcreators/annot-host-ui/right-panel";
 import {
   type AnnotScratchpadSectionElement,
@@ -383,6 +384,34 @@ export class EditorSession {
           this.deps.getCurrentImagePath()
             ? getFilename(this.deps.getCurrentImagePath()!)
             : undefined,
+        // Confirm-then-bake gate the CropTool calls when the user
+        // commits a crop rect. Mirrors `panel.applyAllRedactions`
+        // below: cancel the autosave timer first so a debounced
+        // annotation save can't overwrite the apply's bitmap PATCH
+        // with stale bytes (the same race the redact-burn wiring
+        // documents). The dialog body explicitly calls out that
+        // the cropped-out pixels are gone after save —
+        // CLAUDE.md's destructive-action policy requires this
+        // explicit opt-in for any feature that mutates
+        // `ImageRecord.originalDataUrl`.
+        applyCrop: async (x, y, w, h) => {
+          const ok = await showConfirmDialog({
+            title: "Crop image?",
+            message:
+              `The image will be permanently cropped to ${Math.round(w)}×${Math.round(h)} pixels. ` +
+              "The pixels outside the crop region can no longer be recovered after the next save. Continue?",
+            okLabel: "Crop",
+            cancelLabel: "Cancel",
+            danger: true,
+          });
+          if (!ok) return false;
+          this.savePipeline.cancelAutoSave();
+          const result = await shell.applyCrop(x, y, w, h);
+          if (result.applied) {
+            showInfo(`Image cropped to ${result.width}×${result.height}. Save to make permanent.`);
+          }
+          return result.applied;
+        },
       },
     );
     this.#editorToolbar = toolbar;

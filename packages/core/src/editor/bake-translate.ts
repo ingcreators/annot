@@ -20,6 +20,7 @@
 
 import { translatePathD } from "./path-utils.js";
 import { bakeTextShapeTranslate } from "./text-utils.js";
+import { bakeLineTranslate } from "./transform-utils.js";
 
 /**
  * Translate a Counter (marker) `<g>` and its children by (dx, dy).
@@ -49,14 +50,8 @@ export function bakeMarkerTranslate(g: SVGElement, dx: number, dy: number): void
   }
   const circle = g.querySelector(":scope > circle");
   if (circle) {
-    circle.setAttribute(
-      "cx",
-      String(Number.parseFloat(circle.getAttribute("cx") || "0") + dx),
-    );
-    circle.setAttribute(
-      "cy",
-      String(Number.parseFloat(circle.getAttribute("cy") || "0") + dy),
-    );
+    circle.setAttribute("cx", String(Number.parseFloat(circle.getAttribute("cx") || "0") + dx));
+    circle.setAttribute("cy", String(Number.parseFloat(circle.getAttribute("cy") || "0") + dy));
   }
   const text = g.querySelector(":scope > text");
   if (text) {
@@ -192,4 +187,33 @@ export function bakeTranslate(el: SVGElement, dx: number, dy: number): void {
   }
 
   // line / arrow / unknown leaf — caller's responsibility.
+}
+
+/**
+ * Translate every direct child of an annotations group by (dx, dy).
+ *
+ * Like {@link bakeTranslate} but also handles `<line>` and
+ * `<g data-type="arrow">` children — the destructive-crop path
+ * (`EditorShell.applyCrop`) calls this to shift the annotation
+ * tree into the cropped image's new origin, so it has to cover
+ * EVERY annotation type the editor produces (the `bakeTranslate`
+ * dispatcher itself omits lines/arrows because their move flow goes
+ * through `transform-utils.ts:bakeLineTranslate` directly).
+ *
+ * Tier B — pure DOM mutation, jsdom-friendly. The line/arrow path
+ * uses `DOMMatrix` via `bakeLineTransform`, which jsdom polyfills
+ * via `applyInverseAffine`-style numeric helpers; happy-dom ships a
+ * working `DOMMatrix` for the same routine. No-op for (0, 0).
+ */
+export function bakeAnnotationsTranslate(group: SVGElement, dx: number, dy: number): void {
+  if (dx === 0 && dy === 0) return;
+  for (const child of Array.from(group.children)) {
+    const el = child as SVGElement;
+    const tag = el.tagName;
+    if (tag === "line" || (tag === "g" && el.getAttribute("data-type") === "arrow")) {
+      bakeLineTranslate(el, dx, dy);
+      continue;
+    }
+    bakeTranslate(el, dx, dy);
+  }
 }

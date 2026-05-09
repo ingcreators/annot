@@ -174,6 +174,36 @@ export function bakeLineTransform(el: SVGElement): void {
   el.removeAttribute("data-ty");
 }
 
+/** Translate a line/arrow's endpoints (and arrow control point, if
+ *  curved) by `(dx, dy)` in world space. Bakes any pending
+ *  rotation/flip/translate state into endpoints first via
+ *  `bakeLineTransform` so the result reflects the visual position
+ *  the user sees on screen, not a stale endpoint pair the matrix
+ *  was offsetting at render time.
+ *
+ *  Used by the destructive-crop pipeline (`EditorShell.applyCrop`
+ *  via `bakeAnnotationsTranslate`) to shift line/arrow annotations
+ *  into the cropped image's new origin. The non-line dispatcher
+ *  in `bake-translate.ts:bakeTranslate` covers everything else.
+ *
+ *  No-op for `(0, 0)` and for non-line inputs (the caller is
+ *  expected to dispatch line vs. non-line, but the guard keeps
+ *  the helper safe to call defensively from a generic walker). */
+export function bakeLineTranslate(el: SVGElement, dx: number, dy: number): void {
+  if (!isLineLike(el)) return;
+  if (dx === 0 && dy === 0) return;
+  bakeLineTransform(el);
+  const ep = lineEndpointsOf(el);
+  setLineEndpoints(el, ep.x1 + dx, ep.y1 + dy, ep.x2 + dx, ep.y2 + dy);
+  if (isArrowGroup(el)) {
+    const control = readArrowControl(el);
+    if (control) {
+      writeArrowControl(el, { x: control.x + dx, y: control.y + dy });
+      refreshArrowPath(el);
+    }
+  }
+}
+
 /** Rotate a line's endpoints (and control point, if curved) by `deg`
  *  around the midpoint of the two endpoints. */
 export function rotateLineEndpointsBy(el: SVGElement, deg: number): void {

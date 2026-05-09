@@ -43,21 +43,31 @@ export interface ImageRecord {
  * underlying bitmap — currently the redact-burn-into-image
  * `EditorShell.applyAllRedactions` path
  * ([`_done/redact-burn-into-image.md`](../../../../docs/plans/_done/redact-burn-into-image.md))
- * — can persist the new bytes alongside the matching annotation
- * SVG. Backends that re-encode the file on save (XMP-based
- * stores: DeviceStore, DesktopStore, GoogleDriveStore,
- * GitHubStore) MUST honor a non-undefined `updates.originalDataUrl`
- * by feeding it into the file rebuild instead of the storage's
- * cached / on-disk value. Backends that store the bitmap
- * separately (BrowserStore via IDB) just `Object.assign` it onto
- * the record, which the next put writes back. Including this
- * field on a normal annotation save (no bitmap mutation) is
- * unnecessary and — for network-backed stores — wasteful, so the
- * field is OPT-IN: leave it undefined unless the bitmap actually
- * changed.
+ * and the destructive crop path (`EditorShell.applyCrop`) — can
+ * persist the new bytes alongside the matching annotation SVG.
+ * Backends that re-encode the file on save (XMP-based stores:
+ * DeviceStore, DesktopStore, GoogleDriveStore, GitHubStore) MUST
+ * honor a non-undefined `updates.originalDataUrl` by feeding it
+ * into the file rebuild instead of the storage's cached / on-disk
+ * value. Backends that store the bitmap separately (BrowserStore
+ * via IDB) just `Object.assign` it onto the record, which the
+ * next put writes back. Including this field on a normal
+ * annotation save (no bitmap mutation) is unnecessary and — for
+ * network-backed stores — wasteful, so the field is OPT-IN: leave
+ * it undefined unless the bitmap actually changed.
+ *
+ * `width` / `height` are included for the same reason — the
+ * destructive crop path replaces the bitmap with a smaller one
+ * AND records the new pixel dimensions so the next reload
+ * reconstructs the canvas at the cropped size. Like
+ * `originalDataUrl` they are OPT-IN: only set when the bitmap
+ * dimensions actually changed.
  */
 export type ImageRecordUpdate = Partial<
-  Pick<ImageRecord, "annotationsSvg" | "tags" | "updatedAt" | "originalDataUrl">
+  Pick<
+    ImageRecord,
+    "annotationsSvg" | "tags" | "updatedAt" | "originalDataUrl" | "width" | "height"
+  >
 >;
 
 // =============================================================================
