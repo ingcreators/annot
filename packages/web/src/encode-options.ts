@@ -5,12 +5,22 @@
  * Annot PWA uses localStorage as a lightweight mirror. Defaults match
  * `@ingcreators/annot-core/encode`'s `DEFAULT_ENCODE_OPTIONS`.
  *
+ * Imports from the leaf `/encode/options` subpath rather than `/encode`
+ * itself: the latter pulls in the WASM imagequant binding, and the
+ * production bundle defers that to the lazy worker chunk via
+ * `workers/encode-client.ts`'s dynamic import. Sharing this file's
+ * static import would otherwise hoist the encoder into the main
+ * bundle (Rolldown's `INEFFECTIVE_DYNAMIC_IMPORT` warning).
+ *
  * Used by:
  *   - app.ts (initial capture / SplitEditor Apply)
  *   - storage providers (device-store / google-drive-store) when re-encoding
  *     the flattened "render with annotations baked in" output.
  */
-import { DEFAULT_ENCODE_OPTIONS, type EncodeOptions } from "@ingcreators/annot-core/encode";
+import {
+  DEFAULT_ENCODE_OPTIONS,
+  type EncodeOptions,
+} from "@ingcreators/annot-core/encode/options";
 
 const STORAGE_KEY = "annot-encode-options";
 

@@ -10,7 +10,6 @@
 import type { StorageProvider } from "@ingcreators/annot-core/storage";
 import { logger } from "../logger.js";
 import { hideError, showAuthError, showError } from "../ui/error-bar.js";
-import { BrowserStore } from "./browser-store.js";
 import { DeviceStore } from "./device-store.js";
 import { clearHandle, loadHandle, saveHandle } from "./fs-handle-store.js";
 import {
@@ -100,8 +99,11 @@ class StorageRegistry {
     return null;
   }
 
-  getBrowserStore(): StorageProvider {
-    if (!this.browserFallback) this.browserFallback = new BrowserStore();
+  async getBrowserStore(): Promise<StorageProvider> {
+    if (!this.browserFallback) {
+      const { BrowserStore } = await import("./browser-store.js");
+      this.browserFallback = new BrowserStore();
+    }
     return this.browserFallback;
   }
 

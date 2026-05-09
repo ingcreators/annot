@@ -25,6 +25,7 @@
     "./desktop-bridge": "./src/utils/desktop-bridge.ts",
     "./storage": "./src/storage/index.ts",
     "./encode": "./src/encode/index.ts",
+    "./encode/options": "./src/encode/options.ts",
     "./styles/*": "./styles/*"
   },
   "scripts": {
