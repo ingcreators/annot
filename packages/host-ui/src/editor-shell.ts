@@ -30,7 +30,10 @@
 // proves the architecture works without trying to swallow every
 // PWA-shell concern in one go.
 
-import { bakeAnnotationsTranslate } from "@ingcreators/annot-core/editor/bake-translate";
+import {
+  bakeAnnotationsTranslate,
+  pruneAnnotationsOutsideRect,
+} from "@ingcreators/annot-core/editor/bake-translate";
 import type { ImageRecord, PageMetadata, StorageProvider } from "@ingcreators/annot-core/storage";
 import type { CanvasManager, History, SelectionManager } from "@ingcreators/annot-editor";
 import {
@@ -539,12 +542,20 @@ export class EditorShell {
     const blob = await cropBitmap(base, x, y, w, h);
     const dataUrl = await blobToDataUrl(blob);
 
-    // Translate every annotation child by (-x, -y) so the visible
-    // positions stay anchored to whatever the user drew them on top
-    // of. Done BEFORE the viewBox / imageEl swap so a mid-bake error
-    // (e.g. a malformed line endpoint blowing up bakeLineTransform)
-    // doesn't leave the canvas with a cropped bitmap and stale
-    // annotations.
+    // Drop annotations whose entire bbox sits outside the crop rect
+    // — privacy + file-size win — BEFORE the translate, so the
+    // remaining children all shift by (-x, -y) into the new origin.
+    // Annotations that PARTIALLY overlap the crop boundary are kept
+    // (clipping per-shape geometry is intentionally out of scope;
+    // see `_done/destructive-crop-bake.md`).
+    pruneAnnotationsOutsideRect(canvas.annotations, { x, y, w, h });
+
+    // Translate every remaining annotation child by (-x, -y) so the
+    // visible positions stay anchored to whatever the user drew them
+    // on top of. Done BEFORE the viewBox / imageEl swap so a mid-bake
+    // error (e.g. a malformed line endpoint blowing up
+    // bakeLineTransform) doesn't leave the canvas with a cropped
+    // bitmap and stale annotations.
     bakeAnnotationsTranslate(canvas.annotations, -x, -y);
 
     // Live canvas reflects the crop immediately so the user sees

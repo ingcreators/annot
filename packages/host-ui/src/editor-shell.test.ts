@@ -921,5 +921,72 @@ describe("EditorShell — Phase 3 implementation", () => {
         stub.restore();
       }
     });
+
+    it("drops annotations whose bbox falls fully outside the crop rect, keeps partial overlaps", async () => {
+      // Privacy + file-size win: annotations whose entire bbox sits
+      // outside the crop rect are removed BEFORE the translate step
+      // so they don't survive in `annotationsSvg`. Annotations that
+      // straddle the crop boundary are kept (the visible portion is
+      // what the user wants; clipping per-shape geometry is out of
+      // scope for v1).
+      const stub = stubCanvasAndImage(400, 300);
+      try {
+        const annotationsSvg = `<?xml version="1.0"?>
+<svg xmlns="http://www.w3.org/2000/svg" data-annot-version="1">
+  <g id="annotations">
+    <rect data-test="inside" x="120" y="80" width="40" height="30" fill="#0f0"/>
+    <rect data-test="outside-right" x="350" y="80" width="20" height="20" fill="#f00"/>
+    <rect data-test="outside-below" x="120" y="280" width="20" height="20" fill="#f00"/>
+    <rect data-test="straddle" x="90" y="80" width="40" height="30" fill="#ff0"/>
+    <line data-test="line-outside" x1="350" y1="280" x2="380" y2="290"/>
+  </g>
+</svg>`;
+        const container = makeContainer();
+        const { storage, updateImage } = makeStorage(
+          makeRecord({ width: 400, height: 300, annotationsSvg }),
+        );
+        const shell = new EditorShell({ container, storage });
+        await shell.open("/test.annot.svg");
+
+        // Crop rect (100, 50, 200, 200) → keeps anything intersecting
+        // the rect [100, 250) × [50, 250).
+        const result = await shell.applyCrop(100, 50, 200, 200);
+        expect(result.applied).toBe(true);
+
+        const canvas = shell.getCanvas()!;
+        const survivors = Array.from(
+          canvas.annotations.querySelectorAll<SVGElement>("[data-test]"),
+        );
+        const surviving = survivors.map((el) => el.getAttribute("data-test")).sort();
+        expect(surviving).toEqual(["inside", "straddle"]);
+        // Inside rect translated by (-100, -50).
+        const inside = canvas.annotations.querySelector(
+          '[data-test="inside"]',
+        ) as SVGRectElement | null;
+        expect(inside?.getAttribute("x")).toBe("20");
+        expect(inside?.getAttribute("y")).toBe("30");
+        // Straddle rect translated similarly (still has its
+        // out-of-viewBox portion, that's intentional).
+        const straddle = canvas.annotations.querySelector(
+          '[data-test="straddle"]',
+        ) as SVGRectElement | null;
+        expect(straddle?.getAttribute("x")).toBe("-10");
+        expect(straddle?.getAttribute("y")).toBe("30");
+
+        // Persisted SVG must NOT carry the dropped annotations.
+        expect(updateImage).toHaveBeenCalledTimes(1);
+        const call = updateImage.mock.calls[0] as unknown as [string, { annotationsSvg: string }];
+        const persisted = call[1].annotationsSvg;
+        expect(persisted).not.toContain('data-test="outside-right"');
+        expect(persisted).not.toContain('data-test="outside-below"');
+        expect(persisted).not.toContain('data-test="line-outside"');
+        expect(persisted).toContain('data-test="inside"');
+        expect(persisted).toContain('data-test="straddle"');
+
+        shell.destroy();
+      } finally {
+        stub.restore();
+      }
+    });
   });
 });
