@@ -4,16 +4,19 @@
  *
  * Phases of `docs/plans/annot-html-document.md`:
  * - Phase 3 landed read-only rendering + TOC drawer.
- * - Phase 4a (this file) adds an editing mode: contentEditable on
- *   heading + paragraph blocks, per-block toolbar (delete / move
- *   up / move down), `DocumentHistory`-backed undo/redo via
- *   Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y. Bold / italic / underline
- *   come for free via the browser's default contentEditable
- *   shortcut handling (Ctrl+B / Ctrl+I / Ctrl+U → execCommand).
- * - Phase 4b will add the slash menu, insert above/below,
- *   contentEditable on the remaining text-bearing blocks (list
- *   items, callout / quote inner paragraphs, figcaption), and
- *   debounced auto-commit while typing.
+ * - Phase 4a added an editing mode: contentEditable on heading +
+ *   paragraph blocks, per-block toolbar (delete / move up / move
+ *   down), `DocumentHistory`-backed undo/redo via Ctrl+Z /
+ *   Ctrl+Shift+Z / Ctrl+Y. Bold / italic / underline come for
+ *   free via the browser's default contentEditable shortcut
+ *   handling (Ctrl+B / Ctrl+I / Ctrl+U → execCommand).
+ * - Phase 4b (this file's update) adds the slash menu
+ *   (`<annot-doc-block-menu>`), insert above / insert below in
+ *   the block toolbar, and the `/`-typed-in-empty-block trigger
+ *   that opens the menu anchored to that block.
+ * - Future phase work will extend contentEditable to the
+ *   remaining text-bearing block kinds (list items, callout /
+ *   quote inner paragraphs, figcaption).
  *
  * Light DOM (Hybrid CSS) following the host-ui convention.
  */
@@ -26,6 +29,12 @@ import type {
   ListBlock,
 } from "@ingcreators/annot-doc";
 import { buildStyleBlock } from "@ingcreators/annot-doc";
+import {
+  AnnotDocBlockMenuElement,
+  type BlockMenuItem,
+  type BlockMenuSelectDetail,
+} from "./annot-doc-block-menu.js";
+import "./annot-doc-block-menu.js";
 import "./annot-doc-block-toolbar.js";
 import type { BlockToolbarActionDetail } from "./annot-doc-block-toolbar.js";
 import { DocumentHistory } from "./annot-doc-history.js";
@@ -161,6 +170,49 @@ const SHELL_CSS = `
   outline: 2px solid var(--annot-doc-accent);
   outline-offset: 2px;
   border-radius: 2px;
+}
+
+/* ---- Slash menu (mounted to <body> by openFor) ---- */
+annot-doc-block-menu {
+  display: block;
+  width: 240px;
+  max-height: 360px;
+  overflow-y: auto;
+  background: var(--annot-doc-bg, #ffffff);
+  color: var(--annot-doc-fg, #1f2937);
+  border: 1px solid var(--annot-doc-muted, #6b7280);
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  padding: 4px;
+}
+.annot-doc-block-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.annot-doc-block-menu-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 12px;
+  background: transparent;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  text-align: left;
+  font-size: 0.875rem;
+  color: inherit;
+}
+.annot-doc-block-menu-item.active,
+.annot-doc-block-menu-item:hover {
+  background: var(--annot-doc-code-bg, #f3f4f6);
+}
+.annot-doc-block-menu-label {
+  font-weight: 500;
+}
+.annot-doc-block-menu-desc {
+  font-size: 0.8em;
+  color: var(--annot-doc-muted, #6b7280);
 }
 
 @media (max-width: 768px) {
@@ -384,6 +436,9 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
       const moved = blocks.splice(index, 1)[0];
       if (!moved) return;
       blocks.splice(index + 1, 0, moved);
+    } else if (action === "insertAbove" || action === "insertBelow") {
+      const insertAt = action === "insertAbove" ? index : index + 1;
+      blocks.splice(insertAt, 0, { kind: "paragraph", inlineHtml: "" });
     }
 
     const newDoc: AnnotDocument = { ...this.document, blocks };
@@ -391,8 +446,55 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
     this.#applyInternal(newDoc, "block-action");
   }
 
-  #onArticleInput = (): void => {
+  // -------------------------------------------------------------------------
+  // Slash menu
+  // -------------------------------------------------------------------------
+
+  #maybeOpenSlashMenu(target: HTMLElement): void {
+    // Trigger only when the user typed `/` into an empty editable
+    // block (the canonical Notion-style entry point). We strip the
+    // `/` so the new block starts blank.
+    if (!target.matches('[data-annot-block][contenteditable="true"]')) return;
+    if (target.textContent !== "/") return;
+    target.textContent = "";
+    const wrapper = target.closest(".annot-doc-block-host") as HTMLElement | null;
+    if (!wrapper) return;
+    const indexAttr = wrapper.getAttribute("data-block-index");
+    if (!indexAttr) return;
+    const index = Number.parseInt(indexAttr, 10);
+    if (Number.isNaN(index)) return;
+
+    const menu = AnnotDocBlockMenuElement.openFor(target);
+    menu.addEventListener(
+      "block-menu-select",
+      (e: Event) => {
+        this.#onSlashMenuSelect(e as CustomEvent<BlockMenuSelectDetail>, index);
+      },
+      { once: true },
+    );
+  }
+
+  #onSlashMenuSelect(e: CustomEvent<BlockMenuSelectDetail>, index: number): void {
+    if (!this.document) return;
+    this.#syncDomIntoDocument();
+    const newBlock = createBlockFromMenuItem(e.detail.item);
+    const blocks = [...this.document.blocks];
+    blocks[index] = newBlock;
+    const newDoc: AnnotDocument = { ...this.document, blocks };
+    this.#history?.push(newDoc);
+    this.#applyInternal(newDoc, "block-action");
+  }
+
+  #onArticleInput = (e: Event): void => {
     if (!this.editing) return;
+    // Slash menu trigger — only fires when an editable block's text
+    // is exactly `/`. The handler clears the slash and opens the
+    // menu anchored to the same block.
+    const target = e.target as HTMLElement | null;
+    if (target?.textContent === "/") {
+      this.#maybeOpenSlashMenu(target);
+      return;
+    }
     if (this.#commitTimer !== null) clearTimeout(this.#commitTimer);
     this.#commitTimer = setTimeout(() => {
       this.#commitTimer = null;
@@ -727,4 +829,31 @@ function syncBlockFromDom(wrapper: HTMLElement, block: Block): Block {
     return { ...block, inlineHtml };
   }
   return block;
+}
+
+/** Materialise a fresh `Block` from the slash menu's selection.
+ *  Phase 4b: each kind starts empty so the user can immediately
+ *  type into the new element. */
+function createBlockFromMenuItem(item: BlockMenuItem): Block {
+  switch (item.kind) {
+    case "heading":
+      return { kind: "heading", level: item.level ?? 1, inlineHtml: "" };
+    case "paragraph":
+      return { kind: "paragraph", inlineHtml: "" };
+    case "list":
+      return {
+        kind: "list",
+        ordered: item.listOrdered ?? false,
+        listStyle: item.listOrdered ? "decimal" : "disc",
+        items: [""],
+      };
+    case "code":
+      return { kind: "code", text: "" };
+    case "quote":
+      return { kind: "quote", paragraphs: [""] };
+    case "callout":
+      return { kind: "callout", tone: item.tone ?? "info", paragraphs: [""] };
+    case "divider":
+      return { kind: "divider" };
+  }
 }

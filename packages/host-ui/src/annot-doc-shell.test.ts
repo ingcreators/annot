@@ -503,3 +503,132 @@ describe("annot-doc-shell: text editing", () => {
     vi.useRealTimers();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Phase 4b — slash menu + insert above/below
+// ---------------------------------------------------------------------------
+
+describe("annot-doc-shell: insert above / insert below", () => {
+  function clickToolbarAction(el: AnnotDocShellElement, blockIndex: number, label: string): void {
+    const wrapper = el.querySelectorAll(".annot-doc-block-host")[blockIndex] as HTMLElement;
+    const button = wrapper.querySelector(
+      `annot-doc-block-toolbar button[aria-label="${label}"]`,
+    ) as HTMLButtonElement;
+    button.click();
+  }
+
+  it("insert above adds an empty paragraph at the block's index", async () => {
+    const el = mount(makeMixedDoc());
+    el.editing = true;
+    await el.updateComplete;
+    const before = el.document!.blocks.length;
+    clickToolbarAction(el, 1, "Insert block above");
+    await el.updateComplete;
+    expect(el.document!.blocks.length).toBe(before + 1);
+    expect(el.document!.blocks[1]?.kind).toBe("paragraph");
+    if (el.document!.blocks[1]?.kind === "paragraph") {
+      expect(el.document!.blocks[1].inlineHtml).toBe("");
+    }
+  });
+
+  it("insert below adds an empty paragraph at the next slot", async () => {
+    const el = mount(makeMixedDoc());
+    el.editing = true;
+    await el.updateComplete;
+    const before = el.document!.blocks.length;
+    clickToolbarAction(el, 1, "Insert block below");
+    await el.updateComplete;
+    expect(el.document!.blocks.length).toBe(before + 1);
+    expect(el.document!.blocks[2]?.kind).toBe("paragraph");
+  });
+
+  it("inserts contribute a history entry", async () => {
+    const el = mount(makeMixedDoc());
+    el.editing = true;
+    await el.updateComplete;
+    expect(el.canUndo()).toBe(false);
+    clickToolbarAction(el, 0, "Insert block below");
+    await el.updateComplete;
+    expect(el.canUndo()).toBe(true);
+  });
+});
+
+describe("annot-doc-shell: slash menu", () => {
+  it("opens the menu when `/` is the only text in an empty editable block", async () => {
+    const el = mount(makeMixedDoc());
+    el.editing = true;
+    await el.updateComplete;
+    // The first paragraph in the mixed doc is the second block.
+    const para = el.querySelector(
+      '.annot-doc-block-host[data-block-index="1"] p[contenteditable="true"]',
+    ) as HTMLElement;
+    expect(para).not.toBeNull();
+    para.textContent = "/";
+    para.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    // The menu mounts to body; querySelector outside the shell.
+    const menu = document.querySelector("annot-doc-block-menu");
+    expect(menu).not.toBeNull();
+    // The trigger char is stripped from the editable block.
+    expect(para.textContent).toBe("");
+    // Clean up the menu so it doesn't bleed into other tests.
+    (menu as { close?: () => void } | null)?.close?.();
+  });
+
+  it("does NOT open the menu when text in the block is non-empty", async () => {
+    const el = mount(makeMixedDoc());
+    el.editing = true;
+    await el.updateComplete;
+    const para = el.querySelector('p[contenteditable="true"]') as HTMLElement;
+    para.textContent = "Hello/";
+    para.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    expect(document.querySelector("annot-doc-block-menu")).toBeNull();
+  });
+
+  it("selecting a heading replaces the trigger block with the chosen kind", async () => {
+    const el = mount(makeMixedDoc());
+    el.editing = true;
+    await el.updateComplete;
+    const para = el.querySelector(
+      '.annot-doc-block-host[data-block-index="1"] p[contenteditable="true"]',
+    ) as HTMLElement;
+    para.textContent = "/";
+    para.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    const menu = document.querySelector("annot-doc-block-menu") as
+      | (HTMLElement & { updateComplete: Promise<unknown> })
+      | null;
+    expect(menu).not.toBeNull();
+    await menu!.updateComplete;
+
+    // Pick "Heading 2" via its data-block-menu-id.
+    (menu!.querySelector('[data-block-menu-id="h2"]') as HTMLButtonElement).click();
+    await el.updateComplete;
+
+    const replaced = el.document!.blocks[1];
+    expect(replaced?.kind).toBe("heading");
+    if (replaced?.kind === "heading") {
+      expect(replaced.level).toBe(2);
+      expect(replaced.inlineHtml).toBe("");
+    }
+    // Menu cleans itself up on select.
+    expect(document.querySelector("annot-doc-block-menu")).toBeNull();
+  });
+
+  it("selecting Divider replaces the trigger block with a divider", async () => {
+    const el = mount(makeMixedDoc());
+    el.editing = true;
+    await el.updateComplete;
+    const para = el.querySelector(
+      '.annot-doc-block-host[data-block-index="1"] p[contenteditable="true"]',
+    ) as HTMLElement;
+    para.textContent = "/";
+    para.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    const menu = document.querySelector("annot-doc-block-menu") as
+      | (HTMLElement & { updateComplete: Promise<unknown> })
+      | null;
+    expect(menu).not.toBeNull();
+    await menu!.updateComplete;
+    (menu!.querySelector('[data-block-menu-id="divider"]') as HTMLButtonElement).click();
+    await el.updateComplete;
+    expect(el.document!.blocks[1]?.kind).toBe("divider");
+  });
+});
