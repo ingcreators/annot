@@ -96,9 +96,7 @@ export function createExtensionHandlers(deps: ExtensionDeps): ExtensionHandlers 
         throw err;
       }
 
-      const metaFiles = entries.filter((e) =>
-        e.name.toLowerCase().endsWith(".json"),
-      );
+      const metaFiles = entries.filter((e) => e.name.toLowerCase().endsWith(".json"));
       const out: DrainedCapture[] = [];
 
       for (const meta of metaFiles) {
@@ -173,8 +171,7 @@ export const EXTENSION_CHANNELS = {
   legacyDataInfo: "extension.legacyDataInfo",
 } as const;
 
-export type ExtensionChannel =
-  (typeof EXTENSION_CHANNELS)[keyof typeof EXTENSION_CHANNELS];
+export type ExtensionChannel = (typeof EXTENSION_CHANNELS)[keyof typeof EXTENSION_CHANNELS];
 
 export const EXTENSION_CHANNEL_TO_HANDLER: Record<ExtensionChannel, keyof ExtensionHandlers> = {
   [EXTENSION_CHANNELS.drainIncoming]: "drainIncoming",

@@ -54,16 +54,16 @@ import {
 } from "@ingcreators/annot-capture/encode";
 import type {
   BatchItem,
+  CapturedViewport,
   CaptureEncodeResult,
   CaptureHost,
-  CapturedViewport,
   CaptureTargetRef,
 } from "@ingcreators/annot-capture/host";
 import {
-  DEFAULT_SETTINGS,
-  mergeSettings,
   type BackgroundToContentMessage,
   type ContentToBackgroundMessage,
+  DEFAULT_SETTINGS,
+  mergeSettings,
   type Settings,
 } from "@ingcreators/annot-capture/shared";
 import type { PageMetadata } from "@ingcreators/annot-core";
@@ -107,14 +107,8 @@ export interface BrowseTargetWebview {
   send(channel: string, payload: unknown): void;
   /** Subscribe to `ipc-message` events the preload posts via
    *  `ipcRenderer.sendToHost(channel, payload)`. */
-  addEventListener(
-    type: "ipc-message",
-    listener: (event: WebviewIpcMessageEvent) => void,
-  ): void;
-  removeEventListener(
-    type: "ipc-message",
-    listener: (event: WebviewIpcMessageEvent) => void,
-  ): void;
+  addEventListener(type: "ipc-message", listener: (event: WebviewIpcMessageEvent) => void): void;
+  removeEventListener(type: "ipc-message", listener: (event: WebviewIpcMessageEvent) => void): void;
   /** Inline-style accessor used by `setEmulatedViewport`. The
    *  HTMLElement `style` property is the production target;
    *  tests can pass a stub object with the same `width`/`height`
@@ -158,9 +152,7 @@ export interface CreateBrowseCaptureHostOpts {
    *  future tab's webview. The host fans the events out to
    *  request-response correlation + content-event listeners.
    *  Returns an unsubscribe fn the host calls on dispose. */
-  onAnyTabIpcMessage: (
-    handler: (event: WebviewIpcMessageEvent) => void,
-  ) => () => void;
+  onAnyTabIpcMessage: (handler: (event: WebviewIpcMessageEvent) => void) => () => void;
   /** Required Electron preload bridge. Defaults to
    *  `(window as { electronAPI?: ElectronApi }).electronAPI`. */
   api?: ElectronApi;
@@ -187,8 +179,7 @@ interface ResponseEnvelope {
 }
 
 export function createBrowseCaptureHost(opts: CreateBrowseCaptureHostOpts): CaptureHost {
-  const api =
-    opts.api ?? (window as unknown as { electronAPI?: ElectronApi }).electronAPI;
+  const api = opts.api ?? (window as unknown as { electronAPI?: ElectronApi }).electronAPI;
   if (!api) {
     throw new Error("[browse-host] window.electronAPI is missing — preload script not loaded?");
   }
@@ -247,10 +238,8 @@ export function createBrowseCaptureHost(opts: CreateBrowseCaptureHostOpts): Capt
       if (id === NO_TARGET_ID || !Number.isFinite(id) || id <= 0) {
         return null;
       }
-      const url =
-        (typeof webview.getURL === "function" ? webview.getURL() : webview.src) ?? "";
-      const title =
-        typeof webview.getTitle === "function" ? webview.getTitle() : undefined;
+      const url = (typeof webview.getURL === "function" ? webview.getURL() : webview.src) ?? "";
+      const title = typeof webview.getTitle === "function" ? webview.getTitle() : undefined;
       return { id, windowId: undefined, url, title };
     },
 
@@ -388,10 +377,7 @@ export function createBrowseCaptureHost(opts: CreateBrowseCaptureHostOpts): Capt
       const results: CaptureEncodeResult[] = [];
       for (const item of items) {
         let url = item.pngDataUrl;
-        if (
-          item.cropSrcY > 0 ||
-          (item.cropHeight > 0 && item.cropHeight < item.fullHeight)
-        ) {
+        if (item.cropSrcY > 0 || (item.cropHeight > 0 && item.cropHeight < item.fullHeight)) {
           try {
             url = await cropPngVerticalForBatch(item.pngDataUrl, item.cropSrcY, item.cropHeight);
           } catch (err) {

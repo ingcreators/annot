@@ -15,8 +15,17 @@
   },
   "type": "module",
   "main": "./dist/extension.cjs",
-  "categories": ["Visualization", "Other"],
-  "keywords": ["annot", "annotation", "screenshot", "svg", "playwright"],
+  "categories": [
+    "Visualization",
+    "Other"
+  ],
+  "keywords": [
+    "annot",
+    "annotation",
+    "screenshot",
+    "svg",
+    "playwright"
+  ],
   "license": "Apache-2.0",
   "activationEvents": [],
   "contributes": {
@@ -25,10 +34,18 @@
         "viewType": "annot.editor",
         "displayName": "Annot Editor",
         "selector": [
-          { "filenamePattern": "*.annot.svg" },
-          { "filenamePattern": "*.annot.png" },
-          { "filenamePattern": "*.annot.jpeg" },
-          { "filenamePattern": "*.annot.jpg" }
+          {
+            "filenamePattern": "*.annot.svg"
+          },
+          {
+            "filenamePattern": "*.annot.png"
+          },
+          {
+            "filenamePattern": "*.annot.jpeg"
+          },
+          {
+            "filenamePattern": "*.annot.jpg"
+          }
         ],
         "priority": "default"
       }

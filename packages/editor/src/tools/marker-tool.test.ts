@@ -26,12 +26,7 @@ import type { ToolOptions } from "@ingcreators/annot-core/editor/tool-options";
 import { describe, expect, it, vi } from "vitest";
 import type { CanvasManager } from "../canvas-manager.js";
 import type { History } from "../history.js";
-import {
-  convertMarkerShape,
-  detectMarkerShape,
-  MarkerTool,
-  resizeMarker,
-} from "./marker-tool.js";
+import { convertMarkerShape, detectMarkerShape, MarkerTool, resizeMarker } from "./marker-tool.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -101,7 +96,11 @@ describe("MarkerTool — placement on pointerdown", () => {
   it("renders a rounded rect when markerShape='rounded' (corner radius = r × 0.6)", () => {
     const { canvas, annotations } = makeCanvas();
     const { history } = makeHistory();
-    const tool = new MarkerTool(canvas, history, makeOptions({ markerShape: "rounded", fontSize: 20 }));
+    const tool = new MarkerTool(
+      canvas,
+      history,
+      makeOptions({ markerShape: "rounded", fontSize: 20 }),
+    );
     tool.onPointerDown(pointerEvent(), new DOMPoint(50, 60));
     const rect = annotations.querySelector("rect")!;
     // r = 20 * 0.8 = 16, corner = 16 * 0.6 = 9.6
@@ -330,11 +329,7 @@ describe("resizeMarker", () => {
   function makeCircleMarker(fontSize = 20): SVGElement {
     const { canvas, annotations } = makeCanvas();
     const { history } = makeHistory();
-    const tool = new MarkerTool(
-      canvas,
-      history,
-      makeOptions({ markerShape: "circle", fontSize }),
-    );
+    const tool = new MarkerTool(canvas, history, makeOptions({ markerShape: "circle", fontSize }));
     tool.onPointerDown(pointerEvent(), new DOMPoint(100, 100));
     return annotations.firstElementChild as SVGElement;
   }

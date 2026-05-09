@@ -12,6 +12,16 @@
  * registry below.
  */
 
+// Registry-backed narrow union + all-ids list + resolver.
+// Adding a new id means editing
+// `packages/core/src/editor/icons/registry.ts`; autocomplete +
+// compile errors flow to every consumer here automatically.
+export {
+  BUILTIN_ICON_IDS,
+  BUILTIN_ICONS,
+  type BuiltinIconId,
+  resolveBuiltinIcon,
+} from "../editor/icons/registry.js";
 // Pure types + value-level constructors / guards. The broad
 // `BuiltinIconId` alias from this module is intentionally NOT
 // re-exported — it's superseded by the narrow union from the
@@ -25,14 +35,3 @@ export {
   svgIcon,
   urlIcon,
 } from "./types.js";
-
-// Registry-backed narrow union + all-ids list + resolver.
-// Adding a new id means editing
-// `packages/core/src/editor/icons/registry.ts`; autocomplete +
-// compile errors flow to every consumer here automatically.
-export {
-  BUILTIN_ICON_IDS,
-  BUILTIN_ICONS,
-  type BuiltinIconId,
-  resolveBuiltinIcon,
-} from "../editor/icons/registry.js";

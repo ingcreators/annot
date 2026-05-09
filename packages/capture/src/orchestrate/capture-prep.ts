@@ -60,10 +60,7 @@ export async function beginCapturePrep(
   }
 }
 
-export async function endCapturePrep(
-  host: CaptureHost,
-  target: CaptureTargetRef,
-): Promise<void> {
+export async function endCapturePrep(host: CaptureHost, target: CaptureTargetRef): Promise<void> {
   try {
     await host.sendToContent(target, { type: "restore-after-capture" });
   } catch (err) {
@@ -87,10 +84,7 @@ export async function sendShowProgress(
   }
 }
 
-export async function sendHideProgress(
-  host: CaptureHost,
-  target: CaptureTargetRef,
-): Promise<void> {
+export async function sendHideProgress(host: CaptureHost, target: CaptureTargetRef): Promise<void> {
   try {
     await host.sendToContent(target, { type: "hide-progress" });
   } catch (err) {

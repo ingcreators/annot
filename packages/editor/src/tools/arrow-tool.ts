@@ -1,4 +1,3 @@
-import { computeDasharray } from "@ingcreators/annot-core/utils";
 import {
   type ArrowSpec,
   detectArrowSpec,
@@ -6,6 +5,7 @@ import {
   writeArrowEndpoints,
   writeArrowSpec,
 } from "@ingcreators/annot-core/editor/arrow-markers";
+import { computeDasharray } from "@ingcreators/annot-core/utils";
 import type { ArrowShape } from "./tool-base.js";
 /**
  * ArrowTool — unified Line / Arrow tool.

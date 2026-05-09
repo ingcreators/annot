@@ -10,11 +10,11 @@
  * constructor branches and the SVG-namespace creation helper.
  */
 
-import { createMockToolSurface } from "@ingcreators/annot-core/editor/tool-lifecycle";
 import type {
-  ToolDOMSurface,
   MockToolSurface,
+  ToolDOMSurface,
 } from "@ingcreators/annot-core/editor/tool-lifecycle";
+import { createMockToolSurface } from "@ingcreators/annot-core/editor/tool-lifecycle";
 import type { ToolOptions } from "@ingcreators/annot-core/editor/tool-options";
 import { describe, expect, it, vi } from "vitest";
 import type { CanvasManager } from "../canvas-manager.js";

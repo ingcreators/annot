@@ -38,12 +38,7 @@ const SURFACE_TOKENS = [
   "shadow",
 ] as const;
 
-const CONTENT_TOKENS = [
-  "text-primary",
-  "text-secondary",
-  "text-muted",
-  "preview-line",
-] as const;
+const CONTENT_TOKENS = ["text-primary", "text-secondary", "text-muted", "preview-line"] as const;
 
 const ACCENT_TOKENS = [
   "accent",
@@ -88,22 +83,14 @@ export const THEME_TOKEN_NAMES = [
 
 export type ThemeTokenName = (typeof THEME_TOKEN_NAMES)[number];
 
-export type ThemeTokenSection =
-  | "surface"
-  | "content"
-  | "accent"
-  | "interaction"
-  | "canvas";
+export type ThemeTokenSection = "surface" | "content" | "accent" | "interaction" | "canvas";
 
 /**
  * Group → tokens map. Keeps `THEME_TOKEN_NAMES` flat (one source
  * of truth for the union type) while giving the Settings UI and
  * docs an iteration order that matches the CSS file.
  */
-export const THEME_TOKEN_SECTIONS: Record<
-  ThemeTokenSection,
-  ReadonlyArray<ThemeTokenName>
-> = {
+export const THEME_TOKEN_SECTIONS: Record<ThemeTokenSection, ReadonlyArray<ThemeTokenName>> = {
   surface: SURFACE_TOKENS,
   content: CONTENT_TOKENS,
   accent: ACCENT_TOKENS,
@@ -244,9 +231,7 @@ export function applyPersistedTheme(): void {
  */
 export function persistThemeChoice(): void {
   if (typeof document === "undefined") return;
-  const mode: ThemeMode = document.documentElement.classList.contains("light")
-    ? "light"
-    : "dark";
+  const mode: ThemeMode = document.documentElement.classList.contains("light") ? "light" : "dark";
   const store = safeLocalStorage();
   if (!store) return;
   try {
@@ -278,9 +263,7 @@ export function getThemeOverrides(): ThemeOverrides {
  *
  * Returns the merged override set so callers can chain or log.
  */
-export function setThemeOverrides(
-  overrides: ThemeOverrides,
-): ThemeOverrides {
+export function setThemeOverrides(overrides: ThemeOverrides): ThemeOverrides {
   if (typeof document === "undefined") return {};
   const next = { ...(cachedOverrides ?? readPersistedOverrides()) };
   for (const [key, value] of Object.entries(overrides)) {

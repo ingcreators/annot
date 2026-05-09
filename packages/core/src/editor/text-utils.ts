@@ -861,14 +861,8 @@ export function bakeTextShapeTranslate(g: SVGElement, dx: number, dy: number): v
   // clipPath > rect — keeps the clip aligned with the bg.
   const clipRect = g.querySelector("clipPath > rect");
   if (clipRect) {
-    clipRect.setAttribute(
-      "x",
-      String(Number.parseFloat(clipRect.getAttribute("x") || "0") + dx),
-    );
-    clipRect.setAttribute(
-      "y",
-      String(Number.parseFloat(clipRect.getAttribute("y") || "0") + dy),
-    );
+    clipRect.setAttribute("x", String(Number.parseFloat(clipRect.getAttribute("x") || "0") + dx));
+    clipRect.setAttribute("y", String(Number.parseFloat(clipRect.getAttribute("y") || "0") + dy));
   }
   // Callout tail — path's `d` is rebuilt by `rebuildCalloutTail`
   // off the bg rect + data-tail-* attrs, so shifting those two
@@ -988,10 +982,8 @@ export function rebuildCalloutTail(g: SVGElement): void {
   // yB - rx). Reading out which corner the tip is closer to:
   //   tailX < cx → left corner  (top / bottom edges)
   //   tailY < cy → top corner   (left / right edges)
-  const baseMidH =
-    tailX < cx ? (cx + (xL + rx)) / 2 : (cx + (xR - rx)) / 2;
-  const baseMidV =
-    tailY < cy ? (cy + (yT + rx)) / 2 : (cy + (yB - rx)) / 2;
+  const baseMidH = tailX < cx ? (cx + (xL + rx)) / 2 : (cx + (xR - rx)) / 2;
+  const baseMidV = tailY < cy ? (cy + (yT + rx)) / 2 : (cy + (yB - rx)) / 2;
   // Resolve to the two base points on each axis. Order picked
   // along the edge (smaller coord first, larger second) so the
   // path-emit branches below can pick first / second by

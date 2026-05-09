@@ -63,10 +63,7 @@ export class AnnotCaptureProgressToastElement extends LitElement {
 }
 
 if (!customElements.get("annot-capture-progress-toast")) {
-  customElements.define(
-    "annot-capture-progress-toast",
-    AnnotCaptureProgressToastElement,
-  );
+  customElements.define("annot-capture-progress-toast", AnnotCaptureProgressToastElement);
 }
 
 declare global {

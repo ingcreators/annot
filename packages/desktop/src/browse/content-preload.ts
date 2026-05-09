@@ -39,16 +39,12 @@
  * page's so we don't pollute its window namespace.
  */
 
-// Electron preload context — `electron` is provided at runtime even
-// without `contextIsolation: false`. The capture content modules
-// are bundled inline.
-import { ipcRenderer } from "electron";
 import {
   type ContentBus,
+  getPageDimensions,
   hideForCapture,
   hideProgress,
   hideStickies,
-  getPageDimensions,
   restoreAfterCapture,
   restoreStickies,
   scrollTo,
@@ -59,6 +55,10 @@ import type {
   BackgroundToContentMessage,
   ContentToBackgroundMessage,
 } from "@ingcreators/annot-capture/shared";
+// Electron preload context — `electron` is provided at runtime even
+// without `contextIsolation: false`. The capture content modules
+// are bundled inline.
+import { ipcRenderer } from "electron";
 
 const HOST_REQUEST_CHANNEL = "annot.host.request";
 const CONTENT_RESPONSE_CHANNEL = "annot.content.response";

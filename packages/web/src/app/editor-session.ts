@@ -21,7 +21,7 @@ import type { CanvasManager, History, SelectionManager } from "@ingcreators/anno
 import { openAnchoredPopover } from "@ingcreators/annot-editor";
 import type { AnnotFileDetailsDrawerElement } from "@ingcreators/annot-host-ui/annot-file-details-drawer";
 import { estimateDataUrlBytes } from "@ingcreators/annot-host-ui/annot-file-details-drawer";
-import { Toolbar, type ExtraToolAnchor } from "@ingcreators/annot-host-ui/toolbar";
+import { type ExtraToolAnchor, Toolbar } from "@ingcreators/annot-host-ui/toolbar";
 import "@ingcreators/annot-host-ui/annot-file-details-drawer";
 import { EditorShell, installKeyboardHelp } from "@ingcreators/annot-host-ui";
 import type { AnnotEditorRightPanelElement } from "@ingcreators/annot-host-ui/right-panel";
@@ -758,11 +758,7 @@ export class EditorSession {
     // at a glance. The next tool change (Select / any drawing tool /
     // Esc-cancel via ScratchpadPasteTool) clears the highlight via
     // Toolbar's `#activate` path.
-    this.#editorToolbar?.setExternalToolActive(
-      "Scratchpad",
-      null,
-      this.#scratchpadToolbarBtn,
-    );
+    this.#editorToolbar?.setExternalToolActive("Scratchpad", null, this.#scratchpadToolbarBtn);
   }
 
   /** Resolve (or lazily construct) the per-session `EditorShell`.

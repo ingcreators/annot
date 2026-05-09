@@ -329,9 +329,7 @@ function dataUrlToUint8Array(dataUrl: string): Uint8Array {
 
 function contentTypes(usesPng: boolean, usesJpeg: boolean): string {
   const pngDefault = usesPng ? `\n  <Default Extension="png" ContentType="image/png"/>` : "";
-  const jpegDefault = usesJpeg
-    ? `\n  <Default Extension="jpeg" ContentType="image/jpeg"/>`
-    : "";
+  const jpegDefault = usesJpeg ? `\n  <Default Extension="jpeg" ContentType="image/jpeg"/>` : "";
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>

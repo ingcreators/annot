@@ -74,10 +74,7 @@ export function writeUniversalStyleAttrs(el: SVGElement, preset: ToolOptions): v
     el.setAttribute("stroke-linejoin", preset.strokeLinejoin);
   }
   if (preset.strokeOpacity != null) {
-    if (
-      el.tagName === "line" ||
-      (el.tagName === "g" && el.getAttribute("data-type") === "arrow")
-    ) {
+    if (el.tagName === "line" || (el.tagName === "g" && el.getAttribute("data-type") === "arrow")) {
       el.setAttribute("opacity", String(preset.strokeOpacity));
     } else {
       el.setAttribute("stroke-opacity", String(preset.strokeOpacity));

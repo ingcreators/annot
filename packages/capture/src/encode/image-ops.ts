@@ -4,8 +4,9 @@
  * functions touch `chrome.*` or `window.electronAPI` — they're plain
  * `OffscreenCanvas` work that runs in any modern Chromium realm.
  */
-import type { CaptureRect } from "@ingcreators/annot-core/utils/types";
+
 import { MOSAIC_BLOCK_SIZE } from "@ingcreators/annot-core/utils";
+import type { CaptureRect } from "@ingcreators/annot-core/utils/types";
 
 export interface StitchSegment {
   dataUrl: string;

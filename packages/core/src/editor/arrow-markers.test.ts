@@ -14,6 +14,7 @@
  */
 
 import { describe, expect, it } from "vitest";
+import type { ArrowSpec } from "./arrow-markers.js";
 import {
   detectArrowSpec,
   readArrowControl,
@@ -22,7 +23,6 @@ import {
   writeArrowEndpoints,
   writeArrowSpec,
 } from "./arrow-markers.js";
-import type { ArrowSpec } from "./arrow-markers.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 

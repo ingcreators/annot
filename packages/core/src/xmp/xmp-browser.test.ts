@@ -181,9 +181,7 @@ function buildAnnotApp2Segments(originalBytes: Uint8Array, chunkSize: number): U
     const start = i * chunkSize;
     const end = Math.min(start + chunkSize, originalBytes.length);
     const data = originalBytes.slice(start, end);
-    const payload = new Uint8Array(
-      ANNOT_APP2_PREFIX_BYTES.length + 4 + data.length,
-    );
+    const payload = new Uint8Array(ANNOT_APP2_PREFIX_BYTES.length + 4 + data.length);
     payload.set(ANNOT_APP2_PREFIX_BYTES, 0);
     payload.set(u16beBytes(i), ANNOT_APP2_PREFIX_BYTES.length);
     payload.set(u16beBytes(total), ANNOT_APP2_PREFIX_BYTES.length + 2);
@@ -290,7 +288,7 @@ describe("readEditableImage (JPEG path)", () => {
     const tinyPng = dataUrlToBytes(TINY_PNG_DATA_URL);
     const jpeg = buildJpeg({
       xmpXml: buildXmpString({
-        annotationsSvg: '<g><rect/></g>',
+        annotationsSvg: "<g><rect/></g>",
         width: 1,
         height: 1,
       }),
@@ -312,7 +310,7 @@ describe("readEditableImage (JPEG path)", () => {
     const fakeJpegOriginal = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]);
     const jpeg = buildJpeg({
       xmpXml: buildXmpString({
-        annotationsSvg: '<g><rect/></g>',
+        annotationsSvg: "<g><rect/></g>",
         width: 1,
         height: 1,
       }),
@@ -325,7 +323,7 @@ describe("readEditableImage (JPEG path)", () => {
   it("empty tags JSON in XMP rounds back to {}", () => {
     const jpeg = buildJpeg({
       xmpXml: buildXmpString({
-        annotationsSvg: '<g/>',
+        annotationsSvg: "<g/>",
         width: 1,
         height: 1,
         // No tags entry in the XMP at all.
@@ -407,7 +405,7 @@ describe("readEditableImage (JPEG path)", () => {
   it("originalImageDataUrl is empty string when the JPEG has XMP but no APP2 original image", () => {
     // No APP2 chunks — synthesize a JPEG with just SOI + APP1 XMP + EOI.
     const xmpBytes = new TextEncoder().encode(
-      buildXmpString({ annotationsSvg: '<g/>', width: 1, height: 1 }),
+      buildXmpString({ annotationsSvg: "<g/>", width: 1, height: 1 }),
     );
     const xmpPayload = new Uint8Array(XMP_APP1_PREFIX_BYTES.length + xmpBytes.length);
     xmpPayload.set(XMP_APP1_PREFIX_BYTES, 0);
@@ -431,7 +429,7 @@ describe("readEditableImage (JPEG path)", () => {
     const reversed = [...segments].reverse();
     const xmpBytes = new TextEncoder().encode(
       buildXmpString({
-        annotationsSvg: '<g><rect/></g>',
+        annotationsSvg: "<g><rect/></g>",
         width: 1,
         height: 1,
       }),
@@ -440,8 +438,7 @@ describe("readEditableImage (JPEG path)", () => {
     xmpPayload.set(XMP_APP1_PREFIX_BYTES, 0);
     xmpPayload.set(xmpBytes, XMP_APP1_PREFIX_BYTES.length);
     const xmpSeg = buildJpegSegmentBytes(0xe1, xmpPayload);
-    const totalLen =
-      2 + xmpSeg.length + reversed.reduce((s, p) => s + p.length, 0) + 2;
+    const totalLen = 2 + xmpSeg.length + reversed.reduce((s, p) => s + p.length, 0) + 2;
     const jpeg = new Uint8Array(totalLen);
     jpeg.set([0xff, 0xd8], 0);
     let off = 2;

@@ -28,8 +28,8 @@
  */
 
 import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -60,8 +60,8 @@ function stripComments(src: string): string {
     .join("\n");
 }
 
-describe("Toolbar render paths — no `toolId === \"<id>\"` literals", () => {
-  it("toolbar.ts has no `toolId === \"<id>\"` literal in non-comment code", () => {
+describe('Toolbar render paths — no `toolId === "<id>"` literals', () => {
+  it('toolbar.ts has no `toolId === "<id>"` literal in non-comment code', () => {
     const src = stripComments(readSource("toolbar.ts"));
     const matches = src.match(/toolId\s*===\s*"[^"]+"/g);
     expect(
@@ -72,7 +72,7 @@ describe("Toolbar render paths — no `toolId === \"<id>\"` literals", () => {
     ).toBeNull();
   });
 
-  it("toolbar-canvas-menu.ts has no `toolId === \"<id>\"` literal in non-comment code", () => {
+  it('toolbar-canvas-menu.ts has no `toolId === "<id>"` literal in non-comment code', () => {
     const src = stripComments(readSource("toolbar-canvas-menu.ts"));
     const matches = src.match(/toolId\s*===\s*"[^"]+"/g);
     expect(

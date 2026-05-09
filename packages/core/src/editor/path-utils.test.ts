@@ -63,9 +63,7 @@ describe("translatePathD", () => {
   it("handles arc A — only the final x,y are coords", () => {
     // A rx ry x-axis-rotation large-arc-flag sweep-flag x y
     // rx, ry, rotation, flags must NOT be shifted.
-    expect(translatePathD("M 10 10 A 30 30 0 0 1 50 50", 5, 7)).toBe(
-      "M15 17 A30 30 0 0 1 55 57",
-    );
+    expect(translatePathD("M 10 10 A 30 30 0 0 1 50 50", 5, 7)).toBe("M15 17 A30 30 0 0 1 55 57");
   });
 
   it("handles Z / z as no-ops", () => {
@@ -109,9 +107,7 @@ describe("translatePathD", () => {
   it("handles a complex mixed path (Annot freehand-style)", () => {
     // Real-world input: M absolute, multiple Q smoothing, Z close
     const d = "M 50 50 Q 60 40 70 50 Q 80 60 90 50 L 100 50 Z";
-    expect(translatePathD(d, 10, 20)).toBe(
-      "M60 70 Q70 60 80 70 Q90 80 100 70 L110 70 Z",
-    );
+    expect(translatePathD(d, 10, 20)).toBe("M60 70 Q70 60 80 70 Q90 80 100 70 L110 70 Z");
   });
 
   it("formats trailing zeros away (10.000 → 10)", () => {
@@ -133,8 +129,6 @@ describe("translatePathD", () => {
   it("treats subpath continuations starting with lowercase m as relative", () => {
     // Only the FIRST command of the path can be the leading-m quirk.
     // A second `m` mid-path is a normal relative moveto.
-    expect(translatePathD("M 10 20 L 30 40 m 50 60", 5, 7)).toBe(
-      "M15 27 L35 47 m50 60",
-    );
+    expect(translatePathD("M 10 20 L 30 40 m 50 60", 5, 7)).toBe("M15 27 L35 47 m50 60");
   });
 });

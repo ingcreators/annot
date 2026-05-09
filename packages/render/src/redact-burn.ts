@@ -180,10 +180,7 @@ function parseAttrNumber(el: SVGElement, name: string): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-async function compositeOne(
-  ctx: CanvasRenderingContext2D,
-  el: ClassifiedRedact,
-): Promise<void> {
+async function compositeOne(ctx: CanvasRenderingContext2D, el: ClassifiedRedact): Promise<void> {
   // For mosaic / blur we need the embedded PNG decoded BEFORE the
   // transform stack opens — happy-dom `Image` decoding is async, so
   // resolving it after `ctx.save()` would push the restore() out of
@@ -224,10 +221,7 @@ async function compositeOne(
  * Identity case (no rotation, no flip) skips the transform stack
  * entirely so the Phase 1 axis-aligned fast path stays intact.
  */
-function applyElementTransform(
-  ctx: CanvasRenderingContext2D,
-  el: ClassifiedRedact,
-): void {
+function applyElementTransform(ctx: CanvasRenderingContext2D, el: ClassifiedRedact): void {
   const isIdentity = el.rotation === 0 && !el.flipH && !el.flipV;
   if (isIdentity) return;
   const cx = el.x + el.width / 2;
@@ -244,7 +238,8 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => resolve(img);
-    img.onerror = (e) => reject(new Error(`burnRedactionsIntoBitmap: failed to load redact image (${e})`));
+    img.onerror = (e) =>
+      reject(new Error(`burnRedactionsIntoBitmap: failed to load redact image (${e})`));
     img.src = src;
   });
 }

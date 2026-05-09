@@ -92,10 +92,7 @@ export class AnnotIntervalCaptureDialogElement extends LitElement {
               step="1"
               .value=${String(this.intervalSec)}
               @input=${(e: Event) => {
-                this.intervalSec = Number.parseInt(
-                  (e.currentTarget as HTMLInputElement).value,
-                  10,
-                );
+                this.intervalSec = Number.parseInt((e.currentTarget as HTMLInputElement).value, 10);
               }}
               @keydown=${this.#onInputKeydown}
             />
@@ -111,10 +108,7 @@ export class AnnotIntervalCaptureDialogElement extends LitElement {
               step="1"
               .value=${String(this.frameCount)}
               @input=${(e: Event) => {
-                this.frameCount = Number.parseInt(
-                  (e.currentTarget as HTMLInputElement).value,
-                  10,
-                );
+                this.frameCount = Number.parseInt((e.currentTarget as HTMLInputElement).value, 10);
               }}
               @keydown=${this.#onInputKeydown}
             />
@@ -193,10 +187,7 @@ export class AnnotIntervalCaptureDialogElement extends LitElement {
 }
 
 if (!customElements.get("annot-interval-capture-dialog")) {
-  customElements.define(
-    "annot-interval-capture-dialog",
-    AnnotIntervalCaptureDialogElement,
-  );
+  customElements.define("annot-interval-capture-dialog", AnnotIntervalCaptureDialogElement);
 }
 
 declare global {

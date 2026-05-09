@@ -29,12 +29,7 @@ export function buildLine(s: AnnotationShape, id: number, ns: NamespaceOpts): st
   const sw = pt(s.stroke_width ?? 3);
 
   // Per-end arrows with independent width / length.
-  const head = endXml(
-    "headEnd",
-    s.arrow_shape_start,
-    s.arrow_width_start,
-    s.arrow_length_start,
-  );
+  const head = endXml("headEnd", s.arrow_shape_start, s.arrow_width_start, s.arrow_length_start);
   const tail = s.arrow_shape_end
     ? endXml("tailEnd", s.arrow_shape_end, s.arrow_width_end, s.arrow_length_end)
     : "";

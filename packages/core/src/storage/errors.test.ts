@@ -8,10 +8,10 @@ import { describe, expect, it } from "vitest";
 import {
   StorageConflictError,
   StorageError,
+  type StorageErrorCode,
   StorageNotFoundError,
   StoragePermissionError,
   StorageQuotaError,
-  type StorageErrorCode,
 } from "./errors.js";
 
 describe("StorageError hierarchy", () => {

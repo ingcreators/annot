@@ -15,11 +15,7 @@
  * Mirrors the `StorageError` subclass hierarchy below; callers
  * that prefer a `switch` over `instanceof` can use `e.code`.
  */
-export type StorageErrorCode =
-  | "conflict"
-  | "not-found"
-  | "permission"
-  | "quota";
+export type StorageErrorCode = "conflict" | "not-found" | "permission" | "quota";
 
 /**
  * Base for all `StorageProvider`-thrown errors that callers may

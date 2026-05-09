@@ -17,12 +17,12 @@
  */
 
 import {
+  type CaptureFrame,
+  type CaptureResult,
   runAreaCapture,
   runPerPageCapture,
   runScrollCapture,
   runVisibleCapture,
-  type CaptureFrame,
-  type CaptureResult,
 } from "@ingcreators/annot-capture/orchestrate";
 import type {
   AnnotCaptureSettingsElement,
@@ -30,11 +30,11 @@ import type {
 } from "@ingcreators/annot-host-ui/annot-capture-settings";
 import "@ingcreators/annot-host-ui/annot-capture-settings";
 import { newIdB58 } from "@ingcreators/annot-core/utils";
-import type { DesktopStore } from "../storage/desktop-store.js";
 import { createStandaloneDesktopStore } from "../storage/bootstrap.js";
+import type { DesktopStore } from "../storage/desktop-store.js";
 import { installClickHotkeyHandlers } from "./click-hotkey.js";
-import { createBrowseCaptureHost, type BrowseTargetWebview } from "./host.js";
-import { TabsManager, type Tab } from "./tabs.js";
+import { type BrowseTargetWebview, createBrowseCaptureHost } from "./host.js";
+import { type Tab, TabsManager } from "./tabs.js";
 
 interface ElectronApi {
   invoke<T = unknown>(channel: string, args?: unknown): Promise<T>;
@@ -46,9 +46,7 @@ const ELECTRON_API_KEY = "electronAPI" as const;
 function api(): ElectronApi {
   const electronAPI = (window as unknown as Record<string, unknown>)[ELECTRON_API_KEY];
   if (!electronAPI) {
-    throw new Error(
-      "[browse] window.electronAPI is missing — preload script not loaded?",
-    );
+    throw new Error("[browse] window.electronAPI is missing — preload script not loaded?");
   }
   return electronAPI as ElectronApi;
 }
@@ -85,9 +83,7 @@ interface BrowseDom {
 function resolveDom(): BrowseDom {
   const tabBar = document.getElementById("browse-tabs") as HTMLDivElement | null;
   const newTabBtn = document.getElementById("btn-new-tab") as HTMLButtonElement | null;
-  const webviewContainer = document.getElementById(
-    "browse-target-host",
-  ) as HTMLDivElement | null;
+  const webviewContainer = document.getElementById("browse-target-host") as HTMLDivElement | null;
   const btnBack = document.getElementById("btn-back") as HTMLButtonElement | null;
   const btnForward = document.getElementById("btn-forward") as HTMLButtonElement | null;
   const btnReload = document.getElementById("btn-reload") as HTMLButtonElement | null;
@@ -95,33 +91,19 @@ function resolveDom(): BrowseDom {
   const btnCaptureVisible = document.getElementById(
     "btn-capture-visible",
   ) as HTMLButtonElement | null;
-  const btnCaptureArea = document.getElementById(
-    "btn-capture-area",
-  ) as HTMLButtonElement | null;
-  const btnCaptureFull = document.getElementById(
-    "btn-capture-full",
-  ) as HTMLButtonElement | null;
-  const btnCapturePages = document.getElementById(
-    "btn-capture-pages",
-  ) as HTMLButtonElement | null;
-  const btnCaptureClick = document.getElementById(
-    "btn-capture-click",
-  ) as HTMLButtonElement | null;
+  const btnCaptureArea = document.getElementById("btn-capture-area") as HTMLButtonElement | null;
+  const btnCaptureFull = document.getElementById("btn-capture-full") as HTMLButtonElement | null;
+  const btnCapturePages = document.getElementById("btn-capture-pages") as HTMLButtonElement | null;
+  const btnCaptureClick = document.getElementById("btn-capture-click") as HTMLButtonElement | null;
   const btnCaptureHotkey = document.getElementById(
     "btn-capture-hotkey",
   ) as HTMLButtonElement | null;
-  const btnSettings = document.getElementById(
-    "btn-settings",
-  ) as HTMLButtonElement | null;
-  const contextMenu = document.getElementById(
-    "annot-context-menu",
-  ) as HTMLDivElement | null;
+  const btnSettings = document.getElementById("btn-settings") as HTMLButtonElement | null;
+  const contextMenu = document.getElementById("annot-context-menu") as HTMLDivElement | null;
   const settingsDialog = document.getElementById(
     "capture-settings-dialog",
   ) as HTMLDialogElement | null;
-  const settingsBody = document.getElementById(
-    "capture-settings-body",
-  ) as HTMLDivElement | null;
+  const settingsBody = document.getElementById("capture-settings-body") as HTMLDivElement | null;
   const btnSettingsClose = document.getElementById(
     "btn-settings-close",
   ) as HTMLButtonElement | null;
@@ -245,7 +227,10 @@ document.addEventListener("DOMContentLoaded", () => {
     refreshNavButtonsAgainst(tab);
     if (tab) {
       document.title = tab.title ? `${tab.title} · Annot Browse` : "Annot Browse";
-      setStatus(tab.loading ? `Loading ${tab.url}…` : `Active: ${tab.url}`, tab.loading ? "busy" : null);
+      setStatus(
+        tab.loading ? `Loading ${tab.url}…` : `Active: ${tab.url}`,
+        tab.loading ? "busy" : null,
+      );
     } else {
       document.title = "Annot Browse";
       setStatus("No tabs open", null);
@@ -330,7 +315,9 @@ document.addEventListener("DOMContentLoaded", () => {
     dom.btnCapturePages.disabled = busy;
   }
 
-  type ModeRunner = (host: ReturnType<typeof createBrowseCaptureHost>) => Promise<CaptureResult | null>;
+  type ModeRunner = (
+    host: ReturnType<typeof createBrowseCaptureHost>,
+  ) => Promise<CaptureResult | null>;
 
   /** Modes that span multiple captures or scroll the page; the
    *  user can't safely close / switch tabs mid-flow without
@@ -435,18 +422,13 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  dom.btnCaptureVisible.addEventListener("click", () =>
-    void runMode("visible viewport", runVisibleCapture),
+  dom.btnCaptureVisible.addEventListener(
+    "click",
+    () => void runMode("visible viewport", runVisibleCapture),
   );
-  dom.btnCaptureArea.addEventListener("click", () =>
-    void runMode("selected area", runAreaCapture),
-  );
-  dom.btnCaptureFull.addEventListener("click", () =>
-    void runMode("full page", runScrollCapture),
-  );
-  dom.btnCapturePages.addEventListener("click", () =>
-    void runMode("per-page", runPerPageCapture),
-  );
+  dom.btnCaptureArea.addEventListener("click", () => void runMode("selected area", runAreaCapture));
+  dom.btnCaptureFull.addEventListener("click", () => void runMode("full page", runScrollCapture));
+  dom.btnCapturePages.addEventListener("click", () => void runMode("per-page", runPerPageCapture));
 
   // ---- Click + Hotkey session machines (Phase 4B) ────────────────
 
@@ -584,7 +566,9 @@ document.addEventListener("DOMContentLoaded", () => {
   // persisted state, mirroring the chrome extension's options.html
   // ergonomics.
 
-  const settingsEl = document.createElement("annot-capture-settings") as AnnotCaptureSettingsElement;
+  const settingsEl = document.createElement(
+    "annot-capture-settings",
+  ) as AnnotCaptureSettingsElement;
   dom.settingsBody.appendChild(settingsEl);
 
   // Lazy-init the form on first open. Loading settings reads a
@@ -673,9 +657,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 });
 
-async function probeDataUrlDimensions(
-  dataUrl: string,
-): Promise<{ width: number; height: number }> {
+async function probeDataUrlDimensions(dataUrl: string): Promise<{ width: number; height: number }> {
   try {
     const blob = await (await fetch(dataUrl)).blob();
     const bmp = await createImageBitmap(blob);

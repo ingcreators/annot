@@ -229,8 +229,7 @@ export class AnnotSplitEditorElement extends LitElement {
             @click=${this.#onStackClick}
           >
             ${this.#images.map(
-              (img) =>
-                html`<img class="split-editor-frame" .src=${img.src} draggable="false" />`,
+              (img) => html`<img class="split-editor-frame" .src=${img.src} draggable="false" />`,
             )}
             <div
               class="split-editor-handles"

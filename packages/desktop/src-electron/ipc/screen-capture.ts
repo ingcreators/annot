@@ -160,7 +160,12 @@ export interface ScreenCaptureHandlers {
   captureScreen(): Promise<CaptureResult>;
   listWindows(): Promise<WindowInfo[]>;
   captureWindow(input: { hwnd: string }): Promise<CaptureResult>;
-  captureRegion(input: { x: number; y: number; width: number; height: number }): Promise<CaptureResult>;
+  captureRegion(input: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  }): Promise<CaptureResult>;
   startCaptureOverlay(input: { mode: string }): Promise<OverlayResult | null>;
   getCaptureParams(): Promise<CaptureParams>;
   captureOverlayResult(input: { result: RegionResult | null }): Promise<void>;

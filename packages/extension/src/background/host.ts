@@ -9,14 +9,14 @@
  */
 
 import {
-  walkPageMetadata,
   type WalkerRegion,
+  walkPageMetadata,
 } from "@ingcreators/annot-capture/content/page-metadata-walker";
 import type { BatchItem } from "@ingcreators/annot-capture/encode";
 import type {
+  CapturedViewport,
   CaptureEncodeResult,
   CaptureHost,
-  CapturedViewport,
   CaptureTargetRef,
 } from "@ingcreators/annot-capture/host";
 import {
@@ -28,19 +28,15 @@ import type {
   ContentToBackgroundMessage,
   Settings,
 } from "@ingcreators/annot-capture/shared";
-import { encodeCapture as encodeOne } from "@ingcreators/annot-core/encode";
 import type { PageMetadata } from "@ingcreators/annot-core";
+import { encodeCapture as encodeOne } from "@ingcreators/annot-core/encode";
 import type {
   CaptureRect,
   CaptureSegment,
   PageDimensions,
 } from "@ingcreators/annot-core/utils/types";
 import { logger } from "../logger.js";
-import {
-  loadSettings,
-  onSettingsChange,
-  saveSettings,
-} from "../shared/settings.js";
+import { loadSettings, onSettingsChange, saveSettings } from "../shared/settings.js";
 import { isCapturableUrl } from "./service-worker-helpers.js";
 
 interface SavedGeometry {

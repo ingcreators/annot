@@ -47,12 +47,9 @@ function makeContainer(width = 800, height = 600): HTMLDivElement {
   return div;
 }
 
-function makeCanvas(opts: {
-  containerW?: number;
-  containerH?: number;
-  imageW?: number;
-  imageH?: number;
-} = {}): { svg: SVGSVGElement; container: HTMLDivElement; cm: CanvasManager } {
+function makeCanvas(
+  opts: { containerW?: number; containerH?: number; imageW?: number; imageH?: number } = {},
+): { svg: SVGSVGElement; container: HTMLDivElement; cm: CanvasManager } {
   const container = makeContainer(opts.containerW ?? 800, opts.containerH ?? 600);
   const svg = document.createElementNS(SVG_NS, "svg") as SVGSVGElement;
   container.appendChild(svg);

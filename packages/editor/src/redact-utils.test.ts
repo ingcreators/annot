@@ -21,8 +21,8 @@
  * is what defines correctness.
  */
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { REDACT_SOLID_COLOR } from "@ingcreators/annot-core/utils";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { CanvasManager } from "./canvas-manager.js";
 import { renderBlurRedact, renderMosaicRedact } from "./redact-utils.js";
 
@@ -246,9 +246,7 @@ describe("renderMosaicRedact — out-of-bounds rebake transparency fix", () => {
     // getImageData must also receive integer dimensions so the
     // returned `data.data` length matches what the block-average
     // loop expects.
-    const getData = log.ops.find(
-      (o) => o.kind === "getImageData" && o.w === 670 && o.h === 220,
-    );
+    const getData = log.ops.find((o) => o.kind === "getImageData" && o.w === 670 && o.h === 220);
     expect(getData).toBeDefined();
 
     // No fillRect / getImageData call should leak the fractional
@@ -281,7 +279,7 @@ describe("buildImageRedact — preserveAspectRatio for race-window resilience", 
   // worst transient effect is a subtly stretched blur instead of a
   // hole — privacy contract holds throughout the race.
 
-  it("renderMosaicRedact's resulting <image> carries preserveAspectRatio=\"none\"", async () => {
+  it('renderMosaicRedact\'s resulting <image> carries preserveAspectRatio="none"', async () => {
     const { restore } = setupMockedCanvas();
     teardown = restore;
     const cm = makeCanvasManager();
@@ -291,7 +289,7 @@ describe("buildImageRedact — preserveAspectRatio for race-window resilience", 
     expect(el.getAttribute("preserveAspectRatio")).toBe("none");
   });
 
-  it("renderBlurRedact's resulting <image> carries preserveAspectRatio=\"none\"", async () => {
+  it('renderBlurRedact\'s resulting <image> carries preserveAspectRatio="none"', async () => {
     const { restore } = setupMockedCanvas();
     teardown = restore;
     const cm = makeCanvasManager();
@@ -317,9 +315,7 @@ describe("renderBlurRedact — out-of-bounds rebake transparency fix", () => {
       (o) => o.kind === "fillStyle" && o.value === REDACT_SOLID_COLOR,
     );
     const fillRectIdx = log.ops.findIndex((o) => o.kind === "fillRect");
-    const filterIdx = log.ops.findIndex(
-      (o) => o.kind === "filter" && o.value !== "none",
-    );
+    const filterIdx = log.ops.findIndex((o) => o.kind === "filter" && o.value !== "none");
     const drawImageIdx = log.ops.findIndex((o) => o.kind === "drawImage");
 
     expect(fillStyleIdx).toBeGreaterThanOrEqual(0);

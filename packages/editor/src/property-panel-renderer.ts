@@ -19,10 +19,10 @@ import type {
   PropertyControlOption,
   PropertyEffectId,
 } from "@ingcreators/annot-core/editor/property-schema";
-import { setTooltip } from "./tooltip.js";
 import { createCustomSelect } from "./custom-select.js";
 import { createColorPullButton } from "./property-controls.js";
 import { ppNumberInput } from "./property-panel-helpers.js";
+import { setTooltip } from "./tooltip.js";
 
 /** Result of an in-place or replacing mutation. `oldEl === newEl`
  *  for `setValue` / `effect` paths that mutate in place; `oldEl !==

@@ -425,9 +425,7 @@ async function authedGet(path: string): Promise<unknown> {
   return res.json();
 }
 
-async function authedGetWithLink(
-  path: string,
-): Promise<{ body: unknown; nextUrl: string | null }> {
+async function authedGetWithLink(path: string): Promise<{ body: unknown; nextUrl: string | null }> {
   const token = getAccessToken();
   if (!token) throw new Error("Not signed in to GitHub.");
   const url = path.startsWith("http") ? path : `${GITHUB_API}${path}`;

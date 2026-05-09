@@ -127,7 +127,10 @@ describe("<annot-gallery-page>", () => {
     cards[0]!.click(); // select a
     cards[1]!.dispatchEvent(new MouseEvent("click", { bubbles: true, ctrlKey: true })); // toggle b in
     await el.updateComplete;
-    const selected = el.getSelection().images.map((i) => i.path).sort();
+    const selected = el
+      .getSelection()
+      .images.map((i) => i.path)
+      .sort();
     expect(selected).toEqual(["a.png", "b.png"]);
   });
 
@@ -188,10 +191,7 @@ describe("<annot-gallery-page>", () => {
 
   it("filtering by search query hides folders and matching-only images", async () => {
     const el = await mount({
-      images: [
-        makeImage({ path: "alpha.png" }),
-        makeImage({ path: "beta.png" }),
-      ],
+      images: [makeImage({ path: "alpha.png" }), makeImage({ path: "beta.png" })],
       folders: [makeFolder({ path: "Box", name: "Box" })],
     });
     expect(el.querySelectorAll(".gallery-folder-card").length).toBe(1);

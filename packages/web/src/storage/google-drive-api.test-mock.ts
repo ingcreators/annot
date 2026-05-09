@@ -38,7 +38,7 @@
  * `'{parentId}' in parents and trashed = false and mimeType [=|!=] '...'`.
  * We extract the parent id and the mime filter, nothing more.
  */
-import { http, HttpResponse } from "msw";
+import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
@@ -184,7 +184,8 @@ export function buildDriveHandlers(state: DriveState) {
     http.get(`${DRIVE_API}/files/:id`, ({ request, params }) => {
       const id = params.id as string;
       const file = state.files.get(id);
-      if (!file) return HttpResponse.json({ error: { message: "File not found" } }, { status: 404 });
+      if (!file)
+        return HttpResponse.json({ error: { message: "File not found" } }, { status: 404 });
 
       const url = new URL(request.url);
       if (url.searchParams.get("alt") === "media") {
@@ -228,7 +229,8 @@ export function buildDriveHandlers(state: DriveState) {
       // not strictly needed for store correctness but keeps downloads
       // symmetric.
       const fileMimeMatch = body.match(/Content-Type:\s*([^\r\n]+)/g);
-      const contentHeaderType = fileMimeMatch?.[1]?.split(":")[1]?.trim() || "application/octet-stream";
+      const contentHeaderType =
+        fileMimeMatch?.[1]?.split(":")[1]?.trim() || "application/octet-stream";
       const file: DriveFile = {
         id,
         name: meta.name || "unnamed",
@@ -248,7 +250,8 @@ export function buildDriveHandlers(state: DriveState) {
     http.patch(`${UPLOAD_API}/files/:id`, async ({ request, params }) => {
       const id = params.id as string;
       const file = state.files.get(id);
-      if (!file) return HttpResponse.json({ error: { message: "File not found" } }, { status: 404 });
+      if (!file)
+        return HttpResponse.json({ error: { message: "File not found" } }, { status: 404 });
 
       // The store PATCHes with `Content-Type: <blob.type>` and the
       // blob itself as body. Read as ArrayBuffer → base64 to keep
@@ -289,7 +292,8 @@ export function buildDriveHandlers(state: DriveState) {
     http.patch(`${DRIVE_API}/files/:id`, async ({ request, params }) => {
       const id = params.id as string;
       const file = state.files.get(id);
-      if (!file) return HttpResponse.json({ error: { message: "File not found" } }, { status: 404 });
+      if (!file)
+        return HttpResponse.json({ error: { message: "File not found" } }, { status: 404 });
 
       const url = new URL(request.url);
       const addParents = url.searchParams.get("addParents");

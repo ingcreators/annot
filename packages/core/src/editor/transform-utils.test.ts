@@ -66,12 +66,7 @@ function makeRect(): SVGRectElement {
   return rect;
 }
 
-function makeLine(
-  x1 = 10,
-  y1 = 20,
-  x2 = 110,
-  y2 = 60,
-): SVGLineElement {
+function makeLine(x1 = 10, y1 = 20, x2 = 110, y2 = 60): SVGLineElement {
   const svg = svgRoot();
   const line = document.createElementNS(SVG_NS, "line") as SVGLineElement;
   line.setAttribute("x1", String(x1));
@@ -125,7 +120,7 @@ describe("usesGeometryPosition + isLineLike helpers", () => {
     expect(usesGeometryPosition(document.createElementNS(SVG_NS, "g"))).toBe(false);
   });
 
-  it("isLineLike: <line> and <g data-type=\"arrow\"> are line-like; rect/path/g are not", () => {
+  it('isLineLike: <line> and <g data-type="arrow"> are line-like; rect/path/g are not', () => {
     expect(isLineLike(document.createElementNS(SVG_NS, "line"))).toBe(true);
     const arrow = document.createElementNS(SVG_NS, "g");
     arrow.setAttribute("data-type", "arrow");
@@ -173,7 +168,9 @@ describe("applyTransformState", () => {
     applyTransformState(rect, { tx: 0, ty: 0, rotation: 0, flipH: false, flipV: true });
     const tr = rect.getAttribute("transform")!;
     // matrix(1 0 0 -1 e f) for pure flipV with no rotation.
-    const m = tr.match(/^matrix\((-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)/);
+    const m = tr.match(
+      /^matrix\((-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)/,
+    );
     expect(m).not.toBeNull();
     expect(Number.parseFloat(m![1]!)).toBe(1);
     expect(Number.parseFloat(m![4]!)).toBe(-1);

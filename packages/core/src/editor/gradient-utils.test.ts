@@ -113,9 +113,7 @@ describe("applyGradient + detectGradient round-trip", () => {
 
   it("throws when the element has no ownerSVGElement", () => {
     const orphan = document.createElementNS(SVG_NS, "rect") as SVGRectElement;
-    expect(() => applyGradient(orphan, "stroke", SAMPLE_SPEC)).toThrow(
-      /no ownerSVGElement/,
-    );
+    expect(() => applyGradient(orphan, "stroke", SAMPLE_SPEC)).toThrow(/no ownerSVGElement/);
   });
 });
 

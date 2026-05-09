@@ -30,11 +30,6 @@ import {
   type PropertyControlId,
   type PropertyControlOption,
 } from "./property-schema.js";
-import {
-  TOOL_PANEL_EXTRA_CONTROL_IDS,
-  TOOL_REGISTRY,
-  type ToolPanelExtraControlId,
-} from "./tool-registry.js";
 import type {
   ArrowDim,
   ArrowShape,
@@ -43,6 +38,11 @@ import type {
   TextVerticalAnchor,
   ToolOptions,
 } from "./tool-options.js";
+import {
+  TOOL_PANEL_EXTRA_CONTROL_IDS,
+  TOOL_REGISTRY,
+  type ToolPanelExtraControlId,
+} from "./tool-registry.js";
 
 /** Every id a Tool-side `panelControls` entry can reference, plus
  *  the Tool-only extras. Drives the type of `TOOL_PANEL_ADAPTERS`'s
@@ -146,228 +146,227 @@ function parseArrowSize(value: string): { width: ArrowDim; length: ArrowDim } {
  * SELECTION-side ids that aren't (yet) used on the Tool side don't
  * need an adapter; only the ones the registry actually references.
  */
-export const TOOL_PANEL_ADAPTERS: Readonly<
-  Partial<Record<ToolPanelAdapterId, ToolPanelAdapter>>
-> = {
-  // ─── SELECTION-side ids ─────────────────────────────────────────
-  [PROPERTY_CONTROL_IDS.strokeColor]: {
-    read: (preset) => preset.strokeColor,
-    write: (preset, value) => {
-      preset.strokeColor = String(value);
+export const TOOL_PANEL_ADAPTERS: Readonly<Partial<Record<ToolPanelAdapterId, ToolPanelAdapter>>> =
+  {
+    // ─── SELECTION-side ids ─────────────────────────────────────────
+    [PROPERTY_CONTROL_IDS.strokeColor]: {
+      read: (preset) => preset.strokeColor,
+      write: (preset, value) => {
+        preset.strokeColor = String(value);
+      },
+      selectionDef: PROPERTY_CONTROL_IDS.strokeColor,
     },
-    selectionDef: PROPERTY_CONTROL_IDS.strokeColor,
-  },
 
-  [PROPERTY_CONTROL_IDS.strokeWidth]: {
-    read: (preset) => preset.strokeWidth,
-    write: (preset, value) => {
-      preset.strokeWidth = Number(value);
+    [PROPERTY_CONTROL_IDS.strokeWidth]: {
+      read: (preset) => preset.strokeWidth,
+      write: (preset, value) => {
+        preset.strokeWidth = Number(value);
+      },
+      selectionDef: PROPERTY_CONTROL_IDS.strokeWidth,
     },
-    selectionDef: PROPERTY_CONTROL_IDS.strokeWidth,
-  },
 
-  [PROPERTY_CONTROL_IDS.strokeStyle]: {
-    // Matches `Toolbar`'s preset convention: `""` = solid, anything
-    // else (`"dash"` / `"dot"` / `"dashDot"` / `"lgDash"`) names a
-    // dasharray key resolved via `computeDasharray`.
-    read: (preset) => preset.strokeDasharray ?? "",
-    write: (preset, value) => {
-      preset.strokeDasharray = String(value);
+    [PROPERTY_CONTROL_IDS.strokeStyle]: {
+      // Matches `Toolbar`'s preset convention: `""` = solid, anything
+      // else (`"dash"` / `"dot"` / `"dashDot"` / `"lgDash"`) names a
+      // dasharray key resolved via `computeDasharray`.
+      read: (preset) => preset.strokeDasharray ?? "",
+      write: (preset, value) => {
+        preset.strokeDasharray = String(value);
+      },
+      selectionDef: PROPERTY_CONTROL_IDS.strokeStyle,
     },
-    selectionDef: PROPERTY_CONTROL_IDS.strokeStyle,
-  },
 
-  [PROPERTY_CONTROL_IDS.strokeLinecap]: {
-    // Default "butt" matches the SELECTION def's getValue fallback +
-    // the imperative Tool-side `preset.strokeLinecap ?? "butt"`.
-    read: (preset) => preset.strokeLinecap ?? "butt",
-    write: (preset, value) => {
-      preset.strokeLinecap = value as LineCap;
+    [PROPERTY_CONTROL_IDS.strokeLinecap]: {
+      // Default "butt" matches the SELECTION def's getValue fallback +
+      // the imperative Tool-side `preset.strokeLinecap ?? "butt"`.
+      read: (preset) => preset.strokeLinecap ?? "butt",
+      write: (preset, value) => {
+        preset.strokeLinecap = value as LineCap;
+      },
+      selectionDef: PROPERTY_CONTROL_IDS.strokeLinecap,
     },
-    selectionDef: PROPERTY_CONTROL_IDS.strokeLinecap,
-  },
 
-  [PROPERTY_CONTROL_IDS.fillColor]: {
-    // Tool side persists the literal preset.fillColor (including the
-    // `"none"` sentinel); per-tool fallback for the colour picker
-    // ("#ff0000" / "#ffffff" / "#111111") is a Phase 2 renderer
-    // concern, not an adapter one. Adapters preserve values; they
-    // don't paper over absent ones.
-    read: (preset) => preset.fillColor,
-    write: (preset, value) => {
-      preset.fillColor = String(value);
+    [PROPERTY_CONTROL_IDS.fillColor]: {
+      // Tool side persists the literal preset.fillColor (including the
+      // `"none"` sentinel); per-tool fallback for the colour picker
+      // ("#ff0000" / "#ffffff" / "#111111") is a Phase 2 renderer
+      // concern, not an adapter one. Adapters preserve values; they
+      // don't paper over absent ones.
+      read: (preset) => preset.fillColor,
+      write: (preset, value) => {
+        preset.fillColor = String(value);
+      },
+      selectionDef: PROPERTY_CONTROL_IDS.fillColor,
     },
-    selectionDef: PROPERTY_CONTROL_IDS.fillColor,
-  },
 
-  [PROPERTY_CONTROL_IDS.fontSize]: {
-    read: (preset) => preset.fontSize,
-    write: (preset, value) => {
-      preset.fontSize = Number(value);
+    [PROPERTY_CONTROL_IDS.fontSize]: {
+      read: (preset) => preset.fontSize,
+      write: (preset, value) => {
+        preset.fontSize = Number(value);
+      },
+      selectionDef: PROPERTY_CONTROL_IDS.fontSize,
     },
-    selectionDef: PROPERTY_CONTROL_IDS.fontSize,
-  },
 
-  [PROPERTY_CONTROL_IDS.fontFamily]: {
-    // Logical-family token (`Annot Sans` / `Annot Serif` /
-    // `Annot Mono`). The text tool seeds `fontFamily` lazily; the
-    // adapter normalises any legacy raw CSS family ("sans-serif",
-    // "system-ui, ...", etc.) to the matching token via
-    // `coerceToLogicalFamily` so the read / write round-trip is
-    // well-defined regardless of preset state.
-    read: (preset) => coerceToLogicalFamily(preset.fontFamily),
-    write: (preset, value) => {
-      preset.fontFamily = coerceToLogicalFamily(String(value));
+    [PROPERTY_CONTROL_IDS.fontFamily]: {
+      // Logical-family token (`Annot Sans` / `Annot Serif` /
+      // `Annot Mono`). The text tool seeds `fontFamily` lazily; the
+      // adapter normalises any legacy raw CSS family ("sans-serif",
+      // "system-ui, ...", etc.) to the matching token via
+      // `coerceToLogicalFamily` so the read / write round-trip is
+      // well-defined regardless of preset state.
+      read: (preset) => coerceToLogicalFamily(preset.fontFamily),
+      write: (preset, value) => {
+        preset.fontFamily = coerceToLogicalFamily(String(value));
+      },
+      selectionDef: PROPERTY_CONTROL_IDS.fontFamily,
     },
-    selectionDef: PROPERTY_CONTROL_IDS.fontFamily,
-  },
 
-  [PROPERTY_CONTROL_IDS.textAnchor]: {
-    // Horizontal text alignment for the next-drawn Text shape. The
-    // SELECTION-side def writes `data-text-anchor` + re-flows the
-    // tspans; the Tool-side adapter just persists the value into
-    // `ToolOptions` so `createTextShape` picks it up at draw time.
-    read: (preset) => preset.textAnchor ?? "start",
-    write: (preset, value) => {
-      preset.textAnchor = value as TextAnchor;
+    [PROPERTY_CONTROL_IDS.textAnchor]: {
+      // Horizontal text alignment for the next-drawn Text shape. The
+      // SELECTION-side def writes `data-text-anchor` + re-flows the
+      // tspans; the Tool-side adapter just persists the value into
+      // `ToolOptions` so `createTextShape` picks it up at draw time.
+      read: (preset) => preset.textAnchor ?? "start",
+      write: (preset, value) => {
+        preset.textAnchor = value as TextAnchor;
+      },
+      selectionDef: PROPERTY_CONTROL_IDS.textAnchor,
     },
-    selectionDef: PROPERTY_CONTROL_IDS.textAnchor,
-  },
 
-  [PROPERTY_CONTROL_IDS.textVerticalAnchor]: {
-    read: (preset) => preset.textVerticalAnchor ?? "top",
-    write: (preset, value) => {
-      preset.textVerticalAnchor = value as TextVerticalAnchor;
+    [PROPERTY_CONTROL_IDS.textVerticalAnchor]: {
+      read: (preset) => preset.textVerticalAnchor ?? "top",
+      write: (preset, value) => {
+        preset.textVerticalAnchor = value as TextVerticalAnchor;
+      },
+      selectionDef: PROPERTY_CONTROL_IDS.textVerticalAnchor,
     },
-    selectionDef: PROPERTY_CONTROL_IDS.textVerticalAnchor,
-  },
 
-  [PROPERTY_CONTROL_IDS.arrowStartShape]: {
-    read: (preset) => preset.arrowHeadStart ?? "none",
-    write: (preset, value) => {
-      preset.arrowHeadStart = value as ArrowShape;
+    [PROPERTY_CONTROL_IDS.arrowStartShape]: {
+      read: (preset) => preset.arrowHeadStart ?? "none",
+      write: (preset, value) => {
+        preset.arrowHeadStart = value as ArrowShape;
+      },
+      selectionDef: PROPERTY_CONTROL_IDS.arrowStartShape,
     },
-    selectionDef: PROPERTY_CONTROL_IDS.arrowStartShape,
-  },
 
-  [PROPERTY_CONTROL_IDS.arrowEndShape]: {
-    // Tool default for the End shape is "triangle" — matches the
-    // imperative `preset.arrowHeadEnd ?? "triangle"` + ArrowTool's
-    // creation-time seed. (Begin defaults to "none"; End defaults to
-    // a visible head so the variant chip preview matches the drawn
-    // arrow.)
-    read: (preset) => preset.arrowHeadEnd ?? "triangle",
-    write: (preset, value) => {
-      preset.arrowHeadEnd = value as ArrowShape;
+    [PROPERTY_CONTROL_IDS.arrowEndShape]: {
+      // Tool default for the End shape is "triangle" — matches the
+      // imperative `preset.arrowHeadEnd ?? "triangle"` + ArrowTool's
+      // creation-time seed. (Begin defaults to "none"; End defaults to
+      // a visible head so the variant chip preview matches the drawn
+      // arrow.)
+      read: (preset) => preset.arrowHeadEnd ?? "triangle",
+      write: (preset, value) => {
+        preset.arrowHeadEnd = value as ArrowShape;
+      },
+      selectionDef: PROPERTY_CONTROL_IDS.arrowEndShape,
     },
-    selectionDef: PROPERTY_CONTROL_IDS.arrowEndShape,
-  },
 
-  [PROPERTY_CONTROL_IDS.arrowStartSize]: {
-    // Composite "w-l" string matches the SELECTION-side encoding so
-    // Phase 4 can pull the 3×3 grid options from the SELECTION
-    // registry without reformatting.
-    read: (preset) => readArrowSize(preset.arrowWidthStart, preset.arrowLengthStart),
-    write: (preset, value) => {
-      const { width, length } = parseArrowSize(String(value));
-      preset.arrowWidthStart = width;
-      preset.arrowLengthStart = length;
+    [PROPERTY_CONTROL_IDS.arrowStartSize]: {
+      // Composite "w-l" string matches the SELECTION-side encoding so
+      // Phase 4 can pull the 3×3 grid options from the SELECTION
+      // registry without reformatting.
+      read: (preset) => readArrowSize(preset.arrowWidthStart, preset.arrowLengthStart),
+      write: (preset, value) => {
+        const { width, length } = parseArrowSize(String(value));
+        preset.arrowWidthStart = width;
+        preset.arrowLengthStart = length;
+      },
+      selectionDef: PROPERTY_CONTROL_IDS.arrowStartSize,
     },
-    selectionDef: PROPERTY_CONTROL_IDS.arrowStartSize,
-  },
 
-  [PROPERTY_CONTROL_IDS.arrowEndSize]: {
-    read: (preset) => readArrowSize(preset.arrowWidthEnd, preset.arrowLengthEnd),
-    write: (preset, value) => {
-      const { width, length } = parseArrowSize(String(value));
-      preset.arrowWidthEnd = width;
-      preset.arrowLengthEnd = length;
+    [PROPERTY_CONTROL_IDS.arrowEndSize]: {
+      read: (preset) => readArrowSize(preset.arrowWidthEnd, preset.arrowLengthEnd),
+      write: (preset, value) => {
+        const { width, length } = parseArrowSize(String(value));
+        preset.arrowWidthEnd = width;
+        preset.arrowLengthEnd = length;
+      },
+      selectionDef: PROPERTY_CONTROL_IDS.arrowEndSize,
     },
-    selectionDef: PROPERTY_CONTROL_IDS.arrowEndSize,
-  },
 
-  // ─── Tool-only extras ────────────────────────────────────────────
-  "tool.typeChips": {
-    // The only adapter that genuinely needs `toolId` — the variant
-    // field varies per tool (`shape.shapeType`, `arrow.arrowHead`,
-    // `text.textVariant`, `freehand.drawStyle`, `marker.markerShape`,
-    // `redact.redactStyle`, `highlight.highlightColor`). Resolves
-    // via `TOOL_REGISTRY[toolId].variantField`; tools without a
-    // variantField (Crop) shouldn't list `tool.typeChips` in their
-    // panelControls so the lookup never fails in practice — but the
-    // adapter falls back to a no-op pair if it does, to keep the
-    // round-trip invariant safe under malformed registry edits.
-    read: (preset, toolId) => {
-      const field = TOOL_REGISTRY[toolId]?.variantField;
-      if (!field) return undefined;
-      return preset[field];
+    // ─── Tool-only extras ────────────────────────────────────────────
+    "tool.typeChips": {
+      // The only adapter that genuinely needs `toolId` — the variant
+      // field varies per tool (`shape.shapeType`, `arrow.arrowHead`,
+      // `text.textVariant`, `freehand.drawStyle`, `marker.markerShape`,
+      // `redact.redactStyle`, `highlight.highlightColor`). Resolves
+      // via `TOOL_REGISTRY[toolId].variantField`; tools without a
+      // variantField (Crop) shouldn't list `tool.typeChips` in their
+      // panelControls so the lookup never fails in practice — but the
+      // adapter falls back to a no-op pair if it does, to keep the
+      // round-trip invariant safe under malformed registry edits.
+      read: (preset, toolId) => {
+        const field = TOOL_REGISTRY[toolId]?.variantField;
+        if (!field) return undefined;
+        return preset[field];
+      },
+      write: (preset, value, toolId) => {
+        const field = TOOL_REGISTRY[toolId]?.variantField;
+        if (!field) return;
+        // The variantField is a `keyof ToolOptions` covering many
+        // distinct narrow types (ShapeType / ArrowHead / TextVariant /
+        // …). The dynamic dispatch is type-safe at the registry layer —
+        // each tool's `panelControls` is paired with its variants — but
+        // the generic adapter has to fall through `unknown` here. Cast
+        // through `unknown` first to bypass the structural mismatch
+        // between `ToolOptions` (named fields) and a string-indexed
+        // record.
+        (preset as unknown as Record<string, unknown>)[field as string] = value;
+      },
+      selectionDef: null,
     },
-    write: (preset, value, toolId) => {
-      const field = TOOL_REGISTRY[toolId]?.variantField;
-      if (!field) return;
-      // The variantField is a `keyof ToolOptions` covering many
-      // distinct narrow types (ShapeType / ArrowHead / TextVariant /
-      // …). The dynamic dispatch is type-safe at the registry layer —
-      // each tool's `panelControls` is paired with its variants — but
-      // the generic adapter has to fall through `unknown` here. Cast
-      // through `unknown` first to bypass the structural mismatch
-      // between `ToolOptions` (named fields) and a string-indexed
-      // record.
-      (preset as unknown as Record<string, unknown>)[field as string] = value;
-    },
-    selectionDef: null,
-  },
 
-  "tool.transparencyPercent": {
-    // Inverse of strokeOpacity. Default 1.0 ↔ 0% transparent —
-    // matches the imperative `Math.round((1 - (preset.strokeOpacity
-    // ?? 1)) * 100)` + `preset.strokeOpacity = 1 - v / 100` pair.
-    read: (preset) => transparencyPercentFromOpacity(preset.strokeOpacity ?? 1, 1),
-    write: (preset, value) => {
-      preset.strokeOpacity = opacityFromTransparencyPercent(Number(value));
+    "tool.transparencyPercent": {
+      // Inverse of strokeOpacity. Default 1.0 ↔ 0% transparent —
+      // matches the imperative `Math.round((1 - (preset.strokeOpacity
+      // ?? 1)) * 100)` + `preset.strokeOpacity = 1 - v / 100` pair.
+      read: (preset) => transparencyPercentFromOpacity(preset.strokeOpacity ?? 1, 1),
+      write: (preset, value) => {
+        preset.strokeOpacity = opacityFromTransparencyPercent(Number(value));
+      },
+      selectionDef: PROPERTY_CONTROL_IDS.strokeOpacity,
     },
-    selectionDef: PROPERTY_CONTROL_IDS.strokeOpacity,
-  },
 
-  "tool.fillTransparencyPercent": {
-    // Inverse of fillOpacity, used by Highlight. Default 0.4 ↔ 60%
-    // transparent — matches the imperative `Math.round((1 -
-    // (preset.fillOpacity ?? 0.4)) * 100)` + `preset.fillOpacity = 1
-    // - v / 100` pair.
-    read: (preset) => transparencyPercentFromOpacity(preset.fillOpacity ?? 0.4, 0.4),
-    write: (preset, value) => {
-      preset.fillOpacity = opacityFromTransparencyPercent(Number(value));
+    "tool.fillTransparencyPercent": {
+      // Inverse of fillOpacity, used by Highlight. Default 0.4 ↔ 60%
+      // transparent — matches the imperative `Math.round((1 -
+      // (preset.fillOpacity ?? 0.4)) * 100)` + `preset.fillOpacity = 1
+      // - v / 100` pair.
+      read: (preset) => transparencyPercentFromOpacity(preset.fillOpacity ?? 0.4, 0.4),
+      write: (preset, value) => {
+        preset.fillOpacity = opacityFromTransparencyPercent(Number(value));
+      },
+      selectionDef: PROPERTY_CONTROL_IDS.fillOpacity,
     },
-    selectionDef: PROPERTY_CONTROL_IDS.fillOpacity,
-  },
 
-  "tool.fillOpacityPercent": {
-    // Direct percentage of fillOpacity, used by Shape's Fill section.
-    // Default 1.0 ↔ 100% opaque — matches the imperative
-    // `Math.round((preset.fillOpacity ?? 1) * 100)` + `preset.fillOpacity
-    // = v / 100` pair. Distinct from `tool.fillTransparencyPercent`
-    // (inverse) so the Phase 2 renderer can preserve byte-equivalent
-    // DOM (label "Opacity" vs "Transparency", direct vs inverse).
-    read: (preset) => opacityPercentFromOpacity(preset.fillOpacity ?? 1, 1),
-    write: (preset, value) => {
-      preset.fillOpacity = opacityFromOpacityPercent(Number(value));
+    "tool.fillOpacityPercent": {
+      // Direct percentage of fillOpacity, used by Shape's Fill section.
+      // Default 1.0 ↔ 100% opaque — matches the imperative
+      // `Math.round((preset.fillOpacity ?? 1) * 100)` + `preset.fillOpacity
+      // = v / 100` pair. Distinct from `tool.fillTransparencyPercent`
+      // (inverse) so the Phase 2 renderer can preserve byte-equivalent
+      // DOM (label "Opacity" vs "Transparency", direct vs inverse).
+      read: (preset) => opacityPercentFromOpacity(preset.fillOpacity ?? 1, 1),
+      write: (preset, value) => {
+        preset.fillOpacity = opacityFromOpacityPercent(Number(value));
+      },
+      selectionDef: null,
     },
-    selectionDef: null,
-  },
 
-  "tool.freehandDone": {
-    // Click action — no value. Read returns `null`, write is a no-op
-    // so the round-trip invariant `read → write → read` is trivially
-    // an identity. Phase 2's renderer wires the click to
-    // `FreehandTool.endSession` directly; the adapter exists to
-    // satisfy the "every id has an adapter" shape invariant.
-    read: () => null,
-    write: () => {
-      // Intentional no-op — see the type doc above.
+    "tool.freehandDone": {
+      // Click action — no value. Read returns `null`, write is a no-op
+      // so the round-trip invariant `read → write → read` is trivially
+      // an identity. Phase 2's renderer wires the click to
+      // `FreehandTool.endSession` directly; the adapter exists to
+      // satisfy the "every id has an adapter" shape invariant.
+      read: () => null,
+      write: () => {
+        // Intentional no-op — see the type doc above.
+      },
+      selectionDef: null,
     },
-    selectionDef: null,
-  },
-};
+  };
 
 /** Static metadata an adapter borrows from its SELECTION-side def.
  *  Phase 4 makes this the single source of truth for option arrays

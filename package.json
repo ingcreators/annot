@@ -28,7 +28,7 @@
     "build": "turbo build",
     "dev": "turbo dev",
     "typecheck": "turbo typecheck",
-    "lint": "biome lint packages",
+    "lint": "biome check packages",
     "lint:fix": "biome check packages --write",
     "format": "biome format packages --write",
     "check": "biome check packages",

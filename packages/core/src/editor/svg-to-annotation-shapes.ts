@@ -315,11 +315,7 @@ export function svgElementToAnnotationShape(el: SVGElement): AnnotationShape | n
       const bgStroke = bgRect?.getAttribute("stroke");
       const bgStrokeWidth = bgRect?.getAttribute("stroke-width");
       const bgStrokeDasharray = bgRect?.getAttribute("stroke-dasharray");
-      const textAnchor = el.getAttribute("data-text-anchor") as
-        | "start"
-        | "middle"
-        | "end"
-        | null;
+      const textAnchor = el.getAttribute("data-text-anchor") as "start" | "middle" | "end" | null;
       const textVerticalAnchor = el.getAttribute("data-text-vanchor") as
         | "top"
         | "middle"

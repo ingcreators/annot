@@ -1,7 +1,7 @@
 import { cssStackFor, LOGICAL_FAMILIES } from "@ingcreators/annot-core/headless";
+import { defaultAnnotFilenameStem } from "@ingcreators/annot-core/utils";
 import { createEditableImage } from "@ingcreators/annot-core/xmp";
 import type { CanvasManager } from "./canvas-manager.js";
-import { defaultAnnotFilenameStem } from "@ingcreators/annot-core/utils";
 
 export function exportSVGString(canvas: CanvasManager): string {
   const clone = canvas.svg.cloneNode(true) as SVGSVGElement;
@@ -209,7 +209,6 @@ export async function downloadAsImage(
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
-
 
 async function rasterizeSVG(svgString: string, width: number, height: number): Promise<Blob> {
   // Phase 5 of `docs/plans/multilingual-fonts-os-stack.md`:

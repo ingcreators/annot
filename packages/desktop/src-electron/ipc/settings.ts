@@ -133,8 +133,7 @@ export const SETTINGS_CHANNELS = {
   getPortableDir: "get_portable_dir",
 } as const;
 
-export type SettingsChannel =
-  (typeof SETTINGS_CHANNELS)[keyof typeof SETTINGS_CHANNELS];
+export type SettingsChannel = (typeof SETTINGS_CHANNELS)[keyof typeof SETTINGS_CHANNELS];
 
 export const SETTINGS_CHANNEL_TO_HANDLER: Record<SettingsChannel, keyof SettingsHandlers> = {
   [SETTINGS_CHANNELS.loadToolPresets]: "loadToolPresets",

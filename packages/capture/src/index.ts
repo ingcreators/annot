@@ -7,8 +7,8 @@
  * here for tests and TypeDoc-style consumers.
  */
 
-export * from "./host.js";
 export * from "./content/index.js";
 export * from "./encode/index.js";
-export * from "./shared/index.js";
+export * from "./host.js";
 export * from "./orchestrate/index.js";
+export * from "./shared/index.js";

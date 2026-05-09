@@ -123,20 +123,20 @@ describe("buildShapeXml — rich-text textbox snapshots", () => {
   });
 
   it("logical Annot Serif family expands to Cambria / Yu Mincho / Times New Roman", () => {
-    const xml = buildShapeXml(
-      richTextbox({ runs: [{ text: "x", font_family: "Annot Serif" }] }),
-      { ns: "p", id: 21 },
-    );
+    const xml = buildShapeXml(richTextbox({ runs: [{ text: "x", font_family: "Annot Serif" }] }), {
+      ns: "p",
+      id: 21,
+    });
     expect(xml).toContain('<a:latin typeface="Cambria"/>');
     expect(xml).toContain('<a:ea typeface="Yu Mincho"/>');
     expect(xml).toContain('<a:cs typeface="Times New Roman"/>');
   });
 
   it("logical Annot Mono family expands to Consolas / MS Gothic / Courier New", () => {
-    const xml = buildShapeXml(
-      richTextbox({ runs: [{ text: "x", font_family: "Annot Mono" }] }),
-      { ns: "p", id: 22 },
-    );
+    const xml = buildShapeXml(richTextbox({ runs: [{ text: "x", font_family: "Annot Mono" }] }), {
+      ns: "p",
+      id: 22,
+    });
     expect(xml).toContain('<a:latin typeface="Consolas"/>');
     expect(xml).toContain('<a:ea typeface="MS Gothic"/>');
     expect(xml).toContain('<a:cs typeface="Courier New"/>');
@@ -196,10 +196,7 @@ describe("buildShapeXml — rich-text textbox snapshots", () => {
         shape_kind: "rect",
         stroke: "#000000",
         text_anchor: "middle",
-        runs: [
-          { text: "para1", line_break_after: true },
-          { text: "para2" },
-        ],
+        runs: [{ text: "para1", line_break_after: true }, { text: "para2" }],
       }),
       { ns: "p", id: 14 },
     );
@@ -218,7 +215,9 @@ describe("buildShapeXml — rich-text textbox snapshots", () => {
       }),
       { ns: "p", id: 15 },
     );
-    expect(xml).toContain('<a:bodyPr wrap="square" rtlCol="0" lIns="91440" tIns="45720" rIns="91440" bIns="45720" anchor="ctr"/>');
+    expect(xml).toContain(
+      '<a:bodyPr wrap="square" rtlCol="0" lIns="91440" tIns="45720" rIns="91440" bIns="45720" anchor="ctr"/>',
+    );
   });
 
   it("text_vertical_anchor='top' (default) omits the anchor attribute", () => {

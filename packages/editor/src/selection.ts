@@ -23,6 +23,7 @@ import {
 } from "@ingcreators/annot-core/editor/transform-utils";
 import type { CanvasManager } from "./canvas-manager.js";
 import type { History } from "./history.js";
+import { convertRedactStyle, detectRedactStyle } from "./redact-utils.js";
 import {
   cursorForAngle,
   getWorldBBox,
@@ -36,7 +37,6 @@ import {
   SVG_NS,
   setLineEndpoints,
 } from "./selection-helpers.js";
-import { convertRedactStyle, detectRedactStyle } from "./redact-utils.js";
 import { computeSnap, SmartGuideOverlay } from "./smart-guides.js";
 
 /**

@@ -93,9 +93,7 @@ describe("fs.* IPC handlers — empty / root path", () => {
 
 describe("fs.* IPC handlers — path-traversal validation", () => {
   it("rejects '..' segments", async () => {
-    await expect(handlers.read({ path: "../../etc/passwd" })).rejects.toThrow(
-      /path-traversal/,
-    );
+    await expect(handlers.read({ path: "../../etc/passwd" })).rejects.toThrow(/path-traversal/);
     await expect(handlers.write({ path: "..", bytes: new Uint8Array() })).rejects.toThrow();
   });
 
@@ -114,12 +112,12 @@ describe("fs.* IPC handlers — path-traversal validation", () => {
     await handlers.mkdir({ path: "Inbox", recursive: true });
     await handlers.write({ path: "Inbox/x.png", bytes: TEXT.encode("x") });
 
-    await expect(
-      handlers.rename({ from: "Inbox/x.png", to: "../escape.png" }),
-    ).rejects.toThrow(/path-traversal/);
-    await expect(
-      handlers.rename({ from: "../foo", to: "Inbox/y.png" }),
-    ).rejects.toThrow(/path-traversal/);
+    await expect(handlers.rename({ from: "Inbox/x.png", to: "../escape.png" })).rejects.toThrow(
+      /path-traversal/,
+    );
+    await expect(handlers.rename({ from: "../foo", to: "Inbox/y.png" })).rejects.toThrow(
+      /path-traversal/,
+    );
   });
 });
 

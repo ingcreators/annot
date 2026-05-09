@@ -79,11 +79,7 @@ describe("RedactTool — pointerdown marquee", () => {
   it("attaches a teal marquee to ui-overlay (NOT annotations) at the click point", () => {
     const canvas = makeCanvas();
     const { history } = makeHistory();
-    const tool = new RedactTool(
-      canvas as unknown as CanvasManager,
-      history,
-      makeOptions(),
-    );
+    const tool = new RedactTool(canvas as unknown as CanvasManager, history, makeOptions());
     tool.onPointerDown(pointerEvent(), new DOMPoint(50, 60));
     expect(canvas.annotations.children.length).toBe(0);
     expect(canvas.uiOverlay.children.length).toBe(1);

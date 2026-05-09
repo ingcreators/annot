@@ -83,9 +83,7 @@ const meta: Meta<Args> = {
     heading.className = "editor-right-panel-section-title";
     heading.textContent = "Elements";
     wrapper.appendChild(heading);
-    const section = document.createElement(
-      "annot-right-panel-page-elements-section",
-    );
+    const section = document.createElement("annot-right-panel-page-elements-section");
     section.pageMetadata = args.metadata;
     section.canvas = null;
     section.history = null;

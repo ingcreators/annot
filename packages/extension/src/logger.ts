@@ -26,8 +26,7 @@ const RANK: Record<LogLevel, number> = {
   silent: 100,
 };
 
-const isProd: boolean =
-  (import.meta as { env?: { PROD?: boolean } }).env?.PROD ?? false;
+const isProd: boolean = (import.meta as { env?: { PROD?: boolean } }).env?.PROD ?? false;
 
 let currentLevel: LogLevel = isProd ? "warn" : "debug";
 

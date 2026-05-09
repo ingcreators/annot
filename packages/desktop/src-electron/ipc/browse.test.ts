@@ -17,9 +17,9 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   BROWSE_CHANNELS,
-  createBrowseHandlers,
   type BrowseDeps,
   type CapturedImage,
+  createBrowseHandlers,
 } from "./browse.js";
 
 const FAKE_PNG = new Uint8Array([
@@ -28,12 +28,14 @@ const FAKE_PNG = new Uint8Array([
 
 function buildHandlers(deps: Partial<BrowseDeps> = {}) {
   const openBrowseWindow = vi.fn(async (_opts: { url?: string }) => undefined);
-  const captureWebContents = vi.fn(async (_id: number): Promise<CapturedImage> => ({
-    png: FAKE_PNG,
-    width: 1280,
-    height: 720,
-    dpr: 2,
-  }));
+  const captureWebContents = vi.fn(
+    async (_id: number): Promise<CapturedImage> => ({
+      png: FAKE_PNG,
+      width: 1280,
+      height: 720,
+      dpr: 2,
+    }),
+  );
   const executeJavaScriptInTarget = vi.fn(async (_id: number, _expr: string) => null);
   const merged: BrowseDeps = {
     openBrowseWindow,

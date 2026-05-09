@@ -48,8 +48,8 @@ import {
 import { defaultAnnotImageFilename } from "@ingcreators/annot-core/utils";
 import { readEditableImage } from "@ingcreators/annot-core/xmp";
 import {
-  buildEditableImageBlob,
   type BuildEditableImageDeps,
+  buildEditableImageBlob,
   DEFAULT_DEPS,
 } from "@ingcreators/annot-web/storage/image-encode";
 import type { DesktopFs } from "./desktop-fs.js";
@@ -131,11 +131,7 @@ export class DesktopStore
    *                     stubbed deps object that skips the
    *                     worker.
    */
-  constructor(
-    fs: DesktopFs,
-    rootName: string,
-    encodeDeps: BuildEditableImageDeps = DEFAULT_DEPS,
-  ) {
+  constructor(fs: DesktopFs, rootName: string, encodeDeps: BuildEditableImageDeps = DEFAULT_DEPS) {
     this.#fs = fs;
     this.#rootName = rootName;
     this.#encodeDeps = encodeDeps;
@@ -210,11 +206,7 @@ export class DesktopStore
     if (changed) await this.#saveIndex();
   }
 
-  async #syncDir(
-    folderPath: string,
-    known: Set<string>,
-    onAdd: () => void,
-  ): Promise<void> {
+  async #syncDir(folderPath: string, known: Set<string>, onAdd: () => void): Promise<void> {
     const entries = await this.#fs.readDir(folderPath);
     for (const entry of entries) {
       if (entry.kind === "file" && isImageFile(entry.name)) {
@@ -329,10 +321,7 @@ export class DesktopStore
 
   // ---- Images ─────────────────────────────────────────────────
 
-  async saveImage(
-    data: Omit<ImageRecord, "path">,
-    opts?: { filename?: string },
-  ): Promise<string> {
+  async saveImage(data: Omit<ImageRecord, "path">, opts?: { filename?: string }): Promise<string> {
     const isJpeg = data.originalDataUrl.startsWith("data:image/jpeg");
     // No explicit filename = annot-native capture → use the shared
     // `annot-<ts>.annot.<ext>` shape. External-file saves pass their
@@ -362,11 +351,7 @@ export class DesktopStore
       height: data.height,
       tags: data.tags,
     };
-    const blob = await buildEditableImageBlob(
-      record,
-      isJpeg ? "jpg" : "png",
-      this.#encodeDeps,
-    );
+    const blob = await buildEditableImageBlob(record, isJpeg ? "jpg" : "png", this.#encodeDeps);
     const bytes = new Uint8Array(await blob.arrayBuffer());
 
     try {
@@ -474,11 +459,7 @@ export class DesktopStore
       updates.originalDataUrl !== undefined
     ) {
       const isJpeg = (record.originalDataUrl || "").startsWith("data:image/jpeg");
-      const blob = await buildEditableImageBlob(
-        record,
-        isJpeg ? "jpg" : "png",
-        this.#encodeDeps,
-      );
+      const blob = await buildEditableImageBlob(record, isJpeg ? "jpg" : "png", this.#encodeDeps);
       const bytes = new Uint8Array(await blob.arrayBuffer());
       await this.#fs.writeFile(path, bytes);
       try {

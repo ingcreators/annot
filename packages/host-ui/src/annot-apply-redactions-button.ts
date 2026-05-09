@@ -79,9 +79,9 @@ export class AnnotApplyRedactionsButtonElement extends LitElement {
       <button
         type="button"
         class="annot-apply-redactions-btn"
-        title=${this.count === 0
-          ? "No redactions to apply"
-          : `Apply ${this.count} redaction(s) to image`}
+        title=${
+          this.count === 0 ? "No redactions to apply" : `Apply ${this.count} redaction(s) to image`
+        }
         aria-label="Apply redactions to image"
         ?disabled=${disabled}
         @click=${this.#onClick}

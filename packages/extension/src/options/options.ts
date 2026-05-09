@@ -21,11 +21,7 @@ import type {
   CaptureSettingsChangeDetail,
 } from "@ingcreators/annot-host-ui/annot-capture-settings";
 import "@ingcreators/annot-host-ui/annot-capture-settings";
-import {
-  loadSettings,
-  onSettingsChange,
-  saveSettings,
-} from "../shared/settings.js";
+import { loadSettings, onSettingsChange, saveSettings } from "../shared/settings.js";
 
 let savedTimer: number | undefined;
 

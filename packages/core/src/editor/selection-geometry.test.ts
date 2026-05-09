@@ -4,12 +4,7 @@
 // environment also doubles as a leak check.
 
 import { describe, expect, it } from "vitest";
-import {
-  computeSnap,
-  cursorForAngle,
-  type Rect,
-  rotateAround,
-} from "./selection-geometry.js";
+import { computeSnap, cursorForAngle, type Rect, rotateAround } from "./selection-geometry.js";
 
 const r = (x: number, y: number, width: number, height: number): Rect => ({
   x,

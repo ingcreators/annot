@@ -8,8 +8,8 @@
 
 import type { Meta, StoryObj } from "@storybook/web-components-vite";
 import "./last-commit-section.js";
-import { createDrawerSectionFrame } from "./helpers.js";
 import type { LastCommitInfo } from "../file-details-drawer-types.js";
+import { createDrawerSectionFrame } from "./helpers.js";
 
 interface Args {
   authorName: string;

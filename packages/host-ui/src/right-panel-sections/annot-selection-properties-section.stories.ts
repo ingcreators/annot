@@ -58,9 +58,7 @@ const meta: Meta<Args> = {
     heading.className = "editor-right-panel-section-title";
     heading.textContent = args.title;
     wrapper.appendChild(heading);
-    const section = document.createElement(
-      "annot-right-panel-selection-properties-section",
-    );
+    const section = document.createElement("annot-right-panel-selection-properties-section");
     const stubElements: SVGElement[] = [];
     section.elements = stubElements;
     section.propPanelHost = makePropPanelHost(args.rowCount);

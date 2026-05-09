@@ -1,5 +1,5 @@
-import { isLogicalFamily, ooxmlTypefacesFor } from "@ingcreators/annot-core/headless";
 import type { AnnotationShape, TextRun } from "@ingcreators/annot-core/desktop-bridge";
+import { isLogicalFamily, ooxmlTypefacesFor } from "@ingcreators/annot-core/headless";
 import {
   capAttr,
   chex,
@@ -114,7 +114,8 @@ export function buildText(s: AnnotationShape, id: number, ns: NamespaceOpts): st
  *  variants (plain / sticky / callout) ship with — defines their
  *  PowerPoint identity, so text-on-shape overrides this only
  *  when it has a real stroke from the user's drawn primitive. */
-const AUTO_BG_TEXT_LINE = '<a:ln w="9525"><a:solidFill><a:srgbClr val="BFBFBF"/></a:solidFill></a:ln>';
+const AUTO_BG_TEXT_LINE =
+  '<a:ln w="9525"><a:solidFill><a:srgbClr val="BFBFBF"/></a:solidFill></a:ln>';
 
 function buildTextOnShapeLine(s: AnnotationShape): string {
   const stroke = chex(s.stroke ?? "#000000");

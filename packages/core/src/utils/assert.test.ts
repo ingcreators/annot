@@ -18,9 +18,7 @@ describe("assertNonNull", () => {
   });
 
   it("throws when the value is null", () => {
-    expect(() => assertNonNull(null, "missing root")).toThrow(
-      "Assertion failed: missing root",
-    );
+    expect(() => assertNonNull(null, "missing root")).toThrow("Assertion failed: missing root");
   });
 
   it("throws when the value is undefined", () => {

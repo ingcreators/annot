@@ -135,9 +135,7 @@ function makeSticky(): SVGGElement {
     "data-font-size": "16",
     "data-font-family": "Annot Sans",
   }) as SVGGElement;
-  g.appendChild(
-    svgEl("rect", { x: "0", y: "0", width: "200", height: "80", fill: "#fff8dc" }),
-  );
+  g.appendChild(svgEl("rect", { x: "0", y: "0", width: "200", height: "80", fill: "#fff8dc" }));
   const text = svgEl("text", {
     x: "10",
     y: "10",

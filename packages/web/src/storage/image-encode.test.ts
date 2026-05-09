@@ -34,13 +34,19 @@ describe("pickEncodeStrategy", () => {
 
   it("returns 'render-and-encode' when SVG present + format=png", () => {
     expect(
-      pickEncodeStrategy(record({ annotationsSvg: LONG_SVG, originalDataUrl: SOURCE_DATA_URL }), "png"),
+      pickEncodeStrategy(
+        record({ annotationsSvg: LONG_SVG, originalDataUrl: SOURCE_DATA_URL }),
+        "png",
+      ),
     ).toBe("render-and-encode");
   });
 
   it("returns 'render-only' when SVG present + format=jpg", () => {
     expect(
-      pickEncodeStrategy(record({ annotationsSvg: LONG_SVG, originalDataUrl: SOURCE_DATA_URL }), "jpg"),
+      pickEncodeStrategy(
+        record({ annotationsSvg: LONG_SVG, originalDataUrl: SOURCE_DATA_URL }),
+        "jpg",
+      ),
     ).toBe("render-only");
   });
 
@@ -101,8 +107,9 @@ function makeDeps(): BuildEditableImageDeps & {
   __optsSpy: ReturnType<typeof vi.fn>;
   __wrapSpy: ReturnType<typeof vi.fn>;
 } {
-  const renderSpy = vi.fn(async (_dataUrl: string, _svg: string, _w: number, _h: number) =>
-    "data:image/png;base64,RkFLRVJFTkRFUkVE",
+  const renderSpy = vi.fn(
+    async (_dataUrl: string, _svg: string, _w: number, _h: number) =>
+      "data:image/png;base64,RkFLRVJFTkRFUkVE",
   );
   const encodeSpy = vi.fn(async (_dataUrl: string, _opts: unknown) => ({
     dataUrl: "data:image/png;base64,RkFLRUVOQ09ERUQ=",

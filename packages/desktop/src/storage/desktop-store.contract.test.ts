@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
-import type { BuildEditableImageDeps } from "@ingcreators/annot-web/storage/image-encode";
+
 import { runStorageContract } from "@ingcreators/annot-web/storage/contract.test-helpers";
+import type { BuildEditableImageDeps } from "@ingcreators/annot-web/storage/image-encode";
 import { createMockDesktopFs } from "./desktop-fs.test-mock.js";
 import { DesktopStore } from "./desktop-store.js";
 

@@ -17,14 +17,14 @@
  * need.
  */
 
-import { setTooltip } from "./tooltip.js";
 import { builtinIcon, renderIconHtml } from "@ingcreators/annot-core";
 import type { ArrowSpec } from "@ingcreators/annot-core/editor/arrow-markers";
 import { computeArrowParts } from "@ingcreators/annot-core/editor/arrow-markers";
+import type { ArrowDim, ArrowShape } from "@ingcreators/annot-core/editor/tool-options";
+import { openAnchoredPopover } from "./anchored-popover.js";
 import { createColorPalette } from "./color-palette.js";
 import { createCustomSelect } from "./custom-select.js";
-import { openAnchoredPopover } from "./anchored-popover.js";
-import type { ArrowDim, ArrowShape } from "@ingcreators/annot-core/editor/tool-options";
+import { setTooltip } from "./tooltip.js";
 
 export interface ArrowEndsState {
   start: ArrowSpec;

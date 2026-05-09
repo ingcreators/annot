@@ -17,10 +17,7 @@ export default defineConfig({
       // them alongside the editor package, so bundling them in
       // would duplicate the code and break instanceof checks across
       // package boundaries.
-      external: [
-        /^@ingcreators\//,
-        /^@tauri-apps\//,
-      ],
+      external: [/^@ingcreators\//, /^@tauri-apps\//],
     },
   },
 });

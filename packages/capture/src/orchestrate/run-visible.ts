@@ -8,10 +8,7 @@
  */
 
 import type { CaptureHost } from "../host.js";
-import {
-  beginCapturePrep,
-  endCapturePrep,
-} from "./capture-prep.js";
+import { beginCapturePrep, endCapturePrep } from "./capture-prep.js";
 import { delay, POST_HIDE_PAINT_MS } from "./constants.js";
 import { withEmulatedViewport } from "./emulation.js";
 import type { CaptureFrame, CaptureResult } from "./frame.js";

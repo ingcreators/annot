@@ -54,15 +54,9 @@
 
 import type { PageMetadata } from "@ingcreators/annot-core";
 import type { EncodeResult } from "@ingcreators/annot-core/encode";
-import type {
-  CaptureRect,
-  CaptureSegment,
-} from "@ingcreators/annot-core/utils/types";
+import type { CaptureRect, CaptureSegment } from "@ingcreators/annot-core/utils/types";
 import type { BatchItem } from "./encode/worker-pool.js";
-import type {
-  BackgroundToContentMessage,
-  ContentToBackgroundMessage,
-} from "./shared/messages.js";
+import type { BackgroundToContentMessage, ContentToBackgroundMessage } from "./shared/messages.js";
 import type { Settings } from "./shared/settings.js";
 
 // Re-export `BatchItem` so consumers reaching for the host
@@ -149,10 +143,7 @@ export interface CaptureHost {
    *  binds to a specific response shape (e.g. `get-page-dimensions`
    *  → `PageDimensions`); the wire is fundamentally untyped, so the
    *  caller narrows. */
-  sendToContent<T = unknown>(
-    target: CaptureTargetRef,
-    msg: BackgroundToContentMessage,
-  ): Promise<T>;
+  sendToContent<T = unknown>(target: CaptureTargetRef, msg: BackgroundToContentMessage): Promise<T>;
 
   /** Subscribe to one-shot events from the content side. Returns an
    *  unsubscribe function. The orchestrator uses this for area-select
@@ -168,10 +159,7 @@ export interface CaptureHost {
    *  `area` (in viewport CSS pixels). Returns null when injection
    *  isn't possible (e.g. chrome:// URLs) or fails for any reason —
    *  callers treat metadata as best-effort. */
-  requestPageMetadata(
-    target: CaptureTargetRef,
-    area?: CaptureRect,
-  ): Promise<PageMetadata | null>;
+  requestPageMetadata(target: CaptureTargetRef, area?: CaptureRect): Promise<PageMetadata | null>;
 
   /** Stitch a vertical scroll capture's segments into one PNG. */
   stitchSegments(segments: CaptureSegment[], width: number, height: number): Promise<string>;

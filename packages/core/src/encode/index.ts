@@ -17,11 +17,7 @@
  * (Pako DEFLATE level 9) — no re-quantization, no RGBA round-trip.
  */
 import init, { quantize_image } from "@ingcreators/annot-imagequant";
-import {
-  DEFAULT_ENCODE_OPTIONS,
-  type EncodeOptions,
-  type EncodeResult,
-} from "./options.js";
+import { DEFAULT_ENCODE_OPTIONS, type EncodeOptions, type EncodeResult } from "./options.js";
 import { encodePng8 } from "./png8.js";
 
 export {

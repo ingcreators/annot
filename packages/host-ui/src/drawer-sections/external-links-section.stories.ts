@@ -65,8 +65,16 @@ export const MultiplePluginLinks: Story = {
   args: {
     links: [
       { label: "View on GitHub", url: "https://github.com/foo", icon: builtinIcon("open_in_new") },
-      { label: "JIRA ticket", url: "https://example.atlassian.net/browse/FOO-123", icon: builtinIcon("task") },
-      { label: "Team thread", url: "https://example.slack.com/archives/ABC", icon: builtinIcon("chat") },
+      {
+        label: "JIRA ticket",
+        url: "https://example.atlassian.net/browse/FOO-123",
+        icon: builtinIcon("task"),
+      },
+      {
+        label: "Team thread",
+        url: "https://example.slack.com/archives/ABC",
+        icon: builtinIcon("chat"),
+      },
     ],
   },
 };

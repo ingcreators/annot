@@ -48,8 +48,6 @@ import {
   type ToolPanelControlDef,
   type ToolPanelSection,
 } from "@ingcreators/annot-core/editor";
-import { coerceToLogicalFamily } from "@ingcreators/annot-core/headless";
-import type { CanvasManager } from "@ingcreators/annot-editor";
 import type {
   ArrowDim,
   ArrowShape,
@@ -58,10 +56,10 @@ import type {
   TextVerticalAnchor,
   ToolOptions,
 } from "@ingcreators/annot-core/editor/tool-options";
+import { coerceToLogicalFamily } from "@ingcreators/annot-core/headless";
 import { computeDasharray } from "@ingcreators/annot-core/utils";
+import type { CanvasManager } from "@ingcreators/annot-editor";
 import { createCustomSelect } from "@ingcreators/annot-editor/custom-select";
-import { setTooltip } from "@ingcreators/annot-editor/tooltip";
-import { createBuiltinIcon } from "./annot-icon-imperative.js";
 import {
   createArrowEndsRows,
   createColorPullButton,
@@ -70,6 +68,8 @@ import {
   createPropertySection,
 } from "@ingcreators/annot-editor/property-controls";
 import type { FreehandTool } from "@ingcreators/annot-editor/tools/freehand-tool";
+import { setTooltip } from "@ingcreators/annot-editor/tooltip";
+import { createBuiltinIcon } from "./annot-icon-imperative.js";
 
 // ─── Public surface ──────────────────────────────────────────────────
 
@@ -130,9 +130,7 @@ export function populateToolPropertyPanel(
 
   // Filter visible controls against the current preset (e.g. Redact
   // Fill row hides unless redactStyle === "solid").
-  const visible = meta.panelControls.filter(
-    (c) => !c.visibleWhen || c.visibleWhen(preset),
-  );
+  const visible = meta.panelControls.filter((c) => !c.visibleWhen || c.visibleWhen(preset));
 
   // Group by section, preserving array order. Consecutive entries
   // with the same section share one `pp-section`.
@@ -333,9 +331,7 @@ function renderHighlightTypeChipsRow(
   row.className = "pp-type-row";
   for (const opt of HIGHLIGHT_COLORS) {
     const chip = document.createElement("div");
-    chip.className = `prop-choice-chip pp-color-chip${
-      currentColor === opt.value ? " active" : ""
-    }`;
+    chip.className = `prop-choice-chip pp-color-chip${currentColor === opt.value ? " active" : ""}`;
     chip.style.setProperty("--swatch-color", opt.value);
     setTooltip(chip, opt.label);
     chip.addEventListener("click", () => {
@@ -449,11 +445,7 @@ function metaFor(id: ToolPanelAdapterId): ToolPanelAdapterMetadata {
   return selectionDefMetadata(id) ?? ({} as ToolPanelAdapterMetadata);
 }
 
-function renderStrokeColorRow(
-  toolId: string,
-  preset: ToolOptions,
-  sync: () => void,
-): HTMLElement {
+function renderStrokeColorRow(toolId: string, preset: ToolOptions, sync: () => void): HTMLElement {
   // Marker's Line > Color falls back to white when strokeColor is
   // empty; every other tool uses the literal preset value.
   const initial = toolId === "marker" ? preset.strokeColor || "#ffffff" : preset.strokeColor;
@@ -475,11 +467,7 @@ function renderStrokeColorRow(
  *  shapes that genuinely use thick borders. */
 const MARKER_STROKE_WIDTH_OVERRIDE = { min: 0, max: 20, defaultValue: 1.5 };
 
-function renderStrokeWidthRow(
-  toolId: string,
-  preset: ToolOptions,
-  sync: () => void,
-): HTMLElement {
+function renderStrokeWidthRow(toolId: string, preset: ToolOptions, sync: () => void): HTMLElement {
   const meta = metaFor(PROPERTY_CONTROL_IDS.strokeWidth);
   const isMarker = toolId === "marker";
   // The Tool side uses a tighter `max` for non-marker tools too
@@ -488,12 +476,12 @@ function renderStrokeWidthRow(
   // SELECTION registry because the SELECTION panel deliberately
   // permits the wider 200pt range for users editing existing
   // shapes who started outside Annot. Phase 5 cleanup may revisit.
-  const min = isMarker ? MARKER_STROKE_WIDTH_OVERRIDE.min : meta.min ?? 0.25;
+  const min = isMarker ? MARKER_STROKE_WIDTH_OVERRIDE.min : (meta.min ?? 0.25);
   const max = isMarker ? MARKER_STROKE_WIDTH_OVERRIDE.max : 40;
   const step = meta.step ?? 0.25;
   const unit = meta.unit ?? "pt";
   const initial = isMarker
-    ? preset.strokeWidth ?? MARKER_STROKE_WIDTH_OVERRIDE.defaultValue
+    ? (preset.strokeWidth ?? MARKER_STROKE_WIDTH_OVERRIDE.defaultValue)
     : preset.strokeWidth;
   return createPropertyRow(
     meta.label ?? "Width",
@@ -586,11 +574,7 @@ const FILL_COLOR_OVERRIDES: Readonly<
   },
 };
 
-function renderFillColorRow(
-  toolId: string,
-  preset: ToolOptions,
-  sync: () => void,
-): HTMLElement {
+function renderFillColorRow(toolId: string, preset: ToolOptions, sync: () => void): HTMLElement {
   const meta = metaFor(PROPERTY_CONTROL_IDS.fillColor);
   const ovr = FILL_COLOR_OVERRIDES[toolId];
   const label = ovr?.label ?? meta.label ?? "Color";
@@ -616,11 +600,7 @@ const FONT_SIZE_TOOL_MAX: Readonly<Record<string, number>> = {
   marker: 48,
 };
 
-function renderFontSizeRow(
-  toolId: string,
-  preset: ToolOptions,
-  sync: () => void,
-): HTMLElement {
+function renderFontSizeRow(toolId: string, preset: ToolOptions, sync: () => void): HTMLElement {
   const meta = metaFor(PROPERTY_CONTROL_IDS.fontSize);
   const max = FONT_SIZE_TOOL_MAX[toolId] ?? meta.max ?? 96;
   return createPropertyRow(

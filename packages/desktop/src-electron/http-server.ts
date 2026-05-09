@@ -25,12 +25,7 @@
  */
 
 import { promises as fs } from "node:fs";
-import {
-  createServer,
-  type IncomingMessage,
-  type Server,
-  type ServerResponse,
-} from "node:http";
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { join } from "node:path";
 
 export const HTTP_SERVER_PORT = 19530;
@@ -98,7 +93,7 @@ export async function startHttpServer(opts: HttpServerOptions): Promise<HttpServ
 
   const address = server.address();
   const resolvedPort =
-    address && typeof address === "object" ? address.port : opts.port ?? HTTP_SERVER_PORT;
+    address && typeof address === "object" ? address.port : (opts.port ?? HTTP_SERVER_PORT);
 
   return {
     port: resolvedPort,

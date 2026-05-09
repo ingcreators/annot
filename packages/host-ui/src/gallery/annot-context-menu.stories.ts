@@ -12,7 +12,7 @@
  */
 
 import type { Meta, StoryObj } from "@storybook/web-components-vite";
-import { closeContextMenu, openContextMenu, type MenuItem } from "./annot-context-menu.js";
+import { closeContextMenu, type MenuItem, openContextMenu } from "./annot-context-menu.js";
 
 interface Args {
   items: MenuItem[];

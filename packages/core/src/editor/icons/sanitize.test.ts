@@ -12,7 +12,8 @@ import { sanitizeIconSvg } from "./sanitize.js";
 
 describe("sanitizeIconSvg — accepts well-formed icons", () => {
   it("round-trips a plain <svg>/<path>", () => {
-    const input = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M0 0h24v24H0z"/></svg>';
+    const input =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M0 0h24v24H0z"/></svg>';
     const out = sanitizeIconSvg(input);
     expect(out).toContain("<svg");
     expect(out).toContain('viewBox="0 0 24 24"');
@@ -20,7 +21,8 @@ describe("sanitizeIconSvg — accepts well-formed icons", () => {
   });
 
   it("preserves currentColor + aria-hidden", () => {
-    const input = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M0 0h24v24H0z"/></svg>';
+    const input =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M0 0h24v24H0z"/></svg>';
     const out = sanitizeIconSvg(input);
     expect(out).toContain('fill="currentColor"');
     expect(out).toContain('aria-hidden="true"');
@@ -77,8 +79,7 @@ describe("sanitizeIconSvg — attack vectors", () => {
   });
 
   it("rejects javascript: in <use href>", () => {
-    const input =
-      '<svg xmlns="http://www.w3.org/2000/svg"><use href="javascript:alert(1)"/></svg>';
+    const input = '<svg xmlns="http://www.w3.org/2000/svg"><use href="javascript:alert(1)"/></svg>';
     const out = sanitizeIconSvg(input);
     expect(out ?? "").not.toContain("javascript:");
   });
@@ -112,7 +113,7 @@ describe("sanitizeIconSvg — attack vectors", () => {
     const out = sanitizeIconSvg(input);
     expect(out ?? "").not.toContain("<style");
     expect(out ?? "").not.toContain("javascript:");
-    expect(out ?? "").not.toContain('style=');
+    expect(out ?? "").not.toContain("style=");
   });
 
   it("rejects <a> element entirely (not in allow-list)", () => {

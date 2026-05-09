@@ -148,9 +148,7 @@ class AnnotEditorProvider implements vscode.CustomEditorProvider<AnnotDocument> 
     const webview = webviewPanel.webview;
     webview.options = {
       enableScripts: true,
-      localResourceRoots: [
-        vscode.Uri.joinPath(this.context.extensionUri, "dist", "webview"),
-      ],
+      localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, "dist", "webview")],
     };
     webview.html = await this.#renderHtml(webview);
 
@@ -158,10 +156,7 @@ class AnnotEditorProvider implements vscode.CustomEditorProvider<AnnotDocument> 
     // is disposed. The status item is owned by the webview
     // lifecycle so two open editors don't fight over a single
     // global item.
-    const statusItem = vscode.window.createStatusBarItem(
-      vscode.StatusBarAlignment.Right,
-      100,
-    );
+    const statusItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
     statusItem.text = "$(sync~spin) Annot";
     statusItem.tooltip = `Annot — ${path.basename(document.uri.fsPath)}`;
     statusItem.show();
@@ -278,9 +273,7 @@ class AnnotEditorProvider implements vscode.CustomEditorProvider<AnnotDocument> 
   ): Promise<Uint8Array> {
     const panel = panelByDocument.get(document);
     if (!panel) {
-      throw new Error(
-        `Annot: no live webview for ${path.basename(document.uri.fsPath)}`,
-      );
+      throw new Error(`Annot: no live webview for ${path.basename(document.uri.fsPath)}`);
     }
     const id = nextSaveRequestId++;
     return new Promise<Uint8Array>((resolve, reject) => {
@@ -295,8 +288,14 @@ class AnnotEditorProvider implements vscode.CustomEditorProvider<AnnotDocument> 
       // Wrap so the timer clears whichever way we resolve.
       const wrapped = pendingSaveRequests.get(id)!;
       pendingSaveRequests.set(id, {
-        resolve: (b) => { dispose(); wrapped.resolve(b); },
-        reject: (e) => { dispose(); wrapped.reject(e); },
+        resolve: (b) => {
+          dispose();
+          wrapped.resolve(b);
+        },
+        reject: (e) => {
+          dispose();
+          wrapped.reject(e);
+        },
       });
       void panel.webview.postMessage({ type: "save", id });
     });
@@ -305,11 +304,7 @@ class AnnotEditorProvider implements vscode.CustomEditorProvider<AnnotDocument> 
   /** Update the status bar item attached to the document's
    *  panel. No-op when the panel isn't active or has been
    *  disposed. */
-  #setStatusForPanel(
-    document: AnnotDocument,
-    icon: string,
-    label: string,
-  ): void {
+  #setStatusForPanel(document: AnnotDocument, icon: string, label: string): void {
     const panel = panelByDocument.get(document);
     const setStatus = panel ? statusSetterByPanel.get(panel) : null;
     setStatus?.(icon, label);
@@ -431,20 +426,11 @@ class AnnotEditorProvider implements vscode.CustomEditorProvider<AnnotDocument> 
     }
     // Rewrite relative `<script src="…">` and `<link href="…">`
     // attributes to webview-safe URIs.
-    const webviewRoot = vscode.Uri.joinPath(
-      this.context.extensionUri,
-      "dist",
-      "webview",
-    );
-    return html.replace(
-      /(?:src|href)="(\.\/[^"]+|[^"/][^"]*)"/g,
-      (match, p1) => {
-        const assetUri = webview.asWebviewUri(
-          vscode.Uri.joinPath(webviewRoot, p1),
-        );
-        return match.replace(p1, assetUri.toString());
-      },
-    );
+    const webviewRoot = vscode.Uri.joinPath(this.context.extensionUri, "dist", "webview");
+    return html.replace(/(?:src|href)="(\.\/[^"]+|[^"/][^"]*)"/g, (match, p1) => {
+      const assetUri = webview.asWebviewUri(vscode.Uri.joinPath(webviewRoot, p1));
+      return match.replace(p1, assetUri.toString());
+    });
   }
 }
 
@@ -492,9 +478,7 @@ async function cmdRevealInExplorer(): Promise<void> {
     await vscode.commands.executeCommand("revealFileInOS", active.document.uri);
     return;
   }
-  void vscode.window.showInformationMessage(
-    "Annot: no Annot file is currently active.",
-  );
+  void vscode.window.showInformationMessage("Annot: no Annot file is currently active.");
 }
 
 /**
@@ -547,9 +531,7 @@ async function cmdNewFromImage(): Promise<void> {
     await vscode.workspace.fs.writeFile(dest, bytes);
     await vscode.commands.executeCommand("vscode.openWith", dest, VIEW_TYPE);
   } catch (err) {
-    void vscode.window.showErrorMessage(
-      `Annot: failed to create new annotation: ${err}`,
-    );
+    void vscode.window.showErrorMessage(`Annot: failed to create new annotation: ${err}`);
   }
 }
 
@@ -621,21 +603,18 @@ async function cmdNewFromClipboard(): Promise<void> {
   // doesn't carry an image, the placeholder remains and the
   // user gets a blank canvas to draw on.
   const PLACEHOLDER_PNG = new Uint8Array([
-    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,
-    0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-    0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4, 0x89, 0x00, 0x00, 0x00,
-    0x0d, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00,
-    0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00, 0x00, 0x00, 0x00, 0x49,
-    0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
+    0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4,
+    0x89, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00,
+    0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae,
+    0x42, 0x60, 0x82,
   ]);
 
   try {
     await vscode.workspace.fs.writeFile(dest, PLACEHOLDER_PNG);
     await vscode.commands.executeCommand("vscode.openWith", dest, VIEW_TYPE);
   } catch (err) {
-    void vscode.window.showErrorMessage(
-      `Annot: failed to create clipboard annotation: ${err}`,
-    );
+    void vscode.window.showErrorMessage(`Annot: failed to create clipboard annotation: ${err}`);
   }
 }
 

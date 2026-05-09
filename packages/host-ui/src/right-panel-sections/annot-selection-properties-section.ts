@@ -18,8 +18,8 @@
  * listeners survive mode switches.
  */
 
-import type { UISection } from "../ui-section.js";
 import { html, LitElement } from "../lit.js";
+import type { UISection } from "../ui-section.js";
 
 export class AnnotRightPanelSelectionPropertiesSectionElement extends LitElement {
   static override properties = {
@@ -110,9 +110,7 @@ export interface SelectionPropertiesSectionDeps {
   computeTitle(elements: SVGElement[]): string;
 }
 
-export function createSelectionPropertiesSection(
-  deps: SelectionPropertiesSectionDeps,
-): UISection {
+export function createSelectionPropertiesSection(deps: SelectionPropertiesSectionDeps): UISection {
   let el: AnnotRightPanelSelectionPropertiesSectionElement | null = null;
   const sync = (ctx: { setTitle: (t: string) => void }) => {
     if (!el) return;

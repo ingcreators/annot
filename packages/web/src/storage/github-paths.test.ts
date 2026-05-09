@@ -2,13 +2,7 @@
 // any other DOM-ish globals — just string math.
 
 import { describe, expect, it } from "vitest";
-import {
-  commitMessage,
-  contentsUrl,
-  encodePath,
-  fullPath,
-  relPath,
-} from "./github-paths.js";
+import { commitMessage, contentsUrl, encodePath, fullPath, relPath } from "./github-paths.js";
 
 describe("fullPath", () => {
   it("returns relPath verbatim when basePath is empty", () => {
@@ -47,9 +41,7 @@ describe("relPath", () => {
 
 describe("encodePath", () => {
   it("encodes spaces as %20 in each segment", () => {
-    expect(encodePath("a folder/file with space.png")).toBe(
-      "a%20folder/file%20with%20space.png",
-    );
+    expect(encodePath("a folder/file with space.png")).toBe("a%20folder/file%20with%20space.png");
   });
 
   it("preserves slashes between segments", () => {

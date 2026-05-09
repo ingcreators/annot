@@ -17,10 +17,7 @@
  *   - storage providers (device-store / google-drive-store) when re-encoding
  *     the flattened "render with annotations baked in" output.
  */
-import {
-  DEFAULT_ENCODE_OPTIONS,
-  type EncodeOptions,
-} from "@ingcreators/annot-core/encode/options";
+import { DEFAULT_ENCODE_OPTIONS, type EncodeOptions } from "@ingcreators/annot-core/encode/options";
 
 const STORAGE_KEY = "annot-encode-options";
 

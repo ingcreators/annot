@@ -64,7 +64,7 @@ import {
 import type { PageMetadata } from "@ingcreators/annot-core/storage";
 import type { SelectionManager } from "@ingcreators/annot-editor";
 import { type CanvasManager, type History, PropertyPanel } from "@ingcreators/annot-editor";
-import type { UISection, UISectionContext, UISectionLifecycle } from "./ui-section.js";
+import type { Toolbar } from "@ingcreators/annot-host-ui/toolbar";
 import { html, LitElement, unsafeHTML } from "./lit.js";
 // `logger` (PWA's centralised log shim from `packages/web/src/logger.ts`)
 // is a host-side concern — editor-shell stays host-neutral, so the
@@ -75,7 +75,7 @@ import { html, LitElement, unsafeHTML } from "./lit.js";
 import { createPageElementsSection } from "./right-panel-sections/annot-page-elements-section.js";
 import { createSelectionPropertiesSection } from "./right-panel-sections/annot-selection-properties-section.js";
 import { createToolPropertiesSection } from "./right-panel-sections/annot-tool-properties-section.js";
-import type { Toolbar } from "@ingcreators/annot-host-ui/toolbar";
+import type { UISection, UISectionContext, UISectionLifecycle } from "./ui-section.js";
 import "./annot-apply-redactions-button.js";
 
 // =============================================================================

@@ -20,15 +20,12 @@ import type {
 } from "@ingcreators/annot-core/utils/types";
 import type { BatchItem } from "../encode/worker-pool.js";
 import type {
+  CapturedViewport,
   CaptureEncodeResult,
   CaptureHost,
-  CapturedViewport,
   CaptureTargetRef,
 } from "../host.js";
-import type {
-  BackgroundToContentMessage,
-  ContentToBackgroundMessage,
-} from "../shared/messages.js";
+import type { BackgroundToContentMessage, ContentToBackgroundMessage } from "../shared/messages.js";
 import { DEFAULT_SETTINGS, type Settings } from "../shared/settings.js";
 
 export type FakeCall =

@@ -1,5 +1,6 @@
 import { builtinIcon } from "@ingcreators/annot-core";
 import "./annot-icon.js";
+
 /**
  * `<annot-file-details-drawer>` — right-side slide-in panel that
  * consolidates every piece of information about the currently-open
@@ -34,18 +35,18 @@ import "./annot-icon.js";
  * learn a new affordance.
  */
 
-import { html, LitElement } from "./lit.js";
-import type { UISection, UISectionContext, UISectionLifecycle } from "./ui-section.js";
 import { createExternalLinksSection } from "./drawer-sections/external-links-section.js";
 import { createFileSection } from "./drawer-sections/file-section.js";
 import { createLastCommitSection } from "./drawer-sections/last-commit-section.js";
 import { createTagsSection } from "./drawer-sections/tags-section.js";
 import type { FileDetailsData, LastCommitInfo } from "./file-details-drawer-types.js";
+import { html, LitElement } from "./lit.js";
+import type { UISection, UISectionContext, UISectionLifecycle } from "./ui-section.js";
 
 export type { FileDetailsData, LastCommitInfo } from "./file-details-drawer-types.js";
 export {
-  validateFilename,
   estimateDataUrlBytes,
+  validateFilename,
 } from "./file-details-drawer-types.js";
 
 /** Built-in section ids exposed by the drawer. Used by

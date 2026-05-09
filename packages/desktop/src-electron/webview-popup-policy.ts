@@ -76,9 +76,7 @@ export const DEFAULT_POPUP_HEIGHT = 700;
  *  rather than the disposition because Chromium reports
  *  disposition `'new-window'` for both, but only popups carry
  *  explicit dimensions in features. */
-export function classifyWindowOpenRequest(
-  details: WindowOpenDetailsLike,
-): WindowOpenRouting {
+export function classifyWindowOpenRequest(details: WindowOpenDetailsLike): WindowOpenRouting {
   if (hasExplicitDimensions(details.features)) {
     return {
       kind: "popup",
@@ -100,10 +98,7 @@ export function hasExplicitDimensions(features: string): boolean {
 /** Parse a single numeric feature value (e.g. `width=600`). Returns
  *  `null` when missing or non-numeric so the caller can apply a
  *  fallback. */
-export function parseFeatureDim(
-  features: string,
-  key: "width" | "height",
-): number | null {
+export function parseFeatureDim(features: string, key: "width" | "height"): number | null {
   const m = new RegExp(`(?:^|,)\\s*${key}\\s*=\\s*(\\d+)`, "i").exec(features);
   if (!m) return null;
   const n = Number(m[1]);

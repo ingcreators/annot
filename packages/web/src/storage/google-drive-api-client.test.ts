@@ -75,13 +75,13 @@ describe("GoogleDriveApiClient.request — error mapping", () => {
     const longBody = "x".repeat(500);
     const fetchImpl = scriptFetch([{ status: 500, body: longBody }]);
     const client = createGoogleDriveApiClient("tok-1", { fetchImpl });
-    await expect(
-      client.request("https://www.googleapis.com/drive/v3/files"),
-    ).rejects.toSatisfy((err) => {
-      const msg = (err as DriveError).message;
-      // "Drive API 500: " (15 chars) + 200 body chars = 215 total.
-      return msg.length === 215;
-    });
+    await expect(client.request("https://www.googleapis.com/drive/v3/files")).rejects.toSatisfy(
+      (err) => {
+        const msg = (err as DriveError).message;
+        // "Drive API 500: " (15 chars) + 200 body chars = 215 total.
+        return msg.length === 215;
+      },
+    );
   });
 });
 
@@ -89,9 +89,9 @@ describe("GoogleDriveApiClient.request — 401 token refresh", () => {
   it("throws on 401 when no refresher is registered", async () => {
     const fetchImpl = scriptFetch([{ status: 401, body: "Unauthorized" }]);
     const client = createGoogleDriveApiClient("tok-stale", { fetchImpl });
-    await expect(
-      client.request("https://www.googleapis.com/drive/v3/files"),
-    ).rejects.toMatchObject({ status: 401 });
+    await expect(client.request("https://www.googleapis.com/drive/v3/files")).rejects.toMatchObject(
+      { status: 401 },
+    );
     expect(fetchImpl.calls).toHaveLength(1);
   });
 
@@ -113,9 +113,9 @@ describe("GoogleDriveApiClient.request — 401 token refresh", () => {
     const fetchImpl = scriptFetch([{ status: 401, body: "Unauthorized" }]);
     const client = createGoogleDriveApiClient("tok-stale", { fetchImpl });
     client.setTokenRefresher(async () => null);
-    await expect(
-      client.request("https://www.googleapis.com/drive/v3/files"),
-    ).rejects.toMatchObject({ status: 401 });
+    await expect(client.request("https://www.googleapis.com/drive/v3/files")).rejects.toMatchObject(
+      { status: 401 },
+    );
     expect(fetchImpl.calls).toHaveLength(1);
   });
 
@@ -160,8 +160,8 @@ describe("GoogleDriveApiClient.request — 401 token refresh", () => {
     ]);
     const client = createGoogleDriveApiClient("tok-stale", { fetchImpl });
     client.setTokenRefresher(async () => "tok-fresh");
-    await expect(
-      client.request("https://www.googleapis.com/drive/v3/files"),
-    ).rejects.toMatchObject({ status: 500 });
+    await expect(client.request("https://www.googleapis.com/drive/v3/files")).rejects.toMatchObject(
+      { status: 500 },
+    );
   });
 });

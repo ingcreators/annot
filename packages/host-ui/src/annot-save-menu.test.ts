@@ -34,10 +34,7 @@ vi.mock("@ingcreators/annot-editor", () => ({
 const { saveToFile, downloadAsImage, exportPptx } = exportMocks;
 
 import "./annot-save-menu.js";
-import {
-  AnnotSaveMenuElement,
-  type SaveMenuContext,
-} from "./annot-save-menu.js";
+import { AnnotSaveMenuElement, type SaveMenuContext } from "./annot-save-menu.js";
 
 function makeAnchor(): HTMLElement {
   const a = document.createElement("button");
@@ -70,9 +67,9 @@ describe("AnnotSaveMenuElement.openFor", () => {
     AnnotSaveMenuElement.openFor(anchor, fakeCtx());
     const menu = document.querySelector("annot-save-menu") as AnnotSaveMenuElement;
     await menu.updateComplete;
-    const labels = Array.from(
-      menu.querySelectorAll<HTMLButtonElement>(".copy-dropdown-item"),
-    ).map((b) => b.textContent?.trim());
+    const labels = Array.from(menu.querySelectorAll<HTMLButtonElement>(".copy-dropdown-item")).map(
+      (b) => b.textContent?.trim(),
+    );
     expect(labels).toEqual([
       "Download SVG",
       "Download JPG (re-editable)",

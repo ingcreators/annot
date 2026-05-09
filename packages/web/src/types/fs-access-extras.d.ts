@@ -27,7 +27,14 @@ interface FileSystemHandlePermissionDescriptor {
 
 interface ShowDirectoryPickerOptions {
   mode?: "read" | "readwrite";
-  startIn?: FileSystemHandle | "desktop" | "documents" | "downloads" | "music" | "pictures" | "videos";
+  startIn?:
+    | FileSystemHandle
+    | "desktop"
+    | "documents"
+    | "downloads"
+    | "music"
+    | "pictures"
+    | "videos";
   id?: string;
 }
 

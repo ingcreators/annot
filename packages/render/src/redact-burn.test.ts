@@ -150,7 +150,7 @@ describe("classifyRedact", () => {
     expect(classifyRedact(el as unknown as SVGElement)).toBeNull();
   });
 
-  it("classifies a <rect data-redact-style=\"solid\"> with fill", () => {
+  it('classifies a <rect data-redact-style="solid"> with fill', () => {
     const el = document.createElementNS(SVG_NS, "rect");
     el.setAttribute("data-redact-style", "solid");
     el.setAttribute("x", "5");
@@ -232,7 +232,7 @@ describe("classifyRedact", () => {
     expect(classifyRedact(el as unknown as SVGElement)?.rotation).toBe(45);
   });
 
-  it("treats data-rot=\"\" / non-numeric as 0", () => {
+  it('treats data-rot="" / non-numeric as 0', () => {
     const el = document.createElementNS(SVG_NS, "rect");
     el.setAttribute("data-redact-style", "solid");
     el.setAttribute("width", "10");
@@ -241,7 +241,7 @@ describe("classifyRedact", () => {
     expect(classifyRedact(el as unknown as SVGElement)?.rotation).toBe(0);
   });
 
-  it("reads data-flip-h / data-flip-v as flipH / flipV (\"1\" = true)", () => {
+  it('reads data-flip-h / data-flip-v as flipH / flipV ("1" = true)', () => {
     const el = document.createElementNS(SVG_NS, "rect");
     el.setAttribute("data-redact-style", "solid");
     el.setAttribute("width", "10");
@@ -253,7 +253,7 @@ describe("classifyRedact", () => {
     expect(out?.flipV).toBe(true);
   });
 
-  it("treats any non-\"1\" value of data-flip-* as false", () => {
+  it('treats any non-"1" value of data-flip-* as false', () => {
     const el = document.createElementNS(SVG_NS, "rect");
     el.setAttribute("data-redact-style", "solid");
     el.setAttribute("width", "10");
@@ -373,9 +373,7 @@ describe("burnRedactionsIntoBitmap dispatch", () => {
 
   it("rejects when the base bitmap has zero natural dimensions", async () => {
     const { base } = setupMockedCanvas(0, 0);
-    await expect(burnRedactionsIntoBitmap(base, [])).rejects.toThrow(
-      /zero dimension/,
-    );
+    await expect(burnRedactionsIntoBitmap(base, [])).rejects.toThrow(/zero dimension/);
   });
 });
 

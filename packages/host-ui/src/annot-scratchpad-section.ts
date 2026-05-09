@@ -79,9 +79,7 @@ export class AnnotScratchpadSectionElement extends LitElement {
       <div class="scratchpad-grid">
         ${this.items.map((item) => this.#renderThumbnail(item))}
       </div>
-      ${this.items.length === 0
-        ? html`<p class="scratchpad-empty">${EMPTY_HINT}</p>`
-        : nothing}
+      ${this.items.length === 0 ? html`<p class="scratchpad-empty">${EMPTY_HINT}</p>` : nothing}
     `;
   }
 

@@ -11,6 +11,7 @@
  * Phase 1B of `docs/plans/desktop-browser-mode.md`.
  */
 
+import type { CaptureFrame } from "@ingcreators/annot-capture/orchestrate";
 import {
   beginCapturePrep,
   endCapturePrep,
@@ -19,7 +20,6 @@ import {
   runScrollCapture,
   runVisibleCapture,
 } from "@ingcreators/annot-capture/orchestrate";
-import type { CaptureFrame } from "@ingcreators/annot-capture/orchestrate";
 import { newIdB58 } from "@ingcreators/annot-core/utils";
 import { logger } from "../logger.js";
 import { encodeCapture } from "../shared/encode.js";
@@ -254,11 +254,7 @@ async function findAnnotTab(): Promise<chrome.tabs.Tab | undefined> {
  * Annot tab and dispatch an `annot-capture` event when one's open;
  * otherwise create a new tab.
  */
-async function openOrReuseEditorTab(
-  targetUrl: string,
-  path: string,
-  extId: string,
-): Promise<void> {
+async function openOrReuseEditorTab(targetUrl: string, path: string, extId: string): Promise<void> {
   const existing = await findAnnotTab();
   if (existing?.id) {
     try {
@@ -547,11 +543,9 @@ chrome.tabs.onUpdated.addListener((tabId, info, tab) => {
   if (info.status !== "complete") return;
   if (!clickState.active) return;
   if (!tab.url || !/^https?:|^file:/.test(tab.url)) return;
-  host
-    .injectContentScript({ id: tabId, windowId: tab.windowId, url: tab.url })
-    .then(() => {
-      chrome.tabs.sendMessage(tabId, { type: "click-capture-enable" }).catch(() => {});
-    });
+  host.injectContentScript({ id: tabId, windowId: tab.windowId, url: tab.url }).then(() => {
+    chrome.tabs.sendMessage(tabId, { type: "click-capture-enable" }).catch(() => {});
+  });
 });
 
 // Restore click-capture state across service-worker restarts.
@@ -874,4 +868,3 @@ chrome.runtime.onMessageExternal.addListener(
     return true; // keep channel open for async response
   },
 );
-

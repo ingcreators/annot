@@ -32,9 +32,7 @@ async function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T
   }
   const api = (window as unknown as { electronAPI?: ElectronApi }).electronAPI;
   if (!api) {
-    throw new Error(
-      "[desktop-bridge] window.electronAPI is missing — preload script not loaded?",
-    );
+    throw new Error("[desktop-bridge] window.electronAPI is missing — preload script not loaded?");
   }
   return api.invoke<T>(cmd, args);
 }

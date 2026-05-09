@@ -27,13 +27,13 @@
 
 import {
   DEFAULT_SETTINGS,
-  mergeSettings,
   type EmulationPreset,
   type ImageFormat,
+  mergeSettings,
   type OverlayMode,
   type Settings,
 } from "@ingcreators/annot-capture/shared";
-import { css, html, LitElement, type CSSResultGroup } from "./lit.js";
+import { type CSSResultGroup, css, html, LitElement } from "./lit.js";
 
 export interface CaptureSettingsChangeDetail {
   /** Validated, fully-formed Settings — always passed through
@@ -408,8 +408,9 @@ export class AnnotCaptureSettingsElement extends LitElement {
           </div>
         </div>
 
-        ${s.quality.format === "smart"
-          ? html`
+        ${
+          s.quality.format === "smart"
+            ? html`
               <div class="field">
                 <label for="smart-fallback">
                   Smart fallback (for photo-heavy pages)
@@ -445,7 +446,8 @@ export class AnnotCaptureSettingsElement extends LitElement {
                 </div>
               </div>
             `
-          : null}
+            : null
+        }
 
         <div class="field">
           <label for="jpeg-q">
@@ -524,8 +526,9 @@ export class AnnotCaptureSettingsElement extends LitElement {
           </div>
         </div>
 
-        ${s.emulation.enabled
-          ? html`
+        ${
+          s.emulation.enabled
+            ? html`
               <div class="field">
                 <label for="emulation-preset">Viewport preset</label>
                 <select
@@ -547,8 +550,9 @@ export class AnnotCaptureSettingsElement extends LitElement {
                 </select>
               </div>
 
-              ${s.emulation.preset === "custom"
-                ? html`
+              ${
+                s.emulation.preset === "custom"
+                  ? html`
                     <div class="field field-row">
                       <div>
                         <label for="custom-width">Width (px)</label>
@@ -576,9 +580,11 @@ export class AnnotCaptureSettingsElement extends LitElement {
                       </div>
                     </div>
                   `
-                : null}
+                  : null
+              }
             `
-          : null}
+            : null
+        }
       </section>
 
       <div class="options-footer">

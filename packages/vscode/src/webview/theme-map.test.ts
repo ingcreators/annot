@@ -33,15 +33,7 @@ import { describe, expect, it } from "vitest";
 import { VSCODE_THEME_MAP } from "./theme-map.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const EDITOR_CSS_PATH = resolve(
-  HERE,
-  "..",
-  "..",
-  "..",
-  "core",
-  "styles",
-  "editor.css",
-);
+const EDITOR_CSS_PATH = resolve(HERE, "..", "..", "..", "core", "styles", "editor.css");
 
 /**
  * Pull every `--annot-*` token *declared* in editor.css. We match
@@ -68,9 +60,7 @@ async function collectAnnotTokenDeclarations(): Promise<Set<string>> {
 
 describe("VSCODE_THEME_MAP schema integrity", () => {
   it("every key is an --annot-* token name", () => {
-    const offenders = Object.keys(VSCODE_THEME_MAP).filter(
-      (k) => !k.startsWith("--annot-"),
-    );
+    const offenders = Object.keys(VSCODE_THEME_MAP).filter((k) => !k.startsWith("--annot-"));
     expect(offenders).toEqual([]);
   });
 

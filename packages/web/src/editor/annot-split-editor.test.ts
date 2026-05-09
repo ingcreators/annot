@@ -61,7 +61,7 @@ describe("<annot-split-editor> — boundary state machine", () => {
   });
 
   it("renders one handle per boundary with correct data-value + position", async () => {
-    const el = mount({ width: 800, heights: [600, 600]});
+    const el = mount({ width: 800, heights: [600, 600] });
     await el.updateComplete;
     const handles = Array.from(el.querySelectorAll<HTMLElement>(".split-editor-handle"));
     expect(handles.length).toBe(1);
@@ -71,7 +71,9 @@ describe("<annot-split-editor> — boundary state machine", () => {
   it("clicking the handle's × button removes that boundary", async () => {
     const el = mount({ width: 800, heights: [600, 600, 400] });
     await el.updateComplete;
-    const removeBtn = el.querySelector<HTMLButtonElement>(".split-editor-handle .split-editor-handle-remove");
+    const removeBtn = el.querySelector<HTMLButtonElement>(
+      ".split-editor-handle .split-editor-handle-remove",
+    );
     removeBtn!.click();
     await el.updateComplete;
     expect(el.boundaries).toEqual([1200]);
@@ -93,7 +95,9 @@ describe("<annot-split-editor> — boundary state machine", () => {
     handle.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }));
     await el.updateComplete;
     expect(el.boundaries).toEqual([599]);
-    handle.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", shiftKey: true, bubbles: true }));
+    handle.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "ArrowDown", shiftKey: true, bubbles: true }),
+    );
     await el.updateComplete;
     expect(el.boundaries).toEqual([609]);
   });

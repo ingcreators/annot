@@ -18,7 +18,7 @@
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createCustomSelect, type CustomSelectOption } from "./custom-select.js";
+import { type CustomSelectOption, createCustomSelect } from "./custom-select.js";
 
 const OPTIONS: CustomSelectOption[] = [
   { value: "solid", label: "Solid", preview: "<i>solid</i>" },
@@ -179,9 +179,7 @@ describe("createCustomSelect popup", () => {
 describe("createCustomSelect selection", () => {
   it("clicking an option fires onChange with that option's value", () => {
     const onChange = vi.fn();
-    document.body.appendChild(
-      createCustomSelect({ options: OPTIONS, current: "solid", onChange }),
-    );
+    document.body.appendChild(createCustomSelect({ options: OPTIONS, current: "solid", onChange }));
     const btn = document.body.querySelector("button.pp-select") as HTMLButtonElement;
     btn.click();
     const items = document.body.querySelectorAll<HTMLButtonElement>(".pp-select-item");

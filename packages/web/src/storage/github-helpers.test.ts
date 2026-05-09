@@ -169,9 +169,9 @@ describe("parseGitHubErrorBody", () => {
   });
 
   it("does NOT flag plain 422s without 'sha' in the message", () => {
-    expect(
-      parseGitHubErrorBody(422, JSON.stringify({ message: "Validation failed" })),
-    ).toEqual({ detail: "Validation failed" });
+    expect(parseGitHubErrorBody(422, JSON.stringify({ message: "Validation failed" }))).toEqual({
+      detail: "Validation failed",
+    });
   });
 
   it("handles malformed JSON without throwing", () => {

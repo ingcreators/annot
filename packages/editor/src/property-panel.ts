@@ -496,11 +496,7 @@ export class PropertyPanel {
       for (const r of info.replacements) {
         if (r.oldEl === r.newEl) continue;
         const parent = r.newEl.parentElement as SVGElement | null;
-        if (
-          parent &&
-          parent.tagName === "g" &&
-          parent.getAttribute("data-type") === "shape"
-        ) {
+        if (parent && parent.tagName === "g" && parent.getAttribute("data-type") === "shape") {
           const tag = r.newEl.tagName;
           const rounded = r.newEl.hasAttribute("data-rounded");
           const kind = tag === "ellipse" ? "ellipse" : rounded ? "rounded" : "rect";

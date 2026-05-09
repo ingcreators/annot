@@ -18,11 +18,10 @@
  *     flag the renderer's `desktop-bridge.ts` checks.
  */
 
-import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
+import { contextBridge, type IpcRendererEvent, ipcRenderer } from "electron";
 
 const electronAPI = {
-  invoke: (channel: string, args?: unknown): Promise<unknown> =>
-    ipcRenderer.invoke(channel, args),
+  invoke: (channel: string, args?: unknown): Promise<unknown> => ipcRenderer.invoke(channel, args),
 
   /** Subscribe to a main→renderer event. Returns an unsubscribe
    *  fn; the renderer-side listener receives only the IPC

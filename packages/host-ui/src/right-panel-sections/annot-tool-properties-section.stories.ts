@@ -51,9 +51,7 @@ const meta: Meta<Args> = {
     heading.className = "editor-right-panel-section-title";
     heading.textContent = args.title;
     wrapper.appendChild(heading);
-    const section = document.createElement(
-      "annot-right-panel-tool-properties-section",
-    );
+    const section = document.createElement("annot-right-panel-tool-properties-section");
     section.toolId = args.toolId;
     section.toolbar = makeStubToolbar(args);
     section.setTitle = (t: string) => {

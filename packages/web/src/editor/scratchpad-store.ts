@@ -21,6 +21,7 @@
  */
 
 import { newIdB58 } from "@ingcreators/annot-core/utils";
+
 // `ScratchpadItem` moved to `@ingcreators/annot-host-ui/scratchpad-types`
 // in Phase 2e of `docs/plans/_done/vscode-extension-host.md`. Re-export
 // keeps existing `import { ScratchpadItem } from "./scratchpad-store.js"`
@@ -28,6 +29,7 @@ import { newIdB58 } from "@ingcreators/annot-core/utils";
 // implements `ScratchpadStoreLike` structurally — TypeScript's
 // structural typing means no `implements` clause is needed.
 export type { ScratchpadItem } from "@ingcreators/annot-host-ui/scratchpad-types";
+
 import type { ScratchpadItem } from "@ingcreators/annot-host-ui/scratchpad-types";
 
 const DB_NAME = "annot-scratchpad";

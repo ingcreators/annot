@@ -65,7 +65,11 @@ export function endXml(
 ): string {
   if (!shape || shape === "none") return "";
   const ooxmlType =
-    shape === "arrow" || shape === "triangle" || shape === "stealth" || shape === "diamond" || shape === "oval"
+    shape === "arrow" ||
+    shape === "triangle" ||
+    shape === "stealth" ||
+    shape === "diamond" ||
+    shape === "oval"
       ? shape
       : "triangle";
   const sizeMap = (s: string | undefined | null): "sm" | "med" | "lg" => {

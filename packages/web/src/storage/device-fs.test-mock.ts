@@ -132,7 +132,9 @@ export class MockFileHandle implements FileSystemFileHandle {
     return new File([this.#bytes as BlobPart], this.name);
   }
 
-  async createWritable(_options?: FileSystemCreateWritableOptions): Promise<FileSystemWritableFileStream> {
+  async createWritable(
+    _options?: FileSystemCreateWritableOptions,
+  ): Promise<FileSystemWritableFileStream> {
     return new MockWritable(this);
   }
 

@@ -101,10 +101,8 @@ export class AnnotSaveMenuElement extends LitElement {
     // dialog + plugin-fs write) — Electron handles the
     // `<a download>` event natively, so the same browser-style
     // download path serves the desktop host too.
-    actions["jpg-editable"] = () =>
-      downloadAsImage(ctx.canvas, "jpg", ctx.getCurrentFilename?.());
-    actions["png-editable"] = () =>
-      downloadAsImage(ctx.canvas, "png", ctx.getCurrentFilename?.());
+    actions["jpg-editable"] = () => downloadAsImage(ctx.canvas, "jpg", ctx.getCurrentFilename?.());
+    actions["png-editable"] = () => downloadAsImage(ctx.canvas, "png", ctx.getCurrentFilename?.());
     items.push(
       {
         id: "jpg-editable",

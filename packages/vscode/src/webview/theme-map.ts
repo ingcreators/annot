@@ -37,45 +37,33 @@
  */
 export const VSCODE_THEME_MAP: Record<string, string> = {
   // === Surface — page / panel backdrops + chromeless decoration ===
-  "--annot-bg-primary":
-    "var(--vscode-sideBar-background, var(--vscode-editor-background))",
+  "--annot-bg-primary": "var(--vscode-sideBar-background, var(--vscode-editor-background))",
   "--annot-bg-secondary": "var(--vscode-editor-background)",
-  "--annot-bg-panel":
-    "var(--vscode-editorWidget-background, var(--vscode-editor-background))",
-  "--annot-bg-panel-deep":
-    "var(--vscode-input-background, var(--vscode-editor-background))",
-  "--annot-border-color":
-    "var(--vscode-panel-border, var(--vscode-contrastBorder, transparent))",
-  "--annot-border-subtle":
-    "var(--vscode-widget-border, var(--vscode-panel-border, transparent))",
-  "--annot-shadow":
-    "var(--vscode-widget-shadow, 0 2px 8px rgba(0, 0, 0, 0.16))",
+  "--annot-bg-panel": "var(--vscode-editorWidget-background, var(--vscode-editor-background))",
+  "--annot-bg-panel-deep": "var(--vscode-input-background, var(--vscode-editor-background))",
+  "--annot-border-color": "var(--vscode-panel-border, var(--vscode-contrastBorder, transparent))",
+  "--annot-border-subtle": "var(--vscode-widget-border, var(--vscode-panel-border, transparent))",
+  "--annot-shadow": "var(--vscode-widget-shadow, 0 2px 8px rgba(0, 0, 0, 0.16))",
 
   // === Content — foreground text + reading primitives ===
   "--annot-text-primary": "var(--vscode-foreground)",
-  "--annot-text-secondary":
-    "var(--vscode-descriptionForeground, var(--vscode-foreground))",
+  "--annot-text-secondary": "var(--vscode-descriptionForeground, var(--vscode-foreground))",
   "--annot-text-muted":
     "var(--vscode-disabledForeground, var(--vscode-descriptionForeground, var(--vscode-foreground)))",
   "--annot-preview-line": "var(--vscode-foreground)",
 
   // === Accent — brand colour, active highlight, focus indicator ===
-  "--annot-accent":
-    "var(--vscode-button-background, var(--vscode-focusBorder))",
-  "--annot-accent-2":
-    "var(--vscode-charts-green, var(--vscode-button-background))",
+  "--annot-accent": "var(--vscode-button-background, var(--vscode-focusBorder))",
+  "--annot-accent-2": "var(--vscode-charts-green, var(--vscode-button-background))",
   "--annot-accent-bg":
     "var(--vscode-list-activeSelectionBackground, var(--vscode-list-hoverBackground))",
   "--annot-accent-hover":
     "var(--vscode-list-hoverBackground, var(--vscode-list-activeSelectionBackground))",
   "--annot-active-bg":
     "var(--vscode-list-activeSelectionBackground, var(--vscode-list-hoverBackground))",
-  "--annot-active-border":
-    "var(--vscode-focusBorder, var(--vscode-button-background))",
-  "--annot-chip-bg":
-    "var(--vscode-badge-background, var(--vscode-list-activeSelectionBackground))",
-  "--annot-focus-ring":
-    "var(--vscode-focusBorder, var(--vscode-button-background))",
+  "--annot-active-border": "var(--vscode-focusBorder, var(--vscode-button-background))",
+  "--annot-chip-bg": "var(--vscode-badge-background, var(--vscode-list-activeSelectionBackground))",
+  "--annot-focus-ring": "var(--vscode-focusBorder, var(--vscode-button-background))",
 
   // === Interaction — pointer + form states ===
   // Prefer `--vscode-toolbar-hoverBackground` over
@@ -102,13 +90,10 @@ export const VSCODE_THEME_MAP: Record<string, string> = {
   "--annot-choice-hover": "var(--vscode-list-hoverBackground, transparent)",
   "--annot-choice-active":
     "var(--vscode-list-activeSelectionBackground, var(--vscode-list-hoverBackground))",
-  "--annot-input-bg":
-    "var(--vscode-input-background, var(--vscode-editor-background))",
-  "--annot-input-border":
-    "var(--vscode-input-border, var(--vscode-panel-border, transparent))",
+  "--annot-input-bg": "var(--vscode-input-background, var(--vscode-editor-background))",
+  "--annot-input-border": "var(--vscode-input-border, var(--vscode-panel-border, transparent))",
 
   // === Canvas — editor backdrop + transparency-grid checkerboard ===
   "--annot-canvas-bg": "var(--vscode-editor-background)",
-  "--annot-canvas-check":
-    "var(--vscode-editorWidget-background, var(--vscode-editor-background))",
+  "--annot-canvas-check": "var(--vscode-editorWidget-background, var(--vscode-editor-background))",
 };

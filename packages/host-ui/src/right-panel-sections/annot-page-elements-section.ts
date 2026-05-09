@@ -16,13 +16,11 @@
  * legacy) skip the section's heading entirely.
  */
 
-import type { CanvasManager } from "@ingcreators/annot-editor";
-import type { History } from "@ingcreators/annot-editor";
-import type { SelectionManager } from "@ingcreators/annot-editor";
 import { builtinIcon } from "@ingcreators/annot-core";
 import type { PageElement } from "@ingcreators/annot-core/storage";
-import type { UISection } from "../ui-section.js";
+import type { CanvasManager, History, SelectionManager } from "@ingcreators/annot-editor";
 import { html, LitElement } from "../lit.js";
+import type { UISection } from "../ui-section.js";
 import "../annot-icon.js";
 import {
   fullDescriptionFor,
@@ -77,12 +75,13 @@ export class AnnotRightPanelPageElementsSectionElement extends LitElement {
           @input=${this.#onSearchInput}
         />
         <div class="editor-right-panel-elements-list">
-          ${filtered.length === 0
-            ? html`<div class="editor-right-panel-elements-empty">
+          ${
+            filtered.length === 0
+              ? html`<div class="editor-right-panel-elements-empty">
                 ${this.searchQuery ? "No matches." : "No interactive elements detected."}
               </div>`
-            : filtered.map(
-                (el) => html`
+              : filtered.map(
+                  (el) => html`
                   <button
                     type="button"
                     class="editor-right-panel-element-row"
@@ -104,7 +103,8 @@ export class AnnotRightPanelPageElementsSectionElement extends LitElement {
                     >
                   </button>
                 `,
-              )}
+                )
+          }
         </div>
       </div>
     `;

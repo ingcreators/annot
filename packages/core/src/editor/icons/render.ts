@@ -59,10 +59,7 @@ export function renderIconHtml(spec: IconSpec): string {
       // The double-quoted URL must not break out of the attribute.
       // Replace `"` with `&quot;` defensively even though our
       // safe-URL check already rejected javascript: / vbscript:.
-      const escaped = spec.url
-        .replace(/&/g, "&amp;")
-        .replace(/"/g, "&quot;")
-        .replace(/</g, "&lt;");
+      const escaped = spec.url.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
       return `<img src="${escaped}" alt="" aria-hidden="true" class="annot-icon-img"/>`;
     }
   }
@@ -79,10 +76,7 @@ export function renderIconHtml(spec: IconSpec): string {
 export function renderIconElement(spec: IconSpec, doc?: Document): Element | null {
   const html = renderIconHtml(spec);
   if (!html) return null;
-  const ownerDoc =
-    doc ??
-    (globalThis as unknown as { document?: Document }).document ??
-    null;
+  const ownerDoc = doc ?? (globalThis as unknown as { document?: Document }).document ?? null;
   if (!ownerDoc) return null;
   const tpl = ownerDoc.createElement("template");
   tpl.innerHTML = html;

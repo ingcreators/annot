@@ -16,8 +16,8 @@
  */
 
 import { builtinIcon, renderIconHtml } from "@ingcreators/annot-core";
-import { setTooltip } from "./tooltip.js";
 import { openAnchoredPopover } from "./anchored-popover.js";
+import { setTooltip } from "./tooltip.js";
 
 export interface CustomSelectOption {
   value: string;

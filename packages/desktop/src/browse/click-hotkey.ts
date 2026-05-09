@@ -30,11 +30,7 @@
  * — which is the level of abstraction the package guarantees.
  */
 
-import {
-  beginCapturePrep,
-  endCapturePrep,
-  delay,
-} from "@ingcreators/annot-capture/orchestrate";
+import { beginCapturePrep, delay, endCapturePrep } from "@ingcreators/annot-capture/orchestrate";
 import type { ContentToBackgroundMessage } from "@ingcreators/annot-capture/shared";
 import type { PageMetadata } from "@ingcreators/annot-core";
 import { encodeCapture } from "@ingcreators/annot-core/encode";
@@ -136,9 +132,7 @@ export function installClickHotkeyHandlers(deps: ClickHotkeyDeps): ClickHotkeyHa
 
   function refreshButtons(): void {
     setRecordingClass(deps.btnClick, clickState.active);
-    deps.btnClick.textContent = clickState.active
-      ? `🖱 Click ■ (${clickState.count})`
-      : "🖱 Click ▶";
+    deps.btnClick.textContent = clickState.active ? `🖱 Click ■ (${clickState.count})` : "🖱 Click ▶";
 
     setRecordingClass(deps.btnHotkey, hotkeyState.active);
     deps.btnHotkey.textContent = hotkeyState.active
@@ -527,9 +521,7 @@ function setRecordingClass(btn: HTMLButtonElement, active: boolean): void {
   else btn.classList.remove("recording");
 }
 
-async function probeDataUrlDimensions(
-  dataUrl: string,
-): Promise<{ width: number; height: number }> {
+async function probeDataUrlDimensions(dataUrl: string): Promise<{ width: number; height: number }> {
   try {
     const blob = await (await fetch(dataUrl)).blob();
     const bmp = await createImageBitmap(blob);

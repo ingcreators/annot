@@ -35,16 +35,12 @@ foreignObject [data-font-family="Annot Sans"] {
 text[font-family="Annot Serif"],
 foreignObject [data-font-family="Annot Serif"] {
   font-family:
-    Cambria, Georgia,
-    "Yu Mincho", "Hiragino Mincho ProN",
-    SimSun, "Noto Serif CJK SC",
-    serif;
+    Cambria, Georgia, "Yu Mincho", "Hiragino Mincho ProN", SimSun, "Noto Serif CJK SC", serif;
 }
 
 text[font-family="Annot Mono"],
 foreignObject [data-font-family="Annot Mono"] {
   font-family:
-    "SF Mono", Menlo, Consolas, "Cascadia Mono",
-    "Yu Gothic Mono", "Noto Sans Mono CJK JP",
+    "SF Mono", Menlo, Consolas, "Cascadia Mono", "Yu Gothic Mono", "Noto Sans Mono CJK JP",
     monospace;
 }
