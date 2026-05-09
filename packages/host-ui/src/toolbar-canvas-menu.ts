@@ -30,12 +30,28 @@ import { toggleFlip } from "@ingcreators/annot-core/editor/transform-utils";
 import { TOOL_REGISTRY } from "@ingcreators/annot-core/editor";
 import type { ToolDef } from "./tool-factories.js";
 
+/** A host-registered extra-tool entry (e.g. Scratchpad) surfaced on
+ *  the right-click toolbox menu so it mirrors the toolbar 1:1. */
+export interface ToolbarExtraToolEntry {
+  id: string;
+  icon: string;
+  label: string;
+  /** Invoke the entry — typically proxies to the registered toolbar
+   *  button's `click()` so the anchored popover (or other host action)
+   *  opens against the toolbar button as it does on a direct toolbar
+   *  click. */
+  invoke: () => void;
+}
+
 /** Hooks the canvas menus need from the host toolbar. */
 export interface ToolbarCanvasMenuContext {
   canvas: CanvasManager;
   selection: SelectionManager;
   history: History;
   tools: Map<string, ToolDef>;
+  /** Host-registered extra buttons (e.g. Scratchpad). Optional — empty
+   *  / omitted in hosts that don't register any extras. */
+  extraTools?: ToolbarExtraToolEntry[];
   /** Read the current preset (variant-keyed) for a tool. Used by the
    *  toolbox-menu badge resolver to mirror the toolbar's per-tool
    *  variant glyphs. */
@@ -90,11 +106,25 @@ function findAnnotationAt(target: EventTarget | null, canvas: CanvasManager): SV
 }
 
 /** Build the toolbox menu (tool activators, exactly mirroring the
- *  toolbar button ordering + flyout variants). */
+ *  toolbar button ordering + flyout variants). Host-registered extras
+ *  (Scratchpad, …) follow the core tool rows under a separator so
+ *  the menu reads "create stuff / reusable stuff" — the same visual
+ *  rhythm the toolbar applies between the tool group and the
+ *  extra-button group. */
 function openToolboxMenu(e: MouseEvent, ctx: ToolbarCanvasMenuContext): void {
   const items: CanvasMenuItem[] = [];
   for (const [toolId, def] of ctx.tools) {
     items.push(toolMenuEntry(toolId, def, ctx));
+  }
+  const extras = ctx.extraTools ?? [];
+  for (let i = 0; i < extras.length; i++) {
+    const entry = extras[i]!;
+    items.push({
+      separatorAbove: i === 0,
+      icon: entry.icon,
+      label: entry.label,
+      action: () => entry.invoke(),
+    });
   }
   openCanvasContextMenu({ x: e.clientX, y: e.clientY, items });
 }

@@ -194,8 +194,16 @@ export class Toolbar {
    *  reflects the last-used variant). */
   #toolButtons: Map<string, HTMLButtonElement> = new Map();
   /** Host-registered extra buttons inserted between the tool group and
-   *  the undo/redo group. Populated via `registerExtraToolButton`. */
-  #extraButtons: HTMLButtonElement[] = [];
+   *  the undo/redo group. Populated via `registerExtraToolButton`. The
+   *  metadata (`id` / `icon` / `label`) lives alongside the button ref so
+   *  the canvas right-click toolbox menu can mirror these entries the
+   *  same way it mirrors the core tool buttons. */
+  #extraButtons: Array<{
+    id: string;
+    icon: string;
+    label: string;
+    button: HTMLButtonElement;
+  }> = [];
   /** The DOM group that the extra buttons live in, so registrations
    *  after initial render still attach to the right container. */
   #extraButtonGroup: HTMLElement | null = null;
@@ -474,8 +482,8 @@ export class Toolbar {
     // group so the visual grouping reads "create stuff / reusable
     // stuff / history".
     this.#extraButtonGroup = this.#div("toolbar-group toolbar-extra-group");
-    for (const btn of this.#extraButtons) {
-      this.#extraButtonGroup.appendChild(btn);
+    for (const entry of this.#extraButtons) {
+      this.#extraButtonGroup.appendChild(entry.button);
     }
     if (this.#extraButtons.length > 0) {
       shell.appendChild(this.#extraButtonGroup);
@@ -1225,7 +1233,7 @@ export class Toolbar {
       e.stopPropagation();
       opts.onClick(btn);
     });
-    this.#extraButtons.push(btn);
+    this.#extraButtons.push({ id: opts.id, icon: opts.icon, label: opts.title, button: btn });
     if (this.#extraButtonGroup) {
       this.#extraButtonGroup.appendChild(btn);
       if (!this.#extraButtonGroup.isConnected) {
@@ -1600,6 +1608,18 @@ export class Toolbar {
       selection: this.#selection,
       history: this.#history,
       tools: this.#tools,
+      // Extra-tool entries (e.g. Scratchpad) appear after the core tool
+      // rows so the right-click toolbox menu mirrors the toolbar 1:1
+      // — including host-registered libraries. The action proxies to
+      // the actual toolbar button so the registered onClick (which
+      // typically opens an anchored popover against the button) runs
+      // unchanged.
+      extraTools: this.#extraButtons.map((entry) => ({
+        id: entry.id,
+        icon: entry.icon,
+        label: entry.label,
+        invoke: () => entry.button.click(),
+      })),
       getCurrentPreset: (id) => this.#getCurrentPreset(id),
       activateToolWithVariant: (id, v) => this.#activateToolWithVariant(id, v),
     });
