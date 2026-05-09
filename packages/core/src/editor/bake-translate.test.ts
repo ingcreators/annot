@@ -15,6 +15,7 @@ import {
   bakeMarkerTranslate,
   bakePathTranslate,
   bakeTranslate,
+  moveAnnotationElement,
   pruneAnnotationsOutsideRect,
 } from "./bake-translate.js";
 import { createTextShape } from "./text-utils.js";
@@ -824,4 +825,152 @@ describe("pruneAnnotationsOutsideRect", () => {
     expect(removed).toBe(0);
     expect(group.children.length).toBe(2);
   });
+});
+
+describe("moveAnnotationElement", () => {
+  it("(0, 0) is a no-op", () => {
+    const r = document.createElementNS(SVG_NS, "rect");
+    r.setAttribute("x", "10");
+    r.setAttribute("y", "20");
+    moveAnnotationElement(r as unknown as SVGElement, 0, 0);
+    expect(r.getAttribute("x")).toBe("10");
+    expect(r.getAttribute("y")).toBe("20");
+  });
+
+  it("unrotated rect — bakes (dx, dy) into x/y; no transform attribute left over", () => {
+    const r = document.createElementNS(SVG_NS, "rect");
+    r.setAttribute("x", "10");
+    r.setAttribute("y", "20");
+    r.setAttribute("width", "100");
+    r.setAttribute("height", "50");
+    moveAnnotationElement(r as unknown as SVGElement, 5, 7);
+    expect(r.getAttribute("x")).toBe("15");
+    expect(r.getAttribute("y")).toBe("27");
+    expect(r.hasAttribute("transform")).toBe(false);
+  });
+
+  it("unrotated text-shape `<g>` — walks bg + tspans + clip; no leftover wrapper transform", () => {
+    const svg = svgWithRoot();
+    const g = createTextShape({
+      x: 100,
+      y: 50,
+      w: 120,
+      h: 80,
+      variant: "sticky",
+      runs: [{ text: "hello", line_break_after: false }],
+      fontSize: 16,
+      fontFamily: "sans-serif",
+      color: "#000",
+    });
+    svg.appendChild(g);
+
+    moveAnnotationElement(g as unknown as SVGElement, 30, 40);
+
+    const bg = g.querySelector("rect")!;
+    expect(bg.getAttribute("x")).toBe("130");
+    expect(bg.getAttribute("y")).toBe("90");
+    expect(g.hasAttribute("transform")).toBe(false);
+  });
+
+  it("survives the editor's move path (selection.ts:#moveElement) without jumping back to source", () => {
+    // Regression: a freshly placed shape must be byte-equivalent to
+    // one drawn by hand, so the next user move bakes a CONSISTENT
+    // delta and doesn't drop a wrapper translate. Equivalent to
+    // `selection.#moveElement(el, 10, 10)` running over a fresh
+    // `moveAnnotationElement(el, cx, cy)`-placed shape.
+    const svg = svgWithRoot();
+    const g = createTextShape({
+      x: 0,
+      y: 0,
+      w: 120,
+      h: 80,
+      variant: "sticky",
+      runs: [{ text: "x", line_break_after: false }],
+      fontSize: 16,
+      fontFamily: "sans-serif",
+      color: "#000",
+    });
+    svg.appendChild(g);
+
+    moveAnnotationElement(g as unknown as SVGElement, 300, 200);
+    const bg = g.querySelector("rect")!;
+    expect(bg.getAttribute("x")).toBe("300");
+    expect(bg.getAttribute("y")).toBe("200");
+
+    moveAnnotationElement(g as unknown as SVGElement, 10, 10);
+    expect(bg.getAttribute("x")).toBe("310");
+    expect(bg.getAttribute("y")).toBe("210");
+    expect(g.hasAttribute("transform")).toBe(false);
+  });
+
+  it("`<g data-marker>` — bakes (dx, dy) into bg circle + numeral; no transform attribute", () => {
+    const svg = svgWithRoot();
+    const g = makeMarker({ shape: "circle", cx: 100, cy: 100 });
+    svg.appendChild(g);
+
+    moveAnnotationElement(g as unknown as SVGElement, 25, -10);
+
+    const circle = g.querySelector("circle")!;
+    expect(circle.getAttribute("cx")).toBe("125");
+    expect(circle.getAttribute("cy")).toBe("90");
+    const text = g.querySelector("text")!;
+    expect(text.getAttribute("x")).toBe("125");
+    expect(text.getAttribute("y")).toBe("90");
+    expect(g.hasAttribute("transform")).toBe(false);
+  });
+
+  it("`<line>` — shifts endpoints; lines go through bakeLineTranslate", () => {
+    const svg = svgWithRoot();
+    const line = document.createElementNS(SVG_NS, "line");
+    line.setAttribute("x1", "10");
+    line.setAttribute("y1", "20");
+    line.setAttribute("x2", "100");
+    line.setAttribute("y2", "200");
+    svg.appendChild(line);
+
+    moveAnnotationElement(line as unknown as SVGElement, 5, 7);
+
+    expect(line.getAttribute("x1")).toBe("15");
+    expect(line.getAttribute("y1")).toBe("27");
+    expect(line.getAttribute("x2")).toBe("105");
+    expect(line.getAttribute("y2")).toBe("207");
+  });
+
+  it("folds existing `data-tx` / `data-ty` into the bake delta and clears the data attrs", () => {
+    // Simulates a path that was nudged via the rotated path then had
+    // its rotation cleared — leftover data-tx/ty should fold into the
+    // bake delta (matching SelectionManager#moveElement's contract).
+    const svg = svgWithRoot();
+    const p = document.createElementNS(SVG_NS, "path");
+    p.setAttribute("d", "M 0 0 L 50 50");
+    p.setAttribute("data-tx", "10");
+    p.setAttribute("data-ty", "20");
+    svg.appendChild(p);
+
+    moveAnnotationElement(p as unknown as SVGElement, 5, 7);
+
+    expect(p.getAttribute("d")).toBe("M15 27 L65 77");
+    expect(p.hasAttribute("data-tx")).toBe(false);
+    expect(p.hasAttribute("data-ty")).toBe(false);
+    expect(p.hasAttribute("transform")).toBe(false);
+  });
+
+  it("rotated path — increments data-tx / data-ty (NOT inner geometry) and re-emits the matrix", () => {
+    const svg = svgWithRoot();
+    const p = document.createElementNS(SVG_NS, "path");
+    p.setAttribute("d", "M 0 0 L 50 50");
+    p.setAttribute("data-rot", "30");
+    p.setAttribute("data-tx", "100");
+    p.setAttribute("data-ty", "50");
+    svg.appendChild(p);
+
+    moveAnnotationElement(p as unknown as SVGElement, 10, 20);
+
+    // Inner d is unchanged — rotated branch translates via data-tx/ty.
+    expect(p.getAttribute("d")).toBe("M 0 0 L 50 50");
+    expect(p.getAttribute("data-tx")).toBe("110");
+    expect(p.getAttribute("data-ty")).toBe("70");
+    expect(p.hasAttribute("transform")).toBe(true);
+  });
+
 });

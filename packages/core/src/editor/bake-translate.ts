@@ -20,7 +20,13 @@
 
 import { translatePathD } from "./path-utils.js";
 import { bakeTextShapeTranslate } from "./text-utils.js";
-import { bakeLineTranslate } from "./transform-utils.js";
+import {
+  applyTransformState,
+  bakeLineTranslate,
+  isLineLike,
+  nudgeTranslate,
+  readTransformState,
+} from "./transform-utils.js";
 
 /**
  * Translate a Counter (marker) `<g>` and its children by (dx, dy).
@@ -187,6 +193,77 @@ export function bakeTranslate(el: SVGElement, dx: number, dy: number): void {
   }
 
   // line / arrow / unknown leaf — caller's responsibility.
+}
+
+/**
+ * Translate a single annotation element by (dx, dy) in world space,
+ * mirroring the move dispatch the live editor uses
+ * (`packages/editor/src/selection.ts:#moveElement`):
+ *
+ *  1. Lines / arrows route to `bakeLineTranslate`, which bakes any
+ *     pending rotation/flip/translate state into the endpoints first
+ *     and then shifts those endpoints (plus the optional curved-arrow
+ *     control point) by the world-space delta.
+ *  2. Unrotated / unflipped shapes bake the translate into their
+ *     children's geometry attrs via the `bakeTranslate` dispatcher,
+ *     fold any pre-existing `data-tx` / `data-ty` into the bake delta,
+ *     clear those data attrs, and re-emit the (now-identity) matrix
+ *     via `applyTransformState` so the wrapper carries no leftover
+ *     transform attribute. Identical to a freshly placed shape.
+ *  3. Rotated / flipped shapes shift either the geometry attrs (for
+ *     `usesGeometryPosition` tags — `<rect>` / `<ellipse>` / etc.)
+ *     or the `data-tx` / `data-ty` (for `<path>` / `<g>`), then call
+ *     `nudgeTranslate(el, 0, 0)` to refresh the rotation pivot
+ *     against the new bbox center.
+ *
+ * Used by callers outside `selection.ts` that need to move a single
+ * annotation by a world-space delta: scratchpad save / paste, future
+ * stamp / template features, future plugin host APIs. The live
+ * editor's move path stays in `selection.ts` for now (the gesture
+ * loop owns its own snap / multi-select bookkeeping); a future
+ * unification refactor can route both call sites through here.
+ *
+ * Tier B — pure Element manipulation, jsdom-friendly. No live-
+ * browser dependencies beyond what the underlying bake helpers /
+ * `applyTransformState` already require (which themselves are
+ * jsdom-friendly aside from a `getBBox()` pivot fallback for the
+ * rotated branch — same caveat the bake helpers carry).
+ */
+export function moveAnnotationElement(el: SVGElement, dx: number, dy: number): void {
+  if (dx === 0 && dy === 0) return;
+
+  if (isLineLike(el)) {
+    bakeLineTranslate(el, dx, dy);
+    return;
+  }
+
+  const state = readTransformState(el);
+  const noRotationOrFlip = state.rotation === 0 && !state.flipH && !state.flipV;
+  if (noRotationOrFlip) {
+    bakeTranslate(el, state.tx + dx, state.ty + dy);
+    if (state.tx !== 0 || state.ty !== 0) {
+      el.removeAttribute("data-tx");
+      el.removeAttribute("data-ty");
+    }
+    applyTransformState(el);
+    return;
+  }
+
+  // Rotated / flipped fallback: shift positional attrs (or
+  // data-tx / data-ty) and refresh the matrix pivot via
+  // nudgeTranslate.
+  const tag = el.tagName;
+  if (tag === "rect" || tag === "image" || tag === "text" || tag === "foreignObject") {
+    el.setAttribute("x", String(Number.parseFloat(el.getAttribute("x") || "0") + dx));
+    el.setAttribute("y", String(Number.parseFloat(el.getAttribute("y") || "0") + dy));
+  } else if (tag === "ellipse" || tag === "circle") {
+    el.setAttribute("cx", String(Number.parseFloat(el.getAttribute("cx") || "0") + dx));
+    el.setAttribute("cy", String(Number.parseFloat(el.getAttribute("cy") || "0") + dy));
+  } else if (tag === "path" || tag === "g") {
+    nudgeTranslate(el, dx, dy);
+    return;
+  }
+  nudgeTranslate(el, 0, 0);
 }
 
 /**
