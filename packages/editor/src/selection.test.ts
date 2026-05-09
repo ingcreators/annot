@@ -28,6 +28,7 @@
  * to a no-op.
  */
 
+import { createTextShape } from "@ingcreators/annot-core/editor/text-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CanvasManager } from "./canvas-manager.js";
 import { History } from "./history.js";
@@ -322,6 +323,119 @@ describe("SelectionManager — copySelected + paste + duplicate", () => {
     const dup = annotations.children[1] as SVGRectElement;
     // Offset is exactly PASTE_OFFSET on a fresh duplicate (paste-count=1).
     expect(Number.parseFloat(dup.getAttribute("x") || "0")).toBeGreaterThan(100);
+  });
+});
+
+describe("SelectionManager — paste / duplicate freshen internal SVG ids", () => {
+  // Regression: text-bearing shapes (`<g data-type="shape">` — sticky
+  // / callout / textbox / text-on-shape) carry an internal
+  // `<clipPath id="clip-textshape-...">` that the sibling `<text>`
+  // references via `clip-path="url(#...)"`. paste() round-trips the
+  // selection through `outerHTML`, so without an id-freshen pass the
+  // clone shares the source's clipPath id; SVG resolves duplicate
+  // ids by document order and the pasted text gets clipped against
+  // the SOURCE's clip rect (located at the source position) and
+  // visually disappears even though the tspan content survives.
+
+  it("paste of a sticky alongside the source: clipPath ids differ AND each text references its own wrapper's clip", () => {
+    const { selection, annotations } = setupSelection();
+    const source = createTextShape({
+      x: 50,
+      y: 30,
+      w: 200,
+      h: 80,
+      variant: "sticky",
+      runs: [{ text: "hello", line_break_after: false }],
+      fontSize: 16,
+      fontFamily: "sans-serif",
+      color: "#000",
+    });
+    annotations.appendChild(source);
+    const sourceClip = source.querySelector("clipPath")!;
+    const sourceClipId = sourceClip.id;
+    expect(sourceClipId.length).toBeGreaterThan(0);
+    expect(source.querySelector("text")!.getAttribute("clip-path")).toBe(`url(#${sourceClipId})`);
+
+    selection.select(source);
+    selection.copySelected();
+    selection.paste();
+
+    // Two shapes: source + paste. Both clipPath ids must be unique
+    // so the browser's url(#) lookup resolves unambiguously.
+    const groups = Array.from(annotations.querySelectorAll('g[data-type="shape"]'));
+    expect(groups.length).toBe(2);
+    const clips = Array.from(annotations.querySelectorAll("clipPath"));
+    expect(clips.length).toBe(2);
+    const ids = new Set(clips.map((c) => c.id));
+    expect(ids.size).toBe(2);
+
+    // Every text's `clip-path` references the clipPath inside its
+    // OWN wrapper — not the source's.
+    for (const g of groups) {
+      const ownClip = g.querySelector("clipPath")!;
+      const text = g.querySelector("text")!;
+      expect(text.getAttribute("clip-path")).toBe(`url(#${ownClip.id})`);
+    }
+  });
+
+  it("two consecutive pastes from the same clipboard get distinct clipPath ids (no collision between pastes)", () => {
+    const { selection, annotations } = setupSelection();
+    const source = createTextShape({
+      x: 50,
+      y: 30,
+      w: 200,
+      h: 80,
+      variant: "sticky",
+      runs: [{ text: "hi", line_break_after: false }],
+      fontSize: 16,
+      fontFamily: "sans-serif",
+      color: "#000",
+    });
+    annotations.appendChild(source);
+
+    selection.select(source);
+    selection.copySelected();
+    selection.paste();
+    selection.paste();
+
+    // Three shapes (source + 2 pastes); three unique clipPath ids.
+    const clips = Array.from(annotations.querySelectorAll("clipPath"));
+    expect(clips.length).toBe(3);
+    const ids = new Set(clips.map((c) => c.id));
+    expect(ids.size).toBe(3);
+
+    const groups = Array.from(annotations.querySelectorAll('g[data-type="shape"]'));
+    for (const g of groups) {
+      const ownClip = g.querySelector("clipPath")!;
+      const text = g.querySelector("text")!;
+      expect(text.getAttribute("clip-path")).toBe(`url(#${ownClip.id})`);
+    }
+  });
+
+  it("duplicate() routes through paste(), so Ctrl+D inherits the same id-freshen guarantee", () => {
+    const { selection, annotations } = setupSelection();
+    const source = createTextShape({
+      x: 50,
+      y: 30,
+      w: 200,
+      h: 80,
+      variant: "sticky",
+      runs: [{ text: "yo", line_break_after: false }],
+      fontSize: 16,
+      fontFamily: "sans-serif",
+      color: "#000",
+    });
+    annotations.appendChild(source);
+    const sourceClipId = source.querySelector("clipPath")!.id;
+
+    selection.select(source);
+    selection.duplicate();
+
+    expect(annotations.children.length).toBe(2);
+    const dup = annotations.children[1] as SVGGElement;
+    const dupClip = dup.querySelector("clipPath")!;
+    expect(dupClip.id).not.toBe(sourceClipId);
+    expect(dup.querySelector("text")!.getAttribute("clip-path")).toBe(`url(#${dupClip.id})`);
   });
 });
 
