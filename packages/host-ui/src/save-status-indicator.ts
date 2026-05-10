@@ -34,6 +34,13 @@ import { html, LitElement } from "./lit.js";
 
 export type SaveStatus = "saved" | "pending" | "saving" | "error";
 
+export interface SaveStatusRetryDetail {
+  /** Phase 12 of `docs/plans/annot-html-document-ux-polish.md` —
+   *  the indicator only dispatches `retry-save` when the status
+   *  is `"error"` AND the host has opted in via `interactive`. */
+  reason: "user-clicked-retry";
+}
+
 interface StatusSpec {
   icon: BuiltinIconId;
   label: string;
@@ -71,16 +78,26 @@ const STATUS_SPECS: Record<SaveStatus, StatusSpec> = {
 export class AnnotSaveStatusElement extends LitElement {
   static override properties = {
     status: { type: String },
+    interactive: { type: Boolean, attribute: "interactive" },
   };
 
   // `declare` is type-only (no runtime class-field emit), so Lit's
   // `createProperty` can install its reactive getter/setter on the
   // prototype without a class-field initializer shadowing it.
   declare status: SaveStatus;
+  /** Phase 12 of `docs/plans/annot-html-document-ux-polish.md` —
+   *  when true AND `status === "error"`, the indicator renders a
+   *  clickable "Retry" affordance next to the label. The host
+   *  listens for `retry-save` CustomEvents to trigger another
+   *  save attempt. Defaults to false so the editor side (which
+   *  routes errors through the toolbar's error banner) is
+   *  unaffected. */
+  declare interactive: boolean;
 
   constructor() {
     super();
     this.status = "saved";
+    this.interactive = false;
   }
 
   // Light DOM so global `.save-status` / `.save-status-icon` CSS in
@@ -91,11 +108,37 @@ export class AnnotSaveStatusElement extends LitElement {
 
   override render() {
     const spec = STATUS_SPECS[this.status];
+    const showRetry = this.interactive && this.status === "error";
     return html`
       <annot-icon class="save-status-icon" .spec=${builtinIcon(spec.icon)}></annot-icon>
       <span class="save-status-label">${spec.label}</span>
+      ${
+        showRetry
+          ? html`<button
+              type="button"
+              class="save-status-retry"
+              aria-label="Retry save"
+              title="Retry save"
+              @click=${this.#onRetryClick}
+            >
+              Retry
+            </button>`
+          : ""
+      }
     `;
   }
+
+  #onRetryClick = (e: MouseEvent): void => {
+    e.preventDefault();
+    e.stopPropagation();
+    this.dispatchEvent(
+      new CustomEvent<SaveStatusRetryDetail>("retry-save", {
+        bubbles: true,
+        composed: true,
+        detail: { reason: "user-clicked-retry" },
+      }),
+    );
+  };
 
   protected override updated(): void {
     // The host element itself carries the `.save-status` surface
