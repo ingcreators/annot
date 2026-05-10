@@ -10,10 +10,13 @@
  * in the exposed path (Drive-side name is unchanged).
  */
 import type {
+  DocumentRecord,
+  DocumentRecordUpdate,
   FolderRecord,
   ImageRecord,
   ImageRecordUpdate,
   StorageProvider,
+  StorageWithDocuments,
   StorageWithResync,
   StorageWithThumbnailCache,
   StorageWithTokenRefresher,
@@ -41,12 +44,25 @@ const DRIVE_API = "https://www.googleapis.com/drive/v3";
 const UPLOAD_API = "https://www.googleapis.com/upload/drive/v3";
 const FOLDER_MIME = "application/vnd.google-apps.folder";
 
+/** `appProperties` keys used to cache `.annot.html` document
+ *  metadata on Drive. Reads are cheap (returned in `files.list`)
+ *  so the gallery can show title / counts without downloading
+ *  bytes. Phase 7c of `docs/plans/annot-html-document.md`. */
+const DOC_APP_PROP = {
+  KIND: "annotDoc", // "1" marks the file as an Annot document
+  TITLE: "annotDocTitle",
+  BLOCKS: "annotDocBlockCount",
+  IMAGES: "annotDocImageCount",
+};
+const DOC_EXTENSION = ".annot.html";
+
 export class GoogleDriveStore
   implements
     StorageProvider,
     StorageWithResync,
     StorageWithTokenRefresher,
-    StorageWithThumbnailCache
+    StorageWithThumbnailCache,
+    StorageWithDocuments
 {
   /** HTTP layer — owns token, refresh, error mapping. Synthesised
    *  in the constructor; tests can inject a mock via the alternate
@@ -59,6 +75,26 @@ export class GoogleDriveStore
   #folderIdToPath = new Map<string, string>();
   #pathToFileId = new Map<string, string>();
   #fileIdToPath = new Map<string, string>();
+
+  // Document maps (Phase 7c). Documents are tracked in their own
+  // pair so they don't bleed into `listImages` and so the
+  // capability methods can resolve a document by path without
+  // sniffing extensions.
+  #pathToDocumentId = new Map<string, string>();
+  #documentIdToPath = new Map<string, string>();
+  // Cache the `appProperties`-derived document metadata so
+  // `listDocuments` / `getDocument` return title + counts without
+  // re-fetching. Keyed by drive file id.
+  #documentMeta = new Map<
+    string,
+    {
+      title: string;
+      blockCount: number;
+      imageCount: number;
+      createdTime?: string;
+      modifiedTime?: string;
+    }
+  >();
 
   // Track children loaded per folder (for invalidation purposes)
   #loadedFolders = new Set<string>();
@@ -260,18 +296,41 @@ export class GoogleDriveStore
     }
   }
 
-  #registerFileChildren(parentPath: string, driveChildren: { id: string; name: string }[]): void {
+  #registerFileChildren(
+    parentPath: string,
+    driveChildren: { id: string; name: string; appProperties?: Record<string, string> }[],
+  ): void {
     const used = new Set<string>();
     for (const [p] of this.#pathToFileId) {
       if (getParentPath(p) === parentPath) used.add(getFilename(p));
     }
+    for (const [p] of this.#pathToDocumentId) {
+      if (getParentPath(p) === parentPath) used.add(getFilename(p));
+    }
     for (const child of driveChildren) {
-      if (this.#fileIdToPath.has(child.id)) continue;
+      if (this.#fileIdToPath.has(child.id) || this.#documentIdToPath.has(child.id)) continue;
       const name = uniquifyFilename(child.name, (c) => used.has(c));
       used.add(name);
       const childPath = joinPath(parentPath, name);
-      this.#pathToFileId.set(childPath, child.id);
-      this.#fileIdToPath.set(child.id, childPath);
+      // Phase 7c — discriminate documents from images by file
+      // extension OR explicit `appProperties.annotDoc === "1"`
+      // marker (so renamed-without-extension files still route
+      // correctly when they were created by Annot).
+      const props = child.appProperties || {};
+      const looksLikeDoc =
+        name.toLowerCase().endsWith(DOC_EXTENSION) || props[DOC_APP_PROP.KIND] === "1";
+      if (looksLikeDoc) {
+        this.#pathToDocumentId.set(childPath, child.id);
+        this.#documentIdToPath.set(child.id, childPath);
+        this.#documentMeta.set(child.id, {
+          title: props[DOC_APP_PROP.TITLE] || stripDocExtension(name),
+          blockCount: Number.parseInt(props[DOC_APP_PROP.BLOCKS] || "0", 10) || 0,
+          imageCount: Number.parseInt(props[DOC_APP_PROP.IMAGES] || "0", 10) || 0,
+        });
+      } else {
+        this.#pathToFileId.set(childPath, child.id);
+        this.#fileIdToPath.set(child.id, childPath);
+      }
     }
   }
 
@@ -337,15 +396,23 @@ export class GoogleDriveStore
     if (!parentId) return;
     const children = await this.#listDrive(
       `'${parentId}' in parents and trashed = false and mimeType != '${FOLDER_MIME}'`,
-      "files(id,name,createdTime,modifiedTime,imageMediaMetadata)",
+      "files(id,name,createdTime,modifiedTime,imageMediaMetadata,appProperties)",
     );
     this.#registerFileChildren(folderPath, children);
     // Cache per-file metadata (createdTime / modifiedTime /
     // imageMediaMetadata.width|height) in a side map so
     // `listImages`, `thumbnailVersion`, and the gallery's
     // dimension hydration can read it without an extra fetch.
+    // For documents (Phase 7c), also populate `#documentMeta`'s
+    // mtime/createdTime fields so listDocuments has accurate
+    // updatedAt without an extra fetch.
     for (const f of children) {
       this.#fileMeta.set(f.id, f);
+      const docMeta = this.#documentMeta.get(f.id);
+      if (docMeta) {
+        docMeta.createdTime = f.createdTime;
+        docMeta.modifiedTime = f.modifiedTime;
+      }
     }
     this.#loadedFolders.add(folderPath);
   }
@@ -611,18 +678,184 @@ export class GoogleDriveStore
   }
 
   async deleteImage(path: string): Promise<void> {
-    const driveId = this.#pathToFileId.get(path);
+    // Phase 7c — `deleteImage` is the path-keyed delete primitive
+    // per the `StorageWithDocuments` contract. Routes to whichever
+    // map holds the path; documents and images share Drive's
+    // `files.delete` endpoint.
+    const imageId = this.#pathToFileId.get(path);
+    const docId = this.#pathToDocumentId.get(path);
+    const driveId = imageId ?? docId;
     if (!driveId) return;
     await this.#fetch(`${DRIVE_API}/files/${driveId}`, { method: "DELETE" });
-    this.#pathToFileId.delete(path);
-    this.#fileIdToPath.delete(driveId);
-    this.#fileMeta.delete(driveId);
-    this.#recordCache.delete(path);
+    if (imageId) {
+      this.#pathToFileId.delete(path);
+      this.#fileIdToPath.delete(imageId);
+      this.#fileMeta.delete(imageId);
+      this.#recordCache.delete(path);
+    }
+    if (docId) {
+      this.#pathToDocumentId.delete(path);
+      this.#documentIdToPath.delete(docId);
+      this.#documentMeta.delete(docId);
+      this.#fileMeta.delete(docId);
+    }
     // Thumbnail entry in the unified cache becomes orphan; the
     // host's `ThumbnailManager.invalidatePrefix` is the right
     // call site if a caller wants to free space immediately, but
     // the LRU sweep will reclaim it eventually. Skipping it here
     // keeps the store free of any reference to the cache layer.
+  }
+
+  // ---- Documents (Phase 7c) ─────────────────────────────────
+  // `.annot.html` files upload as `text/html`. Cached metadata
+  // (title / blockCount / imageCount) lives in Drive's
+  // `appProperties` so `listDocuments` returns full listing rows
+  // without downloading bytes.
+
+  async saveDocument(
+    data: Omit<DocumentRecord, "path">,
+    opts?: { filename?: string },
+  ): Promise<string> {
+    const folderPath = data.folderPath || "";
+    const parentId = await this.#resolveFolderId(folderPath);
+    if (!parentId) throw new Error(`Folder not found: ${folderPath}`);
+
+    const desired = opts?.filename || `document-${Date.now()}.annot.html`;
+    validateName(desired);
+
+    await this.#ensureFolderListed(folderPath);
+    const existingNames = new Set<string>();
+    for (const [p] of this.#pathToFileId) {
+      if (getParentPath(p) === folderPath) existingNames.add(getFilename(p));
+    }
+    for (const [p] of this.#pathToDocumentId) {
+      if (getParentPath(p) === folderPath) existingNames.add(getFilename(p));
+    }
+    const filename = uniquifyFilename(desired, (c) => existingNames.has(c));
+    const path = joinPath(folderPath, filename);
+
+    const blob = new Blob([data.bytes], { type: "text/html" });
+    const driveId = await this.#uploadFile(filename, blob, parentId, {
+      [DOC_APP_PROP.KIND]: "1",
+      [DOC_APP_PROP.TITLE]: data.title,
+      [DOC_APP_PROP.BLOCKS]: String(data.blockCount),
+      [DOC_APP_PROP.IMAGES]: String(data.imageCount),
+    });
+    this.#pathToDocumentId.set(path, driveId);
+    this.#documentIdToPath.set(driveId, path);
+    const now = new Date().toISOString();
+    this.#documentMeta.set(driveId, {
+      title: data.title,
+      blockCount: data.blockCount,
+      imageCount: data.imageCount,
+      createdTime: data.createdAt || now,
+      modifiedTime: data.updatedAt || now,
+    });
+    return path;
+  }
+
+  async getDocument(path: string): Promise<DocumentRecord | undefined> {
+    const folderPath = getParentPath(path);
+    await this.#ensureFolderListed(folderPath);
+    const driveId = this.#pathToDocumentId.get(path);
+    if (!driveId) return undefined;
+    const meta = this.#documentMeta.get(driveId) ?? {
+      title: stripDocExtension(getFilename(path)),
+      blockCount: 0,
+      imageCount: 0,
+    };
+    let bytes: string;
+    try {
+      const resp = await this.#fetch(`${DRIVE_API}/files/${driveId}?alt=media`);
+      bytes = await resp.text();
+    } catch {
+      return undefined;
+    }
+    return {
+      path,
+      folderPath,
+      bytes,
+      thumbnailDataUrl: "",
+      title: meta.title,
+      imageCount: meta.imageCount,
+      blockCount: meta.blockCount,
+      createdAt: meta.createdTime || "",
+      updatedAt: meta.modifiedTime || meta.createdTime || "",
+    };
+  }
+
+  async listDocuments(folderPath: string): Promise<DocumentRecord[]> {
+    await this.#ensureFolderListed(folderPath);
+    const out: DocumentRecord[] = [];
+    for (const [path, driveId] of this.#pathToDocumentId) {
+      if (getParentPath(path) !== folderPath) continue;
+      const meta = this.#documentMeta.get(driveId) ?? {
+        title: stripDocExtension(getFilename(path)),
+        blockCount: 0,
+        imageCount: 0,
+      };
+      out.push({
+        path,
+        folderPath,
+        bytes: "",
+        thumbnailDataUrl: "",
+        title: meta.title,
+        imageCount: meta.imageCount,
+        blockCount: meta.blockCount,
+        createdAt: meta.createdTime || "",
+        updatedAt: meta.modifiedTime || meta.createdTime || "",
+      });
+    }
+    out.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+    return out;
+  }
+
+  async updateDocument(path: string, updates: DocumentRecordUpdate): Promise<void> {
+    const driveId = this.#pathToDocumentId.get(path);
+    if (!driveId) return;
+    const meta = this.#documentMeta.get(driveId) ?? {
+      title: stripDocExtension(getFilename(path)),
+      blockCount: 0,
+      imageCount: 0,
+    };
+    if (updates.bytes !== undefined) {
+      const blob = new Blob([updates.bytes], { type: "text/html" });
+      // Upload-API media replace; same endpoint shape as
+      // `updateImage` uses for re-encoding the bitmap.
+      await this.#fetch(`${UPLOAD_API}/files/${driveId}?uploadType=media`, {
+        method: "PATCH",
+        headers: { "Content-Type": "text/html" },
+        body: await blob.arrayBuffer(),
+      });
+    }
+    if (updates.title !== undefined) meta.title = updates.title;
+    if (updates.blockCount !== undefined) meta.blockCount = updates.blockCount;
+    if (updates.imageCount !== undefined) meta.imageCount = updates.imageCount;
+    // Push the latest cached metadata into Drive's appProperties
+    // so a fresh `files.list` (after resync / new session)
+    // surfaces it without a getDocument round-trip. Drive
+    // `appProperties` are scoped to our OAuth client; setting them
+    // doesn't conflict with other apps that might be inspecting
+    // the same files.
+    if (
+      updates.title !== undefined ||
+      updates.blockCount !== undefined ||
+      updates.imageCount !== undefined
+    ) {
+      await this.#fetch(`${DRIVE_API}/files/${driveId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          appProperties: {
+            [DOC_APP_PROP.TITLE]: meta.title,
+            [DOC_APP_PROP.BLOCKS]: String(meta.blockCount),
+            [DOC_APP_PROP.IMAGES]: String(meta.imageCount),
+          },
+        }),
+      });
+    }
+    meta.modifiedTime = new Date().toISOString();
+    this.#documentMeta.set(driveId, meta);
   }
 
   // ---- Folders ----
@@ -801,8 +1034,15 @@ export class GoogleDriveStore
 
   // ---- Helpers ----
 
-  async #uploadFile(filename: string, blob: Blob, parentId: string): Promise<string> {
-    const metadata = JSON.stringify({ name: filename, parents: [parentId] });
+  async #uploadFile(
+    filename: string,
+    blob: Blob,
+    parentId: string,
+    appProperties?: Record<string, string>,
+  ): Promise<string> {
+    const metaPayload: Record<string, unknown> = { name: filename, parents: [parentId] };
+    if (appProperties) metaPayload.appProperties = appProperties;
+    const metadata = JSON.stringify(metaPayload);
     const boundary = `annot_boundary_${Date.now()}`;
     const body =
       `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n` +
@@ -835,4 +1075,14 @@ export class GoogleDriveStore
       reader.readAsDataURL(blob);
     });
   }
+}
+
+/** Strip the canonical `.annot.html` suffix from a filename when
+ *  deriving a fallback document title. Falls back to the raw name
+ *  for non-canonical extensions. */
+function stripDocExtension(name: string): string {
+  if (name.toLowerCase().endsWith(DOC_EXTENSION)) {
+    return name.slice(0, -DOC_EXTENSION.length);
+  }
+  return name;
 }
