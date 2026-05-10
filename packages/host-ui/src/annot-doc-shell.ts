@@ -37,8 +37,10 @@ import {
 import "./annot-doc-block-menu.js";
 import "./annot-doc-block-toolbar.js";
 import type { BlockToolbarActionDetail } from "./annot-doc-block-toolbar.js";
+import "./annot-doc-insert-bar.js";
 import { DocumentHistory } from "./annot-doc-history.js";
 import { AnnotDocImageEditorModalElement } from "./annot-doc-image-editor-modal.js";
+import type { InsertBlockDetail } from "./annot-doc-insert-bar.js";
 import "./annot-doc-image-editor-modal.js";
 import {
   html,
@@ -147,13 +149,34 @@ const SHELL_CSS = `
   position: absolute;
   top: -16px;
   right: 8px;
-  opacity: 0;
+  /* Phase 2 of annot-html-document-ux-polish.md — toolbar is
+     always slightly visible (0.4) for ambient discoverability,
+     and goes to full opacity on hover / focus-within. Removes
+     the "invisible until hover" gesture-only affordance the v1
+     shipped. */
+  opacity: 0.4;
   transition: opacity 0.12s ease-in;
   z-index: 1;
 }
 .annot-doc-shell.editing .annot-doc-block-host:hover annot-doc-block-toolbar,
 .annot-doc-shell.editing .annot-doc-block-host:focus-within annot-doc-block-toolbar {
   opacity: 1;
+}
+@media (hover: none) {
+  /* Touch devices have no hover state — keep the toolbar
+     fully visible so the actions are reachable by tap. Phase 9
+     will sweep this pattern across the rest of the doc surface. */
+  .annot-doc-shell.editing annot-doc-block-toolbar {
+    opacity: 1;
+  }
+}
+.annot-doc-block-toolbar .block-action-handle {
+  cursor: grab;
+  user-select: none;
+  color: var(--annot-doc-muted, #6b7280);
+}
+.annot-doc-block-toolbar .block-action-handle:active {
+  cursor: grabbing;
 }
 .annot-doc-block-toolbar {
   display: inline-flex;
@@ -197,6 +220,83 @@ const SHELL_CSS = `
   outline: 2px solid var(--annot-doc-accent);
   outline-offset: 2px;
   border-radius: 2px;
+}
+
+/* Phase 2 of annot-html-document-ux-polish.md — between-block
+ * insert bar. Default state: 12px-tall transparent band with a
+ * faint hairline running across the middle. On hover / focus,
+ * the bar grows a centered "+ Insert" pill so the user sees a
+ * concrete affordance rather than a gesture they have to
+ * discover. Click opens the existing annot-doc-block-menu
+ * anchored to the bar. The slash-typed-in-empty-block path
+ * stays — this is purely additive. */
+.annot-doc-insert-bar-button {
+  display: block;
+  width: 100%;
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  position: relative;
+  height: 12px;
+  color: var(--annot-doc-accent, #2563eb);
+}
+.annot-doc-insert-bar-button:focus-visible {
+  outline: none;
+}
+.annot-doc-insert-bar-rule {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--annot-doc-muted, #d1d5db);
+  opacity: 0;
+  transition: opacity 0.12s ease-in;
+}
+.annot-doc-insert-bar-button:hover .annot-doc-insert-bar-rule,
+.annot-doc-insert-bar-button:focus-visible .annot-doc-insert-bar-rule {
+  opacity: 0.6;
+}
+.annot-doc-insert-bar-label {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  background: var(--annot-doc-bg, #ffffff);
+  color: var(--annot-doc-accent, #2563eb);
+  border: 1px solid var(--annot-doc-accent, #2563eb);
+  border-radius: 999px;
+  opacity: 0;
+  transition: opacity 0.12s ease-in;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.annot-doc-insert-bar-button:hover .annot-doc-insert-bar-label,
+.annot-doc-insert-bar-button:focus-visible .annot-doc-insert-bar-label {
+  opacity: 1;
+}
+.annot-doc-insert-bar-plus {
+  font-weight: 700;
+  line-height: 1;
+}
+@media (hover: none) {
+  /* Touch — show the pill at low opacity so users see the
+     affordance without needing to hover. Tapping the bar opens
+     the block menu the same as on desktop. */
+  .annot-doc-insert-bar-rule {
+    opacity: 0.4;
+  }
+  .annot-doc-insert-bar-label {
+    opacity: 0.6;
+  }
 }
 
 /* Discoverability hint for empty contentEditable blocks. The
@@ -355,13 +455,23 @@ export class AnnotDocShellElement extends LitElement {
     // Imperatively populate contentEditable bodies for heading +
     // paragraph blocks. See `renderHeading`'s comment for why we
     // can't use Lit template parts here.
+    //
+    // Phase 2 of `annot-html-document-ux-polish.md` interleaves
+    // `<annot-doc-insert-bar>` between every block-host inside
+    // `<article>`. We can no longer use a positional index over
+    // `article.children` to reach the block-host for `blocks[idx]`
+    // — the children alternate `bar, host, bar, host, ..., bar`.
+    // Look up wrappers via `data-block-index` instead so the
+    // mapping stays correct regardless of how many bars sit
+    // between blocks.
     if (!this.editing || !this.document) return;
     const article = this.querySelector("article[data-annot-doc]");
     if (!article) return;
-    const wrappers = Array.from(article.children) as HTMLElement[];
     this.document.blocks.forEach((block, idx) => {
       if (block.kind !== "heading" && block.kind !== "paragraph") return;
-      const wrapper = wrappers[idx];
+      const wrapper = article.querySelector(
+        `.annot-doc-block-host[data-block-index="${idx}"]`,
+      ) as HTMLElement | null;
       if (!wrapper) return;
       const blockEl = wrapper.querySelector("[data-annot-block]") as HTMLElement | null;
       if (!blockEl) return;
@@ -393,21 +503,57 @@ export class AnnotDocShellElement extends LitElement {
       <style>
 ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
       </style>
-      <div class=${shellClasses}>
+      <div
+        class=${shellClasses}
+        @insert-block=${(e: CustomEvent<InsertBlockDetail>) => this.#onInsertBarSelect(e)}
+      >
         ${tocVisible ? this.#renderToc(headings, headingIds) : nothing}
         <article
           data-annot-doc
           @input=${this.#onArticleInput}
           @blur=${this.#onArticleBlur}
         >
-          ${blocks.map((b, i) =>
+          ${
             editing
-              ? this.#renderEditingBlock(b, i, headingIds, blocks.length)
-              : this.#renderBlock(b, headingIds),
-          )}
+              ? this.#renderEditingBody(blocks, headingIds)
+              : blocks.map((b) => this.#renderBlock(b, headingIds))
+          }
         </article>
       </div>
     `;
+  }
+
+  #renderInsertBar(insertAt: number): TemplateResult {
+    return html`
+      <annot-doc-insert-bar
+        .insertAt=${insertAt}
+        data-insert-at=${insertAt}
+      ></annot-doc-insert-bar>
+    `;
+  }
+
+  /** Build the editing-mode article body as a single flat
+   *  iterable of TemplateResults — `[bar0, block0, bar1, block1,
+   *  ..., barN]`. Phase 2 of `annot-html-document-ux-polish.md`
+   *  interleaves insert-bars between every pair of blocks AND at
+   *  both ends. The single-iterable shape keeps Lit's child-part
+   *  reconciliation stable across `document.blocks` length
+   *  changes (mixing `flatMap` with a sibling interpolation
+   *  causes ChildPart parent-marker ejections during async
+   *  insert / paste flows). */
+  #renderEditingBody(
+    blocks: readonly Block[],
+    headingIds: Map<HeadingBlock, string>,
+  ): TemplateResult[] {
+    const items: TemplateResult[] = [];
+    for (let i = 0; i < blocks.length; i += 1) {
+      const block = blocks[i];
+      if (!block) continue;
+      items.push(this.#renderInsertBar(i));
+      items.push(this.#renderEditingBlock(block, i, headingIds, blocks.length));
+    }
+    items.push(this.#renderInsertBar(blocks.length));
+    return items;
   }
 
   // -------------------------------------------------------------------------
@@ -554,6 +700,44 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
     const newDoc: AnnotDocument = { ...this.document, blocks };
     this.#history?.push(newDoc);
     this.#applyInternal(newDoc, "block-action");
+  }
+
+  // -------------------------------------------------------------------------
+  // Insert-bar (Phase 2 of `annot-html-document-ux-polish.md`)
+  // -------------------------------------------------------------------------
+
+  /** Handles the `insert-block` event the between-block insert
+   *  bars dispatch. Splices a fresh block at `insertAt` (0 ≤ idx
+   *  ≤ blocks.length). Image blocks route through the OS file
+   *  picker so the new block has bytes; everything else
+   *  materialises empty so the user can immediately type. */
+  #onInsertBarSelect(e: CustomEvent<InsertBlockDetail>): void {
+    e.stopPropagation();
+    if (!this.document) return;
+    this.#syncDomIntoDocument();
+    const { insertAt, item } = e.detail;
+    const safeAt = Math.max(0, Math.min(this.document.blocks.length, insertAt));
+    if (item.kind === "image") {
+      void this.#promptImageFileAndInsertAt(safeAt);
+      return;
+    }
+    const newBlock = createBlockFromMenuItem(item);
+    const blocks = [...this.document.blocks];
+    blocks.splice(safeAt, 0, newBlock);
+    const newDoc: AnnotDocument = { ...this.document, blocks };
+    this.#history?.push(newDoc);
+    this.#applyInternal(newDoc, "block-action");
+  }
+
+  /** Insert-bar's image-kind entry point — opens the OS file
+   *  picker, then splices the resulting image block at
+   *  `insertAt`. Pairs with `#promptImageFileAndInsertAfter` /
+   *  `#promptImageFileAndReplace` (the toolbar / slash-menu
+   *  variants); all three converge on `#insertImageFromFile`. */
+  async #promptImageFileAndInsertAt(insertAt: number): Promise<void> {
+    const file = await pickImageFile();
+    if (!file) return;
+    await this.#insertImageFromFile(file, { insertAtIndex: insertAt });
   }
 
   // -------------------------------------------------------------------------
@@ -744,7 +928,12 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
     if (!this.document) return false;
     const article = this.querySelector("article[data-annot-doc]");
     if (!article) return false;
-    const wrappers = Array.from(article.children) as HTMLElement[];
+    // Phase 2 of `annot-html-document-ux-polish.md` interleaves
+    // `<annot-doc-insert-bar>` between every block-host inside
+    // `<article>`. Filter to the block-hosts so the index → block
+    // mapping stays correct regardless of how many bars sit
+    // between blocks.
+    const wrappers = Array.from(article.querySelectorAll(".annot-doc-block-host")) as HTMLElement[];
     if (wrappers.length !== this.document.blocks.length) return false;
     let dirty = false;
     const newBlocks = this.document.blocks.map((block, idx) => {

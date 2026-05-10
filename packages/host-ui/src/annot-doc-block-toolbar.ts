@@ -4,9 +4,18 @@
  *
  * Phases of `docs/plans/annot-html-document.md`:
  * - Phase 4a landed delete / move-up / move-down.
- * - Phase 4b (this file's update) adds insert-above /
- *   insert-below buttons + the slash menu's discoverable
- *   "+" affordance for empty paragraphs.
+ * - Phase 4b added insert-above / insert-below buttons + the
+ *   slash menu's discoverable "+" affordance for empty
+ *   paragraphs.
+ *
+ * Phases of `docs/plans/annot-html-document-ux-polish.md`:
+ * - Phase 2 (this file's update) adds a "⠿" drag handle on the
+ *   left edge as a forward-looking affordance for the
+ *   drag-to-reorder flow Phase 7 of the same plan wires.
+ *   For now the handle has `cursor: grab` + an aria-label and
+ *   is otherwise non-interactive — clicking it does nothing,
+ *   so users discover the visual hint without a misleading
+ *   noop callback.
  *
  * Light DOM (Hybrid CSS) following the host-ui convention. The
  * shell positions the toolbar relative to its block; this
@@ -71,6 +80,14 @@ export class AnnotDocBlockToolbarElement extends LitElement {
 
     return html`
       <div class="annot-doc-block-toolbar" role="toolbar" aria-label="Block actions">
+        <span
+          class="block-action block-action-handle"
+          role="img"
+          aria-label="Drag to reorder"
+          title="Drag to reorder (Phase 7)"
+        >
+          ☰
+        </span>
         <button
           type="button"
           class="block-action"
