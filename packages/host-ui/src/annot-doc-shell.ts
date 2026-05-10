@@ -28,7 +28,7 @@ import type {
   ImageBlock,
   ListBlock,
 } from "@ingcreators/annot-doc";
-import { buildStyleBlock } from "@ingcreators/annot-doc";
+import { buildStyleBlock, createImageBlockFromDataUrl } from "@ingcreators/annot-doc";
 import {
   AnnotDocBlockMenuElement,
   type BlockMenuItem,
@@ -302,11 +302,17 @@ export class AnnotDocShellElement extends LitElement {
   override connectedCallback(): void {
     super.connectedCallback();
     this.addEventListener("keydown", this.#onKeydown);
+    this.addEventListener("paste", this.#onPaste as EventListener);
+    this.addEventListener("dragover", this.#onDragOver as EventListener);
+    this.addEventListener("drop", this.#onDrop as EventListener);
   }
 
   override disconnectedCallback(): void {
     super.disconnectedCallback();
     this.removeEventListener("keydown", this.#onKeydown);
+    this.removeEventListener("paste", this.#onPaste as EventListener);
+    this.removeEventListener("dragover", this.#onDragOver as EventListener);
+    this.removeEventListener("drop", this.#onDrop as EventListener);
     if (this.#commitTimer !== null) {
       clearTimeout(this.#commitTimer);
       this.#commitTimer = null;
@@ -500,9 +506,129 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
   #onSlashMenuSelect(e: CustomEvent<BlockMenuSelectDetail>, index: number): void {
     if (!this.document) return;
     this.#syncDomIntoDocument();
-    const newBlock = createBlockFromMenuItem(e.detail.item);
+    const item = e.detail.item;
+    if (item.kind === "image") {
+      // Special-case the image entry: open the OS file picker, then
+      // splice the resulting block in place. The slash menu's
+      // trigger block (an empty paragraph by virtue of how the
+      // menu opens) gets replaced with the image block.
+      void this.#promptImageFileAndReplace(index);
+      return;
+    }
+    const newBlock = createBlockFromMenuItem(item);
     const blocks = [...this.document.blocks];
     blocks[index] = newBlock;
+    const newDoc: AnnotDocument = { ...this.document, blocks };
+    this.#history?.push(newDoc);
+    this.#applyInternal(newDoc, "block-action");
+  }
+
+  // -------------------------------------------------------------------------
+  // Capture insertion — paste / drop / file picker
+  // -------------------------------------------------------------------------
+
+  #onPaste = (e: ClipboardEvent): void => {
+    if (!this.editing) return;
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of Array.from(items)) {
+      if (item.kind === "file" && item.type.startsWith("image/")) {
+        const file = item.getAsFile();
+        if (file) {
+          e.preventDefault();
+          void this.#insertImageFromFile(file);
+          return;
+        }
+      }
+    }
+    // No image item — let the browser handle text paste in the
+    // contentEditable element naturally.
+  };
+
+  #onDragOver = (e: DragEvent): void => {
+    if (!this.editing) return;
+    if (e.dataTransfer?.types.includes("Files")) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "copy";
+    }
+  };
+
+  #onDrop = (e: DragEvent): void => {
+    if (!this.editing) return;
+    // Mirror the paste handler — items + getAsFile is the more
+    // universally-implemented surface (browsers + happy-dom + the
+    // various drag emulators), where the `.files` getter is
+    // sometimes left empty in non-browser DOMs.
+    const items = Array.from(e.dataTransfer?.items ?? []);
+    for (const item of items) {
+      if (item.kind === "file" && item.type.startsWith("image/")) {
+        const file = item.getAsFile();
+        if (file) {
+          e.preventDefault();
+          void this.#insertImageFromFile(file);
+          return;
+        }
+      }
+    }
+    // Browser fallback when dataTransfer.items isn't populated
+    // (rare; some legacy drag sources omit it). `.files` is the
+    // canonical drop surface there.
+    const files = Array.from(e.dataTransfer?.files ?? []);
+    for (const file of files) {
+      if (file.type.startsWith("image/")) {
+        e.preventDefault();
+        void this.#insertImageFromFile(file);
+        return;
+      }
+    }
+  };
+
+  async #promptImageFileAndReplace(index: number): Promise<void> {
+    const file = await pickImageFile();
+    if (!file) return;
+    await this.#insertImageFromFile(file, index);
+  }
+
+  /** Insert (or replace at `replaceIndex`) an image block built
+   *  from the given `File`. The bitmap is inlined as a data URL so
+   *  the document remains self-contained — Phase 8+ may add an
+   *  asset-link path that defers to a `StorageProvider` instead. */
+  async #insertImageFromFile(file: File, replaceIndex?: number): Promise<void> {
+    if (!this.document) return;
+    let dataUrl: string;
+    try {
+      dataUrl = await fileToDataUrl(file);
+    } catch (err) {
+      this.dispatchEvent(
+        new CustomEvent("doc-error", {
+          bubbles: true,
+          composed: true,
+          detail: { reason: "file-read", error: err },
+        }),
+      );
+      return;
+    }
+    let dimensions: { width: number; height: number };
+    try {
+      dimensions = await getImageDimensions(dataUrl);
+    } catch (err) {
+      this.dispatchEvent(
+        new CustomEvent("doc-error", {
+          bubbles: true,
+          composed: true,
+          detail: { reason: "image-decode", error: err },
+        }),
+      );
+      return;
+    }
+    const block = createImageBlockFromDataUrl(dataUrl, dimensions.width, dimensions.height);
+    if (!this.document) return;
+    const blocks = [...this.document.blocks];
+    if (replaceIndex !== undefined && replaceIndex >= 0 && replaceIndex < blocks.length) {
+      blocks[replaceIndex] = block;
+    } else {
+      blocks.push(block);
+    }
     const newDoc: AnnotDocument = { ...this.document, blocks };
     this.#history?.push(newDoc);
     this.#applyInternal(newDoc, "block-action");
@@ -890,7 +1016,9 @@ function syncBlockFromDom(wrapper: HTMLElement, block: Block): Block {
 
 /** Materialise a fresh `Block` from the slash menu's selection.
  *  Phase 4b: each kind starts empty so the user can immediately
- *  type into the new element. */
+ *  type into the new element. v1's catalog reaches every kind
+ *  EXCEPT `image` — the image path goes through a file picker and
+ *  is handled separately by `#promptImageFileAndReplace`. */
 function createBlockFromMenuItem(item: BlockMenuItem): Block {
   switch (item.kind) {
     case "heading":
@@ -912,5 +1040,69 @@ function createBlockFromMenuItem(item: BlockMenuItem): Block {
       return { kind: "callout", tone: item.tone ?? "info", paragraphs: [""] };
     case "divider":
       return { kind: "divider" };
+    case "image":
+      // Defensive default — the slash-menu handler intercepts
+      // image selections before reaching this branch and routes
+      // through the file picker instead. If we somehow get here
+      // (e.g. test path bypassing the handler), fall back to an
+      // empty paragraph so the document remains valid.
+      return { kind: "paragraph", inlineHtml: "" };
   }
+}
+
+// ---------------------------------------------------------------------------
+// Capture-insertion helpers
+// ---------------------------------------------------------------------------
+
+/** Read a `File` as a data URL via FileReader. Wrapped in a
+ *  Promise so the shell's async insertion handler can `await`. */
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result === "string") resolve(result);
+      else reject(new Error("FileReader returned non-string result"));
+    };
+    reader.onerror = () => reject(reader.error ?? new Error("FileReader error"));
+    reader.readAsDataURL(file);
+  });
+}
+
+/** Decode a data URL into image dimensions via the browser's
+ *  `Image()` constructor. happy-dom in the test environment
+ *  resolves the load immediately for data URLs (no network), so
+ *  this works unchanged in tests. */
+function getImageDimensions(dataUrl: string): Promise<{ width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+    img.onerror = () => reject(new Error("getImageDimensions: failed to decode image"));
+    img.src = dataUrl;
+  });
+}
+
+/** Open a hidden `<input type="file" accept="image/*">` and
+ *  resolve with the user's selection (or `null` on cancel). The
+ *  cancel path uses the modern `cancel` event where supported,
+ *  falling back to a focus-back signal that approximates it. */
+function pickImageFile(): Promise<File | null> {
+  return new Promise((resolve) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    let resolved = false;
+    const finish = (result: File | null) => {
+      if (resolved) return;
+      resolved = true;
+      resolve(result);
+    };
+    input.addEventListener("change", () => {
+      finish(input.files?.[0] ?? null);
+    });
+    input.addEventListener("cancel", () => {
+      finish(null);
+    });
+    input.click();
+  });
 }

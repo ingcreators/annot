@@ -154,5 +154,14 @@ describe("annot-doc-block-menu: catalog", () => {
     expect(kinds).toContain("quote");
     expect(kinds).toContain("callout");
     expect(kinds).toContain("divider");
+    expect(kinds).toContain("image");
+  });
+
+  it("includes the Image entry with the documented metadata", () => {
+    const image = DEFAULT_BLOCK_MENU_ITEMS.find((i) => i.id === "image");
+    expect(image).toBeDefined();
+    expect(image?.label).toBe("Image");
+    expect(image?.kind).toBe("image");
+    expect(image?.description).toBe("From file");
   });
 });
