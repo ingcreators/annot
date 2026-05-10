@@ -12,7 +12,7 @@
 
 import type { AnnotDocument } from "@ingcreators/annot-doc";
 import { createEmptyDocument, injectDocumentStyles } from "@ingcreators/annot-doc";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import "./annot-doc-shell.js";
 import type {
@@ -681,5 +681,168 @@ describe("annot-doc-shell: image block click-to-edit", () => {
     figure.click();
     await el.updateComplete;
     expect(document.querySelector("annot-doc-image-editor-modal")).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 5b — capture insertion (paste / drop / file picker)
+// ---------------------------------------------------------------------------
+
+const PNG_PIXEL =
+  "data:image/png;base64," +
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+
+function makeImageFile(): File {
+  // 1x1 transparent PNG bytes inline.
+  const bin = atob(PNG_PIXEL.split(",")[1] ?? "");
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new File([bytes], "test.png", { type: "image/png" });
+}
+
+/** Wait until the doc has the expected number of blocks (the
+ *  insertion path is async — file → data url → image decode →
+ *  history push). Bails after `maxIterations` ticks to avoid
+ *  hanging the suite if the insertion wedges. */
+async function waitForBlockCount(
+  el: AnnotDocShellElement,
+  expectedCount: number,
+  maxIterations = 50,
+): Promise<void> {
+  for (let i = 0; i < maxIterations; i++) {
+    if (el.document?.blocks.length === expectedCount) return;
+    await new Promise((r) => setTimeout(r, 5));
+  }
+}
+
+/** Patch `HTMLImageElement.prototype.src` to synchronously fire
+ *  `onload` with synthetic `naturalWidth` / `naturalHeight` —
+ *  happy-dom doesn't actually decode images, so the helper's
+ *  `Image()` would never resolve in the test environment. Same
+ *  pattern editor-shell.test.ts uses. */
+function installImageLoadStub(): { restore: () => void } {
+  const proto = HTMLImageElement.prototype;
+  const orig = Object.getOwnPropertyDescriptor(proto, "src");
+  Object.defineProperty(proto, "src", {
+    configurable: true,
+    set(this: HTMLImageElement & { _src?: string }, value: string) {
+      this._src = value;
+      Object.defineProperty(this, "naturalWidth", { value: 200, configurable: true });
+      Object.defineProperty(this, "naturalHeight", { value: 150, configurable: true });
+      queueMicrotask(() => {
+        this.onload?.(new Event("load"));
+      });
+    },
+    get(this: HTMLImageElement & { _src?: string }) {
+      return this._src ?? "";
+    },
+  });
+  return {
+    restore: () => {
+      if (orig) Object.defineProperty(proto, "src", orig);
+      else delete (proto as unknown as { src?: string }).src;
+    },
+  };
+}
+
+describe("annot-doc-shell: paste / drop image insertion", () => {
+  let imgStub: { restore: () => void } | null = null;
+  beforeEach(() => {
+    imgStub = installImageLoadStub();
+  });
+  afterEach(() => {
+    imgStub?.restore();
+    imgStub = null;
+  });
+
+  it("paste handler inserts an image block when clipboard has an image file", async () => {
+    const el = mount(makeMixedDoc());
+    el.editing = true;
+    await el.updateComplete;
+    const before = el.document!.blocks.length;
+    const file = makeImageFile();
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    el.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true }));
+    await waitForBlockCount(el, before + 1);
+    expect(el.document!.blocks.length).toBe(before + 1);
+    const last = el.document!.blocks[el.document!.blocks.length - 1];
+    expect(last?.kind).toBe("image");
+  });
+
+  it("paste handler ignores non-image clipboard contents", async () => {
+    const el = mount(makeMixedDoc());
+    el.editing = true;
+    await el.updateComplete;
+    const before = el.document!.blocks.length;
+    const dt = new DataTransfer();
+    dt.setData("text/plain", "hello");
+    el.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true }));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(el.document!.blocks.length).toBe(before);
+  });
+
+  it("paste handler is a no-op when editing=false", async () => {
+    const el = mount(makeMixedDoc());
+    el.editing = false;
+    await el.updateComplete;
+    const before = el.document!.blocks.length;
+    const file = makeImageFile();
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    el.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true }));
+    await new Promise((r) => setTimeout(r, 30));
+    expect(el.document!.blocks.length).toBe(before);
+  });
+
+  it("drop handler inserts an image block when an image file is dropped", async () => {
+    const el = mount(makeMixedDoc());
+    el.editing = true;
+    await el.updateComplete;
+    const before = el.document!.blocks.length;
+    const file = makeImageFile();
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    // happy-dom's DragEvent constructor doesn't reliably store
+    // the `dataTransfer` init field on the resulting event, so we
+    // attach it imperatively before dispatch.
+    const ev = new DragEvent("drop", { bubbles: true });
+    Object.defineProperty(ev, "dataTransfer", { value: dt });
+    el.dispatchEvent(ev);
+    await waitForBlockCount(el, before + 1);
+    expect(el.document!.blocks.length).toBe(before + 1);
+    expect(el.document!.blocks[el.document!.blocks.length - 1]?.kind).toBe("image");
+  });
+
+  it("drop handler is a no-op when editing=false", async () => {
+    const el = mount(makeMixedDoc());
+    el.editing = false;
+    await el.updateComplete;
+    const before = el.document!.blocks.length;
+    const file = makeImageFile();
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    // happy-dom's DragEvent constructor doesn't reliably store
+    // the `dataTransfer` init field on the resulting event, so we
+    // attach it imperatively before dispatch.
+    const ev = new DragEvent("drop", { bubbles: true });
+    Object.defineProperty(ev, "dataTransfer", { value: dt });
+    el.dispatchEvent(ev);
+    await new Promise((r) => setTimeout(r, 30));
+    expect(el.document!.blocks.length).toBe(before);
+  });
+
+  it("an image insertion pushes a history snapshot (undoable)", async () => {
+    const el = mount(makeMixedDoc());
+    el.editing = true;
+    await el.updateComplete;
+    const before = el.document!.blocks.length;
+    expect(el.canUndo()).toBe(false);
+    const file = makeImageFile();
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    el.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true }));
+    await waitForBlockCount(el, before + 1);
+    expect(el.canUndo()).toBe(true);
   });
 });

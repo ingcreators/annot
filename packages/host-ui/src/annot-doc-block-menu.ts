@@ -25,7 +25,8 @@ export type BlockMenuKind =
   | "code"
   | "quote"
   | "callout"
-  | "divider";
+  | "divider"
+  | "image";
 
 export interface BlockMenuItem {
   /** Stable id used for keyboard / test selection. */
@@ -82,6 +83,12 @@ export const DEFAULT_BLOCK_MENU_ITEMS: readonly BlockMenuItem[] = [
     tone: "note",
   },
   { id: "divider", label: "Divider", kind: "divider" },
+  {
+    id: "image",
+    label: "Image",
+    description: "From file",
+    kind: "image",
+  },
 ];
 
 let activeMenu: AnnotDocBlockMenuElement | null = null;
