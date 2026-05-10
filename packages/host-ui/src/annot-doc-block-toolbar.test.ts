@@ -23,9 +23,16 @@ beforeEach(() => {
 });
 
 describe("annot-doc-block-toolbar", () => {
-  it("renders six action buttons by default", async () => {
+  it("renders six action buttons + a non-interactive drag handle", async () => {
     const el = mount();
     await el.updateComplete;
+    // The drag handle is a `<span>` with role="img" — counted via
+    // `.block-action` to confirm the layout slot exists, but
+    // EXCLUDED from the button-only NodeList below because Phase
+    // 7 will turn it into a real drag source rather than a button.
+    const handle = el.querySelector(".block-action-handle");
+    expect(handle).not.toBeNull();
+    expect(handle?.getAttribute("aria-label")).toBe("Drag to reorder");
     const buttons = el.querySelectorAll("button.block-action");
     expect(buttons).toHaveLength(6);
     expect(buttons[0]?.getAttribute("aria-label")).toBe("Insert block above");

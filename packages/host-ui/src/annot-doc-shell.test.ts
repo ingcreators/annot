@@ -470,9 +470,13 @@ describe("annot-doc-shell: text editing", () => {
     const el = mount(makeMixedDoc());
     el.editing = true;
     await el.updateComplete;
-    const para = el.querySelector(
-      '.annot-doc-block-host:nth-child(2) p[data-annot-block="paragraph"]',
-    ) as HTMLElement;
+    // Phase 2 of `annot-html-document-ux-polish.md` interleaves
+    // `<annot-doc-insert-bar>` between every block-host inside
+    // `<article>`, so positional `:nth-child` no longer hits the
+    // intended block-host. Query the second host by index over
+    // the class-keyed NodeList instead.
+    const wrappers = el.querySelectorAll(".annot-doc-block-host");
+    const para = wrappers[1]?.querySelector('p[data-annot-block="paragraph"]') as HTMLElement;
     expect(para).not.toBeNull();
     para.innerHTML = "Edited paragraph";
     el.commit();
