@@ -1296,19 +1296,21 @@ export class App {
     // status === "error") fires a `retry-save` CustomEvent the
     // host listens to.
     //
-    // Set the reactive property directly (not the attribute);
-    // Lit's runtime-property machinery reflects the property →
-    // attribute on its own and a bare `setAttribute("interactive",
-    // "")` after the element is already constructed gets
-    // serialised back through `_attributeToProperty` against the
-    // Boolean converter — which, given a value of "" + the
-    // existence of a default-constructor `interactive=false`
-    // initialiser, can race the initial render and end up `false`.
-    // Property assignment sidesteps that race entirely.
-    (saveStatus as unknown as { interactive: boolean }).interactive = true;
-    saveStatus.addEventListener("retry-save", () => {
-      const latest = shell.document;
-      if (latest) void runSave(latest);
+    // Wait for the header's first render to complete before
+    // assigning the property — `getSaveStatusIndicator()` queries
+    // the rendered child, which Lit creates inside `firstUpdated`
+    // (a microtask after `appendChild`). Without the await the
+    // setter runs against the indicator's pre-construction
+    // default and the attribute / property never reflect the
+    // host's intent.
+    void header.updateComplete.then(() => {
+      const indicator = header.getSaveStatusIndicator();
+      if (!indicator) return;
+      (indicator as unknown as { interactive: boolean }).interactive = true;
+      indicator.addEventListener("retry-save", () => {
+        const latest = shell.document;
+        if (latest) void runSave(latest);
+      });
     });
 
     const body = document.createElement("div");
