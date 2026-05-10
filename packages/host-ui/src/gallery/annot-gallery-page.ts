@@ -278,6 +278,7 @@ export class AnnotGalleryPageElement extends LitElement {
         tabindex="0"
         @dblclick=${(e: MouseEvent) => this.#openDocument(e, doc)}
         @keydown=${(e: KeyboardEvent) => this.#onDocumentKeydown(e, doc)}
+        @contextmenu=${(e: MouseEvent) => this.#onDocumentContextMenu(e, doc)}
       >
         <div class="gallery-thumb">
           ${
@@ -292,6 +293,15 @@ export class AnnotGalleryPageElement extends LitElement {
           </div>
           <div class="gallery-item-meta">${meta} • ${this.#formatDate(doc.updatedAt)}</div>
         </div>
+        <button
+          type="button"
+          class="gallery-card-more"
+          data-tooltip="More actions"
+          aria-label=${`Actions for document ${filename}`}
+          @click=${(e: MouseEvent) => this.#onDocumentMore(e, doc)}
+        >
+          <annot-icon .spec=${builtinIcon("more_vert")}></annot-icon>
+        </button>
       </div>
     `;
   }
@@ -312,6 +322,81 @@ export class AnnotGalleryPageElement extends LitElement {
       e.preventDefault();
       this.#openDocument(null, doc);
     }
+  }
+
+  #onDocumentContextMenu(e: MouseEvent, doc: DocumentRecord): void {
+    e.preventDefault();
+    openContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      items: this.#documentMenuItems(doc),
+    });
+  }
+
+  #onDocumentMore(e: MouseEvent, doc: DocumentRecord): void {
+    e.stopPropagation();
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    openContextMenu({
+      x: rect.right,
+      y: rect.bottom,
+      items: this.#documentMenuItems(doc),
+    });
+  }
+
+  #documentMenuItems(doc: DocumentRecord): MenuItem[] {
+    const filename = getFilename(doc.path) || doc.title || "Untitled document";
+    return [
+      {
+        icon: "open_in_new",
+        label: "Open",
+        action: () => this.#openDocument(null, doc),
+      },
+      {
+        icon: "drive_file_rename_outline",
+        label: "Rename",
+        action: async () => {
+          if (!this.storage) return;
+          const newName = await showPromptDialog({
+            title: "Rename document",
+            defaultValue: filename,
+            okLabel: "Rename",
+          });
+          if (!newName || newName === filename) return;
+          try {
+            await this.storage.renameImage(doc.path, newName);
+            await this.refresh();
+          } catch (e) {
+            const err = e as { message?: string };
+            await showAlertDialog({
+              title: "Couldn't rename document",
+              message: err.message || "An unexpected error occurred.",
+            });
+          }
+        },
+      },
+      {
+        icon: "delete",
+        label: "Delete",
+        danger: true,
+        action: async () => {
+          if (!this.storage) return;
+          const ok = await showConfirmDialog({
+            title: `Delete "${doc.title || filename}"?`,
+            message: "This cannot be undone.",
+            okLabel: "Delete",
+            danger: true,
+          });
+          if (!ok) return;
+          // Phase 6h — `deleteImage` is path-keyed and deletes
+          // any leaf file at the given path (the
+          // `StorageWithDocuments` plan promises this; backends
+          // route to whichever underlying object store /
+          // collection holds the record).
+          await this.storage.deleteImage(doc.path);
+          await this.refresh();
+        },
+      },
+    ];
   }
 
   #renderImageCard(img: ImageRecord) {
