@@ -996,6 +996,7 @@ export class App {
     }
 
     try {
+      const { extractDocumentThumbnailDataUrl } = await import("@ingcreators/annot-doc");
       const doc = parseDocument(sourceBytes);
       const cloned = cloneTemplate(doc);
       const bytes = serializeDocument(cloned);
@@ -1007,7 +1008,11 @@ export class App {
         {
           folderPath,
           bytes,
-          thumbnailDataUrl: "",
+          // Pull the first image's data URL out of the cloned
+          // doc as the gallery card's thumbnail. Empty string
+          // when the template has no image blocks (the doc
+          // card's CSS fallback shows a centered article icon).
+          thumbnailDataUrl: extractDocumentThumbnailDataUrl(cloned),
           title: cloned.title,
           imageCount: cloned.blocks.filter((b) => b.kind === "image").length,
           blockCount: cloned.blocks.length,
@@ -1261,7 +1266,9 @@ export class App {
       saveStatus.status = "saving";
       pendingSave = (async () => {
         try {
-          const { serializeDocument } = await import("@ingcreators/annot-doc");
+          const { extractDocumentThumbnailDataUrl, serializeDocument } = await import(
+            "@ingcreators/annot-doc"
+          );
           const bytes = serializeDocument(current);
           const imageCount = current.blocks.filter((b) => b.kind === "image").length;
           await storage.updateDocument(record.path, {
@@ -1269,6 +1276,12 @@ export class App {
             title: current.title,
             imageCount,
             blockCount: current.blocks.length,
+            // Refresh the gallery card's thumbnail from the
+            // first image block. Auto-updates on every save:
+            // the user adds an image → next save flips the
+            // gallery card from "centered article icon" to a
+            // proper preview. Empty when the doc has no images.
+            thumbnailDataUrl: extractDocumentThumbnailDataUrl(current),
             updatedAt: new Date().toISOString(),
           });
           saveStatus.status = "saved";
@@ -1397,6 +1410,7 @@ export class App {
             : { name: input.name, tags: input.tags },
         },
       };
+      const { extractDocumentThumbnailDataUrl } = await import("@ingcreators/annot-doc");
       const bytes = serializeDocument(stamped);
       const imageCount = stamped.blocks.filter((b) => b.kind === "image").length;
       const now = new Date().toISOString();
@@ -1404,7 +1418,9 @@ export class App {
         {
           folderPath: "Templates",
           bytes,
-          thumbnailDataUrl: "",
+          // First image block's data URL → gallery card thumb.
+          // Empty when the source doc has no images yet.
+          thumbnailDataUrl: extractDocumentThumbnailDataUrl(stamped),
           title: stamped.title,
           imageCount,
           blockCount: stamped.blocks.length,
