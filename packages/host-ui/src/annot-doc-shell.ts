@@ -43,6 +43,13 @@ import { AnnotDocImageEditorModalElement } from "./annot-doc-image-editor-modal.
 import type { InsertBlockDetail } from "./annot-doc-insert-bar.js";
 import "./annot-doc-image-editor-modal.js";
 import {
+  AnnotDocSelectionToolbarElement,
+  type BlockKindChangeDetail,
+  type BlockKindOption,
+  type FormatChangeDetail,
+} from "./annot-doc-selection-toolbar.js";
+import "./annot-doc-selection-toolbar.js";
+import {
   html,
   LitElement,
   nothing,
@@ -427,6 +434,16 @@ export class AnnotDocShellElement extends LitElement {
     this.addEventListener("paste", this.#onPaste as EventListener);
     this.addEventListener("dragover", this.#onDragOver as EventListener);
     this.addEventListener("drop", this.#onDrop as EventListener);
+    // Phase 3 of `annot-html-document-ux-polish.md` — listen for
+    // selection changes globally so the inline format toolbar
+    // shows / hides as the user drags / clicks inside an
+    // editable block. The handler scopes itself to selections
+    // that fall within this shell's contentEditable elements.
+    document.addEventListener("selectionchange", this.#onSelectionChange);
+    document.addEventListener("mousedown", this.#onDocMousedown, { capture: true });
+    document.addEventListener("keydown", this.#onDocKeydown, { capture: true });
+    document.addEventListener("format-change", this.#onFormatChange as EventListener);
+    document.addEventListener("block-kind-change", this.#onBlockKindChange as EventListener);
   }
 
   override disconnectedCallback(): void {
@@ -435,6 +452,12 @@ export class AnnotDocShellElement extends LitElement {
     this.removeEventListener("paste", this.#onPaste as EventListener);
     this.removeEventListener("dragover", this.#onDragOver as EventListener);
     this.removeEventListener("drop", this.#onDrop as EventListener);
+    document.removeEventListener("selectionchange", this.#onSelectionChange);
+    document.removeEventListener("mousedown", this.#onDocMousedown, { capture: true });
+    document.removeEventListener("keydown", this.#onDocKeydown, { capture: true });
+    document.removeEventListener("format-change", this.#onFormatChange as EventListener);
+    document.removeEventListener("block-kind-change", this.#onBlockKindChange as EventListener);
+    AnnotDocSelectionToolbarElement.closeActive();
     if (this.#commitTimer !== null) {
       clearTimeout(this.#commitTimer);
       this.#commitTimer = null;
@@ -965,6 +988,145 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
   };
 
   // -------------------------------------------------------------------------
+  // Phase 3 — Selection format toolbar
+  // -------------------------------------------------------------------------
+
+  #onSelectionChange = (): void => {
+    if (!this.editing) {
+      AnnotDocSelectionToolbarElement.closeActive();
+      return;
+    }
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
+      AnnotDocSelectionToolbarElement.closeActive();
+      return;
+    }
+    const range = selection.getRangeAt(0);
+    const editable = this.#findEditableAncestor(range.commonAncestorContainer);
+    if (!editable || !this.contains(editable)) {
+      AnnotDocSelectionToolbarElement.closeActive();
+      return;
+    }
+    const blockHost = editable.closest(".annot-doc-block-host") as HTMLElement | null;
+    const blockIndex = blockHost?.getAttribute("data-block-index");
+    const block =
+      blockIndex !== null && blockIndex !== undefined
+        ? this.document?.blocks[Number.parseInt(blockIndex, 10)]
+        : null;
+    const rect = range.getBoundingClientRect();
+    if (rect.width === 0 && rect.height === 0) {
+      AnnotDocSelectionToolbarElement.closeActive();
+      return;
+    }
+    AnnotDocSelectionToolbarElement.openFor({
+      rect,
+      format: {
+        bold: this.#queryCommandState("bold"),
+        italic: this.#queryCommandState("italic"),
+        underline: this.#queryCommandState("underline"),
+      },
+      currentBlockKindId: block ? blockKindIdFromBlock(block) : undefined,
+    });
+  };
+
+  #findEditableAncestor(node: Node): HTMLElement | null {
+    let current: Node | null = node;
+    while (current) {
+      if (
+        current.nodeType === Node.ELEMENT_NODE &&
+        (current as HTMLElement).getAttribute("contenteditable") === "true"
+      ) {
+        return current as HTMLElement;
+      }
+      current = current.parentNode;
+    }
+    return null;
+  }
+
+  #queryCommandState(cmd: string): boolean {
+    try {
+      return document.queryCommandState(cmd);
+    } catch {
+      return false;
+    }
+  }
+
+  /** Doc-wide mousedown: when the user clicks outside both the
+   *  shell AND the floating selection toolbar, dismiss the
+   *  toolbar so it doesn't linger over unrelated UI. The toolbar
+   *  itself stops `mousedown` propagation so its own buttons
+   *  don't trip this.  */
+  #onDocMousedown = (e: MouseEvent): void => {
+    const target = e.target as Node | null;
+    if (!target) return;
+    if (this.contains(target)) return;
+    const toolbar = AnnotDocSelectionToolbarElement.getActive();
+    if (toolbar?.contains(target)) return;
+    AnnotDocSelectionToolbarElement.closeActive();
+  };
+
+  /** Doc-wide keydown — Esc dismisses the floating toolbar
+   *  without canceling the user's selection. */
+  #onDocKeydown = (e: KeyboardEvent): void => {
+    if (e.key !== "Escape") return;
+    if (!AnnotDocSelectionToolbarElement.getActive()) return;
+    AnnotDocSelectionToolbarElement.closeActive();
+  };
+
+  /** Inline format dispatch from the selection toolbar. We run
+   *  the existing browser execCommand path (the same one
+   *  Ctrl+B / Ctrl+I / Ctrl+U already triggers) so the
+   *  contentEditable mutates exactly the way it would for a
+   *  keyboard shortcut. After the mutation lands, we commit so
+   *  the inline change pushes a history snapshot. */
+  #onFormatChange = (e: CustomEvent<FormatChangeDetail>): void => {
+    e.stopPropagation();
+    try {
+      document.execCommand(e.detail.command);
+    } catch {
+      // Pre-1.1 happy-dom doesn't implement execCommand; the
+      // host-ui test path stubs it where we need it. The browser
+      // path is reliable for v1.
+    }
+    // Sync DOM-side text changes into the model + push a
+    // snapshot.
+    this.#syncDomIntoDocument();
+    this.commit();
+    // Refresh the toolbar's pressed-state so the button reflects
+    // the new selection state immediately.
+    this.#onSelectionChange();
+  };
+
+  /** Block-kind dispatch from the selection toolbar. Replaces the
+   *  current block in the document model with a new one of the
+   *  chosen kind, preserving the inline HTML where the target
+   *  block kind also carries an `inlineHtml`-like field. */
+  #onBlockKindChange = (e: CustomEvent<BlockKindChangeDetail>): void => {
+    e.stopPropagation();
+    if (!this.document) return;
+    this.#syncDomIntoDocument();
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return;
+    const range = selection.getRangeAt(0);
+    const editable = this.#findEditableAncestor(range.commonAncestorContainer);
+    const blockHost = editable?.closest(".annot-doc-block-host") as HTMLElement | null;
+    const indexAttr = blockHost?.getAttribute("data-block-index");
+    if (!indexAttr) return;
+    const index = Number.parseInt(indexAttr, 10);
+    if (Number.isNaN(index)) return;
+    const current = this.document.blocks[index];
+    if (!current) return;
+    const replacement = convertBlockKind(current, e.detail.option);
+    if (!replacement) return;
+    const blocks = [...this.document.blocks];
+    blocks[index] = replacement;
+    const newDoc: AnnotDocument = { ...this.document, blocks };
+    this.#history?.push(newDoc);
+    this.#applyInternal(newDoc, "block-action");
+    AnnotDocSelectionToolbarElement.closeActive();
+  };
+
+  // -------------------------------------------------------------------------
   // TOC
   // -------------------------------------------------------------------------
 
@@ -1292,6 +1454,84 @@ function createBlockFromMenuItem(item: BlockMenuItem): Block {
       // (e.g. test path bypassing the handler), fall back to an
       // empty paragraph so the document remains valid.
       return { kind: "paragraph", inlineHtml: "" };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Phase 3 — Block-kind conversion (selection toolbar)
+// ---------------------------------------------------------------------------
+
+/** Map a `Block` to the matching id in
+ *  `SELECTION_BLOCK_KIND_OPTIONS` so the toolbar's dropdown can
+ *  highlight the active entry. Non-text-bearing blocks return
+ *  undefined (the toolbar shouldn't have been showing for them
+ *  anyway — only paragraph + heading are contentEditable in
+ *  v1). */
+function blockKindIdFromBlock(block: Block): string | undefined {
+  switch (block.kind) {
+    case "paragraph":
+      return "paragraph";
+    case "heading":
+      return `h${block.level}`;
+    case "list":
+      return block.ordered ? "ol" : "ul";
+    case "quote":
+      return "quote";
+    case "callout":
+      return `callout-${block.tone}`;
+    default:
+      return undefined;
+  }
+}
+
+/** Convert `current` to the kind described by `option`. Preserves
+ *  inline HTML where the target kind also carries text;
+ *  otherwise extracts the inline HTML and wraps it as the only
+ *  entry of the target's items / paragraphs array. Returns
+ *  `null` when the source kind doesn't carry any extractable
+ *  text (`divider`, `image`) — the caller is responsible for
+ *  not converting those. */
+function convertBlockKind(current: Block, option: BlockKindOption): Block | null {
+  const inline = extractInlineHtmlFromBlock(current);
+  if (inline === null) return null;
+  switch (option.kind) {
+    case "paragraph":
+      return { kind: "paragraph", inlineHtml: inline };
+    case "heading":
+      return { kind: "heading", level: option.level ?? 1, inlineHtml: inline };
+    case "list":
+      return {
+        kind: "list",
+        ordered: option.listOrdered ?? false,
+        listStyle: option.listOrdered ? "decimal" : "disc",
+        items: [inline],
+      };
+    case "quote":
+      return { kind: "quote", paragraphs: [inline] };
+    case "callout":
+      return { kind: "callout", tone: option.tone ?? "info", paragraphs: [inline] };
+  }
+}
+
+/** Pull the canonical inline HTML out of a text-bearing block.
+ *  Multi-paragraph blocks (quote / callout / list) collapse to
+ *  the first entry — Phase 5 will extend contentEditable to
+ *  those, at which point conversions will need a smarter
+ *  reverse mapping. Returns `null` for non-text blocks. */
+function extractInlineHtmlFromBlock(block: Block): string | null {
+  switch (block.kind) {
+    case "paragraph":
+    case "heading":
+      return block.inlineHtml;
+    case "list":
+      return block.items[0] ?? "";
+    case "quote":
+    case "callout":
+      return block.paragraphs[0] ?? "";
+    case "code":
+      return block.text;
+    default:
+      return null;
   }
 }
 
