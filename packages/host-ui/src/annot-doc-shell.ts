@@ -542,6 +542,15 @@ export class AnnotDocShellElement extends LitElement {
    *  insert-bar drop handlers to legitimate reorder gestures
    *  only. */
   #draggedBlockIndex: number | null = null;
+  /** Phase 10 of `annot-html-document-ux-polish.md` — lazy
+   *  image-slot materialisation. The observer fires when a
+   *  figure's `.annot-doc-image-svg-slot` placeholder enters
+   *  within ~200vh of the viewport, at which point we inline the
+   *  full SVG bytes carried in `data-annot-image-svg`. Created
+   *  lazily so test environments without IO don't pay the
+   *  construction cost. */
+  #imageSlotObserver: IntersectionObserver | null = null;
+  #observedImageSlots: WeakSet<HTMLElement> = new WeakSet();
 
   #history: DocumentHistory | null = null;
   /** Set briefly while we're applying a mutation internally
@@ -606,6 +615,12 @@ export class AnnotDocShellElement extends LitElement {
       clearTimeout(this.#commitTimer);
       this.#commitTimer = null;
     }
+    // Phase 10 — release the IntersectionObserver so it doesn't
+    // pin the shell + its observed slot elements after the
+    // shell tears down (e.g. when navigating away from a doc
+    // back to the gallery).
+    this.#imageSlotObserver?.disconnect();
+    this.#imageSlotObserver = null;
   }
 
   protected override willUpdate(changed: PropertyValues): void {
@@ -619,6 +634,13 @@ export class AnnotDocShellElement extends LitElement {
   }
 
   protected override updated(_changed: PropertyValues): void {
+    // Phase 10 of `annot-html-document-ux-polish.md` — image SVG
+    // slots need IO observation regardless of editing mode (so
+    // read-only viewers also benefit from lazy load). Run the
+    // sweep first; the rest of the body is an editing-mode
+    // hot-loop.
+    this.#materialiseImageSlots();
+
     // Imperatively populate contentEditable bodies for heading +
     // paragraph blocks. See `renderHeading`'s comment for why we
     // can't use Lit template parts here.
@@ -1454,6 +1476,75 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
     void openKeyboardHelpModal(DOC_SHORTCUT_GROUPS);
   }
 
+  /** Phase 10 — public escape hatch for callers that want all
+   *  image SVGs materialised right now instead of waiting for
+   *  the IntersectionObserver to fire. Used by:
+   *    - Tests, where happy-dom's IO stub never dispatches the
+   *      intersection callback.
+   *    - Print / export pipelines that need every image fully
+   *      rendered before snapshotting.
+   *    - SSR-style hosts where there is no scrolling viewport. */
+  materialiseAllImagesNow(): void {
+    const slots = this.querySelectorAll<HTMLElement>(
+      ".annot-doc-image-svg-slot[data-annot-image-svg]",
+    );
+    for (const slot of Array.from(slots)) {
+      materialiseImageSlot(slot);
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Phase 10 — Lazy image-slot materialisation
+  // -------------------------------------------------------------------------
+
+  /** Walks the article for `.annot-doc-image-svg-slot` placeholders
+   *  and either inlines the full SVG eagerly (when no
+   *  IntersectionObserver is available — happy-dom + tests) or
+   *  hands them to `#imageSlotObserver` so they materialise
+   *  lazily as the user scrolls. Idempotent: slots that have
+   *  already materialised are skipped via the `data-annot-image-svg`
+   *  attribute being cleared after inline. */
+  #materialiseImageSlots(): void {
+    if (!this.document) return;
+    const slots = this.querySelectorAll<HTMLElement>(
+      ".annot-doc-image-svg-slot[data-annot-image-svg]",
+    );
+    if (slots.length === 0) return;
+
+    // Eager-materialise when IntersectionObserver isn't available
+    // (happy-dom on some versions, jsdom). Tests + read-only
+    // viewers without IO support still see the full SVG.
+    if (typeof IntersectionObserver === "undefined") {
+      for (const slot of Array.from(slots)) {
+        materialiseImageSlot(slot);
+      }
+      return;
+    }
+
+    // Lazy path — observe each slot once. The shared observer
+    // dispatches `materialiseImageSlot` on first intersection
+    // within ~200vh of the viewport.
+    if (!this.#imageSlotObserver) {
+      this.#imageSlotObserver = new IntersectionObserver(
+        (entries, observer) => {
+          for (const entry of entries) {
+            if (!entry.isIntersecting) continue;
+            const target = entry.target as HTMLElement;
+            materialiseImageSlot(target);
+            observer.unobserve(target);
+            this.#observedImageSlots.delete(target);
+          }
+        },
+        { rootMargin: "200% 0px" },
+      );
+    }
+    for (const slot of Array.from(slots)) {
+      if (this.#observedImageSlots.has(slot)) continue;
+      this.#observedImageSlots.add(slot);
+      this.#imageSlotObserver.observe(slot);
+    }
+  }
+
   /** Resolve the block index that owns the currently-focused
    *  contentEditable. Falls back to scanning `window.getSelection()`
    *  when the active element isn't an editable (e.g. focus is on
@@ -2099,17 +2190,40 @@ function renderImage(block: ImageBlock, editable = false): TemplateResult {
   // undefined so users can add one in-place; the empty-paragraph
   // placeholder doesn't apply (figcaptions live in their own
   // selector tree).
+  //
+  // Phase 10 of `annot-html-document-ux-polish.md` — figure
+  // body is a placeholder slot the shell's IntersectionObserver
+  // pipeline materialises lazily. The slot carries an
+  // `aspect-ratio` style derived from the SVG's viewBox so the
+  // page lays out at the right height before the SVG mounts;
+  // `data-annot-image-svg` is the bytes the shell will inline
+  // once the figure intersects within ~200vh of the viewport.
+  // Test environments without `IntersectionObserver` (happy-dom
+  // pre-1.x) materialise eagerly via the same path so the
+  // existing tests don't see a regression.
+  const aspect = extractSvgAspectRatio(block.svg);
+  const slotStyle = aspect
+    ? `aspect-ratio: ${aspect}; background: var(--annot-doc-code-bg, #f3f4f6);`
+    : "";
   if (editable) {
     return html`
       <figure data-annot-block="image" data-annot-image-id=${block.id}>
-        ${unsafeHTML(block.svg)}
+        <div
+          class="annot-doc-image-svg-slot"
+          data-annot-image-svg=${block.svg}
+          style=${slotStyle}
+        ></div>
         <figcaption contenteditable="true" data-annot-figcaption></figcaption>
       </figure>
     `;
   }
   return html`
     <figure data-annot-block="image" data-annot-image-id=${block.id}>
-      ${unsafeHTML(block.svg)}
+      <div
+        class="annot-doc-image-svg-slot"
+        data-annot-image-svg=${block.svg}
+        style=${slotStyle}
+      ></div>
       ${
         block.caption !== undefined
           ? html`<figcaption>${unsafeHTML(block.caption)}</figcaption>`
@@ -2117,6 +2231,50 @@ function renderImage(block: ImageBlock, editable = false): TemplateResult {
       }
     </figure>
   `;
+}
+
+/** Phase 10 — inline the SVG bytes carried in
+ *  `data-annot-image-svg` and clear the attribute so subsequent
+ *  passes (e.g. on document edit re-renders) don't re-parse it.
+ *  Idempotent: a slot whose attribute has already been cleared
+ *  short-circuits at the `getAttribute` check. */
+function materialiseImageSlot(slot: HTMLElement): void {
+  const svg = slot.getAttribute("data-annot-image-svg");
+  if (!svg) return;
+  slot.innerHTML = svg;
+  slot.removeAttribute("data-annot-image-svg");
+  // The aspect-ratio style stops being load-bearing once the
+  // SVG is in — clearing it lets the SVG's intrinsic size
+  // govern layout (matches the pre-Phase-10 sizing).
+  slot.style.removeProperty("aspect-ratio");
+  slot.style.removeProperty("background");
+}
+
+/** Phase 10 — derive a CSS `aspect-ratio` value (`W / H`) from
+ *  the SVG's `viewBox` (or `width`/`height`) so the slot reserves
+ *  layout space before the bytes materialise. Returns `null` if
+ *  the dimensions can't be parsed; the slot then sizes from
+ *  whatever content it gets at materialisation time. */
+function extractSvgAspectRatio(svg: string): string | null {
+  // Prefer viewBox — works regardless of `width="100%"` etc.
+  const vbMatch = svg.match(/viewBox\s*=\s*"([^"]+)"/i);
+  if (vbMatch) {
+    const parts = vbMatch[1]?.trim().split(/\s+/).map(Number) ?? [];
+    if (parts.length === 4) {
+      const [, , w, h] = parts;
+      if (w !== undefined && h !== undefined && w > 0 && h > 0) return `${w} / ${h}`;
+    }
+  }
+  // Fall back to width / height attributes — only useful when
+  // both are pixel values.
+  const wMatch = svg.match(/<svg\b[^>]*\swidth\s*=\s*"(\d+(?:\.\d+)?)/i);
+  const hMatch = svg.match(/<svg\b[^>]*\sheight\s*=\s*"(\d+(?:\.\d+)?)/i);
+  if (wMatch && hMatch) {
+    const w = Number.parseFloat(wMatch[1] ?? "");
+    const h = Number.parseFloat(hMatch[1] ?? "");
+    if (Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0) return `${w} / ${h}`;
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------
