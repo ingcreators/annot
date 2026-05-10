@@ -69,6 +69,11 @@ const SHELL_CSS = `
   gap: 1.5rem;
   align-items: start;
   width: 100%;
+  /* Phase 6 of annot-html-document-ux-polish.md — anchors the
+     drop-zone overlay (the .annot-doc-shell-dropzone child,
+     position: absolute) so it covers the shell instead of the
+     viewport. */
+  position: relative;
 }
 .annot-doc-shell.no-toc {
   grid-template-columns: 1fr;
@@ -140,12 +145,51 @@ const SHELL_CSS = `
   color: #ffffff;
   border-radius: 4px;
   font-size: 0.75rem;
-  opacity: 0;
+  /* Phase 6 of annot-html-document-ux-polish.md — ambient hint
+     visible at low opacity even without hover so users know
+     image blocks are interactive. Hover bumps to full
+     visibility. */
+  opacity: 0.5;
   transition: opacity 0.12s ease-in;
   pointer-events: none;
 }
 .annot-doc-shell.editing figure[data-annot-block="image"]:hover::after {
   opacity: 1;
+}
+@media (hover: none) {
+  /* Touch — keep the badge fully visible since there is no
+     hover state to ramp from. */
+  .annot-doc-shell.editing figure[data-annot-block="image"]::after {
+    opacity: 1;
+  }
+}
+
+/* Phase 6 — drop-zone overlay. Mounted as a sibling of the
+   article (inside the .annot-doc-shell wrapper) and shown
+   while the user is dragging files over the shell.
+   Pointer-events: none on the chrome so the underlying drop
+   event still fires. */
+.annot-doc-shell-dropzone {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(37, 99, 235, 0.08);
+  border: 2px dashed var(--annot-doc-accent, #2563eb);
+  border-radius: 6px;
+  pointer-events: none;
+  z-index: 100;
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--annot-doc-accent, #2563eb);
+}
+.annot-doc-shell-dropzone-label {
+  padding: 12px 20px;
+  background: var(--annot-doc-bg, #ffffff);
+  border-radius: 999px;
+  border: 1px solid var(--annot-doc-accent, #2563eb);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
 }
 .annot-doc-shell.editing .annot-doc-block-host:hover,
 .annot-doc-shell.editing .annot-doc-block-host:focus-within {
@@ -405,11 +449,17 @@ export class AnnotDocShellElement extends LitElement {
     document: { attribute: false },
     showToc: { type: Boolean, attribute: "show-toc" },
     editing: { type: Boolean, attribute: "editing" },
+    dropZoneActive: { state: true },
   };
 
   declare document: AnnotDocument | null;
   declare showToc: boolean;
   declare editing: boolean;
+  declare dropZoneActive: boolean;
+  /** Counter mirroring `dragenter` vs `dragleave` events so we
+   *  hide the drop-zone overlay only when the cursor truly
+   *  leaves the shell, not on every nested-element exit. */
+  #dragCounter = 0;
 
   #history: DocumentHistory | null = null;
   /** Set briefly while we're applying a mutation internally
@@ -424,6 +474,7 @@ export class AnnotDocShellElement extends LitElement {
     this.document = null;
     this.showToc = true;
     this.editing = false;
+    this.dropZoneActive = false;
   }
 
   protected override createRenderRoot(): HTMLElement {
@@ -435,6 +486,8 @@ export class AnnotDocShellElement extends LitElement {
     this.addEventListener("keydown", this.#onKeydown);
     this.addEventListener("paste", this.#onPaste as EventListener);
     this.addEventListener("dragover", this.#onDragOver as EventListener);
+    this.addEventListener("dragenter", this.#onDragEnter as EventListener);
+    this.addEventListener("dragleave", this.#onDragLeave as EventListener);
     this.addEventListener("drop", this.#onDrop as EventListener);
     // Phase 3 of `annot-html-document-ux-polish.md` — listen for
     // selection changes globally so the inline format toolbar
@@ -453,6 +506,8 @@ export class AnnotDocShellElement extends LitElement {
     this.removeEventListener("keydown", this.#onKeydown);
     this.removeEventListener("paste", this.#onPaste as EventListener);
     this.removeEventListener("dragover", this.#onDragOver as EventListener);
+    this.removeEventListener("dragenter", this.#onDragEnter as EventListener);
+    this.removeEventListener("dragleave", this.#onDragLeave as EventListener);
     this.removeEventListener("drop", this.#onDrop as EventListener);
     document.removeEventListener("selectionchange", this.#onSelectionChange);
     document.removeEventListener("mousedown", this.#onDocMousedown, { capture: true });
@@ -591,6 +646,17 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
               : blocks.map((b) => this.#renderBlock(b, headingIds))
           }
         </article>
+        ${
+          editing && this.dropZoneActive
+            ? html`
+              <div class="annot-doc-shell-dropzone" aria-hidden="true">
+                <span class="annot-doc-shell-dropzone-label">
+                  Drop image here to insert
+                </span>
+              </div>
+            `
+            : nothing
+        }
       </div>
     `;
   }
@@ -881,18 +947,19 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
     if (!this.editing) return;
     const items = e.clipboardData?.items;
     if (!items) return;
+    // Phase 6 of `annot-html-document-ux-polish.md` — collect ALL
+    // image items in the clipboard payload + insert them
+    // sequentially. v1's `for ... return` only inserted the first.
+    const files: File[] = [];
     for (const item of Array.from(items)) {
       if (item.kind === "file" && item.type.startsWith("image/")) {
         const file = item.getAsFile();
-        if (file) {
-          e.preventDefault();
-          void this.#insertImageFromFile(file);
-          return;
-        }
+        if (file) files.push(file);
       }
     }
-    // No image item — let the browser handle text paste in the
-    // contentEditable element naturally.
+    if (files.length === 0) return; // text-only paste — let browser handle
+    e.preventDefault();
+    void this.#insertImagesSequential(files);
   };
 
   #onDragOver = (e: DragEvent): void => {
@@ -903,35 +970,62 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
     }
   };
 
-  #onDrop = (e: DragEvent): void => {
+  #onDragEnter = (e: DragEvent): void => {
     if (!this.editing) return;
-    // Mirror the paste handler — items + getAsFile is the more
-    // universally-implemented surface (browsers + happy-dom + the
-    // various drag emulators), where the `.files` getter is
-    // sometimes left empty in non-browser DOMs.
+    if (!e.dataTransfer?.types.includes("Files")) return;
+    this.#dragCounter += 1;
+    if (this.#dragCounter === 1) this.dropZoneActive = true;
+  };
+
+  #onDragLeave = (e: DragEvent): void => {
+    if (!this.editing) return;
+    if (!e.dataTransfer?.types.includes("Files")) return;
+    this.#dragCounter = Math.max(0, this.#dragCounter - 1);
+    if (this.#dragCounter === 0) this.dropZoneActive = false;
+  };
+
+  #onDrop = (e: DragEvent): void => {
+    // Phase 6 — clear the overlay regardless of whether the drop
+    // was inside the editing region (the user committed the drag,
+    // so the visual cue should retract).
+    this.#dragCounter = 0;
+    this.dropZoneActive = false;
+    if (!this.editing) return;
+    // Collect all image entries — items + .files — and insert
+    // sequentially in order so a multi-screenshot drop lands as
+    // multiple ordered blocks.
+    const files: File[] = [];
     const items = Array.from(e.dataTransfer?.items ?? []);
     for (const item of items) {
       if (item.kind === "file" && item.type.startsWith("image/")) {
         const file = item.getAsFile();
-        if (file) {
-          e.preventDefault();
-          void this.#insertImageFromFile(file);
-          return;
-        }
+        if (file) files.push(file);
       }
     }
     // Browser fallback when dataTransfer.items isn't populated
     // (rare; some legacy drag sources omit it). `.files` is the
     // canonical drop surface there.
-    const files = Array.from(e.dataTransfer?.files ?? []);
-    for (const file of files) {
-      if (file.type.startsWith("image/")) {
-        e.preventDefault();
-        void this.#insertImageFromFile(file);
-        return;
+    if (files.length === 0) {
+      const ftFiles = Array.from(e.dataTransfer?.files ?? []);
+      for (const file of ftFiles) {
+        if (file.type.startsWith("image/")) files.push(file);
       }
     }
+    if (files.length === 0) return;
+    e.preventDefault();
+    void this.#insertImagesSequential(files);
   };
+
+  /** Insert a list of image files sequentially after the current
+   *  document tail. Sequencing matters because each call awaits
+   *  `#insertImageFromFile` (which awaits an async file-read +
+   *  image-decode) — running them in parallel would race on
+   *  `this.document` and lose all but the last block. */
+  async #insertImagesSequential(files: readonly File[]): Promise<void> {
+    for (const file of files) {
+      await this.#insertImageFromFile(file);
+    }
+  }
 
   async #promptImageFileAndReplace(index: number): Promise<void> {
     const file = await pickImageFile();
@@ -1486,9 +1580,21 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
   }
 
   async #openImageEditor(block: ImageBlock, index: number): Promise<void> {
+    if (!this.document) return;
+    // Phase 6 of `annot-html-document-ux-polish.md` — surface the
+    // "Editing image N of M" context to the modal so users know
+    // where they are. N / M are computed over IMAGE blocks only
+    // (text-bearing blocks don't count toward the position).
+    const imageBlocks = this.document.blocks
+      .map((b, i) => ({ block: b, i }))
+      .filter((entry) => entry.block.kind === "image");
+    const positionInImages = imageBlocks.findIndex((entry) => entry.i === index) + 1;
+    const totalImages = imageBlocks.length;
     const result = await AnnotDocImageEditorModalElement.openFor({
       id: block.id,
       svg: block.svg,
+      positionInImages,
+      totalImages,
     });
     if (result.kind !== "save") return;
     if (!this.document) return;

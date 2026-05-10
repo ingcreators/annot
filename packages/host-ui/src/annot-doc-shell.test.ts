@@ -540,6 +540,58 @@ describe("annot-doc-shell: phase 5 contentEditable coverage", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// Phase 6 — Image flow polish
+// ---------------------------------------------------------------------------
+
+describe("annot-doc-shell: phase 6 image flow", () => {
+  function makeFileDragEvent(type: string): DragEvent {
+    // happy-dom's DragEvent constructor doesn't reliably store
+    // `dataTransfer` from the init dict, so we attach it
+    // imperatively. The shell's handler only checks for the
+    // "Files" entry in `dataTransfer.types`, so the value here
+    // doesn't need real File payloads.
+    const ev = new DragEvent(type, { bubbles: true, cancelable: true });
+    const dt = { types: ["Files"], items: [], files: [] } as unknown as DataTransfer;
+    Object.defineProperty(ev, "dataTransfer", { value: dt });
+    return ev;
+  }
+
+  it("dragenter shows the drop-zone overlay; dragleave hides it", async () => {
+    const el = mount(makeMixedDoc());
+    el.editing = true;
+    await el.updateComplete;
+    expect(el.querySelector(".annot-doc-shell-dropzone")).toBeNull();
+    el.dispatchEvent(makeFileDragEvent("dragenter"));
+    await el.updateComplete;
+    expect(el.querySelector(".annot-doc-shell-dropzone")).not.toBeNull();
+    el.dispatchEvent(makeFileDragEvent("dragleave"));
+    await el.updateComplete;
+    expect(el.querySelector(".annot-doc-shell-dropzone")).toBeNull();
+  });
+
+  it("dragenter has no effect outside editing mode", async () => {
+    const el = mount(makeMixedDoc());
+    el.editing = false;
+    await el.updateComplete;
+    el.dispatchEvent(makeFileDragEvent("dragenter"));
+    await el.updateComplete;
+    expect(el.querySelector(".annot-doc-shell-dropzone")).toBeNull();
+  });
+
+  it("drop clears the drop-zone overlay even when no editable target", async () => {
+    const el = mount(makeMixedDoc());
+    el.editing = true;
+    await el.updateComplete;
+    el.dispatchEvent(makeFileDragEvent("dragenter"));
+    await el.updateComplete;
+    expect(el.querySelector(".annot-doc-shell-dropzone")).not.toBeNull();
+    el.dispatchEvent(makeFileDragEvent("drop"));
+    await el.updateComplete;
+    expect(el.querySelector(".annot-doc-shell-dropzone")).toBeNull();
+  });
+});
+
 describe("annot-doc-shell: block toolbar actions", () => {
   function clickToolbarAction(el: AnnotDocShellElement, blockIndex: number, label: string): void {
     const wrapper = el.querySelectorAll(".annot-doc-block-host")[blockIndex] as HTMLElement;

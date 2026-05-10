@@ -120,3 +120,47 @@ describe("annot-doc-image-editor-modal: save", () => {
     expect(result.svg).toContain(PNG_PIXEL);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Phase 6 of `annot-html-document-ux-polish.md` — image flow polish.
+// ---------------------------------------------------------------------------
+
+describe("annot-doc-image-editor-modal: phase 6 header", () => {
+  it("renders 'Editing image N of M' when position + total are provided", async () => {
+    const promise = AnnotDocImageEditorModalElement.openFor(
+      makeInput({ positionInImages: 2, totalImages: 5 }),
+    );
+    const modal = document.querySelector(
+      "annot-doc-image-editor-modal",
+    ) as AnnotDocImageEditorModalElement;
+    await modal.updateComplete;
+    const header = modal.querySelector(".annot-doc-image-editor-modal-header");
+    expect(header?.textContent ?? "").toContain("Editing image 2 of 5");
+    AnnotDocImageEditorModalElement.closeActive();
+    await promise;
+  });
+
+  it("falls back to 'Edit image' when position / total are absent", async () => {
+    const promise = AnnotDocImageEditorModalElement.openFor(makeInput());
+    const modal = document.querySelector(
+      "annot-doc-image-editor-modal",
+    ) as AnnotDocImageEditorModalElement;
+    await modal.updateComplete;
+    const header = modal.querySelector(".annot-doc-image-editor-modal-header");
+    expect(header?.textContent ?? "").toContain("Edit image");
+    expect(header?.textContent ?? "").not.toContain("Editing image");
+    AnnotDocImageEditorModalElement.closeActive();
+    await promise;
+  });
+
+  it("doesn't show the 'Unsaved changes' pill at open time", async () => {
+    const promise = AnnotDocImageEditorModalElement.openFor(makeInput());
+    const modal = document.querySelector(
+      "annot-doc-image-editor-modal",
+    ) as AnnotDocImageEditorModalElement;
+    await modal.updateComplete;
+    expect(modal.querySelector(".annot-doc-image-editor-modal-dirty")).toBeNull();
+    AnnotDocImageEditorModalElement.closeActive();
+    await promise;
+  });
+});
