@@ -20,6 +20,7 @@ import type {
   ImageBlock,
   ImageMeta,
   ListBlock,
+  NumberingMeta,
   ParagraphBlock,
   QuoteBlock,
   TemplateMeta,
@@ -320,6 +321,7 @@ function parseDocMeta(jsonText: string, headTitle: string): DocMeta {
   const maxWidth = isMaxWidth(obj.maxWidth) ? obj.maxWidth : undefined;
   const template = parseTemplateMeta(obj.template);
   const imageMeta = parseImageMetaMap(obj.imageMeta);
+  const numbering = parseNumberingMeta(obj.numbering);
   const meta: DocMeta = { title };
   if (author !== undefined) (meta as { author?: string }).author = author;
   if (theme !== undefined) (meta as { theme?: typeof theme }).theme = theme;
@@ -328,6 +330,7 @@ function parseDocMeta(jsonText: string, headTitle: string): DocMeta {
   if (imageMeta !== undefined) {
     (meta as { imageMeta?: Readonly<Record<string, ImageMeta>> }).imageMeta = imageMeta;
   }
+  if (numbering !== undefined) (meta as { numbering?: NumberingMeta }).numbering = numbering;
   return meta;
 }
 
@@ -351,6 +354,31 @@ function parseTemplateMeta(v: unknown): TemplateMeta | undefined {
     (t as { tags?: readonly string[] }).tags = o.tags as readonly string[];
   }
   return t;
+}
+
+function parseNumberingMeta(v: unknown): NumberingMeta | undefined {
+  if (v === null || typeof v !== "object" || Array.isArray(v)) return undefined;
+  const o = v as Record<string, unknown>;
+  // Defensive: accept the field only when at least one nested
+  // toggle is meaningfully set. An empty object — `numbering: {}`
+  // — is treated as "not set" so a default-everything-off doc
+  // doesn't litter the JSON sidecar with no-op metadata after a
+  // round-trip.
+  const out: NumberingMeta = {};
+  let hasField = false;
+  if (typeof o.headings === "boolean") {
+    (out as { headings?: boolean }).headings = o.headings;
+    hasField = true;
+  }
+  if (typeof o.figures === "boolean") {
+    (out as { figures?: boolean }).figures = o.figures;
+    hasField = true;
+  }
+  if (typeof o.figureLabel === "string") {
+    (out as { figureLabel?: string }).figureLabel = o.figureLabel;
+    hasField = true;
+  }
+  return hasField ? out : undefined;
 }
 
 function parseImageMetaMap(v: unknown): Readonly<Record<string, ImageMeta>> | undefined {

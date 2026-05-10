@@ -40,6 +40,12 @@ export interface DocMeta {
   readonly maxWidth?: "narrow" | "medium" | "wide" | "full";
   readonly template?: TemplateMeta;
   readonly imageMeta?: Readonly<Record<string, ImageMeta>>;
+  /** Phase 13 of `docs/plans/annot-html-document.md` —
+   *  opt-in auto-numbering for headings and figure captions.
+   *  Implemented via CSS counters in `injectDocumentStyles`,
+   *  so the numbering shows up identically in the editor and
+   *  in standalone browser-view rendering. */
+  readonly numbering?: NumberingMeta;
 }
 
 export interface TemplateMeta {
@@ -52,6 +58,28 @@ export interface ImageMeta {
   readonly alt?: string;
   readonly sourceUrl?: string;
   readonly capturedAt?: string;
+}
+
+/** Auto-numbering toggles. All three fields are independent —
+ *  a doc can number headings without numbering figures, and
+ *  vice versa. Absent / `false` means no numbering for that
+ *  category. */
+export interface NumberingMeta {
+  /** Number h1 / h2 / h3 with hierarchical "1.", "1.1", "1.1.1"
+   *  prefixes. The numeric values come from CSS counters reset
+   *  on the article element so the numbering matches the
+   *  block order in the document tree. */
+  readonly headings?: boolean;
+  /** Number `<figure>` blocks with a "Figure N: " prefix in
+   *  the figcaption. Counter increments on every image block
+   *  in document order, regardless of section nesting. */
+  readonly figures?: boolean;
+  /** Override the figure-number prefix label. Default:
+   *  `"Figure "`. Set to `"図 "` for Japanese-localised docs,
+   *  `"Abbildung "` for German, etc. The trailing space is
+   *  authored explicitly so multi-byte locales that don't use
+   *  spaces can elide it. */
+  readonly figureLabel?: string;
 }
 
 /** Discriminated union over every v1 block kind plus a passthrough

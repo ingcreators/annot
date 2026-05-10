@@ -347,6 +347,7 @@ interface DocMeta {
   maxWidth?: "narrow" | "medium" | "wide" | "full";  // content column
   template?: TemplateMeta;  // present iff this file is a template
   imageMeta?: Record<string, ImageMeta>;  // keyed by data-annot-image-id
+  numbering?: NumberingMeta; // Phase 13 — opt-in heading / figure auto-numbering
 }
 
 interface TemplateMeta {
@@ -360,6 +361,12 @@ interface ImageMeta {
   sourceUrl?: string;       // page URL the screenshot was captured from
   capturedAt?: string;      // ISO timestamp
   // forward-compat: PageMetadata-style additivity per docs/svg-format.md
+}
+
+interface NumberingMeta {
+  headings?: boolean;       // h1/h2/h3 get hierarchical numbering (1., 1.1, 1.1.1)
+  figures?: boolean;        // image-block figcaptions get "Figure N: " prefix
+  figureLabel?: string;     // override "Figure " (e.g. "図 ", "Abbildung ")
 }
 ```
 

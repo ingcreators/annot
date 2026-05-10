@@ -155,3 +155,124 @@ describe("injectDocumentStyles: round-trip", () => {
     expect(styleEl?.textContent ?? "").toContain("--annot-doc-max-width");
   });
 });
+
+describe("injectDocumentStyles: numbering meta (Phase 13)", () => {
+  it("emits no counter rules when numbering is absent", () => {
+    const css = buildStyleBlock(createEmptyDocument({ title: "No numbering" }));
+    expect(css).not.toContain("counter-increment");
+    expect(css).not.toContain("counter-reset");
+    expect(css).not.toContain("annot-h1");
+    expect(css).not.toContain("annot-figure");
+  });
+
+  it("emits no counter rules when numbering is set but everything is false", () => {
+    const css = buildStyleBlock(
+      createEmptyDocument({
+        title: "Disabled",
+        meta: { numbering: { headings: false, figures: false } },
+      }),
+    );
+    expect(css).not.toContain("counter-increment");
+    expect(css).not.toContain("annot-h1");
+    expect(css).not.toContain("annot-figure");
+  });
+
+  it("emits heading-counter rules when numbering.headings is true", () => {
+    const css = buildStyleBlock(
+      createEmptyDocument({
+        title: "Numbered headings",
+        meta: { numbering: { headings: true } },
+      }),
+    );
+    // Counter resets on the article element.
+    expect(css).toContain("counter-reset: annot-h1 annot-h2 annot-h3");
+    // Each level gets ::before with counter-increment + content.
+    expect(css).toContain('[data-annot-block="heading"][data-level="1"]::before');
+    expect(css).toContain('[data-annot-block="heading"][data-level="2"]::before');
+    expect(css).toContain('[data-annot-block="heading"][data-level="3"]::before');
+    expect(css).toContain("counter-increment: annot-h1");
+    expect(css).toContain("counter-increment: annot-h2");
+    expect(css).toContain("counter-increment: annot-h3");
+    // No figure-counter rules when figures is off.
+    expect(css).not.toContain("annot-figure");
+  });
+
+  it("emits figure-counter rules when numbering.figures is true", () => {
+    const css = buildStyleBlock(
+      createEmptyDocument({
+        title: "Numbered figures",
+        meta: { numbering: { figures: true } },
+      }),
+    );
+    expect(css).toContain("counter-reset: annot-figure");
+    expect(css).toContain('[data-annot-block="image"]');
+    expect(css).toContain("counter-increment: annot-figure");
+    expect(css).toContain("figcaption::before");
+    // Default label.
+    expect(css).toContain('"Figure "');
+    // No heading-counter rules when headings is off.
+    expect(css).not.toContain("annot-h1");
+  });
+
+  it("emits both heading and figure counters when both flags are on", () => {
+    const css = buildStyleBlock(
+      createEmptyDocument({
+        title: "Both",
+        meta: { numbering: { headings: true, figures: true } },
+      }),
+    );
+    expect(css).toContain("counter-reset: annot-h1 annot-h2 annot-h3 annot-figure");
+    expect(css).toContain("counter-increment: annot-h1");
+    expect(css).toContain("counter-increment: annot-figure");
+  });
+
+  it("uses the user-supplied figureLabel verbatim", () => {
+    const css = buildStyleBlock(
+      createEmptyDocument({
+        title: "Localised label",
+        meta: { numbering: { figures: true, figureLabel: "図 " } },
+      }),
+    );
+    expect(css).toContain('"図 "');
+    expect(css).not.toContain('"Figure "');
+  });
+
+  it("survives a parse → serialize round-trip with numbering set", () => {
+    const original = injectDocumentStyles(
+      createEmptyDocument({
+        title: "Round-trip numbered",
+        meta: { numbering: { headings: true, figures: true, figureLabel: "図 " } },
+      }),
+    );
+    const onceBytes = serializeDocument(original);
+    const reparsed = parseDocument(onceBytes);
+    const twiceBytes = serializeDocument(reparsed);
+    expect(twiceBytes).toBe(onceBytes);
+    // The reparsed document should carry the numbering field.
+    expect(reparsed.meta.numbering).toEqual({
+      headings: true,
+      figures: true,
+      figureLabel: "図 ",
+    });
+  });
+
+  it("dropping `numbering: {}` from a parsed sidecar treats it as absent", () => {
+    // Defensive: a hand-edited sidecar that explicitly sets
+    // `"numbering": {}` should round-trip as if the field were
+    // unset (the parser elides the empty-object form).
+    const html = serializeDocument(
+      createEmptyDocument({
+        title: "Empty numbering",
+        meta: {},
+      }),
+    );
+    // Inject `"numbering":{}` into the JSON sidecar.
+    const tampered = html.replace(
+      /\{"title":"Empty numbering"\}/,
+      '{"numbering":{},"title":"Empty numbering"}',
+    );
+    expect(tampered).not.toBe(html); // sanity-check the replace landed
+    const reparsed = parseDocument(tampered);
+    expect(reparsed.meta.numbering).toBeUndefined();
+  });
+});
