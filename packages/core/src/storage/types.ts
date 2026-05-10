@@ -573,6 +573,157 @@ export interface StorageWithThumbnailCache {
   fetchThumbnailSource(path: string): Promise<Blob | undefined>;
 }
 
+/**
+ * Persistent document records — the storage shape for `.annot.html`
+ * files (multi-image manuals authored via the doc shell). Sibling
+ * to `ImageRecord`; backends opt in via `StorageWithDocuments`.
+ *
+ * Phase 6a of [`docs/plans/annot-html-document.md`](../../../../docs/plans/annot-html-document.md).
+ * The whole plan series introducing the format lives there; the
+ * Tier A surface (capability + record type + predicate) lands
+ * before any single backend implements it so a consumer that
+ * narrows a `StorageProvider` to `StorageWithDocuments` gets the
+ * documented type-shape regardless of which implementations have
+ * caught up.
+ *
+ * @example
+ * ```ts
+ * if (supportsDocuments(store)) {
+ *   const docs = await store.listDocuments("");
+ *   for (const doc of docs) {
+ *     console.log(doc.title, doc.imageCount, "blocks:", doc.blockCount);
+ *   }
+ * }
+ * ```
+ */
+export interface DocumentRecord {
+  /** Primary key: full path, e.g. "Manuals/onboarding.annot.html". */
+  path: string;
+  /** Parent folder path. Derived from `path` but stored for
+   *  efficient indexing. */
+  folderPath: string;
+  /** The on-disk `.annot.html` source. Self-contained: inlined
+   *  CSS / fonts / images per the format spec. */
+  bytes: string;
+  /** Thumbnail of the document — strategy is implementation-
+   *  defined. `BrowserStore` (Phase 6a) uses the first
+   *  `ImageBlock`'s SVG rendered to a small bitmap; backends that
+   *  opt into `StorageWithThumbnailCache` may answer this via the
+   *  unified cache instead. Empty string when no preview is
+   *  available. */
+  thumbnailDataUrl: string;
+  /** Document title, mirroring the JSON sidecar's `title` field
+   *  (the format-spec contract enforces `<title>` ↔ `meta.title`
+   *  equality on save). Cached here so listing UIs don't have to
+   *  parse every document's bytes to render a name. */
+  title: string;
+  /** Number of image blocks in the document. Cached for the
+   *  same reason as `title`. */
+  imageCount: number;
+  /** Number of top-level blocks. Cached for the same reason. */
+  blockCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * In-place updates allowed via `updateDocument`. Note that
+ * `path` and `folderPath` are intentionally NOT in this set —
+ * relocating a document goes through {@link
+ * StorageProvider.moveImage} / {@link StorageProvider.renameImage}
+ * (the path-keyed model already covers any leaf file).
+ *
+ * The cached metadata fields (`title`, `imageCount`, `blockCount`,
+ * `thumbnailDataUrl`) are part of the update set so callers that
+ * re-derive them on save (e.g. by re-parsing the new `bytes`) can
+ * keep the index consistent without a separate roundtrip.
+ */
+export type DocumentRecordUpdate = Partial<
+  Pick<
+    DocumentRecord,
+    "bytes" | "thumbnailDataUrl" | "title" | "imageCount" | "blockCount" | "updatedAt"
+  >
+>;
+
+/**
+ * Opt into the multi-image document storage surface — the storage
+ * half of the `.annot.html` document format
+ * ([`docs/plans/annot-html-document.md`](../../../../docs/plans/annot-html-document.md)).
+ *
+ * Stores that implement this interface gain four document-shaped
+ * methods. Delete / move / rename reuse the image-side equivalents
+ * because the path-keyed model already covers any leaf file —
+ * `deleteImage("a/b.annot.html")` deletes a document just as it
+ * deletes an image; the discriminator is the file extension and
+ * the receiving backend's storage layout (separate IDB store /
+ * separate object key prefix / etc.). Stores MAY override that
+ * behaviour internally if their layout demands it; consumers see
+ * a uniform path-keyed surface.
+ *
+ * Stores that don't implement this interface narrow out via
+ * `supportsDocuments(store) === false`; document UI code branches
+ * on the predicate before showing document-related affordances.
+ */
+export interface StorageWithDocuments {
+  /**
+   * Save a new document. The `record` carries every field of the
+   * saved entity except its path (which the store assigns). When
+   * `opts.filename` is provided the store uses it as the suggested
+   * leaf name; when omitted the store picks one (e.g.
+   * `document-<timestamp>.annot.html`). On collision the store
+   * uniquifies with " (2)", " (3)" suffixes — `saveDocument`
+   * NEVER throws `StorageConflictError`; the returned path IS the
+   * post-uniquification path.
+   *
+   * @returns the actual path assigned (post-uniquification).
+   * @throws `StoragePermissionError` when the backend rejects the
+   *   write for auth / ACL reasons.
+   * @throws `StorageQuotaError` when the backend reports
+   *   out-of-space or out-of-quota.
+   * @throws `Error` for unstructured backend / IO / network
+   *   failures.
+   */
+  saveDocument(record: Omit<DocumentRecord, "path">, opts?: { filename?: string }): Promise<string>;
+
+  /**
+   * Read a single document by path.
+   *
+   * @returns the document record, or `undefined` if no document
+   *   exists at that path.
+   * @throws `Error` for backend / IO / parse failures.
+   */
+  getDocument(path: string): Promise<DocumentRecord | undefined>;
+
+  /**
+   * List documents directly inside `folderPath`. Use `""` for the
+   * root folder. Does NOT recurse into subfolders.
+   *
+   * @returns document records for that folder. Returns `[]` when
+   *   the folder is empty or missing.
+   * @throws `Error` for backend / IO / parse failures.
+   */
+  listDocuments(folderPath: string): Promise<DocumentRecord[]>;
+
+  /**
+   * In-place update of an existing document's bytes / cached
+   * metadata / `updatedAt`. Path stays the same — to relocate
+   * the document, use {@link StorageProvider.moveImage} or
+   * {@link StorageProvider.renameImage} (path-keyed semantics
+   * apply uniformly).
+   *
+   * Idempotent on missing source: returns silently when no
+   * document exists at `path`. Callers that must distinguish
+   * "updated" from "no-such-document" should `getDocument` first.
+   *
+   * @throws `StoragePermissionError` for backend auth / ACL
+   *   rejection.
+   * @throws `StorageQuotaError` when the backend reports
+   *   out-of-space.
+   * @throws `Error` for unstructured backend / IO failures.
+   */
+  updateDocument(path: string, updates: DocumentRecordUpdate): Promise<void>;
+}
+
 // ─── Capability predicates ────────────────────────────────────────────
 // Use these instead of `if (store.method)` so the narrow is type-safe
 // and the optional behaviour is documented at the call site.
@@ -619,5 +770,17 @@ export function supportsThumbnailCache(
     typeof s.thumbnailKey === "function" &&
     typeof s.thumbnailVersion === "function" &&
     typeof s.fetchThumbnailSource === "function"
+  );
+}
+
+export function supportsDocuments(
+  store: StorageProvider,
+): store is StorageProvider & StorageWithDocuments {
+  const s = store as Partial<StorageWithDocuments>;
+  return (
+    typeof s.saveDocument === "function" &&
+    typeof s.getDocument === "function" &&
+    typeof s.listDocuments === "function" &&
+    typeof s.updateDocument === "function"
   );
 }

@@ -260,12 +260,15 @@ export {
 } from "./storage/thumbnail-cache.js";
 // ─── Storage types (pure types) ───────────────────────────────────────
 export type {
+  DocumentRecord,
+  DocumentRecordUpdate,
   FolderRecord,
   ImageRecord,
   ImageRecordUpdate,
   PageElement,
   PageMetadata,
   StorageProvider,
+  StorageWithDocuments,
   StorageWithForceRefresh,
   StorageWithInit,
   StorageWithRateLimit,
@@ -273,6 +276,7 @@ export type {
   StorageWithTokenRefresher,
 } from "./storage/types.js";
 export {
+  supportsDocuments,
   supportsForceRefresh,
   supportsInit,
   supportsRateLimit,
