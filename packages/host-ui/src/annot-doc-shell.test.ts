@@ -1448,4 +1448,57 @@ describe("annot-doc-shell: paste / drop image insertion", () => {
     await waitForBlockCount(el, before + 1);
     expect(el.canUndo()).toBe(true);
   });
+
+  it("preserves annotations when an .annot.png is pasted (XMP path)", async () => {
+    // Reported in production: dragging a `.annot.png` (a re-
+    // editable PNG carrying its annotation `<g>` in XMP)
+    // produced a flat-pixels image block that couldn't be
+    // edited in the modal. This test feeds a synthesised
+    // editable PNG through the paste path + asserts the
+    // resulting block embeds the original bitmap + the
+    // annotation rect.
+    const { createEditableImage } = await import("@ingcreators/annot-core/xmp");
+    const annotationsSvg = '<g id="annotations"><rect x="5" y="5" width="20" height="20"/></g>';
+    const tinyPngBytes = (() => {
+      const bin = atob(PNG_PIXEL.split(",")[1] ?? "");
+      const u8 = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+      return u8;
+    })();
+    const renderedBlob = new Blob([tinyPngBytes as BlobPart], { type: "image/png" });
+    const editableBlob = await createEditableImage({
+      renderedBlob,
+      originalDataUrl: PNG_PIXEL,
+      annotationsSvg,
+      width: 64,
+      height: 48,
+      format: "png",
+    });
+    const editableBytes = new Uint8Array(await editableBlob.arrayBuffer());
+    const file = new File([editableBytes as BlobPart], "screenshot.annot.png", {
+      type: "image/png",
+    });
+
+    const el = mount(makeMixedDoc());
+    el.editing = true;
+    await el.updateComplete;
+    const before = el.document!.blocks.length;
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    el.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true }));
+    await waitForBlockCount(el, before + 1);
+
+    const last = el.document!.blocks[el.document!.blocks.length - 1];
+    expect(last?.kind).toBe("image");
+    if (last?.kind !== "image") return;
+    // The block's SVG should carry the ORIGINAL bitmap (from
+    // the XMP custom chunk) — same data URL we passed in,
+    // re-emitted by the reader.
+    expect(last.svg).toContain('<image href="data:image/png;base64,');
+    // AND the annotation rect, byte-for-byte from the XMP
+    // `<annotations>` tag.
+    expect(last.svg).toContain('<rect x="5" y="5" width="20" height="20"/>');
+    // viewBox dimensions match the source.
+    expect(last.svg).toContain('viewBox="0 0 64 48"');
+  });
 });

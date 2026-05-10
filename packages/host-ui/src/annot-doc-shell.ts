@@ -21,6 +21,8 @@
  * Light DOM (Hybrid CSS) following the host-ui convention.
  */
 
+import { newIdB58 } from "@ingcreators/annot-core";
+import { readEditableImage } from "@ingcreators/annot-core/xmp";
 import type {
   AnnotDocument,
   Block,
@@ -1251,39 +1253,61 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
    *  The bitmap is inlined as a data URL so the document remains
    *  self-contained — Phase 8+ may add an asset-link path that
    *  defers to a `StorageProvider` instead. Default (no opts) →
-   *  append at end of block list. */
+   *  append at end of block list.
+   *
+   *  When the file is a re-editable `.annot.png` / `.annot.jpg`
+   *  (carrying XMP metadata with the original bitmap +
+   *  annotation `<g>` fragment), the resulting block embeds the
+   *  ORIGINAL bitmap + the existing annotations — not the
+   *  rendered-flat preview pixels. This is the difference
+   *  between dropping a screenshot and dropping a "screenshot
+   *  with my arrows still editable inside" file: the latter
+   *  must round-trip back through the editor modal with every
+   *  shape selectable, otherwise the user has effectively
+   *  flattened their annotations on import. */
   async #insertImageFromFile(
     file: File,
     opts: { replaceIndex?: number; insertAtIndex?: number } = {},
   ): Promise<void> {
     if (!this.document) return;
-    let dataUrl: string;
-    try {
-      dataUrl = await fileToDataUrl(file);
-    } catch (err) {
-      this.dispatchEvent(
-        new CustomEvent("doc-error", {
-          bubbles: true,
-          composed: true,
-          detail: { reason: "file-read", error: err },
-        }),
-      );
-      return;
+
+    // Try the XMP-extracted-annotations path first. When the
+    // file is a plain PNG / JPEG (no annotations chunk),
+    // `readEditableImage` returns null and we fall through to
+    // the bitmap-only path.
+    const editableMeta = await tryReadAnnotImageBytes(file);
+    let block: ImageBlock;
+    if (editableMeta) {
+      block = createImageBlockFromAnnotMeta(editableMeta);
+    } else {
+      let dataUrl: string;
+      try {
+        dataUrl = await fileToDataUrl(file);
+      } catch (err) {
+        this.dispatchEvent(
+          new CustomEvent("doc-error", {
+            bubbles: true,
+            composed: true,
+            detail: { reason: "file-read", error: err },
+          }),
+        );
+        return;
+      }
+      let dimensions: { width: number; height: number };
+      try {
+        dimensions = await getImageDimensions(dataUrl);
+      } catch (err) {
+        this.dispatchEvent(
+          new CustomEvent("doc-error", {
+            bubbles: true,
+            composed: true,
+            detail: { reason: "image-decode", error: err },
+          }),
+        );
+        return;
+      }
+      block = createImageBlockFromDataUrl(dataUrl, dimensions.width, dimensions.height);
     }
-    let dimensions: { width: number; height: number };
-    try {
-      dimensions = await getImageDimensions(dataUrl);
-    } catch (err) {
-      this.dispatchEvent(
-        new CustomEvent("doc-error", {
-          bubbles: true,
-          composed: true,
-          detail: { reason: "image-decode", error: err },
-        }),
-      );
-      return;
-    }
-    const block = createImageBlockFromDataUrl(dataUrl, dimensions.width, dimensions.height);
     if (!this.document) return;
     const blocks = [...this.document.blocks];
     if (
@@ -2548,6 +2572,88 @@ function extractInlineHtmlFromBlock(block: Block): string | null {
 // ---------------------------------------------------------------------------
 // Capture-insertion helpers
 // ---------------------------------------------------------------------------
+
+interface AnnotImageMeta {
+  readonly originalDataUrl: string;
+  readonly annotationsSvg: string;
+  readonly width: number;
+  readonly height: number;
+}
+
+/** Try reading the file as an Annot-editable image (`.annot.png`
+ *  / `.annot.jpg`). Returns null when the file is a plain PNG /
+ *  JPEG without the XMP `<annotations>` tag — the caller falls
+ *  back to the flat-bitmap path in that case.
+ *
+ *  Reported in production: dragging a `.annot.png` into a doc
+ *  would paste the rendered-flat pixels and lose the editable
+ *  annotation tree. The XMP carrier the file ships with already
+ *  has everything we need to reconstruct the original
+ *  `<image>` + annotation `<g>` — just read it and inject. */
+async function tryReadAnnotImageBytes(file: File): Promise<AnnotImageMeta | null> {
+  // Cheap MIME early-out so we don't read multi-megabyte non-
+  // image files in vain. The XMP-reader's magic-byte check
+  // would reject them too but only after a full ArrayBuffer
+  // copy.
+  const t = file.type;
+  if (t && t !== "image/png" && t !== "image/jpeg" && t !== "image/jpg") return null;
+  let bytes: Uint8Array;
+  try {
+    bytes = new Uint8Array(await file.arrayBuffer());
+  } catch {
+    return null;
+  }
+  const meta = readEditableImage(bytes);
+  if (!meta) return null;
+  if (!Number.isFinite(meta.width) || meta.width <= 0) return null;
+  if (!Number.isFinite(meta.height) || meta.height <= 0) return null;
+  if (!meta.originalImageDataUrl) return null;
+  return {
+    originalDataUrl: meta.originalImageDataUrl,
+    annotationsSvg: meta.annotationsSvg,
+    width: meta.width,
+    height: meta.height,
+  };
+}
+
+/** Build an `ImageBlock` whose `<svg>` carries the original
+ *  bitmap as `<image href>` + the existing annotations group
+ *  inline. The doc-image-editor modal's `synthesiseRecord`
+ *  reads the `<image>` for the bitmap and hands the rest to
+ *  `restoreAnnotations` — which already accepts both `<g
+ *  id="annotations">…</g>` and bare `<g>…</g>` shapes that
+ *  XMP-emitted fragments use. */
+function createImageBlockFromAnnotMeta(meta: AnnotImageMeta): ImageBlock {
+  const w = Math.round(meta.width);
+  const h = Math.round(meta.height);
+  const id = `img-${newIdB58()}`;
+  // The XMP `annotationsSvg` is canonical inner content — a
+  // `<g>` (with or without `id="annotations"`) that wraps the
+  // editable shapes. Inject as-is so the editor's restore path
+  // sees the same tree it would after a normal `.annot.svg`
+  // load. If the field is empty (defensive: an `.annot.png`
+  // with no shapes), fall back to an empty annotations group
+  // so the editor still has something to mount into.
+  const annotationsFragment = meta.annotationsSvg.trim() || `<g id="annotations"></g>`;
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" data-annot-version="1" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}">` +
+    `<image href="${escapeAttrValue(meta.originalDataUrl)}" width="${w}" height="${h}"/>` +
+    `${annotationsFragment}` +
+    "</svg>";
+  return { kind: "image", id, svg };
+}
+
+/** Mirrors the `escapeAttrValue` in `@ingcreators/annot-doc/src/
+ *  create-image-block.ts` — kept inline here so this Tier-C
+ *  helper doesn't have to pull a private export across the
+ *  Tier-A / Tier-C boundary. */
+function escapeAttrValue(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
 
 /** Read a `File` as a data URL via FileReader. Wrapped in a
  *  Promise so the shell's async insertion handler can `await`. */
