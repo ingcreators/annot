@@ -1059,15 +1059,18 @@ export class App {
     // Lazy-load: parsing + the shell pull in the doc package + the
     // image-editor modal it transitively imports. Code-split here so
     // image-only sessions stay slim.
-    const [{ parseDocument }, { AnnotDocShellElement }] = await Promise.all([
-      import("@ingcreators/annot-doc"),
-      // The shell self-registers via `customElements.define` on
-      // module load; importing for side effects is enough.
-      import("@ingcreators/annot-host-ui/annot-doc-shell"),
-      // Same for the save-status indicator — we mount one in the
-      // doc-mode header below.
-      import("@ingcreators/annot-host-ui/save-status-indicator"),
-    ]);
+    const [{ parseDocument }, { AnnotDocShellElement }, { AnnotDocHeaderElement }] =
+      await Promise.all([
+        import("@ingcreators/annot-doc"),
+        // The shell self-registers via `customElements.define` on
+        // module load; importing for side effects is enough.
+        import("@ingcreators/annot-host-ui/annot-doc-shell"),
+        // Phase 1 of `docs/plans/annot-html-document-ux-polish.md`
+        // replaced the inline-styled header below with this
+        // first-class Lit element. The header pulls in the save-
+        // status indicator transitively.
+        import("@ingcreators/annot-host-ui/annot-doc-header"),
+      ]);
 
     let parsed: ReturnType<typeof parseDocument>;
     try {
@@ -1127,108 +1130,127 @@ export class App {
       host.style.display = "flex";
     }
 
-    // Header bar with title + Back button. Inline styles only —
-    // tightly scoped to this view; if it grows we move to a
-    // proper Lit element with a stylesheet.
-    const header = document.createElement("div");
-    header.className = "annot-doc-mode-header";
-    header.style.cssText =
-      "display:flex;align-items:center;gap:12px;padding:8px 16px;border-bottom:1px solid var(--annot-doc-muted,#6b7280);background:var(--annot-doc-bg,#ffffff);";
-    const backBtn = document.createElement("button");
-    backBtn.type = "button";
-    backBtn.textContent = "← Back to gallery";
-    backBtn.style.cssText =
-      "padding:6px 10px;border:1px solid var(--annot-doc-muted,#6b7280);background:transparent;color:inherit;border-radius:4px;cursor:pointer;font-size:0.875rem;";
-    backBtn.addEventListener("click", () => {
-      pushRoute(galleryUrl(this.#currentFolderPath));
-      void this.#routerHost.handleRoute();
-    });
-    // Phase 6g — inline-editable title. The header renders the
-    // document title in a contentEditable `<div>`; on blur (or
-    // Enter), we reconcile the new text into both `doc.title` and
-    // `doc.meta.title` (the format spec enforces equality between
-    // `<title>` and the JSON sidecar's `title` field — see
-    // `docs/annot-html-format.md`'s document metadata sidecar
-    // section). Edits flow through the same `scheduleSave` path
-    // used by block-level mutations so the indicator reflects the
-    // pending → saving → saved cycle uniformly.
-    const titleEl = document.createElement("div");
-    titleEl.className = "annot-doc-mode-title";
-    titleEl.textContent = parsed.title || "Untitled";
-    titleEl.contentEditable = "true";
-    titleEl.spellcheck = false;
-    titleEl.role = "textbox";
-    titleEl.ariaLabel = "Document title";
-    titleEl.style.cssText =
-      "font-weight:600;flex:1;outline:none;padding:2px 4px;border-radius:3px;";
-    // Hover / focus border so the affordance is discoverable.
-    titleEl.addEventListener("focus", () => {
-      titleEl.style.boxShadow = "0 0 0 2px var(--annot-doc-accent,#2563eb)";
-    });
-    titleEl.addEventListener("blur", () => {
-      titleEl.style.boxShadow = "";
-    });
-    // Enter blurs to commit (matches the prompt-style edit affordance
-    // most users expect for an inline title field). Shift+Enter is
-    // intercepted to keep the title single-line.
-    titleEl.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        titleEl.blur();
-      }
-    });
-
-    // Phase 6f — save-status indicator in the doc-mode header.
-    // Same `<annot-save-status>` element the editor toolbar uses
-    // for image saves; the doc save lifecycle below drives the
-    // `.status` property through the same `pending → saving →
-    // saved` / `error` cycle.
-    const saveStatus = document.createElement("annot-save-status") as HTMLElement & {
-      status: "saved" | "pending" | "saving" | "error";
-    };
-    saveStatus.status = "saved";
-
-    // Phase 8b — "Save as template…" affordance. Lives next to
-    // the save-status indicator in the doc-mode header. Click
-    // → `showSaveAsTemplateDialog` → stamp `meta.template` on
-    // a clone of the current doc → persist under
-    // `Templates/<name>.annot.html` via `storage.saveDocument`.
-    // Original editor session unaffected — the live document +
-    // its save lifecycle are not mutated; only a new file is
-    // written.
-    const saveAsTemplateBtn = document.createElement("button");
-    saveAsTemplateBtn.type = "button";
-    saveAsTemplateBtn.textContent = "Save as template…";
-    saveAsTemplateBtn.style.cssText =
-      "padding:6px 10px;border:1px solid var(--annot-doc-muted,#6b7280);background:transparent;color:inherit;border-radius:4px;cursor:pointer;font-size:0.875rem;";
-    saveAsTemplateBtn.addEventListener("click", () => {
-      const current = shell.document;
-      if (!current) return;
-      void this.#saveCurrentDocAsTemplate(storage, current);
-    });
-
-    // Phase 11 — multi-slide PPTX export. One slide per
-    // `ImageBlock`. Hidden when the document has no image
-    // blocks (no slides → no usable export); the button gets
-    // re-evaluated on `doc-changed` below.
-    const exportPptxBtn = document.createElement("button");
-    exportPptxBtn.type = "button";
-    exportPptxBtn.textContent = "Export to PowerPoint…";
-    exportPptxBtn.style.cssText =
-      "padding:6px 10px;border:1px solid var(--annot-doc-muted,#6b7280);background:transparent;color:inherit;border-radius:4px;cursor:pointer;font-size:0.875rem;";
-    exportPptxBtn.addEventListener("click", () => {
-      const current = shell.document;
-      if (!current) return;
-      void this.#exportDocAsPptx(current);
-    });
-    const updateExportBtnVisibility = (doc: typeof parsed): void => {
+    // Phase 1 of `docs/plans/annot-html-document-ux-polish.md` —
+    // the doc-mode chrome is now `<annot-doc-header>` (a first-
+    // class Lit element in `@ingcreators/annot-host-ui`). The
+    // header carries: Back button, editable title, save-status
+    // indicator, Undo / Redo, "+ Image" primary action, View /
+    // Edit mode toggle, and an overflow menu hosting the export
+    // + save-as-template entries that used to live as separate
+    // top-level buttons. PWA owns the orchestration (save
+    // lifecycle, mode toggle, image-insert dispatch); the header
+    // is purely presentational.
+    const header = document.createElement("annot-doc-header") as InstanceType<
+      typeof AnnotDocHeaderElement
+    >;
+    header.documentTitle = parsed.title || "Untitled";
+    header.mode = "edit";
+    header.editableTitle = true;
+    header.showBack = true;
+    header.showSaveStatus = true;
+    header.showModeToggle = true;
+    header.canUndo = false;
+    header.canRedo = false;
+    const buildOverflowItems = (
+      doc: typeof parsed,
+    ): import("@ingcreators/annot-host-ui/annot-doc-header").DocHeaderOverflowItem[] => {
       const hasImages = doc.blocks.some((b) => b.kind === "image");
-      exportPptxBtn.style.display = hasImages ? "" : "none";
+      return [
+        {
+          id: "exportPptx",
+          label: "Export to PowerPoint…",
+          // Disabled when the doc has no image blocks (no slides →
+          // no usable export). Phase 11 of the parent plan landed
+          // multi-slide PPTX as the only export format.
+          disabled: !hasImages,
+        },
+        { id: "saveAsTemplate", label: "Save as template…" },
+      ];
     };
-    updateExportBtnVisibility(parsed);
-
-    header.append(backBtn, titleEl, saveStatus, saveAsTemplateBtn, exportPptxBtn);
+    header.overflowItems = buildOverflowItems(parsed);
+    header.callbacks = {
+      onBack: () => {
+        pushRoute(galleryUrl(this.#currentFolderPath));
+        void this.#routerHost.handleRoute();
+      },
+      onUndo: () => {
+        shell.undo();
+      },
+      onRedo: () => {
+        shell.redo();
+      },
+      onInsertImage: () => {
+        // The shell owns the file-picker → data-URL → ImageBlock
+        // pipeline. We just dispatch a synthetic `block-action`
+        // with `insertImage` against the last block so the new
+        // image lands at the end of the document — matching the
+        // primary "+ Image" affordance's "add to end" semantics.
+        const docNow = shell.document;
+        if (!docNow) return;
+        const lastIndex = Math.max(0, docNow.blocks.length - 1);
+        const lastWrapper = shell.querySelector(
+          `.annot-doc-block-host[data-block-index="${lastIndex}"]`,
+        );
+        const target = lastWrapper?.querySelector("annot-doc-block-toolbar");
+        target?.dispatchEvent(
+          new CustomEvent("block-action", {
+            bubbles: true,
+            composed: true,
+            detail: { action: "insertImage" },
+          }),
+        );
+      },
+      onModeChange: (next) => {
+        const editing = next === "edit";
+        shell.editing = editing;
+        header.mode = next;
+      },
+      onTitleCommit: (next) => {
+        const current = shell.document;
+        if (!current) return;
+        const newTitle = next || "Untitled";
+        if (newTitle === current.title) return;
+        const updated = {
+          ...current,
+          title: newTitle,
+          meta: { ...current.meta, title: newTitle },
+        };
+        shell.document = updated;
+        header.setTitleText(newTitle);
+        scheduleSave(updated);
+      },
+      onOverflowSelect: (action) => {
+        const current = shell.document;
+        if (!current) return;
+        if (action === "exportPptx") {
+          void this.#exportDocAsPptx(current);
+        } else if (action === "saveAsTemplate") {
+          void this.#saveCurrentDocAsTemplate(storage, current);
+        }
+      },
+    };
     host.appendChild(header);
+    // Save-status indicator is a child of the header — pull the
+    // ref out so the existing scheduleSave / runSave pipeline can
+    // drive `.status` directly. The header's `firstUpdated` runs
+    // synchronously during `appendChild`, so the indicator is
+    // already mounted.
+    const saveStatus =
+      header.getSaveStatusIndicator() ??
+      (() => {
+        // Defensive fallback: if for any reason the indicator is
+        // missing (e.g. `showSaveStatus = false` was flipped
+        // after construction), build a detached one so the rest
+        // of the pipeline keeps working. The detached element
+        // doesn't render anywhere, but it preserves the
+        // assignment shape (no `if (saveStatus)` guards needed
+        // downstream).
+        const fallback = document.createElement("annot-save-status") as HTMLElement & {
+          status: "saved" | "pending" | "saving" | "error";
+        };
+        fallback.status = "saved";
+        return fallback;
+      })();
 
     const body = document.createElement("div");
     body.className = "annot-doc-mode-body";
@@ -1309,49 +1331,16 @@ export class App {
     shell.addEventListener("doc-changed", () => {
       const latest = shell.document;
       if (!latest) return;
-      // Keep the doc-mode header title in sync when the user edits
-      // the H1 / sidecar metadata. The title shown is whatever the
-      // shell's current document carries — if the shell ever stops
-      // tracking title in `doc.title`, the header will show stale
-      // text until a re-mount.
-      // Avoid clobbering the user's in-progress title edit (when
-      // the field has focus and they're typing): the document
-      // model the shell carries gets updated by the title-blur
-      // handler below, so we only sync the header text when the
-      // field is NOT being edited.
-      if (document.activeElement !== titleEl) {
-        titleEl.textContent = latest.title || "Untitled";
-      }
-      // Phase 11 — re-evaluate the PPTX export button's
-      // visibility. The block list may have grown / shrunk
-      // since mount (slash-menu insert / image-block delete);
-      // hide the button when no image blocks remain so users
-      // don't trip into "no slides to export" confusion.
-      updateExportBtnVisibility(latest);
+      // Phase 1 of `annot-html-document-ux-polish.md` — keep the
+      // header's title + canUndo / canRedo + overflow-export
+      // gating in sync with the live document. `setTitleText`
+      // never overwrites a focused field, so the user's in-
+      // progress edit survives.
+      header.setTitleText(latest.title || "Untitled");
+      header.canUndo = shell.canUndo();
+      header.canRedo = shell.canRedo();
+      header.overflowItems = buildOverflowItems(latest);
       scheduleSave(latest);
-    });
-
-    // Phase 6g — commit title edits on blur. The new value updates
-    // BOTH `doc.title` (mirrors `<title>`) AND `doc.meta.title`
-    // (the JSON sidecar field) so the canonical-form contract is
-    // satisfied on the next serialise. Triggers the same
-    // scheduleSave path so the status indicator + concurrency
-    // gate apply uniformly.
-    titleEl.addEventListener("blur", () => {
-      const current = shell.document;
-      if (!current) return;
-      const newTitle = (titleEl.textContent ?? "").trim() || "Untitled";
-      if (newTitle === current.title) return;
-      const updated = {
-        ...current,
-        title: newTitle,
-        meta: { ...current.meta, title: newTitle },
-      };
-      shell.document = updated;
-      // Normalise the visible field (so a stray-whitespace edit
-      // collapses to the canonical form the model carries).
-      titleEl.textContent = newTitle;
-      scheduleSave(updated);
     });
   }
 

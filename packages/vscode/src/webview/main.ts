@@ -60,6 +60,15 @@ import type {
   AnnotDocShellElement,
   DocChangedDetail,
 } from "@ingcreators/annot-host-ui/annot-doc-shell";
+// Phase 1 of `docs/plans/annot-html-document-ux-polish.md` —
+// the VSCode webview gets the same doc-mode header strip the
+// PWA grew. Back + save-status are hidden because VSCode owns
+// dirty / saved state via the tab badge.
+import "@ingcreators/annot-host-ui/annot-doc-header";
+import type {
+  AnnotDocHeaderElement,
+  DocHeaderOverflowItem,
+} from "@ingcreators/annot-host-ui/annot-doc-header";
 import { Toolbar } from "@ingcreators/annot-host-ui/toolbar";
 import { showConfirmDialog } from "@ingcreators/annot-host-ui/ui/dialog";
 // `<annot-editor-right-panel>` registers a custom element on import.
@@ -626,6 +635,32 @@ function bootDocMode(initialBytes: Uint8Array): void {
     return;
   }
 
+  // Phase 1 of `annot-html-document-ux-polish.md` — header strip
+  // sits above the shell. VSCode hides Back (no gallery) +
+  // save-status (VSCode owns dirty marker). Mode toggle / Undo
+  // / Redo / "+ Image" / overflow Export all wire to the shell.
+  const headerEl = document.createElement("annot-doc-header") as AnnotDocHeaderElement;
+  headerEl.documentTitle = parsed.title || activeFilename;
+  headerEl.mode = "edit";
+  headerEl.editableTitle = false; // VSCode renames via the file tab, not inline
+  headerEl.showBack = false;
+  headerEl.showSaveStatus = false;
+  headerEl.showModeToggle = true;
+  headerEl.canUndo = false;
+  headerEl.canRedo = false;
+  // VSCode reaches Export to PowerPoint via the extension command
+  // palette ("Annot: Export to PowerPoint…") — the extension owns
+  // the save-dialog round-trip there. Surfacing the same action
+  // via the header's overflow menu would need a new
+  // webview-initiated RPC into the extension's `runExport` path;
+  // [`docs/plans/annot-html-document-ux-polish.md`](../../../docs/plans/annot-html-document-ux-polish.md)
+  // Phase 12 (Export menu + save-status feedback) is the right
+  // home for that wiring. Phase 1 keeps the chrome minimal here:
+  // empty overflow → ⋯ button hides automatically.
+  const buildVscodeOverflow = (_doc: AnnotDocument): DocHeaderOverflowItem[] => [];
+  headerEl.overflowItems = buildVscodeOverflow(parsed);
+  docHost.appendChild(headerEl);
+
   const shellEl = document.createElement("annot-doc-shell") as AnnotDocShellElement;
   shellEl.document = parsed;
   shellEl.editing = true;
@@ -641,8 +676,44 @@ function bootDocMode(initialBytes: Uint8Array): void {
     // Update our tracked document so save / revert / external
     // changes always see the latest tree.
     activeDocument = detail.document;
+    headerEl.setTitleText(detail.document.title || activeFilename);
+    headerEl.canUndo = shellEl.canUndo();
+    headerEl.canRedo = shellEl.canRedo();
+    headerEl.overflowItems = buildVscodeOverflow(detail.document);
     vscode.postMessage({ type: "edit" });
   });
+  headerEl.callbacks = {
+    onUndo: () => {
+      shellEl.undo();
+    },
+    onRedo: () => {
+      shellEl.redo();
+    },
+    onInsertImage: () => {
+      const docNow = shellEl.document;
+      if (!docNow) return;
+      const lastIndex = Math.max(0, docNow.blocks.length - 1);
+      const lastWrapper = shellEl.querySelector(
+        `.annot-doc-block-host[data-block-index="${lastIndex}"]`,
+      );
+      const target = lastWrapper?.querySelector("annot-doc-block-toolbar");
+      target?.dispatchEvent(
+        new CustomEvent("block-action", {
+          bubbles: true,
+          composed: true,
+          detail: { action: "insertImage" },
+        }),
+      );
+    },
+    onModeChange: (next) => {
+      const editing = next === "edit";
+      shellEl.editing = editing;
+      headerEl.mode = next;
+    },
+    // No overflow actions in VSCode v1 (see comment on
+    // `buildVscodeOverflow` above). Phase 12 of the parent plan
+    // owns the in-canvas export wiring.
+  };
   docHost.appendChild(shellEl);
   activeDocShell = shellEl;
   activeDocument = parsed;
