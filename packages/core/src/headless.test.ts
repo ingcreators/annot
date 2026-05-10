@@ -34,6 +34,9 @@ describe("@ingcreators/annot-core/headless boundary", () => {
     expect(typeof headless.supportsResync).toBe("function");
     expect(typeof headless.supportsForceRefresh).toBe("function");
     expect(typeof headless.supportsTokenRefresher).toBe("function");
+    // Capability predicate added in Phase 6a of
+    // `docs/plans/annot-html-document.md`.
+    expect(typeof headless.supportsDocuments).toBe("function");
     // Toolbar tool registry — Phase 1 of `docs/plans/toolbar-schema.md`.
     // Pure data + jsdom-friendly classifiers; loading the module here
     // proves it doesn't reach for `document` / `window` at import time.

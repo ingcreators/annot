@@ -6,10 +6,13 @@
  * Implements StorageProvider interface.
  */
 import type {
+  DocumentRecord,
+  DocumentRecordUpdate,
   FolderRecord,
   ImageRecord,
   ImageRecordUpdate,
   StorageProvider,
+  StorageWithDocuments,
   StorageWithThumbnailCache,
 } from "@ingcreators/annot-core/storage";
 import {
@@ -26,25 +29,44 @@ import {
 import { defaultAnnotImageFilename } from "@ingcreators/annot-core/utils";
 
 const DB_NAME = "annot";
-const DB_VERSION = 2; // v2: path-based keys
+// v3: add the `documents` store while preserving the v2
+// path-keyed images / folders. See Phase 6a of
+// `docs/plans/annot-html-document.md`.
+const DB_VERSION = 3;
 const IMG_STORE = "images";
 const FOLDER_STORE = "folders";
+const DOC_STORE = "documents";
 
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = () => {
+    req.onupgradeneeded = (event) => {
       const db = req.result;
-      // Hard cutover: drop old stores and recreate with path-based schema.
-      if (db.objectStoreNames.contains(IMG_STORE)) db.deleteObjectStore(IMG_STORE);
-      if (db.objectStoreNames.contains(FOLDER_STORE)) db.deleteObjectStore(FOLDER_STORE);
+      const oldVersion = (event as IDBVersionChangeEvent).oldVersion;
 
-      const imgs = db.createObjectStore(IMG_STORE, { keyPath: "path" });
-      imgs.createIndex("folderPath", "folderPath", { unique: false });
-      imgs.createIndex("createdAt", "createdAt", { unique: false });
+      // v0/v1 → v2: hard cutover for the path-based schema. The
+      // pre-path-keyed stores are unrecoverable here so we drop
+      // them; users on v0/v1 lose any local captures (acceptable
+      // pre-release behaviour the v2 cutover already established).
+      if (oldVersion < 2) {
+        if (db.objectStoreNames.contains(IMG_STORE)) db.deleteObjectStore(IMG_STORE);
+        if (db.objectStoreNames.contains(FOLDER_STORE)) db.deleteObjectStore(FOLDER_STORE);
 
-      const folders = db.createObjectStore(FOLDER_STORE, { keyPath: "path" });
-      folders.createIndex("parentPath", "parentPath", { unique: false });
+        const imgs = db.createObjectStore(IMG_STORE, { keyPath: "path" });
+        imgs.createIndex("folderPath", "folderPath", { unique: false });
+        imgs.createIndex("createdAt", "createdAt", { unique: false });
+
+        const folders = db.createObjectStore(FOLDER_STORE, { keyPath: "path" });
+        folders.createIndex("parentPath", "parentPath", { unique: false });
+      }
+
+      // v2 → v3: add the documents store without touching the
+      // existing v2 stores. Users on v2 keep their captures.
+      if (oldVersion < 3 && !db.objectStoreNames.contains(DOC_STORE)) {
+        const docs = db.createObjectStore(DOC_STORE, { keyPath: "path" });
+        docs.createIndex("folderPath", "folderPath", { unique: false });
+        docs.createIndex("createdAt", "createdAt", { unique: false });
+      }
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
@@ -57,8 +79,13 @@ function imgStore(db: IDBDatabase, mode: IDBTransactionMode) {
 function folderStore(db: IDBDatabase, mode: IDBTransactionMode) {
   return db.transaction(FOLDER_STORE, mode).objectStore(FOLDER_STORE);
 }
+function docStore(db: IDBDatabase, mode: IDBTransactionMode) {
+  return db.transaction(DOC_STORE, mode).objectStore(DOC_STORE);
+}
 
-export class BrowserStore implements StorageProvider, StorageWithThumbnailCache {
+export class BrowserStore
+  implements StorageProvider, StorageWithThumbnailCache, StorageWithDocuments
+{
   // ---- Images ----
 
   async saveImage(data: Omit<ImageRecord, "path">, opts?: { filename?: string }): Promise<string> {
@@ -461,5 +488,84 @@ export class BrowserStore implements StorageProvider, StorageWithThumbnailCache 
     } catch {
       return undefined;
     }
+  }
+
+  // ── StorageWithDocuments ────────────────────────────────────────
+  // Phase 6a of `docs/plans/annot-html-document.md`. Documents are
+  // stored in their own IDB object store keyed by path; folders are
+  // shared with the image side because the path-keyed model doesn't
+  // discriminate by file kind.
+
+  async saveDocument(
+    data: Omit<DocumentRecord, "path">,
+    opts?: { filename?: string },
+  ): Promise<string> {
+    // No explicit filename → fall back to a timestamped name. The
+    // `.annot.html` extension is the format-spec contract; callers
+    // typically pass a user-chosen leaf name through the editor's
+    // Save-As dialog instead.
+    const filename = opts?.filename || `document-${Date.now()}.annot.html`;
+    validateName(filename);
+    const folderPath = data.folderPath || "";
+
+    const uniqueName = await uniquifyFilenameAsync(filename, async (candidate) => {
+      const path = joinPath(folderPath, candidate);
+      const existing = await this.getDocument(path);
+      return existing !== undefined;
+    });
+
+    const path = joinPath(folderPath, uniqueName);
+    const record: DocumentRecord = {
+      path,
+      folderPath,
+      bytes: data.bytes,
+      thumbnailDataUrl: data.thumbnailDataUrl,
+      title: data.title,
+      imageCount: data.imageCount,
+      blockCount: data.blockCount,
+      createdAt: data.createdAt,
+      updatedAt: data.updatedAt,
+    };
+    const db = await openDB();
+    await new Promise<void>((resolve, reject) => {
+      const req = docStore(db, "readwrite").add(record);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+    return path;
+  }
+
+  async getDocument(path: string): Promise<DocumentRecord | undefined> {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const req = docStore(db, "readonly").get(path);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  async listDocuments(folderPath: string): Promise<DocumentRecord[]> {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const idx = docStore(db, "readonly").index("folderPath");
+      const req = idx.getAll(folderPath);
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  async updateDocument(path: string, updates: DocumentRecordUpdate): Promise<void> {
+    // Idempotent on missing source — matches `updateImage` semantics
+    // (the StorageProvider error-contract baseline applies uniformly
+    // across all sibling methods).
+    const existing = await this.getDocument(path);
+    if (!existing) return;
+    const updated: DocumentRecord = { ...existing, ...updates };
+    const db = await openDB();
+    await new Promise<void>((resolve, reject) => {
+      const req = docStore(db, "readwrite").put(updated);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
   }
 }
