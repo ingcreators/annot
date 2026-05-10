@@ -942,10 +942,40 @@ export class App {
       pushRoute(galleryUrl(this.#currentFolderPath));
       void this.#routerHost.handleRoute();
     });
+    // Phase 6g — inline-editable title. The header renders the
+    // document title in a contentEditable `<div>`; on blur (or
+    // Enter), we reconcile the new text into both `doc.title` and
+    // `doc.meta.title` (the format spec enforces equality between
+    // `<title>` and the JSON sidecar's `title` field — see
+    // `docs/annot-html-format.md`'s document metadata sidecar
+    // section). Edits flow through the same `scheduleSave` path
+    // used by block-level mutations so the indicator reflects the
+    // pending → saving → saved cycle uniformly.
     const titleEl = document.createElement("div");
     titleEl.className = "annot-doc-mode-title";
     titleEl.textContent = parsed.title || "Untitled";
-    titleEl.style.cssText = "font-weight:600;flex:1;";
+    titleEl.contentEditable = "true";
+    titleEl.spellcheck = false;
+    titleEl.role = "textbox";
+    titleEl.ariaLabel = "Document title";
+    titleEl.style.cssText =
+      "font-weight:600;flex:1;outline:none;padding:2px 4px;border-radius:3px;";
+    // Hover / focus border so the affordance is discoverable.
+    titleEl.addEventListener("focus", () => {
+      titleEl.style.boxShadow = "0 0 0 2px var(--annot-doc-accent,#2563eb)";
+    });
+    titleEl.addEventListener("blur", () => {
+      titleEl.style.boxShadow = "";
+    });
+    // Enter blurs to commit (matches the prompt-style edit affordance
+    // most users expect for an inline title field). Shift+Enter is
+    // intercepted to keep the title single-line.
+    titleEl.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        titleEl.blur();
+      }
+    });
 
     // Phase 6f — save-status indicator in the doc-mode header.
     // Same `<annot-save-status>` element the editor toolbar uses
@@ -1035,8 +1065,38 @@ export class App {
       // shell's current document carries — if the shell ever stops
       // tracking title in `doc.title`, the header will show stale
       // text until a re-mount.
-      titleEl.textContent = latest.title || "Untitled";
+      // Avoid clobbering the user's in-progress title edit (when
+      // the field has focus and they're typing): the document
+      // model the shell carries gets updated by the title-blur
+      // handler below, so we only sync the header text when the
+      // field is NOT being edited.
+      if (document.activeElement !== titleEl) {
+        titleEl.textContent = latest.title || "Untitled";
+      }
       scheduleSave(latest);
+    });
+
+    // Phase 6g — commit title edits on blur. The new value updates
+    // BOTH `doc.title` (mirrors `<title>`) AND `doc.meta.title`
+    // (the JSON sidecar field) so the canonical-form contract is
+    // satisfied on the next serialise. Triggers the same
+    // scheduleSave path so the status indicator + concurrency
+    // gate apply uniformly.
+    titleEl.addEventListener("blur", () => {
+      const current = shell.document;
+      if (!current) return;
+      const newTitle = (titleEl.textContent ?? "").trim() || "Untitled";
+      if (newTitle === current.title) return;
+      const updated = {
+        ...current,
+        title: newTitle,
+        meta: { ...current.meta, title: newTitle },
+      };
+      shell.document = updated;
+      // Normalise the visible field (so a stray-whitespace edit
+      // collapses to the canonical form the model carries).
+      titleEl.textContent = newTitle;
+      scheduleSave(updated);
     });
   }
 
