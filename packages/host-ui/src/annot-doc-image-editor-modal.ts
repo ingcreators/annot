@@ -186,6 +186,40 @@ const STYLES = `
   border-color: var(--annot-doc-accent, #2563eb);
   color: #ffffff;
 }
+
+/* Phase 9 of annot-html-document-ux-polish.md — phone-class
+   viewports: take the full screen + collapse the body's
+   3-column grid into a single column so the canvas isn't
+   crushed between the toolbar / right-panel slots. The right
+   panel scrolls under the canvas instead. Footer buttons
+   gain comfortable tap heights. */
+@media (max-width: 600px) {
+  .annot-doc-image-editor-modal-panel {
+    width: 100vw;
+    height: 100vh;
+    max-width: none;
+    border-radius: 0;
+  }
+  .annot-doc-image-editor-modal-body {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr auto;
+  }
+  .annot-doc-image-editor-modal-toolbar {
+    border-right: none;
+    border-bottom: 1px solid var(--annot-doc-muted, #6b7280);
+    flex-direction: row;
+    overflow-x: auto;
+  }
+  .annot-doc-image-editor-modal-rightpanel {
+    border-left: none;
+    border-top: 1px solid var(--annot-doc-muted, #6b7280);
+    max-height: 30vh;
+  }
+  .annot-doc-image-editor-modal-footer button {
+    padding: 12px 18px;
+    min-height: 44px;
+  }
+}
 `;
 
 let activeModal: AnnotDocImageEditorModalElement | null = null;
