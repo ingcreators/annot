@@ -36,6 +36,11 @@ export interface FileManagerCallbacks {
   onCaptureScreen: () => Promise<void>;
   onTimedCapture: () => Promise<void>;
   onPasteClipboard: () => Promise<void>;
+  /** Create a new `.annot.html` document. Phase 6c of
+   *  `docs/plans/annot-html-document.md`. Optional — when omitted,
+   *  the sidebar's "New Document" entry doesn't render (i.e. the
+   *  active host hasn't wired the document creation flow yet). */
+  onNewDocument?: () => Promise<void>;
   /** Plugin-registered storage backends, fed through to the
    *  sidebar so plugin chips can render alongside the built-ins.
    *  Optional — desktop / embedded shells that don't load plugins
@@ -102,6 +107,9 @@ export class FileManager {
       onCaptureScreen: () => this.#callbacks.onCaptureScreen(),
       onTimedCapture: () => this.#callbacks.onTimedCapture(),
       onPasteClipboard: () => this.#callbacks.onPasteClipboard(),
+      onNewDocument: this.#callbacks.onNewDocument
+        ? () => this.#callbacks.onNewDocument?.()
+        : undefined,
       getPluginStorages: this.#callbacks.getPluginStorages,
       isBuiltinDisabled: this.#callbacks.isBuiltinDisabled,
       getSidebarTabs: this.#callbacks.getSidebarTabs,
