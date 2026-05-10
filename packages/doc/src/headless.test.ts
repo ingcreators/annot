@@ -58,4 +58,23 @@ describe("@ingcreators/annot-doc/headless boundary", () => {
     // is not a constructor`.
     expect(() => headless.parseDocument(html)).toThrow(headless.AnnotDocParseError);
   });
+
+  it("BUILTIN_TEMPLATES is reachable from pure Node (Phase 9a)", () => {
+    // The starter templates are computed at module load via
+    // `serializeDocument(<literal>)` — Tier A operation, no
+    // DOM needed. This guard ensures a future regression that
+    // pulls in `parseDocument` at module load (e.g. for a
+    // canonicalisation cycle) gets caught here rather than
+    // surfacing as a runtime crash on a CI box that doesn't
+    // have happy-dom available.
+    expect(Array.isArray(headless.BUILTIN_TEMPLATES)).toBe(true);
+    expect(headless.BUILTIN_TEMPLATES.length).toBe(3);
+    for (const t of headless.BUILTIN_TEMPLATES) {
+      expect(typeof t.id).toBe("string");
+      expect(typeof t.source).toBe("string");
+      expect(t.source.length).toBeGreaterThan(0);
+    }
+    expect(typeof headless.getBuiltinTemplate).toBe("function");
+    expect(headless.getBuiltinTemplate("manual")?.id).toBe("manual");
+  });
 });

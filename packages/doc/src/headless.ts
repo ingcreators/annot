@@ -10,6 +10,8 @@
  * Enforced by `headless.test.ts`.
  */
 
+export type { BuiltinTemplateId, BuiltinTemplateSummary } from "./builtin-templates.js";
+export { BUILTIN_TEMPLATES, getBuiltinTemplate } from "./builtin-templates.js";
 export type { CloneTemplateOptions } from "./clone-template.js";
 export { cloneTemplate } from "./clone-template.js";
 export type { CreateEmptyOptions } from "./create-empty.js";
