@@ -1643,12 +1643,13 @@ export class App {
     // title / theme / maxWidth — otherwise the
     // current-meta-minus-author spread overwrites the new
     // values with the stale ones.
-    const baseMeta = result.author !== undefined
-      ? { ...current.meta, author: result.author }
-      : (() => {
-          const { author: _ignored, ...rest } = current.meta;
-          return rest;
-        })();
+    const baseMeta =
+      result.author !== undefined
+        ? { ...current.meta, author: result.author }
+        : (() => {
+            const { author: _ignored, ...rest } = current.meta;
+            return rest;
+          })();
     const updated: import("@ingcreators/annot-doc").AnnotDocument = {
       ...current,
       title: result.title,
