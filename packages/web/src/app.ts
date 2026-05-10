@@ -541,6 +541,9 @@ export class App {
     );
     // Tear down split editor if active (session → gallery).
     this.#splitEditorHost.unmount();
+    // Tear down doc-mode if active (Phase 6e). Idempotent —
+    // no-op when not in doc-mode.
+    this.#tearDownDocMode();
     const canvasContainer = assertNonNull(
       document.getElementById("canvas-container"),
       "#canvas-container missing — check index.html shell",
@@ -747,6 +750,10 @@ export class App {
   async openFromGallery(record: ImageRecord): Promise<void> {
     if (!this.#storage) return;
 
+    // Phase 6e — tear down doc-mode if active, since image-edit
+    // and doc-edit are mutually exclusive view modes.
+    this.#tearDownDocMode();
+
     const full = await this.#storage.getImage(record.path);
     if (!full) return;
 
@@ -875,27 +882,81 @@ export class App {
       return;
     }
 
+    // Phase 6e — proper view-mode switching:
+    //   - Push the canonical `/doc/...` URL.
+    //   - Hide the gallery / canvas / statusbar surfaces (mirrors
+    //     `setupEditor`'s gallery↔editor handoff so doc-mode +
+    //     editor-mode stay mutually exclusive).
+    //   - Mount the doc-shell into a dedicated `#annot-doc-host`
+    //     element appended to `#main-content` (rather than the
+    //     body overlay Phase 6b shipped) so the existing CSS
+    //     layout system + responsive behaviour applies.
+    //   - Wire a "Back to gallery" affordance so the user has an
+    //     in-app exit path that doesn't depend on the browser's
+    //     back button or URL-bar typing.
     pushRoute(docUrl(getStorageMode(), record.path));
     document.body.classList.add("annot-doc-mode");
 
+    // Hide non-doc surfaces — same shape as `setupEditor`'s
+    // gallery teardown, just inverted (we keep the editor surfaces
+    // hidden and show our own).
+    const fileManagerEl = document.getElementById("file-manager");
+    if (fileManagerEl) fileManagerEl.style.display = "none";
+    const canvasContainer = document.getElementById("canvas-container");
+    if (canvasContainer) canvasContainer.style.display = "none";
+    const statusbar = document.getElementById("statusbar");
+    if (statusbar) statusbar.style.display = "none";
+
+    const mainContent = document.getElementById("main-content");
     let host = document.getElementById("annot-doc-host") as HTMLDivElement | null;
     if (!host) {
       host = document.createElement("div");
       host.id = "annot-doc-host";
       host.style.cssText =
-        "position:fixed;inset:0;background:var(--annot-doc-bg,#ffffff);z-index:1500;overflow:auto;";
-      document.body.appendChild(host);
+        "display:flex;flex-direction:column;width:100%;height:100%;background:var(--annot-doc-bg,#ffffff);overflow:auto;";
+      // Mount alongside / inside `#file-manager`'s parent so the
+      // existing layout grid handles it. `#main-content` is the
+      // canonical mount point per the index.html shell.
+      (mainContent ?? document.body).appendChild(host);
     } else {
       host.innerHTML = "";
-      host.style.display = "block";
+      host.style.display = "flex";
     }
+
+    // Header bar with title + Back button. Inline styles only —
+    // tightly scoped to this view; if it grows we move to a
+    // proper Lit element with a stylesheet.
+    const header = document.createElement("div");
+    header.className = "annot-doc-mode-header";
+    header.style.cssText =
+      "display:flex;align-items:center;gap:12px;padding:8px 16px;border-bottom:1px solid var(--annot-doc-muted,#6b7280);background:var(--annot-doc-bg,#ffffff);";
+    const backBtn = document.createElement("button");
+    backBtn.type = "button";
+    backBtn.textContent = "← Back to gallery";
+    backBtn.style.cssText =
+      "padding:6px 10px;border:1px solid var(--annot-doc-muted,#6b7280);background:transparent;color:inherit;border-radius:4px;cursor:pointer;font-size:0.875rem;";
+    backBtn.addEventListener("click", () => {
+      pushRoute(galleryUrl(this.#currentFolderPath));
+      void this.#routerHost.handleRoute();
+    });
+    const titleEl = document.createElement("div");
+    titleEl.className = "annot-doc-mode-title";
+    titleEl.textContent = parsed.title || "Untitled";
+    titleEl.style.cssText = "font-weight:600;flex:1;";
+    header.append(backBtn, titleEl);
+    host.appendChild(header);
+
+    const body = document.createElement("div");
+    body.className = "annot-doc-mode-body";
+    body.style.cssText = "flex:1;overflow:auto;padding:1rem;";
+    host.appendChild(body);
 
     const shell = document.createElement("annot-doc-shell") as InstanceType<
       typeof AnnotDocShellElement
     >;
     shell.document = parsed;
     shell.editing = true;
-    host.appendChild(shell);
+    body.appendChild(shell);
 
     // Wire dirty → save. Phase 6c will route this through the
     // SavePipeline orchestrator so the toolbar's save status
@@ -938,7 +999,26 @@ export class App {
     };
     shell.addEventListener("doc-changed", () => {
       const latest = shell.document;
-      if (latest) void save(latest);
+      if (!latest) return;
+      // Keep the doc-mode header title in sync when the user edits
+      // the H1 / sidecar metadata. The title shown is whatever the
+      // shell's current document carries — if the shell ever stops
+      // tracking title in `doc.title`, the header will show stale
+      // text until a re-mount.
+      titleEl.textContent = latest.title || "Untitled";
+      void save(latest);
     });
+  }
+
+  /**
+   * Phase 6e teardown helper — removes the doc-mode overlay + its
+   * `body.annot-doc-mode` class so a subsequent `showGalleryView`
+   * or `setupEditor` doesn't leak the doc surface on top of the
+   * gallery / editor. Idempotent on no-doc-mode-active state.
+   */
+  #tearDownDocMode(): void {
+    document.body.classList.remove("annot-doc-mode");
+    const host = document.getElementById("annot-doc-host");
+    if (host) host.remove();
   }
 }
