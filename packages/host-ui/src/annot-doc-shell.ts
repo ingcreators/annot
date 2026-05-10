@@ -36,13 +36,13 @@ import {
 } from "./annot-doc-block-menu.js";
 import "./annot-doc-block-menu.js";
 import "./annot-doc-block-toolbar.js";
-import type { BlockToolbarActionDetail } from "./annot-doc-block-toolbar.js";
+import type { BlockDragStartDetail, BlockToolbarActionDetail } from "./annot-doc-block-toolbar.js";
 import "./annot-doc-empty-state.js";
 import type { EmptyStateActionDetail } from "./annot-doc-empty-state.js";
 import "./annot-doc-insert-bar.js";
 import { DocumentHistory } from "./annot-doc-history.js";
 import { AnnotDocImageEditorModalElement } from "./annot-doc-image-editor-modal.js";
-import type { InsertBlockDetail } from "./annot-doc-insert-bar.js";
+import type { BlockDropAtDetail, InsertBlockDetail } from "./annot-doc-insert-bar.js";
 import "./annot-doc-image-editor-modal.js";
 import {
   AnnotDocSelectionToolbarElement,
@@ -306,11 +306,21 @@ const SHELL_CSS = `
   height: 1px;
   background: var(--annot-doc-muted, #d1d5db);
   opacity: 0;
-  transition: opacity 0.12s ease-in;
+  transition: opacity 0.12s ease-in, background 0.12s ease-in,
+    height 0.12s ease-in;
 }
 .annot-doc-insert-bar-button:hover .annot-doc-insert-bar-rule,
 .annot-doc-insert-bar-button:focus-visible .annot-doc-insert-bar-rule {
   opacity: 0.6;
+}
+/* Phase 7 of annot-html-document-ux-polish.md — drop target
+   indicator. When a block is being dragged over this bar, the
+   hairline thickens + colours up to make the drop position
+   obvious. */
+.annot-doc-insert-bar-button.is-drop-target .annot-doc-insert-bar-rule {
+  opacity: 1;
+  height: 3px;
+  background: var(--annot-doc-accent, #2563eb);
 }
 .annot-doc-insert-bar-label {
   position: absolute;
@@ -460,6 +470,12 @@ export class AnnotDocShellElement extends LitElement {
    *  hide the drop-zone overlay only when the cursor truly
    *  leaves the shell, not on every nested-element exit. */
   #dragCounter = 0;
+  /** Phase 7 of `annot-html-document-ux-polish.md` — index of the
+   *  block currently being dragged via the toolbar's ☰ handle, or
+   *  null when no block reorder is in flight. Used to scope the
+   *  insert-bar drop handlers to legitimate reorder gestures
+   *  only. */
+  #draggedBlockIndex: number | null = null;
 
   #history: DocumentHistory | null = null;
   /** Set briefly while we're applying a mutation internally
@@ -632,6 +648,9 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
         @insert-block=${(e: CustomEvent<InsertBlockDetail>) => this.#onInsertBarSelect(e)}
         @empty-state-action=${(e: CustomEvent<EmptyStateActionDetail>) =>
           this.#onEmptyStateAction(e)}
+        @block-drag-start=${(e: CustomEvent<BlockDragStartDetail>) => this.#onBlockDragStart(e)}
+        @block-drag-end=${() => this.#onBlockDragEnd()}
+        @block-drop-at=${(e: CustomEvent<BlockDropAtDetail>) => this.#onBlockDropAt(e)}
       >
         ${tocVisible ? this.#renderToc(headings, headingIds) : nothing}
         <article
@@ -876,6 +895,50 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
     const file = await pickImageFile();
     if (!file) return;
     await this.#insertImageFromFile(file, { insertAtIndex: insertAt });
+  }
+
+  // -------------------------------------------------------------------------
+  // Block drag-and-drop reorder (Phase 7 of `annot-html-document-ux-polish.md`)
+  // -------------------------------------------------------------------------
+
+  /** Records the source block index when the user grabs the
+   *  toolbar's ☰ handle. The shell uses this in the matching
+   *  `block-drop-at` handler to splice the block to its new
+   *  position; insert-bars only react when a real reorder is
+   *  in flight. */
+  #onBlockDragStart(e: CustomEvent<BlockDragStartDetail>): void {
+    if (e.detail.fromIndex < 0) return;
+    this.#draggedBlockIndex = e.detail.fromIndex;
+  }
+
+  #onBlockDragEnd(): void {
+    this.#draggedBlockIndex = null;
+  }
+
+  /** Reorders `document.blocks` so the dragged block lands at
+   *  `insertAt`. Drops onto the source block's own neighboring
+   *  insert-bars are no-ops (the drop position equals the
+   *  current position). Pushes one history snapshot. */
+  #onBlockDropAt(e: CustomEvent<BlockDropAtDetail>): void {
+    if (!this.document) return;
+    if (this.#draggedBlockIndex === null) return;
+    const fromIndex = this.#draggedBlockIndex;
+    const insertAt = e.detail.insertAt;
+    this.#draggedBlockIndex = null;
+    // Drop on the bar immediately above OR below the source
+    // block resolves to the same position — bail out cleanly.
+    if (insertAt === fromIndex || insertAt === fromIndex + 1) return;
+    const blocks = [...this.document.blocks];
+    const [moved] = blocks.splice(fromIndex, 1);
+    if (!moved) return;
+    // Adjust the splice target if removing earlier in the list
+    // shifted everything after it left by one.
+    const adjustedAt = insertAt > fromIndex ? insertAt - 1 : insertAt;
+    const safeAt = Math.max(0, Math.min(blocks.length, adjustedAt));
+    blocks.splice(safeAt, 0, moved);
+    const newDoc: AnnotDocument = { ...this.document, blocks };
+    this.#history?.push(newDoc);
+    this.#applyInternal(newDoc, "block-action");
   }
 
   // -------------------------------------------------------------------------

@@ -579,6 +579,99 @@ describe("annot-doc-shell: phase 6 image flow", () => {
     expect(el.querySelector(".annot-doc-shell-dropzone")).toBeNull();
   });
 
+  it("dragging block 0 onto the insert-bar after block 2 reorders to the new position", async () => {
+    const el = mount(makeMixedDoc());
+    el.editing = true;
+    await el.updateComplete;
+    const beforeKinds = el.document!.blocks.map((b) => b.kind);
+
+    // Block 0 (heading "Mixed document") is the source.
+    const handle = el.querySelector(
+      '.annot-doc-block-host[data-block-index="0"] .block-action-handle',
+    );
+    if (!handle) throw new Error("drag handle missing");
+    // Synthesise dragstart on the handle
+    handle.dispatchEvent(new DragEvent("dragstart", { bubbles: true }));
+
+    // Drop on the insert bar at position 3 (after the third
+    // block) — block 0 should land at index 2 after the splice
+    // adjustment.
+    const insertBar3 = el.querySelector(
+      'annot-doc-insert-bar[data-insert-at="3"] .annot-doc-insert-bar-button',
+    );
+    if (!insertBar3) throw new Error("insert bar at 3 missing");
+    insertBar3.dispatchEvent(new DragEvent("drop", { bubbles: true }));
+    await el.updateComplete;
+
+    const afterKinds = el.document!.blocks.map((b) => b.kind);
+    // The block 0 originally first (heading) should now be at
+    // index 2; the surrounding blocks shifted up by one.
+    expect(afterKinds[0]).toBe(beforeKinds[1]);
+    expect(afterKinds[1]).toBe(beforeKinds[2]);
+    expect(afterKinds[2]).toBe(beforeKinds[0]);
+  });
+
+  it("dropping on the bar immediately before/after the source is a no-op", async () => {
+    const el = mount(makeMixedDoc());
+    el.editing = true;
+    await el.updateComplete;
+    const before = el.document!.blocks.map((b) => b.kind);
+    const handle = el.querySelector(
+      '.annot-doc-block-host[data-block-index="2"] .block-action-handle',
+    );
+    if (!handle) throw new Error("drag handle missing");
+    handle.dispatchEvent(new DragEvent("dragstart", { bubbles: true }));
+    // Drop onto the bar at insertAt=2 (immediately above block
+    // 2 — same position) → no-op.
+    const sameBar = el.querySelector(
+      'annot-doc-insert-bar[data-insert-at="2"] .annot-doc-insert-bar-button',
+    );
+    if (!sameBar) throw new Error("bar at 2 missing");
+    sameBar.dispatchEvent(new DragEvent("drop", { bubbles: true }));
+    await el.updateComplete;
+    expect(el.document!.blocks.map((b) => b.kind)).toEqual(before);
+  });
+
+  it("reorder pushes a history snapshot (undoable)", async () => {
+    const el = mount(makeMixedDoc());
+    el.editing = true;
+    await el.updateComplete;
+    const before = el.document!.blocks.map((b) => b.kind);
+    const handle = el.querySelector(
+      '.annot-doc-block-host[data-block-index="0"] .block-action-handle',
+    );
+    handle?.dispatchEvent(new DragEvent("dragstart", { bubbles: true }));
+    const bar = el.querySelector(
+      'annot-doc-insert-bar[data-insert-at="3"] .annot-doc-insert-bar-button',
+    );
+    bar?.dispatchEvent(new DragEvent("drop", { bubbles: true }));
+    await el.updateComplete;
+    expect(el.canUndo()).toBe(true);
+    el.undo();
+    await el.updateComplete;
+    expect(el.document!.blocks.map((b) => b.kind)).toEqual(before);
+  });
+
+  it("dragend without a drop clears the dragged-block bookkeeping", async () => {
+    const el = mount(makeMixedDoc());
+    el.editing = true;
+    await el.updateComplete;
+    const handle = el.querySelector(
+      '.annot-doc-block-host[data-block-index="0"] .block-action-handle',
+    );
+    handle?.dispatchEvent(new DragEvent("dragstart", { bubbles: true }));
+    handle?.dispatchEvent(new DragEvent("dragend", { bubbles: true }));
+    // A drop now SHOULD NOT reorder anything because the
+    // bookkeeping has been cleared.
+    const before = el.document!.blocks.map((b) => b.kind);
+    const bar = el.querySelector(
+      'annot-doc-insert-bar[data-insert-at="3"] .annot-doc-insert-bar-button',
+    );
+    bar?.dispatchEvent(new DragEvent("drop", { bubbles: true }));
+    await el.updateComplete;
+    expect(el.document!.blocks.map((b) => b.kind)).toEqual(before);
+  });
+
   it("drop clears the drop-zone overlay even when no editable target", async () => {
     const el = mount(makeMixedDoc());
     el.editing = true;

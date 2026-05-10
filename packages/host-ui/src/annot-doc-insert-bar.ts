@@ -36,6 +36,12 @@ export interface InsertBlockDetail {
   item: BlockMenuItem;
 }
 
+export interface BlockDropAtDetail {
+  /** Splice index within `document.blocks` — 0 means "before the
+   *  first block", `blocks.length` means "after the last block". */
+  insertAt: number;
+}
+
 /**
  * The bar itself. Public reactive properties:
  *
@@ -48,15 +54,21 @@ export class AnnotDocInsertBarElement extends LitElement {
   static override properties = {
     insertAt: { type: Number, attribute: "insert-at" },
     label: { type: String },
+    dropTargetActive: { state: true },
   };
 
   declare insertAt: number;
   declare label: string;
+  /** Phase 7 of `annot-html-document-ux-polish.md` — set true
+   *  while a block-drag hovers this bar so the CSS can render
+   *  the drop indicator (a thicker accent-coloured line). */
+  declare dropTargetActive: boolean;
 
   constructor() {
     super();
     this.insertAt = 0;
     this.label = "Insert";
+    this.dropTargetActive = false;
   }
 
   protected override createRenderRoot(): HTMLElement {
@@ -64,13 +76,18 @@ export class AnnotDocInsertBarElement extends LitElement {
   }
 
   override render(): TemplateResult {
+    const classes = `annot-doc-insert-bar-button${this.dropTargetActive ? " is-drop-target" : ""}`;
     return html`
       <button
         type="button"
-        class="annot-doc-insert-bar-button"
+        class=${classes}
         aria-label=${`Insert block at position ${this.insertAt + 1}`}
         title="Click to insert a block here"
         @click=${this.#onClick}
+        @dragover=${this.#onDragOver}
+        @dragenter=${this.#onDragEnter}
+        @dragleave=${this.#onDragLeave}
+        @drop=${this.#onDrop}
       >
         <span class="annot-doc-insert-bar-rule" aria-hidden="true"></span>
         <span class="annot-doc-insert-bar-label" aria-hidden="true">
@@ -98,6 +115,43 @@ export class AnnotDocInsertBarElement extends LitElement {
         );
       },
       { once: true },
+    );
+  };
+
+  // -------------------------------------------------------------------------
+  // Phase 7 — drop target for the block drag-and-drop reorder flow
+  // -------------------------------------------------------------------------
+
+  #onDragOver = (e: DragEvent): void => {
+    // The dragover MUST be `preventDefault`'d for a drop event
+    // to fire. We accept any drag whose effectAllowed includes
+    // "move" — the shell scopes the actual reorder via its
+    // own `#draggedBlockIndex` bookkeeping so non-reorder drags
+    // are filtered there.
+    if (!e.dataTransfer) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  };
+
+  #onDragEnter = (e: DragEvent): void => {
+    if (!e.dataTransfer) return;
+    e.preventDefault();
+    this.dropTargetActive = true;
+  };
+
+  #onDragLeave = (_e: DragEvent): void => {
+    this.dropTargetActive = false;
+  };
+
+  #onDrop = (e: DragEvent): void => {
+    e.preventDefault();
+    this.dropTargetActive = false;
+    this.dispatchEvent(
+      new CustomEvent<BlockDropAtDetail>("block-drop-at", {
+        bubbles: true,
+        composed: true,
+        detail: { insertAt: this.insertAt },
+      }),
     );
   };
 }
