@@ -9,13 +9,16 @@
  *   paragraphs.
  *
  * Phases of `docs/plans/annot-html-document-ux-polish.md`:
- * - Phase 2 (this file's update) adds a "⠿" drag handle on the
- *   left edge as a forward-looking affordance for the
- *   drag-to-reorder flow Phase 7 of the same plan wires.
- *   For now the handle has `cursor: grab` + an aria-label and
- *   is otherwise non-interactive — clicking it does nothing,
- *   so users discover the visual hint without a misleading
- *   noop callback.
+ * - Phase 2 added a "☰" drag handle on the left edge as a
+ *   forward-looking affordance for the drag-to-reorder flow.
+ * - Phase 7 (this file's update) turns the handle into a real
+ *   HTML5 drag source. `dragstart` on the handle dispatches a
+ *   `block-drag-start` CustomEvent the shell catches to record
+ *   the source block index; `dragend` dispatches
+ *   `block-drag-end` so the shell can clear its hover state.
+ *   The matching `dragover` / `drop` listeners live on the
+ *   insert-bars between blocks so the drop target coincides
+ *   with the existing "+ Insert" affordances.
  *
  * Light DOM (Hybrid CSS) following the host-ui convention. The
  * shell positions the toolbar relative to its block; this
@@ -32,6 +35,20 @@ export type BlockToolbarAction =
   | "insertAbove"
   | "insertBelow"
   | "insertImage";
+
+export interface BlockDragStartDetail {
+  /** Source block index — read from the block-host wrapper's
+   *  `data-block-index`. -1 when the wrapper is missing or the
+   *  attribute can't be parsed; the shell ignores those. */
+  fromIndex: number;
+}
+
+function readBlockIndex(wrapper: HTMLElement): number {
+  const attr = wrapper.getAttribute("data-block-index");
+  if (attr === null) return -1;
+  const n = Number.parseInt(attr, 10);
+  return Number.isFinite(n) ? n : -1;
+}
 
 export interface BlockToolbarActionDetail {
   action: BlockToolbarAction;
@@ -82,9 +99,12 @@ export class AnnotDocBlockToolbarElement extends LitElement {
       <div class="annot-doc-block-toolbar" role="toolbar" aria-label="Block actions">
         <span
           class="block-action block-action-handle"
-          role="img"
+          role="button"
           aria-label="Drag to reorder"
-          title="Drag to reorder (Phase 7)"
+          title="Drag to reorder"
+          draggable="true"
+          @dragstart=${this.#onDragStart}
+          @dragend=${this.#onDragEnd}
         >
           ☰
         </span>
@@ -147,6 +167,43 @@ export class AnnotDocBlockToolbarElement extends LitElement {
       </div>
     `;
   }
+
+  #onDragStart = (e: DragEvent): void => {
+    // Phase 7 of `annot-html-document-ux-polish.md` — set the
+    // drag image to the whole block-host wrapper so the user
+    // sees the entire block lift, not just the handle. The
+    // shell catches the bubbled `block-drag-start` event to
+    // record the source index from the wrapper's
+    // `data-block-index`.
+    const wrapper = (e.currentTarget as HTMLElement | null)?.closest(
+      ".annot-doc-block-host",
+    ) as HTMLElement | null;
+    if (!wrapper) return;
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = "move";
+      // Required by Firefox — the data field must be set or the
+      // drag is silently cancelled. Content is unused; the shell
+      // reads the block index from its own bookkeeping instead so
+      // multiple drag sources never confuse the model.
+      e.dataTransfer.setData("text/plain", "block-drag");
+      try {
+        e.dataTransfer.setDragImage(wrapper, 16, 16);
+      } catch {
+        // happy-dom doesn't implement setDragImage; fall through.
+      }
+    }
+    this.dispatchEvent(
+      new CustomEvent<BlockDragStartDetail>("block-drag-start", {
+        bubbles: true,
+        composed: true,
+        detail: { fromIndex: readBlockIndex(wrapper) },
+      }),
+    );
+  };
+
+  #onDragEnd = (_e: DragEvent): void => {
+    this.dispatchEvent(new CustomEvent<void>("block-drag-end", { bubbles: true, composed: true }));
+  };
 
   #dispatch(action: BlockToolbarAction): void {
     this.dispatchEvent(
