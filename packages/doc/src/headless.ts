@@ -17,6 +17,7 @@ export { createEmptyDocument } from "./create-empty.js";
 export type { CreateImageBlockOptions } from "./create-image-block.js";
 export { createImageBlockFromDataUrl } from "./create-image-block.js";
 export { buildStyleBlock, injectDocumentStyles } from "./inject-styles.js";
+export { isTemplateFromHead } from "./is-template-head.js";
 export type { ParseOptions } from "./parse.js";
 export { AnnotDocParseError, parseDocument } from "./parse.js";
 
