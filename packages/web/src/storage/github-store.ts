@@ -25,10 +25,13 @@
  * limit and block the save behind a network round-trip.
  */
 import type {
+  DocumentRecord,
+  DocumentRecordUpdate,
   FolderRecord,
   ImageRecord,
   ImageRecordUpdate,
   StorageProvider,
+  StorageWithDocuments,
   StorageWithForceRefresh,
   StorageWithRateLimit,
   StorageWithResync,
@@ -63,6 +66,7 @@ import {
   type GitHubError,
   githubError,
   inferMimeFromPath,
+  isDocumentFilename,
   isImageFilename,
   MAX_CONTENTS_BYTES,
 } from "./github-helpers.js";
@@ -114,7 +118,8 @@ export class GitHubStore
     StorageWithForceRefresh,
     StorageWithTokenRefresher,
     StorageWithRateLimit,
-    StorageWithThumbnailCache
+    StorageWithThumbnailCache,
+    StorageWithDocuments
 {
   /** HTTP layer — owns token, token-refresh, rate-limit state, and
    *  the GitHub-specific error mapping. Synthesised in the public
@@ -163,6 +168,19 @@ export class GitHubStore
    * the HTTP layer + I/O pipeline.
    */
   #cache = new GitHubBlobCache();
+
+  /** Phase 7d of `docs/plans/annot-html-document.md` —
+   *  per-document metadata cache. `listDocuments` returns
+   *  filename-derived defaults for documents we haven't decoded
+   *  yet; `getDocument` + `updateDocument` populate this map so
+   *  subsequent listings render the right title / counts without
+   *  re-fetching every doc's bytes. Keyed by basePath-relative
+   *  path. Invalidated on rename / delete via `#cache.purge` /
+   *  the explicit clear in `deleteImage`. */
+  #docMeta = new Map<
+    string,
+    { title: string; blockCount: number; imageCount: number; createdAt: string; updatedAt: string }
+  >();
 
   // Token refresh + rate-limit telemetry now live inside `#api`.
 
@@ -1133,6 +1151,116 @@ export class GitHubStore
     if (!sha) return;
     await this.#deleteContents(path, sha, this.#commitMessage("delete", path));
     this.#cache.purge(path);
+    // Phase 7d — `deleteImage` is the path-keyed delete primitive
+    // per the `StorageWithDocuments` contract. The tree-state +
+    // commit dance above doesn't care whether the file was an
+    // image or a document; the only kind-specific cleanup left is
+    // the document metadata cache.
+    this.#docMeta.delete(path);
+  }
+
+  // ---- Documents (Phase 7d) ─────────────────────────────────
+  // `.annot.html` files are committed verbatim as `text/html` via
+  // the existing `#putContents` helper. Each save = one commit;
+  // matches the image-save commit cadence the rest of the store
+  // uses. Metadata (title / blockCount / imageCount) is cached in
+  // memory keyed by path; first listing returns filename-derived
+  // defaults until the user opens the doc (which triggers a
+  // getDocument + updateDocument cycle that populates the cache).
+
+  async saveDocument(
+    data: Omit<DocumentRecord, "path">,
+    opts?: { filename?: string },
+  ): Promise<string> {
+    await this.#ensureTreeLoaded();
+    const folderPath = data.folderPath || "";
+    const desired = opts?.filename || `document-${Date.now()}.annot.html`;
+    validateName(desired);
+
+    const filename = uniquifyFilename(desired, (candidate) =>
+      this.#tree.hasBlob(joinPath(folderPath, candidate)),
+    );
+    const relPath = joinPath(folderPath, filename);
+
+    const blob = new Blob([data.bytes], { type: "text/html" });
+    await this.#putContents(relPath, blob, this.#commitMessage("add", relPath));
+
+    const now = new Date().toISOString();
+    this.#docMeta.set(relPath, {
+      title: data.title,
+      blockCount: data.blockCount,
+      imageCount: data.imageCount,
+      createdAt: data.createdAt || now,
+      updatedAt: data.updatedAt || now,
+    });
+    return relPath;
+  }
+
+  async getDocument(path: string): Promise<DocumentRecord | undefined> {
+    await this.#ensureTreeLoaded();
+    if (!this.#tree.hasBlob(path)) return undefined;
+    if (!isDocumentFilename(getFilename(path))) return undefined;
+    const result = await this.#getContents(path);
+    if (!result) return undefined;
+    const bytes = new TextDecoder().decode(result.bytes);
+    const cached = this.#docMeta.get(path);
+    return {
+      path,
+      folderPath: getParentPath(path),
+      bytes,
+      thumbnailDataUrl: "",
+      title: cached?.title ?? stripDocExtension(getFilename(path)),
+      blockCount: cached?.blockCount ?? 0,
+      imageCount: cached?.imageCount ?? 0,
+      createdAt: cached?.createdAt ?? "",
+      updatedAt: cached?.updatedAt ?? "",
+    };
+  }
+
+  async listDocuments(folderPath: string): Promise<DocumentRecord[]> {
+    await this.#ensureTreeLoaded();
+    const out: DocumentRecord[] = [];
+    for (const path of this.#tree.blobPaths()) {
+      const name = getFilename(path);
+      if (!isDocumentFilename(name)) continue;
+      if (getParentPath(path) !== folderPath) continue;
+      const cached = this.#docMeta.get(path);
+      out.push({
+        path,
+        folderPath,
+        bytes: "",
+        thumbnailDataUrl: "",
+        title: cached?.title ?? stripDocExtension(name),
+        blockCount: cached?.blockCount ?? 0,
+        imageCount: cached?.imageCount ?? 0,
+        createdAt: cached?.createdAt ?? "",
+        updatedAt: cached?.updatedAt ?? "",
+      });
+    }
+    out.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+    return out;
+  }
+
+  async updateDocument(path: string, updates: DocumentRecordUpdate): Promise<void> {
+    await this.#ensureTreeLoaded();
+    if (!this.#tree.hasBlob(path)) return;
+    if (!isDocumentFilename(getFilename(path))) return;
+    if (updates.bytes !== undefined) {
+      const blob = new Blob([updates.bytes], { type: "text/html" });
+      await this.#putContents(path, blob, this.#commitMessage("update", path));
+    }
+    const existing = this.#docMeta.get(path) ?? {
+      title: stripDocExtension(getFilename(path)),
+      blockCount: 0,
+      imageCount: 0,
+      createdAt: "",
+      updatedAt: "",
+    };
+    if (updates.title !== undefined) existing.title = updates.title;
+    if (updates.blockCount !== undefined) existing.blockCount = updates.blockCount;
+    if (updates.imageCount !== undefined) existing.imageCount = updates.imageCount;
+    if (updates.updatedAt !== undefined) existing.updatedAt = updates.updatedAt;
+    this.#docMeta.set(path, existing);
   }
 
   // ===========================================================================
@@ -1367,4 +1495,17 @@ export class GitHubStore
   async #buildXmpBlob(record: Partial<ImageRecord>, format: "jpg" | "png"): Promise<Blob> {
     return buildEditableImageBlob(record, format);
   }
+}
+
+/** Phase 7d of `docs/plans/annot-html-document.md` — strip the
+ *  `.annot.html` extension from a filename when no cached title
+ *  is available. Mirrors the per-store fallback the other
+ *  backends use (DeviceStore, DesktopStore, GoogleDriveStore)
+ *  so the gallery's filename column shows the same default
+ *  string everywhere. */
+function stripDocExtension(name: string): string {
+  if (name.toLowerCase().endsWith(".annot.html")) {
+    return name.slice(0, -".annot.html".length);
+  }
+  return name;
 }
