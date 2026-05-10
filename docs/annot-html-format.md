@@ -711,6 +711,75 @@ reader hint: a file with `<meta name="annot-document"
 content="1">` but no `data-annot-doc-version` MUST be parsed
 best-effort and stamped as v1 on first save.
 
+## Forward compatibility
+
+The v1 format reserves four forward-compat hooks so future
+versions (and plugin extensions per
+[`docs/plugin-api/documents.md`](./plugin-api/documents.md)) can
+add capabilities without breaking v1 readers / writers.
+
+### Unknown block kinds round-trip verbatim
+
+Any element under `<article data-annot-doc>` carrying a
+`data-annot-block="…"` whose value isn't in the v1 enumeration
+drops into the parser's `UnknownBlock` arm:
+
+```ts
+export interface UnknownBlock {
+  readonly kind: "unknown";
+  readonly rawHtml: string;  // verbatim element bytes
+}
+```
+
+The serializer writes the `rawHtml` field back out untouched.
+v2 documents authored with new block kinds (sequence diagrams,
+video embeds, dataset previews) survive round-trip through
+every v1 tool — the editor just renders them as opaque blocks
+and disables the per-block toolbar's "edit" affordance.
+
+### Unknown attribute names round-trip on known kinds
+
+The known-kind serializers (heading / paragraph / list / etc.)
+emit a fixed attribute set per the canonicalisation rules
+above. Attributes outside that set are NOT preserved. **If you
+need to attach plugin metadata to a known-kind block, use a
+nested `<span>` inside the inline HTML** (where attribute
+preservation is unrestricted) rather than adding attributes to
+the block element itself.
+
+### Unknown sidecar JSON keys round-trip verbatim (v2)
+
+v1 reserves an `extensions?: Record<string, unknown>` field on
+`DocMeta` for v2 plugin metadata. **v1's parser does NOT yet
+forward arbitrary unknown keys** — it filters down to the
+documented field set. The reservation exists so a v2 plugin
+registration surface can add this hook without breaking v1
+parsers (which will continue to ignore the field).
+
+### Inline HTML preserves arbitrary attributes
+
+`HeadingBlock.inlineHtml` / `ParagraphBlock.inlineHtml` /
+`ListBlock.items` / etc. store the inline content verbatim as
+strings. Any attribute on any element inside those fields
+survives the round-trip — `<span data-annot-figref="…">` is
+the cross-reference example, but plugin authors can use the
+same channel for arbitrary inline annotations.
+
+### What does NOT round-trip
+
+- **Element tag names without `data-annot-block`** at the
+  block level. The article's children must each carry one of
+  the documented `data-annot-block` discriminators (or the
+  `UnknownBlock` passthrough). Bare `<custom-block>`s under
+  `<article>` are dropped.
+- **Custom attributes on known-kind block elements** (see
+  above).
+- **Comments inside `<article>`**. The HTML serializer drops
+  them.
+- **Whitespace beyond the canonicalisation rules above.**
+  Indentation / blank lines outside the documented form get
+  normalised on save.
+
 ## Examples
 
 Three canonical examples ship in
@@ -738,10 +807,11 @@ v2 consideration:
   in the sidecar's `imageMeta[<id>]` map. Are there cases where
   per-image-block locality matters more than central JSON locality?
   Unclear before the Playwright integration ships.
-- [ ] **Cross-references** — `@image-block-id` syntax for "see
-  Figure N" pulls render. Mentioned in the plan's Phase 13
-  (Polish). Open: does the source text store the raw `@id` or a
-  resolved label? v1 format isn't committed either way.
+- [x] **Cross-references** — _resolved by Phase 13b_ (see the
+  [Cross-references](#cross-references) section above). v1
+  source text stores the resolved label via
+  `<span data-annot-figref="img-X">Figure N</span>`; the
+  `resolveFigureRefs(doc)` helper re-writes the label on save.
 - [ ] **Nested lists** — v1 disallows `<ul>` inside `<li>`. Manuals
   occasionally need nested numbering (e.g. legal-style 1.1 / 1.2);
   v2 candidate. Adds editor complexity around list-item rich-text

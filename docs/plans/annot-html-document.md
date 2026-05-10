@@ -1,17 +1,33 @@
 # `.annot.html` document — multi-image manual format
 
-> **Status:** In progress — Phases 0–7 landed (parser / styling /
-> read-only shell / editing + slash menu / image block + capture /
-> PWA + BrowserStore + gallery wiring / multi-backend opt-in:
-> Device / Desktop / Drive / GitHub). Phase 8 (templates:
-> mechanism) starts now: Phase 8a (Tier A `cloneTemplate`
-> foundation) is in PR. NOTE: this plan was renumbered after
-> the Phase 6 / 7 rounds — the original Phase 7 (templates) +
-> Phase 9 (multi-backend) were re-ordered to match shipping
-> order (multi-backend went first to validate the contract
-> across backends before templates layer on top). Subdivision
-> letters (`6a`–`6h`, `7a`–`7d`, `8a`–`8d`, …) match the
-> commit log going forward.
+> **Status:** v1 shipping — Phases 0–13 landed:
+>
+> | Phase | Description | PRs |
+> |-------|-------------|-----|
+> | 0 | Spec freeze + golden fixtures | #539 |
+> | 1 | Tier A `@ingcreators/annot-doc` | #540 |
+> | 2 | Self-contained styling | #541 |
+> | 3 | Read-only `<annot-doc-shell>` | #542 |
+> | 4 | Block editing + slash menu | #543 / #544 |
+> | 5 | Image block + EditorShell modal + capture insertion | #545 / #546 |
+> | 6 | PWA route + BrowserStore + gallery wiring | #547–#554 |
+> | 7 | Multi-backend opt-in (Device / Desktop / Drive / GitHub) | #555–#558 |
+> | 8 | Templates: mechanism (clone / save-as / picker / "From Template…") | #559–#562 |
+> | 9 | Built-in starter templates | #563 / #564 |
+> | 10 | VSCode custom editor + `Annot: New document` | #565 |
+> | 11 | Multi-slide PPTX export | #566 |
+> | 13a | Auto-numbering (headings + figures) | #567 |
+> | 13b | Cross-reference resolver helper | #568 |
+> | 13c | Plugin docs (`StorageWithDocuments` + forward-looking `documents.md`) | this PR |
+>
+> Phase 12 (Markdown export) is deferred to demand per the plan.
+>
+> NOTE: this plan was renumbered after the Phase 6 / 7 rounds —
+> the original Phase 7 (templates) + Phase 9 (multi-backend)
+> were re-ordered to match shipping order (multi-backend went
+> first to validate the contract across backends before
+> templates layer on top). Subdivision letters (`6a`–`6h`,
+> `7a`–`7d`, `8a`–`8d`, `13a`–`13c`, …) match the commit log.
 > **Compatibility:** New file format and new file extension; new
 > workspace package `@ingcreators/annot-doc` (Tier A); new editor
 > surface (`<annot-doc-shell>`) in `@ingcreators/annot-host-ui` (Tier C);
