@@ -1097,17 +1097,26 @@ export class App {
     const statusbar = document.getElementById("statusbar");
     if (statusbar) statusbar.style.display = "none";
 
-    const mainContent = document.getElementById("main-content");
+    // The doc host MUST live OUTSIDE `#file-manager` — the
+    // gallery's `#main-content` div is INSIDE `#file-manager`,
+    // so appending the host there (the original Phase 6e mount
+    // point) leaves it hidden the moment
+    // `fileManagerEl.style.display = "none"` runs above. Append
+    // to `document.body` directly (sibling of `#file-manager` /
+    // `#canvas-container`) and position the host like
+    // `#file-manager` itself: absolute fill below the gallery's
+    // `#toolbar` strip (48px tall — see
+    // `packages/core/styles/toolbar.css`). The toolbar stays
+    // visible in doc mode because it carries the Annot brand
+    // and the dark-mode toggle, both of which read fine here
+    // too.
     let host = document.getElementById("annot-doc-host") as HTMLDivElement | null;
     if (!host) {
       host = document.createElement("div");
       host.id = "annot-doc-host";
       host.style.cssText =
-        "display:flex;flex-direction:column;width:100%;height:100%;background:var(--annot-doc-bg,#ffffff);overflow:auto;";
-      // Mount alongside / inside `#file-manager`'s parent so the
-      // existing layout grid handles it. `#main-content` is the
-      // canonical mount point per the index.html shell.
-      (mainContent ?? document.body).appendChild(host);
+        "position:absolute;top:48px;left:0;right:0;bottom:0;display:flex;flex-direction:column;background:var(--annot-doc-bg,#ffffff);overflow:auto;z-index:5;";
+      document.body.appendChild(host);
     } else {
       host.innerHTML = "";
       host.style.display = "flex";
