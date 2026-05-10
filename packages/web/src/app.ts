@@ -1176,6 +1176,14 @@ export class App {
         // doc-level settings (title / lang / author / theme /
         // maxWidth). Always enabled (no preconditions).
         { id: "documentSettings", label: "Document settings…" },
+        // Phase 12 — the static-HTML output the user can paste
+        // into other tools / commit somewhere else. Always
+        // enabled; the doc serialiser produces self-contained
+        // HTML even for empty docs.
+        { id: "copyDocHtml", label: "Copy document HTML" },
+        // Phase 12 — opens the browser's print dialog with the
+        // current article rendered.
+        { id: "print", label: "Print…" },
       ];
     };
     header.overflowItems = buildOverflowItems(parsed);
@@ -1239,6 +1247,15 @@ export class App {
           void this.#saveCurrentDocAsTemplate(storage, current);
         } else if (action === "documentSettings") {
           void this.#openDocSettings(shell, header, scheduleSave);
+        } else if (action === "copyDocHtml") {
+          void this.#copyDocHtmlToClipboard(current);
+        } else if (action === "print") {
+          // Phase 12 — `window.print()` runs against the current
+          // page chrome. Browsers respect the doc's
+          // `injectDocumentStyles` print rules + the figure /
+          // article styles, so the printed page reads as the
+          // standalone-HTML viewer would.
+          window.print();
         }
       },
     };
@@ -1273,6 +1290,26 @@ export class App {
         fallback.status = "saved";
         return fallback;
       })();
+    // Phase 12 of `annot-html-document-ux-polish.md` — opt the
+    // doc-mode save-status pill into the interactive Retry
+    // affordance. Clicking the Retry button (only visible while
+    // status === "error") fires a `retry-save` CustomEvent the
+    // host listens to.
+    //
+    // Set the reactive property directly (not the attribute);
+    // Lit's runtime-property machinery reflects the property →
+    // attribute on its own and a bare `setAttribute("interactive",
+    // "")` after the element is already constructed gets
+    // serialised back through `_attributeToProperty` against the
+    // Boolean converter — which, given a value of "" + the
+    // existence of a default-constructor `interactive=false`
+    // initialiser, can race the initial render and end up `false`.
+    // Property assignment sidesteps that race entirely.
+    (saveStatus as unknown as { interactive: boolean }).interactive = true;
+    saveStatus.addEventListener("retry-save", () => {
+      const latest = shell.document;
+      if (latest) void runSave(latest);
+    });
 
     const body = document.createElement("div");
     body.className = "annot-doc-mode-body";
@@ -1594,6 +1631,43 @@ export class App {
       URL.revokeObjectURL(url);
     } catch (err) {
       showSaveError(`Couldn't export document: ${(err as Error).message}`);
+    }
+  }
+
+  /**
+   * Phase 12 of `docs/plans/annot-html-document-ux-polish.md` —
+   * Copy-document-HTML overflow handler.
+   *
+   * Serialises the live document via the same path that
+   * `runSave` uses + writes the bytes to the clipboard as
+   * both `text/plain` (so paste-as-text works in editors that
+   * don't speak HTML) and `text/html` (so paste into a rich-
+   * text destination preserves formatting). Falls back to
+   * `text/plain` only when the clipboard API doesn't accept
+   * the multi-format `ClipboardItem` payload.
+   */
+  async #copyDocHtmlToClipboard(
+    current: import("@ingcreators/annot-doc").AnnotDocument,
+  ): Promise<void> {
+    try {
+      const { serializeDocument } = await import("@ingcreators/annot-doc");
+      const bytes = serializeDocument(current);
+      if (typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
+        try {
+          const item = new ClipboardItem({
+            "text/html": new Blob([bytes], { type: "text/html" }),
+            "text/plain": new Blob([bytes], { type: "text/plain" }),
+          });
+          await navigator.clipboard.write([item]);
+          return;
+        } catch {
+          // Fall through to text-only path on hosts that reject
+          // multi-format clipboard items (older Safari).
+        }
+      }
+      await navigator.clipboard.writeText(bytes);
+    } catch (err) {
+      showSaveError(`Couldn't copy document HTML: ${(err as Error).message}`);
     }
   }
 
