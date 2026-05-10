@@ -20,6 +20,21 @@ import type { ImageRecord, StorageProvider } from "@ingcreators/annot-core/stora
 import { exportSVGString } from "@ingcreators/annot-editor";
 import { EditorShell } from "./editor-shell.js";
 import { html, LitElement, type TemplateResult } from "./lit.js";
+import { StatusHost } from "./orchestrators/status-host.js";
+// `<annot-editor-right-panel>` registers a custom element on import.
+import "./right-panel.js";
+import type { AnnotEditorRightPanelElement } from "./right-panel.js";
+import { Toolbar } from "./toolbar.js";
+import { showConfirmDialog } from "./ui/dialog.js";
+
+// The host that mounts this modal (PWA / VSCode webview / Storybook
+// preview) is responsible for loading the editor-side stylesheets
+// (`editor.css` / `toolbar.css` / `property-panel.css` / `fonts.css`)
+// at boot. Re-importing them here would either duplicate them in
+// the bundle or fail TS's module-resolution sweep depending on the
+// host's tsconfig. The doc-shell only mounts this modal AFTER the
+// shell itself has rendered, so the stylesheets are guaranteed to
+// be in the document by then.
 
 /** Stub `StorageProvider` used to back the `EditorShell` inside the
  *  modal — the shell never reads or writes through it because we
@@ -73,13 +88,15 @@ const STYLES = `
 .annot-doc-image-editor-modal-panel {
   background: var(--annot-doc-bg, #ffffff);
   color: var(--annot-doc-fg, #1f2937);
-  width: 90vw;
-  height: 80vh;
-  max-width: 1400px;
+  width: 92vw;
+  height: 88vh;
+  max-width: 1600px;
   border-radius: 8px;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  /* header / body (3-col grid for toolbar / canvas / right-panel) /
+     statusbar / footer */
+  grid-template-rows: auto 1fr auto auto;
   overflow: hidden;
 }
 .annot-doc-image-editor-modal-header {
@@ -88,9 +105,24 @@ const STYLES = `
   font-weight: 600;
 }
 .annot-doc-image-editor-modal-body {
+  display: grid;
+  grid-template-columns: 48px 1fr 280px;
+  min-height: 0;
+  border-bottom: 1px solid var(--annot-doc-muted, #6b7280);
+}
+.annot-doc-image-editor-modal-toolbar {
+  border-right: 1px solid var(--annot-doc-muted, #6b7280);
+  overflow: visible;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.annot-doc-image-editor-modal-canvas-wrap {
   position: relative;
   overflow: auto;
   background: var(--annot-doc-code-bg, #f3f4f6);
+  min-width: 0;
+  min-height: 0;
 }
 .annot-doc-image-editor-modal-canvas {
   position: relative;
@@ -105,9 +137,19 @@ const STYLES = `
   max-width: 100%;
   height: auto;
 }
+.annot-doc-image-editor-modal-rightpanel {
+  border-left: 1px solid var(--annot-doc-muted, #6b7280);
+  overflow: auto;
+  min-height: 0;
+}
+.annot-doc-image-editor-modal-statusbar {
+  border-bottom: 1px solid var(--annot-doc-muted, #6b7280);
+  /* StatusHost expects a flex container; existing editor.css's
+     #statusbar rule handles its own layout, this is just a
+     hosting slot. */
+}
 .annot-doc-image-editor-modal-footer {
   padding: 12px 16px;
-  border-top: 1px solid var(--annot-doc-muted, #6b7280);
   display: flex;
   justify-content: flex-end;
   gap: 8px;
@@ -138,6 +180,10 @@ export class AnnotDocImageEditorModalElement extends LitElement {
   declare input: ImageEditorModalInput | null;
 
   #shell: EditorShell | null = null;
+  #toolbar: Toolbar | null = null;
+  #rightPanel: AnnotEditorRightPanelElement | null = null;
+  #statusHost: StatusHost | null = null;
+  #fitObserver: ResizeObserver | null = null;
   #onKeydown: ((e: KeyboardEvent) => void) | null = null;
   /** Resolves on Save / Cancel. The promise is set up in
    *  `openFor`. */
@@ -194,6 +240,12 @@ export class AnnotDocImageEditorModalElement extends LitElement {
       document.removeEventListener("keydown", this.#onKeydown, { capture: true });
       this.#onKeydown = null;
     }
+    this.#fitObserver?.disconnect();
+    this.#fitObserver = null;
+    this.#rightPanel?.destroy();
+    this.#rightPanel = null;
+    this.#toolbar = null;
+    this.#statusHost = null;
     if (this.#shell) {
       this.#shell.destroy();
       this.#shell = null;
@@ -222,8 +274,13 @@ export class AnnotDocImageEditorModalElement extends LitElement {
         >
           <div class="annot-doc-image-editor-modal-header">Edit image</div>
           <div class="annot-doc-image-editor-modal-body">
-            <div class="annot-doc-image-editor-modal-canvas"></div>
+            <div class="annot-doc-image-editor-modal-toolbar"></div>
+            <div class="annot-doc-image-editor-modal-canvas-wrap">
+              <div class="annot-doc-image-editor-modal-canvas"></div>
+            </div>
+            <div class="annot-doc-image-editor-modal-rightpanel"></div>
           </div>
+          <div class="annot-doc-image-editor-modal-statusbar"></div>
           <div class="annot-doc-image-editor-modal-footer">
             <button type="button" @click=${() => this.#resolveCancel()}>Cancel</button>
             <button type="button" class="primary" @click=${() => this.#resolveSave()}>
@@ -246,6 +303,116 @@ export class AnnotDocImageEditorModalElement extends LitElement {
     const shell = new EditorShell({ container, storage: NOOP_STORAGE });
     shell.mountFromRecord(record.path, record);
     this.#shell = shell;
+    this.#mountToolbarAndPanel();
+  }
+
+  /**
+   * Mount the toolbar (left strip), right-panel (property panel +
+   * tool-properties), and statusbar inside the modal — same set
+   * the VSCode webview / PWA editor wire up around an
+   * `EditorShell`. Without these, the user sees the canvas but
+   * has no drawing tools, no selection-property controls, and no
+   * zoom indicator. Matches `mountToolbarAndRightPanel` in
+   * `packages/vscode/src/webview/main.ts`; the doc image-editor
+   * modal is the second consumer of the same pattern.
+   */
+  #mountToolbarAndPanel(): void {
+    const shell = this.#shell;
+    if (!shell) return;
+    const canvas = shell.getCanvas();
+    const history = shell.getHistory();
+    const selection = shell.getSelection();
+    if (!canvas || !history || !selection) return;
+
+    const toolbarMount = this.querySelector(
+      ".annot-doc-image-editor-modal-toolbar",
+    ) as HTMLElement | null;
+    const rightPanelMount = this.querySelector(
+      ".annot-doc-image-editor-modal-rightpanel",
+    ) as HTMLElement | null;
+    const statusbarMount = this.querySelector(
+      ".annot-doc-image-editor-modal-statusbar",
+    ) as HTMLElement | null;
+    const canvasWrap = this.querySelector(
+      ".annot-doc-image-editor-modal-canvas-wrap",
+    ) as HTMLElement | null;
+    if (!toolbarMount || !rightPanelMount || !statusbarMount || !canvasWrap) return;
+
+    // Right-panel first so the toolbar's `onToolChange` callback
+    // (which calls `panel.showToolProperties`) has a target.
+    const panel = document.createElement(
+      "annot-editor-right-panel",
+    ) as AnnotEditorRightPanelElement;
+    panel.canvas = canvas;
+    panel.history = history;
+    panel.selection = selection;
+    panel.getPluginSections = null;
+    panel.isBuiltinSectionDisabled = null;
+    panel.applyAllRedactions = () => shell.applyAllRedactions();
+    panel.refreshRedactCount();
+    rightPanelMount.appendChild(panel);
+    this.#rightPanel = panel;
+    panel.setPageMetadata(shell.getCurrentPageMetadata());
+
+    // Toolbar — vertical strip on the left. Same hidden-affordance
+    // bag the VSCode webview uses (no theme toggle / gallery /
+    // save group inside an embedded editor surface).
+    this.#toolbar = new Toolbar(
+      toolbarMount,
+      canvas,
+      history,
+      selection,
+      (toolName, toolId) => {
+        this.#rightPanel?.showToolProperties(toolId);
+        this.#statusHost?.setActiveTool(toolName);
+      },
+      {
+        orientation: "vertical",
+        showThemeToggle: false,
+        showGalleryButton: false,
+        showSaveGroup: false,
+        hideToolDropdowns: false,
+        applyCrop: async (x, y, w, h) => {
+          const ok = await showConfirmDialog({
+            title: "Crop image?",
+            message:
+              `The image will be permanently cropped to ${Math.round(w)}×${Math.round(h)} pixels. ` +
+              "The pixels outside the crop region can no longer be recovered after the next save. Continue?",
+            okLabel: "Crop",
+            cancelLabel: "Cancel",
+            danger: true,
+          });
+          if (!ok) return false;
+          const result = await shell.applyCrop(x, y, w, h);
+          return result.applied;
+        },
+      },
+    );
+    panel.toolbar = this.#toolbar;
+
+    // Statusbar — `[zoom] [dimensions] ───── [current tool]`.
+    this.#statusHost = new StatusHost(statusbarMount);
+    this.#statusHost.build(canvas, canvas.imageWidth, canvas.imageHeight);
+
+    // Selection-change → right-panel's selection-properties section.
+    // Mirrors the VSCode webview wiring exactly.
+    const previousOnChange = selection.onChange;
+    selection.onChange = () => {
+      previousOnChange?.();
+      const els = selection.selectedElements;
+      if (els.length > 0 && !canvas.activeTool) {
+        this.#rightPanel?.showSelectionProperties(els);
+      } else {
+        this.#rightPanel?.showSelectionProperties([]);
+      }
+    };
+
+    // Re-fit the canvas whenever the panel resizes (the modal
+    // is sized in vw/vh, so window resize / orientation change
+    // alters the canvas slot's dimensions). Skipped silently
+    // when the user is on a fixed zoom level.
+    this.#fitObserver = new ResizeObserver(() => canvas.refitIfFitMode());
+    this.#fitObserver.observe(canvasWrap);
   }
 
   #resolveSave(): void {
