@@ -3,7 +3,12 @@
  * File Manager (gallery) ↔ Editor switching with path-based StorageProvider.
  */
 
-import type { DocumentRecord, ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
+import type {
+  DocumentRecord,
+  ImageRecord,
+  StorageProvider,
+  StorageWithDocuments,
+} from "@ingcreators/annot-core/storage";
 import { supportsDocuments } from "@ingcreators/annot-core/storage";
 import { assertNonNull } from "@ingcreators/annot-core/utils";
 import { createThemeToggle } from "@ingcreators/annot-editor";
@@ -986,7 +991,27 @@ export class App {
       status: "saved" | "pending" | "saving" | "error";
     };
     saveStatus.status = "saved";
-    header.append(backBtn, titleEl, saveStatus);
+
+    // Phase 8b — "Save as template…" affordance. Lives next to
+    // the save-status indicator in the doc-mode header. Click
+    // → `showSaveAsTemplateDialog` → stamp `meta.template` on
+    // a clone of the current doc → persist under
+    // `Templates/<name>.annot.html` via `storage.saveDocument`.
+    // Original editor session unaffected — the live document +
+    // its save lifecycle are not mutated; only a new file is
+    // written.
+    const saveAsTemplateBtn = document.createElement("button");
+    saveAsTemplateBtn.type = "button";
+    saveAsTemplateBtn.textContent = "Save as template…";
+    saveAsTemplateBtn.style.cssText =
+      "padding:6px 10px;border:1px solid var(--annot-doc-muted,#6b7280);background:transparent;color:inherit;border-radius:4px;cursor:pointer;font-size:0.875rem;";
+    saveAsTemplateBtn.addEventListener("click", () => {
+      const current = shell.document;
+      if (!current) return;
+      void this.#saveCurrentDocAsTemplate(storage, current);
+    });
+
+    header.append(backBtn, titleEl, saveStatus, saveAsTemplateBtn);
     host.appendChild(header);
 
     const body = document.createElement("div");
@@ -1098,6 +1123,82 @@ export class App {
       titleEl.textContent = newTitle;
       scheduleSave(updated);
     });
+  }
+
+  /**
+   * Phase 8b — "Save as template…" handler.
+   *
+   * Opens `showSaveAsTemplateDialog`, then on OK:
+   *   1. Stamps `meta.template = {name, description, tags}` on a
+   *      shallow clone of the current document. The original
+   *      `shell.document` is NOT mutated — the live editor
+   *      session continues unaffected.
+   *   2. Serialises the stamped clone (the canonical
+   *      `serializeDocument` then automatically emits the three
+   *      template markers the parser already round-trips:
+   *      `data-annot-doc-template` on `<html>`,
+   *      `<meta name="annot-template">` in `<head>`, and the
+   *      `template` sub-object in the JSON sidecar).
+   *   3. Persists under `Templates/<name>.annot.html` via
+   *      `storage.saveDocument`. The backend's filename-uniqueness
+   *      pass handles same-name collisions.
+   *   4. Surfaces success via the save-status indicator
+   *      (transient "saved" pulse) AND the existing error-bar
+   *      surface for failures.
+   *
+   * The `Templates/` folder is implicit: every backend's
+   * `saveDocument` accepts a `folderPath` and creates the folder
+   * (or its equivalent) on demand. No explicit `createFolder`
+   * call is needed.
+   */
+  async #saveCurrentDocAsTemplate(
+    storage: StorageProvider & StorageWithDocuments,
+    current: import("@ingcreators/annot-doc").AnnotDocument,
+  ): Promise<void> {
+    const { showSaveAsTemplateDialog } = await import(
+      "@ingcreators/annot-host-ui/ui/save-as-template-dialog"
+    );
+    const input = await showSaveAsTemplateDialog({
+      defaultName: current.title,
+    });
+    if (!input) return;
+    try {
+      const { serializeDocument } = await import("@ingcreators/annot-doc");
+      // Build a stamped clone of the live document. The clone is
+      // structurally identical to `current` except `meta.template`
+      // is set + the `<title>` / sidecar `title` get reset to the
+      // user-chosen name (so the resulting template's title matches
+      // its picker label).
+      const stamped: import("@ingcreators/annot-doc").AnnotDocument = {
+        ...current,
+        title: input.name,
+        meta: {
+          ...current.meta,
+          title: input.name,
+          template: input.description
+            ? { name: input.name, description: input.description, tags: input.tags }
+            : { name: input.name, tags: input.tags },
+        },
+      };
+      const bytes = serializeDocument(stamped);
+      const imageCount = stamped.blocks.filter((b) => b.kind === "image").length;
+      const now = new Date().toISOString();
+      await storage.saveDocument(
+        {
+          folderPath: "Templates",
+          bytes,
+          thumbnailDataUrl: "",
+          title: stamped.title,
+          imageCount,
+          blockCount: stamped.blocks.length,
+          createdAt: now,
+          updatedAt: now,
+        },
+        { filename: `${input.name}.annot.html` },
+      );
+    } catch (err) {
+      showSaveError(`Couldn't save template: ${(err as Error).message}`);
+    }
   }
 
   /**
