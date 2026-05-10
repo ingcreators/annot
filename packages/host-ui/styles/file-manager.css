@@ -1201,10 +1201,26 @@ html.light .gallery-item.selected::after {
   gap: 16px;
 }
 
+/* Phase 6d of docs/plans/annot-html-document.md introduced the
+ * Documents section but never gave its grid container a layout
+ * rule. The parent .gallery-grid is forced back to display:block
+ * (line 1171 above), so .gallery-document-grid inherited block
+ * layout — every doc card stretched to 100% of the main-content
+ * width, and the 16:9 .gallery-thumb made each card hundreds of
+ * pixels tall. The rule below mirrors .gallery-image-grid's
+ * auto-fill grid so doc cards size like file cards: ~220px wide,
+ * ~124px tall thumb, gridded across the row. */
+.gallery-document-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+}
+
 /* On wider viewports, nudge cards slightly larger so 4K screens look balanced
  * instead of showing dozens of tiny tiles. */
 @media (min-width: 1600px) {
-  .gallery-image-grid {
+  .gallery-image-grid,
+  .gallery-document-grid {
     grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   }
   .gallery-folder-grid {
@@ -1212,7 +1228,8 @@ html.light .gallery-item.selected::after {
   }
 }
 @media (min-width: 2400px) {
-  .gallery-image-grid {
+  .gallery-image-grid,
+  .gallery-document-grid {
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   }
   .gallery-folder-grid {
