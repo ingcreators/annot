@@ -15,10 +15,13 @@
  * Subfolders on disk = gallery folders.
  */
 import type {
+  DocumentRecord,
+  DocumentRecordUpdate,
   FolderRecord,
   ImageRecord,
   ImageRecordUpdate,
   StorageProvider,
+  StorageWithDocuments,
   StorageWithForceRefresh,
   StorageWithInit,
   StorageWithResync,
@@ -54,9 +57,29 @@ interface IndexEntry {
   mtime?: number;
 }
 
+/** Cached metadata for an `.annot.html` document. The bytes
+ *  themselves live on disk; the index just lets the gallery
+ *  render listing rows without reading every file. Phase 7a of
+ *  `docs/plans/annot-html-document.md`. */
+interface DocIndexEntry {
+  createdAt: string;
+  /** Document title (mirrors `<title>` + sidecar `meta.title`). */
+  title: string;
+  /** Top-level block count from the parser. */
+  blockCount: number;
+  /** Image-block count from the parser. */
+  imageCount: number;
+  /** File.lastModified at the time of last sync. */
+  mtime?: number;
+}
+
 interface IndexData {
-  /** Map path -> cached metadata. */
+  /** Map path -> cached image metadata. */
   images: Record<string, IndexEntry>;
+  /** Map path -> cached document metadata (Phase 7a). Optional
+   *  in stored on-disk indices written before Phase 7a so the
+   *  loader can default to `{}`. */
+  documents?: Record<string, DocIndexEntry>;
 }
 
 export class DeviceStore
@@ -65,10 +88,11 @@ export class DeviceStore
     StorageWithInit,
     StorageWithResync,
     StorageWithForceRefresh,
-    StorageWithThumbnailCache
+    StorageWithThumbnailCache,
+    StorageWithDocuments
 {
   #root: FileSystemDirectoryHandle;
-  #index: IndexData = { images: {} };
+  #index: IndexData = { images: {}, documents: {} };
 
   get rootName(): string {
     return this.#root.name;
@@ -212,12 +236,14 @@ export class DeviceStore
       const text = await file.text();
       const parsed = JSON.parse(text);
       if (parsed && typeof parsed === "object" && parsed.images) {
-        this.#index = parsed;
+        // Backfill the documents map for indices written before
+        // Phase 7a so the in-memory shape always carries it.
+        this.#index = { documents: {}, ...parsed };
       } else {
-        this.#index = { images: {} };
+        this.#index = { images: {}, documents: {} };
       }
     } catch {
-      this.#index = { images: {} };
+      this.#index = { images: {}, documents: {} };
     }
   }
 
@@ -553,7 +579,14 @@ export class DeviceStore
   }
 
   async deleteImage(path: string): Promise<void> {
-    if (!this.#index.images[path]) return;
+    // Phase 7a — `deleteImage` is the path-keyed delete primitive
+    // per the `StorageWithDocuments` plan. It removes whichever
+    // index entry holds the path (image OR document) and then
+    // removes the file from disk. No-op when neither side knows
+    // about the path.
+    const knownAsImage = !!this.#index.images[path];
+    const knownAsDoc = !!this.#index.documents?.[path];
+    if (!knownAsImage && !knownAsDoc) return;
 
     try {
       const dir = await this.#getDirHandle(getParentPath(path));
@@ -562,7 +595,139 @@ export class DeviceStore
       /* may already be gone */
     }
 
-    delete this.#index.images[path];
+    if (knownAsImage) delete this.#index.images[path];
+    if (knownAsDoc && this.#index.documents) delete this.#index.documents[path];
+    await this.#saveIndex();
+  }
+
+  // ---- Documents (Phase 7a) ----
+  // `.annot.html` files are written verbatim (no XMP wrapping —
+  // the format is its own self-contained spec). Metadata cached in
+  // `#index.documents` mirrors the image-side index pattern so
+  // `listDocuments` stays cheap.
+
+  async saveDocument(
+    data: Omit<DocumentRecord, "path">,
+    opts?: { filename?: string },
+  ): Promise<string> {
+    const desiredFilename = opts?.filename || `document-${Date.now()}.annot.html`;
+    validateName(desiredFilename);
+    const folderPath = data.folderPath || "";
+
+    const dir = await this.#getDirHandle(folderPath, true);
+    const filename = await uniquifyFilenameAsync(desiredFilename, (candidate) =>
+      this.#fileExists(dir, candidate),
+    );
+    const path = joinPath(folderPath, filename);
+
+    const fileHandle = await dir.getFileHandle(filename, { create: true });
+    let writable: FileSystemWritableFileStream | null = null;
+    try {
+      writable = await fileHandle.createWritable();
+      await writable.write(data.bytes);
+      await writable.close();
+      writable = null;
+    } catch (e) {
+      if (writable) {
+        try {
+          await writable.abort();
+        } catch {
+          /* ignore */
+        }
+      }
+      try {
+        await dir.removeEntry(filename);
+      } catch {
+        /* ignore */
+      }
+      throw e;
+    }
+
+    let mtime = 0;
+    try {
+      mtime = (await fileHandle.getFile()).lastModified;
+    } catch {
+      /* ignore */
+    }
+
+    if (!this.#index.documents) this.#index.documents = {};
+    this.#index.documents[path] = {
+      createdAt: data.createdAt || new Date().toISOString(),
+      title: data.title,
+      blockCount: data.blockCount,
+      imageCount: data.imageCount,
+      mtime,
+    };
+    await this.#saveIndex();
+    return path;
+  }
+
+  async getDocument(path: string): Promise<DocumentRecord | undefined> {
+    const entry = this.#index.documents?.[path];
+    if (!entry) return undefined;
+    let bytes: string;
+    try {
+      const dir = await this.#getDirHandle(getParentPath(path));
+      const handle = await dir.getFileHandle(getFilename(path));
+      bytes = await (await handle.getFile()).text();
+    } catch {
+      return undefined;
+    }
+    return {
+      path,
+      folderPath: getParentPath(path),
+      bytes,
+      thumbnailDataUrl: "",
+      title: entry.title,
+      imageCount: entry.imageCount,
+      blockCount: entry.blockCount,
+      createdAt: entry.createdAt,
+      updatedAt: entry.mtime ? new Date(entry.mtime).toISOString() : entry.createdAt,
+    };
+  }
+
+  async listDocuments(folderPath: string): Promise<DocumentRecord[]> {
+    const docs = this.#index.documents ?? {};
+    const out: DocumentRecord[] = [];
+    for (const [path, entry] of Object.entries(docs)) {
+      if (getParentPath(path) !== folderPath) continue;
+      out.push({
+        path,
+        folderPath,
+        // Listing payloads omit file bytes — load lazily via
+        // `getDocument(path)` when the user opens. Same shape the
+        // image-side `listImages` uses (records carry `""` for
+        // `originalDataUrl` until requested).
+        bytes: "",
+        thumbnailDataUrl: "",
+        title: entry.title,
+        imageCount: entry.imageCount,
+        blockCount: entry.blockCount,
+        createdAt: entry.createdAt,
+        updatedAt: entry.mtime ? new Date(entry.mtime).toISOString() : entry.createdAt,
+      });
+    }
+    return out;
+  }
+
+  async updateDocument(path: string, updates: DocumentRecordUpdate): Promise<void> {
+    const entry = this.#index.documents?.[path];
+    if (!entry) return;
+    if (updates.bytes !== undefined) {
+      const dir = await this.#getDirHandle(getParentPath(path));
+      const handle = await dir.getFileHandle(getFilename(path), { create: true });
+      const writable = await handle.createWritable();
+      await writable.write(updates.bytes);
+      await writable.close();
+      try {
+        entry.mtime = (await handle.getFile()).lastModified;
+      } catch {
+        /* ignore */
+      }
+    }
+    if (updates.title !== undefined) entry.title = updates.title;
+    if (updates.blockCount !== undefined) entry.blockCount = updates.blockCount;
+    if (updates.imageCount !== undefined) entry.imageCount = updates.imageCount;
     await this.#saveIndex();
   }
 
