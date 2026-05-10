@@ -328,10 +328,13 @@ describe("annot-doc-shell: editing mode rendering", () => {
     const wrappers = el.querySelectorAll(".annot-doc-block-host");
     // Every block in the mixed doc gets a wrapper.
     expect(wrappers.length).toBe(makeMixedDoc().blocks.length);
-    // Heading + paragraph blocks are contentEditable in Phase 4a.
+    // Phase 4a → 4b → 5 contenteditable coverage:
+    //   3 headings + 2 paragraphs (Phase 4a)
+    //   + 2 list items + 1 quote paragraph + 1 callout paragraph
+    //   + 1 figcaption (Phase 5)
+    //   = 10
     const editable = el.querySelectorAll('[contenteditable="true"]');
-    // 3 headings + 2 paragraphs in the mixed doc.
-    expect(editable.length).toBe(5);
+    expect(editable.length).toBe(10);
     // Toolbars rendered for each wrapper.
     expect(el.querySelectorAll("annot-doc-block-toolbar").length).toBe(wrappers.length);
   });
@@ -340,8 +343,9 @@ describe("annot-doc-shell: editing mode rendering", () => {
     const el = mount(makeMixedDoc());
     el.editing = true;
     await el.updateComplete;
-    // Quote / callout / code / list / image / divider must NOT be
-    // contentEditable in Phase 4a (Phase 4b adds those).
+    // The block WRAPPERS stay read-only — only the inner
+    // text-bearing elements (`<li>`, inner `<p>`, `<figcaption>`)
+    // become contentEditable in Phase 5.
     const ce = (sel: string) =>
       (el.querySelector(sel) as HTMLElement | null)?.getAttribute("contenteditable");
     expect(ce('blockquote[data-annot-block="quote"]')).toBeNull();
@@ -349,6 +353,190 @@ describe("annot-doc-shell: editing mode rendering", () => {
     expect(ce('pre[data-annot-block="code"]')).toBeNull();
     expect(ce('ul[data-annot-block="list"]')).toBeNull();
     expect(ce('hr[data-annot-block="divider"]')).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 5 — contentEditable coverage extension
+// ---------------------------------------------------------------------------
+
+describe("annot-doc-shell: phase 5 contentEditable coverage", () => {
+  it("renders list items / quote / callout / figcaption as contentEditable", async () => {
+    const el = mount(makeMixedDoc());
+    el.editing = true;
+    await el.updateComplete;
+    // List items individually contentEditable, indexed.
+    const liEditables = el.querySelectorAll('li[contenteditable="true"]');
+    expect(liEditables).toHaveLength(2);
+    expect(liEditables[0]?.getAttribute("data-list-item-index")).toBe("0");
+    expect(liEditables[1]?.getAttribute("data-list-item-index")).toBe("1");
+    // Quote / callout inner paragraphs.
+    expect(el.querySelectorAll("p[data-quote-paragraph-index]")).toHaveLength(1);
+    expect(el.querySelectorAll("p[data-callout-paragraph-index]")).toHaveLength(1);
+    // Figcaption.
+    expect(el.querySelector('figcaption[contenteditable="true"]')).not.toBeNull();
+  });
+
+  it("populates each editable with its block content via #updated", async () => {
+    const el = mount(makeMixedDoc());
+    el.editing = true;
+    await el.updateComplete;
+    const li0 = el.querySelector('li[data-list-item-index="0"]') as HTMLElement;
+    const li1 = el.querySelector('li[data-list-item-index="1"]') as HTMLElement;
+    expect(li0.innerHTML).toBe("one");
+    expect(li1.innerHTML).toBe("two");
+    const quoteP = el.querySelector("p[data-quote-paragraph-index]") as HTMLElement;
+    expect(quoteP.innerHTML).toBe("A wise saying.");
+    const calloutP = el.querySelector("p[data-callout-paragraph-index]") as HTMLElement;
+    expect(calloutP.innerHTML).toBe("Heads up.");
+    const figcaption = el.querySelector('figcaption[contenteditable="true"]') as HTMLElement;
+    expect(figcaption.innerHTML).toBe("An image.");
+  });
+
+  it("DOM edits to list items round-trip through commit", async () => {
+    const el = mount(makeMixedDoc());
+    el.editing = true;
+    await el.updateComplete;
+    const li0 = el.querySelector('li[data-list-item-index="0"]') as HTMLElement;
+    li0.innerHTML = "<b>edited</b>";
+    el.commit();
+    const list = el.document?.blocks.find((b) => b.kind === "list");
+    expect(list).toBeDefined();
+    if (list?.kind === "list") {
+      expect(list.items[0]).toBe("<b>edited</b>");
+      expect(list.items[1]).toBe("two");
+    }
+  });
+
+  it("DOM edits to quote paragraphs round-trip through commit", async () => {
+    const el = mount(makeMixedDoc());
+    el.editing = true;
+    await el.updateComplete;
+    const p = el.querySelector('p[data-quote-paragraph-index="0"]') as HTMLElement;
+    p.innerHTML = "Edited quote";
+    el.commit();
+    const quote = el.document?.blocks.find((b) => b.kind === "quote");
+    if (quote?.kind === "quote") {
+      expect(quote.paragraphs[0]).toBe("Edited quote");
+    }
+  });
+
+  it("DOM edits to figcaption round-trip through commit (and dropping clears the field)", async () => {
+    const el = mount(makeMixedDoc());
+    el.editing = true;
+    await el.updateComplete;
+    const fc = el.querySelector('figcaption[contenteditable="true"]') as HTMLElement;
+    fc.innerHTML = "New caption";
+    el.commit();
+    let image = el.document?.blocks.find((b) => b.kind === "image");
+    if (image?.kind === "image") {
+      expect(image.caption).toBe("New caption");
+    }
+    // Empty figcaption drops the caption field entirely.
+    const fc2 = el.querySelector('figcaption[contenteditable="true"]') as HTMLElement;
+    fc2.innerHTML = "   ";
+    el.commit();
+    image = el.document?.blocks.find((b) => b.kind === "image");
+    if (image?.kind === "image") {
+      expect(image.caption).toBeUndefined();
+    }
+  });
+
+  it("Enter on a list item splits into a new item below the cursor", async () => {
+    const el = mount(makeMixedDoc());
+    el.editing = true;
+    await el.updateComplete;
+    const li0 = el.querySelector('li[data-list-item-index="0"]') as HTMLElement;
+    li0.focus();
+    const ev = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true });
+    li0.dispatchEvent(ev);
+    expect(ev.defaultPrevented).toBe(true);
+    await el.updateComplete;
+    const list = el.document?.blocks.find((b) => b.kind === "list");
+    if (list?.kind === "list") {
+      // Original "one" + "two" plus a new empty item between them.
+      expect(list.items).toHaveLength(3);
+      expect(list.items[0]).toBe("one");
+      expect(list.items[1]).toBe("");
+      expect(list.items[2]).toBe("two");
+    }
+  });
+
+  it("Enter on the empty trailing list item exits the list to a paragraph", async () => {
+    const doc: AnnotDocument = {
+      version: 1,
+      lang: "en",
+      title: "T",
+      meta: { title: "T" },
+      styleBlock: null,
+      blocks: [{ kind: "list", ordered: false, listStyle: "disc", items: ["first", ""] }],
+    };
+    const el = mount(doc);
+    el.editing = true;
+    await el.updateComplete;
+    const li1 = el.querySelector('li[data-list-item-index="1"]') as HTMLElement;
+    li1.focus();
+    const ev = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true });
+    li1.dispatchEvent(ev);
+    expect(ev.defaultPrevented).toBe(true);
+    await el.updateComplete;
+    const blocks = el.document?.blocks ?? [];
+    expect(blocks).toHaveLength(2);
+    expect(blocks[0]?.kind).toBe("list");
+    expect(blocks[1]?.kind).toBe("paragraph");
+    if (blocks[0]?.kind === "list") {
+      expect(blocks[0].items).toEqual(["first"]);
+    }
+  });
+
+  it("Enter on a quote paragraph splits into a new paragraph below", async () => {
+    const el = mount(makeMixedDoc());
+    el.editing = true;
+    await el.updateComplete;
+    const p = el.querySelector('p[data-quote-paragraph-index="0"]') as HTMLElement;
+    p.focus();
+    const ev = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true });
+    p.dispatchEvent(ev);
+    expect(ev.defaultPrevented).toBe(true);
+    await el.updateComplete;
+    const quote = el.document?.blocks.find((b) => b.kind === "quote");
+    if (quote?.kind === "quote") {
+      expect(quote.paragraphs).toHaveLength(2);
+      expect(quote.paragraphs[0]).toBe("A wise saying.");
+      expect(quote.paragraphs[1]).toBe("");
+    }
+  });
+
+  it("Shift+Enter on a list item falls through to the browser default", async () => {
+    const el = mount(makeMixedDoc());
+    el.editing = true;
+    await el.updateComplete;
+    const li0 = el.querySelector('li[data-list-item-index="0"]') as HTMLElement;
+    li0.focus();
+    const ev = new KeyboardEvent("keydown", {
+      key: "Enter",
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    li0.dispatchEvent(ev);
+    // Shell does NOT preventDefault — browser default (line break)
+    // applies. The list block stays at 2 items.
+    expect(ev.defaultPrevented).toBe(false);
+    const list = el.document?.blocks.find((b) => b.kind === "list");
+    if (list?.kind === "list") {
+      expect(list.items).toHaveLength(2);
+    }
+  });
+
+  it("clicking the figcaption does NOT open the image-edit modal", async () => {
+    const el = mount(makeMixedDoc());
+    el.editing = true;
+    await el.updateComplete;
+    const fc = el.querySelector('figcaption[contenteditable="true"]') as HTMLElement;
+    fc.click();
+    await el.updateComplete;
+    expect(document.querySelector("annot-doc-image-editor-modal")).toBeNull();
   });
 });
 

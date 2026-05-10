@@ -493,17 +493,52 @@ export class AnnotDocShellElement extends LitElement {
     const article = this.querySelector("article[data-annot-doc]");
     if (!article) return;
     this.document.blocks.forEach((block, idx) => {
-      if (block.kind !== "heading" && block.kind !== "paragraph") return;
       const wrapper = article.querySelector(
         `.annot-doc-block-host[data-block-index="${idx}"]`,
       ) as HTMLElement | null;
       if (!wrapper) return;
       const blockEl = wrapper.querySelector("[data-annot-block]") as HTMLElement | null;
       if (!blockEl) return;
-      // Only update DOM when the document's text disagrees with
-      // what's already there — preserves the cursor when typing.
-      if (blockEl.innerHTML !== block.inlineHtml) {
-        blockEl.innerHTML = block.inlineHtml;
+      if (block.kind === "heading" || block.kind === "paragraph") {
+        // Only update DOM when the document's text disagrees with
+        // what's already there — preserves the cursor when typing.
+        if (blockEl.innerHTML !== block.inlineHtml) {
+          blockEl.innerHTML = block.inlineHtml;
+        }
+        return;
+      }
+      // Phase 5 of `annot-html-document-ux-polish.md` — populate
+      // the multi-paragraph / list / figcaption editables. Same
+      // focus-aware update strategy: never overwrite the active
+      // element so the user's cursor / IME state survives.
+      if (block.kind === "list") {
+        const liEls = blockEl.querySelectorAll<HTMLElement>("li[contenteditable='true']");
+        block.items.forEach((html, i) => {
+          const li = liEls[i];
+          if (!li) return;
+          if (document.activeElement === li) return;
+          if (li.innerHTML !== html) li.innerHTML = html;
+        });
+        return;
+      }
+      if (block.kind === "quote" || block.kind === "callout") {
+        const pEls = blockEl.querySelectorAll<HTMLElement>("p[contenteditable='true']");
+        block.paragraphs.forEach((html, i) => {
+          const p = pEls[i];
+          if (!p) return;
+          if (document.activeElement === p) return;
+          if (p.innerHTML !== html) p.innerHTML = html;
+        });
+        return;
+      }
+      if (block.kind === "image") {
+        const figcaption = blockEl.querySelector(
+          "figcaption[contenteditable='true']",
+        ) as HTMLElement | null;
+        if (!figcaption) return;
+        if (document.activeElement === figcaption) return;
+        const next = block.caption ?? "";
+        if (figcaption.innerHTML !== next) figcaption.innerHTML = next;
       }
     });
   }
@@ -1051,16 +1086,173 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
   #onKeydown = (e: KeyboardEvent): void => {
     if (!this.editing) return;
     const cmd = e.ctrlKey || e.metaKey;
-    if (!cmd) return;
-    const key = e.key.toLowerCase();
-    if (key === "z" && !e.shiftKey) {
-      e.preventDefault();
-      this.undo();
-    } else if ((key === "z" && e.shiftKey) || key === "y") {
-      e.preventDefault();
-      this.redo();
+    if (cmd) {
+      const key = e.key.toLowerCase();
+      if (key === "z" && !e.shiftKey) {
+        e.preventDefault();
+        this.undo();
+        return;
+      }
+      if ((key === "z" && e.shiftKey) || key === "y") {
+        e.preventDefault();
+        this.redo();
+        return;
+      }
+    }
+    // Phase 5 of `annot-html-document-ux-polish.md` — Enter in
+    // list / quote / callout editables splits the current entry
+    // into a new sibling. Empty trailing entry exits the block:
+    // - list → a paragraph after the list
+    // - quote / callout → a paragraph after the wrapper
+    // Shift+Enter falls through to the browser's default
+    // (line break inside the same entry).
+    if (e.key === "Enter" && !e.shiftKey) {
+      if (this.#handleEnterInMultiEntryBlock(e)) return;
+      // Figcaption Enter: blur to commit (single-line semantics).
+      const target = e.target as HTMLElement | null;
+      if (target?.matches("figcaption[contenteditable='true']")) {
+        e.preventDefault();
+        target.blur();
+        return;
+      }
     }
   };
+
+  /** Returns true when the event was consumed (handled here) so
+   *  the caller knows to short-circuit. */
+  #handleEnterInMultiEntryBlock(e: KeyboardEvent): boolean {
+    if (!this.document) return false;
+    const target = e.target as HTMLElement | null;
+    if (!target) return false;
+    const li = target.closest<HTMLElement>("li[contenteditable='true']");
+    const quoteP = target.closest<HTMLElement>("p[data-quote-paragraph-index]");
+    const calloutP = target.closest<HTMLElement>("p[data-callout-paragraph-index]");
+    const editable = li ?? quoteP ?? calloutP;
+    if (!editable) return false;
+    const wrapper = editable.closest<HTMLElement>(".annot-doc-block-host");
+    const indexAttr = wrapper?.getAttribute("data-block-index");
+    if (!indexAttr) return false;
+    const blockIndex = Number.parseInt(indexAttr, 10);
+    if (Number.isNaN(blockIndex)) return false;
+    const block = this.document.blocks[blockIndex];
+    if (!block) return false;
+
+    e.preventDefault();
+    this.#syncDomIntoDocument();
+    const isEmpty = (editable.textContent ?? "").trim() === "";
+
+    if (li && block.kind === "list") {
+      const itemIndex = Number.parseInt(li.getAttribute("data-list-item-index") ?? "", 10);
+      if (Number.isNaN(itemIndex)) return false;
+      this.#splitMultiEntry(blockIndex, itemIndex, isEmpty, "list");
+      return true;
+    }
+    if (quoteP && block.kind === "quote") {
+      const paraIndex = Number.parseInt(
+        quoteP.getAttribute("data-quote-paragraph-index") ?? "",
+        10,
+      );
+      if (Number.isNaN(paraIndex)) return false;
+      this.#splitMultiEntry(blockIndex, paraIndex, isEmpty, "quote");
+      return true;
+    }
+    if (calloutP && block.kind === "callout") {
+      const paraIndex = Number.parseInt(
+        calloutP.getAttribute("data-callout-paragraph-index") ?? "",
+        10,
+      );
+      if (Number.isNaN(paraIndex)) return false;
+      this.#splitMultiEntry(blockIndex, paraIndex, isEmpty, "callout");
+      return true;
+    }
+    return false;
+  }
+
+  /** Insert a new sibling entry after `entryIndex` in the
+   *  multi-entry block at `blockIndex`. When `isEmpty` is true
+   *  AND the entry is the last one, drop it and exit the block
+   *  by inserting a fresh paragraph block AFTER the wrapper.
+   *  After applying, focuses the newly-created editable. */
+  #splitMultiEntry(
+    blockIndex: number,
+    entryIndex: number,
+    isEmpty: boolean,
+    kind: "list" | "quote" | "callout",
+  ): void {
+    if (!this.document) return;
+    const block = this.document.blocks[blockIndex];
+    if (!block) return;
+    const blocks = [...this.document.blocks];
+
+    const entries: string[] =
+      kind === "list" && block.kind === "list"
+        ? [...block.items]
+        : (block.kind === "quote" || block.kind === "callout") &&
+            (kind === "quote" || kind === "callout")
+          ? [...block.paragraphs]
+          : [];
+    if (entries.length === 0) return;
+
+    const isLast = entryIndex === entries.length - 1;
+    let focusInfo: { blockIndex: number; entryIndex: number; kind: typeof kind } | null = null;
+
+    if (isEmpty && isLast && entries.length > 1) {
+      // Drop the trailing empty entry and exit the block by
+      // splicing a fresh paragraph block after this one.
+      entries.pop();
+      const updated = this.#withEntries(block, kind, entries);
+      if (!updated) return;
+      blocks[blockIndex] = updated;
+      blocks.splice(blockIndex + 1, 0, { kind: "paragraph", inlineHtml: "" });
+      // Focus the new paragraph.
+      this.#applyAndFocus(blocks, () => {
+        const next = this.querySelector<HTMLElement>(
+          `.annot-doc-block-host[data-block-index="${blockIndex + 1}"] [data-annot-block="paragraph"][contenteditable="true"]`,
+        );
+        next?.focus();
+      });
+      return;
+    }
+
+    // Default: insert a new empty entry after `entryIndex`.
+    entries.splice(entryIndex + 1, 0, "");
+    const updated = this.#withEntries(block, kind, entries);
+    if (!updated) return;
+    blocks[blockIndex] = updated;
+    focusInfo = { blockIndex, entryIndex: entryIndex + 1, kind };
+    this.#applyAndFocus(blocks, () => {
+      if (!focusInfo) return;
+      const selector =
+        focusInfo.kind === "list"
+          ? `.annot-doc-block-host[data-block-index="${focusInfo.blockIndex}"] li[data-list-item-index="${focusInfo.entryIndex}"]`
+          : focusInfo.kind === "quote"
+            ? `.annot-doc-block-host[data-block-index="${focusInfo.blockIndex}"] p[data-quote-paragraph-index="${focusInfo.entryIndex}"]`
+            : `.annot-doc-block-host[data-block-index="${focusInfo.blockIndex}"] p[data-callout-paragraph-index="${focusInfo.entryIndex}"]`;
+      const next = this.querySelector<HTMLElement>(selector);
+      next?.focus();
+    });
+  }
+
+  #withEntries(block: Block, kind: "list" | "quote" | "callout", entries: string[]): Block | null {
+    if (kind === "list" && block.kind === "list") {
+      return { ...block, items: entries };
+    }
+    if (kind === "quote" && block.kind === "quote") {
+      return { ...block, paragraphs: entries };
+    }
+    if (kind === "callout" && block.kind === "callout") {
+      return { ...block, paragraphs: entries };
+    }
+    return null;
+  }
+
+  #applyAndFocus(blocks: Block[], focus: () => void): void {
+    if (!this.document) return;
+    const newDoc: AnnotDocument = { ...this.document, blocks };
+    this.#history?.push(newDoc);
+    this.#applyInternal(newDoc, "block-action");
+    queueMicrotask(focus);
+  }
 
   // -------------------------------------------------------------------------
   // Phase 3 — Selection format toolbar
@@ -1283,9 +1475,13 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
     if (!this.document) return;
     const block = this.document.blocks[index];
     if (block?.kind !== "image") return;
+    const target = e.target as HTMLElement | null;
     // Toolbar lives inside the same host wrapper; clicks on the
     // toolbar buttons must not bubble up into "edit image".
-    if ((e.target as HTMLElement | null)?.closest("annot-doc-block-toolbar")) return;
+    if (target?.closest("annot-doc-block-toolbar")) return;
+    // Phase 5 — figcaption is contentEditable; clicks there
+    // (selecting / placing the cursor) must not open the modal.
+    if (target?.closest("figcaption[contenteditable='true']")) return;
     void this.#openImageEditor(block, index);
   }
 
@@ -1329,25 +1525,17 @@ function renderBlockBody(
     case "paragraph":
       return renderParagraph(block, editable);
     case "list":
-      return renderList(block);
+      return renderList(block, editable);
     case "code":
       return renderCode(block);
     case "quote":
-      return html`
-        <blockquote data-annot-block="quote">
-          ${block.paragraphs.map((p) => html`<p>${unsafeHTML(p)}</p>`)}
-        </blockquote>
-      `;
+      return renderQuote(block, editable);
     case "callout":
-      return html`
-        <aside data-annot-block="callout" data-tone=${block.tone}>
-          ${block.paragraphs.map((p) => html`<p>${unsafeHTML(p)}</p>`)}
-        </aside>
-      `;
+      return renderCallout(block, editable);
     case "divider":
       return html`<hr data-annot-block="divider" />`;
     case "image":
-      return renderImage(block);
+      return renderImage(block, editable);
     case "unknown":
       return html`${unsafeHTML(block.rawHtml)}`;
   }
@@ -1416,8 +1604,19 @@ function renderParagraph(block: { inlineHtml: string }, editable: boolean): Temp
   return html`<p data-annot-block="paragraph">${unsafeHTML(block.inlineHtml)}</p>`;
 }
 
-function renderList(block: ListBlock): TemplateResult {
-  const items = block.items.map((it) => html`<li>${unsafeHTML(it)}</li>`);
+function renderList(block: ListBlock, editable: boolean): TemplateResult {
+  // Phase 5 of `annot-html-document-ux-polish.md` — each `<li>`
+  // becomes contentEditable individually. Like the heading +
+  // paragraph paths, the body is populated imperatively in
+  // `updated()` so Lit's child-part markers stay out of the
+  // editable region. Editing-mode renders empty `<li>` shells
+  // with `data-list-item-index=N` so sync + `updated` can map
+  // each `<li>` back to `items[N]`.
+  const items = editable
+    ? block.items.map(
+        (_, idx) => html`<li contenteditable="true" data-list-item-index=${idx}></li>`,
+      )
+    : block.items.map((it) => html`<li>${unsafeHTML(it)}</li>`);
   if (block.ordered) {
     return html`
       <ol
@@ -1436,6 +1635,38 @@ function renderList(block: ListBlock): TemplateResult {
   `;
 }
 
+function renderQuote(block: { paragraphs: readonly string[] }, editable: boolean): TemplateResult {
+  // Phase 5 — quote inner paragraphs become individually editable.
+  // The `<blockquote>` wrapper stays read-only (decorative).
+  const paras = editable
+    ? block.paragraphs.map(
+        (_, idx) => html`<p contenteditable="true" data-quote-paragraph-index=${idx}></p>`,
+      )
+    : block.paragraphs.map((p) => html`<p>${unsafeHTML(p)}</p>`);
+  return html`
+    <blockquote data-annot-block="quote">
+      ${paras}
+    </blockquote>
+  `;
+}
+
+function renderCallout(
+  block: { tone: string; paragraphs: readonly string[] },
+  editable: boolean,
+): TemplateResult {
+  // Phase 5 — callout inner paragraphs become individually editable.
+  const paras = editable
+    ? block.paragraphs.map(
+        (_, idx) => html`<p contenteditable="true" data-callout-paragraph-index=${idx}></p>`,
+      )
+    : block.paragraphs.map((p) => html`<p>${unsafeHTML(p)}</p>`);
+  return html`
+    <aside data-annot-block="callout" data-tone=${block.tone}>
+      ${paras}
+    </aside>
+  `;
+}
+
 function renderCode(block: { lang?: string; text: string }): TemplateResult {
   if (block.lang !== undefined) {
     return html`<pre data-annot-block="code" data-lang=${block.lang}><code>${block.text}</code></pre>`;
@@ -1443,7 +1674,22 @@ function renderCode(block: { lang?: string; text: string }): TemplateResult {
   return html`<pre data-annot-block="code"><code>${block.text}</code></pre>`;
 }
 
-function renderImage(block: ImageBlock): TemplateResult {
+function renderImage(block: ImageBlock, editable = false): TemplateResult {
+  // Phase 5 of `annot-html-document-ux-polish.md` — figcaption is
+  // contentEditable in editing mode. The SVG above stays
+  // click-to-edit-modal as today (only the caption is touched
+  // here). The figcaption renders even when `caption` is
+  // undefined so users can add one in-place; the empty-paragraph
+  // placeholder doesn't apply (figcaptions live in their own
+  // selector tree).
+  if (editable) {
+    return html`
+      <figure data-annot-block="image" data-annot-image-id=${block.id}>
+        ${unsafeHTML(block.svg)}
+        <figcaption contenteditable="true" data-annot-figcaption></figcaption>
+      </figure>
+    `;
+  }
   return html`
     <figure data-annot-block="image" data-annot-image-id=${block.id}>
       ${unsafeHTML(block.svg)}
@@ -1492,6 +1738,41 @@ function syncBlockFromDom(wrapper: HTMLElement, block: Block): Block {
     const inlineHtml = blockEl.innerHTML;
     if (inlineHtml === block.inlineHtml) return block;
     return { ...block, inlineHtml };
+  }
+  // Phase 5 of `annot-html-document-ux-polish.md` — extend the
+  // sync to the multi-paragraph + list + figcaption block kinds.
+  // Reads each child editable's innerHTML in document order;
+  // identity preserved when nothing changed (callers detect
+  // no-op via `!==`).
+  if (block.kind === "list") {
+    const liEls = Array.from(blockEl.querySelectorAll<HTMLElement>("li[contenteditable='true']"));
+    if (liEls.length !== block.items.length) return block;
+    const next = liEls.map((el) => el.innerHTML);
+    if (next.every((html, i) => html === block.items[i])) return block;
+    return { ...block, items: next };
+  }
+  if (block.kind === "quote" || block.kind === "callout") {
+    const pEls = Array.from(blockEl.querySelectorAll<HTMLElement>("p[contenteditable='true']"));
+    if (pEls.length !== block.paragraphs.length) return block;
+    const next = pEls.map((el) => el.innerHTML);
+    if (next.every((html, i) => html === block.paragraphs[i])) return block;
+    return { ...block, paragraphs: next };
+  }
+  if (block.kind === "image") {
+    const figcaption = blockEl.querySelector(
+      "figcaption[contenteditable='true']",
+    ) as HTMLElement | null;
+    if (!figcaption) return block;
+    const html = figcaption.innerHTML;
+    // Empty figcaption → drop the field entirely so the
+    // serializer doesn't emit an empty `<figcaption>` element.
+    if (html.trim() === "") {
+      if (block.caption === undefined) return block;
+      const { caption: _, ...rest } = block;
+      return rest;
+    }
+    if (html === block.caption) return block;
+    return { ...block, caption: html };
   }
   return block;
 }
