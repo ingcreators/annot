@@ -23,16 +23,17 @@ beforeEach(() => {
 });
 
 describe("annot-doc-block-toolbar", () => {
-  it("renders five action buttons by default", async () => {
+  it("renders six action buttons by default", async () => {
     const el = mount();
     await el.updateComplete;
     const buttons = el.querySelectorAll("button.block-action");
-    expect(buttons).toHaveLength(5);
+    expect(buttons).toHaveLength(6);
     expect(buttons[0]?.getAttribute("aria-label")).toBe("Insert block above");
     expect(buttons[1]?.getAttribute("aria-label")).toBe("Insert block below");
-    expect(buttons[2]?.getAttribute("aria-label")).toBe("Move up");
-    expect(buttons[3]?.getAttribute("aria-label")).toBe("Move down");
-    expect(buttons[4]?.getAttribute("aria-label")).toBe("Delete block");
+    expect(buttons[2]?.getAttribute("aria-label")).toBe("Insert image below");
+    expect(buttons[3]?.getAttribute("aria-label")).toBe("Move up");
+    expect(buttons[4]?.getAttribute("aria-label")).toBe("Move down");
+    expect(buttons[5]?.getAttribute("aria-label")).toBe("Delete block");
   });
 
   it("dispatches block-action with the right payload on click", async () => {
@@ -44,12 +45,14 @@ describe("annot-doc-block-toolbar", () => {
     });
     (el.querySelector('[aria-label="Insert block above"]') as HTMLButtonElement).click();
     (el.querySelector('[aria-label="Insert block below"]') as HTMLButtonElement).click();
+    (el.querySelector('[aria-label="Insert image below"]') as HTMLButtonElement).click();
     (el.querySelector('[aria-label="Move up"]') as HTMLButtonElement).click();
     (el.querySelector('[aria-label="Move down"]') as HTMLButtonElement).click();
     (el.querySelector('[aria-label="Delete block"]') as HTMLButtonElement).click();
     expect(captured.map((d) => d.action)).toEqual([
       "insertAbove",
       "insertBelow",
+      "insertImage",
       "moveUp",
       "moveDown",
       "delete",
@@ -65,13 +68,16 @@ describe("annot-doc-block-toolbar", () => {
     const down = el.querySelector('[aria-label="Move down"]') as HTMLButtonElement;
     expect(up.disabled).toBe(true);
     expect(down.disabled).toBe(true);
-    // Insert + delete stay enabled — moving may not be possible
-    // but inserting a sibling and deleting always are.
+    // Insert + image-insert + delete stay enabled — moving may
+    // not be possible but inserting a sibling and deleting always
+    // are.
     const above = el.querySelector('[aria-label="Insert block above"]') as HTMLButtonElement;
     const below = el.querySelector('[aria-label="Insert block below"]') as HTMLButtonElement;
+    const image = el.querySelector('[aria-label="Insert image below"]') as HTMLButtonElement;
     const del = el.querySelector('[aria-label="Delete block"]') as HTMLButtonElement;
     expect(above.disabled).toBe(false);
     expect(below.disabled).toBe(false);
+    expect(image.disabled).toBe(false);
     expect(del.disabled).toBe(false);
   });
 });

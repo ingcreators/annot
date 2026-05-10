@@ -189,10 +189,32 @@ const SHELL_CSS = `
   background: rgba(220, 38, 38, 0.12);
   color: #dc2626;
 }
+.annot-doc-block-toolbar .block-action-image:hover:not(:disabled) {
+  background: var(--annot-doc-code-bg);
+  color: var(--annot-doc-accent, #2563eb);
+}
 [data-annot-block][contenteditable="true"]:focus-visible {
   outline: 2px solid var(--annot-doc-accent);
   outline-offset: 2px;
   border-radius: 2px;
+}
+
+/* Discoverability hint for empty contentEditable blocks. The
+ * :empty pseudo-selector matches when innerHTML is exactly
+ * empty (no <br>, no whitespace) — true on a freshly-mounted
+ * block before the user has typed anything. The placeholder
+ * disappears the moment any content lands. pointer-events:
+ * none on the pseudo so the user's first click still lands on
+ * the contentEditable + sets the caret correctly. */
+.annot-doc-shell.editing
+  [data-annot-block="paragraph"][contenteditable="true"]:empty::before,
+.annot-doc-shell.editing
+  [data-annot-block="heading"][contenteditable="true"]:empty::before {
+  content: "Type / for commands, or paste / drop an image…";
+  color: var(--annot-doc-muted);
+  pointer-events: none;
+  font-style: italic;
+  opacity: 0.7;
 }
 
 /* ---- Slash menu (mounted to <body> by openFor) ---- */
@@ -447,6 +469,17 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
     // so the user's typing isn't lost.
     this.#syncDomIntoDocument();
 
+    if (action === "insertImage") {
+      // Asynchronous — opens the OS file picker, then inserts
+      // the resulting image block AFTER the current block. The
+      // shell already has #insertImageFromFile; we add a thin
+      // index-aware caller here so the toolbar button reuses the
+      // same data-URL → ImageBlock pipeline as paste / drop / the
+      // slash menu's image entry.
+      void this.#promptImageFileAndInsertAfter(index);
+      return;
+    }
+
     const blocks = [...this.document.blocks];
     if (action === "delete") {
       blocks.splice(index, 1);
@@ -586,14 +619,30 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
   async #promptImageFileAndReplace(index: number): Promise<void> {
     const file = await pickImageFile();
     if (!file) return;
-    await this.#insertImageFromFile(file, index);
+    await this.#insertImageFromFile(file, { replaceIndex: index });
   }
 
-  /** Insert (or replace at `replaceIndex`) an image block built
-   *  from the given `File`. The bitmap is inlined as a data URL so
-   *  the document remains self-contained — Phase 8+ may add an
-   *  asset-link path that defers to a `StorageProvider` instead. */
-  async #insertImageFromFile(file: File, replaceIndex?: number): Promise<void> {
+  /** Block-toolbar "Insert image" entry point — opens the OS
+   *  file picker, then splices the resulting image block in
+   *  after `index`. Discoverable analogue to paste / drop /
+   *  slash-menu image insertion (each of which starts from a
+   *  different user gesture but converges on the same
+   *  `#insertImageFromFile` pipeline). */
+  async #promptImageFileAndInsertAfter(index: number): Promise<void> {
+    const file = await pickImageFile();
+    if (!file) return;
+    await this.#insertImageFromFile(file, { insertAtIndex: index + 1 });
+  }
+
+  /** Insert / replace an image block built from the given `File`.
+   *  The bitmap is inlined as a data URL so the document remains
+   *  self-contained — Phase 8+ may add an asset-link path that
+   *  defers to a `StorageProvider` instead. Default (no opts) →
+   *  append at end of block list. */
+  async #insertImageFromFile(
+    file: File,
+    opts: { replaceIndex?: number; insertAtIndex?: number } = {},
+  ): Promise<void> {
     if (!this.document) return;
     let dataUrl: string;
     try {
@@ -624,8 +673,15 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
     const block = createImageBlockFromDataUrl(dataUrl, dimensions.width, dimensions.height);
     if (!this.document) return;
     const blocks = [...this.document.blocks];
-    if (replaceIndex !== undefined && replaceIndex >= 0 && replaceIndex < blocks.length) {
-      blocks[replaceIndex] = block;
+    if (
+      opts.replaceIndex !== undefined &&
+      opts.replaceIndex >= 0 &&
+      opts.replaceIndex < blocks.length
+    ) {
+      blocks[opts.replaceIndex] = block;
+    } else if (opts.insertAtIndex !== undefined) {
+      const at = Math.max(0, Math.min(blocks.length, opts.insertAtIndex));
+      blocks.splice(at, 0, block);
     } else {
       blocks.push(block);
     }

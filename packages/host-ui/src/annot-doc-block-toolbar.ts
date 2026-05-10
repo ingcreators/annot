@@ -16,7 +16,13 @@
 
 import { html, LitElement, type TemplateResult } from "./lit.js";
 
-export type BlockToolbarAction = "delete" | "moveUp" | "moveDown" | "insertAbove" | "insertBelow";
+export type BlockToolbarAction =
+  | "delete"
+  | "moveUp"
+  | "moveDown"
+  | "insertAbove"
+  | "insertBelow"
+  | "insertImage";
 
 export interface BlockToolbarActionDetail {
   action: BlockToolbarAction;
@@ -42,13 +48,34 @@ export class AnnotDocBlockToolbarElement extends LitElement {
   }
 
   override render(): TemplateResult {
+    // Image-frame SVG glyph for the "Insert image" affordance.
+    // Inline so the toolbar stays self-contained — no
+    // `<annot-icon>` registry round-trip needed for a single
+    // glyph, and the SVG paints with `currentColor` so it
+    // inherits the toolbar button's text colour automatically.
+    const imageIcon = html`<svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.4"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="2" y="3" width="12" height="10" rx="1.5"/>
+      <circle cx="6" cy="7" r="1" fill="currentColor"/>
+      <path d="M14 11 L10 8 L5 13"/>
+    </svg>`;
+
     return html`
       <div class="annot-doc-block-toolbar" role="toolbar" aria-label="Block actions">
         <button
           type="button"
           class="block-action"
           aria-label="Insert block above"
-          title="Insert above"
+          title="Insert empty block above"
           @click=${() => this.#dispatch("insertAbove")}
         >
           ⤴
@@ -57,10 +84,19 @@ export class AnnotDocBlockToolbarElement extends LitElement {
           type="button"
           class="block-action"
           aria-label="Insert block below"
-          title="Insert below"
+          title="Insert empty block below"
           @click=${() => this.#dispatch("insertBelow")}
         >
           ⤵
+        </button>
+        <button
+          type="button"
+          class="block-action block-action-image"
+          aria-label="Insert image below"
+          title="Insert image below (or paste / drop one anywhere)"
+          @click=${() => this.#dispatch("insertImage")}
+        >
+          ${imageIcon}
         </button>
         <button
           type="button"
