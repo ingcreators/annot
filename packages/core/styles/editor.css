@@ -1583,6 +1583,35 @@ body.editor-mode.has-right-panel .file-details-backdrop {
   /* biome-ignore-end lint/suspicious/noDuplicateProperties: deliberate CSS fallback stack */
 }
 
+/* Document-card fallback when `thumbnailDataUrl` is empty —
+ * Phase 11 of `annot-html-document.md` shipped doc cards but
+ * with no thumb-generation path, so the default `.gallery-thumb`
+ * `background:#111` showed through as a black rectangle. The
+ * `<annot-icon spec="article">` fallback rendered into the top-
+ * left corner without sizing because nothing centered it. The
+ * rules below: center the icon, give it a readable size, swap
+ * the dark background for a friendlier panel-coloured tile so
+ * docs feel like papers / preview tiles rather than missing
+ * media. Documents with image blocks override this via the
+ * pre-rendered `<img>` (sibling `.gallery-thumb img` rule
+ * above). */
+.gallery-document-item .gallery-thumb {
+  background: var(--annot-bg-panel, #2a2a2a);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--annot-border-color, transparent);
+}
+.gallery-document-item .gallery-thumb annot-icon {
+  width: 56px;
+  height: 56px;
+  color: var(--annot-text-secondary, #9ca3af);
+}
+.gallery-document-item .gallery-thumb annot-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
 .gallery-item-info {
   padding: 8px 10px;
   position: relative;
