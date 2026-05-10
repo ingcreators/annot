@@ -419,6 +419,50 @@ ships 3 bundled starter templates (`manual` / `feature-guide` /
 [`docs/plans/annot-html-document.md`](./plans/annot-html-document.md)
 for the lifecycle.
 
+## Cross-references
+
+A document can carry inline cross-references to image blocks via
+`<span data-annot-figref="img-X">…</span>` elements inside any
+inline-HTML field (heading, paragraph, list item, quote /
+callout paragraph, image caption). The visible text inside the
+span IS the rendered label — the standalone browser view shows
+exactly what's between the tags, no JS required.
+
+```html
+<p data-annot-block="paragraph">
+  See <span data-annot-figref="img-login">Figure 1</span> for the
+  login screen.
+</p>
+```
+
+The label is computed by walking the document's image blocks in
+order and assigning 1-based numbers (same map the figure-
+caption auto-numbering uses; see
+[Numbering](#docmeta-numbering) above). The Tier B helper
+`resolveFigureRefs(doc)` re-writes every span's text content to
+match the current order — editor / save pipelines call it
+before serialise so the saved bytes never carry stale labels.
+
+Stale references — `<span data-annot-figref="img-X">` whose
+`img-X` no longer exists in the document — render as
+`Figure ?` (or whatever `numbering.figureLabel` is set to,
+followed by the resolver's `staleLabel` option which defaults
+to `?`). The placeholder makes the dangling reference visible
+without breaking the export.
+
+The label format mirrors the figure-caption prefix:
+
+- Default: `"Figure 1"`, `"Figure 2"`, …
+- With `meta.numbering.figureLabel = "図 "`: `"図 1"`,
+  `"図 2"`, …
+- Stale: `"Figure ?"` (or `"図 ?"`).
+
+Phase 13b lands the resolver helper; the editor's `@<id>`
+autocomplete that turns user-typed `@img-foo` into the
+canonical `<span>` form is queued as a follow-up. Today the
+spans need to be authored explicitly (via plugin / scripted
+edit / direct HTML).
+
 ## Self-contained styling
 
 A canonical save MAY (and Phase 2's `injectDocumentStyles` SHALL)

@@ -26,6 +26,8 @@ export { buildStyleBlock, injectDocumentStyles } from "./inject-styles.js";
 export { isTemplateFromHead } from "./is-template-head.js";
 export type { ParseOptions } from "./parse.js";
 export { AnnotDocParseError, parseDocument } from "./parse.js";
+export type { ResolveFigureRefsOptions } from "./resolve-figure-refs.js";
+export { AnnotDocResolveError, resolveFigureRefs } from "./resolve-figure-refs.js";
 
 export { escapeAttr, escapeText, serializeDocument, serializeMetaJson } from "./serialize.js";
 export type {
