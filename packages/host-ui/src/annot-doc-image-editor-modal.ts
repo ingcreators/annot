@@ -69,6 +69,13 @@ export interface ImageEditorModalInput {
   /** Canonical `.annot.svg` bytes carried by the block (the
    *  `<svg>` outer + base `<image>` + the annotation `<g>`). */
   readonly svg: string;
+  /** Phase 6 of `docs/plans/annot-html-document-ux-polish.md` —
+   *  position of this image within the document's image blocks
+   *  (1-indexed). Drives the "Editing image N of M" header
+   *  copy. Optional for back-compat / standalone use. */
+  readonly positionInImages?: number;
+  /** Total image blocks in the document. */
+  readonly totalImages?: number;
 }
 
 export type ImageEditorModalResult =
@@ -103,6 +110,17 @@ const STYLES = `
   padding: 12px 16px;
   border-bottom: 1px solid var(--annot-doc-muted, #6b7280);
   font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.annot-doc-image-editor-modal-dirty {
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(245, 158, 11, 0.16);
+  color: #b45309;
 }
 .annot-doc-image-editor-modal-body {
   display: grid;
@@ -175,9 +193,14 @@ let activeModal: AnnotDocImageEditorModalElement | null = null;
 export class AnnotDocImageEditorModalElement extends LitElement {
   static override properties = {
     input: { attribute: false },
+    dirty: { state: true },
   };
 
   declare input: ImageEditorModalInput | null;
+  /** Phase 6 of `annot-html-document-ux-polish.md` — true once
+   *  the user has made any edit since the modal opened. Drives
+   *  the Esc-to-cancel confirmation guard + the header subtitle. */
+  declare dirty: boolean;
 
   #shell: EditorShell | null = null;
   #toolbar: Toolbar | null = null;
@@ -192,6 +215,7 @@ export class AnnotDocImageEditorModalElement extends LitElement {
   constructor() {
     super();
     this.input = null;
+    this.dirty = false;
   }
 
   protected override createRenderRoot(): HTMLElement {
@@ -228,7 +252,8 @@ export class AnnotDocImageEditorModalElement extends LitElement {
       if (e.key === "Escape") {
         e.preventDefault();
         e.stopPropagation();
-        this.#resolveCancel();
+        // Phase 6 — confirm before discarding dirty edits.
+        void this.#requestCancel();
       }
     };
     document.addEventListener("keydown", this.#onKeydown, { capture: true });
@@ -258,21 +283,38 @@ export class AnnotDocImageEditorModalElement extends LitElement {
   }
 
   override render(): TemplateResult {
+    const pos = this.input?.positionInImages;
+    const total = this.input?.totalImages;
+    // Phase 6 of `annot-html-document-ux-polish.md` — header
+    // copy: "Editing image N of M" when N+M known; falls back to
+    // "Edit image" for pre-Phase-6 callers. Subtitle pill shows
+    // "Unsaved changes" when the modal is dirty.
+    const headerLabel =
+      pos !== undefined && total !== undefined && total > 0
+        ? `Editing image ${pos} of ${total}`
+        : "Edit image";
     return html`
       <style>${STYLES}</style>
       <div
         class="annot-doc-image-editor-modal-overlay"
         @click=${(e: MouseEvent) => {
-          if (e.target === e.currentTarget) this.#resolveCancel();
+          if (e.target === e.currentTarget) void this.#requestCancel();
         }}
       >
         <div
           class="annot-doc-image-editor-modal-panel"
           role="dialog"
           aria-modal="true"
-          aria-label="Edit image"
+          aria-label=${headerLabel}
         >
-          <div class="annot-doc-image-editor-modal-header">Edit image</div>
+          <div class="annot-doc-image-editor-modal-header">
+            <span>${headerLabel}</span>
+            ${
+              this.dirty
+                ? html`<span class="annot-doc-image-editor-modal-dirty">Unsaved changes</span>`
+                : ""
+            }
+          </div>
           <div class="annot-doc-image-editor-modal-body">
             <div class="annot-doc-image-editor-modal-toolbar"></div>
             <div class="annot-doc-image-editor-modal-canvas-wrap">
@@ -282,7 +324,7 @@ export class AnnotDocImageEditorModalElement extends LitElement {
           </div>
           <div class="annot-doc-image-editor-modal-statusbar"></div>
           <div class="annot-doc-image-editor-modal-footer">
-            <button type="button" @click=${() => this.#resolveCancel()}>Cancel</button>
+            <button type="button" @click=${() => void this.#requestCancel()}>Cancel</button>
             <button type="button" class="primary" @click=${() => this.#resolveSave()}>
               Save
             </button>
@@ -290,6 +332,25 @@ export class AnnotDocImageEditorModalElement extends LitElement {
         </div>
       </div>
     `;
+  }
+
+  /** Phase 6 — Esc / Cancel button / overlay-click dispatch.
+   *  When the modal carries unsaved edits (`dirty=true`), prompt
+   *  the user to confirm; otherwise resolve cancel directly. */
+  async #requestCancel(): Promise<void> {
+    if (!this.dirty) {
+      this.#resolveCancel();
+      return;
+    }
+    const ok = await showConfirmDialog({
+      title: "Discard changes to image?",
+      message: "You have unsaved changes to this image. Closing now will discard them. Save first?",
+      okLabel: "Discard",
+      cancelLabel: "Keep editing",
+      danger: true,
+    });
+    if (!ok) return;
+    this.#resolveCancel();
   }
 
   #mountShell(): void {
@@ -303,6 +364,12 @@ export class AnnotDocImageEditorModalElement extends LitElement {
     const shell = new EditorShell({ container, storage: NOOP_STORAGE });
     shell.mountFromRecord(record.path, record);
     this.#shell = shell;
+    // Phase 6 of `annot-html-document-ux-polish.md` — listen for
+    // the shell's `dirty` event so the header subtitle + the
+    // Esc / Cancel guard react to mid-edit state.
+    shell.on("dirty", () => {
+      this.dirty = true;
+    });
     this.#mountToolbarAndPanel();
   }
 
