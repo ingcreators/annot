@@ -1172,6 +1172,10 @@ export class App {
           disabled: !hasImages,
         },
         { id: "saveAsTemplate", label: "Save as template…" },
+        // Phase 11 of `annot-html-document-ux-polish.md` —
+        // doc-level settings (title / lang / author / theme /
+        // maxWidth). Always enabled (no preconditions).
+        { id: "documentSettings", label: "Document settings…" },
       ];
     };
     header.overflowItems = buildOverflowItems(parsed);
@@ -1233,6 +1237,8 @@ export class App {
           void this.#exportDocAsPptx(current);
         } else if (action === "saveAsTemplate") {
           void this.#saveCurrentDocAsTemplate(storage, current);
+        } else if (action === "documentSettings") {
+          void this.#openDocSettings(shell, header, scheduleSave);
         }
       },
     };
@@ -1589,6 +1595,78 @@ export class App {
     } catch (err) {
       showSaveError(`Couldn't export document: ${(err as Error).message}`);
     }
+  }
+
+  /**
+   * Phase 11 of `docs/plans/annot-html-document-ux-polish.md` —
+   * "Document settings…" overflow handler.
+   *
+   * Opens the settings dialog pre-populated with the current
+   * doc's metadata, then on OK applies the diff to
+   * `shell.document`. The result flows through the existing
+   * `scheduleSave` path so the new bytes land in the same file
+   * the user is editing, and the shell's own `doc-changed`
+   * listener pushes a `DocumentHistory` snapshot so undo /
+   * redo round-trip the change.
+   *
+   * Empty-string clears (e.g. clearing author) flow back as
+   * `undefined` so the serialiser doesn't emit an empty
+   * `<meta>` field.
+   */
+  async #openDocSettings(
+    shell: import("@ingcreators/annot-host-ui/annot-doc-shell").AnnotDocShellElement,
+    header: import("@ingcreators/annot-host-ui/annot-doc-header").AnnotDocHeaderElement,
+    scheduleSave: (doc: import("@ingcreators/annot-doc").AnnotDocument) => void,
+  ): Promise<void> {
+    const current = shell.document;
+    if (!current) return;
+    const { showDocSettingsDialog } = await import(
+      "@ingcreators/annot-host-ui/ui/doc-settings-dialog"
+    );
+    const result = await showDocSettingsDialog({
+      defaultTitle: current.title,
+      defaultLang: current.lang,
+      defaultAuthor: current.meta.author,
+      defaultTheme: current.meta.theme ?? "auto",
+      defaultMaxWidth: current.meta.maxWidth ?? "medium",
+    });
+    if (!result) return;
+
+    // Build the new document — title is required (defaults to
+    // "Untitled" inside the dialog); the optional fields drop
+    // when the user clears them so the serialiser doesn't emit
+    // empty `<meta>` entries.
+    //
+    // The meta object is built field-by-field rather than as a
+    // single spread + overrides because the conditional
+    // author-drop case has to come BEFORE we apply
+    // title / theme / maxWidth — otherwise the
+    // current-meta-minus-author spread overwrites the new
+    // values with the stale ones.
+    const baseMeta =
+      result.author !== undefined
+        ? { ...current.meta, author: result.author }
+        : (() => {
+            const { author: _ignored, ...rest } = current.meta;
+            return rest;
+          })();
+    const updated: import("@ingcreators/annot-doc").AnnotDocument = {
+      ...current,
+      title: result.title,
+      ...(result.lang !== undefined ? { lang: result.lang } : {}),
+      meta: {
+        ...baseMeta,
+        title: result.title,
+        // Theme + maxWidth are always set (the dropdowns don't
+        // have "leave unset" affordance); `meta.theme` etc.
+        // round-trip through `serializeDocument` correctly.
+        theme: result.theme,
+        maxWidth: result.maxWidth,
+      },
+    };
+    shell.document = updated;
+    header.setTitleText(result.title);
+    scheduleSave(updated);
   }
 
   /**

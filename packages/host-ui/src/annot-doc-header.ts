@@ -31,7 +31,7 @@ import type { AnnotSaveStatusElement } from "./save-status-indicator.js";
 
 export type DocHeaderMode = "view" | "edit";
 
-export type DocHeaderOverflowAction = "exportPptx" | "saveAsTemplate";
+export type DocHeaderOverflowAction = "exportPptx" | "saveAsTemplate" | "documentSettings";
 
 export interface DocHeaderOverflowItem {
   /** Stable id passed back via `onOverflowSelect`. */
