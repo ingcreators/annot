@@ -241,13 +241,51 @@ export class AnnotDocBlockMenuElement extends LitElement {
 
   #reposition(): void {
     if (!this.anchor) return;
-    const rect = this.anchor.getBoundingClientRect();
+    const anchorRect = this.anchor.getBoundingClientRect();
     this.style.position = "fixed";
-    // Place below the anchor; a future polish item could flip
-    // upwards when we'd overflow the viewport.
-    this.style.top = `${rect.bottom + 4}px`;
-    this.style.left = `${rect.left}px`;
     this.style.zIndex = "1000";
+    // Measure once placed in DOM so the height / width is real.
+    // The element is `display: block` with a max-height of
+    // 360px; on first call its size is whatever it laid out
+    // to. We try below the anchor first; if the bottom edge
+    // would clip the viewport AND there's more room above,
+    // flip upwards. Mirrors the standard `Popper` "auto"
+    // placement heuristic.
+    const menuRect = this.getBoundingClientRect();
+    const margin = 4;
+    const viewportH = window.innerHeight;
+    const viewportW = window.innerWidth;
+    const menuH = menuRect.height || 360; // fallback to max-height
+    const menuW = menuRect.width || 240; // fallback to declared width
+
+    const spaceBelow = viewportH - anchorRect.bottom;
+    const spaceAbove = anchorRect.top;
+    let top: number;
+    if (spaceBelow >= menuH + margin || spaceBelow >= spaceAbove) {
+      // Fits below or below has more room — anchor below.
+      top = anchorRect.bottom + margin;
+      // If even below isn't enough, clamp to the viewport so
+      // some of the menu remains visible + the user can scroll
+      // it.
+      if (top + menuH > viewportH - margin) {
+        top = Math.max(margin, viewportH - menuH - margin);
+      }
+    } else {
+      // More room above — anchor above the trigger.
+      top = anchorRect.top - menuH - margin;
+      if (top < margin) top = margin;
+    }
+
+    // Horizontal: keep within the viewport, prefer the
+    // anchor's left edge.
+    let left = anchorRect.left;
+    if (left + menuW > viewportW - margin) {
+      left = Math.max(margin, viewportW - menuW - margin);
+    }
+    if (left < margin) left = margin;
+
+    this.style.top = `${top}px`;
+    this.style.left = `${left}px`;
   }
 }
 

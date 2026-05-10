@@ -66,6 +66,64 @@ describe("annot-doc-block-menu: open / render", () => {
     expect(menu.querySelectorAll(".annot-doc-block-menu-item")).toHaveLength(1);
     expect(menu.querySelector(".annot-doc-block-menu-label")?.textContent).toBe("Custom");
   });
+
+  it("flips upwards when the anchor is too close to the bottom of the viewport", async () => {
+    // Bug surfaced in production: insert-bar at the bottom of a
+    // long doc opened the menu below the trigger and the menu
+    // overflowed the viewport unrendered.
+    const anchor = makeAnchor();
+    Object.defineProperty(anchor, "getBoundingClientRect", {
+      value: () => ({
+        top: 780,
+        bottom: 800,
+        left: 100,
+        right: 300,
+        width: 200,
+        height: 20,
+        x: 100,
+        y: 780,
+        toJSON: () => ({}),
+      }),
+    });
+    Object.defineProperty(window, "innerHeight", { value: 812, configurable: true });
+    Object.defineProperty(window, "innerWidth", { value: 1000, configurable: true });
+    const menu = AnnotDocBlockMenuElement.openFor(anchor);
+    await menu.updateComplete;
+    // Force a real reposition pass — happy-dom doesn't report
+    // a meaningful bounding rect for the menu itself, so the
+    // helper falls back to the 360 max-height. Wait one
+    // microtask for the queueMicrotask pass to fire.
+    await new Promise<void>((r) => queueMicrotask(r));
+    const top = Number.parseFloat(menu.style.top);
+    // With viewport 812 + bar bottom at 800, only 12 px space
+    // below — definitely flipped above.
+    expect(top).toBeLessThan(780);
+  });
+
+  it("anchors below when there's room", async () => {
+    const anchor = makeAnchor();
+    Object.defineProperty(anchor, "getBoundingClientRect", {
+      value: () => ({
+        top: 100,
+        bottom: 130,
+        left: 100,
+        right: 300,
+        width: 200,
+        height: 30,
+        x: 100,
+        y: 100,
+        toJSON: () => ({}),
+      }),
+    });
+    Object.defineProperty(window, "innerHeight", { value: 812, configurable: true });
+    const menu = AnnotDocBlockMenuElement.openFor(anchor);
+    await menu.updateComplete;
+    await new Promise<void>((r) => queueMicrotask(r));
+    const top = Number.parseFloat(menu.style.top);
+    // Below the anchor (~bottom + 4 px = 134), clamped only if
+    // necessary.
+    expect(top).toBeGreaterThanOrEqual(130);
+  });
 });
 
 describe("annot-doc-block-menu: keyboard navigation", () => {
