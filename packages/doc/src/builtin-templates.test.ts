@@ -15,6 +15,7 @@ import { describe, expect, it } from "vitest";
 import {
   BUILTIN_TEMPLATES,
   type BuiltinTemplateId,
+  cloneBuiltinTemplate,
   getBuiltinTemplate,
 } from "./builtin-templates.js";
 import { isTemplateFromHead } from "./is-template-head.js";
@@ -47,6 +48,41 @@ describe("BUILTIN_TEMPLATES: presence + lookup", () => {
   it("getBuiltinTemplate returns undefined for unknown ids", () => {
     expect(getBuiltinTemplate("does-not-exist")).toBeUndefined();
     expect(getBuiltinTemplate("")).toBeUndefined();
+  });
+});
+
+describe("cloneBuiltinTemplate (Phase 10)", () => {
+  it("returns undefined for unknown ids", () => {
+    expect(cloneBuiltinTemplate("does-not-exist")).toBeUndefined();
+    expect(cloneBuiltinTemplate("")).toBeUndefined();
+  });
+
+  it.each(EXPECTED_IDS)("%s returns a fresh AnnotDocument with markers stripped", (id) => {
+    const cloned = cloneBuiltinTemplate(id);
+    expect(cloned).toBeDefined();
+    if (!cloned) return;
+    // The marker is gone from `meta.template` — the serialiser
+    // then drops `data-annot-doc-template` + the `<meta>` tag
+    // automatically.
+    expect(cloned.meta.template).toBeUndefined();
+    // Title + structure preserved (the bracketed-placeholder
+    // copy stays in place; only the markers + image IDs change).
+    const sourceDoc = getBuiltinTemplate(id);
+    expect(cloned.title).toBe(sourceDoc?.title);
+    expect(cloned.lang).toBe("en");
+  });
+
+  it.each(EXPECTED_IDS)("%s mints fresh image-block IDs (no img-placeholder leftovers)", (id) => {
+    const cloned = cloneBuiltinTemplate(id);
+    if (!cloned) throw new Error("cloneBuiltinTemplate returned undefined");
+    for (const block of cloned.blocks) {
+      if (block.kind !== "image") continue;
+      // The starter source carries `img-placeholder` as the
+      // image-block id; after `cloneTemplate` it's reminted
+      // via `newIdB58` → `img-` + 8–32 base58 chars.
+      expect(block.id).not.toBe("img-placeholder");
+      expect(block.id).toMatch(/^img-[A-Za-z0-9_-]+$/);
+    }
   });
 });
 

@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "displayName": "Annot",
-  "description": "Edit Annot screenshot annotation files (.annot.svg / .annot.png / .annot.jpeg / .annot.jpg) directly inside VSCode.",
+  "description": "Edit Annot screenshot annotation files (.annot.svg / .annot.png / .annot.jpeg / .annot.jpg) and multi-image documents (.annot.html) directly inside VSCode.",
   "publisher": "ingcreators",
   "repository": {
     "type": "git",
@@ -45,6 +45,9 @@
           },
           {
             "filenamePattern": "*.annot.jpg"
+          },
+          {
+            "filenamePattern": "*.annot.html"
           }
         ],
         "priority": "default"
@@ -64,6 +67,11 @@
       {
         "command": "annot.newFromImage",
         "title": "New annotation from image…",
+        "category": "Annot"
+      },
+      {
+        "command": "annot.newDocument",
+        "title": "New document",
         "category": "Annot"
       },
       {
@@ -107,6 +115,7 @@
   },
   "dependencies": {
     "@ingcreators/annot-core": "workspace:*",
+    "@ingcreators/annot-doc": "workspace:*",
     "@ingcreators/annot-editor": "workspace:*",
     "@ingcreators/annot-host-ui": "workspace:*"
   }
