@@ -63,6 +63,33 @@ describe("injectDocumentStyles", () => {
     expect(css).toContain("@media print");
     expect(css).toContain("break-inside: avoid");
   });
+
+  it("scales image SVGs with `max-width: 100%` (not `width: 100%`)", () => {
+    // `width: 100%` stretched a 320px-wide capture out to fill
+    // the column; the in-app view doesn't do that. `max-width`
+    // keeps the natural pixel size as the upper bound. See the
+    // .annot.html standalone-view bug fix.
+    const css = buildStyleBlock(createEmptyDocument({ title: "Images" }));
+    expect(css).toContain('[data-annot-block="image"] svg {\n  max-width: 100%;');
+    expect(css).not.toMatch(/\[data-annot-block="image"\] svg \{\s*width: 100%;/);
+  });
+
+  it("includes the standalone-view TOC chrome", () => {
+    const css = buildStyleBlock(createEmptyDocument({ title: "TOC chrome" }));
+    expect(css).toContain("nav[data-annot-toc]");
+    expect(css).toContain("data-annot-toc-title");
+    expect(css).toContain('nav[data-annot-toc] li[data-annot-toc-level="2"]');
+    expect(css).toContain('nav[data-annot-toc] li[data-annot-toc-level="3"]');
+    // TOC stays out of paginated print output. Verify the
+    // `display: none` rule sits inside the `@media print` block
+    // by isolating the print payload and probing it. (Greedy
+    // `.*` regex doesn't work — the @media block contains
+    // multiple `}` from inner rules.)
+    const printIdx = css.indexOf("@media print {");
+    expect(printIdx).toBeGreaterThan(-1);
+    const printPayload = css.slice(printIdx);
+    expect(printPayload).toContain("nav[data-annot-toc] {\n    display: none;");
+  });
 });
 
 describe("injectDocumentStyles: maxWidth variants", () => {

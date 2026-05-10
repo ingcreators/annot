@@ -7,9 +7,19 @@
   </head>
   <body>
     <article data-annot-doc>
-      <h1 data-annot-block="heading" data-level="1">Format showcase</h1>
+      <nav data-annot-toc aria-label="Contents">
+        <h2 data-annot-toc-title>Contents</h2>
+        <ul>
+          <li data-annot-toc-level="1"><a href="#annot-h-0">Format showcase</a></li>
+          <li data-annot-toc-level="2"><a href="#annot-h-1">Lists</a></li>
+          <li data-annot-toc-level="2"><a href="#annot-h-2">Code</a></li>
+          <li data-annot-toc-level="2"><a href="#annot-h-3">Quote and callouts</a></li>
+          <li data-annot-toc-level="2"><a href="#annot-h-4">Image</a></li>
+        </ul>
+      </nav>
+      <h1 data-annot-block="heading" data-level="1" id="annot-h-0">Format showcase</h1>
       <p data-annot-block="paragraph">This document exercises every v1 block kind. It is the most complete golden fixture, covering canonical attribute order, whitespace, and inline rich-text rules.</p>
-      <h2 data-annot-block="heading" data-level="2">Lists</h2>
+      <h2 data-annot-block="heading" data-level="2" id="annot-h-1">Lists</h2>
       <p data-annot-block="paragraph">An unordered list:</p>
       <ul data-annot-block="list" data-list-style="disc">
         <li>First bullet</li>
@@ -20,10 +30,10 @@
         <li>Step one</li>
         <li>Step two</li>
       </ol>
-      <h2 data-annot-block="heading" data-level="2">Code</h2>
+      <h2 data-annot-block="heading" data-level="2" id="annot-h-2">Code</h2>
       <pre data-annot-block="code" data-lang="bash"><code>echo hello
 echo world</code></pre>
-      <h2 data-annot-block="heading" data-level="2">Quote and callouts</h2>
+      <h2 data-annot-block="heading" data-level="2" id="annot-h-3">Quote and callouts</h2>
       <blockquote data-annot-block="quote">
         <p>A quoted paragraph.</p>
         <p>A second paragraph in the same quotation.</p>
@@ -35,7 +45,7 @@ echo world</code></pre>
         <p>Warning callout for prerequisites or destructive actions.</p>
       </aside>
       <hr data-annot-block="divider">
-      <h2 data-annot-block="heading" data-level="2">Image</h2>
+      <h2 data-annot-block="heading" data-level="2" id="annot-h-4">Image</h2>
       <figure data-annot-block="image" data-annot-image-id="img-placeholder">
         <svg data-annot-version="1" viewBox="0 0 800 600" width="800" height="600" xmlns="http://www.w3.org/2000/svg">
           <image href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNgYAAAAAMAASsJTYQAAAAASUVORK5CYII=" width="800" height="600"/>

@@ -124,9 +124,9 @@ tags for different block kinds).
 ### `heading`
 
 ```html
-<h1 data-annot-block="heading" data-level="1">Section title</h1>
-<h2 data-annot-block="heading" data-level="2">Subsection</h2>
-<h3 data-annot-block="heading" data-level="3">Sub-subsection</h3>
+<h1 data-annot-block="heading" data-level="1" id="annot-h-0">Section title</h1>
+<h2 data-annot-block="heading" data-level="2" id="annot-h-1">Subsection</h2>
+<h3 data-annot-block="heading" data-level="3" id="annot-h-2">Sub-subsection</h3>
 ```
 
 - Tag (`<h1>` / `<h2>` / `<h3>`) and `data-level` (`"1"` / `"2"` /
@@ -135,6 +135,13 @@ tags for different block kinds).
 - Inline content uses [Rich text](#rich-text) inline elements.
 - Heading text is rendered AND extracted into the document's
   table-of-contents (per the doc shell's TOC drawer, Phase 3+).
+- The serializer stamps every heading with a positional `id`
+  (`annot-h-0`, `annot-h-1`, …) so the standalone-view TOC's
+  `<a href="#…">` lands on the right element when the file is
+  opened directly in a browser. The id is derived from the
+  heading-block's index among headings — resilient to title
+  edits, regenerated on every save (a stable rename does not
+  invalidate existing in-document fragment links).
 - v1 caps levels at 3. Markdown's H4–H6 are deliberately omitted —
   manuals rarely need them and the cap simplifies the TOC layout.
 
@@ -284,6 +291,46 @@ A v1 reader presented with a v2 file containing an unknown
 
 This contract makes round-trip preservation mandatory: a v1 reader
 MUST NOT silently drop or rewrite blocks it doesn't understand.
+
+### Standalone-view TOC nav
+
+When a document contains two or more `heading` blocks, the
+serializer prepends a `<nav data-annot-toc>` to the article
+body so that the file rendered directly in a browser shows a
+clickable table of contents:
+
+```html
+<nav data-annot-toc aria-label="Contents">
+  <h2 data-annot-toc-title>Contents</h2>
+  <ul>
+    <li data-annot-toc-level="1"><a href="#annot-h-0">First</a></li>
+    <li data-annot-toc-level="2"><a href="#annot-h-1">Second</a></li>
+  </ul>
+</nav>
+```
+
+- The nav is **serializer-generated chrome**, not a block kind.
+  It is emitted with `data-annot-toc` so parsers can identify
+  and skip it. The single-source-of-truth contract is: the
+  parser drops the nav on read, the serializer regenerates it
+  on every save.
+- Anchor targets reference the heading `id`s described under
+  [`heading`](#heading) — `annot-h-0`, `annot-h-1`, … in
+  document order.
+- The label is the heading's plain text with inline tags
+  stripped (e.g. `<strong>` removed, `&amp;` decoded then
+  re-escaped exactly once). Empty headings render as
+  `(untitled)`.
+- Suppressed for documents with fewer than two headings (a
+  one-item TOC is just visual noise).
+- The nav rides on the document's CSS payload: `<nav
+  data-annot-toc>` is styled like a doc-side block of metadata
+  and hidden from print output. Editor hosts replace it with
+  their own TOC drawer rendering.
+
+This nav, like the auto-numbering counters in the style block,
+exists purely for the browser-view contract — the editor
+contract reads from the heading list directly.
 
 ## Rich text
 

@@ -103,10 +103,15 @@ export function parseDocument(html: string, opts?: ParseOptions): AnnotDocument 
   const metaJsonRaw = metaScript.textContent ?? "{}";
   const meta = parseDocMeta(metaJsonRaw, headTitle);
 
-  // Blocks
+  // Blocks. The standalone-view TOC (`<nav data-annot-toc>`) is a
+  // serializer-generated artifact — skipped on parse so the model
+  // never round-trips through stale TOC bytes; the next save
+  // regenerates it from the heading list.
   const blocks: Block[] = [];
   for (const child of Array.from(article.children)) {
-    blocks.push(parseBlock(child as Element));
+    const childEl = child as Element;
+    if (childEl.hasAttribute("data-annot-toc")) continue;
+    blocks.push(parseBlock(childEl));
   }
 
   return {

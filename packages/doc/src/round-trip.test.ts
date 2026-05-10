@@ -98,6 +98,80 @@ describe("annot-doc: parse coverage", () => {
   });
 });
 
+describe("annot-doc: standalone TOC", () => {
+  // Background: the standalone-view TOC (`<nav data-annot-toc>`)
+  // is a serializer-generated artifact regenerated on every save.
+  // The parser skips it so the model never round-trips through
+  // stale TOC bytes; the next save re-stamps the nav from the
+  // current heading list.
+
+  it("emits no TOC when the doc has 0 headings", () => {
+    const bytes = loadFixture("empty.annot.html");
+    const doc = parseDocument(bytes);
+    const out = serializeDocument(doc);
+    expect(out).not.toContain("data-annot-toc");
+    expect(out).not.toContain("annot-h-");
+  });
+
+  it("emits no TOC when the doc has 1 heading", () => {
+    const bytes = loadFixture("with-image.annot.html");
+    const doc = parseDocument(bytes);
+    const out = serializeDocument(doc);
+    expect(out).not.toContain("data-annot-toc");
+    // A single-heading doc still gets `id="annot-h-0"` so the
+    // saved file's heading is anchorable from external link
+    // sharing — only the chrome is suppressed.
+    expect(out).toContain('id="annot-h-0"');
+  });
+
+  it("emits a TOC entry per heading when the doc has ≥2 headings", () => {
+    const bytes = loadFixture("mixed.annot.html");
+    const doc = parseDocument(bytes);
+    const out = serializeDocument(doc);
+    expect(out).toContain("<nav data-annot-toc");
+    expect(out).toContain("<h2 data-annot-toc-title>Contents</h2>");
+    expect(out).toContain('href="#annot-h-0"');
+    expect(out).toContain('href="#annot-h-4"');
+    expect(out).toContain('id="annot-h-0"');
+    expect(out).toContain('id="annot-h-4"');
+    // TOC label text comes from the heading's plain text.
+    expect(out).toContain(">Format showcase</a>");
+    expect(out).toContain(">Lists</a>");
+  });
+
+  it("the TOC nav is not surfaced as an `unknown` block on parse", () => {
+    const bytes = loadFixture("mixed.annot.html");
+    const doc = parseDocument(bytes);
+    expect(doc.blocks.some((b) => b.kind === "unknown")).toBe(false);
+  });
+
+  it("strips inline tags from the TOC label", () => {
+    // Hand-build a doc whose first heading has inline emphasis.
+    const html = `<!doctype html>
+<html data-annot-doc-version="1" lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="annot-document" content="1">
+    <title>Inline-emphasis labels</title>
+  </head>
+  <body>
+    <article data-annot-doc>
+      <h1 data-annot-block="heading" data-level="1">Hello <strong>world</strong> &amp; friends</h1>
+      <h2 data-annot-block="heading" data-level="2">Plain</h2>
+    </article>
+    <script type="application/annot+json" data-annot-doc-meta>{"title":"Inline-emphasis labels"}</script>
+  </body>
+</html>
+`;
+    const doc = parseDocument(html);
+    const out = serializeDocument(doc);
+    // Inline tags stripped; ampersand decoded then re-escaped
+    // exactly once. The serializer must NOT emit `&amp;amp;`.
+    expect(out).toContain(">Hello world &amp; friends</a>");
+    expect(out).not.toContain("&amp;amp;");
+  });
+});
+
 describe("annot-doc: malformed input", () => {
   it("rejects missing data-annot-doc-version", () => {
     const html = `<!doctype html>
