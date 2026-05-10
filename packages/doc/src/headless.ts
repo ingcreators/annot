@@ -10,6 +10,8 @@
  * Enforced by `headless.test.ts`.
  */
 
+export type { CloneTemplateOptions } from "./clone-template.js";
+export { cloneTemplate } from "./clone-template.js";
 export type { CreateEmptyOptions } from "./create-empty.js";
 export { createEmptyDocument } from "./create-empty.js";
 export type { CreateImageBlockOptions } from "./create-image-block.js";
