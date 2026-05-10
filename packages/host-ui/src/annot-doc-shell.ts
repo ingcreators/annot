@@ -51,6 +51,7 @@ import {
   type FormatChangeDetail,
 } from "./annot-doc-selection-toolbar.js";
 import "./annot-doc-selection-toolbar.js";
+import { openKeyboardHelpModal, type ShortcutGroup } from "./keyboard-help.js";
 import {
   html,
   LitElement,
@@ -1255,6 +1256,78 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
         this.redo();
         return;
       }
+      // Phase 8 of `annot-html-document-ux-polish.md` — additional
+      // shortcuts: insert paragraph above / below the current
+      // block + block-kind conversion of the current block.
+      if (e.key === "Enter") {
+        e.preventDefault();
+        this.#insertParagraphRelativeToCursor(e.shiftKey ? "above" : "below");
+        return;
+      }
+      if (e.shiftKey) {
+        // Headings + lists + quote.
+        if (key === "1") {
+          e.preventDefault();
+          this.#convertCurrentBlockKindAtCursor({
+            id: "h1",
+            label: "Heading 1",
+            kind: "heading",
+            level: 1,
+          });
+          return;
+        }
+        if (key === "2") {
+          e.preventDefault();
+          this.#convertCurrentBlockKindAtCursor({
+            id: "h2",
+            label: "Heading 2",
+            kind: "heading",
+            level: 2,
+          });
+          return;
+        }
+        if (key === "3") {
+          e.preventDefault();
+          this.#convertCurrentBlockKindAtCursor({
+            id: "h3",
+            label: "Heading 3",
+            kind: "heading",
+            level: 3,
+          });
+          return;
+        }
+        if (key === "8") {
+          e.preventDefault();
+          this.#convertCurrentBlockKindAtCursor({
+            id: "ul",
+            label: "Bulleted list",
+            kind: "list",
+            listOrdered: false,
+          });
+          return;
+        }
+        if (key === "7") {
+          e.preventDefault();
+          this.#convertCurrentBlockKindAtCursor({
+            id: "ol",
+            label: "Numbered list",
+            kind: "list",
+            listOrdered: true,
+          });
+          return;
+        }
+        if (e.key === ">" || e.key === ".") {
+          // Ctrl+Shift+. produces ">" on US/JP keyboards. Both keys
+          // map to "convert to quote" the same way.
+          e.preventDefault();
+          this.#convertCurrentBlockKindAtCursor({
+            id: "quote",
+            label: "Quote",
+            kind: "quote",
+          });
+          return;
+        }
+      }
     }
     // Phase 5 of `annot-html-document-ux-polish.md` — Enter in
     // list / quote / callout editables splits the current entry
@@ -1274,6 +1347,86 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
       }
     }
   };
+
+  // -------------------------------------------------------------------------
+  // Phase 8 — Keyboard shortcuts (`annot-html-document-ux-polish.md`)
+  // -------------------------------------------------------------------------
+
+  /** Phase 8 — opens the keyboard-help modal with the doc-mode
+   *  shortcut group appended to the editor's defaults. Public so
+   *  hosts can wire a Help button in their chrome. */
+  openKeyboardHelp(): void {
+    void openKeyboardHelpModal(DOC_SHORTCUT_GROUPS);
+  }
+
+  /** Resolve the block index that owns the currently-focused
+   *  contentEditable. Falls back to scanning `window.getSelection()`
+   *  when the active element isn't an editable (e.g. focus is on
+   *  a header button after a click). Returns null when no doc
+   *  block is focused. */
+  #findFocusedBlockIndex(): number | null {
+    const active = document.activeElement as HTMLElement | null;
+    let editable: HTMLElement | null = null;
+    if (active && this.contains(active) && active.getAttribute("contenteditable") === "true") {
+      editable = active;
+    } else {
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount > 0) {
+        const range = sel.getRangeAt(0);
+        editable = this.#findEditableAncestor(range.commonAncestorContainer);
+        if (editable && !this.contains(editable)) editable = null;
+      }
+    }
+    if (!editable) return null;
+    const wrapper = editable.closest<HTMLElement>(".annot-doc-block-host");
+    if (!wrapper) return null;
+    const indexAttr = wrapper.getAttribute("data-block-index");
+    if (indexAttr === null) return null;
+    const idx = Number.parseInt(indexAttr, 10);
+    return Number.isNaN(idx) ? null : idx;
+  }
+
+  /** Insert an empty paragraph above OR below the block that
+   *  carries the focused editable. Focuses the new paragraph. */
+  #insertParagraphRelativeToCursor(direction: "above" | "below"): void {
+    if (!this.document) return;
+    this.#syncDomIntoDocument();
+    const blockIndex = this.#findFocusedBlockIndex();
+    if (blockIndex === null) return;
+    const insertAt = direction === "above" ? blockIndex : blockIndex + 1;
+    const blocks = [...this.document.blocks];
+    blocks.splice(insertAt, 0, { kind: "paragraph", inlineHtml: "" });
+    const newDoc: AnnotDocument = { ...this.document, blocks };
+    this.#history?.push(newDoc);
+    this.#applyInternal(newDoc, "block-action");
+    queueMicrotask(() => {
+      const p = this.querySelector<HTMLElement>(
+        `.annot-doc-block-host[data-block-index="${insertAt}"] [data-annot-block="paragraph"][contenteditable="true"]`,
+      );
+      p?.focus();
+    });
+  }
+
+  /** Convert the block carrying the focused editable to the
+   *  chosen kind, preserving inline HTML where possible. Wraps
+   *  the existing `convertBlockKind` helper used by the Phase 3
+   *  selection toolbar so both surfaces share the conversion
+   *  rules. */
+  #convertCurrentBlockKindAtCursor(option: BlockKindOption): void {
+    if (!this.document) return;
+    this.#syncDomIntoDocument();
+    const blockIndex = this.#findFocusedBlockIndex();
+    if (blockIndex === null) return;
+    const current = this.document.blocks[blockIndex];
+    if (!current) return;
+    const replacement = convertBlockKind(current, option);
+    if (!replacement) return;
+    const blocks = [...this.document.blocks];
+    blocks[blockIndex] = replacement;
+    const newDoc: AnnotDocument = { ...this.document, blocks };
+    this.#history?.push(newDoc);
+    this.#applyInternal(newDoc, "block-action");
+  }
 
   /** Returns true when the event was consumed (handled here) so
    *  the caller knows to short-circuit. */
@@ -1981,6 +2134,46 @@ function createBlockFromMenuItem(item: BlockMenuItem): Block {
       return { kind: "paragraph", inlineHtml: "" };
   }
 }
+
+// ---------------------------------------------------------------------------
+// Phase 8 — Doc-mode keyboard shortcut catalog (surfaced in the
+// keyboard-help modal alongside the editor's default groups).
+// ---------------------------------------------------------------------------
+
+export const DOC_SHORTCUT_GROUPS: readonly ShortcutGroup[] = [
+  {
+    title: "Document — Editing",
+    entries: [
+      { keys: ["Ctrl", "B"], description: "Bold (in selection)" },
+      { keys: ["Ctrl", "I"], description: "Italic (in selection)" },
+      { keys: ["Ctrl", "U"], description: "Underline (in selection)" },
+      { keys: ["Ctrl", "Z"], description: "Undo" },
+      { keys: ["Ctrl", "Y"], description: "Redo" },
+      { keys: ["Ctrl", "Shift", "Z"], description: "Redo" },
+    ],
+  },
+  {
+    title: "Document — Blocks",
+    entries: [
+      { keys: ["/"], description: "Open block menu (in empty paragraph)" },
+      { keys: ["Ctrl", "Enter"], description: "Insert paragraph below" },
+      { keys: ["Ctrl", "Shift", "Enter"], description: "Insert paragraph above" },
+      { keys: ["Enter"], description: "Split list / quote / callout entry" },
+      { keys: ["Esc"], description: "Close menus / format toolbar" },
+    ],
+  },
+  {
+    title: "Document — Block kind",
+    entries: [
+      { keys: ["Ctrl", "Shift", "1"], description: "Convert to Heading 1" },
+      { keys: ["Ctrl", "Shift", "2"], description: "Convert to Heading 2" },
+      { keys: ["Ctrl", "Shift", "3"], description: "Convert to Heading 3" },
+      { keys: ["Ctrl", "Shift", "8"], description: "Convert to bulleted list" },
+      { keys: ["Ctrl", "Shift", "7"], description: "Convert to numbered list" },
+      { keys: ["Ctrl", "Shift", ">"], description: "Convert to quote" },
+    ],
+  },
+];
 
 // ---------------------------------------------------------------------------
 // Phase 4 — Empty-state predicate

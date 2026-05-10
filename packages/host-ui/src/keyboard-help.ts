@@ -26,17 +26,17 @@
 
 import { builtinIcon, renderIconElement } from "@ingcreators/annot-core";
 
-interface ShortcutEntry {
+export interface ShortcutEntry {
   keys: string[]; // e.g. ["Ctrl", "Shift", "]"]
   description: string;
 }
 
-interface ShortcutGroup {
+export interface ShortcutGroup {
   title: string;
   entries: ShortcutEntry[];
 }
 
-const SHORTCUT_GROUPS: ShortcutGroup[] = [
+export const DEFAULT_SHORTCUT_GROUPS: readonly ShortcutGroup[] = [
   {
     title: "Selection",
     entries: [
@@ -93,22 +93,48 @@ const SHORTCUT_GROUPS: ShortcutGroup[] = [
   },
 ];
 
+export interface InstallKeyboardHelpOptions {
+  /** Phase 8 of `docs/plans/annot-html-document-ux-polish.md` —
+   *  additional groups appended to the default list when the
+   *  modal opens. The shell injects a "Document editing" group
+   *  here when the doc shell is the active mode. Evaluated on
+   *  every open so the list stays in sync with mode switches. */
+  extraGroups?: () => readonly ShortcutGroup[];
+}
+
+/** Singleton modal currently open, if any. Tracked at module
+ *  scope so the imperative `openKeyboardHelpModal` entry point +
+ *  the `?`-keystroke install can share the no-stack guard. */
+let activeKeyboardHelpModal: HTMLElement | null = null;
+
+function closeActiveKeyboardHelp(): void {
+  activeKeyboardHelpModal?.remove();
+  activeKeyboardHelpModal = null;
+}
+
+/** Phase 8 of `annot-html-document-ux-polish.md` — programmatic
+ *  modal open. Used by callers that don't want to rely on the
+ *  global `?` keystroke (e.g. a Help button in the doc-mode
+ *  header strip, or a per-shell `Ctrl+/` handler). */
+export function openKeyboardHelpModal(extraGroups: readonly ShortcutGroup[] = []): () => void {
+  if (activeKeyboardHelpModal) return closeActiveKeyboardHelp;
+  const groups = [...DEFAULT_SHORTCUT_GROUPS, ...extraGroups];
+  activeKeyboardHelpModal = buildModal(closeActiveKeyboardHelp, groups);
+  document.body.appendChild(activeKeyboardHelpModal);
+  return closeActiveKeyboardHelp;
+}
+
 /**
  * Mount a global `?` key listener that opens a modal listing
  * shortcuts. The caller owns the returned teardown function so the
  * listener can be removed if the editor is torn down.
  */
-export function installKeyboardHelp(): () => void {
-  let modal: HTMLElement | null = null;
-
+export function installKeyboardHelp(opts: InstallKeyboardHelpOptions = {}): () => void {
   const open = () => {
-    if (modal) return; // already open — don't stack
-    modal = buildModal(close);
-    document.body.appendChild(modal);
-  };
-  const close = () => {
-    modal?.remove();
-    modal = null;
+    if (activeKeyboardHelpModal) return;
+    const groups = [...DEFAULT_SHORTCUT_GROUPS, ...(opts.extraGroups ? opts.extraGroups() : [])];
+    activeKeyboardHelpModal = buildModal(closeActiveKeyboardHelp, groups);
+    document.body.appendChild(activeKeyboardHelpModal);
   };
 
   const onKeyDown = (e: KeyboardEvent) => {
@@ -125,24 +151,24 @@ export function installKeyboardHelp(): () => void {
       // reliable check.
       e.preventDefault();
       open();
-    } else if (e.key === "Escape" && modal) {
+    } else if (e.key === "Escape" && activeKeyboardHelpModal) {
       // Intercept Esc so it closes the help modal specifically when
       // the help modal is open. Without the `modal` guard we'd shadow
       // other tools' Esc handlers (e.g. draw session commit).
       e.preventDefault();
       e.stopPropagation();
-      close();
+      closeActiveKeyboardHelp();
     }
   };
 
   document.addEventListener("keydown", onKeyDown);
   return () => {
     document.removeEventListener("keydown", onKeyDown);
-    close();
+    closeActiveKeyboardHelp();
   };
 }
 
-function buildModal(onClose: () => void): HTMLElement {
+function buildModal(onClose: () => void, groups: readonly ShortcutGroup[]): HTMLElement {
   const backdrop = document.createElement("div");
   backdrop.className = "keyboard-help-backdrop";
   backdrop.addEventListener("click", (e) => {
@@ -176,7 +202,7 @@ function buildModal(onClose: () => void): HTMLElement {
   // uppercase title matching the property panel's section style.
   const body = document.createElement("div");
   body.className = "keyboard-help-body";
-  for (const group of SHORTCUT_GROUPS) {
+  for (const group of groups) {
     const section = document.createElement("div");
     section.className = "keyboard-help-group";
     const h = document.createElement("div");
