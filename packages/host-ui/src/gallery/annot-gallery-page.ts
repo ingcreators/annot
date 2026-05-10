@@ -27,8 +27,13 @@ import "../annot-icon.js";
  * rules in `file-manager.css` apply unchanged.
  */
 
-import type { FolderRecord, ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
-import { getFilename, supportsResync } from "@ingcreators/annot-core/storage";
+import type {
+  DocumentRecord,
+  FolderRecord,
+  ImageRecord,
+  StorageProvider,
+} from "@ingcreators/annot-core/storage";
+import { getFilename, supportsDocuments, supportsResync } from "@ingcreators/annot-core/storage";
 import { html, LitElement, nothing } from "../lit.js";
 import type { ThumbnailManager } from "../thumbnail-manager.js";
 import { showAlertDialog, showConfirmDialog, showPromptDialog } from "../ui/dialog.js";
@@ -58,6 +63,7 @@ export class AnnotGalleryPageElement extends LitElement {
     viewMode: { attribute: false },
     images: { state: true },
     folders: { state: true },
+    documents: { state: true },
     currentFolderPath: { state: true },
     query: { state: true },
     selectedImagePaths: { state: true },
@@ -74,6 +80,12 @@ export class AnnotGalleryPageElement extends LitElement {
   declare viewMode: "grid" | "list";
   declare images: ImageRecord[];
   declare folders: FolderRecord[];
+  /** `.annot.html` documents in the current folder. Populated from
+   *  `storage.listDocuments(...)` when the active backend opts into
+   *  `StorageWithDocuments` (Phase 6a). Backends without the
+   *  capability leave this array empty and the Documents section
+   *  doesn't render. */
+  declare documents: DocumentRecord[];
   declare currentFolderPath: string;
   declare query: string;
   declare selectedImagePaths: Set<string>;
@@ -93,6 +105,7 @@ export class AnnotGalleryPageElement extends LitElement {
     this.viewMode = "grid";
     this.images = [];
     this.folders = [];
+    this.documents = [];
     this.currentFolderPath = "";
     this.query = "";
     this.selectedImagePaths = new Set();
@@ -141,15 +154,18 @@ export class AnnotGalleryPageElement extends LitElement {
       ? this.images.filter((img) => this.#matchFilter(img, this.query.trim().toLowerCase()))
       : this.images;
     const showFolders = !this.query;
-    const filteredItems = (showFolders ? this.folders.length : 0) + filteredImages.length;
+    const showDocuments = !this.query;
+    const docCount = showDocuments ? this.documents.length : 0;
+    const filteredItems =
+      (showFolders ? this.folders.length : 0) + docCount + filteredImages.length;
     const gridClass = `gallery-grid${this.viewMode === "list" ? " list-view" : ""}`;
 
     const empty =
       filteredItems === 0
         ? html`<div class="gallery-empty">
             ${
-              this.images.length === 0 && this.folders.length === 0
-                ? "No images yet. Upload an image or capture with the extension."
+              this.images.length === 0 && this.folders.length === 0 && this.documents.length === 0
+                ? "No items yet. Upload an image, capture with the extension, or create a new document."
                 : "No matches found."
             }
           </div>`
@@ -169,9 +185,23 @@ export class AnnotGalleryPageElement extends LitElement {
             : nothing
         }
         ${
+          showDocuments && this.documents.length > 0
+            ? html`
+              <div class="gallery-section-header">Documents</div>
+              <div class="gallery-document-grid">
+                ${this.documents.map((d) => this.#renderDocumentCard(d))}
+              </div>
+            `
+            : nothing
+        }
+        ${
           filteredImages.length > 0
             ? html`
-              ${showFolders ? html`<div class="gallery-section-header">Files</div>` : nothing}
+              ${
+                showFolders || (showDocuments && this.documents.length > 0)
+                  ? html`<div class="gallery-section-header">Files</div>`
+                  : nothing
+              }
               <div class="gallery-image-grid">
                 ${filteredImages.map((img) => this.#renderImageCard(img))}
               </div>
@@ -231,6 +261,57 @@ export class AnnotGalleryPageElement extends LitElement {
           </button>
       </div>
     `;
+  }
+
+  #renderDocumentCard(doc: DocumentRecord) {
+    const filename = getFilename(doc.path) || doc.title || "Untitled document";
+    const meta =
+      doc.imageCount > 0
+        ? `${doc.blockCount} blocks • ${doc.imageCount} image${doc.imageCount === 1 ? "" : "s"}`
+        : `${doc.blockCount} block${doc.blockCount === 1 ? "" : "s"}`;
+    return html`
+      <div
+        class="gallery-item gallery-document-item"
+        data-document-path=${doc.path}
+        role="button"
+        aria-label=${`Document ${filename}. Enter or double-click to open.`}
+        tabindex="0"
+        @dblclick=${(e: MouseEvent) => this.#openDocument(e, doc)}
+        @keydown=${(e: KeyboardEvent) => this.#onDocumentKeydown(e, doc)}
+      >
+        <div class="gallery-thumb">
+          ${
+            doc.thumbnailDataUrl
+              ? html`<img src=${doc.thumbnailDataUrl} loading="lazy" alt="" />`
+              : html`<annot-icon .spec=${builtinIcon("article")}></annot-icon>`
+          }
+        </div>
+        <div class="gallery-item-info">
+          <div class="gallery-item-name" data-tooltip=${doc.path} aria-label=${doc.path}>
+            ${doc.title || filename}
+          </div>
+          <div class="gallery-item-meta">${meta} • ${this.#formatDate(doc.updatedAt)}</div>
+        </div>
+      </div>
+    `;
+  }
+
+  #openDocument(e: Event | null, doc: DocumentRecord): void {
+    e?.stopPropagation();
+    this.dispatchEvent(
+      new CustomEvent<{ record: DocumentRecord }>("annot-gallery-open-document", {
+        detail: { record: doc },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  }
+
+  #onDocumentKeydown(e: KeyboardEvent, doc: DocumentRecord): void {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      this.#openDocument(null, doc);
+    }
   }
 
   #renderImageCard(img: ImageRecord) {
@@ -341,6 +422,21 @@ export class AnnotGalleryPageElement extends LitElement {
       } else {
         images = await this.storage.listImages(this.currentFolderPath);
         this.folders = await this.storage.listFolders(this.currentFolderPath);
+        // Phase 6d: list `.annot.html` documents alongside images
+        // when the backend opts into `StorageWithDocuments`. Search
+        // mode (the `q` branch above) intentionally skips documents
+        // — the existing query path is image-only and document
+        // search is its own design (filename + title fields).
+        if (supportsDocuments(this.storage)) {
+          try {
+            this.documents = await this.storage.listDocuments(this.currentFolderPath);
+          } catch (e) {
+            logger.error("[gallery] listDocuments error:", e);
+            this.documents = [];
+          }
+        } else {
+          this.documents = [];
+        }
       }
       // Hydrate thumbnails / dimensions from the unified cache and
       // schedule background prefetches for misses. No-op for stores
@@ -370,6 +466,7 @@ export class AnnotGalleryPageElement extends LitElement {
       logger.error("[gallery] refresh error:", e);
       this.images = [];
       this.folders = [];
+      this.documents = [];
     }
     // Drop stale selections that no longer exist
     const imgPaths = new Set(this.images.map((i) => i.path));
@@ -883,6 +980,7 @@ declare global {
   }
   interface HTMLElementEventMap {
     "annot-gallery-open-image": CustomEvent<{ record: ImageRecord }>;
+    "annot-gallery-open-document": CustomEvent<{ record: DocumentRecord }>;
     "annot-gallery-folder-change": CustomEvent<{ folderPath: string }>;
     "annot-gallery-count-change": CustomEvent<{ total: number; filtered: number }>;
     "annot-gallery-folders-changed": CustomEvent<void>;

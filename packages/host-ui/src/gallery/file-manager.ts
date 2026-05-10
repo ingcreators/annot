@@ -8,7 +8,7 @@
  * elements. `FileManager` keeps its orchestrator role: storage
  * + `<annot-gallery-page>` + sidebar wiring + breadcrumb / count refresh.
  */
-import type { ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
+import type { DocumentRecord, ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
 import { supportsForceRefresh, supportsResync } from "@ingcreators/annot-core/storage";
 import type { SidebarTab, StorageRegistration } from "../plugin-host-types.js";
 import type { StorageMode } from "../storage-mode.js";
@@ -30,6 +30,11 @@ export interface FileManagerCallbacks {
   onStorageSelect: (mode: StorageMode) => Promise<void>;
   onStorageReselect: (mode: StorageMode) => Promise<void>;
   onOpenImage: (record: ImageRecord) => void;
+  /** Phase 6d of `docs/plans/annot-html-document.md`. Optional —
+   *  hosts that don't yet support documents (no
+   *  `StorageWithDocuments` opt-in) can omit it; the gallery hides
+   *  document cards entirely when the storage doesn't list any. */
+  onOpenDocument?: (record: DocumentRecord) => void;
   onFolderChange: (folderPath: string) => void;
   onNewFolder: () => Promise<void>;
   onUploadImage: () => void;
@@ -258,6 +263,9 @@ export class FileManager {
     el.viewMode = this.#viewMode;
     el.addEventListener("annot-gallery-open-image", (e) => {
       this.#callbacks.onOpenImage(e.detail.record);
+    });
+    el.addEventListener("annot-gallery-open-document", (e) => {
+      this.#callbacks.onOpenDocument?.(e.detail.record);
     });
     el.addEventListener("annot-gallery-folder-change", (e) => {
       const folderPath = e.detail.folderPath;

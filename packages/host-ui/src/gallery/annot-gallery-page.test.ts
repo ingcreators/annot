@@ -89,7 +89,7 @@ describe("<annot-gallery-page>", () => {
 
   it("renders the empty hint when storage has no images or folders", async () => {
     const el = await mount();
-    expect(el.querySelector(".gallery-empty")?.textContent || "").toMatch(/No images yet/);
+    expect(el.querySelector(".gallery-empty")?.textContent || "").toMatch(/No items yet/);
   });
 
   it("renders one card per image and one per folder", async () => {
