@@ -28,7 +28,7 @@
  */
 
 import { cssStackFor } from "@ingcreators/annot-core/headless";
-import type { AnnotDocument, DocMeta } from "./types.js";
+import type { AnnotDocument, DocMeta, NumberingMeta } from "./types.js";
 
 /** CSS values for each `meta.maxWidth` keyword. */
 const MAX_WIDTH_VALUES: Readonly<Record<NonNullable<DocMeta["maxWidth"]>, string>> = {
@@ -86,6 +86,13 @@ export function buildStyleBlock(doc: AnnotDocument): string {
   sections.push(typographyRules());
   sections.push(blockRules());
   sections.push(inlineRules());
+  // Phase 13 — auto-numbering opt-in (`meta.numbering`).
+  // Emits CSS counters that reset on the article element and
+  // increment on each matching block. Skipped entirely when
+  // the numbering meta is absent / both toggles false, so
+  // existing docs serialise byte-equivalent.
+  const numberingCss = numberingRules(doc.meta.numbering);
+  if (numberingCss) sections.push(numberingCss);
   sections.push(printRules());
   if (theme === "auto") {
     sections.push(darkModeRules());
@@ -284,4 +291,86 @@ function printRules(): string {
 function darkModeRules(): string {
   const lines = DARK_VARS.map(([name, value]) => `    ${name}: ${value};`);
   return ["@media (prefers-color-scheme: dark) {", "  :root {", ...lines, "  }", "}"].join("\n");
+}
+
+/**
+ * Phase 13 — auto-numbering rules. Returns the empty string
+ * when neither `headings` nor `figures` is enabled (so the
+ * style block doesn't grow when numbering is opt-out).
+ *
+ * Heading numbering uses three nested CSS counters (`annot-h1
+ * / annot-h2 / annot-h3`) reset on the article element. Each
+ * level increments its own counter and resets the deeper
+ * levels — standard hierarchical-numbering pattern (1., 1.1,
+ * 1.1.1).
+ *
+ * Figure numbering uses a single counter (`annot-figure`)
+ * incremented on every image-block figure in document order.
+ * The label sits on `figcaption::before`, which means image
+ * blocks WITHOUT a figcaption don't get a visible number —
+ * acceptable trade-off (the count still increments globally,
+ * so the next figure's number stays right). The label
+ * defaults to `"Figure "` and falls back to the user-supplied
+ * `figureLabel` when set.
+ */
+function numberingRules(numbering: NumberingMeta | undefined): string {
+  if (!numbering) return "";
+  const headings = numbering.headings === true;
+  const figures = numbering.figures === true;
+  if (!headings && !figures) return "";
+
+  const lines: string[] = [];
+
+  // Combined `counter-reset` on the article so a single
+  // declaration covers whichever counters are active. Browsers
+  // ignore unknown counter names in `counter()` lookups, so
+  // emitting both "annot-h1 annot-h2 annot-h3" and "annot-figure"
+  // when only one feature is on is harmless — but we trim it
+  // for readability.
+  const resetCounters: string[] = [];
+  if (headings) resetCounters.push("annot-h1", "annot-h2", "annot-h3");
+  if (figures) resetCounters.push("annot-figure");
+  lines.push("article[data-annot-doc] {");
+  lines.push(`  counter-reset: ${resetCounters.join(" ")};`);
+  lines.push("}");
+
+  if (headings) {
+    lines.push(
+      // h1: increment self, reset deeper levels.
+      'article[data-annot-doc] [data-annot-block="heading"][data-level="1"]::before {',
+      "  counter-increment: annot-h1;",
+      "  counter-reset: annot-h2 annot-h3;",
+      '  content: counter(annot-h1) ". ";',
+      "}",
+      // h2: increment self, reset h3.
+      'article[data-annot-doc] [data-annot-block="heading"][data-level="2"]::before {',
+      "  counter-increment: annot-h2;",
+      "  counter-reset: annot-h3;",
+      '  content: counter(annot-h1) "." counter(annot-h2) " ";',
+      "}",
+      // h3: increment self.
+      'article[data-annot-doc] [data-annot-block="heading"][data-level="3"]::before {',
+      "  counter-increment: annot-h3;",
+      '  content: counter(annot-h1) "." counter(annot-h2) "." counter(annot-h3) " ";',
+      "}",
+    );
+  }
+
+  if (figures) {
+    const label = numbering.figureLabel ?? "Figure ";
+    // Image-block figures: increment the figure counter on
+    // the figure element itself (so blocks without a
+    // figcaption still tick the count), and prepend the
+    // visible label to the figcaption.
+    lines.push(
+      'article[data-annot-doc] [data-annot-block="image"] {',
+      "  counter-increment: annot-figure;",
+      "}",
+      'article[data-annot-doc] [data-annot-block="image"] figcaption::before {',
+      `  content: ${JSON.stringify(label)} counter(annot-figure) ": ";`,
+      "}",
+    );
+  }
+
+  return lines.join("\n");
 }

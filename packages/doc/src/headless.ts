@@ -40,6 +40,7 @@ export type {
   ImageBlock,
   ImageMeta,
   ListBlock,
+  NumberingMeta,
   ParagraphBlock,
   QuoteBlock,
   TemplateMeta,
