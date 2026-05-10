@@ -92,7 +92,9 @@ describe("annot-doc-shell: empty state", () => {
     const empty: AnnotDocument = {
       version: 1,
       title: "Untitled",
-      meta: { title: "Untitled", lang: "en" },
+      lang: "en",
+      meta: { title: "Untitled" },
+      styleBlock: null,
       blocks: [{ kind: "paragraph", inlineHtml: "" }],
     };
     const el = mount(empty);
@@ -116,7 +118,9 @@ describe("annot-doc-shell: empty state", () => {
     const empty: AnnotDocument = {
       version: 1,
       title: "Untitled",
-      meta: { title: "Untitled", lang: "en" },
+      lang: "en",
+      meta: { title: "Untitled" },
+      styleBlock: null,
       blocks: [{ kind: "paragraph", inlineHtml: "" }],
     };
     const el = mount(empty);
