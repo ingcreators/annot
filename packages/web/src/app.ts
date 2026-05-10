@@ -872,6 +872,9 @@ export class App {
       // The shell self-registers via `customElements.define` on
       // module load; importing for side effects is enough.
       import("@ingcreators/annot-host-ui/annot-doc-shell"),
+      // Same for the save-status indicator — we mount one in the
+      // doc-mode header below.
+      import("@ingcreators/annot-host-ui/save-status-indicator"),
     ]);
 
     let parsed: ReturnType<typeof parseDocument>;
@@ -943,7 +946,17 @@ export class App {
     titleEl.className = "annot-doc-mode-title";
     titleEl.textContent = parsed.title || "Untitled";
     titleEl.style.cssText = "font-weight:600;flex:1;";
-    header.append(backBtn, titleEl);
+
+    // Phase 6f — save-status indicator in the doc-mode header.
+    // Same `<annot-save-status>` element the editor toolbar uses
+    // for image saves; the doc save lifecycle below drives the
+    // `.status` property through the same `pending → saving →
+    // saved` / `error` cycle.
+    const saveStatus = document.createElement("annot-save-status") as HTMLElement & {
+      status: "saved" | "pending" | "saving" | "error";
+    };
+    saveStatus.status = "saved";
+    header.append(backBtn, titleEl, saveStatus);
     host.appendChild(header);
 
     const body = document.createElement("div");
@@ -958,21 +971,28 @@ export class App {
     shell.editing = true;
     body.appendChild(shell);
 
-    // Wire dirty → save. Phase 6c will route this through the
-    // SavePipeline orchestrator so the toolbar's save status
-    // indicator stays accurate; for v1 we save eagerly on every
-    // mutation and report errors via the existing error-bar
-    // surface.
+    // Phase 6f — debounced save lifecycle:
+    //   - On `doc-changed`: title sync, status → "pending", arm /
+    //     re-arm a 1500 ms debounce timer.
+    //   - When the timer fires: status → "saving", run the save,
+    //     status → "saved" on success or "error" on failure.
+    //   - If a `doc-changed` event arrives while a save is
+    //     in-flight, set the queued-after-save flag so we issue a
+    //     follow-up save the moment the in-flight one lands. This
+    //     keeps a long backend write from dropping interim edits.
+    //   - The error-bar surface (`showSaveError`) still fires for
+    //     genuine save failures — the indicator's "error" state +
+    //     the banner are complementary, not redundant.
+    const SAVE_DEBOUNCE_MS = 1500;
     let pendingSave: Promise<void> | null = null;
     let dirtyAfterPending = false;
-    const save = async (current: typeof parsed) => {
+    let saveTimer: ReturnType<typeof setTimeout> | null = null;
+    const runSave = async (current: typeof parsed): Promise<void> => {
       if (pendingSave) {
-        // A save is already in flight — note that we need another
-        // pass after it lands and bail; the next iteration picks up
-        // whatever the doc-shell ended up with.
         dirtyAfterPending = true;
         return;
       }
+      saveStatus.status = "saving";
       pendingSave = (async () => {
         try {
           const { serializeDocument } = await import("@ingcreators/annot-doc");
@@ -985,17 +1005,27 @@ export class App {
             blockCount: current.blocks.length,
             updatedAt: new Date().toISOString(),
           });
+          saveStatus.status = "saved";
         } catch (err) {
+          saveStatus.status = "error";
           showSaveError(`Couldn't save document: ${(err as Error).message}`);
         } finally {
           pendingSave = null;
           if (dirtyAfterPending) {
             dirtyAfterPending = false;
             const latest = shell.document;
-            if (latest) void save(latest);
+            if (latest) void runSave(latest);
           }
         }
       })();
+    };
+    const scheduleSave = (current: typeof parsed): void => {
+      if (saveTimer !== null) clearTimeout(saveTimer);
+      saveStatus.status = "pending";
+      saveTimer = setTimeout(() => {
+        saveTimer = null;
+        void runSave(current);
+      }, SAVE_DEBOUNCE_MS);
     };
     shell.addEventListener("doc-changed", () => {
       const latest = shell.document;
@@ -1006,7 +1036,7 @@ export class App {
       // tracking title in `doc.title`, the header will show stale
       // text until a re-mount.
       titleEl.textContent = latest.title || "Untitled";
-      void save(latest);
+      scheduleSave(latest);
     });
   }
 
