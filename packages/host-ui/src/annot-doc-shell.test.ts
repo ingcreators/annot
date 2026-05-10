@@ -652,6 +652,133 @@ describe("annot-doc-shell: phase 6 image flow", () => {
     expect(el.document!.blocks.map((b) => b.kind)).toEqual(before);
   });
 
+  // Phase 8 — keyboard shortcut catalogue
+  it("Ctrl+Shift+1/2/3 converts the focused block to Heading 1/2/3", async () => {
+    const el = mount(makeMixedDoc());
+    el.editing = true;
+    await el.updateComplete;
+    // Focus the second paragraph (index 1) so the conversion
+    // resolves to that block.
+    const p = el.querySelector(
+      '.annot-doc-block-host[data-block-index="1"] [data-annot-block="paragraph"][contenteditable="true"]',
+    ) as HTMLElement;
+    p.focus();
+    el.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "2", ctrlKey: true, shiftKey: true, bubbles: true }),
+    );
+    await el.updateComplete;
+    const block = el.document!.blocks[1];
+    expect(block?.kind).toBe("heading");
+    if (block?.kind === "heading") {
+      expect(block.level).toBe(2);
+      // Inline HTML preserved across conversion.
+      expect(block.inlineHtml).toBe("Intro paragraph.");
+    }
+  });
+
+  it("Ctrl+Shift+8 / Ctrl+Shift+7 convert to bulleted / numbered list", async () => {
+    const el = mount(makeMixedDoc());
+    el.editing = true;
+    await el.updateComplete;
+    const p = el.querySelector(
+      '.annot-doc-block-host[data-block-index="1"] [data-annot-block="paragraph"][contenteditable="true"]',
+    ) as HTMLElement;
+    p.focus();
+    el.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "8", ctrlKey: true, shiftKey: true, bubbles: true }),
+    );
+    await el.updateComplete;
+    let b = el.document!.blocks[1];
+    expect(b?.kind).toBe("list");
+    if (b?.kind === "list") expect(b.ordered).toBe(false);
+
+    // Now switch to numbered.
+    const li0 = el.querySelector(
+      '.annot-doc-block-host[data-block-index="1"] li[contenteditable="true"]',
+    ) as HTMLElement;
+    li0.focus();
+    el.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "7", ctrlKey: true, shiftKey: true, bubbles: true }),
+    );
+    await el.updateComplete;
+    b = el.document!.blocks[1];
+    expect(b?.kind).toBe("list");
+    if (b?.kind === "list") expect(b.ordered).toBe(true);
+  });
+
+  it("Ctrl+Shift+> converts to quote", async () => {
+    const el = mount(makeMixedDoc());
+    el.editing = true;
+    await el.updateComplete;
+    const p = el.querySelector(
+      '.annot-doc-block-host[data-block-index="1"] [data-annot-block="paragraph"][contenteditable="true"]',
+    ) as HTMLElement;
+    p.focus();
+    el.dispatchEvent(
+      new KeyboardEvent("keydown", { key: ">", ctrlKey: true, shiftKey: true, bubbles: true }),
+    );
+    await el.updateComplete;
+    expect(el.document!.blocks[1]?.kind).toBe("quote");
+  });
+
+  it("Ctrl+Enter inserts a paragraph below the focused block", async () => {
+    const el = mount(makeMixedDoc());
+    el.editing = true;
+    await el.updateComplete;
+    const before = el.document!.blocks.length;
+    const p = el.querySelector(
+      '.annot-doc-block-host[data-block-index="1"] [data-annot-block="paragraph"][contenteditable="true"]',
+    ) as HTMLElement;
+    p.focus();
+    el.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", ctrlKey: true, bubbles: true }));
+    await el.updateComplete;
+    expect(el.document!.blocks.length).toBe(before + 1);
+    // The new paragraph lands at index 2 (after the focused one
+    // at index 1).
+    expect(el.document!.blocks[2]?.kind).toBe("paragraph");
+  });
+
+  it("Ctrl+Shift+Enter inserts a paragraph above the focused block", async () => {
+    const el = mount(makeMixedDoc());
+    el.editing = true;
+    await el.updateComplete;
+    const before = el.document!.blocks.length;
+    const p = el.querySelector(
+      '.annot-doc-block-host[data-block-index="1"] [data-annot-block="paragraph"][contenteditable="true"]',
+    ) as HTMLElement;
+    p.focus();
+    el.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "Enter",
+        ctrlKey: true,
+        shiftKey: true,
+        bubbles: true,
+      }),
+    );
+    await el.updateComplete;
+    expect(el.document!.blocks.length).toBe(before + 1);
+    // New paragraph at index 1 (above the previously-focused
+    // block, which has shifted to index 2).
+    expect(el.document!.blocks[1]?.kind).toBe("paragraph");
+  });
+
+  it("openKeyboardHelp opens the modal with the doc-mode group appended", async () => {
+    const el = mount(makeMixedDoc());
+    el.editing = true;
+    await el.updateComplete;
+    el.openKeyboardHelp();
+    const modal = document.querySelector(".keyboard-help-panel");
+    expect(modal).not.toBeNull();
+    const titles = Array.from(
+      modal!.querySelectorAll<HTMLElement>(".keyboard-help-group-title"),
+    ).map((t) => t.textContent?.trim() ?? "");
+    expect(titles).toContain("Document — Editing");
+    expect(titles).toContain("Document — Blocks");
+    expect(titles).toContain("Document — Block kind");
+    // Cleanup so subsequent tests don't see a stray modal.
+    document.querySelector(".keyboard-help-backdrop")?.remove();
+  });
+
   it("dragend without a drop clears the dragged-block bookkeeping", async () => {
     const el = mount(makeMixedDoc());
     el.editing = true;

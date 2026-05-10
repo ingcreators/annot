@@ -13,6 +13,7 @@ import { supportsDocuments } from "@ingcreators/annot-core/storage";
 import { assertNonNull } from "@ingcreators/annot-core/utils";
 import { createThemeToggle } from "@ingcreators/annot-editor";
 import { setTooltip } from "@ingcreators/annot-editor/tooltip";
+import { DOC_SHORTCUT_GROUPS, installKeyboardHelp } from "@ingcreators/annot-host-ui";
 // Section-id whitelists for the `disableBuiltinUISections`
 // validator below. Static imports because both modules are
 // already in the bundle via `EditorSession.setupEditor` —
@@ -109,6 +110,12 @@ export class App {
   #editorSession: EditorSession;
   /** Router host — owns `handleRoute` + Drive/handoff dispatch. */
   #routerHost: RouterHost;
+  /** Phase 8 of `docs/plans/annot-html-document-ux-polish.md` —
+   *  teardown handle for the global `?` keyboard-help listener
+   *  installed in doc-mode. The teardown runs on
+   *  `#tearDownDocMode` so the listener doesn't leak when the
+   *  user navigates back to the gallery / image editor. */
+  #docModeKeyboardHelpUninstall: (() => void) | null = null;
   /** Storage bridge — owns boot-time restore, mode-switch wizard,
    *  sidebar status, and the `currentRootName` label. `#storage` /
    *  `#deviceStore` above are kept as read-cache mirrors so the
@@ -1230,6 +1237,15 @@ export class App {
       },
     };
     host.appendChild(header);
+    // Phase 8 of `annot-html-document-ux-polish.md` — install the
+    // global `?` keyboard-help listener with the doc-mode shortcut
+    // group appended. Idempotent: tearing down + re-mounting the
+    // doc shell uninstalls the previous listener first so we
+    // never stack two `?` listeners.
+    this.#docModeKeyboardHelpUninstall?.();
+    this.#docModeKeyboardHelpUninstall = installKeyboardHelp({
+      extraGroups: () => DOC_SHORTCUT_GROUPS,
+    });
     // Save-status indicator is a child of the header — pull the
     // ref out so the existing scheduleSave / runSave pipeline can
     // drive `.status` directly. The header's `firstUpdated` runs
@@ -1585,5 +1601,9 @@ export class App {
     document.body.classList.remove("annot-doc-mode");
     const host = document.getElementById("annot-doc-host");
     if (host) host.remove();
+    // Phase 8 — release the doc-mode `?` listener so it doesn't
+    // intercept keystrokes in the gallery / image editor.
+    this.#docModeKeyboardHelpUninstall?.();
+    this.#docModeKeyboardHelpUninstall = null;
   }
 }

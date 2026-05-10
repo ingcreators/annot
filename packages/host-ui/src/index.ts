@@ -20,6 +20,10 @@
 //      any other PWA-shell DOM id; those couplings are the whole
 //      reason the package exists.
 
+// Phase 8 of `docs/plans/annot-html-document-ux-polish.md` —
+// expose the doc-mode shortcut catalog from the shell module so
+// hosts can pass it into `installKeyboardHelp({ extraGroups })`.
+export { DOC_SHORTCUT_GROUPS } from "./annot-doc-shell.js";
 export type { AnnotIconElement } from "./annot-icon.js";
 export { createBuiltinIcon, createIcon } from "./annot-icon-imperative.js";
 export type {
@@ -29,7 +33,14 @@ export type {
   EditorShellHost,
 } from "./editor-shell.js";
 export { EditorShell } from "./editor-shell.js";
-export { installKeyboardHelp } from "./keyboard-help.js";
+export {
+  DEFAULT_SHORTCUT_GROUPS,
+  type InstallKeyboardHelpOptions,
+  installKeyboardHelp,
+  openKeyboardHelpModal,
+  type ShortcutEntry,
+  type ShortcutGroup,
+} from "./keyboard-help.js";
 export type { UISection, UISectionContext, UISectionLifecycle } from "./ui-section.js";
 import "./annot-icon.js";
 
