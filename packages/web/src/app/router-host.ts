@@ -14,7 +14,8 @@
  * picker flows slot into the same dispatcher.
  */
 
-import type { ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
+import type { DocumentRecord, ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
+import { supportsDocuments } from "@ingcreators/annot-core/storage";
 import type { FileManager } from "@ingcreators/annot-host-ui/gallery/file-manager";
 import { logger } from "../logger.js";
 import { editUrl, galleryUrl, parseRoute, pushRoute, sessionEditUrl } from "../router.js";
@@ -43,6 +44,12 @@ export interface RouterHostDeps {
   transferAndOpen(record: ImageRecord, extPath: string): Promise<void>;
   openFromGallery(record: ImageRecord): Promise<void>;
   setupSplitEditor(records: ImageRecord[]): Promise<void>;
+  /** Open a `.annot.html` document into the host's doc-shell.
+   *  Phase 6b of `docs/plans/annot-html-document.md`. The host
+   *  decides where to mount the shell (PWA replaces the editor
+   *  area; future hosts may slot it elsewhere); the router-host
+   *  just hands over the resolved record. */
+  openDocFromGallery(record: DocumentRecord): Promise<void>;
   /** Fire the plugin-host `onRouteChange` event. Dispatched at the
    *  top of `handleRoute` so plugins see every URL transition
    *  (including the handoff path) before the dispatcher branches. */
@@ -113,6 +120,39 @@ export class RouterHost {
         }
       } catch (e) {
         console.error("[handleRoute] session lookup error:", e);
+      }
+    }
+
+    // /doc/:store/<path> — load the document and hand off to the
+    // host's doc-shell. Skipped silently when the active storage
+    // backend doesn't implement `StorageWithDocuments` (Phase 7+
+    // backends; the gallery view falls through and the user can
+    // switch to a backend that supports documents).
+    if (route.type === "doc" && route.path && storage) {
+      if (!supportsDocuments(storage)) {
+        showError({
+          message: "This storage backend doesn't support .annot.html documents yet.",
+          severity: "warning",
+        });
+        this.deps.showGalleryView();
+        return;
+      }
+      try {
+        const record = await storage.getDocument(route.path);
+        if (record) {
+          await this.deps.openDocFromGallery(record);
+          return;
+        }
+        showError({
+          message: `Document not found: ${route.path}`,
+          severity: "warning",
+        });
+      } catch (e) {
+        console.error("[handleRoute] getDocument error:", e);
+        showError({
+          message: "Couldn't open the document. See console for details.",
+          severity: "error",
+        });
       }
     }
 
