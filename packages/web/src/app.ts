@@ -1342,6 +1342,123 @@ export class App {
       header.overflowItems = buildOverflowItems(latest);
       scheduleSave(latest);
     });
+
+    // Phase 4 of `annot-html-document-ux-polish.md` — empty-state
+    // onboarding card "Use a template" bubbles its action up here.
+    // The shell self-handles the other three (Start with heading /
+    // Insert image / Paste hint). For Use Template we open the
+    // existing template-picker dialog and REPLACE the current
+    // empty document's content with the chosen template — the
+    // path / save slot stay put so the user's mental model
+    // ("this empty doc becomes that template") is honored.
+    shell.addEventListener("empty-state-action", (e) => {
+      const detail = (e as CustomEvent<{ action: string }>).detail;
+      if (detail?.action !== "useTemplate") return;
+      void this.#replaceCurrentDocFromTemplate(storage, shell, scheduleSave);
+    });
+  }
+
+  /**
+   * Phase 4 of `docs/plans/annot-html-document-ux-polish.md` —
+   * empty-state Use Template handler.
+   *
+   * Lists templates from `Templates/`, shows the picker, then
+   * on select parses + clones the chosen template and replaces
+   * the current shell document's blocks + meta. The cloned
+   * doc's title flows through the existing `scheduleSave` path
+   * so the new content lands in the same file the user is
+   * looking at — no navigation, no new file.
+   */
+  async #replaceCurrentDocFromTemplate(
+    storage: StorageProvider & StorageWithDocuments,
+    shell: import("@ingcreators/annot-host-ui/annot-doc-shell").AnnotDocShellElement,
+    scheduleSave: (doc: import("@ingcreators/annot-doc").AnnotDocument) => void,
+  ): Promise<void> {
+    const [
+      { BUILTIN_TEMPLATES, getBuiltinTemplate, isTemplateFromHead, parseDocument, cloneTemplate },
+      { showTemplatePickerDialog },
+      _picker,
+    ] = await Promise.all([
+      import("@ingcreators/annot-doc"),
+      import("@ingcreators/annot-host-ui/ui/template-picker-dialog"),
+      import("@ingcreators/annot-host-ui/annot-template-picker"),
+    ]);
+    void _picker;
+
+    const builtinTemplates: import("@ingcreators/annot-host-ui/annot-template-picker").BuiltinTemplateEntry[] =
+      BUILTIN_TEMPLATES.map((t) => ({
+        id: t.id,
+        title: t.title,
+        description: t.description,
+      }));
+
+    let userTemplates: import("@ingcreators/annot-host-ui/annot-template-picker").UserTemplateEntry[] =
+      [];
+    try {
+      const entries = await storage.listDocuments("Templates");
+      for (const entry of entries) {
+        try {
+          const record = await storage.getDocument(entry.path);
+          if (!record) continue;
+          if (!isTemplateFromHead(record.bytes)) continue;
+          const doc = parseDocument(record.bytes);
+          const tpl = doc.meta.template;
+          if (!tpl) continue;
+          userTemplates.push({
+            path: entry.path,
+            title: tpl.name || entry.title,
+            ...(tpl.description !== undefined ? { description: tpl.description } : {}),
+            ...(tpl.tags !== undefined ? { tags: tpl.tags } : {}),
+          });
+        } catch (err) {
+          logger.warn("replaceCurrentDocFromTemplate: skipped malformed template", entry.path, err);
+        }
+      }
+    } catch (err) {
+      showSaveError(`Couldn't list templates: ${(err as Error).message}`);
+      userTemplates = [];
+    }
+
+    const detail = await showTemplatePickerDialog({
+      userTemplates,
+      builtinTemplates,
+      title: "Choose a template",
+    });
+    if (!detail) return;
+
+    let sourceBytes: string | null = null;
+    try {
+      if (detail.kind === "user") {
+        const record = await storage.getDocument(detail.path);
+        if (!record) {
+          showSaveError("Template was removed before it could be opened.");
+          return;
+        }
+        sourceBytes = record.bytes;
+      } else {
+        const builtin = getBuiltinTemplate(detail.id);
+        if (!builtin) {
+          showSaveError(`Built-in template "${detail.id}" is no longer available.`);
+          return;
+        }
+        sourceBytes = builtin.source;
+      }
+    } catch (err) {
+      showSaveError(`Couldn't load template: ${(err as Error).message}`);
+      return;
+    }
+
+    try {
+      const doc = parseDocument(sourceBytes);
+      const cloned = cloneTemplate(doc);
+      // Replace the live shell document — the save lifecycle's
+      // `doc-changed` listener picks this up and pushes the new
+      // bytes to the same file slot.
+      shell.document = cloned;
+      scheduleSave(cloned);
+    } catch (err) {
+      showSaveError(`Couldn't apply template: ${(err as Error).message}`);
+    }
   }
 
   /**

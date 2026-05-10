@@ -37,6 +37,8 @@ import {
 import "./annot-doc-block-menu.js";
 import "./annot-doc-block-toolbar.js";
 import type { BlockToolbarActionDetail } from "./annot-doc-block-toolbar.js";
+import "./annot-doc-empty-state.js";
+import type { EmptyStateActionDetail } from "./annot-doc-empty-state.js";
 import "./annot-doc-insert-bar.js";
 import { DocumentHistory } from "./annot-doc-history.js";
 import { AnnotDocImageEditorModalElement } from "./annot-doc-image-editor-modal.js";
@@ -522,6 +524,15 @@ export class AnnotDocShellElement extends LitElement {
       .filter(Boolean)
       .join(" ");
 
+    // Phase 4 of `annot-html-document-ux-polish.md` — when the
+    // document is brand-new (zero blocks or one empty paragraph)
+    // AND we're in editing mode, show the onboarding empty-state
+    // panel ABOVE the article. Read-only mode + non-empty docs
+    // skip it. The panel doesn't replace the article — both
+    // co-exist so paste / drop into the article still works
+    // alongside the cards.
+    const showEmptyState = editing && isEmptyDocument(blocks);
+
     return html`
       <style>
 ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
@@ -529,6 +540,8 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
       <div
         class=${shellClasses}
         @insert-block=${(e: CustomEvent<InsertBlockDetail>) => this.#onInsertBarSelect(e)}
+        @empty-state-action=${(e: CustomEvent<EmptyStateActionDetail>) =>
+          this.#onEmptyStateAction(e)}
       >
         ${tocVisible ? this.#renderToc(headings, headingIds) : nothing}
         <article
@@ -536,6 +549,7 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
           @input=${this.#onArticleInput}
           @blur=${this.#onArticleBlur}
         >
+          ${showEmptyState ? html`<annot-doc-empty-state></annot-doc-empty-state>` : nothing}
           ${
             editing
               ? this.#renderEditingBody(blocks, headingIds)
@@ -761,6 +775,67 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
     const file = await pickImageFile();
     if (!file) return;
     await this.#insertImageFromFile(file, { insertAtIndex: insertAt });
+  }
+
+  // -------------------------------------------------------------------------
+  // Empty-state onboarding (Phase 4 of `annot-html-document-ux-polish.md`)
+  // -------------------------------------------------------------------------
+
+  /** Routes empty-state card clicks. The shell self-handles
+   *  three of the four actions; `useTemplate` intentionally
+   *  bubbles up to the host (which owns storage + the
+   *  template-picker dialog). The bubble is allowed by NOT
+   *  calling `e.stopPropagation()` for that branch. */
+  #onEmptyStateAction = (e: CustomEvent<EmptyStateActionDetail>): void => {
+    const action = e.detail.action;
+    if (action === "useTemplate") {
+      // Bubble up — the host listens for this on its
+      // `#annot-doc-host` container and runs the existing
+      // template-picker flow.
+      return;
+    }
+    e.stopPropagation();
+    if (action === "startWithHeading") {
+      this.#applyStartWithHeading();
+    } else if (action === "insertImage") {
+      void this.#promptImageFileAndInsertAt(0);
+    } else if (action === "pasteHint") {
+      this.#focusFirstEditableAndHintPaste();
+    }
+  };
+
+  #applyStartWithHeading(): void {
+    if (!this.document) return;
+    const newDoc: AnnotDocument = {
+      ...this.document,
+      blocks: [
+        { kind: "heading", level: 1, inlineHtml: "" },
+        { kind: "paragraph", inlineHtml: "" },
+      ],
+    };
+    this.#history?.push(newDoc);
+    this.#applyInternal(newDoc, "block-action");
+    // Focus the heading after the next render so the cursor
+    // lands inside the new contentEditable.
+    queueMicrotask(() => {
+      const heading = this.querySelector(
+        '.annot-doc-block-host[data-block-index="0"] [data-annot-block="heading"][contenteditable="true"]',
+      ) as HTMLElement | null;
+      heading?.focus();
+    });
+  }
+
+  #focusFirstEditableAndHintPaste(): void {
+    // Focus the first editable so Ctrl+V works AND the
+    // article's existing `:empty::before` placeholder ("Type /
+    // for commands, or paste / drop an image…") becomes the
+    // visible hint.
+    queueMicrotask(() => {
+      const editable = this.querySelector(
+        '[data-annot-block][contenteditable="true"]',
+      ) as HTMLElement | null;
+      editable?.focus();
+    });
   }
 
   // -------------------------------------------------------------------------
@@ -1455,6 +1530,24 @@ function createBlockFromMenuItem(item: BlockMenuItem): Block {
       // empty paragraph so the document remains valid.
       return { kind: "paragraph", inlineHtml: "" };
   }
+}
+
+// ---------------------------------------------------------------------------
+// Phase 4 — Empty-state predicate
+// ---------------------------------------------------------------------------
+
+/** A document is "empty" for onboarding purposes when it has
+ *  no blocks at all, OR exactly one paragraph block with no
+ *  inline HTML. The serializer's empty default + the slash
+ *  menu's "starts blank" semantics both produce documents in
+ *  the second shape. */
+function isEmptyDocument(blocks: readonly Block[]): boolean {
+  if (blocks.length === 0) return true;
+  if (blocks.length !== 1) return false;
+  const only = blocks[0];
+  if (!only) return false;
+  if (only.kind !== "paragraph") return false;
+  return only.inlineHtml.trim() === "";
 }
 
 // ---------------------------------------------------------------------------
