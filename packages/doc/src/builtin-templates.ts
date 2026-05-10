@@ -41,6 +41,7 @@
  *     `cloneTemplate` round-trip.
  */
 
+import { cloneTemplate } from "./clone-template.js";
 import { serializeDocument } from "./serialize.js";
 import type { AnnotDocument } from "./types.js";
 import { ANNOT_DOC_VERSION } from "./types.js";
@@ -306,4 +307,40 @@ export const BUILTIN_TEMPLATES: readonly BuiltinTemplateSummary[] = [
  *  this as a "template not found" error path. */
 export function getBuiltinTemplate(id: string): BuiltinTemplateSummary | undefined {
   return BUILTIN_TEMPLATES.find((t) => t.id === id);
+}
+
+/** In-memory map from id → the source `AnnotDocument` literal
+ *  used to compute `BUILTIN_TEMPLATES[i].source`. Kept separate
+ *  from the public `BUILTIN_TEMPLATES` export because the tree
+ *  is implementation detail — the bytes are the contract.
+ *  Populated alphabetically; same map keys as
+ *  `BuiltinTemplateId`'s discriminated union. */
+const BUILTIN_TREES: Readonly<Record<string, AnnotDocument>> = {
+  manual: MANUAL_DOC,
+  "feature-guide": FEATURE_GUIDE_DOC,
+  procedure: PROCEDURE_DOC,
+};
+
+/**
+ * Clone a built-in starter into a fresh editable `AnnotDocument`
+ * — no DOM dependency, runs cleanly under pure Node. Used by
+ * the VSCode extension's `Annot: New document` command (Phase
+ * 10 of `docs/plans/annot-html-document.md`) to skip the
+ * `parseDocument` round-trip the in-browser path would
+ * normally use to recover the tree from `BUILTIN_TEMPLATES[i].
+ * source`.
+ *
+ * The shape contract matches `cloneTemplate`'s: markers
+ * stripped (`meta.template` removed → serialiser drops
+ * `data-annot-doc-template` + `<meta name="annot-template">`
+ * automatically), every `ImageBlock.id` reminted, every other
+ * byte preserved.
+ *
+ * Returns `undefined` for unknown ids; the extension command
+ * surfaces a vscode error toast in that case.
+ */
+export function cloneBuiltinTemplate(id: string): AnnotDocument | undefined {
+  const tree = BUILTIN_TREES[id];
+  if (!tree) return undefined;
+  return cloneTemplate(tree);
 }

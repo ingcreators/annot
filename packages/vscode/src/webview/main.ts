@@ -51,9 +51,15 @@ import {
   createEditableImage,
   readEditableImage,
 } from "@ingcreators/annot-core/xmp";
+import { type AnnotDocument, parseDocument, serializeDocument } from "@ingcreators/annot-doc";
 import { exportSVGString, getPngDataUrl } from "@ingcreators/annot-editor";
 import { buildPptxFiles } from "@ingcreators/annot-editor/pptx-export";
 import { EditorShell } from "@ingcreators/annot-host-ui";
+import "@ingcreators/annot-host-ui/annot-doc-shell";
+import type {
+  AnnotDocShellElement,
+  DocChangedDetail,
+} from "@ingcreators/annot-host-ui/annot-doc-shell";
 import { Toolbar } from "@ingcreators/annot-host-ui/toolbar";
 import { showConfirmDialog } from "@ingcreators/annot-host-ui/ui/dialog";
 // `<annot-editor-right-panel>` registers a custom element on import.
@@ -151,6 +157,14 @@ function extOf(filename: string): "svg" | "png" | "jpg" | "jpeg" | "" {
   const m = filename.toLowerCase().match(/\.(svg|png|jpe?g)$/i);
   if (!m) return "";
   return (m[1] === "jpeg" ? "jpeg" : m[1]) as "svg" | "png" | "jpg" | "jpeg";
+}
+
+/** True for `.annot.html` documents — Phase 10 of
+ *  `docs/plans/annot-html-document.md`. Drives the boot-mode
+ *  branch so `.annot.html` mounts `<annot-doc-shell>` instead
+ *  of the image-side `EditorShell`. */
+function isDocFile(filename: string): boolean {
+  return filename.toLowerCase().endsWith(".annot.html");
 }
 
 function folderPathOf(filePath: string): string {
@@ -511,6 +525,14 @@ function mountToolbarAndRightPanel(): void {
 // ─── File-details drawer ───────────────────────────────────────
 
 function showFileDetails(): void {
+  if (bootMode === "doc") {
+    // The image-side file-details drawer renders canvas
+    // dimensions / data URL. Documents don't have those —
+    // suppress the command silently in doc mode (the
+    // command palette is shared so this keeps the
+    // discoverability without the broken UX).
+    return;
+  }
   const canvas = shell.getCanvas();
   if (!canvas) return;
   // Build a fresh drawer per open. The drawer mounts itself on
@@ -548,6 +570,89 @@ function foldernameFromPath(p: string): string {
   return p.replace(/\\/g, "/").replace(/\/[^/]+$/, "/");
 }
 
+// ─── Doc-mode mount (Phase 10 of annot-html-document.md) ──────
+//
+// `.annot.html` documents go through a separate boot path that
+// mounts `<annot-doc-shell>` directly (no toolbar / right-panel
+// / statusbar — those are image-only affordances). The shell's
+// `doc-changed` event drives the same VSCode-native save
+// lifecycle the image side uses: edit → mark dirty (●), Ctrl+S
+// → encode + write via `vscode.workspace.fs`. Revert re-fetches
+// the bytes and re-parses.
+//
+// `bootMode` flips on the first `open` message and never
+// changes after — the image and doc paths are mutually
+// exclusive; opening a different file uses a fresh
+// `vscode.openWith` invocation which spawns a new webview
+// panel.
+
+type BootMode = "image" | "doc" | null;
+let bootMode: BootMode = null;
+let activeDocShell: AnnotDocShellElement | null = null;
+
+/** Boot the doc-mode UI: hide the image-side grid (toolbar /
+ *  right-panel / statusbar) and replace its centre column with
+ *  the doc-shell. The first call wires the `doc-changed`
+ *  listener (drives the dirty marker) + the save / revert
+ *  hooks below. */
+function bootDocMode(initialBytes: Uint8Array): void {
+  const root = document.getElementById("annot-shell-root");
+  if (!root) return;
+
+  // Hide image-side panes — keep them in the DOM so the boot
+  // path doesn't have to re-create them on a hypothetical
+  // mode-switch (which doesn't happen in practice; one panel
+  // = one mode for its lifetime). The doc-mode container
+  // overlays the entire grid.
+  for (const child of Array.from(root.children) as HTMLElement[]) {
+    child.style.display = "none";
+  }
+
+  let docHost = document.getElementById("annot-doc-host") as HTMLDivElement | null;
+  if (!docHost) {
+    docHost = document.createElement("div");
+    docHost.id = "annot-doc-host";
+    docHost.style.cssText =
+      "position:absolute;inset:0;display:flex;flex-direction:column;overflow:auto;padding:1.5rem;";
+    root.appendChild(docHost);
+  }
+  docHost.innerHTML = "";
+
+  let parsed: AnnotDocument;
+  try {
+    parsed = parseDocument(new TextDecoder().decode(initialBytes));
+  } catch (err) {
+    docHost.textContent = `Failed to parse ${activeFilename}: ${(err as Error).message}`;
+    return;
+  }
+
+  const shellEl = document.createElement("annot-doc-shell") as AnnotDocShellElement;
+  shellEl.document = parsed;
+  shellEl.editing = true;
+  // VSCode owns the dirty marker via `{type: "edit"}` on every
+  // doc-changed event; no per-keystroke save here. Save is
+  // driven by VSCode (`Ctrl+S`, `files.autoSave`, hot-exit) —
+  // when the extension wants bytes it posts `{type: "save",
+  // id}` and `runSave` (below) reads from `activeDocShell.
+  // document` and serialises via `serializeDocument`.
+  shellEl.addEventListener("doc-changed", (e) => {
+    const detail = (e as CustomEvent<DocChangedDetail>).detail;
+    activeDocShell = shellEl;
+    // Update our tracked document so save / revert / external
+    // changes always see the latest tree.
+    activeDocument = detail.document;
+    vscode.postMessage({ type: "edit" });
+  });
+  docHost.appendChild(shellEl);
+  activeDocShell = shellEl;
+  activeDocument = parsed;
+}
+
+/** Last-known parsed document — kept in sync via `doc-changed`.
+ *  The `runSave` hook serialises this on demand; `runRevert`
+ *  replaces it with a freshly-parsed copy from disk. */
+let activeDocument: AnnotDocument | null = null;
+
 // ─── Extension → webview message handler ───────────────────────
 
 window.addEventListener("message", (event) => {
@@ -556,34 +661,47 @@ window.addEventListener("message", (event) => {
     case "open": {
       activeFilename = msg.filename;
       activeFilePath = msg.path;
-      // `shell.open(path)` triggers `proxyStorage.getImage(path)`
-      // which round-trips through `fs.read`. `shell.open` rejects
-      // on missing files; we surface that via the `error` event
-      // listener installed above.
-      void shell.open(msg.path).then(() => {
-        // Clear the placeholder text once the canvas is mounted.
-        for (const child of Array.from(container.children)) {
-          if (child instanceof HTMLElement && child.classList.contains("annot-placeholder")) {
-            child.remove();
+      if (isDocFile(msg.filename)) {
+        // Phase 10 — `.annot.html` document path. fs.read the
+        // bytes once, hand to `bootDocMode` for parse + mount,
+        // and that's the entire boot. No EditorShell, no
+        // toolbar, no right-panel.
+        bootMode = "doc";
+        void fsRead(msg.path).then((bytes) => {
+          activeFileBytes = bytes.length;
+          bootDocMode(bytes);
+        });
+      } else {
+        bootMode = "image";
+        // `shell.open(path)` triggers `proxyStorage.getImage(path)`
+        // which round-trips through `fs.read`. `shell.open` rejects
+        // on missing files; we surface that via the `error` event
+        // listener installed above.
+        void shell.open(msg.path).then(() => {
+          // Clear the placeholder text once the canvas is mounted.
+          for (const child of Array.from(container.children)) {
+            if (child instanceof HTMLElement && child.classList.contains("annot-placeholder")) {
+              child.remove();
+            }
           }
-        }
-        // Mount the toolbar + right-panel now that the shell has
-        // canvas / history / selection ready. Mirrors the PWA's
-        // `EditorSession.setupEditor` pattern but stripped of
-        // PWA-shell-specific bits (no editor-header, no
-        // gallery button, no scratchpad — VSCode owns those
-        // surfaces or doesn't have them at all).
-        mountToolbarAndRightPanel();
-        // `cmdNewFromClipboard` (extension-side) writes a 1×1
-        // transparent PNG as a placeholder so the file exists for
-        // `vscode.openWith`. Detect that exact placeholder here
-        // and try to overwrite the canvas's background with the
-        // OS clipboard image. If the clipboard doesn't carry an
-        // image (or the user denies the permission prompt), the
-        // placeholder remains and the user gets a blank canvas
-        // they can draw on.
-        void maybeBootstrapFromClipboard();
-      });
+          // Mount the toolbar + right-panel now that the shell has
+          // canvas / history / selection ready. Mirrors the PWA's
+          // `EditorSession.setupEditor` pattern but stripped of
+          // PWA-shell-specific bits (no editor-header, no
+          // gallery button, no scratchpad — VSCode owns those
+          // surfaces or doesn't have them at all).
+          mountToolbarAndRightPanel();
+          // `cmdNewFromClipboard` (extension-side) writes a 1×1
+          // transparent PNG as a placeholder so the file exists for
+          // `vscode.openWith`. Detect that exact placeholder here
+          // and try to overwrite the canvas's background with the
+          // OS clipboard image. If the clipboard doesn't carry an
+          // image (or the user denies the permission prompt), the
+          // placeholder remains and the user gets a blank canvas
+          // they can draw on.
+          void maybeBootstrapFromClipboard();
+        });
+      }
       break;
     }
     case "export": {
@@ -661,7 +779,10 @@ async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
  */
 async function runSave(id: number): Promise<void> {
   try {
-    const bytes = await encodeBytesForSave(activeFilePath, activeFilename);
+    const bytes =
+      bootMode === "doc"
+        ? await encodeBytesForDocSave()
+        : await encodeBytesForSave(activeFilePath, activeFilename);
     vscode.postMessage({
       type: "save.result",
       id,
@@ -674,6 +795,17 @@ async function runSave(id: number): Promise<void> {
       error: String(err),
     });
   }
+}
+
+/** Doc-mode save: serialise the current `activeDocument` —
+ *  kept up-to-date by the shell's `doc-changed` listener — back
+ *  to canonical `.annot.html` bytes. The shell's document
+ *  property IS the source of truth; the parser-serialiser
+ *  contract guarantees byte-equality if no edits happened
+ *  since the last open. */
+async function encodeBytesForDocSave(): Promise<Uint8Array> {
+  if (!activeDocument) throw new Error("encodeBytesForDocSave: no document loaded");
+  return new TextEncoder().encode(serializeDocument(activeDocument));
 }
 
 /**
@@ -691,6 +823,17 @@ async function runSave(id: number): Promise<void> {
 async function runRevert(): Promise<void> {
   if (!activeFilePath) return;
   try {
+    if (bootMode === "doc") {
+      // Re-fetch from disk + re-parse + replace the shell's
+      // document. The shell's contentEditable mutations are
+      // discarded; the next render pulls from the new tree.
+      const bytes = await fsRead(activeFilePath);
+      activeFileBytes = bytes.length;
+      const reparsed = parseDocument(new TextDecoder().decode(bytes));
+      activeDocument = reparsed;
+      if (activeDocShell) activeDocShell.document = reparsed;
+      return;
+    }
     await shell.open(activeFilePath);
     mountToolbarAndRightPanel();
   } catch (err) {
@@ -702,6 +845,13 @@ async function runRevert(): Promise<void> {
 
 async function runExport(id: number, format: "png" | "jpeg" | "pptx"): Promise<void> {
   try {
+    if (bootMode === "doc") {
+      // Image-side exports don't apply to documents. Phase 11 of
+      // `docs/plans/annot-html-document.md` introduces the
+      // multi-slide PPTX export for docs; until then surface a
+      // clear error.
+      throw new Error("Export to image / PPTX is image-mode only");
+    }
     const canvas = shell.getCanvas();
     if (!canvas) throw new Error("no canvas mounted");
     const stem = activeFilename.replace(/\.annot\.[^.]+$/i, "").replace(/\.[^.]+$/, "");

@@ -41,6 +41,7 @@
  */
 
 import * as path from "node:path";
+import { BUILTIN_TEMPLATES, cloneBuiltinTemplate, serializeDocument } from "@ingcreators/annot-doc";
 import * as vscode from "vscode";
 
 const VIEW_TYPE = "annot.editor";
@@ -618,6 +619,86 @@ async function cmdNewFromClipboard(): Promise<void> {
   }
 }
 
+/**
+ * `Annot: New document`
+ *
+ * Phase 10 of `docs/plans/annot-html-document.md` — VSCode-side
+ * counterpart to the PWA's "From Template…" sidebar entry.
+ * Workflow:
+ *
+ *   1. `showQuickPick` lists the package-resident built-in
+ *      starters (`manual` / `feature-guide` / `procedure`)
+ *      from `BUILTIN_TEMPLATES`. The picker is VSCode-native
+ *      rather than the host-ui dialog because the command
+ *      runs in the extension host (no DOM) — the workbench's
+ *      Quick Pick is the idiomatic affordance here.
+ *   2. `showSaveDialog` confirms the destination with a
+ *      sensible default filename (`<starter-id>.annot.html`
+ *      under the workspace root).
+ *   3. `cloneBuiltinTemplate(id)` returns a fresh
+ *      `AnnotDocument` with the template markers stripped and
+ *      image IDs reminted (Tier A — runs cleanly in Node).
+ *   4. `serializeDocument(cloned)` produces the canonical
+ *      `.annot.html` bytes; we write them via
+ *      `vscode.workspace.fs.writeFile` and open the file in
+ *      our custom editor.
+ *
+ * No workspace folder open → surface a clear error (mirrors
+ * `cmdNewFromClipboard`'s behaviour). User-templates picker
+ * is deferred to a future row — the workspace's `Templates/`
+ * folder doesn't have a clear convention in VSCode the way it
+ * does in the PWA's storage backend, and this command was
+ * specifically called out as "built-in starters available
+ * immediately" in the plan.
+ */
+async function cmdNewDocument(): Promise<void> {
+  interface QuickPickItem extends vscode.QuickPickItem {
+    templateId: string;
+  }
+  const items: QuickPickItem[] = BUILTIN_TEMPLATES.map((t) => ({
+    label: t.title,
+    description: t.description,
+    templateId: t.id,
+  }));
+  const picked = await vscode.window.showQuickPick(items, {
+    title: "Annot — New document from template",
+    placeHolder: "Select a starter template",
+  });
+  if (!picked) return;
+
+  const wsFolder = vscode.workspace.workspaceFolders?.[0]?.uri;
+  if (!wsFolder) {
+    void vscode.window.showErrorMessage(
+      "Annot: no workspace folder open. Open a folder first, then run this command again.",
+    );
+    return;
+  }
+
+  const cloned = cloneBuiltinTemplate(picked.templateId);
+  if (!cloned) {
+    void vscode.window.showErrorMessage(
+      `Annot: built-in template "${picked.templateId}" is no longer available.`,
+    );
+    return;
+  }
+
+  const defaultName = `${picked.templateId}.annot.html`;
+  const dest = await vscode.window.showSaveDialog({
+    title: "Save new document as…",
+    defaultUri: vscode.Uri.joinPath(wsFolder, defaultName),
+    filters: { "Annot document": ["annot.html"] },
+  });
+  if (!dest) return;
+
+  try {
+    const bytes = new TextEncoder().encode(serializeDocument(cloned));
+    await vscode.workspace.fs.writeFile(dest, bytes);
+    await vscode.commands.executeCommand("vscode.openWith", dest, VIEW_TYPE);
+  } catch (err) {
+    void vscode.window.showErrorMessage(`Annot: failed to create new document: ${err}`);
+  }
+}
+
 // ─── Export commands (delegate to active webview) ──────────────
 
 interface PendingExport {
@@ -799,6 +880,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("annot.openAnnotation", cmdOpenAnnotation),
     vscode.commands.registerCommand("annot.newFromClipboard", cmdNewFromClipboard),
     vscode.commands.registerCommand("annot.newFromImage", cmdNewFromImage),
+    vscode.commands.registerCommand("annot.newDocument", cmdNewDocument),
     vscode.commands.registerCommand("annot.saveAsPng", () => requestExport("png")),
     vscode.commands.registerCommand("annot.saveAsJpeg", () => requestExport("jpeg")),
     vscode.commands.registerCommand("annot.exportPptx", () => requestExport("pptx")),
