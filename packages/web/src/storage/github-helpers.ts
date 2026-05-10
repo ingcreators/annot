@@ -56,6 +56,13 @@ export function isImageFilename(name: string): boolean {
   );
 }
 
+/** Phase 7d of `docs/plans/annot-html-document.md` — `.annot.html`
+ *  document files. Same casing rule the format spec describes (the
+ *  extension is part of the canonical form). */
+export function isDocumentFilename(name: string): boolean {
+  return name.toLowerCase().endsWith(".annot.html");
+}
+
 /** Discriminated subclass of `Error` carrying GitHub-specific
  *  fields the rest of the store + the auth UI react to. */
 export interface GitHubError extends Error {
