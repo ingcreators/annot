@@ -158,6 +158,49 @@ describe("BrowserStore.updateDocument", () => {
   });
 });
 
+describe("BrowserStore.deleteImage on document paths (Phase 6h)", () => {
+  it("deletes documents via the path-keyed deleteImage call", async () => {
+    const store = new BrowserStore();
+    const path = await store.saveDocument(makePayload(), { filename: "deletable.annot.html" });
+    expect(await store.getDocument(path)).toBeDefined();
+    await store.deleteImage(path);
+    expect(await store.getDocument(path)).toBeUndefined();
+  });
+
+  it("does not affect images when deleting a document path", async () => {
+    const store = new BrowserStore();
+    const imgPath = await store.saveImage(
+      {
+        originalDataUrl: "data:image/png;base64,iVBORw0KGgo=",
+        thumbnailDataUrl: "",
+        annotationsSvg: "<g/>",
+        width: 1,
+        height: 1,
+        folderPath: "",
+        sourceUrl: "",
+        tags: {},
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+      { filename: "shared-name.annot.png" },
+    );
+    const docPath = await store.saveDocument(makePayload(), {
+      filename: "shared-name.annot.html",
+    });
+    // Sanity: paths differ even though stems share characters.
+    expect(imgPath).not.toBe(docPath);
+    // Delete only the doc; image stays.
+    await store.deleteImage(docPath);
+    expect(await store.getDocument(docPath)).toBeUndefined();
+    expect(await store.getImage(imgPath)).toBeDefined();
+  });
+
+  it("is idempotent on missing paths", async () => {
+    const store = new BrowserStore();
+    await expect(store.deleteImage("nope.annot.html")).resolves.toBeUndefined();
+  });
+});
+
 describe("supportsDocuments predicate", () => {
   it("narrows BrowserStore to StorageWithDocuments", () => {
     const store = new BrowserStore();

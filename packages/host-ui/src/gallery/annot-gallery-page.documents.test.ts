@@ -162,6 +162,18 @@ describe("annot-gallery-page: documents listing", () => {
     expect(captured).toHaveLength(2);
   });
 
+  it("renders a 'more actions' button on each document card", async () => {
+    const storage = makeDocCapableStorage({
+      documents: [makeDocument("a.annot.html", { title: "A" })],
+    });
+    const el = mount();
+    el.storage = storage;
+    await el.refresh("");
+    await el.updateComplete;
+    const moreBtn = el.querySelector(".gallery-document-item .gallery-card-more");
+    expect(moreBtn).not.toBeNull();
+  });
+
   it("listDocuments errors gracefully fall back to an empty list", async () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const storage = {

@@ -241,11 +241,22 @@ export class BrowserStore
   }
 
   async deleteImage(path: string): Promise<void> {
+    // Phase 6h of `docs/plans/annot-html-document.md`: the
+    // `StorageWithDocuments` plan declares delete / move / rename
+    // reuse the image-side equivalents because the path-keyed
+    // model already covers any leaf file. Documents and images
+    // live in separate IDB object stores in `BrowserStore`, so we
+    // issue both deletes in a single transaction. IDB `delete()`
+    // is idempotent on missing keys, so this is safe even when
+    // the path refers to one kind only — the other store's
+    // delete is a no-op.
     const db = await openDB();
     return new Promise((resolve, reject) => {
-      const req = imgStore(db, "readwrite").delete(path);
-      req.onsuccess = () => resolve();
-      req.onerror = () => reject(req.error);
+      const tx = db.transaction([IMG_STORE, DOC_STORE], "readwrite");
+      tx.objectStore(IMG_STORE).delete(path);
+      tx.objectStore(DOC_STORE).delete(path);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
     });
   }
 
