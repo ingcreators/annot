@@ -10,7 +10,15 @@
  * `<script type="application/annot+json">`, and `<svg>` content).
  */
 
-import type { AnnotDocument, Block, CodeBlock, DocMeta, ImageBlock, ListBlock } from "./types.js";
+import type {
+  AnnotDocument,
+  Block,
+  CodeBlock,
+  DocMeta,
+  HeadingBlock,
+  ImageBlock,
+  ListBlock,
+} from "./types.js";
 
 const INDENT = "  ";
 const LF = "\n";
@@ -39,8 +47,19 @@ export function serializeDocument(doc: AnnotDocument): string {
   // <body>
   out.push(INDENT, "<body>", LF);
   out.push(INDENT.repeat(2), "<article data-annot-doc>", LF);
+  // Build the heading → anchor-id map once so heading
+  // serialisation + TOC generation use the same ids.
+  const anchorMap = buildHeadingAnchorMap(doc.blocks);
+  // Standalone-view TOC. Skipped when the doc has fewer than
+  // two headings (a single-heading TOC is just noise). The
+  // `<nav data-annot-toc>` chrome is regenerated on every save
+  // — the parser treats elements with `data-annot-toc` as
+  // skipped, so the model never round-trips through a stale
+  // TOC.
+  const tocHtml = buildTocHtml(doc.blocks, anchorMap, /* depth */ 3);
+  if (tocHtml) out.push(tocHtml);
   for (const block of doc.blocks) {
-    out.push(serializeBlock(block, /* depth */ 3));
+    out.push(serializeBlock(block, /* depth */ 3, anchorMap));
   }
   out.push(INDENT.repeat(2), "</article>", LF);
   out.push(
@@ -68,11 +87,27 @@ function htmlRootAttrs(doc: AnnotDocument): string {
   return parts.join(" ");
 }
 
-function serializeBlock(block: Block, depth: number): string {
+function serializeBlock(
+  block: Block,
+  depth: number,
+  anchorMap?: ReadonlyMap<HeadingBlock, string>,
+): string {
   const indent = INDENT.repeat(depth);
   switch (block.kind) {
-    case "heading":
-      return `${indent}<h${block.level} data-annot-block="heading" data-level="${block.level}">${block.inlineHtml}</h${block.level}>${LF}`;
+    case "heading": {
+      // Standalone-view TOC needs anchor targets — emit a
+      // deterministic positional id so the TOC `<a href>`
+      // resolves when the file is opened directly in a browser.
+      // The id is derived from the heading-block's index among
+      // headings in the doc; resilient to title edits, breaks
+      // only on heading-block reorder (the next save
+      // regenerates both sides). Per-heading id is optional
+      // (omitted when no map is supplied — keeps the existing
+      // function callable from focused tests).
+      const id = anchorMap?.get(block);
+      const idAttr = id ? ` id="${id}"` : "";
+      return `${indent}<h${block.level} data-annot-block="heading" data-level="${block.level}"${idAttr}>${block.inlineHtml}</h${block.level}>${LF}`;
+    }
     case "paragraph":
       return `${indent}<p data-annot-block="paragraph">${block.inlineHtml}</p>${LF}`;
     case "list":
@@ -206,4 +241,76 @@ export function escapeAttr(s: string): string {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+// ---------------------------------------------------------------------------
+// Standalone-view TOC
+// ---------------------------------------------------------------------------
+
+/** Build a stable heading → anchor-id map. Ids are positional
+ *  (`annot-h-0`, `annot-h-1`, …) so a title rename doesn't
+ *  invalidate existing in-document fragment links. The TOC
+ *  always regenerates from this map on every save. */
+function buildHeadingAnchorMap(blocks: readonly Block[]): Map<HeadingBlock, string> {
+  const map = new Map<HeadingBlock, string>();
+  let i = 0;
+  for (const block of blocks) {
+    if (block.kind === "heading") {
+      map.set(block, `annot-h-${i}`);
+      i += 1;
+    }
+  }
+  return map;
+}
+
+/** Build the standalone-view TOC navigation. Returns the empty
+ *  string when the doc has fewer than two headings (a single-
+ *  heading TOC is just visual noise). The output is a `<nav
+ *  data-annot-toc>` block scoped to the article — the parser
+ *  recognises `data-annot-toc` and skips it, so re-saving never
+ *  round-trips through stale TOC bytes. */
+function buildTocHtml(
+  blocks: readonly Block[],
+  anchorMap: ReadonlyMap<HeadingBlock, string>,
+  depth: number,
+): string {
+  const headings: HeadingBlock[] = [];
+  for (const block of blocks) {
+    if (block.kind === "heading") headings.push(block);
+  }
+  if (headings.length < 2) return "";
+  const indent = INDENT.repeat(depth);
+  const inner = INDENT.repeat(depth + 1);
+  const itemIndent = INDENT.repeat(depth + 2);
+  const lines: string[] = [];
+  lines.push(`${indent}<nav data-annot-toc aria-label="Contents">`);
+  lines.push(`${inner}<h2 data-annot-toc-title>Contents</h2>`);
+  lines.push(`${inner}<ul>`);
+  for (const h of headings) {
+    const id = anchorMap.get(h);
+    if (!id) continue;
+    // The label is the heading's plain text — strip inline tags
+    // so the TOC isn't full of `<strong>` etc. Falls back to
+    // "(untitled)" when the heading is empty.
+    const label = stripInlineTagsForToc(h.inlineHtml) || "(untitled)";
+    lines.push(
+      `${itemIndent}<li data-annot-toc-level="${h.level}"><a href="#${id}">${escapeText(label)}</a></li>`,
+    );
+  }
+  lines.push(`${inner}</ul>`);
+  lines.push(`${indent}</nav>`);
+  return lines.join(LF) + LF;
+}
+
+/** Strip every inline tag from an inline-HTML fragment so the
+ *  TOC label reads as plain text. Decodes the four entities the
+ *  format produces (`&lt;`, `&gt;`, `&quot;`, `&amp;`) so the
+ *  caller's `escapeText` doesn't double-escape (`&amp;amp;`). */
+function stripInlineTagsForToc(inlineHtml: string): string {
+  const stripped = inlineHtml.replace(/<[^>]+>/g, "").trim();
+  return stripped
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, "&");
 }

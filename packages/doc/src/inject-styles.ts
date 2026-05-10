@@ -86,6 +86,7 @@ export function buildStyleBlock(doc: AnnotDocument): string {
   sections.push(typographyRules());
   sections.push(blockRules());
   sections.push(inlineRules());
+  sections.push(tocRules());
   // Phase 13 — auto-numbering opt-in (`meta.numbering`).
   // Emits CSS counters that reset on the article element and
   // increment on each matching block. Skipped entirely when
@@ -232,10 +233,19 @@ function blockRules(): string {
     '[data-annot-block="image"] {',
     "  margin: 1.5rem 0;",
     "}",
+    // Inline SVG: scale down to fit the column but never up.
+    // The captured bitmap is embedded at its natural pixel size
+    // (the `<svg>` carries `width="…px" height="…px"`); without
+    // a `max-width` clamp the document column gets pushed past
+    // its declared `--annot-doc-max-width` for any image wider
+    // than the container. `width: 100%` pre-Phase had the
+    // opposite problem: every image stretched edge-to-edge,
+    // which the in-app view doesn't do.
     '[data-annot-block="image"] svg {',
-    "  width: 100%;",
+    "  max-width: 100%;",
     "  height: auto;",
     "  display: block;",
+    "  margin: 0 auto;",
     "}",
     '[data-annot-block="image"] figcaption {',
     "  font-size: 0.9rem;",
@@ -267,6 +277,55 @@ function inlineRules(): string {
   ].join("\n");
 }
 
+/**
+ * Standalone-view TOC. The `<nav data-annot-toc>` chrome only
+ * appears in serializer output (the parser drops it on read), so
+ * these rules style the standalone HTML view exclusively. Hidden
+ * on print to keep paginated output focused on body content.
+ */
+function tocRules(): string {
+  return [
+    "nav[data-annot-toc] {",
+    "  margin: 1.5rem 0 2rem;",
+    "  padding: 1rem 1.25rem;",
+    "  background: var(--annot-doc-code-bg);",
+    "  border-radius: 6px;",
+    "  font-size: 0.95rem;",
+    "}",
+    "nav[data-annot-toc] [data-annot-toc-title] {",
+    "  margin: 0 0 0.5rem;",
+    "  font-size: 1rem;",
+    "  font-weight: 600;",
+    "  color: var(--annot-doc-muted);",
+    "  text-transform: uppercase;",
+    "  letter-spacing: 0.05em;",
+    "}",
+    "nav[data-annot-toc] ul {",
+    "  list-style: none;",
+    "  margin: 0;",
+    "  padding: 0;",
+    "}",
+    "nav[data-annot-toc] li {",
+    "  margin: 0.25rem 0;",
+    "}",
+    'nav[data-annot-toc] li[data-annot-toc-level="2"] {',
+    "  padding-left: 1rem;",
+    "}",
+    'nav[data-annot-toc] li[data-annot-toc-level="3"] {',
+    "  padding-left: 2rem;",
+    "}",
+    "nav[data-annot-toc] a {",
+    "  color: var(--annot-doc-fg);",
+    "  text-decoration: none;",
+    "}",
+    "nav[data-annot-toc] a:hover,",
+    "nav[data-annot-toc] a:focus {",
+    "  color: var(--annot-doc-accent);",
+    "  text-decoration: underline;",
+    "}",
+  ].join("\n");
+}
+
 function printRules(): string {
   return [
     "@media print {",
@@ -277,6 +336,9 @@ function printRules(): string {
     "  article[data-annot-doc] {",
     "    max-width: none;",
     "    padding: 0;",
+    "  }",
+    "  nav[data-annot-toc] {",
+    "    display: none;",
     "  }",
     '  [data-annot-block="image"] {',
     "    break-inside: avoid;",
