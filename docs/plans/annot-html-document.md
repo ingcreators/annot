@@ -1,6 +1,17 @@
 # `.annot.html` document — multi-image manual format
 
-> **Status:** In progress — Phases 0–1 landed; Phase 2 in PR.
+> **Status:** In progress — Phases 0–7 landed (parser / styling /
+> read-only shell / editing + slash menu / image block + capture /
+> PWA + BrowserStore + gallery wiring / multi-backend opt-in:
+> Device / Desktop / Drive / GitHub). Phase 8 (templates:
+> mechanism) starts now: Phase 8a (Tier A `cloneTemplate`
+> foundation) is in PR. NOTE: this plan was renumbered after
+> the Phase 6 / 7 rounds — the original Phase 7 (templates) +
+> Phase 9 (multi-backend) were re-ordered to match shipping
+> order (multi-backend went first to validate the contract
+> across backends before templates layer on top). Subdivision
+> letters (`6a`–`6h`, `7a`–`7d`, `8a`–`8d`, …) match the
+> commit log going forward.
 > **Compatibility:** New file format and new file extension; new
 > workspace package `@ingcreators/annot-doc` (Tier A); new editor
 > surface (`<annot-doc-shell>`) in `@ingcreators/annot-host-ui` (Tier C);
@@ -643,42 +654,72 @@ not force a revert of phase N+1.
 - Save / Save-As / dirty-tracking wired through the existing
   `SavePipeline` orchestrator.
 
-### Phase 7 — Templates: mechanism (markers + clone + picker + save-as)
+### Phase 7 — Multi-backend opt-in
+
+Originally slated as Phase 9, brought forward to validate the
+multi-backend story before templates layer on top. Each row
+shipped as its own PR (`phase 7a` … `phase 7d` in the commit
+log) — Browser already opted in via Phase 6a, so this phase
+covers the remaining four.
+
+- DeviceStore (Phase 7a): direct file write at the chosen path.
+- DesktopStore (Phase 7b): direct file write at the chosen path
+  via the Electron-side filesystem library.
+- GoogleDriveStore (Phase 7c): upload as `text/html`; per-doc
+  metadata cached in `appProperties`.
+- GitHubStore (Phase 7d): commit-as-save; per-doc metadata
+  cached in an in-memory map keyed by basePath-relative path
+  (no GitHub `appProperties` equivalent).
+- Contract test (`runStorageContract`) extension to a docs
+  section that runs against every opted-in backend — deferred;
+  per-backend `*.documents.test.ts` files cover the
+  `supportsDocuments` narrowing in the meantime.
+- Templates inherit everything for free once Phase 8 / 9 land —
+  `Templates/` is a regular folder on every backend;
+  `<annot-template-picker>` will work against any store that
+  opts into `StorageWithDocuments`.
+
+### Phase 8 — Templates: mechanism (markers + clone + picker + save-as)
 
 This phase ships the user-authored half of the template feature.
-Phase 8 follows with the bundled starters so the picker is never
-empty on a fresh install.
+Phase 9 follows with the bundled starters so the picker is never
+empty on a fresh install. Subdivided like Phase 6 / Phase 7 —
+each row lands as its own PR.
 
-- Template marker support in the parser / serialiser:
-  `data-annot-doc-template`, `<meta name="annot-template">`, the
-  `template` sub-object in the JSON sidecar.
-- New Tier A helper in `@ingcreators/annot-doc`:
-  `cloneTemplate(template: AnnotDocument): AnnotDocument` —
-  strips markers, mints fresh block / image IDs, returns a fresh
-  document. Pure (no DOM, no host); covered by a structural-clone
-  unit test that asserts (a) markers absent, (b) every block ID +
-  image ID changed, (c) every other byte preserved.
-- "Save as template" on `<annot-doc-shell>`'s document properties
-  panel — small `<annot-dialog>` for name + description + tags,
-  then writes to `Templates/<name>.annot.html` via the active
+- **Phase 8a — Template marker support + `cloneTemplate` Tier A
+  foundation**. Parser / serialiser already round-trip the three
+  template markers (`data-annot-doc-template` on `<html>`,
+  `<meta name="annot-template">`, `template` sub-object in the
+  JSON sidecar) — landed alongside Phase 1. This phase adds the
+  inverse: `cloneTemplate(template: AnnotDocument,
+  options?: { makeId?: () => string }): AnnotDocument` —
+  strips markers, mints fresh image-block IDs, remaps
+  `imageMeta` keys, returns a fresh document. Pure (no DOM,
+  no host); covered by a structural-clone unit test that
+  asserts (a) markers absent, (b) every image-block ID
+  changed, (c) every other byte preserved end-to-end through
+  `serialize → parse → serialize`.
+- **Phase 8b — "Save as template" dialog**. Reuses
+  `<annot-dialog>` for name + description + tags input;
+  writes to `Templates/<name>.annot.html` via the active
   store's `saveDocument`. Original editor session unaffected.
-- New host-ui component `<annot-template-picker>` with the
-  built-in section stubbed (empty in this phase; Phase 8 fills
-  it). User-templates section lists `Templates/` folder contents,
-  lazy-narrowed by a streaming `<head>`-only parse so non-template
-  files don't block first paint. Recently-used chips
-  (localStorage), one-click clone-and-open.
-- File-manager toolbar gains a **"New" split button**: default
+- **Phase 8c — `<annot-template-picker>` component**.
+  User-templates section lists `Templates/` folder contents,
+  lazy-narrowed by a streaming `<head>`-only parse so non-
+  template files don't block first paint. Recently-used chips
+  (localStorage), one-click clone-and-open. Built-in section
+  stubbed (Phase 9 fills it).
+- **Phase 8d — File-manager "New" split button**. Default
   action "New blank document"; flyout offers "From template…".
   Editor's File menu (when no doc open) reuses the same picker.
-- BrowserStore inherits everything for free (Phase 6 already
+- BrowserStore inherits everything for free (Phase 6a already
   shipped the `StorageWithDocuments` capability + path-keyed
-  saving; templates are just `.annot.html` files at a convention
-  path).
+  saving; templates are just `.annot.html` files at a
+  convention path).
 - Storybook coverage for: empty picker, populated user-templates
   section, recently-used chips, save-as-template dialog states.
 
-### Phase 8 — Templates: built-in starter templates for manuals
+### Phase 9 — Templates: built-in starter templates for manuals
 
 - Hand-author 3 starter `.annot.html` files under
   `packages/doc/templates/`: `manual.annot.html`,
@@ -711,18 +752,6 @@ empty on a fresh install.
   fixtures.
 - No locale variants in this phase (English only); locale
   infrastructure deferred to v2 — see Forward-looking.
-
-### Phase 9 — Multi-backend opt-in
-
-- DeviceStore / DesktopStore: direct file write at the chosen path.
-- GoogleDriveStore: upload as `text/html`.
-- GitHubStore: commit-as-save.
-- Contract test (`runStorageContract`) extended with a docs section
-  that runs against every opted-in backend.
-- Templates inherit immediately — `Templates/` is a regular folder
-  on every backend; `<annot-template-picker>` works against any
-  store that opts into `StorageWithDocuments`. Built-in starters
-  are package-resident so they show up identically across hosts.
 
 ### Phase 10 — VSCode custom editor
 
