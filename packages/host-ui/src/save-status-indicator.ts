@@ -114,15 +114,37 @@ export class AnnotSaveStatusElement extends LitElement {
       <span class="save-status-label">${spec.label}</span>
       ${
         showRetry
-          ? html`<button
-              type="button"
-              class="save-status-retry"
-              aria-label="Retry save"
-              title="Retry save"
-              @click=${this.#onRetryClick}
-            >
-              Retry
-            </button>`
+          ? html`
+              <style>
+                .save-status-retry {
+                  margin-left: 6px;
+                  padding: 1px 8px;
+                  font-size: 0.75rem;
+                  background: rgba(220, 38, 38, 0.12);
+                  color: #b91c1c;
+                  border: 1px solid rgba(220, 38, 38, 0.35);
+                  border-radius: 4px;
+                  cursor: pointer;
+                  font: inherit;
+                }
+                .save-status-retry:hover {
+                  background: rgba(220, 38, 38, 0.2);
+                }
+                .save-status-retry:focus-visible {
+                  outline: 2px solid var(--annot-doc-accent, #2563eb);
+                  outline-offset: 1px;
+                }
+              </style>
+              <button
+                type="button"
+                class="save-status-retry"
+                aria-label="Retry save"
+                title="Retry save"
+                @click=${this.#onRetryClick}
+              >
+                Retry
+              </button>
+            `
           : ""
       }
     `;

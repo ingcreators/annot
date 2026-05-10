@@ -1,30 +1,59 @@
 # `.annot.html` document — UX polish to product-ready quality
 
-> **Status:** Draft
+> **Status:** Done — all 13 phases shipped 2026-05-10.
+>
+> | Phase | Description | PR |
+> |-------|-------------|-----|
+> | 1  | Document header strip (`<annot-doc-header>`) | #576 |
+> | 2  | Persistent insertion + drag-handle affordances | #577 |
+> | 3  | Inline selection format toolbar | #578 |
+> | 4  | Empty-state onboarding + template surfacing | #579 |
+> | 5  | ContentEditable coverage extension | #580 |
+> | 6  | Image block UX polish + modal ergonomics | #581 |
+> | 7  | Drag-and-drop block reordering | #582 |
+> | 8  | Keyboard shortcuts catalogue + help drawer integration | #583 |
+> | 9  | Mobile / touch / responsive layout | #584 |
+> | 10 | Lazy SVG materialisation for image blocks | #585 |
+> | 11 | Document settings + metadata panel | #586 |
+> | 12 | Export menu + save-status retry | #587 |
+> | 13 | A11y audit + visual-polish sweep | this PR |
+>
+> Three items the parent plan called for were explicitly
+> deferred during shipping (each in a phase that landed close
+> in scope but not all the way):
+>
+>   - **Touch parity via long-press for drag-and-drop** (Phase 7) —
+>     native HTML5 drag doesn't fire on touch; a Pointer Events
+>     long-press implementation is its own scope.
+>   - **Per-block diff history** (Phase 10) — the lazy SVG
+>     materialisation captured the bigger boot-time win;
+>     compressing `DocumentHistory` snapshots is a refactor
+>     for a follow-up.
+>   - **Save as… to a different store / path** (Phase 12) —
+>     needs the gallery picker UX.
+>
 > **Compatibility:**
 >   - No SVG schema change. No `data-annot-doc-version` bump.
 >   - No `StorageProvider` interface change. No `PageMetadata`
 >     change.
 >   - `@ingcreators/annot-doc` Tier A package gains zero new
 >     types. The format on disk is fully stable from
->     [`annot-html-document.md`](./annot-html-document.md) Phase 0.
->   - `@ingcreators/annot-host-ui` gains a small number of new
->     `<annot-doc-*>` Lit components and rearranges the existing
+>     [`annot-html-document.md`](../annot-html-document.md) Phase 0.
+>   - `@ingcreators/annot-host-ui` gained a small number of new
+>     `<annot-doc-*>` Lit components and rearranged the existing
 >     `<annot-doc-shell>` chrome. All consumer wiring is via host
 >     properties / events that the PWA, VSCode, and Desktop
 >     hosts already speak.
->   - PWA `EditorSession` doc-mode dispatcher gains a header strip
+>   - PWA `EditorSession` doc-mode dispatcher gained a header strip
 >     mount. VSCode + Desktop hosts mirror the same surface as
->     [`_done/host-convergence.md`](./_done/host-convergence.md)
+>     [`host-convergence.md`](./host-convergence.md)
 >     conventions allow.
-> **Risk:** Pure UX work — every phase is independently revertable
->     and additive. No data path changes. No format-on-disk
->     changes. Visual goldens (Storybook + DOM-byte tests) pin
->     each phase; later phases edit those goldens explicitly. The
->     largest risk is touch-target regression on mobile + Stop-
->     ship-able accessibility regressions if a phase removes a
->     working keyboard path; a per-phase a11y smoke test guards
->     each landing.
+> **Risk:** Pure UX work — every phase landed independently
+>     revertable. No data path changes. No format-on-disk
+>     changes. The largest risks were touch-target regression on
+>     mobile + accessibility regressions if a phase removed a
+>     working keyboard path; per-phase a11y smoke tests + the
+>     final Phase 13 sweep guarded the landings.
 
 ## Context
 

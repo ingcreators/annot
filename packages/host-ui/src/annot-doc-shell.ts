@@ -258,6 +258,10 @@ const SHELL_CSS = `
 .annot-doc-block-toolbar .block-action:hover:not(:disabled) {
   background: var(--annot-doc-code-bg);
 }
+.annot-doc-block-toolbar .block-action:focus-visible:not(:disabled) {
+  outline: 2px solid var(--annot-doc-accent, #2563eb);
+  outline-offset: 1px;
+}
 .annot-doc-block-toolbar .block-action:disabled {
   opacity: 0.35;
   cursor: not-allowed;
@@ -492,6 +496,23 @@ annot-doc-block-menu {
   }
   .annot-doc-insert-bar-button {
     height: 28px;
+  }
+}
+
+/* Phase 13 of annot-html-document-ux-polish.md — respect users
+   who've asked the OS to reduce motion. Disable the soft fade /
+   slide transitions across the doc shell (block toolbar opacity,
+   insert-bar pill, drop-zone overlay, etc.) so vestibular-
+   sensitive users see crisp state changes. */
+@media (prefers-reduced-motion: reduce) {
+  .annot-doc-shell.editing annot-doc-block-toolbar,
+  .annot-doc-shell.editing figure[data-annot-block="image"]::after,
+  .annot-doc-insert-bar-rule,
+  .annot-doc-insert-bar-label {
+    transition: none;
+  }
+  .annot-doc-empty-state-card {
+    transition: none;
   }
 }
 `;

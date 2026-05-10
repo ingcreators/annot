@@ -256,6 +256,16 @@ const HEADER_CSS = `
     display: none;
   }
 }
+
+/* Phase 13 of annot-html-document-ux-polish.md — focus-visible
+   ring on the title field is already there; explicit ring on
+   the back / action buttons makes keyboard navigation legible. */
+.annot-doc-header-back:focus-visible,
+.annot-doc-header-action:focus-visible:not(:disabled),
+.annot-doc-header-overflow-item:focus-visible:not(:disabled) {
+  outline: 2px solid var(--annot-doc-accent, #2563eb);
+  outline-offset: 1px;
+}
 `;
 
 /**
