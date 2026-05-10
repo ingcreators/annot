@@ -73,3 +73,77 @@ describe("annot-sidebar: New Document entry", () => {
     expect(onNewDocument).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("annot-sidebar: From Template entry (Phase 8d)", () => {
+  it("does NOT render the From Template button when onNewFromTemplate is omitted", async () => {
+    const el = mount();
+    el.callbacks = {
+      onStorageSelect: () => {},
+      onStorageReselect: () => {},
+      onFolderSelect: () => {},
+      onNewFolder: () => {},
+      onUploadImage: () => {},
+      onCaptureScreen: () => {},
+      onTimedCapture: () => {},
+      onPasteClipboard: () => {},
+      onNewDocument: () => {}, // present, but the picker isn't wired
+    };
+    el.newMenuOpen = true;
+    await el.updateComplete;
+    const buttons = Array.from(el.querySelectorAll(".new-menu button"));
+    const labels = buttons.map((b) => b.textContent?.trim());
+    expect(labels).not.toContain("From Template…");
+  });
+
+  it("renders the From Template button when onNewFromTemplate is supplied", async () => {
+    const el = mount();
+    const onNewFromTemplate = vi.fn();
+    el.callbacks = {
+      onStorageSelect: () => {},
+      onStorageReselect: () => {},
+      onFolderSelect: () => {},
+      onNewFolder: () => {},
+      onUploadImage: () => {},
+      onCaptureScreen: () => {},
+      onTimedCapture: () => {},
+      onPasteClipboard: () => {},
+      onNewDocument: () => {},
+      onNewFromTemplate,
+    };
+    el.newMenuOpen = true;
+    await el.updateComplete;
+    const btn = Array.from(el.querySelectorAll(".new-menu button")).find(
+      (b) => b.textContent?.trim() === "From Template…",
+    ) as HTMLButtonElement | undefined;
+    expect(btn).toBeDefined();
+    btn?.click();
+    expect(onNewFromTemplate).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders both New Document and From Template entries together", async () => {
+    const el = mount();
+    el.callbacks = {
+      onStorageSelect: () => {},
+      onStorageReselect: () => {},
+      onFolderSelect: () => {},
+      onNewFolder: () => {},
+      onUploadImage: () => {},
+      onCaptureScreen: () => {},
+      onTimedCapture: () => {},
+      onPasteClipboard: () => {},
+      onNewDocument: () => {},
+      onNewFromTemplate: () => {},
+    };
+    el.newMenuOpen = true;
+    await el.updateComplete;
+    const labels = Array.from(el.querySelectorAll(".new-menu button")).map((b) =>
+      b.textContent?.trim(),
+    );
+    // From Template entry follows New Document — pairs them in
+    // the menu so the discoverability is consistent.
+    const newDocIdx = labels.indexOf("New Document");
+    const fromTemplateIdx = labels.indexOf("From Template…");
+    expect(newDocIdx).toBeGreaterThanOrEqual(0);
+    expect(fromTemplateIdx).toBe(newDocIdx + 1);
+  });
+});

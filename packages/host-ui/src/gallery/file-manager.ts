@@ -46,6 +46,15 @@ export interface FileManagerCallbacks {
    *  the sidebar's "New Document" entry doesn't render (i.e. the
    *  active host hasn't wired the document creation flow yet). */
   onNewDocument?: () => Promise<void>;
+  /** Open the template picker for a new-document-from-template
+   *  flow. Phase 8d of `docs/plans/annot-html-document.md`. The
+   *  host loads `Templates/`, narrows via `isTemplateFromHead`,
+   *  shows `showTemplatePickerDialog`, and on selection clones
+   *  via `cloneTemplate` + persists + navigates. Optional —
+   *  hidden when omitted (e.g. the host hasn't wired the picker
+   *  yet, or the active storage doesn't opt into
+   *  `StorageWithDocuments`). */
+  onNewFromTemplate?: () => Promise<void>;
   /** Plugin-registered storage backends, fed through to the
    *  sidebar so plugin chips can render alongside the built-ins.
    *  Optional — desktop / embedded shells that don't load plugins
@@ -114,6 +123,9 @@ export class FileManager {
       onPasteClipboard: () => this.#callbacks.onPasteClipboard(),
       onNewDocument: this.#callbacks.onNewDocument
         ? () => this.#callbacks.onNewDocument?.()
+        : undefined,
+      onNewFromTemplate: this.#callbacks.onNewFromTemplate
+        ? () => this.#callbacks.onNewFromTemplate?.()
         : undefined,
       getPluginStorages: this.#callbacks.getPluginStorages,
       isBuiltinDisabled: this.#callbacks.isBuiltinDisabled,

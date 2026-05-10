@@ -88,6 +88,16 @@ export interface SidebarCallbacks {
    *  resulting `/doc/...` URL. The button is hidden when this
    *  callback is omitted. */
   onNewDocument?: () => void;
+  /** Open the template picker for a new-document-from-template
+   *  flow. Phase 8d of `docs/plans/annot-html-document.md`. The
+   *  host fetches `Templates/`, narrows via
+   *  `isTemplateFromHead`, hands the survivors to
+   *  `showTemplatePickerDialog`, and on selection clones via
+   *  `cloneTemplate` + persists + navigates. The entry is hidden
+   *  when this callback is omitted (i.e. the active storage
+   *  doesn't opt into `StorageWithDocuments`, or the host hasn't
+   *  wired the picker yet). */
+  onNewFromTemplate?: () => void;
   /** Plugin-registered storage backends — appended to the sidebar
    *  strip per the registration's `priority`. Defaults to "no
    *  plugins" so existing callers (e.g. the desktop shell) don't
@@ -572,6 +582,16 @@ export class AnnotSidebarElement extends LitElement {
         label: "New Document",
         action: () => this.callbacks.onNewDocument?.(),
         show: typeof this.callbacks.onNewDocument === "function",
+      },
+      // Phase 8d — paired with "New Document": opens the
+      // template picker for a clone-and-open flow. Hidden under
+      // the same `StorageWithDocuments`-opt-in gate as
+      // `onNewDocument`.
+      {
+        icon: "library_books",
+        label: "From Template…",
+        action: () => this.callbacks.onNewFromTemplate?.(),
+        show: typeof this.callbacks.onNewFromTemplate === "function",
       },
     ];
     // Host- or plugin-supplied extras (e.g. desktop's "Capture
