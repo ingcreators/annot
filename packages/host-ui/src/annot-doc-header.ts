@@ -209,15 +209,46 @@ const HEADER_CSS = `
   cursor: not-allowed;
 }
 @media (hover: none) {
-  /* Touch devices — bigger hit targets per the Phase 9 plan
-     (mobile / responsive). Phase 1 establishes the pattern;
-     Phase 9 will sweep across the rest of the doc surface. */
+  /* Phase 9 of annot-html-document-ux-polish.md — touch devices
+     get ≥44 × 44 hit targets across the header chrome. */
   .annot-doc-header-action {
-    width: 40px;
-    height: 40px;
+    width: 44px;
+    height: 44px;
   }
   .annot-doc-header-mode-toggle button {
-    padding: 8px 14px;
+    padding: 10px 16px;
+    min-height: 44px;
+  }
+  .annot-doc-header-back {
+    padding: 10px 14px;
+    min-height: 44px;
+  }
+}
+
+/* Phase 9 — narrow viewports: drop the editable title to the
+   second row so the action toolbar still fits on one line.
+   Below 480 px the back-button label collapses to the icon
+   alone to claw back more horizontal space. */
+@media (max-width: 600px) {
+  .annot-doc-header {
+    flex-wrap: wrap;
+    padding: 6px 8px;
+  }
+  .annot-doc-header-title {
+    flex-basis: 100%;
+    order: 5;
+    margin-top: 4px;
+  }
+  .annot-doc-header-action-primary span:nth-child(2) {
+    /* Hide the "Image" text label so the button is just the
+       plus icon — saves real estate without losing
+       discoverability (the icon + tooltip carry the meaning). */
+    display: none;
+  }
+}
+@media (max-width: 480px) {
+  .annot-doc-header-back span:nth-child(2) {
+    display: none;
   }
 }
 `;

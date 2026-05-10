@@ -424,9 +424,39 @@ annot-doc-block-menu {
   color: var(--annot-doc-muted, #6b7280);
 }
 
+/* Phase 9 of annot-html-document-ux-polish.md — mobile / touch
+   sweep. The TOC moves behind a hamburger toggle below 768px;
+   the toggle button itself is hidden on desktop where the
+   sticky TOC has its own column. */
+.annot-doc-shell-toc-toggle {
+  display: none;
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 44px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  background: var(--annot-doc-bg, #ffffff);
+  border: 1px solid var(--annot-doc-muted, #d1d5db);
+  border-radius: 6px;
+  color: inherit;
+  cursor: pointer;
+  font-size: 1.1rem;
+  z-index: 99;
+}
+.annot-doc-shell-toc-toggle:hover,
+.annot-doc-shell-toc-toggle:focus-visible {
+  background: var(--annot-doc-code-bg, #f3f4f6);
+  outline: none;
+}
+
 @media (max-width: 768px) {
   .annot-doc-shell {
     grid-template-columns: 1fr;
+  }
+  .annot-doc-shell-toc-toggle {
+    display: inline-flex;
   }
   .annot-doc-toc {
     position: static;
@@ -434,6 +464,34 @@ annot-doc-block-menu {
     border-right: none;
     border-bottom: 1px solid var(--annot-doc-muted);
     padding: 0.75rem 0;
+  }
+  /* TOC drawer hides by default on mobile; hamburger toggle
+     reveals. The toggle adds .toc-open to the shell wrapper. */
+  .annot-doc-shell:not(.toc-open) .annot-doc-toc {
+    display: none;
+  }
+  /* Bump per-block toolbar to ≥44 px touch targets on touch
+     viewports so individual actions are tappable. */
+  .annot-doc-block-toolbar .block-action {
+    width: 36px;
+    height: 36px;
+  }
+  /* Insert bar grows from 12 px to a comfortable tap zone. */
+  .annot-doc-insert-bar-button {
+    height: 24px;
+  }
+}
+
+@media (hover: none) {
+  /* Touch — bump action targets to 44 × 44 regardless of
+     viewport width; the desktop hover surface keeps its tighter
+     28 / 32 px sizing. */
+  .annot-doc-block-toolbar .block-action {
+    width: 40px;
+    height: 40px;
+  }
+  .annot-doc-insert-bar-button {
+    height: 28px;
   }
 }
 `;
@@ -461,12 +519,19 @@ export class AnnotDocShellElement extends LitElement {
     showToc: { type: Boolean, attribute: "show-toc" },
     editing: { type: Boolean, attribute: "editing" },
     dropZoneActive: { state: true },
+    tocOpen: { state: true },
   };
 
   declare document: AnnotDocument | null;
   declare showToc: boolean;
   declare editing: boolean;
   declare dropZoneActive: boolean;
+  /** Phase 9 of `annot-html-document-ux-polish.md` — mobile-only
+   *  toggle for the TOC drawer. Default true so desktop sees the
+   *  TOC at boot; the CSS `@media (max-width: 768px)` rules hide
+   *  the TOC unless the user explicitly opens it via the
+   *  hamburger button rendered next to the article. */
+  declare tocOpen: boolean;
   /** Counter mirroring `dragenter` vs `dragleave` events so we
    *  hide the drop-zone overlay only when the cursor truly
    *  leaves the shell, not on every nested-element exit. */
@@ -492,6 +557,11 @@ export class AnnotDocShellElement extends LitElement {
     this.showToc = true;
     this.editing = false;
     this.dropZoneActive = false;
+    // Default to closed on mobile so the article gets the
+    // viewport's full width by default; the hamburger button
+    // is the discoverable opt-in. Desktop ignores this state
+    // (CSS unconditionally renders the TOC there).
+    this.tocOpen = false;
   }
 
   protected override createRenderRoot(): HTMLElement {
@@ -627,7 +697,14 @@ export class AnnotDocShellElement extends LitElement {
     const editing = this.editing;
     const blocks = this.document.blocks;
 
-    const shellClasses = ["annot-doc-shell", tocVisible ? "" : "no-toc", editing ? "editing" : ""]
+    const shellClasses = [
+      "annot-doc-shell",
+      tocVisible ? "" : "no-toc",
+      editing ? "editing" : "",
+      // Phase 9 — only meaningful below 768px (CSS gates the
+      // TOC visibility there); harmless on desktop.
+      this.tocOpen ? "toc-open" : "",
+    ]
       .filter(Boolean)
       .join(" ");
 
@@ -653,6 +730,24 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
         @block-drag-end=${() => this.#onBlockDragEnd()}
         @block-drop-at=${(e: CustomEvent<BlockDropAtDetail>) => this.#onBlockDropAt(e)}
       >
+        ${
+          tocVisible
+            ? html`
+              <button
+                type="button"
+                class="annot-doc-shell-toc-toggle"
+                aria-label=${this.tocOpen ? "Hide section list" : "Show section list"}
+                aria-expanded=${this.tocOpen ? "true" : "false"}
+                title="Sections"
+                @click=${() => {
+                  this.tocOpen = !this.tocOpen;
+                }}
+              >
+                ☰
+              </button>
+            `
+            : nothing
+        }
         ${tocVisible ? this.#renderToc(headings, headingIds) : nothing}
         <article
           data-annot-doc

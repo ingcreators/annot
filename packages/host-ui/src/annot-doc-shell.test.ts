@@ -762,6 +762,46 @@ describe("annot-doc-shell: phase 6 image flow", () => {
     expect(el.document!.blocks[1]?.kind).toBe("paragraph");
   });
 
+  // Phase 9 — mobile / TOC drawer
+  it("renders a TOC toggle button when the doc has headings", async () => {
+    const el = mount(makeMixedDoc());
+    el.editing = true;
+    await el.updateComplete;
+    const toggle = el.querySelector(".annot-doc-shell-toc-toggle") as HTMLButtonElement;
+    expect(toggle).not.toBeNull();
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("clicking the TOC toggle flips tocOpen + the toc-open shell modifier class", async () => {
+    const el = mount(makeMixedDoc());
+    el.editing = true;
+    await el.updateComplete;
+    const wrapper = el.querySelector(".annot-doc-shell") as HTMLElement;
+    expect(wrapper.classList.contains("toc-open")).toBe(false);
+    const toggle = el.querySelector(".annot-doc-shell-toc-toggle") as HTMLButtonElement;
+    toggle.click();
+    await el.updateComplete;
+    expect(el.querySelector(".annot-doc-shell")?.classList.contains("toc-open")).toBe(true);
+    expect(el.querySelector(".annot-doc-shell-toc-toggle")?.getAttribute("aria-expanded")).toBe(
+      "true",
+    );
+  });
+
+  it("does not render the TOC toggle when there are no headings", async () => {
+    const noHeadings: AnnotDocument = {
+      version: 1,
+      lang: "en",
+      title: "No headings",
+      meta: { title: "No headings" },
+      styleBlock: null,
+      blocks: [{ kind: "paragraph", inlineHtml: "Just one paragraph." }],
+    };
+    const el = mount(noHeadings);
+    el.editing = true;
+    await el.updateComplete;
+    expect(el.querySelector(".annot-doc-shell-toc-toggle")).toBeNull();
+  });
+
   it("openKeyboardHelp opens the modal with the doc-mode group appended", async () => {
     const el = mount(makeMixedDoc());
     el.editing = true;
