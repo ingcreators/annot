@@ -1193,7 +1193,27 @@ export class App {
       void this.#saveCurrentDocAsTemplate(storage, current);
     });
 
-    header.append(backBtn, titleEl, saveStatus, saveAsTemplateBtn);
+    // Phase 11 — multi-slide PPTX export. One slide per
+    // `ImageBlock`. Hidden when the document has no image
+    // blocks (no slides → no usable export); the button gets
+    // re-evaluated on `doc-changed` below.
+    const exportPptxBtn = document.createElement("button");
+    exportPptxBtn.type = "button";
+    exportPptxBtn.textContent = "Export to PowerPoint…";
+    exportPptxBtn.style.cssText =
+      "padding:6px 10px;border:1px solid var(--annot-doc-muted,#6b7280);background:transparent;color:inherit;border-radius:4px;cursor:pointer;font-size:0.875rem;";
+    exportPptxBtn.addEventListener("click", () => {
+      const current = shell.document;
+      if (!current) return;
+      void this.#exportDocAsPptx(current);
+    });
+    const updateExportBtnVisibility = (doc: typeof parsed): void => {
+      const hasImages = doc.blocks.some((b) => b.kind === "image");
+      exportPptxBtn.style.display = hasImages ? "" : "none";
+    };
+    updateExportBtnVisibility(parsed);
+
+    header.append(backBtn, titleEl, saveStatus, saveAsTemplateBtn, exportPptxBtn);
     host.appendChild(header);
 
     const body = document.createElement("div");
@@ -1280,6 +1300,12 @@ export class App {
       if (document.activeElement !== titleEl) {
         titleEl.textContent = latest.title || "Untitled";
       }
+      // Phase 11 — re-evaluate the PPTX export button's
+      // visibility. The block list may have grown / shrunk
+      // since mount (slash-menu insert / image-block delete);
+      // hide the button when no image blocks remain so users
+      // don't trip into "no slides to export" confusion.
+      updateExportBtnVisibility(latest);
       scheduleSave(latest);
     });
 
@@ -1380,6 +1406,41 @@ export class App {
       );
     } catch (err) {
       showSaveError(`Couldn't save template: ${(err as Error).message}`);
+    }
+  }
+
+  /**
+   * Phase 11 — export the current document as a multi-slide
+   * PPTX file. Each `ImageBlock` becomes one slide via the
+   * shared `exportDocumentPptx` helper in
+   * `@ingcreators/annot-render`; non-image blocks are silently
+   * skipped (the plan reserves heading-as-title-slide as a
+   * future "default off" option).
+   *
+   * Trigger: the doc-mode header's "Export to PowerPoint…"
+   * button. Result: a `Blob` we download via the standard
+   * `<a download>` trick. Errors surface via the existing
+   * `showSaveError` toast.
+   */
+  async #exportDocAsPptx(current: import("@ingcreators/annot-doc").AnnotDocument): Promise<void> {
+    try {
+      const { exportDocumentPptx } = await import("@ingcreators/annot-render");
+      const blob = exportDocumentPptx(current);
+      if (!blob) {
+        showSaveError("This document has no image blocks to export. Add a screenshot first.");
+        return;
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const stem = (current.title || "document").trim() || "document";
+      a.href = url;
+      a.download = `${stem}.pptx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      showSaveError(`Couldn't export document: ${(err as Error).message}`);
     }
   }
 
