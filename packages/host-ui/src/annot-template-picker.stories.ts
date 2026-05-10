@@ -17,6 +17,7 @@
  *     pre-seeded localStorage.
  */
 
+import { BUILTIN_TEMPLATES } from "@ingcreators/annot-doc";
 import type { Meta, StoryObj } from "@storybook/web-components-vite";
 import "./annot-template-picker.js";
 import {
@@ -54,23 +55,16 @@ const SAMPLE_USER: readonly UserTemplateEntry[] = [
   },
 ];
 
-const SAMPLE_BUILTIN: readonly BuiltinTemplateEntry[] = [
-  {
-    id: "manual",
-    title: "Manual",
-    description: "Step-by-step starter for end-user manuals.",
-  },
-  {
-    id: "feature-guide",
-    title: "Feature guide",
-    description: "Marketing-shaped walkthrough for a single feature.",
-  },
-  {
-    id: "procedure",
-    title: "Procedure",
-    description: "Numbered runbook for an operational task.",
-  },
-];
+/** Real bundled starters from `@ingcreators/annot-doc`. Phase
+ *  9a authored these; the picker's built-in section now
+ *  populates from the package's `BUILTIN_TEMPLATES` export
+ *  (Phase 9b) — the stories use the same source of truth so
+ *  authoring changes flow through automatically. */
+const SAMPLE_BUILTIN: readonly BuiltinTemplateEntry[] = BUILTIN_TEMPLATES.map((t) => ({
+  id: t.id,
+  title: t.title,
+  description: t.description,
+}));
 
 const meta: Meta<Args> = {
   title: "Doc / TemplatePicker",

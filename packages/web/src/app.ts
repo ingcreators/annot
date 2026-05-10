@@ -845,32 +845,38 @@ export class App {
   }
 
   /**
-   * Phase 8d — open the template picker, then on selection
-   * clone the chosen template into a fresh document, persist
-   * it, and navigate. Wired through the sidebar's
-   * "From Template…" entry when the active storage backend
-   * opts into `StorageWithDocuments`. Pairs with
+   * Phase 8d / 9b — open the template picker, then on
+   * selection clone the chosen template into a fresh
+   * document, persist it, and navigate. Wired through the
+   * sidebar's "From Template…" entry when the active storage
+   * backend opts into `StorageWithDocuments`. Pairs with
    * `createNewDocument` (which creates a blank doc).
    *
    * Behaviour:
    *
-   *   1. List `Templates/` via `storage.listDocuments`.
+   *   1. Resolve `BUILTIN_TEMPLATES` (Tier A, in-memory) for
+   *      the dialog's "Built-in" section. Phase 9a authored
+   *      `manual` / `feature-guide` / `procedure` starters;
+   *      Phase 9b (this method) consumes them.
+   *   2. List `Templates/` via `storage.listDocuments`.
    *      Backends that don't have a Templates folder yet
    *      return an empty list — the dialog still opens
    *      (showing "No user templates yet") so the user
    *      sees the affordance.
-   *   2. For each entry, fetch its bytes via
+   *   3. For each user-template entry, fetch its bytes via
    *      `storage.getDocument`, run `isTemplateFromHead` as a
    *      fast pre-filter, then `parseDocument` for survivors
    *      to extract `meta.template.{name, description, tags}`.
-   *   3. Open `showTemplatePickerDialog` with the resulting
-   *      `UserTemplateEntry[]`. Built-ins are empty for now
-   *      (Phase 9 fills them in).
-   *   4. On selection: clone via `cloneTemplate` (markers
-   *      stripped, image IDs reminted), serialise, save under
-   *      `<currentFolder>/<template-name>.annot.html`,
-   *      navigate to the new doc.
-   *   5. Cancel / Esc / overlay-click → no-op.
+   *   4. Open `showTemplatePickerDialog` with the assembled
+   *      built-in + user lists.
+   *   5. On selection:
+   *        - `kind: "user"` — `getDocument` → `parseDocument`
+   *          → `cloneTemplate` → save → navigate.
+   *        - `kind: "builtin"` — look up the in-memory source
+   *          via `getBuiltinTemplate(id)`; the rest of the
+   *          pipeline (parse → clone → save → navigate) is
+   *          identical.
+   *   6. Cancel / Esc / overlay-click → no-op.
    *
    * Errors at any stage surface via the existing
    * `showSaveError` toast.
@@ -884,7 +890,14 @@ export class App {
     // Lazy-load — the doc package + the picker dialog are not
     // pulled into the gallery's first-paint chunk.
     const [
-      { isTemplateFromHead, parseDocument, cloneTemplate, serializeDocument },
+      {
+        BUILTIN_TEMPLATES,
+        getBuiltinTemplate,
+        isTemplateFromHead,
+        parseDocument,
+        cloneTemplate,
+        serializeDocument,
+      },
       { showTemplatePickerDialog },
       _picker,
     ] = await Promise.all([
@@ -895,6 +908,20 @@ export class App {
       import("@ingcreators/annot-host-ui/annot-template-picker"),
     ]);
     void _picker;
+
+    // Built-ins for the picker — shape-converted from the
+    // Tier A `BUILTIN_TEMPLATES` to the picker's
+    // `BuiltinTemplateEntry` (id / title / description /
+    // optional thumbnail). The Tier A export carries `source`
+    // too, but the picker doesn't render that — we look it
+    // back up in the selection branch via
+    // `getBuiltinTemplate`.
+    const builtinTemplates: import("@ingcreators/annot-host-ui/annot-template-picker").BuiltinTemplateEntry[] =
+      BUILTIN_TEMPLATES.map((t) => ({
+        id: t.id,
+        title: t.title,
+        description: t.description,
+      }));
 
     let userTemplates: import("@ingcreators/annot-host-ui/annot-template-picker").UserTemplateEntry[] =
       [];
@@ -935,26 +962,41 @@ export class App {
 
     const detail = await showTemplatePickerDialog({
       userTemplates,
-      builtinTemplates: [],
+      builtinTemplates,
       title: "Choose a template",
     });
     if (!detail) return;
-    if (detail.kind !== "user") {
-      // Built-in templates aren't populated until Phase 9. The
-      // discriminator is here so the wiring is forward-
-      // compatible — when Phase 9 lands the only change here is
-      // a `case "builtin"` branch that loads from the in-memory
-      // BUILTIN_TEMPLATES array instead of the store.
+
+    // Resolve the source bytes — same pipeline downstream
+    // regardless of where the bytes came from.
+    let sourceBytes: string | null = null;
+    try {
+      if (detail.kind === "user") {
+        const record = await storage.getDocument(detail.path);
+        if (!record) {
+          showSaveError("Template was removed before it could be opened.");
+          return;
+        }
+        sourceBytes = record.bytes;
+      } else {
+        const builtin = getBuiltinTemplate(detail.id);
+        if (!builtin) {
+          // Stale recently-used chip pointing at a removed
+          // built-in id; defensive — `BUILTIN_TEMPLATES` only
+          // grows in practice, but the picker stores recents
+          // by id so a future renumbering would surface here.
+          showSaveError(`Built-in template "${detail.id}" is no longer available.`);
+          return;
+        }
+        sourceBytes = builtin.source;
+      }
+    } catch (err) {
+      showSaveError(`Couldn't load template: ${(err as Error).message}`);
       return;
     }
 
     try {
-      const record = await storage.getDocument(detail.path);
-      if (!record) {
-        showSaveError("Template was removed before it could be opened.");
-        return;
-      }
-      const doc = parseDocument(record.bytes);
+      const doc = parseDocument(sourceBytes);
       const cloned = cloneTemplate(doc);
       const bytes = serializeDocument(cloned);
       const now = new Date().toISOString();
