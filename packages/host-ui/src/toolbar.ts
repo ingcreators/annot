@@ -177,6 +177,18 @@ export interface ToolbarOptions {
 
 // computeDasharray imported from shared/dash-utils
 
+/** Read the Chrome-extension `chrome` API through `globalThis` so
+ *  the lookup never throws when the bare `chrome` identifier
+ *  isn't bound. happy-dom / Node test environments don't declare
+ *  `chrome` as a global, so a direct `chrome?.storage` reference
+ *  raises `ReferenceError: chrome is not defined`. The
+ *  `globalThis` indirection sidesteps that. Returns the
+ *  Chrome-extension namespace when it's actually present (real
+ *  browser extension context), `undefined` otherwise. */
+function chromeApi(): typeof chrome | undefined {
+  return (globalThis as { chrome?: typeof chrome }).chrome;
+}
+
 export class Toolbar {
   #container: HTMLElement;
   #canvas: CanvasManager;
@@ -304,7 +316,13 @@ export class Toolbar {
     //                     Web still remember per-variant defaults)
     if (isDesktop) {
       this.#loadPresetsFromFile();
-    } else if (chrome?.storage?.local) {
+    } else if (chromeApi()?.storage?.local) {
+      // `chromeApi()` reads through `globalThis` so the bare
+      // `chrome` identifier is never referenced if the global
+      // isn't declared at all (happy-dom / Node test
+      // environments). In real browsers the identifier is always
+      // bound; the indirection is purely defensive for the doc
+      // image-editor modal's vitest coverage.
       this.#loadPresetsFromStorage();
     } else if (typeof localStorage !== "undefined") {
       this.#loadPresetsFromLocalStorage();
@@ -1447,7 +1465,7 @@ export class Toolbar {
         last_variants[toolId] = variant;
       }
       saveToolPresets({ tools, last_variants }).catch(() => {});
-    } else if (chrome?.storage?.local) {
+    } else if (chromeApi()?.storage?.local) {
       this.#savePresetsToStorage();
     } else if (typeof localStorage !== "undefined") {
       this.#savePresetsToLocalStorage();
