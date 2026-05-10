@@ -591,6 +591,14 @@ export class App {
         onStorageSelect: (mode) => this.handleStorageSelect(mode),
         onStorageReselect: (mode) => this.handleStorageSelect(mode, true),
         onOpenImage: (record) => this.openFromGallery(record),
+        onOpenDocument: (record) => {
+          // Phase 6d: gallery double-click on a document card →
+          // route through `/doc/<store>/<path>` so the existing
+          // router-host doc branch handles the mount + edit
+          // wiring. Same pattern `onOpenImage` uses above.
+          pushRoute(docUrl(getStorageMode(), record.path));
+          void this.#routerHost.handleRoute();
+        },
         onFolderChange: (folderPath) => {
           this.#currentFolderPath = folderPath;
           saveLastFolder(folderPath);
