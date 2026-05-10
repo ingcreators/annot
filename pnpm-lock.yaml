@@ -230,6 +230,9 @@ importers:
       '@ingcreators/annot-core':
         specifier: workspace:*
         version: link:../core
+      '@ingcreators/annot-doc':
+        specifier: workspace:*
+        version: link:../doc
     devDependencies:
       typescript:
         specifier: 'catalog:'
@@ -252,6 +255,9 @@ importers:
       '@ingcreators/annot-host-ui':
         specifier: workspace:*
         version: link:../host-ui
+      '@ingcreators/annot-render':
+        specifier: workspace:*
+        version: link:../render
     devDependencies:
       '@types/node':
         specifier: ^25

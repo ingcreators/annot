@@ -846,11 +846,28 @@ async function runRevert(): Promise<void> {
 async function runExport(id: number, format: "png" | "jpeg" | "pptx"): Promise<void> {
   try {
     if (bootMode === "doc") {
-      // Image-side exports don't apply to documents. Phase 11 of
-      // `docs/plans/annot-html-document.md` introduces the
-      // multi-slide PPTX export for docs; until then surface a
-      // clear error.
-      throw new Error("Export to image / PPTX is image-mode only");
+      // Phase 11 — multi-slide PPTX export for documents.
+      // PNG / JPEG remain image-mode only (a document is not a
+      // single bitmap; per-slide PNG export would be a future
+      // enhancement).
+      if (format !== "pptx") {
+        throw new Error("PNG / JPEG export is image-mode only");
+      }
+      if (!activeDocument) throw new Error("no document loaded");
+      const { exportDocumentPptx } = await import("@ingcreators/annot-render");
+      const blob = exportDocumentPptx(activeDocument);
+      if (!blob) {
+        throw new Error("Document has no image blocks to export.");
+      }
+      const docStem =
+        activeFilename.replace(/\.annot\.html$/i, "").replace(/\.[^.]+$/, "") || "document";
+      vscode.postMessage({
+        type: "export.result",
+        id,
+        bytes: Array.from(new Uint8Array(await blob.arrayBuffer())),
+        suggestedFilename: `${docStem}.pptx`,
+      });
+      return;
     }
     const canvas = shell.getCanvas();
     if (!canvas) throw new Error("no canvas mounted");

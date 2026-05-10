@@ -117,6 +117,7 @@
     "@ingcreators/annot-core": "workspace:*",
     "@ingcreators/annot-doc": "workspace:*",
     "@ingcreators/annot-editor": "workspace:*",
-    "@ingcreators/annot-host-ui": "workspace:*"
+    "@ingcreators/annot-host-ui": "workspace:*",
+    "@ingcreators/annot-render": "workspace:*"
   }
 }
