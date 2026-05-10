@@ -84,6 +84,59 @@ describe("annot-doc-shell: empty state", () => {
     expect(el.querySelector("article[data-annot-doc]")).not.toBeNull();
     expect(el.querySelector(".annot-doc-shell-empty")).toBeNull();
   });
+
+  it("renders the onboarding empty-state for new docs in editing mode", async () => {
+    // Phase 4 of `annot-html-document-ux-polish.md`: an empty
+    // doc (zero blocks OR one empty paragraph) shows the four
+    // onboarding cards instead of just the italic placeholder.
+    const empty: AnnotDocument = {
+      version: 1,
+      title: "Untitled",
+      lang: "en",
+      meta: { title: "Untitled" },
+      styleBlock: null,
+      blocks: [{ kind: "paragraph", inlineHtml: "" }],
+    };
+    const el = mount(empty);
+    el.editing = true;
+    await el.updateComplete;
+    expect(el.querySelector("annot-doc-empty-state")).not.toBeNull();
+    // Read-only mode hides the panel.
+    el.editing = false;
+    await el.updateComplete;
+    expect(el.querySelector("annot-doc-empty-state")).toBeNull();
+  });
+
+  it("hides the onboarding empty-state once the doc has real content", async () => {
+    const el = mount(makeMixedDoc());
+    el.editing = true;
+    await el.updateComplete;
+    expect(el.querySelector("annot-doc-empty-state")).toBeNull();
+  });
+
+  it("startWithHeading inserts an H1 + paragraph and focuses the heading", async () => {
+    const empty: AnnotDocument = {
+      version: 1,
+      title: "Untitled",
+      lang: "en",
+      meta: { title: "Untitled" },
+      styleBlock: null,
+      blocks: [{ kind: "paragraph", inlineHtml: "" }],
+    };
+    const el = mount(empty);
+    el.editing = true;
+    await el.updateComplete;
+    const card = el.querySelector('[data-empty-action="startWithHeading"]') as HTMLButtonElement;
+    card.click();
+    await el.updateComplete;
+    const blocks = el.document?.blocks ?? [];
+    expect(blocks).toHaveLength(2);
+    expect(blocks[0]?.kind).toBe("heading");
+    expect(blocks[1]?.kind).toBe("paragraph");
+    if (blocks[0]?.kind === "heading") {
+      expect(blocks[0].level).toBe(1);
+    }
+  });
 });
 
 describe("annot-doc-shell: block rendering", () => {
