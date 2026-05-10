@@ -81,6 +81,13 @@ export interface SidebarCallbacks {
   onCaptureScreen: () => void;
   onTimedCapture: () => void;
   onPasteClipboard: () => void;
+  /** Create a new `.annot.html` document. Phase 6c of
+   *  `docs/plans/annot-html-document.md`. The host is responsible
+   *  for synthesising an empty document, persisting it via the
+   *  active `StorageWithDocuments` backend, and navigating to the
+   *  resulting `/doc/...` URL. The button is hidden when this
+   *  callback is omitted. */
+  onNewDocument?: () => void;
   /** Plugin-registered storage backends — appended to the sidebar
    *  strip per the registration's `priority`. Defaults to "no
    *  plugins" so existing callers (e.g. the desktop shell) don't
@@ -556,6 +563,15 @@ export class AnnotSidebarElement extends LitElement {
         label: "Paste from Clipboard",
         action: () => this.callbacks.onPasteClipboard(),
         show: isClipboardReadSupported(),
+      },
+      // Phase 6c — only rendered when the host wires up
+      // `onNewDocument` (i.e. when the active storage opts into
+      // `StorageWithDocuments`).
+      {
+        icon: "article",
+        label: "New Document",
+        action: () => this.callbacks.onNewDocument?.(),
+        show: typeof this.callbacks.onNewDocument === "function",
       },
     ];
     // Host- or plugin-supplied extras (e.g. desktop's "Capture

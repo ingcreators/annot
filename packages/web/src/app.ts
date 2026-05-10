@@ -600,6 +600,13 @@ export class App {
         onCaptureScreen: () => this.#captureHost.captureScreenAndSave(),
         onTimedCapture: () => this.#captureHost.timedCaptureAndSave(),
         onPasteClipboard: () => this.#captureHost.pasteAndSave(),
+        // Surface "New Document" only when the active backend opts
+        // into `StorageWithDocuments` — otherwise the menu entry
+        // would route to a backend that can't persist what the
+        // user just created.
+        ...(this.#storage && supportsDocuments(this.#storage)
+          ? { onNewDocument: () => this.createNewDocument() }
+          : {}),
         getPluginStorages: () => this.#pluginHost.listStorageRegistrations(),
         isBuiltinDisabled: (mode) => this.#disabledBuiltinStorage.has(mode),
         getSidebarTabs: () => this.#pluginHost.listSidebarTabs(),
@@ -767,6 +774,51 @@ export class App {
     this.#currentTags = args.tags;
     this.#editorSession.setupEditor(args.dataUrl, args.width, args.height, args.annotations);
     pushRoute(editUrl(getStorageMode(), args.path));
+  }
+
+  /**
+   * Create a blank `.annot.html` document and navigate to its
+   * `/doc/...` URL. Phase 6c of
+   * `docs/plans/annot-html-document.md`. Wired through the
+   * sidebar's New menu when the active storage backend opts into
+   * `StorageWithDocuments`. Behaviour:
+   *
+   *   1. Synthesise an empty document via `createEmptyDocument`.
+   *   2. Serialise to canonical bytes via `serializeDocument`.
+   *   3. Persist via `storage.saveDocument` (the backend assigns
+   *      a unique filename inside the current folder).
+   *   4. Navigate to `/doc/<store>/<assigned-path>` so the
+   *      router-host's doc-route branch picks up + mounts the
+   *      shell against the new record.
+   *
+   * Errors surface via the existing `showSaveError` toast; the
+   * editor falls back to the gallery view.
+   */
+  async createNewDocument(): Promise<void> {
+    if (!this.#storage) return;
+    if (!supportsDocuments(this.#storage)) return;
+    const storage = this.#storage;
+    const folderPath = this.#currentFolderPath;
+    try {
+      const { createEmptyDocument, serializeDocument } = await import("@ingcreators/annot-doc");
+      const doc = createEmptyDocument({ title: "Untitled" });
+      const bytes = serializeDocument(doc);
+      const now = new Date().toISOString();
+      const path = await storage.saveDocument({
+        folderPath,
+        bytes,
+        thumbnailDataUrl: "",
+        title: doc.title,
+        imageCount: 0,
+        blockCount: doc.blocks.length,
+        createdAt: now,
+        updatedAt: now,
+      });
+      pushRoute(docUrl(getStorageMode(), path));
+      await this.#routerHost.handleRoute();
+    } catch (err) {
+      showSaveError(`Couldn't create a new document: ${(err as Error).message}`);
+    }
   }
 
   /**
