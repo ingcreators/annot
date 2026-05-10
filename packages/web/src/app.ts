@@ -616,12 +616,15 @@ export class App {
         onCaptureScreen: () => this.#captureHost.captureScreenAndSave(),
         onTimedCapture: () => this.#captureHost.timedCaptureAndSave(),
         onPasteClipboard: () => this.#captureHost.pasteAndSave(),
-        // Surface "New Document" only when the active backend opts
-        // into `StorageWithDocuments` — otherwise the menu entry
-        // would route to a backend that can't persist what the
-        // user just created.
+        // Surface "New Document" + "From Template…" only when the
+        // active backend opts into `StorageWithDocuments` — otherwise
+        // the menu entries would route to a backend that can't
+        // persist what the user just created.
         ...(this.#storage && supportsDocuments(this.#storage)
-          ? { onNewDocument: () => this.createNewDocument() }
+          ? {
+              onNewDocument: () => this.createNewDocument(),
+              onNewFromTemplate: () => this.openTemplatePickerForNew(),
+            }
           : {}),
         getPluginStorages: () => this.#pluginHost.listStorageRegistrations(),
         isBuiltinDisabled: (mode) => this.#disabledBuiltinStorage.has(mode),
@@ -838,6 +841,143 @@ export class App {
       await this.#routerHost.handleRoute();
     } catch (err) {
       showSaveError(`Couldn't create a new document: ${(err as Error).message}`);
+    }
+  }
+
+  /**
+   * Phase 8d — open the template picker, then on selection
+   * clone the chosen template into a fresh document, persist
+   * it, and navigate. Wired through the sidebar's
+   * "From Template…" entry when the active storage backend
+   * opts into `StorageWithDocuments`. Pairs with
+   * `createNewDocument` (which creates a blank doc).
+   *
+   * Behaviour:
+   *
+   *   1. List `Templates/` via `storage.listDocuments`.
+   *      Backends that don't have a Templates folder yet
+   *      return an empty list — the dialog still opens
+   *      (showing "No user templates yet") so the user
+   *      sees the affordance.
+   *   2. For each entry, fetch its bytes via
+   *      `storage.getDocument`, run `isTemplateFromHead` as a
+   *      fast pre-filter, then `parseDocument` for survivors
+   *      to extract `meta.template.{name, description, tags}`.
+   *   3. Open `showTemplatePickerDialog` with the resulting
+   *      `UserTemplateEntry[]`. Built-ins are empty for now
+   *      (Phase 9 fills them in).
+   *   4. On selection: clone via `cloneTemplate` (markers
+   *      stripped, image IDs reminted), serialise, save under
+   *      `<currentFolder>/<template-name>.annot.html`,
+   *      navigate to the new doc.
+   *   5. Cancel / Esc / overlay-click → no-op.
+   *
+   * Errors at any stage surface via the existing
+   * `showSaveError` toast.
+   */
+  async openTemplatePickerForNew(): Promise<void> {
+    if (!this.#storage) return;
+    if (!supportsDocuments(this.#storage)) return;
+    const storage = this.#storage;
+    const folderPath = this.#currentFolderPath;
+
+    // Lazy-load — the doc package + the picker dialog are not
+    // pulled into the gallery's first-paint chunk.
+    const [
+      { isTemplateFromHead, parseDocument, cloneTemplate, serializeDocument },
+      { showTemplatePickerDialog },
+      _picker,
+    ] = await Promise.all([
+      import("@ingcreators/annot-doc"),
+      import("@ingcreators/annot-host-ui/ui/template-picker-dialog"),
+      // The picker self-registers via `customElements.define`
+      // on module load; importing for side effects is enough.
+      import("@ingcreators/annot-host-ui/annot-template-picker"),
+    ]);
+    void _picker;
+
+    let userTemplates: import("@ingcreators/annot-host-ui/annot-template-picker").UserTemplateEntry[] =
+      [];
+    try {
+      const entries = await storage.listDocuments("Templates");
+      // Sequential awaits — the typical Templates folder is
+      // small (5–20 entries). If it ever grows past that we
+      // can `Promise.all` the bytes fetches; for now sequential
+      // keeps the request rate predictable on rate-limited
+      // backends (Drive / GitHub).
+      for (const entry of entries) {
+        try {
+          const record = await storage.getDocument(entry.path);
+          if (!record) continue;
+          if (!isTemplateFromHead(record.bytes)) continue;
+          const doc = parseDocument(record.bytes);
+          const tpl = doc.meta.template;
+          if (!tpl) continue;
+          userTemplates.push({
+            path: entry.path,
+            title: tpl.name || entry.title,
+            ...(tpl.description !== undefined ? { description: tpl.description } : {}),
+            ...(tpl.tags !== undefined ? { tags: tpl.tags } : {}),
+          });
+        } catch (err) {
+          // One bad file shouldn't abort the whole listing.
+          // Log it (development) and continue.
+          logger.warn("openTemplatePickerForNew: skipped malformed template", entry.path, err);
+        }
+      }
+    } catch (err) {
+      // listDocuments failure → still show the dialog so the
+      // user gets feedback ("No user templates yet"). The
+      // toast surfaces the underlying reason.
+      showSaveError(`Couldn't list templates: ${(err as Error).message}`);
+      userTemplates = [];
+    }
+
+    const detail = await showTemplatePickerDialog({
+      userTemplates,
+      builtinTemplates: [],
+      title: "Choose a template",
+    });
+    if (!detail) return;
+    if (detail.kind !== "user") {
+      // Built-in templates aren't populated until Phase 9. The
+      // discriminator is here so the wiring is forward-
+      // compatible — when Phase 9 lands the only change here is
+      // a `case "builtin"` branch that loads from the in-memory
+      // BUILTIN_TEMPLATES array instead of the store.
+      return;
+    }
+
+    try {
+      const record = await storage.getDocument(detail.path);
+      if (!record) {
+        showSaveError("Template was removed before it could be opened.");
+        return;
+      }
+      const doc = parseDocument(record.bytes);
+      const cloned = cloneTemplate(doc);
+      const bytes = serializeDocument(cloned);
+      const now = new Date().toISOString();
+      // Filename for the cloned doc: use the template's title.
+      // Backend uniquifies on collision (`Foo (2).annot.html`).
+      const desiredFilename = `${cloned.title || "Untitled"}.annot.html`;
+      const newPath = await storage.saveDocument(
+        {
+          folderPath,
+          bytes,
+          thumbnailDataUrl: "",
+          title: cloned.title,
+          imageCount: cloned.blocks.filter((b) => b.kind === "image").length,
+          blockCount: cloned.blocks.length,
+          createdAt: now,
+          updatedAt: now,
+        },
+        { filename: desiredFilename },
+      );
+      pushRoute(docUrl(getStorageMode(), newPath));
+      await this.#routerHost.handleRoute();
+    } catch (err) {
+      showSaveError(`Couldn't create document from template: ${(err as Error).message}`);
     }
   }
 
