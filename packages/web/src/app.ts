@@ -3,7 +3,8 @@
  * File Manager (gallery) ↔ Editor switching with path-based StorageProvider.
  */
 
-import type { ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
+import type { DocumentRecord, ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
+import { supportsDocuments } from "@ingcreators/annot-core/storage";
 import { assertNonNull } from "@ingcreators/annot-core/utils";
 import { createThemeToggle } from "@ingcreators/annot-editor";
 import { setTooltip } from "@ingcreators/annot-editor/tooltip";
@@ -36,7 +37,7 @@ import { StorageBridge } from "./app/storage-bridge.js";
 import { pasteFromClipboard } from "./capture/pwa-capture.js";
 import { ScratchpadStore } from "./editor/scratchpad-store.js";
 import { logger } from "./logger.js";
-import { editUrl, galleryUrl, pushRoute } from "./router.js";
+import { docUrl, editUrl, galleryUrl, pushRoute } from "./router.js";
 import {
   type BuiltInStorageMode,
   deleteExtensionImage,
@@ -278,6 +279,7 @@ export class App {
         this.#extensionTransferHost.transferAndOpen(record, extPath),
       openFromGallery: (record) => this.openFromGallery(record),
       setupSplitEditor: (records) => this.#splitEditorHost.setup(records),
+      openDocFromGallery: (record) => this.openDocFromGallery(record),
       notifyRouteChange: (route) => this.#pluginHost.dispatchRouteChange({ route }),
     });
   }
@@ -765,5 +767,118 @@ export class App {
     this.#currentTags = args.tags;
     this.#editorSession.setupEditor(args.dataUrl, args.width, args.height, args.annotations);
     pushRoute(editUrl(getStorageMode(), args.path));
+  }
+
+  /**
+   * Open an `.annot.html` document into the doc-shell.
+   *
+   * Phase 6b of `docs/plans/annot-html-document.md`. Minimum-viable
+   * mount: the shell takes over a fixed-position overlay container
+   * appended to `document.body`, and `doc-changed` events drive a
+   * direct `storage.updateDocument` call (bypassing the per-image
+   * `SavePipeline` orchestrator the editor uses — Phase 6c folds
+   * documents into the same orchestrator, including dirty-tracking,
+   * status-bar integration, and Save-As). The current implementation
+   * deliberately doesn't tear down or hide the gallery's chrome —
+   * it sits on top via `position: fixed` so the user can navigate
+   * back via the URL or browser back button. Phase 6c replaces this
+   * with proper view-mode switching matching `setupEditor`.
+   *
+   * Storage backend MUST opt into `StorageWithDocuments`; the
+   * router-host narrows before invoking. The capability check here
+   * is a defensive belt-and-braces — if the route was reached via a
+   * channel that didn't narrow first, we hard-fail rather than
+   * silently no-op.
+   */
+  async openDocFromGallery(record: DocumentRecord): Promise<void> {
+    if (!this.#storage) return;
+    if (!supportsDocuments(this.#storage)) {
+      throw new Error("openDocFromGallery: active storage does not implement StorageWithDocuments");
+    }
+    const storage = this.#storage;
+
+    // Lazy-load: parsing + the shell pull in the doc package + the
+    // image-editor modal it transitively imports. Code-split here so
+    // image-only sessions stay slim.
+    const [{ parseDocument }, { AnnotDocShellElement }] = await Promise.all([
+      import("@ingcreators/annot-doc"),
+      // The shell self-registers via `customElements.define` on
+      // module load; importing for side effects is enough.
+      import("@ingcreators/annot-host-ui/annot-doc-shell"),
+    ]);
+
+    let parsed: ReturnType<typeof parseDocument>;
+    try {
+      parsed = parseDocument(record.bytes);
+    } catch (err) {
+      showSaveError(`Failed to parse document: ${(err as Error).message}`);
+      return;
+    }
+
+    pushRoute(docUrl(getStorageMode(), record.path));
+    document.body.classList.add("annot-doc-mode");
+
+    let host = document.getElementById("annot-doc-host") as HTMLDivElement | null;
+    if (!host) {
+      host = document.createElement("div");
+      host.id = "annot-doc-host";
+      host.style.cssText =
+        "position:fixed;inset:0;background:var(--annot-doc-bg,#ffffff);z-index:1500;overflow:auto;";
+      document.body.appendChild(host);
+    } else {
+      host.innerHTML = "";
+      host.style.display = "block";
+    }
+
+    const shell = document.createElement("annot-doc-shell") as InstanceType<
+      typeof AnnotDocShellElement
+    >;
+    shell.document = parsed;
+    shell.editing = true;
+    host.appendChild(shell);
+
+    // Wire dirty → save. Phase 6c will route this through the
+    // SavePipeline orchestrator so the toolbar's save status
+    // indicator stays accurate; for v1 we save eagerly on every
+    // mutation and report errors via the existing error-bar
+    // surface.
+    let pendingSave: Promise<void> | null = null;
+    let dirtyAfterPending = false;
+    const save = async (current: typeof parsed) => {
+      if (pendingSave) {
+        // A save is already in flight — note that we need another
+        // pass after it lands and bail; the next iteration picks up
+        // whatever the doc-shell ended up with.
+        dirtyAfterPending = true;
+        return;
+      }
+      pendingSave = (async () => {
+        try {
+          const { serializeDocument } = await import("@ingcreators/annot-doc");
+          const bytes = serializeDocument(current);
+          const imageCount = current.blocks.filter((b) => b.kind === "image").length;
+          await storage.updateDocument(record.path, {
+            bytes,
+            title: current.title,
+            imageCount,
+            blockCount: current.blocks.length,
+            updatedAt: new Date().toISOString(),
+          });
+        } catch (err) {
+          showSaveError(`Couldn't save document: ${(err as Error).message}`);
+        } finally {
+          pendingSave = null;
+          if (dirtyAfterPending) {
+            dirtyAfterPending = false;
+            const latest = shell.document;
+            if (latest) void save(latest);
+          }
+        }
+      })();
+    };
+    shell.addEventListener("doc-changed", () => {
+      const latest = shell.document;
+      if (latest) void save(latest);
+    });
   }
 }

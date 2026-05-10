@@ -9,10 +9,12 @@
  *   /annotation/edit/local/image-123.jpg                        → edit image at root
  *   /annotation/edit/local/Screenshots/Mobile/image-456.png     → edit nested image
  *   /annotation/edit/extension/...?extId=...                    → edit from extension
+ *   /annotation/doc/browser/Manuals/onboarding.annot.html       → edit document
  *
  * In dev (base = "/"):
  *   /                                                           → gallery
  *   /edit/local/<path...>                                       → edit image
+ *   /doc/browser/<path...>                                      → edit document
  *   /folder/<path...>                                           → gallery deep-link
  *
  * Non-ASCII and special characters are percent-encoded per segment,
@@ -23,7 +25,7 @@
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, ""); // e.g. "" in dev, "/annotation" in prod
 
 export interface Route {
-  type: "gallery" | "edit" | "handoff";
+  type: "gallery" | "edit" | "doc" | "handoff";
   store?: string; // "extension" | "device" | "browser" | "googledrive"
   extId?: string; // extension ID (from query param)
   path?: string; // image path (edit) or folder path (gallery deep-link); "" = root
@@ -80,6 +82,18 @@ export function parseRoute(): Route {
     return { type: "edit", store, path, extId, session };
   }
 
+  // /doc/:store/<path...> — `.annot.html` document editor entry
+  // point. Phase 6b of `docs/plans/annot-html-document.md`. Kept
+  // separate from `/edit/...` so a future filename of "doc" inside
+  // a backend can't collide with the route, AND so the router-host
+  // can route documents through the doc-shell instead of the
+  // image editor without sniffing the file extension.
+  if (parts[0] === "doc" && parts[1]) {
+    const store = parts[1];
+    const path = decodePath(parts.slice(2));
+    return { type: "doc", store, path, extId };
+  }
+
   // /folder/<path...>  → gallery deep-link into a folder
   if (parts[0] === "folder" && parts[1]) {
     const path = decodePath(parts.slice(1));
@@ -95,6 +109,16 @@ export function editUrl(store: string, imagePath: string, extId?: string): strin
   const qs = extId ? `?extId=${encodeURIComponent(extId)}` : "";
   const suffix = encoded ? `/${encoded}` : "";
   return `${BASE}/edit/${encodeURIComponent(store)}${suffix}${qs}`;
+}
+
+/** Build a URL for editing an `.annot.html` document at `docPath`.
+ *  Sibling of {@link editUrl}; the only difference is the route
+ *  prefix (`doc` vs `edit`) the router-host dispatches on. */
+export function docUrl(store: string, docPath: string, extId?: string): string {
+  const encoded = encodePath(docPath);
+  const qs = extId ? `?extId=${encodeURIComponent(extId)}` : "";
+  const suffix = encoded ? `/${encoded}` : "";
+  return `${BASE}/doc/${encodeURIComponent(store)}${suffix}${qs}`;
 }
 
 /**
