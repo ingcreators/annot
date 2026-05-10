@@ -162,7 +162,11 @@ describe("annot-doc-shell: block rendering", () => {
     ).not.toBeNull();
     expect(article.querySelector('hr[data-annot-block="divider"]')).not.toBeNull();
     expect(article.querySelector('figure[data-annot-block="image"]')).not.toBeNull();
-    expect(article.querySelector('figure[data-annot-image-id="img-test"] > svg')).not.toBeNull();
+    // Phase 10 — image SVGs render via a lazy `.annot-doc-image-svg-slot`
+    // wrapper; force-materialise so the embedded SVG shows up
+    // in the test's selector probe.
+    el.materialiseAllImagesNow();
+    expect(article.querySelector('figure[data-annot-image-id="img-test"] svg')).not.toBeNull();
     expect(
       article.querySelector('figure[data-annot-block="image"] > figcaption')?.textContent,
     ).toBe("An image.");
@@ -191,9 +195,51 @@ describe("annot-doc-shell: block rendering", () => {
   it("preserves embedded SVG verbatim inside image blocks", async () => {
     const el = mount(makeMixedDoc());
     await el.updateComplete;
-    const svg = el.querySelector('figure[data-annot-image-id="img-test"] > svg');
+    el.materialiseAllImagesNow();
+    const svg = el.querySelector('figure[data-annot-image-id="img-test"] svg');
     expect(svg?.getAttribute("xmlns")).toBe("http://www.w3.org/2000/svg");
     expect(svg?.getAttribute("viewBox")).toBe("0 0 100 100");
+  });
+
+  it("Phase 10 — image renders a placeholder slot until materialised", async () => {
+    const el = mount(makeMixedDoc());
+    await el.updateComplete;
+    const slot = el.querySelector(
+      'figure[data-annot-image-id="img-test"] .annot-doc-image-svg-slot',
+    ) as HTMLElement;
+    expect(slot).not.toBeNull();
+    // Bytes carried via the data attribute, not yet inlined.
+    expect(slot.getAttribute("data-annot-image-svg")).toContain("<svg");
+    // Aspect ratio derived from the SVG viewBox.
+    expect(slot.style.aspectRatio).toBe("100 / 100");
+    // Materialise + verify swap.
+    el.materialiseAllImagesNow();
+    expect(slot.querySelector("svg")).not.toBeNull();
+    expect(slot.getAttribute("data-annot-image-svg")).toBeNull();
+    expect(slot.style.aspectRatio).toBe("");
+  });
+
+  it("Phase 10 — extracts aspect ratio from width / height when viewBox is missing", async () => {
+    const doc: AnnotDocument = {
+      version: 1,
+      lang: "en",
+      title: "T",
+      meta: { title: "T" },
+      styleBlock: null,
+      blocks: [
+        {
+          kind: "image",
+          id: "img-wh",
+          svg: '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="240"></svg>',
+        },
+      ],
+    };
+    const el = mount(doc);
+    await el.updateComplete;
+    const slot = el.querySelector(
+      'figure[data-annot-image-id="img-wh"] .annot-doc-image-svg-slot',
+    ) as HTMLElement;
+    expect(slot.style.aspectRatio).toBe("320 / 240");
   });
 });
 
