@@ -25,10 +25,13 @@
  */
 
 import type {
+  DocumentRecord,
+  DocumentRecordUpdate,
   FolderRecord,
   ImageRecord,
   ImageRecordUpdate,
   StorageProvider,
+  StorageWithDocuments,
   StorageWithForceRefresh,
   StorageWithInit,
   StorageWithResync,
@@ -74,11 +77,31 @@ interface IndexEntry {
   mtime?: number;
 }
 
+/** Cached metadata for an `.annot.html` document. The bytes
+ *  themselves live on disk; the index just lets the gallery
+ *  render listing rows without reading every file. Phase 7b of
+ *  `docs/plans/annot-html-document.md`. */
+interface DocIndexEntry {
+  createdAt: string;
+  /** Document title (mirrors `<title>` + sidecar `meta.title`). */
+  title: string;
+  /** Top-level block count from the parser. */
+  blockCount: number;
+  /** Image-block count from the parser. */
+  imageCount: number;
+  /** File mtime at the time of last sync. */
+  mtime?: number;
+}
+
 interface IndexData {
   /** Map full path -> cached metadata. Paths are forward-slash,
    *  library-relative ("Inbox/cap.annot.png"), matching the keys
    *  every other `StorageProvider` uses. */
   images: Record<string, IndexEntry>;
+  /** Map path -> cached document metadata (Phase 7b). Optional in
+   *  on-disk indices written before Phase 7b — the loader backfills
+   *  the default `{}`. */
+  documents?: Record<string, DocIndexEntry>;
 }
 
 /** Image-file extensions the gallery surfaces. Permissive on
@@ -99,7 +122,8 @@ export class DesktopStore
     StorageWithInit,
     StorageWithResync,
     StorageWithForceRefresh,
-    StorageWithThumbnailCache
+    StorageWithThumbnailCache,
+    StorageWithDocuments
 {
   #fs: DesktopFs;
   /** Stable identifier folded into the thumbnail cache key so two
@@ -108,7 +132,7 @@ export class DesktopStore
    *  when the caller doesn't provide one explicitly. */
   #rootName: string;
   #encodeDeps: BuildEditableImageDeps;
-  #index: IndexData = { images: {} };
+  #index: IndexData = { images: {}, documents: {} };
 
   get rootName(): string {
     return this.#rootName;
@@ -178,13 +202,15 @@ export class DesktopStore
       const text = new TextDecoder().decode(bytes);
       const parsed = JSON.parse(text);
       if (parsed && typeof parsed === "object" && parsed.images) {
-        this.#index = parsed as IndexData;
+        // Backfill the documents map for indices written before
+        // Phase 7b so the in-memory shape always carries it.
+        this.#index = { documents: {}, ...(parsed as IndexData) };
         return;
       }
     } catch {
       /* missing / malformed — start fresh */
     }
-    this.#index = { images: {} };
+    this.#index = { images: {}, documents: {} };
   }
 
   async #saveIndex(): Promise<void> {
@@ -533,7 +559,14 @@ export class DesktopStore
   }
 
   async deleteImage(path: string): Promise<void> {
-    if (!this.#index.images[path]) return;
+    // Phase 7b — `deleteImage` is the path-keyed delete primitive
+    // per the `StorageWithDocuments` plan. Removes whichever index
+    // entry holds the path (image OR document) and then removes
+    // the file from disk. No-op when neither side knows about the
+    // path.
+    const knownAsImage = !!this.#index.images[path];
+    const knownAsDoc = !!this.#index.documents?.[path];
+    if (!knownAsImage && !knownAsDoc) return;
 
     try {
       await this.#fs.remove(path);
@@ -541,7 +574,123 @@ export class DesktopStore
       /* may already be gone */
     }
 
-    delete this.#index.images[path];
+    if (knownAsImage) delete this.#index.images[path];
+    if (knownAsDoc && this.#index.documents) delete this.#index.documents[path];
+    await this.#saveIndex();
+  }
+
+  // ---- Documents (Phase 7b) ─────────────────────────────────
+  // Mirror of `DeviceStore`'s document path. `.annot.html` files
+  // are written verbatim (no XMP — the format is its own
+  // self-contained spec). Index caches title / counts so
+  // `listDocuments` stays cheap.
+
+  async saveDocument(
+    data: Omit<DocumentRecord, "path">,
+    opts?: { filename?: string },
+  ): Promise<string> {
+    const desiredFilename = opts?.filename || `document-${Date.now()}.annot.html`;
+    validateName(desiredFilename);
+    const folderPath = data.folderPath || "";
+
+    if (folderPath) {
+      await this.#fs.mkdir(folderPath, { recursive: true });
+    }
+
+    const filename = await uniquifyFilenameAsync(desiredFilename, (candidate) =>
+      this.#fileExists(folderPath, candidate),
+    );
+    const path = joinPath(folderPath, filename);
+
+    const bytes = new TextEncoder().encode(data.bytes);
+    try {
+      await this.#fs.writeFile(path, bytes);
+    } catch (e) {
+      try {
+        await this.#fs.remove(path);
+      } catch {
+        /* ignore */
+      }
+      throw e;
+    }
+
+    let mtime = 0;
+    try {
+      mtime = (await this.#fs.stat(path))?.mtime ?? 0;
+    } catch {
+      /* ignore */
+    }
+
+    if (!this.#index.documents) this.#index.documents = {};
+    this.#index.documents[path] = {
+      createdAt: data.createdAt || new Date().toISOString(),
+      title: data.title,
+      blockCount: data.blockCount,
+      imageCount: data.imageCount,
+      mtime,
+    };
+    await this.#saveIndex();
+    return path;
+  }
+
+  async getDocument(path: string): Promise<DocumentRecord | undefined> {
+    const entry = this.#index.documents?.[path];
+    if (!entry) return undefined;
+    let bytes: string;
+    try {
+      const raw = await this.#fs.readFile(path);
+      bytes = new TextDecoder().decode(raw);
+    } catch {
+      return undefined;
+    }
+    return {
+      path,
+      folderPath: getParentPath(path),
+      bytes,
+      thumbnailDataUrl: "",
+      title: entry.title,
+      imageCount: entry.imageCount,
+      blockCount: entry.blockCount,
+      createdAt: entry.createdAt,
+      updatedAt: entry.mtime ? new Date(entry.mtime).toISOString() : entry.createdAt,
+    };
+  }
+
+  async listDocuments(folderPath: string): Promise<DocumentRecord[]> {
+    const docs = this.#index.documents ?? {};
+    const out: DocumentRecord[] = [];
+    for (const [path, entry] of Object.entries(docs)) {
+      if (getParentPath(path) !== folderPath) continue;
+      out.push({
+        path,
+        folderPath,
+        bytes: "",
+        thumbnailDataUrl: "",
+        title: entry.title,
+        imageCount: entry.imageCount,
+        blockCount: entry.blockCount,
+        createdAt: entry.createdAt,
+        updatedAt: entry.mtime ? new Date(entry.mtime).toISOString() : entry.createdAt,
+      });
+    }
+    return out;
+  }
+
+  async updateDocument(path: string, updates: DocumentRecordUpdate): Promise<void> {
+    const entry = this.#index.documents?.[path];
+    if (!entry) return;
+    if (updates.bytes !== undefined) {
+      const bytes = new TextEncoder().encode(updates.bytes);
+      await this.#fs.writeFile(path, bytes);
+      try {
+        entry.mtime = (await this.#fs.stat(path))?.mtime ?? entry.mtime;
+      } catch {
+        /* ignore */
+      }
+    }
+    if (updates.title !== undefined) entry.title = updates.title;
+    if (updates.blockCount !== undefined) entry.blockCount = updates.blockCount;
+    if (updates.imageCount !== undefined) entry.imageCount = updates.imageCount;
     await this.#saveIndex();
   }
 
