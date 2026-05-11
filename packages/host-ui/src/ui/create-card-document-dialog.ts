@@ -198,13 +198,17 @@ interface InputOptions {
 }
 
 function makeInput(opts: InputOptions): HTMLInputElement {
+  // Reuse the `.app-dialog-input` class that `<annot-dialog>` /
+  // `showDocSettingsDialog` already style centrally — the
+  // inline cssText we'd otherwise emit hard-codes dark-theme
+  // colors which renders as dark-on-dark on the light
+  // doc-mode modal background.
   const input = document.createElement("input");
   input.type = "text";
+  input.className = "app-dialog-input";
   input.value = opts.value;
   input.setAttribute("aria-label", opts.ariaLabel);
   if (opts.placeholder) input.placeholder = opts.placeholder;
-  input.style.cssText =
-    "padding:6px 8px;border:1px solid var(--annot-border,#374151);background:var(--annot-bg-elevated,#1f2937);color:var(--annot-text-primary,#f9fafb);border-radius:4px;font-size:14px;";
   return input;
 }
 
@@ -216,9 +220,8 @@ interface SelectOptions {
 
 function makeSelect(opts: SelectOptions): HTMLSelectElement {
   const select = document.createElement("select");
+  select.className = "app-dialog-input";
   select.setAttribute("aria-label", opts.ariaLabel);
-  select.style.cssText =
-    "padding:6px 8px;border:1px solid var(--annot-border,#374151);background:var(--annot-bg-elevated,#1f2937);color:var(--annot-text-primary,#f9fafb);border-radius:4px;font-size:14px;";
   for (const o of opts.options) {
     const opt = document.createElement("option");
     opt.value = o.value;
