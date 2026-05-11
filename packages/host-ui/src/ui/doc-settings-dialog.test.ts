@@ -102,3 +102,57 @@ describe("showDocSettingsDialog", () => {
     expect(result?.author).toBeUndefined();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Phase 3b of docs/plans/card-procedure-template.md — Card layout
+// section (cards-per-row + default step layout for new step
+// blocks).
+// ---------------------------------------------------------------------------
+
+describe("showDocSettingsDialog: card layout fields", () => {
+  it("renders Cards per row + Default step layout selects", async () => {
+    const promise = showDocSettingsDialog({
+      defaultTitle: "Cards",
+      defaultCardColumns: 2,
+      defaultCardStepLayout: "image-left",
+    });
+    findDialog();
+    expect((getInput("Cards per row") as HTMLSelectElement).value).toBe("2");
+    expect((getInput("Default step layout for new step blocks") as HTMLSelectElement).value).toBe(
+      "image-left",
+    );
+    findDialog().dispatchEvent(new CustomEvent("dialog-cancel"));
+    expect(await promise).toBeNull();
+  });
+
+  it("defaults cards-per-row to 1 (stack) when cardLayout is unset", async () => {
+    const promise = showDocSettingsDialog({ defaultTitle: "Default" });
+    findDialog();
+    expect((getInput("Cards per row") as HTMLSelectElement).value).toBe("1");
+    expect((getInput("Default step layout for new step blocks") as HTMLSelectElement).value).toBe(
+      "image-top",
+    );
+    findDialog().dispatchEvent(new CustomEvent("dialog-cancel"));
+    await promise;
+  });
+
+  it("returns cardColumns + cardDefaultStepLayout on OK", async () => {
+    const promise = showDocSettingsDialog({ defaultTitle: "X" });
+    findDialog();
+    (getInput("Cards per row") as HTMLSelectElement).value = "3";
+    (getInput("Default step layout for new step blocks") as HTMLSelectElement).value = "image-fill";
+    findDialog().dispatchEvent(new CustomEvent("dialog-ok"));
+    const result = await promise;
+    expect(result?.cardColumns).toBe(3);
+    expect(result?.cardDefaultStepLayout).toBe("image-fill");
+  });
+
+  it('returns cardColumns === "auto" when the user picks Auto', async () => {
+    const promise = showDocSettingsDialog({ defaultTitle: "X" });
+    findDialog();
+    (getInput("Cards per row") as HTMLSelectElement).value = "auto";
+    findDialog().dispatchEvent(new CustomEvent("dialog-ok"));
+    const result = await promise;
+    expect(result?.cardColumns).toBe("auto");
+  });
+});

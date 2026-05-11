@@ -227,6 +227,40 @@ const SHELL_CSS = `
     opacity: 1;
   }
 }
+/* Phase 3b of card-procedure-template — in-block layout
+   switcher. Anchored to the step block's top-right corner; the
+   doc-wide style block in inject-styles.ts makes
+   [data-annot-block="step"] 'position: relative' so the
+   absolute positioning here lands inside the card. The pill
+   appears at 0.4 opacity for ambient discoverability and pops
+   to full opacity on hover / focus-within, matching the block
+   toolbar's affordance pattern. */
+.annot-doc-step-layout-switcher {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 2;
+  opacity: 0.4;
+  transition: opacity 0.12s ease-in;
+}
+[data-annot-block="step"]:hover .annot-doc-step-layout-switcher,
+[data-annot-block="step"]:focus-within .annot-doc-step-layout-switcher {
+  opacity: 1;
+}
+@media (hover: none) {
+  .annot-doc-step-layout-switcher { opacity: 1; }
+}
+.annot-doc-step-layout-switcher select {
+  background: var(--annot-card-bg, #ffffff);
+  color: var(--annot-doc-fg);
+  border: 1px solid var(--annot-doc-muted);
+  border-radius: 4px;
+  padding: 2px 4px;
+  font-size: 0.8rem;
+  line-height: 1.2;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  cursor: pointer;
+}
 .annot-doc-block-toolbar .block-action-handle {
   cursor: grab;
   user-select: none;
@@ -2121,6 +2155,7 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
         class="annot-doc-block-host"
         data-block-index=${index}
         @click=${(e: MouseEvent) => this.#onBlockHostClick(e, index)}
+        @change=${(e: Event) => this.#onBlockHostChange(e, index)}
       >
         ${renderBlockBody(block, ids, /* editable */ true)}
         <annot-doc-block-toolbar
@@ -2136,6 +2171,40 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
   // -------------------------------------------------------------------------
   // Image-block click → modal editor
   // -------------------------------------------------------------------------
+
+  /** Phase 3b of card-procedure-template — capture `change`
+   *  events from the in-block layout switcher (`<select
+   *  data-step-layout-switcher>`). Updates the step's `layout`
+   *  field and pushes a history snapshot. Ignores events from
+   *  any other source (defensive — the block-host's only other
+   *  changeable child is the contentEditable slots which don't
+   *  fire `change`). */
+  #onBlockHostChange(e: Event, index: number): void {
+    if (!this.document) return;
+    const target = e.target as HTMLElement | null;
+    if (!target?.matches("[data-step-layout-switcher]")) return;
+    const block = this.document.blocks[index];
+    if (block?.kind !== "step") return;
+    const next = (target as HTMLSelectElement).value;
+    if (
+      next !== "image-top" &&
+      next !== "image-bottom" &&
+      next !== "image-left" &&
+      next !== "image-right" &&
+      next !== "image-fill"
+    ) {
+      return;
+    }
+    if (next === block.layout) return;
+    this.#syncDomIntoDocument();
+    const refreshed = this.document.blocks[index];
+    if (refreshed?.kind !== "step") return;
+    const blocks = [...this.document.blocks];
+    blocks[index] = { ...refreshed, layout: next };
+    const newDoc: AnnotDocument = { ...this.document, blocks };
+    this.#history?.push(newDoc);
+    this.#applyInternal(newDoc, "block-action");
+  }
 
   #onBlockHostClick(e: MouseEvent, index: number): void {
     if (!this.document) return;
@@ -2157,6 +2226,10 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
     ) {
       return;
     }
+    // Phase 3b — the in-block layout switcher sits inside the
+    // same section; clicks on its `<select>` (or the wrapping
+    // `<label>`) must not bubble into "edit image".
+    if (target?.closest(".annot-doc-step-layout-switcher")) return;
     if (block.kind === "step") {
       void this.#openStepImageEditor(block, index);
       return;
@@ -2473,6 +2546,12 @@ function renderStep(block: StepBlock, editable: boolean): TemplateResult {
     // heading / paragraph use) so the cursor / IME state
     // survives re-renders. The empty elements are caret targets
     // immediately.
+    //
+    // The layout switcher sits at the top-right corner of the
+    // card (position: absolute via the host CSS). It carries the
+    // current `block.layout` as the selected option and uses a
+    // `data-step-layout-switcher` marker so the block-host's
+    // `@change` listener can identify the event source.
     return html`
       <section
         data-annot-block="step"
@@ -2486,6 +2565,15 @@ function renderStep(block: StepBlock, editable: boolean): TemplateResult {
         ></div>
         <h3 data-step-title contenteditable="true"></h3>
         <p data-step-body contenteditable="true"></p>
+        <label class="annot-doc-step-layout-switcher" aria-label="Card layout">
+          <select data-step-layout-switcher .value=${block.layout}>
+            <option value="image-top">Image top</option>
+            <option value="image-bottom">Image bottom</option>
+            <option value="image-left">Image left</option>
+            <option value="image-right">Image right</option>
+            <option value="image-fill">Image fill</option>
+          </select>
+        </label>
       </section>
     `;
   }
