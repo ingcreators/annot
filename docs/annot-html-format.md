@@ -120,6 +120,7 @@ tags for different block kinds).
 | `callout` | `<aside>` | Tone-coloured callout (info / warn / note). |
 | `divider` | `<hr>` | Horizontal rule. |
 | `image` | `<figure>` containing `<svg>` + optional `<figcaption>` | Annotated screenshot. |
+| `step` | `<section>` containing `<svg>` + `<h3 data-step-title>` + `<p data-step-body>` | Card-style procedure step — screenshot + title + body with a per-card layout variant. |
 
 ### `heading`
 
@@ -278,6 +279,78 @@ npm run dev</code></pre>
   `@ingcreators/annot-core/utils`. IDs MUST be unique within the
   document.
 
+### `step`
+
+```html
+<section data-annot-block="step" data-annot-image-id="img-step-01" data-step-layout="image-top">
+  <svg data-annot-version="1" viewBox="0 0 800 600" width="800" height="600" xmlns="http://www.w3.org/2000/svg">
+    <image href="data:image/png;base64,…" width="800" height="600"/>
+    <g id="annotations">
+      <!-- annotation elements per docs/svg-format.md -->
+    </g>
+  </svg>
+  <h3 data-step-title>Open the Settings dialog</h3>
+  <p data-step-body>Click the gear icon in the top-right corner.</p>
+</section>
+```
+
+- `<section>` block; carries `data-annot-image-id` (same attribute,
+  same namespace, same `imageMeta` keying as the `image` block kind —
+  IDs MUST be unique within the document regardless of which block
+  kind uses them).
+- Exactly three children in fixed order:
+  1. One inline `<svg>` carrying its own `data-annot-version`. The
+     embedded `<svg>` is **a complete `.annot.svg` document** — a
+     reader extracting just that subtree gets a valid standalone
+     annotation file. See [`docs/svg-format.md`](./svg-format.md).
+  2. One `<h3 data-step-title>` carrying the step's title.
+     [Rich text](#rich-text) inline content allowed.
+  3. One `<p data-step-body>` carrying the step's description.
+     [Rich text](#rich-text) inline content allowed.
+- The title `<h3>` carries `data-step-title` instead of
+  `data-annot-block="heading"`. This is deliberate — step titles
+  participate in card-block layout, not document-level headings:
+  - They do NOT appear in the standalone-view TOC nav.
+  - They do NOT participate in the heading auto-numbering counter
+    (`meta.numbering.headings`).
+  - They do NOT receive a positional `id="annot-h-N"` from the
+    serializer.
+  - Editors render them with a card-shaped chrome distinct from
+    regular `heading` block edits.
+- The body `<p>` carries `data-step-body` instead of
+  `data-annot-block="paragraph"`. Same rationale — the slot
+  belongs to the step block and is edited / styled / exported
+  through the step machinery, not the prose paragraph path.
+- `data-step-layout` is OPTIONAL and takes one of five values:
+  - `image-top` (default; image fills the upper card region, title +
+    body stacked below).
+  - `image-bottom` (image fills the lower card region, title + body
+    stacked above).
+  - `image-left` (image fills the left column, title + body
+    stacked on the right).
+  - `image-right` (image fills the right column, title + body
+    stacked on the left).
+  - `image-fill` (image fills the entire card; title + body render
+    as a translucent overlay at the bottom).
+  - DOM child order stays fixed (SVG → title → body) regardless of
+    visual layout. CSS Grid placement in the standalone-view style
+    block handles the layout; layout switches don't reorder the
+    tree.
+  - Serializer always emits `data-step-layout` explicitly even for
+    the default — byte-stability over byte-economy.
+- Empty title (`<h3 data-step-title></h3>`) and empty body
+  (`<p data-step-body></p>`) are valid placeholders; the editor
+  renders both with a "type to start" affordance, same as the
+  empty `paragraph` block does.
+- `data-annot-image-id` format: `img-` prefix + 8 to 32 chars from
+  `[a-zA-Z0-9_-]`, generated via `newIdB58` in
+  `@ingcreators/annot-core/utils`. Same constraint as the
+  standalone `image` block.
+- Step blocks generate one slide per block in the multi-slide PPTX
+  export (`exportDocumentPptx`), with `data-step-layout` selecting
+  the PowerPoint slide layout — see
+  [`docs/plans/card-procedure-template.md`](./plans/card-procedure-template.md).
+
 ### Forward-compatibility for unknown blocks
 
 A v1 reader presented with a v2 file containing an unknown
@@ -392,9 +465,19 @@ interface DocMeta {
   author?: string;
   theme?: "light" | "dark" | "auto";   // browser-view default theme
   maxWidth?: "narrow" | "medium" | "wide" | "full";  // content column
+  cardLayout?: CardLayoutMeta;  // step-block grid + default-layout settings
   template?: TemplateMeta;  // present iff this file is a template
   imageMeta?: Record<string, ImageMeta>;  // keyed by data-annot-image-id
   numbering?: NumberingMeta; // Phase 13 — opt-in heading / figure auto-numbering
+}
+
+interface CardLayoutMeta {
+  columns?: 1 | 2 | 3 | "auto";  // cards-per-row in standalone view at the doc's max-width;
+                                   // "auto" uses repeat(auto-fill, …) with a card-min-width
+                                   // breakpoint. Default 1 (vertical stack).
+  defaultStepLayout?: "image-top" | "image-bottom" | "image-left" | "image-right" | "image-fill";
+                                   // editor's default for newly-inserted step blocks.
+                                   // Per-block data-step-layout always wins. Default "image-top".
 }
 
 interface TemplateMeta {
@@ -573,6 +656,9 @@ Inside `<article data-annot-doc>` (block level):
 - `<hr>` with `data-annot-block="divider"`
 - `<figure>` with `data-annot-block="image"` containing one
   inline `<svg>` and an optional `<figcaption>`
+- `<section>` with `data-annot-block="step"` containing one
+  inline `<svg>`, one `<h3 data-step-title>`, and one
+  `<p data-step-body>` (children in that fixed order)
 
 Inside text-bearing nodes (inline level):
 
@@ -749,6 +835,23 @@ Frozen by Phase 0 of
 Phases 1+ may add tests, helpers, or UI; they MUST NOT change the
 on-disk shape of v1 files.
 
+#### Revisions to v1
+
+- **2026-05 — `step` block added** (Phase 0 of
+  [`docs/plans/card-procedure-template.md`](./plans/card-procedure-template.md)).
+  Additive expansion under the unchanged `data-annot-doc-version="1"`
+  stamp; pre-release, no shipped users to consider. Adds:
+  - `step` block kind (`<section data-annot-block="step">` with
+    `data-step-layout` ∈ five enum values, `data-annot-image-id`,
+    three fixed-order children).
+  - `<section>` / `<h3 data-step-title>` / `<p data-step-body>`
+    added to the article-level allow-list.
+  - `cardLayout` optional field on `DocMeta` (columns count +
+    default step-layout for newly-inserted step blocks).
+  - Three new golden fixtures (`steps-only`, `steps-mixed`,
+    `steps-fill`) under
+    [`docs/annot-html-format-examples/`](./annot-html-format-examples/).
+
 ### Version 0 (pre-versioning)
 
 Reserved for HTML files written by Annot before
@@ -829,14 +932,17 @@ same channel for arbitrary inline annotations.
 
 ## Examples
 
-Three canonical examples ship in
+Six canonical examples ship in
 [`docs/annot-html-format-examples/`](./annot-html-format-examples/):
 
 | File | Coverage |
 |---|---|
 | `empty.annot.html` | Minimum viable document — required head metadata, one paragraph block, sidecar. |
 | `with-image.annot.html` | Heading + paragraph + image block. Embedded SVG carries a 1×1 transparent PNG so the file stays small. |
-| `mixed.annot.html` | One block of every v1 kind. Locks in the canonical order, attribute set, and whitespace rules byte-for-byte. |
+| `mixed.annot.html` | One block of every base-v1 kind (`heading`, `paragraph`, `list`, `code`, `quote`, `callout`, `divider`, `image`). Locks in canonical order, attribute set, and whitespace rules byte-for-byte. |
+| `steps-only.annot.html` | Pure card-procedure document — three `step` blocks back-to-back, no headings or prose. No `cardLayout` meta (relies on the implicit default `columns=1, defaultStepLayout="image-top"`). |
+| `steps-mixed.annot.html` | Mixed prose + steps — H1 + intro paragraph + H2 + two step blocks (`image-top`, `image-left`) + H2 + one step block (`image-right`) + a warn callout. `cardLayout.columns=2`. Exercises step blocks alongside the TOC-generating heading blocks. |
+| `steps-fill.annot.html` | Layout showcase — H1 title + three step blocks demonstrating `image-fill`, `image-bottom`, `image-right`. `cardLayout.columns="auto"` + `cardLayout.defaultStepLayout="image-fill"`. |
 
 These files ARE the v1 spec — Phase 1's parser / serializer test
 runs `serialize(parse(bytes)) === bytes` against each. A future
