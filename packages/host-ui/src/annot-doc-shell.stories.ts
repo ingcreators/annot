@@ -375,3 +375,35 @@ export const CardGridTwoColumnEditing: Story = {
   name: "Card grid / 2-column (editing)",
   args: { document: makeCardGridDoc(2), showToc: false, editing: true },
 };
+
+// ---------------------------------------------------------------------------
+// Phase 5 of docs/plans/card-procedure-template.md — bundled
+// `card-procedure` starter rendered in light + dark themes. The
+// starter ships in @ingcreators/annot-doc/BUILTIN_TEMPLATES.
+// ---------------------------------------------------------------------------
+
+import { cloneBuiltinTemplate } from "@ingcreators/annot-doc";
+
+function makeCardProcedureStarter(theme: AnnotDocument["meta"]["theme"] = "auto"): AnnotDocument {
+  // Clone (markers stripped, fresh IDs minted) — same path the
+  // PWA's template-picker flow uses, so the stories preview the
+  // exact bytes the user sees after "New from template".
+  const cloned = cloneBuiltinTemplate("card-procedure");
+  if (!cloned) throw new Error("card-procedure starter missing");
+  return { ...cloned, meta: { ...cloned.meta, theme } };
+}
+
+export const CardProcedureStarter: Story = {
+  name: "Bundled starter / card-procedure",
+  args: { document: makeCardProcedureStarter(), showToc: false, editing: false },
+};
+
+export const CardProcedureStarterDark: Story = {
+  name: "Bundled starter / card-procedure (dark)",
+  args: { document: makeCardProcedureStarter("dark"), showToc: false, editing: false },
+};
+
+export const CardProcedureStarterEditing: Story = {
+  name: "Bundled starter / card-procedure (editing)",
+  args: { document: makeCardProcedureStarter(), showToc: false, editing: true },
+};
