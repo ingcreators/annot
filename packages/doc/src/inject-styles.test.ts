@@ -407,12 +407,29 @@ describe("injectDocumentStyles: step block layouts", () => {
 
   it("child slots get grid-area assignments at the default selector level", () => {
     const css = buildStyleBlock(createEmptyDocument({ title: "Slots" }));
-    expect(css).toContain('[data-annot-block="step"] > svg {');
+    // Image grid-area applies to both the direct SVG (standalone
+    // view) and the editor's `.annot-doc-image-svg-slot` wrapper
+    // — the rule is a comma-list so both selectors share the
+    // declarations.
+    expect(css).toContain('[data-annot-block="step"] > svg,');
+    expect(css).toContain('[data-annot-block="step"] > .annot-doc-image-svg-slot {');
     expect(css).toContain("grid-area: image");
     expect(css).toContain('[data-annot-block="step"] > [data-step-title] {');
     expect(css).toContain("grid-area: title");
     expect(css).toContain('[data-annot-block="step"] > [data-step-body] {');
     expect(css).toContain("grid-area: body");
+  });
+
+  it("SVG inside the editor slot wrapper is clamped to 100% width + 70vh height", () => {
+    // Phase 4 follow-up: the user's large-screenshot card was
+    // overflowing both horizontally (image >700px wide cropped
+    // by `overflow: hidden`) and vertically (tall screenshots
+    // dominated the card). This rule clamps both dimensions.
+    const css = buildStyleBlock(createEmptyDocument({ title: "Slot SVG" }));
+    expect(css).toContain('[data-annot-block="step"] .annot-doc-image-svg-slot > svg {');
+    expect(css).toContain("width: 100%");
+    expect(css).toContain("max-height: 70vh");
+    expect(css).toContain("object-fit: contain");
   });
 
   it("step blocks join the print break-inside avoid rule", () => {

@@ -659,7 +659,18 @@ html.light .view-toggle-btn.active {
 .app-dialog-primary {
   background: var(--annot-accent);
   border-color: var(--annot-accent);
-  color: #0b1020;
+  /* Theme-aware text color — `--annot-bg-primary` flips
+     between light + dark in the opposite direction of
+     `--annot-text-primary`, which is what we need on the
+     accent background:
+       - Light theme: light text (`#f5f7ff`) on `#3456c9`
+         → contrast ~6.5:1 (WCAG AA pass).
+       - Dark theme: dark text (`#0f1730`) on `#7c9cff`
+         → contrast ~7.7:1 (WCAG AA pass).
+     The previous hardcoded `#0b1020` worked only on the
+     dark-theme accent; on the light-theme accent it fell
+     to ~3:1 which fails AA for normal text. */
+  color: var(--annot-bg-primary);
 }
 
 .app-dialog-primary:hover {

@@ -347,12 +347,40 @@ function stepBlockRules(): string {
     "}",
     // Default child styling — applies to image-top / -bottom /
     // -left / -right (image-fill overrides these below).
-    '[data-annot-block="step"] > svg {',
+    //
+    // Standalone view (saved bytes): the SVG is a DIRECT child
+    // of the section. The selector `> svg` lands the SVG in
+    // the `image` grid area and clamps it to the card width.
+    //
+    // Editor view (`<annot-doc-shell>` editing mode): the
+    // shell wraps the SVG in a `.annot-doc-image-svg-slot` div
+    // for the IntersectionObserver-driven lazy materialisation
+    // (see `materialiseImageSlot` in `annot-doc-shell.ts`).
+    // The wrapper has an inline `aspect-ratio` style derived
+    // from the SVG's viewBox so layout settles before bytes
+    // mount; we mirror the same grid-area + max-width clamp on
+    // the wrapper, then let the descendant SVG fill it.
+    // Without this rule large screenshots (the common case —
+    // capture is typically 1500–2000 px wide) overflow the
+    // card horizontally and dominate it vertically.
+    '[data-annot-block="step"] > svg,',
+    '[data-annot-block="step"] > .annot-doc-image-svg-slot {',
     "  grid-area: image;",
+    "  width: 100%;",
     "  max-width: 100%;",
     "  height: auto;",
     "  display: block;",
     "  margin: 0;",
+    "}",
+    '[data-annot-block="step"] .annot-doc-image-svg-slot > svg {',
+    "  width: 100%;",
+    "  height: auto;",
+    "  display: block;",
+    "  /* Cap the visual height so a tall-aspect screenshot",
+    "     doesn't dominate the card; the inline aspect-ratio on",
+    "     the wrapper still drives the slot's pre-mount layout. */",
+    "  max-height: 70vh;",
+    "  object-fit: contain;",
     "}",
     '[data-annot-block="step"] > [data-step-title] {',
     "  grid-area: title;",
@@ -411,7 +439,12 @@ function stepBlockRules(): string {
     "  display: block;",
     "  padding: 0;",
     "}",
-    '[data-annot-block="step"][data-step-layout="image-fill"] > svg {',
+    // image-fill image sizing — applies to direct SVG
+    // (standalone view) AND to the editor's slot wrapper +
+    // inner SVG. Same dual-selector pattern as the
+    // area-based layouts above.
+    '[data-annot-block="step"][data-step-layout="image-fill"] > svg,',
+    '[data-annot-block="step"][data-step-layout="image-fill"] > .annot-doc-image-svg-slot {',
     "  width: 100%;",
     "  height: auto;",
     "  display: block;",
