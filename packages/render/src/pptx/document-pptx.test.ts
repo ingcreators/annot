@@ -12,7 +12,7 @@
 //     pipeline (smoke test — full per-shape XML correctness is
 //     covered by `drawingml.test.ts`).
 
-import type { AnnotDocument, ImageBlock } from "@ingcreators/annot-doc";
+import type { AnnotDocument, ImageBlock, StepBlock, StepLayout } from "@ingcreators/annot-doc";
 import { describe, expect, it } from "vitest";
 import { buildDocumentPptxFiles, exportDocumentPptx } from "./document-pptx.js";
 
@@ -188,6 +188,239 @@ describe("buildDocumentPptxFiles", () => {
     expect(files["ppt/slides/slide2.xml"]).toBeUndefined();
     // App props reflects only the surviving slide.
     expect(decode(files["docProps/app.xml"]!)).toContain("<Slides>1</Slides>");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 6 of docs/plans/card-procedure-template.md — step block
+// → slide export with per-layout title + body overlay shapes.
+// ---------------------------------------------------------------------------
+
+function makeStepBlock(
+  id: string,
+  width: number,
+  height: number,
+  options: {
+    title?: string;
+    body?: string;
+    layout?: StepLayout;
+    withRect?: boolean;
+  } = {},
+): StepBlock {
+  const annotations = options.withRect
+    ? `<rect data-type="rect" x="10" y="10" width="100" height="50" fill="#ff0000"/>`
+    : "";
+  const svg =
+    `<svg data-annot-version="1" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">` +
+    `<image href="${TINY_PNG_DATA_URL}" width="${width}" height="${height}"/>` +
+    `<g id="annotations">${annotations}</g>` +
+    "</svg>";
+  return {
+    kind: "step",
+    id,
+    svg,
+    title: options.title ?? "",
+    body: options.body ?? "",
+    layout: options.layout ?? "image-top",
+  };
+}
+
+describe("buildDocumentPptxFiles: step blocks (Phase 6)", () => {
+  it("emits one slide per step block alongside image blocks", () => {
+    const doc = makeDocument([
+      { kind: "heading", level: 1, inlineHtml: "Mixed doc" },
+      makeImageBlock("img-1", 800, 600),
+      makeStepBlock("step-1", 800, 600, { title: "Step 1", body: "Do A" }),
+      makeStepBlock("step-2", 800, 600, { title: "Step 2", body: "Do B" }),
+    ]);
+    const files = buildDocumentPptxFiles(doc);
+    // 1 image block + 2 step blocks = 3 slides.
+    expect(files["ppt/slides/slide1.xml"]).toBeDefined();
+    expect(files["ppt/slides/slide2.xml"]).toBeDefined();
+    expect(files["ppt/slides/slide3.xml"]).toBeDefined();
+    expect(files["ppt/slides/slide4.xml"]).toBeUndefined();
+  });
+
+  it("embeds the step's image bytes as a separate screenshot media entry per slide", () => {
+    const doc = makeDocument([
+      makeStepBlock("step-1", 800, 600),
+      makeStepBlock("step-2", 800, 600),
+    ]);
+    const files = buildDocumentPptxFiles(doc);
+    expect(files["ppt/media/screenshot1.png"]).toBeDefined();
+    expect(files["ppt/media/screenshot2.png"]).toBeDefined();
+  });
+
+  it("emits a title overlay <p:sp> when the step has a title", () => {
+    const doc = makeDocument([makeStepBlock("step-1", 800, 600, { title: "Open the dialog" })]);
+    const files = buildDocumentPptxFiles(doc);
+    const slide1 = decode(files["ppt/slides/slide1.xml"]!);
+    expect(slide1).toContain('name="StepTitle"');
+    expect(slide1).toContain("<a:t>Open the dialog</a:t>");
+    // Title is bold.
+    expect(slide1).toMatch(/<a:rPr[^>]*\bb="1"/);
+  });
+
+  it("emits a body overlay <p:sp> when the step has a body", () => {
+    const doc = makeDocument([
+      makeStepBlock("step-1", 800, 600, { body: "Click the gear icon to open settings." }),
+    ]);
+    const files = buildDocumentPptxFiles(doc);
+    const slide1 = decode(files["ppt/slides/slide1.xml"]!);
+    expect(slide1).toContain('name="StepBody"');
+    expect(slide1).toContain("<a:t>Click the gear icon to open settings.</a:t>");
+  });
+
+  it("skips empty title / body slots so the slide doesn't carry empty boxes", () => {
+    const doc = makeDocument([makeStepBlock("step-1", 800, 600, { title: "", body: "" })]);
+    const files = buildDocumentPptxFiles(doc);
+    const slide1 = decode(files["ppt/slides/slide1.xml"]!);
+    expect(slide1).not.toContain("StepTitle");
+    expect(slide1).not.toContain("StepBody");
+  });
+
+  it("strips inline HTML tags from the title / body before emitting", () => {
+    const doc = makeDocument([
+      makeStepBlock("step-1", 800, 600, {
+        title: "Open <strong>Settings</strong>",
+        body: "Click <em>the icon</em>.",
+      }),
+    ]);
+    const files = buildDocumentPptxFiles(doc);
+    const slide1 = decode(files["ppt/slides/slide1.xml"]!);
+    // Tags stripped; raw text survives.
+    expect(slide1).toContain("<a:t>Open Settings</a:t>");
+    expect(slide1).toContain("<a:t>Click the icon.</a:t>");
+  });
+
+  it("escapes special chars in title / body for OOXML emit", () => {
+    // The HTML-stripper drops anything between `<` and `>`, so
+    // we use stand-alone `&` here — that's the canonical case
+    // (title text typed by the user is plain text most of the
+    // time, and `&` is the only character that needs escaping
+    // for OOXML).
+    const doc = makeDocument([
+      makeStepBlock("step-1", 800, 600, { title: "AT&T billing", body: "" }),
+    ]);
+    const files = buildDocumentPptxFiles(doc);
+    const slide1 = decode(files["ppt/slides/slide1.xml"]!);
+    expect(slide1).toContain("<a:t>AT&amp;T billing</a:t>");
+  });
+
+  it("positions the overlays per layout — image-top puts text near the bottom", () => {
+    const doc = makeDocument([
+      makeStepBlock("step-1", 800, 600, {
+        title: "T",
+        body: "B",
+        layout: "image-top",
+      }),
+    ]);
+    const slide1 = decode(buildDocumentPptxFiles(doc)["ppt/slides/slide1.xml"]!);
+    // Title rect at (4%, 72%, 92%, 8%) of (800, 600) →
+    // x = 32px, y = 432px in canvas; in EMU the values are
+    // x * 9525, y * 9525.
+    expect(slide1).toMatch(/StepTitle[\s\S]*?<a:off x="304800" y="4114800"\/>/);
+  });
+
+  it("positions the overlays per layout — image-bottom puts text near the top", () => {
+    const doc = makeDocument([
+      makeStepBlock("step-1", 800, 600, {
+        title: "T",
+        body: "B",
+        layout: "image-bottom",
+      }),
+    ]);
+    const slide1 = decode(buildDocumentPptxFiles(doc)["ppt/slides/slide1.xml"]!);
+    // Title rect at (4%, 4%, 92%, 8%) → y = 24px → 228600 EMU.
+    expect(slide1).toMatch(/StepTitle[\s\S]*?<a:off x="304800" y="228600"\/>/);
+  });
+
+  it("positions the overlays per layout — image-left puts text on the right half", () => {
+    const doc = makeDocument([
+      makeStepBlock("step-1", 800, 600, {
+        title: "T",
+        body: "B",
+        layout: "image-left",
+      }),
+    ]);
+    const slide1 = decode(buildDocumentPptxFiles(doc)["ppt/slides/slide1.xml"]!);
+    // Title rect at (56%, 6%, 40%, 10%) → x = 448px → 4267200 EMU.
+    expect(slide1).toMatch(/StepTitle[\s\S]*?<a:off x="4267200" y="342900"\/>/);
+  });
+
+  it("positions the overlays per layout — image-right puts text on the left half", () => {
+    const doc = makeDocument([
+      makeStepBlock("step-1", 800, 600, {
+        title: "T",
+        body: "B",
+        layout: "image-right",
+      }),
+    ]);
+    const slide1 = decode(buildDocumentPptxFiles(doc)["ppt/slides/slide1.xml"]!);
+    // Title rect at (4%, 6%, 40%, 10%) → x = 32px → 304800 EMU.
+    expect(slide1).toMatch(/StepTitle[\s\S]*?<a:off x="304800" y="342900"\/>/);
+  });
+
+  it("the overlay backdrop uses a translucent dark fill", () => {
+    const doc = makeDocument([makeStepBlock("step-1", 800, 600, { title: "T", body: "B" })]);
+    const slide1 = decode(buildDocumentPptxFiles(doc)["ppt/slides/slide1.xml"]!);
+    // Black fill with 65% alpha — same on every layout.
+    expect(slide1).toContain(
+      '<a:solidFill><a:srgbClr val="000000"><a:alpha val="65000"/></a:srgbClr></a:solidFill>',
+    );
+  });
+
+  it("the overlay text is white", () => {
+    const doc = makeDocument([makeStepBlock("step-1", 800, 600, { title: "T", body: "B" })]);
+    const slide1 = decode(buildDocumentPptxFiles(doc)["ppt/slides/slide1.xml"]!);
+    expect(slide1).toContain('<a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill>');
+  });
+
+  it("preserves annotation shapes from the step block's SVG (smoke)", () => {
+    const doc = makeDocument([
+      makeStepBlock("step-1", 800, 600, { title: "T", body: "B", withRect: true }),
+    ]);
+    const slide1 = decode(buildDocumentPptxFiles(doc)["ppt/slides/slide1.xml"]!);
+    // The annotation rect — `buildShapeXml` emits it as a
+    // `<p:sp>` with a `prstGeom prst="rect"` (the same shape we
+    // already test for in the image-block path).
+    expect(slide1).toContain('prst="rect"');
+  });
+
+  it("a 3-step golden document produces a stable file map", () => {
+    // Phase 6 golden — three step blocks, mixed layouts, every
+    // overlay rendered. Re-running buildDocumentPptxFiles on
+    // the same input should produce byte-identical bytes
+    // (modulo coreProps's `dcterms:created` which uses the
+    // current timestamp, see filter below).
+    const doc = makeDocument([
+      makeStepBlock("s-1", 800, 600, {
+        title: "Step 1 — Open",
+        body: "Click Settings.",
+        layout: "image-top",
+      }),
+      makeStepBlock("s-2", 800, 600, {
+        title: "Step 2 — Configure",
+        body: "Pick the right option.",
+        layout: "image-left",
+      }),
+      makeStepBlock("s-3", 800, 600, {
+        title: "Step 3 — Apply",
+        body: "Click Apply.",
+        layout: "image-fill",
+      }),
+    ]);
+    const filesA = buildDocumentPptxFiles(doc);
+    const filesB = buildDocumentPptxFiles(doc);
+    const stableKeys = Object.keys(filesA).filter((k) => k !== "docProps/core.xml");
+    expect(stableKeys.sort()).toEqual(
+      Object.keys(filesB)
+        .filter((k) => k !== "docProps/core.xml")
+        .sort(),
+    );
+    for (const key of stableKeys) {
+      expect(decode(filesA[key]!)).toBe(decode(filesB[key]!));
+    }
   });
 });
 
