@@ -32,6 +32,37 @@ import { buildShapeXml, px } from "../drawingml/index.js";
  *  `Blob` re-wrap in `exportDocumentPptx`. */
 export type DocumentPptxFiles = Record<string, Uint8Array>;
 
+/** Phase 6b of `docs/plans/card-procedure-template.md` —
+ *  globally-uniform slide canvas: PowerPoint widescreen (16:9)
+ *  at 1280×720 px (= 12,192,000 × 6,858,000 EMU, the default
+ *  PowerPoint applies when a user picks "Widescreen" without
+ *  customising). Every slide in the deck shares this size,
+ *  regardless of source-image dimensions or step layout, so
+ *  the resulting `.pptx` looks consistent on every projector /
+ *  display and prints cleanly at letter / A4 via PowerPoint's
+ *  auto-fit. */
+const SLIDE_W_PX = 1280;
+const SLIDE_H_PX = 720;
+
+/** Per-step-layout image placement inside the 16:9 slide,
+ *  expressed as fractions (0..1) of the slide width / height.
+ *  The image is `contain`-fitted within this rect — source
+ *  aspect is preserved, letterboxing on either axis is
+ *  accepted. */
+const STEP_IMAGE_REGION: Record<StepLayout, { x: number; y: number; w: number; h: number }> = {
+  // Image fills the upper 65%; bottom 35% reserved for text.
+  "image-top": { x: 0, y: 0, w: 1, h: 0.65 },
+  // Mirror — image at bottom, text up top.
+  "image-bottom": { x: 0, y: 0.35, w: 1, h: 0.65 },
+  // Two-column — image left 55%, text right 45%.
+  "image-left": { x: 0, y: 0, w: 0.55, h: 1 },
+  // Mirror — image right.
+  "image-right": { x: 0.45, y: 0, w: 0.55, h: 1 },
+  // Image fills entire slide; text overlays at the bottom with
+  // a translucent backdrop (matches CSS image-fill).
+  "image-fill": { x: 0, y: 0, w: 1, h: 1 },
+};
+
 /** Per-slide accumulation collected while walking
  *  `doc.blocks`. Image blocks become one entry; non-image
  *  blocks are skipped (Phase 11 doesn't ship the
@@ -40,23 +71,56 @@ export type DocumentPptxFiles = Record<string, Uint8Array>;
 interface SlideData {
   /** 1-based slide index (used for filename `slide${n}.xml`). */
   index: number;
-  /** Slide width in pixels (matches the source SVG's intrinsic
-   *  dimensions; PPTX uses EMU but we compute it via `px()`). */
+  /** The SVG's intrinsic dimensions — used as the child
+   *  coordinate space for the image-group `<a:xfrm>` so
+   *  annotation shapes keep their SVG-native coords. */
   width: number;
   height: number;
   /** Background screenshot bytes, or null when the SVG has no
    *  embedded `<image>` child (annotations-only export). */
   imageBytes: Uint8Array | null;
   imageExt: "png" | "jpeg";
-  /** Per-shape OOXML fragments + the mosaic / blur media that
-   *  rides along (each entry pre-allocates an rId so the
-   *  slide rels can reference it). */
+  /** Phase 6b — image's slide-pixel rect (post-contain). The
+   *  image-group `<p:grpSp>` is placed here; PowerPoint maps
+   *  the child SVG coord space to this rect, automatically
+   *  scaling the image + every annotation in lockstep. */
+  imageRect: { x: number; y: number; w: number; h: number };
+  /** Annotation shapes inside the image group, in SVG coord
+   *  space (no transform — the group's `<a:xfrm>` handles
+   *  scaling and translation). */
   shapes: { xml: string; id: number }[];
+  /** Phase 6b — title / body text overlays positioned in slide
+   *  coords (outside the image group). Empty for image blocks. */
+  topLevelShapes: { xml: string; id: number }[];
   mosaicMedia: {
     filename: string;
     bytes: Uint8Array;
     rid: number;
   }[];
+}
+
+/** Fit `src` inside `region` preserving aspect ratio (CSS
+ *  `object-fit: contain` semantics). Returns the resulting
+ *  rect in slide-pixel coordinates plus the uniform scale
+ *  factor. `region` is expressed as fractions of the slide. */
+function containInRegion(
+  region: { x: number; y: number; w: number; h: number },
+  src: { width: number; height: number },
+): { x: number; y: number; w: number; h: number; scale: number } {
+  const regionPx = {
+    x: region.x * SLIDE_W_PX,
+    y: region.y * SLIDE_H_PX,
+    w: region.w * SLIDE_W_PX,
+    h: region.h * SLIDE_H_PX,
+  };
+  const scaleX = regionPx.w / src.width;
+  const scaleY = regionPx.h / src.height;
+  const scale = Math.min(scaleX, scaleY);
+  const scaledW = src.width * scale;
+  const scaledH = src.height * scale;
+  const offsetX = regionPx.x + (regionPx.w - scaledW) / 2;
+  const offsetY = regionPx.y + (regionPx.h - scaledH) / 2;
+  return { x: offsetX, y: offsetY, w: scaledW, h: scaledH, scale };
 }
 
 /**
@@ -87,20 +151,15 @@ export function buildDocumentPptxFiles(doc: AnnotDocument): DocumentPptxFiles {
     }
   }
 
-  // Use the first slide's dimensions for `<p:sldSz>`; PPTX
-  // requires every slide to share the slide size, so we pick
-  // the first slide's intrinsic dimensions and trust that the
-  // rest match. (Mismatched slide sizes still render — they
-  // just don't fill the slide cleanly. A future enhancement
-  // could pick the max-dimension to leave letterboxing
-  // instead.)
-  const slideW = slides[0]!.width;
-  const slideH = slides[0]!.height;
-
+  // Phase 6b — slide size is now globally uniform at
+  // SLIDE_W_PX × SLIDE_H_PX (16:9 widescreen). Each slide's
+  // own SVG dimensions live on the SlideData as the
+  // image-group's child-coord space; PowerPoint scales the
+  // group to fit the contained rect inside the slide.
   const files: DocumentPptxFiles = {
     "[Content_Types].xml": str(contentTypes(slides.length, usesPng, usesJpeg)),
     "_rels/.rels": str(rootRels()),
-    "ppt/presentation.xml": str(presentation(slideW, slideH, slides.length)),
+    "ppt/presentation.xml": str(presentation(SLIDE_W_PX, SLIDE_H_PX, slides.length)),
     "ppt/_rels/presentation.xml.rels": str(presentationRels(slides.length)),
     "ppt/slideLayouts/slideLayout1.xml": str(slideLayout()),
     "ppt/slideLayouts/_rels/slideLayout1.xml.rels": str(slideLayoutRels()),
@@ -112,9 +171,7 @@ export function buildDocumentPptxFiles(doc: AnnotDocument): DocumentPptxFiles {
   };
 
   for (const s of slides) {
-    files[`ppt/slides/slide${s.index}.xml`] = str(
-      buildSlideXml(slideW, slideH, s.shapes, s.imageBytes !== null),
-    );
+    files[`ppt/slides/slide${s.index}.xml`] = str(buildSlideXml(s));
     files[`ppt/slides/_rels/slide${s.index}.xml.rels`] = str(
       slideRels(s.index, s.imageBytes !== null, s.imageExt, s.mosaicMedia),
     );
@@ -225,13 +282,22 @@ function buildSlideFromImageBlock(block: ImageBlock, index: number): SlideData |
     }
   }
 
+  // Phase 6b — image blocks `contain`-fit the source into the
+  // full slide rect (16:9). The source aspect may not match
+  // 16:9 → letterboxing on one axis is accepted. Annotation
+  // shapes stay in their original SVG coords; PowerPoint
+  // scales them via the image-group's `<a:xfrm>` mapping.
+  const imageRect = containInRegion({ x: 0, y: 0, w: 1, h: 1 }, { width, height });
+
   return {
     index,
     width,
     height,
     imageBytes: imageInfo?.bytes ?? null,
     imageExt: imageInfo?.ext ?? "png",
+    imageRect,
     shapes,
+    topLevelShapes: [],
     mosaicMedia,
   };
 }
@@ -272,46 +338,63 @@ function buildSlideFromStepBlock(block: StepBlock, index: number): SlideData | n
   const base = buildSlideFromImageBlock({ kind: "image", id: block.id, svg: block.svg }, index);
   if (!base) return null;
 
+  // Phase 6b — recompute the image rect per layout. Phase 6 v1
+  // delegated to `buildSlideFromImageBlock` (which fills the
+  // full slide); for step blocks the image should sit in its
+  // layout-specific region with the text taking the remainder.
+  base.imageRect = containInRegion(STEP_IMAGE_REGION[block.layout], {
+    width: base.width,
+    height: base.height,
+  });
+
   // Allocate fresh `<p:cNvPr id="..."/>` ids for the text
-  // shapes. `buildSlideFromImageBlock` started at 2 and
-  // incremented per annotation; pick up from there.
+  // shapes. Top-level shapes use their own id sequence (the
+  // annotation `<p:cNvPr id="..."/>` numbers live inside the
+  // image group's own coordinate space, so they don't collide
+  // with slide-level ids, but PowerPoint expects unique ids
+  // across the whole `<p:spTree>` — keep the counter monotonic
+  // to be safe).
   let nextId = base.shapes.reduce((m, s) => Math.max(m, s.id), 1) + 1;
 
   const placements = LAYOUT_PLACEMENTS[block.layout];
   const titleText = stripInlineHtml(block.title);
   const bodyText = stripInlineHtml(block.body);
+  // Only the image-fill layout uses the overlay style
+  // (translucent dark backdrop + white text). For the area-
+  // based layouts the text region sits ALONGSIDE the image,
+  // so we render plain dark-on-transparent text — matches
+  // PowerPoint's default body-text appearance.
+  const overlay = block.layout === "image-fill";
 
   // Empty title or body slots — common when the user hasn't
   // typed anything yet — are emitted as visible empty boxes
   // would be noise. Skip them.
   if (titleText.length > 0) {
     const titleId = nextId++;
-    base.shapes.push({
-      xml: buildOverlayTextShapeXml({
+    base.topLevelShapes.push({
+      xml: buildStepTextShapeXml({
         id: titleId,
         name: "StepTitle",
         text: titleText,
         rect: placements.title,
-        slideW: base.width,
-        slideH: base.height,
         fontSizeHpt: 2400,
         bold: true,
+        overlay,
       }),
       id: titleId,
     });
   }
   if (bodyText.length > 0) {
     const bodyId = nextId++;
-    base.shapes.push({
-      xml: buildOverlayTextShapeXml({
+    base.topLevelShapes.push({
+      xml: buildStepTextShapeXml({
         id: bodyId,
         name: "StepBody",
         text: bodyText,
         rect: placements.body,
-        slideW: base.width,
-        slideH: base.height,
         fontSizeHpt: 1600,
         bold: false,
+        overlay,
       }),
       id: bodyId,
     });
@@ -320,10 +403,12 @@ function buildSlideFromStepBlock(block: StepBlock, index: number): SlideData | n
   return base;
 }
 
-/** Per-layout rectangles (as fractions of slide width / height)
- *  for the step block's title + body overlay. Mirrors the CSS
- *  layout's "text region" position: text sits where the body
- *  sits in the in-editor card render. */
+/** Phase 6b — per-layout title + body text-shape positions
+ *  (slide-coordinate fractions). Coordinates pair up with the
+ *  matching `STEP_IMAGE_REGION` so the text sits in the slide
+ *  area NOT occupied by the image. For `image-fill` the text
+ *  still overlays the image at the bottom — that's the only
+ *  layout where image + text share slide pixels. */
 const LAYOUT_PLACEMENTS: Record<
   StepLayout,
   {
@@ -331,27 +416,29 @@ const LAYOUT_PLACEMENTS: Record<
     body: { x: number; y: number; w: number; h: number };
   }
 > = {
-  // CSS: image top, text bottom — PPTX puts text at slide bottom.
+  // Image fills upper 65% → text in bottom 35%.
   "image-top": {
-    title: { x: 0.04, y: 0.72, w: 0.92, h: 0.08 },
-    body: { x: 0.04, y: 0.8, w: 0.92, h: 0.16 },
+    title: { x: 0.04, y: 0.67, w: 0.92, h: 0.08 },
+    body: { x: 0.04, y: 0.75, w: 0.92, h: 0.23 },
   },
-  // CSS: image bottom, text top — PPTX puts text at slide top.
+  // Image fills lower 65% → text in top 35%.
   "image-bottom": {
     title: { x: 0.04, y: 0.04, w: 0.92, h: 0.08 },
-    body: { x: 0.04, y: 0.12, w: 0.92, h: 0.16 },
+    body: { x: 0.04, y: 0.12, w: 0.92, h: 0.23 },
   },
-  // CSS: image left, text right — PPTX puts text on right side.
+  // Image left 55% → text right 45%.
   "image-left": {
-    title: { x: 0.56, y: 0.06, w: 0.4, h: 0.1 },
-    body: { x: 0.56, y: 0.16, w: 0.4, h: 0.78 },
+    title: { x: 0.58, y: 0.04, w: 0.4, h: 0.1 },
+    body: { x: 0.58, y: 0.14, w: 0.4, h: 0.82 },
   },
-  // CSS: image right, text left — PPTX puts text on left side.
+  // Image right 55% → text left 45%.
   "image-right": {
-    title: { x: 0.04, y: 0.06, w: 0.4, h: 0.1 },
-    body: { x: 0.04, y: 0.16, w: 0.4, h: 0.78 },
+    title: { x: 0.02, y: 0.04, w: 0.4, h: 0.1 },
+    body: { x: 0.02, y: 0.14, w: 0.4, h: 0.82 },
   },
-  // CSS: image fill + text bottom overlay — PPTX matches.
+  // Image fills slide → text overlays at the bottom (only
+  // layout where text shares pixels with the image; renders
+  // with the translucent backdrop).
   "image-fill": {
     title: { x: 0.04, y: 0.78, w: 0.92, h: 0.08 },
     body: { x: 0.04, y: 0.86, w: 0.92, h: 0.1 },
@@ -385,27 +472,40 @@ interface OverlayTextShapeOptions {
   name: string;
   text: string;
   rect: { x: number; y: number; w: number; h: number };
-  slideW: number;
-  slideH: number;
   /** Font size in hundredths of a point (PowerPoint's `sz`
    *  attribute unit). `2400` = 24 pt. */
   fontSizeHpt: number;
   bold: boolean;
+  /** When `true`, render with the translucent dark backdrop +
+   *  white text (image-fill style). When `false`, plain
+   *  dark-on-transparent text (sits in a slide region of its
+   *  own — image-top / -bottom / -left / -right). */
+  overlay: boolean;
 }
 
 /**
- * Emit one `<p:sp>` for the step's title or body overlay.
- * The shape draws a translucent dark backdrop (`alpha 65%`)
- * with white text on top so the overlay stays readable
- * against any screenshot. Phase 6 v1 — single-run plain text.
+ * Emit one `<p:sp>` for the step's title or body. Phase 6b
+ * keeps the overlay style (translucent dark backdrop + white
+ * text) for the `image-fill` layout where the text shares
+ * pixels with the image; the other four layouts use plain
+ * dark-on-transparent text in their own slide region.
+ *
+ * Always single-run plain text — rich `TextRun[]` formatting
+ * is a Phase 7+ enhancement.
  */
-function buildOverlayTextShapeXml(opts: OverlayTextShapeOptions): string {
-  const xPx = opts.slideW * opts.rect.x;
-  const yPx = opts.slideH * opts.rect.y;
-  const wPx = opts.slideW * opts.rect.w;
-  const hPx = opts.slideH * opts.rect.h;
+function buildStepTextShapeXml(opts: OverlayTextShapeOptions): string {
+  const xPx = SLIDE_W_PX * opts.rect.x;
+  const yPx = SLIDE_H_PX * opts.rect.y;
+  const wPx = SLIDE_W_PX * opts.rect.w;
+  const hPx = SLIDE_H_PX * opts.rect.h;
   const text = escapeOoxmlText(opts.text);
   const boldAttr = opts.bold ? ' b="1"' : "";
+  // Overlay style: dark translucent backdrop + white text.
+  // Region style: transparent backdrop + dark text.
+  const fillXml = opts.overlay
+    ? `<a:solidFill><a:srgbClr val="000000"><a:alpha val="65000"/></a:srgbClr></a:solidFill>`
+    : `<a:noFill/>`;
+  const textColor = opts.overlay ? "FFFFFF" : "000000";
   return `<p:sp>
         <p:nvSpPr>
           <p:cNvPr id="${opts.id}" name="${opts.name}"/>
@@ -418,7 +518,7 @@ function buildOverlayTextShapeXml(opts: OverlayTextShapeOptions): string {
             <a:ext cx="${px(wPx)}" cy="${px(hPx)}"/>
           </a:xfrm>
           <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
-          <a:solidFill><a:srgbClr val="000000"><a:alpha val="65000"/></a:srgbClr></a:solidFill>
+          ${fillXml}
           <a:ln><a:noFill/></a:ln>
         </p:spPr>
         <p:txBody>
@@ -428,7 +528,7 @@ function buildOverlayTextShapeXml(opts: OverlayTextShapeOptions): string {
             <a:pPr algn="ctr"><a:defRPr/></a:pPr>
             <a:r>
               <a:rPr lang="en-US" sz="${opts.fontSizeHpt}"${boldAttr}>
-                <a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill>
+                <a:solidFill><a:srgbClr val="${textColor}"/></a:solidFill>
               </a:rPr>
               <a:t>${text}</a:t>
             </a:r>
@@ -607,42 +707,82 @@ function presentationRels(slideCount: number): string {
 </Relationships>`;
 }
 
-function buildSlideXml(
-  w: number,
-  h: number,
-  shapes: { xml: string; id: number }[],
-  hasImage: boolean,
-): string {
-  const shapeXml = shapes.map((s) => s.xml).join("\n");
+/**
+ * Phase 6b — slide XML now builds a `<p:grpSp>` that wraps the
+ * image + annotation shapes with an `<a:xfrm>` mapping the
+ * source SVG coordinate space `(chOff=0,0 chExt=svgW,svgH)`
+ * onto the contained image rect `(off=imageRect.x,y
+ * ext=imageRect.w,h)`. PowerPoint applies the group transform
+ * to every child, so annotations stay aligned with the image
+ * without per-shape coordinate scaling.
+ *
+ * Top-level shapes (step block title / body text overlays)
+ * sit OUTSIDE the group at slide-space positions — they don't
+ * scale with the image group.
+ *
+ * The slide canvas itself is uniformly `SLIDE_W_PX × SLIDE_H_PX`
+ * for every slide in the deck.
+ */
+function buildSlideXml(slide: SlideData): string {
+  const annotationXml = slide.shapes.map((s) => s.xml).join("\n");
+  const topLevelXml = slide.topLevelShapes.map((s) => s.xml).join("\n");
+  const hasImage = slide.imageBytes !== null;
+  const hasAnnotations = slide.shapes.length > 0;
+
+  // Image element inside the group, in CHILD coord space
+  // (0..svgW, 0..svgH).
   const picXml = hasImage
     ? `<p:pic>
-      <p:nvPicPr>
-        <p:cNvPr id="1000" name="Screenshot"/>
-        <p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr>
-        <p:nvPr/>
-      </p:nvPicPr>
-      <p:blipFill>
-        <a:blip r:embed="rId2"/>
-        <a:stretch><a:fillRect/></a:stretch>
-      </p:blipFill>
-      <p:spPr>
-        <a:xfrm>
-          <a:off x="0" y="0"/>
-          <a:ext cx="${px(w)}" cy="${px(h)}"/>
-        </a:xfrm>
-        <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
-      </p:spPr>
-    </p:pic>`
+        <p:nvPicPr>
+          <p:cNvPr id="1000" name="Screenshot"/>
+          <p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr>
+          <p:nvPr/>
+        </p:nvPicPr>
+        <p:blipFill>
+          <a:blip r:embed="rId2"/>
+          <a:stretch><a:fillRect/></a:stretch>
+        </p:blipFill>
+        <p:spPr>
+          <a:xfrm>
+            <a:off x="0" y="0"/>
+            <a:ext cx="${px(slide.width)}" cy="${px(slide.height)}"/>
+          </a:xfrm>
+          <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+        </p:spPr>
+      </p:pic>`
     : "";
+
+  // Image-group `<a:xfrm>` — maps child coords to the
+  // contained image rect in slide space.
+  const groupXml =
+    hasImage || hasAnnotations
+      ? `<p:grpSp>
+        <p:nvGrpSpPr>
+          <p:cNvPr id="2" name="ImageGroup"/>
+          <p:cNvGrpSpPr/>
+          <p:nvPr/>
+        </p:nvGrpSpPr>
+        <p:grpSpPr>
+          <a:xfrm>
+            <a:off x="${px(slide.imageRect.x)}" y="${px(slide.imageRect.y)}"/>
+            <a:ext cx="${px(slide.imageRect.w)}" cy="${px(slide.imageRect.h)}"/>
+            <a:chOff x="0" y="0"/>
+            <a:chExt cx="${px(slide.width)}" cy="${px(slide.height)}"/>
+          </a:xfrm>
+        </p:grpSpPr>
+        ${picXml}
+        ${annotationXml}
+      </p:grpSp>`
+      : "";
 
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
   <p:cSld>
     <p:spTree>
       <p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>
-      <p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${px(w)}" cy="${px(h)}"/><a:chOff x="0" y="0"/><a:chExt cx="${px(w)}" cy="${px(h)}"/></a:xfrm></p:grpSpPr>
-      ${picXml}
-      ${shapeXml}
+      <p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${px(SLIDE_W_PX)}" cy="${px(SLIDE_H_PX)}"/><a:chOff x="0" y="0"/><a:chExt cx="${px(SLIDE_W_PX)}" cy="${px(SLIDE_H_PX)}"/></a:xfrm></p:grpSpPr>
+      ${groupXml}
+      ${topLevelXml}
     </p:spTree>
   </p:cSld>
 </p:sld>`;
