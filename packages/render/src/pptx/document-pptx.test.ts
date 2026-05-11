@@ -307,73 +307,76 @@ describe("buildDocumentPptxFiles: step blocks (Phase 6)", () => {
     expect(slide1).toContain("<a:t>AT&amp;T billing</a:t>");
   });
 
+  // Phase 6b: slide canvas is uniformly 1280×720; title /
+  // body rects are computed from `LAYOUT_PLACEMENTS` against
+  // those dimensions. EMU = px × 9525.
   it("positions the overlays per layout — image-top puts text near the bottom", () => {
     const doc = makeDocument([
-      makeStepBlock("step-1", 800, 600, {
-        title: "T",
-        body: "B",
-        layout: "image-top",
-      }),
+      makeStepBlock("step-1", 800, 600, { title: "T", body: "B", layout: "image-top" }),
     ]);
     const slide1 = decode(buildDocumentPptxFiles(doc)["ppt/slides/slide1.xml"]!);
-    // Title rect at (4%, 72%, 92%, 8%) of (800, 600) →
-    // x = 32px, y = 432px in canvas; in EMU the values are
-    // x * 9525, y * 9525.
-    expect(slide1).toMatch(/StepTitle[\s\S]*?<a:off x="304800" y="4114800"\/>/);
+    // Title rect at (4%, 67%, 92%, 8%) of (1280, 720) →
+    // x = 51.2 px, y = 482.4 px → EMU = 487680, 4594860.
+    expect(slide1).toMatch(/StepTitle[\s\S]*?<a:off x="487680" y="4594860"\/>/);
   });
 
   it("positions the overlays per layout — image-bottom puts text near the top", () => {
     const doc = makeDocument([
-      makeStepBlock("step-1", 800, 600, {
-        title: "T",
-        body: "B",
-        layout: "image-bottom",
-      }),
+      makeStepBlock("step-1", 800, 600, { title: "T", body: "B", layout: "image-bottom" }),
     ]);
     const slide1 = decode(buildDocumentPptxFiles(doc)["ppt/slides/slide1.xml"]!);
-    // Title rect at (4%, 4%, 92%, 8%) → y = 24px → 228600 EMU.
-    expect(slide1).toMatch(/StepTitle[\s\S]*?<a:off x="304800" y="228600"\/>/);
+    // Title rect at (4%, 4%, 92%, 8%) → x=51.2, y=28.8 → 487680, 274320 EMU.
+    expect(slide1).toMatch(/StepTitle[\s\S]*?<a:off x="487680" y="274320"\/>/);
   });
 
   it("positions the overlays per layout — image-left puts text on the right half", () => {
     const doc = makeDocument([
-      makeStepBlock("step-1", 800, 600, {
-        title: "T",
-        body: "B",
-        layout: "image-left",
-      }),
+      makeStepBlock("step-1", 800, 600, { title: "T", body: "B", layout: "image-left" }),
     ]);
     const slide1 = decode(buildDocumentPptxFiles(doc)["ppt/slides/slide1.xml"]!);
-    // Title rect at (56%, 6%, 40%, 10%) → x = 448px → 4267200 EMU.
-    expect(slide1).toMatch(/StepTitle[\s\S]*?<a:off x="4267200" y="342900"\/>/);
+    // Title rect at (58%, 4%, 40%, 10%) → x=742.4, y=28.8 → 7071360, 274320 EMU.
+    expect(slide1).toMatch(/StepTitle[\s\S]*?<a:off x="7071360" y="274320"\/>/);
   });
 
   it("positions the overlays per layout — image-right puts text on the left half", () => {
     const doc = makeDocument([
-      makeStepBlock("step-1", 800, 600, {
-        title: "T",
-        body: "B",
-        layout: "image-right",
-      }),
+      makeStepBlock("step-1", 800, 600, { title: "T", body: "B", layout: "image-right" }),
     ]);
     const slide1 = decode(buildDocumentPptxFiles(doc)["ppt/slides/slide1.xml"]!);
-    // Title rect at (4%, 6%, 40%, 10%) → x = 32px → 304800 EMU.
-    expect(slide1).toMatch(/StepTitle[\s\S]*?<a:off x="304800" y="342900"\/>/);
+    // Title rect at (2%, 4%, 40%, 10%) → x=25.6, y=28.8 → 243840, 274320 EMU.
+    expect(slide1).toMatch(/StepTitle[\s\S]*?<a:off x="243840" y="274320"\/>/);
   });
 
-  it("the overlay backdrop uses a translucent dark fill", () => {
-    const doc = makeDocument([makeStepBlock("step-1", 800, 600, { title: "T", body: "B" })]);
+  // Phase 6b: the translucent-backdrop + white-text overlay
+  // style is reserved for image-fill (where text and image
+  // share slide pixels). The four area-based layouts use a
+  // transparent backdrop with dark text instead, since the
+  // text sits in its own slide region.
+  it("image-fill uses the translucent dark fill + white text overlay", () => {
+    const doc = makeDocument([
+      makeStepBlock("step-1", 800, 600, { title: "T", body: "B", layout: "image-fill" }),
+    ]);
     const slide1 = decode(buildDocumentPptxFiles(doc)["ppt/slides/slide1.xml"]!);
-    // Black fill with 65% alpha — same on every layout.
     expect(slide1).toContain(
       '<a:solidFill><a:srgbClr val="000000"><a:alpha val="65000"/></a:srgbClr></a:solidFill>',
     );
+    expect(slide1).toContain('<a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill>');
   });
 
-  it("the overlay text is white", () => {
-    const doc = makeDocument([makeStepBlock("step-1", 800, 600, { title: "T", body: "B" })]);
+  it("area-based layouts (image-top etc.) use a transparent backdrop + dark text", () => {
+    const doc = makeDocument([
+      makeStepBlock("step-1", 800, 600, { title: "T", body: "B", layout: "image-top" }),
+    ]);
     const slide1 = decode(buildDocumentPptxFiles(doc)["ppt/slides/slide1.xml"]!);
-    expect(slide1).toContain('<a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill>');
+    // No translucent backdrop on the text shape itself —
+    // the `<p:sp>` carries `<a:noFill/>` and dark
+    // `srgbClr val="000000"` text.
+    const titleStart = slide1.indexOf("StepTitle");
+    const titleEnd = slide1.indexOf("</p:sp>", titleStart);
+    const titleXml = slide1.slice(titleStart, titleEnd);
+    expect(titleXml).toContain("<a:noFill/>");
+    expect(titleXml).toContain('<a:solidFill><a:srgbClr val="000000"/></a:solidFill>');
+    expect(titleXml).not.toContain('<a:alpha val="65000"/>');
   });
 
   it("preserves annotation shapes from the step block's SVG (smoke)", () => {
@@ -421,6 +424,131 @@ describe("buildDocumentPptxFiles: step blocks (Phase 6)", () => {
     for (const key of stableKeys) {
       expect(decode(filesA[key]!)).toBe(decode(filesB[key]!));
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 6b — globally-uniform 16:9 slide canvas (1280×720 px),
+// image `contain`-fit into per-layout sub-rect, annotations
+// kept in SVG coord space via the image-group `<a:xfrm>`.
+// ---------------------------------------------------------------------------
+
+describe("buildDocumentPptxFiles: 16:9 slide canvas (Phase 6b)", () => {
+  it("every slide uses the uniform 1280×720 slide size regardless of source image dimensions", () => {
+    const doc = makeDocument([
+      // Three image blocks at wildly different aspect ratios —
+      // a 1916×1872 (square-ish) capture, a 1920×1080 (16:9),
+      // and a 600×1200 (portrait). All three should produce
+      // slides with the same `<p:sldSz>`.
+      makeImageBlock("img-1", 1916, 1872),
+      makeImageBlock("img-2", 1920, 1080),
+      makeImageBlock("img-3", 600, 1200),
+    ]);
+    const files = buildDocumentPptxFiles(doc);
+    const presentationXml = decode(files["ppt/presentation.xml"]!);
+    // 1280 px → 12,192,000 EMU; 720 px → 6,858,000 EMU. These
+    // are PowerPoint's default widescreen slide dimensions.
+    expect(presentationXml).toContain('<p:sldSz cx="12192000" cy="6858000" type="custom"/>');
+  });
+
+  it("the image lives inside a <p:grpSp> with an xfrm that contains the SVG into the image region", () => {
+    // Source dims 1280×720 (matches slide aspect exactly) →
+    // image fills the full slide without letterboxing.
+    const doc = makeDocument([makeImageBlock("img-1", 1280, 720)]);
+    const files = buildDocumentPptxFiles(doc);
+    const slideXml = decode(files["ppt/slides/slide1.xml"]!);
+    expect(slideXml).toContain("<p:grpSp>");
+    expect(slideXml).toContain('name="ImageGroup"');
+    // Image group's outer off + ext match the contained image
+    // rect (here the full slide).
+    expect(slideXml).toContain('<a:off x="0" y="0"/>');
+    expect(slideXml).toMatch(
+      /ImageGroup[\s\S]*?<a:ext cx="12192000" cy="6858000"\/>[\s\S]*?<a:chOff x="0" y="0"\/>[\s\S]*?<a:chExt cx="12192000" cy="6858000"\/>/,
+    );
+  });
+
+  it("image-block source narrower than the slide is letterboxed horizontally", () => {
+    // Portrait source 600×1200 (aspect 0.5). Slide is 1280×720
+    // (aspect ~1.78). Contain: scale = min(1280/600, 720/1200)
+    // = min(2.133, 0.6) = 0.6. Scaled image = 360×720.
+    // Centered: x = (1280-360)/2 = 460, y = 0. EMU: 460*9525 =
+    // 4381500; ext = 360*9525 = 3429000 wide, 720*9525 = 6858000.
+    const doc = makeDocument([makeImageBlock("img-portrait", 600, 1200)]);
+    const slideXml = decode(buildDocumentPptxFiles(doc)["ppt/slides/slide1.xml"]!);
+    expect(slideXml).toMatch(
+      /ImageGroup[\s\S]*?<a:off x="4381500" y="0"\/>[\s\S]*?<a:ext cx="3429000" cy="6858000"\/>/,
+    );
+  });
+
+  it("step block image-top puts the image in the upper 65% of the slide", () => {
+    // Source 1280×720 (16:9). Region (0..1280, 0..468). Source
+    // aspect matches slide aspect (1.78); contained = 832×468
+    // centered → x = (1280-832)/2 = 224 px → 2133600 EMU,
+    // y = 0. ext = 832 px wide → 7924800 EMU, 468 px tall →
+    // 4457700 EMU.
+    const doc = makeDocument([
+      makeStepBlock("step-1", 1280, 720, { title: "T", body: "B", layout: "image-top" }),
+    ]);
+    const slideXml = decode(buildDocumentPptxFiles(doc)["ppt/slides/slide1.xml"]!);
+    expect(slideXml).toMatch(
+      /ImageGroup[\s\S]*?<a:off x="2133600" y="0"\/>[\s\S]*?<a:ext cx="7924800" cy="4457700"\/>/,
+    );
+  });
+
+  it("step block image-fill spans the full slide", () => {
+    // image-fill region = full slide; 1280×720 source matches
+    // aspect → no letterboxing, image fills 1280×720.
+    const doc = makeDocument([
+      makeStepBlock("step-1", 1280, 720, { title: "T", body: "B", layout: "image-fill" }),
+    ]);
+    const slideXml = decode(buildDocumentPptxFiles(doc)["ppt/slides/slide1.xml"]!);
+    expect(slideXml).toMatch(
+      /ImageGroup[\s\S]*?<a:off x="0" y="0"\/>[\s\S]*?<a:ext cx="12192000" cy="6858000"\/>/,
+    );
+  });
+
+  it("step block image-left puts the image in the left 55%", () => {
+    // Region (0..704px, 0..720px). 1280×720 source aspect 1.78.
+    // scale = min(704/1280, 720/720) = min(0.55, 1) = 0.55.
+    // Scaled = 704×396. Centered in the region:
+    //   x = 0, y = (720-396)/2 = 162 px = 1,543,050 EMU.
+    //   ext = 704 × 9525 = 6,705,600 wide,
+    //         396 × 9525 = 3,771,900 tall.
+    const doc = makeDocument([
+      makeStepBlock("step-1", 1280, 720, { title: "T", body: "B", layout: "image-left" }),
+    ]);
+    const slideXml = decode(buildDocumentPptxFiles(doc)["ppt/slides/slide1.xml"]!);
+    expect(slideXml).toMatch(
+      /ImageGroup[\s\S]*?<a:off x="0" y="1543050"\/>[\s\S]*?<a:ext cx="6705600" cy="3771900"\/>/,
+    );
+  });
+
+  it("annotation shapes stay in SVG coord space inside the image group (no per-shape coord scaling)", () => {
+    // The annotation rect was authored at (10, 10, 100, 50)
+    // in SVG coords. After Phase 6b the shape XML emits with
+    // those raw coordinates (× 9525 for EMU) — the
+    // surrounding `<p:grpSp>` xfrm handles the scale.
+    const doc = makeDocument([makeImageBlock("img-1", 800, 600, { withRect: true })]);
+    const slideXml = decode(buildDocumentPptxFiles(doc)["ppt/slides/slide1.xml"]!);
+    // 10 px × 9525 = 95250 EMU; 100 px × 9525 = 952500;
+    // 50 × 9525 = 476250.
+    expect(slideXml).toMatch(
+      /<a:off x="95250" y="95250"\/>[\s\S]*?<a:ext cx="952500" cy="476250"\/>/,
+    );
+  });
+
+  it("top-level text shapes (title/body) sit OUTSIDE the image group", () => {
+    const doc = makeDocument([
+      makeStepBlock("step-1", 800, 600, { title: "T", body: "B", layout: "image-top" }),
+    ]);
+    const slideXml = decode(buildDocumentPptxFiles(doc)["ppt/slides/slide1.xml"]!);
+    // The `StepTitle` shape's <p:sp> appears AFTER the closing
+    // </p:grpSp> of the image group (i.e. as a sibling in the
+    // spTree, not a child of the group).
+    const groupEnd = slideXml.indexOf("</p:grpSp>");
+    const titlePos = slideXml.indexOf("StepTitle");
+    expect(groupEnd).toBeGreaterThan(-1);
+    expect(titlePos).toBeGreaterThan(groupEnd);
   });
 });
 
