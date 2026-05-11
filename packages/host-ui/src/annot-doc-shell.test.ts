@@ -1502,3 +1502,188 @@ describe("annot-doc-shell: paste / drop image insertion", () => {
     expect(last.svg).toContain('viewBox="0 0 64 48"');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Phase 3 of docs/plans/card-procedure-template.md — step block
+// editing affordances.
+// ---------------------------------------------------------------------------
+
+describe("annot-doc-shell: step block editing", () => {
+  function makeStepDoc(): AnnotDocument {
+    return {
+      version: 1,
+      lang: "en",
+      title: "Step doc",
+      meta: { title: "Step doc" },
+      styleBlock: null,
+      blocks: [
+        {
+          kind: "step",
+          id: "img-step-test",
+          svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100"></svg>',
+          title: "First step",
+          body: "Click the button.",
+          layout: "image-top",
+        },
+      ],
+    };
+  }
+
+  it("renders a step block as <section> with svg slot + title + body in read-only mode", async () => {
+    const el = mount(makeStepDoc());
+    el.editing = false;
+    await el.updateComplete;
+    const section = el.querySelector('section[data-annot-block="step"]');
+    expect(section).not.toBeNull();
+    expect(section?.getAttribute("data-step-layout")).toBe("image-top");
+    expect(section?.getAttribute("data-annot-image-id")).toBe("img-step-test");
+    expect(section?.querySelector(".annot-doc-image-svg-slot")).not.toBeNull();
+    const title = section?.querySelector("h3[data-step-title]") as HTMLElement | null;
+    const body = section?.querySelector("p[data-step-body]") as HTMLElement | null;
+    expect(title?.textContent).toBe("First step");
+    expect(body?.textContent).toBe("Click the button.");
+    // Read-only mode: no contenteditable attributes.
+    expect(title?.getAttribute("contenteditable")).toBeNull();
+    expect(body?.getAttribute("contenteditable")).toBeNull();
+  });
+
+  it("renders title + body as contentEditable when editing", async () => {
+    const el = mount(makeStepDoc());
+    el.editing = true;
+    await el.updateComplete;
+    const title = el.querySelector(
+      'section[data-annot-block="step"] [data-step-title]',
+    ) as HTMLElement | null;
+    const body = el.querySelector(
+      'section[data-annot-block="step"] [data-step-body]',
+    ) as HTMLElement | null;
+    expect(title?.getAttribute("contenteditable")).toBe("true");
+    expect(body?.getAttribute("contenteditable")).toBe("true");
+    // Initial bodies come from the imperative populate pass.
+    expect(title?.innerHTML).toBe("First step");
+    expect(body?.innerHTML).toBe("Click the button.");
+  });
+
+  it("syncs DOM edits back to the document model on debounced input", async () => {
+    vi.useFakeTimers();
+    const el = mount(makeStepDoc());
+    el.editing = true;
+    await el.updateComplete;
+    const title = el.querySelector(
+      'section[data-annot-block="step"] [data-step-title]',
+    ) as HTMLElement;
+    const body = el.querySelector(
+      'section[data-annot-block="step"] [data-step-body]',
+    ) as HTMLElement;
+    title.innerHTML = "Updated title";
+    body.innerHTML = "Updated body.";
+    // Input bubbles through the article-level listener which
+    // debounces the sync (COMMIT_DEBOUNCE_MS). Advance past the
+    // window so the commit fires.
+    title.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    vi.advanceTimersByTime(700);
+    await el.updateComplete;
+    const step = el.document!.blocks[0];
+    if (step?.kind !== "step") throw new Error("expected step block");
+    expect(step.title).toBe("Updated title");
+    expect(step.body).toBe("Updated body.");
+    vi.useRealTimers();
+  });
+
+  it("preserves cursor by leaving the active editable alone on populate", async () => {
+    const el = mount(makeStepDoc());
+    el.editing = true;
+    await el.updateComplete;
+    const title = el.querySelector(
+      'section[data-annot-block="step"] [data-step-title]',
+    ) as HTMLElement;
+    // Simulate the user holding focus on the title while a
+    // re-render is triggered (e.g. unrelated block-action).
+    title.focus();
+    title.innerHTML = "User-typed";
+    // Re-apply the same document — the populate pass would
+    // overwrite if we weren't focus-aware.
+    el.document = { ...el.document! };
+    await el.updateComplete;
+    expect(title.innerHTML).toBe("User-typed");
+  });
+
+  it("opens the image editor modal when the svg slot is clicked", async () => {
+    const el = mount(makeStepDoc());
+    el.editing = true;
+    await el.updateComplete;
+    el.materialiseAllImagesNow();
+    const openSpy = vi
+      .spyOn(
+        // biome-ignore lint/suspicious/noExplicitAny: spying on module-level static
+        (await import("./annot-doc-image-editor-modal.js")).AnnotDocImageEditorModalElement as any,
+        "openFor",
+      )
+      .mockResolvedValue({ kind: "cancel" });
+    const slot = el.querySelector(".annot-doc-image-svg-slot") as HTMLElement;
+    slot.click();
+    expect(openSpy).toHaveBeenCalledTimes(1);
+    const arg = openSpy.mock.calls[0]?.[0] as { id: string; svg: string };
+    expect(arg.id).toBe("img-step-test");
+    openSpy.mockRestore();
+  });
+
+  it("does NOT open the image modal when clicking on the contentEditable slots", async () => {
+    const el = mount(makeStepDoc());
+    el.editing = true;
+    await el.updateComplete;
+    const openSpy = vi
+      .spyOn(
+        // biome-ignore lint/suspicious/noExplicitAny: spying on module-level static
+        (await import("./annot-doc-image-editor-modal.js")).AnnotDocImageEditorModalElement as any,
+        "openFor",
+      )
+      .mockResolvedValue({ kind: "cancel" });
+    const title = el.querySelector(
+      'section[data-annot-block="step"] [data-step-title]',
+    ) as HTMLElement;
+    title.click();
+    expect(openSpy).not.toHaveBeenCalled();
+    const body = el.querySelector(
+      'section[data-annot-block="step"] [data-step-body]',
+    ) as HTMLElement;
+    body.click();
+    expect(openSpy).not.toHaveBeenCalled();
+    openSpy.mockRestore();
+  });
+
+  it("updates step.svg when the image editor modal saves", async () => {
+    const el = mount(makeStepDoc());
+    el.editing = true;
+    await el.updateComplete;
+    el.materialiseAllImagesNow();
+    const newSvg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200"></svg>';
+    const openSpy = vi
+      .spyOn(
+        // biome-ignore lint/suspicious/noExplicitAny: spying on module-level static
+        (await import("./annot-doc-image-editor-modal.js")).AnnotDocImageEditorModalElement as any,
+        "openFor",
+      )
+      .mockResolvedValue({ kind: "save", svg: newSvg });
+    const slot = el.querySelector(".annot-doc-image-svg-slot") as HTMLElement;
+    slot.click();
+    // Modal save is awaited; flush the microtask queue.
+    await Promise.resolve();
+    await Promise.resolve();
+    await el.updateComplete;
+    const step = el.document!.blocks[0];
+    if (step?.kind !== "step") throw new Error("expected step block");
+    expect(step.svg).toBe(newSvg);
+    openSpy.mockRestore();
+  });
+});
+
+describe("annot-doc-shell: step block menu entry", () => {
+  it("exposes a 'step' kind in the default block menu catalog", async () => {
+    const { DEFAULT_BLOCK_MENU_ITEMS } = await import("./annot-doc-block-menu.js");
+    const stepItem = DEFAULT_BLOCK_MENU_ITEMS.find((i) => i.kind === "step");
+    expect(stepItem).toBeDefined();
+    expect(stepItem?.label).toBe("Step");
+  });
+});

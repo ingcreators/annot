@@ -450,7 +450,7 @@ describe("injectDocumentStyles: cardLayout meta", () => {
     // Negative: the typography block sets `max-width` but no
     // grid template on the article.
     expect(css).not.toContain("article[data-annot-doc] {\n  display: grid");
-    expect(css).not.toContain(':not([data-annot-block="step"])');
+    expect(css).not.toContain(':has(> [data-annot-block="step"])');
   });
 
   it("emits no article-level grid when cardLayout.columns === 1", () => {
@@ -478,8 +478,15 @@ describe("injectDocumentStyles: cardLayout meta", () => {
     expect(css).toContain(
       "grid-template-columns: repeat(var(--annot-card-columns), minmax(0, 1fr))",
     );
-    expect(css).toContain('article[data-annot-doc] > :not([data-annot-block="step"])');
+    // Default: every direct article child spans all columns;
+    // step blocks (or `.annot-doc-block-host` wrappers containing
+    // one in editor mode) opt back into auto placement so they
+    // pack into the grid.
+    expect(css).toContain("article[data-annot-doc] > * {");
     expect(css).toContain("grid-column: 1 / -1");
+    expect(css).toContain('article[data-annot-doc] > [data-annot-block="step"] {');
+    expect(css).toContain('article[data-annot-doc] > :has(> [data-annot-block="step"]) {');
+    expect(css).toContain("grid-column: auto");
   });
 
   it('emits an auto-fill grid when cardLayout.columns === "auto"', () => {

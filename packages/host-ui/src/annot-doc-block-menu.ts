@@ -26,7 +26,8 @@ export type BlockMenuKind =
   | "quote"
   | "callout"
   | "divider"
-  | "image";
+  | "image"
+  | "step";
 
 export interface BlockMenuItem {
   /** Stable id used for keyboard / test selection. */
@@ -88,6 +89,12 @@ export const DEFAULT_BLOCK_MENU_ITEMS: readonly BlockMenuItem[] = [
     label: "Image",
     description: "From file",
     kind: "image",
+  },
+  {
+    id: "step",
+    label: "Step",
+    description: "Image + title + description",
+    kind: "step",
   },
 ];
 

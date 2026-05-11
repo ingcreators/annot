@@ -347,3 +347,31 @@ export const CardGridAuto: Story = {
   name: "Card grid / auto-fill",
   args: { document: makeCardGridDoc("auto"), showToc: false, editing: false },
 };
+
+// ---------------------------------------------------------------------------
+// Phase 3 of docs/plans/card-procedure-template.md — editing mode
+// for step blocks (contentEditable title + body, click-to-edit
+// modal on the SVG slot). The slash-menu / insert-bar Step entry
+// is exercised through interactive use; the static stories below
+// just verify the rendered editing affordances.
+// ---------------------------------------------------------------------------
+
+export const StepImageTopEditing: Story = {
+  name: "Step / image-top (editing)",
+  args: { document: makeStepLayoutDoc("image-top"), showToc: false, editing: true },
+};
+
+export const StepImageLeftEditing: Story = {
+  name: "Step / image-left (editing)",
+  args: { document: makeStepLayoutDoc("image-left"), showToc: false, editing: true },
+};
+
+export const StepImageFillEditing: Story = {
+  name: "Step / image-fill (editing)",
+  args: { document: makeStepLayoutDoc("image-fill"), showToc: false, editing: true },
+};
+
+export const CardGridTwoColumnEditing: Story = {
+  name: "Card grid / 2-column (editing)",
+  args: { document: makeCardGridDoc(2), showToc: false, editing: true },
+};

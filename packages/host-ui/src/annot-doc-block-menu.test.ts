@@ -203,7 +203,7 @@ describe("annot-doc-block-menu: mouse interaction", () => {
 });
 
 describe("annot-doc-block-menu: catalog", () => {
-  it("DEFAULT_BLOCK_MENU_ITEMS covers every v1 slash-menu kind", () => {
+  it("DEFAULT_BLOCK_MENU_ITEMS covers every slash-menu kind", () => {
     const kinds = new Set(DEFAULT_BLOCK_MENU_ITEMS.map((i) => i.kind));
     expect(kinds).toContain("heading");
     expect(kinds).toContain("paragraph");
@@ -213,6 +213,8 @@ describe("annot-doc-block-menu: catalog", () => {
     expect(kinds).toContain("callout");
     expect(kinds).toContain("divider");
     expect(kinds).toContain("image");
+    // Phase 3 of card-procedure-template.
+    expect(kinds).toContain("step");
   });
 
   it("includes the Image entry with the documented metadata", () => {
@@ -221,5 +223,13 @@ describe("annot-doc-block-menu: catalog", () => {
     expect(image?.label).toBe("Image");
     expect(image?.kind).toBe("image");
     expect(image?.description).toBe("From file");
+  });
+
+  it("includes the Step entry with the documented metadata", () => {
+    const step = DEFAULT_BLOCK_MENU_ITEMS.find((i) => i.id === "step");
+    expect(step).toBeDefined();
+    expect(step?.label).toBe("Step");
+    expect(step?.kind).toBe("step");
+    expect(step?.description).toBe("Image + title + description");
   });
 });
