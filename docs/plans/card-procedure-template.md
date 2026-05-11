@@ -3,9 +3,10 @@
 > **Status:** Draft
 > **Compatibility:** Extends the `.annot.html` v1 format from
 > [`_done/annot-html-document.md`](./_done/annot-html-document.md). Adds
-> one new block kind (`step`) as an **additive** change — `.annot.html`
-> is pre-release, no users to migrate, so `data-annot-doc-version`
-> stays at `1`. Touches `@ingcreators/annot-doc` (Tier A),
+> one new block kind (`step`) as an **additive** change under the
+> unchanged `data-annot-doc-version="1"` stamp — `.annot.html` is
+> pre-release with no shipped users, so no migration / forward-compat
+> work is needed. Touches `@ingcreators/annot-doc` (Tier A),
 > `@ingcreators/annot-host-ui` (Tier C — gallery + doc shell),
 > `@ingcreators/annot-render` (PPTX export), `@ingcreators/annot-web`
 > (file-manager action wiring). Adds one built-in starter template
@@ -13,10 +14,7 @@
 > **Risk:** Phased, additive throughout. Each phase is independently
 > revertable. The block-taxonomy change is the only schema delta;
 > everything else (CSS, generator action, PPTX mapping, starter
-> template) builds on existing infrastructure. Treated as v1 expansion
-> rather than a version bump because the format hasn't shipped to
-> end users yet — a real bump waits for the first post-release schema
-> change that needs it.
+> template) builds on existing infrastructure.
 
 ## Context
 
@@ -306,25 +304,15 @@ the dispatch widens from `if (block.kind === "image")` to
 `if (block.kind === "image" || block.kind === "step")`, with each
 arm building the slide its own way.
 
-### Detection / migration
+### Schema decision
 
-- **No version bump.** `ANNOT_DOC_VERSION` in
+- **No version bump, no migration, no forward-compat work.**
+  `.annot.html` is pre-release; no users to consider, no
+  existing-document compatibility burden. `ANNOT_DOC_VERSION` in
   [`packages/doc/src/types.ts`](../../packages/doc/src/types.ts)
-  stays at `1`. `.annot.html` is pre-release; the additive block
-  taxonomy expansion folds into the existing v1 schema. The first
-  real bump waits for a post-release change that breaks an existing
-  reader.
-- **Readers without step-block support gracefully degrade.** Any
-  build of `@ingcreators/annot-doc` predating this plan opens a
-  step-bearing document via the existing `UnknownBlock` branch —
-  the `<section data-annot-block="step">` and its descendants are
-  captured as `kind: "unknown"` + `rawHtml`, then re-emitted
-  byte-for-byte on next save. Useful for the "user opens a doc
-  authored in a newer build with an older build" scenario during
-  development, but not part of the format contract.
-- **No migration step.** Documents authored by the new build that
-  contain no step blocks read identically to documents from the
-  old build.
+  stays at `1` and the `step` block joins the v1 taxonomy as a
+  plain additive expansion. The first real version bump waits for
+  a post-release schema change that breaks an existing reader.
 
 ### Tier alignment
 
@@ -504,13 +492,6 @@ Each phase is a standalone PR per the
   step-block fixtures; CI test asserts
   `serialize(parse(bytes)) === bytes` for every fixture (including
   every layout enum value).
-- **Unknown-block degradation path.** A fixture authored manually
-  with a hypothetical future block kind (e.g.
-  `<section data-annot-block="step-group">` that this plan doesn't
-  introduce) parses as `UnknownBlock` and round-trips byte-identical.
-  Locks in the forward-compat guarantee the parser already offers,
-  so the first real `data-annot-doc-version` bump (when it eventually
-  lands) inherits it cleanly.
 - **`cloneTemplate` integrity.** Clone the `card-procedure`
   starter, save the result, parse it back, assert: template
   markers gone, every step `id` + `imageId` reminted, every other
@@ -537,22 +518,16 @@ Each phase is a standalone PR per the
 
 ## Migration notes
 
-- **Pre-release: no migration.** `.annot.html` hasn't shipped to
-  end users; the additive block expansion folds into the existing
-  v1 schema. Documents authored before this plan continue to parse
-  unchanged, and documents authored after this plan that contain
-  no step blocks are byte-indistinguishable from the old shape.
-- **`data-annot-doc-version` stays at `1`.** No writer-side change
-  to the version stamp. The first real bump waits for a post-
-  release schema change that breaks an existing reader (e.g.
-  renaming a field, changing semantics). That bump can land in
-  isolation when the time comes.
+- **None.** Pre-release format; no shipped users; no existing
+  documents to consider. The `step` block joins the schema as a
+  plain additive expansion under the unchanged
+  `data-annot-doc-version="1"` stamp.
 - **`@ingcreators/annot-doc` consumers** (annot-cloud's pointer-
   commit store, future Playwright integration) pick up the new
   block kind via the `Block` discriminated union; switch statements
   that exhaustively match on `Block.kind` will fail TypeScript
   build until they add a `case "step":` arm. This is a deliberate
-  type-safety prompt.
+  type-safety prompt, not a migration.
 
 ## Forward-looking notes
 
