@@ -552,10 +552,108 @@ describe("buildDocumentPptxFiles: 16:9 slide canvas (Phase 6b)", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// Phase 7a — image-less step blocks. An empty `svg` field skips
+// the image group entirely; the slide carries only the title /
+// body text shapes centred on the canvas.
+// ---------------------------------------------------------------------------
+
+describe("buildDocumentPptxFiles: image-less step blocks (Phase 7a)", () => {
+  function makeImagelessStepBlock(
+    id: string,
+    options: { title?: string; body?: string; layout?: StepLayout } = {},
+  ): StepBlock {
+    return {
+      kind: "step",
+      id,
+      svg: "",
+      title: options.title ?? "",
+      body: options.body ?? "",
+      layout: options.layout ?? "image-top",
+    };
+  }
+
+  it("emits a slide for an image-less step block with title + body", () => {
+    const doc = makeDocument([
+      makeImagelessStepBlock("step-1", { title: "Wrap up", body: "Save your work." }),
+    ]);
+    const files = buildDocumentPptxFiles(doc);
+    expect(files["ppt/slides/slide1.xml"]).toBeDefined();
+    const slide1 = decode(files["ppt/slides/slide1.xml"]!);
+    expect(slide1).toContain("<a:t>Wrap up</a:t>");
+    expect(slide1).toContain("<a:t>Save your work.</a:t>");
+  });
+
+  it("omits the image group entirely (no <p:grpSp>, no media file)", () => {
+    const doc = makeDocument([makeImagelessStepBlock("step-1", { title: "T", body: "B" })]);
+    const files = buildDocumentPptxFiles(doc);
+    const slide1 = decode(files["ppt/slides/slide1.xml"]!);
+    expect(slide1).not.toContain("<p:grpSp>");
+    expect(slide1).not.toContain("ImageGroup");
+    expect(slide1).not.toContain("<p:pic>");
+    // No media bytes — image-less slides reference no screenshot.
+    expect(files["ppt/media/screenshot1.png"]).toBeUndefined();
+    expect(files["ppt/media/screenshot1.jpeg"]).toBeUndefined();
+  });
+
+  it("skips an entirely empty step block (no title, no body)", () => {
+    const doc = makeDocument([
+      makeImagelessStepBlock("step-1", { title: "", body: "" }),
+      makeStepBlock("step-2", 800, 600, { title: "Visible" }),
+    ]);
+    const files = buildDocumentPptxFiles(doc);
+    // Only one slide should exist (the image-bearing step); the
+    // empty image-less step contributes nothing.
+    expect(files["ppt/slides/slide1.xml"]).toBeDefined();
+    expect(files["ppt/slides/slide2.xml"]).toBeUndefined();
+  });
+
+  it("interleaves image-less step slides with image-bearing slides in document order", () => {
+    const doc = makeDocument([
+      makeStepBlock("step-1", 800, 600, { title: "With image" }),
+      makeImagelessStepBlock("step-2", { title: "Text-only step", body: "Narrative." }),
+      makeStepBlock("step-3", 800, 600, { title: "Back to image" }),
+    ]);
+    const files = buildDocumentPptxFiles(doc);
+    expect(files["ppt/slides/slide1.xml"]).toBeDefined();
+    expect(files["ppt/slides/slide2.xml"]).toBeDefined();
+    expect(files["ppt/slides/slide3.xml"]).toBeDefined();
+    const slide2 = decode(files["ppt/slides/slide2.xml"]!);
+    // Middle slide is the image-less one — no image group.
+    expect(slide2).not.toContain("<p:grpSp>");
+    expect(slide2).toContain("<a:t>Text-only step</a:t>");
+  });
+
+  it("uses the uniform 1280×720 canvas for image-less step slides too", () => {
+    const doc = makeDocument([makeImagelessStepBlock("step-1", { title: "Hi" })]);
+    const files = buildDocumentPptxFiles(doc);
+    const presentationXml = decode(files["ppt/presentation.xml"]!);
+    expect(presentationXml).toContain('<p:sldSz cx="12192000" cy="6858000" type="custom"/>');
+  });
+});
+
 describe("exportDocumentPptx", () => {
   it("returns null for a document with no image blocks", () => {
     const doc = makeDocument([{ kind: "paragraph", inlineHtml: "no images" }]);
     expect(exportDocumentPptx(doc)).toBeNull();
+  });
+
+  it("returns a Blob for a document containing only image-less step blocks (Phase 7a)", () => {
+    // Image-less step blocks ARE exportable — they produce a
+    // text-only slide. The result blob carries the OOXML
+    // envelope plus one slide xml.
+    const doc = makeDocument([
+      {
+        kind: "step",
+        id: "step-1",
+        svg: "",
+        title: "Hello",
+        body: "World",
+        layout: "image-top",
+      },
+    ]);
+    const blob = exportDocumentPptx(doc);
+    expect(blob).not.toBeNull();
   });
 
   it("returns a Blob with the expected MIME type for a non-empty document", async () => {

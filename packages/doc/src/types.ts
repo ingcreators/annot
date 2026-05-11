@@ -198,7 +198,11 @@ export interface StepBlock {
    *  format as `ImageBlock.id`. */
   readonly id: string;
   /** Canonical inner-form `<svg>…</svg>` bytes — same shape as
-   *  `ImageBlock.svg`. */
+   *  `ImageBlock.svg`. The empty string `""` is valid and indicates
+   *  an **image-less step**: a text-only narrative card with title +
+   *  body only (Phase 7a of the plan). The serializer omits the
+   *  `<svg>` child entirely when this field is empty; the parser
+   *  accepts both forms. */
   readonly svg: string;
   /** Title inline HTML. Empty string is a valid placeholder
    *  rendered by the editor as a "type to start" affordance. */

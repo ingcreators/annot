@@ -465,6 +465,100 @@ Each phase is a standalone PR per the
   may eventually use in v3.
 - This plan moves to `_done/`; the README's table gains a row.
 
+### Phase 7a — Image-less step blocks
+
+Inserted ahead of Phase 7 (polish) once the picture-bearing path
+proved out. User framing: "画像なしのカードも必要そう" — narrative
+steps that only need a heading + paragraph without a screenshot.
+
+Schema delta:
+
+- `StepBlock.svg` field's domain expands from "canonical
+  `<svg>...</svg>` bytes" to "canonical `<svg>` bytes OR the
+  empty string." The empty string marks an image-less step
+  block.
+- Serializer skips the `<svg>` child entirely when `svg === ""`
+  and emits `data-step-image-less="1"` on the `<section>`
+  (alphabetical between `data-annot-image-id` and
+  `data-step-layout`, per the canonicalisation rules).
+- Parser accepts both shapes: an image-bearing step block has
+  a `<svg>` child and `data-step-image-less` is absent; an
+  image-less step block has no `<svg>` child and (canonically)
+  carries `data-step-image-less="1"`. The parser is defensive:
+  a step with no `<svg>` child but no decorator parses as
+  image-less anyway (hand-authored input tolerance).
+- No `data-annot-doc-version` bump. Pre-release additive change.
+
+UX delta:
+
+- The slash menu gains a "Step (text only)" entry that splices
+  an image-less step block synchronously — no file picker.
+- The block-host's click handler short-circuits for image-less
+  step blocks (no image slot to click → no modal).
+- CSS for image-less step blocks collapses the grid to a single
+  text column regardless of `data-step-layout`; the
+  layout-switcher UI still works (the user may add an image
+  later, at which point the layout choice becomes load-bearing
+  again).
+
+PPTX delta:
+
+- `buildSlideFromStepBlock` short-circuits when `svg === ""`
+  and emits a text-only slide via `buildImagelessStepSlide`:
+  no image group, no annotation shapes, just title / body
+  text shapes centred on the slide.
+- An entirely empty image-less step (no title, no body) yields
+  no slide.
+
+### Phase 7b — URL link embedding (Scribe-style)
+
+User framing: "URLリンクの埋め込みも必要そう" — Scribe shows a
+"Navigate to https://example.com" chip on steps where the
+action is "open this URL." Mirrors that affordance in Annot.
+
+Sketch (not yet implemented):
+
+- New OPTIONAL field on `StepBlock`: `link?: { url: string;
+  label?: string }`. The url is required; label defaults to
+  the URL string. Stored on the `<section>` as
+  `data-step-url="https://..."` plus an optional
+  `data-step-url-label="..."`.
+- Renderer adds an `<a>` chip near the step title (read-only)
+  / contentEditable URL input (edit mode). Standalone-view
+  CSS styles the chip with the document accent colour + an
+  external-link glyph.
+- PPTX export emits the chip as a `<p:sp>` text shape with
+  `<a:hlinkClick>` so clicking the slide in PowerPoint opens
+  the URL.
+- The slash-menu's existing Step entry stays Step
+  (image-bearing); URL is set per-block via the right-panel
+  / context-menu after insertion. A future "Navigation step"
+  preset could ship a single-click image-less + URL combo.
+
+### Phase 7c — Document header / PPTX cover slide
+
+User framing: "ヘッダー部にアイコン、タイトル、説明がある。
+PowerPointでは表紙としてレイアウトできたらよさそう" — Scribe-style
+doc-level header (icon + title + description + author + step
+count) and a matching PPTX cover slide.
+
+Sketch (not yet implemented):
+
+- New OPTIONAL `DocMeta` field: `header?: { icon?: string;
+  description?: string }`. `title` is already on `DocMeta`;
+  `author` already exists; step count is derived from the
+  block walk. `icon` carries a `data:` URL or a
+  registered-icon id.
+- Renderer prepends a header `<section data-annot-doc-header>`
+  to the article output (skipped by the parser the same way
+  the standalone-view TOC is — regenerated on every save from
+  `meta.header`). The editor surfaces the header fields in the
+  document-settings dialog.
+- PPTX export prepends a cover slide before the per-block
+  slides: icon + title + description + author + step-count
+  callout. The cover slide uses the same 16:9 canvas; layout
+  hand-authored in `buildCoverSlide`.
+
 ### Out of scope for v1 (deferred)
 
 - **Per-card colour theming.** All cards share the document-level

@@ -250,11 +250,15 @@ function parseStep(el: Element): StepBlock {
   if (id === null) {
     throw new AnnotDocParseError("Step block missing data-annot-image-id.");
   }
+  // Phase 7a of `docs/plans/card-procedure-template.md` — the
+  // `<svg>` child is OPTIONAL. An image-less step block carries
+  // text-only content (title + body) for narrative steps that
+  // don't need a screenshot. The `data-annot-image-id`
+  // attribute stays present (block ID; the name is a wart
+  // inherited from the image-bearing case, kept stable for
+  // schema compat).
   const svgEl = el.querySelector(":scope > svg");
-  if (!svgEl) {
-    throw new AnnotDocParseError(`Step block ${id} has no <svg> child.`);
-  }
-  const svg = canonicaliseSvg(svgEl);
+  const svg = svgEl ? canonicaliseSvg(svgEl) : "";
   // The spec fixes the title slot to <h3 data-step-title> and the
   // body slot to <p data-step-body>. We look up by attribute rather
   // than tag so a future format extension that swaps the tag (e.g.

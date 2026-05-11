@@ -231,5 +231,23 @@ describe("annot-doc-block-menu: catalog", () => {
     expect(step?.label).toBe("Step");
     expect(step?.kind).toBe("step");
     expect(step?.description).toBe("Image + title + description");
+    // The picker-driven step entry doesn't carry the
+    // `stepImageless` flag — that's the discriminator that the
+    // shell uses to decide between the file picker flow and the
+    // synchronous text-only insertion.
+    expect(step?.stepImageless ?? false).toBe(false);
+  });
+
+  // Phase 7a of `docs/plans/card-procedure-template.md` —
+  // image-less step entry shares the `kind: "step"` discriminator
+  // with the picker-driven entry; the `stepImageless: true` flag
+  // tells the shell to skip the file picker and splice an
+  // image-less step block (empty `svg`) directly.
+  it("includes the Step (text only) entry with stepImageless=true", () => {
+    const stepText = DEFAULT_BLOCK_MENU_ITEMS.find((i) => i.id === "step-text");
+    expect(stepText).toBeDefined();
+    expect(stepText?.kind).toBe("step");
+    expect(stepText?.stepImageless).toBe(true);
+    expect(stepText?.label).toBe("Step (text only)");
   });
 });

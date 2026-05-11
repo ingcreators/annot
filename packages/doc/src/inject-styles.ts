@@ -471,6 +471,41 @@ function stepBlockRules(): string {
     "  font-size: 0.9rem;",
     "  line-height: 1.4;",
     "}",
+    // Phase 7a — image-less step blocks. The empty `svg` field
+    // becomes `data-step-image-less="1"` on the section (emitted
+    // by both the serializer for standalone view and the editor's
+    // renderStep). We collapse the grid to a single text column
+    // regardless of `data-step-layout` so a missing image doesn't
+    // leave a tall empty row / column. The image-fill overlay
+    // positioning is also undone — there's no underlying image to
+    // overlay onto, so the title / body return to the normal flow.
+    '[data-annot-block="step"][data-step-image-less] {',
+    "  display: grid;",
+    '  grid-template-areas:\n    "title"\n    "body";',
+    "  grid-template-columns: 1fr;",
+    "  grid-template-rows: auto auto;",
+    "  gap: 0.5rem;",
+    "  padding: var(--annot-card-padding);",
+    "}",
+    '[data-annot-block="step"][data-step-image-less] > [data-step-title],',
+    '[data-annot-block="step"][data-step-image-less] > [data-step-body] {',
+    "  position: static;",
+    "  background: transparent;",
+    "  color: var(--annot-doc-fg);",
+    "  padding: 0;",
+    "  bottom: auto;",
+    "  font-size: 1.15rem;",
+    "  line-height: 1.3;",
+    "}",
+    '[data-annot-block="step"][data-step-image-less] > [data-step-body] {',
+    "  font-size: 1rem;",
+    "  font-weight: 400;",
+    "  line-height: 1.5;",
+    "}",
+    '[data-annot-block="step"][data-step-image-less] > [data-step-title] {',
+    "  font-weight: 600;",
+    `  font-family: ${sansStack};`,
+    "}",
   ].join("\n");
 }
 

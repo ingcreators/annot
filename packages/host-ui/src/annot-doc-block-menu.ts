@@ -44,6 +44,10 @@ export interface BlockMenuItem {
   readonly listOrdered?: boolean;
   /** Callout tone — only relevant for `callout`. */
   readonly tone?: "info" | "warn" | "note";
+  /** Phase 7a — when `true` for a `step` block, skip the file-
+   *  picker flow and insert an image-less step block (text-only
+   *  narrative card). Ignored for non-step kinds. */
+  readonly stepImageless?: boolean;
 }
 
 export interface BlockMenuSelectDetail {
@@ -95,6 +99,13 @@ export const DEFAULT_BLOCK_MENU_ITEMS: readonly BlockMenuItem[] = [
     label: "Step",
     description: "Image + title + description",
     kind: "step",
+  },
+  {
+    id: "step-text",
+    label: "Step (text only)",
+    description: "Title + description, no image",
+    kind: "step",
+    stepImageless: true,
   },
 ];
 

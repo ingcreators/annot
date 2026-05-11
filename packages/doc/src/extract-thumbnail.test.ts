@@ -111,4 +111,38 @@ describe("extractDocumentThumbnailDataUrl", () => {
     const doc = makeDoc([broken, makeImageBlock("img-good", TINY_PNG_DATA_URL)]);
     expect(extractDocumentThumbnailDataUrl(doc)).toBe(TINY_PNG_DATA_URL);
   });
+
+  // Phase 7a — image-less step blocks (empty `svg`) yield no
+  // thumbnail and the walker continues to the next block. A
+  // document whose only step blocks are image-less falls back
+  // to the empty-string sentinel (gallery card shows the
+  // article icon).
+  it("skips image-less step blocks (Phase 7a) and continues to image-bearing blocks", () => {
+    const doc = makeDoc([
+      {
+        kind: "step",
+        id: "img-empty",
+        svg: "",
+        title: "Recap",
+        body: "Wrap up.",
+        layout: "image-top",
+      },
+      makeImageBlock("img-good", TINY_PNG_DATA_URL),
+    ]);
+    expect(extractDocumentThumbnailDataUrl(doc)).toBe(TINY_PNG_DATA_URL);
+  });
+
+  it("returns empty string when the only step blocks are image-less", () => {
+    const doc = makeDoc([
+      {
+        kind: "step",
+        id: "img-empty",
+        svg: "",
+        title: "Recap",
+        body: "Wrap up.",
+        layout: "image-top",
+      },
+    ]);
+    expect(extractDocumentThumbnailDataUrl(doc)).toBe("");
+  });
 });

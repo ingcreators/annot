@@ -142,13 +142,35 @@ describe("step block: parser", () => {
     expect(() => parseDocument(html)).toThrow(/data-step-body/);
   });
 
-  it("throws when the SVG child is missing", () => {
+  // Phase 7a of `docs/plans/card-procedure-template.md` — the
+  // `<svg>` child is OPTIONAL. An image-less step block carries
+  // text-only content. The parser yields `svg: ""` and accepts
+  // both the `data-step-image-less="1"` decorator and its
+  // absence (defensive against hand-authored input).
+  it("accepts a missing SVG child as an image-less step (Phase 7a)", () => {
+    const html =
+      wrap(`      <section data-annot-block="step" data-annot-image-id="img-step-01" data-step-image-less="1" data-step-layout="image-top">
+        <h3 data-step-title>Recap</h3>
+        <p data-step-body>That's it for now.</p>
+      </section>`);
+    const doc = parseDocument(html);
+    const step = doc.blocks.find((b) => b.kind === "step");
+    if (step?.kind !== "step") throw new Error("expected step block");
+    expect(step.svg).toBe("");
+    expect(step.title).toBe("Recap");
+    expect(step.body).toBe("That's it for now.");
+  });
+
+  it("treats a step with no <svg> child as image-less even without the decorator", () => {
     const html =
       wrap(`      <section data-annot-block="step" data-annot-image-id="img-step-01" data-step-layout="image-top">
         <h3 data-step-title>T</h3>
         <p data-step-body>B</p>
       </section>`);
-    expect(() => parseDocument(html)).toThrow(/svg/i);
+    const doc = parseDocument(html);
+    const step = doc.blocks.find((b) => b.kind === "step");
+    if (step?.kind !== "step") throw new Error("expected step block");
+    expect(step.svg).toBe("");
   });
 });
 
@@ -225,6 +247,63 @@ describe("step block: serializer", () => {
     const bytes = serializeDocument(doc);
     expect(bytes).toContain("<h3 data-step-title></h3>");
     expect(bytes).toContain("<p data-step-body></p>");
+  });
+
+  // Phase 7a — image-less step blocks: `svg === ""` skips the
+  // `<svg>` child emission entirely and stamps the section with
+  // `data-step-image-less="1"` so the CSS can collapse the grid.
+  it("omits the <svg> child and emits data-step-image-less when svg is empty", () => {
+    const doc: AnnotDocument = {
+      version: ANNOT_DOC_VERSION,
+      lang: "en",
+      title: "T",
+      meta: { title: "T" },
+      styleBlock: null,
+      blocks: [
+        {
+          kind: "step",
+          id: "img-step-01",
+          svg: "",
+          title: "Recap",
+          body: "Wrap up.",
+          layout: "image-top",
+        },
+      ],
+    };
+    const bytes = serializeDocument(doc);
+    expect(bytes).not.toContain("<svg ");
+    expect(bytes).toContain(
+      '<section data-annot-block="step" data-annot-image-id="img-step-01" data-step-image-less="1" data-step-layout="image-top">',
+    );
+    expect(bytes).toContain("<h3 data-step-title>Recap</h3>");
+    expect(bytes).toContain("<p data-step-body>Wrap up.</p>");
+  });
+
+  it("round-trips an image-less step byte-for-byte", () => {
+    const doc: AnnotDocument = {
+      version: ANNOT_DOC_VERSION,
+      lang: "en",
+      title: "T",
+      meta: { title: "T" },
+      styleBlock: null,
+      blocks: [
+        {
+          kind: "step",
+          id: "img-step-01",
+          svg: "",
+          title: "Recap",
+          body: "Wrap up.",
+          layout: "image-fill",
+        },
+      ],
+    };
+    const bytes = serializeDocument(doc);
+    const reparsed = parseDocument(bytes);
+    expect(serializeDocument(reparsed)).toBe(bytes);
+    const step = reparsed.blocks.find((b) => b.kind === "step");
+    if (step?.kind !== "step") throw new Error("expected step");
+    expect(step.svg).toBe("");
+    expect(step.layout).toBe("image-fill");
   });
 });
 
