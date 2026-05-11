@@ -336,15 +336,14 @@ Each phase is a standalone PR per the
 ### Phase 0 — Spec freeze + golden fixtures
 
 - Amend [`docs/annot-html-format.md`](../annot-html-format.md) with
-  the `step` block schema, `data-step-layout` enum, child-order
-  rules, and the v2 version bump rationale.
+  the `step` block schema, `data-step-layout` enum, and child-order
+  rules. No version-bump notes — the addition is a plain v1
+  expansion per the Schema-decision section above.
 - Add 3 golden `.annot.html` fixtures under
   `packages/doc/test/fixtures/`:
   - One pure step-only doc (3 steps, default layout).
   - One mixed doc (heading + paragraph + step + step + callout).
   - One full-bleed step (`image-fill` layout).
-- Verify the v1 parser handles unknown step blocks via the
-  `UnknownBlock` passthrough (write an explicit cross-version test).
 - Lock in: child slot order, attribute names, allowed
   `data-step-layout` values, `meta.cardLayout` shape.
 - Resolve the gallery-selection-order question (Set insertion order
@@ -356,7 +355,7 @@ Each phase is a standalone PR per the
 - `StepBlock` added to the `Block` discriminated union in
   [`types.ts`](../../packages/doc/src/types.ts).
 - `ANNOT_DOC_VERSION` stays at `1` (pre-release additive expansion;
-  see "Detection / migration" above).
+  see "Schema decision" above).
 - Parser recognises `<section data-annot-block="step">` and yields a
   `StepBlock` with the parsed image / title / body / layout.
 - Serialiser emits canonical child order + attribute order; the
