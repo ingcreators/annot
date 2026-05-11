@@ -514,26 +514,34 @@ PPTX delta:
 
 User framing: "URLリンクの埋め込みも必要そう" — Scribe shows a
 "Navigate to https://example.com" chip on steps where the
-action is "open this URL." Mirrors that affordance in Annot.
-
-Sketch (not yet implemented):
+action is "open this URL." Landed:
 
 - New OPTIONAL field on `StepBlock`: `link?: { url: string;
-  label?: string }`. The url is required; label defaults to
+  label?: string }`. The URL is required; label defaults to
   the URL string. Stored on the `<section>` as
-  `data-step-url="https://..."` plus an optional
-  `data-step-url-label="..."`.
-- Renderer adds an `<a>` chip near the step title (read-only)
-  / contentEditable URL input (edit mode). Standalone-view
-  CSS styles the chip with the document accent colour + an
-  external-link glyph.
-- PPTX export emits the chip as a `<p:sp>` text shape with
-  `<a:hlinkClick>` so clicking the slide in PowerPoint opens
-  the URL.
-- The slash-menu's existing Step entry stays Step
-  (image-bearing); URL is set per-block via the right-panel
-  / context-menu after insertion. A future "Navigation step"
-  preset could ship a single-click image-less + URL combo.
+  `data-step-url="..."` plus an optional
+  `data-step-url-label="..."` (alphabetical canonical order,
+  after `data-step-layout`).
+- URL allowlist: `http://`, `https://`, `mailto:` only. The
+  parser drops anything else (e.g. `javascript:`, `data:`); the
+  shell's URL input sanitiser mirrors the same allowlist so
+  pasted hostile URLs never enter the model.
+- Renderer adds an `<a data-step-link>` chip below the step
+  title — anchor pill with the document accent colour, an
+  external-link glyph via CSS `mask-image`. In editing mode an
+  inline `<input type="url">` row appears below the title for
+  the user to edit / clear the URL; commit fires on `change`
+  (blur / Enter).
+- PPTX export emits the chip as a `<p:sp>` rounded-rectangle
+  text shape with `<a:hlinkClick r:id="...">` on the text run.
+  The matching slide-rels relationship uses
+  `Type=".../relationships/hyperlink"` with
+  `TargetMode="External"`.
+- `cloneTemplate` preserves `block.link` verbatim across
+  clones (the URL is content, not an id-bearing reference).
+- An image-less step block carrying only a `link` (no title /
+  body) IS exportable to PPTX — the chip alone counts as
+  visible content.
 
 ### Phase 7c — Document header / PPTX cover slide
 

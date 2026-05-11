@@ -357,6 +357,16 @@ npm run dev</code></pre>
   attribute to collapse the card grid to a single text column
   regardless of the declared `data-step-layout`. PPTX export emits
   a text-only slide (no image group) for image-less steps.
+- `data-step-url` (Phase 7b) is an OPTIONAL attribute carrying a
+  Scribe-style "Navigate to …" link. When present the standalone
+  view and editor render a clickable pill below the step title;
+  the PPTX export emits an `<a:hlinkClick>` so the chip is
+  clickable in PowerPoint. The URL is restricted to `http://`,
+  `https://`, and `mailto:` schemes — anything else is dropped
+  on parse to defang `javascript:` / `data:` payloads.
+- `data-step-url-label` (Phase 7b) is an OPTIONAL friendly label
+  shown on the chip. Absent → the chip displays the URL string
+  itself.
 - `data-annot-image-id` format: `img-` prefix + 8 to 32 chars from
   `[a-zA-Z0-9_-]`, generated via `newIdB58` in
   `@ingcreators/annot-core/utils`. Same constraint as the
@@ -878,6 +888,18 @@ on-disk shape of v1 files.
     (decorator present + absent) on read.
   - The slash menu gains a "Step (text only)" entry that splices
     an image-less step block synchronously (no file picker).
+- **2026-05 — URL chip on `step` block** (Phase 7b of
+  [`docs/plans/card-procedure-template.md`](./plans/card-procedure-template.md)).
+  Additive under v1; pre-release. Adds:
+  - New OPTIONAL `data-step-url` attribute on the `<section>`
+    carrying a Scribe-style navigation URL. The parser validates
+    against an allowed-scheme allowlist (http / https / mailto).
+  - New OPTIONAL `data-step-url-label` attribute carrying a
+    friendly chip label. Absent → chip renders the URL.
+  - Standalone-view CSS gains the chip pill styling.
+  - PPTX export emits the chip as a rounded-rectangle text shape
+    with `<a:hlinkClick>` pointing at a slide-rels hyperlink
+    relationship.
 
 ### Version 0 (pre-versioning)
 
