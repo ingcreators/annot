@@ -29,6 +29,7 @@ import type {
   HeadingBlock,
   ImageBlock,
   ListBlock,
+  StepBlock,
 } from "@ingcreators/annot-doc";
 import { buildStyleBlock, createImageBlockFromDataUrl } from "@ingcreators/annot-doc";
 import {
@@ -2089,6 +2090,8 @@ function renderBlockBody(
       return html`<hr data-annot-block="divider" />`;
     case "image":
       return renderImage(block, editable);
+    case "step":
+      return renderStep(block);
     case "unknown":
       return html`${unsafeHTML(block.rawHtml)}`;
   }
@@ -2275,6 +2278,34 @@ function renderImage(block: ImageBlock, editable = false): TemplateResult {
           : nothing
       }
     </figure>
+  `;
+}
+
+/** Phase 1 of `docs/plans/card-procedure-template.md` — minimal
+ *  step-block renderer kept in sync with the parser / serializer
+ *  shape. No card chrome, no editing affordances — those land in
+ *  Phase 3 with the dedicated `<annot-step-block>` Lit element.
+ *  Reuses the image-block's SVG slot machinery so step images get
+ *  the same IntersectionObserver-driven lazy materialisation. */
+function renderStep(block: StepBlock): TemplateResult {
+  const aspect = extractSvgAspectRatio(block.svg);
+  const slotStyle = aspect
+    ? `aspect-ratio: ${aspect}; background: var(--annot-doc-code-bg, #f3f4f6);`
+    : "";
+  return html`
+    <section
+      data-annot-block="step"
+      data-annot-image-id=${block.id}
+      data-step-layout=${block.layout}
+    >
+      <div
+        class="annot-doc-image-svg-slot"
+        data-annot-image-svg=${block.svg}
+        style=${slotStyle}
+      ></div>
+      <h3 data-step-title>${unsafeHTML(block.title)}</h3>
+      <p data-step-body>${unsafeHTML(block.body)}</p>
+    </section>
   `;
 }
 

@@ -18,6 +18,7 @@ import type {
   HeadingBlock,
   ImageBlock,
   ListBlock,
+  StepBlock,
 } from "./types.js";
 
 const INDENT = "  ";
@@ -128,6 +129,8 @@ function serializeBlock(
       return `${indent}<hr data-annot-block="divider">${LF}`;
     case "image":
       return serializeImage(block, depth);
+    case "step":
+      return serializeStep(block, depth);
     case "unknown":
       return `${indent}${block.rawHtml}${LF}`;
   }
@@ -191,6 +194,34 @@ function serializeImage(block: ImageBlock, depth: number): string {
     result += `${inner}<figcaption>${block.caption}</figcaption>${LF}`;
   }
   result += `${indent}</figure>${LF}`;
+  return result;
+}
+
+function serializeStep(block: StepBlock, depth: number): string {
+  const indent = INDENT.repeat(depth);
+  const inner = INDENT.repeat(depth + 1);
+  // Attribute order per docs/annot-html-format.md canonicalisation:
+  // data-annot-block → data-annot-image-id → other data-* alpha.
+  // The step block carries only `data-step-layout` in the
+  // last slot, always emitted explicitly (byte-stability over
+  // byte-economy — see Phase 0 spec freeze).
+  let result = `${indent}<section data-annot-block="step" data-annot-image-id="${escapeAttr(block.id)}" data-step-layout="${escapeAttr(block.layout)}">${LF}`;
+  // SVG is opaque — re-indent each line with the section-child
+  // indent. Same machinery as image-block.
+  const svgLines = block.svg.split(LF);
+  for (const line of svgLines) {
+    if (line.length === 0) {
+      result += LF;
+    } else {
+      result += `${inner}${line}${LF}`;
+    }
+  }
+  // Child slots: title + body, in that fixed order. Always emit
+  // both even when their inline HTML is empty (the editor's
+  // placeholder affordance lives on the empty form).
+  result += `${inner}<h3 data-step-title>${block.title}</h3>${LF}`;
+  result += `${inner}<p data-step-body>${block.body}</p>${LF}`;
+  result += `${indent}</section>${LF}`;
   return result;
 }
 

@@ -36,6 +36,7 @@ export type {
   AnnotDocVersion,
   Block,
   CalloutBlock,
+  CardLayoutMeta,
   CodeBlock,
   DividerBlock,
   DocMeta,
@@ -46,6 +47,8 @@ export type {
   NumberingMeta,
   ParagraphBlock,
   QuoteBlock,
+  StepBlock,
+  StepLayout,
   TemplateMeta,
   UnknownBlock,
 } from "./types.js";

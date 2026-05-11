@@ -46,6 +46,12 @@ export interface DocMeta {
    *  so the numbering shows up identically in the editor and
    *  in standalone browser-view rendering. */
   readonly numbering?: NumberingMeta;
+  /** Phase 1 of `docs/plans/card-procedure-template.md` —
+   *  card-grid + default-step-layout settings for documents that
+   *  carry `step` blocks. Both nested fields are optional; an
+   *  unset cardLayout means the implicit defaults (single-column
+   *  stack, `image-top` for new steps). */
+  readonly cardLayout?: CardLayoutMeta;
 }
 
 export interface TemplateMeta {
@@ -93,7 +99,26 @@ export type Block =
   | CalloutBlock
   | DividerBlock
   | ImageBlock
+  | StepBlock
   | UnknownBlock;
+
+/** Visual layout of a `StepBlock`. The five enum values mirror
+ *  PowerPoint slide layouts that `exportDocumentPptx` will pick
+ *  per-block in Phase 6 of `docs/plans/card-procedure-template.md`. */
+export type StepLayout = "image-top" | "image-bottom" | "image-left" | "image-right" | "image-fill";
+
+/** Card-grid + default-step-layout settings carried in the JSON
+ *  sidecar. Both fields are optional. */
+export interface CardLayoutMeta {
+  /** Cards-per-row in standalone view at the document's
+   *  max-width. `"auto"` uses `repeat(auto-fill, …)` with a
+   *  card-min-width breakpoint. Default `1` (vertical stack). */
+  readonly columns?: 1 | 2 | 3 | "auto";
+  /** Default `data-step-layout` for newly-inserted step blocks
+   *  in the editor. Per-block `data-step-layout` always wins on
+   *  render. Default `"image-top"`. */
+  readonly defaultStepLayout?: StepLayout;
+}
 
 export interface HeadingBlock {
   readonly kind: "heading";
@@ -158,6 +183,32 @@ export interface ImageBlock {
   readonly svg: string;
   /** Optional figcaption inline HTML. */
   readonly caption?: string;
+}
+
+/** Card-style procedure step: image + title + body in a single
+ *  block. The three slots have fixed DOM order (svg → title →
+ *  body) regardless of `layout`; the visual rearrangement is
+ *  pure CSS Grid in `injectDocumentStyles` (Phase 2 of
+ *  `docs/plans/card-procedure-template.md`). */
+export interface StepBlock {
+  readonly kind: "step";
+  /** Stable per-image identifier. Shares the `data-annot-image-id`
+   *  namespace with `ImageBlock` — IDs MUST be unique within the
+   *  document regardless of which block kind uses them. Same
+   *  format as `ImageBlock.id`. */
+  readonly id: string;
+  /** Canonical inner-form `<svg>…</svg>` bytes — same shape as
+   *  `ImageBlock.svg`. */
+  readonly svg: string;
+  /** Title inline HTML. Empty string is a valid placeholder
+   *  rendered by the editor as a "type to start" affordance. */
+  readonly title: string;
+  /** Body inline HTML. Same placeholder semantics as `title`. */
+  readonly body: string;
+  /** Per-block layout. Defaults to `"image-top"` on parse / clone
+   *  / new-block construction. The serializer always emits the
+   *  attribute explicitly even for the default. */
+  readonly layout: StepLayout;
 }
 
 /** Forward-compat preservation: any `<… data-annot-block="…">`

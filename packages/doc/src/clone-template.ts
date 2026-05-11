@@ -27,7 +27,15 @@
  */
 
 import { newIdB58 } from "@ingcreators/annot-core/headless";
-import type { AnnotDocument, Block, DocMeta, ImageBlock, ImageMeta } from "./types.js";
+import type {
+  AnnotDocument,
+  Block,
+  CardLayoutMeta,
+  DocMeta,
+  ImageBlock,
+  ImageMeta,
+  StepBlock,
+} from "./types.js";
 
 export interface CloneTemplateOptions {
   /** ID factory for fresh image-block IDs. Defaults to
@@ -50,22 +58,26 @@ export function cloneTemplate(
 ): AnnotDocument {
   const makeId = options.makeId ?? defaultMakeId;
 
-  // 1. Build an id-remap table for every image block. We mint
-  //    eagerly (rather than lazily during the block walk) so
-  //    `imageMeta` keys can be remapped in one pass without
+  // 1. Build an id-remap table for every image-bearing block —
+  //    `image` and `step` both carry `data-annot-image-id` from
+  //    the same namespace (Phase 0 of card-procedure-template).
+  //    We mint eagerly (rather than lazily during the block walk)
+  //    so `imageMeta` keys can be remapped in one pass without
   //    needing a second walk over the block tree.
   const idRemap = new Map<string, string>();
   for (const block of template.blocks) {
-    if (block.kind === "image") {
+    if (block.kind === "image" || block.kind === "step") {
       idRemap.set(block.id, makeId());
     }
   }
 
-  // 2. Walk blocks; substitute IDs on image blocks, leave
+  // 2. Walk blocks; substitute IDs on image / step blocks, leave
   //    everything else untouched.
-  const blocks: readonly Block[] = template.blocks.map((block) =>
-    block.kind === "image" ? remapImageBlock(block, idRemap) : block,
-  );
+  const blocks: readonly Block[] = template.blocks.map((block) => {
+    if (block.kind === "image") return remapImageBlock(block, idRemap);
+    if (block.kind === "step") return remapStepBlock(block, idRemap);
+    return block;
+  });
 
   // 3. Build new meta: drop `template`, remap `imageMeta` keys.
   const meta = remapMeta(template.meta, idRemap);
@@ -92,6 +104,19 @@ function remapImageBlock(block: ImageBlock, idRemap: Map<string, string>): Image
     : { kind: "image", id: newId, svg: block.svg };
 }
 
+function remapStepBlock(block: StepBlock, idRemap: Map<string, string>): StepBlock {
+  const newId = idRemap.get(block.id);
+  if (newId === undefined || newId === block.id) return block;
+  return {
+    kind: "step",
+    id: newId,
+    svg: block.svg,
+    title: block.title,
+    body: block.body,
+    layout: block.layout,
+  };
+}
+
 function remapMeta(meta: DocMeta, idRemap: Map<string, string>): DocMeta {
   // Strip the `template` field unconditionally — that's the
   // whole point of the clone. Every other field passes through.
@@ -108,6 +133,11 @@ function remapMeta(meta: DocMeta, idRemap: Map<string, string>): DocMeta {
     if (remapped !== undefined) {
       (out as { imageMeta?: Readonly<Record<string, ImageMeta>> }).imageMeta = remapped;
     }
+  }
+  if (meta.cardLayout !== undefined) {
+    // cardLayout is doc-wide chrome, not tied to any specific
+    // image / step block — passes through verbatim.
+    (out as { cardLayout?: CardLayoutMeta }).cardLayout = meta.cardLayout;
   }
   return out;
 }
