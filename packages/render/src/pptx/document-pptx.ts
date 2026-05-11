@@ -97,6 +97,11 @@ interface SlideData {
     bytes: Uint8Array;
     rid: number;
   }[];
+  /** Phase 7b — hyperlinks declared at slide-rels level. Each
+   *  entry pairs a relationship id with the target URL. The URL
+   *  has already been allowlist-validated upstream (the
+   *  parser drops anything outside http / https / mailto). */
+  hyperlinks: { rid: number; url: string }[];
 }
 
 /** Fit `src` inside `region` preserving aspect ratio (CSS
@@ -173,7 +178,7 @@ export function buildDocumentPptxFiles(doc: AnnotDocument): DocumentPptxFiles {
   for (const s of slides) {
     files[`ppt/slides/slide${s.index}.xml`] = str(buildSlideXml(s));
     files[`ppt/slides/_rels/slide${s.index}.xml.rels`] = str(
-      slideRels(s.index, s.imageBytes !== null, s.imageExt, s.mosaicMedia),
+      slideRels(s.index, s.imageBytes !== null, s.imageExt, s.mosaicMedia, s.hyperlinks),
     );
     if (s.imageBytes) {
       files[`ppt/media/screenshot${s.index}.${s.imageExt}`] = s.imageBytes;
@@ -302,6 +307,7 @@ function buildSlideFromImageBlock(block: ImageBlock, index: number): SlideData |
     shapes,
     topLevelShapes: [],
     mosaicMedia,
+    hyperlinks: [],
   };
 }
 
@@ -411,6 +417,28 @@ function buildSlideFromStepBlock(block: StepBlock, index: number): SlideData | n
     });
   }
 
+  // Phase 7b — URL chip. Same dark-on-transparent vs translucent-
+  // overlay split as the title / body shapes; the chip text is
+  // wrapped in `<a:hlinkClick>` so PowerPoint opens the URL on
+  // click. The chip is positioned per layout — see
+  // `LINK_CHIP_PLACEMENTS`.
+  if (block.link !== undefined) {
+    const chipId = nextId++;
+    const linkRid = allocateHyperlinkRid(base);
+    base.hyperlinks.push({ rid: linkRid, url: block.link.url });
+    const chipLabel = block.link.label ?? block.link.url;
+    base.topLevelShapes.push({
+      xml: buildStepLinkChipXml({
+        id: chipId,
+        text: chipLabel,
+        rect: LINK_CHIP_PLACEMENTS[block.layout],
+        linkRid,
+        overlay,
+      }),
+      id: chipId,
+    });
+  }
+
   return base;
 }
 
@@ -429,10 +457,13 @@ function buildSlideFromStepBlock(block: StepBlock, index: number): SlideData | n
 function buildImagelessStepSlide(block: StepBlock, index: number): SlideData | null {
   const titleText = stripInlineHtml(block.title);
   const bodyText = stripInlineHtml(block.body);
-  // A slide with neither title nor body would be visually empty —
-  // skip it the same way image-bearing slides skip on parse
-  // failure.
-  if (titleText.length === 0 && bodyText.length === 0) return null;
+  // A slide with neither title nor body NOR a URL chip would be
+  // visually empty — skip it the same way image-bearing slides
+  // skip on parse failure. Phase 7b: a link-only step IS
+  // exportable; the chip carries visible content.
+  if (titleText.length === 0 && bodyText.length === 0 && block.link === undefined) {
+    return null;
+  }
 
   // Centred text card. Title occupies the upper third (visually
   // emphasises the step name); body fills the middle two-thirds
@@ -474,6 +505,28 @@ function buildImagelessStepSlide(block: StepBlock, index: number): SlideData | n
     });
   }
 
+  // Phase 7b — URL chip on an image-less slide. Centred chip
+  // below the body text region. The slide's hyperlinks rels
+  // start at rId2 (no screenshot in front of them).
+  const hyperlinks: SlideData["hyperlinks"] = [];
+  if (block.link !== undefined) {
+    const chipId = nextId++;
+    const linkRid = 2; // first free rId after slideLayout (rId1).
+    hyperlinks.push({ rid: linkRid, url: block.link.url });
+    const chipLabel = block.link.label ?? block.link.url;
+    topLevelShapes.push({
+      xml: buildStepLinkChipXml({
+        id: chipId,
+        text: chipLabel,
+        // Centred under the body region of an image-less card.
+        rect: { x: 0.3, y: 0.78, w: 0.4, h: 0.06 },
+        linkRid,
+        overlay: false,
+      }),
+      id: chipId,
+    });
+  }
+
   return {
     index,
     // Width / height carried as the slide canvas size so the
@@ -487,8 +540,33 @@ function buildImagelessStepSlide(block: StepBlock, index: number): SlideData | n
     shapes: [],
     topLevelShapes,
     mosaicMedia: [],
+    hyperlinks,
   };
 }
+
+/** Phase 7b — allocate a fresh rId for a slide-level hyperlink.
+ *  Picks the next integer above the existing rIds (slideLayout=1,
+ *  screenshot=2 when present, mosaic media 3..N, hyperlinks
+ *  beyond that). Pure function over the slide's current state. */
+function allocateHyperlinkRid(slide: SlideData): number {
+  let maxRid = 1; // slideLayout
+  if (slide.imageBytes) maxRid = Math.max(maxRid, 2);
+  for (const m of slide.mosaicMedia) maxRid = Math.max(maxRid, m.rid);
+  for (const h of slide.hyperlinks) maxRid = Math.max(maxRid, h.rid);
+  return maxRid + 1;
+}
+
+/** Phase 7b — per-layout chip placement. The chip sits in a
+ *  bottom strip of the text region for the area-based layouts;
+ *  for `image-fill` it overlays the bottom-right corner so the
+ *  user can spot the link without scanning the full slide. */
+const LINK_CHIP_PLACEMENTS: Record<StepLayout, { x: number; y: number; w: number; h: number }> = {
+  "image-top": { x: 0.5, y: 0.92, w: 0.46, h: 0.06 },
+  "image-bottom": { x: 0.5, y: 0.28, w: 0.46, h: 0.06 },
+  "image-left": { x: 0.58, y: 0.9, w: 0.4, h: 0.06 },
+  "image-right": { x: 0.02, y: 0.9, w: 0.4, h: 0.06 },
+  "image-fill": { x: 0.5, y: 0.92, w: 0.46, h: 0.06 },
+};
 
 /** Phase 6b — per-layout title + body text-shape positions
  *  (slide-coordinate fractions). Coordinates pair up with the
@@ -616,6 +694,76 @@ function buildStepTextShapeXml(opts: OverlayTextShapeOptions): string {
             <a:r>
               <a:rPr lang="en-US" sz="${opts.fontSizeHpt}"${boldAttr}>
                 <a:solidFill><a:srgbClr val="${textColor}"/></a:solidFill>
+              </a:rPr>
+              <a:t>${text}</a:t>
+            </a:r>
+          </a:p>
+        </p:txBody>
+      </p:sp>`;
+}
+
+interface StepLinkChipOptions {
+  id: number;
+  text: string;
+  rect: { x: number; y: number; w: number; h: number };
+  /** The slide-rels rId pointing at the hyperlink relationship. */
+  linkRid: number;
+  /** Use the overlay style (translucent dark backdrop + white
+   *  text) for image-fill layout; transparent + accent-coloured
+   *  text otherwise. */
+  overlay: boolean;
+}
+
+/**
+ * Phase 7b — build a `<p:sp>` for the URL chip. The text run is
+ * wrapped in `<a:hlinkClick r:id="rIdN">` so PowerPoint treats
+ * the chip as a hyperlink (Ctrl+Click in slide-edit mode, plain
+ * click in slide-show mode). The chip's visual treatment mirrors
+ * the CSS counterpart in `injectDocumentStyles`: a pill-shaped
+ * accent-coloured outline with an external-link affordance. We
+ * approximate the pill with a rounded-rectangle prstGeom; the
+ * external-link glyph is omitted (PowerPoint text shapes can't
+ * inline SVG, and shipping a media glyph for every slide would
+ * bloat the deck).
+ */
+function buildStepLinkChipXml(opts: StepLinkChipOptions): string {
+  const xPx = SLIDE_W_PX * opts.rect.x;
+  const yPx = SLIDE_H_PX * opts.rect.y;
+  const wPx = SLIDE_W_PX * opts.rect.w;
+  const hPx = SLIDE_H_PX * opts.rect.h;
+  const text = escapeOoxmlText(opts.text);
+  const fillXml = opts.overlay
+    ? `<a:solidFill><a:srgbClr val="000000"><a:alpha val="65000"/></a:srgbClr></a:solidFill>`
+    : "<a:noFill/>";
+  // Chip uses the document accent palette colour for the border
+  // + text. Theme accent1 (#4472C4) is hard-coded — the theme XML
+  // already pins it. Overlay style flips to white-on-dark.
+  const lineColor = opts.overlay ? "FFFFFF" : "4472C4";
+  const textColor = opts.overlay ? "FFFFFF" : "4472C4";
+  return `<p:sp>
+        <p:nvSpPr>
+          <p:cNvPr id="${opts.id}" name="StepLink"/>
+          <p:cNvSpPr txBox="1"/>
+          <p:nvPr/>
+        </p:nvSpPr>
+        <p:spPr>
+          <a:xfrm>
+            <a:off x="${px(xPx)}" y="${px(yPx)}"/>
+            <a:ext cx="${px(wPx)}" cy="${px(hPx)}"/>
+          </a:xfrm>
+          <a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val 50000"/></a:avLst></a:prstGeom>
+          ${fillXml}
+          <a:ln w="9525"><a:solidFill><a:srgbClr val="${lineColor}"/></a:solidFill></a:ln>
+        </p:spPr>
+        <p:txBody>
+          <a:bodyPr wrap="square" lIns="91440" tIns="36000" rIns="91440" bIns="36000" anchor="ctr"/>
+          <a:lstStyle/>
+          <a:p>
+            <a:pPr algn="ctr"><a:defRPr/></a:pPr>
+            <a:r>
+              <a:rPr lang="en-US" sz="1400" u="sng">
+                <a:solidFill><a:srgbClr val="${textColor}"/></a:solidFill>
+                <a:hlinkClick xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="rId${opts.linkRid}"/>
               </a:rPr>
               <a:t>${text}</a:t>
             </a:r>
@@ -880,6 +1028,7 @@ function slideRels(
   hasImage: boolean,
   imageExt: "png" | "jpeg",
   mosaicMedia: ReadonlyArray<{ filename: string; rid: number }>,
+  hyperlinks: ReadonlyArray<{ rid: number; url: string }>,
 ): string {
   const imgRel = hasImage
     ? `\n  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/screenshot${slideIndex}.${imageExt}"/>`
@@ -890,10 +1039,29 @@ function slideRels(
         `\n  <Relationship Id="rId${m.rid}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/${m.filename}"/>`,
     )
     .join("");
+  // Phase 7b — hyperlink relationships. `TargetMode="External"`
+  // tells PowerPoint the URL points outside the package.
+  const linkRels = hyperlinks
+    .map(
+      (h) =>
+        `\n  <Relationship Id="rId${h.rid}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="${escapeXmlAttr(h.url)}" TargetMode="External"/>`,
+    )
+    .join("");
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>${imgRel}${mosaicRels}
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>${imgRel}${mosaicRels}${linkRels}
 </Relationships>`;
+}
+
+/** Escape `&`, `<`, `>`, `"` for XML attribute values. The
+ *  slide-rels `Target` attribute carries user-supplied URLs;
+ *  preserve every character but quote the four XML metachars. */
+function escapeXmlAttr(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
 function slideLayout(): string {

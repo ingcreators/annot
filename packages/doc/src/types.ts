@@ -213,6 +213,26 @@ export interface StepBlock {
    *  / new-block construction. The serializer always emits the
    *  attribute explicitly even for the default. */
   readonly layout: StepLayout;
+  /** Phase 7b of `docs/plans/card-procedure-template.md` —
+   *  optional URL chip (Scribe-style "Navigate to …" affordance).
+   *  When present, the standalone view and editor render a clickable
+   *  chip below the step title; the PPTX export emits the chip
+   *  with a `<a:hlinkClick>` so PowerPoint opens the URL on click.
+   *  `label` defaults to the URL string when absent.
+   *
+   *  The URL is restricted to `http://`, `https://`, and `mailto:`
+   *  schemes — anything else is dropped on parse to defang
+   *  `javascript:` / `data:` payloads from hostile input. */
+  readonly link?: StepLink;
+}
+
+/** URL chip carried on a step block. See `StepBlock.link`. */
+export interface StepLink {
+  /** Validated URL (http / https / mailto only). */
+  readonly url: string;
+  /** Optional human-friendly label. When absent the renderer
+   *  falls back to the URL string itself. */
+  readonly label?: string;
 }
 
 /** Forward-compat preservation: any `<… data-annot-block="…">`

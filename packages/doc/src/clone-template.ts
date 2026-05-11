@@ -107,14 +107,26 @@ function remapImageBlock(block: ImageBlock, idRemap: Map<string, string>): Image
 function remapStepBlock(block: StepBlock, idRemap: Map<string, string>): StepBlock {
   const newId = idRemap.get(block.id);
   if (newId === undefined || newId === block.id) return block;
-  return {
-    kind: "step",
-    id: newId,
-    svg: block.svg,
-    title: block.title,
-    body: block.body,
-    layout: block.layout,
-  };
+  // Phase 7b: `link` field carries through unchanged — the URL is
+  // a piece of content, not an id-bearing reference.
+  return block.link !== undefined
+    ? {
+        kind: "step",
+        id: newId,
+        svg: block.svg,
+        title: block.title,
+        body: block.body,
+        layout: block.layout,
+        link: block.link,
+      }
+    : {
+        kind: "step",
+        id: newId,
+        svg: block.svg,
+        title: block.title,
+        body: block.body,
+        layout: block.layout,
+      };
 }
 
 function remapMeta(meta: DocMeta, idRemap: Map<string, string>): DocMeta {

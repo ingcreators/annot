@@ -209,11 +209,23 @@ function serializeStep(block: StepBlock, depth: number): string {
   // `svg` field marks an image-less step block. We carry the state
   // out-of-band via `data-step-image-less="1"` so the standalone-
   // view CSS can collapse the grid without `:not(:has(...))`
-  // gymnastics. The attribute order is: data-annot-block →
-  // data-annot-image-id → data-step-image-less → data-step-layout
-  // (alphabetical among data-*, per Phase 0 spec).
+  // gymnastics.
+  //
+  // Phase 7b: optional URL chip carried on `data-step-url` +
+  // `data-step-url-label`. Emitted only when `block.link` is set
+  // (an absent link → both attrs absent).
+  //
+  // Canonical attribute order (alphabetical among data-* with
+  // the documented data-annot-block / data-annot-image-id
+  // exceptions):
+  //   data-annot-block → data-annot-image-id →
+  //   data-step-image-less → data-step-layout →
+  //   data-step-url → data-step-url-label
   const imageLessAttr = block.svg.length === 0 ? ` data-step-image-less="1"` : "";
-  let result = `${indent}<section data-annot-block="step" data-annot-image-id="${escapeAttr(block.id)}"${imageLessAttr} data-step-layout="${escapeAttr(block.layout)}">${LF}`;
+  const urlAttr = block.link ? ` data-step-url="${escapeAttr(block.link.url)}"` : "";
+  const urlLabelAttr =
+    block.link?.label !== undefined ? ` data-step-url-label="${escapeAttr(block.link.label)}"` : "";
+  let result = `${indent}<section data-annot-block="step" data-annot-image-id="${escapeAttr(block.id)}"${imageLessAttr} data-step-layout="${escapeAttr(block.layout)}"${urlAttr}${urlLabelAttr}>${LF}`;
   // SVG is opaque — re-indent each line with the section-child
   // indent. Same machinery as image-block. Image-less step blocks
   // emit no `<svg>` child at all (parser side accepts both forms).
