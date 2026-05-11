@@ -298,11 +298,19 @@ npm run dev</code></pre>
   same namespace, same `imageMeta` keying as the `image` block kind —
   IDs MUST be unique within the document regardless of which block
   kind uses them).
-- Exactly three children in fixed order:
-  1. One inline `<svg>` carrying its own `data-annot-version`. The
-     embedded `<svg>` is **a complete `.annot.svg` document** — a
-     reader extracting just that subtree gets a valid standalone
-     annotation file. See [`docs/svg-format.md`](./svg-format.md).
+- Up to three children in fixed order:
+  1. Optionally, one inline `<svg>` carrying its own
+     `data-annot-version`. The embedded `<svg>` is **a complete
+     `.annot.svg` document** — a reader extracting just that
+     subtree gets a valid standalone annotation file. See
+     [`docs/svg-format.md`](./svg-format.md). **The `<svg>` child
+     is OPTIONAL.** A step block with no `<svg>` child is an
+     **image-less step** — a text-only narrative card. When the
+     `<svg>` child is absent the `<section>` MUST carry
+     `data-step-image-less="1"` (see below); the editor / parser
+     accept both forms (decorator present + absent) when reading,
+     but the serializer always emits the decorator when the field
+     is empty.
   2. One `<h3 data-step-title>` carrying the step's title.
      [Rich text](#rich-text) inline content allowed.
   3. One `<p data-step-body>` carrying the step's description.
@@ -342,6 +350,13 @@ npm run dev</code></pre>
   (`<p data-step-body></p>`) are valid placeholders; the editor
   renders both with a "type to start" affordance, same as the
   empty `paragraph` block does.
+- `data-step-image-less` (Phase 7a) is an OPTIONAL flag that the
+  serializer emits when the `<svg>` child is absent. Values are
+  `"1"` (image-less step) or the attribute is absent (image-bearing
+  step). The CSS injected by `injectDocumentStyles` keys off this
+  attribute to collapse the card grid to a single text column
+  regardless of the declared `data-step-layout`. PPTX export emits
+  a text-only slide (no image group) for image-less steps.
 - `data-annot-image-id` format: `img-` prefix + 8 to 32 chars from
   `[a-zA-Z0-9_-]`, generated via `newIdB58` in
   `@ingcreators/annot-core/utils`. Same constraint as the
@@ -851,6 +866,18 @@ on-disk shape of v1 files.
   - Three new golden fixtures (`steps-only`, `steps-mixed`,
     `steps-fill`) under
     [`docs/annot-html-format-examples/`](./annot-html-format-examples/).
+- **2026-05 — image-less `step` block** (Phase 7a of
+  [`docs/plans/card-procedure-template.md`](./plans/card-procedure-template.md)).
+  Additive under v1; pre-release. Adds:
+  - The `<svg>` child of a `step` block is now OPTIONAL. A step
+    block with no `<svg>` child renders as a text-only narrative
+    card (title + body only).
+  - New OPTIONAL attribute `data-step-image-less="1"` on the
+    `<section>` — the serializer always emits it when the
+    `<svg>` child is absent. The parser accepts both forms
+    (decorator present + absent) on read.
+  - The slash menu gains a "Step (text only)" entry that splices
+    an image-less step block synchronously (no file picker).
 
 ### Version 0 (pre-versioning)
 

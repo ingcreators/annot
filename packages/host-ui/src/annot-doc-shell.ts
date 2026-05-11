@@ -1045,6 +1045,15 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
       return;
     }
     if (item.kind === "step") {
+      // Phase 7a of card-procedure-template — `stepImageless`
+      // flag skips the file-picker dance and inserts a text-only
+      // step block directly. Same replacement semantics as the
+      // image-bearing path; the only difference is the block's
+      // `svg` field is the empty string.
+      if (item.stepImageless) {
+        this.#replaceWithImagelessStep(index);
+        return;
+      }
       // Phase 3 of card-procedure-template — same picker-driven
       // path as image, but the resulting block is a `StepBlock`
       // (with empty title + body + the doc's default layout).
@@ -1079,6 +1088,11 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
       return;
     }
     if (item.kind === "step") {
+      // Phase 7a — text-only step bypasses the file picker.
+      if (item.stepImageless) {
+        this.#insertImagelessStepAt(safeAt);
+        return;
+      }
       // Phase 3 of card-procedure-template — picker-driven step
       // insertion mirrors the image entry.
       void this.#promptImageFileAndInsertStepAt(safeAt);
@@ -1422,6 +1436,47 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
     const newDoc: AnnotDocument = { ...this.document, blocks };
     this.#history?.push(newDoc);
     this.#applyInternal(newDoc, "block-action");
+  }
+
+  /** Phase 7a of card-procedure-template — splice an image-less
+   *  step block (empty `svg` field) at `insertAt`. No file picker,
+   *  no XMP probe; the block is text-only so it can be inserted
+   *  synchronously the same way an empty paragraph would. */
+  #insertImagelessStepAt(insertAt: number): void {
+    if (!this.document) return;
+    const stepBlock = this.#makeImagelessStepBlock();
+    const blocks = [...this.document.blocks];
+    const at = Math.max(0, Math.min(blocks.length, insertAt));
+    blocks.splice(at, 0, stepBlock);
+    const newDoc: AnnotDocument = { ...this.document, blocks };
+    this.#history?.push(newDoc);
+    this.#applyInternal(newDoc, "block-action");
+  }
+
+  /** Phase 7a — replace the block at `index` with an image-less
+   *  step block. Mirrors `#promptImageFileAndReplaceWithStep`'s
+   *  splice semantics but skips the picker. */
+  #replaceWithImagelessStep(index: number): void {
+    if (!this.document) return;
+    if (index < 0 || index >= this.document.blocks.length) return;
+    const stepBlock = this.#makeImagelessStepBlock();
+    const blocks = [...this.document.blocks];
+    blocks[index] = stepBlock;
+    const newDoc: AnnotDocument = { ...this.document, blocks };
+    this.#history?.push(newDoc);
+    this.#applyInternal(newDoc, "block-action");
+  }
+
+  #makeImagelessStepBlock(): StepBlock {
+    const layout = this.document?.meta.cardLayout?.defaultStepLayout ?? "image-top";
+    return {
+      kind: "step",
+      id: `img-${newIdB58()}`,
+      svg: "",
+      title: "",
+      body: "",
+      layout,
+    };
   }
 
   async #insertImageFromFile(
@@ -2231,6 +2286,11 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
     // `<label>`) must not bubble into "edit image".
     if (target?.closest(".annot-doc-step-layout-switcher")) return;
     if (block.kind === "step") {
+      // Phase 7a — image-less step blocks have no image slot to
+      // click on. Defensive guard against a stray click anywhere
+      // outside the contentEditable slots opening the editor for
+      // an empty SVG.
+      if (block.svg.length === 0) return;
       void this.#openStepImageEditor(block, index);
       return;
     }
@@ -2272,10 +2332,16 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
     if (!this.document) return;
     // Step blocks count toward the same "image N of M" tally as
     // standalone image blocks — both kinds carry editable
-    // `<svg data-annot-version>` content.
+    // `<svg data-annot-version>` content. Phase 7a: image-less
+    // step blocks (empty `svg`) are excluded — they have nothing
+    // to edit and would skew the position count.
     const imageBearing = this.document.blocks
       .map((b, i) => ({ block: b, i }))
-      .filter((entry) => entry.block.kind === "image" || entry.block.kind === "step");
+      .filter(
+        (entry) =>
+          entry.block.kind === "image" ||
+          (entry.block.kind === "step" && entry.block.svg.length > 0),
+      );
     const positionInImages = imageBearing.findIndex((entry) => entry.i === index) + 1;
     const totalImages = imageBearing.length;
     const result = await AnnotDocImageEditorModalElement.openFor({
@@ -2536,10 +2602,24 @@ function renderImage(block: ImageBlock, editable = false): TemplateResult {
  *  Card chrome + per-layout grid live in `injectDocumentStyles`
  *  (Phase 2); this function only emits the bare HTML structure. */
 function renderStep(block: StepBlock, editable: boolean): TemplateResult {
-  const aspect = extractSvgAspectRatio(block.svg);
+  // Phase 7a of `docs/plans/card-procedure-template.md` — an empty
+  // `block.svg` marks an image-less step (text-only narrative
+  // card). The image slot is omitted entirely; the `data-step-
+  // image-less="1"` attribute lets `injectDocumentStyles` collapse
+  // the layout grid to a single text area regardless of the
+  // declared `data-step-layout`.
+  const imageless = block.svg.length === 0;
+  const aspect = imageless ? null : extractSvgAspectRatio(block.svg);
   const slotStyle = aspect
     ? `aspect-ratio: ${aspect}; background: var(--annot-doc-code-bg, #f3f4f6);`
     : "";
+  const imageSlot = imageless
+    ? null
+    : html`<div
+        class="annot-doc-image-svg-slot"
+        data-annot-image-svg=${block.svg}
+        style=${slotStyle}
+      ></div>`;
   if (editable) {
     // Editing mode: empty contentEditable elements. The bodies
     // are populated imperatively in `updated()` (same strategy
@@ -2552,17 +2632,35 @@ function renderStep(block: StepBlock, editable: boolean): TemplateResult {
     // current `block.layout` as the selected option and uses a
     // `data-step-layout-switcher` marker so the block-host's
     // `@change` listener can identify the event source.
+    if (imageless) {
+      return html`
+        <section
+          data-annot-block="step"
+          data-annot-image-id=${block.id}
+          data-step-layout=${block.layout}
+          data-step-image-less="1"
+        >
+          <h3 data-step-title contenteditable="true"></h3>
+          <p data-step-body contenteditable="true"></p>
+          <label class="annot-doc-step-layout-switcher" aria-label="Card layout">
+            <select data-step-layout-switcher .value=${block.layout}>
+              <option value="image-top">Image top</option>
+              <option value="image-bottom">Image bottom</option>
+              <option value="image-left">Image left</option>
+              <option value="image-right">Image right</option>
+              <option value="image-fill">Image fill</option>
+            </select>
+          </label>
+        </section>
+      `;
+    }
     return html`
       <section
         data-annot-block="step"
         data-annot-image-id=${block.id}
         data-step-layout=${block.layout}
       >
-        <div
-          class="annot-doc-image-svg-slot"
-          data-annot-image-svg=${block.svg}
-          style=${slotStyle}
-        ></div>
+        ${imageSlot}
         <h3 data-step-title contenteditable="true"></h3>
         <p data-step-body contenteditable="true"></p>
         <label class="annot-doc-step-layout-switcher" aria-label="Card layout">
@@ -2577,17 +2675,26 @@ function renderStep(block: StepBlock, editable: boolean): TemplateResult {
       </section>
     `;
   }
+  if (imageless) {
+    return html`
+      <section
+        data-annot-block="step"
+        data-annot-image-id=${block.id}
+        data-step-layout=${block.layout}
+        data-step-image-less="1"
+      >
+        <h3 data-step-title>${unsafeHTML(block.title)}</h3>
+        <p data-step-body>${unsafeHTML(block.body)}</p>
+      </section>
+    `;
+  }
   return html`
     <section
       data-annot-block="step"
       data-annot-image-id=${block.id}
       data-step-layout=${block.layout}
     >
-      <div
-        class="annot-doc-image-svg-slot"
-        data-annot-image-svg=${block.svg}
-        style=${slotStyle}
-      ></div>
+      ${imageSlot}
       <h3 data-step-title>${unsafeHTML(block.title)}</h3>
       <p data-step-body>${unsafeHTML(block.body)}</p>
     </section>

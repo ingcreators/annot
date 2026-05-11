@@ -205,11 +205,15 @@ export function exportDocumentPptx(doc: AnnotDocument): Blob | null {
 
 function collectSlides(doc: AnnotDocument): SlideData[] {
   const out: SlideData[] = [];
-  let slideIndex = 0;
+  // Phase 7a: assign the slide index AFTER a successful build so
+  // skipped blocks (image parse failure, entirely-empty image-
+  // less step, etc.) don't leave a gap in the slide numbering.
+  // The presentation rels / content-types / slide xml all expect
+  // a contiguous 1..N sequence; a gap renders the deck unreadable
+  // in PowerPoint.
   for (const block of doc.blocks) {
     if (block.kind === "image") {
-      slideIndex += 1;
-      const data = buildSlideFromImageBlock(block, slideIndex);
+      const data = buildSlideFromImageBlock(block, out.length + 1);
       if (data) out.push(data);
       continue;
     }
@@ -220,8 +224,7 @@ function collectSlides(doc: AnnotDocument): SlideData[] {
     // are emitted as overlay `<p:sp>` text shapes positioned per
     // `data-step-layout`.
     if (block.kind === "step") {
-      slideIndex += 1;
-      const data = buildSlideFromStepBlock(block, slideIndex);
+      const data = buildSlideFromStepBlock(block, out.length + 1);
       if (data) out.push(data);
     }
   }
@@ -335,6 +338,14 @@ function buildSlideFromImageBlock(block: ImageBlock, index: number): SlideData |
  * and visually consistent across layouts.
  */
 function buildSlideFromStepBlock(block: StepBlock, index: number): SlideData | null {
+  // Phase 7a of `docs/plans/card-procedure-template.md` — an empty
+  // `block.svg` marks an image-less step block (text-only narrative
+  // card). We bypass the image-block delegation entirely and emit
+  // a slide whose only content is the title + body shapes,
+  // centred on the slide.
+  if (block.svg.length === 0) {
+    return buildImagelessStepSlide(block, index);
+  }
   const base = buildSlideFromImageBlock({ kind: "image", id: block.id, svg: block.svg }, index);
   if (!base) return null;
 
@@ -401,6 +412,82 @@ function buildSlideFromStepBlock(block: StepBlock, index: number): SlideData | n
   }
 
   return base;
+}
+
+/**
+ * Phase 7a — build a slide from an image-less step block. The
+ * slide has no image group, no annotation shapes, no mosaic
+ * media; just two top-level text shapes (title + body) centred
+ * on the slide. Layout matches the CSS counterpart: title near
+ * the top of a generous text area, body filling the rest.
+ *
+ * `data-step-layout` is ignored for image-less blocks — the CSS
+ * collapses the grid to text-only regardless of layout, and
+ * mirroring that in PPTX keeps the rendered slide consistent
+ * with the standalone view.
+ */
+function buildImagelessStepSlide(block: StepBlock, index: number): SlideData | null {
+  const titleText = stripInlineHtml(block.title);
+  const bodyText = stripInlineHtml(block.body);
+  // A slide with neither title nor body would be visually empty —
+  // skip it the same way image-bearing slides skip on parse
+  // failure.
+  if (titleText.length === 0 && bodyText.length === 0) return null;
+
+  // Centred text card. Title occupies the upper third (visually
+  // emphasises the step name); body fills the middle two-thirds
+  // with comfortable margins. Coordinates expressed as fractions
+  // of the slide for symmetry with `LAYOUT_PLACEMENTS`.
+  const titleRect = { x: 0.1, y: 0.2, w: 0.8, h: 0.15 };
+  const bodyRect = { x: 0.1, y: 0.4, w: 0.8, h: 0.45 };
+
+  let nextId = 2;
+  const topLevelShapes: SlideData["topLevelShapes"] = [];
+  if (titleText.length > 0) {
+    const titleId = nextId++;
+    topLevelShapes.push({
+      xml: buildStepTextShapeXml({
+        id: titleId,
+        name: "StepTitle",
+        text: titleText,
+        rect: titleRect,
+        fontSizeHpt: 3200,
+        bold: true,
+        overlay: false,
+      }),
+      id: titleId,
+    });
+  }
+  if (bodyText.length > 0) {
+    const bodyId = nextId++;
+    topLevelShapes.push({
+      xml: buildStepTextShapeXml({
+        id: bodyId,
+        name: "StepBody",
+        text: bodyText,
+        rect: bodyRect,
+        fontSizeHpt: 2000,
+        bold: false,
+        overlay: false,
+      }),
+      id: bodyId,
+    });
+  }
+
+  return {
+    index,
+    // Width / height carried as the slide canvas size so the
+    // `<a:chExt>` falls back sensibly if anything queries it; the
+    // image group is skipped entirely (no image, no annotations).
+    width: SLIDE_W_PX,
+    height: SLIDE_H_PX,
+    imageBytes: null,
+    imageExt: "png",
+    imageRect: { x: 0, y: 0, w: 0, h: 0 },
+    shapes: [],
+    topLevelShapes,
+    mosaicMedia: [],
+  };
 }
 
 /** Phase 6b — per-layout title + body text-shape positions

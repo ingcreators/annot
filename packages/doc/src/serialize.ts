@@ -205,15 +205,26 @@ function serializeStep(block: StepBlock, depth: number): string {
   // The step block carries only `data-step-layout` in the
   // last slot, always emitted explicitly (byte-stability over
   // byte-economy — see Phase 0 spec freeze).
-  let result = `${indent}<section data-annot-block="step" data-annot-image-id="${escapeAttr(block.id)}" data-step-layout="${escapeAttr(block.layout)}">${LF}`;
+  // Phase 7a of `docs/plans/card-procedure-template.md`: an empty
+  // `svg` field marks an image-less step block. We carry the state
+  // out-of-band via `data-step-image-less="1"` so the standalone-
+  // view CSS can collapse the grid without `:not(:has(...))`
+  // gymnastics. The attribute order is: data-annot-block →
+  // data-annot-image-id → data-step-image-less → data-step-layout
+  // (alphabetical among data-*, per Phase 0 spec).
+  const imageLessAttr = block.svg.length === 0 ? ` data-step-image-less="1"` : "";
+  let result = `${indent}<section data-annot-block="step" data-annot-image-id="${escapeAttr(block.id)}"${imageLessAttr} data-step-layout="${escapeAttr(block.layout)}">${LF}`;
   // SVG is opaque — re-indent each line with the section-child
-  // indent. Same machinery as image-block.
-  const svgLines = block.svg.split(LF);
-  for (const line of svgLines) {
-    if (line.length === 0) {
-      result += LF;
-    } else {
-      result += `${inner}${line}${LF}`;
+  // indent. Same machinery as image-block. Image-less step blocks
+  // emit no `<svg>` child at all (parser side accepts both forms).
+  if (block.svg.length > 0) {
+    const svgLines = block.svg.split(LF);
+    for (const line of svgLines) {
+      if (line.length === 0) {
+        result += LF;
+      } else {
+        result += `${inner}${line}${LF}`;
+      }
     }
   }
   // Child slots: title + body, in that fixed order. Always emit

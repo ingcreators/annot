@@ -1779,3 +1779,76 @@ describe("annot-doc-shell: step layout switcher", () => {
     openSpy.mockRestore();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Phase 7a of `docs/plans/card-procedure-template.md` —
+// image-less step blocks (text-only narrative card).
+// ---------------------------------------------------------------------------
+
+describe("annot-doc-shell: image-less step blocks", () => {
+  function makeImagelessStepDoc(): AnnotDocument {
+    return {
+      version: 1,
+      lang: "en",
+      title: "Image-less step doc",
+      meta: { title: "Image-less step doc" },
+      styleBlock: null,
+      blocks: [
+        {
+          kind: "step",
+          id: "img-imageless",
+          svg: "",
+          title: "Recap",
+          body: "Wrap up.",
+          layout: "image-top",
+        },
+      ],
+    };
+  }
+
+  it("renders an image-less step without the image slot div", async () => {
+    const el = mount(makeImagelessStepDoc());
+    el.editing = true;
+    await el.updateComplete;
+    const section = el.querySelector('[data-annot-block="step"]') as HTMLElement | null;
+    expect(section).not.toBeNull();
+    expect(section?.getAttribute("data-step-image-less")).toBe("1");
+    // No image slot — the renderStep imageless branch returns
+    // null for that slot.
+    expect(section?.querySelector(".annot-doc-image-svg-slot")).toBeNull();
+    // The contentEditable title + body slots are still present.
+    expect(section?.querySelector("[data-step-title][contenteditable='true']")).not.toBeNull();
+    expect(section?.querySelector("[data-step-body][contenteditable='true']")).not.toBeNull();
+  });
+
+  it("renders an image-less step in read-only mode without the layout switcher", async () => {
+    const el = mount(makeImagelessStepDoc());
+    el.editing = false;
+    await el.updateComplete;
+    const section = el.querySelector('[data-annot-block="step"]') as HTMLElement | null;
+    expect(section?.getAttribute("data-step-image-less")).toBe("1");
+    expect(section?.querySelector(".annot-doc-image-svg-slot")).toBeNull();
+    expect(section?.querySelector("[data-step-layout-switcher]")).toBeNull();
+  });
+
+  it("clicks on an image-less step do NOT open the image modal", async () => {
+    const el = mount(makeImagelessStepDoc());
+    el.editing = true;
+    await el.updateComplete;
+    const openSpy = vi
+      .spyOn(
+        // biome-ignore lint/suspicious/noExplicitAny: spying on module-level static
+        (await import("./annot-doc-image-editor-modal.js")).AnnotDocImageEditorModalElement as any,
+        "openFor",
+      )
+      .mockResolvedValue({ kind: "cancel" });
+    const section = el.querySelector('[data-annot-block="step"]') as HTMLElement;
+    // Click on the section background (outside title / body /
+    // switcher). For an image-less step there's no image slot to
+    // click; the click guard in #onBlockHostClick short-circuits.
+    section.click();
+    await Promise.resolve();
+    expect(openSpy).not.toHaveBeenCalled();
+    openSpy.mockRestore();
+  });
+});
