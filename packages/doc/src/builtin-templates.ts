@@ -72,7 +72,7 @@ const PLACEHOLDER_ALT = "Placeholder for a screenshot. Replace by clicking and u
 /** Identifier for one bundled starter. The format spec sets no
  *  constraints; we use lowercase kebab-case so they read as
  *  proper identifiers in URLs / `data-*` attributes. */
-export type BuiltinTemplateId = "manual" | "feature-guide" | "procedure";
+export type BuiltinTemplateId = "manual" | "feature-guide" | "procedure" | "card-procedure";
 
 /** One bundled starter ready to feed into the picker. */
 export interface BuiltinTemplateSummary {
@@ -265,6 +265,73 @@ const PROCEDURE_DOC: AnnotDocument = {
 };
 
 // ───────────────────────────────────────────────────────────────
+// Card procedure — Scribe-style screenshot-driven walkthrough.
+// Phase 5 of `docs/plans/card-procedure-template.md`.
+// ───────────────────────────────────────────────────────────────
+
+/** Per-step image IDs for the card-procedure starter. Each step
+ *  block carries one — the format spec requires `data-annot-image-id`
+ *  to be unique within a document, so the trio uses the
+ *  `img-card-step-{1,2,3}` namespace to stay distinct from
+ *  `img-placeholder` (which the other three starters share). */
+const CARD_STEP_IDS = ["img-card-step-1", "img-card-step-2", "img-card-step-3"] as const;
+
+const CARD_PROCEDURE_DOC: AnnotDocument = {
+  version: ANNOT_DOC_VERSION,
+  lang: "en",
+  title: "Card procedure",
+  meta: {
+    title: "Card procedure",
+    template: {
+      name: "Card procedure",
+      description: "Scribe-style screenshot-driven walkthrough with one card per step.",
+      tags: ["card", "procedure", "scribe", "starter"],
+    },
+    imageMeta: Object.fromEntries(
+      CARD_STEP_IDS.map((id) => [id, { alt: PLACEHOLDER_ALT }] as const),
+    ),
+  },
+  styleBlock: null,
+  blocks: [
+    { kind: "heading", level: 1, inlineHtml: "[Procedure title]" },
+    {
+      kind: "paragraph",
+      inlineHtml:
+        "[One-paragraph intro — what the reader will accomplish, who this is for, prerequisites.]",
+    },
+    {
+      kind: "step",
+      id: CARD_STEP_IDS[0],
+      svg: PLACEHOLDER_SVG,
+      title: "Step 1 — [first action]",
+      body: "[Concrete instruction the reader can follow. Replace the placeholder screenshot with a real capture.]",
+      layout: "image-top",
+    },
+    {
+      kind: "step",
+      id: CARD_STEP_IDS[1],
+      svg: PLACEHOLDER_SVG,
+      title: "Step 2 — [second action]",
+      body: "[What to do next. Keep each card focused on a single observable change so the reader can self-check progress.]",
+      layout: "image-top",
+    },
+    {
+      kind: "step",
+      id: CARD_STEP_IDS[2],
+      svg: PLACEHOLDER_SVG,
+      title: "Step 3 — [third action]",
+      body: "[Final action that completes the procedure, with the success indicator highlighted on the screenshot.]",
+      layout: "image-top",
+    },
+    {
+      kind: "paragraph",
+      inlineHtml:
+        "[Wrap-up — what to verify, where to go next, links to related procedures or troubleshooting.]",
+    },
+  ],
+};
+
+// ───────────────────────────────────────────────────────────────
 // Public exports.
 // ───────────────────────────────────────────────────────────────
 
@@ -300,6 +367,12 @@ export const BUILTIN_TEMPLATES: readonly BuiltinTemplateSummary[] = [
     description: PROCEDURE_DOC.meta.template?.description ?? "",
     source: serializeDocument(PROCEDURE_DOC),
   },
+  {
+    id: "card-procedure",
+    title: CARD_PROCEDURE_DOC.meta.template?.name ?? "Card procedure",
+    description: CARD_PROCEDURE_DOC.meta.template?.description ?? "",
+    source: serializeDocument(CARD_PROCEDURE_DOC),
+  },
 ];
 
 /** Look up a built-in starter by id. Returns `undefined` for
@@ -319,6 +392,7 @@ const BUILTIN_TREES: Readonly<Record<string, AnnotDocument>> = {
   manual: MANUAL_DOC,
   "feature-guide": FEATURE_GUIDE_DOC,
   procedure: PROCEDURE_DOC,
+  "card-procedure": CARD_PROCEDURE_DOC,
 };
 
 /**

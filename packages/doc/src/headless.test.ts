@@ -68,7 +68,10 @@ describe("@ingcreators/annot-doc/headless boundary", () => {
     // surfacing as a runtime crash on a CI box that doesn't
     // have happy-dom available.
     expect(Array.isArray(headless.BUILTIN_TEMPLATES)).toBe(true);
-    expect(headless.BUILTIN_TEMPLATES.length).toBe(3);
+    // Phase 5 of `docs/plans/card-procedure-template.md` adds
+    // `card-procedure` as the fourth starter alongside the
+    // original three (manual / feature-guide / procedure).
+    expect(headless.BUILTIN_TEMPLATES.length).toBe(4);
     for (const t of headless.BUILTIN_TEMPLATES) {
       expect(typeof t.id).toBe("string");
       expect(typeof t.source).toBe("string");
