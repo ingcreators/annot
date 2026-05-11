@@ -109,10 +109,20 @@ function buildStepBlockFromImage(
   const w = Math.max(1, Math.round(img.width));
   const h = Math.max(1, Math.round(img.height));
   const id = `img-${newIdB58()}`;
-  // Use the image's existing annotations if present; fall back
-  // to an empty group so the editor's restore path has
-  // something to mount into.
-  const annotationsFragment = img.annotationsSvg.trim() || `<g id="annotations"></g>`;
+  // Phase 7d-polish: `img.annotationsSvg` is a FULL `<svg>...</svg>`
+  // document produced by `exportAnnotationsSVGString` (flattened —
+  // no `<g id="annotations">` wrapper). Embedding it raw inside the
+  // step's outer `<svg>` produced a nested-SVG structure, which
+  // (a) confuses `restoreAnnotations` (it adopts the entire inner
+  // `<svg>` as a single annotation), (b) makes PPTX export skip
+  // annotations because `querySelector("[id='annotations']")`
+  // returns null, and (c) gives annotated cards a subtly different
+  // intrinsic structure than unannotated cards.
+  //
+  // Normalise on emit: extract the annotation element children and
+  // wrap them in a fresh `<g id="annotations">` so every step's
+  // structure is identical regardless of annotation state.
+  const annotationsFragment = normaliseAnnotationsFragment(img.annotationsSvg);
   const svg =
     `<svg xmlns="http://www.w3.org/2000/svg" data-annot-version="1" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}">` +
     `<image href="${escapeAttrValue(img.originalDataUrl)}" width="${w}" height="${h}"/>` +
@@ -126,6 +136,61 @@ function buildStepBlockFromImage(
     body: "",
     layout,
   };
+}
+
+/** Phase 7d-polish: extract annotation children from an
+ *  `img.annotationsSvg` payload and emit a canonical
+ *  `<g id="annotations">...</g>` fragment. Handles:
+ *
+ *   - Empty / unparseable input → empty group.
+ *   - Full `<svg>` with flat annotation children (the form
+ *     `exportAnnotationsSVGString` produces) → wrap children.
+ *   - Full `<svg>` with a `<g id="annotations">` already → use
+ *     that group's children.
+ *   - Raw `<g id="annotations">` fragment → use as-is.
+ *
+ *  Browser-only (uses DOMParser); host-ui is Tier C so this is
+ *  fine. */
+function normaliseAnnotationsFragment(raw: string): string {
+  const empty = `<g id="annotations"></g>`;
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) return empty;
+  // Direct `<g id="annotations">` fragment — already canonical.
+  if (trimmed.startsWith("<g") && /id\s*=\s*["']annotations["']/.test(trimmed.slice(0, 80))) {
+    return trimmed;
+  }
+  let root: Element | null = null;
+  try {
+    const parsed = new DOMParser().parseFromString(trimmed, "image/svg+xml");
+    root = parsed.documentElement;
+    if (!root || root.querySelector("parsererror")) return empty;
+  } catch {
+    return empty;
+  }
+  // Find the annotations source: a `<g id="annotations">` if
+  // present (older / canonical form), else the SVG root's
+  // children (flattened form).
+  const annoGroup = root.querySelector('[id="annotations"]');
+  const candidates: Element[] = [];
+  if (annoGroup) {
+    for (const child of Array.from(annoGroup.children)) candidates.push(child);
+  } else {
+    for (const child of Array.from(root.children)) {
+      // Skip non-annotation elements: defs (font styles, etc.),
+      // the base bitmap `<image>` (without redact-style marker —
+      // mosaic / blur redacts ARE annotations even as `<image>`),
+      // and the editor's ui-overlay if it ever leaks in.
+      const tag = child.tagName;
+      if (tag === "defs") continue;
+      if (tag === "image" && !child.hasAttribute("data-redact-style")) continue;
+      if (child.id === "ui-overlay") continue;
+      candidates.push(child);
+    }
+  }
+  if (candidates.length === 0) return empty;
+  const serializer = new XMLSerializer();
+  const inner = candidates.map((el) => serializer.serializeToString(el)).join("");
+  return `<g id="annotations">${inner}</g>`;
 }
 
 function buildStepTitle(index: number, numbering: CardDocumentNumbering): string {

@@ -397,11 +397,33 @@ function buildSlideFromImageBlock(block: ImageBlock, index: number): SlideData |
   const mosaicMedia: SlideData["mosaicMedia"] = [];
 
   let id = 2; // id=1 reserved for slide background group
+  // Phase 7d-polish: annotations may live either inside a
+  // `<g id="annotations">` wrapper (the canonical form the
+  // card-procedure generator emits) OR as direct children of
+  // the outer `<svg>` (the flattened form `exportSVGString`
+  // produces after a modal annotation edit). Walk both — find
+  // the group first, fall back to direct svg children with
+  // the usual skips (`<defs>`, the base `<image>`, ui-overlay).
   const annotationsEl = svgEl.querySelector("[id='annotations']");
+  const annotationCandidates: SVGElement[] = [];
   if (annotationsEl) {
     for (const node of Array.from(annotationsEl.childNodes)) {
       if (node.nodeType !== 1) continue;
+      annotationCandidates.push(node as unknown as SVGElement);
+    }
+  } else {
+    for (const node of Array.from(svgEl.childNodes)) {
+      if (node.nodeType !== 1) continue;
       const el = node as unknown as SVGElement;
+      const tag = el.tagName;
+      if (tag === "defs") continue;
+      if (tag === "image" && !el.hasAttribute("data-redact-style")) continue;
+      if (el.id === "ui-overlay") continue;
+      annotationCandidates.push(el);
+    }
+  }
+  if (annotationCandidates.length > 0) {
+    for (const el of annotationCandidates) {
       const shape = svgElementToAnnotationShape(el);
       if (!shape) continue;
 
