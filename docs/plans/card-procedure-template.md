@@ -548,24 +548,45 @@ action is "open this URL." Landed:
 User framing: "ヘッダー部にアイコン、タイトル、説明がある。
 PowerPointでは表紙としてレイアウトできたらよさそう" — Scribe-style
 doc-level header (icon + title + description + author + step
-count) and a matching PPTX cover slide.
-
-Sketch (not yet implemented):
+count) and a matching PPTX cover slide. Landed:
 
 - New OPTIONAL `DocMeta` field: `header?: { icon?: string;
   description?: string }`. `title` is already on `DocMeta`;
   `author` already exists; step count is derived from the
-  block walk. `icon` carries a `data:` URL or a
-  registered-icon id.
-- Renderer prepends a header `<section data-annot-doc-header>`
-  to the article output (skipped by the parser the same way
-  the standalone-view TOC is — regenerated on every save from
-  `meta.header`). The editor surfaces the header fields in the
-  document-settings dialog.
-- PPTX export prepends a cover slide before the per-block
-  slides: icon + title + description + author + step-count
-  callout. The cover slide uses the same 16:9 canvas; layout
-  hand-authored in `buildCoverSlide`.
+  block walk via `countStepBlocks`. `icon` carries a `data:`
+  URL (PNG / JPEG / SVG); cross-host icon registries are
+  out of scope for v1 (the URL approach keeps the doc
+  self-contained).
+- The serializer prepends a `<section data-annot-doc-header>`
+  to the article body **only when** `meta.header` is set with
+  non-empty content (opt-in). Children are emitted in fixed
+  order: icon → title → description → metadata row (author +
+  step count). Plain docs without a header retain their
+  pre-Phase-7c bytes exactly.
+- The parser skips elements carrying `data-annot-doc-header`
+  on read (mirrors the TOC pattern); the model never round-
+  trips through stale header bytes.
+- `injectDocumentStyles` adds CSS for the header section: a
+  2-column grid (icon | content) when an icon is present, a
+  single-column variant otherwise, with the title styled as a
+  large h1 and the description / metadata row in muted
+  secondary text.
+- The `<annot-doc-shell>` editor surfaces the header fields
+  via the `<annot-doc-settings-dialog>` — two new fields
+  ("Header description" + "Header icon"). Clearing both
+  fields drops the `meta.header` sidecar entry so the
+  serializer reverts to the pre-Phase-7c byte stream.
+- PPTX export prepends a cover slide (index 1) before the
+  per-block slides when `meta.header` is set. Layout:
+  centred icon (160×160 px), centred title (44pt bold),
+  centred description (20pt), centred footer joining
+  "By {author}" and "{N} step(s)" with " · ". Cover slides
+  carry a `coverSlide: true` discriminator on `SlideData`
+  so `buildSlideXml` emits the icon as a top-level
+  `<p:pic>` (no SVG-coord group wrap).
+- Tests: 17 new in `doc-header.test.ts` + 14 new in
+  `document-pptx.test.ts` covering serializer / parser /
+  cover-slide / step-count / opt-in semantics.
 
 ### Out of scope for v1 (deferred)
 

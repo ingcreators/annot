@@ -439,6 +439,107 @@ export const StepWithLinkDark: Story = {
 };
 
 // ---------------------------------------------------------------------------
+// Phase 7c of docs/plans/card-procedure-template.md — Scribe-
+// style document header (icon + title + description + author +
+// step count). Setting `meta.header` opts the doc into the
+// header chrome above the article body + a matching PPTX cover
+// slide.
+// ---------------------------------------------------------------------------
+
+// 1×1 transparent PNG used as a placeholder header icon. Keeps
+// the doc self-contained in the story without dragging in a
+// real bitmap. Real-world docs would carry a brand logo at
+// 256×256 or larger.
+const HEADER_ICON_DATA_URL =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+
+function makeHeadedDoc(
+  options: {
+    withIcon?: boolean;
+    withAuthor?: boolean;
+    theme?: AnnotDocument["meta"]["theme"];
+  } = {},
+): AnnotDocument {
+  return {
+    version: 1,
+    lang: "en",
+    title: "Quick start guide",
+    meta: {
+      title: "Quick start guide",
+      theme: options.theme ?? "auto",
+      ...(options.withAuthor ? { author: "Naoki Ichimura" } : {}),
+      header: {
+        ...(options.withIcon ? { icon: HEADER_ICON_DATA_URL } : {}),
+        description: "Get up and running in five steps. This walkthrough takes about 3 minutes.",
+      },
+    },
+    styleBlock: null,
+    blocks: [
+      {
+        kind: "step",
+        id: "img-step-head-01",
+        svg: STEP_PLACEHOLDER_SVG,
+        title: "Open the dashboard",
+        body: "Navigate to the dashboard URL.",
+        layout: "image-top",
+      },
+      {
+        kind: "step",
+        id: "img-step-head-02",
+        svg: STEP_PLACEHOLDER_SVG,
+        title: "Pick a plan",
+        body: "Select the plan that fits your team.",
+        layout: "image-top",
+      },
+      {
+        kind: "step",
+        id: "img-step-head-03",
+        svg: STEP_PLACEHOLDER_SVG,
+        title: "Invite teammates",
+        body: "Send an invite link to your collaborators.",
+        layout: "image-top",
+      },
+    ],
+  };
+}
+
+export const DocHeaderWithIcon: Story = {
+  name: "Doc header / with icon",
+  args: {
+    document: makeHeadedDoc({ withIcon: true, withAuthor: true }),
+    showToc: false,
+    editing: false,
+  },
+};
+
+export const DocHeaderNoIcon: Story = {
+  name: "Doc header / no icon",
+  args: {
+    document: makeHeadedDoc({ withIcon: false, withAuthor: true }),
+    showToc: false,
+    editing: false,
+  },
+};
+
+export const DocHeaderNoAuthor: Story = {
+  name: "Doc header / no author",
+  args: {
+    document: makeHeadedDoc({ withIcon: true, withAuthor: false }),
+    showToc: false,
+    editing: false,
+  },
+};
+
+export const DocHeaderDark: Story = {
+  name: "Doc header / dark theme",
+  args: {
+    document: makeHeadedDoc({ withIcon: true, withAuthor: true, theme: "dark" }),
+    showToc: false,
+    editing: false,
+  },
+};
+
+// ---------------------------------------------------------------------------
 // Phase 5 of docs/plans/card-procedure-template.md — bundled
 // `card-procedure` starter rendered in light + dark themes. The
 // starter ships in @ingcreators/annot-doc/BUILTIN_TEMPLATES.

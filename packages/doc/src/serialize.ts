@@ -48,6 +48,16 @@ export function serializeDocument(doc: AnnotDocument): string {
   // <body>
   out.push(INDENT, "<body>", LF);
   out.push(INDENT.repeat(2), "<article data-annot-doc>", LF);
+  // Phase 7c of `docs/plans/card-procedure-template.md` —
+  // Scribe-style document header. Regenerated on every save
+  // from `meta.header` + `meta.title` + `meta.author` + a
+  // step-count walk; the parser skips elements carrying
+  // `data-annot-doc-header` so the model never round-trips
+  // through stale header bytes. Emitted before the TOC so
+  // standalone view reads top-to-bottom: header → TOC →
+  // article body.
+  const headerHtml = buildDocHeaderHtml(doc, /* depth */ 3);
+  if (headerHtml) out.push(headerHtml);
   // Build the heading → anchor-id map once so heading
   // serialisation + TOC generation use the same ids.
   const anchorMap = buildHeadingAnchorMap(doc.blocks);
@@ -315,6 +325,63 @@ function buildHeadingAnchorMap(blocks: readonly Block[]): Map<HeadingBlock, stri
     }
   }
   return map;
+}
+
+/** Phase 7c — count step blocks for the header metadata row.
+ *  Counts both image-bearing and image-less step blocks; the
+ *  number lines up with what the user sees in the rendered
+ *  document. */
+function countStepBlocks(blocks: readonly Block[]): number {
+  let n = 0;
+  for (const block of blocks) {
+    if (block.kind === "step") n += 1;
+  }
+  return n;
+}
+
+/** Phase 7c — Scribe-style document header. Returns the empty
+ *  string when neither `meta.header` is set nor any of the
+ *  derived fields (author, step count) would produce visible
+ *  content. The output is a `<section data-annot-doc-header>`
+ *  block scoped to the article — the parser recognises
+ *  `data-annot-doc-header` and skips it, so re-saving never
+ *  round-trips through stale header bytes. */
+function buildDocHeaderHtml(doc: AnnotDocument, depth: number): string {
+  const header = doc.meta.header;
+  // Phase 7c opt-in: the header chrome appears ONLY when the
+  // user has set `meta.header` (icon and/or description). Plain
+  // prose docs, and even step-bearing docs without an explicit
+  // header, retain their previous block-top layout — this keeps
+  // byte-for-byte round-trip with every pre-Phase-7c fixture.
+  if (header === undefined || (!header.icon && !header.description)) return "";
+  const stepCount = countStepBlocks(doc.blocks);
+
+  const indent = INDENT.repeat(depth);
+  const inner = INDENT.repeat(depth + 1);
+  const lines: string[] = [];
+  lines.push(`${indent}<section data-annot-doc-header>`);
+  if (header?.icon) {
+    lines.push(`${inner}<img data-annot-doc-header-icon src="${escapeAttr(header.icon)}" alt="">`);
+  }
+  lines.push(`${inner}<h1 data-annot-doc-header-title>${escapeText(doc.title)}</h1>`);
+  if (header?.description) {
+    lines.push(
+      `${inner}<p data-annot-doc-header-description>${escapeText(header.description)}</p>`,
+    );
+  }
+  const metaParts: string[] = [];
+  if (doc.meta.author) {
+    metaParts.push(`<span data-annot-doc-header-author>${escapeText(doc.meta.author)}</span>`);
+  }
+  if (stepCount > 0) {
+    const label = stepCount === 1 ? "1 step" : `${stepCount} steps`;
+    metaParts.push(`<span data-annot-doc-header-step-count>${escapeText(label)}</span>`);
+  }
+  if (metaParts.length > 0) {
+    lines.push(`${inner}<div data-annot-doc-header-meta>${metaParts.join("")}</div>`);
+  }
+  lines.push(`${indent}</section>`);
+  return lines.join(LF) + LF;
 }
 
 /** Build the standalone-view TOC navigation. Returns the empty

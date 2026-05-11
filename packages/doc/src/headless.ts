@@ -39,6 +39,7 @@ export type {
   CardLayoutMeta,
   CodeBlock,
   DividerBlock,
+  DocHeaderMeta,
   DocMeta,
   HeadingBlock,
   ImageBlock,

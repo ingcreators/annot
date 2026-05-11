@@ -1787,6 +1787,8 @@ export class App {
       defaultMaxWidth: current.meta.maxWidth ?? "medium",
       defaultCardColumns: current.meta.cardLayout?.columns,
       defaultCardStepLayout: current.meta.cardLayout?.defaultStepLayout ?? "image-top",
+      defaultHeaderDescription: current.meta.header?.description ?? "",
+      defaultHeaderIcon: current.meta.header?.icon ?? "",
     });
     if (!result) return;
 
@@ -1822,16 +1824,35 @@ export class App {
         : {}),
     };
     const cardLayoutMaybe = Object.keys(cardLayout).length > 0 ? { cardLayout } : {};
-    // Strip any stale cardLayout from the spread base before
-    // applying the new value (or omission) so users who clear
-    // the columns dropdown see the field disappear.
-    const { cardLayout: _staleCardLayout, ...metaWithoutCardLayout } = baseMeta;
+    // Phase 7c — Scribe-style doc header opt-in. When the user
+    // sets a description and/or icon, attach `meta.header`;
+    // when both are empty (cleared) drop the field so the
+    // sidecar stays minimal for non-card docs.
+    // (Local name `headerMeta` to avoid collision with the
+    // `header` parameter that points at the host's
+    // `<annot-doc-header>` Lit element.)
+    const headerMeta: import("@ingcreators/annot-doc").DocHeaderMeta = {
+      ...(result.headerIcon && result.headerIcon.length > 0 ? { icon: result.headerIcon } : {}),
+      ...(result.headerDescription && result.headerDescription.length > 0
+        ? { description: result.headerDescription }
+        : {}),
+    };
+    const headerMaybe = Object.keys(headerMeta).length > 0 ? { header: headerMeta } : {};
+    // Strip any stale cardLayout / header from the spread base
+    // before applying the new value (or omission) so users who
+    // clear the columns dropdown / description see the field
+    // disappear.
+    const {
+      cardLayout: _staleCardLayout,
+      header: _staleHeader,
+      ...metaWithoutCardLayoutOrHeader
+    } = baseMeta;
     const updated: import("@ingcreators/annot-doc").AnnotDocument = {
       ...current,
       title: result.title,
       ...(result.lang !== undefined ? { lang: result.lang } : {}),
       meta: {
-        ...metaWithoutCardLayout,
+        ...metaWithoutCardLayoutOrHeader,
         title: result.title,
         // Theme + maxWidth are always set (the dropdowns don't
         // have "leave unset" affordance); `meta.theme` etc.
@@ -1839,6 +1860,7 @@ export class App {
         theme: result.theme,
         maxWidth: result.maxWidth,
         ...cardLayoutMaybe,
+        ...headerMaybe,
       },
     };
     shell.document = updated;

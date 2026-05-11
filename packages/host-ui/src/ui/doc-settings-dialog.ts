@@ -62,6 +62,13 @@ export interface DocSettingsInput {
   /** Phase 3b — default layout for newly-inserted step blocks.
    *  Per-block `data-step-layout` always wins on render. */
   readonly cardDefaultStepLayout?: StepLayoutValue;
+  /** Phase 7c — Scribe-style document header opt-in. When the
+   *  user sets a description and/or icon the doc gains a header
+   *  block above the body content + a matching PPTX cover slide.
+   *  Both nested fields default to the empty string to mean
+   *  "clear this field". */
+  readonly headerDescription?: string;
+  readonly headerIcon?: string;
 }
 
 export interface ShowDocSettingsDialogOptions {
@@ -72,6 +79,8 @@ export interface ShowDocSettingsDialogOptions {
   readonly defaultMaxWidth?: "narrow" | "medium" | "wide" | "full";
   readonly defaultCardColumns?: CardColumnsValue;
   readonly defaultCardStepLayout?: StepLayoutValue;
+  readonly defaultHeaderDescription?: string;
+  readonly defaultHeaderIcon?: string;
 }
 
 const COMMON_LANGS: readonly { value: string; label: string }[] = [
@@ -219,6 +228,23 @@ export function showDocSettingsDialog(
       options: STEP_LAYOUT_OPTIONS.map((o) => ({ value: o.value, label: o.label })),
     });
 
+    // Phase 7c — header description + icon. Setting either of
+    // these opts the document into a Scribe-style header block
+    // above the body content + a matching PPTX cover slide.
+    const headerDescriptionLabel = makeLabel("Header description (optional)");
+    const headerDescriptionInput = makeTextarea({
+      value: opts.defaultHeaderDescription ?? "",
+      ariaLabel: "Document header description",
+      placeholder: "Short summary shown in the doc header + PPTX cover slide",
+      rows: 2,
+    });
+    const headerIconLabel = makeLabel("Header icon (data: URL, optional)");
+    const headerIconInput = makeInput({
+      value: opts.defaultHeaderIcon ?? "",
+      ariaLabel: "Document header icon data URL",
+      placeholder: "data:image/png;base64,…",
+    });
+
     fields.append(
       titleLabel,
       titleInput,
@@ -235,6 +261,10 @@ export function showDocSettingsDialog(
       cardColumnsSelect,
       cardDefaultLayoutLabel,
       cardDefaultLayoutSelect,
+      headerDescriptionLabel,
+      headerDescriptionInput,
+      headerIconLabel,
+      headerIconInput,
     );
     dlg.appendChild(fields);
     document.body.appendChild(dlg);
@@ -257,6 +287,12 @@ export function showDocSettingsDialog(
       const maxWidth = widthSelect.value as "narrow" | "medium" | "wide" | "full";
       const cardColumns = parseCardColumns(cardColumnsSelect.value);
       const cardDefaultStepLayout = cardDefaultLayoutSelect.value as StepLayoutValue;
+      // Phase 7c — empty trims to the empty string so the
+      // caller can detect "user cleared the field" vs "user
+      // didn't touch it" (the latter shows up as the same
+      // value as defaultHeaderDescription / defaultHeaderIcon).
+      const headerDescription = headerDescriptionInput.value.trim();
+      const headerIcon = headerIconInput.value.trim();
       close();
       const out: DocSettingsInput = {
         title,
@@ -266,6 +302,8 @@ export function showDocSettingsDialog(
         maxWidth,
         ...(cardColumns !== undefined ? { cardColumns } : {}),
         cardDefaultStepLayout,
+        headerDescription,
+        headerIcon,
       };
       resolve(out);
     });
@@ -299,6 +337,24 @@ function makeInput(opts: InputOptions): HTMLInputElement {
   el.value = opts.value;
   el.setAttribute("aria-label", opts.ariaLabel);
   if (opts.placeholder) el.placeholder = opts.placeholder;
+  return el;
+}
+
+interface TextareaOptions {
+  value: string;
+  ariaLabel: string;
+  placeholder?: string;
+  rows?: number;
+}
+
+function makeTextarea(opts: TextareaOptions): HTMLTextAreaElement {
+  const el = document.createElement("textarea");
+  el.className = "app-dialog-input";
+  el.value = opts.value;
+  el.setAttribute("aria-label", opts.ariaLabel);
+  if (opts.placeholder) el.placeholder = opts.placeholder;
+  el.rows = opts.rows ?? 2;
+  el.style.cssText = "resize:vertical;min-height:48px;font:inherit;";
   return el;
 }
 
