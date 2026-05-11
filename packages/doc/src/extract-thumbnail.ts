@@ -34,7 +34,12 @@ import type { AnnotDocument } from "./types.js";
  */
 export function extractDocumentThumbnailDataUrl(doc: AnnotDocument): string {
   for (const block of doc.blocks) {
-    if (block.kind !== "image") continue;
+    // Phase 4 of card-procedure-template — step blocks carry an
+    // image with the same `<image href="data:...">` shape as
+    // standalone image blocks. Walking both kinds means a card-
+    // procedure document (which may have no `image` blocks at
+    // all) still gets a useful gallery thumbnail.
+    if (block.kind !== "image" && block.kind !== "step") continue;
     const dataUrl = firstDataUrlInSvg(block.svg);
     if (dataUrl) return dataUrl;
   }

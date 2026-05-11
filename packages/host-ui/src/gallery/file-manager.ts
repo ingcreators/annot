@@ -55,6 +55,13 @@ export interface FileManagerCallbacks {
    *  yet, or the active storage doesn't opt into
    *  `StorageWithDocuments`). */
   onNewFromTemplate?: () => Promise<void>;
+  /** Phase 4 of `docs/plans/card-procedure-template.md` — invoked
+   *  when the user picks "Create card document from selection"
+   *  from the gallery's image context menu. The host shows the
+   *  generator dialog, builds the `.annot.html` document, and
+   *  opens it in the doc shell as unsaved. Optional — gallery
+   *  hides the menu entry when the host hasn't wired it. */
+  onCreateCardDocument?: (imagesInOrder: readonly ImageRecord[]) => Promise<void>;
   /** Plugin-registered storage backends, fed through to the
    *  sidebar so plugin chips can render alongside the built-ins.
    *  Optional — desktop / embedded shells that don't load plugins
@@ -273,6 +280,7 @@ export class FileManager {
     el.storage = this.#storage;
     el.thumbnailManager = this.#callbacks.getThumbnailManager?.() ?? null;
     el.viewMode = this.#viewMode;
+    el.canCreateCardDocument = this.#callbacks.onCreateCardDocument !== undefined;
     el.addEventListener("annot-gallery-open-image", (e) => {
       this.#callbacks.onOpenImage(e.detail.record);
     });
@@ -303,6 +311,11 @@ export class FileManager {
       const count = sel.images.length + sel.folders.length;
       this.#shell.selection =
         count > 0 ? { folders: sel.folders.length, images: sel.images.length } : null;
+    });
+    el.addEventListener("annot-gallery-create-card-document-request", (e) => {
+      const onCreate = this.#callbacks.onCreateCardDocument;
+      if (!onCreate) return;
+      void onCreate(e.detail.imagesInOrder);
     });
     gridHost.appendChild(el);
     this.#gallery = el;
