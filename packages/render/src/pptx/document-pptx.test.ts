@@ -390,6 +390,33 @@ describe("buildDocumentPptxFiles: step blocks (Phase 6)", () => {
     expect(slide1).toContain('prst="rect"');
   });
 
+  // Phase 7d-polish: annotations may live as DIRECT children of
+  // the outer `<svg>` (the flat form `exportSVGString` produces
+  // after a modal annotation edit), not just inside a `<g
+  // id="annotations">` wrapper. The PPTX export now walks both
+  // shapes — older docs saved through the modal still get their
+  // annotations exported.
+  it("exports annotations when they live as direct svg children (flat form)", () => {
+    const flatSvg =
+      '<svg xmlns="http://www.w3.org/2000/svg" data-annot-version="1" viewBox="0 0 800 600" width="800" height="600">' +
+      `<image href="${TINY_PNG_DATA_URL}" width="800" height="600"/>` +
+      '<rect data-type="rect" x="10" y="10" width="100" height="50" fill="#ff0000"/>' +
+      "</svg>";
+    const block: StepBlock = {
+      kind: "step",
+      id: "step-1",
+      svg: flatSvg,
+      title: "T",
+      body: "B",
+      layout: "image-top",
+    };
+    const doc = makeDocument([block]);
+    const slide1 = decode(buildDocumentPptxFiles(doc)["ppt/slides/slide1.xml"]!);
+    // The flat-form annotation rect still lands in the slide
+    // via the flat-children walk in `buildSlideFromImageBlock`.
+    expect(slide1).toContain('prst="rect"');
+  });
+
   it("a 3-step golden document produces a stable file map", () => {
     // Phase 6 golden — three step blocks, mixed layouts, every
     // overlay rendered. Re-running buildDocumentPptxFiles on

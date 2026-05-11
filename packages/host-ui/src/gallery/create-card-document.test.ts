@@ -149,6 +149,110 @@ describe("createCardDocumentFromImages: SVG body", () => {
     expect(step.svg).toContain('<rect x="5" y="5" width="20" height="20"/>');
   });
 
+  // Phase 7d-polish: `img.annotationsSvg` produced by the editor's
+  // `exportAnnotationsSVGString` is a FULL `<svg>...</svg>` document
+  // with flattened annotation children (no `<g id="annotations">`
+  // wrapper). The generator must extract the children and re-wrap
+  // them — otherwise the step SVG gets a NESTED `<svg>` inside,
+  // breaking PPTX annotation export and giving annotated cards a
+  // structurally different shape from unannotated ones.
+  it("extracts children from a full-svg annotationsSvg (flat form)", () => {
+    const flatSvg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 600" width="1000" height="600">' +
+      '<rect data-type="rect" x="10" y="10" width="100" height="50" fill="#ff0000"/>' +
+      '<text data-type="text" x="50" y="100">hi</text>' +
+      "</svg>";
+    const images = [makeImage("a.png", { annotationsSvg: flatSvg, width: 1000, height: 600 })];
+    const doc = createCardDocumentFromImages(images, { title: "X" });
+    const step = doc.blocks[0];
+    if (step?.kind !== "step") throw new Error("expected step");
+    // No nested <svg> inside the outer step SVG.
+    expect(step.svg.match(/<svg /g)?.length).toBe(1);
+    // Annotations end up inside a fresh <g id="annotations">.
+    expect(step.svg).toContain('<g id="annotations">');
+    expect(step.svg).toContain('data-type="rect"');
+    expect(step.svg).toContain('data-type="text"');
+  });
+
+  it("skips defs, base image, and ui-overlay when extracting flat annotations", () => {
+    const flatSvg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 600" width="1000" height="600">' +
+      "<defs><style>.foo {}</style></defs>" +
+      '<image href="data:image/png;base64,X" width="1000" height="600"/>' +
+      '<rect data-type="rect" x="10" y="10" width="100" height="50"/>' +
+      '<g id="ui-overlay"><circle cx="0" cy="0" r="5"/></g>' +
+      "</svg>";
+    const images = [makeImage("a.png", { annotationsSvg: flatSvg })];
+    const doc = createCardDocumentFromImages(images, { title: "X" });
+    const step = doc.blocks[0];
+    if (step?.kind !== "step") throw new Error("expected step");
+    // The base image is the OUTER svg's image (from the generator),
+    // not the one from annotationsSvg. The defs / ui-overlay /
+    // duplicate image are stripped.
+    const innerImageCount = step.svg.match(/<image /g)?.length ?? 0;
+    expect(innerImageCount).toBe(1);
+    expect(step.svg).not.toContain("<defs");
+    expect(step.svg).not.toContain('id="ui-overlay"');
+    // The actual annotation survives.
+    expect(step.svg).toContain('data-type="rect"');
+  });
+
+  it("preserves mosaic / blur redact <image data-redact-style> as annotations", () => {
+    const flatSvg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 600" width="1000" height="600">' +
+      '<image href="data:image/png;base64,SOURCE" width="1000" height="600"/>' +
+      '<image data-redact-style="mosaic" href="data:image/png;base64,MOSAIC" x="100" y="100" width="200" height="100"/>' +
+      "</svg>";
+    const images = [makeImage("a.png", { annotationsSvg: flatSvg })];
+    const doc = createCardDocumentFromImages(images, { title: "X" });
+    const step = doc.blocks[0];
+    if (step?.kind !== "step") throw new Error("expected step");
+    expect(step.svg).toContain('data-redact-style="mosaic"');
+    expect(step.svg).toContain("MOSAIC");
+  });
+
+  it('falls back to empty <g id="annotations"> on unparseable input', () => {
+    const images = [makeImage("a.png", { annotationsSvg: "<<<not xml" })];
+    const doc = createCardDocumentFromImages(images, { title: "X" });
+    const step = doc.blocks[0];
+    if (step?.kind !== "step") throw new Error("expected step");
+    expect(step.svg).toContain('<g id="annotations"></g>');
+  });
+
+  it("annotated and unannotated cards have structurally identical outer SVGs (Phase 7d-polish)", () => {
+    // The user-reported bug: a card with annotations had a
+    // different pan range / starting position from a card
+    // without, because the annotated version embedded a NESTED
+    // <svg>. Verify the outer SVG's structural shape (viewBox,
+    // width, height, top-level child count) is identical now.
+    const unannotated = makeImage("u.png", {
+      width: 1000,
+      height: 600,
+      annotationsSvg: "",
+    });
+    const annotated = makeImage("a.png", {
+      width: 1000,
+      height: 600,
+      annotationsSvg:
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 600" width="1000" height="600">' +
+        '<rect data-type="rect" x="10" y="10" width="100" height="50"/></svg>',
+    });
+    const doc = createCardDocumentFromImages([unannotated, annotated], { title: "X" });
+    const a = doc.blocks[0]?.kind === "step" ? doc.blocks[0].svg : "";
+    const b = doc.blocks[1]?.kind === "step" ? doc.blocks[1].svg : "";
+    // Both start with the same outer-svg opening tag.
+    const openTag =
+      '<svg xmlns="http://www.w3.org/2000/svg" data-annot-version="1" viewBox="0 0 1000 600" width="1000" height="600">';
+    expect(a.startsWith(openTag)).toBe(true);
+    expect(b.startsWith(openTag)).toBe(true);
+    // Each has exactly ONE <svg> element (no nested SVG).
+    expect(a.match(/<svg/g)?.length).toBe(1);
+    expect(b.match(/<svg/g)?.length).toBe(1);
+    // Each has exactly ONE <g id="annotations"> wrapper.
+    expect(a.match(/<g id="annotations"/g)?.length).toBe(1);
+    expect(b.match(/<g id="annotations"/g)?.length).toBe(1);
+  });
+
   it("rounds non-integer image dimensions", () => {
     const images = [makeImage("a.png", { width: 100.4, height: 200.6 })];
     const doc = createCardDocumentFromImages(images, { title: "X" });
