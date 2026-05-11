@@ -631,6 +631,11 @@ export class App {
           ? {
               onNewDocument: () => this.createNewDocument(),
               onNewFromTemplate: () => this.openTemplatePickerForNew(),
+              // Phase 4 of card-procedure-template — gated on the
+              // same `supportsDocuments` capability as the other
+              // doc-creating entries. Gallery hides the menu
+              // entry when this callback is omitted.
+              onCreateCardDocument: (images) => this.createCardDocumentFromImages(images),
             }
           : {}),
         getPluginStorages: () => this.#pluginHost.listStorageRegistrations(),
@@ -848,6 +853,74 @@ export class App {
       await this.#routerHost.handleRoute();
     } catch (err) {
       showSaveError(`Couldn't create a new document: ${(err as Error).message}`);
+    }
+  }
+
+  /**
+   * Phase 4 of `docs/plans/card-procedure-template.md` — generate
+   * a card-style step document from the gallery's ordered image
+   * selection. Pipeline:
+   *
+   *   1. Open `showCreateCardDocumentDialog` so the user can pick
+   *      title / per-step layout / column count / numbering.
+   *   2. Cancel / Esc → no-op.
+   *   3. On OK: call `createCardDocumentFromImages` to build the
+   *      `AnnotDocument` (one step block per image, in click
+   *      order, with the chosen layout + numbering).
+   *   4. Serialise + save via `storage.saveDocument` at the
+   *      current folder path (same as `createNewDocument`).
+   *   5. Navigate to the saved doc — the router-host's `?doc=`
+   *      branch mounts the doc shell against the freshly-saved
+   *      bytes.
+   *
+   * Mirrors `createNewDocument` / `openTemplatePickerForNew` for
+   * the persist + navigate tail; differs in steps 1–3 (dialog +
+   * generator). Errors surface via `showSaveError`.
+   */
+  async createCardDocumentFromImages(
+    imagesInOrder: readonly import("@ingcreators/annot-core/storage").ImageRecord[],
+  ): Promise<void> {
+    if (!this.#storage) return;
+    if (!supportsDocuments(this.#storage)) return;
+    if (imagesInOrder.length === 0) return;
+    const storage = this.#storage;
+    const folderPath = this.#currentFolderPath;
+    try {
+      const { showCreateCardDocumentDialog } = await import(
+        "@ingcreators/annot-host-ui/ui/create-card-document-dialog"
+      );
+      const result = await showCreateCardDocumentDialog({
+        imageCount: imagesInOrder.length,
+      });
+      if (!result) return;
+      const { createCardDocumentFromImages } = await import(
+        "@ingcreators/annot-host-ui/gallery/create-card-document"
+      );
+      const annotDoc = createCardDocumentFromImages(imagesInOrder, {
+        title: result.title,
+        layout: result.layout,
+        columns: result.columns,
+        numbering: result.numbering,
+      });
+      const { serializeDocument, extractDocumentThumbnailDataUrl } = await import(
+        "@ingcreators/annot-doc"
+      );
+      const bytes = serializeDocument(annotDoc);
+      const now = new Date().toISOString();
+      const path = await storage.saveDocument({
+        folderPath,
+        bytes,
+        thumbnailDataUrl: extractDocumentThumbnailDataUrl(annotDoc),
+        title: annotDoc.title,
+        imageCount: imagesInOrder.length,
+        blockCount: annotDoc.blocks.length,
+        createdAt: now,
+        updatedAt: now,
+      });
+      pushRoute(docUrl(getStorageMode(), path));
+      await this.#routerHost.handleRoute();
+    } catch (err) {
+      showSaveError(`Couldn't create the card document: ${(err as Error).message}`);
     }
   }
 
