@@ -902,11 +902,7 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
     const stepLabel = stepCount === 1 ? "1 step" : `${stepCount} steps`;
     return html`
       <section data-annot-doc-header>
-        ${
-          header.icon
-            ? html`<img data-annot-doc-header-icon src=${header.icon} alt="">`
-            : nothing
-        }
+        ${header.icon ? html`<img data-annot-doc-header-icon src=${header.icon} alt="">` : nothing}
         <h1 data-annot-doc-header-title>${doc?.title ?? ""}</h1>
         ${
           header.description
