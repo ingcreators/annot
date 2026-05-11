@@ -1,26 +1,36 @@
 /**
- * `attachStepImageViewport(container, options)` — Phase 7d of
+ * `attachStepImageViewport(svg, options)` — Phase 7d of
  * `docs/plans/card-procedure-template.md`. Wires interactive
  * pan / zoom onto a step block's screenshot.
  *
- * The container is the `.annot-doc-image-svg-slot` div (or its
- * descendant SVG element). The controller:
+ * The controller:
  *
  * - Sets the SVG's `viewBox` to the supplied initial rect (or
  *   the SVG's intrinsic viewBox if none is provided).
  * - Listens for `wheel` events to zoom in / out around the
- *   pointer. Wheel delta is treated as 1.1× per notch.
+ *   pointer. Wheel delta is treated as 1.1× per notch by
+ *   default.
  * - Listens for pointer drag (left button) to pan the viewBox.
- * - Exposes a `commit()` method that returns the current
- *   viewBox state — used by the "Save as initial view" button
- *   to capture the user's current pan / zoom into the model.
- * - Exposes a `reset(rect)` method to snap back to the initial
- *   viewport (or a fresh one passed in by the host).
+ *   Pan is clamped so the viewport stays inside the bitmap —
+ *   the user can never pan the image entirely off-screen
+ *   (Phase 7d-polish).
+ * - Distinguishes drag from click: any pointer movement beyond
+ *   a 4-pixel threshold during a pointerdown→pointerup cycle
+ *   suppresses the synthetic `click` event that follows on
+ *   pointerup. This prevents the doc shell's "click to open
+ *   image modal" handler from firing every time the user pans
+ *   (Phase 7d-polish).
+ * - Exposes `current()` returning the live viewBox snapshot,
+ *   `intrinsic()` returning the SVG's at-attach viewBox (the
+ *   full image rect), `reset(rect?)` snapping back to the
+ *   supplied or initial rect, `zoomBy(factor)` for UI button
+ *   driven zoom (centred on the viewBox), and `dispose()` for
+ *   teardown.
  *
  * The controller is read-only with respect to the model — it
  * never writes back to the host. Persistence is the caller's
- * job (the doc shell wires `commit()` into the `<button data-
- * step-viewport-save>` handler).
+ * job (the doc shell wires `current()` into the "Save view"
+ * button handler).
  *
  * Lifecycle: caller invokes `attachStepImageViewport(...)` once
  * per materialised image slot. The returned `dispose()` is
@@ -46,6 +56,17 @@ export interface StepImageViewportController {
   /** Reset to a supplied rect (or to the controller's initial
    *  when no argument is passed). */
   readonly reset: (rect?: StepImageViewportRect) => void;
+  /** Zoom by a multiplicative factor (`factor < 1` zooms in,
+   *  `> 1` zooms out), centred on the current viewBox centre.
+   *  Used by the UI zoom buttons in the toolbar. */
+  readonly zoomBy: (factor: number) => void;
+  /** Phase 7d-polish: true between a drag-end pointerup and the
+   *  next user interaction. The doc shell consults this in its
+   *  click handler — if a drag just ended, the click that
+   *  follows is treated as the drag's tail, not a "click to
+   *  open editor". The flag clears on the NEXT pointerdown,
+   *  so a fresh click without a preceding drag isn't gated. */
+  readonly wasDragging: () => boolean;
   /** Tear down listeners. Idempotent. */
   readonly dispose: () => void;
 }
@@ -63,6 +84,12 @@ export interface StepImageViewportOptions {
   readonly maxSize?: number;
   /** Wheel zoom factor per notch. Default 1.1. */
   readonly wheelStep?: number;
+  /** Phase 7d-polish: pointer-movement threshold (in CSS
+   *  pixels) past which the controller switches from "this is
+   *  a click" to "this is a drag". Drags suppress the
+   *  synthetic `click` event so the doc shell's modal opener
+   *  doesn't fire. Default 4. */
+  readonly dragThresholdPx?: number;
 }
 
 /** Parse `viewBox="x y w h"` into a rect. Returns `null` when
@@ -101,18 +128,21 @@ export function attachStepImageViewport(
   const maxSize =
     options.maxSize ?? (Math.max(intrinsic.w, intrinsic.h) || Number.POSITIVE_INFINITY);
   const wheelStep = options.wheelStep ?? 1.1;
+  const dragThreshold = options.dragThresholdPx ?? 4;
 
-  let state: StepImageViewportRect = { ...initial };
+  let state: StepImageViewportRect = clampPan(clampSize({ ...initial }));
   apply(state);
 
   function apply(rect: StepImageViewportRect): void {
     svg.setAttribute("viewBox", `${rect.x} ${rect.y} ${rect.w} ${rect.h}`);
   }
 
-  function clamp(rect: StepImageViewportRect): StepImageViewportRect {
+  function clampSize(rect: StepImageViewportRect): StepImageViewportRect {
     // Clamp viewBox size to [minSize, maxSize] on both axes,
-    // preserving aspect ratio of the current rect.
-    const aspect = rect.w / rect.h;
+    // preserving aspect ratio of the current rect. Aspect is
+    // resolved from rect.w / rect.h; degenerate cases (w or h
+    // ≤ 0) get an aspect of 1 to avoid division-by-zero.
+    const aspect = rect.h > 0 ? rect.w / rect.h : 1;
     let w = rect.w;
     let h = rect.h;
     if (w < minSize) {
@@ -132,40 +162,101 @@ export function attachStepImageViewport(
     return { x: rect.x, y: rect.y, w, h };
   }
 
+  /** Phase 7d-polish: clamp the viewBox origin so the viewport
+   *  rect stays inside the bitmap. When the viewport is
+   *  smaller than the bitmap, the origin is bounded to
+   *  `[intrinsic.x, intrinsic.x + intrinsic.w - rect.w]`.
+   *  When the viewport is LARGER than the bitmap (zoomed out
+   *  past it), centre the bitmap inside the viewport so the
+   *  user always sees the image, no matter how far they pan. */
+  function clampPan(rect: StepImageViewportRect): StepImageViewportRect {
+    const xMin = intrinsicVb.x;
+    const xMax = intrinsicVb.x + intrinsicVb.w - rect.w;
+    const yMin = intrinsicVb.y;
+    const yMax = intrinsicVb.y + intrinsicVb.h - rect.h;
+    let x = rect.x;
+    let y = rect.y;
+    if (xMax < xMin) {
+      // Viewport wider than bitmap — centre the bitmap.
+      x = intrinsicVb.x + (intrinsicVb.w - rect.w) / 2;
+    } else {
+      if (x < xMin) x = xMin;
+      else if (x > xMax) x = xMax;
+    }
+    if (yMax < yMin) {
+      y = intrinsicVb.y + (intrinsicVb.h - rect.h) / 2;
+    } else {
+      if (y < yMin) y = yMin;
+      else if (y > yMax) y = yMax;
+    }
+    return { x, y, w: rect.w, h: rect.h };
+  }
+
   // ---- Wheel zoom -------------------------------------------------------
 
   function onWheel(e: WheelEvent): void {
     e.preventDefault();
     const factor = e.deltaY > 0 ? wheelStep : 1 / wheelStep;
-    zoomBy(factor, e);
+    zoomAroundClient(factor, e.clientX, e.clientY);
   }
 
-  /** Zoom around the pointer position in `e`. The point under
-   *  the cursor stays anchored to the cursor after the zoom. */
-  function zoomBy(factor: number, e: PointerEvent | WheelEvent): void {
+  /** Zoom around the supplied client coordinate (cursor anchor
+   *  for the wheel handler; viewBox-centre anchor for the
+   *  zoom buttons). The point under the anchor stays anchored
+   *  to the same screen pixel after the zoom. */
+  function zoomAroundClient(factor: number, clientX: number, clientY: number): void {
     const rect = svg.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) return;
-    // Pointer position in screen coords relative to the SVG.
-    const sx = (e.clientX - rect.left) / rect.width;
-    const sy = (e.clientY - rect.top) / rect.height;
-    // Map to SVG-coord cursor position using the current viewBox.
+    const sx = (clientX - rect.left) / rect.width;
+    const sy = (clientY - rect.top) / rect.height;
     const cx = state.x + sx * state.w;
     const cy = state.y + sy * state.h;
-    const next = clamp({
-      x: cx - sx * (state.w * factor),
-      y: cy - sy * (state.h * factor),
-      w: state.w * factor,
-      h: state.h * factor,
-    });
+    const next = clampPan(
+      clampSize({
+        x: cx - sx * (state.w * factor),
+        y: cy - sy * (state.h * factor),
+        w: state.w * factor,
+        h: state.h * factor,
+      }),
+    );
     state = next;
     apply(state);
   }
 
-  // ---- Pan -------------------------------------------------------------
+  /** UI-button zoom: centred on the current viewBox. */
+  function zoomByCenter(factor: number): void {
+    const rect = svg.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) {
+      // No bounding rect (detached / unrendered) — zoom by
+      // mutating state directly around the viewBox centre.
+      const cx = state.x + state.w / 2;
+      const cy = state.y + state.h / 2;
+      const next = clampPan(
+        clampSize({
+          x: cx - (state.w * factor) / 2,
+          y: cy - (state.h * factor) / 2,
+          w: state.w * factor,
+          h: state.h * factor,
+        }),
+      );
+      state = next;
+      apply(state);
+      return;
+    }
+    const centerClientX = rect.left + rect.width / 2;
+    const centerClientY = rect.top + rect.height / 2;
+    zoomAroundClient(factor, centerClientX, centerClientY);
+  }
+
+  // ---- Pan + drag-vs-click disambiguation ------------------------------
 
   let panActive = false;
   let panLastX = 0;
   let panLastY = 0;
+  let panStartX = 0;
+  let panStartY = 0;
+  let dragExceededThreshold = false;
+  let dragJustEnded = false;
   let panPointerId: number | null = null;
 
   function onPointerDown(e: PointerEvent): void {
@@ -176,6 +267,13 @@ export function attachStepImageViewport(
     panActive = true;
     panLastX = e.clientX;
     panLastY = e.clientY;
+    panStartX = e.clientX;
+    panStartY = e.clientY;
+    dragExceededThreshold = false;
+    // Phase 7d-polish: clear the "just dragged" flag on a fresh
+    // interaction so a non-drag pointerdown→pointerup→click
+    // chain still opens the editor modal.
+    dragJustEnded = false;
     panPointerId = e.pointerId;
     svg.setPointerCapture(e.pointerId);
     svg.style.cursor = "grabbing";
@@ -183,6 +281,17 @@ export function attachStepImageViewport(
 
   function onPointerMove(e: PointerEvent): void {
     if (!panActive || e.pointerId !== panPointerId) return;
+    if (!dragExceededThreshold) {
+      const totalDx = e.clientX - panStartX;
+      const totalDy = e.clientY - panStartY;
+      if (Math.hypot(totalDx, totalDy) >= dragThreshold) {
+        dragExceededThreshold = true;
+      } else {
+        // Still within the click slop — don't update viewBox
+        // yet so a quick tap doesn't visibly jitter.
+        return;
+      }
+    }
     const rect = svg.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) return;
     const dxScreen = e.clientX - panLastX;
@@ -192,16 +301,25 @@ export function attachStepImageViewport(
     // Convert screen-pixel deltas to SVG-coord deltas.
     const dxSvg = -(dxScreen / rect.width) * state.w;
     const dySvg = -(dyScreen / rect.height) * state.h;
-    state = { x: state.x + dxSvg, y: state.y + dySvg, w: state.w, h: state.h };
+    state = clampPan({ x: state.x + dxSvg, y: state.y + dySvg, w: state.w, h: state.h });
     apply(state);
   }
 
   function onPointerUp(e: PointerEvent): void {
     if (e.pointerId !== panPointerId) return;
+    const wasDrag = dragExceededThreshold;
     panActive = false;
     panPointerId = null;
+    dragExceededThreshold = false;
     svg.releasePointerCapture(e.pointerId);
-    svg.style.cursor = "";
+    svg.style.cursor = "grab";
+    // Phase 7d-polish: surface a "just dragged" flag so the
+    // doc shell's click handler can bail out of "open the
+    // image editor modal" when the click came from a drag's
+    // tail. The flag stays true until the next pointerdown
+    // (which clears it), giving the shell's synchronous click
+    // delegation a chance to read it.
+    dragJustEnded = wasDrag;
   }
 
   // ---- Wire listeners --------------------------------------------------
@@ -220,9 +338,11 @@ export function attachStepImageViewport(
     current: () => ({ ...state }),
     intrinsic: () => ({ ...intrinsicVb }),
     reset: (rect) => {
-      state = { ...(rect ?? initial) };
+      state = clampPan(clampSize({ ...(rect ?? initial) }));
       apply(state);
     },
+    zoomBy: (factor) => zoomByCenter(factor),
+    wasDragging: () => dragJustEnded,
     dispose: () => {
       if (disposed) return;
       disposed = true;

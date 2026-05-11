@@ -268,7 +268,13 @@ const SHELL_CSS = `
 /* Phase 7d — viewport toolbar pinned to the top-left corner of
    the step image area. Same hover/opacity treatment as the
    layout switcher; flips to the LEFT side so the two
-   affordances don't overlap. */
+   affordances don't overlap.
+   Phase 7d-polish: grew from 1-3 buttons (Save / Reset) to
+   3-5 buttons (zoom-in / zoom-out / reset-view / Save / Clear).
+   Icon buttons (+/−/⟲) are sized to a fixed 26px square; text
+   buttons (Save view / Clear) flex to their content. The
+   pill-shaped buttons gain a subtle backdrop-filter blur so
+   the toolbar reads cleanly on top of busy screenshots. */
 .annot-doc-step-viewport-controls {
   position: absolute;
   top: 6px;
@@ -276,7 +282,7 @@ const SHELL_CSS = `
   z-index: 2;
   display: flex;
   gap: 4px;
-  opacity: 0.4;
+  opacity: 0.6;
   transition: opacity 0.12s ease-in;
 }
 [data-annot-block="step"]:hover .annot-doc-step-viewport-controls,
@@ -292,11 +298,23 @@ const SHELL_CSS = `
   border: 1px solid var(--annot-doc-muted);
   border-radius: 4px;
   padding: 2px 8px;
-  font-size: 0.8rem;
-  line-height: 1.2;
+  min-width: 26px;
+  height: 26px;
+  font-size: 0.85rem;
+  line-height: 1;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
   cursor: pointer;
   font: inherit;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.annot-doc-step-viewport-controls button[data-step-viewport-action="zoom-in"],
+.annot-doc-step-viewport-controls button[data-step-viewport-action="zoom-out"],
+.annot-doc-step-viewport-controls button[data-step-viewport-action="reset-view"] {
+  padding: 0;
+  font-size: 1rem;
+  font-weight: 500;
 }
 .annot-doc-step-viewport-controls button:hover,
 .annot-doc-step-viewport-controls button:focus-visible {
@@ -912,6 +930,7 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
           data-annot-doc
           @input=${this.#onArticleInput}
           @blur=${this.#onArticleBlur}
+          @click=${(e: MouseEvent) => this.#onArticleClick(e)}
         >
           ${this.#renderDocHeader(blocks)}
           ${showEmptyState ? html`<annot-doc-empty-state></annot-doc-empty-state>` : nothing}
@@ -2506,30 +2525,82 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
     // `<input>` whose focus management we don't want overridden.
     if (target?.closest("[data-step-link]")) return;
     if (target?.closest(".annot-doc-step-link-editor")) return;
-    // Phase 7d — viewport toolbar buttons (Save / Reset). Handle
-    // here and short-circuit so the click doesn't open the image
-    // modal.
-    const viewportBtn = target?.closest("[data-step-viewport-action]") as HTMLElement | null;
-    if (viewportBtn) {
-      e.preventDefault();
-      e.stopPropagation();
-      if (block.kind === "step") {
-        const action = viewportBtn.getAttribute("data-step-viewport-action");
-        if (action === "save") this.#saveStepViewport(block, index);
-        else if (action === "reset") this.#resetStepViewport(block, index);
-      }
-      return;
-    }
+    // Phase 7d-polish — viewport toolbar buttons short-circuit
+    // here so they don't open the image modal. The actual
+    // action handling lives in `#onArticleClick` (article-level
+    // delegate) so it works in BOTH read and editing modes.
+    // We return early without `stopPropagation` so the click
+    // bubbles up to the article handler.
+    if (target?.closest("[data-step-viewport-action]")) return;
     if (block.kind === "step") {
       // Phase 7a — image-less step blocks have no image slot to
       // click on. Defensive guard against a stray click anywhere
       // outside the contentEditable slots opening the editor for
       // an empty SVG.
       if (block.svg.length === 0) return;
+      // Phase 7d-polish — drag-just-ended guard. A click that
+      // immediately follows a viewport pan should NOT open the
+      // image-editor modal; the user was panning, not selecting
+      // the image. The controller surfaces `wasDragging()`
+      // which stays true until the next pointerdown.
+      const ctrl = this.#viewportControllers.get(block.id);
+      if (ctrl?.wasDragging()) return;
       void this.#openStepImageEditor(block, index);
       return;
     }
     void this.#openImageEditor(block, index);
+  }
+
+  /** Phase 7d-polish — article-level click delegate. Catches
+   *  the viewport toolbar buttons in BOTH read and editing
+   *  modes (the editing-mode `#onBlockHostClick` handler only
+   *  fires inside `.annot-doc-block-host` wrappers, which read
+   *  mode doesn't render).
+   *
+   *  Zoom-in / zoom-out / reset-view are ephemeral and run in
+   *  read mode too. Save / clear mutate the model and are
+   *  gated to the editing state — read-mode users can still
+   *  see those buttons inside the toolbar template but they
+   *  shouldn't appear there because `renderViewportToolbar`
+   *  filters them by `editable`. */
+  #onArticleClick(e: MouseEvent): void {
+    const target = e.target as HTMLElement | null;
+    const viewportBtn = target?.closest("[data-step-viewport-action]") as HTMLElement | null;
+    if (!viewportBtn) return;
+    // Find the enclosing step block (`<section data-annot-
+    // block="step" data-annot-image-id="...">`) so we can pick
+    // the right controller / block index.
+    const section = viewportBtn.closest('[data-annot-block="step"]') as HTMLElement | null;
+    if (!section) return;
+    const blockId = section.getAttribute("data-annot-image-id");
+    if (!blockId) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const ctrl = this.#viewportControllers.get(blockId);
+    const action = viewportBtn.getAttribute("data-step-viewport-action");
+    if (action === "zoom-in") {
+      ctrl?.zoomBy(1 / 1.25);
+      return;
+    }
+    if (action === "zoom-out") {
+      ctrl?.zoomBy(1.25);
+      return;
+    }
+    if (action === "reset-view") {
+      ctrl?.reset();
+      return;
+    }
+    // Save + clear are editing-mode-only — find the matching
+    // block index in the model.
+    if (action === "save" || action === "clear") {
+      if (!this.document) return;
+      const idx = this.document.blocks.findIndex((b) => b.kind === "step" && b.id === blockId);
+      if (idx < 0) return;
+      const block = this.document.blocks[idx];
+      if (block?.kind !== "step") return;
+      if (action === "save") this.#saveStepViewport(block, idx);
+      else this.#resetStepViewport(block, idx);
+    }
   }
 
   /** Phase 7d — capture the current pan/zoom state from the
@@ -2951,7 +3022,7 @@ function renderStep(block: StepBlock, editable: boolean): TemplateResult {
         data-step-layout=${block.layout}
       >
         ${imageSlot}
-        ${renderViewportToolbar(block)}
+        ${renderViewportToolbar(block, /* editable */ true)}
         <h3 data-step-title contenteditable="true"></h3>
         <p data-step-body contenteditable="true"></p>
         ${linkChip}
@@ -2989,6 +3060,7 @@ function renderStep(block: StepBlock, editable: boolean): TemplateResult {
       data-step-layout=${block.layout}
     >
       ${imageSlot}
+      ${renderViewportToolbar(block, /* editable */ false)}
       <h3 data-step-title>${unsafeHTML(block.title)}</h3>
       <p data-step-body>${unsafeHTML(block.body)}</p>
       ${linkChip}
@@ -2996,20 +3068,23 @@ function renderStep(block: StepBlock, editable: boolean): TemplateResult {
   `;
 }
 
-/** Phase 7d — editing-mode viewport toolbar pinned to the
- *  top-right corner of the step's image area. Carries:
+/** Phase 7d — viewport toolbar pinned to the top-left corner
+ *  of the step's image area. Carries:
  *
- *    - "Save as initial view" — captures the SVG's current
- *      viewBox state (as set by the pan / zoom controller)
- *      into `block.viewport`.
- *    - "Reset" — only shown when the block already carries a
- *      saved viewport; clears the field, reverting to "full
- *      image" as the initial view.
+ *    - Zoom in / zoom out / reset-to-initial buttons (visible
+ *      in both view AND edit modes — wheel-only zoom was hard
+ *      to operate, so Phase 7d-polish surfaces explicit UI).
+ *    - Edit mode only: "Save view" / "Update view" button that
+ *      captures the controller's current viewBox state into
+ *      `block.viewport`.
+ *    - Edit mode only: "Clear" button (when a saved viewport
+ *      exists) that drops `block.viewport` and snaps the
+ *      controller back to the intrinsic (full image) viewBox.
  *
  *  The buttons fire `click` events with `data-step-viewport-
  *  action` markers; the shell's `@click` delegate routes them
  *  through `#onStepViewportAction`. */
-function renderViewportToolbar(block: StepBlock): TemplateResult {
+function renderViewportToolbar(block: StepBlock, editable: boolean): TemplateResult {
   return html`
     <div
       data-step-viewport-controls
@@ -3018,19 +3093,41 @@ function renderViewportToolbar(block: StepBlock): TemplateResult {
     >
       <button
         type="button"
-        data-step-viewport-action="save"
-        title="Save current view as initial"
-      >
-        ${block.viewport ? "Update view" : "Save view"}
-      </button>
+        data-step-viewport-action="zoom-in"
+        aria-label="Zoom in"
+        title="Zoom in"
+      >+</button>
+      <button
+        type="button"
+        data-step-viewport-action="zoom-out"
+        aria-label="Zoom out"
+        title="Zoom out"
+      >−</button>
+      <button
+        type="button"
+        data-step-viewport-action="reset-view"
+        aria-label="Reset view"
+        title="Reset view (back to saved initial)"
+      >⟲</button>
       ${
-        block.viewport
+        editable
           ? html`<button
               type="button"
-              data-step-viewport-action="reset"
-              title="Reset to full image"
+              data-step-viewport-action="save"
+              title="Save current view as the initial display state"
             >
-              Reset
+              ${block.viewport ? "Update" : "Save"}
+            </button>`
+          : nothing
+      }
+      ${
+        editable && block.viewport
+          ? html`<button
+              type="button"
+              data-step-viewport-action="clear"
+              title="Clear saved view (show the full image)"
+            >
+              Clear
             </button>`
           : nothing
       }
