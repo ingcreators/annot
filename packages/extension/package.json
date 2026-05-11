@@ -27,7 +27,7 @@
   },
   "devDependencies": {
     "@resvg/resvg-js": "^2.6.2",
-    "chrome-types": "^0.1.327",
+    "chrome-types": "^0.1.426",
     "typescript": "catalog:",
     "vite": "catalog:"
   }
