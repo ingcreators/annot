@@ -682,7 +682,8 @@ export class AnnotDocShellElement extends LitElement {
    *  slot. Keyed by block id (the `data-annot-image-id` on the
    *  enclosing `<section>`). Disposed when the slot is removed
    *  from the article or when the shell unmounts. */
-  #viewportControllers: Map<string, StepImageViewportController> = new Map();
+  #viewportControllers: Map<string, { ctrl: StepImageViewportController; svg: SVGSVGElement }> =
+    new Map();
 
   #history: DocumentHistory | null = null;
   /** Set briefly while we're applying a mutation internally
@@ -754,7 +755,7 @@ export class AnnotDocShellElement extends LitElement {
     this.#imageSlotObserver?.disconnect();
     this.#imageSlotObserver = null;
     // Phase 7d — release viewport-controller event listeners.
-    for (const ctrl of this.#viewportControllers.values()) ctrl.dispose();
+    for (const entry of this.#viewportControllers.values()) entry.ctrl.dispose();
     this.#viewportControllers.clear();
   }
 
@@ -1888,21 +1889,33 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
    *  step block. No-op for `<figure>` image blocks (which have
    *  their own modal-driven editing flow).
    *
-   *  Idempotent: a slot whose controller is already attached
-   *  (looked up by the enclosing section's `data-annot-image-
-   *  id`) is left untouched so re-renders don't tear down a
-   *  user's in-progress pan / zoom state.
+   *  When the block's SVG bytes change (annotation edit →
+   *  `materialiseImageSlot` re-inlines a new `<svg>` element)
+   *  the previous controller is disposed and a fresh one is
+   *  attached to the new SVG. The saved viewport is re-applied
+   *  as the initial; ephemeral pan/zoom state is reset. Pure
+   *  re-renders (title typing, link edits) leave the SVG node
+   *  untouched and keep the existing controller intact.
    */
   #attachViewportIfStepSlot(slot: HTMLElement): void {
     const section = slot.closest('[data-annot-block="step"]') as HTMLElement | null;
     if (!section) return;
     const blockId = section.getAttribute("data-annot-image-id");
     if (!blockId) return;
-    // Already attached? Keep the existing controller — its
-    // internal viewBox state is the user's current pan / zoom.
-    if (this.#viewportControllers.has(blockId)) return;
     const svg = slot.querySelector("svg") as SVGSVGElement | null;
     if (!svg) return;
+    const existing = this.#viewportControllers.get(blockId);
+    if (existing) {
+      // Same SVG node? Keep the controller — its listeners are
+      // still attached and the user's ephemeral pan/zoom state
+      // survives the re-render.
+      if (existing.svg === svg) return;
+      // SVG was replaced (annotation save / step image swap).
+      // Dispose the old controller and fall through to attach
+      // a fresh one on the new node.
+      existing.ctrl.dispose();
+      this.#viewportControllers.delete(blockId);
+    }
     // Look up the matching step block in the document model so
     // we can apply its saved `viewport` as the initial display
     // state.
@@ -1912,7 +1925,7 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
       ? { x: block.viewport.x, y: block.viewport.y, w: block.viewport.w, h: block.viewport.h }
       : undefined;
     const ctrl = attachStepImageViewport(svg, { initial });
-    this.#viewportControllers.set(blockId, ctrl);
+    this.#viewportControllers.set(blockId, { ctrl, svg });
   }
 
   /** Phase 7d — drop viewport controllers whose block has left
@@ -1927,9 +1940,9 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
     for (const b of this.document?.blocks ?? []) {
       if (b.kind === "step") liveStepIds.add(b.id);
     }
-    for (const [blockId, ctrl] of this.#viewportControllers) {
+    for (const [blockId, entry] of this.#viewportControllers) {
       if (!liveStepIds.has(blockId)) {
-        ctrl.dispose();
+        entry.ctrl.dispose();
         this.#viewportControllers.delete(blockId);
       }
     }
@@ -2543,7 +2556,7 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
       // image-editor modal; the user was panning, not selecting
       // the image. The controller surfaces `wasDragging()`
       // which stays true until the next pointerdown.
-      const ctrl = this.#viewportControllers.get(block.id);
+      const ctrl = this.#viewportControllers.get(block.id)?.ctrl;
       if (ctrl?.wasDragging()) return;
       void this.#openStepImageEditor(block, index);
       return;
@@ -2576,7 +2589,7 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
     if (!blockId) return;
     e.preventDefault();
     e.stopPropagation();
-    const ctrl = this.#viewportControllers.get(blockId);
+    const ctrl = this.#viewportControllers.get(blockId)?.ctrl;
     const action = viewportBtn.getAttribute("data-step-viewport-action");
     if (action === "zoom-in") {
       ctrl?.zoomBy(1 / 1.25);
@@ -2609,7 +2622,7 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
    *  saved by accident. */
   #saveStepViewport(block: StepBlock, index: number): void {
     if (!this.document) return;
-    const ctrl = this.#viewportControllers.get(block.id);
+    const ctrl = this.#viewportControllers.get(block.id)?.ctrl;
     if (!ctrl) return;
     const current = ctrl.current();
     // Skip when the saved viewport is already equal to the
@@ -2639,7 +2652,7 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
    *  viewBox, not the controller's saved initial). */
   #resetStepViewport(block: StepBlock, index: number): void {
     if (!this.document) return;
-    const ctrl = this.#viewportControllers.get(block.id);
+    const ctrl = this.#viewportControllers.get(block.id)?.ctrl;
     if (ctrl) ctrl.reset(ctrl.intrinsic());
     this.#syncDomIntoDocument();
     const refreshed = this.document.blocks[index];
