@@ -248,6 +248,18 @@ export interface StepBlock {
    *  schemes — anything else is dropped on parse to defang
    *  `javascript:` / `data:` payloads from hostile input. */
   readonly link?: StepLink;
+  /** Phase 7d of `docs/plans/card-procedure-template.md` —
+   *  Scribe-style image viewport. A sub-rectangle of the SVG
+   *  coordinate space defining the **initial view** of the
+   *  screenshot inside the card's fixed display area. Interactive
+   *  pan / zoom in standalone view stays ephemeral; the saved
+   *  `viewport` is what new readers see on first open and what
+   *  the PPTX export uses to crop the bitmap.
+   *
+   *  Coordinates are in SVG-native pixel space — same coord system
+   *  as `<g id="annotations">` children. Missing field → display
+   *  the full SVG viewBox (pre-Phase-7d behaviour). */
+  readonly viewport?: StepViewport;
 }
 
 /** URL chip carried on a step block. See `StepBlock.link`. */
@@ -257,6 +269,18 @@ export interface StepLink {
   /** Optional human-friendly label. When absent the renderer
    *  falls back to the URL string itself. */
   readonly label?: string;
+}
+
+/** Phase 7d — initial-view viewport for the step's screenshot.
+ *  All four fields are in SVG-native pixel coordinates and MUST
+ *  satisfy `w > 0 && h > 0`. The values are NOT clamped to the
+ *  SVG's viewBox here — the renderer / PPTX export silently
+ *  clip when the user pans beyond the bitmap. */
+export interface StepViewport {
+  readonly x: number;
+  readonly y: number;
+  readonly w: number;
+  readonly h: number;
 }
 
 /** Forward-compat preservation: any `<… data-annot-block="…">`

@@ -588,6 +588,61 @@ count) and a matching PPTX cover slide. Landed:
   `document-pptx.test.ts` covering serializer / parser /
   cover-slide / step-count / opt-in semantics.
 
+### Phase 7d — Image viewport (pan / zoom + crop)
+
+User framing: "Scribeのようにviewモードでも、ズームイン、ズーム
+アウト、スクロールはできるようにしたい。編集モードでは、どの倍率で
+どこを初期表示するかを決定できるようにしたい。PowerPoint出力は、
+編集モードで指定した初期表示状態でトリミング等をした状態で出力したい。"
+Landed:
+
+- New OPTIONAL field on `StepBlock`: `viewport?: StepViewport`
+  with `{ x; y; w; h }` in SVG-native pixel coordinates.
+  Serializes as `data-step-viewport="x,y,w,h"` on the
+  `<section>` (canonical position: after `data-step-url-label`).
+- Pan / zoom controller in
+  [`packages/host-ui/src/step-image-viewport.ts`](../../packages/host-ui/src/step-image-viewport.ts) —
+  attaches to the SVG element inside the step's image slot
+  after materialisation. Listens for `wheel` (1.1× per notch,
+  cursor-anchored) and pointer-drag (left button) to mutate
+  the SVG's `viewBox` attribute. State stays ephemeral in
+  the controller; `current()` returns the viewBox snapshot,
+  `reset(rect?)` snaps back to the supplied / initial rect,
+  `dispose()` releases listeners.
+- The shell tracks live controllers in `#viewportControllers`
+  (`Map<blockId, StepImageViewportController>`). `#attachViewport
+  IfStepSlot` runs once per materialised step image slot.
+  `#sweepStaleViewportControllers` (called from `updated()`)
+  disposes entries whose block has left the document.
+- Editing mode shows a small toolbar pinned to the image's
+  top-left corner: "Save view" / "Update view" + (when a
+  viewport is set) "Reset". `#saveStepViewport` writes the
+  controller's `current()` into `block.viewport`;
+  `#resetStepViewport` clears the field and snaps the controller
+  back to the SVG's intrinsic viewBox.
+- PPTX export ([`document-pptx.ts`](../../packages/render/src/pptx/document-pptx.ts)):
+  when `block.viewport` is set, the slide picture emits
+  `<a:srcRect l="..." t="..." r="..." b="..."/>` cropping the
+  bitmap to the viewport portion (PowerPoint's 0.001%-per-unit
+  edge-clip convention). The image group's `chOff` / `chExt`
+  shift to `(vp.x, vp.y, vp.w, vp.h)` so the viewport sub-rect
+  of SVG coord space maps to the slide image region.
+  Annotations stay in their full SVG coords inside the group;
+  those entirely inside the viewport land at the slide region,
+  those outside bleed onto the slide canvas (v1 trade-off — a
+  follow-up could filter outside-vp annotations).
+- Standalone HTML view: the `data-step-viewport` attribute is
+  preserved through round-trip but is NOT applied without JS;
+  the static HTML shows the full SVG viewBox. The editor's
+  view-mode (read-only) and edit-mode rendering both apply
+  the viewport because the shell attaches the controller on
+  mount. A future phase could add inline JS to the saved HTML
+  for purely-static viewers.
+- Tests: 7 new in `step-block.test.ts` (parser / serializer
+  round-trip) + 7 new in `document-pptx.test.ts` (srcRect +
+  chOff / chExt + annotation pass-through) + 5 new in
+  `step-image-viewport.test.ts` (controller state).
+
 ### Out of scope for v1 (deferred)
 
 - **Per-card colour theming.** All cards share the document-level

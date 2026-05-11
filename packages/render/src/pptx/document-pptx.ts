@@ -108,6 +108,24 @@ interface SlideData {
    *  `topLevelShapes` carry the title / description / author /
    *  step-count text. */
   coverSlide?: boolean;
+  /** Phase 7d — image-group child coord origin override. When a
+   *  step block carries `viewport`, we set `chOff = (vp.x, vp.y)`
+   *  + `chExt = (vp.w, vp.h)` so the viewport sub-rect maps to
+   *  the slide image region (vs the full SVG mapping when
+   *  viewport is unset). Defaults to `(0, 0)`. */
+  chOff?: { x: number; y: number };
+  /** Phase 7d — picture's child-coord placement. For full-image
+   *  step blocks this is `(0, 0, width, height)` (= the whole
+   *  SVG coord space). For viewport-cropped blocks the picture
+   *  is placed at `(vp.x, vp.y, vp.w, vp.h)` so the cropped
+   *  bitmap aligns with the viewport rect inside the group. */
+  imageChildOff?: { x: number; y: number };
+  imageChildExt?: { w: number; h: number };
+  /** Phase 7d — picture-level bitmap crop, expressed as 0.001%
+   *  edge-clip values (PowerPoint's `<a:srcRect>` units). When
+   *  set, the picture's `<p:blipFill>` carries an `<a:srcRect>`
+   *  child clipping the bitmap to the viewport portion. */
+  imageSrcRect?: { l: number; t: number; r: number; b: number };
 }
 
 /** Fit `src` inside `region` preserving aspect ratio (CSS
@@ -479,10 +497,47 @@ function buildSlideFromStepBlock(block: StepBlock, index: number): SlideData | n
   const base = buildSlideFromImageBlock({ kind: "image", id: block.id, svg: block.svg }, index);
   if (!base) return null;
 
+  // Phase 7d — image viewport (initial-view crop). Apply BEFORE
+  // recomputing the image rect so the contain-fit uses the
+  // viewport aspect ratio rather than the full SVG aspect ratio.
+  // The viewport modifies:
+  //   - group `chOff` / `chExt` → maps vp portion of SVG coord
+  //     space to the slide image region (annotations within the
+  //     viewport land in the slide region; annotations outside
+  //     the viewport bleed onto the slide canvas and may need
+  //     filtering in a v2 follow-up).
+  //   - picture `off` / `ext` → places the picture at the
+  //     viewport rect in child coords.
+  //   - picture `<a:srcRect>` → crops the bitmap to the viewport
+  //     portion (PowerPoint stretches the cropped pixels to fill
+  //     the picture's display rect).
+  const svgWidth = base.width;
+  const svgHeight = base.height;
+  if (block.viewport) {
+    const vp = block.viewport;
+    // PowerPoint srcRect units: 0.001% per unit (100000 = 100%).
+    // Round to integer to keep the XML compact and stable across
+    // re-runs.
+    base.imageSrcRect = {
+      l: Math.round((vp.x / svgWidth) * 100000),
+      t: Math.round((vp.y / svgHeight) * 100000),
+      r: Math.round(((svgWidth - vp.x - vp.w) / svgWidth) * 100000),
+      b: Math.round(((svgHeight - vp.y - vp.h) / svgHeight) * 100000),
+    };
+    base.chOff = { x: vp.x, y: vp.y };
+    base.width = vp.w;
+    base.height = vp.h;
+    base.imageChildOff = { x: vp.x, y: vp.y };
+    base.imageChildExt = { w: vp.w, h: vp.h };
+  }
+
   // Phase 6b — recompute the image rect per layout. Phase 6 v1
   // delegated to `buildSlideFromImageBlock` (which fills the
   // full slide); for step blocks the image should sit in its
   // layout-specific region with the text taking the remainder.
+  // Phase 7d: when viewport is set, `base.width / height` now
+  // reflect the viewport dimensions so the contain-fit uses the
+  // viewport's aspect ratio.
   base.imageRect = containInRegion(STEP_IMAGE_REGION[block.layout], {
     width: base.width,
     height: base.height,
@@ -793,7 +848,7 @@ function buildStepTextShapeXml(opts: OverlayTextShapeOptions): string {
   // Region style: transparent backdrop + dark text.
   const fillXml = opts.overlay
     ? `<a:solidFill><a:srgbClr val="000000"><a:alpha val="65000"/></a:srgbClr></a:solidFill>`
-    : `<a:noFill/>`;
+    : "<a:noFill/>";
   const textColor = opts.overlay ? "FFFFFF" : "000000";
   return `<p:sp>
         <p:nvSpPr>
@@ -1126,8 +1181,18 @@ function buildSlideXml(slide: SlideData): string {
 </p:sld>`;
   }
 
-  // Image element inside the group, in CHILD coord space
-  // (0..svgW, 0..svgH).
+  // Phase 7d — resolve the picture / group child-coord placement.
+  // Defaults: picture at (0, 0, svgW, svgH) child coords; group
+  // chOff = (0, 0), chExt = (svgW, svgH). When a viewport is set
+  // these all shift to express the viewport sub-rect.
+  const chOff = slide.chOff ?? { x: 0, y: 0 };
+  const imageOff = slide.imageChildOff ?? { x: 0, y: 0 };
+  const imageChildExt = slide.imageChildExt ?? { w: slide.width, h: slide.height };
+  const srcRectXml = slide.imageSrcRect
+    ? `<a:srcRect l="${slide.imageSrcRect.l}" t="${slide.imageSrcRect.t}" r="${slide.imageSrcRect.r}" b="${slide.imageSrcRect.b}"/>`
+    : "";
+
+  // Image element inside the group, in CHILD coord space.
   const picXml = hasImage
     ? `<p:pic>
         <p:nvPicPr>
@@ -1137,12 +1202,13 @@ function buildSlideXml(slide: SlideData): string {
         </p:nvPicPr>
         <p:blipFill>
           <a:blip r:embed="rId2"/>
+          ${srcRectXml}
           <a:stretch><a:fillRect/></a:stretch>
         </p:blipFill>
         <p:spPr>
           <a:xfrm>
-            <a:off x="0" y="0"/>
-            <a:ext cx="${px(slide.width)}" cy="${px(slide.height)}"/>
+            <a:off x="${px(imageOff.x)}" y="${px(imageOff.y)}"/>
+            <a:ext cx="${px(imageChildExt.w)}" cy="${px(imageChildExt.h)}"/>
           </a:xfrm>
           <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
         </p:spPr>
@@ -1163,7 +1229,7 @@ function buildSlideXml(slide: SlideData): string {
           <a:xfrm>
             <a:off x="${px(slide.imageRect.x)}" y="${px(slide.imageRect.y)}"/>
             <a:ext cx="${px(slide.imageRect.w)}" cy="${px(slide.imageRect.h)}"/>
-            <a:chOff x="0" y="0"/>
+            <a:chOff x="${px(chOff.x)}" y="${px(chOff.y)}"/>
             <a:chExt cx="${px(slide.width)}" cy="${px(slide.height)}"/>
           </a:xfrm>
         </p:grpSpPr>

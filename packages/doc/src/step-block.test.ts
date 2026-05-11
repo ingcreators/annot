@@ -243,6 +243,60 @@ describe("step block: parser", () => {
     if (step?.kind !== "step") throw new Error("expected step block");
     expect(step.link).toEqual({ url: "mailto:hello@example.com" });
   });
+
+  // Phase 7d of `docs/plans/card-procedure-template.md` —
+  // initial-view viewport parses from `data-step-viewport="x,y,w,h"`.
+  it("parses data-step-viewport into block.viewport (Phase 7d)", () => {
+    const html =
+      wrap(`      <section data-annot-block="step" data-annot-image-id="img-step-01" data-step-layout="image-top" data-step-viewport="100,200,400,300">
+        <svg data-annot-version="1" viewBox="0 0 800 600" width="800" height="600" xmlns="http://www.w3.org/2000/svg"><g id="annotations"/></svg>
+        <h3 data-step-title>T</h3>
+        <p data-step-body>B</p>
+      </section>`);
+    const doc = parseDocument(html);
+    const step = doc.blocks.find((b) => b.kind === "step");
+    if (step?.kind !== "step") throw new Error("expected step block");
+    expect(step.viewport).toEqual({ x: 100, y: 200, w: 400, h: 300 });
+  });
+
+  it("drops a malformed data-step-viewport (wrong field count)", () => {
+    const html =
+      wrap(`      <section data-annot-block="step" data-annot-image-id="img-step-01" data-step-layout="image-top" data-step-viewport="100,200,400">
+        <svg data-annot-version="1" viewBox="0 0 800 600" xmlns="http://www.w3.org/2000/svg"><g id="annotations"/></svg>
+        <h3 data-step-title>T</h3>
+        <p data-step-body>B</p>
+      </section>`);
+    const doc = parseDocument(html);
+    const step = doc.blocks.find((b) => b.kind === "step");
+    if (step?.kind !== "step") throw new Error("expected step block");
+    expect(step.viewport).toBeUndefined();
+  });
+
+  it("drops a viewport with non-positive w/h", () => {
+    const html =
+      wrap(`      <section data-annot-block="step" data-annot-image-id="img-step-01" data-step-layout="image-top" data-step-viewport="100,200,0,300">
+        <svg data-annot-version="1" viewBox="0 0 800 600" xmlns="http://www.w3.org/2000/svg"><g id="annotations"/></svg>
+        <h3 data-step-title>T</h3>
+        <p data-step-body>B</p>
+      </section>`);
+    const doc = parseDocument(html);
+    const step = doc.blocks.find((b) => b.kind === "step");
+    if (step?.kind !== "step") throw new Error("expected step block");
+    expect(step.viewport).toBeUndefined();
+  });
+
+  it("accepts fractional viewport coords", () => {
+    const html =
+      wrap(`      <section data-annot-block="step" data-annot-image-id="img-step-01" data-step-layout="image-top" data-step-viewport="12.5,37.5,123.4,89.6">
+        <svg data-annot-version="1" viewBox="0 0 800 600" xmlns="http://www.w3.org/2000/svg"><g id="annotations"/></svg>
+        <h3 data-step-title>T</h3>
+        <p data-step-body>B</p>
+      </section>`);
+    const doc = parseDocument(html);
+    const step = doc.blocks.find((b) => b.kind === "step");
+    if (step?.kind !== "step") throw new Error("expected step block");
+    expect(step.viewport).toEqual({ x: 12.5, y: 37.5, w: 123.4, h: 89.6 });
+  });
 });
 
 describe("step block: serializer", () => {
@@ -509,6 +563,86 @@ describe("step block: serializer", () => {
     if (step?.kind !== "step") throw new Error("expected step");
     expect(step.svg).toBe("");
     expect(step.link).toEqual({ url: "https://example.com/dashboard" });
+  });
+
+  // Phase 7d — viewport serialisation. data-step-viewport
+  // appears AFTER data-step-url-label in canonical order.
+  it("emits data-step-viewport after data-step-url-label (Phase 7d)", () => {
+    const doc: AnnotDocument = {
+      version: ANNOT_DOC_VERSION,
+      lang: "en",
+      title: "T",
+      meta: { title: "T" },
+      styleBlock: null,
+      blocks: [
+        {
+          kind: "step",
+          id: "img-step-01",
+          svg: CANONICAL_SVG,
+          title: "T",
+          body: "B",
+          layout: "image-top",
+          viewport: { x: 100, y: 200, w: 400, h: 300 },
+        },
+      ],
+    };
+    const bytes = serializeDocument(doc);
+    expect(bytes).toContain(
+      '<section data-annot-block="step" data-annot-image-id="img-step-01" data-step-layout="image-top" data-step-viewport="100,200,400,300">',
+    );
+  });
+
+  it("emits viewport after both URL and viewport when both are set", () => {
+    const doc: AnnotDocument = {
+      version: ANNOT_DOC_VERSION,
+      lang: "en",
+      title: "T",
+      meta: { title: "T" },
+      styleBlock: null,
+      blocks: [
+        {
+          kind: "step",
+          id: "img-step-01",
+          svg: CANONICAL_SVG,
+          title: "T",
+          body: "B",
+          layout: "image-top",
+          link: { url: "https://example.com", label: "Docs" },
+          viewport: { x: 50, y: 60, w: 200, h: 150 },
+        },
+      ],
+    };
+    const bytes = serializeDocument(doc);
+    expect(bytes).toContain(
+      'data-step-layout="image-top" data-step-url="https://example.com" data-step-url-label="Docs" data-step-viewport="50,60,200,150">',
+    );
+  });
+
+  it("round-trips a step block with viewport byte-for-byte", () => {
+    const doc: AnnotDocument = {
+      version: ANNOT_DOC_VERSION,
+      lang: "en",
+      title: "T",
+      meta: { title: "T" },
+      styleBlock: null,
+      blocks: [
+        {
+          kind: "step",
+          id: "img-step-01",
+          svg: CANONICAL_SVG,
+          title: "T",
+          body: "B",
+          layout: "image-top",
+          viewport: { x: 12.5, y: 37.5, w: 123.4, h: 89.6 },
+        },
+      ],
+    };
+    const bytes = serializeDocument(doc);
+    const reparsed = parseDocument(bytes);
+    expect(serializeDocument(reparsed)).toBe(bytes);
+    const step = reparsed.blocks.find((b) => b.kind === "step");
+    if (step?.kind !== "step") throw new Error("expected step");
+    expect(step.viewport).toEqual({ x: 12.5, y: 37.5, w: 123.4, h: 89.6 });
   });
 });
 

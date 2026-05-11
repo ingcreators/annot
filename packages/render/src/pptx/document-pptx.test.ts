@@ -553,6 +553,133 @@ describe("buildDocumentPptxFiles: 16:9 slide canvas (Phase 6b)", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Phase 7d — image viewport. When the step block carries
+// `viewport`, the slide picture emits with `<a:srcRect>` cropping
+// to the viewport sub-rect, and the group's `chOff/chExt` are
+// adjusted so the viewport portion of SVG coord space maps to
+// the slide image region.
+// ---------------------------------------------------------------------------
+
+describe("buildDocumentPptxFiles: step block viewport (Phase 7d)", () => {
+  it("emits <a:srcRect> on the picture when block.viewport is set", () => {
+    const base = makeStepBlock("step-1", 800, 600, { title: "T", body: "B" });
+    const block: StepBlock = {
+      ...base,
+      viewport: { x: 100, y: 75, w: 400, h: 300 },
+    };
+    const doc = makeDocument([block]);
+    const slide1 = decode(buildDocumentPptxFiles(doc)["ppt/slides/slide1.xml"]!);
+    // srcRect units: 0.001% per unit (100000 = 100%).
+    // l = 100/800 * 100000 = 12500
+    // t = 75/600  * 100000 = 12500
+    // r = (800-100-400)/800 * 100000 = 37500
+    // b = (600-75-300)/600  * 100000 = 37500
+    expect(slide1).toContain('<a:srcRect l="12500" t="12500" r="37500" b="37500"/>');
+  });
+
+  it("does NOT emit <a:srcRect> when block.viewport is absent", () => {
+    const doc = makeDocument([makeStepBlock("step-1", 800, 600, { title: "T", body: "B" })]);
+    const slide1 = decode(buildDocumentPptxFiles(doc)["ppt/slides/slide1.xml"]!);
+    expect(slide1).not.toContain("<a:srcRect");
+  });
+
+  it("group's chOff = (vp.x, vp.y) and chExt = (vp.w, vp.h) when viewport is set", () => {
+    const base = makeStepBlock("step-1", 800, 600, { title: "T", body: "B" });
+    const block: StepBlock = {
+      ...base,
+      viewport: { x: 100, y: 75, w: 400, h: 300 },
+    };
+    const doc = makeDocument([block]);
+    const slide1 = decode(buildDocumentPptxFiles(doc)["ppt/slides/slide1.xml"]!);
+    // 100 × 9525 = 952500; 75 × 9525 = 714375
+    // 400 × 9525 = 3810000; 300 × 9525 = 2857500
+    expect(slide1).toMatch(
+      /ImageGroup[\s\S]*?<a:chOff x="952500" y="714375"\/>[\s\S]*?<a:chExt cx="3810000" cy="2857500"\/>/,
+    );
+  });
+
+  it("picture's child placement = (vp.x, vp.y, vp.w, vp.h) when viewport is set", () => {
+    const base = makeStepBlock("step-1", 800, 600, { title: "T", body: "B" });
+    const block: StepBlock = {
+      ...base,
+      viewport: { x: 100, y: 75, w: 400, h: 300 },
+    };
+    const doc = makeDocument([block]);
+    const slide1 = decode(buildDocumentPptxFiles(doc)["ppt/slides/slide1.xml"]!);
+    // The picture inside the group: off=(100, 75) ext=(400, 300)
+    // in child coords = (952500, 714375) and (3810000, 2857500) EMU.
+    expect(slide1).toMatch(
+      /Screenshot[\s\S]*?<a:off x="952500" y="714375"\/>[\s\S]*?<a:ext cx="3810000" cy="2857500"\/>/,
+    );
+  });
+
+  it("integer srcRect edges round-trip on identical input", () => {
+    // Round-trip stability: re-running the export with the
+    // same input produces byte-identical srcRect values.
+    const base = makeStepBlock("step-1", 1000, 500, { title: "T", body: "B" });
+    const block: StepBlock = {
+      ...base,
+      viewport: { x: 300, y: 100, w: 400, h: 300 },
+    };
+    const doc = makeDocument([block]);
+    const a = decode(buildDocumentPptxFiles(doc)["ppt/slides/slide1.xml"]!);
+    const b = decode(buildDocumentPptxFiles(doc)["ppt/slides/slide1.xml"]!);
+    expect(a).toBe(b);
+    // Verify the specific values:
+    // l = 300/1000 * 100000 = 30000
+    // t = 100/500  * 100000 = 20000
+    // r = (1000-300-400)/1000 * 100000 = 30000
+    // b = (500-100-300)/500   * 100000 = 20000
+    expect(a).toContain('<a:srcRect l="30000" t="20000" r="30000" b="20000"/>');
+  });
+
+  it("works on viewport-cropped image-less? — N/A (image-less has empty svg and no picture)", () => {
+    // Defensive sanity: an image-less step block carrying a
+    // viewport (semantically meaningless since there's no
+    // image) still exports cleanly. The PPTX path treats it as
+    // an image-less slide and doesn't apply srcRect.
+    const block: StepBlock = {
+      kind: "step",
+      id: "step-1",
+      svg: "",
+      title: "Recap",
+      body: "Wrap up.",
+      layout: "image-top",
+      viewport: { x: 100, y: 75, w: 400, h: 300 },
+    };
+    const doc = makeDocument([block]);
+    const files = buildDocumentPptxFiles(doc);
+    const slide1 = decode(files["ppt/slides/slide1.xml"]!);
+    expect(slide1).not.toContain("<a:srcRect");
+    expect(slide1).not.toContain('name="Screenshot"');
+  });
+
+  it("annotations stay in SVG-native coords (viewport doesn't translate them)", () => {
+    // Annotations carry their full SVG coords; the group's xfrm
+    // re-maps the viewport rect to the slide image region. An
+    // annotation at SVG (110, 80) (inside vp) lands at the slide
+    // region. We verify the rect at SVG (10, 10, 100, 50) — the
+    // existing makeStepBlock { withRect } authoring — comes
+    // through unchanged in its EMU coords (× 9525 → 95250
+    // x/y, 952500 / 476250 ext) regardless of viewport.
+    const base = makeStepBlock("step-1", 800, 600, {
+      title: "T",
+      body: "B",
+      withRect: true,
+    });
+    const block: StepBlock = {
+      ...base,
+      viewport: { x: 50, y: 30, w: 400, h: 300 },
+    };
+    const doc = makeDocument([block]);
+    const slide1 = decode(buildDocumentPptxFiles(doc)["ppt/slides/slide1.xml"]!);
+    expect(slide1).toMatch(
+      /<a:off x="95250" y="95250"\/>[\s\S]*?<a:ext cx="952500" cy="476250"\/>/,
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Phase 7c — Scribe-style cover slide. When `meta.header` is set
 // the deck gains a leading slide carrying icon + title +
 // description + author + step-count footer. Per-block slides
