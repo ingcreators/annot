@@ -1234,15 +1234,22 @@ export class App {
     const buildOverflowItems = (
       doc: typeof parsed,
     ): import("@ingcreators/annot-host-ui/annot-doc-header").DocHeaderOverflowItem[] => {
-      const hasImages = doc.blocks.some((b) => b.kind === "image");
+      // Phase 6 of `docs/plans/card-procedure-template.md` —
+      // step blocks become slides in the PPTX export alongside
+      // image blocks, so the menu enable gate widens to count
+      // both kinds. A pure card-procedure document (zero image
+      // blocks but N step blocks) now exports cleanly.
+      const hasExportableBlock = doc.blocks.some((b) => b.kind === "image" || b.kind === "step");
       return [
         {
           id: "exportPptx",
           label: "Export to PowerPoint…",
-          // Disabled when the doc has no image blocks (no slides →
-          // no usable export). Phase 11 of the parent plan landed
-          // multi-slide PPTX as the only export format.
-          disabled: !hasImages,
+          // Disabled when the doc has no slide-producing blocks
+          // (no slides → no usable export). Phase 11 of the
+          // parent plan landed multi-slide PPTX; Phase 6 of
+          // card-procedure-template extends slide emission to
+          // step blocks.
+          disabled: !hasExportableBlock,
         },
         { id: "saveAsTemplate", label: "Save as template…" },
         // Phase 11 of `annot-html-document-ux-polish.md` —
