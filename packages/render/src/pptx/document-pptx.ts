@@ -166,7 +166,6 @@ function collectSlides(doc: AnnotDocument): SlideData[] {
       slideIndex += 1;
       const data = buildSlideFromStepBlock(block, slideIndex);
       if (data) out.push(data);
-      continue;
     }
   }
   return out;
