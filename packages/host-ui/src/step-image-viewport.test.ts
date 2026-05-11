@@ -149,6 +149,97 @@ describe("attachStepImageViewport: pan clamping (Phase 7d-polish)", () => {
   });
 });
 
+// Phase 7d-polish 2 — `targetAspect` locks the viewBox aspect to
+// match the slot's CSS aspect ratio (16:9) so multiple cards on
+// the same source bitmap stay visually aligned. Initial state,
+// reset, and zoom all preserve the target aspect.
+describe("attachStepImageViewport: targetAspect (Phase 7d-polish 2)", () => {
+  it("snaps initial state to target aspect by shrinking the wider dimension", () => {
+    // Bitmap 800x600 (4:3). Initial supplied as the full
+    // intrinsic. Target 16:9 → height shrinks to 800/(16/9) =
+    // 450; rect centred on (400, 300) → x=0, y=(600-450)/2=75.
+    const svg = makeSvg(800, 600);
+    const ctrl = attachStepImageViewport(svg, {
+      initial: { x: 0, y: 0, w: 800, h: 600 },
+      targetAspect: 16 / 9,
+    });
+    const current = ctrl.current();
+    expect(current.w).toBe(800);
+    expect(current.h).toBe(450);
+    expect(Math.abs(current.w / current.h - 16 / 9)).toBeLessThan(1e-6);
+  });
+
+  it("computes a top-left-anchored default rect when no initial is supplied", () => {
+    // Tall bitmap 800x4000. Top-left 16:9 sub-rect = 800x450.
+    const svg = makeSvg(800, 4000);
+    const ctrl = attachStepImageViewport(svg, { targetAspect: 16 / 9 });
+    const def = ctrl.defaultRect();
+    expect(def).toEqual({ x: 0, y: 0, w: 800, h: 450 });
+    // ALSO: the initial state itself matches the default.
+    expect(ctrl.current()).toEqual({ x: 0, y: 0, w: 800, h: 450 });
+  });
+
+  it("handles a bitmap WIDER than target — uses full height, shrinks width", () => {
+    // 3000x1080 panorama. target = 16/9 → max w = 1080 * 16/9 = 1920.
+    // Top-left 16:9 sub-rect = 1920x1080.
+    const svg = makeSvg(3000, 1080);
+    const ctrl = attachStepImageViewport(svg, { targetAspect: 16 / 9 });
+    expect(ctrl.defaultRect()).toEqual({ x: 0, y: 0, w: 1920, h: 1080 });
+  });
+
+  it("preserves target aspect through zoomBy", () => {
+    const svg = makeSvg(1920, 1080);
+    const ctrl = attachStepImageViewport(svg, { targetAspect: 16 / 9 });
+    ctrl.zoomBy(0.5);
+    const a = ctrl.current();
+    expect(Math.abs(a.w / a.h - 16 / 9)).toBeLessThan(1e-6);
+    ctrl.zoomBy(2);
+    const b = ctrl.current();
+    expect(Math.abs(b.w / b.h - 16 / 9)).toBeLessThan(1e-6);
+  });
+
+  it("reset(rect) snaps the supplied rect to target aspect", () => {
+    const svg = makeSvg(1920, 1080);
+    const ctrl = attachStepImageViewport(svg, { targetAspect: 16 / 9 });
+    // Pass a 4:3 rect; reset should snap to 16:9.
+    ctrl.reset({ x: 100, y: 100, w: 800, h: 600 });
+    const after = ctrl.current();
+    expect(Math.abs(after.w / after.h - 16 / 9)).toBeLessThan(1e-6);
+  });
+
+  it("reset() (no arg) returns to the snapped initial", () => {
+    const svg = makeSvg(800, 600);
+    const ctrl = attachStepImageViewport(svg, {
+      initial: { x: 0, y: 0, w: 800, h: 600 },
+      targetAspect: 16 / 9,
+    });
+    // After zoom...
+    ctrl.zoomBy(0.5);
+    expect(ctrl.current().w).not.toBe(800);
+    // ...reset() goes back to the snapped initial (800x450).
+    ctrl.reset();
+    const current = ctrl.current();
+    expect(current.w).toBe(800);
+    expect(current.h).toBe(450);
+  });
+
+  it("defaultRect() returns the same rect as a no-initial controller would adopt", () => {
+    // Verify consistency: defaultRect() ≡ current() when no
+    // initial was supplied. The shell's Clear button relies on
+    // this so the displayed view after Clear matches what a
+    // freshly-attached controller would show.
+    const svg1 = makeSvg(800, 4000);
+    const ctrl1 = attachStepImageViewport(svg1, { targetAspect: 16 / 9 });
+    expect(ctrl1.defaultRect()).toEqual(ctrl1.current());
+  });
+
+  it("falls back to intrinsic when no target aspect is set", () => {
+    const svg = makeSvg(800, 600);
+    const ctrl = attachStepImageViewport(svg);
+    expect(ctrl.defaultRect()).toEqual({ x: 0, y: 0, w: 800, h: 600 });
+  });
+});
+
 // Phase 7d-polish — drag-just-ended flag used by the shell to
 // suppress the image-editor modal after a pan.
 describe("attachStepImageViewport: wasDragging() (Phase 7d-polish)", () => {
