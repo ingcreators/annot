@@ -303,3 +303,205 @@ describe("injectDocumentStyles: numbering meta (Phase 13)", () => {
     expect(reparsed.meta.numbering).toBeUndefined();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Phase 2 of docs/plans/card-procedure-template.md — step block
+// card chrome + per-layout grid templates + cardLayout meta.
+// ---------------------------------------------------------------------------
+
+describe("injectDocumentStyles: step block card chrome", () => {
+  it("emits the card chrome rule with all five chrome properties", () => {
+    const css = buildStyleBlock(createEmptyDocument({ title: "Card chrome" }));
+    expect(css).toContain('[data-annot-block="step"] {');
+    expect(css).toContain("background: var(--annot-card-bg)");
+    expect(css).toContain("border: var(--annot-card-border)");
+    expect(css).toContain("border-radius: var(--annot-card-radius)");
+    expect(css).toContain("box-shadow: var(--annot-card-shadow)");
+    expect(css).toContain("padding: var(--annot-card-padding)");
+  });
+
+  it("emits non-themed card sizing variables in :root", () => {
+    const css = buildStyleBlock(createEmptyDocument({ title: "Card sizing" }));
+    expect(css).toContain("--annot-card-radius: 8px");
+    expect(css).toContain("--annot-card-padding: 1rem");
+    expect(css).toContain("--annot-card-gap: 1.5rem");
+  });
+
+  it("emits themed card chrome variables in light theme", () => {
+    const css = buildStyleBlock(
+      createEmptyDocument({ title: "Light card", meta: { theme: "light" } }),
+    );
+    expect(css).toContain("--annot-card-bg: #ffffff");
+    expect(css).toContain("--annot-card-border: 1px solid #e5e7eb");
+    expect(css).toContain("--annot-card-shadow:");
+  });
+
+  it("emits themed card chrome variables in dark theme", () => {
+    const css = buildStyleBlock(
+      createEmptyDocument({ title: "Dark card", meta: { theme: "dark" } }),
+    );
+    expect(css).toContain("--annot-card-bg: #1f2937");
+    expect(css).toContain("--annot-card-border: 1px solid #374151");
+  });
+
+  it("auto theme includes dark card overrides inside @media (prefers-color-scheme: dark)", () => {
+    const css = buildStyleBlock(createEmptyDocument({ title: "Auto card" }));
+    const darkBlock = css.slice(css.indexOf("@media (prefers-color-scheme: dark)"));
+    expect(darkBlock).toContain("--annot-card-bg: #1f2937");
+    expect(darkBlock).toContain("--annot-card-border: 1px solid #374151");
+  });
+});
+
+describe("injectDocumentStyles: step block layouts", () => {
+  it("emits a grid template for each of the five data-step-layout values", () => {
+    const css = buildStyleBlock(createEmptyDocument({ title: "Layouts" }));
+    // image-top is the default — covered by `:not([data-step-layout])`
+    // plus the explicit attribute selector.
+    expect(css).toContain('[data-annot-block="step"]:not([data-step-layout]),');
+    expect(css).toContain('[data-annot-block="step"][data-step-layout="image-top"] {');
+    expect(css).toContain('[data-annot-block="step"][data-step-layout="image-bottom"] {');
+    expect(css).toContain('[data-annot-block="step"][data-step-layout="image-left"] {');
+    expect(css).toContain('[data-annot-block="step"][data-step-layout="image-right"] {');
+    expect(css).toContain('[data-annot-block="step"][data-step-layout="image-fill"] {');
+  });
+
+  it("the four area-based layouts use grid-template-areas with image / title / body slots", () => {
+    const css = buildStyleBlock(createEmptyDocument({ title: "Areas" }));
+    // Each of the four named-area layouts mentions all three slots.
+    // image-top / image-bottom emit single-column areas (`"image"`,
+    // `"title"`, `"body"`); image-left / image-right emit two-column
+    // areas (`"image title"`, `"image body"` and the mirror).
+    // The assertion just checks each slot name shows up at least
+    // once in the rule body.
+    for (const layout of ["image-top", "image-bottom", "image-left", "image-right"]) {
+      const sectionStart = css.indexOf(`[data-annot-block="step"][data-step-layout="${layout}"] {`);
+      expect(sectionStart).toBeGreaterThan(-1);
+      // Grab a slice covering the rule body (next "}" terminates).
+      const sectionEnd = css.indexOf("}", sectionStart);
+      const section = css.slice(sectionStart, sectionEnd);
+      expect(section).toContain("display: grid");
+      expect(section).toContain("grid-template-areas:");
+      expect(section).toMatch(/image/);
+      expect(section).toMatch(/title/);
+      expect(section).toMatch(/body/);
+    }
+  });
+
+  it("image-fill uses absolute positioning instead of grid", () => {
+    const css = buildStyleBlock(createEmptyDocument({ title: "Fill" }));
+    const start = css.indexOf('[data-annot-block="step"][data-step-layout="image-fill"] {');
+    expect(start).toBeGreaterThan(-1);
+    const end = css.indexOf("}", start);
+    const section = css.slice(start, end);
+    expect(section).toContain("display: block");
+    expect(section).toContain("position: relative");
+  });
+
+  it("child slots get grid-area assignments at the default selector level", () => {
+    const css = buildStyleBlock(createEmptyDocument({ title: "Slots" }));
+    expect(css).toContain('[data-annot-block="step"] > svg {');
+    expect(css).toContain("grid-area: image");
+    expect(css).toContain('[data-annot-block="step"] > [data-step-title] {');
+    expect(css).toContain("grid-area: title");
+    expect(css).toContain('[data-annot-block="step"] > [data-step-body] {');
+    expect(css).toContain("grid-area: body");
+  });
+
+  it("step blocks join the print break-inside avoid rule", () => {
+    const css = buildStyleBlock(createEmptyDocument({ title: "Print" }));
+    const printStart = css.indexOf("@media print {");
+    expect(printStart).toBeGreaterThan(-1);
+    const printSection = css.slice(printStart);
+    expect(printSection).toContain('[data-annot-block="step"] {');
+    expect(printSection).toContain("break-inside: avoid");
+  });
+});
+
+describe("injectDocumentStyles: cardLayout meta", () => {
+  it("--annot-card-columns defaults to 1 when cardLayout is absent", () => {
+    const css = buildStyleBlock(createEmptyDocument({ title: "Default columns" }));
+    expect(css).toContain("--annot-card-columns: 1");
+  });
+
+  it("--annot-card-columns reflects cardLayout.columns when set numerically", () => {
+    for (const n of [1, 2, 3] as const) {
+      const css = buildStyleBlock(
+        createEmptyDocument({ title: `Cols ${n}`, meta: { cardLayout: { columns: n } } }),
+      );
+      expect(css).toContain(`--annot-card-columns: ${n}`);
+    }
+  });
+
+  it('--annot-card-columns is 1 when cardLayout.columns is "auto"', () => {
+    // "auto" can't be a numeric CSS custom property used in repeat(),
+    // so the variable falls back to 1; the actual grid-template-columns
+    // value is generated inline in cardLayoutRules instead.
+    const css = buildStyleBlock(
+      createEmptyDocument({
+        title: "Auto columns",
+        meta: { cardLayout: { columns: "auto" } },
+      }),
+    );
+    expect(css).toContain("--annot-card-columns: 1");
+  });
+
+  it("emits no article-level grid when cardLayout is absent", () => {
+    const css = buildStyleBlock(createEmptyDocument({ title: "No cardLayout" }));
+    // Negative: the typography block sets `max-width` but no
+    // grid template on the article.
+    expect(css).not.toContain("article[data-annot-doc] {\n  display: grid");
+    expect(css).not.toContain(':not([data-annot-block="step"])');
+  });
+
+  it("emits no article-level grid when cardLayout.columns === 1", () => {
+    // columns=1 is the same visual layout as block-flow; we leave
+    // the existing article rule alone to keep byte-equivalent
+    // output for single-column docs.
+    const css = buildStyleBlock(
+      createEmptyDocument({
+        title: "One-column",
+        meta: { cardLayout: { columns: 1 } },
+      }),
+    );
+    expect(css).not.toContain("article[data-annot-doc] {\n  display: grid");
+  });
+
+  it("emits a numeric repeat() grid when cardLayout.columns >= 2", () => {
+    const css = buildStyleBlock(
+      createEmptyDocument({
+        title: "Two columns",
+        meta: { cardLayout: { columns: 2 } },
+      }),
+    );
+    expect(css).toContain("article[data-annot-doc] {");
+    expect(css).toContain("display: grid");
+    expect(css).toContain(
+      "grid-template-columns: repeat(var(--annot-card-columns), minmax(0, 1fr))",
+    );
+    expect(css).toContain('article[data-annot-doc] > :not([data-annot-block="step"])');
+    expect(css).toContain("grid-column: 1 / -1");
+  });
+
+  it('emits an auto-fill grid when cardLayout.columns === "auto"', () => {
+    const css = buildStyleBlock(
+      createEmptyDocument({
+        title: "Auto columns",
+        meta: { cardLayout: { columns: "auto" } },
+      }),
+    );
+    expect(css).toContain("grid-template-columns: repeat(auto-fill, minmax(320px, 1fr))");
+  });
+
+  it("survives a parse → serialize round-trip with cardLayout set", () => {
+    const original = injectDocumentStyles(
+      createEmptyDocument({
+        title: "Card round-trip",
+        meta: { cardLayout: { columns: 2, defaultStepLayout: "image-left" } },
+      }),
+    );
+    const onceBytes = serializeDocument(original);
+    const reparsed = parseDocument(onceBytes);
+    expect(serializeDocument(reparsed)).toBe(onceBytes);
+    expect(reparsed.meta.cardLayout).toEqual({ columns: 2, defaultStepLayout: "image-left" });
+  });
+});

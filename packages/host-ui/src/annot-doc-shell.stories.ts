@@ -202,3 +202,148 @@ export const Editing: Story = {
   name: "Editing mode",
   args: { document: makeMixedDoc(), showToc: true, editing: true },
 };
+
+// ---------------------------------------------------------------------------
+// Phase 2 of docs/plans/card-procedure-template.md — step block
+// card chrome + 5 per-layout grid templates. The stories below
+// each render a single-step doc with a different `data-step-layout`
+// value so the Storybook canvas surfaces the visual difference.
+// ---------------------------------------------------------------------------
+
+import type { StepLayout } from "@ingcreators/annot-doc";
+
+const STEP_PLACEHOLDER_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="800" height="450">
+  <rect x="0" y="0" width="800" height="450" fill="#cbd5e1"/>
+  <rect x="80" y="60" width="640" height="330" fill="#f1f5f9" stroke="#94a3b8" stroke-width="2"/>
+  <text x="400" y="225" text-anchor="middle" fill="#475569" font-family="sans-serif" font-size="32" font-weight="600">Screenshot 1</text>
+  <text x="400" y="265" text-anchor="middle" fill="#64748b" font-family="sans-serif" font-size="18">Annotation overlay would sit here</text>
+</svg>`;
+
+function makeStepLayoutDoc(
+  layout: StepLayout,
+  theme: AnnotDocument["meta"]["theme"] = "auto",
+): AnnotDocument {
+  return {
+    version: 1,
+    lang: "en",
+    title: `Step layout: ${layout}`,
+    meta: { title: `Step layout: ${layout}`, theme },
+    styleBlock: null,
+    blocks: [
+      { kind: "heading", level: 1, inlineHtml: `Step layout: <code>${layout}</code>` },
+      {
+        kind: "paragraph",
+        inlineHtml:
+          "The card below renders with the labelled layout variant. The same DOM (svg → h3 → p) renders differently per <code>data-step-layout</code>.",
+      },
+      {
+        kind: "step",
+        id: "img-step-demo",
+        svg: STEP_PLACEHOLDER_SVG,
+        title: "Open the settings dialog",
+        body: "Click the gear icon in the top-right corner. The settings dialog opens centred on the screen and dims the surrounding canvas.",
+        layout,
+      },
+    ],
+  };
+}
+
+/** Renders three step blocks with mixed layouts and a multi-column
+ *  card grid. Exercises `meta.cardLayout` against a populated doc. */
+function makeCardGridDoc(
+  columns: 1 | 2 | 3 | "auto",
+  theme: AnnotDocument["meta"]["theme"] = "auto",
+): AnnotDocument {
+  return {
+    version: 1,
+    lang: "en",
+    title: `Card grid: ${columns}-column`,
+    meta: {
+      title: `Card grid: ${columns}-column`,
+      theme,
+      cardLayout: { columns, defaultStepLayout: "image-top" },
+    },
+    styleBlock: null,
+    blocks: [
+      { kind: "heading", level: 1, inlineHtml: "Card-style procedure" },
+      {
+        kind: "paragraph",
+        inlineHtml: "The intro paragraph sits full-width above the card grid.",
+      },
+      {
+        kind: "step",
+        id: "img-step-grid-01",
+        svg: STEP_PLACEHOLDER_SVG,
+        title: "Step 1: Open settings",
+        body: "Click the gear icon.",
+        layout: "image-top",
+      },
+      {
+        kind: "step",
+        id: "img-step-grid-02",
+        svg: STEP_PLACEHOLDER_SVG,
+        title: "Step 2: Configure",
+        body: "Pick the option you want.",
+        layout: "image-top",
+      },
+      {
+        kind: "step",
+        id: "img-step-grid-03",
+        svg: STEP_PLACEHOLDER_SVG,
+        title: "Step 3: Apply",
+        body: "Click Apply to confirm.",
+        layout: "image-top",
+      },
+    ],
+  };
+}
+
+export const StepImageTop: Story = {
+  name: "Step / image-top",
+  args: { document: makeStepLayoutDoc("image-top"), showToc: false, editing: false },
+};
+
+export const StepImageBottom: Story = {
+  name: "Step / image-bottom",
+  args: { document: makeStepLayoutDoc("image-bottom"), showToc: false, editing: false },
+};
+
+export const StepImageLeft: Story = {
+  name: "Step / image-left",
+  args: { document: makeStepLayoutDoc("image-left"), showToc: false, editing: false },
+};
+
+export const StepImageRight: Story = {
+  name: "Step / image-right",
+  args: { document: makeStepLayoutDoc("image-right"), showToc: false, editing: false },
+};
+
+export const StepImageFill: Story = {
+  name: "Step / image-fill",
+  args: { document: makeStepLayoutDoc("image-fill"), showToc: false, editing: false },
+};
+
+export const StepImageTopDark: Story = {
+  name: "Step / image-top (dark)",
+  args: { document: makeStepLayoutDoc("image-top", "dark"), showToc: false, editing: false },
+};
+
+export const StepImageFillDark: Story = {
+  name: "Step / image-fill (dark)",
+  args: { document: makeStepLayoutDoc("image-fill", "dark"), showToc: false, editing: false },
+};
+
+export const CardGridTwoColumn: Story = {
+  name: "Card grid / 2-column",
+  args: { document: makeCardGridDoc(2), showToc: false, editing: false },
+};
+
+export const CardGridThreeColumn: Story = {
+  name: "Card grid / 3-column",
+  args: { document: makeCardGridDoc(3), showToc: false, editing: false },
+};
+
+export const CardGridAuto: Story = {
+  name: "Card grid / auto-fill",
+  args: { document: makeCardGridDoc("auto"), showToc: false, editing: false },
+};

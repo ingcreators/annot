@@ -28,7 +28,7 @@
  */
 
 import { cssStackFor } from "@ingcreators/annot-core/headless";
-import type { AnnotDocument, DocMeta, NumberingMeta } from "./types.js";
+import type { AnnotDocument, CardLayoutMeta, DocMeta, NumberingMeta } from "./types.js";
 
 /** CSS values for each `meta.maxWidth` keyword. */
 const MAX_WIDTH_VALUES: Readonly<Record<NonNullable<DocMeta["maxWidth"]>, string>> = {
@@ -51,6 +51,11 @@ const LIGHT_VARS: ReadonlyArray<readonly [string, string]> = [
   ["--annot-doc-callout-warn-border", "#d97706"],
   ["--annot-doc-callout-note-bg", "#f3f4f6"],
   ["--annot-doc-callout-note-border", "#6b7280"],
+  // Card chrome — see `step` block kind in docs/annot-html-format.md.
+  // Phase 2 of docs/plans/card-procedure-template.md.
+  ["--annot-card-bg", "#ffffff"],
+  ["--annot-card-border", "1px solid #e5e7eb"],
+  ["--annot-card-shadow", "0 1px 2px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.08)"],
 ];
 
 /** Dark-mode CSS custom property values (same key set as `LIGHT_VARS`). */
@@ -66,6 +71,22 @@ const DARK_VARS: ReadonlyArray<readonly [string, string]> = [
   ["--annot-doc-callout-warn-border", "#fbbf24"],
   ["--annot-doc-callout-note-bg", "#1f2937"],
   ["--annot-doc-callout-note-border", "#9ca3af"],
+  // Card chrome dark-mode equivalents.
+  ["--annot-card-bg", "#1f2937"],
+  ["--annot-card-border", "1px solid #374151"],
+  ["--annot-card-shadow", "0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.4)"],
+];
+
+/** Non-themed card sizing variables, emitted alongside
+ *  `--annot-doc-max-width` in `:root`. Authored as constants here
+ *  (rather than threaded through doc properties) because the
+ *  per-doc settings live in `meta.cardLayout` — these are the
+ *  unrelated geometry knobs. User-themes can override at the
+ *  `:root` level. */
+const CARD_SIZING_VARS: ReadonlyArray<readonly [string, string]> = [
+  ["--annot-card-radius", "8px"],
+  ["--annot-card-padding", "1rem"],
+  ["--annot-card-gap", "1.5rem"],
 ];
 
 /** Returns a new document with `styleBlock` set to canonical CSS.
@@ -81,10 +102,11 @@ export function buildStyleBlock(doc: AnnotDocument): string {
   const theme = doc.meta.theme ?? "auto";
 
   const sections: string[] = [];
-  sections.push(rootSection(maxWidth, theme));
+  sections.push(rootSection(maxWidth, theme, doc.meta.cardLayout));
   sections.push(fontFamilyRules());
   sections.push(typographyRules());
   sections.push(blockRules());
+  sections.push(stepBlockRules());
   sections.push(inlineRules());
   sections.push(tocRules());
   // Phase 13 — auto-numbering opt-in (`meta.numbering`).
@@ -94,6 +116,12 @@ export function buildStyleBlock(doc: AnnotDocument): string {
   // existing docs serialise byte-equivalent.
   const numberingCss = numberingRules(doc.meta.numbering);
   if (numberingCss) sections.push(numberingCss);
+  // Phase 2 of docs/plans/card-procedure-template.md —
+  // article-level grid only when `meta.cardLayout` is set with
+  // columns >= 2 (or "auto"). Otherwise the doc keeps its
+  // existing block-flow layout byte-identical to pre-card docs.
+  const cardLayoutCss = cardLayoutRules(doc.meta.cardLayout);
+  if (cardLayoutCss) sections.push(cardLayoutCss);
   sections.push(printRules());
   if (theme === "auto") {
     sections.push(darkModeRules());
@@ -105,11 +133,30 @@ export function buildStyleBlock(doc: AnnotDocument): string {
 // Section builders
 // ---------------------------------------------------------------------------
 
-function rootSection(maxWidth: string, theme: "auto" | "light" | "dark"): string {
+function rootSection(
+  maxWidth: string,
+  theme: "auto" | "light" | "dark",
+  cardLayout: CardLayoutMeta | undefined,
+): string {
   const vars = theme === "dark" ? DARK_VARS : LIGHT_VARS;
   const lines = vars.map(([name, value]) => `  ${name}: ${value};`);
   // `--annot-doc-max-width` is independent of theme; emit alongside.
   lines.unshift(`  --annot-doc-max-width: ${maxWidth};`);
+  // Card sizing knobs sit alongside the doc-width var — useful
+  // even for documents that don't currently use step blocks
+  // (consumers may override at theme-level).
+  for (const [name, value] of CARD_SIZING_VARS) {
+    lines.push(`  ${name}: ${value};`);
+  }
+  // `--annot-card-columns` is driven by `meta.cardLayout.columns`
+  // when set; defaults to 1 (single-column / stack). Emitted
+  // even when cardLayout is absent so card-level overrides land
+  // on a known default. "auto" is special-cased in
+  // `cardLayoutRules` because `repeat(auto-fill, …)` doesn't
+  // accept a custom-property keyword.
+  const columns = cardLayout?.columns;
+  const columnsValue = typeof columns === "number" ? `${columns}` : "1";
+  lines.push(`  --annot-card-columns: ${columnsValue};`);
   return `:root {\n${lines.join("\n")}\n}`;
 }
 
@@ -256,6 +303,173 @@ function blockRules(): string {
   ].join("\n");
 }
 
+/**
+ * Phase 2 of `docs/plans/card-procedure-template.md` — `step`
+ * block card chrome plus the five per-layout grid templates.
+ *
+ * Always emitted: even documents without `meta.cardLayout`
+ * (i.e. single-column step stacks) need the card chrome and
+ * per-layout grid to render their step blocks correctly.
+ * The article-level multi-column grid is opt-in via
+ * `cardLayoutRules`.
+ *
+ * Layout strategy:
+ *
+ * - `image-top` (default) / `image-bottom` / `image-left` /
+ *   `image-right` use named-area CSS Grid. The three child
+ *   slots (`<svg>`, `<h3 data-step-title>`, `<p data-step-body>`)
+ *   are assigned fixed grid-area names (`image` / `title` /
+ *   `body`) so only `grid-template-areas` + `grid-template-*`
+ *   vary per layout.
+ * - `image-fill` uses absolute positioning instead — the title
+ *   and body overlay the bottom of the image with a translucent
+ *   backdrop. Different model from the four area-based layouts,
+ *   so a separate selector block.
+ */
+function stepBlockRules(): string {
+  const sansStack = cssStackFor("Annot Sans");
+  return [
+    // Card chrome shared by every layout.
+    '[data-annot-block="step"] {',
+    "  background: var(--annot-card-bg);",
+    "  border: var(--annot-card-border);",
+    "  border-radius: var(--annot-card-radius);",
+    "  box-shadow: var(--annot-card-shadow);",
+    "  padding: var(--annot-card-padding);",
+    "  margin: 1rem 0;",
+    "  /* Clip the image-fill overlay's backdrop and any rounded-corner",
+    "     image edges within the card boundary. */",
+    "  overflow: hidden;",
+    "}",
+    // Default child styling — applies to image-top / -bottom /
+    // -left / -right (image-fill overrides these below).
+    '[data-annot-block="step"] > svg {',
+    "  grid-area: image;",
+    "  max-width: 100%;",
+    "  height: auto;",
+    "  display: block;",
+    "  margin: 0;",
+    "}",
+    '[data-annot-block="step"] > [data-step-title] {',
+    "  grid-area: title;",
+    "  margin: 0;",
+    "  font-size: 1.15rem;",
+    "  font-weight: 600;",
+    "  line-height: 1.3;",
+    `  font-family: ${sansStack};`,
+    "}",
+    '[data-annot-block="step"] > [data-step-body] {',
+    "  grid-area: body;",
+    "  margin: 0;",
+    "  color: var(--annot-doc-fg);",
+    "  line-height: 1.5;",
+    "}",
+    // image-top — default. Image on top, title + body stacked
+    // below.
+    '[data-annot-block="step"]:not([data-step-layout]),',
+    '[data-annot-block="step"][data-step-layout="image-top"] {',
+    "  display: grid;",
+    '  grid-template-areas:\n    "image"\n    "title"\n    "body";',
+    "  grid-template-columns: 1fr;",
+    "  grid-template-rows: auto auto auto;",
+    "  gap: 0.5rem;",
+    "}",
+    // image-bottom — title + body stacked above the image.
+    '[data-annot-block="step"][data-step-layout="image-bottom"] {',
+    "  display: grid;",
+    '  grid-template-areas:\n    "title"\n    "body"\n    "image";',
+    "  grid-template-columns: 1fr;",
+    "  grid-template-rows: auto auto auto;",
+    "  gap: 0.5rem;",
+    "}",
+    // image-left — two columns: image on the left, title + body
+    // stacked on the right.
+    '[data-annot-block="step"][data-step-layout="image-left"] {',
+    "  display: grid;",
+    '  grid-template-areas:\n    "image title"\n    "image body";',
+    "  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);",
+    "  grid-template-rows: auto 1fr;",
+    "  gap: 0.5rem 1rem;",
+    "}",
+    // image-right — mirror of image-left.
+    '[data-annot-block="step"][data-step-layout="image-right"] {',
+    "  display: grid;",
+    '  grid-template-areas:\n    "title image"\n    "body image";',
+    "  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);",
+    "  grid-template-rows: auto 1fr;",
+    "  gap: 0.5rem 1rem;",
+    "}",
+    // image-fill — image covers the card; title + body overlay
+    // the bottom edge with a translucent backdrop. Different
+    // positioning model from the four area-based layouts.
+    '[data-annot-block="step"][data-step-layout="image-fill"] {',
+    "  display: block;",
+    "  position: relative;",
+    "  padding: 0;",
+    "}",
+    '[data-annot-block="step"][data-step-layout="image-fill"] > svg {',
+    "  width: 100%;",
+    "  height: auto;",
+    "  display: block;",
+    "  margin: 0;",
+    "}",
+    '[data-annot-block="step"][data-step-layout="image-fill"] > [data-step-title],',
+    '[data-annot-block="step"][data-step-layout="image-fill"] > [data-step-body] {',
+    "  position: absolute;",
+    "  left: 0;",
+    "  right: 0;",
+    "  margin: 0;",
+    "  padding: 0.4rem 1rem;",
+    "  background: rgba(0, 0, 0, 0.65);",
+    "  color: #ffffff;",
+    "}",
+    '[data-annot-block="step"][data-step-layout="image-fill"] > [data-step-title] {',
+    "  bottom: 2rem;",
+    "  font-size: 1.05rem;",
+    "  font-weight: 600;",
+    "  line-height: 1.3;",
+    "}",
+    '[data-annot-block="step"][data-step-layout="image-fill"] > [data-step-body] {',
+    "  bottom: 0;",
+    "  font-size: 0.9rem;",
+    "  line-height: 1.4;",
+    "}",
+  ].join("\n");
+}
+
+/**
+ * Article-level multi-column grid for documents that opt into
+ * `meta.cardLayout`. Skipped entirely when:
+ *
+ * - `meta.cardLayout` is absent (existing docs untouched);
+ * - `columns === 1` (single-column block-flow is byte-identical
+ *   to the pre-card behavior, no point swapping to grid).
+ *
+ * Non-step children get `grid-column: 1 / -1` so headings,
+ * paragraphs, callouts etc. continue to span the full content
+ * width — only the step blocks pack into the grid columns.
+ */
+function cardLayoutRules(cardLayout: CardLayoutMeta | undefined): string {
+  if (!cardLayout) return "";
+  const columns = cardLayout.columns ?? 1;
+  if (columns === 1) return "";
+  const gridTemplate =
+    columns === "auto"
+      ? "repeat(auto-fill, minmax(320px, 1fr))"
+      : "repeat(var(--annot-card-columns), minmax(0, 1fr))";
+  return [
+    "article[data-annot-doc] {",
+    "  display: grid;",
+    `  grid-template-columns: ${gridTemplate};`,
+    "  gap: var(--annot-card-gap);",
+    "  align-items: start;",
+    "}",
+    'article[data-annot-doc] > :not([data-annot-block="step"]) {',
+    "  grid-column: 1 / -1;",
+    "}",
+  ].join("\n");
+}
+
 function inlineRules(): string {
   const monoStack = cssStackFor("Annot Mono");
   return [
@@ -342,6 +556,24 @@ function printRules(): string {
     "  }",
     '  [data-annot-block="image"] {',
     "    break-inside: avoid;",
+    "  }",
+    // Step cards stay intact across page breaks — title + body +
+    // image visually belong together. Same rule as image blocks.
+    '  [data-annot-block="step"] {',
+    "    break-inside: avoid;",
+    // Lift the drop-shadow + tinted background that look right
+    // on screen but waste toner in print.
+    "    box-shadow: none;",
+    "    background: white;",
+    "    color: black;",
+    "  }",
+    // Image-fill overlay's translucent dark backdrop becomes
+    // pure black on screen → unreadable in print. Switch the
+    // overlay to a light backdrop with dark text for print.
+    '  [data-annot-block="step"][data-step-layout="image-fill"] > [data-step-title],',
+    '  [data-annot-block="step"][data-step-layout="image-fill"] > [data-step-body] {',
+    "    background: rgba(255, 255, 255, 0.85);",
+    "    color: black;",
     "  }",
     '  [data-annot-block="heading"] {',
     "    break-after: avoid-page;",
