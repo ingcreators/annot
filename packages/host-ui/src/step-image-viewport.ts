@@ -53,8 +53,17 @@ export interface StepImageViewportController {
    *  button uses this to snap back to "show the entire image"
    *  even when the saved initial was a cropped sub-rect. */
   readonly intrinsic: () => StepImageViewportRect;
+  /** The "no-viewport saved" default rect — the largest rect
+   *  matching `targetAspect` that fits inside the intrinsic
+   *  bitmap, anchored at the top-left. Falls back to the
+   *  intrinsic when no target aspect is set. Used by the
+   *  shell's Clear button so the user sees the same default
+   *  view that a freshly-attached controller would show. */
+  readonly defaultRect: () => StepImageViewportRect;
   /** Reset to a supplied rect (or to the controller's initial
-   *  when no argument is passed). */
+   *  when no argument is passed). When `targetAspect` is set
+   *  the supplied rect is snapped to that aspect before
+   *  applying. */
   readonly reset: (rect?: StepImageViewportRect) => void;
   /** Zoom by a multiplicative factor (`factor < 1` zooms in,
    *  `> 1` zooms out), centred on the current viewBox centre.
@@ -90,6 +99,15 @@ export interface StepImageViewportOptions {
    *  synthetic `click` event so the doc shell's modal opener
    *  doesn't fire. Default 4. */
   readonly dragThresholdPx?: number;
+  /** Phase 7d-polish 2: lock the viewBox's aspect ratio to a
+   *  target (e.g. `16 / 9` to match the card slot's fixed-
+   *  aspect frame). When set, the initial rect is snapped to
+   *  this aspect, and every subsequent zoom keeps it.
+   *  Without this lock, pan/zoom on a non-16:9 saved viewport
+   *  would letterbox INSIDE the slot — different per card,
+   *  giving inconsistent image-starting positions across
+   *  step blocks that share the same source bitmap. */
+  readonly targetAspect?: number;
 }
 
 /** Parse `viewBox="x y w h"` into a rect. Returns `null` when
@@ -120,7 +138,6 @@ export function attachStepImageViewport(
 ): StepImageViewportController {
   const intrinsic = readIntrinsicSize(svg);
   const intrinsicVb = parseViewBox(svg) ?? { x: 0, y: 0, w: intrinsic.w, h: intrinsic.h };
-  const initial = options.initial ?? intrinsicVb;
   const minSize = options.minSize ?? 32;
   // Default cap: the larger of the two intrinsic dimensions —
   // generous enough that the user can always zoom out to the
@@ -129,9 +146,57 @@ export function attachStepImageViewport(
     options.maxSize ?? (Math.max(intrinsic.w, intrinsic.h) || Number.POSITIVE_INFINITY);
   const wheelStep = options.wheelStep ?? 1.1;
   const dragThreshold = options.dragThresholdPx ?? 4;
+  const targetAspect = options.targetAspect ?? null;
+
+  // Phase 7d-polish 2: when a `targetAspect` is set, the initial
+  // rect is snapped to it. If no initial was supplied, derive
+  // the largest target-aspect rect that fits inside the
+  // intrinsic bitmap, anchored at the top-left (so every step
+  // sharing the same source image gets an identical default
+  // view).
+  const rawInitial =
+    options.initial ??
+    (targetAspect !== null ? defaultRectForAspect(intrinsicVb, targetAspect) : intrinsicVb);
+  const initial = targetAspect !== null ? snapToAspect(rawInitial, targetAspect) : rawInitial;
 
   let state: StepImageViewportRect = clampPan(clampSize({ ...initial }));
   apply(state);
+
+  /** Phase 7d-polish 2 — compute the largest rect of the given
+   *  aspect that fits inside the supplied bitmap, anchored at
+   *  the bitmap's top-left. */
+  function defaultRectForAspect(
+    bitmap: StepImageViewportRect,
+    aspect: number,
+  ): StepImageViewportRect {
+    // Pick the dimension that's the binding constraint.
+    const widthFromHeight = bitmap.h * aspect;
+    const heightFromWidth = bitmap.w / aspect;
+    const w = Math.min(bitmap.w, widthFromHeight);
+    const h = w === bitmap.w ? heightFromWidth : bitmap.h;
+    return { x: bitmap.x, y: bitmap.y, w, h };
+  }
+
+  /** Phase 7d-polish 2 — adjust the rect to match a target
+   *  aspect ratio by SHRINKING the wider dimension. Centred
+   *  on the input rect's centre so the shift is symmetric. */
+  function snapToAspect(rect: StepImageViewportRect, aspect: number): StepImageViewportRect {
+    if (rect.w <= 0 || rect.h <= 0) return rect;
+    const currentAspect = rect.w / rect.h;
+    if (Math.abs(currentAspect - aspect) < 1e-6) return rect;
+    const cx = rect.x + rect.w / 2;
+    const cy = rect.y + rect.h / 2;
+    let w = rect.w;
+    let h = rect.h;
+    if (currentAspect > aspect) {
+      // Too wide — shrink width.
+      w = h * aspect;
+    } else {
+      // Too tall — shrink height.
+      h = w / aspect;
+    }
+    return { x: cx - w / 2, y: cy - h / 2, w, h };
+  }
 
   function apply(rect: StepImageViewportRect): void {
     svg.setAttribute("viewBox", `${rect.x} ${rect.y} ${rect.w} ${rect.h}`);
@@ -337,8 +402,12 @@ export function attachStepImageViewport(
   return {
     current: () => ({ ...state }),
     intrinsic: () => ({ ...intrinsicVb }),
+    defaultRect: () =>
+      targetAspect !== null ? defaultRectForAspect(intrinsicVb, targetAspect) : { ...intrinsicVb },
     reset: (rect) => {
-      state = clampPan(clampSize({ ...(rect ?? initial) }));
+      let next = rect ?? initial;
+      if (targetAspect !== null) next = snapToAspect(next, targetAspect);
+      state = clampPan(clampSize({ ...next }));
       apply(state);
     },
     zoomBy: (factor) => zoomByCenter(factor),

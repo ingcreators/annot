@@ -1924,7 +1924,13 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
     const initial = block.viewport
       ? { x: block.viewport.x, y: block.viewport.y, w: block.viewport.w, h: block.viewport.h }
       : undefined;
-    const ctrl = attachStepImageViewport(svg, { initial });
+    // Phase 7d-polish 2: lock the viewBox aspect to 16:9 (the
+    // card slot's CSS aspect-ratio). Without this, a non-16:9
+    // saved viewport — or a wheel-zoom that drifted away from
+    // 16:9 — letterboxes inside the slot, making the image's
+    // visible top edge differ per card and breaking visual
+    // alignment across a column of step blocks.
+    const ctrl = attachStepImageViewport(svg, { initial, targetAspect: 16 / 9 });
     this.#viewportControllers.set(blockId, { ctrl, svg });
   }
 
@@ -2653,7 +2659,13 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
   #resetStepViewport(block: StepBlock, index: number): void {
     if (!this.document) return;
     const ctrl = this.#viewportControllers.get(block.id)?.ctrl;
-    if (ctrl) ctrl.reset(ctrl.intrinsic());
+    // Phase 7d-polish 2: snap back to the "no viewport saved"
+    // default — the top-left-anchored 16:9 sub-rect inside the
+    // intrinsic bitmap. With targetAspect locked at 16:9 this
+    // matches what a freshly-attached controller (with no saved
+    // viewport) would show, so the user gets the same view as
+    // on first open.
+    if (ctrl) ctrl.reset(ctrl.defaultRect());
     this.#syncDomIntoDocument();
     const refreshed = this.document.blocks[index];
     if (refreshed?.kind !== "step") return;
