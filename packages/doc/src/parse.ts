@@ -27,6 +27,7 @@ import type {
   QuoteBlock,
   StepBlock,
   StepLayout,
+  StepViewport,
   TemplateMeta,
 } from "./types.js";
 import { ANNOT_DOC_VERSION } from "./types.js";
@@ -288,25 +289,46 @@ function parseStep(el: Element): StepBlock {
   const rawUrl = el.getAttribute("data-step-url");
   const rawLabel = el.getAttribute("data-step-url-label");
   const link = parseStepLink(rawUrl, rawLabel);
-  const block: StepBlock = link
-    ? {
-        kind: "step",
-        id,
-        svg,
-        title: titleEl.innerHTML,
-        body: bodyEl.innerHTML,
-        layout,
-        link,
-      }
-    : {
-        kind: "step",
-        id,
-        svg,
-        title: titleEl.innerHTML,
-        body: bodyEl.innerHTML,
-        layout,
-      };
-  return block;
+  // Phase 7d — image viewport. `data-step-viewport="x,y,w,h"`
+  // (four numbers, comma-separated). Malformed values silently
+  // drop the viewport so the saved file stays renderable.
+  const rawViewport = el.getAttribute("data-step-viewport");
+  const viewport = parseStepViewport(rawViewport);
+  const base: StepBlock = {
+    kind: "step",
+    id,
+    svg,
+    title: titleEl.innerHTML,
+    body: bodyEl.innerHTML,
+    layout,
+  };
+  return {
+    ...base,
+    ...(link !== undefined ? { link } : {}),
+    ...(viewport !== undefined ? { viewport } : {}),
+  };
+}
+
+/** Phase 7d — parse `data-step-viewport="x,y,w,h"` into a
+ *  `StepViewport`. Returns `undefined` when the attribute is
+ *  missing, malformed (not four comma-separated finite numbers),
+ *  or carries a non-positive `w` / `h`. */
+function parseStepViewport(raw: string | null): StepViewport | undefined {
+  if (raw === null) return undefined;
+  const parts = raw.split(",").map((s) => Number.parseFloat(s.trim()));
+  if (parts.length !== 4) return undefined;
+  const [x, y, w, h] = parts as [number, number, number, number];
+  if (
+    !Number.isFinite(x) ||
+    !Number.isFinite(y) ||
+    !Number.isFinite(w) ||
+    !Number.isFinite(h) ||
+    w <= 0 ||
+    h <= 0
+  ) {
+    return undefined;
+  }
+  return { x, y, w, h };
 }
 
 /** Phase 7b — validate + normalise the `data-step-url` /

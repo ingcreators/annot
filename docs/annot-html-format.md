@@ -367,6 +367,16 @@ npm run dev</code></pre>
 - `data-step-url-label` (Phase 7b) is an OPTIONAL friendly label
   shown on the chip. Absent → the chip displays the URL string
   itself.
+- `data-step-viewport` (Phase 7d) is an OPTIONAL initial-view
+  rectangle, expressed as four comma-separated numbers `x,y,w,h`
+  in SVG-native coordinates. The editor renders the saved rect
+  as the initial pan/zoom state of the screenshot; the user can
+  interactively pan / zoom from there (state is ephemeral and
+  not persisted unless they click "Update view"). The PPTX
+  export emits an `<a:srcRect>` on the slide picture so the
+  exported deck shows the same cropped region. Malformed values
+  (wrong field count, non-finite numbers, non-positive `w` / `h`)
+  drop the attribute silently — the document still renders.
 - `data-annot-image-id` format: `img-` prefix + 8 to 32 chars from
   `[a-zA-Z0-9_-]`, generated via `newIdB58` in
   `@ingcreators/annot-core/utils`. Same constraint as the
@@ -959,6 +969,20 @@ on-disk shape of v1 files.
     + title + description + author + step count.
   - The doc-settings dialog gains "Header description" and
     "Header icon" fields so users can opt in interactively.
+- **2026-05 — Image viewport on `step` block** (Phase 7d of
+  [`docs/plans/card-procedure-template.md`](./plans/card-procedure-template.md)).
+  Additive under v1; pre-release. Adds:
+  - New OPTIONAL `data-step-viewport="x,y,w,h"` attribute on the
+    `<section>` carrying the initial pan/zoom rect in SVG-native
+    coordinates.
+  - Editor: interactive wheel-zoom + drag-pan in both read and
+    edit modes; a "Save view" toolbar pinned to the image's
+    top-left captures the current pan/zoom into the model.
+  - PPTX: the slide picture emits `<a:srcRect>` cropping the
+    bitmap to the viewport portion, and the image group's
+    `chOff` / `chExt` map the viewport sub-rect to the slide
+    image region so annotations inside the viewport remain
+    aligned.
 
 ### Version 0 (pre-versioning)
 

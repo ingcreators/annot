@@ -540,6 +540,65 @@ export const DocHeaderDark: Story = {
 };
 
 // ---------------------------------------------------------------------------
+// Phase 7d of docs/plans/card-procedure-template.md — image
+// viewport (pan / zoom + initial-view crop). The placeholder SVG
+// has a viewBox of 0..400, 0..240; the viewport rect crops to a
+// sub-rect so the rendered card shows the zoomed-in view.
+// Wheel / drag interactivity is wired live — try it in the
+// rendered story.
+// ---------------------------------------------------------------------------
+
+function makeViewportDoc(
+  options: { viewport?: { x: number; y: number; w: number; h: number }; editing?: boolean } = {},
+): AnnotDocument {
+  return {
+    version: 1,
+    lang: "en",
+    title: "Image viewport demo",
+    meta: { title: "Image viewport demo" },
+    styleBlock: null,
+    blocks: [
+      {
+        kind: "step",
+        id: "img-step-vp-01",
+        svg: STEP_PLACEHOLDER_SVG,
+        title: "Zoom into a button",
+        body: "The card shows only the saved viewport. Wheel to zoom, drag to pan; click Save view to capture.",
+        layout: "image-top",
+        ...(options.viewport ? { viewport: options.viewport } : {}),
+      },
+    ],
+  };
+}
+
+export const ViewportCropped: Story = {
+  name: "Viewport / cropped initial view",
+  args: {
+    document: makeViewportDoc({ viewport: { x: 80, y: 50, w: 160, h: 100 } }),
+    showToc: false,
+    editing: false,
+  },
+};
+
+export const ViewportCroppedEditing: Story = {
+  name: "Viewport / cropped (editing)",
+  args: {
+    document: makeViewportDoc({ viewport: { x: 80, y: 50, w: 160, h: 100 } }),
+    showToc: false,
+    editing: true,
+  },
+};
+
+export const ViewportFullEditing: Story = {
+  name: "Viewport / full image (editing — Save view to create)",
+  args: {
+    document: makeViewportDoc({}),
+    showToc: false,
+    editing: true,
+  },
+};
+
+// ---------------------------------------------------------------------------
 // Phase 5 of docs/plans/card-procedure-template.md — bundled
 // `card-procedure` starter rendered in light + dark themes. The
 // starter ships in @ingcreators/annot-doc/BUILTIN_TEMPLATES.

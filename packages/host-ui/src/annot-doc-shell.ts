@@ -63,6 +63,10 @@ import {
   type TemplateResult,
   unsafeHTML,
 } from "./lit.js";
+import {
+  attachStepImageViewport,
+  type StepImageViewportController,
+} from "./step-image-viewport.js";
 
 /** CSS for the shell chrome. Concatenated with
  *  `buildStyleBlock(doc)` at render time. */
@@ -260,6 +264,53 @@ const SHELL_CSS = `
   line-height: 1.2;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
   cursor: pointer;
+}
+/* Phase 7d — viewport toolbar pinned to the top-left corner of
+   the step image area. Same hover/opacity treatment as the
+   layout switcher; flips to the LEFT side so the two
+   affordances don't overlap. */
+.annot-doc-step-viewport-controls {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  z-index: 2;
+  display: flex;
+  gap: 4px;
+  opacity: 0.4;
+  transition: opacity 0.12s ease-in;
+}
+[data-annot-block="step"]:hover .annot-doc-step-viewport-controls,
+[data-annot-block="step"]:focus-within .annot-doc-step-viewport-controls {
+  opacity: 1;
+}
+@media (hover: none) {
+  .annot-doc-step-viewport-controls { opacity: 1; }
+}
+.annot-doc-step-viewport-controls button {
+  background: var(--annot-card-bg, #ffffff);
+  color: var(--annot-doc-fg);
+  border: 1px solid var(--annot-doc-muted);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 0.8rem;
+  line-height: 1.2;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  cursor: pointer;
+  font: inherit;
+}
+.annot-doc-step-viewport-controls button:hover,
+.annot-doc-step-viewport-controls button:focus-visible {
+  border-color: var(--annot-doc-accent);
+  color: var(--annot-doc-accent);
+  outline: none;
+}
+/* The pan/zoom interaction surface — keep the SVG itself
+   clickable for grab+wheel but suppress text-select inside
+   it (otherwise drag triggers a text selection on the
+   ancestor article). */
+[data-annot-block="step"] .annot-doc-image-svg-slot svg {
+  user-select: none;
+  -webkit-user-select: none;
 }
 .annot-doc-block-toolbar .block-action-handle {
   cursor: grab;
@@ -609,6 +660,11 @@ export class AnnotDocShellElement extends LitElement {
    *  construction cost. */
   #imageSlotObserver: IntersectionObserver | null = null;
   #observedImageSlots: WeakSet<HTMLElement> = new WeakSet();
+  /** Phase 7d — active pan/zoom controllers per step block image
+   *  slot. Keyed by block id (the `data-annot-image-id` on the
+   *  enclosing `<section>`). Disposed when the slot is removed
+   *  from the article or when the shell unmounts. */
+  #viewportControllers: Map<string, StepImageViewportController> = new Map();
 
   #history: DocumentHistory | null = null;
   /** Set briefly while we're applying a mutation internally
@@ -679,6 +735,9 @@ export class AnnotDocShellElement extends LitElement {
     // back to the gallery).
     this.#imageSlotObserver?.disconnect();
     this.#imageSlotObserver = null;
+    // Phase 7d — release viewport-controller event listeners.
+    for (const ctrl of this.#viewportControllers.values()) ctrl.dispose();
+    this.#viewportControllers.clear();
   }
 
   protected override willUpdate(changed: PropertyValues): void {
@@ -698,6 +757,9 @@ export class AnnotDocShellElement extends LitElement {
     // sweep first; the rest of the body is an editing-mode
     // hot-loop.
     this.#materialiseImageSlots();
+    // Phase 7d — dispose viewport controllers whose block is
+    // no longer in the document (deletion / reorder paths).
+    this.#sweepStaleViewportControllers();
 
     // Imperatively populate contentEditable bodies for heading +
     // paragraph blocks. See `renderHeading`'s comment for why we
@@ -1798,6 +1860,59 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
     );
     for (const slot of Array.from(slots)) {
       materialiseImageSlot(slot);
+      this.#attachViewportIfStepSlot(slot);
+    }
+  }
+
+  /** Phase 7d — attach the pan/zoom controller to a freshly-
+   *  materialised image slot when its enclosing block is a
+   *  step block. No-op for `<figure>` image blocks (which have
+   *  their own modal-driven editing flow).
+   *
+   *  Idempotent: a slot whose controller is already attached
+   *  (looked up by the enclosing section's `data-annot-image-
+   *  id`) is left untouched so re-renders don't tear down a
+   *  user's in-progress pan / zoom state.
+   */
+  #attachViewportIfStepSlot(slot: HTMLElement): void {
+    const section = slot.closest('[data-annot-block="step"]') as HTMLElement | null;
+    if (!section) return;
+    const blockId = section.getAttribute("data-annot-image-id");
+    if (!blockId) return;
+    // Already attached? Keep the existing controller — its
+    // internal viewBox state is the user's current pan / zoom.
+    if (this.#viewportControllers.has(blockId)) return;
+    const svg = slot.querySelector("svg") as SVGSVGElement | null;
+    if (!svg) return;
+    // Look up the matching step block in the document model so
+    // we can apply its saved `viewport` as the initial display
+    // state.
+    const block = this.document?.blocks.find((b) => b.kind === "step" && b.id === blockId);
+    if (!block || block.kind !== "step") return;
+    const initial = block.viewport
+      ? { x: block.viewport.x, y: block.viewport.y, w: block.viewport.w, h: block.viewport.h }
+      : undefined;
+    const ctrl = attachStepImageViewport(svg, { initial });
+    this.#viewportControllers.set(blockId, ctrl);
+  }
+
+  /** Phase 7d — drop viewport controllers whose block has left
+   *  the document (deletion, kind change, etc.). Called from
+   *  `updated()` so stale entries don't accumulate as the user
+   *  edits. The pan-zoom listeners were attached to the SVG
+   *  element that's already been removed from the DOM by Lit;
+   *  disposing here releases the closure references so they're
+   *  garbage-collected. */
+  #sweepStaleViewportControllers(): void {
+    const liveStepIds = new Set<string>();
+    for (const b of this.document?.blocks ?? []) {
+      if (b.kind === "step") liveStepIds.add(b.id);
+    }
+    for (const [blockId, ctrl] of this.#viewportControllers) {
+      if (!liveStepIds.has(blockId)) {
+        ctrl.dispose();
+        this.#viewportControllers.delete(blockId);
+      }
     }
   }
 
@@ -1825,6 +1940,7 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
     if (typeof IntersectionObserver === "undefined") {
       for (const slot of Array.from(slots)) {
         materialiseImageSlot(slot);
+        this.#attachViewportIfStepSlot(slot);
       }
       return;
     }
@@ -1839,6 +1955,7 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
             if (!entry.isIntersecting) continue;
             const target = entry.target as HTMLElement;
             materialiseImageSlot(target);
+            this.#attachViewportIfStepSlot(target);
             observer.unobserve(target);
             this.#observedImageSlots.delete(target);
           }
@@ -2389,6 +2506,20 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
     // `<input>` whose focus management we don't want overridden.
     if (target?.closest("[data-step-link]")) return;
     if (target?.closest(".annot-doc-step-link-editor")) return;
+    // Phase 7d — viewport toolbar buttons (Save / Reset). Handle
+    // here and short-circuit so the click doesn't open the image
+    // modal.
+    const viewportBtn = target?.closest("[data-step-viewport-action]") as HTMLElement | null;
+    if (viewportBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (block.kind === "step") {
+        const action = viewportBtn.getAttribute("data-step-viewport-action");
+        if (action === "save") this.#saveStepViewport(block, index);
+        else if (action === "reset") this.#resetStepViewport(block, index);
+      }
+      return;
+    }
     if (block.kind === "step") {
       // Phase 7a — image-less step blocks have no image slot to
       // click on. Defensive guard against a stray click anywhere
@@ -2399,6 +2530,56 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
       return;
     }
     void this.#openImageEditor(block, index);
+  }
+
+  /** Phase 7d — capture the current pan/zoom state from the
+   *  block's image slot and write it into `block.viewport`.
+   *  Pushes a history snapshot so the user can Cmd-Z if they
+   *  saved by accident. */
+  #saveStepViewport(block: StepBlock, index: number): void {
+    if (!this.document) return;
+    const ctrl = this.#viewportControllers.get(block.id);
+    if (!ctrl) return;
+    const current = ctrl.current();
+    // Skip when the saved viewport is already equal to the
+    // current state (avoid a no-op history entry).
+    const existing = block.viewport;
+    if (
+      existing &&
+      existing.x === current.x &&
+      existing.y === current.y &&
+      existing.w === current.w &&
+      existing.h === current.h
+    ) {
+      return;
+    }
+    this.#syncDomIntoDocument();
+    const refreshed = this.document.blocks[index];
+    if (refreshed?.kind !== "step") return;
+    const blocks = [...this.document.blocks];
+    blocks[index] = { ...refreshed, viewport: current };
+    const newDoc: AnnotDocument = { ...this.document, blocks };
+    this.#history?.push(newDoc);
+    this.#applyInternal(newDoc, "block-action");
+  }
+
+  /** Phase 7d — clear the saved viewport AND reset the live
+   *  controller back to the full image (the SVG's intrinsic
+   *  viewBox, not the controller's saved initial). */
+  #resetStepViewport(block: StepBlock, index: number): void {
+    if (!this.document) return;
+    const ctrl = this.#viewportControllers.get(block.id);
+    if (ctrl) ctrl.reset(ctrl.intrinsic());
+    this.#syncDomIntoDocument();
+    const refreshed = this.document.blocks[index];
+    if (refreshed?.kind !== "step") return;
+    if (refreshed.viewport === undefined) return;
+    const blocks = [...this.document.blocks];
+    const { viewport: _omit, ...rest } = refreshed;
+    blocks[index] = rest;
+    const newDoc: AnnotDocument = { ...this.document, blocks };
+    this.#history?.push(newDoc);
+    this.#applyInternal(newDoc, "block-action");
   }
 
   async #openImageEditor(block: ImageBlock, index: number): Promise<void> {
@@ -2770,6 +2951,7 @@ function renderStep(block: StepBlock, editable: boolean): TemplateResult {
         data-step-layout=${block.layout}
       >
         ${imageSlot}
+        ${renderViewportToolbar(block)}
         <h3 data-step-title contenteditable="true"></h3>
         <p data-step-body contenteditable="true"></p>
         ${linkChip}
@@ -2811,6 +2993,48 @@ function renderStep(block: StepBlock, editable: boolean): TemplateResult {
       <p data-step-body>${unsafeHTML(block.body)}</p>
       ${linkChip}
     </section>
+  `;
+}
+
+/** Phase 7d — editing-mode viewport toolbar pinned to the
+ *  top-right corner of the step's image area. Carries:
+ *
+ *    - "Save as initial view" — captures the SVG's current
+ *      viewBox state (as set by the pan / zoom controller)
+ *      into `block.viewport`.
+ *    - "Reset" — only shown when the block already carries a
+ *      saved viewport; clears the field, reverting to "full
+ *      image" as the initial view.
+ *
+ *  The buttons fire `click` events with `data-step-viewport-
+ *  action` markers; the shell's `@click` delegate routes them
+ *  through `#onStepViewportAction`. */
+function renderViewportToolbar(block: StepBlock): TemplateResult {
+  return html`
+    <div
+      data-step-viewport-controls
+      class="annot-doc-step-viewport-controls"
+      aria-label="Image viewport controls"
+    >
+      <button
+        type="button"
+        data-step-viewport-action="save"
+        title="Save current view as initial"
+      >
+        ${block.viewport ? "Update view" : "Save view"}
+      </button>
+      ${
+        block.viewport
+          ? html`<button
+              type="button"
+              data-step-viewport-action="reset"
+              title="Reset to full image"
+            >
+              Reset
+            </button>`
+          : nothing
+      }
+    </div>
   `;
 }
 
