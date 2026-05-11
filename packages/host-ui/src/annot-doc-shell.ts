@@ -728,6 +728,23 @@ export class AnnotDocShellElement extends LitElement {
         const next = block.caption ?? "";
         if (figcaption.innerHTML !== next) figcaption.innerHTML = next;
       }
+      // Phase 3 of card-procedure-template — step blocks populate
+      // their title + body contentEditable slots through the same
+      // focus-aware update strategy.
+      if (block.kind === "step") {
+        const titleEl = blockEl.querySelector(
+          "[data-step-title][contenteditable='true']",
+        ) as HTMLElement | null;
+        const bodyEl = blockEl.querySelector(
+          "[data-step-body][contenteditable='true']",
+        ) as HTMLElement | null;
+        if (titleEl && document.activeElement !== titleEl) {
+          if (titleEl.innerHTML !== block.title) titleEl.innerHTML = block.title;
+        }
+        if (bodyEl && document.activeElement !== bodyEl) {
+          if (bodyEl.innerHTML !== block.body) bodyEl.innerHTML = block.body;
+        }
+      }
     });
   }
 
@@ -993,6 +1010,13 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
       void this.#promptImageFileAndReplace(index);
       return;
     }
+    if (item.kind === "step") {
+      // Phase 3 of card-procedure-template — same picker-driven
+      // path as image, but the resulting block is a `StepBlock`
+      // (with empty title + body + the doc's default layout).
+      void this.#promptImageFileAndReplaceWithStep(index);
+      return;
+    }
     const newBlock = createBlockFromMenuItem(item);
     const blocks = [...this.document.blocks];
     blocks[index] = newBlock;
@@ -1018,6 +1042,12 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
     const safeAt = Math.max(0, Math.min(this.document.blocks.length, insertAt));
     if (item.kind === "image") {
       void this.#promptImageFileAndInsertAt(safeAt);
+      return;
+    }
+    if (item.kind === "step") {
+      // Phase 3 of card-procedure-template — picker-driven step
+      // insertion mirrors the image entry.
+      void this.#promptImageFileAndInsertStepAt(safeAt);
       return;
     }
     const newBlock = createBlockFromMenuItem(item);
@@ -1266,6 +1296,100 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
    *  must round-trip back through the editor modal with every
    *  shape selectable, otherwise the user has effectively
    *  flattened their annotations on import. */
+  /** Phase 3 of card-procedure-template — picker entry point
+   *  matching `#promptImageFileAndInsertAt` for step blocks.
+   *  Splices a fresh step block at `insertAt`. */
+  async #promptImageFileAndInsertStepAt(insertAt: number): Promise<void> {
+    const file = await pickImageFile();
+    if (!file) return;
+    await this.#insertStepFromFile(file, { insertAtIndex: insertAt });
+  }
+
+  /** Phase 3 of card-procedure-template — picker entry point
+   *  matching `#promptImageFileAndReplace` for the slash-menu's
+   *  Step entry. Replaces the trigger block (the empty paragraph
+   *  the slash menu opened in) with a fresh step block. */
+  async #promptImageFileAndReplaceWithStep(index: number): Promise<void> {
+    const file = await pickImageFile();
+    if (!file) return;
+    await this.#insertStepFromFile(file, { replaceIndex: index });
+  }
+
+  /** Phase 3 of card-procedure-template — shared step-from-file
+   *  pipeline. Mirrors `#insertImageFromFile`'s shape: tries the
+   *  XMP-extracted-annotations path first (so dropping an
+   *  `.annot.png` produces an editable step block), falls back
+   *  to the bitmap-only path otherwise. The resulting step block
+   *  carries empty `title` / `body` strings and the document's
+   *  `meta.cardLayout.defaultStepLayout` (or `image-top` when
+   *  unset). */
+  async #insertStepFromFile(
+    file: File,
+    opts: { replaceIndex?: number; insertAtIndex?: number } = {},
+  ): Promise<void> {
+    if (!this.document) return;
+    const layout = this.document.meta.cardLayout?.defaultStepLayout ?? "image-top";
+    const editableMeta = await tryReadAnnotImageBytes(file);
+    let svg: string;
+    let id: string;
+    if (editableMeta) {
+      // Reuse the image-block creation helper to canonicalise the
+      // SVG payload + mint the id, then promote the result to a
+      // step shape with the chosen layout + empty text slots.
+      const seed = createImageBlockFromAnnotMeta(editableMeta);
+      svg = seed.svg;
+      id = seed.id;
+    } else {
+      let dataUrl: string;
+      try {
+        dataUrl = await fileToDataUrl(file);
+      } catch (err) {
+        this.dispatchEvent(
+          new CustomEvent("doc-error", {
+            bubbles: true,
+            composed: true,
+            detail: { reason: "file-read", error: err },
+          }),
+        );
+        return;
+      }
+      let dimensions: { width: number; height: number };
+      try {
+        dimensions = await getImageDimensions(dataUrl);
+      } catch (err) {
+        this.dispatchEvent(
+          new CustomEvent("doc-error", {
+            bubbles: true,
+            composed: true,
+            detail: { reason: "image-decode", error: err },
+          }),
+        );
+        return;
+      }
+      const seed = createImageBlockFromDataUrl(dataUrl, dimensions.width, dimensions.height);
+      svg = seed.svg;
+      id = seed.id;
+    }
+    if (!this.document) return;
+    const stepBlock: StepBlock = { kind: "step", id, svg, title: "", body: "", layout };
+    const blocks = [...this.document.blocks];
+    if (
+      opts.replaceIndex !== undefined &&
+      opts.replaceIndex >= 0 &&
+      opts.replaceIndex < blocks.length
+    ) {
+      blocks[opts.replaceIndex] = stepBlock;
+    } else if (opts.insertAtIndex !== undefined) {
+      const at = Math.max(0, Math.min(blocks.length, opts.insertAtIndex));
+      blocks.splice(at, 0, stepBlock);
+    } else {
+      blocks.push(stepBlock);
+    }
+    const newDoc: AnnotDocument = { ...this.document, blocks };
+    this.#history?.push(newDoc);
+    this.#applyInternal(newDoc, "block-action");
+  }
+
   async #insertImageFromFile(
     file: File,
     opts: { replaceIndex?: number; insertAtIndex?: number } = {},
@@ -2016,7 +2140,7 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
   #onBlockHostClick(e: MouseEvent, index: number): void {
     if (!this.document) return;
     const block = this.document.blocks[index];
-    if (block?.kind !== "image") return;
+    if (block?.kind !== "image" && block?.kind !== "step") return;
     const target = e.target as HTMLElement | null;
     // Toolbar lives inside the same host wrapper; clicks on the
     // toolbar buttons must not bubble up into "edit image".
@@ -2024,6 +2148,19 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
     // Phase 5 — figcaption is contentEditable; clicks there
     // (selecting / placing the cursor) must not open the modal.
     if (target?.closest("figcaption[contenteditable='true']")) return;
+    // Phase 3 of card-procedure-template — step title + body are
+    // contentEditable in editing mode; clicks there must not
+    // open the image modal either.
+    if (
+      target?.closest("[data-step-title][contenteditable='true']") ||
+      target?.closest("[data-step-body][contenteditable='true']")
+    ) {
+      return;
+    }
+    if (block.kind === "step") {
+      void this.#openStepImageEditor(block, index);
+      return;
+    }
     void this.#openImageEditor(block, index);
   }
 
@@ -2049,6 +2186,36 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
     const blocks = [...this.document.blocks];
     const target = blocks[index];
     if (target?.kind !== "image") return;
+    blocks[index] = { ...target, svg: result.svg };
+    const newDoc: AnnotDocument = { ...this.document, blocks };
+    this.#history?.push(newDoc);
+    this.#applyInternal(newDoc, "block-action");
+  }
+
+  /** Phase 3 of card-procedure-template — step block image edit.
+   *  Mirrors `#openImageEditor`; the only difference is the block
+   *  shape (StepBlock vs ImageBlock) on save. */
+  async #openStepImageEditor(block: StepBlock, index: number): Promise<void> {
+    if (!this.document) return;
+    // Step blocks count toward the same "image N of M" tally as
+    // standalone image blocks — both kinds carry editable
+    // `<svg data-annot-version>` content.
+    const imageBearing = this.document.blocks
+      .map((b, i) => ({ block: b, i }))
+      .filter((entry) => entry.block.kind === "image" || entry.block.kind === "step");
+    const positionInImages = imageBearing.findIndex((entry) => entry.i === index) + 1;
+    const totalImages = imageBearing.length;
+    const result = await AnnotDocImageEditorModalElement.openFor({
+      id: block.id,
+      svg: block.svg,
+      positionInImages,
+      totalImages,
+    });
+    if (result.kind !== "save") return;
+    if (!this.document) return;
+    const blocks = [...this.document.blocks];
+    const target = blocks[index];
+    if (target?.kind !== "step") return;
     blocks[index] = { ...target, svg: result.svg };
     const newDoc: AnnotDocument = { ...this.document, blocks };
     this.#history?.push(newDoc);
@@ -2091,7 +2258,7 @@ function renderBlockBody(
     case "image":
       return renderImage(block, editable);
     case "step":
-      return renderStep(block);
+      return renderStep(block, editable);
     case "unknown":
       return html`${unsafeHTML(block.rawHtml)}`;
   }
@@ -2281,17 +2448,47 @@ function renderImage(block: ImageBlock, editable = false): TemplateResult {
   `;
 }
 
-/** Phase 1 of `docs/plans/card-procedure-template.md` — minimal
- *  step-block renderer kept in sync with the parser / serializer
- *  shape. No card chrome, no editing affordances — those land in
- *  Phase 3 with the dedicated `<annot-step-block>` Lit element.
- *  Reuses the image-block's SVG slot machinery so step images get
- *  the same IntersectionObserver-driven lazy materialisation. */
-function renderStep(block: StepBlock): TemplateResult {
+/** Phase 1 + 3 of `docs/plans/card-procedure-template.md` —
+ *  step-block renderer. Phase 1 shipped the read-only minimal
+ *  render; Phase 3 layers in the editing affordances:
+ *
+ *    - `<h3 data-step-title>` and `<p data-step-body>` become
+ *      `contenteditable="true"` in editing mode; the shell's
+ *      `#syncDomIntoDocument` + `#populateContentEditables`
+ *      pipeline keeps the model in sync with the DOM.
+ *    - The SVG slot keeps its lazy-materialisation machinery
+ *      shared with image blocks; clicking it opens the same
+ *      `<annot-doc-image-editor-modal>` the image block uses.
+ *
+ *  Card chrome + per-layout grid live in `injectDocumentStyles`
+ *  (Phase 2); this function only emits the bare HTML structure. */
+function renderStep(block: StepBlock, editable: boolean): TemplateResult {
   const aspect = extractSvgAspectRatio(block.svg);
   const slotStyle = aspect
     ? `aspect-ratio: ${aspect}; background: var(--annot-doc-code-bg, #f3f4f6);`
     : "";
+  if (editable) {
+    // Editing mode: empty contentEditable elements. The bodies
+    // are populated imperatively in `updated()` (same strategy
+    // heading / paragraph use) so the cursor / IME state
+    // survives re-renders. The empty elements are caret targets
+    // immediately.
+    return html`
+      <section
+        data-annot-block="step"
+        data-annot-image-id=${block.id}
+        data-step-layout=${block.layout}
+      >
+        <div
+          class="annot-doc-image-svg-slot"
+          data-annot-image-svg=${block.svg}
+          style=${slotStyle}
+        ></div>
+        <h3 data-step-title contenteditable="true"></h3>
+        <p data-step-body contenteditable="true"></p>
+      </section>
+    `;
+  }
   return html`
     <section
       data-annot-block="step"
@@ -2425,6 +2622,20 @@ function syncBlockFromDom(wrapper: HTMLElement, block: Block): Block {
     if (html === block.caption) return block;
     return { ...block, caption: html };
   }
+  // Phase 3 of card-procedure-template — read step title + body
+  // back from their contentEditable slots.
+  if (block.kind === "step") {
+    const titleEl = blockEl.querySelector(
+      "[data-step-title][contenteditable='true']",
+    ) as HTMLElement | null;
+    const bodyEl = blockEl.querySelector(
+      "[data-step-body][contenteditable='true']",
+    ) as HTMLElement | null;
+    const nextTitle = titleEl ? titleEl.innerHTML : block.title;
+    const nextBody = bodyEl ? bodyEl.innerHTML : block.body;
+    if (nextTitle === block.title && nextBody === block.body) return block;
+    return { ...block, title: nextTitle, body: nextBody };
+  }
   return block;
 }
 
@@ -2460,6 +2671,11 @@ function createBlockFromMenuItem(item: BlockMenuItem): Block {
       // through the file picker instead. If we somehow get here
       // (e.g. test path bypassing the handler), fall back to an
       // empty paragraph so the document remains valid.
+      return { kind: "paragraph", inlineHtml: "" };
+    case "step":
+      // Phase 3 of card-procedure-template — same defensive
+      // fallback as `image`. Real step insertion routes through
+      // the file picker so the resulting block has a usable SVG.
       return { kind: "paragraph", inlineHtml: "" };
   }
 }

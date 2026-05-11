@@ -448,6 +448,18 @@ function stepBlockRules(): string {
  * Non-step children get `grid-column: 1 / -1` so headings,
  * paragraphs, callouts etc. continue to span the full content
  * width — only the step blocks pack into the grid columns.
+ *
+ * Two structural shapes have to be handled:
+ *
+ *   - Read-only render: blocks are direct children of `<article>`,
+ *     so `article > [data-annot-block="step"]` packs into the
+ *     grid, everything else gets `grid-column: 1 / -1`.
+ *   - Editor render: the shell wraps each block in a
+ *     `.annot-doc-block-host` div (with `<annot-doc-insert-bar>`s
+ *     interleaved). The step block is then a grandchild. We use
+ *     `:has(> [data-annot-block="step"])` to find the wrapper
+ *     that holds a step block so it packs into the grid; every
+ *     other direct article child spans the full row.
  */
 function cardLayoutRules(cardLayout: CardLayoutMeta | undefined): string {
   if (!cardLayout) return "";
@@ -464,8 +476,22 @@ function cardLayoutRules(cardLayout: CardLayoutMeta | undefined): string {
     "  gap: var(--annot-card-gap);",
     "  align-items: start;",
     "}",
-    'article[data-annot-doc] > :not([data-annot-block="step"]) {',
+    // Default: every direct child spans the full row. This covers
+    // headings / paragraphs / callouts / insert-bars / wrappers
+    // around non-step blocks. The next two rules carve out the
+    // step exceptions.
+    "article[data-annot-doc] > * {",
     "  grid-column: 1 / -1;",
+    "}",
+    // Read-only render path — step blocks are direct children.
+    'article[data-annot-doc] > [data-annot-block="step"] {',
+    "  grid-column: auto;",
+    "}",
+    // Editor render path — step blocks are grandchildren wrapped
+    // by `.annot-doc-block-host`. The `:has()` selector reaches
+    // through one level to identify the right wrapper.
+    'article[data-annot-doc] > :has(> [data-annot-block="step"]) {',
+    "  grid-column: auto;",
     "}",
   ].join("\n");
 }
