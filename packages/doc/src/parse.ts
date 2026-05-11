@@ -16,6 +16,7 @@ import type {
   CalloutBlock,
   CardLayoutMeta,
   CodeBlock,
+  DocHeaderMeta,
   DocMeta,
   HeadingBlock,
   ImageBlock,
@@ -109,11 +110,16 @@ export function parseDocument(html: string, opts?: ParseOptions): AnnotDocument 
   // Blocks. The standalone-view TOC (`<nav data-annot-toc>`) is a
   // serializer-generated artifact — skipped on parse so the model
   // never round-trips through stale TOC bytes; the next save
-  // regenerates it from the heading list.
+  // regenerates it from the heading list. Phase 7c: the Scribe-
+  // style document header (`<section data-annot-doc-header>`)
+  // follows the same regenerated-on-save pattern — its content
+  // is sourced from `meta.header` + `meta.title` + `meta.author`
+  // + the step block walk.
   const blocks: Block[] = [];
   for (const child of Array.from(article.children)) {
     const childEl = child as Element;
     if (childEl.hasAttribute("data-annot-toc")) continue;
+    if (childEl.hasAttribute("data-annot-doc-header")) continue;
     blocks.push(parseBlock(childEl));
   }
 
@@ -425,6 +431,7 @@ function parseDocMeta(jsonText: string, headTitle: string): DocMeta {
   const imageMeta = parseImageMetaMap(obj.imageMeta);
   const numbering = parseNumberingMeta(obj.numbering);
   const cardLayout = parseCardLayoutMeta(obj.cardLayout);
+  const header = parseDocHeaderMeta(obj.header);
   const meta: DocMeta = { title };
   if (author !== undefined) (meta as { author?: string }).author = author;
   if (theme !== undefined) (meta as { theme?: typeof theme }).theme = theme;
@@ -435,7 +442,29 @@ function parseDocMeta(jsonText: string, headTitle: string): DocMeta {
   }
   if (numbering !== undefined) (meta as { numbering?: NumberingMeta }).numbering = numbering;
   if (cardLayout !== undefined) (meta as { cardLayout?: CardLayoutMeta }).cardLayout = cardLayout;
+  if (header !== undefined) (meta as { header?: DocHeaderMeta }).header = header;
   return meta;
+}
+
+/** Phase 7c — parse the `header` sub-object on the JSON sidecar.
+ *  Accepts an object with optional `icon` (data: URL string) +
+ *  `description` (plain text string). Empty / all-fields-absent
+ *  object returns `undefined` so a default-empty header doesn't
+ *  litter the sidecar after a round-trip. */
+function parseDocHeaderMeta(v: unknown): DocHeaderMeta | undefined {
+  if (v === null || typeof v !== "object" || Array.isArray(v)) return undefined;
+  const o = v as Record<string, unknown>;
+  const out: DocHeaderMeta = {};
+  let hasField = false;
+  if (typeof o.icon === "string" && o.icon.length > 0) {
+    (out as { icon?: string }).icon = o.icon;
+    hasField = true;
+  }
+  if (typeof o.description === "string" && o.description.length > 0) {
+    (out as { description?: string }).description = o.description;
+    hasField = true;
+  }
+  return hasField ? out : undefined;
 }
 
 function isTheme(v: unknown): v is "light" | "dark" | "auto" {

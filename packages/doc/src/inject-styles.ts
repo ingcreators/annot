@@ -109,6 +109,7 @@ export function buildStyleBlock(doc: AnnotDocument): string {
   sections.push(stepBlockRules());
   sections.push(inlineRules());
   sections.push(tocRules());
+  sections.push(docHeaderRules());
   // Phase 13 — auto-numbering opt-in (`meta.numbering`).
   // Emits CSS counters that reset on the article element and
   // increment on each matching block. Skipped entirely when
@@ -753,6 +754,80 @@ function tocRules(): string {
     "nav[data-annot-toc] a:focus {",
     "  color: var(--annot-doc-accent);",
     "  text-decoration: underline;",
+    "}",
+  ].join("\n");
+}
+
+/**
+ * Phase 7c — Scribe-style document header. The
+ * `<section data-annot-doc-header>` chrome only appears in
+ * serializer output (the parser drops it on read), so these
+ * rules style the standalone HTML view + editor preview
+ * exclusively.
+ *
+ * Layout: 2-column grid (icon | content) when an icon is set;
+ * single-column (content only) when not. Title (h1) suppresses
+ * the body's first heading rendering only when the title text
+ * matches — we don't try to do that here; the user can choose
+ * to omit the first H1 from the doc body if they don't want
+ * duplication.
+ */
+function docHeaderRules(): string {
+  const sansStack = cssStackFor("Annot Sans");
+  return [
+    "section[data-annot-doc-header] {",
+    "  display: grid;",
+    "  grid-template-columns: auto 1fr;",
+    "  align-items: center;",
+    "  gap: 1.25rem;",
+    "  margin: 0 0 2rem;",
+    "  padding: 1.5rem 0;",
+    "  border-bottom: 1px solid var(--annot-doc-muted);",
+    "}",
+    // Single-column when no icon — the title / description /
+    // meta column spans the full row.
+    "section[data-annot-doc-header]:not(:has([data-annot-doc-header-icon])) {",
+    "  grid-template-columns: 1fr;",
+    "}",
+    "section[data-annot-doc-header] [data-annot-doc-header-icon] {",
+    "  width: 64px;",
+    "  height: 64px;",
+    "  border-radius: 12px;",
+    "  object-fit: contain;",
+    "  background: var(--annot-doc-code-bg);",
+    "  display: block;",
+    "}",
+    "section[data-annot-doc-header] [data-annot-doc-header-title] {",
+    "  margin: 0;",
+    `  font-family: ${sansStack};`,
+    "  font-size: 1.85rem;",
+    "  font-weight: 700;",
+    "  line-height: 1.2;",
+    "  color: var(--annot-doc-fg);",
+    "}",
+    "section[data-annot-doc-header] [data-annot-doc-header-description] {",
+    "  margin: 0.4rem 0 0;",
+    "  font-size: 1rem;",
+    "  line-height: 1.5;",
+    "  color: var(--annot-doc-muted);",
+    "}",
+    "section[data-annot-doc-header] [data-annot-doc-header-meta] {",
+    "  display: flex;",
+    "  flex-wrap: wrap;",
+    "  gap: 0.5rem 1rem;",
+    "  margin: 0.6rem 0 0;",
+    "  font-size: 0.85rem;",
+    "  color: var(--annot-doc-muted);",
+    `  font-family: ${sansStack};`,
+    "}",
+    "section[data-annot-doc-header] [data-annot-doc-header-author]::before {",
+    '  content: "By ";',
+    "  color: var(--annot-doc-muted);",
+    "}",
+    // Multi-column card grid: the header should span the entire
+    // grid row (above every step card column).
+    "article[data-annot-doc] > section[data-annot-doc-header] {",
+    "  grid-column: 1 / -1;",
     "}",
   ].join("\n");
 }

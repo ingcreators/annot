@@ -430,6 +430,46 @@ This nav, like the auto-numbering counters in the style block,
 exists purely for the browser-view contract — the editor
 contract reads from the heading list directly.
 
+### Standalone-view doc header
+
+Phase 7c of `docs/plans/card-procedure-template.md` adds a
+Scribe-style document header. When `meta.header` is set the
+serializer prepends a `<section data-annot-doc-header>` to the
+article body, BEFORE the TOC:
+
+```html
+<section data-annot-doc-header>
+  <img data-annot-doc-header-icon src="data:image/png;base64,…" alt="">
+  <h1 data-annot-doc-header-title>Quick start</h1>
+  <p data-annot-doc-header-description>Get up and running in five steps.</p>
+  <div data-annot-doc-header-meta>
+    <span data-annot-doc-header-author>Naoki Ichimura</span>
+    <span data-annot-doc-header-step-count>5 steps</span>
+  </div>
+</section>
+```
+
+- Like the TOC, the header is **serializer-generated chrome**, not
+  a block kind. Emitted with `data-annot-doc-header` so parsers can
+  identify and skip it; regenerated on every save.
+- **Opt-in**: emitted only when `meta.header` carries a non-empty
+  `icon` and/or `description`. Plain docs (and step-bearing docs
+  without an explicit header) stay byte-equivalent to pre-Phase-7c.
+- Title text: `meta.title` (a verbatim copy of `<title>`).
+- Description: `meta.header.description` (plain text — the editor
+  surfaces this via a textarea in the document-settings dialog).
+- Icon: `meta.header.icon` as a `data:` URL; rendered as a `<img>`
+  with empty `alt` (the title carries the semantic identity).
+- The metadata row carries `meta.author` (when present, prefixed
+  "By " in CSS) and a derived step count (`N steps`, singular form
+  for 1).
+- Children are emitted in fixed order: icon → title → description
+  → metadata-row. Missing fields are simply omitted.
+- The PPTX export uses the same source data to render a matching
+  **cover slide** as slide 1 of the deck, ahead of the per-block
+  slides. The icon embeds as `ppt/media/screenshot1.png` (the
+  shared media-naming convention).
+
 ## Rich text
 
 Inline rich text is allowed inside text-bearing blocks (heading,
@@ -494,6 +534,12 @@ interface DocMeta {
   template?: TemplateMeta;  // present iff this file is a template
   imageMeta?: Record<string, ImageMeta>;  // keyed by data-annot-image-id
   numbering?: NumberingMeta; // Phase 13 — opt-in heading / figure auto-numbering
+  header?: DocHeaderMeta;   // Phase 7c — Scribe-style doc header opt-in
+}
+
+interface DocHeaderMeta {
+  icon?: string;             // data: URL (PNG / JPEG / SVG) — keeps the doc self-contained
+  description?: string;      // plain-text summary; renders below the title and on the PPTX cover slide
 }
 
 interface CardLayoutMeta {
@@ -900,6 +946,19 @@ on-disk shape of v1 files.
   - PPTX export emits the chip as a rounded-rectangle text shape
     with `<a:hlinkClick>` pointing at a slide-rels hyperlink
     relationship.
+- **2026-05 — Scribe-style document header** (Phase 7c of
+  [`docs/plans/card-procedure-template.md`](./plans/card-procedure-template.md)).
+  Additive under v1; pre-release. Adds:
+  - New OPTIONAL `header` sub-object on `DocMeta` carrying
+    `icon` (data: URL) and/or `description` (plain text).
+  - Serializer-generated `<section data-annot-doc-header>`
+    chrome prepended to the article body (opt-in: only when
+    `meta.header` has non-empty content). Parser skips the
+    section the same way it skips `<nav data-annot-toc>`.
+  - PPTX export prepends a matching cover slide carrying icon
+    + title + description + author + step count.
+  - The doc-settings dialog gains "Header description" and
+    "Header icon" fields so users can opt in interactively.
 
 ### Version 0 (pre-versioning)
 

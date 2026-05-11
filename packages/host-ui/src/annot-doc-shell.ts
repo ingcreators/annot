@@ -851,6 +851,7 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
           @input=${this.#onArticleInput}
           @blur=${this.#onArticleBlur}
         >
+          ${this.#renderDocHeader(blocks)}
           ${showEmptyState ? html`<annot-doc-empty-state></annot-doc-empty-state>` : nothing}
           ${
             editing
@@ -879,6 +880,58 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
         .insertAt=${insertAt}
         data-insert-at=${insertAt}
       ></annot-doc-insert-bar>
+    `;
+  }
+
+  /** Phase 7c of `docs/plans/card-procedure-template.md` —
+   *  Scribe-style document header rendering in the editor /
+   *  preview. Mirrors the standalone-view bytes produced by
+   *  the serializer (`buildDocHeaderHtml` in
+   *  `@ingcreators/annot-doc`); both surfaces source the same
+   *  data so what-you-see-is-what-you-get holds.
+   *
+   *  Returns `nothing` when `meta.header` is absent or all of
+   *  its fields are empty — the article retains its block-flow
+   *  layout exactly as before Phase 7c.
+   */
+  #renderDocHeader(blocks: readonly Block[]): unknown {
+    const doc = this.document;
+    const header = doc?.meta.header;
+    if (!header || (!header.icon && !header.description)) return nothing;
+    const stepCount = blocks.reduce((n, b) => (b.kind === "step" ? n + 1 : n), 0);
+    const stepLabel = stepCount === 1 ? "1 step" : `${stepCount} steps`;
+    return html`
+      <section data-annot-doc-header>
+        ${
+          header.icon
+            ? html`<img data-annot-doc-header-icon src=${header.icon} alt="">`
+            : nothing
+        }
+        <h1 data-annot-doc-header-title>${doc?.title ?? ""}</h1>
+        ${
+          header.description
+            ? html`<p data-annot-doc-header-description>${header.description}</p>`
+            : nothing
+        }
+        ${
+          doc?.meta.author || stepCount > 0
+            ? html`
+              <div data-annot-doc-header-meta>
+                ${
+                  doc?.meta.author
+                    ? html`<span data-annot-doc-header-author>${doc.meta.author}</span>`
+                    : nothing
+                }
+                ${
+                  stepCount > 0
+                    ? html`<span data-annot-doc-header-step-count>${stepLabel}</span>`
+                    : nothing
+                }
+              </div>
+            `
+            : nothing
+        }
+      </section>
     `;
   }
 

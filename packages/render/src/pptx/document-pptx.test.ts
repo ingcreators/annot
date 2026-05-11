@@ -553,6 +553,164 @@ describe("buildDocumentPptxFiles: 16:9 slide canvas (Phase 6b)", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Phase 7c — Scribe-style cover slide. When `meta.header` is set
+// the deck gains a leading slide carrying icon + title +
+// description + author + step-count footer. Per-block slides
+// shift to indices 2..N+1.
+// ---------------------------------------------------------------------------
+
+describe("buildDocumentPptxFiles: cover slide (Phase 7c)", () => {
+  function makeHeadedDoc(): AnnotDocument {
+    return {
+      version: 1,
+      lang: "en",
+      title: "Quick start",
+      meta: {
+        title: "Quick start",
+        author: "Naoki Ichimura",
+        header: {
+          icon: TINY_PNG_DATA_URL,
+          description: "Get started in five steps.",
+        },
+      },
+      styleBlock: null,
+      blocks: [
+        makeStepBlock("step-1", 800, 600, { title: "Step 1", body: "Do A" }),
+        makeStepBlock("step-2", 800, 600, { title: "Step 2", body: "Do B" }),
+      ],
+    };
+  }
+
+  it("emits a leading cover slide when meta.header is set", () => {
+    const files = buildDocumentPptxFiles(makeHeadedDoc());
+    expect(files["ppt/slides/slide1.xml"]).toBeDefined();
+    expect(files["ppt/slides/slide2.xml"]).toBeDefined();
+    expect(files["ppt/slides/slide3.xml"]).toBeDefined();
+    expect(files["ppt/slides/slide4.xml"]).toBeUndefined();
+  });
+
+  it("does NOT emit a cover slide when meta.header is absent", () => {
+    const doc: AnnotDocument = {
+      ...makeHeadedDoc(),
+      meta: { title: "Quick start" },
+    };
+    const files = buildDocumentPptxFiles(doc);
+    const slide1 = decode(files["ppt/slides/slide1.xml"]!);
+    expect(slide1).not.toContain("CoverTitle");
+    expect(slide1).not.toContain("CoverIcon");
+  });
+
+  it("cover slide carries title + description + footer text shapes", () => {
+    const slide1 = decode(buildDocumentPptxFiles(makeHeadedDoc())["ppt/slides/slide1.xml"]!);
+    expect(slide1).toContain('name="CoverTitle"');
+    expect(slide1).toContain("<a:t>Quick start</a:t>");
+    expect(slide1).toContain('name="CoverDescription"');
+    expect(slide1).toContain("<a:t>Get started in five steps.</a:t>");
+    expect(slide1).toContain('name="CoverFooter"');
+    // Footer joins author + step count with " · ".
+    expect(slide1).toContain("<a:t>By Naoki Ichimura · 2 steps</a:t>");
+  });
+
+  it("cover slide carries the icon as a top-level <p:pic> (no image group)", () => {
+    const slide1 = decode(buildDocumentPptxFiles(makeHeadedDoc())["ppt/slides/slide1.xml"]!);
+    expect(slide1).toContain('name="CoverIcon"');
+    // Cover slides skip the SVG-space group wrap entirely.
+    expect(slide1).not.toContain('name="ImageGroup"');
+  });
+
+  it("embeds the icon bytes as ppt/media/screenshot1.png", () => {
+    const files = buildDocumentPptxFiles(makeHeadedDoc());
+    expect(files["ppt/media/screenshot1.png"]).toBeDefined();
+  });
+
+  it("omits the icon <p:pic> when meta.header.icon is unset", () => {
+    const doc: AnnotDocument = {
+      ...makeHeadedDoc(),
+      meta: {
+        ...makeHeadedDoc().meta,
+        header: { description: "Plain description" },
+      },
+    };
+    const files = buildDocumentPptxFiles(doc);
+    const slide1 = decode(files["ppt/slides/slide1.xml"]!);
+    expect(slide1).not.toContain("CoverIcon");
+    expect(files["ppt/media/screenshot1.png"]).toBeUndefined();
+  });
+
+  it("omits the description shape when meta.header.description is unset", () => {
+    const doc: AnnotDocument = {
+      ...makeHeadedDoc(),
+      meta: {
+        ...makeHeadedDoc().meta,
+        header: { icon: TINY_PNG_DATA_URL },
+      },
+    };
+    const slide1 = decode(buildDocumentPptxFiles(doc)["ppt/slides/slide1.xml"]!);
+    expect(slide1).not.toContain("CoverDescription");
+    expect(slide1).toContain("CoverTitle");
+  });
+
+  it("footer falls back to step count only when no author", () => {
+    const doc: AnnotDocument = {
+      ...makeHeadedDoc(),
+      meta: {
+        title: "Quick start",
+        header: { description: "Desc" },
+      },
+    };
+    const slide1 = decode(buildDocumentPptxFiles(doc)["ppt/slides/slide1.xml"]!);
+    expect(slide1).toContain("<a:t>2 steps</a:t>");
+    expect(slide1).not.toContain("By ");
+  });
+
+  it("uses '1 step' singular in the cover footer", () => {
+    const doc: AnnotDocument = {
+      ...makeHeadedDoc(),
+      meta: {
+        title: "Quick start",
+        header: { description: "Desc" },
+      },
+      blocks: [makeStepBlock("step-1", 800, 600, { title: "T" })],
+    };
+    const slide1 = decode(buildDocumentPptxFiles(doc)["ppt/slides/slide1.xml"]!);
+    expect(slide1).toContain("<a:t>1 step</a:t>");
+  });
+
+  it("omits the footer entirely when no author + no step blocks", () => {
+    const doc: AnnotDocument = {
+      version: 1,
+      lang: "en",
+      title: "Headed prose",
+      meta: { title: "Headed prose", header: { description: "Desc" } },
+      styleBlock: null,
+      blocks: [{ kind: "paragraph", inlineHtml: "Some prose." }],
+    };
+    const slide1 = decode(buildDocumentPptxFiles(doc)["ppt/slides/slide1.xml"]!);
+    expect(slide1).not.toContain("CoverFooter");
+  });
+
+  it("uses the uniform 1280×720 canvas for the cover slide", () => {
+    const files = buildDocumentPptxFiles(makeHeadedDoc());
+    const presentationXml = decode(files["ppt/presentation.xml"]!);
+    expect(presentationXml).toContain('<p:sldSz cx="12192000" cy="6858000" type="custom"/>');
+  });
+
+  it("a prose doc with header but no step blocks still gets a cover + 0 content slides", () => {
+    const doc: AnnotDocument = {
+      version: 1,
+      lang: "en",
+      title: "Just a cover",
+      meta: { title: "Just a cover", header: { description: "Desc" } },
+      styleBlock: null,
+      blocks: [{ kind: "paragraph", inlineHtml: "Some prose." }],
+    };
+    const files = buildDocumentPptxFiles(doc);
+    expect(files["ppt/slides/slide1.xml"]).toBeDefined();
+    expect(files["ppt/slides/slide2.xml"]).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Phase 7b — URL chip. Step blocks gain an optional `link` field;
 // the slide picks up a hyperlink rel + a chip text shape with
 // `<a:hlinkClick>`.

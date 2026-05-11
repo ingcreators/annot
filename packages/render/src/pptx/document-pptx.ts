@@ -102,6 +102,12 @@ interface SlideData {
    *  has already been allowlist-validated upstream (the
    *  parser drops anything outside http / https / mailto). */
   hyperlinks: { rid: number; url: string }[];
+  /** Phase 7c — cover-slide marker. Cover slides skip the SVG-
+   *  space `<p:grpSp>` wrapping (no annotations) and place the
+   *  icon directly at `imageRect` in slide coordinates. The
+   *  `topLevelShapes` carry the title / description / author /
+   *  step-count text. */
+  coverSlide?: boolean;
 }
 
 /** Fit `src` inside `region` preserving aspect ratio (CSS
@@ -210,6 +216,11 @@ export function exportDocumentPptx(doc: AnnotDocument): Blob | null {
 
 function collectSlides(doc: AnnotDocument): SlideData[] {
   const out: SlideData[] = [];
+  // Phase 7c — cover slide. Prepended ahead of the per-block
+  // slides when `meta.header` is set. The cover always lands at
+  // index 1 (when emitted) so subsequent slides shift to 2..N+1.
+  const cover = buildCoverSlide(doc, 1);
+  if (cover) out.push(cover);
   // Phase 7a: assign the slide index AFTER a successful build so
   // skipped blocks (image parse failure, entirely-empty image-
   // less step, etc.) don't leave a gap in the slide numbering.
@@ -234,6 +245,119 @@ function collectSlides(doc: AnnotDocument): SlideData[] {
     }
   }
   return out;
+}
+
+/**
+ * Phase 7c — build the cover slide from `doc.meta.header`.
+ * Returns `null` when no header is set (so the deck looks
+ * exactly like it did pre-Phase-7c for non-card docs).
+ *
+ * Layout (16:9, 1280×720):
+ *   - Icon: centred 160×160 px at (560, 60) when present.
+ *   - Title: centred at (80, 250, 1120, 100) — large bold font.
+ *   - Description: centred at (160, 360, 960, 160) — medium font.
+ *   - Footer (author + step count): centred at (80, 620, 1120, 40).
+ */
+function buildCoverSlide(doc: AnnotDocument, index: number): SlideData | null {
+  const header = doc.meta.header;
+  if (!header || (!header.icon && !header.description)) return null;
+  const iconInfo = header.icon ? readDataUrl(header.icon) : null;
+  const stepCount = countStepBlocksInDoc(doc);
+
+  const topLevelShapes: SlideData["topLevelShapes"] = [];
+  let nextId = iconInfo ? 3 : 2; // id=1 = root group, id=2 = icon pic when present
+  // Title.
+  const titleId = nextId++;
+  topLevelShapes.push({
+    xml: buildStepTextShapeXml({
+      id: titleId,
+      name: "CoverTitle",
+      text: doc.title,
+      rect: { x: 0.0625, y: 0.347, w: 0.875, h: 0.139 }, // (80,250,1120,100)
+      fontSizeHpt: 4400,
+      bold: true,
+      overlay: false,
+    }),
+    id: titleId,
+  });
+  if (header.description) {
+    const descId = nextId++;
+    topLevelShapes.push({
+      xml: buildStepTextShapeXml({
+        id: descId,
+        name: "CoverDescription",
+        text: header.description,
+        rect: { x: 0.125, y: 0.5, w: 0.75, h: 0.222 }, // (160,360,960,160)
+        fontSizeHpt: 2000,
+        bold: false,
+        overlay: false,
+      }),
+      id: descId,
+    });
+  }
+  const footerParts: string[] = [];
+  if (doc.meta.author) footerParts.push(`By ${doc.meta.author}`);
+  if (stepCount > 0) footerParts.push(stepCount === 1 ? "1 step" : `${stepCount} steps`);
+  if (footerParts.length > 0) {
+    const footerId = nextId++;
+    topLevelShapes.push({
+      xml: buildStepTextShapeXml({
+        id: footerId,
+        name: "CoverFooter",
+        text: footerParts.join(" · "),
+        rect: { x: 0.0625, y: 0.861, w: 0.875, h: 0.056 }, // (80,620,1120,40)
+        fontSizeHpt: 1400,
+        bold: false,
+        overlay: false,
+      }),
+      id: footerId,
+    });
+  }
+
+  // Icon placement (when present). Centred 160x160 px at the top.
+  const iconRect = iconInfo
+    ? { x: 0.4375, y: 0.083, w: 0.125, h: 0.222 } // (560,60,160,160)
+    : { x: 0, y: 0, w: 0, h: 0 };
+
+  return {
+    index,
+    width: SLIDE_W_PX,
+    height: SLIDE_H_PX,
+    imageBytes: iconInfo?.bytes ?? null,
+    imageExt: iconInfo?.ext ?? "png",
+    imageRect: iconRect,
+    shapes: [],
+    topLevelShapes,
+    mosaicMedia: [],
+    hyperlinks: [],
+    coverSlide: true,
+  };
+}
+
+/** Phase 7c — count step blocks in the document; used by the
+ *  cover slide footer and the standalone-view header metadata. */
+function countStepBlocksInDoc(doc: AnnotDocument): number {
+  let n = 0;
+  for (const block of doc.blocks) {
+    if (block.kind === "step") n += 1;
+  }
+  return n;
+}
+
+/** Decode a `data:` URL into raw bytes + format hint. Returns
+ *  `null` when the URL doesn't start with `data:` or carries
+ *  an unsupported MIME type. */
+function readDataUrl(dataUrl: string): { bytes: Uint8Array; ext: "png" | "jpeg" } | null {
+  if (!dataUrl.startsWith("data:")) return null;
+  const bytes = dataUrlToUint8Array(dataUrl);
+  if (bytes.length === 0) return null;
+  const ext = dataUrl.startsWith("data:image/png")
+    ? "png"
+    : dataUrl.startsWith("data:image/jpeg") || dataUrl.startsWith("data:image/jpg")
+      ? "jpeg"
+      : null;
+  if (ext === null) return null;
+  return { bytes, ext };
 }
 
 function buildSlideFromImageBlock(block: ImageBlock, index: number): SlideData | null {
@@ -963,6 +1087,44 @@ function buildSlideXml(slide: SlideData): string {
   const topLevelXml = slide.topLevelShapes.map((s) => s.xml).join("\n");
   const hasImage = slide.imageBytes !== null;
   const hasAnnotations = slide.shapes.length > 0;
+
+  // Phase 7c — cover slides skip the SVG-space group wrap. The
+  // icon (when present) sits at `slide.imageRect` in slide
+  // coords directly; topLevelShapes (title / description /
+  // footer) render unchanged.
+  if (slide.coverSlide) {
+    const iconXml = hasImage
+      ? `<p:pic>
+        <p:nvPicPr>
+          <p:cNvPr id="2" name="CoverIcon"/>
+          <p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr>
+          <p:nvPr/>
+        </p:nvPicPr>
+        <p:blipFill>
+          <a:blip r:embed="rId2"/>
+          <a:stretch><a:fillRect/></a:stretch>
+        </p:blipFill>
+        <p:spPr>
+          <a:xfrm>
+            <a:off x="${px(SLIDE_W_PX * slide.imageRect.x)}" y="${px(SLIDE_H_PX * slide.imageRect.y)}"/>
+            <a:ext cx="${px(SLIDE_W_PX * slide.imageRect.w)}" cy="${px(SLIDE_H_PX * slide.imageRect.h)}"/>
+          </a:xfrm>
+          <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+        </p:spPr>
+      </p:pic>`
+      : "";
+    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+  <p:cSld>
+    <p:spTree>
+      <p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>
+      <p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${px(SLIDE_W_PX)}" cy="${px(SLIDE_H_PX)}"/><a:chOff x="0" y="0"/><a:chExt cx="${px(SLIDE_W_PX)}" cy="${px(SLIDE_H_PX)}"/></a:xfrm></p:grpSpPr>
+      ${iconXml}
+      ${topLevelXml}
+    </p:spTree>
+  </p:cSld>
+</p:sld>`;
+  }
 
   // Image element inside the group, in CHILD coord space
   // (0..svgW, 0..svgH).

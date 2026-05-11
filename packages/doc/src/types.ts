@@ -52,6 +52,30 @@ export interface DocMeta {
    *  unset cardLayout means the implicit defaults (single-column
    *  stack, `image-top` for new steps). */
   readonly cardLayout?: CardLayoutMeta;
+  /** Phase 7c of `docs/plans/card-procedure-template.md` —
+   *  Scribe-style document header (icon + description). The
+   *  `title` field above already covers the heading text; the
+   *  `author` field above is shown in the header metadata row;
+   *  the step count is derived from the block walk. Setting
+   *  this field opts the document into the rendered header
+   *  treatment AND into the matching PPTX cover slide. */
+  readonly header?: DocHeaderMeta;
+}
+
+/** Scribe-style document header — icon + free-form description
+ *  shown above the article body and on the PPTX cover slide.
+ *  Both fields are optional; setting one without the other is
+ *  valid (icon-only or description-only headers both render). */
+export interface DocHeaderMeta {
+  /** Optional icon, stored as a `data:` URL (PNG / JPEG / SVG)
+   *  so the document stays self-contained. Empty / absent →
+   *  the header renders without an icon column. */
+  readonly icon?: string;
+  /** Optional plain-text description shown below the title.
+   *  Authored as plain text rather than inline HTML so the
+   *  PPTX cover slide can re-render it without an HTML→OOXML
+   *  conversion step. */
+  readonly description?: string;
 }
 
 export interface TemplateMeta {
