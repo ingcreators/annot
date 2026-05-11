@@ -20,7 +20,18 @@ function loadFixture(name: string): string {
   return readFileSync(resolve(FIXTURE_DIR, name), "utf8");
 }
 
-const FIXTURES = ["empty.annot.html", "with-image.annot.html", "mixed.annot.html"] as const;
+const FIXTURES = [
+  "empty.annot.html",
+  "with-image.annot.html",
+  "mixed.annot.html",
+  // Phase 1 of `docs/plans/card-procedure-template.md` — step
+  // blocks land in the round-trip corpus once the parser /
+  // serializer understand them. The three fixtures were authored
+  // in Phase 0 as the canonical-form contract.
+  "steps-only.annot.html",
+  "steps-mixed.annot.html",
+  "steps-fill.annot.html",
+] as const;
 
 describe("annot-doc: round-trip byte equivalence", () => {
   for (const name of FIXTURES) {

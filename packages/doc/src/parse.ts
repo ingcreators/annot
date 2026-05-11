@@ -14,6 +14,7 @@ import type {
   AnnotDocument,
   Block,
   CalloutBlock,
+  CardLayoutMeta,
   CodeBlock,
   DocMeta,
   HeadingBlock,
@@ -23,6 +24,8 @@ import type {
   NumberingMeta,
   ParagraphBlock,
   QuoteBlock,
+  StepBlock,
+  StepLayout,
   TemplateMeta,
 } from "./types.js";
 import { ANNOT_DOC_VERSION } from "./types.js";
@@ -147,6 +150,8 @@ function parseBlock(el: Element): Block {
       return { kind: "divider" };
     case "image":
       return parseImage(el);
+    case "step":
+      return parseStep(el);
     default:
       // Forward-compat: preserve unknown blocks verbatim.
       return { kind: "unknown", rawHtml: el.outerHTML };
@@ -240,6 +245,50 @@ function parseImage(el: Element): ImageBlock {
   return caption !== undefined ? { kind: "image", id, svg, caption } : { kind: "image", id, svg };
 }
 
+function parseStep(el: Element): StepBlock {
+  const id = el.getAttribute("data-annot-image-id");
+  if (id === null) {
+    throw new AnnotDocParseError("Step block missing data-annot-image-id.");
+  }
+  const svgEl = el.querySelector(":scope > svg");
+  if (!svgEl) {
+    throw new AnnotDocParseError(`Step block ${id} has no <svg> child.`);
+  }
+  const svg = canonicaliseSvg(svgEl);
+  // The spec fixes the title slot to <h3 data-step-title> and the
+  // body slot to <p data-step-body>. We look up by attribute rather
+  // than tag so a future format extension that swaps the tag (e.g.
+  // <h2 data-step-title>) doesn't silently drop the slot.
+  const titleEl = el.querySelector(":scope > [data-step-title]");
+  const bodyEl = el.querySelector(":scope > [data-step-body]");
+  if (!titleEl) {
+    throw new AnnotDocParseError(`Step block ${id} has no [data-step-title] child.`);
+  }
+  if (!bodyEl) {
+    throw new AnnotDocParseError(`Step block ${id} has no [data-step-body] child.`);
+  }
+  const layoutAttr = el.getAttribute("data-step-layout");
+  const layout = isStepLayout(layoutAttr) ? layoutAttr : "image-top";
+  return {
+    kind: "step",
+    id,
+    svg,
+    title: titleEl.innerHTML,
+    body: bodyEl.innerHTML,
+    layout,
+  };
+}
+
+function isStepLayout(v: string | null): v is StepLayout {
+  return (
+    v === "image-top" ||
+    v === "image-bottom" ||
+    v === "image-left" ||
+    v === "image-right" ||
+    v === "image-fill"
+  );
+}
+
 /** Walk the SVG element and produce canonical bytes:
  *  no leading whitespace on the root line; inner children
  *  indented by 2 spaces relative to root; closing tag flush-left.
@@ -327,6 +376,7 @@ function parseDocMeta(jsonText: string, headTitle: string): DocMeta {
   const template = parseTemplateMeta(obj.template);
   const imageMeta = parseImageMetaMap(obj.imageMeta);
   const numbering = parseNumberingMeta(obj.numbering);
+  const cardLayout = parseCardLayoutMeta(obj.cardLayout);
   const meta: DocMeta = { title };
   if (author !== undefined) (meta as { author?: string }).author = author;
   if (theme !== undefined) (meta as { theme?: typeof theme }).theme = theme;
@@ -336,6 +386,7 @@ function parseDocMeta(jsonText: string, headTitle: string): DocMeta {
     (meta as { imageMeta?: Readonly<Record<string, ImageMeta>> }).imageMeta = imageMeta;
   }
   if (numbering !== undefined) (meta as { numbering?: NumberingMeta }).numbering = numbering;
+  if (cardLayout !== undefined) (meta as { cardLayout?: CardLayoutMeta }).cardLayout = cardLayout;
   return meta;
 }
 
@@ -381,6 +432,23 @@ function parseNumberingMeta(v: unknown): NumberingMeta | undefined {
   }
   if (typeof o.figureLabel === "string") {
     (out as { figureLabel?: string }).figureLabel = o.figureLabel;
+    hasField = true;
+  }
+  return hasField ? out : undefined;
+}
+
+function parseCardLayoutMeta(v: unknown): CardLayoutMeta | undefined {
+  if (v === null || typeof v !== "object" || Array.isArray(v)) return undefined;
+  const o = v as Record<string, unknown>;
+  const out: CardLayoutMeta = {};
+  let hasField = false;
+  if (o.columns === 1 || o.columns === 2 || o.columns === 3 || o.columns === "auto") {
+    (out as { columns?: CardLayoutMeta["columns"] }).columns = o.columns;
+    hasField = true;
+  }
+  if (isStepLayout(typeof o.defaultStepLayout === "string" ? o.defaultStepLayout : null)) {
+    (out as { defaultStepLayout?: StepLayout }).defaultStepLayout =
+      o.defaultStepLayout as StepLayout;
     hasField = true;
   }
   return hasField ? out : undefined;
