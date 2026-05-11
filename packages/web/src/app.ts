@@ -893,10 +893,41 @@ export class App {
         imageCount: imagesInOrder.length,
       });
       if (!result) return;
+      // Phase 7d-polish: hydrate each image record so its
+      // `originalDataUrl` is populated before we embed the
+      // bytes into the generated step blocks. `listImages` on
+      // some storage backends (DeviceStore, GitHubStore — every
+      // backend whose listing is lazy) returns records with
+      // `originalDataUrl: ""`; without this hydration step, the
+      // generated SVG carries `<image href="">` and the cards
+      // render as broken images. Browser storage happened to
+      // work because its IndexedDB-backed listing returned the
+      // full records eagerly.
+      const hydratedImages: import("@ingcreators/annot-core/storage").ImageRecord[] = [];
+      for (const img of imagesInOrder) {
+        if (img.originalDataUrl) {
+          hydratedImages.push(img);
+          continue;
+        }
+        const full = await storage.getImage(img.path);
+        if (full && full.originalDataUrl) {
+          hydratedImages.push(full);
+        } else {
+          // Defensive: a record that can't be hydrated would
+          // produce a broken card. Skip it with a console
+          // hint; the user sees fewer cards than expected,
+          // which is preferable to silent black squares.
+          console.warn("[createCardDocumentFromImages] skipped image with no bytes:", img.path);
+        }
+      }
+      if (hydratedImages.length === 0) {
+        showSaveError("Couldn't load any of the selected images.");
+        return;
+      }
       const { createCardDocumentFromImages } = await import(
         "@ingcreators/annot-host-ui/gallery/create-card-document"
       );
-      const annotDoc = createCardDocumentFromImages(imagesInOrder, {
+      const annotDoc = createCardDocumentFromImages(hydratedImages, {
         title: result.title,
         layout: result.layout,
         columns: result.columns,

@@ -364,24 +364,31 @@ function stepBlockRules(): string {
     // Without this rule large screenshots (the common case —
     // capture is typically 1500–2000 px wide) overflow the
     // card horizontally and dominate it vertically.
+    // Phase 7d-polish: the card image area is locked to 16:9
+    // regardless of the source bitmap's aspect ratio. This
+    // mirrors the PPTX export's slide canvas (also 16:9) and
+    // gives every card in a multi-column grid the same height.
+    // Non-16:9 sources letterbox inside the frame via SVG's
+    // default `preserveAspectRatio="xMidYMid meet"`.
+    //
+    // The slot div is the 16:9 frame; `overflow: hidden` clips
+    // any pan/zoom state that wanders outside (the controller
+    // already clamps pan, but the clip is belt-and-braces).
     '[data-annot-block="step"] > svg,',
     '[data-annot-block="step"] > .annot-doc-image-svg-slot {',
     "  grid-area: image;",
     "  width: 100%;",
     "  max-width: 100%;",
-    "  height: auto;",
+    "  aspect-ratio: 16 / 9;",
     "  display: block;",
     "  margin: 0;",
+    "  overflow: hidden;",
+    "  background: var(--annot-doc-code-bg, #f3f4f6);",
     "}",
     '[data-annot-block="step"] .annot-doc-image-svg-slot > svg {',
     "  width: 100%;",
-    "  height: auto;",
+    "  height: 100%;",
     "  display: block;",
-    "  /* Cap the visual height so a tall-aspect screenshot",
-    "     doesn't dominate the card; the inline aspect-ratio on",
-    "     the wrapper still drives the slot's pre-mount layout. */",
-    "  max-height: 70vh;",
-    "  object-fit: contain;",
     "}",
     '[data-annot-block="step"] > [data-step-title] {',
     "  grid-area: title;",
@@ -443,13 +450,15 @@ function stepBlockRules(): string {
     // image-fill image sizing — applies to direct SVG
     // (standalone view) AND to the editor's slot wrapper +
     // inner SVG. Same dual-selector pattern as the
-    // area-based layouts above.
+    // area-based layouts above. Phase 7d-polish: also locked to
+    // 16:9 (matches the area-based layouts + PPTX slide).
     '[data-annot-block="step"][data-step-layout="image-fill"] > svg,',
     '[data-annot-block="step"][data-step-layout="image-fill"] > .annot-doc-image-svg-slot {',
     "  width: 100%;",
-    "  height: auto;",
+    "  aspect-ratio: 16 / 9;",
     "  display: block;",
     "  margin: 0;",
+    "  overflow: hidden;",
     "}",
     '[data-annot-block="step"][data-step-layout="image-fill"] > [data-step-title],',
     '[data-annot-block="step"][data-step-layout="image-fill"] > [data-step-body] {',
