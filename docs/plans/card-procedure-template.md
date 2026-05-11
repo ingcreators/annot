@@ -1,0 +1,573 @@
+# Card-style step documents from gallery selection
+
+> **Status:** Draft
+> **Compatibility:** Extends the `.annot.html` v1 format from
+> [`_done/annot-html-document.md`](./_done/annot-html-document.md). Adds
+> one new block kind (`step`) — bumps `data-annot-doc-version` 1 → 2.
+> Touches `@ingcreators/annot-doc` (Tier A), `@ingcreators/annot-host-ui`
+> (Tier C — gallery + doc shell), `@ingcreators/annot-render` (PPTX
+> export), `@ingcreators/annot-web` (file-manager action wiring). Adds
+> one built-in starter template (`card-procedure`). v1 parser stays
+> forward-compatible: a v2 document opened by a v1-only reader degrades
+> via the existing `UnknownBlock` passthrough — every byte preserved,
+> rendered as an opaque `<aside>` placeholder.
+> **Risk:** Phased, additive throughout. Each phase is independently
+> revertable. The block-taxonomy change is the only schema delta;
+> everything else (CSS, generator action, PPTX mapping, starter
+> template) builds on existing infrastructure. The version bump
+> precedent already exists for `.annot.svg`'s `data-annot-version`.
+
+## Context
+
+Annot today has the `.annot.html` document format ([Phases 0–13
+shipped](./_done/annot-html-document.md)). It models a free-form prose
+document with image blocks interleaved between paragraphs / headings /
+lists / callouts. The bundled `procedure` starter template uses an
+ordered list of inline steps with one image block per "verification"
+section.
+
+What this plan adds: a **second shape of document** purpose-built for
+screenshot-driven step-by-step guides — the style popularised by
+[Scribe](https://scribehow.com) where each step is a self-contained
+**card** carrying a screenshot, a title, and a short description.
+
+The gap that motivates this:
+
+- **Prose-flow documents read top-to-bottom.** That's the right shape
+  for manuals, feature guides, runbooks. It's the wrong shape for
+  "here are the 8 clicks you need to make, with screenshots" — the
+  user is doing one step at a time and wants the card boundary to
+  match the action boundary.
+- **The capture → manual flow today involves manual stitching.** A
+  user captures 8 screenshots in the gallery, then opens a fresh doc
+  and inserts each one through the slash-menu, then writes one
+  caption per image. The first step (capture) is already in the
+  product; the last step (write description) is unavoidable; the
+  middle step (stitch them into a doc in order) is friction we can
+  remove.
+- **PowerPoint output already maps cleanly to "one image per slide"**
+  ([Phase 11 of `_done/annot-html-document.md`](./_done/annot-html-document.md) —
+  `exportDocumentPptx` walks `ImageBlock`s and emits one slide each).
+  A step block IS one image plus its caption — the existing PPTX
+  pipeline gains a richer slide layout source for free.
+
+User framing: "カードスタイルの手順書を簡単に、file-managerから画像を
+選択した順で作成する、カードの上下左右をどう利用するかが
+テンプレートになる" — three things at once: a card-shape block, a
+gallery-driven generator, and per-card image / text layout variants
+as the template axis.
+
+This plan slots between the shipped `.annot.html` foundation and the
+existing `procedure` starter template — it's a new shape of document,
+not a re-skin of the old one. Both shapes coexist: prose-flow procedure
+for "here's the runbook narrative", card-stack procedure for "here are
+the 8 clicks".
+
+## Design
+
+### A new `step` block type
+
+The block taxonomy gains one entry:
+
+| Block type | Storage | Editable representation |
+|---|---|---|
+| `step` | `<section data-annot-block="step" data-step-layout="...">` with three child slots (image, title, body) | image (embedded `.annot.svg`) + title (`TextRun[]`) + body (`TextRun[]`) + layout |
+
+Concretely:
+
+```html
+<section data-annot-block="step" data-step-id="step_01" data-step-layout="image-top">
+  <figure data-annot-step-image-id="img_01">
+    <svg data-annot-version="1" viewBox="0 0 1280 720" …>
+      <image href="data:image/png;base64,…"/>
+      <g id="annotations">…</g>
+    </svg>
+  </figure>
+  <h3 data-annot-step-title>Open the settings dialog</h3>
+  <p data-annot-step-body>Click the gear icon in the top-right corner.</p>
+</section>
+```
+
+Properties of the step block:
+
+1. **Self-contained.** A step always carries image + title + body. No
+   "optional" slots; the editor renders empty placeholders for any
+   missing slot. This matters because:
+   - The standalone view's CSS grid can size cards uniformly.
+   - The slash-menu's "insert step" action has a single, predictable
+     output.
+   - PPTX export can assume each step block produces a complete
+     slide.
+2. **Per-card layout variant lives on the block.** `data-step-layout`
+   takes one of: `image-top` (default), `image-bottom`, `image-left`,
+   `image-right`, `image-fill` (image covers card, title + body as
+   bottom overlay). The user can change layout per step via an
+   inline switcher; absence means `image-top`.
+3. **Image carries its own stable id.** `data-annot-step-image-id`
+   (separate namespace from `data-annot-image-id` used by standalone
+   image blocks) so the picker / clone-template machinery can mint
+   fresh ids without colliding across the two block kinds.
+4. **Round-trip preserved.** The serialiser pins child order
+   (image → title → body) and attribute order, the same way the
+   current image block does. Adding a step block doesn't change any
+   existing block's bytes.
+
+Why a new block type instead of CSS-styling a `figure + h3 + p` triple:
+
+- **Structural guarantee.** A step block is a unit; the editor
+  drag-reorder + delete operate on the unit. A "pattern of three
+  sibling blocks" would break the moment a user adds a stray
+  paragraph or removes the heading.
+- **PPTX mapping is unambiguous.** "One slide per step block" is a
+  property of the schema, not a heuristic. The renderer doesn't have
+  to pattern-match.
+- **The block taxonomy was always going to grow.** The v1 plan's
+  forward-looking section ("Plugin block types (v2)") explicitly
+  contemplated lifting the closed-union assumption. This is the
+  first concrete case where adding a block kind earns its keep.
+
+### Card visual treatment (CSS only)
+
+`injectDocumentStyles` ([Phase 2 of the original plan](./_done/annot-html-document.md))
+gains a `<style>` section keyed off the `step` block. The rendered
+card has:
+
+- Outer container: rounded corners (radius from
+  `--annot-card-radius`, default `8px`), 1px border, subtle drop
+  shadow. Dark-mode variant flips the border + background.
+- Internal layout via CSS Grid templates, one per
+  `data-step-layout` value:
+  - `image-top`: 2-row grid (image / text), image fills row 1.
+  - `image-bottom`: 2-row grid, image fills row 2.
+  - `image-left`: 2-column grid (image / text), image fills column 1.
+  - `image-right`: 2-column grid (text / image), image fills column 2.
+  - `image-fill`: 1-cell grid, image fills, title + body absolute-
+    positioned with a translucent backdrop ("bottom caption bar").
+- Image element max-height clamped per layout so a tall screenshot
+  doesn't blow the card; preserves aspect ratio via CSS
+  `object-fit: contain`.
+- Title typography matches `h3`; body typography matches `p` — the
+  block's `<h3>` and `<p>` children participate in the existing
+  heading / paragraph styles, no per-block override needed.
+- Print mode: each card sticks together (`break-inside: avoid`).
+- All variables fall back to the document-level theme palette
+  established in `_done/annot-html-document-ux-polish.md` Phase 11
+  (the document settings dialog).
+
+### Document-level grid columns
+
+A new optional `DocMeta` field:
+
+```ts
+export interface DocMeta {
+  // …existing fields…
+  readonly cardLayout?: CardLayoutMeta;
+}
+
+export interface CardLayoutMeta {
+  /** Cards per row in standalone / editor view at the document's
+   *  max-width. `1` = vertical stack (Scribe-style); `2` / `3` =
+   *  multi-column grid. `auto` uses `repeat(auto-fill, …)` with a
+   *  card-min-width breakpoint (~320px). Default: `1`. */
+  readonly columns?: 1 | 2 | 3 | "auto";
+  /** Default `data-step-layout` for newly-inserted step blocks.
+   *  Per-block overrides via `data-step-layout` always win.
+   *  Default: `"image-top"`. */
+  readonly defaultStepLayout?: "image-top" | "image-bottom" |
+    "image-left" | "image-right" | "image-fill";
+}
+```
+
+Standalone view honours `cardLayout.columns` via the injected style
+block (`display: grid; grid-template-columns: …`). Editor view
+respects the same setting so what-you-see-is-what-you-get holds.
+
+The default-step-layout setting drives both the gallery generator's
+default output and the slash-menu's "insert step" action.
+
+### Gallery → card document generator
+
+A new gallery action: **"Create card document from selection"**. It
+sits in:
+
+- The right-click context menu over a gallery selection (entry
+  added to [`gallery/context-menu.ts`](../../packages/host-ui/src/gallery/context-menu.ts)
+  via the existing `<annot-context-menu>` infrastructure).
+- The file-manager toolbar's existing "New" split button flyout
+  (added next to the "From template…" entry that
+  [Phase 8 of `_done/annot-html-document.md`](./_done/annot-html-document.md)
+  shipped).
+
+Both surface the action only when the current gallery selection has
+≥ 1 image (no folders).
+
+The action opens a dialog (reuses `<annot-dialog>`) with four fields:
+
+| Field | Default | Note |
+|---|---|---|
+| Title | "" (required) | Doc `<title>` + `meta.title`. |
+| Step layout | `image-top` | Applied to every generated step block. |
+| Columns | `1` (vertical stack) | Doc-level `cardLayout.columns`. |
+| Numbering | "Step 1 / Step 2 / …" | Pre-fills each step title with the index; users edit per-step. |
+
+Confirm → the generator builds an `AnnotDocument` with one
+`StepBlock` per selected image (in selection order), each carrying:
+
+- `id`: freshly minted via `newIdB58`.
+- `imageId`: freshly minted.
+- `svg`: the image's existing `annotationsSvg` (an editable
+  `.annot.svg` — same source the editor opens). Falls back to a
+  wrapper `<svg>` around the raw bitmap if the image has no
+  annotations.
+- `title`: `TextRun[]` carrying the numbering prefill (e.g.
+  `"Step 1"`) if numbering is on, otherwise empty.
+- `body`: empty `TextRun[]`.
+- `layout`: from the dialog selection (or omitted to inherit the
+  doc default).
+
+The generated document opens in the doc shell as **unsaved**, same
+behaviour as "New from template" — the user picks the destination on
+first save. No filesystem write happens at generator-confirm time.
+
+#### Selection-order capture
+
+The existing `<annot-gallery-page>` tracks selection as
+`Set<string>` ([`selectedImagePaths` at gallery-page.ts:91](../../packages/host-ui/src/gallery/annot-gallery-page.ts:91)),
+which preserves insertion order in modern JS engines but doesn't
+expose "order of user clicks" as a stable concept. Two viable
+approaches:
+
+1. **Rely on `Set` insertion order.** Works today because
+   `toggleSelection` adds on first click and removes on second
+   click — re-selecting an item moves it to the end. Simple.
+   Edge case: Shift-click range-selection inserts in DOM order, not
+   click order; users doing a Shift-select from item 5 → item 1
+   get the wrong order.
+2. **Track an explicit ordered selection list.** Add a parallel
+   `selectedImagePathOrder: string[]` that tracks the precise click
+   sequence. Survives Shift-click as the user expects (anchor-first,
+   then DOM order to the click target, matching every other gallery
+   on the planet). This is the recommended approach.
+
+Phase 0 (spec freeze) confirms which model the existing gallery
+matches and locks in the ordering rule the user sees. If we adopt
+the explicit-list approach, the new field is purely additive — every
+existing selection-consumer call site (`onClearSelection` /
+`onDeleteSelection` / etc.) continues to work via the `Set`.
+
+### Built-in starter template
+
+V1 ships one new entry in `BUILTIN_TEMPLATES`:
+
+| ID | Name | Shape |
+|---|---|---|
+| `card-procedure` | Card procedure | H1 title + intro paragraph + 3 placeholder step blocks (image-top layout, "Step 1 / 2 / 3" titles, lorem-ish body) + closing wrap-up paragraph. |
+
+Same authoring pattern as the existing starters
+([`packages/doc/src/builtin-templates.ts`](../../packages/doc/src/builtin-templates.ts)):
+TypeScript literal, serialised at module load via
+`serializeDocument`, byte-for-byte regression-tested by
+`builtin-templates.test.ts`.
+
+Picker integration: a new entry in `BUILTIN_TEMPLATES` is enough —
+[`<annot-template-picker-dialog>`](../../packages/host-ui/src/ui/template-picker-dialog.ts)
+walks the array and renders one card per entry. The picker doesn't
+care that the template uses a v2 block kind; the parse → clone →
+mount path is identical to the v1 starters.
+
+### PPTX export mapping
+
+[`exportDocumentPptx` at `packages/render/src/pptx/document-pptx.ts`](../../packages/render/src/pptx/document-pptx.ts)
+walks `doc.blocks` and emits one slide per `ImageBlock`. The same
+function gains:
+
+- **Recognise `StepBlock` as a slide source.** A step block produces
+  one slide whose source SVG is the step's embedded `.annot.svg`.
+- **Slide layout per `data-step-layout`.** The PPTX slide layout
+  picks one of five existing PowerPoint layouts:
+  - `image-top` → "Title and Content" (title on top, content below).
+  - `image-bottom` → "Content with Caption" (content top, title /
+    caption bottom).
+  - `image-left` → "Two Content" left-image variant.
+  - `image-right` → "Two Content" right-image variant.
+  - `image-fill` → "Title Slide" variant with title overlay on the
+    full-bleed image background.
+- **Step title → `<p:sp>` title placeholder.** The step's
+  `<h3 data-annot-step-title>` content becomes the slide title,
+  honoring the rich-text `TextRun[]` formatting (existing
+  text-run-to-OOXML path already supports bold / italic / underline
+  / fonts / colours).
+- **Step body → `<p:sp>` body placeholder.** Same translation as
+  the title.
+
+Existing standalone `ImageBlock` slides keep working unchanged —
+the dispatch widens from `if (block.kind === "image")` to
+`if (block.kind === "image" || block.kind === "step")`, with each
+arm building the slide its own way.
+
+### Detection / migration
+
+- **Version bump 1 → 2.** `ANNOT_DOC_VERSION` in
+  [`packages/doc/src/types.ts`](../../packages/doc/src/types.ts)
+  changes to `2`. The serialiser stamps `data-annot-doc-version="2"`
+  on save.
+- **Forward-compat for v1 readers.** A v2 document opened by a v1
+  parser falls through the existing `UnknownBlock` branch — the
+  `<section data-annot-block="step">` and its descendants are
+  captured as `kind: "unknown"` + `rawHtml`, then re-emitted
+  byte-for-byte on next save. The standalone CSS (injected on save)
+  still styles the card correctly because the `<style>` block from
+  the v2 save is preserved.
+- **Backward-compat for v2 readers.** A v1 document parses fine —
+  no `step` blocks means no step-block-specific code runs. No
+  migration step needed.
+
+### Tier alignment
+
+| Tier | Code | Package |
+|---|---|---|
+| A | `StepBlock` in types, parser/serialiser/clone for step blocks, `CardLayoutMeta` | `@ingcreators/annot-doc` |
+| B | step-block CSS in `injectDocumentStyles`, grid templates | `@ingcreators/annot-doc/editor` subpath |
+| C | `<annot-step-block>`, slash-menu "Insert step" entry, layout switcher, gallery generator dialog | `@ingcreators/annot-host-ui` |
+| C-render | step-block slide emission in `exportDocumentPptx` | `@ingcreators/annot-render` |
+
+Headless boundary test (the existing
+[`packages/doc/src/headless.test.ts`](../../packages/doc/src/headless.test.ts))
+automatically covers the new Tier A code — every documented
+subpath is re-imported and `require.cache` is walked for leaks.
+
+## Phased plan
+
+Each phase is a standalone PR per the
+[`docs/plans/README.md`](./README.md) "one PR per phase" convention.
+
+### Phase 0 — Spec freeze + golden fixtures
+
+- Amend [`docs/annot-html-format.md`](../annot-html-format.md) with
+  the `step` block schema, `data-step-layout` enum, child-order
+  rules, and the v2 version bump rationale.
+- Add 3 golden `.annot.html` fixtures under
+  `packages/doc/test/fixtures/`:
+  - One pure step-only doc (3 steps, default layout).
+  - One mixed doc (heading + paragraph + step + step + callout).
+  - One full-bleed step (`image-fill` layout).
+- Verify the v1 parser handles unknown step blocks via the
+  `UnknownBlock` passthrough (write an explicit cross-version test).
+- Lock in: child slot order, attribute names, allowed
+  `data-step-layout` values, `meta.cardLayout` shape.
+- Resolve the gallery-selection-order question (Set insertion order
+  vs explicit ordered list) — document the chosen approach in the
+  plan for Phase 4.
+
+### Phase 1 — Tier A: `step` block + version bump
+
+- `StepBlock` added to the `Block` discriminated union in
+  [`types.ts`](../../packages/doc/src/types.ts).
+- `ANNOT_DOC_VERSION` bumped 1 → 2.
+- Parser recognises `<section data-annot-block="step">` and yields a
+  `StepBlock` with the parsed image / title / body / layout.
+- Serialiser emits canonical child order + attribute order; the
+  round-trip test corpus extended with the Phase 0 fixtures.
+- `cloneTemplate` mints fresh `id` + `imageId` for every step.
+- `CardLayoutMeta` added to `DocMeta`; parser / serialiser pick up
+  the `card-layout` keys in the JSON sidecar.
+- No editor / host work yet — Phase 1 is pure data model.
+
+### Phase 2 — Tier B: card grid + layout CSS
+
+- `injectDocumentStyles` extended with the step-block style section
+  (grid templates per layout, dark-mode + print variants).
+- Document-level CSS variables: `--annot-card-radius`,
+  `--annot-card-border`, `--annot-card-shadow`,
+  `--annot-card-gap`, `--annot-card-columns` (driven by
+  `meta.cardLayout.columns`).
+- Storybook visual goldens for the 5 layouts × light / dark /
+  print.
+- Round-trip property test: a step block survives serialize →
+  parse → serialize across every layout enum value.
+
+### Phase 3 — Tier C: `<annot-step-block>` editor + slash-menu
+
+- New `<annot-step-block>` Lit element in
+  [`packages/host-ui/src/`](../../packages/host-ui/src/).
+- Three child slots rendered with `contentEditable` (title + body)
+  + image-click-to-edit (reuses the existing
+  [`EditorShell.mountFromRecord`](../../packages/host-ui/src/editor-shell.ts:210)
+  modal — same path as standalone image blocks).
+- Per-block layout switcher: small pulldown next to the block
+  toolbar, lists the 5 layouts with icons.
+- Slash-menu entry: "Insert step". Default layout from
+  `meta.cardLayout.defaultStepLayout`.
+- Document settings dialog gains a "Card layout" section
+  (columns + default layout), wired through
+  [`<annot-doc-settings-dialog>`](../../packages/host-ui/src/ui/doc-settings-dialog.test.ts).
+- Co-located `*.stories.ts` covering empty / populated / each
+  layout / dark-mode variant.
+
+### Phase 4 — Gallery: ordered selection + generator
+
+- `<annot-gallery-page>` adopts the chosen selection-order rule
+  from Phase 0 (recommended: parallel `selectedImagePathOrder:
+  string[]`). Existing `selectedImagePaths` stays as the membership
+  check; the new array drives ordering for downstream consumers.
+- `selection-change` event payload extended with the ordered list
+  (additive — existing listeners continue to work).
+- New right-click menu entry "Create card document from
+  selection" — visible when ≥ 1 image is selected, 0 folders.
+- New "New" split-button flyout entry next to "From template…":
+  "Card document from selection".
+- New `<annot-create-card-document-dialog>` (Lit) collecting
+  title / layout / columns / numbering.
+- Generator function in `@ingcreators/annot-host-ui`:
+  `createCardDocumentFromImages(images: ImageRecord[],
+  options: CardDocOptions): AnnotDocument`. Pure (Tier B-ish —
+  uses `@ingcreators/annot-doc` only; no live DOM). Unit-tested
+  with fixture `ImageRecord[]` against fixture `AnnotDocument`
+  goldens.
+- Wired to open the generated document in the doc shell as
+  unsaved (same path as "New from template").
+
+### Phase 5 — Built-in `card-procedure` starter
+
+- New entry in
+  [`BUILTIN_TEMPLATES`](../../packages/doc/src/builtin-templates.ts):
+  `card-procedure` — H1 + intro paragraph + 3 step-block
+  placeholders (image-top, "Step 1 / 2 / 3", placeholder body) +
+  closing wrap-up paragraph.
+- Reuses the existing `PLACEHOLDER_SVG` / `PLACEHOLDER_ALT`
+  constants — same dashed-border "Drop screenshot here" placeholder.
+- Storybook story for the starter rendered in light / dark / print.
+- `builtin-templates.test.ts` extended to cover the new entry
+  (parse → clone → re-serialise byte-equivalence + marker round-trip).
+- Picker shows it alongside the existing three starters; no picker
+  code changes needed.
+
+### Phase 6 — PPTX export: step blocks → slides
+
+- `collectSlides` in
+  [`packages/render/src/pptx/document-pptx.ts`](../../packages/render/src/pptx/document-pptx.ts)
+  recognises `StepBlock` as a slide source.
+- Per-slide layout picked from `data-step-layout`:
+  - `image-top` → Title and Content
+  - `image-bottom` → Content with Caption
+  - `image-left` / `image-right` → Two Content variants
+  - `image-fill` → Title Slide variant
+- Title placeholder populated from step title; body placeholder
+  populated from step body (existing `TextRun` → OOXML path).
+- Golden PPTX fixture: a 3-step document round-trips through
+  `exportDocumentPptx` → byte-stable output. Reviewer manually
+  opens in PowerPoint at PR time to confirm slide layout matches.
+- The standalone image-block slide path stays unchanged — the
+  dispatch widens, the per-arm code is independent.
+
+### Phase 7 — Polish + plugin docs
+
+- VSCode custom editor + `Annot: New document` command continue
+  working unchanged (the doc shell is host-neutral; step blocks
+  ride along automatically).
+- `docs/annot-html-format.md` gains a "Step block" section with
+  the schema + layout grid.
+- `docs/plugin-api/documents.md` (the v1 forward-looking doc from
+  the original plan's Phase 13) gains a note: step blocks
+  illustrate the "additive block-kind extension" pattern plugins
+  may eventually use in v3.
+- This plan moves to `_done/`; the README's table gains a row.
+
+### Out of scope for v1 (deferred)
+
+- **Per-card colour theming.** All cards share the document-level
+  palette. Per-card accent colour candidates for v2 (e.g. "this
+  step is the destructive one — make its border red").
+- **Step grouping into sub-procedures.** A `step-group` container
+  that holds N steps with a shared subheading. v2.
+- **Auto-numbering of step titles independent of headings.** v1
+  numbers via the user typing "Step N" into the title. The existing
+  `NumberingMeta` covers headings + figures; extending it for
+  steps is a small addition for v2.
+- **Drag step-block from gallery thumbnail into open doc.**
+  v1 generator creates a new document only. v2 candidate.
+- **Inline image editing (no modal) for step images.** Same trade-off
+  as the v1 image block — modal-first, inline-later if the workflow
+  demands it.
+- **Custom card layouts beyond the five enumerated.** Plugin-supplied
+  layouts (`data-step-layout="custom:foo"` resolving to plugin CSS)
+  are a v2 candidate; v1 fixes the enum.
+
+## Verification
+
+- **Round-trip byte equivalence (v2).** Golden corpus extended with
+  step-block fixtures; CI test asserts
+  `serialize(parse(bytes)) === bytes` for every fixture (including
+  every layout enum value).
+- **Cross-version compatibility.** v1 parser opens a v2 fixture →
+  step blocks captured as `UnknownBlock`; re-serialise produces
+  byte-identical output. Documented as a permanent test in
+  `packages/doc/src/types.test.ts` so future v3 schema bumps
+  inherit the same forward-compat guarantee.
+- **`cloneTemplate` integrity.** Clone the `card-procedure`
+  starter, save the result, parse it back, assert: template
+  markers gone, every step `id` + `imageId` reminted, every other
+  byte preserved.
+- **Generator output stability.** Unit test:
+  `createCardDocumentFromImages([img1, img2, img3], { title:
+  "Test", layout: "image-top", columns: 1, numbering: "step-n"})`
+  → matches a checked-in `AnnotDocument` JSON snapshot.
+- **Standalone view rendering.** Storybook visual goldens per
+  layout × theme × column-count combination. Reviewer signs off
+  on the visual change in each phase PR.
+- **PPTX export structural test.** A document with one step per
+  layout exports to a PPTX whose `slideN.xml` payloads match a
+  golden corpus (similar to the existing PPTX export goldens in
+  `packages/editor/src/`). Manual smoke against PowerPoint at PR
+  time.
+- **Gallery selection-order parity.** Multi-select test in
+  `<annot-gallery-page>`: click image 3, then 1, then 2 →
+  `selectedImagePathOrder` reflects `[3, 1, 2]`; Shift-click
+  range honours the anchor-first DOM-order rule.
+- **Picker integration.** The `card-procedure` entry appears in
+  the built-in section of the picker; clicking it clones + opens
+  an editable document with 3 step blocks present.
+
+## Migration notes
+
+- **No data migration for existing users.** v1 documents already
+  in `.annot.html` form continue to parse + serialise unchanged.
+  The version bump only takes effect when a document either
+  introduces a step block or is re-saved by a v2 writer.
+- **First v2 save is silent.** Opening a v1 doc in a v2 build and
+  saving (even with no edits) stamps `data-annot-doc-version="2"`.
+  This matches the SVG-format behaviour: the format version
+  reflects the writer, not the historical content.
+- **`@ingcreators/annot-doc` consumers** (annot-cloud's pointer-
+  commit store, future Playwright integration) get the v2 type
+  union for free; switch statements that exhaustively match on
+  `Block.kind` will fail TypeScript build until they add a
+  `case "step":` arm. This is a deliberate type-safety prompt.
+
+## Forward-looking notes
+
+- **Step-group container (v2).** A `<section data-annot-block="step-group">`
+  that holds N steps with a shared subheading + collapsible
+  toggle. Natural extension once we see how users organise multi-
+  procedure documents. The container becomes one PPTX section
+  separator + N slides.
+- **Per-step numbering metadata (v2).** Extend `NumberingMeta`
+  with `steps?: boolean` + `stepLabel?: string` ("Step " / "Étape "
+  / "ステップ "); CSS counters drive both editor + standalone view.
+  Users still type the step title; the prefix renders automatically.
+- **Plugin-supplied step layouts (v2).** Once plugin block types
+  (the original v1 plan's forward-looking v2 item) ship, allow
+  plugin CSS to register additional `data-step-layout` values
+  (e.g. `"custom:plugin-id:layout-id"`).
+- **Drag step block from gallery (v2).** Drag a gallery thumbnail
+  into an open doc → insert a step block at the drop position with
+  the image preloaded. Pairs nicely with the existing image-block
+  drop-zone overlay shipped in
+  [`_done/annot-html-document-ux-polish.md`](./_done/annot-html-document-ux-polish.md)
+  Phase 6.
+- **annot-cloud touchpoints** ([`oss-cloud-split.md`](./oss-cloud-split.md)):
+  the format + the editor + the generator + the starter template
+  all live in OSS. Commercial-only candidates above the format:
+  hosted team card-layouts, branded card themes, "publish this
+  card procedure to Confluence/Notion" sync. None touch the file
+  format or the editor surface.
