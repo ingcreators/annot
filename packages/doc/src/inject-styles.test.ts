@@ -420,16 +420,21 @@ describe("injectDocumentStyles: step block layouts", () => {
     expect(css).toContain("grid-area: body");
   });
 
-  it("SVG inside the editor slot wrapper is clamped to 100% width + 70vh height", () => {
-    // Phase 4 follow-up: the user's large-screenshot card was
-    // overflowing both horizontally (image >700px wide cropped
-    // by `overflow: hidden`) and vertically (tall screenshots
-    // dominated the card). This rule clamps both dimensions.
+  it("card image slot uses a fixed 16:9 aspect ratio (Phase 7d-polish)", () => {
+    // Phase 7d-polish: the card image area is locked to 16:9
+    // regardless of the source bitmap's aspect ratio, so cards
+    // in a multi-column grid have uniform height and the editor
+    // preview matches the PPTX slide canvas. Non-16:9 sources
+    // letterbox inside the frame via the SVG's default
+    // `preserveAspectRatio="xMidYMid meet"`.
     const css = buildStyleBlock(createEmptyDocument({ title: "Slot SVG" }));
+    expect(css).toContain('[data-annot-block="step"] > .annot-doc-image-svg-slot {');
+    expect(css).toContain("aspect-ratio: 16 / 9");
+    expect(css).toContain("overflow: hidden");
+    // The inner SVG fills the slot's 16:9 box on both axes.
     expect(css).toContain('[data-annot-block="step"] .annot-doc-image-svg-slot > svg {');
     expect(css).toContain("width: 100%");
-    expect(css).toContain("max-height: 70vh");
-    expect(css).toContain("object-fit: contain");
+    expect(css).toContain("height: 100%");
   });
 
   it("step blocks join the print break-inside avoid rule", () => {

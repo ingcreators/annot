@@ -2965,17 +2965,16 @@ function renderStep(block: StepBlock, editable: boolean): TemplateResult {
   // the layout grid to a single text area regardless of the
   // declared `data-step-layout`.
   const imageless = block.svg.length === 0;
-  const aspect = imageless ? null : extractSvgAspectRatio(block.svg);
-  const slotStyle = aspect
-    ? `aspect-ratio: ${aspect}; background: var(--annot-doc-code-bg, #f3f4f6);`
-    : "";
+  // Phase 7d-polish: the slot's aspect ratio is now fixed to
+  // 16:9 in CSS (`injectDocumentStyles`), matching the PPTX
+  // slide canvas and giving multi-column card grids uniform
+  // row heights. The inline `aspect-ratio` style is no longer
+  // needed — the SVG inside the slot uses its viewBox +
+  // default `preserveAspectRatio="xMidYMid meet"` to letterbox
+  // any non-16:9 source.
   const imageSlot = imageless
     ? null
-    : html`<div
-        class="annot-doc-image-svg-slot"
-        data-annot-image-svg=${block.svg}
-        style=${slotStyle}
-      ></div>`;
+    : html`<div class="annot-doc-image-svg-slot" data-annot-image-svg=${block.svg}></div>`;
   // Phase 7b — URL chip + edit-mode link editor.
   const linkChip = renderStepLinkChip(block);
   const linkEditor = editable ? renderStepLinkEditor(block) : null;
