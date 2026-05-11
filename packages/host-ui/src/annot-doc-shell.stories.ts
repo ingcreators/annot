@@ -598,6 +598,18 @@ export const ViewportFullEditing: Story = {
   },
 };
 
+// Phase 7d-polish — view-mode toolbar with zoom buttons. The
+// viewport controls (+ / − / ⟲) appear in both read and edit
+// modes; only Save / Clear are edit-only.
+export const ViewportFullView: Story = {
+  name: "Viewport / full image (view-mode, zoom buttons only)",
+  args: {
+    document: makeViewportDoc({}),
+    showToc: false,
+    editing: false,
+  },
+};
+
 // ---------------------------------------------------------------------------
 // Phase 5 of docs/plans/card-procedure-template.md — bundled
 // `card-procedure` starter rendered in light + dark themes. The

@@ -107,3 +107,196 @@ describe("attachStepImageViewport: dispose()", () => {
     expect(svg.style.touchAction).toBe("");
   });
 });
+
+// Phase 7d-polish — pan clamping. The viewport can't pan
+// outside the intrinsic bitmap; when zoomed in, the rect's
+// origin is bounded to `[0, intrinsic - rect.size]`. When
+// zoomed out past the bitmap, the rect centres the bitmap.
+describe("attachStepImageViewport: pan clamping (Phase 7d-polish)", () => {
+  it("clamps the initial rect's origin to inside the bitmap", () => {
+    const svg = makeSvg(800, 600);
+    // Negative initial origin — should clamp to (0, 0).
+    const ctrl = attachStepImageViewport(svg, { initial: { x: -100, y: -50, w: 400, h: 300 } });
+    expect(ctrl.current()).toEqual({ x: 0, y: 0, w: 400, h: 300 });
+  });
+
+  it("clamps the initial rect's origin past the bitmap edge", () => {
+    const svg = makeSvg(800, 600);
+    // Past-right origin (x=600 + w=400 = 1000 > 800) — should clamp x to 400.
+    const ctrl = attachStepImageViewport(svg, { initial: { x: 600, y: 400, w: 400, h: 300 } });
+    expect(ctrl.current()).toEqual({ x: 400, y: 300, w: 400, h: 300 });
+  });
+
+  it("centres the bitmap when the viewport is larger than the bitmap", () => {
+    // A 1000×800 viewport on a 800×600 bitmap. The viewport
+    // can't slide INSIDE the bitmap; instead the bitmap centres
+    // inside the viewport so the user always sees the image.
+    const svg = makeSvg(800, 600);
+    const ctrl = attachStepImageViewport(svg, {
+      maxSize: 2000,
+      initial: { x: 0, y: 0, w: 1000, h: 800 },
+    });
+    // Centred: x = (800 - 1000) / 2 = -100; y = (600 - 800) / 2 = -100.
+    expect(ctrl.current()).toEqual({ x: -100, y: -100, w: 1000, h: 800 });
+  });
+
+  it("reset(rect) also clamps the supplied rect", () => {
+    const svg = makeSvg(800, 600);
+    const ctrl = attachStepImageViewport(svg);
+    ctrl.reset({ x: 1000, y: 700, w: 200, h: 150 });
+    // x=1000 clamps to 800-200=600; y=700 clamps to 600-150=450.
+    expect(ctrl.current()).toEqual({ x: 600, y: 450, w: 200, h: 150 });
+  });
+});
+
+// Phase 7d-polish — drag-just-ended flag used by the shell to
+// suppress the image-editor modal after a pan.
+describe("attachStepImageViewport: wasDragging() (Phase 7d-polish)", () => {
+  it("starts false on a fresh controller", () => {
+    const svg = makeSvg();
+    const ctrl = attachStepImageViewport(svg);
+    expect(ctrl.wasDragging()).toBe(false);
+  });
+
+  it("stays false after a pointerdown+pointerup with no movement (click)", () => {
+    const svg = makeSvg();
+    const ctrl = attachStepImageViewport(svg);
+    svg.dispatchEvent(
+      new PointerEvent("pointerdown", {
+        button: 0,
+        pointerId: 1,
+        clientX: 10,
+        clientY: 10,
+        bubbles: true,
+      }),
+    );
+    svg.dispatchEvent(
+      new PointerEvent("pointerup", {
+        pointerId: 1,
+        clientX: 10,
+        clientY: 10,
+        bubbles: true,
+      }),
+    );
+    expect(ctrl.wasDragging()).toBe(false);
+  });
+
+  it("becomes true after a drag past the threshold", () => {
+    const svg = makeSvg();
+    const ctrl = attachStepImageViewport(svg);
+    svg.dispatchEvent(
+      new PointerEvent("pointerdown", {
+        button: 0,
+        pointerId: 1,
+        clientX: 10,
+        clientY: 10,
+        bubbles: true,
+      }),
+    );
+    svg.dispatchEvent(
+      new PointerEvent("pointermove", {
+        pointerId: 1,
+        clientX: 50,
+        clientY: 50,
+        bubbles: true,
+      }),
+    );
+    svg.dispatchEvent(
+      new PointerEvent("pointerup", {
+        pointerId: 1,
+        clientX: 50,
+        clientY: 50,
+        bubbles: true,
+      }),
+    );
+    expect(ctrl.wasDragging()).toBe(true);
+  });
+
+  it("clears on the NEXT pointerdown so a subsequent click works", () => {
+    const svg = makeSvg();
+    const ctrl = attachStepImageViewport(svg);
+    // First: a drag.
+    svg.dispatchEvent(
+      new PointerEvent("pointerdown", {
+        button: 0,
+        pointerId: 1,
+        clientX: 10,
+        clientY: 10,
+        bubbles: true,
+      }),
+    );
+    svg.dispatchEvent(
+      new PointerEvent("pointermove", {
+        pointerId: 1,
+        clientX: 50,
+        clientY: 50,
+        bubbles: true,
+      }),
+    );
+    svg.dispatchEvent(
+      new PointerEvent("pointerup", {
+        pointerId: 1,
+        clientX: 50,
+        clientY: 50,
+        bubbles: true,
+      }),
+    );
+    expect(ctrl.wasDragging()).toBe(true);
+    // Next: a non-drag pointerdown should clear the flag.
+    svg.dispatchEvent(
+      new PointerEvent("pointerdown", {
+        button: 0,
+        pointerId: 2,
+        clientX: 100,
+        clientY: 100,
+        bubbles: true,
+      }),
+    );
+    expect(ctrl.wasDragging()).toBe(false);
+  });
+});
+
+// Phase 7d-polish — programmatic zoom for the UI buttons.
+describe("attachStepImageViewport: zoomBy() (Phase 7d-polish)", () => {
+  it("zooms in (factor < 1) shrinking the viewBox", () => {
+    const svg = makeSvg(800, 600);
+    const ctrl = attachStepImageViewport(svg, { initial: { x: 100, y: 75, w: 400, h: 300 } });
+    ctrl.zoomBy(0.5);
+    const after = ctrl.current();
+    expect(after.w).toBe(200);
+    expect(after.h).toBe(150);
+  });
+
+  it("zooms out (factor > 1) growing the viewBox", () => {
+    const svg = makeSvg(800, 600);
+    const ctrl = attachStepImageViewport(svg, { initial: { x: 100, y: 75, w: 400, h: 300 } });
+    ctrl.zoomBy(2);
+    const after = ctrl.current();
+    // Capped at intrinsic dimensions (max=800 on width, aspect-preserved).
+    expect(after.w).toBeLessThanOrEqual(800);
+    expect(after.w).toBeGreaterThan(400);
+  });
+
+  it("centres the zoom on the current viewBox centre", () => {
+    const svg = makeSvg(1000, 1000);
+    const ctrl = attachStepImageViewport(svg, { initial: { x: 200, y: 200, w: 400, h: 400 } });
+    // Center of initial = (400, 400). Zoom in 2× → new w/h = 200,
+    // new origin = center - 100 = (300, 300).
+    ctrl.zoomBy(0.5);
+    expect(ctrl.current()).toEqual({ x: 300, y: 300, w: 200, h: 200 });
+  });
+
+  it("respects the minSize cap when zooming in", () => {
+    const svg = makeSvg(800, 600);
+    const ctrl = attachStepImageViewport(svg, {
+      minSize: 100,
+      initial: { x: 0, y: 0, w: 200, h: 150 },
+    });
+    // Zoom in repeatedly — eventually hits minSize=100.
+    ctrl.zoomBy(0.1);
+    ctrl.zoomBy(0.1);
+    ctrl.zoomBy(0.1);
+    expect(ctrl.current().w).toBeGreaterThanOrEqual(100);
+    expect(ctrl.current().h).toBeGreaterThanOrEqual(75); // aspect-preserved
+  });
+});
