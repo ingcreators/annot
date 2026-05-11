@@ -394,7 +394,15 @@ describe("injectDocumentStyles: step block layouts", () => {
     const end = css.indexOf("}", start);
     const section = css.slice(start, end);
     expect(section).toContain("display: block");
-    expect(section).toContain("position: relative");
+    // `position: relative` lives on the shared step rule
+    // (Phase 3b moved it there so the in-block layout
+    // switcher can anchor against every layout, not just
+    // image-fill). The image-fill section relies on it
+    // implicitly.
+    const sharedStart = css.indexOf('[data-annot-block="step"] {');
+    expect(sharedStart).toBeGreaterThan(-1);
+    const sharedEnd = css.indexOf("}", sharedStart);
+    expect(css.slice(sharedStart, sharedEnd)).toContain("position: relative");
   });
 
   it("child slots get grid-area assignments at the default selector level", () => {

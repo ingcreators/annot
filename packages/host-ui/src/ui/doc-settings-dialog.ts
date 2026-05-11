@@ -28,6 +28,18 @@
 
 import "./annot-dialog.js";
 
+/** Layout enum mirrored from `@ingcreators/annot-doc`'s
+ *  `StepLayout`. Mirrored here (rather than imported) to keep
+ *  this dialog dependency-free at the type level — the dialog
+ *  bundles into the same chunk as the doc shell and pulling the
+ *  enum across packages would force a doc-package eager import
+ *  for the few hosts that haven't opted into documents yet.
+ *  The set of allowed values is held in sync by the
+ *  `STEP_LAYOUT_OPTIONS` constant below. */
+type StepLayoutValue = "image-top" | "image-bottom" | "image-left" | "image-right" | "image-fill";
+
+type CardColumnsValue = 1 | 2 | 3 | "auto";
+
 export interface DocSettingsInput {
   /** Trimmed title, never empty. Falls back to "Untitled" when
    *  the user clears the field. Used for both `doc.title` and
@@ -43,6 +55,13 @@ export interface DocSettingsInput {
   readonly theme?: "light" | "dark" | "auto";
   /** Article width — `undefined` means "medium" (the default). */
   readonly maxWidth?: "narrow" | "medium" | "wide" | "full";
+  /** Phase 3b of card-procedure-template — cards-per-row in the
+   *  standalone view. `undefined` means "leave the model
+   *  unchanged" (used when the user keeps the default). */
+  readonly cardColumns?: CardColumnsValue;
+  /** Phase 3b — default layout for newly-inserted step blocks.
+   *  Per-block `data-step-layout` always wins on render. */
+  readonly cardDefaultStepLayout?: StepLayoutValue;
 }
 
 export interface ShowDocSettingsDialogOptions {
@@ -51,6 +70,8 @@ export interface ShowDocSettingsDialogOptions {
   readonly defaultAuthor?: string;
   readonly defaultTheme?: "light" | "dark" | "auto";
   readonly defaultMaxWidth?: "narrow" | "medium" | "wide" | "full";
+  readonly defaultCardColumns?: CardColumnsValue;
+  readonly defaultCardStepLayout?: StepLayoutValue;
 }
 
 const COMMON_LANGS: readonly { value: string; label: string }[] = [
@@ -78,6 +99,35 @@ const WIDTH_OPTIONS: readonly {
   { value: "wide", label: "Wide (~960 px)" },
   { value: "full", label: "Full width" },
 ];
+
+const CARD_COLUMNS_OPTIONS: readonly { value: string; label: string }[] = [
+  { value: "1", label: "1 column (stack)" },
+  { value: "2", label: "2 columns" },
+  { value: "3", label: "3 columns" },
+  { value: "auto", label: "Auto (responsive)" },
+];
+
+const STEP_LAYOUT_OPTIONS: readonly { value: StepLayoutValue; label: string }[] = [
+  { value: "image-top", label: "Image top" },
+  { value: "image-bottom", label: "Image bottom" },
+  { value: "image-left", label: "Image left" },
+  { value: "image-right", label: "Image right" },
+  { value: "image-fill", label: "Image fill" },
+];
+
+function cardColumnsToString(v: CardColumnsValue | undefined): string {
+  if (v === "auto") return "auto";
+  if (v === 1 || v === 2 || v === 3) return String(v);
+  return "1";
+}
+
+function parseCardColumns(raw: string): CardColumnsValue | undefined {
+  if (raw === "auto") return "auto";
+  if (raw === "1") return 1;
+  if (raw === "2") return 2;
+  if (raw === "3") return 3;
+  return undefined;
+}
 
 /**
  * Show the doc-settings dialog. Resolves with the user's input
@@ -152,6 +202,23 @@ export function showDocSettingsDialog(
       options: WIDTH_OPTIONS.map((w) => ({ value: w.value, label: w.label })),
     });
 
+    // Phase 3b of card-procedure-template — card layout section.
+    // Two selects controlling how step blocks pack into the
+    // standalone view (columns) and which layout newly-inserted
+    // step blocks default to.
+    const cardColumnsLabel = makeLabel("Card columns");
+    const cardColumnsSelect = makeSelect({
+      value: cardColumnsToString(opts.defaultCardColumns),
+      ariaLabel: "Cards per row",
+      options: CARD_COLUMNS_OPTIONS,
+    });
+    const cardDefaultLayoutLabel = makeLabel("Default step layout");
+    const cardDefaultLayoutSelect = makeSelect({
+      value: opts.defaultCardStepLayout ?? "image-top",
+      ariaLabel: "Default step layout for new step blocks",
+      options: STEP_LAYOUT_OPTIONS.map((o) => ({ value: o.value, label: o.label })),
+    });
+
     fields.append(
       titleLabel,
       titleInput,
@@ -164,6 +231,10 @@ export function showDocSettingsDialog(
       themeSelect,
       widthLabel,
       widthSelect,
+      cardColumnsLabel,
+      cardColumnsSelect,
+      cardDefaultLayoutLabel,
+      cardDefaultLayoutSelect,
     );
     dlg.appendChild(fields);
     document.body.appendChild(dlg);
@@ -184,6 +255,8 @@ export function showDocSettingsDialog(
       const author = authorInput.value.trim() || undefined;
       const theme = themeSelect.value as "light" | "dark" | "auto";
       const maxWidth = widthSelect.value as "narrow" | "medium" | "wide" | "full";
+      const cardColumns = parseCardColumns(cardColumnsSelect.value);
+      const cardDefaultStepLayout = cardDefaultLayoutSelect.value as StepLayoutValue;
       close();
       const out: DocSettingsInput = {
         title,
@@ -191,6 +264,8 @@ export function showDocSettingsDialog(
         ...(author !== undefined ? { author } : {}),
         theme,
         maxWidth,
+        ...(cardColumns !== undefined ? { cardColumns } : {}),
+        cardDefaultStepLayout,
       };
       resolve(out);
     });

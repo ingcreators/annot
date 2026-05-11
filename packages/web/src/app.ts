@@ -1705,6 +1705,8 @@ export class App {
       defaultAuthor: current.meta.author,
       defaultTheme: current.meta.theme ?? "auto",
       defaultMaxWidth: current.meta.maxWidth ?? "medium",
+      defaultCardColumns: current.meta.cardLayout?.columns,
+      defaultCardStepLayout: current.meta.cardLayout?.defaultStepLayout ?? "image-top",
     });
     if (!result) return;
 
@@ -1726,18 +1728,37 @@ export class App {
             const { author: _ignored, ...rest } = current.meta;
             return rest;
           })();
+    // Phase 3b of card-procedure-template — cardLayout is
+    // optional; only emit the field when at least one nested
+    // setting differs from its implicit default. An empty
+    // cardLayout object would round-trip as `undefined` per
+    // `parseCardLayoutMeta`, but elide it here so the saved
+    // sidecar stays minimal for users who haven't engaged with
+    // the card-procedure feature.
+    const cardLayout: import("@ingcreators/annot-doc").CardLayoutMeta = {
+      ...(result.cardColumns !== undefined ? { columns: result.cardColumns } : {}),
+      ...(result.cardDefaultStepLayout !== undefined && result.cardDefaultStepLayout !== "image-top"
+        ? { defaultStepLayout: result.cardDefaultStepLayout }
+        : {}),
+    };
+    const cardLayoutMaybe = Object.keys(cardLayout).length > 0 ? { cardLayout } : {};
+    // Strip any stale cardLayout from the spread base before
+    // applying the new value (or omission) so users who clear
+    // the columns dropdown see the field disappear.
+    const { cardLayout: _staleCardLayout, ...metaWithoutCardLayout } = baseMeta;
     const updated: import("@ingcreators/annot-doc").AnnotDocument = {
       ...current,
       title: result.title,
       ...(result.lang !== undefined ? { lang: result.lang } : {}),
       meta: {
-        ...baseMeta,
+        ...metaWithoutCardLayout,
         title: result.title,
         // Theme + maxWidth are always set (the dropdowns don't
         // have "leave unset" affordance); `meta.theme` etc.
         // round-trip through `serializeDocument` correctly.
         theme: result.theme,
         maxWidth: result.maxWidth,
+        ...cardLayoutMaybe,
       },
     };
     shell.document = updated;

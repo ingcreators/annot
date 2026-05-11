@@ -337,6 +337,10 @@ function stepBlockRules(): string {
     "  box-shadow: var(--annot-card-shadow);",
     "  padding: var(--annot-card-padding);",
     "  margin: 1rem 0;",
+    "  /* Anchor for absolute-positioned children — the in-block",
+    "     layout switcher (Phase 3b of card-procedure-template) and",
+    "     the image-fill title/body overlay both rely on this. */",
+    "  position: relative;",
     "  /* Clip the image-fill overlay's backdrop and any rounded-corner",
     "     image edges within the card boundary. */",
     "  overflow: hidden;",
@@ -402,9 +406,9 @@ function stepBlockRules(): string {
     // image-fill — image covers the card; title + body overlay
     // the bottom edge with a translucent backdrop. Different
     // positioning model from the four area-based layouts.
+    // `position: relative` is inherited from the shared step rule.
     '[data-annot-block="step"][data-step-layout="image-fill"] {',
     "  display: block;",
-    "  position: relative;",
     "  padding: 0;",
     "}",
     '[data-annot-block="step"][data-step-layout="image-fill"] > svg {',

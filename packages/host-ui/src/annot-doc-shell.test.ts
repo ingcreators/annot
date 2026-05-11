@@ -1687,3 +1687,95 @@ describe("annot-doc-shell: step block menu entry", () => {
     expect(stepItem?.label).toBe("Step");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Phase 3b of docs/plans/card-procedure-template.md — in-block
+// layout switcher.
+// ---------------------------------------------------------------------------
+
+describe("annot-doc-shell: step layout switcher", () => {
+  function makeStepDoc(): AnnotDocument {
+    return {
+      version: 1,
+      lang: "en",
+      title: "Step doc",
+      meta: { title: "Step doc" },
+      styleBlock: null,
+      blocks: [
+        {
+          kind: "step",
+          id: "img-step-test",
+          svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100"></svg>',
+          title: "First step",
+          body: "Click the button.",
+          layout: "image-top",
+        },
+      ],
+    };
+  }
+
+  it("renders a layout switcher in editing mode only", async () => {
+    const el = mount(makeStepDoc());
+    el.editing = false;
+    await el.updateComplete;
+    expect(el.querySelector("[data-step-layout-switcher]")).toBeNull();
+    el.editing = true;
+    await el.updateComplete;
+    const switcher = el.querySelector("[data-step-layout-switcher]") as HTMLSelectElement | null;
+    expect(switcher).not.toBeNull();
+    expect(switcher?.value).toBe("image-top");
+    // All five enum values are present as options.
+    const values = Array.from(switcher?.options ?? []).map((o) => o.value);
+    expect(values).toEqual([
+      "image-top",
+      "image-bottom",
+      "image-left",
+      "image-right",
+      "image-fill",
+    ]);
+  });
+
+  it("updates step.layout when the switcher fires change", async () => {
+    const el = mount(makeStepDoc());
+    el.editing = true;
+    await el.updateComplete;
+    const switcher = el.querySelector("[data-step-layout-switcher]") as HTMLSelectElement;
+    switcher.value = "image-left";
+    switcher.dispatchEvent(new Event("change", { bubbles: true }));
+    await el.updateComplete;
+    const step = el.document!.blocks[0];
+    if (step?.kind !== "step") throw new Error("expected step block");
+    expect(step.layout).toBe("image-left");
+  });
+
+  it("pushes a history entry when the switcher changes", async () => {
+    const el = mount(makeStepDoc());
+    el.editing = true;
+    await el.updateComplete;
+    const switcher = el.querySelector("[data-step-layout-switcher]") as HTMLSelectElement;
+    expect(el.canUndo()).toBe(false);
+    switcher.value = "image-fill";
+    switcher.dispatchEvent(new Event("change", { bubbles: true }));
+    await el.updateComplete;
+    expect(el.canUndo()).toBe(true);
+  });
+
+  it("clicks on the switcher do NOT open the image modal", async () => {
+    const el = mount(makeStepDoc());
+    el.editing = true;
+    await el.updateComplete;
+    const openSpy = vi
+      .spyOn(
+        // biome-ignore lint/suspicious/noExplicitAny: spying on module-level static
+        (await import("./annot-doc-image-editor-modal.js")).AnnotDocImageEditorModalElement as any,
+        "openFor",
+      )
+      .mockResolvedValue({ kind: "cancel" });
+    const switcher = el.querySelector("[data-step-layout-switcher]") as HTMLSelectElement;
+    // Bubbling click event through the switcher should not reach
+    // the block-host's modal-opening handler.
+    switcher.click();
+    expect(openSpy).not.toHaveBeenCalled();
+    openSpy.mockRestore();
+  });
+});
