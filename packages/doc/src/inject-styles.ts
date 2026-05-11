@@ -374,6 +374,17 @@ function stepBlockRules(): string {
     // The slot div is the 16:9 frame; `overflow: hidden` clips
     // any pan/zoom state that wanders outside (the controller
     // already clamps pan, but the clip is belt-and-braces).
+    //
+    // Phase 7d-polish follow-up: the slot background is the
+    // CARD background, not the code-block grey. Otherwise a
+    // tall screenshot in a 16:9 frame shows a visible grey
+    // strip above / below the letterboxed image (user-reported
+    // regression). With `transparent` the section's card
+    // background fills the letterbox area, which blends into
+    // the card chrome. A subtle pre-mount placeholder appears
+    // ONLY while the SVG hasn't materialised yet, keyed off
+    // the `data-annot-image-svg` attribute that
+    // `materialiseImageSlot` removes after inlining.
     '[data-annot-block="step"] > svg,',
     '[data-annot-block="step"] > .annot-doc-image-svg-slot {',
     "  grid-area: image;",
@@ -383,6 +394,12 @@ function stepBlockRules(): string {
     "  display: block;",
     "  margin: 0;",
     "  overflow: hidden;",
+    "  background: transparent;",
+    "}",
+    '[data-annot-block="step"] > .annot-doc-image-svg-slot[data-annot-image-svg] {',
+    "  /* Pre-mount placeholder background — visible only while",
+    "     the slot is reserving layout space; cleared by",
+    "     `materialiseImageSlot` once the SVG inlines. */",
     "  background: var(--annot-doc-code-bg, #f3f4f6);",
     "}",
     '[data-annot-block="step"] .annot-doc-image-svg-slot > svg {',
