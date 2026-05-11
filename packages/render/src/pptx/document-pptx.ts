@@ -23,7 +23,7 @@
 
 import { svgElementToAnnotationShape } from "@ingcreators/annot-core/editor/svg-to-annotation-shapes";
 import { buildZip } from "@ingcreators/annot-core/zip";
-import type { AnnotDocument, ImageBlock } from "@ingcreators/annot-doc";
+import type { AnnotDocument, ImageBlock, StepBlock, StepLayout } from "@ingcreators/annot-doc";
 import { buildShapeXml, px } from "../drawingml/index.js";
 
 /** Output of {@link buildDocumentPptxFiles} — the OPC file map
@@ -150,10 +150,24 @@ function collectSlides(doc: AnnotDocument): SlideData[] {
   const out: SlideData[] = [];
   let slideIndex = 0;
   for (const block of doc.blocks) {
-    if (block.kind !== "image") continue;
-    slideIndex += 1;
-    const data = buildSlideFromImageBlock(block, slideIndex);
-    if (data) out.push(data);
+    if (block.kind === "image") {
+      slideIndex += 1;
+      const data = buildSlideFromImageBlock(block, slideIndex);
+      if (data) out.push(data);
+      continue;
+    }
+    // Phase 6 of `docs/plans/card-procedure-template.md` — step
+    // blocks become slides alongside image blocks. The image is
+    // full-bleed (matches the image-block path) so annotation
+    // coordinates stay in their SVG-native space; title + body
+    // are emitted as overlay `<p:sp>` text shapes positioned per
+    // `data-step-layout`.
+    if (block.kind === "step") {
+      slideIndex += 1;
+      const data = buildSlideFromStepBlock(block, slideIndex);
+      if (data) out.push(data);
+      continue;
+    }
   }
   return out;
 }
@@ -221,6 +235,207 @@ function buildSlideFromImageBlock(block: ImageBlock, index: number): SlideData |
     shapes,
     mosaicMedia,
   };
+}
+
+/**
+ * Phase 6 of `docs/plans/card-procedure-template.md` — build a
+ * slide from a `step` block. The step block's SVG carries the
+ * same shape as an image block's SVG (background `<image>` +
+ * `<g id="annotations">` tree), so we delegate to
+ * `buildSlideFromImageBlock` against a synthesised stand-in,
+ * then append the layout-positioned title + body overlay
+ * `<p:sp>` shapes.
+ *
+ * The image stays full-bleed across every `data-step-layout`
+ * value — annotation coordinates remain in their SVG-native
+ * space, no transform required. The layout choice controls
+ * WHERE the title + body text overlay sits on top of the image:
+ *
+ *   - `image-top`     → text at the bottom (CSS counterpart:
+ *                       image visually top, text below it).
+ *   - `image-bottom`  → text at the top (mirror).
+ *   - `image-left`    → text on the right (image left → text
+ *                       right).
+ *   - `image-right`   → text on the left.
+ *   - `image-fill`    → text at the bottom (the CSS default
+ *                       overlay position; matches the
+ *                       in-editor render).
+ *
+ * Every overlay carries a translucent dark backdrop + white
+ * text so the title + body stay legible against any
+ * screenshot. Future enhancement: parse `block.title` /
+ * `block.body` rich-text HTML and emit per-run formatting
+ * (bold / italic / underline). Phase 6 v1 strips inline tags
+ * to plain text for the overlay — keeps the OOXML emit terse
+ * and visually consistent across layouts.
+ */
+function buildSlideFromStepBlock(block: StepBlock, index: number): SlideData | null {
+  const base = buildSlideFromImageBlock({ kind: "image", id: block.id, svg: block.svg }, index);
+  if (!base) return null;
+
+  // Allocate fresh `<p:cNvPr id="..."/>` ids for the text
+  // shapes. `buildSlideFromImageBlock` started at 2 and
+  // incremented per annotation; pick up from there.
+  let nextId = base.shapes.reduce((m, s) => Math.max(m, s.id), 1) + 1;
+
+  const placements = LAYOUT_PLACEMENTS[block.layout];
+  const titleText = stripInlineHtml(block.title);
+  const bodyText = stripInlineHtml(block.body);
+
+  // Empty title or body slots — common when the user hasn't
+  // typed anything yet — are emitted as visible empty boxes
+  // would be noise. Skip them.
+  if (titleText.length > 0) {
+    const titleId = nextId++;
+    base.shapes.push({
+      xml: buildOverlayTextShapeXml({
+        id: titleId,
+        name: "StepTitle",
+        text: titleText,
+        rect: placements.title,
+        slideW: base.width,
+        slideH: base.height,
+        fontSizeHpt: 2400,
+        bold: true,
+      }),
+      id: titleId,
+    });
+  }
+  if (bodyText.length > 0) {
+    const bodyId = nextId++;
+    base.shapes.push({
+      xml: buildOverlayTextShapeXml({
+        id: bodyId,
+        name: "StepBody",
+        text: bodyText,
+        rect: placements.body,
+        slideW: base.width,
+        slideH: base.height,
+        fontSizeHpt: 1600,
+        bold: false,
+      }),
+      id: bodyId,
+    });
+  }
+
+  return base;
+}
+
+/** Per-layout rectangles (as fractions of slide width / height)
+ *  for the step block's title + body overlay. Mirrors the CSS
+ *  layout's "text region" position: text sits where the body
+ *  sits in the in-editor card render. */
+const LAYOUT_PLACEMENTS: Record<
+  StepLayout,
+  {
+    title: { x: number; y: number; w: number; h: number };
+    body: { x: number; y: number; w: number; h: number };
+  }
+> = {
+  // CSS: image top, text bottom — PPTX puts text at slide bottom.
+  "image-top": {
+    title: { x: 0.04, y: 0.72, w: 0.92, h: 0.08 },
+    body: { x: 0.04, y: 0.8, w: 0.92, h: 0.16 },
+  },
+  // CSS: image bottom, text top — PPTX puts text at slide top.
+  "image-bottom": {
+    title: { x: 0.04, y: 0.04, w: 0.92, h: 0.08 },
+    body: { x: 0.04, y: 0.12, w: 0.92, h: 0.16 },
+  },
+  // CSS: image left, text right — PPTX puts text on right side.
+  "image-left": {
+    title: { x: 0.56, y: 0.06, w: 0.4, h: 0.1 },
+    body: { x: 0.56, y: 0.16, w: 0.4, h: 0.78 },
+  },
+  // CSS: image right, text left — PPTX puts text on left side.
+  "image-right": {
+    title: { x: 0.04, y: 0.06, w: 0.4, h: 0.1 },
+    body: { x: 0.04, y: 0.16, w: 0.4, h: 0.78 },
+  },
+  // CSS: image fill + text bottom overlay — PPTX matches.
+  "image-fill": {
+    title: { x: 0.04, y: 0.78, w: 0.92, h: 0.08 },
+    body: { x: 0.04, y: 0.86, w: 0.92, h: 0.1 },
+  },
+};
+
+/** Strip inline HTML to plain text. The step title / body are
+ *  stored as canonical inline HTML (Phase 1) — `<strong>`,
+ *  `<em>`, `<u>`, `<span style>`, etc. Phase 6 v1 flattens that
+ *  to a single run; rich formatting per run is a future
+ *  enhancement that needs an HTML → `TextRun[]` parser bridge. */
+function stripInlineHtml(html: string): string {
+  return html
+    .replace(/<[^>]+>/g, "")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, "&")
+    .trim();
+}
+
+/** Escape characters that have special meaning inside OOXML
+ *  text content. Matches the canonicaliser the format spec
+ *  uses for `<a:t>` text. */
+function escapeOoxmlText(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+interface OverlayTextShapeOptions {
+  id: number;
+  name: string;
+  text: string;
+  rect: { x: number; y: number; w: number; h: number };
+  slideW: number;
+  slideH: number;
+  /** Font size in hundredths of a point (PowerPoint's `sz`
+   *  attribute unit). `2400` = 24 pt. */
+  fontSizeHpt: number;
+  bold: boolean;
+}
+
+/**
+ * Emit one `<p:sp>` for the step's title or body overlay.
+ * The shape draws a translucent dark backdrop (`alpha 65%`)
+ * with white text on top so the overlay stays readable
+ * against any screenshot. Phase 6 v1 — single-run plain text.
+ */
+function buildOverlayTextShapeXml(opts: OverlayTextShapeOptions): string {
+  const xPx = opts.slideW * opts.rect.x;
+  const yPx = opts.slideH * opts.rect.y;
+  const wPx = opts.slideW * opts.rect.w;
+  const hPx = opts.slideH * opts.rect.h;
+  const text = escapeOoxmlText(opts.text);
+  const boldAttr = opts.bold ? ' b="1"' : "";
+  return `<p:sp>
+        <p:nvSpPr>
+          <p:cNvPr id="${opts.id}" name="${opts.name}"/>
+          <p:cNvSpPr txBox="1"/>
+          <p:nvPr/>
+        </p:nvSpPr>
+        <p:spPr>
+          <a:xfrm>
+            <a:off x="${px(xPx)}" y="${px(yPx)}"/>
+            <a:ext cx="${px(wPx)}" cy="${px(hPx)}"/>
+          </a:xfrm>
+          <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+          <a:solidFill><a:srgbClr val="000000"><a:alpha val="65000"/></a:srgbClr></a:solidFill>
+          <a:ln><a:noFill/></a:ln>
+        </p:spPr>
+        <p:txBody>
+          <a:bodyPr wrap="square" lIns="91440" tIns="45720" rIns="91440" bIns="45720" anchor="ctr"/>
+          <a:lstStyle/>
+          <a:p>
+            <a:pPr algn="ctr"><a:defRPr/></a:pPr>
+            <a:r>
+              <a:rPr lang="en-US" sz="${opts.fontSizeHpt}"${boldAttr}>
+                <a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill>
+              </a:rPr>
+              <a:t>${text}</a:t>
+            </a:r>
+          </a:p>
+        </p:txBody>
+      </p:sp>`;
 }
 
 // ---- SVG helpers ---------------------------------------------------------
