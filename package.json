@@ -38,13 +38,13 @@
     "test:coverage": "vitest run --coverage"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.4.14",
-    "@material-symbols/svg-400": "^0.44.4",
+    "@biomejs/biome": "^2.4.15",
+    "@material-symbols/svg-400": "^0.44.6",
     "@vitest/coverage-v8": "^4.1.5",
     "fake-indexeddb": "^6",
     "happy-dom": "^20",
     "msw": "^2.14",
-    "turbo": "^2.9.8",
+    "turbo": "^2.9.12",
     "vitest": "^4.1.5"
   },
   "pnpm": {
