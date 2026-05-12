@@ -635,6 +635,18 @@ function stepBlockRules(): string {
     "  font-size: 0.9rem;",
     "  line-height: 1.4;",
     "}",
+    // When body is empty, the body shape has zero rendered
+    // height and the title sits `bottom: 2rem` — leaving a
+    // 2rem-tall transparent gap between the title's bottom
+    // edge and the slide's bottom. Drop the title flush to
+    // the bottom (`bottom: 0`) so the dark overlay strip
+    // extends all the way down, matching the body-present
+    // visual. `:has(> :empty)` is supported in Chrome 105+ /
+    // Firefox 121+ / Safari 15.4+ — well past the editor's
+    // baseline.
+    '[data-annot-block="step"][data-step-layout="image-fill"]:has(> [data-step-body]:empty) > [data-step-title] {',
+    "  bottom: 0;",
+    "}",
     // Phase 7a — image-less step blocks. The empty `svg` field
     // becomes `data-step-image-less="1"` on the section (emitted
     // by both the serializer for standalone view and the editor's

@@ -470,6 +470,25 @@ describe("injectDocumentStyles: numbering meta (Phase 13)", () => {
     expect(css).toContain("padding-left: calc(var(--annot-step-badge-min-size) + 2.8rem + 1rem);");
   });
 
+  it("image-fill title drops to bottom: 0 when body is empty (no gap below overlay)", () => {
+    // User-reported: in image-fill layout with an empty body,
+    // the title sits at `bottom: 2rem` but the empty body
+    // shape has zero rendered height — leaving a 2rem
+    // transparent strip between the title and the slide
+    // bottom. The :has(> [data-step-body]:empty) rule drops
+    // the title to bottom: 0 in that case so the dark
+    // overlay extends fully to the bottom.
+    const css = buildStyleBlock(createEmptyDocument({ title: "Image-fill empty body" }));
+    expect(css).toContain(
+      '[data-step-layout="image-fill"]:has(> [data-step-body]:empty) > [data-step-title]',
+    );
+    const overrideStart = css.indexOf(
+      '[data-step-layout="image-fill"]:has(> [data-step-body]:empty) > [data-step-title]',
+    );
+    const overrideEnd = css.indexOf("}", overrideStart);
+    expect(css.slice(overrideStart, overrideEnd)).toContain("bottom: 0;");
+  });
+
   it("emits title clearance for image-less step blocks regardless of layout", () => {
     // User-reported: an image-less step block (`svg: ""`)
     // collapses to a text-only column regardless of
