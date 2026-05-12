@@ -540,13 +540,34 @@ Located as the **last child of `<body>`**, immediately after the
 interface DocMeta {
   title: string;            // mirrors <title>; serializer enforces equality
   author?: string;
-  theme?: "light" | "dark" | "auto";   // browser-view default theme
+  theme?: "light" | "dark" | "auto";   // legacy browser-view theme keyword; overridden by appearance.template
   maxWidth?: "narrow" | "medium" | "wide" | "full";  // content column
   cardLayout?: CardLayoutMeta;  // step-block grid + default-layout settings
   template?: TemplateMeta;  // present iff this file is a template
   imageMeta?: Record<string, ImageMeta>;  // keyed by data-annot-image-id
   numbering?: NumberingMeta; // Phase 13 — opt-in heading / figure auto-numbering
   header?: DocHeaderMeta;   // Phase 7c — Scribe-style doc header opt-in
+  appearance?: AppearanceMeta; // card-document-themes — built-in theme + per-doc customisation
+}
+
+interface AppearanceMeta {
+  template?: string;        // BuiltinThemeId from @ingcreators/annot-doc/headless THEMES
+                            // ("modern-light" | "modern-dark" | "minimal" | "editorial" | "playful").
+                            // Unknown ids fall back to "modern-light" at render time.
+                            // Takes precedence over the legacy `theme` keyword.
+  customCss?: string;       // free-form CSS appended after the theme. Sanitised on parse + render:
+                            //   - @import rules stripped
+                            //   - external url(http://…|https://…|//…) refs stripped (data: allowed)
+                            //   - legacy behavior: url() stripped
+                            //   - hard-capped at 8 KB
+                            // The escape hatch for users whose customisation needs go beyond
+                            // the built-in themes + font-family overrides.
+  fontFamily?: {            // per-token font-family override. Each field is independent.
+    sans?: string;          // overrides body inheritance + [data-font-family="Annot Sans"]
+    serif?: string;         // overrides [data-font-family="Annot Serif"]
+    mono?: string;          // overrides [data-annot-block="code"] + inline code selectors
+  };                        // Logical tokens (Annot Sans / Serif / Mono) resolve via cssStackFor;
+                            // raw values like "Inter, sans-serif" pass through verbatim.
 }
 
 interface DocHeaderMeta {

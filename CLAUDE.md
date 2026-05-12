@@ -556,6 +556,61 @@ History: [`_done/vscode-extension-host.md`](./docs/plans/_done/vscode-extension-
 followed by [`_done/editor-session-shell-switchover.md`](./docs/plans/_done/editor-session-shell-switchover.md)
 (PRs #411–TBD).
 
+### 11. Document themes — structural vs themable CSS split
+
+`injectDocumentStyles` in
+[`packages/doc/src/inject-styles.ts`](./packages/doc/src/inject-styles.ts)
+emits the document's `<style>` block in two layers:
+
+| Layer | Authored as | Emitted always? | Examples |
+|------|-------------|-----------------|----------|
+| **Structural** | Inline in `inject-styles.ts` | Yes | `[data-annot-block]` selectors, grid templates per `data-step-layout`, `position: relative` anchors, CSS counter declarations, print rules, mobile collapse rules, the structural `--annot-card-*` / `--annot-step-badge-*` geometry vars |
+| **Theme** | `Theme` modules under [`packages/doc/src/themes/`](./packages/doc/src/themes/) | Per-document opt-in via `meta.appearance.template`; falls back to legacy `meta.theme` mapping for non-opted docs | `--annot-doc-*` / `--annot-card-*` / `--annot-step-badge-*` colour values, optional `darkVars`, optional theme-specific `extraCss` selectors, optional `badgeLabelTemplate` |
+
+The split is a guardrail, not just a refactor:
+
+- **Anything the editor's DOM walks for stays structural.**
+  `<annot-doc-shell>` and the editor's slash-menu / drag-handle
+  code identify blocks via `[data-annot-block]` selectors and
+  position absolutely-positioned children via `position:
+  relative` anchors. Moving any of those into a theme would
+  let a theme accidentally break the editor.
+- **Themes only touch presentation.** Colours, shadows, font
+  scale, badge shape — all overridable per theme. Geometry
+  (radius / padding / gap defaults) starts structural and
+  moves to themable only when a built-in theme actually needs
+  to override it (`minimal` overrode `--annot-card-radius`
+  via `extraCss` rather than a `vars` move; the bytes for
+  existing fixtures stay identical).
+- **User customisation lands as a postlude**, not a structural
+  edit. `meta.appearance.fontFamily` appends an override block
+  after `extraCss`; `meta.appearance.customCss` appends a
+  sanitised user block after that. Both are inert when not
+  set (byte-identical for docs that haven't opted in).
+
+When adding new doc CSS, the test is:
+
+1. Does the editor's TypeScript code walk for this selector or
+   attribute? → structural (inline in `inject-styles.ts`).
+2. Is it purely visual (colour, shadow, radius)? → themable
+   (move it into the `Theme` shape — `vars` + optionally
+   `darkVars` + optionally `extraCss`).
+3. Is it a one-off per-document override? → goes through the
+   `meta.appearance.customCss` escape hatch; sanitiser strips
+   `@import` / external `url()` / `behavior: url()`.
+
+The `Theme` type + theme registry sit at
+`@ingcreators/annot-doc/headless`; see
+[`docs/plugin-api/themes.md`](./docs/plugin-api/themes.md) for
+the plugin-author guide.
+
+History: [`_done/card-document-themes.md`](./docs/plans/_done/card-document-themes.md)
+(PRs [#632](https://github.com/ingcreators/annot/pull/632)–#637)
+landed the split + the five built-in themes
+(`modern-light` / `modern-dark` / `minimal` / `editorial` /
+`playful`) + the Appearance picker + font-family override +
+custom CSS escape hatch.
+
 ## Component stories (Storybook)
 
 Storybook lives in
