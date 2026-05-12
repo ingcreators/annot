@@ -460,6 +460,22 @@ describe("injectDocumentStyles: step block layouts", () => {
     expect(innerSection).toContain("inset: 0");
   });
 
+  it("card image inner SVG carries margin: 0 to neutralise editor-shell #svg-root style leakage", () => {
+    // Root cause: the editor's live canvas uses `<svg id="svg-root">`,
+    // which the editor stylesheet styles with `margin: 20px auto`.
+    // Pre-fix annotated bytes saved to `block.svg` carried that id;
+    // when embedded in the doc shell the margin pushed the SVG 20px
+    // down inside the slot — visible as a grey strip above the card
+    // image. The editor's export path now strips the id, but legacy
+    // saved docs already on disk still carry it. `margin: 0` on the
+    // inner SVG rule neutralises the leakage for both forward and
+    // backward compat.
+    const css = buildStyleBlock(createEmptyDocument({ title: "Margin reset" }));
+    const innerStart = css.indexOf('[data-annot-block="step"] .annot-doc-image-svg-slot > svg {');
+    const innerEnd = css.indexOf("}", innerStart);
+    expect(css.slice(innerStart, innerEnd)).toContain("margin: 0");
+  });
+
   it("step blocks join the print break-inside avoid rule", () => {
     const css = buildStyleBlock(createEmptyDocument({ title: "Print" }));
     const printStart = css.indexOf("@media print {");

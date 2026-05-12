@@ -421,6 +421,16 @@ function stepBlockRules(): string {
     "  width: 100%;",
     "  height: 100%;",
     "  display: block;",
+    // Host-guard: pre-fix editor-saved SVG bytes may still carry
+    // `id="svg-root"` (the editor's live canvas id). That id is
+    // styled with `margin: 20px auto` in `editor.css` — when
+    // embedded into the doc shell, that margin would push the
+    // SVG ~20px down inside the slot (visible as a grey strip
+    // above annotated cards). The export path now strips the id
+    // on save, but legacy docs already on disk still carry it.
+    // Forcing `margin: 0` here neutralises the leakage for both
+    // forward and backward compat.
+    "  margin: 0;",
     "}",
     '[data-annot-block="step"] > [data-step-title] {',
     "  grid-area: title;",

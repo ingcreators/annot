@@ -19,6 +19,17 @@ export function exportSVGString(canvas: CanvasManager): string {
   injectLogicalFontStyles(clone);
 
   clone.removeAttribute("style");
+  // Strip the editor-shell `id` so the exported SVG doesn't carry
+  // editor-host CSS hooks into foreign hosts. Specifically: the
+  // editor's `#svg-root` style block carries `margin: 20px auto`
+  // (live canvas chrome). When the same SVG bytes get embedded
+  // inside a card-procedure doc as `<svg id="svg-root">`, that
+  // 20px top margin pushes the SVG down inside the card image
+  // slot — visible as a grey strip above annotated cards (the
+  // unannotated path uses a freshly-built SVG with no id, so it
+  // never had the symptom). Removing the id makes the exported
+  // bytes host-agnostic.
+  clone.removeAttribute("id");
   clone.setAttribute("width", String(canvas.imageWidth));
   clone.setAttribute("height", String(canvas.imageHeight));
 
@@ -120,6 +131,12 @@ function exportAnnotationsSVGString(canvas: CanvasManager): string {
   }
 
   clone.removeAttribute("style");
+  // See `exportSVGString` for why the editor-shell id is stripped
+  // before serialisation. Same rationale applies here — the
+  // annotations-only output may be embedded into foreign hosts
+  // (XMP `annotationsSvg`, card-procedure docs) where the
+  // editor's `#svg-root` margin would bleed through.
+  clone.removeAttribute("id");
   clone.setAttribute("width", String(canvas.imageWidth));
   clone.setAttribute("height", String(canvas.imageHeight));
 
