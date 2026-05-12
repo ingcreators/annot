@@ -89,6 +89,15 @@ export interface DocSettingsInput {
    *  `meta.appearance.template = value` AND clears `meta.theme`
    *  so the two fields don't fight. */
   readonly appearanceTemplate?: string;
+  /** Phase 4 of `docs/plans/card-document-themes.md` — driver
+   *  for `meta.appearance.fontFamily`. Each field is independent
+   *  (the dialog renders three separate text inputs). Empty
+   *  strings collapse to `undefined` so the saved sidecar stays
+   *  minimal. When ALL three fields are empty, the caller drops
+   *  the `fontFamily` object entirely. */
+  readonly appearanceFontFamilySans?: string;
+  readonly appearanceFontFamilySerif?: string;
+  readonly appearanceFontFamilyMono?: string;
 }
 
 export interface ShowDocSettingsDialogOptions {
@@ -114,6 +123,13 @@ export interface ShowDocSettingsDialogOptions {
    *  `meta.appearance.template`. Absent → "Legacy" radio is
    *  checked, the legacy `Theme:` dropdown drives appearance. */
   readonly defaultAppearanceTemplate?: string;
+  /** Phase 4 of `docs/plans/card-document-themes.md` — current
+   *  `meta.appearance.fontFamily.{sans,serif,mono}`. Absent /
+   *  empty → corresponding text input is empty, and the
+   *  resolved field collapses to undefined on save. */
+  readonly defaultAppearanceFontFamilySans?: string;
+  readonly defaultAppearanceFontFamilySerif?: string;
+  readonly defaultAppearanceFontFamilyMono?: string;
 }
 
 /** Phase 3 of `docs/plans/card-document-themes.md` — built-in
@@ -331,6 +347,30 @@ export function showDocSettingsDialog(
       appearanceGroup.appendChild(card);
     }
 
+    // Phase 4 of card-document-themes.md — three text inputs for
+    // font family overrides. Each accepts a logical token
+    // (`Annot Sans` / `Annot Serif` / `Annot Mono`) or a raw CSS
+    // family stack. Empty → no override (sidecar stays minimal).
+    const fontFamilyHeader = makeLabel("Font family overrides (optional)");
+    const fontFamilySansInput = makeInput({
+      value: opts.defaultAppearanceFontFamilySans ?? "",
+      ariaLabel: "Sans font family override",
+      placeholder: "e.g. Inter, sans-serif — or Annot Serif",
+    });
+    const fontFamilySansLabel = makeSubLabel("Sans (body)");
+    const fontFamilySerifInput = makeInput({
+      value: opts.defaultAppearanceFontFamilySerif ?? "",
+      ariaLabel: "Serif font family override",
+      placeholder: "e.g. Charter, serif",
+    });
+    const fontFamilySerifLabel = makeSubLabel("Serif (Annot Serif token)");
+    const fontFamilyMonoInput = makeInput({
+      value: opts.defaultAppearanceFontFamilyMono ?? "",
+      ariaLabel: "Mono font family override",
+      placeholder: "e.g. Fira Code, monospace",
+    });
+    const fontFamilyMonoLabel = makeSubLabel("Mono (code)");
+
     const themeLabel = makeLabel("Theme (legacy — Appearance overrides)");
     const themeSelect = makeSelect({
       value: opts.defaultTheme ?? "auto",
@@ -446,6 +486,13 @@ export function showDocSettingsDialog(
       authorInput,
       appearanceLabel,
       appearanceGroup,
+      fontFamilyHeader,
+      fontFamilySansLabel,
+      fontFamilySansInput,
+      fontFamilySerifLabel,
+      fontFamilySerifInput,
+      fontFamilyMonoLabel,
+      fontFamilyMonoInput,
       themeLabel,
       themeSelect,
       widthLabel,
@@ -525,6 +572,11 @@ export function showDocSettingsDialog(
           break;
         }
       }
+      // Phase 4 of card-document-themes.md — read the font
+      // family text inputs. Empty values collapse to undefined.
+      const appearanceFontFamilySans = fontFamilySansInput.value.trim() || undefined;
+      const appearanceFontFamilySerif = fontFamilySerifInput.value.trim() || undefined;
+      const appearanceFontFamilyMono = fontFamilyMonoInput.value.trim() || undefined;
       close();
       const out: DocSettingsInput = {
         title,
@@ -539,6 +591,9 @@ export function showDocSettingsDialog(
         numberingSteps,
         ...(numberingStepLabel !== undefined ? { numberingStepLabel } : {}),
         ...(appearanceTemplate !== undefined ? { appearanceTemplate } : {}),
+        ...(appearanceFontFamilySans !== undefined ? { appearanceFontFamilySans } : {}),
+        ...(appearanceFontFamilySerif !== undefined ? { appearanceFontFamilySerif } : {}),
+        ...(appearanceFontFamilyMono !== undefined ? { appearanceFontFamilyMono } : {}),
       };
       resolve(out);
     });
@@ -556,6 +611,15 @@ function makeLabel(text: string): HTMLLabelElement {
   const lbl = document.createElement("label");
   lbl.textContent = text;
   lbl.style.cssText = "font-size:12px;color:var(--annot-text-secondary,#9ca3af);margin-top:4px;";
+  return lbl;
+}
+
+/** Sub-label for the font-family override inputs — slightly
+ *  smaller + slightly less indented than the section header. */
+function makeSubLabel(text: string): HTMLLabelElement {
+  const lbl = document.createElement("label");
+  lbl.textContent = text;
+  lbl.style.cssText = "font-size:11px;color:var(--annot-text-secondary,#9ca3af);margin-top:2px;";
   return lbl;
 }
 

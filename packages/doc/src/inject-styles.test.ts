@@ -845,6 +845,75 @@ describe("injectDocumentStyles: meta.appearance.template (Phase 2)", () => {
     expect(css).not.toContain("--annot-doc-accent: #60a5fa;");
   });
 
+  it("emits font-family override postlude when meta.appearance.fontFamily.sans is set", () => {
+    const css = buildStyleBlock(
+      createEmptyDocument({
+        title: "Custom sans",
+        meta: { appearance: { fontFamily: { sans: "Inter, sans-serif" } } },
+      }),
+    );
+    expect(css).toContain('html, body, [data-font-family="Annot Sans"]');
+    expect(css).toContain("font-family: Inter, sans-serif;");
+  });
+
+  it("resolves logical font tokens via cssStackFor", () => {
+    // Setting `sans` to "Annot Serif" should swap the resolved
+    // family — useful for users who want a serif body without
+    // picking the editorial theme outright.
+    const css = buildStyleBlock(
+      createEmptyDocument({
+        title: "Serif body",
+        meta: { appearance: { fontFamily: { sans: "Annot Serif" } } },
+      }),
+    );
+    // The resolved stack contains Cambria + Georgia (`Annot Serif`).
+    expect(css).toContain("Cambria");
+  });
+
+  it("each fontFamily field is independent — setting one doesn't emit the others", () => {
+    const css = buildStyleBlock(
+      createEmptyDocument({
+        title: "Mono only",
+        meta: { appearance: { fontFamily: { mono: "Fira Code, monospace" } } },
+      }),
+    );
+    // The mono override mentions the code-block selector.
+    expect(css).toContain('[data-annot-block="code"]');
+    expect(css).toContain("font-family: Fira Code, monospace;");
+    // But the sans + serif overrides are absent.
+    expect(css).not.toContain('html, body, [data-font-family="Annot Sans"] {\n  font-family:');
+    expect(css).not.toContain('[data-font-family="Annot Serif"] {\n  font-family:');
+  });
+
+  it("emits nothing when fontFamily is set but every field is empty", () => {
+    const css = buildStyleBlock(
+      createEmptyDocument({
+        title: "Empty",
+        meta: { appearance: { fontFamily: { sans: "", serif: "", mono: "" } } },
+      }),
+    );
+    // Postlude header for sans override absent.
+    expect(css).not.toContain('html, body, [data-font-family="Annot Sans"]');
+  });
+
+  it("survives a parse → serialize round-trip with appearance.fontFamily", () => {
+    const original = injectDocumentStyles(
+      createEmptyDocument({
+        title: "Round-trip fonts",
+        meta: {
+          appearance: { fontFamily: { sans: "Inter", mono: "Fira Code" } },
+        },
+      }),
+    );
+    const onceBytes = serializeDocument(original);
+    const reparsed = parseDocument(onceBytes);
+    expect(serializeDocument(reparsed)).toBe(onceBytes);
+    expect(reparsed.meta.appearance?.fontFamily).toEqual({
+      sans: "Inter",
+      mono: "Fira Code",
+    });
+  });
+
   it("absent meta.appearance falls through to legacy meta.theme mapping (byte-equivalent)", () => {
     // Documents that haven't opted into appearance MUST produce
     // the same bytes they did pre-Phase-2. This is the Phase 1

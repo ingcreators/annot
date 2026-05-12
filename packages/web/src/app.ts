@@ -1822,6 +1822,9 @@ export class App {
       defaultNumberingSteps: current.meta.numbering?.steps === true,
       defaultNumberingStepLabel: current.meta.numbering?.stepLabel,
       defaultAppearanceTemplate: current.meta.appearance?.template,
+      defaultAppearanceFontFamilySans: current.meta.appearance?.fontFamily?.sans,
+      defaultAppearanceFontFamilySerif: current.meta.appearance?.fontFamily?.serif,
+      defaultAppearanceFontFamilyMono: current.meta.appearance?.fontFamily?.mono,
     });
     if (!result) return;
 
@@ -1899,10 +1902,31 @@ export class App {
     // so the legacy keyword doesn't fight the new field at
     // render time.
     const existingAppearance = baseMeta.appearance ?? {};
-    const { template: _staleTemplate, ...appearanceWithoutTemplate } = existingAppearance;
+    const {
+      template: _staleTemplate,
+      fontFamily: _staleFontFamily,
+      ...appearanceWithoutDerived
+    } = existingAppearance;
+    // Phase 4 — collect the three text inputs into a
+    // `fontFamily` sub-object. Drop the field entirely when all
+    // three slots are empty so the sidecar stays minimal.
+    const fontFamilyNext: import("@ingcreators/annot-doc").AppearanceFontFamily = {
+      ...(result.appearanceFontFamilySans !== undefined
+        ? { sans: result.appearanceFontFamilySans }
+        : {}),
+      ...(result.appearanceFontFamilySerif !== undefined
+        ? { serif: result.appearanceFontFamilySerif }
+        : {}),
+      ...(result.appearanceFontFamilyMono !== undefined
+        ? { mono: result.appearanceFontFamilyMono }
+        : {}),
+    };
+    const fontFamilyMaybe =
+      Object.keys(fontFamilyNext).length > 0 ? { fontFamily: fontFamilyNext } : {};
     const appearanceNext: import("@ingcreators/annot-doc").AppearanceMeta = {
-      ...appearanceWithoutTemplate,
+      ...appearanceWithoutDerived,
       ...(result.appearanceTemplate !== undefined ? { template: result.appearanceTemplate } : {}),
+      ...fontFamilyMaybe,
     };
     const appearanceMaybe =
       Object.keys(appearanceNext).length > 0 ? { appearance: appearanceNext } : {};
