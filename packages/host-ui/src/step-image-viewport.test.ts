@@ -169,20 +169,48 @@ describe("attachStepImageViewport: targetAspect (Phase 7d-polish 2)", () => {
     expect(Math.abs(current.w / current.h - 16 / 9)).toBeLessThan(1e-6);
   });
 
-  it("computes a top-left-anchored default rect when no initial is supplied", () => {
-    // Tall bitmap 800x4000. Top-left 16:9 sub-rect = 800x450.
+  it("portrait bitmap: default rect CONTAINS the whole bitmap with horizontal letterbox", () => {
+    // Tall portrait 800x4000. "Contain" semantics: smallest
+    // 16:9 rect that wraps the entire bitmap. Binding axis is
+    // height (bitmap is taller relative to 16:9), so width
+    // expands to bitmap.h * 16/9 ≈ 7111.11. Centred on bitmap
+    // centre (400, 2000) → x ≈ -3155.55, y = 0. The bitmap
+    // shows up centred horizontally inside the 16:9 frame with
+    // empty SVG space (the slot's `overflow: hidden` clips to
+    // the card chrome) on left and right.
     const svg = makeSvg(800, 4000);
     const ctrl = attachStepImageViewport(svg, { targetAspect: 16 / 9 });
     const def = ctrl.defaultRect();
-    expect(def).toEqual({ x: 0, y: 0, w: 800, h: 450 });
+    expect(def.w).toBeCloseTo(7111.11, 1);
+    expect(def.h).toBe(4000);
+    expect(def.x).toBeCloseTo(-3155.55, 1);
+    expect(def.y).toBe(0);
+    // Aspect is exactly 16:9.
+    expect(Math.abs(def.w / def.h - 16 / 9)).toBeLessThan(1e-6);
     // ALSO: the initial state itself matches the default.
-    expect(ctrl.current()).toEqual({ x: 0, y: 0, w: 800, h: 450 });
+    expect(ctrl.current()).toEqual(def);
   });
 
-  it("handles a bitmap WIDER than target — uses full height, shrinks width", () => {
-    // 3000x1080 panorama. target = 16/9 → max w = 1080 * 16/9 = 1920.
-    // Top-left 16:9 sub-rect = 1920x1080.
+  it("wide panorama: default rect CONTAINS the whole bitmap with vertical letterbox", () => {
+    // 3000x1080 panorama. "Contain" semantics: bitmap is
+    // wider-than-target (3000 >= 1080 * 16/9 = 1920), so the
+    // binding axis is width — height expands to 3000 / (16/9) =
+    // 1687.5. Centred on bitmap centre (1500, 540) → x=0,
+    // y = 540 - 1687.5/2 = -303.75.
     const svg = makeSvg(3000, 1080);
+    const ctrl = attachStepImageViewport(svg, { targetAspect: 16 / 9 });
+    const def = ctrl.defaultRect();
+    expect(def.x).toBe(0);
+    expect(def.y).toBeCloseTo(-303.75, 2);
+    expect(def.w).toBe(3000);
+    expect(def.h).toBe(1687.5);
+    expect(Math.abs(def.w / def.h - 16 / 9)).toBeLessThan(1e-6);
+  });
+
+  it("near-16:9 source: default rect matches the bitmap (no letterbox)", () => {
+    // 1920x1080 already at target aspect. Contain rect equals
+    // the bitmap exactly.
+    const svg = makeSvg(1920, 1080);
     const ctrl = attachStepImageViewport(svg, { targetAspect: 16 / 9 });
     expect(ctrl.defaultRect()).toEqual({ x: 0, y: 0, w: 1920, h: 1080 });
   });
