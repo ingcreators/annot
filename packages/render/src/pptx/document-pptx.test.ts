@@ -1326,6 +1326,63 @@ describe("buildDocumentPptxFiles: step numbering badge (Phase 5)", () => {
     expect(slide1).toContain("StepBadge");
     expect(slide1).toContain("<a:t>1</a:t>");
   });
+
+  // User-feedback fix: when numbering is on, the image-less
+  // step slide swaps from the "title-card" layout (title in
+  // the upper third, body in the middle) to a "compact-text
+  // card" layout (title at the top with badge clearance, body
+  // filling the rest). Mirrors the HTML view's collapsed
+  // text-only column where badge + title sit adjacent at the
+  // top of the card.
+  it("image-less title sits near the top with badge clearance when numbering is on", () => {
+    const doc = makeNumberedDoc([
+      {
+        kind: "step",
+        id: "step-1",
+        svg: "",
+        title: "Hello",
+        body: "World",
+        layout: "image-top",
+      },
+    ]);
+    const slide1 = decode(buildDocumentPptxFiles(doc)["ppt/slides/slide1.xml"]!);
+    // Title rect at (12%, 6%, 83%, 12%) → x = 153.6 px → EMU
+    // = 1,463,040; y = 43.2 px → EMU = 411,480.
+    const titleStart = slide1.indexOf("StepTitle");
+    const titleEnd = slide1.indexOf("</p:sp>", titleStart);
+    const titleXml = slide1.slice(titleStart, titleEnd);
+    expect(titleXml).toContain('<a:off x="1463040" y="411480"/>');
+    // Title x = 12% = 153.6 px ≥ badge end at 8.45% ≈ 108 px,
+    // giving a comfortable ~46 px gutter for `Step %n` and
+    // similar wider templates.
+  });
+
+  it("image-less without numbering keeps the original title-card centred layout", () => {
+    const doc: AnnotDocument = {
+      version: 1,
+      lang: "en",
+      title: "Imageless plain",
+      meta: { title: "Imageless plain" },
+      styleBlock: null,
+      blocks: [
+        {
+          kind: "step",
+          id: "step-1",
+          svg: "",
+          title: "Hello",
+          body: "World",
+          layout: "image-top",
+        },
+      ],
+    };
+    const slide1 = decode(buildDocumentPptxFiles(doc)["ppt/slides/slide1.xml"]!);
+    // No badge to clear → title stays in the upper third
+    // (x=10%, y=20%) → EMU = (1,219,200, 1,371,600).
+    const titleStart = slide1.indexOf("StepTitle");
+    const titleEnd = slide1.indexOf("</p:sp>", titleStart);
+    const titleXml = slide1.slice(titleStart, titleEnd);
+    expect(titleXml).toContain('<a:off x="1219200" y="1371600"/>');
+  });
 });
 
 // ---------------------------------------------------------------------------
