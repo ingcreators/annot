@@ -2,7 +2,7 @@
  * @vitest-environment happy-dom
  *
  * `<annot-sidebar>` "New Document" entry tests — Phase 6c of
- * `docs/plans/annot-html-document.md`. The sidebar's New menu is
+ * `docs/plans/_done/annot-html-document.md`. The sidebar's New menu is
  * extensible via host- / plugin-supplied items and via the new
  * built-in `onNewDocument` callback (added in Phase 6c). The
  * test exercises both presence + hidden states without exercising

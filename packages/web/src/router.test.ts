@@ -3,7 +3,7 @@
  *
  * `parseRoute` / `editUrl` / `docUrl` tests — focused on the
  * `/doc/<store>/<path>` shape introduced by Phase 6b of
- * `docs/plans/annot-html-document.md`. Other route shapes
+ * `docs/plans/_done/annot-html-document.md`. Other route shapes
  * (`/edit/...`, `/folder/...`, `/handoff/...`) are exercised
  * through end-to-end navigation in `web` and aren't re-tested
  * here.

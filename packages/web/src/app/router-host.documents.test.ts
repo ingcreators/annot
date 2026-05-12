@@ -2,7 +2,7 @@
  * @vitest-environment happy-dom
  *
  * `RouterHost` doc-route dispatch — Phase 6b of
- * `docs/plans/annot-html-document.md`. Focused on the new
+ * `docs/plans/_done/annot-html-document.md`. Focused on the new
  * `/doc/<store>/<path>` branch in `handleRoute`; the existing
  * gallery / edit / handoff branches keep their end-to-end
  * coverage in `app.test.ts` (not duplicated here).

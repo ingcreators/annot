@@ -40,19 +40,19 @@ export interface DocMeta {
   readonly maxWidth?: "narrow" | "medium" | "wide" | "full";
   readonly template?: TemplateMeta;
   readonly imageMeta?: Readonly<Record<string, ImageMeta>>;
-  /** Phase 13 of `docs/plans/annot-html-document.md` —
+  /** Phase 13 of `docs/plans/_done/annot-html-document.md` —
    *  opt-in auto-numbering for headings and figure captions.
    *  Implemented via CSS counters in `injectDocumentStyles`,
    *  so the numbering shows up identically in the editor and
    *  in standalone browser-view rendering. */
   readonly numbering?: NumberingMeta;
-  /** Phase 1 of `docs/plans/card-procedure-template.md` —
+  /** Phase 1 of `docs/plans/_done/card-procedure-template.md` —
    *  card-grid + default-step-layout settings for documents that
    *  carry `step` blocks. Both nested fields are optional; an
    *  unset cardLayout means the implicit defaults (single-column
    *  stack, `image-top` for new steps). */
   readonly cardLayout?: CardLayoutMeta;
-  /** Phase 7c of `docs/plans/card-procedure-template.md` —
+  /** Phase 7c of `docs/plans/_done/card-procedure-template.md` —
    *  Scribe-style document header (icon + description). The
    *  `title` field above already covers the heading text; the
    *  `author` field above is shown in the header metadata row;
@@ -128,7 +128,7 @@ export type Block =
 
 /** Visual layout of a `StepBlock`. The five enum values mirror
  *  PowerPoint slide layouts that `exportDocumentPptx` will pick
- *  per-block in Phase 6 of `docs/plans/card-procedure-template.md`. */
+ *  per-block in Phase 6 of `docs/plans/_done/card-procedure-template.md`. */
 export type StepLayout = "image-top" | "image-bottom" | "image-left" | "image-right" | "image-fill";
 
 /** Card-grid + default-step-layout settings carried in the JSON
@@ -213,7 +213,7 @@ export interface ImageBlock {
  *  block. The three slots have fixed DOM order (svg → title →
  *  body) regardless of `layout`; the visual rearrangement is
  *  pure CSS Grid in `injectDocumentStyles` (Phase 2 of
- *  `docs/plans/card-procedure-template.md`). */
+ *  `docs/plans/_done/card-procedure-template.md`). */
 export interface StepBlock {
   readonly kind: "step";
   /** Stable per-image identifier. Shares the `data-annot-image-id`
@@ -237,7 +237,7 @@ export interface StepBlock {
    *  / new-block construction. The serializer always emits the
    *  attribute explicitly even for the default. */
   readonly layout: StepLayout;
-  /** Phase 7b of `docs/plans/card-procedure-template.md` —
+  /** Phase 7b of `docs/plans/_done/card-procedure-template.md` —
    *  optional URL chip (Scribe-style "Navigate to …" affordance).
    *  When present, the standalone view and editor render a clickable
    *  chip below the step title; the PPTX export emits the chip
@@ -248,7 +248,7 @@ export interface StepBlock {
    *  schemes — anything else is dropped on parse to defang
    *  `javascript:` / `data:` payloads from hostile input. */
   readonly link?: StepLink;
-  /** Phase 7d of `docs/plans/card-procedure-template.md` —
+  /** Phase 7d of `docs/plans/_done/card-procedure-template.md` —
    *  Scribe-style image viewport. A sub-rectangle of the SVG
    *  coordinate space defining the **initial view** of the
    *  screenshot inside the card's fixed display area. Interactive

@@ -2,7 +2,7 @@
 //
 // Coverage for the three package-resident starter templates
 // that fill the picker's "Built-in" section. Phase 9a of
-// `docs/plans/annot-html-document.md`.
+// `docs/plans/_done/annot-html-document.md`.
 //
 // happy-dom is needed because the round-trip checks call
 // `parseDocument`, which lazily resolves `globalThis.DOMParser`.
@@ -26,7 +26,7 @@ const EXPECTED_IDS: readonly BuiltinTemplateId[] = [
   "manual",
   "feature-guide",
   "procedure",
-  // Phase 5 of `docs/plans/card-procedure-template.md` — adds
+  // Phase 5 of `docs/plans/_done/card-procedure-template.md` — adds
   // the Scribe-style screenshot-driven walkthrough starter.
   "card-procedure",
 ];

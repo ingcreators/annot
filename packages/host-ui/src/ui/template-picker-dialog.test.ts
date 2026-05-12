@@ -2,7 +2,7 @@
  * @vitest-environment happy-dom
  *
  * `showTemplatePickerDialog` — Phase 8d of
- * `docs/plans/annot-html-document.md`. Promise wrapper around
+ * `docs/plans/_done/annot-html-document.md`. Promise wrapper around
  * `<annot-template-picker>` with full-viewport overlay chrome,
  * dismissal triggers (Esc / overlay-click / Cancel), and
  * resolution on `template-selected`.

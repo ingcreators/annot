@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 //
 // `exportDocumentPptx` / `buildDocumentPptxFiles` — Phase 11 of
-// `docs/plans/annot-html-document.md`. Coverage:
+// `docs/plans/_done/annot-html-document.md`. Coverage:
 //
 //   - Empty document (no image blocks) → empty file map / null
 //     blob.
@@ -192,7 +192,7 @@ describe("buildDocumentPptxFiles", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Phase 6 of docs/plans/card-procedure-template.md — step block
+// Phase 6 of docs/plans/_done/card-procedure-template.md — step block
 // → slide export with per-layout title + body overlay shapes.
 // ---------------------------------------------------------------------------
 

@@ -82,14 +82,14 @@ export interface SidebarCallbacks {
   onTimedCapture: () => void;
   onPasteClipboard: () => void;
   /** Create a new `.annot.html` document. Phase 6c of
-   *  `docs/plans/annot-html-document.md`. The host is responsible
+   *  `docs/plans/_done/annot-html-document.md`. The host is responsible
    *  for synthesising an empty document, persisting it via the
    *  active `StorageWithDocuments` backend, and navigating to the
    *  resulting `/doc/...` URL. The button is hidden when this
    *  callback is omitted. */
   onNewDocument?: () => void;
   /** Open the template picker for a new-document-from-template
-   *  flow. Phase 8d of `docs/plans/annot-html-document.md`. The
+   *  flow. Phase 8d of `docs/plans/_done/annot-html-document.md`. The
    *  host fetches `Templates/`, narrows via
    *  `isTemplateFromHead`, hands the survivors to
    *  `showTemplatePickerDialog`, and on selection clones via

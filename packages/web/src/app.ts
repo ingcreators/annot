@@ -814,7 +814,7 @@ export class App {
   /**
    * Create a blank `.annot.html` document and navigate to its
    * `/doc/...` URL. Phase 6c of
-   * `docs/plans/annot-html-document.md`. Wired through the
+   * `docs/plans/_done/annot-html-document.md`. Wired through the
    * sidebar's New menu when the active storage backend opts into
    * `StorageWithDocuments`. Behaviour:
    *
@@ -857,7 +857,7 @@ export class App {
   }
 
   /**
-   * Phase 4 of `docs/plans/card-procedure-template.md` — generate
+   * Phase 4 of `docs/plans/_done/card-procedure-template.md` — generate
    * a card-style step document from the gallery's ordered image
    * selection. Pipeline:
    *
@@ -1142,7 +1142,7 @@ export class App {
   /**
    * Open an `.annot.html` document into the doc-shell.
    *
-   * Phase 6b of `docs/plans/annot-html-document.md`. Minimum-viable
+   * Phase 6b of `docs/plans/_done/annot-html-document.md`. Minimum-viable
    * mount: the shell takes over a fixed-position overlay container
    * appended to `document.body`, and `doc-changed` events drive a
    * direct `storage.updateDocument` call (bypassing the per-image
@@ -1265,7 +1265,7 @@ export class App {
     const buildOverflowItems = (
       doc: typeof parsed,
     ): import("@ingcreators/annot-host-ui/annot-doc-header").DocHeaderOverflowItem[] => {
-      // Phase 6 of `docs/plans/card-procedure-template.md` —
+      // Phase 6 of `docs/plans/_done/card-procedure-template.md` —
       // step blocks become slides in the PPTX export alongside
       // image blocks, so the menu enable gate widens to count
       // both kinds. A pure card-procedure document (zero image

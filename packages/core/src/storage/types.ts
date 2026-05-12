@@ -578,7 +578,7 @@ export interface StorageWithThumbnailCache {
  * files (multi-image manuals authored via the doc shell). Sibling
  * to `ImageRecord`; backends opt in via `StorageWithDocuments`.
  *
- * Phase 6a of [`docs/plans/annot-html-document.md`](../../../../docs/plans/annot-html-document.md).
+ * Phase 6a of [`docs/plans/_done/annot-html-document.md`](../../../../docs/plans/_done/annot-html-document.md).
  * The whole plan series introducing the format lives there; the
  * Tier A surface (capability + record type + predicate) lands
  * before any single backend implements it so a consumer that
@@ -648,7 +648,7 @@ export type DocumentRecordUpdate = Partial<
 /**
  * Opt into the multi-image document storage surface — the storage
  * half of the `.annot.html` document format
- * ([`docs/plans/annot-html-document.md`](../../../../docs/plans/annot-html-document.md)).
+ * ([`docs/plans/_done/annot-html-document.md`](../../../../docs/plans/_done/annot-html-document.md)).
  *
  * Stores that implement this interface gain four document-shaped
  * methods. Delete / move / rename reuse the image-side equivalents

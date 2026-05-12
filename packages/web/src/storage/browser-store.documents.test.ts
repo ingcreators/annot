@@ -1,6 +1,6 @@
 /**
  * `BrowserStore` document-method tests — Phase 6a of
- * `docs/plans/annot-html-document.md`. Covers the four methods the
+ * `docs/plans/_done/annot-html-document.md`. Covers the four methods the
  * `StorageWithDocuments` capability adds (saveDocument /
  * getDocument / listDocuments / updateDocument), the IDB schema
  * upgrade from v2 → v3, and the `supportsDocuments` predicate's

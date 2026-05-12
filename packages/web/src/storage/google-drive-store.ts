@@ -47,7 +47,7 @@ const FOLDER_MIME = "application/vnd.google-apps.folder";
 /** `appProperties` keys used to cache `.annot.html` document
  *  metadata on Drive. Reads are cheap (returned in `files.list`)
  *  so the gallery can show title / counts without downloading
- *  bytes. Phase 7c of `docs/plans/annot-html-document.md`. */
+ *  bytes. Phase 7c of `docs/plans/_done/annot-html-document.md`. */
 const DOC_APP_PROP = {
   KIND: "annotDoc", // "1" marks the file as an Annot document
   TITLE: "annotDocTitle",

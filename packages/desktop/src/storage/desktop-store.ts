@@ -80,7 +80,7 @@ interface IndexEntry {
 /** Cached metadata for an `.annot.html` document. The bytes
  *  themselves live on disk; the index just lets the gallery
  *  render listing rows without reading every file. Phase 7b of
- *  `docs/plans/annot-html-document.md`. */
+ *  `docs/plans/_done/annot-html-document.md`. */
 interface DocIndexEntry {
   createdAt: string;
   /** Document title (mirrors `<title>` + sidecar `meta.title`). */

@@ -31,7 +31,7 @@ import { defaultAnnotImageFilename } from "@ingcreators/annot-core/utils";
 const DB_NAME = "annot";
 // v3: add the `documents` store while preserving the v2
 // path-keyed images / folders. See Phase 6a of
-// `docs/plans/annot-html-document.md`.
+// `docs/plans/_done/annot-html-document.md`.
 const DB_VERSION = 3;
 const IMG_STORE = "images";
 const FOLDER_STORE = "folders";
@@ -241,7 +241,7 @@ export class BrowserStore
   }
 
   async deleteImage(path: string): Promise<void> {
-    // Phase 6h of `docs/plans/annot-html-document.md`: the
+    // Phase 6h of `docs/plans/_done/annot-html-document.md`: the
     // `StorageWithDocuments` plan declares delete / move / rename
     // reuse the image-side equivalents because the path-keyed
     // model already covers any leaf file. Documents and images
@@ -502,7 +502,7 @@ export class BrowserStore
   }
 
   // ── StorageWithDocuments ────────────────────────────────────────
-  // Phase 6a of `docs/plans/annot-html-document.md`. Documents are
+  // Phase 6a of `docs/plans/_done/annot-html-document.md`. Documents are
   // stored in their own IDB object store keyed by path; folders are
   // shared with the image side because the path-keyed model doesn't
   // discriminate by file kind.

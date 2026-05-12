@@ -2,7 +2,7 @@
  * @vitest-environment happy-dom
  *
  * `DeviceStore` document-method tests — Phase 7a of
- * `docs/plans/annot-html-document.md`. Same in-memory FSA mock
+ * `docs/plans/_done/annot-html-document.md`. Same in-memory FSA mock
  * the contract suite uses; covers the four `StorageWithDocuments`
  * methods (saveDocument / getDocument / listDocuments /
  * updateDocument), the `deleteImage` cross-kind path-keyed

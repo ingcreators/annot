@@ -2,7 +2,7 @@
  * `<annot-doc-shell>` — renderer for an `AnnotDocument` with an
  * optional editing mode.
  *
- * Phases of `docs/plans/annot-html-document.md`:
+ * Phases of `docs/plans/_done/annot-html-document.md`:
  * - Phase 3 landed read-only rendering + TOC drawer.
  * - Phase 4a added an editing mode: contentEditable on heading +
  *   paragraph blocks, per-block toolbar (delete / move up / move
@@ -991,7 +991,7 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
     `;
   }
 
-  /** Phase 7c of `docs/plans/card-procedure-template.md` —
+  /** Phase 7c of `docs/plans/_done/card-procedure-template.md` —
    *  Scribe-style document header rendering in the editor /
    *  preview. Mirrors the standalone-view bytes produced by
    *  the serializer (`buildDocHeaderHtml` in
@@ -2994,7 +2994,7 @@ function renderImage(block: ImageBlock, editable = false): TemplateResult {
   `;
 }
 
-/** Phase 1 + 3 of `docs/plans/card-procedure-template.md` —
+/** Phase 1 + 3 of `docs/plans/_done/card-procedure-template.md` —
  *  step-block renderer. Phase 1 shipped the read-only minimal
  *  render; Phase 3 layers in the editing affordances:
  *
@@ -3009,7 +3009,7 @@ function renderImage(block: ImageBlock, editable = false): TemplateResult {
  *  Card chrome + per-layout grid live in `injectDocumentStyles`
  *  (Phase 2); this function only emits the bare HTML structure. */
 function renderStep(block: StepBlock, editable: boolean): TemplateResult {
-  // Phase 7a of `docs/plans/card-procedure-template.md` — an empty
+  // Phase 7a of `docs/plans/_done/card-procedure-template.md` — an empty
   // `block.svg` marks an image-less step (text-only narrative
   // card). The image slot is omitted entirely; the `data-step-
   // image-less="1"` attribute lets `injectDocumentStyles` collapse

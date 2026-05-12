@@ -22,7 +22,7 @@ v1 with a fixed block taxonomy. See:
   canonical format spec (block types, attribute vocabulary,
   metadata sidecar, template / numbering / cross-reference
   rules).
-- [`docs/plans/annot-html-document.md`](../plans/annot-html-document.md) —
+- [`docs/plans/_done/annot-html-document.md`](../plans/_done/annot-html-document.md) —
   the multi-image-document plan series (phases 0–13).
 - [`docs/plugin-api/storage.md`](./storage.md) —
   `StorageWithDocuments` (the storage half of the format).
@@ -173,7 +173,7 @@ forward-looking custom block kinds:
   [`packages/doc/src/serialize.ts`](../../packages/doc/src/serialize.ts) —
   parser / serializer. Read these to understand exactly what
   gets preserved verbatim for unknown content.
-- [`docs/plans/annot-html-document.md`](../plans/annot-html-document.md) —
+- [`docs/plans/_done/annot-html-document.md`](../plans/_done/annot-html-document.md) —
   master plan series. Phase 13c (this doc) closes the v1
   shipping milestone; the plugin registration surface is
   out of scope until v2.

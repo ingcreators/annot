@@ -1,6 +1,6 @@
 /**
  * Stories for `<annot-doc-block-toolbar>` — Phase 4a of
- * `docs/plans/annot-html-document.md`.
+ * `docs/plans/_done/annot-html-document.md`.
  */
 
 import type { Meta, StoryObj } from "@storybook/web-components-vite";

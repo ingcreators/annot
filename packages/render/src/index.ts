@@ -2,7 +2,7 @@
 //
 // Phase 8 of `docs/plans/three-package-split.md` — `renderImageRecord`
 // landed here as the day-1 surface. Phase 11 of
-// `docs/plans/annot-html-document.md` added `exportDocumentPptx`
+// `docs/plans/_done/annot-html-document.md` added `exportDocumentPptx`
 // for multi-slide PPTX export of `.annot.html` documents.
 //
 // **Architectural invariant**: this package depends on

@@ -1,6 +1,11 @@
 # `.annot.html` document — multi-image manual format
 
-> **Status:** v1 shipping — Phases 0–13 landed:
+> **Status:** Done — v1 shipped, all 14 phases landed (0–13).
+> Phases 0–13 landed via the PRs below; this archival entry retires
+> the doc to `_done/` together with the follow-on
+> [`card-procedure-template.md`](./card-procedure-template.md) plan.
+>
+> Phases 0–13 landed:
 >
 > | Phase | Description | PRs |
 > |-------|-------------|-----|

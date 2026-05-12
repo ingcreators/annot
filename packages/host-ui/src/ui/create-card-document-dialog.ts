@@ -2,7 +2,7 @@
  * `showCreateCardDocumentDialog` — modal that collects the
  * inputs the card-document generator needs.
  *
- * Phase 4 of `docs/plans/card-procedure-template.md`. Surfaces:
+ * Phase 4 of `docs/plans/_done/card-procedure-template.md`. Surfaces:
  *
  *   - **Title** (required) — doc title + `meta.title`. Defaults
  *     to "Untitled procedure" + selected to encourage rename.

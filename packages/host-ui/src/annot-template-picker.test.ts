@@ -2,7 +2,7 @@
  * @vitest-environment happy-dom
  *
  * `<annot-template-picker>` — Phase 8c of
- * `docs/plans/annot-html-document.md`. Coverage:
+ * `docs/plans/_done/annot-html-document.md`. Coverage:
  *
  *   - localStorage helpers (`readRecentTemplateIds`,
  *     `recordRecentTemplateId`, `forgetRecentTemplateId`):

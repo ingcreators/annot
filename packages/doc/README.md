@@ -7,7 +7,7 @@ so consumers can opt into a Node-side polyfill / test environment).
 
 See [`docs/annot-html-format.md`](../../docs/annot-html-format.md)
 for the canonical format reference and
-[`docs/plans/annot-html-document.md`](../../docs/plans/annot-html-document.md)
+[`docs/plans/_done/annot-html-document.md`](../../docs/plans/_done/annot-html-document.md)
 for the multi-phase plan this package belongs to.
 
 ## Public API (Phase 1)

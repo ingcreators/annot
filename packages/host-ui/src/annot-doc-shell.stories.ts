@@ -1,6 +1,6 @@
 /**
  * Stories for `<annot-doc-shell>` — read-only document renderer.
- * Phase 3 of `docs/plans/annot-html-document.md`.
+ * Phase 3 of `docs/plans/_done/annot-html-document.md`.
  *
  * The stories below exercise:
  *
@@ -204,7 +204,7 @@ export const Editing: Story = {
 };
 
 // ---------------------------------------------------------------------------
-// Phase 2 of docs/plans/card-procedure-template.md — step block
+// Phase 2 of docs/plans/_done/card-procedure-template.md — step block
 // card chrome + 5 per-layout grid templates. The stories below
 // each render a single-step doc with a different `data-step-layout`
 // value so the Storybook canvas surfaces the visual difference.
@@ -349,7 +349,7 @@ export const CardGridAuto: Story = {
 };
 
 // ---------------------------------------------------------------------------
-// Phase 3 of docs/plans/card-procedure-template.md — editing mode
+// Phase 3 of docs/plans/_done/card-procedure-template.md — editing mode
 // for step blocks (contentEditable title + body, click-to-edit
 // modal on the SVG slot). The slash-menu / insert-bar Step entry
 // is exercised through interactive use; the static stories below
@@ -377,7 +377,7 @@ export const CardGridTwoColumnEditing: Story = {
 };
 
 // ---------------------------------------------------------------------------
-// Phase 7b of docs/plans/card-procedure-template.md — URL chip
+// Phase 7b of docs/plans/_done/card-procedure-template.md — URL chip
 // embedded in step blocks (Scribe-style "Navigate to ..."
 // affordance). The chip appears below the step title in both
 // read and editing modes; editing mode also shows the URL
@@ -439,7 +439,7 @@ export const StepWithLinkDark: Story = {
 };
 
 // ---------------------------------------------------------------------------
-// Phase 7c of docs/plans/card-procedure-template.md — Scribe-
+// Phase 7c of docs/plans/_done/card-procedure-template.md — Scribe-
 // style document header (icon + title + description + author +
 // step count). Setting `meta.header` opts the doc into the
 // header chrome above the article body + a matching PPTX cover
@@ -540,7 +540,7 @@ export const DocHeaderDark: Story = {
 };
 
 // ---------------------------------------------------------------------------
-// Phase 7d of docs/plans/card-procedure-template.md — image
+// Phase 7d of docs/plans/_done/card-procedure-template.md — image
 // viewport (pan / zoom + initial-view crop). The placeholder SVG
 // has a viewBox of 0..400, 0..240; the viewport rect crops to a
 // sub-rect so the rendered card shows the zoomed-in view.
@@ -611,7 +611,7 @@ export const ViewportFullView: Story = {
 };
 
 // ---------------------------------------------------------------------------
-// Phase 5 of docs/plans/card-procedure-template.md — bundled
+// Phase 5 of docs/plans/_done/card-procedure-template.md — bundled
 // `card-procedure` starter rendered in light + dark themes. The
 // starter ships in @ingcreators/annot-doc/BUILTIN_TEMPLATES.
 // ---------------------------------------------------------------------------

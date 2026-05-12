@@ -8,7 +8,7 @@
 // defined` at module load time.
 //
 // Mirrors `packages/core/src/headless.test.ts` — Phase 1 of
-// `docs/plans/annot-html-document.md`.
+// `docs/plans/_done/annot-html-document.md`.
 
 import { describe, expect, it } from "vitest";
 import * as headless from "./headless.js";
@@ -68,7 +68,7 @@ describe("@ingcreators/annot-doc/headless boundary", () => {
     // surfacing as a runtime crash on a CI box that doesn't
     // have happy-dom available.
     expect(Array.isArray(headless.BUILTIN_TEMPLATES)).toBe(true);
-    // Phase 5 of `docs/plans/card-procedure-template.md` adds
+    // Phase 5 of `docs/plans/_done/card-procedure-template.md` adds
     // `card-procedure` as the fourth starter alongside the
     // original three (manual / feature-guide / procedure).
     expect(headless.BUILTIN_TEMPLATES.length).toBe(4);

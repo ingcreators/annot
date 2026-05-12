@@ -48,7 +48,7 @@ export function serializeDocument(doc: AnnotDocument): string {
   // <body>
   out.push(INDENT, "<body>", LF);
   out.push(INDENT.repeat(2), "<article data-annot-doc>", LF);
-  // Phase 7c of `docs/plans/card-procedure-template.md` —
+  // Phase 7c of `docs/plans/_done/card-procedure-template.md` —
   // Scribe-style document header. Regenerated on every save
   // from `meta.header` + `meta.title` + `meta.author` + a
   // step-count walk; the parser skips elements carrying
@@ -215,7 +215,7 @@ function serializeStep(block: StepBlock, depth: number): string {
   // The step block carries only `data-step-layout` in the
   // last slot, always emitted explicitly (byte-stability over
   // byte-economy — see Phase 0 spec freeze).
-  // Phase 7a of `docs/plans/card-procedure-template.md`: an empty
+  // Phase 7a of `docs/plans/_done/card-procedure-template.md`: an empty
   // `svg` field marks an image-less step block. We carry the state
   // out-of-band via `data-step-image-less="1"` so the standalone-
   // view CSS can collapse the grid without `:not(:has(...))`

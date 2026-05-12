@@ -2,7 +2,7 @@
  * @vitest-environment happy-dom
  *
  * `<annot-doc-image-editor-modal>` tests — Phase 5a of
- * `docs/plans/annot-html-document.md`.
+ * `docs/plans/_done/annot-html-document.md`.
  */
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";

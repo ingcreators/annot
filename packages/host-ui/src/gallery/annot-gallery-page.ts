@@ -54,7 +54,7 @@ import { type MenuItem, openContextMenu } from "./annot-context-menu.js";
 export interface GallerySelection {
   images: ImageRecord[];
   folders: FolderRecord[];
-  /** Phase 4 of `docs/plans/card-procedure-template.md` — images
+  /** Phase 4 of `docs/plans/_done/card-procedure-template.md` — images
    *  in the precise order the user clicked them. Length matches
    *  `images`; the two arrays carry the same records, the only
    *  difference is ordering:
@@ -110,7 +110,7 @@ export class AnnotGalleryPageElement extends LitElement {
   declare query: string;
   declare selectedImagePaths: Set<string>;
   declare selectedFolderPaths: Set<string>;
-  /** Phase 4 of `docs/plans/card-procedure-template.md` —
+  /** Phase 4 of `docs/plans/_done/card-procedure-template.md` —
    *  parallel ordered list tracking image-selection click order.
    *  `selectedImagePaths` stays as the O(1) membership probe;
    *  this array carries the precise sequence the card-document
@@ -119,7 +119,7 @@ export class AnnotGalleryPageElement extends LitElement {
    *  membership; updates flow through `#handleItemClick` and
    *  the selection-clearing call sites below. */
   declare selectedImagePathOrder: string[];
-  /** Phase 4 of `docs/plans/card-procedure-template.md` — set
+  /** Phase 4 of `docs/plans/_done/card-procedure-template.md` — set
    *  by the host (via `FileManager.callbacks.onCreateCardDocument`
    *  presence) to gate the "Create card document from selection"
    *  menu entry. The gallery itself stays storage-agnostic; this
@@ -1027,7 +1027,7 @@ export class AnnotGalleryPageElement extends LitElement {
    *  request. Hosts (PWA / VSCode / Desktop) listen for this on
    *  the gallery element and own the actual dialog + generator
    *  + doc-open flow. Gallery stays storage-agnostic.
-   *  Phase 4 of `docs/plans/card-procedure-template.md`. */
+   *  Phase 4 of `docs/plans/_done/card-procedure-template.md`. */
   #requestCreateCardDocument(): void {
     const { imagesInOrder } = this.getSelection();
     if (imagesInOrder.length === 0) return;

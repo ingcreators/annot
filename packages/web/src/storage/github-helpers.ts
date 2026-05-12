@@ -56,7 +56,7 @@ export function isImageFilename(name: string): boolean {
   );
 }
 
-/** Phase 7d of `docs/plans/annot-html-document.md` — `.annot.html`
+/** Phase 7d of `docs/plans/_done/annot-html-document.md` — `.annot.html`
  *  document files. Same casing rule the format spec describes (the
  *  extension is part of the canonical form). */
 export function isDocumentFilename(name: string): boolean {

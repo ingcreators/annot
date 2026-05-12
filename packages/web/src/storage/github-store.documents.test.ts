@@ -2,7 +2,7 @@
  * @vitest-environment happy-dom
  *
  * `GitHubStore` document support — Phase 7d of
- * `docs/plans/annot-html-document.md`.
+ * `docs/plans/_done/annot-html-document.md`.
  *
  * GitHub's REST surface (recursive tree fetch + Contents API
  * commit-as-save) is exercised end-to-end by

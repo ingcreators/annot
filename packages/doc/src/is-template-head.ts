@@ -1,6 +1,6 @@
 /**
  * Streaming-friendly template detection — Phase 8c of
- * `docs/plans/annot-html-document.md`.
+ * `docs/plans/_done/annot-html-document.md`.
  *
  * The picker (`<annot-template-picker>`) needs to narrow a
  * `Templates/` folder listing down to actual templates without

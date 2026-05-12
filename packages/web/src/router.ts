@@ -83,7 +83,7 @@ export function parseRoute(): Route {
   }
 
   // /doc/:store/<path...> — `.annot.html` document editor entry
-  // point. Phase 6b of `docs/plans/annot-html-document.md`. Kept
+  // point. Phase 6b of `docs/plans/_done/annot-html-document.md`. Kept
   // separate from `/edit/...` so a future filename of "doc" inside
   // a backend can't collide with the route, AND so the router-host
   // can route documents through the doc-shell instead of the

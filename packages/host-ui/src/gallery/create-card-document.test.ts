@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 //
 // `createCardDocumentFromImages` tests — Phase 4 of
-// `docs/plans/card-procedure-template.md`. Pure / Tier B-ish:
+// `docs/plans/_done/card-procedure-template.md`. Pure / Tier B-ish:
 // the function takes `ImageRecord[]` and an options bag, returns
 // an `AnnotDocument`. happy-dom is needed because the round-trip
 // assertion below calls `parseDocument` (which lazily resolves

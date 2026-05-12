@@ -2,7 +2,7 @@
  * `<annot-doc-block-menu>` — slash-menu / block-kind picker for
  * `<annot-doc-shell>` editing mode.
  *
- * Phase 4b of `docs/plans/annot-html-document.md`. Opens when the
+ * Phase 4b of `docs/plans/_done/annot-html-document.md`. Opens when the
  * user types `/` in an empty contentEditable text block; the
  * shell anchors the menu to the editable element and the user
  * picks the kind of block they want next. The plan calls for

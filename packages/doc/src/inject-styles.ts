@@ -1,6 +1,6 @@
 /**
  * `injectDocumentStyles(doc)` — Phase 2 of
- * `docs/plans/annot-html-document.md`.
+ * `docs/plans/_done/annot-html-document.md`.
  *
  * Returns a new `AnnotDocument` whose `styleBlock` carries a
  * canonical CSS payload covering: logical font-family stacks
@@ -52,7 +52,7 @@ const LIGHT_VARS: ReadonlyArray<readonly [string, string]> = [
   ["--annot-doc-callout-note-bg", "#f3f4f6"],
   ["--annot-doc-callout-note-border", "#6b7280"],
   // Card chrome — see `step` block kind in docs/annot-html-format.md.
-  // Phase 2 of docs/plans/card-procedure-template.md.
+  // Phase 2 of docs/plans/_done/card-procedure-template.md.
   ["--annot-card-bg", "#ffffff"],
   ["--annot-card-border", "1px solid #e5e7eb"],
   ["--annot-card-shadow", "0 1px 2px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.08)"],
@@ -117,7 +117,7 @@ export function buildStyleBlock(doc: AnnotDocument): string {
   // existing docs serialise byte-equivalent.
   const numberingCss = numberingRules(doc.meta.numbering);
   if (numberingCss) sections.push(numberingCss);
-  // Phase 2 of docs/plans/card-procedure-template.md —
+  // Phase 2 of docs/plans/_done/card-procedure-template.md —
   // article-level grid only when `meta.cardLayout` is set with
   // columns >= 2 (or "auto"). Otherwise the doc keeps its
   // existing block-flow layout byte-identical to pre-card docs.
@@ -305,7 +305,7 @@ function blockRules(): string {
 }
 
 /**
- * Phase 2 of `docs/plans/card-procedure-template.md` — `step`
+ * Phase 2 of `docs/plans/_done/card-procedure-template.md` — `step`
  * block card chrome plus the five per-layout grid templates.
  *
  * Always emitted: even documents without `meta.cardLayout`
