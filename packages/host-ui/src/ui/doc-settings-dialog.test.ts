@@ -371,3 +371,54 @@ describe("showDocSettingsDialog: appearance picker", () => {
     await promise;
   });
 });
+
+// ---------------------------------------------------------------------------
+// Phase 4 of docs/plans/card-document-themes.md — font family
+// override text inputs in the Appearance section.
+// ---------------------------------------------------------------------------
+
+describe("showDocSettingsDialog: font family overrides", () => {
+  it("renders three empty text inputs by default", async () => {
+    const promise = showDocSettingsDialog({ defaultTitle: "X" });
+    expect((getInput("Sans font family override") as HTMLInputElement).value).toBe("");
+    expect((getInput("Serif font family override") as HTMLInputElement).value).toBe("");
+    expect((getInput("Mono font family override") as HTMLInputElement).value).toBe("");
+    findDialog().dispatchEvent(new CustomEvent("dialog-cancel"));
+    await promise;
+  });
+
+  it("pre-populates the inputs from caller-supplied defaults", async () => {
+    const promise = showDocSettingsDialog({
+      defaultTitle: "X",
+      defaultAppearanceFontFamilySans: "Inter, sans-serif",
+      defaultAppearanceFontFamilyMono: "Fira Code",
+    });
+    expect((getInput("Sans font family override") as HTMLInputElement).value).toBe(
+      "Inter, sans-serif",
+    );
+    expect((getInput("Serif font family override") as HTMLInputElement).value).toBe("");
+    expect((getInput("Mono font family override") as HTMLInputElement).value).toBe("Fira Code");
+    findDialog().dispatchEvent(new CustomEvent("dialog-cancel"));
+    await promise;
+  });
+
+  it("returns undefined for empty inputs", async () => {
+    const promise = showDocSettingsDialog({ defaultTitle: "X" });
+    findDialog().dispatchEvent(new CustomEvent("dialog-ok"));
+    const result = await promise;
+    expect(result?.appearanceFontFamilySans).toBeUndefined();
+    expect(result?.appearanceFontFamilySerif).toBeUndefined();
+    expect(result?.appearanceFontFamilyMono).toBeUndefined();
+  });
+
+  it("returns trimmed string values when inputs are non-empty", async () => {
+    const promise = showDocSettingsDialog({ defaultTitle: "X" });
+    (getInput("Sans font family override") as HTMLInputElement).value = "  Inter  ";
+    (getInput("Serif font family override") as HTMLInputElement).value = "Charter";
+    findDialog().dispatchEvent(new CustomEvent("dialog-ok"));
+    const result = await promise;
+    expect(result?.appearanceFontFamilySans).toBe("Inter");
+    expect(result?.appearanceFontFamilySerif).toBe("Charter");
+    expect(result?.appearanceFontFamilyMono).toBeUndefined();
+  });
+});

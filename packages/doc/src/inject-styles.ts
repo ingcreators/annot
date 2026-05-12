@@ -39,7 +39,13 @@
 import { cssStackFor } from "@ingcreators/annot-core/headless";
 import type { Theme, VarTuples } from "./themes/index.js";
 import { getTheme, pickLegacyTheme } from "./themes/index.js";
-import type { AnnotDocument, CardLayoutMeta, DocMeta, NumberingMeta } from "./types.js";
+import type {
+  AnnotDocument,
+  AppearanceFontFamily,
+  CardLayoutMeta,
+  DocMeta,
+  NumberingMeta,
+} from "./types.js";
 
 /** CSS values for each `meta.maxWidth` keyword. */
 const MAX_WIDTH_VALUES: Readonly<Record<NonNullable<DocMeta["maxWidth"]>, string>> = {
@@ -138,6 +144,15 @@ export function buildStyleBlock(doc: AnnotDocument): string {
   // share their specificity. Legacy themes don't set this; the
   // branch stays inert until Phase 2's themes need it.
   if (theme.extraCss) sections.push(theme.extraCss);
+  // Phase 4 of `card-document-themes.md` — font family overrides.
+  // Postlude sits AFTER `extraCss` so a user-supplied font
+  // family wins even against editorial's serif headings rule
+  // (the editorial theme picked `Annot Serif` for `<h1>` etc.;
+  // when the user changes the `serif` token's resolved family,
+  // we want the new family to flow through to editorial's
+  // headings too).
+  const fontFamilyCss = fontFamilyOverrideRules(doc.meta.appearance?.fontFamily);
+  if (fontFamilyCss) sections.push(fontFamilyCss);
   return sections.join("\n");
 }
 
@@ -169,6 +184,85 @@ function rootSection(
   const columnsValue = typeof columns === "number" ? `${columns}` : "1";
   lines.push(`  --annot-card-columns: ${columnsValue};`);
   return `:root {\n${lines.join("\n")}\n}`;
+}
+
+/**
+ * Phase 4 of `docs/plans/card-document-themes.md` — emit
+ * postlude CSS that overrides the structural font-family
+ * declarations when `meta.appearance.fontFamily` is set. Each
+ * field is independent — overriding `sans` doesn't touch
+ * `serif` / `mono` resolution.
+ *
+ * Values that match a logical font token (`Annot Sans` /
+ * `Annot Serif` / `Annot Mono`) get resolved via `cssStackFor`
+ * so a user picking "Annot Serif" for `sans` substitutes the
+ * canonical serif stack. Any other input is passed verbatim —
+ * power users can paste `"Helvetica Neue, sans-serif"` and the
+ * raw value lands in the CSS.
+ *
+ * Returns `""` when no fontFamily field is set (existing
+ * documents stay byte-identical).
+ *
+ * Coverage:
+ *
+ *   - `sans` → `html, body` (default body inheritance) +
+ *     `[data-font-family="Annot Sans"]` (explicit opt-ins).
+ *   - `serif` → `[data-font-family="Annot Serif"]` (explicit
+ *     opt-ins). The editorial theme's `extraCss` already
+ *     picked Annot Serif for headings, so a user changing the
+ *     `serif` field overrides that pick too (the postlude
+ *     emits AFTER `extraCss`, so its rule lands later in the
+ *     cascade).
+ *   - `mono` → `[data-annot-block="code"]`,
+ *     `[data-font-family="Annot Mono"]`, and the inline-code
+ *     selectors mirroring the typography rule.
+ *
+ * Surfaces NOT covered (acceptable v1 trade-off): the per-block
+ * step / TOC / dochead rules that inline `cssStackFor("Annot
+ * Sans")` literally won't pick up the override. Phase 5's
+ * `customCss` is the escape hatch for users who need
+ * comprehensive control.
+ */
+function fontFamilyOverrideRules(fontFamily: AppearanceFontFamily | undefined): string {
+  if (!fontFamily) return "";
+  const sans = resolveFontFamilyValue(fontFamily.sans);
+  const serif = resolveFontFamilyValue(fontFamily.serif);
+  const mono = resolveFontFamilyValue(fontFamily.mono);
+  if (sans === undefined && serif === undefined && mono === undefined) return "";
+
+  const lines: string[] = [];
+  if (sans !== undefined) {
+    lines.push('html, body, [data-font-family="Annot Sans"] {', `  font-family: ${sans};`, "}");
+  }
+  if (serif !== undefined) {
+    lines.push('[data-font-family="Annot Serif"] {', `  font-family: ${serif};`, "}");
+  }
+  if (mono !== undefined) {
+    // Mirror the typography rule's inline-code selectors plus
+    // the explicit-token + code-block selectors. Keep this
+    // selector list in sync with `inlineRules()` + `blockRules()`
+    // when adding new mono surfaces.
+    lines.push(
+      '[data-annot-block="code"], [data-font-family="Annot Mono"], p code, li code, blockquote code, aside code, h1 code, h2 code, h3 code, figcaption code {',
+      `  font-family: ${mono};`,
+      "}",
+    );
+  }
+  return lines.join("\n");
+}
+
+/** Resolve a user-supplied family value. Logical tokens
+ *  (`Annot Sans` / `Annot Serif` / `Annot Mono`) resolve to
+ *  the canonical OS-aware stack via `cssStackFor`; everything
+ *  else passes through unchanged. */
+function resolveFontFamilyValue(raw: string | undefined): string | undefined {
+  if (raw === undefined) return undefined;
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) return undefined;
+  if (trimmed === "Annot Sans" || trimmed === "Annot Serif" || trimmed === "Annot Mono") {
+    return cssStackFor(trimmed);
+  }
+  return trimmed;
 }
 
 function fontFamilyRules(): string {
