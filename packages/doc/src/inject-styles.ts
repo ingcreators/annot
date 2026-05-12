@@ -1196,6 +1196,25 @@ function numberingRules(numbering: NumberingMeta | undefined): string {
       "  -webkit-backdrop-filter: blur(8px) saturate(150%);",
       "  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);",
       "}",
+      // Title clearance for layouts where the title lands in
+      // the top-left of the card — without this rule the badge
+      // (top: 0.75rem; left: 0.75rem) overlaps the title text.
+      //
+      // Layouts affected:
+      //   - image-bottom: title is row 1 of the grid → top of card
+      //   - image-right:  title is in the LEFT column → top-left
+      //
+      // Other layouts (image-top, image-left, image-fill) don't
+      // need this because the title sits below / right of /
+      // overlay'd on the image, not in the badge's footprint.
+      //
+      // The padding reserves badge-width + a 1rem gutter; short
+      // titles render to the right of the badge, long titles
+      // wrap around it once they overflow.
+      'article[data-annot-doc] [data-annot-block="step"][data-step-layout="image-bottom"] > [data-step-title],',
+      'article[data-annot-doc] [data-annot-block="step"][data-step-layout="image-right"] > [data-step-title] {',
+      "  padding-left: calc(var(--annot-step-badge-min-size) + 1rem);",
+      "}",
     );
   }
 
