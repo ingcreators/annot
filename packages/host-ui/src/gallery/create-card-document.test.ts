@@ -37,9 +37,6 @@ describe("createCardDocumentFromImages: basics", () => {
     for (const block of doc.blocks) {
       expect(block.kind).toBe("step");
     }
-    // Titles default to "Step 1", "Step 2", "Step 3" (numbering: step-n).
-    const titles = doc.blocks.map((b) => (b.kind === "step" ? b.title : ""));
-    expect(titles).toEqual(["Step 1", "Step 2", "Step 3"]);
   });
 
   it("uses title verbatim, falling back to 'Untitled' on empty", () => {
@@ -50,31 +47,23 @@ describe("createCardDocumentFromImages: basics", () => {
     expect(empty.title).toBe("Untitled");
   });
 
-  it('defaults numbering to "step-n"', () => {
+  // Phase 4 of `docs/plans/card-step-auto-numbering.md` — step
+  // titles are empty by default. The auto-numbering badge
+  // carries the step index; users author the editorial title
+  // themselves.
+  it("emits empty step titles by default (auto-numbering carries the index)", () => {
     const doc = createCardDocumentFromImages([makeImage("a.png"), makeImage("b.png")], {
       title: "X",
     });
     const titles = doc.blocks.map((b) => (b.kind === "step" ? b.title : ""));
-    expect(titles).toEqual(["Step 1", "Step 2"]);
+    expect(titles).toEqual(["", ""]);
   });
 
-  it('honours numbering: "image-n"', () => {
-    const doc = createCardDocumentFromImages([makeImage("a.png"), makeImage("b.png")], {
-      title: "X",
-      numbering: "image-n",
-    });
-    expect(doc.blocks.map((b) => (b.kind === "step" ? b.title : ""))).toEqual([
-      "Image 1",
-      "Image 2",
-    ]);
-  });
-
-  it('honours numbering: "none"', () => {
-    const doc = createCardDocumentFromImages([makeImage("a.png"), makeImage("b.png")], {
-      title: "X",
-      numbering: "none",
-    });
-    expect(doc.blocks.map((b) => (b.kind === "step" ? b.title : ""))).toEqual(["", ""]);
+  it("opts new card documents into step numbering via meta.numbering.steps", () => {
+    const doc = createCardDocumentFromImages([makeImage("a.png")], { title: "X" });
+    expect(doc.meta.numbering?.steps).toBe(true);
+    // No stepLabel — the badge renders the bare numeral by default.
+    expect(doc.meta.numbering?.stepLabel).toBeUndefined();
   });
 
   it("stamps the chosen layout on every step + as the doc default when non-default", () => {

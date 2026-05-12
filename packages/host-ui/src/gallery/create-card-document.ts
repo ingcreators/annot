@@ -9,6 +9,14 @@
  * the result is a structured `AnnotDocument` the host can pass
  * straight to the doc shell.
  *
+ * Phase 4 of `docs/plans/card-step-auto-numbering.md` retired
+ * the old `numbering` option (and the matching `buildStepTitle`
+ * pre-fill of `"Step 1"` / `"Image 1"` into the title field) in
+ * favour of the CSS-counter-driven badge driven by
+ * `meta.numbering.steps`. Generated documents now start with
+ * step numbering ON and empty titles; users opt out / customise
+ * the badge label via the Doc Settings dialog after creation.
+ *
  * Inputs:
  *
  *   - `images`: the user's ordered selection (`getSelection().
@@ -21,11 +29,6 @@
  *         inserted later inherit the user's choice.
  *       - `columns`: doc-level `cardLayout.columns`. Optional
  *         (default `1` → no field emitted).
- *       - `numbering`: optional pre-fill strategy for step
- *         titles. `"step-n"` produces `"Step 1"` / `"Step 2"` /
- *         …, `"image-n"` produces `"Image 1"` / …, `"none"`
- *         leaves titles empty. The user can always retitle each
- *         step after open.
  *
  * Each input image becomes one `StepBlock` in document order;
  * the block's `id` matches the image's source `path` slug (so
@@ -38,8 +41,6 @@ import type { ImageRecord } from "@ingcreators/annot-core/storage";
 import type { AnnotDocument, CardLayoutMeta, StepBlock, StepLayout } from "@ingcreators/annot-doc";
 import { ANNOT_DOC_VERSION } from "@ingcreators/annot-doc";
 
-export type CardDocumentNumbering = "none" | "step-n" | "image-n";
-
 export interface CreateCardDocumentOptions {
   /** Document title. Falls back to "Untitled" when empty. */
   readonly title: string;
@@ -49,8 +50,6 @@ export interface CreateCardDocumentOptions {
    *  `cardLayout.columns` field — single-column block flow is
    *  byte-identical to the pre-card layout. */
   readonly columns?: 1 | 2 | 3 | "auto";
-  /** Title-prefill strategy. Default `"step-n"`. */
-  readonly numbering?: CardDocumentNumbering;
   /** Document language (BCP-47). Default `"en"`. */
   readonly lang?: string;
 }
@@ -63,13 +62,10 @@ export function createCardDocumentFromImages(
 ): AnnotDocument {
   const layout: StepLayout = options.layout ?? "image-top";
   const columns = options.columns;
-  const numbering: CardDocumentNumbering = options.numbering ?? "step-n";
   const title = options.title.trim() || "Untitled";
   const lang = options.lang ?? "en";
 
-  const blocks: StepBlock[] = images.map((img, i) =>
-    buildStepBlockFromImage(img, i, layout, numbering),
-  );
+  const blocks: StepBlock[] = images.map((img) => buildStepBlockFromImage(img, layout));
 
   // cardLayout is emitted iff it differs from the implicit
   // default (`columns: 1`, `defaultStepLayout: "image-top"`).
@@ -88,6 +84,11 @@ export function createCardDocumentFromImages(
     title,
     meta: {
       title,
+      // Phase 4 of `docs/plans/card-step-auto-numbering.md` —
+      // new card documents start with auto-numbering on so the
+      // generated cards render with the Scribe-style badge from
+      // first open. Users opt out / customise from Doc Settings.
+      numbering: { steps: true },
       ...cardLayoutMaybe,
     },
     styleBlock: null,
@@ -100,12 +101,7 @@ export function createCardDocumentFromImages(
  *  (single-line `<svg>` with the bitmap + annotations group) —
  *  consistent with how XMP-extracted images flow into the doc
  *  shell. */
-function buildStepBlockFromImage(
-  img: ImageRecord,
-  index: number,
-  layout: StepLayout,
-  numbering: CardDocumentNumbering,
-): StepBlock {
+function buildStepBlockFromImage(img: ImageRecord, layout: StepLayout): StepBlock {
   const w = Math.max(1, Math.round(img.width));
   const h = Math.max(1, Math.round(img.height));
   const id = `img-${newIdB58()}`;
@@ -132,7 +128,11 @@ function buildStepBlockFromImage(
     kind: "step",
     id,
     svg,
-    title: buildStepTitle(index, numbering),
+    // Phase 4 of `docs/plans/card-step-auto-numbering.md` —
+    // titles are empty by default. The auto-numbering badge
+    // carries the step index; users author the editorial title
+    // in the editor.
+    title: "",
     body: "",
     layout,
   };
@@ -191,17 +191,6 @@ function normaliseAnnotationsFragment(raw: string): string {
   const serializer = new XMLSerializer();
   const inner = candidates.map((el) => serializer.serializeToString(el)).join("");
   return `<g id="annotations">${inner}</g>`;
-}
-
-function buildStepTitle(index: number, numbering: CardDocumentNumbering): string {
-  switch (numbering) {
-    case "step-n":
-      return `Step ${index + 1}`;
-    case "image-n":
-      return `Image ${index + 1}`;
-    default:
-      return "";
-  }
 }
 
 /** Inline copy of `escapeAttrValue` from `create-image-block.ts`

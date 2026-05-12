@@ -14,9 +14,14 @@
  *     `1` = single-column stack (Scribe shape); `2` / `3` =
  *     multi-column grid; `auto` = responsive `repeat(auto-
  *     fill, …)`.
- *   - **Step titles** — title pre-fill strategy. `Step 1 / 2 /
- *     …` (default), `Image 1 / 2 / …`, or empty (user types
- *     each title manually).
+ *
+ * Phase 4 of `docs/plans/card-step-auto-numbering.md` removed
+ * the old "Step titles" dropdown — step numbering is now a
+ * CSS-counter-driven badge controlled from Doc Settings
+ * (`numbering.steps` / `numbering.stepLabel`). The generated
+ * doc starts with step numbering ON by default; users who want
+ * the legacy "no numbering at all" or "numeral-in-title" shape
+ * disable / customise via Doc Settings after creation.
  *
  * Pattern mirrors `showDocSettingsDialog` so the dialog shape
  * feels consistent across doc-mode chrome.
@@ -28,8 +33,6 @@ type StepLayoutValue = "image-top" | "image-bottom" | "image-left" | "image-righ
 
 type CardColumnsValue = 1 | 2 | 3 | "auto";
 
-type Numbering = "step-n" | "image-n" | "none";
-
 export interface CreateCardDocumentInput {
   /** Trimmed title, never empty. Falls back to "Untitled
    *  procedure" when the user clears the field. */
@@ -39,8 +42,6 @@ export interface CreateCardDocumentInput {
   /** Doc-level cards-per-row. `1` (or undefined) leaves the
    *  document's `cardLayout.columns` field unset. */
   readonly columns?: CardColumnsValue;
-  /** Title pre-fill strategy. */
-  readonly numbering: Numbering;
 }
 
 export interface ShowCreateCardDocumentDialogOptions {
@@ -54,8 +55,6 @@ export interface ShowCreateCardDocumentDialogOptions {
   readonly defaultLayout?: StepLayoutValue;
   /** Default cards-per-row. Defaults to `1`. */
   readonly defaultColumns?: CardColumnsValue;
-  /** Default title-prefill strategy. Defaults to `"step-n"`. */
-  readonly defaultNumbering?: Numbering;
 }
 
 const STEP_LAYOUT_OPTIONS: readonly { value: StepLayoutValue; label: string }[] = [
@@ -71,12 +70,6 @@ const COLUMNS_OPTIONS: readonly { value: string; label: string }[] = [
   { value: "2", label: "2 columns" },
   { value: "3", label: "3 columns" },
   { value: "auto", label: "Auto (responsive)" },
-];
-
-const NUMBERING_OPTIONS: readonly { value: Numbering; label: string }[] = [
-  { value: "step-n", label: "Step 1, Step 2, …" },
-  { value: "image-n", label: "Image 1, Image 2, …" },
-  { value: "none", label: "Leave titles empty" },
 ];
 
 function columnsToString(v: CardColumnsValue | undefined): string {
@@ -134,23 +127,7 @@ export function showCreateCardDocumentDialog(
       options: COLUMNS_OPTIONS,
     });
 
-    const numberingLabel = makeLabel("Step titles");
-    const numberingSelect = makeSelect({
-      value: opts.defaultNumbering ?? "step-n",
-      ariaLabel: "Step title prefill",
-      options: NUMBERING_OPTIONS.map((o) => ({ value: o.value, label: o.label })),
-    });
-
-    fields.append(
-      titleLabel,
-      titleInput,
-      layoutLabel,
-      layoutSelect,
-      columnsLabel,
-      columnsSelect,
-      numberingLabel,
-      numberingSelect,
-    );
+    fields.append(titleLabel, titleInput, layoutLabel, layoutSelect, columnsLabel, columnsSelect);
     dlg.appendChild(fields);
     document.body.appendChild(dlg);
 
@@ -164,13 +141,11 @@ export function showCreateCardDocumentDialog(
       const title = titleInput.value.trim() || "Untitled procedure";
       const layout = layoutSelect.value as StepLayoutValue;
       const columns = parseColumns(columnsSelect.value);
-      const numbering = numberingSelect.value as Numbering;
       close();
       const out: CreateCardDocumentInput = {
         title,
         layout,
         ...(columns !== undefined ? { columns } : {}),
-        numbering,
       };
       resolve(out);
     });
