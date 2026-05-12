@@ -1,6 +1,7 @@
 # Themeable card documents (HTML)
 
-> **Status:** Draft
+> **Status:** In progress — Phase 1 (structural / theme CSS
+> split) lands as the Phase 1 PR. Phases 2–6 follow.
 > **Compatibility:** Extends the `.annot.html` v1 format from
 > [`_done/annot-html-document.md`](./_done/annot-html-document.md)
 > and builds on the card mechanics from
