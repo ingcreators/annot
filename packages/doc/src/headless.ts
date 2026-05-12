@@ -33,6 +33,13 @@ export { AnnotDocResolveError, resolveFigureRefs } from "./resolve-figure-refs.j
 export { escapeAttr, escapeText, serializeDocument, serializeMetaJson } from "./serialize.js";
 export type { BuiltinThemeId, Theme, VarTuples } from "./themes/index.js";
 export { BUILTIN_THEME_IDS, getTheme, THEMES } from "./themes/index.js";
+export type { SanitiseResult } from "./themes/sanitise-custom-css.js";
+export {
+  CUSTOM_CSS_MAX_BYTES,
+  CUSTOM_CSS_TRUNCATION_MARKER,
+  sanitiseCustomCss,
+  sanitiseCustomCssText,
+} from "./themes/sanitise-custom-css.js";
 export type {
   AnnotDocument,
   AnnotDocVersion,

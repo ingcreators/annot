@@ -39,6 +39,7 @@
 import { cssStackFor } from "@ingcreators/annot-core/headless";
 import type { Theme, VarTuples } from "./themes/index.js";
 import { getTheme, pickLegacyTheme } from "./themes/index.js";
+import { sanitiseCustomCss } from "./themes/sanitise-custom-css.js";
 import type {
   AnnotDocument,
   AppearanceFontFamily,
@@ -153,6 +154,16 @@ export function buildStyleBlock(doc: AnnotDocument): string {
   // headings too).
   const fontFamilyCss = fontFamilyOverrideRules(doc.meta.appearance?.fontFamily);
   if (fontFamilyCss) sections.push(fontFamilyCss);
+  // Phase 5 of `card-document-themes.md` — custom CSS escape
+  // hatch. Sanitised at render time AND on parse so a stored
+  // pre-sanitised value gets a second pass even if the parser's
+  // pre-sanitiser missed something. Sits at the very end so
+  // user CSS wins against every other layer.
+  const customCss = doc.meta.appearance?.customCss;
+  if (customCss !== undefined && customCss.length > 0) {
+    const sanitised = sanitiseCustomCss(customCss).css;
+    if (sanitised.length > 0) sections.push(sanitised);
+  }
   return sections.join("\n");
 }
 

@@ -23,12 +23,12 @@ function findDialog(): HTMLElement {
   return dlg as HTMLElement;
 }
 
-function getInput(label: string): HTMLInputElement | HTMLSelectElement {
-  const inputs = document.querySelectorAll<HTMLInputElement | HTMLSelectElement>(
-    `[aria-label="${label}"]`,
-  );
+function getInput(label: string): HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement {
+  const inputs = document.querySelectorAll<
+    HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+  >(`[aria-label="${label}"]`);
   if (inputs.length === 0) throw new Error(`no input with aria-label="${label}"`);
-  return inputs[0] as HTMLInputElement | HTMLSelectElement;
+  return inputs[0] as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
 }
 
 describe("showDocSettingsDialog", () => {
@@ -420,5 +420,68 @@ describe("showDocSettingsDialog: font family overrides", () => {
     expect(result?.appearanceFontFamilySans).toBe("Inter");
     expect(result?.appearanceFontFamilySerif).toBe("Charter");
     expect(result?.appearanceFontFamilyMono).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 5 of docs/plans/card-document-themes.md — Advanced: Custom CSS
+// expander. The dialog runs the sanitiser at save time and
+// forwards both the cleaned CSS and any warnings back to the
+// caller.
+// ---------------------------------------------------------------------------
+
+describe("showDocSettingsDialog: custom CSS escape hatch", () => {
+  it("renders the textarea inside a collapsed <details> expander by default", async () => {
+    const promise = showDocSettingsDialog({ defaultTitle: "X" });
+    const textarea = getInput("Custom CSS appended after the theme") as HTMLTextAreaElement;
+    expect(textarea).toBeTruthy();
+    const details = textarea.closest("details");
+    expect(details).toBeTruthy();
+    expect(details?.open).toBe(false);
+    findDialog().dispatchEvent(new CustomEvent("dialog-cancel"));
+    await promise;
+  });
+
+  it("opens the expander by default when defaultAppearanceCustomCss is set", async () => {
+    const promise = showDocSettingsDialog({
+      defaultTitle: "X",
+      defaultAppearanceCustomCss: "body { color: red; }",
+    });
+    const textarea = getInput("Custom CSS appended after the theme") as HTMLTextAreaElement;
+    expect(textarea.value).toBe("body { color: red; }");
+    expect(textarea.closest("details")?.open).toBe(true);
+    findDialog().dispatchEvent(new CustomEvent("dialog-cancel"));
+    await promise;
+  });
+
+  it("returns undefined appearanceCustomCss when the textarea is empty", async () => {
+    const promise = showDocSettingsDialog({ defaultTitle: "X" });
+    findDialog().dispatchEvent(new CustomEvent("dialog-ok"));
+    const result = await promise;
+    expect(result?.appearanceCustomCss).toBeUndefined();
+    expect(result?.customCssWarnings).toBeUndefined();
+  });
+
+  it("returns sanitised CSS + no warnings for clean input", async () => {
+    const promise = showDocSettingsDialog({ defaultTitle: "X" });
+    const textarea = getInput("Custom CSS appended after the theme") as HTMLTextAreaElement;
+    textarea.value = "body { background: pink; }";
+    findDialog().dispatchEvent(new CustomEvent("dialog-ok"));
+    const result = await promise;
+    expect(result?.appearanceCustomCss).toBe("body { background: pink; }");
+    expect(result?.customCssWarnings).toBeUndefined();
+  });
+
+  it("returns warnings when sanitiser strips @import / external url()", async () => {
+    const promise = showDocSettingsDialog({ defaultTitle: "X" });
+    const textarea = getInput("Custom CSS appended after the theme") as HTMLTextAreaElement;
+    textarea.value = "@import 'evil.css'; body { background: url(https://tracker/p.png); }";
+    findDialog().dispatchEvent(new CustomEvent("dialog-ok"));
+    const result = await promise;
+    expect(result?.appearanceCustomCss).toBeDefined();
+    expect(result?.appearanceCustomCss).not.toContain("@import");
+    expect(result?.appearanceCustomCss).not.toContain("tracker");
+    expect(result?.customCssWarnings).toBeDefined();
+    expect(result?.customCssWarnings?.length ?? 0).toBeGreaterThanOrEqual(2);
   });
 });

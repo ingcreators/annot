@@ -896,6 +896,38 @@ describe("injectDocumentStyles: meta.appearance.template (Phase 2)", () => {
     expect(css).not.toContain('html, body, [data-font-family="Annot Sans"]');
   });
 
+  it("appends meta.appearance.customCss verbatim at the end of the style block", () => {
+    const css = buildStyleBlock(
+      createEmptyDocument({
+        title: "Custom CSS",
+        meta: { appearance: { customCss: "body { background: pink; }" } },
+      }),
+    );
+    expect(css).toContain("body { background: pink; }");
+    // The custom CSS lands at the end of the block (after the
+    // print rules, after dark-mode, after extraCss).
+    const idx = css.lastIndexOf("body { background: pink; }");
+    expect(idx).toBeGreaterThan(css.indexOf("@media print"));
+  });
+
+  it("sanitises meta.appearance.customCss at render time (strips @import + external url)", () => {
+    const css = buildStyleBlock(
+      createEmptyDocument({
+        title: "Malicious CSS",
+        meta: {
+          appearance: {
+            customCss:
+              "@import 'https://evil.example/x.css'; body { background: url(http://tracker/p.png); }",
+          },
+        },
+      }),
+    );
+    expect(css).not.toContain("@import");
+    expect(css).not.toContain("evil.example");
+    expect(css).not.toContain("tracker");
+    expect(css).toContain("body { background:");
+  });
+
   it("survives a parse → serialize round-trip with appearance.fontFamily", () => {
     const original = injectDocumentStyles(
       createEmptyDocument({

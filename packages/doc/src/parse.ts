@@ -10,6 +10,7 @@
  * their own.
  */
 
+import { sanitiseCustomCssText } from "./themes/sanitise-custom-css.js";
 import type {
   AnnotDocument,
   AppearanceFontFamily,
@@ -491,8 +492,16 @@ function parseAppearanceMeta(v: unknown): AppearanceMeta | undefined {
     hasField = true;
   }
   if (typeof o.customCss === "string" && o.customCss.length > 0) {
-    (out as { customCss?: string }).customCss = o.customCss;
-    hasField = true;
+    // Phase 5 of `card-document-themes.md` — sanitise on parse
+    // so a hand-edited sidecar can't slip malicious / external-
+    // url constructs past the dialog's save-time sanitiser.
+    // Defence in depth: `buildStyleBlock` sanitises again at
+    // render time.
+    const cleaned = sanitiseCustomCssText(o.customCss);
+    if (cleaned.length > 0) {
+      (out as { customCss?: string }).customCss = cleaned;
+      hasField = true;
+    }
   }
   const fontFamily = parseAppearanceFontFamily(o.fontFamily);
   if (fontFamily !== undefined) {
