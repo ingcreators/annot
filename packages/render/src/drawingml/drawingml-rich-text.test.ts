@@ -39,7 +39,7 @@ describe("buildShapeXml — rich-text textbox snapshots", () => {
   it("uniformly-styled single run renders one paragraph with a single run", () => {
     const xml = buildShapeXml(richTextbox({ runs: [{ text: "Hello" }] }), { ns: "p", id: 1 });
     expect(xml).toMatchInlineSnapshot(
-      `"<p:sp><p:nvSpPr><p:cNvPr id="1" name="T1"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="1905000" cy="571500"/></a:xfrm><a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val 5000"/></a:avLst></a:prstGeom><a:noFill/><a:ln w="9525"><a:solidFill><a:srgbClr val="BFBFBF"/></a:solidFill></a:ln></p:spPr><p:txBody><a:bodyPr wrap="square" rtlCol="0" lIns="91440" tIns="45720" rIns="91440" bIns="45720"/><a:lstStyle/><a:p><a:r><a:rPr lang="ja-JP" sz="1350" dirty="0"><a:solidFill><a:srgbClr val="222222"/></a:solidFill></a:rPr><a:t>Hello</a:t></a:r></a:p></p:txBody></p:sp>"`,
+      `"<p:sp><p:nvSpPr><p:cNvPr id="1" name="T1"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="1905000" cy="571500"/></a:xfrm><a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val 5000"/></a:avLst></a:prstGeom><a:noFill/><a:ln w="9525"><a:solidFill><a:srgbClr val="BFBFBF"/></a:solidFill></a:ln></p:spPr><p:txBody><a:bodyPr wrap="square" rtlCol="0" lIns="0" tIns="0" rIns="0" bIns="0"/><a:lstStyle/><a:p><a:r><a:rPr lang="ja-JP" sz="1350" dirty="0"><a:solidFill><a:srgbClr val="222222"/></a:solidFill></a:rPr><a:t>Hello</a:t></a:r></a:p></p:txBody></p:sp>"`,
     );
   });
 
@@ -55,7 +55,7 @@ describe("buildShapeXml — rich-text textbox snapshots", () => {
       { ns: "p", id: 2 },
     );
     expect(xml).toMatchInlineSnapshot(
-      `"<p:sp><p:nvSpPr><p:cNvPr id="2" name="T2"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="1905000" cy="571500"/></a:xfrm><a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val 5000"/></a:avLst></a:prstGeom><a:noFill/><a:ln w="9525"><a:solidFill><a:srgbClr val="BFBFBF"/></a:solidFill></a:ln></p:spPr><p:txBody><a:bodyPr wrap="square" rtlCol="0" lIns="91440" tIns="45720" rIns="91440" bIns="45720"/><a:lstStyle/><a:p><a:r><a:rPr lang="ja-JP" sz="1350" b="1" dirty="0"><a:solidFill><a:srgbClr val="222222"/></a:solidFill></a:rPr><a:t>B </a:t></a:r><a:r><a:rPr lang="ja-JP" sz="1350" i="1" dirty="0"><a:solidFill><a:srgbClr val="222222"/></a:solidFill></a:rPr><a:t>I </a:t></a:r><a:r><a:rPr lang="ja-JP" sz="1350" u="sng" dirty="0"><a:solidFill><a:srgbClr val="222222"/></a:solidFill></a:rPr><a:t>U</a:t></a:r></a:p></p:txBody></p:sp>"`,
+      `"<p:sp><p:nvSpPr><p:cNvPr id="2" name="T2"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="1905000" cy="571500"/></a:xfrm><a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val 5000"/></a:avLst></a:prstGeom><a:noFill/><a:ln w="9525"><a:solidFill><a:srgbClr val="BFBFBF"/></a:solidFill></a:ln></p:spPr><p:txBody><a:bodyPr wrap="square" rtlCol="0" lIns="0" tIns="0" rIns="0" bIns="0"/><a:lstStyle/><a:p><a:r><a:rPr lang="ja-JP" sz="1350" b="1" dirty="0"><a:solidFill><a:srgbClr val="222222"/></a:solidFill></a:rPr><a:t>B </a:t></a:r><a:r><a:rPr lang="ja-JP" sz="1350" i="1" dirty="0"><a:solidFill><a:srgbClr val="222222"/></a:solidFill></a:rPr><a:t>I </a:t></a:r><a:r><a:rPr lang="ja-JP" sz="1350" u="sng" dirty="0"><a:solidFill><a:srgbClr val="222222"/></a:solidFill></a:rPr><a:t>U</a:t></a:r></a:p></p:txBody></p:sp>"`,
     );
   });
 
@@ -71,7 +71,7 @@ describe("buildShapeXml — rich-text textbox snapshots", () => {
       { ns: "p", id: 3 },
     );
     expect(xml).toMatchInlineSnapshot(
-      `"<p:sp><p:nvSpPr><p:cNvPr id="3" name="T3"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="1905000" cy="571500"/></a:xfrm><a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val 5000"/></a:avLst></a:prstGeom><a:noFill/><a:ln w="9525"><a:solidFill><a:srgbClr val="BFBFBF"/></a:solidFill></a:ln></p:spPr><p:txBody><a:bodyPr wrap="square" rtlCol="0" lIns="91440" tIns="45720" rIns="91440" bIns="45720"/><a:lstStyle/><a:p><a:r><a:rPr lang="ja-JP" sz="900" dirty="0"><a:solidFill><a:srgbClr val="222222"/></a:solidFill></a:rPr><a:t>small </a:t></a:r><a:r><a:rPr lang="ja-JP" sz="1350" dirty="0"><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill></a:rPr><a:t>red </a:t></a:r><a:r><a:rPr lang="ja-JP" sz="1350" dirty="0"><a:solidFill><a:srgbClr val="222222"/></a:solidFill><a:latin typeface="Inter, sans-serif"/></a:rPr><a:t>fancy</a:t></a:r></a:p></p:txBody></p:sp>"`,
+      `"<p:sp><p:nvSpPr><p:cNvPr id="3" name="T3"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="1905000" cy="571500"/></a:xfrm><a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val 5000"/></a:avLst></a:prstGeom><a:noFill/><a:ln w="9525"><a:solidFill><a:srgbClr val="BFBFBF"/></a:solidFill></a:ln></p:spPr><p:txBody><a:bodyPr wrap="square" rtlCol="0" lIns="0" tIns="0" rIns="0" bIns="0"/><a:lstStyle/><a:p><a:r><a:rPr lang="ja-JP" sz="900" dirty="0"><a:solidFill><a:srgbClr val="222222"/></a:solidFill></a:rPr><a:t>small </a:t></a:r><a:r><a:rPr lang="ja-JP" sz="1350" dirty="0"><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill></a:rPr><a:t>red </a:t></a:r><a:r><a:rPr lang="ja-JP" sz="1350" dirty="0"><a:solidFill><a:srgbClr val="222222"/></a:solidFill><a:latin typeface="Inter, sans-serif"/></a:rPr><a:t>fancy</a:t></a:r></a:p></p:txBody></p:sp>"`,
     );
   });
 
@@ -86,7 +86,7 @@ describe("buildShapeXml — rich-text textbox snapshots", () => {
       { ns: "p", id: 4 },
     );
     expect(xml).toMatchInlineSnapshot(
-      `"<p:sp><p:nvSpPr><p:cNvPr id="4" name="T4"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="1905000" cy="571500"/></a:xfrm><a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val 5000"/></a:avLst></a:prstGeom><a:noFill/><a:ln w="9525"><a:solidFill><a:srgbClr val="BFBFBF"/></a:solidFill></a:ln></p:spPr><p:txBody><a:bodyPr wrap="square" rtlCol="0" lIns="91440" tIns="45720" rIns="91440" bIns="45720"/><a:lstStyle/><a:p><a:r><a:rPr lang="ja-JP" sz="1350" b="1" dirty="0"><a:solidFill><a:srgbClr val="222222"/></a:solidFill></a:rPr><a:t>para1</a:t></a:r></a:p><a:p><a:r><a:rPr lang="ja-JP" sz="1350" i="1" dirty="0"><a:solidFill><a:srgbClr val="222222"/></a:solidFill></a:rPr><a:t>para2</a:t></a:r></a:p></p:txBody></p:sp>"`,
+      `"<p:sp><p:nvSpPr><p:cNvPr id="4" name="T4"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="1905000" cy="571500"/></a:xfrm><a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val 5000"/></a:avLst></a:prstGeom><a:noFill/><a:ln w="9525"><a:solidFill><a:srgbClr val="BFBFBF"/></a:solidFill></a:ln></p:spPr><p:txBody><a:bodyPr wrap="square" rtlCol="0" lIns="0" tIns="0" rIns="0" bIns="0"/><a:lstStyle/><a:p><a:r><a:rPr lang="ja-JP" sz="1350" b="1" dirty="0"><a:solidFill><a:srgbClr val="222222"/></a:solidFill></a:rPr><a:t>para1</a:t></a:r></a:p><a:p><a:r><a:rPr lang="ja-JP" sz="1350" i="1" dirty="0"><a:solidFill><a:srgbClr val="222222"/></a:solidFill></a:rPr><a:t>para2</a:t></a:r></a:p></p:txBody></p:sp>"`,
     );
   });
 
@@ -216,7 +216,7 @@ describe("buildShapeXml — rich-text textbox snapshots", () => {
       { ns: "p", id: 15 },
     );
     expect(xml).toContain(
-      '<a:bodyPr wrap="square" rtlCol="0" lIns="91440" tIns="45720" rIns="91440" bIns="45720" anchor="ctr"/>',
+      '<a:bodyPr wrap="square" rtlCol="0" lIns="0" tIns="0" rIns="0" bIns="0" anchor="ctr"/>',
     );
   });
 

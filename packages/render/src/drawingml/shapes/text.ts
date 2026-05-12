@@ -107,7 +107,17 @@ export function buildText(s: AnnotationShape, id: number, ns: NamespaceOpts): st
   // snapshots stable.
   const vAttr = bodyPrAnchorAttr(s.text_vertical_anchor);
 
-  return `<${ns.shape}><${ns.nvShape}><${ns.cnvPr} id="${id}" name="T${id}"/><${ns.cnvSp} txBox="1"/>${ns.nvPrSuffix}</${ns.nvShape}><${ns.spPr}><a:xfrm${xf}><a:off x="${x}" y="${y}"/><a:ext cx="${bw}" cy="${bh}"/></a:xfrm>${geom}${bgFill}${line}</${ns.spPr}>${ns.txBodyOpen}<a:bodyPr wrap="square" rtlCol="0" lIns="91440" tIns="45720" rIns="91440" bIns="45720"${vAttr}/><a:lstStyle/>${paragraphs}${ns.txBodyClose}</${ns.shape}>`;
+  // Zero `lIns` / `tIns` / `rIns` / `bIns` on the text body so the
+  // OOXML rendering matches the SVG layout pixel-for-pixel. The
+  // SVG side already positions tspans inside the bg-primitive
+  // (rect / wedgeRoundRect / etc) with the padding the annotation
+  // kind needs (sticky / callout get their visual padding from the
+  // bg-primitive's geometry, not from a text inset). PowerPoint's
+  // default insets (0.25 cm / 0.13 cm) would add a SECOND layer of
+  // padding on top of that, pushing the text inward and overflowing
+  // the user-drawn frame — user-reported regression in card-
+  // procedure PPTX exports.
+  return `<${ns.shape}><${ns.nvShape}><${ns.cnvPr} id="${id}" name="T${id}"/><${ns.cnvSp} txBox="1"/>${ns.nvPrSuffix}</${ns.nvShape}><${ns.spPr}><a:xfrm${xf}><a:off x="${x}" y="${y}"/><a:ext cx="${bw}" cy="${bh}"/></a:xfrm>${geom}${bgFill}${line}</${ns.spPr}>${ns.txBodyOpen}<a:bodyPr wrap="square" rtlCol="0" lIns="0" tIns="0" rIns="0" bIns="0"${vAttr}/><a:lstStyle/>${paragraphs}${ns.txBodyClose}</${ns.shape}>`;
 }
 
 /** The historical light-gray hairline border the auto-bg text
