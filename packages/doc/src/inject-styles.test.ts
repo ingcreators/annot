@@ -437,6 +437,29 @@ describe("injectDocumentStyles: step block layouts", () => {
     expect(css).toContain("height: 100%");
   });
 
+  it("card image slot anchors its inner SVG via position:absolute (grey-strip guard)", () => {
+    // Phase 7d-polish follow-up: a `<?xml ?>` PI residue / inter-
+    // element whitespace from XMLSerializer / browser-quirk DOM
+    // injection can leave a non-SVG node above the slot's `<svg>`
+    // child, pushing the SVG ~20px down inside the 16:9 frame and
+    // showing a grey strip at the top of the card. The fix is
+    // structural: the slot is `position: relative` and the inner
+    // SVG is `position: absolute; inset: 0`, so the SVG always
+    // fills the slot starting at top-left regardless of sibling
+    // nodes.
+    const css = buildStyleBlock(createEmptyDocument({ title: "Slot anchor" }));
+    const slotStart = css.indexOf('[data-annot-block="step"] > .annot-doc-image-svg-slot {');
+    expect(slotStart).toBeGreaterThan(-1);
+    const slotEnd = css.indexOf("}", slotStart);
+    expect(css.slice(slotStart, slotEnd)).toContain("position: relative");
+    const innerStart = css.indexOf('[data-annot-block="step"] .annot-doc-image-svg-slot > svg {');
+    expect(innerStart).toBeGreaterThan(-1);
+    const innerEnd = css.indexOf("}", innerStart);
+    const innerSection = css.slice(innerStart, innerEnd);
+    expect(innerSection).toContain("position: absolute");
+    expect(innerSection).toContain("inset: 0");
+  });
+
   it("step blocks join the print break-inside avoid rule", () => {
     const css = buildStyleBlock(createEmptyDocument({ title: "Print" }));
     const printStart = css.indexOf("@media print {");

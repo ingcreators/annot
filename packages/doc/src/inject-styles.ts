@@ -395,6 +395,15 @@ function stepBlockRules(): string {
     "  margin: 0;",
     "  overflow: hidden;",
     "  background: transparent;",
+    // Anchor the absolutely-positioned inner SVG below. This
+    // makes the SVG fill the 16:9 slot regardless of any text
+    // / comment / metadata node the HTML parser leaves above it
+    // (e.g. `<?xml ?>` PI residue, XMLSerializer-produced inter-
+    // element whitespace, or browser-quirk DOM injections). The
+    // user-visible symptom this guards against is a ~20px grey
+    // strip at the top of edited cards where the slot's natural
+    // line-height pushes the SVG down.
+    "  position: relative;",
     "}",
     '[data-annot-block="step"] > .annot-doc-image-svg-slot[data-annot-image-svg] {',
     "  /* Pre-mount placeholder background — visible only while",
@@ -403,6 +412,12 @@ function stepBlockRules(): string {
     "  background: var(--annot-doc-code-bg, #f3f4f6);",
     "}",
     '[data-annot-block="step"] .annot-doc-image-svg-slot > svg {',
+    // Absolute-positioned + inset:0 guarantees the SVG fills the
+    // slot starting at its top-left, regardless of what other
+    // nodes (text, comments, metadata) end up above it inside
+    // the slot. See the `position: relative` comment above.
+    "  position: absolute;",
+    "  inset: 0;",
     "  width: 100%;",
     "  height: 100%;",
     "  display: block;",
@@ -476,6 +491,9 @@ function stepBlockRules(): string {
     "  display: block;",
     "  margin: 0;",
     "  overflow: hidden;",
+    // image-fill mirrors the area-based slot anchor — see the
+    // `position: relative` comment on the shared rule above.
+    "  position: relative;",
     "}",
     '[data-annot-block="step"][data-step-layout="image-fill"] > [data-step-title],',
     '[data-annot-block="step"][data-step-layout="image-fill"] > [data-step-body] {',
