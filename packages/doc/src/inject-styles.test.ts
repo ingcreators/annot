@@ -437,27 +437,32 @@ describe("injectDocumentStyles: step block layouts", () => {
     expect(css).toContain("height: 100%");
   });
 
-  it("card image slot anchors its inner SVG via position:absolute (grey-strip guard)", () => {
-    // Phase 7d-polish follow-up: a `<?xml ?>` PI residue / inter-
-    // element whitespace from XMLSerializer / browser-quirk DOM
-    // injection can leave a non-SVG node above the slot's `<svg>`
-    // child, pushing the SVG ~20px down inside the 16:9 frame and
-    // showing a grey strip at the top of the card. The fix is
-    // structural: the slot is `position: relative` and the inner
-    // SVG is `position: absolute; inset: 0`, so the SVG always
-    // fills the slot starting at top-left regardless of sibling
-    // nodes.
+  it("card image inner SVG does NOT use position:absolute (regresses card grid sizing)", () => {
+    // #618 originally added `position: absolute; inset: 0` on
+    // the slot's inner SVG plus `position: relative` on the
+    // slot itself as a defence against any node ending up above
+    // the SVG inside the slot. User-reported regression: with
+    // the SVG out of flow the slot has no in-flow children, and
+    // browsers' grid track sizing (the card is `display: grid;
+    // grid-template-columns: 1fr` with aspect-ratio-bearing
+    // items) shrinks the track to the toolbar's min-content
+    // width, leaving documents stuck at a narrow card column
+    // regardless of `--annot-doc-max-width`. Reverting to in-
+    // flow SVG restores the column width; the grey strip is
+    // already covered by the editor-side id strip, the
+    // `margin: 0` host guard, the JS non-SVG-child peel, and
+    // the `<?xml ?>` regex strip — `position: absolute` was
+    // extra belt-and-braces that turned out to break a more
+    // important contract.
     const css = buildStyleBlock(createEmptyDocument({ title: "Slot anchor" }));
     const slotStart = css.indexOf('[data-annot-block="step"] > .annot-doc-image-svg-slot {');
-    expect(slotStart).toBeGreaterThan(-1);
     const slotEnd = css.indexOf("}", slotStart);
-    expect(css.slice(slotStart, slotEnd)).toContain("position: relative");
+    expect(css.slice(slotStart, slotEnd)).not.toContain("position: relative");
     const innerStart = css.indexOf('[data-annot-block="step"] .annot-doc-image-svg-slot > svg {');
-    expect(innerStart).toBeGreaterThan(-1);
     const innerEnd = css.indexOf("}", innerStart);
     const innerSection = css.slice(innerStart, innerEnd);
-    expect(innerSection).toContain("position: absolute");
-    expect(innerSection).toContain("inset: 0");
+    expect(innerSection).not.toContain("position: absolute");
+    expect(innerSection).not.toContain("inset: 0");
   });
 
   it("card image inner SVG carries margin: 0 to neutralise editor-shell #svg-root style leakage", () => {
