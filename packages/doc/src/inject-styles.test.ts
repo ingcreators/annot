@@ -423,6 +423,42 @@ describe("injectDocumentStyles: numbering meta (Phase 13)", () => {
     expect(css).toContain("counter-reset: annot-h1 annot-h2 annot-h3 annot-figure annot-step");
   });
 
+  it("emits title clearance padding for layouts where title lands top-left of card", () => {
+    // Regression guard: with numbering on, the badge sits at
+    // top-left of the card and overlaps the title in layouts
+    // where the title is the first row of the grid. The
+    // `padding-left: calc(badge + 1rem)` rule pushes the title
+    // text to the right of the badge.
+    const css = buildStyleBlock(
+      createEmptyDocument({
+        title: "Badge clearance",
+        meta: { numbering: { steps: true } },
+      }),
+    );
+    expect(css).toContain('[data-step-layout="image-bottom"] > [data-step-title]');
+    expect(css).toContain('[data-step-layout="image-right"] > [data-step-title]');
+    expect(css).toContain("padding-left: calc(var(--annot-step-badge-min-size) + 1rem);");
+    // No padding-left for image-top / -left / -fill — those
+    // layouts don't have the title in the badge's footprint.
+    expect(css).not.toContain(
+      '[data-step-layout="image-top"] > [data-step-title] {\n  padding-left',
+    );
+    expect(css).not.toContain(
+      '[data-step-layout="image-left"] > [data-step-title] {\n  padding-left',
+    );
+    expect(css).not.toContain(
+      '[data-step-layout="image-fill"] > [data-step-title] {\n  padding-left',
+    );
+  });
+
+  it("does not emit the title clearance rule when numbering is off", () => {
+    // The badge isn't rendered without numbering, so the
+    // clearance rule shouldn't be either — keeps the saved
+    // bytes minimal for docs that haven't opted in.
+    const css = buildStyleBlock(createEmptyDocument({ title: "No numbering" }));
+    expect(css).not.toContain('[data-step-layout="image-bottom"] > [data-step-title]');
+  });
+
   it("emits step-badge CSS variables in :root regardless of steps toggle", () => {
     // Variables are unconditionally emitted so theme / user-CSS
     // overrides have a stable name to target even before the
