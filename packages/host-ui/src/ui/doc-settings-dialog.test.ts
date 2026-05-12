@@ -156,3 +156,125 @@ describe("showDocSettingsDialog: card layout fields", () => {
     expect(result?.cardColumns).toBe("auto");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Phase 3 of docs/plans/card-step-auto-numbering.md — Step numbering
+// section (toggle + label format picker).
+// ---------------------------------------------------------------------------
+
+describe("showDocSettingsDialog: step numbering fields", () => {
+  it("renders the step-numbering checkbox unchecked by default", async () => {
+    const promise = showDocSettingsDialog({ defaultTitle: "X" });
+    findDialog();
+    const checkbox = getInput("Auto-number step blocks") as HTMLInputElement;
+    expect(checkbox.checked).toBe(false);
+    findDialog().dispatchEvent(new CustomEvent("dialog-cancel"));
+    await promise;
+  });
+
+  it("pre-checks the checkbox when defaultNumberingSteps is true", async () => {
+    const promise = showDocSettingsDialog({
+      defaultTitle: "X",
+      defaultNumberingSteps: true,
+    });
+    const checkbox = getInput("Auto-number step blocks") as HTMLInputElement;
+    expect(checkbox.checked).toBe(true);
+    findDialog().dispatchEvent(new CustomEvent("dialog-cancel"));
+    await promise;
+  });
+
+  it("hides the label-format select when step numbering is off", async () => {
+    const promise = showDocSettingsDialog({ defaultTitle: "X" });
+    const labelSelect = getInput("Step badge label format") as HTMLSelectElement;
+    expect(labelSelect.style.display).toBe("none");
+    findDialog().dispatchEvent(new CustomEvent("dialog-cancel"));
+    await promise;
+  });
+
+  it("shows the label-format select when step numbering is on", async () => {
+    const promise = showDocSettingsDialog({
+      defaultTitle: "X",
+      defaultNumberingSteps: true,
+    });
+    const labelSelect = getInput("Step badge label format") as HTMLSelectElement;
+    expect(labelSelect.style.display).not.toBe("none");
+    findDialog().dispatchEvent(new CustomEvent("dialog-cancel"));
+    await promise;
+  });
+
+  it("returns numberingSteps:false and no stepLabel when off", async () => {
+    const promise = showDocSettingsDialog({ defaultTitle: "X" });
+    findDialog().dispatchEvent(new CustomEvent("dialog-ok"));
+    const result = await promise;
+    expect(result?.numberingSteps).toBe(false);
+    expect(result?.numberingStepLabel).toBeUndefined();
+  });
+
+  it("returns numberingSteps:true and undefined stepLabel for the default %n template", async () => {
+    const promise = showDocSettingsDialog({
+      defaultTitle: "X",
+      defaultNumberingSteps: true,
+    });
+    findDialog().dispatchEvent(new CustomEvent("dialog-ok"));
+    const result = await promise;
+    expect(result?.numberingSteps).toBe(true);
+    // %n collapses to undefined for sidecar minimality.
+    expect(result?.numberingStepLabel).toBeUndefined();
+  });
+
+  it("returns numberingSteps:true and verbatim stepLabel when a preset is chosen", async () => {
+    const promise = showDocSettingsDialog({
+      defaultTitle: "X",
+      defaultNumberingSteps: true,
+    });
+    (getInput("Step badge label format") as HTMLSelectElement).value = "Step %n";
+    findDialog().dispatchEvent(new CustomEvent("dialog-ok"));
+    const result = await promise;
+    expect(result?.numberingSteps).toBe(true);
+    expect(result?.numberingStepLabel).toBe("Step %n");
+  });
+
+  it("returns the custom stepLabel input when Custom is selected", async () => {
+    const promise = showDocSettingsDialog({
+      defaultTitle: "X",
+      defaultNumberingSteps: true,
+    });
+    const labelSelect = getInput("Step badge label format") as HTMLSelectElement;
+    labelSelect.value = "__custom";
+    labelSelect.dispatchEvent(new Event("change"));
+    const custom = getInput("Custom step badge label") as HTMLInputElement;
+    custom.value = "  %n / 5  ";
+    findDialog().dispatchEvent(new CustomEvent("dialog-ok"));
+    const result = await promise;
+    expect(result?.numberingStepLabel).toBe("%n / 5");
+  });
+
+  it("pre-populates Custom when defaultNumberingStepLabel is not a preset", async () => {
+    const promise = showDocSettingsDialog({
+      defaultTitle: "X",
+      defaultNumberingSteps: true,
+      defaultNumberingStepLabel: "Task %n of N",
+    });
+    const labelSelect = getInput("Step badge label format") as HTMLSelectElement;
+    expect(labelSelect.value).toBe("__custom");
+    const custom = getInput("Custom step badge label") as HTMLInputElement;
+    expect(custom.value).toBe("Task %n of N");
+    findDialog().dispatchEvent(new CustomEvent("dialog-cancel"));
+    await promise;
+  });
+
+  it("toggling the checkbox updates the label-format visibility", async () => {
+    const promise = showDocSettingsDialog({ defaultTitle: "X" });
+    const checkbox = getInput("Auto-number step blocks") as HTMLInputElement;
+    const labelSelect = getInput("Step badge label format") as HTMLSelectElement;
+    expect(labelSelect.style.display).toBe("none");
+    checkbox.checked = true;
+    checkbox.dispatchEvent(new Event("change"));
+    expect(labelSelect.style.display).not.toBe("none");
+    checkbox.checked = false;
+    checkbox.dispatchEvent(new Event("change"));
+    expect(labelSelect.style.display).toBe("none");
+    findDialog().dispatchEvent(new CustomEvent("dialog-cancel"));
+    await promise;
+  });
+});
