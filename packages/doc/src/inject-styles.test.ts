@@ -573,6 +573,29 @@ describe("injectDocumentStyles: cardLayout meta", () => {
     expect(css).toContain("grid-template-columns: repeat(auto-fill, minmax(320px, 1fr))");
   });
 
+  it("hides insert-bars between two cards in multi-column mode so the grid packs horizontally", () => {
+    // Editor render interleaves `<annot-doc-insert-bar>` between
+    // every pair of blocks. In single-column mode they sit
+    // between cards harmlessly. In multi-column mode their
+    // default `grid-column: 1 / -1` would force a row break
+    // between every pair of cards, leaving the second column
+    // empty and packing cards into one column visually. Hide
+    // just the bars sandwiched between two cards (or wrapped
+    // cards) — bars at the article boundary or adjacent to a
+    // non-card stay visible so non-card-insert UX still works.
+    const css = buildStyleBlock(
+      createEmptyDocument({
+        title: "Two columns hide bars",
+        meta: { cardLayout: { columns: 2 } },
+      }),
+    );
+    // The hiding rule references both the read-only and editor
+    // card selectors through `:is()` so it covers both render
+    // paths. Probe a stable substring of the rule.
+    expect(css).toContain("annot-doc-insert-bar:has(+ :is");
+    expect(css).toContain("display: none");
+  });
+
   it("survives a parse → serialize round-trip with cardLayout set", () => {
     const original = injectDocumentStyles(
       createEmptyDocument({
