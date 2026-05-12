@@ -315,9 +315,9 @@ describe("buildDocumentPptxFiles: step blocks (Phase 6)", () => {
       makeStepBlock("step-1", 800, 600, { title: "T", body: "B", layout: "image-top" }),
     ]);
     const slide1 = decode(buildDocumentPptxFiles(doc)["ppt/slides/slide1.xml"]!);
-    // Title rect at (4%, 67%, 92%, 8%) of (1280, 720) →
-    // x = 51.2 px, y = 482.4 px → EMU = 487680, 4594860.
-    expect(slide1).toMatch(/StepTitle[\s\S]*?<a:off x="487680" y="4594860"\/>/);
+    // Title rect at (4%, 77%, 92%, 6%) of (1280, 720) →
+    // x = 51.2 px, y = 554.4 px → EMU = 487680, 5280660.
+    expect(slide1).toMatch(/StepTitle[\s\S]*?<a:off x="487680" y="5280660"\/>/);
   });
 
   it("positions the overlays per layout — image-bottom puts text near the top", () => {
@@ -325,8 +325,8 @@ describe("buildDocumentPptxFiles: step blocks (Phase 6)", () => {
       makeStepBlock("step-1", 800, 600, { title: "T", body: "B", layout: "image-bottom" }),
     ]);
     const slide1 = decode(buildDocumentPptxFiles(doc)["ppt/slides/slide1.xml"]!);
-    // Title rect at (4%, 4%, 92%, 8%) → x=51.2, y=28.8 → 487680, 274320 EMU.
-    expect(slide1).toMatch(/StepTitle[\s\S]*?<a:off x="487680" y="274320"\/>/);
+    // Title rect at (4%, 2%, 92%, 6%) → x=51.2, y=14.4 → 487680, 137160 EMU.
+    expect(slide1).toMatch(/StepTitle[\s\S]*?<a:off x="487680" y="137160"\/>/);
   });
 
   it("positions the overlays per layout — image-left puts text on the right half", () => {
@@ -334,8 +334,8 @@ describe("buildDocumentPptxFiles: step blocks (Phase 6)", () => {
       makeStepBlock("step-1", 800, 600, { title: "T", body: "B", layout: "image-left" }),
     ]);
     const slide1 = decode(buildDocumentPptxFiles(doc)["ppt/slides/slide1.xml"]!);
-    // Title rect at (58%, 4%, 40%, 10%) → x=742.4, y=28.8 → 7071360, 274320 EMU.
-    expect(slide1).toMatch(/StepTitle[\s\S]*?<a:off x="7071360" y="274320"\/>/);
+    // Title rect at (65%, 4%, 33%, 10%) → x=832, y=28.8 → 7924800, 274320 EMU.
+    expect(slide1).toMatch(/StepTitle[\s\S]*?<a:off x="7924800" y="274320"\/>/);
   });
 
   it("positions the overlays per layout — image-right puts text on the left half", () => {
@@ -343,8 +343,28 @@ describe("buildDocumentPptxFiles: step blocks (Phase 6)", () => {
       makeStepBlock("step-1", 800, 600, { title: "T", body: "B", layout: "image-right" }),
     ]);
     const slide1 = decode(buildDocumentPptxFiles(doc)["ppt/slides/slide1.xml"]!);
-    // Title rect at (2%, 4%, 40%, 10%) → x=25.6, y=28.8 → 243840, 274320 EMU.
+    // Title rect at (2%, 4%, 33%, 10%) → x=25.6, y=28.8 → 243840, 274320 EMU.
     expect(slide1).toMatch(/StepTitle[\s\S]*?<a:off x="243840" y="274320"\/>/);
+  });
+
+  // User feedback fix: step content (title + body) is left-
+  // aligned + top-anchored to match the HTML view's reading
+  // flow. The previous default was centred — fine for the
+  // cover slide, weird for in-card content.
+  it("step title + body are left-aligned and top-anchored", () => {
+    const doc = makeDocument([
+      makeStepBlock("step-1", 800, 600, { title: "Title", body: "Body text" }),
+    ]);
+    const slide1 = decode(buildDocumentPptxFiles(doc)["ppt/slides/slide1.xml"]!);
+    // Spot-check the title's paragraph properties + body anchor.
+    const titleSegment = slide1.slice(slide1.indexOf("StepTitle"));
+    expect(titleSegment).toContain('<a:pPr algn="l">');
+    expect(titleSegment).toContain('anchor="t"');
+    const bodySegment = slide1.slice(slide1.indexOf("StepBody"));
+    expect(bodySegment).toContain('<a:pPr algn="l">');
+    expect(bodySegment).toContain('anchor="t"');
+    // The legacy centred alignment is gone for step content.
+    expect(titleSegment).not.toContain('algn="ctr"');
   });
 
   // Phase 6b: the translucent-backdrop + white-text overlay
@@ -507,18 +527,18 @@ describe("buildDocumentPptxFiles: 16:9 slide canvas (Phase 6b)", () => {
     );
   });
 
-  it("step block image-top puts the image in the upper 65% of the slide", () => {
-    // Source 1280×720 (16:9). Region (0..1280, 0..468). Source
-    // aspect matches slide aspect (1.78); contained = 832×468
-    // centered → x = (1280-832)/2 = 224 px → 2133600 EMU,
-    // y = 0. ext = 832 px wide → 7924800 EMU, 468 px tall →
-    // 4457700 EMU.
+  it("step block image-top puts the image in the upper 75% of the slide", () => {
+    // Source 1280×720 (16:9). Region (0..1280, 0..540). Source
+    // aspect 1.78; scale = min(1280/1280, 540/720) = 0.75.
+    // Scaled = 960×540, centred horizontally → x = (1280-960)/2 = 160
+    // → 1,524,000 EMU. y = 0. ext = 960 × 9525 = 9,144,000 wide,
+    // 540 × 9525 = 5,143,500 tall.
     const doc = makeDocument([
       makeStepBlock("step-1", 1280, 720, { title: "T", body: "B", layout: "image-top" }),
     ]);
     const slideXml = decode(buildDocumentPptxFiles(doc)["ppt/slides/slide1.xml"]!);
     expect(slideXml).toMatch(
-      /ImageGroup[\s\S]*?<a:off x="2133600" y="0"\/>[\s\S]*?<a:ext cx="7924800" cy="4457700"\/>/,
+      /ImageGroup[\s\S]*?<a:off x="1524000" y="0"\/>[\s\S]*?<a:ext cx="9144000" cy="5143500"\/>/,
     );
   });
 
@@ -534,19 +554,19 @@ describe("buildDocumentPptxFiles: 16:9 slide canvas (Phase 6b)", () => {
     );
   });
 
-  it("step block image-left puts the image in the left 55%", () => {
-    // Region (0..704px, 0..720px). 1280×720 source aspect 1.78.
-    // scale = min(704/1280, 720/720) = min(0.55, 1) = 0.55.
-    // Scaled = 704×396. Centered in the region:
-    //   x = 0, y = (720-396)/2 = 162 px = 1,543,050 EMU.
-    //   ext = 704 × 9525 = 6,705,600 wide,
-    //         396 × 9525 = 3,771,900 tall.
+  it("step block image-left puts the image in the left 62%", () => {
+    // Region (0..793.6px, 0..720px). 1280×720 source aspect 1.78.
+    // scale = min(793.6/1280, 720/720) = min(0.62, 1) = 0.62.
+    // Scaled = 793.6×446.4. Centred in the region:
+    //   x = 0, y = (720-446.4)/2 = 136.8 px → 1,303,020 EMU.
+    //   ext = 793.6 × 9525 = 7,559,040 wide,
+    //         446.4 × 9525 = 4,251,960 tall.
     const doc = makeDocument([
       makeStepBlock("step-1", 1280, 720, { title: "T", body: "B", layout: "image-left" }),
     ]);
     const slideXml = decode(buildDocumentPptxFiles(doc)["ppt/slides/slide1.xml"]!);
     expect(slideXml).toMatch(
-      /ImageGroup[\s\S]*?<a:off x="0" y="1543050"\/>[\s\S]*?<a:ext cx="6705600" cy="3771900"\/>/,
+      /ImageGroup[\s\S]*?<a:off x="0" y="1303020"\/>[\s\S]*?<a:ext cx="7559040" cy="4251960"\/>/,
     );
   });
 
@@ -763,6 +783,16 @@ describe("buildDocumentPptxFiles: cover slide (Phase 7c)", () => {
     expect(slide1).toContain('name="CoverFooter"');
     // Footer joins author + step count with " · ".
     expect(slide1).toContain("<a:t>By Naoki Ichimura · 2 steps</a:t>");
+  });
+
+  it("cover slide content stays centred (title / description / footer)", () => {
+    // Cover slides retain the classic centred treatment; only
+    // step content switched to left-aligned in the user-feedback
+    // fix.
+    const slide1 = decode(buildDocumentPptxFiles(makeHeadedDoc())["ppt/slides/slide1.xml"]!);
+    const titleSegment = slide1.slice(slide1.indexOf("CoverTitle"));
+    expect(titleSegment).toContain('<a:pPr algn="ctr">');
+    expect(titleSegment).toContain('anchor="ctr"');
   });
 
   it("cover slide carries the icon as a top-level <p:pic> (no image group)", () => {

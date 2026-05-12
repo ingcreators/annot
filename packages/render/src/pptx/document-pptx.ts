@@ -58,14 +58,18 @@ const SLIDE_H_PX = 720;
  *  aspect is preserved, letterboxing on either axis is
  *  accepted. */
 const STEP_IMAGE_REGION: Record<StepLayout, { x: number; y: number; w: number; h: number }> = {
-  // Image fills the upper 65%; bottom 35% reserved for text.
-  "image-top": { x: 0, y: 0, w: 1, h: 0.65 },
+  // Image fills the upper 75%; bottom 25% reserved for text.
+  // Bumped from 65% on user feedback — the 16:9 source maps
+  // more legibly when the image takes a clear majority of the
+  // slide.
+  "image-top": { x: 0, y: 0, w: 1, h: 0.75 },
   // Mirror — image at bottom, text up top.
-  "image-bottom": { x: 0, y: 0.35, w: 1, h: 0.65 },
-  // Two-column — image left 55%, text right 45%.
-  "image-left": { x: 0, y: 0, w: 0.55, h: 1 },
+  "image-bottom": { x: 0, y: 0.25, w: 1, h: 0.75 },
+  // Two-column — image left 62%, text right 38%. Bumped from
+  // 55/45 so the screenshot is the obvious focus of the slide.
+  "image-left": { x: 0, y: 0, w: 0.62, h: 1 },
   // Mirror — image right.
-  "image-right": { x: 0.45, y: 0, w: 0.55, h: 1 },
+  "image-right": { x: 0.38, y: 0, w: 0.62, h: 1 },
   // Image fills entire slide; text overlays at the bottom with
   // a translucent backdrop (matches CSS image-fill).
   "image-fill": { x: 0, y: 0, w: 1, h: 1 },
@@ -342,6 +346,11 @@ function buildCoverSlide(doc: AnnotDocument, index: number): SlideData | null {
       fontSizeHpt: 4400,
       bold: true,
       overlay: false,
+      // Cover slide uses centred title / description / footer
+      // — the classic "first slide" treatment vs. step blocks'
+      // left-aligned reading flow.
+      align: "ctr",
+      anchor: "ctr",
     }),
     id: titleId,
   });
@@ -356,6 +365,8 @@ function buildCoverSlide(doc: AnnotDocument, index: number): SlideData | null {
         fontSizeHpt: 2000,
         bold: false,
         overlay: false,
+        align: "ctr",
+        anchor: "ctr",
       }),
       id: descId,
     });
@@ -374,6 +385,8 @@ function buildCoverSlide(doc: AnnotDocument, index: number): SlideData | null {
         fontSizeHpt: 1400,
         bold: false,
         overlay: false,
+        align: "ctr",
+        anchor: "ctr",
       }),
       id: footerId,
     });
@@ -988,25 +1001,27 @@ const LAYOUT_PLACEMENTS: Record<
     body: { x: number; y: number; w: number; h: number };
   }
 > = {
-  // Image fills upper 65% → text in bottom 35%.
+  // Image fills upper 75% → text in bottom 25%. Title sits
+  // just below the image; body wraps the remaining height.
   "image-top": {
-    title: { x: 0.04, y: 0.67, w: 0.92, h: 0.08 },
-    body: { x: 0.04, y: 0.75, w: 0.92, h: 0.23 },
+    title: { x: 0.04, y: 0.77, w: 0.92, h: 0.06 },
+    body: { x: 0.04, y: 0.83, w: 0.92, h: 0.15 },
   },
-  // Image fills lower 65% → text in top 35%.
+  // Image fills lower 75% → text in top 25%.
   "image-bottom": {
-    title: { x: 0.04, y: 0.04, w: 0.92, h: 0.08 },
-    body: { x: 0.04, y: 0.12, w: 0.92, h: 0.23 },
+    title: { x: 0.04, y: 0.02, w: 0.92, h: 0.06 },
+    body: { x: 0.04, y: 0.08, w: 0.92, h: 0.15 },
   },
-  // Image left 55% → text right 45%.
+  // Image left 62% → text right 38%. 0.65 column start gives
+  // 0.03 gutter between the image and the title.
   "image-left": {
-    title: { x: 0.58, y: 0.04, w: 0.4, h: 0.1 },
-    body: { x: 0.58, y: 0.14, w: 0.4, h: 0.82 },
+    title: { x: 0.65, y: 0.04, w: 0.33, h: 0.1 },
+    body: { x: 0.65, y: 0.14, w: 0.33, h: 0.82 },
   },
-  // Image right 55% → text left 45%.
+  // Image right 62% → text left 38%.
   "image-right": {
-    title: { x: 0.02, y: 0.04, w: 0.4, h: 0.1 },
-    body: { x: 0.02, y: 0.14, w: 0.4, h: 0.82 },
+    title: { x: 0.02, y: 0.04, w: 0.33, h: 0.1 },
+    body: { x: 0.02, y: 0.14, w: 0.33, h: 0.82 },
   },
   // Image fills slide → text overlays at the bottom (only
   // layout where text shares pixels with the image; renders
@@ -1053,6 +1068,17 @@ interface OverlayTextShapeOptions {
    *  dark-on-transparent text (sits in a slide region of its
    *  own — image-top / -bottom / -left / -right). */
   overlay: boolean;
+  /** Horizontal text alignment. Default `"l"` (left) so step
+   *  titles + bodies match the HTML view's left-aligned reading
+   *  flow. Cover slide call sites pass `"ctr"` because a
+   *  centred title is the standard cover treatment. */
+  align?: "l" | "ctr" | "r";
+  /** Vertical alignment inside the shape's text body. Default
+   *  `"t"` (top) for step content — title sits flush at the top
+   *  of its rect, body follows below. Cover-slide call sites
+   *  pass `"ctr"` because the cover slide reserves vertical
+   *  space generously and wants its blocks centred. */
+  anchor?: "t" | "ctr" | "b";
 }
 
 /**
@@ -1078,6 +1104,11 @@ function buildStepTextShapeXml(opts: OverlayTextShapeOptions): string {
     ? `<a:solidFill><a:srgbClr val="000000"><a:alpha val="65000"/></a:srgbClr></a:solidFill>`
     : "<a:noFill/>";
   const textColor = opts.overlay ? "FFFFFF" : "000000";
+  // Alignment: left + top by default so step titles + bodies
+  // match the HTML view's reading flow. Cover-slide call sites
+  // override both to "ctr" for the classic centred treatment.
+  const align = opts.align ?? "l";
+  const anchor = opts.anchor ?? "t";
   return `<p:sp>
         <p:nvSpPr>
           <p:cNvPr id="${opts.id}" name="${opts.name}"/>
@@ -1094,10 +1125,10 @@ function buildStepTextShapeXml(opts: OverlayTextShapeOptions): string {
           <a:ln><a:noFill/></a:ln>
         </p:spPr>
         <p:txBody>
-          <a:bodyPr wrap="square" lIns="91440" tIns="45720" rIns="91440" bIns="45720" anchor="ctr"/>
+          <a:bodyPr wrap="square" lIns="91440" tIns="45720" rIns="91440" bIns="45720" anchor="${anchor}"/>
           <a:lstStyle/>
           <a:p>
-            <a:pPr algn="ctr"><a:defRPr/></a:pPr>
+            <a:pPr algn="${align}"><a:defRPr/></a:pPr>
             <a:r>
               <a:rPr lang="en-US" sz="${opts.fontSizeHpt}"${boldAttr}>
                 <a:solidFill><a:srgbClr val="${textColor}"/></a:solidFill>
