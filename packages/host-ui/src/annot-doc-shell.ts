@@ -52,6 +52,7 @@ import {
   type BlockKindChangeDetail,
   type BlockKindOption,
   type FormatChangeDetail,
+  type LinkRequestDetail,
 } from "./annot-doc-selection-toolbar.js";
 import "./annot-doc-selection-toolbar.js";
 import { openKeyboardHelpModal, type ShortcutGroup } from "./keyboard-help.js";
@@ -754,6 +755,7 @@ export class AnnotDocShellElement extends LitElement {
     document.addEventListener("keydown", this.#onDocKeydown, { capture: true });
     document.addEventListener("format-change", this.#onFormatChange as EventListener);
     document.addEventListener("block-kind-change", this.#onBlockKindChange as EventListener);
+    document.addEventListener("link-request", this.#onLinkRequest as EventListener);
   }
 
   override disconnectedCallback(): void {
@@ -769,6 +771,7 @@ export class AnnotDocShellElement extends LitElement {
     document.removeEventListener("keydown", this.#onDocKeydown, { capture: true });
     document.removeEventListener("format-change", this.#onFormatChange as EventListener);
     document.removeEventListener("block-kind-change", this.#onBlockKindChange as EventListener);
+    document.removeEventListener("link-request", this.#onLinkRequest as EventListener);
     AnnotDocSelectionToolbarElement.closeActive();
     if (this.#commitTimer !== null) {
       clearTimeout(this.#commitTimer);
@@ -2276,10 +2279,42 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
         bold: this.#queryCommandState("bold"),
         italic: this.#queryCommandState("italic"),
         underline: this.#queryCommandState("underline"),
+        link: this.#selectionInsideAnchor(),
       },
       currentBlockKindId: block ? blockKindIdFromBlock(block) : undefined,
     });
   };
+
+  /** Whether the active selection / cursor sits inside an
+   *  `<a>` element within an editable block. Used to drive
+   *  the link button's pressed state + open-in-edit-mode
+   *  affordance. */
+  #selectionInsideAnchor(): boolean {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return false;
+    const range = sel.getRangeAt(0);
+    let node: Node | null = range.commonAncestorContainer;
+    while (node) {
+      if (node.nodeType === Node.ELEMENT_NODE && (node as Element).tagName === "A") {
+        return true;
+      }
+      node = node.parentNode;
+    }
+    return false;
+  }
+
+  /** Walk up from `node` to find the first ancestor `<a>` —
+   *  returns it for editing / removal flows. */
+  #findAnchorAncestor(node: Node): HTMLAnchorElement | null {
+    let current: Node | null = node;
+    while (current) {
+      if (current.nodeType === Node.ELEMENT_NODE && (current as Element).tagName === "A") {
+        return current as HTMLAnchorElement;
+      }
+      current = current.parentNode;
+    }
+    return null;
+  }
 
   #findEditableAncestor(node: Node): HTMLElement | null {
     let current: Node | null = node;
@@ -2320,6 +2355,27 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
   /** Doc-wide keydown — Esc dismisses the floating toolbar
    *  without canceling the user's selection. */
   #onDocKeydown = (e: KeyboardEvent): void => {
+    // Ctrl+K / Cmd+K — Google-Docs-style "open link dialog"
+    // shortcut when the focus is inside one of this shell's
+    // editable blocks. Intercept before the contentEditable's
+    // own keydown so the browser doesn't navigate the URL bar
+    // or trigger an unrelated default.
+    const cmdLike = e.ctrlKey || e.metaKey;
+    if (cmdLike && (e.key === "k" || e.key === "K") && !e.altKey && !e.shiftKey) {
+      const sel = window.getSelection();
+      const editable = sel?.anchorNode ? this.#findEditableAncestor(sel.anchorNode) : null;
+      if (editable && this.contains(editable)) {
+        e.preventDefault();
+        document.dispatchEvent(
+          new CustomEvent<LinkRequestDetail>("link-request", {
+            detail: { editing: this.#selectionInsideAnchor() },
+            bubbles: false,
+            composed: false,
+          }),
+        );
+        return;
+      }
+    }
     if (e.key !== "Escape") return;
     if (!AnnotDocSelectionToolbarElement.getActive()) return;
     AnnotDocSelectionToolbarElement.closeActive();
@@ -2347,6 +2403,136 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
     // Refresh the toolbar's pressed-state so the button reflects
     // the new selection state immediately.
     this.#onSelectionChange();
+  };
+
+  /** Inline-link dispatch from the selection toolbar. Opens
+   *  the link dialog (saving the active selection range first),
+   *  applies the user's choice via `createLink` / `unlink`, and
+   *  pushes a history snapshot.
+   *
+   *  Selection survives the dialog open/close round-trip because
+   *  the toolbar's `mousedown.preventDefault()` keeps the
+   *  contentEditable focused; we still cache the Range so we can
+   *  restore it explicitly after the modal closes (the dialog's
+   *  text inputs DO move focus away from the editable, even with
+   *  the preventDefault). */
+  #onLinkRequest = (e: CustomEvent<LinkRequestDetail>): void => {
+    e.stopPropagation();
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+    const range = sel.getRangeAt(0).cloneRange();
+    const existingAnchor = this.#findAnchorAncestor(range.commonAncestorContainer);
+    // Default label = the selected text, OR the existing
+    // link's text content when editing. Default URL = the
+    // existing href when editing, else empty.
+    let defaultLabel = "";
+    let defaultUrl = "";
+    if (existingAnchor) {
+      defaultLabel = existingAnchor.textContent ?? "";
+      defaultUrl = existingAnchor.getAttribute("href") ?? "";
+    } else if (!range.collapsed) {
+      defaultLabel = range.toString();
+    }
+    const allowRemove = existingAnchor !== null;
+
+    void (async () => {
+      const { showLinkDialog } = await import("./ui/link-dialog.js");
+      const result = await showLinkDialog({ defaultUrl, defaultLabel, allowRemove });
+      if (result.action === "cancel") return;
+      // Restore the cached range — the dialog moved focus, so
+      // we need to put the selection back before execCommand.
+      const restored = window.getSelection();
+      if (!restored) return;
+      // When editing an existing link, select the whole `<a>`
+      // so `unlink` + `createLink` work on the entire chip.
+      if (existingAnchor) {
+        const editRange = document.createRange();
+        editRange.selectNode(existingAnchor);
+        restored.removeAllRanges();
+        restored.addRange(editRange);
+      } else {
+        restored.removeAllRanges();
+        restored.addRange(range);
+      }
+      if (result.action === "remove") {
+        try {
+          document.execCommand("unlink");
+        } catch {
+          // happy-dom may not implement unlink; fall back to
+          // tag stripping via the DOM.
+          if (existingAnchor) {
+            const text = document.createTextNode(existingAnchor.textContent ?? "");
+            existingAnchor.replaceWith(text);
+          }
+        }
+      } else {
+        // result.action === "save"
+        const { url, label } = result.input;
+        // If we're editing an existing link, drop the old one
+        // first so the new createLink lands cleanly without
+        // nesting.
+        if (existingAnchor) {
+          try {
+            document.execCommand("unlink");
+          } catch {
+            const text = document.createTextNode(existingAnchor.textContent ?? "");
+            existingAnchor.replaceWith(text);
+          }
+        }
+        // If the label differs from the current selection text,
+        // replace the selection text first so the createLink
+        // wraps the new text.
+        const currentSelectionText = window.getSelection()?.toString() ?? "";
+        if (label !== currentSelectionText) {
+          try {
+            document.execCommand("insertText", false, label);
+          } catch {
+            // Fallback: replace via DOM
+            const r = window.getSelection()?.getRangeAt(0);
+            if (r) {
+              r.deleteContents();
+              r.insertNode(document.createTextNode(label));
+            }
+          }
+          // Re-select the newly-inserted text so createLink wraps
+          // exactly the label.
+          const labelRange = document.createRange();
+          const editable = this.#findEditableAncestor(
+            (window.getSelection()?.anchorNode ?? document.body) as Node,
+          );
+          if (editable && label.length > 0) {
+            // The insertText command placed the cursor right
+            // after the inserted text. Walk back by `label.length`
+            // to wrap the newly-inserted text. The current
+            // selection is collapsed at that position; extend
+            // backwards.
+            const selAfter = window.getSelection();
+            if (selAfter && selAfter.rangeCount > 0) {
+              const after = selAfter.getRangeAt(0);
+              labelRange.setEnd(after.endContainer, after.endOffset);
+              labelRange.setStart(after.endContainer, Math.max(0, after.endOffset - label.length));
+              selAfter.removeAllRanges();
+              selAfter.addRange(labelRange);
+            }
+          }
+        }
+        try {
+          document.execCommand("createLink", false, url);
+        } catch {
+          // Fallback: wrap the selection in an `<a>` manually.
+          const r = window.getSelection()?.getRangeAt(0);
+          if (r) {
+            const a = document.createElement("a");
+            a.href = url;
+            a.appendChild(r.extractContents());
+            r.insertNode(a);
+          }
+        }
+      }
+      this.#syncDomIntoDocument();
+      this.commit();
+      this.#onSelectionChange();
+    })();
   };
 
   /** Block-kind dispatch from the selection toolbar. Replaces the

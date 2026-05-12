@@ -62,6 +62,12 @@ export interface SelectionFormatState {
   bold: boolean;
   italic: boolean;
   underline: boolean;
+  /** Whether the active selection is INSIDE an existing
+   *  inline link. Drives the `aria-pressed` state on the
+   *  Link button so users can tell at a glance that the
+   *  click will edit the existing link rather than create
+   *  a new one. */
+  link: boolean;
 }
 
 export interface SelectionToolbarContext {
@@ -83,6 +89,18 @@ export interface BlockKindChangeDetail {
 
 export interface FormatChangeDetail {
   command: "bold" | "italic" | "underline";
+}
+
+/** Detail payload for the `link-request` event. The toolbar
+ *  dispatches this when the Link button is clicked; the
+ *  shell opens the link dialog, restores the selection
+ *  afterwards, and applies the user's choice via
+ *  `document.execCommand`. */
+export interface LinkRequestDetail {
+  /** Whether the active selection is currently inside an
+   *  inline `<a>` — drives the dialog's "Edit" vs. "Create"
+   *  mode. */
+  editing: boolean;
 }
 
 const TOOLBAR_CSS = `
@@ -208,7 +226,7 @@ export class AnnotDocSelectionToolbarElement extends LitElement {
 
   constructor() {
     super();
-    this.format = { bold: false, italic: false, underline: false };
+    this.format = { bold: false, italic: false, underline: false, link: false };
     this.currentBlockKindId = undefined;
     this.options = SELECTION_BLOCK_KIND_OPTIONS;
     this.kindMenuOpen = false;
@@ -278,6 +296,7 @@ export class AnnotDocSelectionToolbarElement extends LitElement {
         ${this.#renderFormatButton("bold", "B", "bold", "Bold (Ctrl+B)")}
         ${this.#renderFormatButton("italic", "I", "italic", "Italic (Ctrl+I)")}
         ${this.#renderFormatButton("underline", "U", "underline", "Underline (Ctrl+U)")}
+        ${this.#renderLinkButton()}
         <span class="annot-doc-selection-toolbar-divider" aria-hidden="true"></span>
         <button
           type="button"
@@ -293,6 +312,30 @@ export class AnnotDocSelectionToolbarElement extends LitElement {
         </button>
         ${this.kindMenuOpen ? this.#renderKindMenu() : ""}
       </div>
+    `;
+  }
+
+  #renderLinkButton(): TemplateResult {
+    const pressed = this.format.link;
+    const title = pressed ? "Edit link" : "Insert link (Ctrl+K)";
+    // The link button shows a generic link glyph (🔗 isn't
+    // available in every host font and emoji rendering is
+    // inconsistent across operating systems; the ASCII chain
+    // "∞" was considered but reads as infinity). The "↗"
+    // diagonal arrow reads unambiguously as "go to external"
+    // without depending on an emoji font.
+    return html`
+      <button
+        type="button"
+        class="annot-doc-selection-toolbar-button annot-doc-selection-toolbar-button-link"
+        aria-label=${title}
+        aria-pressed=${pressed ? "true" : "false"}
+        title=${title}
+        data-format="link"
+        @click=${this.#dispatchLinkRequest}
+      >
+        <span aria-hidden="true">↗</span>
+      </button>
     `;
   }
 
@@ -372,6 +415,16 @@ export class AnnotDocSelectionToolbarElement extends LitElement {
         bubbles: true,
         composed: true,
         detail: { command },
+      }),
+    );
+  };
+
+  #dispatchLinkRequest = (): void => {
+    this.dispatchEvent(
+      new CustomEvent<LinkRequestDetail>("link-request", {
+        bubbles: true,
+        composed: true,
+        detail: { editing: this.format.link },
       }),
     );
   };
