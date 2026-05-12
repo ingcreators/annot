@@ -3248,6 +3248,23 @@ function materialiseImageSlot(slot: HTMLElement): void {
   // node. Idempotent / safe when the prefix is already absent.
   const svg = raw.replace(/^\s*<\?xml[^?]*\?>\s*/, "").trimStart();
   slot.innerHTML = svg;
+  // User-reported regression: annotated step cards (the ones
+  // whose `block.svg` came from `exportSVGString`) showed a ~20px
+  // grey strip above the SVG even after the `<?xml ?>` prefix
+  // strip. Live-browser HTML parsing of XMLSerializer-produced
+  // SVG can leave inter-element whitespace / comment nodes BEFORE
+  // the `<svg>` child inside the slot, and the slot's default
+  // line-height pushes the SVG down. Defensively peel any non-
+  // `<svg>` child node off so the slot's first (and only) child
+  // is the `<svg>` element. Pairs with the `position: absolute;
+  // inset: 0` rule on the inner SVG (inject-styles.ts) — the CSS
+  // pins the SVG to top:0 even if a stray node slips past, but
+  // we also keep the DOM clean so the markup matches the visual.
+  for (const child of Array.from(slot.childNodes)) {
+    const isSvgElement =
+      child.nodeType === Node.ELEMENT_NODE && (child as Element).tagName.toLowerCase() === "svg";
+    if (!isSvgElement) child.remove();
+  }
   slot.removeAttribute("data-annot-image-svg");
   // The aspect-ratio style stops being load-bearing once the
   // SVG is in — clearing it lets the SVG's intrinsic size

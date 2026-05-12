@@ -1857,6 +1857,48 @@ describe("annot-doc-shell: SVG materialisation strips XML decl prefix", () => {
     expect(slot.childNodes.length).toBe(1);
     expect(slot.firstChild?.nodeName.toLowerCase()).toBe("svg");
   });
+
+  it("peels inter-element whitespace / comments off so SVG is the only child", async () => {
+    // Live-browser HTML parsing of an XMLSerializer-produced SVG
+    // can leave whitespace or comment text nodes BEFORE the
+    // `<svg>` element when the markup contains pretty-printed
+    // newlines or comments outside the SVG root. The clean-up
+    // pass in `materialiseImageSlot` guarantees the slot's only
+    // child is the `<svg>` regardless. The user-visible symptom
+    // it guards against is the grey strip above annotated step
+    // card images.
+    const noisySvg =
+      "  \n<!-- prettyprint -->\n  " +
+      '<svg xmlns="http://www.w3.org/2000/svg" data-annot-version="1" viewBox="0 0 800 450" width="800" height="450">' +
+      "<defs><style>text { font-family: sans-serif; }</style></defs>" +
+      '<image href="data:," width="800" height="450"/>' +
+      '<rect x="10" y="10" width="100" height="50"/>' +
+      "</svg>\n  ";
+    const doc: AnnotDocument = {
+      version: 1,
+      lang: "en",
+      title: "T",
+      meta: { title: "T" },
+      styleBlock: null,
+      blocks: [
+        {
+          kind: "step",
+          id: "img-noisy",
+          svg: noisySvg,
+          title: "T",
+          body: "B",
+          layout: "image-top",
+        },
+      ],
+    };
+    const el = mount(doc);
+    el.editing = false;
+    await el.updateComplete;
+    el.materialiseAllImagesNow();
+    const slot = el.querySelector(".annot-doc-image-svg-slot") as HTMLElement;
+    expect(slot.childNodes.length).toBe(1);
+    expect(slot.firstChild?.nodeName.toLowerCase()).toBe("svg");
+  });
 });
 
 describe("annot-doc-shell: image-less step blocks", () => {

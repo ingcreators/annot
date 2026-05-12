@@ -437,6 +437,45 @@ describe("injectDocumentStyles: step block layouts", () => {
     expect(css).toContain("height: 100%");
   });
 
+  it("card image slot anchors its inner SVG via position:absolute (grey-strip guard)", () => {
+    // Phase 7d-polish follow-up: a `<?xml ?>` PI residue / inter-
+    // element whitespace from XMLSerializer / browser-quirk DOM
+    // injection can leave a non-SVG node above the slot's `<svg>`
+    // child, pushing the SVG ~20px down inside the 16:9 frame and
+    // showing a grey strip at the top of the card. The fix is
+    // structural: the slot is `position: relative` and the inner
+    // SVG is `position: absolute; inset: 0`, so the SVG always
+    // fills the slot starting at top-left regardless of sibling
+    // nodes.
+    const css = buildStyleBlock(createEmptyDocument({ title: "Slot anchor" }));
+    const slotStart = css.indexOf('[data-annot-block="step"] > .annot-doc-image-svg-slot {');
+    expect(slotStart).toBeGreaterThan(-1);
+    const slotEnd = css.indexOf("}", slotStart);
+    expect(css.slice(slotStart, slotEnd)).toContain("position: relative");
+    const innerStart = css.indexOf('[data-annot-block="step"] .annot-doc-image-svg-slot > svg {');
+    expect(innerStart).toBeGreaterThan(-1);
+    const innerEnd = css.indexOf("}", innerStart);
+    const innerSection = css.slice(innerStart, innerEnd);
+    expect(innerSection).toContain("position: absolute");
+    expect(innerSection).toContain("inset: 0");
+  });
+
+  it("card image inner SVG carries margin: 0 to neutralise editor-shell #svg-root style leakage", () => {
+    // Root cause: the editor's live canvas uses `<svg id="svg-root">`,
+    // which the editor stylesheet styles with `margin: 20px auto`.
+    // Pre-fix annotated bytes saved to `block.svg` carried that id;
+    // when embedded in the doc shell the margin pushed the SVG 20px
+    // down inside the slot — visible as a grey strip above the card
+    // image. The editor's export path now strips the id, but legacy
+    // saved docs already on disk still carry it. `margin: 0` on the
+    // inner SVG rule neutralises the leakage for both forward and
+    // backward compat.
+    const css = buildStyleBlock(createEmptyDocument({ title: "Margin reset" }));
+    const innerStart = css.indexOf('[data-annot-block="step"] .annot-doc-image-svg-slot > svg {');
+    const innerEnd = css.indexOf("}", innerStart);
+    expect(css.slice(innerStart, innerEnd)).toContain("margin: 0");
+  });
+
   it("step blocks join the print break-inside avoid rule", () => {
     const css = buildStyleBlock(createEmptyDocument({ title: "Print" }));
     const printStart = css.indexOf("@media print {");
