@@ -23,7 +23,13 @@
 
 import { svgElementToAnnotationShape } from "@ingcreators/annot-core/editor/svg-to-annotation-shapes";
 import { buildZip } from "@ingcreators/annot-core/zip";
-import type { AnnotDocument, ImageBlock, StepBlock, StepLayout } from "@ingcreators/annot-doc";
+import type {
+  AnnotDocument,
+  ImageBlock,
+  NumberingMeta,
+  StepBlock,
+  StepLayout,
+} from "@ingcreators/annot-doc";
 import { buildShapeXml, px } from "../drawingml/index.js";
 
 /** Output of {@link buildDocumentPptxFiles} — the OPC file map
@@ -245,6 +251,14 @@ function collectSlides(doc: AnnotDocument): SlideData[] {
   // The presentation rels / content-types / slide xml all expect
   // a contiguous 1..N sequence; a gap renders the deck unreadable
   // in PowerPoint.
+  //
+  // Phase 5 of `docs/plans/card-step-auto-numbering.md` — track
+  // a separate `stepCounter` so badge numerals mirror the
+  // CSS-counter behaviour in the standalone view (counts step
+  // blocks in document order regardless of cover / image blocks
+  // interleaved before / between them).
+  let stepCounter = 0;
+  const numbering = doc.meta.numbering;
   for (const block of doc.blocks) {
     if (block.kind === "image") {
       const data = buildSlideFromImageBlock(block, out.length + 1);
@@ -258,7 +272,8 @@ function collectSlides(doc: AnnotDocument): SlideData[] {
     // are emitted as overlay `<p:sp>` text shapes positioned per
     // `data-step-layout`.
     if (block.kind === "step") {
-      const data = buildSlideFromStepBlock(block, out.length + 1);
+      stepCounter += 1;
+      const data = buildSlideFromStepBlock(block, out.length + 1, stepCounter, numbering);
       if (data) out.push(data);
     }
   }
@@ -507,14 +522,19 @@ function buildSlideFromImageBlock(block: ImageBlock, index: number): SlideData |
  * to plain text for the overlay — keeps the OOXML emit terse
  * and visually consistent across layouts.
  */
-function buildSlideFromStepBlock(block: StepBlock, index: number): SlideData | null {
+function buildSlideFromStepBlock(
+  block: StepBlock,
+  index: number,
+  stepCounter: number,
+  numbering: NumberingMeta | undefined,
+): SlideData | null {
   // Phase 7a of `docs/plans/_done/card-procedure-template.md` — an empty
   // `block.svg` marks an image-less step block (text-only narrative
   // card). We bypass the image-block delegation entirely and emit
   // a slide whose only content is the title + body shapes,
   // centred on the slide.
   if (block.svg.length === 0) {
-    return buildImagelessStepSlide(block, index);
+    return buildImagelessStepSlide(block, index, stepCounter, numbering);
   }
   const base = buildSlideFromImageBlock({ kind: "image", id: block.id, svg: block.svg }, index);
   if (!base) return null;
@@ -640,6 +660,24 @@ function buildSlideFromStepBlock(block: StepBlock, index: number): SlideData | n
     });
   }
 
+  // Phase 5 of `docs/plans/card-step-auto-numbering.md` — render
+  // the step badge. Mirrors the CSS counterpart in
+  // `injectDocumentStyles`: small accent-coloured circle in the
+  // top-left corner with the step numeral (template parsed from
+  // `numbering.stepLabel`). Skipped when numbering is off so
+  // existing exports stay byte-identical to pre-Phase-5 output.
+  if (numbering?.steps === true) {
+    const badgeId = nextId++;
+    base.topLevelShapes.push({
+      xml: buildStepBadgeXml({
+        id: badgeId,
+        text: applyStepLabelTemplate(numbering.stepLabel, stepCounter),
+        overlay: block.layout === "image-fill",
+      }),
+      id: badgeId,
+    });
+  }
+
   return base;
 }
 
@@ -655,7 +693,12 @@ function buildSlideFromStepBlock(block: StepBlock, index: number): SlideData | n
  * mirroring that in PPTX keeps the rendered slide consistent
  * with the standalone view.
  */
-function buildImagelessStepSlide(block: StepBlock, index: number): SlideData | null {
+function buildImagelessStepSlide(
+  block: StepBlock,
+  index: number,
+  stepCounter: number,
+  numbering: NumberingMeta | undefined,
+): SlideData | null {
   const titleText = stripInlineHtml(block.title);
   const bodyText = stripInlineHtml(block.body);
   // A slide with neither title nor body NOR a URL chip would be
@@ -728,6 +771,22 @@ function buildImagelessStepSlide(block: StepBlock, index: number): SlideData | n
     });
   }
 
+  // Phase 5 of `docs/plans/card-step-auto-numbering.md` — badge
+  // on an image-less slide. Same chrome as the image-bearing
+  // path; uses the non-overlay style because there's no
+  // screenshot underneath to compete with.
+  if (numbering?.steps === true) {
+    const badgeId = nextId++;
+    topLevelShapes.push({
+      xml: buildStepBadgeXml({
+        id: badgeId,
+        text: applyStepLabelTemplate(numbering.stepLabel, stepCounter),
+        overlay: false,
+      }),
+      id: badgeId,
+    });
+  }
+
   return {
     index,
     // Width / height carried as the slide canvas size so the
@@ -743,6 +802,98 @@ function buildImagelessStepSlide(block: StepBlock, index: number): SlideData | n
     mosaicMedia: [],
     hyperlinks,
   };
+}
+
+/**
+ * Phase 5 of `docs/plans/card-step-auto-numbering.md` — replace
+ * `%n` in the `stepLabel` template with the step counter. Mirrors
+ * `stepLabelToCssContent` in `inject-styles.ts` but emits plain
+ * text (no CSS counter substitution) since OOXML can't express
+ * a counter at render time. The template defaults to `"%n"` —
+ * bare numeral — when absent.
+ */
+function applyStepLabelTemplate(template: string | undefined, n: number): string {
+  if (template === undefined) return String(n);
+  return template.replace(/%n/g, String(n));
+}
+
+/** Phase 5 — step badge placement (slide-coordinate fractions).
+ *  Top-left corner with a small inset matching the CSS
+ *  `top: 0.75rem; left: 0.75rem` rule. 80x80 px at the
+ *  1280x720 canvas → larger than the CSS badge proportionally,
+ *  trading off PowerPoint's coarser hit-area / typography
+ *  defaults vs. the browser's HiDPI rendering. */
+const STEP_BADGE_RECT = { x: 0.022, y: 0.039, w: 0.0625, h: 0.111 };
+
+interface StepBadgeOptions {
+  id: number;
+  text: string;
+  /** image-fill layout → swap to a translucent dark backdrop +
+   *  white text + soft shadow so the numeral stays legible on
+   *  top of the screenshot. Other layouts get the accent-coloured
+   *  pill style. */
+  overlay: boolean;
+}
+
+/**
+ * Emit one `<p:sp>` for the step badge — a small ellipse / rounded
+ * rectangle carrying the step numeral in the top-left of the slide.
+ * Mirrors the CSS `::before` rule emitted by `injectDocumentStyles`
+ * when `meta.numbering.steps === true`.
+ */
+function buildStepBadgeXml(opts: StepBadgeOptions): string {
+  const xPx = SLIDE_W_PX * STEP_BADGE_RECT.x;
+  const yPx = SLIDE_H_PX * STEP_BADGE_RECT.y;
+  const wPx = SLIDE_W_PX * STEP_BADGE_RECT.w;
+  const hPx = SLIDE_H_PX * STEP_BADGE_RECT.h;
+  const text = escapeOoxmlText(opts.text);
+  // Accent fill: blue (#2563eb) matching the default
+  // `--annot-doc-accent` in inject-styles.ts. Overlay variant
+  // uses translucent black for image-fill legibility.
+  const fillXml = opts.overlay
+    ? `<a:solidFill><a:srgbClr val="000000"><a:alpha val="55000"/></a:srgbClr></a:solidFill>`
+    : `<a:solidFill><a:srgbClr val="2563EB"/></a:solidFill>`;
+  // Pill-shaped (roundRect with maximum corner radius). Single-
+  // digit content visually reads as a circle; longer labels
+  // ("Step 1") stretch into a horizontal pill. The `adj1="50000"`
+  // sets the corner radius to 50% of the shorter side — same
+  // visual as `border-radius: 9999px` in CSS.
+  const geomXml = `<a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val 50000"/></a:avLst></a:prstGeom>`;
+  // Soft drop shadow on the non-overlay variant — matches the
+  // `box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25)` in CSS.
+  const effectXml = opts.overlay
+    ? ""
+    : `<a:effectLst><a:outerShdw blurRad="76200" dist="38100" dir="5400000" algn="t" rotWithShape="0"><a:srgbClr val="2563EB"><a:alpha val="40000"/></a:srgbClr></a:outerShdw></a:effectLst>`;
+  return `<p:sp>
+        <p:nvSpPr>
+          <p:cNvPr id="${opts.id}" name="StepBadge"/>
+          <p:cNvSpPr/>
+          <p:nvPr/>
+        </p:nvSpPr>
+        <p:spPr>
+          <a:xfrm>
+            <a:off x="${px(xPx)}" y="${px(yPx)}"/>
+            <a:ext cx="${px(wPx)}" cy="${px(hPx)}"/>
+          </a:xfrm>
+          ${geomXml}
+          ${fillXml}
+          <a:ln><a:noFill/></a:ln>
+          ${effectXml}
+        </p:spPr>
+        <p:txBody>
+          <a:bodyPr wrap="none" lIns="0" tIns="0" rIns="0" bIns="0" anchor="ctr"/>
+          <a:lstStyle/>
+          <a:p>
+            <a:pPr algn="ctr"><a:defRPr/></a:pPr>
+            <a:r>
+              <a:rPr lang="en-US" sz="1800" b="1">
+                <a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill>
+              </a:rPr>
+              <a:t>${text}</a:t>
+            </a:r>
+          </a:p>
+        </p:txBody>
+      </p:sp>`;
 }
 
 /** Phase 7b — allocate a fresh rId for a slide-level hyperlink.

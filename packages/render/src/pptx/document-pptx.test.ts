@@ -1084,6 +1084,127 @@ describe("exportDocumentPptx", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// Phase 5 of docs/plans/card-step-auto-numbering.md — step badge
+// shape on each step slide when `meta.numbering.steps === true`.
+// Mirrors the CSS-counter badge in the standalone view.
+// ---------------------------------------------------------------------------
+
+describe("buildDocumentPptxFiles: step numbering badge (Phase 5)", () => {
+  function makeNumberedDoc(blocks: AnnotDocument["blocks"], stepLabel?: string): AnnotDocument {
+    return {
+      version: 1,
+      lang: "en",
+      title: "Numbered",
+      meta: {
+        title: "Numbered",
+        numbering: { steps: true, ...(stepLabel !== undefined ? { stepLabel } : {}) },
+      },
+      styleBlock: null,
+      blocks,
+    };
+  }
+
+  it("emits no badge when meta.numbering.steps is absent", () => {
+    const doc = makeDocument([makeStepBlock("step-1", 800, 600, { title: "T", body: "B" })]);
+    const slide1 = decode(buildDocumentPptxFiles(doc)["ppt/slides/slide1.xml"]!);
+    expect(slide1).not.toContain("StepBadge");
+  });
+
+  it("emits a badge shape with the numeral when meta.numbering.steps is true", () => {
+    const doc = makeNumberedDoc([makeStepBlock("step-1", 800, 600, { title: "T", body: "B" })]);
+    const slide1 = decode(buildDocumentPptxFiles(doc)["ppt/slides/slide1.xml"]!);
+    expect(slide1).toContain("StepBadge");
+    expect(slide1).toContain("<a:t>1</a:t>");
+    // Pill-shaped (roundRect with 50% adj).
+    expect(slide1).toContain('prst="roundRect"');
+    expect(slide1).toContain('fmla="val 50000"');
+    // Accent fill (#2563EB matches --annot-doc-accent default).
+    expect(slide1).toContain('val="2563EB"');
+  });
+
+  it("increments the badge numeral across step blocks in document order", () => {
+    const doc = makeNumberedDoc([
+      makeStepBlock("step-1", 800, 600, { title: "A" }),
+      makeStepBlock("step-2", 800, 600, { title: "B" }),
+      makeStepBlock("step-3", 800, 600, { title: "C" }),
+    ]);
+    const files = buildDocumentPptxFiles(doc);
+    const slide1 = decode(files["ppt/slides/slide1.xml"]!);
+    const slide2 = decode(files["ppt/slides/slide2.xml"]!);
+    const slide3 = decode(files["ppt/slides/slide3.xml"]!);
+    expect(slide1).toContain("<a:t>1</a:t>");
+    expect(slide2).toContain("<a:t>2</a:t>");
+    expect(slide3).toContain("<a:t>3</a:t>");
+  });
+
+  it("substitutes %n in stepLabel into the badge text", () => {
+    const doc = makeNumberedDoc(
+      [
+        makeStepBlock("step-1", 800, 600, { title: "A" }),
+        makeStepBlock("step-2", 800, 600, { title: "B" }),
+      ],
+      "Step %n",
+    );
+    const files = buildDocumentPptxFiles(doc);
+    const slide1 = decode(files["ppt/slides/slide1.xml"]!);
+    const slide2 = decode(files["ppt/slides/slide2.xml"]!);
+    expect(slide1).toContain("<a:t>Step 1</a:t>");
+    expect(slide2).toContain("<a:t>Step 2</a:t>");
+  });
+
+  it("uses translucent dark backdrop for image-fill layout", () => {
+    const doc = makeNumberedDoc([
+      makeStepBlock("step-1", 800, 600, { title: "T", body: "B", layout: "image-fill" }),
+    ]);
+    const slide1 = decode(buildDocumentPptxFiles(doc)["ppt/slides/slide1.xml"]!);
+    expect(slide1).toContain("StepBadge");
+    // Image-fill uses transparent black, NOT the accent colour.
+    // The badge block contains alpha + #000000 fill (translucent
+    // dark), so look for the alpha in the badge segment.
+    const badgeSegment = slide1.slice(slide1.indexOf("StepBadge"));
+    expect(badgeSegment).toContain('val="000000"');
+    expect(badgeSegment).toContain('<a:alpha val="55000"/>');
+  });
+
+  it("step counter increments only over step blocks (image blocks don't tick it)", () => {
+    // Cover would be one slide, then an image-block slide (no
+    // badge), then two step-block slides (badges with counters
+    // 1, 2 — the image block in between doesn't increment).
+    const doc = makeNumberedDoc([
+      makeImageBlock("img-1", 800, 600),
+      makeStepBlock("step-1", 800, 600, { title: "A" }),
+      makeImageBlock("img-2", 800, 600),
+      makeStepBlock("step-2", 800, 600, { title: "B" }),
+    ]);
+    const files = buildDocumentPptxFiles(doc);
+    // Slide 1 = image block — no badge.
+    expect(decode(files["ppt/slides/slide1.xml"]!)).not.toContain("StepBadge");
+    // Slide 2 = first step — badge "1".
+    expect(decode(files["ppt/slides/slide2.xml"]!)).toContain("<a:t>1</a:t>");
+    // Slide 3 = image block — no badge.
+    expect(decode(files["ppt/slides/slide3.xml"]!)).not.toContain("StepBadge");
+    // Slide 4 = second step — badge "2".
+    expect(decode(files["ppt/slides/slide4.xml"]!)).toContain("<a:t>2</a:t>");
+  });
+
+  it("emits a badge on image-less step blocks too", () => {
+    const doc = makeNumberedDoc([
+      {
+        kind: "step",
+        id: "step-1",
+        svg: "",
+        title: "Hello",
+        body: "World",
+        layout: "image-top",
+      },
+    ]);
+    const slide1 = decode(buildDocumentPptxFiles(doc)["ppt/slides/slide1.xml"]!);
+    expect(slide1).toContain("StepBadge");
+    expect(slide1).toContain("<a:t>1</a:t>");
+  });
+});
+
 // ---- helpers --------------------------------------------------------------
 
 function decode(bytes: Uint8Array): string {

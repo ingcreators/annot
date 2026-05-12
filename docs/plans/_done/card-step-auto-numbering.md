@@ -1,23 +1,30 @@
 # Auto-numbering for card-style step documents
 
-> **Status:** Draft
-> **Compatibility:** Extends the `.annot.html` v1 format from
-> [`_done/annot-html-document.md`](./_done/annot-html-document.md) and
-> the card document mechanics from
-> [`_done/card-procedure-template.md`](./_done/card-procedure-template.md).
-> Adds an opt-in `NumberingMeta.steps` flag and a `::before` CSS
-> counter on `[data-annot-block="step"]`. The pre-fill that bakes
-> `"Step 1"` / `"Image 1"` into step titles at creation time goes
-> away. Touches `@ingcreators/annot-doc` (Tier A), `@ingcreators/annot-host-ui`
-> (Tier C — dialog + generator), `@ingcreators/annot-render` (PPTX
-> export — must emit `index + 1` literally since OOXML has no CSS
-> counters). Schema delta is purely additive — `data-annot-doc-version`
-> stays at 1.
-> **Risk:** Five phases, additive throughout. Each phase lands as an
-> independently revertable PR. No migration of pre-existing card
-> documents — per user direction this plan treats the install as
-> having no shipped card documents yet, so the Phase 4 pre-fill
-> drop is a clean cut.
+> **Status:** Done — all 5 phases shipped (1 – 5). PRs
+> [#627](https://github.com/ingcreators/annot/pull/627)
+> (data layer), [#628](https://github.com/ingcreators/annot/pull/628)
+> (CSS counter + badge), [#629](https://github.com/ingcreators/annot/pull/629)
+> (Doc Settings dialog wiring), [#630](https://github.com/ingcreators/annot/pull/630)
+> (drop title pre-fill + default `meta.numbering.steps = true`
+> on new card docs), and the Phase 5 PR (PPTX badge + format
+> docs + archival, this PR).
+> **Compatibility:** Extended the `.annot.html` v1 format from
+> [`annot-html-document.md`](./annot-html-document.md) and the
+> card document mechanics from
+> [`card-procedure-template.md`](./card-procedure-template.md).
+> Added an opt-in `NumberingMeta.steps` flag and a `::before` CSS
+> counter on `[data-annot-block="step"]`. The pre-fill that baked
+> `"Step 1"` / `"Image 1"` into step titles at creation time was
+> retired. Touched `@ingcreators/annot-doc` (Tier A),
+> `@ingcreators/annot-host-ui` (Tier C — dialog + generator),
+> `@ingcreators/annot-render` (PPTX export — emits the badge
+> numeral literally since OOXML has no CSS counters). Schema
+> delta was purely additive — `data-annot-doc-version` stayed at 1.
+> **Risk:** Five phases, additive throughout. Each phase landed
+> as an independently revertable PR. No migration of pre-existing
+> card documents — per user direction this plan treated the
+> install as having no shipped card documents yet, so the Phase 4
+> pre-fill drop was a clean cut.
 
 ## Context
 
