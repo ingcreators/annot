@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 //
 // Targeted coverage for the Scribe-style document header landed
-// in Phase 7c of `docs/plans/card-procedure-template.md`. The
+// in Phase 7c of `docs/plans/_done/card-procedure-template.md`. The
 // header is regenerated on every save from `meta.header` +
 // `meta.title` + `meta.author` + a step-block walk, matching the
 // existing TOC pattern: the parser skips elements carrying

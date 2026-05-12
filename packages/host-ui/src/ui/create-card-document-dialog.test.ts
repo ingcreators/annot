@@ -2,7 +2,7 @@
  * @vitest-environment happy-dom
  *
  * `showCreateCardDocumentDialog` tests — Phase 4 of
- * `docs/plans/card-procedure-template.md`. Same imperative-dialog
+ * `docs/plans/_done/card-procedure-template.md`. Same imperative-dialog
  * shape as `showDocSettingsDialog`, so the assertions follow
  * the same pattern.
  */

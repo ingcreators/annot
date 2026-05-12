@@ -1,5 +1,5 @@
 /**
- * Phase 9a of `docs/plans/annot-html-document.md` — three
+ * Phase 9a of `docs/plans/_done/annot-html-document.md` — three
  * package-resident starter templates (`manual`, `feature-guide`,
  * `procedure`) that fill the picker's "Built-in" section once
  * the host wires them through (Phase 9b).
@@ -266,7 +266,7 @@ const PROCEDURE_DOC: AnnotDocument = {
 
 // ───────────────────────────────────────────────────────────────
 // Card procedure — Scribe-style screenshot-driven walkthrough.
-// Phase 5 of `docs/plans/card-procedure-template.md`.
+// Phase 5 of `docs/plans/_done/card-procedure-template.md`.
 // ───────────────────────────────────────────────────────────────
 
 /** Per-step image IDs for the card-procedure starter. Each step
@@ -399,7 +399,7 @@ const BUILTIN_TREES: Readonly<Record<string, AnnotDocument>> = {
  * Clone a built-in starter into a fresh editable `AnnotDocument`
  * — no DOM dependency, runs cleanly under pure Node. Used by
  * the VSCode extension's `Annot: New document` command (Phase
- * 10 of `docs/plans/annot-html-document.md`) to skip the
+ * 10 of `docs/plans/_done/annot-html-document.md`) to skip the
  * `parseDocument` round-trip the in-browser path would
  * normally use to recover the tree from `BUILTIN_TEMPLATES[i].
  * source`.

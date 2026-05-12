@@ -1,7 +1,7 @@
 # Annot HTML document format
 
 > **Status:** Version **1**, frozen by Phase 0 of
-> [`docs/plans/annot-html-document.md`](./plans/annot-html-document.md).
+> [`docs/plans/_done/annot-html-document.md`](./plans/_done/annot-html-document.md).
 > The block vocabulary, root markers, `data-*` attribute set,
 > canonicalisation rules, and allow-listed HTML elements documented
 > below are the contract for v1 readers and writers. Phases 1+ may
@@ -384,7 +384,7 @@ npm run dev</code></pre>
 - Step blocks generate one slide per block in the multi-slide PPTX
   export (`exportDocumentPptx`), with `data-step-layout` selecting
   the PowerPoint slide layout — see
-  [`docs/plans/card-procedure-template.md`](./plans/card-procedure-template.md).
+  [`docs/plans/_done/card-procedure-template.md`](./plans/_done/card-procedure-template.md).
 
 ### Forward-compatibility for unknown blocks
 
@@ -442,7 +442,7 @@ contract reads from the heading list directly.
 
 ### Standalone-view doc header
 
-Phase 7c of `docs/plans/card-procedure-template.md` adds a
+Phase 7c of `docs/plans/_done/card-procedure-template.md` adds a
 Scribe-style document header. When `meta.header` is set the
 serializer prepends a `<section data-annot-doc-header>` to the
 article body, BEFORE the TOC:
@@ -627,7 +627,7 @@ Why three:
 Phase 7 lands these markers in the parser / serializer; Phase 8
 ships 3 bundled starter templates (`manual` / `feature-guide` /
 `procedure`) that use them. See
-[`docs/plans/annot-html-document.md`](./plans/annot-html-document.md)
+[`docs/plans/_done/annot-html-document.md`](./plans/_done/annot-html-document.md)
 for the lifecycle.
 
 ## Cross-references
@@ -912,14 +912,14 @@ for v1 readers and writers. Block taxonomy, root markers, `data-*`
 vocabulary, and canonicalisation rules described above.
 
 Frozen by Phase 0 of
-[`docs/plans/annot-html-document.md`](./plans/annot-html-document.md).
+[`docs/plans/_done/annot-html-document.md`](./plans/_done/annot-html-document.md).
 Phases 1+ may add tests, helpers, or UI; they MUST NOT change the
 on-disk shape of v1 files.
 
 #### Revisions to v1
 
 - **2026-05 — `step` block added** (Phase 0 of
-  [`docs/plans/card-procedure-template.md`](./plans/card-procedure-template.md)).
+  [`docs/plans/_done/card-procedure-template.md`](./plans/_done/card-procedure-template.md)).
   Additive expansion under the unchanged `data-annot-doc-version="1"`
   stamp; pre-release, no shipped users to consider. Adds:
   - `step` block kind (`<section data-annot-block="step">` with
@@ -933,7 +933,7 @@ on-disk shape of v1 files.
     `steps-fill`) under
     [`docs/annot-html-format-examples/`](./annot-html-format-examples/).
 - **2026-05 — image-less `step` block** (Phase 7a of
-  [`docs/plans/card-procedure-template.md`](./plans/card-procedure-template.md)).
+  [`docs/plans/_done/card-procedure-template.md`](./plans/_done/card-procedure-template.md)).
   Additive under v1; pre-release. Adds:
   - The `<svg>` child of a `step` block is now OPTIONAL. A step
     block with no `<svg>` child renders as a text-only narrative
@@ -945,7 +945,7 @@ on-disk shape of v1 files.
   - The slash menu gains a "Step (text only)" entry that splices
     an image-less step block synchronously (no file picker).
 - **2026-05 — URL chip on `step` block** (Phase 7b of
-  [`docs/plans/card-procedure-template.md`](./plans/card-procedure-template.md)).
+  [`docs/plans/_done/card-procedure-template.md`](./plans/_done/card-procedure-template.md)).
   Additive under v1; pre-release. Adds:
   - New OPTIONAL `data-step-url` attribute on the `<section>`
     carrying a Scribe-style navigation URL. The parser validates
@@ -957,7 +957,7 @@ on-disk shape of v1 files.
     with `<a:hlinkClick>` pointing at a slide-rels hyperlink
     relationship.
 - **2026-05 — Scribe-style document header** (Phase 7c of
-  [`docs/plans/card-procedure-template.md`](./plans/card-procedure-template.md)).
+  [`docs/plans/_done/card-procedure-template.md`](./plans/_done/card-procedure-template.md)).
   Additive under v1; pre-release. Adds:
   - New OPTIONAL `header` sub-object on `DocMeta` carrying
     `icon` (data: URL) and/or `description` (plain text).
@@ -970,7 +970,7 @@ on-disk shape of v1 files.
   - The doc-settings dialog gains "Header description" and
     "Header icon" fields so users can opt in interactively.
 - **2026-05 — Image viewport on `step` block** (Phase 7d of
-  [`docs/plans/card-procedure-template.md`](./plans/card-procedure-template.md)).
+  [`docs/plans/_done/card-procedure-template.md`](./plans/_done/card-procedure-template.md)).
   Additive under v1; pre-release. Adds:
   - New OPTIONAL `data-step-viewport="x,y,w,h"` attribute on the
     `<section>` carrying the initial pan/zoom rect in SVG-native
@@ -1114,7 +1114,7 @@ v2 consideration:
   reason for keeping the on-disk format portable.
 - [`docs/svg-format.md`](./svg-format.md) — companion spec for
   the embedded `.annot.svg` images.
-- [`docs/plans/annot-html-document.md`](./plans/annot-html-document.md) —
+- [`docs/plans/_done/annot-html-document.md`](./plans/_done/annot-html-document.md) —
   multi-phase implementation plan.
 - [`docs/annot-html-format-examples/`](./annot-html-format-examples/) —
   canonical golden fixtures.

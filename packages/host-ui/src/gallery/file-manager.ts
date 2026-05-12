@@ -30,7 +30,7 @@ export interface FileManagerCallbacks {
   onStorageSelect: (mode: StorageMode) => Promise<void>;
   onStorageReselect: (mode: StorageMode) => Promise<void>;
   onOpenImage: (record: ImageRecord) => void;
-  /** Phase 6d of `docs/plans/annot-html-document.md`. Optional —
+  /** Phase 6d of `docs/plans/_done/annot-html-document.md`. Optional —
    *  hosts that don't yet support documents (no
    *  `StorageWithDocuments` opt-in) can omit it; the gallery hides
    *  document cards entirely when the storage doesn't list any. */
@@ -42,12 +42,12 @@ export interface FileManagerCallbacks {
   onTimedCapture: () => Promise<void>;
   onPasteClipboard: () => Promise<void>;
   /** Create a new `.annot.html` document. Phase 6c of
-   *  `docs/plans/annot-html-document.md`. Optional — when omitted,
+   *  `docs/plans/_done/annot-html-document.md`. Optional — when omitted,
    *  the sidebar's "New Document" entry doesn't render (i.e. the
    *  active host hasn't wired the document creation flow yet). */
   onNewDocument?: () => Promise<void>;
   /** Open the template picker for a new-document-from-template
-   *  flow. Phase 8d of `docs/plans/annot-html-document.md`. The
+   *  flow. Phase 8d of `docs/plans/_done/annot-html-document.md`. The
    *  host loads `Templates/`, narrows via `isTemplateFromHead`,
    *  shows `showTemplatePickerDialog`, and on selection clones
    *  via `cloneTemplate` + persists + navigates. Optional —
@@ -55,7 +55,7 @@ export interface FileManagerCallbacks {
    *  yet, or the active storage doesn't opt into
    *  `StorageWithDocuments`). */
   onNewFromTemplate?: () => Promise<void>;
-  /** Phase 4 of `docs/plans/card-procedure-template.md` — invoked
+  /** Phase 4 of `docs/plans/_done/card-procedure-template.md` — invoked
    *  when the user picks "Create card document from selection"
    *  from the gallery's image context menu. The host shows the
    *  generator dialog, builds the `.annot.html` document, and

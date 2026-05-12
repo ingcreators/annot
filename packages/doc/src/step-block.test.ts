@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 //
 // Targeted coverage for the `step` block kind landed in Phase 1
-// of `docs/plans/card-procedure-template.md`. The fixture-driven
+// of `docs/plans/_done/card-procedure-template.md`. The fixture-driven
 // round-trip is in `round-trip.test.ts` (the three Phase 0
 // fixtures join the existing FIXTURES array). This file covers
 // the model edges the fixtures can't easily hit:
@@ -142,7 +142,7 @@ describe("step block: parser", () => {
     expect(() => parseDocument(html)).toThrow(/data-step-body/);
   });
 
-  // Phase 7a of `docs/plans/card-procedure-template.md` — the
+  // Phase 7a of `docs/plans/_done/card-procedure-template.md` — the
   // `<svg>` child is OPTIONAL. An image-less step block carries
   // text-only content. The parser yields `svg: ""` and accepts
   // both the `data-step-image-less="1"` decorator and its
@@ -173,7 +173,7 @@ describe("step block: parser", () => {
     expect(step.svg).toBe("");
   });
 
-  // Phase 7b of `docs/plans/card-procedure-template.md` —
+  // Phase 7b of `docs/plans/_done/card-procedure-template.md` —
   // optional URL chip parses out of `data-step-url` +
   // `data-step-url-label`, with allowed-scheme allowlist.
   it("parses a step block's data-step-url + data-step-url-label into block.link (Phase 7b)", () => {
@@ -244,7 +244,7 @@ describe("step block: parser", () => {
     expect(step.link).toEqual({ url: "mailto:hello@example.com" });
   });
 
-  // Phase 7d of `docs/plans/card-procedure-template.md` —
+  // Phase 7d of `docs/plans/_done/card-procedure-template.md` —
   // initial-view viewport parses from `data-step-viewport="x,y,w,h"`.
   it("parses data-step-viewport into block.viewport (Phase 7d)", () => {
     const html =

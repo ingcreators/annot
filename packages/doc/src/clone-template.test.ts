@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 //
 // Structural-clone coverage for `cloneTemplate`. Phase 8a of
-// `docs/plans/annot-html-document.md`.
+// `docs/plans/_done/annot-html-document.md`.
 //
 // The contract: given a template document, the clone has
 // (a) every template marker absent, (b) every image-block ID

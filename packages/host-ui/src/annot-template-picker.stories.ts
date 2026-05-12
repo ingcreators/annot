@@ -2,7 +2,7 @@
  * Stories for `<annot-template-picker>` — modal picker for
  * built-in + user templates with a recently-used row.
  *
- * Phase 8c of `docs/plans/annot-html-document.md`. The stories
+ * Phase 8c of `docs/plans/_done/annot-html-document.md`. The stories
  * exercise:
  *
  *   - **Default** — a mix of built-in starter cards + user

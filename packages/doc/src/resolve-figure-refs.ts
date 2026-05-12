@@ -1,6 +1,6 @@
 /**
  * `resolveFigureRefs(doc)` — Phase 13b of
- * `docs/plans/annot-html-document.md`. Walks the document's
+ * `docs/plans/_done/annot-html-document.md`. Walks the document's
  * inline HTML and re-writes every
  * `<span data-annot-figref="img-…">…</span>` element with the
  * current "Figure N" label so cross-references stay consistent

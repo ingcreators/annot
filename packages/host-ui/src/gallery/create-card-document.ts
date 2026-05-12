@@ -2,7 +2,7 @@
  * `createCardDocumentFromImages(images, options) → AnnotDocument` —
  * generator for the card-procedure flow.
  *
- * Phase 4 of `docs/plans/card-procedure-template.md`. Pure / Tier
+ * Phase 4 of `docs/plans/_done/card-procedure-template.md`. Pure / Tier
  * B-ish: imports from `@ingcreators/annot-core/storage` (for the
  * `ImageRecord` shape) and `@ingcreators/annot-doc` (for the
  * document model) but never reaches for `document` / `window` —

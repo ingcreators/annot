@@ -1,7 +1,7 @@
 /**
  * `exportDocumentPptx(doc): Blob` — multi-slide PPTX export.
  *
- * Phase 11 of `docs/plans/annot-html-document.md`. Each
+ * Phase 11 of `docs/plans/_done/annot-html-document.md`. Each
  * `ImageBlock` in the document maps to one slide; the embedded
  * `<svg>` is parsed and its annotations re-emitted as OOXML via
  * the same `buildShapeXml` dispatcher the image-side export
@@ -32,7 +32,7 @@ import { buildShapeXml, px } from "../drawingml/index.js";
  *  `Blob` re-wrap in `exportDocumentPptx`. */
 export type DocumentPptxFiles = Record<string, Uint8Array>;
 
-/** Phase 6b of `docs/plans/card-procedure-template.md` —
+/** Phase 6b of `docs/plans/_done/card-procedure-template.md` —
  *  globally-uniform slide canvas: PowerPoint widescreen (16:9)
  *  at 1280×720 px (= 12,192,000 × 6,858,000 EMU, the default
  *  PowerPoint applies when a user picks "Widescreen" without
@@ -251,7 +251,7 @@ function collectSlides(doc: AnnotDocument): SlideData[] {
       if (data) out.push(data);
       continue;
     }
-    // Phase 6 of `docs/plans/card-procedure-template.md` — step
+    // Phase 6 of `docs/plans/_done/card-procedure-template.md` — step
     // blocks become slides alongside image blocks. The image is
     // full-bleed (matches the image-block path) so annotation
     // coordinates stay in their SVG-native space; title + body
@@ -476,7 +476,7 @@ function buildSlideFromImageBlock(block: ImageBlock, index: number): SlideData |
 }
 
 /**
- * Phase 6 of `docs/plans/card-procedure-template.md` — build a
+ * Phase 6 of `docs/plans/_done/card-procedure-template.md` — build a
  * slide from a `step` block. The step block's SVG carries the
  * same shape as an image block's SVG (background `<image>` +
  * `<g id="annotations">` tree), so we delegate to
@@ -508,7 +508,7 @@ function buildSlideFromImageBlock(block: ImageBlock, index: number): SlideData |
  * and visually consistent across layouts.
  */
 function buildSlideFromStepBlock(block: StepBlock, index: number): SlideData | null {
-  // Phase 7a of `docs/plans/card-procedure-template.md` — an empty
+  // Phase 7a of `docs/plans/_done/card-procedure-template.md` — an empty
   // `block.svg` marks an image-less step block (text-only narrative
   // card). We bypass the image-block delegation entirely and emit
   // a slide whose only content is the title + body shapes,

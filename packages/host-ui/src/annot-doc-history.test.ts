@@ -1,6 +1,6 @@
 /**
  * Pure-Node tests for `DocumentHistory` — no DOM dependency.
- * Phase 4a of `docs/plans/annot-html-document.md`.
+ * Phase 4a of `docs/plans/_done/annot-html-document.md`.
  */
 
 import type { AnnotDocument } from "@ingcreators/annot-doc";

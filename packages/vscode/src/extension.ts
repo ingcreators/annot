@@ -622,7 +622,7 @@ async function cmdNewFromClipboard(): Promise<void> {
 /**
  * `Annot: New document`
  *
- * Phase 10 of `docs/plans/annot-html-document.md` — VSCode-side
+ * Phase 10 of `docs/plans/_done/annot-html-document.md` — VSCode-side
  * counterpart to the PWA's "From Template…" sidebar entry.
  * Workflow:
  *

@@ -213,7 +213,7 @@ describe("<annot-gallery-page>", () => {
   });
 
   // -----------------------------------------------------------------------
-  // Phase 4 of docs/plans/card-procedure-template.md — ordered
+  // Phase 4 of docs/plans/_done/card-procedure-template.md — ordered
   // image-selection tracking + create-card-document request.
   // -----------------------------------------------------------------------
 

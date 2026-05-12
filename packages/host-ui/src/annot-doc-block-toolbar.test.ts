@@ -2,7 +2,7 @@
  * @vitest-environment happy-dom
  *
  * `<annot-doc-block-toolbar>` tests — Phase 4a of
- * `docs/plans/annot-html-document.md`.
+ * `docs/plans/_done/annot-html-document.md`.
  */
 
 import { beforeEach, describe, expect, it } from "vitest";

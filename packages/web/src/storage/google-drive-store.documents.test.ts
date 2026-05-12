@@ -2,7 +2,7 @@
  * @vitest-environment happy-dom
  *
  * `GoogleDriveStore` document support — Phase 7c of
- * `docs/plans/annot-html-document.md`.
+ * `docs/plans/_done/annot-html-document.md`.
  *
  * Drive's API surface (`files.list` / multipart uploads / media
  * PATCH / `appProperties`) is more involved than DeviceStore's

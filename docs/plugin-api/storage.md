@@ -378,7 +378,7 @@ strategy, and uniformity with the image-side CRUD.
 - [`docs/plans/_done/unified-thumbnail-cache.md`](../plans/_done/unified-thumbnail-cache.md) —
   design doc covering the rationale, alternatives considered, and
   per-backend integration notes.
-- [`docs/plans/annot-html-document.md`](../plans/annot-html-document.md) —
+- [`docs/plans/_done/annot-html-document.md`](../plans/_done/annot-html-document.md) —
   master plan for the multi-image document format. Phases 6a / 7a–7d
   ship `StorageWithDocuments` across the five built-in backends;
   later phases (template picker, multi-slide PPTX export, VSCode

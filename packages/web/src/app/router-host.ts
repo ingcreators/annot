@@ -45,7 +45,7 @@ export interface RouterHostDeps {
   openFromGallery(record: ImageRecord): Promise<void>;
   setupSplitEditor(records: ImageRecord[]): Promise<void>;
   /** Open a `.annot.html` document into the host's doc-shell.
-   *  Phase 6b of `docs/plans/annot-html-document.md`. The host
+   *  Phase 6b of `docs/plans/_done/annot-html-document.md`. The host
    *  decides where to mount the shell (PWA replaces the editor
    *  area; future hosts may slot it elsewhere); the router-host
    *  just hands over the resolved record. */

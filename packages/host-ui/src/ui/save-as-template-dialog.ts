@@ -3,7 +3,7 @@
  * description / tags fields needed to mark a document as a
  * template and persist it under `Templates/<name>.annot.html`.
  *
- * Phase 8b of `docs/plans/annot-html-document.md` — pairs with
+ * Phase 8b of `docs/plans/_done/annot-html-document.md` — pairs with
  * Phase 8a's `cloneTemplate` (Tier A) helper. Save-as-template
  * is the WRITE side: stamp `meta.template = {name, description,
  * tags}` onto the current document, serialise, and hand off to

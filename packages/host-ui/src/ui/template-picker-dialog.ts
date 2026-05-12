@@ -2,7 +2,7 @@
  * `showTemplatePickerDialog` — full-viewport modal that mounts
  * `<annot-template-picker>` and resolves with the chosen entry.
  *
- * Phase 8d of `docs/plans/annot-html-document.md`. Closes the
+ * Phase 8d of `docs/plans/_done/annot-html-document.md`. Closes the
  * loop the previous three Phase-8 rows opened:
  *
  *   - Phase 8a → `cloneTemplate` (Tier A): READ-side helper.

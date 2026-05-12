@@ -2,7 +2,7 @@
  * `<annot-doc-block-toolbar>` — floating control row for a block
  * inside `<annot-doc-shell>` when in editing mode.
  *
- * Phases of `docs/plans/annot-html-document.md`:
+ * Phases of `docs/plans/_done/annot-html-document.md`:
  * - Phase 4a landed delete / move-up / move-down.
  * - Phase 4b added insert-above / insert-below buttons + the
  *   slash menu's discoverable "+" affordance for empty

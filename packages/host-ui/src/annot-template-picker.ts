@@ -5,7 +5,7 @@
  * a `template-selected` event carrying the chosen entry's id +
  * source kind so the parent can clone-and-open.
  *
- * Phase 8c of `docs/plans/annot-html-document.md`. Pairs with
+ * Phase 8c of `docs/plans/_done/annot-html-document.md`. Pairs with
  * Phase 8b's "Save as template…" dialog (the WRITE side) and
  * Phase 8a's `cloneTemplate` (the post-selection clone).
  *

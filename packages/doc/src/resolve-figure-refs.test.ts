@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 //
 // `resolveFigureRefs` — Phase 13b of
-// `docs/plans/annot-html-document.md`. Coverage:
+// `docs/plans/_done/annot-html-document.md`. Coverage:
 //
 //   - Inline-HTML rewrite across every block kind that
 //     carries inline content (heading / paragraph / list

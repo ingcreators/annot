@@ -4,7 +4,7 @@
  * image block, lets the user annotate, and resolves with either
  * the new SVG (Save) or `null` (Cancel).
  *
- * Phase 5a of `docs/plans/annot-html-document.md`. The doc shell
+ * Phase 5a of `docs/plans/_done/annot-html-document.md`. The doc shell
  * wires this in for the click-to-edit affordance on image blocks
  * when `editing=true`.
  *

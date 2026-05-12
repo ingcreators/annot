@@ -2,7 +2,7 @@
  * @vitest-environment happy-dom
  *
  * `<annot-doc-block-menu>` tests — Phase 4b of
- * `docs/plans/annot-html-document.md`.
+ * `docs/plans/_done/annot-html-document.md`.
  */
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -238,7 +238,7 @@ describe("annot-doc-block-menu: catalog", () => {
     expect(step?.stepImageless ?? false).toBe(false);
   });
 
-  // Phase 7a of `docs/plans/card-procedure-template.md` —
+  // Phase 7a of `docs/plans/_done/card-procedure-template.md` —
   // image-less step entry shares the `kind: "step"` discriminator
   // with the picker-driven entry; the `stepImageless: true` flag
   // tells the shell to skip the file picker and splice an

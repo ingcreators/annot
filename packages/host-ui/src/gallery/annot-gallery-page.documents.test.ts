@@ -2,7 +2,7 @@
  * @vitest-environment happy-dom
  *
  * `<annot-gallery-page>` document-listing tests — Phase 6d of
- * `docs/plans/annot-html-document.md`. Focused on the new
+ * `docs/plans/_done/annot-html-document.md`. Focused on the new
  * Documents section: hidden when the storage doesn't opt into
  * `StorageWithDocuments`, populated when it does, and the
  * `annot-gallery-open-document` event the file-manager listens

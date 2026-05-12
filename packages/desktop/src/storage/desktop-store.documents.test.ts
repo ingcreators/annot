@@ -2,7 +2,7 @@
  * @vitest-environment happy-dom
  *
  * `DesktopStore` document-method tests — Phase 7b of
- * `docs/plans/annot-html-document.md`. Mirror of
+ * `docs/plans/_done/annot-html-document.md`. Mirror of
  * `device-store.documents.test.ts` against the in-memory
  * `DesktopFs` mock.
  */

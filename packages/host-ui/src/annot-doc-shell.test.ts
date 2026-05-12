@@ -2,7 +2,7 @@
  * @vitest-environment happy-dom
  *
  * `<annot-doc-shell>` tests — Phases 3 + 4a of
- * `docs/plans/annot-html-document.md`. Covers initial mount,
+ * `docs/plans/_done/annot-html-document.md`. Covers initial mount,
  * re-mount with a different document, the TOC scroll-into-view
  * behaviour, theme variants (light / dark / auto), the
  * empty / no-document state, and Phase 4a's editing-mode
@@ -1554,7 +1554,7 @@ describe("annot-doc-shell: paste / drop image insertion", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Phase 3 of docs/plans/card-procedure-template.md — step block
+// Phase 3 of docs/plans/_done/card-procedure-template.md — step block
 // editing affordances.
 // ---------------------------------------------------------------------------
 
@@ -1739,7 +1739,7 @@ describe("annot-doc-shell: step block menu entry", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Phase 3b of docs/plans/card-procedure-template.md — in-block
+// Phase 3b of docs/plans/_done/card-procedure-template.md — in-block
 // layout switcher.
 // ---------------------------------------------------------------------------
 
@@ -1831,7 +1831,7 @@ describe("annot-doc-shell: step layout switcher", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Phase 7a of `docs/plans/card-procedure-template.md` —
+// Phase 7a of `docs/plans/_done/card-procedure-template.md` —
 // image-less step blocks (text-only narrative card).
 // ---------------------------------------------------------------------------
 
@@ -2020,7 +2020,7 @@ describe("annot-doc-shell: image-less step blocks", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Phase 7b of `docs/plans/card-procedure-template.md` —
+// Phase 7b of `docs/plans/_done/card-procedure-template.md` —
 // URL chip + inline link editor.
 // ---------------------------------------------------------------------------
 

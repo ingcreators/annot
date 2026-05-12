@@ -169,7 +169,7 @@ export class GitHubStore
    */
   #cache = new GitHubBlobCache();
 
-  /** Phase 7d of `docs/plans/annot-html-document.md` —
+  /** Phase 7d of `docs/plans/_done/annot-html-document.md` —
    *  per-document metadata cache. `listDocuments` returns
    *  filename-derived defaults for documents we haven't decoded
    *  yet; `getDocument` + `updateDocument` populate this map so
@@ -1497,7 +1497,7 @@ export class GitHubStore
   }
 }
 
-/** Phase 7d of `docs/plans/annot-html-document.md` — strip the
+/** Phase 7d of `docs/plans/_done/annot-html-document.md` — strip the
  *  `.annot.html` extension from a filename when no cached title
  *  is available. Mirrors the per-store fallback the other
  *  backends use (DeviceStore, DesktopStore, GoogleDriveStore)

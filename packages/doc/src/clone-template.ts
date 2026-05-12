@@ -2,7 +2,7 @@
  * `cloneTemplate` — produce a fresh editable document from a
  * template-marked source document.
  *
- * Phase 8a of `docs/plans/annot-html-document.md` ships the
+ * Phase 8a of `docs/plans/_done/annot-html-document.md` ships the
  * Tier A foundation for the templates feature: the parser /
  * serializer already round-trip the three template markers
  * (Phase 1), and this helper inverts the marker side — given a

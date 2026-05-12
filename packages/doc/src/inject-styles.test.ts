@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 //
-// Phase 2 of `docs/plans/annot-html-document.md`. Validates the
+// Phase 2 of `docs/plans/_done/annot-html-document.md`. Validates the
 // `<style>` payload `injectDocumentStyles` adds to a document:
 // canonical bytes, doc-property reflection, and round-trip
 // preservation through the parser/serializer pair.
@@ -305,7 +305,7 @@ describe("injectDocumentStyles: numbering meta (Phase 13)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Phase 2 of docs/plans/card-procedure-template.md — step block
+// Phase 2 of docs/plans/_done/card-procedure-template.md — step block
 // card chrome + per-layout grid templates + cardLayout meta.
 // ---------------------------------------------------------------------------
 

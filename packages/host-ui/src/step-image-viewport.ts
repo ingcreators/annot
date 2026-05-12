@@ -1,6 +1,6 @@
 /**
  * `attachStepImageViewport(svg, options)` — Phase 7d of
- * `docs/plans/card-procedure-template.md`. Wires interactive
+ * `docs/plans/_done/card-procedure-template.md`. Wires interactive
  * pan / zoom onto a step block's screenshot.
  *
  * The controller:

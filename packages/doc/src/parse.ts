@@ -257,7 +257,7 @@ function parseStep(el: Element): StepBlock {
   if (id === null) {
     throw new AnnotDocParseError("Step block missing data-annot-image-id.");
   }
-  // Phase 7a of `docs/plans/card-procedure-template.md` — the
+  // Phase 7a of `docs/plans/_done/card-procedure-template.md` — the
   // `<svg>` child is OPTIONAL. An image-less step block carries
   // text-only content (title + body) for narrative steps that
   // don't need a screenshot. The `data-annot-image-id`
@@ -280,7 +280,7 @@ function parseStep(el: Element): StepBlock {
   }
   const layoutAttr = el.getAttribute("data-step-layout");
   const layout = isStepLayout(layoutAttr) ? layoutAttr : "image-top";
-  // Phase 7b of `docs/plans/card-procedure-template.md` —
+  // Phase 7b of `docs/plans/_done/card-procedure-template.md` —
   // optional URL chip. `data-step-url` carries the URL and
   // `data-step-url-label` carries an optional friendly label.
   // The URL is validated to defang `javascript:` / `data:` —

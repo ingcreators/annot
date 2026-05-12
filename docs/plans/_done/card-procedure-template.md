@@ -1,25 +1,33 @@
 # Card-style step documents from gallery selection
 
-> **Status:** Draft
-> **Compatibility:** Extends the `.annot.html` v1 format from
-> [`_done/annot-html-document.md`](./_done/annot-html-document.md). Adds
-> one new block kind (`step`) as an **additive** change under the
-> unchanged `data-annot-doc-version="1"` stamp — `.annot.html` is
-> pre-release with no shipped users, so no migration / forward-compat
-> work is needed. Touches `@ingcreators/annot-doc` (Tier A),
+> **Status:** Done — all 12 phases shipped (0 – 7d). Wrap-up PR series
+> [#610](https://github.com/ingcreators/annot/pull/610)–[#624](https://github.com/ingcreators/annot/pull/624)
+> covered Phase 7d (image viewport — pan / zoom / save-view) and the
+> follow-up UX polish surfaced during testing: grey-strip fix on
+> annotated cards (id="svg-root" leakage + position:absolute revert
+> chain), portrait-image contain semantics, multi-column grid
+> packing (hide between-card insert-bars), full-width doc shell
+> via `display: block`, PPTX text-shape zero insets, and toolbar
+> hover-reveal + Ctrl/Cmd-gated wheel zoom.
+> **Compatibility:** Extended the `.annot.html` v1 format from
+> [`annot-html-document.md`](./annot-html-document.md). Added the
+> `step` block kind as an **additive** change under the unchanged
+> `data-annot-doc-version="1"` stamp. `.annot.html` was pre-release
+> with no shipped users at landing time, so no migration / forward-
+> compat work was needed. Touched `@ingcreators/annot-doc` (Tier A),
 > `@ingcreators/annot-host-ui` (Tier C — gallery + doc shell),
 > `@ingcreators/annot-render` (PPTX export), `@ingcreators/annot-web`
-> (file-manager action wiring). Adds one built-in starter template
+> (file-manager action wiring). Added one built-in starter template
 > (`card-procedure`).
-> **Risk:** Phased, additive throughout. Each phase is independently
-> revertable. The block-taxonomy change is the only schema delta;
-> everything else (CSS, generator action, PPTX mapping, starter
-> template) builds on existing infrastructure.
+> **Risk:** Phased, additive throughout. Each phase landed as an
+> independently revertable PR. The block-taxonomy change was the
+> only schema delta; everything else (CSS, generator action, PPTX
+> mapping, starter template) built on existing infrastructure.
 
 ## Context
 
 Annot today has the `.annot.html` document format ([Phases 0–13
-shipped](./_done/annot-html-document.md)). It models a free-form prose
+shipped](./annot-html-document.md)). It models a free-form prose
 document with image blocks interleaved between paragraphs / headings /
 lists / callouts. The bundled `procedure` starter template uses an
 ordered list of inline steps with one image block per "verification"
@@ -45,7 +53,7 @@ The gap that motivates this:
   middle step (stitch them into a doc in order) is friction we can
   remove.
 - **PowerPoint output already maps cleanly to "one image per slide"**
-  ([Phase 11 of `_done/annot-html-document.md`](./_done/annot-html-document.md) —
+  ([Phase 11 of `_done/annot-html-document.md`](./annot-html-document.md) —
   `exportDocumentPptx` walks `ImageBlock`s and emits one slide each).
   A step block IS one image plus its caption — the existing PPTX
   pipeline gains a richer slide layout source for free.
@@ -127,7 +135,7 @@ Why a new block type instead of CSS-styling a `figure + h3 + p` triple:
 
 ### Card visual treatment (CSS only)
 
-`injectDocumentStyles` ([Phase 2 of the original plan](./_done/annot-html-document.md))
+`injectDocumentStyles` ([Phase 2 of the original plan](./annot-html-document.md))
 gains a `<style>` section keyed off the `step` block. The rendered
 card has:
 
@@ -194,7 +202,7 @@ sits in:
   via the existing `<annot-context-menu>` infrastructure).
 - The file-manager toolbar's existing "New" split button flyout
   (added next to the "From template…" entry that
-  [Phase 8 of `_done/annot-html-document.md`](./_done/annot-html-document.md)
+  [Phase 8 of `_done/annot-html-document.md`](./annot-html-document.md)
   shipped).
 
 Both surface the action only when the current gallery selection has
@@ -725,7 +733,7 @@ Landed:
   into an open doc → insert a step block at the drop position with
   the image preloaded. Pairs nicely with the existing image-block
   drop-zone overlay shipped in
-  [`_done/annot-html-document-ux-polish.md`](./_done/annot-html-document-ux-polish.md)
+  [`_done/annot-html-document-ux-polish.md`](./annot-html-document-ux-polish.md)
   Phase 6.
 - **annot-cloud touchpoints** ([`oss-cloud-split.md`](./oss-cloud-split.md)):
   the format + the editor + the generator + the starter template

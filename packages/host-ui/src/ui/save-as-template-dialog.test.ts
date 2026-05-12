@@ -2,7 +2,7 @@
  * @vitest-environment happy-dom
  *
  * `showSaveAsTemplateDialog` — Phase 8b of
- * `docs/plans/annot-html-document.md`. Same shape as the
+ * `docs/plans/_done/annot-html-document.md`. Same shape as the
  * `showPromptDialog` / `showConfirmDialog` tests in
  * `dialog.test.ts`: exercise the Promise wrapper end-to-end via
  * the resulting DOM (mounted `<annot-dialog>` chrome + the three

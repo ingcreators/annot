@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 //
 // Targeted coverage for the pan/zoom controller landed in
-// Phase 7d of `docs/plans/card-procedure-template.md`. happy-dom
+// Phase 7d of `docs/plans/_done/card-procedure-template.md`. happy-dom
 // doesn't fully ship pointer-capture / wheel-event geometry, so
 // the tests focus on the controller's state-tracking surface:
 // initial viewport application, `current()` snapshot, `reset()`

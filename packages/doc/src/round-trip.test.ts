@@ -24,7 +24,7 @@ const FIXTURES = [
   "empty.annot.html",
   "with-image.annot.html",
   "mixed.annot.html",
-  // Phase 1 of `docs/plans/card-procedure-template.md` — step
+  // Phase 1 of `docs/plans/_done/card-procedure-template.md` — step
   // blocks land in the round-trip corpus once the parser /
   // serializer understand them. The three fixtures were authored
   // in Phase 0 as the canonical-form contract.

@@ -169,7 +169,7 @@ function extOf(filename: string): "svg" | "png" | "jpg" | "jpeg" | "" {
 }
 
 /** True for `.annot.html` documents — Phase 10 of
- *  `docs/plans/annot-html-document.md`. Drives the boot-mode
+ *  `docs/plans/_done/annot-html-document.md`. Drives the boot-mode
  *  branch so `.annot.html` mounts `<annot-doc-shell>` instead
  *  of the image-side `EditorShell`. */
 function isDocFile(filename: string): boolean {

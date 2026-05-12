@@ -104,7 +104,7 @@ describe("showDocSettingsDialog", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Phase 3b of docs/plans/card-procedure-template.md — Card layout
+// Phase 3b of docs/plans/_done/card-procedure-template.md — Card layout
 // section (cards-per-row + default step layout for new step
 // blocks).
 // ---------------------------------------------------------------------------

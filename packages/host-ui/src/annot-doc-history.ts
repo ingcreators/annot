@@ -1,7 +1,7 @@
 /**
  * `DocumentHistory` — snapshot-based undo/redo for `AnnotDocument`.
  *
- * Phase 4a of `docs/plans/annot-html-document.md`. Documents are
+ * Phase 4a of `docs/plans/_done/annot-html-document.md`. Documents are
  * small (typical: < 1 MB even with several embedded screenshots),
  * so we snapshot the whole `AnnotDocument` per commit instead of
  * tracking diffs. This is what `History` in `@ingcreators/annot-editor`
