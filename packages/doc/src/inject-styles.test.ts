@@ -710,6 +710,30 @@ describe("injectDocumentStyles: step block layouts", () => {
     expect(css).toContain("height: 100%");
   });
 
+  it("card image slot resets height: auto so SVG presentation attrs don't override aspect-ratio", () => {
+    // Regression: standalone view of saved `.annot.html` files
+    // renders the SVG as a direct `> svg` child of the section.
+    // The SVG bytes carry `width=` / `height=` presentation
+    // attributes from the source bitmap (e.g. `1920` × `1161`
+    // for a fresh ShareX capture). The `height` presentation
+    // attribute resolves to a CSS `height: <px>` value, which
+    // outranks `aspect-ratio` per spec when both `width` and
+    // `height` are explicitly set. Without an explicit
+    // `height: auto` reset, the saved file (opened directly in
+    // a browser, no editor JS) renders cards thousands of pixels
+    // tall with the screenshot pinned at the top and the title /
+    // body stranded far below.
+    const css = buildStyleBlock(createEmptyDocument({ title: "Slot SVG" }));
+    // The image-top / -bottom / -left / -right shared rule.
+    expect(css).toMatch(
+      /\[data-annot-block="step"\] > svg,\s*\n\s*\[data-annot-block="step"\] > \.annot-doc-image-svg-slot \{[\s\S]*?height: auto;/,
+    );
+    // The image-fill layout rule (same override applies).
+    expect(css).toMatch(
+      /\[data-annot-block="step"\]\[data-step-layout="image-fill"\] > svg,\s*\n\s*\[data-annot-block="step"\]\[data-step-layout="image-fill"\] > \.annot-doc-image-svg-slot \{[\s\S]*?height: auto;/,
+    );
+  });
+
   it("card image inner SVG does NOT use position:absolute (regresses card grid sizing)", () => {
     // #618 originally added `position: absolute; inset: 0` on
     // the slot's inner SVG plus `position: relative` on the
