@@ -82,6 +82,13 @@ export interface DocSettingsInput {
    *  helper `STEP_LABEL_PRESETS` below carries the offered
    *  options. */
   readonly numberingStepLabel?: string;
+  /** Phase 3 of `docs/plans/card-document-themes.md` — driver
+   *  for `meta.appearance.template`. Absent → "use legacy theme"
+   *  (caller clears `meta.appearance.template` and keeps the
+   *  `meta.theme` keyword). Present → caller writes
+   *  `meta.appearance.template = value` AND clears `meta.theme`
+   *  so the two fields don't fight. */
+  readonly appearanceTemplate?: string;
 }
 
 export interface ShowDocSettingsDialogOptions {
@@ -103,7 +110,59 @@ export interface ShowDocSettingsDialogOptions {
    *  on the verbatim string; custom values surface in the
    *  "Custom" branch with the user's literal in the text input. */
   readonly defaultNumberingStepLabel?: string;
+  /** Phase 3 of `docs/plans/card-document-themes.md` — current
+   *  `meta.appearance.template`. Absent → "Legacy" radio is
+   *  checked, the legacy `Theme:` dropdown drives appearance. */
+  readonly defaultAppearanceTemplate?: string;
 }
+
+/** Phase 3 of `docs/plans/card-document-themes.md` — built-in
+ *  theme options shown in the Appearance picker. Each entry's
+ *  `id` matches the matching `BuiltinThemeId` in
+ *  `@ingcreators/annot-doc/themes`; the labels are mirrored here
+ *  (rather than imported from the doc package) for the same
+ *  dependency-light reason the layout enum is mirrored above.
+ *  The sentinel `__legacy` entry maps to "no appearance.template
+ *  is set" — the user is asking us to defer to the legacy `Theme`
+ *  dropdown below. */
+const APPEARANCE_TEMPLATE_LEGACY = "__legacy";
+const APPEARANCE_TEMPLATE_OPTIONS: readonly {
+  value: string;
+  label: string;
+  description: string;
+}[] = [
+  {
+    value: APPEARANCE_TEMPLATE_LEGACY,
+    label: "Legacy (use Theme below)",
+    description:
+      "Driven by the legacy “Theme” dropdown — Light / Dark / Auto. Pick this to keep documents authored before themes were added unchanged.",
+  },
+  {
+    value: "modern-light",
+    label: "Modern Light",
+    description: "Soft shadows, blue accent, white background.",
+  },
+  {
+    value: "modern-dark",
+    label: "Modern Dark",
+    description: "Always-dark variant of Modern Light.",
+  },
+  {
+    value: "minimal",
+    label: "Minimal",
+    description: "Hairline borders, no shadows, neutral mono-toned palette.",
+  },
+  {
+    value: "editorial",
+    label: "Editorial",
+    description: "Serif headings, off-white background, magazine-style pull quotes.",
+  },
+  {
+    value: "playful",
+    label: "Playful",
+    description: "Pastel palette, generous radii, chat-bubble badge.",
+  },
+];
 
 const COMMON_LANGS: readonly { value: string; label: string }[] = [
   { value: "en", label: "English (en)" },
@@ -232,11 +291,60 @@ export function showDocSettingsDialog(
       placeholder: "Name or handle",
     });
 
-    const themeLabel = makeLabel("Theme");
+    // Phase 3 of card-document-themes.md — Appearance picker.
+    // Renders the built-in themes as radio cards. Selecting a
+    // theme writes `meta.appearance.template`; selecting "Legacy"
+    // clears it (the legacy Theme dropdown below wins). The
+    // dropdown itself stays for back-compat — selecting a value
+    // there auto-flips the Appearance picker back to "Legacy" so
+    // the two fields don't fight at save time.
+    const appearanceLabel = makeLabel("Appearance");
+    const appearanceGroup = document.createElement("div");
+    appearanceGroup.className = "annot-doc-settings-appearance";
+    appearanceGroup.setAttribute("role", "radiogroup");
+    appearanceGroup.setAttribute("aria-label", "Appearance template");
+    appearanceGroup.style.cssText =
+      "display:flex;flex-direction:column;gap:6px;padding:8px;border:1px solid var(--annot-border-subtle,#e5e7eb);border-radius:6px;";
+    const initialAppearance = opts.defaultAppearanceTemplate ?? APPEARANCE_TEMPLATE_LEGACY;
+    const appearanceRadios = new Map<string, HTMLInputElement>();
+    for (const option of APPEARANCE_TEMPLATE_OPTIONS) {
+      const card = document.createElement("label");
+      card.style.cssText =
+        "display:flex;align-items:flex-start;gap:8px;padding:6px;border-radius:4px;cursor:pointer;font-size:13px;";
+      const radio = document.createElement("input");
+      radio.type = "radio";
+      radio.name = "annot-doc-appearance";
+      radio.value = option.value;
+      radio.setAttribute("aria-label", option.label);
+      if (option.value === initialAppearance) radio.checked = true;
+      appearanceRadios.set(option.value, radio);
+      const textBox = document.createElement("div");
+      textBox.style.cssText = "display:flex;flex-direction:column;gap:2px;flex:1;";
+      const titleEl = document.createElement("span");
+      titleEl.textContent = option.label;
+      titleEl.style.cssText = "font-weight:600;";
+      const descEl = document.createElement("span");
+      descEl.textContent = option.description;
+      descEl.style.cssText = "color:var(--annot-text-secondary,#6b7280);font-size:12px;";
+      textBox.append(titleEl, descEl);
+      card.append(radio, textBox);
+      appearanceGroup.appendChild(card);
+    }
+
+    const themeLabel = makeLabel("Theme (legacy — Appearance overrides)");
     const themeSelect = makeSelect({
       value: opts.defaultTheme ?? "auto",
       ariaLabel: "Theme",
       options: THEME_OPTIONS.map((t) => ({ value: t.value, label: t.label })),
+    });
+    // Cross-toggle: picking a real theme card clears the legacy
+    // dropdown's effect (we DON'T mutate the dropdown's UI value
+    // — just the result emission); picking a Theme dropdown
+    // value flips the Appearance picker back to "Legacy" so the
+    // user gets immediate feedback about which side wins.
+    themeSelect.addEventListener("change", () => {
+      const legacyRadio = appearanceRadios.get(APPEARANCE_TEMPLATE_LEGACY);
+      if (legacyRadio && !legacyRadio.checked) legacyRadio.checked = true;
     });
 
     const widthLabel = makeLabel("Article width");
@@ -336,6 +444,8 @@ export function showDocSettingsDialog(
       langCustomInput,
       authorLabel,
       authorInput,
+      appearanceLabel,
+      appearanceGroup,
       themeLabel,
       themeSelect,
       widthLabel,
@@ -403,6 +513,18 @@ export function showDocSettingsDialog(
       } else {
         numberingStepLabel = undefined;
       }
+      // Phase 3 of card-document-themes.md — read the selected
+      // appearance template. The "__legacy" sentinel collapses
+      // to undefined so the caller clears
+      // `meta.appearance.template` (the legacy `meta.theme`
+      // dropdown above drives the look).
+      let appearanceTemplate: string | undefined;
+      for (const [value, radio] of appearanceRadios) {
+        if (radio.checked) {
+          appearanceTemplate = value === APPEARANCE_TEMPLATE_LEGACY ? undefined : value;
+          break;
+        }
+      }
       close();
       const out: DocSettingsInput = {
         title,
@@ -416,6 +538,7 @@ export function showDocSettingsDialog(
         headerIcon,
         numberingSteps,
         ...(numberingStepLabel !== undefined ? { numberingStepLabel } : {}),
+        ...(appearanceTemplate !== undefined ? { appearanceTemplate } : {}),
       };
       resolve(out);
     });

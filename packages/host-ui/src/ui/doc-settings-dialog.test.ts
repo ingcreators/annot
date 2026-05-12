@@ -278,3 +278,96 @@ describe("showDocSettingsDialog: step numbering fields", () => {
     await promise;
   });
 });
+
+// ---------------------------------------------------------------------------
+// Phase 3 of docs/plans/card-document-themes.md — Appearance picker
+// (radio cards) + legacy Theme dropdown cross-toggle.
+// ---------------------------------------------------------------------------
+
+describe("showDocSettingsDialog: appearance picker", () => {
+  function getRadio(value: string): HTMLInputElement {
+    const radio = document.querySelector<HTMLInputElement>(
+      `input[type="radio"][name="annot-doc-appearance"][value="${value}"]`,
+    );
+    if (!radio) throw new Error(`appearance radio for "${value}" not mounted`);
+    return radio;
+  }
+
+  it("renders all five built-in themes + the Legacy radio", async () => {
+    const promise = showDocSettingsDialog({ defaultTitle: "X" });
+    findDialog();
+    for (const id of [
+      "__legacy",
+      "modern-light",
+      "modern-dark",
+      "minimal",
+      "editorial",
+      "playful",
+    ]) {
+      expect(getRadio(id)).toBeTruthy();
+    }
+    findDialog().dispatchEvent(new CustomEvent("dialog-cancel"));
+    await promise;
+  });
+
+  it("defaults to the Legacy radio when defaultAppearanceTemplate is unset", async () => {
+    const promise = showDocSettingsDialog({ defaultTitle: "X" });
+    findDialog();
+    expect(getRadio("__legacy").checked).toBe(true);
+    expect(getRadio("editorial").checked).toBe(false);
+    findDialog().dispatchEvent(new CustomEvent("dialog-cancel"));
+    await promise;
+  });
+
+  it("pre-selects the matching radio when defaultAppearanceTemplate is set", async () => {
+    const promise = showDocSettingsDialog({
+      defaultTitle: "X",
+      defaultAppearanceTemplate: "editorial",
+    });
+    findDialog();
+    expect(getRadio("editorial").checked).toBe(true);
+    expect(getRadio("__legacy").checked).toBe(false);
+    findDialog().dispatchEvent(new CustomEvent("dialog-cancel"));
+    await promise;
+  });
+
+  it("returns undefined appearanceTemplate when Legacy is selected", async () => {
+    const promise = showDocSettingsDialog({ defaultTitle: "X" });
+    findDialog().dispatchEvent(new CustomEvent("dialog-ok"));
+    const result = await promise;
+    expect(result?.appearanceTemplate).toBeUndefined();
+  });
+
+  it("returns the picked template id when a theme radio is selected", async () => {
+    const promise = showDocSettingsDialog({
+      defaultTitle: "X",
+      defaultAppearanceTemplate: "minimal",
+    });
+    findDialog().dispatchEvent(new CustomEvent("dialog-ok"));
+    const result = await promise;
+    expect(result?.appearanceTemplate).toBe("minimal");
+  });
+
+  it("returns the theme id when the user switches Legacy -> a theme card", async () => {
+    const promise = showDocSettingsDialog({ defaultTitle: "X" });
+    getRadio("playful").checked = true;
+    findDialog().dispatchEvent(new CustomEvent("dialog-ok"));
+    const result = await promise;
+    expect(result?.appearanceTemplate).toBe("playful");
+  });
+
+  it("picking the legacy Theme dropdown auto-flips Appearance back to Legacy", async () => {
+    const promise = showDocSettingsDialog({
+      defaultTitle: "X",
+      defaultAppearanceTemplate: "editorial",
+    });
+    expect(getRadio("editorial").checked).toBe(true);
+    const themeSelect = getInput("Theme") as HTMLSelectElement;
+    themeSelect.value = "dark";
+    themeSelect.dispatchEvent(new Event("change"));
+    expect(getRadio("__legacy").checked).toBe(true);
+    expect(getRadio("editorial").checked).toBe(false);
+    findDialog().dispatchEvent(new CustomEvent("dialog-cancel"));
+    await promise;
+  });
+});
