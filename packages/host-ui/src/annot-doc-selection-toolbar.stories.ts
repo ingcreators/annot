@@ -19,6 +19,7 @@ interface Args {
   bold: boolean;
   italic: boolean;
   underline: boolean;
+  link: boolean;
   currentBlockKindId: string;
 }
 
@@ -41,6 +42,7 @@ const meta: Meta<Args> = {
       bold: args.bold,
       italic: args.italic,
       underline: args.underline,
+      link: args.link,
     };
     tb.format = format;
     tb.currentBlockKindId = args.currentBlockKindId;
@@ -59,6 +61,9 @@ const meta: Meta<Args> = {
     tb.addEventListener("block-kind-change", (e) => {
       console.log("[story] block-kind-change", (e as CustomEvent).detail);
     });
+    tb.addEventListener("link-request", (e) => {
+      console.log("[story] link-request", (e as CustomEvent).detail);
+    });
 
     wrapper.appendChild(tb);
     return wrapper;
@@ -67,6 +72,7 @@ const meta: Meta<Args> = {
     bold: { control: "boolean" },
     italic: { control: "boolean" },
     underline: { control: "boolean" },
+    link: { control: "boolean" },
     currentBlockKindId: {
       control: { type: "select" },
       options: [
@@ -87,6 +93,7 @@ const meta: Meta<Args> = {
     bold: false,
     italic: false,
     underline: false,
+    link: false,
     currentBlockKindId: "paragraph",
   },
 };
@@ -101,7 +108,19 @@ export const BoldActive: Story = {
 };
 
 export const AllFormatsActive: Story = {
-  args: { bold: true, italic: true, underline: true },
+  args: { bold: true, italic: true, underline: true, link: true },
+};
+
+export const LinkActive: Story = {
+  args: { link: true },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Link button shows the `aria-pressed="true"` state when the cursor sits inside an existing inline `<a>` — clicking opens the dialog in edit mode (Remove + Apply).',
+      },
+    },
+  },
 };
 
 export const Heading2Selection: Story = {

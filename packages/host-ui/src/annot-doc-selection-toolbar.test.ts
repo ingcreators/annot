@@ -22,7 +22,7 @@ describe("annot-doc-selection-toolbar", () => {
   it("openFor mounts a singleton toolbar to document.body", async () => {
     AnnotDocSelectionToolbarElement.openFor({
       rect: { top: 10, left: 10, right: 110, bottom: 30 } as DOMRect,
-      format: { bold: false, italic: false, underline: false },
+      format: { bold: false, italic: false, underline: false, link: false },
     });
     const a = AnnotDocSelectionToolbarElement.getActive();
     expect(a).not.toBeNull();
@@ -31,7 +31,7 @@ describe("annot-doc-selection-toolbar", () => {
     // Re-opening reuses the same instance (singleton semantics).
     AnnotDocSelectionToolbarElement.openFor({
       rect: { top: 50, left: 50, right: 150, bottom: 70 } as DOMRect,
-      format: { bold: true, italic: false, underline: false },
+      format: { bold: true, italic: false, underline: false, link: false },
     });
     expect(AnnotDocSelectionToolbarElement.getActive()).toBe(a);
   });
@@ -39,7 +39,7 @@ describe("annot-doc-selection-toolbar", () => {
   it("renders B / I / U with aria-pressed reflecting `format`", async () => {
     AnnotDocSelectionToolbarElement.openFor({
       rect: { top: 0, left: 0, right: 0, bottom: 0 } as DOMRect,
-      format: { bold: true, italic: false, underline: true },
+      format: { bold: true, italic: false, underline: true, link: false },
     });
     const a = AnnotDocSelectionToolbarElement.getActive()!;
     await a.updateComplete;
@@ -54,7 +54,7 @@ describe("annot-doc-selection-toolbar", () => {
   it("clicking B / I / U dispatches format-change with the right command", async () => {
     AnnotDocSelectionToolbarElement.openFor({
       rect: { top: 0, left: 0, right: 0, bottom: 0 } as DOMRect,
-      format: { bold: false, italic: false, underline: false },
+      format: { bold: false, italic: false, underline: false, link: false },
     });
     const a = AnnotDocSelectionToolbarElement.getActive()!;
     await a.updateComplete;
@@ -71,7 +71,7 @@ describe("annot-doc-selection-toolbar", () => {
   it("opens the block-kind menu on click and dispatches block-kind-change on pick", async () => {
     AnnotDocSelectionToolbarElement.openFor({
       rect: { top: 0, left: 0, right: 0, bottom: 0 } as DOMRect,
-      format: { bold: false, italic: false, underline: false },
+      format: { bold: false, italic: false, underline: false, link: false },
       currentBlockKindId: "paragraph",
     });
     const a = AnnotDocSelectionToolbarElement.getActive()!;
@@ -101,11 +101,45 @@ describe("annot-doc-selection-toolbar", () => {
   it("closeActive removes the toolbar from the document", () => {
     AnnotDocSelectionToolbarElement.openFor({
       rect: { top: 0, left: 0, right: 0, bottom: 0 } as DOMRect,
-      format: { bold: false, italic: false, underline: false },
+      format: { bold: false, italic: false, underline: false, link: false },
     });
     expect(AnnotDocSelectionToolbarElement.getActive()).not.toBeNull();
     AnnotDocSelectionToolbarElement.closeActive();
     expect(AnnotDocSelectionToolbarElement.getActive()).toBeNull();
     expect(document.querySelector("annot-doc-selection-toolbar")).toBeNull();
+  });
+
+  it("renders a Link button that dispatches `link-request` on click", async () => {
+    const a = AnnotDocSelectionToolbarElement.openFor({
+      rect: { top: 0, left: 0, right: 0, bottom: 0 } as DOMRect,
+      format: { bold: false, italic: false, underline: false, link: false },
+    });
+    await a.updateComplete;
+    const linkBtn = a.querySelector('[data-format="link"]') as HTMLButtonElement;
+    expect(linkBtn).not.toBeNull();
+    expect(linkBtn.getAttribute("aria-pressed")).toBe("false");
+    const seen: Array<{ editing: boolean }> = [];
+    a.addEventListener("link-request", (e) => {
+      seen.push((e as CustomEvent<{ editing: boolean }>).detail);
+    });
+    linkBtn.click();
+    expect(seen).toHaveLength(1);
+    expect(seen[0]?.editing).toBe(false);
+  });
+
+  it("Link button reports `editing: true` when the selection sits inside an existing link", async () => {
+    const a = AnnotDocSelectionToolbarElement.openFor({
+      rect: { top: 0, left: 0, right: 0, bottom: 0 } as DOMRect,
+      format: { bold: false, italic: false, underline: false, link: true },
+    });
+    await a.updateComplete;
+    const linkBtn = a.querySelector('[data-format="link"]') as HTMLButtonElement;
+    expect(linkBtn.getAttribute("aria-pressed")).toBe("true");
+    const seen: Array<{ editing: boolean }> = [];
+    a.addEventListener("link-request", (e) => {
+      seen.push((e as CustomEvent<{ editing: boolean }>).detail);
+    });
+    linkBtn.click();
+    expect(seen[0]?.editing).toBe(true);
   });
 });
