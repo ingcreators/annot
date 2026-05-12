@@ -1821,6 +1821,7 @@ export class App {
       defaultHeaderIcon: current.meta.header?.icon ?? "",
       defaultNumberingSteps: current.meta.numbering?.steps === true,
       defaultNumberingStepLabel: current.meta.numbering?.stepLabel,
+      defaultAppearanceTemplate: current.meta.appearance?.template,
     });
     if (!result) return;
 
@@ -1891,14 +1892,33 @@ export class App {
     const numberingMaybe =
       Object.keys(numberingNext).length > 0 ? { numbering: numberingNext } : {};
 
-    // Strip any stale cardLayout / header / numbering from the
-    // spread base before applying the new value (or omission)
-    // so users who clear the columns dropdown / description /
-    // numbering checkbox see the field disappear.
+    // Phase 3 of card-document-themes.md — merge the appearance
+    // template into `meta.appearance`. Preserves any existing
+    // `customCss` / `fontFamily` fields (Phase 4 / 5 fill them
+    // in). Setting an appearance template ALSO drops `meta.theme`
+    // so the legacy keyword doesn't fight the new field at
+    // render time.
+    const existingAppearance = baseMeta.appearance ?? {};
+    const { template: _staleTemplate, ...appearanceWithoutTemplate } = existingAppearance;
+    const appearanceNext: import("@ingcreators/annot-doc").AppearanceMeta = {
+      ...appearanceWithoutTemplate,
+      ...(result.appearanceTemplate !== undefined ? { template: result.appearanceTemplate } : {}),
+    };
+    const appearanceMaybe =
+      Object.keys(appearanceNext).length > 0 ? { appearance: appearanceNext } : {};
+    const appearanceTemplateSet = result.appearanceTemplate !== undefined;
+
+    // Strip any stale cardLayout / header / numbering / appearance
+    // from the spread base before applying the new value (or
+    // omission) so users who clear the columns dropdown /
+    // description / numbering checkbox / appearance radio see the
+    // field disappear.
     const {
       cardLayout: _staleCardLayout,
       header: _staleHeader,
       numbering: _staleNumbering,
+      appearance: _staleAppearance,
+      theme: _staleTheme,
       ...metaWithoutDerivedFields
     } = baseMeta;
     const updated: import("@ingcreators/annot-doc").AnnotDocument = {
@@ -1908,14 +1928,17 @@ export class App {
       meta: {
         ...metaWithoutDerivedFields,
         title: result.title,
-        // Theme + maxWidth are always set (the dropdowns don't
-        // have "leave unset" affordance); `meta.theme` etc.
-        // round-trip through `serializeDocument` correctly.
-        theme: result.theme,
+        // When the user picks an appearance template the legacy
+        // `meta.theme` keyword stops driving rendering — drop it
+        // entirely so the sidecar tells a single story.
+        // Otherwise (Appearance: Legacy radio) write the dropdown
+        // value through.
+        ...(appearanceTemplateSet ? {} : { theme: result.theme }),
         maxWidth: result.maxWidth,
         ...cardLayoutMaybe,
         ...headerMaybe,
         ...numberingMaybe,
+        ...appearanceMaybe,
       },
     };
     shell.document = updated;
