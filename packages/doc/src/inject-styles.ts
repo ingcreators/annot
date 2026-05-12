@@ -1220,17 +1220,59 @@ function numberingRules(numbering: NumberingMeta | undefined): string {
       // need this because the title sits below / right of /
       // overlay'd on the image, not in the badge's footprint.
       //
-      // The padding reserves badge-width + a 1rem gutter; short
-      // titles render to the right of the badge, long titles
-      // wrap around it once they overflow.
+      // The padding has to be wide enough to clear the WIDEST
+      // badge the template can produce. For the default `%n`
+      // template the badge is just `min-width` wide (~2rem +
+      // padding). For `Step %n` / `#%n` / similar templates
+      // with literal text, the badge expands to fit the
+      // literal — so we add a per-character allowance derived
+      // from the template's literal length. The estimate uses
+      // 0.6em per character (a decent average for the bold
+      // sans stack at 0.95rem font-size).
       'article[data-annot-doc] [data-annot-block="step"][data-step-layout="image-bottom"] > [data-step-title],',
       'article[data-annot-doc] [data-annot-block="step"][data-step-layout="image-right"] > [data-step-title] {',
-      "  padding-left: calc(var(--annot-step-badge-min-size) + 1rem);",
+      `  padding-left: calc(var(--annot-step-badge-min-size) + ${stepBadgeLiteralAllowance(numbering.stepLabel ?? "%n")} + 1rem);`,
       "}",
     );
   }
 
   return lines.join("\n");
+}
+
+/**
+ * Estimate the extra horizontal space the step badge needs
+ * beyond `--annot-step-badge-min-size`, given the user's
+ * `stepLabel` template. Returns a CSS length string ready to
+ * drop into a `calc()` expression.
+ *
+ * The badge's actual width = `max(min-size, content-width +
+ * 2 * 0.5rem padding)`. For the default `%n` template the
+ * content is just a 1-2 digit number → content-width is
+ * already inside `min-size`, so no extra allowance needed
+ * (return `0px`).
+ *
+ * For templates with literal text (`Step %n` / `#%n` / `%n.`)
+ * the badge expands. We estimate `0.6em` per literal
+ * character at the badge's font size (`0.95rem`) and add a
+ * fixed `1em` for the digit slot. The estimate is intentionally
+ * generous to err on the side of more clearance.
+ *
+ * Phase 2 of `docs/plans/_done/card-step-auto-numbering.md`
+ * shipped a fixed 1rem clearance that worked for `%n` but
+ * broke for `Step %n` (user-reported overlap).
+ */
+function stepBadgeLiteralAllowance(template: string): string {
+  // Literal = template minus the `%n` placeholder. Empty
+  // string means no literal text → no allowance needed.
+  const literal = template.replace(/%n/g, "");
+  if (literal.length === 0) return "0px";
+  // 0.6em per literal char (rough average for bold sans at
+  // 0.95rem); convert to rem against the structural badge
+  // font size (`0.95rem`). 0.6 × 0.95 ≈ 0.57rem per char.
+  const literalRem = literal.length * 0.57;
+  // Round to one decimal so the generated CSS stays readable.
+  const rounded = Math.round(literalRem * 10) / 10;
+  return `${rounded}rem`;
 }
 
 /**

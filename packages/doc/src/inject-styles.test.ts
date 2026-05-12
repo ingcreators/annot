@@ -427,8 +427,8 @@ describe("injectDocumentStyles: numbering meta (Phase 13)", () => {
     // Regression guard: with numbering on, the badge sits at
     // top-left of the card and overlaps the title in layouts
     // where the title is the first row of the grid. The
-    // `padding-left: calc(badge + 1rem)` rule pushes the title
-    // text to the right of the badge.
+    // `padding-left: calc(badge + literal-allowance + 1rem)`
+    // rule pushes the title text to the right of the badge.
     const css = buildStyleBlock(
       createEmptyDocument({
         title: "Badge clearance",
@@ -437,7 +437,8 @@ describe("injectDocumentStyles: numbering meta (Phase 13)", () => {
     );
     expect(css).toContain('[data-step-layout="image-bottom"] > [data-step-title]');
     expect(css).toContain('[data-step-layout="image-right"] > [data-step-title]');
-    expect(css).toContain("padding-left: calc(var(--annot-step-badge-min-size) + 1rem);");
+    // Default `%n` template → 0px literal allowance.
+    expect(css).toContain("padding-left: calc(var(--annot-step-badge-min-size) + 0px + 1rem);");
     // No padding-left for image-top / -left / -fill — those
     // layouts don't have the title in the badge's footprint.
     expect(css).not.toContain(
@@ -449,6 +450,35 @@ describe("injectDocumentStyles: numbering meta (Phase 13)", () => {
     expect(css).not.toContain(
       '[data-step-layout="image-fill"] > [data-step-title] {\n  padding-left',
     );
+  });
+
+  it("widens title clearance for templates with literal text (e.g. 'Step %n')", () => {
+    // User-reported overlap: with `stepLabel: "Step %n"` the
+    // badge expands to fit the literal text, exceeding the
+    // default `min-size + 1rem` clearance and overlapping the
+    // title. The literal allowance estimates 0.57rem per char
+    // (0.6em × 0.95rem font-size, rounded to one decimal). For
+    // "Step " (5 chars including the trailing space): 5 ×
+    // 0.57 = 2.85, which JS floating-point evaluates as
+    // 2.8499…rem → rounds down to 2.8rem.
+    const css = buildStyleBlock(
+      createEmptyDocument({
+        title: "Step prefix",
+        meta: { numbering: { steps: true, stepLabel: "Step %n" } },
+      }),
+    );
+    expect(css).toContain("padding-left: calc(var(--annot-step-badge-min-size) + 2.8rem + 1rem);");
+  });
+
+  it("shorter literals get proportionally smaller clearance ('#%n' has 1 char)", () => {
+    const css = buildStyleBlock(
+      createEmptyDocument({
+        title: "Hash prefix",
+        meta: { numbering: { steps: true, stepLabel: "#%n" } },
+      }),
+    );
+    // "#": 1 char × 0.57 = 0.57 → 0.6rem rounded.
+    expect(css).toContain("padding-left: calc(var(--annot-step-badge-min-size) + 0.6rem + 1rem);");
   });
 
   it("emits min-width + overflow-wrap on step title + body to prevent card overflow", () => {
