@@ -69,6 +69,19 @@ export interface DocSettingsInput {
    *  "clear this field". */
   readonly headerDescription?: string;
   readonly headerIcon?: string;
+  /** Phase 3 of `docs/plans/card-step-auto-numbering.md` —
+   *  driver for `meta.numbering.steps`. Always present; the
+   *  caller is expected to merge into the existing
+   *  `meta.numbering` object so unrelated toggles
+   *  (headings / figures) aren't dropped. */
+  readonly numberingSteps: boolean;
+  /** Phase 3 — driver for `meta.numbering.stepLabel`. Absent
+   *  when `numberingSteps === false` OR when the user kept the
+   *  default `"%n"` template (so the saved sidecar stays
+   *  minimal). The literal `%n` placeholder is required; the
+   *  helper `STEP_LABEL_PRESETS` below carries the offered
+   *  options. */
+  readonly numberingStepLabel?: string;
 }
 
 export interface ShowDocSettingsDialogOptions {
@@ -81,6 +94,15 @@ export interface ShowDocSettingsDialogOptions {
   readonly defaultCardStepLayout?: StepLayoutValue;
   readonly defaultHeaderDescription?: string;
   readonly defaultHeaderIcon?: string;
+  /** Phase 3 of `docs/plans/card-step-auto-numbering.md` —
+   *  current `meta.numbering.steps`. Absent / `undefined` /
+   *  `false` → checkbox starts unchecked. */
+  readonly defaultNumberingSteps?: boolean;
+  /** Phase 3 — current `meta.numbering.stepLabel`. Absent →
+   *  defaults to `"%n"` (numeral only). The dropdown matches
+   *  on the verbatim string; custom values surface in the
+   *  "Custom" branch with the user's literal in the text input. */
+  readonly defaultNumberingStepLabel?: string;
 }
 
 const COMMON_LANGS: readonly { value: string; label: string }[] = [
@@ -123,6 +145,19 @@ const STEP_LAYOUT_OPTIONS: readonly { value: StepLayoutValue; label: string }[] 
   { value: "image-right", label: "Image right" },
   { value: "image-fill", label: "Image fill" },
 ];
+
+/** Phase 3 of `docs/plans/card-step-auto-numbering.md` — built-in
+ *  step badge label templates. `%n` is the CSS counter
+ *  placeholder; everything else is literal CSS `content` text.
+ *  The "Custom" branch lets the user type their own template. */
+const STEP_LABEL_PRESETS: readonly { value: string; label: string }[] = [
+  { value: "%n", label: "Number only (1, 2, 3…)" },
+  { value: "Step %n", label: "“Step N” prefix (Step 1, Step 2…)" },
+  { value: "%n.", label: "“N.” suffix (1., 2., 3…)" },
+  { value: "#%n", label: "Hash prefix (#1, #2, #3…)" },
+];
+
+const STEP_LABEL_CUSTOM_SENTINEL = "__custom";
 
 function cardColumnsToString(v: CardColumnsValue | undefined): string {
   if (v === "auto") return "auto";
@@ -228,6 +263,53 @@ export function showDocSettingsDialog(
       options: STEP_LAYOUT_OPTIONS.map((o) => ({ value: o.value, label: o.label })),
     });
 
+    // Phase 3 of card-step-auto-numbering.md — Scribe-style
+    // auto-numbering badge on every step block. The checkbox
+    // controls `meta.numbering.steps`; the label-format select
+    // drives `meta.numbering.stepLabel`. Both are gated on
+    // step-numbering being on — the label format hides
+    // (display: none) when the checkbox is off so the dialog
+    // doesn't tease a control that has no effect.
+    const stepNumberingLabel = makeLabel("Step numbering");
+    const stepNumberingRow = document.createElement("div");
+    stepNumberingRow.style.cssText = "display:flex;align-items:center;gap:8px;";
+    const stepNumberingCheckbox = document.createElement("input");
+    stepNumberingCheckbox.type = "checkbox";
+    stepNumberingCheckbox.setAttribute("aria-label", "Auto-number step blocks");
+    stepNumberingCheckbox.checked = opts.defaultNumberingSteps === true;
+    const stepNumberingCheckboxText = document.createElement("span");
+    stepNumberingCheckboxText.textContent = "Auto-number step blocks with a Scribe-style badge";
+    stepNumberingCheckboxText.style.cssText = "font-size:13px;";
+    stepNumberingRow.append(stepNumberingCheckbox, stepNumberingCheckboxText);
+
+    const stepLabelLabel = makeLabel("Step badge label");
+    const initialStepLabel = opts.defaultNumberingStepLabel;
+    const isPresetStepLabel =
+      initialStepLabel === undefined || STEP_LABEL_PRESETS.some((p) => p.value === initialStepLabel);
+    const stepLabelSelect = makeSelect({
+      value: isPresetStepLabel ? (initialStepLabel ?? "%n") : STEP_LABEL_CUSTOM_SENTINEL,
+      ariaLabel: "Step badge label format",
+      options: [
+        ...STEP_LABEL_PRESETS,
+        { value: STEP_LABEL_CUSTOM_SENTINEL, label: "Custom (enter below)…" },
+      ],
+    });
+    const stepLabelCustomInput = makeInput({
+      value: !isPresetStepLabel && initialStepLabel !== undefined ? initialStepLabel : "",
+      ariaLabel: "Custom step badge label",
+      placeholder: "e.g. “%n / 5” — %n is the auto-counter",
+    });
+    const updateStepLabelVisibility = () => {
+      const numberingOn = stepNumberingCheckbox.checked;
+      stepLabelLabel.style.display = numberingOn ? "" : "none";
+      stepLabelSelect.style.display = numberingOn ? "" : "none";
+      stepLabelCustomInput.style.display =
+        numberingOn && stepLabelSelect.value === STEP_LABEL_CUSTOM_SENTINEL ? "" : "none";
+    };
+    stepNumberingCheckbox.addEventListener("change", updateStepLabelVisibility);
+    stepLabelSelect.addEventListener("change", updateStepLabelVisibility);
+    updateStepLabelVisibility();
+
     // Phase 7c — header description + icon. Setting either of
     // these opts the document into a Scribe-style header block
     // above the body content + a matching PPTX cover slide.
@@ -261,6 +343,11 @@ export function showDocSettingsDialog(
       cardColumnsSelect,
       cardDefaultLayoutLabel,
       cardDefaultLayoutSelect,
+      stepNumberingLabel,
+      stepNumberingRow,
+      stepLabelLabel,
+      stepLabelSelect,
+      stepLabelCustomInput,
       headerDescriptionLabel,
       headerDescriptionInput,
       headerIconLabel,
@@ -293,6 +380,28 @@ export function showDocSettingsDialog(
       // value as defaultHeaderDescription / defaultHeaderIcon).
       const headerDescription = headerDescriptionInput.value.trim();
       const headerIcon = headerIconInput.value.trim();
+      // Phase 3 — collapse the dropdown + custom-text input
+      // pair into a single string. The dropdown's sentinel
+      // value defers to the text input; everything else is the
+      // verbatim preset. Empty custom text is treated as
+      // "user cleared the field — fall back to the default".
+      const numberingSteps = stepNumberingCheckbox.checked;
+      let numberingStepLabel: string | undefined;
+      if (numberingSteps) {
+        const selectVal = stepLabelSelect.value;
+        if (selectVal === STEP_LABEL_CUSTOM_SENTINEL) {
+          const custom = stepLabelCustomInput.value.trim();
+          numberingStepLabel = custom.length > 0 ? custom : undefined;
+        } else if (selectVal !== "%n") {
+          // `"%n"` matches the data-layer default, so we
+          // collapse to undefined for sidecar minimality.
+          numberingStepLabel = selectVal;
+        } else {
+          numberingStepLabel = undefined;
+        }
+      } else {
+        numberingStepLabel = undefined;
+      }
       close();
       const out: DocSettingsInput = {
         title,
@@ -304,6 +413,8 @@ export function showDocSettingsDialog(
         cardDefaultStepLayout,
         headerDescription,
         headerIcon,
+        numberingSteps,
+        ...(numberingStepLabel !== undefined ? { numberingStepLabel } : {}),
       };
       resolve(out);
     });

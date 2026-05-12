@@ -1820,6 +1820,8 @@ export class App {
       defaultCardStepLayout: current.meta.cardLayout?.defaultStepLayout ?? "image-top",
       defaultHeaderDescription: current.meta.header?.description ?? "",
       defaultHeaderIcon: current.meta.header?.icon ?? "",
+      defaultNumberingSteps: current.meta.numbering?.steps === true,
+      defaultNumberingStepLabel: current.meta.numbering?.stepLabel,
     });
     if (!result) return;
 
@@ -1869,21 +1871,45 @@ export class App {
         : {}),
     };
     const headerMaybe = Object.keys(headerMeta).length > 0 ? { header: headerMeta } : {};
-    // Strip any stale cardLayout / header from the spread base
-    // before applying the new value (or omission) so users who
-    // clear the columns dropdown / description see the field
-    // disappear.
+    // Phase 3 of card-step-auto-numbering.md — merge the step
+    // numbering toggle into `meta.numbering`. Preserve existing
+    // `headings` / `figures` / `figureLabel` so the dialog
+    // doesn't accidentally drop unrelated numbering opt-ins.
+    // Drop the `steps` / `stepLabel` keys when off so the
+    // sidecar stays minimal; if no numbering field remains,
+    // drop the whole `numbering` object too.
+    const existingNumbering = baseMeta.numbering ?? {};
+    const {
+      steps: _staleSteps,
+      stepLabel: _staleStepLabel,
+      ...numberingWithoutSteps
+    } = existingNumbering;
+    const numberingNext: import("@ingcreators/annot-doc").NumberingMeta = {
+      ...numberingWithoutSteps,
+      ...(result.numberingSteps ? { steps: true as const } : {}),
+      ...(result.numberingStepLabel !== undefined
+        ? { stepLabel: result.numberingStepLabel }
+        : {}),
+    };
+    const numberingMaybe =
+      Object.keys(numberingNext).length > 0 ? { numbering: numberingNext } : {};
+
+    // Strip any stale cardLayout / header / numbering from the
+    // spread base before applying the new value (or omission)
+    // so users who clear the columns dropdown / description /
+    // numbering checkbox see the field disappear.
     const {
       cardLayout: _staleCardLayout,
       header: _staleHeader,
-      ...metaWithoutCardLayoutOrHeader
+      numbering: _staleNumbering,
+      ...metaWithoutDerivedFields
     } = baseMeta;
     const updated: import("@ingcreators/annot-doc").AnnotDocument = {
       ...current,
       title: result.title,
       ...(result.lang !== undefined ? { lang: result.lang } : {}),
       meta: {
-        ...metaWithoutCardLayoutOrHeader,
+        ...metaWithoutDerivedFields,
         title: result.title,
         // Theme + maxWidth are always set (the dropdowns don't
         // have "leave unset" affordance); `meta.theme` etc.
@@ -1892,6 +1918,7 @@ export class App {
         maxWidth: result.maxWidth,
         ...cardLayoutMaybe,
         ...headerMaybe,
+        ...numberingMaybe,
       },
     };
     shell.document = updated;
