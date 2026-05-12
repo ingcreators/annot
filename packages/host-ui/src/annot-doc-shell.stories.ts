@@ -564,68 +564,6 @@ export const CardGridTwoColumnEditing: Story = {
 };
 
 // ---------------------------------------------------------------------------
-// Phase 7b of docs/plans/_done/card-procedure-template.md — URL chip
-// embedded in step blocks (Scribe-style "Navigate to ..."
-// affordance). The chip appears below the step title in both
-// read and editing modes; editing mode also shows the URL
-// input row underneath.
-// ---------------------------------------------------------------------------
-
-function makeStepWithLinkDoc(
-  layout: StepLayout,
-  theme: AnnotDocument["meta"]["theme"] = "auto",
-): AnnotDocument {
-  return {
-    version: 1,
-    lang: "en",
-    title: `Step with link: ${layout}`,
-    meta: { title: `Step with link: ${layout}`, theme },
-    styleBlock: null,
-    blocks: [
-      { kind: "heading", level: 1, inlineHtml: "Card with navigation chip" },
-      {
-        kind: "step",
-        id: "img-step-link-01",
-        svg: STEP_PLACEHOLDER_SVG,
-        title: "Open the documentation",
-        body: "Read the API reference for the full list of options.",
-        layout,
-        link: { url: "https://example.com/docs", label: "Docs" },
-      },
-      {
-        kind: "step",
-        id: "img-step-link-02",
-        svg: "",
-        title: "Visit the dashboard",
-        body: "Open the dashboard to see your data.",
-        layout: "image-top",
-        link: { url: "https://example.com/dashboard" },
-      },
-    ],
-  };
-}
-
-export const StepWithLink: Story = {
-  name: "Step / with URL chip",
-  args: { document: makeStepWithLinkDoc("image-top"), showToc: false, editing: false },
-};
-
-export const StepWithLinkEditing: Story = {
-  name: "Step / with URL chip (editing)",
-  args: { document: makeStepWithLinkDoc("image-top"), showToc: false, editing: true },
-};
-
-export const StepWithLinkImageFill: Story = {
-  name: "Step / with URL chip (image-fill)",
-  args: { document: makeStepWithLinkDoc("image-fill"), showToc: false, editing: false },
-};
-
-export const StepWithLinkDark: Story = {
-  name: "Step / with URL chip (dark)",
-  args: { document: makeStepWithLinkDoc("image-top", "dark"), showToc: false, editing: false },
-};
-
-// ---------------------------------------------------------------------------
 // Phase 7c of docs/plans/_done/card-procedure-template.md — Scribe-
 // style document header (icon + title + description + author +
 // step count). Setting `meta.header` opts the doc into the

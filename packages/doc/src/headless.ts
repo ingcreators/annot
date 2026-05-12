@@ -62,7 +62,6 @@ export type {
   QuoteBlock,
   StepBlock,
   StepLayout,
-  StepLink,
   StepViewport,
   TemplateMeta,
   UnknownBlock,

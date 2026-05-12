@@ -107,10 +107,8 @@ function remapImageBlock(block: ImageBlock, idRemap: Map<string, string>): Image
 function remapStepBlock(block: StepBlock, idRemap: Map<string, string>): StepBlock {
   const newId = idRemap.get(block.id);
   if (newId === undefined || newId === block.id) return block;
-  // Phase 7b: `link` field carries through unchanged — the URL is
-  // a piece of content, not an id-bearing reference. Phase 7d:
-  // `viewport` similarly carries through (sub-rect of the
-  // bitmap, not id-bearing).
+  // Phase 7d: `viewport` carries through unchanged (sub-rect of
+  // the bitmap, not id-bearing).
   return {
     kind: "step",
     id: newId,
@@ -118,7 +116,6 @@ function remapStepBlock(block: StepBlock, idRemap: Map<string, string>): StepBlo
     title: block.title,
     body: block.body,
     layout: block.layout,
-    ...(block.link !== undefined ? { link: block.link } : {}),
     ...(block.viewport !== undefined ? { viewport: block.viewport } : {}),
   };
 }

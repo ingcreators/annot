@@ -221,20 +221,13 @@ function serializeStep(block: StepBlock, depth: number): string {
   // view CSS can collapse the grid without `:not(:has(...))`
   // gymnastics.
   //
-  // Phase 7b: optional URL chip carried on `data-step-url` +
-  // `data-step-url-label`. Emitted only when `block.link` is set
-  // (an absent link → both attrs absent).
-  //
   // Canonical attribute order (alphabetical among data-* with
   // the documented data-annot-block / data-annot-image-id
   // exceptions):
   //   data-annot-block → data-annot-image-id →
   //   data-step-image-less → data-step-layout →
-  //   data-step-url → data-step-url-label → data-step-viewport
+  //   data-step-viewport
   const imageLessAttr = block.svg.length === 0 ? ` data-step-image-less="1"` : "";
-  const urlAttr = block.link ? ` data-step-url="${escapeAttr(block.link.url)}"` : "";
-  const urlLabelAttr =
-    block.link?.label !== undefined ? ` data-step-url-label="${escapeAttr(block.link.label)}"` : "";
   // Phase 7d — `data-step-viewport="x,y,w,h"` carries the
   // initial-view rect in SVG-native coords. Numbers serialise
   // via `String()`, which produces the shortest round-trippable
@@ -242,7 +235,7 @@ function serializeStep(block: StepBlock, depth: number): string {
   const viewportAttr = block.viewport
     ? ` data-step-viewport="${block.viewport.x},${block.viewport.y},${block.viewport.w},${block.viewport.h}"`
     : "";
-  let result = `${indent}<section data-annot-block="step" data-annot-image-id="${escapeAttr(block.id)}"${imageLessAttr} data-step-layout="${escapeAttr(block.layout)}"${urlAttr}${urlLabelAttr}${viewportAttr}>${LF}`;
+  let result = `${indent}<section data-annot-block="step" data-annot-image-id="${escapeAttr(block.id)}"${imageLessAttr} data-step-layout="${escapeAttr(block.layout)}"${viewportAttr}>${LF}`;
   // SVG is opaque — re-indent each line with the section-child
   // indent. Same machinery as image-block. Image-less step blocks
   // emit no `<svg>` child at all (parser side accepts both forms).

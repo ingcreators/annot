@@ -283,18 +283,15 @@ function parseStep(el: Element): StepBlock {
   }
   const layoutAttr = el.getAttribute("data-step-layout");
   const layout = isStepLayout(layoutAttr) ? layoutAttr : "image-top";
-  // Phase 7b of `docs/plans/_done/card-procedure-template.md` —
-  // optional URL chip. `data-step-url` carries the URL and
-  // `data-step-url-label` carries an optional friendly label.
-  // The URL is validated to defang `javascript:` / `data:` —
-  // only http / https / mailto schemes survive. An invalid URL
-  // drops the chip entirely (the label is also discarded).
-  const rawUrl = el.getAttribute("data-step-url");
-  const rawLabel = el.getAttribute("data-step-url-label");
-  const link = parseStepLink(rawUrl, rawLabel);
   // Phase 7d — image viewport. `data-step-viewport="x,y,w,h"`
   // (four numbers, comma-separated). Malformed values silently
   // drop the viewport so the saved file stays renderable.
+  //
+  // Legacy `data-step-url` / `data-step-url-label` attributes
+  // (Scribe-style per-step "Navigate to" chip, retired in favour
+  // of inline `<a href>` links inside title / body) are silently
+  // ignored here — they survive in unparsed form long enough for
+  // the editor to overwrite them on the next save.
   const rawViewport = el.getAttribute("data-step-viewport");
   const viewport = parseStepViewport(rawViewport);
   const base: StepBlock = {
@@ -307,7 +304,6 @@ function parseStep(el: Element): StepBlock {
   };
   return {
     ...base,
-    ...(link !== undefined ? { link } : {}),
     ...(viewport !== undefined ? { viewport } : {}),
   };
 }
@@ -332,30 +328,6 @@ function parseStepViewport(raw: string | null): StepViewport | undefined {
     return undefined;
   }
   return { x, y, w, h };
-}
-
-/** Phase 7b — validate + normalise the `data-step-url` /
- *  `data-step-url-label` pair into a `StepLink`. Returns
- *  `undefined` when the URL is missing or fails the
- *  allowed-scheme check (defangs `javascript:` etc.). */
-function parseStepLink(
-  rawUrl: string | null,
-  rawLabel: string | null,
-): { url: string; label?: string } | undefined {
-  if (rawUrl === null) return undefined;
-  const trimmed = rawUrl.trim();
-  if (trimmed.length === 0) return undefined;
-  if (!isAllowedStepUrl(trimmed)) return undefined;
-  const labelTrimmed = rawLabel?.trim() ?? "";
-  return labelTrimmed.length > 0 ? { url: trimmed, label: labelTrimmed } : { url: trimmed };
-}
-
-/** Allowed-scheme allowlist for `StepBlock.link.url`. The
- *  whitelist mirrors the renderer's `href` emit rules —
- *  `http://`, `https://`, and `mailto:` only. */
-function isAllowedStepUrl(url: string): boolean {
-  const lower = url.toLowerCase();
-  return lower.startsWith("http://") || lower.startsWith("https://") || lower.startsWith("mailto:");
 }
 
 function isStepLayout(v: string | null): v is StepLayout {
