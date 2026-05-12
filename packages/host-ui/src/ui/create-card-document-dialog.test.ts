@@ -39,9 +39,19 @@ describe("showCreateCardDocumentDialog", () => {
     expect((getInput("Document title") as HTMLInputElement).value).toBe("Untitled procedure");
     expect((getInput("Per-step layout") as HTMLSelectElement).value).toBe("image-top");
     expect((getInput("Cards per row") as HTMLSelectElement).value).toBe("1");
-    expect((getInput("Step title prefill") as HTMLSelectElement).value).toBe("step-n");
     findDialog().dispatchEvent(new CustomEvent("dialog-cancel"));
     expect(await promise).toBeNull();
+  });
+
+  // Phase 4 of `docs/plans/card-step-auto-numbering.md` — the
+  // legacy "Step title prefill" dropdown was removed. Step
+  // numbering is now a CSS counter badge controlled from Doc
+  // Settings (`meta.numbering.steps`).
+  it("no longer renders a step-title prefill dropdown", () => {
+    showCreateCardDocumentDialog({ imageCount: 1 });
+    findDialog();
+    expect(document.querySelector('[aria-label="Step title prefill"]')).toBeNull();
+    findDialog().dispatchEvent(new CustomEvent("dialog-cancel"));
   });
 
   it("pre-populates from caller-supplied defaults", async () => {
@@ -50,13 +60,11 @@ describe("showCreateCardDocumentDialog", () => {
       defaultTitle: "Onboarding manual",
       defaultLayout: "image-left",
       defaultColumns: 2,
-      defaultNumbering: "image-n",
     });
     findDialog();
     expect((getInput("Document title") as HTMLInputElement).value).toBe("Onboarding manual");
     expect((getInput("Per-step layout") as HTMLSelectElement).value).toBe("image-left");
     expect((getInput("Cards per row") as HTMLSelectElement).value).toBe("2");
-    expect((getInput("Step title prefill") as HTMLSelectElement).value).toBe("image-n");
     findDialog().dispatchEvent(new CustomEvent("dialog-cancel"));
     await promise;
   });
@@ -82,7 +90,6 @@ describe("showCreateCardDocumentDialog", () => {
     (getInput("Document title") as HTMLInputElement).value = "Manual";
     (getInput("Per-step layout") as HTMLSelectElement).value = "image-fill";
     (getInput("Cards per row") as HTMLSelectElement).value = "3";
-    (getInput("Step title prefill") as HTMLSelectElement).value = "none";
     findDialog().dispatchEvent(new CustomEvent("dialog-ok"));
     const result = await promise;
     expect(result).not.toBeNull();
@@ -90,7 +97,6 @@ describe("showCreateCardDocumentDialog", () => {
     expect(result.title).toBe("Manual");
     expect(result.layout).toBe("image-fill");
     expect(result.columns).toBe(3);
-    expect(result.numbering).toBe("none");
   });
 
   it("returns `columns: undefined` when the user picks the 1-column default", async () => {

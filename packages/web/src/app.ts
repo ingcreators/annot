@@ -931,7 +931,6 @@ export class App {
         title: result.title,
         layout: result.layout,
         columns: result.columns,
-        numbering: result.numbering,
       });
       const { serializeDocument, extractDocumentThumbnailDataUrl } = await import(
         "@ingcreators/annot-doc"
