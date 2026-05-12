@@ -1205,6 +1205,122 @@ describe("buildDocumentPptxFiles: step numbering badge (Phase 5)", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// Pragmatic Phase 1 of docs/plans/card-pptx-templates.md — the
+// step badge picks up the document's appearance template's
+// `pptxPalette` so HTML + PPTX renderings of the same doc share
+// the brand colours.
+// ---------------------------------------------------------------------------
+
+describe("buildDocumentPptxFiles: theme-aware PPTX palette (card-pptx-templates)", () => {
+  function makeNumberedThemedDoc(template: string): AnnotDocument {
+    return {
+      version: 1,
+      lang: "en",
+      title: "Themed",
+      meta: {
+        title: "Themed",
+        numbering: { steps: true },
+        appearance: { template },
+      },
+      styleBlock: null,
+      blocks: [makeStepBlock("step-1", 800, 600, { title: "Demo" })],
+    };
+  }
+
+  it("uses the legacy modern-light blue (2563EB) when meta.appearance is absent", () => {
+    const doc = makeDocument([
+      {
+        kind: "step",
+        id: "step-1",
+        svg: "",
+        title: "Legacy",
+        body: "Body",
+        layout: "image-top",
+      },
+    ]);
+    // Force numbering on so the badge actually renders.
+    const docWithNumbering: AnnotDocument = {
+      ...doc,
+      meta: { ...doc.meta, numbering: { steps: true } },
+    };
+    const slide1 = decode(buildDocumentPptxFiles(docWithNumbering)["ppt/slides/slide1.xml"]!);
+    expect(slide1).toContain('val="2563EB"');
+  });
+
+  it("uses the minimal theme's accent (#111111) when template=minimal", () => {
+    const doc = makeNumberedThemedDoc("minimal");
+    const slide1 = decode(buildDocumentPptxFiles(doc)["ppt/slides/slide1.xml"]!);
+    expect(slide1).toContain('val="111111"');
+    // The legacy blue MUST NOT appear in the slide when a theme
+    // is set — confirms the palette flowed through.
+    expect(slide1).not.toContain('val="2563EB"');
+  });
+
+  it("uses the editorial theme's burgundy (#8B2A2A) when template=editorial", () => {
+    const doc = makeNumberedThemedDoc("editorial");
+    const slide1 = decode(buildDocumentPptxFiles(doc)["ppt/slides/slide1.xml"]!);
+    expect(slide1).toContain('val="8B2A2A"');
+    expect(slide1).not.toContain('val="2563EB"');
+  });
+
+  it("uses the playful theme's pink (#E96D8A) when template=playful", () => {
+    const doc = makeNumberedThemedDoc("playful");
+    const slide1 = decode(buildDocumentPptxFiles(doc)["ppt/slides/slide1.xml"]!);
+    expect(slide1).toContain('val="E96D8A"');
+    expect(slide1).not.toContain('val="2563EB"');
+  });
+
+  it("badge text colour tracks accentFg (white on most themes)", () => {
+    const doc = makeNumberedThemedDoc("editorial");
+    const slide1 = decode(buildDocumentPptxFiles(doc)["ppt/slides/slide1.xml"]!);
+    // Editorial's accentFg is `#FFFDF9` (off-white). Spot-check
+    // the badge segment of the slide for the off-white text fill.
+    const badgeSegment = slide1.slice(slide1.indexOf("StepBadge"));
+    expect(badgeSegment).toContain('val="FFFDF9"');
+  });
+
+  it("badge shadow tracks the accent colour (no phantom blue glow on non-blue themes)", () => {
+    const doc = makeNumberedThemedDoc("minimal");
+    const slide1 = decode(buildDocumentPptxFiles(doc)["ppt/slides/slide1.xml"]!);
+    const badgeSegment = slide1.slice(slide1.indexOf("StepBadge"));
+    // The `<a:outerShdw>` should reference minimal's black accent,
+    // not the legacy blue.
+    expect(badgeSegment).toContain("<a:outerShdw");
+    expect(badgeSegment).toContain('val="111111"');
+  });
+
+  it("image-fill layout keeps the translucent dark backdrop regardless of theme", () => {
+    // The screenshot underneath makes accent-on-image illegible,
+    // so the overlay style is theme-agnostic by design.
+    const docFill: AnnotDocument = {
+      version: 1,
+      lang: "en",
+      title: "Fill",
+      meta: {
+        title: "Fill",
+        numbering: { steps: true },
+        appearance: { template: "playful" },
+      },
+      styleBlock: null,
+      blocks: [makeStepBlock("step-1", 800, 600, { title: "T", layout: "image-fill" })],
+    };
+    const slide1 = decode(buildDocumentPptxFiles(docFill)["ppt/slides/slide1.xml"]!);
+    const badgeSegment = slide1.slice(slide1.indexOf("StepBadge"));
+    // The translucent black backdrop signal is the alpha + black.
+    expect(badgeSegment).toContain('val="000000"');
+    expect(badgeSegment).toContain('<a:alpha val="55000"/>');
+  });
+
+  it("falls back to legacy blue for an unknown template id", () => {
+    const doc = makeNumberedThemedDoc("not-a-real-theme");
+    const slide1 = decode(buildDocumentPptxFiles(doc)["ppt/slides/slide1.xml"]!);
+    // `getTheme` falls back to modern-light, whose pptxPalette
+    // accent is `#2563EB` — same as the legacy hard-coded blue.
+    expect(slide1).toContain('val="2563EB"');
+  });
+});
+
 // ---- helpers --------------------------------------------------------------
 
 function decode(bytes: Uint8Array): string {

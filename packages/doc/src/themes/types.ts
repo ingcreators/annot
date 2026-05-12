@@ -59,4 +59,41 @@ export interface Theme {
    *  `meta.numbering.stepLabel` STILL wins when set — that's
    *  per-document opt-in customisation. */
   readonly badgeLabelTemplate?: string;
+  /** Pragmatic-Phase-1 deliverable for
+   *  `docs/plans/card-pptx-templates.md` — cross-surface theme
+   *  pairing. Each themable colour the PPTX exporter cares
+   *  about lives here so picking an Appearance template in
+   *  Doc Settings carries through to the exported `.pptx`'s
+   *  slide background, step badge, and text colours.
+   *
+   *  Absent → PPTX exporter uses the legacy hard-coded modern-
+   *  light palette (white slide, blue badge). Existing
+   *  documents that haven't opted into `meta.appearance.template`
+   *  fall through this path so saved bytes stay byte-identical.
+   *
+   *  Values are 6-digit uppercase hex without the `#` prefix —
+   *  matches the OOXML `<a:srgbClr val="..."/>` shape. */
+  readonly pptxPalette?: PptxPalette;
+}
+
+/** OOXML colour palette mirrored from the theme's CSS variables.
+ *  Each value is a 6-digit uppercase hex string (no leading `#`)
+ *  ready to drop into `<a:srgbClr val="..."/>`. */
+export interface PptxPalette {
+  /** Slide background (the deck's `dk1` / `lt1` pair lands here
+   *  via the slide master). Light backgrounds give a printable
+   *  deck; dark backgrounds give an always-dark deck. */
+  readonly slideBg: string;
+  /** Default text colour (title + body). Pairs with `slideBg`
+   *  for contrast. */
+  readonly slideFg: string;
+  /** Accent / brand colour. Drives the step badge fill, the
+   *  hyperlink chip border, and any future accent surface. */
+  readonly accent: string;
+  /** Text colour rendered on top of `accent` (typically white
+   *  on a bright accent, dark on a pastel accent). */
+  readonly accentFg: string;
+  /** Muted / secondary text colour — used for footer / metadata
+   *  on the cover slide. Falls back to `slideFg` when absent. */
+  readonly muted?: string;
 }

@@ -27,9 +27,11 @@ import type {
   AnnotDocument,
   ImageBlock,
   NumberingMeta,
+  PptxPalette,
   StepBlock,
   StepLayout,
 } from "@ingcreators/annot-doc";
+import { getTheme } from "@ingcreators/annot-doc";
 import { buildShapeXml, px } from "../drawingml/index.js";
 
 /** Output of {@link buildDocumentPptxFiles} — the OPC file map
@@ -259,6 +261,12 @@ function collectSlides(doc: AnnotDocument): SlideData[] {
   // interleaved before / between them).
   let stepCounter = 0;
   const numbering = doc.meta.numbering;
+  // Pragmatic-Phase-1 of `docs/plans/card-pptx-templates.md` —
+  // resolve the active theme's `pptxPalette` once and thread it
+  // through the per-step builders so the step badge colours
+  // match the document's `meta.appearance.template`. Absent →
+  // legacy modern-light blue baked into `buildStepBadgeXml`.
+  const palette = resolvePptxPalette(doc);
   for (const block of doc.blocks) {
     if (block.kind === "image") {
       const data = buildSlideFromImageBlock(block, out.length + 1);
@@ -273,11 +281,35 @@ function collectSlides(doc: AnnotDocument): SlideData[] {
     // `data-step-layout`.
     if (block.kind === "step") {
       stepCounter += 1;
-      const data = buildSlideFromStepBlock(block, out.length + 1, stepCounter, numbering);
+      const data = buildSlideFromStepBlock(block, out.length + 1, stepCounter, numbering, palette);
       if (data) out.push(data);
     }
   }
   return out;
+}
+
+/** Pragmatic-Phase-1 of `docs/plans/card-pptx-templates.md` —
+ *  resolve the active theme's PPTX palette from the document.
+ *  Mirrors the precedence rules in
+ *  `inject-styles.ts:buildStyleBlock`: `meta.appearance.template`
+ *  wins; otherwise fall through to the legacy `meta.theme`
+ *  mapping. Returns `undefined` when neither is set so the
+ *  exporter's legacy hard-coded blue palette applies — which
+ *  keeps `buildDocumentPptxFiles` byte-identical to pre-Phase-1
+ *  output for documents that haven't opted into appearance. */
+function resolvePptxPalette(doc: AnnotDocument): PptxPalette | undefined {
+  const templateId = doc.meta.appearance?.template;
+  if (templateId !== undefined) {
+    return getTheme(templateId).pptxPalette;
+  }
+  // Defer to the legacy `meta.theme` keyword mapping. For
+  // byte-equivalence with the pre-Phase-1 output we leave the
+  // palette undefined when the legacy modern-light fallback
+  // applies — the exporter's hard-coded blue matches. The
+  // `theme === "dark"` legacy path also matches by virtue of
+  // the hard-coded blue (the legacy exporter didn't theme the
+  // badge by `meta.theme` either).
+  return undefined;
 }
 
 /**
@@ -527,6 +559,7 @@ function buildSlideFromStepBlock(
   index: number,
   stepCounter: number,
   numbering: NumberingMeta | undefined,
+  palette: PptxPalette | undefined,
 ): SlideData | null {
   // Phase 7a of `docs/plans/_done/card-procedure-template.md` — an empty
   // `block.svg` marks an image-less step block (text-only narrative
@@ -534,7 +567,7 @@ function buildSlideFromStepBlock(
   // a slide whose only content is the title + body shapes,
   // centred on the slide.
   if (block.svg.length === 0) {
-    return buildImagelessStepSlide(block, index, stepCounter, numbering);
+    return buildImagelessStepSlide(block, index, stepCounter, numbering, palette);
   }
   const base = buildSlideFromImageBlock({ kind: "image", id: block.id, svg: block.svg }, index);
   if (!base) return null;
@@ -673,6 +706,8 @@ function buildSlideFromStepBlock(
         id: badgeId,
         text: applyStepLabelTemplate(numbering.stepLabel, stepCounter),
         overlay: block.layout === "image-fill",
+        accent: palette?.accent,
+        accentFg: palette?.accentFg,
       }),
       id: badgeId,
     });
@@ -698,6 +733,7 @@ function buildImagelessStepSlide(
   index: number,
   stepCounter: number,
   numbering: NumberingMeta | undefined,
+  palette: PptxPalette | undefined,
 ): SlideData | null {
   const titleText = stripInlineHtml(block.title);
   const bodyText = stripInlineHtml(block.body);
@@ -782,6 +818,8 @@ function buildImagelessStepSlide(
         id: badgeId,
         text: applyStepLabelTemplate(numbering.stepLabel, stepCounter),
         overlay: false,
+        accent: palette?.accent,
+        accentFg: palette?.accentFg,
       }),
       id: badgeId,
     });
@@ -833,6 +871,12 @@ interface StepBadgeOptions {
    *  top of the screenshot. Other layouts get the accent-coloured
    *  pill style. */
   overlay: boolean;
+  /** Pragmatic-Phase-1 of `docs/plans/card-pptx-templates.md` —
+   *  badge fill + text colours sourced from the document's
+   *  theme palette (`Theme.pptxPalette`). Absent → falls back
+   *  to the legacy modern-light blue (`#2563EB` + white). */
+  accent?: string;
+  accentFg?: string;
 }
 
 /**
@@ -847,12 +891,17 @@ function buildStepBadgeXml(opts: StepBadgeOptions): string {
   const wPx = SLIDE_W_PX * STEP_BADGE_RECT.w;
   const hPx = SLIDE_H_PX * STEP_BADGE_RECT.h;
   const text = escapeOoxmlText(opts.text);
-  // Accent fill: blue (#2563eb) matching the default
-  // `--annot-doc-accent` in inject-styles.ts. Overlay variant
-  // uses translucent black for image-fill legibility.
+  // Accent fill: from the active theme's pptxPalette when set,
+  // otherwise the legacy modern-light blue (`#2563EB`) for
+  // documents that haven't opted into `meta.appearance.template`.
+  // Overlay variant uses translucent black for image-fill
+  // legibility regardless of theme — the screenshot underneath
+  // makes accent-on-image illegible.
+  const accent = opts.accent ?? "2563EB";
+  const accentFg = opts.accentFg ?? "FFFFFF";
   const fillXml = opts.overlay
     ? `<a:solidFill><a:srgbClr val="000000"><a:alpha val="55000"/></a:srgbClr></a:solidFill>`
-    : `<a:solidFill><a:srgbClr val="2563EB"/></a:solidFill>`;
+    : `<a:solidFill><a:srgbClr val="${accent}"/></a:solidFill>`;
   // Pill-shaped (roundRect with maximum corner radius). Single-
   // digit content visually reads as a circle; longer labels
   // ("Step 1") stretch into a horizontal pill. The `adj1="50000"`
@@ -860,10 +909,16 @@ function buildStepBadgeXml(opts: StepBadgeOptions): string {
   // visual as `border-radius: 9999px` in CSS.
   const geomXml = `<a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val 50000"/></a:avLst></a:prstGeom>`;
   // Soft drop shadow on the non-overlay variant — matches the
-  // `box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25)` in CSS.
+  // `box-shadow: 0 4px 12px rgba(R, G, B, 0.25)` in CSS. The
+  // shadow tracks the accent colour so light-accent themes (e.g.
+  // minimal's black) don't end up with a phantom blue glow.
   const effectXml = opts.overlay
     ? ""
-    : `<a:effectLst><a:outerShdw blurRad="76200" dist="38100" dir="5400000" algn="t" rotWithShape="0"><a:srgbClr val="2563EB"><a:alpha val="40000"/></a:srgbClr></a:outerShdw></a:effectLst>`;
+    : `<a:effectLst><a:outerShdw blurRad="76200" dist="38100" dir="5400000" algn="t" rotWithShape="0"><a:srgbClr val="${accent}"><a:alpha val="40000"/></a:srgbClr></a:outerShdw></a:effectLst>`;
+  // Overlay variant always uses white badge text; non-overlay
+  // uses the theme's accentFg (white on most themes, dark on
+  // pastel themes).
+  const textColor = opts.overlay ? "FFFFFF" : accentFg;
   return `<p:sp>
         <p:nvSpPr>
           <p:cNvPr id="${opts.id}" name="StepBadge"/>
@@ -887,7 +942,7 @@ function buildStepBadgeXml(opts: StepBadgeOptions): string {
             <a:pPr algn="ctr"><a:defRPr/></a:pPr>
             <a:r>
               <a:rPr lang="en-US" sz="1800" b="1">
-                <a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill>
+                <a:solidFill><a:srgbClr val="${textColor}"/></a:solidFill>
               </a:rPr>
               <a:t>${text}</a:t>
             </a:r>
