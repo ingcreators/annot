@@ -38,7 +38,7 @@
 
 import { cssStackFor } from "@ingcreators/annot-core/headless";
 import type { Theme, VarTuples } from "./themes/index.js";
-import { pickLegacyTheme } from "./themes/index.js";
+import { getTheme, pickLegacyTheme } from "./themes/index.js";
 import type { AnnotDocument, CardLayoutMeta, DocMeta, NumberingMeta } from "./types.js";
 
 /** CSS values for each `meta.maxWidth` keyword. */
@@ -89,10 +89,22 @@ export function buildStyleBlock(doc: AnnotDocument): string {
   const maxWidthKey = doc.meta.maxWidth ?? "medium";
   const maxWidth = MAX_WIDTH_VALUES[maxWidthKey];
   const themeMode = doc.meta.theme ?? "auto";
-  // Phase 1 of `card-document-themes.md` — pick the theme via
-  // the legacy keyword mapping. Phase 2 (TBD) reads
-  // `meta.appearance.template` first and falls back here.
-  const { theme, emitDarkMediaQuery } = pickLegacyTheme(themeMode);
+  // Phase 2 of `card-document-themes.md` — `meta.appearance.template`
+  // takes precedence over the legacy `meta.theme` keyword when set.
+  // Picked theme always emits its `darkVars` behind a `prefers-
+  // color-scheme: dark` block (theme authors opt in by declaring
+  // `darkVars`; absence = "this theme is light-only or
+  // dark-only"). The legacy fallback below preserves the
+  // pre-Phase-2 byte output for documents that haven't opted in.
+  const appearanceTemplate = doc.meta.appearance?.template;
+  let theme: Theme;
+  let emitDarkMediaQuery: boolean;
+  if (appearanceTemplate !== undefined) {
+    theme = getTheme(appearanceTemplate);
+    emitDarkMediaQuery = theme.darkVars !== undefined;
+  } else {
+    ({ theme, emitDarkMediaQuery } = pickLegacyTheme(themeMode));
+  }
 
   const sections: string[] = [];
   sections.push(rootSection(maxWidth, theme, doc.meta.cardLayout));

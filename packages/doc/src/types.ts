@@ -60,6 +60,43 @@ export interface DocMeta {
    *  this field opts the document into the rendered header
    *  treatment AND into the matching PPTX cover slide. */
   readonly header?: DocHeaderMeta;
+  /** Phase 2 of `docs/plans/card-document-themes.md` — appearance
+   *  customisation hub. When `appearance.template` is set it
+   *  takes precedence over the legacy `theme` field. Phase 2
+   *  ships `template`; Phases 4 / 5 add `fontFamily` and
+   *  `customCss` to the same object. */
+  readonly appearance?: AppearanceMeta;
+}
+
+/** Phase 2 of `docs/plans/card-document-themes.md` — opt-in
+ *  appearance customisation. */
+export interface AppearanceMeta {
+  /** Built-in theme id, taken from `BUILTIN_THEME_IDS` in
+   *  `@ingcreators/annot-doc`'s themes registry. Absent means
+   *  "fall back to the legacy `meta.theme` keyword mapping" —
+   *  no implicit migration. Unknown values render as
+   *  `modern-light` (so a document referencing a plugin theme
+   *  the host hasn't loaded still reads cleanly). */
+  readonly template?: string;
+  /** Phase 5 of `card-document-themes.md` — free-form CSS
+   *  appended after the theme. Sanitised on parse + save (no
+   *  `@import`, no external `url()`). Capped at 8 KB. Absent
+   *  / empty → no extra CSS. */
+  readonly customCss?: string;
+  /** Phase 4 of `card-document-themes.md` — per-document
+   *  override of the logical font tokens. Absent fields keep
+   *  the structural defaults. */
+  readonly fontFamily?: AppearanceFontFamily;
+}
+
+/** Phase 4 of `docs/plans/card-document-themes.md` — font-family
+ *  override knobs. Each field accepts a logical token
+ *  (`Annot Sans` / `Annot Serif` / `Annot Mono`) or a raw CSS
+ *  family stack (e.g. `"Helvetica Neue, sans-serif"`). */
+export interface AppearanceFontFamily {
+  readonly sans?: string;
+  readonly serif?: string;
+  readonly mono?: string;
 }
 
 /** Scribe-style document header — icon + free-form description

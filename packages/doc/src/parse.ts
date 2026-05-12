@@ -12,6 +12,8 @@
 
 import type {
   AnnotDocument,
+  AppearanceFontFamily,
+  AppearanceMeta,
   Block,
   CalloutBlock,
   CardLayoutMeta,
@@ -454,6 +456,7 @@ function parseDocMeta(jsonText: string, headTitle: string): DocMeta {
   const numbering = parseNumberingMeta(obj.numbering);
   const cardLayout = parseCardLayoutMeta(obj.cardLayout);
   const header = parseDocHeaderMeta(obj.header);
+  const appearance = parseAppearanceMeta(obj.appearance);
   const meta: DocMeta = { title };
   if (author !== undefined) (meta as { author?: string }).author = author;
   if (theme !== undefined) (meta as { theme?: typeof theme }).theme = theme;
@@ -465,7 +468,58 @@ function parseDocMeta(jsonText: string, headTitle: string): DocMeta {
   if (numbering !== undefined) (meta as { numbering?: NumberingMeta }).numbering = numbering;
   if (cardLayout !== undefined) (meta as { cardLayout?: CardLayoutMeta }).cardLayout = cardLayout;
   if (header !== undefined) (meta as { header?: DocHeaderMeta }).header = header;
+  if (appearance !== undefined) {
+    (meta as { appearance?: AppearanceMeta }).appearance = appearance;
+  }
   return meta;
+}
+
+/** Phase 2 of `docs/plans/card-document-themes.md` — parse the
+ *  `appearance` sub-object on the JSON sidecar. Accepts an
+ *  object with optional `template` (string id, validated by the
+ *  themes registry at render time — the parser is forward-compat
+ *  here), `customCss` (string), and `fontFamily` (object with
+ *  optional `sans` / `serif` / `mono` string members). Empty /
+ *  no-meaningful-field object returns `undefined`. */
+function parseAppearanceMeta(v: unknown): AppearanceMeta | undefined {
+  if (v === null || typeof v !== "object" || Array.isArray(v)) return undefined;
+  const o = v as Record<string, unknown>;
+  const out: AppearanceMeta = {};
+  let hasField = false;
+  if (typeof o.template === "string" && o.template.length > 0) {
+    (out as { template?: string }).template = o.template;
+    hasField = true;
+  }
+  if (typeof o.customCss === "string" && o.customCss.length > 0) {
+    (out as { customCss?: string }).customCss = o.customCss;
+    hasField = true;
+  }
+  const fontFamily = parseAppearanceFontFamily(o.fontFamily);
+  if (fontFamily !== undefined) {
+    (out as { fontFamily?: AppearanceFontFamily }).fontFamily = fontFamily;
+    hasField = true;
+  }
+  return hasField ? out : undefined;
+}
+
+function parseAppearanceFontFamily(v: unknown): AppearanceFontFamily | undefined {
+  if (v === null || typeof v !== "object" || Array.isArray(v)) return undefined;
+  const o = v as Record<string, unknown>;
+  const out: AppearanceFontFamily = {};
+  let hasField = false;
+  if (typeof o.sans === "string" && o.sans.length > 0) {
+    (out as { sans?: string }).sans = o.sans;
+    hasField = true;
+  }
+  if (typeof o.serif === "string" && o.serif.length > 0) {
+    (out as { serif?: string }).serif = o.serif;
+    hasField = true;
+  }
+  if (typeof o.mono === "string" && o.mono.length > 0) {
+    (out as { mono?: string }).mono = o.mono;
+    hasField = true;
+  }
+  return hasField ? out : undefined;
 }
 
 /** Phase 7c — parse the `header` sub-object on the JSON sidecar.
