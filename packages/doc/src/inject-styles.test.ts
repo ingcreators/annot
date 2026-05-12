@@ -338,17 +338,102 @@ describe("injectDocumentStyles: numbering meta (Phase 13)", () => {
     });
   });
 
-  it("Phase 1 emits no step-counter CSS yet (Phase 2 lights it up)", () => {
-    // Defensive guard: Phase 1 is data-layer only. If a future
-    // edit accidentally emits CSS for `numbering.steps` without
-    // updating Phase 2's plan section, this test fails first.
+  // Phase 2 of `docs/plans/card-step-auto-numbering.md` — CSS
+  // counter + badge styling. The guards below match the
+  // existing heading / figure counter tests in pattern.
+
+  it("emits no step-counter CSS when numbering.steps is absent", () => {
     const css = buildStyleBlock(
       createEmptyDocument({
-        title: "Phase 1 no CSS",
+        title: "Steps off",
+        meta: { numbering: { headings: true } },
+      }),
+    );
+    // The `--annot-step-badge-*` CSS variables ARE always
+    // emitted (so themes can target them) — assert specifically
+    // that the counter rules and the `::before` content are
+    // absent.
+    expect(css).not.toContain("counter-increment: annot-step");
+    expect(css).not.toContain("counter-reset: annot-step");
+    expect(css).not.toContain('[data-annot-block="step"]::before');
+  });
+
+  it("emits no step-counter CSS when numbering.steps is false", () => {
+    const css = buildStyleBlock(
+      createEmptyDocument({
+        title: "Steps explicitly off",
+        meta: { numbering: { steps: false } },
+      }),
+    );
+    expect(css).not.toContain("counter-increment: annot-step");
+    expect(css).not.toContain("counter-reset: annot-step");
+    expect(css).not.toContain('[data-annot-block="step"]::before');
+  });
+
+  it("emits step-counter rules when numbering.steps is true", () => {
+    const css = buildStyleBlock(
+      createEmptyDocument({
+        title: "Numbered steps",
+        meta: { numbering: { steps: true } },
+      }),
+    );
+    expect(css).toContain("counter-reset: annot-step");
+    expect(css).toContain('[data-annot-block="step"] {');
+    expect(css).toContain("counter-increment: annot-step");
+    expect(css).toContain('[data-annot-block="step"]::before');
+    // Default badge content is the bare numeral.
+    expect(css).toContain("content: counter(annot-step);");
+    // Image-fill layout gets its own backdrop override.
+    expect(css).toContain('[data-step-layout="image-fill"]::before');
+    expect(css).toContain("backdrop-filter:");
+    // Heading / figure counters stay quiet when only steps are on.
+    expect(css).not.toContain("annot-h1");
+    expect(css).not.toContain("annot-figure");
+  });
+
+  it("renders stepLabel template with %n substitution", () => {
+    const css = buildStyleBlock(
+      createEmptyDocument({
+        title: "Step prefix",
         meta: { numbering: { steps: true, stepLabel: "Step %n" } },
       }),
     );
-    expect(css).not.toContain("annot-step");
+    expect(css).toContain('content: "Step " counter(annot-step);');
+  });
+
+  it("renders stepLabel template with trailing literal", () => {
+    const css = buildStyleBlock(
+      createEmptyDocument({
+        title: "Slash format",
+        meta: { numbering: { steps: true, stepLabel: "%n /" } },
+      }),
+    );
+    expect(css).toContain('content: counter(annot-step) " /";');
+  });
+
+  it("emits all three counters together when every numbering toggle is on", () => {
+    const css = buildStyleBlock(
+      createEmptyDocument({
+        title: "Triple",
+        meta: {
+          numbering: { headings: true, figures: true, steps: true },
+        },
+      }),
+    );
+    expect(css).toContain("counter-reset: annot-h1 annot-h2 annot-h3 annot-figure annot-step");
+  });
+
+  it("emits step-badge CSS variables in :root regardless of steps toggle", () => {
+    // Variables are unconditionally emitted so theme / user-CSS
+    // overrides have a stable name to target even before the
+    // numbering opt-in.
+    const css = buildStyleBlock(createEmptyDocument({ title: "Vars" }));
+    expect(css).toContain("--annot-step-badge-bg:");
+    expect(css).toContain("--annot-step-badge-fg:");
+    expect(css).toContain("--annot-step-badge-radius:");
+    expect(css).toContain("--annot-step-badge-shadow:");
+    expect(css).toContain("--annot-step-badge-min-size:");
+    expect(css).toContain("--annot-step-badge-font-size:");
   });
 
   it("dropping `numbering: {}` from a parsed sidecar treats it as absent", () => {
