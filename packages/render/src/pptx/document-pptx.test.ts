@@ -447,6 +447,35 @@ describe("buildDocumentPptxFiles: step blocks (Phase 6)", () => {
     expect(slide1).toContain('<a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill>');
   });
 
+  // User-feedback fix: HTML view's image-fill overlay spans
+  // the full card width (left:0; right:0) and is flush to the
+  // card bottom; the PPTX version had 4% margins on each side
+  // and a 4% gap at the bottom, leaving the dark strip
+  // narrower than the slide. Both title + body now span the
+  // full slide width and the body is flush to the slide
+  // bottom so the combined dark strip forms one continuous
+  // band across the bottom of the slide.
+  it("image-fill title + body span the full slide width (no left/right gap)", () => {
+    const doc = makeDocument([
+      makeStepBlock("step-1", 800, 600, { title: "T", body: "B", layout: "image-fill" }),
+    ]);
+    const slide1 = decode(buildDocumentPptxFiles(doc)["ppt/slides/slide1.xml"]!);
+    // Title shape rect: x=0 (no left margin), w=100% slide width.
+    // 1280 × 9525 = 12,192,000 EMU.
+    const titleStart = slide1.indexOf("StepTitle");
+    const titleEnd = slide1.indexOf("</p:sp>", titleStart);
+    const titleXml = slide1.slice(titleStart, titleEnd);
+    expect(titleXml).toContain('<a:off x="0"');
+    expect(titleXml).toContain('<a:ext cx="12192000"');
+    // Body shape rect: x=0, w=100%, y flush to slide bottom
+    // (y=88%, h=12% → ext cy 12% of 720 = 86.4 px → 822,960 EMU).
+    const bodyStart = slide1.indexOf("StepBody");
+    const bodyEnd = slide1.indexOf("</p:sp>", bodyStart);
+    const bodyXml = slide1.slice(bodyStart, bodyEnd);
+    expect(bodyXml).toContain('<a:off x="0"');
+    expect(bodyXml).toContain('<a:ext cx="12192000"');
+  });
+
   it("area-based layouts (image-top etc.) use a transparent backdrop + dark text", () => {
     const doc = makeDocument([
       makeStepBlock("step-1", 800, 600, { title: "T", body: "B", layout: "image-top" }),

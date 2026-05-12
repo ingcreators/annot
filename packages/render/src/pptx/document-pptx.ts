@@ -1026,9 +1026,17 @@ const LAYOUT_PLACEMENTS: Record<
   // Image fills slide → text overlays at the bottom (only
   // layout where text shares pixels with the image; renders
   // with the translucent backdrop).
+  //
+  // Both title + body span the FULL slide width (x: 0, w: 1)
+  // and the body is flush to the slide bottom — matches the
+  // HTML view's `left: 0; right: 0; bottom: 0` overlay. The
+  // shape's solid-fill backdrop paints the entire box, so a
+  // 92%-wide shape leaves 4% gaps on either side; full-width
+  // shapes form one continuous dark strip across the slide
+  // bottom, which is the design intent.
   "image-fill": {
-    title: { x: 0.04, y: 0.78, w: 0.92, h: 0.08 },
-    body: { x: 0.04, y: 0.86, w: 0.92, h: 0.1 },
+    title: { x: 0, y: 0.78, w: 1, h: 0.1 },
+    body: { x: 0, y: 0.88, w: 1, h: 0.12 },
   },
 };
 
