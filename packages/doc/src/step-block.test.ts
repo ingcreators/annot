@@ -173,10 +173,11 @@ describe("step block: parser", () => {
     expect(step.svg).toBe("");
   });
 
-  // Phase 7b of `docs/plans/_done/card-procedure-template.md` —
-  // optional URL chip parses out of `data-step-url` +
-  // `data-step-url-label`, with allowed-scheme allowlist.
-  it("parses a step block's data-step-url + data-step-url-label into block.link (Phase 7b)", () => {
+  // Legacy `data-step-url` / `data-step-url-label` (Scribe-style
+  // per-step "Navigate to" chip, retired in favour of inline
+  // `<a href>` links inside title / body) parse without error
+  // — the parser silently ignores the attributes for back-compat.
+  it("silently ignores legacy data-step-url / data-step-url-label attributes", () => {
     const html =
       wrap(`      <section data-annot-block="step" data-annot-image-id="img-step-01" data-step-layout="image-top" data-step-url="https://example.com/docs" data-step-url-label="Documentation">
         <svg data-annot-version="1" viewBox="0 0 10 10" width="10" height="10" xmlns="http://www.w3.org/2000/svg">
@@ -189,59 +190,7 @@ describe("step block: parser", () => {
     const doc = parseDocument(html);
     const step = doc.blocks.find((b) => b.kind === "step");
     if (step?.kind !== "step") throw new Error("expected step block");
-    expect(step.link).toEqual({ url: "https://example.com/docs", label: "Documentation" });
-  });
-
-  it("parses a URL without a label as a label-less link", () => {
-    const html =
-      wrap(`      <section data-annot-block="step" data-annot-image-id="img-step-01" data-step-layout="image-top" data-step-url="https://example.com">
-        <svg data-annot-version="1" viewBox="0 0 10 10" xmlns="http://www.w3.org/2000/svg"><g id="annotations"/></svg>
-        <h3 data-step-title>T</h3>
-        <p data-step-body>B</p>
-      </section>`);
-    const doc = parseDocument(html);
-    const step = doc.blocks.find((b) => b.kind === "step");
-    if (step?.kind !== "step") throw new Error("expected step block");
-    expect(step.link).toEqual({ url: "https://example.com" });
-  });
-
-  it("drops a javascript: URL on parse (security allowlist)", () => {
-    const html =
-      wrap(`      <section data-annot-block="step" data-annot-image-id="img-step-01" data-step-layout="image-top" data-step-url="javascript:alert(1)" data-step-url-label="Click me">
-        <svg data-annot-version="1" viewBox="0 0 10 10" xmlns="http://www.w3.org/2000/svg"><g id="annotations"/></svg>
-        <h3 data-step-title>T</h3>
-        <p data-step-body>B</p>
-      </section>`);
-    const doc = parseDocument(html);
-    const step = doc.blocks.find((b) => b.kind === "step");
-    if (step?.kind !== "step") throw new Error("expected step block");
-    expect(step.link).toBeUndefined();
-  });
-
-  it("drops a data: URL on parse (security allowlist)", () => {
-    const html =
-      wrap(`      <section data-annot-block="step" data-annot-image-id="img-step-01" data-step-layout="image-top" data-step-url="data:text/html,<script>alert(1)</script>">
-        <svg data-annot-version="1" viewBox="0 0 10 10" xmlns="http://www.w3.org/2000/svg"><g id="annotations"/></svg>
-        <h3 data-step-title>T</h3>
-        <p data-step-body>B</p>
-      </section>`);
-    const doc = parseDocument(html);
-    const step = doc.blocks.find((b) => b.kind === "step");
-    if (step?.kind !== "step") throw new Error("expected step block");
-    expect(step.link).toBeUndefined();
-  });
-
-  it("accepts mailto: URLs", () => {
-    const html =
-      wrap(`      <section data-annot-block="step" data-annot-image-id="img-step-01" data-step-layout="image-top" data-step-url="mailto:hello@example.com">
-        <svg data-annot-version="1" viewBox="0 0 10 10" xmlns="http://www.w3.org/2000/svg"><g id="annotations"/></svg>
-        <h3 data-step-title>T</h3>
-        <p data-step-body>B</p>
-      </section>`);
-    const doc = parseDocument(html);
-    const step = doc.blocks.find((b) => b.kind === "step");
-    if (step?.kind !== "step") throw new Error("expected step block");
-    expect(step.link).toEqual({ url: "mailto:hello@example.com" });
+    expect("link" in step).toBe(false);
   });
 
   // Phase 7d of `docs/plans/_done/card-procedure-template.md` —
@@ -431,143 +380,9 @@ describe("step block: serializer", () => {
     expect(step.layout).toBe("image-fill");
   });
 
-  // Phase 7b — URL chip serialisation. data-step-url and
-  // data-step-url-label appear AFTER data-step-layout in
-  // canonical alphabetical order.
-  it("emits data-step-url + data-step-url-label after data-step-layout (Phase 7b)", () => {
-    const doc: AnnotDocument = {
-      version: ANNOT_DOC_VERSION,
-      lang: "en",
-      title: "T",
-      meta: { title: "T" },
-      styleBlock: null,
-      blocks: [
-        {
-          kind: "step",
-          id: "img-step-01",
-          svg: CANONICAL_SVG,
-          title: "Open Settings",
-          body: "Click the gear.",
-          layout: "image-top",
-          link: { url: "https://example.com", label: "Docs" },
-        },
-      ],
-    };
-    const bytes = serializeDocument(doc);
-    expect(bytes).toContain(
-      '<section data-annot-block="step" data-annot-image-id="img-step-01" data-step-layout="image-top" data-step-url="https://example.com" data-step-url-label="Docs">',
-    );
-  });
-
-  it("omits data-step-url-label when no label is set", () => {
-    const doc: AnnotDocument = {
-      version: ANNOT_DOC_VERSION,
-      lang: "en",
-      title: "T",
-      meta: { title: "T" },
-      styleBlock: null,
-      blocks: [
-        {
-          kind: "step",
-          id: "img-step-01",
-          svg: CANONICAL_SVG,
-          title: "T",
-          body: "B",
-          layout: "image-top",
-          link: { url: "https://example.com" },
-        },
-      ],
-    };
-    const bytes = serializeDocument(doc);
-    expect(bytes).toContain('data-step-url="https://example.com"');
-    expect(bytes).not.toContain("data-step-url-label");
-  });
-
-  it("escapes special chars in the URL and label", () => {
-    const doc: AnnotDocument = {
-      version: ANNOT_DOC_VERSION,
-      lang: "en",
-      title: "T",
-      meta: { title: "T" },
-      styleBlock: null,
-      blocks: [
-        {
-          kind: "step",
-          id: "img-step-01",
-          svg: CANONICAL_SVG,
-          title: "T",
-          body: "B",
-          layout: "image-top",
-          link: {
-            url: "https://example.com/search?q=a&b=c",
-            label: 'AT&T "billing"',
-          },
-        },
-      ],
-    };
-    const bytes = serializeDocument(doc);
-    expect(bytes).toContain('data-step-url="https://example.com/search?q=a&amp;b=c"');
-    expect(bytes).toContain('data-step-url-label="AT&amp;T &quot;billing&quot;"');
-  });
-
-  it("round-trips a step block with link byte-for-byte", () => {
-    const doc: AnnotDocument = {
-      version: ANNOT_DOC_VERSION,
-      lang: "en",
-      title: "T",
-      meta: { title: "T" },
-      styleBlock: null,
-      blocks: [
-        {
-          kind: "step",
-          id: "img-step-01",
-          svg: CANONICAL_SVG,
-          title: "T",
-          body: "B",
-          layout: "image-top",
-          link: { url: "https://example.com", label: "Docs" },
-        },
-      ],
-    };
-    const bytes = serializeDocument(doc);
-    const reparsed = parseDocument(bytes);
-    expect(serializeDocument(reparsed)).toBe(bytes);
-    const step = reparsed.blocks.find((b) => b.kind === "step");
-    if (step?.kind !== "step") throw new Error("expected step");
-    expect(step.link).toEqual({ url: "https://example.com", label: "Docs" });
-  });
-
-  it("round-trips an image-less step with link byte-for-byte", () => {
-    const doc: AnnotDocument = {
-      version: ANNOT_DOC_VERSION,
-      lang: "en",
-      title: "T",
-      meta: { title: "T" },
-      styleBlock: null,
-      blocks: [
-        {
-          kind: "step",
-          id: "img-step-01",
-          svg: "",
-          title: "Visit the dashboard",
-          body: "",
-          layout: "image-top",
-          link: { url: "https://example.com/dashboard" },
-        },
-      ],
-    };
-    const bytes = serializeDocument(doc);
-    const reparsed = parseDocument(bytes);
-    expect(serializeDocument(reparsed)).toBe(bytes);
-    const step = reparsed.blocks.find((b) => b.kind === "step");
-    if (step?.kind !== "step") throw new Error("expected step");
-    expect(step.svg).toBe("");
-    expect(step.link).toEqual({ url: "https://example.com/dashboard" });
-  });
-
   // Phase 7d — viewport serialisation. data-step-viewport
-  // appears AFTER data-step-url-label in canonical order.
-  it("emits data-step-viewport after data-step-url-label (Phase 7d)", () => {
+  // appears at the tail of the section's data-* attributes.
+  it("emits data-step-viewport after data-step-layout (Phase 7d)", () => {
     const doc: AnnotDocument = {
       version: ANNOT_DOC_VERSION,
       lang: "en",
@@ -589,32 +404,6 @@ describe("step block: serializer", () => {
     const bytes = serializeDocument(doc);
     expect(bytes).toContain(
       '<section data-annot-block="step" data-annot-image-id="img-step-01" data-step-layout="image-top" data-step-viewport="100,200,400,300">',
-    );
-  });
-
-  it("emits viewport after both URL and viewport when both are set", () => {
-    const doc: AnnotDocument = {
-      version: ANNOT_DOC_VERSION,
-      lang: "en",
-      title: "T",
-      meta: { title: "T" },
-      styleBlock: null,
-      blocks: [
-        {
-          kind: "step",
-          id: "img-step-01",
-          svg: CANONICAL_SVG,
-          title: "T",
-          body: "B",
-          layout: "image-top",
-          link: { url: "https://example.com", label: "Docs" },
-          viewport: { x: 50, y: 60, w: 200, h: 150 },
-        },
-      ],
-    };
-    const bytes = serializeDocument(doc);
-    expect(bytes).toContain(
-      'data-step-layout="image-top" data-step-url="https://example.com" data-step-url-label="Docs" data-step-viewport="50,60,200,150">',
     );
   });
 
@@ -783,33 +572,5 @@ describe("step block: cloneTemplate integration", () => {
     const bytes = serializeDocument(clone);
     const reparsed = parseDocument(bytes);
     expect(serializeDocument(reparsed)).toBe(bytes);
-  });
-
-  // Phase 7b — `link` field carries through cloneTemplate unchanged.
-  it("preserves step.link across clone (Phase 7b)", () => {
-    let counter = 0;
-    const template: AnnotDocument = {
-      version: ANNOT_DOC_VERSION,
-      lang: "en",
-      title: "Linked card procedure",
-      meta: { title: "Linked card procedure", template: { name: "card-procedure" } },
-      styleBlock: null,
-      blocks: [
-        {
-          kind: "step",
-          id: "img-step-source-1",
-          svg: CANONICAL_SVG,
-          title: "Visit the docs",
-          body: "Read the API reference.",
-          layout: "image-top",
-          link: { url: "https://example.com/docs", label: "Docs" },
-        },
-      ],
-    };
-    const clone = cloneTemplate(template, { makeId: () => `img-fresh-${++counter}` });
-    const step = clone.blocks.find((b) => b.kind === "step");
-    if (step?.kind !== "step") throw new Error("expected step");
-    expect(step.id).toBe("img-fresh-1");
-    expect(step.link).toEqual({ url: "https://example.com/docs", label: "Docs" });
   });
 });

@@ -2658,11 +2658,6 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
       this.#onStepLayoutChange(target as HTMLSelectElement, index);
       return;
     }
-    // Phase 7b — URL chip input. Fires `change` on blur / Enter.
-    if (target.matches("[data-step-link-input]")) {
-      this.#onStepLinkChange(target as HTMLInputElement, index);
-      return;
-    }
   }
 
   #onStepLayoutChange(target: HTMLSelectElement, index: number): void {
@@ -2685,42 +2680,6 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
     if (refreshed?.kind !== "step") return;
     const blocks = [...this.document.blocks];
     blocks[index] = { ...refreshed, layout: next };
-    const newDoc: AnnotDocument = { ...this.document, blocks };
-    this.#history?.push(newDoc);
-    this.#applyInternal(newDoc, "block-action");
-  }
-
-  /** Phase 7b — commit the user's URL edit. Empty input → drop
-   *  the link entirely. Non-empty but invalid (unsupported scheme
-   *  / unparseable) → treat as empty (drop the link). Otherwise
-   *  build / update `block.link` with the new URL. The label is
-   *  preserved if previously set; clearing the label is a
-   *  follow-up affordance not in v1 scope. */
-  #onStepLinkChange(target: HTMLInputElement, index: number): void {
-    if (!this.document) return;
-    const block = this.document.blocks[index];
-    if (block?.kind !== "step") return;
-    const trimmed = target.value.trim();
-    const sanitised = trimmed.length === 0 ? null : sanitiseStepUrl(trimmed);
-    const previousUrl = block.link?.url ?? null;
-    if (sanitised === previousUrl) return;
-    this.#syncDomIntoDocument();
-    const refreshed = this.document.blocks[index];
-    if (refreshed?.kind !== "step") return;
-    const blocks = [...this.document.blocks];
-    if (sanitised === null) {
-      // Drop the link. Spreading without `link` is awkward
-      // because TypeScript's readonly types want explicit
-      // assignment; build the new object without the field.
-      const { link: _omit, ...rest } = refreshed;
-      blocks[index] = rest;
-    } else {
-      const nextLink =
-        refreshed.link?.label !== undefined
-          ? { url: sanitised, label: refreshed.link.label }
-          : { url: sanitised };
-      blocks[index] = { ...refreshed, link: nextLink };
-    }
     const newDoc: AnnotDocument = { ...this.document, blocks };
     this.#history?.push(newDoc);
     this.#applyInternal(newDoc, "block-action");
@@ -2750,12 +2709,6 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
     // same section; clicks on its `<select>` (or the wrapping
     // `<label>`) must not bubble into "edit image".
     if (target?.closest(".annot-doc-step-layout-switcher")) return;
-    // Phase 7b — clicks inside the URL chip or the inline link
-    // editor must not propagate to the modal opener. The chip is
-    // an `<a>` that already navigates on click; the editor is an
-    // `<input>` whose focus management we don't want overridden.
-    if (target?.closest("[data-step-link]")) return;
-    if (target?.closest(".annot-doc-step-link-editor")) return;
     // Phase 7d-polish — viewport toolbar buttons short-circuit
     // here so they don't open the image modal. The actual
     // action handling lives in `#onArticleClick` (article-level
@@ -3212,9 +3165,6 @@ function renderStep(block: StepBlock, editable: boolean): TemplateResult {
   const imageSlot = imageless
     ? null
     : html`<div class="annot-doc-image-svg-slot" data-annot-image-svg=${block.svg}></div>`;
-  // Phase 7b — URL chip + edit-mode link editor.
-  const linkChip = renderStepLinkChip(block);
-  const linkEditor = editable ? renderStepLinkEditor(block) : null;
   if (editable) {
     // Editing mode: empty contentEditable elements. The bodies
     // are populated imperatively in `updated()` (same strategy
@@ -3237,8 +3187,6 @@ function renderStep(block: StepBlock, editable: boolean): TemplateResult {
         >
           <h3 data-step-title contenteditable="true"></h3>
           <p data-step-body contenteditable="true"></p>
-          ${linkChip}
-          ${linkEditor}
           <label class="annot-doc-step-layout-switcher" aria-label="Card layout">
             <select data-step-layout-switcher .value=${block.layout}>
               <option value="image-top">Image top</option>
@@ -3261,8 +3209,6 @@ function renderStep(block: StepBlock, editable: boolean): TemplateResult {
         ${renderViewportToolbar(block, /* editable */ true)}
         <h3 data-step-title contenteditable="true"></h3>
         <p data-step-body contenteditable="true"></p>
-        ${linkChip}
-        ${linkEditor}
         <label class="annot-doc-step-layout-switcher" aria-label="Card layout">
           <select data-step-layout-switcher .value=${block.layout}>
             <option value="image-top">Image top</option>
@@ -3285,7 +3231,6 @@ function renderStep(block: StepBlock, editable: boolean): TemplateResult {
       >
         <h3 data-step-title>${unsafeHTML(block.title)}</h3>
         <p data-step-body>${unsafeHTML(block.body)}</p>
-        ${linkChip}
       </section>
     `;
   }
@@ -3299,7 +3244,6 @@ function renderStep(block: StepBlock, editable: boolean): TemplateResult {
       ${renderViewportToolbar(block, /* editable */ false)}
       <h3 data-step-title>${unsafeHTML(block.title)}</h3>
       <p data-step-body>${unsafeHTML(block.body)}</p>
-      ${linkChip}
     </section>
   `;
 }
@@ -3367,69 +3311,6 @@ function renderViewportToolbar(block: StepBlock, editable: boolean): TemplateRes
             </button>`
           : nothing
       }
-    </div>
-  `;
-}
-
-/** Phase 7b — read-only URL chip ("Navigate to https://...").
- *  Rendered in both read mode and editing mode; in editing
- *  mode the chip's `<a>` is `tabindex="-1"` so it doesn't
- *  intercept the user's keyboard focus when filling in the
- *  step's title / body. Clicking the chip in editing mode
- *  opens the URL in a new tab — same as the standalone view. */
-function renderStepLinkChip(block: StepBlock): TemplateResult | null {
-  const link = block.link;
-  if (!link) return null;
-  const label = link.label ?? link.url;
-  return html`<a
-    data-step-link
-    href=${link.url}
-    target="_blank"
-    rel="noopener noreferrer"
-    title=${link.url}
-    >${label}</a
-  >`;
-}
-
-/** Phase 7b — URL allowlist sanitiser. Returns the trimmed URL
- *  when it matches a permitted scheme (http / https / mailto),
- *  or `null` otherwise. Used by `#onStepLinkChange` to defang
- *  `javascript:` / `data:` from clipboard paste. Mirrors the
- *  same allowlist used by the parser. */
-function sanitiseStepUrl(raw: string): string | null {
-  const trimmed = raw.trim();
-  if (trimmed.length === 0) return null;
-  const lower = trimmed.toLowerCase();
-  if (lower.startsWith("http://") || lower.startsWith("https://") || lower.startsWith("mailto:")) {
-    return trimmed;
-  }
-  return null;
-}
-
-/** Phase 7b — inline URL editor visible in editing mode. The
- *  shell's `#onBlockHostChange` handler reads back the input's
- *  value on `change` (commit on blur / Enter) and updates
- *  `block.link`. The `data-step-link-input` marker on the
- *  input identifies the event source. Empty URL clears the
- *  link entirely. */
-function renderStepLinkEditor(block: StepBlock): TemplateResult {
-  const currentUrl = block.link?.url ?? "";
-  return html`
-    <div class="annot-doc-step-link-editor" data-step-link-editor>
-      <label for=${`step-link-${block.id}`}>Link</label>
-      <input
-        id=${`step-link-${block.id}`}
-        data-step-link-input
-        type="url"
-        placeholder="https://example.com"
-        .value=${currentUrl}
-        @keydown=${(e: KeyboardEvent) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            (e.currentTarget as HTMLInputElement).blur();
-          }
-        }}
-      />
     </div>
   `;
 }
