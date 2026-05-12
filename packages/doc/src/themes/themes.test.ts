@@ -7,8 +7,11 @@
 // assertions.
 
 import { describe, expect, it } from "vitest";
-import { getTheme, pickLegacyTheme, THEMES } from "./index.js";
+import { editorial } from "./editorial.js";
+import { BUILTIN_THEME_IDS, getTheme, pickLegacyTheme, THEMES } from "./index.js";
 import { modernDark, modernLight } from "./legacy.js";
+import { minimal } from "./minimal.js";
+import { playful } from "./playful.js";
 
 describe("THEMES registry", () => {
   it("registers the legacy modern-light + modern-dark themes", () => {
@@ -53,6 +56,50 @@ describe("getTheme", () => {
     expect(getTheme("does-not-exist")).toBe(modernLight);
     expect(getTheme(undefined)).toBe(modernLight);
   });
+});
+
+describe("Phase 2 themes (minimal / editorial / playful)", () => {
+  const phase2Themes = [
+    ["minimal", minimal],
+    ["editorial", editorial],
+    ["playful", playful],
+  ] as const;
+
+  it("registers every Phase 2 theme in THEMES under its id", () => {
+    expect(THEMES.minimal).toBe(minimal);
+    expect(THEMES.editorial).toBe(editorial);
+    expect(THEMES.playful).toBe(playful);
+  });
+
+  it("exposes every theme id through BUILTIN_THEME_IDS in the canonical order", () => {
+    expect(BUILTIN_THEME_IDS).toEqual([
+      "modern-light",
+      "modern-dark",
+      "minimal",
+      "editorial",
+      "playful",
+    ]);
+  });
+
+  for (const [id, theme] of phase2Themes) {
+    it(`${id}: declares the full themable variable set on vars`, () => {
+      // Each Phase 2 theme MUST define every variable name the
+      // legacy modern-light theme defines so consumers don't fall
+      // through to undefined for any themable property. (The
+      // structural defaults from `CARD_SIZING_VARS` still apply
+      // for non-themable knobs.)
+      const themeKeys = new Set(theme.vars.map(([k]) => k));
+      const baselineKeys = new Set(modernLight.vars.map(([k]) => k));
+      expect(themeKeys).toEqual(baselineKeys);
+    });
+
+    it(`${id}: declares matching darkVars keys when present`, () => {
+      if (!theme.darkVars) return;
+      const darkKeys = new Set(theme.darkVars.map(([k]) => k));
+      const lightKeys = new Set(theme.vars.map(([k]) => k));
+      expect(darkKeys).toEqual(lightKeys);
+    });
+  }
 });
 
 describe("pickLegacyTheme", () => {

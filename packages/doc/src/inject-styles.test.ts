@@ -762,3 +762,99 @@ describe("injectDocumentStyles: cardLayout meta", () => {
     expect(reparsed.meta.cardLayout).toEqual({ columns: 2, defaultStepLayout: "image-left" });
   });
 });
+
+// ---------------------------------------------------------------------------
+// Phase 2 of docs/plans/card-document-themes.md — meta.appearance.template
+// takes precedence over the legacy `meta.theme` keyword + the
+// new built-in themes produce identifiable CSS.
+// ---------------------------------------------------------------------------
+
+describe("injectDocumentStyles: meta.appearance.template (Phase 2)", () => {
+  it("uses the named theme's vars on :root when template is set", () => {
+    const css = buildStyleBlock(
+      createEmptyDocument({
+        title: "Minimal",
+        meta: { appearance: { template: "minimal" } },
+      }),
+    );
+    // minimal theme's accent is #111111 (black), not the
+    // modern-light blue.
+    expect(css).toContain("--annot-doc-accent: #111111;");
+    expect(css).not.toContain("--annot-doc-accent: #2563eb;");
+  });
+
+  it("falls back to modern-light for unknown templates", () => {
+    const css = buildStyleBlock(
+      createEmptyDocument({
+        title: "Unknown",
+        meta: { appearance: { template: "not-a-real-theme" } },
+      }),
+    );
+    expect(css).toContain("--annot-doc-accent: #2563eb;");
+  });
+
+  it("emits theme.extraCss at the end of the style block when present", () => {
+    const css = buildStyleBlock(
+      createEmptyDocument({
+        title: "Editorial",
+        meta: { appearance: { template: "editorial" } },
+      }),
+    );
+    // Editorial's extraCss sets a serif font on heading blocks.
+    expect(css).toContain('[data-annot-block="heading"] { font-family:');
+    // And tightens the badge corner radius.
+    expect(css).toContain("--annot-step-badge-radius: 6px;");
+  });
+
+  it("emits both :root + dark media query for themes that ship darkVars", () => {
+    const css = buildStyleBlock(
+      createEmptyDocument({
+        title: "Playful",
+        meta: { appearance: { template: "playful" } },
+      }),
+    );
+    expect(css).toContain("@media (prefers-color-scheme: dark)");
+    // Playful's dark accent (#f48eaa) lives in the media query.
+    expect(css).toContain("--annot-doc-accent: #f48eaa;");
+  });
+
+  it("survives a parse → serialize round-trip with meta.appearance.template", () => {
+    const original = injectDocumentStyles(
+      createEmptyDocument({
+        title: "Round-trip",
+        meta: { appearance: { template: "editorial" } },
+      }),
+    );
+    const onceBytes = serializeDocument(original);
+    const reparsed = parseDocument(onceBytes);
+    expect(serializeDocument(reparsed)).toBe(onceBytes);
+    expect(reparsed.meta.appearance).toEqual({ template: "editorial" });
+  });
+
+  it("meta.appearance.template wins over meta.theme when both are set", () => {
+    // Setting both should pick the appearance template; the
+    // legacy theme keyword is ignored.
+    const css = buildStyleBlock(
+      createEmptyDocument({
+        title: "Both",
+        meta: { theme: "dark", appearance: { template: "minimal" } },
+      }),
+    );
+    // Minimal accent (black), NOT modern-dark accent (#60a5fa).
+    expect(css).toContain("--annot-doc-accent: #111111;");
+    expect(css).not.toContain("--annot-doc-accent: #60a5fa;");
+  });
+
+  it("absent meta.appearance falls through to legacy meta.theme mapping (byte-equivalent)", () => {
+    // Documents that haven't opted into appearance MUST produce
+    // the same bytes they did pre-Phase-2. This is the Phase 1
+    // contract being re-asserted with the Phase 2 wiring in place.
+    const cssA = buildStyleBlock(createEmptyDocument({ title: "Legacy", meta: { theme: "dark" } }));
+    expect(cssA).toContain("--annot-doc-bg: #111827;"); // modern-dark
+    const cssB = buildStyleBlock(
+      createEmptyDocument({ title: "Legacy auto", meta: { theme: "auto" } }),
+    );
+    expect(cssB).toContain("--annot-doc-bg: #ffffff;");
+    expect(cssB).toContain("@media (prefers-color-scheme: dark)");
+  });
+});

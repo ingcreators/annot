@@ -828,3 +828,53 @@ export const CardProcedureStarterEditing: Story = {
   name: "Bundled starter / card-procedure (editing)",
   args: { document: makeCardProcedureStarter(), showToc: false, editing: true },
 };
+
+// ---------------------------------------------------------------------------
+// Phase 2 of docs/plans/card-document-themes.md — built-in themes
+// (`modern-light` / `modern-dark` / `minimal` / `editorial` /
+// `playful`) applied to the same content. Each story uses the
+// card-procedure starter so the visual differences land on the
+// same baseline.
+// ---------------------------------------------------------------------------
+
+function makeThemedStarterDoc(
+  templateId: "modern-light" | "modern-dark" | "minimal" | "editorial" | "playful",
+): AnnotDocument {
+  const cloned = cloneBuiltinTemplate("card-procedure");
+  if (!cloned) throw new Error("card-procedure starter missing");
+  return {
+    ...cloned,
+    meta: {
+      ...cloned.meta,
+      // Clear the legacy theme keyword so appearance.template
+      // is the only signal driving the visual treatment.
+      theme: undefined,
+      appearance: { template: templateId },
+    },
+  };
+}
+
+export const ThemeModernLight: Story = {
+  name: "Theme / Modern Light",
+  args: { document: makeThemedStarterDoc("modern-light"), showToc: false, editing: false },
+};
+
+export const ThemeModernDark: Story = {
+  name: "Theme / Modern Dark",
+  args: { document: makeThemedStarterDoc("modern-dark"), showToc: false, editing: false },
+};
+
+export const ThemeMinimal: Story = {
+  name: "Theme / Minimal",
+  args: { document: makeThemedStarterDoc("minimal"), showToc: false, editing: false },
+};
+
+export const ThemeEditorial: Story = {
+  name: "Theme / Editorial",
+  args: { document: makeThemedStarterDoc("editorial"), showToc: false, editing: false },
+};
+
+export const ThemePlayful: Story = {
+  name: "Theme / Playful",
+  args: { document: makeThemedStarterDoc("playful"), showToc: false, editing: false },
+};
