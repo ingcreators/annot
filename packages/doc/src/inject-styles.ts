@@ -505,6 +505,18 @@ function stepBlockRules(): string {
     "  grid-area: image;",
     "  width: 100%;",
     "  max-width: 100%;",
+    // Inline SVG carries its source pixel dimensions as
+    // presentation attributes (`<svg width=\"1920\" height=\"1161\">`
+    // from a fresh ShareX capture, for example). The `height`
+    // presentation attribute resolves to `height: 1161px` at CSS-
+    // computed-value time, which outranks `aspect-ratio: 16/9` (the
+    // spec ignores `aspect-ratio` when both `width` and `height`
+    // are explicitly set). Resetting `height: auto` here lets
+    // `aspect-ratio` take over so the slot stays 16:9 regardless
+    // of the source bitmap's natural size. Without this the saved
+    // file, opened directly in a browser, shows a card several
+    // thousand pixels tall with the screenshot pinned at the top.
+    "  height: auto;",
     "  aspect-ratio: 16 / 9;",
     "  display: block;",
     "  margin: 0;",
@@ -609,6 +621,9 @@ function stepBlockRules(): string {
     '[data-annot-block="step"][data-step-layout="image-fill"] > svg,',
     '[data-annot-block="step"][data-step-layout="image-fill"] > .annot-doc-image-svg-slot {',
     "  width: 100%;",
+    // See the `height: auto` rationale above — same presentation-
+    // attribute override applies to the image-fill layout.
+    "  height: auto;",
     "  aspect-ratio: 16 / 9;",
     "  display: block;",
     "  margin: 0;",
