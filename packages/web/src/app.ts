@@ -1887,9 +1887,7 @@ export class App {
     const numberingNext: import("@ingcreators/annot-doc").NumberingMeta = {
       ...numberingWithoutSteps,
       ...(result.numberingSteps ? { steps: true as const } : {}),
-      ...(result.numberingStepLabel !== undefined
-        ? { stepLabel: result.numberingStepLabel }
-        : {}),
+      ...(result.numberingStepLabel !== undefined ? { stepLabel: result.numberingStepLabel } : {}),
     };
     const numberingMaybe =
       Object.keys(numberingNext).length > 0 ? { numbering: numberingNext } : {};

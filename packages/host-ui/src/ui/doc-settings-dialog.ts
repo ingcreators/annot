@@ -285,7 +285,8 @@ export function showDocSettingsDialog(
     const stepLabelLabel = makeLabel("Step badge label");
     const initialStepLabel = opts.defaultNumberingStepLabel;
     const isPresetStepLabel =
-      initialStepLabel === undefined || STEP_LABEL_PRESETS.some((p) => p.value === initialStepLabel);
+      initialStepLabel === undefined ||
+      STEP_LABEL_PRESETS.some((p) => p.value === initialStepLabel);
     const stepLabelSelect = makeSelect({
       value: isPresetStepLabel ? (initialStepLabel ?? "%n") : STEP_LABEL_CUSTOM_SENTINEL,
       ariaLabel: "Step badge label format",
