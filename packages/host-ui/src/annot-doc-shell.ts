@@ -71,6 +71,18 @@ import {
 /** CSS for the shell chrome. Concatenated with
  *  `buildStyleBlock(doc)` at render time. */
 const SHELL_CSS = `
+/* The custom element itself defaults to display: inline (the spec
+   default for unknown HTML elements), which makes \`width: 100%\` on
+   the inner .annot-doc-shell div resolve against an inline parent
+   whose intrinsic width is the children's min-content. Visible
+   symptom: docs with \`meta.maxWidth: "full"\` still rendered as
+   narrow as the step card's toolbar — the article never claimed
+   the viewport width because the custom element above it didn't.
+   \`display: block\` on the host element makes the chain
+   load-bearing. */
+annot-doc-shell {
+  display: block;
+}
 .annot-doc-shell {
   display: grid;
   grid-template-columns: 240px 1fr;

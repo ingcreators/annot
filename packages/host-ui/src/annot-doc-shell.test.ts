@@ -351,6 +351,30 @@ describe("annot-doc-shell: theme + style block", () => {
     expect(el.querySelector("style")).not.toBeNull();
     expect(el.querySelector("article[data-annot-doc]")).not.toBeNull();
   });
+
+  it("declares display:block for the custom element so full-width docs claim their space", async () => {
+    // User-reported regression: a document with
+    // `meta.maxWidth: "full"` rendered as narrow as the step
+    // card toolbar's min-content. Root cause: the custom element
+    // `<annot-doc-shell>` is `display: inline` by default (HTML
+    // spec for unknown elements). The inner `.annot-doc-shell`
+    // div's `width: 100%` resolves against an inline parent
+    // whose intrinsic width is its content's min-content, so the
+    // article never expanded to the host's flex slot. Fix: emit
+    // `annot-doc-shell { display: block }` alongside the existing
+    // shell chrome CSS so the host element behaves like a block-
+    // level container.
+    const el = mount(makeMixedDoc());
+    await el.updateComplete;
+    const css = el.querySelector("style")?.textContent ?? "";
+    // Locate the rule and assert its declaration block contains
+    // `display: block`. Tolerant of surrounding whitespace.
+    const idx = css.indexOf("annot-doc-shell {");
+    expect(idx).toBeGreaterThan(-1);
+    const end = css.indexOf("}", idx);
+    expect(end).toBeGreaterThan(-1);
+    expect(css.slice(idx, end)).toContain("display: block");
+  });
 });
 
 // ---------------------------------------------------------------------------
