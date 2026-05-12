@@ -90,7 +90,7 @@ export interface ImageMeta {
   readonly capturedAt?: string;
 }
 
-/** Auto-numbering toggles. All three fields are independent —
+/** Auto-numbering toggles. All fields are independent —
  *  a doc can number headings without numbering figures, and
  *  vice versa. Absent / `false` means no numbering for that
  *  category. */
@@ -110,6 +110,22 @@ export interface NumberingMeta {
    *  authored explicitly so multi-byte locales that don't use
    *  spaces can elide it. */
   readonly figureLabel?: string;
+  /** Phase 1 of `docs/plans/card-step-auto-numbering.md` — number
+   *  every `[data-annot-block="step"]` in document order. The
+   *  numeric value comes from a CSS counter (`annot-step`) so
+   *  reordering steps via the editor's drag-handle updates the
+   *  rendered numbers automatically. The CSS counter content is
+   *  rendered on the step section's `::before` pseudo-element,
+   *  styled as a Scribe-style numbered badge. Phase 2 emits the
+   *  matching CSS. */
+  readonly steps?: boolean;
+  /** Phase 1 of `docs/plans/card-step-auto-numbering.md` — badge
+   *  content template. `%n` is required and gets replaced by the
+   *  CSS counter at render time; everything else is literal CSS
+   *  `content` text. Default: `"%n"` (just the number). Common
+   *  alternatives: `"Step %n"`, `"%n."`, `"%n /"`. Only meaningful
+   *  when `steps` is true; ignored otherwise. */
+  readonly stepLabel?: string;
 }
 
 /** Discriminated union over every v1 block kind plus a passthrough
