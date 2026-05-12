@@ -1785,6 +1785,80 @@ describe("annot-doc-shell: step layout switcher", () => {
 // image-less step blocks (text-only narrative card).
 // ---------------------------------------------------------------------------
 
+// Phase 7d-polish 3: `exportSVGString` prepends a
+// `<?xml ?>\n` declaration to its output for standalone-SVG
+// callers (file download / clipboard). When that same SVG ends
+// up embedded in the doc via the step image slot, the leading
+// whitespace becomes a text node above the SVG and the slot's
+// line-height pushes the SVG ~20px down — visible as a grey
+// strip at the top of cards whose annotations were edited via
+// the modal. `materialiseImageSlot` strips the prefix so the
+// slot's first (and only) child is the `<svg>` element.
+describe("annot-doc-shell: SVG materialisation strips XML decl prefix", () => {
+  it("drops a leading <?xml ?> declaration so the slot's only child is the SVG", async () => {
+    const annotatedSvg =
+      '<?xml version="1.0" encoding="UTF-8"?>\n' +
+      '<svg xmlns="http://www.w3.org/2000/svg" data-annot-version="1" viewBox="0 0 800 450" width="800" height="450">' +
+      '<rect data-type="rect" x="10" y="10" width="100" height="50" fill="#ff0000"/>' +
+      "</svg>";
+    const doc: AnnotDocument = {
+      version: 1,
+      lang: "en",
+      title: "T",
+      meta: { title: "T" },
+      styleBlock: null,
+      blocks: [
+        {
+          kind: "step",
+          id: "img-annotated",
+          svg: annotatedSvg,
+          title: "T",
+          body: "B",
+          layout: "image-top",
+        },
+      ],
+    };
+    const el = mount(doc);
+    el.editing = false;
+    await el.updateComplete;
+    el.materialiseAllImagesNow();
+    const slot = el.querySelector(".annot-doc-image-svg-slot") as HTMLElement;
+    // Only ONE child node — the SVG. No text node from the
+    // stripped `<?xml ?>\n` prefix.
+    expect(slot.childNodes.length).toBe(1);
+    expect(slot.firstChild?.nodeName.toLowerCase()).toBe("svg");
+  });
+
+  it("leaves an XML-decl-free SVG unchanged", async () => {
+    const cleanSvg =
+      '<svg xmlns="http://www.w3.org/2000/svg" data-annot-version="1" viewBox="0 0 800 450" width="800" height="450"><rect x="10" y="10" width="100" height="50"/></svg>';
+    const doc: AnnotDocument = {
+      version: 1,
+      lang: "en",
+      title: "T",
+      meta: { title: "T" },
+      styleBlock: null,
+      blocks: [
+        {
+          kind: "step",
+          id: "img-clean",
+          svg: cleanSvg,
+          title: "T",
+          body: "B",
+          layout: "image-top",
+        },
+      ],
+    };
+    const el = mount(doc);
+    el.editing = false;
+    await el.updateComplete;
+    el.materialiseAllImagesNow();
+    const slot = el.querySelector(".annot-doc-image-svg-slot") as HTMLElement;
+    expect(slot.childNodes.length).toBe(1);
+    expect(slot.firstChild?.nodeName.toLowerCase()).toBe("svg");
+  });
+});
+
 describe("annot-doc-shell: image-less step blocks", () => {
   function makeImagelessStepDoc(): AnnotDocument {
     return {
