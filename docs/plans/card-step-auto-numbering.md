@@ -14,10 +14,10 @@
 > counters). Schema delta is purely additive — `data-annot-doc-version`
 > stays at 1.
 > **Risk:** Five phases, additive throughout. Each phase lands as an
-> independently revertable PR. The only behaviour change visible to
-> existing documents is the auto-strip migration in Phase 4 (strips
-> the legacy `"Step N "` / `"Image N "` title prefix on parse), and
-> only when the user enables `numbering.steps` in the dialog.
+> independently revertable PR. No migration of pre-existing card
+> documents — per user direction this plan treats the install as
+> having no shipped card documents yet, so the Phase 4 pre-fill
+> drop is a clean cut.
 
 ## Context
 
@@ -203,24 +203,16 @@ toggles). Setting it on / off rewrites `doc.meta.numbering.steps`,
 which triggers a fresh `injectDocumentStyles` call, which updates
 the `<style>` block, which re-renders.
 
-### Migration: legacy "Step N" / "Image N" title prefixes
+### No migration of pre-existing documents
 
-Documents created before this plan lands have their numbers baked
-into title text. Two strategies for these:
-
-- **Leave them alone.** Documents that don't opt into
-  `numbering.steps` keep their prefilled titles. No migration.
-- **Auto-strip on enable.** When the user toggles
-  `numbering.steps = true` on a document that has prefilled
-  titles, the dialog confirms: "Strip existing 'Step N' / 'Image N'
-  prefixes from step titles? You can undo via the editor's undo
-  stack." On confirm, the document walks every step block and
-  strips the leading `/^(Step|Image) \d+\s*/` from `title`.
-
-Phase 4 picks strategy B (with the confirmation). The auto-strip
-is **opt-in** per document; a user who wants both the badge AND
-the literal title prefix (unlikely, but valid) can decline the
-strip and leave the duplication.
+Per user direction this plan treats the install as having no
+pre-existing card documents. The Phase 4 pre-fill drop is a
+clean cut — `buildStepTitle` simply returns `""` from that
+phase onward, and the `CardDocumentNumbering` legacy type goes
+away. If a user happens to have a card document with prefilled
+`"Step N"` titles lying around, those titles render as-is
+alongside the badge (the duplication is the user's to clean up
+manually, not the editor's problem).
 
 ### Default numbering for new card documents
 
@@ -306,27 +298,22 @@ literal quotes).
 **Verified:** Story for the dialog showing the new control, manual
 test toggling on / off in a live document.
 
-### Phase 4 — Drop title pre-fill + migrate legacy titles
+### Phase 4 — Drop title pre-fill
 
 - `buildStepTitle` in [`create-card-document.ts`](../../packages/host-ui/src/gallery/create-card-document.ts)
   returns `""` unconditionally — generated documents have empty
   step titles, the badge carries the number.
-- The legacy `CardDocumentNumbering` type stays as a deprecated
-  alias for back-compat (maps to `meta.numbering` fields).
-- One-time auto-strip: when the user toggles
-  `numbering.steps = true` in the dialog AND the document has any
-  step block whose `title` matches `/^(Step|Image) \d+\s*/`, the
-  dialog opens a `showConfirmDialog`:
-  > Some step titles already start with "Step N" / "Image N".
-  > Strip these prefixes so the badge and title don't duplicate
-  > the number?
-  > [ Strip prefixes ] [ Keep titles as-is ]
-- Confirm → walk all step blocks, regex-strip the leading number,
-  push a single DocumentHistory snapshot (undoable).
+- The legacy `CardDocumentNumbering` type and the `numbering`
+  field on `CreateCardDocumentOptions` are removed entirely (no
+  back-compat shim — per user direction, no shipped users to
+  preserve).
+- Create Card Document dialog drops its `Numbering` dropdown
+  (its only consumer); the new "Step numbering" toggle in the
+  Doc Settings dialog (Phase 3) is now the single control.
 
-**Verified:** Unit test for the strip regex (handles `Step 1`,
-`Step 10`, `Image 99 `, leading whitespace, multi-byte titles
-without prefix).
+**Verified:** Unit tests updated; the now-removed
+`CardDocumentNumbering` references compile-error if any caller
+slipped through.
 
 ### Phase 5 — PPTX badge emit + docs
 
@@ -372,15 +359,16 @@ unaffected.
 
 - Schema delta is purely additive. `data-annot-doc-version` stays
   at 1.
-- Existing documents with prefilled `"Step N"` titles render
-  identically until the user opts into `numbering.steps`. On
-  opt-in, the strip-confirmation dialog gives explicit consent
-  before mutating titles. No silent rewriting.
-- The `CardDocumentNumbering` type stays exported for back-compat
-  (plugin authors may have called the generator API). Marked
-  `@deprecated`, removed in a future major version when plugins
-  catch up.
-- The `<annot-step-image-id>` attribute namespace
+- No migration of pre-existing card documents — per user
+  direction, this plan treats the install as having no shipped
+  card documents yet. If any happen to exist on disk with
+  prefilled `"Step N"` titles, they render as-is (the badge
+  plus the literal title text duplicate the number; the user
+  cleans up manually if they care).
+- The `CardDocumentNumbering` type and the `numbering` option
+  on `CreateCardDocumentOptions` are removed in Phase 4. No
+  deprecation window.
+- The `data-annot-step-image-id` attribute namespace
   (Phase 7 of [`_done/card-procedure-template.md`](./_done/card-procedure-template.md))
   is unaffected.
 
