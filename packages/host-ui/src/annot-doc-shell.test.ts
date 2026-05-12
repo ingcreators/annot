@@ -375,6 +375,32 @@ describe("annot-doc-shell: theme + style block", () => {
     expect(end).toBeGreaterThan(-1);
     expect(css.slice(idx, end)).toContain("display: block");
   });
+
+  it("hides the viewport toolbar by default and shows it on hover / focus (with touch fallback)", async () => {
+    // User-reported: the zoom toolbar at the top-left of each step
+    // card always covered the underlying screenshot. The fix
+    // hides it (opacity: 0, pointer-events: none) by default and
+    // brings it back on `.step:hover` / `.step:focus-within`. A
+    // `@media (hover: none)` override keeps it visible on touch
+    // devices that have no hover state — there's no other
+    // affordance to surface the buttons there.
+    const el = mount(makeMixedDoc());
+    await el.updateComplete;
+    const css = el.querySelector("style")?.textContent ?? "";
+    const start = css.indexOf(".annot-doc-step-viewport-controls {");
+    expect(start).toBeGreaterThan(-1);
+    const end = css.indexOf("}", start);
+    const baseRule = css.slice(start, end);
+    expect(baseRule).toContain("opacity: 0");
+    expect(baseRule).toContain("pointer-events: none");
+    // Hover / focus-within ramps back to opacity: 1.
+    expect(css).toContain('[data-annot-block="step"]:hover .annot-doc-step-viewport-controls,');
+    expect(css).toContain(
+      '[data-annot-block="step"]:focus-within .annot-doc-step-viewport-controls',
+    );
+    // Touch fallback — `(hover: none)` keeps it always visible.
+    expect(css).toContain("@media (hover: none)");
+  });
 });
 
 // ---------------------------------------------------------------------------

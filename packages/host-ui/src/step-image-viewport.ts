@@ -298,7 +298,16 @@ export function attachStepImageViewport(
 
   // ---- Wheel zoom -------------------------------------------------------
 
+  /** Wheel zoom is gated behind Ctrl / Cmd. Plain `wheel` events
+   *  fall through to the surrounding article so the user can
+   *  scroll the doc past the card without accidentally zooming
+   *  into the screenshot — the prior "any wheel zooms" behaviour
+   *  was reported as a usability problem when the user just
+   *  meant to scroll. Ctrl+wheel matches the browser / Google
+   *  Maps convention for "explicit zoom on the focused surface."
+   */
   function onWheel(e: WheelEvent): void {
+    if (!e.ctrlKey && !e.metaKey) return;
     e.preventDefault();
     const factor = e.deltaY > 0 ? wheelStep : 1 / wheelStep;
     zoomAroundClient(factor, e.clientX, e.clientY);

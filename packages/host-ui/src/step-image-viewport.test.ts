@@ -108,6 +108,40 @@ describe("attachStepImageViewport: dispose()", () => {
   });
 });
 
+// User-reported regression: a bare `wheel` event over the card
+// zoomed even when the user was just trying to scroll the doc.
+// The handler now gates zoom behind Ctrl / Meta (Google Maps /
+// browser-zoom convention) — plain wheel falls through to the
+// surrounding article so the page scrolls normally.
+describe("attachStepImageViewport: wheel modifier gate", () => {
+  it("ignores a wheel event without Ctrl / Meta and leaves the viewBox alone", () => {
+    const svg = makeSvg(800, 600);
+    const ctrl = attachStepImageViewport(svg);
+    const before = ctrl.current();
+    svg.dispatchEvent(new WheelEvent("wheel", { deltaY: 100, cancelable: true }));
+    expect(ctrl.current()).toEqual(before);
+  });
+
+  it("does not preventDefault on a modifier-free wheel (page scroll still propagates)", () => {
+    const svg = makeSvg(800, 600);
+    attachStepImageViewport(svg);
+    const ev = new WheelEvent("wheel", { deltaY: 100, cancelable: true });
+    svg.dispatchEvent(ev);
+    expect(ev.defaultPrevented).toBe(false);
+  });
+
+  // Note: the "Ctrl + wheel zooms" path can't be exercised under
+  // happy-dom because `svg.getBoundingClientRect()` returns 0×0
+  // (no layout engine), and `zoomAroundClient` early-returns on
+  // a zero-sized rect. The modifier gate itself is exercised by
+  // the two cases above — those confirm that without Ctrl / Meta
+  // the handler is a no-op (no preventDefault, no state change),
+  // which is the user-facing contract this fix introduces. The
+  // Ctrl-active branch is covered indirectly by the existing
+  // `targetAspect: preserves target aspect through zoomBy` test
+  // (zoomBy is `zoomAroundClient`'s direct sibling).
+});
+
 // Phase 7d-polish — pan clamping. The viewport can't pan
 // outside the intrinsic bitmap; when zoomed in, the rect's
 // origin is bounded to `[0, intrinsic - rect.size]`. When

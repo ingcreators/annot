@@ -294,15 +294,29 @@ annot-doc-shell {
   z-index: 2;
   display: flex;
   gap: 4px;
-  opacity: 0.6;
+  /* Hidden by default so the toolbar doesn't cover the underlying
+     screenshot at rest — user-reported visual obstruction. The
+     hover / focus-within rule below brings it back when the user
+     interacts with the card. pointer-events: none while hidden
+     so a stray cursor near the toolbar position can't trigger
+     a zoom while the buttons are invisible.
+     Touch devices (no hover state) keep the toolbar visible via
+     the (hover: none) override below — there's no other
+     affordance for triggering the buttons. */
+  opacity: 0;
+  pointer-events: none;
   transition: opacity 0.12s ease-in;
 }
 [data-annot-block="step"]:hover .annot-doc-step-viewport-controls,
 [data-annot-block="step"]:focus-within .annot-doc-step-viewport-controls {
   opacity: 1;
+  pointer-events: auto;
 }
 @media (hover: none) {
-  .annot-doc-step-viewport-controls { opacity: 1; }
+  .annot-doc-step-viewport-controls {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 .annot-doc-step-viewport-controls button {
   background: var(--annot-card-bg, #ffffff);
