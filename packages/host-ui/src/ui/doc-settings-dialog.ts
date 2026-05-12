@@ -281,7 +281,16 @@ export function showDocSettingsDialog(
 
     const fields = document.createElement("div");
     fields.className = "annot-doc-settings-fields";
-    fields.style.cssText = "display:flex;flex-direction:column;gap:8px;";
+    // The dialog has grown a lot since the Appearance picker +
+    // font family overrides + custom CSS expander landed —
+    // without an explicit cap on the fields container, the
+    // dialog can extend below the viewport on shorter screens
+    // and the OK / Cancel buttons end up unreachable. Cap at
+    // 60vh + scroll so the buttons (rendered by
+    // `<annot-dialog>` outside this `fields` div) always stay
+    // visible.
+    fields.style.cssText =
+      "display:flex;flex-direction:column;gap:8px;max-height:60vh;overflow-y:auto;padding-right:4px;";
 
     const titleLabel = makeLabel("Title");
     const titleInput = makeInput({
