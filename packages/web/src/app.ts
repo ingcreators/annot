@@ -835,9 +835,11 @@ export class App {
     const storage = this.#storage;
     const folderPath = this.#currentFolderPath;
     try {
-      const { createEmptyDocument, serializeDocument } = await import("@ingcreators/annot-doc");
+      const { createEmptyDocument, serializeStandaloneDocument } = await import(
+        "@ingcreators/annot-doc"
+      );
       const doc = createEmptyDocument({ title: "Untitled" });
-      const bytes = serializeDocument(doc);
+      const bytes = serializeStandaloneDocument(doc);
       const now = new Date().toISOString();
       const path = await storage.saveDocument({
         folderPath,
@@ -932,10 +934,10 @@ export class App {
         layout: result.layout,
         columns: result.columns,
       });
-      const { serializeDocument, extractDocumentThumbnailDataUrl } = await import(
+      const { serializeStandaloneDocument, extractDocumentThumbnailDataUrl } = await import(
         "@ingcreators/annot-doc"
       );
-      const bytes = serializeDocument(annotDoc);
+      const bytes = serializeStandaloneDocument(annotDoc);
       const now = new Date().toISOString();
       const path = await storage.saveDocument({
         folderPath,
@@ -1006,7 +1008,7 @@ export class App {
         isTemplateFromHead,
         parseDocument,
         cloneTemplate,
-        serializeDocument,
+        serializeStandaloneDocument,
       },
       { showTemplatePickerDialog },
       _picker,
@@ -1109,7 +1111,7 @@ export class App {
       const { extractDocumentThumbnailDataUrl } = await import("@ingcreators/annot-doc");
       const doc = parseDocument(sourceBytes);
       const cloned = cloneTemplate(doc);
-      const bytes = serializeDocument(cloned);
+      const bytes = serializeStandaloneDocument(cloned);
       const now = new Date().toISOString();
       // Filename for the cloned doc: use the template's title.
       // Backend uniquifies on collision (`Foo (2).annot.html`).
@@ -1459,10 +1461,10 @@ export class App {
       saveStatus.status = "saving";
       pendingSave = (async () => {
         try {
-          const { extractDocumentThumbnailDataUrl, serializeDocument } = await import(
+          const { extractDocumentThumbnailDataUrl, serializeStandaloneDocument } = await import(
             "@ingcreators/annot-doc"
           );
-          const bytes = serializeDocument(current);
+          const bytes = serializeStandaloneDocument(current);
           const imageCount = current.blocks.filter((b) => b.kind === "image").length;
           await storage.updateDocument(record.path, {
             bytes,
@@ -1670,7 +1672,7 @@ export class App {
     });
     if (!input) return;
     try {
-      const { serializeDocument } = await import("@ingcreators/annot-doc");
+      const { serializeStandaloneDocument } = await import("@ingcreators/annot-doc");
       // Build a stamped clone of the live document. The clone is
       // structurally identical to `current` except `meta.template`
       // is set + the `<title>` / sidecar `title` get reset to the
@@ -1688,7 +1690,7 @@ export class App {
         },
       };
       const { extractDocumentThumbnailDataUrl } = await import("@ingcreators/annot-doc");
-      const bytes = serializeDocument(stamped);
+      const bytes = serializeStandaloneDocument(stamped);
       const imageCount = stamped.blocks.filter((b) => b.kind === "image").length;
       const now = new Date().toISOString();
       await storage.saveDocument(
@@ -1762,8 +1764,8 @@ export class App {
     current: import("@ingcreators/annot-doc").AnnotDocument,
   ): Promise<void> {
     try {
-      const { serializeDocument } = await import("@ingcreators/annot-doc");
-      const bytes = serializeDocument(current);
+      const { serializeStandaloneDocument } = await import("@ingcreators/annot-doc");
+      const bytes = serializeStandaloneDocument(current);
       if (typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
         try {
           const item = new ClipboardItem({

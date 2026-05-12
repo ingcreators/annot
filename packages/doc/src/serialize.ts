@@ -10,6 +10,7 @@
  * `<script type="application/annot+json">`, and `<svg>` content).
  */
 
+import { injectDocumentStyles } from "./inject-styles.js";
 import type {
   AnnotDocument,
   Block,
@@ -23,6 +24,29 @@ import type {
 
 const INDENT = "  ";
 const LF = "\n";
+
+/** Save-time wrapper around `serializeDocument` that guarantees
+ *  the emitted bytes carry a `<style>` block matching the
+ *  current `meta` (theme, maxWidth, cardLayout, appearance,
+ *  numbering, …). The doc-shell mounts CSS dynamically via
+ *  `buildStyleBlock(doc)` at render time without writing to
+ *  `doc.styleBlock`, so the in-memory document a host receives
+ *  via `doc-changed` typically has `styleBlock: null` (new
+ *  docs) or a stale CSS string (docs whose meta changed since
+ *  last load). Calling raw `serializeDocument` on such a doc
+ *  produces an `.annot.html` file that, opened directly in a
+ *  browser, renders as unstyled HTML.
+ *
+ *  `serializeStandaloneDocument(doc) === serializeDocument(
+ *    injectDocumentStyles(doc))` — the inject step is
+ *  idempotent, so calling this on an already-styled doc just
+ *  refreshes the bytes against the latest meta. Save sites
+ *  should always reach for this; the raw `serializeDocument`
+ *  stays available for the round-trip byte-equivalence tests
+ *  that intentionally exercise byte-perfect parse → serialize. */
+export function serializeStandaloneDocument(doc: AnnotDocument): string {
+  return serializeDocument(injectDocumentStyles(doc));
+}
 
 export function serializeDocument(doc: AnnotDocument): string {
   const out: string[] = [];

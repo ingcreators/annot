@@ -51,7 +51,11 @@ import {
   createEditableImage,
   readEditableImage,
 } from "@ingcreators/annot-core/xmp";
-import { type AnnotDocument, parseDocument, serializeDocument } from "@ingcreators/annot-doc";
+import {
+  type AnnotDocument,
+  parseDocument,
+  serializeStandaloneDocument,
+} from "@ingcreators/annot-doc";
 import { exportSVGString, getPngDataUrl } from "@ingcreators/annot-editor";
 import { buildPptxFiles } from "@ingcreators/annot-editor/pptx-export";
 import { EditorShell } from "@ingcreators/annot-host-ui";
@@ -876,7 +880,7 @@ async function runSave(id: number): Promise<void> {
  *  since the last open. */
 async function encodeBytesForDocSave(): Promise<Uint8Array> {
   if (!activeDocument) throw new Error("encodeBytesForDocSave: no document loaded");
-  return new TextEncoder().encode(serializeDocument(activeDocument));
+  return new TextEncoder().encode(serializeStandaloneDocument(activeDocument));
 }
 
 /**
