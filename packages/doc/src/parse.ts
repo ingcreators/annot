@@ -533,6 +533,15 @@ function parseNumberingMeta(v: unknown): NumberingMeta | undefined {
     (out as { figureLabel?: string }).figureLabel = o.figureLabel;
     hasField = true;
   }
+  // Phase 1 of `docs/plans/card-step-auto-numbering.md`.
+  if (typeof o.steps === "boolean") {
+    (out as { steps?: boolean }).steps = o.steps;
+    hasField = true;
+  }
+  if (typeof o.stepLabel === "string") {
+    (out as { stepLabel?: string }).stepLabel = o.stepLabel;
+    hasField = true;
+  }
   return hasField ? out : undefined;
 }
 

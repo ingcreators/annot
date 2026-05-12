@@ -283,6 +283,74 @@ describe("injectDocumentStyles: numbering meta (Phase 13)", () => {
     });
   });
 
+  // Phase 1 of `docs/plans/card-step-auto-numbering.md` — the
+  // `steps` + `stepLabel` data-layer additions. Phase 1
+  // deliberately stops short of emitting any CSS for the new
+  // fields (Phase 2 lights up the counter + badge); these tests
+  // exercise round-trip preservation only.
+  it("preserves numbering.steps through parse → serialize round-trip", () => {
+    const original = createEmptyDocument({
+      title: "Round-trip stepped",
+      meta: { numbering: { steps: true } },
+    });
+    const onceBytes = serializeDocument(original);
+    const reparsed = parseDocument(onceBytes);
+    const twiceBytes = serializeDocument(reparsed);
+    expect(twiceBytes).toBe(onceBytes);
+    expect(reparsed.meta.numbering).toEqual({ steps: true });
+  });
+
+  it("preserves numbering.stepLabel through parse → serialize round-trip", () => {
+    const original = createEmptyDocument({
+      title: "Round-trip step label",
+      meta: { numbering: { steps: true, stepLabel: "Step %n" } },
+    });
+    const onceBytes = serializeDocument(original);
+    const reparsed = parseDocument(onceBytes);
+    const twiceBytes = serializeDocument(reparsed);
+    expect(twiceBytes).toBe(onceBytes);
+    expect(reparsed.meta.numbering).toEqual({
+      steps: true,
+      stepLabel: "Step %n",
+    });
+  });
+
+  it("parses numbering with steps alongside headings + figures", () => {
+    const original = createEmptyDocument({
+      title: "All three",
+      meta: {
+        numbering: {
+          headings: true,
+          figures: true,
+          figureLabel: "図 ",
+          steps: true,
+          stepLabel: "%n",
+        },
+      },
+    });
+    const reparsed = parseDocument(serializeDocument(original));
+    expect(reparsed.meta.numbering).toEqual({
+      headings: true,
+      figures: true,
+      figureLabel: "図 ",
+      steps: true,
+      stepLabel: "%n",
+    });
+  });
+
+  it("Phase 1 emits no step-counter CSS yet (Phase 2 lights it up)", () => {
+    // Defensive guard: Phase 1 is data-layer only. If a future
+    // edit accidentally emits CSS for `numbering.steps` without
+    // updating Phase 2's plan section, this test fails first.
+    const css = buildStyleBlock(
+      createEmptyDocument({
+        title: "Phase 1 no CSS",
+        meta: { numbering: { steps: true, stepLabel: "Step %n" } },
+      }),
+    );
+    expect(css).not.toContain("annot-step");
+  });
+
   it("dropping `numbering: {}` from a parsed sidecar treats it as absent", () => {
     // Defensive: a hand-edited sidecar that explicitly sets
     // `"numbering": {}` should round-trip as if the field were
