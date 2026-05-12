@@ -470,6 +470,23 @@ describe("injectDocumentStyles: numbering meta (Phase 13)", () => {
     expect(css).toContain("padding-left: calc(var(--annot-step-badge-min-size) + 2.8rem + 1rem);");
   });
 
+  it("emits title clearance for image-less step blocks regardless of layout", () => {
+    // User-reported: an image-less step block (`svg: ""`)
+    // collapses to a text-only column regardless of
+    // `data-step-layout`, so the title always sits at the
+    // top-left of the card. Without an explicit clearance
+    // rule for `[data-step-image-less]`, picking `image-fill`
+    // / `image-top` / `image-left` on an image-less card left
+    // the badge overlapping the title.
+    const css = buildStyleBlock(
+      createEmptyDocument({
+        title: "Image-less clearance",
+        meta: { numbering: { steps: true } },
+      }),
+    );
+    expect(css).toContain("[data-step-image-less] > [data-step-title]");
+  });
+
   it("shorter literals get proportionally smaller clearance ('#%n' has 1 char)", () => {
     const css = buildStyleBlock(
       createEmptyDocument({
