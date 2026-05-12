@@ -320,7 +320,9 @@ npm run dev</code></pre>
   participate in card-block layout, not document-level headings:
   - They do NOT appear in the standalone-view TOC nav.
   - They do NOT participate in the heading auto-numbering counter
-    (`meta.numbering.headings`).
+    (`meta.numbering.headings`). Step blocks have their own
+    independent counter via `meta.numbering.steps` — a Scribe-
+    style numbered badge rendered on `[data-annot-block="step"]::before`.
   - They do NOT receive a positional `id="annot-h-N"` from the
     serializer.
   - Editors render them with a card-shaped chrome distinct from
@@ -578,6 +580,10 @@ interface NumberingMeta {
   headings?: boolean;       // h1/h2/h3 get hierarchical numbering (1., 1.1, 1.1.1)
   figures?: boolean;        // image-block figcaptions get "Figure N: " prefix
   figureLabel?: string;     // override "Figure " (e.g. "図 ", "Abbildung ")
+  steps?: boolean;          // step-block cards get a Scribe-style numbered badge
+                            // (CSS counter on `[data-annot-block="step"]::before`)
+  stepLabel?: string;       // badge content template; `%n` is the counter
+                            // (default `"%n"`; common: `"Step %n"`, `"%n."`, `"#%n"`)
 }
 ```
 
