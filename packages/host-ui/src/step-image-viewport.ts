@@ -139,21 +139,30 @@ export function attachStepImageViewport(
   const intrinsic = readIntrinsicSize(svg);
   const intrinsicVb = parseViewBox(svg) ?? { x: 0, y: 0, w: intrinsic.w, h: intrinsic.h };
   const minSize = options.minSize ?? 32;
-  // Default cap: the larger of the two intrinsic dimensions —
-  // generous enough that the user can always zoom out to the
-  // full image but not infinitely further.
-  const maxSize =
-    options.maxSize ?? (Math.max(intrinsic.w, intrinsic.h) || Number.POSITIVE_INFINITY);
+  const targetAspect = options.targetAspect ?? null;
+  // Default cap: when a `targetAspect` is set, the user-visible
+  // "fit everything" viewport is the smallest rect of that
+  // aspect that CONTAINS the bitmap (see
+  // `defaultRectForAspect`). For a portrait 720×1280 bitmap at
+  // 16:9, that's 2275×1280 — wider than either intrinsic
+  // dimension. Cap `maxSize` at the larger axis of that
+  // contain rect so the user can always zoom out to the full
+  // image, regardless of aspect mismatch.
+  const containSize =
+    targetAspect !== null
+      ? Math.max(intrinsic.w, intrinsic.h, intrinsic.h * targetAspect, intrinsic.w / targetAspect)
+      : Math.max(intrinsic.w, intrinsic.h);
+  const maxSize = options.maxSize ?? (containSize || Number.POSITIVE_INFINITY);
   const wheelStep = options.wheelStep ?? 1.1;
   const dragThreshold = options.dragThresholdPx ?? 4;
-  const targetAspect = options.targetAspect ?? null;
 
   // Phase 7d-polish 2: when a `targetAspect` is set, the initial
   // rect is snapped to it. If no initial was supplied, derive
-  // the largest target-aspect rect that fits inside the
-  // intrinsic bitmap, anchored at the top-left (so every step
-  // sharing the same source image gets an identical default
-  // view).
+  // the smallest target-aspect rect that CONTAINS the intrinsic
+  // bitmap, centred over the bitmap (so every step sharing the
+  // same source image gets an identical default view that shows
+  // the entire image — letterboxed for non-target-aspect
+  // sources).
   const rawInitial =
     options.initial ??
     (targetAspect !== null ? defaultRectForAspect(intrinsicVb, targetAspect) : intrinsicVb);
@@ -162,19 +171,49 @@ export function attachStepImageViewport(
   let state: StepImageViewportRect = clampPan(clampSize({ ...initial }));
   apply(state);
 
-  /** Phase 7d-polish 2 — compute the largest rect of the given
-   *  aspect that fits inside the supplied bitmap, anchored at
-   *  the bitmap's top-left. */
+  /** Phase 7d-polish 2 — compute the smallest rect of the given
+   *  aspect that CONTAINS the supplied bitmap, centred over the
+   *  bitmap. This is the "fit everything into the frame"
+   *  default: for a portrait source on a 16:9 frame, the
+   *  returned rect extends horizontally beyond the bitmap (the
+   *  out-of-bitmap area renders as the SVG background, which
+   *  the slot's `overflow: hidden` clips to the card chrome).
+   *
+   *  Earlier revisions used "cover" semantics (largest rect
+   *  fitting INSIDE the bitmap, anchored at the top-left) so
+   *  every step showed an identical top-left crop of a near-
+   *  16:9 screenshot. That left portrait sources permanently
+   *  cropped to their top band with no way to zoom out far
+   *  enough to see the whole image — `maxSize` was capped at
+   *  the larger intrinsic dimension. "Contain" semantics restore
+   *  full-image visibility by default while still pinning a
+   *  consistent starting view across cards. */
   function defaultRectForAspect(
     bitmap: StepImageViewportRect,
     aspect: number,
   ): StepImageViewportRect {
-    // Pick the dimension that's the binding constraint.
-    const widthFromHeight = bitmap.h * aspect;
-    const heightFromWidth = bitmap.w / aspect;
-    const w = Math.min(bitmap.w, widthFromHeight);
-    const h = w === bitmap.w ? heightFromWidth : bitmap.h;
-    return { x: bitmap.x, y: bitmap.y, w, h };
+    // Pick the binding axis: if the bitmap is already wider than
+    // the target aspect demands for its height, wrap by width and
+    // expand height; otherwise wrap by height and expand width.
+    let w: number;
+    let h: number;
+    if (bitmap.w >= bitmap.h * aspect) {
+      // Bitmap is wider-than-target — expand height to wrap.
+      w = bitmap.w;
+      h = bitmap.w / aspect;
+    } else {
+      // Bitmap is taller-than-target — expand width to wrap.
+      h = bitmap.h;
+      w = bitmap.h * aspect;
+    }
+    // Centre the contain rect on the bitmap so letterbox is
+    // symmetric on whichever axis got expanded.
+    return {
+      x: bitmap.x + (bitmap.w - w) / 2,
+      y: bitmap.y + (bitmap.h - h) / 2,
+      w,
+      h,
+    };
   }
 
   /** Phase 7d-polish 2 — adjust the rect to match a target
