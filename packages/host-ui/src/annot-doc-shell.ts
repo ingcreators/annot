@@ -1741,6 +1741,21 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
     const dirty = this.#syncDomIntoDocument();
     if (dirty && this.#history && this.document) {
       this.#history.push(this.document);
+      // Mirror the debounced `#onArticleInput` path: notify the
+      // host so autosave persists the synced model. Without this
+      // dispatch, programmatic mutations driven through
+      // `commit()` (inline-link `createLink`, format-toolbar
+      // B / I / U, image-modal apply, blur after a typing burst
+      // that hadn't ticked yet) update the in-memory document
+      // but never reach the storage layer — reopening the file
+      // shows the pre-mutation state.
+      this.dispatchEvent(
+        new CustomEvent<DocChangedDetail>("doc-changed", {
+          bubbles: true,
+          composed: true,
+          detail: { document: this.document, reason: "commit" },
+        }),
+      );
     }
   }
 
