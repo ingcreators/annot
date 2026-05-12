@@ -1825,6 +1825,7 @@ export class App {
       defaultAppearanceFontFamilySans: current.meta.appearance?.fontFamily?.sans,
       defaultAppearanceFontFamilySerif: current.meta.appearance?.fontFamily?.serif,
       defaultAppearanceFontFamilyMono: current.meta.appearance?.fontFamily?.mono,
+      defaultAppearanceCustomCss: current.meta.appearance?.customCss,
     });
     if (!result) return;
 
@@ -1905,6 +1906,7 @@ export class App {
     const {
       template: _staleTemplate,
       fontFamily: _staleFontFamily,
+      customCss: _staleCustomCss,
       ...appearanceWithoutDerived
     } = existingAppearance;
     // Phase 4 — collect the three text inputs into a
@@ -1927,6 +1929,9 @@ export class App {
       ...appearanceWithoutDerived,
       ...(result.appearanceTemplate !== undefined ? { template: result.appearanceTemplate } : {}),
       ...fontFamilyMaybe,
+      ...(result.appearanceCustomCss !== undefined
+        ? { customCss: result.appearanceCustomCss }
+        : {}),
     };
     const appearanceMaybe =
       Object.keys(appearanceNext).length > 0 ? { appearance: appearanceNext } : {};
@@ -1968,6 +1973,15 @@ export class App {
     shell.document = updated;
     header.setTitleText(result.title);
     scheduleSave(updated);
+    // Phase 5 of card-document-themes.md — surface any
+    // sanitisation warnings the dialog collected on save. We
+    // route through `showSaveError` (the same toast surface
+    // used for other dialog feedback) — these are informational,
+    // not failures, but the existing error-bar component is the
+    // only top-level notification surface the PWA shell has.
+    if (result.customCssWarnings && result.customCssWarnings.length > 0) {
+      showSaveError(`Custom CSS sanitised: ${result.customCssWarnings.join(" ")}`);
+    }
   }
 
   /**

@@ -98,6 +98,18 @@ export interface DocSettingsInput {
   readonly appearanceFontFamilySans?: string;
   readonly appearanceFontFamilySerif?: string;
   readonly appearanceFontFamilyMono?: string;
+  /** Phase 5 of `docs/plans/card-document-themes.md` — driver
+   *  for `meta.appearance.customCss`. The string is the user's
+   *  raw input; the caller is expected to run it through
+   *  `sanitiseCustomCss` from `@ingcreators/annot-doc/headless`
+   *  before writing it to `meta.appearance.customCss`. The
+   *  dialog itself also runs the sanitiser at save time and
+   *  surfaces a warning when stripping is applied (the
+   *  `customCssWarnings` field carries those warnings back to
+   *  the caller so the host can decide where to surface them —
+   *  toast, status bar, etc.). */
+  readonly appearanceCustomCss?: string;
+  readonly customCssWarnings?: readonly string[];
 }
 
 export interface ShowDocSettingsDialogOptions {
@@ -130,6 +142,10 @@ export interface ShowDocSettingsDialogOptions {
   readonly defaultAppearanceFontFamilySans?: string;
   readonly defaultAppearanceFontFamilySerif?: string;
   readonly defaultAppearanceFontFamilyMono?: string;
+  /** Phase 5 of `docs/plans/card-document-themes.md` — current
+   *  `meta.appearance.customCss`. Absent / empty → the
+   *  "Advanced: Custom CSS" textarea starts empty. */
+  readonly defaultAppearanceCustomCss?: string;
 }
 
 /** Phase 3 of `docs/plans/card-document-themes.md` — built-in
@@ -371,6 +387,30 @@ export function showDocSettingsDialog(
     });
     const fontFamilyMonoLabel = makeSubLabel("Mono (code)");
 
+    // Phase 5 of card-document-themes.md — Advanced: Custom CSS
+    // expander. Renders as a `<details>` so the textarea takes
+    // zero vertical space until the user opens it. The dialog
+    // re-runs the sanitiser at save time and forwards warnings
+    // through `result.customCssWarnings` for the host to surface.
+    const customCssDetails = document.createElement("details");
+    customCssDetails.style.cssText = "margin-top:4px;";
+    const customCssSummary = document.createElement("summary");
+    customCssSummary.textContent = "Advanced: Custom CSS";
+    customCssSummary.style.cssText =
+      "font-size:12px;cursor:pointer;color:var(--annot-text-secondary,#9ca3af);";
+    const customCssTextarea = makeTextarea({
+      value: opts.defaultAppearanceCustomCss ?? "",
+      ariaLabel: "Custom CSS appended after the theme",
+      placeholder:
+        "/* Free-form CSS appended after the theme.\n   @import + external url() refs get stripped on save. */",
+      rows: 6,
+    });
+    customCssTextarea.style.cssText += "font-family:monospace;font-size:12px;white-space:pre;";
+    customCssDetails.append(customCssSummary, customCssTextarea);
+    if (opts.defaultAppearanceCustomCss && opts.defaultAppearanceCustomCss.length > 0) {
+      customCssDetails.open = true;
+    }
+
     const themeLabel = makeLabel("Theme (legacy — Appearance overrides)");
     const themeSelect = makeSelect({
       value: opts.defaultTheme ?? "auto",
@@ -493,6 +533,7 @@ export function showDocSettingsDialog(
       fontFamilySerifInput,
       fontFamilyMonoLabel,
       fontFamilyMonoInput,
+      customCssDetails,
       themeLabel,
       themeSelect,
       widthLabel,
@@ -520,7 +561,7 @@ export function showDocSettingsDialog(
       close();
       resolve(null);
     });
-    dlg.addEventListener("dialog-ok", () => {
+    dlg.addEventListener("dialog-ok", async () => {
       const title = titleInput.value.trim() || "Untitled";
       const langPick = langSelect.value;
       const lang =
@@ -577,6 +618,26 @@ export function showDocSettingsDialog(
       const appearanceFontFamilySans = fontFamilySansInput.value.trim() || undefined;
       const appearanceFontFamilySerif = fontFamilySerifInput.value.trim() || undefined;
       const appearanceFontFamilyMono = fontFamilyMonoInput.value.trim() || undefined;
+      // Phase 5 of card-document-themes.md — sanitise the custom
+      // CSS at save time and forward any warnings to the host.
+      // Dynamic import keeps the host-ui chunk free of a
+      // load-time dep on @ingcreators/annot-doc (the dialog is
+      // bundled with the editor surface; the doc package may
+      // not be in the chunk graph for hosts that don't use
+      // documents).
+      const customCssRaw = customCssTextarea.value;
+      let appearanceCustomCss: string | undefined;
+      let customCssWarnings: readonly string[] | undefined;
+      if (customCssRaw.length > 0) {
+        const { sanitiseCustomCss } = await import("@ingcreators/annot-doc");
+        const sanitisedResult = sanitiseCustomCss(customCssRaw);
+        if (sanitisedResult.css.length > 0) {
+          appearanceCustomCss = sanitisedResult.css;
+        }
+        if (sanitisedResult.warnings.length > 0) {
+          customCssWarnings = sanitisedResult.warnings;
+        }
+      }
       close();
       const out: DocSettingsInput = {
         title,
@@ -594,6 +655,8 @@ export function showDocSettingsDialog(
         ...(appearanceFontFamilySans !== undefined ? { appearanceFontFamilySans } : {}),
         ...(appearanceFontFamilySerif !== undefined ? { appearanceFontFamilySerif } : {}),
         ...(appearanceFontFamilyMono !== undefined ? { appearanceFontFamilyMono } : {}),
+        ...(appearanceCustomCss !== undefined ? { appearanceCustomCss } : {}),
+        ...(customCssWarnings !== undefined ? { customCssWarnings } : {}),
       };
       resolve(out);
     });
