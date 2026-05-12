@@ -56,6 +56,14 @@ const LIGHT_VARS: ReadonlyArray<readonly [string, string]> = [
   ["--annot-card-bg", "#ffffff"],
   ["--annot-card-border", "1px solid #e5e7eb"],
   ["--annot-card-shadow", "0 1px 2px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.08)"],
+  // Step badge — Phase 2 of docs/plans/card-step-auto-numbering.md.
+  // Only consumed when `meta.numbering.steps === true` (the
+  // `::before` rule is opt-in). Emitting the vars
+  // unconditionally lets future themes / user CSS override them
+  // even before they're active.
+  ["--annot-step-badge-bg", "var(--annot-doc-accent)"],
+  ["--annot-step-badge-fg", "#ffffff"],
+  ["--annot-step-badge-shadow", "0 4px 12px rgba(37, 99, 235, 0.25)"],
 ];
 
 /** Dark-mode CSS custom property values (same key set as `LIGHT_VARS`). */
@@ -75,6 +83,12 @@ const DARK_VARS: ReadonlyArray<readonly [string, string]> = [
   ["--annot-card-bg", "#1f2937"],
   ["--annot-card-border", "1px solid #374151"],
   ["--annot-card-shadow", "0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.4)"],
+  // Step badge — dark-mode pair. Accent colour is brighter in
+  // dark mode (`#60a5fa` per the existing `--annot-doc-accent`),
+  // so the shadow tracks accordingly.
+  ["--annot-step-badge-bg", "var(--annot-doc-accent)"],
+  ["--annot-step-badge-fg", "#0b1220"],
+  ["--annot-step-badge-shadow", "0 4px 12px rgba(96, 165, 250, 0.30)"],
 ];
 
 /** Non-themed card sizing variables, emitted alongside
@@ -87,6 +101,16 @@ const CARD_SIZING_VARS: ReadonlyArray<readonly [string, string]> = [
   ["--annot-card-radius", "8px"],
   ["--annot-card-padding", "1rem"],
   ["--annot-card-gap", "1.5rem"],
+  // Step badge geometry — Phase 2 of
+  // docs/plans/card-step-auto-numbering.md. Always emitted so
+  // user-CSS overrides have a stable name to target even before
+  // step numbering is opted in. `9999px` is the "always pill"
+  // value — single-digit content renders as a circle (square
+  // box rounded fully), longer content stretches to a pill.
+  ["--annot-step-badge-min-size", "2rem"],
+  ["--annot-step-badge-padding", "0 0.5rem"],
+  ["--annot-step-badge-radius", "9999px"],
+  ["--annot-step-badge-font-size", "0.95rem"],
 ];
 
 /** Returns a new document with `styleBlock` set to canonical CSS.
@@ -938,8 +962,8 @@ function darkModeRules(): string {
 
 /**
  * Phase 13 — auto-numbering rules. Returns the empty string
- * when neither `headings` nor `figures` is enabled (so the
- * style block doesn't grow when numbering is opt-out).
+ * when no `numbering` field is enabled (so the style block
+ * doesn't grow when numbering is opt-out).
  *
  * Heading numbering uses three nested CSS counters (`annot-h1
  * / annot-h2 / annot-h3`) reset on the article element. Each
@@ -955,24 +979,39 @@ function darkModeRules(): string {
  * so the next figure's number stays right). The label
  * defaults to `"Figure "` and falls back to the user-supplied
  * `figureLabel` when set.
+ *
+ * Step numbering (Phase 2 of
+ * `docs/plans/card-step-auto-numbering.md`) uses a single
+ * counter (`annot-step`) incremented on every step block. The
+ * value renders on a `::before` pseudo-element styled as a
+ * Scribe-style numbered badge anchored to the card's top-left
+ * corner. The `stepLabel` field parameterises the rendered
+ * content via a `%n` placeholder; absent → `"%n"` (numeral
+ * only). The badge sits **inside** the card's `overflow:
+ * hidden` clip — this avoids the DOM restructure the plan
+ * originally floated. Visual contrast comes from the badge's
+ * accent-colour fill + shadow, not from bleeding past the
+ * card boundary.
  */
 function numberingRules(numbering: NumberingMeta | undefined): string {
   if (!numbering) return "";
   const headings = numbering.headings === true;
   const figures = numbering.figures === true;
-  if (!headings && !figures) return "";
+  const steps = numbering.steps === true;
+  if (!headings && !figures && !steps) return "";
 
   const lines: string[] = [];
 
   // Combined `counter-reset` on the article so a single
   // declaration covers whichever counters are active. Browsers
   // ignore unknown counter names in `counter()` lookups, so
-  // emitting both "annot-h1 annot-h2 annot-h3" and "annot-figure"
-  // when only one feature is on is harmless — but we trim it
-  // for readability.
+  // emitting all of "annot-h1 annot-h2 annot-h3", "annot-figure",
+  // and "annot-step" when only one feature is on is harmless —
+  // but we trim it for readability.
   const resetCounters: string[] = [];
   if (headings) resetCounters.push("annot-h1", "annot-h2", "annot-h3");
   if (figures) resetCounters.push("annot-figure");
+  if (steps) resetCounters.push("annot-step");
   lines.push("article[data-annot-doc] {");
   lines.push(`  counter-reset: ${resetCounters.join(" ")};`);
   lines.push("}");
@@ -1015,5 +1054,91 @@ function numberingRules(numbering: NumberingMeta | undefined): string {
     );
   }
 
+  if (steps) {
+    const sansStack = cssStackFor("Annot Sans");
+    const labelCss = stepLabelToCssContent(numbering.stepLabel ?? "%n");
+    lines.push(
+      // Step block carries the increment (not the `::before`)
+      // so the count ticks even on layouts where a future
+      // override might hide the visual badge.
+      'article[data-annot-doc] [data-annot-block="step"] {',
+      "  counter-increment: annot-step;",
+      "}",
+      // Default badge — anchored to the card's top-left corner.
+      // `position: absolute` works because the section already
+      // carries `position: relative` for the existing in-block
+      // controls. `z-index: 2` lifts the badge above the
+      // image-fill overlay (z-index: 1 in the existing rules).
+      'article[data-annot-doc] [data-annot-block="step"]::before {',
+      `  content: ${labelCss};`,
+      "  position: absolute;",
+      "  top: 0.75rem;",
+      "  left: 0.75rem;",
+      "  min-width: var(--annot-step-badge-min-size);",
+      "  height: var(--annot-step-badge-min-size);",
+      "  padding: var(--annot-step-badge-padding);",
+      "  box-sizing: border-box;",
+      "  display: inline-flex;",
+      "  align-items: center;",
+      "  justify-content: center;",
+      "  background: var(--annot-step-badge-bg);",
+      "  color: var(--annot-step-badge-fg);",
+      "  border-radius: var(--annot-step-badge-radius);",
+      `  font-family: ${sansStack};`,
+      "  font-weight: 700;",
+      "  font-size: var(--annot-step-badge-font-size);",
+      "  line-height: 1;",
+      "  letter-spacing: 0.01em;",
+      "  box-shadow: var(--annot-step-badge-shadow);",
+      "  z-index: 2;",
+      "  pointer-events: none;",
+      "}",
+      // image-fill — the badge sits on top of the screenshot.
+      // Swap to a translucent-dark backdrop with blur so the
+      // numeral stays legible regardless of underlying image
+      // content. Override colour/shadow but keep geometry +
+      // typography from the default rule above.
+      'article[data-annot-doc] [data-annot-block="step"][data-step-layout="image-fill"]::before {',
+      "  background: rgba(0, 0, 0, 0.55);",
+      "  color: #ffffff;",
+      "  backdrop-filter: blur(8px) saturate(150%);",
+      "  -webkit-backdrop-filter: blur(8px) saturate(150%);",
+      "  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);",
+      "}",
+    );
+  }
+
   return lines.join("\n");
+}
+
+/**
+ * Parse a `stepLabel` template into a CSS `content` value.
+ * `%n` is the only special token; everything else is literal
+ * text. Returns a space-separated list of `"literal"` strings
+ * and `counter(annot-step)` calls.
+ *
+ * Examples:
+ *   `"%n"`        → `counter(annot-step)`
+ *   `"Step %n"`   → `"Step " counter(annot-step)`
+ *   `"%n."`       → `counter(annot-step) "."`
+ *   `"%n /"`      → `counter(annot-step) " /"`
+ *
+ * Empty literal segments are omitted so the output stays
+ * compact. A template with no `%n` is treated as a pure
+ * literal — the counter still increments on the step block,
+ * but the badge displays the static text. (Hopeless authoring,
+ * but spec'd for completeness.)
+ */
+function stepLabelToCssContent(template: string): string {
+  const parts = template.split("%n");
+  if (parts.length === 1) {
+    // No `%n` — pure literal.
+    return JSON.stringify(template);
+  }
+  const pieces: string[] = [];
+  parts.forEach((segment, i) => {
+    if (segment.length > 0) pieces.push(JSON.stringify(segment));
+    if (i < parts.length - 1) pieces.push("counter(annot-step)");
+  });
+  return pieces.join(" ");
 }

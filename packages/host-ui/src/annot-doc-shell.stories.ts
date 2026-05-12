@@ -349,6 +349,193 @@ export const CardGridAuto: Story = {
 };
 
 // ---------------------------------------------------------------------------
+// Phase 2 of docs/plans/card-step-auto-numbering.md — Scribe-style
+// numbered badge on `[data-annot-block="step"]::before` driven by a
+// CSS counter. Reordering steps via the editor's drag-handle (not
+// exercised in these static stories) updates the numbers
+// automatically because the counter walks the document tree in
+// natural order.
+// ---------------------------------------------------------------------------
+
+function makeNumberedStepLayoutDoc(
+  layout: StepLayout,
+  theme: AnnotDocument["meta"]["theme"] = "auto",
+  stepLabel?: string,
+): AnnotDocument {
+  const numbering = stepLabel ? { steps: true as const, stepLabel } : { steps: true as const };
+  return {
+    version: 1,
+    lang: "en",
+    title: `Numbered step: ${layout}`,
+    meta: { title: `Numbered step: ${layout}`, theme, numbering },
+    styleBlock: null,
+    blocks: [
+      { kind: "heading", level: 1, inlineHtml: `Numbered step: <code>${layout}</code>` },
+      {
+        kind: "paragraph",
+        inlineHtml:
+          "Each card carries an auto-incrementing badge on its top-left corner. Reordering would update the number automatically.",
+      },
+      {
+        kind: "step",
+        id: "img-step-num-1",
+        svg: STEP_PLACEHOLDER_SVG,
+        title: "Open the settings dialog",
+        body: "Click the gear icon in the top-right corner.",
+        layout,
+      },
+      {
+        kind: "step",
+        id: "img-step-num-2",
+        svg: STEP_PLACEHOLDER_SVG,
+        title: "Pick the option",
+        body: "Choose the option that matches your workflow and press Save.",
+        layout,
+      },
+      {
+        kind: "step",
+        id: "img-step-num-3",
+        svg: STEP_PLACEHOLDER_SVG,
+        title: "Confirm and apply",
+        body: "Review the diff in the preview pane, then press Apply.",
+        layout,
+      },
+    ],
+  };
+}
+
+function makeNumberedCardGridDoc(
+  columns: 1 | 2 | 3 | "auto",
+  theme: AnnotDocument["meta"]["theme"] = "auto",
+  stepLabel?: string,
+): AnnotDocument {
+  const numbering = stepLabel ? { steps: true as const, stepLabel } : { steps: true as const };
+  return {
+    version: 1,
+    lang: "en",
+    title: `Numbered card grid: ${columns}-column`,
+    meta: {
+      title: `Numbered card grid: ${columns}-column`,
+      theme,
+      cardLayout: { columns, defaultStepLayout: "image-top" },
+      numbering,
+    },
+    styleBlock: null,
+    blocks: [
+      { kind: "heading", level: 1, inlineHtml: "Numbered card grid" },
+      {
+        kind: "paragraph",
+        inlineHtml:
+          "Multi-column grid with auto-numbered badges. The counter ticks in document order regardless of grid placement.",
+      },
+      {
+        kind: "step",
+        id: "img-step-num-grid-1",
+        svg: STEP_PLACEHOLDER_SVG,
+        title: "Open the settings dialog",
+        body: "Click the gear icon.",
+        layout: "image-top",
+      },
+      {
+        kind: "step",
+        id: "img-step-num-grid-2",
+        svg: STEP_PLACEHOLDER_SVG,
+        title: "Pick the option",
+        body: "Toggle the new behaviour.",
+        layout: "image-top",
+      },
+      {
+        kind: "step",
+        id: "img-step-num-grid-3",
+        svg: STEP_PLACEHOLDER_SVG,
+        title: "Apply and review",
+        body: "Confirm the change in the preview.",
+        layout: "image-top",
+      },
+      {
+        kind: "step",
+        id: "img-step-num-grid-4",
+        svg: STEP_PLACEHOLDER_SVG,
+        title: "Save the file",
+        body: "Ctrl + S writes back to disk.",
+        layout: "image-top",
+      },
+    ],
+  };
+}
+
+export const StepNumberedImageTop: Story = {
+  name: "Step numbered / image-top",
+  args: { document: makeNumberedStepLayoutDoc("image-top"), showToc: false, editing: false },
+};
+
+export const StepNumberedImageBottom: Story = {
+  name: "Step numbered / image-bottom",
+  args: { document: makeNumberedStepLayoutDoc("image-bottom"), showToc: false, editing: false },
+};
+
+export const StepNumberedImageLeft: Story = {
+  name: "Step numbered / image-left",
+  args: { document: makeNumberedStepLayoutDoc("image-left"), showToc: false, editing: false },
+};
+
+export const StepNumberedImageRight: Story = {
+  name: "Step numbered / image-right",
+  args: { document: makeNumberedStepLayoutDoc("image-right"), showToc: false, editing: false },
+};
+
+export const StepNumberedImageFill: Story = {
+  name: "Step numbered / image-fill",
+  args: { document: makeNumberedStepLayoutDoc("image-fill"), showToc: false, editing: false },
+};
+
+export const StepNumberedImageTopDark: Story = {
+  name: "Step numbered / image-top (dark)",
+  args: {
+    document: makeNumberedStepLayoutDoc("image-top", "dark"),
+    showToc: false,
+    editing: false,
+  },
+};
+
+export const StepNumberedImageFillDark: Story = {
+  name: "Step numbered / image-fill (dark)",
+  args: {
+    document: makeNumberedStepLayoutDoc("image-fill", "dark"),
+    showToc: false,
+    editing: false,
+  },
+};
+
+export const StepNumberedStepLabel: Story = {
+  name: 'Step numbered / stepLabel "Step %n"',
+  args: {
+    document: makeNumberedStepLayoutDoc("image-top", "auto", "Step %n"),
+    showToc: false,
+    editing: false,
+  },
+};
+
+export const StepNumberedDotSuffix: Story = {
+  name: 'Step numbered / stepLabel "%n."',
+  args: {
+    document: makeNumberedStepLayoutDoc("image-left", "auto", "%n."),
+    showToc: false,
+    editing: false,
+  },
+};
+
+export const CardGridTwoColumnNumbered: Story = {
+  name: "Card grid / 2-column numbered",
+  args: { document: makeNumberedCardGridDoc(2), showToc: false, editing: false },
+};
+
+export const CardGridThreeColumnNumbered: Story = {
+  name: "Card grid / 3-column numbered",
+  args: { document: makeNumberedCardGridDoc(3), showToc: false, editing: false },
+};
+
+// ---------------------------------------------------------------------------
 // Phase 3 of docs/plans/_done/card-procedure-template.md — editing mode
 // for step blocks (contentEditable title + body, click-to-edit
 // modal on the SVG slot). The slash-menu / insert-bar Step entry
