@@ -1230,7 +1230,14 @@ function numberingRules(numbering: NumberingMeta | undefined): string {
       // 0.6em per character (a decent average for the bold
       // sans stack at 0.95rem font-size).
       'article[data-annot-doc] [data-annot-block="step"][data-step-layout="image-bottom"] > [data-step-title],',
-      'article[data-annot-doc] [data-annot-block="step"][data-step-layout="image-right"] > [data-step-title] {',
+      'article[data-annot-doc] [data-annot-block="step"][data-step-layout="image-right"] > [data-step-title],',
+      // Image-less step blocks collapse to a text-only column
+      // regardless of `data-step-layout`, so the title always
+      // ends up at the top-left of the card. Apply the same
+      // clearance — without this, picking "image-fill" (or any
+      // other layout) on an image-less card leaves the badge
+      // overlapping the title.
+      'article[data-annot-doc] [data-annot-block="step"][data-step-image-less] > [data-step-title] {',
       `  padding-left: calc(var(--annot-step-badge-min-size) + ${stepBadgeLiteralAllowance(numbering.stepLabel ?? "%n")} + 1rem);`,
       "}",
     );
