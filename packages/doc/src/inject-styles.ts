@@ -539,12 +539,24 @@ function stepBlockRules(): string {
     "  font-weight: 600;",
     "  line-height: 1.3;",
     `  font-family: ${sansStack};`,
+    // Wrap long unbreakable strings (URLs, no-space code-style
+    // identifiers, the user reproducer's 'aaaa...' input). Pair
+    // with `min-width: 0` so CSS Grid's `min-content` track
+    // sizing doesn't blow the column out to fit a long word.
+    // Without `min-width: 0`, image-left / -right cards bleed
+    // out horizontally and drag the screenshot column with them.
+    "  min-width: 0;",
+    "  overflow-wrap: anywhere;",
+    "  word-break: break-word;",
     "}",
     '[data-annot-block="step"] > [data-step-body] {',
     "  grid-area: body;",
     "  margin: 0;",
     "  color: var(--annot-doc-fg);",
     "  line-height: 1.5;",
+    "  min-width: 0;",
+    "  overflow-wrap: anywhere;",
+    "  word-break: break-word;",
     "}",
     // image-top — default. Image on top, title + body stacked
     // below.

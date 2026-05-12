@@ -351,6 +351,70 @@ describe("buildDocumentPptxFiles: step blocks (Phase 6)", () => {
   // aligned + top-anchored to match the HTML view's reading
   // flow. The previous default was centred — fine for the
   // cover slide, weird for in-card content.
+  // User feedback fix: <br> and block-tag closings (</div>,
+  // </p>, </li>) in the title/body must survive the HTML →
+  // plain text conversion AND emit as separate <a:p>
+  // paragraphs so PowerPoint preserves the author's intended
+  // line breaks.
+  it("converts <br> in body to separate <a:p> paragraphs", () => {
+    const doc = makeDocument([
+      makeStepBlock("step-1", 800, 600, { title: "T", body: "First line<br>Second line" }),
+    ]);
+    const slide1 = decode(buildDocumentPptxFiles(doc)["ppt/slides/slide1.xml"]!);
+    const bodySegment = slide1.slice(slide1.indexOf("StepBody"));
+    // Two <a:p> paragraphs inside the body shape, one per line.
+    const paragraphCount = (bodySegment.match(/<a:p>/g) ?? []).length;
+    expect(paragraphCount).toBe(2);
+    expect(bodySegment).toContain("<a:t>First line</a:t>");
+    expect(bodySegment).toContain("<a:t>Second line</a:t>");
+  });
+
+  it("converts </div> in body to paragraph breaks (contentEditable line-break shape)", () => {
+    // contentEditable in browsers often emits new lines as
+    // wrapped <div>...</div>; the editor stores that verbatim
+    // as the body's inline HTML. We need those breaks to survive.
+    const doc = makeDocument([
+      makeStepBlock("step-1", 800, 600, {
+        title: "T",
+        body: "Line one<div>Line two</div><div>Line three</div>",
+      }),
+    ]);
+    const slide1 = decode(buildDocumentPptxFiles(doc)["ppt/slides/slide1.xml"]!);
+    const bodySegment = slide1.slice(slide1.indexOf("StepBody"));
+    expect(bodySegment).toContain("<a:t>Line one</a:t>");
+    expect(bodySegment).toContain("<a:t>Line two</a:t>");
+    expect(bodySegment).toContain("<a:t>Line three</a:t>");
+  });
+
+  it("collapses three+ consecutive newlines to two (paragraph break, no bloat)", () => {
+    const doc = makeDocument([
+      makeStepBlock("step-1", 800, 600, {
+        title: "T",
+        body: "A<br><br><br><br>B",
+      }),
+    ]);
+    const slide1 = decode(buildDocumentPptxFiles(doc)["ppt/slides/slide1.xml"]!);
+    const bodySegment = slide1.slice(slide1.indexOf("StepBody"));
+    // Expect exactly 3 <a:p> elements (A, empty paragraph, B).
+    const paragraphCount = (bodySegment.match(/<a:p>/g) ?? []).length;
+    expect(paragraphCount).toBe(3);
+  });
+
+  it("title without line breaks still emits a single paragraph (no regression)", () => {
+    const doc = makeDocument([
+      makeStepBlock("step-1", 800, 600, { title: "Single line title", body: "Body" }),
+    ]);
+    const slide1 = decode(buildDocumentPptxFiles(doc)["ppt/slides/slide1.xml"]!);
+    // Scope to JUST the title shape — the body shape sits
+    // right after and also carries its own <a:p>, so the naive
+    // "indexOf('StepTitle')" slice would include both.
+    const titleStart = slide1.indexOf("StepTitle");
+    const titleEnd = slide1.indexOf("</p:sp>", titleStart);
+    const titleSegment = slide1.slice(titleStart, titleEnd);
+    const paragraphCount = (titleSegment.match(/<a:p>/g) ?? []).length;
+    expect(paragraphCount).toBe(1);
+  });
+
   it("step title + body are left-aligned and top-anchored", () => {
     const doc = makeDocument([
       makeStepBlock("step-1", 800, 600, { title: "Title", body: "Body text" }),

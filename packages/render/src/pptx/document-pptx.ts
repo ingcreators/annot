@@ -1036,15 +1036,38 @@ const LAYOUT_PLACEMENTS: Record<
  *  stored as canonical inline HTML (Phase 1) — `<strong>`,
  *  `<em>`, `<u>`, `<span style>`, etc. Phase 6 v1 flattens that
  *  to a single run; rich formatting per run is a future
- *  enhancement that needs an HTML → `TextRun[]` parser bridge. */
+ *  enhancement that needs an HTML → `TextRun[]` parser bridge.
+ *
+ *  User-feedback fix: preserves line breaks. `<br>` /
+ *  `<br/>` / `<br />` and block-tag closings (`</div>`,
+ *  `</p>`, `</li>`) become `\n` so PPTX emit can split into
+ *  separate `<a:p>` paragraphs and preserve the author's
+ *  intended line wrapping. */
 function stripInlineHtml(html: string): string {
-  return html
-    .replace(/<[^>]+>/g, "")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&amp;/g, "&")
-    .trim();
+  return (
+    html
+      .replace(/<br\s*\/?\s*>/gi, "\n")
+      // Block-tag OPENING marks the start of a new line —
+      // contentEditable typically wraps subsequent lines in
+      // `<div>`s after the first Enter, leaving the first line
+      // un-wrapped (e.g. `"A<div>B</div><div>C</div>"`). Insert
+      // a `\n` before each opening div/p/li so the boundary
+      // gets preserved.
+      .replace(/<(div|p|li)(\s[^>]*)?>/gi, "\n")
+      // Closing tags get stripped (no extra `\n` to avoid
+      // doubling).
+      .replace(/<\/(div|p|li)\s*>/gi, "")
+      .replace(/<[^>]+>/g, "")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"')
+      .replace(/&amp;/g, "&")
+      // Collapse 3+ consecutive newlines down to 2 — a doubled
+      // newline reads as a paragraph break in PowerPoint; more
+      // than that just bloats the output.
+      .replace(/\n{3,}/g, "\n\n")
+      .trim()
+  );
 }
 
 /** Escape characters that have special meaning inside OOXML
@@ -1096,7 +1119,6 @@ function buildStepTextShapeXml(opts: OverlayTextShapeOptions): string {
   const yPx = SLIDE_H_PX * opts.rect.y;
   const wPx = SLIDE_W_PX * opts.rect.w;
   const hPx = SLIDE_H_PX * opts.rect.h;
-  const text = escapeOoxmlText(opts.text);
   const boldAttr = opts.bold ? ' b="1"' : "";
   // Overlay style: dark translucent backdrop + white text.
   // Region style: transparent backdrop + dark text.
@@ -1109,6 +1131,24 @@ function buildStepTextShapeXml(opts: OverlayTextShapeOptions): string {
   // override both to "ctr" for the classic centred treatment.
   const align = opts.align ?? "l";
   const anchor = opts.anchor ?? "t";
+  // User-feedback fix: split on `\n` so author-inserted line
+  // breaks become separate paragraphs in PowerPoint. Each line
+  // emits its own `<a:p>` with the same styling. Empty lines
+  // (between two consecutive `\n`s) become empty paragraphs —
+  // PowerPoint renders these as visible blank lines, matching
+  // the author's intent.
+  const paragraphs = opts.text.split("\n").map((line) => {
+    const text = escapeOoxmlText(line);
+    return `<a:p>
+            <a:pPr algn="${align}"><a:defRPr/></a:pPr>
+            <a:r>
+              <a:rPr lang="en-US" sz="${opts.fontSizeHpt}"${boldAttr}>
+                <a:solidFill><a:srgbClr val="${textColor}"/></a:solidFill>
+              </a:rPr>
+              <a:t>${text}</a:t>
+            </a:r>
+          </a:p>`;
+  });
   return `<p:sp>
         <p:nvSpPr>
           <p:cNvPr id="${opts.id}" name="${opts.name}"/>
@@ -1127,15 +1167,7 @@ function buildStepTextShapeXml(opts: OverlayTextShapeOptions): string {
         <p:txBody>
           <a:bodyPr wrap="square" lIns="91440" tIns="45720" rIns="91440" bIns="45720" anchor="${anchor}"/>
           <a:lstStyle/>
-          <a:p>
-            <a:pPr algn="${align}"><a:defRPr/></a:pPr>
-            <a:r>
-              <a:rPr lang="en-US" sz="${opts.fontSizeHpt}"${boldAttr}>
-                <a:solidFill><a:srgbClr val="${textColor}"/></a:solidFill>
-              </a:rPr>
-              <a:t>${text}</a:t>
-            </a:r>
-          </a:p>
+          ${paragraphs.join("\n          ")}
         </p:txBody>
       </p:sp>`;
 }

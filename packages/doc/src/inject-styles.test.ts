@@ -451,6 +451,24 @@ describe("injectDocumentStyles: numbering meta (Phase 13)", () => {
     );
   });
 
+  it("emits min-width + overflow-wrap on step title + body to prevent card overflow", () => {
+    // Regression guard: long unbreakable strings (URLs, no-
+    // space identifiers, paste-test gibberish) were pushing
+    // the grid column wider than the card and dragging the
+    // screenshot column with them. min-width:0 lets the grid
+    // track shrink below its content min-content; overflow-
+    // wrap:anywhere + word-break:break-word force the text to
+    // break mid-token.
+    const css = buildStyleBlock(createEmptyDocument({ title: "Overflow" }));
+    const titleRule = css.slice(css.indexOf('[data-annot-block="step"] > [data-step-title] {'));
+    expect(titleRule).toContain("min-width: 0;");
+    expect(titleRule).toContain("overflow-wrap: anywhere;");
+    expect(titleRule).toContain("word-break: break-word;");
+    const bodyRule = css.slice(css.indexOf('[data-annot-block="step"] > [data-step-body] {'));
+    expect(bodyRule).toContain("min-width: 0;");
+    expect(bodyRule).toContain("overflow-wrap: anywhere;");
+  });
+
   it("does not emit the title clearance rule when numbering is off", () => {
     // The badge isn't rendered without numbering, so the
     // clearance rule shouldn't be either — keeps the saved
