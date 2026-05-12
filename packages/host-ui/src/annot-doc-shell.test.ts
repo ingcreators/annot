@@ -1138,6 +1138,47 @@ describe("annot-doc-shell: text editing", () => {
     }
   });
 
+  it("commit() dispatches doc-changed when the DOM was dirty (autosave hook-up)", async () => {
+    // Regression: inline-link `createLink` + format-toolbar
+    // B / I / U mutate the contentEditable then call
+    // `this.commit()`, expecting the host's `doc-changed`
+    // listener to drive autosave. Pre-fix, `commit()` updated
+    // the in-memory document but never fired the event, so
+    // reopening the file dropped the link / format wrapper
+    // while keeping the visible text behind it.
+    const el = mount(makeMixedDoc());
+    el.editing = true;
+    await el.updateComplete;
+    const wrappers = el.querySelectorAll(".annot-doc-block-host");
+    const para = wrappers[1]?.querySelector('p[data-annot-block="paragraph"]') as HTMLElement;
+    para.innerHTML = 'A <a href="https://example.com">link</a> survives.';
+    const events: Array<{ reason: string; html: string }> = [];
+    el.addEventListener("doc-changed", (e) => {
+      const detail = (
+        e as CustomEvent<{ document: { blocks: ReadonlyArray<unknown> }; reason: string }>
+      ).detail;
+      const block = detail.document.blocks[1] as { kind: string; inlineHtml: string } | undefined;
+      events.push({
+        reason: detail.reason,
+        html: block?.kind === "paragraph" ? block.inlineHtml : "",
+      });
+    });
+    el.commit();
+    expect(events).toHaveLength(1);
+    expect(events[0]?.reason).toBe("commit");
+    expect(events[0]?.html).toBe('A <a href="https://example.com">link</a> survives.');
+  });
+
+  it("commit() with no DOM changes does NOT dispatch doc-changed", async () => {
+    const el = mount(makeMixedDoc());
+    el.editing = true;
+    await el.updateComplete;
+    const events: Event[] = [];
+    el.addEventListener("doc-changed", (e) => events.push(e));
+    el.commit();
+    expect(events).toHaveLength(0);
+  });
+
   it("debounced input commits to history after the configured idle window", async () => {
     vi.useFakeTimers();
     const el = mount(makeMixedDoc());
