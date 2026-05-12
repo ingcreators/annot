@@ -81,6 +81,13 @@ export const modernLight: Theme = {
   description: "Soft shadows, blue accent, white background.",
   vars: MODERN_LIGHT_VARS,
   darkVars: MODERN_LIGHT_DARK_VARS,
+  pptxPalette: {
+    slideBg: "FFFFFF",
+    slideFg: "1F2937",
+    accent: "2563EB",
+    accentFg: "FFFFFF",
+    muted: "6B7280",
+  },
 };
 
 /** `modern-dark` — the legacy `meta.theme === "dark"` pair.
@@ -92,4 +99,11 @@ export const modernDark: Theme = {
   name: "Modern Dark",
   description: "Always-dark variant of Modern Light.",
   vars: MODERN_LIGHT_DARK_VARS,
+  pptxPalette: {
+    slideBg: "111827",
+    slideFg: "F9FAFB",
+    accent: "60A5FA",
+    accentFg: "0B1220",
+    muted: "9CA3AF",
+  },
 };

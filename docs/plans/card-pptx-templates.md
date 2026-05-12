@@ -1,6 +1,46 @@
 # PPTX template system for card documents
 
-> **Status:** Draft
+> **Status:** Partially landed — pragmatic Phase 1 ([theme-aware
+> PPTX palette](https://github.com/ingcreators/annot/pull/TBD))
+> shipped. The full slide-master refactor + custom-template
+> upload (Phases 1–6 as originally written) deferred to a
+> follow-up plan; the user-visible "Appearance pick carries the
+> brand colour into the exported PPTX" promise is now satisfied
+> via a smaller path.
+>
+> **What landed (pragmatic Phase 1):**
+>
+> - `Theme.pptxPalette?: { slideBg, slideFg, accent, accentFg, muted? }`
+>   on every built-in theme — OOXML colour-equivalents of the
+>   theme's CSS variables.
+> - `document-pptx.ts` reads `meta.appearance.template`, resolves
+>   the matching theme via `getTheme`, and threads its
+>   `pptxPalette` through to `buildStepBadgeXml`. The step badge
+>   fill, text colour, and shadow now track the theme's accent.
+> - Existing documents without `meta.appearance.template` keep
+>   the legacy hard-coded blue badge — byte-identical for the
+>   6-fixture round-trip + the existing PPTX-export goldens.
+> - 8 new tests in `document-pptx.test.ts` covering the per-theme
+>   palette emission + the unknown-template fallback + the
+>   image-fill overlay's theme-agnostic dark backdrop.
+>
+> **What's deferred:**
+>
+> - Slide master / slide layout refactor (the original plan's
+>   Phase 1). The current exporter still emits a minimal master
+>   + layout pair; no slide-layout-driven placeholders yet.
+> - Built-in `.pptx` template files in
+>   `packages/render/src/pptx/templates/` (the original Phase 2).
+> - `fflate`-based ZIP read support (the original Phase 2).
+> - Appearance dialog PPTX-template picker (original Phase 3) —
+>   the existing dialog's Appearance template radio carries both
+>   surfaces now, no separate picker needed.
+> - Custom user-uploaded templates (original Phase 4).
+> - Authoring guide for power-user templates (original Phase 6).
+>
+> These items are tracked as a future plan
+> (`pptx-template-upload.md`, TBD) — gated on a concrete user
+> ask for corporate-branded templates.
 > **Compatibility:** Reworks the PPTX export pipeline from
 > [`_done/annot-html-document.md`](./_done/annot-html-document.md)
 > Phase 11 and [`_done/card-procedure-template.md`](./_done/card-procedure-template.md)

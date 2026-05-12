@@ -62,4 +62,13 @@ export const minimal: Theme = {
   // the hairline-border aesthetic. `extraCss` overrides the
   // structural `--annot-step-badge-radius` after `:root`.
   extraCss: ":root { --annot-step-badge-radius: 4px; --annot-card-radius: 0; }",
+  pptxPalette: {
+    slideBg: "FFFFFF",
+    slideFg: "111111",
+    // Minimal's CSS accent is `#111111` (black) — same as fg.
+    // Pair it with white badge text for a pure mono treatment.
+    accent: "111111",
+    accentFg: "FFFFFF",
+    muted: "666666",
+  },
 };

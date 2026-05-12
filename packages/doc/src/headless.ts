@@ -40,6 +40,7 @@ export {
   sanitiseCustomCss,
   sanitiseCustomCssText,
 } from "./themes/sanitise-custom-css.js";
+export type { PptxPalette } from "./themes/types.js";
 export type {
   AnnotDocument,
   AnnotDocVersion,

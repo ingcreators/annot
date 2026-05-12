@@ -63,6 +63,16 @@ export const editorial: Theme = {
   // Editorial-style badge — "N." (dot suffix) reads as a numbered
   // list marker rather than a chip, fitting the prose aesthetic.
   badgeLabelTemplate: "%n.",
+  pptxPalette: {
+    // Warm cream slide background mirrors the CSS theme's
+    // `#faf7f2` body bg.
+    slideBg: "FAF7F2",
+    slideFg: "1F1B16",
+    // Classic burgundy accent — matches the editorial chrome.
+    accent: "8B2A2A",
+    accentFg: "FFFDF9",
+    muted: "75695A",
+  },
   // Serif headings + pull-quote treatment + generous body
   // line-height. `extraCss` lands at the end of the style block,
   // so its selectors win against the structural defaults.

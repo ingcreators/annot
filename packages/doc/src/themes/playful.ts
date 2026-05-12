@@ -77,4 +77,13 @@ export const playful: Theme = {
     "  font-size: 1.75rem;",
     "}",
   ].join("\n"),
+  pptxPalette: {
+    // Soft cream slide bg matching the CSS theme's `#fff8f5`.
+    slideBg: "FFF8F5",
+    slideFg: "2C1E3A",
+    // Pink pastel accent — the chat-bubble badge.
+    accent: "E96D8A",
+    accentFg: "FFFFFF",
+    muted: "7B6A8C",
+  },
 };
