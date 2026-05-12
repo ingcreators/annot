@@ -758,12 +758,30 @@ function buildImagelessStepSlide(
     return null;
   }
 
-  // Centred text card. Title occupies the upper third (visually
-  // emphasises the step name); body fills the middle two-thirds
-  // with comfortable margins. Coordinates expressed as fractions
-  // of the slide for symmetry with `LAYOUT_PLACEMENTS`.
-  const titleRect = { x: 0.1, y: 0.2, w: 0.8, h: 0.15 };
-  const bodyRect = { x: 0.1, y: 0.4, w: 0.8, h: 0.45 };
+  // Layout choice depends on whether the step is auto-
+  // numbered:
+  //
+  // - Numbering OFF → "title-card" layout. Title in the upper
+  //   third (visually emphasises the step name); body fills
+  //   the middle two-thirds with comfortable margins.
+  // - Numbering ON  → "compact-text card" layout matching the
+  //   HTML view. Title near the top with explicit clearance
+  //   from the badge (badge ends around x = 0.085 + ~1% for
+  //   wider templates like `Step %n` → title.x = 0.12 leaves
+  //   a comfortable gutter). Body fills the rest of the slide
+  //   so badge + title + body read as a coherent column from
+  //   the slide's top edge.
+  //
+  // The split is conditional rather than universal because
+  // the title-card style looks better when there's no badge
+  // anchoring the top-left corner.
+  const numberingOn = numbering?.steps === true;
+  const titleRect = numberingOn
+    ? { x: 0.12, y: 0.06, w: 0.83, h: 0.12 }
+    : { x: 0.1, y: 0.2, w: 0.8, h: 0.15 };
+  const bodyRect = numberingOn
+    ? { x: 0.05, y: 0.22, w: 0.9, h: 0.7 }
+    : { x: 0.1, y: 0.4, w: 0.8, h: 0.45 };
 
   let nextId = 2;
   const topLevelShapes: SlideData["topLevelShapes"] = [];
