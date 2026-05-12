@@ -697,6 +697,12 @@ function cardLayoutRules(cardLayout: CardLayoutMeta | undefined): string {
     columns === "auto"
       ? "repeat(auto-fill, minmax(320px, 1fr))"
       : "repeat(var(--annot-card-columns), minmax(0, 1fr))";
+  // Reusable selector fragment that matches both render paths
+  // for a step card:
+  //   - Read-only: a direct `[data-annot-block="step"]` child.
+  //   - Editor:    a `.annot-doc-block-host` wrapper whose child
+  //                IS a step card (detected via `:has(>)`).
+  const cardOrWrapper = '[data-annot-block="step"], :has(> [data-annot-block="step"])';
   return [
     "article[data-annot-doc] {",
     "  display: grid;",
@@ -720,6 +726,21 @@ function cardLayoutRules(cardLayout: CardLayoutMeta | undefined): string {
     // through one level to identify the right wrapper.
     'article[data-annot-doc] > :has(> [data-annot-block="step"]) {',
     "  grid-column: auto;",
+    "}",
+    // Editor render — `#renderEditingBody` interleaves an
+    // `<annot-doc-insert-bar>` between every pair of blocks.
+    // Those bars are full-row siblings, so in multi-column mode
+    // they break CSS grid auto-flow: with `grid-column: 1 / -1`
+    // each between-card bar forces the next card onto a new row
+    // and the second column stays empty. Hide just the bars that
+    // sit BETWEEN two cards (the bar precedes a card AND follows
+    // a card). Bars at the article boundary, or between a card
+    // and a non-card, stay visible so users can still insert
+    // blocks. Users who want to insert another card BETWEEN two
+    // cards can still use the block toolbar's Insert above /
+    // Insert below buttons.
+    `article[data-annot-doc] > :is(${cardOrWrapper}) + annot-doc-insert-bar:has(+ :is(${cardOrWrapper})) {`,
+    "  display: none;",
     "}",
   ].join("\n");
 }
