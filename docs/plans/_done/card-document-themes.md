@@ -1,11 +1,18 @@
 # Themeable card documents (HTML)
 
-> **Status:** In progress — Phase 1 (structural / theme CSS
-> split) lands as the Phase 1 PR. Phases 2–6 follow.
-> **Compatibility:** Extends the `.annot.html` v1 format from
-> [`_done/annot-html-document.md`](./_done/annot-html-document.md)
-> and builds on the card mechanics from
-> [`_done/card-procedure-template.md`](./_done/card-procedure-template.md)
+> **Status:** Done — all 6 phases shipped. PRs
+> [#632](https://github.com/ingcreators/annot/pull/632)
+> (structural / theme split), [#633](https://github.com/ingcreators/annot/pull/633)
+> (3 new themes + `meta.appearance.template`),
+> [#634](https://github.com/ingcreators/annot/pull/634) (Appearance
+> picker in Doc Settings), [#635](https://github.com/ingcreators/annot/pull/635)
+> (font family override), [#636](https://github.com/ingcreators/annot/pull/636)
+> (custom CSS escape hatch + sanitiser), and the Phase 6 PR
+> (docs + CLAUDE.md guardrail #11 + archival, this PR).
+> **Compatibility:** Extended the `.annot.html` v1 format from
+> [`annot-html-document.md`](./annot-html-document.md)
+> and built on the card mechanics from
+> [`card-procedure-template.md`](./card-procedure-template.md)
 > and the auto-numbering badge from
 > [`card-step-auto-numbering.md`](./card-step-auto-numbering.md).
 > Splits the monolithic `injectDocumentStyles` into a fixed
