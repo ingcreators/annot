@@ -30,7 +30,13 @@ export { AnnotDocParseError, parseDocument } from "./parse.js";
 export type { ResolveFigureRefsOptions } from "./resolve-figure-refs.js";
 export { AnnotDocResolveError, resolveFigureRefs } from "./resolve-figure-refs.js";
 
-export { escapeAttr, escapeText, serializeDocument, serializeMetaJson } from "./serialize.js";
+export {
+  escapeAttr,
+  escapeText,
+  serializeDocument,
+  serializeMetaJson,
+  serializeStandaloneDocument,
+} from "./serialize.js";
 export type { BuiltinThemeId, Theme, VarTuples } from "./themes/index.js";
 export { BUILTIN_THEME_IDS, getTheme, THEMES } from "./themes/index.js";
 export type { SanitiseResult } from "./themes/sanitise-custom-css.js";

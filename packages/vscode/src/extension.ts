@@ -41,7 +41,11 @@
  */
 
 import * as path from "node:path";
-import { BUILTIN_TEMPLATES, cloneBuiltinTemplate, serializeDocument } from "@ingcreators/annot-doc";
+import {
+  BUILTIN_TEMPLATES,
+  cloneBuiltinTemplate,
+  serializeStandaloneDocument,
+} from "@ingcreators/annot-doc";
 import * as vscode from "vscode";
 
 const VIEW_TYPE = "annot.editor";
@@ -691,7 +695,7 @@ async function cmdNewDocument(): Promise<void> {
   if (!dest) return;
 
   try {
-    const bytes = new TextEncoder().encode(serializeDocument(cloned));
+    const bytes = new TextEncoder().encode(serializeStandaloneDocument(cloned));
     await vscode.workspace.fs.writeFile(dest, bytes);
     await vscode.commands.executeCommand("vscode.openWith", dest, VIEW_TYPE);
   } catch (err) {
