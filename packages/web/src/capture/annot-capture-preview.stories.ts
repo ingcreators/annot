@@ -69,3 +69,52 @@ export const Stopped: Story = {
     sourceHeight: 1080,
   },
 };
+
+/* Auto Capture state-cycle stories (Phase 4 of web-capture-redesign) */
+export const WatchingState: Story = {
+  args: {
+    status: "Watching for screen changes",
+    sourceWidth: 1920,
+    sourceHeight: 1080,
+  },
+};
+
+export const ChangeDetected: Story = {
+  args: {
+    status: "Screen change detected",
+    sourceWidth: 1920,
+    sourceHeight: 1080,
+  },
+};
+
+export const StableWait: Story = {
+  args: {
+    status: "Waiting for the screen to settle",
+    sourceWidth: 1920,
+    sourceHeight: 1080,
+  },
+};
+
+export const Captured: Story = {
+  args: {
+    status: "Candidate image added",
+    sourceWidth: 1920,
+    sourceHeight: 1080,
+  },
+};
+
+export const IgnoredCursor: Story = {
+  args: {
+    status: "Ignored cursor-only movement",
+    sourceWidth: 1920,
+    sourceHeight: 1080,
+  },
+};
+
+export const BufferFull: Story = {
+  args: {
+    status: "Candidate buffer full — accept or delete some to keep capturing.",
+    sourceWidth: 1920,
+    sourceHeight: 1080,
+  },
+};

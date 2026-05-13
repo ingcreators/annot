@@ -50,10 +50,11 @@ export default meta;
 
 type Story = StoryObj<Args>;
 
-/** Default open state — the only enabled mode is selected. */
+/** Default open state — Auto Capture is the default selection in
+ *  Phase 4 (was "once" in Phases 1–3). */
 export const Default: Story = {};
 
-/** Capture Once selected (the only enabled mode in Phase 1). */
+/** Capture Once selected. */
 export const OnceSelected: Story = {
   args: {
     mode: "once",
@@ -61,13 +62,20 @@ export const OnceSelected: Story = {
   },
 };
 
-/** Auto Capture pre-selected: the chip remains highlighted but is
- *  disabled; the Start button is greyed out until the user picks an
- *  enabled mode. Stand-in for what the dialog will look like once
- *  Phase 4 lands and `auto` becomes the default. */
-export const AutoDisabled: Story = {
+/** Auto Capture pre-selected. */
+export const AutoSelected: Story = {
   args: {
     mode: "auto",
+    cursor: "always",
+  },
+};
+
+/** Capture Area selected — chip is still disabled (Capture Area is
+ *  spec Phase 4 / our Phase 6, deferred), so the Start button is
+ *  greyed out until the user picks an enabled mode. */
+export const AreaDisabled: Story = {
+  args: {
+    mode: "area",
     cursor: "always",
   },
 };

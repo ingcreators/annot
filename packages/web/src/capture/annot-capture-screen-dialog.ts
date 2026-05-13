@@ -36,9 +36,8 @@ const MODE_CHIPS: readonly ModeChip[] = [
   {
     mode: "auto",
     label: "Auto Capture",
-    description: "Automatically capture meaningful screen changes.",
-    enabled: false,
-    comingSoon: "Coming soon",
+    description: "Automatically capture meaningful screen changes. Recommended for procedures.",
+    enabled: true,
   },
   {
     mode: "once",
@@ -81,7 +80,11 @@ export class AnnotCaptureScreenDialogElement extends LitElement {
 
   constructor() {
     super();
-    this.mode = "once";
+    // Phase 4 of `docs/plans/web-capture-redesign.md` — Auto
+    // Capture is now the default selection. `loadModePreference`
+    // (used by `showCaptureScreenDialog`) returns `"auto"` when
+    // nothing is stored, which matches.
+    this.mode = "auto";
     this.cursor = "always";
   }
 
