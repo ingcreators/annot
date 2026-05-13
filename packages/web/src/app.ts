@@ -632,12 +632,11 @@ export class App {
         },
         onNewFolder: () => this.#fileManager!.createNewFolder(),
         onUploadImage: () => this.#captureHost.openFileDialog(),
-        onCaptureScreen: () => this.#captureHost.captureScreenAndSave(),
-        onTimedCapture: () => this.#captureHost.timedCaptureAndSave(),
-        // Phase 1 of `docs/plans/web-capture-redesign.md` — additive
-        // entry that opens the new mode-picker dialog alongside the
-        // legacy `Capture Screen` / `Timed Capture...` items. spec
-        // Phase 5 retires the two callbacks above.
+        // Phase 5 of `docs/plans/web-capture-redesign.md` retired
+        // the legacy `onCaptureScreen` / `onTimedCapture` PWA
+        // wiring. `Capture Screen...` (the mode-picker dialog) is
+        // the only capture entry the PWA surfaces now; Auto
+        // Capture inside the workspace replaces Timed Capture.
         onCaptureScreenDialog: () => this.#captureHost.captureScreenDialogAndSave(),
         onPasteClipboard: () => this.#captureHost.pasteAndSave(),
         // Surface "New Document" + "From Template…" only when the

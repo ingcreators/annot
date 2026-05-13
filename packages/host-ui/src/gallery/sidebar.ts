@@ -78,13 +78,21 @@ export interface SidebarCallbacks {
   onFolderSelect: (folderPath: string) => void;
   onNewFolder: () => void;
   onUploadImage: () => void;
-  onCaptureScreen: () => void;
-  onTimedCapture: () => void;
+  /** Legacy single-frame capture callback. Phase 5 of
+   *  `docs/plans/web-capture-redesign.md` made this optional —
+   *  the PWA dropped it in favour of `onCaptureScreenDialog`,
+   *  but the desktop host wires it for its native fullscreen
+   *  capture so the menu entry stays available there. The
+   *  sidebar hides the entry when this is omitted. */
+  onCaptureScreen?: () => void;
+  /** Legacy timed (interval) capture callback. Same Phase 5
+   *  treatment — optional + hide-when-omitted. The PWA's
+   *  interval implementation was retired alongside this; hosts
+   *  that still want timed capture wire their own. */
+  onTimedCapture?: () => void;
   /** Phase 1 of `docs/plans/web-capture-redesign.md`. Opens the new
-   *  `Capture Screen...` mode-picker dialog. Old `Capture Screen`
-   *  and `Timed Capture...` entries remain in parallel during the
-   *  rollout; spec Phase 5 retires them. Optional so non-PWA hosts
-   *  (VSCode / desktop) don't have to wire it. */
+   *  `Capture Screen...` mode-picker dialog. Optional so non-PWA
+   *  hosts (VSCode / desktop) don't have to wire it. */
   onCaptureScreenDialog?: () => void;
   onPasteClipboard: () => void;
   /** Create a new `.annot.html` document. Phase 6c of
@@ -255,8 +263,6 @@ export class AnnotSidebarElement extends LitElement {
       onFolderSelect: () => {},
       onNewFolder: () => {},
       onUploadImage: () => {},
-      onCaptureScreen: () => {},
-      onTimedCapture: () => {},
       onPasteClipboard: () => {},
     };
     this.newMenuOpen = false;
@@ -562,29 +568,32 @@ export class AnnotSidebarElement extends LitElement {
         action: () => this.callbacks.onNewFolder(),
       },
       { icon: "upload", label: "Upload Image", action: () => this.callbacks.onUploadImage() },
-      {
-        icon: "screenshot_monitor",
-        label: "Capture Screen",
-        action: () => this.callbacks.onCaptureScreen(),
-        show: isScreenCaptureSupported(),
-      },
-      {
-        icon: "timer",
-        label: "Timed Capture...",
-        action: () => this.callbacks.onTimedCapture(),
-        show: isScreenCaptureSupported(),
-      },
-      // Phase 1 of `docs/plans/web-capture-redesign.md` — additive
-      // entry that opens the new mode-picker dialog. Surfaced only
-      // when the host wires `onCaptureScreenDialog`; spec Phase 5
-      // retires the two entries above and leaves this one as the
-      // single capture surface.
+      // Phase 1 of `docs/plans/web-capture-redesign.md` — opens the
+      // mode-picker dialog. Surfaced only when the host wires
+      // `onCaptureScreenDialog` (PWA post-Phase-1).
       {
         icon: "screenshot_monitor",
         label: "Capture Screen...",
         action: () => this.callbacks.onCaptureScreenDialog?.(),
         show:
           isScreenCaptureSupported() && typeof this.callbacks.onCaptureScreenDialog === "function",
+      },
+      // Legacy single-frame capture entry. Phase 5 of
+      // `docs/plans/web-capture-redesign.md` made the callback
+      // optional; only hosts that still wire it (desktop's native
+      // `desktopCapturer` flow) get the menu item. The PWA dropped
+      // its wiring in favour of `Capture Screen...` above.
+      {
+        icon: "screenshot_monitor",
+        label: "Capture Screen",
+        action: () => this.callbacks.onCaptureScreen?.(),
+        show: isScreenCaptureSupported() && typeof this.callbacks.onCaptureScreen === "function",
+      },
+      {
+        icon: "timer",
+        label: "Timed Capture...",
+        action: () => this.callbacks.onTimedCapture?.(),
+        show: isScreenCaptureSupported() && typeof this.callbacks.onTimedCapture === "function",
       },
       {
         icon: "content_paste",

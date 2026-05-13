@@ -37,8 +37,6 @@ describe("annot-sidebar: New Document entry", () => {
       onFolderSelect: () => {},
       onNewFolder: () => {},
       onUploadImage: () => {},
-      onCaptureScreen: () => {},
-      onTimedCapture: () => {},
       onPasteClipboard: () => {},
       // onNewDocument intentionally omitted
     };
@@ -58,8 +56,6 @@ describe("annot-sidebar: New Document entry", () => {
       onFolderSelect: () => {},
       onNewFolder: () => {},
       onUploadImage: () => {},
-      onCaptureScreen: () => {},
-      onTimedCapture: () => {},
       onPasteClipboard: () => {},
       onNewDocument,
     };
@@ -83,8 +79,6 @@ describe("annot-sidebar: From Template entry (Phase 8d)", () => {
       onFolderSelect: () => {},
       onNewFolder: () => {},
       onUploadImage: () => {},
-      onCaptureScreen: () => {},
-      onTimedCapture: () => {},
       onPasteClipboard: () => {},
       onNewDocument: () => {}, // present, but the picker isn't wired
     };
@@ -104,8 +98,6 @@ describe("annot-sidebar: From Template entry (Phase 8d)", () => {
       onFolderSelect: () => {},
       onNewFolder: () => {},
       onUploadImage: () => {},
-      onCaptureScreen: () => {},
-      onTimedCapture: () => {},
       onPasteClipboard: () => {},
       onNewDocument: () => {},
       onNewFromTemplate,
@@ -128,8 +120,6 @@ describe("annot-sidebar: From Template entry (Phase 8d)", () => {
       onFolderSelect: () => {},
       onNewFolder: () => {},
       onUploadImage: () => {},
-      onCaptureScreen: () => {},
-      onTimedCapture: () => {},
       onPasteClipboard: () => {},
       onNewDocument: () => {},
       onNewFromTemplate: () => {},

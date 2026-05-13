@@ -38,12 +38,17 @@ export interface FileManagerCallbacks {
   onFolderChange: (folderPath: string) => void;
   onNewFolder: () => Promise<void>;
   onUploadImage: () => void;
-  onCaptureScreen: () => Promise<void>;
-  onTimedCapture: () => Promise<void>;
+  /** Phase 5 of `docs/plans/web-capture-redesign.md` made this
+   *  optional. The PWA dropped it in favour of the new
+   *  `onCaptureScreenDialog`; the desktop host keeps wiring it for
+   *  its native fullscreen capture. Hidden when omitted. */
+  onCaptureScreen?: () => Promise<void>;
+  /** Same Phase 5 treatment — optional + hide-when-omitted. */
+  onTimedCapture?: () => Promise<void>;
   /** Phase 1 of `docs/plans/web-capture-redesign.md`. Opens the new
    *  `Capture Screen...` mode-picker dialog. Optional — non-PWA
-   *  hosts (VSCode / desktop) keep the legacy `onCaptureScreen` /
-   *  `onTimedCapture` and skip this until they wire the new flow. */
+   *  hosts (VSCode / desktop) skip this until they wire the new
+   *  flow. */
   onCaptureScreenDialog?: () => Promise<void>;
   onPasteClipboard: () => Promise<void>;
   /** Create a new `.annot.html` document. Phase 6c of
@@ -130,8 +135,12 @@ export class FileManager {
       onFolderSelect: (folderPath) => this.navigateToFolder(folderPath),
       onNewFolder: () => this.#callbacks.onNewFolder(),
       onUploadImage: () => this.#callbacks.onUploadImage(),
-      onCaptureScreen: () => this.#callbacks.onCaptureScreen(),
-      onTimedCapture: () => this.#callbacks.onTimedCapture(),
+      onCaptureScreen: this.#callbacks.onCaptureScreen
+        ? () => this.#callbacks.onCaptureScreen?.()
+        : undefined,
+      onTimedCapture: this.#callbacks.onTimedCapture
+        ? () => this.#callbacks.onTimedCapture?.()
+        : undefined,
       onCaptureScreenDialog: this.#callbacks.onCaptureScreenDialog
         ? () => this.#callbacks.onCaptureScreenDialog?.()
         : undefined,

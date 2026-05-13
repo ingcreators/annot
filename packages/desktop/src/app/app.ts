@@ -727,14 +727,12 @@ async function init(): Promise<void> {
     onCaptureScreen: async () => {
       await doCapture("fullscreen");
     },
-    onTimedCapture: async () => {
-      // Timed capture (delayed Capture Screen) isn't implemented
-      // on the desktop host yet. The unified sidebar's "Timed
-      // Capture" item surfaces only when `isScreenCaptureSupported()`
-      // returns true (the browser API is technically present in
-      // the Tauri webview), so we stub it instead of letting the
-      // click fall through and emit an undefined-callback warning.
-    },
+    // Phase 5 of `docs/plans/web-capture-redesign.md` made
+    // `onTimedCapture` optional and the sidebar now hides the
+    // entry when omitted. The desktop host hadn't implemented
+    // timed capture beyond the empty stub, so we drop it
+    // entirely — users can install the (future) Auto Capture
+    // workspace in the desktop host once it's enabled there.
     onPasteClipboard: async () => {
       try {
         const items = await navigator.clipboard.read();

@@ -75,15 +75,19 @@ export interface BootstrapOptions {
    *  `app.ts` routes this into the existing `openEditor` flow. */
   onOpenImage: (record: ImageRecord) => void;
   /** Callbacks for the unified sidebar's built-in "New" menu items
-   *  (Capture Screen / Timed Capture / Paste Clipboard / Upload
-   *  Image). Desktop-only entries (Capture Window / Capture Region
-   *  / Open Browse Window) are appended via `getNewMenuExtras`
-   *  below — they used to live as a separate action-row above the
-   *  gallery (`<div class="desktop-fs-action-row">`); folding them
-   *  into the New menu lets the desktop's gallery chrome match the
-   *  PWA's. */
+   *  (Capture Screen / Paste Clipboard / Upload Image). Desktop-
+   *  only entries (Capture Window / Capture Region / Open Browse
+   *  Window) are appended via `getNewMenuExtras` below — they used
+   *  to live as a separate action-row above the gallery
+   *  (`<div class="desktop-fs-action-row">`); folding them into the
+   *  New menu lets the desktop's gallery chrome match the PWA's.
+   *
+   *  Phase 5 of `docs/plans/web-capture-redesign.md` retired the
+   *  PWA's `Timed Capture...` flow. The desktop hadn't implemented
+   *  timed capture beyond a stub, so this no longer takes an
+   *  `onTimedCapture` — use a future Auto Capture workspace once
+   *  it's enabled in the desktop host. */
   onCaptureScreen: () => Promise<void>;
-  onTimedCapture: () => Promise<void>;
   onPasteClipboard: () => Promise<void>;
   onUploadImage: () => void;
   /** Host-supplied extras for the New menu. The desktop wires
@@ -228,7 +232,6 @@ export async function bootstrapDesktopFsGallery(
     onNewFolder: () => fileManager.createNewFolder(),
     onUploadImage: () => opts.onUploadImage(),
     onCaptureScreen: () => opts.onCaptureScreen(),
-    onTimedCapture: () => opts.onTimedCapture(),
     onPasteClipboard: () => opts.onPasteClipboard(),
     isBuiltinDisabled: (mode: string) => DISABLED_BUILTINS.has(mode),
     getNewMenuExtras: opts.getNewMenuExtras,

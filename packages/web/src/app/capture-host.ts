@@ -13,7 +13,6 @@
  */
 
 import type { StorageProvider } from "@ingcreators/annot-core/storage";
-import { newIdB58 } from "@ingcreators/annot-core/utils";
 import { readEditableImage } from "@ingcreators/annot-core/xmp";
 import type { FileManager } from "@ingcreators/annot-host-ui/gallery/file-manager";
 import { generateThumbnailFromDataUrl } from "@ingcreators/annot-host-ui/image-thumbnail";
@@ -21,12 +20,7 @@ import type { ThumbnailManager } from "@ingcreators/annot-host-ui/thumbnail-mana
 import { setCapturePendingSession } from "../capture/capture-pending-session.js";
 import { saveCursorPreference, saveModePreference } from "../capture/capture-prefs.js";
 import { showCaptureScreenDialog } from "../capture/capture-screen-dialog.js";
-import {
-  loadCursorPreference,
-  showIntervalCaptureDialog,
-  showIntervalCaptureProgress,
-} from "../capture/interval-dialog.js";
-import { captureScreen, pasteFromClipboard, startIntervalCapture } from "../capture/pwa-capture.js";
+import { pasteFromClipboard } from "../capture/pwa-capture.js";
 import { captureUrl, pushRoute } from "../router.js";
 import { showSaveError } from "../ui/error-bar.js";
 import { fileToDataUrl, loadImage } from "./image-utils.js";
@@ -65,13 +59,6 @@ export interface CaptureHostDeps {
 export class CaptureHost {
   constructor(private readonly deps: CaptureHostDeps) {}
 
-  async captureScreenAndSave(): Promise<void> {
-    // Use last-chosen cursor preference; defaults to "always".
-    const dataUrl = await captureScreen(loadCursorPreference());
-    if (!dataUrl) return;
-    await this.saveDataUrlAndOpen(dataUrl);
-  }
-
   /**
    * Phase 2 of `docs/plans/web-capture-redesign.md` — opens the new
    * `Capture Screen...` mode-picker dialog and routes the user
@@ -101,107 +88,6 @@ export class CaptureHost {
     // Surface the workspace via the routing pathway so plugin
     // route-change listeners + browser history all participate.
     this.deps.openCaptureWorkspace();
-  }
-
-  async timedCaptureAndSave(): Promise<void> {
-    const storage = this.deps.getStorage();
-    if (!storage) return;
-    const cfg = await showIntervalCaptureDialog();
-    if (!cfg) return;
-    // Remember the cursor choice for next captures (single + timed)
-    saveCursorPreference(cfg.cursor);
-
-    const progress = showIntervalCaptureProgress(cfg.count);
-    const folderPath = this.deps.getCurrentFolderPath();
-    const sessionId = newIdB58();
-    const total = cfg.count;
-    let savedFrames = 0;
-
-    const handle = await startIntervalCapture({
-      intervalSec: cfg.intervalSec,
-      count: cfg.count,
-      cursor: cfg.cursor,
-      onProgress: (captured, total) => progress.update(captured, total),
-      onError: (err) => console.error("[timed-capture] frame error:", err),
-      onFrame: async (dataUrl, index) => {
-        try {
-          const img = await loadImage(dataUrl);
-          const thumbnailDataUrl = await generateThumbnailFromDataUrl(dataUrl);
-          const now = new Date().toISOString();
-          const sec = String(index + 1).padStart(3, "0");
-          const savedPath = await storage.saveImage(
-            {
-              originalDataUrl: dataUrl,
-              thumbnailDataUrl,
-              annotationsSvg: "",
-              width: img.naturalWidth,
-              height: img.naturalHeight,
-              sourceUrl: "",
-              tags: {
-                timed: "1",
-                seq: sec,
-                captureId: newIdB58(),
-                session: sessionId,
-                sessionKind: "interval",
-                sessionIndex: String(index),
-                sessionTotal: String(total),
-              },
-              folderPath,
-              createdAt: now,
-              updatedAt: now,
-            },
-            { filename: `capture-${now.replace(/[:.]/g, "-")}-${sec}.jpg` },
-          );
-          // Seed the unified thumbnail cache so the gallery card
-          // renders immediately without a prefetch round-trip.
-          // No-op for stores that don't participate.
-          await this.deps.getThumbnailManager()?.write(storage, savedPath, thumbnailDataUrl, {
-            width: img.naturalWidth,
-            height: img.naturalHeight,
-          });
-          savedFrames++;
-        } catch (e) {
-          console.error("[timed-capture] save error:", e);
-        }
-      },
-    });
-
-    if (!handle) {
-      progress.complete();
-      return;
-    }
-
-    progress.setOnCancel(() => handle.cancel());
-
-    await handle.done;
-    progress.complete();
-
-    // Return focus to this tab (which initiated the capture).
-    // Chrome may require a recent user gesture; try multiple paths.
-    try {
-      window.focus();
-      // If the tab is hidden, try flashing title to draw attention as a fallback.
-      if (document.visibilityState !== "visible") {
-        const originalTitle = document.title;
-        document.title = `✔ Capture complete — ${originalTitle}`;
-        const restore = () => {
-          document.title = originalTitle;
-          document.removeEventListener("visibilitychange", restore);
-        };
-        document.addEventListener("visibilitychange", restore);
-      }
-    } catch {
-      /* ignore */
-    }
-
-    // Interval capture frames are tagged with a session id for future
-    // grouping, but we don't auto-open any editor — just refresh the
-    // gallery so the new frames are visible.
-    await this.deps.getFileManager()?.refresh(folderPath);
-    // Silence the unused-var warning for `savedFrames` / `sessionId` while
-    // still keeping the ids attached to the stored tags for later features.
-    void savedFrames;
-    void sessionId;
   }
 
   async pasteAndSave(): Promise<void> {
