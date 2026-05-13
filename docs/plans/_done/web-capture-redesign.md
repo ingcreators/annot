@@ -1,6 +1,8 @@
 # Web Capture Redesign
 
-> **Status:** Queued
+> **Status:** Done (Phases 0–5 landed; Capture Area + Edit shortcut
+>             dropped in follow-up cleanup — see "Scope adjustments
+>             during rollout" below).
 > **Compatibility:** PWA only (`packages/web` + `packages/host-ui`).
 >           VSCode / Desktop / Extension hosts unchanged. No
 >           `StorageProvider`, `ImageRecord`, or SVG schema changes.
@@ -53,6 +55,29 @@ Confirmed scope decisions (user sign-off):
   "Discard N pending candidates?".
 - **Edit on a candidate** = Accept + open editor (shortcut, not
   edit-before-save).
+
+## Scope adjustments during rollout
+
+After Phases 1–5 landed, real-usage feedback prompted two scope
+trims (folded into a single cleanup PR that landed alongside Phase
+5 in spirit):
+
+- **Capture Area is removed entirely** (was listed under Deferred
+  below). The cropping workflow it would have offered is already
+  covered by the editor's destructive crop tool — running Capture
+  Once and then cropping in the editor produces the same outcome
+  without a parallel selection UI inside the workspace. The
+  `Capture Area` chip is dropped from the dialog; the
+  `CaptureMode` union shrinks to `"auto" | "once"`; the
+  `Capture Area` button is removed from the workspace toolbar.
+- **Edit shortcut on candidate cards is removed.** The "Accept +
+  open editor" hand-off the Phase 3 sign-off blessed didn't
+  survive real usage — the in-flight blob → editor mount path
+  produced inconsistent state. Candidate cards now expose only
+  Accept (save without leaving the workspace) and Delete. Users
+  open saved captures from the gallery after they leave the
+  workspace, the same way Auto Capture / Capture Once candidates
+  reach the editor today.
 
 ## Design
 
@@ -486,11 +511,13 @@ removes the *capture entry point*, not the resulting records.
 `StorageProvider`, `ImageRecord`, `PageMetadata`, and the SVG
 schema are all unchanged. No `data-annot-version` bump.
 
-## Deferred (spec Phases 4 + 5, future PRs)
+## Deferred (spec Phase 5, future PRs)
 
-- **Capture Area** (spec §12). Selection overlay on preview,
-  `previewRectToVideoRect` coordinate mapping, `Use Previous Area`,
-  letterboxing offset for `object-fit: contain`.
+- **~~Capture Area~~** — RETIRED during rollout. The editor's
+  destructive crop tool covers the same workflow; see "Scope
+  adjustments during rollout" above. The spec's §12 (selection
+  overlay, coordinate mapping, `Use Previous Area`, letterboxing
+  offset) is not coming to the workspace.
 - **Save size presets** (spec §6.5, §13.2). `Light 1280px` /
   `Standard 1920px` / `High Quality 2560px` / `Original`.
 - **Smart PNG-8 encode pipeline adoption** (replaces spec §14's

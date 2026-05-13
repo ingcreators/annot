@@ -84,7 +84,6 @@ export class AnnotCandidatePanelElement extends LitElement {
             (c) => html`<annot-candidate-card
               .candidate=${c}
               @candidate-accept=${(e: Event) => this.#forward(e, "candidate-accept")}
-              @candidate-edit=${(e: Event) => this.#forward(e, "candidate-edit")}
               @candidate-delete=${(e: Event) => this.#forward(e, "candidate-delete")}
             ></annot-candidate-card>`,
           )}

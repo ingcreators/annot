@@ -1,16 +1,16 @@
 /**
  * `<annot-candidate-card>` — single capture candidate row inside
  * `<annot-candidate-panel>`. Renders thumbnail + timestamp + status
- * + Accept / Edit / Delete buttons.
+ * + Accept / Delete buttons.
  *
- * Phase 3 of `docs/plans/web-capture-redesign.md`. Lit Phase 6 —
- * light DOM, `static properties`, no decorators.
+ * Phase 3 of `docs/plans/web-capture-redesign.md`, with the Edit
+ * shortcut retired in the follow-up cleanup PR — the "Accept +
+ * open editor" flow didn't survive contact with real usage, so
+ * the card now offers only Accept (save without leaving the
+ * workspace) and Delete. Users can open any saved capture in the
+ * editor from the gallery after they leave the workspace.
  *
- * Edit semantics: per the user's Phase 3 sign-off, Edit = Accept +
- * open editor (one click instead of two). The workspace's Edit
- * handler dispatches both the accept-and-save path AND the
- * editor-navigation. The card itself is dumb and just emits the
- * `candidate-edit` event with the candidate id.
+ * Lit Phase 6 — light DOM, `static properties`, no decorators.
  */
 
 import { html, LitElement } from "../lit.js";
@@ -62,13 +62,6 @@ export class AnnotCandidateCardElement extends LitElement {
             </button>
             <button
               type="button"
-              class="candidate-card-btn"
-              @click=${() => this.#emit("candidate-edit")}
-            >
-              Edit
-            </button>
-            <button
-              type="button"
               class="candidate-card-btn candidate-card-btn-danger"
               @click=${() => this.#emit("candidate-delete")}
             >
@@ -80,7 +73,7 @@ export class AnnotCandidateCardElement extends LitElement {
     `;
   }
 
-  #emit(name: "candidate-accept" | "candidate-edit" | "candidate-delete"): void {
+  #emit(name: "candidate-accept" | "candidate-delete"): void {
     this.dispatchEvent(
       new CustomEvent(name, { bubbles: true, detail: { id: this.candidate?.id } }),
     );

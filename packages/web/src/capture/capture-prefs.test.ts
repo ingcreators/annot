@@ -51,13 +51,13 @@ describe("capture-prefs", () => {
       expect(loadModePreference()).toBe("once");
     });
 
-    it("persists 'area' across load", () => {
-      saveModePreference("area");
-      expect(loadModePreference()).toBe("area");
-    });
-
     it("falls back to 'auto' on unrecognised stored value", () => {
       localStorage.setItem("annot-capture-mode", "garbage");
+      expect(loadModePreference()).toBe("auto");
+    });
+
+    it("legacy 'area' values map to 'auto' (Capture Area was retired)", () => {
+      localStorage.setItem("annot-capture-mode", "area");
       expect(loadModePreference()).toBe("auto");
     });
   });

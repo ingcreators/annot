@@ -73,14 +73,11 @@ describe("showCaptureScreenDialog", () => {
     expect(document.querySelector("annot-capture-screen-dialog")).toBeNull();
   });
 
-  it("Start button is disabled when the selected mode is not enabled", async () => {
-    // `area` is the only disabled chip in Phase 4 (auto + once both
-    // enabled). Picking `area` should grey the Start button out.
-    const promise = showCaptureScreenDialog({ mode: "area" });
+  it("Start button is always enabled (every chip is a valid choice)", async () => {
+    const promise = showCaptureScreenDialog({ mode: "auto" });
     await Promise.resolve();
     const btn = findDialog().querySelector<HTMLButtonElement>(".capture-dialog-btn-primary");
-    expect(btn?.disabled).toBe(true);
-    // Clean up — cancel so the promise resolves.
+    expect(btn?.disabled).toBe(false);
     clickCancel();
     await promise;
   });

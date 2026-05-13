@@ -40,9 +40,6 @@ const meta: Meta<Args> = {
     el.addEventListener("candidate-accept", (e) =>
       console.log("[story] candidate-accept", (e as CustomEvent).detail),
     );
-    el.addEventListener("candidate-edit", (e) =>
-      console.log("[story] candidate-edit", (e as CustomEvent).detail),
-    );
     el.addEventListener("candidate-delete", (e) =>
       console.log("[story] candidate-delete", (e as CustomEvent).detail),
     );

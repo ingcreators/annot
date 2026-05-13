@@ -2082,12 +2082,16 @@ export class App {
       });
     });
     // Phase 3 of `docs/plans/web-capture-redesign.md`. Candidate
-    // Accept (and Edit, which is Accept + open editor per the
-    // user's Phase 3 sign-off) routes the blob through the
-    // existing `saveDataUrlAndOpen` path. The host calls
-    // `removeCandidate` after a successful save so the panel drops
-    // the card. Errors keep the candidate around so the user can
-    // retry.
+    // Accept routes the blob through `saveDataUrlSilently` (the
+    // user is mid-triage; opening the editor would tear down the
+    // workspace). The host calls `removeCandidate` after a
+    // successful save so the panel drops the card. Errors keep
+    // the candidate around so the user can retry.
+    //
+    // The original "Edit = Accept + open editor" shortcut was
+    // removed in a follow-up cleanup — the in-flight blob → editor
+    // hand-off didn't survive contact with real usage. Users open
+    // saved captures via the gallery after leaving the workspace.
     workspace.addEventListener("candidate-accepted", (e) => {
       const detail = (e as CustomEvent).detail as {
         id: string;
@@ -2096,15 +2100,10 @@ export class App {
         width: number;
         height: number;
         folderPath: string;
-        openEditor: boolean;
       };
       void blobToDataUrl(detail.blob)
         .then(async (dataUrl) => {
-          if (detail.openEditor) {
-            await this.#captureHost.saveDataUrlAndOpen(dataUrl);
-          } else {
-            await this.#captureHost.saveDataUrlSilently(dataUrl);
-          }
+          await this.#captureHost.saveDataUrlSilently(dataUrl);
           // Cast through the typed element so the
           // workspace-internal API stays in sync.
           (workspace as unknown as { removeCandidate: (id: string) => void }).removeCandidate(
