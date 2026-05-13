@@ -137,6 +137,8 @@ export class AnnotCaptureWorkspaceElement extends LitElement {
     super.disconnectedCallback();
     this.#engine?.stop();
     this.#engine = null;
+    const video = this.#preview?.getVideoElement();
+    video?.removeEventListener("resize", this.#onVideoResize);
     this.#session?.stop();
     this.#session = null;
     this.#store.clear();
@@ -406,6 +408,16 @@ export class AnnotCaptureWorkspaceElement extends LitElement {
     this.state = "sharing";
     this.sourceWidth = session.sourceWidth;
     this.sourceHeight = session.sourceHeight;
+    // Track source-resolution changes so the "Source: WxH" label
+    // stays accurate when the user resizes the shared window or
+    // navigates to a page with a different layout. The
+    // `<video>` element fires `resize` whenever its
+    // `videoWidth` / `videoHeight` change post-load. The Auto
+    // Capture engine also re-baselines on dimension change
+    // (`auto-capture.ts:#processFrame`), so the engine + the
+    // header display stay in sync. */
+    const video = this.#preview?.getVideoElement();
+    video?.addEventListener("resize", this.#onVideoResize);
     if (this.#pending.mode === "auto") {
       this.statusMessage = AUTO_STATE_COPY.idle;
       this.#startAutoEngine();
@@ -413,6 +425,12 @@ export class AnnotCaptureWorkspaceElement extends LitElement {
       this.statusMessage = "Sharing — click Capture Once to save the current frame.";
     }
   }
+
+  #onVideoResize = (): void => {
+    if (!this.#session) return;
+    this.sourceWidth = this.#session.sourceWidth;
+    this.sourceHeight = this.#session.sourceHeight;
+  };
 
   #startAutoEngine(): void {
     if (!this.#session) return;

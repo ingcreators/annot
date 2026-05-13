@@ -169,6 +169,22 @@ export class AutoCaptureEngine {
       return;
     }
 
+    // Source dimensions changed (user resized the shared window /
+    // navigated to a page with a different layout that resized the
+    // viewport / DPR shifted) — `computeDiffScore` would throw on
+    // mismatched dimensions and `#tick`'s try / catch would swallow
+    // it silently, leaving the engine paralysed (every subsequent
+    // tick throws against the same stale baseline → no captures
+    // ever land). Reset the baseline + capture the new view as a
+    // fresh starting point.
+    if (this.#baseline.width !== current.width || this.#baseline.height !== current.height) {
+      this.#baseline = current;
+      this.#stableWaitStartedMs = null;
+      this.#setState("idle");
+      this.#captureNow(current);
+      return;
+    }
+
     const diff = computeDiffScore(this.#baseline, current);
     const meaningful = isMeaningfulChange(diff);
 
