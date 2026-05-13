@@ -236,6 +236,23 @@ export {
   StoragePermissionError,
   StorageQuotaError,
 } from "./storage/errors.js";
+// ─── Metadata cache (Tier A interface + capability + predicate) ───────
+// Phase 1 of `docs/plans/shared-metadata-cache.md`. Shared cache
+// layer for `ImageRecord` / `DocumentRecord` / folder listings,
+// pluggable via the `StorageWithMetadataCache` capability. The
+// first-party `IndexedDBMetadataCache` in
+// `@ingcreators/annot-host-ui` is the canonical browser-side impl;
+// tests / Node hosts swap in an in-memory mock. Pure types + a
+// runtime `supportsMetadataCache` predicate — no DOM.
+export {
+  type ListingEntry,
+  type ListingEntryKind,
+  type MetadataCache,
+  MetadataCacheError,
+  MetadataCacheQuotaError,
+  type StorageWithMetadataCache,
+  supportsMetadataCache,
+} from "./storage/metadata-cache.js";
 // ─── Path utilities (pure string manipulation) ────────────────────────
 export {
   ancestorPaths,

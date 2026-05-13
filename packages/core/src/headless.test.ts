@@ -37,6 +37,12 @@ describe("@ingcreators/annot-core/headless boundary", () => {
     // Capability predicate added in Phase 6a of
     // `docs/plans/_done/annot-html-document.md`.
     expect(typeof headless.supportsDocuments).toBe("function");
+    // Capability predicate added in Phase 1 of
+    // `docs/plans/shared-metadata-cache.md`. The error classes are
+    // runtime constructors so they get spot-checked here too.
+    expect(typeof headless.supportsMetadataCache).toBe("function");
+    expect(typeof headless.MetadataCacheError).toBe("function");
+    expect(typeof headless.MetadataCacheQuotaError).toBe("function");
     // Toolbar tool registry — Phase 1 of `docs/plans/toolbar-schema.md`.
     // Pure data + jsdom-friendly classifiers; loading the module here
     // proves it doesn't reach for `document` / `window` at import time.
