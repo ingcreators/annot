@@ -472,6 +472,12 @@ async function refreshGithubToken(): Promise<string | null> {
 /** Connect to GitHub with a selected repo ref. */
 export function connectGitHub(token: string, ref: GitHubRepoRef): StorageProvider {
   const store = new GitHubStore(token, ref);
+  store.attachMetadataCache(getMetadataCache());
+  // Best-effort: check the live HEAD SHA against our last-known
+  // value; mismatch invalidates the in-session caches so the next
+  // operation refetches from a clean slate. Fire-and-forget — a
+  // network failure here leaves the user offline-capable.
+  void store.init();
   store.setTokenRefresher(refreshGithubToken);
   store.setRateLimitListener(({ remaining, resetAt }) => {
     // Advisory info banner; non-blocking. Fires at most once per

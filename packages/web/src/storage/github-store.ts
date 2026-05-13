@@ -30,9 +30,12 @@ import type {
   FolderRecord,
   ImageRecord,
   ImageRecordUpdate,
+  MetadataCache,
   StorageProvider,
   StorageWithDocuments,
   StorageWithForceRefresh,
+  StorageWithInit,
+  StorageWithMetadataCache,
   StorageWithRateLimit,
   StorageWithResync,
   StorageWithThumbnailCache,
@@ -114,12 +117,14 @@ interface TreeOp {
 export class GitHubStore
   implements
     StorageProvider,
+    StorageWithInit,
     StorageWithResync,
     StorageWithForceRefresh,
     StorageWithTokenRefresher,
     StorageWithRateLimit,
     StorageWithThumbnailCache,
-    StorageWithDocuments
+    StorageWithDocuments,
+    StorageWithMetadataCache
 {
   /** HTTP layer — owns token, token-refresh, rate-limit state, and
    *  the GitHub-specific error mapping. Synthesised in the public
@@ -184,12 +189,141 @@ export class GitHubStore
 
   // Token refresh + rate-limit telemetry now live inside `#api`.
 
+  // ── MetadataCache integration (Phase 5 of shared-metadata-cache) ──
+  /**
+   * Host-supplied metadata cache. The store still maintains its
+   * own bespoke in-session caches (`#tree`, `#cache`, `#docMeta`)
+   * because they're tightly coupled to GitHub's Contents-API
+   * optimistic-concurrency model — the full migration onto
+   * `MetadataCache`'s listing layer is queued as a follow-up.
+   * Phase 5 of `docs/plans/shared-metadata-cache.md` integrates
+   * the cache for two narrower wins:
+   *
+   *   - `branchHead` namespace meta persists the last-known HEAD
+   *     commit SHA across sessions. `init()` compares it against
+   *     the current live HEAD via 1 cheap `GET /git/refs/...`;
+   *     mismatch triggers a forced cache reset before the first
+   *     listing so peers' commits get picked up automatically.
+   *   - Cross-tab `annot-metadata-ns-changed` listener: when a
+   *     peer tab commits, our local `#tree` / `#cache` get
+   *     invalidated so the next read fetches fresh.
+   */
+  #cache_md?: MetadataCache;
+  /** Memory shortcut for `branchHead` so we don't re-read IDB on
+   *  every operation. Cleared by the cross-tab listener so peer
+   *  commits force a re-check. */
+  #headShaMemo: string | null = null;
+  /** Per-instance handler bound to `window` for cross-tab updates.
+   *  Stored so we can remove it on teardown — not strictly needed
+   *  today (stores live for the page's lifetime) but harmless. */
+  #onNsChangedBound?: (e: Event) => void;
+
   constructor(token: string, ref: GitHubRepoRef, apiClient?: GitHubApiClient) {
     this.#api = apiClient ?? createGitHubApiClient(token);
     this.#owner = ref.owner;
     this.#repo = ref.repo;
     this.#branch = ref.branch;
     this.#basePath = ref.basePath || "";
+  }
+
+  // ── StorageWithMetadataCache ─────────────────────────────────
+
+  metadataNamespace(): string {
+    return `github:${this.#owner}/${this.#repo}:${this.#branch}`;
+  }
+
+  attachMetadataCache(cache: MetadataCache): void {
+    this.#cache_md = cache;
+    if (typeof window !== "undefined") {
+      const handler = (e: Event) => {
+        const detail = (e as CustomEvent<{ ns: string; key: string }>).detail;
+        if (!detail) return;
+        if (detail.ns !== this.metadataNamespace()) return;
+        if (detail.key !== "branchHead") return;
+        // Peer tab committed something. Drop our memory shortcuts
+        // so the next operation re-validates against the live
+        // HEAD and refetches the tree.
+        this.#headShaMemo = null;
+        this.#tree.clear();
+        this.#cache.clear();
+      };
+      this.#onNsChangedBound = handler;
+      window.addEventListener("annot-metadata-ns-changed", handler);
+    }
+  }
+
+  /**
+   * One-shot startup hook — reconciles the local cache against the
+   * live branch HEAD. If our last-known `branchHead` matches what
+   * the API reports, nothing has changed since last session and
+   * existing in-session caches (when they're populated) stay
+   * valid. If it differs, we clear caches so the first
+   * `listImages` fetches a fresh tree.
+   *
+   * Cheap: 1 API call to `GET /git/refs/heads/{branch}`
+   * (significantly smaller than the recursive tree fetch).
+   * Silently best-effort: a network failure here leaves caches
+   * intact and the user can still operate offline against memory
+   * data.
+   */
+  async init(): Promise<void> {
+    if (!this.#cache_md) return;
+    try {
+      const ns = this.metadataNamespace();
+      const knownHead = await this.#cache_md.getNamespaceMeta(ns, "branchHead");
+      const liveHead = await this.#fetchBranchHead();
+      this.#headShaMemo = liveHead;
+      if (knownHead && liveHead && knownHead !== liveHead) {
+        // Stale cache from a prior session — drop it. Don't await
+        // the prefix-invalidation because we want `init()` to
+        // return quickly; the next `listImages` will see the
+        // cleared `#tree` / `#cache` and refetch.
+        this.#tree.clear();
+        this.#cache.clear();
+        this.#docMeta.clear();
+      }
+      if (liveHead && liveHead !== knownHead) {
+        await this.#cache_md.putNamespaceMeta(ns, "branchHead", liveHead);
+      }
+    } catch {
+      /* offline / 401 / 404 — leave caches intact */
+    }
+  }
+
+  /**
+   * Read the current branch HEAD commit SHA. Best-effort: 404 on
+   * empty repos returns `null` so callers can treat "no commits
+   * yet" the same as "matches our zero-state".
+   */
+  async #fetchBranchHead(): Promise<string | null> {
+    const owner = encodeURIComponent(this.#owner);
+    const repo = encodeURIComponent(this.#repo);
+    const branch = encodeURIComponent(this.#branch);
+    try {
+      const resp = await this.#fetch(
+        `${GITHUB_API}/repos/${owner}/${repo}/git/refs/heads/${branch}`,
+      );
+      const body = (await resp.json()) as { object?: { sha?: string } };
+      return body?.object?.sha ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Push a freshly-known HEAD commit SHA into namespace meta.
+   * Called after every commit response so peer tabs find a
+   * matching `branchHead` instead of triggering a spurious reset
+   * on their next `init()`.
+   */
+  async #recordBranchHead(commitSha: string): Promise<void> {
+    this.#headShaMemo = commitSha;
+    if (!this.#cache_md) return;
+    try {
+      await this.#cache_md.putNamespaceMeta(this.metadataNamespace(), "branchHead", commitSha);
+    } catch {
+      /* best-effort */
+    }
   }
 
   setToken(token: string): void {
@@ -409,6 +543,11 @@ export class GitHubStore
     // Materialise the containing folder (and ancestors) in the
     // sidebar tree without waiting for a tree re-fetch.
     this.#tree.addFolderWithAncestors(getParentPath(relPath));
+    // Persist the new HEAD commit SHA for peer-tab freshness.
+    const newCommitSha: string | undefined = data?.commit?.sha;
+    if (newCommitSha) {
+      await this.#recordBranchHead(newCommitSha);
+    }
     return newSha;
   }
 
@@ -569,6 +708,9 @@ export class GitHubStore
     // Refresh local state to reflect the new blob.
     this.#tree.setBlobSha(relPath, newBlobSha);
     this.#tree.addFolderWithAncestors(getParentPath(relPath));
+    // Persist the new HEAD commit SHA so peer tabs don't think
+    // we're stale after we just authored a commit.
+    await this.#recordBranchHead(newCommitSha);
     return newBlobSha;
   }
 
@@ -731,6 +873,9 @@ export class GitHubStore
         if (newBlobSha) this.#tree.setBlobSha(op.relPath, newBlobSha);
         this.#tree.addFolderWithAncestors(getParentPath(op.relPath));
       }
+      // Persist the new HEAD commit SHA so peer tabs don't think
+      // we're stale after we just authored a multi-file commit.
+      await this.#recordBranchHead(newCommitSha);
       return newCommitSha;
     } catch (e) {
       console.warn("[github-store] tree commit failed, caller will fall back:", e);
@@ -741,7 +886,7 @@ export class GitHubStore
   /** Delete a file. Requires the current SHA. */
   async #deleteContents(relPath: string, sha: string, message: string): Promise<void> {
     const full = this.#fullPath(relPath);
-    await this.#fetch(this.#contentsUrl(full), {
+    const resp = await this.#fetch(this.#contentsUrl(full), {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -754,6 +899,13 @@ export class GitHubStore
     // We intentionally don't prune ancestor folders here — other
     // stores (Drive, Device, Browser) leave the folder visible after
     // its last child is deleted, and we mirror that behaviour.
+    try {
+      const data = await resp.json();
+      const newCommitSha: string | undefined = data?.commit?.sha;
+      if (newCommitSha) await this.#recordBranchHead(newCommitSha);
+    } catch {
+      /* response not JSON / no commit info — best-effort */
+    }
   }
 
   /**
