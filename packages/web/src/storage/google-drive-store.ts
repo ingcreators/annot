@@ -127,31 +127,39 @@ export class GoogleDriveStore
     this.#api.setTokenRefresher(refresher);
   }
 
-  // ── MetadataCache integration (Phase 6 of shared-metadata-cache) ──
+  // ── MetadataCache integration ────────────────────────────────
   /**
-   * Host-supplied metadata cache. Drive keeps its bespoke in-session
-   * caches (path↔id maps, `#recordCache`, `#fileMeta`,
-   * `#documentMeta`) because they're tightly coupled to Drive's
-   * ID-native API patterns. Phase 6 of
-   * `docs/plans/shared-metadata-cache.md` adds two narrower wins:
+   * Host-supplied metadata cache. Replaces the bespoke per-path
+   * `#recordCache` Map (Phase 10 of the shared-metadata-cache
+   * plan). Drive's other bespoke in-session caches —
+   * `#pathToFolderId` / `#folderIdToPath` / `#pathToFileId` /
+   * `#fileIdToPath` (path↔id maps), `#fileMeta` (per-fileId Drive
+   * metadata), `#documentMeta` (per-document title / counts) —
+   * remain in-memory because they're keyed by Drive ID rather
+   * than path, and the path↔id resolution lives on every API
+   * call's hot path.
    *
-   *   - `changesPageToken` namespace meta persists the Drive Changes
-   *     API resume token across sessions. Initial seed on `init()`
-   *     via `GET /drive/v3/changes/startPageToken`. Differential
-   *     application of changes is queued for a follow-up plan.
-   *   - Cross-tab listener: peer-tab token advances drop the local
-   *     in-session caches so subsequent reads re-list against the
-   *     real Drive state.
+   * The cache also wires:
+   *
+   *   - `changesPageToken` namespace meta persists the Drive
+   *     Changes API resume token across sessions (Phase 6).
+   *   - Cross-tab listener: peer-tab token advances drop the
+   *     local in-session caches so subsequent reads re-list
+   *     against the real Drive state.
    */
-  #cache_md?: MetadataCache;
+  #cache?: MetadataCache;
   #onNsChangedBound?: (e: Event) => void;
 
   metadataNamespace(): string {
     return `googledrive:${this.#rootFolderId}`;
   }
 
+  #ns(): string {
+    return this.metadataNamespace();
+  }
+
   attachMetadataCache(cache: MetadataCache): void {
-    this.#cache_md = cache;
+    this.#cache = cache;
     if (typeof window !== "undefined") {
       const handler = (e: Event) => {
         const detail = (e as CustomEvent<{ ns: string; key: string }>).detail;
@@ -166,7 +174,10 @@ export class GoogleDriveStore
         this.#pathToFileId.clear();
         this.#fileIdToPath.clear();
         this.#loadedFolders.clear();
-        this.#recordCache.clear();
+        // Record cache invalidation is fire-and-forget so the
+        // sync `addEventListener` callback stays sync. Errors
+        // here are non-fatal.
+        void this.#cacheClearRecords();
         this.#pathToFolderId.set("", this.#rootFolderId);
         this.#folderIdToPath.set(this.#rootFolderId, "");
       };
@@ -183,14 +194,14 @@ export class GoogleDriveStore
    * still operates against Drive directly.
    */
   async init(): Promise<void> {
-    if (!this.#cache_md) return;
+    if (!this.#cache) return;
     const ns = this.metadataNamespace();
     try {
-      const existing = await this.#cache_md.getNamespaceMeta(ns, "changesPageToken");
+      const existing = await this.#cache.getNamespaceMeta(ns, "changesPageToken");
       if (existing) return;
       const startToken = await this.#fetchStartPageToken();
       if (startToken) {
-        await this.#cache_md.putNamespaceMeta(ns, "changesPageToken", startToken);
+        await this.#cache.putNamespaceMeta(ns, "changesPageToken", startToken);
       }
     } catch {
       /* best-effort */
@@ -221,7 +232,7 @@ export class GoogleDriveStore
     this.#pathToFileId.clear();
     this.#fileIdToPath.clear();
     this.#loadedFolders.clear();
-    this.#recordCache.clear();
+    await this.#cacheClearRecords();
     this.#pathToFolderId.set("", this.#rootFolderId);
     this.#folderIdToPath.set(this.#rootFolderId, "");
   }
@@ -467,7 +478,7 @@ export class GoogleDriveStore
     // …)` in the save flow); we leave `thumbnailDataUrl` empty
     // here — the gallery hydrates from the manager separately.
     const now = new Date().toISOString();
-    this.#recordCache.set(path, {
+    await this.#cachePutRecord(path, {
       path,
       folderPath,
       originalDataUrl: data.originalDataUrl,
@@ -511,19 +522,104 @@ export class GoogleDriveStore
   }
 
   #fileMeta = new Map<string, any>();
+
   /**
-   * Cache of the last full `ImageRecord` we produced for each path.
-   * Crucial for edit-loop performance: `updateImage` internally calls
-   * `getImage` to pull the immutable original image data, and without
-   * this cache every single annotation save hit the Drive download
-   * endpoint before re-uploading. The cache is kept in sync by
-   * every mutation path below (`saveImage`, `updateImage`,
-   * `renameImage`, `deleteImage`, moves, folder renames, `resync`).
+   * Per-path `ImageRecord` cache. Crucial for edit-loop
+   * performance: `updateImage` internally calls `getImage` to pull
+   * the immutable original image data, and without this cache
+   * every annotation save would round-trip the Drive download
+   * endpoint before re-uploading.
+   *
+   * Phase 10 of the shared-metadata-cache plan migrated this off
+   * a bespoke in-memory Map onto the shared `MetadataCache`.
+   * Version is the constant `RECORD_VERSION` — Drive's per-file
+   * `modifiedTime` would let us version-gate properly, but it's
+   * keyed by Drive ID in `#fileMeta` and isn't always populated
+   * by the time we cache (e.g. fresh saves write the record
+   * before the upload response with `modifiedTime` returns). The
+   * constant-version model mirrors the old `Map`-keyed shape:
+   * cache hits invalidate explicitly via the mutation paths
+   * below; cross-tab broadcasts also invalidate per the IDB
+   * cache's standard pattern.
    */
-  #recordCache = new Map<string, ImageRecord>();
+  static readonly #RECORD_VERSION = "v1";
+
+  /** Read a cached `ImageRecord` by path. Returns `undefined` when
+   *  no cache is attached (no-op fallback) or the cache misses. */
+  async #cacheGetRecord(path: string): Promise<ImageRecord | undefined> {
+    if (!this.#cache) return undefined;
+    return await this.#cache.getImage(this.#ns(), path, GoogleDriveStore.#RECORD_VERSION);
+  }
+
+  /** Write an `ImageRecord` to the cache, no-op when not attached. */
+  async #cachePutRecord(path: string, record: ImageRecord): Promise<void> {
+    if (!this.#cache) return;
+    await this.#cache.putImage(this.#ns(), path, GoogleDriveStore.#RECORD_VERSION, record);
+  }
+
+  /** Drop a cached record at `path`. */
+  async #cachePurgeRecord(path: string): Promise<void> {
+    if (!this.#cache) return;
+    await this.#cache.invalidatePath(this.#ns(), path);
+  }
+
+  /** Rename a cached entry under a path change. The transform
+   *  callback rewrites `.path` / `.folderPath` on the value so the
+   *  cached record stays consistent with its new key. */
+  async #cacheMigrateRecord(
+    oldPath: string,
+    newPath: string,
+    transformRecord?: (rec: ImageRecord) => ImageRecord,
+  ): Promise<void> {
+    if (!this.#cache) return;
+    await this.#cache.migrateEntry(this.#ns(), oldPath, newPath);
+    if (!transformRecord) return;
+    const moved = await this.#cache.getImage(this.#ns(), newPath, GoogleDriveStore.#RECORD_VERSION);
+    if (moved) {
+      await this.#cache.putImage(
+        this.#ns(),
+        newPath,
+        GoogleDriveStore.#RECORD_VERSION,
+        transformRecord(moved),
+      );
+    }
+  }
+
+  /** Bulk-rewrite cached entries under `oldPrefix` to live under
+   *  `newPrefix` (folder rename / move). After the migrate, walk
+   *  the in-session path↔id map to find every key under the new
+   *  prefix and rewrite the in-record `path` / `folderPath`. */
+  async #cacheRewriteRecordPrefix(
+    oldPrefix: string,
+    newPrefix: string,
+    transformRecord?: (rec: ImageRecord, newPath: string) => ImageRecord,
+  ): Promise<void> {
+    if (!this.#cache) return;
+    await this.#cache.rewriteEntriesForPrefix(this.#ns(), oldPrefix, newPrefix);
+    if (!transformRecord) return;
+    for (const path of this.#pathToFileId.keys()) {
+      if (path !== newPrefix && !path.startsWith(`${newPrefix}/`)) continue;
+      const rec = await this.#cache.getImage(this.#ns(), path, GoogleDriveStore.#RECORD_VERSION);
+      if (rec) {
+        await this.#cache.putImage(
+          this.#ns(),
+          path,
+          GoogleDriveStore.#RECORD_VERSION,
+          transformRecord(rec, path),
+        );
+      }
+    }
+  }
+
+  /** Drop every cached record in this namespace. Used by
+   *  `resync()` / `forceRefresh()`. */
+  async #cacheClearRecords(): Promise<void> {
+    if (!this.#cache) return;
+    await this.#cache.invalidatePrefix(`${this.#ns()}:`);
+  }
 
   async getImage(path: string): Promise<ImageRecord | undefined> {
-    const cached = this.#recordCache.get(path);
+    const cached = await this.#cacheGetRecord(path);
     if (cached) return cached;
 
     const folderPath = getParentPath(path);
@@ -563,7 +659,7 @@ export class GoogleDriveStore
         createdAt: meta.createdTime || "",
         updatedAt: meta.createdTime || "",
       };
-      this.#recordCache.set(path, record);
+      await this.#cachePutRecord(path, record);
       return record;
     } catch {
       return undefined;
@@ -701,7 +797,7 @@ export class GoogleDriveStore
 
       // Keep the cached record coherent so the next edit doesn't
       // pull a pre-edit version from the cache.
-      this.#recordCache.set(path, {
+      await this.#cachePutRecord(path, {
         ...record,
         annotationsSvg,
         tags,
@@ -735,11 +831,11 @@ export class GoogleDriveStore
     this.#pathToFileId.delete(path);
     this.#pathToFileId.set(newPath, driveId);
     this.#fileIdToPath.set(driveId, newPath);
-    const cached = this.#recordCache.get(path);
-    if (cached) {
-      this.#recordCache.delete(path);
-      this.#recordCache.set(newPath, { ...cached, path: newPath, folderPath: newFolderPath });
-    }
+    await this.#cacheMigrateRecord(path, newPath, (rec) => ({
+      ...rec,
+      path: newPath,
+      folderPath: newFolderPath,
+    }));
     return newPath;
   }
 
@@ -762,11 +858,10 @@ export class GoogleDriveStore
     this.#pathToFileId.delete(path);
     this.#pathToFileId.set(newPath, driveId);
     this.#fileIdToPath.set(driveId, newPath);
-    const cached = this.#recordCache.get(path);
-    if (cached) {
-      this.#recordCache.delete(path);
-      this.#recordCache.set(newPath, { ...cached, path: newPath });
-    }
+    await this.#cacheMigrateRecord(path, newPath, (rec) => ({
+      ...rec,
+      path: newPath,
+    }));
     return newPath;
   }
 
@@ -784,7 +879,7 @@ export class GoogleDriveStore
       this.#pathToFileId.delete(path);
       this.#fileIdToPath.delete(imageId);
       this.#fileMeta.delete(imageId);
-      this.#recordCache.delete(path);
+      await this.#cachePurgeRecord(path);
     }
     if (docId) {
       this.#pathToDocumentId.delete(path);
@@ -1023,7 +1118,7 @@ export class GoogleDriveStore
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: newName }),
     });
-    this.#rewriteDescendantPaths(path, newPath);
+    await this.#rewriteDescendantPaths(path, newPath);
     return newPath;
   }
 
@@ -1047,11 +1142,11 @@ export class GoogleDriveStore
       `${DRIVE_API}/files/${driveId}?addParents=${newParentId}&removeParents=${oldParents}`,
       { method: "PATCH" },
     );
-    this.#rewriteDescendantPaths(path, newPath);
+    await this.#rewriteDescendantPaths(path, newPath);
     return newPath;
   }
 
-  #rewriteDescendantPaths(oldPath: string, newPath: string): void {
+  async #rewriteDescendantPaths(oldPath: string, newPath: string): Promise<void> {
     // Rewrite folder entries
     const folderEntries = Array.from(this.#pathToFolderId.entries());
     for (const [p, driveId] of folderEntries) {
@@ -1072,15 +1167,16 @@ export class GoogleDriveStore
         this.#fileIdToPath.set(driveId, np);
       }
     }
-    // Rewrite record cache entries (same prefix migration)
-    const cacheEntries = Array.from(this.#recordCache.entries());
-    for (const [p, rec] of cacheEntries) {
-      if (p === oldPath || p.startsWith(`${oldPath}/`)) {
-        const np = rewritePathPrefix(p, oldPath, newPath);
-        this.#recordCache.delete(p);
-        this.#recordCache.set(np, { ...rec, path: np, folderPath: getParentPath(np) });
-      }
-    }
+    // Rewrite record cache entries (same prefix migration) — the
+    // shared MetadataCache handles the key transfer atomically;
+    // the transform callback updates `path` / `folderPath` on
+    // each moved record so the cached value stays consistent
+    // with its new key.
+    await this.#cacheRewriteRecordPrefix(oldPath, newPath, (rec, np) => ({
+      ...rec,
+      path: np,
+      folderPath: getParentPath(np),
+    }));
     // Rewrite loaded folders set
     const loaded = Array.from(this.#loadedFolders);
     this.#loadedFolders.clear();
@@ -1109,8 +1205,12 @@ export class GoogleDriveStore
         this.#pathToFileId.delete(p);
         this.#fileIdToPath.delete(id);
         this.#fileMeta.delete(id);
-        this.#recordCache.delete(p);
       }
+    }
+    // Drop every cached record under this folder's prefix in one
+    // namespace-scoped call.
+    if (this.#cache) {
+      await this.#cache.invalidatePrefix(`${this.#ns()}:${path}`);
     }
   }
 
