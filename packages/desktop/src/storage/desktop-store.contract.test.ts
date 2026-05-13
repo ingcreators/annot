@@ -29,6 +29,9 @@ import { DesktopStore } from "./desktop-store.js";
 
 import { DEFAULT_ENCODE_OPTIONS } from "@ingcreators/annot-core/encode";
 import { createEditableImage } from "@ingcreators/annot-core/xmp";
+import { IndexedDBMetadataCache } from "@ingcreators/annot-host-ui/idb-metadata-cache";
+import { IDBFactory } from "fake-indexeddb";
+import { beforeEach } from "vitest";
 
 const stubDeps: BuildEditableImageDeps = {
   renderImageRecord: async () => {
@@ -42,7 +45,17 @@ const stubDeps: BuildEditableImageDeps = {
   createEditableImage,
 };
 
-runStorageContract(
-  "DesktopStore",
-  () => new DesktopStore(createMockDesktopFs(), "mock-library", stubDeps),
-);
+beforeEach(() => {
+  globalThis.indexedDB = new IDBFactory();
+});
+
+runStorageContract("DesktopStore", () => {
+  const store = new DesktopStore(createMockDesktopFs(), "mock-library", stubDeps);
+  store.attachMetadataCache(
+    new IndexedDBMetadataCache({
+      channelName: `desktop-store-contract-${Math.random().toString(36).slice(2)}`,
+      dispatchWindowEvents: false,
+    }),
+  );
+  return store;
+});

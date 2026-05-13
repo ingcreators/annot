@@ -10,8 +10,10 @@
 import { DEFAULT_ENCODE_OPTIONS } from "@ingcreators/annot-core/encode";
 import { supportsDocuments } from "@ingcreators/annot-core/storage";
 import { createEditableImage } from "@ingcreators/annot-core/xmp";
+import { IndexedDBMetadataCache } from "@ingcreators/annot-host-ui/idb-metadata-cache";
 import type { BuildEditableImageDeps } from "@ingcreators/annot-web/storage/image-encode";
-import { describe, expect, it } from "vitest";
+import { IDBFactory } from "fake-indexeddb";
+import { beforeEach, describe, expect, it } from "vitest";
 import { createMockDesktopFs } from "./desktop-fs.test-mock.js";
 import { DesktopStore } from "./desktop-store.js";
 
@@ -40,8 +42,19 @@ const SAMPLE_BYTES = `<!doctype html>
 </html>
 `;
 
+beforeEach(() => {
+  globalThis.indexedDB = new IDBFactory();
+});
+
 function makeStore(): DesktopStore {
-  return new DesktopStore(createMockDesktopFs(), "mock-library", stubDeps);
+  const store = new DesktopStore(createMockDesktopFs(), "mock-library", stubDeps);
+  store.attachMetadataCache(
+    new IndexedDBMetadataCache({
+      channelName: `desktop-store-documents-${Math.random().toString(36).slice(2)}`,
+      dispatchWindowEvents: false,
+    }),
+  );
+  return store;
 }
 
 function makePayload(overrides: Partial<Parameters<DesktopStore["saveDocument"]>[0]> = {}) {
