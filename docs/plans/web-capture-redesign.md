@@ -86,9 +86,17 @@ Confirmed scope decisions (user sign-off):
   move to a new `packages/web/src/capture/capture-prefs.ts` in
   Phase 1 so they survive the Phase 5 deletion of
   `interval-dialog.ts`.
-- **Format / size in Phases 1–4**: keep current behaviour — JPEG
-  @ 0.92, no resize from source. PNG default + size presets land
-  in spec Phase 5 (deferred).
+- **Format / size in Phases 1–4**: keep current behaviour — direct
+  `canvas.toDataURL("image/jpeg", 0.92)` (today's
+  [`pwa-capture.ts:49`](../../packages/web/src/capture/pwa-capture.ts:49)
+  / `:331` path), no resize from source. The format work in spec
+  Phase 5 routes captures through the existing
+  [`encodeCapture()`](../../packages/core/src/encode/index.ts:39)
+  smart pipeline — sampled-color PNG-8 quantisation via
+  `@ingcreators/annot-imagequant`, with JPEG fallback for
+  photo-heavy frames per `EncodeOptions.smartFallback`. **WebP is
+  not on the roadmap** — the PNG-8-centric approach the extension
+  already uses is the target here too.
 
 ### Reuse map
 
@@ -131,8 +139,10 @@ export interface CaptureSettings {
   stableWaitMs: number;
   minMsBetweenCaptures: number;
   comparisonWidth: number;
-  // TODO(spec-phase-5): saveSizePreset, format, changeSensitivity,
-  //                     thumbnailWidth, keepOriginalForAccepted.
+  // TODO(spec-phase-5): saveSizePreset, encodeFormat ("smart" | "png" | "jpeg"
+  //                     mirroring `EncodeOptions.format`),
+  //                     changeSensitivity, thumbnailWidth,
+  //                     keepOriginalForAccepted.
 }
 
 export const DEFAULT_CAPTURE_SETTINGS: CaptureSettings = {
@@ -483,8 +493,25 @@ schema are all unchanged. No `data-annot-version` bump.
   letterboxing offset for `object-fit: contain`.
 - **Save size presets** (spec §6.5, §13.2). `Light 1280px` /
   `Standard 1920px` / `High Quality 2560px` / `Original`.
-- **Format selector** (spec §14). PNG / WebP / JPEG with PNG
-  default.
+- **Smart PNG-8 encode pipeline adoption** (replaces spec §14's
+  WebP / JPEG selector framing). Route captured frames through
+  [`encodeCapture()`](../../packages/core/src/encode/index.ts:39)
+  from `@ingcreators/annot-core/encode` (the same pipeline the
+  Chrome Extension uses): `format: "smart"` samples pixel colours
+  via `isPhotoHeavy()` against
+  `EncodeOptions.smartColorThreshold` (default 15000). Below the
+  threshold → libimagequant PNG-8 quantisation
+  (`@ingcreators/annot-imagequant`). Above → fall back per
+  `smartFallback` (PNG-24 or JPEG @ `jpegPercent`, default 92).
+  User-facing setting reduces to a 3-way `format: "smart" | "png"
+  | "jpeg"` mirroring `EncodeOptions`. WebP is **explicitly
+  out of scope** — the PNG-8-centric approach is the product
+  decision. Migration note: today's PWA capture path
+  ([`pwa-capture.ts:49`](../../packages/web/src/capture/pwa-capture.ts:49)
+  / `:331`) calls `canvas.toDataURL("image/jpeg", 0.92)`
+  directly; switching means producing PNG-24 from the canvas first
+  (as `encodeCapture` expects a PNG data URL), then handing it to
+  the smart encoder.
 - **High-DPI warnings** (spec §13.4). Mild ≥ 2560px,
   strong ≥ 3840px.
 - **Advanced settings panel** (spec §6.6). `Capture interval`,
