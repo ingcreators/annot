@@ -1029,27 +1029,38 @@ html.light .view-toggle-btn.active {
   cursor: pointer;
 }
 
-/* Capture preview inside the workspace */
+/* Capture preview inside the workspace.
+ *
+ * Layout strategy: the FRAME is `flex: 1` so it always claims the
+ * available column space (column height minus toolbar +
+ * meta line + gaps). The `<video>` inside uses `max-width: 100%
+ * / max-height: 100%` WITHOUT `object-fit`, so the browser
+ * scales it down preserving its intrinsic `videoWidth /
+ * videoHeight` aspect — same content that gets written to disk
+ * by `captureFrame()`, just shrunk to fit. The frame's `#000`
+ * background fills any empty space around the video so the
+ * letterbox effect is visually quiet (matches the editor's
+ * canvas background convention).
+ *
+ * History: an earlier revision tried `aspect-ratio:
+ * var(--capture-source-aspect)` on the frame so the frame
+ * itself was source-shaped (no bars). It worked for typical
+ * 16:9 sources but produced a too-tall frame for near-square
+ * 1916×1872 sources, overflowing the column and hiding the
+ * toolbar. The current approach is robust across any source
+ * aspect at the cost of showing a thin band of dark frame
+ * background on whichever axis has slack. */
 .capture-preview {
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: 8px;
   min-height: 0;
-  align-items: center;
 }
 
-/* The preview frame matches the source's aspect ratio (driven by
- * the `--capture-source-aspect` CSS variable the preview element
- * sets from `sourceWidth`/`sourceHeight`). This means no
- * letterbox bars and the visible preview is byte-equivalent to
- * what `captureFrame()` writes to disk — earlier `object-fit:
- * contain` letterboxing made the preview look very different
- * from the saved 3840×1874 PNGs, which the user reported as a
- * blocker for triage. Falls back to 16:9 while dimensions are
- * still 0 (during the brief `starting` state). */
 .capture-preview-frame {
   position: relative;
+  flex: 1;
   background: #000;
   border: 1px solid var(--annot-border-color);
   border-radius: 8px;
@@ -1058,28 +1069,14 @@ html.light .view-toggle-btn.active {
   align-items: center;
   justify-content: center;
   min-height: 0;
-  aspect-ratio: var(--capture-source-aspect, 16 / 9);
-  /* Take the lesser of "all available width" and "all available
-   * height converted via aspect-ratio". The flex parent caps
-   * height; max-width: 100% caps width. Browsers resolve
-   * aspect-ratio against the smaller dimension automatically. */
-  max-width: 100%;
-  max-height: 100%;
-  /* Cap so the preview doesn't take the full available column on
-   * tall monitors — keeps the candidate panel comfortably
-   * visible. The cap is generous enough that on typical 1080p
-   * monitors the preview is much larger than the previous
-   * 520px hard cap. */
-  width: min(100%, 1100px);
 }
 
 .capture-preview-video {
-  /* Frame already matches source aspect → video fills exactly,
-   * no `object-fit` needed. (object-fit defaults to fill for
-   * <video>, which is what we want here since the aspect is
-   * already correct.) */
-  width: 100%;
-  height: 100%;
+  /* Intrinsic-aspect sizing: max-* caps the box, the video's
+   * natural `videoWidth / videoHeight` ratio is preserved
+   * because we don't set `width: 100%` or `object-fit`. */
+  max-width: 100%;
+  max-height: 100%;
   display: block;
 }
 
