@@ -88,11 +88,25 @@ export class AnnotCapturePreviewElement extends LitElement {
 
   /** Re-attach the video on subsequent renders if Lit re-built the
    *  frame (it shouldn't because the element is re-used, but this
-   *  is the cheap defensive check). */
+   *  is the cheap defensive check). Also keeps the
+   *  `--capture-source-aspect` CSS variable in sync with the
+   *  source dimensions — the workspace stylesheet uses it to size
+   *  the frame so the preview matches what gets captured byte-for-
+   *  byte (no misleading letterbox bars from `object-fit:
+   *  contain`). Falls back to 16:9 when dimensions aren't known
+   *  yet (during `starting` state). */
   protected override updated(): void {
     const frame = this.querySelector<HTMLElement>(".capture-preview-frame");
     if (frame && this.#video.parentElement !== frame) {
       frame.insertBefore(this.#video, frame.firstChild);
+    }
+    if (this.sourceWidth > 0 && this.sourceHeight > 0) {
+      this.style.setProperty(
+        "--capture-source-aspect",
+        `${this.sourceWidth} / ${this.sourceHeight}`,
+      );
+    } else {
+      this.style.removeProperty("--capture-source-aspect");
     }
   }
 

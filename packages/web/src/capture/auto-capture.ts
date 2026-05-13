@@ -156,6 +156,16 @@ export class AutoCaptureEngine {
     if (!this.#baseline) {
       this.#baseline = current;
       this.#setState("idle");
+      // First-frame capture: the spec phrasing "save only meaningful
+      // screen changes" is correct on the technical merits, but in
+      // practice users sharing a static page got no feedback at all
+      // (the engine waits for changes that may never come). Capture
+      // the starting frame as a candidate so reviewers always see
+      // immediate feedback + have a reference point for subsequent
+      // diffs. Throttled by `#captureNow`'s `minMsBetweenCaptures`
+      // gate just like every other capture — meaningful changes
+      // detected within ~1.5s of start still defer politely.
+      this.#captureNow(current);
       return;
     }
 
