@@ -88,8 +88,11 @@ export interface MetadataCache {
 
   /**
    * Returns the cached image record IFF its stored version matches
-   * `version`. Stale entries (version mismatch) are evicted as a
-   * side effect — the next caller sees a cold miss.
+   * `version`. Version mismatch returns `undefined` without
+   * disturbing the stored row — in a multi-tab world a peer may
+   * have written a NEWER version we don't yet know about, and
+   * silently evicting it here would discard valid data. Stale
+   * entries age out via LRU or are overwritten by the next `put`.
    * `lastAccessedAt` is updated on hit so LRU eviction respects
    * recent reads.
    */
