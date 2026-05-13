@@ -1036,16 +1036,20 @@ html.light .view-toggle-btn.active {
   flex-direction: column;
   gap: 8px;
   min-height: 0;
-  /* Cap so reviewers don't lose the candidate panel under a
-   * giant 4K preview on tall monitors. The video keeps its own
-   * aspect via `object-fit: contain`; the cap just stops the
-   * preview from claiming all available space. */
-  max-height: min(60vh, 520px);
+  align-items: center;
 }
 
+/* The preview frame matches the source's aspect ratio (driven by
+ * the `--capture-source-aspect` CSS variable the preview element
+ * sets from `sourceWidth`/`sourceHeight`). This means no
+ * letterbox bars and the visible preview is byte-equivalent to
+ * what `captureFrame()` writes to disk — earlier `object-fit:
+ * contain` letterboxing made the preview look very different
+ * from the saved 3840×1874 PNGs, which the user reported as a
+ * blocker for triage. Falls back to 16:9 while dimensions are
+ * still 0 (during the brief `starting` state). */
 .capture-preview-frame {
   position: relative;
-  flex: 1;
   background: #000;
   border: 1px solid var(--annot-border-color);
   border-radius: 8px;
@@ -1054,12 +1058,28 @@ html.light .view-toggle-btn.active {
   align-items: center;
   justify-content: center;
   min-height: 0;
+  aspect-ratio: var(--capture-source-aspect, 16 / 9);
+  /* Take the lesser of "all available width" and "all available
+   * height converted via aspect-ratio". The flex parent caps
+   * height; max-width: 100% caps width. Browsers resolve
+   * aspect-ratio against the smaller dimension automatically. */
+  max-width: 100%;
+  max-height: 100%;
+  /* Cap so the preview doesn't take the full available column on
+   * tall monitors — keeps the candidate panel comfortably
+   * visible. The cap is generous enough that on typical 1080p
+   * monitors the preview is much larger than the previous
+   * 520px hard cap. */
+  width: min(100%, 1100px);
 }
 
 .capture-preview-video {
+  /* Frame already matches source aspect → video fills exactly,
+   * no `object-fit` needed. (object-fit defaults to fill for
+   * <video>, which is what we want here since the aspect is
+   * already correct.) */
   width: 100%;
   height: 100%;
-  object-fit: contain;
   display: block;
 }
 
