@@ -4,6 +4,13 @@
  * and `<annot-capture-progress-toast>` (Lit Phase 6); this module
  * keeps the public function shape the rest of the capture
  * pipeline already calls.
+ *
+ * Phase 1 of `docs/plans/web-capture-redesign.md` moved
+ * `loadCursorPreference` / `saveCursorPreference` into
+ * `capture-prefs.ts` so they survive the Phase 5 deletion of this
+ * file. The two helpers are re-exported below for back-compat with
+ * the existing `pwa-capture.ts` / `capture-host.ts` import sites;
+ * new code should import directly from `./capture-prefs.js`.
  */
 
 import "./annot-capture-progress-toast.js";
@@ -18,18 +25,9 @@ export type { CursorMode, IntervalCaptureConfig } from "./annot-interval-capture
 
 import type { CursorMode, IntervalCaptureConfig } from "./annot-interval-capture-dialog.js";
 
-const CURSOR_PREF_KEY = "annot-capture-cursor";
+export { loadCursorPreference, saveCursorPreference } from "./capture-prefs.js";
 
-/** Load the last-used cursor preference from localStorage, or default. */
-export function loadCursorPreference(): CursorMode {
-  const v = localStorage.getItem(CURSOR_PREF_KEY);
-  return v === "motion" || v === "never" ? v : "always";
-}
-
-/** Persist the cursor preference for future captures. */
-export function saveCursorPreference(cursor: CursorMode): void {
-  localStorage.setItem(CURSOR_PREF_KEY, cursor);
-}
+import { loadCursorPreference } from "./capture-prefs.js";
 
 /** Show a modal dialog asking for interval seconds, frame count, and cursor mode. */
 export function showIntervalCaptureDialog(
@@ -38,7 +36,7 @@ export function showIntervalCaptureDialog(
   const cfg: IntervalCaptureConfig = initial || {
     intervalSec: 10,
     count: 10,
-    cursor: loadCursorPreference(),
+    cursor: loadCursorPreference() as CursorMode,
   };
   return new Promise((resolve) => {
     const dlg: AnnotIntervalCaptureDialogElement = document.createElement(
