@@ -44,6 +44,14 @@ export interface RouterHostDeps {
   transferAndOpen(record: ImageRecord, extPath: string): Promise<void>;
   openFromGallery(record: ImageRecord): Promise<void>;
   setupSplitEditor(records: ImageRecord[]): Promise<void>;
+  /** Phase 2 of `docs/plans/web-capture-redesign.md`. The router
+   *  dispatches `/capture` here. The host mounts
+   *  `<annot-capture-workspace>` into its own surface, consumes
+   *  the `CapturePendingSession`, and handles `capture-once` /
+   *  `workspace-exit` events. Direct navigation with no pending
+   *  session is still routed here — the workspace renders the
+   *  no-session hint. */
+  showCaptureWorkspace(): void;
   /** Open a `.annot.html` document into the host's doc-shell.
    *  Phase 6b of `docs/plans/_done/annot-html-document.md`. The host
    *  decides where to mount the shell (PWA replaces the editor
@@ -69,6 +77,16 @@ export class RouterHost {
     // understands, then replace the URL with the canonical edit URL.
     if (route.type === "handoff") {
       await this.#handleHandoff(route.handoffSource || "", route.handoffState || "");
+      return;
+    }
+
+    // /capture — Phase 2 of `docs/plans/web-capture-redesign.md`.
+    // Dispatched before the extension-transfer / session / edit /
+    // doc branches because the workspace doesn't need any of that
+    // setup; the host mounts the workspace directly and the
+    // workspace reads its session from memory.
+    if (route.type === "capture") {
+      this.deps.showCaptureWorkspace();
       return;
     }
 

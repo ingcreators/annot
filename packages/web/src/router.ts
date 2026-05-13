@@ -25,7 +25,7 @@
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, ""); // e.g. "" in dev, "/annotation" in prod
 
 export interface Route {
-  type: "gallery" | "edit" | "doc" | "handoff";
+  type: "gallery" | "edit" | "doc" | "handoff" | "capture";
   store?: string; // "extension" | "device" | "browser" | "googledrive"
   extId?: string; // extension ID (from query param)
   path?: string; // image path (edit) or folder path (gallery deep-link); "" = root
@@ -100,6 +100,16 @@ export function parseRoute(): Route {
     return { type: "gallery", path, extId, session };
   }
 
+  // /capture — Phase 2 of `docs/plans/web-capture-redesign.md`.
+  // Mode + folderPath aren't in the URL by design (we don't want
+  // them in browser history and the workspace can't re-grant
+  // getDisplayMedia on a reload anyway). The router-host reads
+  // `CapturePendingSession` from memory — direct navigation
+  // without a pending session surfaces the no-session hint.
+  if (parts[0] === "capture") {
+    return { type: "capture" };
+  }
+
   return { type: "gallery", path: "", extId, session };
 }
 
@@ -138,6 +148,15 @@ export function sessionEditUrl(
   params.set("session", sessionId);
   if (extId) params.set("extId", extId);
   return `${BASE}/edit/${encodeURIComponent(store)}${suffix}?${params.toString()}`;
+}
+
+/** Build the `/capture` workspace URL. Phase 2 of
+ *  `docs/plans/web-capture-redesign.md`. Mode + folder are
+ *  intentionally not in the URL — `CapturePendingSession` carries
+ *  them between dialog confirm and workspace mount. */
+export function captureUrl(): string {
+  const base = BASE || "";
+  return `${base}/capture`;
 }
 
 /** Build the gallery URL, optionally deep-linking to a folder. */

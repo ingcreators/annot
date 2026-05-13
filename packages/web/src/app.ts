@@ -43,7 +43,7 @@ import { StorageBridge } from "./app/storage-bridge.js";
 import { pasteFromClipboard } from "./capture/pwa-capture.js";
 import { ScratchpadStore } from "./editor/scratchpad-store.js";
 import { logger } from "./logger.js";
-import { docUrl, editUrl, galleryUrl, pushRoute } from "./router.js";
+import { captureUrl, docUrl, editUrl, galleryUrl, pushRoute } from "./router.js";
 import {
   type BuiltInStorageMode,
   deleteExtensionImage,
@@ -172,6 +172,11 @@ export class App {
       getFileManager: () => this.#fileManager,
       openEditor: (args) => this.#openEditorFor(args),
       getThumbnailManager: () => this.#thumbnailManager,
+      // Phase 2 of `docs/plans/web-capture-redesign.md` — the
+      // capture host signals "now mount the workspace" after the
+      // dialog confirm has set the pending session + pushed the
+      // route. The host owns the actual element creation.
+      openCaptureWorkspace: () => this.showCaptureWorkspace(),
     });
     this.#headerHost = new HeaderHost(
       assertNonNull(
@@ -292,6 +297,10 @@ export class App {
       openFromGallery: (record) => this.openFromGallery(record),
       setupSplitEditor: (records) => this.#splitEditorHost.setup(records),
       openDocFromGallery: (record) => this.openDocFromGallery(record),
+      // Phase 2 of `docs/plans/web-capture-redesign.md` — the
+      // router's `/capture` branch lands here; the host mounts the
+      // workspace into a dedicated `#annot-capture-host` container.
+      showCaptureWorkspace: () => this.showCaptureWorkspace(),
       notifyRouteChange: (route) => this.#pluginHost.dispatchRouteChange({ route }),
     });
   }
@@ -556,6 +565,9 @@ export class App {
     // Tear down doc-mode if active (Phase 6e). Idempotent —
     // no-op when not in doc-mode.
     this.#tearDownDocMode();
+    // Phase 2 of `docs/plans/web-capture-redesign.md`. Tear down
+    // the capture workspace if active. Idempotent.
+    this.#tearDownCaptureWorkspace();
     const canvasContainer = assertNonNull(
       document.getElementById("canvas-container"),
       "#canvas-container missing — check index.html shell",
@@ -2005,5 +2017,85 @@ export class App {
     // intercept keystrokes in the gallery / image editor.
     this.#docModeKeyboardHelpUninstall?.();
     this.#docModeKeyboardHelpUninstall = null;
+  }
+
+  /**
+   * Phase 2 of `docs/plans/web-capture-redesign.md`. Mount the
+   * `<annot-capture-workspace>` over the gallery / editor surfaces.
+   * Mirrors `openDocFromGallery`'s mount pattern — dedicated host
+   * div appended to `<body>` so it sits at the same DOM depth as
+   * `#file-manager` / `#canvas-container`.
+   *
+   * The workspace handles its own lifecycle (`getDisplayMedia`
+   * inside `connectedCallback`, track teardown in
+   * `disconnectedCallback`). The host wires:
+   *   - `capture-once` → save the captured frame via the active
+   *     `StorageProvider` and route into the editor (mirrors
+   *     `CaptureHost.saveDataUrlAndOpen`).
+   *   - `workspace-exit` → tear down the workspace + push the
+   *     gallery URL.
+   */
+  showCaptureWorkspace(): void {
+    // Lazy-load the workspace component module — avoids dragging
+    // `getDisplayMedia` / `<video>` chrome into the gallery-only
+    // boot path.
+    void import("./capture/annot-capture-workspace.js").then(() => {
+      this.#mountCaptureWorkspace();
+    });
+  }
+
+  #mountCaptureWorkspace(): void {
+    // Tear down sibling surfaces first (gallery + editor + doc).
+    this.#tearDownDocMode();
+    this.#splitEditorHost.unmount();
+    document.body.classList.remove("editor-mode");
+    const fileManagerEl = document.getElementById("file-manager");
+    if (fileManagerEl) fileManagerEl.style.display = "none";
+    const canvasContainer = document.getElementById("canvas-container");
+    if (canvasContainer) canvasContainer.style.display = "none";
+    const statusbar = document.getElementById("statusbar");
+    if (statusbar) statusbar.style.display = "none";
+
+    let host = document.getElementById("annot-capture-host") as HTMLDivElement | null;
+    if (!host) {
+      host = document.createElement("div");
+      host.id = "annot-capture-host";
+      host.style.cssText =
+        "position:absolute;top:48px;left:0;right:0;bottom:0;display:block;background:var(--annot-bg-canvas, #1a1a1a);overflow:hidden;z-index:5;";
+      document.body.appendChild(host);
+    } else {
+      host.innerHTML = "";
+      host.style.display = "block";
+    }
+
+    const workspace = document.createElement("annot-capture-workspace");
+    workspace.addEventListener("capture-once", (e) => {
+      const detail = (e as CustomEvent).detail as {
+        dataUrl: string;
+        width: number;
+        height: number;
+        folderPath: string;
+      };
+      // Persist via the active storage backend. Errors surface via
+      // the shared `<annot-error-bar>` toast.
+      void this.#captureHost.saveDataUrlAndOpen(detail.dataUrl).catch((err) => {
+        showSaveError(`Couldn't save capture: ${(err as Error).message}`);
+      });
+    });
+    workspace.addEventListener("workspace-exit", () => {
+      this.#tearDownCaptureWorkspace();
+      pushRoute(galleryUrl());
+      this.showGalleryView();
+    });
+    host.appendChild(workspace);
+  }
+
+  /** Mirror of `#tearDownDocMode` for the capture workspace. The
+   *  workspace's own `disconnectedCallback` stops the stream when
+   *  the element is removed from the DOM, so removing the host
+   *  div is enough. Idempotent. */
+  #tearDownCaptureWorkspace(): void {
+    const host = document.getElementById("annot-capture-host");
+    if (host) host.remove();
   }
 }

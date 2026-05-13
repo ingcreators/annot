@@ -87,6 +87,7 @@ function makeDeps(storage: StorageProvider | null, overrides: Partial<RouterHost
     openFromGallery: async () => {},
     setupSplitEditor: async () => {},
     openDocFromGallery,
+    showCaptureWorkspace: () => {},
     notifyRouteChange: () => {},
     ...overrides,
   };
