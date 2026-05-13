@@ -311,4 +311,44 @@ export class CaptureHost {
       tags: {},
     });
   }
+
+  /**
+   * Phase 3 of `docs/plans/web-capture-redesign.md`. Save without
+   * opening the editor — used by candidate Accept (the user is
+   * still in the workspace triaging more candidates; opening the
+   * editor would tear it down). Tags carry session metadata so
+   * Phase 4's Auto Capture sessions remain groupable in the
+   * gallery.
+   */
+  async saveDataUrlSilently(
+    dataUrl: string,
+    tags: Record<string, string> = {},
+  ): Promise<string | null> {
+    const storage = this.deps.getStorage();
+    if (!storage) return null;
+    const img = await loadImage(dataUrl);
+    const thumbnailDataUrl = await generateThumbnailFromDataUrl(dataUrl);
+    const now = new Date().toISOString();
+    const folderPath = this.deps.getCurrentFolderPath();
+    const path = await storage.saveImage({
+      originalDataUrl: dataUrl,
+      thumbnailDataUrl,
+      annotationsSvg: "",
+      width: img.naturalWidth,
+      height: img.naturalHeight,
+      sourceUrl: "",
+      tags,
+      folderPath,
+      createdAt: now,
+      updatedAt: now,
+    });
+    await this.deps.getThumbnailManager()?.write(storage, path, thumbnailDataUrl, {
+      width: img.naturalWidth,
+      height: img.naturalHeight,
+    });
+    // Refresh the file manager in the background so when the user
+    // exits the workspace the gallery is already up-to-date.
+    void this.deps.getFileManager()?.refresh(folderPath);
+    return path;
+  }
 }

@@ -22,16 +22,19 @@
  * mirroring how doc-mode mounts `#annot-doc-host`.
  */
 
+import { newIdB58 } from "@ingcreators/annot-core/utils";
 import { html, LitElement, nothing } from "../lit.js";
 import "./annot-candidate-panel.js";
 import "./annot-capture-preview.js";
 import "./annot-capture-toolbar.js";
 import type { AnnotCapturePreviewElement } from "./annot-capture-preview.js";
+import { CandidateStore } from "./candidate-store.js";
 import {
   type CapturePendingSession,
   consumeCapturePendingSession,
 } from "./capture-pending-session.js";
 import { CaptureSession } from "./capture-session.js";
+import type { CaptureCandidate } from "./types.js";
 
 export interface CaptureWorkspaceCaptureDetail {
   dataUrl: string;
@@ -39,6 +42,22 @@ export interface CaptureWorkspaceCaptureDetail {
   height: number;
   mode: CapturePendingSession["mode"];
   folderPath: string;
+}
+
+/** Detail dispatched on `candidate-accepted`. The host's
+ *  workspace-mount handler in app.ts persists the blob via
+ *  `storage.saveImage` and then calls `removeCandidate(id)` on
+ *  the workspace so the panel re-renders without the card. */
+export interface CandidateAcceptedDetail {
+  id: string;
+  blob: Blob;
+  thumbnailDataUrl: string;
+  width: number;
+  height: number;
+  folderPath: string;
+  /** When `true`, the host should also navigate into the editor
+   *  for the saved record (the Edit button shortcut). */
+  openEditor: boolean;
 }
 
 type WorkspaceState = "no-pending" | "starting" | "sharing" | "stopped" | "cancelled";
@@ -59,6 +78,7 @@ export class AnnotCaptureWorkspaceElement extends LitElement {
   #pending: CapturePendingSession | null = null;
   #session: CaptureSession | null = null;
   #preview: AnnotCapturePreviewElement | null = null;
+  #store: CandidateStore = new CandidateStore();
 
   constructor() {
     super();
@@ -92,6 +112,14 @@ export class AnnotCaptureWorkspaceElement extends LitElement {
     super.disconnectedCallback();
     this.#session?.stop();
     this.#session = null;
+    this.#store.clear();
+  }
+
+  /** Workspace-internal API the host can call to drop a candidate
+   *  after persisting it. The candidate panel re-renders via the
+   *  store's `change` event. */
+  removeCandidate(id: string): void {
+    this.#store.remove(id);
   }
 
   override render() {
@@ -144,9 +172,15 @@ export class AnnotCaptureWorkspaceElement extends LitElement {
                 ></annot-capture-toolbar>`
                 : nothing
             }
+            ${this.#renderDevDebugButton()}
           </div>
           <div class="capture-workspace-side">
-            <annot-candidate-panel .count=${0}></annot-candidate-panel>
+            <annot-candidate-panel
+              .store=${this.#store}
+              @candidate-accept=${(e: Event) => this.#onCandidateAccept(e, false)}
+              @candidate-edit=${(e: Event) => this.#onCandidateAccept(e, true)}
+              @candidate-delete=${this.#onCandidateDelete}
+            ></annot-candidate-panel>
           </div>
         </div>
       </div>
@@ -212,6 +246,73 @@ export class AnnotCaptureWorkspaceElement extends LitElement {
     this.dispatchEvent(new CustomEvent("workspace-exit", { bubbles: true }));
   };
 
+  /** Phase 3 dev-only debug surface. Lets reviewers exercise the
+   *  candidate panel + Accept / Edit / Delete actions before Phase
+   *  4's Auto Capture engine starts populating the store
+   *  organically. Removed in Phase 4 (the engine takes its place).
+   *  Gated on `import.meta.env.DEV` so production builds drop it. */
+  #renderDevDebugButton() {
+    if (!import.meta.env.DEV) return nothing;
+    if (this.state !== "sharing") return nothing;
+    return html`
+      <div class="capture-workspace-dev-tools">
+        <button
+          type="button"
+          class="capture-workspace-dev-btn"
+          @click=${this.#pushTestCandidate}
+        >
+          [debug] Push test candidate
+        </button>
+      </div>
+    `;
+  }
+
+  #pushTestCandidate = (): void => {
+    if (!this.#session?.isLive) return;
+    const frame = this.#session.captureFrame();
+    const candidate: CaptureCandidate = {
+      id: newIdB58(),
+      status: "candidate",
+      createdAt: new Date().toISOString(),
+      sourceWidth: frame.width,
+      sourceHeight: frame.height,
+      // Reuse the JPEG data URL as both blob source AND thumbnail —
+      // good enough for the debug surface; Phase 4's engine builds
+      // a proper downscaled thumbnail.
+      imageBlob: dataUrlToBlob(frame.dataUrl),
+      thumbnailDataUrl: frame.dataUrl,
+    };
+    this.#store.add(candidate);
+  };
+
+  #onCandidateAccept = (e: Event, openEditor: boolean): void => {
+    const id = (e as CustomEvent).detail?.id as string | undefined;
+    if (!id || !this.#pending) return;
+    const c = this.#store.get(id);
+    if (!c) return;
+    this.#store.accept(id);
+    this.dispatchEvent(
+      new CustomEvent<CandidateAcceptedDetail>("candidate-accepted", {
+        detail: {
+          id,
+          blob: c.imageBlob,
+          thumbnailDataUrl: c.thumbnailDataUrl,
+          width: c.sourceWidth,
+          height: c.sourceHeight,
+          folderPath: this.#pending.folderPath,
+          openEditor,
+        },
+        bubbles: true,
+      }),
+    );
+  };
+
+  #onCandidateDelete = (e: Event): void => {
+    const id = (e as CustomEvent).detail?.id as string | undefined;
+    if (!id) return;
+    this.#store.remove(id);
+  };
+
   async #startSession(): Promise<void> {
     if (!this.#pending) return;
     this.#preview = this.querySelector<AnnotCapturePreviewElement>("annot-capture-preview");
@@ -248,6 +349,21 @@ export class AnnotCaptureWorkspaceElement extends LitElement {
     this.sourceWidth = session.sourceWidth;
     this.sourceHeight = session.sourceHeight;
   }
+}
+
+/** Decode a `data:image/...;base64,...` URL into a `Blob`. Used by
+ *  the Phase 3 dev-only debug button so the candidate it pushes
+ *  carries a real `Blob` (matching what Phase 4's engine produces
+ *  via canvas `toBlob`). */
+function dataUrlToBlob(dataUrl: string): Blob {
+  const m = /^data:([^;]+);base64,(.*)$/.exec(dataUrl);
+  if (!m) return new Blob([], { type: "application/octet-stream" });
+  const mime = m[1] ?? "application/octet-stream";
+  const b64 = m[2] ?? "";
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new Blob([bytes], { type: mime });
 }
 
 if (!customElements.get("annot-capture-workspace")) {
