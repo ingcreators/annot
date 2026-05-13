@@ -1,12 +1,13 @@
 /**
  * `<annot-capture-screen-dialog>` — modal asking the user to pick
- * one of three capture modes (Auto Capture / Capture Once /
- * Capture Area) before starting a screen-share session.
+ * a capture mode (Auto Capture or Capture Once) before starting
+ * a screen-share session.
  *
- * Phase 1 of `docs/plans/web-capture-redesign.md`. Only `once` is
- * enabled in this phase; the other two render disabled with a
- * "Coming soon" hint. Phase 4 enables `auto` and makes it the
- * default; the deferred Capture Area work enables `area`.
+ * Phases 1 + 4 of `docs/plans/web-capture-redesign.md`. Auto
+ * Capture is the default selection. The originally-planned
+ * Capture Area mode was retired during the rollout — users get
+ * the same outcome by running Capture Once and cropping in the
+ * editor.
  *
  * Lit Phase 6 — light DOM, no decorators, `annot-` prefix. Mounts
  * via `showCaptureScreenDialog()` (capture-screen-dialog.ts), the
@@ -28,8 +29,6 @@ interface ModeChip {
   mode: CaptureMode;
   label: string;
   description: string;
-  enabled: boolean;
-  comingSoon?: string;
 }
 
 const MODE_CHIPS: readonly ModeChip[] = [
@@ -37,20 +36,12 @@ const MODE_CHIPS: readonly ModeChip[] = [
     mode: "auto",
     label: "Auto Capture",
     description: "Automatically capture meaningful screen changes. Recommended for procedures.",
-    enabled: true,
   },
   {
     mode: "once",
     label: "Capture Once",
-    description: "Capture the current shared screen as a single image.",
-    enabled: true,
-  },
-  {
-    mode: "area",
-    label: "Capture Area",
-    description: "Select an area from the shared preview and capture it.",
-    enabled: false,
-    comingSoon: "Coming soon",
+    description:
+      "Capture the current shared screen as a single image. Crop in the editor if you need a specific region.",
   },
 ];
 
@@ -126,21 +117,11 @@ export class AnnotCaptureScreenDialogElement extends LitElement {
                   role="radio"
                   aria-checked=${this.mode === chip.mode}
                   class=${this.#chipClass(chip)}
-                  ?disabled=${!chip.enabled}
                   @click=${() => {
-                    if (chip.enabled) this.mode = chip.mode;
+                    this.mode = chip.mode;
                   }}
                 >
-                  <div class="capture-screen-mode-label">
-                    ${chip.label}
-                    ${
-                      chip.comingSoon
-                        ? html`<span class="capture-screen-mode-coming-soon"
-                            >${chip.comingSoon}</span
-                          >`
-                        : null
-                    }
-                  </div>
+                  <div class="capture-screen-mode-label">${chip.label}</div>
                   <div class="capture-screen-mode-desc">${chip.description}</div>
                 </button>
               `,
@@ -169,7 +150,6 @@ export class AnnotCaptureScreenDialogElement extends LitElement {
             <button
               type="button"
               class="capture-dialog-btn capture-dialog-btn-primary"
-              ?disabled=${!this.#selectedChipEnabled()}
               @click=${this.#confirm}
             >
               Start Screen Share
@@ -183,16 +163,10 @@ export class AnnotCaptureScreenDialogElement extends LitElement {
   #chipClass(chip: ModeChip): string {
     const base = "capture-screen-mode-chip";
     const active = this.mode === chip.mode ? " capture-screen-mode-chip-active" : "";
-    const disabled = chip.enabled ? "" : " capture-screen-mode-chip-disabled";
-    return `${base}${active}${disabled}`;
-  }
-
-  #selectedChipEnabled(): boolean {
-    return MODE_CHIPS.find((c) => c.mode === this.mode)?.enabled === true;
+    return `${base}${active}`;
   }
 
   #confirm = (): void => {
-    if (!this.#selectedChipEnabled()) return;
     this.dispatchEvent(
       new CustomEvent<CaptureScreenDialogConfirmDetail>("capture-confirm", {
         detail: { mode: this.mode, cursor: this.cursor },

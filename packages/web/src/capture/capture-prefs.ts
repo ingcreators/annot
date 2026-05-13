@@ -32,10 +32,13 @@ export function saveCursorPreference(cursor: CursorMode): void {
   localStorage.setItem(CURSOR_PREF_KEY, cursor);
 }
 
-/** Load the last-used capture-mode preference, or default to `"auto"`. */
+/** Load the last-used capture-mode preference, or default to `"auto"`.
+ *  Legacy `"area"` values (the never-shipped Capture Area mode) map
+ *  to `"auto"` rather than throwing — protects users who somehow
+ *  ended up with that string in localStorage. */
 export function loadModePreference(): CaptureMode {
   const v = localStorage.getItem(MODE_PREF_KEY);
-  return v === "once" || v === "area" || v === "auto" ? v : "auto";
+  return v === "once" || v === "auto" ? v : "auto";
 }
 
 /** Persist the capture-mode preference for future dialog opens. */

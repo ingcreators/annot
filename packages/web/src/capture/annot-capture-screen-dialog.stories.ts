@@ -18,6 +18,14 @@ interface Args {
 
 const meta: Meta<Args> = {
   title: "Capture / CaptureScreenDialog",
+  parameters: {
+    docs: {
+      description: {
+        component:
+          "Mode picker for the Capture Screen flow. Two modes only: Auto Capture (default) and Capture Once. The originally-planned Capture Area mode was retired — users crop in the editor after a Capture Once instead.",
+      },
+    },
+  },
   render: (args) => {
     const wrapper = document.createElement("div");
     wrapper.style.position = "relative";
@@ -38,7 +46,7 @@ const meta: Meta<Args> = {
     return wrapper;
   },
   argTypes: {
-    mode: { control: "radio", options: ["auto", "once", "area"] },
+    mode: { control: "radio", options: ["auto", "once"] },
     cursor: { control: "radio", options: ["always", "motion", "never"] },
   },
   args: {
@@ -50,8 +58,7 @@ export default meta;
 
 type Story = StoryObj<Args>;
 
-/** Default open state — Auto Capture is the default selection in
- *  Phase 4 (was "once" in Phases 1–3). */
+/** Default open state — Auto Capture is the default selection. */
 export const Default: Story = {};
 
 /** Capture Once selected. */
@@ -66,16 +73,6 @@ export const OnceSelected: Story = {
 export const AutoSelected: Story = {
   args: {
     mode: "auto",
-    cursor: "always",
-  },
-};
-
-/** Capture Area selected — chip is still disabled (Capture Area is
- *  spec Phase 4 / our Phase 6, deferred), so the Start button is
- *  greyed out until the user picks an enabled mode. */
-export const AreaDisabled: Story = {
-  args: {
-    mode: "area",
     cursor: "always",
   },
 };

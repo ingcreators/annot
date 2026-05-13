@@ -4,11 +4,17 @@
  * `docs/plans/web-capture-redesign.md` §"Architectural decisions").
  */
 
-/** Three modes the `Capture Screen...` dialog offers.
+/** Modes the `Capture Screen...` dialog offers.
  *  - `auto`: change-detection-based candidate collection (Phase 4).
- *  - `once`: single-frame capture (Phase 1, today's `Capture Screen`).
- *  - `area`: rectangular subregion capture (deferred to spec Phase 4). */
-export type CaptureMode = "auto" | "once" | "area";
+ *  - `once`: single-frame capture (today's `Capture Screen`).
+ *
+ *  Capture Area was originally planned as a third mode but was
+ *  retired during the rollout — users get the same outcome via
+ *  the editor's Crop tool after a Capture Once. Dropping it
+ *  keeps the dialog focused on the two capture *behaviours*
+ *  (one-shot vs. change-driven) rather than mixing in a post-
+ *  capture cropping decision. */
+export type CaptureMode = "auto" | "once";
 
 /** State machine for the Auto Capture engine (Phase 4). */
 export type AutoCaptureState = "idle" | "changing" | "stable-wait" | "captured";

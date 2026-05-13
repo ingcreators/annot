@@ -61,9 +61,6 @@ export class AnnotCaptureToolbarElement extends LitElement {
         >
           ${autoLabel}
         </button>
-        <button type="button" class="capture-toolbar-btn" disabled title="Coming soon">
-          Capture Area
-        </button>
         <span class="capture-toolbar-spacer"></span>
         <button
           type="button"

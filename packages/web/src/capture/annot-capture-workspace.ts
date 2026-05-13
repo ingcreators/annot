@@ -80,9 +80,6 @@ export interface CandidateAcceptedDetail {
   width: number;
   height: number;
   folderPath: string;
-  /** When `true`, the host should also navigate into the editor
-   *  for the saved record (the Edit button shortcut). */
-  openEditor: boolean;
 }
 
 type WorkspaceState = "no-pending" | "starting" | "sharing" | "stopped" | "cancelled";
@@ -209,8 +206,7 @@ export class AnnotCaptureWorkspaceElement extends LitElement {
           <div class="capture-workspace-side">
             <annot-candidate-panel
               .store=${this.#store}
-              @candidate-accept=${(e: Event) => this.#onCandidateAccept(e, false)}
-              @candidate-edit=${(e: Event) => this.#onCandidateAccept(e, true)}
+              @candidate-accept=${this.#onCandidateAccept}
               @candidate-delete=${this.#onCandidateDelete}
             ></annot-candidate-panel>
           </div>
@@ -314,7 +310,7 @@ export class AnnotCaptureWorkspaceElement extends LitElement {
     this.requestUpdate();
   };
 
-  #onCandidateAccept = (e: Event, openEditor: boolean): void => {
+  #onCandidateAccept = (e: Event): void => {
     const id = (e as CustomEvent).detail?.id as string | undefined;
     if (!id || !this.#pending) return;
     const c = this.#store.get(id);
@@ -329,7 +325,6 @@ export class AnnotCaptureWorkspaceElement extends LitElement {
           width: c.sourceWidth,
           height: c.sourceHeight,
           folderPath: this.#pending.folderPath,
-          openEditor,
         },
         bubbles: true,
       }),
