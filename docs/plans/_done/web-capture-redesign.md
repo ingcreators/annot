@@ -520,25 +520,18 @@ schema are all unchanged. No `data-annot-version` bump.
   offset) is not coming to the workspace.
 - **Save size presets** (spec §6.5, §13.2). `Light 1280px` /
   `Standard 1920px` / `High Quality 2560px` / `Original`.
-- **Smart PNG-8 encode pipeline adoption** (replaces spec §14's
-  WebP / JPEG selector framing). Route captured frames through
-  [`encodeCapture()`](../../packages/core/src/encode/index.ts:39)
-  from `@ingcreators/annot-core/encode` (the same pipeline the
-  Chrome Extension uses): `format: "smart"` samples pixel colours
-  via `isPhotoHeavy()` against
-  `EncodeOptions.smartColorThreshold` (default 15000). Below the
-  threshold → libimagequant PNG-8 quantisation
-  (`@ingcreators/annot-imagequant`). Above → fall back per
-  `smartFallback` (PNG-24 or JPEG @ `jpegPercent`, default 92).
-  User-facing setting reduces to a 3-way `format: "smart" | "png"
-  | "jpeg"` mirroring `EncodeOptions`. WebP is **explicitly
-  out of scope** — the PNG-8-centric approach is the product
-  decision. Migration note: today's PWA capture path
-  ([`pwa-capture.ts:49`](../../packages/web/src/capture/pwa-capture.ts:49)
-  / `:331`) calls `canvas.toDataURL("image/jpeg", 0.92)`
-  directly; switching means producing PNG-24 from the canvas first
-  (as `encodeCapture` expects a PNG data URL), then handing it to
-  the smart encoder.
+- **~~Smart PNG-8 encode pipeline adoption~~** — LANDED in a
+  follow-up. `CaptureSession.captureFrame()` now produces PNG-24
+  (was JPEG @ 0.92), and `CaptureHost.saveDataUrlSilently()` runs
+  the result through `encodeCaptureInWorker` (worker-backed
+  wrapper around
+  [`encodeCapture()`](../../packages/core/src/encode/index.ts:39))
+  with options from `loadEncodeOptions()`. `format: "smart"`
+  (default): UI-heavy frames quantize to PNG-8 via libimagequant,
+  photo-heavy frames fall back per `smartFallback`. The shared
+  encoder settings the extension already exposes via its
+  `<annot-capture-settings>` UI now drive /capture too — no
+  per-app fork. WebP stays out of scope as planned.
 - **High-DPI warnings** (spec §13.4). Mild ≥ 2560px,
   strong ≥ 3840px.
 - **Advanced settings panel** (spec §6.6). `Capture interval`,
