@@ -381,12 +381,90 @@ export class GitHubStore
         // fresh tree + records.
         this.#tree.clear();
         await this.#cacheClear();
+      } else if (knownHead && liveHead && knownHead === liveHead) {
+        // Warm start — branch HEAD hasn't moved since we cached.
+        // Try to hydrate the in-memory tree state from the
+        // namespace-meta snapshot so the next `listImages` skips
+        // the recursive tree fetch entirely. Best-effort: a
+        // corrupt / missing snapshot just falls through to the
+        // normal `#loadTree()` path.
+        await this.#hydrateTreeFromCache();
       }
       if (liveHead && liveHead !== knownHead) {
         await this.#cache.putNamespaceMeta(ns, "branchHead", liveHead);
       }
     } catch {
       /* offline / 401 / 404 — leave caches intact */
+    }
+  }
+
+  /**
+   * Restore the in-memory `GitHubTreeState` from a previously-saved
+   * `treeState` namespace-meta blob. Called from `init()` on a
+   * `branchHead` match so the next read can skip the recursive
+   * tree fetch.
+   *
+   * Returns `true` when the in-memory tree was repopulated and
+   * marked loaded; `false` when there's no usable snapshot (first
+   * connect, deserialisation failure, …).
+   */
+  async #hydrateTreeFromCache(): Promise<boolean> {
+    if (!this.#cache) return false;
+    try {
+      const raw = await this.#cache.getNamespaceMeta(this.#ns(), "treeState");
+      if (!raw) return false;
+      const parsed = JSON.parse(raw) as {
+        shaByPath?: ReadonlyArray<readonly [string, string]>;
+        folderPaths?: ReadonlyArray<string>;
+      };
+      // Defensive: a future schema bump may invalidate the shape;
+      // bail rather than half-populate.
+      if (!Array.isArray(parsed.shaByPath) || !Array.isArray(parsed.folderPaths)) {
+        return false;
+      }
+      for (const [path, sha] of parsed.shaByPath) {
+        if (typeof path === "string" && typeof sha === "string") {
+          this.#tree.setBlobSha(path, sha);
+        }
+      }
+      for (const folder of parsed.folderPaths) {
+        if (typeof folder === "string") {
+          this.#tree.addFolderExact(folder);
+        }
+      }
+      this.#tree.markLoaded();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Snapshot the current in-memory tree state into the namespace-
+   * meta `treeState` value so the next session can warm-start via
+   * `#hydrateTreeFromCache`. Called from:
+   *   - `#loadTree()` on successful cold fetch,
+   *   - every mutation that updates the in-memory tree (the
+   *     wrapper `#persistTreeAfter` collapses the repeated
+   *     `await` into a single helper at each public-method exit).
+   *
+   * Best-effort: an IDB write failure here doesn't break the
+   * current session, just means the next session falls back to
+   * the recursive tree fetch.
+   */
+  async #persistTreeState(): Promise<void> {
+    if (!this.#cache) return;
+    try {
+      const shaByPath: Array<[string, string]> = [];
+      for (const path of this.#tree.blobPaths()) {
+        const sha = this.#tree.getBlobSha(path);
+        if (sha) shaByPath.push([path, sha]);
+      }
+      const folderPaths = Array.from(this.#tree.folderPaths());
+      const blob = JSON.stringify({ shaByPath, folderPaths });
+      await this.#cache.putNamespaceMeta(this.#ns(), "treeState", blob);
+    } catch {
+      /* best-effort */
     }
   }
 
@@ -421,6 +499,11 @@ export class GitHubStore
     if (!this.#cache) return;
     try {
       await this.#cache.putNamespaceMeta(this.metadataNamespace(), "branchHead", commitSha);
+      // After every commit we refresh the persisted tree snapshot
+      // alongside the HEAD pointer — both move together, so peers
+      // that warm-start in the next session see a consistent
+      // pair (new HEAD, new tree).
+      await this.#persistTreeState();
     } catch {
       /* best-effort */
     }
@@ -605,6 +688,10 @@ export class GitHubStore
     }
 
     this.#tree.markLoaded();
+    // Persist the freshly-fetched tree state so the next session
+    // (with a matching `branchHead`) can warm-start without
+    // re-running this recursive fetch.
+    await this.#persistTreeState();
   }
 
   // ===========================================================================
