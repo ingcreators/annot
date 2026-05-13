@@ -6,6 +6,7 @@
  * and Area (deferred spec Phase 4).
  */
 
+import type { SaveSizePreset } from "@ingcreators/annot-core/encode/options";
 import type { Meta, StoryObj } from "@storybook/web-components-vite";
 import "./annot-capture-screen-dialog.js";
 import type { CursorMode } from "./capture-prefs.js";
@@ -14,6 +15,7 @@ import type { CaptureMode } from "./types.js";
 interface Args {
   mode: CaptureMode;
   cursor: CursorMode;
+  saveSizePreset: SaveSizePreset;
 }
 
 const meta: Meta<Args> = {
@@ -35,6 +37,7 @@ const meta: Meta<Args> = {
     const dlg = document.createElement("annot-capture-screen-dialog");
     dlg.mode = args.mode;
     dlg.cursor = args.cursor;
+    dlg.saveSizePreset = args.saveSizePreset;
     // Storybook arg-flow trace — intentional `console.log`.
     dlg.addEventListener("capture-confirm", (e) => {
       console.log("[story] capture-confirm", (e as CustomEvent).detail);
@@ -48,10 +51,15 @@ const meta: Meta<Args> = {
   argTypes: {
     mode: { control: "radio", options: ["auto", "once"] },
     cursor: { control: "radio", options: ["always", "motion", "never"] },
+    saveSizePreset: {
+      control: "radio",
+      options: ["light", "standard", "highQuality", "original"],
+    },
   },
   args: {
     mode: "once",
     cursor: "always",
+    saveSizePreset: "standard",
   },
 };
 export default meta;
@@ -66,6 +74,7 @@ export const OnceSelected: Story = {
   args: {
     mode: "once",
     cursor: "always",
+    saveSizePreset: "standard",
   },
 };
 
@@ -74,5 +83,16 @@ export const AutoSelected: Story = {
   args: {
     mode: "auto",
     cursor: "always",
+    saveSizePreset: "standard",
+  },
+};
+
+/** Save-size preset set to "Original" (no resize) — useful for
+ *  reviewers comparing the dialog state across presets. */
+export const OriginalSize: Story = {
+  args: {
+    mode: "auto",
+    cursor: "always",
+    saveSizePreset: "original",
   },
 };
