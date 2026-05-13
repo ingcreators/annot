@@ -15,8 +15,11 @@ import type {
   FolderRecord,
   ImageRecord,
   ImageRecordUpdate,
+  MetadataCache,
   StorageProvider,
   StorageWithDocuments,
+  StorageWithInit,
+  StorageWithMetadataCache,
   StorageWithResync,
   StorageWithThumbnailCache,
   StorageWithTokenRefresher,
@@ -59,10 +62,12 @@ const DOC_EXTENSION = ".annot.html";
 export class GoogleDriveStore
   implements
     StorageProvider,
+    StorageWithInit,
     StorageWithResync,
     StorageWithTokenRefresher,
     StorageWithThumbnailCache,
-    StorageWithDocuments
+    StorageWithDocuments,
+    StorageWithMetadataCache
 {
   /** HTTP layer — owns token, refresh, error mapping. Synthesised
    *  in the constructor; tests can inject a mock via the alternate
@@ -120,6 +125,94 @@ export class GoogleDriveStore
    *  the API client lets the 401 propagate. */
   setTokenRefresher(refresher: () => Promise<string | null>): void {
     this.#api.setTokenRefresher(refresher);
+  }
+
+  // ── MetadataCache integration (Phase 6 of shared-metadata-cache) ──
+  /**
+   * Host-supplied metadata cache. Drive keeps its bespoke in-session
+   * caches (path↔id maps, `#recordCache`, `#fileMeta`,
+   * `#documentMeta`) because they're tightly coupled to Drive's
+   * ID-native API patterns. Phase 6 of
+   * `docs/plans/shared-metadata-cache.md` adds two narrower wins:
+   *
+   *   - `changesPageToken` namespace meta persists the Drive Changes
+   *     API resume token across sessions. Initial seed on `init()`
+   *     via `GET /drive/v3/changes/startPageToken`. Differential
+   *     application of changes is queued for a follow-up plan.
+   *   - Cross-tab listener: peer-tab token advances drop the local
+   *     in-session caches so subsequent reads re-list against the
+   *     real Drive state.
+   */
+  #cache_md?: MetadataCache;
+  #onNsChangedBound?: (e: Event) => void;
+
+  metadataNamespace(): string {
+    return `googledrive:${this.#rootFolderId}`;
+  }
+
+  attachMetadataCache(cache: MetadataCache): void {
+    this.#cache_md = cache;
+    if (typeof window !== "undefined") {
+      const handler = (e: Event) => {
+        const detail = (e as CustomEvent<{ ns: string; key: string }>).detail;
+        if (!detail) return;
+        if (detail.ns !== this.metadataNamespace()) return;
+        if (detail.key !== "changesPageToken") return;
+        // Peer tab advanced the changes page token — its in-session
+        // caches are now ahead of ours. Drop our caches so the next
+        // read sees fresh Drive state.
+        this.#pathToFolderId.clear();
+        this.#folderIdToPath.clear();
+        this.#pathToFileId.clear();
+        this.#fileIdToPath.clear();
+        this.#loadedFolders.clear();
+        this.#recordCache.clear();
+        this.#pathToFolderId.set("", this.#rootFolderId);
+        this.#folderIdToPath.set(this.#rootFolderId, "");
+      };
+      this.#onNsChangedBound = handler;
+      window.addEventListener("annot-metadata-ns-changed", handler);
+    }
+  }
+
+  /**
+   * One-shot startup hook — seed the Drive Changes API page token
+   * on first connect so a follow-up plan can apply changes since
+   * the token instead of re-listing every folder. Best-effort:
+   * network failure here leaves the cache empty and the store
+   * still operates against Drive directly.
+   */
+  async init(): Promise<void> {
+    if (!this.#cache_md) return;
+    const ns = this.metadataNamespace();
+    try {
+      const existing = await this.#cache_md.getNamespaceMeta(ns, "changesPageToken");
+      if (existing) return;
+      const startToken = await this.#fetchStartPageToken();
+      if (startToken) {
+        await this.#cache_md.putNamespaceMeta(ns, "changesPageToken", startToken);
+      }
+    } catch {
+      /* best-effort */
+    }
+  }
+
+  /**
+   * `GET /drive/v3/changes/startPageToken` — the cheap seed call
+   * the Changes API recommends running once when an app first
+   * connects. Returns `null` on failure so callers can degrade
+   * gracefully.
+   */
+  async #fetchStartPageToken(): Promise<string | null> {
+    try {
+      const resp = await this.#api.request(
+        "https://www.googleapis.com/drive/v3/changes/startPageToken",
+      );
+      const body = (await resp.json()) as { startPageToken?: string };
+      return body?.startPageToken ?? null;
+    } catch {
+      return null;
+    }
   }
 
   async resync(): Promise<void> {

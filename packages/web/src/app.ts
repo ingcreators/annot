@@ -43,7 +43,7 @@ import { StorageBridge } from "./app/storage-bridge.js";
 import { pasteFromClipboard } from "./capture/pwa-capture.js";
 import { ScratchpadStore } from "./editor/scratchpad-store.js";
 import { logger } from "./logger.js";
-import { captureUrl, docUrl, editUrl, galleryUrl, pushRoute } from "./router.js";
+import { docUrl, editUrl, galleryUrl, pushRoute } from "./router.js";
 import {
   type BuiltInStorageMode,
   deleteExtensionImage,

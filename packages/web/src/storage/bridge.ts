@@ -393,6 +393,10 @@ async function refreshDriveToken(): Promise<string | null> {
 /** Connect to Google Drive with a selected root folder. */
 export function connectGoogleDrive(token: string, rootFolderId: string): StorageProvider {
   const store = new GoogleDriveStore(token, rootFolderId);
+  store.attachMetadataCache(getMetadataCache());
+  // Fire-and-forget seed of the Changes API page token so a
+  // follow-up plan can run differential sync against it.
+  void store.init();
   store.setTokenRefresher(refreshDriveToken);
   registry.driveStore = store;
   registry.currentMode = "googledrive";
