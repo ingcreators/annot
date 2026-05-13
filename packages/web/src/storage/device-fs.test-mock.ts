@@ -123,13 +123,32 @@ export class MockFileHandle implements FileSystemFileHandle {
   readonly kind = "file" as const;
   readonly name: string;
   #bytes: Uint8Array = new Uint8Array(0);
+  /**
+   * Stable per-file modification timestamp. Real `File.lastModified`
+   * is the value at the time the file was last written; without
+   * pinning it here every `getFile()` would invoke `new File()`
+   * with no `lastModified` and the constructor would default to
+   * `Date.now()` — so two consecutive reads would see different
+   * timestamps. DeviceStore's metadata cache uses mtime as the
+   * version string; tests would always cache-miss without a
+   * stable value.
+   *
+   * Bumped via `_setBytes` from `MockWritable.close()` so a write
+   * advances the timestamp by 1 ms (FSA real-world semantics).
+   */
+  #lastModified = Date.now();
+  /** Monotonic per-file tiebreaker so two writes inside one ms
+   *  still produce strictly-increasing timestamps. */
+  static #counter = 0;
 
   constructor(name: string) {
     this.name = name;
   }
 
   async getFile(): Promise<File> {
-    return new File([this.#bytes as BlobPart], this.name);
+    return new File([this.#bytes as BlobPart], this.name, {
+      lastModified: this.#lastModified,
+    });
   }
 
   async createWritable(
@@ -159,6 +178,13 @@ export class MockFileHandle implements FileSystemFileHandle {
   // Internal access for MockWritable + tests.
   _setBytes(bytes: Uint8Array): void {
     this.#bytes = bytes;
+    // Bump the modification timestamp so version-based cache
+    // invalidation in callers (DeviceStore × MetadataCache) sees a
+    // fresh version per write. Counter keeps strictly-monotone
+    // ordering across writes that happen inside the same
+    // millisecond.
+    MockFileHandle.#counter += 1;
+    this.#lastModified = Date.now() + MockFileHandle.#counter;
   }
   _getBytes(): Uint8Array {
     return this.#bytes;

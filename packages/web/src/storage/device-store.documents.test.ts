@@ -11,6 +11,8 @@
  */
 
 import { supportsDocuments } from "@ingcreators/annot-core/storage";
+import { IndexedDBMetadataCache } from "@ingcreators/annot-host-ui/idb-metadata-cache";
+import { IDBFactory } from "fake-indexeddb";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMockRoot } from "./device-fs.test-mock.js";
 import { DeviceStore } from "./device-store.js";
@@ -36,7 +38,14 @@ const SAMPLE_BYTES = `<!doctype html>
 `;
 
 function makeStore(): DeviceStore {
-  return new DeviceStore(createMockRoot() as unknown as FileSystemDirectoryHandle);
+  const store = new DeviceStore(createMockRoot() as unknown as FileSystemDirectoryHandle);
+  store.attachMetadataCache(
+    new IndexedDBMetadataCache({
+      channelName: `device-store-documents-${Math.random().toString(36).slice(2)}`,
+      dispatchWindowEvents: false,
+    }),
+  );
+  return store;
 }
 
 function makePayload(overrides: Partial<Parameters<DeviceStore["saveDocument"]>[0]> = {}) {
@@ -54,7 +63,9 @@ function makePayload(overrides: Partial<Parameters<DeviceStore["saveDocument"]>[
   };
 }
 
-beforeEach(() => {});
+beforeEach(() => {
+  globalThis.indexedDB = new IDBFactory();
+});
 afterEach(() => {});
 
 describe("DeviceStore.saveDocument + getDocument round-trip", () => {

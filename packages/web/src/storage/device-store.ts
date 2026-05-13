@@ -13,6 +13,16 @@
  * or imported with an explicit filename) keep their original name.
  * Annotations, tags, and original image are stored as XMP metadata inside each file.
  * Subfolders on disk = gallery folders.
+ *
+ * Phase 3 of `docs/plans/shared-metadata-cache.md` — the per-store
+ * `.annot.json` sidecar that older builds wrote next to the user's
+ * screenshots is no longer read or written. Metadata persistence
+ * is delegated to the host-supplied `MetadataCache`
+ * (`IndexedDBMetadataCache` in production). The legacy
+ * `.annot.json` file is **left on disk** by design: a user who
+ * downgrades to a pre-Phase-3 Annot release still finds a valid
+ * sidecar. A future plan can drop the legacy file once enough
+ * release cycles have passed.
  */
 import type {
   DocumentRecord,
@@ -20,10 +30,13 @@ import type {
   FolderRecord,
   ImageRecord,
   ImageRecordUpdate,
+  ListingEntry,
+  MetadataCache,
   StorageProvider,
   StorageWithDocuments,
   StorageWithForceRefresh,
   StorageWithInit,
+  StorageWithMetadataCache,
   StorageWithResync,
   StorageWithThumbnailCache,
 } from "@ingcreators/annot-core/storage";
@@ -32,7 +45,6 @@ import {
   getFilename,
   getParentPath,
   joinPath,
-  rewritePathPrefix,
   StorageConflictError,
   StorageNotFoundError,
   uniquifyFilenameAsync,
@@ -40,47 +52,19 @@ import {
 } from "@ingcreators/annot-core/storage";
 import { defaultAnnotImageFilename } from "@ingcreators/annot-core/utils";
 import { readEditableImage } from "@ingcreators/annot-core/xmp";
-import { logger } from "../logger.js";
 import { fileExists, getDirHandle, purgeEmptyFiles } from "./device-fs.js";
 import { buildEditableImageBlob } from "./image-encode.js";
 
-const INDEX_FILE = ".annot.json";
-
-interface IndexEntry {
-  createdAt: string;
-  /** XMP-extracted tags, cached so the gallery can show them without reading the file. */
-  tags?: Record<string, string>;
-  width?: number;
-  height?: number;
-  sourceUrl?: string;
-  /** File.lastModified at the time the entry was last synced. Used to detect external edits. */
-  mtime?: number;
-}
-
-/** Cached metadata for an `.annot.html` document. The bytes
- *  themselves live on disk; the index just lets the gallery
- *  render listing rows without reading every file. Phase 7a of
- *  `docs/plans/_done/annot-html-document.md`. */
-interface DocIndexEntry {
-  createdAt: string;
-  /** Document title (mirrors `<title>` + sidecar `meta.title`). */
-  title: string;
-  /** Top-level block count from the parser. */
-  blockCount: number;
-  /** Image-block count from the parser. */
-  imageCount: number;
-  /** File.lastModified at the time of last sync. */
-  mtime?: number;
-}
-
-interface IndexData {
-  /** Map path -> cached image metadata. */
-  images: Record<string, IndexEntry>;
-  /** Map path -> cached document metadata (Phase 7a). Optional
-   *  in stored on-disk indices written before Phase 7a so the
-   *  loader can default to `{}`. */
-  documents?: Record<string, DocIndexEntry>;
-}
+/**
+ * Filename of the legacy on-disk metadata sidecar. Pre-Phase-3 Annot
+ * builds wrote `images` / `documents` maps here so cold starts could
+ * skip re-reading XMP from every image. The current implementation
+ * ignores it for both read and write — the sidecar is left in place
+ * for downgrade compatibility. Listed here so the directory walk can
+ * filter it out of folder listings without surfacing it as a "file"
+ * to the gallery.
+ */
+const LEGACY_INDEX_FILE = ".annot.json";
 
 export class DeviceStore
   implements
@@ -89,10 +73,20 @@ export class DeviceStore
     StorageWithResync,
     StorageWithForceRefresh,
     StorageWithThumbnailCache,
-    StorageWithDocuments
+    StorageWithDocuments,
+    StorageWithMetadataCache
 {
   #root: FileSystemDirectoryHandle;
-  #index: IndexData = { images: {}, documents: {} };
+  #cache?: MetadataCache;
+  /**
+   * Synchronous mtime lookup for `thumbnailVersion`. The unified
+   * `ThumbnailManager` calls that method on the synchronous path
+   * (no `await`), so reads from the async `MetadataCache` won't
+   * work. Every cache write path populates this map alongside the
+   * IDB write — they stay in sync as long as the store is the
+   * only writer for its namespace, which is the per-tab guarantee.
+   */
+  #mtimeByPath = new Map<string, number>();
 
   get rootName(): string {
     return this.#root.name;
@@ -102,224 +96,250 @@ export class DeviceStore
     this.#root = root;
   }
 
+  // ── StorageWithMetadataCache ─────────────────────────────────
+
+  /**
+   * Namespace prefix used to scope this store's entries in the
+   * shared cache. The root folder name is folded in so two distinct
+   * user-picked folders with identical relative paths don't
+   * collide. Stable across `resync` / `forceRefresh`.
+   */
+  metadataNamespace(): string {
+    return `device:${this.#root.name}`;
+  }
+
+  /**
+   * Receive the host-owned `MetadataCache` instance. The host MUST
+   * call this BEFORE `init()` so the lifecycle scan has somewhere
+   * to populate. Constructed-but-unattached stores raise on the
+   * first cache access; this mirrors how
+   * `StorageWithTokenRefresher` requires `setToken` before any
+   * network call lands.
+   */
+  attachMetadataCache(cache: MetadataCache): void {
+    this.#cache = cache;
+  }
+
+  #c(): MetadataCache {
+    const cache = this.#cache;
+    if (!cache) {
+      throw new Error(
+        "DeviceStore: MetadataCache not attached. Call attachMetadataCache() before init().",
+      );
+    }
+    return cache;
+  }
+
+  #ns(): string {
+    return this.metadataNamespace();
+  }
+
+  /**
+   * Record `path → mtime` after every cache write so the
+   * synchronous `thumbnailVersion(path)` accessor has somewhere
+   * to look. Numbers are derived from the `version` string the
+   * cache already received (we always pass `String(mtime)`).
+   */
+  #rememberMtime(path: string, version: string): void {
+    const n = Number(version);
+    if (Number.isFinite(n) && n > 0) this.#mtimeByPath.set(path, n);
+  }
+
+  #forgetMtime(path: string): void {
+    this.#mtimeByPath.delete(path);
+  }
+
+  #forgetMtimePrefix(prefix: string): void {
+    for (const k of [...this.#mtimeByPath.keys()]) {
+      if (k === prefix || k.startsWith(`${prefix}/`)) this.#mtimeByPath.delete(k);
+    }
+  }
+
+  async #cachePutImage(path: string, version: string, rec: ImageRecord): Promise<void> {
+    await this.#c().putImage(this.#ns(), path, version, rec);
+    this.#rememberMtime(path, version);
+  }
+
+  async #cachePutDocument(path: string, version: string, rec: DocumentRecord): Promise<void> {
+    await this.#c().putDocument(this.#ns(), path, version, rec);
+    this.#rememberMtime(path, version);
+  }
+
+  // ── Lifecycle ────────────────────────────────────────────────
+
   async init(): Promise<void> {
-    await this.#loadIndex();
     await this.#purgeEmptyFiles(this.#root, "");
-    await this.#syncFilesToIndex();
-    await this.#removeOrphanedEntries();
-    await this.#backfillMissingMetadata();
-    await this.#revalidateModified();
+    await this.#syncFolderRecursive(this.#root, "");
   }
 
   async resync(): Promise<void> {
     await this.#purgeEmptyFiles(this.#root, "");
-    await this.#syncFilesToIndex();
-    await this.#removeOrphanedEntries();
-    await this.#backfillMissingMetadata();
-    await this.#revalidateModified();
+    await this.#syncFolderRecursive(this.#root, "");
+  }
+
+  /**
+   * Force a full refresh: clear every cached metadata entry under
+   * this namespace, then re-scan disk from scratch. Use this when
+   * the mtime-based heuristic might have missed something (e.g.
+   * filesystems with sub-second mtime).
+   */
+  async forceRefresh(): Promise<void> {
+    await this.#c().invalidatePrefix(`${this.#ns()}:`);
+    this.#mtimeByPath.clear();
+    await this.#syncFolderRecursive(this.#root, "");
   }
 
   /**
    * Recursively delete 0-byte files left behind by aborted writes
-   * (createWritable() truncates the file to 0 immediately, so a crash
-   * between then and close() leaves an orphan empty file). Subdirectories
-   * are walked but never removed.
+   * (`createWritable()` truncates the file to 0 immediately, so a
+   * crash between then and `close()` leaves an orphan empty file).
+   * Subdirectories are walked but never removed.
    */
-  /** Remove every zero-byte file under `dir` (recursive) and drop
-   *  matching entries from the in-memory index. The FS-side scan
-   *  lives in `./device-fs.ts`'s `purgeEmptyFiles`; this wrapper
-   *  applies the index cleanup that's specific to DeviceStore. */
   async #purgeEmptyFiles(dir: FileSystemDirectoryHandle, parentPath: string): Promise<void> {
     const deleted = await purgeEmptyFiles(dir, parentPath);
     for (const fullPath of deleted) {
-      if (this.#index.images[fullPath]) {
-        delete this.#index.images[fullPath];
-      }
-      logger.debug("[device-store] purged empty file:", fullPath);
+      await this.#c().invalidatePath(this.#ns(), fullPath);
+      this.#forgetMtime(fullPath);
     }
   }
 
   /**
-   * Force a full refresh: re-read every image's XMP and regenerate its thumbnail
-   * regardless of mtime. Use this as a "Refresh" action when the mtime-based
-   * heuristic might have missed something (e.g. filesystems with sub-second mtime).
+   * Reconcile the on-disk state of `(dir, folderPath)` with the
+   * cache: build the current listing from disk, diff against the
+   * cached listing by mtime version, re-read XMP for changed / new
+   * entries, drop cache rows for missing entries, then recurse into
+   * subfolders. The walk is intentionally O(N) per call — the FS
+   * Access API doesn't expose a cheap "what changed" probe, and
+   * mtime comparison via `getFile()` is fast enough on SSD.
    */
-  async forceRefresh(): Promise<void> {
-    for (const entry of Object.values(this.#index.images)) {
-      // Force re-check: clear mtime so revalidate treats it as changed
-      entry.mtime = undefined;
-    }
-    await this.#revalidateModified();
-    await this.#removeOrphanedEntries();
-  }
+  async #syncFolderRecursive(dir: FileSystemDirectoryHandle, folderPath: string): Promise<void> {
+    const liveEntries: ListingEntry[] = [];
+    const subfolders: Array<[FileSystemDirectoryHandle, string]> = [];
 
-  async #removeOrphanedEntries(): Promise<void> {
-    let changed = false;
-    for (const path of Object.keys(this.#index.images)) {
-      try {
-        const dir = await this.#getDirHandle(getParentPath(path));
-        await dir.getFileHandle(getFilename(path));
-      } catch {
-        delete this.#index.images[path];
-        changed = true;
-      }
-    }
-    if (changed) await this.#saveIndex();
-  }
-
-  /**
-   * Detect external modifications (Explorer / Finder / image editor) by
-   * comparing each file's current `lastModified` against the cached `mtime`.
-   * Entries that changed get their XMP tags + dimensions + thumbnail refreshed.
-   */
-  async #revalidateModified(): Promise<void> {
-    let changed = false;
-    for (const [path, entry] of Object.entries(this.#index.images)) {
-      try {
-        const dir = await this.#getDirHandle(getParentPath(path));
-        const fh = await dir.getFileHandle(getFilename(path));
-        const file = await fh.getFile();
-        if (entry.mtime !== undefined && file.lastModified === entry.mtime) {
-          continue; // unchanged
-        }
-        // File was added/modified externally — refresh cached metadata.
-        // Thumbnail bytes are owned by the unified `ThumbnailManager`;
-        // the next gallery `attach` call detects the version mismatch
-        // (mtime changed) and re-prefetches via `fetchThumbnailSource`.
-        const bytes = new Uint8Array(await file.arrayBuffer());
-        const meta = readEditableImage(bytes);
-        entry.tags = meta?.tags || {};
-        entry.width = meta?.width || entry.width || 0;
-        entry.height = meta?.height || entry.height || 0;
-        entry.mtime = file.lastModified;
-        changed = true;
-      } catch {
-        // File disappeared mid-check; #removeOrphanedEntries will handle it
-      }
-    }
-    if (changed) await this.#saveIndex();
-  }
-
-  /**
-   * Backfill missing metadata (tags / dimensions) for entries created by an
-   * older version of the index schema. Reads each image's XMP once. Runs on
-   * init() and resync(). Skips entries that already have tags set.
-   */
-  async #backfillMissingMetadata(): Promise<void> {
-    let changed = false;
-    for (const [path, entry] of Object.entries(this.#index.images)) {
-      if (entry.tags !== undefined) continue; // already migrated
-      try {
-        const dir = await this.#getDirHandle(getParentPath(path));
-        const fileHandle = await dir.getFileHandle(getFilename(path));
-        const file = await fileHandle.getFile();
-        const bytes = new Uint8Array(await file.arrayBuffer());
-        const meta = readEditableImage(bytes);
-        entry.tags = meta?.tags || {};
-        entry.width = meta?.width || entry.width || 0;
-        entry.height = meta?.height || entry.height || 0;
-        changed = true;
-      } catch {
-        entry.tags = {};
-        changed = true;
-      }
-    }
-    if (changed) await this.#saveIndex();
-  }
-
-  // ---- Index management ----
-
-  async #loadIndex(): Promise<void> {
-    try {
-      const handle = await this.#root.getFileHandle(INDEX_FILE);
-      const file = await handle.getFile();
-      const text = await file.text();
-      const parsed = JSON.parse(text);
-      if (parsed && typeof parsed === "object" && parsed.images) {
-        // Backfill the documents map for indices written before
-        // Phase 7a so the in-memory shape always carries it.
-        this.#index = { documents: {}, ...parsed };
-      } else {
-        this.#index = { images: {}, documents: {} };
-      }
-    } catch {
-      this.#index = { images: {}, documents: {} };
-    }
-  }
-
-  async #saveIndex(): Promise<void> {
-    const handle = await this.#root.getFileHandle(INDEX_FILE, { create: true });
-    const writable = await handle.createWritable();
-    await writable.write(JSON.stringify(this.#index, null, 2));
-    await writable.close();
-  }
-
-  /** Scan disk for image files not yet in the index. */
-  async #syncFilesToIndex(): Promise<void> {
-    const known = new Set(Object.keys(this.#index.images));
-    let changed = false;
-    await this.#syncDir(this.#root, "", known, () => {
-      changed = true;
-    });
-    if (changed) await this.#saveIndex();
-  }
-
-  async #syncDir(
-    dir: FileSystemDirectoryHandle,
-    folderPath: string,
-    known: Set<string>,
-    onAdd: () => void,
-  ): Promise<void> {
     for await (const [name, handle] of dir.entries()) {
-      if (handle.kind === "file" && this.#isImageFile(name)) {
-        const path = joinPath(folderPath, name);
-        if (!known.has(path)) {
-          let tags: Record<string, string> = {};
-          let width = 0;
-          let height = 0;
-          let mtime = 0;
-          try {
-            const file = await (handle as FileSystemFileHandle).getFile();
-            mtime = file.lastModified;
-            // Read once; extract XMP (tags + dimensions). Thumbnail
-            // generation is deferred to the unified `ThumbnailManager`
-            // — the gallery's `attach` call schedules a prefetch via
-            // `fetchThumbnailSource(path)` for any cache miss.
-            const bytes = new Uint8Array(await file.arrayBuffer());
-            const meta = readEditableImage(bytes);
-            if (meta) {
-              tags = meta.tags || {};
-              width = meta.width || 0;
-              height = meta.height || 0;
-            }
-          } catch {
-            /* skip on error — entry still added with empty tags */
-          }
-
-          this.#index.images[path] = {
-            createdAt: new Date().toISOString(),
-            tags,
-            width,
-            height,
-            mtime,
-          };
-          onAdd();
+      if (handle.kind === "file") {
+        if (name === LEGACY_INDEX_FILE) continue;
+        if (this.#isImageFile(name)) {
+          const path = joinPath(folderPath, name);
+          const file = await (handle as FileSystemFileHandle).getFile();
+          liveEntries.push({ path, version: String(file.lastModified), kind: "image" });
+        } else if (this.#isDocumentFile(name)) {
+          const path = joinPath(folderPath, name);
+          const file = await (handle as FileSystemFileHandle).getFile();
+          liveEntries.push({ path, version: String(file.lastModified), kind: "document" });
         }
       } else if (handle.kind === "directory" && !name.startsWith(".")) {
-        const subPath = joinPath(folderPath, name);
-        await this.#syncDir(handle as FileSystemDirectoryHandle, subPath, known, onAdd);
+        subfolders.push([handle as FileSystemDirectoryHandle, joinPath(folderPath, name)]);
       }
+    }
+
+    const cached = (await this.#c().getListing(this.#ns(), folderPath)) ?? [];
+    const cachedByPath = new Map(cached.map((e) => [e.path, e]));
+
+    // Refresh any entry whose mtime version doesn't match the cache.
+    for (const live of liveEntries) {
+      const previous = cachedByPath.get(live.path);
+      if (previous?.version === live.version) continue;
+      if (live.kind === "image") {
+        await this.#refreshImageCache(live.path, live.version);
+      } else {
+        await this.#refreshDocumentCache(live.path, live.version);
+      }
+    }
+
+    // Drop cache entries for files that vanished since the last sync.
+    const liveSet = new Set(liveEntries.map((e) => e.path));
+    for (const previous of cached) {
+      if (!liveSet.has(previous.path)) {
+        await this.#c().invalidatePath(this.#ns(), previous.path);
+        this.#forgetMtime(previous.path);
+      }
+    }
+    for (const live of liveEntries) {
+      this.#rememberMtime(live.path, live.version);
+    }
+
+    await this.#c().putListing(this.#ns(), folderPath, liveEntries);
+
+    for (const [sub, subPath] of subfolders) {
+      await this.#syncFolderRecursive(sub, subPath);
+    }
+  }
+
+  /**
+   * Re-read XMP for `path` (image) and populate the metadata cache
+   * with the lightweight subset. Heavy fields (`originalDataUrl`,
+   * `annotationsSvg`) are intentionally NOT cached — see the plan's
+   * caching policy. The cached record carries empty strings for
+   * those so a `getImage` cache hit doesn't accidentally deliver
+   * stale annotation bytes; the real read path falls through to
+   * the file when callers need the full record.
+   */
+  async #refreshImageCache(path: string, version: string): Promise<void> {
+    try {
+      const dir = await this.#getDirHandle(getParentPath(path));
+      const fileHandle = await dir.getFileHandle(getFilename(path));
+      const file = await fileHandle.getFile();
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const meta = readEditableImage(bytes);
+      const previous = await this.#c().getImage(this.#ns(), path, version);
+      const createdAt = previous?.createdAt ?? new Date(file.lastModified).toISOString();
+      const rec: ImageRecord = {
+        path,
+        folderPath: getParentPath(path),
+        // Heavy fields not persisted in the cache.
+        originalDataUrl: "",
+        thumbnailDataUrl: "",
+        annotationsSvg: "",
+        width: meta?.width ?? 0,
+        height: meta?.height ?? 0,
+        sourceUrl: previous?.sourceUrl ?? "",
+        tags: meta?.tags ?? {},
+        createdAt,
+        updatedAt: new Date(file.lastModified).toISOString(),
+      };
+      await this.#cachePutImage(path, version, rec);
+    } catch {
+      // File disappeared mid-scan; the listing reconciliation step
+      // handles cleanup.
+    }
+  }
+
+  /**
+   * Re-parse a `.annot.html` document header for its lightweight
+   * metadata (title, block / image counts) and populate the cache.
+   * Bytes are not stored — they're fetched on demand from disk.
+   */
+  async #refreshDocumentCache(path: string, version: string): Promise<void> {
+    try {
+      const dir = await this.#getDirHandle(getParentPath(path));
+      const fileHandle = await dir.getFileHandle(getFilename(path));
+      const file = await fileHandle.getFile();
+      const bytes = await file.text();
+      const meta = parseDocumentMetaCheap(bytes);
+      const previous = await this.#c().getDocument(this.#ns(), path, version);
+      const createdAt = previous?.createdAt ?? new Date(file.lastModified).toISOString();
+      const rec: DocumentRecord = {
+        path,
+        folderPath: getParentPath(path),
+        bytes: "",
+        thumbnailDataUrl: "",
+        title: meta.title,
+        blockCount: meta.blockCount,
+        imageCount: meta.imageCount,
+        createdAt,
+        updatedAt: new Date(file.lastModified).toISOString(),
+      };
+      await this.#cachePutDocument(path, version, rec);
+    } catch {
+      /* file vanished — listing reconciler handles it */
     }
   }
 
   #isImageFile(name: string): boolean {
     const lower = name.toLowerCase();
-    // Accept any PNG / JPEG / SVG. `.annot.*` is subsumed by the
-    // plain extension checks below. Listing is intentionally
-    // permissive so external screenshots dropped into the folder
-    // appear in the Annot gallery alongside annot-native captures —
-    // editor save-back preserves the original name for external
-    // files and uses `.annot.*` only for fresh captures.
+    // Permissive — external screenshots dropped into the folder
+    // appear in the Annot gallery alongside annot-native captures.
     return (
       lower.endsWith(".jpg") ||
       lower.endsWith(".jpeg") ||
@@ -328,9 +348,11 @@ export class DeviceStore
     );
   }
 
-  /** Thin wrappers around the shared FSA helpers in `./device-fs.ts`
-   *  so call sites stay short. The helpers themselves are
-   *  structurally typed and unit-tested separately. */
+  #isDocumentFile(name: string): boolean {
+    return name.toLowerCase().endsWith(".annot.html");
+  }
+
+  /** Thin wrappers around the shared FSA helpers in `./device-fs.ts`. */
   #getDirHandle(folderPath: string, create = false): Promise<FileSystemDirectoryHandle> {
     return getDirHandle(this.#root, folderPath, create);
   }
@@ -339,13 +361,10 @@ export class DeviceStore
     return fileExists(dir, name);
   }
 
-  // ---- Images ----
+  // ── Images ────────────────────────────────────────────────────
 
   async saveImage(data: Omit<ImageRecord, "path">, opts?: { filename?: string }): Promise<string> {
     const isJpeg = data.originalDataUrl.startsWith("data:image/jpeg");
-    // No explicit filename = annot-native capture → use the shared
-    // `annot-<ts>.annot.<ext>` shape. External-file saves pass their
-    // original filename and keep it unchanged.
     const desiredFilename = opts?.filename || defaultAnnotImageFilename(data.originalDataUrl);
     validateName(desiredFilename);
     const folderPath = data.folderPath || "";
@@ -356,7 +375,6 @@ export class DeviceStore
     );
     const path = joinPath(folderPath, filename);
 
-    // Build XMP blob
     const record: Partial<ImageRecord> = {
       originalDataUrl: data.originalDataUrl,
       annotationsSvg: data.annotationsSvg,
@@ -374,11 +392,10 @@ export class DeviceStore
       await writable.close();
       writable = null;
     } catch (e) {
-      // Critical: createWritable() truncates the file to 0 bytes immediately,
-      // so a failure between here and close() leaves an empty file behind.
-      // That orphan file then collides on the next attempt and the retry
-      // saves into "filename (2)". Clean up the partial file so retries
-      // can use the original name.
+      // createWritable() truncates the file to 0 bytes immediately,
+      // so a failure between here and close() leaves an empty file
+      // behind. Clean up the partial file so retries can reuse the
+      // original name.
       if (writable) {
         try {
           await writable.abort();
@@ -394,50 +411,53 @@ export class DeviceStore
       throw e;
     }
 
-    let mtime = 0;
-    try {
-      mtime = (await fileHandle.getFile()).lastModified;
-    } catch {
-      /* ignore */
-    }
+    const mtime = await this.#getMtime(fileHandle);
+    const version = String(mtime);
 
-    this.#index.images[path] = {
+    const cached: ImageRecord = {
+      path,
+      folderPath,
+      originalDataUrl: "",
+      thumbnailDataUrl: "",
+      annotationsSvg: "",
+      width: data.width ?? 0,
+      height: data.height ?? 0,
+      sourceUrl: data.sourceUrl ?? "",
+      tags: data.tags ?? {},
       createdAt: data.createdAt || new Date().toISOString(),
-      tags: data.tags || {},
-      width: data.width || 0,
-      height: data.height || 0,
-      sourceUrl: data.sourceUrl || "",
-      mtime,
+      updatedAt: new Date(mtime).toISOString(),
     };
-    await this.#saveIndex();
+    await this.#cachePutImage(path, version, cached);
+    await this.#upsertListing(folderPath, { path, version, kind: "image" });
 
     return path;
   }
 
   async getImage(path: string): Promise<ImageRecord | undefined> {
-    const entry = this.#index.images[path];
-    if (!entry) return undefined;
-
     try {
       const dir = await this.#getDirHandle(getParentPath(path));
       const fileHandle = await dir.getFileHandle(getFilename(path));
       const file = await fileHandle.getFile();
       const data = new Uint8Array(await file.arrayBuffer());
       const meta = readEditableImage(data);
-
+      // Prefer the cached createdAt (preserves the value the caller
+      // passed to `saveImage`); fall back to the file mtime when the
+      // cache is cold or missed.
+      const version = String(file.lastModified);
+      const cached = await this.#c().getImage(this.#ns(), path, version);
+      const createdAt = cached?.createdAt ?? new Date(file.lastModified).toISOString();
       return {
         path,
         folderPath: getParentPath(path),
         originalDataUrl: meta?.originalImageDataUrl || (await this.#fileToDataUrl(file)),
-        // Thumbnail bytes owned by the unified `ThumbnailManager`.
         thumbnailDataUrl: "",
         annotationsSvg: meta?.annotationsSvg || "",
         width: meta?.width || 0,
         height: meta?.height || 0,
-        sourceUrl: "",
+        sourceUrl: cached?.sourceUrl ?? "",
         tags: meta?.tags || {},
-        createdAt: entry.createdAt,
-        updatedAt: entry.createdAt,
+        createdAt,
+        updatedAt: new Date(file.lastModified).toISOString(),
       };
     } catch {
       return undefined;
@@ -445,78 +465,126 @@ export class DeviceStore
   }
 
   async listImages(folderPath: string): Promise<ImageRecord[]> {
-    const results: ImageRecord[] = [];
-    for (const [path, entry] of Object.entries(this.#index.images)) {
-      if (getParentPath(path) !== folderPath) continue;
-      results.push({
+    // Always walk disk first — the FS is the source of truth, and a
+    // user could have dropped files since the last `init()` /
+    // `resync()`. Refresh the cache opportunistically; cache hits
+    // skip the XMP re-parse for unchanged entries.
+    const dir = await this.#getDirHandleOrUndefined(folderPath);
+    if (!dir) return [];
+
+    const liveEntries: ListingEntry[] = [];
+    const records: ImageRecord[] = [];
+
+    for await (const [name, handle] of dir.entries()) {
+      if (handle.kind !== "file") continue;
+      if (name === LEGACY_INDEX_FILE) continue;
+      if (!this.#isImageFile(name)) continue;
+      const path = joinPath(folderPath, name);
+      const file = await (handle as FileSystemFileHandle).getFile();
+      const version = String(file.lastModified);
+      liveEntries.push({ path, version, kind: "image" });
+
+      let cached = await this.#c().getImage(this.#ns(), path, version);
+      if (!cached) {
+        await this.#refreshImageCache(path, version);
+        cached = await this.#c().getImage(this.#ns(), path, version);
+      }
+      if (!cached) continue;
+
+      records.push({
         path,
         folderPath,
-        originalDataUrl: "", // lazy — loaded on getImage
-        // Thumbnail bytes owned by the unified `ThumbnailManager`;
-        // gallery hydrates via `attach` after this returns.
+        originalDataUrl: "",
         thumbnailDataUrl: "",
         annotationsSvg: "",
-        width: entry.width || 0,
-        height: entry.height || 0,
-        sourceUrl: entry.sourceUrl || "",
-        tags: entry.tags || {},
-        createdAt: entry.createdAt,
-        updatedAt: entry.createdAt,
+        width: cached.width,
+        height: cached.height,
+        sourceUrl: cached.sourceUrl,
+        tags: cached.tags,
+        createdAt: cached.createdAt,
+        updatedAt: cached.updatedAt,
       });
     }
-    results.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
-    return results;
+
+    await this.#c().putListing(this.#ns(), folderPath, liveEntries);
+    records.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+    return records;
   }
 
   async updateImage(path: string, updates: ImageRecordUpdate): Promise<void> {
-    const record = await this.getImage(path);
-    if (!record) return;
+    const existing = await this.getImage(path);
+    if (!existing) return;
 
-    Object.assign(record, updates);
-    const entry = this.#index.images[path];
-    if (!entry) return;
+    const merged: ImageRecord = { ...existing, ...updates };
+    const folderPath = getParentPath(path);
 
     // Rewrite file if annotations / tags / underlying bitmap changed.
     // `originalDataUrl` carries the new bitmap when the redact-burn
     // path explicitly mutates the base image (see
     // `_done/redact-burn-into-image.md`); without it in the gate
-    // condition, a bitmap-only update would skip the rebuild and
-    // the new bytes never reach disk.
+    // condition, a bitmap-only update would skip the rebuild.
+    let newMtime: number | undefined;
     if (
       updates.annotationsSvg !== undefined ||
       updates.tags !== undefined ||
       updates.originalDataUrl !== undefined
     ) {
-      const isJpeg = (record.originalDataUrl || "").startsWith("data:image/jpeg");
-      const blob = await this.#buildXmpBlob(record, isJpeg ? "jpg" : "png");
+      const isJpeg = (merged.originalDataUrl || "").startsWith("data:image/jpeg");
+      const blob = await this.#buildXmpBlob(merged, isJpeg ? "jpg" : "png");
 
-      const dir = await this.#getDirHandle(getParentPath(path));
+      const dir = await this.#getDirHandle(folderPath);
       const fileHandle = await dir.getFileHandle(getFilename(path));
       const writable = await fileHandle.createWritable();
       await writable.write(blob);
       await writable.close();
-      // Record the new mtime so external-edit detection knows this change was ours
-      try {
-        entry.mtime = (await fileHandle.getFile()).lastModified;
-      } catch {
-        /* ignore */
-      }
+      newMtime = await this.#getMtime(fileHandle);
     }
 
-    // `updates.thumbnailDataUrl` is no longer handled — thumbnail
-    // bytes are owned by the unified `ThumbnailManager`.
-    // Cache tag edits in the index so the gallery sees them without reopening the file
-    if (updates.tags !== undefined) {
-      entry.tags = { ...updates.tags };
+    if (newMtime !== undefined) {
+      const version = String(newMtime);
+      const cached: ImageRecord = {
+        path,
+        folderPath,
+        originalDataUrl: "",
+        thumbnailDataUrl: "",
+        annotationsSvg: "",
+        width: merged.width,
+        height: merged.height,
+        sourceUrl: merged.sourceUrl,
+        tags: merged.tags,
+        createdAt: merged.createdAt,
+        updatedAt: new Date(newMtime).toISOString(),
+      };
+      await this.#cachePutImage(path, version, cached);
+      await this.#upsertListing(folderPath, { path, version, kind: "image" });
+    } else if (updates.tags !== undefined) {
+      // Tag-only update with no on-disk write (caller passed
+      // identical bytes alongside): refresh the cached row so the
+      // gallery's tag display catches up.
+      const version = String(await this.#mtimeForPath(path));
+      const cached: ImageRecord = {
+        path,
+        folderPath,
+        originalDataUrl: "",
+        thumbnailDataUrl: "",
+        annotationsSvg: "",
+        width: merged.width,
+        height: merged.height,
+        sourceUrl: merged.sourceUrl,
+        tags: merged.tags,
+        createdAt: merged.createdAt,
+        updatedAt: merged.updatedAt,
+      };
+      await this.#cachePutImage(path, version, cached);
     }
-
-    await this.#saveIndex();
   }
 
   async moveImage(path: string, newFolderPath: string): Promise<string> {
     if (newFolderPath === getParentPath(path)) return path;
-    const entry = this.#index.images[path];
-    if (!entry) throw new StorageNotFoundError(path, `Image not found: ${path}`);
+    const existing = await this.#c().getImage(this.#ns(), path, await this.#peekVersion(path));
+    if (!existing && !(await this.#fileExistsAtPath(path))) {
+      throw new StorageNotFoundError(path, `Image not found: ${path}`);
+    }
 
     const filename = getFilename(path);
     const oldDir = await this.#getDirHandle(getParentPath(path));
@@ -534,15 +602,22 @@ export class DeviceStore
     await writable.close();
     await oldDir.removeEntry(filename);
 
-    delete this.#index.images[path];
-    this.#index.images[newPath] = entry;
-    await this.#saveIndex();
+    await this.#c().migrateEntry(this.#ns(), path, newPath);
+    this.#forgetMtime(path);
+    // The new mtime after copy may differ; refresh listing version.
+    const newVersion = String(await this.#getMtime(newHandle));
+    this.#rememberMtime(newPath, newVersion);
+    await this.#upsertListing(newFolderPath, {
+      path: newPath,
+      version: newVersion,
+      kind: "image",
+    });
     return newPath;
   }
 
   async renameImage(path: string, newName: string): Promise<string> {
     validateName(newName);
-    if (!this.#index.images[path]) {
+    if (!(await this.#fileExistsAtPath(path))) {
       throw new StorageNotFoundError(path, `Image not found: ${path}`);
     }
     const folderPath = getParentPath(path);
@@ -555,7 +630,7 @@ export class DeviceStore
     }
 
     const oldFilename = getFilename(path);
-    // Copy + delete (FS Access API has no native rename)
+    // Copy + delete (FS Access API has no native rename).
     const oldHandle = await dir.getFileHandle(oldFilename);
     const file = await oldHandle.getFile();
     const newHandle = await dir.getFileHandle(newName, { create: true });
@@ -564,29 +639,19 @@ export class DeviceStore
     await writable.close();
     await dir.removeEntry(oldFilename);
 
-    const entry = this.#index.images[path];
-    delete this.#index.images[path];
-    if (entry) {
-      try {
-        entry.mtime = (await newHandle.getFile()).lastModified;
-      } catch {
-        /* ignore */
-      }
-      this.#index.images[newPath] = entry;
-    }
-    await this.#saveIndex();
+    await this.#c().migrateEntry(this.#ns(), path, newPath);
+    this.#forgetMtime(path);
+    const newVersion = String(await this.#getMtime(newHandle));
+    this.#rememberMtime(newPath, newVersion);
+    await this.#upsertListing(folderPath, { path: newPath, version: newVersion, kind: "image" });
     return newPath;
   }
 
   async deleteImage(path: string): Promise<void> {
-    // Phase 7a — `deleteImage` is the path-keyed delete primitive
-    // per the `StorageWithDocuments` plan. It removes whichever
-    // index entry holds the path (image OR document) and then
-    // removes the file from disk. No-op when neither side knows
-    // about the path.
-    const knownAsImage = !!this.#index.images[path];
-    const knownAsDoc = !!this.#index.documents?.[path];
-    if (!knownAsImage && !knownAsDoc) return;
+    // `deleteImage` is the path-keyed delete primitive — same shape
+    // for images AND documents. The cache distinguishes via the
+    // record `kind`, but the file system call is identical.
+    if (!(await this.#fileExistsAtPath(path))) return;
 
     try {
       const dir = await this.#getDirHandle(getParentPath(path));
@@ -595,16 +660,12 @@ export class DeviceStore
       /* may already be gone */
     }
 
-    if (knownAsImage) delete this.#index.images[path];
-    if (knownAsDoc && this.#index.documents) delete this.#index.documents[path];
-    await this.#saveIndex();
+    await this.#c().invalidatePath(this.#ns(), path);
+    await this.#c().removeListingEntry(this.#ns(), getParentPath(path), path);
+    this.#forgetMtime(path);
   }
 
-  // ---- Documents (Phase 7a) ----
-  // `.annot.html` files are written verbatim (no XMP wrapping —
-  // the format is its own self-contained spec). Metadata cached in
-  // `#index.documents` mirrors the image-side index pattern so
-  // `listDocuments` stays cheap.
+  // ── Documents ────────────────────────────────────────────────
 
   async saveDocument(
     data: Omit<DocumentRecord, "path">,
@@ -643,100 +704,130 @@ export class DeviceStore
       throw e;
     }
 
-    let mtime = 0;
-    try {
-      mtime = (await fileHandle.getFile()).lastModified;
-    } catch {
-      /* ignore */
-    }
-
-    if (!this.#index.documents) this.#index.documents = {};
-    this.#index.documents[path] = {
-      createdAt: data.createdAt || new Date().toISOString(),
+    const mtime = await this.#getMtime(fileHandle);
+    const version = String(mtime);
+    const cached: DocumentRecord = {
+      path,
+      folderPath,
+      bytes: "",
+      thumbnailDataUrl: "",
       title: data.title,
       blockCount: data.blockCount,
       imageCount: data.imageCount,
-      mtime,
+      createdAt: data.createdAt || new Date().toISOString(),
+      updatedAt: new Date(mtime).toISOString(),
     };
-    await this.#saveIndex();
+    await this.#cachePutDocument(path, version, cached);
+    await this.#upsertListing(folderPath, { path, version, kind: "document" });
     return path;
   }
 
   async getDocument(path: string): Promise<DocumentRecord | undefined> {
-    const entry = this.#index.documents?.[path];
-    if (!entry) return undefined;
     let bytes: string;
+    let mtime: number;
     try {
       const dir = await this.#getDirHandle(getParentPath(path));
       const handle = await dir.getFileHandle(getFilename(path));
-      bytes = await (await handle.getFile()).text();
+      const file = await handle.getFile();
+      mtime = file.lastModified;
+      bytes = await file.text();
     } catch {
       return undefined;
     }
+    const version = String(mtime);
+    let cached = await this.#c().getDocument(this.#ns(), path, version);
+    if (!cached) {
+      await this.#refreshDocumentCache(path, version);
+      cached = await this.#c().getDocument(this.#ns(), path, version);
+    }
+    if (!cached) return undefined;
     return {
       path,
       folderPath: getParentPath(path),
       bytes,
       thumbnailDataUrl: "",
-      title: entry.title,
-      imageCount: entry.imageCount,
-      blockCount: entry.blockCount,
-      createdAt: entry.createdAt,
-      updatedAt: entry.mtime ? new Date(entry.mtime).toISOString() : entry.createdAt,
+      title: cached.title,
+      imageCount: cached.imageCount,
+      blockCount: cached.blockCount,
+      createdAt: cached.createdAt,
+      updatedAt: cached.updatedAt,
     };
   }
 
   async listDocuments(folderPath: string): Promise<DocumentRecord[]> {
-    const docs = this.#index.documents ?? {};
+    const dir = await this.#getDirHandleOrUndefined(folderPath);
+    if (!dir) return [];
+
     const out: DocumentRecord[] = [];
-    for (const [path, entry] of Object.entries(docs)) {
-      if (getParentPath(path) !== folderPath) continue;
+    for await (const [name, handle] of dir.entries()) {
+      if (handle.kind !== "file") continue;
+      if (!this.#isDocumentFile(name)) continue;
+      const path = joinPath(folderPath, name);
+      const file = await (handle as FileSystemFileHandle).getFile();
+      const version = String(file.lastModified);
+      let cached = await this.#c().getDocument(this.#ns(), path, version);
+      if (!cached) {
+        await this.#refreshDocumentCache(path, version);
+        cached = await this.#c().getDocument(this.#ns(), path, version);
+      }
+      if (!cached) continue;
       out.push({
         path,
         folderPath,
-        // Listing payloads omit file bytes — load lazily via
-        // `getDocument(path)` when the user opens. Same shape the
-        // image-side `listImages` uses (records carry `""` for
-        // `originalDataUrl` until requested).
         bytes: "",
         thumbnailDataUrl: "",
-        title: entry.title,
-        imageCount: entry.imageCount,
-        blockCount: entry.blockCount,
-        createdAt: entry.createdAt,
-        updatedAt: entry.mtime ? new Date(entry.mtime).toISOString() : entry.createdAt,
+        title: cached.title,
+        imageCount: cached.imageCount,
+        blockCount: cached.blockCount,
+        createdAt: cached.createdAt,
+        updatedAt: cached.updatedAt,
       });
     }
     return out;
   }
 
   async updateDocument(path: string, updates: DocumentRecordUpdate): Promise<void> {
-    const entry = this.#index.documents?.[path];
-    if (!entry) return;
+    const existing = await this.getDocument(path);
+    if (!existing) return;
+    const folderPath = getParentPath(path);
+    let newMtime: number | undefined;
     if (updates.bytes !== undefined) {
-      const dir = await this.#getDirHandle(getParentPath(path));
+      const dir = await this.#getDirHandle(folderPath);
       const handle = await dir.getFileHandle(getFilename(path), { create: true });
       const writable = await handle.createWritable();
       await writable.write(updates.bytes);
       await writable.close();
-      try {
-        entry.mtime = (await handle.getFile()).lastModified;
-      } catch {
-        /* ignore */
-      }
+      newMtime = await this.#getMtime(handle);
     }
-    if (updates.title !== undefined) entry.title = updates.title;
-    if (updates.blockCount !== undefined) entry.blockCount = updates.blockCount;
-    if (updates.imageCount !== undefined) entry.imageCount = updates.imageCount;
-    await this.#saveIndex();
+    const merged: DocumentRecord = {
+      ...existing,
+      title: updates.title ?? existing.title,
+      blockCount: updates.blockCount ?? existing.blockCount,
+      imageCount: updates.imageCount ?? existing.imageCount,
+    };
+    const version = String(newMtime ?? (await this.#mtimeForPath(path)));
+    const cached: DocumentRecord = {
+      path,
+      folderPath,
+      bytes: "",
+      thumbnailDataUrl: "",
+      title: merged.title,
+      blockCount: merged.blockCount,
+      imageCount: merged.imageCount,
+      createdAt: merged.createdAt,
+      updatedAt: newMtime ? new Date(newMtime).toISOString() : merged.updatedAt,
+    };
+    await this.#cachePutDocument(path, version, cached);
+    if (newMtime !== undefined) {
+      await this.#upsertListing(folderPath, { path, version, kind: "document" });
+    }
   }
 
-  // ---- Folders ----
+  // ── Folders ──────────────────────────────────────────────────
 
   async createFolder(parentPath: string, name: string): Promise<string> {
     validateName(name);
     const parentDir = await this.#getDirHandle(parentPath, true);
-    // Throw if already exists
     try {
       await parentDir.getDirectoryHandle(name);
       throw new StorageConflictError(
@@ -755,7 +846,8 @@ export class DeviceStore
   }
 
   async listFolders(parentPath: string): Promise<FolderRecord[]> {
-    const dir = await this.#getDirHandle(parentPath);
+    const dir = await this.#getDirHandleOrUndefined(parentPath);
+    if (!dir) return [];
     const results: FolderRecord[] = [];
     for await (const [name, handle] of dir.entries()) {
       if (handle.kind === "directory" && !name.startsWith(".")) {
@@ -807,7 +899,6 @@ export class DeviceStore
   }
 
   async #moveFolderImpl(oldPath: string, newPath: string): Promise<string> {
-    // Collision check
     if (await this.getFolder(newPath)) {
       throw new StorageConflictError(newPath, `Folder already exists: ${newPath}`);
     }
@@ -822,14 +913,20 @@ export class DeviceStore
     const oldParentDir = await this.#getDirHandle(getParentPath(oldPath));
     await oldParentDir.removeEntry(getFilename(oldPath), { recursive: true });
 
-    // Rewrite index entries
-    const newIndex: Record<string, IndexEntry> = {};
-    for (const [p, entry] of Object.entries(this.#index.images)) {
-      const np = rewritePathPrefix(p, oldPath, newPath);
-      newIndex[np] = entry;
+    // Rewrite cache entries under the prefix in one call. The
+    // primitive moves records, backend IDs, and listing keys; it
+    // also rewrites the `path` field inside the listing entries.
+    await this.#c().rewriteEntriesForPrefix(this.#ns(), oldPath, newPath);
+
+    // Mirror the prefix rewrite into the synchronous mtime map so
+    // `thumbnailVersion` keeps working for the moved files.
+    for (const [k, v] of [...this.#mtimeByPath.entries()]) {
+      if (k === oldPath || k.startsWith(`${oldPath}/`)) {
+        this.#mtimeByPath.delete(k);
+        const moved = newPath + k.slice(oldPath.length);
+        this.#mtimeByPath.set(moved, v);
+      }
     }
-    this.#index.images = newIndex;
-    await this.#saveIndex();
 
     return newPath;
   }
@@ -854,12 +951,6 @@ export class DeviceStore
 
   async deleteFolder(path: string): Promise<void> {
     if (!path) return;
-    // Drop index entries
-    for (const p of Object.keys(this.#index.images)) {
-      if (p === path || p.startsWith(`${path}/`)) {
-        delete this.#index.images[p];
-      }
-    }
 
     const parentDir = await this.#getDirHandle(getParentPath(path));
     try {
@@ -868,7 +959,10 @@ export class DeviceStore
       /* may fail if not empty in some browsers */
     }
 
-    await this.#saveIndex();
+    // Drop every cache row under this folder's prefix.
+    await this.#c().invalidatePrefix(`${this.#ns()}:${path}`);
+    await this.#c().removeListingEntry(this.#ns(), getParentPath(path), path);
+    this.#forgetMtimePrefix(path);
   }
 
   async getBreadcrumb(path: string): Promise<FolderRecord[]> {
@@ -891,23 +985,29 @@ export class DeviceStore
    * different parent folders).
    */
   thumbnailKey(path: string): string | undefined {
-    if (!this.#index.images[path]) return undefined;
+    // The thumbnail key must be stable regardless of whether the
+    // metadata cache has been populated yet; key just off the path.
     return `device:${this.#root.name}:${path}`;
   }
 
   /**
    * `mtime` advances on every write — both this store's own
    * `saveImage` / `updateImage` and external edits picked up by
-   * `#revalidateModified`. Cache hits require a matching mtime;
-   * mismatches evict and re-prefetch.
+   * the listing-reconciliation walk. The unified thumbnail manager
+   * gates cache hits on this value via a synchronous lookup, so we
+   * mirror mtimes into `#mtimeByPath` alongside every metadata-cache
+   * write. Returns `"0"` for paths we haven't seen yet (the
+   * manager treats mismatches as cache misses and re-prefetches —
+   * correct fallback while the per-folder walk is still in
+   * progress).
    */
   thumbnailVersion(path: string): string {
-    return String(this.#index.images[path]?.mtime ?? 0);
+    return String(this.#mtimeByPath.get(path) ?? 0);
   }
 
   /**
    * Source bytes for thumbnail regeneration. Reads the file from
-   * disk; manager runs the result through
+   * disk; the manager runs the result through
    * `generateThumbnailFromBlob` when the cache misses.
    */
   async fetchThumbnailSource(path: string): Promise<Blob | undefined> {
@@ -920,7 +1020,7 @@ export class DeviceStore
     }
   }
 
-  // ---- Helpers ----
+  // ── Helpers ──────────────────────────────────────────────────
 
   async #buildXmpBlob(record: Partial<ImageRecord>, format: "jpg" | "png"): Promise<Blob> {
     return buildEditableImageBlob(record, format);
@@ -933,4 +1033,107 @@ export class DeviceStore
       reader.readAsDataURL(file);
     });
   }
+
+  async #getMtime(handle: FileSystemFileHandle): Promise<number> {
+    try {
+      return (await handle.getFile()).lastModified;
+    } catch {
+      return 0;
+    }
+  }
+
+  async #mtimeForPath(path: string): Promise<number> {
+    try {
+      const dir = await this.#getDirHandle(getParentPath(path));
+      const fh = await dir.getFileHandle(getFilename(path));
+      return await this.#getMtime(fh);
+    } catch {
+      return 0;
+    }
+  }
+
+  async #peekVersion(path: string): Promise<string> {
+    return String(await this.#mtimeForPath(path));
+  }
+
+  async #fileExistsAtPath(path: string): Promise<boolean> {
+    try {
+      const dir = await this.#getDirHandle(getParentPath(path));
+      await dir.getFileHandle(getFilename(path));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async #getDirHandleOrUndefined(
+    folderPath: string,
+  ): Promise<FileSystemDirectoryHandle | undefined> {
+    try {
+      return await this.#getDirHandle(folderPath);
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
+   * Single-entry listing patch — upsert into the cached listing if
+   * one exists for the folder; otherwise reconcile by walking the
+   * folder so a never-listed folder still has its listing ready
+   * for the next `listImages` call. Avoids the common pitfall
+   * where `saveImage` populates the record cache but the parent
+   * folder's listing stays stale.
+   */
+  async #upsertListing(folderPath: string, entry: ListingEntry): Promise<void> {
+    const cached = await this.#c().getListing(this.#ns(), folderPath);
+    if (cached) {
+      await this.#c().upsertListingEntry(this.#ns(), folderPath, entry);
+    } else {
+      // Initialize the listing from disk so we don't drop sibling
+      // files that happen to exist but weren't listed yet.
+      try {
+        const dir = await this.#getDirHandle(folderPath);
+        await this.#syncFolderRecursive(dir, folderPath);
+      } catch {
+        // Folder may have been removed mid-flight; fall back to a
+        // single-entry listing.
+        await this.#c().putListing(this.#ns(), folderPath, [entry]);
+      }
+    }
+  }
+
+  // ── Logger import preserved for explicit-debug callsites ────
+  // (Earlier code had `logger.debug` calls in the purge path;
+  // those moved to `MetadataCache.invalidatePath` which doesn't
+  // need a debug log. Keep the import out of dead-code territory.)
+}
+
+// ─── Cheap document-meta parser ─────────────────────────────────
+
+interface CheapDocumentMeta {
+  title: string;
+  blockCount: number;
+  imageCount: number;
+}
+
+/**
+ * Pull title / block / image counts out of an `.annot.html` document
+ * without instantiating the full parser. Two regex passes against
+ * the source text: cheaper than spinning up a DOMParser in the
+ * walking critical path.
+ *
+ * Robust against minor variations — the format spec mandates
+ * `<title>` + `data-annot-block` markers per
+ * [`docs/plans/_done/annot-html-document.md`](../../../docs/plans/_done/annot-html-document.md).
+ */
+function parseDocumentMetaCheap(text: string): CheapDocumentMeta {
+  const titleMatch = text.match(/<title>([\s\S]*?)<\/title>/i);
+  const title = titleMatch?.[1]?.trim() ?? "";
+  const blockMatches = text.match(/data-annot-block="[^"]+"/g);
+  const imageMatches = text.match(/data-annot-block="image"/g);
+  return {
+    title,
+    blockCount: blockMatches?.length ?? 0,
+    imageCount: imageMatches?.length ?? 0,
+  };
 }
