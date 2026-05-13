@@ -1,4 +1,6 @@
 // @vitest-environment happy-dom
+import { IndexedDBMetadataCache } from "@ingcreators/annot-host-ui/idb-metadata-cache";
+import { IDBFactory } from "fake-indexeddb";
 import { afterAll, afterEach, beforeAll, beforeEach, vi } from "vitest";
 import { runStorageContract } from "./contract.test-helpers.js";
 import { startGitHubMockServer } from "./github-api.test-mock.js";
@@ -50,15 +52,21 @@ afterAll(() => server.close());
 // in a new GitHubStore pointed at the (reset-per-test) repo state.
 beforeEach(() => {
   reset();
+  globalThis.indexedDB = new IDBFactory();
 });
 
-runStorageContract(
-  "GitHubStore",
-  () =>
-    new GitHubStore("fake-pat-for-tests", {
-      owner: "annot-test",
-      repo: "sandbox",
-      branch: "main",
-      basePath: "",
+runStorageContract("GitHubStore", () => {
+  const store = new GitHubStore("fake-pat-for-tests", {
+    owner: "annot-test",
+    repo: "sandbox",
+    branch: "main",
+    basePath: "",
+  });
+  store.attachMetadataCache(
+    new IndexedDBMetadataCache({
+      channelName: `github-store-contract-${Math.random().toString(36).slice(2)}`,
+      dispatchWindowEvents: false,
     }),
-);
+  );
+  return store;
+});

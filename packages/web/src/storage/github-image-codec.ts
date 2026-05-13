@@ -16,13 +16,24 @@
 import type { ImageRecord } from "@ingcreators/annot-core/storage";
 import { getParentPath } from "@ingcreators/annot-core/storage";
 import { readEditableImage } from "@ingcreators/annot-core/xmp";
-import type { GitHubFileMeta } from "./github-blob-cache.js";
 import { bytesToDataUrl, inferMimeFromPath } from "./github-helpers.js";
+
+/**
+ * Last-known commit info for a single file. Phase 8 of
+ * `docs/plans/_done/shared-metadata-cache.md` retired the
+ * `GitHubBlobCache` class that originally owned this shape; the
+ * type now lives next to the decoder that consumes it.
+ */
+export interface GitHubFileMeta {
+  createdAt?: string;
+  updatedAt?: string;
+}
 
 /**
  * Decode a fetched blob into an `ImageRecord`. Pure: no cache
  * writes, no `this`. Caller is responsible for stashing the result
- * in `GitHubBlobCache.setRecord(...)` if appropriate.
+ * in the shared `MetadataCache` if appropriate (the GitHubStore
+ * uses `#cachePutRecord`).
  *
  * Decoding strategy:
  *
@@ -36,7 +47,7 @@ import { bytesToDataUrl, inferMimeFromPath } from "./github-helpers.js";
  *      gallery; it just has no annotations layer.
  *
  * `meta` is the optional last-known commit info (`createdAt` /
- *  `updatedAt`) the store maintains in `GitHubBlobCache.getMeta`.
+ *  `updatedAt`) the store maintains in its `MetadataCache` row.
  *  Decoding doesn't need it but the editor header surface does, so
  *  the store typically passes it through.
  */

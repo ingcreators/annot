@@ -60,7 +60,6 @@ import {
 } from "./github-api-client.js";
 import type { GitHubCommitSummary, GitHubRepoRef } from "./github-auth.js";
 import { getLastCommitForPath } from "./github-auth.js";
-import { GitHubBlobCache } from "./github-blob-cache.js";
 import {
   base64ToBytes,
   blobToBase64,
@@ -152,52 +151,19 @@ export class GitHubStore
    */
   #tree = new GitHubTreeState();
 
-  /**
-   * In-memory caches keyed by basePath-relative path:
-   *
-   *   - `record`            — last full `ImageRecord` per path.
-   *     Lets `updateImage` re-render without re-fetching the source
-   *     bytes.
-   *   - `meta`              — last-known commit info per file
-   *     (`createdAt` / `updatedAt`), surfaced to the editor header.
-   *   - `thumbnail`         — gallery thumbnail data URL. GitHub
-   *     has no thumbnail facility of its own, so we generate and
-   *     remember our own.
-   *   - `thumbnailInFlight` — dedup map for in-flight thumbnail
-   *     fetches launched by `listImages` so the gallery can patch
-   *     cards in place without blocking its initial render.
-   *
-   * Implementation lives in `./github-blob-cache.ts` so the cache
-   * invariants (purge-all-on-delete, move-on-rename,
-   * rewrite-on-folder-rename) are unit-testable independently of
-   * the HTTP layer + I/O pipeline.
-   */
-  #cache = new GitHubBlobCache();
-
-  /** Phase 7d of `docs/plans/_done/annot-html-document.md` —
-   *  per-document metadata cache. `listDocuments` returns
-   *  filename-derived defaults for documents we haven't decoded
-   *  yet; `getDocument` + `updateDocument` populate this map so
-   *  subsequent listings render the right title / counts without
-   *  re-fetching every doc's bytes. Keyed by basePath-relative
-   *  path. Invalidated on rename / delete via `#cache.purge` /
-   *  the explicit clear in `deleteImage`. */
-  #docMeta = new Map<
-    string,
-    { title: string; blockCount: number; imageCount: number; createdAt: string; updatedAt: string }
-  >();
-
   // Token refresh + rate-limit telemetry now live inside `#api`.
 
-  // ── MetadataCache integration (Phase 5 of shared-metadata-cache) ──
+  // ── MetadataCache integration ────────────────────────────────
   /**
-   * Host-supplied metadata cache. The store still maintains its
-   * own bespoke in-session caches (`#tree`, `#cache`, `#docMeta`)
-   * because they're tightly coupled to GitHub's Contents-API
-   * optimistic-concurrency model — the full migration onto
-   * `MetadataCache`'s listing layer is queued as a follow-up.
-   * Phase 5 of `docs/plans/shared-metadata-cache.md` integrates
-   * the cache for two narrower wins:
+   * Host-supplied shared metadata cache. Replaces the bespoke
+   * in-memory `GitHubBlobCache` + `#docMeta` Map: per-path
+   * `ImageRecord` / `DocumentRecord` rows live in IDB under
+   * `MetadataCache`, version-gated by blob SHA so peer-tab edits
+   * automatically invalidate. The remaining bespoke state in this
+   * store is `GitHubTreeState` (path → SHA + folder set), tracked
+   * as a follow-up phase (P9 of the shared-metadata-cache plan).
+   *
+   * Cache-meta integration also wires:
    *
    *   - `branchHead` namespace meta persists the last-known HEAD
    *     commit SHA across sessions. `init()` compares it against
@@ -205,10 +171,10 @@ export class GitHubStore
    *     mismatch triggers a forced cache reset before the first
    *     listing so peers' commits get picked up automatically.
    *   - Cross-tab `annot-metadata-ns-changed` listener: when a
-   *     peer tab commits, our local `#tree` / `#cache` get
-   *     invalidated so the next read fetches fresh.
+   *     peer tab commits, our local `#tree` gets invalidated so
+   *     the next read fetches fresh.
    */
-  #cache_md?: MetadataCache;
+  #cache?: MetadataCache;
   /** Memory shortcut for `branchHead` so we don't re-read IDB on
    *  every operation. Cleared by the cross-tab listener so peer
    *  commits force a re-check. */
@@ -233,7 +199,7 @@ export class GitHubStore
   }
 
   attachMetadataCache(cache: MetadataCache): void {
-    this.#cache_md = cache;
+    this.#cache = cache;
     if (typeof window !== "undefined") {
       const handler = (e: Event) => {
         const detail = (e as CustomEvent<{ ns: string; key: string }>).detail;
@@ -242,14 +208,150 @@ export class GitHubStore
         if (detail.key !== "branchHead") return;
         // Peer tab committed something. Drop our memory shortcuts
         // so the next operation re-validates against the live
-        // HEAD and refetches the tree.
+        // HEAD and refetches the tree. Record-cache invalidation
+        // happens automatically via SHA-versioned reads.
         this.#headShaMemo = null;
         this.#tree.clear();
-        this.#cache.clear();
       };
       this.#onNsChangedBound = handler;
       window.addEventListener("annot-metadata-ns-changed", handler);
     }
+  }
+
+  /** Throw when no cache has been attached (test helper / safety
+   *  net — the production path always attaches via `bridge.ts`
+   *  before any operation). */
+  #c(): MetadataCache {
+    const cache = this.#cache;
+    if (!cache) {
+      throw new Error(
+        "GitHubStore: MetadataCache not attached. Call attachMetadataCache() before any operation.",
+      );
+    }
+    return cache;
+  }
+
+  #ns(): string {
+    return this.metadataNamespace();
+  }
+
+  // ── Local helpers around the shared MetadataCache ────────────
+  //
+  // The bespoke `GitHubBlobCache` + `#docMeta` were path-keyed in-
+  // memory Maps without a version concept. These helpers reproduce
+  // the same surface but back it with the shared `MetadataCache`
+  // SHA-gated by blob SHA (read from `GitHubTreeState` for now —
+  // P9 of the shared-metadata-cache plan migrates the tree state
+  // itself onto the listing layer). Callers continue to look like
+  // method calls on a per-instance object; the only difference
+  // visible at the call site is the `await`.
+
+  /**
+   * Read a cached `ImageRecord` by path. Returns `undefined` when:
+   *   - no SHA is known for the path (tree state hasn't been
+   *     loaded yet, or the path doesn't exist in the repo),
+   *   - the cached version doesn't match the current SHA (peer-
+   *     tab edit invalidated us; we fall back to a fresh fetch).
+   */
+  async #cacheGetRecord(path: string): Promise<ImageRecord | undefined> {
+    const sha = this.#tree.getBlobSha(path);
+    if (!sha) return undefined;
+    return await this.#c().getImage(this.#ns(), path, sha);
+  }
+
+  /** Write an `ImageRecord` at the current SHA version. No-op when
+   *  the SHA isn't known yet (the next save / commit response will
+   *  populate it and a subsequent put will succeed). */
+  async #cachePutRecord(path: string, record: ImageRecord): Promise<void> {
+    const sha = this.#tree.getBlobSha(path);
+    if (!sha) return;
+    await this.#c().putImage(this.#ns(), path, sha, record);
+  }
+
+  /** Read a cached `DocumentRecord` shape (lightweight subset) by
+   *  path. Returns `undefined` on miss; mirrors `#cacheGetRecord`. */
+  async #cacheGetDocument(path: string): Promise<DocumentRecord | undefined> {
+    const sha = this.#tree.getBlobSha(path);
+    if (!sha) return undefined;
+    return await this.#c().getDocument(this.#ns(), path, sha);
+  }
+
+  /** Write a `DocumentRecord` (lightweight subset) at the current
+   *  SHA version. Bytes are NOT persisted — the cache only carries
+   *  the lightweight metadata; callers fetch bytes from the
+   *  Contents API as before. */
+  async #cachePutDocument(path: string, record: DocumentRecord): Promise<void> {
+    const sha = this.#tree.getBlobSha(path);
+    if (!sha) return;
+    await this.#c().putDocument(this.#ns(), path, sha, record);
+  }
+
+  /** Drop any cached image OR document row at `path`. Used on
+   *  delete / commit-removes-path. */
+  async #cachePurge(path: string): Promise<void> {
+    await this.#c().invalidatePath(this.#ns(), path);
+  }
+
+  /** Move a cached image entry under a path rename. Reads the old
+   *  record, applies `transformRecord` (typically setting
+   *  `.path` / `.folderPath`), writes it at the new path's
+   *  version, and drops the old key. Used by `moveImage` /
+   *  `renameImage`. The new path's SHA is read from the tree
+   *  state — both the atomic rename (existing blob SHA preserved)
+   *  and the fallback path (fresh blob SHA from a re-upload)
+   *  have populated the tree by the time this helper runs. */
+  async #cacheMigrate(
+    oldPath: string,
+    newPath: string,
+    transformRecord?: (rec: ImageRecord) => ImageRecord,
+  ): Promise<void> {
+    const cache = this.#c();
+    // The old path's SHA may already be gone from the tree (the
+    // mutation that triggered the rename clears it). Try a fixed
+    // probe via `migrateEntry` so the IDB layer transfers the row
+    // regardless of which version it was stored under, then apply
+    // the transform on top by reading + putting.
+    await cache.migrateEntry(this.#ns(), oldPath, newPath);
+    if (!transformRecord) return;
+    const sha = this.#tree.getBlobSha(newPath);
+    if (!sha) return;
+    const moved = await cache.getImage(this.#ns(), newPath, sha);
+    if (moved) {
+      await cache.putImage(this.#ns(), newPath, sha, transformRecord(moved));
+    }
+  }
+
+  /** Bulk-rewrite cached entries under `oldPrefix` to live under
+   *  `newPrefix` (folder rename / move). After the migrate, walk
+   *  back and apply `transformRecord` to each moved record so its
+   *  `path` / `folderPath` fields stay consistent with the new
+   *  key. */
+  async #cacheRewritePrefix(
+    oldPrefix: string,
+    newPrefix: string,
+    transformRecord?: (rec: ImageRecord, newPath: string) => ImageRecord,
+  ): Promise<void> {
+    const cache = this.#c();
+    await cache.rewriteEntriesForPrefix(this.#ns(), oldPrefix, newPrefix);
+    if (!transformRecord) return;
+    // Rewrite the in-record path / folderPath fields by reading +
+    // putting at every blob under the new prefix that we know
+    // about via the tree state.
+    for (const newPath of Array.from(this.#tree.blobPaths())) {
+      if (newPath !== newPrefix && !newPath.startsWith(`${newPrefix}/`)) continue;
+      const sha = this.#tree.getBlobSha(newPath);
+      if (!sha) continue;
+      const rec = await cache.getImage(this.#ns(), newPath, sha);
+      if (rec) {
+        await cache.putImage(this.#ns(), newPath, sha, transformRecord(rec, newPath));
+      }
+    }
+  }
+
+  /** Drop every cached row in this store's namespace. Used by
+   *  `forceRefresh()`. */
+  async #cacheClear(): Promise<void> {
+    await this.#c().invalidatePrefix(`${this.#ns()}:`);
   }
 
   /**
@@ -267,23 +369,21 @@ export class GitHubStore
    * data.
    */
   async init(): Promise<void> {
-    if (!this.#cache_md) return;
+    if (!this.#cache) return;
     try {
       const ns = this.metadataNamespace();
-      const knownHead = await this.#cache_md.getNamespaceMeta(ns, "branchHead");
+      const knownHead = await this.#cache.getNamespaceMeta(ns, "branchHead");
       const liveHead = await this.#fetchBranchHead();
       this.#headShaMemo = liveHead;
       if (knownHead && liveHead && knownHead !== liveHead) {
-        // Stale cache from a prior session — drop it. Don't await
-        // the prefix-invalidation because we want `init()` to
-        // return quickly; the next `listImages` will see the
-        // cleared `#tree` / `#cache` and refetch.
+        // Stale cache from a prior session — drop everything in
+        // this namespace so the next `listImages` refetches a
+        // fresh tree + records.
         this.#tree.clear();
-        this.#cache.clear();
-        this.#docMeta.clear();
+        await this.#cacheClear();
       }
       if (liveHead && liveHead !== knownHead) {
-        await this.#cache_md.putNamespaceMeta(ns, "branchHead", liveHead);
+        await this.#cache.putNamespaceMeta(ns, "branchHead", liveHead);
       }
     } catch {
       /* offline / 401 / 404 — leave caches intact */
@@ -318,9 +418,9 @@ export class GitHubStore
    */
   async #recordBranchHead(commitSha: string): Promise<void> {
     this.#headShaMemo = commitSha;
-    if (!this.#cache_md) return;
+    if (!this.#cache) return;
     try {
-      await this.#cache_md.putNamespaceMeta(this.metadataNamespace(), "branchHead", commitSha);
+      await this.#cache.putNamespaceMeta(this.metadataNamespace(), "branchHead", commitSha);
     } catch {
       /* best-effort */
     }
@@ -392,7 +492,7 @@ export class GitHubStore
    */
   async forceRefresh(): Promise<void> {
     this.#tree.clear();
-    this.#cache.clear();
+    await this.#cacheClear();
   }
 
   // ===========================================================================
@@ -866,7 +966,7 @@ export class GitHubStore
       for (const op of ops) {
         if (op.deleteOnly) {
           this.#tree.removeBlob(op.relPath);
-          this.#cache.purge(op.relPath);
+          await this.#cachePurge(op.relPath);
           continue;
         }
         const newBlobSha = op.existingBlobSha ?? blobShaByRelPath.get(op.relPath);
@@ -989,8 +1089,7 @@ export class GitHubStore
       updatedAt: data.updatedAt || now,
       pageMetadata: data.pageMetadata,
     };
-    this.#cache.setRecord(relPath, record);
-    this.#cache.setMeta(relPath, { createdAt: record.createdAt, updatedAt: record.updatedAt });
+    await this.#cachePutRecord(relPath, record);
     // Thumbnail bytes are owned by the unified `ThumbnailManager`:
     // capture-host calls `tm.write(provider, path, dataUrl, dims)`
     // after `saveImage` resolves, so the gallery card has its
@@ -999,10 +1098,16 @@ export class GitHubStore
   }
 
   async getImage(path: string): Promise<ImageRecord | undefined> {
-    const cached = this.#cache.getRecord(path);
+    await this.#ensureTreeLoaded();
+    // Try the shared cache before any network. SHA-versioned reads
+    // mean a peer-tab commit that bumped the blob SHA on disk
+    // automatically misses (our local `#tree` still has the old
+    // SHA until the next forceRefresh / branchHead-mismatch
+    // detection clears it; eventually the listing-cache work in
+    // P9 + Phase 5's `branchHead` listener take care of this).
+    const cached = await this.#cacheGetRecord(path);
     if (cached) return cached;
 
-    await this.#ensureTreeLoaded();
     // Snapshot the cached SHA before fetching so we can apply a
     // compare-and-set on the way out. Without this a concurrent
     // mutation that advances `tree-state SHA cache` while our GET is in flight
@@ -1013,15 +1118,24 @@ export class GitHubStore
     if (this.#tree.getBlobSha(path) === before) {
       this.#tree.setBlobSha(path, result.sha);
     }
-    return this.#decodeRecord(path, result.bytes);
+    return await this.#decodeRecord(path, result.bytes);
   }
 
-  #decodeRecord(relPath: string, bytes: Uint8Array): ImageRecord {
+  async #decodeRecord(relPath: string, bytes: Uint8Array): Promise<ImageRecord> {
     // Pure decode lives in `./github-image-codec.ts`; the cache
     // write stays here because it's tied to this store instance's
     // cache, not the codec.
-    const record = decodeImageRecord(relPath, bytes, this.#cache.getMeta(relPath));
-    this.#cache.setRecord(relPath, record);
+    //
+    // Pass the previously-cached record's commit timestamps to the
+    // decoder so the freshly-decoded record carries the same
+    // createdAt / updatedAt the gallery has shown so far (the XMP
+    // payload itself doesn't always include them).
+    const previous = await this.#cacheGetRecord(relPath);
+    const fallbackMeta = previous
+      ? { createdAt: previous.createdAt, updatedAt: previous.updatedAt }
+      : undefined;
+    const record = decodeImageRecord(relPath, bytes, fallbackMeta);
+    await this.#cachePutRecord(relPath, record);
     return record;
   }
 
@@ -1033,8 +1147,7 @@ export class GitHubStore
       if (name === GITKEEP) continue;
       if (!isImageFilename(name)) continue;
       if (getParentPath(path) !== folderPath) continue;
-      const meta = this.#cache.getMeta(path);
-      const cachedRecord = this.#cache.getRecord(path);
+      const cachedRecord = await this.#cacheGetRecord(path);
       // Thumbnail bytes are owned by the unified `ThumbnailManager`.
       // The gallery calls `tm.attach(provider, records)` after
       // this returns and fills `thumbnailDataUrl` from the cache
@@ -1052,8 +1165,8 @@ export class GitHubStore
         height: cachedRecord?.height || 0,
         sourceUrl: "",
         tags: {},
-        createdAt: meta?.createdAt || "",
-        updatedAt: meta?.updatedAt || "",
+        createdAt: cachedRecord?.createdAt || "",
+        updatedAt: cachedRecord?.updatedAt || "",
       });
     }
     results.sort((a, b) => a.path.localeCompare(b.path));
@@ -1162,7 +1275,7 @@ export class GitHubStore
         await this.#commitFileAmendable(path, blob, this.#commitMessage("update", path), fresh.sha);
       }
 
-      this.#cache.setRecord(path, {
+      await this.#cachePutRecord(path, {
         ...record,
         annotationsSvg,
         tags,
@@ -1230,7 +1343,7 @@ export class GitHubStore
       }
     }
 
-    this.#cache.migrateEntry(path, newPath, (rec) => ({
+    await this.#cacheMigrate(path, newPath, (rec) => ({
       ...rec,
       path: newPath,
       folderPath: newFolderPath,
@@ -1266,7 +1379,7 @@ export class GitHubStore
         `annot: rename ${getFilename(path)} → ${newName}`,
       );
       if (atomicSha) {
-        this.#migrateLocalCachesAfterRename(path, newPath);
+        await this.#migrateLocalCachesAfterRename(path, newPath);
         return newPath;
       }
     }
@@ -1286,15 +1399,15 @@ export class GitHubStore
       await this.#deleteContents(path, oldSha, this.#commitMessage("delete", path));
     }
 
-    this.#migrateLocalCachesAfterRename(path, newPath);
+    await this.#migrateLocalCachesAfterRename(path, newPath);
     return newPath;
   }
 
-  /** Move `path`'s in-memory record / meta / thumbnail entries to
-   *  `newPath`. Shared between the atomic and fallback rename
-   *  paths so both end up with the same local state. */
-  #migrateLocalCachesAfterRename(oldPath: string, newPath: string): void {
-    this.#cache.migrateEntry(oldPath, newPath, (rec) => ({ ...rec, path: newPath }));
+  /** Move `path`'s cached record + document metadata to `newPath`.
+   *  Shared between the atomic and fallback rename paths so both
+   *  end up with the same local state. */
+  async #migrateLocalCachesAfterRename(oldPath: string, newPath: string): Promise<void> {
+    await this.#cacheMigrate(oldPath, newPath, (rec) => ({ ...rec, path: newPath }));
   }
 
   async deleteImage(path: string): Promise<void> {
@@ -1302,13 +1415,12 @@ export class GitHubStore
     const sha = this.#tree.getBlobSha(path);
     if (!sha) return;
     await this.#deleteContents(path, sha, this.#commitMessage("delete", path));
-    this.#cache.purge(path);
+    await this.#cachePurge(path);
     // Phase 7d — `deleteImage` is the path-keyed delete primitive
     // per the `StorageWithDocuments` contract. The tree-state +
     // commit dance above doesn't care whether the file was an
-    // image or a document; the only kind-specific cleanup left is
-    // the document metadata cache.
-    this.#docMeta.delete(path);
+    // image or a document; `cachePurge` already wipes any
+    // document-shaped record at the same path.
   }
 
   // ---- Documents (Phase 7d) ─────────────────────────────────
@@ -1338,7 +1450,11 @@ export class GitHubStore
     await this.#putContents(relPath, blob, this.#commitMessage("add", relPath));
 
     const now = new Date().toISOString();
-    this.#docMeta.set(relPath, {
+    await this.#cachePutDocument(relPath, {
+      path: relPath,
+      folderPath,
+      bytes: "",
+      thumbnailDataUrl: "",
       title: data.title,
       blockCount: data.blockCount,
       imageCount: data.imageCount,
@@ -1355,7 +1471,7 @@ export class GitHubStore
     const result = await this.#getContents(path);
     if (!result) return undefined;
     const bytes = new TextDecoder().decode(result.bytes);
-    const cached = this.#docMeta.get(path);
+    const cached = await this.#cacheGetDocument(path);
     return {
       path,
       folderPath: getParentPath(path),
@@ -1376,7 +1492,7 @@ export class GitHubStore
       const name = getFilename(path);
       if (!isDocumentFilename(name)) continue;
       if (getParentPath(path) !== folderPath) continue;
-      const cached = this.#docMeta.get(path);
+      const cached = await this.#cacheGetDocument(path);
       out.push({
         path,
         folderPath,
@@ -1401,7 +1517,11 @@ export class GitHubStore
       const blob = new Blob([updates.bytes], { type: "text/html" });
       await this.#putContents(path, blob, this.#commitMessage("update", path));
     }
-    const existing = this.#docMeta.get(path) ?? {
+    const existing = (await this.#cacheGetDocument(path)) ?? {
+      path,
+      folderPath: getParentPath(path),
+      bytes: "",
+      thumbnailDataUrl: "",
       title: stripDocExtension(getFilename(path)),
       blockCount: 0,
       imageCount: 0,
@@ -1412,7 +1532,7 @@ export class GitHubStore
     if (updates.blockCount !== undefined) existing.blockCount = updates.blockCount;
     if (updates.imageCount !== undefined) existing.imageCount = updates.imageCount;
     if (updates.updatedAt !== undefined) existing.updatedAt = updates.updatedAt;
-    this.#docMeta.set(path, existing);
+    await this.#cachePutDocument(path, existing);
   }
 
   // ===========================================================================
@@ -1536,7 +1656,7 @@ export class GitHubStore
       }
     }
 
-    this.#rewriteDescendantCaches(oldPath, newPath);
+    await this.#rewriteDescendantCaches(oldPath, newPath);
   }
 
   async #migrateBlob(oldRelPath: string, newRelPath: string, message: string): Promise<void> {
@@ -1562,12 +1682,12 @@ export class GitHubStore
     }
   }
 
-  #rewriteDescendantCaches(oldPath: string, newPath: string): void {
-    // Record / meta / thumbnail entries are migrated atomically by
-    // the cache's prefix-rewrite helper; the record's `path` and
-    // `folderPath` fields stay consistent with the new key via the
-    // transform callback.
-    this.#cache.rewriteEntriesForPrefix(oldPath, newPath, (rec, np) => ({
+  async #rewriteDescendantCaches(oldPath: string, newPath: string): Promise<void> {
+    // Record / document-metadata entries are migrated atomically
+    // by the cache's prefix-rewrite helper; the record's `path`
+    // and `folderPath` fields stay consistent with the new key
+    // via the transform callback.
+    await this.#cacheRewritePrefix(oldPath, newPath, (rec, np) => ({
       ...rec,
       path: np,
       folderPath: getParentPath(np),
@@ -1607,7 +1727,7 @@ export class GitHubStore
           const sha = this.#tree.getBlobSha(rel);
           if (!sha) continue;
           await this.#deleteContents(rel, sha, this.#commitMessage("delete", rel));
-          this.#cache.purge(rel);
+          await this.#cachePurge(rel);
         }
       }
     }
