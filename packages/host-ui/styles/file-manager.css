@@ -971,15 +971,26 @@ html.light .view-toggle-btn.active {
   padding: 16px;
   gap: 12px;
   min-width: 0;
+  /* Critical: lets the main column shrink inside the workspace's
+   * vertical flex when the viewport loses height (Chrome's
+   * "<host> をこのタブに共有しています" bar shrinks the visual
+   * viewport without firing a `resize` until the bar settles).
+   * Without this, the `flex: 1` preview frame keeps its original
+   * height and the toolbar gets pushed below the viewport. */
+  min-height: 0;
 }
 
 .capture-workspace-side {
-  width: 320px;
+  /* Wider panel so candidate cards (now full-width 16:9
+   * thumbnails) are visually obvious — they used to be 96×56
+   * letterboxes hard to skim. */
+  width: 380px;
   border-left: 1px solid var(--annot-border-color);
   background: var(--annot-bg-panel);
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
+  min-height: 0;
 }
 
 .capture-workspace-empty {
@@ -1025,6 +1036,11 @@ html.light .view-toggle-btn.active {
   flex-direction: column;
   gap: 8px;
   min-height: 0;
+  /* Cap so reviewers don't lose the candidate panel under a
+   * giant 4K preview on tall monitors. The video keeps its own
+   * aspect via `object-fit: contain`; the cap just stops the
+   * preview from claiming all available space. */
+  max-height: min(60vh, 520px);
 }
 
 .capture-preview-frame {
@@ -1165,23 +1181,34 @@ html.light .view-toggle-btn.active {
   font-style: italic;
 }
 
-/* Candidate card (Phase 3) */
+/* Candidate card (Phase 3, redesigned in the post-rollout
+ * cleanup) — vertical layout: full-width 16:9 thumbnail on top,
+ * meta + actions below. The earlier horizontal 96×56 letterbox
+ * was too small to skim at a glance; the user explicitly asked
+ * for larger thumbnails as part of the layout fix. */
 .candidate-card {
   display: flex;
-  gap: 10px;
-  padding: 8px;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
   border: 1px solid var(--annot-border-color);
-  border-radius: 6px;
+  border-radius: 8px;
   background: var(--annot-bg-canvas);
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 
 .candidate-card-thumb {
-  width: 96px;
-  height: 56px;
+  width: 100%;
+  /* 16:9 aspect via aspect-ratio — keeps a consistent card
+   * height regardless of source dimensions, and lets the
+   * thumbnail preview the source's centre via `object-fit:
+   * contain`. The `min-height` is a safety net for older
+   * browsers without aspect-ratio support. */
+  aspect-ratio: 16 / 9;
+  min-height: 120px;
   flex-shrink: 0;
   background: #000;
-  border-radius: 4px;
+  border-radius: 6px;
   overflow: hidden;
   display: flex;
   align-items: center;
@@ -1191,8 +1218,12 @@ html.light .view-toggle-btn.active {
 .candidate-card-thumb img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  /* `contain` instead of the previous `cover` so the user can
+   * see the whole frame at a glance — Auto Capture cards are
+   * meant for triage, not for hero presentation. */
+  object-fit: contain;
   display: block;
+  background: #000;
 }
 
 .candidate-card-thumb-placeholder {
@@ -1202,10 +1233,9 @@ html.light .view-toggle-btn.active {
 }
 
 .candidate-card-body {
-  flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
 }
 
