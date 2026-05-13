@@ -38,11 +38,14 @@ export interface CaptureSessionOptions {
 }
 
 export interface CaptureFrameResult {
-  /** JPEG @ 0.92 — matches the existing `pwa-capture.ts` output.
-   *  spec Phase 5 (deferred) routes this through
-   *  `encodeCapture()` from `@ingcreators/annot-core/encode` to
-   *  pick up smart PNG-8 quantisation; the data-URL shape stays
-   *  the same so the storage path doesn't move. */
+  /** Lossless PNG-24 data URL — the raw canvas read-back. The
+   *  `CaptureHost.saveDataUrlSilently` step pipes this through
+   *  `encodeCapture()` from `@ingcreators/annot-core/encode`,
+   *  which decides (per `DEFAULT_ENCODE_OPTIONS`) whether to
+   *  quantize down to PNG-8 (UI-heavy frames) or fall back to
+   *  PNG-24 / JPEG (photo-heavy frames). Output of this method
+   *  stays as the lossless PNG-24 so the encoder has the full
+   *  fidelity to work with. */
   dataUrl: string;
   width: number;
   height: number;
@@ -115,8 +118,13 @@ export class CaptureSession {
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("CaptureSession: 2D context unavailable");
     ctx.drawImage(this.#video, 0, 0, w, h);
+    // Lossless PNG-24 — the encoder downstream needs full fidelity
+    // to make the best quantization decision. The final bytes
+    // stored on disk are produced by `encodeCapture()` in
+    // `CaptureHost.saveDataUrlSilently`, which runs the smart
+    // PNG-8 / PNG-24 / JPEG routing the Chrome Extension uses.
     return {
-      dataUrl: canvas.toDataURL("image/jpeg", 0.92),
+      dataUrl: canvas.toDataURL("image/png"),
       width: w,
       height: h,
     };

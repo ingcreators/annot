@@ -21,8 +21,10 @@ import { setCapturePendingSession } from "../capture/capture-pending-session.js"
 import { saveCursorPreference, saveModePreference } from "../capture/capture-prefs.js";
 import { showCaptureScreenDialog } from "../capture/capture-screen-dialog.js";
 import { pasteFromClipboard } from "../capture/pwa-capture.js";
+import { loadEncodeOptions } from "../encode-options.js";
 import { captureUrl, pushRoute } from "../router.js";
 import { showSaveError } from "../ui/error-bar.js";
+import { encodeCaptureInWorker } from "../workers/encode-client.js";
 import { fileToDataUrl, loadImage } from "./image-utils.js";
 
 export interface OpenEditorArgs {
@@ -201,10 +203,17 @@ export class CaptureHost {
   /**
    * Save without opening the editor — used by the /capture
    * workspace for both Auto Capture-detected frames AND the
-   * manual "Add Capture" button (post-Phase-5 refactor: every
-   * captured frame persists immediately; the workspace panel is
-   * just a session-local list of saved records the user can
-   * delete during the session).
+   * manual "Add Capture" button.
+   *
+   * Routes the captured PNG-24 through `encodeCaptureInWorker`
+   * (the shared `encodeCapture` smart pipeline running in a Web
+   * Worker so libimagequant + DEFLATE-9 don't freeze the UI) so
+   * the saved bytes use PNG-8 for UI-heavy frames and fall back
+   * to PNG-24 / JPEG for photo-heavy ones — identical behaviour
+   * to the Chrome Extension's capture pipeline. The user-tunable
+   * `EncodeOptions` are loaded from `loadEncodeOptions()` so the
+   * same Settings UI that drives the extension's capture quality
+   * also drives /capture.
    *
    * Returns the saved path + the generated thumbnail + the
    * source dimensions so callers can populate their session list
@@ -222,18 +231,34 @@ export class CaptureHost {
   } | null> {
     const storage = this.deps.getStorage();
     if (!storage) return null;
-    const img = await loadImage(dataUrl);
-    const thumbnailDataUrl = await generateThumbnailFromDataUrl(dataUrl);
+    // Smart-encode the captured PNG-24 before persisting. The
+    // worker-backed `encodeCaptureInWorker` falls back to a
+    // main-thread `encodeCapture` automatically when workers
+    // aren't available (restrictive CSP, Storybook fixtures,
+    // etc.). On unexpected errors we keep the raw PNG-24 — saving
+    // *something* beats losing the user's capture to an
+    // encode failure.
+    let finalDataUrl = dataUrl;
+    let encodeReason: string | undefined;
+    try {
+      const result = await encodeCaptureInWorker(dataUrl, loadEncodeOptions());
+      finalDataUrl = result.dataUrl;
+      encodeReason = result.reason;
+    } catch (e) {
+      console.warn("[capture-host] smart encode failed, keeping raw PNG-24:", e);
+    }
+    const img = await loadImage(finalDataUrl);
+    const thumbnailDataUrl = await generateThumbnailFromDataUrl(finalDataUrl);
     const now = new Date().toISOString();
     const folderPath = this.deps.getCurrentFolderPath();
     const path = await storage.saveImage({
-      originalDataUrl: dataUrl,
+      originalDataUrl: finalDataUrl,
       thumbnailDataUrl,
       annotationsSvg: "",
       width: img.naturalWidth,
       height: img.naturalHeight,
       sourceUrl: "",
-      tags,
+      tags: { ...tags, ...(encodeReason ? { encodeReason } : {}) },
       folderPath,
       createdAt: now,
       updatedAt: now,
