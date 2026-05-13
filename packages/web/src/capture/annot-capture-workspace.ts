@@ -276,13 +276,8 @@ export class AnnotCaptureWorkspaceElement extends LitElement {
   async #exitAsync(): Promise<void> {
     const pendingCount = this.#store.list().filter((c) => c.status !== "accepted").length;
     if (pendingCount > 0) {
-      const confirmed = await showConfirmDialog({
-        title: "Discard pending candidates?",
-        message: `${pendingCount} candidate${pendingCount === 1 ? "" : "s"} ${pendingCount === 1 ? "hasn't" : "haven't"} been accepted yet. Leaving the workspace will discard ${pendingCount === 1 ? "it" : "them"}.`,
-        okLabel: "Discard",
-        cancelLabel: "Stay",
-        danger: true,
-      });
+      const message = `${pendingCount} candidate${pendingCount === 1 ? "" : "s"} ${pendingCount === 1 ? "hasn't" : "haven't"} been accepted yet. Leaving the workspace will discard ${pendingCount === 1 ? "it" : "them"}.`;
+      const confirmed = await this.#confirmDiscard("Discard pending candidates?", message);
       if (!confirmed) return;
     }
     this.#engine?.stop();
@@ -290,6 +285,46 @@ export class AnnotCaptureWorkspaceElement extends LitElement {
     this.#session?.stop();
     this.#session = null;
     this.dispatchEvent(new CustomEvent("workspace-exit", { bubbles: true }));
+  }
+
+  /** Show a destructive confirm dialog. Tries the styled
+   *  `<annot-dialog>` first; falls back to the browser's native
+   *  `window.confirm` if the styled dialog throws or doesn't
+   *  resolve in a reasonable time.
+   *
+   *  The fallback exists because the original Phase 4 wiring
+   *  silently exited without a warning in real usage — the styled
+   *  dialog's promise sometimes never resolved (suspected
+   *  interaction with the screen-share toolbar's focus / event
+   *  routing). A native `confirm()` is uglier but guaranteed to
+   *  surface, so the user can't lose triage work to a stray click. */
+  async #confirmDiscard(title: string, message: string): Promise<boolean> {
+    try {
+      const dialogPromise = showConfirmDialog({
+        title,
+        message,
+        okLabel: "Discard",
+        cancelLabel: "Stay",
+        danger: true,
+      });
+      // 3-second watchdog: if the styled dialog hasn't resolved by
+      // then it's almost certainly stuck (the dialog mounted but
+      // the user can't see it, or the events aren't wiring up).
+      // Resolve `null` to signal "fall through to native".
+      const watchdog = new Promise<null>((resolve) => {
+        setTimeout(() => resolve(null), 3000);
+      });
+      const result = await Promise.race([dialogPromise, watchdog]);
+      if (result !== null) return result;
+      // Watchdog fired — drop into native confirm so the user
+      // sees *something*. Best-effort cleanup of the orphan
+      // styled dialog if it happened to mount.
+      document.querySelectorAll("annot-dialog").forEach((el) => el.remove());
+      return window.confirm(`${title}\n\n${message}`);
+    } catch (err) {
+      console.warn("[capture-workspace] styled confirm failed, falling back to native:", err);
+      return window.confirm(`${title}\n\n${message}`);
+    }
   }
 
   /** Workspace toolbar's `Auto OFF` toggle — pause / resume the
