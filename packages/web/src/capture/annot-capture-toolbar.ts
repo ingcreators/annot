@@ -43,8 +43,9 @@ export class AnnotCaptureToolbarElement extends LitElement {
           class="capture-toolbar-btn capture-toolbar-btn-primary"
           ?disabled=${!this.canCaptureOnce}
           @click=${this.#capture}
+          title="Save the current frame as a new capture"
         >
-          Capture Once
+          + Add Capture
         </button>
         <button
           type="button"

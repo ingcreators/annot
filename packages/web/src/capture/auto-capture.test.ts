@@ -13,14 +13,18 @@
  *   - the engine no-ops cleanly when `session.isLive` becomes
  *     false (after a `stop()` from another path)
  *   - `resetBaseline()` flips state to idle
+ *   - dimension change recovery (regression for the resize bug)
  *
  * The diff-detection logic itself has its own test suite
  * (`diff-detection.test.ts`); this file scopes to engine plumbing.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { AutoCaptureEngine } from "./auto-capture.js";
-import { CandidateStore } from "./candidate-store.js";
+import {
+  AutoCaptureEngine,
+  type AutoCaptureFrame,
+  type AutoCaptureOptions,
+} from "./auto-capture.js";
 import type { CaptureSession } from "./capture-session.js";
 
 beforeEach(() => {
@@ -48,80 +52,52 @@ function makeFakeSession(opts: { isLive?: boolean } = {}): CaptureSession {
   } as unknown as CaptureSession;
 }
 
+function makeOpts(
+  overrides: { session?: CaptureSession; onCaptureReady?: (frame: AutoCaptureFrame) => void } = {},
+): AutoCaptureOptions {
+  let capturedCount = 0;
+  return {
+    session: overrides.session ?? makeFakeSession(),
+    intervalMs: 1000,
+    stableWaitMs: 700,
+    minMsBetweenCaptures: 1500,
+    comparisonWidth: 320,
+    ignoreCursorOnlyChanges: true,
+    getCapturedCount: () => capturedCount,
+    onCaptureReady:
+      overrides.onCaptureReady ??
+      (() => {
+        capturedCount++;
+      }),
+  };
+}
+
 describe("AutoCaptureEngine", () => {
   it("schedules ticks via setTimeout once started", () => {
-    const session = makeFakeSession();
-    const store = new CandidateStore();
-    const engine = new AutoCaptureEngine({
-      session,
-      store,
-      intervalMs: 1000,
-      stableWaitMs: 700,
-      minMsBetweenCaptures: 1500,
-      comparisonWidth: 320,
-      ignoreCursorOnlyChanges: true,
-    });
+    const engine = new AutoCaptureEngine(makeOpts());
     expect(engine.isRunning).toBe(false);
     engine.start();
     expect(engine.isRunning).toBe(true);
-    // Drive a tick — getVideoElementForSampling returns null so
-    // no diff happens, but the engine should re-schedule.
     void vi.advanceTimersByTimeAsync(0);
     engine.stop();
     expect(engine.isRunning).toBe(false);
   });
 
   it("stops when the session reports it's no longer live", async () => {
-    const session = makeFakeSession({ isLive: false });
-    const store = new CandidateStore();
-    const engine = new AutoCaptureEngine({
-      session,
-      store,
-      intervalMs: 1000,
-      stableWaitMs: 700,
-      minMsBetweenCaptures: 1500,
-      comparisonWidth: 320,
-      ignoreCursorOnlyChanges: true,
-    });
+    const engine = new AutoCaptureEngine(makeOpts({ session: makeFakeSession({ isLive: false }) }));
     engine.start();
     await vi.advanceTimersByTimeAsync(50);
-    // Engine self-stops on first tick because session.isLive is false.
     expect(engine.isRunning).toBe(false);
   });
 
   it("resetBaseline() drops state to idle", () => {
-    const session = makeFakeSession();
-    const store = new CandidateStore();
-    const stateChanges: string[] = [];
-    const engine = new AutoCaptureEngine({
-      session,
-      store,
-      intervalMs: 1000,
-      stableWaitMs: 700,
-      minMsBetweenCaptures: 1500,
-      comparisonWidth: 320,
-      ignoreCursorOnlyChanges: true,
-      onStateChange: (s) => stateChanges.push(s),
-    });
+    const engine = new AutoCaptureEngine(makeOpts());
     engine.resetBaseline();
-    // Already idle internally; setState short-circuits when state
-    // doesn't change. This asserts the public method doesn't
-    // throw.
     expect(engine.state).toBe("idle");
   });
 
   it("stop() is idempotent", () => {
-    const session = makeFakeSession();
-    const store = new CandidateStore();
-    const engine = new AutoCaptureEngine({
-      session,
-      store,
-      intervalMs: 1000,
-      stableWaitMs: 700,
-      minMsBetweenCaptures: 1500,
-      comparisonWidth: 320,
-      ignoreCursorOnlyChanges: true,
-    });
+    const engine = new AutoCaptureEngine(makeOpts());
     expect(() => {
       engine.stop();
       engine.stop();
@@ -129,19 +105,11 @@ describe("AutoCaptureEngine", () => {
   });
 
   it("recovers from dimension change instead of throwing on every tick", async () => {
-    // Regression for the user-reported "screen change isn't detected
-    // after window resize" bug. Before the fix, the engine cached a
-    // baseline at the original source dimensions; when the user
-    // resized the shared window, every subsequent
-    // `computeDiffScore(baseline, current)` threw a dimension-
-    // mismatch error which `#tick`'s try / catch swallowed
-    // silently — engine paralysed.
-    //
-    // Drive a controlled scenario: stub canvas's `getContext` so
-    // `#processFrame` actually runs (happy-dom returns null without
-    // the stub). Pre-seed `getImageData` to return the engine's
-    // current target dimensions so we can flip them mid-test and
-    // assert recovery.
+    // Regression for "screen change isn't detected after window
+    // resize" — the engine cached a baseline at original source
+    // dims; resizing the shared window triggered a
+    // `computeDiffScore` dimension-mismatch throw on every tick.
+    // The fix: re-baseline + fire a fresh capture instead.
     let nextW = 320;
     let nextH = 180;
     const fakeCtx = {
@@ -158,8 +126,6 @@ describe("AutoCaptureEngine", () => {
     } as unknown as CanvasRenderingContext2D;
     vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(fakeCtx);
 
-    // Session reports the shared window's dimensions. We flip them
-    // mid-test to simulate a user resize.
     let sourceW = 1280;
     let sourceH = 720;
     const session = {
@@ -181,36 +147,37 @@ describe("AutoCaptureEngine", () => {
       stop: vi.fn(),
     } as unknown as CaptureSession;
 
-    const store = new CandidateStore();
+    let captureCount = 0;
+    const onCaptureReady = vi.fn(() => {
+      captureCount++;
+    });
+
     const engine = new AutoCaptureEngine({
       session,
-      store,
       intervalMs: 1000,
       stableWaitMs: 700,
       minMsBetweenCaptures: 0, // disable throttle for the test
       comparisonWidth: 320,
       ignoreCursorOnlyChanges: false,
+      getCapturedCount: () => captureCount,
+      onCaptureReady,
     });
 
     engine.start();
     // First tick: engine establishes baseline + first capture.
     await vi.advanceTimersByTimeAsync(50);
-    const beforeResize = store.size;
+    const beforeResize = captureCount;
     expect(beforeResize).toBeGreaterThanOrEqual(1);
 
     // Simulate user resize. New target dimensions for the
-    // comparison canvas (engine recomputes from sourceW / sourceH).
+    // comparison canvas.
     sourceW = 1916;
     sourceH = 1872;
-    nextW = 320; // comparisonWidth stays 320
-    nextH = Math.round((1872 / 1916) * 320); // proportional new height
+    nextW = 320;
+    nextH = Math.round((1872 / 1916) * 320);
 
-    // Without the fix, this tick would throw; the engine would log
-    // the error and re-schedule. Subsequent ticks would do the same
-    // forever. With the fix, the engine resets the baseline to the
-    // new dimensions and captures a fresh frame.
     await vi.advanceTimersByTimeAsync(1000);
-    expect(store.size).toBeGreaterThan(beforeResize);
+    expect(captureCount).toBeGreaterThan(beforeResize);
     engine.stop();
   });
 });

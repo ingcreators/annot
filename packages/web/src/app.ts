@@ -2068,52 +2068,23 @@ export class App {
     }
 
     const workspace = document.createElement("annot-capture-workspace");
-    workspace.addEventListener("capture-once", (e) => {
-      const detail = (e as CustomEvent).detail as {
-        dataUrl: string;
-        width: number;
-        height: number;
-        folderPath: string;
-      };
-      // Persist via the active storage backend. Errors surface via
-      // the shared `<annot-error-bar>` toast.
-      void this.#captureHost.saveDataUrlAndOpen(detail.dataUrl).catch((err) => {
+    // Direct-save model (post-rollout refactor): every captured
+    // frame — whether the Auto Capture engine pushed it or the
+    // user clicked + Add Capture — persists immediately via the
+    // host. The workspace panel just renders the saved records
+    // for the duration of the session; Delete in the panel
+    // removes from storage too.
+    workspace.saveCapture = async (dataUrl, tags) => {
+      try {
+        return await this.#captureHost.saveDataUrlSilently(dataUrl, tags);
+      } catch (err) {
         showSaveError(`Couldn't save capture: ${(err as Error).message}`);
-      });
-    });
-    // Phase 3 of `docs/plans/web-capture-redesign.md`. Candidate
-    // Accept routes the blob through `saveDataUrlSilently` (the
-    // user is mid-triage; opening the editor would tear down the
-    // workspace). The host calls `removeCandidate` after a
-    // successful save so the panel drops the card. Errors keep
-    // the candidate around so the user can retry.
-    //
-    // The original "Edit = Accept + open editor" shortcut was
-    // removed in a follow-up cleanup — the in-flight blob → editor
-    // hand-off didn't survive contact with real usage. Users open
-    // saved captures via the gallery after leaving the workspace.
-    workspace.addEventListener("candidate-accepted", (e) => {
-      const detail = (e as CustomEvent).detail as {
-        id: string;
-        blob: Blob;
-        thumbnailDataUrl: string;
-        width: number;
-        height: number;
-        folderPath: string;
-      };
-      void blobToDataUrl(detail.blob)
-        .then(async (dataUrl) => {
-          await this.#captureHost.saveDataUrlSilently(dataUrl);
-          // Cast through the typed element so the
-          // workspace-internal API stays in sync.
-          (workspace as unknown as { removeCandidate: (id: string) => void }).removeCandidate(
-            detail.id,
-          );
-        })
-        .catch((err) => {
-          showSaveError(`Couldn't save candidate: ${(err as Error).message}`);
-        });
-    });
+        return null;
+      }
+    };
+    workspace.deleteCapture = async (path) => {
+      await this.#captureHost.deleteCapture(path);
+    };
     workspace.addEventListener("workspace-exit", () => {
       this.#tearDownCaptureWorkspace();
       pushRoute(galleryUrl());
@@ -2130,19 +2101,4 @@ export class App {
     const host = document.getElementById("annot-capture-host");
     if (host) host.remove();
   }
-}
-
-/** Phase 3 of `docs/plans/web-capture-redesign.md`. Promise-shaped
- *  Blob → data URL conversion used by the workspace's
- *  `candidate-accepted` handler — the existing
- *  `saveDataUrlAndOpen` / `saveDataUrlSilently` paths take a data
- *  URL, but the candidate carries a Blob (so future Phase 5
- *  IDB persistence can stream bytes without re-encoding). */
-function blobToDataUrl(blob: Blob): Promise<string> {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(blob);
-  });
 }

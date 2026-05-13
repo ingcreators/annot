@@ -27,39 +27,52 @@
  * handler persist on user action.
  */
 
-import { newIdB58 } from "@ingcreators/annot-core/utils";
-import type { CandidateStore } from "./candidate-store.js";
 import type { CaptureSession } from "./capture-session.js";
 import { computeDiffScore, isCursorOnly, isMeaningfulChange } from "./diff-detection.js";
-import type { AutoCaptureState, CaptureCandidate } from "./types.js";
+import type { AutoCaptureState } from "./types.js";
+
+/** Frame the engine surfaces when it decides a capture should land. */
+export interface AutoCaptureFrame {
+  dataUrl: string;
+  width: number;
+  height: number;
+  diffScore?: number;
+}
 
 export interface AutoCaptureOptions {
   session: CaptureSession;
-  store: CandidateStore;
   intervalMs: number;
   stableWaitMs: number;
   minMsBetweenCaptures: number;
   comparisonWidth: number;
   ignoreCursorOnlyChanges: boolean;
-  /** Notified on every state transition + when a candidate lands.
-   *  The workspace renders these as the spec §8.4 status copy. */
+  /** Called with the captured frame when the engine decides one
+   *  should land. The workspace persists it via the host's
+   *  `saveCapture` callback (which routes through
+   *  `CaptureHost.saveDataUrlSilently`). Async — the engine awaits
+   *  the result to honour back-pressure if storage is slow. */
+  onCaptureReady: (frame: AutoCaptureFrame) => void | Promise<void>;
+  /** Notified on every state transition. Workspace renders these
+   *  as the spec §8.4 status copy. */
   onStateChange?: (state: AutoCaptureState) => void;
   /** Notified once a meaningful change is classified as cursor-only
    *  and dropped. Workspace surfaces this as a transient
    *  "Ignored cursor-only movement" status. */
   onCursorIgnored?: () => void;
-  /** Maximum number of candidates the store should hold. The engine
-   *  pauses on its own when this is reached so the workspace can
-   *  show its "buffer full" info bar. The cap matches the
-   *  workspace's `MAX_CANDIDATES` so both layers agree on the
-   *  threshold. */
-  maxCandidates?: number;
-  /** Notified when the engine pauses because the candidate buffer
-   *  hit `maxCandidates`. */
+  /** Number of captures already in this session (so the engine knows
+   *  whether the cap below has been reached without holding a
+   *  store reference). Re-read on every tick — the workspace
+   *  decrements it when the user deletes a candidate. */
+  getCapturedCount: () => number;
+  /** Maximum captures to produce in this session before the engine
+   *  pauses itself. Workspace surfaces a "buffer full" info bar via
+   *  the `onBufferFull` callback. */
+  maxCaptures?: number;
+  /** Notified when the engine pauses because `maxCaptures` was hit. */
   onBufferFull?: () => void;
 }
 
-const DEFAULT_MAX_CANDIDATES = 200;
+const DEFAULT_MAX_CAPTURES = 200;
 
 export class AutoCaptureEngine {
   #opts: AutoCaptureOptions;
@@ -199,7 +212,7 @@ export class AutoCaptureEngine {
         this.#setState("stable-wait");
         const elapsed = Date.now() - (this.#stableWaitStartedMs ?? Date.now());
         if (elapsed >= this.#opts.stableWaitMs) {
-          this.#captureNow(current);
+          this.#captureNow(current, diff.changedRatio);
         }
       } else {
         // Already idle and the frame matches the baseline — keep
@@ -224,30 +237,30 @@ export class AutoCaptureEngine {
     this.#setState("changing");
   }
 
-  #captureNow(currentBaseline: ImageData): void {
+  #captureNow(currentBaseline: ImageData, diffScore?: number): void {
     if (Date.now() - this.#lastCaptureMs < this.#opts.minMsBetweenCaptures) {
       // Throttle — keep state in stable-wait so we try again next tick.
       return;
     }
-    const cap = this.#opts.maxCandidates ?? DEFAULT_MAX_CANDIDATES;
-    if (this.#opts.store.size >= cap) {
+    const cap = this.#opts.maxCaptures ?? DEFAULT_MAX_CAPTURES;
+    if (this.#opts.getCapturedCount() >= cap) {
       this.#opts.onBufferFull?.();
       this.stop();
       return;
     }
 
     const frame = this.#opts.session.captureFrame();
-    const blob = dataUrlToBlob(frame.dataUrl);
-    const candidate: CaptureCandidate = {
-      id: newIdB58(),
-      status: "candidate",
-      createdAt: new Date().toISOString(),
-      sourceWidth: frame.width,
-      sourceHeight: frame.height,
-      imageBlob: blob,
-      thumbnailDataUrl: frame.dataUrl,
-    };
-    this.#opts.store.add(candidate);
+    // Fire-and-forget: the workspace's `onCaptureReady` saves via
+    // `StorageProvider.saveImage`; that's async but we don't await
+    // because the engine's tick should re-schedule immediately and
+    // a slow disk shouldn't stall the diff loop. Failures are the
+    // workspace's responsibility (logs + toast).
+    void this.#opts.onCaptureReady({
+      dataUrl: frame.dataUrl,
+      width: frame.width,
+      height: frame.height,
+      diffScore,
+    });
     this.#lastCaptureMs = Date.now();
     this.#baseline = currentBaseline;
     this.#stableWaitStartedMs = null;
@@ -262,17 +275,4 @@ export class AutoCaptureEngine {
     this.#state = next;
     this.#opts.onStateChange?.(next);
   }
-}
-
-/** Decode a `data:image/...;base64,...` URL into a `Blob`. Local
- *  copy of the workspace's helper to keep this module independent. */
-function dataUrlToBlob(dataUrl: string): Blob {
-  const m = /^data:([^;]+);base64,(.*)$/.exec(dataUrl);
-  if (!m) return new Blob([], { type: "application/octet-stream" });
-  const mime = m[1] ?? "application/octet-stream";
-  const b64 = m[2] ?? "";
-  const bin = atob(b64);
-  const bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  return new Blob([bytes], { type: mime });
 }

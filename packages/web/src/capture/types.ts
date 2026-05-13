@@ -19,10 +19,6 @@ export type CaptureMode = "auto" | "once";
 /** State machine for the Auto Capture engine (Phase 4). */
 export type AutoCaptureState = "idle" | "changing" | "stable-wait" | "captured";
 
-/** Lifecycle state of a candidate inside the in-memory `CandidateStore`. */
-export type CaptureCandidateStatus = "candidate" | "accepted" | "deleted";
-// TODO(spec-phase-5): "editing" | "export-ready"
-
 /** Tunable knobs for one capture session. Phases 1–4 use only the
  *  fields below. spec Phase 5 (deferred) extends with the items in
  *  the TODO comment. */
@@ -51,18 +47,32 @@ export const DEFAULT_CAPTURE_SETTINGS: CaptureSettings = {
   comparisonWidth: 320,
 };
 
-/** A single captured frame buffered before the user accepts or
- *  deletes it. Auto Capture pushes here; Capture Once and Capture
- *  Area save directly via `storage.saveImage()` and never produce a
- *  candidate. */
+/** One image saved during a /capture session.
+ *
+ *  Originally Phase 3 buffered an in-memory `Blob` here pending an
+ *  Accept gate (the workspace would call `storage.saveImage()` only
+ *  after the user accepted). Real usage showed the gate was friction
+ *  + the in-memory buffer leaked tens-of-MB per candidate at 4K, so
+ *  the model flipped: every captured frame is persisted to storage
+ *  immediately, the session panel renders the saved records, and
+ *  Delete in the panel actually deletes from storage. `path` is the
+ *  authoritative key + the same id `<annot-candidate-card>` emits
+ *  on its `candidate-delete` event. */
 export interface CaptureCandidate {
+  /** Identical to `path`. Kept as a separate field so the card
+   *  element can stay schema-agnostic — events carry `id`, callers
+   *  resolve to `path` via this field. */
   id: string;
-  status: CaptureCandidateStatus;
+  /** Storage path of the saved image. The image is already in the
+   *  active `StorageProvider`'s `currentFolderPath`. */
+  path: string;
   createdAt: string;
   sourceWidth: number;
   sourceHeight: number;
-  imageBlob: Blob;
+  /** Same small thumbnail data URL the gallery would show — produced
+   *  by `generateThumbnailFromDataUrl` (≤ 480px wide, JPEG @ 85%).
+   *  Keeps the panel light + ensures the gallery `ThumbnailManager`
+   *  cache is already warm by the time the user revisits. */
   thumbnailDataUrl: string;
   diffScore?: number;
-  // TODO(spec-phase-5): title, savedWidth/Height, format, sourceRect.
 }
