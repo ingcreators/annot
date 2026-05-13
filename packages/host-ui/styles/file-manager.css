@@ -1165,6 +1165,139 @@ html.light .view-toggle-btn.active {
   font-style: italic;
 }
 
+/* Candidate card (Phase 3) */
+.candidate-card {
+  display: flex;
+  gap: 10px;
+  padding: 8px;
+  border: 1px solid var(--annot-border-color);
+  border-radius: 6px;
+  background: var(--annot-bg-canvas);
+  margin-bottom: 8px;
+}
+
+.candidate-card-thumb {
+  width: 96px;
+  height: 56px;
+  flex-shrink: 0;
+  background: #000;
+  border-radius: 4px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.candidate-card-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.candidate-card-thumb-placeholder {
+  font-size: 11px;
+  color: var(--annot-text-secondary);
+  text-align: center;
+}
+
+.candidate-card-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.candidate-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--annot-text-secondary);
+}
+
+.candidate-card-status {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--annot-border-color);
+}
+
+.candidate-card-status-accepted {
+  background: rgba(68, 210, 126, 0.15);
+  border-color: rgba(68, 210, 126, 0.4);
+  color: #44d27e;
+}
+
+.candidate-card-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.candidate-card-btn {
+  padding: 4px 10px;
+  border: 1px solid var(--annot-border-color);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--annot-text-primary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.candidate-card-btn:hover:not([disabled]) {
+  background: var(--annot-hover-bg);
+  border-color: var(--annot-hover-border);
+}
+
+.candidate-card-btn[disabled] {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.candidate-card-btn-primary {
+  background: var(--annot-accent);
+  border-color: var(--annot-accent);
+  color: #0b1020;
+  font-weight: 500;
+}
+
+.candidate-card-btn-primary:hover:not([disabled]) {
+  opacity: 0.85;
+}
+
+.candidate-card-btn-danger {
+  border-color: #d24444;
+  color: #d24444;
+}
+
+.candidate-card-btn-danger:hover:not([disabled]) {
+  background: #d24444;
+  color: #fff;
+}
+
+/* Phase 3 dev-only debug button (removed in Phase 4) */
+.capture-workspace-dev-tools {
+  display: flex;
+  justify-content: flex-end;
+  padding: 4px 0;
+}
+
+.capture-workspace-dev-btn {
+  padding: 4px 10px;
+  border: 1px dashed var(--annot-border-color);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--annot-text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.capture-workspace-dev-btn:hover {
+  background: var(--annot-hover-bg);
+}
+
 /* ---- Timed capture progress toast ---- */
 
 .capture-progress-toast {

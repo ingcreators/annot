@@ -2082,6 +2082,40 @@ export class App {
         showSaveError(`Couldn't save capture: ${(err as Error).message}`);
       });
     });
+    // Phase 3 of `docs/plans/web-capture-redesign.md`. Candidate
+    // Accept (and Edit, which is Accept + open editor per the
+    // user's Phase 3 sign-off) routes the blob through the
+    // existing `saveDataUrlAndOpen` path. The host calls
+    // `removeCandidate` after a successful save so the panel drops
+    // the card. Errors keep the candidate around so the user can
+    // retry.
+    workspace.addEventListener("candidate-accepted", (e) => {
+      const detail = (e as CustomEvent).detail as {
+        id: string;
+        blob: Blob;
+        thumbnailDataUrl: string;
+        width: number;
+        height: number;
+        folderPath: string;
+        openEditor: boolean;
+      };
+      void blobToDataUrl(detail.blob)
+        .then(async (dataUrl) => {
+          if (detail.openEditor) {
+            await this.#captureHost.saveDataUrlAndOpen(dataUrl);
+          } else {
+            await this.#captureHost.saveDataUrlSilently(dataUrl);
+          }
+          // Cast through the typed element so the
+          // workspace-internal API stays in sync.
+          (workspace as unknown as { removeCandidate: (id: string) => void }).removeCandidate(
+            detail.id,
+          );
+        })
+        .catch((err) => {
+          showSaveError(`Couldn't save candidate: ${(err as Error).message}`);
+        });
+    });
     workspace.addEventListener("workspace-exit", () => {
       this.#tearDownCaptureWorkspace();
       pushRoute(galleryUrl());
@@ -2098,4 +2132,19 @@ export class App {
     const host = document.getElementById("annot-capture-host");
     if (host) host.remove();
   }
+}
+
+/** Phase 3 of `docs/plans/web-capture-redesign.md`. Promise-shaped
+ *  Blob → data URL conversion used by the workspace's
+ *  `candidate-accepted` handler — the existing
+ *  `saveDataUrlAndOpen` / `saveDataUrlSilently` paths take a data
+ *  URL, but the candidate carries a Blob (so future Phase 5
+ *  IDB persistence can stream bytes without re-encoding). */
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
 }

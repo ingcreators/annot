@@ -2,37 +2,75 @@
  * `<annot-candidate-panel>` — right-side list of capture candidates
  * inside the workspace.
  *
- * Phase 2 of `docs/plans/web-capture-redesign.md` ships only the
- * empty-state. Phase 3 adds the `CandidateStore` integration +
- * `<annot-candidate-card>` rows; Phase 4 starts populating it from
- * `AutoCaptureEngine`.
+ * Phase 3 of `docs/plans/web-capture-redesign.md`. Wires the
+ * `CandidateStore` so the panel re-renders on every store
+ * mutation; the workspace passes the store in via the `.store`
+ * prop. Phase 2's empty-state survives intact for the
+ * "no store / count === 0" path.
+ *
+ * Action events bubble up through the cards; the panel
+ * re-dispatches them with the same name so the workspace can
+ * listen at the panel boundary instead of every card.
  */
 
-import { html, LitElement } from "../lit.js";
+import { html, LitElement, nothing } from "../lit.js";
+import "./annot-candidate-card.js";
+import type { CandidateStore } from "./candidate-store.js";
 
 export class AnnotCandidatePanelElement extends LitElement {
   static override properties = {
-    count: { type: Number },
+    store: { attribute: false },
+    revision: { state: true },
   };
 
-  declare count: number;
+  declare store: CandidateStore | null;
+  declare revision: number;
+
+  /** Increments on every store `change` event so Lit re-renders
+   *  even though the store reference itself doesn't change. */
+  #onStoreChange = (): void => {
+    this.revision = this.revision + 1;
+  };
 
   constructor() {
     super();
-    this.count = 0;
+    this.store = null;
+    this.revision = 0;
   }
 
   protected override createRenderRoot(): HTMLElement {
     return this;
   }
 
+  override connectedCallback(): void {
+    super.connectedCallback();
+    this.store?.addEventListener("change", this.#onStoreChange);
+  }
+
+  override disconnectedCallback(): void {
+    super.disconnectedCallback();
+    this.store?.removeEventListener("change", this.#onStoreChange);
+  }
+
+  /** Re-bind the listener if the consumer swaps stores mid-life
+   *  (the workspace doesn't, but Storybook stories might). */
+  override updated(changed: Map<string, unknown>): void {
+    if (changed.has("store")) {
+      const old = changed.get("store") as CandidateStore | null | undefined;
+      old?.removeEventListener("change", this.#onStoreChange);
+      this.store?.addEventListener("change", this.#onStoreChange);
+    }
+  }
+
   override render() {
+    const candidates = this.store?.list() ?? [];
+    const count = candidates.length;
     return html`
       <div class="candidate-panel">
-        <div class="candidate-panel-header">Candidates (${this.count})</div>
+        <div class="candidate-panel-header">Candidates (${count})</div>
         <div class="candidate-panel-body">
           ${
-            this.count === 0
+            count === 0
               ? html`<div class="candidate-panel-empty">
                 No candidates yet.
                 <div class="candidate-panel-empty-sub">
@@ -40,13 +78,25 @@ export class AnnotCandidatePanelElement extends LitElement {
                   <strong>Capture Once</strong> button to save individual frames.
                 </div>
               </div>`
-              : html`<div class="candidate-panel-placeholder">
-                Phase 3 will render candidate cards here.
-              </div>`
+              : nothing
           }
+          ${candidates.map(
+            (c) => html`<annot-candidate-card
+              .candidate=${c}
+              @candidate-accept=${(e: Event) => this.#forward(e, "candidate-accept")}
+              @candidate-edit=${(e: Event) => this.#forward(e, "candidate-edit")}
+              @candidate-delete=${(e: Event) => this.#forward(e, "candidate-delete")}
+            ></annot-candidate-card>`,
+          )}
         </div>
       </div>
     `;
+  }
+
+  #forward(e: Event, name: string): void {
+    const detail = (e as CustomEvent).detail;
+    e.stopPropagation();
+    this.dispatchEvent(new CustomEvent(name, { bubbles: true, detail }));
   }
 }
 
