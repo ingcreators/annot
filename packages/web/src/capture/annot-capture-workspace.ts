@@ -22,19 +22,44 @@
  * mirroring how doc-mode mounts `#annot-doc-host`.
  */
 
-import { newIdB58 } from "@ingcreators/annot-core/utils";
+import { showConfirmDialog } from "@ingcreators/annot-host-ui/ui/dialog";
 import { html, LitElement, nothing } from "../lit.js";
 import "./annot-candidate-panel.js";
 import "./annot-capture-preview.js";
 import "./annot-capture-toolbar.js";
 import type { AnnotCapturePreviewElement } from "./annot-capture-preview.js";
+import { AutoCaptureEngine } from "./auto-capture.js";
 import { CandidateStore } from "./candidate-store.js";
 import {
   type CapturePendingSession,
   consumeCapturePendingSession,
 } from "./capture-pending-session.js";
 import { CaptureSession } from "./capture-session.js";
-import type { CaptureCandidate } from "./types.js";
+import type { AutoCaptureState } from "./types.js";
+
+/** Max candidates the engine produces before pausing itself. The
+ *  workspace surfaces a "buffer full" info bar; the user accepts
+ *  or deletes some to resume. */
+const MAX_CANDIDATES = 200;
+
+/** Spec §10.4 defaults — used when the workspace runs in Auto
+ *  mode. spec Phase 5 (deferred) will surface them through the
+ *  Advanced settings panel. */
+const AUTO_CAPTURE_DEFAULTS = {
+  intervalMs: 1000,
+  stableWaitMs: 700,
+  minMsBetweenCaptures: 1500,
+  comparisonWidth: 320,
+  ignoreCursorOnlyChanges: true,
+};
+
+/** Map `AutoCaptureState` → spec §8.4 status copy. */
+const AUTO_STATE_COPY: Record<AutoCaptureState, string> = {
+  idle: "Watching for screen changes",
+  changing: "Screen change detected",
+  "stable-wait": "Waiting for the screen to settle",
+  captured: "Candidate image added",
+};
 
 export interface CaptureWorkspaceCaptureDetail {
   dataUrl: string;
@@ -79,6 +104,9 @@ export class AnnotCaptureWorkspaceElement extends LitElement {
   #session: CaptureSession | null = null;
   #preview: AnnotCapturePreviewElement | null = null;
   #store: CandidateStore = new CandidateStore();
+  #engine: AutoCaptureEngine | null = null;
+  #autoEnabled = true;
+  #bufferFullNotified = false;
 
   constructor() {
     super();
@@ -110,6 +138,8 @@ export class AnnotCaptureWorkspaceElement extends LitElement {
 
   override disconnectedCallback(): void {
     super.disconnectedCallback();
+    this.#engine?.stop();
+    this.#engine = null;
     this.#session?.stop();
     this.#session = null;
     this.#store.clear();
@@ -167,12 +197,14 @@ export class AnnotCaptureWorkspaceElement extends LitElement {
                 ? html`<annot-capture-toolbar
                   .mode=${this.#pending?.mode ?? "once"}
                   .canCaptureOnce=${this.state === "sharing"}
+                  .autoEnabled=${this.#engine !== null && this.#autoEnabled}
+                  .autoSupported=${this.#pending?.mode === "auto"}
                   @capture-once-click=${this.#captureOnce}
+                  @auto-toggle-click=${this.#toggleAuto}
                   @stop-click=${this.#exit}
                 ></annot-capture-toolbar>`
                 : nothing
             }
-            ${this.#renderDevDebugButton()}
           </div>
           <div class="capture-workspace-side">
             <annot-candidate-panel
@@ -238,51 +270,48 @@ export class AnnotCaptureWorkspaceElement extends LitElement {
 
   /** "Stop & Exit" / "Back to gallery" — stops the session and
    *  asks the host (via `workspace-exit` CustomEvent) to navigate
-   *  back. The host owns routing because the workspace shouldn't
-   *  reach into `pushRoute`. */
+   *  back. If the candidate buffer has unsaved entries, surfaces a
+   *  confirm dialog (Phase 4 of the plan) so the user doesn't lose
+   *  capture work to a stray click. */
   #exit = (): void => {
+    void this.#exitAsync();
+  };
+
+  async #exitAsync(): Promise<void> {
+    const pendingCount = this.#store.list().filter((c) => c.status !== "accepted").length;
+    if (pendingCount > 0) {
+      const confirmed = await showConfirmDialog({
+        title: "Discard pending candidates?",
+        message: `${pendingCount} candidate${pendingCount === 1 ? "" : "s"} ${pendingCount === 1 ? "hasn't" : "haven't"} been accepted yet. Leaving the workspace will discard ${pendingCount === 1 ? "it" : "them"}.`,
+        okLabel: "Discard",
+        cancelLabel: "Stay",
+        danger: true,
+      });
+      if (!confirmed) return;
+    }
+    this.#engine?.stop();
+    this.#engine = null;
     this.#session?.stop();
     this.#session = null;
     this.dispatchEvent(new CustomEvent("workspace-exit", { bubbles: true }));
-  };
-
-  /** Phase 3 dev-only debug surface. Lets reviewers exercise the
-   *  candidate panel + Accept / Edit / Delete actions before Phase
-   *  4's Auto Capture engine starts populating the store
-   *  organically. Removed in Phase 4 (the engine takes its place).
-   *  Gated on `import.meta.env.DEV` so production builds drop it. */
-  #renderDevDebugButton() {
-    if (!import.meta.env.DEV) return nothing;
-    if (this.state !== "sharing") return nothing;
-    return html`
-      <div class="capture-workspace-dev-tools">
-        <button
-          type="button"
-          class="capture-workspace-dev-btn"
-          @click=${this.#pushTestCandidate}
-        >
-          [debug] Push test candidate
-        </button>
-      </div>
-    `;
   }
 
-  #pushTestCandidate = (): void => {
-    if (!this.#session?.isLive) return;
-    const frame = this.#session.captureFrame();
-    const candidate: CaptureCandidate = {
-      id: newIdB58(),
-      status: "candidate",
-      createdAt: new Date().toISOString(),
-      sourceWidth: frame.width,
-      sourceHeight: frame.height,
-      // Reuse the JPEG data URL as both blob source AND thumbnail —
-      // good enough for the debug surface; Phase 4's engine builds
-      // a proper downscaled thumbnail.
-      imageBlob: dataUrlToBlob(frame.dataUrl),
-      thumbnailDataUrl: frame.dataUrl,
-    };
-    this.#store.add(candidate);
+  /** Workspace toolbar's `Auto OFF` toggle — pause / resume the
+   *  engine. `resetBaseline` so the next tick treats the current
+   *  frame as the new starting point. */
+  #toggleAuto = (): void => {
+    if (!this.#engine) return;
+    this.#autoEnabled = !this.#autoEnabled;
+    if (this.#autoEnabled) {
+      this.#engine.resetBaseline();
+      this.#engine.start();
+      this.statusMessage = AUTO_STATE_COPY.idle;
+    } else {
+      this.#engine.stop();
+      this.statusMessage = "Auto Capture paused.";
+    }
+    // Trigger a render so the toolbar reflects the new state.
+    this.requestUpdate();
   };
 
   #onCandidateAccept = (e: Event, openEditor: boolean): void => {
@@ -345,25 +374,37 @@ export class AnnotCaptureWorkspaceElement extends LitElement {
       return;
     }
     this.state = "sharing";
-    this.statusMessage = "Sharing — click Capture Once to save the current frame.";
     this.sourceWidth = session.sourceWidth;
     this.sourceHeight = session.sourceHeight;
+    if (this.#pending.mode === "auto") {
+      this.statusMessage = AUTO_STATE_COPY.idle;
+      this.#startAutoEngine();
+    } else {
+      this.statusMessage = "Sharing — click Capture Once to save the current frame.";
+    }
   }
-}
 
-/** Decode a `data:image/...;base64,...` URL into a `Blob`. Used by
- *  the Phase 3 dev-only debug button so the candidate it pushes
- *  carries a real `Blob` (matching what Phase 4's engine produces
- *  via canvas `toBlob`). */
-function dataUrlToBlob(dataUrl: string): Blob {
-  const m = /^data:([^;]+);base64,(.*)$/.exec(dataUrl);
-  if (!m) return new Blob([], { type: "application/octet-stream" });
-  const mime = m[1] ?? "application/octet-stream";
-  const b64 = m[2] ?? "";
-  const bin = atob(b64);
-  const bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  return new Blob([bytes], { type: mime });
+  #startAutoEngine(): void {
+    if (!this.#session) return;
+    this.#engine = new AutoCaptureEngine({
+      session: this.#session,
+      store: this.#store,
+      ...AUTO_CAPTURE_DEFAULTS,
+      maxCandidates: MAX_CANDIDATES,
+      onStateChange: (state) => {
+        this.statusMessage = AUTO_STATE_COPY[state];
+      },
+      onCursorIgnored: () => {
+        this.statusMessage = "Ignored cursor-only movement";
+      },
+      onBufferFull: () => {
+        if (this.#bufferFullNotified) return;
+        this.#bufferFullNotified = true;
+        this.statusMessage = "Candidate buffer full — accept or delete some to keep capturing.";
+      },
+    });
+    this.#engine.start();
+  }
 }
 
 if (!customElements.get("annot-capture-workspace")) {

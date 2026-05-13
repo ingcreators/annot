@@ -74,7 +74,9 @@ describe("showCaptureScreenDialog", () => {
   });
 
   it("Start button is disabled when the selected mode is not enabled", async () => {
-    const promise = showCaptureScreenDialog({ mode: "auto" });
+    // `area` is the only disabled chip in Phase 4 (auto + once both
+    // enabled). Picking `area` should grey the Start button out.
+    const promise = showCaptureScreenDialog({ mode: "area" });
     await Promise.resolve();
     const btn = findDialog().querySelector<HTMLButtonElement>(".capture-dialog-btn-primary");
     expect(btn?.disabled).toBe(true);

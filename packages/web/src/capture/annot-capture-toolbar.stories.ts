@@ -12,6 +12,8 @@ import type { CaptureMode } from "./types.js";
 interface Args {
   mode: CaptureMode;
   canCaptureOnce: boolean;
+  autoEnabled: boolean;
+  autoSupported: boolean;
 }
 
 const meta: Meta<Args> = {
@@ -23,7 +25,10 @@ const meta: Meta<Args> = {
     const el = document.createElement("annot-capture-toolbar");
     el.mode = args.mode;
     el.canCaptureOnce = args.canCaptureOnce;
+    el.autoEnabled = args.autoEnabled;
+    el.autoSupported = args.autoSupported;
     el.addEventListener("capture-once-click", () => console.log("[story] capture-once-click"));
+    el.addEventListener("auto-toggle-click", () => console.log("[story] auto-toggle-click"));
     el.addEventListener("stop-click", () => console.log("[story] stop-click"));
     wrapper.appendChild(el);
     return wrapper;
@@ -31,21 +36,45 @@ const meta: Meta<Args> = {
   argTypes: {
     mode: { control: "radio", options: ["auto", "once", "area"] },
     canCaptureOnce: { control: "boolean" },
+    autoEnabled: { control: "boolean" },
+    autoSupported: { control: "boolean" },
   },
   args: {
-    mode: "once",
+    mode: "auto",
     canCaptureOnce: true,
+    autoEnabled: true,
+    autoSupported: true,
   },
 };
 export default meta;
 
 type Story = StoryObj<Args>;
 
-export const Default: Story = {};
+export const AutoOn: Story = {};
+
+export const AutoOff: Story = {
+  args: {
+    mode: "auto",
+    canCaptureOnce: true,
+    autoEnabled: false,
+    autoSupported: true,
+  },
+};
+
+export const OnceMode: Story = {
+  args: {
+    mode: "once",
+    canCaptureOnce: true,
+    autoEnabled: false,
+    autoSupported: false,
+  },
+};
 
 export const CaptureDisabled: Story = {
   args: {
     mode: "once",
     canCaptureOnce: false,
+    autoEnabled: false,
+    autoSupported: false,
   },
 };

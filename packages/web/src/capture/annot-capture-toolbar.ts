@@ -13,15 +13,21 @@ export class AnnotCaptureToolbarElement extends LitElement {
   static override properties = {
     mode: { type: String },
     canCaptureOnce: { type: Boolean },
+    autoEnabled: { type: Boolean },
+    autoSupported: { type: Boolean },
   };
 
   declare mode: CaptureMode;
   declare canCaptureOnce: boolean;
+  declare autoEnabled: boolean;
+  declare autoSupported: boolean;
 
   constructor() {
     super();
     this.mode = "once";
     this.canCaptureOnce = true;
+    this.autoEnabled = false;
+    this.autoSupported = false;
   }
 
   protected override createRenderRoot(): HTMLElement {
@@ -29,6 +35,7 @@ export class AnnotCaptureToolbarElement extends LitElement {
   }
 
   override render() {
+    const autoLabel = this.autoEnabled ? "Auto ON" : "Auto OFF";
     return html`
       <div class="capture-toolbar">
         <button
@@ -39,8 +46,20 @@ export class AnnotCaptureToolbarElement extends LitElement {
         >
           Capture Once
         </button>
-        <button type="button" class="capture-toolbar-btn" disabled title="Available in Phase 4">
-          Auto OFF
+        <button
+          type="button"
+          class="capture-toolbar-btn"
+          ?disabled=${!this.autoSupported}
+          @click=${this.#toggleAuto}
+          title=${
+            this.autoSupported
+              ? this.autoEnabled
+                ? "Pause Auto Capture"
+                : "Resume Auto Capture"
+              : "Pick Auto Capture in the dialog to enable"
+          }
+        >
+          ${autoLabel}
         </button>
         <button type="button" class="capture-toolbar-btn" disabled title="Coming soon">
           Capture Area
@@ -59,6 +78,11 @@ export class AnnotCaptureToolbarElement extends LitElement {
 
   #capture = (): void => {
     this.dispatchEvent(new CustomEvent("capture-once-click", { bubbles: true }));
+  };
+
+  #toggleAuto = (): void => {
+    if (!this.autoSupported) return;
+    this.dispatchEvent(new CustomEvent("auto-toggle-click", { bubbles: true }));
   };
 
   #stop = (): void => {

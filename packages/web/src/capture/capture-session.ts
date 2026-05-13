@@ -155,4 +155,13 @@ export class CaptureSession {
   get isLive(): boolean {
     return this.#stream !== null && !this.#stopped;
   }
+
+  /** Read-only accessor for the bound `<video>` element so the
+   *  `AutoCaptureEngine` (Phase 4) can sample frames into its
+   *  comparison canvas. The session keeps full ownership — the
+   *  engine MUST NOT modify `srcObject` / dimensions / etc. */
+  getVideoElementForSampling(): HTMLVideoElement | null {
+    if (!this.isLive) return null;
+    return this.#video;
+  }
 }
