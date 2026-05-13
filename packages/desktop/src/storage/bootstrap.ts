@@ -23,17 +23,33 @@
  * default-flips the flag and Phase 5 deletes the legacy code.
  */
 
-import type { ImageRecord } from "@ingcreators/annot-core/storage";
+import type { ImageRecord, MetadataCache } from "@ingcreators/annot-core/storage";
 import {
   FileManager,
   type FileManagerCallbacks,
 } from "@ingcreators/annot-host-ui/gallery/file-manager";
 import type { NewMenuItem } from "@ingcreators/annot-host-ui/gallery/sidebar";
+import { IndexedDBMetadataCache } from "@ingcreators/annot-host-ui/idb-metadata-cache";
 import { IndexedDBThumbnailCache } from "@ingcreators/annot-host-ui/idb-thumbnail-cache";
 import type { StorageMode } from "@ingcreators/annot-host-ui/storage-mode";
 import { ThumbnailManager } from "@ingcreators/annot-host-ui/thumbnail-manager";
 import { createElectronDesktopFs, type DesktopFs, type ElectronApi } from "./desktop-fs.js";
 import { DesktopStore } from "./desktop-store.js";
+
+/**
+ * Lazy per-renderer singleton — one shared `MetadataCache` across
+ * every `DesktopStore` instance in this tab. The cache itself
+ * coordinates across tabs via `BroadcastChannel`; the singleton
+ * is just the per-tab handle. Phase 4 of
+ * `docs/plans/shared-metadata-cache.md`.
+ */
+let sharedMetadataCache: MetadataCache | null = null;
+function getMetadataCache(): MetadataCache {
+  if (!sharedMetadataCache) {
+    sharedMetadataCache = new IndexedDBMetadataCache();
+  }
+  return sharedMetadataCache;
+}
 
 /** Default top-level folder created on first launch so the gallery
  *  doesn't open into a totally empty tree. Phase 4's "no
@@ -151,6 +167,7 @@ export async function createStandaloneDesktopStore(
   const fs = opts.fs ?? createElectronDesktopFs();
   await ensureLibrarySkeleton(fs);
   const store = new DesktopStore(fs, leafNameOf(libraryRoot));
+  store.attachMetadataCache(getMetadataCache());
   await store.init();
   return store;
 }
@@ -192,6 +209,7 @@ export async function bootstrapDesktopFsGallery(
   const rootName = leafNameOf(libraryRoot);
 
   const store = new DesktopStore(fs, rootName);
+  store.attachMetadataCache(getMetadataCache());
   await store.init();
 
   // Unified thumbnail cache shared with every other host; the
