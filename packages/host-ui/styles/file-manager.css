@@ -1158,6 +1158,20 @@ html.light .view-toggle-btn.active {
   flex: 1;
 }
 
+/* Make the custom element itself a flex child of
+ * `.capture-workspace-side` so its inner `.candidate-panel`
+ * (`height: 100%`) actually has a bounded height to fill —
+ * without this, `<annot-candidate-panel>` defaults to
+ * `display: inline` with auto sizing, the body grows with the
+ * cards, and the `overflow-y: auto` in `.candidate-panel-body`
+ * never kicks in. User-reported scroll regression. */
+.capture-workspace-side > annot-candidate-panel {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
 /* Candidate panel inside the workspace */
 .candidate-panel {
   display: flex;
