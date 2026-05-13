@@ -199,17 +199,27 @@ export class CaptureHost {
   }
 
   /**
-   * Phase 3 of `docs/plans/web-capture-redesign.md`. Save without
-   * opening the editor — used by candidate Accept (the user is
-   * still in the workspace triaging more candidates; opening the
-   * editor would tear it down). Tags carry session metadata so
-   * Phase 4's Auto Capture sessions remain groupable in the
-   * gallery.
+   * Save without opening the editor — used by the /capture
+   * workspace for both Auto Capture-detected frames AND the
+   * manual "Add Capture" button (post-Phase-5 refactor: every
+   * captured frame persists immediately; the workspace panel is
+   * just a session-local list of saved records the user can
+   * delete during the session).
+   *
+   * Returns the saved path + the generated thumbnail + the
+   * source dimensions so callers can populate their session list
+   * without re-decoding the image or hitting storage again.
+   * `null` when no storage backend is active.
    */
   async saveDataUrlSilently(
     dataUrl: string,
     tags: Record<string, string> = {},
-  ): Promise<string | null> {
+  ): Promise<{
+    path: string;
+    thumbnailDataUrl: string;
+    width: number;
+    height: number;
+  } | null> {
     const storage = this.deps.getStorage();
     if (!storage) return null;
     const img = await loadImage(dataUrl);
@@ -235,6 +245,27 @@ export class CaptureHost {
     // Refresh the file manager in the background so when the user
     // exits the workspace the gallery is already up-to-date.
     void this.deps.getFileManager()?.refresh(folderPath);
-    return path;
+    return {
+      path,
+      thumbnailDataUrl,
+      width: img.naturalWidth,
+      height: img.naturalHeight,
+    };
+  }
+
+  /** Delete a saved capture from storage. Used by the /capture
+   *  workspace's Delete button — the user removes session
+   *  captures that didn't pan out. */
+  async deleteCapture(path: string): Promise<void> {
+    const storage = this.deps.getStorage();
+    if (!storage) return;
+    try {
+      await storage.deleteImage(path);
+      // Refresh the file manager so the deletion is reflected in
+      // the gallery if the user exits straight after.
+      void this.deps.getFileManager()?.refresh(this.deps.getCurrentFolderPath());
+    } catch (err) {
+      console.error("[capture-host] deleteCapture failed:", err);
+    }
   }
 }

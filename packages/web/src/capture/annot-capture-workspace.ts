@@ -2,9 +2,16 @@
  * `<annot-capture-workspace>` — the `/capture` route's main surface.
  * Owns the `MediaStream` (via `CaptureSession`) + the
  * `<annot-capture-preview>` + `<annot-capture-toolbar>` +
- * `<annot-candidate-panel>` triad. Phase 2 wires Capture Once
- * end-to-end; Phase 3 adds the candidate panel + store; Phase 4
- * adds the Auto Capture engine.
+ * `<annot-candidate-panel>` triad.
+ *
+ * Post-Phase-5 model: every captured frame (Auto Capture-detected
+ * OR manually added via the toolbar button) persists immediately
+ * through the host's `saveCapture` callback. The panel renders a
+ * session-local list of already-saved records. Delete in the panel
+ * routes through `deleteCapture` to remove from storage too. No
+ * Accept gate, no in-memory blob buffer, no "discard pending"
+ * confirm on exit — the user can leave any time without losing
+ * work.
  *
  * Lit Phase 6 — light DOM, `static properties`, no decorators.
  *
@@ -22,7 +29,7 @@
  * mirroring how doc-mode mounts `#annot-doc-host`.
  */
 
-import { showConfirmDialog } from "@ingcreators/annot-host-ui/ui/dialog";
+import { newIdB58 } from "@ingcreators/annot-core/utils";
 import { html, LitElement, nothing } from "../lit.js";
 import "./annot-candidate-panel.js";
 import "./annot-capture-preview.js";
@@ -37,10 +44,11 @@ import {
 import { CaptureSession } from "./capture-session.js";
 import type { AutoCaptureState } from "./types.js";
 
-/** Max candidates the engine produces before pausing itself. The
- *  workspace surfaces a "buffer full" info bar; the user accepts
- *  or deletes some to resume. */
-const MAX_CANDIDATES = 200;
+/** Max captures the engine produces per session before pausing
+ *  itself. Workspace surfaces a "buffer full" info bar; the user
+ *  deletes some to resume. Same cap applies to the (already-
+ *  persisted) panel list. */
+const MAX_CAPTURES = 200;
 
 /** Spec §10.4 defaults — used when the workspace runs in Auto
  *  mode. spec Phase 5 (deferred) will surface them through the
@@ -58,29 +66,29 @@ const AUTO_STATE_COPY: Record<AutoCaptureState, string> = {
   idle: "Watching for screen changes",
   changing: "Screen change detected",
   "stable-wait": "Waiting for the screen to settle",
-  captured: "Candidate image added",
+  captured: "Capture saved",
 };
 
-export interface CaptureWorkspaceCaptureDetail {
-  dataUrl: string;
-  width: number;
-  height: number;
-  mode: CapturePendingSession["mode"];
-  folderPath: string;
-}
-
-/** Detail dispatched on `candidate-accepted`. The host's
- *  workspace-mount handler in app.ts persists the blob via
- *  `storage.saveImage` and then calls `removeCandidate(id)` on
- *  the workspace so the panel re-renders without the card. */
-export interface CandidateAcceptedDetail {
-  id: string;
-  blob: Blob;
+/** Result the host returns from `saveCapture`. Mirrors
+ *  `CaptureHost.saveDataUrlSilently`'s return shape. */
+export interface CaptureSaveResult {
+  path: string;
   thumbnailDataUrl: string;
   width: number;
   height: number;
-  folderPath: string;
 }
+
+/** Host-supplied callback that persists a captured frame and
+ *  returns the saved record + thumbnail. */
+export type CaptureSaveFn = (
+  dataUrl: string,
+  tags: Record<string, string>,
+) => Promise<CaptureSaveResult | null>;
+
+/** Host-supplied callback that deletes a saved capture from
+ *  storage. The workspace calls this when the user clicks Delete
+ *  on a candidate card. */
+export type CaptureDeleteFn = (path: string) => Promise<void>;
 
 type WorkspaceState = "no-pending" | "starting" | "sharing" | "stopped" | "cancelled";
 
@@ -90,12 +98,23 @@ export class AnnotCaptureWorkspaceElement extends LitElement {
     statusMessage: { state: true },
     sourceWidth: { state: true },
     sourceHeight: { state: true },
+    saveCapture: { attribute: false },
+    deleteCapture: { attribute: false },
   };
 
   declare state: WorkspaceState;
   declare statusMessage: string;
   declare sourceWidth: number;
   declare sourceHeight: number;
+  /** Host-supplied save callback (see `CaptureSaveFn`). Required
+   *  for a working session — the workspace surfaces a console
+   *  warning if invoked while unset (Storybook fixture missing
+   *  the wiring, etc.). */
+  declare saveCapture: CaptureSaveFn | null;
+  /** Host-supplied delete callback (see `CaptureDeleteFn`). When
+   *  unset, Delete still drops from the panel but leaves the
+   *  storage record in place. */
+  declare deleteCapture: CaptureDeleteFn | null;
 
   #pending: CapturePendingSession | null = null;
   #session: CaptureSession | null = null;
@@ -104,6 +123,9 @@ export class AnnotCaptureWorkspaceElement extends LitElement {
   #engine: AutoCaptureEngine | null = null;
   #autoEnabled = true;
   #bufferFullNotified = false;
+  /** Session id shared by every tag emitted during this session
+   *  so the gallery can group them later. */
+  #sessionId: string = newIdB58();
 
   constructor() {
     super();
@@ -111,6 +133,8 @@ export class AnnotCaptureWorkspaceElement extends LitElement {
     this.statusMessage = "";
     this.sourceWidth = 0;
     this.sourceHeight = 0;
+    this.saveCapture = null;
+    this.deleteCapture = null;
   }
 
   protected override createRenderRoot(): HTMLElement {
@@ -142,13 +166,6 @@ export class AnnotCaptureWorkspaceElement extends LitElement {
     this.#session?.stop();
     this.#session = null;
     this.#store.clear();
-  }
-
-  /** Workspace-internal API the host can call to drop a candidate
-   *  after persisting it. The candidate panel re-renders via the
-   *  store's `change` event. */
-  removeCandidate(id: string): void {
-    this.#store.remove(id);
   }
 
   override render() {
@@ -198,7 +215,7 @@ export class AnnotCaptureWorkspaceElement extends LitElement {
                   .canCaptureOnce=${this.state === "sharing"}
                   .autoEnabled=${this.#engine !== null && this.#autoEnabled}
                   .autoSupported=${this.#pending?.mode === "auto"}
-                  @capture-once-click=${this.#captureOnce}
+                  @capture-once-click=${this.#manualCapture}
                   @auto-toggle-click=${this.#toggleAuto}
                   @stop-click=${this.#exit}
                 ></annot-capture-toolbar>`
@@ -208,7 +225,6 @@ export class AnnotCaptureWorkspaceElement extends LitElement {
           <div class="capture-workspace-side">
             <annot-candidate-panel
               .store=${this.#store}
-              @candidate-accept=${this.#onCandidateAccept}
               @candidate-delete=${this.#onCandidateDelete}
             ></annot-candidate-panel>
           </div>
@@ -244,90 +260,74 @@ export class AnnotCaptureWorkspaceElement extends LitElement {
     `;
   }
 
-  /** Workspace consumer hook — emit a `capture-once` CustomEvent
-   *  (with the captured frame's data URL + dimensions + mode +
-   *  folderPath) for the host to persist via its `StorageProvider`.
-   *  The workspace stays storage-agnostic so it can be mounted in
-   *  Storybook against a fake handler. */
-  #captureOnce = (): void => {
-    if (!this.#session?.isLive || !this.#pending) return;
+  /** Toolbar's "Add Capture" button — grabs the current frame and
+   *  saves it via the host. The previous Phase 2 "Capture Once"
+   *  semantic (capture + open editor) was retired post-rollout
+   *  because the editor hand-off interrupted the user's triage
+   *  flow; manual captures now go through the same save+panel
+   *  path as Auto Capture detections. */
+  #manualCapture = (): void => {
+    if (!this.#session?.isLive) return;
     const frame = this.#session.captureFrame();
-    this.dispatchEvent(
-      new CustomEvent<CaptureWorkspaceCaptureDetail>("capture-once", {
-        detail: {
-          dataUrl: frame.dataUrl,
-          width: frame.width,
-          height: frame.height,
-          mode: this.#pending.mode,
-          folderPath: this.#pending.folderPath,
-        },
-        bubbles: true,
-      }),
-    );
+    void this.#persistCapture(frame.dataUrl, frame.width, frame.height, "manual");
   };
+
+  /** Persist a captured frame via the host's `saveCapture`
+   *  callback, then push the result onto the session panel. */
+  async #persistCapture(
+    dataUrl: string,
+    width: number,
+    height: number,
+    sessionKind: "auto" | "manual",
+    diffScore?: number,
+  ): Promise<void> {
+    if (!this.saveCapture) {
+      console.warn("[capture-workspace] saveCapture not wired; dropping frame");
+      return;
+    }
+    if (!this.#pending) return;
+    if (this.#store.size >= MAX_CAPTURES) {
+      // Engine self-pauses via `onBufferFull`; this guard catches
+      // the manual-add path post-cap. Surface the same message.
+      this.#notifyBufferFull();
+      return;
+    }
+    const tags: Record<string, string> = {
+      captureId: newIdB58(),
+      session: this.#sessionId,
+      sessionKind,
+      sessionIndex: String(this.#store.size),
+    };
+    let saved: CaptureSaveResult | null;
+    try {
+      saved = await this.saveCapture(dataUrl, tags);
+    } catch (err) {
+      console.error("[capture-workspace] saveCapture failed:", err);
+      return;
+    }
+    if (!saved) return;
+    this.#store.add({
+      id: saved.path,
+      path: saved.path,
+      createdAt: new Date().toISOString(),
+      sourceWidth: saved.width,
+      sourceHeight: saved.height,
+      thumbnailDataUrl: saved.thumbnailDataUrl,
+      diffScore,
+    });
+  }
 
   /** "Stop & Exit" / "Back to gallery" — stops the session and
    *  asks the host (via `workspace-exit` CustomEvent) to navigate
-   *  back. If the candidate buffer has unsaved entries, surfaces a
-   *  confirm dialog (Phase 4 of the plan) so the user doesn't lose
-   *  capture work to a stray click. */
+   *  back. No confirmation needed — every capture is already
+   *  persisted, so there's nothing to lose. */
   #exit = (): void => {
-    void this.#exitAsync();
-  };
-
-  async #exitAsync(): Promise<void> {
-    const pendingCount = this.#store.list().filter((c) => c.status !== "accepted").length;
-    if (pendingCount > 0) {
-      const message = `${pendingCount} candidate${pendingCount === 1 ? "" : "s"} ${pendingCount === 1 ? "hasn't" : "haven't"} been accepted yet. Leaving the workspace will discard ${pendingCount === 1 ? "it" : "them"}.`;
-      const confirmed = await this.#confirmDiscard("Discard pending candidates?", message);
-      if (!confirmed) return;
-    }
     this.#engine?.stop();
     this.#engine = null;
     this.#session?.stop();
     this.#session = null;
     this.dispatchEvent(new CustomEvent("workspace-exit", { bubbles: true }));
-  }
-
-  /** Show a destructive confirm dialog. Tries the styled
-   *  `<annot-dialog>` first; falls back to the browser's native
-   *  `window.confirm` if the styled dialog throws or doesn't
-   *  resolve in a reasonable time.
-   *
-   *  The fallback exists because the original Phase 4 wiring
-   *  silently exited without a warning in real usage — the styled
-   *  dialog's promise sometimes never resolved (suspected
-   *  interaction with the screen-share toolbar's focus / event
-   *  routing). A native `confirm()` is uglier but guaranteed to
-   *  surface, so the user can't lose triage work to a stray click. */
-  async #confirmDiscard(title: string, message: string): Promise<boolean> {
-    try {
-      const dialogPromise = showConfirmDialog({
-        title,
-        message,
-        okLabel: "Discard",
-        cancelLabel: "Stay",
-        danger: true,
-      });
-      // 3-second watchdog: if the styled dialog hasn't resolved by
-      // then it's almost certainly stuck (the dialog mounted but
-      // the user can't see it, or the events aren't wiring up).
-      // Resolve `null` to signal "fall through to native".
-      const watchdog = new Promise<null>((resolve) => {
-        setTimeout(() => resolve(null), 3000);
-      });
-      const result = await Promise.race([dialogPromise, watchdog]);
-      if (result !== null) return result;
-      // Watchdog fired — drop into native confirm so the user
-      // sees *something*. Best-effort cleanup of the orphan
-      // styled dialog if it happened to mount.
-      document.querySelectorAll("annot-dialog").forEach((el) => el.remove());
-      return window.confirm(`${title}\n\n${message}`);
-    } catch (err) {
-      console.warn("[capture-workspace] styled confirm failed, falling back to native:", err);
-      return window.confirm(`${title}\n\n${message}`);
-    }
-  }
+  };
 
   /** Workspace toolbar's `Auto OFF` toggle — pause / resume the
    *  engine. `resetBaseline` so the next tick treats the current
@@ -347,31 +347,15 @@ export class AnnotCaptureWorkspaceElement extends LitElement {
     this.requestUpdate();
   };
 
-  #onCandidateAccept = (e: Event): void => {
-    const id = (e as CustomEvent).detail?.id as string | undefined;
-    if (!id || !this.#pending) return;
-    const c = this.#store.get(id);
-    if (!c) return;
-    this.#store.accept(id);
-    this.dispatchEvent(
-      new CustomEvent<CandidateAcceptedDetail>("candidate-accepted", {
-        detail: {
-          id,
-          blob: c.imageBlob,
-          thumbnailDataUrl: c.thumbnailDataUrl,
-          width: c.sourceWidth,
-          height: c.sourceHeight,
-          folderPath: this.#pending.folderPath,
-        },
-        bubbles: true,
-      }),
-    );
-  };
-
   #onCandidateDelete = (e: Event): void => {
     const id = (e as CustomEvent).detail?.id as string | undefined;
     if (!id) return;
     this.#store.remove(id);
+    if (this.deleteCapture) {
+      void this.deleteCapture(id).catch((err) => {
+        console.error("[capture-workspace] deleteCapture failed:", err);
+      });
+    }
   };
 
   async #startSession(): Promise<void> {
@@ -415,14 +399,14 @@ export class AnnotCaptureWorkspaceElement extends LitElement {
     // `videoWidth` / `videoHeight` change post-load. The Auto
     // Capture engine also re-baselines on dimension change
     // (`auto-capture.ts:#processFrame`), so the engine + the
-    // header display stay in sync. */
+    // header display stay in sync.
     const video = this.#preview?.getVideoElement();
     video?.addEventListener("resize", this.#onVideoResize);
     if (this.#pending.mode === "auto") {
       this.statusMessage = AUTO_STATE_COPY.idle;
       this.#startAutoEngine();
     } else {
-      this.statusMessage = "Sharing — click Capture Once to save the current frame.";
+      this.statusMessage = "Sharing — click Add Capture to save the current frame.";
     }
   }
 
@@ -436,22 +420,26 @@ export class AnnotCaptureWorkspaceElement extends LitElement {
     if (!this.#session) return;
     this.#engine = new AutoCaptureEngine({
       session: this.#session,
-      store: this.#store,
       ...AUTO_CAPTURE_DEFAULTS,
-      maxCandidates: MAX_CANDIDATES,
+      maxCaptures: MAX_CAPTURES,
+      getCapturedCount: () => this.#store.size,
+      onCaptureReady: ({ dataUrl, width, height, diffScore }) =>
+        this.#persistCapture(dataUrl, width, height, "auto", diffScore),
       onStateChange: (state) => {
         this.statusMessage = AUTO_STATE_COPY[state];
       },
       onCursorIgnored: () => {
         this.statusMessage = "Ignored cursor-only movement";
       },
-      onBufferFull: () => {
-        if (this.#bufferFullNotified) return;
-        this.#bufferFullNotified = true;
-        this.statusMessage = "Candidate buffer full — accept or delete some to keep capturing.";
-      },
+      onBufferFull: () => this.#notifyBufferFull(),
     });
     this.#engine.start();
+  }
+
+  #notifyBufferFull(): void {
+    if (this.#bufferFullNotified) return;
+    this.#bufferFullNotified = true;
+    this.statusMessage = `Capture buffer full (${MAX_CAPTURES}) — delete some to keep capturing.`;
   }
 }
 

@@ -67,15 +67,17 @@ export class AnnotCandidatePanelElement extends LitElement {
     const count = candidates.length;
     return html`
       <div class="candidate-panel">
-        <div class="candidate-panel-header">Candidates (${count})</div>
+        <div class="candidate-panel-header">Captures (${count})</div>
         <div class="candidate-panel-body">
           ${
             count === 0
               ? html`<div class="candidate-panel-empty">
-                No candidates yet.
+                No captures yet.
                 <div class="candidate-panel-empty-sub">
-                  Auto Capture lands in Phase 4. For now, use the toolbar's
-                  <strong>Capture Once</strong> button to save individual frames.
+                  Auto Capture saves screen changes as it detects them. Click
+                  <strong>Add Capture</strong> on the toolbar to save the current
+                  frame manually. Captures are saved to your gallery — use Delete
+                  here if you don't want one.
                 </div>
               </div>`
               : nothing
@@ -83,7 +85,6 @@ export class AnnotCandidatePanelElement extends LitElement {
           ${candidates.map(
             (c) => html`<annot-candidate-card
               .candidate=${c}
-              @candidate-accept=${(e: Event) => this.#forward(e, "candidate-accept")}
               @candidate-delete=${(e: Event) => this.#forward(e, "candidate-delete")}
             ></annot-candidate-card>`,
           )}

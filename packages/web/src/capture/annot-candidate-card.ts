@@ -1,14 +1,15 @@
 /**
- * `<annot-candidate-card>` — single capture candidate row inside
- * `<annot-candidate-panel>`. Renders thumbnail + timestamp + status
- * + Accept / Delete buttons.
+ * `<annot-candidate-card>` — single capture card inside
+ * `<annot-candidate-panel>`. Renders thumbnail + timestamp +
+ * Delete button.
  *
- * Phase 3 of `docs/plans/web-capture-redesign.md`, with the Edit
- * shortcut retired in the follow-up cleanup PR — the "Accept +
- * open editor" flow didn't survive contact with real usage, so
- * the card now offers only Accept (save without leaving the
- * workspace) and Delete. Users can open any saved capture in the
- * editor from the gallery after they leave the workspace.
+ * Post-rollout cleanup: the original Phase 3 design buffered an
+ * unsaved Blob and exposed Accept / Edit / Delete to gate
+ * persistence. Real usage showed the Accept step was friction +
+ * the buffer leaked memory at 4K, so the model flipped — every
+ * capture persists immediately, the card is just a view onto the
+ * already-saved record, and Delete actually deletes from
+ * storage. Accept (and the earlier Edit shortcut) are gone.
  *
  * Lit Phase 6 — light DOM, `static properties`, no decorators.
  */
@@ -43,23 +44,8 @@ export class AnnotCandidateCardElement extends LitElement {
         <div class="candidate-card-body">
           <div class="candidate-card-meta">
             <span class="candidate-card-time">${time}</span>
-            ${
-              c.status === "accepted"
-                ? html`<span class="candidate-card-status candidate-card-status-accepted"
-                    >Accepted</span
-                  >`
-                : null
-            }
           </div>
           <div class="candidate-card-actions">
-            <button
-              type="button"
-              class="candidate-card-btn candidate-card-btn-primary"
-              ?disabled=${c.status === "accepted"}
-              @click=${() => this.#emit("candidate-accept")}
-            >
-              Accept
-            </button>
             <button
               type="button"
               class="candidate-card-btn candidate-card-btn-danger"
@@ -73,7 +59,7 @@ export class AnnotCandidateCardElement extends LitElement {
     `;
   }
 
-  #emit(name: "candidate-accept" | "candidate-delete"): void {
+  #emit(name: "candidate-delete"): void {
     this.dispatchEvent(
       new CustomEvent(name, { bubbles: true, detail: { id: this.candidate?.id } }),
     );
