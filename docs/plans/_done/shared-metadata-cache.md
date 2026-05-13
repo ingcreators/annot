@@ -1,7 +1,32 @@
 # Shared MetadataCache (IndexedDB) across storage providers
 
-> **Status:** Queued
-> **Compatibility:** Affects 4 of 6 `StorageProvider` implementations
+> **Status:** Done — all 8 phases landed.
+>
+> | Phase | Description | PR |
+> |-------|-------------|----|
+> | P0 | Plan doc | [#667](https://github.com/ingcreators/annot/pull/667) |
+> | P1 | Tier A `MetadataCache` interface | [#668](https://github.com/ingcreators/annot/pull/668) |
+> | P2 | Tier C `IndexedDBMetadataCache` + memory LRU + BroadcastChannel multi-tab sync | [#669](https://github.com/ingcreators/annot/pull/669) |
+> | P3 | DeviceStore migration (pilot) | [#670](https://github.com/ingcreators/annot/pull/670) |
+> | P4 | DesktopStore migration | [#671](https://github.com/ingcreators/annot/pull/671) |
+> | P5 | GitHubStore + branch HEAD SHA tracking (additive — bespoke caches retained) | [#672](https://github.com/ingcreators/annot/pull/672) |
+> | P6 | GoogleDriveStore + Changes API page token seed (additive — bespoke caches retained) | [#673](https://github.com/ingcreators/annot/pull/673) |
+> | P7 | CLAUDE.md guardrail + plugin-api docs + archive | this PR |
+>
+> NOTE: P5 / P6 deviated from the plan's "drop bespoke caches"
+> language — both stores' in-session caches (`GitHubTreeState` /
+> `GitHubBlobCache` / `#docMeta`; Drive's path↔id maps + record
+> cache) are tightly coupled to their backend's API contract, and
+> a full migration onto the shared cache's listing/record layers
+> proved larger than the 3–4d budget. The capability is in,
+> `branchHead` / `changesPageToken` cross-session tracking lands,
+> and the cross-tab listener is wired. A follow-up plan can
+> finish the bespoke-cache replacement when there's a concrete
+> trigger (e.g. wanting differential `compare`-based update on
+> GitHub HEAD mismatch, or differential Drive `changes.list`
+> application).
+>
+> **Compatibility:** Affected 4 of 6 `StorageProvider` implementations
 >   (`Device` / `Desktop` / `GitHub` / `Drive`). `BrowserStore` and
 >   the extension's `IDBStore` keep their current shape since they
 >   already use IndexedDB natively. Adds one optional capability
@@ -9,12 +34,10 @@
 >   surface change.
 > **Risk:** Single landing not viable — 8-phase split, each phase
 >   independently revertable per
->   [`docs/plans/README.md`](./README.md). Conservative on disk
+>   [`docs/plans/README.md`](../README.md). Conservative on disk
 >   data: existing `.annot.json` sidecars in user folders are left
 >   in place (not read, not deleted) so a downgrade still finds a
->   valid sidecar. Adds two backend-specific incremental-sync
->   features that piggy-back on the shared primitive: GitHub branch
->   HEAD SHA tracking, Drive Changes API page token.
+>   valid sidecar.
 
 ## Context
 

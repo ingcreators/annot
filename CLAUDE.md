@@ -611,6 +611,66 @@ landed the split + the five built-in themes
 `playful`) + the Appearance picker + font-family override +
 custom CSS escape hatch.
 
+### 12. MetadataCache for cross-session + multi-tab consistency
+
+The shared
+[`MetadataCache`](./packages/core/src/storage/metadata-cache.ts)
+(Tier A interface) +
+[`IndexedDBMetadataCache`](./packages/host-ui/src/idb-metadata-cache.ts)
+(Tier C impl) layer the per-store metadata-cache lifecycle the
+same way
+[`_done/unified-thumbnail-cache.md`](./docs/plans/_done/unified-thumbnail-cache.md)
+layered thumbnail caching. Stores that opt in via
+`StorageWithMetadataCache` (`metadataNamespace()` +
+`attachMetadataCache(cache)`) get cross-session metadata
+persistence + cross-tab consistency via `BroadcastChannel` for
+free.
+
+Caching policy is **lightweight fields only** — `ImageRecord.originalDataUrl`,
+`ImageRecord.annotationsSvg`, and `DocumentRecord.bytes` are NOT
+cached (sizes are MB-class; backends re-fetch on demand). The
+cache holds title / dimensions / tags / timestamps / per-folder
+listing arrays / per-namespace KV (e.g. GitHub branch HEAD SHA,
+Drive Changes API page token) / path ↔ backend-id maps.
+
+Opt-in status across the built-ins:
+
+| Store | Opt-in | Bespoke cache fully replaced? | Notes |
+|---|---|---|---|
+| DeviceStore | ✓ | ✓ | `.annot.json` sidecar left on disk for downgrade; not read / written |
+| DesktopStore | ✓ | ✓ | Same `.annot.json` policy |
+| GitHubStore | ✓ | partial | `branchHead` tracking + cross-tab listener; full `GitHubTreeState` / `GitHubBlobCache` replacement deferred |
+| GoogleDriveStore | ✓ | partial | `changesPageToken` seeded; full `#fileMeta` / `#recordCache` / id-map replacement deferred |
+| BrowserStore | not applicable | n/a | Already IDB-native; second cache layer would be redundant |
+| Extension `IDBStore` | not applicable | n/a | Already IDB-native |
+
+When adding new code that touches metadata persistence:
+
+- **Don't write a parallel in-memory map** when the same data
+  can flow through `MetadataCache` — every additional cache is
+  one more place to forget to invalidate.
+- **Don't cache `originalDataUrl` / `annotationsSvg` /
+  `DocumentRecord.bytes`** anywhere. The cache deliberately
+  excludes them; sneaking them through a value field breaks the
+  size guarantees for cross-session storage.
+- **Don't construct your own `IndexedDBMetadataCache`** — the
+  host owns one singleton per renderer; stores opt in via
+  `attachMetadataCache`.
+- **Don't bypass the namespace** —
+  `MetadataCache` operations are scoped by namespace; cross-namespace
+  side effects break multi-account isolation.
+
+The plugin-author guide at
+[`docs/plugin-api/metadata-cache.md`](./docs/plugin-api/metadata-cache.md)
+documents the opt-in surface for third-party storage backends.
+
+History: [`_done/shared-metadata-cache.md`](./docs/plans/_done/shared-metadata-cache.md)
+(PRs [#667](https://github.com/ingcreators/annot/pull/667)–[#673](https://github.com/ingcreators/annot/pull/673))
+landed the Tier A interface, Tier C implementation,
+DeviceStore / DesktopStore migrations (full bespoke-cache
+replacement), GitHubStore + GoogleDriveStore opt-ins
+(additive — `branchHead` + Changes API foundations).
+
 ## Component stories (Storybook)
 
 Storybook lives in
