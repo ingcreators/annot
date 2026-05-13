@@ -18,9 +18,10 @@ import { readEditableImage } from "@ingcreators/annot-core/xmp";
 import type { FileManager } from "@ingcreators/annot-host-ui/gallery/file-manager";
 import { generateThumbnailFromDataUrl } from "@ingcreators/annot-host-ui/image-thumbnail";
 import type { ThumbnailManager } from "@ingcreators/annot-host-ui/thumbnail-manager";
+import { saveCursorPreference, saveModePreference } from "../capture/capture-prefs.js";
+import { showCaptureScreenDialog } from "../capture/capture-screen-dialog.js";
 import {
   loadCursorPreference,
-  saveCursorPreference,
   showIntervalCaptureDialog,
   showIntervalCaptureProgress,
 } from "../capture/interval-dialog.js";
@@ -62,6 +63,31 @@ export class CaptureHost {
     const dataUrl = await captureScreen(loadCursorPreference());
     if (!dataUrl) return;
     await this.saveDataUrlAndOpen(dataUrl);
+  }
+
+  /**
+   * Phase 1 of `docs/plans/web-capture-redesign.md` — opens the new
+   * `Capture Screen...` mode-picker dialog. For Phase 1 only Capture
+   * Once is enabled; the chosen mode is persisted so Phase 4's
+   * default-to-Auto switch picks up the user's last preference.
+   * Subsequent phases route the dialog's confirm into the new
+   * `/capture` workspace; for now we keep the inline single-frame
+   * behaviour to make the menu entry shippable on its own.
+   */
+  async captureScreenDialogAndSave(): Promise<void> {
+    const result = await showCaptureScreenDialog();
+    if (!result) return;
+    saveModePreference(result.mode);
+    saveCursorPreference(result.cursor);
+    if (result.mode === "once") {
+      const dataUrl = await captureScreen(result.cursor);
+      if (!dataUrl) return;
+      await this.saveDataUrlAndOpen(dataUrl);
+    }
+    // `auto` and `area` chips are disabled in Phase 1; the dialog
+    // refuses to confirm them. If a future phase wires them in
+    // before this method is updated, treat as no-op rather than
+    // silently falling through.
   }
 
   async timedCaptureAndSave(): Promise<void> {

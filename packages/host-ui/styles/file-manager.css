@@ -813,6 +813,90 @@ html.light .view-toggle-btn.active {
   opacity: 0.85;
 }
 
+.capture-dialog-btn[disabled],
+.capture-dialog-btn-primary[disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.capture-dialog-btn[disabled]:hover,
+.capture-dialog-btn-primary[disabled]:hover {
+  background: transparent;
+  opacity: 0.45;
+}
+
+.capture-dialog-btn-primary[disabled]:hover {
+  background: var(--annot-accent);
+}
+
+/* ---- Capture Screen dialog (Phase 1 of web-capture-redesign) ---- */
+
+.capture-screen-dialog {
+  min-width: 380px;
+  max-width: 480px;
+}
+
+.capture-screen-mode-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 4px 0 8px;
+}
+
+.capture-screen-mode-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--annot-border-color);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--annot-text-primary);
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.capture-screen-mode-chip:hover:not(:disabled) {
+  background: var(--annot-hover-bg);
+  border-color: var(--annot-hover-border);
+}
+
+.capture-screen-mode-chip-active {
+  border-color: var(--annot-accent);
+  box-shadow: inset 0 0 0 1px var(--annot-accent);
+}
+
+.capture-screen-mode-chip-disabled,
+.capture-screen-mode-chip:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.capture-screen-mode-label {
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.capture-screen-mode-coming-soon {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--annot-text-secondary);
+  border: 1px solid var(--annot-border-color);
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+
+.capture-screen-mode-desc {
+  font-size: 12px;
+  color: var(--annot-text-secondary);
+  line-height: 1.4;
+}
+
 /* ---- Timed capture progress toast ---- */
 
 .capture-progress-toast {

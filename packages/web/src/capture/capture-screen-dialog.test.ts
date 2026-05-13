@@ -1,0 +1,94 @@
+// @vitest-environment happy-dom
+
+/**
+ * `showCaptureScreenDialog()` happy-dom tests — opens the dialog,
+ * simulates the relevant clicks, and asserts the Promise resolves
+ * to the expected result.
+ */
+
+import { afterEach, describe, expect, it } from "vitest";
+import { showCaptureScreenDialog } from "./capture-screen-dialog.js";
+
+afterEach(() => {
+  // Drop any leftover dialog elements between tests so a failing
+  // run doesn't leak state into the next.
+  document.body.querySelectorAll("annot-capture-screen-dialog").forEach((el) => el.remove());
+  localStorage.clear();
+});
+
+function findDialog(): HTMLElement {
+  const el = document.querySelector("annot-capture-screen-dialog");
+  if (!el) throw new Error("dialog not mounted");
+  return el as HTMLElement;
+}
+
+function clickStart(): void {
+  const btn = findDialog().querySelector<HTMLButtonElement>(".capture-dialog-btn-primary");
+  if (!btn) throw new Error("Start button not found");
+  btn.click();
+}
+
+function clickCancel(): void {
+  const buttons = findDialog().querySelectorAll<HTMLButtonElement>(".capture-dialog-btn");
+  // The first non-primary button is Cancel (the primary one carries
+  // the `-primary` modifier and we walk past it explicitly).
+  for (const btn of buttons) {
+    if (!btn.classList.contains("capture-dialog-btn-primary")) {
+      btn.click();
+      return;
+    }
+  }
+  throw new Error("Cancel button not found");
+}
+
+describe("showCaptureScreenDialog", () => {
+  it("resolves with mode 'once' and the chosen cursor on confirm", async () => {
+    const promise = showCaptureScreenDialog({ mode: "once", cursor: "motion" });
+    // Wait one microtask for the element to mount + render.
+    await Promise.resolve();
+    clickStart();
+    expect(await promise).toEqual({ mode: "once", cursor: "motion" });
+  });
+
+  it("resolves to null when the user clicks Cancel", async () => {
+    const promise = showCaptureScreenDialog({ mode: "once" });
+    await Promise.resolve();
+    clickCancel();
+    expect(await promise).toBeNull();
+  });
+
+  it("removes the dialog element from the DOM after confirm", async () => {
+    const promise = showCaptureScreenDialog({ mode: "once" });
+    await Promise.resolve();
+    clickStart();
+    await promise;
+    expect(document.querySelector("annot-capture-screen-dialog")).toBeNull();
+  });
+
+  it("removes the dialog element from the DOM after cancel", async () => {
+    const promise = showCaptureScreenDialog({ mode: "once" });
+    await Promise.resolve();
+    clickCancel();
+    await promise;
+    expect(document.querySelector("annot-capture-screen-dialog")).toBeNull();
+  });
+
+  it("Start button is disabled when the selected mode is not enabled", async () => {
+    const promise = showCaptureScreenDialog({ mode: "auto" });
+    await Promise.resolve();
+    const btn = findDialog().querySelector<HTMLButtonElement>(".capture-dialog-btn-primary");
+    expect(btn?.disabled).toBe(true);
+    // Clean up — cancel so the promise resolves.
+    clickCancel();
+    await promise;
+  });
+
+  it("falls back to localStorage defaults when no initial provided", async () => {
+    localStorage.setItem("annot-capture-mode", "once");
+    localStorage.setItem("annot-capture-cursor", "never");
+    const promise = showCaptureScreenDialog();
+    await Promise.resolve();
+    clickStart();
+    expect(await promise).toEqual({ mode: "once", cursor: "never" });
+  });
+});

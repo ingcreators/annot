@@ -40,6 +40,11 @@ export interface FileManagerCallbacks {
   onUploadImage: () => void;
   onCaptureScreen: () => Promise<void>;
   onTimedCapture: () => Promise<void>;
+  /** Phase 1 of `docs/plans/web-capture-redesign.md`. Opens the new
+   *  `Capture Screen...` mode-picker dialog. Optional — non-PWA
+   *  hosts (VSCode / desktop) keep the legacy `onCaptureScreen` /
+   *  `onTimedCapture` and skip this until they wire the new flow. */
+  onCaptureScreenDialog?: () => Promise<void>;
   onPasteClipboard: () => Promise<void>;
   /** Create a new `.annot.html` document. Phase 6c of
    *  `docs/plans/_done/annot-html-document.md`. Optional — when omitted,
@@ -127,6 +132,9 @@ export class FileManager {
       onUploadImage: () => this.#callbacks.onUploadImage(),
       onCaptureScreen: () => this.#callbacks.onCaptureScreen(),
       onTimedCapture: () => this.#callbacks.onTimedCapture(),
+      onCaptureScreenDialog: this.#callbacks.onCaptureScreenDialog
+        ? () => this.#callbacks.onCaptureScreenDialog?.()
+        : undefined,
       onPasteClipboard: () => this.#callbacks.onPasteClipboard(),
       onNewDocument: this.#callbacks.onNewDocument
         ? () => this.#callbacks.onNewDocument?.()

@@ -80,6 +80,12 @@ export interface SidebarCallbacks {
   onUploadImage: () => void;
   onCaptureScreen: () => void;
   onTimedCapture: () => void;
+  /** Phase 1 of `docs/plans/web-capture-redesign.md`. Opens the new
+   *  `Capture Screen...` mode-picker dialog. Old `Capture Screen`
+   *  and `Timed Capture...` entries remain in parallel during the
+   *  rollout; spec Phase 5 retires them. Optional so non-PWA hosts
+   *  (VSCode / desktop) don't have to wire it. */
+  onCaptureScreenDialog?: () => void;
   onPasteClipboard: () => void;
   /** Create a new `.annot.html` document. Phase 6c of
    *  `docs/plans/_done/annot-html-document.md`. The host is responsible
@@ -567,6 +573,18 @@ export class AnnotSidebarElement extends LitElement {
         label: "Timed Capture...",
         action: () => this.callbacks.onTimedCapture(),
         show: isScreenCaptureSupported(),
+      },
+      // Phase 1 of `docs/plans/web-capture-redesign.md` — additive
+      // entry that opens the new mode-picker dialog. Surfaced only
+      // when the host wires `onCaptureScreenDialog`; spec Phase 5
+      // retires the two entries above and leaves this one as the
+      // single capture surface.
+      {
+        icon: "screenshot_monitor",
+        label: "Capture Screen...",
+        action: () => this.callbacks.onCaptureScreenDialog?.(),
+        show:
+          isScreenCaptureSupported() && typeof this.callbacks.onCaptureScreenDialog === "function",
       },
       {
         icon: "content_paste",
