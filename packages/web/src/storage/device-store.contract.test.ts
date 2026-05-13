@@ -1,5 +1,7 @@
 // @vitest-environment happy-dom
-import { vi } from "vitest";
+import { IndexedDBMetadataCache } from "@ingcreators/annot-host-ui/idb-metadata-cache";
+import { IDBFactory } from "fake-indexeddb";
+import { beforeEach, vi } from "vitest";
 import { runStorageContract } from "./contract.test-helpers.js";
 import { createMockRoot } from "./device-fs.test-mock.js";
 import { DeviceStore } from "./device-store.js";
@@ -12,9 +14,10 @@ import { DeviceStore } from "./device-store.js";
  * operates against. There's no standard polyfill for the API, but
  * the store only touches a dozen methods; `device-fs.test-mock.ts`
  * implements that subset in-memory. The factory below hands the
- * store a fresh `MockDirectoryHandle` as its root for every test,
- * and happy-dom supplies the ambient `Blob` / `File` / `FileReader`
- * / `fetch` primitives the XMP pipeline needs.
+ * store a fresh `MockDirectoryHandle` as its root for every test
+ * along with a fresh `IndexedDBMetadataCache` backed by
+ * `fake-indexeddb`; happy-dom supplies the ambient `Blob` / `File`
+ * / `FileReader` / `fetch` primitives the XMP pipeline needs.
  *
  * The worker stub mirrors the Drive / GitHub contract tests —
  * short-SVG payloads from `makeImagePayload` never actually hit the
@@ -26,7 +29,20 @@ vi.mock("../workers/encode-client.js", () => ({
   encodeCaptureInWorker: async (dataUrl: string) => ({ dataUrl }),
 }));
 
-runStorageContract(
-  "DeviceStore",
-  () => new DeviceStore(createMockRoot() as unknown as FileSystemDirectoryHandle),
-);
+beforeEach(() => {
+  globalThis.indexedDB = new IDBFactory();
+});
+
+runStorageContract("DeviceStore", () => {
+  const store = new DeviceStore(createMockRoot() as unknown as FileSystemDirectoryHandle);
+  store.attachMetadataCache(
+    new IndexedDBMetadataCache({
+      // Per-test channel name guards parallel test isolation when
+      // multiple suites construct caches against the same IDB
+      // factory between tests.
+      channelName: `device-store-contract-${Math.random().toString(36).slice(2)}`,
+      dispatchWindowEvents: false,
+    }),
+  );
+  return store;
+});

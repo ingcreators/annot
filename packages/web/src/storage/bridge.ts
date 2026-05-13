@@ -7,7 +7,8 @@
  * Falls back to `BrowserStore` (IndexedDB in this origin) if the
  * extension is not installed.
  */
-import type { StorageProvider } from "@ingcreators/annot-core/storage";
+import type { MetadataCache, StorageProvider } from "@ingcreators/annot-core/storage";
+import { IndexedDBMetadataCache } from "@ingcreators/annot-host-ui/idb-metadata-cache";
 import { logger } from "../logger.js";
 import { hideError, showAuthError, showError } from "../ui/error-bar.js";
 import { DeviceStore } from "./device-store.js";
@@ -280,6 +281,21 @@ export function setStorageMode(mode: StorageMode): void {
   registry.currentMode = mode;
 }
 
+/**
+ * Lazy singleton — one `MetadataCache` per browser tab, shared by
+ * every store that opts in via `StorageWithMetadataCache`. The
+ * cache itself coordinates across tabs via `BroadcastChannel`
+ * internally; this singleton is just the per-tab handle. Phase 3
+ * of `docs/plans/shared-metadata-cache.md`.
+ */
+let sharedMetadataCache: MetadataCache | null = null;
+function getMetadataCache(): MetadataCache {
+  if (!sharedMetadataCache) {
+    sharedMetadataCache = new IndexedDBMetadataCache();
+  }
+  return sharedMetadataCache;
+}
+
 /** Open a local directory and switch to filesystem storage. */
 export async function openDeviceDirectory(): Promise<StorageProvider | null> {
   if (!window.showDirectoryPicker) return null;
@@ -287,6 +303,7 @@ export async function openDeviceDirectory(): Promise<StorageProvider | null> {
     const dirHandle = await window.showDirectoryPicker({ mode: "readwrite" });
     await saveHandle(dirHandle);
     const store = new DeviceStore(dirHandle);
+    store.attachMetadataCache(getMetadataCache());
     await store.init();
     registry.deviceStore = store;
     registry.currentMode = "device";
@@ -309,6 +326,7 @@ export async function restoreDevice(): Promise<StorageProvider | null> {
     }
 
     const store = new DeviceStore(handle);
+    store.attachMetadataCache(getMetadataCache());
     await store.init();
     registry.deviceStore = store;
     registry.currentMode = "device";
