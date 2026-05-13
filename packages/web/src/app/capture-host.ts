@@ -18,6 +18,7 @@ import { readEditableImage } from "@ingcreators/annot-core/xmp";
 import type { FileManager } from "@ingcreators/annot-host-ui/gallery/file-manager";
 import { generateThumbnailFromDataUrl } from "@ingcreators/annot-host-ui/image-thumbnail";
 import type { ThumbnailManager } from "@ingcreators/annot-host-ui/thumbnail-manager";
+import { setCapturePendingSession } from "../capture/capture-pending-session.js";
 import { saveCursorPreference, saveModePreference } from "../capture/capture-prefs.js";
 import { showCaptureScreenDialog } from "../capture/capture-screen-dialog.js";
 import {
@@ -26,6 +27,7 @@ import {
   showIntervalCaptureProgress,
 } from "../capture/interval-dialog.js";
 import { captureScreen, pasteFromClipboard, startIntervalCapture } from "../capture/pwa-capture.js";
+import { captureUrl, pushRoute } from "../router.js";
 import { showSaveError } from "../ui/error-bar.js";
 import { fileToDataUrl, loadImage } from "./image-utils.js";
 
@@ -53,6 +55,11 @@ export interface CaptureHostDeps {
    *  view for the new image. The callback owns `setCurrentImagePath`,
    *  `setupEditor`, and the URL push. */
   openEditor(args: OpenEditorArgs): void;
+  /** Phase 2 of `docs/plans/web-capture-redesign.md`. Invoked after
+   *  the dialog confirm + `pushRoute("/capture")` to mount the
+   *  workspace. The host owns the actual element creation +
+   *  surface teardown — the capture host just signals "now". */
+  openCaptureWorkspace(): void;
 }
 
 export class CaptureHost {
@@ -66,28 +73,34 @@ export class CaptureHost {
   }
 
   /**
-   * Phase 1 of `docs/plans/web-capture-redesign.md` — opens the new
-   * `Capture Screen...` mode-picker dialog. For Phase 1 only Capture
-   * Once is enabled; the chosen mode is persisted so Phase 4's
-   * default-to-Auto switch picks up the user's last preference.
-   * Subsequent phases route the dialog's confirm into the new
-   * `/capture` workspace; for now we keep the inline single-frame
-   * behaviour to make the menu entry shippable on its own.
+   * Phase 2 of `docs/plans/web-capture-redesign.md` — opens the new
+   * `Capture Screen...` mode-picker dialog and routes the user
+   * into `/capture` so the workspace handles the live preview +
+   * Capture Once / (future) Auto Capture loop.
+   *
+   * The dialog's Start button click IS the user gesture
+   * `getDisplayMedia` needs — the workspace mounts immediately and
+   * the API is callable before the gesture window expires.
+   *
+   * Phase 1 captured inline before the workspace existed; Phase 2
+   * removes that path so the workspace is the single source of
+   * truth for live capture. Capture Once still saves directly via
+   * the workspace's `capture-once` event handler in `app.ts`.
    */
   async captureScreenDialogAndSave(): Promise<void> {
     const result = await showCaptureScreenDialog();
     if (!result) return;
     saveModePreference(result.mode);
     saveCursorPreference(result.cursor);
-    if (result.mode === "once") {
-      const dataUrl = await captureScreen(result.cursor);
-      if (!dataUrl) return;
-      await this.saveDataUrlAndOpen(dataUrl);
-    }
-    // `auto` and `area` chips are disabled in Phase 1; the dialog
-    // refuses to confirm them. If a future phase wires them in
-    // before this method is updated, treat as no-op rather than
-    // silently falling through.
+    setCapturePendingSession({
+      mode: result.mode,
+      cursor: result.cursor,
+      folderPath: this.deps.getCurrentFolderPath(),
+    });
+    pushRoute(captureUrl());
+    // Surface the workspace via the routing pathway so plugin
+    // route-change listeners + browser history all participate.
+    this.deps.openCaptureWorkspace();
   }
 
   async timedCaptureAndSave(): Promise<void> {
