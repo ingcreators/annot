@@ -17,14 +17,23 @@
  * (Pako DEFLATE level 9) — no re-quantization, no RGBA round-trip.
  */
 import init, { quantize_image } from "@ingcreators/annot-imagequant";
-import { DEFAULT_ENCODE_OPTIONS, type EncodeOptions, type EncodeResult } from "./options.js";
+import {
+  computeResizeTarget,
+  DEFAULT_ENCODE_OPTIONS,
+  type EncodeOptions,
+  type EncodeResult,
+} from "./options.js";
 import { encodePng8 } from "./png8.js";
 
 export {
+  computeResizeTarget,
   DEFAULT_ENCODE_OPTIONS,
   type EncodeFormat,
   type EncodeOptions,
   type EncodeResult,
+  SAVE_SIZE_LABEL,
+  SAVE_SIZE_MAX_WIDTH,
+  type SaveSizePreset,
 } from "./options.js";
 
 /**
@@ -41,30 +50,67 @@ export async function encodeCapture(
   options: EncodeOptions = DEFAULT_ENCODE_OPTIONS,
 ): Promise<EncodeResult> {
   const { format, jpegPercent, smartFallback, smartColorThreshold } = options;
+  // `saveSizePreset` is optional on the interface (backward-compat
+  // for callers that don't surface the knob yet, e.g. the Browser
+  // Extension); `undefined` means "no resize". Web app's
+  // `loadEncodeOptions()` always populates it from
+  // `DEFAULT_ENCODE_OPTIONS.saveSizePreset` ("standard").
+  const saveSizePreset = options.saveSizePreset ?? "original";
 
-  if (format === "png") {
+  // Fast path: lossless PNG passthrough only when we don't need a
+  // resize. With `saveSizePreset` set, we always have to decode +
+  // redraw onto the smaller canvas to actually shrink the bytes.
+  if (format === "png" && saveSizePreset === "original") {
     return { dataUrl: pngDataUrl, chosen: "png" };
   }
 
   const bmp = await dataUrlToBitmap(pngDataUrl);
-  const canvas = new OffscreenCanvas(bmp.width, bmp.height);
-  const ctx = canvas.getContext("2d")!;
-  ctx.drawImage(bmp, 0, 0);
+  const target = computeResizeTarget(bmp.width, bmp.height, saveSizePreset);
+  const w = target.width;
+  const h = target.height;
 
-  const w = bmp.width;
-  const h = bmp.height;
+  // Same fast path again, post-decode: PNG with no actual scale needed
+  // (source narrower than the preset cap) — we can hand back the
+  // original bytes instead of re-encoding via canvas.
+  if (format === "png" && !target.scaled) {
+    bmp.close();
+    return { dataUrl: pngDataUrl, chosen: "png", width: w, height: h };
+  }
+
+  const canvas = new OffscreenCanvas(w, h);
+  const ctx = canvas.getContext("2d")!;
+  // High-quality down-scale — `image-rendering: smooth` equivalent.
+  // Default `imageSmoothingEnabled` is true; we explicitly bump
+  // quality to "high" so the bicubic-ish path is preferred over the
+  // browser's bilinear default.
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(bmp, 0, 0, w, h);
 
   if (format === "jpeg") {
     const dataUrl = await canvasToDataUrl(canvas, "image/jpeg", jpegPercent / 100);
     bmp.close();
-    return { dataUrl, chosen: "jpeg" };
+    return { dataUrl, chosen: "jpeg", width: w, height: h };
+  }
+
+  if (format === "png") {
+    // PNG explicit + we hit the resize path → re-encode at the new
+    // dimensions as PNG-24 (no smart logic by definition).
+    const dataUrl = await canvasToDataUrl(canvas, "image/png", 1);
+    bmp.close();
+    return { dataUrl, chosen: "png", width: w, height: h };
   }
 
   // format === "smart"
   const pixelCount = w * h;
   if (pixelCount > MAX_SMART_PIXELS) {
+    // Resize-then-fall-through: if the resize knocked us under the
+    // cap, we'd already have a smaller canvas; if not, encode the
+    // resized canvas as PNG-24 instead of returning the unscaled
+    // input.
+    const dataUrl = target.scaled ? await canvasToDataUrl(canvas, "image/png", 1) : pngDataUrl;
     bmp.close();
-    return { dataUrl: pngDataUrl, chosen: "png", reason: "too-large-for-png8" };
+    return { dataUrl, chosen: "png", reason: "too-large-for-png8", width: w, height: h };
   }
 
   const imageData = ctx.getImageData(0, 0, w, h);
@@ -73,10 +119,13 @@ export async function encodeCapture(
     if (smartFallback === "jpeg") {
       const dataUrl = await canvasToDataUrl(canvas, "image/jpeg", jpegPercent / 100);
       bmp.close();
-      return { dataUrl, chosen: "jpeg", reason: "photo-fallback-jpeg" };
+      return { dataUrl, chosen: "jpeg", reason: "photo-fallback-jpeg", width: w, height: h };
     }
+    // PNG fallback: hand back the resized canvas as PNG-24, OR the
+    // original bytes when no resize happened.
+    const dataUrl = target.scaled ? await canvasToDataUrl(canvas, "image/png", 1) : pngDataUrl;
     bmp.close();
-    return { dataUrl: pngDataUrl, chosen: "png", reason: "photo-fallback-png" };
+    return { dataUrl, chosen: "png", reason: "photo-fallback-png", width: w, height: h };
   }
 
   // UI-heavy → quantize with libimagequant (WASM) → emit PNG-8.
@@ -84,11 +133,12 @@ export async function encodeCapture(
     const png8Bytes = await quantizeToPng8(imageData);
     bmp.close();
     const dataUrl = await blobToDataUrl(new Blob([png8Bytes as BlobPart], { type: "image/png" }));
-    return { dataUrl, chosen: "png", reason: "png-8" };
+    return { dataUrl, chosen: "png", reason: "png-8", width: w, height: h };
   } catch (e) {
     console.warn("[encode] PNG-8 quantization failed, falling back to PNG-24:", e);
+    const dataUrl = target.scaled ? await canvasToDataUrl(canvas, "image/png", 1) : pngDataUrl;
     bmp.close();
-    return { dataUrl: pngDataUrl, chosen: "png", reason: "quantize-failed" };
+    return { dataUrl, chosen: "png", reason: "quantize-failed", width: w, height: h };
   }
 }
 

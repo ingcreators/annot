@@ -17,9 +17,20 @@
  *   - storage providers (device-store / google-drive-store) when re-encoding
  *     the flattened "render with annotations baked in" output.
  */
-import { DEFAULT_ENCODE_OPTIONS, type EncodeOptions } from "@ingcreators/annot-core/encode/options";
+import {
+  DEFAULT_ENCODE_OPTIONS,
+  type EncodeOptions,
+  type SaveSizePreset,
+} from "@ingcreators/annot-core/encode/options";
 
 const STORAGE_KEY = "annot-encode-options";
+
+const VALID_SAVE_SIZE_PRESETS: ReadonlySet<SaveSizePreset> = new Set([
+  "light",
+  "standard",
+  "highQuality",
+  "original",
+]);
 
 export function loadEncodeOptions(): EncodeOptions {
   try {
@@ -40,6 +51,11 @@ export function loadEncodeOptions(): EncodeOptions {
         typeof parsed.jpegPercent === "number"
           ? parsed.jpegPercent
           : DEFAULT_ENCODE_OPTIONS.jpegPercent,
+      saveSizePreset:
+        typeof parsed.saveSizePreset === "string" &&
+        VALID_SAVE_SIZE_PRESETS.has(parsed.saveSizePreset as SaveSizePreset)
+          ? (parsed.saveSizePreset as SaveSizePreset)
+          : DEFAULT_ENCODE_OPTIONS.saveSizePreset,
     };
   } catch {
     return DEFAULT_ENCODE_OPTIONS;

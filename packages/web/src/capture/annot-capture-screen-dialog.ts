@@ -15,6 +15,7 @@
  * `capture-cancel`.
  */
 
+import { SAVE_SIZE_LABEL, type SaveSizePreset } from "@ingcreators/annot-core/encode/options";
 import { html, LitElement } from "../lit.js";
 import type { CursorMode } from "./capture-prefs.js";
 import type { CaptureMode } from "./types.js";
@@ -23,7 +24,18 @@ import type { CaptureMode } from "./types.js";
 export interface CaptureScreenDialogConfirmDetail {
   mode: CaptureMode;
   cursor: CursorMode;
+  /** Save-size preset the user picked. The host should persist it
+   *  via `saveEncodeOptions` so future captures + the (future)
+   *  Browser Extension settings UI see the same value. */
+  saveSizePreset: SaveSizePreset;
 }
+
+const SAVE_SIZE_OPTIONS: readonly SaveSizePreset[] = [
+  "light",
+  "standard",
+  "highQuality",
+  "original",
+];
 
 interface ModeChip {
   mode: CaptureMode;
@@ -49,10 +61,12 @@ export class AnnotCaptureScreenDialogElement extends LitElement {
   static override properties = {
     mode: { type: String },
     cursor: { type: String },
+    saveSizePreset: { type: String },
   };
 
   declare mode: CaptureMode;
   declare cursor: CursorMode;
+  declare saveSizePreset: SaveSizePreset;
 
   #onKey = (e: KeyboardEvent): void => {
     if (e.key === "Escape") {
@@ -77,6 +91,10 @@ export class AnnotCaptureScreenDialogElement extends LitElement {
     // nothing is stored, which matches.
     this.mode = "auto";
     this.cursor = "always";
+    // Default mirrors `DEFAULT_ENCODE_OPTIONS.saveSizePreset`.
+    // The Promise wrapper (`capture-screen-dialog.ts`) overrides
+    // it with the user's persisted preference at mount time.
+    this.saveSizePreset = "standard";
   }
 
   protected override createRenderRoot(): HTMLElement {
@@ -129,6 +147,26 @@ export class AnnotCaptureScreenDialogElement extends LitElement {
           </div>
 
           <label class="capture-dialog-row">
+            <span class="capture-dialog-label">Save size</span>
+            <select
+              class="capture-dialog-select"
+              .value=${this.saveSizePreset}
+              @change=${(e: Event) => {
+                this.saveSizePreset = (e.currentTarget as HTMLSelectElement)
+                  .value as SaveSizePreset;
+              }}
+            >
+              ${SAVE_SIZE_OPTIONS.map(
+                (preset) => html`
+                  <option value=${preset} ?selected=${this.saveSizePreset === preset}>
+                    ${SAVE_SIZE_LABEL[preset]}
+                  </option>
+                `,
+              )}
+            </select>
+          </label>
+
+          <label class="capture-dialog-row">
             <span class="capture-dialog-label">Mouse cursor</span>
             <select
               class="capture-dialog-select"
@@ -169,7 +207,11 @@ export class AnnotCaptureScreenDialogElement extends LitElement {
   #confirm = (): void => {
     this.dispatchEvent(
       new CustomEvent<CaptureScreenDialogConfirmDetail>("capture-confirm", {
-        detail: { mode: this.mode, cursor: this.cursor },
+        detail: {
+          mode: this.mode,
+          cursor: this.cursor,
+          saveSizePreset: this.saveSizePreset,
+        },
         bubbles: true,
       }),
     );

@@ -518,8 +518,22 @@ schema are all unchanged. No `data-annot-version` bump.
   adjustments during rollout" above. The spec's §12 (selection
   overlay, coordinate mapping, `Use Previous Area`, letterboxing
   offset) is not coming to the workspace.
-- **Save size presets** (spec §6.5, §13.2). `Light 1280px` /
-  `Standard 1920px` / `High Quality 2560px` / `Original`.
+- **~~Save size presets~~** — LANDED in a follow-up. Added
+  `SaveSizePreset` (`"light" | "standard" | "highQuality" |
+  "original"`) + `SAVE_SIZE_MAX_WIDTH` map + `SAVE_SIZE_LABEL`
+  + `computeResizeTarget()` helper to
+  [`@ingcreators/annot-core/encode/options`](../../packages/core/src/encode/options.ts);
+  optional `saveSizePreset` on `EncodeOptions` (`undefined` →
+  no resize for back-compat with the Browser Extension's
+  current `Settings.quality`-derived options). `encodeCapture`
+  draws onto a smaller `OffscreenCanvas` when the preset
+  triggers a down-scale (`high` `imageSmoothingQuality`).
+  Web app: dialog gets a Save size selector reading from /
+  writing back to the shared encode-options localStorage blob;
+  default `"standard"` (1920px) per spec. Extension can adopt
+  by adding a matching field to its `Settings.quality` and
+  passing it through `packages/capture/src/shared/encode.ts`
+  — no core or web changes needed.
 - **~~Smart PNG-8 encode pipeline adoption~~** — LANDED in a
   follow-up. `CaptureSession.captureFrame()` now produces PNG-24
   (was JPEG @ 0.92), and `CaptureHost.saveDataUrlSilently()` runs

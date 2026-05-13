@@ -47,7 +47,11 @@ describe("showCaptureScreenDialog", () => {
     // Wait one microtask for the element to mount + render.
     await Promise.resolve();
     clickStart();
-    expect(await promise).toEqual({ mode: "once", cursor: "motion" });
+    expect(await promise).toEqual({
+      mode: "once",
+      cursor: "motion",
+      saveSizePreset: "standard",
+    });
   });
 
   it("resolves to null when the user clicks Cancel", async () => {
@@ -88,6 +92,27 @@ describe("showCaptureScreenDialog", () => {
     const promise = showCaptureScreenDialog();
     await Promise.resolve();
     clickStart();
-    expect(await promise).toEqual({ mode: "once", cursor: "never" });
+    expect(await promise).toEqual({
+      mode: "once",
+      cursor: "never",
+      saveSizePreset: "standard",
+    });
+  });
+
+  it("persists the chosen saveSizePreset back to localStorage on confirm", async () => {
+    const promise = showCaptureScreenDialog({ mode: "once", cursor: "always" });
+    await Promise.resolve();
+    // Switch the size preset via the select.
+    const select = findDialog().querySelectorAll<HTMLSelectElement>(".capture-dialog-select")[0];
+    if (!select) throw new Error("save-size select not found");
+    select.value = "light";
+    select.dispatchEvent(new Event("change"));
+    clickStart();
+    const result = await promise;
+    expect(result?.saveSizePreset).toBe("light");
+    // Verify it landed in the shared encode-options blob so future
+    // captures use it too.
+    const stored = JSON.parse(localStorage.getItem("annot-encode-options") || "{}");
+    expect(stored.saveSizePreset).toBe("light");
   });
 });
