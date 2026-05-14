@@ -26,6 +26,9 @@ interface Args {
   sidebarTabs: SidebarTab[];
   disabledBuiltins: StorageMode[];
   newMenuExtras: NewMenuItem[];
+  /** Enables the `New Document` + `From Template…` entries in the
+   *  New menu. Mirrors the `StorageWithDocuments` opt-in gate. */
+  documentsEnabled: boolean;
 }
 
 function mountSidebar(args: Args): HTMLElement {
@@ -53,6 +56,10 @@ function mountSidebar(args: Args): HTMLElement {
     onCaptureScreen: () => console.log("[story] onCaptureScreen (legacy)"),
     onCaptureScreenDialog: () => console.log("[story] onCaptureScreenDialog"),
     onPasteClipboard: () => console.log("[story] onPasteClipboard"),
+    onNewDocument: args.documentsEnabled ? () => console.log("[story] onNewDocument") : undefined,
+    onNewFromTemplate: args.documentsEnabled
+      ? () => console.log("[story] onNewFromTemplate")
+      : undefined,
     getPluginStorages: () => args.pluginStorages,
     getSidebarTabs: () => args.sidebarTabs,
     isBuiltinDisabled: (mode) => args.disabledBuiltins.includes(mode as StorageMode),
@@ -83,6 +90,7 @@ const meta: Meta<Args> = {
     sidebarTabs: { control: false },
     disabledBuiltins: { control: false },
     newMenuExtras: { control: false },
+    documentsEnabled: { control: "boolean" },
   },
   args: {
     activeMode: "browser",
@@ -93,6 +101,7 @@ const meta: Meta<Args> = {
     sidebarTabs: [],
     disabledBuiltins: [],
     newMenuExtras: [],
+    documentsEnabled: false,
   },
 };
 export default meta;
@@ -176,10 +185,11 @@ export const GithubDisabled: Story = {
 
 export const WithNewMenuExtras: Story = {
   name: "New menu — host extras",
-  // Mirrors the desktop's wiring: Window / Region capture and an
-  // "Open Browse Window" entry that the desktop host appends after
-  // the built-in items. Click `+ New` in the rendered sidebar to
-  // see the merged menu; arg-flow goes through the console.
+  // Mirrors the desktop's wiring: Window / Region capture (Image
+  // section) and an "Open Browse Window" entry (More section) that
+  // the desktop host appends after the built-in items. Click
+  // `+ New` in the rendered sidebar to see the merged menu;
+  // arg-flow goes through the console.
   args: {
     activeMode: "browser",
     newMenuExtras: [
@@ -187,16 +197,53 @@ export const WithNewMenuExtras: Story = {
         icon: "desktop_windows",
         label: "Capture Window",
         action: () => console.log("[story] Capture Window"),
+        section: "image",
       },
       {
         icon: "crop",
         label: "Capture Region",
         action: () => console.log("[story] Capture Region"),
+        section: "image",
       },
       {
         icon: "open_in_new",
         label: "Open Browse Window",
         action: () => console.log("[story] Open Browse Window"),
+        section: "more",
+      },
+    ],
+  },
+};
+
+export const NewMenuFullySectioned: Story = {
+  name: "New menu — all four sections",
+  // Shows the menu with every section populated: FOLDER (built-in
+  // New Folder), IMAGE (built-ins + desktop's capture extras),
+  // DOCUMENT (toggled on via `documentsEnabled`), MORE (desktop's
+  // Open Browse Window extra). Use this story to spot-check the
+  // section header treatment + the divider between adjacent
+  // populated sections.
+  args: {
+    activeMode: "browser",
+    documentsEnabled: true,
+    newMenuExtras: [
+      {
+        icon: "desktop_windows",
+        label: "Capture Window",
+        action: () => console.log("[story] Capture Window"),
+        section: "image",
+      },
+      {
+        icon: "crop",
+        label: "Capture Region",
+        action: () => console.log("[story] Capture Region"),
+        section: "image",
+      },
+      {
+        icon: "open_in_new",
+        label: "Open Browse Window",
+        action: () => console.log("[story] Open Browse Window"),
+        section: "more",
       },
     ],
   },

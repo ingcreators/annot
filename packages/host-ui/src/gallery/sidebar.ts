@@ -39,6 +39,19 @@ export const DEFAULT_SIDEBAR_SECTION_ORDER = {
 export type SidebarSectionOrder = Partial<typeof DEFAULT_SIDEBAR_SECTION_ORDER>;
 
 /**
+ * Section the entry belongs to. The dropdown renders sections in
+ * the order `folder` → `image` → `document` → `more`, with a
+ * compact uppercase header per section and a hairline divider
+ * between adjacent populated sections.
+ *
+ * Built-ins declare their section explicitly. Host- / plugin-
+ * supplied extras default to `"more"` when omitted, preserving the
+ * legacy "append at the bottom" semantics for callers that haven't
+ * been updated.
+ */
+export type NewMenuSection = "folder" | "image" | "document" | "more";
+
+/**
  * Host- or plugin-supplied entry appended to the New menu after
  * the built-in items (New Folder, Upload Image, Capture Screen,
  * Timed Capture, Paste from Clipboard).
@@ -65,6 +78,9 @@ export interface NewMenuItem {
   label: string;
   /** Click handler. The sidebar closes the menu before invoking. */
   action: () => void;
+  /** Section to place the entry in. Defaults to `"more"` so legacy
+   *  callers without a section land at the bottom of the menu. */
+  section?: NewMenuSection;
   /** Hide the entry by returning false. Mirrors the built-in
    *  items' `show` gate (e.g. `Capture Screen` is hidden when
    *  `getDisplayMedia` is unsupported). Default: shown. */
@@ -566,15 +582,22 @@ export class AnnotSidebarElement extends LitElement {
         icon: "create_new_folder",
         label: "New Folder",
         action: () => this.callbacks.onNewFolder(),
+        section: "folder",
       },
-      { icon: "upload", label: "Upload Image", action: () => this.callbacks.onUploadImage() },
+      {
+        icon: "upload",
+        label: "Upload Image…",
+        action: () => this.callbacks.onUploadImage(),
+        section: "image",
+      },
       // Phase 1 of `docs/plans/web-capture-redesign.md` — opens the
       // mode-picker dialog. Surfaced only when the host wires
       // `onCaptureScreenDialog` (PWA post-Phase-1).
       {
         icon: "screenshot_monitor",
-        label: "Capture Screen...",
+        label: "Capture Screen…",
         action: () => this.callbacks.onCaptureScreenDialog?.(),
+        section: "image",
         show:
           isScreenCaptureSupported() && typeof this.callbacks.onCaptureScreenDialog === "function",
       },
@@ -582,23 +605,26 @@ export class AnnotSidebarElement extends LitElement {
       // `docs/plans/web-capture-redesign.md` made the callback
       // optional; only hosts that still wire it (desktop's native
       // `desktopCapturer` flow) get the menu item. The PWA dropped
-      // its wiring in favour of `Capture Screen...` above.
+      // its wiring in favour of `Capture Screen…` above.
       {
         icon: "screenshot_monitor",
         label: "Capture Screen",
         action: () => this.callbacks.onCaptureScreen?.(),
+        section: "image",
         show: isScreenCaptureSupported() && typeof this.callbacks.onCaptureScreen === "function",
       },
       {
         icon: "timer",
-        label: "Timed Capture...",
+        label: "Timed Capture…",
         action: () => this.callbacks.onTimedCapture?.(),
+        section: "image",
         show: isScreenCaptureSupported() && typeof this.callbacks.onTimedCapture === "function",
       },
       {
         icon: "content_paste",
         label: "Paste from Clipboard",
         action: () => this.callbacks.onPasteClipboard(),
+        section: "image",
         show: isClipboardReadSupported(),
       },
       // Phase 6c — only rendered when the host wires up
@@ -608,6 +634,7 @@ export class AnnotSidebarElement extends LitElement {
         icon: "article",
         label: "New Document",
         action: () => this.callbacks.onNewDocument?.(),
+        section: "document",
         show: typeof this.callbacks.onNewDocument === "function",
       },
       // Phase 8d — paired with "New Document": opens the
@@ -618,6 +645,7 @@ export class AnnotSidebarElement extends LitElement {
         icon: "library_books",
         label: "From Template…",
         action: () => this.callbacks.onNewFromTemplate?.(),
+        section: "document",
         show: typeof this.callbacks.onNewFromTemplate === "function",
       },
     ];
@@ -628,25 +656,55 @@ export class AnnotSidebarElement extends LitElement {
     // (e.g. hide Browse when the Browse window is already focused).
     const extras = this.callbacks.getNewMenuExtras?.() ?? [];
     const items = [...builtins, ...extras];
+    // Group surviving (non-hidden) items by section. Section order
+    // is fixed at `folder` → `image` → `document` → `more` — that
+    // matches the user's mental model (containers, then content
+    // inputs, then document creation, then platform extras). Empty
+    // sections render nothing (no header, no divider) so the menu
+    // stays compact in PWA/VSCode contexts where document-creation
+    // callbacks aren't wired.
+    const sectionOrder: NewMenuSection[] = ["folder", "image", "document", "more"];
+    const sectionLabels: Record<NewMenuSection, string> = {
+      folder: "Folder",
+      image: "Image",
+      document: "Document",
+      more: "More",
+    };
+    const grouped = new Map<NewMenuSection, NewMenuItem[]>();
+    for (const section of sectionOrder) {
+      grouped.set(section, []);
+    }
+    for (const item of items) {
+      if (item.show === false) continue;
+      const section = item.section ?? "more";
+      grouped.get(section)?.push(item);
+    }
     return html`
       <div class="new-menu">
-        ${items
-          .filter((item) => item.show !== false)
+        ${sectionOrder
+          .filter((section) => (grouped.get(section)?.length ?? 0) > 0)
           .map(
-            (item) => html`
-              <button
-                type="button"
-                class="new-menu-item"
-                @click=${() => {
-                  this.newMenuOpen = false;
-                  item.action();
-                }}
-              >
-                <annot-icon
-                  .spec=${typeof item.icon === "string" ? builtinIcon(item.icon) : item.icon}
-                ></annot-icon>
-                ${item.label}
-              </button>
+            (section) => html`
+              <div class="new-menu-section">
+                <div class="new-menu-section-header">${sectionLabels[section]}</div>
+                ${(grouped.get(section) ?? []).map(
+                  (item) => html`
+                    <button
+                      type="button"
+                      class="new-menu-item"
+                      @click=${() => {
+                        this.newMenuOpen = false;
+                        item.action();
+                      }}
+                    >
+                      <annot-icon
+                        .spec=${typeof item.icon === "string" ? builtinIcon(item.icon) : item.icon}
+                      ></annot-icon>
+                      ${item.label}
+                    </button>
+                  `,
+                )}
+              </div>
             `,
           )}
       </div>

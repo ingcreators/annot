@@ -162,6 +162,27 @@
   color: var(--annot-accent);
 }
 
+/* Section header inside the New menu. Mirrors the compact uppercase
+ * treatment used by the Capture dialog (`.capture-dialog-section-title`)
+ * so the grouping is visually consistent with the rest of the app. */
+.new-menu-section-header {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  color: var(--annot-text-muted);
+  padding: 10px 16px 4px;
+  user-select: none;
+}
+
+/* Divider between adjacent sections. The first section keeps its
+ * natural top padding; only sections that follow another section
+ * grow a hairline divider on top of their header. */
+.new-menu-section + .new-menu-section .new-menu-section-header {
+  border-top: 1px solid var(--annot-border-subtle);
+  margin-top: 4px;
+}
+
 /* Storage section */
 .sidebar-section-title {
   font-size: 11px;
