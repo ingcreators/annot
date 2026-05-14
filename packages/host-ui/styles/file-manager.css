@@ -929,6 +929,74 @@ html.light .view-toggle-btn.active {
   line-height: 1.4;
 }
 
+/* ---- Capture dialog Advanced section ---- */
+.capture-dialog-advanced {
+  border: 1px solid var(--annot-border-color);
+  border-radius: 6px;
+  padding: 0;
+  margin-top: 4px;
+}
+
+.capture-dialog-advanced-summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--annot-text-secondary);
+  padding: 8px 10px;
+  list-style: none;
+  user-select: none;
+}
+
+.capture-dialog-advanced-summary::marker,
+.capture-dialog-advanced-summary::-webkit-details-marker {
+  display: none;
+}
+
+.capture-dialog-advanced-summary::before {
+  content: "▸ ";
+  display: inline-block;
+  margin-right: 4px;
+  transition: transform 0.15s;
+}
+
+.capture-dialog-advanced[open] .capture-dialog-advanced-summary::before {
+  content: "▾ ";
+}
+
+.capture-dialog-advanced[open] .capture-dialog-advanced-summary {
+  border-bottom: 1px solid var(--annot-border-color);
+}
+
+.capture-dialog-advanced-group {
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.capture-dialog-advanced-group + .capture-dialog-advanced-group {
+  border-top: 1px solid var(--annot-border-color);
+}
+
+.capture-dialog-advanced-group-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--annot-text-secondary);
+  margin-bottom: 2px;
+}
+
+.capture-dialog-row-checkbox {
+  justify-content: flex-start;
+  gap: 8px;
+}
+
+.capture-dialog-row-checkbox input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+}
+
 /* ---- Capture workspace (Phase 2 of web-capture-redesign) ---- */
 
 .capture-workspace {

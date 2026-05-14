@@ -29,7 +29,9 @@
  * mirroring how doc-mode mounts `#annot-doc-host`.
  */
 
+import { resolveAutoCaptureOptions } from "@ingcreators/annot-core/auto-capture-options";
 import { newIdB58 } from "@ingcreators/annot-core/utils";
+import { loadAutoCaptureOptions } from "../auto-capture-options.js";
 import { html, LitElement, nothing } from "../lit.js";
 import "./annot-candidate-panel.js";
 import "./annot-capture-preview.js";
@@ -50,15 +52,15 @@ import type { AutoCaptureState } from "./types.js";
  *  persisted) panel list. */
 const MAX_CAPTURES = 200;
 
-/** Spec §10.4 defaults — used when the workspace runs in Auto
- *  mode. spec Phase 5 (deferred) will surface them through the
- *  Advanced settings panel. */
-const AUTO_CAPTURE_DEFAULTS = {
-  intervalMs: 1000,
-  stableWaitMs: 700,
+/** Engine knobs the dialog's Advanced settings DON'T expose.
+ *  `comparisonWidth` is implementation detail (downscaled diff
+ *  canvas size); `minMsBetweenCaptures` is a throttle the user
+ *  shouldn't have to think about. The user-facing fields
+ *  (interval / sensitivity / stable wait / cursor-only ignore)
+ *  come from `loadAutoCaptureOptions()` + `resolveAutoCaptureOptions`. */
+const AUTO_CAPTURE_INTERNALS = {
   minMsBetweenCaptures: 1500,
   comparisonWidth: 320,
-  ignoreCursorOnlyChanges: true,
 };
 
 /** Map `AutoCaptureState` → spec §8.4 status copy. */
@@ -418,9 +420,20 @@ export class AnnotCaptureWorkspaceElement extends LitElement {
 
   #startAutoEngine(): void {
     if (!this.#session) return;
+    // Resolve user-facing presets (Advanced settings dialog) into
+    // the engine's millisecond / ratio knobs. `loadAutoCaptureOptions`
+    // returns `DEFAULT_AUTO_CAPTURE_OPTIONS` when nothing is
+    // stored, so first-run users get the spec §10.4 defaults
+    // (interval=1s, sensitivity=standard, stableWait=0.7s,
+    // ignoreCursorOnly=true).
+    const resolved = resolveAutoCaptureOptions(loadAutoCaptureOptions());
     this.#engine = new AutoCaptureEngine({
       session: this.#session,
-      ...AUTO_CAPTURE_DEFAULTS,
+      intervalMs: resolved.intervalMs,
+      stableWaitMs: resolved.stableWaitMs,
+      changeRatioThreshold: resolved.changeRatioThreshold,
+      ignoreCursorOnlyChanges: resolved.ignoreCursorOnlyChanges,
+      ...AUTO_CAPTURE_INTERNALS,
       maxCaptures: MAX_CAPTURES,
       getCapturedCount: () => this.#store.size,
       onCaptureReady: ({ dataUrl, width, height, diffScore }) =>

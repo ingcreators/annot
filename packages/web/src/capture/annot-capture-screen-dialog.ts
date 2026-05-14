@@ -13,21 +13,57 @@
  * via `showCaptureScreenDialog()` (capture-screen-dialog.ts), the
  * Promise wrapper that listens for `capture-confirm` /
  * `capture-cancel`.
+ *
+ * Advanced settings (collapsed by default per spec §6.6):
+ * - Encode group: format / smart-fallback / JPEG quality —
+ *   shared with the Browser Extension via
+ *   `@ingcreators/annot-core/encode/options`.
+ * - Auto Capture group (mode === "auto" only): interval /
+ *   sensitivity / stable-wait / cursor-only-ignore — shared via
+ *   `@ingcreators/annot-core/auto-capture-options`.
  */
 
-import { SAVE_SIZE_LABEL, type SaveSizePreset } from "@ingcreators/annot-core/encode/options";
-import { html, LitElement } from "../lit.js";
+import {
+  CAPTURE_INTERVAL_LABEL,
+  type CaptureIntervalPreset,
+  CHANGE_SENSITIVITY_LABEL,
+  type ChangeSensitivityPreset,
+  STABLE_WAIT_LABEL,
+  type StableWaitPreset,
+} from "@ingcreators/annot-core/auto-capture-options";
+import {
+  type EncodeFormat,
+  SAVE_SIZE_LABEL,
+  type SaveSizePreset,
+} from "@ingcreators/annot-core/encode/options";
+import { html, LitElement, nothing } from "../lit.js";
 import type { CursorMode } from "./capture-prefs.js";
 import type { CaptureMode } from "./types.js";
 
-/** Detail dispatched on `capture-confirm`. */
+/** Detail dispatched on `capture-confirm`. The wrapper persists
+ *  each field to its respective shared options blob so future
+ *  captures + the (future) Browser Extension surface see the
+ *  same values. */
 export interface CaptureScreenDialogConfirmDetail {
   mode: CaptureMode;
   cursor: CursorMode;
-  /** Save-size preset the user picked. The host should persist it
-   *  via `saveEncodeOptions` so future captures + the (future)
-   *  Browser Extension settings UI see the same value. */
   saveSizePreset: SaveSizePreset;
+  /** Encode pipeline format. */
+  format: EncodeFormat;
+  /** Smart-mode fallback when source is photo-heavy. */
+  smartFallback: "png" | "jpeg";
+  /** JPEG quality 60-100%. Used for `format: "jpeg"` and smart's
+   *  JPEG fallback. */
+  jpegPercent: number;
+  /** Auto Capture engine: sampling cadence preset. */
+  autoInterval: CaptureIntervalPreset;
+  /** Auto Capture engine: diff sensitivity preset. */
+  autoSensitivity: ChangeSensitivityPreset;
+  /** Auto Capture engine: stable-wait preset. */
+  autoStableWait: StableWaitPreset;
+  /** Auto Capture engine: drop frames whose only change is
+   *  cursor-shaped. */
+  autoIgnoreCursorOnlyChanges: boolean;
 }
 
 const SAVE_SIZE_OPTIONS: readonly SaveSizePreset[] = [
@@ -36,6 +72,18 @@ const SAVE_SIZE_OPTIONS: readonly SaveSizePreset[] = [
   "highQuality",
   "original",
 ];
+const FORMAT_OPTIONS: readonly { value: EncodeFormat; label: string }[] = [
+  { value: "smart", label: "Smart (PNG-8 / fallback)" },
+  { value: "png", label: "PNG (lossless)" },
+  { value: "jpeg", label: "JPEG (compressed)" },
+];
+const SMART_FALLBACK_OPTIONS: readonly { value: "png" | "jpeg"; label: string }[] = [
+  { value: "png", label: "PNG (lossless, larger)" },
+  { value: "jpeg", label: "JPEG (compressed, smaller)" },
+];
+const INTERVAL_OPTIONS: readonly CaptureIntervalPreset[] = ["fast", "standard", "slow"];
+const SENSITIVITY_OPTIONS: readonly ChangeSensitivityPreset[] = ["sensitive", "standard", "major"];
+const STABLE_WAIT_OPTIONS: readonly StableWaitPreset[] = ["none", "short", "long"];
 
 interface ModeChip {
   mode: CaptureMode;
@@ -62,11 +110,25 @@ export class AnnotCaptureScreenDialogElement extends LitElement {
     mode: { type: String },
     cursor: { type: String },
     saveSizePreset: { type: String },
+    format: { type: String },
+    smartFallback: { type: String },
+    jpegPercent: { type: Number },
+    autoInterval: { type: String },
+    autoSensitivity: { type: String },
+    autoStableWait: { type: String },
+    autoIgnoreCursorOnlyChanges: { type: Boolean },
   };
 
   declare mode: CaptureMode;
   declare cursor: CursorMode;
   declare saveSizePreset: SaveSizePreset;
+  declare format: EncodeFormat;
+  declare smartFallback: "png" | "jpeg";
+  declare jpegPercent: number;
+  declare autoInterval: CaptureIntervalPreset;
+  declare autoSensitivity: ChangeSensitivityPreset;
+  declare autoStableWait: StableWaitPreset;
+  declare autoIgnoreCursorOnlyChanges: boolean;
 
   #onKey = (e: KeyboardEvent): void => {
     if (e.key === "Escape") {
@@ -74,9 +136,15 @@ export class AnnotCaptureScreenDialogElement extends LitElement {
       this.#cancel();
     } else if (e.key === "Enter") {
       // Allow Enter from anywhere inside the dialog (so a non-input
-      // focus like the mode chip button still confirms).
+      // focus like the mode chip button still confirms). Skip
+      // when focus is on an interactive control inside the
+      // collapsed Advanced section so users can edit numbers.
       const target = e.target as HTMLElement | null;
-      if (target?.tagName !== "BUTTON") {
+      if (
+        target?.tagName !== "BUTTON" &&
+        target?.tagName !== "INPUT" &&
+        target?.tagName !== "SELECT"
+      ) {
         e.preventDefault();
         this.#confirm();
       }
@@ -85,16 +153,19 @@ export class AnnotCaptureScreenDialogElement extends LitElement {
 
   constructor() {
     super();
-    // Phase 4 of `docs/plans/web-capture-redesign.md` — Auto
-    // Capture is now the default selection. `loadModePreference`
-    // (used by `showCaptureScreenDialog`) returns `"auto"` when
-    // nothing is stored, which matches.
+    // Defaults mirror the various `DEFAULT_*` blobs. The Promise
+    // wrapper (`capture-screen-dialog.ts`) overrides each field
+    // with the user's persisted preferences at mount time.
     this.mode = "auto";
     this.cursor = "always";
-    // Default mirrors `DEFAULT_ENCODE_OPTIONS.saveSizePreset`.
-    // The Promise wrapper (`capture-screen-dialog.ts`) overrides
-    // it with the user's persisted preference at mount time.
     this.saveSizePreset = "standard";
+    this.format = "smart";
+    this.smartFallback = "png";
+    this.jpegPercent = 92;
+    this.autoInterval = "standard";
+    this.autoSensitivity = "standard";
+    this.autoStableWait = "short";
+    this.autoIgnoreCursorOnlyChanges = true;
   }
 
   protected override createRenderRoot(): HTMLElement {
@@ -183,6 +254,8 @@ export class AnnotCaptureScreenDialogElement extends LitElement {
             </select>
           </label>
 
+          ${this.#renderAdvancedSection()}
+
           <div class="capture-dialog-actions">
             <button type="button" class="capture-dialog-btn" @click=${this.#cancel}>Cancel</button>
             <button
@@ -195,6 +268,171 @@ export class AnnotCaptureScreenDialogElement extends LitElement {
           </div>
         </div>
       </div>
+    `;
+  }
+
+  /** Collapsed-by-default `<details>`. Keeps the basic dialog
+   *  surface the same height it was before Advanced settings
+   *  landed; expanded state is per-mount only (the user opens it
+   *  when they need to tweak, then it folds back next time the
+   *  dialog appears). */
+  #renderAdvancedSection() {
+    const showJpegQuality = this.format === "jpeg" || this.smartFallback === "jpeg";
+    return html`
+      <details class="capture-dialog-advanced">
+        <summary class="capture-dialog-advanced-summary">Advanced settings</summary>
+
+        <div class="capture-dialog-advanced-group">
+          <div class="capture-dialog-advanced-group-title">Image encoding</div>
+
+          <label class="capture-dialog-row">
+            <span class="capture-dialog-label">Format</span>
+            <select
+              class="capture-dialog-select"
+              .value=${this.format}
+              @change=${(e: Event) => {
+                this.format = (e.currentTarget as HTMLSelectElement).value as EncodeFormat;
+              }}
+            >
+              ${FORMAT_OPTIONS.map(
+                (opt) => html`
+                  <option value=${opt.value} ?selected=${this.format === opt.value}>
+                    ${opt.label}
+                  </option>
+                `,
+              )}
+            </select>
+          </label>
+
+          ${
+            this.format === "smart"
+              ? html`<label class="capture-dialog-row">
+                  <span class="capture-dialog-label">Smart fallback</span>
+                  <select
+                    class="capture-dialog-select"
+                    .value=${this.smartFallback}
+                    @change=${(e: Event) => {
+                      this.smartFallback = (e.currentTarget as HTMLSelectElement).value as
+                        | "png"
+                        | "jpeg";
+                    }}
+                  >
+                    ${SMART_FALLBACK_OPTIONS.map(
+                      (opt) => html`
+                        <option value=${opt.value} ?selected=${this.smartFallback === opt.value}>
+                          ${opt.label}
+                        </option>
+                      `,
+                    )}
+                  </select>
+                </label>`
+              : nothing
+          }
+
+          ${
+            showJpegQuality
+              ? html`<label class="capture-dialog-row">
+                  <span class="capture-dialog-label">JPEG quality</span>
+                  <input
+                    type="number"
+                    class="capture-dialog-input"
+                    min="60"
+                    max="100"
+                    step="1"
+                    .value=${String(this.jpegPercent)}
+                    @input=${(e: Event) => {
+                      const v = Number.parseInt((e.currentTarget as HTMLInputElement).value, 10);
+                      if (Number.isFinite(v)) {
+                        this.jpegPercent = Math.max(60, Math.min(100, v));
+                      }
+                    }}
+                  />
+                </label>`
+              : nothing
+          }
+        </div>
+
+        ${
+          this.mode === "auto"
+            ? html`<div class="capture-dialog-advanced-group">
+                <div class="capture-dialog-advanced-group-title">Auto Capture</div>
+
+                <label class="capture-dialog-row">
+                  <span class="capture-dialog-label">Capture interval</span>
+                  <select
+                    class="capture-dialog-select"
+                    .value=${this.autoInterval}
+                    @change=${(e: Event) => {
+                      this.autoInterval = (e.currentTarget as HTMLSelectElement)
+                        .value as CaptureIntervalPreset;
+                    }}
+                  >
+                    ${INTERVAL_OPTIONS.map(
+                      (preset) => html`
+                        <option value=${preset} ?selected=${this.autoInterval === preset}>
+                          ${CAPTURE_INTERVAL_LABEL[preset]}
+                        </option>
+                      `,
+                    )}
+                  </select>
+                </label>
+
+                <label class="capture-dialog-row">
+                  <span class="capture-dialog-label">Change sensitivity</span>
+                  <select
+                    class="capture-dialog-select"
+                    .value=${this.autoSensitivity}
+                    @change=${(e: Event) => {
+                      this.autoSensitivity = (e.currentTarget as HTMLSelectElement)
+                        .value as ChangeSensitivityPreset;
+                    }}
+                  >
+                    ${SENSITIVITY_OPTIONS.map(
+                      (preset) => html`
+                        <option value=${preset} ?selected=${this.autoSensitivity === preset}>
+                          ${CHANGE_SENSITIVITY_LABEL[preset]}
+                        </option>
+                      `,
+                    )}
+                  </select>
+                </label>
+
+                <label class="capture-dialog-row">
+                  <span class="capture-dialog-label">Stable wait</span>
+                  <select
+                    class="capture-dialog-select"
+                    .value=${this.autoStableWait}
+                    @change=${(e: Event) => {
+                      this.autoStableWait = (e.currentTarget as HTMLSelectElement)
+                        .value as StableWaitPreset;
+                    }}
+                  >
+                    ${STABLE_WAIT_OPTIONS.map(
+                      (preset) => html`
+                        <option value=${preset} ?selected=${this.autoStableWait === preset}>
+                          ${STABLE_WAIT_LABEL[preset]}
+                        </option>
+                      `,
+                    )}
+                  </select>
+                </label>
+
+                <label class="capture-dialog-row capture-dialog-row-checkbox">
+                  <input
+                    type="checkbox"
+                    .checked=${this.autoIgnoreCursorOnlyChanges}
+                    @change=${(e: Event) => {
+                      this.autoIgnoreCursorOnlyChanges = (
+                        e.currentTarget as HTMLInputElement
+                      ).checked;
+                    }}
+                  />
+                  <span class="capture-dialog-label">Ignore cursor-only changes</span>
+                </label>
+              </div>`
+            : nothing
+        }
+      </details>
     `;
   }
 
@@ -211,6 +449,13 @@ export class AnnotCaptureScreenDialogElement extends LitElement {
           mode: this.mode,
           cursor: this.cursor,
           saveSizePreset: this.saveSizePreset,
+          format: this.format,
+          smartFallback: this.smartFallback,
+          jpegPercent: this.jpegPercent,
+          autoInterval: this.autoInterval,
+          autoSensitivity: this.autoSensitivity,
+          autoStableWait: this.autoStableWait,
+          autoIgnoreCursorOnlyChanges: this.autoIgnoreCursorOnlyChanges,
         },
         bubbles: true,
       }),

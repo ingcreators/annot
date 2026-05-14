@@ -96,3 +96,39 @@ export const OriginalSize: Story = {
     saveSizePreset: "original",
   },
 };
+
+/** Advanced section programmatically expanded so reviewers can
+ *  inspect every Advanced control without clicking. The Auto
+ *  Capture sub-group only renders for mode === "auto". */
+export const AdvancedExpanded: Story = {
+  args: {
+    mode: "auto",
+    cursor: "always",
+    saveSizePreset: "standard",
+  },
+  render: (args) => {
+    const wrapper = document.createElement("div");
+    wrapper.style.position = "relative";
+    wrapper.style.width = "100%";
+    wrapper.style.minHeight = "720px";
+    wrapper.style.background = "var(--bg-canvas, #1e1e1e)";
+    const dlg = document.createElement("annot-capture-screen-dialog");
+    dlg.mode = args.mode;
+    dlg.cursor = args.cursor;
+    dlg.saveSizePreset = args.saveSizePreset;
+    dlg.addEventListener("capture-confirm", (e) => {
+      console.log("[story] capture-confirm", (e as CustomEvent).detail);
+    });
+    dlg.addEventListener("capture-cancel", () => {
+      console.log("[story] capture-cancel");
+    });
+    wrapper.appendChild(dlg);
+    // Open the <details> after the first render so reviewers
+    // see the expanded state by default.
+    queueMicrotask(() => {
+      const details = dlg.querySelector<HTMLDetailsElement>(".capture-dialog-advanced");
+      if (details) details.open = true;
+    });
+    return wrapper;
+  },
+};

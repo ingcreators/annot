@@ -548,9 +548,30 @@ schema are all unchanged. No `data-annot-version` bump.
   per-app fork. WebP stays out of scope as planned.
 - **High-DPI warnings** (spec §13.4). Mild ≥ 2560px,
   strong ≥ 3840px.
-- **Advanced settings panel** (spec §6.6). `Capture interval`,
-  `Change sensitivity`, `Stable wait`, `Thumbnail size`,
-  `Keep original for accepted`.
+- **~~Advanced settings panel~~** — LANDED in a follow-up. The
+  Capture Screen dialog gained a collapsed-by-default
+  `<details class="capture-dialog-advanced">` section grouping:
+  - **Image encoding** (always visible): Format
+    (`smart` / `png` / `jpeg`); Smart fallback
+    (`png` / `jpeg`, visible when Format is `smart`); JPEG
+    quality 60–100% (visible when Format is `jpeg` or
+    fallback is `jpeg`). Persisted to the existing shared
+    `EncodeOptions` blob (`@ingcreators/annot-core/encode/options`).
+  - **Auto Capture** (mode === "auto" only): Capture interval
+    (`Fast 0.5s` / `Standard 1s` / `Slow 2s`), Change
+    sensitivity (`Sensitive` / `Standard` / `Major`),
+    Stable wait (`None` / `Short 0.7s` / `Long 1.5s`),
+    `Ignore cursor-only changes` checkbox. Persisted to a
+    new shared
+    [`AutoCaptureOptions`](../../packages/core/src/auto-capture-options.ts)
+    blob in `@ingcreators/annot-core/auto-capture-options`
+    so a future Browser Extension Auto Capture surface can
+    reuse the same shape.
+  - Spec §6.6 items intentionally **dropped**: `Thumbnail
+    size` (the gallery-thumbnail width is fine at the 480px
+    `generateThumbnailFromDataUrl` default, no demand for a
+    knob), `Keep original for accepted` (Accept gate retired
+    during rollout — concept no longer applies).
 - **Settings persistence** (spec §22 Phase 5). Per-key localStorage
   for the new dialog settings.
 - **IDB / OPFS candidate storage** (spec §18.3). Replace the
