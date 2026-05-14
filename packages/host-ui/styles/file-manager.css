@@ -755,8 +755,15 @@ html.light .view-toggle-btn.active {
 }
 
 .capture-dialog-label {
+  /* Subdued so the row value (select / number / checkbox) reads as
+   * the primary content of each row, mirroring `.pp-row-label` in
+   * the editor's PropertyPanel. Applies to both top-level rows
+   * (Save size / Mouse cursor) and rows nested under an Advanced
+   * section header — consistent "label (muted) → value (primary)"
+   * rhythm across the whole dialog. */
   font-size: 13px;
-  color: var(--annot-text-primary);
+  font-weight: 400;
+  color: var(--annot-text-secondary);
 }
 
 .capture-dialog-input {
@@ -983,23 +990,37 @@ html.light .view-toggle-btn.active {
 }
 
 .capture-dialog-advanced-group {
-  padding: 8px 10px;
+  /* Rows hang off the section header — the title cancels this
+   * indent with its own negative margin so it stays flush at the
+   * section's outer left edge (same trick as `.pp-section-body`'s
+   * padding-left: 10px). */
+  padding: 8px 10px 8px 20px;
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
 .capture-dialog-advanced-group + .capture-dialog-advanced-group {
+  /* Keep the faint 1px divider as a structural cue, plus extra
+   * padding-top so the uppercase title has room to breathe above
+   * its rows. */
   border-top: 1px solid var(--annot-border-color);
+  padding-top: 12px;
 }
 
 .capture-dialog-advanced-group-title {
-  font-size: 11px;
-  font-weight: 600;
+  /* Canonical "section header" treatment — small, bold, uppercase,
+   * generously tracked, muted. Same scale as `.pp-section-header`
+   * in the editor's PropertyPanel so the dialog reads with the
+   * same hierarchy users already know. Negative left margin pulls
+   * the title back out of the row indent established by the group's
+   * padding-left, anchoring it at the section's outer left edge. */
+  font-size: 10px;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--annot-text-secondary);
-  margin-bottom: 2px;
+  letter-spacing: 0.7px;
+  color: var(--annot-text-muted);
+  margin: 0 0 4px -10px;
 }
 
 .capture-dialog-row-checkbox {
