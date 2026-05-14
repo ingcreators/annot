@@ -818,7 +818,12 @@ html.light .view-toggle-btn.active {
 .capture-dialog-btn-primary {
   background: var(--annot-accent);
   border-color: var(--annot-accent);
-  color: #0b1020;
+  /* Theme-aware foreground — `--annot-bg-panel` flips from
+   * `#121933` (dark navy, on light-blue dark accent) to
+   * `#ffffff` (on saturated-blue light accent). Hard-coding
+   * `#0b1020` here paired the dark-mode intent with the light-
+   * mode accent and dropped contrast below 4.5:1. */
+  color: var(--annot-bg-panel);
 }
 
 .capture-dialog-btn-primary:hover {
@@ -1036,7 +1041,8 @@ html.light .view-toggle-btn.active {
   border: 1px solid var(--annot-accent);
   border-radius: 6px;
   background: var(--annot-accent);
-  color: #0b1020;
+  /* Theme-aware foreground — see `.capture-dialog-btn-primary`. */
+  color: var(--annot-bg-panel);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -1147,7 +1153,8 @@ html.light .view-toggle-btn.active {
 .capture-toolbar-btn-primary {
   background: var(--annot-accent);
   border-color: var(--annot-accent);
-  color: #0b1020;
+  /* Theme-aware foreground — see `.capture-dialog-btn-primary`. */
+  color: var(--annot-bg-panel);
 }
 
 .capture-toolbar-btn-primary:hover:not([disabled]) {
@@ -1333,7 +1340,8 @@ html.light .view-toggle-btn.active {
 .candidate-card-btn-primary {
   background: var(--annot-accent);
   border-color: var(--annot-accent);
-  color: #0b1020;
+  /* Theme-aware foreground — see `.capture-dialog-btn-primary`. */
+  color: var(--annot-bg-panel);
   font-weight: 500;
 }
 
