@@ -88,9 +88,9 @@ beforeEach(() => {
 });
 
 describe("annot-doc-header", () => {
-  it("renders the title, back button, save-status, and primary actions", async () => {
+  it("renders the title, brand mark, save-status, and primary actions", async () => {
     const { el } = await mount();
-    expect(el.querySelector(".annot-doc-header-back")).not.toBeNull();
+    expect(el.querySelector(".annot-doc-header-brand")).not.toBeNull();
     expect(el.querySelector(".annot-doc-header-title")?.textContent).toBe("Onboarding");
     expect(el.querySelector("annot-save-status")).not.toBeNull();
     expect(el.querySelector('[aria-label="Undo"]')).not.toBeNull();
@@ -99,13 +99,13 @@ describe("annot-doc-header", () => {
     expect(el.querySelector('[aria-label="More actions"]')).not.toBeNull();
   });
 
-  it("hides back / save-status / mode-toggle when their `show*` knobs are false", async () => {
+  it("hides brand / save-status / mode-toggle when their `show*` knobs are false", async () => {
     const { el } = await mount({
       showBack: false,
       showSaveStatus: false,
       showModeToggle: false,
     });
-    expect(el.querySelector(".annot-doc-header-back")).toBeNull();
+    expect(el.querySelector(".annot-doc-header-brand")).toBeNull();
     expect(el.querySelector("annot-save-status")).toBeNull();
     expect(el.querySelector(".annot-doc-header-mode-toggle")).toBeNull();
   });
@@ -120,7 +120,7 @@ describe("annot-doc-header", () => {
 
   it("dispatches the right callback on each primary action click", async () => {
     const { el, log } = await mount();
-    (el.querySelector(".annot-doc-header-back") as HTMLButtonElement).click();
+    (el.querySelector(".annot-doc-header-brand") as HTMLButtonElement).click();
     (el.querySelector('[aria-label="Undo"]') as HTMLButtonElement).click();
     (el.querySelector('[aria-label="Redo"]') as HTMLButtonElement).click();
     (el.querySelector('[aria-label="Insert image"]') as HTMLButtonElement).click();

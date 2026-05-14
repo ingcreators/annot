@@ -273,7 +273,11 @@ annot-icon > img {
 
 .split-editor {
   position: fixed;
-  inset: 48px 0 0 0; /* below the toolbar */
+  /* Fills the viewport. The split-editor ships its own header
+     row (.split-editor-header) so it doesn't need the gallery
+     #toolbar above it — that's hidden via editor.css's combined
+     editor-mode / annot-doc-mode / split-editor-active rule. */
+  inset: 0;
   background: var(--annot-bg-secondary);
   display: flex;
   flex-direction: column;

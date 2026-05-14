@@ -24,8 +24,17 @@
  */
 
 import { builtinIcon } from "@ingcreators/annot-core";
+import { createThemeToggle } from "@ingcreators/annot-editor";
 import "./annot-icon.js";
-import { html, LitElement, nothing, type PropertyValues, type TemplateResult } from "./lit.js";
+import { BRAND_MARK_SVG } from "./brand-mark.js";
+import {
+  html,
+  LitElement,
+  nothing,
+  type PropertyValues,
+  type TemplateResult,
+  unsafeHTML,
+} from "./lit.js";
 import "./save-status-indicator.js";
 import type { AnnotSaveStatusElement } from "./save-status-indicator.js";
 
@@ -90,22 +99,35 @@ const HEADER_CSS = `
   min-height: 44px;
   position: relative;
 }
-.annot-doc-header-back {
+/* Brand mark, doubles as "back to gallery" trigger. Mirrors the
+   image editor's annot-editor-header brand button so users learn
+   one chrome shape across editor surfaces. The button is
+   transparent — only the embedded SVG paints — and the hover /
+   focus affordance is a subtle background tint so the mark
+   stays the visual anchor. */
+.annot-doc-header-brand {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 10px;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
   background: transparent;
-  border: 1px solid var(--annot-doc-muted, #d1d5db);
-  border-radius: 4px;
+  border: 1px solid transparent;
+  border-radius: 6px;
   color: inherit;
   cursor: pointer;
   font: inherit;
+  flex-shrink: 0;
 }
-.annot-doc-header-back:hover,
-.annot-doc-header-back:focus-visible {
+.annot-doc-header-brand:hover,
+.annot-doc-header-brand:focus-visible {
   background: var(--annot-doc-code-bg, #f3f4f6);
   outline: none;
+}
+.annot-doc-header-brand svg {
+  display: block;
+  pointer-events: none;
 }
 .annot-doc-header-title {
   flex: 1 1 auto;
@@ -224,16 +246,14 @@ const HEADER_CSS = `
     padding: 10px 16px;
     min-height: 44px;
   }
-  .annot-doc-header-back {
-    padding: 10px 14px;
-    min-height: 44px;
+  .annot-doc-header-brand {
+    width: 44px;
+    height: 44px;
   }
 }
 
 /* Phase 9 — narrow viewports: drop the editable title to the
-   second row so the action toolbar still fits on one line.
-   Below 480 px the back-button label collapses to the icon
-   alone to claw back more horizontal space. */
+   second row so the action toolbar still fits on one line. */
 @media (max-width: 600px) {
   .annot-doc-header {
     flex-wrap: wrap;
@@ -251,16 +271,11 @@ const HEADER_CSS = `
     display: none;
   }
 }
-@media (max-width: 480px) {
-  .annot-doc-header-back span:nth-child(2) {
-    display: none;
-  }
-}
 
 /* Phase 13 of annot-html-document-ux-polish.md — focus-visible
    ring on the title field is already there; explicit ring on
-   the back / action buttons makes keyboard navigation legible. */
-.annot-doc-header-back:focus-visible,
+   the brand / action buttons makes keyboard navigation legible. */
+.annot-doc-header-brand:focus-visible,
 .annot-doc-header-action:focus-visible:not(:disabled),
 .annot-doc-header-overflow-item:focus-visible:not(:disabled) {
   outline: 2px solid var(--annot-doc-accent, #2563eb);
@@ -393,7 +408,7 @@ export class AnnotDocHeaderElement extends LitElement {
     return html`
       <style>${HEADER_CSS}</style>
       <div class="annot-doc-header" role="banner">
-        ${this.showBack ? this.#renderBack() : nothing}
+        ${this.showBack ? this.#renderBrand() : nothing}
         ${this.#renderTitle()}
         ${this.showSaveStatus ? html`<annot-save-status></annot-save-status>` : nothing}
         <span style="flex: 1 1 auto"></span>
@@ -430,25 +445,36 @@ export class AnnotDocHeaderElement extends LitElement {
           </button>
           ${this.showModeToggle ? this.#renderModeToggle() : nothing}
           ${this.overflowItems.length > 0 ? this.#renderOverflowButton() : nothing}
+          ${this.#renderThemeToggle()}
         </div>
         ${this.overflowOpen ? this.#renderOverflowMenu() : nothing}
       </div>
     `;
   }
 
-  #renderBack(): TemplateResult {
+  #renderBrand(): TemplateResult {
     return html`
       <button
         type="button"
-        class="annot-doc-header-back"
+        class="annot-doc-header-brand"
         aria-label="Back to gallery"
         title="Back to gallery"
         @click=${() => this.callbacks.onBack?.()}
       >
-        <span aria-hidden="true">←</span>
-        <span>Back</span>
+        ${unsafeHTML(BRAND_MARK_SVG)}
       </button>
     `;
+  }
+
+  /** Lazily mount the shared theme toggle once and reuse the same
+   *  DOM node across renders so its event listener + current-theme
+   *  state survive. Matches the image editor header's pattern. */
+  #themeToggleEl: HTMLElement | null = null;
+  #renderThemeToggle() {
+    if (!this.#themeToggleEl) {
+      this.#themeToggleEl = createThemeToggle("annot-doc-header-action");
+    }
+    return this.#themeToggleEl;
   }
 
   #renderTitle(): TemplateResult {

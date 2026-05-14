@@ -1239,19 +1239,18 @@ export class App {
     // point) leaves it hidden the moment
     // `fileManagerEl.style.display = "none"` runs above. Append
     // to `document.body` directly (sibling of `#file-manager` /
-    // `#canvas-container`) and position the host like
-    // `#file-manager` itself: absolute fill below the gallery's
-    // `#toolbar` strip (48px tall — see
-    // `packages/core/styles/toolbar.css`). The toolbar stays
-    // visible in doc mode because it carries the Annot brand
-    // and the dark-mode toggle, both of which read fine here
-    // too.
+    // `#canvas-container`) and position the host as an absolute
+    // fill of the viewport. The gallery's `#toolbar` is hidden
+    // in doc mode (see editor.css's `body.annot-doc-mode #toolbar`
+    // rule) because `<annot-doc-header>` now carries the brand
+    // + theme toggle inline, matching the image editor's
+    // `<annot-editor-header>` chrome contract.
     let host = document.getElementById("annot-doc-host") as HTMLDivElement | null;
     if (!host) {
       host = document.createElement("div");
       host.id = "annot-doc-host";
       host.style.cssText =
-        "position:absolute;top:48px;left:0;right:0;bottom:0;display:flex;flex-direction:column;background:var(--annot-doc-bg,#ffffff);overflow:auto;z-index:5;";
+        "position:absolute;top:0;left:0;right:0;bottom:0;display:flex;flex-direction:column;background:var(--annot-doc-bg,#ffffff);overflow:auto;z-index:5;";
       document.body.appendChild(host);
     } else {
       host.innerHTML = "";
