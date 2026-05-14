@@ -163,12 +163,19 @@ export class FileManager {
 
     this.#mainContentEl.innerHTML = "";
     const shell = document.createElement("annot-file-manager-shell");
+    shell.canCreateCardDocument = this.#callbacks.onCreateCardDocument !== undefined;
     shell.callbacks = {
       onNavigate: (path) => this.navigateToFolder(path),
       onRefresh: () => this.refreshFromDisk(),
       onSetViewMode: (mode) => this.#setViewMode(mode),
       onClearSelection: () => this.#gallery?.clearSelection(),
       onDeleteSelection: () => this.#gallery?.deleteSelection(),
+      // The gallery's public `requestCreateCardDocument()` and the
+      // image context menu's "Create card document from N images"
+      // both dispatch the same `annot-gallery-create-card-document-request`
+      // event — the host listener below routes it back through
+      // `#callbacks.onCreateCardDocument(imagesInOrder)`.
+      onCreateCardDocument: () => this.#gallery?.requestCreateCardDocument(),
     };
     this.#mainContentEl.appendChild(shell);
     this.#shell = shell;
@@ -325,9 +332,15 @@ export class FileManager {
     });
     el.addEventListener("annot-gallery-selection-change", (e) => {
       const sel = e.detail.selection;
-      const count = sel.images.length + sel.folders.length;
+      const count = sel.images.length + sel.folders.length + sel.documents.length;
       this.#shell.selection =
-        count > 0 ? { folders: sel.folders.length, images: sel.images.length } : null;
+        count > 0
+          ? {
+              folders: sel.folders.length,
+              images: sel.images.length,
+              documents: sel.documents.length,
+            }
+          : null;
     });
     el.addEventListener("annot-gallery-create-card-document-request", (e) => {
       const onCreate = this.#callbacks.onCreateCardDocument;

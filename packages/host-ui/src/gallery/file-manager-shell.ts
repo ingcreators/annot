@@ -16,7 +16,7 @@ import "../annot-icon.js";
  */
 
 import { setTooltip } from "@ingcreators/annot-editor/tooltip";
-import { html, LitElement } from "../lit.js";
+import { html, LitElement, nothing } from "../lit.js";
 
 /** Breadcrumb entry shown in the header. The shell renders the
  *  list declaratively; the file-manager populates it after a
@@ -30,6 +30,11 @@ export interface BreadcrumbEntry {
 export interface SelectionInfo {
   folders: number;
   images: number;
+  /** Number of `.annot.html` documents in the current selection.
+   *  Documents participate in the same multi-select model as
+   *  images, so the selection bar can summarise mixed selections
+   *  and the bulk Delete button removes all three kinds at once. */
+  documents: number;
 }
 
 export interface FileManagerShellCallbacks {
@@ -38,6 +43,12 @@ export interface FileManagerShellCallbacks {
   onSetViewMode: (mode: "grid" | "list") => void;
   onClearSelection: () => void;
   onDeleteSelection: () => void;
+  /** Invoked when the user clicks the selection-bar's "Create
+   *  card document" button. Host wires this to call
+   *  `gallery.requestCreateCardDocument()`, which dispatches the
+   *  existing `annot-gallery-create-card-document-request` event
+   *  with the current ordered image selection. */
+  onCreateCardDocument: () => void;
 }
 
 export class AnnotFileManagerShellElement extends LitElement {
@@ -46,6 +57,7 @@ export class AnnotFileManagerShellElement extends LitElement {
     viewMode: { state: true },
     countText: { state: true },
     selection: { state: true },
+    canCreateCardDocument: { attribute: false },
     callbacks: { attribute: false },
   };
 
@@ -53,6 +65,11 @@ export class AnnotFileManagerShellElement extends LitElement {
   declare viewMode: "grid" | "list";
   declare countText: string;
   declare selection: SelectionInfo | null;
+  /** Set by the host (`FileManager`) based on whether the
+   *  `onCreateCardDocument` host callback was wired. Gates the
+   *  selection-bar's "Create card document" button — the button
+   *  also requires images-only selection at runtime. */
+  declare canCreateCardDocument: boolean;
   declare callbacks: FileManagerShellCallbacks;
 
   constructor() {
@@ -61,12 +78,14 @@ export class AnnotFileManagerShellElement extends LitElement {
     this.viewMode = "grid";
     this.countText = "";
     this.selection = null;
+    this.canCreateCardDocument = false;
     this.callbacks = {
       onNavigate: () => {},
       onRefresh: () => {},
       onSetViewMode: () => {},
       onClearSelection: () => {},
       onDeleteSelection: () => {},
+      onCreateCardDocument: () => {},
     };
   }
 
@@ -163,6 +182,7 @@ export class AnnotFileManagerShellElement extends LitElement {
           >${this.#renderSelectionCount()}</span
         >
         <div class="selection-bar-spacer"></div>
+        ${this.#renderCreateCardDocumentButton()}
         <button
           type="button"
           class="selection-bar-btn selection-bar-btn-danger"
@@ -198,11 +218,35 @@ export class AnnotFileManagerShellElement extends LitElement {
   #renderSelectionCount(): string {
     const sel = this.selection;
     if (!sel) return "";
-    const count = sel.folders + sel.images;
+    const count = sel.folders + sel.images + sel.documents;
     const parts: string[] = [];
     if (sel.folders) parts.push(`${sel.folders} folder${sel.folders !== 1 ? "s" : ""}`);
-    if (sel.images) parts.push(`${sel.images} file${sel.images !== 1 ? "s" : ""}`);
+    if (sel.documents) parts.push(`${sel.documents} document${sel.documents !== 1 ? "s" : ""}`);
+    if (sel.images) parts.push(`${sel.images} image${sel.images !== 1 ? "s" : ""}`);
     return `${count} selected (${parts.join(", ")})`;
+  }
+
+  #renderCreateCardDocumentButton() {
+    const sel = this.selection;
+    if (!this.canCreateCardDocument) return nothing;
+    if (!sel) return nothing;
+    // Mirrors the image context menu's gating
+    // (`annot-gallery-page.ts:1007`): visible only when the
+    // selection is images-only — no folders, no other documents.
+    if (sel.images < 1 || sel.folders > 0 || sel.documents > 0) return nothing;
+    const label =
+      sel.images === 1 ? "Create card document" : `Create card document (${sel.images} images)`;
+    return html`
+      <button
+        type="button"
+        class="selection-bar-btn"
+        data-tooltip="Create card document from selected images"
+        aria-label=${label}
+        @click=${() => this.callbacks.onCreateCardDocument()}
+      >
+        <annot-icon aria-hidden="true" .spec=${builtinIcon("view_carousel")}></annot-icon>${label}
+      </button>
+    `;
   }
 
   protected override updated(): void {
