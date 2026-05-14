@@ -9,13 +9,20 @@
  * users see it inside the file manager.
  */
 
-import type { FolderRecord, ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
+import type {
+  DocumentRecord,
+  FolderRecord,
+  ImageRecord,
+  StorageProvider,
+  StorageWithDocuments,
+} from "@ingcreators/annot-core/storage";
 import type { Meta, StoryObj } from "@storybook/web-components-vite";
 import "./annot-gallery-page.js";
 
 interface Args {
   imageCount: number;
   folderCount: number;
+  documentCount: number;
   viewMode: "grid" | "list";
   query: string;
 }
@@ -29,7 +36,11 @@ const PLACEHOLDER_THUMB =
       "</svg>",
   );
 
-function makeStorage(images: ImageRecord[], folders: FolderRecord[]): StorageProvider {
+function makeStorage(
+  images: ImageRecord[],
+  folders: FolderRecord[],
+  documents: DocumentRecord[],
+): StorageProvider {
   return {
     async listImages(folderPath: string) {
       return images.filter((i) => i.folderPath === folderPath);
@@ -40,7 +51,17 @@ function makeStorage(images: ImageRecord[], folders: FolderRecord[]): StoragePro
     async getBreadcrumb() {
       return [];
     },
-  } as unknown as StorageProvider;
+    async listDocuments(folderPath: string) {
+      return documents.filter((d) => d.folderPath === folderPath);
+    },
+    async getDocument() {
+      return undefined;
+    },
+    async saveDocument() {
+      return "";
+    },
+    async updateDocument() {},
+  } as unknown as StorageProvider & StorageWithDocuments;
 }
 
 function buildFixture(args: Args): { storage: StorageProvider } {
@@ -69,7 +90,21 @@ function buildFixture(args: Args): { storage: StorageProvider } {
       createdAt: "2026-04-25T00:00:00Z",
     } as FolderRecord);
   }
-  return { storage: makeStorage(images, folders) };
+  const documents: DocumentRecord[] = [];
+  for (let i = 0; i < args.documentCount; i++) {
+    documents.push({
+      path: `doc-${i + 1}.annot.html`,
+      folderPath: "",
+      bytes: "<!doctype html>",
+      thumbnailDataUrl: "",
+      title: `Card document ${i + 1}`,
+      imageCount: 3,
+      blockCount: 5,
+      createdAt: "2026-05-10T00:00:00Z",
+      updatedAt: "2026-05-10T00:00:00Z",
+    });
+  }
+  return { storage: makeStorage(images, folders, documents) };
 }
 
 const meta: Meta<Args> = {
@@ -98,12 +133,14 @@ const meta: Meta<Args> = {
   argTypes: {
     imageCount: { control: { type: "number", min: 0, max: 24 } },
     folderCount: { control: { type: "number", min: 0, max: 8 } },
+    documentCount: { control: { type: "number", min: 0, max: 8 } },
     viewMode: { control: "radio", options: ["grid", "list"] },
     query: { control: "text" },
   },
   args: {
     imageCount: 6,
     folderCount: 2,
+    documentCount: 0,
     viewMode: "grid",
     query: "",
   },
@@ -113,17 +150,31 @@ export default meta;
 type Story = StoryObj<Args>;
 
 export const GridWithFoldersAndImages: Story = {
-  args: { imageCount: 6, folderCount: 2, viewMode: "grid", query: "" },
+  args: { imageCount: 6, folderCount: 2, documentCount: 0, viewMode: "grid", query: "" },
 };
 
 export const ListWithFoldersAndImages: Story = {
-  args: { imageCount: 6, folderCount: 2, viewMode: "list", query: "" },
+  args: { imageCount: 6, folderCount: 2, documentCount: 0, viewMode: "list", query: "" },
+};
+
+export const GridWithFoldersDocumentsAndImages: Story = {
+  args: { imageCount: 6, folderCount: 1, documentCount: 2, viewMode: "grid", query: "" },
+};
+
+export const DocumentsOnly: Story = {
+  args: { imageCount: 0, folderCount: 0, documentCount: 3, viewMode: "grid", query: "" },
 };
 
 export const Empty: Story = {
-  args: { imageCount: 0, folderCount: 0, viewMode: "grid", query: "" },
+  args: { imageCount: 0, folderCount: 0, documentCount: 0, viewMode: "grid", query: "" },
 };
 
 export const SearchFiltered: Story = {
-  args: { imageCount: 6, folderCount: 2, viewMode: "grid", query: "screenshot-01" },
+  args: {
+    imageCount: 6,
+    folderCount: 2,
+    documentCount: 0,
+    viewMode: "grid",
+    query: "screenshot-01",
+  },
 };

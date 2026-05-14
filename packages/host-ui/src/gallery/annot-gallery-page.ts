@@ -54,6 +54,14 @@ import { type MenuItem, openContextMenu } from "./annot-context-menu.js";
 export interface GallerySelection {
   images: ImageRecord[];
   folders: FolderRecord[];
+  /** `.annot.html` documents currently selected alongside images
+   *  / folders. Documents share the same selection state machine
+   *  as images (click toggles, Shift extends, Ctrl/Cmd toggles in
+   *  place) so `deleteSelection` can bulk-remove them through the
+   *  same path-keyed `storage.deleteImage` route the per-item
+   *  context menu already uses. No ordered counterpart — the
+   *  card-document generator only consumes images. */
+  documents: DocumentRecord[];
   /** Phase 4 of `docs/plans/_done/card-procedure-template.md` — images
    *  in the precise order the user clicked them. Length matches
    *  `images`; the two arrays carry the same records, the only
@@ -86,6 +94,7 @@ export class AnnotGalleryPageElement extends LitElement {
     query: { state: true },
     selectedImagePaths: { state: true },
     selectedFolderPaths: { state: true },
+    selectedDocumentPaths: { state: true },
     selectedImagePathOrder: { state: true },
     canCreateCardDocument: { attribute: false },
   };
@@ -110,6 +119,10 @@ export class AnnotGalleryPageElement extends LitElement {
   declare query: string;
   declare selectedImagePaths: Set<string>;
   declare selectedFolderPaths: Set<string>;
+  /** Paths of `.annot.html` documents currently selected. Symmetric
+   *  with `selectedImagePaths`; participates in the same click /
+   *  Shift / Ctrl modifiers and bulk-delete. */
+  declare selectedDocumentPaths: Set<string>;
   /** Phase 4 of `docs/plans/_done/card-procedure-template.md` —
    *  parallel ordered list tracking image-selection click order.
    *  `selectedImagePaths` stays as the O(1) membership probe;
@@ -128,7 +141,7 @@ export class AnnotGalleryPageElement extends LitElement {
   declare canCreateCardDocument: boolean;
 
   /** Last clicked item (for shift-range select). */
-  #selectionAnchor: { type: "image" | "folder"; path: string } | null = null;
+  #selectionAnchor: { type: "image" | "folder" | "document"; path: string } | null = null;
   #searchInput: HTMLInputElement | null = null;
   #searchInputListener: ((e: Event) => void) | null = null;
   #searchTimer: number | undefined;
@@ -146,6 +159,7 @@ export class AnnotGalleryPageElement extends LitElement {
     this.query = "";
     this.selectedImagePaths = new Set();
     this.selectedFolderPaths = new Set();
+    this.selectedDocumentPaths = new Set();
     this.selectedImagePathOrder = [];
     this.canCreateCardDocument = false;
   }
@@ -176,13 +190,16 @@ export class AnnotGalleryPageElement extends LitElement {
   }
 
   get totalSelectedCount(): number {
-    return this.selectedImagePaths.size + this.selectedFolderPaths.size;
+    return (
+      this.selectedImagePaths.size + this.selectedFolderPaths.size + this.selectedDocumentPaths.size
+    );
   }
 
   /** Current selection as records. */
   getSelection(): GallerySelection {
     const images = this.images.filter((i) => this.selectedImagePaths.has(i.path));
     const folders = this.folders.filter((f) => this.selectedFolderPaths.has(f.path));
+    const documents = this.documents.filter((d) => this.selectedDocumentPaths.has(d.path));
     // Phase 4 of card-procedure-template — resolve each path in
     // the click-order array to its current `ImageRecord`. We
     // also defensively filter out anything the Set no longer
@@ -195,7 +212,7 @@ export class AnnotGalleryPageElement extends LitElement {
       const rec = byPath.get(path);
       if (rec) imagesInOrder.push(rec);
     }
-    return { images, folders, imagesInOrder };
+    return { images, folders, documents, imagesInOrder };
   }
 
   override render() {
@@ -248,7 +265,7 @@ export class AnnotGalleryPageElement extends LitElement {
             ? html`
               ${
                 showFolders || (showDocuments && this.documents.length > 0)
-                  ? html`<div class="gallery-section-header">Files</div>`
+                  ? html`<div class="gallery-section-header">Images</div>`
                   : nothing
               }
               <div class="gallery-image-grid">
@@ -314,17 +331,20 @@ export class AnnotGalleryPageElement extends LitElement {
 
   #renderDocumentCard(doc: DocumentRecord) {
     const filename = getFilename(doc.path) || doc.title || "Untitled document";
+    const selected = this.selectedDocumentPaths.has(doc.path);
     const meta =
       doc.imageCount > 0
         ? `${doc.blockCount} blocks • ${doc.imageCount} image${doc.imageCount === 1 ? "" : "s"}`
         : `${doc.blockCount} block${doc.blockCount === 1 ? "" : "s"}`;
     return html`
       <div
-        class="gallery-item gallery-document-item"
+        class=${`gallery-item gallery-document-item${selected ? " selected" : ""}`}
         data-document-path=${doc.path}
         role="button"
-        aria-label=${`Document ${filename}. Enter or double-click to open.`}
+        aria-label=${`Document ${filename}. Enter or double-click to open, Space to toggle selection.`}
+        aria-pressed=${selected ? "true" : "false"}
         tabindex="0"
+        @click=${(e: MouseEvent) => this.#handleItemClick(e, "document", doc.path)}
         @dblclick=${(e: MouseEvent) => this.#openDocument(e, doc)}
         @keydown=${(e: KeyboardEvent) => this.#onDocumentKeydown(e, doc)}
         @contextmenu=${(e: MouseEvent) => this.#onDocumentContextMenu(e, doc)}
@@ -357,6 +377,7 @@ export class AnnotGalleryPageElement extends LitElement {
 
   #openDocument(e: Event | null, doc: DocumentRecord): void {
     e?.stopPropagation();
+    this.clearSelection();
     this.dispatchEvent(
       new CustomEvent<{ record: DocumentRecord }>("annot-gallery-open-document", {
         detail: { record: doc },
@@ -370,11 +391,25 @@ export class AnnotGalleryPageElement extends LitElement {
     if (e.key === "Enter") {
       e.preventDefault();
       this.#openDocument(null, doc);
+    } else if (e.key === " ") {
+      e.preventDefault();
+      this.#handleItemClick(e as unknown as MouseEvent, "document", doc.path);
     }
   }
 
   #onDocumentContextMenu(e: MouseEvent, doc: DocumentRecord): void {
     e.preventDefault();
+    // Mirror the image right-click behaviour: if the clicked
+    // document is not part of the current selection, reseat the
+    // selection to just this document before opening the menu.
+    if (!this.selectedDocumentPaths.has(doc.path)) {
+      this.selectedDocumentPaths = new Set([doc.path]);
+      this.selectedImagePaths = new Set();
+      this.selectedFolderPaths = new Set();
+      this.selectedImagePathOrder = [];
+      this.#selectionAnchor = { type: "document", path: doc.path };
+      this.#fireSelectionChange();
+    }
     openContextMenu({
       x: e.clientX,
       y: e.clientY,
@@ -605,6 +640,7 @@ export class AnnotGalleryPageElement extends LitElement {
     // Drop stale selections that no longer exist
     const imgPaths = new Set(this.images.map((i) => i.path));
     const folderPaths = new Set(this.folders.map((f) => f.path));
+    const docPaths = new Set(this.documents.map((d) => d.path));
     let mutated = false;
     const nextImgs = new Set(this.selectedImagePaths);
     for (const p of Array.from(nextImgs))
@@ -618,9 +654,16 @@ export class AnnotGalleryPageElement extends LitElement {
         nextFolders.delete(p);
         mutated = true;
       }
+    const nextDocs = new Set(this.selectedDocumentPaths);
+    for (const p of Array.from(nextDocs))
+      if (!docPaths.has(p)) {
+        nextDocs.delete(p);
+        mutated = true;
+      }
     if (mutated) {
       this.selectedImagePaths = nextImgs;
       this.selectedFolderPaths = nextFolders;
+      this.selectedDocumentPaths = nextDocs;
       // Phase 4 of card-procedure-template — keep the ordered
       // list trimmed to what still exists. Survives a refresh
       // that drops a deleted-elsewhere image: the click order
@@ -655,6 +698,7 @@ export class AnnotGalleryPageElement extends LitElement {
     if (this.totalSelectedCount === 0) return;
     this.selectedImagePaths = new Set();
     this.selectedFolderPaths = new Set();
+    this.selectedDocumentPaths = new Set();
     this.selectedImagePathOrder = [];
     this.#selectionAnchor = null;
     this.#fireSelectionChange();
@@ -664,11 +708,13 @@ export class AnnotGalleryPageElement extends LitElement {
   async deleteSelection(): Promise<number> {
     if (!this.storage) return 0;
     const sel = this.getSelection();
-    const count = sel.images.length + sel.folders.length;
+    const count = sel.images.length + sel.folders.length + sel.documents.length;
     if (count === 0) return 0;
     const label =
       count === 1
-        ? getFilename(sel.images[0]?.path || sel.folders[0]?.path || "") || "this item"
+        ? getFilename(
+            sel.images[0]?.path || sel.documents[0]?.path || sel.folders[0]?.path || "",
+          ) || "this item"
         : `${count} items`;
     const ok = await showConfirmDialog({
       title: count === 1 ? `Delete "${label}"?` : `Delete ${label}?`,
@@ -683,6 +729,17 @@ export class AnnotGalleryPageElement extends LitElement {
     for (const img of sel.images) {
       try {
         await this.storage.deleteImage(img.path);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    // Documents are deleted through the same path-keyed
+    // `deleteImage` route as images — the `StorageWithDocuments`
+    // contract routes leaf-path deletes to the correct underlying
+    // collection in each backend (Phase 6h of annot-html-document).
+    for (const doc of sel.documents) {
+      try {
+        await this.storage.deleteImage(doc.path);
       } catch (e) {
         console.error(e);
       }
@@ -794,7 +851,9 @@ export class AnnotGalleryPageElement extends LitElement {
     if (!this.selectedFolderPaths.has(folder.path)) {
       this.selectedFolderPaths = new Set([folder.path]);
       this.selectedImagePaths = new Set();
+      this.selectedDocumentPaths = new Set();
       this.selectedImagePathOrder = [];
+      this.#selectionAnchor = { type: "folder", path: folder.path };
       this.#fireSelectionChange();
     }
     openContextMenu({
@@ -843,7 +902,9 @@ export class AnnotGalleryPageElement extends LitElement {
     if (!this.selectedImagePaths.has(img.path)) {
       this.selectedImagePaths = new Set([img.path]);
       this.selectedFolderPaths = new Set();
+      this.selectedDocumentPaths = new Set();
       this.selectedImagePathOrder = [img.path];
+      this.#selectionAnchor = { type: "image", path: img.path };
       this.#fireSelectionChange();
     }
     openContextMenu({
@@ -1016,7 +1077,7 @@ export class AnnotGalleryPageElement extends LitElement {
             ? "Create card document from this image"
             : `Create card document from ${this.selectedImagePaths.size} images`,
         action: () => {
-          this.#requestCreateCardDocument();
+          this.requestCreateCardDocument();
         },
       });
     }
@@ -1027,8 +1088,13 @@ export class AnnotGalleryPageElement extends LitElement {
    *  request. Hosts (PWA / VSCode / Desktop) listen for this on
    *  the gallery element and own the actual dialog + generator
    *  + doc-open flow. Gallery stays storage-agnostic.
-   *  Phase 4 of `docs/plans/_done/card-procedure-template.md`. */
-  #requestCreateCardDocument(): void {
+   *  Phase 4 of `docs/plans/_done/card-procedure-template.md`.
+   *
+   *  Public so the file-manager shell's selection-bar button can
+   *  trigger the same flow as the image context menu — both end
+   *  up dispatching `annot-gallery-create-card-document-request`
+   *  with the current ordered image selection. */
+  requestCreateCardDocument(): void {
     const { imagesInOrder } = this.getSelection();
     if (imagesInOrder.length === 0) return;
     this.dispatchEvent(
@@ -1045,7 +1111,7 @@ export class AnnotGalleryPageElement extends LitElement {
 
   // ---- Selection handling ----
 
-  #handleItemClick(e: MouseEvent, type: "image" | "folder", path: string): void {
+  #handleItemClick(e: MouseEvent, type: "image" | "folder" | "document", path: string): void {
     e.stopPropagation();
     const isMac = navigator.platform.toUpperCase().startsWith("MAC");
     const multiModifier = isMac ? e.metaKey : e.ctrlKey;
@@ -1053,6 +1119,7 @@ export class AnnotGalleryPageElement extends LitElement {
 
     let nextImages = new Set(this.selectedImagePaths);
     let nextFolders = new Set(this.selectedFolderPaths);
+    let nextDocuments = new Set(this.selectedDocumentPaths);
     // Phase 4 of card-procedure-template — order tracking. We
     // compute the next ordered list alongside the Set; the
     // rules per modifier mirror the membership update.
@@ -1062,13 +1129,14 @@ export class AnnotGalleryPageElement extends LitElement {
       const range = this.#selectRange(this.#selectionAnchor, { type, path });
       nextImages = range.nextImages;
       nextFolders = range.nextFolders;
+      nextDocuments = range.nextDocuments;
       // Shift-range reseats the entire image selection in
       // anchor-first-then-DOM-order. Any prior click sequence
       // gets discarded — matches every other gallery on the
       // planet (Finder / Explorer / Drive).
       nextOrder = range.imageOrder;
     } else if (multiModifier) {
-      const set = type === "image" ? nextImages : nextFolders;
+      const set = type === "image" ? nextImages : type === "folder" ? nextFolders : nextDocuments;
       if (set.has(path)) {
         set.delete(path);
         if (type === "image") nextOrder = nextOrder.filter((p) => p !== path);
@@ -1081,7 +1149,8 @@ export class AnnotGalleryPageElement extends LitElement {
       // Plain click: replace selection with just this item.
       nextImages = new Set();
       nextFolders = new Set();
-      const set = type === "image" ? nextImages : nextFolders;
+      nextDocuments = new Set();
+      const set = type === "image" ? nextImages : type === "folder" ? nextFolders : nextDocuments;
       set.add(path);
       nextOrder = type === "image" ? [path] : [];
       this.#selectionAnchor = { type, path };
@@ -1089,24 +1158,39 @@ export class AnnotGalleryPageElement extends LitElement {
 
     this.selectedImagePaths = nextImages;
     this.selectedFolderPaths = nextFolders;
+    this.selectedDocumentPaths = nextDocuments;
     this.selectedImagePathOrder = nextOrder;
     this.#fireSelectionChange();
   }
 
   #selectRange(
-    anchor: { type: "image" | "folder"; path: string },
-    target: { type: "image" | "folder"; path: string },
-  ): { nextImages: Set<string>; nextFolders: Set<string>; imageOrder: string[] } {
-    const flat: { type: "image" | "folder"; path: string }[] = [
+    anchor: { type: "image" | "folder" | "document"; path: string },
+    target: { type: "image" | "folder" | "document"; path: string },
+  ): {
+    nextImages: Set<string>;
+    nextFolders: Set<string>;
+    nextDocuments: Set<string>;
+    imageOrder: string[];
+  } {
+    // Flat order matches render order: Folders → Documents → Images.
+    // Shift-range walks this flat list; the membership Sets stay
+    // segregated per type so a range that crosses a section
+    // boundary still selects items of every traversed type — this
+    // mirrors how Drive / Finder behave when a range spans
+    // headings.
+    const flat: { type: "image" | "folder" | "document"; path: string }[] = [
       ...this.folders.map((f) => ({ type: "folder" as const, path: f.path })),
+      ...this.documents.map((d) => ({ type: "document" as const, path: d.path })),
       ...this.images.map((i) => ({ type: "image" as const, path: i.path })),
     ];
     const anchorIdx = flat.findIndex((x) => x.type === anchor.type && x.path === anchor.path);
     const targetIdx = flat.findIndex((x) => x.type === target.type && x.path === target.path);
     const nextImages = new Set<string>();
     const nextFolders = new Set<string>();
+    const nextDocuments = new Set<string>();
     const imageOrder: string[] = [];
-    if (anchorIdx < 0 || targetIdx < 0) return { nextImages, nextFolders, imageOrder };
+    if (anchorIdx < 0 || targetIdx < 0)
+      return { nextImages, nextFolders, nextDocuments, imageOrder };
     // Phase 4 of card-procedure-template — image-order walks
     // from the anchor toward the target rather than always
     // ascending. This matches the user intent: Shift-clicking
@@ -1116,12 +1200,13 @@ export class AnnotGalleryPageElement extends LitElement {
     const step = anchorIdx <= targetIdx ? 1 : -1;
     for (let i = anchorIdx; ; i += step) {
       const item = flat[i]!;
-      const set = item.type === "image" ? nextImages : nextFolders;
+      const set =
+        item.type === "image" ? nextImages : item.type === "folder" ? nextFolders : nextDocuments;
       set.add(item.path);
       if (item.type === "image") imageOrder.push(item.path);
       if (i === targetIdx) break;
     }
-    return { nextImages, nextFolders, imageOrder };
+    return { nextImages, nextFolders, nextDocuments, imageOrder };
   }
 
   #fireSelectionChange(): void {

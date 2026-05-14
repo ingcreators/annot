@@ -25,6 +25,7 @@ interface Args {
   viewMode: "grid" | "list";
   countText: string;
   selection: SelectionInfo | null;
+  canCreateCardDocument: boolean;
 }
 
 function makeCallbacks(): FileManagerShellCallbacks {
@@ -34,6 +35,7 @@ function makeCallbacks(): FileManagerShellCallbacks {
     onSetViewMode: (mode) => console.log("[story] onSetViewMode", mode),
     onClearSelection: () => console.log("[story] onClearSelection"),
     onDeleteSelection: () => console.log("[story] onDeleteSelection"),
+    onCreateCardDocument: () => console.log("[story] onCreateCardDocument"),
   };
 }
 
@@ -52,6 +54,7 @@ const meta: Meta<Args> = {
     el.viewMode = args.viewMode;
     el.countText = args.countText;
     el.selection = args.selection;
+    el.canCreateCardDocument = args.canCreateCardDocument;
     el.callbacks = makeCallbacks();
     wrapper.appendChild(el);
     return wrapper;
@@ -61,12 +64,14 @@ const meta: Meta<Args> = {
     viewMode: { control: "radio", options: ["grid", "list"] },
     countText: { control: "text" },
     selection: { control: "object" },
+    canCreateCardDocument: { control: "boolean" },
   },
   args: {
     breadcrumbs: [{ label: "Browser", path: "", active: true }],
     viewMode: "grid",
     countText: "12 images",
     selection: null,
+    canCreateCardDocument: true,
   },
 };
 export default meta;
@@ -100,19 +105,45 @@ export const SelectionBarVisible: Story = {
     breadcrumbs: [{ label: "Browser", path: "", active: true }],
     viewMode: "grid",
     countText: "24 images",
-    selection: { folders: 1, images: 3 },
+    selection: { folders: 1, images: 3, documents: 0 },
   },
 };
 
 export const SelectionFoldersOnly: Story = {
   args: {
-    selection: { folders: 2, images: 0 },
+    selection: { folders: 2, images: 0, documents: 0 },
   },
 };
 
-export const SelectionFilesOnly: Story = {
+export const SelectionImagesOnly: Story = {
   args: {
-    selection: { folders: 0, images: 5 },
+    selection: { folders: 0, images: 5, documents: 0 },
+  },
+};
+
+export const SelectionDocumentsOnly: Story = {
+  args: {
+    selection: { folders: 0, images: 0, documents: 2 },
+  },
+};
+
+export const SelectionMixed: Story = {
+  args: {
+    selection: { folders: 0, images: 3, documents: 2 },
+  },
+};
+
+export const SelectionImagesWithCreateCardButton: Story = {
+  args: {
+    selection: { folders: 0, images: 4, documents: 0 },
+    canCreateCardDocument: true,
+  },
+};
+
+export const SelectionWithoutCreateCardButton: Story = {
+  args: {
+    selection: { folders: 0, images: 4, documents: 0 },
+    canCreateCardDocument: false,
   },
 };
 

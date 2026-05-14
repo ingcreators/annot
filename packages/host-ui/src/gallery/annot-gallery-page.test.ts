@@ -321,6 +321,32 @@ describe("<annot-gallery-page>", () => {
       expect(handler).not.toHaveBeenCalled();
     });
 
+    it("requestCreateCardDocument() is callable from outside the element", async () => {
+      const el = await mount({
+        images: [makeImage({ path: "a.png" }), makeImage({ path: "b.png" })],
+      });
+      el.querySelectorAll<HTMLElement>(".gallery-item")[0]!.click();
+      el.querySelectorAll<HTMLElement>(".gallery-item")[1]!.dispatchEvent(
+        new MouseEvent("click", { bubbles: true, ctrlKey: true }),
+      );
+      await el.updateComplete;
+      const handler = vi.fn();
+      el.addEventListener("annot-gallery-create-card-document-request", (e) =>
+        handler(e.detail.imagesInOrder.map((i) => i.path)),
+      );
+      el.requestCreateCardDocument();
+      expect(handler).toHaveBeenCalledWith(["a.png", "b.png"]);
+    });
+
+    it("requestCreateCardDocument() with no images dispatches nothing", async () => {
+      const el = await mount({ images: [makeImage({ path: "a.png" })] });
+      const handler = vi.fn();
+      el.addEventListener("annot-gallery-create-card-document-request", handler);
+      // No image selected.
+      el.requestCreateCardDocument();
+      expect(handler).not.toHaveBeenCalled();
+    });
+
     it("dispatches imagesInOrder when the host has wired the action", async () => {
       const el = await mount({
         images: [makeImage({ path: "a.png" }), makeImage({ path: "b.png" })],
