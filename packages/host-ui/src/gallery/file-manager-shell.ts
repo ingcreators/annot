@@ -49,6 +49,11 @@ export interface FileManagerShellCallbacks {
    *  existing `annot-gallery-create-card-document-request` event
    *  with the current ordered image selection. */
   onCreateCardDocument: () => void;
+  /** Invoked when the user clicks the selection-bar's "Download"
+   *  button. Host (`FileManager`) routes to the per-host download
+   *  pipeline (XMP-embedded blob per image + raw bytes per document,
+   *  packed into a single file or ZIP). */
+  onDownloadSelection: () => void;
 }
 
 export class AnnotFileManagerShellElement extends LitElement {
@@ -58,6 +63,7 @@ export class AnnotFileManagerShellElement extends LitElement {
     countText: { state: true },
     selection: { state: true },
     canCreateCardDocument: { attribute: false },
+    canDownloadSelection: { attribute: false },
     callbacks: { attribute: false },
   };
 
@@ -70,6 +76,12 @@ export class AnnotFileManagerShellElement extends LitElement {
    *  selection-bar's "Create card document" button — the button
    *  also requires images-only selection at runtime. */
   declare canCreateCardDocument: boolean;
+  /** Set by the host (`FileManager`) based on whether the host's
+   *  `onDownloadSelection` callback was wired. Gates the
+   *  selection-bar's "Download" button — the button also requires
+   *  at least one image or document in the selection at runtime
+   *  (folders alone don't qualify). */
+  declare canDownloadSelection: boolean;
   declare callbacks: FileManagerShellCallbacks;
 
   constructor() {
@@ -79,6 +91,7 @@ export class AnnotFileManagerShellElement extends LitElement {
     this.countText = "";
     this.selection = null;
     this.canCreateCardDocument = false;
+    this.canDownloadSelection = false;
     this.callbacks = {
       onNavigate: () => {},
       onRefresh: () => {},
@@ -86,6 +99,7 @@ export class AnnotFileManagerShellElement extends LitElement {
       onClearSelection: () => {},
       onDeleteSelection: () => {},
       onCreateCardDocument: () => {},
+      onDownloadSelection: () => {},
     };
   }
 
@@ -183,6 +197,7 @@ export class AnnotFileManagerShellElement extends LitElement {
         >
         <div class="selection-bar-spacer"></div>
         ${this.#renderCreateCardDocumentButton()}
+        ${this.#renderDownloadButton()}
         <button
           type="button"
           class="selection-bar-btn selection-bar-btn-danger"
@@ -245,6 +260,29 @@ export class AnnotFileManagerShellElement extends LitElement {
         @click=${() => this.callbacks.onCreateCardDocument()}
       >
         <annot-icon aria-hidden="true" .spec=${builtinIcon("view_carousel")}></annot-icon>${label}
+      </button>
+    `;
+  }
+
+  #renderDownloadButton() {
+    const sel = this.selection;
+    if (!this.canDownloadSelection) return nothing;
+    if (!sel) return nothing;
+    // Folders alone don't qualify — they have no single-file
+    // representation. Mixed selections (some files + some folders)
+    // proceed with folders silently skipped on the host side.
+    const fileCount = sel.images + sel.documents;
+    if (fileCount < 1) return nothing;
+    const label = fileCount === 1 ? "Download" : `Download (${fileCount} items)`;
+    return html`
+      <button
+        type="button"
+        class="selection-bar-btn"
+        data-tooltip="Download selected files"
+        aria-label=${label}
+        @click=${() => this.callbacks.onDownloadSelection()}
+      >
+        <annot-icon aria-hidden="true" .spec=${builtinIcon("download")}></annot-icon>${label}
       </button>
     `;
   }
