@@ -42,6 +42,7 @@ import { SplitEditorHost } from "./app/split-editor-host.js";
 import { StorageBridge } from "./app/storage-bridge.js";
 import { pasteFromClipboard } from "./capture/pwa-capture.js";
 import { ScratchpadStore } from "./editor/scratchpad-store.js";
+import { downloadGallerySelection } from "./gallery/download-selection.js";
 import { logger } from "./logger.js";
 import { docUrl, editUrl, galleryUrl, pushRoute } from "./router.js";
 import {
@@ -654,6 +655,7 @@ export class App {
               onCreateCardDocument: (images) => this.createCardDocumentFromImages(images),
             }
           : {}),
+        onDownloadSelection: (sel) => downloadGallerySelection(sel),
         getPluginStorages: () => this.#pluginHost.listStorageRegistrations(),
         isBuiltinDisabled: (mode) => this.#disabledBuiltinStorage.has(mode),
         getSidebarTabs: () => this.#pluginHost.listSidebarTabs(),

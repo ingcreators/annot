@@ -72,6 +72,23 @@ export interface FileManagerCallbacks {
    *  opens it in the doc shell as unsaved. Optional — gallery
    *  hides the menu entry when the host hasn't wired it. */
   onCreateCardDocument?: (imagesInOrder: readonly ImageRecord[]) => Promise<void>;
+  /**
+   * Download the current selection.
+   *
+   * Single file (one image or one document) → host triggers a
+   * direct download of that file with its stored filename.
+   * Multiple files → host packs into a ZIP and downloads.
+   *
+   * Folders in the selection are filtered out before invoking this
+   * callback. The callback is only invoked when at least one image
+   * or document is selected.
+   *
+   * Optional — hosts that don't wire it hide the Download button.
+   */
+  onDownloadSelection?: (selection: {
+    images: readonly ImageRecord[];
+    documents: readonly DocumentRecord[];
+  }) => Promise<void>;
   /** Plugin-registered storage backends, fed through to the
    *  sidebar so plugin chips can render alongside the built-ins.
    *  Optional — desktop / embedded shells that don't load plugins
@@ -164,6 +181,7 @@ export class FileManager {
     this.#mainContentEl.innerHTML = "";
     const shell = document.createElement("annot-file-manager-shell");
     shell.canCreateCardDocument = this.#callbacks.onCreateCardDocument !== undefined;
+    shell.canDownloadSelection = this.#callbacks.onDownloadSelection !== undefined;
     shell.callbacks = {
       onNavigate: (path) => this.navigateToFolder(path),
       onRefresh: () => this.refreshFromDisk(),
@@ -176,9 +194,32 @@ export class FileManager {
       // event — the host listener below routes it back through
       // `#callbacks.onCreateCardDocument(imagesInOrder)`.
       onCreateCardDocument: () => this.#gallery?.requestCreateCardDocument(),
+      onDownloadSelection: () => {
+        void this.#downloadSelection();
+      },
     };
     this.#mainContentEl.appendChild(shell);
     this.#shell = shell;
+  }
+
+  async #downloadSelection(): Promise<void> {
+    const onDownload = this.#callbacks.onDownloadSelection;
+    if (!onDownload) return;
+    const sel = this.#gallery?.getSelection();
+    if (!sel) return;
+    // Folders are intentionally filtered out — they have no
+    // single-file representation. Mixed selections proceed with
+    // files only.
+    if (sel.images.length === 0 && sel.documents.length === 0) return;
+    try {
+      await onDownload({ images: sel.images, documents: sel.documents });
+    } catch (e: unknown) {
+      const msg = (e as { message?: string })?.message || "Failed to download selection";
+      await showAlertDialog({
+        title: "Couldn't download",
+        message: msg,
+      });
+    }
   }
 
   get sidebar(): AnnotSidebarElement {

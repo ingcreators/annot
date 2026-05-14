@@ -26,6 +26,7 @@ interface Args {
   countText: string;
   selection: SelectionInfo | null;
   canCreateCardDocument: boolean;
+  canDownloadSelection: boolean;
 }
 
 function makeCallbacks(): FileManagerShellCallbacks {
@@ -36,6 +37,7 @@ function makeCallbacks(): FileManagerShellCallbacks {
     onClearSelection: () => console.log("[story] onClearSelection"),
     onDeleteSelection: () => console.log("[story] onDeleteSelection"),
     onCreateCardDocument: () => console.log("[story] onCreateCardDocument"),
+    onDownloadSelection: () => console.log("[story] onDownloadSelection"),
   };
 }
 
@@ -55,6 +57,7 @@ const meta: Meta<Args> = {
     el.countText = args.countText;
     el.selection = args.selection;
     el.canCreateCardDocument = args.canCreateCardDocument;
+    el.canDownloadSelection = args.canDownloadSelection;
     el.callbacks = makeCallbacks();
     wrapper.appendChild(el);
     return wrapper;
@@ -65,6 +68,7 @@ const meta: Meta<Args> = {
     countText: { control: "text" },
     selection: { control: "object" },
     canCreateCardDocument: { control: "boolean" },
+    canDownloadSelection: { control: "boolean" },
   },
   args: {
     breadcrumbs: [{ label: "Browser", path: "", active: true }],
@@ -72,6 +76,7 @@ const meta: Meta<Args> = {
     countText: "12 images",
     selection: null,
     canCreateCardDocument: true,
+    canDownloadSelection: true,
   },
 };
 export default meta;
@@ -144,6 +149,27 @@ export const SelectionWithoutCreateCardButton: Story = {
   args: {
     selection: { folders: 0, images: 4, documents: 0 },
     canCreateCardDocument: false,
+  },
+};
+
+export const SelectionWithDownloadButton: Story = {
+  args: {
+    selection: { folders: 0, images: 3, documents: 2 },
+    canDownloadSelection: true,
+  },
+};
+
+export const SelectionWithoutDownloadButton: Story = {
+  args: {
+    selection: { folders: 0, images: 3, documents: 2 },
+    canDownloadSelection: false,
+  },
+};
+
+export const SelectionFoldersOnlyHidesDownload: Story = {
+  args: {
+    selection: { folders: 2, images: 0, documents: 0 },
+    canDownloadSelection: true,
   },
 };
 
