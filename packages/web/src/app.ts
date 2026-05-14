@@ -620,7 +620,7 @@ export class App {
         onOpenImage: (record) => this.openFromGallery(record),
         onOpenDocument: (record) => {
           // Phase 6d: gallery double-click on a document card →
-          // route through `/doc/<store>/<path>` so the existing
+          // route through `/edit/doc/<store>/<path>` so the existing
           // router-host doc branch handles the mount + edit
           // wiring. Same pattern `onOpenImage` uses above.
           pushRoute(docUrl(getStorageMode(), record.path));
@@ -838,7 +838,7 @@ export class App {
    *   2. Serialise to canonical bytes via `serializeDocument`.
    *   3. Persist via `storage.saveDocument` (the backend assigns
    *      a unique filename inside the current folder).
-   *   4. Navigate to `/doc/<store>/<assigned-path>` so the
+   *   4. Navigate to `/edit/doc/<store>/<assigned-path>` so the
    *      router-host's doc-route branch picks up + mounts the
    *      shell against the new record.
    *

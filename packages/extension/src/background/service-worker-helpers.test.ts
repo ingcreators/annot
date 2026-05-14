@@ -109,7 +109,7 @@ describe("buildEditUrl", () => {
   it("URL-encodes each path segment so slashes survive but reserved chars don't", () => {
     const url = buildEditUrl("folder/sub/file with space.png", "ext-id");
     // Each segment is encoded separately; "/" between them is preserved.
-    expect(url).toContain("/edit/extension/folder/sub/file%20with%20space.png");
+    expect(url).toContain("/edit/img/extension/folder/sub/file%20with%20space.png");
   });
 
   it("URL-encodes the extension id", () => {

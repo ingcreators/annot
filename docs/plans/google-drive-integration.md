@@ -127,14 +127,14 @@ Annot parses it, and:
   (permitted because Drive UI initiated the open), resolves the
   file's parents chain back to the user's Annot root, registers the
   file in the internal `pathToFileId` cache, then navigates to
-  `/edit/googledrive/<resolved-path>`.
+  `/edit/img/googledrive/<resolved-path>`.
 - `action === "create"`: reserved for a follow-up — Annot needs a
   base image to meaningfully "create" an annotation file, so this
   flow will plug in once the broader capture-from-Drive story is
   designed.
 
 Routing namespace: a dedicated `/handoff/<source>` tree, kept
-separate from `/edit/<store>/<path>`. Two reasons:
+separate from `/edit/<kind>/<store>/<path>`. Two reasons:
 
 1. "handoff" is not a valid filename to reserve inside `/edit/...`
    — any file literally named `handoff` would otherwise collide

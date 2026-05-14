@@ -3,19 +3,27 @@
  * Image path occupies the URL path segments after the store,
  * so "/" acts as a natural folder separator.
  *
- * URL patterns:
+ * URL patterns (production base = "/annotation"):
  *   /annotation/                                                → gallery (root)
  *   /annotation/folder/Screenshots/Mobile                       → gallery (deep-link)
- *   /annotation/edit/local/image-123.jpg                        → edit image at root
- *   /annotation/edit/local/Screenshots/Mobile/image-456.png     → edit nested image
- *   /annotation/edit/extension/...?extId=...                    → edit from extension
- *   /annotation/doc/browser/Manuals/onboarding.annot.html       → edit document
+ *   /annotation/edit/img/browser/image-123.jpg                  → edit image at root
+ *   /annotation/edit/img/browser/Screenshots/Mobile/image.png   → edit nested image
+ *   /annotation/edit/img/extension/...?extId=...                → edit from extension
+ *   /annotation/edit/doc/browser/Manuals/onboarding.annot.html  → edit document
  *
  * In dev (base = "/"):
  *   /                                                           → gallery
- *   /edit/local/<path...>                                       → edit image
- *   /doc/browser/<path...>                                      → edit document
+ *   /edit/img/<store>/<path...>                                 → edit image
+ *   /edit/doc/<store>/<path...>                                 → edit document
  *   /folder/<path...>                                           → gallery deep-link
+ *   /capture                                                    → capture workspace
+ *
+ * Resource type lives between `edit` and `<store>` as a short
+ * identifier (`img` / `doc`), matching annot's "short identifier in
+ * URLs / package names / element prefixes" convention. Legacy
+ * `/edit/<store>/<path>` and `/doc/<store>/<path>` URLs fall through
+ * to the gallery (404 policy, mirroring the `local→browser` rename
+ * precedent in `docs/url-schemes.md`).
  *
  * Non-ASCII and special characters are percent-encoded per segment,
  * so "/" is never %2F-encoded.
@@ -75,22 +83,21 @@ export function parseRoute(): Route {
     return { type: "handoff", handoffSource, handoffState };
   }
 
-  // /edit/:store/<path...>
-  if (parts[0] === "edit" && parts[1]) {
-    const store = parts[1];
-    const path = decodePath(parts.slice(2));
-    return { type: "edit", store, path, extId, session };
-  }
-
-  // /doc/:store/<path...> — `.annot.html` document editor entry
-  // point. Phase 6b of `docs/plans/_done/annot-html-document.md`. Kept
-  // separate from `/edit/...` so a future filename of "doc" inside
-  // a backend can't collide with the route, AND so the router-host
-  // can route documents through the doc-shell instead of the
-  // image editor without sniffing the file extension.
-  if (parts[0] === "doc" && parts[1]) {
-    const store = parts[1];
-    const path = decodePath(parts.slice(2));
+  // /edit/img/:store/<path...>  → image editor
+  // /edit/doc/:store/<path...>  → `.annot.html` document editor
+  //
+  // Resource type lives between `edit` and `<store>` as a short
+  // identifier. The doc branch routes through the doc-shell instead
+  // of the image editor without sniffing the file extension. Legacy
+  // `/edit/<store>/<path>` (no resource segment) and `/doc/<store>/<path>`
+  // (top-level) fall through to the gallery — see the docblock above.
+  if (parts[0] === "edit" && (parts[1] === "img" || parts[1] === "doc") && parts[2]) {
+    const kind = parts[1];
+    const store = parts[2];
+    const path = decodePath(parts.slice(3));
+    if (kind === "img") {
+      return { type: "edit", store, path, extId, session };
+    }
     return { type: "doc", store, path, extId };
   }
 
@@ -118,17 +125,17 @@ export function editUrl(store: string, imagePath: string, extId?: string): strin
   const encoded = encodePath(imagePath);
   const qs = extId ? `?extId=${encodeURIComponent(extId)}` : "";
   const suffix = encoded ? `/${encoded}` : "";
-  return `${BASE}/edit/${encodeURIComponent(store)}${suffix}${qs}`;
+  return `${BASE}/edit/img/${encodeURIComponent(store)}${suffix}${qs}`;
 }
 
 /** Build a URL for editing an `.annot.html` document at `docPath`.
- *  Sibling of {@link editUrl}; the only difference is the route
- *  prefix (`doc` vs `edit`) the router-host dispatches on. */
+ *  Sibling of {@link editUrl}; the only difference is the resource
+ *  segment (`doc` vs `img`) the router-host dispatches on. */
 export function docUrl(store: string, docPath: string, extId?: string): string {
   const encoded = encodePath(docPath);
   const qs = extId ? `?extId=${encodeURIComponent(extId)}` : "";
   const suffix = encoded ? `/${encoded}` : "";
-  return `${BASE}/doc/${encodeURIComponent(store)}${suffix}${qs}`;
+  return `${BASE}/edit/doc/${encodeURIComponent(store)}${suffix}${qs}`;
 }
 
 /**
@@ -147,7 +154,7 @@ export function sessionEditUrl(
   const params = new URLSearchParams();
   params.set("session", sessionId);
   if (extId) params.set("extId", extId);
-  return `${BASE}/edit/${encodeURIComponent(store)}${suffix}?${params.toString()}`;
+  return `${BASE}/edit/img/${encodeURIComponent(store)}${suffix}?${params.toString()}`;
 }
 
 /** Build the `/capture` workspace URL. Phase 2 of
