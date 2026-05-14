@@ -1,11 +1,12 @@
 /**
  * @vitest-environment happy-dom
  *
- * `RouterHost` doc-route dispatch — Phase 6b of
- * `docs/plans/_done/annot-html-document.md`. Focused on the new
- * `/doc/<store>/<path>` branch in `handleRoute`; the existing
- * gallery / edit / handoff branches keep their end-to-end
- * coverage in `app.test.ts` (not duplicated here).
+ * `RouterHost` doc-route dispatch — originally landed in Phase 6b
+ * of `docs/plans/_done/annot-html-document.md` under `/doc/...`; the
+ * route was later regrouped under `/edit/doc/<store>/<path>` so
+ * resource types share a single `/edit/` namespace. The existing
+ * gallery / edit / handoff branches keep their end-to-end coverage
+ * in `app.test.ts` (not duplicated here).
  */
 
 import type {
@@ -122,7 +123,7 @@ describe("RouterHost: /doc dispatch", () => {
     const { deps, openDocFromGallery, showGalleryView } = makeDeps(storage);
     const host = new RouterHost(deps);
 
-    setHref("/doc/browser/Manuals/onboarding.annot.html");
+    setHref("/edit/doc/browser/Manuals/onboarding.annot.html");
     await host.handleRoute();
 
     expect(storage.getDocument).toHaveBeenCalledWith("Manuals/onboarding.annot.html");
@@ -136,7 +137,7 @@ describe("RouterHost: /doc dispatch", () => {
     const { deps, openDocFromGallery, showGalleryView } = makeDeps(storage);
     const host = new RouterHost(deps);
 
-    setHref("/doc/browser/Missing.annot.html");
+    setHref("/edit/doc/browser/Missing.annot.html");
     await host.handleRoute();
 
     expect(openDocFromGallery).not.toHaveBeenCalled();
@@ -154,7 +155,7 @@ describe("RouterHost: /doc dispatch", () => {
     const { deps, openDocFromGallery, showGalleryView } = makeDeps(storage);
     const host = new RouterHost(deps);
 
-    setHref("/doc/browser/x.annot.html");
+    setHref("/edit/doc/browser/x.annot.html");
     await host.handleRoute();
 
     expect(openDocFromGallery).not.toHaveBeenCalled();
@@ -173,7 +174,7 @@ describe("RouterHost: /doc dispatch", () => {
     const { deps, openDocFromGallery, showGalleryView } = makeDeps(storage);
     const host = new RouterHost(deps);
 
-    setHref("/doc/browser/x.annot.html");
+    setHref("/edit/doc/browser/x.annot.html");
     await host.handleRoute();
 
     expect(openDocFromGallery).not.toHaveBeenCalled();

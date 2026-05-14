@@ -4,7 +4,7 @@
  * Device (File System Access API) storage provider — path-based
  * identification. Reads/writes image files to a user-selected local
  * directory. The "Device" name mirrors the sidebar label so
- * identifiers line up across UI / URL (`/edit/device/...`) / code;
+ * identifiers line up across UI / URL (`/edit/img/device/...`) / code;
  * internally the implementation talks to the browser's
  * `FileSystemDirectoryHandle` API.
  *

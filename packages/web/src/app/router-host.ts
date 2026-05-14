@@ -122,7 +122,7 @@ export class RouterHost {
         const records = await findSessionRecords(storage, folderPath, route.session);
         const kind = records[0]?.tags?.sessionKind;
         if (records.length > 0 && (kind === "scroll" || kind === "perPage")) {
-          // Rewrite the URL to the canonical `/edit/<store>?session=…` form
+          // Rewrite the URL to the canonical `/edit/img/<store>?session=…` form
           // so reloads / popstate re-enter the split editor cleanly.
           pushRoute(sessionEditUrl(getStorageMode(), route.session));
           await this.deps.setupSplitEditor(records);
@@ -141,7 +141,7 @@ export class RouterHost {
       }
     }
 
-    // /doc/:store/<path> — load the document and hand off to the
+    // /edit/doc/:store/<path> — load the document and hand off to the
     // host's doc-shell. Skipped silently when the active storage
     // backend doesn't implement `StorageWithDocuments` (Phase 7+
     // backends; the gallery view falls through and the user can

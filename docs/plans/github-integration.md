@@ -27,7 +27,7 @@ GitHub repository as another storage backend:
 
 - `StorageProvider` is backend-neutral (see
   [`path-based-storage.md`](./path-based-storage.md)).
-- Per-mode `/edit/<store>/<path>` routing (see
+- Per-mode `/edit/img/<store>/<path>` routing (see
   [`url-schemes.md`](../url-schemes.md)).
 - Per-operation 401 recovery and token refresh flows already
   exist for Drive and generalize cleanly.
@@ -251,8 +251,8 @@ picker help text at Phase 1 docs polish time.
 
 ### 8. URLs
 
-Route: `/edit/github/<path>?extId=…&session=…`, parallel to
-the existing `/edit/<store>/<path>` entries. `<path>` is the
+Route: `/edit/img/github/<path>?extId=…&session=…`, parallel to
+the existing `/edit/img/<store>/<path>` entries. `<path>` is the
 repo-relative path relative to the picked base path — same
 semantics as Drive's root-relative path.
 

@@ -33,10 +33,12 @@ export const IDB_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
  */
 export const ANNOTATION_URL = import.meta.env.DEV ? "http://localhost:3000" : "https://annot.work";
 
-/** Build edit URL with multi-segment image path. */
+/** Build edit URL with multi-segment image path. Mirrors the web app's
+ *  `editUrl(store, path, extId)` builder — resource type lives between
+ *  `edit` and `<store>` so `img` and `doc` share the same parent. */
 export function buildEditUrl(path: string, extId: string): string {
   const encoded = path.split("/").map(encodeURIComponent).join("/");
-  return `${ANNOTATION_URL}/edit/extension/${encoded}?extId=${encodeURIComponent(extId)}`;
+  return `${ANNOTATION_URL}/edit/img/extension/${encoded}?extId=${encodeURIComponent(extId)}`;
 }
 
 /**
