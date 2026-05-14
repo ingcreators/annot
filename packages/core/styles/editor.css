@@ -921,8 +921,17 @@ body.editor-mode #editor-header {
 
 /* In editor mode, the top #toolbar is replaced by the left
  * #editor-sidebar. Hide the top toolbar entirely and make room for
- * the sidebar on the left edge of the canvas area. */
-body.editor-mode #toolbar {
+ * the sidebar on the left edge of the canvas area.
+ *
+ * Doc mode + split-editor mode follow the same chrome contract:
+ * each surface ships its own dedicated header (`<annot-doc-header>`
+ * / `.split-editor-header`) carrying brand + actions + theme
+ * toggle, so the gallery's search-bearing #toolbar is redundant
+ * and the search box (meaningless on a single-doc editor or a
+ * modal split-editor task) would otherwise leak into chrome. */
+body.editor-mode #toolbar,
+body.annot-doc-mode #toolbar,
+body.split-editor-active #toolbar {
   display: none;
 }
 #editor-sidebar {

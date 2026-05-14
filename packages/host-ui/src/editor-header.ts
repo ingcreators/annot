@@ -21,25 +21,12 @@ import "./annot-icon.js";
  */
 
 import { createThemeToggle } from "@ingcreators/annot-editor";
+import { BRAND_MARK_SVG } from "./brand-mark.js";
 import "./editable-filename.js";
 import type { AnnotEditableFilenameElement } from "./editable-filename.js";
 import { html, LitElement, nothing, unsafeHTML } from "./lit.js";
 import "./save-status-indicator.js";
 import type { AnnotSaveStatusElement } from "./save-status-indicator.js";
-
-/** Brand mark — 30×30 SVG matching the file-manager `.brand` so
- *  the logo stays at the same x/y position when the user
- *  navigates between gallery and editor. 30px fills ~62% of the
- *  48px header — the sweet spot used by Figma / Slack / Notion
- *  in equivalent-height chrome. */
-const BRAND_SVG = `
-  <svg width="30" height="30" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="24" cy="7" r="3.5" fill="#7c9cff"/>
-    <path d="M24 13 L13 38" stroke="#7ef0c5" stroke-width="4" stroke-linecap="round"/>
-    <path d="M24 13 L35 38" stroke="#b391ff" stroke-width="4" stroke-linecap="round"/>
-    <path d="M19 24 H29" stroke="#7c9cff" stroke-width="3.5" stroke-linecap="round"/>
-  </svg>
-`;
 
 export interface EditorHeaderCallbacks {
   /** Click on the brand or any breadcrumb segment that resolves
@@ -138,7 +125,7 @@ export class AnnotEditorHeaderElement extends LitElement {
         aria-label="Back to Gallery"
         @click=${() => this.callbacks.onNavigateToFolder("")}
       >
-        ${unsafeHTML(BRAND_SVG)}
+        ${unsafeHTML(BRAND_MARK_SVG)}
       </button>
 
       <nav class="breadcrumb editor-header-path" aria-label="Return to gallery">
