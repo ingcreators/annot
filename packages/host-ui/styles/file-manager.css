@@ -741,12 +741,6 @@ html.light .view-toggle-btn.active {
   color: var(--annot-text-primary);
 }
 
-.capture-dialog-desc {
-  font-size: 12px;
-  color: var(--annot-text-secondary);
-  line-height: 1.5;
-}
-
 .capture-dialog-row {
   display: flex;
   align-items: center;
@@ -894,7 +888,6 @@ html.light .view-toggle-btn.active {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  margin: 4px 0 8px;
 }
 
 .capture-screen-mode-chip {
@@ -951,22 +944,36 @@ html.light .view-toggle-btn.active {
   line-height: 1.4;
 }
 
-/* ---- Capture dialog Advanced section ---- */
+/* ---- Capture dialog Advanced section ----
+ * Plain `<details>` wrapper — no border or padding. The disclosure
+ * summary plays the role of a top-level section header (with a
+ * `▸ / ▾` marker for the toggle affordance), and the nested sections
+ * inside (Image encoding / Auto Capture) sit at the dialog's content
+ * edge so every row in the dialog — top-level or nested — shares
+ * the same left column. */
 .capture-dialog-advanced {
-  border: 1px solid var(--annot-border-color);
-  border-radius: 6px;
-  padding: 0;
-  margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .capture-dialog-advanced-summary {
+  /* Looks like the other section titles (uppercase tracked muted)
+   * with an added disclosure marker. Slightly larger hit area than
+   * a plain title so clicking is comfortable. */
   cursor: pointer;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--annot-text-secondary);
-  padding: 8px 10px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  color: var(--annot-text-muted);
+  padding: 4px 0;
   list-style: none;
   user-select: none;
+}
+
+.capture-dialog-advanced-summary:hover {
+  color: var(--annot-text-secondary);
 }
 
 .capture-dialog-advanced-summary::marker,
@@ -975,52 +982,56 @@ html.light .view-toggle-btn.active {
 }
 
 .capture-dialog-advanced-summary::before {
-  content: "▸ ";
+  content: "▸";
   display: inline-block;
-  margin-right: 4px;
+  margin-right: 6px;
   transition: transform 0.15s;
 }
 
 .capture-dialog-advanced[open] .capture-dialog-advanced-summary::before {
-  content: "▾ ";
+  content: "▾";
 }
 
-.capture-dialog-advanced[open] .capture-dialog-advanced-summary {
-  border-bottom: 1px solid var(--annot-border-color);
-}
-
-.capture-dialog-advanced-group {
-  /* Rows hang off the section header — the title cancels this
-   * indent with its own negative margin so it stays flush at the
-   * section's outer left edge (same trick as `.pp-section-body`'s
-   * padding-left: 10px). */
-  padding: 8px 10px 8px 20px;
+/* Section wrapper used at BOTH levels: the dialog's three top-level
+ * groups (Capture mode / Output / Advanced settings) AND the nested
+ * groups inside the Advanced `<details>` (Image encoding / Auto
+ * Capture). One class so every section reads with the same
+ * hierarchy: uppercase tracked muted header hangs at the section's
+ * outer left edge, rows hang 10px to the right (PropertyPanel
+ * `.pp-section-header` + `.pp-section-body` pattern). The 10px
+ * row indent is identical across top-level AND nested sections,
+ * so every row in the dialog — Save size / Mouse cursor / Format
+ * / Smart fallback / Capture interval / … — shares a single
+ * label column. */
+.capture-dialog-section {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  padding-left: 10px;
 }
 
-.capture-dialog-advanced-group + .capture-dialog-advanced-group {
-  /* Keep the faint 1px divider as a structural cue, plus extra
-   * padding-top so the uppercase title has room to breathe above
-   * its rows. */
-  border-top: 1px solid var(--annot-border-color);
-  padding-top: 12px;
-}
-
-.capture-dialog-advanced-group-title {
+.capture-dialog-section-title {
   /* Canonical "section header" treatment — small, bold, uppercase,
    * generously tracked, muted. Same scale as `.pp-section-header`
    * in the editor's PropertyPanel so the dialog reads with the
    * same hierarchy users already know. Negative left margin pulls
-   * the title back out of the row indent established by the group's
-   * padding-left, anchoring it at the section's outer left edge. */
+   * the title back out of the section's row indent so it anchors
+   * at the section's outer left edge. */
   font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.7px;
   color: var(--annot-text-muted);
   margin: 0 0 4px -10px;
+}
+
+/* Nested sections inside Advanced sit at the same left edge as the
+ * top-level sections; consecutive nested sections get a faint
+ * divider above so the boundary between Image encoding / Auto
+ * Capture is unambiguous. */
+.capture-dialog-advanced .capture-dialog-section + .capture-dialog-section {
+  border-top: 1px solid var(--annot-border-color);
+  padding-top: 12px;
 }
 
 .capture-dialog-row-checkbox {

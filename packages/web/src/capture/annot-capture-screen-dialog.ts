@@ -196,63 +196,69 @@ export class AnnotCaptureScreenDialogElement extends LitElement {
       >
         <div class="capture-dialog capture-screen-dialog" role="dialog" aria-modal="true">
           <div class="capture-dialog-title">Capture Screen</div>
-          <div class="capture-dialog-desc">Choose a capture mode</div>
 
-          <div class="capture-screen-mode-list" role="radiogroup">
-            ${MODE_CHIPS.map(
-              (chip) => html`
-                <button
-                  type="button"
-                  role="radio"
-                  aria-checked=${this.mode === chip.mode}
-                  class=${this.#chipClass(chip)}
-                  @click=${() => {
-                    this.mode = chip.mode;
-                  }}
-                >
-                  <div class="capture-screen-mode-label">${chip.label}</div>
-                  <div class="capture-screen-mode-desc">${chip.description}</div>
-                </button>
-              `,
-            )}
-          </div>
-
-          <label class="capture-dialog-row">
-            <span class="capture-dialog-label">Save size</span>
-            <select
-              class="capture-dialog-select"
-              .value=${this.saveSizePreset}
-              @change=${(e: Event) => {
-                this.saveSizePreset = (e.currentTarget as HTMLSelectElement)
-                  .value as SaveSizePreset;
-              }}
-            >
-              ${SAVE_SIZE_OPTIONS.map(
-                (preset) => html`
-                  <option value=${preset} ?selected=${this.saveSizePreset === preset}>
-                    ${SAVE_SIZE_LABEL[preset]}
-                  </option>
+          <div class="capture-dialog-section">
+            <div class="capture-dialog-section-title">Capture mode</div>
+            <div class="capture-screen-mode-list" role="radiogroup">
+              ${MODE_CHIPS.map(
+                (chip) => html`
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked=${this.mode === chip.mode}
+                    class=${this.#chipClass(chip)}
+                    @click=${() => {
+                      this.mode = chip.mode;
+                    }}
+                  >
+                    <div class="capture-screen-mode-label">${chip.label}</div>
+                    <div class="capture-screen-mode-desc">${chip.description}</div>
+                  </button>
                 `,
               )}
-            </select>
-          </label>
+            </div>
+          </div>
 
-          <label class="capture-dialog-row">
-            <span class="capture-dialog-label">Mouse cursor</span>
-            <select
-              class="capture-dialog-select"
-              .value=${this.cursor}
-              @change=${(e: Event) => {
-                this.cursor = (e.currentTarget as HTMLSelectElement).value as CursorMode;
-              }}
-            >
-              <option value="always" ?selected=${this.cursor === "always"}>Always show</option>
-              <option value="motion" ?selected=${this.cursor === "motion"}>
-                Only when moving
-              </option>
-              <option value="never" ?selected=${this.cursor === "never"}>Hide</option>
-            </select>
-          </label>
+          <div class="capture-dialog-section">
+            <div class="capture-dialog-section-title">Output</div>
+
+            <label class="capture-dialog-row">
+              <span class="capture-dialog-label">Save size</span>
+              <select
+                class="capture-dialog-select"
+                .value=${this.saveSizePreset}
+                @change=${(e: Event) => {
+                  this.saveSizePreset = (e.currentTarget as HTMLSelectElement)
+                    .value as SaveSizePreset;
+                }}
+              >
+                ${SAVE_SIZE_OPTIONS.map(
+                  (preset) => html`
+                    <option value=${preset} ?selected=${this.saveSizePreset === preset}>
+                      ${SAVE_SIZE_LABEL[preset]}
+                    </option>
+                  `,
+                )}
+              </select>
+            </label>
+
+            <label class="capture-dialog-row">
+              <span class="capture-dialog-label">Mouse cursor</span>
+              <select
+                class="capture-dialog-select"
+                .value=${this.cursor}
+                @change=${(e: Event) => {
+                  this.cursor = (e.currentTarget as HTMLSelectElement).value as CursorMode;
+                }}
+              >
+                <option value="always" ?selected=${this.cursor === "always"}>Always show</option>
+                <option value="motion" ?selected=${this.cursor === "motion"}>
+                  Only when moving
+                </option>
+                <option value="never" ?selected=${this.cursor === "never"}>Hide</option>
+              </select>
+            </label>
+          </div>
 
           ${this.#renderAdvancedSection()}
 
@@ -282,8 +288,8 @@ export class AnnotCaptureScreenDialogElement extends LitElement {
       <details class="capture-dialog-advanced">
         <summary class="capture-dialog-advanced-summary">Advanced settings</summary>
 
-        <div class="capture-dialog-advanced-group">
-          <div class="capture-dialog-advanced-group-title">Image encoding</div>
+        <div class="capture-dialog-section">
+          <div class="capture-dialog-section-title">Image encoding</div>
 
           <label class="capture-dialog-row">
             <span class="capture-dialog-label">Format</span>
@@ -354,8 +360,8 @@ export class AnnotCaptureScreenDialogElement extends LitElement {
 
         ${
           this.mode === "auto"
-            ? html`<div class="capture-dialog-advanced-group">
-                <div class="capture-dialog-advanced-group-title">Auto Capture</div>
+            ? html`<div class="capture-dialog-section">
+                <div class="capture-dialog-section-title">Auto Capture</div>
 
                 <label class="capture-dialog-row">
                   <span class="capture-dialog-label">Capture interval</span>

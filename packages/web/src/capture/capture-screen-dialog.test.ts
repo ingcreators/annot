@@ -137,7 +137,7 @@ describe("showCaptureScreenDialog", () => {
     // Force a re-render so the conditional groups land.
     await Promise.resolve();
     const groupTitlesAuto = Array.from(
-      dlg.querySelectorAll(".capture-dialog-advanced-group-title"),
+      dlg.querySelectorAll(".capture-dialog-advanced .capture-dialog-section-title"),
     ).map((el) => el.textContent?.trim());
     expect(groupTitlesAuto).toContain("Auto Capture");
     clickCancel();
@@ -152,7 +152,7 @@ describe("showCaptureScreenDialog", () => {
     details2.open = true;
     await Promise.resolve();
     const groupTitlesOnce = Array.from(
-      dlg2.querySelectorAll(".capture-dialog-advanced-group-title"),
+      dlg2.querySelectorAll(".capture-dialog-advanced .capture-dialog-section-title"),
     ).map((el) => el.textContent?.trim());
     expect(groupTitlesOnce).not.toContain("Auto Capture");
     expect(groupTitlesOnce).toContain("Image encoding");
