@@ -18,8 +18,13 @@ import type { FileManager } from "@ingcreators/annot-host-ui/gallery/file-manage
 import { generateThumbnailFromDataUrl } from "@ingcreators/annot-host-ui/image-thumbnail";
 import type { ThumbnailManager } from "@ingcreators/annot-host-ui/thumbnail-manager";
 import { setCapturePendingSession } from "../capture/capture-pending-session.js";
-import { saveCursorPreference, saveModePreference } from "../capture/capture-prefs.js";
+import {
+  type CursorMode,
+  saveCursorPreference,
+  saveModePreference,
+} from "../capture/capture-prefs.js";
 import { showCaptureScreenDialog } from "../capture/capture-screen-dialog.js";
+import { CaptureSession } from "../capture/capture-session.js";
 import { pasteFromClipboard } from "../capture/pwa-capture.js";
 import { loadEncodeOptions } from "../encode-options.js";
 import { captureUrl, pushRoute } from "../router.js";
@@ -62,25 +67,33 @@ export class CaptureHost {
   constructor(private readonly deps: CaptureHostDeps) {}
 
   /**
-   * Phase 2 of `docs/plans/web-capture-redesign.md` — opens the new
-   * `Capture Screen...` mode-picker dialog and routes the user
-   * into `/capture` so the workspace handles the live preview +
-   * Capture Once / (future) Auto Capture loop.
+   * Opens the `Capture Screen...` mode-picker dialog and routes
+   * the user per the chosen mode:
    *
-   * The dialog's Start button click IS the user gesture
-   * `getDisplayMedia` needs — the workspace mounts immediately and
-   * the API is callable before the gesture window expires.
+   *   - `auto`: push to `/capture` so the workspace's live preview
+   *     + Auto Capture engine handle the session.
+   *   - `once`: skip the workspace entirely — single-shot capture
+   *     against a hidden `<video>` + immediate save + open editor,
+   *     matching the legacy `Capture Screen` menu behaviour the
+   *     dialog's "Capture Once" mode preserves. The post-rollout
+   *     workspace's `+ Add Capture` button covers "stay in
+   *     workspace, manually grab additional frames" — a different
+   *     flow from "I want one shot then start annotating".
    *
-   * Phase 1 captured inline before the workspace existed; Phase 2
-   * removes that path so the workspace is the single source of
-   * truth for live capture. Capture Once still saves directly via
-   * the workspace's `capture-once` event handler in `app.ts`.
+   * The dialog's Start button click is the user gesture
+   * `getDisplayMedia` needs in both cases.
    */
   async captureScreenDialogAndSave(): Promise<void> {
     const result = await showCaptureScreenDialog();
     if (!result) return;
     saveModePreference(result.mode);
     saveCursorPreference(result.cursor);
+
+    if (result.mode === "once") {
+      await this.#captureOnceAndOpenEditor(result.cursor);
+      return;
+    }
+
     setCapturePendingSession({
       mode: result.mode,
       cursor: result.cursor,
@@ -90,6 +103,36 @@ export class CaptureHost {
     // Surface the workspace via the routing pathway so plugin
     // route-change listeners + browser history all participate.
     this.deps.openCaptureWorkspace();
+  }
+
+  /**
+   * Capture-Once flow: one frame from `getDisplayMedia`, smart-
+   * encoded, saved to the active storage, opened in the editor.
+   * Stops the stream as soon as the frame is grabbed — the
+   * browser's "this tab is being shared" bar disappears within
+   * one tick.
+   */
+  async #captureOnceAndOpenEditor(cursor: CursorMode): Promise<void> {
+    // Detached `<video>` — never appended to the DOM. The
+    // `CaptureSession` only needs `videoWidth` / `videoHeight`
+    // + `drawImage` to grab the frame; rendering it on screen
+    // would just briefly flash the shared content during the
+    // ~200ms post-paint wait.
+    const video = document.createElement("video");
+    const session = new CaptureSession({ video, cursor });
+    const ok = await session.start();
+    if (!ok) return; // user cancelled the screen-share picker
+    let dataUrl: string;
+    try {
+      dataUrl = session.captureFrame().dataUrl;
+    } finally {
+      session.stop();
+    }
+    try {
+      await this.#saveEncodedAndOpenEditor(dataUrl);
+    } catch (err) {
+      showSaveError(`Couldn't save capture: ${(err as Error).message}`);
+    }
   }
 
   async pasteAndSave(): Promise<void> {
@@ -276,6 +319,58 @@ export class CaptureHost {
       width: img.naturalWidth,
       height: img.naturalHeight,
     };
+  }
+
+  /**
+   * Smart-encode + save + open editor. Mirrors `saveDataUrlSilently`
+   * (worker-backed `encodeCaptureInWorker`, smart PNG-8 / JPEG
+   * routing, encode-reason tag, file-manager refresh) plus the
+   * editor hand-off. Used by the Capture Once dialog flow — the
+   * `saveDataUrlAndOpen` path stays JPEG-direct for the
+   * paste-from-clipboard case where the bytes are usually
+   * already-compressed and a re-encode round-trip isn't worth
+   * the latency.
+   */
+  async #saveEncodedAndOpenEditor(dataUrl: string): Promise<void> {
+    const storage = this.deps.getStorage();
+    if (!storage) return;
+    let finalDataUrl = dataUrl;
+    let encodeReason: string | undefined;
+    try {
+      const result = await encodeCaptureInWorker(dataUrl, loadEncodeOptions());
+      finalDataUrl = result.dataUrl;
+      encodeReason = result.reason;
+    } catch (e) {
+      console.warn("[capture-host] smart encode failed, keeping raw PNG-24:", e);
+    }
+    const img = await loadImage(finalDataUrl);
+    const thumbnailDataUrl = await generateThumbnailFromDataUrl(finalDataUrl);
+    const now = new Date().toISOString();
+    const folderPath = this.deps.getCurrentFolderPath();
+    const tags: Record<string, string> = encodeReason ? { encodeReason } : {};
+    const path = await storage.saveImage({
+      originalDataUrl: finalDataUrl,
+      thumbnailDataUrl,
+      annotationsSvg: "",
+      width: img.naturalWidth,
+      height: img.naturalHeight,
+      sourceUrl: "",
+      tags,
+      folderPath,
+      createdAt: now,
+      updatedAt: now,
+    });
+    await this.deps.getThumbnailManager()?.write(storage, path, thumbnailDataUrl, {
+      width: img.naturalWidth,
+      height: img.naturalHeight,
+    });
+    this.deps.openEditor({
+      path,
+      dataUrl: finalDataUrl,
+      width: img.naturalWidth,
+      height: img.naturalHeight,
+      tags,
+    });
   }
 
   /** Delete a saved capture from storage. Used by the /capture

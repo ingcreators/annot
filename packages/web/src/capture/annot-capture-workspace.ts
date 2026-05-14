@@ -275,11 +275,16 @@ export class AnnotCaptureWorkspaceElement extends LitElement {
   };
 
   /** Persist a captured frame via the host's `saveCapture`
-   *  callback, then push the result onto the session panel. */
+   *  callback, then push the result onto the session panel.
+   *  `_width` / `_height` are the source-frame dimensions the
+   *  engine reports; the panel uses the post-encode dimensions
+   *  the host returns instead, so the source dims are unused
+   *  here — kept on the signature for symmetry with
+   *  `AutoCaptureFrame` + the manual-capture path. */
   async #persistCapture(
     dataUrl: string,
-    width: number,
-    height: number,
+    _width: number,
+    _height: number,
     sessionKind: "auto" | "manual",
     diffScore?: number,
   ): Promise<void> {
