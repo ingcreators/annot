@@ -975,12 +975,21 @@ html.light .view-toggle-btn.active {
 }
 
 /* ---- Capture dialog Advanced section ----
- * Plain `<details>` wrapper — no border or padding. The disclosure
- * summary plays the role of a top-level section header (with a
- * `▸ / ▾` marker for the toggle affordance), and the nested sections
- * inside (Image encoding / Auto Capture) sit at the dialog's content
- * edge so every row in the dialog — top-level or nested — shares
- * the same left column. */
+ * Plain `<details>` wrapper — no border. The disclosure summary
+ * plays the role of a top-level section header (with a `▸ / ▾`
+ * marker for the toggle affordance), and the nested sections
+ * inside (Image encoding / Auto Capture) sit at the dialog's
+ * content edge so every row in the dialog — top-level or
+ * nested — shares the same left column.
+ *
+ * The thin `border-top` marks the conceptual break between the
+ * everyday settings above (Capture mode + Output) and the
+ * collapsible Advanced area below — the strongest section
+ * boundary in the dialog, so the only place that earns a
+ * dividing line. Sub-sections inside Advanced (Image encoding,
+ * Auto Capture) rely on their uppercase headers + the wrapper's
+ * `gap` for separation; adding another divider inside felt
+ * noisy. */
 .capture-dialog-advanced {
   display: flex;
   flex-direction: column;
@@ -988,6 +997,11 @@ html.light .view-toggle-btn.active {
    * Advanced (Image encoding / Auto Capture) breathe the same
    * amount as the top-level sections do. */
   gap: 16px;
+  border-top: 1px solid var(--annot-border-color);
+  padding-top: 16px;
+  /* The dialog's outer 18 px gap puts 18 px above this border;
+   * the 16 px padding-top puts 16 px below it. Close enough to
+   * symmetric without dropping the existing dialog rhythm. */
 }
 
 .capture-dialog-advanced-summary {
@@ -1058,17 +1072,15 @@ html.light .view-toggle-btn.active {
   margin: 0 0 6px -10px;
 }
 
-/* Nested sections inside Advanced sit at the same left edge as the
- * top-level sections; consecutive nested sections get a faint
- * divider with symmetric breathing room — `margin-top` puts space
- * ABOVE the divider line, `padding-top` puts matching space BELOW
- * so neither neighbour hugs it. (Using margin/padding rather than
- * relying on the parent's flex `gap` because `<details>` collapses
- * the gap between non-summary children in some engines.) */
+/* Nested sections inside Advanced sit at the same left edge as
+ * the top-level sections; consecutive nested sections get extra
+ * breathing room (no divider — the uppercase section headers
+ * already announce the boundary). `margin-top` rather than
+ * relying on the parent's flex `gap` because `<details>`
+ * collapses the gap between non-summary children in some
+ * engines. */
 .capture-dialog-advanced .capture-dialog-section + .capture-dialog-section {
-  border-top: 1px solid var(--annot-border-color);
   margin-top: 16px;
-  padding-top: 16px;
 }
 
 .capture-dialog-row-checkbox {
