@@ -729,6 +729,11 @@ html.light .view-toggle-btn.active {
   padding: 20px 22px;
   min-width: 340px;
   max-width: 420px;
+  /* Never grow past the viewport — the inner `.capture-dialog-body`
+   * is the scrolling region, so the title at the top and the action
+   * buttons at the bottom stay anchored even when the user has a
+   * short viewport (e.g. half-screen window on a 13" laptop). */
+  max-height: calc(100vh - 32px);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
   display: flex;
   flex-direction: column;
@@ -736,6 +741,28 @@ html.light .view-toggle-btn.active {
    * to breathe without dragging the dialog tall — the title's own
    * 4 px top + 4 px section-title bottom margin add to this. */
   gap: 18px;
+}
+
+/* Scrollable middle region — wraps every section between the
+ * dialog title and the action buttons. Sticky title + sticky
+ * actions stay visible while the user scrolls through options on
+ * a short viewport. `min-height: 0` is the standard flex-child
+ * incantation that allows shrinking below content size so the
+ * overflow actually kicks in. */
+.capture-dialog-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  /* Pull the scrollbar tight against the dialog's right padding
+   * so the scrollbar doesn't visually float in the middle of the
+   * row gap. Negative margin extends the body across the dialog's
+   * inner padding; padding-right adds the equivalent space back
+   * INSIDE the scroll region so content isn't clipped. */
+  margin-right: -22px;
+  padding-right: 22px;
 }
 
 .capture-dialog-title {
