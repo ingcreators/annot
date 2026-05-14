@@ -46,6 +46,11 @@ export interface AutoCaptureOptions {
   minMsBetweenCaptures: number;
   comparisonWidth: number;
   ignoreCursorOnlyChanges: boolean;
+  /** Diff-detection threshold (changed-pixel ratio) above which a
+   *  frame is treated as meaningful. Defaults to
+   *  `DEFAULT_CHANGE_RATIO_THRESHOLD` (0.03) inside the engine
+   *  when omitted, matching pre-Advanced-settings behaviour. */
+  changeRatioThreshold?: number;
   /** Called with the captured frame when the engine decides one
    *  should land. The workspace persists it via the host's
    *  `saveCapture` callback (which routes through
@@ -199,7 +204,7 @@ export class AutoCaptureEngine {
     }
 
     const diff = computeDiffScore(this.#baseline, current);
-    const meaningful = isMeaningfulChange(diff);
+    const meaningful = isMeaningfulChange(diff, this.#opts.changeRatioThreshold);
 
     if (!meaningful) {
       // Frame is "still". If we were waiting for stability, the
