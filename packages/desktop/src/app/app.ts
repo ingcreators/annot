@@ -784,16 +784,19 @@ async function init(): Promise<void> {
         icon: "desktop_windows",
         label: "Capture Window",
         action: () => void doCapture("window"),
+        section: "image",
       },
       {
         icon: "crop",
         label: "Capture Region",
         action: () => void doCapture("rect"),
+        section: "image",
       },
       {
         icon: "open_in_new",
         label: "Open Browse Window",
         action: () => void openBrowseWindow(),
+        section: "more",
       },
     ],
   });

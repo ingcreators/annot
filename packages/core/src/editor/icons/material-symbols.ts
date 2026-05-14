@@ -5,8 +5,8 @@
 // Upstream license: Apache-2.0, Copyright Google LLC.
 // Project NOTICE: see /NOTICE for the project-wide attribution.
 //
-// Upstream package version: 0.44.4
-// Extracted on: 2026-05-09
+// Upstream package version: 0.44.6
+// Extracted on: 2026-05-14
 //
 // Re-run: `pnpm up @material-symbols/svg-400` then
 //          `node scripts/extract-material-symbols.mjs`
@@ -37,6 +37,8 @@ export const MATERIAL_SYMBOL_GLYPHS = {
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="m560-242-43-42 168-168H160v-60h525L516-681l43-42 241 241-240 240Z"/></svg>',
   arrow_selector_tool:
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="m300-347 109-153h218L300-757v410ZM560-84 412-401 240-160v-720l560 440H505l145 314-90 42ZM409-500Z"/></svg>',
+  article:
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M277-279h275v-60H277v60Zm0-171h406v-60H277v60Zm0-171h406v-60H277v60Zm-97 501q-24 0-42-18t-18-42v-600q0-24 18-42t42-18h600q24 0 42 18t18 42v600q0 24-18 42t-42 18H180Zm0-60h600v-600H180v600Zm0-600v600-600Z"/></svg>',
   blur_on:
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M106-387q-6-6-6-15t6-15q6-6 15-6t15 6q6 6 6 15t-6 15q-6 6-15 6t-15-6Zm0-156q-6-6-6-15t6-15q6-6 15-6t15 6q6 6 6 15t-6 15q-6 6-15 6t-15-6Zm107 330q-11-11-11-27t11-27q11-11 27-11t27 11q11 11 11 27t-11 27q-11 11-27 11t-27-11Zm0-162q-11-11-11-27t11-27q11-11 27-11t27 11q11 11 11 27t-11 27q-11 11-27 11t-27-11Zm0-156q-11-11-11-27t11-27q11-11 27-11t27 11q11 11 11 27t-11 27q-11 11-27 11t-27-11Zm0-162q-11-11-11-27t11-27q11-11 27-11t27 11q11 11 11 27t-11 27q-11 11-27 11t-27-11Zm150.5 329.5Q348-379 348-402t15.5-38.5Q379-456 402-456t38.5 15.5Q456-425 456-402t-15.5 38.5Q425-348 402-348t-38.5-15.5Zm0-156Q348-535 348-558t15.5-38.5Q379-612 402-612t38.5 15.5Q456-581 456-558t-15.5 38.5Q425-504 402-504t-38.5-15.5ZM375-213q-11-11-11-27t11-27q11-11 27-11t27 11q11 11 11 27t-11 27q-11 11-27 11t-27-11Zm0-480q-11-11-11-27t11-27q11-11 27-11t27 11q11 11 11 27t-11 27q-11 11-27 11t-27-11Zm12 587q-6-6-6-15t6-15q6-6 15-6t15 6q6 6 6 15t-6 15q-6 6-15 6t-15-6Zm0-718q-6-6-6-15t6-15q6-6 15-6t15 6q6 6 6 15t-6 15q-6 6-15 6t-15-6Zm132.5 460.5Q504-379 504-402t15.5-38.5Q535-456 558-456t38.5 15.5Q612-425 612-402t-15.5 38.5Q581-348 558-348t-38.5-15.5Zm0-156Q504-535 504-558t15.5-38.5Q535-612 558-612t38.5 15.5Q612-581 612-558t-15.5 38.5Q581-504 558-504t-38.5-15.5ZM531-213q-11-11-11-27t11-27q11-11 27-11t27 11q11 11 11 27t-11 27q-11 11-27 11t-27-11Zm0-480q-11-11-11-27t11-27q11-11 27-11t27 11q11 11 11 27t-11 27q-11 11-27 11t-27-11Zm18 587q-6-6-6-15t6-15q6-6 15-6t15 6q6 6 6 15t-6 15q-6 6-15 6t-15-6Zm-6-718q-6-6-6-15t6-15q6-6 15-6t15 6q6 6 6 15t-6 15q-6 6-15 6t-15-6Zm150 611q-11-11-11-27t11-27q11-11 27-11t27 11q11 11 11 27t-11 27q-11 11-27 11t-27-11Zm0-162q-11-11-11-27t11-27q11-11 27-11t27 11q11 11 11 27t-11 27q-11 11-27 11t-27-11Zm0-156q-11-11-11-27t11-27q11-11 27-11t27 11q11 11 11 27t-11 27q-11 11-27 11t-27-11Zm0-162q-11-11-11-27t11-27q11-11 27-11t27 11q11 11 11 27t-11 27q-11 11-27 11t-27-11Zm131 306q-6-6-6-15t6-15q6-6 15-6t15 6q6 6 6 15t-6 15q-6 6-15 6t-15-6Zm0-156q-6-6-6-15t6-15q6-6 15-6t15 6q6 6 6 15t-6 15q-6 6-15 6t-15-6Z"/></svg>',
   chat: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M240-399h313v-60H240v60Zm0-130h480v-60H240v60Zm0-130h480v-60H240v60ZM80-80v-740q0-24 18-42t42-18h680q24 0 42 18t18 42v520q0 24-18 42t-42 18H240L80-80Zm134-220h606v-520H140v600l74-80Zm-74 0v-520 520Z"/></svg>',
@@ -143,6 +145,8 @@ export const MATERIAL_SYMBOL_GLYPHS = {
   // laptop [aliased upstream: laptop_mac]
   laptop:
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M57-160q-23.51 0-40.26-17.63Q0-195.25 0-220h141q-24 0-42-18t-18-42v-500q0-24 18-42t42-18h678q24 0 42 18t18 42v500q0 24-18 42t-42 18h141q0 25-17.62 42.5Q924.75-160 900-160H57Zm447-32q10-10 10-24t-10-24q-10-10-24-10t-24 10q-10 10-10 24t10 24q10 10 24 10t24-10Zm-363-88h678v-500H141v500Zm0 0v-500 500Z"/></svg>',
+  library_books:
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M343-420h225v-60H343v60Zm0-90h395v-60H343v60Zm0-90h395v-60H343v60Zm-83 400q-24 0-42-18t-18-42v-560q0-24 18-42t42-18h560q24 0 42 18t18 42v560q0 24-18 42t-42 18H260Zm0-60h560v-560H260v560ZM140-80q-24 0-42-18t-18-42v-620h60v620h620v60H140Zm120-740v560-560Z"/></svg>',
   light_mode:
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M579-381q41-41 41-99t-41-99q-41-41-99-41t-99 41q-41 41-41 99t41 99q41 41 99 41t99-41Zm-240.5 42.5Q280-397 280-480t58.5-141.5Q397-680 480-680t141.5 58.5Q680-563 680-480t-58.5 141.5Q563-280 480-280t-141.5-58.5ZM200-450H40v-60h160v60Zm720 0H760v-60h160v60ZM450-760v-160h60v160h-60Zm0 720v-160h60v160h-60ZM262-658l-100-97 43-44 96 100-39 41Zm494 496-98-100 41-41 99 98-42 43Zm-99-537 98-99 44 42-99 98-43-41ZM162-205l99-98 42 42-98 99-43-43Zm318-275Z"/></svg>',
   more_vert:
