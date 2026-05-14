@@ -777,7 +777,16 @@ html.light .view-toggle-btn.active {
 }
 
 .capture-dialog-select {
-  width: 150px;
+  /* Width was 150px; the Advanced section's longer labels
+   * ("Smart (PNG-8 / fallback)", "PNG (lossless, larger)",
+   * "Sensitive (small changes)", "None (capture immediately)")
+   * truncated at that width. Bumped to 240px so every option
+   * label fits across the dialog's font stack without
+   * letter-spacing surprises. The dialog itself is
+   * `min-width: 380px / max-width: 480px` (`.capture-screen-dialog`),
+   * so the select still leaves comfortable room for the label
+   * column on the left. */
+  width: 240px;
   height: 32px;
   padding: 0 8px;
   background: var(--annot-input-bg);
@@ -864,8 +873,14 @@ html.light .view-toggle-btn.active {
 /* ---- Capture Screen dialog (Phase 1 of web-capture-redesign) ---- */
 
 .capture-screen-dialog {
-  min-width: 380px;
-  max-width: 480px;
+  /* Bumped to 420 / 520 in the Advanced-settings PR — the wider
+   * `.capture-dialog-select` (240px, was 150px) needs ~360px for
+   * the row (120px label column + 240px select + 8px row gap).
+   * The previous `min-width: 380px` left only 20px of breathing
+   * room; cards inside `.capture-screen-mode-list` look
+   * cramped at that width too. */
+  min-width: 420px;
+  max-width: 520px;
 }
 
 .capture-screen-mode-list {
