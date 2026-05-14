@@ -615,6 +615,20 @@ html.light .view-toggle-btn.active {
   box-shadow: 0 0 0 2px var(--annot-accent-bg);
 }
 
+/* Open-dropdown popup. Chromium / Firefox render the native popup
+ * list using these `<option>` styles instead of inheriting from
+ * the styled `<select>`. Without these, the dark-mode `<select>`
+ * pairs a light-mode native popup background with light text and
+ * the option labels become invisible. `--annot-input-bg` is a
+ * 6% white overlay (transparent against the panel) so it can't
+ * stand on its own as a popup backdrop — use the opaque panel
+ * background here. Mirrors the `.capture-dialog-select option`
+ * fix lower in this file. */
+.app-dialog-input option {
+  background-color: var(--annot-bg-panel);
+  color: var(--annot-text-primary);
+}
+
 .app-dialog-input[aria-invalid="true"] {
   border-color: #e44;
 }
