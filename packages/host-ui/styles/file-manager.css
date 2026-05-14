@@ -732,7 +732,10 @@ html.light .view-toggle-btn.active {
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  /* 18px between top-level sections gives the section headers room
+   * to breathe without dragging the dialog tall — the title's own
+   * 4 px top + 4 px section-title bottom margin add to this. */
+  gap: 18px;
 }
 
 .capture-dialog-title {
@@ -954,7 +957,10 @@ html.light .view-toggle-btn.active {
 .capture-dialog-advanced {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  /* Matches the dialog's outer gap so the nested sections inside
+   * Advanced (Image encoding / Auto Capture) breathe the same
+   * amount as the top-level sections do. */
+  gap: 16px;
 }
 
 .capture-dialog-advanced-summary {
@@ -1006,7 +1012,7 @@ html.light .view-toggle-btn.active {
 .capture-dialog-section {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
   padding-left: 10px;
 }
 
@@ -1022,16 +1028,20 @@ html.light .view-toggle-btn.active {
   text-transform: uppercase;
   letter-spacing: 0.7px;
   color: var(--annot-text-muted);
-  margin: 0 0 4px -10px;
+  margin: 0 0 6px -10px;
 }
 
 /* Nested sections inside Advanced sit at the same left edge as the
  * top-level sections; consecutive nested sections get a faint
- * divider above so the boundary between Image encoding / Auto
- * Capture is unambiguous. */
+ * divider with symmetric breathing room — `margin-top` puts space
+ * ABOVE the divider line, `padding-top` puts matching space BELOW
+ * so neither neighbour hugs it. (Using margin/padding rather than
+ * relying on the parent's flex `gap` because `<details>` collapses
+ * the gap between non-summary children in some engines.) */
 .capture-dialog-advanced .capture-dialog-section + .capture-dialog-section {
   border-top: 1px solid var(--annot-border-color);
-  padding-top: 12px;
+  margin-top: 16px;
+  padding-top: 16px;
 }
 
 .capture-dialog-row-checkbox {
