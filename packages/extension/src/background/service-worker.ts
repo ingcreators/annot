@@ -994,13 +994,29 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 
 chrome.tabs.onUpdated.addListener((tabId, info, tab) => {
   if (!autoState.active) return;
-  if (autoState.tabId !== tabId) return;
-  // Top-frame navigation in the observed tab — observer is gone
-  // with the old page. Re-install when the new page completes
-  // loading.
   if (info.status !== "complete" || !tab.url) return;
-  autoState.tabId = null; // force re-activation path inside activateObserverOn
-  void activateObserverOn(tabId, tab.windowId, tab.url);
+
+  // Case 1: top-frame navigation in the currently-observed tab —
+  // observer is gone with the old page. Re-install on the new
+  // page.
+  if (autoState.tabId === tabId) {
+    autoState.tabId = null; // force re-activation path inside activateObserverOn
+    void activateObserverOn(tabId, tab.windowId, tab.url);
+    return;
+  }
+
+  // Case 2: observer is dormant (no tab currently bound) AND this
+  // tab is active in its window — catch up. The most common path
+  // here is "user clicked a link that opened a new tab":
+  // `tabs.onActivated` fires for the new tab almost immediately
+  // with `tab.url === "about:blank"`, which fails the injectability
+  // gate in `activateObserverOn` and leaves `autoState.tabId`
+  // null. By the time the navigation completes and `onUpdated`
+  // fires with the real URL, nothing has rebound the observer.
+  // This branch picks it back up.
+  if (autoState.tabId === null && tab.active) {
+    void activateObserverOn(tabId, tab.windowId, tab.url);
+  }
 });
 
 chrome.commands.onCommand.addListener((command, tab) => {
