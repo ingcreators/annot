@@ -48,18 +48,18 @@ async function init(): Promise<void> {
     sendWithResponse<{
       active: boolean;
       count: number;
-    }>({ type: "hotkey-capture-status" }).catch(() => null),
+    }>({ type: "hotkey-status" }).catch(() => null),
     sendWithResponse<{
       active: boolean;
       count: number;
       stableWaitMs: number;
       minIntervalMs: number;
-    }>({ type: "auto-capture-status" }).catch(() => null),
+    }>({ type: "auto-status" }).catch(() => null),
     chrome.commands.getAll().catch(() => [] as chrome.commands.Command[]),
   ]);
 
   el.settings = settings;
-  el.hotkeyShortcut = commands.find((c) => c.name === "hotkey-capture")?.shortcut ?? "";
+  el.hotkeyShortcut = commands.find((c) => c.name === "hotkey")?.shortcut ?? "";
   if (autoStatus?.active) {
     el.view = "autoActive";
     el.autoSummary = {

@@ -29,7 +29,7 @@ import {
 export async function runPerPageCapture(host: CaptureHost): Promise<CaptureResult | null> {
   const target = await host.resolveTarget();
   if (!target) {
-    host.log("warn", "[capture-pages] no capturable tab found");
+    host.log("warn", "[whole-page-per-screen] no capturable tab found");
     return null;
   }
   const settings = await host.loadSettings();
@@ -81,7 +81,10 @@ export async function runPerPageCapture(host: CaptureHost): Promise<CaptureResul
       });
 
       if (decision.action === "stop") {
-        host.log("debug", `[capture-pages] ${decision.reason} at page ${pageIndex + 1}, stopping`);
+        host.log(
+          "debug",
+          `[whole-page-per-screen] ${decision.reason} at page ${pageIndex + 1}, stopping`,
+        );
         break;
       }
       lastActualScrollY = after.scrollY;

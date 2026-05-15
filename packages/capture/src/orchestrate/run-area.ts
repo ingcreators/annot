@@ -17,7 +17,7 @@ import type { CaptureFrame, CaptureResult } from "./frame.js";
 export async function runAreaCapture(host: CaptureHost): Promise<CaptureResult | null> {
   const target = await host.resolveTarget();
   if (!target) {
-    host.log("warn", "[capture-area] no capturable tab found");
+    host.log("warn", "[select-region] no capturable tab found");
     return null;
   }
   const settings = await host.loadSettings();

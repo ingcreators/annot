@@ -19,8 +19,8 @@
  *
  * Quick Options binds directly to the shared `Settings` blob in
  * `chrome.storage.sync` via `loadSettings` / `saveSettings`. The
- * `Whole Page` button dispatches `capture-full` (stitched) or
- * `capture-pages` (per-screen) based on `settings.wholePageOutput`.
+ * `Whole Page` button dispatches `whole-page-stitched` or
+ * `whole-page-per-screen` based on `settings.wholePageOutput`.
  *
  * Lit-Phase-0 conventions: light DOM, no decorators, runtime
  * `static properties` + `declare`, custom-element prefix `annot-`.
@@ -103,8 +103,8 @@ export class AnnotExtensionPopupElement extends LitElement {
   declare autoSummary: AutoCaptureSummary | null;
   declare settings: Settings | null;
   declare quickOptionsOpen: boolean;
-  /** Resolved keyboard shortcut bound to the `hotkey-capture` command,
-   *  as reported by `chrome.commands.getAll()` at popup boot. Empty
+  /** Resolved keyboard shortcut bound to the `hotkey` command, as
+   *  reported by `chrome.commands.getAll()` at popup boot. Empty
    *  string when the user has unbound it in the browser's extension
    *  shortcuts page; the renderer falls back to a "Configure a
    *  shortcut in Settings" hint in that case. */
@@ -158,7 +158,7 @@ export class AnnotExtensionPopupElement extends LitElement {
       <button
         type="button"
         class="popup-btn"
-        @click=${() => this.#dispatch({ type: "capture-visible" })}
+        @click=${() => this.#dispatch({ type: "visible-area" })}
       >
         <span class="popup-btn-icon" aria-hidden="true">&#9634;</span>
         <span class="popup-btn-label">Visible Area</span>
@@ -166,7 +166,7 @@ export class AnnotExtensionPopupElement extends LitElement {
       <button
         type="button"
         class="popup-btn"
-        @click=${() => this.#dispatch({ type: "capture-area" })}
+        @click=${() => this.#dispatch({ type: "select-region" })}
       >
         <span class="popup-btn-icon" aria-hidden="true">&#9698;</span>
         <span class="popup-btn-label">Select Region</span>
@@ -180,7 +180,7 @@ export class AnnotExtensionPopupElement extends LitElement {
       <button
         type="button"
         class="popup-btn"
-        @click=${() => this.#dispatch({ type: "auto-capture-start" })}
+        @click=${() => this.#dispatch({ type: "auto-start" })}
       >
         <span class="popup-btn-icon" aria-hidden="true">&#9889;</span>
         <span class="popup-btn-label">Auto</span>
@@ -189,7 +189,7 @@ export class AnnotExtensionPopupElement extends LitElement {
       <button
         type="button"
         class="popup-btn"
-        @click=${() => this.#dispatch({ type: "hotkey-capture-start" })}
+        @click=${() => this.#dispatch({ type: "hotkey-start" })}
       >
         <span class="popup-btn-icon" aria-hidden="true">&#9000;</span>
         <span class="popup-btn-label">Hotkey</span>
@@ -234,7 +234,7 @@ export class AnnotExtensionPopupElement extends LitElement {
       <button
         type="button"
         class="popup-btn popup-btn-stop"
-        @click=${() => this.#dispatch({ type: "hotkey-capture-stop" })}
+        @click=${() => this.#dispatch({ type: "hotkey-stop" })}
       >
         <span class="popup-btn-icon" aria-hidden="true">&#9632;</span>
         <span class="popup-btn-label">Stop &amp; Review</span>
@@ -270,7 +270,7 @@ export class AnnotExtensionPopupElement extends LitElement {
       <button
         type="button"
         class="popup-btn popup-btn-stop"
-        @click=${() => this.#dispatch({ type: "auto-capture-stop" })}
+        @click=${() => this.#dispatch({ type: "auto-stop" })}
       >
         <span class="popup-btn-icon" aria-hidden="true">&#9632;</span>
         <span class="popup-btn-label">Stop &amp; Review</span>
@@ -405,7 +405,8 @@ export class AnnotExtensionPopupElement extends LitElement {
    *  on the persisted `wholePageOutput` preference. */
   #onWholePageClick = (): void => {
     const out = this.settings?.wholePageOutput ?? "stitched";
-    const type: PopupMessage["type"] = out === "perScreen" ? "capture-pages" : "capture-full";
+    const type: PopupMessage["type"] =
+      out === "perScreen" ? "whole-page-per-screen" : "whole-page-stitched";
     this.#dispatch({ type } as PopupMessage);
   };
 

@@ -59,7 +59,7 @@ export interface Settings {
     scrollSettleMs: number;
     /** ms to wait after a user click before capturing (click-capture). */
     clickSettleMs: number;
-    /** ms to wait after a hotkey trigger before capturing (hotkey-capture). */
+    /** ms to wait after a hotkey trigger before capturing (the Hotkey session). */
     hotkeySettleMs: number;
     /** ms pause between successive segments of scroll / per-page captures. */
     interSegmentMs: number;

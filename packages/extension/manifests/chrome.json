@@ -33,17 +33,17 @@
     "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';"
   },
   "commands": {
-    "hotkey-capture": {
+    "hotkey": {
       "suggested_key": { "default": "Alt+Shift+Z" },
       "description": "Hotkey"
     },
-    "capture-visible": {
+    "visible-area": {
       "description": "Visible Area"
     },
-    "capture-area": {
+    "select-region": {
       "description": "Select Region"
     },
-    "capture-full": {
+    "whole-page": {
       "description": "Whole Page"
     }
   }
