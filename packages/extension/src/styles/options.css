@@ -179,3 +179,17 @@ body {
 .shortcuts-config-btn:active {
   background: rgba(124, 156, 255, 0.28);
 }
+
+/* Fallback instructions for Firefox / Safari, which block extensions
+   from deep-linking to their shortcut config pages. Visually quieter
+   than the button — it's a passive hint, not an action. */
+.shortcuts-manual {
+  margin: 0;
+  padding: 10px 14px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--annot-text-muted);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--annot-border);
+  border-radius: 6px;
+}

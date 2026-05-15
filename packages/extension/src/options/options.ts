@@ -98,17 +98,26 @@ const COMMAND_LABELS: Record<string, string> = {
   "hotkey-capture": "Hotkey capture",
 };
 
-/** Render the current `chrome.commands` bindings + a button that
- *  opens the browser's extension-shortcuts page. The page URL is
- *  browser-detected: Edge / Opera have their own scheme; everything
- *  else (Chrome / Brave / Vivaldi / Chromium proper) takes the
- *  `chrome://` URL. `chrome://` URLs can't be opened via
- *  `<a href>` from an extension page — they're blocked by browser
- *  security — so we open them through `chrome.tabs.create` on a
- *  click handler instead. */
+/** Render the current `chrome.commands` bindings + either a button
+ *  that opens the browser's extension-shortcuts page or a textual
+ *  instructions block, depending on what the host browser allows.
+ *
+ *  Chromium variants (Chrome / Edge / Opera / Brave / Vivaldi /
+ *  Chromium proper) expose internal config pages we can deep-link
+ *  to via `chrome.tabs.create`. (`<a href>` to `chrome://` URLs is
+ *  blocked by browser security, hence the tabs API.)
+ *
+ *  Firefox + Safari block extensions from opening their internal
+ *  pages — `about:` URLs in Firefox, the macOS Settings app in
+ *  Safari — so for those we hide the button and reveal a fallback
+ *  paragraph with manual navigation steps. The extension doesn't
+ *  ship a Firefox/Safari manifest today, but the defense lets the
+ *  Settings page degrade gracefully if someone repackages it for
+ *  those browsers later (or if a future build target adds them). */
 async function renderShortcutsSection(): Promise<void> {
   const list = el<HTMLUListElement>("shortcuts-list");
   const btn = el<HTMLButtonElement>("shortcuts-config-btn");
+  const manual = el<HTMLParagraphElement>("shortcuts-manual");
 
   const commands = await chrome.commands.getAll().catch(() => [] as chrome.commands.Command[]);
   list.innerHTML = "";
@@ -135,25 +144,71 @@ async function renderShortcutsSection(): Promise<void> {
   }
 
   const target = detectShortcutsPage();
-  btn.textContent = `Open ${target.browser} shortcuts page`;
-  btn.addEventListener("click", () => {
-    void chrome.tabs.create({ url: target.url });
-  });
+  if (target.kind === "openable") {
+    btn.textContent = `Open ${target.browser} shortcuts page`;
+    btn.hidden = false;
+    btn.addEventListener("click", () => {
+      void chrome.tabs.create({ url: target.url });
+    });
+  } else {
+    manual.textContent = target.steps;
+    manual.hidden = false;
+  }
 }
 
-/** Detect which Chromium variant we're running in so the shortcut
- *  config button opens the right scheme. Edge / Opera use their own
- *  internal URL; Chrome / Brave / Vivaldi / Chromium proper all map
- *  `chrome://extensions/shortcuts` to the same page. */
-function detectShortcutsPage(): { browser: string; url: string } {
+type ShortcutsTarget =
+  | { kind: "openable"; browser: string; url: string }
+  | { kind: "manual"; browser: string; steps: string };
+
+/** Detect which browser variant we're running in and how its
+ *  extension-shortcuts page can be reached. `openable` variants get
+ *  a clickable button; `manual` variants get instructional text
+ *  because they block extensions from opening the relevant page. */
+function detectShortcutsPage(): ShortcutsTarget {
   const ua = navigator.userAgent;
+
+  // Firefox advertises `Firefox/` without any Chromium-ish tokens.
+  // Reaching `about:addons` from a `tabs.create` call is blocked, so
+  // we degrade to instructions instead of a button.
+  if (ua.includes("Firefox/")) {
+    return {
+      kind: "manual",
+      browser: "Firefox",
+      steps:
+        'Open the Firefox menu → Add-ons and themes → click the gear icon → "Manage Extension Shortcuts". Firefox does not allow extensions to open about: pages directly.',
+    };
+  }
+
+  // Chromium variants — these all expose a deep-linkable config
+  // page via their own internal URL scheme.
   if (ua.includes("Edg/")) {
-    return { browser: "Edge", url: "edge://extensions/shortcuts" };
+    return { kind: "openable", browser: "Edge", url: "edge://extensions/shortcuts" };
   }
   if (ua.includes("OPR/") || ua.includes("Opera/")) {
-    return { browser: "Opera", url: "opera://settings/keyboardShortcuts" };
+    return {
+      kind: "openable",
+      browser: "Opera",
+      url: "opera://settings/keyboardShortcuts",
+    };
   }
-  return { browser: "Chrome", url: "chrome://extensions/shortcuts" };
+
+  // Safari Web Extensions only ship on macOS / iOS. Their shortcut
+  // bindings live in the OS Settings app, which an extension cannot
+  // open. Detection: a Safari UA contains "Safari/" but lacks both
+  // "Chrome/" and "Chromium/" (every Chromium variant carries the
+  // Chrome token for legacy WebKit compatibility).
+  if (ua.includes("Safari/") && !ua.includes("Chrome/") && !ua.includes("Chromium/")) {
+    return {
+      kind: "manual",
+      browser: "Safari",
+      steps:
+        "On macOS, configure shortcuts in System Settings → Keyboard → Keyboard Shortcuts → App Shortcuts. Safari does not let extensions open the Settings app directly.",
+    };
+  }
+
+  // Catch-all: Chrome proper, Brave, Vivaldi, plain Chromium. They
+  // all map chrome://extensions/shortcuts to the same page.
+  return { kind: "openable", browser: "Chrome", url: "chrome://extensions/shortcuts" };
 }
 
 function flashSaved(text: string): void {

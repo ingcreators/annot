@@ -43,7 +43,20 @@
         Customize these in your browser's extension shortcuts page. Changes are picked up the next time the popup is opened.
       </p>
       <ul class="shortcuts-list" id="shortcuts-list"></ul>
-      <button type="button" class="shortcuts-config-btn" id="shortcuts-config-btn"></button>
+      <!-- Either the openable button or the manual-instructions
+           block is revealed by options.ts after UA detection.
+           Both start `hidden` to prevent a flash on first paint. -->
+      <button
+        type="button"
+        class="shortcuts-config-btn"
+        id="shortcuts-config-btn"
+        hidden
+      ></button>
+      <p
+        class="shortcuts-manual"
+        id="shortcuts-manual"
+        hidden
+      ></p>
     </section>
   </main>
 
