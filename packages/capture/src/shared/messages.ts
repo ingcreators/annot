@@ -32,9 +32,21 @@ export type PopupMessage =
   | { type: "hotkey-start" }
   | { type: "hotkey-stop" }
   | { type: "hotkey-status" }
+  /** Manual "Add Capture" press from the popup's `hotkeyActive`
+   *  view. Captures the active tab once, applies the same
+   *  100ms min-interval debounce as the keyboard hotkey, and
+   *  tags the frame as part of the active hotkey session. */
+  | { type: "hotkey-capture-now" }
   | { type: "auto-start" }
   | { type: "auto-stop" }
-  | { type: "auto-status" };
+  | { type: "auto-status" }
+  /** Manual "Add Capture" press from the popup's `autoActive`
+   *  view. Captures the auto session's bound tab once,
+   *  bypassing the min-interval throttle and duplicate-frame
+   *  dedupe so purely-visual changes the MutationObserver
+   *  misses (CSS hover, transitions, etc.) still produce a
+   *  frame. */
+  | { type: "auto-capture-now" };
 
 // Background -> Content
 export type BackgroundToContentMessage =

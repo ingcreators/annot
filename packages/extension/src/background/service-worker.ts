@@ -738,9 +738,10 @@ async function stopAutoCapture(): Promise<void> {
 }
 
 /** Fired by the content script's MutationObserver when DOM
- *  mutations have settled for `stableWaitMs`. Service worker
- *  applies the min-interval throttle + duplicate-frame dedupe, then
- *  saves a frame and increments the session count. */
+ *  mutations have settled for `stableWaitMs`. Applies the
+ *  min-interval throttle + duplicate-frame dedupe, then delegates
+ *  to `performAutoCapture` for the shared capture + save + count
+ *  increment work. */
 async function autoCaptureShot(senderTabId?: number): Promise<void> {
   if (!autoState.active) return;
   if (senderTabId != null && senderTabId !== autoState.tabId) return; // ignore other tabs
@@ -749,6 +750,35 @@ async function autoCaptureShot(senderTabId?: number): Promise<void> {
   if (now - autoState.lastCaptureAt < autoState.minIntervalMs) return;
   autoState.lastCaptureAt = now;
 
+  await performAutoCapture({ manual: false });
+}
+
+/** Manual "Add Capture" press from the popup's `autoActive` view.
+ *  Skips the sender-tab check (no senderTabId), the min-interval
+ *  throttle, and the duplicate-frame dedupe — the user explicitly
+ *  asked for this frame, even if the page hasn't visibly mutated.
+ *  Still uses `autoState.tabId` for the capture target so the
+ *  session stays bound to its original tab (cross-tab safety: if
+ *  the popup is currently on a different tab, we still capture the
+ *  session's tab, not the popup's). */
+async function autoCaptureManual(): Promise<void> {
+  if (!autoState.active) return;
+  if (autoState.tabId == null) {
+    console.warn("[auto] manual capture skipped — session has no bound tab");
+    return;
+  }
+  await performAutoCapture({ manual: true });
+}
+
+/** Shared capture path for both observer-driven (`autoCaptureShot`)
+ *  and manual (`autoCaptureManual`) entries. Both flows resolve the
+ *  tab from `autoState.tabId`, prep/restore stickies and scrollbars,
+ *  call `host.captureViewport`, encode + thumb + save with session
+ *  tags, then increment the session count + update the badge. The
+ *  `manual` flag controls whether the duplicate-frame dedupe runs
+ *  and gets recorded in `auto.trigger`. */
+async function performAutoCapture(opts: { manual: boolean }): Promise<void> {
+  const { manual } = opts;
   const tabId = autoState.tabId;
   if (tabId == null) return;
   let tab: chrome.tabs.Tab;
@@ -797,12 +827,22 @@ async function autoCaptureShot(senderTabId?: number): Promise<void> {
     const encoded = await encodeCapture(captured.pngDataUrl, settings);
     const dataUrl = encoded.dataUrl;
 
-    const frameHash = await hashDataUrl(dataUrl);
-    if (frameHash === autoState.lastFrameHash) {
-      logger.debug("[auto] dropping duplicate frame");
-      return;
+    // Manual presses bypass dedupe — the user explicitly wants this
+    // frame even if the pixels match the last one. Observer-driven
+    // presses still dedupe so micro-mutations don't flood storage.
+    if (!manual) {
+      const frameHash = await hashDataUrl(dataUrl);
+      if (frameHash === autoState.lastFrameHash) {
+        logger.debug("[auto] dropping duplicate frame");
+        return;
+      }
+      autoState.lastFrameHash = frameHash;
+    } else {
+      // Keep `lastFrameHash` in sync so the next observer tick
+      // doesn't reject the page state that the manual frame just
+      // captured.
+      autoState.lastFrameHash = await hashDataUrl(dataUrl);
     }
-    autoState.lastFrameHash = frameHash;
 
     const thumbnailDataUrl = await idbStore.generateThumbnail(dataUrl);
     const { width: w, height: h } = await probeDimensions(dataUrl);
@@ -812,6 +852,7 @@ async function autoCaptureShot(senderTabId?: number): Promise<void> {
 
     const tags: Record<string, string> = {
       "auto.seq": String(autoState.count + 1).padStart(3, "0"),
+      "auto.trigger": manual ? "manual" : "observer",
       "click.title": title,
       "click.url": url,
       captureId: newIdB58(),
@@ -926,6 +967,13 @@ chrome.runtime.onMessage.addListener((msg: any, sender, sendResponse) => {
     case "hotkey-status":
       sendResponse(getHotkeyCaptureStatus());
       return false;
+    // Manual "Add Capture" press from the popup's `hotkeyActive`
+    // view. `hotkeyCaptureShot(undefined)` already auto-starts the
+    // session, falls through `chrome.tabs.query` for the active
+    // tab, and applies the 100ms debounce — no new logic needed.
+    case "hotkey-capture-now":
+      hotkeyCaptureShot();
+      break;
 
     // ---- Auto Capture (DOM-mutation-driven) ----
     case "auto-start":
@@ -937,6 +985,13 @@ chrome.runtime.onMessage.addListener((msg: any, sender, sendResponse) => {
     case "auto-status":
       sendResponse(getAutoCaptureStatus());
       return false;
+    // Manual "Add Capture" press from the popup's `autoActive`
+    // view. Skips throttle + dedupe so purely-visual changes that
+    // the MutationObserver missed (CSS hover, transitions) still
+    // produce a frame.
+    case "auto-capture-now":
+      autoCaptureManual();
+      break;
     // `auto-capture-signal` is a content → background message (the
     // content-script enablement protocol), not a popup IPC type, so
     // it keeps the `auto-capture-` prefix shared with its

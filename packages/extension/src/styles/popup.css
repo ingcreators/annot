@@ -176,6 +176,26 @@ annot-extension-popup {
   border-color: #7ef0c5;
 }
 
+/* Primary call-to-action variant used by the "Add Capture" button
+   in the active-session views (`hotkeyActive`, `autoActive`). The
+   brand blue separates it from the red destructive `.popup-btn-stop`
+   placed directly below — both buttons live in the same vertical
+   column and need to be distinguishable at a glance. */
+.popup-btn-primary {
+  border-color: rgba(124, 156, 255, 0.4);
+  background: rgba(124, 156, 255, 0.12);
+}
+
+.popup-btn-primary:hover {
+  background: rgba(124, 156, 255, 0.2);
+  border-color: #7c9cff;
+}
+
+.popup-btn-primary .popup-btn-icon {
+  color: #7c9cff;
+  font-weight: 700;
+}
+
 .popup-separator {
   height: 1px;
   background: rgba(255, 255, 255, 0.08);
