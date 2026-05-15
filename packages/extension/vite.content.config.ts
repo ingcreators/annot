@@ -90,6 +90,27 @@ export default defineConfig(({ mode }) => ({
       output: {
         entryFileNames: "content.js",
         format: "es",
+        // Preserve function + class names through minification.
+        // Without this, Rolldown's mangler can give two top-level
+        // `function` declarations the SAME minified name when the
+        // content-script bundle inlines all imported module-level
+        // functions into one scope — the LATER declaration wins
+        // (function hoisting), the EARLIER one becomes unreachable,
+        // and any caller expecting the earlier name silently
+        // invokes the later function with the wrong arguments. The
+        // specific collision (Apr 2026) was `restoreOwnOverlay`
+        // from `@ingcreators/annot-capture/content` colliding with
+        // `onAutoCaptureMutation` in this entry, which broke
+        // scrollbar restore for every single-shot capture mode.
+        // `keepNames: true` instructs the mangler to leave function
+        // + class identifiers alone; other minification
+        // (whitespace, dead code, expression compression, local
+        // variable renaming) still happens.
+        minify: {
+          mangle: {
+            keepNames: true,
+          },
+        },
       },
     },
     // Disable code splitting entirely so every module reachable from

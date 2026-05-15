@@ -33,9 +33,26 @@ export function hideForCapture(prefs: HidePrefs): void {
 }
 
 export function restoreAfterCapture(): void {
-  restoreStickies();
-  restoreOwnOverlay();
-  restoreScrollbars();
+  // Each helper is wrapped in its own try-catch so a failure in one
+  // (e.g. a page with weird DOM that breaks `restoreStickies`)
+  // doesn't abort the others. Earlier sequential calls left
+  // scrollbars hidden if `restoreOwnOverlay` threw mid-flow,
+  // because the subsequent `restoreScrollbars()` never ran.
+  try {
+    restoreStickies();
+  } catch (err) {
+    console.error("[annot] restoreStickies failed:", err);
+  }
+  try {
+    restoreOwnOverlay();
+  } catch (err) {
+    console.error("[annot] restoreOwnOverlay failed:", err);
+  }
+  try {
+    restoreScrollbars();
+  } catch (err) {
+    console.error("[annot] restoreScrollbars failed:", err);
+  }
 }
 
 // ---- Our own progress overlay — always hidden during capture ----
@@ -146,5 +163,26 @@ export function hideScrollbars(): void {
 }
 
 export function restoreScrollbars(): void {
-  document.getElementById(SCROLLBAR_STYLE_ID)?.remove();
+  // Primary path: remove by id from the top-level document.
+  const el = document.getElementById(SCROLLBAR_STYLE_ID);
+  if (el) {
+    el.remove();
+  }
+  // Defensive: scan the entire document for any leftover element
+  // with the same id. Covers pathological pages where a
+  // MutationObserver / runtime DOM rewriter moved or cloned the
+  // node (we've seen this on react-renderer-heavy SPAs that snapshot
+  // the head and re-apply it after layout settles). querySelectorAll
+  // returns an empty NodeList when no matches — the loop short-
+  // circuits naturally on the common path.
+  for (const stale of document.querySelectorAll(`#${SCROLLBAR_STYLE_ID}`)) {
+    stale.remove();
+  }
+  // Force a synchronous reflow so the browser drops any cached
+  // scrollbar visibility state from the CSSOM. Reading `offsetHeight`
+  // flushes pending layout. Some Chrome versions (observed on dev
+  // builds) leave the scrollbar gutter mid-paint when a `<style>`
+  // with `::-webkit-scrollbar` rules is removed without an
+  // additional layout trigger.
+  void document.documentElement.offsetHeight;
 }
