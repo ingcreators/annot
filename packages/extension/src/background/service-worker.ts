@@ -774,16 +774,20 @@ async function autoCaptureShot(senderTabId?: number): Promise<void> {
     .catch(() => null)) as CaptureContext | null;
 
   const settings = await loadSettings();
-  await beginCapturePrep(host, target, "hotkey", settings, 0);
-  await delay(settings.timing.hotkeySettleMs);
-  if (!autoState.active) {
-    await endCapturePrep(host, target);
-    return;
-  }
+  // Auto Capture intentionally skips `beginCapturePrep` /
+  // `endCapturePrep` (the hide-stickies / hide-scrollbars / paint-flush
+  // dance every other capture mode runs). Auto fires on a continuous
+  // cadence (every `minIntervalMs`, default 1s), and the hide-restore
+  // cycle injects + removes a `<style>` element on every shot — the
+  // user sees their scrollbars flicker off and on while they're
+  // working. The mode's value prop is "passive recorder": capture the
+  // page exactly as the user is looking at it, including scrollbars
+  // and stickies. The content-script-side `stableWait` already
+  // guarantees DOM mutations have settled before the signal fires, so
+  // the extra `hotkeySettleMs` paint-flush isn't load-bearing.
 
   try {
     const captured = await host.captureViewport(target);
-    await endCapturePrep(host, target);
     const encoded = await encodeCapture(captured.pngDataUrl, settings);
     const dataUrl = encoded.dataUrl;
 
@@ -831,7 +835,6 @@ async function autoCaptureShot(senderTabId?: number): Promise<void> {
     updateBadge();
   } catch (e) {
     console.error("[auto-capture] capture failed:", e);
-    await endCapturePrep(host, target);
   }
 }
 
