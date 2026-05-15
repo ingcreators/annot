@@ -393,6 +393,15 @@ interface AutoCaptureState {
   scrollbarsHidden: boolean;
 }
 
+/** Tabs we've sent `hide-for-capture` to during the current session.
+ *  Tracked independently of `autoState.tabId` (which only points at
+ *  the currently-observed tab) so we can definitively restore every
+ *  tab the session touched when it stops — even if `autoState.tabId`
+ *  was cleared in between (e.g. the user navigated to a chrome://
+ *  page or the bound tab closed mid-session). The Set is drained on
+ *  every `restore-after-capture` send and on `stopAutoCapture`. */
+const autoHiddenTabs = new Set<number>();
+
 const autoState: AutoCaptureState = {
   active: false,
   count: 0,
@@ -678,6 +687,7 @@ async function activateObserverOn(tabId: number, windowId: number, url: string):
           scrollbars: true,
         })
         .catch(() => undefined);
+      autoHiddenTabs.add(tabId);
     }
     await host.sendToContent(target, {
       type: "auto-capture-enable",
@@ -710,12 +720,16 @@ async function deactivateObserverOn(tabId: number): Promise<void> {
     const tab = await chrome.tabs.get(tabId);
     const target = { id: tabId, windowId: tab.windowId, url: tab.url ?? "" };
     await host.sendToContent(target, { type: "auto-capture-disable" }).catch(() => undefined);
-    if (autoState.scrollbarsHidden) {
-      await host.sendToContent(target, { type: "restore-after-capture" }).catch(() => undefined);
-    }
+    // Always attempt restore — `restoreAfterCapture` is idempotent
+    // (`restoreScrollbars` is `getElementById(...)?.remove()`), and
+    // dropping the conditional shaves a class of bugs where
+    // `autoState.scrollbarsHidden` could be cleared before
+    // `deactivateObserverOn` runs.
+    await host.sendToContent(target, { type: "restore-after-capture" }).catch(() => undefined);
   } catch {
     // tab gone — observer cleanup happens implicitly on tab destruction
   }
+  autoHiddenTabs.delete(tabId);
 }
 
 async function startAutoCapture(): Promise<void> {
@@ -770,13 +784,27 @@ async function stopAutoCapture(): Promise<void> {
   autoState.lastFrameHash = "";
   updateBadge();
 
-  // `deactivateObserverOn` reads `autoState.scrollbarsHidden` to
-  // decide whether to send `restore-after-capture`. Clear the flag
-  // AFTER the deactivate runs so that final restore actually
-  // happens — otherwise the session's last tab would be left with
-  // the persistent hide style still injected.
   if (lastTabId != null) {
     await deactivateObserverOn(lastTabId);
+  }
+  // Belt-and-suspenders: drain any tab still in `autoHiddenTabs`
+  // after the explicit `deactivateObserverOn`. Covers edge cases
+  // where the bound tab churned (navigated, closed, or focus moved
+  // to chrome://) without the corresponding `deactivateObserverOn`
+  // landing — e.g. `tabs.onRemoved` clears `autoState.tabId` to
+  // null but doesn't run the per-tab restore (the page died with
+  // the tab in that path), and `autoState.tabId === null` lets
+  // `stopAutoCapture` skip the explicit deactivate above.
+  const stragglers = [...autoHiddenTabs];
+  autoHiddenTabs.clear();
+  for (const tabId of stragglers) {
+    try {
+      const tab = await chrome.tabs.get(tabId);
+      const target = { id: tabId, windowId: tab.windowId, url: tab.url ?? "" };
+      await host.sendToContent(target, { type: "restore-after-capture" }).catch(() => undefined);
+    } catch {
+      // Tab gone — page took the style with it. Nothing to restore.
+    }
   }
   autoState.scrollbarsHidden = false;
 
@@ -1030,6 +1058,11 @@ chrome.windows.onFocusChanged.addListener((windowId) => {
 });
 
 chrome.tabs.onRemoved.addListener((tabId) => {
+  // Whatever happens to the rest of the session state, the page is
+  // gone and took our injected scrollbar style with it. Drop the
+  // tab from our tracking set so `stopAutoCapture` doesn't later
+  // try to restore a non-existent tab.
+  autoHiddenTabs.delete(tabId);
   if (!autoState.active) return;
   if (autoState.tabId !== tabId) return;
   // The observed tab is gone — the MutationObserver died with the
@@ -1044,8 +1077,10 @@ chrome.tabs.onUpdated.addListener((tabId, info, tab) => {
   if (!autoState.active) return;
   if (autoState.tabId !== tabId) return;
   // Top-frame navigation in the observed tab — observer is gone with
-  // the old page. Re-install when the new page completes loading.
+  // the old page (along with our injected scrollbar style). Re-install
+  // when the new page completes loading.
   if (info.status !== "complete" || !tab.url) return;
+  autoHiddenTabs.delete(tabId); // old page is gone; remove stale tracking
   autoState.tabId = null; // force re-activation path inside activateObserverOn
   void activateObserverOn(tabId, tab.windowId, tab.url);
 });
