@@ -17,7 +17,20 @@
  *     host I/O wrapper
  */
 
+import type { SaveSizePreset } from "@ingcreators/annot-core/encode/options";
+
 export type OverlayMode = "scrollOnly" | "all" | "never";
+
+/**
+ * Output style for the `Whole Page` capture button in the extension
+ * popup. `"stitched"` produces one tall image (the legacy `Full Page`
+ * behaviour, routed through `captureFullPage` / `runScrollCapture`);
+ * `"perScreen"` produces N viewport-sized images (the legacy `Per
+ * Page` behaviour, routed through `capturePages` / `runPerPageCapture`).
+ * The popup picks the message to dispatch based on this setting; the
+ * orchestration handlers themselves don't read it.
+ */
+export type WholePageOutput = "stitched" | "perScreen";
 
 export interface Settings {
   overlays: {
@@ -74,7 +87,16 @@ export interface Settings {
     thumbnailPercent: number;
     /** Thumbnail max width in pixels (height is derived from 16:9). */
     thumbnailMaxWidth: number;
+    /**
+     * Max-width cap applied during encode so 4K screenshots don't end
+     * up as 5-10 MB files. Mirrors the web app's `EncodeOptions.saveSizePreset`;
+     * `SAVE_SIZE_MAX_WIDTH` in `@ingcreators/annot-core/encode/options`
+     * defines the px ceiling per preset.
+     */
+    saveSizePreset: SaveSizePreset;
   };
+  /** See {@link WholePageOutput}. */
+  wholePageOutput: WholePageOutput;
   /**
    * Viewport emulation by physically resizing the host window before
    * capture (extension: `chrome.windows.update`; desktop: Electron
@@ -163,6 +185,7 @@ export const DEFAULT_SETTINGS: Settings = {
     jpegPercent: 92,
     thumbnailPercent: 85,
     thumbnailMaxWidth: 480,
+    saveSizePreset: "standard",
   },
   emulation: {
     enabled: false,
@@ -170,6 +193,7 @@ export const DEFAULT_SETTINGS: Settings = {
     customWidth: 1920,
     customHeight: 1080,
   },
+  wholePageOutput: "stitched",
 };
 
 /** Deep-merge partial settings onto defaults (only known keys). */
@@ -253,6 +277,11 @@ export function mergeSettings(partial: any): Settings {
         [360, 480, 640, 960],
         DEFAULT_SETTINGS.quality.thumbnailMaxWidth,
       ),
+      saveSizePreset: pickEnum<SaveSizePreset>(
+        p.quality?.saveSizePreset,
+        ["light", "standard", "highQuality", "original"],
+        DEFAULT_SETTINGS.quality.saveSizePreset,
+      ),
     },
     emulation: {
       enabled:
@@ -277,6 +306,11 @@ export function mergeSettings(partial: any): Settings {
         DEFAULT_SETTINGS.emulation.customHeight,
       ),
     },
+    wholePageOutput: pickEnum<WholePageOutput>(
+      p.wholePageOutput,
+      ["stitched", "perScreen"],
+      DEFAULT_SETTINGS.wholePageOutput,
+    ),
   };
 }
 

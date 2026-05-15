@@ -137,6 +137,7 @@ export async function runPerPageCapture(host: CaptureHost): Promise<CaptureResul
       smartFallback: settings.quality.smartFallback,
       smartColorThreshold: settings.quality.smartColorThreshold,
       jpegPercent: settings.quality.jpegPercent,
+      saveSizePreset: settings.quality.saveSizePreset,
     };
     const batchItems = rawPages.map((rp) => ({
       pngDataUrl: rp.pngDataUrl,
