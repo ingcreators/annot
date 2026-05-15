@@ -22,15 +22,9 @@ export const MAX_CANVAS_DIMENSION = 32767;
  */
 export const POST_HIDE_PAINT_MS = 80;
 
-/** Click-capture debounce window — successive clicks within this
- *  interval are ignored to avoid duplicate frames. */
-export const CLICK_CAPTURE_MIN_INTERVAL_MS = 350;
-
-/** Safety cap on click-capture frame count per session. */
-export const CLICK_CAPTURE_MAX_FRAMES = 500;
-
-/** Hotkey-capture debounce window. Faster than click capture
- *  because keyboard shortcut presses can come from auto-repeat. */
+/** Hotkey-capture debounce window. Faster than the desktop Browse
+ *  window's click-capture floor because keyboard shortcut presses
+ *  can come from auto-repeat. */
 export const HOTKEY_CAPTURE_MIN_INTERVAL_MS = 200;
 
 /** Promise-wrapped `setTimeout`. Used to wait out paint flushes

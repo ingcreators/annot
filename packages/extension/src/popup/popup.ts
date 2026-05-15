@@ -33,18 +33,16 @@ function sendWithResponse<T>(msg: { type: string }): Promise<T> {
 async function init(): Promise<void> {
   const el = document.getElementById("popup") as AnnotExtensionPopupElement;
 
-  // Load persisted Settings + active-session state in parallel. Auto
-  // Capture has its own status message because the hotkey/click status
-  // is shared and adding auto-state there would conflate three
-  // independent session machines.
-  const [settings, clickStatus, autoStatus] = await Promise.all([
+  // Load persisted Settings + active-session state in parallel. Hotkey
+  // and Auto each have their own status message — they're independent
+  // session machines, and folding them into one response shape would
+  // tempt callers into ambiguous handling.
+  const [settings, hotkeyStatus, autoStatus] = await Promise.all([
     loadSettings(),
     sendWithResponse<{
       active: boolean;
       count: number;
-      hotkeyActive: boolean;
-      hotkeyCount: number;
-    }>({ type: "click-capture-status" }).catch(() => null),
+    }>({ type: "hotkey-capture-status" }).catch(() => null),
     sendWithResponse<{
       active: boolean;
       count: number;
@@ -61,9 +59,9 @@ async function init(): Promise<void> {
       stableWaitMs: autoStatus.stableWaitMs ?? 0,
       minIntervalMs: autoStatus.minIntervalMs ?? 0,
     };
-  } else if (clickStatus?.hotkeyActive) {
+  } else if (hotkeyStatus?.active) {
     el.view = "hotkeyActive";
-    el.hotkeyCount = clickStatus.hotkeyCount ?? 0;
+    el.hotkeyCount = hotkeyStatus.count ?? 0;
   } else {
     el.view = "idle";
   }

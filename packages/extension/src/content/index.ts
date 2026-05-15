@@ -104,11 +104,14 @@ if (guardWindow.__annot_injected) {
         break;
 
       case "click-capture-enable":
-        enableClickCapture();
-        break;
-
       case "click-capture-disable":
-        disableClickCapture();
+        // Extension-side Click Capture was retired in
+        // `docs/plans/browser-extension-web-optimized-pudding.md`.
+        // The shared message types remain because the desktop Browse
+        // window still uses them; the chrome service worker no
+        // longer sends them, but be tolerant of stragglers from an
+        // older service-worker build that hasn't reloaded yet.
+        sendResponse(true);
         break;
 
       case "get-capture-context":
@@ -208,76 +211,6 @@ if (guardWindow.__annot_injected) {
     };
   }
 
-  // ---- Click capture ----
-
-  let clickListenerActive = false;
-
-  function onClickCapture(e: MouseEvent) {
-    // Ignore clicks from our own content-script UI overlays
-    if ((e.target as HTMLElement)?.closest?.("[data-annot-ui]")) return;
-
-    const target = e.target as HTMLElement | null;
-
-    // Capture the bounding rect of the clicked element. Walk up to find a
-    // "meaningful" ancestor so that clicking an inner <span> inside a <button>
-    // highlights the button (which is usually what the user intends to mark).
-    let rectEl: HTMLElement | null = target;
-    while (rectEl && rectEl !== document.body) {
-      const tag = rectEl.tagName;
-      if (
-        tag === "A" ||
-        tag === "BUTTON" ||
-        tag === "INPUT" ||
-        tag === "LABEL" ||
-        tag === "SELECT" ||
-        tag === "TEXTAREA" ||
-        rectEl.getAttribute("role") === "button" ||
-        rectEl.getAttribute("role") === "link" ||
-        rectEl.getAttribute("role") === "tab" ||
-        rectEl.getAttribute("role") === "menuitem"
-      )
-        break;
-      rectEl = rectEl.parentElement;
-    }
-    if (!rectEl || rectEl === document.body) rectEl = target;
-
-    let rect: { x: number; y: number; width: number; height: number } | undefined;
-    try {
-      const r = rectEl?.getBoundingClientRect();
-      if (r && r.width > 0 && r.height > 0) {
-        rect = { x: r.left, y: r.top, width: r.width, height: r.height };
-      }
-    } catch {
-      /* ignore */
-    }
-
-    chromeContentBus.send({
-      type: "click-detected",
-      x: e.clientX,
-      y: e.clientY,
-      pageX: e.pageX,
-      pageY: e.pageY,
-      dpr: window.devicePixelRatio || 1,
-      target: rectEl?.tagName || target?.tagName || "",
-      url: location.href,
-      title: document.title,
-      rect,
-    });
-  }
-
-  function enableClickCapture(): void {
-    if (clickListenerActive) return;
-    clickListenerActive = true;
-    // Capture-phase to beat any stopPropagation in page code
-    document.addEventListener("click", onClickCapture, true);
-  }
-
-  function disableClickCapture(): void {
-    if (!clickListenerActive) return;
-    clickListenerActive = false;
-    document.removeEventListener("click", onClickCapture, true);
-  }
-
   // ---- Auto Capture (DOM-mutation-driven) ----
 
   let autoObserver: MutationObserver | null = null;
@@ -346,14 +279,5 @@ if (guardWindow.__annot_injected) {
         ? (node as Element)
         : (node.parentElement as Element | null);
     return !!el?.closest?.("[data-annot-ui]");
-  }
-
-  // On initial injection, read state from storage so we pick up an in-progress session
-  try {
-    chrome.storage.local.get(["clickCaptureActive"], (res) => {
-      if (res.clickCaptureActive) enableClickCapture();
-    });
-  } catch {
-    // storage may be unavailable in some contexts
   }
 } // end guard

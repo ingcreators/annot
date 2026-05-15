@@ -7,8 +7,6 @@ import { describe, expect, it } from "vitest";
 import {
   ANNOTATION_URL,
   buildEditUrl,
-  CLICK_CAPTURE_MAX_FRAMES,
-  CLICK_CAPTURE_MIN_INTERVAL_MS,
   HOTKEY_CAPTURE_MIN_INTERVAL_MS,
   IDB_MAX_AGE_MS,
   isCapturableUrl,
@@ -28,9 +26,7 @@ describe("constants", () => {
 
   it("exposes paint / debounce timing constants as positive integers", () => {
     expect(POST_HIDE_PAINT_MS).toBeGreaterThan(0);
-    expect(CLICK_CAPTURE_MIN_INTERVAL_MS).toBeGreaterThan(0);
     expect(HOTKEY_CAPTURE_MIN_INTERVAL_MS).toBeGreaterThan(0);
-    expect(CLICK_CAPTURE_MAX_FRAMES).toBeGreaterThan(0);
   });
 
   it("ANNOTATION_URL points at a valid http(s) origin", () => {
