@@ -6,16 +6,22 @@
   box-sizing: border-box;
 }
 
+/* The Chrome extension popup scrolls on the `html` element, not on
+   `body`, so the scrollbar-gutter reservation has to live here. With
+   the gutter on `body` only, Chrome auto-sized the popup window wider
+   by the scrollbar's width when Quick Options opened — visible as a
+   horizontal shift between the closed and open state. `scrollbar-width:
+   thin` reduces the scrollbar's visual weight when it does appear. */
+html {
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+}
+
 body {
   width: 360px;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   background: #0f1730;
   color: #eef2ff;
-  /* Reserve scrollbar gutter so Quick Options open/close doesn't shift
-     content horizontally if the popup viewport ever needs to scroll.
-     `thin` reduces the scrollbar's visual weight when it does appear. */
-  scrollbar-gutter: stable;
-  scrollbar-width: thin;
 }
 
 annot-extension-popup {
