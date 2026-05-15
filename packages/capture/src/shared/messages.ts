@@ -5,17 +5,21 @@ import type {
 } from "@ingcreators/annot-core/utils/types";
 
 // Popup -> Background
+//
+// `click-capture-*` messages were retired with the extension's
+// Click Capture surface. The desktop Browse window's click+hotkey
+// flow still uses `BackgroundToContentMessage["click-capture-{enable,
+// disable}"]` + `ContentToBackgroundMessage["click-detected"]`
+// internally; those stay below.
 export type PopupMessage =
   | { type: "capture-visible" }
   | { type: "capture-area" }
   | { type: "capture-full" }
   | { type: "capture-pages" }
   | { type: "open-gallery" }
-  | { type: "click-capture-start" }
-  | { type: "click-capture-stop" }
-  | { type: "click-capture-status" }
   | { type: "hotkey-capture-start" }
   | { type: "hotkey-capture-stop" }
+  | { type: "hotkey-capture-status" }
   | { type: "auto-capture-start" }
   | { type: "auto-capture-stop" }
   | { type: "auto-capture-status" };

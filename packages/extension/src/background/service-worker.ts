@@ -31,8 +31,6 @@ import { createChromeCaptureHost } from "./host.js";
 import {
   ANNOTATION_URL,
   buildEditUrl,
-  CLICK_CAPTURE_MAX_FRAMES,
-  CLICK_CAPTURE_MIN_INTERVAL_MS,
   delay,
   HOTKEY_CAPTURE_MIN_INTERVAL_MS,
   IDB_MAX_AGE_MS,
@@ -322,27 +320,36 @@ async function openGallery(): Promise<void> {
   await openOrReuseAnnotTab(chrome.runtime.id);
 }
 
-// ---- Click Capture ───────────────────────────────────────────────
+// ---- Session state ───────────────────────────────────────────────
 
-interface ClickCaptureState {
+/**
+ * Hotkey Capture session shape. One active session per service
+ * worker; each Alt+Shift+C press fires `hotkeyCaptureShot` which
+ * appends a frame to the IDB session bound by `sessionId`. The
+ * Click Capture surface (which previously shared this shape) was
+ * retired in `docs/plans/browser-extension-web-optimized-pudding.md`.
+ */
+interface HotkeyCaptureState {
   active: boolean;
   count: number;
-  /** Timestamp of last capture — used to debounce rapid clicks. */
+  /** Timestamp of last capture — used to debounce rapid presses. */
   lastCaptureAt: number;
   /** uuid7-base58 session id; set at start, reused for every capture. */
   sessionId: string;
 }
 
-const clickState: ClickCaptureState = { active: false, count: 0, lastCaptureAt: 0, sessionId: "" };
-const hotkeyState: ClickCaptureState = { active: false, count: 0, lastCaptureAt: 0, sessionId: "" };
+const hotkeyState: HotkeyCaptureState = {
+  active: false,
+  count: 0,
+  lastCaptureAt: 0,
+  sessionId: "",
+};
 
 /**
- * Auto Capture session state. Mirrors the click / hotkey shapes —
- * one active session per service worker, scoped to the tab the
- * session was started in. The content-script-side MutationObserver
- * posts `auto-capture-signal` on each settle; the service worker
- * applies a min-interval throttle (`AutoCaptureOptions.interval`)
- * + a duplicate-frame dedupe before saving.
+ * Auto Capture session state. Mirrors the hotkey shape but adds the
+ * fields the DOM-mutation trigger needs: tab binding (so signals
+ * from other tabs are ignored), last-frame hash (dedupe), and the
+ * resolved interval / stable-wait timings.
  */
 interface AutoCaptureState {
   active: boolean;
@@ -372,11 +379,8 @@ const autoState: AutoCaptureState = {
   stableWaitMs: 0,
 };
 
-function getClickCaptureStatus(): ClickCaptureState & {
-  hotkeyActive: boolean;
-  hotkeyCount: number;
-} {
-  return { ...clickState, hotkeyActive: hotkeyState.active, hotkeyCount: hotkeyState.count };
+function getHotkeyCaptureStatus(): { active: boolean; count: number } {
+  return { active: hotkeyState.active, count: hotkeyState.count };
 }
 
 function getAutoCaptureStatus(): {
@@ -394,224 +398,18 @@ function getAutoCaptureStatus(): {
 }
 
 function updateBadge(): void {
-  const anyActive = clickState.active || hotkeyState.active;
-  if (anyActive) {
+  if (hotkeyState.active) {
     chrome.action.setBadgeBackgroundColor({ color: "#e44" });
-    const total = clickState.count + hotkeyState.count;
-    chrome.action.setBadgeText({ text: String(total) });
+    chrome.action.setBadgeText({ text: String(hotkeyState.count) });
   } else {
     chrome.action.setBadgeText({ text: "" });
   }
 }
 
-async function broadcastClickCapture(enable: boolean): Promise<void> {
-  const tabs = await chrome.tabs.query({});
-  const msgType = enable ? "click-capture-enable" : "click-capture-disable";
-  for (const t of tabs) {
-    if (!t.id || !t.url) continue;
-    if (!/^https?:|^file:/.test(t.url)) continue;
-    try {
-      // Ensure content script is present for http(s) pages
-      if (enable) {
-        await host.injectContentScript({ id: t.id, windowId: t.windowId, url: t.url ?? "" });
-      }
-      await chrome.tabs.sendMessage(t.id, { type: msgType }).catch(() => {});
-    } catch (err) {
-      logger.debug("[click-capture] broadcast to tab failed:", t.id, err);
-    }
-  }
-}
-
-async function startClickCapture(): Promise<void> {
-  if (clickState.active) return;
-  clickState.active = true;
-  clickState.count = 0;
-  clickState.lastCaptureAt = 0;
-  clickState.sessionId = newIdB58();
-  await chrome.storage.local.set({
-    clickCaptureActive: true,
-    clickCaptureSession: clickState.sessionId,
-  });
-  updateBadge();
-  await broadcastClickCapture(true);
-}
-
-async function stopClickCapture(): Promise<void> {
-  if (!clickState.active) return;
-  clickState.active = false;
-  await chrome.storage.local.set({ clickCaptureActive: false });
-  await broadcastClickCapture(false);
-  const finalCount = clickState.count;
-  clickState.sessionId = "";
-  updateBadge();
-
-  // Open Annot so user can review + transfer captured frames.
-  if (finalCount > 0) {
-    await openOrReuseAnnotTab(chrome.runtime.id);
-  }
-}
-
-/** Handle a click reported by a content script: capture + save. */
-async function handleClickDetected(
-  msg: {
-    x: number;
-    y: number;
-    pageX: number;
-    pageY: number;
-    dpr: number;
-    target: string;
-    url: string;
-    title: string;
-    rect?: { x: number; y: number; width: number; height: number };
-  },
-  sender: chrome.runtime.MessageSender,
-): Promise<void> {
-  if (!clickState.active) return;
-  if (clickState.count >= CLICK_CAPTURE_MAX_FRAMES) {
-    console.warn("[click-capture] max frames reached, auto-stopping");
-    stopClickCapture();
-    return;
-  }
-
-  const now = Date.now();
-  if (now - clickState.lastCaptureAt < CLICK_CAPTURE_MIN_INTERVAL_MS) return;
-  clickState.lastCaptureAt = now;
-
-  const tabId = sender.tab?.id;
-  const windowId = sender.tab?.windowId;
-  if (tabId == null || windowId == null) return;
-
-  const settings = await loadSettings();
-
-  // Click capture uses host primitives directly rather than going
-  // through `runVisibleCapture` because:
-  //   - it needs custom tag bookkeeping (click coords, sessionIndex)
-  //   - the settle delay is per-click rather than per-mode
-  //   - no "open the editor" step (frames accumulate; editor opens
-  //     on `stopClickCapture`)
-  const target = { id: tabId, windowId, url: sender.tab?.url ?? "" };
-  // Mirror the orchestrators' beginCapturePrep / endCapturePrep dance
-  // so stickies / scrollbars don't bake into the capture.
-  await beginCapturePrep(host, target, "click", settings, 0);
-  await delay(settings.timing.clickSettleMs);
-
-  if (!clickState.active) {
-    await endCapturePrep(host, target);
-    return;
-  }
-
-  try {
-    const captured = await host.captureViewport(target);
-    await endCapturePrep(host, target);
-    const encoded = await encodeCapture(captured.pngDataUrl, settings);
-    const dataUrl = encoded.dataUrl;
-    const thumbnailDataUrl = await idbStore.generateThumbnail(dataUrl);
-
-    // Dimensions from image
-    const { width: w, height: h } = await probeDimensions(dataUrl);
-
-    // Re-query the tab AFTER the settle delay so the recorded URL/title
-    // reflects the captured page (post-navigation), not the page the
-    // click was dispatched on. The pre-click URL/title is kept
-    // separately in `click.from*` tags for reference.
-    let capturedUrl = msg.url;
-    let capturedTitle = msg.title;
-    try {
-      const updated = await chrome.tabs.get(tabId);
-      if (updated?.url) capturedUrl = updated.url;
-      if (updated?.title) capturedTitle = updated.title;
-    } catch {
-      /* ignore — fall back to click-time values */
-    }
-
-    // Did the page navigate between click and capture? If so, click
-    // coordinates/rect are on a different layout and would draw a
-    // misplaced marker on the captured image — omit them.
-    const navigated = !!msg.url && msg.url !== capturedUrl;
-
-    const ts = new Date().toISOString();
-    const tags: Record<string, string> = {
-      "click.target": msg.target,
-      "click.seq": String(clickState.count + 1).padStart(3, "0"),
-      // URL/title at capture time (matches the image)
-      "click.url": capturedUrl,
-      "click.title": capturedTitle.slice(0, 120),
-      captureId: newIdB58(),
-      session: clickState.sessionId,
-      sessionKind: "click",
-      sessionIndex: String(clickState.count),
-    };
-    if (!navigated) {
-      tags["click.x"] = String(Math.round(msg.x * msg.dpr));
-      tags["click.y"] = String(Math.round(msg.y * msg.dpr));
-      tags["click.pageX"] = String(Math.round(msg.pageX * msg.dpr));
-      tags["click.pageY"] = String(Math.round(msg.pageY * msg.dpr));
-      if (msg.rect) {
-        tags["click.rect.x"] = String(Math.round(msg.rect.x * msg.dpr));
-        tags["click.rect.y"] = String(Math.round(msg.rect.y * msg.dpr));
-        tags["click.rect.w"] = String(Math.round(msg.rect.width * msg.dpr));
-        tags["click.rect.h"] = String(Math.round(msg.rect.height * msg.dpr));
-      }
-    } else {
-      // Page navigated — record the originating URL/title for traceability
-      tags["click.fromUrl"] = msg.url;
-      tags["click.fromTitle"] = msg.title.slice(0, 120);
-    }
-    Object.assign(tags, urlTags(capturedUrl));
-
-    // Snapshot DOM metadata while the page state matches the
-    // screenshot (same scroll, same hidden stickies). Click capture
-    // doesn't open the editor immediately, but the user opens these
-    // later from the gallery — at that point the Elements sidebar
-    // is useful.
-    const meta = await host.requestPageMetadata(target);
-
-    await idbStore.saveImage({
-      originalDataUrl: dataUrl,
-      thumbnailDataUrl,
-      annotationsSvg: "",
-      width: w,
-      height: h,
-      sourceUrl: capturedUrl,
-      tags,
-      folderPath: "",
-      createdAt: ts,
-      updatedAt: ts,
-      pageMetadata: meta ?? undefined,
-    });
-
-    clickState.count += 1;
-    updateBadge();
-  } catch (e) {
-    console.error("[click-capture] capture failed:", e);
-    await endCapturePrep(host, target);
-  }
-}
-
-// Auto-inject content script into newly loaded tabs while click
-// capture is active.
-chrome.tabs.onUpdated.addListener((tabId, info, tab) => {
-  if (info.status !== "complete") return;
-  if (!clickState.active) return;
-  if (!tab.url || !/^https?:|^file:/.test(tab.url)) return;
-  host.injectContentScript({ id: tabId, windowId: tab.windowId, url: tab.url }).then(() => {
-    chrome.tabs.sendMessage(tabId, { type: "click-capture-enable" }).catch(() => {});
-  });
-});
-
-// Restore click-capture state across service-worker restarts.
+// Restore hotkey-capture state across service-worker restarts.
 (async () => {
   try {
-    const res = await chrome.storage.local.get([
-      "clickCaptureActive",
-      "clickCaptureSession",
-      "hotkeyCaptureActive",
-      "hotkeyCaptureSession",
-    ]);
-    if (res.clickCaptureActive) {
-      clickState.active = true;
-      clickState.sessionId = res.clickCaptureSession || newIdB58();
-    }
+    const res = await chrome.storage.local.get(["hotkeyCaptureActive", "hotkeyCaptureSession"]);
     if (res.hotkeyCaptureActive) {
       hotkeyState.active = true;
       hotkeyState.sessionId = res.hotkeyCaptureSession || newIdB58();
@@ -1055,20 +853,6 @@ chrome.runtime.onMessage.addListener((msg: any, sender, sendResponse) => {
       openGallery();
       break;
 
-    // ---- Click Capture ----
-    case "click-capture-start":
-      startClickCapture();
-      break;
-    case "click-capture-stop":
-      stopClickCapture();
-      break;
-    case "click-capture-status":
-      sendResponse(getClickCaptureStatus());
-      return false;
-    case "click-detected":
-      handleClickDetected(msg, sender);
-      break;
-
     // ---- Hotkey Capture ----
     case "hotkey-capture-start":
       startHotkeyCapture();
@@ -1076,6 +860,9 @@ chrome.runtime.onMessage.addListener((msg: any, sender, sendResponse) => {
     case "hotkey-capture-stop":
       stopHotkeyCapture();
       break;
+    case "hotkey-capture-status":
+      sendResponse(getHotkeyCaptureStatus());
+      return false;
 
     // ---- Auto Capture (DOM-mutation-driven) ----
     case "auto-capture-start":

@@ -3,7 +3,7 @@
  * the capturable-URL predicate, and the storage-cleanup window.
  *
  * Phase 1A of `docs/plans/desktop-browser-mode.md`: shared constants
- * (canvas dim cap, paint-flush delay, click/hotkey debounce windows,
+ * (canvas dim cap, paint-flush delay, hotkey debounce window,
  * `delay`) and the strategy math moved into
  * `@ingcreators/annot-capture/orchestrate`. The chrome / annot-app /
  * IDB-cleanup pieces stay here — they're extension-specific. The
@@ -12,8 +12,6 @@
  */
 
 export {
-  CLICK_CAPTURE_MAX_FRAMES,
-  CLICK_CAPTURE_MIN_INTERVAL_MS,
   delay,
   HOTKEY_CAPTURE_MIN_INTERVAL_MS,
   MAX_CANVAS_DIMENSION,
