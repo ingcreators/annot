@@ -419,6 +419,9 @@ function updateBadge(): void {
   if (hotkeyState.active) {
     chrome.action.setBadgeBackgroundColor({ color: "#e44" });
     chrome.action.setBadgeText({ text: String(hotkeyState.count) });
+  } else if (autoState.active) {
+    chrome.action.setBadgeBackgroundColor({ color: "#e44" });
+    chrome.action.setBadgeText({ text: String(autoState.count) });
   } else {
     chrome.action.setBadgeText({ text: "" });
   }
