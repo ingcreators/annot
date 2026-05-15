@@ -32,6 +32,10 @@ interface Args {
   hotkeyCount: number;
   autoSummary: AutoCaptureSummary | null;
   quickOptionsOpen: boolean;
+  hotkeyShortcut: string;
+  visibleAreaShortcut: string;
+  selectRegionShortcut: string;
+  wholePageShortcut: string;
 }
 
 function renderPopup(args: Args): HTMLElement {
@@ -51,6 +55,10 @@ function renderPopup(args: Args): HTMLElement {
   el.hotkeyCount = args.hotkeyCount;
   el.autoSummary = args.autoSummary;
   el.quickOptionsOpen = args.quickOptionsOpen;
+  el.hotkeyShortcut = args.hotkeyShortcut;
+  el.visibleAreaShortcut = args.visibleAreaShortcut;
+  el.selectRegionShortcut = args.selectRegionShortcut;
+  el.wholePageShortcut = args.wholePageShortcut;
   el.addEventListener("popup-message", (e) => {
     // Arg-flow trace — intentional `console.log`.
     console.log("[story] popup-message", (e as CustomEvent).detail);
@@ -74,6 +82,10 @@ const meta: Meta<Args> = {
     hotkeyCount: { control: "number" },
     autoSummary: { control: "object" },
     quickOptionsOpen: { control: "boolean" },
+    hotkeyShortcut: { control: "text" },
+    visibleAreaShortcut: { control: "text" },
+    selectRegionShortcut: { control: "text" },
+    wholePageShortcut: { control: "text" },
   },
   args: {
     settings: DEFAULT_SETTINGS,
@@ -81,6 +93,10 @@ const meta: Meta<Args> = {
     hotkeyCount: 0,
     autoSummary: null,
     quickOptionsOpen: false,
+    hotkeyShortcut: "",
+    visibleAreaShortcut: "",
+    selectRegionShortcut: "",
+    wholePageShortcut: "",
   },
 };
 export default meta;
@@ -98,6 +114,22 @@ export const Idle: Story = {};
 export const IdleWithQuickOptionsOpen: Story = {
   args: {
     quickOptionsOpen: true,
+  },
+};
+
+/** Idle popup with shortcuts bound to all four capture commands.
+ *  Shows the trailing `.popup-btn-trailing` badge on Visible Area /
+ *  Select Region / Whole Page / Hotkey so reviewers can verify the
+ *  layout reads cleanly at a typical wide-binding width
+ *  (`Alt+Shift+1`). The real popup pulls these strings from
+ *  `chrome.commands.getAll()` at boot — the story stubs them
+ *  directly. */
+export const IdleWithShortcuts: Story = {
+  args: {
+    hotkeyShortcut: "Alt+Shift+Z",
+    visibleAreaShortcut: "Alt+Shift+1",
+    selectRegionShortcut: "Alt+Shift+2",
+    wholePageShortcut: "Alt+Shift+3",
   },
 };
 
