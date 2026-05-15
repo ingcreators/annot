@@ -18,10 +18,18 @@
 
 import type {
   AnnotCaptureSettingsElement,
+  AutoCaptureOptionsChangeDetail,
   CaptureSettingsChangeDetail,
 } from "@ingcreators/annot-host-ui/annot-capture-settings";
 import "@ingcreators/annot-host-ui/annot-capture-settings";
-import { loadSettings, onSettingsChange, saveSettings } from "../shared/settings.js";
+import {
+  loadAutoCaptureOptions,
+  loadSettings,
+  onAutoCaptureOptionsChange,
+  onSettingsChange,
+  saveAutoCaptureOptions,
+  saveSettings,
+} from "../shared/settings.js";
 
 let savedTimer: number | undefined;
 
@@ -32,19 +40,35 @@ function el<T extends HTMLElement>(id: string): T {
 async function init(): Promise<void> {
   const settingsEl = el<AnnotCaptureSettingsElement>("capture-settings");
 
-  // Load + populate.
-  settingsEl.settings = await loadSettings();
+  // Load + populate. Settings and AutoCaptureOptions live in
+  // separate `chrome.storage.sync` keys (`annot.settings.v1` /
+  // `annot.autoCapture.v1`); the component's two props handle them
+  // independently and fire separate events on change.
+  const [settings, autoOptions] = await Promise.all([loadSettings(), loadAutoCaptureOptions()]);
+  settingsEl.settings = settings;
+  settingsEl.autoCaptureOptions = autoOptions;
+  settingsEl.showAutoCapture = true;
 
-  // Autosave on every input. The Lit component fires
-  // `settings-changed` synchronously so the value the host saves
-  // exactly matches what the user just toggled — no read-back race
-  // through `chrome.storage`.
+  // Autosave on every input. The Lit component fires the events
+  // synchronously so the value the host saves exactly matches what
+  // the user just toggled — no read-back race through
+  // `chrome.storage`.
   settingsEl.addEventListener("settings-changed", (event) => {
     const detail = (event as CustomEvent<CaptureSettingsChangeDetail>).detail;
     void saveSettings(detail.settings)
       .then(() => flashSaved("Saved"))
       .catch((err) => {
         console.error("[options] save failed:", err);
+        flashSaved(`Save failed: ${(err as Error).message}`);
+      });
+  });
+
+  settingsEl.addEventListener("auto-capture-options-changed", (event) => {
+    const detail = (event as CustomEvent<AutoCaptureOptionsChangeDetail>).detail;
+    void saveAutoCaptureOptions(detail.options)
+      .then(() => flashSaved("Saved"))
+      .catch((err) => {
+        console.error("[options] saveAutoCaptureOptions failed:", err);
         flashSaved(`Save failed: ${(err as Error).message}`);
       });
   });
@@ -56,6 +80,9 @@ async function init(): Promise<void> {
   // without reloading.
   onSettingsChange((s) => {
     settingsEl.settings = s;
+  });
+  onAutoCaptureOptionsChange((o) => {
+    settingsEl.autoCaptureOptions = o;
   });
 }
 
