@@ -33,6 +33,16 @@ import {
   type OverlayMode,
   type Settings,
 } from "@ingcreators/annot-capture/shared";
+import {
+  type AutoCaptureOptions,
+  CAPTURE_INTERVAL_LABEL,
+  type CaptureIntervalPreset,
+  CHANGE_SENSITIVITY_LABEL,
+  type ChangeSensitivityPreset,
+  DEFAULT_AUTO_CAPTURE_OPTIONS,
+  STABLE_WAIT_LABEL,
+  type StableWaitPreset,
+} from "@ingcreators/annot-core/auto-capture-options";
 import { type CSSResultGroup, css, html, LitElement } from "./lit.js";
 
 export interface CaptureSettingsChangeDetail {
@@ -42,16 +52,51 @@ export interface CaptureSettingsChangeDetail {
   settings: Settings;
 }
 
+export interface AutoCaptureOptionsChangeDetail {
+  /** Fully-formed `AutoCaptureOptions`. The host listener persists
+   *  this blob separately from `Settings` (it lives at
+   *  `chrome.storage.sync["annot.autoCapture.v1"]` on the
+   *  extension). */
+  options: AutoCaptureOptions;
+}
+
+/** Combined emulation selection: `"off"` collapses the storage-level
+ *  `enabled: false` + `preset: "native"` pair into one UI choice so
+ *  the user isn't asked to set two coupled fields. */
+const EMULATION_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
+  { value: "off", label: "Off (use the real viewport)" },
+  { value: "fullhd", label: "Full HD — 1920 × 1080" },
+  { value: "macbook", label: "MacBook — 1440 × 900" },
+  { value: "iphonese", label: "iPhone SE — 375 × 667" },
+  { value: "iphone15promax", label: "iPhone 15 Pro Max — 430 × 932" },
+  { value: "ipad", label: "iPad — 1024 × 1366" },
+  { value: "custom", label: "Custom…" },
+];
+
+const INTERVAL_OPTIONS: readonly CaptureIntervalPreset[] = ["fast", "standard", "slow"];
+const SENSITIVITY_OPTIONS: readonly ChangeSensitivityPreset[] = ["sensitive", "standard", "major"];
+const STABLE_WAIT_OPTIONS: readonly StableWaitPreset[] = ["none", "short", "long"];
+
 export class AnnotCaptureSettingsElement extends LitElement {
   static override properties = {
     settings: { attribute: false },
+    autoCaptureOptions: { attribute: false },
+    showAutoCapture: { attribute: false },
   };
 
   declare settings: Settings;
+  declare autoCaptureOptions: AutoCaptureOptions;
+  /** Whether to surface the Auto Capture options section. Default
+   *  `false` — the host (e.g. the chrome extension's options page)
+   *  opts in. Desktop Browse window leaves it off because Auto
+   *  Capture isn't a feature there. */
+  declare showAutoCapture: boolean;
 
   constructor() {
     super();
     this.settings = DEFAULT_SETTINGS;
+    this.autoCaptureOptions = DEFAULT_AUTO_CAPTURE_OPTIONS;
+    this.showAutoCapture = false;
   }
 
   static override styles: CSSResultGroup = css`
@@ -218,8 +263,7 @@ export class AnnotCaptureSettingsElement extends LitElement {
       <section class="options-section">
         <h2>Overlays</h2>
         <p class="section-hint">
-          Hide fixed headers, stickies, and modals that repeat across
-          scroll-capture segments.
+          Hide fixed headers, stickies, and modals during capture.
         </p>
 
         <div class="field">
@@ -247,10 +291,9 @@ export class AnnotCaptureSettingsElement extends LitElement {
             <span>Keep overlays on the first viewport (scroll / per-page)</span>
           </label>
           <div class="field-hint">
-            Recommended. The first scroll-capture segment keeps the
-            page's natural header, then the header is hidden from
-            segment 2 onward so it doesn't repeat in the stitched
-            image. Matches Shottr / Xnapper / CleanShot behavior.
+            Recommended. Keeps the page's natural header on the first
+            segment, hides it from segment 2 onward so it doesn't
+            repeat in the stitched image.
           </div>
         </div>
 
@@ -288,10 +331,6 @@ export class AnnotCaptureSettingsElement extends LitElement {
             <span>Hide browser scrollbars during capture</span>
           </label>
         </div>
-        <p class="field-hint">
-          Injects CSS to hide the browser's scrollbar so it doesn't
-          appear in the captured image.
-        </p>
       </section>
 
       <section class="options-section">
@@ -384,9 +423,6 @@ export class AnnotCaptureSettingsElement extends LitElement {
 
       <section class="options-section">
         <h2>Image format</h2>
-        <p class="section-hint">
-          How captured images are encoded and stored.
-        </p>
 
         <div class="field">
           <label for="image-format">Format</label>
@@ -464,124 +500,70 @@ export class AnnotCaptureSettingsElement extends LitElement {
             @input=${this.#onJpegQuality}
           />
           <div class="field-hint">
-            Used for "JPEG" format and the JPEG smart-fallback option.
             85–95% is good for screenshots.
           </div>
         </div>
-
-        <div class="field">
-          <label for="thumb-q">
-            Thumbnail quality
-            <output>${s.quality.thumbnailPercent}%</output>
-          </label>
-          <input
-            type="range"
-            id="thumb-q"
-            min="60"
-            max="95"
-            step="1"
-            .value=${String(s.quality.thumbnailPercent)}
-            @input=${this.#onThumbnailQuality}
-          />
-        </div>
-
-        <div class="field">
-          <label for="thumb-w">Thumbnail resolution</label>
-          <select
-            id="thumb-w"
-            .value=${String(s.quality.thumbnailMaxWidth)}
-            @change=${this.#onThumbnailWidth}
-          >
-            <option value="360">360 px — smallest</option>
-            <option value="480">480 px — default</option>
-            <option value="640">640 px — sharper on 4K displays</option>
-            <option value="960">960 px — HiDPI</option>
-          </select>
-        </div>
       </section>
+
+      ${this.showAutoCapture ? this.#renderAutoCaptureSection() : null}
 
       <section class="options-section">
         <h2>Viewport emulation</h2>
         <p class="section-hint">
-          Capture at a specified output pixel size by physically
-          resizing the host's window before the capture, then
-          restoring it. The DPR-aware math divides the target by your
-          display's device-pixel-ratio so the resulting image lands on
-          the requested pixel dimensions.
+          Resize the window before each capture so the image lands on
+          a specific pixel size.
         </p>
 
-        <div class="field checkbox-row">
-          <label class="checkbox">
-            <input
-              type="checkbox"
-              ?checked=${s.emulation.enabled}
-              @change=${this.#onEmulationEnabled}
-            />
-            <span>Enable viewport emulation</span>
-          </label>
-          <div class="field-hint">
-            ⚠ The window will briefly resize during capture. If the
-            target is larger than your monitor (after DPR
-            compensation) it's clamped to what fits.
-          </div>
+        <div class="field">
+          <label for="emulation-preset">Target viewport</label>
+          <select
+            id="emulation-preset"
+            .value=${s.emulation.enabled ? s.emulation.preset : "off"}
+            @change=${this.#onEmulationSelect}
+          >
+            ${EMULATION_OPTIONS.map(
+              (opt) => html`<option value=${opt.value}>${opt.label}</option>`,
+            )}
+          </select>
+          ${
+            s.emulation.enabled
+              ? html`<div class="field-hint">
+                ⚠ The window will briefly resize during capture. Clamped
+                to the monitor's available size if the target exceeds it.
+              </div>`
+              : null
+          }
         </div>
 
         ${
-          s.emulation.enabled
+          s.emulation.enabled && s.emulation.preset === "custom"
             ? html`
-              <div class="field">
-                <label for="emulation-preset">Viewport preset</label>
-                <select
-                  id="emulation-preset"
-                  .value=${s.emulation.preset}
-                  @change=${this.#onEmulationPreset}
-                >
-                  <option value="native">Native (don't resize)</option>
-                  <option value="fullhd">Full HD — 1920 × 1080</option>
-                  <option value="macbook">MacBook — 1440 × 900</option>
-                  <option value="iphonese">
-                    iPhone SE width — 375 × 667
-                  </option>
-                  <option value="iphone15promax">
-                    iPhone 15 Pro Max width — 430 × 932
-                  </option>
-                  <option value="ipad">iPad width — 1024 × 1366</option>
-                  <option value="custom">Custom…</option>
-                </select>
+              <div class="field field-row">
+                <div>
+                  <label for="custom-width">Width (px)</label>
+                  <input
+                    type="number"
+                    id="custom-width"
+                    min="320"
+                    max="4096"
+                    step="1"
+                    .value=${String(s.emulation.customWidth)}
+                    @change=${this.#onCustomWidth}
+                  />
+                </div>
+                <div>
+                  <label for="custom-height">Height (px)</label>
+                  <input
+                    type="number"
+                    id="custom-height"
+                    min="320"
+                    max="4096"
+                    step="1"
+                    .value=${String(s.emulation.customHeight)}
+                    @change=${this.#onCustomHeight}
+                  />
+                </div>
               </div>
-
-              ${
-                s.emulation.preset === "custom"
-                  ? html`
-                    <div class="field field-row">
-                      <div>
-                        <label for="custom-width">Width (px)</label>
-                        <input
-                          type="number"
-                          id="custom-width"
-                          min="320"
-                          max="4096"
-                          step="1"
-                          .value=${String(s.emulation.customWidth)}
-                          @change=${this.#onCustomWidth}
-                        />
-                      </div>
-                      <div>
-                        <label for="custom-height">Height (px)</label>
-                        <input
-                          type="number"
-                          id="custom-height"
-                          min="320"
-                          max="4096"
-                          step="1"
-                          .value=${String(s.emulation.customHeight)}
-                          @change=${this.#onCustomHeight}
-                        />
-                      </div>
-                    </div>
-                  `
-                  : null
-              }
             `
             : null
         }
@@ -670,28 +652,22 @@ export class AnnotCaptureSettingsElement extends LitElement {
     this.#emit({ quality: { ...this.settings.quality, jpegPercent: v } });
   }
 
-  #onThumbnailQuality(e: Event): void {
-    const v = Number((e.target as HTMLInputElement).value);
+  /** Combined emulation select. Stores translate `"off"` to
+   *  `enabled: false` and any other value to `enabled: true` +
+   *  `preset: <value>`. */
+  #onEmulationSelect(e: Event): void {
+    const v = (e.target as HTMLSelectElement).value;
+    if (v === "off") {
+      this.#emit({ emulation: { ...this.settings.emulation, enabled: false } });
+      return;
+    }
     this.#emit({
-      quality: { ...this.settings.quality, thumbnailPercent: v },
+      emulation: {
+        ...this.settings.emulation,
+        enabled: true,
+        preset: v as EmulationPreset,
+      },
     });
-  }
-
-  #onThumbnailWidth(e: Event): void {
-    const v = Number((e.target as HTMLSelectElement).value);
-    this.#emit({
-      quality: { ...this.settings.quality, thumbnailMaxWidth: v },
-    });
-  }
-
-  #onEmulationEnabled(e: Event): void {
-    const v = (e.target as HTMLInputElement).checked;
-    this.#emit({ emulation: { ...this.settings.emulation, enabled: v } });
-  }
-
-  #onEmulationPreset(e: Event): void {
-    const v = (e.target as HTMLSelectElement).value as EmulationPreset;
-    this.#emit({ emulation: { ...this.settings.emulation, preset: v } });
   }
 
   #onCustomWidth(e: Event): void {
@@ -706,8 +682,42 @@ export class AnnotCaptureSettingsElement extends LitElement {
     });
   }
 
+  // ---- Auto Capture handlers ───────────────────────────────────
+
+  #onAutoInterval(e: Event): void {
+    const v = (e.target as HTMLSelectElement).value as CaptureIntervalPreset;
+    this.#emitAuto({ ...this.autoCaptureOptions, interval: v });
+  }
+
+  #onAutoSensitivity(e: Event): void {
+    const v = (e.target as HTMLSelectElement).value as ChangeSensitivityPreset;
+    this.#emitAuto({ ...this.autoCaptureOptions, sensitivity: v });
+  }
+
+  #onAutoStableWait(e: Event): void {
+    const v = (e.target as HTMLSelectElement).value as StableWaitPreset;
+    this.#emitAuto({ ...this.autoCaptureOptions, stableWait: v });
+  }
+
+  #onAutoIgnoreCursor(e: Event): void {
+    const v = (e.target as HTMLInputElement).checked;
+    this.#emitAuto({ ...this.autoCaptureOptions, ignoreCursorOnlyChanges: v });
+  }
+
+  #emitAuto(next: AutoCaptureOptions): void {
+    this.autoCaptureOptions = next;
+    this.dispatchEvent(
+      new CustomEvent<AutoCaptureOptionsChangeDetail>("auto-capture-options-changed", {
+        detail: { options: next },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  }
+
   #onReset(): void {
     this.settings = DEFAULT_SETTINGS;
+    this.autoCaptureOptions = DEFAULT_AUTO_CAPTURE_OPTIONS;
     this.dispatchEvent(
       new CustomEvent<CaptureSettingsChangeDetail>("settings-changed", {
         detail: { settings: DEFAULT_SETTINGS },
@@ -715,6 +725,103 @@ export class AnnotCaptureSettingsElement extends LitElement {
         composed: true,
       }),
     );
+    this.dispatchEvent(
+      new CustomEvent<AutoCaptureOptionsChangeDetail>("auto-capture-options-changed", {
+        detail: { options: DEFAULT_AUTO_CAPTURE_OPTIONS },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  }
+
+  /** Render the Auto Capture options block. Same select/checkbox
+   *  shape the Web app's `<annot-capture-screen-dialog>` uses for
+   *  the same options, so users see one consistent UX whether they
+   *  open Settings or the dialog. */
+  #renderAutoCaptureSection(): unknown {
+    const a = this.autoCaptureOptions;
+    return html`
+      <section class="options-section">
+        <h2>Auto Capture</h2>
+        <p class="section-hint">
+          How the extension's Auto Capture mode decides when to fire
+          a frame as the page changes.
+        </p>
+
+        <div class="field">
+          <label for="auto-interval">Capture interval</label>
+          <select
+            id="auto-interval"
+            .value=${a.interval}
+            @change=${this.#onAutoInterval}
+          >
+            ${INTERVAL_OPTIONS.map(
+              (preset) => html`
+                <option value=${preset}>${CAPTURE_INTERVAL_LABEL[preset]}</option>
+              `,
+            )}
+          </select>
+          <div class="field-hint">
+            Minimum time between captures during a session.
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="auto-sensitivity">Change sensitivity</label>
+          <select
+            id="auto-sensitivity"
+            .value=${a.sensitivity}
+            @change=${this.#onAutoSensitivity}
+          >
+            ${SENSITIVITY_OPTIONS.map(
+              (preset) => html`
+                <option value=${preset}>
+                  ${CHANGE_SENSITIVITY_LABEL[preset]}
+                </option>
+              `,
+            )}
+          </select>
+          <div class="field-hint">
+            How aggressive Auto Capture should be when deciding that
+            a DOM change is worth capturing.
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="auto-stable-wait">Stable wait</label>
+          <select
+            id="auto-stable-wait"
+            .value=${a.stableWait}
+            @change=${this.#onAutoStableWait}
+          >
+            ${STABLE_WAIT_OPTIONS.map(
+              (preset) => html`
+                <option value=${preset}>${STABLE_WAIT_LABEL[preset]}</option>
+              `,
+            )}
+          </select>
+          <div class="field-hint">
+            Wait this long after DOM mutations stop before capturing
+            — avoids snapping mid-animation.
+          </div>
+        </div>
+
+        <div class="field checkbox-row">
+          <label class="checkbox">
+            <input
+              type="checkbox"
+              ?checked=${a.ignoreCursorOnlyChanges}
+              @change=${this.#onAutoIgnoreCursor}
+            />
+            <span>Ignore cursor-only changes</span>
+          </label>
+          <div class="field-hint">
+            Drop frames whose only change is cursor movement /
+            hover-state styling.
+          </div>
+        </div>
+      </section>
+    `;
   }
 
   /** Apply a partial `Settings` patch over the current value, run
@@ -744,5 +851,6 @@ declare global {
   }
   interface HTMLElementEventMap {
     "settings-changed": CustomEvent<CaptureSettingsChangeDetail>;
+    "auto-capture-options-changed": CustomEvent<AutoCaptureOptionsChangeDetail>;
   }
 }
