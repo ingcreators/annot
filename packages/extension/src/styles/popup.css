@@ -121,6 +121,16 @@ annot-extension-popup {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
+/* Subtitle text rendered to the right of the button label (e.g.
+   "on DOM changes" for the Auto button). Plain text in muted color
+   — no badge styling like `.popup-btn-trailing`. */
+.popup-btn-subtitle {
+  margin-left: auto;
+  font-size: 11px;
+  color: #9fb0dc;
+  font-weight: 400;
+}
+
 .popup-btn-secondary {
   background: transparent;
   border-color: rgba(255, 255, 255, 0.06);
@@ -284,6 +294,15 @@ annot-extension-popup {
   font-size: 12px;
   color: #b7c0e0;
   padding: 2px 0;
+}
+
+/* Session-config summary line under the rec count in the Auto
+   active view (e.g. "Stable wait: 0.7s · Min interval: 1.0s"). */
+.popup-rec-summary {
+  text-align: center;
+  font-size: 11px;
+  color: #9fb0dc;
+  padding: 4px 0 6px;
 }
 
 .popup-btn-stop {

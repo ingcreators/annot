@@ -40,7 +40,19 @@ import { SAVE_SIZE_LABEL } from "@ingcreators/annot-core/encode/options";
 import { html, LitElement, nothing } from "@ingcreators/annot-host-ui/lit";
 import type { PopupMessage } from "../shared/messages.js";
 
-export type PopupView = "idle" | "hotkeyActive";
+export type PopupView = "idle" | "hotkeyActive" | "autoActive";
+
+/** Read-only summary of the live Auto Capture session, shown in
+ *  the active-state view so users can tell what's driving the
+ *  background captures. */
+export interface AutoCaptureSummary {
+  /** Live frame count from the service worker. */
+  count: number;
+  /** Resolved stable-wait duration in ms. */
+  stableWaitMs: number;
+  /** Resolved min-interval between captures in ms. */
+  minIntervalMs: number;
+}
 
 const FORMAT_OPTIONS: readonly { value: ImageFormat; label: string }[] = [
   { value: "smart", label: "Smart" },
@@ -80,12 +92,14 @@ export class AnnotExtensionPopupElement extends LitElement {
   static override properties = {
     view: { state: true },
     hotkeyCount: { state: true },
+    autoSummary: { attribute: false },
     settings: { attribute: false },
     quickOptionsOpen: { state: true },
   };
 
   declare view: PopupView;
   declare hotkeyCount: number;
+  declare autoSummary: AutoCaptureSummary | null;
   declare settings: Settings | null;
   declare quickOptionsOpen: boolean;
 
@@ -93,6 +107,7 @@ export class AnnotExtensionPopupElement extends LitElement {
     super();
     this.view = "idle";
     this.hotkeyCount = 0;
+    this.autoSummary = null;
     this.settings = null;
     this.quickOptionsOpen = false;
   }
@@ -103,6 +118,7 @@ export class AnnotExtensionPopupElement extends LitElement {
 
   override render() {
     if (this.view === "hotkeyActive") return this.#renderHotkeyActive();
+    if (this.view === "autoActive") return this.#renderAutoActive();
     return this.#renderIdle();
   }
 
@@ -156,6 +172,15 @@ export class AnnotExtensionPopupElement extends LitElement {
       <button
         type="button"
         class="popup-btn"
+        @click=${() => this.#dispatch({ type: "auto-capture-start" })}
+      >
+        <span class="popup-btn-icon" aria-hidden="true">&#9889;</span>
+        <span class="popup-btn-label">Auto</span>
+        <span class="popup-btn-subtitle">on DOM changes</span>
+      </button>
+      <button
+        type="button"
+        class="popup-btn"
         @click=${() => this.#dispatch({ type: "hotkey-capture-start" })}
       >
         <span class="popup-btn-icon" aria-hidden="true">&#9000;</span>
@@ -194,6 +219,42 @@ export class AnnotExtensionPopupElement extends LitElement {
         type="button"
         class="popup-btn popup-btn-stop"
         @click=${() => this.#dispatch({ type: "hotkey-capture-stop" })}
+      >
+        <span class="popup-btn-icon" aria-hidden="true">&#9632;</span>
+        <span class="popup-btn-label">Stop &amp; Review</span>
+      </button>
+      <div class="popup-separator"></div>
+      <button
+        type="button"
+        class="popup-btn popup-btn-secondary"
+        @click=${() => this.#dispatch({ type: "open-gallery" })}
+      >
+        <span class="popup-btn-icon" aria-hidden="true">&#128444;</span>
+        <span class="popup-btn-label">Gallery</span>
+      </button>
+    `;
+  }
+
+  #renderAutoActive() {
+    const summary = this.autoSummary;
+    const count = summary?.count ?? 0;
+    const stable = summary ? `${(summary.stableWaitMs / 1000).toFixed(1)}s` : "—";
+    const interval = summary ? `${(summary.minIntervalMs / 1000).toFixed(1)}s` : "—";
+    return html`
+      <div class="popup-rec-indicator">
+        <span class="popup-rec-dot" aria-hidden="true"></span>
+        <span class="popup-rec-text">Auto Capture Active</span>
+      </div>
+      <div class="popup-rec-count">Watching for DOM changes…</div>
+      <div class="popup-rec-count">${count} frame${count === 1 ? "" : "s"} captured</div>
+      <div class="popup-rec-summary">
+        Stable wait: <span class="popup-kbd">${stable}</span> · Min interval:
+        <span class="popup-kbd">${interval}</span>
+      </div>
+      <button
+        type="button"
+        class="popup-btn popup-btn-stop"
+        @click=${() => this.#dispatch({ type: "auto-capture-stop" })}
       >
         <span class="popup-btn-icon" aria-hidden="true">&#9632;</span>
         <span class="popup-btn-label">Stop &amp; Review</span>

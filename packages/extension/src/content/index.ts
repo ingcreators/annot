@@ -114,6 +114,14 @@ if (guardWindow.__annot_injected) {
       case "get-capture-context":
         sendResponse(getCaptureContext());
         return false;
+
+      case "auto-capture-enable":
+        enableAutoCapture(msg.stableWaitMs);
+        break;
+
+      case "auto-capture-disable":
+        disableAutoCapture();
+        break;
     }
 
     return false;
@@ -268,6 +276,76 @@ if (guardWindow.__annot_injected) {
     if (!clickListenerActive) return;
     clickListenerActive = false;
     document.removeEventListener("click", onClickCapture, true);
+  }
+
+  // ---- Auto Capture (DOM-mutation-driven) ----
+
+  let autoObserver: MutationObserver | null = null;
+  let autoStableTimer: number | null = null;
+  let autoStableWaitMs = 0;
+
+  /**
+   * Install a `MutationObserver` on `document.body` and signal the
+   * service worker whenever mutations settle for `stableWaitMs`.
+   *
+   * Watch options:
+   * - `childList: true` — node added/removed (the bulk of meaningful
+   *   page change: dialogs open, lists update, navigations swap content).
+   * - `subtree: true` — entire descendant tree counts.
+   * - `characterData: true` — text-node edits (search-as-you-type,
+   *   inline counters, etc.).
+   * - `attributes: false` — too noisy (every `:hover` style change,
+   *   `aria-expanded` toggle, focus-management bookkeeping fires).
+   *   Real visual changes almost always come paired with childList /
+   *   text mutations anyway.
+   *
+   * Throttle / dedupe live service-worker-side so we can keep this
+   * end as a thin signal source.
+   */
+  function enableAutoCapture(stableWaitMs: number): void {
+    if (autoObserver) return; // already running — idempotent re-enable
+    autoStableWaitMs = Math.max(0, stableWaitMs);
+    autoObserver = new MutationObserver(onAutoCaptureMutation);
+    autoObserver.observe(document.body, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+      attributes: false,
+    });
+    logger.debug("[annot] auto-capture observer installed, stableWait=", autoStableWaitMs);
+  }
+
+  function disableAutoCapture(): void {
+    if (!autoObserver) return;
+    autoObserver.disconnect();
+    autoObserver = null;
+    if (autoStableTimer !== null) {
+      window.clearTimeout(autoStableTimer);
+      autoStableTimer = null;
+    }
+    logger.debug("[annot] auto-capture observer removed");
+  }
+
+  function onAutoCaptureMutation(records: MutationRecord[]): void {
+    // Skip mutations confined to our own UI overlays (progress
+    // banner, area selector, etc.) — they're page-state plumbing,
+    // not user-meaningful page change.
+    if (records.every((r) => isAnnotUiNode(r.target))) return;
+
+    if (autoStableTimer !== null) window.clearTimeout(autoStableTimer);
+    autoStableTimer = window.setTimeout(() => {
+      autoStableTimer = null;
+      chromeContentBus.send({ type: "auto-capture-signal" });
+    }, autoStableWaitMs);
+  }
+
+  function isAnnotUiNode(node: Node | null): boolean {
+    if (!node) return false;
+    const el =
+      node.nodeType === Node.ELEMENT_NODE
+        ? (node as Element)
+        : (node.parentElement as Element | null);
+    return !!el?.closest?.("[data-annot-ui]");
   }
 
   // On initial injection, read state from storage so we pick up an in-progress session
