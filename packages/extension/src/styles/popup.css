@@ -182,6 +182,79 @@ annot-extension-popup {
   margin: 8px 0 4px;
 }
 
+/* ---- Hotkey unbound notice ----
+   Inline panel that appears under the Hotkey button when the user
+   clicks it while no keyboard shortcut is bound. Brand-blue tint
+   reuses the same `rgba(124, 156, 255, X)` palette as `popup-btn`
+   hover / focus borders so the notice reads as "Annot speaking",
+   not as a generic browser alert. */
+
+.popup-hotkey-notice {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid rgba(124, 156, 255, 0.4);
+  border-radius: 8px;
+  background: rgba(124, 156, 255, 0.1);
+}
+
+.popup-hotkey-notice-text {
+  font-size: 12px;
+  line-height: 1.45;
+  color: #c7d3f5;
+}
+
+.popup-hotkey-notice-text strong {
+  color: #eef2ff;
+  font-weight: 600;
+}
+
+.popup-hotkey-notice-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.popup-hotkey-notice-btn {
+  flex: 1;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-family: inherit;
+  color: #eef2ff;
+  background: rgba(124, 156, 255, 0.18);
+  border: 1px solid rgba(124, 156, 255, 0.5);
+  border-radius: 6px;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+}
+
+.popup-hotkey-notice-btn:hover {
+  background: rgba(124, 156, 255, 0.28);
+  border-color: #7c9cff;
+}
+
+.popup-hotkey-notice-dismiss {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  font-size: 16px;
+  line-height: 1;
+  color: #9fb0dc;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.popup-hotkey-notice-dismiss:hover {
+  color: #eef2ff;
+  background: rgba(255, 255, 255, 0.06);
+}
+
 /* ---- Quick Options ----
    Collapsed-by-default `<details>` block above the capture sections.
    Each row pairs a label with a compact <select> sized to fit the

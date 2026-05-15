@@ -30,6 +30,7 @@ import {
   saveAutoCaptureOptions,
   saveSettings,
 } from "../shared/settings.js";
+import { detectShortcutsPage } from "../shared/shortcuts-page.js";
 
 let savedTimer: number | undefined;
 
@@ -144,61 +145,6 @@ async function renderShortcutsSection(): Promise<void> {
     manual.textContent = target.steps;
     manual.hidden = false;
   }
-}
-
-type ShortcutsTarget =
-  | { kind: "openable"; browser: string; url: string }
-  | { kind: "manual"; browser: string; steps: string };
-
-/** Detect which browser variant we're running in and how its
- *  extension-shortcuts page can be reached. `openable` variants get
- *  a clickable button; `manual` variants get instructional text
- *  because they block extensions from opening the relevant page. */
-function detectShortcutsPage(): ShortcutsTarget {
-  const ua = navigator.userAgent;
-
-  // Firefox advertises `Firefox/` without any Chromium-ish tokens.
-  // Reaching `about:addons` from a `tabs.create` call is blocked, so
-  // we degrade to instructions instead of a button.
-  if (ua.includes("Firefox/")) {
-    return {
-      kind: "manual",
-      browser: "Firefox",
-      steps:
-        'Open the Firefox menu → Add-ons and themes → click the gear icon → "Manage Extension Shortcuts". Firefox does not allow extensions to open about: pages directly.',
-    };
-  }
-
-  // Chromium variants — these all expose a deep-linkable config
-  // page via their own internal URL scheme.
-  if (ua.includes("Edg/")) {
-    return { kind: "openable", browser: "Edge", url: "edge://extensions/shortcuts" };
-  }
-  if (ua.includes("OPR/") || ua.includes("Opera/")) {
-    return {
-      kind: "openable",
-      browser: "Opera",
-      url: "opera://settings/keyboardShortcuts",
-    };
-  }
-
-  // Safari Web Extensions only ship on macOS / iOS. Their shortcut
-  // bindings live in the OS Settings app, which an extension cannot
-  // open. Detection: a Safari UA contains "Safari/" but lacks both
-  // "Chrome/" and "Chromium/" (every Chromium variant carries the
-  // Chrome token for legacy WebKit compatibility).
-  if (ua.includes("Safari/") && !ua.includes("Chrome/") && !ua.includes("Chromium/")) {
-    return {
-      kind: "manual",
-      browser: "Safari",
-      steps:
-        "On macOS, configure shortcuts in System Settings → Keyboard → Keyboard Shortcuts → App Shortcuts. Safari does not let extensions open the Settings app directly.",
-    };
-  }
-
-  // Catch-all: Chrome proper, Brave, Vivaldi, plain Chromium. They
-  // all map chrome://extensions/shortcuts to the same page.
-  return { kind: "openable", browser: "Chrome", url: "chrome://extensions/shortcuts" };
 }
 
 function flashSaved(text: string): void {

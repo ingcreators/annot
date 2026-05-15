@@ -11,6 +11,7 @@
 
 import type { Settings } from "@ingcreators/annot-capture/shared";
 import { loadSettings, onSettingsChange, saveSettings } from "../shared/settings.js";
+import { detectShortcutsPage } from "../shared/shortcuts-page.js";
 import { AnnotExtensionPopupElement } from "./annot-extension-popup.js";
 
 // Force-register the element (the file's top-level
@@ -96,6 +97,23 @@ async function init(): Promise<void> {
 
   el.addEventListener("open-options", () => {
     chrome.runtime.openOptionsPage();
+    setTimeout(() => window.close(), POPUP_CLOSE_DELAY_MS);
+  });
+
+  // The popup component dispatches this when the user clicks
+  // "Configure shortcut" inside the Hotkey-unbound inline notice.
+  // Chromium variants get a direct `chrome.tabs.create` to the
+  // matching `*://extensions/shortcuts` page; Firefox / Safari can't
+  // be deep-linked there so we fall back to opening the Settings
+  // page, which already renders the full per-browser instructions
+  // block.
+  el.addEventListener("open-shortcuts", () => {
+    const target = detectShortcutsPage();
+    if (target.kind === "openable") {
+      void chrome.tabs.create({ url: target.url });
+    } else {
+      chrome.runtime.openOptionsPage();
+    }
     setTimeout(() => window.close(), POPUP_CLOSE_DELAY_MS);
   });
 }
