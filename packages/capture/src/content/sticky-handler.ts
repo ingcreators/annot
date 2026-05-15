@@ -146,17 +146,47 @@ export function hideScrollbars(): void {
   if (document.getElementById(SCROLLBAR_STYLE_ID)) return;
   const style = document.createElement("style");
   style.id = SCROLLBAR_STYLE_ID;
+  // Keep the scrollbar gutter reserved at its intrinsic OS width and
+  // paint thumb / track / arrows transparent. On Windows / Linux Chrome
+  // (classic, gutter-occupying scrollbars), collapsing the gutter with
+  // `width: 0` / `scrollbar-width: none` widens the viewport ~15px
+  // mid-capture and shows a layout-flash. Transparency keeps the
+  // intrinsic geometry so layout is undisturbed; the gutter shows the
+  // html element's background through, which is the same color the
+  // browser would paint immediately adjacent to the scrollbar anyway.
   style.textContent = `
     html::-webkit-scrollbar,
     body::-webkit-scrollbar,
     *::-webkit-scrollbar {
-      width: 0 !important;
-      height: 0 !important;
+      background: transparent !important;
+    }
+    html::-webkit-scrollbar-thumb,
+    body::-webkit-scrollbar-thumb,
+    *::-webkit-scrollbar-thumb {
+      background: transparent !important;
+      border: 0 !important;
+      box-shadow: none !important;
+    }
+    html::-webkit-scrollbar-track,
+    body::-webkit-scrollbar-track,
+    *::-webkit-scrollbar-track {
+      background: transparent !important;
+      border: 0 !important;
+      box-shadow: none !important;
+    }
+    html::-webkit-scrollbar-button,
+    body::-webkit-scrollbar-button,
+    *::-webkit-scrollbar-button {
+      background: transparent !important;
+      display: none !important;
+    }
+    html::-webkit-scrollbar-corner,
+    body::-webkit-scrollbar-corner,
+    *::-webkit-scrollbar-corner {
       background: transparent !important;
     }
     html, body {
-      -ms-overflow-style: none !important;
-      scrollbar-width: none !important;
+      scrollbar-color: transparent transparent !important;
     }
   `;
   (document.head || document.documentElement).appendChild(style);
