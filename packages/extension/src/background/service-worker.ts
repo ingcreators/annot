@@ -653,6 +653,15 @@ async function activateObserverOn(tabId: number, windowId: number, url: string):
     });
     autoState.tabId = tabId;
     logger.debug("[auto-capture] observer installed on tab", tabId);
+    // Initial baseline frame for the newly-bound tab. Without it
+    // the session's first IDB image would be "page state after
+    // the first DOM mutation" — no record of the starting state,
+    // which doesn't match "I just hit Auto, save what I'm looking
+    // at now". This also captures the new tab's baseline after a
+    // tab switch / navigation rebind, so the timeline reads as
+    // "Step N: I switched to / loaded this page, here's what it
+    // looked like before I did anything".
+    void autoCaptureShot(tabId);
   } catch (e) {
     logger.debug("[auto-capture] observer install failed on tab", tabId, e);
     autoState.tabId = null;
