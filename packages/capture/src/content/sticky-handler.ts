@@ -33,16 +33,31 @@ export function hideForCapture(prefs: HidePrefs): void {
 }
 
 export function restoreAfterCapture(): void {
-  // DIAGNOSTIC LOGS — temporary, intended to surface why scrollbars
-  // are observed staying hidden after a single-shot Visible Area /
-  // Select Region capture on certain pages. Will be removed once
-  // the root cause is identified.
+  // DIAGNOSTIC LOGS — narrowing which of the three restore helpers
+  // throws (the "AFTER restore" log was missing in the user's repro,
+  // proving one of them aborts mid-flow). Will be removed once the
+  // root cause is identified.
   console.log("[annot] restoreAfterCapture called");
   const before = document.getElementById(SCROLLBAR_STYLE_ID);
   console.log("[annot] scrollbar style element BEFORE restore:", before);
-  restoreStickies();
-  restoreOwnOverlay();
-  restoreScrollbars();
+  try {
+    restoreStickies();
+    console.log("[annot] restoreStickies OK");
+  } catch (e) {
+    console.error("[annot] restoreStickies THREW:", e);
+  }
+  try {
+    restoreOwnOverlay();
+    console.log("[annot] restoreOwnOverlay OK");
+  } catch (e) {
+    console.error("[annot] restoreOwnOverlay THREW:", e);
+  }
+  try {
+    restoreScrollbars();
+    console.log("[annot] restoreScrollbars OK");
+  } catch (e) {
+    console.error("[annot] restoreScrollbars THREW:", e);
+  }
   const after = document.getElementById(SCROLLBAR_STYLE_ID);
   console.log("[annot] scrollbar style element AFTER restore:", after);
 }
