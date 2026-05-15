@@ -378,14 +378,6 @@ export class AnnotExtensionPopupElement extends LitElement {
                   )}
                 </select>
               </label>
-
-              <button
-                type="button"
-                class="popup-quick-options-advanced"
-                @click=${this.#openOptions}
-              >
-                Advanced settings…
-              </button>
             `
         }
       </details>
