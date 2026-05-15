@@ -96,6 +96,9 @@ export class AnnotExtensionPopupElement extends LitElement {
     settings: { attribute: false },
     quickOptionsOpen: { state: true },
     hotkeyShortcut: { attribute: false },
+    visibleAreaShortcut: { attribute: false },
+    selectRegionShortcut: { attribute: false },
+    wholePageShortcut: { attribute: false },
     hotkeyUnboundNotice: { state: true },
   };
 
@@ -110,6 +113,21 @@ export class AnnotExtensionPopupElement extends LitElement {
    *  shortcuts page; the renderer falls back to a "Configure a
    *  shortcut in Settings" hint in that case. */
   declare hotkeyShortcut: string;
+  /** Resolved keyboard shortcut bound to the `visible-area` command,
+   *  reported by `chrome.commands.getAll()` at popup boot. Empty
+   *  string when nothing is bound — the trailing badge is then
+   *  omitted (the button itself still works on click; the binding
+   *  is an opt-in accelerator, not a gate). */
+  declare visibleAreaShortcut: string;
+  /** Resolved keyboard shortcut bound to the `select-region` command.
+   *  Same semantics as `visibleAreaShortcut`. */
+  declare selectRegionShortcut: string;
+  /** Resolved keyboard shortcut bound to the `whole-page` command.
+   *  The chrome command always captures stitched whole-page; the
+   *  popup's Whole Page button respects the `wholePageOutput`
+   *  setting (stitched vs per-screen), but the displayed shortcut
+   *  matches the user's binding either way. */
+  declare wholePageShortcut: string;
   /** Transient inline notice that appears under the Hotkey button
    *  when the user clicks it while no shortcut is bound. The popup
    *  is short-lived (closes on each capture), so we open it inline
@@ -126,6 +144,9 @@ export class AnnotExtensionPopupElement extends LitElement {
     this.settings = null;
     this.quickOptionsOpen = false;
     this.hotkeyShortcut = "";
+    this.visibleAreaShortcut = "";
+    this.selectRegionShortcut = "";
+    this.wholePageShortcut = "";
     this.hotkeyUnboundNotice = false;
   }
 
@@ -171,6 +192,11 @@ export class AnnotExtensionPopupElement extends LitElement {
       >
         <span class="popup-btn-icon" aria-hidden="true">&#9634;</span>
         <span class="popup-btn-label">Visible Area</span>
+        ${
+          this.visibleAreaShortcut
+            ? html`<span class="popup-btn-trailing">${this.visibleAreaShortcut}</span>`
+            : nothing
+        }
       </button>
       <button
         type="button"
@@ -179,10 +205,20 @@ export class AnnotExtensionPopupElement extends LitElement {
       >
         <span class="popup-btn-icon" aria-hidden="true">&#9698;</span>
         <span class="popup-btn-label">Select Region</span>
+        ${
+          this.selectRegionShortcut
+            ? html`<span class="popup-btn-trailing">${this.selectRegionShortcut}</span>`
+            : nothing
+        }
       </button>
       <button type="button" class="popup-btn" @click=${this.#onWholePageClick}>
         <span class="popup-btn-icon" aria-hidden="true">&#128196;</span>
         <span class="popup-btn-label">Whole Page</span>
+        ${
+          this.wholePageShortcut
+            ? html`<span class="popup-btn-trailing">${this.wholePageShortcut}</span>`
+            : nothing
+        }
       </button>
 
       <div class="popup-section-title">Continuous capture</div>

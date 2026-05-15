@@ -40,7 +40,7 @@ async function init(): Promise<void> {
   // and folding them into one response shape would tempt callers
   // into ambiguous handling. `chrome.commands.getAll()` resolves
   // synchronously-ish from the in-memory command table; the popup
-  // reads it once per open so the Hotkey button's trailing badge
+  // reads it once per open so every capture button's trailing badge
   // reflects whatever the user last set in the browser's extension
   // shortcuts page (re-opening the popup picks up changes — there's
   // no `onChanged` event on `chrome.commands`).
@@ -61,6 +61,9 @@ async function init(): Promise<void> {
 
   el.settings = settings;
   el.hotkeyShortcut = commands.find((c) => c.name === "hotkey")?.shortcut ?? "";
+  el.visibleAreaShortcut = commands.find((c) => c.name === "visible-area")?.shortcut ?? "";
+  el.selectRegionShortcut = commands.find((c) => c.name === "select-region")?.shortcut ?? "";
+  el.wholePageShortcut = commands.find((c) => c.name === "whole-page")?.shortcut ?? "";
   if (autoStatus?.active) {
     el.view = "autoActive";
     el.autoSummary = {
