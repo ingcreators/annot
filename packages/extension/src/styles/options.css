@@ -85,3 +85,97 @@ body {
 .options-status.visible {
   opacity: 1;
 }
+
+/* ---- Keyboard shortcuts section ----
+   Sits below the shared `<annot-capture-settings>` form. Matches the
+   form's overall density (16px gutter, muted dividers) without
+   importing the component's scoped styles. */
+
+.options-shortcuts {
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 1px solid var(--annot-border);
+}
+
+.shortcuts-heading {
+  margin: 0 0 6px;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--annot-text);
+}
+
+.shortcuts-hint {
+  margin: 0 0 14px;
+  font-size: 12px;
+  color: var(--annot-text-muted);
+}
+
+.shortcuts-list {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+  border: 1px solid var(--annot-border);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.02);
+  overflow: hidden;
+}
+
+.shortcuts-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 14px;
+  font-size: 13px;
+}
+
+.shortcuts-item + .shortcuts-item {
+  border-top: 1px solid var(--annot-border);
+}
+
+.shortcuts-label {
+  color: var(--annot-text);
+}
+
+.shortcuts-value {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  color: var(--annot-text);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.shortcuts-value-unset {
+  color: var(--annot-text-muted);
+  font-style: italic;
+  background: transparent;
+  border-color: transparent;
+}
+
+.shortcuts-config-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--annot-text);
+  background: rgba(124, 156, 255, 0.12);
+  border: 1px solid rgba(124, 156, 255, 0.4);
+  border-radius: 6px;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+}
+
+.shortcuts-config-btn:hover {
+  background: rgba(124, 156, 255, 0.2);
+  border-color: var(--annot-accent);
+}
+
+.shortcuts-config-btn:active {
+  background: rgba(124, 156, 255, 0.28);
+}

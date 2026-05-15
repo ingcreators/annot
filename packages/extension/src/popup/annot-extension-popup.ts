@@ -13,7 +13,7 @@
  *     Visible Area / Select Region / Whole Page
  *
  *   CONTINUOUS CAPTURE           ← section header (Phase 2: Auto button lands here)
- *     Hotkey  (Alt+Shift+C)
+ *     Hotkey  (configurable shortcut, default Alt+Shift+C)
  *
  *   Gallery / Settings
  *
@@ -95,6 +95,7 @@ export class AnnotExtensionPopupElement extends LitElement {
     autoSummary: { attribute: false },
     settings: { attribute: false },
     quickOptionsOpen: { state: true },
+    hotkeyShortcut: { attribute: false },
   };
 
   declare view: PopupView;
@@ -102,6 +103,12 @@ export class AnnotExtensionPopupElement extends LitElement {
   declare autoSummary: AutoCaptureSummary | null;
   declare settings: Settings | null;
   declare quickOptionsOpen: boolean;
+  /** Resolved keyboard shortcut bound to the `hotkey-capture` command,
+   *  as reported by `chrome.commands.getAll()` at popup boot. Empty
+   *  string when the user has unbound it in the browser's extension
+   *  shortcuts page; the renderer falls back to a "Configure a
+   *  shortcut in Settings" hint in that case. */
+  declare hotkeyShortcut: string;
 
   constructor() {
     super();
@@ -110,6 +117,7 @@ export class AnnotExtensionPopupElement extends LitElement {
     this.autoSummary = null;
     this.settings = null;
     this.quickOptionsOpen = false;
+    this.hotkeyShortcut = "";
   }
 
   protected override createRenderRoot(): HTMLElement {
@@ -185,7 +193,11 @@ export class AnnotExtensionPopupElement extends LitElement {
       >
         <span class="popup-btn-icon" aria-hidden="true">&#9000;</span>
         <span class="popup-btn-label">Hotkey</span>
-        <span class="popup-btn-trailing">Alt+Shift+C</span>
+        ${
+          this.hotkeyShortcut
+            ? html`<span class="popup-btn-trailing">${this.hotkeyShortcut}</span>`
+            : nothing
+        }
       </button>
 
       <div class="popup-separator"></div>
@@ -212,7 +224,11 @@ export class AnnotExtensionPopupElement extends LitElement {
         <span class="popup-rec-text">Hotkey Capture Active</span>
       </div>
       <div class="popup-rec-count">
-        Press <span class="popup-kbd">Alt+Shift+C</span> to capture
+        ${
+          this.hotkeyShortcut
+            ? html`Press <span class="popup-kbd">${this.hotkeyShortcut}</span> to capture`
+            : html`Configure a shortcut in Settings to capture frames`
+        }
       </div>
       <div class="popup-rec-count">${this.hotkeyCount} frame${this.hotkeyCount === 1 ? "" : "s"} captured</div>
       <button

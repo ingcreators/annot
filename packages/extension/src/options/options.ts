@@ -84,6 +84,76 @@ async function init(): Promise<void> {
   onAutoCaptureOptionsChange((o) => {
     settingsEl.autoCaptureOptions = o;
   });
+
+  void renderShortcutsSection();
+}
+
+/** Friendly labels for the commands declared in `manifests/chrome.json`.
+ *  Falls back to the manifest's `description` if we ever add a new
+ *  command without updating this table. */
+const COMMAND_LABELS: Record<string, string> = {
+  "capture-visible": "Capture visible area",
+  "capture-area": "Capture selected area",
+  "capture-full": "Capture full page",
+  "hotkey-capture": "Hotkey capture",
+};
+
+/** Render the current `chrome.commands` bindings + a button that
+ *  opens the browser's extension-shortcuts page. The page URL is
+ *  browser-detected: Edge / Opera have their own scheme; everything
+ *  else (Chrome / Brave / Vivaldi / Chromium proper) takes the
+ *  `chrome://` URL. `chrome://` URLs can't be opened via
+ *  `<a href>` from an extension page — they're blocked by browser
+ *  security — so we open them through `chrome.tabs.create` on a
+ *  click handler instead. */
+async function renderShortcutsSection(): Promise<void> {
+  const list = el<HTMLUListElement>("shortcuts-list");
+  const btn = el<HTMLButtonElement>("shortcuts-config-btn");
+
+  const commands = await chrome.commands.getAll().catch(() => [] as chrome.commands.Command[]);
+  list.innerHTML = "";
+  for (const cmd of commands) {
+    if (!cmd.name) continue;
+    const item = document.createElement("li");
+    item.className = "shortcuts-item";
+
+    const label = document.createElement("span");
+    label.className = "shortcuts-label";
+    label.textContent = COMMAND_LABELS[cmd.name] ?? cmd.description ?? cmd.name;
+
+    const value = document.createElement("span");
+    if (cmd.shortcut) {
+      value.className = "shortcuts-value";
+      value.textContent = cmd.shortcut;
+    } else {
+      value.className = "shortcuts-value shortcuts-value-unset";
+      value.textContent = "Not set";
+    }
+
+    item.append(label, value);
+    list.appendChild(item);
+  }
+
+  const target = detectShortcutsPage();
+  btn.textContent = `Open ${target.browser} shortcuts page`;
+  btn.addEventListener("click", () => {
+    void chrome.tabs.create({ url: target.url });
+  });
+}
+
+/** Detect which Chromium variant we're running in so the shortcut
+ *  config button opens the right scheme. Edge / Opera use their own
+ *  internal URL; Chrome / Brave / Vivaldi / Chromium proper all map
+ *  `chrome://extensions/shortcuts` to the same page. */
+function detectShortcutsPage(): { browser: string; url: string } {
+  const ua = navigator.userAgent;
+  if (ua.includes("Edg/")) {
+    return { browser: "Edge", url: "edge://extensions/shortcuts" };
+  }
+  if (ua.includes("OPR/") || ua.includes("Opera/")) {
+    return { browser: "Opera", url: "opera://settings/keyboardShortcuts" };
+  }
+  return { browser: "Chrome", url: "chrome://extensions/shortcuts" };
 }
 
 function flashSaved(text: string): void {

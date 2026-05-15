@@ -33,11 +33,17 @@ function sendWithResponse<T>(msg: { type: string }): Promise<T> {
 async function init(): Promise<void> {
   const el = document.getElementById("popup") as AnnotExtensionPopupElement;
 
-  // Load persisted Settings + active-session state in parallel. Hotkey
-  // and Auto each have their own status message — they're independent
-  // session machines, and folding them into one response shape would
-  // tempt callers into ambiguous handling.
-  const [settings, hotkeyStatus, autoStatus] = await Promise.all([
+  // Load persisted Settings + active-session state + the currently-
+  // bound keyboard shortcuts in parallel. Hotkey and Auto each have
+  // their own status message — they're independent session machines,
+  // and folding them into one response shape would tempt callers
+  // into ambiguous handling. `chrome.commands.getAll()` resolves
+  // synchronously-ish from the in-memory command table; the popup
+  // reads it once per open so the Hotkey button's trailing badge
+  // reflects whatever the user last set in the browser's extension
+  // shortcuts page (re-opening the popup picks up changes — there's
+  // no `onChanged` event on `chrome.commands`).
+  const [settings, hotkeyStatus, autoStatus, commands] = await Promise.all([
     loadSettings(),
     sendWithResponse<{
       active: boolean;
@@ -49,9 +55,11 @@ async function init(): Promise<void> {
       stableWaitMs: number;
       minIntervalMs: number;
     }>({ type: "auto-capture-status" }).catch(() => null),
+    chrome.commands.getAll().catch(() => [] as chrome.commands.Command[]),
   ]);
 
   el.settings = settings;
+  el.hotkeyShortcut = commands.find((c) => c.name === "hotkey-capture")?.shortcut ?? "";
   if (autoStatus?.active) {
     el.view = "autoActive";
     el.autoSummary = {
