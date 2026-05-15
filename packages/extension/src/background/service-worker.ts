@@ -324,10 +324,12 @@ async function openGallery(): Promise<void> {
 
 /**
  * Hotkey Capture session shape. One active session per service
- * worker; each Alt+Shift+C press fires `hotkeyCaptureShot` which
- * appends a frame to the IDB session bound by `sessionId`. The
- * Click Capture surface (which previously shared this shape) was
- * retired in `docs/plans/browser-extension-web-optimized-pudding.md`.
+ * worker; each press of the `hotkey-capture` command (configurable
+ * in the browser's extension shortcuts page, default `Alt+Shift+Z`)
+ * fires `hotkeyCaptureShot` which appends a frame to the IDB session
+ * bound by `sessionId`. The Click Capture surface (which previously
+ * shared this shape) was retired in
+ * `docs/plans/browser-extension-web-optimized-pudding.md`.
  */
 interface HotkeyCaptureState {
   active: boolean;
@@ -464,7 +466,8 @@ async function stopHotkeyCapture(): Promise<void> {
   }
 }
 
-/** Triggered by the Alt+Shift+C hotkey. Auto-starts the session on first press. */
+/** Triggered by the `hotkey-capture` command (default `Alt+Shift+Z`).
+ *  Auto-starts the session on first press. */
 async function hotkeyCaptureShot(firedTab?: chrome.tabs.Tab): Promise<void> {
   logger.debug(
     "[hotkey-capture] shot fired, active=",

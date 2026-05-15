@@ -88,16 +88,6 @@ async function init(): Promise<void> {
   void renderShortcutsSection();
 }
 
-/** Friendly labels for the commands declared in `manifests/chrome.json`.
- *  Falls back to the manifest's `description` if we ever add a new
- *  command without updating this table. */
-const COMMAND_LABELS: Record<string, string> = {
-  "capture-visible": "Capture visible area",
-  "capture-area": "Capture selected area",
-  "capture-full": "Capture full page",
-  "hotkey-capture": "Hotkey capture",
-};
-
 /** Render the current `chrome.commands` bindings + either a button
  *  that opens the browser's extension-shortcuts page or a textual
  *  instructions block, depending on what the host browser allows.
@@ -128,7 +118,7 @@ async function renderShortcutsSection(): Promise<void> {
 
     const label = document.createElement("span");
     label.className = "shortcuts-label";
-    label.textContent = COMMAND_LABELS[cmd.name] ?? cmd.description ?? cmd.name;
+    label.textContent = cmd.description ?? cmd.name;
 
     const value = document.createElement("span");
     if (cmd.shortcut) {

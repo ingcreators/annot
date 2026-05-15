@@ -13,7 +13,7 @@
  *     Visible Area / Select Region / Whole Page
  *
  *   CONTINUOUS CAPTURE           ← section header (Phase 2: Auto button lands here)
- *     Hotkey  (configurable shortcut, default Alt+Shift+C)
+ *     Hotkey  (configurable shortcut, default Alt+Shift+Z)
  *
  *   Gallery / Settings
  *
