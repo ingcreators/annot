@@ -96,6 +96,7 @@ export class AnnotExtensionPopupElement extends LitElement {
     settings: { attribute: false },
     quickOptionsOpen: { state: true },
     hotkeyShortcut: { attribute: false },
+    hotkeyUnboundNotice: { state: true },
   };
 
   declare view: PopupView;
@@ -109,6 +110,13 @@ export class AnnotExtensionPopupElement extends LitElement {
    *  shortcuts page; the renderer falls back to a "Configure a
    *  shortcut in Settings" hint in that case. */
   declare hotkeyShortcut: string;
+  /** Transient inline notice that appears under the Hotkey button
+   *  when the user clicks it while no shortcut is bound. The popup
+   *  is short-lived (closes on each capture), so we open it inline
+   *  rather than closing the popup → opening Settings → asking the
+   *  user to re-click the toolbar icon. Cleared on each fresh popup
+   *  open since the property starts at `false`. */
+  declare hotkeyUnboundNotice: boolean;
 
   constructor() {
     super();
@@ -118,6 +126,7 @@ export class AnnotExtensionPopupElement extends LitElement {
     this.settings = null;
     this.quickOptionsOpen = false;
     this.hotkeyShortcut = "";
+    this.hotkeyUnboundNotice = false;
   }
 
   protected override createRenderRoot(): HTMLElement {
@@ -189,7 +198,7 @@ export class AnnotExtensionPopupElement extends LitElement {
       <button
         type="button"
         class="popup-btn"
-        @click=${() => this.#dispatch({ type: "hotkey-start" })}
+        @click=${this.#onHotkeyClick}
       >
         <span class="popup-btn-icon" aria-hidden="true">&#9000;</span>
         <span class="popup-btn-label">Hotkey</span>
@@ -199,6 +208,7 @@ export class AnnotExtensionPopupElement extends LitElement {
             : nothing
         }
       </button>
+      ${this.hotkeyUnboundNotice ? this.#renderHotkeyUnboundNotice() : nothing}
 
       <div class="popup-separator"></div>
 
@@ -408,6 +418,57 @@ export class AnnotExtensionPopupElement extends LitElement {
     const type: PopupMessage["type"] =
       out === "perScreen" ? "whole-page-per-screen" : "whole-page-stitched";
     this.#dispatch({ type } as PopupMessage);
+  };
+
+  /** Hotkey button: starts the session when a keyboard shortcut is
+   *  bound; otherwise surfaces the inline notice so the user can
+   *  jump straight to the browser shortcuts page without closing
+   *  the popup and re-clicking the toolbar icon. */
+  #onHotkeyClick = (): void => {
+    if (this.hotkeyShortcut) {
+      this.#dispatch({ type: "hotkey-start" });
+    } else {
+      this.hotkeyUnboundNotice = true;
+    }
+  };
+
+  /** Notice rendered below the Hotkey button when the user clicks
+   *  it while no shortcut is bound. The host owns the actual
+   *  navigation (the popup component is host-neutral) — clicking
+   *  "Configure" dispatches `open-shortcuts`, which popup.ts
+   *  translates into a browser-detected `chrome.tabs.create`. */
+  #renderHotkeyUnboundNotice() {
+    return html`
+      <div class="popup-hotkey-notice" role="status">
+        <div class="popup-hotkey-notice-text">
+          No keyboard shortcut is bound to <strong>Hotkey</strong>. Configure one in
+          your browser's extension settings to use this capture mode.
+        </div>
+        <div class="popup-hotkey-notice-actions">
+          <button
+            type="button"
+            class="popup-hotkey-notice-btn"
+            @click=${this.#openShortcuts}
+          >
+            Configure shortcut
+          </button>
+          <button
+            type="button"
+            class="popup-hotkey-notice-dismiss"
+            aria-label="Dismiss"
+            @click=${() => {
+              this.hotkeyUnboundNotice = false;
+            }}
+          >
+            &times;
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  #openShortcuts = (): void => {
+    this.dispatchEvent(new CustomEvent("open-shortcuts"));
   };
 
   #updateFormat(e: Event): void {
