@@ -243,6 +243,14 @@ export class AnnotExtensionPopupElement extends LitElement {
       <div class="popup-rec-count">${this.hotkeyCount} frame${this.hotkeyCount === 1 ? "" : "s"} captured</div>
       <button
         type="button"
+        class="popup-btn popup-btn-primary"
+        @click=${() => this.#dispatch({ type: "hotkey-capture-now" })}
+      >
+        <span class="popup-btn-icon" aria-hidden="true">+</span>
+        <span class="popup-btn-label">Add Capture</span>
+      </button>
+      <button
+        type="button"
         class="popup-btn popup-btn-stop"
         @click=${() => this.#dispatch({ type: "hotkey-stop" })}
       >
@@ -277,6 +285,14 @@ export class AnnotExtensionPopupElement extends LitElement {
         Stable wait: <span class="popup-kbd">${stable}</span> · Min interval:
         <span class="popup-kbd">${interval}</span>
       </div>
+      <button
+        type="button"
+        class="popup-btn popup-btn-primary"
+        @click=${() => this.#dispatch({ type: "auto-capture-now" })}
+      >
+        <span class="popup-btn-icon" aria-hidden="true">+</span>
+        <span class="popup-btn-label">Add Capture</span>
+      </button>
       <button
         type="button"
         class="popup-btn popup-btn-stop"
