@@ -33,33 +33,26 @@ export function hideForCapture(prefs: HidePrefs): void {
 }
 
 export function restoreAfterCapture(): void {
-  // DIAGNOSTIC LOGS — narrowing which of the three restore helpers
-  // throws (the "AFTER restore" log was missing in the user's repro,
-  // proving one of them aborts mid-flow). Will be removed once the
-  // root cause is identified.
-  console.log("[annot] restoreAfterCapture called");
-  const before = document.getElementById(SCROLLBAR_STYLE_ID);
-  console.log("[annot] scrollbar style element BEFORE restore:", before);
+  // Each helper is wrapped in its own try-catch so a failure in one
+  // (e.g. a page with weird DOM that breaks `restoreStickies`)
+  // doesn't abort the others. Earlier sequential calls left
+  // scrollbars hidden if `restoreOwnOverlay` threw mid-flow,
+  // because the subsequent `restoreScrollbars()` never ran.
   try {
     restoreStickies();
-    console.log("[annot] restoreStickies OK");
-  } catch (e) {
-    console.error("[annot] restoreStickies THREW:", e);
+  } catch (err) {
+    console.error("[annot] restoreStickies failed:", err);
   }
   try {
     restoreOwnOverlay();
-    console.log("[annot] restoreOwnOverlay OK");
-  } catch (e) {
-    console.error("[annot] restoreOwnOverlay THREW:", e);
+  } catch (err) {
+    console.error("[annot] restoreOwnOverlay failed:", err);
   }
   try {
     restoreScrollbars();
-    console.log("[annot] restoreScrollbars OK");
-  } catch (e) {
-    console.error("[annot] restoreScrollbars THREW:", e);
+  } catch (err) {
+    console.error("[annot] restoreScrollbars failed:", err);
   }
-  const after = document.getElementById(SCROLLBAR_STYLE_ID);
-  console.log("[annot] scrollbar style element AFTER restore:", after);
 }
 
 // ---- Our own progress overlay — always hidden during capture ----
