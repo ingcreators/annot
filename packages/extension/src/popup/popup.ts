@@ -1,91 +1,81 @@
-import type { PopupMessage } from "../shared/messages.js";
+/**
+ * Popup host: loads persisted Settings + active-session state, wires
+ * the Lit `<annot-extension-popup>` element's events to the service
+ * worker, and closes the popup after a capture is dispatched.
+ *
+ * The element itself owns rendering + the per-field Settings draft;
+ * this file owns I/O (`chrome.runtime.sendMessage`,
+ * `chrome.runtime.openOptionsPage`, `chrome.storage.sync` via
+ * `loadSettings` / `saveSettings`).
+ */
 
-/** Send a fire-and-forget message, then close popup. */
-function sendAndClose(msg: PopupMessage): void {
+import type { Settings } from "@ingcreators/annot-capture/shared";
+import { loadSettings, onSettingsChange, saveSettings } from "../shared/settings.js";
+import { AnnotExtensionPopupElement } from "./annot-extension-popup.js";
+
+// Force-register the element (the file's top-level
+// `customElements.define` runs as a side-effect of the import, but
+// referencing the class here keeps tree-shakers from dropping the
+// module when Vite bundles popup.ts).
+void AnnotExtensionPopupElement;
+
+const POPUP_CLOSE_DELAY_MS = 100;
+
+function sendAndClose(msg: { type: string }): void {
   chrome.runtime.sendMessage(msg);
-  setTimeout(() => window.close(), 100);
+  setTimeout(() => window.close(), POPUP_CLOSE_DELAY_MS);
 }
 
-/** Send a message expecting a response. */
-function sendWithResponse<T = any>(msg: PopupMessage): Promise<T> {
+function sendWithResponse<T>(msg: { type: string }): Promise<T> {
   return chrome.runtime.sendMessage(msg) as Promise<T>;
 }
 
-document.getElementById("btn-visible")!.addEventListener("click", () => {
-  sendAndClose({ type: "capture-visible" });
-});
+async function init(): Promise<void> {
+  const el = document.getElementById("popup") as AnnotExtensionPopupElement;
 
-document.getElementById("btn-area")!.addEventListener("click", () => {
-  sendAndClose({ type: "capture-area" });
-});
+  // Load persisted Settings + active-session state in parallel.
+  const [settings, status] = await Promise.all([
+    loadSettings(),
+    sendWithResponse<{
+      active: boolean;
+      count: number;
+      hotkeyActive: boolean;
+      hotkeyCount: number;
+    }>({ type: "click-capture-status" }).catch(() => null),
+  ]);
 
-document.getElementById("btn-full")!.addEventListener("click", () => {
-  sendAndClose({ type: "capture-full" });
-});
-
-document.getElementById("btn-pages")!.addEventListener("click", () => {
-  sendAndClose({ type: "capture-pages" });
-});
-
-document.getElementById("btn-gallery")!.addEventListener("click", () => {
-  sendAndClose({ type: "open-gallery" });
-});
-document.getElementById("btn-gallery-active")!.addEventListener("click", () => {
-  sendAndClose({ type: "open-gallery" });
-});
-document.getElementById("btn-gallery-hotkey-active")!.addEventListener("click", () => {
-  sendAndClose({ type: "open-gallery" });
-});
-
-document.getElementById("btn-click-capture")!.addEventListener("click", () => {
-  sendAndClose({ type: "click-capture-start" });
-});
-
-document.getElementById("btn-stop-click")!.addEventListener("click", () => {
-  sendAndClose({ type: "click-capture-stop" });
-});
-
-document.getElementById("btn-hotkey-capture")!.addEventListener("click", () => {
-  sendAndClose({ type: "hotkey-capture-start" });
-});
-
-document.getElementById("btn-stop-hotkey")!.addEventListener("click", () => {
-  sendAndClose({ type: "hotkey-capture-stop" });
-});
-
-document.getElementById("btn-options")?.addEventListener("click", () => {
-  chrome.runtime.openOptionsPage();
-  setTimeout(() => window.close(), 100);
-});
-
-// ---- Initial state sync ----
-(async () => {
-  const status = await sendWithResponse<{
-    active: boolean;
-    count: number;
-    hotkeyActive: boolean;
-    hotkeyCount: number;
-  }>({ type: "click-capture-status" });
-
-  const idle = document.getElementById("idle-state")!;
-  const clickActive = document.getElementById("active-state")!;
-  const hotkeyActive = document.getElementById("hotkey-active-state")!;
-
-  if (status?.active) {
-    idle.style.display = "none";
-    clickActive.style.display = "";
-    hotkeyActive.style.display = "none";
-    const n = document.getElementById("rec-count-num");
-    if (n) n.textContent = String(status.count || 0);
-  } else if (status?.hotkeyActive) {
-    idle.style.display = "none";
-    clickActive.style.display = "none";
-    hotkeyActive.style.display = "";
-    const n = document.getElementById("hotkey-count-num");
-    if (n) n.textContent = String(status.hotkeyCount || 0);
+  el.settings = settings;
+  if (status?.hotkeyActive) {
+    el.view = "hotkeyActive";
+    el.hotkeyCount = status.hotkeyCount ?? 0;
   } else {
-    idle.style.display = "";
-    clickActive.style.display = "none";
-    hotkeyActive.style.display = "none";
+    el.view = "idle";
   }
-})();
+
+  // Cross-tab Settings updates (Settings page edits while popup is
+  // open) push through `chrome.storage.onChanged` → mirror into the
+  // element so users see the latest values without reopening.
+  onSettingsChange((s) => {
+    el.settings = s;
+  });
+
+  // Element events → service worker + storage.
+  el.addEventListener("popup-message", (event) => {
+    const detail = (event as CustomEvent<{ type: string }>).detail;
+    sendAndClose(detail);
+  });
+
+  el.addEventListener("popup-settings-changed", (event) => {
+    const detail = (event as CustomEvent<Settings>).detail;
+    void saveSettings(detail).catch((err) => {
+      console.error("[popup] saveSettings failed:", err);
+    });
+  });
+
+  el.addEventListener("open-options", () => {
+    chrome.runtime.openOptionsPage();
+    setTimeout(() => window.close(), POPUP_CLOSE_DELAY_MS);
+  });
+}
+
+void init();

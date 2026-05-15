@@ -27,7 +27,15 @@ const config: StorybookConfig = {
   // `docs/plans/_done/vscode-extension-host.md` continue to appear
   // in the same Storybook bundle. Stories stay co-located with
   // their component source per CLAUDE.md.
-  stories: ["../src/**/*.stories.ts", "../../host-ui/src/**/*.stories.ts"],
+  //
+  // `packages/extension/src/popup/` joined the bundle in Phase 1
+  // of `docs/plans/browser-extension-web-optimized-pudding.md`
+  // when the popup migrated to Lit (`<annot-extension-popup>`).
+  stories: [
+    "../src/**/*.stories.ts",
+    "../../host-ui/src/**/*.stories.ts",
+    "../../extension/src/popup/**/*.stories.ts",
+  ],
   framework: {
     name: "@storybook/web-components-vite",
     options: {},

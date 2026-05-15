@@ -18,5 +18,6 @@ export function encodeCapture(pngDataUrl: string, settings: Settings): Promise<E
     smartFallback: settings.quality.smartFallback,
     smartColorThreshold: settings.quality.smartColorThreshold,
     jpegPercent: settings.quality.jpegPercent,
+    saveSizePreset: settings.quality.saveSizePreset,
   });
 }

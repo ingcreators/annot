@@ -61,6 +61,7 @@ export async function runAreaCapture(host: CaptureHost): Promise<CaptureResult |
             smartFallback: settings.quality.smartFallback,
             smartColorThreshold: settings.quality.smartColorThreshold,
             jpegPercent: settings.quality.jpegPercent,
+            saveSizePreset: settings.quality.saveSizePreset,
           },
         },
       ]);

@@ -179,6 +179,9 @@ importers:
       '@resvg/resvg-js':
         specifier: ^2.6.2
         version: 2.6.2
+      '@storybook/web-components-vite':
+        specifier: ^10.3.6
+        version: 10.3.6(esbuild@0.27.7)(lit@3.3.2)(storybook@10.3.6(@testing-library/dom@10.4.1)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(vite@8.0.11(@types/node@25.6.2)(esbuild@0.27.7)(jiti@2.7.0))
       chrome-types:
         specifier: ^0.1.426
         version: 0.1.426

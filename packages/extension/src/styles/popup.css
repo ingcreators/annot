@@ -7,60 +7,71 @@
 }
 
 body {
-  width: 240px;
+  width: 360px;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   background: #0f1730;
   color: #eef2ff;
 }
 
-.popup {
-  padding: 16px;
+annot-extension-popup {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
+  padding: 16px;
 }
 
-.title {
+.popup-brand {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 10px;
-  margin-bottom: 8px;
+  margin-bottom: 4px;
 }
 
-.title svg {
+.popup-brand svg {
   display: block;
   flex-shrink: 0;
 }
 
-/* Brand lockup: product name primary, org line secondary. */
-.brand-stack {
+.popup-brand-stack {
   display: inline-flex;
   flex-direction: column;
   line-height: 1.15;
 }
-.brand-name {
-  /* Sora is the canonical wordmark typeface — see `brand/
-     README.md`. The system-font fallback applies only while
-     the woff2 in /fonts/ is still loading (font-display: swap)
-     or in an environment where it can't be served. */
+
+.popup-brand-name {
+  /* Sora is the canonical wordmark typeface — see `brand/README.md`.
+     The system-font fallback applies only while the woff2 in /fonts/
+     is still loading (font-display: swap) or in an environment where
+     it can't be served. */
   font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   font-size: 18px;
   font-weight: 700;
   letter-spacing: -0.035em;
   color: #eef2ff;
 }
-.brand-org {
+
+.popup-brand-org {
   font-size: 10px;
   font-weight: 500;
   letter-spacing: 0.02em;
-  /* Brand-blue-derived muted ink (not grey) — the attribution is
-     rendered in the color of the ingcreators "i" network itself. */
   color: #9fb0dc;
   text-transform: lowercase;
 }
 
-.capture-btn {
+/* Section header. Mirrors `.capture-dialog-section-title` in
+   `packages/host-ui/styles/file-manager.css` so the extension's
+   visual language matches the Web app's Capture Dialog. */
+.popup-section-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #9fb0dc;
+  margin: 10px 2px 4px;
+}
+
+.popup-btn {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -70,103 +81,171 @@ body {
   background: rgba(255, 255, 255, 0.04);
   color: #eef2ff;
   font-size: 14px;
+  font-family: inherit;
   cursor: pointer;
+  text-align: left;
   transition:
     background 0.15s,
     border-color 0.15s;
 }
 
-.capture-btn:hover {
+.popup-btn:hover {
   background: rgba(124, 156, 255, 0.14);
   border-color: #7c9cff;
 }
 
-.capture-btn:active {
+.popup-btn:active {
   background: rgba(124, 156, 255, 0.22);
 }
 
-.icon {
+.popup-btn-icon {
   font-size: 18px;
   width: 24px;
   text-align: center;
   color: #7c9cff;
+  flex-shrink: 0;
 }
 
-.separator {
-  height: 1px;
-  background: rgba(255, 255, 255, 0.08);
-  margin: 4px 0;
+.popup-btn-label {
+  flex: 1;
 }
 
-.open-btn {
+.popup-btn-trailing {
+  margin-left: auto;
+  font-size: 10px;
+  color: #b7c0e0;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.popup-btn-secondary {
   background: transparent;
   border-color: rgba(255, 255, 255, 0.06);
   font-size: 13px;
   padding: 8px 14px;
 }
 
-.open-btn:hover {
+.popup-btn-secondary:hover {
   background: rgba(126, 240, 197, 0.1);
   border-color: #7ef0c5;
 }
 
-.settings-btn:hover {
-  background: rgba(124, 156, 255, 0.1);
-  border-color: #7c9cff;
+.popup-separator {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
+  margin: 8px 0 4px;
 }
 
-.folder-section {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
+/* ---- Quick Options ----
+   Collapsed-by-default `<details>` block above the capture sections.
+   Each row pairs a label with a compact <select> sized to fit the
+   360px popup. */
 
-.folder-status {
-  font-size: 11px;
-  color: #888;
-  text-align: center;
-}
-
-.folder-status.active {
-  color: #4caf50;
-}
-
-.folder-buttons {
-  display: flex;
-  gap: 4px;
-}
-
-.folder-btn {
-  flex: 1;
+.popup-quick-options {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.02);
   padding: 6px 10px;
-  border: 1px solid #333;
-  border-radius: 6px;
-  background: transparent;
-  color: #aaa;
+}
+
+.popup-quick-options[open] {
+  padding-bottom: 10px;
+}
+
+.popup-quick-options-summary {
+  cursor: pointer;
+  padding: 4px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #c7d3f5;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  user-select: none;
+}
+
+/* Hide the default disclosure marker; render our own caret. */
+.popup-quick-options-summary::-webkit-details-marker {
+  display: none;
+}
+.popup-quick-options-summary::marker {
+  content: "";
+}
+
+.popup-quick-options-summary::before {
+  content: "\25B8";
+  font-size: 10px;
+  color: #7c9cff;
+  width: 10px;
+  display: inline-block;
+  transition: transform 0.15s;
+}
+
+.popup-quick-options[open] .popup-quick-options-summary::before {
+  transform: rotate(90deg);
+}
+
+.popup-quick-options-loading {
+  padding: 6px 4px;
   font-size: 12px;
+  color: #9fb0dc;
+}
+
+.popup-quick-options-row {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.popup-quick-options-label {
+  font-size: 12px;
+  color: #b7c0e0;
+}
+
+.popup-quick-options-select {
+  width: 100%;
+  padding: 4px 6px;
+  font-size: 12px;
+  font-family: inherit;
+  color: #eef2ff;
+  background: #1a2244;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
   cursor: pointer;
 }
 
-.folder-btn:hover {
-  border-color: #00d4ff;
-  color: #00d4ff;
+.popup-quick-options-select:focus {
+  outline: none;
+  border-color: #7c9cff;
 }
 
-.folder-btn-clear {
-  flex: 0;
-  width: 28px;
-  color: #888;
-  font-size: 14px;
+.popup-quick-options-advanced {
+  display: block;
+  margin: 8px 0 0;
+  padding: 4px 0;
+  border: none;
+  background: transparent;
+  color: #7c9cff;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
 }
 
-.folder-btn-clear:hover {
-  color: #e44;
-  border-color: #e44;
+.popup-quick-options-advanced:hover {
+  color: #b3c5ff;
+  text-decoration: underline;
 }
 
-/* ---- Click Capture active state ---- */
+/* ---- Hotkey Capture active state ---- */
 
-.rec-indicator {
+.popup-rec-indicator {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -180,15 +259,15 @@ body {
   font-weight: 600;
 }
 
-.rec-dot {
+.popup-rec-dot {
   width: 10px;
   height: 10px;
   border-radius: 50%;
   background: #e44;
-  animation: rec-pulse 1.2s ease-in-out infinite;
+  animation: popup-rec-pulse 1.2s ease-in-out infinite;
 }
 
-@keyframes rec-pulse {
+@keyframes popup-rec-pulse {
   0%,
   100% {
     opacity: 1;
@@ -200,39 +279,28 @@ body {
   }
 }
 
-.rec-count {
+.popup-rec-count {
   text-align: center;
   font-size: 12px;
   color: #b7c0e0;
   padding: 2px 0;
 }
 
-.stop-btn {
+.popup-btn-stop {
   border-color: rgba(228, 68, 68, 0.4);
   background: rgba(228, 68, 68, 0.1);
 }
 
-.stop-btn:hover {
+.popup-btn-stop:hover {
   background: rgba(228, 68, 68, 0.2);
   border-color: #e44;
 }
 
-.stop-btn .icon {
+.popup-btn-stop .popup-btn-icon {
   color: #e44;
 }
 
-.hotkey-hint {
-  margin-left: auto;
-  font-size: 10px;
-  color: #b7c0e0;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-}
-
-.kbd {
+.popup-kbd {
   display: inline-block;
   background: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.18);
