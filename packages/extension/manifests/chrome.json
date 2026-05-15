@@ -33,21 +33,18 @@
     "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';"
   },
   "commands": {
-    "capture-visible": {
-      "suggested_key": { "default": "Alt+Shift+S" },
-      "description": "Capture visible area"
+    "hotkey": {
+      "suggested_key": { "default": "Alt+Shift+Z" },
+      "description": "Hotkey"
     },
-    "capture-area": {
-      "suggested_key": { "default": "Alt+Shift+A" },
-      "description": "Capture selected area"
+    "visible-area": {
+      "description": "Visible Area"
     },
-    "capture-full": {
-      "suggested_key": { "default": "Alt+Shift+F" },
-      "description": "Capture full page"
+    "select-region": {
+      "description": "Select Region"
     },
-    "hotkey-capture": {
-      "suggested_key": { "default": "Alt+Shift+C" },
-      "description": "Hotkey capture — start session / capture frame"
+    "whole-page": {
+      "description": "Whole Page"
     }
   }
 }

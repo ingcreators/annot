@@ -23,7 +23,7 @@ import { planScrollSegments } from "./strategy.js";
 export async function runScrollCapture(host: CaptureHost): Promise<CaptureResult | null> {
   const target = await host.resolveTarget();
   if (!target) {
-    host.log("warn", "[capture-full] no capturable tab found");
+    host.log("warn", "[whole-page-stitched] no capturable tab found");
     return null;
   }
   const settings = await host.loadSettings();

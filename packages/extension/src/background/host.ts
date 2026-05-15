@@ -423,7 +423,7 @@ const contentListenersAll = new Set<(msg: ContentToBackgroundMessage) => void>()
  *
  *  We listen for the small set of orchestrator-relevant content-side
  *  events; the service-worker's own `chrome.runtime.onMessage`
- *  listener still handles popup messages (`capture-visible`, etc.)
+ *  listener still handles popup messages (`visible-area`, etc.)
  *  and `click-detected`, which are mode-specific extension wiring
  *  rather than orchestrator events. */
 function installContentBridgeOnce(): void {

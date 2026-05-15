@@ -29,6 +29,35 @@
          every section + autosaves on each input. The extension's
          options.ts wires `settings-changed` to `chrome.storage.sync`. -->
     <annot-capture-settings id="capture-settings"></annot-capture-settings>
+
+    <!-- Keyboard shortcuts — extension-specific (Electron has no
+         `chrome.commands`), so this section lives here in the
+         extension's options.html rather than in the shared
+         `<annot-capture-settings>` component. Lists the current
+         bindings + a button that opens the browser's extension
+         shortcuts page (URL is browser-detected; `chrome://` URLs
+         must be opened via `chrome.tabs.create`, not `<a href>`). -->
+    <section class="options-shortcuts" aria-labelledby="shortcuts-heading">
+      <h2 id="shortcuts-heading" class="shortcuts-heading">Keyboard shortcuts</h2>
+      <p class="shortcuts-hint">
+        Customize these in your browser's extension shortcuts page. Changes are picked up the next time the popup is opened.
+      </p>
+      <ul class="shortcuts-list" id="shortcuts-list"></ul>
+      <!-- Either the openable button or the manual-instructions
+           block is revealed by options.ts after UA detection.
+           Both start `hidden` to prevent a flash on first paint. -->
+      <button
+        type="button"
+        class="shortcuts-config-btn"
+        id="shortcuts-config-btn"
+        hidden
+      ></button>
+      <p
+        class="shortcuts-manual"
+        id="shortcuts-manual"
+        hidden
+      ></p>
+    </section>
   </main>
 
   <script type="module" src="./options.ts"></script>

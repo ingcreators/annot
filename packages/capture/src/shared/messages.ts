@@ -6,23 +6,35 @@ import type {
 
 // Popup -> Background
 //
+// Message-type names mirror the chrome extension's
+// `chrome.commands` keys (`visible-area`, `select-region`,
+// `whole-page`, `hotkey`) so reading a popup dispatch makes the
+// chrome.commands counterpart obvious. The `whole-page` button
+// can dispatch either `whole-page-stitched` or
+// `whole-page-per-screen` depending on the user's
+// `wholePageOutput` setting; the chrome.commands shortcut
+// (`whole-page`) always invokes the stitched path. Hotkey + Auto
+// session controls share the same `<feature>-start|stop|status`
+// shape since both are session machines triggered from the
+// popup.
+//
 // `click-capture-*` messages were retired with the extension's
 // Click Capture surface. The desktop Browse window's click+hotkey
 // flow still uses `BackgroundToContentMessage["click-capture-{enable,
 // disable}"]` + `ContentToBackgroundMessage["click-detected"]`
 // internally; those stay below.
 export type PopupMessage =
-  | { type: "capture-visible" }
-  | { type: "capture-area" }
-  | { type: "capture-full" }
-  | { type: "capture-pages" }
+  | { type: "visible-area" }
+  | { type: "select-region" }
+  | { type: "whole-page-stitched" }
+  | { type: "whole-page-per-screen" }
   | { type: "open-gallery" }
-  | { type: "hotkey-capture-start" }
-  | { type: "hotkey-capture-stop" }
-  | { type: "hotkey-capture-status" }
-  | { type: "auto-capture-start" }
-  | { type: "auto-capture-stop" }
-  | { type: "auto-capture-status" };
+  | { type: "hotkey-start" }
+  | { type: "hotkey-stop" }
+  | { type: "hotkey-status" }
+  | { type: "auto-start" }
+  | { type: "auto-stop" }
+  | { type: "auto-status" };
 
 // Background -> Content
 export type BackgroundToContentMessage =

@@ -380,7 +380,7 @@ export function installClickHotkeyHandlers(deps: ClickHotkeyDeps): ClickHotkeyHa
       } catch {
         /* ignore */
       }
-      console.error("[hotkey-capture] capture failed:", err);
+      console.error("[hotkey] capture failed:", err);
       deps.setStatus(`Hotkey capture failed: ${(err as Error).message}`, "error");
     }
   }

@@ -18,7 +18,7 @@ export async function runVisibleCapture(host: CaptureHost): Promise<CaptureResul
   if (!target) {
     host.log(
       "warn",
-      "[capture-visible] no capturable tab found (devtools / chrome:// pages cannot be captured)",
+      "[visible-area] no capturable tab found (devtools / chrome:// pages cannot be captured)",
     );
     return null;
   }

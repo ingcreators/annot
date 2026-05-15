@@ -324,10 +324,12 @@ async function openGallery(): Promise<void> {
 
 /**
  * Hotkey Capture session shape. One active session per service
- * worker; each Alt+Shift+C press fires `hotkeyCaptureShot` which
- * appends a frame to the IDB session bound by `sessionId`. The
- * Click Capture surface (which previously shared this shape) was
- * retired in `docs/plans/browser-extension-web-optimized-pudding.md`.
+ * worker; each press of the `hotkey` command (configurable in the
+ * browser's extension shortcuts page, default `Alt+Shift+Z`) fires
+ * `hotkeyCaptureShot` which appends a frame to the IDB session
+ * bound by `sessionId`. The Click Capture surface (which previously
+ * shared this shape) was retired in
+ * `docs/plans/browser-extension-web-optimized-pudding.md`.
  */
 interface HotkeyCaptureState {
   active: boolean;
@@ -422,7 +424,7 @@ function updateBadge(): void {
   }
 }
 
-// Restore hotkey-capture state across service-worker restarts.
+// Restore the Hotkey session across service-worker restarts.
 (async () => {
   try {
     const res = await chrome.storage.local.get(["hotkeyCaptureActive", "hotkeyCaptureSession"]);
@@ -464,14 +466,10 @@ async function stopHotkeyCapture(): Promise<void> {
   }
 }
 
-/** Triggered by the Alt+Shift+C hotkey. Auto-starts the session on first press. */
+/** Triggered by the `hotkey` command (default `Alt+Shift+Z`).
+ *  Auto-starts the session on first press. */
 async function hotkeyCaptureShot(firedTab?: chrome.tabs.Tab): Promise<void> {
-  logger.debug(
-    "[hotkey-capture] shot fired, active=",
-    hotkeyState.active,
-    "firedTab=",
-    firedTab?.id,
-  );
+  logger.debug("[hotkey] shot fired, active=", hotkeyState.active, "firedTab=", firedTab?.id);
   if (!hotkeyState.active) {
     await startHotkeyCapture();
   }
@@ -497,7 +495,7 @@ async function hotkeyCaptureShot(firedTab?: chrome.tabs.Tab): Promise<void> {
     tab = anyActive[0];
   }
   if (!tab?.id || tab.windowId == null) {
-    console.warn("[hotkey-capture] no active tab found");
+    console.warn("[hotkey] no active tab found");
     return;
   }
 
@@ -522,7 +520,7 @@ async function hotkeyCaptureShot(firedTab?: chrome.tabs.Tab): Promise<void> {
         .sendToContent<CaptureContext>(target, { type: "get-capture-context" })
         .catch(() => null)) as CaptureContext | null;
     } catch (e) {
-      logger.debug("[hotkey-capture] context query failed:", e);
+      logger.debug("[hotkey] context query failed:", e);
     }
   }
 
@@ -540,7 +538,7 @@ async function hotkeyCaptureShot(firedTab?: chrome.tabs.Tab): Promise<void> {
   }
 
   try {
-    logger.debug("[hotkey-capture] capturing window", tab.windowId);
+    logger.debug("[hotkey] capturing window", tab.windowId);
     const captured = await host.captureViewport(target);
     if (injectable) await endCapturePrep(host, target);
     const encoded = await encodeCapture(captured.pngDataUrl, settings);
@@ -595,7 +593,7 @@ async function hotkeyCaptureShot(firedTab?: chrome.tabs.Tab): Promise<void> {
     hotkeyState.count += 1;
     updateBadge();
   } catch (e) {
-    console.error("[hotkey-capture] capture failed:", e);
+    console.error("[hotkey] capture failed:", e);
     if (injectable) await endCapturePrep(host, target);
   }
 }
@@ -652,7 +650,7 @@ async function activateObserverOn(tabId: number, windowId: number, url: string):
       stableWaitMs: autoState.stableWaitMs,
     });
     autoState.tabId = tabId;
-    logger.debug("[auto-capture] observer installed on tab", tabId);
+    logger.debug("[auto] observer installed on tab", tabId);
     // Initial baseline frame for the newly-bound tab. Without it
     // the session's first IDB image would be "page state after
     // the first DOM mutation" — no record of the starting state,
@@ -663,7 +661,7 @@ async function activateObserverOn(tabId: number, windowId: number, url: string):
     // looked like before I did anything".
     void autoCaptureShot(tabId);
   } catch (e) {
-    logger.debug("[auto-capture] observer install failed on tab", tabId, e);
+    logger.debug("[auto] observer install failed on tab", tabId, e);
     autoState.tabId = null;
   }
 }
@@ -694,7 +692,7 @@ async function startAutoCapture(): Promise<void> {
     tab = byLast[0];
   }
   if (!tab?.id || tab.windowId == null) {
-    console.warn("[auto-capture] no active tab");
+    console.warn("[auto] no active tab");
     return;
   }
 
@@ -712,7 +710,7 @@ async function startAutoCapture(): Promise<void> {
 
   await activateObserverOn(tab.id, tab.windowId, tab.url ?? "");
   updateBadge();
-  logger.debug("[auto-capture] started", { tab: tab.id, ...resolved });
+  logger.debug("[auto] started", { tab: tab.id, ...resolved });
 }
 
 async function stopAutoCapture(): Promise<void> {
@@ -798,7 +796,7 @@ async function autoCaptureShot(senderTabId?: number): Promise<void> {
 
     const frameHash = await hashDataUrl(dataUrl);
     if (frameHash === autoState.lastFrameHash) {
-      logger.debug("[auto-capture] dropping duplicate frame");
+      logger.debug("[auto] dropping duplicate frame");
       return;
     }
     autoState.lastFrameHash = frameHash;
@@ -839,7 +837,7 @@ async function autoCaptureShot(senderTabId?: number): Promise<void> {
     autoState.count += 1;
     updateBadge();
   } catch (e) {
-    console.error("[auto-capture] capture failed:", e);
+    console.error("[auto] capture failed:", e);
     await endCapturePrep(host, target);
   }
 }
@@ -899,16 +897,16 @@ async function handleExternalMessage(msg: any): Promise<any> {
 // concrete handler narrows by `msg.type` below.
 chrome.runtime.onMessage.addListener((msg: any, sender, sendResponse) => {
   switch (msg.type) {
-    case "capture-visible":
+    case "visible-area":
       captureVisible();
       break;
-    case "capture-area":
+    case "select-region":
       captureArea();
       break;
-    case "capture-full":
+    case "whole-page-stitched":
       captureFullPage();
       break;
-    case "capture-pages":
+    case "whole-page-per-screen":
       capturePages();
       break;
     case "open-gallery":
@@ -916,26 +914,31 @@ chrome.runtime.onMessage.addListener((msg: any, sender, sendResponse) => {
       break;
 
     // ---- Hotkey Capture ----
-    case "hotkey-capture-start":
+    case "hotkey-start":
       startHotkeyCapture();
       break;
-    case "hotkey-capture-stop":
+    case "hotkey-stop":
       stopHotkeyCapture();
       break;
-    case "hotkey-capture-status":
+    case "hotkey-status":
       sendResponse(getHotkeyCaptureStatus());
       return false;
 
     // ---- Auto Capture (DOM-mutation-driven) ----
-    case "auto-capture-start":
+    case "auto-start":
       startAutoCapture();
       break;
-    case "auto-capture-stop":
+    case "auto-stop":
       stopAutoCapture();
       break;
-    case "auto-capture-status":
+    case "auto-status":
       sendResponse(getAutoCaptureStatus());
       return false;
+    // `auto-capture-signal` is a content → background message (the
+    // content-script enablement protocol), not a popup IPC type, so
+    // it keeps the `auto-capture-` prefix shared with its
+    // `auto-capture-{enable,disable}` siblings in
+    // `BackgroundToContentMessage`.
     case "auto-capture-signal":
       autoCaptureShot(sender.tab?.id);
       break;
@@ -959,7 +962,7 @@ chrome.tabs.onActivated.addListener((info) => {
       const tab = await chrome.tabs.get(info.tabId);
       await activateObserverOn(info.tabId, info.windowId, tab.url ?? "");
     } catch (e) {
-      logger.debug("[auto-capture] onActivated handler failed:", e);
+      logger.debug("[auto] onActivated handler failed:", e);
     }
   })();
 });
@@ -976,7 +979,7 @@ chrome.windows.onFocusChanged.addListener((windowId) => {
       if (!active?.id) return;
       await activateObserverOn(active.id, windowId, active.url ?? "");
     } catch (e) {
-      logger.debug("[auto-capture] onFocusChanged handler failed:", e);
+      logger.debug("[auto] onFocusChanged handler failed:", e);
     }
   })();
 });
@@ -1021,20 +1024,21 @@ chrome.tabs.onUpdated.addListener((tabId, info, tab) => {
 
 chrome.commands.onCommand.addListener((command, tab) => {
   logger.debug("[cmd]", command, "tab:", tab?.id, tab?.url);
+  // Command names mirror the popup button labels (kebab-cased) so
+  // they read coherently in chrome://extensions/shortcuts. The
+  // `PopupMessage` types use the same base names so the two
+  // listeners line up by eye.
   switch (command) {
-    case "capture-visible":
+    case "visible-area":
       captureVisible();
       break;
-    case "capture-pages":
-      capturePages();
-      break;
-    case "capture-area":
+    case "select-region":
       captureArea();
       break;
-    case "capture-full":
+    case "whole-page":
       captureFullPage();
       break;
-    case "hotkey-capture":
+    case "hotkey":
       hotkeyCaptureShot(tab);
       break;
   }
