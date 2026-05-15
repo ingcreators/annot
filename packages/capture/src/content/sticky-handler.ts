@@ -33,9 +33,18 @@ export function hideForCapture(prefs: HidePrefs): void {
 }
 
 export function restoreAfterCapture(): void {
+  // DIAGNOSTIC LOGS — temporary, intended to surface why scrollbars
+  // are observed staying hidden after a single-shot Visible Area /
+  // Select Region capture on certain pages. Will be removed once
+  // the root cause is identified.
+  console.log("[annot] restoreAfterCapture called");
+  const before = document.getElementById(SCROLLBAR_STYLE_ID);
+  console.log("[annot] scrollbar style element BEFORE restore:", before);
   restoreStickies();
   restoreOwnOverlay();
   restoreScrollbars();
+  const after = document.getElementById(SCROLLBAR_STYLE_ID);
+  console.log("[annot] scrollbar style element AFTER restore:", after);
 }
 
 // ---- Our own progress overlay — always hidden during capture ----
