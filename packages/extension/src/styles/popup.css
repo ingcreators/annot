@@ -11,12 +11,17 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   background: #0f1730;
   color: #eef2ff;
+  /* Reserve scrollbar gutter so Quick Options open/close doesn't shift
+     content horizontally if the popup viewport ever needs to scroll.
+     `thin` reduces the scrollbar's visual weight when it does appear. */
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
 }
 
 annot-extension-popup {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   padding: 16px;
 }
 
@@ -68,7 +73,7 @@ annot-extension-popup {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: #9fb0dc;
-  margin: 10px 2px 4px;
+  margin: 6px 2px 2px;
 }
 
 .popup-btn {
@@ -210,7 +215,7 @@ annot-extension-popup {
   grid-template-columns: 110px 1fr;
   align-items: center;
   gap: 8px;
-  margin-top: 6px;
+  margin-top: 3px;
 }
 
 .popup-quick-options-label {
@@ -220,7 +225,7 @@ annot-extension-popup {
 
 .popup-quick-options-select {
   width: 100%;
-  padding: 4px 6px;
+  padding: 3px 6px;
   font-size: 12px;
   font-family: inherit;
   color: #eef2ff;
@@ -233,24 +238,6 @@ annot-extension-popup {
 .popup-quick-options-select:focus {
   outline: none;
   border-color: #7c9cff;
-}
-
-.popup-quick-options-advanced {
-  display: block;
-  margin: 8px 0 0;
-  padding: 4px 0;
-  border: none;
-  background: transparent;
-  color: #7c9cff;
-  font-size: 12px;
-  font-family: inherit;
-  cursor: pointer;
-  text-align: left;
-}
-
-.popup-quick-options-advanced:hover {
-  color: #b3c5ff;
-  text-decoration: underline;
 }
 
 /* ---- Hotkey Capture active state ---- */
