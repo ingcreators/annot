@@ -382,6 +382,15 @@ interface AutoCaptureState {
   /** Resolved stable-wait in milliseconds (passed to the content
    *  script so it can tune its MutationObserver debounce). */
   stableWaitMs: number;
+  /** Whether the session should install a persistent scrollbar-hide
+   *  style on each tab it observes. Captured from
+   *  `Settings.scrollbars.hide` at session start. The hide stays
+   *  installed for the entire duration we observe a tab — captures
+   *  themselves no longer flick scrollbars on/off (which produced
+   *  visible flicker and a self-perpetuating capture loop on
+   *  reactively-laid-out pages). Restored at tab unbind / session
+   *  end. */
+  scrollbarsHidden: boolean;
 }
 
 const autoState: AutoCaptureState = {
@@ -393,6 +402,7 @@ const autoState: AutoCaptureState = {
   lastFrameHash: "",
   minIntervalMs: 0,
   stableWaitMs: 0,
+  scrollbarsHidden: false,
 };
 
 function getHotkeyCaptureStatus(): { active: boolean; count: number } {
@@ -647,6 +657,28 @@ async function activateObserverOn(tabId: number, windowId: number, url: string):
   const target = { id: tabId, windowId, url };
   try {
     await host.injectContentScript(target);
+    // Persistent scrollbar hide for the entire time we observe this
+    // tab. Sent BEFORE `auto-capture-enable` so the `MutationObserver`
+    // starts watching AFTER the page has reacted to the scrollbar
+    // gutter disappearing — otherwise the reactive re-layout (React /
+    // Vue / ResizeObserver-driven components etc.) would trip the
+    // observer and produce a spurious capture on every tab bind.
+    //
+    // We deliberately pass `overlays: false` so stickies stay visible
+    // during the user's interaction — they can be load-bearing UI
+    // (cookie banners, modal triggers) and hiding them for the whole
+    // session is too invasive. Scrollbars are the only chrome we
+    // actually want gone from every frame.
+    if (autoState.scrollbarsHidden) {
+      await host
+        .sendToContent(target, {
+          type: "hide-for-capture",
+          overlays: false,
+          preservedSelectors: [],
+          scrollbars: true,
+        })
+        .catch(() => undefined);
+    }
     await host.sendToContent(target, {
       type: "auto-capture-enable",
       stableWaitMs: autoState.stableWaitMs,
@@ -669,12 +701,18 @@ async function activateObserverOn(tabId: number, windowId: number, url: string):
 }
 
 /** Best-effort disable of the observer on `tabId`. Silent if the tab
- *  has closed or is otherwise unreachable. */
+ *  has closed or is otherwise unreachable. Also restores the
+ *  scrollbar-hide style we installed at observer bind so the user's
+ *  page is left in its natural state when the session migrates away
+ *  / ends. */
 async function deactivateObserverOn(tabId: number): Promise<void> {
   try {
     const tab = await chrome.tabs.get(tabId);
     const target = { id: tabId, windowId: tab.windowId, url: tab.url ?? "" };
     await host.sendToContent(target, { type: "auto-capture-disable" }).catch(() => undefined);
+    if (autoState.scrollbarsHidden) {
+      await host.sendToContent(target, { type: "restore-after-capture" }).catch(() => undefined);
+    }
   } catch {
     // tab gone — observer cleanup happens implicitly on tab destruction
   }
@@ -700,6 +738,10 @@ async function startAutoCapture(): Promise<void> {
 
   const opts = await loadAutoCaptureOptions();
   const resolved = resolveAutoCaptureOptions(opts);
+  // Capture the scrollbar-hide preference at session start so the
+  // user toggling it mid-session doesn't leave the observed tab in
+  // an inconsistent state (some tabs hidden, the next ones not).
+  const settings = await loadSettings();
 
   autoState.active = true;
   autoState.count = 0;
@@ -709,6 +751,7 @@ async function startAutoCapture(): Promise<void> {
   autoState.lastFrameHash = "";
   autoState.minIntervalMs = resolved.intervalMs;
   autoState.stableWaitMs = resolved.stableWaitMs;
+  autoState.scrollbarsHidden = settings.scrollbars.hide;
 
   await activateObserverOn(tab.id, tab.windowId, tab.url ?? "");
   updateBadge();
@@ -727,9 +770,15 @@ async function stopAutoCapture(): Promise<void> {
   autoState.lastFrameHash = "";
   updateBadge();
 
+  // `deactivateObserverOn` reads `autoState.scrollbarsHidden` to
+  // decide whether to send `restore-after-capture`. Clear the flag
+  // AFTER the deactivate runs so that final restore actually
+  // happens — otherwise the session's last tab would be left with
+  // the persistent hide style still injected.
   if (lastTabId != null) {
     await deactivateObserverOn(lastTabId);
   }
+  autoState.scrollbarsHidden = false;
 
   if (finalCount > 0) {
     await openOrReuseAnnotTab(chrome.runtime.id);
@@ -774,17 +823,22 @@ async function autoCaptureShot(senderTabId?: number): Promise<void> {
     .catch(() => null)) as CaptureContext | null;
 
   const settings = await loadSettings();
-  // Auto Capture intentionally skips `beginCapturePrep` /
-  // `endCapturePrep` (the hide-stickies / hide-scrollbars / paint-flush
-  // dance every other capture mode runs). Auto fires on a continuous
-  // cadence (every `minIntervalMs`, default 1s), and the hide-restore
-  // cycle injects + removes a `<style>` element on every shot — the
-  // user sees their scrollbars flicker off and on while they're
-  // working. The mode's value prop is "passive recorder": capture the
-  // page exactly as the user is looking at it, including scrollbars
-  // and stickies. The content-script-side `stableWait` already
-  // guarantees DOM mutations have settled before the signal fires, so
-  // the extra `hotkeySettleMs` paint-flush isn't load-bearing.
+  // Auto Capture intentionally skips per-shot `beginCapturePrep` /
+  // `endCapturePrep`. The scrollbar hide is installed ONCE when
+  // we bind to a tab (in `activateObserverOn`) and restored ONCE
+  // when we unbind (in `deactivateObserverOn`) — so the captured
+  // image stays scrollbar-clean without the hide/restore cycle
+  // firing on every shot. Two reasons that mattered: (a) visible
+  // flicker as the scrollbar disappeared+reappeared on the ~1s
+  // capture cadence, and (b) a self-perpetuating loop on
+  // reactively-laid-out pages where the page's own React / Vue /
+  // ResizeObserver code reacted to the scrollbar gutter coming
+  // back, which produced a body-tree mutation, which the auto
+  // observer picked up, which triggered the next capture, which
+  // hid the scrollbar again, ... and so on indefinitely. The
+  // content-script-side `stableWait` already guarantees DOM
+  // mutations have settled before the signal fires, so we don't
+  // need the extra `hotkeySettleMs` paint flush either.
 
   try {
     const captured = await host.captureViewport(target);
