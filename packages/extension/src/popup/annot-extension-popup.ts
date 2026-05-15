@@ -245,7 +245,7 @@ export class AnnotExtensionPopupElement extends LitElement {
         <span class="popup-rec-dot" aria-hidden="true"></span>
         <span class="popup-rec-text">Auto Capture Active</span>
       </div>
-      <div class="popup-rec-count">Watching for DOM changes…</div>
+      <div class="popup-rec-count">Watching for DOM changes on the active tab…</div>
       <div class="popup-rec-count">${count} frame${count === 1 ? "" : "s"} captured</div>
       <div class="popup-rec-summary">
         Stable wait: <span class="popup-kbd">${stable}</span> · Min interval:

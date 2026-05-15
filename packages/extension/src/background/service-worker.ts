@@ -346,25 +346,41 @@ const hotkeyState: HotkeyCaptureState = {
 };
 
 /**
- * Auto Capture session state. Mirrors the hotkey shape but adds the
- * fields the DOM-mutation trigger needs: tab binding (so signals
- * from other tabs are ignored), last-frame hash (dedupe), and the
- * resolved interval / stable-wait timings.
+ * Auto Capture session state. The session itself is one continuous
+ * stream of captures; the MutationObserver follows the
+ * currently-active tab so the user can walk between tabs and have
+ * their workflow recorded as a single session. `tabId` is the tab
+ * the observer is currently installed on (= the active tab at the
+ * last `tabs.onActivated` / `windows.onFocusChanged`), or `null`
+ * while focus is on a non-injectable URL (chrome://, devtools, etc.)
+ * — in that case captures are dormant but the session is still
+ * "active" and will resume when the user returns to an injectable
+ * page.
+ *
+ * Chrome's `chrome.tabs.captureVisibleTab` only ever captures the
+ * window's active tab; pure multi-observer designs can't actually
+ * produce frames from backgrounded tabs anyway, so "session follows
+ * the active tab" is the natural multi-tab model.
  */
 interface AutoCaptureState {
   active: boolean;
   count: number;
   lastCaptureAt: number;
   sessionId: string;
-  /** Tab id the session is bound to. `null` when inactive. The
-   *  Observer is per-tab; signals from other tabs are ignored. */
+  /** Tab currently hosting the observer. `null` while focus is on a
+   *  non-injectable URL or between tab switches. Always reset to
+   *  `null` when the session ends. */
   tabId: number | null;
-  /** Hash of the most recently captured frame (for dedupe). */
+  /** Hash of the most recently captured frame (for dedupe). Cleared
+   *  on tab switch so the first frame on a new tab can never be
+   *  deduped against a leftover hash from the previous tab. */
   lastFrameHash: string;
-  /** Resolved min-interval between captures in milliseconds. */
+  /** Resolved min-interval between captures in milliseconds. Global
+   *  to the session — switching tabs does NOT bypass it, otherwise a
+   *  user rapidly cycling tabs could swamp the encoder. */
   minIntervalMs: number;
-  /** Resolved stable-wait in milliseconds (passed back to the
-   *  content script so it can tune its MutationObserver debounce). */
+  /** Resolved stable-wait in milliseconds (passed to the content
+   *  script so it can tune its MutationObserver debounce). */
   stableWaitMs: number;
 }
 
@@ -602,12 +618,66 @@ async function hashDataUrl(dataUrl: string): Promise<string> {
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+/** Inject the content script + enable its MutationObserver on the
+ *  given tab. Idempotent: returns early if the observer is already
+ *  installed there. Failures (chrome://, no permission, etc.) leave
+ *  the session "active but dormant" — `tabId` becomes `null` and the
+ *  next tab switch retries. */
+async function activateObserverOn(tabId: number, windowId: number, url: string): Promise<void> {
+  if (!autoState.active) return;
+  if (autoState.tabId === tabId) return; // already on this tab
+
+  // Tear down the previous tab's observer first so we don't leave
+  // orphan listeners on tabs the user has moved away from.
+  if (autoState.tabId != null && autoState.tabId !== tabId) {
+    await deactivateObserverOn(autoState.tabId);
+  }
+
+  // Reset per-tab dedupe baseline — different tab, different content;
+  // the first frame on the new tab should never be deduped against a
+  // leftover hash from the previous tab.
+  autoState.lastFrameHash = "";
+
+  const injectable = /^(https?|file):/.test(url);
+  if (!injectable) {
+    autoState.tabId = null;
+    return;
+  }
+
+  const target = { id: tabId, windowId, url };
+  try {
+    await host.injectContentScript(target);
+    await host.sendToContent(target, {
+      type: "auto-capture-enable",
+      stableWaitMs: autoState.stableWaitMs,
+    });
+    autoState.tabId = tabId;
+    logger.debug("[auto-capture] observer installed on tab", tabId);
+  } catch (e) {
+    logger.debug("[auto-capture] observer install failed on tab", tabId, e);
+    autoState.tabId = null;
+  }
+}
+
+/** Best-effort disable of the observer on `tabId`. Silent if the tab
+ *  has closed or is otherwise unreachable. */
+async function deactivateObserverOn(tabId: number): Promise<void> {
+  try {
+    const tab = await chrome.tabs.get(tabId);
+    const target = { id: tabId, windowId: tab.windowId, url: tab.url ?? "" };
+    await host.sendToContent(target, { type: "auto-capture-disable" }).catch(() => undefined);
+  } catch {
+    // tab gone — observer cleanup happens implicitly on tab destruction
+  }
+}
+
 async function startAutoCapture(): Promise<void> {
   if (autoState.active) return;
 
-  // Pick the active tab when the session starts. The MutationObserver
-  // lives in that tab; signals from other tabs are ignored. Phase 2's
-  // multi-tab scope was explicitly deferred in the plan.
+  // Pick the active tab when the session starts. The observer
+  // installs there and then follows the user across tab / window
+  // switches via the `tabs.onActivated` / `windows.onFocusChanged`
+  // listeners below.
   const byCurrent = await chrome.tabs.query({ active: true, currentWindow: true });
   let tab = byCurrent[0];
   if (!tab?.id) {
@@ -619,12 +689,6 @@ async function startAutoCapture(): Promise<void> {
     return;
   }
 
-  const injectable = !!tab.url && /^(https?|file):/.test(tab.url);
-  if (!injectable) {
-    console.warn("[auto-capture] tab is not injectable:", tab.url);
-    return;
-  }
-
   const opts = await loadAutoCaptureOptions();
   const resolved = resolveAutoCaptureOptions(opts);
 
@@ -632,25 +696,12 @@ async function startAutoCapture(): Promise<void> {
   autoState.count = 0;
   autoState.lastCaptureAt = 0;
   autoState.sessionId = newIdB58();
-  autoState.tabId = tab.id;
+  autoState.tabId = null;
   autoState.lastFrameHash = "";
   autoState.minIntervalMs = resolved.intervalMs;
   autoState.stableWaitMs = resolved.stableWaitMs;
 
-  const target = { id: tab.id, windowId: tab.windowId, url: tab.url ?? "" };
-  try {
-    await host.injectContentScript(target);
-    await host.sendToContent(target, {
-      type: "auto-capture-enable",
-      stableWaitMs: resolved.stableWaitMs,
-    });
-  } catch (e) {
-    console.error("[auto-capture] enable failed:", e);
-    autoState.active = false;
-    autoState.tabId = null;
-    return;
-  }
-
+  await activateObserverOn(tab.id, tab.windowId, tab.url ?? "");
   updateBadge();
   logger.debug("[auto-capture] started", { tab: tab.id, ...resolved });
 }
@@ -658,7 +709,7 @@ async function startAutoCapture(): Promise<void> {
 async function stopAutoCapture(): Promise<void> {
   if (!autoState.active) return;
 
-  const tabId = autoState.tabId;
+  const lastTabId = autoState.tabId;
   const finalCount = autoState.count;
 
   autoState.active = false;
@@ -667,15 +718,8 @@ async function stopAutoCapture(): Promise<void> {
   autoState.lastFrameHash = "";
   updateBadge();
 
-  // Best-effort disable — the tab may have closed/navigated already.
-  if (tabId != null) {
-    try {
-      const tab = await chrome.tabs.get(tabId);
-      const target = { id: tabId, windowId: tab.windowId, url: tab.url ?? "" };
-      await host.sendToContent(target, { type: "auto-capture-disable" }).catch(() => undefined);
-    } catch {
-      // tab gone — observer cleanup happens implicitly on tab destruction
-    }
+  if (lastTabId != null) {
+    await deactivateObserverOn(lastTabId);
   }
 
   if (finalCount > 0) {
@@ -881,20 +925,63 @@ chrome.runtime.onMessage.addListener((msg: any, sender, sendResponse) => {
   return undefined;
 });
 
-// End the Auto Capture session if the bound tab navigates away or
-// closes — the MutationObserver dies with the page anyway, and the
-// service worker shouldn't keep an orphan session around.
-chrome.tabs.onRemoved.addListener((tabId) => {
-  if (autoState.active && autoState.tabId === tabId) {
-    void stopAutoCapture();
-  }
+// ---- Auto Capture: follow the active tab ────────────────────────
+//
+// The session is one continuous stream of captures. As the user
+// walks between tabs, the observer migrates with them. Listeners
+// below cover the four ways the "currently observed tab" can
+// change: tab activation within a window, window-focus change
+// between windows, the observed tab being closed, and the observed
+// tab navigating to a new top-frame URL.
+
+chrome.tabs.onActivated.addListener((info) => {
+  if (!autoState.active) return;
+  void (async () => {
+    try {
+      const tab = await chrome.tabs.get(info.tabId);
+      await activateObserverOn(info.tabId, info.windowId, tab.url ?? "");
+    } catch (e) {
+      logger.debug("[auto-capture] onActivated handler failed:", e);
+    }
+  })();
 });
-chrome.tabs.onUpdated.addListener((tabId, info) => {
-  if (!autoState.active || autoState.tabId !== tabId) return;
-  // Full navigation (top-frame document swap) — observer is gone.
-  if (info.url) {
-    void stopAutoCapture();
-  }
+
+chrome.windows.onFocusChanged.addListener((windowId) => {
+  if (!autoState.active) return;
+  // Chrome fires `WINDOW_ID_NONE` when focus leaves Chrome entirely
+  // (user switched to another app). Keep the observer in place —
+  // when they come back, focus returns and a real id arrives.
+  if (windowId === chrome.windows.WINDOW_ID_NONE) return;
+  void (async () => {
+    try {
+      const [active] = await chrome.tabs.query({ active: true, windowId });
+      if (!active?.id) return;
+      await activateObserverOn(active.id, windowId, active.url ?? "");
+    } catch (e) {
+      logger.debug("[auto-capture] onFocusChanged handler failed:", e);
+    }
+  })();
+});
+
+chrome.tabs.onRemoved.addListener((tabId) => {
+  if (!autoState.active) return;
+  if (autoState.tabId !== tabId) return;
+  // The observed tab is gone — the MutationObserver died with the
+  // page. Clear the slot; the next `tabs.onActivated` /
+  // `windows.onFocusChanged` will rebind the observer on whatever
+  // tab the user lands on next.
+  autoState.tabId = null;
+  autoState.lastFrameHash = "";
+});
+
+chrome.tabs.onUpdated.addListener((tabId, info, tab) => {
+  if (!autoState.active) return;
+  if (autoState.tabId !== tabId) return;
+  // Top-frame navigation in the observed tab — observer is gone with
+  // the old page. Re-install when the new page completes loading.
+  if (info.status !== "complete" || !tab.url) return;
+  autoState.tabId = null; // force re-activation path inside activateObserverOn
+  void activateObserverOn(tabId, tab.windowId, tab.url);
 });
 
 chrome.commands.onCommand.addListener((command, tab) => {
