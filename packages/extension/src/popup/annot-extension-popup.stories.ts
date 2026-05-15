@@ -20,12 +20,17 @@ import { DEFAULT_SETTINGS, type Settings } from "@ingcreators/annot-capture/shar
 import type { Meta, StoryObj } from "@storybook/web-components-vite";
 import "../styles/popup.css";
 import "./annot-extension-popup.js";
-import type { AnnotExtensionPopupElement, PopupView } from "./annot-extension-popup.js";
+import type {
+  AnnotExtensionPopupElement,
+  AutoCaptureSummary,
+  PopupView,
+} from "./annot-extension-popup.js";
 
 interface Args {
   settings: Settings;
   view: PopupView;
   hotkeyCount: number;
+  autoSummary: AutoCaptureSummary | null;
   quickOptionsOpen: boolean;
 }
 
@@ -44,6 +49,7 @@ function renderPopup(args: Args): HTMLElement {
   el.settings = args.settings;
   el.view = args.view;
   el.hotkeyCount = args.hotkeyCount;
+  el.autoSummary = args.autoSummary;
   el.quickOptionsOpen = args.quickOptionsOpen;
   el.addEventListener("popup-message", (e) => {
     // Arg-flow trace — intentional `console.log`.
@@ -64,14 +70,16 @@ const meta: Meta<Args> = {
   render: renderPopup,
   argTypes: {
     settings: { control: "object" },
-    view: { control: "select", options: ["idle", "hotkeyActive"] },
+    view: { control: "select", options: ["idle", "hotkeyActive", "autoActive"] },
     hotkeyCount: { control: "number" },
+    autoSummary: { control: "object" },
     quickOptionsOpen: { control: "boolean" },
   },
   args: {
     settings: DEFAULT_SETTINGS,
     view: "idle",
     hotkeyCount: 0,
+    autoSummary: null,
     quickOptionsOpen: false,
   },
 };
@@ -101,5 +109,20 @@ export const HotkeyActive: Story = {
   args: {
     view: "hotkeyActive",
     hotkeyCount: 7,
+  },
+};
+
+/** The popup view after Auto Capture has been started. Shows the
+ *  rec indicator + the trigger-config summary ("Stable wait: 0.7s
+ *  · Min interval: 1.0s") so users can tell what's driving the
+ *  background captures. */
+export const AutoActive: Story = {
+  args: {
+    view: "autoActive",
+    autoSummary: {
+      count: 12,
+      stableWaitMs: 700,
+      minIntervalMs: 1000,
+    },
   },
 };

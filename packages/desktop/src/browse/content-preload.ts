@@ -181,6 +181,19 @@ async function dispatch(msg: BackgroundToContentMessage): Promise<unknown> {
     case "get-capture-context":
       return getCaptureContext();
 
+    case "auto-capture-enable":
+    case "auto-capture-disable":
+      // Auto Capture (DOM-mutation-driven) is a Chrome-extension-only
+      // surface today (Phase 2 of
+      // `docs/plans/browser-extension-web-optimized-pudding.md`). The
+      // desktop Browse window hasn't wired it yet — the host should
+      // never send these messages here, but exhaustive narrowing
+      // requires us to acknowledge them. Future Browse-window
+      // support would install a MutationObserver on the page DOM
+      // and post `auto-capture-signal` events via the
+      // `annot.content.event` channel.
+      return true;
+
     default: {
       const _exhaustive: never = msg;
       throw new Error(

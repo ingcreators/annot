@@ -15,7 +15,10 @@ export type PopupMessage =
   | { type: "click-capture-stop" }
   | { type: "click-capture-status" }
   | { type: "hotkey-capture-start" }
-  | { type: "hotkey-capture-stop" };
+  | { type: "hotkey-capture-stop" }
+  | { type: "auto-capture-start" }
+  | { type: "auto-capture-stop" }
+  | { type: "auto-capture-status" };
 
 // Background -> Content
 export type BackgroundToContentMessage =
@@ -38,7 +41,20 @@ export type BackgroundToContentMessage =
   | { type: "hide-progress" }
   | { type: "click-capture-enable" }
   | { type: "click-capture-disable" }
-  | { type: "get-capture-context" };
+  | { type: "get-capture-context" }
+  | {
+      /** Activate the auto-capture content-script logic. The content
+       *  script installs a `MutationObserver` on `document.body`,
+       *  debounces bursts with a stable-wait, and posts
+       *  `auto-capture-signal` back to the service worker each time
+       *  the DOM settles after a meaningful change. */
+      type: "auto-capture-enable";
+      /** Resolved stable-wait duration in milliseconds, derived from
+       *  the user's `AutoCaptureOptions.stableWait` preset by the
+       *  service worker before injection. */
+      stableWaitMs: number;
+    }
+  | { type: "auto-capture-disable" };
 
 // Content -> Background
 export type ContentToBackgroundMessage =
@@ -69,6 +85,15 @@ export type ContentToBackgroundMessage =
       type: "context-menu-request";
       x: number;
       y: number;
+    }
+  | {
+      /** Fired by the auto-capture content script when DOM mutations
+       *  have settled (stable-wait elapsed without new mutations).
+       *  The service worker uses this as the trigger to call
+       *  `captureVisible` on the active tab. Throttling +
+       *  duplicate-frame dedupe live service-worker-side so the
+       *  content script stays a thin signal source. */
+      type: "auto-capture-signal";
     };
 
 // Background -> Offscreen

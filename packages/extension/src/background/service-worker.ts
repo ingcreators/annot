@@ -20,10 +20,11 @@ import {
   runScrollCapture,
   runVisibleCapture,
 } from "@ingcreators/annot-capture/orchestrate";
+import { resolveAutoCaptureOptions } from "@ingcreators/annot-core/auto-capture-options";
 import { newIdB58 } from "@ingcreators/annot-core/utils";
 import { logger } from "../logger.js";
 import { encodeCapture } from "../shared/encode.js";
-import { loadSettings } from "../shared/settings.js";
+import { loadAutoCaptureOptions, loadSettings } from "../shared/settings.js";
 // Static import of IDB store — used by external message API
 import * as idbStore from "../storage/idb-store.js";
 import { createChromeCaptureHost } from "./host.js";
@@ -335,11 +336,61 @@ interface ClickCaptureState {
 const clickState: ClickCaptureState = { active: false, count: 0, lastCaptureAt: 0, sessionId: "" };
 const hotkeyState: ClickCaptureState = { active: false, count: 0, lastCaptureAt: 0, sessionId: "" };
 
+/**
+ * Auto Capture session state. Mirrors the click / hotkey shapes —
+ * one active session per service worker, scoped to the tab the
+ * session was started in. The content-script-side MutationObserver
+ * posts `auto-capture-signal` on each settle; the service worker
+ * applies a min-interval throttle (`AutoCaptureOptions.interval`)
+ * + a duplicate-frame dedupe before saving.
+ */
+interface AutoCaptureState {
+  active: boolean;
+  count: number;
+  lastCaptureAt: number;
+  sessionId: string;
+  /** Tab id the session is bound to. `null` when inactive. The
+   *  Observer is per-tab; signals from other tabs are ignored. */
+  tabId: number | null;
+  /** Hash of the most recently captured frame (for dedupe). */
+  lastFrameHash: string;
+  /** Resolved min-interval between captures in milliseconds. */
+  minIntervalMs: number;
+  /** Resolved stable-wait in milliseconds (passed back to the
+   *  content script so it can tune its MutationObserver debounce). */
+  stableWaitMs: number;
+}
+
+const autoState: AutoCaptureState = {
+  active: false,
+  count: 0,
+  lastCaptureAt: 0,
+  sessionId: "",
+  tabId: null,
+  lastFrameHash: "",
+  minIntervalMs: 0,
+  stableWaitMs: 0,
+};
+
 function getClickCaptureStatus(): ClickCaptureState & {
   hotkeyActive: boolean;
   hotkeyCount: number;
 } {
   return { ...clickState, hotkeyActive: hotkeyState.active, hotkeyCount: hotkeyState.count };
+}
+
+function getAutoCaptureStatus(): {
+  active: boolean;
+  count: number;
+  stableWaitMs: number;
+  minIntervalMs: number;
+} {
+  return {
+    active: autoState.active,
+    count: autoState.count,
+    stableWaitMs: autoState.stableWaitMs,
+    minIntervalMs: autoState.minIntervalMs,
+  };
 }
 
 function updateBadge(): void {
@@ -735,6 +786,204 @@ async function hotkeyCaptureShot(firedTab?: chrome.tabs.Tab): Promise<void> {
   }
 }
 
+// ---- Auto Capture (DOM-mutation-driven) ───────────────────────────
+
+/** SHA-256 of the data URL — used to dedupe identical successive
+ *  frames. Hash on the encoded data URL rather than a downscaled
+ *  bitmap because the encoder + Save Size preset already collapse
+ *  visually-equivalent frames to identical bytes most of the time;
+ *  this stays a cheap "did anything change at all" gate. */
+async function hashDataUrl(dataUrl: string): Promise<string> {
+  // Strip the `data:image/...;base64,` prefix before hashing so the
+  // hash is stable across format changes that re-encode identical
+  // pixels (rare, but worth being defensive).
+  const comma = dataUrl.indexOf(",");
+  const payload = comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
+  const enc = new TextEncoder();
+  const digest = await crypto.subtle.digest("SHA-256", enc.encode(payload));
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function startAutoCapture(): Promise<void> {
+  if (autoState.active) return;
+
+  // Pick the active tab when the session starts. The MutationObserver
+  // lives in that tab; signals from other tabs are ignored. Phase 2's
+  // multi-tab scope was explicitly deferred in the plan.
+  const byCurrent = await chrome.tabs.query({ active: true, currentWindow: true });
+  let tab = byCurrent[0];
+  if (!tab?.id) {
+    const byLast = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    tab = byLast[0];
+  }
+  if (!tab?.id || tab.windowId == null) {
+    console.warn("[auto-capture] no active tab");
+    return;
+  }
+
+  const injectable = !!tab.url && /^(https?|file):/.test(tab.url);
+  if (!injectable) {
+    console.warn("[auto-capture] tab is not injectable:", tab.url);
+    return;
+  }
+
+  const opts = await loadAutoCaptureOptions();
+  const resolved = resolveAutoCaptureOptions(opts);
+
+  autoState.active = true;
+  autoState.count = 0;
+  autoState.lastCaptureAt = 0;
+  autoState.sessionId = newIdB58();
+  autoState.tabId = tab.id;
+  autoState.lastFrameHash = "";
+  autoState.minIntervalMs = resolved.intervalMs;
+  autoState.stableWaitMs = resolved.stableWaitMs;
+
+  const target = { id: tab.id, windowId: tab.windowId, url: tab.url ?? "" };
+  try {
+    await host.injectContentScript(target);
+    await host.sendToContent(target, {
+      type: "auto-capture-enable",
+      stableWaitMs: resolved.stableWaitMs,
+    });
+  } catch (e) {
+    console.error("[auto-capture] enable failed:", e);
+    autoState.active = false;
+    autoState.tabId = null;
+    return;
+  }
+
+  updateBadge();
+  logger.debug("[auto-capture] started", { tab: tab.id, ...resolved });
+}
+
+async function stopAutoCapture(): Promise<void> {
+  if (!autoState.active) return;
+
+  const tabId = autoState.tabId;
+  const finalCount = autoState.count;
+
+  autoState.active = false;
+  autoState.tabId = null;
+  autoState.sessionId = "";
+  autoState.lastFrameHash = "";
+  updateBadge();
+
+  // Best-effort disable — the tab may have closed/navigated already.
+  if (tabId != null) {
+    try {
+      const tab = await chrome.tabs.get(tabId);
+      const target = { id: tabId, windowId: tab.windowId, url: tab.url ?? "" };
+      await host.sendToContent(target, { type: "auto-capture-disable" }).catch(() => undefined);
+    } catch {
+      // tab gone — observer cleanup happens implicitly on tab destruction
+    }
+  }
+
+  if (finalCount > 0) {
+    await openOrReuseAnnotTab(chrome.runtime.id);
+  }
+}
+
+/** Fired by the content script's MutationObserver when DOM
+ *  mutations have settled for `stableWaitMs`. Service worker
+ *  applies the min-interval throttle + duplicate-frame dedupe, then
+ *  saves a frame and increments the session count. */
+async function autoCaptureShot(senderTabId?: number): Promise<void> {
+  if (!autoState.active) return;
+  if (senderTabId != null && senderTabId !== autoState.tabId) return; // ignore other tabs
+
+  const now = Date.now();
+  if (now - autoState.lastCaptureAt < autoState.minIntervalMs) return;
+  autoState.lastCaptureAt = now;
+
+  const tabId = autoState.tabId;
+  if (tabId == null) return;
+  let tab: chrome.tabs.Tab;
+  try {
+    tab = await chrome.tabs.get(tabId);
+  } catch {
+    // Tab closed mid-session — stop gracefully.
+    await stopAutoCapture();
+    return;
+  }
+  if (tab.windowId == null) return;
+  const target = { id: tabId, windowId: tab.windowId, url: tab.url ?? "" };
+
+  interface CaptureContext {
+    url?: string;
+    title?: string;
+    dpr?: number;
+    target?: string;
+    mouse?: { x: number; y: number };
+    rect?: { x: number; y: number; width: number; height: number };
+  }
+  const context = (await host
+    .sendToContent<CaptureContext>(target, { type: "get-capture-context" })
+    .catch(() => null)) as CaptureContext | null;
+
+  const settings = await loadSettings();
+  await beginCapturePrep(host, target, "hotkey", settings, 0);
+  await delay(settings.timing.hotkeySettleMs);
+  if (!autoState.active) {
+    await endCapturePrep(host, target);
+    return;
+  }
+
+  try {
+    const captured = await host.captureViewport(target);
+    await endCapturePrep(host, target);
+    const encoded = await encodeCapture(captured.pngDataUrl, settings);
+    const dataUrl = encoded.dataUrl;
+
+    const frameHash = await hashDataUrl(dataUrl);
+    if (frameHash === autoState.lastFrameHash) {
+      logger.debug("[auto-capture] dropping duplicate frame");
+      return;
+    }
+    autoState.lastFrameHash = frameHash;
+
+    const thumbnailDataUrl = await idbStore.generateThumbnail(dataUrl);
+    const { width: w, height: h } = await probeDimensions(dataUrl);
+    const ts = new Date().toISOString();
+    const url = context?.url || tab.url || "";
+    const title = (context?.title || tab.title || "").slice(0, 120);
+
+    const tags: Record<string, string> = {
+      "auto.seq": String(autoState.count + 1).padStart(3, "0"),
+      "click.title": title,
+      "click.url": url,
+      captureId: newIdB58(),
+      session: autoState.sessionId,
+      sessionKind: "auto",
+      sessionIndex: String(autoState.count),
+    };
+    Object.assign(tags, urlTags(url));
+
+    const meta = await host.requestPageMetadata(target);
+
+    await idbStore.saveImage({
+      originalDataUrl: dataUrl,
+      thumbnailDataUrl,
+      annotationsSvg: "",
+      width: w,
+      height: h,
+      sourceUrl: url,
+      tags,
+      folderPath: "",
+      createdAt: ts,
+      updatedAt: ts,
+      pageMetadata: meta ?? undefined,
+    });
+
+    autoState.count += 1;
+    updateBadge();
+  } catch (e) {
+    console.error("[auto-capture] capture failed:", e);
+    await endCapturePrep(host, target);
+  }
+}
+
 // ---- External-message API (for annotating.work / noting.work) ─────
 
 async function handleExternalMessage(msg: any): Promise<any> {
@@ -827,8 +1076,38 @@ chrome.runtime.onMessage.addListener((msg: any, sender, sendResponse) => {
     case "hotkey-capture-stop":
       stopHotkeyCapture();
       break;
+
+    // ---- Auto Capture (DOM-mutation-driven) ----
+    case "auto-capture-start":
+      startAutoCapture();
+      break;
+    case "auto-capture-stop":
+      stopAutoCapture();
+      break;
+    case "auto-capture-status":
+      sendResponse(getAutoCaptureStatus());
+      return false;
+    case "auto-capture-signal":
+      autoCaptureShot(sender.tab?.id);
+      break;
   }
   return undefined;
+});
+
+// End the Auto Capture session if the bound tab navigates away or
+// closes — the MutationObserver dies with the page anyway, and the
+// service worker shouldn't keep an orphan session around.
+chrome.tabs.onRemoved.addListener((tabId) => {
+  if (autoState.active && autoState.tabId === tabId) {
+    void stopAutoCapture();
+  }
+});
+chrome.tabs.onUpdated.addListener((tabId, info) => {
+  if (!autoState.active || autoState.tabId !== tabId) return;
+  // Full navigation (top-frame document swap) — observer is gone.
+  if (info.url) {
+    void stopAutoCapture();
+  }
 });
 
 chrome.commands.onCommand.addListener((command, tab) => {
