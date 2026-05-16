@@ -11,7 +11,6 @@ import type {
 } from "@ingcreators/annot-core/storage";
 import { supportsDocuments } from "@ingcreators/annot-core/storage";
 import { assertNonNull } from "@ingcreators/annot-core/utils";
-import { createThemeToggle } from "@ingcreators/annot-editor";
 import { setTooltip } from "@ingcreators/annot-editor/tooltip";
 import { DOC_SHORTCUT_GROUPS, installKeyboardHelp } from "@ingcreators/annot-host-ui";
 // Section-id whitelists for the `disableBuiltinUISections`
@@ -30,6 +29,7 @@ import { SavePipeline } from "@ingcreators/annot-host-ui/orchestrators/save-pipe
 import { StatusHost } from "@ingcreators/annot-host-ui/orchestrators/status-host";
 import { BUILTIN_RIGHT_PANEL_SECTION_IDS } from "@ingcreators/annot-host-ui/right-panel";
 import { ThumbnailManager } from "@ingcreators/annot-host-ui/thumbnail-manager";
+import { createSettingsButton } from "@ingcreators/annot-host-ui/ui/settings-button";
 import { CaptureHost, type OpenEditorArgs } from "./app/capture-host.js";
 import { EditorSession } from "./app/editor-session.js";
 import { ExtensionTransferHost } from "./app/extension-transfer-host.js";
@@ -754,9 +754,9 @@ export class App {
     helpBtn.setAttribute("aria-label", "Help");
     toolbarEl.appendChild(helpBtn);
 
-    // Shared theme toggle factory (from @ingcreators/annot-core) — same behavior
-    // as the editor toolbar's toggle so both stay in sync.
-    toolbarEl.appendChild(createThemeToggle("header-info-btn"));
+    // Settings button — opens the app-level Settings dialog (Theme + future
+    // rows). Replaces the direct light/dark theme-toggle icon.
+    toolbarEl.appendChild(createSettingsButton("header-info-btn"));
   }
 
   /** Display name for the root of the currently-active storage.

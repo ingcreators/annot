@@ -54,18 +54,22 @@ export { PropertyPanel } from "./property-panel.js";
 // resize / rotate. Uses `smart-guides` overlays internally.
 export { SelectionManager } from "./selection.js";
 export type {
+  EffectiveThemeMode,
   ThemeMode,
   ThemeOverrides,
   ThemeTokenName,
   ThemeTokenSection,
 } from "./theme-overrides.js";
 // Theme persistence + user-driven token overrides. Boot once with
-// `applyPersistedTheme()`; runtime customisation via
+// `applyPersistedTheme()`; the host's Settings dialog round-trips
+// the persisted mode via `getPersistedThemeMode()` /
+// `persistThemeChoice(mode)`. Runtime token customisation via
 // `setThemeOverrides({ accent: "#ff00aa" })`. See
 // `docs/design-system.md` for the full token reference.
 export {
   applyPersistedTheme,
   clearThemeOverrides,
+  getPersistedThemeMode,
   getThemeOverrides,
   persistThemeChoice,
   setThemeOverrides,
@@ -74,7 +78,6 @@ export {
   THEME_TOKEN_NAMES,
   THEME_TOKEN_SECTIONS,
 } from "./theme-overrides.js";
-export { createThemeToggle } from "./theme-toggle.js";
 export type { ToolOptions } from "./tools/tool-base.js";
 // Tool hierarchy moved in Phase 2. `ToolBase` is the abstract
 // pointer-event-driven primitive every concrete tool extends;

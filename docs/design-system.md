@@ -48,9 +48,14 @@ setThemeOverrides({ accent: "#ff00aa", "accent-bg": "rgba(255,0,170,0.18)" });
 clearThemeOverrides();
 ```
 
-Toggling between dark and light continues to happen via the
-existing `createThemeToggle` button — clicking it now persists
-the choice in `localStorage` automatically.
+Toggling between System / Light / Dark happens via the
+app-level Settings dialog (`showSettingsDialog` in
+`@ingcreators/annot-host-ui/ui/settings-dialog`). The Settings
+icon that opens the dialog is `createSettingsButton` from
+`@ingcreators/annot-host-ui/ui/settings-button` — mounted in the
+gallery header, image-editor toolbar + header, and HTML-doc
+header. Picking a mode persists it in `localStorage` and
+re-applies it immediately.
 
 ## Token taxonomy
 
@@ -112,28 +117,37 @@ brand accent goes under `Accent`, not invented as
 | `--annot-canvas-bg` | Solid backdrop behind the editor's `<svg>` viewport. |
 | `--annot-canvas-check` | Second colour in the transparency-grid checkerboard. |
 
-## Theme switching (`light` / `dark`)
+## Theme switching (`system` / `light` / `dark`)
 
-Annot ships a dark default and a light alternative. The mode
-toggle is the `<button>` factory `createThemeToggle()` in
-[`packages/editor/src/theme-toggle.ts`](../packages/editor/src/theme-toggle.ts).
+Annot supports three theme modes: `"system"` (the default —
+follow OS `prefers-color-scheme` live), `"light"`, and `"dark"`.
+Users pick a mode in the app-level Settings dialog opened from
+the Settings icon (`createSettingsButton` in
+[`packages/host-ui/src/ui/settings-button.ts`](../packages/host-ui/src/ui/settings-button.ts);
+dialog implementation in
+[`packages/host-ui/src/ui/settings-dialog.ts`](../packages/host-ui/src/ui/settings-dialog.ts)).
 
 How it works:
 
 - The `light` palette is gated by a `light` class on
   `document.documentElement`. The dark palette is the
   unscoped `:root` block.
-- Clicking the toggle flips the class AND persists the choice
-  to `localStorage` under `annot.theme` (values: `"light"` or
-  `"dark"`).
+- The persisted mode lives in `localStorage` under
+  `annot.theme` (values: `"system" | "light" | "dark"`). When
+  nothing is persisted the effective default is `"system"`.
+- `applyPersistedTheme()` reads the persisted mode, resolves
+  `"system"` through `window.matchMedia("(prefers-color-scheme:
+  dark)")`, and installs a single `change` listener so OS-level
+  flips take effect live (no reload) WHEN the persisted mode is
+  `"system"`. Picking explicit Light / Dark keeps the listener
+  installed but dormant — re-selecting "System" later in the
+  dialog resumes OS-driven flips immediately.
 - The host's entry point calls `applyPersistedTheme()` at boot
-  to restore the choice before the first paint that depends
-  on it. In the web shell, that's the first non-import line of
+  to restore the choice before the first paint that depends on
+  it. In the web shell, that's the first non-import line of
   [`packages/web/src/main.ts`](../packages/web/src/main.ts).
-
-A "follow system preference" mode (a third state that respects
-`prefers-color-scheme`) is planned for Phase 5 and is not yet
-shipped. Until then, the choice is binary.
+  The Settings dialog also calls it after persisting the user's
+  choice so the live DOM matches the newly-persisted mode.
 
 ## User overrides
 
@@ -163,6 +177,7 @@ setThemeOverrides({
 import {
   applyPersistedTheme,
   clearThemeOverrides,
+  getPersistedThemeMode,
   getThemeOverrides,
   persistThemeChoice,
   setThemeOverrides,
@@ -170,6 +185,7 @@ import {
   THEME_STORAGE_KEY,
   THEME_TOKEN_NAMES,
   THEME_TOKEN_SECTIONS,
+  type EffectiveThemeMode,
   type ThemeMode,
   type ThemeOverrides,
   type ThemeTokenName,
@@ -179,11 +195,12 @@ import {
 
 | Symbol | Purpose |
 |--------|---------|
-| `applyPersistedTheme()` | Restore mode + overrides from `localStorage`. Call at boot, BEFORE the first paint that depends on tokens. Idempotent. No-op when storage is unavailable. |
+| `applyPersistedTheme()` | Restore mode + overrides from `localStorage` and install the matchMedia listener for system mode. Call at boot, BEFORE the first paint that depends on tokens. Idempotent — the Settings dialog calls it again after persisting a new mode. No-op when storage is unavailable. |
 | `setThemeOverrides(overrides)` | Merge the given overrides into the active set, persist, and apply to `<html>` immediately. Returns the merged set. Pass `undefined` or `""` for a token to clear that single override. Unknown token names are silently ignored. |
 | `clearThemeOverrides()` | Remove every override and clear the persisted entry. Theme mode is unaffected. |
 | `getThemeOverrides()` | Read the currently-applied overrides. Returns a fresh shallow copy each call. |
-| `persistThemeChoice()` | Persist the current `<html class="light">` state. Called from `createThemeToggle`'s click handler — usually you don't call it directly. |
+| `persistThemeChoice(mode)` | Persist `"system" \| "light" \| "dark"`. Called by the Settings dialog on OK; usually you don't call it directly. Pair with `applyPersistedTheme()` to re-apply the live DOM. |
+| `getPersistedThemeMode()` | Read the persisted mode, defaulting to `"system"` when nothing is persisted. The Settings dialog uses this to populate its select on open. |
 | `THEME_TOKEN_NAMES` | The full list of overridable token names, as a `readonly` tuple. Use for iteration in a Settings UI. |
 | `THEME_TOKEN_SECTIONS` | Map from section name (`"surface" \| "content" \| "accent" \| "interaction" \| "canvas"`) to its tokens. Same partition as the section tables above. |
 | `THEME_STORAGE_KEY` / `THEME_OVERRIDES_STORAGE_KEY` | The two `localStorage` keys, exported so tests and external integrations can scrub them. |
@@ -192,7 +209,8 @@ import {
 
 Two `localStorage` keys:
 
-- `annot.theme` — `"light"` or `"dark"`.
+- `annot.theme` — `"system"`, `"light"`, or `"dark"`. Missing /
+  malformed values are treated as `"system"`.
 - `annot.themeOverrides` — JSON object whose keys are
   `ThemeTokenName` and whose values are CSS values (any string
   the browser accepts for that property).

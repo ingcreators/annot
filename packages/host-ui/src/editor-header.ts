@@ -20,13 +20,13 @@ import "./annot-icon.js";
  * Lit element's `getSaveStatusIndicator()` accessor.
  */
 
-import { createThemeToggle } from "@ingcreators/annot-editor";
 import { BRAND_MARK_SVG } from "./brand-mark.js";
 import "./editable-filename.js";
 import type { AnnotEditableFilenameElement } from "./editable-filename.js";
 import { html, LitElement, nothing, unsafeHTML } from "./lit.js";
 import "./save-status-indicator.js";
 import type { AnnotSaveStatusElement } from "./save-status-indicator.js";
+import { createSettingsButton } from "./ui/settings-button.js";
 
 export interface EditorHeaderCallbacks {
   /** Click on the brand or any breadcrumb segment that resolves
@@ -213,7 +213,7 @@ export class AnnotEditorHeaderElement extends LitElement {
             <annot-icon .spec=${builtinIcon("help_outline")}></annot-icon>
           </button>
 
-      ${this.#renderThemeToggle()}
+      ${this.#renderSettingsButton()}
     `;
   }
 
@@ -232,17 +232,16 @@ export class AnnotEditorHeaderElement extends LitElement {
     `;
   }
 
-  /** Lazily mount the theme toggle once and reuse the same DOM
-   *  node across re-renders so its event listener and current-
-   *  theme state survive. `createThemeToggle` returns a vanilla
-   *  button — wrap it in a no-op host so Lit's diff treats it
-   *  as a stable child. */
-  #themeToggleEl: HTMLElement | null = null;
-  #renderThemeToggle() {
-    if (!this.#themeToggleEl) {
-      this.#themeToggleEl = createThemeToggle("header-info-btn");
+  /** Lazily mount the settings button once and reuse the same DOM
+   *  node across re-renders so its event listener survives.
+   *  `createSettingsButton` returns a vanilla button — wrap it in
+   *  a no-op host so Lit's diff treats it as a stable child. */
+  #settingsButtonEl: HTMLElement | null = null;
+  #renderSettingsButton() {
+    if (!this.#settingsButtonEl) {
+      this.#settingsButtonEl = createSettingsButton("header-info-btn");
     }
-    return this.#themeToggleEl;
+    return this.#settingsButtonEl;
   }
 }
 

@@ -1,31 +1,38 @@
 /**
  * Theme persistence + user-driven token overrides.
  *
- * Phase 1 of `docs/plans/design-system-foundations.md` exposes
- * three pieces of public API on top of the existing
- * `<html class="light">` toggle:
+ * Public API on top of the `<html class="light">` toggle:
  *
  *   1. `applyPersistedTheme()` — call once at boot to restore the
  *      user's last theme choice + any token overrides BEFORE the
- *      first paint that reads them.
- *   2. `setThemeOverrides(overrides)` / `clearThemeOverrides()` /
+ *      first paint that reads them. The supported modes are
+ *      `"system"` / `"light"` / `"dark"`; when no choice has been
+ *      persisted the effective default is `"system"`, which
+ *      resolves to the current OS `prefers-color-scheme` value and
+ *      installs a `matchMedia` listener so OS-level flips take
+ *      effect live without a reload.
+ *   2. `persistThemeChoice(mode)` / `getPersistedThemeMode()` —
+ *      writer + reader for the persisted mode. The Settings dialog
+ *      uses both to populate its select and round-trip the user's
+ *      choice.
+ *   3. `setThemeOverrides(overrides)` / `clearThemeOverrides()` /
  *      `getThemeOverrides()` — runtime API for replacing individual
  *      design tokens. Overrides are inline `--token` properties on
  *      `<html>`, so they win over both `:root` and `:root.light`
  *      regardless of which mode is active.
- *   3. `THEME_TOKEN_NAMES` / `ThemeTokenName` — the public surface
+ *   4. `THEME_TOKEN_NAMES` / `ThemeTokenName` — the public surface
  *      pinning which tokens the override API accepts. Symmetry with
  *      the CSS source-of-truth in
  *      `packages/core/styles/editor.css` is enforced by
  *      `theme-overrides.test.ts` — adding a new token to the CSS
  *      without updating this list (or vice versa) fails the build.
  *
- * The module is intentionally tiny and side-effect free at import
- * time: nothing touches `document` or `localStorage` until a
- * function is called. The only cross-module coupling is that
- * `theme-toggle.ts` calls `persistThemeChoice()` after flipping
- * the class, so the toggle button's behaviour rolls forward as a
- * single observable change.
+ * The module is intentionally side-effect free at import time:
+ * nothing touches `document` or `localStorage` until a function is
+ * called. The matchMedia listener is installed lazily by
+ * `applyPersistedTheme()` and remains live for the lifetime of the
+ * page so subsequent OS flips keep working when the user is in
+ * `"system"` mode.
  */
 
 const SURFACE_TOKENS = [
@@ -100,10 +107,17 @@ export const THEME_TOKEN_SECTIONS: Record<ThemeTokenSection, ReadonlyArray<Theme
 
 export type ThemeOverrides = Partial<Record<ThemeTokenName, string>>;
 
-export type ThemeMode = "light" | "dark";
+/** Persisted theme mode. `"system"` follows the OS-level
+ *  `prefers-color-scheme` value live; `"light"` / `"dark"` are
+ *  explicit overrides that ignore OS flips. */
+export type ThemeMode = "system" | "light" | "dark";
 
-/** localStorage keys. Centralised so `theme-toggle.ts` and tests
- * can't drift on the literal. */
+/** Resolved mode that drives the `<html class="light">` toggle.
+ *  `"system"` collapses to one of these by reading matchMedia. */
+export type EffectiveThemeMode = "light" | "dark";
+
+/** localStorage keys. Centralised so callers and tests can't drift
+ *  on the literal. */
 export const THEME_STORAGE_KEY = "annot.theme";
 export const THEME_OVERRIDES_STORAGE_KEY = "annot.themeOverrides";
 
@@ -129,11 +143,23 @@ function readPersistedMode(): ThemeMode | null {
   if (!store) return null;
   try {
     const raw = store.getItem(THEME_STORAGE_KEY);
-    if (raw === "light" || raw === "dark") return raw;
+    if (raw === "system" || raw === "light" || raw === "dark") return raw;
     return null;
   } catch {
     return null;
   }
+}
+
+/**
+ * Read the persisted mode, defaulting to `"system"` when nothing
+ * has been persisted yet. The Settings dialog uses this to
+ * populate its select on open; callers that need to distinguish
+ * "never picked" from "explicitly picked system" can fall back to
+ * the private `readPersistedMode()` if a follow-up ever requires
+ * it (none do today).
+ */
+export function getPersistedThemeMode(): ThemeMode {
+  return readPersistedMode() ?? "system";
 }
 
 function readPersistedOverrides(): ThemeOverrides {
@@ -172,10 +198,70 @@ function writePersistedOverrides(overrides: ThemeOverrides): void {
   }
 }
 
-function applyMode(mode: ThemeMode): void {
+function prefersDark(): boolean {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+    // No matchMedia (Node / older happy-dom): default the OS preference
+    // to dark so the legacy "no class = dark" behaviour is preserved.
+    return true;
+  }
+  try {
+    return window.matchMedia("(prefers-color-scheme: dark)").matches;
+  } catch {
+    return true;
+  }
+}
+
+function resolveEffectiveMode(mode: ThemeMode): EffectiveThemeMode {
+  if (mode === "system") return prefersDark() ? "dark" : "light";
+  return mode;
+}
+
+function applyEffectiveMode(effective: EffectiveThemeMode): void {
   const root = document.documentElement;
-  if (mode === "light") root.classList.add("light");
+  if (effective === "light") root.classList.add("light");
   else root.classList.remove("light");
+}
+
+// matchMedia listener — installed by `applyPersistedTheme()`. The
+// listener re-resolves on every OS-level `prefers-color-scheme`
+// flip but only mutates the class when the currently-persisted
+// mode is `"system"`. Explicit Light / Dark choices keep the
+// listener live (it just no-ops) so subsequent switches back to
+// "System" work without re-installing.
+//
+// Keyed on the MediaQueryList instance so production (where
+// matchMedia returns a stable object) installs exactly one
+// listener, while tests that swap `window.matchMedia` between
+// fixtures get a fresh listener on the new mock.
+const mediaListsWithListener = new WeakSet<MediaQueryList>();
+
+function installSystemModeListener(): void {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
+  let list: MediaQueryList;
+  try {
+    list = window.matchMedia("(prefers-color-scheme: dark)");
+  } catch {
+    return;
+  }
+  if (mediaListsWithListener.has(list)) return;
+  const listener = (): void => {
+    const mode = readPersistedMode() ?? "system";
+    if (mode !== "system") return;
+    applyEffectiveMode(resolveEffectiveMode(mode));
+  };
+  try {
+    list.addEventListener("change", listener);
+  } catch {
+    // Older Safari / some environments only expose the deprecated
+    // `addListener` API. The cast is intentional — TypeScript's lib
+    // has removed `addListener` but we still want to call it when
+    // present at runtime.
+    const legacy = list as unknown as {
+      addListener?: (cb: (e: MediaQueryListEvent) => void) => void;
+    };
+    legacy.addListener?.(listener);
+  }
+  mediaListsWithListener.add(list);
 }
 
 /**
@@ -209,29 +295,39 @@ let cachedOverrides: ThemeOverrides | null = null;
  * statement of `packages/web/src/main.ts`.
  *
  * Idempotent — calling more than once just re-applies the
- * current persisted state. No-op when `localStorage` is
- * unavailable (file:// schemes, sandboxed iframes).
+ * current persisted state. Hosts call it a second time after
+ * the user updates the theme in the Settings dialog. No-op when
+ * `localStorage` is unavailable (file:// schemes, sandboxed
+ * iframes).
+ *
+ * When no theme has been persisted yet, the effective default is
+ * `"system"`: the class follows `prefers-color-scheme` and a
+ * matchMedia listener is installed so OS-level flips take effect
+ * live. Picking explicit Light / Dark in the dialog disables the
+ * OS-driven flip without removing the listener (it just stays
+ * dormant and resumes work the next time the user picks
+ * "System").
  */
 export function applyPersistedTheme(): void {
   if (typeof document === "undefined") return;
-  const mode = readPersistedMode();
-  if (mode) applyMode(mode);
+  const mode = readPersistedMode() ?? "system";
+  applyEffectiveMode(resolveEffectiveMode(mode));
+  installSystemModeListener();
   const overrides = readPersistedOverrides();
   cachedOverrides = overrides;
   applyOverridesToDom(overrides);
 }
 
 /**
- * Persist the current theme mode. Called by
- * `createThemeToggle`'s click handler after toggling the class.
+ * Persist the user's theme choice. Pass the mode the Settings
+ * dialog read off its select. Best-effort — silent no-op when
+ * storage is blocked.
  *
- * Reads the live class state rather than taking a parameter so
- * callers can't drift from the actual DOM truth. Best-effort —
- * silent no-op when storage is blocked.
+ * Callers are expected to follow this with `applyPersistedTheme()`
+ * (or a more targeted re-resolve) so the live DOM matches the
+ * newly-persisted choice.
  */
-export function persistThemeChoice(): void {
-  if (typeof document === "undefined") return;
-  const mode: ThemeMode = document.documentElement.classList.contains("light") ? "light" : "dark";
+export function persistThemeChoice(mode: ThemeMode): void {
   const store = safeLocalStorage();
   if (!store) return;
   try {
