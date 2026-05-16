@@ -27,6 +27,7 @@ import {
   EMULATION_INNER_SETTLE_MS,
   MIN_WINDOW_DIMENSION,
   pixelToCssSize,
+  type Size,
 } from "@ingcreators/annot-capture/orchestrate";
 import type {
   BackgroundToContentMessage,
@@ -324,7 +325,7 @@ export function createChromeCaptureHost(): CaptureHost {
         state: "normal", // forces explicit size if the window was maximized
       });
 
-      // ── Corrective pass ──────────────────────────────────────────
+      // ── Iterative corrective pass ────────────────────────────────
       // The chrome-delta probed above is taken BEFORE the resize, so
       // state-dependent chrome shifts leave the inner viewport off
       // target. Three failure modes seen in practice:
@@ -338,39 +339,48 @@ export function createChromeCaptureHost(): CaptureHost {
       //     so the pre-resize chromeDelta is 0; once state:"normal"
       //     is forced the tab strip + address bar reappear and the
       //     inner viewport shrinks by the full chrome height.
-      //   - DPR-fraction rounding: a fractional DPR like 1.5 / 1.7
-      //     makes `pixelTarget.height / DPR` non-integer, so
-      //     `pixelToCssSize` rounds to nearest, leaving ±1 CSS px
-      //     after re-scaling by DPR.
-      // Re-measure the actual inner viewport, compute the residual,
-      // and apply a single corrective resize. One iteration converges
-      // because the chrome decoration is stable once the window has
-      // reached its final non-maximized, non-fullscreen state. The
-      // explicit `state: "normal"` on the corrective `windows.update`
-      // call is defensive: if Chrome restored the window to a non-
-      // normal state between the two calls (some Windows themes /
-      // virtual-desktop transitions can do this), we re-pin it so
-      // the corrected width / height are honored.
+      //   - DPR-fraction CSS rounding: `window.innerHeight` is
+      //     reported as an integer, but at fractional DPR the actual
+      //     inner CSS height is itself fractional (e.g. 4K@150% with
+      //     ~123 physical-px chrome → inner CSS 726.67 reported as
+      //     726). One corrective pass under-counts the residual by
+      //     the fractional part, leaving 1 CSS px = 1-2 physical px
+      //     drift after re-scaling by DPR.
+      // Iterate until the reported inner viewport matches the target
+      // CSS, or until we hit a tight cap so a pathological case (page
+      // navigating mid-pass, infinite reflow) can't stall the
+      // capture. Each step settles 300 ms, re-probes, applies the
+      // residual as a delta on the current outer. The explicit
+      // `state: "normal"` is defensive — certain Windows themes /
+      // virtual-desktop transitions can flip the window back to a
+      // non-normal state between calls.
+      const MAX_CORRECTIVE_ITERATIONS = 3;
+      let currentOuter: Size = desired;
       try {
-        await delay(EMULATION_INNER_SETTLE_MS);
-        const dimsAfter = (await chrome.tabs.sendMessage(target.id, {
-          type: "get-page-dimensions",
-        })) as PageDimensions | undefined;
-        if (dimsAfter) {
-          const correction = computeOuterSizeCorrection(desired, targetCss, {
+        for (let i = 0; i < MAX_CORRECTIVE_ITERATIONS; i++) {
+          await delay(EMULATION_INNER_SETTLE_MS);
+          const dimsAfter = (await chrome.tabs.sendMessage(target.id, {
+            type: "get-page-dimensions",
+          })) as PageDimensions | undefined;
+          if (!dimsAfter) break;
+          const correction = computeOuterSizeCorrection(currentOuter, targetCss, {
             width: dimsAfter.viewportWidth,
             height: dimsAfter.viewportHeight,
           });
-          if (correction !== null) {
-            await chrome.windows.update(target.windowId, {
-              width: Math.max(MIN_WINDOW_DIMENSION, correction.width),
-              height: Math.max(MIN_WINDOW_DIMENSION, correction.height),
-              state: "normal",
-            });
-          }
+          if (correction === null) break; // converged
+          const next = {
+            width: Math.max(MIN_WINDOW_DIMENSION, correction.width),
+            height: Math.max(MIN_WINDOW_DIMENSION, correction.height),
+          };
+          await chrome.windows.update(target.windowId, {
+            width: next.width,
+            height: next.height,
+            state: "normal",
+          });
+          currentOuter = next;
         }
       } catch {
-        /* best-effort correction; first-pass estimate stands */
+        /* best-effort correction; the latest applied size stands */
       }
     },
 
