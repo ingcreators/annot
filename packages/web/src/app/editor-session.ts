@@ -368,7 +368,7 @@ export class EditorSession {
       },
       {
         orientation: "vertical",
-        showThemeToggle: false,
+        showSettingsButton: false,
         showGalleryButton: false,
         showSaveGroup: false,
         // Variant flyouts (shape / arrow / text / draw / redact) open

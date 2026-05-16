@@ -15,9 +15,10 @@ import { App } from "./app.js";
 import "./ui/annot-icon.js";
 
 // Restore the user's last-chosen theme + any saved token overrides
-// before the first paint that depends on them. Call sites that
-// later flip the theme (`createThemeToggle`) persist via
-// `persistThemeChoice()` for the next boot.
+// before the first paint that depends on them. When the user
+// later flips the theme via the Settings dialog, the dialog
+// persists the new mode and re-calls `applyPersistedTheme()` to
+// re-resolve "system" → effective light/dark.
 applyPersistedTheme();
 
 const app = new App();

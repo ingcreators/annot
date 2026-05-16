@@ -117,9 +117,11 @@ export {
 // `PropertyPanel` and `SelectionManager` moved to `@ingcreators/annot-editor`
 // in Phases 2 / 5 of `docs/plans/three-package-split.md`. Consumers
 // should `import { PropertyPanel, SelectionManager } from "@ingcreators/annot-editor"`.
-// `createThemeToggle` moved to `@ingcreators/annot-editor` in
-// Phase 1 of `docs/plans/three-package-split.md`. Consumers
-// should `import { createThemeToggle } from "@ingcreators/annot-editor"`.
+// The direct light/dark theme-toggle button has been replaced by
+// the app-level Settings dialog. Use `createSettingsButton` from
+// `@ingcreators/annot-host-ui/ui/settings-button` instead — it
+// renders a Settings (tune) icon that opens a dialog with the
+// Theme row inside.
 // --- Shared UI helpers used by PropertyPanel + the relocated Toolbar ---
 // Phase 5a moved the Toolbar class to `@ingcreators/annot-web`; the
 // icon catalogues + popover helper stayed here because PropertyPanel

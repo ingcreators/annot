@@ -230,7 +230,7 @@ function openEditor(record: ImageRecord): void {
     },
     {
       orientation: "vertical",
-      showThemeToggle: false,
+      showSettingsButton: false,
       showGalleryButton: false,
       showSaveGroup: false,
       hideToolDropdowns: false,

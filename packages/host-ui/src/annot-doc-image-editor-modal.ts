@@ -469,7 +469,7 @@ export class AnnotDocImageEditorModalElement extends LitElement {
       },
       {
         orientation: "vertical",
-        showThemeToggle: false,
+        showSettingsButton: false,
         showGalleryButton: false,
         showSaveGroup: false,
         hideToolDropdowns: false,

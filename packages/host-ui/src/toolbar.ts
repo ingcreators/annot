@@ -63,7 +63,6 @@ import {
 import {
   type CanvasManager,
   copyAsImage,
-  createThemeToggle,
   getPngDataUrl,
   type History,
   openAnchoredPopover,
@@ -91,6 +90,7 @@ import {
   mergePresetForVariantChange,
   seedPresetFromElement,
 } from "./toolbar-preset-helpers.js";
+import { createSettingsButton } from "./ui/settings-button.js";
 
 // Minimal ambient declaration for the Chrome extension API surface
 // referenced at runtime below (all call sites are gated by
@@ -137,10 +137,11 @@ export type ExtraToolAnchor = HTMLButtonElement | { point: { x: number; y: numbe
  * existing callers (e.g. the desktop app) don't need changes.
  */
 export interface ToolbarOptions {
-  /** Append the built-in theme toggle. Default true. Set false when the
-   *  host provides its own toggle elsewhere (e.g. the web app's editor
-   *  header) to avoid duplicate controls. */
-  showThemeToggle?: boolean;
+  /** Append the built-in Settings button (opens the app-level Settings
+   *  dialog — Theme + future rows). Default true. Set false when the
+   *  host provides its own settings affordance elsewhere (e.g. the
+   *  web app's editor header) to avoid duplicate controls. */
+  showSettingsButton?: boolean;
   /** Append the "Gallery" button (web-only). Default true. Set false when
    *  the host provides navigation via a breadcrumb or other affordance. */
   showGalleryButton?: boolean;
@@ -257,7 +258,7 @@ export class Toolbar {
   /** Invoked whenever the active tool changes. `toolId` is the registered
    *  tool id (e.g. "rect", "arrow") or null for Select / deactivation. */
   #onToolChange?: (name: string, toolId: string | null) => void;
-  #showThemeToggle: boolean;
+  #showSettingsButton: boolean;
   #showGalleryButton: boolean;
   #showSaveGroup: boolean;
   #orientation: "horizontal" | "vertical";
@@ -278,7 +279,7 @@ export class Toolbar {
     this.#history = history;
     this.#selection = selection;
     this.#onToolChange = onToolChange;
-    this.#showThemeToggle = options.showThemeToggle ?? true;
+    this.#showSettingsButton = options.showSettingsButton ?? true;
     this.#showGalleryButton = options.showGalleryButton ?? true;
     this.#showSaveGroup = options.showSaveGroup ?? true;
     this.#orientation = options.orientation ?? "horizontal";
@@ -640,17 +641,17 @@ export class Toolbar {
       shell.appendChild(exportGroup);
     }
 
-    // Separator before the theme / gallery group — only add when one
+    // Separator before the settings / gallery group — only add when one
     // of them will actually render.
-    if (this.#showThemeToggle || (this.#showGalleryButton && hasGalleryHook)) {
+    if (this.#showSettingsButton || (this.#showGalleryButton && hasGalleryHook)) {
       shell.appendChild(this.#sep());
     }
 
-    // Theme toggle (shared factory — reads current theme on init so the icon
-    // reflects the actual state instead of always rendering "dark_mode").
-    // The host may suppress this if it renders its own toggle elsewhere.
-    if (this.#showThemeToggle) {
-      shell.appendChild(createThemeToggle());
+    // Settings button — opens the app-level Settings dialog (Theme + future
+    // rows). The host may suppress this if it renders its own settings
+    // affordance elsewhere.
+    if (this.#showSettingsButton) {
+      shell.appendChild(createSettingsButton());
     }
 
     // Gallery button (extension only). The host may suppress this in favor

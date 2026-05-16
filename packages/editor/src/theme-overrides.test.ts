@@ -35,6 +35,7 @@ const editorCss = readFileSync(resolve(process.cwd(), "packages/core/styles/edit
 import {
   applyPersistedTheme,
   clearThemeOverrides,
+  getPersistedThemeMode,
   getThemeOverrides,
   persistThemeChoice,
   setThemeOverrides,
@@ -44,6 +45,64 @@ import {
   THEME_TOKEN_SECTIONS,
   type ThemeTokenName,
 } from "./theme-overrides.js";
+
+// Mock matchMedia per-test so we can drive the OS preference + fire
+// change events deterministically. happy-dom ships a matchMedia
+// stub but it doesn't dispatch change events, so we replace it
+// entirely.
+interface FakeMediaQueryList {
+  matches: boolean;
+  media: string;
+  onchange: ((e: MediaQueryListEvent) => void) | null;
+  addEventListener(type: "change", cb: (e: MediaQueryListEvent) => void): void;
+  removeEventListener(type: "change", cb: (e: MediaQueryListEvent) => void): void;
+  dispatchEvent(e: MediaQueryListEvent): boolean;
+  addListener(cb: (e: MediaQueryListEvent) => void): void;
+  removeListener(cb: (e: MediaQueryListEvent) => void): void;
+}
+
+function makeFakeMediaQueryList(initialMatches: boolean): FakeMediaQueryList {
+  const listeners = new Set<(e: MediaQueryListEvent) => void>();
+  const mql: FakeMediaQueryList = {
+    matches: initialMatches,
+    media: "(prefers-color-scheme: dark)",
+    onchange: null,
+    addEventListener(_type, cb) {
+      listeners.add(cb);
+    },
+    removeEventListener(_type, cb) {
+      listeners.delete(cb);
+    },
+    dispatchEvent(e) {
+      for (const cb of listeners) cb(e);
+      return true;
+    },
+    addListener(cb) {
+      listeners.add(cb);
+    },
+    removeListener(cb) {
+      listeners.delete(cb);
+    },
+  };
+  return mql;
+}
+
+let fakeMql: FakeMediaQueryList | null = null;
+const originalMatchMedia = (globalThis as { matchMedia?: (q: string) => MediaQueryList })
+  .matchMedia;
+
+function installFakeMatchMedia(initialDarkMatches: boolean): FakeMediaQueryList {
+  fakeMql = makeFakeMediaQueryList(initialDarkMatches);
+  (window as unknown as { matchMedia: (q: string) => MediaQueryList }).matchMedia = (() =>
+    fakeMql as unknown as MediaQueryList) as (q: string) => MediaQueryList;
+  return fakeMql;
+}
+
+function flipFakeOs(dark: boolean): void {
+  if (!fakeMql) return;
+  fakeMql.matches = dark;
+  fakeMql.dispatchEvent(new Event("change") as MediaQueryListEvent);
+}
 
 /**
  * Extract `--token-name` declarations from a `:root { ... }` block.
@@ -107,12 +166,21 @@ beforeEach(() => {
   document.documentElement.removeAttribute("style");
   document.documentElement.classList.remove("light");
   globalThis.localStorage?.clear();
+  fakeMql = null;
 });
 
 afterEach(() => {
   document.documentElement.removeAttribute("style");
   document.documentElement.classList.remove("light");
   globalThis.localStorage?.clear();
+  // Restore matchMedia so the next test starts from a known state.
+  if (originalMatchMedia) {
+    (window as unknown as { matchMedia: typeof originalMatchMedia }).matchMedia =
+      originalMatchMedia;
+  } else {
+    delete (window as unknown as { matchMedia?: typeof originalMatchMedia }).matchMedia;
+  }
+  fakeMql = null;
 });
 
 describe("THEME_TOKEN_NAMES <-> editor.css symmetry", () => {
@@ -201,12 +269,24 @@ describe("applyPersistedTheme", () => {
     expect(document.documentElement.classList.contains("light")).toBe(false);
   });
 
-  it("leaves the class alone when nothing is persisted", () => {
+  it("defaults to system mode when nothing is persisted (OS dark → no class)", () => {
+    installFakeMatchMedia(true);
     document.documentElement.classList.add("light");
     applyPersistedTheme();
-    // We don't force a default — first-time visitors keep whatever
-    // the host happens to have set up (which may itself default to
-    // dark). The test asserts no surprise mutation.
+    expect(document.documentElement.classList.contains("light")).toBe(false);
+  });
+
+  it("defaults to system mode when nothing is persisted (OS light → light class)", () => {
+    installFakeMatchMedia(false);
+    document.documentElement.classList.remove("light");
+    applyPersistedTheme();
+    expect(document.documentElement.classList.contains("light")).toBe(true);
+  });
+
+  it("resolves explicit system mode against the OS preference", () => {
+    installFakeMatchMedia(false);
+    globalThis.localStorage.setItem(THEME_STORAGE_KEY, "system");
+    applyPersistedTheme();
     expect(document.documentElement.classList.contains("light")).toBe(true);
   });
 
@@ -227,14 +307,70 @@ describe("applyPersistedTheme", () => {
   });
 });
 
+describe("matchMedia listener (system mode)", () => {
+  it("flips the class when OS preference changes AND mode is system", () => {
+    installFakeMatchMedia(true);
+    globalThis.localStorage.setItem(THEME_STORAGE_KEY, "system");
+    applyPersistedTheme();
+    expect(document.documentElement.classList.contains("light")).toBe(false);
+    flipFakeOs(false);
+    expect(document.documentElement.classList.contains("light")).toBe(true);
+    flipFakeOs(true);
+    expect(document.documentElement.classList.contains("light")).toBe(false);
+  });
+
+  it("ignores OS-preference changes when an explicit mode is persisted", () => {
+    installFakeMatchMedia(true);
+    globalThis.localStorage.setItem(THEME_STORAGE_KEY, "light");
+    applyPersistedTheme();
+    expect(document.documentElement.classList.contains("light")).toBe(true);
+    flipFakeOs(false);
+    // Explicit light wins; OS flip is a no-op.
+    expect(document.documentElement.classList.contains("light")).toBe(true);
+  });
+
+  it("resumes responding to OS flips when the user re-enters system mode", () => {
+    installFakeMatchMedia(true);
+    globalThis.localStorage.setItem(THEME_STORAGE_KEY, "light");
+    applyPersistedTheme();
+    expect(document.documentElement.classList.contains("light")).toBe(true);
+    // User switches back to system in the Settings dialog.
+    persistThemeChoice("system");
+    applyPersistedTheme();
+    expect(document.documentElement.classList.contains("light")).toBe(false);
+    flipFakeOs(false);
+    expect(document.documentElement.classList.contains("light")).toBe(true);
+  });
+});
+
 describe("persistThemeChoice", () => {
-  it("writes the current class state to localStorage", () => {
-    document.documentElement.classList.add("light");
-    persistThemeChoice();
+  it("writes the supplied mode to localStorage", () => {
+    persistThemeChoice("light");
     expect(globalThis.localStorage.getItem(THEME_STORAGE_KEY)).toBe("light");
-    document.documentElement.classList.remove("light");
-    persistThemeChoice();
+    persistThemeChoice("dark");
     expect(globalThis.localStorage.getItem(THEME_STORAGE_KEY)).toBe("dark");
+    persistThemeChoice("system");
+    expect(globalThis.localStorage.getItem(THEME_STORAGE_KEY)).toBe("system");
+  });
+});
+
+describe("getPersistedThemeMode", () => {
+  it("returns the persisted mode verbatim", () => {
+    globalThis.localStorage.setItem(THEME_STORAGE_KEY, "light");
+    expect(getPersistedThemeMode()).toBe("light");
+    globalThis.localStorage.setItem(THEME_STORAGE_KEY, "dark");
+    expect(getPersistedThemeMode()).toBe("dark");
+    globalThis.localStorage.setItem(THEME_STORAGE_KEY, "system");
+    expect(getPersistedThemeMode()).toBe("system");
+  });
+
+  it("defaults to system when nothing is persisted", () => {
+    expect(getPersistedThemeMode()).toBe("system");
+  });
+
+  it("treats unknown stored values as system (corrupted storage)", () => {
+    globalThis.localStorage.setItem(THEME_STORAGE_KEY, "purple");
+    expect(getPersistedThemeMode()).toBe("system");
   });
 });
 

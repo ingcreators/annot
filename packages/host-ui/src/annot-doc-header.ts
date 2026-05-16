@@ -24,7 +24,6 @@
  */
 
 import { builtinIcon } from "@ingcreators/annot-core";
-import { createThemeToggle } from "@ingcreators/annot-editor";
 import "./annot-icon.js";
 import { BRAND_MARK_SVG } from "./brand-mark.js";
 import {
@@ -37,6 +36,7 @@ import {
 } from "./lit.js";
 import "./save-status-indicator.js";
 import type { AnnotSaveStatusElement } from "./save-status-indicator.js";
+import { createSettingsButton } from "./ui/settings-button.js";
 
 export type DocHeaderMode = "view" | "edit";
 
@@ -445,7 +445,7 @@ export class AnnotDocHeaderElement extends LitElement {
           </button>
           ${this.showModeToggle ? this.#renderModeToggle() : nothing}
           ${this.overflowItems.length > 0 ? this.#renderOverflowButton() : nothing}
-          ${this.#renderThemeToggle()}
+          ${this.#renderSettingsButton()}
         </div>
         ${this.overflowOpen ? this.#renderOverflowMenu() : nothing}
       </div>
@@ -466,15 +466,15 @@ export class AnnotDocHeaderElement extends LitElement {
     `;
   }
 
-  /** Lazily mount the shared theme toggle once and reuse the same
-   *  DOM node across renders so its event listener + current-theme
-   *  state survive. Matches the image editor header's pattern. */
-  #themeToggleEl: HTMLElement | null = null;
-  #renderThemeToggle() {
-    if (!this.#themeToggleEl) {
-      this.#themeToggleEl = createThemeToggle("annot-doc-header-action");
+  /** Lazily mount the shared Settings button once and reuse the
+   *  same DOM node across renders so its event listener survives.
+   *  Matches the image editor header's pattern. */
+  #settingsButtonEl: HTMLElement | null = null;
+  #renderSettingsButton() {
+    if (!this.#settingsButtonEl) {
+      this.#settingsButtonEl = createSettingsButton("annot-doc-header-action");
     }
-    return this.#themeToggleEl;
+    return this.#settingsButtonEl;
   }
 
   #renderTitle(): TemplateResult {
