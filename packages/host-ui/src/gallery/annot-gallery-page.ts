@@ -51,6 +51,20 @@ const logger = {
 
 import { type MenuItem, openContextMenu } from "./annot-context-menu.js";
 
+/** Column key + direction for the list-view's per-section sort.
+ *  `null` everywhere = storage-delivered order. Each section
+ *  (folders / documents / images) carries its own state so the
+ *  user can sort folders by name and images by modified date
+ *  independently — the columns are the same shape across all three
+ *  kinds, but the underlying records aren't, and Drive's sectional
+ *  list mode behaves the same way. */
+export type ListSortColumn = "name" | "modified" | "size";
+export type ListSortDir = "asc" | "desc";
+export interface ListSort {
+  column: ListSortColumn;
+  dir: ListSortDir;
+}
+
 export interface GallerySelection {
   images: ImageRecord[];
   folders: FolderRecord[];
@@ -97,6 +111,9 @@ export class AnnotGalleryPageElement extends LitElement {
     selectedDocumentPaths: { state: true },
     selectedImagePathOrder: { state: true },
     canCreateCardDocument: { attribute: false },
+    folderSort: { attribute: false },
+    documentSort: { attribute: false },
+    imageSort: { attribute: false },
   };
 
   declare storage: StorageProvider | null;
@@ -139,6 +156,18 @@ export class AnnotGalleryPageElement extends LitElement {
    *  flag just hides the menu item on hosts that haven't wired
    *  the action handler. */
   declare canCreateCardDocument: boolean;
+  /** Per-section list-view sort state. `null` = storage-delivered
+   *  order (matches the grid view). Set imperatively from the host
+   *  or interactively by clicking a list-view column header; the
+   *  click cycle is `null → asc → desc → null`. Each kind has its
+   *  own state so folders / documents / images sort independently
+   *  — clicking the Name header in the Folders section doesn't
+   *  reshuffle the Images section. State persists across folder
+   *  navigation and search entry/exit; resets only on element
+   *  disposal. The grid view ignores these fields. */
+  declare folderSort: ListSort | null;
+  declare documentSort: ListSort | null;
+  declare imageSort: ListSort | null;
 
   /** Last clicked item (for shift-range select). */
   #selectionAnchor: { type: "image" | "folder" | "document"; path: string } | null = null;
@@ -146,6 +175,14 @@ export class AnnotGalleryPageElement extends LitElement {
   #searchInputListener: ((e: Event) => void) | null = null;
   #searchTimer: number | undefined;
   #lastHadQuery = false;
+  /** Sorted views cached from the most recent list-view render —
+   *  read by `#selectRange` so shift-range walks the visible order
+   *  instead of storage order. `null` while the grid view is
+   *  active; callers fall back to `this.folders / .documents /
+   *  .images` in that case. */
+  #sortedFolders: FolderRecord[] | null = null;
+  #sortedDocuments: DocumentRecord[] | null = null;
+  #sortedImages: ImageRecord[] | null = null;
 
   constructor() {
     super();
@@ -162,6 +199,9 @@ export class AnnotGalleryPageElement extends LitElement {
     this.selectedDocumentPaths = new Set();
     this.selectedImagePathOrder = [];
     this.canCreateCardDocument = false;
+    this.folderSort = null;
+    this.documentSort = null;
+    this.imageSort = null;
   }
 
   protected override createRenderRoot(): HTMLElement {
@@ -224,7 +264,22 @@ export class AnnotGalleryPageElement extends LitElement {
     const docCount = showDocuments ? this.documents.length : 0;
     const filteredItems =
       (showFolders ? this.folders.length : 0) + docCount + filteredImages.length;
-    const gridClass = `gallery-grid${this.viewMode === "list" ? " list-view" : ""}`;
+    const isList = this.viewMode === "list";
+    const gridClass = `gallery-grid${isList ? " list-view" : ""}`;
+
+    // Sorted views for list mode. Computed every render (cheap —
+    // a few hundred records at most, and Array.sort is the same
+    // cost as the existing storage-order traversal). Cached on the
+    // element so `#selectRange` can walk the visible order rather
+    // than storage order when the user shift-clicks a list row.
+    // Grid mode leaves them null and `#selectRange` falls back to
+    // the storage-order arrays.
+    const sortedFolders = isList ? this.#sortFolders(this.folders) : null;
+    const sortedDocuments = isList ? this.#sortDocuments(this.documents) : null;
+    const sortedImages = isList ? this.#sortImages(filteredImages) : null;
+    this.#sortedFolders = sortedFolders;
+    this.#sortedDocuments = sortedDocuments;
+    this.#sortedImages = sortedImages;
 
     const empty =
       filteredItems === 0
@@ -236,6 +291,44 @@ export class AnnotGalleryPageElement extends LitElement {
             }
           </div>`
         : nothing;
+
+    if (isList) {
+      return html`
+        <div class=${gridClass} @click=${this.#onGridClick}>
+          ${empty}
+          ${
+            showFolders && this.folders.length > 0
+              ? this.#renderListSection(
+                  "Folders",
+                  "folder",
+                  this.folderSort,
+                  sortedFolders!.map((f) => this.#renderListFolderRow(f)),
+                )
+              : nothing
+          }
+          ${
+            showDocuments && this.documents.length > 0
+              ? this.#renderListSection(
+                  "Documents",
+                  "document",
+                  this.documentSort,
+                  sortedDocuments!.map((d) => this.#renderListDocumentRow(d)),
+                )
+              : nothing
+          }
+          ${
+            sortedImages && sortedImages.length > 0
+              ? this.#renderListSection(
+                  "Images",
+                  "image",
+                  this.imageSort,
+                  sortedImages.map((img) => this.#renderListImageRow(img)),
+                )
+              : nothing
+          }
+        </div>
+      `;
+    }
 
     return html`
       <div class=${gridClass} @click=${this.#onGridClick}>
@@ -537,6 +630,265 @@ export class AnnotGalleryPageElement extends LitElement {
           </button>
       </div>
     `;
+  }
+
+  // ---- List view (Google Drive-style table rows) ----
+
+  /** Render one of the three list-view sections (Folders /
+   *  Documents / Images). Each section is a self-contained block
+   *  with a sticky `.list-section-bar` (section name + clickable
+   *  column headers) followed by the row list. The bar sticks
+   *  within the section's own block, so when the user scrolls past
+   *  this section the next section's bar replaces it — Drive-like
+   *  behaviour. */
+  #renderListSection(
+    label: string,
+    kind: "folder" | "document" | "image",
+    sort: ListSort | null,
+    rows: unknown,
+  ) {
+    return html`
+      <div class="list-section list-section-${kind}">
+        <div class="list-section-bar">
+          <div class="list-section-title">${label}</div>
+          ${this.#renderListColumnHeaders(kind, sort)}
+        </div>
+        <div class="list-rows" role="list">${rows}</div>
+      </div>
+    `;
+  }
+
+  #renderListColumnHeaders(kind: "folder" | "document" | "image", sort: ListSort | null) {
+    const cell = (column: ListSortColumn, labelText: string, extraClass = "") => {
+      const active = sort?.column === column;
+      const dir = active ? sort.dir : null;
+      const ariaSort = !active ? "none" : dir === "asc" ? "ascending" : "descending";
+      const indicator = active
+        ? html`<annot-icon
+            class="list-sort-indicator"
+            .spec=${builtinIcon(dir === "asc" ? "keyboard_arrow_up" : "keyboard_arrow_down")}
+          ></annot-icon>`
+        : nothing;
+      return html`
+        <button
+          type="button"
+          class=${`list-col-header list-col-${column}${extraClass ? ` ${extraClass}` : ""}${active ? " sorted" : ""}`}
+          role="columnheader"
+          aria-sort=${ariaSort}
+          @click=${(e: MouseEvent) => {
+            e.stopPropagation();
+            this.#cycleSort(kind, column);
+          }}
+        >
+          <span class="list-col-label">${labelText}</span>
+          ${indicator}
+        </button>
+      `;
+    };
+    return html`
+      <div class="list-column-headers" role="row">
+        ${cell("name", "Name", "list-col-name")}
+        ${cell("modified", "Modified")}
+        ${cell("size", "Size")}
+      </div>
+    `;
+  }
+
+  #renderListFolderRow(folder: FolderRecord) {
+    const selected = this.selectedFolderPaths.has(folder.path);
+    return html`
+      <div
+        class=${`list-row list-row-folder${selected ? " selected" : ""}`}
+        data-folder-path=${folder.path}
+        role="row"
+        aria-label=${`Folder ${folder.name}. Enter to open, Space to toggle selection.`}
+        aria-selected=${selected ? "true" : "false"}
+        tabindex="0"
+        @click=${(e: MouseEvent) => this.#handleItemClick(e, "folder", folder.path)}
+        @dblclick=${(e: MouseEvent) => this.#openFolder(e, folder)}
+        @contextmenu=${(e: MouseEvent) => this.#onFolderContextMenu(e, folder)}
+        @keydown=${(e: KeyboardEvent) => this.#onFolderKeydown(e, folder)}
+      >
+        <div class="list-cell list-cell-name" data-tooltip=${folder.name}>
+          <annot-icon class="list-row-icon" .spec=${builtinIcon("folder")}></annot-icon>
+          <span class="list-cell-label">${folder.name}</span>
+        </div>
+        <div class="list-cell list-cell-modified">${this.#formatDate(folder.createdAt)}</div>
+        <div class="list-cell list-cell-size"></div>
+        <button
+          type="button"
+          class="list-row-more"
+          data-tooltip="More actions"
+          aria-label=${`Actions for folder ${folder.name}`}
+          @click=${(e: MouseEvent) => this.#onFolderMore(e, folder)}
+        >
+          <annot-icon .spec=${builtinIcon("more_vert")}></annot-icon>
+        </button>
+      </div>
+    `;
+  }
+
+  #renderListDocumentRow(doc: DocumentRecord) {
+    const filename = getFilename(doc.path) || doc.title || "Untitled document";
+    const selected = this.selectedDocumentPaths.has(doc.path);
+    const sizeInfo =
+      doc.imageCount > 0
+        ? `${doc.blockCount} blocks · ${doc.imageCount} image${doc.imageCount === 1 ? "" : "s"}`
+        : `${doc.blockCount} block${doc.blockCount === 1 ? "" : "s"}`;
+    return html`
+      <div
+        class=${`list-row list-row-document${selected ? " selected" : ""}`}
+        data-document-path=${doc.path}
+        role="row"
+        aria-label=${`Document ${filename}. Enter or double-click to open, Space to toggle selection.`}
+        aria-selected=${selected ? "true" : "false"}
+        tabindex="0"
+        @click=${(e: MouseEvent) => this.#handleItemClick(e, "document", doc.path)}
+        @dblclick=${(e: MouseEvent) => this.#openDocument(e, doc)}
+        @keydown=${(e: KeyboardEvent) => this.#onDocumentKeydown(e, doc)}
+        @contextmenu=${(e: MouseEvent) => this.#onDocumentContextMenu(e, doc)}
+      >
+        <div class="list-cell list-cell-name" data-tooltip=${doc.path}>
+          <annot-icon class="list-row-icon" .spec=${builtinIcon("article")}></annot-icon>
+          <span class="list-cell-label">${doc.title || filename}</span>
+        </div>
+        <div class="list-cell list-cell-modified">${this.#formatDate(doc.updatedAt)}</div>
+        <div class="list-cell list-cell-size">${sizeInfo}</div>
+        <button
+          type="button"
+          class="list-row-more"
+          data-tooltip="More actions"
+          aria-label=${`Actions for document ${filename}`}
+          @click=${(e: MouseEvent) => this.#onDocumentMore(e, doc)}
+        >
+          <annot-icon .spec=${builtinIcon("more_vert")}></annot-icon>
+        </button>
+      </div>
+    `;
+  }
+
+  #renderListImageRow(img: ImageRecord) {
+    const filename = getFilename(img.path);
+    const displayName = filename || this.#displayUrl(img.sourceUrl);
+    const selected = this.selectedImagePaths.has(img.path);
+    const sizeInfo = img.width && img.height ? `${img.width}×${img.height}` : "";
+    return html`
+      <div
+        class=${`list-row list-row-image${selected ? " selected" : ""}`}
+        data-image-path=${img.path}
+        role="row"
+        aria-label=${`Image ${filename || displayName}. Enter to open, Space to toggle selection.`}
+        aria-selected=${selected ? "true" : "false"}
+        tabindex="0"
+        @click=${(e: MouseEvent) => this.#handleItemClick(e, "image", img.path)}
+        @dblclick=${(e: MouseEvent) => this.#openImage(e, img)}
+        @contextmenu=${(e: MouseEvent) => this.#onImageContextMenu(e, img)}
+        @keydown=${(e: KeyboardEvent) => this.#onImageKeydown(e, img)}
+      >
+        <div class="list-cell list-cell-name" data-tooltip=${img.path}>
+          <annot-icon class="list-row-icon" .spec=${builtinIcon("screenshot_monitor")}></annot-icon>
+          <span class="list-cell-label">${displayName}</span>
+        </div>
+        <div class="list-cell list-cell-modified">${this.#formatDate(img.updatedAt || img.createdAt)}</div>
+        <div class="list-cell list-cell-size">${sizeInfo}</div>
+        <button
+          type="button"
+          class="list-row-more"
+          data-tooltip="More actions"
+          aria-label=${`Actions for image ${filename || displayName}`}
+          @click=${(e: MouseEvent) => this.#onImageMore(e, img)}
+        >
+          <annot-icon .spec=${builtinIcon("more_vert")}></annot-icon>
+        </button>
+      </div>
+    `;
+  }
+
+  /** Click cycle on a list-view column header:
+   *  unsorted → asc → desc → unsorted. The cycle is per-section so
+   *  toggling the Folders/Name header doesn't touch the Images
+   *  section's state. */
+  #cycleSort(kind: "folder" | "document" | "image", column: ListSortColumn): void {
+    const current =
+      kind === "folder"
+        ? this.folderSort
+        : kind === "document"
+          ? this.documentSort
+          : this.imageSort;
+    let next: ListSort | null;
+    if (!current || current.column !== column) {
+      next = { column, dir: "asc" };
+    } else if (current.dir === "asc") {
+      next = { column, dir: "desc" };
+    } else {
+      next = null;
+    }
+    if (kind === "folder") this.folderSort = next;
+    else if (kind === "document") this.documentSort = next;
+    else this.imageSort = next;
+  }
+
+  /** Stable sort routing every column through a single comparator
+   *  shape so each kind's helpers only need to define field
+   *  accessors. `null` sort returns a shallow copy in storage
+   *  order (no-op sort) so callers always get a fresh array safe
+   *  to mutate. */
+  #applySort<T>(
+    records: readonly T[],
+    sort: ListSort | null,
+    accessors: {
+      name: (r: T) => string;
+      modified: (r: T) => string;
+      size: (r: T) => number;
+    },
+  ): T[] {
+    const arr = records.slice();
+    if (!sort) return arr;
+    const dirMult = sort.dir === "asc" ? 1 : -1;
+    arr.sort((a, b) => {
+      let cmp: number;
+      if (sort.column === "name") {
+        cmp = accessors.name(a).localeCompare(accessors.name(b));
+      } else if (sort.column === "modified") {
+        cmp = accessors.modified(a).localeCompare(accessors.modified(b));
+      } else {
+        cmp = accessors.size(a) - accessors.size(b);
+      }
+      return cmp * dirMult;
+    });
+    return arr;
+  }
+
+  #sortFolders(records: readonly FolderRecord[]): FolderRecord[] {
+    return this.#applySort(records, this.folderSort, {
+      name: (f) => f.name.toLowerCase(),
+      // FolderRecord has no `updatedAt`. Sort by `createdAt` as the
+      // single closest proxy — matches the Modified column's display.
+      modified: (f) => f.createdAt || "",
+      // Folders carry no size signal; tie everything so the sort
+      // stays a no-op when the user clicks Size on the Folders
+      // header (and the Modified-by-createdAt fallback above gives
+      // them at least one meaningful column).
+      size: () => 0,
+    });
+  }
+
+  #sortDocuments(records: readonly DocumentRecord[]): DocumentRecord[] {
+    return this.#applySort(records, this.documentSort, {
+      name: (d) => (d.title || getFilename(d.path) || "").toLowerCase(),
+      modified: (d) => d.updatedAt || d.createdAt || "",
+      // Compound rank: imageCount dominates, blockCount breaks ties
+      // (consistent with the "N blocks · M images" Size column).
+      size: (d) => d.imageCount * 1_000_000 + d.blockCount,
+    });
+  }
+
+  #sortImages(records: readonly ImageRecord[]): ImageRecord[] {
+    return this.#applySort(records, this.imageSort, {
+      name: (i) => (getFilename(i.path) || this.#displayUrl(i.sourceUrl) || "").toLowerCase(),
+      modified: (i) => i.updatedAt || i.createdAt || "",
+      size: (i) => i.width * i.height,
+    });
   }
 
   // ---- Public API ----
@@ -1178,10 +1530,21 @@ export class AnnotGalleryPageElement extends LitElement {
     // boundary still selects items of every traversed type — this
     // mirrors how Drive / Finder behave when a range spans
     // headings.
+    //
+    // In list view we walk the sorted views cached on the element
+    // by the most recent render. Otherwise Shift-clicking row 1
+    // then row 5 in a sorted column would highlight the wrong items
+    // (storage order ≠ visible order). Grid view has no client-
+    // side reordering so the storage-order arrays match the visible
+    // layout 1:1.
+    const isList = this.viewMode === "list";
+    const folders = (isList && this.#sortedFolders) || this.folders;
+    const documents = (isList && this.#sortedDocuments) || this.documents;
+    const images = (isList && this.#sortedImages) || this.images;
     const flat: { type: "image" | "folder" | "document"; path: string }[] = [
-      ...this.folders.map((f) => ({ type: "folder" as const, path: f.path })),
-      ...this.documents.map((d) => ({ type: "document" as const, path: d.path })),
-      ...this.images.map((i) => ({ type: "image" as const, path: i.path })),
+      ...folders.map((f) => ({ type: "folder" as const, path: f.path })),
+      ...documents.map((d) => ({ type: "document" as const, path: d.path })),
+      ...images.map((i) => ({ type: "image" as const, path: i.path })),
     ];
     const anchorIdx = flat.findIndex((x) => x.type === anchor.type && x.path === anchor.path);
     const targetIdx = flat.findIndex((x) => x.type === target.type && x.path === target.path);

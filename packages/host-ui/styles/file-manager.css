@@ -2101,58 +2101,234 @@ html.light .gallery-item.selected::after {
   color: #e44;
 }
 
-/* ---- List View ---- */
+/* ---- List View (Google Drive-style) ---- */
+
+/* The list view trades the grid's card layout for a per-section
+ * table: filename-first rows with three columns (Name / Modified /
+ * Size) and a hover-revealed actions button. Sticky section bars
+ * keep the section title + column headers pinned to the top of the
+ * scroll container (`.main-content-body`) while that section's
+ * rows scroll past. When the next section's bar reaches the top,
+ * it replaces the previous one — Drive behaviour.
+ *
+ * The four-column grid template (name / modified / size / more-button)
+ * is shared by `.list-column-headers` and `.list-row` so cells
+ * align vertically without per-row width tweaks. The `more-button`
+ * column is 32px to match the kebab icon button's hit target. */
 
 .gallery-grid.list-view {
-  grid-template-columns: 1fr;
-  gap: 2px;
+  display: flex;
+  flex-direction: column;
 }
 
-.gallery-grid.list-view .gallery-item {
+.list-section {
+  display: block;
+  position: relative;
+}
+
+.list-section + .list-section {
+  margin-top: 16px;
+}
+
+.list-section-bar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--annot-bg-primary);
+  border-bottom: 1px solid var(--annot-border-color);
+}
+
+.list-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--annot-text-secondary);
+  padding: 10px 4px 4px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.list-column-headers {
   display: grid;
-  grid-template-columns: 64px 1fr;
-  border-radius: 4px;
+  grid-template-columns: minmax(0, 1fr) 180px 160px 32px;
+  gap: 8px;
+  align-items: center;
+  padding: 0 4px;
 }
 
-.gallery-grid.list-view .gallery-item:hover {
-  transform: none;
-}
-
-.gallery-grid.list-view .gallery-thumb {
-  aspect-ratio: 1;
-  width: 64px;
-  height: 48px;
-}
-
-.gallery-grid.list-view .gallery-folder-icon {
-  width: 64px;
-  height: 48px;
-}
-
-.gallery-grid.list-view .gallery-folder-icon annot-icon {
-  font-size: 28px;
-}
-
-.gallery-grid.list-view .gallery-item-info {
+.list-col-header {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 4px 10px;
-}
-
-.gallery-grid.list-view .gallery-item-name {
-  flex: 1;
+  gap: 4px;
+  background: transparent;
+  border: none;
+  padding: 6px 8px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--annot-text-secondary);
+  text-align: left;
+  cursor: pointer;
+  border-radius: 4px;
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
   min-width: 0;
 }
 
-.gallery-grid.list-view .gallery-item-meta {
-  margin-top: 0;
+.list-col-header:hover {
+  background: var(--annot-hover-bg);
+  color: var(--annot-text-primary);
+}
+
+.list-col-header.sorted {
+  color: var(--annot-text-primary);
+}
+
+.list-col-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.list-sort-indicator {
+  font-size: 14px;
   flex-shrink: 0;
 }
 
-.gallery-grid.list-view .gallery-tag-chips {
-  margin-top: 0;
+.list-rows {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 0;
+}
+
+.list-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 180px 160px 32px;
+  gap: 8px;
+  align-items: center;
+  padding: 0 8px;
+  min-height: 36px;
+  border-radius: 4px;
+  cursor: pointer;
+  position: relative;
+  transition: background 0.1s;
+}
+
+.list-row:hover {
+  background: var(--annot-hover-bg);
+}
+
+.list-row.selected {
+  background: rgba(124, 156, 255, 0.18);
+}
+
+html.light .list-row.selected {
+  background: rgba(124, 156, 255, 0.14);
+}
+
+.list-row:focus-visible {
+  outline: 2px solid var(--annot-accent);
+  outline-offset: -2px;
+}
+
+.list-cell {
+  font-size: 13px;
+  color: var(--annot-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.list-cell-name {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.list-cell-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.list-cell-modified,
+.list-cell-size {
+  font-size: 12px;
+  color: var(--annot-text-secondary);
+}
+
+.list-row-icon {
+  font-size: 20px;
+  color: var(--annot-text-secondary);
   flex-shrink: 0;
+}
+
+.list-row-folder .list-row-icon {
+  color: var(--annot-text-primary);
+}
+
+.list-row-folder:hover .list-row-icon {
+  color: var(--annot-accent);
+}
+
+.list-row-more {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--annot-text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  opacity: 0;
+  transition:
+    opacity 0.15s,
+    background 0.15s,
+    color 0.15s;
+}
+
+.list-row:hover .list-row-more,
+.list-row.selected .list-row-more,
+.list-row-more:focus-visible {
+  opacity: 1;
+}
+
+.list-row-more:hover {
+  background: var(--annot-hover-bg);
+  color: var(--annot-text-primary);
+}
+
+.list-row-more annot-icon {
+  font-size: 18px;
+}
+
+/* Narrow viewports — collapse the Modified column first, then the
+ * Size column. Filename + actions stay accessible at every width. */
+@media (max-width: 720px) {
+  .list-column-headers,
+  .list-row {
+    grid-template-columns: minmax(0, 1fr) 120px 32px;
+  }
+  .list-col-modified,
+  .list-cell-modified {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .list-column-headers,
+  .list-row {
+    grid-template-columns: minmax(0, 1fr) 32px;
+  }
+  .list-col-size,
+  .list-cell-size {
+    display: none;
+  }
 }
 
 /* ---- Empty / placeholder state ---- */
