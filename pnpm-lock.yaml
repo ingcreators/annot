@@ -280,6 +280,9 @@ importers:
 
   packages/web:
     dependencies:
+      '@ingcreators/annot-capture':
+        specifier: workspace:*
+        version: link:../capture
       '@ingcreators/annot-core':
         specifier: workspace:*
         version: link:../core

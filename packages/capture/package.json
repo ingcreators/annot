@@ -20,7 +20,9 @@
     "./shared": "./src/shared/index.ts",
     "./shared/*": "./src/shared/*.ts",
     "./orchestrate": "./src/orchestrate/index.ts",
-    "./orchestrate/*": "./src/orchestrate/*.ts"
+    "./orchestrate/*": "./src/orchestrate/*.ts",
+    "./diff": "./src/diff/index.ts",
+    "./diff/*": "./src/diff/*.ts"
   },
   "scripts": {
     "build": "vite build",

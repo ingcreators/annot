@@ -26,6 +26,7 @@ export default defineConfig({
         "encode/index": resolve(__dirname, "src/encode/index.ts"),
         "shared/index": resolve(__dirname, "src/shared/index.ts"),
         "orchestrate/index": resolve(__dirname, "src/orchestrate/index.ts"),
+        "diff/index": resolve(__dirname, "src/diff/index.ts"),
       },
       formats: ["es"],
     },

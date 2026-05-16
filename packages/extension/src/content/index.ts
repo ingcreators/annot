@@ -211,11 +211,26 @@ if (guardWindow.__annot_injected) {
     };
   }
 
-  // ---- Auto Capture (DOM-mutation-driven) ----
+  // ---- Auto Capture (DOM-mutation- and interaction-driven) ----
 
   let autoObserver: MutationObserver | null = null;
   let autoStableTimer: number | null = null;
   let autoStableWaitMs = 0;
+  // Coalescing flag for the shared debounce timer below. When set,
+  // the next timer fire dispatches a mutation `auto-capture-signal`
+  // (no probe gate needed — we KNOW the DOM changed). When unset,
+  // the timer fires `auto-probe-signal` so the service worker
+  // applies its visual-diff gate to decide whether to keep the
+  // frame. Mutations always win over interactions in the same
+  // settle window because they carry strictly more information.
+  let autoSawMutationInWindow = false;
+  // Capture-phase listeners on `document` for user interactions
+  // that can produce CSS-only visual changes the MutationObserver
+  // never sees (`:hover` reveals, transitions, animations). The
+  // service worker compares the resulting frame against the last
+  // saved frame via `offscreen-diff` so inert clicks / hovers are
+  // dropped silently.
+  let autoInteractionListenersInstalled = false;
 
   // Narrow attribute allowlist for the auto-capture MutationObserver.
   // These are the semantic state attributes modern UI libraries flip
@@ -267,6 +282,7 @@ if (guardWindow.__annot_injected) {
       attributes: true,
       attributeFilter: AUTO_CAPTURE_ATTRIBUTE_FILTER,
     });
+    installInteractionListeners();
     logger.debug("[annot] auto-capture observer installed, stableWait=", autoStableWaitMs);
   }
 
@@ -274,10 +290,12 @@ if (guardWindow.__annot_injected) {
     if (!autoObserver) return;
     autoObserver.disconnect();
     autoObserver = null;
+    uninstallInteractionListeners();
     if (autoStableTimer !== null) {
       window.clearTimeout(autoStableTimer);
       autoStableTimer = null;
     }
+    autoSawMutationInWindow = false;
     logger.debug("[annot] auto-capture observer removed");
   }
 
@@ -287,11 +305,65 @@ if (guardWindow.__annot_injected) {
     // not user-meaningful page change.
     if (records.every((r) => isAnnotUiNode(r.target))) return;
 
+    autoSawMutationInWindow = true;
+    scheduleAutoCaptureSignal();
+  }
+
+  /** Schedule (or extend) the shared debounce timer. When it fires,
+   *  dispatches the strongest signal observed in this window —
+   *  `auto-capture-signal` if a mutation occurred (we know the DOM
+   *  changed), `auto-probe-signal` otherwise (pure-interaction tail
+   *  the service worker should gate on a visual-diff). */
+  function scheduleAutoCaptureSignal(): void {
     if (autoStableTimer !== null) window.clearTimeout(autoStableTimer);
     autoStableTimer = window.setTimeout(() => {
       autoStableTimer = null;
-      chromeContentBus.send({ type: "auto-capture-signal" });
+      const sawMutation = autoSawMutationInWindow;
+      autoSawMutationInWindow = false;
+      chromeContentBus.send({
+        type: sawMutation ? "auto-capture-signal" : "auto-probe-signal",
+      });
     }, autoStableWaitMs);
+  }
+
+  /** Suppress probe scheduling when the originating event is from
+   *  our own overlay — avoids the area-selector / progress banner
+   *  triggering probes against themselves. Pointer / focus events
+   *  pass the originating element directly; the closest
+   *  `[data-annot-ui]` ancestor flags it as Annot's own UI. */
+  function isAnnotUiEvent(ev: Event): boolean {
+    const t = ev.target;
+    if (t instanceof Element) return !!t.closest("[data-annot-ui]");
+    return false;
+  }
+
+  function onInteractionForProbe(ev: Event): void {
+    if (!autoObserver) return; // safety: only when auto-capture is active
+    if (isAnnotUiEvent(ev)) return;
+    scheduleAutoCaptureSignal();
+  }
+
+  function installInteractionListeners(): void {
+    if (autoInteractionListenersInstalled) return;
+    // Capture phase so app-level `stopPropagation()` can't hide the
+    // event from us. `passive: true` keeps the wheel listener from
+    // blocking native scroll.
+    const opts: AddEventListenerOptions = { capture: true, passive: true };
+    document.addEventListener("pointerup", onInteractionForProbe, opts);
+    document.addEventListener("keyup", onInteractionForProbe, opts);
+    document.addEventListener("wheel", onInteractionForProbe, opts);
+    document.addEventListener("focusin", onInteractionForProbe, opts);
+    autoInteractionListenersInstalled = true;
+  }
+
+  function uninstallInteractionListeners(): void {
+    if (!autoInteractionListenersInstalled) return;
+    const opts: AddEventListenerOptions = { capture: true };
+    document.removeEventListener("pointerup", onInteractionForProbe, opts);
+    document.removeEventListener("keyup", onInteractionForProbe, opts);
+    document.removeEventListener("wheel", onInteractionForProbe, opts);
+    document.removeEventListener("focusin", onInteractionForProbe, opts);
+    autoInteractionListenersInstalled = false;
   }
 
   function isAnnotUiNode(node: Node | null): boolean {

@@ -23,6 +23,7 @@
     "build-storybook": "storybook build"
   },
   "dependencies": {
+    "@ingcreators/annot-capture": "workspace:*",
     "@ingcreators/annot-core": "workspace:*",
     "@ingcreators/annot-doc": "workspace:*",
     "@ingcreators/annot-editor": "workspace:*",
