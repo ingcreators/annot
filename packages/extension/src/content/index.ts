@@ -313,9 +313,22 @@ if (guardWindow.__annot_injected) {
    *  dispatches the strongest signal observed in this window —
    *  `auto-capture-signal` if a mutation occurred (we know the DOM
    *  changed), `auto-probe-signal` otherwise (pure-interaction tail
-   *  the service worker should gate on a visual-diff). */
+   *  the service worker should gate on a visual-diff).
+   *
+   *  The wait length depends on what we'd fire RIGHT NOW: mutation
+   *  signals use the user-configured `stableWaitMs` because a fresh
+   *  DOM mutation is a strong signal that real change happened.
+   *  Probe-only windows use a longer wait so we don't fire during
+   *  the brief mutation gaps that occur mid-transition / mid-load.
+   *  React's unmount → mount cycle, route changes, and CSS-driven
+   *  layout settles all produce intermittent mutation bursts with
+   *  sub-second gaps; a longer probe wait makes any such gap
+   *  re-extend the timer (the next mutation flips the flag back to
+   *  the short wait), so probes only fire when the page is truly
+   *  idle. */
   function scheduleAutoCaptureSignal(): void {
     if (autoStableTimer !== null) window.clearTimeout(autoStableTimer);
+    const wait = autoSawMutationInWindow ? autoStableWaitMs : probeStableWaitMs();
     autoStableTimer = window.setTimeout(() => {
       autoStableTimer = null;
       const sawMutation = autoSawMutationInWindow;
@@ -323,7 +336,20 @@ if (guardWindow.__annot_injected) {
       chromeContentBus.send({
         type: sawMutation ? "auto-capture-signal" : "auto-probe-signal",
       });
-    }, autoStableWaitMs);
+    }, wait);
+  }
+
+  /** Probe-path stable wait: `stableWaitMs + 1000ms`, floored at
+   *  1500ms. Ensures probes don't fire instantly when the user picks
+   *  `stableWait = none` AND that route-change / CSS-transition
+   *  patterns with multi-hundred-ms mutation gaps trigger the
+   *  mutation path (short wait) instead of the probe path (long
+   *  wait). Tuned against the
+   *  `https://claude.com/product/overview` nav-menu reproduction. */
+  const PROBE_EXTRA_STABILITY_MS = 1000;
+  const PROBE_MIN_STABILITY_MS = 1500;
+  function probeStableWaitMs(): number {
+    return Math.max(PROBE_MIN_STABILITY_MS, autoStableWaitMs + PROBE_EXTRA_STABILITY_MS);
   }
 
   /** Suppress probe scheduling when the originating event is from
