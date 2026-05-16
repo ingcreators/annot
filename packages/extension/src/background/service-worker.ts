@@ -37,6 +37,11 @@ import {
   IDB_MAX_AGE_MS,
   urlTags,
 } from "./service-worker-helpers.js";
+import {
+  applySessionEmulation,
+  migrateSessionEmulation,
+  restoreSessionEmulation,
+} from "./session-emulation.js";
 
 const host = createChromeCaptureHost();
 
@@ -339,6 +344,15 @@ interface HotkeyCaptureState {
   lastCaptureAt: number;
   /** uuid7-base58 session id; set at start, reused for every capture. */
   sessionId: string;
+  /** Window id that currently has the user's emulated viewport
+   *  applied, or `null` when emulation is disabled / not yet applied
+   *  / failed. Captures from other windows during the session
+   *  intentionally fire at native size — Hotkey doesn't follow the
+   *  active window, so per-press migration would surprise the user.
+   *  Persisted to `chrome.storage.local` together with the rest of
+   *  the Hotkey session so a service-worker restart can still restore
+   *  the window geometry on stop. */
+  emulatedWindowId: number | null;
 }
 
 const hotkeyState: HotkeyCaptureState = {
@@ -346,6 +360,7 @@ const hotkeyState: HotkeyCaptureState = {
   count: 0,
   lastCaptureAt: 0,
   sessionId: "",
+  emulatedWindowId: null,
 };
 
 /**
@@ -398,6 +413,12 @@ interface AutoCaptureState {
   /** Drop probe frames classified as cursor-only by the offscreen
    *  diff. From `AutoCaptureOptions.ignoreCursorOnlyChanges`. */
   ignoreCursorOnlyChanges: boolean;
+  /** Window id that currently has the user's emulated viewport
+   *  applied, or `null` when emulation is disabled / not yet applied
+   *  / failed. Updated when the session migrates to a new active
+   *  window via `activateObserverOn` — old window restored, new
+   *  window gets emulation. Always restored on session stop. */
+  emulatedWindowId: number | null;
 }
 
 const autoState: AutoCaptureState = {
@@ -412,6 +433,7 @@ const autoState: AutoCaptureState = {
   stableWaitMs: 0,
   changeRatioThreshold: 0,
   ignoreCursorOnlyChanges: true,
+  emulatedWindowId: null,
 };
 
 function getHotkeyCaptureStatus(): { active: boolean; count: number } {
@@ -447,10 +469,18 @@ function updateBadge(): void {
 // Restore the Hotkey session across service-worker restarts.
 (async () => {
   try {
-    const res = await chrome.storage.local.get(["hotkeyCaptureActive", "hotkeyCaptureSession"]);
+    const res = await chrome.storage.local.get([
+      "hotkeyCaptureActive",
+      "hotkeyCaptureSession",
+      "hotkeyCaptureEmulatedWindowId",
+    ]);
     if (res.hotkeyCaptureActive) {
       hotkeyState.active = true;
       hotkeyState.sessionId = res.hotkeyCaptureSession || newIdB58();
+      hotkeyState.emulatedWindowId =
+        typeof res.hotkeyCaptureEmulatedWindowId === "number"
+          ? res.hotkeyCaptureEmulatedWindowId
+          : null;
     }
     updateBadge();
   } catch (err) {
@@ -466,9 +496,31 @@ async function startHotkeyCapture(): Promise<void> {
   hotkeyState.count = 0;
   hotkeyState.lastCaptureAt = 0;
   hotkeyState.sessionId = newIdB58();
+  hotkeyState.emulatedWindowId = null;
+
+  // Apply Quick-options emulation to the active window for the
+  // duration of the session. Captures fired from other windows
+  // during the session intentionally use native size — Hotkey
+  // doesn't follow the active window, and per-press migration would
+  // surprise the user with mid-session window-size churn.
+  try {
+    const settings = await loadSettings();
+    const [activeTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    if (activeTab?.windowId != null) {
+      hotkeyState.emulatedWindowId = await applySessionEmulation(
+        host,
+        activeTab.windowId,
+        settings,
+      );
+    }
+  } catch (err) {
+    logger.debug("[hotkey] emulation setup failed:", err);
+  }
+
   await chrome.storage.local.set({
     hotkeyCaptureActive: true,
     hotkeyCaptureSession: hotkeyState.sessionId,
+    hotkeyCaptureEmulatedWindowId: hotkeyState.emulatedWindowId,
   });
   updateBadge();
 }
@@ -476,7 +528,12 @@ async function startHotkeyCapture(): Promise<void> {
 async function stopHotkeyCapture(): Promise<void> {
   if (!hotkeyState.active) return;
   hotkeyState.active = false;
-  await chrome.storage.local.set({ hotkeyCaptureActive: false });
+  await restoreSessionEmulation(host, hotkeyState.emulatedWindowId);
+  hotkeyState.emulatedWindowId = null;
+  await chrome.storage.local.set({
+    hotkeyCaptureActive: false,
+    hotkeyCaptureEmulatedWindowId: null,
+  });
   const finalCount = hotkeyState.count;
   hotkeyState.sessionId = "";
   updateBadge();
@@ -666,6 +723,24 @@ async function activateObserverOn(tabId: number, windowId: number, url: string):
     return;
   }
 
+  // Migrate Quick-options emulation to the new window if it differs
+  // from the one we're currently holding. Done BEFORE observer
+  // install so the page reflows once at the new viewport size
+  // before the initial baseline frame is taken. Settings are read
+  // here (not at session start) so changes to the emulation preset
+  // mid-session pick up on the next tab/window switch.
+  try {
+    const settings = await loadSettings();
+    autoState.emulatedWindowId = await migrateSessionEmulation(
+      host,
+      autoState.emulatedWindowId,
+      windowId,
+      settings,
+    );
+  } catch (err) {
+    logger.debug("[auto] emulation migrate failed:", err);
+  }
+
   const target = { id: tabId, windowId, url };
   try {
     await host.injectContentScript(target);
@@ -734,6 +809,7 @@ async function startAutoCapture(): Promise<void> {
   autoState.stableWaitMs = resolved.stableWaitMs;
   autoState.changeRatioThreshold = resolved.changeRatioThreshold;
   autoState.ignoreCursorOnlyChanges = resolved.ignoreCursorOnlyChanges;
+  autoState.emulatedWindowId = null;
 
   await activateObserverOn(tab.id, tab.windowId, tab.url ?? "");
   updateBadge();
@@ -751,11 +827,14 @@ async function stopAutoCapture(): Promise<void> {
   autoState.sessionId = "";
   autoState.lastFrameHash = "";
   autoState.lastFrameDataUrl = null;
+  const emulatedWindowId = autoState.emulatedWindowId;
+  autoState.emulatedWindowId = null;
   updateBadge();
 
   if (lastTabId != null) {
     await deactivateObserverOn(lastTabId);
   }
+  await restoreSessionEmulation(host, emulatedWindowId);
 
   if (finalCount > 0) {
     await openOrReuseAnnotTab(chrome.runtime.id);
