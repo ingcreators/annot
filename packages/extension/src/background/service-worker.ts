@@ -1097,7 +1097,18 @@ chrome.commands.onCommand.addListener((command, tab) => {
       captureFullPage();
       break;
     case "hotkey":
-      hotkeyCaptureShot(tab);
+      // Auto Capture takes precedence: when an Auto session is
+      // already running, the Hotkey shortcut routes its capture
+      // into that session via the same `autoCaptureManual` path
+      // the popup's "Add Capture" button uses. Without this guard
+      // the legacy behaviour was to start a parallel Hotkey session
+      // — two independent sessionIds writing into IDB concurrently,
+      // which surfaced as two separate review groups for the user.
+      if (autoState.active) {
+        autoCaptureManual();
+      } else {
+        hotkeyCaptureShot(tab);
+      }
       break;
   }
 });

@@ -136,8 +136,22 @@ export const IdleWithShortcuts: Story = {
 /** The popup view after Hotkey Capture has been started. Frame
  *  count is a live property pushed from the service worker via the
  *  status message — the story pins it at 7 to show how it reads at
- *  a non-zero value. */
+ *  a non-zero value. With a shortcut bound the Add Capture button
+ *  carries its trailing badge (mirroring the popup buttons) and
+ *  the body copy reads "Press <kbd> to capture". */
 export const HotkeyActive: Story = {
+  args: {
+    view: "hotkeyActive",
+    hotkeyCount: 7,
+    hotkeyShortcut: "Alt+Shift+Z",
+  },
+};
+
+/** Hotkey Capture active without a bound shortcut — the body copy
+ *  switches to the "Configure a shortcut in Settings" hint and the
+ *  Add Capture button's trailing badge is omitted. Pinned as its
+ *  own story so reviewers can eyeball the degraded state. */
+export const HotkeyActiveWithoutShortcut: Story = {
   args: {
     view: "hotkeyActive",
     hotkeyCount: 7,
@@ -147,10 +161,14 @@ export const HotkeyActive: Story = {
 /** The popup view after Auto Capture has been started. Shows the
  *  rec indicator + the trigger-config summary ("Stable wait: 0.7s
  *  · Min interval: 1.0s") so users can tell what's driving the
- *  background captures. */
+ *  background captures. With a Hotkey shortcut bound, the Add
+ *  Capture button shows the trailing badge — the same shortcut
+ *  the service worker routes into `autoCaptureManual()` while an
+ *  Auto session is active. */
 export const AutoActive: Story = {
   args: {
     view: "autoActive",
+    hotkeyShortcut: "Alt+Shift+Z",
     autoSummary: {
       count: 12,
       stableWaitMs: 700,
