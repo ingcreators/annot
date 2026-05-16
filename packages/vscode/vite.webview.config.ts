@@ -27,6 +27,18 @@ export default defineConfig({
     outDir: resolve(__dirname, "dist/webview"),
     emptyOutDir: true,
     target: "es2022",
+    // VSCode webview bundles are loaded from disk (the extension's
+    // local install dir), not over the network, so the eager
+    // bundle size matters far less than for a PWA. Today's main
+    // chunk sits at ~542 kB raw / ~145 kB gzip, which is fine for
+    // a disk-loaded editor surface — the obvious lazy-load wins
+    // (PPTX export, annot-doc-shell when opening a non-doc file)
+    // would each cost a small first-use chunk-fetch latency for
+    // little practical benefit. Raise the warning ceiling to 800 kB
+    // so the legitimate signal isn't drowned out by a soft hint
+    // we've consciously accepted; INEFFECTIVE_DYNAMIC_IMPORT etc.
+    // still surface normally.
+    chunkSizeWarningLimit: 800,
     rollupOptions: {
       input: resolve(__dirname, "src/webview/index.html"),
     },
