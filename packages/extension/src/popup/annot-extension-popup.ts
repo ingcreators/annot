@@ -283,6 +283,11 @@ export class AnnotExtensionPopupElement extends LitElement {
       >
         <span class="popup-btn-icon" aria-hidden="true">+</span>
         <span class="popup-btn-label">Add Capture</span>
+        ${
+          this.hotkeyShortcut
+            ? html`<span class="popup-btn-trailing">${this.hotkeyShortcut}</span>`
+            : nothing
+        }
       </button>
       <button
         type="button"
@@ -327,6 +332,11 @@ export class AnnotExtensionPopupElement extends LitElement {
       >
         <span class="popup-btn-icon" aria-hidden="true">+</span>
         <span class="popup-btn-label">Add Capture</span>
+        ${
+          this.hotkeyShortcut
+            ? html`<span class="popup-btn-trailing">${this.hotkeyShortcut}</span>`
+            : nothing
+        }
       </button>
       <button
         type="button"
