@@ -229,7 +229,6 @@ export class AnnotExtensionPopupElement extends LitElement {
       >
         <span class="popup-btn-icon" aria-hidden="true">&#9889;</span>
         <span class="popup-btn-label">Auto</span>
-        <span class="popup-btn-subtitle">on DOM changes</span>
       </button>
       <button
         type="button"

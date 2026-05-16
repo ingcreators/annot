@@ -154,16 +154,6 @@ annot-extension-popup {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
-/* Subtitle text rendered to the right of the button label (e.g.
-   "on DOM changes" for the Auto button). Plain text in muted color
-   — no badge styling like `.popup-btn-trailing`. */
-.popup-btn-subtitle {
-  margin-left: auto;
-  font-size: 11px;
-  color: #9fb0dc;
-  font-weight: 400;
-}
-
 .popup-btn-secondary {
   background: transparent;
   border-color: rgba(255, 255, 255, 0.06);
