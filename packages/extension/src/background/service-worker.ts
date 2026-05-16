@@ -888,12 +888,17 @@ async function performAutoCapture(opts: { kind: "observer" | "probe" | "manual" 
         // refreshing `lastFrameDataUrl` either.
         return;
       }
-      // Probe path: extra visual-diff gate. SHA didn't match, but
-      // the encoder can produce non-identical bytes from
-      // visually-identical pixels (re-quantization etc.). Run the
-      // offscreen diff to confirm the change is actually
-      // user-meaningful before persisting.
-      if (kind === "probe" && autoState.lastFrameDataUrl) {
+      // Extra visual-diff gate for observer + probe paths. SHA
+      // didn't match, but the encoder can produce non-identical
+      // bytes from visually-identical pixels (re-quantization,
+      // ad refresh, timestamp ticks, etc.). The classic offender
+      // is the page-load tail: a navigation finishes →
+      // `activateObserverOn` snaps the baseline frame → late ads /
+      // lazy-loaded images fire one more mutation a second later →
+      // the SHA hashes differ but the page looks the same to the
+      // user. Run the offscreen diff to confirm the change is
+      // actually user-meaningful before persisting.
+      if (autoState.lastFrameDataUrl) {
         try {
           const result = await diffFramesViaOffscreen(
             autoState.lastFrameDataUrl,
@@ -903,15 +908,17 @@ async function performAutoCapture(opts: { kind: "observer" | "probe" | "manual" 
           );
           if (!result.meaningful) {
             logger.debug(
-              "[auto] dropping probe frame (not meaningful)",
+              "[auto] dropping",
+              kind,
+              "frame (not meaningful)",
               "ratio=",
               result.diff.changedRatio,
               "cursorOnly=",
               result.cursorOnly,
             );
             // Refresh the baseline so we don't keep diffing against
-            // an increasingly stale frame across many inert
-            // interactions.
+            // an increasingly stale frame across many near-duplicate
+            // observer / probe events.
             autoState.lastFrameDataUrl = dataUrl;
             autoState.lastFrameHash = frameHash;
             return;
