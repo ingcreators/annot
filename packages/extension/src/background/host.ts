@@ -327,20 +327,30 @@ export function createChromeCaptureHost(): CaptureHost {
       // ── Corrective pass ──────────────────────────────────────────
       // The chrome-delta probed above is taken BEFORE the resize, so
       // state-dependent chrome shifts leave the inner viewport off
-      // target. Two failure modes seen in practice:
+      // target. Three failure modes seen in practice:
       //   - Maximized→normal: a Hotkey session started on a maximized
       //     window leaves the inner viewport ≈12 px tall over the
       //     target (Windows reports the maximized outer as larger than
       //     the visible area; the gutter disappears once state:"normal"
       //     is forced, so the pre-resize chromeDelta overstates true
       //     chrome height by exactly the gutter).
-      //   - DPR-fraction rounding: a fractional DPR like 1.7 makes
-      //     `pixelTarget.height / DPR` non-integer, so `pixelToCssSize`
-      //     rounds to nearest, leaving ±1 px after re-scaling by DPR.
+      //   - Fullscreen→normal: F11 browser fullscreen has zero chrome,
+      //     so the pre-resize chromeDelta is 0; once state:"normal"
+      //     is forced the tab strip + address bar reappear and the
+      //     inner viewport shrinks by the full chrome height.
+      //   - DPR-fraction rounding: a fractional DPR like 1.5 / 1.7
+      //     makes `pixelTarget.height / DPR` non-integer, so
+      //     `pixelToCssSize` rounds to nearest, leaving ±1 CSS px
+      //     after re-scaling by DPR.
       // Re-measure the actual inner viewport, compute the residual,
       // and apply a single corrective resize. One iteration converges
       // because the chrome decoration is stable once the window has
-      // reached its final non-maximized state.
+      // reached its final non-maximized, non-fullscreen state. The
+      // explicit `state: "normal"` on the corrective `windows.update`
+      // call is defensive: if Chrome restored the window to a non-
+      // normal state between the two calls (some Windows themes /
+      // virtual-desktop transitions can do this), we re-pin it so
+      // the corrected width / height are honored.
       try {
         await delay(EMULATION_INNER_SETTLE_MS);
         const dimsAfter = (await chrome.tabs.sendMessage(target.id, {
@@ -355,6 +365,7 @@ export function createChromeCaptureHost(): CaptureHost {
             await chrome.windows.update(target.windowId, {
               width: Math.max(MIN_WINDOW_DIMENSION, correction.width),
               height: Math.max(MIN_WINDOW_DIMENSION, correction.height),
+              state: "normal",
             });
           }
         }

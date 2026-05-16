@@ -27,17 +27,27 @@ export const POST_HIDE_PAINT_MS = 80;
  *  can come from auto-repeat. */
 export const HOTKEY_CAPTURE_MIN_INTERVAL_MS = 200;
 
-/** Short settle between `chrome.windows.update` and the corrective
+/** Settle between `chrome.windows.update` and the corrective
  *  `get-page-dimensions` re-probe inside the host's emulated-viewport
  *  apply. The window-resize call resolves before the page commits
  *  the new layout, so `window.innerWidth/Height` is stale unless we
- *  give the browser one paint tick to converge. Smaller than
- *  `EMULATION_REFLOW_MS` because we're only waiting for the chrome /
- *  inner-viewport math to stabilize, not for media queries or lazy
- *  images. The orchestrator's separate reflow wait still runs after
- *  `setEmulatedViewport` returns, so the user-perceptible reflow
- *  budget is unaffected. */
-export const EMULATION_INNER_SETTLE_MS = 80;
+ *  give the browser one paint tick to converge.
+ *
+ *  Originally tuned to 80 ms for the maximized→normal case, where
+ *  the state change is essentially instantaneous on Windows. The
+ *  fullscreen→normal case (F11 browser fullscreen exit) has a real
+ *  animation that lasts ≈200 ms on Chrome / Windows — probing too
+ *  early sees the inner viewport mid-transition, the residual gets
+ *  computed against transitional dims, and the corrective resize
+ *  lands on the wrong outer size. Bumped to 300 ms so the page has
+ *  fully reached its final non-fullscreen state before we re-probe.
+ *
+ *  Smaller than `EMULATION_REFLOW_MS` (400 ms) because we're only
+ *  waiting for the chrome / inner-viewport math to stabilize, not
+ *  for media queries or lazy images. The orchestrator's separate
+ *  reflow wait still runs after `setEmulatedViewport` returns, so
+ *  the user-perceptible reflow budget is unaffected by this bump. */
+export const EMULATION_INNER_SETTLE_MS = 300;
 
 /** Promise-wrapped `setTimeout`. Used to wait out paint flushes
  *  and reflow settles between capture stages. */
