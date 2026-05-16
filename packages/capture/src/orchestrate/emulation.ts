@@ -15,8 +15,10 @@ import { delay } from "./constants.js";
 
 /** Time to wait after the host's viewport resize so the page can
  *  reflow lazy images / media queries / flex layouts. The same
- *  400 ms the legacy extension service-worker used. */
-const EMULATION_REFLOW_MS = 400;
+ *  400 ms the legacy extension service-worker used. Exported so
+ *  long-lived sessions (extension Auto / Hotkey) that manage their
+ *  own apply/restore lifecycle reuse the same settle budget. */
+export const EMULATION_REFLOW_MS = 400;
 
 export async function withEmulatedViewport<T>(
   host: CaptureHost,
