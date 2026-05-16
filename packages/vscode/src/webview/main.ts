@@ -929,7 +929,16 @@ async function runExport(id: number, format: "png" | "jpeg" | "pptx"): Promise<v
         throw new Error("PNG / JPEG export is image-mode only");
       }
       if (!activeDocument) throw new Error("no document loaded");
-      const { exportDocumentPptx } = await import("@ingcreators/annot-render");
+      // Deep subpath dynamic import — the barrel
+      // `@ingcreators/annot-render` is already in the static
+      // dependency chain via `toolbar.ts` / `editor-shell.ts` /
+      // `pptx-export.ts`, so a barrel-shaped dynamic import does
+      // NOT move `exportDocumentPptx` to its own chunk
+      // (`[INEFFECTIVE_DYNAMIC_IMPORT]` Rollup warning). The
+      // `./pptx/document-pptx` submodule pulls in the multi-slide
+      // OOXML builder + zip writer; that surface is NOT reachable
+      // from the eager bundle, so this import really does split.
+      const { exportDocumentPptx } = await import("@ingcreators/annot-render/pptx/document-pptx");
       const blob = exportDocumentPptx(activeDocument);
       if (!blob) {
         throw new Error("Document has no image blocks to export.");
