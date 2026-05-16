@@ -122,13 +122,40 @@ export type ContentToBackgroundMessage =
        *  duplicate-frame dedupe live service-worker-side so the
        *  content script stays a thin signal source. */
       type: "auto-capture-signal";
+    }
+  | {
+      /** Fired by the auto-capture content script after a user
+       *  interaction (pointer / key / wheel / focus) has settled for
+       *  `stableWaitMs` without follow-up mutations. The service
+       *  worker treats this like an `auto-capture-signal` but
+       *  additionally gates the captured frame on a pixel-diff check
+       *  (via the offscreen document) so pure CSS hover / transition
+       *  / animation reveals — which never fire a DOM mutation —
+       *  still produce a capture, while inert clicks (no visual
+       *  change) are silently dropped. */
+      type: "auto-probe-signal";
     };
 
 // Background -> Offscreen
 export type OffscreenMessage =
   | { type: "offscreen-stitch"; segments: CaptureSegment[]; width: number; height: number }
   | { type: "offscreen-crop"; dataUrl: string; rect: CaptureRect; dpr: number }
-  | { type: "offscreen-mosaic"; dataUrl: string; rect: CaptureRect; blockSize: number };
+  | { type: "offscreen-mosaic"; dataUrl: string; rect: CaptureRect; blockSize: number }
+  | {
+      /** Compare two PNG data URLs for visual change. The offscreen
+       *  document decodes both via `createImageBitmap`, downscales to
+       *  `comparisonWidth × proportional-height` on an
+       *  `OffscreenCanvas`, runs `computeDiffScore` and reports
+       *  whether the diff is meaningful + cursor-only. Used by the
+       *  Auto Capture interaction-probe path to gate frame saves on
+       *  pixel-level change. */
+      type: "offscreen-diff";
+      a: string;
+      b: string;
+      comparisonWidth: number;
+      threshold: number;
+      ignoreCursorOnly: boolean;
+    };
 
 // Offscreen -> Background
 export type OffscreenResult = { type: "offscreen-result"; dataUrl: string };

@@ -27,6 +27,7 @@ import { encodeCapture } from "../shared/encode.js";
 import { loadAutoCaptureOptions, loadSettings } from "../shared/settings.js";
 // Static import of IDB store — used by external message API
 import * as idbStore from "../storage/idb-store.js";
+import { diffFramesViaOffscreen } from "./auto-diff.js";
 import { createChromeCaptureHost } from "./host.js";
 import {
   ANNOTATION_URL,
@@ -377,6 +378,12 @@ interface AutoCaptureState {
    *  on tab switch so the first frame on a new tab can never be
    *  deduped against a leftover hash from the previous tab. */
   lastFrameHash: string;
+  /** PNG data URL of the most recently captured (or probed) frame.
+   *  Baseline for the offscreen-diff gate that decides whether an
+   *  interaction-probe frame should be saved. Cleared together with
+   *  `lastFrameHash` on tab switch so probes never compare against a
+   *  different tab's pixels. */
+  lastFrameDataUrl: string | null;
   /** Resolved min-interval between captures in milliseconds. Global
    *  to the session — switching tabs does NOT bypass it, otherwise a
    *  user rapidly cycling tabs could swamp the encoder. */
@@ -384,6 +391,13 @@ interface AutoCaptureState {
   /** Resolved stable-wait in milliseconds (passed to the content
    *  script so it can tune its MutationObserver debounce). */
   stableWaitMs: number;
+  /** Resolved changed-pixel ratio threshold above which an
+   *  interaction-probe frame counts as meaningful. From
+   *  `AutoCaptureOptions.sensitivity`. */
+  changeRatioThreshold: number;
+  /** Drop probe frames classified as cursor-only by the offscreen
+   *  diff. From `AutoCaptureOptions.ignoreCursorOnlyChanges`. */
+  ignoreCursorOnlyChanges: boolean;
 }
 
 const autoState: AutoCaptureState = {
@@ -393,8 +407,11 @@ const autoState: AutoCaptureState = {
   sessionId: "",
   tabId: null,
   lastFrameHash: "",
+  lastFrameDataUrl: null,
   minIntervalMs: 0,
   stableWaitMs: 0,
+  changeRatioThreshold: 0,
+  ignoreCursorOnlyChanges: true,
 };
 
 function getHotkeyCaptureStatus(): { active: boolean; count: number } {
@@ -636,8 +653,12 @@ async function activateObserverOn(tabId: number, windowId: number, url: string):
 
   // Reset per-tab dedupe baseline — different tab, different content;
   // the first frame on the new tab should never be deduped against a
-  // leftover hash from the previous tab.
+  // leftover hash from the previous tab. The `lastFrameDataUrl`
+  // baseline used by the offscreen diff path is cleared for the same
+  // reason: comparing a probe frame on tab B against pixels from tab
+  // A is meaningless and would always flag as "meaningful".
   autoState.lastFrameHash = "";
+  autoState.lastFrameDataUrl = null;
 
   const injectable = /^(https?|file):/.test(url);
   if (!injectable) {
@@ -708,8 +729,11 @@ async function startAutoCapture(): Promise<void> {
   autoState.sessionId = newIdB58();
   autoState.tabId = null;
   autoState.lastFrameHash = "";
+  autoState.lastFrameDataUrl = null;
   autoState.minIntervalMs = resolved.intervalMs;
   autoState.stableWaitMs = resolved.stableWaitMs;
+  autoState.changeRatioThreshold = resolved.changeRatioThreshold;
+  autoState.ignoreCursorOnlyChanges = resolved.ignoreCursorOnlyChanges;
 
   await activateObserverOn(tab.id, tab.windowId, tab.url ?? "");
   updateBadge();
@@ -726,6 +750,7 @@ async function stopAutoCapture(): Promise<void> {
   autoState.tabId = null;
   autoState.sessionId = "";
   autoState.lastFrameHash = "";
+  autoState.lastFrameDataUrl = null;
   updateBadge();
 
   if (lastTabId != null) {
@@ -750,7 +775,24 @@ async function autoCaptureShot(senderTabId?: number): Promise<void> {
   if (now - autoState.lastCaptureAt < autoState.minIntervalMs) return;
   autoState.lastCaptureAt = now;
 
-  await performAutoCapture({ manual: false });
+  await performAutoCapture({ kind: "observer" });
+}
+
+/** Fired by the content script after a user interaction has
+ *  settled (`pointerup` / `keyup` / `wheel` / `focusin`). Same
+ *  throttle as the observer signal, but the captured frame is
+ *  additionally gated against the offscreen-side visual-diff check
+ *  in `performAutoCapture` so clicks / hovers that didn't change the
+ *  visible pixels are silently dropped. */
+async function autoCaptureProbe(senderTabId?: number): Promise<void> {
+  if (!autoState.active) return;
+  if (senderTabId != null && senderTabId !== autoState.tabId) return;
+
+  const now = Date.now();
+  if (now - autoState.lastCaptureAt < autoState.minIntervalMs) return;
+  autoState.lastCaptureAt = now;
+
+  await performAutoCapture({ kind: "probe" });
 }
 
 /** Manual "Add Capture" press from the popup's `autoActive` view.
@@ -767,18 +809,25 @@ async function autoCaptureManual(): Promise<void> {
     console.warn("[auto] manual capture skipped — session has no bound tab");
     return;
   }
-  await performAutoCapture({ manual: true });
+  await performAutoCapture({ kind: "manual" });
 }
 
-/** Shared capture path for both observer-driven (`autoCaptureShot`)
- *  and manual (`autoCaptureManual`) entries. Both flows resolve the
- *  tab from `autoState.tabId`, prep/restore stickies and scrollbars,
- *  call `host.captureViewport`, encode + thumb + save with session
- *  tags, then increment the session count + update the badge. The
- *  `manual` flag controls whether the duplicate-frame dedupe runs
- *  and gets recorded in `auto.trigger`. */
-async function performAutoCapture(opts: { manual: boolean }): Promise<void> {
-  const { manual } = opts;
+/** Shared capture path for all three Auto Capture entries:
+ *  - `observer`: MutationObserver settled. Subject to SHA dedupe.
+ *  - `probe`: user-interaction-driven, gated on a pixel-level
+ *    diff against the last saved/probed frame so inert clicks /
+ *    hovers don't pollute the session.
+ *  - `manual`: explicit popup button press. Bypasses every gate
+ *    (the user asked for this frame even if pixels didn't change).
+ *
+ *  All flows resolve the tab from `autoState.tabId`, prep/restore
+ *  stickies and scrollbars, call `host.captureViewport`, encode +
+ *  thumb + save with session tags, then increment the session count
+ *  + update the badge. The `kind` flag controls which gates run and
+ *  what `auto.trigger` tag the saved frame carries. */
+async function performAutoCapture(opts: { kind: "observer" | "probe" | "manual" }): Promise<void> {
+  const { kind } = opts;
+  const manual = kind === "manual";
   const tabId = autoState.tabId;
   if (tabId == null) return;
   let tab: chrome.tabs.Tab;
@@ -829,12 +878,50 @@ async function performAutoCapture(opts: { manual: boolean }): Promise<void> {
 
     // Manual presses bypass dedupe — the user explicitly wants this
     // frame even if the pixels match the last one. Observer-driven
-    // presses still dedupe so micro-mutations don't flood storage.
+    // and probe-driven presses dedupe so micro-mutations / inert
+    // clicks don't flood storage.
     if (!manual) {
       const frameHash = await hashDataUrl(dataUrl);
       if (frameHash === autoState.lastFrameHash) {
         logger.debug("[auto] dropping duplicate frame");
+        // Identical-bit frame — baseline is unchanged, no point
+        // refreshing `lastFrameDataUrl` either.
         return;
+      }
+      // Probe path: extra visual-diff gate. SHA didn't match, but
+      // the encoder can produce non-identical bytes from
+      // visually-identical pixels (re-quantization etc.). Run the
+      // offscreen diff to confirm the change is actually
+      // user-meaningful before persisting.
+      if (kind === "probe" && autoState.lastFrameDataUrl) {
+        try {
+          const result = await diffFramesViaOffscreen(
+            autoState.lastFrameDataUrl,
+            dataUrl,
+            autoState.changeRatioThreshold,
+            autoState.ignoreCursorOnlyChanges,
+          );
+          if (!result.meaningful) {
+            logger.debug(
+              "[auto] dropping probe frame (not meaningful)",
+              "ratio=",
+              result.diff.changedRatio,
+              "cursorOnly=",
+              result.cursorOnly,
+            );
+            // Refresh the baseline so we don't keep diffing against
+            // an increasingly stale frame across many inert
+            // interactions.
+            autoState.lastFrameDataUrl = dataUrl;
+            autoState.lastFrameHash = frameHash;
+            return;
+          }
+        } catch (err) {
+          // Fail-open: if the offscreen diff fails for any reason,
+          // keep the frame rather than silently lose it. The SHA
+          // dedupe above already filtered identical-bit duplicates.
+          logger.debug("[auto] offscreen diff failed, keeping frame:", err);
+        }
       }
       autoState.lastFrameHash = frameHash;
     } else {
@@ -843,6 +930,7 @@ async function performAutoCapture(opts: { manual: boolean }): Promise<void> {
       // captured.
       autoState.lastFrameHash = await hashDataUrl(dataUrl);
     }
+    autoState.lastFrameDataUrl = dataUrl;
 
     const thumbnailDataUrl = await idbStore.generateThumbnail(dataUrl);
     const { width: w, height: h } = await probeDimensions(dataUrl);
@@ -852,7 +940,7 @@ async function performAutoCapture(opts: { manual: boolean }): Promise<void> {
 
     const tags: Record<string, string> = {
       "auto.seq": String(autoState.count + 1).padStart(3, "0"),
-      "auto.trigger": manual ? "manual" : "observer",
+      "auto.trigger": kind,
       "click.title": title,
       "click.url": url,
       captureId: newIdB58(),
@@ -1000,6 +1088,9 @@ chrome.runtime.onMessage.addListener((msg: any, sender, sendResponse) => {
     case "auto-capture-signal":
       autoCaptureShot(sender.tab?.id);
       break;
+    case "auto-probe-signal":
+      autoCaptureProbe(sender.tab?.id);
+      break;
   }
   return undefined;
 });
@@ -1051,6 +1142,7 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   // tab the user lands on next.
   autoState.tabId = null;
   autoState.lastFrameHash = "";
+  autoState.lastFrameDataUrl = null;
 });
 
 chrome.tabs.onUpdated.addListener((tabId, info, tab) => {

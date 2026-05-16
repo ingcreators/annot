@@ -27,8 +27,12 @@
  * handler persist on user action.
  */
 
+import {
+  computeDiffScore,
+  isCursorOnly,
+  isMeaningfulChange,
+} from "@ingcreators/annot-capture/diff";
 import type { CaptureSession } from "./capture-session.js";
-import { computeDiffScore, isCursorOnly, isMeaningfulChange } from "./diff-detection.js";
 import type { AutoCaptureState } from "./types.js";
 
 /** Frame the engine surfaces when it decides a capture should land. */
