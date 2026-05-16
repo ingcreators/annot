@@ -269,6 +269,26 @@ export function createChromeCaptureHost(): CaptureHost {
         console.warn("[emulation] couldn't read window geometry — capturing at native size:", e);
         return;
       }
+      // The chrome-delta probe sends a `get-page-dimensions` message
+      // to the content script. If the content script isn't loaded
+      // yet (the extension's manifest declares NO `content_scripts` —
+      // every injection is programmatic via
+      // `chrome.scripting.executeScript`), the send throws and we
+      // fall through to a zero chrome delta. The one-shot capture
+      // paths inject before calling `withEmulatedViewport`, but the
+      // session paths (Auto's `activateObserverOn`, Hotkey's
+      // `startHotkeyCapture`) historically did emulation BEFORE
+      // injection — leaving the inner viewport short by the full
+      // chrome height (≈85 px on a typical desktop Chrome) for the
+      // first session on a fresh tab. Inject here so every caller
+      // gets the same accurate probe; the helper is idempotent
+      // (ping-first) so re-injecting from already-injected tabs
+      // costs one round-trip.
+      try {
+        await injectContentScript(target.id);
+      } catch {
+        /* non-injectable URL or transient failure — probe falls back to zero deltas */
+      }
       let dpr = 1;
       let chromeDelta = { width: 0, height: 0 };
       try {
