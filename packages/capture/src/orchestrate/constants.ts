@@ -33,21 +33,23 @@ export const HOTKEY_CAPTURE_MIN_INTERVAL_MS = 200;
  *  the new layout, so `window.innerWidth/Height` is stale unless we
  *  give the browser one paint tick to converge.
  *
- *  Originally tuned to 80 ms for the maximized→normal case, where
- *  the state change is essentially instantaneous on Windows. The
- *  fullscreen→normal case (F11 browser fullscreen exit) has a real
- *  animation that lasts ≈200 ms on Chrome / Windows — probing too
- *  early sees the inner viewport mid-transition, the residual gets
- *  computed against transitional dims, and the corrective resize
- *  lands on the wrong outer size. Bumped to 300 ms so the page has
- *  fully reached its final non-fullscreen state before we re-probe.
+ *  History: 80 ms (initial, sufficient for instantaneous
+ *  maximized→normal transitions) → 300 ms (covers F11 fullscreen
+ *  exit animation, ≈200 ms on Chrome / Windows) → 500 ms (covers
+ *  Win 11 Aero / DWM transition animation on maximized→normal that
+ *  some users see). The page only needs ONE paint tick once the
+ *  state transition completes, but the transition itself can vary
+ *  by Windows version, theme, and animation settings.
  *
- *  Smaller than `EMULATION_REFLOW_MS` (400 ms) because we're only
- *  waiting for the chrome / inner-viewport math to stabilize, not
- *  for media queries or lazy images. The orchestrator's separate
- *  reflow wait still runs after `setEmulatedViewport` returns, so
- *  the user-perceptible reflow budget is unaffected by this bump. */
-export const EMULATION_INNER_SETTLE_MS = 300;
+ *  Smaller than `EMULATION_REFLOW_MS` (400 ms) was the original
+ *  rationale — but we now exceed it because the state transition
+ *  can outlast the page's own reflow budget. The orchestrator's
+ *  separate post-`setEmulatedViewport` reflow wait still runs in
+ *  addition. The corrective pass iterates up to 3 times, so worst-
+ *  case total emulation latency is 3 × 500 ms + probes + resizes
+ *  ≈ 1.6 s — paid once per session start (Auto / Hotkey) or per
+ *  one-shot capture invocation. */
+export const EMULATION_INNER_SETTLE_MS = 500;
 
 /** Promise-wrapped `setTimeout`. Used to wait out paint flushes
  *  and reflow settles between capture stages. */
