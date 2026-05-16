@@ -27,29 +27,22 @@ export const POST_HIDE_PAINT_MS = 80;
  *  can come from auto-repeat. */
 export const HOTKEY_CAPTURE_MIN_INTERVAL_MS = 200;
 
-/** Settle between `chrome.windows.update` and the corrective
- *  `get-page-dimensions` re-probe inside the host's emulated-viewport
- *  apply. The window-resize call resolves before the page commits
- *  the new layout, so `window.innerWidth/Height` is stale unless we
- *  give the browser one paint tick to converge.
- *
- *  History: 80 ms (initial, sufficient for instantaneous
- *  maximized→normal transitions) → 300 ms (covers F11 fullscreen
- *  exit animation, ≈200 ms on Chrome / Windows) → 500 ms (covers
- *  Win 11 Aero / DWM transition animation on maximized→normal that
- *  some users see). The page only needs ONE paint tick once the
- *  state transition completes, but the transition itself can vary
- *  by Windows version, theme, and animation settings.
- *
- *  Smaller than `EMULATION_REFLOW_MS` (400 ms) was the original
- *  rationale — but we now exceed it because the state transition
- *  can outlast the page's own reflow budget. The orchestrator's
- *  separate post-`setEmulatedViewport` reflow wait still runs in
- *  addition. The corrective pass iterates up to 3 times, so worst-
- *  case total emulation latency is 3 × 500 ms + probes + resizes
- *  ≈ 1.6 s — paid once per session start (Auto / Hotkey) or per
- *  one-shot capture invocation. */
-export const EMULATION_INNER_SETTLE_MS = 500;
+/** Settle after a window-state transition (maximized / fullscreen
+ *  → normal). Win 11 Aero / DWM animations + Chrome's F11 fullscreen
+ *  exit (≈200 ms on Chrome / Windows) can outlast a typical paint
+ *  tick; without this wait, the post-transition chrome decoration
+ *  hasn't settled, and our subsequent chrome-delta probe captures a
+ *  transitional inner viewport. 500 ms covers the slowest case
+ *  observed (Win 11 default Aero settings on a 4K@150% display). */
+export const EMULATION_STATE_TRANSITION_MS = 500;
+
+/** Settle after a corrective `chrome.windows.update` that only
+ *  changes the inner viewport size (no state change). The window
+ *  is already in normal state and the resize is a small CSS-px
+ *  delta, so the page only needs one paint tick to update
+ *  `window.innerWidth/Height`. Much shorter than the state-
+ *  transition settle. */
+export const EMULATION_INNER_SETTLE_MS = 100;
 
 /** Promise-wrapped `setTimeout`. Used to wait out paint flushes
  *  and reflow settles between capture stages. */
