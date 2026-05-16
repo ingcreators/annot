@@ -10,9 +10,18 @@
  */
 
 import type { Settings } from "@ingcreators/annot-capture/shared";
+import { applyPersistedTheme } from "@ingcreators/annot-editor";
 import { loadSettings, onSettingsChange, saveSettings } from "../shared/settings.js";
 import { detectShortcutsPage } from "../shared/shortcuts-page.js";
 import { AnnotExtensionPopupElement } from "./annot-extension-popup.js";
+
+// Apply the persisted theme before the popup paints. Defaults to
+// `"system"` (follow OS) when nothing has been stored; the matchMedia
+// listener installed by `applyPersistedTheme()` re-flips the live
+// theme on OS-preference change. The popup itself doesn't render a
+// theme switcher — the Settings page owns that — but every popup
+// open must honour the latest persisted choice.
+applyPersistedTheme();
 
 // Force-register the element (the file's top-level
 // `customElements.define` runs as a side-effect of the import, but

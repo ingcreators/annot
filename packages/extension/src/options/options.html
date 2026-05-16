@@ -24,6 +24,32 @@
       <div class="options-status" id="saved-note" aria-live="polite"></div>
     </header>
 
+    <!-- Appearance — extension-owned (not part of the shared
+         `<annot-capture-settings>` form). Sits above the capture
+         settings so the user finds the Theme switch immediately
+         on opening Settings. The select's three options match the
+         PWA's Settings dialog: System (follow OS) / Light / Dark.
+         options.ts persists the choice through
+         `applyPersistedTheme()` from `@ingcreators/annot-editor`. -->
+    <section class="options-appearance" aria-labelledby="appearance-heading">
+      <h2 id="appearance-heading" class="options-appearance-heading">Appearance</h2>
+      <p class="options-appearance-hint">
+        Choose how the extension's popup and Settings page look. System follows your OS light/dark preference live.
+      </p>
+      <div class="options-appearance-row">
+        <label for="appearance-theme" class="options-appearance-label">Theme</label>
+        <select
+          id="appearance-theme"
+          class="options-appearance-select"
+          aria-label="Theme"
+        >
+          <option value="system">System (follow OS)</option>
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+        </select>
+      </div>
+    </section>
+
     <!-- The settings form is the shared `<annot-capture-settings>`
          Lit component from `@ingcreators/annot-host-ui`. It renders
          every section + autosaves on each input. The extension's

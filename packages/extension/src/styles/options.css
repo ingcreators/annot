@@ -4,15 +4,23 @@
  * The form sections (overlays / scrollbars / timing / format /
  * emulation) are rendered by the shared `<annot-capture-settings>`
  * Lit component (`@ingcreators/annot-host-ui`); its scoped styles
- * cover every field. This stylesheet only handles the page-level
- * chrome the extension owns: the page background, the brand
- * header strip above the component, and the autosave-flash badge
- * in the header's right corner.
+ * cover every field. This stylesheet handles the page-level chrome
+ * the extension owns (page background, brand header, autosave
+ * flash, the new Appearance section + the keyboard-shortcuts
+ * section) AND publishes the design tokens
+ * `<annot-capture-settings>` reads through `var()` so theme
+ * switching ripples through the shadow-DOM boundary.
+ *
+ * Theme switching follows the same `<html class="light">` gate as
+ * the PWA (`@ingcreators/annot-editor`'s `applyPersistedTheme()`).
+ * The dark palette is the unscoped default; the light palette
+ * overrides come from the `:root.light` block.
  */
 
 @import url("./sora-font.css");
 
 :root {
+  /* Extension-owned chrome (header, page background, autosave flash). */
   --annot-bg-primary: #0b1020;
   --annot-border: #1f2746;
   --annot-text: #e7ecf7;
@@ -21,8 +29,49 @@
      Reinforces the "blue = ingcreators network" narrative across
      the whole UI. */
   --annot-text-muted: #9fb0dc;
+  --annot-text-strong: #d1d5db;
   --annot-accent: #7c9cff;
   --annot-ok: #7ef0c5;
+  --annot-shortcuts-fill: rgba(255, 255, 255, 0.02);
+  --annot-shortcuts-fill-strong: rgba(255, 255, 255, 0.03);
+  --annot-shortcuts-kbd-fill: rgba(255, 255, 255, 0.06);
+  --annot-shortcuts-kbd-line: rgba(255, 255, 255, 0.1);
+  --annot-shortcuts-btn-fill-soft: rgba(124, 156, 255, 0.12);
+  --annot-shortcuts-btn-fill: rgba(124, 156, 255, 0.2);
+  --annot-shortcuts-btn-fill-strong: rgba(124, 156, 255, 0.28);
+  --annot-shortcuts-btn-line: rgba(124, 156, 255, 0.4);
+
+  /* Shared with `<annot-capture-settings>` — its scoped styles
+     consume these via `var()`. Defining them on `:root` lets the
+     shadow-DOM element inherit theme variants without reaching
+     into its internals. */
+  --annot-bg-panel: #10172b;
+  --annot-bg-section: #13192d;
+  --annot-bg-section-hover: #1c2444;
+  --annot-input-bg: #0d1325;
+}
+
+:root.light {
+  --annot-bg-primary: #f5f7ff;
+  --annot-border: #c8d1e8;
+  --annot-text: #1a2244;
+  --annot-text-muted: #5e6a8c;
+  --annot-text-strong: #2b3454;
+  --annot-accent: #3656d3;
+  --annot-ok: #1a8c5f;
+  --annot-shortcuts-fill: rgba(20, 30, 70, 0.02);
+  --annot-shortcuts-fill-strong: rgba(20, 30, 70, 0.04);
+  --annot-shortcuts-kbd-fill: rgba(20, 30, 70, 0.06);
+  --annot-shortcuts-kbd-line: rgba(20, 30, 70, 0.12);
+  --annot-shortcuts-btn-fill-soft: rgba(54, 86, 211, 0.1);
+  --annot-shortcuts-btn-fill: rgba(54, 86, 211, 0.16);
+  --annot-shortcuts-btn-fill-strong: rgba(54, 86, 211, 0.24);
+  --annot-shortcuts-btn-line: rgba(54, 86, 211, 0.45);
+
+  --annot-bg-panel: #ffffff;
+  --annot-bg-section: #eef2fb;
+  --annot-bg-section-hover: #dee5f5;
+  --annot-input-bg: #ffffff;
 }
 
 * {
@@ -86,6 +135,64 @@ body {
   opacity: 1;
 }
 
+/* ---- Appearance section (Theme picker) ----
+   Sits above the shared `<annot-capture-settings>` form so the
+   user finds the theme switch immediately on opening Settings.
+   The visual density mirrors the keyboard-shortcuts section
+   below, with the same border + radius. */
+
+.options-appearance {
+  margin-bottom: 14px;
+  padding: 18px 20px;
+  background: var(--annot-bg-panel);
+  border: 1px solid var(--annot-border);
+  border-radius: 12px;
+}
+
+.options-appearance-heading {
+  margin: 0 0 4px;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--annot-text);
+}
+
+.options-appearance-hint {
+  margin: 0 0 14px;
+  font-size: 12px;
+  color: var(--annot-text-muted);
+}
+
+.options-appearance-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.options-appearance-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--annot-text-strong);
+  min-width: 64px;
+}
+
+.options-appearance-select {
+  flex: 1;
+  max-width: 320px;
+  background: var(--annot-input-bg);
+  color: var(--annot-text);
+  border: 1px solid var(--annot-border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font: inherit;
+}
+
+.options-appearance-select:focus {
+  outline: 2px solid var(--annot-accent);
+  outline-offset: -1px;
+  border-color: transparent;
+}
+
 /* ---- Keyboard shortcuts section ----
    Sits below the shared `<annot-capture-settings>` form. Matches the
    form's overall density (16px gutter, muted dividers) without
@@ -117,7 +224,7 @@ body {
   padding: 0;
   border: 1px solid var(--annot-border);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--annot-shortcuts-fill);
   overflow: hidden;
 }
 
@@ -142,8 +249,8 @@ body {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12px;
   color: var(--annot-text);
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--annot-shortcuts-kbd-fill);
+  border: 1px solid var(--annot-shortcuts-kbd-line);
   padding: 2px 8px;
   border-radius: 4px;
 }
@@ -162,8 +269,8 @@ body {
   font-size: 13px;
   font-family: inherit;
   color: var(--annot-text);
-  background: rgba(124, 156, 255, 0.12);
-  border: 1px solid rgba(124, 156, 255, 0.4);
+  background: var(--annot-shortcuts-btn-fill-soft);
+  border: 1px solid var(--annot-shortcuts-btn-line);
   border-radius: 6px;
   cursor: pointer;
   transition:
@@ -172,12 +279,12 @@ body {
 }
 
 .shortcuts-config-btn:hover {
-  background: rgba(124, 156, 255, 0.2);
+  background: var(--annot-shortcuts-btn-fill);
   border-color: var(--annot-accent);
 }
 
 .shortcuts-config-btn:active {
-  background: rgba(124, 156, 255, 0.28);
+  background: var(--annot-shortcuts-btn-fill-strong);
 }
 
 /* Fallback instructions for Firefox / Safari, which block extensions
@@ -189,7 +296,7 @@ body {
   font-size: 12px;
   line-height: 1.5;
   color: var(--annot-text-muted);
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--annot-shortcuts-fill-strong);
   border: 1px solid var(--annot-border);
   border-radius: 6px;
 }

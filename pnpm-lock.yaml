@@ -169,6 +169,9 @@ importers:
       '@ingcreators/annot-core':
         specifier: workspace:*
         version: link:../core
+      '@ingcreators/annot-editor':
+        specifier: workspace:*
+        version: link:../editor
       '@ingcreators/annot-host-ui':
         specifier: workspace:*
         version: link:../host-ui

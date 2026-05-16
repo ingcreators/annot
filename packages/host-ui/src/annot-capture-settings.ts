@@ -100,22 +100,24 @@ export class AnnotCaptureSettingsElement extends LitElement {
   }
 
   static override styles: CSSResultGroup = css`
+    /* Theme tokens come from the host page's :root — custom
+       properties inherit through the shadow-DOM boundary. Defaults
+       below apply when the consumer hasn't published a value
+       (e.g. the desktop browse window's <annot-capture-settings>
+       dialog, which is dark-only chrome). The extension's options
+       page publishes both dark and light variants on :root vs
+       :root.light so the element retints automatically with the
+       page-level theme class. */
     :host {
       display: block;
       font: 13px / 1.45 system-ui, -apple-system, "Segoe UI", Roboto,
         sans-serif;
-      color: #e7ecf7;
-      --annot-bg-panel: #10172b;
-      --annot-bg-section: #13192d;
-      --annot-border: #1f2746;
-      --annot-text-muted: #9fb0dc;
-      --annot-accent: #7c9cff;
-      --annot-input-bg: #0d1325;
+      color: var(--annot-text, #e7ecf7);
     }
 
     .options-section {
-      background: var(--annot-bg-panel);
-      border: 1px solid var(--annot-border);
+      background: var(--annot-bg-panel, #10172b);
+      border: 1px solid var(--annot-border, #1f2746);
       border-radius: 12px;
       padding: 18px 20px;
       margin-bottom: 14px;
@@ -130,7 +132,7 @@ export class AnnotCaptureSettingsElement extends LitElement {
 
     .section-hint {
       margin: 0 0 14px;
-      color: var(--annot-text-muted);
+      color: var(--annot-text-muted, #9fb0dc);
       font-size: 12px;
     }
 
@@ -146,13 +148,13 @@ export class AnnotCaptureSettingsElement extends LitElement {
       font-size: 12px;
       font-weight: 600;
       margin-bottom: 4px;
-      color: #d1d5db;
+      color: var(--annot-text-strong, #d1d5db);
     }
 
     .field-hint {
       margin-top: 4px;
       font-size: 11px;
-      color: var(--annot-text-muted);
+      color: var(--annot-text-muted, #9fb0dc);
       line-height: 1.4;
     }
 
@@ -163,7 +165,7 @@ export class AnnotCaptureSettingsElement extends LitElement {
       cursor: pointer;
       font-size: 13px;
       font-weight: 500;
-      color: #e7ecf7;
+      color: var(--annot-text, #e7ecf7);
     }
 
     .field-row {
@@ -179,9 +181,9 @@ export class AnnotCaptureSettingsElement extends LitElement {
     input[type="number"],
     textarea {
       width: 100%;
-      background: var(--annot-input-bg);
-      color: #e7ecf7;
-      border: 1px solid var(--annot-border);
+      background: var(--annot-input-bg, #0d1325);
+      color: var(--annot-text, #e7ecf7);
+      border: 1px solid var(--annot-border, #1f2746);
       border-radius: 6px;
       padding: 6px 8px;
       font: inherit;
@@ -195,27 +197,27 @@ export class AnnotCaptureSettingsElement extends LitElement {
     select:focus,
     input:focus,
     textarea:focus {
-      outline: 2px solid var(--annot-accent);
+      outline: 2px solid var(--annot-accent, #7c9cff);
       outline-offset: -1px;
       border-color: transparent;
     }
 
     input[type="range"] {
       width: 100%;
-      accent-color: var(--annot-accent);
+      accent-color: var(--annot-accent, #7c9cff);
     }
 
     output {
       float: right;
       font-variant-numeric: tabular-nums;
-      color: var(--annot-text-muted);
+      color: var(--annot-text-muted, #9fb0dc);
       font-size: 12px;
     }
 
     details.advanced summary {
       cursor: pointer;
       font-size: 12px;
-      color: var(--annot-text-muted);
+      color: var(--annot-text-muted, #9fb0dc);
       padding: 4px 0;
     }
 
@@ -225,34 +227,34 @@ export class AnnotCaptureSettingsElement extends LitElement {
       gap: 10px;
       margin-top: 18px;
       padding: 12px 0 0;
-      border-top: 1px solid var(--annot-border);
+      border-top: 1px solid var(--annot-border, #1f2746);
     }
 
     .btn {
-      background: var(--annot-bg-section);
-      color: #e7ecf7;
-      border: 1px solid var(--annot-border);
+      background: var(--annot-bg-section, #13192d);
+      color: var(--annot-text, #e7ecf7);
+      border: 1px solid var(--annot-border, #1f2746);
       border-radius: 6px;
       padding: 6px 14px;
       font: inherit;
       cursor: pointer;
     }
     .btn:hover {
-      background: #1c2444;
+      background: var(--annot-bg-section-hover, #1c2444);
     }
     .footer-spacer {
       flex: 1;
     }
     .footer-saved {
       font-size: 12px;
-      color: var(--annot-text-muted);
+      color: var(--annot-text-muted, #9fb0dc);
     }
 
     code {
       font-family: ui-monospace, SF Mono, Menlo, monospace;
       font-size: 12px;
       padding: 1px 4px;
-      background: var(--annot-input-bg);
+      background: var(--annot-input-bg, #0d1325);
       border-radius: 3px;
     }
   `;
