@@ -25,6 +25,7 @@ import {
   computeOuterSizeCorrection,
   delay,
   EMULATION_INNER_SETTLE_MS,
+  EMULATION_STATE_TRANSITION_MS,
   MIN_WINDOW_DIMENSION,
   pixelToCssSize,
   type Size,
@@ -303,7 +304,10 @@ export function createChromeCaptureHost(): CaptureHost {
       if (needsNormalize) {
         try {
           await chrome.windows.update(target.windowId, { state: "normal" });
-          await delay(EMULATION_INNER_SETTLE_MS);
+          // Long settle: state transition can run an OS-level
+          // animation (Win 11 Aero, Chrome fullscreen-exit) that
+          // outlasts a typical paint tick.
+          await delay(EMULATION_STATE_TRANSITION_MS);
           // Re-read after the transition so chromeDelta is computed
           // against the now-stable normal-state outer dims.
           try {
@@ -361,26 +365,14 @@ export function createChromeCaptureHost(): CaptureHost {
       });
 
       // ── Iterative corrective pass ────────────────────────────────
-      // The chrome-delta probed above is taken BEFORE the resize, so
-      // state-dependent chrome shifts leave the inner viewport off
-      // target. We iterate, tracking the best request seen, and stop
-      // either on exact convergence or on oscillation detection.
-      //
-      // Known fractional-DPR limit: on Windows at DPR=1.5 (e.g. 4K
-      // 150% scale), `chrome.windows.update` snaps requested outer
-      // dimensions to a coarser grid (empirically: even-CSS height,
-      // ≈+2 CSS width regardless of request). Combined with chrome
-      // decoration that's non-integer in CSS (e.g. 142.5 phys = 95
-      // CSS rounded), this makes inner CSS = target CSS unreachable
-      // for some integer-CSS requests: the achievable inner values
-      // bracket the target by ±1 CSS (= ±1-2 physical px after the
-      // DPR-1.5 multiply). The user picks an integer target like
-      // "Full HD 1920×1080" and we land at 1078-1079 or 1081-1082,
-      // never exactly 1080. We minimize the residual but cannot
-      // eliminate it without an alternative API (e.g. CDP
-      // `Emulation.setDeviceMetricsOverride`, which would require
-      // `chrome.debugger` permission + visible debugger banner).
-      const MAX_CORRECTIVE_ITERATIONS = 4;
+      // Safety net for the rare case where the chrome decoration
+      // shifts subtly between probe and capture (DPR-fraction CSS
+      // rounding, mid-session page reflow). With pre-normalization
+      // above the first-pass should usually land exactly on target
+      // and this loop converges on iter 0; max 2 iterations is
+      // enough room for an outlier to settle without paying for an
+      // open-ended retry budget.
+      const MAX_CORRECTIVE_ITERATIONS = 2;
       let currentOuter: Size = desired;
       let bestRequest: Size = currentOuter;
       let bestResidualSum = Number.POSITIVE_INFINITY;
