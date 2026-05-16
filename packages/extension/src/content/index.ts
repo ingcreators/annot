@@ -217,6 +217,22 @@ if (guardWindow.__annot_injected) {
   let autoStableTimer: number | null = null;
   let autoStableWaitMs = 0;
 
+  // Narrow attribute allowlist for the auto-capture MutationObserver.
+  // These are the semantic state attributes modern UI libraries flip
+  // when toggling visibility / activation on pre-rendered nodes; the
+  // dropdown menus on https://claude.com/product/overview are the
+  // motivating example. `class` / `style` are intentionally absent —
+  // they fire on every `:hover` / animation frame.
+  const AUTO_CAPTURE_ATTRIBUTE_FILTER: string[] = [
+    "aria-expanded", // disclosure / dropdown buttons
+    "aria-hidden", // overlay show / hide
+    "aria-selected", // tab activation
+    "aria-current", // breadcrumb / step / pagination
+    "data-state", // Radix UI / shadcn / Headless UI
+    "hidden", // global HTML hidden boolean
+    "open", // <details> / <dialog>
+  ];
+
   /**
    * Install a `MutationObserver` on `document.body` and signal the
    * service worker whenever mutations settle for `stableWaitMs`.
@@ -227,10 +243,15 @@ if (guardWindow.__annot_injected) {
    * - `subtree: true` — entire descendant tree counts.
    * - `characterData: true` — text-node edits (search-as-you-type,
    *   inline counters, etc.).
-   * - `attributes: false` — too noisy (every `:hover` style change,
-   *   `aria-expanded` toggle, focus-management bookkeeping fires).
-   *   Real visual changes almost always come paired with childList /
-   *   text mutations anyway.
+   * - `attributes: true` with a narrow `attributeFilter` allowlist —
+   *   semantic state attributes that modern UI libraries flip when
+   *   toggling visibility / activation. Covers patterns where the
+   *   element is pre-rendered and a click only flips `aria-expanded`
+   *   / `data-state` / `hidden` (Radix UI, Headless UI, shadcn,
+   *   Framer Motion's pre-render-then-animate, native `<details>` /
+   *   `<dialog>`). `class` and `style` are intentionally EXCLUDED:
+   *   they fire on every `:hover` / `:focus-visible` / animation
+   *   frame and would dominate the signal.
    *
    * Throttle / dedupe live service-worker-side so we can keep this
    * end as a thin signal source.
@@ -243,7 +264,8 @@ if (guardWindow.__annot_injected) {
       childList: true,
       subtree: true,
       characterData: true,
-      attributes: false,
+      attributes: true,
+      attributeFilter: AUTO_CAPTURE_ATTRIBUTE_FILTER,
     });
     logger.debug("[annot] auto-capture observer installed, stableWait=", autoStableWaitMs);
   }
