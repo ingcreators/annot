@@ -244,17 +244,41 @@ export function createChromeCaptureHost(): CaptureHost {
       if (target.windowId == null) return;
       if (size === null) {
         // Restore mode.
+        //
+        // `chrome.windows.update` documents that "minimized",
+        // "maximized" and "fullscreen" states cannot be combined
+        // with `left`, `top`, `width` or `height`. So when the user
+        // started with a maximized / fullscreen window (the common
+        // case post-#727 pre-normalize), we can't restore in a
+        // single update — Chrome rejects the request and nothing
+        // happens, leaving the window stuck at the emulated size.
+        //
+        // Two-step restore for non-normal saved states:
+        //   1. Restore size + position with `state: "normal"`. This
+        //      gives the window its pre-maximize bounds, which is
+        //      the natural "previous normal size" the user would
+        //      see after un-maximizing manually.
+        //   2. Re-apply the saved state ("maximized" / "fullscreen")
+        //      WITHOUT bounds. Chrome accepts state-only updates,
+        //      and the saved state takes the window back to its
+        //      pre-emulation appearance.
+        // For an originally-"normal" save, the single-update path
+        // works fine and we skip step 2.
         const saved = savedGeometryByWindow.get(target.windowId);
         if (!saved) return;
         savedGeometryByWindow.delete(target.windowId);
+        const restoreState = saved.state || "normal";
         try {
           await chrome.windows.update(target.windowId, {
             width: saved.width,
             height: saved.height,
             left: saved.left,
             top: saved.top,
-            state: saved.state || "normal",
+            state: "normal",
           });
+          if (restoreState !== "normal") {
+            await chrome.windows.update(target.windowId, { state: restoreState });
+          }
         } catch {
           /* ignore — best effort restore */
         }
