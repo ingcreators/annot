@@ -22,6 +22,11 @@ import type {
 import {
   computeChromeDelta,
   computeDesiredWindowSize,
+  computeOuterSizeCorrection,
+  delay,
+  EMULATION_INNER_SETTLE_MS,
+  MIN_WINDOW_DIMENSION,
+  pixelToCssSize,
 } from "@ingcreators/annot-capture/orchestrate";
 import type {
   BackgroundToContentMessage,
@@ -280,11 +285,9 @@ export function createChromeCaptureHost(): CaptureHost {
       } catch {
         /* fall back to zero deltas / dpr=1 */
       }
-      const desired = computeDesiredWindowSize(
-        { width: size.width, height: size.height },
-        dpr,
-        chromeDelta,
-      );
+      const pixelTarget = { width: size.width, height: size.height };
+      const targetCss = pixelToCssSize(pixelTarget, dpr);
+      const desired = computeDesiredWindowSize(pixelTarget, dpr, chromeDelta);
       savedGeometryByWindow.set(target.windowId, {
         width: originalWindow.width,
         height: originalWindow.height,
@@ -300,6 +303,44 @@ export function createChromeCaptureHost(): CaptureHost {
         height: desired.height,
         state: "normal", // forces explicit size if the window was maximized
       });
+
+      // ── Corrective pass ──────────────────────────────────────────
+      // The chrome-delta probed above is taken BEFORE the resize, so
+      // state-dependent chrome shifts leave the inner viewport off
+      // target. Two failure modes seen in practice:
+      //   - Maximized→normal: a Hotkey session started on a maximized
+      //     window leaves the inner viewport ≈12 px tall over the
+      //     target (Windows reports the maximized outer as larger than
+      //     the visible area; the gutter disappears once state:"normal"
+      //     is forced, so the pre-resize chromeDelta overstates true
+      //     chrome height by exactly the gutter).
+      //   - DPR-fraction rounding: a fractional DPR like 1.7 makes
+      //     `pixelTarget.height / DPR` non-integer, so `pixelToCssSize`
+      //     rounds to nearest, leaving ±1 px after re-scaling by DPR.
+      // Re-measure the actual inner viewport, compute the residual,
+      // and apply a single corrective resize. One iteration converges
+      // because the chrome decoration is stable once the window has
+      // reached its final non-maximized state.
+      try {
+        await delay(EMULATION_INNER_SETTLE_MS);
+        const dimsAfter = (await chrome.tabs.sendMessage(target.id, {
+          type: "get-page-dimensions",
+        })) as PageDimensions | undefined;
+        if (dimsAfter) {
+          const correction = computeOuterSizeCorrection(desired, targetCss, {
+            width: dimsAfter.viewportWidth,
+            height: dimsAfter.viewportHeight,
+          });
+          if (correction !== null) {
+            await chrome.windows.update(target.windowId, {
+              width: Math.max(MIN_WINDOW_DIMENSION, correction.width),
+              height: Math.max(MIN_WINDOW_DIMENSION, correction.height),
+            });
+          }
+        }
+      } catch {
+        /* best-effort correction; first-pass estimate stands */
+      }
     },
 
     async sendToContent<T = unknown>(

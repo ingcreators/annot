@@ -96,6 +96,52 @@ export function computeDesiredWindowSize(
   };
 }
 
+/**
+ * Compute the corrective outer-window size to use after a first-pass
+ * emulator resize has settled and the inner viewport diverged from
+ * the requested target.
+ *
+ * The chrome-delta probed by `computeChromeDelta` is taken BEFORE
+ * the host calls its window-resize API, so two state-dependent
+ * effects can leave the inner viewport off-target:
+ *
+ *   1. Maximized → normal transition. On Windows, Chrome reports a
+ *      maximized window's outer bounds as ≈8–16 px larger than the
+ *      visible area (the "invisible resize handle" gutter that
+ *      vanishes once the window unmaximizes). The pre-resize
+ *      chrome-delta therefore overstates the true chrome by exactly
+ *      that gutter, and the inner viewport overshoots the target
+ *      by the same amount after `state: "normal"` is forced.
+ *   2. DPR-fraction rounding. When `pixelTarget / DPR` isn't an
+ *      integer (e.g. 1080 / 1.7 = 635.29) the CSS-pixel side rounds
+ *      to nearest, leaving ±1 px after re-scaling by DPR.
+ *
+ * Re-measuring the actual inner viewport once the first-pass resize
+ * has paint-committed, then feeding it through this helper, yields
+ * the residual the caller should add back to the outer window's
+ * size for a single corrective resize. One iteration converges —
+ * the chrome decoration is stable once the window has reached its
+ * final non-maximized state.
+ *
+ * Returns `null` when the actual inner viewport already matches the
+ * target (no second resize needed). Returns the same width / height
+ * the caller passed for `appliedOuter` on axes that already match;
+ * the corrective resize only moves the axis that drifted.
+ */
+export function computeOuterSizeCorrection(
+  appliedOuter: Size,
+  targetInnerCss: Size,
+  actualInnerCss: Size,
+): Size | null {
+  const dw = targetInnerCss.width - actualInnerCss.width;
+  const dh = targetInnerCss.height - actualInnerCss.height;
+  if (dw === 0 && dh === 0) return null;
+  return {
+    width: appliedOuter.width + dw,
+    height: appliedOuter.height + dh,
+  };
+}
+
 // ─── Scroll-segment plan (used by captureFullPageInner) ───────────────
 
 export interface PageDims {

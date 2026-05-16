@@ -7,6 +7,7 @@ import { MAX_CANVAS_DIMENSION } from "./constants.js";
 import {
   computeChromeDelta,
   computeDesiredWindowSize,
+  computeOuterSizeCorrection,
   MIN_WINDOW_DIMENSION,
   pixelToCssSize,
   planScrollSegments,
@@ -114,6 +115,67 @@ describe("computeDesiredWindowSize", () => {
     expect(
       computeDesiredWindowSize({ width: 1280, height: 720 }, 1, { width: -50, height: -50 }),
     ).toEqual({ width: 1280, height: 720 });
+  });
+});
+
+// ─── computeOuterSizeCorrection ──────────────────────────────────────
+
+describe("computeOuterSizeCorrection", () => {
+  it("returns null when the actual inner viewport already matches the target", () => {
+    expect(
+      computeOuterSizeCorrection(
+        { width: 1920, height: 1167 },
+        { width: 1920, height: 1080 },
+        { width: 1920, height: 1080 },
+      ),
+    ).toBeNull();
+  });
+
+  it("adds the residual to the outer size when the inner overshoots", () => {
+    // First-pass landed inner at 1092 on a 1080 target — chrome
+    // delta was overestimated by 12 px (typical maximized→normal
+    // transition on Windows). The corrective resize must SHRINK
+    // the outer by 12 so the inner lands at 1080.
+    expect(
+      computeOuterSizeCorrection(
+        { width: 1920, height: 1167 },
+        { width: 1920, height: 1080 },
+        { width: 1920, height: 1092 },
+      ),
+    ).toEqual({ width: 1920, height: 1155 });
+  });
+
+  it("adds the residual when the inner undershoots", () => {
+    // First-pass landed inner at 1079 on a 1080 target — chrome
+    // delta was underestimated by 1 px. The corrective resize
+    // must GROW the outer by 1 so the inner lands at 1080.
+    expect(
+      computeOuterSizeCorrection(
+        { width: 1920, height: 1167 },
+        { width: 1920, height: 1080 },
+        { width: 1920, height: 1079 },
+      ),
+    ).toEqual({ width: 1920, height: 1168 });
+  });
+
+  it("corrects each axis independently", () => {
+    expect(
+      computeOuterSizeCorrection(
+        { width: 1936, height: 1167 },
+        { width: 1920, height: 1080 },
+        { width: 1908, height: 1085 },
+      ),
+    ).toEqual({ width: 1948, height: 1162 });
+  });
+
+  it("returns null only when BOTH axes are exact (one-axis drift still corrects)", () => {
+    expect(
+      computeOuterSizeCorrection(
+        { width: 1920, height: 1167 },
+        { width: 1920, height: 1080 },
+        { width: 1920, height: 1081 },
+      ),
+    ).toEqual({ width: 1920, height: 1166 });
   });
 });
 

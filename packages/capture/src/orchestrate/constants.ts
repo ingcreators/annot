@@ -27,6 +27,18 @@ export const POST_HIDE_PAINT_MS = 80;
  *  can come from auto-repeat. */
 export const HOTKEY_CAPTURE_MIN_INTERVAL_MS = 200;
 
+/** Short settle between `chrome.windows.update` and the corrective
+ *  `get-page-dimensions` re-probe inside the host's emulated-viewport
+ *  apply. The window-resize call resolves before the page commits
+ *  the new layout, so `window.innerWidth/Height` is stale unless we
+ *  give the browser one paint tick to converge. Smaller than
+ *  `EMULATION_REFLOW_MS` because we're only waiting for the chrome /
+ *  inner-viewport math to stabilize, not for media queries or lazy
+ *  images. The orchestrator's separate reflow wait still runs after
+ *  `setEmulatedViewport` returns, so the user-perceptible reflow
+ *  budget is unaffected. */
+export const EMULATION_INNER_SETTLE_MS = 80;
+
 /** Promise-wrapped `setTimeout`. Used to wait out paint flushes
  *  and reflow settles between capture stages. */
 export function delay(ms: number): Promise<void> {
