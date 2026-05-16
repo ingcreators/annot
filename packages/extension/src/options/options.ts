@@ -16,6 +16,12 @@
  * property, and saves on `settings-changed`.
  */
 
+import {
+  applyPersistedTheme,
+  getPersistedThemeMode,
+  persistThemeChoice,
+  type ThemeMode,
+} from "@ingcreators/annot-editor";
 import type {
   AnnotCaptureSettingsElement,
   AutoCaptureOptionsChangeDetail,
@@ -31,6 +37,19 @@ import {
   saveSettings,
 } from "../shared/settings.js";
 import { detectShortcutsPage } from "../shared/shortcuts-page.js";
+
+// Apply the persisted theme before the first paint depends on it.
+// Defaults to "system" (follow OS) when nothing has been stored;
+// the matchMedia listener installed by `applyPersistedTheme()`
+// re-flips the `<html class="light">` gate live on OS preference
+// change.
+applyPersistedTheme();
+
+// Wire the Theme select at module load (independent of `chrome.*`
+// availability) so it works even if the capture-settings `init()`
+// below aborts during a dev / non-extension load where
+// `chrome.storage` / `chrome.commands` aren't available.
+wireAppearanceSection();
 
 let savedTimer: number | undefined;
 
@@ -87,6 +106,31 @@ async function init(): Promise<void> {
   });
 
   void renderShortcutsSection();
+}
+
+/** Wire the Appearance → Theme select to the
+ *  `@ingcreators/annot-editor` theme-overrides helpers. The select
+ *  is populated with the persisted mode on first render; picking
+ *  a new value persists + re-applies immediately. `localStorage`
+ *  fires `storage` events on cross-window changes (e.g. the popup
+ *  re-opening after a theme flip), so the listener keeps the
+ *  options select in sync when another extension surface updates
+ *  the persisted mode. */
+function wireAppearanceSection(): void {
+  const select = el<HTMLSelectElement>("appearance-theme");
+  select.value = getPersistedThemeMode();
+  select.addEventListener("change", () => {
+    const mode = select.value as ThemeMode;
+    persistThemeChoice(mode);
+    applyPersistedTheme();
+    flashSaved("Saved");
+  });
+  window.addEventListener("storage", (ev) => {
+    if (ev.key !== "annot.theme") return;
+    const next = getPersistedThemeMode();
+    if (select.value !== next) select.value = next;
+    applyPersistedTheme();
+  });
 }
 
 /** Render the current `chrome.commands` bindings + either a button

@@ -1,5 +1,81 @@
 @import url("./sora-font.css");
 
+/* Theme tokens — the dark palette is the unscoped default; the
+   light palette is gated by `<html class="light">`. `applyPersistedTheme()`
+   in `popup.ts` toggles the class at boot from `localStorage["annot.theme"]`
+   (default `"system"` → resolves through `prefers-color-scheme`). */
+:root {
+  --annot-popup-bg: #0f1730;
+  --annot-popup-text: #eef2ff;
+  --annot-popup-text-muted: #9fb0dc;
+  --annot-popup-text-soft: #b7c0e0;
+  --annot-popup-text-strong: #c7d3f5;
+  --annot-popup-accent: #7c9cff;
+  --annot-popup-accent-soft: #1a2244;
+  --annot-popup-ok: #7ef0c5;
+  --annot-popup-danger: #e44;
+  --annot-popup-danger-strong: #ff9e9e;
+  /* Borders + chip backdrops use rgba-on-white so they read as
+     "edge chrome" on the dark backdrop. The light variant below
+     swaps the channel + tightens alpha so the same percentages
+     produce a coherent palette in either mode. */
+  --annot-popup-line-soft: rgba(255, 255, 255, 0.08);
+  --annot-popup-line-strong: rgba(255, 255, 255, 0.18);
+  --annot-popup-fill-soft: rgba(255, 255, 255, 0.02);
+  --annot-popup-fill: rgba(255, 255, 255, 0.04);
+  --annot-popup-fill-strong: rgba(255, 255, 255, 0.06);
+  --annot-popup-fill-stronger: rgba(255, 255, 255, 0.1);
+  --annot-popup-fill-strongest: rgba(255, 255, 255, 0.28);
+  --annot-popup-accent-fill-soft: rgba(124, 156, 255, 0.1);
+  --annot-popup-accent-fill: rgba(124, 156, 255, 0.12);
+  --annot-popup-accent-fill-strong: rgba(124, 156, 255, 0.14);
+  --annot-popup-accent-fill-stronger: rgba(124, 156, 255, 0.2);
+  --annot-popup-accent-fill-strongest: rgba(124, 156, 255, 0.28);
+  --annot-popup-accent-line: rgba(124, 156, 255, 0.4);
+  --annot-popup-accent-line-strong: rgba(124, 156, 255, 0.5);
+  --annot-popup-danger-fill-soft: rgba(228, 68, 68, 0.1);
+  --annot-popup-danger-fill: rgba(228, 68, 68, 0.12);
+  --annot-popup-danger-fill-strong: rgba(228, 68, 68, 0.2);
+  --annot-popup-danger-line: rgba(228, 68, 68, 0.35);
+  --annot-popup-danger-line-strong: rgba(228, 68, 68, 0.4);
+  --annot-popup-success-line: rgba(126, 240, 197, 0.4);
+  --annot-popup-success-fill: rgba(126, 240, 197, 0.1);
+}
+
+:root.light {
+  --annot-popup-bg: #f5f7ff;
+  --annot-popup-text: #1a2244;
+  --annot-popup-text-muted: #5e6a8c;
+  --annot-popup-text-soft: #475174;
+  --annot-popup-text-strong: #2b3454;
+  --annot-popup-accent: #3656d3;
+  --annot-popup-accent-soft: #e3ecff;
+  --annot-popup-ok: #1a8c5f;
+  --annot-popup-danger: #c92929;
+  --annot-popup-danger-strong: #a01919;
+  --annot-popup-line-soft: rgba(20, 30, 70, 0.12);
+  --annot-popup-line-strong: rgba(20, 30, 70, 0.28);
+  --annot-popup-fill-soft: rgba(20, 30, 70, 0.02);
+  --annot-popup-fill: rgba(20, 30, 70, 0.04);
+  --annot-popup-fill-strong: rgba(20, 30, 70, 0.06);
+  --annot-popup-fill-stronger: rgba(20, 30, 70, 0.1);
+  --annot-popup-fill-strongest: rgba(20, 30, 70, 0.18);
+  --annot-popup-accent-fill-soft: rgba(54, 86, 211, 0.08);
+  --annot-popup-accent-fill: rgba(54, 86, 211, 0.1);
+  --annot-popup-accent-fill-strong: rgba(54, 86, 211, 0.14);
+  --annot-popup-accent-fill-stronger: rgba(54, 86, 211, 0.18);
+  --annot-popup-accent-fill-strongest: rgba(54, 86, 211, 0.26);
+  --annot-popup-accent-line: rgba(54, 86, 211, 0.45);
+  --annot-popup-accent-line-strong: rgba(54, 86, 211, 0.6);
+  --annot-popup-danger-fill-soft: rgba(201, 41, 41, 0.08);
+  --annot-popup-danger-fill: rgba(201, 41, 41, 0.1);
+  --annot-popup-danger-fill-strong: rgba(201, 41, 41, 0.18);
+  --annot-popup-danger-line: rgba(201, 41, 41, 0.4);
+  --annot-popup-danger-line-strong: rgba(201, 41, 41, 0.5);
+  --annot-popup-success-line: rgba(26, 140, 95, 0.45);
+  --annot-popup-success-fill: rgba(26, 140, 95, 0.08);
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -17,33 +93,27 @@ html {
   scrollbar-width: thin;
 }
 
-/* Tint the scrollbar to match the popup's dark theme. The thumb uses
-   the same `rgba(255, 255, 255, X)` low-alpha utility palette as the
-   rest of the popup's chrome (button borders, separators), so it
-   reads as "edge chrome" rather than as an interactive control. Brand
-   accents (`#7c9cff` etc.) are deliberately NOT used here — they
-   carry an "interactive / focusable" semantic via button hover, focus
-   borders, and the wordmark, so reusing them on a non-interactive
-   overflow indicator would dilute that meaning. Hover lifts the
-   thumb to give the user a slightly stronger affordance while
-   dragging. WebKit pseudo-elements are sufficient because the
-   extension only ships on Chromium. */
+/* Tint the scrollbar to match the popup's theme. The thumb uses the
+   same low-alpha utility palette as the rest of the popup's chrome
+   (button borders, separators), so it reads as "edge chrome" rather
+   than as an interactive control. WebKit pseudo-elements are
+   sufficient because the extension only ships on Chromium. */
 html::-webkit-scrollbar-track {
   background: transparent;
 }
 html::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.18);
+  background: var(--annot-popup-line-strong);
   border-radius: 4px;
 }
 html::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.28);
+  background: var(--annot-popup-fill-strongest);
 }
 
 body {
   width: 360px;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  background: #0f1730;
-  color: #eef2ff;
+  background: var(--annot-popup-bg);
+  color: var(--annot-popup-text);
 }
 
 annot-extension-popup {
@@ -81,14 +151,14 @@ annot-extension-popup {
   font-size: 18px;
   font-weight: 700;
   letter-spacing: -0.035em;
-  color: #eef2ff;
+  color: var(--annot-popup-text);
 }
 
 .popup-brand-org {
   font-size: 10px;
   font-weight: 500;
   letter-spacing: 0.02em;
-  color: #9fb0dc;
+  color: var(--annot-popup-text-muted);
   text-transform: lowercase;
 }
 
@@ -100,7 +170,7 @@ annot-extension-popup {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #9fb0dc;
+  color: var(--annot-popup-text-muted);
   margin: 6px 2px 2px;
 }
 
@@ -109,10 +179,10 @@ annot-extension-popup {
   align-items: center;
   gap: 10px;
   padding: 10px 14px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--annot-popup-line-soft);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.04);
-  color: #eef2ff;
+  background: var(--annot-popup-fill);
+  color: var(--annot-popup-text);
   font-size: 14px;
   font-family: inherit;
   cursor: pointer;
@@ -123,19 +193,19 @@ annot-extension-popup {
 }
 
 .popup-btn:hover {
-  background: rgba(124, 156, 255, 0.14);
-  border-color: #7c9cff;
+  background: var(--annot-popup-accent-fill-strong);
+  border-color: var(--annot-popup-accent);
 }
 
 .popup-btn:active {
-  background: rgba(124, 156, 255, 0.22);
+  background: var(--annot-popup-accent-fill-stronger);
 }
 
 .popup-btn-icon {
   font-size: 18px;
   width: 24px;
   text-align: center;
-  color: #7c9cff;
+  color: var(--annot-popup-accent);
   flex-shrink: 0;
 }
 
@@ -146,24 +216,34 @@ annot-extension-popup {
 .popup-btn-trailing {
   margin-left: auto;
   font-size: 10px;
-  color: #b7c0e0;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--annot-popup-text-soft);
+  background: var(--annot-popup-fill-strong);
+  border: 1px solid var(--annot-popup-fill-stronger);
   padding: 2px 6px;
   border-radius: 4px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
+/* Subtitle text rendered to the right of the button label (e.g.
+   "on DOM changes" for the Auto button). Plain text in muted color
+   — no badge styling like `.popup-btn-trailing`. */
+.popup-btn-subtitle {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--annot-popup-text-muted);
+  font-weight: 400;
+}
+
 .popup-btn-secondary {
   background: transparent;
-  border-color: rgba(255, 255, 255, 0.06);
+  border-color: var(--annot-popup-line-soft);
   font-size: 13px;
   padding: 8px 14px;
 }
 
 .popup-btn-secondary:hover {
-  background: rgba(126, 240, 197, 0.1);
-  border-color: #7ef0c5;
+  background: var(--annot-popup-success-fill);
+  border-color: var(--annot-popup-ok);
 }
 
 /* Primary call-to-action variant used by the "Add Capture" button
@@ -172,51 +252,51 @@ annot-extension-popup {
    placed directly below — both buttons live in the same vertical
    column and need to be distinguishable at a glance. */
 .popup-btn-primary {
-  border-color: rgba(124, 156, 255, 0.4);
-  background: rgba(124, 156, 255, 0.12);
+  border-color: var(--annot-popup-accent-line);
+  background: var(--annot-popup-accent-fill);
 }
 
 .popup-btn-primary:hover {
-  background: rgba(124, 156, 255, 0.2);
-  border-color: #7c9cff;
+  background: var(--annot-popup-accent-fill-stronger);
+  border-color: var(--annot-popup-accent);
 }
 
 .popup-btn-primary .popup-btn-icon {
-  color: #7c9cff;
+  color: var(--annot-popup-accent);
   font-weight: 700;
 }
 
 .popup-separator {
   height: 1px;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--annot-popup-line-soft);
   margin: 8px 0 4px;
 }
 
 /* ---- Hotkey unbound notice ----
    Inline panel that appears under the Hotkey button when the user
    clicks it while no keyboard shortcut is bound. Brand-blue tint
-   reuses the same `rgba(124, 156, 255, X)` palette as `popup-btn`
-   hover / focus borders so the notice reads as "Annot speaking",
-   not as a generic browser alert. */
+   reuses the same accent palette as `popup-btn` hover / focus
+   borders so the notice reads as "Annot speaking", not as a
+   generic browser alert. */
 
 .popup-hotkey-notice {
   display: flex;
   flex-direction: column;
   gap: 8px;
   padding: 10px 12px;
-  border: 1px solid rgba(124, 156, 255, 0.4);
+  border: 1px solid var(--annot-popup-accent-line);
   border-radius: 8px;
-  background: rgba(124, 156, 255, 0.1);
+  background: var(--annot-popup-accent-fill-soft);
 }
 
 .popup-hotkey-notice-text {
   font-size: 12px;
   line-height: 1.45;
-  color: #c7d3f5;
+  color: var(--annot-popup-text-strong);
 }
 
 .popup-hotkey-notice-text strong {
-  color: #eef2ff;
+  color: var(--annot-popup-text);
   font-weight: 600;
 }
 
@@ -231,9 +311,9 @@ annot-extension-popup {
   padding: 6px 10px;
   font-size: 12px;
   font-family: inherit;
-  color: #eef2ff;
-  background: rgba(124, 156, 255, 0.18);
-  border: 1px solid rgba(124, 156, 255, 0.5);
+  color: var(--annot-popup-text);
+  background: var(--annot-popup-accent-fill-strong);
+  border: 1px solid var(--annot-popup-accent-line-strong);
   border-radius: 6px;
   cursor: pointer;
   transition:
@@ -242,8 +322,8 @@ annot-extension-popup {
 }
 
 .popup-hotkey-notice-btn:hover {
-  background: rgba(124, 156, 255, 0.28);
-  border-color: #7c9cff;
+  background: var(--annot-popup-accent-fill-strongest);
+  border-color: var(--annot-popup-accent);
 }
 
 .popup-hotkey-notice-dismiss {
@@ -252,7 +332,7 @@ annot-extension-popup {
   padding: 0;
   font-size: 16px;
   line-height: 1;
-  color: #9fb0dc;
+  color: var(--annot-popup-text-muted);
   background: transparent;
   border: 1px solid transparent;
   border-radius: 4px;
@@ -261,8 +341,8 @@ annot-extension-popup {
 }
 
 .popup-hotkey-notice-dismiss:hover {
-  color: #eef2ff;
-  background: rgba(255, 255, 255, 0.06);
+  color: var(--annot-popup-text);
+  background: var(--annot-popup-fill-strong);
 }
 
 /* ---- Quick Options ----
@@ -271,9 +351,9 @@ annot-extension-popup {
    360px popup. */
 
 .popup-quick-options {
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--annot-popup-line-soft);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--annot-popup-fill-soft);
   padding: 6px 10px;
 }
 
@@ -286,7 +366,7 @@ annot-extension-popup {
   padding: 4px 0;
   font-size: 13px;
   font-weight: 600;
-  color: #c7d3f5;
+  color: var(--annot-popup-text-strong);
   list-style: none;
   display: flex;
   align-items: center;
@@ -305,7 +385,7 @@ annot-extension-popup {
 .popup-quick-options-summary::before {
   content: "\25B8";
   font-size: 10px;
-  color: #7c9cff;
+  color: var(--annot-popup-accent);
   width: 10px;
   display: inline-block;
   transition: transform 0.15s;
@@ -318,7 +398,7 @@ annot-extension-popup {
 .popup-quick-options-loading {
   padding: 6px 4px;
   font-size: 12px;
-  color: #9fb0dc;
+  color: var(--annot-popup-text-muted);
 }
 
 .popup-quick-options-row {
@@ -331,7 +411,7 @@ annot-extension-popup {
 
 .popup-quick-options-label {
   font-size: 12px;
-  color: #b7c0e0;
+  color: var(--annot-popup-text-soft);
 }
 
 .popup-quick-options-select {
@@ -339,16 +419,16 @@ annot-extension-popup {
   padding: 3px 6px;
   font-size: 12px;
   font-family: inherit;
-  color: #eef2ff;
-  background: #1a2244;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--annot-popup-text);
+  background: var(--annot-popup-accent-soft);
+  border: 1px solid var(--annot-popup-fill-stronger);
   border-radius: 4px;
   cursor: pointer;
 }
 
 .popup-quick-options-select:focus {
   outline: none;
-  border-color: #7c9cff;
+  border-color: var(--annot-popup-accent);
 }
 
 /* ---- Hotkey Capture active state ---- */
@@ -359,10 +439,10 @@ annot-extension-popup {
   justify-content: center;
   gap: 8px;
   padding: 10px 12px;
-  border: 1px solid rgba(228, 68, 68, 0.35);
+  border: 1px solid var(--annot-popup-danger-line);
   border-radius: 8px;
-  background: rgba(228, 68, 68, 0.12);
-  color: #ff9e9e;
+  background: var(--annot-popup-danger-fill);
+  color: var(--annot-popup-danger-strong);
   font-size: 13px;
   font-weight: 600;
 }
@@ -371,7 +451,7 @@ annot-extension-popup {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: #e44;
+  background: var(--annot-popup-danger);
   animation: popup-rec-pulse 1.2s ease-in-out infinite;
 }
 
@@ -390,7 +470,7 @@ annot-extension-popup {
 .popup-rec-count {
   text-align: center;
   font-size: 12px;
-  color: #b7c0e0;
+  color: var(--annot-popup-text-soft);
   padding: 2px 0;
 }
 
@@ -399,29 +479,29 @@ annot-extension-popup {
 .popup-rec-summary {
   text-align: center;
   font-size: 11px;
-  color: #9fb0dc;
+  color: var(--annot-popup-text-muted);
   padding: 4px 0 6px;
 }
 
 .popup-btn-stop {
-  border-color: rgba(228, 68, 68, 0.4);
-  background: rgba(228, 68, 68, 0.1);
+  border-color: var(--annot-popup-danger-line-strong);
+  background: var(--annot-popup-danger-fill-soft);
 }
 
 .popup-btn-stop:hover {
-  background: rgba(228, 68, 68, 0.2);
-  border-color: #e44;
+  background: var(--annot-popup-danger-fill-strong);
+  border-color: var(--annot-popup-danger);
 }
 
 .popup-btn-stop .popup-btn-icon {
-  color: #e44;
+  color: var(--annot-popup-danger);
 }
 
 .popup-kbd {
   display: inline-block;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  color: #eef2ff;
+  background: var(--annot-popup-fill-stronger);
+  border: 1px solid var(--annot-popup-line-strong);
+  color: var(--annot-popup-text);
   padding: 1px 6px;
   border-radius: 4px;
   font-size: 11px;

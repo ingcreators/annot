@@ -12,6 +12,12 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "@ingcreators/annot-web", "exec", "storybook", "dev", "-p", "6006", "--no-open"],
       "port": 6006
+    },
+    {
+      "name": "annot-extension-dev",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@ingcreators/annot-extension", "exec", "vite", "--port", "5173", "--strictPort"],
+      "port": 5173
     }
   ]
 }
