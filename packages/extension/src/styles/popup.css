@@ -123,17 +123,64 @@ annot-extension-popup {
   padding: 16px;
 }
 
+/* Header strip — left-aligned brand on the left, Settings gear
+   on the right. The previous centered brand has been replaced by
+   this two-column flex header so the popup matches the productivity-
+   tool convention (brand identity left, header actions right) and
+   leaves room for future status / account affordances next to the
+   gear. */
+.popup-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
 .popup-brand {
   display: flex;
   align-items: center;
-  justify-content: center;
   gap: 10px;
-  margin-bottom: 4px;
+  flex: 1;
+  min-width: 0;
 }
 
 .popup-brand svg {
   display: block;
   flex-shrink: 0;
+}
+
+/* Header gear button — square, ghost background, hover lifts to
+   the same accent-tinted fill as the primary popup buttons so the
+   user reads it as "interactive" rather than as decoration. */
+.popup-header-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  font-size: 18px;
+  font-family: inherit;
+  color: var(--annot-popup-text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    color 0.15s;
+}
+
+.popup-header-action:hover {
+  color: var(--annot-popup-accent);
+  background: var(--annot-popup-accent-fill-strong);
+  border-color: var(--annot-popup-accent);
+}
+
+.popup-header-action:active {
+  background: var(--annot-popup-accent-fill-stronger);
 }
 
 .popup-brand-stack {
