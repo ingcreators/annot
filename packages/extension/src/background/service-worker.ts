@@ -506,10 +506,13 @@ async function startHotkeyCapture(): Promise<void> {
   try {
     const settings = await loadSettings();
     const [activeTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-    if (activeTab?.windowId != null) {
+    // Need a real tab id (not just windowId) so the host's chrome-
+    // delta probe can run — without it the emulated session captures
+    // at outer-window minus chrome instead of the user's preset.
+    if (activeTab?.id != null && activeTab.windowId != null) {
       hotkeyState.emulatedWindowId = await applySessionEmulation(
         host,
-        activeTab.windowId,
+        { id: activeTab.id, windowId: activeTab.windowId, url: activeTab.url ?? "" },
         settings,
       );
     }
@@ -734,7 +737,7 @@ async function activateObserverOn(tabId: number, windowId: number, url: string):
     autoState.emulatedWindowId = await migrateSessionEmulation(
       host,
       autoState.emulatedWindowId,
-      windowId,
+      { id: tabId, windowId, url },
       settings,
     );
   } catch (err) {
