@@ -1863,10 +1863,20 @@ html.light .view-toggle-btn.active {
  *       especially over image thumbnails where a colored border can blend.
  */
 
-/* Anchor the absolute check-badge (::after) to the card itself. */
+/* Anchor the absolute check-badge (::after) to the card itself.
+ *
+ * `user-select: none` matches the rule on `.list-row` in list view:
+ * Shift-click range select on cards would otherwise drag a native
+ * text selection through every filename / meta line / tag chip
+ * between the anchor and the click target, painting them blue.
+ * Cards are click targets, not copyable text — Drive / Finder /
+ * Explorer all suppress text selection on their tile views for
+ * the same reason. */
 .gallery-item,
 .gallery-folder-card {
   position: relative;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .gallery-folder-card.selected,
