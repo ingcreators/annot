@@ -162,25 +162,36 @@ export class AnnotExtensionPopupElement extends LitElement {
 
   #renderIdle() {
     return html`
-      <div class="popup-brand">
-        <svg
-          width="32"
-          height="32"
-          viewBox="0 0 48 48"
-          fill="none"
-          xmlns="http://www.w3.org/2000/svg"
-          aria-hidden="true"
+      <header class="popup-header">
+        <div class="popup-brand">
+          <svg
+            width="32"
+            height="32"
+            viewBox="0 0 48 48"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            aria-hidden="true"
+          >
+            <circle cx="24" cy="7" r="3.5" fill="#7c9cff" />
+            <path d="M24 13 L13 38" stroke="#7ef0c5" stroke-width="4" stroke-linecap="round" />
+            <path d="M24 13 L35 38" stroke="#b391ff" stroke-width="4" stroke-linecap="round" />
+            <path d="M19 24 H29" stroke="#7c9cff" stroke-width="3.5" stroke-linecap="round" />
+          </svg>
+          <span class="popup-brand-stack">
+            <span class="popup-brand-name">Annot</span>
+            <span class="popup-brand-org">by ingcreators</span>
+          </span>
+        </div>
+        <button
+          type="button"
+          class="popup-header-action"
+          aria-label="Settings"
+          title="Settings"
+          @click=${this.#openOptions}
         >
-          <circle cx="24" cy="7" r="3.5" fill="#7c9cff" />
-          <path d="M24 13 L13 38" stroke="#7ef0c5" stroke-width="4" stroke-linecap="round" />
-          <path d="M24 13 L35 38" stroke="#b391ff" stroke-width="4" stroke-linecap="round" />
-          <path d="M19 24 H29" stroke="#7c9cff" stroke-width="3.5" stroke-linecap="round" />
-        </svg>
-        <span class="popup-brand-stack">
-          <span class="popup-brand-name">Annot</span>
-          <span class="popup-brand-org">by ingcreators</span>
-        </span>
-      </div>
+          <span aria-hidden="true">&#9881;</span>
+        </button>
+      </header>
 
       ${this.#renderQuickOptions()}
 
@@ -254,10 +265,6 @@ export class AnnotExtensionPopupElement extends LitElement {
       >
         <span class="popup-btn-icon" aria-hidden="true">&#128444;</span>
         <span class="popup-btn-label">Gallery</span>
-      </button>
-      <button type="button" class="popup-btn popup-btn-secondary" @click=${this.#openOptions}>
-        <span class="popup-btn-icon" aria-hidden="true">&#9881;</span>
-        <span class="popup-btn-label">Settings</span>
       </button>
     `;
   }
