@@ -270,21 +270,60 @@ export function createChromeCaptureHost(): CaptureHost {
         console.warn("[emulation] couldn't read window geometry — capturing at native size:", e);
         return;
       }
+      // Save the ORIGINAL geometry (maximized / fullscreen state and
+      // all) for the restore branch. Subsequent measurements run on
+      // a possibly-normalized window, but restore needs to put the
+      // user back where they started.
+      savedGeometryByWindow.set(target.windowId, {
+        width: originalWindow.width,
+        height: originalWindow.height,
+        left: originalWindow.left,
+        top: originalWindow.top,
+        state: originalWindow.state || "normal",
+      });
+      // ── Pre-normalize state transition ───────────────────────────
+      // The maximized→normal state change leaves Chrome's chrome
+      // decoration at a fractional CSS height that's 1 CSS px taller
+      // than the value it settles at when the window starts in normal
+      // state. Empirically (Win 11 + 4K @ 150% scale): maximized
+      // window → state-change-while-resizing in one update call →
+      // chrome = 95 CSS (= 142.5 phys, non-integer). Already-normal
+      // window → no state change → chrome = 94 CSS (= 141 phys,
+      // integer). The 1 CSS px difference makes target inner CSS =
+      // 720 reachable in the second case (outer 814) and UNREACHABLE
+      // in the first (would need outer 815, but `chrome.windows.update`
+      // snaps to even-CSS heights on this OS / DPR combo).
+      //
+      // Fix: transition to "normal" state FIRST (no resize) and let
+      // the chrome decoration settle, THEN measure. The subsequent
+      // resize stays in normal state, so the chrome decoration we
+      // measured is the one we'll capture with.
+      const needsNormalize =
+        originalWindow.state === "maximized" || originalWindow.state === "fullscreen";
+      if (needsNormalize) {
+        try {
+          await chrome.windows.update(target.windowId, { state: "normal" });
+          await delay(EMULATION_INNER_SETTLE_MS);
+          // Re-read after the transition so chromeDelta is computed
+          // against the now-stable normal-state outer dims.
+          try {
+            originalWindow = await chrome.windows.get(target.windowId);
+          } catch {
+            /* keep the original; subsequent steps degrade gracefully */
+          }
+        } catch {
+          /* state transition failed; fall through with original window */
+        }
+      }
       // The chrome-delta probe sends a `get-page-dimensions` message
-      // to the content script. If the content script isn't loaded
-      // yet (the extension's manifest declares NO `content_scripts` —
-      // every injection is programmatic via
-      // `chrome.scripting.executeScript`), the send throws and we
-      // fall through to a zero chrome delta. The one-shot capture
-      // paths inject before calling `withEmulatedViewport`, but the
-      // session paths (Auto's `activateObserverOn`, Hotkey's
-      // `startHotkeyCapture`) historically did emulation BEFORE
-      // injection — leaving the inner viewport short by the full
-      // chrome height (≈85 px on a typical desktop Chrome) for the
-      // first session on a fresh tab. Inject here so every caller
-      // gets the same accurate probe; the helper is idempotent
-      // (ping-first) so re-injecting from already-injected tabs
-      // costs one round-trip.
+      // to the content script. The extension's manifest declares NO
+      // `content_scripts` — every injection is programmatic via
+      // `chrome.scripting.executeScript`. The one-shot capture paths
+      // inject before calling `withEmulatedViewport`, but the
+      // session paths historically did emulation BEFORE injection,
+      // leaving chromeDelta=0 → inner viewport short by the full
+      // chrome height. Inject here so every caller gets the same
+      // accurate probe; idempotent (ping-first).
       try {
         await injectContentScript(target.id);
       } catch {
@@ -309,63 +348,74 @@ export function createChromeCaptureHost(): CaptureHost {
       const pixelTarget = { width: size.width, height: size.height };
       const targetCss = pixelToCssSize(pixelTarget, dpr);
       const desired = computeDesiredWindowSize(pixelTarget, dpr, chromeDelta);
-      savedGeometryByWindow.set(target.windowId, {
-        width: originalWindow.width,
-        height: originalWindow.height,
-        left: originalWindow.left,
-        top: originalWindow.top,
-        state: originalWindow.state || "normal",
-      });
       // `chrome.windows.update` clamps to the monitor's available
       // work area, so if the target exceeds the screen we'll capture
-      // at max-available.
+      // at max-available. We omit `state` here when we already
+      // pre-normalized — the window is in normal state and including
+      // state in the update can re-trigger the chrome-decoration
+      // shift this whole flow exists to avoid.
       await chrome.windows.update(target.windowId, {
         width: desired.width,
         height: desired.height,
-        state: "normal", // forces explicit size if the window was maximized
+        ...(needsNormalize ? {} : { state: "normal" as const }),
       });
 
       // ── Iterative corrective pass ────────────────────────────────
       // The chrome-delta probed above is taken BEFORE the resize, so
       // state-dependent chrome shifts leave the inner viewport off
-      // target. Iterate until the reported inner viewport matches
-      // the target CSS, or until we hit a tight cap. Diagnostic
-      // logs at info-level so users on a release build can capture
-      // the actual numbers when reporting accuracy regressions —
-      // accuracy here is sensitive to OS chrome-decoration scaling,
-      // animation timing, and DPR fractions, so the per-iteration
-      // trace is far more useful than guessing from screenshots.
-      console.log("[emulation] target px:", { w: size.width, h: size.height }, "dpr:", dpr);
-      console.log("[emulation] target css:", targetCss, "first-pass outer:", desired);
-      console.log("[emulation] pre-resize chromeDelta:", chromeDelta);
-      const MAX_CORRECTIVE_ITERATIONS = 3;
+      // target. We iterate, tracking the best request seen, and stop
+      // either on exact convergence or on oscillation detection.
+      //
+      // Known fractional-DPR limit: on Windows at DPR=1.5 (e.g. 4K
+      // 150% scale), `chrome.windows.update` snaps requested outer
+      // dimensions to a coarser grid (empirically: even-CSS height,
+      // ≈+2 CSS width regardless of request). Combined with chrome
+      // decoration that's non-integer in CSS (e.g. 142.5 phys = 95
+      // CSS rounded), this makes inner CSS = target CSS unreachable
+      // for some integer-CSS requests: the achievable inner values
+      // bracket the target by ±1 CSS (= ±1-2 physical px after the
+      // DPR-1.5 multiply). The user picks an integer target like
+      // "Full HD 1920×1080" and we land at 1078-1079 or 1081-1082,
+      // never exactly 1080. We minimize the residual but cannot
+      // eliminate it without an alternative API (e.g. CDP
+      // `Emulation.setDeviceMetricsOverride`, which would require
+      // `chrome.debugger` permission + visible debugger banner).
+      const MAX_CORRECTIVE_ITERATIONS = 4;
       let currentOuter: Size = desired;
+      let bestRequest: Size = currentOuter;
+      let bestResidualSum = Number.POSITIVE_INFINITY;
+      const seenInner = new Set<string>();
       try {
         for (let i = 0; i < MAX_CORRECTIVE_ITERATIONS; i++) {
           await delay(EMULATION_INNER_SETTLE_MS);
-          let actualOuter: { width?: number; height?: number } = currentOuter;
-          try {
-            const win = await chrome.windows.get(target.windowId);
-            actualOuter = { width: win.width, height: win.height };
-          } catch {
-            /* probe-only diagnostic; fall back to requested outer */
-          }
           const dimsAfter = (await chrome.tabs.sendMessage(target.id, {
             type: "get-page-dimensions",
           })) as PageDimensions | undefined;
-          console.log(
-            `[emulation] iter ${i} actual outer:`,
-            actualOuter,
-            "inner:",
-            dimsAfter ? { w: dimsAfter.viewportWidth, h: dimsAfter.viewportHeight } : "unavailable",
-          );
           if (!dimsAfter) break;
+          const dw = targetCss.width - dimsAfter.viewportWidth;
+          const dh = targetCss.height - dimsAfter.viewportHeight;
+          const residualSum = Math.abs(dw) + Math.abs(dh);
+          // Track best (smallest residual). Ties favor the LATEST
+          // iteration so re-running the same request a second time
+          // doesn't matter, but a genuinely-equal-residual rebound
+          // after oscillation lets the loop pick whichever side it
+          // settled on last — symmetric, no built-in over/under bias.
+          if (residualSum <= bestResidualSum) {
+            bestResidualSum = residualSum;
+            bestRequest = currentOuter;
+          }
+          if (residualSum === 0) break; // exact match
+          // Oscillation: same inner viewport observed twice means
+          // further iteration can't make progress (Chrome's snap
+          // grid is bracketing the target). Bail with the best.
+          const innerKey = `${dimsAfter.viewportWidth}x${dimsAfter.viewportHeight}`;
+          if (seenInner.has(innerKey)) break;
+          seenInner.add(innerKey);
           const correction = computeOuterSizeCorrection(currentOuter, targetCss, {
             width: dimsAfter.viewportWidth,
             height: dimsAfter.viewportHeight,
           });
-          console.log(`[emulation] iter ${i} correction:`, correction ?? "converged");
-          if (correction === null) break; // converged
+          if (correction === null) break;
           const next = {
             width: Math.max(MIN_WINDOW_DIMENSION, correction.width),
             height: Math.max(MIN_WINDOW_DIMENSION, correction.height),
@@ -377,10 +427,21 @@ export function createChromeCaptureHost(): CaptureHost {
           });
           currentOuter = next;
         }
-      } catch (err) {
-        console.log("[emulation] iteration error:", err);
+        // If iteration ended on a non-best request (we drifted past
+        // the optimum chasing exact match), restore the best.
+        if (
+          bestRequest.width !== currentOuter.width ||
+          bestRequest.height !== currentOuter.height
+        ) {
+          await chrome.windows.update(target.windowId, {
+            width: bestRequest.width,
+            height: bestRequest.height,
+            state: "normal",
+          });
+        }
+      } catch {
+        /* best-effort correction; the latest applied size stands */
       }
-      console.log("[emulation] final requested outer:", currentOuter);
     },
 
     async sendToContent<T = unknown>(
