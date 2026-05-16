@@ -335,9 +335,9 @@ export function createChromeCaptureHost(): CaptureHost {
       // accuracy here is sensitive to OS chrome-decoration scaling,
       // animation timing, and DPR fractions, so the per-iteration
       // trace is far more useful than guessing from screenshots.
-      logger.info("[emulation] target px:", { w: size.width, h: size.height }, "dpr:", dpr);
-      logger.info("[emulation] target css:", targetCss, "first-pass outer:", desired);
-      logger.info("[emulation] pre-resize chromeDelta:", chromeDelta);
+      console.log("[emulation] target px:", { w: size.width, h: size.height }, "dpr:", dpr);
+      console.log("[emulation] target css:", targetCss, "first-pass outer:", desired);
+      console.log("[emulation] pre-resize chromeDelta:", chromeDelta);
       const MAX_CORRECTIVE_ITERATIONS = 3;
       let currentOuter: Size = desired;
       try {
@@ -353,7 +353,7 @@ export function createChromeCaptureHost(): CaptureHost {
           const dimsAfter = (await chrome.tabs.sendMessage(target.id, {
             type: "get-page-dimensions",
           })) as PageDimensions | undefined;
-          logger.info(
+          console.log(
             `[emulation] iter ${i} actual outer:`,
             actualOuter,
             "inner:",
@@ -364,7 +364,7 @@ export function createChromeCaptureHost(): CaptureHost {
             width: dimsAfter.viewportWidth,
             height: dimsAfter.viewportHeight,
           });
-          logger.info(`[emulation] iter ${i} correction:`, correction ?? "converged");
+          console.log(`[emulation] iter ${i} correction:`, correction ?? "converged");
           if (correction === null) break; // converged
           const next = {
             width: Math.max(MIN_WINDOW_DIMENSION, correction.width),
@@ -378,9 +378,9 @@ export function createChromeCaptureHost(): CaptureHost {
           currentOuter = next;
         }
       } catch (err) {
-        logger.info("[emulation] iteration error:", err);
+        console.log("[emulation] iteration error:", err);
       }
-      logger.info("[emulation] final requested outer:", currentOuter);
+      console.log("[emulation] final requested outer:", currentOuter);
     },
 
     async sendToContent<T = unknown>(
