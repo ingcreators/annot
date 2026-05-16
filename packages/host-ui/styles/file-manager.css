@@ -2136,6 +2136,13 @@ html.light .gallery-item.selected::after {
   z-index: 2;
   background: var(--annot-bg-primary);
   border-bottom: 1px solid var(--annot-border-color);
+  /* Same rationale as `.list-row` — Shift-clicking from a row
+   * into the sticky bar would otherwise drag a text selection
+   * across the section title. The column-header buttons already
+   * resist selection (native <button> behaviour), but the title
+   * is a plain div. */
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .list-section-title {
@@ -2212,6 +2219,14 @@ html.light .gallery-item.selected::after {
   cursor: pointer;
   position: relative;
   transition: background 0.1s;
+  /* Shift-click range select would otherwise drag the browser's
+   * native text selection across the cell contents (filename /
+   * timestamp / size info), leaving a messy half-selected blue
+   * smear during the click. Drive / Finder / Explorer all suppress
+   * text selection on list rows for the same reason — rows are
+   * click targets, not copyable text. */
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .list-row:hover {
