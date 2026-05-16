@@ -1745,7 +1745,14 @@ export class App {
    */
   async #exportDocAsPptx(current: import("@ingcreators/annot-doc").AnnotDocument): Promise<void> {
     try {
-      const { exportDocumentPptx } = await import("@ingcreators/annot-render");
+      // Deep subpath dynamic import — see `vscode/src/webview/main.ts`
+      // for the rationale. Importing through the
+      // `@ingcreators/annot-render` barrel would NOT chunk-split
+      // because the barrel is already statically pulled in by
+      // `toolbar.ts` / `editor-shell.ts` / `pptx-export.ts`. The
+      // submodule path keeps the multi-slide OOXML builder out of
+      // the eager bundle.
+      const { exportDocumentPptx } = await import("@ingcreators/annot-render/pptx/document-pptx");
       const blob = exportDocumentPptx(current);
       if (!blob) {
         showSaveError("This document has no image blocks to export. Add a screenshot first.");

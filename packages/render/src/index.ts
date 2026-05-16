@@ -43,11 +43,18 @@ export {
   strokePaintXml,
   xfrmAttrs,
 } from "./drawingml/index.js";
-export {
-  buildDocumentPptxFiles,
-  type DocumentPptxFiles,
-  exportDocumentPptx,
-} from "./pptx/document-pptx.js";
+// `exportDocumentPptx` + `buildDocumentPptxFiles` deliberately not
+// re-exported here. The multi-slide PPTX builder is heavy
+// (entire OOXML envelope + slide rendering pipeline) and only
+// fires on a user-driven export action; both call sites
+// (`packages/web/src/app.ts:#exportDocAsPptx` and
+// `packages/vscode/src/webview/main.ts`) import it dynamically
+// from the deep subpath `@ingcreators/annot-render/pptx/document-pptx`
+// so the bundler can split it into its own chunk. Re-exporting
+// from this barrel defeats the split (the eager `toolbar.ts` /
+// `editor-shell.ts` / `pptx-export.ts` static imports of the
+// barrel pull the submodule into the main chunk —
+// `[INEFFECTIVE_DYNAMIC_IMPORT]` Rollup warning).
 export {
   burnRedactionsIntoBitmap,
   classifyRedact,
