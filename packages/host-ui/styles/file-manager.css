@@ -477,7 +477,11 @@
   color: var(--annot-accent);
 }
 
-.header-refresh-btn:active {
+/* Rotate the icon, not the button — `data-tooltip` renders via a
+ * `::after` pseudo on the button, so rotating the button rotates
+ * the tooltip text along with the glyph. Targeting the inner
+ * `<annot-icon>` keeps the tooltip upright. */
+.header-refresh-btn:active annot-icon {
   transform: rotate(180deg);
   transition: transform 0.3s ease;
 }
