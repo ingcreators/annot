@@ -2619,3 +2619,214 @@ describe("annot-doc-shell: linked image pull (Phase 3)", () => {
     expect(pullSpy.mock.calls[1]?.[0]).toBe("Screenshots/bar.png");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Phase 4 of `card-document-image-gallery-link-sync.md` — `window`
+// listener on `annot-metadata-changed`: when a gallery edit lands in
+// another tab (or via direct storage write in this tab), the shell
+// triggers a targeted live pull instead of waiting for the next doc-load.
+// ---------------------------------------------------------------------------
+
+describe("annot-doc-shell: linked image live pull (Phase 4)", () => {
+  const PNG_PIXEL_A =
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+  const PNG_PIXEL_B = "data:image/png;base64,IMAGE-B";
+
+  function makeStepDocWithLink(sourceImagePath: string, href: string): AnnotDocument {
+    return {
+      version: 1,
+      lang: "en",
+      title: "Live pull",
+      meta: { title: "Live pull" },
+      styleBlock: null,
+      blocks: [
+        {
+          kind: "step",
+          id: "img-step-live",
+          svg:
+            `<svg xmlns="http://www.w3.org/2000/svg" data-annot-version="1" viewBox="0 0 100 50" width="100" height="50">` +
+            `<image href="${href}" width="100" height="50"/>` +
+            `<g id="annotations"></g>` +
+            "</svg>",
+          title: "Step",
+          body: "Body.",
+          layout: "image-top",
+          sourceImagePath,
+        },
+      ],
+    };
+  }
+
+  async function flushPulls(el: AnnotDocShellElement): Promise<void> {
+    await el.updateComplete;
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    await el.updateComplete;
+  }
+
+  it("re-pulls the linked block when a window metadata event matches its sourceImagePath", async () => {
+    const el = mount();
+    const pullSpy = vi.fn<(path: string) => Promise<LinkedImagePullResult>>(async () => ({
+      status: "dead-link",
+    }));
+    el.pullLinkedImage = pullSpy;
+    el.document = makeStepDocWithLink("Screenshots/foo.png", PNG_PIXEL_A);
+    await flushPulls(el);
+    expect(pullSpy).toHaveBeenCalledTimes(1);
+    pullSpy.mockClear();
+    // Fire a window metadata-changed event for the linked path.
+    window.dispatchEvent(
+      new CustomEvent("annot-metadata-changed", {
+        detail: { kind: "path", ns: "device:default", path: "Screenshots/foo.png", version: "v2" },
+      }),
+    );
+    await flushPulls(el);
+    expect(pullSpy).toHaveBeenCalledTimes(1);
+    expect(pullSpy).toHaveBeenCalledWith("Screenshots/foo.png");
+  });
+
+  it("ignores window metadata events for paths NOT linked from any block", async () => {
+    const el = mount();
+    const pullSpy = vi.fn<(path: string) => Promise<LinkedImagePullResult>>(async () => ({
+      status: "dead-link",
+    }));
+    el.pullLinkedImage = pullSpy;
+    el.document = makeStepDocWithLink("Screenshots/foo.png", PNG_PIXEL_A);
+    await flushPulls(el);
+    pullSpy.mockClear();
+    window.dispatchEvent(
+      new CustomEvent("annot-metadata-changed", {
+        detail: {
+          kind: "path",
+          ns: "device:default",
+          path: "Screenshots/UNRELATED.png",
+          version: "v2",
+        },
+      }),
+    );
+    await flushPulls(el);
+    expect(pullSpy).not.toHaveBeenCalled();
+  });
+
+  it("ignores listing / prefix metadata events", async () => {
+    const el = mount();
+    const pullSpy = vi.fn<(path: string) => Promise<LinkedImagePullResult>>(async () => ({
+      status: "dead-link",
+    }));
+    el.pullLinkedImage = pullSpy;
+    el.document = makeStepDocWithLink("Screenshots/foo.png", PNG_PIXEL_A);
+    await flushPulls(el);
+    pullSpy.mockClear();
+    window.dispatchEvent(
+      new CustomEvent("annot-metadata-changed", {
+        detail: { kind: "listing", ns: "device:default", folderPath: "Screenshots" },
+      }),
+    );
+    window.dispatchEvent(
+      new CustomEvent("annot-metadata-changed", {
+        detail: { kind: "prefix", prefix: "device:default:" },
+      }),
+    );
+    await flushPulls(el);
+    expect(pullSpy).not.toHaveBeenCalled();
+  });
+
+  it("re-embeds the block when the live-pull result diverges", async () => {
+    const el = mount();
+    let pullCount = 0;
+    el.pullLinkedImage = async () => {
+      pullCount += 1;
+      // First call (open-time): match. Second (live): diverge.
+      if (pullCount === 1) {
+        return {
+          status: "found",
+          originalDataUrl: PNG_PIXEL_A,
+          annotationsSvg: '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="50"></svg>',
+          width: 100,
+          height: 50,
+        };
+      }
+      return {
+        status: "found",
+        originalDataUrl: PNG_PIXEL_B,
+        annotationsSvg: '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="50"></svg>',
+        width: 100,
+        height: 50,
+      };
+    };
+    el.document = makeStepDocWithLink("Screenshots/foo.png", PNG_PIXEL_A);
+    await flushPulls(el);
+    // After open-time pull, block still has PNG_PIXEL_A.
+    let step = el.document!.blocks[0];
+    if (step?.kind !== "step") throw new Error("expected step");
+    expect(step.svg).toContain(PNG_PIXEL_A);
+    // Fire metadata change → live pull → re-embed with PNG_PIXEL_B.
+    window.dispatchEvent(
+      new CustomEvent("annot-metadata-changed", {
+        detail: { kind: "path", ns: "device:default", path: "Screenshots/foo.png", version: "v2" },
+      }),
+    );
+    await flushPulls(el);
+    step = el.document!.blocks[0];
+    if (step?.kind !== "step") throw new Error("expected step");
+    expect(step.svg).toContain(PNG_PIXEL_B);
+    expect(step.svg).not.toContain(PNG_PIXEL_A);
+  });
+
+  it("emits linked-images-synced for the live-pulled block only", async () => {
+    const el = mount();
+    let pullCount = 0;
+    el.pullLinkedImage = async () => {
+      pullCount += 1;
+      // Open-time → dead-link (no event). Live pull → found-and-diverge.
+      if (pullCount === 1) return { status: "dead-link" };
+      return {
+        status: "found",
+        originalDataUrl: PNG_PIXEL_B,
+        annotationsSvg: '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="50"></svg>',
+        width: 100,
+        height: 50,
+      };
+    };
+    const events: LinkedImagesSyncedDetail[] = [];
+    el.addEventListener("linked-images-synced", (e) => {
+      events.push((e as CustomEvent<LinkedImagesSyncedDetail>).detail);
+    });
+    el.document = makeStepDocWithLink("Screenshots/foo.png", PNG_PIXEL_A);
+    await flushPulls(el);
+    // Open-time dead-link → no event.
+    expect(events).toHaveLength(0);
+    window.dispatchEvent(
+      new CustomEvent("annot-metadata-changed", {
+        detail: { kind: "path", ns: "device:default", path: "Screenshots/foo.png", version: "v2" },
+      }),
+    );
+    await flushPulls(el);
+    expect(events).toHaveLength(1);
+    expect(events[0]?.updated).toEqual([
+      { blockId: "img-step-live", sourceImagePath: "Screenshots/foo.png" },
+    ]);
+  });
+
+  it("removes the listener on disconnect (no spurious re-pulls after teardown)", async () => {
+    const el = mount();
+    const pullSpy = vi.fn<(path: string) => Promise<LinkedImagePullResult>>(async () => ({
+      status: "dead-link",
+    }));
+    el.pullLinkedImage = pullSpy;
+    el.document = makeStepDocWithLink("Screenshots/foo.png", PNG_PIXEL_A);
+    await flushPulls(el);
+    pullSpy.mockClear();
+    el.remove();
+    window.dispatchEvent(
+      new CustomEvent("annot-metadata-changed", {
+        detail: { kind: "path", ns: "device:default", path: "Screenshots/foo.png", version: "v2" },
+      }),
+    );
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(pullSpy).not.toHaveBeenCalled();
+  });
+});
