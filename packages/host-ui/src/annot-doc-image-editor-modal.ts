@@ -200,9 +200,27 @@ const STYLES = `
   justify-content: center;
   padding: 16px;
 }
+/* The canvas wrap below scrolls (overflow: auto), so the
+   editor's <svg> renders at the size CanvasManager sets via
+   setZoom / fitToView. Two pitfalls we deliberately avoid
+   here:
+
+   1. Never apply "max-width: 100%; height: auto" to the
+      <svg>. Earlier versions did, and the rule clamped the
+      visible width while overriding height: auto, silently
+      breaking zoom — the SVG element grew in the DOM but
+      the visible rendering stayed clamped to the container.
+
+   2. The canvas container above is a flex parent
+      (display: flex; align-items / justify-content: center
+      for centring the SVG when the image is smaller than
+      the wrap). Without flex-shrink: 0 the SVG also shrinks
+      below its intrinsic width when zoomed in past the
+      wrap's width — same visible symptom as #1. Pinning
+      flex-shrink: 0 keeps the zoom-driven width attr
+      authoritative and lets the wrap scroll instead. */
 .annot-doc-image-editor-modal-canvas > svg {
-  max-width: 100%;
-  height: auto;
+  flex-shrink: 0;
 }
 .annot-doc-image-editor-modal-rightpanel {
   border-left: 1px solid var(--annot-doc-muted, #6b7280);
@@ -512,6 +530,33 @@ export class AnnotDocImageEditorModalElement extends LitElement {
       this.dirty = true;
     });
     this.#mountToolbarAndPanel();
+    // Fit the canvas to the modal's canvas area on first open so
+    // (a) the SVG doesn't overflow + scroll immediately when the
+    // source image is larger than the available width, and
+    // (b) `CanvasManager.#fitMode` becomes `true` so the existing
+    // ResizeObserver below keeps the canvas fitted as the modal
+    // resizes. Subsequent `setZoom` calls (toolbar zoom buttons,
+    // statusbar zoom chip, wheel-zoom) drop fit mode and scale
+    // the SVG via `width` / `height` attrs + inline style.
+    //
+    // `CanvasManager`'s constructor already calls `fitToView()`,
+    // but at construction time the canvas container's
+    // `clientWidth` / `clientHeight` are still 0 (Lit's render
+    // → `firstUpdated` runs before the browser has laid out the
+    // modal panel). `fitToView` early-returns when the container
+    // is 0-sized, leaving `#fitMode = false`; the SVG then stays
+    // at natural pixel size and used to be silently clamped by a
+    // since-removed `max-width: 100%` rule, which masked the
+    // bug. We schedule a follow-up `fitToView` for the next
+    // paint frame, by which time the modal's flex / grid layout
+    // has resolved and the container has its real size.
+    const canvas = shell.getCanvas();
+    if (canvas) {
+      requestAnimationFrame(() => {
+        if (this.#shell !== shell) return; // modal closed or re-mounted
+        canvas.fitToView();
+      });
+    }
   }
 
   /**
