@@ -279,6 +279,17 @@ describe("createCardDocumentFromImages: SVG body", () => {
     expect(idA.startsWith("img-")).toBe(true);
     expect(idB.startsWith("img-")).toBe(true);
   });
+
+  // Phase 1 of `card-document-image-gallery-link-sync.md` — every
+  // step generated from a gallery `ImageRecord` carries that
+  // record's path as `sourceImagePath`. Drives the doc ↔ gallery
+  // sync behaviour added in later phases.
+  it("populates sourceImagePath from the source ImageRecord.path on every step", () => {
+    const images = [makeImage("Screenshots/foo.png"), makeImage("Screenshots/Mobile/bar.png")];
+    const doc = createCardDocumentFromImages(images, { title: "X" });
+    const paths = doc.blocks.map((b) => (b.kind === "step" ? b.sourceImagePath : undefined));
+    expect(paths).toEqual(["Screenshots/foo.png", "Screenshots/Mobile/bar.png"]);
+  });
 });
 
 describe("createCardDocumentFromImages: serialisation round-trip", () => {

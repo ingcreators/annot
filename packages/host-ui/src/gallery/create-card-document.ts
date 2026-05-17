@@ -135,6 +135,12 @@ function buildStepBlockFromImage(img: ImageRecord, layout: StepLayout): StepBloc
     title: "",
     body: "",
     layout,
+    // Phase 1 of `card-document-image-gallery-link-sync.md` —
+    // back-reference to the originating gallery `ImageRecord`.
+    // The doc shell uses this to push in-doc annotation edits
+    // back to the gallery and pull gallery-side changes (annotation
+    // / redact / crop) into the embedded SVG on doc open.
+    sourceImagePath: img.path,
   };
 }
 

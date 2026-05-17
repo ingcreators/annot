@@ -278,6 +278,17 @@ npm run dev</code></pre>
   `[a-zA-Z0-9_-]`. Generated via `newIdB58` in
   `@ingcreators/annot-core/utils`. IDs MUST be unique within the
   document.
+- **`data-annot-source-path` (optional).** Back-reference to the
+  source gallery `ImageRecord.path` when the block was inserted
+  from the gallery. Editing hosts use this to sync edits between
+  doc and gallery (push on doc save; pull on doc open).
+  When absent → the block is independent of any gallery record
+  (drag-drop / paste / external import). Carried with whatever
+  string the editing host's storage uses as the image path; an
+  empty string parses as absent. Standalone readers (`.annot.html`
+  opened directly in a browser) ignore the attribute entirely —
+  it's metadata for round-tripping into an editor that owns the
+  matching gallery library.
 
 ### `step`
 
@@ -381,6 +392,11 @@ npm run dev</code></pre>
   `[a-zA-Z0-9_-]`, generated via `newIdB58` in
   `@ingcreators/annot-core/utils`. Same constraint as the
   standalone `image` block.
+- **`data-annot-source-path` (optional).** Same semantics as on
+  the `image` block — back-reference to the gallery
+  `ImageRecord.path` when the step was generated from a gallery
+  selection. Editing hosts use it for doc ↔ gallery sync; absent
+  means the step's image is independent.
 - Step blocks generate one slide per block in the multi-slide PPTX
   export (`exportDocumentPptx`), with `data-step-layout` selecting
   the PowerPoint slide layout — see
