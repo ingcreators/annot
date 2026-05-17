@@ -185,64 +185,32 @@ const STYLES = `
   align-items: center;
 }
 .annot-doc-image-editor-modal-canvas-wrap {
+  /* The canvas wrap is the scrolling viewport AND the direct
+     parent of the editor SVG. Mirrors the main editor's
+     "#canvas-container" (in editor.css) — block-level with
+     overflow:auto, no inner flex / wrapper. The SVG itself
+     handles horizontal centring (block-level margin:auto from
+     the "[data-annot-shell-root]" rule) and vertical breathing
+     room (the same rule's "margin: 20px auto"), so we don't
+     need a separate ".annot-doc-image-editor-modal-canvas" div
+     here.
+
+     Earlier the modal had an intermediate flex wrapper
+     (".annot-doc-image-editor-modal-canvas") that, by virtue
+     of "flex-shrink: 0" + "min-height: 100%", grew to match
+     the SVG's natural height. CanvasManager.fitToView() reads
+     "svg.parentElement.clientHeight" — that meant the fit
+     calculation used the SVG's own (un-fitted) height as the
+     viewport reference, so tall images never actually fit
+     vertically and showed at 100% zoom with a vertical
+     scrollbar even in "Fit" mode. Dropping the wrapper makes
+     the SVG's parent the canvas wrap itself, whose
+     clientHeight is the real viewport. */
   position: relative;
   overflow: auto;
   background: var(--annot-doc-code-bg, #f3f4f6);
   min-width: 0;
   min-height: 0;
-}
-.annot-doc-image-editor-modal-canvas {
-  position: relative;
-  min-height: 100%;
-  min-width: 100%;
-  display: flex;
-  /* Top-anchored + horizontally centred — matches the main
-     editor's "#svg-root, [data-annot-shell-root]" rule in
-     editor.css ("margin: 20px auto"). Reasons we anchor at
-     the top instead of vertically centring:
-
-     - Consistency with the main editor surface (users have
-       built muscle memory there).
-     - Zoom in / out keeps the image's top edge stable instead
-       of jumping vertically as the rendered height changes.
-     - Tall images (PDF / scrolling-page captures) default to
-       showing their TOP, not their middle — vertically
-       centring such a capture hides the page heading by
-       default and forces a scroll-up to find it.
-
-     The "safe" keyword on justify-content is load-bearing —
-     without it, classic flex centring puts overflow
-     half-on-each-side of the centre axis, and the left half
-     lives at NEGATIVE scrollLeft (unreachable via the
-     canvas-wrap's horizontal scrollbar). "safe center" falls
-     back to "flex-start" when the SVG outgrows the wrap,
-     putting the left edge at scrollLeft=0 so the user can
-     scroll across the full width. */
-  align-items: flex-start;
-  justify-content: safe center;
-  padding: 16px;
-}
-/* The canvas wrap below scrolls (overflow: auto), so the
-   editor's <svg> renders at the size CanvasManager sets via
-   setZoom / fitToView. Two pitfalls we deliberately avoid
-   here:
-
-   1. Never apply "max-width: 100%; height: auto" to the
-      <svg>. Earlier versions did, and the rule clamped the
-      visible width while overriding height: auto, silently
-      breaking zoom — the SVG element grew in the DOM but
-      the visible rendering stayed clamped to the container.
-
-   2. The canvas container above is a flex parent
-      (display: flex; align-items / justify-content: center
-      for centring the SVG when the image is smaller than
-      the wrap). Without flex-shrink: 0 the SVG also shrinks
-      below its intrinsic width when zoomed in past the
-      wrap's width — same visible symptom as #1. Pinning
-      flex-shrink: 0 keeps the zoom-driven width attr
-      authoritative and lets the wrap scroll instead. */
-.annot-doc-image-editor-modal-canvas > svg {
-  flex-shrink: 0;
 }
 .annot-doc-image-editor-modal-rightpanel {
   border-left: 1px solid var(--annot-doc-muted, #6b7280);
@@ -449,9 +417,7 @@ export class AnnotDocImageEditorModalElement extends LitElement {
           </div>
           <div class="annot-doc-image-editor-modal-body">
             <div class="annot-doc-image-editor-modal-toolbar"></div>
-            <div class="annot-doc-image-editor-modal-canvas-wrap">
-              <div class="annot-doc-image-editor-modal-canvas"></div>
-            </div>
+            <div class="annot-doc-image-editor-modal-canvas-wrap"></div>
             <div class="annot-doc-image-editor-modal-rightpanel"></div>
           </div>
           <div class="annot-doc-image-editor-modal-statusbar"></div>
@@ -536,8 +502,14 @@ export class AnnotDocImageEditorModalElement extends LitElement {
 
   #mountShell(): void {
     if (!this.input) return;
+    // The canvas wrap is the SVG's direct parent — see the CSS
+    // comment on `.annot-doc-image-editor-modal-canvas-wrap`
+    // for why we don't nest the SVG inside an intermediate
+    // flex container. `CanvasManager.fitToView()` reads
+    // `svg.parentElement.clientHeight`, so the wrap-as-parent
+    // arrangement is what lets "Fit" actually fit vertically.
     const container = this.querySelector(
-      ".annot-doc-image-editor-modal-canvas",
+      ".annot-doc-image-editor-modal-canvas-wrap",
     ) as HTMLElement | null;
     if (!container) return;
 
