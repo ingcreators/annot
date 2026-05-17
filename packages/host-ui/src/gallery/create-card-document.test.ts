@@ -163,10 +163,9 @@ describe("createCardDocumentFromImages: SVG body", () => {
     expect(step.svg).toContain('data-type="text"');
   });
 
-  it("skips defs, base image, and ui-overlay when extracting flat annotations", () => {
+  it("skips the base image + ui-overlay when extracting flat annotations", () => {
     const flatSvg =
       '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 600" width="1000" height="600">' +
-      "<defs><style>.foo {}</style></defs>" +
       '<image href="data:image/png;base64,X" width="1000" height="600"/>' +
       '<rect data-type="rect" x="10" y="10" width="100" height="50"/>' +
       '<g id="ui-overlay"><circle cx="0" cy="0" r="5"/></g>' +
@@ -175,14 +174,84 @@ describe("createCardDocumentFromImages: SVG body", () => {
     const doc = createCardDocumentFromImages(images, { title: "X" });
     const step = doc.blocks[0];
     if (step?.kind !== "step") throw new Error("expected step");
-    // The base image is the OUTER svg's image (from the generator),
-    // not the one from annotationsSvg. The defs / ui-overlay /
-    // duplicate image are stripped.
     const innerImageCount = step.svg.match(/<image /g)?.length ?? 0;
     expect(innerImageCount).toBe(1);
-    expect(step.svg).not.toContain("<defs");
     expect(step.svg).not.toContain('id="ui-overlay"');
-    // The actual annotation survives.
+    expect(step.svg).toContain('data-type="rect"');
+  });
+
+  // Preserve gradient / marker defs so the annotation's id refs
+  // (`fill="url(#…)"`, `marker-end="url(#…)"`) still resolve when
+  // the doc renders. Strip only the editor's `data-annot-fonts`
+  // injection (the doc supplies its own fonts).
+  it("preserves gradient <defs> so url(#…) refs still resolve in-doc", () => {
+    const flatSvg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 600" width="1000" height="600">' +
+      "<defs>" +
+      '<linearGradient id="grad-fill-1"><stop offset="0" stop-color="#ff0000"/><stop offset="1" stop-color="#0000ff"/></linearGradient>' +
+      "</defs>" +
+      '<rect data-type="rect" x="10" y="10" width="100" height="50" fill="url(#grad-fill-1)"/>' +
+      "</svg>";
+    const images = [makeImage("a.png", { annotationsSvg: flatSvg })];
+    const doc = createCardDocumentFromImages(images, { title: "X" });
+    const step = doc.blocks[0];
+    if (step?.kind !== "step") throw new Error("expected step");
+    expect(step.svg).toContain("<defs");
+    expect(step.svg).toContain('id="grad-fill-1"');
+    expect(step.svg).toContain('fill="url(#grad-fill-1)"');
+  });
+
+  it("preserves marker <defs> so arrow heads still resolve in-doc", () => {
+    const flatSvg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 600" width="1000" height="600">' +
+      "<defs>" +
+      '<marker id="arrow-1" viewBox="0 0 10 10" refX="5" refY="5">' +
+      '<path d="M0,0 L10,5 L0,10z"/>' +
+      "</marker>" +
+      "</defs>" +
+      '<line data-type="line" x1="0" y1="0" x2="100" y2="0" marker-end="url(#arrow-1)"/>' +
+      "</svg>";
+    const images = [makeImage("a.png", { annotationsSvg: flatSvg })];
+    const doc = createCardDocumentFromImages(images, { title: "X" });
+    const step = doc.blocks[0];
+    if (step?.kind !== "step") throw new Error("expected step");
+    expect(step.svg).toContain('id="arrow-1"');
+    expect(step.svg).toContain('marker-end="url(#arrow-1)"');
+  });
+
+  it("strips the editor's <style data-annot-fonts> from <defs>", () => {
+    const flatSvg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 600" width="1000" height="600">' +
+      "<defs>" +
+      // Avoid quote-in-style happy-dom parse quirk by using a
+      // minimal selector body; the test is about the
+      // data-annot-fonts attribute, not the CSS content.
+      '<style data-annot-fonts="">text { font-family: system-ui }</style>' +
+      '<linearGradient id="grad-1"><stop offset="0" stop-color="#000"/></linearGradient>' +
+      "</defs>" +
+      '<rect data-type="rect" x="10" y="10" width="100" height="50" fill="url(#grad-1)"/>' +
+      "</svg>";
+    const images = [makeImage("a.png", { annotationsSvg: flatSvg })];
+    const doc = createCardDocumentFromImages(images, { title: "X" });
+    const step = doc.blocks[0];
+    if (step?.kind !== "step") throw new Error("expected step");
+    expect(step.svg).not.toContain("data-annot-fonts");
+    expect(step.svg).not.toContain("system-ui");
+    // Gradient sibling survives in the same defs.
+    expect(step.svg).toContain('id="grad-1"');
+  });
+
+  it("omits a <defs> that contained ONLY data-annot-fonts (now empty after strip)", () => {
+    const flatSvg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 600" width="1000" height="600">' +
+      '<defs><style data-annot-fonts="">text { font-family: system-ui }</style></defs>' +
+      '<rect data-type="rect" x="10" y="10" width="100" height="50"/>' +
+      "</svg>";
+    const images = [makeImage("a.png", { annotationsSvg: flatSvg })];
+    const doc = createCardDocumentFromImages(images, { title: "X" });
+    const step = doc.blocks[0];
+    if (step?.kind !== "step") throw new Error("expected step");
+    expect(step.svg).not.toContain("<defs");
     expect(step.svg).toContain('data-type="rect"');
   });
 

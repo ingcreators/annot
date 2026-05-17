@@ -87,11 +87,11 @@ describe("round-trip flap: generator → parse → decompose vs original ImageRe
   // This is the user-reported scenario: an annotation with a
   // gradient stroke / fill (or any annotation that has a
   // sibling <defs> in the editor canvas). The doc generator's
-  // `normaliseAnnotationsFragment` strips ALL <defs>, but the
-  // gallery's record.annotationsSvg keeps them — so the strict
-  // comparison flagged the block as out-of-sync on every open
-  // and the toast fired every time.
-  it("annotation with <defs> (gradient / marker): no flap", () => {
+  // `normaliseAnnotationsFragment` used to strip ALL <defs>;
+  // now it preserves them so url(#…) refs still resolve. The
+  // pull-pass comparison ignores <defs> on both sides, so this
+  // case stays flap-free.
+  it("annotation with <defs> (gradient / marker): no flap AND defs preserved in embed", () => {
     const annotationsSvg =
       '<svg xmlns="http://www.w3.org/2000/svg" data-annot-version="1" viewBox="0 0 800 480" width="800" height="480">' +
       "<defs>" +
@@ -105,6 +105,12 @@ describe("round-trip flap: generator → parse → decompose vs original ImageRe
     const img = makeImage(annotationsSvg);
     const doc = createCardDocumentFromImages([img], { title: "X" });
     const bytes = serializeDocument(doc);
+    // Gradient defs and the matching url() ref both survive
+    // the parse / serialise round-trip — the in-doc renderer
+    // can now resolve the gradient instead of falling back to
+    // black stroke.
+    expect(bytes).toContain('id="grad-stroke-1"');
+    expect(bytes).toContain('stroke="url(#grad-stroke-1)"');
     const reparsed = parseDocument(bytes);
     const step = reparsed.blocks[0];
     if (step?.kind !== "step") throw new Error("expected step");

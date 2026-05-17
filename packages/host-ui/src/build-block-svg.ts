@@ -134,7 +134,15 @@ function normaliseAnnotationsFragment(raw: string): string {
   } else {
     for (const child of Array.from(root.children)) {
       const tag = child.tagName;
-      if (tag === "defs") continue;
+      // <defs> — preserve content (gradients, markers) so the
+      // annotation's id refs still resolve in-doc. Strip only
+      // the editor's `data-annot-fonts` style block. Mirrors the
+      // same logic in `gallery/create-card-document.ts`.
+      if (tag === "defs") {
+        const sanitised = sanitiseAnnotationDefs(child);
+        if (sanitised) candidates.push(sanitised);
+        continue;
+      }
       // Skip the base image but preserve mosaic / blur redact
       // overlays — they are themselves annotations even though
       // they use `<image>`.
@@ -147,6 +155,20 @@ function normaliseAnnotationsFragment(raw: string): string {
   const serializer = new XMLSerializer();
   const inner = candidates.map((el) => serializer.serializeToString(el)).join("");
   return `<g id="annotations">${inner}</g>`;
+}
+
+/** Strip the editor's `data-annot-fonts` style block from a
+ *  cloned `<defs>`. Returns `null` when the result has no
+ *  meaningful content left. See `gallery/create-card-document.ts`
+ *  for the rationale (font defs would conflict with the doc's
+ *  own fonts; everything else — gradients, markers — must survive). */
+function sanitiseAnnotationDefs(defs: Element): Element | null {
+  const clone = defs.cloneNode(true) as Element;
+  for (const fontStyle of Array.from(clone.querySelectorAll("style[data-annot-fonts]"))) {
+    fontStyle.remove();
+  }
+  if (clone.children.length === 0 && (clone.textContent ?? "").trim().length === 0) return null;
+  return clone;
 }
 
 function escapeAttrValue(s: string): string {
