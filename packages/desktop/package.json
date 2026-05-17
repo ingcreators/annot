@@ -97,6 +97,7 @@
   "dependencies": {
     "@ingcreators/annot-capture": "workspace:*",
     "@ingcreators/annot-core": "workspace:*",
+    "@ingcreators/annot-doc": "workspace:*",
     "@ingcreators/annot-editor": "workspace:*",
     "@ingcreators/annot-host-ui": "workspace:*",
     "@ingcreators/annot-web": "workspace:*",

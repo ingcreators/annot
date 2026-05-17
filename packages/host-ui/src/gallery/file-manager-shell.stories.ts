@@ -27,6 +27,8 @@ interface Args {
   selection: SelectionInfo | null;
   canCreateCardDocument: boolean;
   canDownloadSelection: boolean;
+  dragOver: boolean;
+  dropTargetLabel: string;
 }
 
 function makeCallbacks(): FileManagerShellCallbacks {
@@ -38,6 +40,11 @@ function makeCallbacks(): FileManagerShellCallbacks {
     onDeleteSelection: () => console.log("[story] onDeleteSelection"),
     onCreateCardDocument: () => console.log("[story] onCreateCardDocument"),
     onDownloadSelection: () => console.log("[story] onDownloadSelection"),
+    onImportFiles: (files) =>
+      console.log(
+        "[story] onImportFiles",
+        Array.from(files).map((f) => f.name),
+      ),
   };
 }
 
@@ -58,6 +65,8 @@ const meta: Meta<Args> = {
     el.selection = args.selection;
     el.canCreateCardDocument = args.canCreateCardDocument;
     el.canDownloadSelection = args.canDownloadSelection;
+    el.dropTargetLabel = args.dropTargetLabel;
+    el.dragOver = args.dragOver;
     el.callbacks = makeCallbacks();
     wrapper.appendChild(el);
     return wrapper;
@@ -69,6 +78,8 @@ const meta: Meta<Args> = {
     selection: { control: "object" },
     canCreateCardDocument: { control: "boolean" },
     canDownloadSelection: { control: "boolean" },
+    dragOver: { control: "boolean" },
+    dropTargetLabel: { control: "text" },
   },
   args: {
     breadcrumbs: [{ label: "Browser", path: "", active: true }],
@@ -77,6 +88,8 @@ const meta: Meta<Args> = {
     selection: null,
     canCreateCardDocument: true,
     canDownloadSelection: true,
+    dragOver: false,
+    dropTargetLabel: "Browser",
   },
 };
 export default meta;
@@ -179,5 +192,19 @@ export const Empty: Story = {
     viewMode: "grid",
     countText: "0 images",
     selection: null,
+  },
+};
+
+export const DragOverActive: Story = {
+  args: {
+    breadcrumbs: [
+      { label: "Browser", path: "", active: false },
+      { label: "Screenshots", path: "Screenshots", active: true },
+    ],
+    viewMode: "grid",
+    countText: "8 images",
+    selection: null,
+    dragOver: true,
+    dropTargetLabel: "Screenshots",
   },
 };

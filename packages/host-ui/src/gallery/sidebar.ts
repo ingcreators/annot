@@ -586,7 +586,7 @@ export class AnnotSidebarElement extends LitElement {
       },
       {
         icon: "upload",
-        label: "Upload Image…",
+        label: "Upload Files…",
         action: () => this.callbacks.onUploadImage(),
         section: "image",
       },

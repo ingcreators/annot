@@ -1946,6 +1946,56 @@ html.light .gallery-item.selected::after {
   background: var(--annot-bg-primary);
 }
 
+/* Multi-file drop overlay — covers the gallery scroll area while
+   the user is dragging files over the file manager. `position:
+   relative` on the body lets the overlay absolutely-fill it
+   without bleeding into the header / footer / sidebar. */
+.file-manager-body {
+  position: relative;
+}
+
+.file-manager-drop-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--annot-accent, #4a90e2) 12%, transparent);
+  z-index: 5;
+}
+
+.file-manager-drop-overlay-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 28px 40px;
+  border-radius: 12px;
+  border: 2px dashed var(--annot-accent, #4a90e2);
+  background: var(--annot-bg-secondary, #fff);
+  color: var(--annot-text-primary);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  min-width: 260px;
+  text-align: center;
+}
+
+.file-manager-drop-overlay-card annot-icon {
+  width: 36px;
+  height: 36px;
+  color: var(--annot-accent, #4a90e2);
+}
+
+.file-manager-drop-overlay-title {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.file-manager-drop-overlay-subtitle {
+  font-size: 13px;
+  color: var(--annot-text-secondary);
+}
+
 /* Count footer inside main content */
 .main-content-footer {
   display: flex;

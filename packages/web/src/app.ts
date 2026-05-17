@@ -633,6 +633,9 @@ export class App {
         },
         onNewFolder: () => this.#fileManager!.createNewFolder(),
         onUploadImage: () => this.#captureHost.openFileDialog(),
+        onImportFiles: (files) => {
+          void this.#captureHost.importFiles(Array.from(files));
+        },
         // Phase 5 of `docs/plans/web-capture-redesign.md` retired
         // the legacy `onCaptureScreen` / `onTimedCapture` PWA
         // wiring. `Capture Screen...` (the mode-picker dialog) is
