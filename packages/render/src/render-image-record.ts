@@ -44,10 +44,23 @@ export async function renderImageRecord(
     const parser = new DOMParser();
     const doc = parser.parseFromString(annotationsSvg, "image/svg+xml");
     const root = doc.documentElement;
-    // Extract child elements (skip defs, base image, ui-overlay)
+    const serializer = new XMLSerializer();
+    // Extract child elements. We preserve `<defs>` content
+    // (gradients via `gradient-utils`, arrow markers) so the
+    // annotation's id refs — `fill="url(#grad-…)"`,
+    // `marker-end="url(#…)"` — still resolve in the rendered
+    // bitmap. We strip only the editor's `data-annot-fonts`
+    // style block (the renderer doesn't need it; the surrounding
+    // <text> elements still resolve via the canvas's default
+    // font stack). Base image and `ui-overlay` chrome are
+    // skipped as before.
     for (const child of Array.from(root.children)) {
       const tag = child.tagName;
-      if (tag === "defs") continue;
+      if (tag === "defs") {
+        const sanitised = sanitiseRenderDefs(child);
+        if (sanitised) svgString += serializer.serializeToString(sanitised);
+        continue;
+      }
       // Skip the base bitmap (`<image>` at SVG root with no `<g>` ancestor)
       // but NOT mosaic / blur redacts, which are also `<image>` elements
       // and become top-level after `exportAnnotationsSvgForIdb`'s
@@ -59,11 +72,11 @@ export async function renderImageRecord(
       if (child.id === "ui-overlay") continue;
       if (child.id === "annotations") {
         for (const annotation of Array.from(child.children)) {
-          svgString += new XMLSerializer().serializeToString(annotation);
+          svgString += serializer.serializeToString(annotation);
         }
         continue;
       }
-      svgString += new XMLSerializer().serializeToString(child);
+      svgString += serializer.serializeToString(child);
     }
   }
 
@@ -96,6 +109,22 @@ export async function renderImageRecord(
     reader.onloadend = () => resolve(reader.result as string);
     reader.readAsDataURL(pngBlob);
   });
+}
+
+/** Strip the editor's `data-annot-fonts` injection from a
+ *  cloned `<defs>`. Returns `null` when the cleaned defs no
+ *  longer carries content (so we don't waste bytes on an
+ *  empty `<defs/>`). Mirrors the same helper in
+ *  `host-ui/src/gallery/create-card-document.ts` —
+ *  intentional duplication: this package can't import from
+ *  `annot-host-ui` (Tier C-render vs Tier C). */
+function sanitiseRenderDefs(defs: Element): Element | null {
+  const clone = defs.cloneNode(true) as Element;
+  for (const fontStyle of Array.from(clone.querySelectorAll("style[data-annot-fonts]"))) {
+    fontStyle.remove();
+  }
+  if (clone.children.length === 0 && (clone.textContent ?? "").trim().length === 0) return null;
+  return clone;
 }
 
 async function rasterizeSVG(svgString: string, width: number, height: number): Promise<Blob> {

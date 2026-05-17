@@ -182,12 +182,21 @@ function normaliseAnnotationsFragment(raw: string): string {
     for (const child of Array.from(annoGroup.children)) candidates.push(child);
   } else {
     for (const child of Array.from(root.children)) {
-      // Skip non-annotation elements: defs (font styles, etc.),
-      // the base bitmap `<image>` (without redact-style marker —
-      // mosaic / blur redacts ARE annotations even as `<image>`),
-      // and the editor's ui-overlay if it ever leaks in.
       const tag = child.tagName;
-      if (tag === "defs") continue;
+      // <defs> — preserve content so id-keyed references
+      // (`fill="url(#grad-…)"`, `marker-end="url(#…)"`) still
+      // resolve. Strip only the editor's `data-annot-fonts`
+      // style block (the doc supplies its own fonts and would
+      // conflict). When the cleaned `<defs>` ends up empty,
+      // omit it.
+      if (tag === "defs") {
+        const sanitised = sanitiseAnnotationDefs(child);
+        if (sanitised) candidates.push(sanitised);
+        continue;
+      }
+      // Skip the base bitmap (`<image>` at root) but preserve
+      // mosaic / blur redact overlays — those ARE annotations
+      // even though they use `<image>`.
       if (tag === "image" && !child.hasAttribute("data-redact-style")) continue;
       if (child.id === "ui-overlay") continue;
       candidates.push(child);
@@ -197,6 +206,21 @@ function normaliseAnnotationsFragment(raw: string): string {
   const serializer = new XMLSerializer();
   const inner = candidates.map((el) => serializer.serializeToString(el)).join("");
   return `<g id="annotations">${inner}</g>`;
+}
+
+/** Clone a `<defs>` element with the editor's font-style
+ *  injection (`<style data-annot-fonts>` from
+ *  `injectLogicalFontStyles`) removed. Returns the cloned defs
+ *  iff it still carries content; `null` when the defs contained
+ *  ONLY font-style entries (so embedding it would add an empty
+ *  `<defs/>` to every doc image). */
+function sanitiseAnnotationDefs(defs: Element): Element | null {
+  const clone = defs.cloneNode(true) as Element;
+  for (const fontStyle of Array.from(clone.querySelectorAll("style[data-annot-fonts]"))) {
+    fontStyle.remove();
+  }
+  if (clone.children.length === 0 && (clone.textContent ?? "").trim().length === 0) return null;
+  return clone;
 }
 
 /** Inline copy of `escapeAttrValue` from `create-image-block.ts`
