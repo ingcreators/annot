@@ -2830,3 +2830,129 @@ describe("annot-doc-shell: linked image live pull (Phase 4)", () => {
     expect(pullSpy).not.toHaveBeenCalled();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Phase 5 of `card-document-image-gallery-link-sync.md` — when the modal
+// returns `unlinked: true`, the shell strips `sourceImagePath` from the
+// block (the block becomes doc-only from that save onward).
+// ---------------------------------------------------------------------------
+
+describe("annot-doc-shell: unlink result (Phase 5)", () => {
+  const PNG_PIXEL =
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+  const SAVED_SVG =
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 50" width="100" height="50">` +
+    `<image href="${PNG_PIXEL}" width="100" height="50"/>` +
+    `<rect data-type="rect" x="10" y="10" width="20" height="15"/>` +
+    "</svg>";
+
+  function makeStepDocWithLink(): AnnotDocument {
+    return {
+      version: 1,
+      lang: "en",
+      title: "Unlink test",
+      meta: { title: "Unlink test" },
+      styleBlock: null,
+      blocks: [
+        {
+          kind: "step",
+          id: "img-step-unlink",
+          svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 50" width="100" height="50"></svg>',
+          title: "Step",
+          body: "Body.",
+          layout: "image-top",
+          sourceImagePath: "Screenshots/foo.png",
+        },
+      ],
+    };
+  }
+
+  it("passes the block's sourceImagePath into the modal", async () => {
+    const el = mount(makeStepDocWithLink());
+    el.editing = true;
+    await el.updateComplete;
+    el.materialiseAllImagesNow();
+    const openSpy = vi
+      .spyOn(
+        // biome-ignore lint/suspicious/noExplicitAny: spying on module-level static
+        (await import("./annot-doc-image-editor-modal.js")).AnnotDocImageEditorModalElement as any,
+        "openFor",
+      )
+      .mockResolvedValue({ kind: "cancel" });
+    (el.querySelector(".annot-doc-image-svg-slot") as HTMLElement).click();
+    expect(openSpy).toHaveBeenCalledTimes(1);
+    const arg = openSpy.mock.calls[0]?.[0] as { sourceImagePath?: string };
+    expect(arg.sourceImagePath).toBe("Screenshots/foo.png");
+    openSpy.mockRestore();
+  });
+
+  it("strips sourceImagePath when the modal returns unlinked: true", async () => {
+    const el = mount(makeStepDocWithLink());
+    el.editing = true;
+    await el.updateComplete;
+    el.materialiseAllImagesNow();
+    const openSpy = vi
+      .spyOn(
+        // biome-ignore lint/suspicious/noExplicitAny: spying on module-level static
+        (await import("./annot-doc-image-editor-modal.js")).AnnotDocImageEditorModalElement as any,
+        "openFor",
+      )
+      .mockResolvedValue({ kind: "save", svg: SAVED_SVG, unlinked: true });
+    (el.querySelector(".annot-doc-image-svg-slot") as HTMLElement).click();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    const step = el.document!.blocks[0];
+    if (step?.kind !== "step") throw new Error("expected step");
+    expect(step.sourceImagePath).toBeUndefined();
+    expect(step.svg).toBe(SAVED_SVG);
+    openSpy.mockRestore();
+  });
+
+  it("does NOT push to gallery after an unlink save", async () => {
+    const el = mount(makeStepDocWithLink());
+    el.editing = true;
+    await el.updateComplete;
+    el.materialiseAllImagesNow();
+    const pushSpy = vi.fn<(detail: LinkedImagePushDetail) => Promise<LinkedImagePushResult>>(
+      async () => "synced",
+    );
+    el.pushLinkedImage = pushSpy;
+    const openSpy = vi
+      .spyOn(
+        // biome-ignore lint/suspicious/noExplicitAny: spying on module-level static
+        (await import("./annot-doc-image-editor-modal.js")).AnnotDocImageEditorModalElement as any,
+        "openFor",
+      )
+      .mockResolvedValue({ kind: "save", svg: SAVED_SVG, unlinked: true });
+    (el.querySelector(".annot-doc-image-svg-slot") as HTMLElement).click();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    // The block was just unlinked — push must not fire for this edit.
+    expect(pushSpy).not.toHaveBeenCalled();
+    openSpy.mockRestore();
+  });
+
+  it("preserves sourceImagePath on a normal save (unlinked field absent)", async () => {
+    const el = mount(makeStepDocWithLink());
+    el.editing = true;
+    await el.updateComplete;
+    el.materialiseAllImagesNow();
+    const openSpy = vi
+      .spyOn(
+        // biome-ignore lint/suspicious/noExplicitAny: spying on module-level static
+        (await import("./annot-doc-image-editor-modal.js")).AnnotDocImageEditorModalElement as any,
+        "openFor",
+      )
+      .mockResolvedValue({ kind: "save", svg: SAVED_SVG });
+    (el.querySelector(".annot-doc-image-svg-slot") as HTMLElement).click();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    const step = el.document!.blocks[0];
+    if (step?.kind !== "step") throw new Error("expected step");
+    expect(step.sourceImagePath).toBe("Screenshots/foo.png");
+    openSpy.mockRestore();
+  });
+});
