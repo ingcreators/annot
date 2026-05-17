@@ -41,9 +41,12 @@ describe("annot-doc-image-editor-modal: lifecycle", () => {
     ) as AnnotDocImageEditorModalElement;
     expect(modal).not.toBeNull();
     await modal.updateComplete;
-    // The shell's SVG mounts inside the canvas region.
+    // The shell's SVG mounts as a direct child of the canvas
+    // wrap — the previous intermediate `.canvas` flex div was
+    // dropped so `CanvasManager.fitToView` reads the wrap's
+    // real clientHeight.
     expect(
-      modal.querySelector(".annot-doc-image-editor-modal-canvas svg[data-annot-shell-root]"),
+      modal.querySelector(".annot-doc-image-editor-modal-canvas-wrap > svg[data-annot-shell-root]"),
     ).not.toBeNull();
     // Cancel so the test cleanly resolves.
     modal
