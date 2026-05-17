@@ -196,8 +196,19 @@ const STYLES = `
   min-height: 100%;
   min-width: 100%;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  /* "safe center" — centre the SVG within the canvas WHEN it
+     fits (image smaller than the wrap), but fall back to
+     start-alignment when it overflows. Without the "safe"
+     keyword, classic flex centring puts the overflowing
+     content half-on-each-side of the flex container's centre
+     axis — the right half is reachable via the canvas-wrap's
+     horizontal scrollbar, but the left half lives at NEGATIVE
+     scrollLeft and can never be scrolled into view. The
+     visible symptom: zooming in shows the right portion of
+     the image fine, but the left edge is clipped under the
+     toolbar / off-screen with no scrollbar to recover it. */
+  align-items: safe center;
+  justify-content: safe center;
   padding: 16px;
 }
 /* The canvas wrap below scrolls (overflow: auto), so the
