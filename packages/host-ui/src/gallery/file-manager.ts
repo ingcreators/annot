@@ -245,6 +245,16 @@ export class FileManager {
     return this.#storage;
   }
 
+  /** Breadcrumb-style label for the active folder, e.g.
+   *  `"Browser / Screenshots / Mobile"` or just the storage root
+   *  label when at the top. Used by the file-conflict dialog so
+   *  the user knows WHERE the collision is. */
+  get currentDestinationLabel(): string {
+    const root = this.#rootLabel();
+    if (!this.#currentFolderPath) return root;
+    return `${root} / ${this.#currentFolderPath}`;
+  }
+
   setSearchInput(input: HTMLInputElement): void {
     this.#searchInput = input;
     if (this.#gallery) this.#gallery.setSearchInput(input);

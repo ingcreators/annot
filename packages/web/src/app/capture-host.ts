@@ -21,6 +21,7 @@ import {
 } from "@ingcreators/annot-host-ui/gallery/import-files";
 import { generateThumbnailFromDataUrl } from "@ingcreators/annot-host-ui/image-thumbnail";
 import type { ThumbnailManager } from "@ingcreators/annot-host-ui/thumbnail-manager";
+import { showFileConflictDialog } from "@ingcreators/annot-host-ui/ui/dialog";
 import { setCapturePendingSession } from "../capture/capture-pending-session.js";
 import {
   type CursorMode,
@@ -188,6 +189,12 @@ export class CaptureHost {
       autoDismiss: 0,
     });
 
+    // Destination label for the conflict prompt — built once
+    // (folder doesn't change mid-batch). Falls back to a
+    // user-friendly default when the FileManager isn't mounted.
+    const fileManager = this.deps.getFileManager();
+    const destinationLabel = fileManager?.currentDestinationLabel ?? "the current folder";
+
     let results: ImportFileResult[];
     try {
       results = await importFilesBatch(files, {
@@ -201,6 +208,26 @@ export class CaptureHost {
             message: `Importing ${done} / ${total}…`,
             autoDismiss: 0,
           });
+        },
+        onConflict: async (info) => {
+          // The progress bar must not steal focus from the
+          // conflict dialog — hide it for the duration of the
+          // prompt and restore the "Importing N / M…" line
+          // immediately after.
+          hideError();
+          const result = await showFileConflictDialog({
+            filename: info.file.name,
+            destinationLabel,
+            showApplyToAll: info.total > 1,
+          });
+          if (total > 1) {
+            showError({
+              severity: "info",
+              message: `Importing ${total}…`,
+              autoDismiss: 0,
+            });
+          }
+          return { action: result.action, applyToAll: result.applyToAll };
         },
       });
     } catch (err) {
@@ -218,8 +245,23 @@ export class CaptureHost {
     // new files appear in the gallery. Warn / error on partial /
     // total failure.
     const ok = results.filter((r) => r.path).length;
-    const skipped = results.filter((r) => r.kind === "skipped").length;
     const failed = results.filter((r) => r.error).length;
+    const skippedUnsupported = results.filter(
+      (r) => r.kind === "skipped" && r.skipReason === "unsupported-type",
+    ).length;
+    const skippedDocsUnsupported = results.filter(
+      (r) => r.kind === "skipped" && r.skipReason === "documents-not-supported",
+    ).length;
+    const skippedDuplicate = results.filter(
+      (r) =>
+        r.kind === "skipped" &&
+        (r.skipReason === "duplicate-skipped" || r.skipReason === "duplicate-cancelled"),
+    ).length;
+    const skippedEmpty = results.filter(
+      (r) => r.kind === "skipped" && r.skipReason === "empty-file",
+    ).length;
+    const totalSkipped =
+      skippedUnsupported + skippedDocsUnsupported + skippedDuplicate + skippedEmpty;
 
     if (failed > 0 && ok === 0) {
       const firstError = results.find((r) => r.error);
@@ -227,9 +269,18 @@ export class CaptureHost {
         ? `Couldn't import any files. ${(firstError.error as Error).message}`
         : "Couldn't import any files.";
       showSaveError(msg);
-    } else if (failed > 0 || skipped > 0) {
+    } else if (failed > 0 || totalSkipped > 0) {
       const parts: string[] = [`Imported ${ok} file${ok === 1 ? "" : "s"}.`];
-      if (skipped > 0) parts.push(`${skipped} skipped (unsupported type).`);
+      const reasons: string[] = [];
+      if (skippedUnsupported > 0) reasons.push(`${skippedUnsupported} unsupported type`);
+      if (skippedDocsUnsupported > 0) {
+        reasons.push(`${skippedDocsUnsupported} document(s) not supported by storage`);
+      }
+      if (skippedDuplicate > 0) reasons.push(`${skippedDuplicate} duplicate`);
+      if (skippedEmpty > 0) reasons.push(`${skippedEmpty} empty`);
+      if (reasons.length > 0) {
+        parts.push(`${totalSkipped} skipped (${reasons.join(", ")}).`);
+      }
       if (failed > 0) parts.push(`${failed} failed.`);
       showError({
         severity: "warning",
