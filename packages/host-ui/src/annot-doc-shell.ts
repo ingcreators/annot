@@ -44,6 +44,7 @@ import { annotationChildrenEqual, buildBlockSvg } from "./build-block-svg.js";
 import { decomposeBlockSvg } from "./decompose-block-svg.js";
 import "./annot-doc-empty-state.js";
 import type { EmptyStateActionDetail } from "./annot-doc-empty-state.js";
+import type { MetadataChangedDetail } from "./idb-metadata-cache.js";
 import "./annot-doc-insert-bar.js";
 import { DocumentHistory } from "./annot-doc-history.js";
 import { AnnotDocImageEditorModalElement } from "./annot-doc-image-editor-modal.js";
@@ -837,6 +838,11 @@ export class AnnotDocShellElement extends LitElement {
    *  on every property change. */
   #suppressHistoryReset = false;
   #commitTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Phase 4 of `card-document-image-gallery-link-sync.md` —
+   *  bound window listener for `annot-metadata-changed`. The
+   *  reference is stored so `disconnectedCallback` can detach
+   *  the same function. */
+  #onMetadataChanged: ((e: Event) => void) | null = null;
 
   constructor() {
     super();
@@ -874,6 +880,17 @@ export class AnnotDocShellElement extends LitElement {
     document.addEventListener("format-change", this.#onFormatChange as EventListener);
     document.addEventListener("block-kind-change", this.#onBlockKindChange as EventListener);
     document.addEventListener("link-request", this.#onLinkRequest as EventListener);
+    // Phase 4 of `card-document-image-gallery-link-sync.md` —
+    // listen for cross-tab + same-tab metadata changes so a gallery
+    // edit landing while the doc is open propagates immediately,
+    // not just on next doc-load. The IDB metadata cache dispatches
+    // `annot-metadata-changed` `CustomEvent`s on `window` for every
+    // `putImage` + on `BroadcastChannel` echo from peer tabs.
+    if (typeof window !== "undefined") {
+      const handler = (e: Event) => this.#handleMetadataChanged(e);
+      this.#onMetadataChanged = handler;
+      window.addEventListener("annot-metadata-changed", handler);
+    }
   }
 
   override disconnectedCallback(): void {
@@ -890,6 +907,10 @@ export class AnnotDocShellElement extends LitElement {
     document.removeEventListener("format-change", this.#onFormatChange as EventListener);
     document.removeEventListener("block-kind-change", this.#onBlockKindChange as EventListener);
     document.removeEventListener("link-request", this.#onLinkRequest as EventListener);
+    if (this.#onMetadataChanged && typeof window !== "undefined") {
+      window.removeEventListener("annot-metadata-changed", this.#onMetadataChanged);
+      this.#onMetadataChanged = null;
+    }
     AnnotDocSelectionToolbarElement.closeActive();
     if (this.#commitTimer !== null) {
       clearTimeout(this.#commitTimer);
@@ -3080,11 +3101,18 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
    *  `linked-images-synced` event so the host can toast one
    *  line per refreshed block.
    *
+   *  Phase 4 extends this with an optional `filterPath` argument
+   *  — when set, only blocks whose `sourceImagePath` equals the
+   *  filter are considered. This is the entry point for the
+   *  `annot-metadata-changed` `kind: "path"` event handler:
+   *  re-pull just the affected block(s) instead of running the
+   *  full document sweep on every gallery edit.
+   *
    *  Idempotent: if no block diverged the pass is a complete
    *  no-op — no history push, no event. Dead-link / error
    *  results leave the block alone (the user-visible badge for
    *  dead links is a Phase 5 concern). */
-  async #pullLinkedImagesPass(initialDoc: AnnotDocument): Promise<void> {
+  async #pullLinkedImagesPass(initialDoc: AnnotDocument, filterPath?: string): Promise<void> {
     const pull = this.pullLinkedImage;
     if (!pull) return;
     // Collect (index, block, sourceImagePath) for every linked
@@ -3100,6 +3128,7 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
     }> = [];
     initialDoc.blocks.forEach((block, index) => {
       if (block.kind === "image" && block.sourceImagePath !== undefined) {
+        if (filterPath !== undefined && block.sourceImagePath !== filterPath) return;
         linkedTargets.push({
           index,
           blockId: block.id,
@@ -3111,6 +3140,7 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
         block.sourceImagePath !== undefined &&
         block.svg.length > 0
       ) {
+        if (filterPath !== undefined && block.sourceImagePath !== filterPath) return;
         linkedTargets.push({
           index,
           blockId: block.id,
@@ -3186,6 +3216,38 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
         detail: { updated },
       }),
     );
+  }
+
+  /** Phase 4 — translate a same-tab / cross-tab
+   *  `annot-metadata-changed` event into a targeted live pull.
+   *  `kind: "path"` is the only event the shell reacts to:
+   *  re-pull just that path against the host's storage and
+   *  re-embed the matching block(s) when they diverge.
+   *
+   *  Listing / prefix events are ignored — they fire on listing
+   *  reshape (folder rename) but not on individual image edits,
+   *  and a doc-mode renderer doesn't expose the gallery listing.
+   *  Prefix events from `forceRefresh` / plugin-uninstall paths
+   *  intentionally bypass this layer; the next doc-open's full
+   *  pull pass catches up.
+   *
+   *  The shell does NOT filter by namespace — `pullLinkedImage`
+   *  resolves against the active storage, so an event from a
+   *  non-active namespace falls through to a `dead-link` reply
+   *  (silently ignored). Multi-storage-tab setups are rare; if
+   *  they become a real concern we can plumb the active
+   *  namespace through later. */
+  #handleMetadataChanged(e: Event): void {
+    const detail = (e as CustomEvent<MetadataChangedDetail>).detail;
+    if (!detail || detail.kind !== "path") return;
+    const doc = this.document;
+    if (!doc) return;
+    // Quick scan for matching linked blocks; bail when none.
+    const hasMatch = doc.blocks.some(
+      (b) => (b.kind === "image" || b.kind === "step") && b.sourceImagePath === detail.path,
+    );
+    if (!hasMatch) return;
+    void this.#pullLinkedImagesPass(doc, detail.path);
   }
 
   /** Phase 2 — doc → gallery push helper. No-op when:
