@@ -40,6 +40,7 @@ import {
 import "./annot-doc-block-menu.js";
 import "./annot-doc-block-toolbar.js";
 import type { BlockDragStartDetail, BlockToolbarActionDetail } from "./annot-doc-block-toolbar.js";
+import { annotationChildrenEqual, buildBlockSvg } from "./build-block-svg.js";
 import { decomposeBlockSvg } from "./decompose-block-svg.js";
 import "./annot-doc-empty-state.js";
 import type { EmptyStateActionDetail } from "./annot-doc-empty-state.js";
@@ -665,8 +666,10 @@ export interface DocHeadingActivatedDetail {
 export interface DocChangedDetail {
   document: AnnotDocument;
   /** What triggered the change — useful for analytics / future
-   *  PWA orchestration. */
-  reason: "block-action" | "undo" | "redo" | "commit" | "external";
+   *  PWA orchestration. `gallery-sync` is emitted when the
+   *  Phase 3 pull pass re-embeds one or more linked blocks
+   *  with the latest gallery state. */
+  reason: "block-action" | "undo" | "redo" | "commit" | "external" | "gallery-sync";
 }
 
 /** Phase 2 of `card-document-image-gallery-link-sync.md` — payload
@@ -714,6 +717,49 @@ export type LinkedImagePushResult = "synced" | "dead-link" | "error";
  *  the push — the doc still updates, the gallery just doesn't. */
 export type PushLinkedImageFn = (detail: LinkedImagePushDetail) => Promise<LinkedImagePushResult>;
 
+/** Phase 3 of `card-document-image-gallery-link-sync.md` — result
+ *  the host returns from a `pullLinkedImage` invocation. */
+export type LinkedImagePullResult =
+  | {
+      /** Gallery record found; the shell compares the parts and
+       *  re-embeds when the doc copy diverges. */
+      readonly status: "found";
+      readonly originalDataUrl: string;
+      readonly annotationsSvg: string;
+      readonly width: number;
+      readonly height: number;
+    }
+  | {
+      /** `sourceImagePath` doesn't resolve to a gallery record.
+       *  The shell leaves the block alone — the doc keeps its
+       *  inlined snapshot. (Phase 5 will surface a UI badge.) */
+      readonly status: "dead-link";
+    }
+  | {
+      /** Read failed for another reason (network, permission).
+       *  The shell skips this block; subsequent doc opens retry. */
+      readonly status: "error";
+    };
+
+/** Host-supplied callback that performs the gallery → doc pull:
+ *  resolve `sourceImagePath` against the active `StorageProvider`,
+ *  return the record's bitmap + annotations + dims, or signal a
+ *  dead-link / error. Set to `null` when the host doesn't own a
+ *  storage backend (in which case the shell silently skips). */
+export type PullLinkedImageFn = (sourceImagePath: string) => Promise<LinkedImagePullResult>;
+
+/** Phase 3 — payload of the `linked-images-synced` event the
+ *  shell fires after a pull pass has finished. Hosts use it to
+ *  toast a single "Image X updated from gallery." line per
+ *  refreshed block. The event is suppressed when no block
+ *  changed (idle pulls stay silent). */
+export interface LinkedImagesSyncedDetail {
+  readonly updated: ReadonlyArray<{
+    readonly blockId: string;
+    readonly sourceImagePath: string;
+  }>;
+}
+
 export class AnnotDocShellElement extends LitElement {
   static override properties = {
     document: { attribute: false },
@@ -739,6 +785,19 @@ export class AnnotDocShellElement extends LitElement {
    *  changes through the shell's lifetime, so no re-render is
    *  needed on assignment. */
   pushLinkedImage: PushLinkedImageFn | null = null;
+  /** Phase 3 of `card-document-image-gallery-link-sync.md` —
+   *  optional callback the host installs to fetch the latest
+   *  gallery state for a linked block. The shell calls this once
+   *  per linked block on every fresh-document load (i.e. when
+   *  the `document` property is set externally, not via internal
+   *  history-push). When unset the shell silently skips the
+   *  pull pass — the doc stays at whatever state it was loaded
+   *  with. See `PullLinkedImageFn` / `LinkedImagePullResult`. */
+  pullLinkedImage: PullLinkedImageFn | null = null;
+  /** Identity-tracker so the pull pass fires at most once per
+   *  externally-set document. Reset every time `willUpdate`
+   *  sees a non-suppressed `document` change. */
+  #pulledForDoc: AnnotDocument | null = null;
   /** Phase 9 of `annot-html-document-ux-polish.md` — mobile-only
    *  toggle for the TOC drawer. Default true so desktop sees the
    *  TOC at boot; the CSS `@media (max-width: 768px)` rules hide
@@ -853,6 +912,25 @@ export class AnnotDocShellElement extends LitElement {
         this.#suppressHistoryReset = false;
       } else {
         this.#history = this.document ? new DocumentHistory(this.document) : null;
+        // Phase 3 of `card-document-image-gallery-link-sync.md`
+        // — a fresh, externally-set document is the trigger for
+        // the gallery → doc pull pass. Schedule it for the next
+        // microtask so the first render lands without blocking;
+        // the pass itself is async and emits a follow-up history
+        // push (`reason: "gallery-sync"`) when a block needed
+        // re-embedding. Guard against re-firing on subsequent
+        // renders of the same identity (e.g. Lit re-running
+        // `willUpdate` after a `dropZoneActive` state change).
+        if (this.document && this.#pulledForDoc !== this.document) {
+          const target = this.document;
+          this.#pulledForDoc = target;
+          queueMicrotask(() => {
+            // Bail if the document changed again before the
+            // microtask ran (rapid back-to-back loads in tests).
+            if (this.document !== target) return;
+            void this.#pullLinkedImagesPass(target);
+          });
+        }
       }
     }
   }
@@ -2988,6 +3066,126 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
     this.#applyInternal(newDoc, "block-action");
     // See `#openImageEditor` — symmetrical push for step blocks.
     await this.#pushLinkedImageIfLinked(target, result.svg, index, "step");
+  }
+
+  /** Phase 3 — gallery → doc pull pass. Fired by `willUpdate`
+   *  the first time the shell observes a fresh, externally-set
+   *  `document`. For each linked block (those carrying
+   *  `sourceImagePath`), calls the host's `pullLinkedImage`
+   *  callback and compares the returned gallery state with the
+   *  block's inlined SVG. When they diverge, the block is
+   *  re-embedded with a freshly-built SVG from the gallery
+   *  state; once the whole pass finishes, a single
+   *  `gallery-sync` history push lands plus a
+   *  `linked-images-synced` event so the host can toast one
+   *  line per refreshed block.
+   *
+   *  Idempotent: if no block diverged the pass is a complete
+   *  no-op — no history push, no event. Dead-link / error
+   *  results leave the block alone (the user-visible badge for
+   *  dead links is a Phase 5 concern). */
+  async #pullLinkedImagesPass(initialDoc: AnnotDocument): Promise<void> {
+    const pull = this.pullLinkedImage;
+    if (!pull) return;
+    // Collect (index, block, sourceImagePath) for every linked
+    // image / step block in the initial snapshot. The pass runs
+    // against this snapshot — concurrent user edits land on the
+    // current `this.document` and aren't clobbered because we
+    // re-read the latest doc before applying (see below).
+    const linkedTargets: Array<{
+      index: number;
+      blockId: string;
+      sourceImagePath: string;
+      kind: "image" | "step";
+    }> = [];
+    initialDoc.blocks.forEach((block, index) => {
+      if (block.kind === "image" && block.sourceImagePath !== undefined) {
+        linkedTargets.push({
+          index,
+          blockId: block.id,
+          sourceImagePath: block.sourceImagePath,
+          kind: "image",
+        });
+      } else if (
+        block.kind === "step" &&
+        block.sourceImagePath !== undefined &&
+        block.svg.length > 0
+      ) {
+        linkedTargets.push({
+          index,
+          blockId: block.id,
+          sourceImagePath: block.sourceImagePath,
+          kind: "step",
+        });
+      }
+    });
+    if (linkedTargets.length === 0) return;
+
+    // Fan out the pulls concurrently — typical doc has 1-30 linked
+    // blocks; running them in parallel keeps the pass under the
+    // first-render budget. Failed / dead-link results are skipped
+    // silently.
+    const galleryResults = await Promise.all(
+      linkedTargets.map(async (target) => {
+        try {
+          return { target, result: await pull(target.sourceImagePath) };
+        } catch {
+          return {
+            target,
+            result: { status: "error" as const } satisfies LinkedImagePullResult,
+          };
+        }
+      }),
+    );
+
+    // Apply against the LATEST `this.document` (the user may
+    // have undone / redone / typed while the pulls were in
+    // flight). If the document changed identity mid-pass we
+    // bail rather than overwrite the user's work; the next
+    // doc-load will re-trigger the pass.
+    if (this.document !== initialDoc) return;
+    const currentDoc = this.document;
+    if (!currentDoc) return;
+    const updated: Array<{ blockId: string; sourceImagePath: string }> = [];
+    let blocks: Block[] | null = null;
+    for (const { target, result } of galleryResults) {
+      if (result.status !== "found") continue;
+      const source = blocks ?? currentDoc.blocks;
+      const block = source[target.index];
+      // Block may have shifted between snapshot + pass return if
+      // a concurrent edit reordered the list. Match by id so we
+      // don't accidentally re-embed a different image into the
+      // wrong slot.
+      if (!block || block.kind !== target.kind || block.id !== target.blockId) continue;
+      if (block.svg.length === 0) continue;
+      const parts = decomposeBlockSvg(block.svg);
+      const inSync =
+        parts.originalDataUrl === result.originalDataUrl &&
+        parts.width === result.width &&
+        parts.height === result.height &&
+        annotationChildrenEqual(parts.annotationsSvg, result.annotationsSvg);
+      if (inSync) continue;
+      const refreshedSvg = buildBlockSvg({
+        originalDataUrl: result.originalDataUrl,
+        annotationsSvg: result.annotationsSvg,
+        width: result.width,
+        height: result.height,
+      });
+      if (blocks === null) blocks = [...currentDoc.blocks];
+      blocks[target.index] = { ...block, svg: refreshedSvg };
+      updated.push({ blockId: target.blockId, sourceImagePath: target.sourceImagePath });
+    }
+    if (blocks === null) return;
+    const newDoc: AnnotDocument = { ...currentDoc, blocks };
+    this.#history?.push(newDoc);
+    this.#applyInternal(newDoc, "gallery-sync");
+    this.dispatchEvent(
+      new CustomEvent<LinkedImagesSyncedDetail>("linked-images-synced", {
+        bubbles: true,
+        composed: true,
+        detail: { updated },
+      }),
+    );
   }
 
   /** Phase 2 — doc → gallery push helper. No-op when:

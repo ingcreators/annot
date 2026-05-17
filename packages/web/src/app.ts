@@ -1485,6 +1485,48 @@ export class App {
       }
     };
 
+    // Phase 3 of `card-document-image-gallery-link-sync.md` — on
+    // every fresh doc-load the shell asks for the latest gallery
+    // state for each linked block. We hand it the record fields
+    // it needs (bitmap + annotations + dims); the shell decides
+    // whether to re-embed via its semantic-equality comparison.
+    shell.pullLinkedImage = async (sourceImagePath) => {
+      try {
+        const record = await storage.getImage(sourceImagePath);
+        if (!record) return { status: "dead-link" };
+        return {
+          status: "found",
+          originalDataUrl: record.originalDataUrl,
+          annotationsSvg: record.annotationsSvg,
+          width: record.width,
+          height: record.height,
+        };
+      } catch (err) {
+        logger.warn("openDocFromGallery: gallery pull failed for", sourceImagePath, err);
+        return { status: "error" };
+      }
+    };
+    shell.addEventListener("linked-images-synced", (e) => {
+      const detail = (
+        e as CustomEvent<
+          import("@ingcreators/annot-host-ui/annot-doc-shell").LinkedImagesSyncedDetail
+        >
+      ).detail;
+      const count = detail.updated.length;
+      if (count === 0) return;
+      const head = detail.updated[0];
+      if (!head) return;
+      const headName = head.sourceImagePath.split("/").pop() ?? head.sourceImagePath;
+      const message =
+        count === 1
+          ? `Image "${headName}" updated from gallery.`
+          : `Image "${headName}" + ${count - 1} more updated from gallery.`;
+      // `showSaveError` is the existing non-blocking toast
+      // surface — wording stays informational; the user can
+      // dismiss.
+      showSaveError(message);
+    });
+
     // Phase 6f — debounced save lifecycle:
     //   - On `doc-changed`: title sync, status → "pending", arm /
     //     re-arm a 1500 ms debounce timer.

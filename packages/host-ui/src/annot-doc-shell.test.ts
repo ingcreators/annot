@@ -19,8 +19,10 @@ import type {
   AnnotDocShellElement,
   DocChangedDetail,
   DocHeadingActivatedDetail,
+  LinkedImagePullResult,
   LinkedImagePushDetail,
   LinkedImagePushResult,
+  LinkedImagesSyncedDetail,
 } from "./annot-doc-shell.js";
 
 function mount(doc: AnnotDocument | null = null): AnnotDocShellElement {
@@ -2319,5 +2321,301 @@ describe("annot-doc-shell: linked image push (Phase 2)", () => {
     expect(pushSpy).toHaveBeenCalledTimes(1);
     expect(pushSpy.mock.calls[0]?.[0]?.blockId).toBe("img-linked");
     openSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 3 of `card-document-image-gallery-link-sync.md` — gallery → doc
+// pull: on a fresh doc-load, the shell fetches the latest gallery state
+// for each linked block, re-embeds when it diverges, and fires a
+// `linked-images-synced` event so the host can toast the user.
+// ---------------------------------------------------------------------------
+
+describe("annot-doc-shell: linked image pull (Phase 3)", () => {
+  const PNG_PIXEL_A =
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+  const PNG_PIXEL_B = "data:image/png;base64,IMAGE-B";
+
+  function makeStepDocWithLink(args: {
+    sourceImagePath: string;
+    href: string;
+    annotationRect?: string;
+  }): AnnotDocument {
+    const rect =
+      args.annotationRect !== undefined
+        ? `<rect data-type="rect" x="${args.annotationRect}"/>`
+        : "";
+    const svg =
+      `<svg xmlns="http://www.w3.org/2000/svg" data-annot-version="1" viewBox="0 0 100 50" width="100" height="50">` +
+      `<image href="${args.href}" width="100" height="50"/>` +
+      `<g id="annotations">${rect}</g>` +
+      "</svg>";
+    return {
+      version: 1,
+      lang: "en",
+      title: "Pull test",
+      meta: { title: "Pull test" },
+      styleBlock: null,
+      blocks: [
+        {
+          kind: "step",
+          id: "img-step-pull",
+          svg,
+          title: "Step",
+          body: "Body.",
+          layout: "image-top",
+          sourceImagePath: args.sourceImagePath,
+        },
+      ],
+    };
+  }
+
+  async function waitForPullPass(el: AnnotDocShellElement): Promise<void> {
+    // willUpdate schedules the pass via queueMicrotask AFTER Lit's
+    // update microtask. After the pull awaits its callback the
+    // shell calls #applyInternal which triggers another update.
+    // Drain a few microtasks + a render to be safe.
+    await el.updateComplete;
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    await el.updateComplete;
+  }
+
+  it("calls pullLinkedImage once per linked block on a fresh doc-load", async () => {
+    const el = mount();
+    const pullSpy = vi.fn<(path: string) => Promise<LinkedImagePullResult>>(async () => ({
+      status: "dead-link",
+    }));
+    el.pullLinkedImage = pullSpy;
+    el.document = makeStepDocWithLink({
+      sourceImagePath: "Screenshots/foo.png",
+      href: PNG_PIXEL_A,
+    });
+    await waitForPullPass(el);
+    expect(pullSpy).toHaveBeenCalledTimes(1);
+    expect(pullSpy).toHaveBeenCalledWith("Screenshots/foo.png");
+  });
+
+  it("does NOT call pullLinkedImage when no callback is installed", async () => {
+    const el = mount();
+    el.document = makeStepDocWithLink({
+      sourceImagePath: "Screenshots/foo.png",
+      href: PNG_PIXEL_A,
+    });
+    await waitForPullPass(el);
+    // No assertion needed beyond "didn't throw" — pullLinkedImage
+    // is null by default. The doc still mounts.
+    expect(el.document?.blocks[0]?.kind).toBe("step");
+  });
+
+  it("skips pull for blocks without sourceImagePath", async () => {
+    const el = mount();
+    const pullSpy = vi.fn<(path: string) => Promise<LinkedImagePullResult>>(async () => ({
+      status: "dead-link",
+    }));
+    el.pullLinkedImage = pullSpy;
+    // Hand-build a doc with a step block that has no sourceImagePath.
+    const docNoLink: AnnotDocument = {
+      version: 1,
+      lang: "en",
+      title: "No link",
+      meta: { title: "No link" },
+      styleBlock: null,
+      blocks: [
+        {
+          kind: "step",
+          id: "img-step-nolink",
+          svg:
+            `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 50" width="100" height="50">` +
+            `<image href="${PNG_PIXEL_A}" width="100" height="50"/>` +
+            `<g id="annotations"></g>` +
+            "</svg>",
+          title: "Step",
+          body: "Body.",
+          layout: "image-top",
+        },
+      ],
+    };
+    el.document = docNoLink;
+    await waitForPullPass(el);
+    expect(pullSpy).not.toHaveBeenCalled();
+  });
+
+  it("re-embeds the block when gallery state diverges (different bitmap)", async () => {
+    const el = mount();
+    el.pullLinkedImage = async () => ({
+      status: "found",
+      originalDataUrl: PNG_PIXEL_B,
+      annotationsSvg: '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="50"></svg>',
+      width: 100,
+      height: 50,
+    });
+    el.document = makeStepDocWithLink({
+      sourceImagePath: "Screenshots/foo.png",
+      href: PNG_PIXEL_A,
+    });
+    await waitForPullPass(el);
+    const step = el.document!.blocks[0];
+    if (step?.kind !== "step") throw new Error("expected step");
+    expect(step.svg).toContain(PNG_PIXEL_B);
+    expect(step.svg).not.toContain(PNG_PIXEL_A);
+  });
+
+  it("re-embeds the block when annotation children diverge", async () => {
+    const el = mount();
+    el.pullLinkedImage = async () => ({
+      status: "found",
+      originalDataUrl: PNG_PIXEL_A,
+      annotationsSvg:
+        '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="50">' +
+        '<text data-type="text" x="50" y="50">new annotation</text>' +
+        "</svg>",
+      width: 100,
+      height: 50,
+    });
+    el.document = makeStepDocWithLink({
+      sourceImagePath: "Screenshots/foo.png",
+      href: PNG_PIXEL_A,
+      annotationRect: "10",
+    });
+    await waitForPullPass(el);
+    const step = el.document!.blocks[0];
+    if (step?.kind !== "step") throw new Error("expected step");
+    expect(step.svg).toContain('data-type="text"');
+    expect(step.svg).toContain("new annotation");
+    expect(step.svg).not.toContain('data-type="rect"');
+  });
+
+  it("does NOT re-embed when gallery state matches the inlined snapshot", async () => {
+    const el = mount();
+    el.pullLinkedImage = async () => ({
+      status: "found",
+      originalDataUrl: PNG_PIXEL_A,
+      annotationsSvg:
+        '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="50">' +
+        '<rect data-type="rect" x="10"/>' +
+        "</svg>",
+      width: 100,
+      height: 50,
+    });
+    const initial = makeStepDocWithLink({
+      sourceImagePath: "Screenshots/foo.png",
+      href: PNG_PIXEL_A,
+      annotationRect: "10",
+    });
+    const originalSvg = (initial.blocks[0] as { svg: string }).svg;
+    let syncedEventCount = 0;
+    el.addEventListener("linked-images-synced", () => {
+      syncedEventCount += 1;
+    });
+    el.document = initial;
+    await waitForPullPass(el);
+    const step = el.document!.blocks[0];
+    if (step?.kind !== "step") throw new Error("expected step");
+    // Block byte-equal to original — no re-embed happened.
+    expect(step.svg).toBe(originalSvg);
+    // Idle pull pass stays silent — no toast event.
+    expect(syncedEventCount).toBe(0);
+  });
+
+  it("leaves the block alone on dead-link result (no badge change in Phase 3)", async () => {
+    const el = mount();
+    el.pullLinkedImage = async () => ({ status: "dead-link" });
+    el.document = makeStepDocWithLink({
+      sourceImagePath: "Screenshots/gone.png",
+      href: PNG_PIXEL_A,
+    });
+    await waitForPullPass(el);
+    const step = el.document!.blocks[0];
+    if (step?.kind !== "step") throw new Error("expected step");
+    // sourceImagePath survives — Phase 5 introduces the badge UI.
+    expect(step.sourceImagePath).toBe("Screenshots/gone.png");
+    expect(step.svg).toContain(PNG_PIXEL_A);
+  });
+
+  it("emits linked-images-synced with one entry per refreshed block", async () => {
+    const el = mount();
+    el.pullLinkedImage = async () => ({
+      status: "found",
+      originalDataUrl: PNG_PIXEL_B,
+      annotationsSvg: '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="50"></svg>',
+      width: 100,
+      height: 50,
+    });
+    const syncedEvents: LinkedImagesSyncedDetail[] = [];
+    el.addEventListener("linked-images-synced", (e) => {
+      syncedEvents.push((e as CustomEvent<LinkedImagesSyncedDetail>).detail);
+    });
+    el.document = makeStepDocWithLink({
+      sourceImagePath: "Screenshots/foo.png",
+      href: PNG_PIXEL_A,
+    });
+    await waitForPullPass(el);
+    expect(syncedEvents).toHaveLength(1);
+    expect(syncedEvents[0]?.updated).toEqual([
+      { blockId: "img-step-pull", sourceImagePath: "Screenshots/foo.png" },
+    ]);
+  });
+
+  it("survives an exception thrown from pullLinkedImage", async () => {
+    const el = mount();
+    el.pullLinkedImage = async () => {
+      throw new Error("transient");
+    };
+    el.document = makeStepDocWithLink({
+      sourceImagePath: "Screenshots/foo.png",
+      href: PNG_PIXEL_A,
+    });
+    await waitForPullPass(el);
+    // Block stays intact — the throw bubbled to the
+    // Promise.all wrapper and was caught.
+    const step = el.document!.blocks[0];
+    if (step?.kind !== "step") throw new Error("expected step");
+    expect(step.svg).toContain(PNG_PIXEL_A);
+  });
+
+  it("doc-changed event for a gallery-sync push carries reason='gallery-sync'", async () => {
+    const el = mount();
+    el.pullLinkedImage = async () => ({
+      status: "found",
+      originalDataUrl: PNG_PIXEL_B,
+      annotationsSvg: '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="50"></svg>',
+      width: 100,
+      height: 50,
+    });
+    const events: DocChangedDetail[] = [];
+    el.addEventListener("doc-changed", (e) => {
+      events.push((e as CustomEvent<DocChangedDetail>).detail);
+    });
+    el.document = makeStepDocWithLink({
+      sourceImagePath: "Screenshots/foo.png",
+      href: PNG_PIXEL_A,
+    });
+    await waitForPullPass(el);
+    // At least one event with the gallery-sync reason landed.
+    expect(events.some((d) => d.reason === "gallery-sync")).toBe(true);
+  });
+
+  it("re-fires the pull pass when a new document identity is assigned", async () => {
+    const el = mount();
+    const pullSpy = vi.fn<(path: string) => Promise<LinkedImagePullResult>>(async () => ({
+      status: "dead-link",
+    }));
+    el.pullLinkedImage = pullSpy;
+    el.document = makeStepDocWithLink({
+      sourceImagePath: "Screenshots/foo.png",
+      href: PNG_PIXEL_A,
+    });
+    await waitForPullPass(el);
+    expect(pullSpy).toHaveBeenCalledTimes(1);
+    // Assign a fresh (different identity) document.
+    el.document = makeStepDocWithLink({
+      sourceImagePath: "Screenshots/bar.png",
+      href: PNG_PIXEL_A,
+    });
+    await waitForPullPass(el);
+    expect(pullSpy).toHaveBeenCalledTimes(2);
+    expect(pullSpy.mock.calls[1]?.[0]).toBe("Screenshots/bar.png");
   });
 });
