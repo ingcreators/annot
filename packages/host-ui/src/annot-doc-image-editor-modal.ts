@@ -196,18 +196,29 @@ const STYLES = `
   min-height: 100%;
   min-width: 100%;
   display: flex;
-  /* "safe center" — centre the SVG within the canvas WHEN it
-     fits (image smaller than the wrap), but fall back to
-     start-alignment when it overflows. Without the "safe"
-     keyword, classic flex centring puts the overflowing
-     content half-on-each-side of the flex container's centre
-     axis — the right half is reachable via the canvas-wrap's
-     horizontal scrollbar, but the left half lives at NEGATIVE
-     scrollLeft and can never be scrolled into view. The
-     visible symptom: zooming in shows the right portion of
-     the image fine, but the left edge is clipped under the
-     toolbar / off-screen with no scrollbar to recover it. */
-  align-items: safe center;
+  /* Top-anchored + horizontally centred — matches the main
+     editor's "#svg-root, [data-annot-shell-root]" rule in
+     editor.css ("margin: 20px auto"). Reasons we anchor at
+     the top instead of vertically centring:
+
+     - Consistency with the main editor surface (users have
+       built muscle memory there).
+     - Zoom in / out keeps the image's top edge stable instead
+       of jumping vertically as the rendered height changes.
+     - Tall images (PDF / scrolling-page captures) default to
+       showing their TOP, not their middle — vertically
+       centring such a capture hides the page heading by
+       default and forces a scroll-up to find it.
+
+     The "safe" keyword on justify-content is load-bearing —
+     without it, classic flex centring puts overflow
+     half-on-each-side of the centre axis, and the left half
+     lives at NEGATIVE scrollLeft (unreachable via the
+     canvas-wrap's horizontal scrollbar). "safe center" falls
+     back to "flex-start" when the SVG outgrows the wrap,
+     putting the left edge at scrollLeft=0 so the user can
+     scroll across the full width. */
+  align-items: flex-start;
   justify-content: safe center;
   padding: 16px;
 }
