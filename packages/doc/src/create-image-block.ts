@@ -21,6 +21,12 @@ export interface CreateImageBlockOptions {
   readonly id?: string;
   /** Optional figcaption inline HTML. */
   readonly caption?: string;
+  /** Optional back-reference to the gallery `ImageRecord` this
+   *  block was sourced from. Carried through serialize / parse via
+   *  `data-annot-source-path`; enables doc ↔ gallery sync in the
+   *  editing host. Drag-drop / paste / file-picker callers leave
+   *  this undefined (doc-only). */
+  readonly sourceImagePath?: string;
 }
 
 /** Synthesise an `ImageBlock` from a bitmap data URL + dimensions.
@@ -49,9 +55,12 @@ export function createImageBlockFromDataUrl(
   const w = Math.round(width);
   const h = Math.round(height);
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" data-annot-version="1" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}"><image href="${escapeAttrValue(dataUrl)}" width="${w}" height="${h}"/><g id="annotations"></g></svg>`;
-  return options.caption !== undefined
-    ? { kind: "image", id, svg, caption: options.caption }
-    : { kind: "image", id, svg };
+  const base: ImageBlock = { kind: "image", id, svg };
+  return {
+    ...base,
+    ...(options.caption !== undefined ? { caption: options.caption } : {}),
+    ...(options.sourceImagePath !== undefined ? { sourceImagePath: options.sourceImagePath } : {}),
+  };
 }
 
 /** Escape a value for an HTML / SVG attribute. Mirror of the

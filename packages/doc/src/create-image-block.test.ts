@@ -52,4 +52,17 @@ describe("createImageBlockFromDataUrl", () => {
     expect(() => createImageBlockFromDataUrl(PNG_PIXEL, Number.NaN, 100)).toThrow(/invalid width/);
     expect(() => createImageBlockFromDataUrl(PNG_PIXEL, 100, -50)).toThrow(/invalid height/);
   });
+
+  // Phase 1 of `card-document-image-gallery-link-sync.md`.
+  it("carries sourceImagePath through when provided", () => {
+    const block = createImageBlockFromDataUrl(PNG_PIXEL, 100, 100, {
+      sourceImagePath: "Screenshots/foo.png",
+    });
+    expect(block.sourceImagePath).toBe("Screenshots/foo.png");
+  });
+
+  it("leaves sourceImagePath undefined when not provided", () => {
+    const block = createImageBlockFromDataUrl(PNG_PIXEL, 100, 100);
+    expect(block.sourceImagePath).toBeUndefined();
+  });
 });

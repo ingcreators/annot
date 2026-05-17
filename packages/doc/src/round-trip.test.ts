@@ -10,6 +10,8 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { parseDocument, serializeDocument } from "./headless.js";
+import type { AnnotDocument } from "./types.js";
+import { ANNOT_DOC_VERSION } from "./types.js";
 
 // vitest's cwd is the monorepo root (where the root vitest.config.ts
 // lives). We resolve fixtures from there rather than from
@@ -180,6 +182,152 @@ describe("annot-doc: standalone TOC", () => {
     // exactly once. The serializer must NOT emit `&amp;amp;`.
     expect(out).toContain(">Hello world &amp; friends</a>");
     expect(out).not.toContain("&amp;amp;");
+  });
+});
+
+describe("annot-doc: image-block source path (Phase 1)", () => {
+  // Phase 1 of `card-document-image-gallery-link-sync.md` —
+  // `data-annot-source-path` on `<figure data-annot-block="image">`
+  // carries the gallery `ImageRecord.path` back-reference. It
+  // lives in the `data-annot-*` group (alphabetical, after
+  // `data-annot-image-id`).
+
+  const IMAGE_SVG = [
+    '<svg data-annot-version="1" viewBox="0 0 10 10" width="10" height="10" xmlns="http://www.w3.org/2000/svg">',
+    '  <image href="data:image/png;base64,iVBORw0KGgo=" width="10" height="10"/>',
+    '  <g id="annotations"/>',
+    "</svg>",
+  ].join("\n");
+
+  function wrap(figureHtml: string): string {
+    return `<!doctype html>
+<html data-annot-doc-version="1" lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="annot-document" content="1">
+    <title>Test</title>
+  </head>
+  <body>
+    <article data-annot-doc>
+${figureHtml}
+    </article>
+    <script type="application/annot+json" data-annot-doc-meta>{"title":"Test"}</script>
+  </body>
+</html>
+`;
+  }
+
+  it("parses data-annot-source-path on <figure data-annot-block=image>", () => {
+    const html =
+      wrap(`      <figure data-annot-block="image" data-annot-image-id="img-1" data-annot-source-path="Screenshots/foo.png">
+        <svg data-annot-version="1" viewBox="0 0 10 10" width="10" height="10" xmlns="http://www.w3.org/2000/svg"><g id="annotations"/></svg>
+      </figure>`);
+    const doc = parseDocument(html);
+    const image = doc.blocks.find((b) => b.kind === "image");
+    if (image?.kind !== "image") throw new Error("expected image block");
+    expect(image.sourceImagePath).toBe("Screenshots/foo.png");
+  });
+
+  it("treats an empty data-annot-source-path as absent", () => {
+    const html =
+      wrap(`      <figure data-annot-block="image" data-annot-image-id="img-1" data-annot-source-path="">
+        <svg data-annot-version="1" viewBox="0 0 10 10" width="10" height="10" xmlns="http://www.w3.org/2000/svg"><g id="annotations"/></svg>
+      </figure>`);
+    const doc = parseDocument(html);
+    const image = doc.blocks.find((b) => b.kind === "image");
+    if (image?.kind !== "image") throw new Error("expected image block");
+    expect(image.sourceImagePath).toBeUndefined();
+  });
+
+  it("emits data-annot-source-path after data-annot-image-id", () => {
+    const doc: AnnotDocument = {
+      version: ANNOT_DOC_VERSION,
+      lang: "en",
+      title: "T",
+      meta: { title: "T" },
+      styleBlock: null,
+      blocks: [
+        {
+          kind: "image",
+          id: "img-1",
+          svg: IMAGE_SVG,
+          sourceImagePath: "Screenshots/foo.png",
+        },
+      ],
+    };
+    const bytes = serializeDocument(doc);
+    expect(bytes).toContain(
+      '<figure data-annot-block="image" data-annot-image-id="img-1" data-annot-source-path="Screenshots/foo.png">',
+    );
+  });
+
+  it("round-trips an image block with sourceImagePath byte-for-byte", () => {
+    const doc: AnnotDocument = {
+      version: ANNOT_DOC_VERSION,
+      lang: "en",
+      title: "T",
+      meta: { title: "T" },
+      styleBlock: null,
+      blocks: [
+        {
+          kind: "image",
+          id: "img-1",
+          svg: IMAGE_SVG,
+          caption: "Figure 1",
+          sourceImagePath: "Screenshots/Mobile/foo bar.png",
+        },
+      ],
+    };
+    const bytes = serializeDocument(doc);
+    const reparsed = parseDocument(bytes);
+    expect(serializeDocument(reparsed)).toBe(bytes);
+    const image = reparsed.blocks.find((b) => b.kind === "image");
+    if (image?.kind !== "image") throw new Error("expected image block");
+    expect(image.sourceImagePath).toBe("Screenshots/Mobile/foo bar.png");
+    expect(image.caption).toBe("Figure 1");
+  });
+
+  it("omits data-annot-source-path when undefined (back-compat with existing fixtures)", () => {
+    const doc: AnnotDocument = {
+      version: ANNOT_DOC_VERSION,
+      lang: "en",
+      title: "T",
+      meta: { title: "T" },
+      styleBlock: null,
+      blocks: [
+        {
+          kind: "image",
+          id: "img-1",
+          svg: IMAGE_SVG,
+        },
+      ],
+    };
+    const bytes = serializeDocument(doc);
+    expect(bytes).not.toContain("data-annot-source-path");
+  });
+
+  it("escapes attribute-special characters in sourceImagePath", () => {
+    const doc: AnnotDocument = {
+      version: ANNOT_DOC_VERSION,
+      lang: "en",
+      title: "T",
+      meta: { title: "T" },
+      styleBlock: null,
+      blocks: [
+        {
+          kind: "image",
+          id: "img-1",
+          svg: IMAGE_SVG,
+          sourceImagePath: 'Q&A/foo"bar.png',
+        },
+      ],
+    };
+    const bytes = serializeDocument(doc);
+    expect(bytes).toContain('data-annot-source-path="Q&amp;A/foo&quot;bar.png"');
+    const reparsed = parseDocument(bytes);
+    const image = reparsed.blocks.find((b) => b.kind === "image");
+    if (image?.kind !== "image") throw new Error("expected image block");
+    expect(image.sourceImagePath).toBe('Q&A/foo"bar.png');
   });
 });
 

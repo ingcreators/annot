@@ -212,7 +212,15 @@ function serializeMultiPara(
 function serializeImage(block: ImageBlock, depth: number): string {
   const indent = INDENT.repeat(depth);
   const inner = INDENT.repeat(depth + 1);
-  let result = `${indent}<figure data-annot-block="image" data-annot-image-id="${escapeAttr(block.id)}">${LF}`;
+  // Canonical attribute order on `<figure>`:
+  //   data-annot-block → data-annot-image-id → data-annot-source-path?
+  // (`data-annot-*` group, alphabetical — `data-annot-source-path`
+  // comes after `data-annot-image-id`.)
+  const sourcePathAttr =
+    block.sourceImagePath !== undefined
+      ? ` data-annot-source-path="${escapeAttr(block.sourceImagePath)}"`
+      : "";
+  let result = `${indent}<figure data-annot-block="image" data-annot-image-id="${escapeAttr(block.id)}"${sourcePathAttr}>${LF}`;
   // SVG is opaque — re-indent each line with the figure-child indent.
   const svgLines = block.svg.split(LF);
   for (const line of svgLines) {
@@ -249,8 +257,17 @@ function serializeStep(block: StepBlock, depth: number): string {
   // the documented data-annot-block / data-annot-image-id
   // exceptions):
   //   data-annot-block → data-annot-image-id →
+  //   data-annot-source-path? →
   //   data-step-image-less → data-step-layout →
   //   data-step-viewport
+  // `data-annot-source-path` lands in the `data-annot-*` group
+  // (alphabetical, after `data-annot-image-id`), before any
+  // `data-step-*` attribute (per the canonicalisation rules in
+  // docs/annot-html-format.md §"Attribute order").
+  const sourcePathAttr =
+    block.sourceImagePath !== undefined
+      ? ` data-annot-source-path="${escapeAttr(block.sourceImagePath)}"`
+      : "";
   const imageLessAttr = block.svg.length === 0 ? ` data-step-image-less="1"` : "";
   // Phase 7d — `data-step-viewport="x,y,w,h"` carries the
   // initial-view rect in SVG-native coords. Numbers serialise
@@ -259,7 +276,7 @@ function serializeStep(block: StepBlock, depth: number): string {
   const viewportAttr = block.viewport
     ? ` data-step-viewport="${block.viewport.x},${block.viewport.y},${block.viewport.w},${block.viewport.h}"`
     : "";
-  let result = `${indent}<section data-annot-block="step" data-annot-image-id="${escapeAttr(block.id)}"${imageLessAttr} data-step-layout="${escapeAttr(block.layout)}"${viewportAttr}>${LF}`;
+  let result = `${indent}<section data-annot-block="step" data-annot-image-id="${escapeAttr(block.id)}"${sourcePathAttr}${imageLessAttr} data-step-layout="${escapeAttr(block.layout)}"${viewportAttr}>${LF}`;
   // SVG is opaque — re-indent each line with the section-child
   // indent. Same machinery as image-block. Image-less step blocks
   // emit no `<svg>` child at all (parser side accepts both forms).

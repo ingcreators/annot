@@ -260,6 +260,14 @@ export interface ImageBlock {
   readonly svg: string;
   /** Optional figcaption inline HTML. */
   readonly caption?: string;
+  /** Path of the gallery `ImageRecord` this block was sourced
+   *  from, when known. Used by the editing host to keep the
+   *  embedded SVG and the gallery record in sync (doc edits push
+   *  back; gallery edits pull through). Missing → block is
+   *  independent of any gallery record (drag-drop / paste / file
+   *  pick, or doc imported from another workspace). Carried
+   *  through serialize / parse via `data-annot-source-path`. */
+  readonly sourceImagePath?: string;
 }
 
 /** Card-style procedure step: image + title + body in a single
@@ -302,6 +310,14 @@ export interface StepBlock {
    *  as `<g id="annotations">` children. Missing field → display
    *  the full SVG viewBox (pre-Phase-7d behaviour). */
   readonly viewport?: StepViewport;
+  /** Path of the gallery `ImageRecord` this step's image was
+   *  sourced from. Same semantics as `ImageBlock.sourceImagePath`
+   *  — present iff the step was generated from a gallery selection
+   *  (via `createCardDocumentFromImages`) or a later gallery-
+   *  insert action; absent for image-less steps and for steps
+   *  whose image came from a non-gallery source. Carried through
+   *  serialize / parse via `data-annot-source-path`. */
+  readonly sourceImagePath?: string;
 }
 
 /** Phase 7d — initial-view viewport for the step's screenshot.

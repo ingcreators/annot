@@ -433,6 +433,128 @@ describe("step block: serializer", () => {
     if (step?.kind !== "step") throw new Error("expected step");
     expect(step.viewport).toEqual({ x: 12.5, y: 37.5, w: 123.4, h: 89.6 });
   });
+
+  // Phase 1 of `card-document-image-gallery-link-sync.md` —
+  // `data-annot-source-path` carries the gallery `ImageRecord.path`
+  // back-reference on `<section data-annot-block="step">`. The
+  // attribute lives in the `data-annot-*` group (alphabetical,
+  // after `data-annot-image-id`), before any `data-step-*`.
+  it("parses data-annot-source-path into block.sourceImagePath", () => {
+    const html =
+      wrap(`      <section data-annot-block="step" data-annot-image-id="img-step-01" data-annot-source-path="Screenshots/foo.png" data-step-layout="image-top">
+        <svg data-annot-version="1" viewBox="0 0 10 10" width="10" height="10" xmlns="http://www.w3.org/2000/svg"><g id="annotations"/></svg>
+        <h3 data-step-title>T</h3>
+        <p data-step-body>B</p>
+      </section>`);
+    const doc = parseDocument(html);
+    const step = doc.blocks.find((b) => b.kind === "step");
+    if (step?.kind !== "step") throw new Error("expected step block");
+    expect(step.sourceImagePath).toBe("Screenshots/foo.png");
+  });
+
+  it("treats an empty data-annot-source-path as absent", () => {
+    const html =
+      wrap(`      <section data-annot-block="step" data-annot-image-id="img-step-01" data-annot-source-path="" data-step-layout="image-top">
+        <svg data-annot-version="1" viewBox="0 0 10 10" width="10" height="10" xmlns="http://www.w3.org/2000/svg"><g id="annotations"/></svg>
+        <h3 data-step-title>T</h3>
+        <p data-step-body>B</p>
+      </section>`);
+    const doc = parseDocument(html);
+    const step = doc.blocks.find((b) => b.kind === "step");
+    if (step?.kind !== "step") throw new Error("expected step block");
+    expect(step.sourceImagePath).toBeUndefined();
+  });
+
+  it("emits data-annot-source-path before any data-step-* attribute", () => {
+    const doc: AnnotDocument = {
+      version: ANNOT_DOC_VERSION,
+      lang: "en",
+      title: "T",
+      meta: { title: "T" },
+      styleBlock: null,
+      blocks: [
+        {
+          kind: "step",
+          id: "img-step-01",
+          svg: CANONICAL_SVG,
+          title: "T",
+          body: "B",
+          layout: "image-top",
+          sourceImagePath: "Screenshots/foo.png",
+        },
+      ],
+    };
+    const bytes = serializeDocument(doc);
+    expect(bytes).toContain(
+      '<section data-annot-block="step" data-annot-image-id="img-step-01" data-annot-source-path="Screenshots/foo.png" data-step-layout="image-top">',
+    );
+  });
+
+  it("round-trips a step block with sourceImagePath byte-for-byte", () => {
+    const doc: AnnotDocument = {
+      version: ANNOT_DOC_VERSION,
+      lang: "en",
+      title: "T",
+      meta: { title: "T" },
+      styleBlock: null,
+      blocks: [
+        {
+          kind: "step",
+          id: "img-step-01",
+          svg: CANONICAL_SVG,
+          title: "T",
+          body: "B",
+          layout: "image-top",
+          sourceImagePath: "Screenshots/Mobile/foo bar.png",
+        },
+      ],
+    };
+    const bytes = serializeDocument(doc);
+    const reparsed = parseDocument(bytes);
+    expect(serializeDocument(reparsed)).toBe(bytes);
+    const step = reparsed.blocks.find((b) => b.kind === "step");
+    if (step?.kind !== "step") throw new Error("expected step");
+    expect(step.sourceImagePath).toBe("Screenshots/Mobile/foo bar.png");
+  });
+
+  it("co-emits data-annot-source-path with viewport in canonical order", () => {
+    const doc: AnnotDocument = {
+      version: ANNOT_DOC_VERSION,
+      lang: "en",
+      title: "T",
+      meta: { title: "T" },
+      styleBlock: null,
+      blocks: [
+        {
+          kind: "step",
+          id: "img-step-01",
+          svg: CANONICAL_SVG,
+          title: "T",
+          body: "B",
+          layout: "image-top",
+          sourceImagePath: "Screenshots/foo.png",
+          viewport: { x: 1, y: 2, w: 3, h: 4 },
+        },
+      ],
+    };
+    const bytes = serializeDocument(doc);
+    expect(bytes).toContain(
+      '<section data-annot-block="step" data-annot-image-id="img-step-01" data-annot-source-path="Screenshots/foo.png" data-step-layout="image-top" data-step-viewport="1,2,3,4">',
+    );
+  });
+
+  it("omits data-annot-source-path when undefined (back-compat with existing fixtures)", () => {
+    const doc: AnnotDocument = {
+      version: ANNOT_DOC_VERSION,
+      lang: "en",
+      title: "T",
+      meta: { title: "T" },
+      styleBlock: null,
+      blocks: [buildStep("image-top")],
+    };
+    const bytes = serializeDocument(doc);
+    expect(bytes).not.toContain("data-annot-source-path");
+  });
 });
 
 describe("step block: cardLayout meta", () => {

@@ -252,7 +252,17 @@ function parseImage(el: Element): ImageBlock {
   const svg = canonicaliseSvg(svgEl);
   const figEl = el.querySelector("figcaption");
   const caption = figEl ? figEl.innerHTML : undefined;
-  return caption !== undefined ? { kind: "image", id, svg, caption } : { kind: "image", id, svg };
+  // Optional gallery-link back-reference. Empty string is treated
+  // as absent (defensive against editor-produced empties).
+  const sourcePathRaw = el.getAttribute("data-annot-source-path");
+  const sourceImagePath =
+    sourcePathRaw !== null && sourcePathRaw.length > 0 ? sourcePathRaw : undefined;
+  const base: ImageBlock = { kind: "image", id, svg };
+  return {
+    ...base,
+    ...(caption !== undefined ? { caption } : {}),
+    ...(sourceImagePath !== undefined ? { sourceImagePath } : {}),
+  };
 }
 
 function parseStep(el: Element): StepBlock {
@@ -294,6 +304,11 @@ function parseStep(el: Element): StepBlock {
   // the editor to overwrite them on the next save.
   const rawViewport = el.getAttribute("data-step-viewport");
   const viewport = parseStepViewport(rawViewport);
+  // Optional gallery-link back-reference. Empty string is treated
+  // as absent (defensive against editor-produced empties).
+  const sourcePathRaw = el.getAttribute("data-annot-source-path");
+  const sourceImagePath =
+    sourcePathRaw !== null && sourcePathRaw.length > 0 ? sourcePathRaw : undefined;
   const base: StepBlock = {
     kind: "step",
     id,
@@ -305,6 +320,7 @@ function parseStep(el: Element): StepBlock {
   return {
     ...base,
     ...(viewport !== undefined ? { viewport } : {}),
+    ...(sourceImagePath !== undefined ? { sourceImagePath } : {}),
   };
 }
 
