@@ -55,6 +55,7 @@ import {
 } from "@ingcreators/annot-core/storage";
 import { defaultAnnotImageFilename } from "@ingcreators/annot-core/utils";
 import { readEditableImage } from "@ingcreators/annot-core/xmp";
+import { parseDocumentMetaCheap } from "@ingcreators/annot-doc/headless";
 import {
   type BuildEditableImageDeps,
   buildEditableImageBlob,
@@ -893,24 +894,4 @@ export class DesktopStore
       reader.readAsDataURL(blob);
     });
   }
-}
-
-// ─── Cheap document-meta parser ─────────────────────────────────
-
-interface CheapDocumentMeta {
-  title: string;
-  blockCount: number;
-  imageCount: number;
-}
-
-function parseDocumentMetaCheap(text: string): CheapDocumentMeta {
-  const titleMatch = text.match(/<title>([\s\S]*?)<\/title>/i);
-  const title = titleMatch?.[1]?.trim() ?? "";
-  const blockMatches = text.match(/data-annot-block="[^"]+"/g);
-  const imageMatches = text.match(/data-annot-block="image"/g);
-  return {
-    title,
-    blockCount: blockMatches?.length ?? 0,
-    imageCount: imageMatches?.length ?? 0,
-  };
 }

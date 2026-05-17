@@ -15,6 +15,10 @@
 import type { StorageProvider } from "@ingcreators/annot-core/storage";
 import { readEditableImage } from "@ingcreators/annot-core/xmp";
 import type { FileManager } from "@ingcreators/annot-host-ui/gallery/file-manager";
+import {
+  type ImportFileResult,
+  importFiles as importFilesBatch,
+} from "@ingcreators/annot-host-ui/gallery/import-files";
 import { generateThumbnailFromDataUrl } from "@ingcreators/annot-host-ui/image-thumbnail";
 import type { ThumbnailManager } from "@ingcreators/annot-host-ui/thumbnail-manager";
 import { setCapturePendingSession } from "../capture/capture-pending-session.js";
@@ -28,7 +32,7 @@ import { CaptureSession } from "../capture/capture-session.js";
 import { pasteFromClipboard } from "../capture/pwa-capture.js";
 import { loadEncodeOptions } from "../encode-options.js";
 import { captureUrl, pushRoute } from "../router.js";
-import { showSaveError } from "../ui/error-bar.js";
+import { hideError, showError, showSaveError } from "../ui/error-bar.js";
 import { encodeCaptureInWorker } from "../workers/encode-client.js";
 import { fileToDataUrl, loadImage } from "./image-utils.js";
 
@@ -147,14 +151,101 @@ export class CaptureHost {
   openFileDialog(): void {
     const input = document.createElement("input");
     input.type = "file";
-    input.accept = ".jpg,.jpeg,.png,.svg";
+    // Includes `.annot.html` so the user can re-import documents
+    // they previously exported, plus the same image set as before.
+    // Multi-file selection routes through `importFiles` — same code
+    // path as drag-drop.
+    input.accept = ".jpg,.jpeg,.png,.svg,.html,.annot.html";
+    input.multiple = true;
     input.addEventListener("change", async () => {
-      const file = input.files?.[0];
-      if (file) await this.openFile(file);
+      const files = Array.from(input.files ?? []);
+      if (files.length === 0) return;
+      await this.importFiles(files);
     });
     input.click();
   }
 
+  /**
+   * Batch import — used by both the sidebar picker and the file
+   * manager's drag-drop overlay. Saves every file to the active
+   * storage under the current folder, surfaces progress + an
+   * end-of-batch summary via the error bar, and refreshes the file
+   * manager so the new files appear in the gallery. The editor is
+   * NOT opened — even a single-file import keeps the user on the
+   * file manager.
+   */
+  async importFiles(files: File[]): Promise<void> {
+    const storage = this.deps.getStorage();
+    if (!storage) return;
+    if (files.length === 0) return;
+
+    const folderPath = this.deps.getCurrentFolderPath();
+    const tm = this.deps.getThumbnailManager() ?? undefined;
+    const total = files.length;
+    showError({
+      severity: "info",
+      message: total === 1 ? "Importing 1 file…" : `Importing 0 / ${total}…`,
+      autoDismiss: 0,
+    });
+
+    let results: ImportFileResult[];
+    try {
+      results = await importFilesBatch(files, {
+        storage,
+        folderPath,
+        thumbnailManager: tm ?? null,
+        onProgress: (done) => {
+          if (total === 1) return;
+          showError({
+            severity: "info",
+            message: `Importing ${done} / ${total}…`,
+            autoDismiss: 0,
+          });
+        },
+      });
+    } catch (err) {
+      // The helper itself is "never throws" by contract; this branch
+      // only fires if something happens before the per-file loop
+      // starts. Surface the error and bail.
+      showSaveError(`Couldn't import files: ${(err as Error).message}`);
+      return;
+    }
+
+    hideError();
+    await this.deps.getFileManager()?.refresh(folderPath);
+
+    // End-of-batch summary. Quiet on full success — the user sees the
+    // new files appear in the gallery. Warn / error on partial /
+    // total failure.
+    const ok = results.filter((r) => r.path).length;
+    const skipped = results.filter((r) => r.kind === "skipped").length;
+    const failed = results.filter((r) => r.error).length;
+
+    if (failed > 0 && ok === 0) {
+      const firstError = results.find((r) => r.error);
+      const msg = firstError?.error
+        ? `Couldn't import any files. ${(firstError.error as Error).message}`
+        : "Couldn't import any files.";
+      showSaveError(msg);
+    } else if (failed > 0 || skipped > 0) {
+      const parts: string[] = [`Imported ${ok} file${ok === 1 ? "" : "s"}.`];
+      if (skipped > 0) parts.push(`${skipped} skipped (unsupported type).`);
+      if (failed > 0) parts.push(`${failed} failed.`);
+      showError({
+        severity: "warning",
+        message: parts.join(" "),
+        autoDismiss: 5000,
+      });
+    }
+  }
+
+  /**
+   * Single-file import that opens the editor on success. Kept for
+   * the legacy paste-from-clipboard flow and any external callers
+   * that still want the "import then start annotating" UX. The
+   * sidebar picker no longer uses this — it routes through
+   * `importFiles`.
+   */
   async openFile(file: File): Promise<void> {
     const storage = this.deps.getStorage();
     if (!storage) return;

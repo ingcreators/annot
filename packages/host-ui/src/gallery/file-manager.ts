@@ -38,6 +38,12 @@ export interface FileManagerCallbacks {
   onFolderChange: (folderPath: string) => void;
   onNewFolder: () => Promise<void>;
   onUploadImage: () => void;
+  /** Batch import — invoked when the user drops files onto the
+   *  gallery's drop overlay. Host saves each file (image or
+   *  document) under the current folder via its `importFiles`
+   *  pipeline. Optional — when omitted, drag-drop is a no-op
+   *  (overlay still appears but the drop is ignored). */
+  onImportFiles?: (files: readonly File[]) => void;
   /** Phase 5 of `docs/plans/web-capture-redesign.md` made this
    *  optional. The PWA dropped it in favour of the new
    *  `onCaptureScreenDialog`; the desktop host keeps wiring it for
@@ -197,6 +203,13 @@ export class FileManager {
       onDownloadSelection: () => {
         void this.#downloadSelection();
       },
+      // Forward drop-imports straight to the host. Only wire the
+      // shell callback if the host opted in — keeping it
+      // `undefined` is how the shell knows to suppress the
+      // overlay entirely.
+      onImportFiles: this.#callbacks.onImportFiles
+        ? (files) => this.#callbacks.onImportFiles?.(files)
+        : undefined,
     };
     this.#mainContentEl.appendChild(shell);
     this.#shell = shell;
@@ -397,6 +410,7 @@ export class FileManager {
   async #refreshBreadcrumbs(): Promise<void> {
     if (!this.#storage) {
       this.#shell.breadcrumbs = [];
+      this.#shell.dropTargetLabel = "this folder";
       return;
     }
     const entries: BreadcrumbEntry[] = [
@@ -417,6 +431,11 @@ export class FileManager {
       }
     }
     this.#shell.breadcrumbs = entries;
+    // Drop overlay's "into <folder>" hint — derive from the active
+    // crumb so the label tracks navigation without a separate
+    // listener.
+    const active = entries[entries.length - 1];
+    this.#shell.dropTargetLabel = active?.label ?? "this folder";
   }
 
   #rootLabel(): string {

@@ -27,6 +27,8 @@ export { buildStyleBlock, injectDocumentStyles } from "./inject-styles.js";
 export { isTemplateFromHead } from "./is-template-head.js";
 export type { ParseOptions } from "./parse.js";
 export { AnnotDocParseError, parseDocument } from "./parse.js";
+export type { CheapDocumentMeta } from "./parse-document-meta-cheap.js";
+export { parseDocumentMetaCheap } from "./parse-document-meta-cheap.js";
 export type { ResolveFigureRefsOptions } from "./resolve-figure-refs.js";
 export { AnnotDocResolveError, resolveFigureRefs } from "./resolve-figure-refs.js";
 

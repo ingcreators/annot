@@ -54,7 +54,18 @@ export interface FileManagerShellCallbacks {
    *  pipeline (XMP-embedded blob per image + raw bytes per document,
    *  packed into a single file or ZIP). */
   onDownloadSelection: () => void;
+  /** Invoked when the user drops `File`s from the OS onto the
+   *  shell. The host saves each file under the currently-viewed
+   *  folder via its `importFiles` pipeline. Optional — when
+   *  omitted, drag-drop is suppressed entirely (no overlay
+   *  appears, no callback fires). */
+  onImportFiles?: (files: readonly File[]) => void;
 }
+
+/** Label for the drop overlay's body line. Set by the host to
+ *  reflect the currently-viewed folder so the user knows where
+ *  the files will land. */
+export type DropTargetLabel = string;
 
 export class AnnotFileManagerShellElement extends LitElement {
   static override properties = {
@@ -65,6 +76,8 @@ export class AnnotFileManagerShellElement extends LitElement {
     canCreateCardDocument: { attribute: false },
     canDownloadSelection: { attribute: false },
     callbacks: { attribute: false },
+    dropTargetLabel: { attribute: false },
+    dragOver: { state: true },
   };
 
   declare breadcrumbs: BreadcrumbEntry[];
@@ -83,6 +96,22 @@ export class AnnotFileManagerShellElement extends LitElement {
    *  (folders alone don't qualify). */
   declare canDownloadSelection: boolean;
   declare callbacks: FileManagerShellCallbacks;
+  /** Human-readable name of the folder the user is currently
+   *  viewing, used in the drop overlay's "Drop files to import
+   *  to <folder>" hint. Defaults to "this folder" so the overlay
+   *  works before the host populates it. */
+  declare dropTargetLabel: DropTargetLabel;
+  /** Internal — true while a drag containing files hovers the
+   *  shell. Flipped by the document-level dragenter / dragleave
+   *  pair below. The story reflects this state via a public
+   *  setter for visual-regression coverage. */
+  declare dragOver: boolean;
+
+  /** Counter so nested children's dragenter / dragleave events
+   *  don't make the overlay flicker. Increment on `dragenter`,
+   *  decrement on `dragleave`; only flip `dragOver` when the
+   *  count crosses zero. */
+  #dragDepth = 0;
 
   constructor() {
     super();
@@ -92,6 +121,8 @@ export class AnnotFileManagerShellElement extends LitElement {
     this.selection = null;
     this.canCreateCardDocument = false;
     this.canDownloadSelection = false;
+    this.dropTargetLabel = "this folder";
+    this.dragOver = false;
     this.callbacks = {
       onNavigate: () => {},
       onRefresh: () => {},
@@ -118,7 +149,74 @@ export class AnnotFileManagerShellElement extends LitElement {
     // the body would no longer grow as intended. `display:
     // contents` makes the wrapper transparent to layout.
     this.style.display = "contents";
+
+    // Drag-drop listeners. `display: contents` makes the element
+    // transparent to layout but it still participates in event
+    // dispatch — so the host element is a fine listener target.
+    // Only respond to drags carrying `Files`; in-app DnD (folder
+    // moves, gallery selection drag) uses different transfer
+    // types and would otherwise trigger our overlay on every
+    // grab.
+    this.addEventListener("dragenter", this.#onDragEnter);
+    this.addEventListener("dragover", this.#onDragOver);
+    this.addEventListener("dragleave", this.#onDragLeave);
+    this.addEventListener("drop", this.#onDrop);
   }
+
+  override disconnectedCallback(): void {
+    this.removeEventListener("dragenter", this.#onDragEnter);
+    this.removeEventListener("dragover", this.#onDragOver);
+    this.removeEventListener("dragleave", this.#onDragLeave);
+    this.removeEventListener("drop", this.#onDrop);
+    super.disconnectedCallback();
+  }
+
+  #dragHasFiles(e: DragEvent): boolean {
+    const types = e.dataTransfer?.types;
+    if (!types) return false;
+    // Array-like in some browsers, string-list in others — handle
+    // both.
+    for (let i = 0; i < types.length; i++) {
+      if (types[i] === "Files") return true;
+    }
+    return false;
+  }
+
+  #onDragEnter = (e: DragEvent): void => {
+    if (!this.callbacks.onImportFiles) return;
+    if (!this.#dragHasFiles(e)) return;
+    e.preventDefault();
+    this.#dragDepth += 1;
+    if (this.#dragDepth === 1) this.dragOver = true;
+  };
+
+  #onDragOver = (e: DragEvent): void => {
+    if (!this.callbacks.onImportFiles) return;
+    if (!this.#dragHasFiles(e)) return;
+    // Required to enable `drop` — without `preventDefault` the
+    // browser's default "open this file in the tab" behaviour
+    // kicks in.
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+  };
+
+  #onDragLeave = (e: DragEvent): void => {
+    if (!this.callbacks.onImportFiles) return;
+    if (!this.#dragHasFiles(e)) return;
+    this.#dragDepth = Math.max(0, this.#dragDepth - 1);
+    if (this.#dragDepth === 0) this.dragOver = false;
+  };
+
+  #onDrop = (e: DragEvent): void => {
+    const cb = this.callbacks.onImportFiles;
+    if (!cb) return;
+    if (!this.#dragHasFiles(e)) return;
+    e.preventDefault();
+    this.#dragDepth = 0;
+    this.dragOver = false;
+    const files = e.dataTransfer ? Array.from(e.dataTransfer.files) : [];
+    if (files.length > 0) cb(files);
+  };
 
   /** The container the file-manager appends `<annot-gallery-page>`
    *  into. Stable across re-renders because Lit reuses the same
@@ -209,12 +307,31 @@ export class AnnotFileManagerShellElement extends LitElement {
         </button>
       </div>
 
-      <div class="main-content-body">
+      <div class="main-content-body file-manager-body">
         <div id="gallery-container" class="file-manager-grid-host"></div>
+        ${this.dragOver ? this.#renderDropOverlay() : nothing}
       </div>
 
       <div class="main-content-footer">
         <span class="gallery-footer-text">${this.countText}</span>
+      </div>
+    `;
+  }
+
+  #renderDropOverlay() {
+    return html`
+      <div
+        class="file-manager-drop-overlay"
+        role="presentation"
+        aria-hidden="true"
+      >
+        <div class="file-manager-drop-overlay-card">
+          <annot-icon .spec=${builtinIcon("upload")}></annot-icon>
+          <div class="file-manager-drop-overlay-title">Drop files to import</div>
+          <div class="file-manager-drop-overlay-subtitle">
+            into ${this.dropTargetLabel}
+          </div>
+        </div>
       </div>
     `;
   }
