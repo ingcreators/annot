@@ -19,6 +19,8 @@ import type {
   AnnotDocShellElement,
   DocChangedDetail,
   DocHeadingActivatedDetail,
+  LinkedImagePushDetail,
+  LinkedImagePushResult,
 } from "./annot-doc-shell.js";
 
 function mount(doc: AnnotDocument | null = null): AnnotDocShellElement {
@@ -2056,6 +2058,266 @@ describe("annot-doc-shell: image-less step blocks", () => {
     section.click();
     await Promise.resolve();
     expect(openSpy).not.toHaveBeenCalled();
+    openSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 2 of `card-document-image-gallery-link-sync.md` — doc → gallery
+// push: the shell hands a decomposed payload to the host's
+// `pushLinkedImage` callback after an in-doc image edit lands.
+// ---------------------------------------------------------------------------
+
+describe("annot-doc-shell: linked image push (Phase 2)", () => {
+  const PNG_PIXEL =
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+  const SAVED_SVG =
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 50" width="100" height="50">` +
+    `<image href="${PNG_PIXEL}" width="100" height="50"/>` +
+    `<rect data-type="rect" x="10" y="10" width="20" height="15"/>` +
+    "</svg>";
+
+  function makeStepDocWithLink(sourceImagePath?: string): AnnotDocument {
+    return {
+      version: 1,
+      lang: "en",
+      title: "Linked step",
+      meta: { title: "Linked step" },
+      styleBlock: null,
+      blocks: [
+        {
+          kind: "step",
+          id: "img-step-linked",
+          svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 50" width="100" height="50"></svg>',
+          title: "Step",
+          body: "Body.",
+          layout: "image-top",
+          ...(sourceImagePath !== undefined ? { sourceImagePath } : {}),
+        },
+      ],
+    };
+  }
+
+  function makeImageDocWithLink(sourceImagePath: string): AnnotDocument {
+    return {
+      version: 1,
+      lang: "en",
+      title: "Linked image",
+      meta: { title: "Linked image" },
+      styleBlock: null,
+      blocks: [
+        {
+          kind: "image",
+          id: "img-linked",
+          svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 50" width="100" height="50"></svg>',
+          sourceImagePath,
+        },
+      ],
+    };
+  }
+
+  it("invokes pushLinkedImage with decomposed payload when the step block has sourceImagePath", async () => {
+    const el = mount(makeStepDocWithLink("Screenshots/foo.png"));
+    el.editing = true;
+    await el.updateComplete;
+    el.materialiseAllImagesNow();
+    const pushSpy = vi.fn<(detail: LinkedImagePushDetail) => Promise<LinkedImagePushResult>>(
+      async () => "synced",
+    );
+    el.pushLinkedImage = pushSpy;
+    const openSpy = vi
+      .spyOn(
+        // biome-ignore lint/suspicious/noExplicitAny: spying on module-level static
+        (await import("./annot-doc-image-editor-modal.js")).AnnotDocImageEditorModalElement as any,
+        "openFor",
+      )
+      .mockResolvedValue({ kind: "save", svg: SAVED_SVG });
+    (el.querySelector(".annot-doc-image-svg-slot") as HTMLElement).click();
+    // Modal save + push are awaited; flush microtasks.
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(pushSpy).toHaveBeenCalledTimes(1);
+    const detail = pushSpy.mock.calls[0]?.[0];
+    expect(detail?.blockId).toBe("img-step-linked");
+    expect(detail?.sourceImagePath).toBe("Screenshots/foo.png");
+    expect(detail?.originalDataUrl).toBe(PNG_PIXEL);
+    expect(detail?.width).toBe(100);
+    expect(detail?.height).toBe(50);
+    expect(detail?.annotationsSvg).toContain('data-type="rect"');
+    expect(detail?.annotationsSvg).not.toContain("<image");
+    openSpy.mockRestore();
+  });
+
+  it("does NOT invoke pushLinkedImage when the block has no sourceImagePath", async () => {
+    const el = mount(makeStepDocWithLink(undefined));
+    el.editing = true;
+    await el.updateComplete;
+    el.materialiseAllImagesNow();
+    const pushSpy = vi.fn<(detail: LinkedImagePushDetail) => Promise<LinkedImagePushResult>>(
+      async () => "synced",
+    );
+    el.pushLinkedImage = pushSpy;
+    const openSpy = vi
+      .spyOn(
+        // biome-ignore lint/suspicious/noExplicitAny: spying on module-level static
+        (await import("./annot-doc-image-editor-modal.js")).AnnotDocImageEditorModalElement as any,
+        "openFor",
+      )
+      .mockResolvedValue({ kind: "save", svg: SAVED_SVG });
+    (el.querySelector(".annot-doc-image-svg-slot") as HTMLElement).click();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(pushSpy).not.toHaveBeenCalled();
+    openSpy.mockRestore();
+  });
+
+  it("does NOT throw when pushLinkedImage is unset (no host callback installed)", async () => {
+    const el = mount(makeStepDocWithLink("Screenshots/foo.png"));
+    el.editing = true;
+    await el.updateComplete;
+    el.materialiseAllImagesNow();
+    expect(el.pushLinkedImage).toBeNull();
+    const openSpy = vi
+      .spyOn(
+        // biome-ignore lint/suspicious/noExplicitAny: spying on module-level static
+        (await import("./annot-doc-image-editor-modal.js")).AnnotDocImageEditorModalElement as any,
+        "openFor",
+      )
+      .mockResolvedValue({ kind: "save", svg: SAVED_SVG });
+    (el.querySelector(".annot-doc-image-svg-slot") as HTMLElement).click();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    // The doc still gets the SVG update.
+    const step = el.document!.blocks[0];
+    if (step?.kind !== "step") throw new Error("expected step");
+    expect(step.svg).toBe(SAVED_SVG);
+    expect(step.sourceImagePath).toBe("Screenshots/foo.png");
+    openSpy.mockRestore();
+  });
+
+  it("strips sourceImagePath from the step block when push returns dead-link", async () => {
+    const el = mount(makeStepDocWithLink("Screenshots/gone.png"));
+    el.editing = true;
+    await el.updateComplete;
+    el.materialiseAllImagesNow();
+    el.pushLinkedImage = async () => "dead-link";
+    const openSpy = vi
+      .spyOn(
+        // biome-ignore lint/suspicious/noExplicitAny: spying on module-level static
+        (await import("./annot-doc-image-editor-modal.js")).AnnotDocImageEditorModalElement as any,
+        "openFor",
+      )
+      .mockResolvedValue({ kind: "save", svg: SAVED_SVG });
+    (el.querySelector(".annot-doc-image-svg-slot") as HTMLElement).click();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    const step = el.document!.blocks[0];
+    if (step?.kind !== "step") throw new Error("expected step");
+    expect(step.sourceImagePath).toBeUndefined();
+    // The edit itself survives.
+    expect(step.svg).toBe(SAVED_SVG);
+    openSpy.mockRestore();
+  });
+
+  it("preserves sourceImagePath when push returns synced", async () => {
+    const el = mount(makeStepDocWithLink("Screenshots/foo.png"));
+    el.editing = true;
+    await el.updateComplete;
+    el.materialiseAllImagesNow();
+    el.pushLinkedImage = async () => "synced";
+    const openSpy = vi
+      .spyOn(
+        // biome-ignore lint/suspicious/noExplicitAny: spying on module-level static
+        (await import("./annot-doc-image-editor-modal.js")).AnnotDocImageEditorModalElement as any,
+        "openFor",
+      )
+      .mockResolvedValue({ kind: "save", svg: SAVED_SVG });
+    (el.querySelector(".annot-doc-image-svg-slot") as HTMLElement).click();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    const step = el.document!.blocks[0];
+    if (step?.kind !== "step") throw new Error("expected step");
+    expect(step.sourceImagePath).toBe("Screenshots/foo.png");
+    openSpy.mockRestore();
+  });
+
+  it("preserves sourceImagePath when push returns error (transient failure)", async () => {
+    const el = mount(makeStepDocWithLink("Screenshots/foo.png"));
+    el.editing = true;
+    await el.updateComplete;
+    el.materialiseAllImagesNow();
+    el.pushLinkedImage = async () => "error";
+    const openSpy = vi
+      .spyOn(
+        // biome-ignore lint/suspicious/noExplicitAny: spying on module-level static
+        (await import("./annot-doc-image-editor-modal.js")).AnnotDocImageEditorModalElement as any,
+        "openFor",
+      )
+      .mockResolvedValue({ kind: "save", svg: SAVED_SVG });
+    (el.querySelector(".annot-doc-image-svg-slot") as HTMLElement).click();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    const step = el.document!.blocks[0];
+    if (step?.kind !== "step") throw new Error("expected step");
+    expect(step.sourceImagePath).toBe("Screenshots/foo.png");
+    openSpy.mockRestore();
+  });
+
+  it("does not propagate exceptions thrown from the host's pushLinkedImage", async () => {
+    const el = mount(makeStepDocWithLink("Screenshots/foo.png"));
+    el.editing = true;
+    await el.updateComplete;
+    el.materialiseAllImagesNow();
+    el.pushLinkedImage = async () => {
+      throw new Error("transient network failure");
+    };
+    const openSpy = vi
+      .spyOn(
+        // biome-ignore lint/suspicious/noExplicitAny: spying on module-level static
+        (await import("./annot-doc-image-editor-modal.js")).AnnotDocImageEditorModalElement as any,
+        "openFor",
+      )
+      .mockResolvedValue({ kind: "save", svg: SAVED_SVG });
+    // No await rejection — the shell swallows it.
+    await expect(
+      (async () => {
+        (el.querySelector(".annot-doc-image-svg-slot") as HTMLElement).click();
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+      })(),
+    ).resolves.toBeUndefined();
+    openSpy.mockRestore();
+  });
+
+  it("fires push for ImageBlock (not just StepBlock)", async () => {
+    const el = mount(makeImageDocWithLink("Screenshots/foo.png"));
+    el.editing = true;
+    await el.updateComplete;
+    el.materialiseAllImagesNow();
+    const pushSpy = vi.fn<(detail: LinkedImagePushDetail) => Promise<LinkedImagePushResult>>(
+      async () => "synced",
+    );
+    el.pushLinkedImage = pushSpy;
+    const openSpy = vi
+      .spyOn(
+        // biome-ignore lint/suspicious/noExplicitAny: spying on module-level static
+        (await import("./annot-doc-image-editor-modal.js")).AnnotDocImageEditorModalElement as any,
+        "openFor",
+      )
+      .mockResolvedValue({ kind: "save", svg: SAVED_SVG });
+    (el.querySelector(".annot-doc-image-svg-slot") as HTMLElement).click();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(pushSpy).toHaveBeenCalledTimes(1);
+    expect(pushSpy.mock.calls[0]?.[0]?.blockId).toBe("img-linked");
     openSpy.mockRestore();
   });
 });
