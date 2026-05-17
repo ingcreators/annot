@@ -56,7 +56,18 @@ export interface BlockSvgParts {
  *  depending on which side of the doc ↔ gallery boundary
  *  produced it. We compare the annotation CHILDREN after one
  *  normalisation pass; that's stable across the round-trip
- *  that the Phase 3 pull pass relies on. */
+ *  that the Phase 3 pull pass relies on.
+ *
+ *  Critically — `<defs>` siblings are filtered out before the
+ *  comparison runs. The doc generator's
+ *  `normaliseAnnotationsFragment` strips `<defs>` from the
+ *  embedded form (intentional — fonts are doc-supplied), so
+ *  any annotation that drags `<defs>` along (gradients via
+ *  `gradient-utils`, arrow markers, the editor's
+ *  `data-annot-fonts` style block) would otherwise mismatch on
+ *  every Phase 3 pull pass and re-toast forever. Filtering on
+ *  the comparison side keeps the existing embed shape intact
+ *  while making the comparison robust. */
 export function annotationChildrenEqual(a: string, b: string): boolean {
   return canonicaliseChildren(a) === canonicaliseChildren(b);
 }
@@ -69,6 +80,7 @@ function canonicaliseChildren(annotationsSvg: string): string {
     if (root.querySelector("parsererror")) return annotationsSvg;
     const serializer = new XMLSerializer();
     return Array.from(root.children)
+      .filter((c) => c.tagName !== "defs")
       .map((c) => serializer.serializeToString(c))
       .join("");
   } catch {

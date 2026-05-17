@@ -24,6 +24,7 @@ import { createBuiltinIcon } from "@ingcreators/annot-host-ui/annot-icon-imperat
 import { FileManager } from "@ingcreators/annot-host-ui/gallery/file-manager";
 import type { SidebarSectionOrder } from "@ingcreators/annot-host-ui/gallery/sidebar";
 import { IndexedDBThumbnailCache } from "@ingcreators/annot-host-ui/idb-thumbnail-cache";
+import { generateThumbnailFromDataUrl } from "@ingcreators/annot-host-ui/image-thumbnail";
 import { HeaderHost } from "@ingcreators/annot-host-ui/orchestrators/header-host";
 import { SavePipeline } from "@ingcreators/annot-host-ui/orchestrators/save-pipeline";
 import { StatusHost } from "@ingcreators/annot-host-ui/orchestrators/status-host";
@@ -1475,6 +1476,40 @@ export class App {
           height: detail.height,
           updatedAt: new Date().toISOString(),
         });
+        // Regenerate the gallery thumbnail so the gallery card +
+        // any other UI surface that hangs off the thumbnail manager
+        // reflects the new annotations. Rasterise the saved
+        // `ImageRecord` (bitmap + annotations) via `renderImageRecord`
+        // (Tier C-render) → shrink + JPEG-compress via the shared
+        // thumbnail helper → write to the manager keyed on the
+        // gallery path. Mirrors what `save-pipeline.writeThumbnail`
+        // does after an in-canvas save; without it the gallery
+        // tile stayed stuck on the pre-annotation thumbnail.
+        try {
+          const { renderImageRecord } = await import("@ingcreators/annot-render");
+          const renderedDataUrl = await renderImageRecord(
+            detail.originalDataUrl,
+            detail.annotationsSvg,
+            detail.width,
+            detail.height,
+          );
+          const thumb = await generateThumbnailFromDataUrl(renderedDataUrl);
+          if (thumb) {
+            await this.#thumbnailManager.write(storage, detail.sourceImagePath, thumb, {
+              width: detail.width,
+              height: detail.height,
+            });
+          }
+        } catch (thumbErr) {
+          // Thumbnail regen failed; gallery falls back to whatever
+          // the cache had. Annotations themselves are already
+          // persisted via `updateImage` above — log + move on.
+          logger.warn(
+            "openDocFromGallery: gallery thumbnail regen failed for",
+            detail.sourceImagePath,
+            thumbErr,
+          );
+        }
         return "synced";
       } catch (err) {
         logger.warn("openDocFromGallery: gallery push failed for", detail.sourceImagePath, err);
