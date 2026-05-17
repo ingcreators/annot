@@ -40,6 +40,7 @@ import {
 import "./annot-doc-block-menu.js";
 import "./annot-doc-block-toolbar.js";
 import type { BlockDragStartDetail, BlockToolbarActionDetail } from "./annot-doc-block-toolbar.js";
+import { decomposeBlockSvg } from "./decompose-block-svg.js";
 import "./annot-doc-empty-state.js";
 import type { EmptyStateActionDetail } from "./annot-doc-empty-state.js";
 import "./annot-doc-insert-bar.js";
@@ -668,6 +669,51 @@ export interface DocChangedDetail {
   reason: "block-action" | "undo" | "redo" | "commit" | "external";
 }
 
+/** Phase 2 of `card-document-image-gallery-link-sync.md` — payload
+ *  the shell hands the host when the user saves an in-doc image
+ *  edit on a block linked to a gallery `ImageRecord`. The host
+ *  resolves `sourceImagePath` against its `StorageProvider` and
+ *  writes the new bitmap + annotation fragment back to the
+ *  corresponding `ImageRecord`. */
+export interface LinkedImagePushDetail {
+  /** `ImageBlock.id` / `StepBlock.id` — for tracing / logging
+   *  (the host doesn't need it for the lookup; `sourceImagePath`
+   *  is the storage key). */
+  readonly blockId: string;
+  /** The doc-side back-reference. Path of the gallery `ImageRecord`
+   *  the host should update. */
+  readonly sourceImagePath: string;
+  /** Base bitmap data URL extracted from the saved doc-block SVG. */
+  readonly originalDataUrl: string;
+  /** Flat `<svg>` annotation fragment (no base image, no
+   *  `<g id="annotations">` wrapper). Drop-in replacement for
+   *  `ImageRecord.annotationsSvg`. */
+  readonly annotationsSvg: string;
+  /** Pixel width — drop-in for `ImageRecord.width`. */
+  readonly width: number;
+  /** Pixel height — drop-in for `ImageRecord.height`. */
+  readonly height: number;
+}
+
+/** Result the host returns from a `pushLinkedImage` invocation.
+ *
+ *  - `"synced"` — gallery record updated successfully.
+ *  - `"dead-link"` — `sourceImagePath` no longer resolves to a
+ *    gallery record. The shell strips the back-reference from the
+ *    block on receipt (the doc edit stays in place; only the link
+ *    is severed).
+ *  - `"error"` — push failed for another reason. The host already
+ *    surfaced the error (toast / log); the shell preserves the
+ *    link in case it's a transient failure. */
+export type LinkedImagePushResult = "synced" | "dead-link" | "error";
+
+/** Host-supplied callback that performs the doc → gallery push.
+ *  Set to `null` when the host doesn't own a storage backend
+ *  (Storybook preview, headless tests, VSCode webview without a
+ *  matching gallery library). When null the shell silently skips
+ *  the push — the doc still updates, the gallery just doesn't. */
+export type PushLinkedImageFn = (detail: LinkedImagePushDetail) => Promise<LinkedImagePushResult>;
+
 export class AnnotDocShellElement extends LitElement {
   static override properties = {
     document: { attribute: false },
@@ -681,6 +727,18 @@ export class AnnotDocShellElement extends LitElement {
   declare showToc: boolean;
   declare editing: boolean;
   declare dropZoneActive: boolean;
+  /** Phase 2 of `card-document-image-gallery-link-sync.md` —
+   *  optional callback the host installs to push a saved in-doc
+   *  image edit back to its linked gallery `ImageRecord`. When
+   *  unset the shell behaves exactly as it did pre-Phase-2 (doc
+   *  edit lands locally, gallery is untouched). See
+   *  `PushLinkedImageFn` / `LinkedImagePushDetail` /
+   *  `LinkedImagePushResult` for the contract. Not declared as a
+   *  Lit reactive property — it's a function reference set
+   *  imperatively by the host once at mount time and never
+   *  changes through the shell's lifetime, so no re-render is
+   *  needed on assignment. */
+  pushLinkedImage: PushLinkedImageFn | null = null;
   /** Phase 9 of `annot-html-document-ux-polish.md` — mobile-only
    *  toggle for the TOC drawer. Default true so desktop sees the
    *  TOC at boot; the CSS `@media (max-width: 768px)` rules hide
@@ -2885,6 +2943,13 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
     const newDoc: AnnotDocument = { ...this.document, blocks };
     this.#history?.push(newDoc);
     this.#applyInternal(newDoc, "block-action");
+    // Phase 2 of `card-document-image-gallery-link-sync.md` —
+    // when the block is linked to a gallery `ImageRecord`, hand
+    // the host the decomposed payload so it can write the bitmap
+    // + annotation fragment back through `storage.updateImage`.
+    // Awaited so the dead-link unlink completes before the user's
+    // next edit; the modal itself has already closed.
+    await this.#pushLinkedImageIfLinked(target, result.svg, index, "image");
   }
 
   /** Phase 3 of card-procedure-template — step block image edit.
@@ -2918,6 +2983,74 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
     const target = blocks[index];
     if (target?.kind !== "step") return;
     blocks[index] = { ...target, svg: result.svg };
+    const newDoc: AnnotDocument = { ...this.document, blocks };
+    this.#history?.push(newDoc);
+    this.#applyInternal(newDoc, "block-action");
+    // See `#openImageEditor` — symmetrical push for step blocks.
+    await this.#pushLinkedImageIfLinked(target, result.svg, index, "step");
+  }
+
+  /** Phase 2 — doc → gallery push helper. No-op when:
+   *
+   *   - the host hasn't installed a `pushLinkedImage` callback,
+   *   - the block has no `sourceImagePath` (doc-only block),
+   *   - decomposition produces an empty `originalDataUrl` (the
+   *     saved SVG had no recognisable base bitmap — defensive,
+   *     should not happen with editor-produced output).
+   *
+   *  On the `"dead-link"` reply, strip `sourceImagePath` from
+   *  the block so the next edit doesn't keep poking at a missing
+   *  gallery record. The strip lands as its own history entry —
+   *  the user can undo it back to "still linked" state if the
+   *  gallery record reappears (rename / unmove).
+   *
+   *  On `"error"` and `"synced"` no further mutation runs; the
+   *  host owns user-facing messaging (toast). */
+  async #pushLinkedImageIfLinked(
+    block: ImageBlock | StepBlock,
+    savedSvg: string,
+    index: number,
+    kind: "image" | "step",
+  ): Promise<void> {
+    const push = this.pushLinkedImage;
+    if (!push) return;
+    const sourceImagePath = block.sourceImagePath;
+    if (sourceImagePath === undefined || sourceImagePath.length === 0) return;
+    const parts = decomposeBlockSvg(savedSvg);
+    if (parts.originalDataUrl.length === 0) return;
+    let result: LinkedImagePushResult;
+    try {
+      result = await push({
+        blockId: block.id,
+        sourceImagePath,
+        originalDataUrl: parts.originalDataUrl,
+        annotationsSvg: parts.annotationsSvg,
+        width: parts.width,
+        height: parts.height,
+      });
+    } catch {
+      // Host-side throw is treated as a transient error — leave
+      // the link in place so the next edit retries. The host has
+      // already logged / toasted; the shell stays quiet.
+      return;
+    }
+    if (result !== "dead-link") return;
+    // Strip `sourceImagePath` from the block. We re-find by index
+    // since the doc may have shifted under us between the push
+    // dispatch and the await landing (history.push earlier ran an
+    // `#applyInternal`, but no other handler is mid-flight here).
+    if (!this.document) return;
+    const blocks = [...this.document.blocks];
+    const target = blocks[index];
+    if (kind === "image" && target?.kind === "image") {
+      const { sourceImagePath: _drop, ...rest } = target;
+      blocks[index] = rest;
+    } else if (kind === "step" && target?.kind === "step") {
+      const { sourceImagePath: _drop, ...rest } = target;
+      blocks[index] = rest;
+    } else {
+      return;
+    }
     const newDoc: AnnotDocument = { ...this.document, blocks };
     this.#history?.push(newDoc);
     this.#applyInternal(newDoc, "block-action");

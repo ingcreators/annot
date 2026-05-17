@@ -1457,6 +1457,34 @@ export class App {
     shell.editing = true;
     body.appendChild(shell);
 
+    // Phase 2 of `card-document-image-gallery-link-sync.md` —
+    // when the user saves an in-doc image edit on a block linked
+    // to a gallery `ImageRecord` (via `sourceImagePath`), push
+    // the new bitmap + annotation fragment back to that record
+    // so the gallery copy stays in sync. The shell decomposes
+    // the saved SVG before dispatching, so we just drop the
+    // fields into `storage.updateImage`.
+    shell.pushLinkedImage = async (detail) => {
+      try {
+        const existing = await storage.getImage(detail.sourceImagePath);
+        if (!existing) return "dead-link";
+        await storage.updateImage(detail.sourceImagePath, {
+          originalDataUrl: detail.originalDataUrl,
+          annotationsSvg: detail.annotationsSvg,
+          width: detail.width,
+          height: detail.height,
+          updatedAt: new Date().toISOString(),
+        });
+        return "synced";
+      } catch (err) {
+        logger.warn("openDocFromGallery: gallery push failed for", detail.sourceImagePath, err);
+        showSaveError(
+          `Couldn't sync changes back to gallery image "${detail.sourceImagePath}": ${(err as Error).message}`,
+        );
+        return "error";
+      }
+    };
+
     // Phase 6f — debounced save lifecycle:
     //   - On `doc-changed`: title sync, status → "pending", arm /
     //     re-arm a 1500 ms debounce timer.
