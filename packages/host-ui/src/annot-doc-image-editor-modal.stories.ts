@@ -60,3 +60,33 @@ export default meta;
 type Story = StoryObj<Args>;
 
 export const Default: Story = {};
+
+/** Phase 5 of `card-document-image-gallery-link-sync.md` — when
+ *  the block was inserted from a gallery selection, the modal
+ *  header surfaces a "Linked to gallery" badge + an Unlink
+ *  action. Clicking the action confirms via dialog and hides
+ *  the badge; the next Save returns `unlinked: true`. */
+export const Linked: Story = {
+  args: {
+    input: {
+      id: "story-img",
+      svg: SAMPLE_SVG,
+      sourceImagePath: "Screenshots/Mobile/login-flow.png",
+      positionInImages: 1,
+      totalImages: 1,
+    },
+  },
+};
+
+/** A doc-only block (no `sourceImagePath`) renders without the
+ *  link badge — same shape as a Phase-0 modal session. */
+export const Unlinked: Story = {
+  args: {
+    input: {
+      id: "story-img",
+      svg: SAMPLE_SVG,
+      positionInImages: 2,
+      totalImages: 5,
+    },
+  },
+};

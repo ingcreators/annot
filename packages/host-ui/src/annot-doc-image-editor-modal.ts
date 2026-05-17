@@ -19,7 +19,7 @@
 import type { ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
 import { exportSVGString } from "@ingcreators/annot-editor";
 import { EditorShell } from "./editor-shell.js";
-import { html, LitElement, type TemplateResult } from "./lit.js";
+import { html, LitElement, nothing, type TemplateResult } from "./lit.js";
 import { StatusHost } from "./orchestrators/status-host.js";
 // `<annot-editor-right-panel>` registers a custom element on import.
 import "./right-panel.js";
@@ -76,10 +76,23 @@ export interface ImageEditorModalInput {
   readonly positionInImages?: number;
   /** Total image blocks in the document. */
   readonly totalImages?: number;
+  /** Phase 5 of `card-document-image-gallery-link-sync.md` —
+   *  the gallery `ImageRecord.path` this block links to, when
+   *  any. Drives the linked-badge + Unlink affordance in the
+   *  header. Missing → block is doc-only (no badge shown). */
+  readonly sourceImagePath?: string;
 }
 
 export type ImageEditorModalResult =
-  | { readonly kind: "save"; readonly svg: string }
+  | {
+      readonly kind: "save";
+      readonly svg: string;
+      /** Phase 5 — true when the user clicked Unlink during this
+       *  edit session. The doc shell strips `sourceImagePath`
+       *  from the block on receipt. Absent / `false` means the
+       *  block's link state is unchanged. */
+      readonly unlinked?: boolean;
+    }
   | { readonly kind: "cancel" };
 
 const STYLES = `
@@ -121,6 +134,42 @@ const STYLES = `
   border-radius: 999px;
   background: rgba(245, 158, 11, 0.16);
   color: #b45309;
+}
+.annot-doc-image-editor-modal-link-badge {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.78rem;
+  font-weight: 500;
+}
+.annot-doc-image-editor-modal-link-badge-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.12);
+  color: #1d4ed8;
+}
+.annot-doc-image-editor-modal-link-badge-path {
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.annot-doc-image-editor-modal-link-badge button.unlink {
+  font-size: 0.78rem;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--annot-doc-muted, #6b7280);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.annot-doc-image-editor-modal-link-badge button.unlink:hover {
+  background: rgba(37, 99, 235, 0.08);
 }
 .annot-doc-image-editor-modal-body {
   display: grid;
@@ -228,6 +277,7 @@ export class AnnotDocImageEditorModalElement extends LitElement {
   static override properties = {
     input: { attribute: false },
     dirty: { state: true },
+    unlinked: { state: true },
   };
 
   declare input: ImageEditorModalInput | null;
@@ -235,6 +285,12 @@ export class AnnotDocImageEditorModalElement extends LitElement {
    *  the user has made any edit since the modal opened. Drives
    *  the Esc-to-cancel confirmation guard + the header subtitle. */
   declare dirty: boolean;
+  /** Phase 5 of `card-document-image-gallery-link-sync.md` — set
+   *  to `true` once the user has clicked Unlink in this session.
+   *  Hides the link-badge from that point on; the save path
+   *  surfaces it back to the doc shell so the block's
+   *  `sourceImagePath` is stripped on next history push. */
+  declare unlinked: boolean;
 
   #shell: EditorShell | null = null;
   #toolbar: Toolbar | null = null;
@@ -250,6 +306,7 @@ export class AnnotDocImageEditorModalElement extends LitElement {
     super();
     this.input = null;
     this.dirty = false;
+    this.unlinked = false;
   }
 
   protected override createRenderRoot(): HTMLElement {
@@ -348,6 +405,7 @@ export class AnnotDocImageEditorModalElement extends LitElement {
                 ? html`<span class="annot-doc-image-editor-modal-dirty">Unsaved changes</span>`
                 : ""
             }
+            ${this.#renderLinkBadge()}
           </div>
           <div class="annot-doc-image-editor-modal-body">
             <div class="annot-doc-image-editor-modal-toolbar"></div>
@@ -366,6 +424,55 @@ export class AnnotDocImageEditorModalElement extends LitElement {
         </div>
       </div>
     `;
+  }
+
+  /** Phase 5 — linked-badge surface. Renders the gallery-link
+   *  indicator + Unlink action in the modal header when the
+   *  block was opened with a `sourceImagePath` AND the user
+   *  hasn't already clicked Unlink in this session. Pure
+   *  presentation — the host runs the click handler via
+   *  `#requestUnlink`. */
+  #renderLinkBadge(): TemplateResult | typeof nothing {
+    const path = this.input?.sourceImagePath;
+    if (path === undefined || path.length === 0) return nothing;
+    if (this.unlinked) return nothing;
+    const fileName = extractFileName(path);
+    return html`
+      <span
+        class="annot-doc-image-editor-modal-link-badge"
+        title="Edits to this image also update the gallery copy."
+      >
+        <span class="annot-doc-image-editor-modal-link-badge-label" aria-label="Linked to gallery">
+          <span aria-hidden="true">🔗</span>
+          <span class="annot-doc-image-editor-modal-link-badge-path">${fileName}</span>
+        </span>
+        <button
+          type="button"
+          class="unlink"
+          @click=${() => void this.#requestUnlink()}
+        >Unlink</button>
+      </span>
+    `;
+  }
+
+  /** Phase 5 — Unlink action. Prompts the user (irreversible-ish
+   *  in the sense that future edits stop syncing; the badge can
+   *  be restored only by deleting + re-inserting the block from
+   *  gallery), then flips `this.unlinked = true` which both
+   *  hides the badge and tells `#resolveSave` to carry the
+   *  signal back to the doc shell. */
+  async #requestUnlink(): Promise<void> {
+    const ok = await showConfirmDialog({
+      title: "Unlink image from gallery?",
+      message:
+        "Future edits to this image will stay inside this document only. " +
+        "The gallery copy and this document copy will diverge.",
+      okLabel: "Unlink",
+      cancelLabel: "Keep linked",
+      danger: false,
+    });
+    if (!ok) return;
+    this.unlinked = true;
   }
 
   /** Phase 6 — Esc / Cancel button / overlay-click dispatch.
@@ -527,7 +634,13 @@ export class AnnotDocImageEditorModalElement extends LitElement {
     const svg = exportSVGString(canvas);
     const r = this.#resolver;
     this.#resolver = null;
-    r({ kind: "save", svg });
+    // Phase 5 — surface the unlink intent back to the doc shell.
+    // Only set when the user actually clicked Unlink in this
+    // session AND the block had been opened with a link;
+    // otherwise the field is absent so the shell's existing
+    // "unchanged link" path runs untouched.
+    const unlinked = this.unlinked && this.input?.sourceImagePath !== undefined;
+    r(unlinked ? { kind: "save", svg, unlinked: true } : { kind: "save", svg });
   }
 
   #resolveCancel(): void {
@@ -592,6 +705,14 @@ function synthesiseRecord(input: ImageEditorModalInput): ImageRecord {
     createdAt: now,
     updatedAt: now,
   };
+}
+
+/** Pull the last path segment out of a slash-separated path for the
+ *  link badge's compact display. Treats backslashes the same as
+ *  forward slashes so Windows-style backends present nicely. */
+function extractFileName(path: string): string {
+  const i = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
+  return i >= 0 ? path.slice(i + 1) : path;
 }
 
 function pickInt(...candidates: (string | number | null | undefined)[]): number {

@@ -3032,13 +3032,25 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
       svg: block.svg,
       positionInImages,
       totalImages,
+      ...(block.sourceImagePath !== undefined ? { sourceImagePath: block.sourceImagePath } : {}),
     });
     if (result.kind !== "save") return;
     if (!this.document) return;
     const blocks = [...this.document.blocks];
     const target = blocks[index];
     if (target?.kind !== "image") return;
-    blocks[index] = { ...target, svg: result.svg };
+    // Phase 5 — when the modal returns `unlinked: true`, drop the
+    // block's `sourceImagePath` as part of the same history entry
+    // that carries the SVG edit. `#pushLinkedImageIfLinked` then
+    // sees an unlinked block and skips the gallery push.
+    let refreshed: ImageBlock;
+    if (result.unlinked === true) {
+      const { sourceImagePath: _drop, ...rest } = target;
+      refreshed = { ...rest, svg: result.svg };
+    } else {
+      refreshed = { ...target, svg: result.svg };
+    }
+    blocks[index] = refreshed;
     const newDoc: AnnotDocument = { ...this.document, blocks };
     this.#history?.push(newDoc);
     this.#applyInternal(newDoc, "block-action");
@@ -3048,7 +3060,7 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
     // + annotation fragment back through `storage.updateImage`.
     // Awaited so the dead-link unlink completes before the user's
     // next edit; the modal itself has already closed.
-    await this.#pushLinkedImageIfLinked(target, result.svg, index, "image");
+    await this.#pushLinkedImageIfLinked(refreshed, result.svg, index, "image");
   }
 
   /** Phase 3 of card-procedure-template — step block image edit.
@@ -3075,18 +3087,28 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
       svg: block.svg,
       positionInImages,
       totalImages,
+      ...(block.sourceImagePath !== undefined ? { sourceImagePath: block.sourceImagePath } : {}),
     });
     if (result.kind !== "save") return;
     if (!this.document) return;
     const blocks = [...this.document.blocks];
     const target = blocks[index];
     if (target?.kind !== "step") return;
-    blocks[index] = { ...target, svg: result.svg };
+    // Phase 5 — mirror the unlink handling from `#openImageEditor`
+    // (see comment there for the rationale).
+    let refreshed: StepBlock;
+    if (result.unlinked === true) {
+      const { sourceImagePath: _drop, ...rest } = target;
+      refreshed = { ...rest, svg: result.svg };
+    } else {
+      refreshed = { ...target, svg: result.svg };
+    }
+    blocks[index] = refreshed;
     const newDoc: AnnotDocument = { ...this.document, blocks };
     this.#history?.push(newDoc);
     this.#applyInternal(newDoc, "block-action");
     // See `#openImageEditor` — symmetrical push for step blocks.
-    await this.#pushLinkedImageIfLinked(target, result.svg, index, "step");
+    await this.#pushLinkedImageIfLinked(refreshed, result.svg, index, "step");
   }
 
   /** Phase 3 — gallery → doc pull pass. Fired by `willUpdate`
