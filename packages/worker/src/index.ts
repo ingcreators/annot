@@ -1,24 +1,24 @@
 // `@ingcreators/annot-worker` — Cloudflare Worker hosting Annot's
 // API surface.
 //
-// Current state (Phase 4a):
-//   - /api/health                  (liveness probe)
-//   - /api/health/bindings         (KV + D1 + R2 reachability)
-//   - /api/auth/github             (start GitHub OAuth)
-//   - /api/auth/github/callback    (finish GitHub OAuth)
-//   - /api/auth/google             (start Google OAuth)
-//   - /api/auth/google/callback    (finish Google OAuth)
-//   - /api/auth/me                 (current user from session)
-//   - /api/auth/logout             (invalidate session)
+// Current state (Phase 4c):
+//   - /api/health                            (liveness probe)
+//   - /api/health/bindings                   (KV + D1 + R2 reachability)
+//   - /api/auth/github + /github/callback    (GitHub OAuth)
+//   - /api/auth/google + /google/callback    (Google OAuth)
+//   - /api/auth/me                           (current user from session)
+//   - /api/auth/logout                       (invalidate session)
+//   - /api/images                            (POST upload, GET list)
+//   - /api/images/:id                        (GET / PATCH / DELETE metadata)
+//   - /api/images/:id/original               (GET original bytes)
+//   - /api/images/:id/annotations            (GET + PATCH annotations SVG)
 //   - SESSIONS (KV) + DB (D1) + OBJECTS (R2) bindings wired
 //   - users / workspaces / workspace_members tables (Phase 3a)
-//   - GITHUB_OAUTH_CLIENT_ID / _SECRET secrets read from c.env
-//   - GOOGLE_OAUTH_CLIENT_ID / _SECRET secrets read from c.env
+//   - images / documents / audit_events tables (Phase 4b)
+//   - GITHUB_OAUTH_CLIENT_ID / _SECRET secrets
+//   - GOOGLE_OAUTH_CLIENT_ID / _SECRET secrets
 //
 // Subsequent phases add:
-//   Phase 4b: 0002_storage.sql migration (images / documents /
-//             audit_events tables)
-//   Phase 4c: /api/images/* (upload, get, list, delete, annotate)
 //   Phase 4d: /api/documents/* (.annot.html documents)
 //   Phase 4e: per-workspace quota gates
 //   Phase 5:  /api/shares/* + /share/:token + /embed/:token
@@ -31,6 +31,16 @@ import { Hono } from "hono";
 import { handleGithubCallback, handleGithubStart } from "./auth-github.js";
 import { handleGoogleCallback, handleGoogleStart } from "./auth-google.js";
 import { handleAuthLogout, handleAuthMe } from "./auth-me.js";
+import {
+  handleImageAnnotationsGet,
+  handleImageAnnotationsPatch,
+  handleImageDelete,
+  handleImageGet,
+  handleImageList,
+  handleImageOriginalGet,
+  handleImagePatch,
+  handleImageUpload,
+} from "./images.js";
 
 /**
  * Environment bindings for the Worker. Each entry corresponds
@@ -192,6 +202,16 @@ app.get("/api/auth/google/callback", handleGoogleCallback);
 // ─── Auth — session introspection / invalidation ─────────────
 app.get("/api/auth/me", handleAuthMe);
 app.post("/api/auth/logout", handleAuthLogout);
+
+// ─── Images (AnnotCloudStore) ────────────────────────────────
+app.post("/api/images", handleImageUpload);
+app.get("/api/images", handleImageList);
+app.get("/api/images/:id", handleImageGet);
+app.patch("/api/images/:id", handleImagePatch);
+app.delete("/api/images/:id", handleImageDelete);
+app.get("/api/images/:id/original", handleImageOriginalGet);
+app.get("/api/images/:id/annotations", handleImageAnnotationsGet);
+app.patch("/api/images/:id/annotations", handleImageAnnotationsPatch);
 
 /**
  * Catch-all 404 so probes against an undefined route return a
