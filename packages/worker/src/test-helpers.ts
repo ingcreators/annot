@@ -90,12 +90,19 @@ export function makeMockD1(): D1Database {
 
 /**
  * Construct a complete mock Env. Override individual bindings
- * via the optional `overrides` to test failure paths.
+ * or secrets via the optional `overrides` to test failure paths
+ * (e.g. an unset `GITHUB_OAUTH_CLIENT_ID` via `{ GITHUB_OAUTH_CLIENT_ID:
+ * "" }`).
  */
 export function makeMockEnv(overrides: Partial<Env> = {}): Env {
   return {
     SESSIONS: makeMockKv(),
     DB: makeMockD1(),
+    // Test-only OAuth credentials. Real values are set via
+    // `wrangler secret put` at deploy time; these defaults let
+    // the handlers run end-to-end in unit tests.
+    GITHUB_OAUTH_CLIENT_ID: "test-client-id",
+    GITHUB_OAUTH_CLIENT_SECRET: "test-client-secret",
     ...overrides,
   };
 }

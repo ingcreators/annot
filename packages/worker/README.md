@@ -3,10 +3,14 @@
 Cloudflare Worker hosting Annot's API surface — GitHub OAuth,
 GitHub App, AnnotCloudStore endpoints, share / embed.
 
-> **Status:** Phase 2b. The Worker has `/api/health` +
-> `/api/health/bindings` endpoints; KV (`SESSIONS`) and D1 (`DB`)
-> bindings are wired in `wrangler.toml`. Phase 2c adds GitHub
-> OAuth and the `api.annot.work` route binding.
+> **Status:** Phase 2c. The Worker has the full GitHub OAuth
+> sign-in flow (start + callback), session cookies, `/api/auth/me`,
+> and `/api/auth/logout`. KV-backed sessions (30-day TTL),
+> CSRF-state KV keys (10-min TTL), httpOnly + Secure + SameSite=Lax
+> cookies. Operator action required before deploy: register a
+> GitHub OAuth App and set the client ID + secret via
+> `wrangler secret put`. The `api.annot.work` route binding is the
+> last step (see *Operator action* section).
 >
 > Plan: [`docs/plans/annot-cloud-roadmap.md`](../../docs/plans/annot-cloud-roadmap.md).
 
@@ -97,17 +101,42 @@ environment variable. CI auto-deploy lands in a later phase
 | Sessions / CSRF state | Cloudflare KV |
 | Payments | Stripe (Phase 7) |
 
+## Operator action required for Phase 2c deploy
+
+This sub-phase ships the OAuth code but not the credentials. To
+make sign-in work end-to-end, the operator:
+
+1. Registers a GitHub OAuth App at
+   <https://github.com/settings/developers> → "New OAuth App"
+   - Homepage URL: `https://annot.work`
+   - Authorization callback URL:
+     `https://annot.work/api/auth/github/callback` (and the
+     `*.workers.dev` URL for testing, if separate)
+2. Sets the client ID + secret as Worker secrets:
+   ```sh
+   pnpm --filter @ingcreators/annot-worker exec wrangler secret put GITHUB_OAUTH_CLIENT_ID
+   pnpm --filter @ingcreators/annot-worker exec wrangler secret put GITHUB_OAUTH_CLIENT_SECRET
+   ```
+3. Configures the route binding from `annot.work/api/*` to the
+   `annot-api` Worker (separate follow-up PR — adds the `routes`
+   stanza to `wrangler.toml`).
+
+Until step 1+2 are done, `/api/auth/github` returns
+`500 oauth_not_configured`. Until step 3 is done, callers must
+use the `*.workers.dev` URL.
+
 ## Roadmap
 
 - **Phase 2a** ✅: scaffold + `/api/health`.
 - **Phase 2b** ✅: KV (`SESSIONS`) + D1 (`DB`) binding wiring
   (empty schema), `/api/health/bindings` smoke probe, migrations
   directory.
-- **Phase 2c**: GitHub OAuth endpoints (`/api/auth/github`,
-  `/api/auth/github/callback`), session cookies, `api.annot.work`
-  route binding.
-- **Phase 3**: Google OAuth, `users` / `workspaces` tables,
-  `/api/auth/me`.
+- **Phase 2c** ✅ (this PR): GitHub OAuth endpoints (start +
+  callback), `/api/auth/me`, `/api/auth/logout`, session cookies.
+  Operator follow-up: register OAuth App, set secrets, bind
+  `api.annot.work` route.
+- **Phase 3**: Google OAuth, `users` / `workspaces` D1 tables,
+  promote KV-only sessions onto user/workspace rows.
 - **Phase 4**: AnnotCloudStore CRUD endpoints (`/api/images`,
   `/api/documents`).
 - **Phase 5**: Share / embed (`/api/shares`).
