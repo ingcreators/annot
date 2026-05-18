@@ -48,37 +48,39 @@ name: Deploy
 on:
   push:
     branches: [main]
+    # GitHub Actions only permits ONE of `paths` / `paths-ignore`
+    # per event, so the exclusions below use negation patterns
+    # (`!path`) within the single `paths` list. Patterns are
+    # applied in order: a later `!` exclusion strips a path that
+    # an earlier positive pattern would have matched.
     paths:
-      # Worker bundle source / config.
-      - "packages/worker/**"
-      # PWA bundle source — pretty much any workspace package
-      # change can affect the built PWA (transitive deps). The
-      # paths-ignore stanza below trims this back for the
-      # demonstrably-non-deployable subsets.
+      # ─── Include ───────────────────────────────────────────
+      # Workspace package source — any package change can
+      # affect either the API bundle or the PWA bundle. The
+      # negations below trim back the demonstrably-non-deployable
+      # subsets.
       - "packages/**"
-      # Root config that controls the PWA Workers Builds.
+      # Root config that defines the PWA worker.
       - "wrangler.jsonc"
-      # Workspace files that materially change either build.
+      # Lockfile bumps can change either bundle.
       - "pnpm-lock.yaml"
       # Allow operator iteration on the deploy pipeline itself.
       - ".github/workflows/deploy.yml"
-    paths-ignore:
-      # Docs-only edits.
-      - "packages/**/README.md"
-      - "**/*.md"
+
+      # ─── Exclude ───────────────────────────────────────────
+      # Docs only.
+      - "!**/*.md"
       # Schema files are operator-applied via `migrations:apply`,
-      # not code-deployed. A migration-only PR doesn't change
-      # what either Worker DOES; the deploy fires on the next
-      # code change (or via manual `workflow_dispatch`).
-      - "packages/worker/migrations/**"
-      # Tests don't ship in either bundle.
-      - "packages/**/*.test.ts"
-      - "packages/**/*.test-helpers.ts"
-      - "packages/**/*.test-mock.ts"
-      - "packages/**/*.contract.test.ts"
-      # Storybook also doesn't ship to production.
-      - "packages/**/*.stories.ts"
-      - "packages/web/.storybook/**"
+      # not code-deployed.
+      - "!packages/worker/migrations/**"
+      # Tests / test helpers don't ship in either bundle.
+      - "!packages/**/*.test.ts"
+      - "!packages/**/*.test-helpers.ts"
+      - "!packages/**/*.test-mock.ts"
+      - "!packages/**/*.contract.test.ts"
+      # Storybook doesn't ship to production.
+      - "!packages/**/*.stories.ts"
+      - "!packages/web/.storybook/**"
   workflow_dispatch:
 
 # Serialise deploys. `cancel-in-progress: true` lets a newer
