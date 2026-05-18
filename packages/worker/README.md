@@ -3,13 +3,11 @@
 Cloudflare Worker hosting Annot's API surface — GitHub OAuth,
 GitHub App, AnnotCloudStore endpoints, share / embed.
 
-> **Status:** Phase 3c. Both GitHub and Google OAuth flows are
-> wired; both callbacks upsert a persistent `users` row + create
-> a personal `workspaces` row on first login. Session records
-> carry `userId` / `workspaceId`. `/api/auth/me` returns those
-> IDs and touches `users.last_seen_at`. Cross-provider account
-> linking is intentionally NOT implemented — each provider is a
-> separate identity row.
+> **Status:** Phase 4a. R2 bucket binding wired alongside the
+> Phase 2b KV and D1 bindings. The bindings probe at
+> `/api/health/bindings` now checks all three. Phase 4b/4c/4d
+> add the migration + endpoints that write image / document
+> bytes to the bucket.
 >
 > Plan: [`docs/plans/annot-cloud-roadmap.md`](../../docs/plans/annot-cloud-roadmap.md).
 
@@ -45,15 +43,21 @@ pnpm exec wrangler kv namespace create SESSIONS --preview
 
 # Create the D1 database.
 pnpm exec wrangler d1 create annot-db
+
+# Create the R2 bucket for image / document bytes.
+pnpm exec wrangler r2 bucket create annot-objects
 cd ../..
 ```
 
-Each command prints an `id`. Replace the `<placeholder>` strings
-(if any) in `packages/worker/wrangler.toml`:
+KV and D1 each print an `id`; replace the placeholder values in
+`packages/worker/wrangler.jsonc`:
 
-- `[[kv_namespaces]].id`         ← from `kv namespace create SESSIONS`
-- `[[kv_namespaces]].preview_id` ← from `kv namespace create SESSIONS --preview`
-- `[[d1_databases]].database_id` ← from `d1 create annot-db`
+- `kv_namespaces[0].id`         ← from `kv namespace create SESSIONS`
+- `kv_namespaces[0].preview_id` ← from `kv namespace create SESSIONS --preview`
+- `d1_databases[0].database_id` ← from `d1 create annot-db`
+
+R2 buckets are addressed by name, not id, so no wrangler.jsonc
+edit is needed after `r2 bucket create annot-objects`.
 
 ### Apply migrations
 
@@ -191,12 +195,19 @@ use the `*.workers.dev` URL.
   D1 tables; OAuth callback persists a user row + personal
   workspace; session records carry `userId` / `workspaceId`;
   `/api/auth/me` returns the IDs and touches `users.last_seen_at`.
-- **Phase 3c** ✅ (this PR): Google OAuth (mirror of GitHub
-  OAuth code path). Cross-provider account linking is
-  intentionally NOT implemented — each provider is a separate
-  identity row.
-- **Phase 4**: AnnotCloudStore CRUD endpoints (`/api/images`,
-  `/api/documents`) — R2 binding + per-workspace quota.
+- **Phase 3c** ✅: Google OAuth (mirror of GitHub OAuth code
+  path). Cross-provider account linking is intentionally NOT
+  implemented — each provider is a separate identity row.
+- **Phase 4a** ✅ (this PR): R2 bucket binding wired
+  (`OBJECTS`). `/api/health/bindings` now checks KV + D1 + R2.
+- **Phase 4b**: `0002_storage.sql` migration — `images`,
+  `documents`, `audit_events` tables.
+- **Phase 4c**: `/api/images/*` CRUD endpoints (upload, get,
+  list, delete, annotate).
+- **Phase 4d**: `/api/documents/*` CRUD endpoints
+  (`.annot.html` documents).
+- **Phase 4e**: per-workspace quota gates (plan-gated storage
+  + share / document limits).
 - **Phase 5**: Share / embed (`/api/shares`).
 - **Phase 7**: Stripe checkout + webhook (`/api/billing`,
   `/api/webhooks/stripe`).

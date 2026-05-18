@@ -1,22 +1,26 @@
 // `@ingcreators/annot-worker` — Cloudflare Worker hosting Annot's
 // API surface.
 //
-// Current state (Phase 3c):
+// Current state (Phase 4a):
 //   - /api/health                  (liveness probe)
-//   - /api/health/bindings         (KV + D1 reachability check)
+//   - /api/health/bindings         (KV + D1 + R2 reachability)
 //   - /api/auth/github             (start GitHub OAuth)
 //   - /api/auth/github/callback    (finish GitHub OAuth)
 //   - /api/auth/google             (start Google OAuth)
 //   - /api/auth/google/callback    (finish Google OAuth)
 //   - /api/auth/me                 (current user from session)
 //   - /api/auth/logout             (invalidate session)
-//   - SESSIONS (KV) + DB (D1) bindings wired
+//   - SESSIONS (KV) + DB (D1) + OBJECTS (R2) bindings wired
 //   - users / workspaces / workspace_members tables (Phase 3a)
 //   - GITHUB_OAUTH_CLIENT_ID / _SECRET secrets read from c.env
 //   - GOOGLE_OAUTH_CLIENT_ID / _SECRET secrets read from c.env
 //
 // Subsequent phases add:
-//   Phase 4:  /api/images/* + /api/documents/* (AnnotCloudStore)
+//   Phase 4b: 0002_storage.sql migration (images / documents /
+//             audit_events tables)
+//   Phase 4c: /api/images/* (upload, get, list, delete, annotate)
+//   Phase 4d: /api/documents/* (.annot.html documents)
+//   Phase 4e: per-workspace quota gates
 //   Phase 5:  /api/shares/* + /share/:token + /embed/:token
 //   Phase 7:  /api/billing/* + /api/webhooks/stripe (private repo
 //             integration)
@@ -34,9 +38,9 @@ import { handleAuthLogout, handleAuthMe } from "./auth-me.js";
  * entry in `wrangler.jsonc`, or a secret set via
  * `wrangler secret put`.
  *
- * Phase 3c (this PR) adds the `GOOGLE_OAUTH_CLIENT_ID` and
- * `GOOGLE_OAUTH_CLIENT_SECRET` secrets. Subsequent phases:
- *   Phase 4:  OBJECTS (R2Bucket) — image / document bytes
+ * Phase 4a (this PR) adds the `OBJECTS` R2 bucket binding.
+ * Subsequent phases:
+ *   Phase 4b: D1 migration adds tables; OBJECTS gets keys
  *   Phase 7:  STRIPE_SECRET_KEY / _WEBHOOK_SECRET secrets
  */
 export interface Env {
@@ -52,6 +56,19 @@ export interface Env {
    * without re-touching the wrangler config.
    */
   DB: D1Database;
+  /**
+   * Object storage for image bytes, annotation SVGs, document
+   * bytes (`.annot.html`), and thumbnails. R2's no-egress-cost
+   * pricing model is what makes the free tier financially
+   * viable; S3 / GCS egress costs would dominate as users view
+   * shared screenshots repeatedly.
+   *
+   * Phase 4a (this PR) just wires the binding. Phase 4c/4d add
+   * the endpoints that write keys to this bucket; key layout
+   * (decided in Phase 4c): `<workspace_id>/images/<image_id>/...`
+   * for namespacing per-workspace.
+   */
+  OBJECTS: R2Bucket;
   /**
    * GitHub OAuth App client ID. Public (gets baked into the
    * authorize URL); declared as a Worker secret only to keep all
@@ -96,24 +113,29 @@ app.get("/api/health", (c) =>
 );
 
 /**
- * Bindings smoke check. Verifies SESSIONS (KV) and DB (D1) are
- * configured and reachable by issuing a no-op probe against each.
- * Returns 200 with `{ kv: "ok", db: "ok" }` on success.
+ * Bindings smoke check. Verifies SESSIONS (KV), DB (D1), and
+ * OBJECTS (R2) are configured and reachable by issuing a no-op
+ * probe against each. Returns 200 with `{ kv: "ok", db: "ok",
+ * r2: "ok" }` on success.
  *
  * Used for:
- * - Post-deploy verification that wrangler.toml IDs are correctly
- *   replaced from `<placeholder>` to real Cloudflare resource IDs.
+ * - Post-deploy verification that wrangler.jsonc bindings
+ *   resolve to real Cloudflare resources.
  * - Smoke-checking after a binding migration.
  *
- * NOT used for application-level health (the `DB` schema is empty
- * in Phase 2b, so we can't probe for app data yet). The endpoint
- * deliberately stays low-fidelity to remain useful as the schema
- * grows.
+ * NOT used for application-level health. The endpoint
+ * deliberately stays low-fidelity (each probe is a cheap no-op
+ * call) to remain useful as the schema grows.
  */
 app.get("/api/health/bindings", async (c) => {
-  const checks: { kv: "ok" | "error"; db: "ok" | "error" } = {
+  const checks: {
+    kv: "ok" | "error";
+    db: "ok" | "error";
+    r2: "ok" | "error";
+  } = {
     kv: "error",
     db: "error",
+    r2: "error",
   };
   const errors: Record<string, string> = {};
 
@@ -136,7 +158,17 @@ app.get("/api/health/bindings", async (c) => {
     errors.db = err instanceof Error ? err.message : String(err);
   }
 
-  const allOk = checks.kv === "ok" && checks.db === "ok";
+  try {
+    // R2: a `.head` against a definitely-missing key returns
+    // null without throwing. Proves the binding is reachable
+    // and the bucket exists.
+    await c.env.OBJECTS.head("__health-probe__");
+    checks.r2 = "ok";
+  } catch (err) {
+    errors.r2 = err instanceof Error ? err.message : String(err);
+  }
+
+  const allOk = checks.kv === "ok" && checks.db === "ok" && checks.r2 === "ok";
   return c.json(
     {
       ok: allOk,

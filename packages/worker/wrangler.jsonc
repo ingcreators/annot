@@ -15,8 +15,9 @@
  * <root>/migrations" errors. Having this package use `.jsonc`
  * too means wrangler stops at the closer match.
  *
- * Phase 2c: KV / D1 bindings wired. Secrets (GITHUB_OAUTH_*)
- * land via `wrangler secret put`. Phase 2c follow-up adds the
+ * Phase 4a: R2 bucket binding added alongside the Phase 2b
+ * KV / D1 bindings. Phase 4b/4c/4d add migrations + endpoints
+ * that read/write the bucket. Phase 2c follow-up still pending:
  * `api.annot.work` route binding.
  */
 {
@@ -70,18 +71,35 @@
       "database_id": "30492e01-73f8-4898-8e04-96af6f805acb",
       "migrations_dir": "migrations"
     }
+  ],
+
+  // R2 bucket holding the actual bytes of every image and
+  // document (annotation SVGs, original screenshots, exported
+  // PNGs, .annot.html docs). Phase 4 lands the
+  // /api/images/* and /api/documents/* endpoints that write to
+  // this bucket; Phase 4a (this PR) just wires the binding.
+  //
+  // R2 charges $0.015 / GB-month storage and ZERO egress —
+  // perfect fit for hosting user-uploaded images that get viewed
+  // many times after upload. (S3 / GCS egress would dominate
+  // the cost; R2 lets us keep the free tier viable.)
+  //
+  // Created via:
+  //   wrangler r2 bucket create annot-objects
+  "r2_buckets": [
+    {
+      "binding": "OBJECTS",
+      "bucket_name": "annot-objects"
+    }
   ]
 
-  // Future bindings to add as their phases land:
-  //   - Phase 4: r2_buckets binding = "OBJECTS" for image bytes
-  //
   // Secrets (set via `wrangler secret put`):
   //   - GITHUB_OAUTH_CLIENT_ID    (Phase 2c)
   //   - GITHUB_OAUTH_CLIENT_SECRET (Phase 2c)
   //   - GITHUB_APP_PRIVATE_KEY    (Phase 2c follow-up)
   //   - GITHUB_WEBHOOK_SECRET     (Phase 2c follow-up)
-  //   - GOOGLE_OAUTH_CLIENT_ID    (Phase 3)
-  //   - GOOGLE_OAUTH_CLIENT_SECRET (Phase 3)
+  //   - GOOGLE_OAUTH_CLIENT_ID    (Phase 3c)
+  //   - GOOGLE_OAUTH_CLIENT_SECRET (Phase 3c)
   //   - STRIPE_SECRET_KEY         (Phase 7)
   //   - STRIPE_WEBHOOK_SECRET     (Phase 7)
 }
