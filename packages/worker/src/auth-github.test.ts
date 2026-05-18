@@ -92,7 +92,7 @@ describe("GET /api/auth/github/callback (finish)", () => {
       env,
     );
     expect(res.status).toBe(302);
-    expect(res.headers.get("location")).toBe("/");
+    expect(res.headers.get("location")).toBe("/api/auth/success");
     const cookie = res.headers.get("set-cookie");
     expect(cookie).toBeTruthy();
     expect(cookie).toContain("annot_session=");

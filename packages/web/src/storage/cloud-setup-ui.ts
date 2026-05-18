@@ -45,6 +45,9 @@ export async function showCloudConnectDialog(): Promise<AnnotCloudStore | null> 
     let popup: Window | null = null;
     let pollTimer: number | null = null;
     let cancelled = false;
+    /** Tracks whether the postMessage listener is currently
+     *  registered so cleanup knows whether to detach it. */
+    let messageListener: ((event: MessageEvent) => void) | null = null;
 
     function cleanup(): void {
       cancelled = true;
@@ -52,9 +55,14 @@ export async function showCloudConnectDialog(): Promise<AnnotCloudStore | null> 
         window.clearInterval(pollTimer);
         pollTimer = null;
       }
-      // Best-effort popup close. Cross-origin popups can refuse
-      // (browser blocks `popup.close()` after a navigation to a
-      // different origin); the user can dismiss them manually.
+      if (messageListener !== null) {
+        window.removeEventListener("message", messageListener);
+        messageListener = null;
+      }
+      // Best-effort popup close. Same-origin popups (the new
+      // `/api/auth/success` terminal page already does
+      // `window.close()` itself); cross-origin popups can refuse
+      // — the user can dismiss them manually.
       try {
         popup?.close();
       } catch {
@@ -206,6 +214,45 @@ export async function showCloudConnectDialog(): Promise<AnnotCloudStore | null> 
       }
       status.style.color = "";
       status.textContent = `Waiting for ${provider === "github" ? "GitHub" : "Google"} sign-in…`;
+
+      // postMessage handshake — the worker-served terminal page
+      // at `/api/auth/success` posts a message to its opener
+      // when OAuth completes. Same-origin (under the
+      // `annot.work/api/*` route binding) so the origin check
+      // here is precise. Receiving the message short-circuits
+      // the polling delay: we retry `/api/auth/me` immediately
+      // instead of waiting up to 1.5s.
+      //
+      // Polling stays in place as the fallback: cross-origin
+      // self-hosted deploys, blocked popup-message channels, or
+      // an older worker without the success page all still get
+      // resolved by the timer.
+      const expectedOrigin = effectiveBase || window.location.origin;
+      messageListener = (event) => {
+        if (event.origin !== expectedOrigin) return;
+        const data = event.data;
+        if (
+          data == null ||
+          typeof data !== "object" ||
+          (data as { type?: unknown }).type !== "annot-cloud-auth-complete"
+        ) {
+          return;
+        }
+        // Run the same connect-and-settle logic the poller
+        // runs. Race against the timer is harmless — `settle`
+        // and `cleanup` are idempotent guards.
+        void (async () => {
+          try {
+            const store = await connectAndInit(baseUrl);
+            settle(store);
+          } catch {
+            // Fall through — the poll timer will catch it on the
+            // next tick if the session genuinely landed, or surface
+            // the failure if it didn't.
+          }
+        })();
+      };
+      window.addEventListener("message", messageListener);
 
       // Poll both `popup.closed` and `/api/auth/me` every 1.5s.
       // `closed` is the user-cancel signal; `me` is the success

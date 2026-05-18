@@ -8,6 +8,8 @@
 //   - /api/auth/google + /google/callback    (Google OAuth)
 //   - /api/auth/me                           (current user from session)
 //   - /api/auth/logout                       (invalidate session)
+//   - /api/auth/success                      (popup terminal page;
+//                                             posts message + closes)
 //   - /api/images                            (POST upload, GET list)
 //   - /api/images/:id                        (GET / PATCH / DELETE metadata)
 //   - /api/images/:id/original               (GET original bytes)
@@ -38,6 +40,7 @@ import { Hono } from "hono";
 import { handleGithubCallback, handleGithubStart } from "./auth-github.js";
 import { handleGoogleCallback, handleGoogleStart } from "./auth-google.js";
 import { handleAuthLogout, handleAuthMe } from "./auth-me.js";
+import { handleAuthSuccess } from "./auth-success.js";
 import {
   handleDocumentContentGet,
   handleDocumentContentPatch,
@@ -226,6 +229,13 @@ app.get("/api/auth/google/callback", handleGoogleCallback);
 // ─── Auth — session introspection / invalidation ─────────────
 app.get("/api/auth/me", handleAuthMe);
 app.post("/api/auth/logout", handleAuthLogout);
+
+// ─── Auth — popup-friendly terminal page ─────────────────────
+// Both `/api/auth/github/callback` and `/api/auth/google/callback`
+// redirect here after minting a session. The page posts a message
+// to `window.opener` so the PWA's cloud-connect dialog can resolve
+// immediately, then `window.close()`s the popup.
+app.get("/api/auth/success", handleAuthSuccess);
 
 // ─── Images (AnnotCloudStore) ────────────────────────────────
 app.post("/api/images", handleImageUpload);

@@ -34,8 +34,12 @@ const GITHUB_AUTHORIZE_URL = "https://github.com/login/oauth/authorize";
 const GITHUB_TOKEN_URL = "https://github.com/login/oauth/access_token";
 const GITHUB_USER_URL = "https://api.github.com/user";
 
-/** Where to bounce the user after a successful sign-in. */
-const POST_LOGIN_REDIRECT = "/";
+/** Where to bounce the user after a successful sign-in. Points
+ *  at the worker-served terminal page that posts a message to the
+ *  PWA opener (if any) and then `window.close()`s the popup.
+ *  Same-origin under the `annot.work/api/*` route binding, so the
+ *  postMessage origin check on the PWA side passes. */
+const POST_LOGIN_REDIRECT = "/api/auth/success";
 
 /**
  * `GET /api/auth/github` — start the OAuth flow. Builds the
