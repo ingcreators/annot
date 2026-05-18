@@ -1,0 +1,25 @@
+{
+  "name": "@ingcreators/annot-cloud-store",
+  "version": "0.0.0",
+  "private": true,
+  "description": "AnnotCloudStore — StorageProvider implementation talking to the Annot Worker API (Cloudflare Workers + D1 + R2). Phase 4 client-side of `docs/plans/annot-cloud-roadmap.md`. Cookie-based auth via the worker's session middleware.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ingcreators/annot.git",
+    "directory": "packages/cloud-store"
+  },
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "catalog:"
+  },
+  "dependencies": {
+    "@ingcreators/annot-core": "workspace:*"
+  }
+}
