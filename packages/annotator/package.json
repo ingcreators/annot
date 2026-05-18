@@ -14,10 +14,13 @@
     ".": "./src/index.ts"
   },
   "scripts": {
+    "build": "vite build",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vite-plugin-dts": "^5.0.0"
   },
   "dependencies": {
     "@ingcreators/annot-core": "workspace:*",
