@@ -148,9 +148,39 @@ bottleneck; today's mocks are sufficient.
 
 ## CI auto-deploy
 
-Not wired yet. CI lands when a `CLOUDFLARE_API_TOKEN` repo
-secret is set; until then `pnpm --filter @ingcreators/annot-worker
-deploy` runs manually from a developer machine.
+[`.github/workflows/worker-deploy.yml`](../../.github/workflows/worker-deploy.yml)
+deploys to Cloudflare on every `main` push that touches
+`packages/worker/**`, plus a manual `workflow_dispatch`
+trigger for re-deploys / rollbacks.
+
+### Required repo secrets
+
+| Name | Source | Permissions |
+|---|---|---|
+| `CLOUDFLARE_API_TOKEN` | Cloudflare dashboard → Manage Account → API Tokens → "Create Token" with the **Edit Cloudflare Workers** template | Account: Workers Scripts:Edit + Workers R2 Storage:Edit; Zone: Workers Routes:Edit + Zone:Read (on `annot.work`) |
+| `CLOUDFLARE_ACCOUNT_ID` | Dashboard → Workers & Pages → right sidebar | none (just an identifier; recommended for explicit account binding) |
+
+Set both in **Settings → Secrets and variables → Actions → New
+repository secret**.
+
+### What the workflow does NOT do
+
+- **Apply D1 migrations.** A bad migration can brick
+  production; `pnpm --filter @ingcreators/annot-worker
+  migrations:apply` stays manual.
+- **Manage secrets.** `wrangler secret put` is also manual
+  (one-time bootstrap; rotations are operator-driven).
+- **Deploy the PWA worker.** The PWA's static-assets deploy
+  story lives in the repo-root `wrangler.jsonc` and isn't
+  wired into CI yet.
+
+### Post-deploy smoke check
+
+The workflow finishes with a `curl https://annot.work/api/health/bindings`
+that asserts `ok: true` across KV/D1/R2 (with up to 30s of
+retry to absorb Cloudflare edge propagation). A failure here
+surfaces a regression immediately instead of via the first
+real user request.
 
 ## Architecture
 
