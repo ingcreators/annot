@@ -157,17 +157,53 @@ trigger for re-deploys / rollbacks.
 
 | Name | Source | Permissions |
 |---|---|---|
-| `CLOUDFLARE_API_TOKEN` | Cloudflare dashboard → Manage Account → API Tokens → "Create Token" with the **Edit Cloudflare Workers** template | Account: Workers Scripts:Edit + Workers R2 Storage:Edit; Zone: Workers Routes:Edit + Zone:Read (on `annot.work`) |
+| `CLOUDFLARE_API_TOKEN` | Cloudflare dashboard → Manage Account → API Tokens → "Create Token" | Account: Workers Scripts:Edit + Workers R2 Storage:Edit + D1:Edit; Zone: Workers Routes:Edit + Zone:Read (on `annot.work`) |
 | `CLOUDFLARE_ACCOUNT_ID` | Dashboard → Workers & Pages → right sidebar | none (just an identifier; recommended for explicit account binding) |
+
+The "Edit Cloudflare Workers" template gets you most of the
+permissions; add **D1:Edit** manually so the workflow's
+schema-drift check can read `d1_migrations`. (Cloudflare
+doesn't expose a read-only D1 scope, but D1:Edit is the
+narrowest available.)
 
 Set both in **Settings → Secrets and variables → Actions → New
 repository secret**.
 
+### Schema-drift guard
+
+The workflow is **deliberately split-brain**: auto-deploys
+code, but does **not** auto-apply D1 migrations. To prevent
+"new code SELECTs a column the remote DB doesn't have yet"
+500s, the deploy fails fast when local
+`packages/worker/migrations/*.sql` files don't all appear in
+the remote `d1_migrations` table.
+
+When the guard fires:
+
+```sh
+pnpm --filter @ingcreators/annot-worker migrations:apply
+```
+
+Then re-dispatch the workflow from **Actions → Worker deploy
+→ Run workflow** (no code change needed — the
+`workflow_dispatch` lever exists for exactly this).
+
+### Path filter
+
+The workflow ignores edits that don't change the deployed
+Worker bundle:
+
+- `packages/worker/README.md` — docs only
+- `packages/worker/migrations/**` — schema files are
+  operator-applied, not code-deployed (apply manually, then
+  push a code change or `workflow_dispatch` to trigger
+  deploy)
+
 ### What the workflow does NOT do
 
 - **Apply D1 migrations.** A bad migration can brick
-  production; `pnpm --filter @ingcreators/annot-worker
-  migrations:apply` stays manual.
+  production; `migrations:apply` stays manual. The drift
+  guard above is the safety net against forgetting.
 - **Manage secrets.** `wrangler secret put` is also manual
   (one-time bootstrap; rotations are operator-driven).
 - **Deploy the PWA worker.** The PWA's static-assets deploy
