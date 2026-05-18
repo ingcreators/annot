@@ -12,7 +12,7 @@
   "main": "./src/index.ts",
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
+    "cf:deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
     "migrations:list": "wrangler d1 migrations list annot-db",
     "migrations:apply:local": "wrangler d1 migrations apply annot-db --local",
