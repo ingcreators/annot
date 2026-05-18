@@ -3,9 +3,9 @@
 Cloudflare Worker hosting Annot's API surface — GitHub OAuth,
 GitHub App, AnnotCloudStore endpoints, share / embed.
 
-> **Status:** Phase 2a scaffold. The Worker has a single
-> `/api/health` endpoint and is bound to a `*.workers.dev`
-> subdomain. Phase 2b adds KV + D1 bindings; Phase 2c adds GitHub
+> **Status:** Phase 2b. The Worker has `/api/health` +
+> `/api/health/bindings` endpoints; KV (`SESSIONS`) and D1 (`DB`)
+> bindings are wired in `wrangler.toml`. Phase 2c adds GitHub
 > OAuth and the `api.annot.work` route binding.
 >
 > Plan: [`docs/plans/annot-cloud-roadmap.md`](../../docs/plans/annot-cloud-roadmap.md).
@@ -14,16 +14,54 @@ GitHub App, AnnotCloudStore endpoints, share / embed.
 
 ```sh
 pnpm install
+```
+
+### One-time setup (creates the Cloudflare resources)
+
+After `wrangler login` (or with `CLOUDFLARE_API_TOKEN` set):
+
+```sh
+# Create the KV namespace (production + preview).
+pnpm --filter @ingcreators/annot-worker exec wrangler kv namespace create SESSIONS
+pnpm --filter @ingcreators/annot-worker exec wrangler kv namespace create SESSIONS --preview
+
+# Create the D1 database.
+pnpm --filter @ingcreators/annot-worker exec wrangler d1 create annot-db
+```
+
+Each command prints an `id`. Replace the `<placeholder>` strings
+in `packages/worker/wrangler.toml`:
+
+- `[[kv_namespaces]].id`         ← from `kv namespace create SESSIONS`
+- `[[kv_namespaces]].preview_id` ← from `kv namespace create SESSIONS --preview`
+- `[[d1_databases]].database_id` ← from `d1 create annot-db`
+
+Apply migrations:
+
+```sh
+pnpm --filter @ingcreators/annot-worker exec wrangler d1 migrations apply annot-db --local
+pnpm --filter @ingcreators/annot-worker exec wrangler d1 migrations apply annot-db --remote
+```
+
+### Run the Worker
+
+```sh
 pnpm --filter @ingcreators/annot-worker dev
 ```
 
-`wrangler dev` boots the Worker on `http://localhost:8787`. Test
-the health endpoint:
+`wrangler dev` boots on `http://localhost:8787`. Test:
 
 ```sh
 curl http://localhost:8787/api/health
 # { "ok": true, "service": "annot-api", "timestamp": "..." }
+
+curl http://localhost:8787/api/health/bindings
+# { "ok": true, "service": "annot-api", "kv": "ok", "db": "ok", "timestamp": "..." }
 ```
+
+If `/api/health/bindings` returns `503` with `errors.kv` or
+`errors.db`, the bindings haven't been configured — return to
+the one-time setup section.
 
 ## Tests
 
@@ -61,8 +99,10 @@ environment variable. CI auto-deploy lands in a later phase
 
 ## Roadmap
 
-- **Phase 2a** (this): scaffold + `/api/health`.
-- **Phase 2b**: KV namespace + D1 binding wiring (empty schema).
+- **Phase 2a** ✅: scaffold + `/api/health`.
+- **Phase 2b** ✅: KV (`SESSIONS`) + D1 (`DB`) binding wiring
+  (empty schema), `/api/health/bindings` smoke probe, migrations
+  directory.
 - **Phase 2c**: GitHub OAuth endpoints (`/api/auth/github`,
   `/api/auth/github/callback`), session cookies, `api.annot.work`
   route binding.

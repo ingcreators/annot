@@ -5,10 +5,10 @@
 # repo-root `wrangler.jsonc` which deploys the static PWA at
 # `annot.work`.
 #
-# Phase 2a (this scaffold): no bindings, no routes — just
-# `wrangler dev` locally + `*.workers.dev` URL for smoke
-# verification. Phase 2b adds KV + D1 bindings. Phase 2c adds the
-# `api.annot.work` route binding once GitHub OAuth lands.
+# Phase 2b (this PR): adds KV (SESSIONS) and D1 (DB) bindings.
+# Tables themselves come in Phase 3 (auth + multi-tenant schema).
+# Phase 2c adds the `api.annot.work` route binding once GitHub
+# OAuth lands.
 
 name = "annot-api"
 main = "src/index.ts"
@@ -26,12 +26,35 @@ workers_dev = true
 [observability]
 enabled = true
 
-# Bindings (KV / D1 / R2) are added in subsequent phases:
-#   - Phase 2b: kv_namespaces.SESSIONS (for OAuth state + sessions)
-#   - Phase 3: d1_databases.DB (multi-tenant schema)
-#   - Phase 4: r2_buckets.OBJECTS (image / document bytes)
+# ─── Bindings ────────────────────────────────────────────────
 #
-# Secrets (set via `wrangler secret put`) lands separately:
+# Operator action required before `wrangler deploy`: create the
+# Cloudflare resources and replace the `<placeholder>` IDs below
+# with the real values. See `packages/worker/README.md`.
+
+# KV namespace for session cookies + OAuth CSRF state.
+#   wrangler kv namespace create SESSIONS
+#   wrangler kv namespace create SESSIONS --preview
+[[kv_namespaces]]
+binding = "SESSIONS"
+id = "<replace-with-prod-namespace-id>"
+preview_id = "<replace-with-preview-namespace-id>"
+
+# D1 database for the multi-tenant schema (users / workspaces /
+# images / documents / share_links / audit_events). Phase 3 lands
+# the tables; Phase 2b just wires the binding.
+#   wrangler d1 create annot-db
+#   wrangler d1 migrations apply annot-db   # once migrations exist
+[[d1_databases]]
+binding = "DB"
+database_name = "annot-db"
+database_id = "<replace-with-d1-database-id>"
+migrations_dir = "migrations"
+
+# Future bindings to add as their phases land:
+#   - Phase 4: [[r2_buckets]] binding = "OBJECTS" for image bytes
+#
+# Secrets (set via `wrangler secret put`):
 #   - GITHUB_OAUTH_CLIENT_ID    (Phase 2c)
 #   - GITHUB_OAUTH_CLIENT_SECRET (Phase 2c)
 #   - GITHUB_APP_PRIVATE_KEY    (Phase 2c follow-up)
