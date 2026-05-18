@@ -3,11 +3,13 @@
 Cloudflare Worker hosting Annot's API surface — GitHub OAuth,
 GitHub App, AnnotCloudStore endpoints, share / embed.
 
-> **Status:** Phase 4a. R2 bucket binding wired alongside the
-> Phase 2b KV and D1 bindings. The bindings probe at
-> `/api/health/bindings` now checks all three. Phase 4b/4c/4d
-> add the migration + endpoints that write image / document
-> bytes to the bucket.
+> **Status:** Phase 4c. `/api/images/*` CRUD endpoints landed:
+> upload (POST) / list (GET) / metadata (GET, PATCH, DELETE) /
+> original bytes (GET) / annotations SVG (GET, PATCH). Bytes go
+> to R2 keyed by `<workspace_id>/images/<image_id>/...`;
+> metadata in D1. Auth-gated via session cookie (Phase 3-aware
+> sessions only). Phase 4d adds `/api/documents/*` for
+> `.annot.html` documents.
 >
 > Plan: [`docs/plans/annot-cloud-roadmap.md`](../../docs/plans/annot-cloud-roadmap.md).
 
