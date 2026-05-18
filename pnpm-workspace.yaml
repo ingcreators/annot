@@ -5,6 +5,15 @@ allowBuilds:
   electron-winstaller: true
   esbuild: true
   msw: true
+  # `sharp` is pulled in transitively by wrangler (image asset
+  # processing). Native libvips binding; needs the postinstall to
+  # download the platform-matched binary.
+  sharp: true
+  # `workerd` is Cloudflare's V8-based Workers runtime, pulled in
+  # by wrangler. The postinstall fetches the platform-matched
+  # binary used by `wrangler dev` to emulate the Workers runtime
+  # locally.
+  workerd: true
 
 # Centralised version pins for build-time tooling that every package
 # uses. Each package keeps its own devDependency entry (so the
