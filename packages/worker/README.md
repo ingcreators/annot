@@ -22,16 +22,17 @@ pnpm install
 
 ### Notes on `wrangler` invocation
 
-Use `pnpm --filter @ingcreators/annot-worker <script>` (which
-runs through `pnpm run` and CD's into `packages/worker/`), NOT
-`pnpm exec` from the repo root. Otherwise wrangler picks up the
-**root** `wrangler.jsonc` (the static-PWA deploy config) instead
-of this package's `wrangler.toml`, and migrations / bindings
-fail to resolve.
+Wrangler walks up the directory tree looking for config files,
+and at each level prefers `.jsonc` over `.toml`. The repo root
+has a `wrangler.jsonc` for the static PWA. If this package used
+`wrangler.toml`, wrangler would walk past it and pick up the
+root config by mistake.
 
-All operator-facing wrangler invocations are wrapped as npm
-scripts in `packages/worker/package.json` so this is automatic
-— prefer them over raw `exec`.
+This package therefore uses `wrangler.jsonc` (NOT `.toml`) so
+wrangler stops at the closer match. All operator-facing wrangler
+invocations are wrapped as npm scripts in
+`packages/worker/package.json`; prefer those over raw
+`pnpm exec` so the working directory is also correct.
 
 ### One-time setup (creates the Cloudflare resources)
 
