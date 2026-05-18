@@ -34,16 +34,30 @@
   "compatibility_date": "2026-05-01",
   "compatibility_flags": ["nodejs_compat"],
 
-  // Workers.dev subdomain stays enabled alongside the production
-  // route binding so:
-  //   - Local Wrangler test deploys have a public URL even
-  //     before the zone routing propagates.
-  //   - Self-hosters who don't own `annot.work` can deploy this
-  //     Worker to their own account + reach it via
-  //     `annot-api.<account>.workers.dev` (their PWA's
-  //     "Advanced" cloud-connect override then points at the
-  //     `*.workers.dev` URL).
-  "workers_dev": true,
+  // Workers.dev subdomain is disabled now that the
+  // `annot.work/api/*` route binding is live. Two reasons to
+  // turn it off:
+  //
+  //   - Single canonical URL — the `*.workers.dev` URL was only
+  //     usable for the cross-origin smoke checks (anonymous
+  //     fetches against `/api/health`), since the OAuth flow's
+  //     callback URLs are registered on `annot.work` only. Any
+  //     session cookie set via the `*.workers.dev` host would
+  //     also be invisible to the PWA at `annot.work` — different
+  //     origin, different cookie jar. Leaving the subdomain
+  //     enabled invited confusion about which URL is "the API".
+  //
+  //   - Smaller attack surface — even though the only thing the
+  //     anonymous endpoint exposes is `/api/health` (no secrets,
+  //     no auth bypass), narrowing the public surface to one URL
+  //     simplifies the threat model.
+  //
+  // Self-hosters who don't own a custom zone can flip this back
+  // to `true` in their fork and remove (or edit) the `routes`
+  // stanza below. The PWA's cloud-connect modal lets them
+  // override the base URL at sign-in time, so the
+  // `*.workers.dev` URL still works as a backend.
+  "workers_dev": false,
 
   // Production route binding: `annot.work/api/*` resolves to
   // this Worker. The root `wrangler.jsonc` (PWA static assets)
