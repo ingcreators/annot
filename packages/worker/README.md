@@ -20,31 +20,65 @@ GitHub App, AnnotCloudStore endpoints, share / embed.
 pnpm install
 ```
 
+### Notes on `wrangler` invocation
+
+Use `pnpm --filter @ingcreators/annot-worker <script>` (which
+runs through `pnpm run` and CD's into `packages/worker/`), NOT
+`pnpm exec` from the repo root. Otherwise wrangler picks up the
+**root** `wrangler.jsonc` (the static-PWA deploy config) instead
+of this package's `wrangler.toml`, and migrations / bindings
+fail to resolve.
+
+All operator-facing wrangler invocations are wrapped as npm
+scripts in `packages/worker/package.json` so this is automatic
+— prefer them over raw `exec`.
+
 ### One-time setup (creates the Cloudflare resources)
 
 After `wrangler login` (or with `CLOUDFLARE_API_TOKEN` set):
 
 ```sh
 # Create the KV namespace (production + preview).
-pnpm --filter @ingcreators/annot-worker exec wrangler kv namespace create SESSIONS
-pnpm --filter @ingcreators/annot-worker exec wrangler kv namespace create SESSIONS --preview
+cd packages/worker
+pnpm exec wrangler kv namespace create SESSIONS
+pnpm exec wrangler kv namespace create SESSIONS --preview
 
 # Create the D1 database.
-pnpm --filter @ingcreators/annot-worker exec wrangler d1 create annot-db
+pnpm exec wrangler d1 create annot-db
+cd ../..
 ```
 
 Each command prints an `id`. Replace the `<placeholder>` strings
-in `packages/worker/wrangler.toml`:
+(if any) in `packages/worker/wrangler.toml`:
 
 - `[[kv_namespaces]].id`         ← from `kv namespace create SESSIONS`
 - `[[kv_namespaces]].preview_id` ← from `kv namespace create SESSIONS --preview`
 - `[[d1_databases]].database_id` ← from `d1 create annot-db`
 
-Apply migrations:
+### Apply migrations
 
 ```sh
-pnpm --filter @ingcreators/annot-worker exec wrangler d1 migrations apply annot-db --local
-pnpm --filter @ingcreators/annot-worker exec wrangler d1 migrations apply annot-db --remote
+# Local D1 (for `wrangler dev`):
+pnpm --filter @ingcreators/annot-worker migrations:apply:local
+
+# Remote D1 (for `wrangler deploy`):
+pnpm --filter @ingcreators/annot-worker migrations:apply
+```
+
+### Set the OAuth secrets
+
+```sh
+pnpm --filter @ingcreators/annot-worker secrets:put:github-client-id
+# (prompt — paste the GitHub OAuth App Client ID)
+
+pnpm --filter @ingcreators/annot-worker secrets:put:github-client-secret
+# (prompt — paste the Client Secret)
+```
+
+Verify the secrets list:
+
+```sh
+pnpm --filter @ingcreators/annot-worker secrets:list
 ```
 
 ### Run the Worker
@@ -67,6 +101,18 @@ If `/api/health/bindings` returns `503` with `errors.kv` or
 `errors.db`, the bindings haven't been configured — return to
 the one-time setup section.
 
+### Tail production logs
+
+```sh
+pnpm --filter @ingcreators/annot-worker tail
+```
+
+### Deploy
+
+```sh
+pnpm --filter @ingcreators/annot-worker deploy
+```
+
 ## Tests
 
 Pure-function tests via `vitest` + Hono's `app.request()`:
@@ -75,20 +121,17 @@ Pure-function tests via `vitest` + Hono's `app.request()`:
 pnpm vitest run packages/worker
 ```
 
-These don't boot Miniflare — they invoke handlers directly. Once
-Phase 2b adds KV / D1 bindings, binding-aware tests will use
-`@cloudflare/vitest-pool-workers`; the current smoke tests stay
-as fast pure-handler coverage.
+These don't boot Miniflare — they invoke handlers directly with
+in-memory KV / D1 mocks (`src/test-helpers.ts`). Phase 4 may
+graduate binding-aware paths to
+`@cloudflare/vitest-pool-workers` if mock fidelity becomes the
+bottleneck; today's mocks are sufficient.
 
-## Deployment
+## CI auto-deploy
 
-```sh
-pnpm --filter @ingcreators/annot-worker deploy
-```
-
-Requires `wrangler login` first, or a `CLOUDFLARE_API_TOKEN`
-environment variable. CI auto-deploy lands in a later phase
-(needs the `CLOUDFLARE_API_TOKEN` repo secret to be set).
+Not wired yet. CI lands when a `CLOUDFLARE_API_TOKEN` repo
+secret is set; until then `pnpm --filter @ingcreators/annot-worker
+deploy` runs manually from a developer machine.
 
 ## Architecture
 
