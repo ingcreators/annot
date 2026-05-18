@@ -29,7 +29,16 @@ export default defineConfig({
     emptyOutDir: true,
     target: "es2022",
     rollupOptions: {
-      external: [/^@ingcreators\//, "@playwright/test"],
+      // For v0.1.0 the fixture is published with `annot-annotator`
+      // as a real `dependencies` entry — npm consumers get the
+      // full annotator package on `npm install`. We don't bundle
+      // it here because `annot-annotator` transitively imports
+      // `@resvg/resvg-js`, whose native `.node` binding can't
+      // pass through Rolldown's bundler.
+      //
+      // `@playwright/test` stays external because it's a peer dep
+      // (consumers bring their own pinned Playwright version).
+      external: ["@playwright/test", /^@ingcreators\//, "@resvg/resvg-js", "@xmldom/xmldom"],
     },
   },
 });
