@@ -186,7 +186,7 @@ jobs:
             echo "Auth: OIDC (Trusted Publishing)"
           fi
 
-      - name: Publish via Changesets
+      - name: Publish to npm
         env:
           # When NPM_TOKEN is set, npm CLI uses it. When unset
           # (empty string from a missing secret), npm CLI falls
@@ -197,9 +197,22 @@ jobs:
         run: |
           set -euo pipefail
           if [ "${{ inputs.dry-run }}" = "true" ]; then
-            echo "── DRY RUN: changeset publish --dry-run ──"
-            pnpm changeset publish --dry-run
+            # `changeset publish` has no `--dry-run` flag; use
+            # pnpm's recursive publish in dry-run mode for the
+            # same effect (validates auth + tarball shape against
+            # the registry without committing). pnpm walks the
+            # workspace and skips `private: true` packages
+            # automatically.
+            #
+            # `--no-git-checks` because CI runners often have a
+            # dirty tree from auto-generated build artefacts,
+            # which would otherwise fail pnpm's pre-publish gate.
+            echo "── DRY RUN: pnpm publish -r --dry-run ──"
+            pnpm publish -r --dry-run --access public --no-git-checks
           else
+            # Real publish goes through Changesets so dependent
+            # packages publish in the correct order (annot-core
+            # → annot-annotator → annot-playwright).
             pnpm changeset publish
           fi
 
