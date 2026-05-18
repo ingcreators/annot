@@ -23,6 +23,7 @@ import type { Context } from "hono";
 import { requireAuth } from "./auth-middleware.js";
 import type { Env } from "./index.js";
 import { validatePath, validateUploadSize } from "./path-utils.js";
+import { checkUploadQuota } from "./plan-gates.js";
 import {
   findImageById,
   findImageByPath,
@@ -143,6 +144,26 @@ export async function handleImageUpload(c: Context<{ Bindings: Env }>): Promise<
     if (postCheck) {
       return c.json({ ok: false, error: "payload_too_large", message: postCheck }, 413);
     }
+  }
+
+  // Per-workspace quota gate (Phase 4e). Runs AFTER the body is in
+  // memory so we know the exact byte count; runs BEFORE the D1
+  // insert / R2 upload to short-circuit those when the workspace
+  // is over quota.
+  const quota = await checkUploadQuota(c.env.DB, auth.workspaceId, bytes.byteLength);
+  if (!quota.ok) {
+    return c.json(
+      {
+        ok: false,
+        error: "quota_exceeded",
+        exceeded: quota.exceeded,
+        plan: quota.plan,
+        usage: quota.usage,
+        limits: quota.limits,
+        message: quota.message,
+      },
+      413,
+    );
   }
 
   const mimeType = c.req.header("Content-Type") ?? null;

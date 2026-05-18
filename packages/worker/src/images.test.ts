@@ -248,6 +248,54 @@ describe("POST /api/images", () => {
     expect(res.status).toBe(413);
   });
 
+  it("returns 413 quota_exceeded when the workspace is over the storage cap", async () => {
+    const { env, cookie, workspaceId } = await setupAuthed();
+    // Seed 4.999 GB of "existing" image bytes — just under the
+    // 5 GB free cap. Insert directly via D1 since we only need
+    // the size_bytes column; no R2 bytes are required for the
+    // quota math.
+    await env.DB.prepare(
+      `INSERT INTO images (
+        id, workspace_id, created_by_user_id, path,
+        original_r2_key, size_bytes, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+      .bind(
+        "seed-id",
+        workspaceId,
+        "fake-user",
+        "seed.png",
+        `${workspaceId}/images/seed-id/original`,
+        4_999_000_000,
+        Date.now(),
+        Date.now(),
+      )
+      .run();
+
+    // Now attempt to upload a small image. The bytes themselves
+    // are tiny but the quota check projects current + additional
+    // against the 5 GB cap and rejects.
+    const big = new Uint8Array(2_000_000); // 2 MB body — pushes 4.999 + 0.002 GB > 5 GB
+    const res = await app.request(
+      "/api/images?path=overflow.png",
+      {
+        method: "POST",
+        headers: { Cookie: cookie, "Content-Type": "image/png" },
+        body: big,
+      },
+      env,
+    );
+    expect(res.status).toBe(413);
+    const body = (await res.json()) as {
+      error: string;
+      exceeded?: string;
+      plan?: string;
+    };
+    expect(body.error).toBe("quota_exceeded");
+    expect(body.exceeded).toBe("storage");
+    expect(body.plan).toBe("free");
+  });
+
   it("rollbacks the D1 row if R2 write fails", async () => {
     const { env, cookie, workspaceId } = await setupAuthed();
     // Replace OBJECTS with a broken one. Keep the same `db` /

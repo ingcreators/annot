@@ -27,6 +27,7 @@ import type { Context } from "hono";
 import { requireAuth } from "./auth-middleware.js";
 import type { Env } from "./index.js";
 import { MAX_DOCUMENT_UPLOAD_BYTES_VALUE, validatePath, validateUploadSize } from "./path-utils.js";
+import { checkUploadQuota } from "./plan-gates.js";
 import {
   type DocumentRow,
   findDocumentById,
@@ -132,6 +133,26 @@ export async function handleDocumentUpload(c: Context<{ Bindings: Env }>): Promi
     if (postCheck) {
       return c.json({ ok: false, error: "payload_too_large", message: postCheck }, 413);
     }
+  }
+
+  // Per-workspace quota gate (Phase 4e). New document uploads
+  // both add bytes AND increment the active-document count.
+  const quota = await checkUploadQuota(c.env.DB, auth.workspaceId, bytes.byteLength, {
+    incrementsDocumentCount: true,
+  });
+  if (!quota.ok) {
+    return c.json(
+      {
+        ok: false,
+        error: "quota_exceeded",
+        exceeded: quota.exceeded,
+        plan: quota.plan,
+        usage: quota.usage,
+        limits: quota.limits,
+        message: quota.message,
+      },
+      413,
+    );
   }
 
   const title = c.req.header("X-Annot-Title") ?? null;
@@ -393,6 +414,30 @@ export async function handleDocumentContentPatch(c: Context<{ Bindings: Env }>):
     const postCheck = validateUploadSize(String(bytes.byteLength), MAX_DOCUMENT_UPLOAD_BYTES_VALUE);
     if (postCheck) {
       return c.json({ ok: false, error: "payload_too_large", message: postCheck }, 413);
+    }
+  }
+
+  // Per-workspace quota gate (Phase 4e). Overwrites use the SIZE
+  // DELTA (new bytes - old bytes) so re-saving a 1 MB document
+  // inside a quota-exhausted workspace doesn't get rejected when
+  // the byte count didn't actually grow. Document count is
+  // unchanged on overwrite — `incrementsDocumentCount` is false.
+  const delta = bytes.byteLength - row.size_bytes;
+  if (delta > 0) {
+    const quota = await checkUploadQuota(c.env.DB, auth.workspaceId, delta);
+    if (!quota.ok) {
+      return c.json(
+        {
+          ok: false,
+          error: "quota_exceeded",
+          exceeded: quota.exceeded,
+          plan: quota.plan,
+          usage: quota.usage,
+          limits: quota.limits,
+          message: quota.message,
+        },
+        413,
+      );
     }
   }
 

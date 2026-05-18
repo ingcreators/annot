@@ -160,7 +160,7 @@ async function insertUser(db: D1Database, profile: ProviderProfile): Promise<Use
 
   const row = await db.prepare("SELECT * FROM users WHERE id = ?").bind(id).first<UserRow>();
   if (!row) {
-    throw new Error(`User row vanished immediately after INSERT (id=${id}). ` + "D1 binding bug?");
+    throw new Error(`User row vanished immediately after INSERT (id=${id}). D1 binding bug?`);
   }
   return row;
 }
@@ -209,9 +209,7 @@ async function createPersonalWorkspace(
     .bind(id)
     .first<WorkspaceRow>();
   if (!row) {
-    throw new Error(
-      `Workspace row vanished immediately after INSERT (id=${id}). ` + "D1 binding bug?",
-    );
+    throw new Error(`Workspace row vanished immediately after INSERT (id=${id}). D1 binding bug?`);
   }
   return row;
 }

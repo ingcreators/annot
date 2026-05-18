@@ -1,7 +1,7 @@
 // `@ingcreators/annot-worker` — Cloudflare Worker hosting Annot's
 // API surface.
 //
-// Current state (Phase 4d):
+// Current state (Phase 4e):
 //   - /api/health                            (liveness probe)
 //   - /api/health/bindings                   (KV + D1 + R2 reachability)
 //   - /api/auth/github + /github/callback    (GitHub OAuth)
@@ -15,14 +15,14 @@
 //   - /api/documents                         (POST upload, GET list)
 //   - /api/documents/:id                     (GET / PATCH / DELETE metadata)
 //   - /api/documents/:id/content             (GET + PATCH document bytes)
+//   - /api/usage                             (workspace plan + quota usage)
+//   - per-workspace plan-gated quotas on POST /api/images, POST
+//     /api/documents, PATCH /api/documents/:id/content (Phase 4e)
 //   - SESSIONS (KV) + DB (D1) + OBJECTS (R2) bindings wired
 //   - users / workspaces / workspace_members tables (Phase 3a)
 //   - images / documents / audit_events tables (Phase 4b)
 //   - GITHUB_OAUTH_CLIENT_ID / _SECRET secrets
 //   - GOOGLE_OAUTH_CLIENT_ID / _SECRET secrets
-//
-// Subsequent phases add:
-//   Phase 4e: per-workspace quota gates
 //   Phase 5:  /api/shares/* + /share/:token + /embed/:token
 //   Phase 7:  /api/billing/* + /api/webhooks/stripe (private repo
 //             integration)
@@ -52,6 +52,7 @@ import {
   handleImagePatch,
   handleImageUpload,
 } from "./images.js";
+import { handleUsageGet } from "./usage.js";
 
 /**
  * Environment bindings for the Worker. Each entry corresponds
@@ -232,6 +233,9 @@ app.patch("/api/documents/:id", handleDocumentPatch);
 app.delete("/api/documents/:id", handleDocumentDelete);
 app.get("/api/documents/:id/content", handleDocumentContentGet);
 app.patch("/api/documents/:id/content", handleDocumentContentPatch);
+
+// ─── Plan / quota introspection ──────────────────────────────
+app.get("/api/usage", handleUsageGet);
 
 /**
  * Catch-all 404 so probes against an undefined route return a
