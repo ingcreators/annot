@@ -62,15 +62,20 @@ describe("/api/usage", () => {
       ok: boolean;
       workspaceId: string;
       plan: string;
-      usage: { storageBytes: number; documentCount: number };
-      limits: { storageBytes: number | null; activeDocuments: number | null };
+      usage: { storageBytes: number; documentCount: number; shareCount: number };
+      limits: {
+        storageBytes: number | null;
+        activeDocuments: number | null;
+        activeShares: number | null;
+      };
     };
     expect(body.ok).toBe(true);
     expect(body.workspaceId).toBe(workspaceId);
     expect(body.plan).toBe("free");
-    expect(body.usage).toEqual({ storageBytes: 0, documentCount: 0 });
+    expect(body.usage).toEqual({ storageBytes: 0, documentCount: 0, shareCount: 0 });
     expect(body.limits.storageBytes).toBe(5_000_000_000);
     expect(body.limits.activeDocuments).toBe(50);
+    expect(body.limits.activeShares).toBe(30);
   });
 
   it("reflects current usage after an upload", async () => {
@@ -96,11 +101,16 @@ describe("/api/usage", () => {
     const res = await app.request("/api/usage", { headers: { Cookie: cookie } }, env);
     const body = (await res.json()) as {
       plan: string;
-      limits: { storageBytes: number | null; activeDocuments: number | null };
+      limits: {
+        storageBytes: number | null;
+        activeDocuments: number | null;
+        activeShares: number | null;
+      };
     };
     expect(body.plan).toBe("pro");
     expect(body.limits.storageBytes).toBe(50_000_000_000);
-    // activeDocuments is Infinity on pro → null in JSON wire form.
+    // activeDocuments + activeShares are Infinity on pro → null in JSON.
     expect(body.limits.activeDocuments).toBeNull();
+    expect(body.limits.activeShares).toBeNull();
   });
 });

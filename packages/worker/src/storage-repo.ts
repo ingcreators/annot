@@ -65,6 +65,20 @@ export interface AuditEventRow {
   created_at: number;
 }
 
+/** Mirrors the `share_links` table. */
+export interface ShareLinkRow {
+  id: string;
+  resource_type: "image" | "document";
+  resource_id: string;
+  workspace_id: string;
+  created_by_user_id: string;
+  view_count: number;
+  password_hash: string | null;
+  expires_at: number | null;
+  revoked_at: number | null;
+  created_at: number;
+}
+
 // ─── images ─────────────────────────────────────────────────────
 
 export interface InsertImageInput {
@@ -516,6 +530,142 @@ export async function listDocuments(
         .bind(workspaceId, limit, offset);
   const result = await stmt.all<DocumentRow>();
   return result.results;
+}
+
+// ─── share_links ────────────────────────────────────────────────
+
+export interface InsertShareLinkInput {
+  /** Caller-supplied URL-safe token; primary key + URL slug. */
+  id: string;
+  resourceType: "image" | "document";
+  resourceId: string;
+  workspaceId: string;
+  createdByUserId: string;
+}
+
+/**
+ * Insert a new share link. Token (`id`) is caller-supplied so the
+ * caller can generate it with its own RNG + apply policy (length,
+ * alphabet). Returns the inserted row.
+ */
+export async function insertShareLink(
+  db: D1Database,
+  input: InsertShareLinkInput,
+): Promise<ShareLinkRow> {
+  const now = NOW();
+  await db
+    .prepare(
+      `INSERT INTO share_links (
+        id, resource_type, resource_id, workspace_id,
+        created_by_user_id, view_count, created_at
+      ) VALUES (?, ?, ?, ?, ?, 0, ?)`,
+    )
+    .bind(
+      input.id,
+      input.resourceType,
+      input.resourceId,
+      input.workspaceId,
+      input.createdByUserId,
+      now,
+    )
+    .run();
+
+  const row = await db
+    .prepare("SELECT * FROM share_links WHERE id = ?")
+    .bind(input.id)
+    .first<ShareLinkRow>();
+  if (!row) {
+    throw new Error(
+      `Share row vanished immediately after INSERT (id=${input.id}). D1 binding bug?`,
+    );
+  }
+  return row;
+}
+
+/** Look up a share by token. Returns null if revoked or missing.
+ *  Public (no auth) — the token itself is the access credential. */
+export async function findShareByToken(
+  db: D1Database,
+  token: string,
+): Promise<ShareLinkRow | null> {
+  return await db
+    .prepare(
+      `SELECT * FROM share_links
+       WHERE id = ? AND revoked_at IS NULL
+       LIMIT 1`,
+    )
+    .bind(token)
+    .first<ShareLinkRow>();
+}
+
+/** Mark a share as revoked. Returns true if a row was affected,
+ *  false when the share was unknown / already revoked / belongs
+ *  to a different workspace. */
+export async function revokeShareLink(
+  db: D1Database,
+  workspaceId: string,
+  token: string,
+): Promise<boolean> {
+  const now = NOW();
+  const result = await db
+    .prepare(
+      `UPDATE share_links SET revoked_at = ?
+       WHERE id = ? AND workspace_id = ? AND revoked_at IS NULL`,
+    )
+    .bind(now, token, workspaceId)
+    .run();
+  return (result.meta.changes ?? 0) > 0;
+}
+
+/** List active shares (not revoked) for a workspace. */
+export async function listShareLinks(
+  db: D1Database,
+  workspaceId: string,
+  options: { limit?: number; offset?: number } = {},
+): Promise<ShareLinkRow[]> {
+  const limit = Math.min(Math.max(options.limit ?? 100, 1), 500);
+  const offset = Math.max(options.offset ?? 0, 0);
+  const result = await db
+    .prepare(
+      `SELECT * FROM share_links
+       WHERE workspace_id = ? AND revoked_at IS NULL
+       ORDER BY created_at DESC
+       LIMIT ? OFFSET ?`,
+    )
+    .bind(workspaceId, limit, offset)
+    .all<ShareLinkRow>();
+  return result.results;
+}
+
+/** Count of non-revoked share rows in a workspace. Used by the
+ *  Phase 5 quota gate's `activeShares` check. */
+export async function activeShareCount(db: D1Database, workspaceId: string): Promise<number> {
+  const row = await db
+    .prepare(
+      `SELECT COUNT(*) AS count FROM share_links
+       WHERE workspace_id = ? AND revoked_at IS NULL`,
+    )
+    .bind(workspaceId)
+    .first<{ count: number }>();
+  return row?.count ?? 0;
+}
+
+/** Increment a share's view counter. Best-effort; race-y writes
+ *  are acceptable (off-by-one in `view_count` isn't a privacy
+ *  concern). Returns silently on error so a transient D1 failure
+ *  doesn't break the public payload endpoint. */
+export async function incrementShareViewCount(db: D1Database, token: string): Promise<void> {
+  try {
+    await db
+      .prepare(
+        `UPDATE share_links SET view_count = view_count + 1
+         WHERE id = ? AND revoked_at IS NULL`,
+      )
+      .bind(token)
+      .run();
+  } catch (err) {
+    console.warn(`[storage-repo] view_count increment failed for share ${token}:`, err);
+  }
 }
 
 // ─── audit_events ───────────────────────────────────────────────

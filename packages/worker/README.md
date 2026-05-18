@@ -3,15 +3,15 @@
 Cloudflare Worker hosting Annot's API surface — GitHub OAuth,
 GitHub App, AnnotCloudStore endpoints, share / embed.
 
-> **Status:** Phase 4e. Per-workspace plan-gated quotas now
-> enforce on POST `/api/images`, POST `/api/documents`, and PATCH
-> `/api/documents/:id/content` — over-quota writes return HTTP
-> 413 with `error: "quota_exceeded"`. `/api/usage` surfaces the
-> workspace's plan, current usage (storage + document count),
-> and per-plan limits for client-side progress bars. Free-tier
-> limits are intentionally permissive during the pre-launch beta
-> (5 GB storage / 50 active documents) and tighten to the launch
-> values (500 MB / 5 documents) in Phase 7d.
+> **Status:** Phase 5. `/api/shares/*` landed:
+> POST create / GET list (auth) + GET `/api/shares/:token` and
+> `/api/shares/:token/payload` (public, cookie-less) + DELETE
+> revoke (auth). Shares grant anonymous read access to one image
+> or document; tokens are 22-char base62 URL slugs (~130 bits
+> entropy). Active share count is plan-gated (free: 30 beta /
+> 3 launch). `/api/usage` now also surfaces `activeShares` and
+> `shareCount`. Migration `0003_shares.sql` adds the
+> `share_links` table.
 >
 > Plan: [`docs/plans/annot-cloud-roadmap.md`](../../docs/plans/annot-cloud-roadmap.md).
 
@@ -212,12 +212,19 @@ use the `*.workers.dev` URL.
   (`.annot.html` documents: upload, get, list, patch, delete,
   content bytes). Document upload cap is 50 MB (vs 25 MB for
   images) since `.annot.html` embeds base64 image data.
-- **Phase 4e** ✅ (this PR): per-workspace plan-gated quotas.
+- **Phase 4e** ✅: per-workspace plan-gated quotas.
   `plan-gates.ts` holds the `PLAN_LIMITS` table (free / pro /
   team); `checkUploadQuota` runs before every byte-adding write
   and returns HTTP 413 `quota_exceeded` when exceeded.
   `/api/usage` exposes plan + usage + limits for the gallery
   storage bar.
+- **Phase 5** ✅ (this PR): Share / embed endpoints.
+  `share_links` table (migration `0003`); `/api/shares` create
+  + list (auth); `/api/shares/:token` + `/api/shares/:token/payload`
+  (public, anonymous read); `DELETE /api/shares/:token` revoke
+  (auth, workspace-scoped). Active share count plan-gated
+  (free: 30 beta → 3 launch). Pro-only fields (`password_hash`,
+  `expires_at`) reserved in the schema but not yet wired.
 - **Phase 5**: Share / embed (`/api/shares`).
 - **Phase 7**: Stripe checkout + webhook (`/api/billing`,
   `/api/webhooks/stripe`).

@@ -1,7 +1,7 @@
 // `@ingcreators/annot-worker` — Cloudflare Worker hosting Annot's
 // API surface.
 //
-// Current state (Phase 4e):
+// Current state (Phase 5):
 //   - /api/health                            (liveness probe)
 //   - /api/health/bindings                   (KV + D1 + R2 reachability)
 //   - /api/auth/github + /github/callback    (GitHub OAuth)
@@ -16,11 +16,16 @@
 //   - /api/documents/:id                     (GET / PATCH / DELETE metadata)
 //   - /api/documents/:id/content             (GET + PATCH document bytes)
 //   - /api/usage                             (workspace plan + quota usage)
+//   - /api/shares                            (POST create, GET list)
+//   - /api/shares/:token                     (GET public, DELETE revoke)
+//   - /api/shares/:token/payload             (GET public bytes)
 //   - per-workspace plan-gated quotas on POST /api/images, POST
-//     /api/documents, PATCH /api/documents/:id/content (Phase 4e)
+//     /api/documents, PATCH /api/documents/:id/content, POST
+//     /api/shares (Phase 4e + 5)
 //   - SESSIONS (KV) + DB (D1) + OBJECTS (R2) bindings wired
 //   - users / workspaces / workspace_members tables (Phase 3a)
 //   - images / documents / audit_events tables (Phase 4b)
+//   - share_links table (Phase 5)
 //   - GITHUB_OAUTH_CLIENT_ID / _SECRET secrets
 //   - GOOGLE_OAUTH_CLIENT_ID / _SECRET secrets
 //   Phase 5:  /api/shares/* + /share/:token + /embed/:token
@@ -52,6 +57,13 @@ import {
   handleImagePatch,
   handleImageUpload,
 } from "./images.js";
+import {
+  handleShareCreate,
+  handleShareGet,
+  handleShareList,
+  handleSharePayload,
+  handleShareRevoke,
+} from "./shares.js";
 import { handleUsageGet } from "./usage.js";
 
 /**
@@ -236,6 +248,13 @@ app.patch("/api/documents/:id/content", handleDocumentContentPatch);
 
 // ─── Plan / quota introspection ──────────────────────────────
 app.get("/api/usage", handleUsageGet);
+
+// ─── Shares (public link + embed) ────────────────────────────
+app.post("/api/shares", handleShareCreate);
+app.get("/api/shares", handleShareList);
+app.get("/api/shares/:token", handleShareGet);
+app.delete("/api/shares/:token", handleShareRevoke);
+app.get("/api/shares/:token/payload", handleSharePayload);
 
 /**
  * Catch-all 404 so probes against an undefined route return a
