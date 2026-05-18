@@ -13,7 +13,15 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "migrations:list": "wrangler d1 migrations list annot-db",
+    "migrations:apply:local": "wrangler d1 migrations apply annot-db --local",
+    "migrations:apply": "wrangler d1 migrations apply annot-db --remote",
+    "d1:exec": "wrangler d1 execute annot-db",
+    "secrets:list": "wrangler secret list",
+    "secrets:put:github-client-id": "wrangler secret put GITHUB_OAUTH_CLIENT_ID",
+    "secrets:put:github-client-secret": "wrangler secret put GITHUB_OAUTH_CLIENT_SECRET",
+    "tail": "wrangler tail"
   },
   "dependencies": {
     "hono": "^4.10.4"
