@@ -1,0 +1,26 @@
+{
+  "name": "@ingcreators/annot-annotator",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Headless annotator — Phase 0 feasibility spike. Node-side renderImageRecord replacement using @resvg/resvg-js. Private until Phase 1 promotes the public API.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ingcreators/annot.git",
+    "directory": "packages/annotator"
+  },
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "catalog:"
+  },
+  "dependencies": {
+    "@ingcreators/annot-core": "workspace:*",
+    "@resvg/resvg-js": "^2.6.2"
+  }
+}
