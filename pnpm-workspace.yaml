@@ -2,6 +2,12 @@ packages:
   - "packages/*"
 
 allowBuilds:
+  # `better-sqlite3` is a devDep of `packages/worker` used for
+  # SQLite-backed unit tests against the same SQL the production
+  # D1 binding runs (so user-repo tests catch syntax / constraint
+  # bugs locally). Native binding with platform-matched prebuilt
+  # binaries; postinstall fetches the right one.
+  better-sqlite3: true
   electron-winstaller: true
   esbuild: true
   msw: true

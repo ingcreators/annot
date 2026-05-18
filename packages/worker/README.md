@@ -3,14 +3,13 @@
 Cloudflare Worker hosting Annot's API surface — GitHub OAuth,
 GitHub App, AnnotCloudStore endpoints, share / embed.
 
-> **Status:** Phase 2c. The Worker has the full GitHub OAuth
-> sign-in flow (start + callback), session cookies, `/api/auth/me`,
-> and `/api/auth/logout`. KV-backed sessions (30-day TTL),
-> CSRF-state KV keys (10-min TTL), httpOnly + Secure + SameSite=Lax
-> cookies. Operator action required before deploy: register a
-> GitHub OAuth App and set the client ID + secret via
-> `wrangler secret put`. The `api.annot.work` route binding is the
-> last step (see *Operator action* section).
+> **Status:** Phase 3a/3b. GitHub OAuth callback now upserts a
+> persistent `users` row + creates a personal `workspaces` row +
+> an `owner` `workspace_members` entry on first login. Session
+> records carry `userId` / `workspaceId`. `/api/auth/me` returns
+> those IDs and touches `users.last_seen_at`. Phase 3c adds
+> Google OAuth as a second provider (same shape, mirrored
+> handler).
 >
 > Plan: [`docs/plans/annot-cloud-roadmap.md`](../../docs/plans/annot-cloud-roadmap.md).
 
@@ -180,14 +179,16 @@ use the `*.workers.dev` URL.
 - **Phase 2b** ✅: KV (`SESSIONS`) + D1 (`DB`) binding wiring
   (empty schema), `/api/health/bindings` smoke probe, migrations
   directory.
-- **Phase 2c** ✅ (this PR): GitHub OAuth endpoints (start +
-  callback), `/api/auth/me`, `/api/auth/logout`, session cookies.
-  Operator follow-up: register OAuth App, set secrets, bind
-  `api.annot.work` route.
-- **Phase 3**: Google OAuth, `users` / `workspaces` D1 tables,
-  promote KV-only sessions onto user/workspace rows.
+- **Phase 2c** ✅: GitHub OAuth endpoints (start + callback),
+  `/api/auth/me`, `/api/auth/logout`, session cookies.
+- **Phase 3a/3b** ✅ (this PR): `users` / `workspaces` /
+  `workspace_members` D1 tables; OAuth callback persists a user
+  row + personal workspace; session records carry `userId` /
+  `workspaceId`; `/api/auth/me` returns the IDs and touches
+  `users.last_seen_at`.
+- **Phase 3c**: Google OAuth (mirror of GitHub OAuth code path).
 - **Phase 4**: AnnotCloudStore CRUD endpoints (`/api/images`,
-  `/api/documents`).
+  `/api/documents`) — R2 binding + per-workspace quota.
 - **Phase 5**: Share / embed (`/api/shares`).
 - **Phase 7**: Stripe checkout + webhook (`/api/billing`,
   `/api/webhooks/stripe`).

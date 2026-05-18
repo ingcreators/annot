@@ -1,17 +1,30 @@
-// Test helpers — minimal mock implementations of Cloudflare
-// runtime bindings sufficient for unit-testing the Worker's
-// handlers. NOT production-grade; just enough surface for
-// vitest invocations via `app.request(path, init, mockEnv)`.
+// Test helpers — mock implementations of Cloudflare runtime
+// bindings sufficient for unit-testing the Worker's handlers.
+// NOT production code; the file lives under `src/` so its imports
+// resolve under the same tsconfig, but it's only consumed from
+// `*.test.ts` files.
 //
-// Phase 4 will likely move binding-aware tests onto
-// `@cloudflare/vitest-pool-workers` (real bindings inside a
-// miniflare environment); these mocks stay as fast smoke
-// fixtures for handler-level tests that don't need
-// transaction semantics or persistence.
+// Two flavours of D1 mock exist:
+//   - `makeMockD1`              static stub (returns the same row
+//                                for any query). Used by tests
+//                                that just need the binding to be
+//                                callable (e.g. health probe).
+//   - `makeMockD1Sqlite`        real in-memory SQLite via
+//                                `better-sqlite3`, wrapped in the
+//                                D1Database interface and seeded
+//                                from the migrations directory.
+//                                Use this for user-repo / DB-aware
+//                                tests so SQL syntax + constraint
+//                                violations are caught at test time.
 //
-// File suffix is `.ts` (not `.test-mock.ts`) because the helpers
-// are pure types + factories — they don't ship Vitest fixtures.
+// Phase 4 may graduate to `@cloudflare/vitest-pool-workers`
+// (real bindings inside a miniflare environment) if the SQLite
+// approximation becomes the bottleneck; these mocks stay as
+// fast handler-level coverage either way.
 
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import Sqlite from "better-sqlite3";
 import type { Env } from "./index.js";
 
 /**
@@ -105,4 +118,119 @@ export function makeMockEnv(overrides: Partial<Env> = {}): Env {
     GITHUB_OAUTH_CLIENT_SECRET: "test-client-secret",
     ...overrides,
   };
+}
+
+// ─── SQLite-backed D1 mock ───────────────────────────────────────
+//
+// `makeMockD1Sqlite()` returns a D1Database-shaped object backed
+// by `better-sqlite3` (real in-memory SQLite). All migration SQL
+// files under `packages/worker/migrations/` are applied on
+// construction so the test database mirrors the production
+// schema. Use this for user-repo and other DB-aware tests where
+// real SQL semantics (UNIQUE constraints, NULL handling, etc.)
+// matter.
+//
+// Limitations vs real D1:
+//   - No network round-trip; everything is synchronous under the
+//     hood. The wrapper async-ifies the surface to match D1.
+//   - No multi-statement BEGIN/COMMIT transactions exposed via
+//     `.batch()`; we approximate by running statements in order.
+//   - `meta.last_row_id` returns better-sqlite3's lastInsertRowid
+//     for inserts; D1 also exposes this. Same shape.
+
+const MIGRATIONS_DIR = join(import.meta.dirname, "..", "migrations");
+
+/**
+ * Construct a fresh in-memory SQLite database with all migrations
+ * applied. Returned as a D1Database-shaped object so the same
+ * code that talks to the real D1 binding in production can be
+ * exercised against this in tests.
+ */
+export function makeMockD1Sqlite(): D1Database {
+  const sqlite = new Sqlite(":memory:");
+  // Match D1's default behaviour: foreign-key constraints are
+  // declared but NOT enforced. Cloudflare D1 doesn't run
+  // `PRAGMA foreign_keys = ON` automatically, and our migrations
+  // intentionally treat `REFERENCES` clauses as documentation.
+  // If a future migration starts relying on cascade-delete, we
+  // can flip this and update D1-side runtime expectations together.
+  sqlite.pragma("foreign_keys = OFF");
+  applyMigrations(sqlite);
+  return wrapSqliteAsD1(sqlite);
+}
+
+function applyMigrations(sqlite: Sqlite.Database): void {
+  const files = readdirSync(MIGRATIONS_DIR)
+    .filter((f) => f.endsWith(".sql"))
+    .sort();
+  for (const file of files) {
+    const sql = readFileSync(join(MIGRATIONS_DIR, file), "utf8");
+    sqlite.exec(sql);
+  }
+}
+
+function wrapSqliteAsD1(sqlite: Sqlite.Database): D1Database {
+  function prepare(query: string): unknown {
+    const stmt = sqlite.prepare(query);
+    let boundArgs: unknown[] = [];
+    const api = {
+      bind(...args: unknown[]) {
+        boundArgs = args;
+        return api;
+      },
+      async first<T = unknown>(): Promise<T | null> {
+        const row = stmt.get(...(boundArgs as never[]));
+        return (row as T | undefined) ?? null;
+      },
+      async all() {
+        const results = stmt.all(...(boundArgs as never[]));
+        return {
+          results,
+          success: true as const,
+          meta: { duration: 0, rows_read: results.length, rows_written: 0 },
+        };
+      },
+      async run() {
+        const info = stmt.run(...(boundArgs as never[]));
+        return {
+          success: true as const,
+          meta: {
+            changes: info.changes,
+            last_row_id: Number(info.lastInsertRowid),
+            duration: 0,
+            rows_read: 0,
+            rows_written: info.changes,
+          },
+        };
+      },
+      async raw() {
+        return stmt.raw().all(...(boundArgs as never[])) as unknown[];
+      },
+    };
+    return api;
+  }
+
+  const mock = {
+    prepare,
+    async batch<T>(statements: unknown[]): Promise<T[]> {
+      const out: unknown[] = [];
+      for (const s of statements) {
+        // `batch` accepts the prepared statements returned by
+        // `prepare(...).bind(...)`. We just sequentially `run`
+        // them; the SQLite native lib handles statement reuse.
+        const result = await (s as { run(): Promise<unknown> }).run();
+        out.push(result);
+      }
+      return out as T[];
+    },
+    async exec(query: string) {
+      const startedAt = Date.now();
+      sqlite.exec(query);
+      return { count: 1, duration: Date.now() - startedAt };
+    },
+    async dump() {
+      return new ArrayBuffer(0);
+    },
+  };
+  return mock as unknown as D1Database;
 }
