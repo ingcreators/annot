@@ -1,0 +1,30 @@
+# Code owners for the annot monorepo.
+#
+# GitHub uses this file to auto-request reviews on opened PRs.
+# The path patterns are matched in order, with later rules winning,
+# so the catch-all `*` rule lives at the top and per-area overrides
+# (when they're added) sit below it.
+#
+# Today this is a single-maintainer project, so every path resolves
+# to one reviewer. As reviewers join, add per-area lines:
+#
+#   /packages/extension/      @ingmrn @<extension-maintainer>
+#   /packages/desktop/        @ingmrn @<desktop-maintainer>
+#   /docs/plans/              @ingmrn  # plans changes only need
+#                                       # one reviewer
+#
+# Keep CONTRIBUTING.md, CLAUDE.md, and the LICENSE owned by the
+# project lead even when the rest is shared, since those define
+# the project's contract with contributors.
+
+*                           @ingmrn
+
+# Conventions, contract documents, and licensing — always reviewed
+# by the project lead.
+/CLAUDE.md                  @ingmrn
+/CONTRIBUTING.md            @ingmrn
+/CODE_OF_CONDUCT.md         @ingmrn
+/SECURITY.md                @ingmrn
+/LICENSE                    @ingmrn
+/PRODUCT_DIRECTION.md       @ingmrn
+/docs/plans/                @ingmrn

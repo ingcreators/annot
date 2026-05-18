@@ -1,0 +1,18 @@
+# GitHub Sponsors / funding metadata.
+#
+# Intentionally empty for now — the project's funding direction is
+# the paid Pro tier landing in the cloud roadmap
+# (`docs/plans/annot-cloud-roadmap.md`), NOT sponsorship donations.
+#
+# When the Pro tier launches, this file's heart-icon links can
+# optionally point at:
+#   - The annot.work pricing page (subscribe to support OSS work)
+#   - GitHub Sponsors (one-time tip / monthly tier for the
+#     maintainer; orthogonal to the Pro tier subscription)
+#
+# Leaving every field empty (rather than absent) tells GitHub
+# explicitly "no sponsorship channels today" so the sidebar's
+# heart icon stays consistent with the project's actual stance.
+
+# github: []          # to enable: [ingmrn]
+# custom: []          # to enable: ["https://annot.work/pricing"]

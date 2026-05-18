@@ -1,6 +1,11 @@
 # Pre-release final pieces — `.github/` templates + Changesets
 
-> **Status:** Draft. Authored 2026-04-27 as the cleanup-debt
+> **Status:** Partially landed. Stage 1 (`.github/` templates +
+> `CODEOWNERS` + `FUNDING.yml`) landed 2026-05-18 as Phase 1 of
+> [`annot-cloud-roadmap.md`](./annot-cloud-roadmap.md). Stage 2
+> (Changesets bootstrap) is gated on Phase 6 of the same roadmap
+> (`@ingcreators/annot-annotator` / `-playwright` npm publish).
+> Authored 2026-04-27 as the cleanup-debt
 > follow-up to the OSS contributor friction audit that produced
 > [#227](https://github.com/ingcreators/annot/pull/227)–[#233](https://github.com/ingcreators/annot/pull/233)
 > (Biome `noExplicitAny` warn, `PopupMessage` union fix, Node-version

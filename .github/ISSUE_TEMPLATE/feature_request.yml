@@ -1,0 +1,94 @@
+name: Feature request
+description: Suggest a feature, improvement, or design change.
+title: "[feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for thinking about how to improve Annot. The fields
+        below are framed deliberately around the **problem** rather
+        than the **implementation** — issues that lead with "please
+        add X" tend to skip the question of what user-visible pain
+        X actually solves, and that question is the one we need
+        answered to design the right thing.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem statement
+      description: |
+        What user-visible pain are you trying to solve? Be concrete:
+        what were you trying to do, what got in your way, and what
+        happened?
+
+        It's OK if you don't have a proposed solution yet — the
+        problem itself is the most important part of this issue.
+      placeholder: |
+        When I'm doing X, I want to Y, but currently Z blocks me
+        because...
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution_sketch
+    attributes:
+      label: Proposed solution (optional)
+      description: |
+        If you have an idea for how to solve the problem, share it.
+        A rough sketch is fine; we'll iterate on the design together.
+      placeholder: |
+        Could be a new toolbar button that... or a setting that...
+        or an option in the right-click menu that...
+    validations:
+      required: false
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered (optional)
+      description: |
+        Other approaches you thought of and ruled out, or workarounds
+        you tried in the current product. Useful even if the answer
+        is "I tried the existing X and it didn't work because...".
+    validations:
+      required: false
+
+  - type: dropdown
+    id: package
+    attributes:
+      label: Most-affected package (optional)
+      description: |
+        Which workspace package would the change most likely live in?
+        Pick "I don't know" if it's not obvious — we'll route it
+        during triage.
+      options:
+        - "I don't know"
+        - "@ingcreators/annot-core"
+        - "@ingcreators/annot-editor"
+        - "@ingcreators/annot-render"
+        - "@ingcreators/annot-host-ui"
+        - "@ingcreators/annot-web (PWA)"
+        - "@ingcreators/annot-extension (Chrome MV3)"
+        - "@ingcreators/annot-desktop (Electron)"
+        - "@ingcreators/annot-vscode (VSCode extension)"
+        - "@ingcreators/annot-doc (.annot.html format)"
+        - "@ingcreators/annot-capture"
+        - "@ingcreators/annot-annotator (headless / Node)"
+        - "@ingcreators/annot-playwright (fixture)"
+        - "@ingcreators/annot-imagequant"
+        - "docs / plans"
+        - "cross-package"
+    validations:
+      required: false
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Additional context
+      description: |
+        Anything else worth knowing — comparable features in other
+        tools, screenshots or mockups, links to prior discussions,
+        impact on your workflow if landed.
+    validations:
+      required: false
