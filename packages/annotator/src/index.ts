@@ -1,11 +1,18 @@
-// @ingcreators/annot-annotator — Phase 0 feasibility spike.
+// `@ingcreators/annot-annotator` — headless annotator API.
 //
-// This package is private during the spike. The public surface,
-// versioning, and stability commitment land in Phase 1.
+// Public surface lands in Phase 1 (the spike's loose
+// `renderImageRecordToPngBytes` helper is now an internal
+// implementation detail of `createAnnotator`). The package stays
+// `private: true` in the workspace until Phase 3 enables Changesets
+// + first npm publish.
 //
-// See `docs/plans/headless-annotator-spike.md`.
+// See `docs/plans/annot-annotator-package.md` for the design and
+// `docs/plans/_done/headless-annotator-spike.md` for Phase 0's
+// feasibility findings.
 
 export {
-  buildHeadlessSvg,
-  renderImageRecordToPngBytes,
-} from "./render.js";
+  type Annotator,
+  type AnnotatorInput,
+  type AnnotatorOptions,
+  createAnnotator,
+} from "./annotator.js";
