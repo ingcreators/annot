@@ -102,7 +102,7 @@ export function buildSessionCookie(token: string): string {
  * cookie (Max-Age=0 + empty value). Used by `/api/auth/logout`.
  */
 export function buildClearedSessionCookie(): string {
-  return `${SESSION_COOKIE_NAME}=; ` + "Path=/; Max-Age=0; " + "HttpOnly; Secure; SameSite=Lax";
+  return `${SESSION_COOKIE_NAME}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax`;
 }
 
 /**

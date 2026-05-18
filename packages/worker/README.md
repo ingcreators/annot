@@ -3,15 +3,15 @@
 Cloudflare Worker hosting Annot's API surface — GitHub OAuth,
 GitHub App, AnnotCloudStore endpoints, share / embed.
 
-> **Status:** Phase 4d. `/api/images/*` (Phase 4c) +
-> `/api/documents/*` (this phase) CRUD endpoints landed.
-> Images: upload (POST) / list (GET) / metadata (GET, PATCH,
-> DELETE) / original bytes (GET) / annotations SVG (GET, PATCH).
-> Documents: upload (POST) / list (GET) / metadata (GET, PATCH,
-> DELETE) / content bytes (GET, PATCH). Bytes go to R2 keyed by
-> `<workspace_id>/{images,documents}/<id>/...`; metadata in D1.
-> Auth-gated via session cookie (Phase 3-aware sessions only).
-> Phase 4e adds per-workspace quota gates.
+> **Status:** Phase 4e. Per-workspace plan-gated quotas now
+> enforce on POST `/api/images`, POST `/api/documents`, and PATCH
+> `/api/documents/:id/content` — over-quota writes return HTTP
+> 413 with `error: "quota_exceeded"`. `/api/usage` surfaces the
+> workspace's plan, current usage (storage + document count),
+> and per-plan limits for client-side progress bars. Free-tier
+> limits are intentionally permissive during the pre-launch beta
+> (5 GB storage / 50 active documents) and tighten to the launch
+> values (500 MB / 5 documents) in Phase 7d.
 >
 > Plan: [`docs/plans/annot-cloud-roadmap.md`](../../docs/plans/annot-cloud-roadmap.md).
 
@@ -208,12 +208,16 @@ use the `*.workers.dev` URL.
   `documents`, `audit_events` tables.
 - **Phase 4c** ✅: `/api/images/*` CRUD endpoints (upload, get,
   list, patch, delete, original bytes, annotations SVG).
-- **Phase 4d** ✅ (this PR): `/api/documents/*` CRUD endpoints
+- **Phase 4d** ✅: `/api/documents/*` CRUD endpoints
   (`.annot.html` documents: upload, get, list, patch, delete,
   content bytes). Document upload cap is 50 MB (vs 25 MB for
   images) since `.annot.html` embeds base64 image data.
-- **Phase 4e**: per-workspace quota gates (plan-gated storage
-  + share / document limits).
+- **Phase 4e** ✅ (this PR): per-workspace plan-gated quotas.
+  `plan-gates.ts` holds the `PLAN_LIMITS` table (free / pro /
+  team); `checkUploadQuota` runs before every byte-adding write
+  and returns HTTP 413 `quota_exceeded` when exceeded.
+  `/api/usage` exposes plan + usage + limits for the gallery
+  storage bar.
 - **Phase 5**: Share / embed (`/api/shares`).
 - **Phase 7**: Stripe checkout + webhook (`/api/billing`,
   `/api/webhooks/stripe`).

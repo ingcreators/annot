@@ -255,6 +255,87 @@ describe("POST /api/documents", () => {
     expect(res.status).toBe(201);
   });
 
+  it("returns 413 quota_exceeded when the workspace is over the storage cap", async () => {
+    const { env, cookie, workspaceId } = await setupAuthed();
+    // Seed 4.999 GB of "existing" document bytes.
+    await env.DB.prepare(
+      `INSERT INTO documents (
+        id, workspace_id, created_by_user_id, path,
+        document_r2_key, size_bytes, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+      .bind(
+        "seed-doc",
+        workspaceId,
+        "fake-user",
+        "seed.annot.html",
+        `${workspaceId}/documents/seed-doc/document.html`,
+        4_999_000_000,
+        Date.now(),
+        Date.now(),
+      )
+      .run();
+
+    const big = new Uint8Array(2_000_000); // 2 MB body — pushes over 5 GB.
+    const res = await app.request(
+      "/api/documents?path=overflow.annot.html",
+      {
+        method: "POST",
+        headers: { Cookie: cookie, "Content-Type": "text/html" },
+        body: big,
+      },
+      env,
+    );
+    expect(res.status).toBe(413);
+    const body = (await res.json()) as {
+      error: string;
+      exceeded?: string;
+      plan?: string;
+    };
+    expect(body.error).toBe("quota_exceeded");
+    expect(body.exceeded).toBe("storage");
+    expect(body.plan).toBe("free");
+  });
+
+  it("returns 413 quota_exceeded when the workspace is over the document count cap", async () => {
+    const { env, cookie, workspaceId } = await setupAuthed();
+    // Seed 50 documents — the free cap.
+    const now = Date.now();
+    for (let i = 0; i < 50; i++) {
+      await env.DB.prepare(
+        `INSERT INTO documents (
+          id, workspace_id, created_by_user_id, path,
+          document_r2_key, size_bytes, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+        .bind(
+          `seed-doc-${i}`,
+          workspaceId,
+          "fake-user",
+          `seed-${i}.annot.html`,
+          `${workspaceId}/documents/seed-doc-${i}/document.html`,
+          1000,
+          now,
+          now,
+        )
+        .run();
+    }
+
+    const res = await app.request(
+      "/api/documents?path=overflow.annot.html",
+      {
+        method: "POST",
+        headers: { Cookie: cookie, "Content-Type": "text/html" },
+        body: DOC_HTML,
+      },
+      env,
+    );
+    expect(res.status).toBe(413);
+    const body = (await res.json()) as { error: string; exceeded?: string };
+    expect(body.error).toBe("quota_exceeded");
+    expect(body.exceeded).toBe("documents");
+  });
+
   it("rollbacks the D1 row if R2 write fails", async () => {
     const { env, cookie, workspaceId } = await setupAuthed();
     const brokenR2 = {
