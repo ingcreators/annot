@@ -1,19 +1,21 @@
 // `@ingcreators/annot-worker` — Cloudflare Worker hosting Annot's
 // API surface.
 //
-// Current state (Phase 2c):
+// Current state (Phase 3c):
 //   - /api/health                  (liveness probe)
 //   - /api/health/bindings         (KV + D1 reachability check)
 //   - /api/auth/github             (start GitHub OAuth)
 //   - /api/auth/github/callback    (finish GitHub OAuth)
+//   - /api/auth/google             (start Google OAuth)
+//   - /api/auth/google/callback    (finish Google OAuth)
 //   - /api/auth/me                 (current user from session)
 //   - /api/auth/logout             (invalidate session)
 //   - SESSIONS (KV) + DB (D1) bindings wired
+//   - users / workspaces / workspace_members tables (Phase 3a)
 //   - GITHUB_OAUTH_CLIENT_ID / _SECRET secrets read from c.env
+//   - GOOGLE_OAUTH_CLIENT_ID / _SECRET secrets read from c.env
 //
 // Subsequent phases add:
-//   Phase 3:  /api/auth/google + Google OAuth callback
-//             D1 users / workspaces tables, /api/auth/session refresh
 //   Phase 4:  /api/images/* + /api/documents/* (AnnotCloudStore)
 //   Phase 5:  /api/shares/* + /share/:token + /embed/:token
 //   Phase 7:  /api/billing/* + /api/webhooks/stripe (private repo
@@ -23,19 +25,18 @@
 
 import { Hono } from "hono";
 import { handleGithubCallback, handleGithubStart } from "./auth-github.js";
+import { handleGoogleCallback, handleGoogleStart } from "./auth-google.js";
 import { handleAuthLogout, handleAuthMe } from "./auth-me.js";
 
 /**
  * Environment bindings for the Worker. Each entry corresponds
  * to a `[[kv_namespaces]]` / `[[d1_databases]]` / `[[r2_buckets]]`
- * entry in `wrangler.toml`, or a secret set via
+ * entry in `wrangler.jsonc`, or a secret set via
  * `wrangler secret put`.
  *
- * Phase 2c (this PR) adds the `GITHUB_OAUTH_CLIENT_ID` and
- * `GITHUB_OAUTH_CLIENT_SECRET` secrets. The bindings themselves
- * (KV, D1) landed in Phase 2b. Subsequent phases extend this:
+ * Phase 3c (this PR) adds the `GOOGLE_OAUTH_CLIENT_ID` and
+ * `GOOGLE_OAUTH_CLIENT_SECRET` secrets. Subsequent phases:
  *   Phase 4:  OBJECTS (R2Bucket) — image / document bytes
- *   Phase 3:  GOOGLE_OAUTH_CLIENT_ID / _SECRET secrets
  *   Phase 7:  STRIPE_SECRET_KEY / _WEBHOOK_SECRET secrets
  */
 export interface Env {
@@ -64,6 +65,18 @@ export interface Env {
    * Set via `wrangler secret put GITHUB_OAUTH_CLIENT_SECRET`.
    */
   GITHUB_OAUTH_CLIENT_SECRET: string;
+  /**
+   * Google OAuth Client ID. Public (gets baked into the
+   * authorize URL). Set via
+   * `wrangler secret put GOOGLE_OAUTH_CLIENT_ID`.
+   */
+  GOOGLE_OAUTH_CLIENT_ID: string;
+  /**
+   * Google OAuth Client Secret. Required for the
+   * `code → access_token` exchange. Set via
+   * `wrangler secret put GOOGLE_OAUTH_CLIENT_SECRET`.
+   */
+  GOOGLE_OAUTH_CLIENT_SECRET: string;
 }
 
 const app = new Hono<{ Bindings: Env }>();
@@ -139,6 +152,10 @@ app.get("/api/health/bindings", async (c) => {
 // ─── Auth — GitHub OAuth ─────────────────────────────────────
 app.get("/api/auth/github", handleGithubStart);
 app.get("/api/auth/github/callback", handleGithubCallback);
+
+// ─── Auth — Google OAuth ─────────────────────────────────────
+app.get("/api/auth/google", handleGoogleStart);
+app.get("/api/auth/google/callback", handleGoogleCallback);
 
 // ─── Auth — session introspection / invalidation ─────────────
 app.get("/api/auth/me", handleAuthMe);

@@ -21,6 +21,8 @@
     "secrets:list": "wrangler secret list",
     "secrets:put:github-client-id": "wrangler secret put GITHUB_OAUTH_CLIENT_ID",
     "secrets:put:github-client-secret": "wrangler secret put GITHUB_OAUTH_CLIENT_SECRET",
+    "secrets:put:google-client-id": "wrangler secret put GOOGLE_OAUTH_CLIENT_ID",
+    "secrets:put:google-client-secret": "wrangler secret put GOOGLE_OAUTH_CLIENT_SECRET",
     "tail": "wrangler tail"
   },
   "dependencies": {

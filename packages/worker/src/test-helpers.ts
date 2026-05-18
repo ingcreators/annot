@@ -116,6 +116,8 @@ export function makeMockEnv(overrides: Partial<Env> = {}): Env {
     // the handlers run end-to-end in unit tests.
     GITHUB_OAUTH_CLIENT_ID: "test-client-id",
     GITHUB_OAUTH_CLIENT_SECRET: "test-client-secret",
+    GOOGLE_OAUTH_CLIENT_ID: "test-google-client-id",
+    GOOGLE_OAUTH_CLIENT_SECRET: "test-google-client-secret",
     ...overrides,
   };
 }

@@ -3,13 +3,13 @@
 Cloudflare Worker hosting Annot's API surface — GitHub OAuth,
 GitHub App, AnnotCloudStore endpoints, share / embed.
 
-> **Status:** Phase 3a/3b. GitHub OAuth callback now upserts a
-> persistent `users` row + creates a personal `workspaces` row +
-> an `owner` `workspace_members` entry on first login. Session
-> records carry `userId` / `workspaceId`. `/api/auth/me` returns
-> those IDs and touches `users.last_seen_at`. Phase 3c adds
-> Google OAuth as a second provider (same shape, mirrored
-> handler).
+> **Status:** Phase 3c. Both GitHub and Google OAuth flows are
+> wired; both callbacks upsert a persistent `users` row + create
+> a personal `workspaces` row on first login. Session records
+> carry `userId` / `workspaceId`. `/api/auth/me` returns those
+> IDs and touches `users.last_seen_at`. Cross-provider account
+> linking is intentionally NOT implemented — each provider is a
+> separate identity row.
 >
 > Plan: [`docs/plans/annot-cloud-roadmap.md`](../../docs/plans/annot-cloud-roadmap.md).
 
@@ -72,6 +72,12 @@ pnpm --filter @ingcreators/annot-worker secrets:put:github-client-id
 # (prompt — paste the GitHub OAuth App Client ID)
 
 pnpm --filter @ingcreators/annot-worker secrets:put:github-client-secret
+# (prompt — paste the Client Secret)
+
+pnpm --filter @ingcreators/annot-worker secrets:put:google-client-id
+# (prompt — paste the Google OAuth Client ID)
+
+pnpm --filter @ingcreators/annot-worker secrets:put:google-client-secret
 # (prompt — paste the Client Secret)
 ```
 
@@ -181,12 +187,14 @@ use the `*.workers.dev` URL.
   directory.
 - **Phase 2c** ✅: GitHub OAuth endpoints (start + callback),
   `/api/auth/me`, `/api/auth/logout`, session cookies.
-- **Phase 3a/3b** ✅ (this PR): `users` / `workspaces` /
-  `workspace_members` D1 tables; OAuth callback persists a user
-  row + personal workspace; session records carry `userId` /
-  `workspaceId`; `/api/auth/me` returns the IDs and touches
-  `users.last_seen_at`.
-- **Phase 3c**: Google OAuth (mirror of GitHub OAuth code path).
+- **Phase 3a/3b** ✅: `users` / `workspaces` / `workspace_members`
+  D1 tables; OAuth callback persists a user row + personal
+  workspace; session records carry `userId` / `workspaceId`;
+  `/api/auth/me` returns the IDs and touches `users.last_seen_at`.
+- **Phase 3c** ✅ (this PR): Google OAuth (mirror of GitHub
+  OAuth code path). Cross-provider account linking is
+  intentionally NOT implemented — each provider is a separate
+  identity row.
 - **Phase 4**: AnnotCloudStore CRUD endpoints (`/api/images`,
   `/api/documents`) — R2 binding + per-workspace quota.
 - **Phase 5**: Share / embed (`/api/shares`).
