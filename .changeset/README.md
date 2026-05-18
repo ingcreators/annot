@@ -65,7 +65,13 @@ pnpm changeset publish
 
 The CI publish workflow at `.github/workflows/publish.yml`
 (lands in Stage 3 of `docs/plans/headless-annotator-publish.md`)
-runs `pnpm changeset publish` on `workflow_dispatch`.
+runs `pnpm changeset publish` on `workflow_dispatch`. Auth uses
+**npm Trusted Publishing (OIDC)** — no long-lived `NPM_TOKEN`
+secret in the repo; the workflow mints a short-lived identity
+token via `permissions: id-token: write`, npm verifies it
+against the Trusted Publisher rules configured at
+<https://www.npmjs.com/settings/ingcreators/trusted-publishers>,
+and grants publish on a per-run basis.
 
 ## Why `updateInternalDependencies: patch`
 
