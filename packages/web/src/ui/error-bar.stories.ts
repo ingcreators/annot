@@ -162,3 +162,46 @@ export const ErrorSingleton: Story = {
     );
   },
 };
+
+/** Phase 1 of `docs/plans/web-dynamic-import-recovery.md` — the
+ *  structured `showInfo(message, opts)` overload that combines the
+ *  info severity with an action button and a persist flag.
+ *  Persisted info banners stay up until the user clicks Reload or
+ *  Dismiss. */
+export const InfoWithAction: Story = {
+  name: "Shorthand — showInfo with action",
+  render: () => {
+    hideError();
+    showInfo("Workspace updated — reload to see changes.", {
+      persist: true,
+      action: {
+        label: "Reload",
+        onClick: () => console.log("[story] InfoWithAction action clicked"),
+      },
+      onDismiss: () => console.log("[story] InfoWithAction dismissed"),
+    });
+    return hint(
+      "Rendered via showInfo(message, { persist: true, action }). The banner stays up until the user clicks Reload or the ✕ button.",
+    );
+  },
+};
+
+/** The exact banner the deploy-version poller shows when it detects
+ *  that the bundled `__APP_VERSION__` no longer matches the SHA
+ *  served at `/version.txt`. Visible regression pin for the copy. */
+export const NewVersionAvailable: Story = {
+  name: "Deploy — new version available",
+  render: () => {
+    hideError();
+    showInfo("A new version is available", {
+      persist: true,
+      action: {
+        label: "Reload",
+        onClick: () => console.log("[story] NewVersionAvailable reload clicked"),
+      },
+    });
+    return hint(
+      "Fired by startVersionPolling when /version.txt changes vs the bundled __APP_VERSION__. The user reloads on their own timing.",
+    );
+  },
+};

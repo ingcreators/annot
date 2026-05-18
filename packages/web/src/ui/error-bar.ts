@@ -203,7 +203,43 @@ export function showAuthError(
   });
 }
 
-/** Convenience: show a transient info message. */
-export function showInfo(message: string, durationMs = 5000): void {
+/** Options for the structured `showInfo` overload. */
+export interface ShowInfoOptions {
+  /** Auto-dismiss after this many ms. Defaults to 5000. Ignored when
+   *  `persist` is true. */
+  durationMs?: number;
+  /** Keep the banner up until the user dismisses it (or the caller
+   *  hides it explicitly via `hideError`). Use for "new version
+   *  available" prompts and other non-transient signals. */
+  persist?: boolean;
+  /** Optional action button on the right side of the banner. */
+  action?: ActionSpec;
+  /** Called when the user dismisses the bar (either via the ✕
+   *  button or when `durationMs` elapses). */
+  onDismiss?: () => void;
+}
+
+/** Convenience: show a transient info message.
+ *
+ * Two overloads:
+ *  - `showInfo(message, durationMs?)` — legacy transient banner.
+ *  - `showInfo(message, opts)` — structured form with action button
+ *    + persist flag. Used by the deploy-version recovery banner
+ *    (`docs/plans/web-dynamic-import-recovery.md`).
+ */
+export function showInfo(message: string, durationMs?: number): void;
+export function showInfo(message: string, opts: ShowInfoOptions): void;
+export function showInfo(message: string, arg?: number | ShowInfoOptions): void {
+  if (typeof arg === "object" && arg !== null) {
+    showError({
+      message,
+      severity: "info",
+      action: arg.action,
+      autoDismiss: arg.persist ? 0 : (arg.durationMs ?? 5000),
+      onDismiss: arg.onDismiss,
+    });
+    return;
+  }
+  const durationMs = typeof arg === "number" ? arg : 5000;
   showError({ message, severity: "info", autoDismiss: durationMs });
 }
