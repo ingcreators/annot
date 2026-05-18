@@ -3,13 +3,15 @@
 Cloudflare Worker hosting Annot's API surface — GitHub OAuth,
 GitHub App, AnnotCloudStore endpoints, share / embed.
 
-> **Status:** Phase 4c. `/api/images/*` CRUD endpoints landed:
-> upload (POST) / list (GET) / metadata (GET, PATCH, DELETE) /
-> original bytes (GET) / annotations SVG (GET, PATCH). Bytes go
-> to R2 keyed by `<workspace_id>/images/<image_id>/...`;
-> metadata in D1. Auth-gated via session cookie (Phase 3-aware
-> sessions only). Phase 4d adds `/api/documents/*` for
-> `.annot.html` documents.
+> **Status:** Phase 4d. `/api/images/*` (Phase 4c) +
+> `/api/documents/*` (this phase) CRUD endpoints landed.
+> Images: upload (POST) / list (GET) / metadata (GET, PATCH,
+> DELETE) / original bytes (GET) / annotations SVG (GET, PATCH).
+> Documents: upload (POST) / list (GET) / metadata (GET, PATCH,
+> DELETE) / content bytes (GET, PATCH). Bytes go to R2 keyed by
+> `<workspace_id>/{images,documents}/<id>/...`; metadata in D1.
+> Auth-gated via session cookie (Phase 3-aware sessions only).
+> Phase 4e adds per-workspace quota gates.
 >
 > Plan: [`docs/plans/annot-cloud-roadmap.md`](../../docs/plans/annot-cloud-roadmap.md).
 
@@ -200,14 +202,16 @@ use the `*.workers.dev` URL.
 - **Phase 3c** ✅: Google OAuth (mirror of GitHub OAuth code
   path). Cross-provider account linking is intentionally NOT
   implemented — each provider is a separate identity row.
-- **Phase 4a** ✅ (this PR): R2 bucket binding wired
-  (`OBJECTS`). `/api/health/bindings` now checks KV + D1 + R2.
-- **Phase 4b**: `0002_storage.sql` migration — `images`,
+- **Phase 4a** ✅: R2 bucket binding wired (`OBJECTS`).
+  `/api/health/bindings` now checks KV + D1 + R2.
+- **Phase 4b** ✅: `0002_storage.sql` migration — `images`,
   `documents`, `audit_events` tables.
-- **Phase 4c**: `/api/images/*` CRUD endpoints (upload, get,
-  list, delete, annotate).
-- **Phase 4d**: `/api/documents/*` CRUD endpoints
-  (`.annot.html` documents).
+- **Phase 4c** ✅: `/api/images/*` CRUD endpoints (upload, get,
+  list, patch, delete, original bytes, annotations SVG).
+- **Phase 4d** ✅ (this PR): `/api/documents/*` CRUD endpoints
+  (`.annot.html` documents: upload, get, list, patch, delete,
+  content bytes). Document upload cap is 50 MB (vs 25 MB for
+  images) since `.annot.html` embeds base64 image data.
 - **Phase 4e**: per-workspace quota gates (plan-gated storage
   + share / document limits).
 - **Phase 5**: Share / embed (`/api/shares`).

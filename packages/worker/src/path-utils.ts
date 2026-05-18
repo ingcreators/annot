@@ -46,7 +46,13 @@ export function validatePath(path: string): string | null {
   return null;
 }
 
-const MAX_UPLOAD_BYTES = 25 * 1024 * 1024; // 25 MB
+const MAX_IMAGE_UPLOAD_BYTES = 25 * 1024 * 1024; // 25 MB
+
+// `.annot.html` documents embed images as base64 / `data:` URLs, so
+// their on-wire size is bigger than the equivalent images. 50 MB
+// is a generous-but-not-abusive ceiling that still leaves headroom
+// before the per-workspace quota gate (Phase 4e) kicks in.
+const MAX_DOCUMENT_UPLOAD_BYTES = 50 * 1024 * 1024; // 50 MB
 
 /**
  * Inspect the `Content-Length` header (set by the client) and
@@ -56,18 +62,27 @@ const MAX_UPLOAD_BYTES = 25 * 1024 * 1024; // 25 MB
  * **Not** a quota — quota is per-workspace and lands in Phase 4e.
  * This is a per-request defence so a single oversized upload
  * can't tie up the Worker.
+ *
+ * Caller passes the resource-specific cap so images (25 MB) and
+ * documents (50 MB) can share the same parsing logic without
+ * sharing the same limit.
  */
-export function validateUploadSize(contentLengthHeader: string | null): string | null {
+export function validateUploadSize(
+  contentLengthHeader: string | null,
+  maxBytes: number = MAX_IMAGE_UPLOAD_BYTES,
+): string | null {
   if (!contentLengthHeader) return null; // No header? Let R2 enforce its own limit.
   const n = Number.parseInt(contentLengthHeader, 10);
   if (!Number.isFinite(n) || n < 0) {
     return "Invalid Content-Length header.";
   }
-  if (n > MAX_UPLOAD_BYTES) {
-    return `Upload is too large (${n} bytes; max ${MAX_UPLOAD_BYTES}).`;
+  if (n > maxBytes) {
+    return `Upload is too large (${n} bytes; max ${maxBytes}).`;
   }
   return null;
 }
 
-/** Public so tests can assert the constant doesn't drift. */
-export const MAX_UPLOAD_BYTES_VALUE = MAX_UPLOAD_BYTES;
+/** Public so tests can assert the constants don't drift. */
+export const MAX_UPLOAD_BYTES_VALUE = MAX_IMAGE_UPLOAD_BYTES;
+export const MAX_IMAGE_UPLOAD_BYTES_VALUE = MAX_IMAGE_UPLOAD_BYTES;
+export const MAX_DOCUMENT_UPLOAD_BYTES_VALUE = MAX_DOCUMENT_UPLOAD_BYTES;
