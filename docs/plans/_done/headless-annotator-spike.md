@@ -1,6 +1,6 @@
 # Headless annotator spike
 
-> **Status:** Queued
+> **Status:** Done — landed [`#750`](https://github.com/ingcreators/annot/pull/750) 2026-05-18
 > **Compatibility:** New package `@ingcreators/annot-annotator`
 >   (private during spike). Reads from `@ingcreators/annot-core` +
 >   `@ingcreators/annot-render`. Does **not** touch the PWA, the

@@ -50,6 +50,9 @@ importers:
       '@resvg/resvg-js':
         specifier: ^2.6.2
         version: 2.6.2
+      '@xmldom/xmldom':
+        specifier: ^0.9.10
+        version: 0.9.10
     devDependencies:
       typescript:
         specifier: 'catalog:'
@@ -3992,8 +3995,7 @@ snapshots:
 
   '@xmldom/xmldom@0.8.13': {}
 
-  '@xmldom/xmldom@0.9.10':
-    optional: true
+  '@xmldom/xmldom@0.9.10': {}
 
   abbrev@4.0.0: {}
 
