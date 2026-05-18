@@ -7,10 +7,12 @@
  * Falls back to `BrowserStore` (IndexedDB in this origin) if the
  * extension is not installed.
  */
+import { AnnotCloudStore } from "@ingcreators/annot-cloud-store";
 import type { MetadataCache, StorageProvider } from "@ingcreators/annot-core/storage";
 import { IndexedDBMetadataCache } from "@ingcreators/annot-host-ui/idb-metadata-cache";
 import { logger } from "../logger.js";
 import { hideError, showAuthError, showError } from "../ui/error-bar.js";
+import { clearCloudBaseUrl, loadCloudBaseUrl, logoutCloudSession } from "./cloud-auth.js";
 import { DeviceStore } from "./device-store.js";
 import { clearHandle, loadHandle, saveHandle } from "./fs-handle-store.js";
 import {
@@ -73,6 +75,7 @@ class StorageRegistry {
   driveStore: GoogleDriveStore | null = null;
   deviceStore: DeviceStore | null = null;
   githubStore: GitHubStore | null = null;
+  cloudStore: AnnotCloudStore | null = null;
   currentMode: StorageMode = "browser";
 
   // Extension handshake.
@@ -95,6 +98,7 @@ class StorageRegistry {
     if (this.currentMode === "googledrive" && this.driveStore) return this.driveStore;
     if (this.currentMode === "github" && this.githubStore) return this.githubStore;
     if (this.currentMode === "device" && this.deviceStore) return this.deviceStore;
+    if (this.currentMode === "cloud" && this.cloudStore) return this.cloudStore;
     const pluginStore = this.pluginStores.get(this.currentMode);
     if (pluginStore) return pluginStore;
     return null;
@@ -538,6 +542,74 @@ export function disconnectGitHub(): void {
 /** Check if GitHub is connected. */
 export function isGitHubConnected(): boolean {
   return registry.currentMode === "github" && registry.githubStore !== null;
+}
+
+/**
+ * Connect to Annot Cloud. Returns the already-initialised store
+ * — the caller (the connect-modal in `cloud-setup-ui.ts`) runs
+ * `init()` itself so it can surface the OAuth flow on a 401
+ * before the store ever lands in the registry. The bridge here
+ * just attaches the shared metadata cache + stashes the active
+ * store + flips the mode.
+ *
+ * No token refresher hook: auth is HttpOnly cookie based, so the
+ * "refresh" UX is a separate `showCloudConnectDialog()` call
+ * that the storage-bridge layer drives explicitly.
+ */
+export function connectAnnotCloud(store: AnnotCloudStore): StorageProvider {
+  store.attachMetadataCache(getMetadataCache());
+  registry.cloudStore = store;
+  registry.currentMode = "cloud";
+  return store;
+}
+
+/**
+ * Try to re-establish the Annot Cloud connection from the
+ * persisted base URL. Probes `/api/auth/me`; returns the store
+ * on success, `null` when the session is missing/expired or the
+ * base URL was never persisted.
+ *
+ * Unlike Drive / GitHub restore, this DOES proactively validate
+ * the session — the cookie is server-managed so there's no token
+ * to use later as a "stale" sentinel. Calling `init()` is the
+ * only way to know if the session is still good.
+ */
+export async function restoreAnnotCloud(): Promise<StorageProvider | null> {
+  const baseUrl = loadCloudBaseUrl();
+  if (baseUrl === null) return null;
+  const store = new AnnotCloudStore({ baseUrl });
+  try {
+    await store.init();
+  } catch {
+    // Cookie expired or worker unreachable — leave the persisted
+    // base URL alone so the user can re-sign-in without retyping
+    // it.
+    return null;
+  }
+  return connectAnnotCloud(store);
+}
+
+/** Forget the persisted base URL + invalidate the worker-side
+ *  session cookie (best-effort POST to `/api/auth/logout`). */
+export async function disconnectAnnotCloud(): Promise<void> {
+  const baseUrl = loadCloudBaseUrl();
+  registry.cloudStore = null;
+  if (baseUrl !== null) {
+    await logoutCloudSession(baseUrl);
+  }
+  clearCloudBaseUrl();
+  if (registry.currentMode === "cloud") registry.currentMode = "browser";
+}
+
+/** Check if Annot Cloud is connected. */
+export function isAnnotCloudConnected(): boolean {
+  return registry.currentMode === "cloud" && registry.cloudStore !== null;
+}
+
+/** Get the base URL of the connected Annot Cloud store, or
+ *  `null` when not connected. Used by the sidebar status label. */
+export function getAnnotCloudBaseUrl(): string | null {
+  return loadCloudBaseUrl();
 }
 
 /** Delete an image from Extension IDB (cleanup after transfer). */
