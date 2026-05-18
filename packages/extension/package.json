@@ -28,8 +28,8 @@
   },
   "devDependencies": {
     "@resvg/resvg-js": "^2.6.2",
-    "@storybook/web-components-vite": "^10.3.6",
-    "chrome-types": "^0.1.426",
+    "@storybook/web-components-vite": "^10.4.0",
+    "chrome-types": "^0.1.428",
     "typescript": "catalog:",
     "vite": "catalog:"
   }
