@@ -16,7 +16,11 @@ name: Worker deploy
 # What this workflow does NOT do:
 #   - Apply D1 migrations. `migrations:apply` stays manual — a bad
 #     migration could brick production; the operator runs it from
-#     their machine after eyeballing the SQL.
+#     their machine after eyeballing the SQL. INSTEAD, the
+#     "Check for pending D1 migrations" step below fails the
+#     deploy fast when local migration files don't match the
+#     remote `d1_migrations` table — the operator applies them,
+#     then re-dispatches the workflow.
 #   - Manage secrets. `wrangler secret put` is also manual; this
 #     workflow assumes `GITHUB_OAUTH_CLIENT_*`, `GOOGLE_OAUTH_*`,
 #     etc. are already set on the worker (one-time bootstrap).
@@ -29,7 +33,13 @@ on:
     branches: [main]
     paths:
       # Source / config — anything that actually changes the
-      # deployed Worker bundle.
+      # deployed Worker bundle. Migrations folder is deliberately
+      # excluded (paths-ignore below): adding a SQL file doesn't
+      # change what the Worker DOES, only what schema it expects.
+      # An operator runs `migrations:apply` manually, then a
+      # code change (or `workflow_dispatch`) triggers the deploy.
+      # The pre-deploy drift check catches the inverse mistake
+      # (code change merged before migration applied) anyway.
       - "packages/worker/**"
       # Workspace files that affect what pnpm install resolves.
       # A lockfile bump in this set could materially change the
@@ -38,6 +48,11 @@ on:
       # Allow operator to iterate on the deploy pipeline itself
       # without needing to touch a worker file to trigger a run.
       - ".github/workflows/worker-deploy.yml"
+    paths-ignore:
+      # Docs-only edits shouldn't cause a redeploy.
+      - "packages/worker/README.md"
+      # See the migrations-folder note above.
+      - "packages/worker/migrations/**"
   workflow_dispatch:
 
 # Serialise deploys to the same environment. `cancel-in-progress`
@@ -84,13 +99,66 @@ jobs:
       - name: Typecheck worker
         run: pnpm --filter @ingcreators/annot-worker typecheck
 
+      # Schema-drift guard. If `packages/worker/migrations/` has
+      # SQL files that aren't yet recorded in the remote D1's
+      # `d1_migrations` table, the deploy would push code that
+      # SELECTs a missing column / table and 500 on the first
+      # real request. Block here instead so the operator can run:
+      #
+      #     pnpm --filter @ingcreators/annot-worker migrations:apply
+      #
+      # …and then re-dispatch the workflow.
+      #
+      # The check uses `wrangler d1 migrations list` (lists ONLY
+      # unapplied migrations). Output contains zero `<NNNN>_*.sql`
+      # tokens when the remote DB matches local — we grep for that
+      # pattern to be resilient to wrangler's phrasing changing
+      # between versions ("No migrations to apply!" vs "All
+      # migrations applied" etc.).
+      - name: Check for pending D1 migrations
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          cd packages/worker
+          # Use `script` to avoid wrangler thinking it's in a
+          # non-TTY env and abbreviating output. On ubuntu-latest
+          # `script` is part of `bsdmainutils` (preinstalled).
+          # Plain pipe also works; this is a belt-and-suspenders
+          # because some wrangler versions print "No migrations"
+          # only on a TTY.
+          output=$(pnpm exec wrangler d1 migrations list annot-db --remote 2>&1 || true)
+          echo "── wrangler d1 migrations list output ──"
+          echo "$output"
+          echo "─────────────────────────────────────────"
+          if echo "$output" | grep -qE "[0-9]{4}_[A-Za-z0-9_-]+\.sql"; then
+            {
+              echo "::error::Pending D1 migrations detected. Apply them first, then re-dispatch:"
+              echo "::error::  pnpm --filter @ingcreators/annot-worker migrations:apply"
+              echo "::error:: "
+              echo "::error::Why this guard exists: the worker deploy is auto, but"
+              echo "::error::migrations:apply is deliberately manual (a bad SQL change"
+              echo "::error::can brick production). Without this check, code that"
+              echo "::error::SELECTs a missing column would 500 the next deploy."
+            } 1>&2
+            exit 1
+          fi
+          echo "✓ D1 schema is up to date — proceeding with deploy."
+
       - name: Deploy via wrangler
         env:
           # Cloudflare API token with:
-          #   - Account: Workers Scripts:Edit
-          #   - Account: Workers R2 Storage:Edit
-          #   - Zone:Workers Routes:Edit on the annot.work zone
-          #   - Zone:Read on the annot.work zone
+          #   - Account: Workers Scripts:Edit       (publish the Worker)
+          #   - Account: Workers R2 Storage:Edit    (R2 binding)
+          #   - Account: D1:Edit                    (read d1_migrations
+          #                                          for the drift check
+          #                                          above; "Edit" is the
+          #                                          only scope CF exposes
+          #                                          for D1 — read-only
+          #                                          isn't separate)
+          #   - Zone: Workers Routes:Edit on annot.work
+          #   - Zone: Zone:Read on annot.work
           # Set in the repo's "Actions secrets and variables"
           # settings; rotate via the Cloudflare dashboard.
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
