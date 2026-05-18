@@ -74,9 +74,13 @@ export class ApiClient {
   readonly #fetch: typeof fetch;
 
   constructor(options: ApiClientOptions) {
-    // Strip trailing slash so `joinUrl` can concatenate without
-    // worrying about double-slashes.
-    this.#baseUrl = options.baseUrl.replace(/\/+$/, "");
+    // Strip trailing slashes so `url()` can concatenate without
+    // double-slashes. CodeQL warns on the `replace(/\/+$/, "")`
+    // shape (polynomial ReDoS risk on adversarial input); the
+    // imperative loop has linear worst-case time.
+    let normalised = options.baseUrl;
+    while (normalised.endsWith("/")) normalised = normalised.slice(0, -1);
+    this.#baseUrl = normalised;
     this.#fetch = options.fetchImpl ?? globalThis.fetch.bind(globalThis);
   }
 
