@@ -8,7 +8,7 @@
 
 import { describe, expect, it } from "vitest";
 import app from "./index.js";
-import { makeMockD1, makeMockEnv, makeMockKv } from "./test-helpers.js";
+import { makeMockD1, makeMockEnv, makeMockKv, makeMockR2 } from "./test-helpers.js";
 
 describe("/api/health", () => {
   it("returns 200 with ok:true and service identifier", async () => {
@@ -34,7 +34,7 @@ describe("/api/health", () => {
 });
 
 describe("/api/health/bindings", () => {
-  it("returns 200 + ok:true when KV and D1 are reachable", async () => {
+  it("returns 200 + ok:true when KV, D1, and R2 are all reachable", async () => {
     const env = makeMockEnv();
     const res = await app.request("/api/health/bindings", {}, env);
     expect(res.status).toBe(200);
@@ -42,10 +42,12 @@ describe("/api/health/bindings", () => {
       ok: boolean;
       kv: string;
       db: string;
+      r2: string;
     };
     expect(body.ok).toBe(true);
     expect(body.kv).toBe("ok");
     expect(body.db).toBe("ok");
+    expect(body.r2).toBe("ok");
   });
 
   it("returns 503 + errors when the KV binding fails", async () => {
@@ -62,11 +64,13 @@ describe("/api/health/bindings", () => {
       ok: boolean;
       kv: string;
       db: string;
+      r2: string;
       errors?: Record<string, string>;
     };
     expect(body.ok).toBe(false);
     expect(body.kv).toBe("error");
     expect(body.db).toBe("ok");
+    expect(body.r2).toBe("ok");
     expect(body.errors?.kv).toContain("KV unreachable");
   });
 
@@ -102,12 +106,38 @@ describe("/api/health/bindings", () => {
       ok: boolean;
       kv: string;
       db: string;
+      r2: string;
       errors?: Record<string, string>;
     };
     expect(body.ok).toBe(false);
     expect(body.kv).toBe("ok");
     expect(body.db).toBe("error");
+    expect(body.r2).toBe("ok");
     expect(body.errors?.db).toContain("D1 down");
+  });
+
+  it("returns 503 + errors when the R2 binding fails", async () => {
+    const env = makeMockEnv({
+      OBJECTS: {
+        async head() {
+          throw new Error("R2 not reachable");
+        },
+      } as unknown as R2Bucket,
+    });
+    const res = await app.request("/api/health/bindings", {}, env);
+    expect(res.status).toBe(503);
+    const body = (await res.json()) as {
+      ok: boolean;
+      kv: string;
+      db: string;
+      r2: string;
+      errors?: Record<string, string>;
+    };
+    expect(body.ok).toBe(false);
+    expect(body.kv).toBe("ok");
+    expect(body.db).toBe("ok");
+    expect(body.r2).toBe("error");
+    expect(body.errors?.r2).toContain("R2 not reachable");
   });
 });
 
@@ -126,6 +156,40 @@ describe("test helpers themselves", () => {
     const db = makeMockD1();
     const row = await db.prepare("SELECT 1").first();
     expect(row).not.toBeNull();
+  });
+
+  it("makeMockR2 supports put / head / get / delete round-trip", async () => {
+    const r2 = makeMockR2();
+    expect(await r2.head("missing")).toBeNull();
+    expect(await r2.get("missing")).toBeNull();
+
+    const payload = new TextEncoder().encode("hello world").buffer as ArrayBuffer;
+    await r2.put("greeting", payload, {
+      customMetadata: { kind: "test" },
+    });
+
+    const head = await r2.head("greeting");
+    expect(head).not.toBeNull();
+    expect(head?.key).toBe("greeting");
+    expect(head?.size).toBe(11);
+    expect(head?.customMetadata?.kind).toBe("test");
+
+    const got = await r2.get("greeting");
+    expect(got).not.toBeNull();
+    expect(await got?.text()).toBe("hello world");
+
+    await r2.delete("greeting");
+    expect(await r2.head("greeting")).toBeNull();
+  });
+
+  it("makeMockR2 list filters by prefix", async () => {
+    const r2 = makeMockR2();
+    await r2.put("ws-a/img/1", "1");
+    await r2.put("ws-a/img/2", "2");
+    await r2.put("ws-b/img/1", "3");
+    const list = await r2.list({ prefix: "ws-a/" });
+    expect(list.objects.length).toBe(2);
+    expect(list.objects.map((o) => o.key).sort()).toEqual(["ws-a/img/1", "ws-a/img/2"]);
   });
 });
 

@@ -102,6 +102,134 @@ export function makeMockD1(): D1Database {
 }
 
 /**
+ * In-memory R2Bucket stub. Supports `head` / `get` / `put` /
+ * `delete` / `list`. Body bytes stored as `ArrayBuffer`. Custom
+ * metadata + httpMetadata round-tripped per-key. Sufficient for
+ * the Phase 4c/4d upload + retrieval round-trip tests.
+ *
+ * Phase 4a (this PR) only uses `head` for the binding probe.
+ */
+export function makeMockR2(): R2Bucket {
+  interface Entry {
+    body: ArrayBuffer;
+    customMetadata: Record<string, string>;
+    httpMetadata: R2HTTPMetadata;
+  }
+  const store = new Map<string, Entry>();
+
+  function makeObject(key: string, entry: Entry, includeBody: boolean): R2Object | R2ObjectBody {
+    const base = {
+      key,
+      version: "test-version",
+      size: entry.body.byteLength,
+      etag: `test-etag-${key}`,
+      httpEtag: `"test-etag-${key}"`,
+      checksums: {} as R2Checksums,
+      uploaded: new Date(),
+      httpMetadata: entry.httpMetadata,
+      customMetadata: entry.customMetadata,
+      range: undefined,
+      storageClass: "Standard",
+      ssecKeyMd5: undefined,
+      writeHttpMetadata(_headers: Headers) {
+        /* no-op in tests */
+      },
+    };
+    if (!includeBody) return base as unknown as R2Object;
+    const text = () => new TextDecoder().decode(entry.body);
+    return {
+      ...base,
+      get body() {
+        return new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(new Uint8Array(entry.body));
+            controller.close();
+          },
+        });
+      },
+      bodyUsed: false,
+      async arrayBuffer() {
+        return entry.body;
+      },
+      async text() {
+        return text();
+      },
+      async json<T>() {
+        return JSON.parse(text()) as T;
+      },
+      async blob() {
+        return new Blob([entry.body]);
+      },
+      async bytes() {
+        return new Uint8Array(entry.body);
+      },
+    } as unknown as R2ObjectBody;
+  }
+
+  const mock = {
+    async head(key: string): Promise<R2Object | null> {
+      const entry = store.get(key);
+      if (!entry) return null;
+      return makeObject(key, entry, false) as R2Object;
+    },
+    async get(key: string): Promise<R2ObjectBody | null> {
+      const entry = store.get(key);
+      if (!entry) return null;
+      return makeObject(key, entry, true) as R2ObjectBody;
+    },
+    async put(
+      key: string,
+      value: ArrayBuffer | ArrayBufferView | string | null | Blob,
+      options?: R2PutOptions,
+    ): Promise<R2Object> {
+      let body: ArrayBuffer;
+      if (value === null) {
+        body = new ArrayBuffer(0);
+      } else if (typeof value === "string") {
+        body = new TextEncoder().encode(value).buffer as ArrayBuffer;
+      } else if (value instanceof ArrayBuffer) {
+        body = value;
+      } else if (ArrayBuffer.isView(value)) {
+        body = value.buffer.slice(
+          value.byteOffset,
+          value.byteOffset + value.byteLength,
+        ) as ArrayBuffer;
+      } else {
+        // Blob
+        body = await value.arrayBuffer();
+      }
+      const entry: Entry = {
+        body,
+        customMetadata: options?.customMetadata ?? {},
+        httpMetadata: (options?.httpMetadata as R2HTTPMetadata | undefined) ?? {},
+      };
+      store.set(key, entry);
+      return makeObject(key, entry, false) as R2Object;
+    },
+    async delete(key: string | string[]): Promise<void> {
+      if (Array.isArray(key)) {
+        for (const k of key) store.delete(k);
+      } else {
+        store.delete(key);
+      }
+    },
+    async list(options?: R2ListOptions): Promise<R2Objects> {
+      const prefix = options?.prefix ?? "";
+      const matching = Array.from(store.entries())
+        .filter(([k]) => k.startsWith(prefix))
+        .sort(([a], [b]) => a.localeCompare(b));
+      const objects = matching.map(([k, e]) => makeObject(k, e, false) as R2Object);
+      return {
+        objects,
+        truncated: false,
+        delimitedPrefixes: [],
+      } as unknown as R2Objects;
+    },
+  };
+  return mock as unknown as R2Bucket;
+}
+
+/**
  * Construct a complete mock Env. Override individual bindings
  * or secrets via the optional `overrides` to test failure paths
  * (e.g. an unset `GITHUB_OAUTH_CLIENT_ID` via `{ GITHUB_OAUTH_CLIENT_ID:
@@ -111,6 +239,7 @@ export function makeMockEnv(overrides: Partial<Env> = {}): Env {
   return {
     SESSIONS: makeMockKv(),
     DB: makeMockD1(),
+    OBJECTS: makeMockR2(),
     // Test-only OAuth credentials. Real values are set via
     // `wrangler secret put` at deploy time; these defaults let
     // the handlers run end-to-end in unit tests.
