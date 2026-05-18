@@ -1,7 +1,7 @@
 // `@ingcreators/annot-worker` — Cloudflare Worker hosting Annot's
 // API surface.
 //
-// Current state (Phase 4c):
+// Current state (Phase 4d):
 //   - /api/health                            (liveness probe)
 //   - /api/health/bindings                   (KV + D1 + R2 reachability)
 //   - /api/auth/github + /github/callback    (GitHub OAuth)
@@ -12,6 +12,9 @@
 //   - /api/images/:id                        (GET / PATCH / DELETE metadata)
 //   - /api/images/:id/original               (GET original bytes)
 //   - /api/images/:id/annotations            (GET + PATCH annotations SVG)
+//   - /api/documents                         (POST upload, GET list)
+//   - /api/documents/:id                     (GET / PATCH / DELETE metadata)
+//   - /api/documents/:id/content             (GET + PATCH document bytes)
 //   - SESSIONS (KV) + DB (D1) + OBJECTS (R2) bindings wired
 //   - users / workspaces / workspace_members tables (Phase 3a)
 //   - images / documents / audit_events tables (Phase 4b)
@@ -19,7 +22,6 @@
 //   - GOOGLE_OAUTH_CLIENT_ID / _SECRET secrets
 //
 // Subsequent phases add:
-//   Phase 4d: /api/documents/* (.annot.html documents)
 //   Phase 4e: per-workspace quota gates
 //   Phase 5:  /api/shares/* + /share/:token + /embed/:token
 //   Phase 7:  /api/billing/* + /api/webhooks/stripe (private repo
@@ -31,6 +33,15 @@ import { Hono } from "hono";
 import { handleGithubCallback, handleGithubStart } from "./auth-github.js";
 import { handleGoogleCallback, handleGoogleStart } from "./auth-google.js";
 import { handleAuthLogout, handleAuthMe } from "./auth-me.js";
+import {
+  handleDocumentContentGet,
+  handleDocumentContentPatch,
+  handleDocumentDelete,
+  handleDocumentGet,
+  handleDocumentList,
+  handleDocumentPatch,
+  handleDocumentUpload,
+} from "./documents.js";
 import {
   handleImageAnnotationsGet,
   handleImageAnnotationsPatch,
@@ -212,6 +223,15 @@ app.delete("/api/images/:id", handleImageDelete);
 app.get("/api/images/:id/original", handleImageOriginalGet);
 app.get("/api/images/:id/annotations", handleImageAnnotationsGet);
 app.patch("/api/images/:id/annotations", handleImageAnnotationsPatch);
+
+// ─── Documents (AnnotCloudStore — .annot.html) ───────────────
+app.post("/api/documents", handleDocumentUpload);
+app.get("/api/documents", handleDocumentList);
+app.get("/api/documents/:id", handleDocumentGet);
+app.patch("/api/documents/:id", handleDocumentPatch);
+app.delete("/api/documents/:id", handleDocumentDelete);
+app.get("/api/documents/:id/content", handleDocumentContentGet);
+app.patch("/api/documents/:id/content", handleDocumentContentPatch);
 
 /**
  * Catch-all 404 so probes against an undefined route return a
