@@ -1,0 +1,114 @@
+name: Bug report
+description: Something is broken or behaves unexpectedly.
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug. Please fill in the
+        fields below — the more concrete the reproduction, the faster
+        we can land a fix. For security-sensitive issues, do NOT open
+        a public issue: see [SECURITY.md](../blob/main/SECURITY.md)
+        for the private reporting channel.
+
+  - type: dropdown
+    id: package
+    attributes:
+      label: Affected package
+      description: Which workspace package is the bug in?
+      options:
+        - "@ingcreators/annot-core"
+        - "@ingcreators/annot-editor"
+        - "@ingcreators/annot-render"
+        - "@ingcreators/annot-host-ui"
+        - "@ingcreators/annot-web (PWA)"
+        - "@ingcreators/annot-extension (Chrome MV3)"
+        - "@ingcreators/annot-desktop (Electron)"
+        - "@ingcreators/annot-vscode (VSCode extension)"
+        - "@ingcreators/annot-doc (.annot.html format)"
+        - "@ingcreators/annot-capture"
+        - "@ingcreators/annot-annotator (headless / Node)"
+        - "@ingcreators/annot-playwright (fixture)"
+        - "@ingcreators/annot-imagequant"
+        - "docs / plans"
+        - "build / CI tooling"
+        - "I don't know"
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Annot version / commit
+      description: |
+        Run `git rev-parse HEAD` in your local clone, or paste the
+        version string from the running app's About / settings.
+        While we're pre-1.0, every package's `version` is `0.0.0`;
+        the commit SHA is the meaningful identifier.
+      placeholder: e.g. abcdef0 (main), or v0.1.0 (post-publish)
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Browser / OS / Node version as relevant to the bug.
+      placeholder: e.g. Chrome 128 on Windows 11, Node 24.0.0
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: |
+        Minimal sequence to trigger the bug. Numbered steps work best.
+        If the bug needs a specific input file (a screenshot, an
+        `.annot.svg`, a `.annot.html` document), attach it or describe
+        how to construct it.
+      placeholder: |
+        1. Open the PWA at annot.work
+        2. Drag-drop a screenshot
+        3. Pick the Highlight tool
+        4. Draw a rectangle
+        5. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected_vs_actual
+    attributes:
+      label: Expected vs actual
+      description: |
+        What did you expect to happen? What happened instead?
+        If the bug is visual, a screenshot helps (drag-drop into the
+        textarea).
+    validations:
+      required: true
+
+  - type: textarea
+    id: errors
+    attributes:
+      label: Console / network errors
+      description: |
+        Any errors in the browser DevTools console, or failed network
+        requests visible in the Network panel? Paste them here — they
+        often tell us exactly where to look.
+      placeholder: |
+        Uncaught TypeError: ...
+        (or "no errors visible")
+    validations:
+      required: false
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Additional context
+      description: |
+        Anything else worth knowing. Workarounds you tried, related
+        issues you found, history (did this work in an older
+        version?), etc.
+    validations:
+      required: false
