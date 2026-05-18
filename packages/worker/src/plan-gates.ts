@@ -10,7 +10,7 @@
 // `docs/plans/annot-cloud-roadmap.md` Phase 7d). Don't tighten them
 // here without also updating the roadmap.
 
-import { activeDocumentCount, totalStorageUsedBytes } from "./storage-repo.js";
+import { activeDocumentCount, activeShareCount, totalStorageUsedBytes } from "./storage-repo.js";
 
 export type PlanId = "free" | "pro" | "team";
 
@@ -27,25 +27,32 @@ export interface PlanLimits {
   /** Number of non-deleted `documents` rows the workspace may
    *  hold. Phase 4 only — images aren't capped by count. */
   activeDocuments: number;
+  /** Number of non-revoked `share_links` rows the workspace may
+   *  hold. Revoking a share frees the slot; the underlying
+   *  resource (image / document) is not affected. */
+  activeShares: number;
 }
 
 /**
  * The Phase 7 "launch" values quoted in the roadmap are:
  *   free.storageBytes        = 500 MB
  *   free.activeDocuments     = 5
- * Phase 4e ships 10× those numbers so the beta period has headroom
- * (per `annot-cloud-roadmap.md` Phase 7d: "free quotas reduced to
- * launch values at Phase 7d"). When Phase 7d ships, edit these
- * values + the corresponding roadmap line in lockstep.
+ *   free.activeShares        = 3
+ * Phase 4e + 5 ship ~10× those numbers so the beta period has
+ * headroom (per `annot-cloud-roadmap.md` Phase 7d: "free quotas
+ * reduced to launch values at Phase 7d"). When Phase 7d ships,
+ * edit these values + the corresponding roadmap line in lockstep.
  */
 export const PLAN_LIMITS: Record<PlanId, PlanLimits> = {
   free: {
     storageBytes: 5_000_000_000, // 5 GB (beta) → 500 MB at Phase 7d
     activeDocuments: 50, // (beta) → 5 at Phase 7d
+    activeShares: 30, // (beta) → 3 at Phase 7d
   },
   pro: {
     storageBytes: 50_000_000_000, // 50 GB
     activeDocuments: Number.POSITIVE_INFINITY,
+    activeShares: Number.POSITIVE_INFINITY,
   },
   team: {
     // Team is a per-seat plan; the per-workspace storage cap is
@@ -54,6 +61,7 @@ export const PLAN_LIMITS: Record<PlanId, PlanLimits> = {
     // need a per-seat-multiplied cap.
     storageBytes: 500_000_000_000, // 500 GB
     activeDocuments: Number.POSITIVE_INFINITY,
+    activeShares: Number.POSITIVE_INFINITY,
   },
 };
 
@@ -68,10 +76,11 @@ export interface QuotaCheckResult {
   usage: {
     storageBytes: number;
     documentCount: number;
+    shareCount: number;
   };
   limits: PlanLimits;
   /** Which limit failed; undefined when `ok === true`. */
-  exceeded?: "storage" | "documents";
+  exceeded?: "storage" | "documents" | "shares";
   /** Human-readable message for the API response body. Always
    *  populated; clients show it as-is when surfacing the gate. */
   message: string;
@@ -111,22 +120,29 @@ export async function checkUploadQuota(
   db: D1Database,
   workspaceId: string,
   additionalBytes: number,
-  options: { incrementsDocumentCount?: boolean } = {},
+  options: { incrementsDocumentCount?: boolean; incrementsShareCount?: boolean } = {},
 ): Promise<QuotaCheckResult> {
-  const [plan, currentBytes, currentDocs] = await Promise.all([
+  const [plan, currentBytes, currentDocs, currentShares] = await Promise.all([
     getWorkspacePlan(db, workspaceId),
     totalStorageUsedBytes(db, workspaceId),
     options.incrementsDocumentCount ? activeDocumentCount(db, workspaceId) : Promise.resolve(0),
+    options.incrementsShareCount ? activeShareCount(db, workspaceId) : Promise.resolve(0),
   ]);
   const limits = PLAN_LIMITS[plan];
   const projectedBytes = currentBytes + Math.max(0, additionalBytes);
   const projectedDocs = options.incrementsDocumentCount ? currentDocs + 1 : currentDocs;
+  const projectedShares = options.incrementsShareCount ? currentShares + 1 : currentShares;
+  const usage = {
+    storageBytes: currentBytes,
+    documentCount: currentDocs,
+    shareCount: currentShares,
+  };
 
   if (Number.isFinite(limits.storageBytes) && projectedBytes > limits.storageBytes) {
     return {
       ok: false,
       plan,
-      usage: { storageBytes: currentBytes, documentCount: currentDocs },
+      usage,
       limits,
       exceeded: "storage",
       message: `Workspace storage limit exceeded (${currentBytes} + ${additionalBytes} > ${limits.storageBytes} bytes on the ${plan} plan).`,
@@ -141,17 +157,32 @@ export async function checkUploadQuota(
     return {
       ok: false,
       plan,
-      usage: { storageBytes: currentBytes, documentCount: currentDocs },
+      usage,
       limits,
       exceeded: "documents",
       message: `Workspace document limit exceeded (${currentDocs} + 1 > ${limits.activeDocuments} documents on the ${plan} plan).`,
     };
   }
 
+  if (
+    options.incrementsShareCount &&
+    Number.isFinite(limits.activeShares) &&
+    projectedShares > limits.activeShares
+  ) {
+    return {
+      ok: false,
+      plan,
+      usage,
+      limits,
+      exceeded: "shares",
+      message: `Workspace active share limit exceeded (${currentShares} + 1 > ${limits.activeShares} shares on the ${plan} plan).`,
+    };
+  }
+
   return {
     ok: true,
     plan,
-    usage: { storageBytes: currentBytes, documentCount: currentDocs },
+    usage,
     limits,
     message: "ok",
   };
