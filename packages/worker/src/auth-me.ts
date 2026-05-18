@@ -1,4 +1,6 @@
-// `/api/auth/me` + `/api/auth/logout` — Phase 2c.
+// `/api/auth/me` + `/api/auth/logout` — Phase 2c, extended in
+// Phase 3 to surface `userId` / `workspaceId` and touch
+// `users.last_seen_at`.
 //
 // `/me` reads the session cookie, looks up the KV record, and
 // returns a small JSON envelope identifying the current user.
@@ -16,6 +18,7 @@ import {
   loadSession,
   readSessionCookie,
 } from "./session.js";
+import { touchUserLastSeen } from "./user-repo.js";
 
 /**
  * `GET /api/auth/me` — return the current user's identity, or
@@ -30,15 +33,18 @@ import {
  *     "providerUserId": "12345",
  *     "login": "octocat",
  *     "name": "The Octocat",
- *     "avatarUrl": "https://github.com/octocat.png"
+ *     "avatarUrl": "https://github.com/octocat.png",
+ *     "userId": "<uuid>",
+ *     "workspaceId": "<uuid>"
  *   }
  * }
  * ```
  *
  * The session's `createdAt` / `lastSeenAt` are intentionally
  * not exposed on this endpoint — the client doesn't need them.
- * Phase 3 will add a touch-on-use behaviour that bumps
- * `lastSeenAt` server-side here.
+ * Phase 3 added the side effect of touching `users.last_seen_at`
+ * each time `/me` resolves a valid session, so the database
+ * timestamp reflects real activity.
  */
 export async function handleAuthMe(c: Context<{ Bindings: Env }>): Promise<Response> {
   const token = readSessionCookie(c.req.header("Cookie") ?? null);
@@ -56,6 +62,15 @@ export async function handleAuthMe(c: Context<{ Bindings: Env }>): Promise<Respo
       401,
     );
   }
+
+  // Touch the DB-side `last_seen_at`. Best-effort: the helper
+  // swallows errors so a transient D1 hiccup doesn't 5xx the
+  // /me call for an already-authenticated user. Skip the touch
+  // for pre-Phase-3 sessions that don't carry `userId`.
+  if (session.userId) {
+    await touchUserLastSeen(c.env.DB, session.userId);
+  }
+
   return c.json({
     ok: true,
     user: {
@@ -64,6 +79,8 @@ export async function handleAuthMe(c: Context<{ Bindings: Env }>): Promise<Respo
       login: session.login,
       name: session.name,
       avatarUrl: session.avatarUrl,
+      userId: session.userId,
+      workspaceId: session.workspaceId,
     },
   });
 }

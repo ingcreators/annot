@@ -3,7 +3,13 @@
   "compilerOptions": {
     "rootDir": "src",
     "outDir": "dist",
-    "types": ["@cloudflare/workers-types"]
+    // `node` is here so test-helpers + *.test.ts can use `node:fs`
+    // to read migration SQL into the better-sqlite3-backed D1 mock.
+    // The PRODUCTION src files (handlers, user-repo, session,
+    // auth-*) MUST NOT import from `node:*` — Workers runtime has
+    // no Node API surface. A future runtime lint rule could
+    // enforce this; for now it's a convention.
+    "types": ["@cloudflare/workers-types", "node"]
   },
   "include": ["src/**/*.ts"]
 }

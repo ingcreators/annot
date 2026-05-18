@@ -28,6 +28,7 @@ import {
   createSession,
   type SessionRecord,
 } from "./session.js";
+import { findOrCreateUserFromProvider } from "./user-repo.js";
 
 const GITHUB_AUTHORIZE_URL = "https://github.com/login/oauth/authorize";
 const GITHUB_TOKEN_URL = "https://github.com/login/oauth/access_token";
@@ -224,6 +225,37 @@ export async function handleGithubCallback(c: Context<{ Bindings: Env }>): Promi
     );
   }
 
+  // Promote the GitHub identity into a D1-persisted user +
+  // personal workspace (first-time login → fresh rows; otherwise
+  // re-use). Failure here surfaces as a 500 because the OAuth
+  // exchange succeeded but we can't establish the user record —
+  // retrying is meaningful, vs the upstream 502s where retry
+  // doesn't help.
+  let upserted: Awaited<ReturnType<typeof findOrCreateUserFromProvider>>;
+  try {
+    upserted = await findOrCreateUserFromProvider(c.env.DB, {
+      provider: "github",
+      providerUserId: String(user.id),
+      email: null, // GitHub /user.email may be null; Phase 3 doesn't
+      // hit /user/emails yet. Promotion of the verified primary
+      // email lands in a follow-up.
+      displayName: user.name ?? "",
+      avatarUrl: user.avatar_url,
+    });
+  } catch (err) {
+    return c.json(
+      {
+        ok: false,
+        error: "db_error",
+        message:
+          err instanceof Error
+            ? `User upsert failed: ${err.message}`
+            : "User upsert failed with unknown error",
+      },
+      500,
+    );
+  }
+
   const now = new Date().toISOString();
   const record: SessionRecord = {
     provider: "github",
@@ -233,6 +265,8 @@ export async function handleGithubCallback(c: Context<{ Bindings: Env }>): Promi
     avatarUrl: user.avatar_url,
     createdAt: now,
     lastSeenAt: now,
+    userId: upserted.user.id,
+    workspaceId: upserted.workspace.id,
   };
   const token = await createSession(c.env.SESSIONS, record);
 

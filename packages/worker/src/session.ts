@@ -17,16 +17,12 @@ const SESSION_TTL_SECONDS = 30 * 24 * 60 * 60; // 30 days
 const OAUTH_STATE_TTL_SECONDS = 10 * 60; // 10 minutes
 
 /**
- * Identity attached to a session. For Phase 2c (GitHub OAuth)
- * only `provider: "github"` is emitted; Phase 3 adds
- * `provider: "google"`.
- *
- * Note: at Phase 2c there is no `users` table yet, so the session
- * is the ONLY persistent identity record. Phase 3 promotes this
- * into a row in D1 and adds `user_id` to the session record.
+ * Identity attached to a session. Phase 3 added the `userId` /
+ * `workspaceId` fields — sessions are now promoted onto D1 rows
+ * during OAuth callback. Phase 3c will add `provider: "google"`.
  */
 export interface SessionRecord {
-  /** Provider — "github" | "google" (Phase 3) */
+  /** Provider — "github" | "google" (Phase 3c) */
   provider: "github" | "google";
   /** Provider's user id (numeric for GitHub, string for Google) */
   providerUserId: string;
@@ -40,6 +36,22 @@ export interface SessionRecord {
   createdAt: string;
   /** ISO timestamp of the most recent activity (touched on /me) */
   lastSeenAt: string;
+  /**
+   * `users.id` for this session. Added in Phase 3 when the OAuth
+   * callback started persisting to D1; ALL new sessions carry it.
+   *
+   * Optional in the type because pre-Phase-3 KV-only sessions in
+   * the wild (created before Phase 3 deploy) don't have it.
+   * Phase 3-aware code that needs the id should fall back to
+   * provider+providerUserId lookup when this is undefined, or
+   * just force a re-login.
+   */
+  userId?: string;
+  /**
+   * `workspaces.id` for this session's personal workspace. Same
+   * Phase 3 / optionality story as `userId`.
+   */
+  workspaceId?: string;
 }
 
 /**
