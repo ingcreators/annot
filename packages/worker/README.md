@@ -157,35 +157,55 @@ deploy` runs manually from a developer machine.
 | Concern | Location |
 |---|---|
 | Static PWA at `annot.work` | Repo-root `wrangler.jsonc` (separate Worker, name `annot`) |
-| API at `api.annot.work` (post Phase 2c) | This package, name `annot-api` |
+| API at `annot.work/api/*` (same-origin with the PWA) | This package, name `annot-api` |
 | Database | Cloudflare D1 (multi-tenant SQLite) |
 | Object storage | Cloudflare R2 (image / document bytes) |
 | Sessions / CSRF state | Cloudflare KV |
 | Payments | Stripe (Phase 7) |
 
-## Operator action required for Phase 2c deploy
+## Operator action required for deploy
 
-This sub-phase ships the OAuth code but not the credentials. To
-make sign-in work end-to-end, the operator:
+The Worker code ships with the OAuth flow + route binding wired,
+but neither the credentials nor the Cloudflare zone setup ride
+along in source. To make sign-in work end-to-end the operator:
 
-1. Registers a GitHub OAuth App at
+1. **Registers a GitHub OAuth App** at
    <https://github.com/settings/developers> → "New OAuth App"
    - Homepage URL: `https://annot.work`
    - Authorization callback URL:
      `https://annot.work/api/auth/github/callback` (and the
      `*.workers.dev` URL for testing, if separate)
-2. Sets the client ID + secret as Worker secrets:
+2. **Registers a Google OAuth Client** at
+   <https://console.cloud.google.com> → APIs & Services →
+   Credentials → OAuth client (Web application)
+   - Authorised redirect URI:
+     `https://annot.work/api/auth/google/callback`
+3. **Sets the client IDs + secrets** as Worker secrets:
    ```sh
-   pnpm --filter @ingcreators/annot-worker exec wrangler secret put GITHUB_OAUTH_CLIENT_ID
-   pnpm --filter @ingcreators/annot-worker exec wrangler secret put GITHUB_OAUTH_CLIENT_SECRET
+   pnpm --filter @ingcreators/annot-worker secrets:put:github-client-id
+   pnpm --filter @ingcreators/annot-worker secrets:put:github-client-secret
+   pnpm --filter @ingcreators/annot-worker secrets:put:google-client-id
+   pnpm --filter @ingcreators/annot-worker secrets:put:google-client-secret
    ```
-3. Configures the route binding from `annot.work/api/*` to the
-   `annot-api` Worker (separate follow-up PR — adds the `routes`
-   stanza to `wrangler.toml`).
+4. **Confirms the `annot.work` zone exists on the deploy
+   account** and the API token used for `cf:deploy` has
+   `Worker Routes:Edit` for it. Without that, the deploy fails
+   with a 403 when wrangler tries to install the route binding
+   from `wrangler.jsonc`.
 
-Until step 1+2 are done, `/api/auth/github` returns
-`500 oauth_not_configured`. Until step 3 is done, callers must
-use the `*.workers.dev` URL.
+Until step 1–3 are done, `/api/auth/*` returns
+`500 oauth_not_configured`. Until step 4 is done, the route
+binding can't deploy and the PWA must use the `*.workers.dev`
+URL via the cloud-connect modal's "Advanced" override.
+
+### Self-hosting
+
+The deploying Cloudflare account doesn't have to own
+`annot.work` to run this Worker — drop or edit the `routes`
+stanza in `wrangler.jsonc` to point at whatever zone the
+operator does own (or remove the stanza entirely and run on
+`*.workers.dev`). The PWA's connect modal lets self-hosters
+override the base URL at sign-in time.
 
 ## Roadmap
 
