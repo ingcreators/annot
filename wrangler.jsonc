@@ -7,10 +7,23 @@
  * serves index.html so the SPA router can take over client-side.
  */
 {
-  "name": "annot",
-  "compatibility_date": "2026-04-23",
-  "assets": {
-    "directory": "./packages/web/dist",
-    "not_found_handling": "single-page-application"
-  }
+	"name": "annot",
+	"compatibility_date": "2026-04-23",
+	"assets": {
+		"directory": "./packages/web/dist",
+		"not_found_handling": "single-page-application"
+	},
+	"kv_namespaces": [
+		{
+			"binding": "SESSIONS",
+			"id": "bcf47845acab46ba92254f167bab5190"
+		}
+	],
+	"d1_databases": [
+		{
+			"binding": "annot_db",
+			"database_name": "annot-db",
+			"database_id": "30492e01-73f8-4898-8e04-96af6f805acb"
+		}
+	]
 }
