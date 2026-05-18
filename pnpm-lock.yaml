@@ -42,6 +42,19 @@ importers:
         specifier: ^4.1.5
         version: 4.1.5(@types/node@25.6.2)(@vitest/coverage-v8@4.1.5)(happy-dom@20.9.0)(msw@2.14.5(@types/node@25.6.2)(typescript@6.0.3))(vite@8.0.11(@types/node@25.6.2)(esbuild@0.27.7)(jiti@2.7.0))
 
+  packages/annotator:
+    dependencies:
+      '@ingcreators/annot-core':
+        specifier: workspace:*
+        version: link:../core
+      '@resvg/resvg-js':
+        specifier: ^2.6.2
+        version: 2.6.2
+    devDependencies:
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+
   packages/capture:
     dependencies:
       '@ingcreators/annot-core':
