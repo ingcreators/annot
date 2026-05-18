@@ -41,8 +41,12 @@ const GOOGLE_AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v3/userinfo";
 
-/** Where to bounce the user after a successful sign-in. */
-const POST_LOGIN_REDIRECT = "/";
+/** Where to bounce the user after a successful sign-in. Points
+ *  at the worker-served terminal page that posts a message to the
+ *  PWA opener (if any) and then `window.close()`s the popup.
+ *  Same-origin under the `annot.work/api/*` route binding, so the
+ *  postMessage origin check on the PWA side passes. */
+const POST_LOGIN_REDIRECT = "/api/auth/success";
 
 /**
  * Derive the callback URL from the current request's origin.
