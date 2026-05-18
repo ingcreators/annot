@@ -45,7 +45,8 @@
     "happy-dom": "^20",
     "msw": "^2.14",
     "turbo": "^2.9.12",
-    "vitest": "^4.1.5"
+    "vitest": "^4.1.5",
+    "wrangler": "^4.45.0"
   },
   "pnpm": {
     "overrides": {
