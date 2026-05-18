@@ -149,7 +149,14 @@ export function makeMockWorker(options: MockWorkerOptions = {}): MockWorker {
   }
 
   function bytesResponse(status: number, body: Uint8Array, contentType: string): Response {
-    return new Response(body, {
+    // Slice into a fresh ArrayBuffer so the Response constructor's
+    // BodyInit overload matches in the TS lib version CI uses
+    // (where Uint8Array carries its ArrayBufferLike phantom).
+    const buf = body.buffer.slice(
+      body.byteOffset,
+      body.byteOffset + body.byteLength,
+    ) as ArrayBuffer;
+    return new Response(buf, {
       status,
       headers: { "Content-Type": contentType },
     });
