@@ -1,0 +1,26 @@
+{
+  "name": "@ingcreators/annot-worker",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Cloudflare Worker hosting Annot's API surface (GitHub OAuth, GitHub App, AnnotCloudStore endpoints, share / embed). Phase 2a of the Excalidraw-route cloud roadmap (`docs/plans/annot-cloud-roadmap.md`).",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ingcreators/annot.git",
+    "directory": "packages/worker"
+  },
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "hono": "^4.10.4"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20251005.0",
+    "typescript": "catalog:",
+    "wrangler": "^4.45.0"
+  }
+}
