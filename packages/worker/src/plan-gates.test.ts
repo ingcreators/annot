@@ -23,10 +23,7 @@ async function setupWorkspace(plan: "free" | "pro" | "team" = "free") {
   const workspaceId = upserted.workspace.id;
   const userId = upserted.user.id;
   if (plan !== "free") {
-    await db
-      .prepare("UPDATE workspaces SET plan = ? WHERE id = ?")
-      .bind(plan, workspaceId)
-      .run();
+    await db.prepare("UPDATE workspaces SET plan = ? WHERE id = ?").bind(plan, workspaceId).run();
   }
   return { db, workspaceId, userId };
 }

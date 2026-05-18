@@ -479,10 +479,7 @@ export async function softDeleteDocument(
 
 /** Count of non-deleted document rows in a workspace. Used by
  *  the Phase 4e quota gate's `activeDocuments` check. */
-export async function activeDocumentCount(
-  db: D1Database,
-  workspaceId: string,
-): Promise<number> {
+export async function activeDocumentCount(db: D1Database, workspaceId: string): Promise<number> {
   const row = await db
     .prepare(
       `SELECT COUNT(*) AS count FROM documents

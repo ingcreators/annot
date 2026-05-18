@@ -24,8 +24,7 @@ export async function handleUsageGet(c: Context<{ Bindings: Env }>): Promise<Res
     totalStorageUsedBytes(c.env.DB, auth.workspaceId),
     activeDocumentCount(c.env.DB, auth.workspaceId),
   ]);
-  const plan: PlanId =
-    planRow?.plan === "pro" || planRow?.plan === "team" ? planRow.plan : "free";
+  const plan: PlanId = planRow?.plan === "pro" || planRow?.plan === "team" ? planRow.plan : "free";
   const limits = PLAN_LIMITS[plan];
 
   // `Number.POSITIVE_INFINITY` doesn't survive JSON.stringify
