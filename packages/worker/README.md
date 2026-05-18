@@ -148,33 +148,46 @@ bottleneck; today's mocks are sufficient.
 
 ## CI auto-deploy
 
-[`.github/workflows/worker-deploy.yml`](../../.github/workflows/worker-deploy.yml)
-deploys to Cloudflare on every `main` push that touches
-`packages/worker/**`, plus a manual `workflow_dispatch`
-trigger for re-deploys / rollbacks.
+[`.github/workflows/deploy.yml`](../../.github/workflows/deploy.yml)
+deploys **both** Workers — `annot-api` (this package) AND
+`annot` (the PWA static-assets worker at the repo-root
+`wrangler.jsonc`) — from a single workflow. The drift guard
+gates BOTH so the API + PWA stay in lockstep when a migration
+is pending.
+
+Triggers: `main` pushes that touch `packages/**`,
+`wrangler.jsonc`, or `pnpm-lock.yaml`. Plus
+`workflow_dispatch` for manual re-deploys / rollbacks.
 
 ### Required repo secrets
 
 | Name | Source | Permissions |
 |---|---|---|
-| `CLOUDFLARE_API_TOKEN` | Cloudflare dashboard → Manage Account → API Tokens → "Create Token" | Account: Workers Scripts:Edit + Workers R2 Storage:Edit + D1:Edit; Zone: Workers Routes:Edit + Zone:Read (on `annot.work`) |
+| `CLOUDFLARE_API_TOKEN` | Cloudflare dashboard → Manage Account → API Tokens → "Create Token" | Account: Workers Scripts:Edit + Workers R2 Storage:Edit + Workers KV Storage:Edit + D1:Edit + Workers Observability:Edit + Workers Tail:Read + Account Settings:Read; Zone: Workers Routes:Edit on `annot.work`; User: User Details:Read + Memberships:Read |
 | `CLOUDFLARE_ACCOUNT_ID` | Dashboard → Workers & Pages → right sidebar | none (just an identifier; recommended for explicit account binding) |
-
-The "Edit Cloudflare Workers" template gets you most of the
-permissions; add **D1:Edit** manually so the workflow's
-schema-drift check can read `d1_migrations`. (Cloudflare
-doesn't expose a read-only D1 scope, but D1:Edit is the
-narrowest available.)
 
 Set both in **Settings → Secrets and variables → Actions → New
 repository secret**.
 
+### Cloudflare-side coordination (one-time)
+
+The Cloudflare Workers Builds integration for the `annot`
+worker MUST be **disabled** in the Cloudflare dashboard,
+otherwise Cloudflare watches GitHub itself and races this
+workflow — defeating the drift gate. Disable via:
+
+  Cloudflare Dashboard → Workers & Pages → `annot` →
+  Settings → Builds → **Disconnect repository**.
+
+After disconnecting, dispatch the workflow once manually
+(Actions → Deploy → Run workflow) to seed both deploys.
+
 ### Schema-drift guard
 
-The workflow is **deliberately split-brain**: auto-deploys
-code, but does **not** auto-apply D1 migrations. To prevent
-"new code SELECTs a column the remote DB doesn't have yet"
-500s, the deploy fails fast when local
+The workflow is **deliberately split-brain on migrations**:
+auto-deploys code, but does **not** auto-apply D1 migrations.
+To prevent "new code SELECTs a column the remote DB doesn't
+have yet" 500s, the deploy fails fast when local
 `packages/worker/migrations/*.sql` files don't all appear in
 the remote `d1_migrations` table.
 
@@ -184,39 +197,51 @@ When the guard fires:
 pnpm --filter @ingcreators/annot-worker migrations:apply
 ```
 
-Then re-dispatch the workflow from **Actions → Worker deploy
-→ Run workflow** (no code change needed — the
-`workflow_dispatch` lever exists for exactly this).
+Then re-dispatch the workflow from **Actions → Deploy → Run
+workflow**. Both halves catch up in lockstep — applying the
+migration + re-dispatch brings the API and PWA up to the
+merged-main version simultaneously.
+
+### Deploy order: API first, then PWA
+
+API ships before PWA so that when the PWA's new bundle lands
+on browsers, the API endpoints it expects are already live.
+Reverse order would create "PWA calls nonexistent endpoint"
+404s, while API-first only risks the prior-PWA / new-API
+direction, which the API is required to keep
+forward-compatible anyway (existing clients shouldn't break).
 
 ### Path filter
 
-The workflow ignores edits that don't change the deployed
-Worker bundle:
+The workflow ignores edits that don't change either deployed
+bundle:
 
-- `packages/worker/README.md` — docs only
+- `**/*.md` — docs only
 - `packages/worker/migrations/**` — schema files are
-  operator-applied, not code-deployed (apply manually, then
-  push a code change or `workflow_dispatch` to trigger
-  deploy)
+  operator-applied, not code-deployed
+- `packages/**/*.test.ts`, `*.stories.ts`,
+  `packages/web/.storybook/**` — tests + Storybook don't
+  ship to production
 
 ### What the workflow does NOT do
 
 - **Apply D1 migrations.** A bad migration can brick
   production; `migrations:apply` stays manual. The drift
-  guard above is the safety net against forgetting.
+  guard is the safety net against forgetting.
 - **Manage secrets.** `wrangler secret put` is also manual
   (one-time bootstrap; rotations are operator-driven).
-- **Deploy the PWA worker.** The PWA's static-assets deploy
-  story lives in the repo-root `wrangler.jsonc` and isn't
-  wired into CI yet.
 
-### Post-deploy smoke check
+### Post-deploy smoke checks
 
-The workflow finishes with a `curl https://annot.work/api/health/bindings`
-that asserts `ok: true` across KV/D1/R2 (with up to 30s of
-retry to absorb Cloudflare edge propagation). A failure here
-surfaces a regression immediately instead of via the first
-real user request.
+The workflow finishes with two `curl`s:
+
+  - `https://annot.work/api/health/bindings` — asserts
+    `ok: true` across KV/D1/R2.
+  - `https://annot.work/` — asserts a 200 from the PWA.
+
+Each retries up to 30s to absorb Cloudflare edge propagation.
+A failure surfaces a regression immediately instead of via
+the first real user request.
 
 ## Architecture
 

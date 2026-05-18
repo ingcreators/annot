@@ -1,0 +1,231 @@
+name: Deploy
+
+# Unified deploy for BOTH Cloudflare Workers under the
+# `annot.work` zone:
+#
+#   1. `annot-api`  — the API worker at `annot.work/api/*`
+#                     (`packages/worker/`, `wrangler.jsonc`).
+#   2. `annot`      — the static-assets worker that serves the
+#                     PWA at `annot.work/*` (`packages/web/dist/`,
+#                     root `wrangler.jsonc`).
+#
+# Why one workflow, not two? The PWA and the API are co-deployed
+# product surfaces: the PWA calls API endpoints + reads schema
+# the API expects to exist. Splitting them into separate
+# pipelines lets the PWA ship a `fetch("/api/foo")` while the API
+# is still on the prior version, producing brief windows of
+# "endpoint 404" or "missing column" 500 visible to users.
+#
+# This workflow gates BOTH deploys behind the same D1 migration
+# drift check: if local migrations aren't applied to the remote
+# DB, neither half ships. The operator runs `migrations:apply`
+# and re-dispatches, and both halves catch up in lockstep.
+#
+# Trust model: runs AFTER the merge — `ci.yml` already vouched
+# for typecheck + test + lint + storybook. The deploy job re-runs
+# the worker's typecheck (cheap, catches type-conflicts at the
+# merged tip) and lets the existing `pnpm build` produce the
+# PWA artefact.
+#
+# What this workflow does NOT do:
+#   - Apply D1 migrations. `migrations:apply` stays manual —
+#     a bad SQL change can brick production. The drift step
+#     below fails fast when local migrations aren't applied,
+#     and the operator re-dispatches after running the apply.
+#   - Manage worker secrets. `wrangler secret put` is also
+#     manual; bootstrap + rotations stay operator-driven.
+#
+# IMPORTANT — Cloudflare-side coordination:
+#
+# The Cloudflare Workers Builds integration for the `annot`
+# worker MUST be disabled in the Cloudflare dashboard
+# (Workers & Pages → annot → Settings → Builds → Disconnect).
+# Otherwise Cloudflare watches GitHub itself and races this
+# workflow, defeating the migration-drift gate. The first run
+# after disabling needs `workflow_dispatch` from the Actions UI
+# to seed both deploys.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      # Worker bundle source / config.
+      - "packages/worker/**"
+      # PWA bundle source — pretty much any workspace package
+      # change can affect the built PWA (transitive deps). The
+      # paths-ignore stanza below trims this back for the
+      # demonstrably-non-deployable subsets.
+      - "packages/**"
+      # Root config that controls the PWA Workers Builds.
+      - "wrangler.jsonc"
+      # Workspace files that materially change either build.
+      - "pnpm-lock.yaml"
+      # Allow operator iteration on the deploy pipeline itself.
+      - ".github/workflows/deploy.yml"
+    paths-ignore:
+      # Docs-only edits.
+      - "packages/**/README.md"
+      - "**/*.md"
+      # Schema files are operator-applied via `migrations:apply`,
+      # not code-deployed. A migration-only PR doesn't change
+      # what either Worker DOES; the deploy fires on the next
+      # code change (or via manual `workflow_dispatch`).
+      - "packages/worker/migrations/**"
+      # Tests don't ship in either bundle.
+      - "packages/**/*.test.ts"
+      - "packages/**/*.test-helpers.ts"
+      - "packages/**/*.test-mock.ts"
+      - "packages/**/*.contract.test.ts"
+      # Storybook also doesn't ship to production.
+      - "packages/**/*.stories.ts"
+      - "packages/web/.storybook/**"
+  workflow_dispatch:
+
+# Serialise deploys. `cancel-in-progress: true` lets a newer
+# push abandon an older still-running deploy; the newer push's
+# output would have overwritten the older one anyway, so
+# cancelling saves runner minutes without changing final state.
+concurrency:
+  group: deploy
+  cancel-in-progress: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  deploy:
+    name: deploy annot + annot-api
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # ── 1. API typecheck (sanity gate) ───────────────────────
+      - name: Typecheck worker
+        run: pnpm --filter @ingcreators/annot-worker typecheck
+
+      # ── 2. Migration drift guard ─────────────────────────────
+      # If local `packages/worker/migrations/*.sql` files aren't
+      # all recorded in the remote `d1_migrations` table, BOTH
+      # deploys are blocked. Operator runs:
+      #     pnpm --filter @ingcreators/annot-worker migrations:apply
+      # …then re-dispatches from the Actions UI.
+      - name: Check for pending D1 migrations
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          cd packages/worker
+          output=$(pnpm exec wrangler d1 migrations list annot-db --remote 2>&1 || true)
+          echo "── wrangler d1 migrations list output ──"
+          echo "$output"
+          echo "─────────────────────────────────────────"
+          if echo "$output" | grep -qE "[0-9]{4}_[A-Za-z0-9_-]+\.sql"; then
+            {
+              echo "::error::Pending D1 migrations detected. Apply them first, then re-dispatch:"
+              echo "::error::  pnpm --filter @ingcreators/annot-worker migrations:apply"
+              echo "::error:: "
+              echo "::error::Both annot-api AND annot (PWA) deploys are blocked together"
+              echo "::error::so they stay in lockstep — applying the migration + re-dispatch"
+              echo "::error::brings both up to the merged-main version simultaneously."
+            } 1>&2
+            exit 1
+          fi
+          echo "✓ D1 schema is up to date — proceeding with deploy."
+
+      # ── 3. Deploy annot-api FIRST ────────────────────────────
+      # API ships before PWA so that when the PWA's new bundle
+      # lands on browsers, the API endpoints it expects are
+      # already live. Reverse order produces "PWA calls
+      # nonexistent endpoint" 404s while the older PWA on
+      # other browsers might call a removed endpoint and 404
+      # — net: API-first minimises mismatched-window pain.
+      - name: Deploy annot-api
+        env:
+          # Cloudflare API token with:
+          #   - Account: Workers Scripts:Edit       (publish both Workers)
+          #   - Account: Workers R2 Storage:Edit    (R2 binding on annot-api)
+          #   - Account: Workers KV Storage:Edit    (KV binding on annot-api)
+          #   - Account: D1:Edit                    (drift check + migrations)
+          #   - Account: Workers Observability:Edit (annot-api logs)
+          #   - Account: Workers Tail:Read          (annot-api logs)
+          #   - Account: Account Settings:Read      (wrangler whoami)
+          #   - Zone: Workers Routes:Edit on annot.work
+          #   - User: User Details:Read, Memberships:Read
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm --filter @ingcreators/annot-worker cf:deploy
+
+      # ── 4. Smoke check the API ───────────────────────────────
+      # Up to 30s of retries to absorb Cloudflare edge propagation.
+      - name: Smoke check /api/health/bindings
+        run: |
+          set -euo pipefail
+          for i in {1..6}; do
+            if curl -sf --max-time 5 https://annot.work/api/health/bindings | tee /tmp/health.json | grep -q '"ok":true'; then
+              echo "API smoke check passed:"
+              cat /tmp/health.json
+              exit 0
+            fi
+            echo "Attempt $i failed; retrying in 5s…"
+            sleep 5
+          done
+          echo "API smoke check failed after 30s. Last body:"
+          cat /tmp/health.json || echo "(no body)"
+          exit 1
+
+      # ── 5. Build the PWA bundle ──────────────────────────────
+      # `annot-core` ships a `vite-plugin-dts`-generated `dist/`
+      # that `annot-web`'s build resolves via the `exports` map;
+      # we build it explicitly to mirror what `ci.yml` does, even
+      # though Vite would also read from `src/` directly via the
+      # exports conditionals — being explicit avoids drift if a
+      # future `tsc`-only consumer of `annot-core/dist` arrives.
+      - name: Build annot (PWA)
+        run: >
+          pnpm
+          --filter @ingcreators/annot-core
+          --filter @ingcreators/annot-web
+          build
+
+      # ── 6. Deploy the PWA worker ─────────────────────────────
+      # Root `wrangler.jsonc` declares the `annot` worker which
+      # serves `packages/web/dist/` under
+      # `not_found_handling: single-page-application` (SPA
+      # fallthrough). `wrangler deploy` from the repo root
+      # picks up the root config.
+      - name: Deploy annot (PWA)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm exec wrangler deploy
+
+      # ── 7. Smoke check the PWA ───────────────────────────────
+      - name: Smoke check PWA root
+        run: |
+          set -euo pipefail
+          for i in {1..6}; do
+            if curl -sfI --max-time 5 https://annot.work/ | grep -qE "^HTTP/.* 200"; then
+              echo "PWA smoke check passed (annot.work/ → 200)."
+              exit 0
+            fi
+            echo "Attempt $i failed; retrying in 5s…"
+            sleep 5
+          done
+          echo "PWA smoke check failed after 30s."
+          exit 1
