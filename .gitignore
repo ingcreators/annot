@@ -27,6 +27,14 @@ Thumbs.db
 .env
 .env.local
 
+# Cloudflare Workers (wrangler)
+# Miniflare local D1/KV/R2 state + tmp build artefacts — regenerated
+# on every `wrangler dev` / `wrangler d1 ...` invocation.
+.wrangler/
+# Local-only Worker secrets for `wrangler dev`. Production secrets
+# land via `wrangler secret put` and never touch the repo.
+.dev.vars
+
 # Claude Code (local-only)
 .claude/settings.local.json
 .claude/worktrees/
