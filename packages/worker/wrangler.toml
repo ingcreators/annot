@@ -28,27 +28,31 @@ enabled = true
 
 # ─── Bindings ────────────────────────────────────────────────
 #
-# Operator action required before `wrangler deploy`: create the
-# Cloudflare resources and replace the `<placeholder>` IDs below
-# with the real values. See `packages/worker/README.md`.
+# Resource IDs below are Cloudflare-internal identifiers (NOT
+# credentials). They identify which KV namespace / D1 database
+# the Worker reads — access still requires the Cloudflare API
+# token. Same publish-as-plaintext stance as wrangler.toml files
+# in every Cloudflare Workers OSS project.
 
 # KV namespace for session cookies + OAuth CSRF state.
+# Created via:
 #   wrangler kv namespace create SESSIONS
 #   wrangler kv namespace create SESSIONS --preview
 [[kv_namespaces]]
 binding = "SESSIONS"
-id = "<replace-with-prod-namespace-id>"
-preview_id = "<replace-with-preview-namespace-id>"
+id = "bcf47845acab46ba92254f167bab5190"
+preview_id = "6927e8127e8147c498fdd265f2f81fcb"
 
 # D1 database for the multi-tenant schema (users / workspaces /
 # images / documents / share_links / audit_events). Phase 3 lands
-# the tables; Phase 2b just wires the binding.
+# the tables; Phase 2b wired the binding.
+# Created via:
 #   wrangler d1 create annot-db
 #   wrangler d1 migrations apply annot-db   # once migrations exist
 [[d1_databases]]
 binding = "DB"
 database_name = "annot-db"
-database_id = "<replace-with-d1-database-id>"
+database_id = "30492e01-73f8-4898-8e04-96af6f805acb"
 migrations_dir = "migrations"
 
 # Future bindings to add as their phases land:
