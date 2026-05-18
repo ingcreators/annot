@@ -173,8 +173,7 @@ along in source. To make sign-in work end-to-end the operator:
    <https://github.com/settings/developers> → "New OAuth App"
    - Homepage URL: `https://annot.work`
    - Authorization callback URL:
-     `https://annot.work/api/auth/github/callback` (and the
-     `*.workers.dev` URL for testing, if separate)
+     `https://annot.work/api/auth/github/callback`
 2. **Registers a Google OAuth Client** at
    <https://console.cloud.google.com> → APIs & Services →
    Credentials → OAuth client (Web application)
@@ -194,18 +193,22 @@ along in source. To make sign-in work end-to-end the operator:
    from `wrangler.jsonc`.
 
 Until step 1–3 are done, `/api/auth/*` returns
-`500 oauth_not_configured`. Until step 4 is done, the route
-binding can't deploy and the PWA must use the `*.workers.dev`
-URL via the cloud-connect modal's "Advanced" override.
+`500 oauth_not_configured`. Step 4 is required for the deploy
+itself to succeed — without the zone permission, wrangler
+fails the route-install step with a 403.
 
 ### Self-hosting
 
 The deploying Cloudflare account doesn't have to own
-`annot.work` to run this Worker — drop or edit the `routes`
-stanza in `wrangler.jsonc` to point at whatever zone the
-operator does own (or remove the stanza entirely and run on
-`*.workers.dev`). The PWA's connect modal lets self-hosters
-override the base URL at sign-in time.
+`annot.work` to run this Worker. Fork the repo and edit
+`wrangler.jsonc` to:
+
+  - Replace the `pattern` / `zone_name` in the `routes` stanza
+    with whatever zone the operator owns, OR
+  - Drop the `routes` stanza entirely AND flip
+    `workers_dev` back to `true`. Wrangler will then publish
+    on the `*.workers.dev` subdomain. The PWA's cloud-connect
+    modal "Advanced" override accepts that URL as the base.
 
 ## Roadmap
 
