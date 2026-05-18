@@ -1,0 +1,24 @@
+{
+  "$schema": "https://unpkg.com/@changesets/config@3.0.0/schema.json",
+  "changelog": "@changesets/cli/changelog",
+  "commit": false,
+  "fixed": [],
+  "linked": [],
+  "access": "restricted",
+  "baseBranch": "main",
+  "updateInternalDependencies": "patch",
+  "ignore": [
+    "@ingcreators/annot-web",
+    "@ingcreators/annot-extension",
+    "@ingcreators/annot-desktop",
+    "@ingcreators/annot-vscode",
+    "@ingcreators/annot-worker",
+    "@ingcreators/annot-cloud-store",
+    "@ingcreators/annot-capture",
+    "@ingcreators/annot-host-ui",
+    "@ingcreators/annot-doc",
+    "@ingcreators/annot-editor",
+    "@ingcreators/annot-render",
+    "@ingcreators/annot-imagequant"
+  ]
+}
