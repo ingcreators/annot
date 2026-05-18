@@ -111,8 +111,13 @@ pnpm --filter @ingcreators/annot-worker tail
 ### Deploy
 
 ```sh
-pnpm --filter @ingcreators/annot-worker deploy
+pnpm --filter @ingcreators/annot-worker cf:deploy
 ```
+
+The script is named `cf:deploy` rather than `deploy` because
+`pnpm deploy` is a built-in pnpm command (it copies a package to
+a target directory for self-contained deployment, unrelated to
+Cloudflare). The `cf:` prefix sidesteps the collision.
 
 ## Tests
 
