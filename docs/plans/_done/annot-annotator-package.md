@@ -1,6 +1,6 @@
 # `@ingcreators/annot-annotator` package — Phase 1
 
-> **Status:** Queued
+> **Status:** Done — landed [`#751`](https://github.com/ingcreators/annot/pull/751) 2026-05-18
 > **Compatibility:** Builds on the Phase 0 spike landed in
 >   [`#750`](https://github.com/ingcreators/annot/pull/750)
 >   (`docs/plans/_done/headless-annotator-spike.md`). Workspace
