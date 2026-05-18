@@ -1,0 +1,124 @@
+name: Worker deploy
+
+# Deploys `@ingcreators/annot-worker` (Cloudflare Worker at
+# `annot.work/api/*`) to the production environment on every push
+# to `main` that touches the worker package. `workflow_dispatch`
+# gives an operator-triggered manual lever for re-deploys / rollbacks
+# without needing a local checkout.
+#
+# Trust model: this workflow runs AFTER the merge — the merge PR
+# already went through `ci.yml` (typecheck + test + lint), so the
+# pre-deploy artifact is already vouched for. We re-run typecheck
+# scoped to the worker as a final sanity gate (cheap, catches the
+# rare case where two PRs to non-overlapping files type-conflict at
+# the merged tip).
+#
+# What this workflow does NOT do:
+#   - Apply D1 migrations. `migrations:apply` stays manual — a bad
+#     migration could brick production; the operator runs it from
+#     their machine after eyeballing the SQL.
+#   - Manage secrets. `wrangler secret put` is also manual; this
+#     workflow assumes `GITHUB_OAUTH_CLIENT_*`, `GOOGLE_OAUTH_*`,
+#     etc. are already set on the worker (one-time bootstrap).
+#   - Deploy the PWA worker (root `wrangler.jsonc`). The PWA build
+#     produces static assets; its deploy story is a separate
+#     follow-up.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      # Source / config — anything that actually changes the
+      # deployed Worker bundle.
+      - "packages/worker/**"
+      # Workspace files that affect what pnpm install resolves.
+      # A lockfile bump in this set could materially change the
+      # built Worker even when no `packages/worker/` file moved.
+      - "pnpm-lock.yaml"
+      # Allow operator to iterate on the deploy pipeline itself
+      # without needing to touch a worker file to trigger a run.
+      - ".github/workflows/worker-deploy.yml"
+  workflow_dispatch:
+
+# Serialise deploys to the same environment. `cancel-in-progress`
+# means a newer push abandons an older still-running deploy —
+# correctness-safe because Cloudflare publishes atomically (the
+# newer push's deploy would have overwritten the older one anyway,
+# so cancelling the older saves runner minutes without changing
+# the final state).
+concurrency:
+  group: worker-deploy
+  cancel-in-progress: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  deploy:
+    name: deploy annot-api
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # `id-token: write` would be required for OIDC-based Cloudflare
+    # auth; we use a long-lived API token instead, so a plain
+    # `contents: read` is sufficient.
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Re-run the worker's own typecheck. Cheap (<5s) and a final
+      # gate against the "two PRs merged to non-overlapping files
+      # but type-conflict at the merged tip" failure mode.
+      - name: Typecheck worker
+        run: pnpm --filter @ingcreators/annot-worker typecheck
+
+      - name: Deploy via wrangler
+        env:
+          # Cloudflare API token with:
+          #   - Account: Workers Scripts:Edit
+          #   - Account: Workers R2 Storage:Edit
+          #   - Zone:Workers Routes:Edit on the annot.work zone
+          #   - Zone:Read on the annot.work zone
+          # Set in the repo's "Actions secrets and variables"
+          # settings; rotate via the Cloudflare dashboard.
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          # Optional but recommended — explicit account binding
+          # avoids ambiguity if the token's scope spans accounts.
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm --filter @ingcreators/annot-worker cf:deploy
+
+      # Post-deploy smoke check. Hits the freshly-deployed health
+      # endpoint to confirm the route binding survived and all
+      # three bindings (KV/D1/R2) wake up. Failure here doesn't
+      # roll back (Cloudflare's atomic publish already committed),
+      # but it surfaces the regression immediately instead of
+      # discovering it via a 500 from a real user.
+      - name: Smoke check /api/health/bindings
+        run: |
+          set -euo pipefail
+          # Up to 30s of retries because Cloudflare's edge can
+          # take a few seconds to propagate the new version.
+          for i in {1..6}; do
+            if curl -sf --max-time 5 https://annot.work/api/health/bindings | tee /tmp/health.json | grep -q '"ok":true'; then
+              echo "Smoke check passed:"
+              cat /tmp/health.json
+              exit 0
+            fi
+            echo "Attempt $i failed; retrying in 5s…"
+            sleep 5
+          done
+          echo "Smoke check failed after 30s. Last body:"
+          cat /tmp/health.json || echo "(no body)"
+          exit 1
