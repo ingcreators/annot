@@ -59,6 +59,18 @@
   // `*.workers.dev` URL still works as a backend.
   "workers_dev": false,
 
+  // Preview URLs — per-version `<id>-annot-api.<account>.workers.dev`
+  // subdomains Cloudflare normally mints for each deploy so the
+  // operator can poke at a new version before promoting it.
+  // Setting `workers_dev: false` above implicitly disables these
+  // too, but wrangler logs a warning on every deploy unless the
+  // intent is stated explicitly. Same rationale as the
+  // `workers_dev` flip: one canonical URL only. If preview-URL
+  // smoke testing becomes useful in the future (e.g. a CI job
+  // wants to validate a build artefact pre-promotion), flip this
+  // to `true` and the per-version subdomains come back.
+  "preview_urls": false,
+
   // Production route binding: `annot.work/api/*` resolves to
   // this Worker. The root `wrangler.jsonc` (PWA static assets)
   // claims everything else under `annot.work` — Cloudflare
