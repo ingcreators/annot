@@ -2,15 +2,15 @@ name: Publish
 
 # Manually-triggered publish of the three OSS npm packages —
 # `@ingcreators/annot-core`, `@ingcreators/annot-annotator`,
-# `@ingcreators/annot-playwright` — via Changesets, authenticated
-# via npm Trusted Publishing (OIDC).
+# `@ingcreators/annot-playwright` — via Changesets.
 #
 # Phase 6 of `docs/plans/annot-cloud-roadmap.md` / Stage 3 of
 # `docs/plans/headless-annotator-publish.md`. The first run after
 # this workflow lands is the very first npm publish from this
 # org; treat each manual dispatch as a deliberate release event.
 #
-# Trust model:
+# ## Trust model
+#
 #   - `workflow_dispatch` only. NEVER auto-publishes on push.
 #     Versions move when the operator clicks "Run workflow", and
 #     the operator's clicks ARE the release signal.
@@ -25,30 +25,58 @@ name: Publish
 #     already matches what's on the registry, so a re-dispatch
 #     after a partial-failure recovery doesn't double-publish.
 #
-# Auth: Trusted Publishing (OIDC). No long-lived `NPM_TOKEN`
-# secret needed — GitHub Actions mints a short-lived OIDC
-# identity token via `permissions: id-token: write`, npm verifies
-# it against the configured Trusted Publisher rules
-# (repo + workflow path + ref), and grants publish on a per-run
-# basis. Token never touches the runner's disk.
+# ## Auth: dual-mode (Trusted Publishing OR NPM_TOKEN)
 #
-# Required setup on npmjs.com (one-time, per package OR at the
-# org level so it covers all current + future packages):
+# This workflow supports BOTH npm Trusted Publishing (OIDC) and
+# legacy `NPM_TOKEN`-based auth. The two modes coexist because
+# npm's Trusted Publishing UI is currently **per-package** and
+# **post-publish only** — the first publish of a NEW package has
+# to use a token to create it on the registry, after which the
+# operator configures Trusted Publishers on the package's own
+# Settings page and the token can be retired.
 #
-#   1. https://www.npmjs.com/settings/ingcreators/trusted-publishers
-#      (Org-level setup applies to every `@ingcreators/*` package,
-#      current and future.)
-#   2. "Add new publisher" → GitHub Actions:
-#        - Organization: `ingcreators`
-#        - Repository:   `annot`
-#        - Workflow:     `.github/workflows/publish.yml`
-#        - Environment:  (leave empty)
-#   3. Save. Done.
+# Bootstrap timeline:
+#
+#   Step 1. First publish (bootstrap):
+#     - Operator creates a short-lived Granular Access Token
+#       (1-week TTL) scoped to `@ingcreators` with publish perms.
+#     - Sets `NPM_TOKEN` repo secret to the token.
+#     - Dispatches this workflow. The three packages get created
+#       on npm.
+#
+#   Step 2. Per-package Trusted Publisher setup:
+#     - For each of the now-existing packages, the operator
+#       navigates to:
+#         https://www.npmjs.com/package/@ingcreators/annot-core/access
+#         https://www.npmjs.com/package/@ingcreators/annot-annotator/access
+#         https://www.npmjs.com/package/@ingcreators/annot-playwright/access
+#       (or per-package Settings → "Trusted Publishers")
+#     - Adds a Trusted Publisher rule:
+#         Publisher: GitHub Actions
+#         Organization: ingcreators
+#         Repository:   annot
+#         Workflow:     .github/workflows/publish.yml
+#         Environment:  (leave empty)
+#
+#   Step 3. Retire the token:
+#     - Operator deletes the `NPM_TOKEN` repo secret.
+#     - Operator deletes the Granular Access Token from npm.com.
+#     - Future publishes use OIDC automatically.
+#
+# How auth selection works in this workflow:
+#
+#   - `permissions: id-token: write` is always set, so OIDC is
+#     ALWAYS available.
+#   - If `NPM_TOKEN` is set, npm CLI uses it (legacy auth path).
+#   - If `NPM_TOKEN` is empty / unset, npm CLI falls back to
+#     OIDC and looks for the Trusted Publisher rule on each
+#     package being published.
 #
 # OIDC requires npm CLI v11.5.1+; the "Upgrade npm CLI" step
 # below ensures that even on Node 24's bundled npm 10.x runner.
 #
-# This workflow does NOT:
+# ## This workflow does NOT
+#
 #   - Bump versions. `pnpm changeset version` is operator-run
 #     locally; the version-bump commit lands as its own PR.
 #   - Build a static-assets PWA / desktop installer / VSCode
@@ -83,13 +111,10 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
-      # Trusted Publishing — GitHub Actions mints a short-lived
-      # OIDC identity token on the runner; the npm CLI presents
-      # it to npmjs.org to authenticate the publish. No secret
-      # storage involved. Without this permission, npm falls
-      # back to looking for `NODE_AUTH_TOKEN`, which we don't
-      # provide — so the publish hard-errors instead of silently
-      # using stale auth. That's the safer failure mode.
+      # Required for OIDC Trusted Publishing. Even when we use a
+      # token in the bootstrap window, leaving this on costs
+      # nothing — the runner just doesn't request an OIDC token
+      # if npm CLI doesn't need one.
       id-token: write
     steps:
       - uses: actions/checkout@v6
@@ -102,23 +127,22 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: pnpm
-          # `registry-url` is intentionally omitted — under
-          # Trusted Publishing the OIDC token is the auth, not
-          # a `_authToken` in `~/.npmrc`. Setting registry-url
-          # here would write an empty auth line, which npm
-          # interprets as "anonymous" and is harmless but noisy.
+          # Writes `~/.npmrc` with the registry URL. In token
+          # mode, the auth token is also written by the env-var
+          # interpolation `${NODE_AUTH_TOKEN}`; in OIDC mode,
+          # this just establishes the registry endpoint and
+          # npm CLI ignores the (empty) auth line.
+          registry-url: "https://registry.npmjs.org"
+          scope: "@ingcreators"
 
       - name: Upgrade npm CLI to OIDC-supporting version
         # Node 24 ships with npm 10.x; Trusted Publishing needs
-        # 11.5.1+. Installing globally + verifying the version
-        # makes future Node bumps a no-op (the check will pass
-        # earlier).
+        # 11.5.1+. Token auth works on any version, but we install
+        # the latest anyway so the same job handles both modes.
         run: |
           set -euo pipefail
           npm install --global npm@latest
           npm --version
-          # Print npm CLI version so the log shows the OIDC-
-          # capable version was installed.
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -149,7 +173,27 @@ jobs:
             echo ""
           done
 
+      - name: Report auth mode
+        # Helps the operator confirm which auth path the publish
+        # took. Doesn't leak the token (just reports whether one
+        # is set).
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -n "$NPM_TOKEN" ]; then
+            echo "Auth: NPM_TOKEN (bootstrap mode)"
+          else
+            echo "Auth: OIDC (Trusted Publishing)"
+          fi
+
       - name: Publish via Changesets
+        env:
+          # When NPM_TOKEN is set, npm CLI uses it. When unset
+          # (empty string from a missing secret), npm CLI falls
+          # back to OIDC. Both env-var names are checked by
+          # different npm CLI codepaths; setting both is safe.
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
           if [ "${{ inputs.dry-run }}" = "true" ]; then

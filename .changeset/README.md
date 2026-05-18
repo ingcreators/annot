@@ -65,13 +65,25 @@ pnpm changeset publish
 
 The CI publish workflow at `.github/workflows/publish.yml`
 (lands in Stage 3 of `docs/plans/headless-annotator-publish.md`)
-runs `pnpm changeset publish` on `workflow_dispatch`. Auth uses
-**npm Trusted Publishing (OIDC)** — no long-lived `NPM_TOKEN`
-secret in the repo; the workflow mints a short-lived identity
-token via `permissions: id-token: write`, npm verifies it
-against the Trusted Publisher rules configured at
-<https://www.npmjs.com/settings/ingcreators/trusted-publishers>,
-and grants publish on a per-run basis.
+runs `pnpm changeset publish` on `workflow_dispatch`. Auth is
+**dual-mode**: the workflow tries `NPM_TOKEN` first (if the repo
+secret is set) and falls back to **npm Trusted Publishing
+(OIDC)** otherwise.
+
+**First publish (bootstrap)** uses a short-lived `NPM_TOKEN`
+because npm's Trusted Publishing UI is currently per-package
+and post-publish — a not-yet-existing package can't be
+configured as a trusted publisher target.
+
+**After the bootstrap**: configure Trusted Publishers on each
+package's npmjs.com Settings page (Publisher: GitHub Actions /
+Org: ingcreators / Repo: annot / Workflow:
+`.github/workflows/publish.yml`), delete the `NPM_TOKEN` secret,
+and subsequent publishes flow through OIDC with no long-lived
+credentials in the repo.
+
+Inline comments at the top of `publish.yml` walk through the
+full bootstrap → migration timeline.
 
 ## Why `updateInternalDependencies: patch`
 
