@@ -1,7 +1,15 @@
 import { resolve } from "path";
 import { defineConfig } from "vite";
+import { appVersionPlugin } from "./vite/version-plugin.js";
 
 export default defineConfig({
+  plugins: [
+    // Inject __APP_VERSION__ + emit dist/version.txt so the
+    // post-deploy recovery code can detect a stale tab vs the
+    // currently-deployed bundle. See
+    // `docs/plans/web-dynamic-import-recovery.md`.
+    appVersionPlugin(),
+  ],
   build: {
     outDir: "dist",
     emptyOutDir: true,

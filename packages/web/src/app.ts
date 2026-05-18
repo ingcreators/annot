@@ -45,6 +45,7 @@ import { pasteFromClipboard } from "./capture/pwa-capture.js";
 import { ScratchpadStore } from "./editor/scratchpad-store.js";
 import { downloadGallerySelection } from "./gallery/download-selection.js";
 import { logger } from "./logger.js";
+import { startVersionPolling } from "./recovery/version-poller.js";
 import { docUrl, editUrl, galleryUrl, pushRoute } from "./router.js";
 import {
   type BuiltInStorageMode,
@@ -58,7 +59,7 @@ import {
   setStorageMode,
 } from "./storage/bridge.js";
 import { GitHubStore } from "./storage/github-store.js";
-import { hideError, showSaveError } from "./ui/error-bar.js";
+import { hideError, showInfo, showSaveError } from "./ui/error-bar.js";
 
 export class App {
   #storage: StorageProvider | null = null;
@@ -551,6 +552,23 @@ export class App {
     });
 
     await this.#routerHost.handleRoute();
+
+    // Detect post-deploy bundle staleness and surface a persistent
+    // "new version available" banner with a Reload action. Pure
+    // additive — never auto-reloads. See
+    // `docs/plans/web-dynamic-import-recovery.md`.
+    startVersionPolling({
+      onNewVersion: (remote) => {
+        logger.info("[app] new version detected", { remote });
+        showInfo("A new version is available", {
+          persist: true,
+          action: {
+            label: "Reload",
+            onClick: () => window.location.reload(),
+          },
+        });
+      },
+    });
   }
 
   // ---- File Manager (Gallery) ----
