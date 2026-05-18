@@ -85,6 +85,40 @@ packages/
                 for supply-chain reasons; see
                 `docs/plans/_done/vendor-libimagequant.md`.
                 npm name: @ingcreators/annot-imagequant (private)
+  annotator/    Headless annotator — Node-side `renderImageRecord`
+                replacement built on `@resvg/resvg-js`. Tier A
+                (pure Node, no DOM). Public API
+                `createAnnotator(options) → { toPng, toSvg }` over
+                an `ImageRecord`-shaped input. Tier-A SVG sanitiser
+                (`@xmldom/xmldom`) strips editor-internal artefacts
+                (`<style data-annot-fonts>`, legacy
+                base-image-in-wrapper, `#ui-overlay`,
+                `<g id="annotations">` wrapper). Currently `private:
+                true` in the workspace; Phase 3 of the
+                headless-annotator track flips it to a published
+                package — see
+                `docs/plans/headless-annotator-publish.md`.
+                Phase 0 spike landed via
+                `docs/plans/_done/headless-annotator-spike.md`;
+                Phase 1 public API via
+                `docs/plans/_done/annot-annotator-package.md`.
+                npm name: @ingcreators/annot-annotator (private)
+  playwright/   Playwright fixture composing `annot-annotator` into
+                idiomatic `test.extend({ annotator })` form.
+                Callers `import { test, expect, rectForBoundingBox
+                } from "@ingcreators/annot-playwright"` and gain
+                `annotator.annotateScreenshot(page, { annotationsSvg
+                })` — dimensions read from the PNG IHDR chunk so
+                clipped + full-page captures both work.
+                `@playwright/test` declared as `peerDependencies`.
+                Three pure SVG-fragment helpers
+                (`rectForBoundingBox` / `arrowBetween` / `textAt`)
+                composable via string concatenation. Tier C
+                (Playwright runtime), but Tier A for the helpers.
+                Currently `private: true`; same Phase 3 publish
+                gate. See
+                `docs/plans/_done/annot-playwright-fixture.md`.
+                npm name: @ingcreators/annot-playwright (private)
 ```
 
 Naming convention: **`@ingcreators/annot-<role>`** for every package.

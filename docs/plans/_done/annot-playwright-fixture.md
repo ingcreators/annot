@@ -1,6 +1,6 @@
 # `@ingcreators/annot-playwright` fixture — Phase 2
 
-> **Status:** Queued
+> **Status:** Done — landed [`#752`](https://github.com/ingcreators/annot/pull/752) 2026-05-18
 > **Compatibility:** Builds on Phase 1's `@ingcreators/annot-annotator`
 >   (landed [`#751`](https://github.com/ingcreators/annot/pull/751)).
 >   New workspace package; `@playwright/test` is a peer
