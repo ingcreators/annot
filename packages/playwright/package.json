@@ -1,17 +1,50 @@
 {
   "name": "@ingcreators/annot-playwright",
-  "version": "0.0.0",
-  "private": true,
-  "description": "Playwright fixture for @ingcreators/annot-annotator — emit annotated screenshots from test failures, without leaving the test file.",
+  "version": "0.1.0",
+  "description": "Playwright fixture for annotated screenshots — emit annotated PNGs from failing tests without leaving the test file. Pairs `test.extend({ annotator })` with the headless renderer from @ingcreators/annot-annotator.",
+  "license": "Apache-2.0",
+  "author": "ingcreators",
+  "homepage": "https://github.com/ingcreators/annot/tree/main/packages/playwright#readme",
+  "bugs": {
+    "url": "https://github.com/ingcreators/annot/issues"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ingcreators/annot.git",
     "directory": "packages/playwright"
   },
+  "keywords": [
+    "annotation",
+    "screenshot",
+    "playwright",
+    "fixture",
+    "testing",
+    "ci",
+    "headless",
+    "svg",
+    "png"
+  ],
   "type": "module",
   "main": "./src/index.ts",
+  "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    }
   },
   "scripts": {
     "build": "vite build",
@@ -23,10 +56,10 @@
     "vite": "catalog:",
     "vite-plugin-dts": "^5.0.0"
   },
-  "peerDependencies": {
-    "@playwright/test": "^1.40.0"
-  },
   "dependencies": {
     "@ingcreators/annot-annotator": "workspace:*"
+  },
+  "peerDependencies": {
+    "@playwright/test": "^1.40.0"
   }
 }

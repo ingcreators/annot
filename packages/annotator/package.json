@@ -1,29 +1,63 @@
 {
   "name": "@ingcreators/annot-annotator",
-  "version": "0.0.0",
-  "private": true,
-  "description": "Headless annotator — Phase 0 feasibility spike. Node-side renderImageRecord replacement using @resvg/resvg-js. Private until Phase 1 promotes the public API.",
+  "version": "0.1.0",
+  "description": "Headless annotator — render annotated screenshots from Node without a browser. Built on @resvg/resvg-js. Pairs with @ingcreators/annot-playwright for fail-on-test annotated reports.",
+  "license": "Apache-2.0",
+  "author": "ingcreators",
+  "homepage": "https://github.com/ingcreators/annot/tree/main/packages/annotator#readme",
+  "bugs": {
+    "url": "https://github.com/ingcreators/annot/issues"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ingcreators/annot.git",
     "directory": "packages/annotator"
   },
+  "keywords": [
+    "annotation",
+    "screenshot",
+    "headless",
+    "node",
+    "svg",
+    "png",
+    "resvg",
+    "playwright",
+    "ci",
+    "testing"
+  ],
   "type": "module",
   "main": "./src/index.ts",
+  "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    }
   },
   "scripts": {
     "build": "vite build",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "@ingcreators/annot-core": "workspace:*",
     "typescript": "catalog:",
     "vite": "catalog:",
     "vite-plugin-dts": "^5.0.0"
   },
   "dependencies": {
-    "@ingcreators/annot-core": "workspace:*",
     "@resvg/resvg-js": "^2.6.2",
     "@xmldom/xmldom": "^0.9.10"
   }

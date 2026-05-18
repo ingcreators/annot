@@ -30,12 +30,18 @@ export default defineConfig({
     emptyOutDir: true,
     target: "es2022",
     rollupOptions: {
-      // Everything in `dependencies` stays external. resvg + xmldom
-      // are the heavy runtime pieces; bundling them would multiply
-      // the tarball size for no gain (npm dedupes them on install).
-      // `@ingcreators/*` regex catches the `annot-core` workspace
-      // dep; it'll be a real version range by publish time.
-      external: [/^@ingcreators\//, "@resvg/resvg-js", "@xmldom/xmldom"],
+      // Heavy runtime deps stay external — consumers get them via
+      // their own npm install. `@ingcreators/annot-core` is
+      // INTENTIONALLY NOT externalised: for v0.1.0 the annotator's
+      // published bundle inlines its core usage so consumers don't
+      // need to know about the workspace's internal layering.
+      // (See Stage 2 of `docs/plans/headless-annotator-publish.md`
+      // — "self-contained tarballs" rationale.) Once we want
+      // version-independent dependency resolution between
+      // annot-annotator and annot-core, this list grows
+      // `/^@ingcreators\//` back and `annot-core` migrates from a
+      // workspace devDep to a real dep with a version range.
+      external: ["@resvg/resvg-js", "@xmldom/xmldom"],
     },
   },
 });
