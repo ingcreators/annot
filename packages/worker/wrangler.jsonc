@@ -17,8 +17,16 @@
  *
  * Phase 4a: R2 bucket binding added alongside the Phase 2b
  * KV / D1 bindings. Phase 4b/4c/4d add migrations + endpoints
- * that read/write the bucket. Phase 2c follow-up still pending:
- * `api.annot.work` route binding.
+ * that read/write the bucket.
+ *
+ * Same-origin routing (this PR): `annot.work/api/*` is bound to
+ * this Worker so the PWA at `annot.work` can call the API
+ * without crossing origins. Same-origin means session cookies
+ * just work (no third-party-cookie issue in Safari ITP /
+ * Chrome's 3P-cookie phase-out) and no CORS configuration.
+ * The PWA's `AnnotCloudStore` defaults to a `""` base URL,
+ * which becomes `<pwa-origin>/api/...` at request time and
+ * lands on this Worker via the route binding.
  */
 {
   "name": "annot-api",
@@ -26,10 +34,36 @@
   "compatibility_date": "2026-05-01",
   "compatibility_flags": ["nodejs_compat"],
 
-  // Enable the *.workers.dev subdomain so the Worker has a public
-  // URL for OAuth callback testing. Production routing to
-  // `api.annot.work` lands in Phase 2c follow-up.
+  // Workers.dev subdomain stays enabled alongside the production
+  // route binding so:
+  //   - Local Wrangler test deploys have a public URL even
+  //     before the zone routing propagates.
+  //   - Self-hosters who don't own `annot.work` can deploy this
+  //     Worker to their own account + reach it via
+  //     `annot-api.<account>.workers.dev` (their PWA's
+  //     "Advanced" cloud-connect override then points at the
+  //     `*.workers.dev` URL).
   "workers_dev": true,
+
+  // Production route binding: `annot.work/api/*` resolves to
+  // this Worker. The root `wrangler.jsonc` (PWA static assets)
+  // claims everything else under `annot.work` — Cloudflare
+  // routes a request to whichever Worker has the most-specific
+  // matching pattern, so `annot.work/api/foo` lands here while
+  // `annot.work/` still lands on the PWA assets Worker.
+  //
+  // Requires the `annot.work` zone to exist on the deploying
+  // Cloudflare account AND the deploy token to have `Zone:Edit`
+  // (or just `Zone:Read` + `Worker Routes:Edit`) for it. Adding
+  // a route to a zone the token can't manage fails the deploy
+  // with a 403 — re-issue the API token via the dashboard with
+  // the missing scope.
+  "routes": [
+    {
+      "pattern": "annot.work/api/*",
+      "zone_name": "annot.work"
+    }
+  ],
 
   // Observability: enable Workers Logs (zero cost on the free
   // tier for low-volume traffic). Helpful when debugging OAuth
