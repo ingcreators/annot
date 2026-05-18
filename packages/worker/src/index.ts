@@ -1,10 +1,12 @@
 // `@ingcreators/annot-worker` — Cloudflare Worker hosting Annot's
 // API surface.
 //
-// Phase 2a (this scaffold): single `/api/health` endpoint to prove
-// the Worker deploys and routes correctly. Subsequent phases add:
+// Current state (Phase 2b):
+//   - /api/health           (liveness probe)
+//   - /api/health/bindings  (KV + D1 reachability check)
+//   - SESSIONS (KV) + DB (D1) bindings wired
 //
-//   Phase 2b: KV + D1 bindings (no endpoints yet, just wiring)
+// Subsequent phases add:
 //   Phase 2c: /api/auth/github + /api/auth/github/callback
 //             /api/auth/me + /api/auth/logout
 //   Phase 3:  /api/auth/google + Google OAuth callback
@@ -18,18 +20,35 @@
 
 import { Hono } from "hono";
 
-// Note: an `Env` interface for environment bindings (KV / D1 / R2
-// / secrets) lands in Phase 2b alongside the first binding.
-// Phase 2a needs no bindings, so the Hono generic is left at its
-// default. Bindings to land in subsequent phases:
-//   Phase 2b: SESSIONS (KVNamespace) — OAuth state + sessions
-//   Phase 3:  DB (D1Database) — multi-tenant schema
-//   Phase 4:  OBJECTS (R2Bucket) — image / document bytes
-//   Phase 2c: GITHUB_OAUTH_CLIENT_ID / _SECRET secrets
-//   Phase 3:  GOOGLE_OAUTH_CLIENT_ID / _SECRET secrets
-//   Phase 7:  STRIPE_SECRET_KEY / _WEBHOOK_SECRET secrets
+/**
+ * Environment bindings for the Worker. Each entry corresponds
+ * to a `[[kv_namespaces]]` / `[[d1_databases]]` / `[[r2_buckets]]`
+ * entry in `wrangler.toml`, or a secret set via
+ * `wrangler secret put`.
+ *
+ * Phase 2b (this PR) adds `SESSIONS` (KV) and `DB` (D1).
+ * Subsequent phases extend this:
+ *   Phase 4:  OBJECTS (R2Bucket) — image / document bytes
+ *   Phase 2c: GITHUB_OAUTH_CLIENT_ID / _SECRET secrets
+ *   Phase 3:  GOOGLE_OAUTH_CLIENT_ID / _SECRET secrets
+ *   Phase 7:  STRIPE_SECRET_KEY / _WEBHOOK_SECRET secrets
+ */
+export interface Env {
+  /**
+   * Session cookies + OAuth CSRF state. Short-TTL keys
+   * (`oauth-state:*` for 10 min, `session:*` for 30 days).
+   */
+  SESSIONS: KVNamespace;
+  /**
+   * Multi-tenant SQLite. Schema lands in Phase 3 (`users`,
+   * `workspaces`, `workspace_members`); Phase 2b only wires the
+   * binding so subsequent phases can drop in `CREATE TABLE`s
+   * without re-touching the wrangler config.
+   */
+  DB: D1Database;
+}
 
-const app = new Hono();
+const app = new Hono<{ Bindings: Env }>();
 
 /**
  * Liveness probe. Returns 200 with a small JSON body so the
@@ -44,6 +63,60 @@ app.get("/api/health", (c) =>
     timestamp: new Date().toISOString(),
   }),
 );
+
+/**
+ * Bindings smoke check. Verifies SESSIONS (KV) and DB (D1) are
+ * configured and reachable by issuing a no-op probe against each.
+ * Returns 200 with `{ kv: "ok", db: "ok" }` on success.
+ *
+ * Used for:
+ * - Post-deploy verification that wrangler.toml IDs are correctly
+ *   replaced from `<placeholder>` to real Cloudflare resource IDs.
+ * - Smoke-checking after a binding migration.
+ *
+ * NOT used for application-level health (the `DB` schema is empty
+ * in Phase 2b, so we can't probe for app data yet). The endpoint
+ * deliberately stays low-fidelity to remain useful as the schema
+ * grows.
+ */
+app.get("/api/health/bindings", async (c) => {
+  const checks: { kv: "ok" | "error"; db: "ok" | "error" } = {
+    kv: "error",
+    db: "error",
+  };
+  const errors: Record<string, string> = {};
+
+  try {
+    // KV: a `.get` against a definitely-missing key returns null
+    // without throwing. Proves the binding is reachable.
+    await c.env.SESSIONS.get("__health-probe__");
+    checks.kv = "ok";
+  } catch (err) {
+    errors.kv = err instanceof Error ? err.message : String(err);
+  }
+
+  try {
+    // D1: a SELECT against a built-in metadata table works even
+    // when no user tables exist. `sqlite_master` is available on
+    // every D1 instance.
+    await c.env.DB.prepare("SELECT 1 FROM sqlite_master LIMIT 1").first();
+    checks.db = "ok";
+  } catch (err) {
+    errors.db = err instanceof Error ? err.message : String(err);
+  }
+
+  const allOk = checks.kv === "ok" && checks.db === "ok";
+  return c.json(
+    {
+      ok: allOk,
+      service: "annot-api",
+      timestamp: new Date().toISOString(),
+      ...checks,
+      ...(Object.keys(errors).length > 0 ? { errors } : {}),
+    },
+    allOk ? 200 : 503,
+  );
+});
 
 /**
  * Catch-all 404 so probes against an undefined route return a
