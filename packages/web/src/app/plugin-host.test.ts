@@ -284,15 +284,15 @@ describe("PluginHost", () => {
   describe("registerStorage", () => {
     it("registers a plugin storage and resolves it via findStorageRegistration", () => {
       const host = new PluginHost();
-      const reg = fakeStorageReg("cloud", 25);
+      const reg = fakeStorageReg("fakecloud", 25);
       const plugin: AnnotPlugin = {
-        name: "cloud",
+        name: "fakecloud-plugin",
         register(ctx) {
           ctx.registerStorage(reg);
         },
       };
       host.registerAll([plugin]);
-      expect(host.findStorageRegistration("cloud")).toBe(reg);
+      expect(host.findStorageRegistration("fakecloud")).toBe(reg);
     });
 
     it("returns undefined for unregistered modes — bridge falls back to browser", () => {
@@ -346,6 +346,7 @@ describe("PluginHost", () => {
       "googledrive",
       "github",
       "extension",
+      "cloud",
     ])("rejects collision with built-in mode %s", (builtin) => {
       const host = new PluginHost();
       // Bypass `registerAll`'s error isolation by calling the
@@ -369,19 +370,19 @@ describe("PluginHost", () => {
       const first: AnnotPlugin = {
         name: "first",
         register(ctx) {
-          ctx.registerStorage(fakeStorageReg("cloud"));
+          ctx.registerStorage(fakeStorageReg("fakecloud"));
         },
       };
       const second: AnnotPlugin = {
         name: "second",
         register(ctx) {
-          ctx.registerStorage(fakeStorageReg("cloud"));
+          ctx.registerStorage(fakeStorageReg("fakecloud"));
         },
       };
       host.registerAll([first, second]);
       // The first plugin's registration wins; the second's throw
       // is logged + isolated.
-      const reg = host.findStorageRegistration("cloud")!;
+      const reg = host.findStorageRegistration("fakecloud")!;
       expect(reg).toBeDefined();
       expect(consoleErrorSpy).toHaveBeenCalled();
       consoleErrorSpy.mockRestore();
@@ -394,11 +395,11 @@ describe("PluginHost", () => {
       // copying / freezing of the registration object.
       const host = new PluginHost();
       const fakeStore = { id: "fake-store-instance" } as unknown as StorageProvider;
-      const reg = fakeStorageReg("cloud", 25, {
+      const reg = fakeStorageReg("fakecloud", 25, {
         connect: async () => fakeStore,
       });
-      host.registerAll([{ name: "cloud", register: (ctx) => ctx.registerStorage(reg) }]);
-      const back = host.findStorageRegistration("cloud");
+      host.registerAll([{ name: "fakecloud-plugin", register: (ctx) => ctx.registerStorage(reg) }]);
+      const back = host.findStorageRegistration("fakecloud");
       const result = await back!.connect({ forcePicker: false });
       expect(result).toBe(fakeStore);
     });

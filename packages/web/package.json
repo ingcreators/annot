@@ -24,6 +24,7 @@
   },
   "dependencies": {
     "@ingcreators/annot-capture": "workspace:*",
+    "@ingcreators/annot-cloud-store": "workspace:*",
     "@ingcreators/annot-core": "workspace:*",
     "@ingcreators/annot-doc": "workspace:*",
     "@ingcreators/annot-editor": "workspace:*",

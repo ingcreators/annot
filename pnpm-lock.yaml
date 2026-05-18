@@ -325,6 +325,9 @@ importers:
       '@ingcreators/annot-capture':
         specifier: workspace:*
         version: link:../capture
+      '@ingcreators/annot-cloud-store':
+        specifier: workspace:*
+        version: link:../cloud-store
       '@ingcreators/annot-core':
         specifier: workspace:*
         version: link:../core

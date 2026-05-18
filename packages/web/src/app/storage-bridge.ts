@@ -22,13 +22,16 @@ import {
   BUILT_IN_STORAGE_MODES,
   connectGitHub,
   connectGoogleDrive,
+  getAnnotCloudBaseUrl,
   getDeviceRootName,
   getGitHubRef,
   getStorageMode,
+  isAnnotCloudConnected,
   isDriveConnected,
   isGitHubConnected,
   loadLastStorage,
   openDeviceDirectory,
+  restoreAnnotCloud,
   restoreDevice,
   restoreGitHub,
   restoreGoogleDrive,
@@ -151,6 +154,21 @@ export class StorageBridge {
         this.#storage = browserStore;
         setStorageMode("browser");
       }
+    } else if (lastMode === "cloud") {
+      // Annot Cloud DOES proactively validate on restore because
+      // the cookie is server-managed (no separate token to use
+      // later as a "stale" sentinel). `restoreAnnotCloud()` calls
+      // `init()`; on 401 it returns null and the bridge falls
+      // back to browser — the user can re-select "Annot Cloud"
+      // in the sidebar to re-auth.
+      const cloudStore = await restoreAnnotCloud();
+      if (cloudStore) {
+        this.#storage = cloudStore;
+        setStorageMode("cloud");
+      } else {
+        this.#storage = browserStore;
+        setStorageMode("browser");
+      }
     } else if (lastMode && !(BUILT_IN_STORAGE_MODES as readonly string[]).includes(lastMode)) {
       // Plugin-registered mode rehydrate. The plugin's `restore`
       // factory does the same "no network on boot" cheap rehydrate
@@ -241,6 +259,21 @@ export class StorageBridge {
           console.error("[app] Drive connection failed:", e);
           return false;
         }
+      } else if (mode === "cloud") {
+        // Annot Cloud — open the connect modal, which probes
+        // `/api/auth/me` first and falls through to the OAuth
+        // popup on 401. `forcePicker` ignored: there's no
+        // sub-resource to reselect (workspace = the account).
+        // The modal returns a fully-initialised store; the
+        // bridge's `connectAnnotCloud` attaches the metadata
+        // cache + stashes it.
+        const { showCloudConnectDialog } = await import("../storage/cloud-setup-ui.js");
+        const { connectAnnotCloud } = await import("../storage/bridge.js");
+        const initialised = await showCloudConnectDialog();
+        if (!initialised) return false;
+        const store = connectAnnotCloud(initialised);
+        this.#storage = store;
+        saveLastStorage("cloud");
       } else if (mode === "github") {
         // First-click: if we already have a persisted PAT + ref,
         // rehydrate without prompting. Reselect / no ref → open the
@@ -319,6 +352,19 @@ export class StorageBridge {
       const base = ref.basePath ? `/${ref.basePath}` : "";
       return `${ref.owner}/${ref.repo}${base}@${ref.branch}`;
     }
+    if (mode === "cloud") {
+      const baseUrl = getAnnotCloudBaseUrl();
+      if (baseUrl === null) return undefined;
+      // Empty string = same-origin deploy; show "Annot Cloud" as
+      // the friendly label. Otherwise show the hostname so
+      // self-hosters see where their data lives.
+      if (!baseUrl) return "Annot Cloud";
+      try {
+        return new URL(baseUrl).host;
+      } catch {
+        return baseUrl;
+      }
+    }
     // Plugin-registered mode — use the registration's own status
     // label as the sidebar subtitle (mirrors what built-ins surface
     // for "Connected ← drive root name / repo ref").
@@ -348,6 +394,16 @@ export class StorageBridge {
         ? ghRef
           ? `${ghRef.owner}/${ghRef.repo}@${ghRef.branch}`
           : "Connected"
+        : "Not connected",
+    );
+    const cloudBase = getAnnotCloudBaseUrl();
+    sidebar.setStorageStatus(
+      "cloud",
+      isAnnotCloudConnected(),
+      isAnnotCloudConnected()
+        ? cloudBase
+          ? cloudBase || "Annot Cloud"
+          : "Annot Cloud"
         : "Not connected",
     );
     // Plugin chips report their own connected / label state.

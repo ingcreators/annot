@@ -208,6 +208,15 @@ const BUILTIN_CHIP_DESCRIPTORS: readonly ChipDescriptor[] = [
     reselectTitle: "Change repository",
   },
   {
+    // Annot Cloud — the hosted Worker + D1 + R2 stack. Cookie
+    // session auth; lives in `@ingcreators/annot-cloud-store`.
+    mode: "cloud",
+    icon: builtinIcon("cloud"),
+    label: "Annot Cloud",
+    priority: 45,
+    reselectTitle: "Change cloud workspace",
+  },
+  {
     // Electron desktop host's filesystem-backed library
     // (`@ingcreators/annot-desktop`'s `DesktopStore`). Gated on
     // `isDesktop` (i.e. `window.__ANNOT_DESKTOP__` set by the

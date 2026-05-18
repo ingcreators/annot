@@ -30,6 +30,11 @@ export const BUILT_IN_STORAGE_MODES = [
   "github",
   "extension",
   "desktop",
+  // Annot Cloud — Cloudflare Worker + D1 + R2 stack served from
+  // `api.annot.work`. Cookie-based session auth. Phase 4 of
+  // `docs/plans/annot-cloud-roadmap.md`; client-side
+  // `AnnotCloudStore` lives in `@ingcreators/annot-cloud-store`.
+  "cloud",
 ] as const;
 
 export type BuiltInStorageMode = (typeof BUILT_IN_STORAGE_MODES)[number];
