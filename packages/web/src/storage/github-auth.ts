@@ -462,7 +462,17 @@ function parseLinkHeader(header: string | null): string | null {
 function toRelativeUrl(fullUrl: string): string {
   // The Link header returns absolute URLs back to api.github.com.
   // Strip the host so `authedGetWithLink` rebuilds consistently.
-  if (fullUrl.startsWith(GITHUB_API)) return fullUrl.slice(GITHUB_API.length);
+  //
+  // Use a real URL parse + origin equality rather than a `startsWith`
+  // prefix check so a hostile / malformed Link header value like
+  // `https://api.github.com.evil.example/...` doesn't satisfy the
+  // prefix (CodeQL `js/incomplete-url-substring-sanitization`).
+  try {
+    const u = new URL(fullUrl);
+    if (u.origin === GITHUB_API) return u.pathname + u.search;
+  } catch {
+    // Fall through — non-URL input keeps the original return path.
+  }
   return fullUrl;
 }
 

@@ -39,6 +39,12 @@ concurrency:
   group: desktop-release-${{ github.ref }}
   cancel-in-progress: true
 
+# Least-privilege default for the auto-provisioned GITHUB_TOKEN. The
+# `publish` job overrides this with `contents: write` so
+# `softprops/action-gh-release` can attach assets to the draft Release.
+permissions:
+  contents: read
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
