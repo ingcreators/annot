@@ -362,13 +362,21 @@ export class AnnotCloudStore
     const list = await this.#listImagesWire(folderPath);
     if (this.#cache) {
       // Seed the path → id map so subsequent getImage / updateImage
-      // calls hit the fast resolver path.
+      // calls hit the fast resolver path. Seed for every wire row
+      // the worker returned (including descendants), since the
+      // resolver benefits regardless of folder depth.
       const ns = this.metadataNamespace();
       await Promise.all(
         list.images.map((wire) => this.#cache!.setBackendId(ns, wire.path, wire.id)),
       );
     }
+    // Worker filters by `path LIKE 'prefix%'`, which is recursive
+    // (matches descendants in subfolders) AND collapses to "all
+    // rows" when prefix is empty. The StorageProvider contract is
+    // "direct children of folderPath only" — filter to exact-folder
+    // matches here.
     return list.images
+      .filter((wire) => getParentPath(wire.path) === folderPath)
       .map((wire) => this.#toLightImageRecord(wire))
       .sort((a, b) => a.path.localeCompare(b.path));
   }
@@ -806,7 +814,10 @@ export class AnnotCloudStore
         list.documents.map((wire) => this.#cache!.setBackendId(ns, `doc:${wire.path}`, wire.id)),
       );
     }
+    // See `listImages` for why the wire response needs an
+    // exact-folder filter on top of the worker's prefix query.
     return list.documents
+      .filter((wire) => getParentPath(wire.path) === folderPath)
       .map((wire) => this.#toLightDocumentRecord(wire))
       .sort((a, b) => a.path.localeCompare(b.path));
   }
