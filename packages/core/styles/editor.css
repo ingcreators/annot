@@ -140,6 +140,14 @@ body {
     0 10px,
     10px -10px,
     -10px 0;
+  /* Hidden by default — only the image editor mounts here. Gallery,
+   * doc, split-editor, and capture workspaces each own their own
+   * surface. Without this default, the checkered canvas backdrop
+   * paints on every boot before JS decides the route, producing a
+   * brief "empty editor" flash on gallery loads (e.g. `/app`, `/`,
+   * `/folder/...`). `body.editor-mode` below restores display when
+   * `EditorSession.setupEditor` mounts an image. */
+  display: none;
 }
 
 /* Editor SVG root.
@@ -186,12 +194,20 @@ body {
   height: 28px;
   background: var(--annot-bg-panel, #1e1e1e);
   border-top: 1px solid var(--annot-border-color, #333);
-  display: flex;
+  /* Hidden by default for the same reason as `#canvas-container`
+   * above — only the image editor mode shows the statusbar, and
+   * leaving it visible by default paints the dark bottom strip
+   * before JS resolves the route, contributing to the boot flash
+   * on gallery loads. `body.editor-mode` restores `display: flex`. */
+  display: none;
   align-items: center;
   padding: 0 12px;
   gap: 16px;
   font-size: 12px;
   color: #888;
+}
+body.editor-mode #statusbar {
+  display: flex;
 }
 
 /* Save toast notification */
@@ -970,6 +986,7 @@ body.editor-mode #editor-sidebar {
   overflow: visible;
 }
 body.editor-mode #canvas-container {
+  display: block;
   top: 48px; /* below editor-header only */
   left: 48px; /* right of the sidebar */
 }
