@@ -1,0 +1,36 @@
+<!--
+  Annot stacked wordmark — icon + "Annot" + "by ingcreators" tagline.
+  Two-line brand lockup for places that benefit from the parent-org context
+  (e.g. Chrome Web Store thumbnail, doc headers, footer lockups).
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 56" fill="none" role="img" aria-label="Annot by ingcreators">
+  <!-- Icon vertically centered: viewBox height 56, icon 48 → offset 4 -->
+  <g transform="translate(0 4)">
+    <rect width="48" height="48" rx="10" fill="#0f1730"/>
+    <circle cx="24" cy="7" r="3.5" fill="#7c9cff"/>
+    <path d="M24 13 L13 38" stroke="#7ef0c5" stroke-width="4" stroke-linecap="round"/>
+    <path d="M24 13 L35 38" stroke="#b391ff" stroke-width="4" stroke-linecap="round"/>
+    <path d="M19 24 H29" stroke="#7c9cff" stroke-width="3.5" stroke-linecap="round"/>
+  </g>
+
+  <!-- Primary: product name -->
+  <text x="62" y="30"
+        fill="#0f1730"
+        font-family="Sora, -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif"
+        font-weight="700"
+        font-size="22"
+        letter-spacing="-0.025em">Annot</text>
+
+  <!--
+    Secondary: org line (subdued, smaller).
+    Color is a muted navy derived from the brand blue (#7c9cff) —
+    not a neutral grey. "ingcreators" is the blue "i" network, so
+    its attribution line is rendered in the color of that network.
+  -->
+  <text x="62" y="46"
+        fill="#4e5ea0"
+        font-family="Sora, -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif"
+        font-weight="500"
+        font-size="11"
+        letter-spacing="0.02em">by ingcreators</text>
+</svg>

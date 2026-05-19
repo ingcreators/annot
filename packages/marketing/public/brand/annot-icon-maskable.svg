@@ -1,0 +1,29 @@
+<!--
+  Annot maskable icon (for Android adaptive icons / PWA maskable purpose).
+
+  Android / Chromium may clip the PWA icon to any shape (circle, rounded
+  square, squircle). To prevent the mark from being cropped, maskable
+  icons must respect a "safe zone" of ~80% diameter centered on the
+  canvas. Anything outside can be cut.
+
+  Layout:
+    • viewBox 60×60. Full-bleed background (no rounded corners — the OS
+      provides its own mask).
+    • Annot mark (48×48) translated to (6, 6) → lives inside a centered
+      48-wide safe zone, giving 10% padding on each side (6/60 = 10%).
+      This keeps the mark fully visible under any OS mask shape.
+
+  Source of truth for the A mark: packages/browser-extension/public/icons/icon.svg
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 60" fill="none">
+  <!-- Full-bleed brand background (no rx — OS applies the mask) -->
+  <rect width="60" height="60" fill="#0f1730"/>
+
+  <!-- Annot mark embedded inside the 80% safe zone -->
+  <g transform="translate(6 6)">
+    <circle cx="24" cy="7" r="3.5" fill="#7c9cff"/>
+    <path d="M24 13 L13 38" stroke="#7ef0c5" stroke-width="4" stroke-linecap="round"/>
+    <path d="M24 13 L35 38" stroke="#b391ff" stroke-width="4" stroke-linecap="round"/>
+    <path d="M19 24 H29" stroke="#7c9cff" stroke-width="3.5" stroke-linecap="round"/>
+  </g>
+</svg>

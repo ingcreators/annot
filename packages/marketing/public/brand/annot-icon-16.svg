@@ -1,0 +1,22 @@
+<!--
+  Annot 16px-optimized variant — for favicons and small UI.
+    • Pin removed: at 16px, r=3.5 → 1.17px, but the gap to the letter
+      makes it read as a stray speck. Dropping it keeps the A clean.
+    • Strokes thickened sw=4 → sw=5 so the letterform survives scaling
+      (sw=5 → 1.67px at 16px, vs sw=4 → 1.33px).
+    • Legs extended: apex y=13 → 10, base y=38 → 40, base x spread
+      13/35 → 12/36 — fills more canvas so the A is less lost in the
+      frame at small sizes.
+    • Crossbar at y=24 (48% down — classical ~45–50%), endpoints on
+      the new leg centerlines: t=(24-10)/(40-10)=0.467, left x=18.4,
+      right x=29.6 → crossbar M18 24 H30 plugs into both legs.
+
+  Use at 16/20/24 px. For 32 px and above, use the full icon.svg
+  (which includes the annotation pin).
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 48 48" fill="none">
+  <rect width="48" height="48" rx="10" fill="#0f1730"/>
+  <path d="M24 10 L12 40" stroke="#7ef0c5" stroke-width="5" stroke-linecap="round"/>
+  <path d="M24 10 L36 40" stroke="#b391ff" stroke-width="5" stroke-linecap="round"/>
+  <path d="M18 24 H30" stroke="#7c9cff" stroke-width="5" stroke-linecap="round"/>
+</svg>
