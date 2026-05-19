@@ -1,0 +1,93 @@
+---
+// Shared layout for every marketing page. Renders the <head>,
+// the site-wide header (brand + nav), the page slot, and the
+// site-wide footer.
+//
+// Prop contract intentionally minimal: title + description are
+// inlined as the SEO basics; pages that need more (OG image,
+// canonical, structured data) extend this layout later.
+import "../styles/global.css";
+
+interface Props {
+  title: string;
+  description: string;
+}
+
+const { title, description } = Astro.props;
+const year = new Date().getFullYear();
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={description} />
+    <meta name="theme-color" content="#0f1730" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content={Astro.url.href} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <title>{title}</title>
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="container site-header-row">
+        <a class="site-header-brand" href="/">
+          <svg width="32" height="32" viewBox="0 0 48 48" fill="none" aria-hidden="true">
+            <rect width="48" height="48" rx="10" fill="#0f1730" />
+            <circle cx="24" cy="7" r="3.5" fill="#7c9cff" />
+            <path d="M24 13 L13 38" stroke="#7ef0c5" stroke-width="4" stroke-linecap="round" />
+            <path d="M24 13 L35 38" stroke="#b391ff" stroke-width="4" stroke-linecap="round" />
+            <path d="M19 24 H29" stroke="#7c9cff" stroke-width="3.5" stroke-linecap="round" />
+          </svg>
+          <span>Annot</span>
+        </a>
+        <nav>
+          <a href="/docs">Docs</a>
+          <a href="/app">Open editor</a>
+          <a href="https://github.com/ingcreators/annot" rel="noopener">GitHub</a>
+        </nav>
+      </div>
+    </header>
+
+    <main>
+      <slot />
+    </main>
+
+    <footer class="site-footer">
+      <div class="container site-footer-row">
+        <div class="site-footer-brand">
+          <strong>Annot</strong> — SVG-first screenshot annotation toolkit.
+          Open source, MIT-aligned (Apache-2.0). Built by
+          <a href="https://github.com/ingcreators" rel="noopener">ingcreators</a>.
+        </div>
+        <nav>
+          <section>
+            <h4>Product</h4>
+            <a href="/app">Open editor</a>
+            <a href="/docs">Documentation</a>
+            <a href="/press">Press kit</a>
+          </section>
+          <section>
+            <h4>Packages</h4>
+            <a href="https://www.npmjs.com/package/@ingcreators/annot-playwright" rel="noopener">annot-playwright</a>
+            <a href="https://www.npmjs.com/package/@ingcreators/annot-annotator" rel="noopener">annot-annotator</a>
+            <a href="https://www.npmjs.com/package/@ingcreators/annot-core" rel="noopener">annot-core</a>
+          </section>
+          <section>
+            <h4>Legal</h4>
+            <a href="/privacy">Privacy</a>
+            <a href="/terms">Terms</a>
+            <a href="https://github.com/ingcreators/annot/blob/main/LICENSE" rel="noopener">License</a>
+          </section>
+        </nav>
+      </div>
+      <div class="container site-footer-meta">
+        &copy; {year} ingcreators. annot.work
+      </div>
+    </footer>
+  </body>
+</html>

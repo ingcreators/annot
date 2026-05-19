@@ -1,0 +1,156 @@
+---
+import Base from "../layouts/Base.astro";
+
+const title = "Annot — Annotated screenshots for Playwright and CI";
+const description =
+  "An SVG-first screenshot annotation toolkit you can call from Playwright. Capture, annotate, and attach annotated screenshots to your test report in a few lines of code.";
+---
+
+<Base title={title} description={description}>
+  <!--
+    Hero — moat anchor. The single most important pixel above the
+    fold is the Playwright code snippet on the right: it shows
+    that a single fixture call produces an annotated PNG.
+  -->
+  <section class="hero">
+    <div class="container hero-grid">
+      <div>
+        <span class="hero-eyebrow">New · v0.1.0 on npm</span>
+        <h1 class="hero-headline">
+          Annotated screenshots,<br />from a Playwright fixture.
+        </h1>
+        <p class="hero-subhead">
+          Annot is an SVG-first annotation toolkit. Drop the
+          <code>annotator</code> fixture into your Playwright suite and
+          attach annotated screenshots to your HTML report — no extra
+          tabs, no manual edits, no Electron app in CI.
+        </p>
+        <div class="hero-cta-row">
+          <a class="btn btn-primary" href="/docs/getting-started"
+            >Read the quickstart</a
+          >
+          <a class="btn btn-secondary" href="/app">Try the editor →</a>
+        </div>
+      </div>
+
+      <div>
+        <div class="code-card" aria-label="Playwright fixture example">
+          <span class="filename">example.spec.ts</span>
+          <pre><code><span class="tok-k">import</span> {`{ test, expect, rectForBoundingBox }`} <span class="tok-k">from</span> <span class="tok-s">"@ingcreators/annot-playwright"</span>;
+
+test(<span class="tok-s">"login form is reachable"</span>, <span class="tok-k">async</span> ({`{ page, annotator }`}) =&gt; {`{`}
+  <span class="tok-k">await</span> page.goto(<span class="tok-s">"https://example.com/login"</span>);
+
+  <span class="tok-c">// Capture, annotate, attach to the HTML report.</span>
+  <span class="tok-k">const</span> btn = page.getByRole(<span class="tok-s">"button"</span>, {`{ name: "Sign in" }`});
+  <span class="tok-k">const</span> box = (<span class="tok-k">await</span> btn.boundingBox())!;
+
+  <span class="tok-k">await</span> annotator.<span class="tok-f">annotateScreenshot</span>(page, {`{`}
+    annotationsSvg: <span class="tok-f">rectForBoundingBox</span>(box, {`{ stroke: "#ff5252" }`}),
+  {`}`});
+{`}`});
+</code></pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!--
+    Three flow showcases. Plain text for v1 — illustrated demos
+    follow when the demo video / GIFs are recorded in Phase 8g.
+  -->
+  <section class="section">
+    <div class="container">
+      <div class="section-eyebrow">Three flows out of the box</div>
+      <h2 class="section-title">From failing test to annotated report.</h2>
+      <p class="section-lead">
+        The fixture composes three pure SVG-fragment helpers
+        (<code>rectForBoundingBox</code>, <code>arrowBetween</code>,
+        <code>textAt</code>) with the headless annotator. Each flow
+        works against any Playwright <code>page</code>.
+      </p>
+
+      <div class="flow-grid">
+        <article class="flow-card">
+          <h3>Annotate on assertion failure</h3>
+          <p>
+            Catch a failing assertion in a try/catch and call
+            <code>annotateScreenshot</code> with a red rectangle around
+            the locator that misbehaved. The annotated PNG attaches to
+            the HTML report automatically.
+          </p>
+        </article>
+        <article class="flow-card">
+          <h3>Draw by DOM locator</h3>
+          <p>
+            <code>locator.boundingBox()</code> + <code>rectForBoundingBox</code>
+            gives you a precise overlay rectangle without measuring
+            anything by hand. Add an arrow with <code>arrowBetween</code>
+            to label it.
+          </p>
+        </article>
+        <article class="flow-card">
+          <h3>Attach to the HTML report</h3>
+          <p>
+            Annot returns the PNG as a buffer. Pass it straight to
+            <code>testInfo.attach()</code> and Playwright's HTML report
+            renders the annotated screenshot inline next to the failing
+            step.
+          </p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!--
+    Install CTAs — direct links to the three published npm packages.
+  -->
+  <section class="section section-alt">
+    <div class="container">
+      <div class="section-eyebrow">Install</div>
+      <h2 class="section-title">Three packages, one toolkit.</h2>
+      <p class="section-lead">
+        All three publish under <code>@ingcreators/</code> on npm at
+        <code>0.1.0</code>. <code>annot-playwright</code> is what you
+        install if you just want the fixture.
+      </p>
+
+      <div class="install-row">
+        <div class="install-card">
+          <h3>annot-playwright</h3>
+          <p>The fixture, plus three pure SVG-fragment helpers.</p>
+          <div class="cmd">npm install --save-dev @ingcreators/annot-playwright</div>
+        </div>
+        <div class="install-card">
+          <h3>annot-annotator</h3>
+          <p>The headless annotator. Use directly without Playwright.</p>
+          <div class="cmd">npm install @ingcreators/annot-annotator</div>
+        </div>
+        <div class="install-card">
+          <h3>annot-core</h3>
+          <p>The SVG annotation format + storage types.</p>
+          <div class="cmd">npm install @ingcreators/annot-core</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!--
+    Editor CTA. The PWA at annot.work/app is where annotated
+    screenshots are edited by hand; the Playwright fixture is
+    where they're generated in CI. Both produce the same SVG.
+  -->
+  <section class="section">
+    <div class="container">
+      <div class="section-eyebrow">Or use the PWA</div>
+      <h2 class="section-title">Annotate by hand in your browser.</h2>
+      <p class="section-lead">
+        The same SVG format powers a free in-browser editor. Capture
+        with the Chrome extension, drop a file in, or paste from the
+        clipboard. Local-first storage; optional sync to GitHub or
+        Annot Cloud.
+      </p>
+      <a class="btn btn-primary" href="/app">Open the editor →</a>
+    </div>
+  </section>
+</Base>
