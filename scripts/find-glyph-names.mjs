@@ -59,10 +59,10 @@ for (const file of files) {
   for (const match of src.matchAll(/(?:icon|materialIcon):\s*"([a-z][a-z0-9_]*)"/g)) {
     found.add(match[1]);
   }
-  // Pattern 5: ${"name"} embedded in template after the class
-  for (const match of src.matchAll(/material-symbols-outlined[^"]*"[\s\S]{0,200}?>\s*\$\{[^}]*\}\s*</g)) {
-    // Captures variable; can't extract literal name here.
-  }
+  // Pattern 5 (template-interpolated glyph names — `${"name"}` after
+  // the class) is intentionally skipped: the literal can't be
+  // recovered statically. Left documented here so future patterns
+  // don't accidentally re-add a noisy / no-op scan.
 }
 
 // Filter out non-glyph false positives (English words used as button

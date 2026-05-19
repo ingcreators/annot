@@ -65,12 +65,6 @@ export function makeMockWorker(options: MockWorkerOptions = {}): MockWorker {
   const documents = new Map<string, DocumentRow>();
   const requests: { method: string; url: string }[] = [];
 
-  function pathTaken(path: string): boolean {
-    for (const row of images.values()) if (row.wire.path === path) return true;
-    for (const row of documents.values()) if (row.wire.path === path) return true;
-    return false;
-  }
-
   function findImageById(id: string): ImageRow | undefined {
     return images.get(id);
   }
