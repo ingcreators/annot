@@ -1,17 +1,19 @@
 /**
- * Cloudflare Workers Static Assets config for the annot web app
- * (the PWA at annot.work/app/*).
+ * Cloudflare Worker config for the annot PWA (annot.work/app/*).
  *
- * This repo has no Worker script — we deploy only the built PWA
- * from packages/web/dist/ behind Cloudflare's asset server. When a
- * request path doesn't match a built asset, `not_found_handling`
- * serves index.html so the SPA router can take over client-side.
+ * The Worker script (`./worker.js`) does a small URL rewrite —
+ * strip the `/app` prefix before consulting the static-asset
+ * binding so the PWA's flat `dist/` layout serves correctly AND
+ * the SPA fallback (`<assets-root>/index.html`) catches deep
+ * links like `annot.work/app/edit/img/browser/foo`. See
+ * `worker.js`'s docblock for the full reasoning.
  *
  * URL layout (Phase 8d of docs/plans/launch-prep.md, atomic
  * switchover):
  *
  *   annot.work/      → annot-marketing (landing site,
  *                       packages/marketing/wrangler.jsonc)
+ *   annot.work/app   → THIS worker (PWA — 301 to /app/)
  *   annot.work/app/* → THIS worker (PWA, packages/web/dist/)
  *   annot.work/docs/*→ annot-docs-site
  *                       (packages/docs-site/wrangler.jsonc)
@@ -26,8 +28,13 @@
 {
 	"name": "annot",
 	"compatibility_date": "2026-04-23",
+	"main": "./worker.js",
 	"workers_dev": false,
 	"routes": [
+		{
+			"pattern": "annot.work/app",
+			"zone_name": "annot.work"
+		},
 		{
 			"pattern": "annot.work/app/*",
 			"zone_name": "annot.work"
@@ -35,6 +42,7 @@
 	],
 	"assets": {
 		"directory": "./packages/web/dist",
+		"binding": "ASSETS",
 		"not_found_handling": "single-page-application"
 	},
 	"kv_namespaces": [

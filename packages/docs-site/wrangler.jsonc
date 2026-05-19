@@ -32,9 +32,14 @@
 {
   "name": "annot-docs-site",
   "compatibility_date": "2026-04-23",
+  "main": "./worker.js",
   "workers_dev": false,
   "preview_urls": false,
   "routes": [
+    {
+      "pattern": "annot.work/docs",
+      "zone_name": "annot.work"
+    },
     {
       "pattern": "annot.work/docs/*",
       "zone_name": "annot.work"
@@ -42,6 +47,7 @@
   ],
   "assets": {
     "directory": "./.vitepress/dist",
+    "binding": "ASSETS",
     "not_found_handling": "404-page"
   }
 }
