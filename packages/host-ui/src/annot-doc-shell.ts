@@ -3839,22 +3839,23 @@ function buildHeadingIdMap(headings: readonly HeadingBlock[]): Map<HeadingBlock,
 /** Best-effort plain-text extraction from canonical inline HTML
  *  for use in event details / aria labels.
  *
- *  Two-pass strip: the first pass removes real tags from the
- *  serialized HTML, the second pass (after entity decode) catches
- *  tag-shaped text the decode reintroduced from `&lt;tag&gt;`
- *  inputs. Without the second pass the function output can carry
- *  a literal `<script` substring (CodeQL
- *  `js/incomplete-multi-character-sanitization`). The
- *  `<\/?[a-zA-Z]` anchor requires a tag-name letter after `<`, so
- *  a literal `Hello < World` (space after `<`) heading text still
- *  passes through. */
+ *  Strips tags with `<\/?[a-zA-Z][^>]*>?` (handles well-formed
+ *  AND truncated tags), then a final pass removes any `<` / `>`
+ *  characters the entity decode reintroduced from `&lt;` / `&gt;`
+ *  literals. Without that final pass the function output can
+ *  carry a literal `<script` substring downstream into event
+ *  detail / aria payloads (CodeQL
+ *  `js/incomplete-multi-character-sanitization`). The cost is
+ *  that literal `<` / `>` in heading text are dropped from the
+ *  derived label — rare, acceptable for the diagnostic-label
+ *  use case here. */
 function stripInlineTags(inlineHtml: string): string {
   return inlineHtml
     .replace(/<\/?[a-zA-Z][^>]*>?/g, "")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&amp;/g, "&")
-    .replace(/<\/?[a-zA-Z][^>]*>?/g, "")
+    .replace(/[<>]/g, "")
     .trim();
 }
 
