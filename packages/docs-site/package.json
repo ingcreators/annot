@@ -1,0 +1,22 @@
+{
+  "name": "@ingcreators/annot-docs-site",
+  "version": "0.0.0",
+  "private": true,
+  "description": "VitePress documentation site for annot.work/docs — install walkthroughs, API reference, recipes, and the Annot Cloud (PWA) guide. Phase 8 of the Excalidraw-route cloud roadmap (`docs/plans/launch-prep.md`).",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ingcreators/annot.git",
+    "directory": "packages/docs-site"
+  },
+  "type": "module",
+  "scripts": {
+    "dev": "vitepress dev",
+    "build": "vitepress build",
+    "preview": "vitepress preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "catalog:",
+    "vitepress": "^1.6.4"
+  }
+}

@@ -1,0 +1,85 @@
+# `createAnnotator`
+
+```ts
+import { createAnnotator } from "@ingcreators/annot-annotator";
+
+const annotator = createAnnotator(options?);
+```
+
+Factory that returns a headless annotator instance. The returned
+object is stateless — you can create one per call or hoist it to a
+module-level singleton; both are equivalent.
+
+## Signature
+
+```ts
+function createAnnotator(options?: AnnotatorOptions): Annotator;
+
+interface AnnotatorOptions {
+  /**
+   * Override the default font stack used for text annotations.
+   * Defaults to the logical `Annot Sans` token with the
+   * system-font cascade.
+   */
+  fontFamily?: string;
+}
+
+interface Annotator {
+  toPng(input: AnnotateInput): Promise<Buffer>;
+  toSvg(input: AnnotateInput): Promise<string>;
+}
+
+interface AnnotateInput {
+  /**
+   * Base image bytes. Accepts a Buffer, a Uint8Array, or a
+   * `data:image/png;base64,...` URL.
+   */
+  baseImage: Buffer | Uint8Array | string;
+
+  /**
+   * SVG fragment to overlay on the base image. Coordinate space
+   * is the natural pixel dimensions of `baseImage` (read from
+   * the PNG IHDR chunk).
+   */
+  annotationsSvg: string;
+}
+```
+
+## Examples
+
+### Simple rectangle
+
+```ts
+const annotator = createAnnotator();
+const annotated = await annotator.toPng({
+  baseImage: await readFile("./screenshot.png"),
+  annotationsSvg: `
+    <rect x="100" y="100" width="200" height="40"
+          fill="none" stroke="#ff5252" stroke-width="3" />
+  `,
+});
+```
+
+### SVG output (no rasterisation)
+
+When you want the SVG itself — for embedding in a webpage, for
+diffing in tests, for piping into another converter — use
+`toSvg`:
+
+```ts
+const svg = await annotator.toSvg({ baseImage, annotationsSvg });
+await writeFile("./annotated.svg", svg);
+```
+
+## Sanitisation
+
+The annotator strips editor-internal artefacts from the input SVG
+fragment before composition:
+
+- `<style data-annot-fonts>` blocks
+- legacy base-image-in-wrapper structures
+- `#ui-overlay` and `<g id="annotations">` wrappers
+
+This means it's safe to pass output from the PWA's `Save as SVG`
+straight in — the artefacts that exist only for the live editor
+session are removed before rendering.
