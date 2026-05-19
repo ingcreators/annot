@@ -376,10 +376,12 @@ export class StorageBridge {
     if (mode === "cloud") {
       const baseUrl = getAnnotCloudBaseUrl();
       if (baseUrl === null) return undefined;
-      // Empty string = same-origin deploy; show "Annot Cloud" as
-      // the friendly label. Otherwise show the hostname so
-      // self-hosters see where their data lives.
-      if (!baseUrl) return "Annot Cloud";
+      // Empty string = same-origin deploy; no subtitle needed
+      // because the title row already says "Annot Cloud" — mirroring
+      // Browser's no-subtitle behaviour. For a non-empty base URL
+      // (self-hosters or staging), show the hostname so users see
+      // where their data lives.
+      if (!baseUrl) return undefined;
       try {
         return new URL(baseUrl).host;
       } catch {

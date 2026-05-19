@@ -348,25 +348,15 @@ export class AnnotSidebarElement extends LitElement {
     treeContainer.setAttribute("aria-label", "Folders");
 
     // Root node — always shows storage type name; folder/repo name
-    // as subtitle for Device / Drive / GitHub / Desktop.
-    let rootLabel: string;
-    switch (this.activeMode) {
-      case "device":
-        rootLabel = "Device";
-        break;
-      case "googledrive":
-        rootLabel = "Google Drive";
-        break;
-      case "github":
-        rootLabel = "GitHub";
-        break;
-      case "desktop":
-        rootLabel = "Desktop";
-        break;
-      default:
-        rootLabel = "Browser";
-        break;
-    }
+    // as subtitle for Device / Drive / GitHub / Cloud / Desktop.
+    // Resolved from the same chip-descriptor table that renders the
+    // STORAGE strip so a new built-in (or a plugin-registered
+    // storage) only needs ONE source-of-truth update.
+    const builtinLabel = BUILTIN_CHIP_DESCRIPTORS.find((d) => d.mode === this.activeMode)?.label;
+    const pluginLabel = this.callbacks
+      .getPluginStorages?.()
+      .find((r) => r.mode === this.activeMode)?.label;
+    const rootLabel = builtinLabel ?? pluginLabel ?? "Browser";
 
     const rootRow = document.createElement("div");
     rootRow.className = `folder-tree-item${this.activeFolderPath === "" ? " active" : ""}`;
