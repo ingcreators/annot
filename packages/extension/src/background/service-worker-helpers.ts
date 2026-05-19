@@ -24,12 +24,22 @@ export const IDB_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 /**
  * Annotation app URL. Vite swaps this at build time:
- *   `vite` / `vite dev`   → http://localhost:3000
- *   `vite build` (ship)   → https://annot.work
+ *   `vite` / `vite dev`   → http://localhost:3000/app
+ *   `vite build` (ship)   → https://annot.work/app
+ *
+ * The `/app` suffix is the PWA's Cloudflare route binding as of
+ * Phase 8d of `docs/plans/launch-prep.md` (atomic URL switchover).
+ * The PWA's Vite config sets `base: "/app/"` so its built `index.html`
+ * carries `/app/`-prefixed asset URLs and its router strips the
+ * prefix before parsing — staying in sync requires that EVERY URL
+ * the extension hands back to the PWA includes the prefix.
+ *
  * If a staging deploy ever needs a third target, promote this to a
  * VITE_ANNOTATION_URL env var.
  */
-export const ANNOTATION_URL = import.meta.env.DEV ? "http://localhost:3000" : "https://annot.work";
+export const ANNOTATION_URL = import.meta.env.DEV
+  ? "http://localhost:3000/app"
+  : "https://annot.work/app";
 
 /** Build edit URL with multi-segment image path. Mirrors the web app's
  *  `editUrl(store, path, extId)` builder — resource type lives between
