@@ -26,6 +26,28 @@ Thumbs.db
 # Environment
 .env
 .env.local
+.env.*.local
+.env.production
+.env.development
+
+# Secrets — defensive deny-by-pattern so an accidental drop never
+# even gets staged. Adding to this list is cheap; the CI `secret-scan`
+# job (gitleaks) is the second layer that catches anything that slips
+# past `git add`.
+*.pem
+*.key
+*.pfx
+*.p12
+*.cer
+*.crt
+id_rsa
+id_rsa.*
+id_ed25519
+id_ed25519.*
+serviceAccountKey*.json
+google-credentials*.json
+secrets/
+.secrets/
 
 # Cloudflare Workers (wrangler)
 # Miniflare local D1/KV/R2 state + tmp build artefacts — regenerated
