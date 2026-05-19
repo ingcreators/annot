@@ -252,7 +252,6 @@ describe("start_capture_overlay → get_capture_params → capture_overlay_resul
     // The deps owner (main.ts) wires `openOverlay` to return a
     // handle whose 'closed' event calls `notifyOverlayClosed`;
     // simulate that here.
-    let closeOverlay: () => void = () => {};
     const minimizeMain = vi.fn();
     const restoreMain = vi.fn();
     const openOverlay = vi.fn(() => ({ destroy: vi.fn() }));
@@ -265,7 +264,7 @@ describe("start_capture_overlay → get_capture_params → capture_overlay_resul
       openOverlay,
     };
     const handlers = createScreenCaptureHandlers(deps);
-    closeOverlay = () => handlers.notifyOverlayClosed();
+    const closeOverlay = () => handlers.notifyOverlayClosed();
 
     const overlayPromise = handlers.startCaptureOverlay({ mode: "rect" });
     await new Promise((r) => setTimeout(r, 500));
