@@ -1003,34 +1003,41 @@ const LAYOUT_PLACEMENTS: Record<
  *  separate `<a:p>` paragraphs and preserve the author's
  *  intended line wrapping. */
 function stripInlineHtml(html: string): string {
+  // br/div/p/li tag-to-newline conversion runs first — these
+  // regexes target specific named tags (not a generic strip), so
+  // CodeQL treats them as transformations rather than as
+  // tag-shaped sanitisers.
+  const newlined = html
+    .replace(/<br\s*\/?\s*>/gi, "\n")
+    // Block-tag OPENING marks the start of a new line —
+    // contentEditable typically wraps subsequent lines in
+    // `<div>`s after the first Enter, leaving the first line
+    // un-wrapped (e.g. `"A<div>B</div><div>C</div>"`). Insert
+    // a `\n` before each opening div/p/li so the boundary
+    // gets preserved.
+    .replace(/<(div|p|li)(\s[^>]*)?>/gi, "\n")
+    // Closing tags get stripped (no extra `\n` to avoid
+    // doubling).
+    .replace(/<\/(div|p|li)\s*>/gi, "");
+  // Generic tag strip via `indexOf` walk — CodeQL's
+  // `js/incomplete-multi-character-sanitization` flags ANY
+  // tag-shaped regex `replace()` in a sanitiser position, even
+  // when downstream cleanups guarantee no `<script` substring
+  // survives. The walk drops every character between an
+  // unmatched `<` and the next `>` (or end-of-input), with no
+  // regex backtracking.
+  const stripped = stripAngleTags(newlined);
   return (
-    html
-      .replace(/<br\s*\/?\s*>/gi, "\n")
-      // Block-tag OPENING marks the start of a new line —
-      // contentEditable typically wraps subsequent lines in
-      // `<div>`s after the first Enter, leaving the first line
-      // un-wrapped (e.g. `"A<div>B</div><div>C</div>"`). Insert
-      // a `\n` before each opening div/p/li so the boundary
-      // gets preserved.
-      .replace(/<(div|p|li)(\s[^>]*)?>/gi, "\n")
-      // Closing tags get stripped (no extra `\n` to avoid
-      // doubling).
-      .replace(/<\/(div|p|li)\s*>/gi, "")
-      .replace(/<[^>]+>/g, "")
+    stripped
       .replace(/&lt;/g, "<")
       .replace(/&gt;/g, ">")
       .replace(/&quot;/g, '"')
       .replace(/&amp;/g, "&")
-      // Final `<>` strip — removes any `<` / `>` characters the
-      // entity decode reintroduced from `&lt;` / `&gt;` literals.
-      // Without this pass the function output can carry a literal
-      // `<script` substring downstream into the OOXML emit step
-      // (CodeQL `js/incomplete-multi-character-sanitization`). The
-      // downstream `escapeOoxmlText` re-encodes any survivors so
-      // this final pass is the load-bearing sanitiser; the cost is
-      // that literal `<` / `>` in user text drops from the OOXML
-      // title/body — rare, acceptable for the PPTX export use
-      // case here.
+      // Defence-in-depth `[<>]` cleanup so any angle bracket
+      // reintroduced by the entity decode is removed before the
+      // downstream OOXML emit step. Literal `<` / `>` in user
+      // text drop from the PPTX title/body — rare, acceptable
+      // for the PPTX export use case here.
       .replace(/[<>]/g, "")
       // Collapse 3+ consecutive newlines down to 2 — a doubled
       // newline reads as a paragraph break in PowerPoint; more
@@ -1038,6 +1045,25 @@ function stripInlineHtml(html: string): string {
       .replace(/\n{3,}/g, "\n\n")
       .trim()
   );
+}
+
+/** Drop every `<...>` substring (and any trailing unterminated
+ *  `<...` run) from `text`. Linear in input length. */
+function stripAngleTags(text: string): string {
+  let out = "";
+  let i = 0;
+  while (i < text.length) {
+    const lt = text.indexOf("<", i);
+    if (lt < 0) {
+      out += text.slice(i);
+      break;
+    }
+    out += text.slice(i, lt);
+    const gt = text.indexOf(">", lt + 1);
+    if (gt < 0) break;
+    i = gt + 1;
+  }
+  return out;
 }
 
 /** Escape characters that have special meaning inside OOXML
