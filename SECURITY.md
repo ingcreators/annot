@@ -127,9 +127,29 @@ auditors can trace each to its enforcement point:
 - **Browser extension** uses MV3 with content-script DOM
   metadata capture gated behind explicit user action; there is
   no background page that runs unconditionally.
-- **CI** runs `pnpm audit --audit-level=high` on every PR via
-  the `security audit` workflow; high-severity advisories
-  block merges.
+- **CI runs `pnpm audit --audit-level=high`** on every PR via
+  the `security audit` workflow. Findings surface as a non-blocking
+  check (`continue-on-error: true`) so a new transitive CVE doesn't
+  stall unrelated merges; the authoritative alert path is
+  GitHub's native security advisories + Dependabot upgrade PRs.
+- **CI runs `gitleaks`** on every PR via the `secret scan`
+  workflow with the default ruleset extended by `.gitleaks.toml`
+  at the repo root. The job is **blocking** — a credential
+  matching any built-in rule (AWS, GCP, GitHub PAT, Stripe,
+  private keys, JWT, generic high-entropy `*_KEY` / `*_SECRET`
+  assignments, …) outside the small documented allowlist fails
+  the PR. The gitleaks binary is pinned by version and
+  SHA-256 in the workflow.
+- **Defensive `.gitignore`**: `.env*`, `*.pem`, `*.key`,
+  `id_rsa*`, `serviceAccountKey*.json`, `.dev.vars`, and similar
+  patterns are pre-blocked from accidental `git add`. The
+  `gitleaks` gate above is the second layer that catches
+  anything that slips past.
 - **Build supply chain**: Vite 8 + Biome 2 + Vitest 4, all
   pinned via `pnpm-lock.yaml`. Dependabot is enabled (see
-  `.github/dependabot.yml`) for ecosystem updates.
+  `.github/dependabot.yml`) for ecosystem updates. In-tree
+  compiled artefacts (`@ingcreators/annot-imagequant` WASM,
+  `annot-win-clipboard` napi-rs `.node` prebuild) are
+  byte-diffed against a fresh CI rebuild on every PR — see
+  the `verify-wasm` / `verify-win-clipboard` jobs in
+  `.github/workflows/ci.yml`.

@@ -99,6 +99,55 @@ jobs:
       - name: pnpm audit (high severity)
         run: pnpm audit --audit-level=high
 
+  # Secret scanning with gitleaks. Blocking (no `continue-on-error`):
+  # a leaked credential is a hard stop, unlike a dependency CVE which
+  # needs triage time. Config lives in `.gitleaks.toml` at the repo
+  # root — the small allowlist there covers known-public Cloudflare
+  # resource IDs, `.env.example` placeholders, and clearly-labelled
+  # worker test fixtures. Anything outside that allowlist fails the
+  # build.
+  #
+  # gitleaks is pinned by version + binary checksum for supply-chain
+  # safety (same posture the `verify-wasm` / `verify-win-clipboard`
+  # gates take for in-tree compiled artefacts). Bump GITLEAKS_VERSION
+  # + GITLEAKS_SHA256 together when upgrading; the SHA is published
+  # in the release notes at
+  # https://github.com/gitleaks/gitleaks/releases.
+  secret-scan:
+    name: secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # Full history so the scan covers every commit reachable
+          # from the PR head, not just the latest tree. Catches the
+          # case where a secret is added in commit N and removed in
+          # commit N+1 within the same PR.
+          fetch-depth: 0
+
+      - name: Install gitleaks
+        env:
+          GITLEAKS_VERSION: 8.18.4
+          GITLEAKS_SHA256: ba6dbb656933921c775ee5a2d1c13a91046e7952e9d919f9bac4cec61d628e7d
+        run: |
+          set -euo pipefail
+          curl -sSL -o /tmp/gitleaks.tar.gz \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  /tmp/gitleaks.tar.gz" | sha256sum --check --strict
+          tar -xz -C /tmp -f /tmp/gitleaks.tar.gz gitleaks
+          sudo install /tmp/gitleaks /usr/local/bin/gitleaks
+          gitleaks version
+
+      - name: Scan repository for secrets
+        run: |
+          gitleaks detect \
+            --source . \
+            --config .gitleaks.toml \
+            --redact \
+            --no-banner \
+            --verbose
+
   # Phase 2 of docs/plans/vendor-libimagequant.md: rebuild the
   # `@ingcreators/annot-imagequant` WASM artefact from source and
   # diff against the committed `packages/imagequant/pkg/`. This is

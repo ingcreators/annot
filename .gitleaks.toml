@@ -1,0 +1,59 @@
+# gitleaks config for the annot monorepo.
+#
+# Runs in CI via `.github/workflows/ci.yml` (job: `secret-scan`).
+# Extends the upstream default ruleset and adds a small allowlist for
+# things that are intentional + public-by-design or clearly-labelled
+# test fixtures. Keep this list tight — every allowlist entry is a
+# place a real leak could hide.
+
+title = "annot gitleaks config"
+
+[extend]
+useDefault = true
+
+# ─── Allowlist ─────────────────────────────────────────────────────
+#
+# Single global allowlist (works on every gitleaks v8.x). Grouped by
+# reason in the inline comments below.
+
+[allowlist]
+description = "annot known-OK paths + patterns"
+
+paths = [
+  # Test-fixture credentials. Worker tests stub the OAuth dance with
+  # literal placeholders (`test-client-id`, `test-client-secret`,
+  # `gho_test-access-token`) so the handlers can run end-to-end
+  # without real secrets. Strings are obviously not real and never
+  # leave the test files.
+  '''packages/worker/src/.*\.test\.ts$''',
+  '''packages/worker/src/test-helpers\.ts$''',
+
+  # `.env.example` documents env-var shape with placeholder values
+  # (`your-client-id…`, `your-api-key`). Tracked intentionally; real
+  # values land in untracked `.env.local`.
+  '''(^|/)\.env\.example$''',
+
+  # Cloudflare resource IDs in `wrangler.jsonc`. The 32-char hex KV /
+  # preview IDs and the UUID-shaped D1 database IDs are Cloudflare-
+  # internal identifiers, NOT credentials — access still requires
+  # the Cloudflare API token (a separate GitHub Actions secret).
+  '''(^|/)wrangler\.jsonc$''',
+
+  # Lockfile integrity hashes (`sha512-…`, content hashes) routinely
+  # trip the generic high-entropy pattern. Not a vector for secret
+  # leaks.
+  '''(^|/)pnpm-lock\.yaml$''',
+  '''(^|/)package-lock\.json$''',
+  '''(^|/)yarn\.lock$''',
+  '''(^|/)Cargo\.lock$''',
+]
+
+# Regex match against the offending LINE (not just the captured
+# secret) so we can pin specific code sites by surrounding context.
+regexTarget = "line"
+regexes = [
+  # Hard-coded base62 alphabet used by `generateToken()` in
+  # `packages/worker/src/shares.ts`. The alphabet is public; the
+  # random token built from it only ever exists at runtime.
+  '''TOKEN_ALPHABET\s*=\s*"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"''',
+]
