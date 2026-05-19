@@ -181,21 +181,19 @@ function drawOpenArrow(
 }
 
 /**
- * Filled diamond (rhombus). `thin=true` for a narrower variant.
+ * Filled diamond (rhombus).
  */
 function drawDiamond(
   canvas: SvgPathCanvas,
-  thin: boolean,
   pe: Point,
   unitX: number,
   unitY: number,
   size: number,
   sw: number,
 ): void {
-  // 0.7071 = 1/(2·sin(45°)); 0.9862 for the thin diamond's 45°/81° tip.
-  const swFactor = thin ? 0.9862 : Math.SQRT1_2;
-  const endOffsetX = unitX * sw * swFactor;
-  const endOffsetY = unitY * sw * swFactor;
+  // 0.7071 = 1/(2·sin(45°)) for the standard diamond's right-angle tip.
+  const endOffsetX = unitX * sw * Math.SQRT1_2;
+  const endOffsetY = unitY * sw * Math.SQRT1_2;
 
   const uX = unitX * (size + sw);
   const uY = unitY * (size + sw);
@@ -204,13 +202,11 @@ function drawDiamond(
   pe.x += -uX - endOffsetX;
   pe.y += -uY - endOffsetY;
 
-  // Thickness factor — 2 for standard diamond, 3.4 for thin.
-  const tk = thin ? 3.4 : 2;
-
+  // Thickness factor 2 = standard diamond.
   canvas.moveTo(pt.x, pt.y);
-  canvas.lineTo(pt.x - uX / 2 - uY / tk, pt.y + uX / tk - uY / 2);
+  canvas.lineTo(pt.x - uX / 2 - uY / 2, pt.y + uX / 2 - uY / 2);
   canvas.lineTo(pt.x - uX, pt.y - uY);
-  canvas.lineTo(pt.x - uX / 2 + uY / tk, pt.y - uY / 2 - uX / tk);
+  canvas.lineTo(pt.x - uX / 2 + uY / 2, pt.y - uY / 2 - uX / 2);
   canvas.close();
 }
 
@@ -327,7 +323,7 @@ export function renderArrowHead(
       drawOpenArrow(canvas, widthFactor, pe, unitX, unitY, size, strokeWidth);
       return { filled: false };
     case "diamond":
-      drawDiamond(canvas, false, pe, unitX, unitY, size, strokeWidth);
+      drawDiamond(canvas, pe, unitX, unitY, size, strokeWidth);
       return { filled: true };
     case "oval":
       drawOval(canvas, pe, unitX, unitY, size);
