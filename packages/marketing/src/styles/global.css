@@ -362,6 +362,76 @@ pre {
   color: var(--annot-text-soft);
 }
 
+/*
+ * Long-form text content (privacy, terms, press).
+ * Single-column, comfortable reading width, generous vertical
+ * rhythm between blocks.
+ */
+.prose-wrap {
+  padding: 56px 0 72px;
+  background: var(--annot-bg);
+}
+.prose {
+  max-width: 38rem;
+  margin: 0 auto;
+}
+.prose .eyebrow {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--annot-ink-soft);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+.prose h1 {
+  font-size: clamp(1.8rem, 4vw, 2.5rem);
+  margin-bottom: 8px;
+}
+.prose .updated {
+  color: var(--annot-text-soft);
+  font-size: 0.92rem;
+  margin-bottom: 32px;
+}
+.prose h2 {
+  font-size: 1.4rem;
+  margin: 40px 0 14px;
+}
+.prose h3 {
+  font-size: 1.1rem;
+  margin: 28px 0 10px;
+}
+.prose p,
+.prose ul,
+.prose ol {
+  margin: 0 0 14px;
+}
+.prose ul,
+.prose ol {
+  padding-left: 1.5em;
+}
+.prose li {
+  margin-bottom: 8px;
+}
+.prose code {
+  background: var(--annot-bg-alt);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.88em;
+}
+.prose .draft-banner {
+  background: #fff8e1;
+  border: 1px solid #f1d375;
+  border-left: 4px solid #e0a800;
+  border-radius: var(--annot-radius-sm);
+  padding: 14px 18px;
+  margin-bottom: 32px;
+  font-size: 0.92rem;
+  color: #5a4400;
+}
+.prose .draft-banner strong {
+  color: #3d2e00;
+}
+
 @media (max-width: 760px) {
   .hero {
     padding: 48px 0 32px;
@@ -372,6 +442,9 @@ pre {
   }
   .section {
     padding: 48px 0;
+  }
+  .prose-wrap {
+    padding: 40px 0 56px;
   }
 }
 
