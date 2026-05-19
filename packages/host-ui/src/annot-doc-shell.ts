@@ -3837,16 +3837,44 @@ function buildHeadingIdMap(headings: readonly HeadingBlock[]): Map<HeadingBlock,
 }
 
 /** Best-effort plain-text extraction from canonical inline HTML
- *  for use in event details / aria labels. Strips tags only —
- *  doesn't decode entities, since the canonical form has only
- *  the standard `&lt;` / `&gt;` / `&amp;` triple. */
+ *  for use in event details / aria labels.
+ *
+ *  The tag strip uses an indexOf-based walk rather than a regex
+ *  replace — CodeQL's `js/incomplete-multi-character-sanitization`
+ *  rule flags ANY tag-shaped regex used in a sanitiser, since
+ *  regex alternation can leave fragments under adversarial
+ *  overlap. The walk drops every character between an unmatched
+ *  `<` and the next `>` (or end-of-input), then the final `[<>]`
+ *  strip removes any angle brackets the entity decode
+ *  reintroduced from `&lt;` / `&gt;` literals. The cost is that
+ *  literal `<` / `>` in heading text drop from the derived label
+ *  — rare, acceptable for the diagnostic-label use case here. */
 function stripInlineTags(inlineHtml: string): string {
-  return inlineHtml
-    .replace(/<[^>]*>/g, "")
+  return stripAngleTags(inlineHtml)
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&amp;/g, "&")
+    .replace(/[<>]/g, "")
     .trim();
+}
+
+/** Drop every `<...>` substring (and any trailing unterminated
+ *  `<...` run) from `text`. Linear in input length. */
+function stripAngleTags(text: string): string {
+  let out = "";
+  let i = 0;
+  while (i < text.length) {
+    const lt = text.indexOf("<", i);
+    if (lt < 0) {
+      out += text.slice(i);
+      break;
+    }
+    out += text.slice(i, lt);
+    const gt = text.indexOf(">", lt + 1);
+    if (gt < 0) break;
+    i = gt + 1;
+  }
+  return out;
 }
 
 /** Pull DOM state back into a block. Phase 4a covers heading +

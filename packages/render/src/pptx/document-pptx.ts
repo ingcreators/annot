@@ -1021,6 +1021,17 @@ function stripInlineHtml(html: string): string {
       .replace(/&gt;/g, ">")
       .replace(/&quot;/g, '"')
       .replace(/&amp;/g, "&")
+      // Final `<>` strip — removes any `<` / `>` characters the
+      // entity decode reintroduced from `&lt;` / `&gt;` literals.
+      // Without this pass the function output can carry a literal
+      // `<script` substring downstream into the OOXML emit step
+      // (CodeQL `js/incomplete-multi-character-sanitization`). The
+      // downstream `escapeOoxmlText` re-encodes any survivors so
+      // this final pass is the load-bearing sanitiser; the cost is
+      // that literal `<` / `>` in user text drops from the OOXML
+      // title/body — rare, acceptable for the PPTX export use
+      // case here.
+      .replace(/[<>]/g, "")
       // Collapse 3+ consecutive newlines down to 2 — a doubled
       // newline reads as a paragraph break in PowerPoint; more
       // than that just bloats the output.

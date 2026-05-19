@@ -48,9 +48,23 @@ export function chex(c: string | undefined | null): string {
   return "000000";
 }
 
-/** XML-escape free text inside `<a:t>...</a:t>` / attribute values. */
+/** XML-escape free text inside `<a:t>...</a:t>` / attribute values.
+ *
+ * Encodes `& < > " '` so the same helper is safe for both text-content
+ * and quoted-attribute contexts. Without quote escaping, a stored
+ * font-family value containing `"` would close the surrounding
+ * `typeface="…"` attribute and let arbitrary XML bleed in — see
+ * CodeQL `js/incomplete-html-attribute-sanitization` alerts on the
+ * `<a:latin>` / `<a:ea>` / `<a:cs>` emitters in `shapes/text.ts`.
+ * Encoding the two quote chars in text content too is harmless: XML
+ * decodes `&quot;` / `&apos;` to `"` / `'` symmetrically. */
 export function exml(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
 }
 
 /** Map an SVG arrow-shape name + dimensions onto an OOXML
