@@ -13,10 +13,12 @@
     "dev": "vitepress dev",
     "build": "vitepress build",
     "preview": "vitepress preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "cf:deploy": "wrangler deploy"
   },
   "devDependencies": {
     "typescript": "catalog:",
-    "vitepress": "^1.6.4"
+    "vitepress": "^1.6.4",
+    "wrangler": "^4.45.0"
   }
 }

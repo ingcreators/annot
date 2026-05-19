@@ -32,7 +32,11 @@
 
 import { APP_VERSION, isDevVersion } from "./app-version.js";
 
-const VERSION_URL = "/version.txt";
+// `import.meta.env.BASE_URL` propagates Vite's `base` config to
+// runtime — when the PWA serves at `/app/`, the version file is
+// at `/app/version.txt`. The trailing-slash form of BASE_URL is
+// already what we want for path concatenation here.
+const VERSION_URL = `${import.meta.env.BASE_URL}version.txt`;
 const INITIAL_CHECK_DELAY_MS = 30_000;
 
 export interface VersionPollerOptions {

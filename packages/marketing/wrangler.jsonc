@@ -1,0 +1,39 @@
+/**
+ * Cloudflare Workers Static Assets config for the annot.work
+ * marketing landing site.
+ *
+ * No Worker script — just the Astro static build from
+ * `packages/marketing/dist/` behind Cloudflare's asset server.
+ *
+ * URL layout (Phase 8d of docs/plans/launch-prep.md):
+ *
+ *   annot.work/      → THIS worker (landing, /, /privacy,
+ *                       /terms, /press, …)
+ *   annot.work/app/* → annot (PWA, root wrangler.jsonc)
+ *   annot.work/docs/*→ annot-docs-site
+ *                       (packages/docs-site/wrangler.jsonc)
+ *   annot.work/api/* → annot-api (packages/worker/wrangler.jsonc)
+ *
+ * Cloudflare resolves overlapping routes by longest-prefix match,
+ * so the catch-all `annot.work/*` defined here only fires for
+ * paths NOT covered by the more-specific bindings above.
+ *
+ * `not_found_handling: "404-page"` (Astro emits per-route static
+ * HTML) — falling through to a SPA index would be wrong here.
+ */
+{
+  "name": "annot-marketing",
+  "compatibility_date": "2026-04-23",
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [
+    {
+      "pattern": "annot.work/*",
+      "zone_name": "annot.work"
+    }
+  ],
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "404-page"
+  }
+}

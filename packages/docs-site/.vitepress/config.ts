@@ -15,6 +15,15 @@ export default defineConfig({
   cleanUrls: true,
   lastUpdated: true,
 
+  // VitePress's default outDir is `.vitepress/dist/`. Cloudflare's
+  // static-asset binding (configured via `wrangler.jsonc`) maps an
+  // incoming URL path to a file inside `assets.directory` —
+  // including the route prefix. So `annot.work/docs/index.html`
+  // → `<assets.directory>/docs/index.html`. We nest the build
+  // output one level deeper so the on-disk path mirrors the
+  // public URL.
+  outDir: "./.vitepress/dist/docs",
+
   // The package README.md is repo metadata, not docs content — it
   // links out to ../../docs/plans/ (sibling docs in the monorepo)
   // and that path doesn't exist inside the docs-site build root.
