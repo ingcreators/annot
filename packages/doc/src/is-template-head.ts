@@ -48,4 +48,10 @@ export function isTemplateFromHead(bytes: string): boolean {
   return TEMPLATE_META_REGEX.test(bytes);
 }
 
-const TEMPLATE_META_REGEX = /<meta\s+name=["']annot-template["']\s+content=["']1["']\s*\/?\s*>/i;
+// Single trailing `\s*` (not `\s*\/?\s*`) — two adjacent unanchored
+// `\s*` create polynomial backtracking on input that almost matches
+// but ends just short of the closing `>` (CodeQL
+// `js/polynomial-redos`). HTML5 self-closing notation tolerates
+// `/>` immediately after attributes; whitespace between `/` and `>`
+// is non-standard and not produced by `serializeDocument`.
+const TEMPLATE_META_REGEX = /<meta\s+name=["']annot-template["']\s+content=["']1["']\s*\/?>/i;
