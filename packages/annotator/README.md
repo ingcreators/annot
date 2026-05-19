@@ -1,24 +1,27 @@
 # `@ingcreators/annot-annotator`
 
+[![npm](https://img.shields.io/npm/v/@ingcreators/annot-annotator.svg)](https://www.npmjs.com/package/@ingcreators/annot-annotator)
+[![license](https://img.shields.io/npm/l/@ingcreators/annot-annotator.svg)](https://github.com/ingcreators/annot/blob/main/LICENSE)
+
 Headless annotator — produce annotated screenshots from Node without
 a browser. Reads an `ImageRecord`-shaped input (base image + saved
 annotations SVG) and emits a PNG or the merged SVG.
 
-> **Status:** Workspace package, not yet published to npm. The public
-> API is stable; the package becomes installable in Phase 3 of the
-> headless-annotator track (gated on Changesets).
->
-> Companion package: `@ingcreators/annot-playwright` (Phase 2 of the
-> same track) — a Playwright fixture composing this annotator into
-> idiomatic `test.extend({ annotator })` form.
+Companion package: [`@ingcreators/annot-playwright`](https://www.npmjs.com/package/@ingcreators/annot-playwright) —
+a Playwright fixture composing this annotator into idiomatic
+`test.extend({ annotator })` form.
 
-## Install (post-publish)
+## Install
 
 ```sh
 npm install @ingcreators/annot-annotator
 # or
 pnpm add @ingcreators/annot-annotator
 ```
+
+Peer runtime requirements: Node 20+. The package depends on
+`@resvg/resvg-js` (native binding via `@napi-rs`) — npm install
+fetches the platform-matched prebuild automatically.
 
 ## Usage
 

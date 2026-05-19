@@ -1,21 +1,22 @@
 # `@ingcreators/annot-playwright`
 
-Playwright fixture for [`@ingcreators/annot-annotator`](../annotator/README.md).
+[![npm](https://img.shields.io/npm/v/@ingcreators/annot-playwright.svg)](https://www.npmjs.com/package/@ingcreators/annot-playwright)
+[![license](https://img.shields.io/npm/l/@ingcreators/annot-playwright.svg)](https://github.com/ingcreators/annot/blob/main/LICENSE)
+
+Playwright fixture for [`@ingcreators/annot-annotator`](https://www.npmjs.com/package/@ingcreators/annot-annotator).
 Emit annotated screenshots from test failures without leaving the
 test file.
 
-> **Status:** Workspace package, not yet published to npm. Becomes
-> installable in Phase 3 of the headless-annotator track (gated on
-> Changesets). The Phase 1 annotator it depends on is also
-> workspace-only until then.
-
-## Install (post-publish)
+## Install
 
 ```sh
 pnpm add -D @playwright/test @ingcreators/annot-playwright
+# or
+npm install --save-dev @playwright/test @ingcreators/annot-playwright
 ```
 
-(`@playwright/test` is a peer dependency.)
+`@playwright/test` is a peer dependency — bring your own pinned
+version.
 
 ## Usage
 
