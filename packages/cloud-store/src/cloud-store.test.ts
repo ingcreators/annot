@@ -195,13 +195,10 @@ describe("AnnotCloudStore.listImages", () => {
     mock.seedImage({ path: "Screenshots/sub/c.png", bytes: PNG_BYTES });
 
     const list = await store.listImages("Screenshots");
-    // Folder-prefix filter on the worker side returns ALL paths
-    // matching the prefix; the store sees all three.
-    expect(list.map((r) => r.path).sort()).toEqual([
-      "Screenshots/a.png",
-      "Screenshots/b.png",
-      "Screenshots/sub/c.png",
-    ]);
+    // StorageProvider.listImages does NOT recurse. The worker's
+    // prefix filter returns the descendant too, and the store
+    // filters it back out before returning.
+    expect(list.map((r) => r.path).sort()).toEqual(["Screenshots/a.png", "Screenshots/b.png"]);
     // Lightweight: no bytes carried.
     for (const r of list) {
       expect(r.originalDataUrl).toBe("");
@@ -217,6 +214,16 @@ describe("AnnotCloudStore.listImages", () => {
     mock.seedImage({ path: "b.png", bytes: PNG_BYTES });
     const list = await store.listImages("");
     expect(list).toHaveLength(2);
+  });
+
+  it("does NOT include files in subfolders when listing the root", async () => {
+    const { mock, store } = await makeStoreWithMock();
+    await store.init();
+    mock.seedImage({ path: "root.png", bytes: PNG_BYTES });
+    mock.seedImage({ path: "Screenshots/nested.png", bytes: PNG_BYTES });
+    mock.seedImage({ path: "Screenshots/deep/sub.png", bytes: PNG_BYTES });
+    const list = await store.listImages("");
+    expect(list.map((r) => r.path)).toEqual(["root.png"]);
   });
 });
 
@@ -425,6 +432,19 @@ describe("AnnotCloudStore document methods", () => {
     const list = await store.listDocuments("");
     expect(list.map((r) => r.title).sort()).toEqual(["A", "B"]);
     for (const r of list) expect(r.bytes).toBe("");
+  });
+
+  it("listDocuments does NOT include subfolder documents when listing the root", async () => {
+    const { store, mock } = await makeStoreWithMock();
+    await store.init();
+    mock.seedDocument({ path: "root.annot.html", bytes: "<html></html>", title: "Root" });
+    mock.seedDocument({
+      path: "Folder/nested.annot.html",
+      bytes: "<html></html>",
+      title: "Nested",
+    });
+    const list = await store.listDocuments("");
+    expect(list.map((r) => r.title)).toEqual(["Root"]);
   });
 
   it("updateDocument with bytes routes through the content endpoint", async () => {
