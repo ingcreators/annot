@@ -10,8 +10,8 @@ catalogs:
       specifier: ^6.0.3
       version: 6.0.3
     vite:
-      specifier: ^8.0.13
-      version: 8.0.13
+      specifier: ^6.4.2
+      version: 6.4.2
 
 importers:
 
@@ -65,10 +65,10 @@ importers:
         version: 6.0.3
       vite:
         specifier: 'catalog:'
-        version: 8.0.13(@types/node@25.9.0)(esbuild@0.27.7)(jiti@2.7.0)(yaml@2.9.0)
+        version: 6.4.2(@types/node@25.9.0)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0)
       vite-plugin-dts:
         specifier: ^5.0.0
-        version: 5.0.0(esbuild@0.27.7)(rolldown@1.0.1)(rollup@4.60.4)(typescript@6.0.3)(vite@8.0.13(@types/node@25.9.0)(esbuild@0.27.7)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(esbuild@0.27.7)(rolldown@1.0.1)(rollup@4.60.4)(typescript@6.0.3)(vite@6.4.2(@types/node@25.9.0)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0))
 
   packages/capture:
     dependencies:
@@ -81,7 +81,7 @@ importers:
         version: 6.0.3
       vite:
         specifier: 'catalog:'
-        version: 8.0.13(@types/node@25.9.0)(esbuild@0.27.7)(jiti@2.7.0)(yaml@2.9.0)
+        version: 6.4.2(@types/node@25.9.0)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0)
 
   packages/cloud-store:
     dependencies:
@@ -110,10 +110,10 @@ importers:
         version: 6.0.3
       vite:
         specifier: 'catalog:'
-        version: 8.0.13(@types/node@25.9.0)(esbuild@0.27.7)(jiti@2.7.0)(yaml@2.9.0)
+        version: 6.4.2(@types/node@25.9.0)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0)
       vite-plugin-dts:
         specifier: ^5.0.0
-        version: 5.0.0(esbuild@0.27.7)(rolldown@1.0.1)(rollup@4.60.4)(typescript@6.0.3)(vite@8.0.13(@types/node@25.9.0)(esbuild@0.27.7)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(esbuild@0.27.7)(rolldown@1.0.1)(rollup@4.60.4)(typescript@6.0.3)(vite@6.4.2(@types/node@25.9.0)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0))
 
   packages/desktop:
     dependencies:
@@ -156,13 +156,13 @@ importers:
         version: 26.8.1(electron-builder-squirrel-windows@26.8.1)
       electron-vite:
         specifier: 6.0.0-beta.1
-        version: 6.0.0-beta.1(vite@8.0.13(@types/node@25.8.0)(esbuild@0.27.7)(jiti@2.7.0)(yaml@2.9.0))
+        version: 6.0.0-beta.1(vite@6.4.2(@types/node@25.8.0)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0))
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
       vite:
         specifier: 'catalog:'
-        version: 8.0.13(@types/node@25.8.0)(esbuild@0.27.7)(jiti@2.7.0)(yaml@2.9.0)
+        version: 6.4.2(@types/node@25.8.0)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0)
 
   packages/doc:
     dependencies:
@@ -178,10 +178,10 @@ importers:
         version: 6.0.3
       vite:
         specifier: 'catalog:'
-        version: 8.0.13(@types/node@25.8.0)(esbuild@0.27.7)(jiti@2.7.0)(yaml@2.9.0)
+        version: 6.4.2(@types/node@25.8.0)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0)
       vite-plugin-dts:
         specifier: ^5.0.0
-        version: 5.0.0(esbuild@0.27.7)(rolldown@1.0.1)(rollup@4.60.4)(typescript@6.0.3)(vite@8.0.13(@types/node@25.8.0)(esbuild@0.27.7)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(esbuild@0.27.7)(rolldown@1.0.1)(rollup@4.60.4)(typescript@6.0.3)(vite@6.4.2(@types/node@25.8.0)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0))
 
   packages/docs-site:
     devDependencies:
@@ -212,7 +212,7 @@ importers:
         version: 6.0.3
       vite:
         specifier: 'catalog:'
-        version: 8.0.13(@types/node@25.8.0)(esbuild@0.27.7)(jiti@2.7.0)(yaml@2.9.0)
+        version: 6.4.2(@types/node@25.8.0)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0)
 
   packages/extension:
     dependencies:
@@ -237,7 +237,7 @@ importers:
         version: 2.6.2
       '@storybook/web-components-vite':
         specifier: ^10.4.0
-        version: 10.4.0(esbuild@0.27.7)(lit@3.3.3)(rollup@4.60.4)(storybook@10.4.0(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@testing-library/dom@10.4.1)(prettier@3.8.3)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(vite@8.0.13(@types/node@25.9.0)(esbuild@0.27.7)(jiti@2.7.0)(yaml@2.9.0))
+        version: 10.4.0(esbuild@0.27.7)(lit@3.3.3)(rollup@4.60.4)(storybook@10.4.0(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@testing-library/dom@10.4.1)(prettier@3.8.3)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(vite@6.4.2(@types/node@25.9.0)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0))
       chrome-types:
         specifier: ^0.1.428
         version: 0.1.428
@@ -246,7 +246,7 @@ importers:
         version: 6.0.3
       vite:
         specifier: 'catalog:'
-        version: 8.0.13(@types/node@25.9.0)(esbuild@0.27.7)(jiti@2.7.0)(yaml@2.9.0)
+        version: 6.4.2(@types/node@25.9.0)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0)
 
   packages/host-ui:
     dependencies:
@@ -271,7 +271,7 @@ importers:
     devDependencies:
       '@storybook/web-components-vite':
         specifier: ^10.4.0
-        version: 10.4.0(esbuild@0.27.7)(lit@3.3.3)(rollup@4.60.4)(storybook@10.4.0(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@testing-library/dom@10.4.1)(prettier@3.8.3)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(vite@8.0.13(@types/node@25.9.0)(esbuild@0.27.7)(jiti@2.7.0)(yaml@2.9.0))
+        version: 10.4.0(esbuild@0.27.7)(lit@3.3.3)(rollup@4.60.4)(storybook@10.4.0(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@testing-library/dom@10.4.1)(prettier@3.8.3)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(vite@6.4.2(@types/node@25.9.0)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0))
       storybook:
         specifier: ^10.4.0
         version: 10.4.0(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@testing-library/dom@10.4.1)(prettier@3.8.3)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
@@ -280,7 +280,7 @@ importers:
         version: 6.0.3
       vite:
         specifier: 'catalog:'
-        version: 8.0.13(@types/node@25.9.0)(esbuild@0.27.7)(jiti@2.7.0)(yaml@2.9.0)
+        version: 6.4.2(@types/node@25.9.0)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0)
 
   packages/imagequant: {}
 
@@ -314,10 +314,10 @@ importers:
         version: 6.0.3
       vite:
         specifier: 'catalog:'
-        version: 8.0.13(@types/node@25.9.0)(esbuild@0.27.7)(jiti@2.7.0)(yaml@2.9.0)
+        version: 6.4.2(@types/node@25.9.0)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0)
       vite-plugin-dts:
         specifier: ^5.0.0
-        version: 5.0.0(esbuild@0.27.7)(rolldown@1.0.1)(rollup@4.60.4)(typescript@6.0.3)(vite@8.0.13(@types/node@25.9.0)(esbuild@0.27.7)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(esbuild@0.27.7)(rolldown@1.0.1)(rollup@4.60.4)(typescript@6.0.3)(vite@6.4.2(@types/node@25.9.0)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0))
 
   packages/render:
     dependencies:
@@ -333,7 +333,7 @@ importers:
         version: 6.0.3
       vite:
         specifier: 'catalog:'
-        version: 8.0.13(@types/node@25.9.0)(esbuild@0.27.7)(jiti@2.7.0)(yaml@2.9.0)
+        version: 6.4.2(@types/node@25.9.0)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0)
 
   packages/vscode:
     dependencies:
@@ -364,7 +364,7 @@ importers:
         version: 6.0.3
       vite:
         specifier: 'catalog:'
-        version: 8.0.13(@types/node@25.8.0)(esbuild@0.27.7)(jiti@2.7.0)(yaml@2.9.0)
+        version: 6.4.2(@types/node@25.8.0)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0)
 
   packages/web:
     dependencies:
@@ -401,7 +401,7 @@ importers:
         version: 10.4.0(storybook@10.4.0(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@testing-library/dom@10.4.1)(prettier@3.8.3)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))
       '@storybook/web-components-vite':
         specifier: ^10.4.0
-        version: 10.4.0(esbuild@0.27.7)(lit@3.3.3)(rollup@4.60.4)(storybook@10.4.0(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@testing-library/dom@10.4.1)(prettier@3.8.3)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(vite@8.0.13(@types/node@25.9.0)(esbuild@0.27.7)(jiti@2.7.0)(yaml@2.9.0))
+        version: 10.4.0(esbuild@0.27.7)(lit@3.3.3)(rollup@4.60.4)(storybook@10.4.0(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@testing-library/dom@10.4.1)(prettier@3.8.3)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(vite@6.4.2(@types/node@25.9.0)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0))
       chrome-types:
         specifier: ^0.1.428
         version: 0.1.428
@@ -413,7 +413,7 @@ importers:
         version: 6.0.3
       vite:
         specifier: 'catalog:'
-        version: 8.0.13(@types/node@25.9.0)(esbuild@0.27.7)(jiti@2.7.0)(yaml@2.9.0)
+        version: 6.4.2(@types/node@25.9.0)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0)
 
   packages/worker:
     dependencies:
@@ -5509,6 +5509,46 @@ packages:
       terser:
         optional: true
 
+  vite@6.4.2:
+    resolution: {integrity: sha512-2N/55r4JDJ4gdrCvGgINMy+HH3iRpNIz8K6SFwVsA+JbQScLiC+clmAxBgwiSPgcG9U15QmvqCGWzMbqda5zGQ==}
+    engines: {node: ^18.0.0 || ^20.0.0 || >=22.0.0}
+    hasBin: true
+    peerDependencies:
+      '@types/node': ^18.0.0 || ^20.0.0 || >=22.0.0
+      jiti: '>=1.21.0'
+      less: '*'
+      lightningcss: ^1.21.0
+      sass: '*'
+      sass-embedded: '*'
+      stylus: '*'
+      sugarss: '*'
+      terser: ^5.16.0
+      tsx: ^4.8.1
+      yaml: ^2.4.2
+    peerDependenciesMeta:
+      '@types/node':
+        optional: true
+      jiti:
+        optional: true
+      less:
+        optional: true
+      lightningcss:
+        optional: true
+      sass:
+        optional: true
+      sass-embedded:
+        optional: true
+      stylus:
+        optional: true
+      sugarss:
+        optional: true
+      terser:
+        optional: true
+      tsx:
+        optional: true
+      yaml:
+        optional: true
+
   vite@7.3.3:
     resolution: {integrity: sha512-/4XH147Ui7OGTjg3HbdWe5arnZQSbfuRzdr9Ec7TQi5I7R+ir0Rlc9GIvD4v0XZurELqA035KVXJXpR61xhiTA==}
     engines: {node: ^20.19.0 || >=22.12.0}
@@ -7606,25 +7646,25 @@ snapshots:
       axe-core: 4.11.4
       storybook: 10.4.0(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@testing-library/dom@10.4.1)(prettier@3.8.3)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
 
-  '@storybook/builder-vite@10.4.0(esbuild@0.27.7)(rollup@4.60.4)(storybook@10.4.0(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@testing-library/dom@10.4.1)(prettier@3.8.3)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(vite@8.0.13(@types/node@25.9.0)(esbuild@0.27.7)(jiti@2.7.0)(yaml@2.9.0))':
+  '@storybook/builder-vite@10.4.0(esbuild@0.27.7)(rollup@4.60.4)(storybook@10.4.0(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@testing-library/dom@10.4.1)(prettier@3.8.3)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(vite@6.4.2(@types/node@25.9.0)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0))':
     dependencies:
-      '@storybook/csf-plugin': 10.4.0(esbuild@0.27.7)(rollup@4.60.4)(storybook@10.4.0(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@testing-library/dom@10.4.1)(prettier@3.8.3)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(vite@8.0.13(@types/node@25.9.0)(esbuild@0.27.7)(jiti@2.7.0)(yaml@2.9.0))
+      '@storybook/csf-plugin': 10.4.0(esbuild@0.27.7)(rollup@4.60.4)(storybook@10.4.0(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@testing-library/dom@10.4.1)(prettier@3.8.3)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(vite@6.4.2(@types/node@25.9.0)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0))
       storybook: 10.4.0(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@testing-library/dom@10.4.1)(prettier@3.8.3)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       ts-dedent: 2.2.0
-      vite: 8.0.13(@types/node@25.9.0)(esbuild@0.27.7)(jiti@2.7.0)(yaml@2.9.0)
+      vite: 6.4.2(@types/node@25.9.0)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0)
     transitivePeerDependencies:
       - esbuild
       - rollup
       - webpack
 
-  '@storybook/csf-plugin@10.4.0(esbuild@0.27.7)(rollup@4.60.4)(storybook@10.4.0(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@testing-library/dom@10.4.1)(prettier@3.8.3)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(vite@8.0.13(@types/node@25.9.0)(esbuild@0.27.7)(jiti@2.7.0)(yaml@2.9.0))':
+  '@storybook/csf-plugin@10.4.0(esbuild@0.27.7)(rollup@4.60.4)(storybook@10.4.0(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@testing-library/dom@10.4.1)(prettier@3.8.3)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(vite@6.4.2(@types/node@25.9.0)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0))':
     dependencies:
       storybook: 10.4.0(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@testing-library/dom@10.4.1)(prettier@3.8.3)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       unplugin: 2.3.11
     optionalDependencies:
       esbuild: 0.27.7
       rollup: 4.60.4
-      vite: 8.0.13(@types/node@25.9.0)(esbuild@0.27.7)(jiti@2.7.0)(yaml@2.9.0)
+      vite: 6.4.2(@types/node@25.9.0)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0)
 
   '@storybook/global@5.0.0': {}
 
@@ -7633,12 +7673,12 @@ snapshots:
       react: 19.2.5
       react-dom: 19.2.5(react@19.2.5)
 
-  '@storybook/web-components-vite@10.4.0(esbuild@0.27.7)(lit@3.3.3)(rollup@4.60.4)(storybook@10.4.0(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@testing-library/dom@10.4.1)(prettier@3.8.3)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(vite@8.0.13(@types/node@25.9.0)(esbuild@0.27.7)(jiti@2.7.0)(yaml@2.9.0))':
+  '@storybook/web-components-vite@10.4.0(esbuild@0.27.7)(lit@3.3.3)(rollup@4.60.4)(storybook@10.4.0(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@testing-library/dom@10.4.1)(prettier@3.8.3)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(vite@6.4.2(@types/node@25.9.0)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0))':
     dependencies:
-      '@storybook/builder-vite': 10.4.0(esbuild@0.27.7)(rollup@4.60.4)(storybook@10.4.0(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@testing-library/dom@10.4.1)(prettier@3.8.3)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(vite@8.0.13(@types/node@25.9.0)(esbuild@0.27.7)(jiti@2.7.0)(yaml@2.9.0))
+      '@storybook/builder-vite': 10.4.0(esbuild@0.27.7)(rollup@4.60.4)(storybook@10.4.0(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@testing-library/dom@10.4.1)(prettier@3.8.3)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(vite@6.4.2(@types/node@25.9.0)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0))
       '@storybook/web-components': 10.4.0(lit@3.3.3)(storybook@10.4.0(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@testing-library/dom@10.4.1)(prettier@3.8.3)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))
       storybook: 10.4.0(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@testing-library/dom@10.4.1)(prettier@3.8.3)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
-      vite: 8.0.13(@types/node@25.9.0)(esbuild@0.27.7)(jiti@2.7.0)(yaml@2.9.0)
+      vite: 6.4.2(@types/node@25.9.0)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0)
     transitivePeerDependencies:
       - esbuild
       - lit
@@ -8769,7 +8809,7 @@ snapshots:
 
   electron-to-chromium@1.5.349: {}
 
-  electron-vite@6.0.0-beta.1(vite@8.0.13(@types/node@25.8.0)(esbuild@0.27.7)(jiti@2.7.0)(yaml@2.9.0)):
+  electron-vite@6.0.0-beta.1(vite@6.4.2(@types/node@25.8.0)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0)):
     dependencies:
       '@babel/core': 7.29.0
       '@babel/plugin-transform-arrow-functions': 7.27.1(@babel/core@7.29.0)
@@ -8777,7 +8817,7 @@ snapshots:
       esbuild: 0.25.12
       magic-string: 0.30.21
       picocolors: 1.1.1
-      vite: 8.0.13(@types/node@25.8.0)(esbuild@0.27.7)(jiti@2.7.0)(yaml@2.9.0)
+      vite: 6.4.2(@types/node@25.8.0)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0)
     transitivePeerDependencies:
       - supports-color
 
@@ -11130,7 +11170,7 @@ snapshots:
 
   universalify@2.0.1: {}
 
-  unplugin-dts@1.0.0(esbuild@0.27.7)(rolldown@1.0.1)(rollup@4.60.4)(typescript@6.0.3)(vite@8.0.13(@types/node@25.8.0)(esbuild@0.27.7)(jiti@2.7.0)(yaml@2.9.0)):
+  unplugin-dts@1.0.0(esbuild@0.27.7)(rolldown@1.0.1)(rollup@4.60.4)(typescript@6.0.3)(vite@6.4.2(@types/node@25.8.0)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0)):
     dependencies:
       '@rollup/pluginutils': 5.3.0(rollup@4.60.4)
       '@volar/typescript': 2.4.28
@@ -11145,11 +11185,11 @@ snapshots:
       esbuild: 0.27.7
       rolldown: 1.0.1
       rollup: 4.60.4
-      vite: 8.0.13(@types/node@25.8.0)(esbuild@0.27.7)(jiti@2.7.0)(yaml@2.9.0)
+      vite: 6.4.2(@types/node@25.8.0)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0)
     transitivePeerDependencies:
       - supports-color
 
-  unplugin-dts@1.0.0(esbuild@0.27.7)(rolldown@1.0.1)(rollup@4.60.4)(typescript@6.0.3)(vite@8.0.13(@types/node@25.9.0)(esbuild@0.27.7)(jiti@2.7.0)(yaml@2.9.0)):
+  unplugin-dts@1.0.0(esbuild@0.27.7)(rolldown@1.0.1)(rollup@4.60.4)(typescript@6.0.3)(vite@6.4.2(@types/node@25.9.0)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0)):
     dependencies:
       '@rollup/pluginutils': 5.3.0(rollup@4.60.4)
       '@volar/typescript': 2.4.28
@@ -11164,7 +11204,7 @@ snapshots:
       esbuild: 0.27.7
       rolldown: 1.0.1
       rollup: 4.60.4
-      vite: 8.0.13(@types/node@25.9.0)(esbuild@0.27.7)(jiti@2.7.0)(yaml@2.9.0)
+      vite: 6.4.2(@types/node@25.9.0)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0)
     transitivePeerDependencies:
       - supports-color
 
@@ -11228,12 +11268,12 @@ snapshots:
       '@types/unist': 3.0.3
       vfile-message: 4.0.3
 
-  vite-plugin-dts@5.0.0(esbuild@0.27.7)(rolldown@1.0.1)(rollup@4.60.4)(typescript@6.0.3)(vite@8.0.13(@types/node@25.8.0)(esbuild@0.27.7)(jiti@2.7.0)(yaml@2.9.0)):
+  vite-plugin-dts@5.0.0(esbuild@0.27.7)(rolldown@1.0.1)(rollup@4.60.4)(typescript@6.0.3)(vite@6.4.2(@types/node@25.8.0)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0)):
     dependencies:
-      unplugin-dts: 1.0.0(esbuild@0.27.7)(rolldown@1.0.1)(rollup@4.60.4)(typescript@6.0.3)(vite@8.0.13(@types/node@25.8.0)(esbuild@0.27.7)(jiti@2.7.0)(yaml@2.9.0))
+      unplugin-dts: 1.0.0(esbuild@0.27.7)(rolldown@1.0.1)(rollup@4.60.4)(typescript@6.0.3)(vite@6.4.2(@types/node@25.8.0)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0))
     optionalDependencies:
       rollup: 4.60.4
-      vite: 8.0.13(@types/node@25.8.0)(esbuild@0.27.7)(jiti@2.7.0)(yaml@2.9.0)
+      vite: 6.4.2(@types/node@25.8.0)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0)
     transitivePeerDependencies:
       - '@rspack/core'
       - '@vue/language-core'
@@ -11243,12 +11283,12 @@ snapshots:
       - typescript
       - webpack
 
-  vite-plugin-dts@5.0.0(esbuild@0.27.7)(rolldown@1.0.1)(rollup@4.60.4)(typescript@6.0.3)(vite@8.0.13(@types/node@25.9.0)(esbuild@0.27.7)(jiti@2.7.0)(yaml@2.9.0)):
+  vite-plugin-dts@5.0.0(esbuild@0.27.7)(rolldown@1.0.1)(rollup@4.60.4)(typescript@6.0.3)(vite@6.4.2(@types/node@25.9.0)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0)):
     dependencies:
-      unplugin-dts: 1.0.0(esbuild@0.27.7)(rolldown@1.0.1)(rollup@4.60.4)(typescript@6.0.3)(vite@8.0.13(@types/node@25.9.0)(esbuild@0.27.7)(jiti@2.7.0)(yaml@2.9.0))
+      unplugin-dts: 1.0.0(esbuild@0.27.7)(rolldown@1.0.1)(rollup@4.60.4)(typescript@6.0.3)(vite@6.4.2(@types/node@25.9.0)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0))
     optionalDependencies:
       rollup: 4.60.4
-      vite: 8.0.13(@types/node@25.9.0)(esbuild@0.27.7)(jiti@2.7.0)(yaml@2.9.0)
+      vite: 6.4.2(@types/node@25.9.0)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0)
     transitivePeerDependencies:
       - '@rspack/core'
       - '@vue/language-core'
@@ -11268,6 +11308,36 @@ snapshots:
       fsevents: 2.3.3
       lightningcss: 1.32.0
 
+  vite@6.4.2(@types/node@25.8.0)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0):
+    dependencies:
+      esbuild: 0.25.12
+      fdir: 6.5.0(picomatch@4.0.4)
+      picomatch: 4.0.4
+      postcss: 8.5.14
+      rollup: 4.60.4
+      tinyglobby: 0.2.16
+    optionalDependencies:
+      '@types/node': 25.8.0
+      fsevents: 2.3.3
+      jiti: 2.7.0
+      lightningcss: 1.32.0
+      yaml: 2.9.0
+
+  vite@6.4.2(@types/node@25.9.0)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0):
+    dependencies:
+      esbuild: 0.25.12
+      fdir: 6.5.0(picomatch@4.0.4)
+      picomatch: 4.0.4
+      postcss: 8.5.14
+      rollup: 4.60.4
+      tinyglobby: 0.2.16
+    optionalDependencies:
+      '@types/node': 25.9.0
+      fsevents: 2.3.3
+      jiti: 2.7.0
+      lightningcss: 1.32.0
+      yaml: 2.9.0
+
   vite@7.3.3(@types/node@25.9.0)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0):
     dependencies:
       esbuild: 0.27.7
@@ -11281,20 +11351,6 @@ snapshots:
       fsevents: 2.3.3
       jiti: 2.7.0
       lightningcss: 1.32.0
-      yaml: 2.9.0
-
-  vite@8.0.13(@types/node@25.8.0)(esbuild@0.27.7)(jiti@2.7.0)(yaml@2.9.0):
-    dependencies:
-      lightningcss: 1.32.0
-      picomatch: 4.0.4
-      postcss: 8.5.14
-      rolldown: 1.0.1
-      tinyglobby: 0.2.16
-    optionalDependencies:
-      '@types/node': 25.8.0
-      esbuild: 0.27.7
-      fsevents: 2.3.3
-      jiti: 2.7.0
       yaml: 2.9.0
 
   vite@8.0.13(@types/node@25.9.0)(esbuild@0.27.7)(jiti@2.7.0)(yaml@2.9.0):
