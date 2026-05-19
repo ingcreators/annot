@@ -19,11 +19,12 @@ import type { AnnotGalleryPageElement } from "./annot-gallery-page.js";
 import type { AnnotFileManagerShellElement, BreadcrumbEntry } from "./file-manager-shell.js";
 import "./annot-gallery-page.js";
 import "./sidebar.js";
-import type {
-  AnnotSidebarElement,
-  NewMenuItem,
-  SidebarCallbacks,
-  SidebarSectionOrder,
+import {
+  type AnnotSidebarElement,
+  type NewMenuItem,
+  resolveStorageRootLabel,
+  type SidebarCallbacks,
+  type SidebarSectionOrder,
 } from "./sidebar.js";
 
 export interface FileManagerCallbacks {
@@ -449,18 +450,7 @@ export class FileManager {
   }
 
   #rootLabel(): string {
-    switch (this.#storageMode) {
-      case "device":
-        return "Device";
-      case "googledrive":
-        return "Google Drive";
-      case "github":
-        return "GitHub";
-      case "desktop":
-        return "Desktop";
-      default:
-        return "Browser";
-    }
+    return resolveStorageRootLabel(this.#storageMode, this.#callbacks.getPluginStorages);
   }
 
   #setViewMode(mode: "grid" | "list"): void {

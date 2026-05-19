@@ -236,6 +236,24 @@ const BUILTIN_CHIP_DESCRIPTORS: readonly ChipDescriptor[] = [
   },
 ];
 
+/**
+ * Resolve the display label for `mode` from the same chip-descriptor
+ * table that renders the STORAGE strip. Shared by
+ * `<annot-sidebar>`'s FOLDERS root row and `FileManager`'s
+ * breadcrumb / search-placeholder so a new built-in (or a
+ * plugin-registered storage) only needs ONE source-of-truth update.
+ * Falls back to `"Browser"` when neither matches — preserves the
+ * pre-refactor default behaviour.
+ */
+export function resolveStorageRootLabel(
+  mode: StorageMode,
+  getPluginStorages?: () => StorageRegistration[],
+): string {
+  const builtin = BUILTIN_CHIP_DESCRIPTORS.find((d) => d.mode === mode)?.label;
+  const plugin = getPluginStorages?.().find((r) => r.mode === mode)?.label;
+  return builtin ?? plugin ?? "Browser";
+}
+
 interface StorageStatus {
   connected: boolean;
   label?: string;
@@ -349,14 +367,7 @@ export class AnnotSidebarElement extends LitElement {
 
     // Root node — always shows storage type name; folder/repo name
     // as subtitle for Device / Drive / GitHub / Cloud / Desktop.
-    // Resolved from the same chip-descriptor table that renders the
-    // STORAGE strip so a new built-in (or a plugin-registered
-    // storage) only needs ONE source-of-truth update.
-    const builtinLabel = BUILTIN_CHIP_DESCRIPTORS.find((d) => d.mode === this.activeMode)?.label;
-    const pluginLabel = this.callbacks
-      .getPluginStorages?.()
-      .find((r) => r.mode === this.activeMode)?.label;
-    const rootLabel = builtinLabel ?? pluginLabel ?? "Browser";
+    const rootLabel = resolveStorageRootLabel(this.activeMode, this.callbacks.getPluginStorages);
 
     const rootRow = document.createElement("div");
     rootRow.className = `folder-tree-item${this.activeFolderPath === "" ? " active" : ""}`;

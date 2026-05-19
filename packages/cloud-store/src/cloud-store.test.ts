@@ -313,6 +313,23 @@ describe("AnnotCloudStore.deleteImage", () => {
     await store.deleteImage("ghost.png");
     // No throw.
   });
+
+  it("preserves the containing folder hierarchy via phantoms", async () => {
+    const { store, mock } = await makeStoreWithMock();
+    await store.init();
+    mock.seedImage({ path: "Trip/Day1/photo.png", bytes: PNG_BYTES });
+    // Sanity: the folder is visible via path derivation before delete.
+    const beforeRoot = await store.listFolders("");
+    expect(beforeRoot.map((f) => f.name)).toContain("Trip");
+    await store.deleteImage("Trip/Day1/photo.png");
+    // After deleting the only image, the folder hierarchy must
+    // still be visible — the user explicitly removed the image,
+    // not the folder.
+    const root = await store.listFolders("");
+    expect(root.map((f) => f.name)).toContain("Trip");
+    const trip = await store.listFolders("Trip");
+    expect(trip.map((f) => f.name)).toContain("Day1");
+  });
 });
 
 // ─── folders (virtual) ──────────────────────────────────────────

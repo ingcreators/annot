@@ -542,6 +542,19 @@ export class AnnotCloudStore
       await this.#cache.invalidatePath(this.metadataNamespace(), path);
       await this.#cache.removeListingEntry(this.metadataNamespace(), getParentPath(path), path);
     }
+    // Preserve the containing folder hierarchy as phantoms so the
+    // folder doesn't evaporate out of the sidebar when the user
+    // deletes the last image. Matches the GitHubStore "best-effort
+    // virtual folders" UX — explicit image delete should remove
+    // only the image, not the folder the user has been working in.
+    // Harmless when other images still live there (phantom set is
+    // additive; listFolders unions phantoms with path-derived
+    // names) and idempotent across repeated deletes.
+    let ancestor = getParentPath(path);
+    while (ancestor) {
+      this.#phantomFolders.add(ancestor);
+      ancestor = getParentPath(ancestor);
+    }
   }
 
   // ── StorageProvider: folders (virtual) ──────────────────────
