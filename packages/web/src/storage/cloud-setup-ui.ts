@@ -19,23 +19,60 @@
 //      popup is open, the modal polls `/api/auth/me` every 1.5s
 //      until success.
 //
+// Account-switch flow (`forcePicker: true`, fired by the sidebar's
+// "Change cloud workspace" reselect icon):
+//   - If a session already exists, render the management screen:
+//     "Signed in as <name>" + Sign out button + provider buttons
+//     framed as "Switch to <provider>". Picking a provider hits
+//     `/api/auth/logout` first so the new OAuth callback mints a
+//     clean session (avoids accumulating dead session records in
+//     KV and prevents the worker from re-using the previous user's
+//     workspace on re-auth).
+//   - If no session exists, behave exactly like the first-time
+//     flow above.
+//
 // Same-origin deploy is strongly recommended: it avoids
 // third-party cookie issues (Safari ITP / Chrome 3P cookie
 // phase-out) and CORS configuration. The "Advanced" disclosure
 // lets self-hosters override the base URL.
 
-import { AnnotCloudStore } from "@ingcreators/annot-cloud-store";
+import { AnnotCloudStore, type AuthMeWire } from "@ingcreators/annot-cloud-store";
 import { StoragePermissionError } from "@ingcreators/annot-core/storage";
-import { DEFAULT_CLOUD_BASE_URL, loadCloudBaseUrl, saveCloudBaseUrl } from "./cloud-auth.js";
+import {
+  DEFAULT_CLOUD_BASE_URL,
+  loadCloudBaseUrl,
+  logoutCloudSession,
+  saveCloudBaseUrl,
+} from "./cloud-auth.js";
+
+/** Discriminated result so the caller can distinguish a fresh
+ *  connection from a deliberate sign-out (which needs to fall back
+ *  to the browser store) from a cancellation (which leaves the
+ *  existing storage untouched). */
+export type CloudConnectResult =
+  | { kind: "connected"; store: AnnotCloudStore }
+  | { kind: "disconnected" }
+  | { kind: "cancelled" };
+
+export interface CloudConnectOptions {
+  /** When true (fired by the sidebar's "Change cloud workspace"
+   *  reselect icon), surface the account-management screen instead
+   *  of silently auto-resolving on a still-valid cookie. Lets the
+   *  user sign out or switch to a different account. */
+  forcePicker?: boolean;
+}
 
 /**
- * Show the connect modal. Resolves with a ready-to-use store on
- * success, or `null` when the user cancelled.
+ * Show the connect modal. Resolves with a discriminated result —
+ * see `CloudConnectResult`.
  *
  * Does NOT call `attachMetadataCache` — the bridge wires the
  * shared cache before returning the store to the caller.
  */
-export async function showCloudConnectDialog(): Promise<AnnotCloudStore | null> {
+export async function showCloudConnectDialog(
+  opts: CloudConnectOptions = {},
+): Promise<CloudConnectResult> {
+  const forcePicker = !!opts.forcePicker;
   return new Promise((resolve) => {
     const { close, body } = openDialog(
       "Connect to Annot Cloud",
@@ -71,17 +108,23 @@ export async function showCloudConnectDialog(): Promise<AnnotCloudStore | null> 
       popup = null;
     }
 
-    function settle(store: AnnotCloudStore | null): void {
+    function settleConnected(store: AnnotCloudStore): void {
       if (cancelled) return;
       cleanup();
       close();
-      resolve(store);
+      resolve({ kind: "connected", store });
+    }
+
+    function settleDisconnected(): void {
+      cleanup();
+      close();
+      resolve({ kind: "disconnected" });
     }
 
     function settleCancel(): void {
       cleanup();
       close();
-      resolve(null);
+      resolve({ kind: "cancelled" });
     }
 
     // ─── Initial UI ─────────────────────────────────────────────
@@ -96,11 +139,24 @@ export async function showCloudConnectDialog(): Promise<AnnotCloudStore | null> 
     status.textContent = "";
     body.appendChild(status);
 
+    // ─── Account management section (shown only when a session
+    // already exists AND the caller asked for the picker, i.e. the
+    // sidebar's reselect icon). Kept hidden by default; revealed by
+    // `enterManagementMode()` after the existing-session probe
+    // succeeds. ─────────────────────────────────────────────────
+    const accountInfo = document.createElement("div");
+    accountInfo.className = "app-dialog-message";
+    accountInfo.style.display = "none";
+    accountInfo.style.fontSize = "13px";
+    accountInfo.style.marginTop = "4px";
+    body.appendChild(accountInfo);
+
     const signinRow = document.createElement("div");
     signinRow.style.display = "flex";
     signinRow.style.gap = "8px";
     signinRow.style.justifyContent = "center";
     signinRow.style.marginTop = "12px";
+    signinRow.style.flexWrap = "wrap";
 
     const githubBtn = makeProviderButton("Sign in with GitHub", () => {
       void startSignIn("github");
@@ -110,6 +166,24 @@ export async function showCloudConnectDialog(): Promise<AnnotCloudStore | null> 
     });
     signinRow.append(githubBtn, googleBtn);
     body.appendChild(signinRow);
+
+    // Sign-out button — only shown in management mode. Placed
+    // below the provider row so the primary "Switch to …" action
+    // stays the visual default; sign-out is the deliberate
+    // secondary path.
+    const signOutRow = document.createElement("div");
+    signOutRow.style.display = "none";
+    signOutRow.style.justifyContent = "center";
+    signOutRow.style.marginTop = "8px";
+    const signOutBtn = document.createElement("button");
+    signOutBtn.type = "button";
+    signOutBtn.className = "app-dialog-btn app-dialog-danger";
+    signOutBtn.textContent = "Sign out of Annot Cloud";
+    signOutBtn.addEventListener("click", () => {
+      void runSignOut();
+    });
+    signOutRow.appendChild(signOutBtn);
+    body.appendChild(signOutRow);
 
     // ─── Advanced disclosure ────────────────────────────────────
 
@@ -171,7 +245,26 @@ export async function showCloudConnectDialog(): Promise<AnnotCloudStore | null> 
       status.textContent = "Checking existing session…";
       try {
         const store = await connectAndInit(baseUrl);
-        settle(store);
+        if (forcePicker) {
+          // The user came in via the reselect icon — they want to
+          // see their options (sign out / switch account) instead
+          // of being silently re-resolved into the same session.
+          // Fetch the user identity so the dialog can show
+          // "Signed in as …". A 401 here would mean the session
+          // expired between `init()` and now (essentially
+          // impossible); the management-mode renderer treats a
+          // null user as "unknown account" without breaking the
+          // flow.
+          let me: AuthMeWire | null = null;
+          try {
+            me = await fetchAuthMe(baseUrl);
+          } catch {
+            /* show management mode without the identity line */
+          }
+          enterManagementMode(me);
+        } else {
+          settleConnected(store);
+        }
       } catch (err) {
         if (err instanceof StoragePermissionError) {
           status.textContent = "Not signed in. Pick a provider below.";
@@ -188,6 +281,47 @@ export async function showCloudConnectDialog(): Promise<AnnotCloudStore | null> 
       }
     }
 
+    /** Show the "signed in as X / sign out / switch to <provider>"
+     *  view. Called only when `forcePicker` is true AND the
+     *  existing session is valid. */
+    function enterManagementMode(me: AuthMeWire | null): void {
+      status.textContent = "You're already signed in to Annot Cloud.";
+      status.style.color = "";
+      const who = me?.user;
+      if (who) {
+        const provider = who.provider === "github" ? "GitHub" : "Google";
+        const name = who.name || who.login || provider;
+        accountInfo.textContent = `Signed in as ${name} (via ${provider}).`;
+      } else {
+        accountInfo.textContent = "Signed in.";
+      }
+      accountInfo.style.display = "";
+      // Re-label provider buttons so the picker reads as
+      // "switch", not "sign in again into the same account".
+      githubBtn.textContent = "Switch to GitHub account";
+      googleBtn.textContent = "Switch to Google account";
+      signOutRow.style.display = "flex";
+    }
+
+    /** Sign out and bail. Clears the worker-side session cookie,
+     *  forgets the persisted base URL, and resolves the dialog
+     *  with `disconnected` so the caller can fall back to the
+     *  browser store. */
+    async function runSignOut(): Promise<void> {
+      status.textContent = "Signing out…";
+      status.style.color = "";
+      // Disable buttons so the user can't double-fire mid-fetch.
+      githubBtn.disabled = true;
+      googleBtn.disabled = true;
+      signOutBtn.disabled = true;
+      try {
+        await logoutCloudSession(baseUrl);
+      } catch {
+        /* best-effort */
+      }
+      settleDisconnected();
+    }
+
     // ─── OAuth popup + polling ──────────────────────────────────
 
     async function startSignIn(provider: "github" | "google"): Promise<void> {
@@ -201,6 +335,29 @@ export async function showCloudConnectDialog(): Promise<AnnotCloudStore | null> 
       // theoretical ReDoS risk).
       let effectiveBase = baseUrl;
       while (effectiveBase.endsWith("/")) effectiveBase = effectiveBase.slice(0, -1);
+
+      // If we're in management mode, log out first so the new
+      // OAuth callback mints a clean session record instead of
+      // leaving the previous user's session lingering in KV.
+      // Same effect as the user clicking "Sign out" then a
+      // provider button, but in one gesture so the popup still
+      // counts as user-initiated and isn't popup-blocked.
+      const wasManaging = signOutRow.style.display !== "none";
+      if (wasManaging) {
+        try {
+          await logoutCloudSession(effectiveBase);
+        } catch {
+          /* best-effort */
+        }
+        // Hide management UI now that the session is gone — if
+        // the OAuth popup ends up cancelled, we'll surface the
+        // plain "Not signed in" message via the poll fallthrough.
+        accountInfo.style.display = "none";
+        signOutRow.style.display = "none";
+        githubBtn.textContent = "Sign in with GitHub";
+        googleBtn.textContent = "Sign in with Google";
+      }
+
       const oauthUrl = `${effectiveBase}/api/auth/${provider}`;
       popup = window.open(
         oauthUrl,
@@ -244,7 +401,7 @@ export async function showCloudConnectDialog(): Promise<AnnotCloudStore | null> 
         void (async () => {
           try {
             const store = await connectAndInit(baseUrl);
-            settle(store);
+            settleConnected(store);
           } catch {
             // Fall through — the poll timer will catch it on the
             // next tick if the session genuinely landed, or surface
@@ -265,7 +422,7 @@ export async function showCloudConnectDialog(): Promise<AnnotCloudStore | null> 
         try {
           const store = await connectAndInit(baseUrl);
           // Success! Close the popup if it's still around.
-          settle(store);
+          settleConnected(store);
         } catch (err) {
           if (err instanceof StoragePermissionError) {
             if (popupClosed) {
@@ -294,6 +451,22 @@ async function connectAndInit(baseUrl: string): Promise<AnnotCloudStore> {
   // finds it without prompting.
   saveCloudBaseUrl(baseUrl);
   return store;
+}
+
+/** Fetch `/api/auth/me` directly so the management view can show
+ *  "Signed in as …" without needing the store to expose the user
+ *  identity it already cached in `init()`. Throws on non-200. */
+async function fetchAuthMe(baseUrl: string): Promise<AuthMeWire> {
+  let effectiveBase = baseUrl;
+  while (effectiveBase.endsWith("/")) effectiveBase = effectiveBase.slice(0, -1);
+  const res = await fetch(`${effectiveBase}/api/auth/me`, {
+    method: "GET",
+    credentials: "include",
+  });
+  if (!res.ok) {
+    throw new Error(`auth/me returned ${res.status}`);
+  }
+  return (await res.json()) as AuthMeWire;
 }
 
 // ─── Tiny dialog primitives (mirrors github-setup-ui.ts) ──────
