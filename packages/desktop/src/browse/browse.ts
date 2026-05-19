@@ -182,43 +182,41 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!trimmed) return;
     // Be permissive: accept bare hostnames and prepend `https://`,
     // mirroring how mainstream browsers' address bars behave.
-    const url =
+    const candidate =
       /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmed) || trimmed.startsWith("about:")
         ? trimmed
         : `https://${trimmed}`;
-    // Block scheme-based XSS into the `<webview>`. A `javascript:` /
-    // `vbscript:` / `data:text/html` URL in `.src` would execute
-    // inside the webview's renderer; only navigable schemes belong on
-    // the address bar (CodeQL `js/xss-through-dom`).
-    if (!isNavigableUrl(url)) {
-      setStatus(`Blocked unsupported URL scheme: ${url.slice(0, 40)}`, null);
+    // Block scheme-based XSS into the `<webview>`. A `javascript:`,
+    // `vbscript:`, `data:text/html`, or `file:` URL in `.src` would
+    // execute inside the webview's renderer with elevated privileges.
+    // Inline the `new URL(...)` parse + `.protocol` allow-list check
+    // (rather than delegating to a helper) so CodeQL's
+    // `js/xss-through-dom` data-flow recognises the URL-parser
+    // round-trip as a sanitiser. Pass `parsed.href` to the sink so
+    // CodeQL sees the value flow through the parser, not the raw
+    // user input.
+    let parsed: URL;
+    try {
+      parsed = new URL(candidate);
+    } catch {
+      setStatus(`Invalid URL: ${candidate.slice(0, 40)}`, null);
+      return;
+    }
+    // `https` / `http` cover web pages; `about` covers
+    // `about:blank` and friends. `file://` is intentionally NOT in
+    // the allow-list — a file-URL HTML page can execute scripts
+    // with `file://` origin, which is a broader XSS vector than
+    // we want the address bar to surface.
+    if (
+      parsed.protocol !== "http:" &&
+      parsed.protocol !== "https:" &&
+      parsed.protocol !== "about:"
+    ) {
+      setStatus(`Blocked unsupported URL scheme: ${parsed.protocol}`, null);
       return;
     }
     const active = tabs.getActiveTab();
-    if (active) active.webview.src = url;
-  }
-
-  // Allow-list of URL schemes the address bar may navigate to.
-  // Parses the input through `URL` and compares `.protocol`
-  // against the allow-list — CodeQL's `js/xss-through-dom` only
-  // recognises a URL-parsed `.protocol` check as a sink-side
-  // sanitiser, not a `startsWith` prefix scan (the prefix path
-  // was the previous shape and triggered a re-flag after PR
-  // #815 landed).
-  //
-  // `https` / `http` cover web pages; `about` covers
-  // `about:blank` and friends. `file://` is intentionally NOT in
-  // the allow-list — a file-URL HTML page can execute scripts
-  // with `file://` origin, which is a broader XSS vector than
-  // we want the address bar to surface.
-  function isNavigableUrl(s: string): boolean {
-    let u: URL;
-    try {
-      u = new URL(s);
-    } catch {
-      return false;
-    }
-    return u.protocol === "http:" || u.protocol === "https:" || u.protocol === "about:";
+    if (active) active.webview.src = parsed.href;
   }
 
   dom.urlInput.addEventListener("keydown", (e) => {
