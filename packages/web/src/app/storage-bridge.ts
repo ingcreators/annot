@@ -262,16 +262,37 @@ export class StorageBridge {
       } else if (mode === "cloud") {
         // Annot Cloud — open the connect modal, which probes
         // `/api/auth/me` first and falls through to the OAuth
-        // popup on 401. `forcePicker` ignored: there's no
-        // sub-resource to reselect (workspace = the account).
-        // The modal returns a fully-initialised store; the
-        // bridge's `connectAnnotCloud` attaches the metadata
-        // cache + stashes it.
+        // popup on 401. `forcePicker` (sidebar reselect icon)
+        // surfaces the account-management view instead of
+        // silently re-resolving the existing session, so the
+        // user can sign out or switch to a different account
+        // (workspace = the account). The modal returns a
+        // discriminated result — handle the three branches:
+        //
+        //   - "connected"   → stash + persist mode, return true
+        //   - "disconnected"→ sign out + fall back to browser,
+        //                     return true (storage DID change)
+        //   - "cancelled"   → leave existing storage untouched,
+        //                     return false
         const { showCloudConnectDialog } = await import("../storage/cloud-setup-ui.js");
-        const { connectAnnotCloud } = await import("../storage/bridge.js");
-        const initialised = await showCloudConnectDialog();
-        if (!initialised) return false;
-        const store = connectAnnotCloud(initialised);
+        const { connectAnnotCloud, disconnectAnnotCloud } = await import("../storage/bridge.js");
+        const result = await showCloudConnectDialog({ forcePicker });
+        if (result.kind === "cancelled") return false;
+        if (result.kind === "disconnected") {
+          // The user signed out from inside the dialog. The
+          // dialog already POSTed `/api/auth/logout`; this also
+          // clears the persisted base URL + resets the bridge's
+          // mode to "browser". Then fall back to the BrowserStore
+          // so the caller's "refresh the file manager" step has
+          // a live store to render against.
+          await disconnectAnnotCloud();
+          const { BrowserStore } = await import("../storage/browser-store.js");
+          this.#storage = new BrowserStore();
+          setStorageMode("browser");
+          saveLastStorage("browser");
+          return true;
+        }
+        const store = connectAnnotCloud(result.store);
         this.#storage = store;
         saveLastStorage("cloud");
       } else if (mode === "github") {
