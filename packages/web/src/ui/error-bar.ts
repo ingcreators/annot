@@ -26,6 +26,7 @@
 
 import { builtinIcon } from "@ingcreators/annot-core";
 import { html, LitElement, nothing } from "../lit.js";
+import { chunkReloadInProgress } from "../recovery/chunk-reload.js";
 import "./annot-icon.js";
 
 export type ErrorSeverity = "error" | "warning" | "info";
@@ -154,6 +155,19 @@ export interface ErrorBarOptions {
 
 /** Show error/warning bar below toolbar. */
 export function showError(opts: ErrorBarOptions): void {
+  // Suppress all bar output during the brief window between a
+  // dynamic-import failure firing and the reload landing. Without
+  // this short-circuit, the 33+ `showSaveError` call sites in
+  // `app.ts` / `storage-bridge.ts` would each flash a "Couldn't
+  // ...: Failed to fetch dynamically imported module" toast before
+  // the reload kills the page. The sticky "Failed to load update"
+  // banner that the recovery module renders for the loop-guard
+  // case routes through this function as well, but only AFTER the
+  // recovery module has decided NOT to set `chunkReloadInProgress`
+  // — so the loop-guard banner DOES render. See
+  // `docs/plans/web-dynamic-import-recovery.md`.
+  if (chunkReloadInProgress) return;
+
   const bar = ensureBar();
   clearTimeout(hideTimer);
   bar.severity = opts.severity || "error";

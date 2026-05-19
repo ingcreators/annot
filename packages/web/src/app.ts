@@ -45,6 +45,8 @@ import { pasteFromClipboard } from "./capture/pwa-capture.js";
 import { ScratchpadStore } from "./editor/scratchpad-store.js";
 import { downloadGallerySelection } from "./gallery/download-selection.js";
 import { logger } from "./logger.js";
+import { setChunkReloadFlushHook, setStickyErrorRenderer } from "./recovery/chunk-reload.js";
+import { showPostReloadBannerIfNeeded } from "./recovery/post-reload-banner.js";
 import { startVersionPolling } from "./recovery/version-poller.js";
 import { docUrl, editUrl, galleryUrl, pushRoute } from "./router.js";
 import {
@@ -59,7 +61,7 @@ import {
   setStorageMode,
 } from "./storage/bridge.js";
 import { GitHubStore } from "./storage/github-store.js";
-import { hideError, showInfo, showSaveError } from "./ui/error-bar.js";
+import { hideError, showError, showInfo, showSaveError } from "./ui/error-bar.js";
 
 export class App {
   #storage: StorageProvider | null = null;
@@ -553,10 +555,22 @@ export class App {
 
     await this.#routerHost.handleRoute();
 
-    // Detect post-deploy bundle staleness and surface a persistent
-    // "new version available" banner with a Reload action. Pure
-    // additive — never auto-reloads. See
-    // `docs/plans/web-dynamic-import-recovery.md`.
+    // ---- Post-deploy recovery wiring ----
+    // See `docs/plans/web-dynamic-import-recovery.md`. Three pieces
+    // come together here at the end of `init`:
+    //
+    //   1. Proactive: poll `/version.txt` to surface a "new version
+    //      available" banner before the user hits a broken chunk.
+    //   2. Reactive: the global `vite:preloadError` listener
+    //      (installed at the top of `main.ts`) needs a way to
+    //      (a) flush pending saves before reloading, and (b) render
+    //      the sticky "manual reload" banner if the loop guard
+    //      trips. Both are bridged via setter hooks here so the
+    //      recovery module doesn't have to import `App`.
+    //   3. Post-reload: if the previous bundle reloaded us, show a
+    //      one-shot "Updated to new version" toast so the apparent
+    //      random reload isn't surprising.
+
     startVersionPolling({
       onNewVersion: (remote) => {
         logger.info("[app] new version detected", { remote });
@@ -568,6 +582,23 @@ export class App {
           },
         });
       },
+    });
+
+    setChunkReloadFlushHook(() => this.#savePipeline.flushPending());
+
+    setStickyErrorRenderer((reload) => {
+      showError({
+        message: "Failed to load update. Please reload manually.",
+        severity: "error",
+        action: { label: "Reload", onClick: reload },
+        autoDismiss: 0,
+      });
+    });
+
+    // Wait one frame so the `#toolbar` anchor that
+    // `<annot-error-bar>` mounts after is in the DOM.
+    requestAnimationFrame(() => {
+      showPostReloadBannerIfNeeded();
     });
   }
 

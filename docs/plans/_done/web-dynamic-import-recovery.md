@@ -1,6 +1,6 @@
 # Web — dynamic-import failure recovery across deploys
 
-> **Status:** Queued
+> **Status:** Done
 > **Compatibility:**
 >   - `@ingcreators/annot-web` only. No `StorageProvider` / SVG /
 >     `PageMetadata` schema changes. No new dependencies.
