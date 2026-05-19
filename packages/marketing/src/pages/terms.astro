@@ -1,0 +1,227 @@
+---
+import Base from "../layouts/Base.astro";
+
+const title = "Terms of service — Annot";
+const description =
+  "Terms that govern your use of annot.work, the PWA, the npm packages, and the Annot Cloud storage backend.";
+const updated = "2026-05-19";
+---
+
+<Base title={title} description={description}>
+  <section class="prose-wrap">
+    <div class="container">
+      <article class="prose">
+        <p class="eyebrow">Annot.work</p>
+        <h1>Terms of service</h1>
+        <p class="updated">Last updated: {updated}</p>
+
+        <div class="draft-banner">
+          <strong>Draft pending lawyer review.</strong> These terms are
+          a good-faith first pass written by the product team. They
+          will be reviewed by Japanese SaaS counsel before public
+          launch. Until that review lands, the operator reserves the
+          right to update wording without notice; substantive changes
+          will still trigger an email to active accounts.
+        </div>
+
+        <h2>1. Acceptance</h2>
+        <p>
+          By using <code>annot.work</code>, the Annot PWA, the Chrome
+          extension, the desktop app, the VSCode extension, the Annot
+          Cloud storage backend, or any of the
+          <code>@ingcreators/annot-*</code> npm packages
+          (collectively, the <strong>Service</strong>), you agree to
+          these terms.
+        </p>
+        <p>
+          If you don't agree, don't use the Service. The open-source
+          source code at
+          <a href="https://github.com/ingcreators/annot" rel="noopener">github.com/ingcreators/annot</a>
+          remains available under the Apache-2.0 licence regardless
+          of these terms.
+        </p>
+
+        <h2>2. Open source</h2>
+        <p>
+          The Annot codebase is released under the
+          <a
+            href="https://github.com/ingcreators/annot/blob/main/LICENSE"
+            rel="noopener">Apache-2.0 licence</a
+          >. You may use, modify, and redistribute the source under
+          that licence's terms. These terms govern the
+          <em>hosted Service</em> we operate at <code>annot.work</code>
+          and any premium add-ons we offer there — they do not modify
+          the Apache-2.0 grant on the code itself.
+        </p>
+
+        <h2>3. Your account</h2>
+        <ul>
+          <li>
+            You may create an account by signing in with GitHub or
+            Google. You are responsible for the security of the
+            identity provider account you use.
+          </li>
+          <li>
+            You must be old enough to enter into a contract in your
+            jurisdiction (in Japan, 18; in the EU, varies by country
+            — see <a href="/privacy">the privacy policy</a>).
+          </li>
+          <li>
+            One human, one account. Service accounts for automation
+            (CI etc.) are fine; share-the-login-with-the-team is not
+            permitted on the free tier.
+          </li>
+        </ul>
+
+        <h2>4. What you can store</h2>
+        <p>
+          You may store screenshots and annotations you have the right
+          to capture and store. You may NOT store:
+        </p>
+        <ul>
+          <li>
+            Content that infringes someone else's copyright,
+            trademark, or other IP rights.
+          </li>
+          <li>
+            Content that doxxes, harasses, or facilitates harm against
+            an identifiable person.
+          </li>
+          <li>
+            Content that depicts minors in sexual contexts (CSAM is an
+            instant ban + report).
+          </li>
+          <li>
+            Malware, exploit payloads, or content used to coordinate
+            attacks against third parties.
+          </li>
+          <li>
+            Personally-identifiable information that you do not have
+            the legal right to process (e.g. screenshots of someone
+            else's private medical or financial information).
+          </li>
+        </ul>
+
+        <h2>5. Quotas</h2>
+        <ul>
+          <li>
+            <strong>Free tier</strong>: per-workspace quotas apply to
+            storage, share-link generation, and API call rate.
+            Specific numbers are visible at
+            <code>annot.work/app → Settings → Usage</code> and can be
+            updated unilaterally with 30 days' notice.
+          </li>
+          <li>
+            <strong>Paid tier</strong> (planned, not yet available):
+            higher quotas, team sharing, history. Pricing is
+            disclosed at checkout when the tier launches.
+          </li>
+          <li>
+            <strong>Excessive use</strong> — automated scraping,
+            crypto mining, or DoS-shaped traffic against the API will
+            be rate-limited at the edge and may result in account
+            suspension.
+          </li>
+        </ul>
+
+        <h2>6. Suspension + termination</h2>
+        <p>
+          We may suspend or terminate your account if you violate
+          these terms, particularly the content rules in §4 or the
+          excessive-use rules in §5. We will, where reasonable, give
+          you advance notice and a chance to cure.
+        </p>
+        <p>
+          You may delete your account at any time via
+          <em>Settings → Delete account</em>. Stored content is
+          removed within 30 days per the privacy policy.
+        </p>
+
+        <h2>7. Intellectual property</h2>
+        <ul>
+          <li>
+            <strong>Your content stays yours.</strong> You retain all
+            rights, title, and interest in the screenshots and
+            annotations you create. We claim no ownership.
+          </li>
+          <li>
+            <strong>You grant us a limited licence</strong> to store,
+            process, and transmit your content as necessary to provide
+            the Service to you. This licence ends when you delete the
+            content or close the account.
+          </li>
+          <li>
+            <strong>Share links</strong>: by generating a share link,
+            you grant viewers of that link a read-only licence to
+            view the content. You can revoke the share link at any
+            time.
+          </li>
+          <li>
+            <strong>The Annot brand</strong> (name, logo, wordmark) is
+            owned by ingcreators. The
+            <a
+              href="https://github.com/ingcreators/annot/tree/main/brand"
+              rel="noopener">brand assets repository</a
+            > is publicly available — use is governed by the
+            <code>brand/README.md</code> guidelines.
+          </li>
+        </ul>
+
+        <h2>8. Warranties</h2>
+        <p>
+          The Service is provided <strong>as-is, without warranty of
+          any kind</strong>. We do our best to keep it running and to
+          keep your data safe, but we make no specific promise about
+          uptime, performance, or fitness for any particular purpose.
+        </p>
+
+        <h2>9. Liability cap</h2>
+        <p>
+          To the maximum extent permitted by law, our total liability
+          to you for any claim arising out of or relating to the
+          Service is capped at the amount you paid us in the 12
+          months preceding the claim, or <strong>¥10,000</strong>,
+          whichever is greater.
+        </p>
+        <p>
+          We are not liable for indirect, incidental, special,
+          consequential, or punitive damages — including lost profits,
+          lost revenue, or lost data — even if we were warned of the
+          possibility.
+        </p>
+
+        <h2>10. Indemnification</h2>
+        <p>
+          You agree to indemnify and hold harmless ingcreators
+          against any claim arising from your violation of these
+          terms or your storage of prohibited content under §4.
+        </p>
+
+        <h2>11. Governing law + venue</h2>
+        <p>
+          These terms are governed by the laws of Japan. Disputes
+          will be resolved exclusively in the Tokyo District Court,
+          Japan, except where local consumer-protection law gives you
+          a non-waivable right to a different forum.
+        </p>
+
+        <h2>12. Changes</h2>
+        <p>
+          We may update these terms. Material changes (new fees,
+          changed liability terms, new prohibited-use categories)
+          trigger an email to active accounts at least 30 days before
+          taking effect. Continued use after the effective date
+          constitutes acceptance.
+        </p>
+
+        <h2>13. Contact</h2>
+        <p>
+          Questions about these terms:
+          <a href="mailto:hello@annot.work">hello@annot.work</a>.
+          For abuse reports or content-removal requests:
+          <a href="mailto:abuse@annot.work">abuse@annot.work</a>.
+        </p>
+      </article>
+    </div>
+  </section>
+</Base>
