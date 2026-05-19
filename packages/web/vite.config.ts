@@ -18,17 +18,14 @@ export default defineConfig(({ mode }) => {
   // Vite normalises the value to ensure leading + trailing slashes.
   const PWA_BASE = (env.VITE_PWA_BASE || "/app/").replace(/\/?$/, "/");
 
-  // outDir mirrors the public URL space so Cloudflare's static-
-  // asset binding maps URL → file without a route-prefix rewrite.
-  // The binding includes the route prefix when resolving paths, so
-  // nesting the build output under `dist/<base>/` keeps the
-  // wrangler config trivial.
-  //
-  //   base "/app/" → outDir "dist/app"
-  //   base "/"     → outDir "dist"
-  //   base "/editor/" → outDir "dist/editor"
-  const baseSegment = PWA_BASE.replace(/^\//, "").replace(/\/$/, "");
-  const OUT_DIR = baseSegment ? `dist/${baseSegment}` : "dist";
+  // outDir stays flat (`dist/`) regardless of `base`. The PWA
+  // worker's `worker.js` strips the base prefix from incoming
+  // URLs before consulting the asset binding — so a request to
+  // `/app/assets/foo.js` lands on `dist/assets/foo.js`, and the
+  // SPA fallback (`<assets-root>/index.html`) resolves correctly
+  // for deep links like `/app/edit/img/browser/foo`. See
+  // `worker.js` at the repo root for the rewrite mechanism +
+  // `docs/plans/launch-prep.md` for the URL layout.
 
   return {
     plugins: [
@@ -44,7 +41,7 @@ export default defineConfig(({ mode }) => {
     // `.env.local` configures every workspace package.
     envDir: REPO_ROOT,
     build: {
-      outDir: OUT_DIR,
+      outDir: "dist",
       emptyOutDir: true,
       target: "es2022",
       rollupOptions: {
