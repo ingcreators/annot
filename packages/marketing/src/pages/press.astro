@@ -1,0 +1,285 @@
+---
+import Base from "../layouts/Base.astro";
+
+const title = "Press kit — Annot";
+const description =
+  "Brand assets, product description, screenshots, demo video, and maker contact for journalists and reviewers covering Annot.";
+
+// Brand assets served from packages/marketing/public/brand/.
+// The source-of-truth copies live in the repo's /brand directory;
+// these are mirrored at build time so the press page can link to
+// stable static URLs without coupling to the GitHub raw-content
+// host.
+const annotMarks = [
+  {
+    file: "annot-icon.svg",
+    label: "Annot app icon",
+    meta: "48×48 master · SVG",
+    preview: "annot-icon.svg",
+    background: "light",
+  },
+  {
+    file: "annot-icon-maskable.svg",
+    label: "Annot icon (maskable)",
+    meta: "PWA / Android adaptive · SVG",
+    preview: "annot-icon-maskable.svg",
+    background: "light",
+  },
+  {
+    file: "annot-wordmark.svg",
+    label: "Annot wordmark (light bg)",
+    meta: "Horizontal · SVG",
+    preview: "annot-wordmark.svg",
+    background: "light",
+  },
+  {
+    file: "annot-wordmark-inverse.svg",
+    label: "Annot wordmark (dark bg)",
+    meta: "Horizontal inverse · SVG",
+    preview: "annot-wordmark-inverse.svg",
+    background: "dark",
+  },
+  {
+    file: "annot-wordmark-stacked.svg",
+    label: "Annot wordmark (stacked)",
+    meta: "Square / social avatar · SVG",
+    preview: "annot-wordmark-stacked.svg",
+    background: "light",
+  },
+  {
+    file: "annot-wordmark-stacked-inverse.svg",
+    label: "Annot wordmark (stacked, dark bg)",
+    meta: "Square inverse · SVG",
+    preview: "annot-wordmark-stacked-inverse.svg",
+    background: "dark",
+  },
+];
+
+const ingcreatorsMarks = [
+  {
+    file: "ingcreators-icon.svg",
+    label: "ingcreators icon",
+    meta: "Parent company · SVG",
+    preview: "ingcreators-icon.svg",
+    background: "light",
+  },
+  {
+    file: "ingcreators-wordmark.svg",
+    label: "ingcreators wordmark",
+    meta: "Parent company · SVG",
+    preview: "ingcreators-wordmark.svg",
+    background: "light",
+  },
+];
+---
+
+<Base title={title} description={description}>
+  <div class="press-head">
+    <div class="container">
+      <p class="eyebrow">Annot.work · Press kit</p>
+      <h1>Press kit</h1>
+      <p>
+        Everything journalists, reviewers, or community-channel
+        maintainers need to cover Annot: brand assets, the
+        one-paragraph description, the elevator pitch, screenshots,
+        and the maker's contact.
+      </p>
+    </div>
+  </div>
+
+  <div class="container" style="padding-bottom: 56px;">
+    <!--
+      Elevator pitch — "Annot in 30 seconds". Reads aloud cleanly,
+      includes the moat anchor (Playwright fixture) without
+      drowning in jargon.
+    -->
+    <section class="press-block">
+      <h2>Annot in 30 seconds</h2>
+      <p class="press-pitch">
+        Annot is an SVG-first screenshot annotation toolkit you
+        can call from a Playwright fixture, edit by hand in a
+        browser PWA, or store inside a GitHub repo. The same
+        annotation format powers all three. Free hosted at
+        <a href="https://annot.work">annot.work</a>;
+        the entire codebase is Apache-2.0 OSS on
+        <a href="https://github.com/ingcreators/annot" rel="noopener"
+          >GitHub</a
+        >.
+      </p>
+    </section>
+
+    <!--
+      One-paragraph product description. Roughly 150 words; matches
+      the description we'd want a journalist to copy-paste into a
+      story without rewriting.
+    -->
+    <section class="press-block">
+      <h2>Product description</h2>
+      <div class="press-card">
+        <p>
+          Annot is an open-source screenshot annotation toolkit
+          designed around a portable SVG format. Test engineers
+          install
+          <code>@ingcreators/annot-playwright</code> and drop a
+          single fixture call into their Playwright suite — the
+          annotator captures the page, overlays an annotation SVG,
+          and attaches the resulting PNG to the HTML report. The
+          same format underpins a free in-browser editor at
+          <a href="https://annot.work/app">annot.work/app</a>, a
+          Chrome capture extension, an Electron desktop app, and a
+          VSCode custom editor — all sharing one core. Apache-2.0
+          across the board, no telemetry by default, optional
+          cloud sync. Built by <strong>ingcreators</strong>, a
+          one-person OSS shop in Japan focused on developer tools
+          that respect their users' data.
+        </p>
+      </div>
+    </section>
+
+    <!--
+      Maker contact + the few facts a reporter actually needs.
+    -->
+    <section class="press-block">
+      <h2>Maker + facts</h2>
+      <div class="press-card">
+        <div class="press-meta-row">
+          <div class="meta-item">
+            <strong>Maker</strong>
+            Naoki Ichimura
+          </div>
+          <div class="meta-item">
+            <strong>Company</strong>
+            ingcreators (Japan)
+          </div>
+          <div class="meta-item">
+            <strong>Launched</strong>
+            2026
+          </div>
+          <div class="meta-item">
+            <strong>Licence</strong>
+            Apache-2.0
+          </div>
+          <div class="meta-item">
+            <strong>Pricing</strong>
+            Free hosted; paid Pro tier TBD
+          </div>
+          <div class="meta-item">
+            <strong>Press email</strong>
+            <a href="mailto:press@annot.work">press@annot.work</a>
+          </div>
+          <div class="meta-item">
+            <strong>Maker email</strong>
+            <a href="mailto:hello@annot.work">hello@annot.work</a>
+          </div>
+          <div class="meta-item">
+            <strong>GitHub</strong>
+            <a
+              href="https://github.com/ingcreators/annot"
+              rel="noopener">github.com/ingcreators/annot</a
+            >
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!--
+      Screenshots + demo video. These slots are placeholders until
+      the assets are recorded as part of Phase 8g operator action.
+      Once the assets land, replace the placeholders with <img> +
+      <video> embeds and link to downloadable copies.
+    -->
+    <section class="press-block">
+      <h2>Screenshots</h2>
+      <div class="press-screenshot-placeholder">
+        Screenshots will land here as part of Phase 8g operator
+        action (recording the demo video + the three core
+        screenshots: PWA editor, Playwright report attachment,
+        Chrome extension capture). Until then, the live PWA at
+        <a href="https://annot.work/app">annot.work/app</a> is the
+        best way to grab a fresh screenshot.
+      </div>
+    </section>
+
+    <section class="press-block">
+      <h2>Demo video</h2>
+      <div class="press-screenshot-placeholder">
+        A 30-second demo video showing the full Playwright →
+        annotated PNG → HTML report flow lands as part of Phase
+        8g. Specification + storyboard live in
+        <code>docs/launch/product-hunt.md</code> in the repo.
+      </div>
+    </section>
+
+    <!--
+      Brand assets. Linked directly to the SVG files in
+      /public/brand/ — right-click to download, or open in a new
+      tab to inspect.
+    -->
+    <section class="press-block">
+      <h2>Annot brand marks</h2>
+      <div class="press-asset-grid">
+        {
+          annotMarks.map((mark) => (
+            <div class="press-asset">
+              <div
+                class:list={[
+                  "preview",
+                  mark.background === "dark" ? "preview-dark" : null,
+                ]}
+              >
+                <img src={`/brand/${mark.preview}`} alt={mark.label} />
+              </div>
+              <div class="label">{mark.label}</div>
+              <div class="meta">{mark.meta}</div>
+              <a href={`/brand/${mark.file}`} download>
+                Download SVG
+              </a>
+            </div>
+          ))
+        }
+      </div>
+    </section>
+
+    <section class="press-block">
+      <h2>Parent company (ingcreators) marks</h2>
+      <div class="press-asset-grid">
+        {
+          ingcreatorsMarks.map((mark) => (
+            <div class="press-asset">
+              <div
+                class:list={[
+                  "preview",
+                  mark.background === "dark" ? "preview-dark" : null,
+                ]}
+              >
+                <img src={`/brand/${mark.preview}`} alt={mark.label} />
+              </div>
+              <div class="label">{mark.label}</div>
+              <div class="meta">{mark.meta}</div>
+              <a href={`/brand/${mark.file}`} download>
+                Download SVG
+              </a>
+            </div>
+          ))
+        }
+      </div>
+    </section>
+
+    <section class="press-block">
+      <h2>Full brand directory</h2>
+      <p>
+        The full source-of-truth brand kit — including PNG
+        rasterisations, an archive of earlier iterations, and the
+        render scripts — lives in the repo's
+        <a
+          href="https://github.com/ingcreators/annot/tree/main/brand"
+          rel="noopener"><code>/brand</code></a
+        >
+        directory. Same Apache-2.0 licence as the codebase. A
+        bundled press-kit ZIP will be added in a follow-up; until
+        then, <code>git clone</code> the repo and you have every
+        asset.
+      </p>
+    </section>
+  </div>
+</Base>

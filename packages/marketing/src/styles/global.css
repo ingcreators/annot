@@ -363,7 +363,7 @@ pre {
 }
 
 /*
- * Long-form text content (privacy, terms, press).
+ * Long-form text content (privacy, terms).
  * Single-column, comfortable reading width, generous vertical
  * rhythm between blocks.
  */
@@ -432,6 +432,124 @@ pre {
   color: #3d2e00;
 }
 
+/*
+ * Press kit page (/press) — asset grid + contact card + elevator
+ * pitch. Distinct from the long-form `.prose` styles (privacy /
+ * terms) because the press kit is a structured directory, not
+ * continuous text.
+ */
+.press-head {
+  padding: 56px 0 24px;
+}
+.press-head .eyebrow {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--annot-ink-soft);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+.press-head h1 {
+  margin-bottom: 12px;
+}
+.press-head p {
+  max-width: 36em;
+  color: var(--annot-text-soft);
+}
+.press-block {
+  margin-bottom: 48px;
+}
+.press-block h2 {
+  font-size: 1.4rem;
+  margin-bottom: 18px;
+}
+.press-asset-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+.press-asset {
+  background: var(--annot-bg);
+  border: 1px solid var(--annot-border);
+  border-radius: var(--annot-radius);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.press-asset .preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 96px;
+  background: var(--annot-bg-alt);
+  border-radius: var(--annot-radius-sm);
+  padding: 12px;
+}
+.press-asset .preview.preview-dark {
+  background: var(--annot-ink);
+}
+.press-asset .preview img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+.press-asset .label {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--annot-ink);
+}
+.press-asset .meta {
+  font-size: 0.82rem;
+  color: var(--annot-text-soft);
+}
+.press-asset a {
+  font-size: 0.88rem;
+  color: var(--annot-ink);
+  text-decoration: underline;
+  text-decoration-color: var(--annot-blue);
+}
+.press-card {
+  background: var(--annot-bg);
+  border: 1px solid var(--annot-border);
+  border-radius: var(--annot-radius);
+  padding: 24px 26px;
+}
+.press-pitch {
+  border-left: 4px solid var(--annot-blue);
+  padding: 4px 0 4px 18px;
+  font-size: 1.05rem;
+  color: var(--annot-text);
+  max-width: 36em;
+}
+.press-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.press-meta-row .meta-item {
+  font-size: 0.92rem;
+  color: var(--annot-text-soft);
+}
+.press-meta-row .meta-item strong {
+  display: block;
+  color: var(--annot-ink);
+  font-weight: 600;
+  margin-bottom: 2px;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.press-screenshot-placeholder {
+  border: 2px dashed var(--annot-border);
+  background: var(--annot-bg-alt);
+  border-radius: var(--annot-radius);
+  padding: 32px 24px;
+  text-align: center;
+  color: var(--annot-text-soft);
+  font-size: 0.92rem;
+}
+
 @media (max-width: 760px) {
   .hero {
     padding: 48px 0 32px;
@@ -445,6 +563,9 @@ pre {
   }
   .prose-wrap {
     padding: 40px 0 56px;
+  }
+  .press-head {
+    padding: 40px 0 16px;
   }
 }
 

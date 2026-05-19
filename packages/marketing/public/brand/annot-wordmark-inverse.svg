@@ -1,0 +1,19 @@
+<!--
+  Annot horizontal wordmark (inverse — for dark backgrounds).
+  Use on: dark-themed landing pages, Chrome Web Store hero images,
+  in-app splash, social media banners with dark bg.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 170 48" fill="none" role="img" aria-label="Annot">
+  <rect width="48" height="48" rx="10" fill="#0f1730"/>
+  <circle cx="24" cy="7" r="3.5" fill="#7c9cff"/>
+  <path d="M24 13 L13 38" stroke="#7ef0c5" stroke-width="4" stroke-linecap="round"/>
+  <path d="M24 13 L35 38" stroke="#b391ff" stroke-width="4" stroke-linecap="round"/>
+  <path d="M19 24 H29" stroke="#7c9cff" stroke-width="3.5" stroke-linecap="round"/>
+
+  <text x="62" y="33"
+        fill="#eef2ff"
+        font-family="Sora, -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif"
+        font-weight="700"
+        font-size="26"
+        letter-spacing="-0.03em">Annot</text>
+</svg>
