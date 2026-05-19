@@ -1,0 +1,65 @@
+# Switch storage backends
+
+Annot's PWA reads and writes annotations through a single
+`StorageProvider` interface, with four built-in implementations.
+Switch between them in **Settings → Storage**.
+
+| Backend | Where it lives | Sign-in required |
+| ------- | -------------- | ---------------- |
+| **Browser (default)** | IndexedDB on the current device | No |
+| **Device (File System Access)** | A folder you pick on your local disk | No |
+| **GitHub** | A repo + branch + base path you pick | GitHub OAuth |
+| **Google Drive** | A `drive.file`-scoped subfolder | Google OAuth |
+| **Annot Cloud** | A workspace on `annot.work` | Annot Cloud sign-in |
+
+## Browser (default)
+
+The simplest backend — annotations live in IndexedDB on the
+current device, no sign-in, no upload. Loses data if you clear
+browser storage; doesn't sync across devices.
+
+## Device (File System Access)
+
+Pick a local folder; annotations live as `*.annot.svg` files
+inside it. The annotation SVG + an optional sidecar metadata
+file go on disk. You can git-track the folder, sync it with
+Dropbox, or open the same folder from the desktop app.
+
+Supported on Chromium-based browsers (Chrome, Edge, Brave).
+Safari + Firefox fall back to the Browser backend.
+
+## GitHub
+
+Pick a repo, a branch, and a base path (e.g. `screenshots/`).
+Annotations save as commits on the chosen branch.
+
+- Auth: a GitHub OAuth grant covering `repo` scope on the repos
+  you choose.
+- Save flow: each save creates a commit. Conflict resolution is
+  last-write-wins on the chosen branch.
+
+## Google Drive
+
+Pick a folder; annotations save as files inside it.
+
+- Auth: `drive.file` scope — the PWA can only see / write files
+  it created itself, not other Drive content.
+- Limits: Google API quotas apply; the PWA backs off on 429
+  responses.
+
+## Annot Cloud
+
+Sign in with GitHub or Google to use the hosted backend at
+`annot.work`. Same SVG format, plus share-link generation and
+multi-device sync.
+
+The free tier covers personal use; team sharing + higher quotas
+are on the [Pro roadmap](https://github.com/ingcreators/annot/blob/main/docs/plans/annot-cloud-roadmap.md).
+
+## Switching
+
+Each backend is independent — switching from Browser to GitHub
+doesn't migrate existing annotations. To move annotations across
+backends, export them as `.annot.svg` files and import on the
+other side, or copy them through the Device backend (which is
+the same on-disk format the GitHub backend uses).

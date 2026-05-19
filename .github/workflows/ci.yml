@@ -51,7 +51,7 @@ jobs:
       # The platform-specific installer packaging lives in
       # `desktop-release.yml`, which runs the matching
       # `electron-builder` invocation on a matrix of OSes.
-      - name: Build (core, web, extension, desktop, marketing)
+      - name: Build (core, web, extension, desktop, marketing, docs-site)
         run: >
           pnpm
           --filter @ingcreators/annot-core
@@ -59,6 +59,7 @@ jobs:
           --filter @ingcreators/annot-extension
           --filter @ingcreators/annot-desktop
           --filter @ingcreators/annot-marketing
+          --filter @ingcreators/annot-docs-site
           build
 
       # Storybook build. Originally landed as `continue-on-error: true`
