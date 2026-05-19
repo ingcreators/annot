@@ -203,8 +203,51 @@ begins. Paste this into the planning issue / doc:
   adding new deep links must document the new URL shape in
   `docs/url-schemes.md` (to be created).
 
+## What's published on npm
+
+As of 2026-05-19, the following packages are published on npm
+under the `@ingcreators` scope. **Public API surface for these
+packages is semver-versioned** — breaking changes require a
+major bump per [semver](https://semver.org).
+
+| Package | Version | Stability commitment |
+|---------|---------|----------------------|
+| [`@ingcreators/annot-core`](https://www.npmjs.com/package/@ingcreators/annot-core) | `0.1.0` | Root export (`.`) only on this version; subpaths (`/storage`, `/editor`, etc.) land in a later minor. Pre-1.0 — minor bumps may include breaking changes (with a changelog note). |
+| [`@ingcreators/annot-annotator`](https://www.npmjs.com/package/@ingcreators/annot-annotator) | `0.1.0` | `createAnnotator(options) → { toPng, toSvg }` public API. Inlines its `annot-core` usage so consumers don't transitively pull the core SDK. |
+| [`@ingcreators/annot-playwright`](https://www.npmjs.com/package/@ingcreators/annot-playwright) | `0.1.0` | `test.extend({ annotator })` Playwright fixture + the three pure SVG-fragment helpers (`rectForBoundingBox` / `arrowBetween` / `textAt`). |
+
+Auth for publish is via [npm Trusted Publishing (OIDC)](https://docs.npmjs.com/trusted-publishers) —
+no long-lived tokens. The workflow at `.github/workflows/publish.yml`
+mints a per-run identity token via GitHub Actions OIDC, npm
+verifies it against per-package Trusted Publisher rules, and
+publish proceeds. Each package's Publishing Access is set to
+"Require 2FA AND disallow tokens" so token-based publish is
+structurally impossible.
+
+### Not yet published
+
+Other workspace packages stay `private: true` and are not
+distributed via npm:
+
+- Host apps: `annot-web` (PWA at annot.work), `annot-extension`
+  (Chrome Web Store), `annot-desktop` (Electron self-distribute),
+  `annot-vscode` (VSCode Marketplace) — distribution path is the
+  host's own marketplace, not npm.
+- Internal libraries: `annot-host-ui`, `annot-editor`,
+  `annot-render`, `annot-doc`, `annot-capture`, `annot-cloud-store`,
+  `annot-imagequant` — refactor freely within the monorepo; not
+  contracted as external APIs yet.
+- Server-side: `annot-worker` deploys to Cloudflare via
+  `.github/workflows/deploy.yml`, not npm.
+
+Future additions to the published set need: (a) a clear
+external-API contract, (b) a `publishConfig` block flipping
+the package to `public`, (c) a Trusted Publisher rule on
+npm.com, (d) a Changesets entry.
+
 ## Revision history
 
 | Date       | Change                                     |
 |------------|--------------------------------------------|
 | 2026-04-23 | Initial document. Committed to Playwright + GitHub direction. |
+| 2026-05-19 | First npm publish — `annot-core@0.1.0`, `annot-annotator@0.1.0`, `annot-playwright@0.1.0`. Added "What's published" section. |
