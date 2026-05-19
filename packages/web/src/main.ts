@@ -1,3 +1,12 @@
+// Install the reactive `vite:preloadError` / chunk-load-failure
+// safety net BEFORE anything else. The module's top-level side
+// effect attaches the global window listeners; placing the import
+// here guarantees the handler is wired before any subsequent
+// module (CSS, theme restore, App boot, ...) can itself trigger a
+// dynamic import that might fail against a stale deploy.
+// See `docs/plans/web-dynamic-import-recovery.md`.
+import "./recovery/chunk-reload.js";
+
 // CSS imports
 import "@ingcreators/annot-core/styles/editor.css";
 import "@ingcreators/annot-core/styles/toolbar.css";
