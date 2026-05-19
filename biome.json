@@ -21,7 +21,8 @@
       "!**/pnpm-lock.yaml",
       "!**/packages/**/*/public/**",
       "!**/brand/**",
-      "!**/*.md"
+      "!**/*.md",
+      "!**/*.astro"
     ]
   },
   "formatter": {
