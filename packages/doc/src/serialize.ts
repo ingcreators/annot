@@ -469,21 +469,41 @@ function buildTocHtml(
  *  format produces (`&lt;`, `&gt;`, `&quot;`, `&amp;`) so the
  *  caller's `escapeText` doesn't double-escape (`&amp;amp;`).
  *
- *  Strips tags with `<\/?[a-zA-Z][^>]*>?` (handles well-formed
- *  AND truncated tags), then a final pass removes any `<` / `>`
- *  characters the entity decode reintroduced from `&lt;` / `&gt;`
- *  literals. Without that final pass the function output can
- *  carry a literal `<script` substring downstream into the TOC
- *  label (CodeQL `js/incomplete-multi-character-sanitization`).
- *  The cost is that literal `<` / `>` characters in heading text
- *  are dropped from the TOC label (rare, acceptable trade-off for
- *  TOC presentation). */
+ *  The tag strip uses an indexOf-based walk rather than a regex
+ *  replace — CodeQL's `js/incomplete-multi-character-sanitization`
+ *  rule flags ANY tag-shaped regex used in a sanitiser, since
+ *  regex alternation can leave fragments under adversarial
+ *  overlap. The walk drops every character between an unmatched
+ *  `<` and the next `>` (or end-of-input), then the final `[<>]`
+ *  strip removes any angle brackets the entity decode
+ *  reintroduced from `&lt;` / `&gt;` literals. The cost is that
+ *  literal `<` / `>` in heading text drop from the TOC label —
+ *  rare, acceptable for TOC presentation. */
 function stripInlineTagsForToc(inlineHtml: string): string {
-  const stripped = inlineHtml.replace(/<\/?[a-zA-Z][^>]*>?/g, "").trim();
+  const stripped = stripAngleTags(inlineHtml).trim();
   return stripped
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
     .replace(/&amp;/g, "&")
     .replace(/[<>]/g, "");
+}
+
+/** Drop every `<...>` substring (and any trailing unterminated
+ *  `<...` run) from `text`. Linear in input length. */
+function stripAngleTags(text: string): string {
+  let out = "";
+  let i = 0;
+  while (i < text.length) {
+    const lt = text.indexOf("<", i);
+    if (lt < 0) {
+      out += text.slice(i);
+      break;
+    }
+    out += text.slice(i, lt);
+    const gt = text.indexOf(">", lt + 1);
+    if (gt < 0) break;
+    i = gt + 1;
+  }
+  return out;
 }
