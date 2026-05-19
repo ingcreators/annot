@@ -154,6 +154,14 @@ export class CanvasManager {
   fitToView(): void {
     const container = this.svg.parentElement;
     if (!container) return;
+    // Enter fit mode unconditionally so the ResizeObserver-driven
+    // refit picks up the first real layout pass even when this
+    // call can't compute a valid scale yet — the canvas container
+    // is typically 0×0 at constructor time, before the browser
+    // has laid out the editor surface. Without this flag, the
+    // ResizeObserver's `refitIfFitMode` early-returns and the
+    // canvas stays at the default 100% zoom forever.
+    this.#fitMode = true;
     const scale = computeFitZoom(
       this.#imageWidth,
       this.#imageHeight,

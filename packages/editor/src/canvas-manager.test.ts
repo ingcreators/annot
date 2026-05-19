@@ -245,6 +245,34 @@ describe("CanvasManager — zoom / fit / viewBox", () => {
     expect(cm.isFitMode).toBe(false);
   });
 
+  it("enters fit mode even when the container is 0×0 at constructor time", () => {
+    // Regression: when the editor mounts before browser layout has
+    // run, the canvas-container's clientWidth/clientHeight are still
+    // 0, so computeFitZoom returns ≤ 0 and the initial setZoom path
+    // is skipped. The host then wires a ResizeObserver that calls
+    // refitIfFitMode() on the first layout pass — but that only
+    // re-fits when isFitMode is already true. Without an explicit
+    // "enter fit mode" tag, the canvas got stuck at 100% forever.
+    const { container, cm } = makeCanvas({
+      containerW: 0,
+      containerH: 0,
+      imageW: 400,
+      imageH: 300,
+    });
+    // Initial fit failed silently — zoom stays at the default 1.
+    expect(cm.zoom).toBe(1);
+    // …but the canvas IS in fit mode, so refitIfFitMode picks it up
+    // once layout produces real dimensions.
+    expect(cm.isFitMode).toBe(true);
+    Object.defineProperty(container, "clientWidth", { configurable: true, value: 800 });
+    Object.defineProperty(container, "clientHeight", { configurable: true, value: 600 });
+    cm.refitIfFitMode();
+    // computeFitZoom uses a 40px gutter inside the container; the
+    // result fits well within 1× so it caps at 1.
+    expect(cm.zoom).toBe(1);
+    expect(cm.isFitMode).toBe(true);
+  });
+
   it("updateViewBox writes the viewBox attribute + updates imageWidth/imageHeight", () => {
     const { svg, cm } = makeCanvas();
     cm.updateViewBox(10, 20, 500, 250);
