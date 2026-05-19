@@ -186,8 +186,31 @@ document.addEventListener("DOMContentLoaded", () => {
       /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmed) || trimmed.startsWith("about:")
         ? trimmed
         : `https://${trimmed}`;
+    // Block scheme-based XSS into the `<webview>`. A `javascript:` /
+    // `vbscript:` / `data:text/html` URL in `.src` would execute
+    // inside the webview's renderer; only navigable schemes belong on
+    // the address bar (CodeQL `js/xss-through-dom`).
+    if (!isNavigableUrl(url)) {
+      setStatus(`Blocked unsupported URL scheme: ${url.slice(0, 40)}`, null);
+      return;
+    }
     const active = tabs.getActiveTab();
     if (active) active.webview.src = url;
+  }
+
+  // Allow-list of URL schemes the address bar may navigate to.
+  // `https` / `http` cover web pages; `about` covers `about:blank` +
+  // similar; `file` covers local-file navigation that Electron
+  // legitimately supports. Anything else (javascript:, data:,
+  // vbscript:, chrome:, …) is refused.
+  function isNavigableUrl(s: string): boolean {
+    const lower = s.toLowerCase();
+    return (
+      lower.startsWith("http://") ||
+      lower.startsWith("https://") ||
+      lower.startsWith("about:") ||
+      lower.startsWith("file://")
+    );
   }
 
   dom.urlInput.addEventListener("keydown", (e) => {
