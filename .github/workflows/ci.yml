@@ -51,13 +51,14 @@ jobs:
       # The platform-specific installer packaging lives in
       # `desktop-release.yml`, which runs the matching
       # `electron-builder` invocation on a matrix of OSes.
-      - name: Build (core, web, extension, desktop, docs-site)
+      - name: Build (core, web, extension, desktop, marketing, docs-site)
         run: >
           pnpm
           --filter @ingcreators/annot-core
           --filter @ingcreators/annot-web
           --filter @ingcreators/annot-extension
           --filter @ingcreators/annot-desktop
+          --filter @ingcreators/annot-marketing
           --filter @ingcreators/annot-docs-site
           build
 
