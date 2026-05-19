@@ -199,18 +199,26 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // Allow-list of URL schemes the address bar may navigate to.
-  // `https` / `http` cover web pages; `about` covers `about:blank` +
-  // similar; `file` covers local-file navigation that Electron
-  // legitimately supports. Anything else (javascript:, data:,
-  // vbscript:, chrome:, …) is refused.
+  // Parses the input through `URL` and compares `.protocol`
+  // against the allow-list — CodeQL's `js/xss-through-dom` only
+  // recognises a URL-parsed `.protocol` check as a sink-side
+  // sanitiser, not a `startsWith` prefix scan (the prefix path
+  // was the previous shape and triggered a re-flag after PR
+  // #815 landed).
+  //
+  // `https` / `http` cover web pages; `about` covers
+  // `about:blank` and friends. `file://` is intentionally NOT in
+  // the allow-list — a file-URL HTML page can execute scripts
+  // with `file://` origin, which is a broader XSS vector than
+  // we want the address bar to surface.
   function isNavigableUrl(s: string): boolean {
-    const lower = s.toLowerCase();
-    return (
-      lower.startsWith("http://") ||
-      lower.startsWith("https://") ||
-      lower.startsWith("about:") ||
-      lower.startsWith("file://")
-    );
+    let u: URL;
+    try {
+      u = new URL(s);
+    } catch {
+      return false;
+    }
+    return u.protocol === "http:" || u.protocol === "https:" || u.protocol === "about:";
   }
 
   dom.urlInput.addEventListener("keydown", (e) => {
