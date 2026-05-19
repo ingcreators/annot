@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 // Package `dist/` into a versioned ZIP for store submission.
 //
@@ -27,18 +27,40 @@ mkdirSync(releasesDir, { recursive: true });
 const outPath = resolve(releasesDir, `annot-${target}-${version}.zip`);
 
 // Use the OS `zip` / `powershell Compress-Archive` — avoids adding a node
-// dependency just for packaging.
+// dependency just for packaging. Paths flow through `execFileSync`
+// (argv array, no shell) and env vars rather than string-interpolated
+// shell commands, so a checkout path containing shell-meta characters
+// can't escape the command (CodeQL
+// `js/shell-command-injection-from-environment`).
 try {
   if (process.platform === "win32") {
-    // PowerShell Compress-Archive — needs forward-slash paths escaped.
+    // PowerShell Compress-Archive — forward slashes get normalised to
+    // backslashes, then the path values flow in via env vars rather
+    // than string-interpolation into the -Command body. PowerShell
+    // single-quote escaping of arbitrary paths is fragile, env vars
+    // bypass quoting entirely.
     const distWin = distDir.replace(/\//g, "\\");
     const outWin = outPath.replace(/\//g, "\\");
-    execSync(
-      `powershell -NoProfile -Command "Compress-Archive -Force -Path '${distWin}\\*' -DestinationPath '${outWin}'"`,
-      { stdio: "inherit" },
+    execFileSync(
+      "powershell",
+      [
+        "-NoProfile",
+        "-Command",
+        "Compress-Archive -Force -Path $env:ANNOT_ZIP_SRC -DestinationPath $env:ANNOT_ZIP_OUT",
+      ],
+      {
+        stdio: "inherit",
+        env: {
+          ...process.env,
+          ANNOT_ZIP_SRC: `${distWin}\\*`,
+          ANNOT_ZIP_OUT: outWin,
+        },
+      },
     );
   } else {
-    execSync(`cd "${distDir}" && zip -r "${outPath}" .`, { stdio: "inherit", shell: "/bin/sh" });
+    // `cwd:` + argv array — no shell, so `distDir` / `outPath` aren't
+    // re-parsed.
+    execFileSync("zip", ["-r", outPath, "."], { stdio: "inherit", cwd: distDir });
   }
 } catch (e) {
   console.error("ZIP failed. Ensure `zip` (macOS/Linux) or PowerShell (Windows) is available.", e);
