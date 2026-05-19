@@ -22,7 +22,10 @@ import { DOC_SHORTCUT_GROUPS, installKeyboardHelp } from "@ingcreators/annot-hos
 import { BUILTIN_DRAWER_SECTION_IDS } from "@ingcreators/annot-host-ui/annot-file-details-drawer";
 import { createBuiltinIcon } from "@ingcreators/annot-host-ui/annot-icon-imperative";
 import { FileManager } from "@ingcreators/annot-host-ui/gallery/file-manager";
-import type { SidebarSectionOrder } from "@ingcreators/annot-host-ui/gallery/sidebar";
+import {
+  resolveStorageRootLabel,
+  type SidebarSectionOrder,
+} from "@ingcreators/annot-host-ui/gallery/sidebar";
 import { IndexedDBThumbnailCache } from "@ingcreators/annot-host-ui/idb-thumbnail-cache";
 import { generateThumbnailFromDataUrl } from "@ingcreators/annot-host-ui/image-thumbnail";
 import { HeaderHost } from "@ingcreators/annot-host-ui/orchestrators/header-host";
@@ -212,16 +215,10 @@ export class App {
         // Phase 3 / PR C of `docs/plans/_done/host-convergence.md` — host
         // concerns lifted out of HeaderHost into deps callbacks so
         // editor-shell stays host-neutral. PWA wires:
-        getRootLabel: () => {
-          const mode = getStorageMode();
-          return mode === "device"
-            ? "Device"
-            : mode === "googledrive"
-              ? "Google Drive"
-              : mode === "github"
-                ? "GitHub"
-                : "Browser";
-        },
+        getRootLabel: () =>
+          resolveStorageRootLabel(getStorageMode(), () =>
+            this.#pluginHost.listStorageRegistrations(),
+          ),
         pushEditRoute: (newPath) => pushRoute(editUrl(getStorageMode(), newPath)),
         fetchLastCommit: async (path) => {
           const storage = this.#storage;
