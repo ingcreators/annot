@@ -1021,6 +1021,15 @@ function stripInlineHtml(html: string): string {
       .replace(/&gt;/g, ">")
       .replace(/&quot;/g, '"')
       .replace(/&amp;/g, "&")
+      // Final tag-shaped strip — catches anything the entity
+      // decode just reintroduced (`&lt;script&gt;` → `<script>`).
+      // Without this pass the function output can carry a literal
+      // `<script` substring downstream into the OOXML emit step
+      // (CodeQL `js/incomplete-multi-character-sanitization`).
+      // The `<\/?[a-zA-Z]` anchor requires a letter after `<` so
+      // literal text like `Hello < World` (space then letter) is
+      // preserved.
+      .replace(/<\/?[a-zA-Z][^>]*>?/g, "")
       // Collapse 3+ consecutive newlines down to 2 — a doubled
       // newline reads as a paragraph break in PowerPoint; more
       // than that just bloats the output.

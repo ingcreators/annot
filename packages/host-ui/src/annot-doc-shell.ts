@@ -3837,15 +3837,24 @@ function buildHeadingIdMap(headings: readonly HeadingBlock[]): Map<HeadingBlock,
 }
 
 /** Best-effort plain-text extraction from canonical inline HTML
- *  for use in event details / aria labels. Strips tags only —
- *  doesn't decode entities, since the canonical form has only
- *  the standard `&lt;` / `&gt;` / `&amp;` triple. */
+ *  for use in event details / aria labels.
+ *
+ *  Two-pass strip: the first pass removes real tags from the
+ *  serialized HTML, the second pass (after entity decode) catches
+ *  tag-shaped text the decode reintroduced from `&lt;tag&gt;`
+ *  inputs. Without the second pass the function output can carry
+ *  a literal `<script` substring (CodeQL
+ *  `js/incomplete-multi-character-sanitization`). The
+ *  `<\/?[a-zA-Z]` anchor requires a tag-name letter after `<`, so
+ *  a literal `Hello < World` (space after `<`) heading text still
+ *  passes through. */
 function stripInlineTags(inlineHtml: string): string {
   return inlineHtml
-    .replace(/<[^>]*>/g, "")
+    .replace(/<\/?[a-zA-Z][^>]*>?/g, "")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&amp;/g, "&")
+    .replace(/<\/?[a-zA-Z][^>]*>?/g, "")
     .trim();
 }
 

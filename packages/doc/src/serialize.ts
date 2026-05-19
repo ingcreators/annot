@@ -467,12 +467,23 @@ function buildTocHtml(
 /** Strip every inline tag from an inline-HTML fragment so the
  *  TOC label reads as plain text. Decodes the four entities the
  *  format produces (`&lt;`, `&gt;`, `&quot;`, `&amp;`) so the
- *  caller's `escapeText` doesn't double-escape (`&amp;amp;`). */
+ *  caller's `escapeText` doesn't double-escape (`&amp;amp;`).
+ *
+ *  The strip happens twice — once on the raw HTML to remove real
+ *  tags, then again after the entity decode to catch any
+ *  tag-shaped text the decode reintroduced (`&lt;script&gt;` →
+ *  `<script>`). Without that second pass the function output can
+ *  carry a literal `<script` substring (CodeQL
+ *  `js/incomplete-multi-character-sanitization`). The
+ *  `<\/?[a-zA-Z]` anchor on the second pass requires a tag-name
+ *  letter after `<`, so a literal `Hello < World` (space after
+ *  `<`) text in the heading still passes through. */
 function stripInlineTagsForToc(inlineHtml: string): string {
-  const stripped = inlineHtml.replace(/<[^>]+>/g, "").trim();
+  const stripped = inlineHtml.replace(/<\/?[a-zA-Z][^>]*>?/g, "").trim();
   return stripped
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
-    .replace(/&amp;/g, "&");
+    .replace(/&amp;/g, "&")
+    .replace(/<\/?[a-zA-Z][^>]*>?/g, "");
 }
