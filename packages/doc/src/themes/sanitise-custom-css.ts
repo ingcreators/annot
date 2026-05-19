@@ -84,7 +84,13 @@ export function sanitiseCustomCss(raw: string): SanitiseResult {
 
   // 3. Strip external url() references. Allow `data:` URLs
   //    (embedded bytes, no network egress).
-  const urlExternalRegex = /url\s*\(\s*(?:["']?)\s*(?:https?:|\/\/)[^)]*\)/gi;
+  //
+  // The `\s*` runs are collapsed (no double-`\s*` around the
+  // optional quote) so the regex is linear on `url(   ...`
+  // inputs with many spaces (CodeQL `js/polynomial-redos`). The
+  // `[^)]{0,2048}` bound on the URL body keeps the close-paren
+  // search linear even on adversarial inputs that lack a `)`.
+  const urlExternalRegex = /url\s*\(\s*["']?(?:https?:|\/\/)[^)]{0,2048}\)/gi;
   const urlMatches = css.match(urlExternalRegex);
   if (urlMatches && urlMatches.length > 0) {
     warnings.push(

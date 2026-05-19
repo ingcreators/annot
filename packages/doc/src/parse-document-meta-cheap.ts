@@ -21,7 +21,13 @@ export interface CheapDocumentMeta {
 }
 
 export function parseDocumentMetaCheap(text: string): CheapDocumentMeta {
-  const titleMatch = text.match(/<title>([\s\S]*?)<\/title>/i);
+  // The inner group is a linear-time "atomic-ish" walk: chunks of
+  // non-`<` chars optionally separated by a `<` whose lookahead
+  // confirms it's not the closing `</title>`. The original
+  // `<title>([\s\S]*?)</title>` was polynomial on inputs that
+  // contained many `<title>` substrings without a close (CodeQL
+  // `js/polynomial-redos`).
+  const titleMatch = text.match(/<title>([^<]*(?:<(?!\/title>)[^<]*)*)<\/title>/i);
   const title = titleMatch?.[1]?.trim() ?? "";
   const blockMatches = text.match(/data-annot-block="[^"]+"/g);
   const imageMatches = text.match(/data-annot-block="image"/g);

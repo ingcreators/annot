@@ -75,8 +75,15 @@ export function estimateDataUrlBytes(dataUrl: string): number {
   const commaIdx = dataUrl.indexOf(",");
   if (commaIdx === -1) return dataUrl.length;
   const body = dataUrl.substring(commaIdx + 1);
-  // Base64 encodes 3 bytes into 4 chars. Padding "=" chars subtract 1 byte each.
-  const paddingMatch = body.match(/=+$/);
-  const padding = paddingMatch ? paddingMatch[0].length : 0;
+  // Base64 encodes 3 bytes into 4 chars. Padding "=" chars subtract
+  // 1 byte each. Count trailing `=` with a tight reverse walk
+  // rather than `body.match(/=+$/)` — the regex is linear per
+  // attempt but `.match()` retries from each start position, which
+  // CodeQL flags as polynomial on adversarial inputs that contain
+  // many `=` runs not at the end (`js/polynomial-redos`).
+  let padding = 0;
+  for (let i = body.length - 1; i >= 0 && body.charCodeAt(i) === 61; i--) {
+    padding++;
+  }
   return Math.max(0, Math.floor(body.length * 0.75) - padding);
 }
