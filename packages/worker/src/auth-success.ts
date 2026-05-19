@@ -86,7 +86,7 @@ const SUCCESS_HTML = `<!doctype html>
   <main>
     <div class="ok" aria-hidden="true">✓</div>
     <h1>Signed in to Annot Cloud</h1>
-    <p id="msg">You can close this window. <a href="/">Return to Annot</a></p>
+    <p id="msg">You can close this window. <a href="/app/">Return to Annot</a></p>
   </main>
   <script>
     // Notify the PWA opener so it can short-circuit its polling

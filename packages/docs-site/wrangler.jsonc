@@ -1,0 +1,47 @@
+/**
+ * Cloudflare Workers Static Assets config for the annot.work/docs
+ * VitePress documentation site.
+ *
+ * No Worker script — just the VitePress static build from
+ * `.vitepress/dist/docs/` behind Cloudflare's asset server.
+ *
+ * VitePress is configured to write to `.vitepress/dist/docs/`
+ * (not the default `dist/`) so the on-disk layout mirrors the
+ * public URL space — Cloudflare's static-asset binding includes
+ * the route prefix when mapping URL → file, so a request to
+ * `annot.work/docs/getting-started/` lands on
+ * `<assets.directory>/docs/getting-started/index.html`.
+ *
+ * URL layout (Phase 8d of docs/plans/launch-prep.md):
+ *
+ *   annot.work/      → annot-marketing (landing site)
+ *   annot.work/app/* → annot (PWA)
+ *   annot.work/docs/*→ THIS worker (VitePress docs)
+ *   annot.work/api/* → annot-api
+ *
+ * Cloudflare resolves overlapping routes by longest-prefix match
+ * — `annot.work/docs/*` is more specific than the marketing
+ * worker's `annot.work/*`, so it wins.
+ *
+ * VitePress is configured with `base: "/docs/"` so every
+ * internal link in the built HTML already includes that prefix.
+ * `not_found_handling: "404-page"` because VitePress emits a
+ * per-route static file — falling through to an index page
+ * would be wrong.
+ */
+{
+  "name": "annot-docs-site",
+  "compatibility_date": "2026-04-23",
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [
+    {
+      "pattern": "annot.work/docs/*",
+      "zone_name": "annot.work"
+    }
+  ],
+  "assets": {
+    "directory": "./.vitepress/dist",
+    "not_found_handling": "404-page"
+  }
+}
