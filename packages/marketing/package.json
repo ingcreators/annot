@@ -1,0 +1,26 @@
+{
+  "name": "@ingcreators/annot-marketing",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Astro marketing site for annot.work — landing page, press kit, privacy / terms. Phase 8 of the Excalidraw-route cloud roadmap (`docs/plans/launch-prep.md`).",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ingcreators/annot.git",
+    "directory": "packages/marketing"
+  },
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "typecheck": "astro check",
+    "astro": "astro"
+  },
+  "dependencies": {
+    "astro": "^5.14.1"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.4",
+    "typescript": "catalog:"
+  }
+}
