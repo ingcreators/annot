@@ -1,5 +1,15 @@
 # SVG helpers
 
+::: tip Prefer the DSL for new code
+Since `@ingcreators/annot-annotator@0.2.0` the
+[annotation DSL](./dsl.md) covers the same use cases with typed
+JSON shapes, an `intent` shorthand mapped to design-system
+colours, and a `callout` composite. The primitives below stay
+exported for back-compat and for the rare case where the DSL
+doesn't model what you need (use `{ type: "raw" }` as the
+escape hatch).
+:::
+
 Three pure functions that return SVG fragments as strings. Combine
 them with string concatenation:
 

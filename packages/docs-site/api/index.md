@@ -13,8 +13,14 @@ any patch release.
   factory for the headless annotator.
 - [**Playwright fixture**](./playwright-fixture.md) —
   the `test.extend({ annotator })` surface.
-- [**SVG helpers**](./svg-helpers.md) —
-  `rectForBoundingBox`, `arrowBetween`, `textAt`.
+- [**Annotation DSL**](./dsl.md) — typed JSON vocabulary
+  (`rect` / `circle` / `arrow` / `text` / `callout` / `raw`)
+  shared by the annotator, the Playwright fixture, and the MCP
+  server. **Recommended starting point for new code.**
+- [**SVG helpers**](./svg-helpers.md) — low-level fragment
+  builders (`rectForBoundingBox`, `arrowBetween`, `textAt`).
+  Useful when the DSL doesn't cover what you need; otherwise
+  prefer the DSL.
 
 ## Stability commitments
 
