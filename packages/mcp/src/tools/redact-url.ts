@@ -5,11 +5,15 @@
 import { writeFile } from "node:fs/promises";
 import { isAbsolute } from "node:path";
 
+import type { EncodeOptions } from "@ingcreators/annot-annotator";
+
 import { capturePage, type ViewportOptions } from "../browser/capture.js";
 import type { BrowserPool } from "../browser/pool.js";
 import { resolveLocator } from "../browser/resolve-locator.js";
-import { LOCATOR_REDACT_REGION_SCHEMA, SHARED_DEFS } from "../dsl/schema.js";
+import { ENCODE_OPTIONS_SCHEMA, LOCATOR_REDACT_REGION_SCHEMA, SHARED_DEFS } from "../dsl/schema.js";
 import type { BBox, LocatorRedactRegion, RedactStyle } from "../dsl/types.js";
+import { applyEncodeOptions } from "../io/encode-output.js";
+import { readPngDimensions } from "../io/png-dimensions.js";
 import { burnRedactions, type RedactRegion } from "../redact/burn.js";
 import type { AnnotateToolResult } from "./annotate-screenshot.js";
 
@@ -48,10 +52,12 @@ export const redactUrlTool = {
         default: "load",
       },
       output: { type: "string" },
+      encode: { $ref: "#/$defs/EncodeOptions" },
     },
     $defs: {
       ...SHARED_DEFS,
       LocatorRedactRegion: LOCATOR_REDACT_REGION_SCHEMA,
+      EncodeOptions: ENCODE_OPTIONS_SCHEMA,
     },
   },
 } as const;
@@ -67,6 +73,7 @@ interface RedactUrlInput {
   fullPage?: unknown;
   waitFor?: unknown;
   output?: unknown;
+  encode?: unknown;
 }
 
 class InvalidRedactUrlInputError extends Error {
@@ -102,18 +109,22 @@ export async function handleRedactUrl(
       await capture.handle.close();
     }
     const redactedBytes = await burnRedactions(capture.pngBytes, resolvedRegions);
+    const captureDims = readPngDimensions(capture.pngBytes);
+    const encoded = await applyEncodeOptions(redactedBytes, captureDims, params.encode);
 
     if (params.output) {
-      await writeFile(params.output, redactedBytes);
+      await writeFile(params.output, encoded.bytes);
+      const reasonSuffix = encoded.reason ? `, reason: ${encoded.reason}` : "";
       return {
         content: [
           {
             type: "text",
             text:
-              `Wrote ${redactedBytes.byteLength}-byte redacted PNG to ${params.output} ` +
-              `(${params.regions.length} region${
+              `Wrote ${encoded.bytes.byteLength}-byte redacted ${encoded.chosen.toUpperCase()} to ${params.output} ` +
+              `(${encoded.width}×${encoded.height}, ` +
+              `${params.regions.length} region${
                 params.regions.length === 1 ? "" : "s"
-              }, captured from ${params.url}).`,
+              }, captured from ${params.url}${reasonSuffix}).`,
           },
         ],
       };
@@ -123,11 +134,11 @@ export async function handleRedactUrl(
         {
           type: "image",
           data: Buffer.from(
-            redactedBytes.buffer,
-            redactedBytes.byteOffset,
-            redactedBytes.byteLength,
+            encoded.bytes.buffer,
+            encoded.bytes.byteOffset,
+            encoded.bytes.byteLength,
           ).toString("base64"),
-          mimeType: "image/png",
+          mimeType: encoded.mimeType,
         },
       ],
     };
@@ -150,6 +161,7 @@ interface ParsedInput {
   fullPage: boolean;
   waitFor: "load" | "domcontentloaded" | "networkidle";
   output: string | undefined;
+  encode: Partial<EncodeOptions> | undefined;
 }
 
 function parseInput(input: RedactUrlInput): ParsedInput {
@@ -188,7 +200,16 @@ function parseInput(input: RedactUrlInput): ParsedInput {
     }
     output = input.output;
   }
-  return { url: input.url, regions, viewport, fullPage, waitFor, output };
+
+  let encode: Partial<EncodeOptions> | undefined;
+  if (input.encode !== undefined) {
+    if (typeof input.encode !== "object" || input.encode === null) {
+      throw new InvalidRedactUrlInputError("`encode` must be an object when provided.");
+    }
+    encode = input.encode as Partial<EncodeOptions>;
+  }
+
+  return { url: input.url, regions, viewport, fullPage, waitFor, output, encode };
 }
 
 async function resolveRegionBbox(

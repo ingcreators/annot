@@ -144,6 +144,55 @@ export const LOCATOR_ANNOTATION_SCHEMA = {
   oneOf: [LOCATOR_RECT, LOCATOR_CIRCLE, LOCATOR_ARROW, LOCATOR_TEXT, LOCATOR_CALLOUT, RAW],
 };
 
+// ─── Encode options schema ──────────────────────────────────────
+//
+// Optional `encode` block on every tool that emits an image.
+// All fields default to `DEFAULT_ENCODE_OPTIONS` from
+// `@ingcreators/annot-annotator` when the agent omits them.
+
+export const ENCODE_OPTIONS_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    format: {
+      type: "string",
+      enum: ["smart", "png", "jpeg"],
+      description:
+        "Encoding strategy. `smart` (default) picks PNG-8 for UI-heavy " +
+        "content and PNG-32 / JPEG for photo-heavy content per " +
+        "`smartFallback`. `png` forces PNG-32 (lossless). `jpeg` forces " +
+        "JPEG at `jpegPercent` quality.",
+    },
+    saveSizePreset: {
+      type: "string",
+      enum: ["light", "standard", "highQuality", "original"],
+      description:
+        "Max-width cap. `light` = 1280px, `standard` = 1920px (default), " +
+        "`highQuality` = 2560px, `original` = no resize. Aspect-preserving; " +
+        "never upscales.",
+    },
+    smartFallback: {
+      type: "string",
+      enum: ["png", "jpeg"],
+      description:
+        "Fallback format used by smart mode when the image is photo-heavy. " + "Default `png`.",
+    },
+    smartColorThreshold: {
+      type: "integer",
+      minimum: 1,
+      description:
+        "Unique-colour count above which smart mode treats the image as " +
+        "photo-heavy. Default 15000.",
+    },
+    jpegPercent: {
+      type: "integer",
+      minimum: 60,
+      maximum: 100,
+      description: "JPEG quality 60–100. Default 92.",
+    },
+  },
+};
+
 // ─── Locator redact region schema ────────────────────────────────
 
 export const LOCATOR_REDACT_REGION_SCHEMA = {

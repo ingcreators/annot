@@ -9,6 +9,9 @@ import {
   type BboxAnnotation,
   bboxAnnotationsToSvg,
   createAnnotator,
+  DEFAULT_ENCODE_OPTIONS,
+  decodeAndEncodeImage,
+  type EncodeOptions,
 } from "@ingcreators/annot-annotator";
 import { test as base } from "@playwright/test";
 
@@ -46,8 +49,23 @@ export interface PageLike {
  *     `intent` shorthand mapping to design-system colours.
  */
 export type AnnotateScreenshotOptions =
-  | { annotationsSvg: string; annotations?: never; fullPage?: boolean }
-  | { annotations: readonly BboxAnnotation[]; annotationsSvg?: never; fullPage?: boolean };
+  | {
+      annotationsSvg: string;
+      annotations?: never;
+      fullPage?: boolean;
+      /** Optional encoder settings (since 0.3.0). When omitted the
+       *  fixture emits PNG-32 verbatim (matches 0.1.x / 0.2.x
+       *  behaviour). When set, the annotated bytes go through
+       *  `decodeAndEncodeImage()` for `format` / `saveSizePreset`
+       *  application. */
+      encode?: Partial<EncodeOptions>;
+    }
+  | {
+      annotations: readonly BboxAnnotation[];
+      annotationsSvg?: never;
+      fullPage?: boolean;
+      encode?: Partial<EncodeOptions>;
+    };
 
 export interface PlaywrightAnnotator {
   raw: Annotator;
@@ -92,12 +110,18 @@ export async function annotateScreenshot(
     "annotations" in opts && opts.annotations !== undefined
       ? bboxAnnotationsToSvg(opts.annotations)
       : (opts.annotationsSvg ?? "");
-  return annotator.toPng({
+  const annotatedPng = annotator.toPng({
     originalDataUrl: dataUrl,
     annotationsSvg,
     width,
     height,
   });
+  if (!opts.encode || Object.keys(opts.encode).length === 0) {
+    return annotatedPng;
+  }
+  const encodeOptions: EncodeOptions = { ...DEFAULT_ENCODE_OPTIONS, ...opts.encode };
+  const result = await decodeAndEncodeImage(annotatedPng, encodeOptions);
+  return result.bytes;
 }
 
 /**
