@@ -1,0 +1,67 @@
+{
+  "name": "@ingcreators/annot-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Model Context Protocol server exposing the Annot headless annotator as agent-callable tools. Drop into Claude Desktop / Claude Code / Cursor and let an AI agent compose Annot with @playwright/mcp + GitHub MCP for one-turn bug-report autopilot, visual-diff PR review, and locator-first annotation workflows.",
+  "license": "Apache-2.0",
+  "author": "ingcreators",
+  "homepage": "https://github.com/ingcreators/annot/tree/main/packages/mcp#readme",
+  "bugs": {
+    "url": "https://github.com/ingcreators/annot/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ingcreators/annot.git",
+    "directory": "packages/mcp"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "annotation",
+    "screenshot",
+    "ai-agent",
+    "playwright",
+    "claude",
+    "svg",
+    "png"
+  ],
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "bin": {
+    "annot-mcp": "./bin/annot-mcp.mjs"
+  },
+  "files": [
+    "bin",
+    "dist",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    }
+  },
+  "scripts": {
+    "build": "vite build",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.0",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vite-plugin-dts": "^5.0.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  }
+}

@@ -1,6 +1,7 @@
 # Annot MCP server — AI agent integration
 
-> **Status:** Draft — discussion stage, no implementation work yet.
+> **Status:** In progress — Phase 1 scaffold landing in the PR
+>   that introduces this status flip.
 > **Compatibility:** Builds on the headless-annotator track —
 >   [`_done/annot-annotator-package.md`](./_done/annot-annotator-package.md)
 >   (Phase 1) provides `createAnnotator()`, and
