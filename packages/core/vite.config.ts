@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [
     // Emit `.d.ts` files alongside the JS bundle. Needed for the
     // first npm publish (Phase 6 of `annot-cloud-roadmap.md` /
-    // `headless-annotator-publish.md`): TypeScript consumers
+    // `_done/headless-annotator-publish.md`): TypeScript consumers
     // installing `@ingcreators/annot-core` expect typings in the
     // shipped tarball.
     dts({

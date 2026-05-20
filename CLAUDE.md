@@ -98,7 +98,7 @@ packages/
                 true` in the workspace; Phase 3 of the
                 headless-annotator track flips it to a published
                 package — see
-                `docs/plans/headless-annotator-publish.md`.
+                `docs/plans/_done/headless-annotator-publish.md`.
                 Phase 0 spike landed via
                 `docs/plans/_done/headless-annotator-spike.md`;
                 Phase 1 public API via
@@ -140,7 +140,7 @@ packages/
                 (Node-only, no DOM). Currently `private: true`;
                 first npm publish is Phase 8 of the plan, which
                 piggy-backs on
-                `docs/plans/headless-annotator-publish.md`'s
+                `docs/plans/_done/headless-annotator-publish.md`'s
                 Changesets pipeline. PPTX export (Phase 6 of the
                 plan) deferred indefinitely pending the
                 pptx-export `ImageRecord[]`-driven refactor noted
