@@ -326,6 +326,9 @@ The agent sees these as MCP tool errors and can correct + retry.
 
 ## See also
 
+- [`docs/ai-agents.md`](../../docs/ai-agents.md) — short intro
+  guide + "which doc do I want?" map; start here if you're new
+  to the MCP integration.
 - [`docs/plans/agent-mcp-integration.md`](../../docs/plans/agent-mcp-integration.md)
   — full design + phase ledger.
 - [`@ingcreators/annot-annotator`](../annotator/README.md) — the
