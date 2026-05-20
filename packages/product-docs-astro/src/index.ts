@@ -12,6 +12,14 @@ export {
   createMemoryCache,
   RENDER_PIPELINE_VERSION,
 } from "./cache.js";
+export type {
+  GraphDirection,
+  GraphEdge,
+  Match,
+  OverlayIntent,
+  ScreenListEntry,
+  TransitionEntry,
+} from "./components/types.js";
 
 export type { ProductDocsIntegrationOptions } from "./integration.js";
 export { productDocsIntegration } from "./integration.js";

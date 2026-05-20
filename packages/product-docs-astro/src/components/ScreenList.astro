@@ -1,0 +1,58 @@
+---
+// `<ScreenList>` — auto-enumerated list of every `role: screen`
+// MDX in the same `book`.
+//
+// MDX usage (inside a `role: list` doc):
+//   <ScreenList book="Screen spec" sort="byId" entries={...} />
+//
+// The `entries` prop is normally populated by the Astro
+// integration's `astro:config:setup` walker (Phase 4 polish).
+// Until that's wired up, callers pass `entries` explicitly so
+// the component renders deterministically in tests and in
+// dev-mode-without-build.
+
+export interface ScreenListEntry {
+  id: string;
+  title?: string;
+  href?: string;
+  order?: number;
+}
+
+interface Props {
+  book?: string;
+  sort?: "byId" | "byOrder" | "byFilePath";
+  entries: ScreenListEntry[];
+}
+const { book, sort = "byId", entries } = Astro.props;
+
+const sortedEntries = [...entries].sort((a, b) => {
+  if (sort === "byOrder") {
+    return (a.order ?? 100) - (b.order ?? 100);
+  }
+  // byId / byFilePath both fall back to alphabetical for
+  // determinism.
+  return a.id.localeCompare(b.id);
+});
+---
+<table class="annot-screen-list" data-book={book} data-sort={sort}>
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>Screen</th>
+    </tr>
+  </thead>
+  <tbody>
+    {sortedEntries.map((entry) => (
+      <tr data-screen-id={entry.id}>
+        <td>{entry.id}</td>
+        <td>
+          {entry.href ? (
+            <a href={entry.href}>{entry.title ?? entry.id}</a>
+          ) : (
+            <span>{entry.title ?? entry.id}</span>
+          )}
+        </td>
+      </tr>
+    ))}
+  </tbody>
+</table>

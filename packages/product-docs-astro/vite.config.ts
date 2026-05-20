@@ -1,6 +1,27 @@
+import { cpSync, mkdirSync } from "fs";
 import { resolve } from "path";
-import { defineConfig } from "vite";
+import { defineConfig, type PluginOption } from "vite";
 import dts from "vite-plugin-dts";
+
+// Copy the `.astro` component source files verbatim into
+// `dist/components/`. Vite only processes JS/TS in library mode
+// and Astro itself is the compiler for `.astro` files at the
+// consumer's build step, so we ship the source as-is.
+function copyAstroComponents(): PluginOption {
+  return {
+    name: "annot-product-docs-astro:copy-components",
+    apply: "build",
+    writeBundle() {
+      const src = resolve(__dirname, "src/components");
+      const dst = resolve(__dirname, "dist/components");
+      mkdirSync(dst, { recursive: true });
+      cpSync(src, dst, {
+        recursive: true,
+        filter: (file: string) => !file.endsWith(".ts") && !file.endsWith(".test.ts"),
+      });
+    },
+  };
+}
 
 // Vite library build for `@ingcreators/annot-product-docs-astro`.
 // Phase 2 of `docs/plans/living-product-docs.md`. Emits
@@ -18,6 +39,7 @@ export default defineConfig({
       include: ["src/**/*.ts"],
       exclude: ["src/**/*.test.ts", "src/**/*.test-helpers.ts"],
     }),
+    copyAstroComponents(),
   ],
   build: {
     lib: {

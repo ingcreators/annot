@@ -1,0 +1,55 @@
+---
+// `<TransitionTable>` — tabular list of every `<Transition>`
+// on the page. Pass an array of transition descriptors as the
+// `entries` prop; the table renders them with one row per
+// transition. The reader sees "trigger / event / target" as
+// columns plus a body cell with the prose.
+//
+// MDX usage:
+//   <TransitionTable
+//     entries={[
+//       { trigger: "Sign in", on: "click", to: "dashboard", body: "..." },
+//       { trigger: "Sign up", on: "click", to: "signup", body: "..." },
+//     ]}
+//   />
+//
+// The companion `<Transition>` component is the inline variant
+// for free-flowing prose. Both compile to data attributes the
+// reader CSS can style consistently.
+
+export interface TransitionEntry {
+  trigger: string;
+  on?: string;
+  to?: string;
+  body?: string;
+}
+
+interface Props {
+  entries: TransitionEntry[];
+}
+const { entries } = Astro.props;
+---
+<table class="annot-transition-table">
+  <thead>
+    <tr>
+      <th>Trigger</th>
+      <th>Event</th>
+      <th>Target</th>
+      <th>Notes</th>
+    </tr>
+  </thead>
+  <tbody>
+    {entries.map((entry) => (
+      <tr
+        data-trigger={entry.trigger}
+        data-on={entry.on}
+        data-to={entry.to}
+      >
+        <td>{entry.trigger}</td>
+        <td>{entry.on ?? "—"}</td>
+        <td>{entry.to ?? "—"}</td>
+        <td set:html={entry.body ?? ""} />
+      </tr>
+    ))}
+  </tbody>
+</table>

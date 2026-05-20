@@ -1,0 +1,50 @@
+---
+// `<Overlay>` — caption for one numbered callout on a screen.
+//
+// MDX usage:
+//   <Overlay match={{ role: "textbox", name: "Email" }}
+//            intent="required" number={1}>
+//     **Email** — enter your registered email.
+//   </Overlay>
+//
+// Build-time positioning of the visual callout on the
+// screenshot is handled by the Image Service. This component
+// emits the prose body as a `<li>` in a description list
+// alongside the screen — readers see the screenshot + a
+// numbered legend in parallel.
+
+interface Match {
+  role: string;
+  name: string;
+  under?: Match;
+}
+type Intent =
+  | "info"
+  | "warning"
+  | "error"
+  | "success"
+  | "neutral"
+  | "required"
+  | "action";
+
+interface Props {
+  match: Match;
+  intent?: Intent;
+  number?: number;
+}
+const { match, intent, number } = Astro.props;
+---
+<li
+  class="annot-overlay"
+  data-intent={intent}
+  data-overlay-number={number}
+  data-match-role={match.role}
+  data-match-name={match.name}
+>
+  {number !== undefined && (
+    <span class="annot-overlay-number" aria-hidden="true">{number}</span>
+  )}
+  <div class="annot-overlay-body">
+    <slot />
+  </div>
+</li>

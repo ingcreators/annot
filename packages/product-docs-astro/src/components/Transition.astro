@@ -1,0 +1,48 @@
+---
+// `<Transition>` — describes one screen-to-screen transition.
+//
+// MDX usage:
+//   <Transition
+//     trigger={{ role: "button", name: "Sign in" }}
+//     on="click"
+//     to="dashboard"
+//   >
+//     Successful login redirects to the dashboard.
+//   </Transition>
+//
+// Renders inline as part of the screen's prose; for a tabular
+// list of every transition on the screen, wrap in
+// `<TransitionTable>` instead.
+
+interface Match {
+  role: string;
+  name: string;
+  under?: Match;
+}
+
+interface Props {
+  trigger: Match;
+  on?: string;
+  to?: string;
+}
+const { trigger, on, to } = Astro.props;
+---
+<div
+  class="annot-transition"
+  data-trigger-role={trigger.role}
+  data-trigger-name={trigger.name}
+  data-on={on}
+  data-to={to}
+>
+  <div class="annot-transition-summary">
+    <code class="annot-transition-trigger">{trigger.name}</code>
+    {on && <span class="annot-transition-event">{on}</span>}
+    {to && (
+      <span class="annot-transition-arrow" aria-hidden="true">→</span>
+    )}
+    {to && <code class="annot-transition-target">{to}</code>}
+  </div>
+  <div class="annot-transition-body">
+    <slot />
+  </div>
+</div>
