@@ -17,6 +17,11 @@ any patch release.
   (`rect` / `circle` / `arrow` / `text` / `callout` / `raw`)
   shared by the annotator, the Playwright fixture, and the MCP
   server. **Recommended starting point for new code.**
+- [**Encode pipeline**](./encode.md) — `format: "smart"` +
+  `saveSizePreset` for PNG-8 / JPEG / resize. Optional on the
+  annotator, the Playwright fixture, and every MCP tool that
+  emits an image. Typically halves the output bytes for UI
+  screenshots.
 - [**SVG helpers**](./svg-helpers.md) — low-level fragment
   builders (`rectForBoundingBox`, `arrowBetween`, `textAt`).
   Useful when the DSL doesn't cover what you need; otherwise

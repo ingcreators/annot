@@ -104,6 +104,7 @@ export default defineConfig({
             { text: "createAnnotator", link: "/api/create-annotator" },
             { text: "Playwright fixture", link: "/api/playwright-fixture" },
             { text: "Annotation DSL", link: "/api/dsl" },
+            { text: "Encode pipeline", link: "/api/encode" },
             { text: "SVG helpers", link: "/api/svg-helpers" },
           ],
         },
@@ -132,6 +133,10 @@ export default defineConfig({
             {
               text: "Agent bug-report autopilot",
               link: "/recipes/agent-bug-report",
+            },
+            {
+              text: "Generate a manual from screenshots",
+              link: "/recipes/manual-from-screenshots",
             },
           ],
         },
