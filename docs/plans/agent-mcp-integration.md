@@ -787,11 +787,35 @@ can ship without Phase 6.
 ### Phase 8 — First npm publish (gated)
 
 Gated on [`headless-annotator-publish.md`](./headless-annotator-publish.md).
-The MCP package can ship in the same publish batch as
-`@ingcreators/annot-annotator` / `@ingcreators/annot-playwright`
-or as a follow-up — Changesets handles either. **This is the
-schema-freeze gate:** breaking changes after this PR require a
-major bump.
+**Prep work landed**: that plan's "package flips" table now lists
+`@ingcreators/annot-mcp` as a fourth publishable package, so when
+the operator runs the publish workflow with `workflow_dispatch`,
+the MCP package ships alongside `annot-core` / `annot-annotator` /
+`annot-playwright` via the same Changesets pipeline.
+
+**Remaining operator-driven steps (not autonomous):**
+
+1. Land [`headless-annotator-publish.md`](./headless-annotator-publish.md)'s
+   Vite library build wiring + per-package metadata flips +
+   `publish.yml` workflow (its Stages 1–3).
+2. Flip `packages/mcp/package.json`'s `"private": true` →
+   `"private": false`. The `publishConfig` block already contains
+   the `dist/` entry-point mapping needed for the published
+   tarball.
+3. Write a Changeset entry: `pnpm changeset` → pick
+   `@ingcreators/annot-mcp` → version `0.1.0` → describe the
+   initial publish.
+4. Run `pnpm changeset version` (rolls up the pending changesets),
+   commit the resulting version bumps + CHANGELOG entries.
+5. Trigger the publish workflow via `gh workflow run publish.yml`
+   (or the GitHub UI). The workflow runs `pnpm changeset publish`
+   under `NPM_TOKEN` for the first publish, falling back to
+   Trusted Publishing (OIDC) on subsequent releases.
+6. After the first publish succeeds, move this plan to `_done/`
+   and update [`docs/plans/README.md`](./README.md).
+
+**This is the schema-freeze gate:** breaking changes after the
+first publish require a major bump.
 
 ## Verification
 

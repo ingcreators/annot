@@ -36,13 +36,14 @@ because:
 
 ### Package flips
 
-Three packages move from `"private": true` to the published state:
+Four packages move from `"private": true` to the published state:
 
 | Package | Why it must publish | Notes |
 |---|---|---|
 | `@ingcreators/annot-core` | Transitively pulled in by `annot-annotator` (Tier A imports — `editor/svg-format` constants) | Becomes the de-facto OSS SDK surface; many downstream things assume it stable |
 | `@ingcreators/annot-annotator` | The headline package — the public API users install | |
 | `@ingcreators/annot-playwright` | The Playwright fixture package | Peer-deps `@playwright/test` |
+| `@ingcreators/annot-mcp` | MCP server for AI-agent tooling (Phase 8 of [`agent-mcp-integration.md`](./agent-mcp-integration.md) piggy-backs on this pipeline). | Deps: `@modelcontextprotocol/sdk`, `@napi-rs/canvas`, `playwright-core`, `pixelmatch`. Ships `bin: { "annot-mcp": "./bin/annot-mcp.mjs" }`. |
 
 `@ingcreators/annot-render` does NOT publish in Phase 3 — it's
 Tier C-render (browser `<canvas>` + jsdom-friendly OOXML builder),
