@@ -41,7 +41,19 @@ export default defineConfig({
       // annot-annotator and annot-core, this list grows
       // `/^@ingcreators\//` back and `annot-core` migrates from a
       // workspace devDep to a real dep with a version range.
-      external: ["@resvg/resvg-js", "@xmldom/xmldom"],
+      // `@napi-rs/canvas` (native binding) and `@ingcreators/annot-imagequant`
+      // (WASM, GPL-3.0, optional dep) MUST stay external — consumers
+      // install the platform-matched binary themselves via npm.
+      // `pako` is a runtime dep of the inlined annot-core PNG-8
+      // encoder; keep it external so we don't ship a duplicate copy
+      // in the bundle.
+      external: [
+        "@resvg/resvg-js",
+        "@xmldom/xmldom",
+        "@napi-rs/canvas",
+        "@ingcreators/annot-imagequant",
+        "pako",
+      ],
     },
   },
 });

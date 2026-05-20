@@ -75,7 +75,13 @@ function stubAnnotator(): {
   const stubPng = new Uint8Array([0xfa, 0xce, 0xfe, 0xed]);
   const toPng = vi.fn(() => stubPng);
   const toSvg = vi.fn(() => "<svg/>");
-  return { annotator: { toPng, toSvg }, toPng };
+  const toEncoded = vi.fn(async () => ({
+    bytes: stubPng,
+    chosen: "png" as const,
+    width: 0,
+    height: 0,
+  }));
+  return { annotator: { toPng, toSvg, toEncoded }, toPng };
 }
 
 describe("handleAnnotateUrl", () => {

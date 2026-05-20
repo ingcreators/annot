@@ -12,7 +12,10 @@ import {
   ANNOT_SVG_VERSION,
   ANNOT_SVG_VERSION_ATTR,
 } from "@ingcreators/annot-core/editor/svg-format";
+import type { EncodeOptions } from "@ingcreators/annot-core/encode/options";
 import { Resvg, type ResvgRenderOptions } from "@resvg/resvg-js";
+import { encodeRgba } from "./encode/encode.js";
+import type { EncodeResult } from "./encode/options.js";
 import { sanitiseAnnotationsSvg } from "./sanitise-svg.js";
 
 /**
@@ -66,16 +69,23 @@ export interface AnnotatorOptions {
 }
 
 /**
- * Annotator instance returned by {@link createAnnotator}. Use
- * `toPng` to rasterise; use `toSvg` to get the merged SVG without
- * rasterisation (useful for piping into another tool, or for
- * inspecting what the annotator would render).
+ * Annotator instance returned by {@link createAnnotator}.
+ *
+ * - {@link toPng}     synchronous rasterise → PNG-32 bytes.
+ * - {@link toSvg}     build the rasterise-ready SVG string (no
+ *                     rasterisation).
+ * - {@link toEncoded} (since 0.3.0) async rasterise + smart
+ *                     encode pipeline — `saveSizePreset` resize,
+ *                     `format: "smart" | "png" | "jpeg"` decision
+ *                     tree, PNG-8 quantization via the optional
+ *                     `@ingcreators/annot-imagequant`.
  */
 export interface Annotator {
   /**
-   * Rasterise the input to a PNG byte array. JPEG output is not
-   * yet supported — Phase 1.5 brings `sharp` as an optional peer
-   * dep.
+   * Rasterise the input to a PNG-32 byte array. Synchronous, no
+   * resize, no smart format selection — the most direct path.
+   * Use {@link toEncoded} when you need `saveSize` / format
+   * decisions.
    */
   toPng(input: AnnotatorInput): Uint8Array;
   /**
@@ -84,6 +94,21 @@ export interface Annotator {
    * the caller can feed to any other SVG tool.
    */
   toSvg(input: AnnotatorInput): string;
+  /**
+   * Rasterise + encode in one step. Honours `saveSizePreset`
+   * (max-width resize), `format` (`"smart"` / `"png"` /
+   * `"jpeg"`), and `jpegPercent`. Returns the encoded bytes plus
+   * a metadata record so the caller can log which format was
+   * actually picked.
+   *
+   * Smart mode requires `@ingcreators/annot-imagequant` to be
+   * available at runtime for PNG-8 output; the WASM ships as a
+   * regular `dependencies` entry but is dynamic-imported, so a
+   * consumer who explicitly uninstalls the package (to avoid
+   * its GPL-3.0 license) gets a graceful fallback to PNG-32
+   * with `reason: "imagequant-missing"`.
+   */
+  toEncoded(input: AnnotatorInput, encodeOptions?: EncodeOptions): Promise<EncodeResult>;
 }
 
 /**
@@ -103,6 +128,25 @@ export function createAnnotator(options: AnnotatorOptions = {}): Annotator {
     ...(options.defaultFontFamily ? { defaultFontFamily: options.defaultFontFamily } : {}),
   };
 
+  function rasterise(input: AnnotatorInput): {
+    pixels: Uint8Array;
+    width: number;
+    height: number;
+  } {
+    const svgString = buildRasterReadySvg(input);
+    const resvg = new Resvg(svgString, {
+      fitTo: { mode: "width", value: input.width },
+      background: "rgba(0, 0, 0, 0)",
+      font: resvgFontOptions,
+    });
+    const rendered = resvg.render();
+    return {
+      pixels: rendered.pixels,
+      width: rendered.width,
+      height: rendered.height,
+    };
+  }
+
   return {
     toSvg(input: AnnotatorInput): string {
       return buildRasterReadySvg(input);
@@ -115,6 +159,10 @@ export function createAnnotator(options: AnnotatorOptions = {}): Annotator {
         font: resvgFontOptions,
       });
       return resvg.render().asPng();
+    },
+    async toEncoded(input: AnnotatorInput, encodeOptions?: EncodeOptions): Promise<EncodeResult> {
+      const { pixels, width, height } = rasterise(input);
+      return encodeRgba(pixels, width, height, encodeOptions);
     },
   };
 }

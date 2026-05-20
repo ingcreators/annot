@@ -33,7 +33,13 @@ function stubAnnotator(): { annotator: Annotator; toPng: ReturnType<typeof vi.fn
   const stubPng = new Uint8Array([0xfa, 0xce, 0xfe, 0xed]);
   const toPng = vi.fn(() => stubPng);
   const toSvg = vi.fn(() => "<svg/>");
-  const annotator: Annotator = { toPng, toSvg };
+  const toEncoded = vi.fn(async () => ({
+    bytes: stubPng,
+    chosen: "png" as const,
+    width: 0,
+    height: 0,
+  }));
+  const annotator: Annotator = { toPng, toSvg, toEncoded };
   return { annotator, toPng };
 }
 

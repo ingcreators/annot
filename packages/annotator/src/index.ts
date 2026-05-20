@@ -23,6 +23,28 @@ export {
   createAnnotator,
 } from "./annotator.js";
 
+// ─── Encode pipeline (since 0.3.0) ─────────────────────────────
+//
+// Standalone `encodeRgba()` for callers who already have RGBA
+// bytes (e.g. from a Playwright screenshot + manual decode) and
+// want the smart / saveSize / jpeg decision tree without going
+// through `createAnnotator`. Use `annotator.toEncoded()` when
+// you're rasterising an annotated SVG.
+
+export { encodeRgba } from "./encode/encode.js";
+export {
+  type BrowserEncodeResult,
+  computeResizeTarget,
+  DEFAULT_ENCODE_OPTIONS,
+  type EncodeFormat,
+  type EncodeOptions,
+  type EncodeResult,
+  SAVE_SIZE_LABEL,
+  SAVE_SIZE_MAX_WIDTH,
+  type SaveSizePreset,
+} from "./encode/options.js";
+export { isImagequantAvailable, isPhotoHeavy } from "./encode/quantize.js";
+
 // ─── DSL (since 0.2.0) ──────────────────────────────────────────
 
 export {
