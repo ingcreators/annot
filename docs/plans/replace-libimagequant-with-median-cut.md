@@ -1,6 +1,6 @@
 # Replace libimagequant with a pure-TS Median Cut + FS dither quantizer
 
-> **Status:** Draft. Authored 2026-05-20 to remove Annot's only
+> **Status:** Queued. Authored 2026-05-20 to remove Annot's only
 > GPL-3.0-or-later dependency
 > ([`packages/imagequant/`](../../packages/imagequant/), the
 > in-tree wasm-bindgen wrapper around
