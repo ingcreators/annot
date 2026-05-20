@@ -34,6 +34,12 @@ import {
   annotateUrlTool,
   handleAnnotateUrl,
 } from "./tools/annotate-url.js";
+import {
+  handleRedactScreenshot,
+  REDACT_SCREENSHOT_TOOL_NAME,
+  redactScreenshotTool,
+} from "./tools/redact-screenshot.js";
+import { handleRedactUrl, REDACT_URL_TOOL_NAME, redactUrlTool } from "./tools/redact-url.js";
 
 export interface CreateServerOptions {
   /**
@@ -66,7 +72,12 @@ export interface CreateServerOptions {
 const SERVER_NAME = "annot-mcp";
 const DEFAULT_VERSION = "0.1.0";
 
-const TOOL_REGISTRY = [annotateScreenshotTool, annotateUrlTool] as const;
+const TOOL_REGISTRY = [
+  annotateScreenshotTool,
+  annotateUrlTool,
+  redactScreenshotTool,
+  redactUrlTool,
+] as const;
 
 /**
  * Construct an MCP server instance with the Annot tool surface.
@@ -103,6 +114,12 @@ export function createServer(options: CreateServerOptions = {}): Server {
         break;
       case ANNOTATE_URL_TOOL_NAME:
         result = await handleAnnotateUrl(args ?? {}, { annotator, pool });
+        break;
+      case REDACT_SCREENSHOT_TOOL_NAME:
+        result = await handleRedactScreenshot(args ?? {});
+        break;
+      case REDACT_URL_TOOL_NAME:
+        result = await handleRedactUrl(args ?? {}, { pool });
         break;
       default:
         result = {

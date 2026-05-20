@@ -43,6 +43,7 @@ export default defineConfig({
         /^@modelcontextprotocol\/sdk\//,
         /^@ingcreators\//,
         "playwright-core",
+        "@napi-rs/canvas",
         /^node:/,
       ],
     },

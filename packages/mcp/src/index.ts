@@ -85,7 +85,7 @@ export {
   type ResolvedImage,
   resolveImageInput,
 } from "./io/read-image.js";
-
+export { burnRedactions, type RedactRegion } from "./redact/burn.js";
 // Server factory + transport — embedding callers can construct
 // the server in-process instead of going through the bin.
 export { type CreateServerOptions, createServer } from "./server.js";
@@ -102,4 +102,14 @@ export {
   annotateUrlTool,
   handleAnnotateUrl,
 } from "./tools/annotate-url.js";
+export {
+  handleRedactScreenshot,
+  REDACT_SCREENSHOT_TOOL_NAME,
+  redactScreenshotTool,
+} from "./tools/redact-screenshot.js";
+export {
+  handleRedactUrl,
+  REDACT_URL_TOOL_NAME,
+  redactUrlTool,
+} from "./tools/redact-url.js";
 export { runStdioServer } from "./transport.js";
