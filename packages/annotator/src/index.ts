@@ -43,7 +43,7 @@ export {
   SAVE_SIZE_MAX_WIDTH,
   type SaveSizePreset,
 } from "./encode/options.js";
-export { isImagequantAvailable, isPhotoHeavy } from "./encode/quantize.js";
+export { isPhotoHeavy } from "./encode/quantize.js";
 
 // ─── DSL (since 0.2.0) ──────────────────────────────────────────
 

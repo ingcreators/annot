@@ -50,9 +50,6 @@ importers:
 
   packages/annotator:
     dependencies:
-      '@ingcreators/annot-imagequant':
-        specifier: workspace:*
-        version: link:../imagequant
       '@napi-rs/canvas':
         specifier: ^0.1.0
         version: 0.1.100

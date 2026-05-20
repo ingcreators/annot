@@ -1,13 +1,13 @@
 // Tests for the encode pipeline. Real `@napi-rs/canvas` roundtrips
-// for the PNG / JPEG paths; `@ingcreators/annot-imagequant` is
-// optional, so the PNG-8 path is asserted only when the WASM is
-// actually available at runtime (`isImagequantAvailable()` gates
-// the test).
+// for the PNG / JPEG paths; PNG-8 routes through the pure-TS
+// Median Cut quantizer in `@ingcreators/annot-core/encode/quantize-median-cut`
+// (post-Phase 3 of
+// `docs/plans/replace-libimagequant-with-median-cut.md`).
 
 import { describe, expect, test } from "vitest";
 
 import { encodeRgba } from "./encode.js";
-import { isImagequantAvailable, isPhotoHeavy } from "./quantize.js";
+import { isPhotoHeavy } from "./quantize.js";
 
 /** Build a synthetic RGBA buffer of solid colour. */
 function solidRgba(
@@ -146,12 +146,7 @@ describe("encodeRgba", () => {
     expect(isPngSignature(result.bytes)).toBe(true);
   });
 
-  test("smart mode quantizes to PNG-8 for UI-heavy content (when imagequant installed)", async () => {
-    const available = await isImagequantAvailable();
-    if (!available) {
-      // Skip — optional dep not installed.
-      return;
-    }
+  test("smart mode quantizes to PNG-8 for UI-heavy content", async () => {
     // Solid colour = 1 unique colour. Definitely not photo-heavy.
     const rgba = solidRgba(100, 80, 32, 64, 128);
     const result = await encodeRgba(rgba, 100, 80, {
@@ -163,23 +158,6 @@ describe("encodeRgba", () => {
     expect(result.chosen).toBe("png");
     expect(result.reason).toBe("png-8");
     expect(isPngSignature(result.bytes)).toBe(true);
-  });
-
-  test("smart mode falls back to PNG-32 when imagequant is unavailable", async () => {
-    const available = await isImagequantAvailable();
-    if (available) {
-      // Skip — imagequant IS installed; we can't simulate absence cheaply.
-      return;
-    }
-    const rgba = solidRgba(50, 40, 200, 100, 50);
-    const result = await encodeRgba(rgba, 50, 40, {
-      format: "smart",
-      smartFallback: "png",
-      smartColorThreshold: 15000,
-      jpegPercent: 92,
-    });
-    expect(result.chosen).toBe("png");
-    expect(result.reason).toBe("imagequant-missing");
   });
 });
 

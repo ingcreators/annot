@@ -1,26 +1,19 @@
-// A/B comparison between the GPL-3.0 libimagequant WASM and the
-// pure-TS Median Cut quantizer that supersedes it (Phase 1 of
-// `docs/plans/replace-libimagequant-with-median-cut.md`).
+// Quality metrics for the pure-TS Median Cut quantizer that
+// powers `Annotator.toEncoded()`'s PNG-8 path. Originally added
+// in Phase 1 of `docs/plans/replace-libimagequant-with-median-cut.md`
+// as an A/B against the libimagequant WASM; post-Phase 3 the WASM
+// path is gone and this file keeps the metrics as a quality
+// regression guard.
 //
-// The test runs both quantizers over a small synthetic fixture
-// corpus, encodes the result as PNG-8 via the shared encoder,
-// and logs per-fixture metrics (palette size, reconstruction
-// MSE, output byte size). The metrics surface in the Phase 1 PR
-// description so reviewers can compare the two backends without
-// having to run a Storybook visual diff.
-//
-// Why a `.test.ts` and not a one-off script: the metrics are
-// load-bearing for Phase 2's "flip the default" decision, so
-// running them on every PR catches regressions in the TS
-// quantizer.
-//
-// The WASM side gracefully skips when imagequant isn't
-// installed (same gate as `encode.test.ts`).
+// Each fixture runs through the full quantizer + PNG-8 encoder
+// pipeline. We log `{ palette size, PNG-8 byte length, reconstruction
+// MSE }` for surfacing in PR descriptions and assert a soft quality
+// envelope so a future algorithm change that visibly degrades
+// output fails CI.
 
 import { encodePng8 } from "@ingcreators/annot-core/encode/png8";
 import { quantizeMedianCut } from "@ingcreators/annot-core/encode/quantize-median-cut";
 import { describe, expect, test } from "vitest";
-import { isImagequantAvailable, quantizeRgbaToPng8 } from "./quantize.js";
 
 interface Fixture {
   name: string;
@@ -162,65 +155,39 @@ function reconstructionMse(source: Uint8Array, palette: Uint8Array, indices: Uin
 
 interface Metric {
   fixture: string;
-  backend: "wasm" | "median-cut";
   paletteEntries: number;
   png8Bytes: number;
   reconstructionMse: number;
 }
 
-describe("quantizer A/B comparison (Phase 1)", () => {
-  test("reports per-fixture metrics for both backends", async () => {
-    const wasmAvailable = await isImagequantAvailable();
-    console.log(`[ab] wasm available: ${wasmAvailable}`);
-
+describe("Median Cut quantizer quality metrics", () => {
+  test("per-fixture palette size, PNG-8 size, and reconstruction MSE", () => {
     const metrics: Metric[] = [];
 
     for (const fx of FIXTURES) {
-      // TS Median Cut.
-      const ts = quantizeMedianCut(fx.rgba, fx.width, fx.height, 256);
-      const tsPng8 = encodePng8(ts.palette, ts.indices, fx.width, fx.height, 9);
+      const { palette, indices } = quantizeMedianCut(fx.rgba, fx.width, fx.height, 256);
+      const png8 = encodePng8(palette, indices, fx.width, fx.height, 9);
       metrics.push({
         fixture: fx.name,
-        backend: "median-cut",
-        paletteEntries: ts.palette.length / 4,
-        png8Bytes: tsPng8.length,
-        reconstructionMse: reconstructionMse(fx.rgba, ts.palette, ts.indices),
+        paletteEntries: palette.length / 4,
+        png8Bytes: png8.length,
+        reconstructionMse: reconstructionMse(fx.rgba, palette, indices),
       });
-
-      // WASM libimagequant (skipped if not installed).
-      if (wasmAvailable) {
-        const wasmPng8 = await quantizeRgbaToPng8(fx.rgba, fx.width, fx.height);
-        expect(wasmPng8).not.toBeNull();
-        // We can't recover the raw palette + indices from the
-        // wasm path (it's bundled into the PNG already), so only
-        // the encoded size is comparable here.
-        metrics.push({
-          fixture: fx.name,
-          backend: "wasm",
-          paletteEntries: Number.NaN, // unknown — emit-only path
-          png8Bytes: wasmPng8!.length,
-          reconstructionMse: Number.NaN, // ditto
-        });
-      }
     }
 
-    // Pretty-print the metrics table so the Phase 1 PR
-    // description can quote the run output verbatim.
-    const header = "fixture          | backend     | palette | bytes  | mse";
+    // Pretty-print the metrics table so reviewers + future PRs can
+    // quote the run output verbatim.
+    const header = "fixture          | palette | bytes  | mse";
     const sep = "-".repeat(header.length);
     const rows = metrics.map((m) => {
-      const palette = Number.isNaN(m.paletteEntries)
-        ? "  ?  "
-        : String(m.paletteEntries).padStart(5);
-      const mse = Number.isNaN(m.reconstructionMse) ? "  ?  " : m.reconstructionMse.toFixed(2);
-      return `${m.fixture.padEnd(16)} | ${m.backend.padEnd(11)} | ${palette}   | ${String(m.png8Bytes).padStart(6)} | ${mse}`;
+      const palette = String(m.paletteEntries).padStart(5);
+      const mse = m.reconstructionMse.toFixed(2);
+      return `${m.fixture.padEnd(16)} | ${palette}   | ${String(m.png8Bytes).padStart(6)} | ${mse}`;
     });
     console.log(["", header, sep, ...rows, ""].join("\n"));
 
-    // Sanity assertions on the TS side only — the WASM
-    // side is exercised by `encode.test.ts` already.
+    // Quality envelope — guards against future regressions.
     for (const m of metrics) {
-      if (m.backend !== "median-cut") continue;
       expect(m.paletteEntries).toBeGreaterThan(0);
       expect(m.paletteEntries).toBeLessThanOrEqual(256);
       expect(m.png8Bytes).toBeGreaterThan(0);

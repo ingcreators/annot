@@ -77,8 +77,12 @@ export interface AnnotatorOptions {
  * - {@link toEncoded} (since 0.3.0) async rasterise + smart
  *                     encode pipeline — `saveSizePreset` resize,
  *                     `format: "smart" | "png" | "jpeg"` decision
- *                     tree, PNG-8 quantization via the optional
- *                     `@ingcreators/annot-imagequant`.
+ *                     tree, PNG-8 quantization via the in-tree
+ *                     pure-TS Median Cut + Floyd–Steinberg dither
+ *                     (post-Phase 3 of
+ *                     `docs/plans/replace-libimagequant-with-median-cut.md`;
+ *                     prior versions used the GPL-3.0
+ *                     `@ingcreators/annot-imagequant` WASM).
  */
 export interface Annotator {
   /**
@@ -101,12 +105,14 @@ export interface Annotator {
    * a metadata record so the caller can log which format was
    * actually picked.
    *
-   * Smart mode requires `@ingcreators/annot-imagequant` to be
-   * available at runtime for PNG-8 output; the WASM ships as a
-   * regular `dependencies` entry but is dynamic-imported, so a
-   * consumer who explicitly uninstalls the package (to avoid
-   * its GPL-3.0 license) gets a graceful fallback to PNG-32
-   * with `reason: "imagequant-missing"`.
+   * Smart mode emits PNG-8 (via the in-tree Median Cut +
+   * Floyd–Steinberg dither at
+   * `@ingcreators/annot-core/encode/quantize-median-cut`) for
+   * UI-heavy content, falling back to PNG-32 / JPEG for
+   * photo-heavy content per `smartFallback`. PNG-8 is
+   * unconditionally available since Phase 3 of
+   * `docs/plans/replace-libimagequant-with-median-cut.md`
+   * retired the optional GPL-3.0 imagequant WASM dependency.
    */
   toEncoded(input: AnnotatorInput, encodeOptions?: EncodeOptions): Promise<EncodeResult>;
 }
