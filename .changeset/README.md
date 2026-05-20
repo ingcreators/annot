@@ -1,24 +1,28 @@
 # Changesets
 
 This repo uses [Changesets](https://github.com/changesets/changesets)
-to manage versioning + changelogs for the **three publishable npm
+to manage versioning + changelogs for the **five publishable npm
 packages**:
 
 - `@ingcreators/annot-core`
 - `@ingcreators/annot-annotator`
 - `@ingcreators/annot-playwright`
+- `@ingcreators/annot-mcp`
+- `@ingcreators/annot-imagequant` (GPL-3.0; auto-installed as a
+  regular `dependencies` entry of `annot-annotator` for the
+  PNG-8 path of the smart encoder)
 
 Every other workspace package (`annot-web`, `annot-extension`,
 `annot-desktop`, `annot-vscode`, `annot-worker`, `annot-host-ui`,
 `annot-editor`, `annot-render`, `annot-doc`, `annot-capture`,
-`annot-cloud-store`, `annot-imagequant`) is either an end-user
-app (hosts) or an internal library that doesn't ship to npm —
-those are listed under `ignore` in `config.json` and Changesets
-silently skips them.
+`annot-cloud-store`) is either an end-user app (hosts) or an
+internal library that doesn't ship to npm — those are listed
+under `ignore` in `config.json` and Changesets silently skips
+them.
 
 ## When you need a changeset
 
-PRs that touch one of the three publishable packages above
+PRs that touch one of the five publishable packages above
 need a changeset entry so the next publish picks them up. PRs
 that only touch the ignored packages (host apps, internal
 libraries, docs, tooling) **don't** need a changeset.
@@ -35,11 +39,11 @@ pnpm changeset
 
 Walk through the prompts:
 
-1. **Pick affected packages.** Pre-publish (before the first npm
-   release), every change to one of the three publishable
-   packages is a `patch` (no risk of breaking external consumers
-   because there aren't any yet). Post-publish, choose
-   `patch` / `minor` / `major` per semver.
+1. **Pick affected packages.** All five publishable packages
+   are now on npm (since 2026-05-19 / 2026-05-20); choose
+   `patch` / `minor` / `major` per semver. `major` is unusual
+   pre-1.0 — breaking changes can land in a `minor` bump until
+   each package reaches `1.0.0`.
 2. **Write a one-line description.** What changed, observable
    from a consumer's perspective. Internal refactors with no
    API change can be a single-line "internal refactor — no

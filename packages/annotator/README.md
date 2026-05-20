@@ -129,7 +129,7 @@ See also:
 - [`docs/plans/_done/headless-annotator-spike.md`](../../docs/plans/_done/headless-annotator-spike.md)
   — Phase 0 feasibility report (`@resvg/resvg-js` vs
   `@napi-rs/canvas` trade-offs; documented gaps).
-- [`docs/plans/annot-annotator-package.md`](../../docs/plans/annot-annotator-package.md)
+- [`docs/plans/_done/annot-annotator-package.md`](../../docs/plans/_done/annot-annotator-package.md)
   — Phase 1 design + rationale for the public API shape.
 - [`PRODUCT_DIRECTION.md`](../../PRODUCT_DIRECTION.md) — strategic
   context (Playwright + GitHub vectors).

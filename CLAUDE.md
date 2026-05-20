@@ -85,7 +85,8 @@ packages/
                 the third-party `@panda-ai/imagequant` npm package
                 for supply-chain reasons; see
                 `docs/plans/_done/vendor-libimagequant.md`.
-                npm name: @ingcreators/annot-imagequant (private)
+                npm name: @ingcreators/annot-imagequant
+                (published 2026-05-20; GPL-3.0)
   annotator/    Headless annotator — Node-side `renderImageRecord`
                 replacement built on `@resvg/resvg-js`. Tier A
                 (pure Node, no DOM). Public API
@@ -103,7 +104,8 @@ packages/
                 `docs/plans/_done/headless-annotator-spike.md`;
                 Phase 1 public API via
                 `docs/plans/_done/annot-annotator-package.md`.
-                npm name: @ingcreators/annot-annotator (private)
+                npm name: @ingcreators/annot-annotator
+                (published 2026-05-19; current 0.3.0)
   playwright/   Playwright fixture composing `annot-annotator` into
                 idiomatic `test.extend({ annotator })` form.
                 Callers `import { test, expect, rectForBoundingBox
@@ -119,7 +121,8 @@ packages/
                 Currently `private: true`; same Phase 3 publish
                 gate. See
                 `docs/plans/_done/annot-playwright-fixture.md`.
-                npm name: @ingcreators/annot-playwright (private)
+                npm name: @ingcreators/annot-playwright
+                (published 2026-05-19; current 0.3.0)
   mcp/          Model Context Protocol stdio server exposing the
                 headless annotator as agent-callable tools. Five
                 tools at v1: `annot_annotate_screenshot` + paired
@@ -146,7 +149,8 @@ packages/
                 pptx-export `ImageRecord[]`-driven refactor noted
                 under "Tier C-render" in section 2. See
                 `docs/plans/agent-mcp-integration.md`.
-                npm name: @ingcreators/annot-mcp (private)
+                npm name: @ingcreators/annot-mcp
+                (published 2026-05-20; current 0.2.0)
 ```
 
 Naming convention: **`@ingcreators/annot-<role>`** for every package.
