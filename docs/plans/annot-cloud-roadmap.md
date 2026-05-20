@@ -147,7 +147,7 @@ Annual billing: -2 months (~17% discount).
 ```
 packages/
   core/, editor/, render/, host-ui/, web/, extension/,
-  desktop/, vscode/, imagequant/, annotator/, playwright/     ← existing
+  desktop/, vscode/, annotator/, playwright/, mcp/            ← existing
   worker/         ← Phase 2: GitHub OAuth + GitHub App + webhook +
                     auth + AnnotCloudStore API endpoints
   cloud-store/    ← Phase 4: client-side AnnotCloudStore

@@ -77,16 +77,6 @@ packages/
                 and
                 `docs/plans/_done/desktop-electron-migration.md`.
                 npm name: @ingcreators/annot-desktop
-  imagequant/   In-tree wasm-bindgen wrapper around upstream
-                ImageOptim/libimagequant. Tier A from the runtime
-                tier model (the JS glue is pure, the .wasm has no
-                DOM access; runs identically in browser, web worker,
-                extension service worker, and Node test). Replaces
-                the third-party `@panda-ai/imagequant` npm package
-                for supply-chain reasons; see
-                `docs/plans/_done/vendor-libimagequant.md`.
-                npm name: @ingcreators/annot-imagequant
-                (published 2026-05-20; GPL-3.0)
   annotator/    Headless annotator — Node-side `renderImageRecord`
                 replacement built on `@resvg/resvg-js`. Tier A
                 (pure Node, no DOM). Public API

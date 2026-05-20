@@ -12,7 +12,7 @@
  *         Median Cut + Floyd–Steinberg dither implementation (see
  *         {@link quantizeMedianCut}) and emit a true PNG-8 palette file.
  *
- * Phase 2 of `docs/plans/replace-libimagequant-with-median-cut.md`
+ * Phase 2 of `docs/plans/_done/replace-libimagequant-with-median-cut.md`
  * switched the default quantizer from libimagequant (GPL-3.0 WASM)
  * to the pure-TS implementation. The WASM is no longer initialised
  * from this module — Phase 4 deletes the workspace package entirely.

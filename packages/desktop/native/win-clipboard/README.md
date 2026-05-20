@@ -57,9 +57,11 @@ bash scripts/verify-addon.sh
 ```
 
 `scripts/verify-addon.sh` is byte-exact: a single byte of drift
-fails. The model mirrors `packages/imagequant/scripts/verify-wasm.sh` —
-same supply-chain rationale (a tampered binary can't slip past
-review because CI rebuilds from source).
+fails. The model mirrors the (now-retired) `verify-wasm` gate
+that protected the `@ingcreators/annot-imagequant` WASM blob
+before that package was removed — same supply-chain rationale (a
+tampered binary can't slip past review because CI rebuilds from
+source).
 
 ### Updating the prebuild
 
@@ -75,9 +77,8 @@ When the addon source changes, push the PR and let
 3. Replace `prebuilds/win-clipboard.win32-x64.node` with the
    downloaded file and push the update commit. CI will pass.
 
-This handshake mirrors how a contributor on a non-canonical OS
-updates the imagequant `pkg/` — the local build is fine for
-quick iteration, but the committed artefact must match CI.
+The local build is fine for quick iteration, but the committed
+artefact must match CI.
 
 ## Distribution
 
@@ -102,7 +103,7 @@ back to the in-repo path under `native/win-clipboard/prebuilds/`.
 `napi-build`, and `windows`. The verify-build gate is a byte
 equivalence check — any transitive bump that changes the
 generated DLL would fail the CI job until someone deliberately
-re-runs `build-addon.sh` and commits the new prebuild. This is
-the same supply-chain stance the `imagequant` crate takes; see
-`docs/plans/_done/vendor-libimagequant.md` for the original
-rationale.
+re-runs `build-addon.sh` and commits the new prebuild. The
+original supply-chain rationale for this byte-exact verification
+model is documented in
+`docs/plans/_done/vendor-libimagequant.md`.

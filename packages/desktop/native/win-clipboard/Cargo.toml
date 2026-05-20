@@ -10,11 +10,10 @@ repository = "https://github.com/ingcreators/annot"
 [lib]
 crate-type = ["cdylib"]
 
-# Versions are pinned EXACTLY (`=x.y.z`) on purpose, mirroring
-# `packages/imagequant/Cargo.toml`. The pre-built `.node` binary
-# is committed to the repo and CI re-builds + diffs against it
-# (see `scripts/verify-addon.sh`); transitive drift would break
-# the byte-equivalence gate.
+# Versions are pinned EXACTLY (`=x.y.z`) on purpose. The pre-built
+# `.node` binary is committed to the repo and CI re-builds + diffs
+# against it (see `scripts/verify-addon.sh`); transitive drift would
+# break the byte-equivalence gate.
 [dependencies]
 napi = { version = "=3.8.6", default-features = false, features = ["napi6"] }
 napi-derive = "=3.5.5"
@@ -28,9 +27,9 @@ windows = { version = "=0.62.2", features = [
 napi-build = "=2.3.1"
 
 # Reproducible release profile: optimize for size, single codegen
-# unit, strip debug symbols, abort on panic. Matches the imagequant
-# crate so the binary stays as small + as deterministic as possible
-# for the verify-build supply-chain gate.
+# unit, strip debug symbols, abort on panic. The binary stays as
+# small + as deterministic as possible for the verify-build
+# supply-chain gate.
 [profile.release]
 opt-level = "z"
 lto = true

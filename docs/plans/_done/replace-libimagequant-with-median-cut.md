@@ -1,5 +1,23 @@
 # Replace libimagequant with a pure-TS Median Cut + FS dither quantizer
 
+> **Status:** Done (2026-05-20). All four phases landed via PRs
+> [#858](https://github.com/ingcreators/annot/pull/858) (Phase 1 —
+> TS quantizer + feature flag + A/B harness),
+> [#859](https://github.com/ingcreators/annot/pull/859) (Phase 2 —
+> flip client-capture default),
+> [#860](https://github.com/ingcreators/annot/pull/860) (Phase 3 —
+> retire the annotator / MCP dynamic-import path), and the Phase 4
+> PR that deletes `packages/imagequant/`, removes the `verify-wasm`
+> CI job + dependabot entry + issue-template option, and prunes
+> the now-stale references from CLAUDE.md +
+> `.changeset/README.md`. The published
+> `@ingcreators/annot-imagequant@0.1.0` is deprecated on npm via
+> the Phase 4 operator action; the package is no longer maintained.
+>
+> **Original draft preserved below for history.**
+
+---
+
 > **Status:** Queued. Authored 2026-05-20 to remove Annot's only
 > GPL-3.0-or-later dependency
 > ([`packages/imagequant/`](../../packages/imagequant/), the

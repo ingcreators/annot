@@ -30,7 +30,6 @@ body:
         - "@ingcreators/annot-capture"
         - "@ingcreators/annot-annotator (headless / Node)"
         - "@ingcreators/annot-playwright (fixture)"
-        - "@ingcreators/annot-imagequant"
         - "docs / plans"
         - "build / CI tooling"
         - "I don't know"

@@ -1,5 +1,16 @@
 # Vendor libimagequant — replace `@panda-ai/imagequant`
 
+> **Superseded** (2026-05-20) by
+> [`replace-libimagequant-with-median-cut.md`](./replace-libimagequant-with-median-cut.md).
+> The supply-chain rationale that motivated the in-tree WASM
+> wrap still holds, but the proprietary `annot-cloud`
+> distribution requirement made the GPL-3.0-or-later licence of
+> the wrapped libimagequant a blocker. A pure-TS Median Cut
+> quantizer covers Annot's `isPhotoHeavy`-filtered UI-screenshot
+> workload at acceptable quality with zero GPL contamination,
+> so `packages/imagequant/` has been deleted and the published
+> `@ingcreators/annot-imagequant@0.1.0` is deprecated on npm.
+
 > **Status:** Done (2026-04-27). All five phases landed via PRs
 > [#239](https://github.com/ingcreators/annot/pull/239) (Phase 1),
 > [#240](https://github.com/ingcreators/annot/pull/240) (Phase 2),

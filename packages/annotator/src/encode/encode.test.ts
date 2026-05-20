@@ -2,7 +2,7 @@
 // for the PNG / JPEG paths; PNG-8 routes through the pure-TS
 // Median Cut quantizer in `@ingcreators/annot-core/encode/quantize-median-cut`
 // (post-Phase 3 of
-// `docs/plans/replace-libimagequant-with-median-cut.md`).
+// `docs/plans/_done/replace-libimagequant-with-median-cut.md`).
 
 import { describe, expect, test } from "vitest";
 
