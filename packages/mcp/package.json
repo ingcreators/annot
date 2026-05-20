@@ -63,6 +63,7 @@
   },
   "dependencies": {
     "@ingcreators/annot-annotator": "workspace:*",
-    "@modelcontextprotocol/sdk": "^1.0.0"
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "playwright-core": "^1.50.0"
   }
 }
