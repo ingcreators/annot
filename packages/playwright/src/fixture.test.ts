@@ -101,6 +101,35 @@ describe("annotateScreenshot", () => {
     expect(captured[1]).toEqual({ fullPage: undefined });
   });
 
+  it("accepts the DSL flavour (annotations: BboxAnnotation[])", async () => {
+    const annotator = createAnnotator();
+    const page = makeStubPage(makePng(300, 200));
+    const result = await annotateScreenshot(annotator, page, {
+      annotations: [
+        { type: "rect", bbox: { x: 10, y: 10, width: 80, height: 60 }, intent: "error" },
+        {
+          type: "callout",
+          at: { x: 100, y: 100 },
+          targetBbox: { x: 10, y: 10, width: 80, height: 60 },
+          content: "Failing here",
+        },
+      ],
+    });
+    expect(result).toBeInstanceOf(Uint8Array);
+    expect(Array.from(result.slice(0, 8))).toEqual(Array.from(PNG_MAGIC));
+    expect(readIHDRWidth(result)).toBe(300);
+  });
+
+  it("empty DSL annotations[] renders the screenshot unchanged-ish", async () => {
+    const annotator = createAnnotator();
+    const page = makeStubPage(makePng(100, 80));
+    const result = await annotateScreenshot(annotator, page, {
+      annotations: [],
+    });
+    expect(result.length).toBeGreaterThan(100);
+    expect(readIHDRWidth(result)).toBe(100);
+  });
+
   it("throws on too-small input (sub-IHDR-length bytes)", async () => {
     const annotator = createAnnotator();
     const bogus = Buffer.from([0x89, 0x50, 0x4e, 0x47]); // 4 bytes
