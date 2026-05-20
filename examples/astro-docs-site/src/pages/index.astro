@@ -1,0 +1,28 @@
+---
+// Index landing for the docs example site.
+//
+// Real Astro docs sites would typically use content collections
+// (`getCollection("docs")`) + a routing convention to render
+// each MDX as its own page. The sample stays minimal: just lists
+// the available screens so a maintainer can click through.
+//
+// The integration's `astro:config:setup` walker (Phase 4 polish)
+// will populate the screen list automatically; until then this
+// page hard-codes the one example screen for the dogfood.
+---
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Annot Sample Docs</title>
+  </head>
+  <body>
+    <h1>Annot Sample Docs</h1>
+    <p>
+      Demonstrates <code>@ingcreators/annot-product-docs-astro</code>
+      consuming a single annotated MDX screen.
+    </p>
+    <ul>
+      <li><a href="/SC-001-login">SC-001 Login</a></li>
+    </ul>
+  </body>
+</html>
