@@ -11,6 +11,13 @@ export {
   defineConfig,
   isScreenRole,
 } from "./config.js";
+export type { Screen, ScreenCaptureOptions } from "./fixture.js";
+export {
+  captureScreen,
+  collectAttributesYaml,
+  DEFAULT_ATTR_WHITELIST,
+  test,
+} from "./fixture.js";
 export type { ParseMdxOptions } from "./mdx.js";
 export { parseMdx, parseMdxFile, updateCommentBlocks } from "./mdx.js";
 export type {
