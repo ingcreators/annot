@@ -1,19 +1,26 @@
 # Annot MCP server — AI agent integration
 
-> **Status:** Partially landed —
->   Phases 1 ([#830](https://github.com/ingcreators/annot/pull/830)) /
->   2 ([#831](https://github.com/ingcreators/annot/pull/831)) /
->   3a ([#832](https://github.com/ingcreators/annot/pull/832)) /
->   3b ([#833](https://github.com/ingcreators/annot/pull/833)) /
->   4 ([#834](https://github.com/ingcreators/annot/pull/834)) /
->   5 ([#835](https://github.com/ingcreators/annot/pull/835)) /
->   7 (this PR) landed. Five tools live:
->   `annot_annotate_screenshot`, `annot_annotate_url`,
->   `annot_redact_screenshot`, `annot_redact_url`,
->   `annot_compare_screenshots`. Phase 6 (PPTX export) deferred
->   indefinitely pending the pptx-export `ImageRecord[]`-driven
->   refactor in CLAUDE.md §2; Phase 8 (first npm publish) gated
->   on [`headless-annotator-publish.md`](./headless-annotator-publish.md).
+> **Status:** Done — landed across 12 PRs:
+>   Phase 0 plan [#829](https://github.com/ingcreators/annot/pull/829),
+>   Phase 1 [#830](https://github.com/ingcreators/annot/pull/830),
+>   Phase 2 [#831](https://github.com/ingcreators/annot/pull/831),
+>   Phase 3a [#832](https://github.com/ingcreators/annot/pull/832),
+>   Phase 3b [#833](https://github.com/ingcreators/annot/pull/833),
+>   Phase 4 [#834](https://github.com/ingcreators/annot/pull/834),
+>   Phase 5 [#835](https://github.com/ingcreators/annot/pull/835),
+>   Phase 7 [#836](https://github.com/ingcreators/annot/pull/836),
+>   Phase 8 prep [#837](https://github.com/ingcreators/annot/pull/837),
+>   Stage 2 unprivate [#840](https://github.com/ingcreators/annot/pull/840),
+>   publish.yml update [#842](https://github.com/ingcreators/annot/pull/842),
+>   release 0.1.0 [#843](https://github.com/ingcreators/annot/pull/843).
+>   First npm publish completed 2026-05-20: `@ingcreators/annot-mcp@0.1.0`
+>   ships five agent-callable tools (`annot_annotate_screenshot`,
+>   `annot_annotate_url`, `annot_redact_screenshot`,
+>   `annot_redact_url`, `annot_compare_screenshots`). Phase 6
+>   (`annot_export_pptx`) remains deferred indefinitely pending the
+>   pptx-export `ImageRecord[]`-driven refactor in CLAUDE.md §2 —
+>   a future plan can pick it up additively without re-opening this
+>   one.
 > **Compatibility:** Builds on the headless-annotator track —
 >   [`_done/annot-annotator-package.md`](./_done/annot-annotator-package.md)
 >   (Phase 1) provides `createAnnotator()`, and

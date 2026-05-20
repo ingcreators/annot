@@ -8,7 +8,7 @@
 >   interfaces already in
 >   [`packages/mcp/src/browser/`](../../packages/mcp/src/browser/)
 >   that landed with
->   [`_done/`-ish `agent-mcp-integration.md`](./agent-mcp-integration.md)
+>   [`_done/agent-mcp-integration.md`](./_done/agent-mcp-integration.md)
 >   Phase 3a. No DSL or tool-schema changes; the agent-facing
 >   surface stays identical.
 > **Risk:** Low. The MCP package's tools already abstract on
@@ -19,7 +19,7 @@
 
 ## Why this plan exists
 
-[`agent-mcp-integration.md`](./agent-mcp-integration.md) shipped
+[`_done/agent-mcp-integration.md`](./_done/agent-mcp-integration.md) shipped
 five MCP tools, two of which (`annot_annotate_url` /
 `annot_redact_url`) drive a headless browser via `playwright-core`.
 The decision to bundle `playwright-core` was deliberate — locator
@@ -282,7 +282,7 @@ generated.
 
 ## References
 
-- [`agent-mcp-integration.md`](./agent-mcp-integration.md) —
+- [`_done/agent-mcp-integration.md`](./_done/agent-mcp-integration.md) —
   parent plan; this is its v0.2.x follow-up.
 - [`packages/mcp/src/browser/`](../../packages/mcp/src/browser/)
   — the structural interfaces that make this plan cheap.
