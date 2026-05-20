@@ -67,7 +67,7 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "astro": "^5.0.0",
+    "astro": "^6.1.10",
     "typescript": "catalog:",
     "vite": "catalog:",
     "vite-plugin-dts": "^5.0.0"
@@ -77,6 +77,6 @@
     "@ingcreators/annot-product-docs": "workspace:*"
   },
   "peerDependencies": {
-    "astro": "^5.0.0"
+    "astro": "^6.1.10"
   }
 }
