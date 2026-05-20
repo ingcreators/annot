@@ -68,7 +68,7 @@ playwright-mcp's `browser_*` tools.
 | `annot_redact_screenshot` | PNG + bbox regions (solid / mosaic / blur) | PNG with redactions destructively burned in |
 | `annot_redact_url` | URL + locator-or-bbox regions | Same, with live capture |
 | `annot_compare_screenshots` | Two PNGs of identical dimensions | PNG of the second image with changed regions highlighted |
-| `annot_aria_snapshot` | URL + optional `rootSelector` | YAML accessibility tree with `[ref=eN]` markers — same primitive `playwright-mcp` uses, foundational input for the screen-spec workflow ([`docs/plans/living-product-docs.md`](./plans/living-product-docs.md)) |
+| `annot_aria_snapshot` | URL + optional `rootSelector` | YAML accessibility tree with `[ref=eN]` markers — same primitive `playwright-mcp` uses, foundational input for the product-docs workflow ([`docs/plans/living-product-docs.md`](./plans/living-product-docs.md)) |
 
 Per-tool input schemas and the full DSL (locator adaptation
 rules, intent → colour mapping) are documented in
