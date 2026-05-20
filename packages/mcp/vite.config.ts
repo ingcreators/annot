@@ -44,6 +44,7 @@ export default defineConfig({
         /^@ingcreators\//,
         "playwright-core",
         "@napi-rs/canvas",
+        "pixelmatch",
         /^node:/,
       ],
     },
