@@ -1,6 +1,6 @@
 // Quality metrics for the pure-TS Median Cut quantizer that
 // powers `Annotator.toEncoded()`'s PNG-8 path. Originally added
-// in Phase 1 of `docs/plans/replace-libimagequant-with-median-cut.md`
+// in Phase 1 of `docs/plans/_done/replace-libimagequant-with-median-cut.md`
 // as an A/B against the libimagequant WASM; post-Phase 3 the WASM
 // path is gone and this file keeps the metrics as a quality
 // regression guard.

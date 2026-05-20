@@ -119,7 +119,7 @@ export async function encodeRgba(
   // libimagequant WASM dependency (and its dynamic-import +
   // `reason: "imagequant-missing"` graceful-fallback contract) was
   // retired by Phase 3 of
-  // `docs/plans/replace-libimagequant-with-median-cut.md`. PNG-8
+  // `docs/plans/_done/replace-libimagequant-with-median-cut.md`. PNG-8
   // is now unconditionally available — no runtime "imagequant
   // installed?" gate.
   const png8 = quantizeRgbaToPng8(resized, w, h);

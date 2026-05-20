@@ -3,7 +3,7 @@
 // Floyd–Steinberg dither (`@ingcreators/annot-core/encode/quantize-median-cut`)
 // + the PNG-8 file encoder (`@ingcreators/annot-core/encode/png8`).
 //
-// Phase 3 of `docs/plans/replace-libimagequant-with-median-cut.md`
+// Phase 3 of `docs/plans/_done/replace-libimagequant-with-median-cut.md`
 // replaced the prior GPL-3.0 libimagequant WASM dependency. The
 // previous dynamic-import boundary, the `isImagequantAvailable()`
 // gate, and the `reason: "imagequant-missing"` graceful-fallback

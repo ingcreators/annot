@@ -80,7 +80,7 @@ export interface AnnotatorOptions {
  *                     tree, PNG-8 quantization via the in-tree
  *                     pure-TS Median Cut + Floyd–Steinberg dither
  *                     (post-Phase 3 of
- *                     `docs/plans/replace-libimagequant-with-median-cut.md`;
+ *                     `docs/plans/_done/replace-libimagequant-with-median-cut.md`;
  *                     prior versions used the GPL-3.0
  *                     `@ingcreators/annot-imagequant` WASM).
  */
@@ -111,7 +111,7 @@ export interface Annotator {
    * UI-heavy content, falling back to PNG-32 / JPEG for
    * photo-heavy content per `smartFallback`. PNG-8 is
    * unconditionally available since Phase 3 of
-   * `docs/plans/replace-libimagequant-with-median-cut.md`
+   * `docs/plans/_done/replace-libimagequant-with-median-cut.md`
    * retired the optional GPL-3.0 imagequant WASM dependency.
    */
   toEncoded(input: AnnotatorInput, encodeOptions?: EncodeOptions): Promise<EncodeResult>;

@@ -15,7 +15,7 @@
 #
 # Scope: this config only applies inside this addon directory
 # because Cargo discovers `.cargo/config.toml` by walking up from
-# the manifest. The imagequant crate's wasm target is unaffected.
+# the manifest.
 
 [target.x86_64-pc-windows-msvc]
 rustflags = ["-C", "link-arg=/Brepro"]

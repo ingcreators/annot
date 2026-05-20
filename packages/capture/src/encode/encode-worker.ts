@@ -7,7 +7,7 @@
  * Each worker imports `@ingcreators/annot-core/encode` which now runs
  * the pure-TS Median Cut + Floyd–Steinberg quantizer entirely on the
  * worker thread — no WASM init, no global instance contention.
- * Phase 2 of `docs/plans/replace-libimagequant-with-median-cut.md`
+ * Phase 2 of `docs/plans/_done/replace-libimagequant-with-median-cut.md`
  * replaced the prior libimagequant WASM dependency.
  */
 import {

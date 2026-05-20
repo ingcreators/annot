@@ -49,7 +49,7 @@ export const SAVE_SIZE_LABEL: Record<SaveSizePreset, string> = {
  * localStorage keep working unchanged.
  *
  * Phase 2 of
- * [`docs/plans/replace-libimagequant-with-median-cut.md`](../../../../docs/plans/replace-libimagequant-with-median-cut.md)
+ * [`docs/plans/_done/replace-libimagequant-with-median-cut.md`](../../../../docs/plans/_done/replace-libimagequant-with-median-cut.md)
  * flipped the default to Median Cut and removed the WASM init
  * path. Phase 4 deletes the `@ingcreators/annot-imagequant`
  * workspace package and removes this field entirely.
