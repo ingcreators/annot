@@ -1,8 +1,26 @@
 # Quantizer nearest-palette acceleration
 
+> **Status:** Done (2026-05-20). All three phases landed via PRs
+> [#871](https://github.com/ingcreators/annot/pull/871) (plan
+> draft), [#872](https://github.com/ingcreators/annot/pull/872)
+> (Phase 1 — per-pixel `Map<rgb24, paletteIdx>` cache inside
+> `remapWithFloydSteinberg` + bench script), and
+> [#873](https://github.com/ingcreators/annot/pull/873) (Phase 2 —
+> retire the SW-thread `encodeBatch` single-item carve-out and
+> redirect the hotkey + auto direct `encodeCapture` call sites
+> through `host.encodeBatch`). Phase 1 bench numbers:
+> `code`-shape fixture at 8 MP, 1655 ms → 331 ms (5×). The
+> ~8-second editor-open freeze users reported after
+> [`_done/replace-libimagequant-with-median-cut.md`](./replace-libimagequant-with-median-cut.md)
+> Phase 2 (#859) is gone.
+>
+> **Original draft preserved below for history.**
+
+---
+
 > **Status:** Queued. Authored 2026-05-20 to fix the ~8-second
 > editor-open freeze that browser-extension captures developed after
-> [`_done/replace-libimagequant-with-median-cut.md`](./_done/replace-libimagequant-with-median-cut.md)
+> [`_done/replace-libimagequant-with-median-cut.md`](./replace-libimagequant-with-median-cut.md)
 > Phase 2 flipped the client-capture quantizer default from
 > libimagequant (WASM) to the pure-TS Median Cut + Floyd–Steinberg
 > implementation. The TS quantizer's nearest-palette inner loop is a
@@ -15,12 +33,12 @@
 > before the editor tab can open.
 >
 > The upstream plan **explicitly called this out** —
-> [`replace-libimagequant-with-median-cut.md`](./_done/replace-libimagequant-with-median-cut.md)
+> [`replace-libimagequant-with-median-cut.md`](./replace-libimagequant-with-median-cut.md)
 > §"Nearest-palette lookup acceleration" said the Phase 1 remap
 > step would use either (a) a per-pixel cache keyed by the input
 > RGB value or (b) a small k-d tree over the palette, "whichever
 > benchmarks better." The landed implementation in
-> [`packages/core/src/encode/quantize-median-cut.ts`](../../packages/core/src/encode/quantize-median-cut.ts)
+> [`packages/core/src/encode/quantize-median-cut.ts`](../../../packages/core/src/encode/quantize-median-cut.ts)
 > ships **neither**. This plan fills that gap.
 >
 > **Scope is narrow.** Two phases, each independently revertable:
@@ -50,7 +68,7 @@ captures were sub-second.
 
 ### Root cause
 
-[`quantize-median-cut.ts:421-430`](../../packages/core/src/encode/quantize-median-cut.ts:421)
+[`quantize-median-cut.ts:421-430`](../../../packages/core/src/encode/quantize-median-cut.ts:421)
 inside `remapWithFloydSteinberg`:
 
 ```ts
@@ -79,7 +97,7 @@ was ~30× lower so it was invisible.
 
 ### Secondary factor: SW thread is the critical path
 
-[`packages/extension/src/background/host.ts:513-522`](../../packages/extension/src/background/host.ts:513)
+[`packages/extension/src/background/host.ts:513-522`](../../../packages/extension/src/background/host.ts:513)
 short-circuits single-item batches back into the service-worker
 thread:
 
@@ -108,7 +126,7 @@ must service every subsequent `chrome.runtime.onMessage` /
 with the PWA tab. Even after Phase 1 makes the encode fast, the
 worker-pool route is preferable for the same "don't block the
 SW" reason that
-[`_done/desktop-browser-mode.md`](./_done/desktop-browser-mode.md)
+[`_done/desktop-browser-mode.md`](./desktop-browser-mode.md)
 gave for the N-item path.
 
 ### Why a per-pixel cache works for Annot's payloads
@@ -148,11 +166,11 @@ path cost is a single map lookup.
    `captureVisibleTab` resolve to the editor's first paint.
 2. **Quantizer output is byte-identical** to the pre-Phase-1
    implementation. Existing
-   [`quantize-median-cut.test.ts`](../../packages/core/src/encode/quantize-median-cut.test.ts)
+   [`quantize-median-cut.test.ts`](../../../packages/core/src/encode/quantize-median-cut.test.ts)
    property tests pass unchanged; a new "with vs. without
    accelerator on identical input" test asserts byte equality.
 3. **No public-API change.**
-   [`quantizeMedianCut`](../../packages/core/src/encode/quantize-median-cut.ts)
+   [`quantizeMedianCut`](../../../packages/core/src/encode/quantize-median-cut.ts)
    signature is the same; the accelerator lives inside the
    function. Downstream `encodePng8` is untouched.
 4. **No SVG / storage / metadata schema change.**
@@ -178,7 +196,7 @@ path cost is a single map lookup.
   doesn't replace the pool.
 - **Adoption by the PWA `<annot-capture-workspace>` encode
   path.**
-  [`_done/web-capture-redesign.md`](./_done/web-capture-redesign.md)
+  [`_done/web-capture-redesign.md`](./web-capture-redesign.md)
   documented that the new `/capture` route deferred the smart
   PNG-8 pipeline; that's still deferred. PWA captures continue
   to take whatever path that plan landed.
@@ -188,7 +206,7 @@ path cost is a single map lookup.
 ### Phase 1 — Per-pixel cache inside `remapWithFloydSteinberg`
 
 **File:**
-[`packages/core/src/encode/quantize-median-cut.ts`](../../packages/core/src/encode/quantize-median-cut.ts)
+[`packages/core/src/encode/quantize-median-cut.ts`](../../../packages/core/src/encode/quantize-median-cut.ts)
 
 **Change shape** (sketch):
 
@@ -301,7 +319,7 @@ before/after PNG byte comparison for both "always-in-range" and
 "often-saturates" fixtures; if any of the latter changes a small
 number of bytes, the PR calls it out explicitly. Snapshot tests
 in
-[`quantize-median-cut.test.ts`](../../packages/core/src/encode/quantize-median-cut.test.ts)
+[`quantize-median-cut.test.ts`](../../../packages/core/src/encode/quantize-median-cut.test.ts)
 are property-tests (palette size, index validity, determinism),
 not byte-snapshot tests, so the existing tests pass either way.
 
@@ -340,7 +358,7 @@ goal pushes us to the exact-cache path.
   3× against the same input, asserts byte-identical output.
 
 Both go in
-[`quantize-median-cut.test.ts`](../../packages/core/src/encode/quantize-median-cut.test.ts).
+[`quantize-median-cut.test.ts`](../../../packages/core/src/encode/quantize-median-cut.test.ts).
 No new test file.
 
 **Acceptance for Phase 1 PR:**
@@ -360,24 +378,24 @@ No new test file.
 
 **Files:**
 
-1. [`packages/extension/src/background/host.ts`](../../packages/extension/src/background/host.ts)
+1. [`packages/extension/src/background/host.ts`](../../../packages/extension/src/background/host.ts)
    — drop the single-item carve-out at
-   [host.ts:518-522](../../packages/extension/src/background/host.ts:518).
-2. [`packages/extension/src/background/service-worker.ts`](../../packages/extension/src/background/service-worker.ts)
+   [host.ts:518-522](../../../packages/extension/src/background/host.ts:518).
+2. [`packages/extension/src/background/service-worker.ts`](../../../packages/extension/src/background/service-worker.ts)
    — replace the two direct `encodeCapture(captured.pngDataUrl,
    settings)` call sites at
-   [service-worker.ts:624](../../packages/extension/src/background/service-worker.ts:624)
+   [service-worker.ts:624](../../../packages/extension/src/background/service-worker.ts:624)
    (hotkey single-shot flow) and
-   [service-worker.ts:958](../../packages/extension/src/background/service-worker.ts:958)
+   [service-worker.ts:958](../../../packages/extension/src/background/service-worker.ts:958)
    (auto-capture flow) with `host.encodeBatch([{ pngDataUrl, cropSrcY:
    0, cropHeight: 0, fullHeight: 0, options: <derived from settings> }])`
    so they share the same offscreen-pool route as the orchestrator
    modes (`runVisibleCapture` / `runAreaCapture` / `runScrollCapture` /
    `runPerPageCapture` already do this — see
-   [`packages/capture/src/orchestrate/run-visible.ts:39`](../../packages/capture/src/orchestrate/run-visible.ts:39)).
+   [`packages/capture/src/orchestrate/run-visible.ts:39`](../../../packages/capture/src/orchestrate/run-visible.ts:39)).
 3. Remove the `import { encodeCapture } from "../shared/encode.js"`
    declaration in
-   [service-worker.ts:26](../../packages/extension/src/background/service-worker.ts:26)
+   [service-worker.ts:26](../../../packages/extension/src/background/service-worker.ts:26)
    once both call sites are migrated.
 
 **Why both files matter:** the carve-out in `host.ts` is one path
@@ -403,7 +421,7 @@ The carve-out is the single line that decided "SW vs. pool" in
 the same `host.encodeBatch([...])` wrapper that
 `runVisibleCapture` and friends use. The pool already accepts
 single-item submissions via `encodeOne` (see
-[`packages/capture/src/encode/worker-pool.ts`](../../packages/capture/src/encode/worker-pool.ts)).
+[`packages/capture/src/encode/worker-pool.ts`](../../../packages/capture/src/encode/worker-pool.ts)).
 
 **Settings → EncodeOptions mapping** at both
 `service-worker.ts` call sites:
@@ -426,7 +444,7 @@ re-introducing a wrapper now that the call goes through `host`.
 on a freshly installed extension), the SW-side fallback path
 inside `host.encodeBatch` (the `catch (e) { console.warn(...) }`
 block at
-[host.ts:535-551](../../packages/extension/src/background/host.ts:535))
+[host.ts:535-551](../../../packages/extension/src/background/host.ts:535))
 already handles it: serial encode on the SW thread as the
 recovery path. So routing hotkey + auto through `host.encodeBatch`
 doesn't expose a new failure mode — it just makes the SW-thread
@@ -456,7 +474,7 @@ Move this file to `docs/plans/_done/` once Phases 1 & 2 are
 merged. Add a one-line pointer in
 [`docs/plans/README.md`](./README.md)'s "Recently landed" table,
 linking back to
-[`_done/replace-libimagequant-with-median-cut.md`](./_done/replace-libimagequant-with-median-cut.md)
+[`_done/replace-libimagequant-with-median-cut.md`](./replace-libimagequant-with-median-cut.md)
 as the upstream plan that motivated the work.
 
 No code touched.
@@ -488,22 +506,22 @@ No code touched.
 None at draft time. If Phase 1 bench numbers come in worse than
 expected, the fallback is to layer a k-d tree on the cache-miss
 path; the
-[`quantize-median-cut.ts`](../../packages/core/src/encode/quantize-median-cut.ts)
+[`quantize-median-cut.ts`](../../../packages/core/src/encode/quantize-median-cut.ts)
 diff stays localised either way.
 
 ## References
 
 - Upstream plan that introduced the regression:
-  [`_done/replace-libimagequant-with-median-cut.md`](./_done/replace-libimagequant-with-median-cut.md)
+  [`_done/replace-libimagequant-with-median-cut.md`](./replace-libimagequant-with-median-cut.md)
   (specifically the "Nearest-palette lookup acceleration" section
   which specified the work this plan now executes).
 - Worker-pool design:
-  [`packages/capture/src/encode/worker-pool.ts`](../../packages/capture/src/encode/worker-pool.ts).
+  [`packages/capture/src/encode/worker-pool.ts`](../../../packages/capture/src/encode/worker-pool.ts).
 - SW thread call sites:
-  [`packages/extension/src/background/host.ts`](../../packages/extension/src/background/host.ts)
+  [`packages/extension/src/background/host.ts`](../../../packages/extension/src/background/host.ts)
   (`encodeBatch`),
-  [`packages/extension/src/background/service-worker.ts`](../../packages/extension/src/background/service-worker.ts)
+  [`packages/extension/src/background/service-worker.ts`](../../../packages/extension/src/background/service-worker.ts)
   (`hotkey` + `auto` capture flows, both reach the encode via
   `host.encodeBatch` per the desktop-browser-mode refactor).
 - Companion offscreen entry:
-  [`packages/extension/src/offscreen/offscreen.ts`](../../packages/extension/src/offscreen/offscreen.ts).
+  [`packages/extension/src/offscreen/offscreen.ts`](../../../packages/extension/src/offscreen/offscreen.ts).
