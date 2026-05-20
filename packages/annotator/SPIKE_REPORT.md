@@ -1,6 +1,6 @@
 # Phase 0 spike — findings
 
-> Plan: [`docs/plans/headless-annotator-spike.md`](../../docs/plans/headless-annotator-spike.md)
+> Plan: [`docs/plans/_done/headless-annotator-spike.md`](../../docs/plans/_done/headless-annotator-spike.md)
 
 ## Summary
 

@@ -161,7 +161,7 @@ const annotator = createAnnotator({
   — Phase 0 feasibility report.
 - [`docs/plans/_done/annot-annotator-package.md`](../../docs/plans/_done/annot-annotator-package.md)
   — Phase 1 annotator design.
-- [`docs/plans/annot-playwright-fixture.md`](../../docs/plans/annot-playwright-fixture.md)
+- [`docs/plans/_done/annot-playwright-fixture.md`](../../docs/plans/_done/annot-playwright-fixture.md)
   — Phase 2 design (this package).
 - [`PRODUCT_DIRECTION.md`](../../PRODUCT_DIRECTION.md) — strategic
   context.

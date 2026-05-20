@@ -6,7 +6,7 @@ Rust crate. Replaces [`@panda-ai/imagequant`](https://www.npmjs.com/package/@pan
 as the WASM-side palette quantizer for Annot's PNG-8 capture pipeline.
 
 Why we own the build: see
-[`docs/plans/vendor-libimagequant.md`](../../docs/plans/vendor-libimagequant.md).
+[`docs/plans/_done/vendor-libimagequant.md`](../../docs/plans/_done/vendor-libimagequant.md).
 
 ## ABI
 
