@@ -86,7 +86,11 @@ export function parseSnapshot(yaml: string): SnapshotEntry[] {
     }
     const ancestors = ancestorStack.map((f) => ({ role: f.role, name: f.name }));
 
-    const refMatch = line.match(/\[ref=([^\]]+)\]/);
+    // Playwright's ref ids are `e<digits>` (e.g. `e3`, `e12`).
+    // Pinning the character class avoids the polynomial backtrack
+    // CodeQL flags for the broader `[^\]]+` form when scanning
+    // unbounded library output.
+    const refMatch = line.match(/\[ref=(e\d+)\]/);
     if (refMatch) {
       entries.push({
         role,

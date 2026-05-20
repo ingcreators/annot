@@ -371,14 +371,28 @@ function safeEvalJsValue(expr: string): unknown {
 
   if (/^-?\d+(\.\d+)?$/.test(trimmed)) return Number.parseFloat(trimmed);
 
-  if (
-    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
-    (trimmed.startsWith("'") && trimmed.endsWith("'"))
-  ) {
+  if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
+    // Already JSON-shaped. Try a direct parse so escape sequences
+    // (`\n`, `\t`, `\"`, `\\`) round-trip correctly.
     try {
-      return JSON.parse(`"${trimmed.slice(1, -1).replace(/"/g, '\\"')}"`);
+      return JSON.parse(trimmed);
     } catch {
       return trimmed.slice(1, -1);
+    }
+  }
+  if (trimmed.startsWith("'") && trimmed.endsWith("'")) {
+    // Single-quoted JS string → JSON-quoted. Escape backslashes
+    // FIRST (so we don't double-escape sequences we add later),
+    // then escape the existing `"` characters, then wrap. Without
+    // the backslash escape, an input like `'\b'` would round-trip
+    // as the JSON backspace control character (CodeQL: incomplete
+    // string escaping).
+    const inner = trimmed.slice(1, -1);
+    const escaped = inner.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+    try {
+      return JSON.parse(`"${escaped}"`);
+    } catch {
+      return inner;
     }
   }
 
@@ -489,10 +503,10 @@ function replaceOrAppend(source: string, tag: string, body: string): string {
     return source.replace(re, replacement);
   }
   // Append on a new line, with a leading blank line so the block
-  // doesn't run into existing content. Strip trailing whitespace
-  // from `source` first so we don't accumulate blank lines on
-  // every re-write.
-  const trimmed = source.replace(/\s+$/, "");
+  // doesn't run into existing content. `trimEnd()` is O(n) and
+  // avoids the polynomial backtracking CodeQL flags for the
+  // equivalent `/\s+$/` regex when the source is large.
+  const trimmed = source.trimEnd();
   return `${trimmed}\n\n${replacement}\n`;
 }
 
