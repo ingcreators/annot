@@ -8,15 +8,18 @@
  *   - "jpeg" : re-encode via OffscreenCanvas → JPEG.
  *   - "smart":
  *       - Sample unique-color count. If photo-heavy, apply `smartFallback`.
- *       - Otherwise quantize to 256 colors via libimagequant (WASM port,
- *         same core as `pngquant`) and emit a true PNG-8 palette file.
+ *       - Otherwise quantize to 256 colors via the in-tree pure-TS
+ *         Median Cut + Floyd–Steinberg dither implementation (see
+ *         {@link quantizeMedianCut}) and emit a true PNG-8 palette file.
  *
- * libimagequant (Wu + NeuQuant + Floyd-Steinberg) gives much better
- * quantization than pure-JS libraries. Its palette + per-pixel indices
- * are written directly into a PNG-8 file via a small in-house encoder
+ * Phase 2 of `docs/plans/replace-libimagequant-with-median-cut.md`
+ * switched the default quantizer from libimagequant (GPL-3.0 WASM)
+ * to the pure-TS implementation. The WASM is no longer initialised
+ * from this module — Phase 4 deletes the workspace package entirely.
+ * The TS quantizer's palette + per-pixel indices are written
+ * directly into a PNG-8 file via the in-house encoder
  * (Pako DEFLATE level 9) — no re-quantization, no RGBA round-trip.
  */
-import init, { quantize_image } from "@ingcreators/annot-imagequant";
 import {
   computeResizeTarget,
   DEFAULT_ENCODE_OPTIONS,
@@ -38,10 +41,12 @@ export {
 } from "./options.js";
 
 /**
- * Upper bound on images we attempt to PNG-8-quantize. libimagequant's
- * Wu algorithm copies the image into WASM memory, so very tall scroll
- * captures (e.g. 1920×15000 = 28.8M) would allocate >115 MB *twice* and
- * dominate the capture time. Above this we fall back to lossless PNG.
+ * Upper bound on images we attempt to PNG-8-quantize. The Median
+ * Cut histogram + FS-dither remap together allocate roughly
+ * `width*height*4 + width*height + width*4*4*3` (input + indices +
+ * 4 float error rows × 3 channels), so a 1920×15000 = 28.8 M-pixel
+ * scroll capture would commit ~150 MB during quantization. Above
+ * this cap we fall back to lossless PNG-32.
  */
 const MAX_SMART_PIXELS = 10_000_000; // ~4K display or a 1920×5200 scrollshot
 
@@ -129,13 +134,14 @@ export async function encodeCapture(
     return { dataUrl, chosen: "png", reason: "photo-fallback-png", width: w, height: h };
   }
 
-  // UI-heavy → quantize with the chosen backend → emit PNG-8.
-  // `options.quantizer` selects between the GPL-3.0 WASM
-  // (libimagequant) and the in-tree pure-TS Median Cut. Default
-  // is `"wasm"` for Phase 1; Phase 2 flips it to `"median-cut"`.
-  const quantizer = options.quantizer ?? "wasm";
+  // UI-heavy → quantize via the in-tree pure-TS Median Cut + FS
+  // dither → emit PNG-8. The `options.quantizer` knob is honored
+  // for back-compat (Phase 1 introduced it) but the only valid
+  // value now is `"median-cut"`; the legacy `"wasm"` value falls
+  // through to the same implementation. Phase 4 of the migration
+  // removes the field entirely.
   try {
-    const png8Bytes = await quantizeToPng8(imageData, quantizer);
+    const png8Bytes = quantizeToPng8(imageData);
     bmp.close();
     const dataUrl = await blobToDataUrl(new Blob([png8Bytes as BlobPart], { type: "image/png" }));
     return { dataUrl, chosen: "png", reason: "png-8", width: w, height: h };
@@ -147,33 +153,16 @@ export async function encodeCapture(
   }
 }
 
-// ---- Quantizer dispatch ----
-
-interface WasmExports {
-  memory: WebAssembly.Memory;
-}
-let wasmPromise: Promise<WasmExports> | null = null;
-function ensureWasm(): Promise<WasmExports> {
-  if (!wasmPromise) {
-    wasmPromise = (init() as Promise<WasmExports>).catch((e) => {
-      wasmPromise = null;
-      throw e;
-    });
-  }
-  return wasmPromise;
-}
+// ---- Quantizer ----
 
 /**
- * Quantize an RGBA ImageData to ≤256 colors via the chosen
- * backend and emit a PNG-8 file via the in-house encoder (Pako
- * DEFLATE level 9). No re-quantization or RGBA round-trip — the
- * palette + per-pixel indices flow straight from quantizer to
- * PNG writer.
+ * Quantize an RGBA ImageData to ≤256 colors via the in-tree
+ * Median Cut + FS dither and emit a PNG-8 file via the in-house
+ * encoder (Pako DEFLATE level 9). No re-quantization or RGBA
+ * round-trip — the palette + per-pixel indices flow straight
+ * from quantizer to PNG writer. Synchronous; no WASM init.
  */
-async function quantizeToPng8(
-  imageData: ImageData,
-  backend: "wasm" | "median-cut",
-): Promise<Uint8Array> {
+function quantizeToPng8(imageData: ImageData): Uint8Array {
   const w = imageData.width;
   const h = imageData.height;
   const pixels = new Uint8Array(
@@ -181,32 +170,7 @@ async function quantizeToPng8(
     imageData.data.byteOffset,
     imageData.data.byteLength,
   );
-
-  let palette: Uint8Array;
-  let indices: Uint8Array;
-
-  if (backend === "median-cut") {
-    const result = quantizeMedianCut(pixels, w, h, 256);
-    palette = result.palette;
-    indices = result.indices;
-  } else {
-    await ensureWasm();
-    // `@ingcreators/annot-imagequant` wasm-bindgen binding returns
-    // `{ palette: Uint8Array, indices: Uint8Array }` — palette is
-    // flattened RGBA bytes, indices is one byte per pixel. Both
-    // are standalone copies of WASM memory (wrapper does the
-    // `Uint8Array::copy_from`), so no extra slice() needed.
-    const result: { palette?: unknown; indices?: unknown } = quantize_image(pixels, w, h, 256);
-    if (!(result.palette instanceof Uint8Array) || !(result.indices instanceof Uint8Array)) {
-      throw new Error(
-        `quantize_image returned unexpected shape: keys=${Object.keys(result).join(",")} ` +
-          `palette=${typeof result.palette} indices=${typeof result.indices}`,
-      );
-    }
-    palette = result.palette;
-    indices = result.indices;
-  }
-
+  const { palette, indices } = quantizeMedianCut(pixels, w, h, 256);
   return encodePng8(palette, indices, w, h, 9);
 }
 

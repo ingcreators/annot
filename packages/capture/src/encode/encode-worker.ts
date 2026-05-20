@@ -4,9 +4,11 @@
  * document (extension) or main renderer (Electron Browse window) to
  * parallelize compression across CPU cores.
  *
- * Each worker imports `@ingcreators/annot-core/encode` which loads its own
- * copy of the libimagequant WASM module — WASM is single-instance-per-realm,
- * so N workers give N parallel quantizers.
+ * Each worker imports `@ingcreators/annot-core/encode` which now runs
+ * the pure-TS Median Cut + Floyd–Steinberg quantizer entirely on the
+ * worker thread — no WASM init, no global instance contention.
+ * Phase 2 of `docs/plans/replace-libimagequant-with-median-cut.md`
+ * replaced the prior libimagequant WASM dependency.
  */
 import {
   type EncodeOptions,

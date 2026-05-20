@@ -2,9 +2,9 @@
  * Capture-side adapter for the shared image encoder.
  *
  * Maps the `Settings.quality` shape to the core encode options. The
- * actual encoder (libimagequant WASM + UPNG.js) lives in
- * `@ingcreators/annot-core/encode` so every host shares one canonical
- * implementation.
+ * actual encoder (pure-TS Median Cut quantizer + Pako-DEFLATE PNG-8
+ * writer) lives in `@ingcreators/annot-core/encode` so every host
+ * shares one canonical implementation.
  */
 import { encodeCapture as coreEncode, type EncodeResult } from "@ingcreators/annot-core/encode";
 import type { Settings } from "./settings.js";

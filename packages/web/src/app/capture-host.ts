@@ -392,7 +392,7 @@ export class CaptureHost {
    *
    * Routes the captured PNG-24 through `encodeCaptureInWorker`
    * (the shared `encodeCapture` smart pipeline running in a Web
-   * Worker so libimagequant + DEFLATE-9 don't freeze the UI) so
+   * Worker so Median Cut + DEFLATE-9 don't freeze the UI) so
    * the saved bytes use PNG-8 for UI-heavy frames and fall back
    * to PNG-24 / JPEG for photo-heavy ones — identical behaviour
    * to the Chrome Extension's capture pipeline. The user-tunable

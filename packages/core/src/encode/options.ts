@@ -1,9 +1,9 @@
 /**
- * Encode option types + defaults — split out of `./index.ts` so callers
- * that only need the data shape (e.g. the web app's preferences
- * loader) can import this leaf without dragging in the WASM
- * imagequant binding that `encodeCapture` requires. Keeps the
- * encoder lazy-loadable as a separate chunk.
+ * Encode option types + defaults — split out of `./index.ts` so
+ * callers that only need the data shape (e.g. the web app's
+ * preferences loader) can import this leaf without dragging in
+ * the heavier encoder + quantizer module that `encodeCapture`
+ * requires. Keeps the encoder lazy-loadable as a separate chunk.
  */
 
 export type EncodeFormat = "smart" | "png" | "jpeg";
@@ -41,21 +41,18 @@ export const SAVE_SIZE_LABEL: Record<SaveSizePreset, string> = {
 /**
  * Quantizer backend for PNG-8 smart-mode encoding.
  *
- * - `"wasm"` (default): the GPL-3.0
- *   [`@ingcreators/annot-imagequant`](https://github.com/ingcreators/annot/tree/main/packages/imagequant)
- *   wasm-bindgen wrapper around libimagequant. Best subjective
- *   quality on photographic content; slowest cold-start (WASM init).
- * - `"median-cut"`: the in-tree pure-TS Median Cut + Floyd–Steinberg
- *   dither at
- *   [`quantize-median-cut.ts`](./quantize-median-cut.ts). Lighter
- *   bundle, no GPL exposure, comparable subjective quality on
- *   UI-heavy screenshots (Annot's actual workload after the
- *   `isPhotoHeavy` photo-mode fallback).
+ * Both values currently resolve to the in-tree pure-TS Median Cut
+ * + Floyd–Steinberg dither at
+ * [`quantize-median-cut.ts`](./quantize-median-cut.ts). The
+ * `"wasm"` value is retained for back-compat with the Phase 1
+ * feature flag so consumers that persisted `quantizer: "wasm"` to
+ * localStorage keep working unchanged.
  *
- * Phase 1 of
+ * Phase 2 of
  * [`docs/plans/replace-libimagequant-with-median-cut.md`](../../../../docs/plans/replace-libimagequant-with-median-cut.md)
- * lands the flag with `"wasm"` as the default. Phase 2 flips the
- * default; Phase 4 removes the `"wasm"` branch entirely.
+ * flipped the default to Median Cut and removed the WASM init
+ * path. Phase 4 deletes the `@ingcreators/annot-imagequant`
+ * workspace package and removes this field entirely.
  */
 export type Quantizer = "wasm" | "median-cut";
 
@@ -91,8 +88,8 @@ export interface EncodeOptions {
   saveSizePreset?: SaveSizePreset;
   /**
    * Quantizer backend used by smart-mode PNG-8 output. Optional;
-   * defaults to `"wasm"` for back-compat in Phase 1 of the
-   * libimagequant → Median Cut migration. See {@link Quantizer}.
+   * both values resolve to the same Median Cut implementation
+   * post-Phase 2. See {@link Quantizer}.
    */
   quantizer?: Quantizer;
 }
@@ -103,7 +100,7 @@ export const DEFAULT_ENCODE_OPTIONS: EncodeOptions = {
   smartColorThreshold: 15000,
   jpegPercent: 92,
   saveSizePreset: "standard",
-  quantizer: "wasm",
+  quantizer: "median-cut",
 };
 
 /** Compute the resize target for a given source size + preset.
