@@ -130,7 +130,10 @@ interface PlaywrightPageLike {
     options: { waitUntil: "load" | "domcontentloaded" | "networkidle" },
   ): Promise<unknown>;
   screenshot(options: { fullPage: boolean; type: "png" }): Promise<Buffer>;
-  locator(selector: string): {
-    boundingBox(): Promise<{ x: number; y: number; width: number; height: number } | null>;
-  };
+  locator(selector: string): PlaywrightLocatorLike;
+}
+
+interface PlaywrightLocatorLike {
+  boundingBox(): Promise<{ x: number; y: number; width: number; height: number } | null>;
+  ariaSnapshot(options?: { mode?: "ai" | "default"; timeout?: number }): Promise<string>;
 }

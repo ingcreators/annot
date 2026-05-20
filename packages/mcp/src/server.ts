@@ -35,6 +35,11 @@ import {
   handleAnnotateUrl,
 } from "./tools/annotate-url.js";
 import {
+  ARIA_SNAPSHOT_TOOL_NAME,
+  ariaSnapshotTool,
+  handleAriaSnapshot,
+} from "./tools/aria-snapshot.js";
+import {
   COMPARE_SCREENSHOTS_TOOL_NAME,
   compareScreenshotsTool,
   handleCompareScreenshots,
@@ -83,6 +88,7 @@ const TOOL_REGISTRY = [
   redactScreenshotTool,
   redactUrlTool,
   compareScreenshotsTool,
+  ariaSnapshotTool,
 ] as const;
 
 /**
@@ -129,6 +135,9 @@ export function createServer(options: CreateServerOptions = {}): Server {
         break;
       case COMPARE_SCREENSHOTS_TOOL_NAME:
         result = await handleCompareScreenshots(args ?? {}, { annotator });
+        break;
+      case ARIA_SNAPSHOT_TOOL_NAME:
+        result = await handleAriaSnapshot(args ?? {}, { pool });
         break;
       default:
         result = {

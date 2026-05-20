@@ -129,6 +129,43 @@ highlighted as `warning`-intent rects.
   content block listing the changed-region bboxes.
 - `output` (optional).
 
+### `annot_aria_snapshot`
+
+Open a URL and return Playwright's AI-mode aria-snapshot
+(YAML format with `[ref=eN]` markers). The same primitive
+`playwright-mcp` and `playwright-cli` use. Foundational
+input for the screen-spec workflow (see
+[`docs/plans/living-product-docs.md`](../../docs/plans/living-product-docs.md)).
+
+**Inputs:**
+- `url` — page URL to snapshot.
+- `viewport` (optional) — `{ width, height, deviceScaleFactor }`.
+- `waitFor` (optional) — `"load"` / `"domcontentloaded"` /
+  `"networkidle"`. Default `"load"`.
+- `rootSelector` (optional, default `"body"`) — locator
+  selector whose subtree is snapshotted. Narrow to e.g.
+  `"main"` or `'[data-testid="login-form"]'` when only part
+  of the page is relevant.
+- `timeout` (optional) — forwarded to
+  `locator.ariaSnapshot({ timeout })`. Default 30 s.
+- `output` (optional, absolute path) — when set, the YAML is
+  written here and the tool returns a text confirmation;
+  otherwise the YAML is returned inline.
+
+**Important:** refs (`eN`) are session-local. They identify
+elements within THIS snapshot only. Do NOT persist refs
+across sessions or runs. Persistent identifiers should use
+`role + name` (with tree-path disambiguation for duplicates).
+
+**Example output:**
+
+```yaml
+- textbox "Email" [ref=e3]
+- textbox "Password" [ref=e5]
+- checkbox "Remember me" [ref=e7]
+- button "Sign in" [ref=e9]
+```
+
 ## The annotation DSL
 
 Two flavours. `BboxAnnotation` (used by `_screenshot` tools)
@@ -285,6 +322,7 @@ is the composable primitive.
 | `src/tools/redact-screenshot.ts` | `annot_redact_screenshot` |
 | `src/tools/redact-url.ts` | `annot_redact_url` |
 | `src/tools/compare-screenshots.ts` | `annot_compare_screenshots` |
+| `src/tools/aria-snapshot.ts` | `annot_aria_snapshot` |
 
 ## Runtime dependencies
 
