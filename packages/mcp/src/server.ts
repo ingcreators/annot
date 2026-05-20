@@ -35,6 +35,11 @@ import {
   handleAnnotateUrl,
 } from "./tools/annotate-url.js";
 import {
+  COMPARE_SCREENSHOTS_TOOL_NAME,
+  compareScreenshotsTool,
+  handleCompareScreenshots,
+} from "./tools/compare-screenshots.js";
+import {
   handleRedactScreenshot,
   REDACT_SCREENSHOT_TOOL_NAME,
   redactScreenshotTool,
@@ -77,6 +82,7 @@ const TOOL_REGISTRY = [
   annotateUrlTool,
   redactScreenshotTool,
   redactUrlTool,
+  compareScreenshotsTool,
 ] as const;
 
 /**
@@ -120,6 +126,9 @@ export function createServer(options: CreateServerOptions = {}): Server {
         break;
       case REDACT_URL_TOOL_NAME:
         result = await handleRedactUrl(args ?? {}, { pool });
+        break;
+      case COMPARE_SCREENSHOTS_TOOL_NAME:
+        result = await handleCompareScreenshots(args ?? {}, { annotator });
         break;
       default:
         result = {

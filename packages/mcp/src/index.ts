@@ -39,6 +39,13 @@ export {
   resolveLocatorAnnotation,
   resolveLocatorAnnotations,
 } from "./browser/resolve-locator.js";
+export { aggregateDiffRegions } from "./compare/aggregate.js";
+export {
+  type DiffOptions,
+  type DiffResult,
+  DimensionMismatchError,
+  diffScreenshots,
+} from "./compare/diff.js";
 // JSON Schemas — for downstream tooling that wants to validate
 // agent payloads outside the MCP request handler (e.g. tests).
 export {
@@ -102,6 +109,11 @@ export {
   annotateUrlTool,
   handleAnnotateUrl,
 } from "./tools/annotate-url.js";
+export {
+  COMPARE_SCREENSHOTS_TOOL_NAME,
+  compareScreenshotsTool,
+  handleCompareScreenshots,
+} from "./tools/compare-screenshots.js";
 export {
   handleRedactScreenshot,
   REDACT_SCREENSHOT_TOOL_NAME,
