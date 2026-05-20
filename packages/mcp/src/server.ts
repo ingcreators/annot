@@ -22,12 +22,18 @@ import {
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 
+import { type BrowserPool, createChromiumPool } from "./browser/pool.js";
 import {
   ANNOTATE_SCREENSHOT_TOOL_NAME,
   type AnnotateToolResult,
   annotateScreenshotTool,
   handleAnnotateScreenshot,
 } from "./tools/annotate-screenshot.js";
+import {
+  ANNOTATE_URL_TOOL_NAME,
+  annotateUrlTool,
+  handleAnnotateUrl,
+} from "./tools/annotate-url.js";
 
 export interface CreateServerOptions {
   /**
@@ -49,12 +55,18 @@ export interface CreateServerOptions {
    * set without subclassing the server.
    */
   annotatorOptions?: AnnotatorOptions;
+  /**
+   * Inject a pre-built browser pool. Tests pass a stub to skip the
+   * Chromium launch; production callers omit the field and let
+   * the server construct a `createChromiumPool()` lazily.
+   */
+  pool?: BrowserPool;
 }
 
 const SERVER_NAME = "annot-mcp";
 const DEFAULT_VERSION = "0.1.0";
 
-const TOOL_REGISTRY = [annotateScreenshotTool] as const;
+const TOOL_REGISTRY = [annotateScreenshotTool, annotateUrlTool] as const;
 
 /**
  * Construct an MCP server instance with the Annot tool surface.
@@ -73,6 +85,10 @@ export function createServer(options: CreateServerOptions = {}): Server {
   );
 
   const annotator = options.annotator ?? createAnnotator(options.annotatorOptions ?? {});
+  // The pool launches Chromium lazily on first `_url` tool call,
+  // so constructing it here is cheap. Tests inject a stub to
+  // sidestep the actual launch.
+  const pool = options.pool ?? createChromiumPool();
 
   server.setRequestHandler(ListToolsRequestSchema, async () => {
     return { tools: TOOL_REGISTRY as unknown as (typeof TOOL_REGISTRY)[number][] };
@@ -84,6 +100,9 @@ export function createServer(options: CreateServerOptions = {}): Server {
     switch (name) {
       case ANNOTATE_SCREENSHOT_TOOL_NAME:
         result = await handleAnnotateScreenshot(args ?? {}, { annotator });
+        break;
+      case ANNOTATE_URL_TOOL_NAME:
+        result = await handleAnnotateUrl(args ?? {}, { annotator, pool });
         break;
       default:
         result = {
