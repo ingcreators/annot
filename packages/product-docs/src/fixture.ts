@@ -126,10 +126,15 @@ export async function captureScreen(page: Page, opts: ScreenCaptureOptions): Pro
   }
 
   const rootLocator = opts.rootLocator ?? page.locator("body");
-  // Playwright's "ai mode" output includes the `[ref=eN]` markers
-  // the resolver depends on. Default `ariaSnapshot()` (no mode)
-  // omits them — explicitly passing the option is load-bearing.
-  const snapshotYaml = await rootLocator.ariaSnapshot({ mode: "ai" });
+  // - `mode: "ai"` includes the `[ref=eN]` markers the resolver
+  //   depends on. Default `ariaSnapshot()` (no mode) omits them.
+  // - `boxes: true` appends `[box=x,y,w,h]` markers per entry.
+  //   The Image Service in `@ingcreators/annot-product-docs-astro`
+  //   uses these to position callouts at build time without
+  //   re-launching Playwright. Skipping it leaves the captured
+  //   snapshot bbox-less and the Astro adapter falls back to
+  //   the base PNG verbatim.
+  const snapshotYaml = await rootLocator.ariaSnapshot({ mode: "ai", boxes: true });
 
   const attributesYaml = await collectAttributesYaml(
     page,
