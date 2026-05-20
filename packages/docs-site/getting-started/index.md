@@ -1,37 +1,51 @@
 # Getting started
 
-Annot publishes three packages on npm. Pick the one that matches
+Annot publishes four packages on npm. Pick the one that matches
 how you want to use it.
 
 | Package | Use it when | npm |
 | ------- | ----------- | --- |
 | **[`@ingcreators/annot-playwright`](./playwright.md)** | You run Playwright tests and want to attach annotated screenshots to the HTML report. | [![npm](https://img.shields.io/npm/v/@ingcreators/annot-playwright)](https://www.npmjs.com/package/@ingcreators/annot-playwright) |
+| **[`@ingcreators/annot-mcp`](./mcp.md)** | You drive Annot from an AI agent (Claude Desktop / Claude Code / Cursor) via the Model Context Protocol. | [![npm](https://img.shields.io/npm/v/@ingcreators/annot-mcp)](https://www.npmjs.com/package/@ingcreators/annot-mcp) |
 | **[`@ingcreators/annot-annotator`](./annotator.md)** | You want the headless annotator from any Node script — CI, a CLI, a build pipeline. | [![npm](https://img.shields.io/npm/v/@ingcreators/annot-annotator)](https://www.npmjs.com/package/@ingcreators/annot-annotator) |
 | **[`@ingcreators/annot-core`](./core.md)** | You're building a new host (extension, editor, plugin) and need the SVG annotation format + storage types. | [![npm](https://img.shields.io/npm/v/@ingcreators/annot-core)](https://www.npmjs.com/package/@ingcreators/annot-core) |
 
 If in doubt, start with **annot-playwright** — it's the highest-
-leverage entry point and pulls the rest in transitively.
+leverage entry point and pulls the rest in transitively. If
+you're wiring an AI agent, start with **annot-mcp**.
 
 ## What you get
 
-A single call shape on every package:
+The same [annotation DSL](../api/dsl) — `rect` / `circle` /
+`arrow` / `text` / `callout` / `raw` with an `intent` shorthand
+mapped to design-system colours — works from any of the
+packages:
 
 ```ts
-import { test, rectForBoundingBox } from "@ingcreators/annot-playwright";
+import {
+  test,
+  type BboxAnnotation,
+} from "@ingcreators/annot-playwright";
 
 test("login form is reachable", async ({ page, annotator }) => {
   await page.goto("https://example.com/login");
-
-  const box = (await page.getByRole("button", { name: "Sign in" }).boundingBox())!;
+  const submit = page.getByRole("button", { name: "Sign in" });
+  const box = (await submit.boundingBox())!;
 
   await annotator.annotateScreenshot(page, {
-    annotationsSvg: rectForBoundingBox(box, { stroke: "#ff5252" }),
+    annotations: [
+      { type: "rect", bbox: box, intent: "error" },
+      { type: "callout", at: { x: 50, y: 50 }, targetBbox: box,
+        content: "Failing here" },
+    ] satisfies BboxAnnotation[],
   });
 });
 ```
 
 The resulting PNG attaches to the Playwright HTML report next to
-the failing step.
+the failing step. AI agents emit the same `BboxAnnotation[]`
+shape over MCP tool calls; see
+[AI agents](../ai-agents/).
 
 ## Requirements
 

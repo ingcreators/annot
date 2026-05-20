@@ -60,6 +60,7 @@ export default defineConfig({
       { text: "Getting started", link: "/getting-started/" },
       { text: "API", link: "/api/" },
       { text: "Recipes", link: "/recipes/" },
+      { text: "AI agents", link: "/ai-agents/" },
       {
         text: "Annot.work",
         items: [
@@ -84,6 +85,10 @@ export default defineConfig({
               link: "/getting-started/playwright",
             },
             {
+              text: "Install annot-mcp",
+              link: "/getting-started/mcp",
+            },
+            {
               text: "Install annot-annotator",
               link: "/getting-started/annotator",
             },
@@ -98,6 +103,7 @@ export default defineConfig({
             { text: "Overview", link: "/api/" },
             { text: "createAnnotator", link: "/api/create-annotator" },
             { text: "Playwright fixture", link: "/api/playwright-fixture" },
+            { text: "Annotation DSL", link: "/api/dsl" },
             { text: "SVG helpers", link: "/api/svg-helpers" },
           ],
         },
@@ -112,6 +118,10 @@ export default defineConfig({
               link: "/recipes/assertion-failure",
             },
             {
+              text: "Annotate on failure with the DSL",
+              link: "/recipes/dsl-on-failure",
+            },
+            {
               text: "Draw by DOM locator",
               link: "/recipes/dom-locator",
             },
@@ -119,6 +129,20 @@ export default defineConfig({
               text: "Attach to the HTML report",
               link: "/recipes/html-report",
             },
+            {
+              text: "Agent bug-report autopilot",
+              link: "/recipes/agent-bug-report",
+            },
+          ],
+        },
+      ],
+      "/ai-agents/": [
+        {
+          text: "AI agents",
+          items: [
+            { text: "Overview", link: "/ai-agents/" },
+            { text: "Install", link: "/ai-agents/install" },
+            { text: "MCP tools reference", link: "/ai-agents/tools" },
           ],
         },
       ],
