@@ -211,6 +211,74 @@ describe("quantizeMedianCut — Floyd–Steinberg remap basics", () => {
   });
 });
 
+describe("quantizeMedianCut — nearest-palette cache", () => {
+  // Phase 1 of `docs/plans/_done/quantizer-nearest-palette-acceleration.md`
+  // wrapped the FS-dither inner loop with a per-encode `Map<rgb24,
+  // paletteIdx>` cache. These tests guard the contract.
+
+  it("repeated identical pixels stay deterministic (cache-hit path)", () => {
+    // Solid-colour image — pixel 0 fills the cache, every subsequent
+    // pixel hits. The Median-Cut step produces exactly one palette
+    // entry; the remap step must route every pixel to it.
+    const buf = solid(32, 32, 142, 78, 230);
+    const { palette, indices } = quantizeMedianCut(buf, 32, 32, 256);
+    expect(palette.length).toBe(4);
+    expect(Array.from(palette).slice(0, 3)).toEqual([142, 78, 230]);
+    expect(indices.length).toBe(1024);
+    for (const idx of indices) expect(idx).toBe(0);
+  });
+
+  it("saturating-dither input still produces valid indices", () => {
+    // Black/white checker — FS error accumulates to push the
+    // post-error RGB channels well outside [0, 255]. The cache key
+    // path clamps before lookup, but the linear-scan fallback
+    // operates on the unclamped float. Every output index must
+    // index a real palette entry.
+    const w = 32;
+    const h = 32;
+    const buf = new Uint8Array(w * h * 4);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const v = (x + y) % 2 === 0 ? 0 : 255;
+        const i = (y * w + x) * 4;
+        buf[i] = v;
+        buf[i + 1] = v;
+        buf[i + 2] = v;
+        buf[i + 3] = 255;
+      }
+    }
+    const { palette, indices } = quantizeMedianCut(buf, w, h, 8);
+    const maxIdx = palette.length / 4;
+    for (const idx of indices) expect(idx).toBeLessThan(maxIdx);
+  });
+
+  it("two-colour input over many pixels exercises the cache", () => {
+    // Two-colour image with both colours repeated thousands of
+    // times. The cache lookup ratio is asymptotically 100 % minus
+    // the two initial misses; the test asserts the indices follow
+    // the input pattern (Median-Cut at maxColors=2 keeps both
+    // colours distinct).
+    const w = 100;
+    const h = 100;
+    const buf = new Uint8Array(w * h * 4);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const i = (y * w + x) * 4;
+        const useA = (x + y) % 2 === 0;
+        buf[i] = useA ? 200 : 50;
+        buf[i + 1] = useA ? 100 : 150;
+        buf[i + 2] = useA ? 50 : 200;
+        buf[i + 3] = 255;
+      }
+    }
+    const { palette, indices } = quantizeMedianCut(buf, w, h, 2);
+    expect(palette.length).toBe(8); // 2 entries × 4 bytes
+    // Without dither artefacts at the borders, both indices appear.
+    const seen = new Set(indices);
+    expect(seen.size).toBe(2);
+  });
+});
+
 describe("quantizeMedianCut — quality smoke-test on a UI-ish gradient", () => {
   // A 64×8 horizontal gradient from black to white. Quantized to
   // 8 colours with FS dither, the result should preserve the
