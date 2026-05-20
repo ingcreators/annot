@@ -1,9 +1,9 @@
 // `encodeRgba(rgba, w, h, options)` — Node-side orchestration of
 // the smart / png / jpeg / saveSize encoding pipeline. Mirrors
 // `@ingcreators/annot-core/encode`'s decision tree but runs in
-// pure Node via `@napi-rs/canvas` (decoding + resize + JPEG) and
-// the optional `@ingcreators/annot-imagequant` WASM (PNG-8
-// quantization).
+// pure Node via `@napi-rs/canvas` (decoding + resize + JPEG)
+// and the pure-TS Median Cut quantizer (PNG-8) from
+// `@ingcreators/annot-core/encode/quantize-median-cut`.
 //
 // Inputs:
 //
@@ -25,11 +25,12 @@ import type { EncodeResult } from "./options.js";
 import { isPhotoHeavy, quantizeRgbaToPng8 } from "./quantize.js";
 
 /**
- * Upper bound on images we attempt to PNG-8-quantize. Matches the
- * browser-side cap — libimagequant's Wu algorithm copies the image
- * twice into WASM memory, and a 1920×5200 scroll capture is the
- * largest we want to incur that cost on. Above this we fall back
- * to PNG-32.
+ * Upper bound on images we attempt to PNG-8-quantize. Matches
+ * the browser-side cap — the Median Cut histogram + FS-dither
+ * remap allocate roughly `width*height*4` for the input + a few
+ * MB of error rows, so the largest scroll capture we want to
+ * incur that cost on is ~1920×5200. Above this we fall back to
+ * PNG-32.
  */
 const MAX_SMART_PIXELS = 10_000_000;
 
@@ -49,10 +50,10 @@ const MAX_SMART_PIXELS = 10_000_000;
  *            - Sample unique-colour count via {@link isPhotoHeavy}.
  *              If photo-heavy, emit `smartFallback` (PNG-32 or
  *              JPEG) with reason `"photo-fallback-*"`.
- *            - Otherwise quantize to ≤256 colours via libimagequant
- *              (if installed) and emit PNG-8 with reason `"png-8"`.
- *              When the optional imagequant WASM isn't installed,
- *              fall back to PNG-32 with `reason: "imagequant-missing"`.
+ *            - Otherwise quantize to ≤256 colours via the
+ *              in-tree Median Cut + FS dither and emit PNG-8 with
+ *              reason `"png-8"`. PNG-8 is unconditionally
+ *              available post-Phase 3 (no optional WASM gate).
  */
 export async function encodeRgba(
   rgba: Uint8Array,
@@ -113,19 +114,16 @@ export async function encodeRgba(
     };
   }
 
-  // UI-heavy → try PNG-8 via imagequant.
-  const png8 = await quantizeRgbaToPng8(resized, w, h);
-  if (png8) {
-    return { bytes: png8, chosen: "png", reason: "png-8", width: w, height: h };
-  }
-  // Imagequant not installed — fall back to PNG-32.
-  return {
-    bytes: encodePng32(resized, w, h),
-    chosen: "png",
-    reason: "imagequant-missing",
-    width: w,
-    height: h,
-  };
+  // UI-heavy → quantize to PNG-8 via the in-tree pure-TS Median
+  // Cut + Floyd–Steinberg dither. The previous GPL-3.0
+  // libimagequant WASM dependency (and its dynamic-import +
+  // `reason: "imagequant-missing"` graceful-fallback contract) was
+  // retired by Phase 3 of
+  // `docs/plans/replace-libimagequant-with-median-cut.md`. PNG-8
+  // is now unconditionally available — no runtime "imagequant
+  // installed?" gate.
+  const png8 = quantizeRgbaToPng8(resized, w, h);
+  return { bytes: png8, chosen: "png", reason: "png-8", width: w, height: h };
 }
 
 /**

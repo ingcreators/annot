@@ -1,75 +1,27 @@
-// Dynamic-import boundary for the optional
-// `@ingcreators/annot-imagequant` WASM. Because imagequant is
-// GPL-3.0-licensed it ships as an `optionalDependencies` entry —
-// users who want PNG-8 smart-mode encoding install it explicitly
-// and accept the GPL obligations. Users who don't get a graceful
-// fallback through this module's `quantizeRgbaToPng8` returning
-// `null`, which the orchestrator handles by falling back to
-// PNG-32 (or JPEG when `smartFallback === "jpeg"`).
+// Synchronous PNG-8 quantizer that drives `encodeRgba`'s smart-
+// mode UI-heavy branch. Wraps the in-tree pure-TS Median Cut +
+// Floyd–Steinberg dither (`@ingcreators/annot-core/encode/quantize-median-cut`)
+// + the PNG-8 file encoder (`@ingcreators/annot-core/encode/png8`).
+//
+// Phase 3 of `docs/plans/replace-libimagequant-with-median-cut.md`
+// replaced the prior GPL-3.0 libimagequant WASM dependency. The
+// previous dynamic-import boundary, the `isImagequantAvailable()`
+// gate, and the `reason: "imagequant-missing"` graceful-fallback
+// contract are gone — PNG-8 is now unconditionally available
+// without GPL exposure.
 
 import { encodePng8 } from "@ingcreators/annot-core/encode/png8";
-
-/** Module-level singleton — cache the WASM init across calls. */
-let wasmPromise: Promise<{
-  quantize_image: (
-    pixels: Uint8Array,
-    width: number,
-    height: number,
-    maxColors: number,
-  ) => { palette: Uint8Array; indices: Uint8Array };
-} | null> | null = null;
-
-async function ensureImagequant(): Promise<{
-  quantize_image: (
-    pixels: Uint8Array,
-    width: number,
-    height: number,
-    maxColors: number,
-  ) => { palette: Uint8Array; indices: Uint8Array };
-} | null> {
-  if (wasmPromise) return wasmPromise;
-  wasmPromise = (async () => {
-    try {
-      const mod = (await import("@ingcreators/annot-imagequant")) as {
-        default: () => Promise<unknown>;
-        quantize_image: (
-          pixels: Uint8Array,
-          width: number,
-          height: number,
-          maxColors: number,
-        ) => { palette: Uint8Array; indices: Uint8Array };
-      };
-      await mod.default();
-      return { quantize_image: mod.quantize_image };
-    } catch {
-      // Optional dep not installed (or failed to load) — caller
-      // falls back to a non-quantized path.
-      return null;
-    }
-  })();
-  return wasmPromise;
-}
+import { quantizeMedianCut } from "@ingcreators/annot-core/encode/quantize-median-cut";
 
 /**
- * Quantize RGBA pixels to ≤256 colours via libimagequant and emit
- * a PNG-8 file. Returns the encoded bytes, OR `null` if the
- * optional imagequant module isn't installed.
+ * Quantize RGBA pixels to ≤256 colours via Median Cut + Floyd–
+ * Steinberg dither and emit a PNG-8 file.
  *
- * The caller is responsible for falling back to a non-PNG-8 path
- * (PNG-32 or JPEG) when this returns `null`.
+ * Synchronous, deterministic, GPL-free.
  */
-export async function quantizeRgbaToPng8(
-  rgba: Uint8Array,
-  width: number,
-  height: number,
-): Promise<Uint8Array | null> {
-  const mod = await ensureImagequant();
-  if (!mod) return null;
-  const result = mod.quantize_image(rgba, width, height, 256);
-  if (!(result?.palette instanceof Uint8Array) || !(result?.indices instanceof Uint8Array)) {
-    throw new Error("quantize_image returned an unexpected shape");
-  }
-  return encodePng8(result.palette, result.indices, width, height, 9);
+export function quantizeRgbaToPng8(rgba: Uint8Array, width: number, height: number): Uint8Array {
+  const { palette, indices } = quantizeMedianCut(rgba, width, height, 256);
+  return encodePng8(palette, indices, width, height, 9);
 }
 
 /**
@@ -95,11 +47,4 @@ export function isPhotoHeavy(rgba: Uint8Array, threshold: number): boolean {
     if (seen.size > threshold) return true;
   }
   return false;
-}
-
-/** Whether the optional imagequant WASM is available at runtime.
- *  Useful for callers that want to decide ahead of time whether to
- *  request `format: "smart"`. */
-export async function isImagequantAvailable(): Promise<boolean> {
-  return (await ensureImagequant()) !== null;
 }
