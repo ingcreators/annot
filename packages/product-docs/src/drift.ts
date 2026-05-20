@@ -281,11 +281,15 @@ function scoreSimilarity(a: string, b: string): number {
   return overlap / Math.max(ga.size, gb.size);
 }
 
-/** Collapse whitespace + trim — so "extra blank lines" don't false-positive attr drift. */
+/** Collapse trailing whitespace + drop blank lines — so YAML
+ *  reformatting noise doesn't false-positive attribute drift.
+ *  `String#trimEnd` avoids the polynomial backtracking CodeQL
+ *  flags for the equivalent `/\s+$/` regex on unbounded library
+ *  input. */
 function normaliseYaml(yaml: string): string {
   return yaml
     .split(/\r?\n/)
-    .map((l) => l.replace(/\s+$/, ""))
+    .map((l) => l.trimEnd())
     .filter((l) => l.length > 0)
     .join("\n");
 }
