@@ -1,6 +1,6 @@
 {
   "name": "@ingcreators/annot-imagequant",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "In-tree wasm-bindgen wrapper around ImageOptim/libimagequant. Drives the PNG-8 palette quantization in Annot's PNG-8 capture pipeline. GPL-3.0 — installed only when consumers opt into the smart PNG-8 encoder.",
   "license": "GPL-3.0-or-later",
   "author": "ingcreators",
