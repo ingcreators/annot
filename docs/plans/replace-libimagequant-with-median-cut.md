@@ -25,13 +25,34 @@
 > [`_done/vendor-libimagequant.md`](./_done/vendor-libimagequant.md)
 > work.
 >
-> **Compatibility:** `@ingcreators/annot-core/encode` only. The
-> external API of `encodeCapture()` is unchanged. The internal
-> [`quantizeToPng8(imageData)`](../../packages/core/src/encode/index.ts)
-> helper is the only call site; downstream code consumes the
-> PNG-8 byte output verbatim.
+> **Compatibility:** two call sites need updating, both inside
+> the monorepo:
 >
-> **Risk:** Four phases, each independently revertable. Phase 1
+> - [`packages/core/src/encode/index.ts`](../../packages/core/src/encode/index.ts)
+>   — the PWA / extension / desktop client capture pipeline.
+>   Direct (static) import; WASM eagerly loaded.
+> - [`packages/annotator/src/encode/quantize.ts`](../../packages/annotator/src/encode/quantize.ts)
+>   — the headless-annotator (Node) PNG-8 path, also used
+>   transitively from [`@ingcreators/annot-mcp`](../../packages/mcp/).
+>   **Dynamic-import boundary with graceful fallback** today:
+>   the WASM ships as a regular `dependencies` entry but is
+>   `import()`-ed lazily so a consumer who `npm uninstall`s the
+>   package to avoid GPL contamination still gets a working
+>   `toEncoded()` (the smart-encoder degrades to PNG-32 with
+>   `reason: "imagequant-missing"`). The TS replacement makes
+>   this dynamic-import dance obsolete — PNG-8 becomes always
+>   available, no graceful-fallback path needed.
+>
+> External APIs (`encodeCapture()`,
+> [`Annotator.toEncoded()`](../../packages/annotator/src/annotator.ts),
+> the MCP tool signatures) are unchanged. The
+> [`isImagequantAvailable()`](../../packages/annotator/src/encode/quantize.ts)
+> public export goes away as part of Phase 2 (always-true after
+> the swap; pre-release, no external consumers — see
+> [`docs/plans/annot-cloud-roadmap.md`](./annot-cloud-roadmap.md)
+> for the launch timeline).
+>
+> **Risk:** Five phases, each independently revertable. Phase 1
 > lands the TS quantizer behind a feature flag so the two
 > quantizers can be A/B-compared on real fixtures before any
 > bytes-in-anger swap.
@@ -41,22 +62,54 @@
 ### What we are replacing
 
 [`packages/imagequant/`](../../packages/imagequant/) (300-line
-wasm-bindgen crate) exports exactly one function:
+wasm-bindgen crate, **published as
+`@ingcreators/annot-imagequant@0.1.0` on 2026-05-20** per
+[PR #852](https://github.com/ingcreators/annot/pull/852))
+exports exactly one function:
 
 ```ts
 quantize_image(rgba, width, height, max_colors=256)
   → { palette: Uint8Array, indices: Uint8Array }
 ```
 
-Its single call site is
-[`packages/core/src/encode/index.ts`](../../packages/core/src/encode/index.ts)
-inside `quantizeToPng8`. The output is fed unchanged into
+Two call sites today:
+
+| Call site | Import style | Fallback |
+|---|---|---|
+| [`packages/core/src/encode/index.ts`](../../packages/core/src/encode/index.ts) (`quantizeToPng8`) | static `import init, { quantize_image }` | none — WASM eagerly loaded |
+| [`packages/annotator/src/encode/quantize.ts`](../../packages/annotator/src/encode/quantize.ts) (`quantizeRgbaToPng8` / `isImagequantAvailable`) | dynamic `await import(...)` | PNG-32 + `reason: "imagequant-missing"` |
+
+Both feed the output unchanged into
 [`encodePng8`](../../packages/core/src/encode/png8.ts) — a 140-line
 self-contained PNG-8 file-format encoder (Pako-only dependency)
 that is **NOT being replaced** by this plan.
 
 In other words: only the *colour quantization* step is on the
 table. The *PNG file format encoding* step stays exactly as-is.
+
+### Existing graceful-fallback contract (annotator / MCP only)
+
+The annotator package already treats imagequant as an
+optional, GPL-fenced dependency:
+
+- Marketed as a regular `dependencies` entry but **dynamic-
+  imported** inside `quantize.ts` so a tree-shake or
+  explicit uninstall is a no-op at static-analysis time.
+- `isImagequantAvailable(): Promise<boolean>` lets callers
+  decide whether to request `format: "smart"`.
+- When unavailable, `toEncoded()` returns a result with
+  `reason: "imagequant-missing"` and PNG-32 bytes.
+- Test coverage in
+  [`packages/annotator/src/encode/encode.test.ts`](../../packages/annotator/src/encode/encode.test.ts)
+  exercises both the "imagequant present" and "imagequant
+  absent" paths.
+
+Once Median Cut + FS dither lives inside
+`@ingcreators/annot-core/encode`, this fallback path is
+obsolete — PNG-8 becomes unconditionally available without
+GPL exposure. The dynamic-import dance + the
+`isImagequantAvailable` export + the `"imagequant-missing"`
+reason value all go away in Phase 2.
 
 ### Why a pure-TS replacement is realistic for Annot
 
@@ -128,14 +181,23 @@ distributions in one move.
    Phase 3 lands.
 3. The `packages/imagequant/` workspace, the Rust / wasm-pack
    toolchain, and the `verify-wasm` CI job are removed
-   entirely. CLAUDE.md "Monorepo layout" and any other docs are
-   updated to match.
-4. `encodeCapture()` and `encodePng8()` external behaviour /
-   signatures are unchanged. No callers outside
-   `packages/core/src/encode/` need touching.
-5. The new quantizer is deterministic (same input → same output)
+   entirely. CLAUDE.md "Monorepo layout", `.changeset/README.md`,
+   and any other docs are updated to match.
+4. `@ingcreators/annot-imagequant@0.1.0` on npm is **deprecated**
+   via `npm deprecate` with a pointer to the replacement plan
+   and the equivalent built-in path. We don't unpublish (npm
+   policy + supply-chain etiquette) — we mark it deprecated so
+   `pnpm add` surfaces a warning if anyone tries to install it.
+5. `encodeCapture()` and `encodePng8()` external behaviour /
+   signatures are unchanged. The annotator's
+   `Annotator.toEncoded()` external behaviour is unchanged in
+   the success case; the `reason: "imagequant-missing"` value
+   stops being emitted because PNG-8 is unconditionally
+   available. The `isImagequantAvailable()` named export is
+   removed (pre-release; no external consumers).
+6. The new quantizer is deterministic (same input → same output)
    so PNG-8 fixtures are stable for snapshot tests.
-6. Test coverage in
+7. Test coverage in
    [`packages/core/src/encode/`](../../packages/core/src/encode/)
    exercises the new quantizer on fixture inputs that mirror the
    existing test corpus.
@@ -325,38 +387,80 @@ implementation in this phase.
 Acceptance: the TS quantizer is callable, tested, and visually
 A/B-compared in the PR. No production behaviour has changed.
 
-### Phase 2 — Switch the default to the TS quantizer
+### Phase 2 — Switch the client-capture default to the TS quantizer
 
 - Flip the feature flag default in
   `packages/core/src/encode/index.ts`.
 - Remove the `ensureWasm()` path. Remove the
-  `@ingcreators/annot-imagequant` import.
+  `@ingcreators/annot-imagequant` static import.
 - Keep `packages/imagequant/` in the workspace untouched for
   one-PR revertability.
 - Build sizes (PWA, extension, desktop) recorded in the PR for
   comparison.
 
-Acceptance: production bundles no longer load the WASM blob.
-Smoke-test capture flow in PWA + extension + desktop.
+Acceptance: production PWA / extension / desktop bundles no
+longer load the WASM blob. Smoke-test capture flow in PWA +
+extension + desktop. Annotator / MCP path **still uses the
+WASM dynamic-import** at this phase (Phase 3 retires it).
 
-### Phase 3 — Delete `packages/imagequant/`
+### Phase 3 — Switch the annotator / MCP path to the TS quantizer
+
+- In `packages/annotator/src/encode/quantize.ts`, replace the
+  dynamic-import dance with a direct call to
+  `quantizeMedianCut` from `@ingcreators/annot-core/encode`.
+- Remove `isImagequantAvailable()` and its export from
+  `packages/annotator/src/index.ts`.
+- Stop emitting `reason: "imagequant-missing"` from
+  `toEncoded()`. Update the API docs in `annotator.ts` and the
+  type union in `EncodeResult` accordingly.
+- Update tests in
+  `packages/annotator/src/encode/encode.test.ts` — the
+  "imagequant absent" branch becomes unreachable; replace with
+  a deterministic golden against the TS quantizer.
+- Drop `@ingcreators/annot-imagequant` from the
+  `dependencies` of `packages/annotator/package.json` and
+  (if applicable) `packages/mcp/package.json`.
+- Changeset: `minor` bump for both `annot-annotator` and
+  `annot-mcp` — public API surface contracts (removed export
+  + removed reason value).
+
+Acceptance: `pnpm --filter @ingcreators/annot-annotator test`
++ `--filter @ingcreators/annot-mcp test` pass with no
+imagequant in `node_modules` of either workspace. End-to-end
+PNG-8 path exercised by `encode.test.ts`.
+
+### Phase 4 — Delete `packages/imagequant/` + deprecate on npm
 
 - Remove the workspace package, the Cargo.lock entries, the
-  wasm-pack scripts, the `verify-wasm` CI job, and any
-  remaining toolchain installation steps.
-- Update CLAUDE.md "Monorepo layout" to drop the
+  wasm-pack scripts (`scripts/build-wasm.sh`,
+  `scripts/verify-wasm.sh`), the `verify-wasm` CI job, and any
+  remaining toolchain installation steps from the root
+  workflows.
+- Drop `@ingcreators/annot-imagequant` from
+  `.changeset/README.md`'s publishable-packages list (back
+  down to four: core / annotator / playwright / mcp). Drop
+  the matching changeset config entry.
+- Update CLAUDE.md "Monorepo layout" to delete the
   `imagequant/` row.
 - Update CLAUDE.md "Three-tier package boundary" if the
   imagequant Tier A row is referenced (it is — section 2's
   table).
-- Update any remaining references in
-  `_done/vendor-libimagequant.md` to mark its outcome
-  superseded (a one-line addendum is sufficient — the original
-  plan is historical context).
+- Append a one-line "superseded by
+  `replace-libimagequant-with-median-cut.md`" addendum to the
+  top of [`_done/vendor-libimagequant.md`](./_done/vendor-libimagequant.md).
+- **Operator action (manual):** run
+  `npm deprecate @ingcreators/annot-imagequant@"*"
+  "Replaced by built-in TS quantizer in
+  @ingcreators/annot-core@>=NEXT_VERSION. See
+  https://github.com/ingcreators/annot/blob/main/docs/plans/_done/replace-libimagequant-with-median-cut.md"`
+  from a maintainer account. Document this in the PR
+  description so it gets done at merge time, not silently
+  forgotten.
 
 Acceptance: `pnpm -r build` passes with no Rust toolchain
-installed. `git grep -i imagequant` returns only history /
-addenda.
+installed. `git grep -i imagequant -- ':!docs/plans/_done/'`
+returns only addenda. `npm view @ingcreators/annot-imagequant
+deprecated` returns the deprecation string.
 
 ## Verification (each phase)
 
@@ -368,6 +472,12 @@ addenda.
 - For Phase 1 + 2: `pnpm --filter @ingcreators/annot-web
   build` and `pnpm --filter @ingcreators/annot-extension
   build` succeed; bundle-size diff is captured in the PR.
+- For Phase 3: `pnpm --filter @ingcreators/annot-annotator
+  build` + `pnpm --filter @ingcreators/annot-mcp build`
+  succeed with `imagequant` removed from `node_modules`.
+- For Phase 4: a `pnpm install` on a fresh clone with no Rust
+  toolchain succeeds; `gh workflow view ci` shows no
+  `verify-wasm` job.
 
 ## Migration notes
 
