@@ -44,8 +44,12 @@ test("login form is reachable", async ({ page, annotator }) => {
 
 The resulting PNG attaches to the Playwright HTML report next to
 the failing step. AI agents emit the same `BboxAnnotation[]`
-shape over MCP tool calls; see
-[AI agents](../ai-agents/).
+shape over MCP tool calls; see [AI agents](../ai-agents/).
+
+Need smaller files? Pass `encode: { format: "smart",
+saveSizePreset: "standard" }` and the output PNG-32 gets
+auto-quantized to PNG-8 (UI-heavy) or compressed to JPEG
+(photo-heavy). See [Encode pipeline](../api/encode).
 
 ## Requirements
 

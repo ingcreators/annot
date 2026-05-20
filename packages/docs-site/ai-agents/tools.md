@@ -14,7 +14,11 @@ absolute filesystem path.
 | `annot_compare_screenshots` | two PNGs (same dims) | — |
 
 The annotation shape vocabulary is documented in the
-[DSL reference](../api/dsl).
+[DSL reference](../api/dsl). The optional `encode` block on
+every tool (since `annot-mcp@0.2.0`) is documented in the
+[Encode pipeline reference](../api/encode) — set it to
+shrink the output bytes for inclusion in GitHub issues,
+manuals, or PR comments.
 
 ## `annot_annotate_screenshot`
 
@@ -55,7 +59,11 @@ locator-first tool.
   ],
   "viewport": { "width": 1280, "height": 800, "deviceScaleFactor": 1 },
   "fullPage": false,
-  "waitFor": "load"   // "load" | "domcontentloaded" | "networkidle"
+  "waitFor": "load",   // "load" | "domcontentloaded" | "networkidle"
+  "encode": {          // optional — see ../api/encode
+    "format": "smart",
+    "saveSizePreset": "standard"
+  }
 }
 ```
 
@@ -103,7 +111,8 @@ or bboxes:
 }
 ```
 
-Same viewport / fullPage / waitFor knobs as `annot_annotate_url`.
+Same viewport / fullPage / waitFor / encode knobs as
+`annot_annotate_url`.
 
 ## `annot_compare_screenshots`
 
@@ -115,7 +124,11 @@ changed regions highlighted as `warning`-intent rects.
   "before": "/abs/path/before.png",
   "after":  "/abs/path/after.png",
   "threshold": 0.1,            // 0 strict … 1 permissive
-  "includeChangeList": false   // when true, append a text summary
+  "includeChangeList": false,  // when true, append a text summary
+  "encode": {                  // optional — see ../api/encode
+    "format": "smart",
+    "saveSizePreset": "standard"
+  }
 }
 ```
 
