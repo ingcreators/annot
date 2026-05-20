@@ -12,6 +12,33 @@
 //
 // See `docs/plans/agent-mcp-integration.md` for the full design.
 
+export {
+  type CapturePageOptions,
+  type CapturePageResult,
+  capturePage,
+  type PageHandle,
+  type ViewportOptions,
+} from "./browser/capture.js";
+// Browser pool + locator resolution (Phase 3a infrastructure).
+// Used internally by `annot_annotate_url` and `annot_redact_url`
+// (Phases 3b + 4). Re-exported so embedders can drive the same
+// infrastructure for custom MCP surfaces.
+export {
+  type BrowserLauncher,
+  type BrowserLike,
+  BrowserPool,
+  type BrowserPoolOptions,
+  ChromiumUnavailableError,
+  createChromiumPool,
+} from "./browser/pool.js";
+export {
+  type LocatorLike,
+  LocatorResolutionError,
+  type PageLike,
+  resolveLocator,
+  resolveLocatorAnnotation,
+  resolveLocatorAnnotations,
+} from "./browser/resolve-locator.js";
 // JSON Schemas — for downstream tooling that wants to validate
 // agent payloads outside the MCP request handler (e.g. tests).
 export {
@@ -58,6 +85,7 @@ export {
   type ResolvedImage,
   resolveImageInput,
 } from "./io/read-image.js";
+
 // Server factory + transport — embedding callers can construct
 // the server in-process instead of going through the bin.
 export { type CreateServerOptions, createServer } from "./server.js";
