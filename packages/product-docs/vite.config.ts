@@ -33,7 +33,25 @@ export default defineConfig({
     emptyOutDir: true,
     target: "es2022",
     rollupOptions: {
-      external: ["@playwright/test", /^@ingcreators\//, /^node:/],
+      // Runtime deps stay external — npm consumers install them
+      // via this package's `dependencies` declarations. Bundling
+      // `unified` + `remark-*` + `js-yaml` + `zod` would
+      // double-count when the consumer already depends on any of
+      // them, and would prevent the host from controlling the
+      // version pin.
+      external: [
+        "@playwright/test",
+        /^@ingcreators\//,
+        /^node:/,
+        "js-yaml",
+        "remark-frontmatter",
+        "remark-mdx",
+        "remark-parse",
+        "remark-stringify",
+        "unified",
+        "unist-util-visit",
+        "zod",
+      ],
     },
   },
 });

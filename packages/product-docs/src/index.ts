@@ -1,10 +1,43 @@
 // Public surface for `@ingcreators/annot-product-docs`.
 //
-// Phase 1 of `docs/plans/living-product-docs.md`. PR 1 ships the
-// package scaffold only; PRs 2–4 fill it with the MDX parser,
-// match resolver, project config, Playwright `screen` fixture,
-// and the `annot docs init / sync / lint` CLI. Until then this
-// module intentionally re-exports nothing — the file exists so
-// `vite build` has an entry point and `tsc --noEmit` has
-// something to typecheck.
-export {};
+// Phase 1 of `docs/plans/living-product-docs.md`. PR 2 lands the
+// MDX parser, match resolver, project config, and Zod schemas;
+// PRs 3–4 add the Playwright `screen` fixture and the
+// `annot docs init / sync / lint` CLI on top.
+
+export {
+  annotDocsConfigSchema,
+  annotFrontmatterSchema,
+  defineConfig,
+  isScreenRole,
+} from "./config.js";
+export type { ParseMdxOptions } from "./mdx.js";
+export { parseMdx, parseMdxFile, updateCommentBlocks } from "./mdx.js";
+export type {
+  ResolveFailureKind,
+  ResolveResult,
+  SnapshotEntry,
+} from "./resolver.js";
+export {
+  parseSnapshot,
+  resolveMatch,
+  resolveOverlays,
+} from "./resolver.js";
+
+export type {
+  AnnotCommentBlocks,
+  AnnotFrontmatter,
+  AnnotFrontmatterRole,
+  AnnotMeta,
+  AnnotXlsxConfig,
+  HistoryEntrySpec,
+  MatchKey,
+  OverlayIntent,
+  OverlaySpec,
+  ParsedMdx,
+  ScreenListSpec,
+  ScreenSpec,
+  TransitionSpec,
+} from "./types.js";
+
+export type { AnnotDocsConfig, BookConfig } from "./types-config.js";
