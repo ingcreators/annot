@@ -69,7 +69,6 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@ingcreators/annot-imagequant": "workspace:*",
     "@types/pako": "^2.0.4",
     "typescript": "catalog:",
     "vite": "catalog:",

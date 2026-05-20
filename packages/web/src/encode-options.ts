@@ -6,11 +6,12 @@
  * `@ingcreators/annot-core/encode`'s `DEFAULT_ENCODE_OPTIONS`.
  *
  * Imports from the leaf `/encode/options` subpath rather than `/encode`
- * itself: the latter pulls in the WASM imagequant binding, and the
- * production bundle defers that to the lazy worker chunk via
- * `workers/encode-client.ts`'s dynamic import. Sharing this file's
- * static import would otherwise hoist the encoder into the main
- * bundle (Rolldown's `INEFFECTIVE_DYNAMIC_IMPORT` warning).
+ * itself: the latter pulls in the Median Cut quantizer + Pako
+ * DEFLATE encoder, and the production bundle defers that to the
+ * lazy worker chunk via `workers/encode-client.ts`'s dynamic
+ * import. Sharing this file's static import would otherwise hoist
+ * the encoder into the main bundle (Rolldown's
+ * `INEFFECTIVE_DYNAMIC_IMPORT` warning).
  *
  * Used by:
  *   - app.ts (initial capture / SplitEditor Apply)

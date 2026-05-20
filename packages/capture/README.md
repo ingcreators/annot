@@ -22,7 +22,7 @@ What lives here:
   `ipcRenderer.send`-bridged equivalent for Electron).
 - **Encode pipeline** ([`src/encode/`](./src/encode/)) — pure-canvas
   image-ops (stitch / crop / mosaic) and the worker-pool source for
-  parallel libimagequant / JPEG / PNG re-encoding.
+  parallel Median Cut / JPEG / PNG re-encoding.
 - **Shared types** ([`src/shared/`](./src/shared/)) — `Settings`
   shape + DEFAULT / merge / parseSelectorList /
   shouldHideOverlaysFor; capture-message envelopes; encode adapter.

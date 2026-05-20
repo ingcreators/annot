@@ -7,8 +7,8 @@
  * verbatim, and post the returned `EncodeResult` back. No Transferable
  * tricks for now — the payloads are modest (a few hundred KB at most
  * for real screenshots) and the structured-clone cost is dwarfed by
- * the WASM quantization + DEFLATE-9 pass that this file exists to
- * move off the main thread.
+ * the Median Cut quantization + DEFLATE-9 pass that this file
+ * exists to move off the main thread.
  */
 import {
   type EncodeOptions,
