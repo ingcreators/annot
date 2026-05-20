@@ -362,6 +362,9 @@ importers:
       js-yaml:
         specifier: ^4.1.1
         version: 4.1.1
+      playwright-core:
+        specifier: ^1.50.0
+        version: 1.60.0
       remark-frontmatter:
         specifier: ^5.0.0
         version: 5.0.0

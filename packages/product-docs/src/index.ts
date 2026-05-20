@@ -6,11 +6,29 @@
 // `annot docs init / sync / lint` CLI on top.
 
 export {
+  filterAnnotMdxFiles,
+  main,
+  walkMdx,
+} from "./cli.js";
+export {
   annotDocsConfigSchema,
   annotFrontmatterSchema,
   defineConfig,
   isScreenRole,
 } from "./config.js";
+export type {
+  DetectDriftOptions,
+  DriftFinding,
+  DriftKind,
+  DriftSeverity,
+} from "./drift.js";
+export {
+  detectDrift,
+  detectDriftFromYaml,
+  isLintableScreen,
+  lintableScreens,
+  summariseDrift,
+} from "./drift.js";
 export type { Screen, ScreenCaptureOptions } from "./fixture.js";
 export {
   captureScreen,

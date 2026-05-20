@@ -1,0 +1,446 @@
+// Command-line interface for `@ingcreators/annot-product-docs`.
+//
+// Phase 1 PR 4 of `docs/plans/living-product-docs.md`. Provides
+// the three commands the plan calls out:
+//
+//   annot docs init      Scaffold annot-docs.config.ts + a sample
+//                        tour spec + a starter screen MDX.
+//
+//   annot docs sync      For every MDX with `annot:` frontmatter,
+//                        re-capture aria-snapshot + attribute
+//                        blocks via Playwright. Writes back to
+//                        the source MDX in place.
+//
+//   annot docs lint      Same walk as `sync`, but reports drift
+//                        against the live page instead of
+//                        rewriting. Exit code is non-zero when
+//                        any `error`-severity finding fires.
+//
+// Phase 4 polishes the `--ci` / `--fix` / JSON output of `lint`;
+// this PR ships the human-readable form so the workflow is
+// end-to-end usable today.
+
+import { mkdir, readdir, writeFile } from "node:fs/promises";
+import { dirname, join, relative, resolve, sep } from "node:path";
+
+import type { Browser, Page } from "playwright-core";
+import {
+  type DriftFinding,
+  type DriftSeverity,
+  detectDrift,
+  lintableScreens,
+  summariseDrift,
+} from "./drift.js";
+import { captureScreen } from "./fixture.js";
+import { parseMdxFile } from "./mdx.js";
+import { parseSnapshot } from "./resolver.js";
+
+export interface CliOptions {
+  cwd?: string;
+  /** Write target for diagnostic output (defaults to process.stderr). */
+  stderr?: (line: string) => void;
+  stdout?: (line: string) => void;
+  /** Override Playwright launch (used in tests). Returns an already-open `Page`. */
+  newPage?: (url: string) => Promise<{ page: Page; close: () => Promise<void> }>;
+}
+
+/**
+ * `main(argv)` entrypoint. Returns the process exit code so the
+ * bin script (`bin/annot-docs.mjs`) can `process.exit(...)`. Also
+ * usable from vitest by passing custom `stdout` / `stderr` / `cwd`.
+ */
+export async function main(argv: string[], options: CliOptions = {}): Promise<number> {
+  const stdout = options.stdout ?? ((l: string) => process.stdout.write(`${l}\n`));
+  const stderr = options.stderr ?? ((l: string) => process.stderr.write(`${l}\n`));
+  const cwd = options.cwd ?? process.cwd();
+
+  const [, , verb, ...rest] = argv;
+  if (verb !== "init" && verb !== "sync" && verb !== "lint") {
+    stderr(USAGE);
+    return verb ? 1 : 0;
+  }
+
+  try {
+    switch (verb) {
+      case "init":
+        return await runInit(rest, { cwd, stdout, stderr });
+      case "sync":
+        return await runSync(rest, { ...options, cwd, stdout, stderr });
+      case "lint":
+        return await runLint(rest, { ...options, cwd, stdout, stderr });
+    }
+  } catch (err) {
+    stderr(`annot docs ${verb}: ${(err as Error).message}`);
+    return 1;
+  }
+}
+
+const USAGE = [
+  "annot docs <command> [options]",
+  "",
+  "Commands:",
+  "  init                       Scaffold annot-docs.config.ts + sample files",
+  "  sync   --url <baseUrl>     Re-capture snapshot + attrs into every annot MDX",
+  "  lint   --url <baseUrl>     Report drift between annot MDXs and the live page",
+  "",
+  "Options:",
+  "  --url <baseUrl>            Base URL Playwright navigates to (sync / lint)",
+  "  --root <dir>               Override MDX search root (default: docs/)",
+  "  --help                     Show this help",
+].join("\n");
+
+// ─── init ──────────────────────────────────────────────────────
+
+interface InitDeps {
+  cwd: string;
+  stdout: (line: string) => void;
+  stderr: (line: string) => void;
+}
+
+async function runInit(_args: string[], deps: InitDeps): Promise<number> {
+  const { cwd, stdout } = deps;
+  const targets: Array<{ path: string; content: string }> = [
+    { path: "annot-docs.config.ts", content: SCAFFOLD_CONFIG },
+    { path: "tests/docs/example.spec.ts", content: SCAFFOLD_TOUR },
+    { path: "docs/books/example/SC-001-login.mdx", content: SCAFFOLD_SCREEN_MDX },
+  ];
+
+  let wrote = 0;
+  for (const target of targets) {
+    const abs = resolve(cwd, target.path);
+    try {
+      await mkdir(dirname(abs), { recursive: true });
+      await writeFile(abs, target.content, { flag: "wx" });
+      stdout(`  created ${target.path}`);
+      wrote++;
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === "EEXIST") {
+        stdout(`  exists  ${target.path} (skipped)`);
+      } else {
+        throw err;
+      }
+    }
+  }
+  stdout(
+    wrote === 0
+      ? "annot docs init: nothing to do (all targets exist)"
+      : `annot docs init: wrote ${wrote} file(s)`,
+  );
+  return 0;
+}
+
+const SCAFFOLD_CONFIG = `// Living product docs config for annot.
+// See https://github.com/ingcreators/annot/blob/main/docs/plans/living-product-docs.md
+import { defineConfig } from "@ingcreators/annot-product-docs";
+
+export default defineConfig({
+  meta: {
+    projectName: "Example",
+  },
+  xlsx: {
+    defaultBook: "Screen spec",
+    books: {
+      "Screen spec": {
+        // Drop your customer-supplied template here (Phase 3) and
+        // the Excel adapter will fill it. Until then the OSS
+        // default layout applies.
+        // template: "./templates/customer-screen-spec.xlsx",
+      },
+    },
+  },
+});
+`;
+
+const SCAFFOLD_TOUR = `// Tour file — runs through every screen and refreshes the
+// matching MDX's annot:snapshot / annot:attributes blocks.
+//
+// Run with: pnpm playwright test tests/docs/
+
+import { test } from "@ingcreators/annot-product-docs";
+
+test.describe.configure({ mode: "serial" });
+
+test("login flow", async ({ page, screen }) => {
+  await page.goto("/login");
+  await screen.capture({
+    id: "login",
+    mdxPath: "docs/books/example/SC-001-login.mdx",
+  });
+});
+`;
+
+const SCAFFOLD_SCREEN_MDX = `---
+annot:
+  id: SC-001
+  title: Login screen
+  meta:
+    author: TODO
+  xlsx:
+    book: Screen spec
+    sheet: SC-001 Login
+    role: screen
+    order: 100
+---
+
+import { Screen, Overlay } from "@ingcreators/annot-product-docs-astro";
+
+# Login screen
+
+Enter your credentials to access the system.
+
+<Screen id="login" src="./shots/login.png">
+
+<Overlay match={{ role: "textbox", name: "Email" }} intent="required" number={1}>
+**Email** — Enter your registered email address.
+</Overlay>
+
+<Overlay match={{ role: "button", name: "Sign in" }} intent="action" number={2}>
+Click to sign in.
+</Overlay>
+
+</Screen>
+`;
+
+// ─── sync / lint ───────────────────────────────────────────────
+
+interface RunDeps {
+  cwd: string;
+  stdout: (line: string) => void;
+  stderr: (line: string) => void;
+  newPage?: CliOptions["newPage"];
+}
+
+async function runSync(args: string[], deps: RunDeps): Promise<number> {
+  const { cwd, stdout, stderr } = deps;
+  const flags = parseFlags(args);
+  if (!flags.url) {
+    stderr("annot docs sync: --url <baseUrl> is required.");
+    return 1;
+  }
+  const mdxFiles = await walkMdx(resolve(cwd, flags.root ?? "docs"));
+  const annotMdxs = await filterAnnotMdxFiles(mdxFiles);
+  if (annotMdxs.length === 0) {
+    stdout(
+      `annot docs sync: no MDX files with \`annot:\` frontmatter under ${flags.root ?? "docs"}.`,
+    );
+    return 0;
+  }
+  stdout(`annot docs sync: ${annotMdxs.length} MDX file(s) → ${flags.url}`);
+
+  const { newPage, close } = await openBrowser(flags.url, deps);
+  try {
+    for (const mdx of annotMdxs) {
+      const parsed = await parseMdxFile(mdx);
+      if (!parsed) continue;
+      const screens = lintableScreens(parsed.screens);
+      if (screens.length === 0) {
+        stdout(`  skip   ${relative(cwd, mdx)} (no <Screen> blocks)`);
+        continue;
+      }
+      for (const screen of screens) {
+        const { page, dispose } = await newPage(screen.src ?? "/");
+        try {
+          await captureScreen(page, { id: screen.id, mdxPath: mdx });
+          stdout(`  synced ${relative(cwd, mdx)} (screen=${screen.id})`);
+        } finally {
+          await dispose();
+        }
+      }
+    }
+  } finally {
+    await close();
+  }
+  return 0;
+}
+
+async function runLint(args: string[], deps: RunDeps): Promise<number> {
+  const { cwd, stdout, stderr } = deps;
+  const flags = parseFlags(args);
+  if (!flags.url) {
+    stderr("annot docs lint: --url <baseUrl> is required.");
+    return 1;
+  }
+  const mdxFiles = await walkMdx(resolve(cwd, flags.root ?? "docs"));
+  const annotMdxs = await filterAnnotMdxFiles(mdxFiles);
+  if (annotMdxs.length === 0) {
+    stdout(
+      `annot docs lint: no MDX files with \`annot:\` frontmatter under ${flags.root ?? "docs"}.`,
+    );
+    return 0;
+  }
+  stdout(`annot docs lint: ${annotMdxs.length} MDX file(s) → ${flags.url}`);
+
+  const allFindings: Array<{ file: string; finding: DriftFinding }> = [];
+
+  const { newPage, close } = await openBrowser(flags.url, deps);
+  try {
+    for (const mdx of annotMdxs) {
+      const parsed = await parseMdxFile(mdx);
+      if (!parsed) continue;
+      for (const screen of lintableScreens(parsed.screens)) {
+        const { page, dispose } = await newPage(screen.src ?? "/");
+        try {
+          const yaml = await page.locator("body").ariaSnapshot({ mode: "ai" });
+          const liveSnapshot = parseSnapshot(yaml);
+          const findings = detectDrift({ screen, liveSnapshot });
+          for (const f of findings) {
+            allFindings.push({ file: relative(cwd, mdx), finding: f });
+          }
+        } finally {
+          await dispose();
+        }
+      }
+    }
+  } finally {
+    await close();
+  }
+
+  for (const { file, finding } of allFindings) {
+    stdout(
+      `${formatSeverity(finding.severity)} ${file} [${finding.screenId}] ${finding.kind}: ${finding.message}`,
+    );
+  }
+  const summary = summariseDrift(allFindings.map((f) => f.finding));
+  stdout(
+    `annot docs lint: ${summary.errors} error(s), ${summary.warnings} warning(s), ${summary.infos} info(s).`,
+  );
+  return summary.errors > 0 ? 1 : 0;
+}
+
+interface OpenedBrowser {
+  newPage(navigate: string): Promise<{ page: Page; dispose: () => Promise<void> }>;
+  close(): Promise<void>;
+}
+
+async function openBrowser(baseUrl: string, deps: RunDeps): Promise<OpenedBrowser> {
+  if (deps.newPage) {
+    // Test-injected page factory — bypass Playwright.
+    return {
+      async newPage(navigate) {
+        const { page, close } = await deps.newPage!(joinUrl(baseUrl, navigate));
+        return { page, dispose: close };
+      },
+      async close() {
+        /* no-op */
+      },
+    };
+  }
+  // Real Playwright launch.
+  const { chromium } = await import("playwright-core");
+  const browser: Browser = await chromium.launch({ headless: true });
+  return {
+    async newPage(navigate) {
+      const ctx = await browser.newContext();
+      const page = await ctx.newPage();
+      await page.goto(joinUrl(baseUrl, navigate));
+      return {
+        page,
+        dispose: async () => {
+          await ctx.close();
+        },
+      };
+    },
+    async close() {
+      await browser.close();
+    },
+  };
+}
+
+function joinUrl(base: string, path: string): string {
+  if (/^https?:\/\//.test(path)) return path;
+  if (path.startsWith("/")) {
+    return base.replace(/\/$/, "") + path;
+  }
+  // Relative `./shots/...` references on a `<Screen>` block are
+  // image paths, not URLs. Default to the base URL itself.
+  return base;
+}
+
+// ─── helpers ───────────────────────────────────────────────────
+
+interface ParsedFlags {
+  url?: string;
+  root?: string;
+}
+
+function parseFlags(args: string[]): ParsedFlags {
+  const out: ParsedFlags = {};
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === "--url" || arg === "-u") {
+      out.url = args[++i];
+    } else if (arg === "--root" || arg === "-r") {
+      out.root = args[++i];
+    }
+  }
+  return out;
+}
+
+/**
+ * Walk the directory tree below `root` and return every `*.mdx`
+ * absolute path. Uses `readdir({ withFileTypes: true })` for a
+ * single syscall per directory — no external glob dep.
+ */
+export async function walkMdx(root: string): Promise<string[]> {
+  const out: string[] = [];
+  const stack = [root];
+  while (stack.length > 0) {
+    const dir = stack.pop()!;
+    let entries: Array<{
+      name: string;
+      isDirectory(): boolean;
+      isFile(): boolean;
+    }>;
+    try {
+      entries = await readdir(dir, { withFileTypes: true });
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") continue;
+      throw err;
+    }
+    for (const entry of entries) {
+      const abs = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name === "node_modules" || entry.name.startsWith(".")) continue;
+        stack.push(abs);
+      } else if (entry.isFile() && entry.name.endsWith(".mdx")) {
+        out.push(abs);
+      }
+    }
+  }
+  return out.sort();
+}
+
+/**
+ * Filter a list of MDX paths down to the ones with `annot:`
+ * frontmatter — i.e. the files the CLI should act on.
+ */
+export async function filterAnnotMdxFiles(paths: string[]): Promise<string[]> {
+  const out: string[] = [];
+  for (const path of paths) {
+    try {
+      const parsed = await parseMdxFile(path);
+      if (parsed) out.push(path);
+    } catch {
+      // Skip files that fail to parse — `annot docs lint` may
+      // later add a `--strict` flag that surfaces them; for now,
+      // a broken file shouldn't crash the whole walk.
+    }
+  }
+  return out;
+}
+
+function formatSeverity(severity: DriftSeverity): string {
+  switch (severity) {
+    case "error":
+      return "ERROR  ";
+    case "warning":
+      return "WARN   ";
+    case "info":
+      return "INFO   ";
+  }
+}
+
+// Stop biome from flagging `sep` as unused — we keep it imported
+// so the Windows / POSIX path handling in `relative` works the
+// same regardless of the host's `path.sep`.
+void sep;

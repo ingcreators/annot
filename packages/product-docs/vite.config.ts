@@ -44,6 +44,7 @@ export default defineConfig({
         /^@ingcreators\//,
         /^node:/,
         "js-yaml",
+        "playwright-core",
         "remark-frontmatter",
         "remark-mdx",
         "remark-parse",

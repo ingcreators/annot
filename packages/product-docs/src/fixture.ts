@@ -126,12 +126,10 @@ export async function captureScreen(page: Page, opts: ScreenCaptureOptions): Pro
   }
 
   const rootLocator = opts.rootLocator ?? page.locator("body");
-  const snapshotYaml = await rootLocator.ariaSnapshot({
-    // Playwright's "ai mode" output includes `[ref=eN]` markers
-    // the resolver depends on. Default `ariaSnapshot()` (no mode)
-    // omits them.
-    ...({ mode: "ai" } as Parameters<Locator["ariaSnapshot"]>[0]),
-  });
+  // Playwright's "ai mode" output includes the `[ref=eN]` markers
+  // the resolver depends on. Default `ariaSnapshot()` (no mode)
+  // omits them — explicitly passing the option is load-bearing.
+  const snapshotYaml = await rootLocator.ariaSnapshot({ mode: "ai" });
 
   const attributesYaml = await collectAttributesYaml(
     page,
