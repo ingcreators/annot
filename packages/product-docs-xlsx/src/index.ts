@@ -11,6 +11,13 @@
 //   PR 5 — `{annot:date}` special vars + multi-screen `sheets` map.
 //   PR 6 — multi-book CLI integration + Mermaid → PNG embed.
 
+export type { ApplyDefaultLayoutInput } from "./default-layout.js";
+export {
+  applyDefaultLayout,
+  sanitiseSheetName,
+  sortBundlesForLayout,
+} from "./default-layout.js";
+
 export type {
   ExcelMdxBundle,
   NormalisedOverlay,
