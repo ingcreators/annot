@@ -25,6 +25,16 @@ export type {
 } from "./extract.js";
 export { extractFromParsed, extractMdxFile } from "./extract.js";
 
+export type { SubstituteOptions } from "./placeholder.js";
+export {
+  applyPlaceholders,
+  applyPlaceholdersToSheet,
+  resolvePlaceholders,
+} from "./placeholder.js";
+
+export type { ApplyTemplateInput } from "./template.js";
+export { applyTemplateLayout, loadTemplateWorkbook } from "./template.js";
+
 export type { BuildWorkbookInput } from "./workbook.js";
 export {
   buildEmptyWorkbook,
