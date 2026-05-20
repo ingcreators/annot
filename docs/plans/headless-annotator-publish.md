@@ -101,7 +101,19 @@ For each of the three published packages:
     commitments.
 12. Optional but recommended: write an announcement blog post
     or README banner for the first publish — sets expectations
-    for early adopters.
+    for early adopters. A positioning fact worth surfacing
+    explicitly: **Playwright has no native action-overlay for
+    still-image screenshots.** `page.screenshot()` only exposes
+    `mask` (solid-fill redaction; `maskColor` since v1.35) and
+    `style` (CSS injection since v1.41) — no rectangles /
+    arrows / labels / locator-targeted annotation. Playwright
+    v1.59 added `Screencast.showActions()`
+    (<https://playwright.dev/docs/api/class-screencast#screencast-show-actions>)
+    but it decorates **video recordings** only. That makes
+    `@ingcreators/annot-annotator` + `@ingcreators/annot-playwright`
+    a non-overlapping complement to Playwright for the
+    still-image annotation niche (PR review images, doc
+    illustrations, regression baselines).
 
 ## Phased plan (post-Changesets)
 

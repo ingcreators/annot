@@ -128,6 +128,21 @@ surface small — no auth, no rate limit, no PII concerns.
   the upstream `@playwright/mcp` for those workflows.
 - Cloud-hosted MCP / authenticated remote MCP. Local-only at v1.
 - A "Annot Cloud OAuth bridge for MCP". Defer.
+- **Real-time action-overlay annotation on video / screencast
+  output.** Playwright's built-in `Screencast.showActions()`
+  (added in v1.59,
+  <https://playwright.dev/docs/api/class-screencast#screencast-show-actions>)
+  already decorates locator-targeted actions on the live page
+  during recording — duplicating it here would be redundant.
+  annot-mcp's `annotate_*` / `redact_*` / `compare_*` tools stay
+  focused on **still-image** output, where the comparable
+  Playwright API (`page.screenshot()`) has *no* action-overlay
+  equivalent — only `mask` (solid-fill redaction, v1.35+
+  `maskColor`) and `style` (CSS injection, v1.41+). That gap is
+  exactly what `annot_annotate_*` fills. If a video / recording
+  tool is ever proposed for Phase 6+ of this plan, reconsider
+  whether it would re-implement `Screencast.showActions` before
+  adding it.
 
 ## Design
 
