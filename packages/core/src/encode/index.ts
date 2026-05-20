@@ -24,6 +24,7 @@ import {
   type EncodeResult,
 } from "./options.js";
 import { encodePng8 } from "./png8.js";
+import { quantizeMedianCut } from "./quantize-median-cut.js";
 
 export {
   computeResizeTarget,
@@ -128,9 +129,13 @@ export async function encodeCapture(
     return { dataUrl, chosen: "png", reason: "photo-fallback-png", width: w, height: h };
   }
 
-  // UI-heavy → quantize with libimagequant (WASM) → emit PNG-8.
+  // UI-heavy → quantize with the chosen backend → emit PNG-8.
+  // `options.quantizer` selects between the GPL-3.0 WASM
+  // (libimagequant) and the in-tree pure-TS Median Cut. Default
+  // is `"wasm"` for Phase 1; Phase 2 flips it to `"median-cut"`.
+  const quantizer = options.quantizer ?? "wasm";
   try {
-    const png8Bytes = await quantizeToPng8(imageData);
+    const png8Bytes = await quantizeToPng8(imageData, quantizer);
     bmp.close();
     const dataUrl = await blobToDataUrl(new Blob([png8Bytes as BlobPart], { type: "image/png" }));
     return { dataUrl, chosen: "png", reason: "png-8", width: w, height: h };
@@ -142,7 +147,7 @@ export async function encodeCapture(
   }
 }
 
-// ---- libimagequant (WASM) ----
+// ---- Quantizer dispatch ----
 
 interface WasmExports {
   memory: WebAssembly.Memory;
@@ -159,38 +164,47 @@ function ensureWasm(): Promise<WasmExports> {
 }
 
 /**
- * Quantize an RGBA ImageData to ≤256 colors with libimagequant, then
- * write the palette + per-pixel indices straight into a PNG-8 file via
- * our minimal encoder (Pako DEFLATE level 9). No re-quantization or
- * RGBA round-trip — libimagequant's palette is preserved 1:1 and the
- * file is compressed with the strongest setting available.
+ * Quantize an RGBA ImageData to ≤256 colors via the chosen
+ * backend and emit a PNG-8 file via the in-house encoder (Pako
+ * DEFLATE level 9). No re-quantization or RGBA round-trip — the
+ * palette + per-pixel indices flow straight from quantizer to
+ * PNG writer.
  */
-async function quantizeToPng8(imageData: ImageData): Promise<Uint8Array> {
-  await ensureWasm();
+async function quantizeToPng8(
+  imageData: ImageData,
+  backend: "wasm" | "median-cut",
+): Promise<Uint8Array> {
   const w = imageData.width;
   const h = imageData.height;
-
   const pixels = new Uint8Array(
     imageData.data.buffer,
     imageData.data.byteOffset,
     imageData.data.byteLength,
   );
-  const result: any = quantize_image(pixels, w, h, 256);
 
-  // The `@ingcreators/annot-imagequant` wasm-bindgen binding returns
-  // `{ palette: Uint8Array, indices: Uint8Array }` — palette is
-  // flattened RGBA bytes, indices is one byte per pixel. Arrays are
-  // already standalone copies of the WASM-allocated buffers (the
-  // wrapper does the `Uint8Array::copy_from` itself), so no extra
-  // slice() is needed at the call site.
-  const palette: Uint8Array = result?.palette;
-  const indices: Uint8Array = result?.indices;
+  let palette: Uint8Array;
+  let indices: Uint8Array;
 
-  if (!(palette instanceof Uint8Array) || !(indices instanceof Uint8Array)) {
-    throw new Error(
-      `quantize_image returned unexpected shape: keys=${Object.keys(result || {}).join(",")} ` +
-        `palette=${typeof palette} indices=${typeof indices}`,
-    );
+  if (backend === "median-cut") {
+    const result = quantizeMedianCut(pixels, w, h, 256);
+    palette = result.palette;
+    indices = result.indices;
+  } else {
+    await ensureWasm();
+    // `@ingcreators/annot-imagequant` wasm-bindgen binding returns
+    // `{ palette: Uint8Array, indices: Uint8Array }` — palette is
+    // flattened RGBA bytes, indices is one byte per pixel. Both
+    // are standalone copies of WASM memory (wrapper does the
+    // `Uint8Array::copy_from`), so no extra slice() needed.
+    const result: { palette?: unknown; indices?: unknown } = quantize_image(pixels, w, h, 256);
+    if (!(result.palette instanceof Uint8Array) || !(result.indices instanceof Uint8Array)) {
+      throw new Error(
+        `quantize_image returned unexpected shape: keys=${Object.keys(result).join(",")} ` +
+          `palette=${typeof result.palette} indices=${typeof result.indices}`,
+      );
+    }
+    palette = result.palette;
+    indices = result.indices;
   }
 
   return encodePng8(palette, indices, w, h, 9);
