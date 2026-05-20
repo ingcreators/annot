@@ -177,10 +177,28 @@ function visitJsxElement(node: unknown, source: string, acc: JsxAccumulators): v
 function buildScreen(el: JsxNode, source: string): ScreenSpec {
   const props = readJsxAttributes(el);
   const overlays: OverlaySpec[] = [];
-  for (const child of el.children ?? []) {
-    const c = child as JsxNode;
-    if (c.name === "Overlay") overlays.push(buildOverlay(c, source));
-  }
+
+  // Walk the screen's subtree recursively for `<Overlay>` JSX
+  // elements. When the author omits blank lines between
+  // `<Overlay>` tags inside a `<Screen>`, mdast wraps the
+  // siblings in an implicit `paragraph` node — the direct-child
+  // walk misses them. Recursion picks them up uniformly while
+  // still stopping descent into nested `<Screen>` blocks
+  // (defensive — the MDX grammar doesn't actually nest screens).
+  const walk = (node: unknown): void => {
+    const n = node as JsxNode & { children?: unknown[] };
+    if (n.name === "Overlay") {
+      overlays.push(buildOverlay(n, source));
+      return;
+    }
+    if (n.name === "Screen" && n !== el) {
+      // Defensive: do not recurse into a nested Screen.
+      return;
+    }
+    for (const child of n.children ?? []) walk(child);
+  };
+  for (const child of el.children ?? []) walk(child);
+
   const id = asString(props["id"]);
   if (!id) {
     throw new Error("<Screen> requires an `id` prop.");
