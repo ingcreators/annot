@@ -1,14 +1,5 @@
 # Working with AI agents
 
-> **Status:** Draft. The MCP server package
-> (`@ingcreators/annot-mcp`) is `private: true` in the workspace
-> until the first npm publish (Phase 8 of
-> [`docs/plans/agent-mcp-integration.md`](./plans/agent-mcp-integration.md),
-> gated on
-> [`docs/plans/headless-annotator-publish.md`](./plans/headless-annotator-publish.md)).
-> The tools described here are functional today on a workspace
-> checkout — the gate is only on the npm registry side.
-
 This document is the entry point for **driving Annot from an AI
 agent** (Claude Desktop, Claude Code, Cursor, Continue, or any
 other Model Context Protocol client). The same SVG-first core
@@ -41,7 +32,6 @@ is the shorter intro plus a "which doc do I want?" map.
 ## Setup
 
 ```sh
-# Install (after Phase 8 publish — until then, workspace-link).
 npm install -g @ingcreators/annot-mcp
 
 # One-time Chromium runtime for the `_url` tools (~150 MB).
@@ -145,8 +135,7 @@ renders.
 |---|---|
 | Set up Claude Desktop / Claude Code with Annot | [`packages/mcp/README.md`](../packages/mcp/README.md) — Installation |
 | Learn the full annotation DSL + tool schemas | [`packages/mcp/README.md`](../packages/mcp/README.md) — The five tools / The annotation DSL |
-| Understand the design rationale + phase ledger | [`docs/plans/agent-mcp-integration.md`](./plans/agent-mcp-integration.md) |
-| Track when the npm publish ships | [`docs/plans/headless-annotator-publish.md`](./plans/headless-annotator-publish.md) |
+| Understand the design rationale + phase ledger | [`docs/plans/_done/agent-mcp-integration.md`](./plans/_done/agent-mcp-integration.md) |
 | See how the headless rasteriser works under the hood | [`packages/annotator/README.md`](../packages/annotator/README.md) |
 | Wire Annot into a Playwright test (not an agent) | [`packages/playwright/README.md`](../packages/playwright/README.md) |
 | Read the broader product direction | [`PRODUCT_DIRECTION.md`](../PRODUCT_DIRECTION.md) |

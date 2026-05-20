@@ -17,17 +17,13 @@ browser-driven workflows:
   single MCP call; the server handles capture + locator
   resolution + render.
 
-> **Status:** under construction. Phases 1–5 + 7 of
-> [`docs/plans/agent-mcp-integration.md`](../../docs/plans/agent-mcp-integration.md)
-> have landed; the package is `private: true` in the workspace
-> until Phase 8 (gated on
-> [`docs/plans/headless-annotator-publish.md`](../../docs/plans/headless-annotator-publish.md))
-> flips it for the first npm publish. Phase 6 (PPTX export) is
-> deferred indefinitely per the plan.
+> Phase 6 (PPTX export) is deferred indefinitely per the
+> design plan in
+> [`docs/plans/_done/agent-mcp-integration.md`](../../docs/plans/_done/agent-mcp-integration.md),
+> pending the `pptx-export` `ImageRecord[]`-driven refactor noted
+> in [`CLAUDE.md`](../../CLAUDE.md) §2.
 
 ## Installation
-
-After Phase 8 publish:
 
 ```sh
 # Once globally (or via npx per-call)
@@ -329,7 +325,7 @@ The agent sees these as MCP tool errors and can correct + retry.
 - [`docs/ai-agents.md`](../../docs/ai-agents.md) — short intro
   guide + "which doc do I want?" map; start here if you're new
   to the MCP integration.
-- [`docs/plans/agent-mcp-integration.md`](../../docs/plans/agent-mcp-integration.md)
+- [`docs/plans/_done/agent-mcp-integration.md`](../../docs/plans/_done/agent-mcp-integration.md)
   — full design + phase ledger.
 - [`@ingcreators/annot-annotator`](../annotator/README.md) — the
   underlying Tier A headless renderer.
