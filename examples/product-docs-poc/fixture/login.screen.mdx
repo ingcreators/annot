@@ -1,0 +1,60 @@
+---
+annot:
+  id: SC-001
+  title: ログイン画面
+  purpose: 未認証ユーザーが認証情報を入力する
+  meta:
+    author: 山田太郎
+    createdDate: 2026-05-21
+    revision: "1.0"
+  xlsx:
+    book: 画面設計書
+    sheet: SC-001 ログイン
+    role: screen
+    order: 100
+---
+
+import { Screen, Overlay, Transition } from "@ingcreators/annot-product-docs-astro";
+
+# ログイン画面 (SC-001)
+
+未認証ユーザーが認証情報を入力する画面です。社員 ID 移行までの
+暫定実装で、SSO 切替後に廃止予定。
+
+<Screen id="login" src="./shots/login.png">
+
+<Overlay match={{ role: "textbox", name: "メールアドレス" }} intent="required" number={1}>
+**メールアドレス** — 会社のメールアドレスを入力してください。
+
+- 必須項目
+- 最大 255 文字
+- メール形式 (RFC 5322)
+- 個人 Gmail は許可していません
+</Overlay>
+
+<Overlay match={{ role: "textbox", name: "パスワード" }} intent="required" number={2}>
+**パスワード** — 8 文字以上、英数記号混合。
+
+> 3 回連続失敗するとアカウントが 30 分ロックされます。
+</Overlay>
+
+<Overlay match={{ role: "checkbox", name: "ログイン状態を保持" }} intent="info" number={3}>
+**ログイン状態を保持** — チェックすると 30 日間ログインを保持します。
+
+共有端末では使用しないでください。
+</Overlay>
+
+<Overlay match={{ role: "button", name: "ログイン" }} intent="action" number={4}>
+**ログインボタン** — クリックで `POST /api/auth/sign-in` を発行。
+
+認証成功で `/dashboard` へ遷移。
+</Overlay>
+
+</Screen>
+
+## 画面遷移
+
+<Transition trigger={{ role: "button", name: "ログイン" }} on="認証成功" to="SC-002" />
+<Transition trigger={{ role: "button", name: "ログイン" }} on="認証失敗" to="self">
+  エラー帯を画面上部に表示。
+</Transition>

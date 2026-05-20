@@ -1,0 +1,23 @@
+{
+  "name": "@ingcreators/product-docs-poc",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Phase 0 PoC for the living-product-docs plan. Disposable code exercising the end-to-end pipeline: MDX → aria-snapshot match resolution → annotated PNG via annot-annotator → HTML render → minimal Excel sheet → drift detection. See docs/plans/living-product-docs.md. Standalone — NOT a workspace package; cd here and run `npm install` before `npm run poc`.",
+  "type": "module",
+  "scripts": {
+    "poc": "tsx src/run.ts",
+    "poc:drift": "tsx src/run.ts --drift-demo",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ingcreators/annot-annotator": "^0.3.0",
+    "@mdx-js/mdx": "^3.1.0",
+    "exceljs": "^4.4.0",
+    "playwright-core": "^1.50.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.7.0"
+  }
+}
