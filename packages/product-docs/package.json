@@ -1,0 +1,68 @@
+{
+  "name": "@ingcreators/annot-product-docs",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Living product docs core — parse `.mdx` files with `annot:` frontmatter, resolve `<Overlay match>` keys against live Playwright `aria-snapshot` trees, run drift detection against the rendered UI, and ship a Playwright `screen` fixture that re-captures + re-syncs MDX snapshot blocks. Tier A (Node-only). Phase 1 of docs/plans/living-product-docs.md.",
+  "license": "Apache-2.0",
+  "author": "ingcreators",
+  "homepage": "https://github.com/ingcreators/annot/tree/main/packages/product-docs#readme",
+  "bugs": {
+    "url": "https://github.com/ingcreators/annot/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ingcreators/annot.git",
+    "directory": "packages/product-docs"
+  },
+  "keywords": [
+    "annotation",
+    "screenshot",
+    "playwright",
+    "mdx",
+    "docs",
+    "documentation",
+    "screen-spec",
+    "画面設計書",
+    "drift",
+    "aria-snapshot"
+  ],
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    }
+  },
+  "scripts": {
+    "build": "vite build",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.50.0",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vite-plugin-dts": "^5.0.0"
+  },
+  "dependencies": {
+    "@ingcreators/annot-annotator": "workspace:*",
+    "@ingcreators/annot-playwright": "workspace:*"
+  },
+  "peerDependencies": {
+    "@playwright/test": "^1.40.0"
+  }
+}
