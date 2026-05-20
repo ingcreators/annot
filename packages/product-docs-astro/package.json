@@ -30,7 +30,14 @@
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./components/Screen.astro": "./src/components/Screen.astro",
+    "./components/Overlay.astro": "./src/components/Overlay.astro",
+    "./components/Transition.astro": "./src/components/Transition.astro",
+    "./components/TransitionTable.astro": "./src/components/TransitionTable.astro",
+    "./components/HistoryEntry.astro": "./src/components/HistoryEntry.astro",
+    "./components/ScreenList.astro": "./src/components/ScreenList.astro",
+    "./components/TransitionGraph.astro": "./src/components/TransitionGraph.astro"
   },
   "files": [
     "dist",
@@ -45,7 +52,14 @@
       ".": {
         "types": "./dist/index.d.ts",
         "default": "./dist/index.js"
-      }
+      },
+      "./components/Screen.astro": "./dist/components/Screen.astro",
+      "./components/Overlay.astro": "./dist/components/Overlay.astro",
+      "./components/Transition.astro": "./dist/components/Transition.astro",
+      "./components/TransitionTable.astro": "./dist/components/TransitionTable.astro",
+      "./components/HistoryEntry.astro": "./dist/components/HistoryEntry.astro",
+      "./components/ScreenList.astro": "./dist/components/ScreenList.astro",
+      "./components/TransitionGraph.astro": "./dist/components/TransitionGraph.astro"
     }
   },
   "scripts": {

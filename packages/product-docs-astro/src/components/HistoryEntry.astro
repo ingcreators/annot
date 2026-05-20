@@ -1,0 +1,34 @@
+---
+// `<HistoryEntry>` — single revision-history row.
+//
+// MDX usage (inside a `role: history` doc):
+//   <HistoryEntry version="1.0" date="2026-03-15" author="Alice">
+//     Initial draft, requirements v2.0.
+//   </HistoryEntry>
+//
+// Multiple entries stack vertically; the Excel adapter renders
+// them into the workbook's history sheet via the `annotHistory`
+// named range.
+
+interface Props {
+  version: string;
+  date: string;
+  author?: string;
+}
+const { version, date, author } = Astro.props;
+---
+<div
+  class="annot-history-entry"
+  data-version={version}
+  data-date={date}
+  data-author={author}
+>
+  <div class="annot-history-meta">
+    <span class="annot-history-version">v{version}</span>
+    <time class="annot-history-date" datetime={date}>{date}</time>
+    {author && <span class="annot-history-author">{author}</span>}
+  </div>
+  <div class="annot-history-body">
+    <slot />
+  </div>
+</div>

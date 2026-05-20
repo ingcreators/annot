@@ -1,0 +1,27 @@
+---
+// `<Screen>` — annotated screenshot block.
+//
+// MDX usage:
+//   <Screen id="login" src="./shots/login.png">
+//     <Overlay match={...} number={1}>...</Overlay>
+//   </Screen>
+//
+// The annotated PNG is produced at build time by the Image
+// Service in `@ingcreators/annot-product-docs-astro` (see
+// `../render.ts`). At render time we just emit an `<img>` that
+// points at the cache hash; the Astro pipeline resolves the
+// final URL.
+
+interface Props {
+  id: string;
+  src: string;
+  alt?: string;
+}
+const { id, src, alt } = Astro.props;
+---
+<figure class="annot-screen" data-screen-id={id}>
+  <img src={src} alt={alt ?? `Screen ${id}`} loading="lazy" />
+  <div class="annot-screen-overlays" data-screen-overlays={id}>
+    <slot />
+  </div>
+</figure>

@@ -1,0 +1,46 @@
+---
+// `<TransitionGraph>` — Mermaid-rendered cross-screen graph.
+//
+// MDX usage (typically in a `role: list` doc):
+//   <TransitionGraph entries={...} title="Auth flow" />
+//
+// Emits a `<pre class="mermaid">` block containing a Mermaid
+// flowchart definition. Rendering happens client-side via the
+// Mermaid runtime the consumer adds to their Astro site
+// (`<script type="module" src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.esm.min.mjs">`),
+// or build-time via Mermaid CLI / `@napi-rs/canvas` if the
+// consumer opts in.
+
+export interface GraphEdge {
+  from: string;
+  to: string;
+  label?: string;
+}
+
+interface Props {
+  entries: GraphEdge[];
+  title?: string;
+  direction?: "TB" | "LR" | "BT" | "RL";
+}
+const { entries, title, direction = "TB" } = Astro.props;
+
+const escape = (id: string): string => id.replace(/[^A-Za-z0-9_]/g, "_");
+
+const mermaid = ["flowchart " + direction];
+if (title) {
+  mermaid.push(`%% ${title.replace(/\r?\n/g, " ")}`);
+}
+for (const edge of entries) {
+  const from = escape(edge.from);
+  const to = escape(edge.to);
+  const label = edge.label
+    ? `|${edge.label.replace(/\|/g, "&#124;")}|`
+    : "";
+  mermaid.push(`  ${from}[${edge.from}] -->${label} ${to}[${edge.to}]`);
+}
+const definition = mermaid.join("\n");
+---
+<figure class="annot-transition-graph" data-direction={direction}>
+  {title && <figcaption>{title}</figcaption>}
+  <pre class="mermaid">{definition}</pre>
+</figure>
