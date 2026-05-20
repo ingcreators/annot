@@ -38,6 +38,27 @@ export const SAVE_SIZE_LABEL: Record<SaveSizePreset, string> = {
   original: "Original",
 };
 
+/**
+ * Quantizer backend for PNG-8 smart-mode encoding.
+ *
+ * - `"wasm"` (default): the GPL-3.0
+ *   [`@ingcreators/annot-imagequant`](https://github.com/ingcreators/annot/tree/main/packages/imagequant)
+ *   wasm-bindgen wrapper around libimagequant. Best subjective
+ *   quality on photographic content; slowest cold-start (WASM init).
+ * - `"median-cut"`: the in-tree pure-TS Median Cut + Floyd–Steinberg
+ *   dither at
+ *   [`quantize-median-cut.ts`](./quantize-median-cut.ts). Lighter
+ *   bundle, no GPL exposure, comparable subjective quality on
+ *   UI-heavy screenshots (Annot's actual workload after the
+ *   `isPhotoHeavy` photo-mode fallback).
+ *
+ * Phase 1 of
+ * [`docs/plans/replace-libimagequant-with-median-cut.md`](../../../../docs/plans/replace-libimagequant-with-median-cut.md)
+ * lands the flag with `"wasm"` as the default. Phase 2 flips the
+ * default; Phase 4 removes the `"wasm"` branch entirely.
+ */
+export type Quantizer = "wasm" | "median-cut";
+
 export interface EncodeOptions {
   /** "smart" | "png" | "jpeg" */
   format: EncodeFormat;
@@ -68,6 +89,12 @@ export interface EncodeOptions {
    * `Settings.quality.saveSizePreset` field here.
    */
   saveSizePreset?: SaveSizePreset;
+  /**
+   * Quantizer backend used by smart-mode PNG-8 output. Optional;
+   * defaults to `"wasm"` for back-compat in Phase 1 of the
+   * libimagequant → Median Cut migration. See {@link Quantizer}.
+   */
+  quantizer?: Quantizer;
 }
 
 export const DEFAULT_ENCODE_OPTIONS: EncodeOptions = {
@@ -76,6 +103,7 @@ export const DEFAULT_ENCODE_OPTIONS: EncodeOptions = {
   smartColorThreshold: 15000,
   jpegPercent: 92,
   saveSizePreset: "standard",
+  quantizer: "wasm",
 };
 
 /** Compute the resize target for a given source size + preset.
