@@ -73,7 +73,7 @@
     "@types/pako": "^2.0.4",
     "typescript": "catalog:",
     "vite": "catalog:",
-    "vite-plugin-dts": "^5.0.0"
+    "vite-plugin-dts": "^5.0.1"
   },
   "dependencies": {
     "pako": "^2.1.0"
