@@ -6,9 +6,8 @@ import { writeFile } from "node:fs/promises";
 import { isAbsolute } from "node:path";
 
 import type { Annotator } from "@ingcreators/annot-annotator";
-
+import { bboxAnnotationsToSvg } from "@ingcreators/annot-annotator";
 import { diffScreenshots } from "../compare/diff.js";
-import { bboxAnnotationsToSvg } from "../dsl/to-svg.js";
 import type { BboxAnnotation } from "../dsl/types.js";
 import { resolveImageInput } from "../io/read-image.js";
 import type { AnnotateToolResult } from "./annotate-screenshot.js";

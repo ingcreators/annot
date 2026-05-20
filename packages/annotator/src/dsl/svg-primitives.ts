@@ -1,30 +1,24 @@
-// SVG fragment builders — the low-level primitives the DSL → SVG
-// converter composes.
+// SVG fragment builders used by `bboxAnnotationsToSvg`. Exported
+// publicly because callers occasionally want a single primitive
+// without going through the full DSL.
 //
-// These mirror the shape of the helpers in
-// `@ingcreators/annot-playwright/src/helpers.ts` so the visual
-// output for agent-facing annotations and test-engineer-facing
-// fixture annotations stays consistent. We don't directly depend
-// on `@ingcreators/annot-playwright` because doing so would pull
-// its `expect` re-export from `@playwright/test` into the mcp
-// bundle through the workspace `main` resolution (workspace `main`
-// points at `src/index.ts`, not the published `dist/`).
-//
-// If we ever extract a shared `@ingcreators/annot-svg-helpers`
-// package, both surfaces can consolidate on it. Until then the
-// ~80 LOC of duplication is the lesser evil.
+// `arrowBetween` inlines a `<marker>` definition per call with a
+// unique id (`annot-arrow-N`). This used to be `annot-pw-arrow-N`
+// in `@ingcreators/annot-playwright` and `annot-mcp-arrow-N` in
+// `@ingcreators/annot-mcp`; the canonical home is now here, so
+// the prefix is the package-agnostic `annot-arrow-N`. Snapshot
+// tests on the SVG output of those packages will see this minor
+// prefix change as part of the 0.2.0 bump.
 
-export interface BoundingBox {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
+import type { BBox, Point } from "./types.js";
 
-export interface Point {
-  x: number;
-  y: number;
-}
+/**
+ * Back-compat alias retained because the original
+ * `@ingcreators/annot-playwright` helpers exposed this name.
+ * Prefer importing `BBox` from `@ingcreators/annot-annotator`
+ * directly.
+ */
+export type BoundingBox = BBox;
 
 export interface RectOptions {
   stroke?: string;
@@ -65,7 +59,7 @@ export function rectForBoundingBox(bbox: BoundingBox, opts: RectOptions = {}): s
 export function arrowBetween(from: Point, to: Point, opts: ArrowOptions = {}): string {
   const color = opts.color ?? "red";
   const strokeWidth = opts.strokeWidth ?? 2;
-  const markerId = `annot-mcp-arrow-${nextMarkerId()}`;
+  const markerId = `annot-arrow-${nextMarkerId()}`;
   return (
     "<defs>" +
     `<marker id="${markerId}" viewBox="0 0 10 10" ` +

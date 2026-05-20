@@ -23,12 +23,11 @@ import { writeFile } from "node:fs/promises";
 import { isAbsolute } from "node:path";
 
 import type { Annotator } from "@ingcreators/annot-annotator";
-
+import { bboxAnnotationsToSvg } from "@ingcreators/annot-annotator";
 import { capturePage, type ViewportOptions } from "../browser/capture.js";
 import type { BrowserPool } from "../browser/pool.js";
 import { resolveLocatorAnnotations } from "../browser/resolve-locator.js";
 import { LOCATOR_ANNOTATION_SCHEMA, SHARED_DEFS } from "../dsl/schema.js";
-import { bboxAnnotationsToSvg } from "../dsl/to-svg.js";
 import type { BboxAnnotation, LocatorAnnotation } from "../dsl/types.js";
 import { readPngDimensions } from "../io/png-dimensions.js";
 import type { AnnotateToolResult } from "./annotate-screenshot.js";
