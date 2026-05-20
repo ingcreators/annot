@@ -5,10 +5,12 @@
 import { writeFile } from "node:fs/promises";
 import { isAbsolute } from "node:path";
 
-import type { Annotator } from "@ingcreators/annot-annotator";
+import type { Annotator, EncodeOptions } from "@ingcreators/annot-annotator";
 import { bboxAnnotationsToSvg } from "@ingcreators/annot-annotator";
 import { diffScreenshots } from "../compare/diff.js";
+import { ENCODE_OPTIONS_SCHEMA } from "../dsl/schema.js";
 import type { BboxAnnotation } from "../dsl/types.js";
+import { applyEncodeOptions } from "../io/encode-output.js";
 import { resolveImageInput } from "../io/read-image.js";
 import type { AnnotateToolResult } from "./annotate-screenshot.js";
 
@@ -48,6 +50,10 @@ export const compareScreenshotsTool = {
           "bboxes alongside the annotated PNG.",
       },
       output: { type: "string" },
+      encode: { $ref: "#/$defs/EncodeOptions" },
+    },
+    $defs: {
+      EncodeOptions: ENCODE_OPTIONS_SCHEMA,
     },
   },
 } as const;
@@ -62,6 +68,7 @@ interface CompareScreenshotsInput {
   threshold?: unknown;
   includeChangeList?: unknown;
   output?: unknown;
+  encode?: unknown;
 }
 
 class InvalidCompareInputError extends Error {
@@ -95,6 +102,14 @@ export async function handleCompareScreenshots(
       output = input.output;
     }
 
+    let encode: Partial<EncodeOptions> | undefined;
+    if (input.encode !== undefined) {
+      if (typeof input.encode !== "object" || input.encode === null) {
+        throw new InvalidCompareInputError("`encode` must be an object when provided.");
+      }
+      encode = input.encode as Partial<EncodeOptions>;
+    }
+
     const [beforeImage, afterImage] = await Promise.all([
       resolveImageInput(input.before),
       resolveImageInput(input.after),
@@ -106,29 +121,37 @@ export async function handleCompareScreenshots(
       intent: "warning",
     }));
     const annotationsSvg = bboxAnnotationsToSvg(annotations);
-    const pngBytes = deps.annotator.toPng({
+    const rasterised = deps.annotator.toPng({
       originalDataUrl: afterImage.dataUrl,
       annotationsSvg,
       width: diff.width,
       height: diff.height,
     });
+    const encoded = await applyEncodeOptions(
+      rasterised,
+      { width: diff.width, height: diff.height },
+      encode,
+    );
 
     if (output) {
-      await writeFile(output, pngBytes);
+      await writeFile(output, encoded.bytes);
+      const reasonSuffix = encoded.reason ? `, reason: ${encoded.reason}` : "";
       const text =
-        `Wrote ${pngBytes.byteLength}-byte diff-annotated PNG to ${output} ` +
-        `(${diff.width}×${diff.height}, ${diff.regions.length} changed region${
+        `Wrote ${encoded.bytes.byteLength}-byte diff-annotated ${encoded.chosen.toUpperCase()} to ${output} ` +
+        `(${encoded.width}×${encoded.height}, ${diff.regions.length} changed region${
           diff.regions.length === 1 ? "" : "s"
-        }, ${diff.mismatchedPixels} mismatched pixel${diff.mismatchedPixels === 1 ? "" : "s"}).`;
+        }, ${diff.mismatchedPixels} mismatched pixel${diff.mismatchedPixels === 1 ? "" : "s"}${reasonSuffix}).`;
       return { content: [{ type: "text", text }] };
     }
 
     const imageContent = {
       type: "image" as const,
-      data: Buffer.from(pngBytes.buffer, pngBytes.byteOffset, pngBytes.byteLength).toString(
-        "base64",
-      ),
-      mimeType: "image/png",
+      data: Buffer.from(
+        encoded.bytes.buffer,
+        encoded.bytes.byteOffset,
+        encoded.bytes.byteLength,
+      ).toString("base64"),
+      mimeType: encoded.mimeType,
     };
     if (!includeChangeList) {
       return { content: [imageContent] };

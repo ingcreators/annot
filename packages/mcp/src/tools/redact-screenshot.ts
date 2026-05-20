@@ -5,8 +5,11 @@
 import { writeFile } from "node:fs/promises";
 import { isAbsolute } from "node:path";
 
-import { BBOX_REDACT_REGION_SCHEMA, SHARED_DEFS } from "../dsl/schema.js";
+import type { EncodeOptions } from "@ingcreators/annot-annotator";
+
+import { BBOX_REDACT_REGION_SCHEMA, ENCODE_OPTIONS_SCHEMA, SHARED_DEFS } from "../dsl/schema.js";
 import type { BboxRedactRegion } from "../dsl/types.js";
+import { applyEncodeOptions } from "../io/encode-output.js";
 import { resolveImageInput } from "../io/read-image.js";
 import { burnRedactions } from "../redact/burn.js";
 import type { AnnotateToolResult } from "./annotate-screenshot.js";
@@ -34,10 +37,18 @@ export const redactScreenshotTool = {
         items: { $ref: "#/$defs/BboxRedactRegion" },
       },
       output: { type: "string" },
+      encode: {
+        $ref: "#/$defs/EncodeOptions",
+        description:
+          "Optional encoder settings applied after the redactions are " +
+          "burned in. Useful when the redacted screenshot is destined for " +
+          "an issue tracker / docs and size matters.",
+      },
     },
     $defs: {
       ...SHARED_DEFS,
       BboxRedactRegion: BBOX_REDACT_REGION_SCHEMA,
+      EncodeOptions: ENCODE_OPTIONS_SCHEMA,
     },
   },
 } as const;
@@ -46,6 +57,7 @@ interface RedactScreenshotInput {
   image?: unknown;
   regions?: unknown;
   output?: unknown;
+  encode?: unknown;
 }
 
 class InvalidRedactInputError extends Error {
@@ -78,19 +90,29 @@ export async function handleRedactScreenshot(
       output = input.output;
     }
 
+    let encode: Partial<EncodeOptions> | undefined;
+    if (input.encode !== undefined) {
+      if (typeof input.encode !== "object" || input.encode === null) {
+        throw new InvalidRedactInputError("`encode` must be an object when provided.");
+      }
+      encode = input.encode as Partial<EncodeOptions>;
+    }
+
     const resolved = await resolveImageInput(input.image);
     const redactedBytes = await burnRedactions(resolved.bytes, regions);
+    const encoded = await applyEncodeOptions(redactedBytes, resolved.dimensions, encode);
 
     if (output) {
-      await writeFile(output, redactedBytes);
+      await writeFile(output, encoded.bytes);
+      const reasonSuffix = encoded.reason ? `, reason: ${encoded.reason}` : "";
       return {
         content: [
           {
             type: "text",
             text:
-              `Wrote ${redactedBytes.byteLength}-byte redacted PNG to ${output} ` +
-              `(${resolved.dimensions.width}×${resolved.dimensions.height}, ` +
-              `${regions.length} region${regions.length === 1 ? "" : "s"}).`,
+              `Wrote ${encoded.bytes.byteLength}-byte redacted ${encoded.chosen.toUpperCase()} to ${output} ` +
+              `(${encoded.width}×${encoded.height}, ` +
+              `${regions.length} region${regions.length === 1 ? "" : "s"}${reasonSuffix}).`,
           },
         ],
       };
@@ -100,11 +122,11 @@ export async function handleRedactScreenshot(
         {
           type: "image",
           data: Buffer.from(
-            redactedBytes.buffer,
-            redactedBytes.byteOffset,
-            redactedBytes.byteLength,
+            encoded.bytes.buffer,
+            encoded.bytes.byteOffset,
+            encoded.bytes.byteLength,
           ).toString("base64"),
-          mimeType: "image/png",
+          mimeType: encoded.mimeType,
         },
       ],
     };

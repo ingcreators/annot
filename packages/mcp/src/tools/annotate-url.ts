@@ -22,13 +22,14 @@
 import { writeFile } from "node:fs/promises";
 import { isAbsolute } from "node:path";
 
-import type { Annotator } from "@ingcreators/annot-annotator";
+import type { Annotator, EncodeOptions } from "@ingcreators/annot-annotator";
 import { bboxAnnotationsToSvg } from "@ingcreators/annot-annotator";
 import { capturePage, type ViewportOptions } from "../browser/capture.js";
 import type { BrowserPool } from "../browser/pool.js";
 import { resolveLocatorAnnotations } from "../browser/resolve-locator.js";
-import { LOCATOR_ANNOTATION_SCHEMA, SHARED_DEFS } from "../dsl/schema.js";
+import { ENCODE_OPTIONS_SCHEMA, LOCATOR_ANNOTATION_SCHEMA, SHARED_DEFS } from "../dsl/schema.js";
 import type { BboxAnnotation, LocatorAnnotation } from "../dsl/types.js";
+import { applyEncodeOptions } from "../io/encode-output.js";
 import { readPngDimensions } from "../io/png-dimensions.js";
 import type { AnnotateToolResult } from "./annotate-screenshot.js";
 
@@ -90,10 +91,18 @@ export const annotateUrlTool = {
           "Optional absolute filesystem path. When set, the annotated PNG " +
           "is written here and the tool returns a text confirmation.",
       },
+      encode: {
+        $ref: "#/$defs/EncodeOptions",
+        description:
+          "Optional encoder settings (`format` / `saveSizePreset` / " +
+          "`jpegPercent`). Set to shrink the output for ingestion into " +
+          "issue trackers / docs.",
+      },
     },
     $defs: {
       ...SHARED_DEFS,
       LocatorAnnotation: LOCATOR_ANNOTATION_SCHEMA,
+      EncodeOptions: ENCODE_OPTIONS_SCHEMA,
     },
   },
 } as const;
@@ -110,6 +119,7 @@ interface AnnotateUrlInput {
   fullPage?: unknown;
   waitFor?: unknown;
   output?: unknown;
+  encode?: unknown;
 }
 
 interface ParsedInput {
@@ -119,6 +129,7 @@ interface ParsedInput {
   fullPage: boolean;
   waitFor: "load" | "domcontentloaded" | "networkidle";
   output: string | undefined;
+  encode: Partial<EncodeOptions> | undefined;
 }
 
 class InvalidAnnotateUrlInputError extends Error {
@@ -151,24 +162,26 @@ export async function handleAnnotateUrl(
     }
     const dimensions = readPngDimensions(capture.pngBytes);
     const annotationsSvg = bboxAnnotationsToSvg(resolvedAnnotations);
-    const pngBytes = deps.annotator.toPng({
+    const rasterised = deps.annotator.toPng({
       originalDataUrl: `data:image/png;base64,${bytesToBase64(capture.pngBytes)}`,
       annotationsSvg,
       width: dimensions.width,
       height: dimensions.height,
     });
+    const encoded = await applyEncodeOptions(rasterised, dimensions, params.encode);
     if (params.output) {
-      await writeFile(params.output, pngBytes);
+      await writeFile(params.output, encoded.bytes);
+      const reasonSuffix = encoded.reason ? `, reason: ${encoded.reason}` : "";
       return {
         content: [
           {
             type: "text",
             text:
-              `Wrote ${pngBytes.byteLength}-byte annotated PNG to ${params.output} ` +
-              `(${dimensions.width}×${dimensions.height}, ` +
+              `Wrote ${encoded.bytes.byteLength}-byte ${encoded.chosen.toUpperCase()} to ${params.output} ` +
+              `(${encoded.width}×${encoded.height}, ` +
               `${params.annotations.length} annotation${
                 params.annotations.length === 1 ? "" : "s"
-              }, captured from ${params.url}).`,
+              }, captured from ${params.url}${reasonSuffix}).`,
           },
         ],
       };
@@ -177,8 +190,8 @@ export async function handleAnnotateUrl(
       content: [
         {
           type: "image",
-          data: bytesToBase64(pngBytes),
-          mimeType: "image/png",
+          data: bytesToBase64(encoded.bytes),
+          mimeType: encoded.mimeType,
         },
       ],
     };
@@ -226,6 +239,15 @@ function parseInput(input: AnnotateUrlInput): ParsedInput {
     }
     output = input.output;
   }
+
+  let encode: Partial<EncodeOptions> | undefined;
+  if (input.encode !== undefined) {
+    if (typeof input.encode !== "object" || input.encode === null) {
+      throw new InvalidAnnotateUrlInputError("`encode` must be an object when provided.");
+    }
+    encode = input.encode as Partial<EncodeOptions>;
+  }
+
   return {
     url: input.url,
     annotations,
@@ -233,6 +255,7 @@ function parseInput(input: AnnotateUrlInput): ParsedInput {
     fullPage,
     waitFor,
     output,
+    encode,
   };
 }
 

@@ -19,7 +19,7 @@ import {
   DEFAULT_ENCODE_OPTIONS,
   type EncodeOptions,
 } from "@ingcreators/annot-core/encode/options";
-import { createCanvas } from "@napi-rs/canvas";
+import { createCanvas, loadImage } from "@napi-rs/canvas";
 
 import type { EncodeResult } from "./options.js";
 import { isPhotoHeavy, quantizeRgbaToPng8 } from "./quantize.js";
@@ -126,6 +126,31 @@ export async function encodeRgba(
     width: w,
     height: h,
   };
+}
+
+/**
+ * Decode a PNG / JPEG byte stream into RGBA and re-encode it
+ * through {@link encodeRgba}. Useful for downstream pipelines
+ * that emit a PNG first (e.g. the redact-burn output or a
+ * Playwright `page.screenshot()` capture) and want to apply
+ * `saveSize` / `format` after the fact.
+ *
+ * The decode goes through `@napi-rs/canvas`'s `loadImage`, so
+ * any format the underlying Skia decoder understands (PNG /
+ * JPEG / WebP / AVIF on the canvas's supported list) flows
+ * through transparently.
+ */
+export async function decodeAndEncodeImage(
+  imageBytes: Uint8Array,
+  options: EncodeOptions = DEFAULT_ENCODE_OPTIONS,
+): Promise<EncodeResult> {
+  const image = await loadImage(Buffer.from(imageBytes));
+  const canvas = createCanvas(image.width, image.height);
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(image, 0, 0);
+  const data = ctx.getImageData(0, 0, image.width, image.height).data;
+  const rgba = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+  return encodeRgba(rgba, image.width, image.height, options);
 }
 
 // ─── helpers ────────────────────────────────────────────────────

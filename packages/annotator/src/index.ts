@@ -31,7 +31,7 @@ export {
 // through `createAnnotator`. Use `annotator.toEncoded()` when
 // you're rasterising an annotated SVG.
 
-export { encodeRgba } from "./encode/encode.js";
+export { decodeAndEncodeImage, encodeRgba } from "./encode/encode.js";
 export {
   type BrowserEncodeResult,
   computeResizeTarget,

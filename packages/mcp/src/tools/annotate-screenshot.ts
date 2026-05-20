@@ -16,10 +16,11 @@
 import { writeFile } from "node:fs/promises";
 import { isAbsolute } from "node:path";
 
-import type { Annotator } from "@ingcreators/annot-annotator";
+import type { Annotator, EncodeOptions } from "@ingcreators/annot-annotator";
 import { bboxAnnotationsToSvg } from "@ingcreators/annot-annotator";
-import { BBOX_ANNOTATION_SCHEMA, SHARED_DEFS } from "../dsl/schema.js";
+import { BBOX_ANNOTATION_SCHEMA, ENCODE_OPTIONS_SCHEMA, SHARED_DEFS } from "../dsl/schema.js";
 import type { BboxAnnotation } from "../dsl/types.js";
+import { applyEncodeOptions } from "../io/encode-output.js";
 import { InvalidImageInputError, resolveImageInput } from "../io/read-image.js";
 
 export const ANNOTATE_SCREENSHOT_TOOL_NAME = "annot_annotate_screenshot";
@@ -65,10 +66,19 @@ export const annotateScreenshotTool = {
           "is written here and the tool returns a text confirmation; " +
           "otherwise the PNG bytes are returned inline.",
       },
+      encode: {
+        $ref: "#/$defs/EncodeOptions",
+        description:
+          "Optional encoder settings. When set, the output PNG-32 is " +
+          "decoded and re-encoded per `format` / `saveSizePreset` for " +
+          'size savings — `format: "smart"` + `saveSizePreset: "standard"` ' +
+          "gives ~50–80% byte reduction typical for UI screenshots.",
+      },
     },
     $defs: {
       ...SHARED_DEFS,
       BboxAnnotation: BBOX_ANNOTATION_SCHEMA,
+      EncodeOptions: ENCODE_OPTIONS_SCHEMA,
     },
   },
 } as const;
@@ -85,6 +95,7 @@ interface AnnotateScreenshotInput {
   image?: unknown;
   annotations?: unknown;
   output?: unknown;
+  encode?: unknown;
 }
 
 /** MCP `tools/call` result content block. */
@@ -112,24 +123,26 @@ export async function handleAnnotateScreenshot(
     const params = parseInput(input);
     const resolved = await resolveImageInput(params.image);
     const annotationsSvg = bboxAnnotationsToSvg(params.annotations);
-    const pngBytes = deps.annotator.toPng({
+    const rasterised = deps.annotator.toPng({
       originalDataUrl: resolved.dataUrl,
       annotationsSvg,
       width: resolved.dimensions.width,
       height: resolved.dimensions.height,
     });
+    const encoded = await applyEncodeOptions(rasterised, resolved.dimensions, params.encode);
     if (params.output) {
-      await writeFile(params.output, pngBytes);
+      await writeFile(params.output, encoded.bytes);
+      const reasonSuffix = encoded.reason ? `, reason: ${encoded.reason}` : "";
       return {
         content: [
           {
             type: "text",
             text:
-              `Wrote ${pngBytes.byteLength}-byte annotated PNG to ${params.output} ` +
-              `(${resolved.dimensions.width}×${resolved.dimensions.height}, ` +
+              `Wrote ${encoded.bytes.byteLength}-byte ${encoded.chosen.toUpperCase()} to ${params.output} ` +
+              `(${encoded.width}×${encoded.height}, ` +
               `${params.annotations.length} annotation${
                 params.annotations.length === 1 ? "" : "s"
-              }).`,
+              }${reasonSuffix}).`,
           },
         ],
       };
@@ -138,8 +151,8 @@ export async function handleAnnotateScreenshot(
       content: [
         {
           type: "image",
-          data: bytesToBase64(pngBytes),
-          mimeType: "image/png",
+          data: bytesToBase64(encoded.bytes),
+          mimeType: encoded.mimeType,
         },
       ],
     };
@@ -154,6 +167,7 @@ interface ParsedInput {
   image: string;
   annotations: readonly BboxAnnotation[];
   output: string | undefined;
+  encode: Partial<EncodeOptions> | undefined;
 }
 
 function parseInput(input: AnnotateScreenshotInput): ParsedInput {
@@ -180,7 +194,16 @@ function parseInput(input: AnnotateScreenshotInput): ParsedInput {
     }
     output = input.output;
   }
-  return { image: input.image, annotations, output };
+
+  let encode: Partial<EncodeOptions> | undefined;
+  if (input.encode !== undefined) {
+    if (typeof input.encode !== "object" || input.encode === null) {
+      throw new InvalidToolInputError("`encode` must be an object when provided.");
+    }
+    encode = input.encode as Partial<EncodeOptions>;
+  }
+
+  return { image: input.image, annotations, output, encode };
 }
 
 class InvalidToolInputError extends Error {
