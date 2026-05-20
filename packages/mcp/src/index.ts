@@ -12,6 +12,16 @@
 //
 // See `docs/plans/agent-mcp-integration.md` for the full design.
 
+// DSL → SVG conversion — re-exported from
+// `@ingcreators/annot-annotator` since the lift in 0.1.1, so
+// downstream tooling that only depends on `@ingcreators/annot-mcp`
+// still sees one import surface for the bbox-flavour DSL.
+export {
+  arrowBetween,
+  bboxAnnotationsToSvg,
+  rectForBoundingBox,
+  textAt,
+} from "@ingcreators/annot-annotator";
 export {
   type CapturePageOptions,
   type CapturePageResult,
@@ -55,8 +65,6 @@ export {
   LOCATOR_REDACT_REGION_SCHEMA,
   SHARED_DEFS,
 } from "./dsl/schema.js";
-// DSL → SVG conversion — used by `_screenshot` tool implementations.
-export { bboxAnnotationsToSvg } from "./dsl/to-svg.js";
 // DSL types — agent-facing wire format.
 export type {
   AnnotationStyle,

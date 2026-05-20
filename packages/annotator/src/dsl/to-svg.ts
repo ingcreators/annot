@@ -1,20 +1,14 @@
 // Convert a `BboxAnnotation[]` into an SVG fragment string. The
-// result is fed into `@ingcreators/annot-annotator`'s
-// `createAnnotator({ annotationsSvg })` pipeline at tool-call time
-// (Phase 2 onwards).
+// result is fed into `createAnnotator({ ... }).toPng({
+// annotationsSvg })`, or — once the same overload lands in
+// `@ingcreators/annot-playwright` 0.2.0 — passed through the
+// fixture's `annotateScreenshot()` automatically.
 //
-// Composes the in-tree primitives in `svg-primitives.ts` (which
-// mirror the shape of `@ingcreators/annot-playwright`'s helpers so
-// the agent-facing and test-engineer-facing surfaces produce
-// visually consistent output). Adds the circle / callout / raw
-// shapes the primitives don't cover.
-//
-// `LocatorAnnotation`-flavour input lands in Phase 3b — that path
-// resolves locators to bboxes and then delegates here. Phase 1
-// only implements the bbox flavour.
+// Locator-flavoured annotations (`LocatorAnnotation` in
+// `@ingcreators/annot-mcp`) get resolved to bbox form by the MCP
+// server's browser pool first, then handed to this same path.
 
 import { arrowBetween, rectForBoundingBox, textAt } from "./svg-primitives.js";
-
 import type {
   AnnotationStyle,
   BboxAnnotation,
@@ -30,16 +24,10 @@ import type {
 
 // ─── Intent → colour resolution ─────────────────────────────────
 //
-// The values mirror the design-system tokens documented in
-// `docs/design-system.md`. They're inlined here rather than
-// imported from `@ingcreators/annot-editor` because that package
-// is Tier C (live-browser-only) and this conversion runs in
-// pure Node (Tier A).
-//
-// If the design tokens move, regenerate this table from the same
-// source. The CI invariant in `to-svg.test.ts` snapshots the
-// generated SVG, so a drift here will surface as a snapshot diff
-// rather than a silent visual regression.
+// Values mirror the design-system tokens documented in
+// `docs/design-system.md`. Inlined here rather than imported from
+// `@ingcreators/annot-editor` because that package is Tier C
+// (live-browser-only); this converter runs in pure Node.
 
 const INTENT_COLOURS: Record<Intent, { stroke: string; fill: string; text: string }> = {
   info: { stroke: "#3b82f6", fill: "rgba(59, 130, 246, 0.12)", text: "#1e40af" },
@@ -70,10 +58,11 @@ function resolveColours(style: AnnotationStyle): {
 /**
  * Convert a list of bbox-flavour annotations into a single SVG
  * fragment string. The fragment is suitable as the
- * `annotationsSvg` payload for `@ingcreators/annot-annotator`.
+ * `annotationsSvg` payload for `createAnnotator(...).toPng()` /
+ * `.toSvg()`.
  *
- * Phase 1 emits the bare fragments only (no `<svg>` wrapper); the
- * annotator's sanitiser handles wrapping at rasterise time.
+ * Emits bare fragments (no outer `<svg>` wrapper); the annotator's
+ * sanitiser wraps them at rasterise time.
  */
 export function bboxAnnotationsToSvg(annotations: readonly BboxAnnotation[]): string {
   return annotations.map(bboxAnnotationToSvg).join("");
@@ -142,8 +131,8 @@ function calloutFragment(annotation: BboxCalloutAnnotation): string {
   //   2. Arrow from the caption anchor to the nearest edge of the
   //      target bbox.
   //   3. Text at the caption anchor.
-  // Z-order matters: text on top so it can sit above the arrow's
-  // tail / a possible fill on the rect.
+  // Z-order matters: text on top so it sits above any fill on the
+  // rect.
   const colours = resolveColours(annotation);
   const target = annotation.targetBbox;
   const arrowEnd = nearestEdgePoint(target, annotation.at);
@@ -173,16 +162,10 @@ function rawFragment(annotation: RawAnnotation): string {
 
 /**
  * Project a point onto the nearest point of a bbox's perimeter.
- * Used by callout to pick the natural visual landing point for the
- * arrow head — if the caption is to the left of the bbox, the
- * arrow hits the left edge midpoint; if above, the top edge; etc.
- *
- * The algorithm clamps the caption coordinates to the bbox's
- * range, which automatically picks the nearest perimeter point
- * for any caption position outside the bbox. If the caption is
- * inside the bbox the clamp is a no-op and the arrow is a zero-
- * length line — a degenerate but visually acceptable case (the
- * marker still renders).
+ * Clamps the caption coordinates to the bbox range — outside the
+ * bbox the clamp picks the closest perimeter point; inside the
+ * bbox the clamp is a no-op (degenerate zero-length arrow,
+ * visually acceptable).
  */
 function nearestEdgePoint(bbox: BboxLike, point: Point): Point {
   const x = clamp(point.x, bbox.x, bbox.x + bbox.width);

@@ -1,12 +1,10 @@
-// Tests for the DSL → SVG converter. Snapshot tests pin the exact
-// SVG output per annotation type so a refactor that changes
-// whitespace or attribute order fails the test intentionally — the
-// agent contract is the rendered SVG, not the source code shape.
-//
-// Phase 1 covers the bbox flavour only; LocatorAnnotation
-// resolution lands in Phase 3b along with `annot_annotate_url`.
+// Tests for the DSL → SVG converter. Snapshot-style assertions
+// pin the exact SVG output per annotation type so a refactor that
+// changes whitespace or attribute order fails intentionally — the
+// public contract is the rendered SVG, not the source code shape.
 
 import { describe, expect, test } from "vitest";
+
 import { bboxAnnotationsToSvg } from "./to-svg.js";
 import type { BboxAnnotation } from "./types.js";
 
@@ -74,7 +72,7 @@ describe("bboxAnnotationsToSvg", () => {
     // Marker id is suffixed by a counter — assert on the structure
     // instead of an exact id so re-orderings don't break the test.
     expect(out).toMatch(
-      /^<defs><marker id="annot-mcp-arrow-\d+" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto" markerUnits="strokeWidth"><path d="M 0 0 L 10 5 L 0 10 z" fill="#3b82f6"\/><\/marker><\/defs><line x1="100" y1="100" x2="200" y2="150" stroke="#3b82f6" stroke-width="2" marker-end="url\(#annot-mcp-arrow-\d+\)"\/>$/,
+      /^<defs><marker id="annot-arrow-\d+" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto" markerUnits="strokeWidth"><path d="M 0 0 L 10 5 L 0 10 z" fill="#3b82f6"\/><\/marker><\/defs><line x1="100" y1="100" x2="200" y2="150" stroke="#3b82f6" stroke-width="2" marker-end="url\(#annot-arrow-\d+\)"\/>$/,
     );
   });
 
@@ -114,7 +112,6 @@ describe("bboxAnnotationsToSvg", () => {
         intent: "error",
       },
     ]);
-    // Order: rect first, arrow in the middle, text on top.
     expect(out).toMatch(/<rect /);
     expect(out).toMatch(/<defs><marker /);
     expect(out).toMatch(/<text [^>]*>form validation broken<\/text>/);
@@ -123,11 +120,6 @@ describe("bboxAnnotationsToSvg", () => {
   });
 
   test("callout arrow lands on the nearest target edge", () => {
-    // Caption at (50, 50), target rect at (200, 200, 80, 40).
-    // The target's left edge spans x=200, y∈[200,240]. Clamping
-    // (50, 50) gives (200, 200) — the top-left corner. We just
-    // assert that the arrow endpoint coordinates appear in the
-    // output; precise geometry is the helper's contract.
     const out = bboxAnnotationsToSvg([
       {
         type: "callout",
