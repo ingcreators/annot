@@ -1,0 +1,43 @@
+---
+annot:
+  id: SC-001
+  title: Login screen
+  purpose: Unauthenticated users enter credentials.
+  meta:
+    author: Sample
+    revisedDate: 2026-05-21
+  xlsx:
+    book: Screen spec
+    sheet: SC-001 Login
+    role: screen
+    order: 100
+---
+
+import Screen from "@ingcreators/annot-product-docs-astro/components/Screen.astro";
+import Overlay from "@ingcreators/annot-product-docs-astro/components/Overlay.astro";
+
+# Login screen
+
+Enter your email + password to sign in. This screen is the
+unauthenticated entry point and routes the user to the
+dashboard on success.
+
+<Screen id="login" src="/shots/login.png">
+
+<Overlay match={{ role: "textbox", name: "Email" }} intent="required" number={1}>
+**Email** — Enter your registered company email address.
+Personal Gmail accounts are rejected by the auth service.
+</Overlay>
+
+<Overlay match={{ role: "textbox", name: "Password" }} intent="required" number={2}>
+**Password** — at least 12 characters, with one number and one symbol.
+</Overlay>
+
+<Overlay match={{ role: "button", name: "Sign in" }} intent="action" number={3}>
+Submits the form via `POST /api/auth/sign-in`. On success the
+user is redirected to `/dashboard`.
+</Overlay>
+
+</Screen>
+
+{/* annot:snapshot */}

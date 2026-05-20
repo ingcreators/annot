@@ -1,0 +1,23 @@
+{
+  "name": "@ingcreators/astro-docs-site-example",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Sample Astro site dogfooding @ingcreators/annot-product-docs-astro. Phase 2 PR 4 of docs/plans/living-product-docs.md. Standalone — NOT a workspace package; cd here and run `npm install` before `npm run dev`.",
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "check": "astro check"
+  },
+  "dependencies": {
+    "@astrojs/mdx": "^4.0.0",
+    "@ingcreators/annot-product-docs": "^0.1.0",
+    "@ingcreators/annot-product-docs-astro": "^0.1.0",
+    "astro": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0"
+  }
+}
