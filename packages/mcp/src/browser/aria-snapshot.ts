@@ -3,8 +3,9 @@
 // `[ref=eN]` markers).
 //
 // Phase 0 Stage 1 of `docs/plans/living-product-docs.md`. The
-// foundational primitive: the YAML that `screen.yaml`'s
-// `generated.snapshot` field will be populated from.
+// foundational primitive: the YAML that the `annot:snapshot`
+// MDX comment block in `*.screen.mdx` files will be populated
+// from.
 //
 // Mirrors `capturePage` in shape but skips the screenshot and
 // closes the page eagerly — callers don't need the live page

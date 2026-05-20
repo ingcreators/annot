@@ -134,7 +134,7 @@ highlighted as `warning`-intent rects.
 Open a URL and return Playwright's AI-mode aria-snapshot
 (YAML format with `[ref=eN]` markers). The same primitive
 `playwright-mcp` and `playwright-cli` use. Foundational
-input for the screen-spec workflow (see
+input for the product-docs workflow (see
 [`docs/plans/living-product-docs.md`](../../docs/plans/living-product-docs.md)).
 
 **Inputs:**
