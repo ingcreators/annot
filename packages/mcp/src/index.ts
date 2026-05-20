@@ -97,4 +97,9 @@ export {
   annotateScreenshotTool,
   handleAnnotateScreenshot,
 } from "./tools/annotate-screenshot.js";
+export {
+  ANNOTATE_URL_TOOL_NAME,
+  annotateUrlTool,
+  handleAnnotateUrl,
+} from "./tools/annotate-url.js";
 export { runStdioServer } from "./transport.js";
