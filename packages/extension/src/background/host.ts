@@ -511,18 +511,18 @@ export function createChromeCaptureHost(): CaptureHost {
     },
 
     async encodeBatch(items: BatchItem[]): Promise<CaptureEncodeResult[]> {
-      // Single-item: encode directly in the SW context. Avoids the
-      // offscreen round-trip overhead and matches the legacy
-      // `encodeCapture(pngDataUrl, settings)` path that visible /
-      // area / scroll / click / hotkey used.
-      if (items.length === 1) {
-        const item = items[0]!;
-        const result = await encodeOne(item.pngDataUrl, item.options);
-        return [result];
-      }
-      // N-item: route through the offscreen pool with a serial
-      // SW-side fallback if the pool is unavailable (legacy
-      // capturePages behaviour).
+      // Every encode — single-item OR batch — routes through the
+      // offscreen worker pool. The single-item carve-out that ran
+      // the encode directly on the SW thread was correct when the
+      // quantizer was libimagequant WASM (microsecond-class), but
+      // after the swap to pure-TS Median Cut the per-encode wall
+      // clock landed in the hundreds of ms to seconds, blocking
+      // every subsequent `chrome.runtime.*` callback in the
+      // capture-completion handshake. The worker-pool round-trip is
+      // ~10 ms of overhead in exchange for keeping the SW
+      // responsive. The SW-side serial path below stays as the
+      // recovery branch when the offscreen document fails to start.
+      // See `docs/plans/_done/quantizer-nearest-palette-acceleration.md`.
       try {
         await ensureOffscreen();
         const resp = (await chrome.runtime.sendMessage({

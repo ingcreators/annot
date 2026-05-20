@@ -23,7 +23,6 @@ import {
 import { resolveAutoCaptureOptions } from "@ingcreators/annot-core/auto-capture-options";
 import { newIdB58 } from "@ingcreators/annot-core/utils";
 import { logger } from "../logger.js";
-import { encodeCapture } from "../shared/encode.js";
 import { loadAutoCaptureOptions, loadSettings } from "../shared/settings.js";
 // Static import of IDB store — used by external message API
 import * as idbStore from "../storage/idb-store.js";
@@ -621,7 +620,28 @@ async function hotkeyCaptureShot(firedTab?: chrome.tabs.Tab): Promise<void> {
     logger.debug("[hotkey] capturing window", tab.windowId);
     const captured = await host.captureViewport(target);
     if (injectable) await endCapturePrep(host, target);
-    const encoded = await encodeCapture(captured.pngDataUrl, settings);
+    // Route via `host.encodeBatch` so the encode runs on the
+    // offscreen worker pool. A direct `encodeCapture(...)` call
+    // would block the SW thread for the full encode duration —
+    // pre-Phase-2 of `quantizer-nearest-palette-acceleration.md`
+    // that left every hotkey-mode capture freezing the SW until
+    // the editor opened.
+    const [encoded] = await host.encodeBatch([
+      {
+        pngDataUrl: captured.pngDataUrl,
+        cropSrcY: 0,
+        cropHeight: 0,
+        fullHeight: 0,
+        options: {
+          format: settings.quality.format,
+          smartFallback: settings.quality.smartFallback,
+          smartColorThreshold: settings.quality.smartColorThreshold,
+          jpegPercent: settings.quality.jpegPercent,
+          saveSizePreset: settings.quality.saveSizePreset,
+        },
+      },
+    ]);
+    if (!encoded) throw new Error("[hotkey] encodeBatch returned empty result");
     const dataUrl = encoded.dataUrl;
     const thumbnailDataUrl = await idbStore.generateThumbnail(dataUrl);
 
@@ -955,7 +975,25 @@ async function performAutoCapture(opts: { kind: "observer" | "probe" | "manual" 
   try {
     const captured = await host.captureViewport(target);
     await endCapturePrep(host, target);
-    const encoded = await encodeCapture(captured.pngDataUrl, settings);
+    // Same offscreen-pool routing as the hotkey path above —
+    // keeps the SW thread free during multi-second encodes (per
+    // `quantizer-nearest-palette-acceleration.md` Phase 2).
+    const [encoded] = await host.encodeBatch([
+      {
+        pngDataUrl: captured.pngDataUrl,
+        cropSrcY: 0,
+        cropHeight: 0,
+        fullHeight: 0,
+        options: {
+          format: settings.quality.format,
+          smartFallback: settings.quality.smartFallback,
+          smartColorThreshold: settings.quality.smartColorThreshold,
+          jpegPercent: settings.quality.jpegPercent,
+          saveSizePreset: settings.quality.saveSizePreset,
+        },
+      },
+    ]);
+    if (!encoded) throw new Error("[auto] encodeBatch returned empty result");
     const dataUrl = encoded.dataUrl;
 
     // Manual presses bypass dedupe — the user explicitly wants this
