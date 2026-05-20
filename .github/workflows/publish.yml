@@ -7,7 +7,7 @@ name: Publish
 # annotator for PNG-8 smart-mode encoding) — via Changesets.
 #
 # Phase 6 of `docs/plans/annot-cloud-roadmap.md` / Stage 3 of
-# `docs/plans/headless-annotator-publish.md`. The first run after
+# `docs/plans/_done/headless-annotator-publish.md`. The first run after
 # this workflow lands is the very first npm publish from this
 # org; treat each manual dispatch as a deliberate release event.
 #

@@ -4,7 +4,7 @@ import dts from "vite-plugin-dts";
 
 // Vite library build for `@ingcreators/annot-playwright`.
 // Phase 6 of `docs/plans/annot-cloud-roadmap.md` — Stage 1 of
-// `headless-annotator-publish.md`. Emits `dist/index.js` (ESM) +
+// `_done/headless-annotator-publish.md`. Emits `dist/index.js` (ESM) +
 // `dist/index.d.ts` for the Playwright-fixture surface.
 //
 // `@playwright/test` is a peerDependency on the package side, so

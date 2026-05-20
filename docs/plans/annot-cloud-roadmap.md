@@ -442,8 +442,8 @@ party page (test on a fresh static HTML).
 
 ### Phase 6 — npm publish (annot-annotator + annot-playwright)  *(1 week)*
 
-Inherits the headless-annotator-publish plan (already drafted in
-`docs/plans/headless-annotator-publish.md`). Five sub-stages
+Inherits the headless-annotator-publish plan (now archived at
+`docs/plans/_done/headless-annotator-publish.md`). Five sub-stages
 within this phase:
 
 - Vite library builds for `annotator` + `playwright`.
@@ -714,8 +714,8 @@ Drive remain unchanged); `AnnotCloudStore` is purely additive.
 - [`docs/plans/google-drive-integration.md`](./google-drive-integration.md) —
   existing OSS Drive Store; OAuth Verification covered in this
   roadmap's Legal track.
-- [`docs/plans/headless-annotator-publish.md`](./headless-annotator-publish.md) —
-  becomes Phase 6 of this roadmap.
+- [`docs/plans/_done/headless-annotator-publish.md`](./_done/headless-annotator-publish.md) —
+  became Phase 6 of this roadmap; archived after first publishes landed.
 - [`docs/plans/pre-release-final-pieces.md`](./pre-release-final-pieces.md) —
   Stage 1 (templates) becomes Phase 1; Stage 2 (Changesets)
   becomes part of Phase 6.

@@ -64,7 +64,7 @@ pnpm changeset publish
 ```
 
 The CI publish workflow at `.github/workflows/publish.yml`
-(lands in Stage 3 of `docs/plans/headless-annotator-publish.md`)
+(lands in Stage 3 of `docs/plans/_done/headless-annotator-publish.md`)
 runs `pnpm changeset publish` on `workflow_dispatch`. Auth is
 **dual-mode**: the workflow tries `NPM_TOKEN` first (if the repo
 secret is set) and falls back to **npm Trusted Publishing
@@ -101,4 +101,4 @@ a package that shouldn't publish, the org-level default
 prevents an accidental public publish. Each publishable package
 will be explicitly flipped to `access: public` (in its own
 `publishConfig`) when Stage 2 of
-`docs/plans/headless-annotator-publish.md` lands.
+`docs/plans/_done/headless-annotator-publish.md` lands.

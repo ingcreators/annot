@@ -1,17 +1,73 @@
 # Headless annotator — npm publish (Phase 3)
 
-> **Status:** Draft — gated on
->   [`pre-release-final-pieces.md`](./pre-release-final-pieces.md)
->   Stage 2 (Changesets bootstrap).
-> **Compatibility:** Flips `@ingcreators/annot-annotator`,
->   `@ingcreators/annot-playwright`, AND `@ingcreators/annot-core`
->   from `private: true` to a published state on npm. Once
->   landed, the annotator's public API enters semantic versioning;
+> **Status:** Done — first publishes landed 2026-05-19 / 2026-05-20;
+>   Trusted Publishing (OIDC) configured on all five packages
+>   2026-05-20. `NPM_TOKEN` retirement is the only remaining
+>   operator action and is documented in the [Post-publish
+>   ledger](#post-publish-ledger) below.
+> **Compatibility:** Flipped `@ingcreators/annot-core`,
+>   `@ingcreators/annot-annotator`, `@ingcreators/annot-playwright`,
+>   `@ingcreators/annot-mcp`, AND `@ingcreators/annot-imagequant`
+>   from `private: true` to a published state on npm. The
+>   annotator's public API now lives under semantic versioning;
 >   breaking changes require a major bump.
-> **Risk:** High — first public npm publish from this org. Mistakes
->   here are public. Reviewers should pre-verify `npm pack`
->   output (`files` allowlist + entry-point resolution +
->   `peerDependencies` shape) before flipping.
+> **Risk:** High at the time of drafting — first public npm
+>   publish from this org. Retained verbatim below for history.
+
+## Post-publish ledger
+
+First-publish dates and current registry versions (verified
+2026-05-20):
+
+| Package | First publish | Current version | Trusted Publisher? |
+|---|---|---|---|
+| `@ingcreators/annot-core` | 2026-05-19 | 0.1.0 | ✓ |
+| `@ingcreators/annot-annotator` | 2026-05-19 | 0.3.0 | ✓ |
+| `@ingcreators/annot-playwright` | 2026-05-19 | 0.3.0 | ✓ |
+| `@ingcreators/annot-mcp` | 2026-05-20 | 0.2.0 | ✓ |
+| `@ingcreators/annot-imagequant` | 2026-05-20 | 0.1.0 | ✓ |
+
+Stage-by-stage outcome:
+
+- **Stage 1** (build-script wiring) — landed in the per-package
+  Vite library configs (`packages/{core,annotator,playwright}/
+  vite.config.ts`).
+- **Stage 2** (package metadata cleanup) — `private: false`,
+  `files`, version, exports map. Verified via `npm pack
+  --dry-run` before each publish.
+- **Stage 3** (publish CI workflow) — `.github/workflows/publish.yml`
+  landed with dual-mode auth (NPM_TOKEN bootstrap → OIDC).
+- **Stage 4** (first publish) — `annot-core` + `annot-annotator`
+  + `annot-playwright` on 2026-05-19; `annot-mcp` on 2026-05-20
+  (Phase 8 of [`_done/agent-mcp-integration.md`](./_done/agent-mcp-integration.md));
+  `annot-imagequant` on 2026-05-20 alongside annotator 0.3.0
+  (see #849).
+- **Stage 5** (README cleanup + announcement + Trusted
+  Publishing) — README + `PRODUCT_DIRECTION.md` updates in
+  #797 and #844; Trusted Publishing rules configured on all
+  five packages' npmjs.com Settings pages on 2026-05-20.
+  `NPM_TOKEN` retirement is the final operator action: delete
+  the GitHub repo secret + revoke the Granular Access Token on
+  npmjs.com. The `publish.yml` workflow stays dual-mode so a
+  re-introduction of token auth (e.g. for a future
+  `@ingcreators/annot-*` first publish) needs no code change.
+
+Follow-on work that is **not** part of this plan but landed in
+parallel:
+
+- DSL lift on annotator (0.2.0) + playwright fixture (0.2.0) +
+  mcp (0.1.1) — #845–#847.
+- `toEncoded()` smart/saveSize/jpeg pipeline on annotator (0.3.0)
+  + matching playwright (0.3.0) / mcp (0.2.0) + imagequant
+  publish (0.1.0) — #846–#852.
+
+The npm-publish track is superseded by P6 of
+[`annot-cloud-roadmap.md`](./annot-cloud-roadmap.md) for any
+future work on the publish pipeline (auto-publish on PR merge,
+multi-package Changesets coordination, etc.). The original plan
+body below is retained for historical context.
+
+---
 
 ## Context
 

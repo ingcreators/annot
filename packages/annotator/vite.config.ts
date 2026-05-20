@@ -4,7 +4,7 @@ import dts from "vite-plugin-dts";
 
 // Vite library build for `@ingcreators/annot-annotator`. Phase 6
 // of `docs/plans/annot-cloud-roadmap.md` — Stage 1 of
-// `headless-annotator-publish.md`. Emits `dist/index.js` (ESM) +
+// `_done/headless-annotator-publish.md`. Emits `dist/index.js` (ESM) +
 // `dist/index.d.ts` so npm consumers can `import { createAnnotator }
 // from "@ingcreators/annot-annotator"` against pre-built artefacts
 // instead of the `.ts` source the workspace consumers see.
@@ -35,7 +35,7 @@ export default defineConfig({
       // INTENTIONALLY NOT externalised: for v0.1.0 the annotator's
       // published bundle inlines its core usage so consumers don't
       // need to know about the workspace's internal layering.
-      // (See Stage 2 of `docs/plans/headless-annotator-publish.md`
+      // (See Stage 2 of `docs/plans/_done/headless-annotator-publish.md`
       // — "self-contained tarballs" rationale.) Once we want
       // version-independent dependency resolution between
       // annot-annotator and annot-core, this list grows
