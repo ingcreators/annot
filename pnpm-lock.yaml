@@ -50,12 +50,21 @@ importers:
 
   packages/annotator:
     dependencies:
+      '@ingcreators/annot-imagequant':
+        specifier: workspace:*
+        version: link:../imagequant
+      '@napi-rs/canvas':
+        specifier: ^0.1.0
+        version: 0.1.100
       '@resvg/resvg-js':
         specifier: ^2.6.2
         version: 2.6.2
       '@xmldom/xmldom':
         specifier: ^0.9.10
         version: 0.9.10
+      pako:
+        specifier: ^2.1.0
+        version: 2.1.0
     devDependencies:
       '@ingcreators/annot-core':
         specifier: workspace:*

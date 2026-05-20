@@ -41,6 +41,7 @@
     "./storage": "./src/storage/index.ts",
     "./encode": "./src/encode/index.ts",
     "./encode/options": "./src/encode/options.ts",
+    "./encode/png8": "./src/encode/png8.ts",
     "./auto-capture-options": "./src/auto-capture-options.ts",
     "./styles/*": "./styles/*"
   },

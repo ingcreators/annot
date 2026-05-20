@@ -23,7 +23,16 @@ function paintedPng(
 function stubAnnotator(): { annotator: Annotator; toPng: ReturnType<typeof vi.fn> } {
   const stub = new Uint8Array([0xde, 0xad, 0xbe, 0xef]);
   const toPng = vi.fn(() => stub);
-  return { annotator: { toPng, toSvg: vi.fn(() => "<svg/>") }, toPng };
+  const toEncoded = vi.fn(async () => ({
+    bytes: stub,
+    chosen: "png" as const,
+    width: 0,
+    height: 0,
+  }));
+  return {
+    annotator: { toPng, toSvg: vi.fn(() => "<svg/>"), toEncoded },
+    toPng,
+  };
 }
 
 describe("handleCompareScreenshots", () => {
