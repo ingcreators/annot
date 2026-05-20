@@ -1,7 +1,19 @@
 # Annot MCP server — AI agent integration
 
-> **Status:** In progress — Phase 1 scaffold landing in the PR
->   that introduces this status flip.
+> **Status:** Partially landed —
+>   Phases 1 ([#830](https://github.com/ingcreators/annot/pull/830)) /
+>   2 ([#831](https://github.com/ingcreators/annot/pull/831)) /
+>   3a ([#832](https://github.com/ingcreators/annot/pull/832)) /
+>   3b ([#833](https://github.com/ingcreators/annot/pull/833)) /
+>   4 ([#834](https://github.com/ingcreators/annot/pull/834)) /
+>   5 ([#835](https://github.com/ingcreators/annot/pull/835)) /
+>   7 (this PR) landed. Five tools live:
+>   `annot_annotate_screenshot`, `annot_annotate_url`,
+>   `annot_redact_screenshot`, `annot_redact_url`,
+>   `annot_compare_screenshots`. Phase 6 (PPTX export) deferred
+>   indefinitely pending the pptx-export `ImageRecord[]`-driven
+>   refactor in CLAUDE.md §2; Phase 8 (first npm publish) gated
+>   on [`headless-annotator-publish.md`](./headless-annotator-publish.md).
 > **Compatibility:** Builds on the headless-annotator track —
 >   [`_done/annot-annotator-package.md`](./_done/annot-annotator-package.md)
 >   (Phase 1) provides `createAnnotator()`, and

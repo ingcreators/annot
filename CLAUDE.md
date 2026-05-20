@@ -119,6 +119,33 @@ packages/
                 gate. See
                 `docs/plans/_done/annot-playwright-fixture.md`.
                 npm name: @ingcreators/annot-playwright (private)
+  mcp/          Model Context Protocol stdio server exposing the
+                headless annotator as agent-callable tools. Five
+                tools at v1: `annot_annotate_screenshot` + paired
+                `annot_annotate_url` (live `playwright-core`
+                capture + locator-or-bbox positioning); same
+                pairing for `annot_redact_*` (destructive
+                solid / mosaic / blur burn over `@napi-rs/canvas`);
+                `annot_compare_screenshots` (pixelmatch + flood-
+                fill region aggregation, warning-intent rect
+                output). Locator-flavour DSL accepts Playwright
+                locator strings (`button:has-text("...")`,
+                `[data-testid="..."]`, `role=…`); resolution rules
+                for non-rect shapes (circle centroid, arrow
+                endpoint centroid, text top-left raised one font
+                line, callout split into anchor + target) live in
+                `src/browser/resolve-locator.ts`. Refcounted
+                `BrowserPool` with 30 s idle close. Tier A
+                (Node-only, no DOM). Currently `private: true`;
+                first npm publish is Phase 8 of the plan, which
+                piggy-backs on
+                `docs/plans/headless-annotator-publish.md`'s
+                Changesets pipeline. PPTX export (Phase 6 of the
+                plan) deferred indefinitely pending the
+                pptx-export `ImageRecord[]`-driven refactor noted
+                under "Tier C-render" in section 2. See
+                `docs/plans/agent-mcp-integration.md`.
+                npm name: @ingcreators/annot-mcp (private)
 ```
 
 Naming convention: **`@ingcreators/annot-<role>`** for every package.
