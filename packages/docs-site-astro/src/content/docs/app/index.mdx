@@ -1,14 +1,55 @@
 ---
 title: Annot Cloud (web app)
 description: The Annot web app at annot.work/app is the hand-edit surface for the same SVG annotation format produced by the headless annotator.
+annot:
+  id: app-overview
+  title: Annot web app — overview
+  xlsx:
+    book: Annot web app
+    sheet: Overview
+    role: screen
 ---
 
 import { Aside } from "@astrojs/starlight/components";
+import Screen from "@ingcreators/annot-product-docs-astro/components/Screen.astro";
+import Overlay from "@ingcreators/annot-product-docs-astro/components/Overlay.astro";
 
 The Annot web app at [`annot.work/app`](https://annot.work/app) is
 the hand-edit surface for the same SVG annotation format produced
 by the headless annotator. Capture once, hand-tune in the browser,
 share the result.
+
+<Aside type="note" title="This page is dogfooded">
+The screenshot below is captured by a Playwright tour of
+`annot.work/app/` on every CI run (Phase 5 of
+[the unification plan](https://github.com/ingcreators/annot/blob/main/docs/plans/_done/annot-work-astro-unification.md)).
+The numbered overlays use the same `<Screen>` + `<Overlay match>`
+components documented in the
+[living-product-docs section](../product-docs/). When the live
+UI changes, the next nightly tour run re-syncs this page; drift
+between this MDX and the live UI surfaces as a CI warning.
+</Aside>
+
+<Screen id="app-overview" src="./shots/app-overview.png">
+
+<Overlay match={{ role: "toolbar" }} intent="info" number={1}>
+**Toolbar** — Tool picker for rects, arrows, callouts, text,
+redact, and the freehand tool. Each tool has its own colour /
+variant flyout.
+</Overlay>
+
+<Overlay match={{ role: "main" }} intent="info" number={2}>
+**Canvas** — The SVG annotation surface. Drag to draw the
+currently-selected tool; right-click switches between selection
+and tool-pick modes.
+</Overlay>
+
+<Overlay match={{ role: "complementary" }} intent="info" number={3}>
+**Right panel** — Property editor for the selected element +
+the file metadata drawer.
+</Overlay>
+
+</Screen>
 
 ## Topics
 
