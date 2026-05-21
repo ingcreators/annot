@@ -219,22 +219,16 @@ packages/
                 `annot.work/docs/*`. Took over the conventional
                 `docs-site/` directory + `@ingcreators/annot-docs-site`
                 npm name in Phase 7 of
-                `docs/plans/_done/annot-work-astro-unification.md`.
+                `docs/plans/_done/annot-work-astro-unification.md`,
+                then claimed the production route directly when
+                the VitePress sibling was deleted in the
+                "retire VitePress + English-only" follow-up.
                 Consumes `@ingcreators/annot-product-docs` +
                 `-astro` as workspace deps for the Phase 5
                 dogfooded `/docs/app/` page (Playwright tour at
                 `tests/docs/annot-app.spec.ts`; advisory GitHub
                 Actions workflow at `.github/workflows/docs-tour.yml`).
                 npm name: @ingcreators/annot-docs-site
-  docs-site-vitepress/ RETIRED: legacy VitePress docs site —
-                kept in the tree for one release cycle after the
-                Phase 7 rename as a fallback during the Phase 6
-                cookie-opt-in observation window. The
-                `worker.js` here is the Phase 6 picker that
-                forwards opt-in traffic to the Astro Worker via
-                a Cloudflare service binding. Deleted entirely
-                in a follow-up PR.
-                npm name: @ingcreators/annot-docs-site-vitepress
 ```
 
 Naming convention: **`@ingcreators/annot-<role>`** for every package.

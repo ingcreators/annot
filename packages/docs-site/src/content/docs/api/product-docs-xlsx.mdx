@@ -15,7 +15,7 @@ Tier A — Node-only, no DOM. Depends on
 
 ```sh
 annot-docs-xlsx render --root docs --out dist/xlsx
-annot-docs-xlsx render --book "画面設計書"
+annot-docs-xlsx render --book "Screen specifications"
 ```
 
 Reads `annot-docs.config.ts` from the project root, groups the
@@ -41,7 +41,7 @@ const bytes = await applyDefaultLayout(book);
 ```
 
 Used when a book has no `template` configured. Emits the
-Japanese 画面設計書 default layout — cover / history / list /
+default screen-specifications layout — cover / history / list /
 screen / reference sheets with sensible labels + styling.
 
 ## `applyTemplateLayout(book, templatePath)`

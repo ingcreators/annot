@@ -1,13 +1,13 @@
 ---
-title: Living product docs — Playwright tour → docs site + 画面設計書
-description: End-to-end working example — write one MDX, write one Playwright tour, ship a docs site and an Excel 画面設計書 from the same source, kept in sync.
+title: Living product docs — Playwright tour → docs site + screen specs
+description: End-to-end working example — write one MDX, write one Playwright tour, ship a docs site and an Excel screen-specifications spreadsheet from the same source, kept in sync.
 ---
 
 import { Aside } from "@astrojs/starlight/components";
 
 This recipe walks the full living-product-docs flow against a
 tiny example app. The result: one MDX file produces both an
-Astro docs page **and** a Japanese 画面設計書 Excel
+Astro docs page **and** an Excel screen-specifications
 spreadsheet, with drift between MDX + live UI caught at lint
 time.
 
@@ -45,30 +45,30 @@ annot:
   id: SC-001
   title: Login screen
   xlsx:
-    book: 画面設計書
-    sheet: SC-001 ログイン
+    book: Screen specifications
+    sheet: SC-001 Login
     role: screen
 ---
 
 import Screen from "@ingcreators/annot-product-docs-astro/components/Screen.astro";
 import Overlay from "@ingcreators/annot-product-docs-astro/components/Overlay.astro";
 
-# ログイン画面
+# Login screen
 
-ユーザーがメールアドレスとパスワードでサインインする画面。
+The screen where users sign in with email and password.
 
 <Screen id="login" src="./shots/login.png">
 
 <Overlay match={{ role: "textbox", name: "Email" }} intent="required" number={1}>
-**Email** — 登録済みメールアドレスを入力。
+**Email** — Enter your registered email address.
 </Overlay>
 
 <Overlay match={{ role: "textbox", name: "Password" }} intent="required" number={2}>
-**Password** — 大文字小文字 + 数字を含む 8 文字以上。
+**Password** — 8+ characters with upper, lower, and a digit.
 </Overlay>
 
 <Overlay match={{ role: "button", name: "Sign in" }} intent="action" number={3}>
-入力検証後、サーバーに認証リクエストを送信。
+After client-side validation, sends the auth request to the server.
 </Overlay>
 
 </Screen>
@@ -131,7 +131,7 @@ The output includes a page that renders the screenshot with
 three numbered overlay callouts composited at the exact bbox
 coordinates the tour captured.
 
-## 4. Render the 画面設計書
+## 4. Render the screen-specifications spreadsheet
 
 ```ts
 // annot-docs.config.ts
@@ -139,13 +139,13 @@ import { defineConfig } from "@ingcreators/annot-product-docs";
 
 export default defineConfig({
   meta: {
-    projectName: "顧客管理システム",
-    customerName: "株式会社XYZ",
+    projectName: "Customer management system",
+    customerName: "Acme Corp.",
   },
   xlsx: {
-    defaultBook: "画面設計書",
+    defaultBook: "Screen specifications",
     books: {
-      "画面設計書": {
+      "Screen specifications": {
         // No `template` — use the OSS default layout.
       },
     },
@@ -154,13 +154,13 @@ export default defineConfig({
 ```
 
 ```sh
-pnpm annot-docs-xlsx render --book "画面設計書"
+pnpm annot-docs-xlsx render --book "Screen specifications"
 ```
 
-Output: `dist/xlsx/画面設計書.xlsx` with cover / history /
-screen-list / per-screen sheets, the annotated PNG embedded
-on the per-screen sheet, the overlay table populated from the
-three `<Overlay>` entries.
+Output: `dist/xlsx/Screen specifications.xlsx` with cover /
+history / screen-list / per-screen sheets, the annotated PNG
+embedded on the per-screen sheet, the overlay table populated
+from the three `<Overlay>` entries.
 
 For a customer-supplied template, swap the `defineConfig`
 above with the `template` + `templateSheets` form shown on

@@ -88,7 +88,6 @@ omissions.
 | [`packages/desktop`](./packages/desktop) | `@ingcreators/annot-desktop` | Electron desktop wrapper. |
 | [`packages/marketing`](./packages/marketing) | `@ingcreators/annot-marketing` | Astro 6 marketing site at `annot.work/`. |
 | [`packages/docs-site`](./packages/docs-site) | `@ingcreators/annot-docs-site` | Astro Starlight docs site at `annot.work/docs/*`. Dogfoods `@ingcreators/annot-product-docs-astro` for the `/docs/app/` page (Playwright tour against `annot.work/app/`). |
-| [`packages/docs-site-vitepress`](./packages/docs-site-vitepress) | `@ingcreators/annot-docs-site-vitepress` | RETIRED — legacy VitePress site kept as the Phase 6 picker Worker (forwards `annot-docs-stack=astro` cookie / `?docs-stack=astro` opt-in to the Astro Worker via service binding). Deleted in a follow-up PR after one release cycle. |
 
 `@ingcreators/annot-core` exposes two public entry points:
 
