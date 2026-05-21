@@ -61,4 +61,37 @@ The approver sees a single "Pending approvals" card
 A `<span class="wf-badge" data-testid="menu-pending-count">`
 inside the card shows `pendingApprovals().length`.
 
-{/* annot:snapshot */}
+{/* annot:snapshot
+id: menu-applicant
+capturedBy: workflow-app-tour
+capturedAt: 2026-05-21T23:15:39.039Z
+---
+- banner:
+  - link "Workflow App":
+    - /url: "#/menu"
+  - text: Taro Yamada Applicant
+  - button "Sign out"
+  - text: Language
+  - group "Language":
+    - button "English" [pressed]
+    - button "Japanese"
+- main:
+  - heading "Menu" [level=1]
+  - paragraph:
+    - text: Signed in as
+    - strong: Taro Yamada
+    - text: (yamada@example.com)
+  - paragraph: Submit a new application or review past ones.
+  - link "New application":
+    - /url: "#/apply"
+    - heading "New application" [level=2]
+    - paragraph: Start a new leave / expense / purchase application.
+  - heading "My applications" [level=2]
+  - list:
+    - listitem:
+      - strong: APP-001
+      - text: Leave May 19, 2026, 6:00 PM Submitted
+    - listitem:
+      - strong: APP-003
+      - text: Purchase May 17, 2026, 8:45 PM Rejected
+*/}

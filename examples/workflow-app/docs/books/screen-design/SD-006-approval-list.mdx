@@ -72,4 +72,41 @@ with a card whose body reads
 `approve.list.empty` ("No applications awaiting approval.")
 and `data-testid="approval-list-empty"`.
 
-{/* annot:snapshot */}
+{/* annot:snapshot
+id: approval-list
+capturedBy: workflow-app-tour
+capturedAt: 2026-05-21T23:15:39.770Z
+---
+- banner:
+  - link "Workflow App":
+    - /url: "#/menu"
+  - text: Ichiro Tanaka Approver
+  - button "Sign out"
+  - text: Language
+  - group "Language":
+    - button "English" [pressed]
+    - button "Japanese"
+- main:
+  - heading "Pending approvals" [level=1]
+  - paragraph: Open an item to review the full application.
+  - table:
+    - rowgroup:
+      - row "ID Applicant Category Amount Submitted at Action":
+        - columnheader "ID"
+        - columnheader "Applicant"
+        - columnheader "Category"
+        - columnheader "Amount"
+        - columnheader "Submitted at"
+        - columnheader "Action"
+    - rowgroup:
+      - row "APP-001 Taro Yamada Leave — May 19, 2026, 6:00 PM Review APP-001":
+        - cell "APP-001"
+        - cell "Taro Yamada"
+        - cell "Leave"
+        - cell "—"
+        - cell "May 19, 2026, 6:00 PM"
+        - cell "Review APP-001":
+          - link "Review APP-001":
+            - /url: "#/approve/APP-001"
+            - text: Review
+*/}

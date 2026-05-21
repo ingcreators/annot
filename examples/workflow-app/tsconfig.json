@@ -18,5 +18,11 @@
     "verbatimModuleSyntax": true,
     "noEmit": true
   },
-  "include": ["src", "vite.config.ts", "annot-docs.config.ts"]
+  "include": [
+    "src",
+    "tests",
+    "vite.config.ts",
+    "playwright.config.ts",
+    "annot-docs.config.ts"
+  ]
 }

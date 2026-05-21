@@ -55,4 +55,38 @@ the decision terminal with an "approved" badge.
 <Transition trigger={{ role: "button", name: "Approve" }} on="approved" to="OM-009" />
 <Transition trigger={{ role: "button", name: "Reject" }} on="rejected" to="OM-009" />
 
-{/* annot:snapshot */}
+{/* annot:snapshot
+id: approval-detail
+capturedBy: workflow-app-tour
+capturedAt: 2026-05-21T23:15:39.891Z
+---
+- banner:
+  - link "Workflow App":
+    - /url: "#/menu"
+  - text: Ichiro Tanaka Approver
+  - button "Sign out"
+  - text: Language
+  - group "Language":
+    - button "English" [pressed]
+    - button "Japanese"
+- main:
+  - heading "Review application" [level=1]
+  - term: ID
+  - definition: APP-001
+  - term: Applicant
+  - definition: Taro Yamada (yamada@example.com)
+  - term: Category
+  - definition: Leave
+  - term: Amount
+  - definition: —
+  - term: Submitted at
+  - definition: May 19, 2026, 6:00 PM
+  - term: Reason
+  - definition: Annual leave for family event.
+  - text: Decision comment (Optional)
+  - textbox "Decision comment (Optional)":
+    - /placeholder: Add an optional comment that will be shown to the applicant.
+    - text: Approved — family event covered.
+  - button "Reject"
+  - button "Approve"
+*/}
