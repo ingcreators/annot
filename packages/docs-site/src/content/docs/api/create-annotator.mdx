@@ -124,6 +124,36 @@ same names when present):
 | `capturedAt` | ISO timestamp. |
 | `commit` | Git SHA when applicable. |
 
+### From a Playwright test
+
+For Playwright specs producing screenshots of a documented
+screen, the `@ingcreators/annot-product-docs-astro/playwright`
+subpath ships an extended `test` fixture that bundles the whole
+flow (refresh MDX snapshot → take raw screenshot → bake editable
+PNG → write to disk) into one `page.screenshot()` call:
+
+```ts
+import { test } from "@ingcreators/annot-product-docs-astro/playwright";
+
+test("app overview", async ({ page }) => {
+  await page.goto("https://annot.work/app/");
+  await page.screenshot({
+    path: "public/app/shots/app-overview.png",
+    annot: {
+      mdx: { id: "app-overview", path: "src/content/docs/app/index.mdx" },
+      tags: { source: "docs-tour", capturedAt: new Date().toISOString() },
+    },
+  });
+});
+```
+
+The `annot` option is compositional — `mdx` / `overlays` / `tags`
+/ `editable` are independent fields, each contributing to a
+separate slice of the embedded XMP record. See
+[`product-docs/playwright-fixture`](/docs/product-docs/playwright-fixture/)
+for the full vocabulary, locator screenshot semantics, and the
+codegen→hand-edit workflow.
+
 ## Sanitisation
 
 The annotator strips editor-internal artefacts from the input SVG

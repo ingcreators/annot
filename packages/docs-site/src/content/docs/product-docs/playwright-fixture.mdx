@@ -1,0 +1,240 @@
+---
+title: Playwright fixture — page.screenshot({ annot })
+description: One-call screenshot capture that refreshes the MDX snapshot, bakes overlays into a re-editable PNG, and writes to disk. Drop-in for `page.screenshot()` and `locator.screenshot()`.
+---
+
+The `@ingcreators/annot-product-docs-astro/playwright` subpath
+ships an extended Playwright `test` fixture that intercepts
+`page.screenshot()` and `locator.screenshot()`. When the call
+carries an `annot: { … }` option, the fixture bundles four
+coordinated steps into one:
+
+1. Refresh the MDX `annot:snapshot` block against the current page
+   (via `screen.capture` from `@ingcreators/annot-product-docs`).
+2. Take the raw screenshot.
+3. Resolve `<Overlay>` annotations and merge with any
+   caller-supplied inline overlays.
+4. Compose the output PNG — editable wrap, flat raster, or
+   tags-only sidecar — and write to `path`.
+
+```ts
+import { test } from "@ingcreators/annot-product-docs-astro/playwright";
+
+test("app overview", async ({ page }) => {
+  await page.goto("https://annot.work/app/");
+  await page.screenshot({
+    path: "public/app/shots/app-overview.png",
+    annot: {
+      mdx: { id: "app-overview", path: "src/content/docs/app/index.mdx" },
+      tags: { source: "docs-tour", capturedAt: new Date().toISOString() },
+    },
+  });
+});
+```
+
+The resulting PNG is drop-in re-editable in Annot Cloud
+(`annot.work/app/`) — readers can save the image and load it as
+an editable session, with the badges restored as selectable /
+movable / colour-editable objects.
+
+## Pass-through to vanilla Playwright
+
+`page.screenshot()` calls **without** an `annot` option are
+unchanged. The fixture only kicks in when `annot` carries a
+contribution (`mdx` / `overlays` / `tags`); shorthand values like
+`annot: true` and `annot: {}` also pass through to the original
+method. This means codegen tools — Playwright Codegen, Chrome
+DevTools Recorder — emit standard `page.screenshot({ path })`
+calls that work as-is. Adding `annot: { mdx: { … } }` by hand to
+the codegen-generated skeleton is the standard editing flow.
+
+## The `annot` option — compositional fields
+
+```ts
+interface AnnotScreenshotOptions {
+  /** Refresh the MDX `annot:snapshot` block and resolve the
+   *  `<Screen id>`'s overlays. */
+  mdx?: { id: string; path: string };
+
+  /** Caller-supplied annotations — merged with MDX-derived ones
+   *  when both are present. Same DSL `@ingcreators/annot-annotator`
+   *  accepts. */
+  overlays?: BboxAnnotation[];
+
+  /** Provenance metadata written verbatim into the PNG's XMP.
+   *  No auto-fill — the fixture writes exactly what's here. */
+  tags?: Record<string, string>;
+
+  /** Default `true`: annotations preserved as SVG layer + original
+   *  capture embedded → re-editable in Annot Cloud. `false`:
+   *  annotations baked into visible pixels, no XMP layer, no
+   *  embedded original — flat PNG, no round-trip. */
+  editable?: boolean;
+}
+```
+
+### Recipes
+
+```ts
+// 1. MDX-linked: refresh snapshot + bake overlays in one call.
+await page.screenshot({
+  path: "shot.png",
+  annot: { mdx: { id: "login", path: "docs/login.mdx" } },
+});
+
+// 2. Inline overlays: no MDX, caller provides annotations.
+await page.screenshot({
+  path: "shot.png",
+  annot: {
+    overlays: [
+      { type: "rect", bbox: { x: 10, y: 10, width: 200, height: 50 }, intent: "warning" },
+      { type: "numberedBadge", bbox: { x: 240, y: 12, width: 24, height: 24 }, number: 1 },
+    ],
+  },
+});
+
+// 3. MDX + extra inline overlay for this test run only.
+await page.screenshot({
+  path: "shot.png",
+  annot: {
+    mdx: { id: "checkout", path: "docs/checkout.mdx" },
+    overlays: [
+      { type: "rect", bbox: testFailureRegion, intent: "error" },
+    ],
+    tags: { variant: testInfo.project.name },
+  },
+});
+
+// 4. Provenance sidecar: tag a PNG with test metadata, no overlays.
+await page.screenshot({
+  path: testInfo.outputPath("failure.png"),
+  annot: {
+    tags: {
+      source: "vrt-failure",
+      testId: testInfo.titlePath.join(" / "),
+    },
+  },
+});
+
+// 5. Locked / non-re-editable: bake overlays into pixels.
+await page.screenshot({
+  path: "marketing/feature.png",
+  annot: {
+    mdx: { id: "feature", path: "marketing/feature.mdx" },
+    editable: false,
+  },
+});
+```
+
+## Locator screenshots
+
+`locator.screenshot({ annot })` works the same way, with one
+addition: overlay coordinates are automatically **rebased** into
+the locator's clip. Overlays that fall outside the locator's
+bounding box are dropped with a warning (surfaced via
+`console.warn` and Playwright's `test.info().annotations`).
+
+```ts
+await page.locator("header").screenshot({
+  path: "header.png",
+  annot: {
+    overlays: [
+      // page-space bbox — rebased onto the header's clip
+      { type: "rect", bbox: { x: 120, y: 60, width: 50, height: 30 } },
+    ],
+  },
+});
+```
+
+Page-space coordinates fit naturally: you describe overlays in
+the coordinate system the snapshot uses (page pixels), and the
+fixture translates per locator's `boundingBox()`.
+
+When the locator has no bounding box (off-screen / hidden), the
+fixture throws with a friendly diagnostic — re-test with a
+stable selector or `waitFor()`.
+
+`page.screenshot({ clip, annot })` honours `clip` the same way —
+the explicit clip is treated as the rebase reference.
+
+## Output file shapes
+
+| Input | Output |
+|---|---|
+| `annot` absent / `true` / `{}` | Plain PNG (= vanilla Playwright) |
+| `annot: { tags }` only | Plain PNG + iTXt XMP chunk (no `<annot:annotations>`; editor treats as a normal PNG, external XMP tools read the tags) |
+| `annot: { overlays \| mdx }` | Editable PNG (annotations preserved as SVG layer, original capture embedded) |
+| `annot: { overlays \| mdx, editable: false }` | Flat PNG (annotations baked into pixels, no XMP layer) |
+
+## Tags
+
+Tags are written **verbatim**. The fixture does not auto-fill
+`capturedAt` / `commit` / etc — callers who want them write them.
+Soft-convention key names (documented in
+[`createAnnotator`](/docs/api/create-annotator/#re-editable-png)):
+
+| Key | Meaning |
+|---|---|
+| `source` | What produced the PNG (e.g. `"docs-tour"`, `"vrt-failure"`). |
+| `screen` | Living-product-docs `<Screen id>` value. |
+| `capturedAt` | ISO timestamp. |
+| `commit` | Git SHA when applicable. |
+
+A common docs-tour preamble:
+
+```ts
+tags: {
+  source: "docs-tour",
+  screen: SCREEN_ID,
+  capturedAt: new Date().toISOString(),
+  ...(process.env.GITHUB_SHA ? { commit: process.env.GITHUB_SHA } : {}),
+}
+```
+
+## Companion helpers
+
+For callers that want to compose annotations themselves without
+going through the `annot` option, the same subpath also exports:
+
+```ts
+import {
+  rebaseAnnotations,
+  describeAnnotation,
+  resolveMdxAnnotations,
+  svgFromBboxAnnotations,
+} from "@ingcreators/annot-product-docs-astro/playwright";
+```
+
+- `rebaseAnnotations(annotations, clip)` — pure
+  `BboxAnnotation[]` → `{ kept, dropped }` partition. Same
+  function the fixture uses internally.
+- `resolveMdxAnnotations({ mdxPath, screenId, dims })` — read
+  MDX overlays into a typed annotation list.
+- `svgFromBboxAnnotations(annotations)` — wrap a
+  `BboxAnnotation[]` into a single-root `<svg>` ready for
+  `Annotator.toEditablePng()` / `toPng()`.
+
+## Codegen workflow
+
+Generate a Playwright spec skeleton with
+`npx playwright codegen <url>` (or the VSCode "Record at cursor"
+action). The codegen produces standard
+`await page.screenshot({ path: "…" })` calls. Add the import
+swap and the `annot: { … }` opt by hand:
+
+```diff
+-import { test, expect } from "@playwright/test";
++import { test, expect } from "@ingcreators/annot-product-docs-astro/playwright";
+
+ test("…", async ({ page }) => {
+   await page.goto("…");
+-  await page.screenshot({ path: "shot.png" });
++  await page.screenshot({
++    path: "shot.png",
++    annot: { mdx: { id: "…", path: "docs/….mdx" } },
++  });
+ });
+```
+
+`@playwright/test`'s `expect` is re-exported from the subpath so
+the import swap is a one-liner.
