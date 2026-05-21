@@ -6,9 +6,9 @@ Workflow approval SPA + dogfooded living product docs against
 [`@ingcreators/annot-product-docs-astro`](https://www.npmjs.com/package/@ingcreators/annot-product-docs-astro).
 
 Plan:
-[`docs/plans/workflow-app-example.md`](../../docs/plans/workflow-app-example.md).
+[`docs/plans/_done/workflow-app-example.md`](../../docs/plans/_done/workflow-app-example.md).
 
-## What's here (Phases 1–5)
+## What's here
 
 ```
 examples/workflow-app/
@@ -144,9 +144,29 @@ Workarounds in this example until `0.1.1` lands:
   `import` statements stay unchanged — only the resolution
   changes. Drop the alias block once the package republishes.
 
-## What lands next
+## CI
 
-- **Phase 7** — Advisory CI workflow + final README polish +
-  plan archival to `docs/plans/_done/`.
+[`.github/workflows/example-workflow-app-docs-tour.yml`](../../.github/workflows/example-workflow-app-docs-tour.yml)
+runs the tour + Astro build on every PR that touches the
+example. Advisory — drift surfaces as a `::warning::`
+annotation but does not block merge.
 
-Track progress on the linked plan.
+## Clone-and-use as a template
+
+The example is designed to fork directly:
+
+1. Copy `examples/workflow-app/` to a fresh repo.
+2. Replace the seed user / application data in `src/state.ts`
+   with your own.
+3. Rename `<wf-*>` element prefixes if your product uses a
+   different brand.
+4. Replace the MDX content under `docs/books/` with the
+   chapters that describe YOUR app.
+5. Edit `tests/docs/{applicant,approver}-flow.spec.ts` to
+   walk YOUR happy paths — the `capture(page, { id })`
+   helper still does the screenshot + MDX rewrite work for
+   free.
+6. After `@ingcreators/annot-product-docs@0.1.1`
+   republishes, drop the local `tour-helpers.ts` + the
+   Astro alias workaround in favour of the upstream
+   `screen.capture` fixture.
