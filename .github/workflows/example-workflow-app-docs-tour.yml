@@ -1,0 +1,83 @@
+name: Example workflow-app docs tour
+
+# Phase 7 of `docs/plans/_done/workflow-app-example.md`.
+#
+# Advisory CI for the standalone `examples/workflow-app/`
+# example. Runs the Playwright docs tour
+# (`npm run docs:sync`) on PRs that touch the example,
+# surfaces any rewritten files as a workflow annotation,
+# and does NOT block merge. The example is reference
+# material; the tour confirms it still functions end-to-
+# end on a clean clone.
+#
+# `continue-on-error: true` because:
+#   - The example depends on `playwright install chromium`
+#     downloading a browser at CI time. Transient
+#     download failures shouldn't block unrelated PRs.
+#   - When the broken `@ingcreators/annot-product-docs`
+#     upstream publish is fixed (#947) and the tour
+#     migrates from `tour-helpers.ts` to the published
+#     fixture, the workflow will catch the migration
+#     drift but shouldn't block it.
+
+on:
+  pull_request:
+    paths:
+      - "examples/workflow-app/**"
+      - ".github/workflows/example-workflow-app-docs-tour.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: example-workflow-app-docs-tour-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tour:
+    name: docs tour
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true
+    defaults:
+      run:
+        working-directory: examples/workflow-app
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+
+      # The example uses plain npm (NOT the repo's pnpm
+      # workspace) so `npm install` here is the same
+      # command a fresh-clone consumer would run.
+      - name: Install example dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Install Chromium for Playwright
+        run: npx playwright install chromium
+
+      - name: Run the docs tour
+        run: npm run docs:sync
+
+      - name: Build the example's Astro docs-site
+        run: |
+          cd docs-site
+          npm install --no-audit --no-fund
+          npx astro build
+
+      - name: Surface MDX / PNG diff
+        if: always()
+        run: |
+          set +e
+          cd "${{ github.workspace }}"
+          DIFF_FILES="examples/workflow-app/docs/books/ examples/workflow-app/docs-site/public/shots/"
+          if [ -n "$(git status --porcelain -- $DIFF_FILES)" ]; then
+            echo "::warning::Docs tour rewrote files in the example. Run \`npm run docs:sync\` locally and commit the result."
+            git status --short -- $DIFF_FILES
+          else
+            echo "::notice::Docs tour completed; no rewrites (example MDX + base PNGs match the live SPA)."
+          fi

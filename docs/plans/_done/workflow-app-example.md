@@ -1,14 +1,15 @@
 # Workflow-app example + dogfooded living product docs
 
-> **Status:** In progress
+> **Status:** Done
 > **Owner:** Naoki Ichimura
-> **Plan PR:** TBD
+> **Plan PR:** [#942](https://github.com/ingcreators/annot/pull/942)
 > **Created:** 2026-05-22
+> **Landed:** 2026-05-22 (all seven phases in one session)
 > **Targets:** new `examples/workflow-app/` example project that
 > exercises the full
-> [`@ingcreators/annot-product-docs`](../../packages/product-docs/)
+> [`@ingcreators/annot-product-docs`](../../../packages/product-docs/)
 > +
-> [`@ingcreators/annot-product-docs-astro`](../../packages/product-docs-astro/)
+> [`@ingcreators/annot-product-docs-astro`](../../../packages/product-docs-astro/)
 > pipeline end-to-end against a non-trivial SPA.
 
 ## Why
@@ -616,15 +617,14 @@ example. Out of scope for this plan.
 
 ## Verified
 
-(Filled in per phase as PRs land.)
-
 | Phase | PR | Verified |
 |---|---|---|
-| 0 | TBD | plan + index update; `pnpm -r typecheck` n/a (markdown only) |
-| 1 | TBD | TBD |
-| 2 | TBD | TBD |
-| 3 | TBD | TBD |
-| 4 | TBD | TBD |
-| 5 | TBD | TBD |
-| 6 | TBD | TBD |
-| 7 | TBD | TBD |
+| 0 | [#942](https://github.com/ingcreators/annot/pull/942) | Plan + index update; markdown only. |
+| 1 | [#943](https://github.com/ingcreators/annot/pull/943) | SPA scaffold + shell. `npx tsc --noEmit` clean; preview boot at 5173; lang toggle + 8 placeholder routes verified. |
+| 2 | [#944](https://github.com/ingcreators/annot/pull/944) | Applicant flow + seed data. Happy path walked end-to-end (yamada → Expense ¥8,500 → submit → APP-004 in history); validation surfaced "申請理由を入力してください。" in ja; conditional Amount row hides for `leave`; role gating bounces applicant→`/menu`; sign out → `/login`. |
+| 3 | [#945](https://github.com/ingcreators/annot/pull/945) | Approver flow + every planned screen ships a component. Approve flow (en) walked APP-001 → terminal; reject flow (ja) walked APP-004 → 「申請を却下しました」with `data-decision="rejected"`; empty-state + already-decided + not-found verified. |
+| 4 | [#946](https://github.com/ingcreators/annot/pull/946) | 20 MDX files authored. SPA fix-ups (menu card `aria-label`s + per-row `Review APP-XXX` aria-label) verified in browser. Plan's Open Question #1 resolution adjusted: `{role, name}` with English names + en-only tour, since `data-testid`-based `match` isn't in the MatchKey shape. |
+| (interlude) | [#947](https://github.com/ingcreators/annot/pull/947) | `fix(publish): build product-docs packages before pack`. Root-cause: publish.yml filtered 4 packages but pack-verifies 7. Added 3 packages to the filter + `prepack: pnpm run build` to each. Local `pnpm pack --dry-run` now includes 11 dist files in the product-docs tarball. |
+| 5 | [#948](https://github.com/ingcreators/annot/pull/948) | Astro 5 docs-site. 22 pages built; per-screen pages render heading + body + figure + numbered overlays + transitions. 9 base PNGs captured by a stop-gap `scripts/capture-shots.mjs` (retired by Phase 6). Vite alias workaround for the broken upstream publish documented inline. |
+| 6 | [#949](https://github.com/ingcreators/annot/pull/949) | Playwright docs tour. 2 specs pass in ~4.8 s; `npm run docs:sync` refreshes 9 PNGs + populates 14 MDX `annot:snapshot` blocks; Astro build still produces 22 pages. `scripts/capture-shots.mjs` deleted. Self-contained `tour-helpers.ts` until `0.1.1` republishes. |
+| 7 | TBD | CI workflow + final README + plan archival to `_done/`. Advisory GHA runs the tour + Astro build on PRs touching the example; surfaces drift as `::warning::` annotations. |
