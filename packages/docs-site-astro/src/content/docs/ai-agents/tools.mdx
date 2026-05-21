@@ -1,0 +1,216 @@
+---
+title: MCP tools reference
+description: Schema reference for every annot-mcp tool — annotation, redaction, comparison, aria snapshots, and the living-product-docs flow.
+---
+
+`@ingcreators/annot-mcp@0.2.0` ships nine tools, grouped into
+three families:
+
+| Family | Tools |
+| --- | --- |
+| Annotation + comparison | `annot_annotate_screenshot`, `annot_annotate_url`, `annot_redact_screenshot`, `annot_redact_url`, `annot_compare_screenshots` |
+| Page inspection | `annot_aria_snapshot` |
+| Living product docs flow | `annot_draft_screen_spec`, `annot_propose_drift_fixes`, `annot_translate_screen_spec` |
+
+Each tool returns either an MCP `image` content block (base64
+PNG, displayed inline in clients like Claude Desktop), an MCP
+`text` content block (for the docs-flow + aria-snapshot tools),
+or a text confirmation when `output` is set to an absolute
+filesystem path.
+
+The annotation shape vocabulary is documented in the
+[DSL reference](../api/dsl). The optional `encode` block on
+every image-returning tool (since `annot-mcp@0.2.0`) is documented
+in the [Encode pipeline reference](../api/encode).
+
+## `annot_annotate_screenshot`
+
+Overlay annotations on a pre-captured PNG.
+
+```jsonc
+{
+  "image": "/abs/path/to/screenshot.png",   // or "data:image/png;base64,..."
+  "annotations": [
+    { "type": "rect", "bbox": { "x": 420, "y": 380, "width": 120, "height": 44 },
+      "intent": "error" },
+    { "type": "callout",
+      "at": { "x": 200, "y": 360 },
+      "targetBbox": { "x": 420, "y": 380, "width": 120, "height": 44 },
+      "content": "Submit button disabled" }
+  ],
+  "output": "/abs/path/to/out.png"   // optional
+}
+```
+
+## `annot_annotate_url`
+
+Open a URL in headless Chromium, capture, overlay annotations
+positioned by Playwright locator strings. The headline
+locator-first tool.
+
+```jsonc
+{
+  "url": "https://staging.example.com/login",
+  "annotations": [
+    { "type": "rect",
+      "locator": "button:has-text('Submit')",
+      "intent": "error" },
+    { "type": "callout",
+      "atLocator": "form",
+      "targetLocator": "button:has-text('Submit')",
+      "content": "Submit button is disabled" }
+  ],
+  "viewport": { "width": 1280, "height": 800, "deviceScaleFactor": 1 },
+  "fullPage": false,
+  "waitFor": "load",   // "load" | "domcontentloaded" | "networkidle"
+  "encode": {          // optional — see ../api/encode
+    "format": "smart",
+    "saveSizePreset": "standard"
+  }
+}
+```
+
+Each `locator` resolves to a bbox via
+`page.locator(s).boundingBox()`. Non-rect shapes use the
+adaptation rules documented [here](../api/dsl#locator-flavour-dsl-mcp-only).
+
+## `annot_redact_screenshot`
+
+Destructively burn redactions (solid / mosaic / blur) into a
+PNG. Original pixels under each region are **irrecoverably**
+replaced.
+
+```jsonc
+{
+  "image": "/abs/path/to/screenshot.png",
+  "regions": [
+    { "bbox": { "x": 100, "y": 100, "width": 200, "height": 30 },
+      "style": "blur" },
+    { "bbox": { "x": 100, "y": 150, "width": 200, "height": 30 },
+      "style": "solid", "color": "#000" }
+  ]
+}
+```
+
+Styles:
+
+- `solid` — `ctx.fillRect` with `color` (default `#000`).
+- `mosaic` — nearest-neighbour downsample + upsample with
+  smoothing disabled. Block size 16 px.
+- `blur` — `ctx.filter = "blur(12px)"` clipped to the region.
+
+## `annot_redact_url`
+
+Live-capture variant of redact. Regions accept locator strings
+or bboxes:
+
+```jsonc
+{
+  "url": "https://staging.example.com/account",
+  "regions": [
+    { "locator": "input[type=password]", "style": "blur" },
+    { "locator": "[data-testid=ssn]", "style": "solid", "color": "#000" }
+  ]
+}
+```
+
+Same viewport / fullPage / waitFor / encode knobs as
+`annot_annotate_url`.
+
+## `annot_compare_screenshots`
+
+Pixel-perfect diff. Returns a PNG of the `after` image with
+changed regions highlighted as `warning`-intent rects.
+
+```jsonc
+{
+  "before": "/abs/path/before.png",
+  "after":  "/abs/path/after.png",
+  "threshold": 0.1,            // 0 strict … 1 permissive
+  "includeChangeList": false,  // when true, append a text summary
+  "encode": {                  // optional — see ../api/encode
+    "format": "smart",
+    "saveSizePreset": "standard"
+  }
+}
+```
+
+The two inputs must have identical dimensions. Backed by
+[`pixelmatch`](https://www.npmjs.com/package/pixelmatch);
+contiguous changed pixels are aggregated into bounding
+rectangles via flood-fill (minimum region size 4 px to drop AA
+noise).
+
+## `annot_aria_snapshot`
+
+Open a URL in headless Chromium and return Playwright's
+AI-mode aria snapshot (the YAML the agent reasons over to
+identify elements). Use as the discovery step before
+`annot_annotate_url` when the agent doesn't already know the
+locator.
+
+```jsonc
+{
+  "url": "https://staging.example.com/login",
+  "viewport": { "width": 1280, "height": 800 },
+  "boxes": true   // when true, snapshot lines carry [box=x,y,w,h] markers
+}
+```
+
+The `boxes` flag is what the living-product-docs flow uses to
+match screen-spec entries to on-page elements via bounding
+boxes — see the [drift-detection page](../product-docs/drift-detection).
+
+## `annot_draft_screen_spec`
+
+Living product docs flow. Given an aria snapshot, draft a
+starter MDX screen spec (the `annot:`-frontmatter `.mdx` file
+the docs site + 画面設計書 spreadsheet are generated from).
+
+```jsonc
+{
+  "id": "SC-001",
+  "title": "Login screen",
+  "ariaSnapshot": "...YAML from annot_aria_snapshot..."
+}
+```
+
+Returns the MDX as a `text` content block — the agent writes it
+to a file under the user's docs root and runs `annot docs sync`
+to populate the snapshot block.
+
+## `annot_propose_drift_fixes`
+
+Living product docs flow. Given a drift report (the JSON output
+of `annot docs lint --ci --json`), propose per-finding patches
+the agent can apply.
+
+```jsonc
+{
+  "driftJson": "...JSON from `annot docs lint --ci --json`...",
+  "rootDir": "/abs/path/to/docs/root"
+}
+```
+
+Returns a text content block enumerating proposed edits per
+file. Agent applies them through its filesystem MCP server or
+its host's editing tools.
+
+## `annot_translate_screen_spec`
+
+Living product docs flow. Translate the human-readable strings
+in a screen-spec MDX bundle into a target locale. Preserves
+all `annot:` machine fields verbatim — only `title` /
+`description` / step copy / button labels in the body change.
+
+```jsonc
+{
+  "mdxPath": "/abs/path/to/SC-001-login.mdx",
+  "targetLocale": "ja-JP"
+}
+```
+
+Returns the translated MDX as a text content block. Pair with
+`annot docs sync` after writing so the snapshot blocks
+re-match against the live UI (which is still English; the
+translation covers the docs surface, not the running app).
