@@ -64,7 +64,7 @@
     "@ingcreators/annot-annotator": "workspace:*",
     "@ingcreators/annot-product-docs": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.0.0",
-    "@napi-rs/canvas": "^0.1.0",
+    "@napi-rs/canvas": "^1.0.0",
     "pixelmatch": "^7.1.0",
     "playwright-core": "^1.50.0"
   }
