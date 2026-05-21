@@ -1,0 +1,215 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--wf-color-bg);
+  color: var(--wf-color-text);
+  font-family: var(--wf-font-family);
+  font-size: var(--wf-font-size-md);
+  line-height: var(--wf-line-height);
+  min-height: 100vh;
+}
+
+a {
+  color: var(--wf-color-link);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+}
+
+input,
+select,
+textarea,
+button {
+  font-family: inherit;
+}
+
+/* Shared layout helpers used across screens. */
+
+.wf-page {
+  max-width: var(--wf-max-width);
+  margin: 0 auto;
+  padding: var(--wf-space-5) var(--wf-space-4);
+}
+
+.wf-card {
+  background: var(--wf-color-surface);
+  border: 1px solid var(--wf-color-border);
+  border-radius: var(--wf-radius-md);
+  box-shadow: var(--wf-shadow-sm);
+  padding: var(--wf-space-5);
+}
+
+.wf-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wf-space-4);
+}
+
+.wf-row {
+  display: flex;
+  align-items: center;
+  gap: var(--wf-space-3);
+  flex-wrap: wrap;
+}
+
+.wf-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--wf-space-2);
+  min-height: 40px;
+  padding: 0 var(--wf-space-4);
+  border: 1px solid var(--wf-color-border-strong);
+  border-radius: var(--wf-radius-sm);
+  background: var(--wf-color-surface);
+  color: var(--wf-color-text);
+  font-size: var(--wf-font-size-md);
+  font-weight: 500;
+  transition: background-color 0.15s ease;
+}
+
+.wf-button:hover {
+  background: var(--wf-color-surface-muted);
+}
+
+.wf-button[data-variant="primary"] {
+  background: var(--wf-color-primary);
+  border-color: var(--wf-color-primary);
+  color: var(--wf-color-primary-contrast);
+}
+
+.wf-button[data-variant="primary"]:hover {
+  background: var(--wf-color-primary-hover);
+}
+
+.wf-button[data-variant="danger"] {
+  background: var(--wf-color-danger);
+  border-color: var(--wf-color-danger);
+  color: var(--wf-color-primary-contrast);
+}
+
+.wf-heading {
+  font-size: var(--wf-font-size-xxl);
+  font-weight: 600;
+  margin: 0 0 var(--wf-space-4);
+}
+
+.wf-subheading {
+  font-size: var(--wf-font-size-xl);
+  font-weight: 600;
+  margin: 0 0 var(--wf-space-3);
+}
+
+.wf-muted {
+  color: var(--wf-color-text-muted);
+}
+
+/* App shell — light-DOM rendered, hence rules live here. */
+
+.wf-shell-header {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--wf-color-surface);
+  border-bottom: 1px solid var(--wf-color-border);
+}
+
+.wf-shell-header__inner {
+  max-width: var(--wf-max-width);
+  margin: 0 auto;
+  padding: 0 var(--wf-space-4);
+  min-height: var(--wf-header-height);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--wf-space-4);
+  flex-wrap: wrap;
+}
+
+.wf-shell-brand {
+  font-size: var(--wf-font-size-lg);
+  font-weight: 600;
+  color: var(--wf-color-text);
+  text-decoration: none;
+}
+
+.wf-shell-brand:hover {
+  text-decoration: none;
+  color: var(--wf-color-link);
+}
+
+.wf-shell-main {
+  min-height: calc(100vh - var(--wf-header-height));
+}
+
+/* Language toggle (light-DOM rendered). */
+
+wf-lang-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--wf-space-2);
+}
+
+.wf-lang-toggle__label {
+  color: var(--wf-color-text-muted);
+  font-size: var(--wf-font-size-sm);
+}
+
+.wf-lang-toggle__group {
+  display: inline-flex;
+  border: 1px solid var(--wf-color-border-strong);
+  border-radius: var(--wf-radius-sm);
+  overflow: hidden;
+}
+
+.wf-lang-toggle__group button {
+  background: var(--wf-color-surface);
+  border: 0;
+  padding: 6px 10px;
+  font-size: var(--wf-font-size-sm);
+  color: var(--wf-color-text);
+  cursor: pointer;
+  min-height: 32px;
+}
+
+.wf-lang-toggle__group button + button {
+  border-left: 1px solid var(--wf-color-border-strong);
+}
+
+.wf-lang-toggle__group button[aria-pressed="true"] {
+  background: var(--wf-color-primary);
+  color: var(--wf-color-primary-contrast);
+}
+
+.wf-lang-toggle__group button:hover:not([aria-pressed="true"]) {
+  background: var(--wf-color-surface-muted);
+}
+
+/* Responsive — collapse padding under 640 px. */
+@media (max-width: 640px) {
+  .wf-page {
+    padding: var(--wf-space-4) var(--wf-space-3);
+  }
+
+  .wf-card {
+    padding: var(--wf-space-4);
+  }
+
+  .wf-heading {
+    font-size: 24px;
+  }
+}
