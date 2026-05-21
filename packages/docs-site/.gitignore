@@ -12,3 +12,7 @@ node_modules/
 
 # Wrangler
 .wrangler/
+
+# Playwright artefacts from the docs-tour
+test-results/
+playwright-report/
