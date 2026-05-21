@@ -31,6 +31,7 @@ window (`Queued`), or actively shipping (`In progress`).
 | [`google-drive-integration.md`](./google-drive-integration.md) | Draft | Rework the Drive backend onto the non-sensitive `drive.file` scope + Workspace Marketplace + Drive UI Integration so Annot can ship publicly without a restricted-scope CASA audit. |
 | [`oss-cloud-split.md`](./oss-cloud-split.md) | Draft | Forward-looking strategy for keeping Annot OSS while developing paid features in a separate private `annot-cloud` repo. Guardrails apply from today; concrete phases trigger on "first paid feature" and "company incorporation". |
 | [`github-integration.md`](./github-integration.md) | Draft | Individual-user `GitHubStore` — device-flow auth, pick repo + branch + base path, commits as save. Drive-integration-equivalent scope. PR automation / Check Runs / org admin live in `annot-cloud`, not here. Phases 1–3 landed (#36–#38); Phase 4 polish in progress. |
+| [`editable-png-from-annotator.md`](./editable-png-from-annotator.md) | Draft | Add `toEditablePng()` to `@ingcreators/annot-annotator` so headless callers (docs-tour, MCP, custom Node scripts) can produce PNGs that reopen in the Annot editor with the annotations selectable / movable / restylable — same XMP-in-PNG round-trip the browser-side `createEditableImage` already implements, but lifted to Tier A. Three phases (Tier-A lift of `annot-core/xmp` primitives → `toEditablePng` API on the annotator → docs-tour adopts). ~half a working day end-to-end; additive — existing `toPng` callers unchanged. |
 
 ## Recently landed plans
 
