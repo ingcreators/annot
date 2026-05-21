@@ -24,6 +24,12 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "@ingcreators/annot-docs-site-astro", "exec", "astro", "dev", "--port", "4321", "--host", "127.0.0.1"],
       "port": 4321
+    },
+    {
+      "name": "annot-marketing",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@ingcreators/annot-marketing", "exec", "astro", "dev", "--port", "4322", "--host", "127.0.0.1"],
+      "port": 4322
     }
   ]
 }
