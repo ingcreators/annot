@@ -131,6 +131,126 @@ describe("bboxAnnotationsToSvg", () => {
     expect(out).toMatch(/<line x1="50" y1="50" x2="200" y2="200"/);
   });
 
+  test("numberedBadge composes rect + circle + bold number", () => {
+    const out = bboxAnnotationsToSvg([
+      {
+        type: "numberedBadge",
+        bbox: { x: 100, y: 200, width: 80, height: 40 },
+        number: 7,
+        intent: "info",
+      },
+    ]);
+    expect(out).toMatch(/<rect /);
+    expect(out).toMatch(/<circle [^/]*\/>/);
+    expect(out).toMatch(/<text [^>]*font-weight="700"[^>]*>7<\/text>/);
+    // Z-order: rect → circle → text so the number sits on top of
+    // the filled circle, and both sit on top of the target outline.
+    const rectAt = out.indexOf("<rect");
+    const circleAt = out.indexOf("<circle");
+    const textAt = out.indexOf("<text");
+    expect(rectAt).toBeLessThan(circleAt);
+    expect(circleAt).toBeLessThan(textAt);
+  });
+
+  test("numberedBadge placement: explicit topRight anchors the badge at the bbox's top-right corner", () => {
+    const out = bboxAnnotationsToSvg([
+      {
+        type: "numberedBadge",
+        bbox: { x: 100, y: 200, width: 80, height: 40 },
+        number: 1,
+        placement: "topRight",
+      },
+    ]);
+    // top-right corner of the bbox is (180, 200)
+    expect(out).toMatch(/<circle cx="180" cy="200"/);
+  });
+
+  test("numberedBadge placement: bottomLeft anchors at the bbox's bottom-left corner", () => {
+    const out = bboxAnnotationsToSvg([
+      {
+        type: "numberedBadge",
+        bbox: { x: 100, y: 200, width: 80, height: 40 },
+        number: 2,
+        placement: "bottomLeft",
+      },
+    ]);
+    // bottom-left corner of the bbox is (100, 240)
+    expect(out).toMatch(/<circle cx="100" cy="240"/);
+  });
+
+  test("numberedBadge placement: auto with image dims picks the corner furthest from any edge", () => {
+    // bbox in the bottom-right of a 1280×800 image — the top-left
+    // corner of the bbox is furthest from the image edges.
+    const out = bboxAnnotationsToSvg([
+      {
+        type: "numberedBadge",
+        bbox: { x: 1100, y: 700, width: 80, height: 40 },
+        number: 3,
+        placement: "auto",
+        imageWidth: 1280,
+        imageHeight: 800,
+      },
+    ]);
+    // top-left corner of the bbox is (1100, 700)
+    expect(out).toMatch(/<circle cx="1100" cy="700"/);
+  });
+
+  test("numberedBadge placement: auto without image dims falls back to topRight", () => {
+    const out = bboxAnnotationsToSvg([
+      {
+        type: "numberedBadge",
+        bbox: { x: 100, y: 200, width: 80, height: 40 },
+        number: 9,
+        placement: "auto",
+      },
+    ]);
+    // top-right corner of the bbox is (180, 200)
+    expect(out).toMatch(/<circle cx="180" cy="200"/);
+  });
+
+  test("numberedBadge default badgeSize is 40 — circle radius is 20", () => {
+    const out = bboxAnnotationsToSvg([
+      {
+        type: "numberedBadge",
+        bbox: { x: 100, y: 200, width: 80, height: 40 },
+        number: 4,
+        placement: "topLeft",
+      },
+    ]);
+    expect(out).toMatch(/<circle [^/]*r="20"/);
+  });
+
+  test("numberedBadge custom badgeSize scales the circle and the font", () => {
+    const out = bboxAnnotationsToSvg([
+      {
+        type: "numberedBadge",
+        bbox: { x: 100, y: 200, width: 80, height: 40 },
+        number: 5,
+        badgeSize: 64,
+        placement: "topLeft",
+      },
+    ]);
+    // radius 32, font-size = round(32 * 1.1) = 35
+    expect(out).toMatch(/<circle [^/]*r="32"/);
+    expect(out).toMatch(/font-size="35"/);
+  });
+
+  test("numberedBadge escapes the number content (defensive — Number stringifies safely but the path is shared with text)", () => {
+    // The number field is a number, so this asserts the escape
+    // helper exists for the unusual case where a future caller
+    // shoves a string through (e.g. via JSON Schema with a
+    // looser validator).
+    const out = bboxAnnotationsToSvg([
+      {
+        type: "numberedBadge",
+        bbox: { x: 0, y: 0, width: 10, height: 10 },
+        // biome-ignore lint/suspicious/noExplicitAny: deliberate
+        number: "<script>" as any,
+      },
+    ]);
+    expect(out).toContain("&lt;script&gt;");
+  });
+
   test("raw fragment passes through verbatim", () => {
     const out = bboxAnnotationsToSvg([
       {
