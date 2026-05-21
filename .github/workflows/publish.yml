@@ -1,10 +1,16 @@
 name: Publish
 
-# Manually-triggered publish of the five OSS npm packages —
+# Manually-triggered publish of the OSS npm packages —
 # `@ingcreators/annot-core`, `@ingcreators/annot-annotator`,
 # `@ingcreators/annot-playwright`, `@ingcreators/annot-mcp`,
-# `@ingcreators/annot-imagequant` (GPL-3.0, optional dep of the
-# annotator for PNG-8 smart-mode encoding) — via Changesets.
+# `@ingcreators/annot-product-docs`,
+# `@ingcreators/annot-product-docs-astro`,
+# `@ingcreators/annot-product-docs-xlsx` — via Changesets.
+#
+# Note: `@ingcreators/annot-imagequant` was published at 0.1.0
+# and then retired by `replace-libimagequant-with-median-cut.md`;
+# its package directory is gone from the workspace and this
+# workflow no longer references it.
 #
 # Phase 6 of `docs/plans/annot-cloud-roadmap.md` / Stage 3 of
 # `docs/plans/_done/headless-annotator-publish.md`. The first run after
@@ -53,7 +59,9 @@ name: Publish
 #         https://www.npmjs.com/package/@ingcreators/annot-annotator/access
 #         https://www.npmjs.com/package/@ingcreators/annot-playwright/access
 #         https://www.npmjs.com/package/@ingcreators/annot-mcp/access
-#         https://www.npmjs.com/package/@ingcreators/annot-imagequant/access
+#         https://www.npmjs.com/package/@ingcreators/annot-product-docs/access
+#         https://www.npmjs.com/package/@ingcreators/annot-product-docs-astro/access
+#         https://www.npmjs.com/package/@ingcreators/annot-product-docs-xlsx/access
 #       (or per-package Settings → "Trusted Publishers")
 #     - Adds a Trusted Publisher rule:
 #         Publisher: GitHub Actions
@@ -171,7 +179,7 @@ jobs:
       - name: Verify pack contents
         run: |
           set -euo pipefail
-          for pkg in core annotator playwright mcp imagequant; do
+          for pkg in core annotator playwright mcp product-docs product-docs-astro product-docs-xlsx; do
             echo "── @ingcreators/annot-${pkg} pack contents ──"
             pnpm --filter @ingcreators/annot-${pkg} pack --pack-destination /tmp --dry-run 2>&1 \
               | grep -v "^[[:space:]]*$" || true
@@ -228,7 +236,7 @@ jobs:
         if: success() && inputs.dry-run != true
         run: |
           set -euo pipefail
-          for pkg in core annotator playwright mcp imagequant; do
+          for pkg in core annotator playwright mcp product-docs product-docs-astro product-docs-xlsx; do
             v=$(node -p "require('./packages/${pkg}/package.json').version")
             echo "✓ @ingcreators/annot-${pkg}@${v} → https://www.npmjs.com/package/@ingcreators/annot-${pkg}/v/${v}"
           done
