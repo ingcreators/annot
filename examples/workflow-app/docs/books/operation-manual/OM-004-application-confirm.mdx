@@ -1,0 +1,52 @@
+---
+annot:
+  id: OM-004
+  title: Confirm application
+  purpose: Read-only review of the draft before the irreversible submit.
+  meta:
+    audience: end users
+    role: applicant
+    revisedDate: 2026-05-22
+  xlsx:
+    book: Operation Manual
+    sheet: OM-004 Confirm application
+    role: screen
+    order: 400
+---
+
+import Screen from "@ingcreators/annot-product-docs-astro/components/Screen.astro";
+import Overlay from "@ingcreators/annot-product-docs-astro/components/Overlay.astro";
+import Transition from "@ingcreators/annot-product-docs-astro/components/Transition.astro";
+
+# Confirm application
+
+The confirm screen renders every captured field read-only so
+the user can verify the request before submission. There is
+no edit-in-place — Back to edit returns to the form, where
+the draft is still in memory.
+
+<Screen id="application-confirm" src="/shots/application-confirm.png">
+
+<Overlay match={{ role: "heading", name: "Confirm application" }} intent="info" number={1}>
+Page heading. The current draft is rendered as a definition
+list below.
+</Overlay>
+
+<Overlay match={{ role: "button", name: "Back to edit" }} intent="info" number={2}>
+Returns to the form with the draft preserved. Use this to
+correct typos.
+</Overlay>
+
+<Overlay match={{ role: "button", name: "Submit application" }} intent="action" number={3}>
+Persists the application (in-memory only — the example
+resets on reload) and routes to the success terminal.
+</Overlay>
+
+</Screen>
+
+## Transitions
+
+<Transition trigger={{ role: "button", name: "Submit application" }} to="OM-005" />
+<Transition trigger={{ role: "button", name: "Back to edit" }} to="OM-003" />
+
+{/* annot:snapshot */}

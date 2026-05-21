@@ -1,0 +1,57 @@
+---
+annot:
+  id: SD-005
+  title: Application submitted (spec)
+  purpose: Per-element spec for the success terminal.
+  meta:
+    audience: developers + QA
+    route: "#/apply/submitted"
+    component: "<wf-application-submitted>"
+    revisedDate: 2026-05-22
+  xlsx:
+    book: Screen Design
+    sheet: SD-005 Application submitted
+    role: screen
+    order: 500
+---
+
+import Screen from "@ingcreators/annot-product-docs-astro/components/Screen.astro";
+import Overlay from "@ingcreators/annot-product-docs-astro/components/Overlay.astro";
+
+# Application submitted — element spec
+
+Route: `#/apply/submitted`. Component:
+`<wf-application-submitted>`.
+
+Guards:
+
+- No user → `/login`.
+- No `state.lastSubmittedId` (hard refresh / direct link) →
+  `/menu`. The id is the only state this screen needs.
+
+<Screen id="application-submitted" src="/shots/application-submitted.png">
+
+<Overlay match={{ role: "heading", name: "Application submitted" }} intent="success" number={1}>
+**Heading**
+
+- Static text. Body sentence reads:
+  "Your application has been forwarded for approval."
+</Overlay>
+
+<Overlay match={{ role: "button", name: "Back to menu" }} intent="action" number={2}>
+**Back to menu**
+
+- `data-testid`: `submitted-back-to-menu`.
+- `navigate("/menu")`. The menu's history list now shows the
+  new application at the top.
+</Overlay>
+
+</Screen>
+
+## Application ID display
+
+The new id is rendered inside `<strong data-testid="submitted-id">`.
+Tests use the testid to assert on the assigned id (e.g.
+`APP-004` after the seed `APP-001..003`).
+
+{/* annot:snapshot */}

@@ -1,0 +1,72 @@
+---
+annot:
+  id: SD-004
+  title: Confirm application (spec)
+  purpose: Per-element spec for the read-only review screen.
+  meta:
+    audience: developers + QA
+    route: "#/apply/confirm"
+    component: "<wf-application-confirm>"
+    revisedDate: 2026-05-22
+  xlsx:
+    book: Screen Design
+    sheet: SD-004 Confirm application
+    role: screen
+    order: 400
+---
+
+import Screen from "@ingcreators/annot-product-docs-astro/components/Screen.astro";
+import Overlay from "@ingcreators/annot-product-docs-astro/components/Overlay.astro";
+
+# Confirm application — element spec
+
+Route: `#/apply/confirm`. Component:
+`<wf-application-confirm>` (src/screens/application-confirm.ts).
+
+Renders `state.draft` as a definition list (no inputs).
+Guards: redirects to `/menu` for non-applicants, and to
+`/apply` if the draft is incomplete UNLESS `lastSubmittedId`
+is set (the post-submit microtask race documented in
+`application-confirm.ts`).
+
+<Screen id="application-confirm" src="/shots/application-confirm.png">
+
+<Overlay match={{ role: "heading", name: "Confirm application" }} intent="info" number={1}>
+**Page heading**
+
+Static text. Definition list below carries the actual draft.
+</Overlay>
+
+<Overlay match={{ role: "button", name: "Back to edit" }} intent="info" number={2}>
+**Back to edit**
+
+- `data-testid`: `confirm-back`
+- `navigate("/apply")`. Draft is preserved.
+</Overlay>
+
+<Overlay match={{ role: "button", name: "Submit application" }} intent="action" number={3}>
+**Submit application**
+
+- `data-testid`: `confirm-submit`
+- Calls `submitDraft()` from `state.ts`:
+  - Constructs an `Application` from the draft.
+  - Prepends it to `state.applications`.
+  - Sets `state.lastSubmittedId`.
+  - Clears `state.draft`.
+  - Emits a change event so the menu list re-renders.
+- Returns to `null` on validation failure (no draft, blank
+  reason, missing category). On success, `navigate("/apply/submitted")`.
+</Overlay>
+
+</Screen>
+
+## Definition list contents
+
+| dt | dd source | `data-testid` |
+|----|-----------|---------------|
+| Applicant | `displayName(currentUser) + " (" + currentUser.email + ")"` | `confirm-applicant` |
+| Category | `formatCategory(draft.category)` | `confirm-category` |
+| Amount | `formatAmount(draft.amount, draft.category)` | `confirm-amount` |
+| Reason | `draft.reason` (verbatim, may contain newlines) | `confirm-reason` |
+
+{/* annot:snapshot */}

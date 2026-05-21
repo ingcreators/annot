@@ -1,0 +1,45 @@
+---
+annot:
+  id: OM-005
+  title: Application submitted
+  purpose: Success terminal — the applicant has handed off to the approver.
+  meta:
+    audience: end users
+    role: applicant
+    revisedDate: 2026-05-22
+  xlsx:
+    book: Operation Manual
+    sheet: OM-005 Application submitted
+    role: screen
+    order: 500
+---
+
+import Screen from "@ingcreators/annot-product-docs-astro/components/Screen.astro";
+import Overlay from "@ingcreators/annot-product-docs-astro/components/Overlay.astro";
+import Transition from "@ingcreators/annot-product-docs-astro/components/Transition.astro";
+
+# Application submitted
+
+Terminal screen after a successful submission. The newly-
+assigned application id is visible — share it with the
+approver if they need to find the entry quickly.
+
+<Screen id="application-submitted" src="/shots/application-submitted.png">
+
+<Overlay match={{ role: "heading", name: "Application submitted" }} intent="success" number={1}>
+Confirmation heading. The body sentence tells the user the
+application is now in the approver's queue.
+</Overlay>
+
+<Overlay match={{ role: "button", name: "Back to menu" }} intent="action" number={2}>
+Returns to the applicant menu. The history list now
+includes the new entry at the top.
+</Overlay>
+
+</Screen>
+
+## Transitions
+
+<Transition trigger={{ role: "button", name: "Back to menu" }} to="OM-002" />
+
+{/* annot:snapshot */}

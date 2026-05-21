@@ -1,0 +1,59 @@
+---
+annot:
+  id: OM-007
+  title: Pending approvals
+  purpose: Approver's queue. Lists every submitted application that has not yet been decided.
+  meta:
+    audience: end users
+    role: approver
+    revisedDate: 2026-05-22
+  xlsx:
+    book: Operation Manual
+    sheet: OM-007 Pending approvals
+    role: screen
+    order: 700
+---
+
+import Screen from "@ingcreators/annot-product-docs-astro/components/Screen.astro";
+import Overlay from "@ingcreators/annot-product-docs-astro/components/Overlay.astro";
+import Transition from "@ingcreators/annot-product-docs-astro/components/Transition.astro";
+
+# Pending approvals
+
+The approver sees every submitted (not-yet-decided)
+application in a single table. Each row shows the
+applicant, category, amount, and submission timestamp;
+the Review CTA opens the detail screen.
+
+<Screen id="approval-list" src="/shots/approval-list.png">
+
+<Overlay match={{ role: "heading", name: "Pending approvals" }} intent="info" number={1}>
+Page heading. Below it, a single table contains every
+application awaiting a decision.
+</Overlay>
+
+<Overlay match={{ role: "columnheader", name: "Applicant" }} intent="info" number={2}>
+Identifies the submitter. The display name follows the
+current locale.
+</Overlay>
+
+<Overlay match={{ role: "columnheader", name: "Amount" }} intent="info" number={3}>
+Currency-formatted via `Intl.NumberFormat`. Leave
+applications show an em-dash because they carry no amount.
+</Overlay>
+
+<Overlay match={{ role: "link", name: "Review APP-001" }} intent="action" number={4}>
+Opens the corresponding detail screen. Each row has its own
+Review CTA (the accessible name carries the application id
+for disambiguation when several rows are pending). When the
+queue empties, the table is replaced with an empty-state
+card.
+</Overlay>
+
+</Screen>
+
+## Transitions
+
+<Transition trigger={{ role: "link", name: "Review APP-001" }} to="OM-008" />
+
+{/* annot:snapshot */}

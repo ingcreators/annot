@@ -1,0 +1,47 @@
+---
+annot:
+  id: OM-009
+  title: Decision recorded
+  purpose: Terminal acknowledging the approve / reject decision.
+  meta:
+    audience: end users
+    role: approver
+    revisedDate: 2026-05-22
+  xlsx:
+    book: Operation Manual
+    sheet: OM-009 Decision recorded
+    role: screen
+    order: 900
+---
+
+import Screen from "@ingcreators/annot-product-docs-astro/components/Screen.astro";
+import Overlay from "@ingcreators/annot-product-docs-astro/components/Overlay.astro";
+import Transition from "@ingcreators/annot-product-docs-astro/components/Transition.astro";
+
+# Decision recorded
+
+After Approve or Reject, the approver lands on a terminal
+screen that summarises the decision. The applicant sees the
+new status when they next open their menu.
+
+<Screen id="approval-decided" src="/shots/approval-decided.png">
+
+<Overlay match={{ role: "heading", name: "Application approved" }} intent="success" number={1}>
+The heading reads "Application approved" or "Application
+rejected" depending on the decision. The screenshot here
+shows the approved variant.
+</Overlay>
+
+<Overlay match={{ role: "button", name: "Back to pending list" }} intent="action" number={2}>
+Returns to the queue. The just-decided item is removed from
+the pending list — the queue badge in the menu reflects the
+new depth.
+</Overlay>
+
+</Screen>
+
+## Transitions
+
+<Transition trigger={{ role: "button", name: "Back to pending list" }} to="OM-007" />
+
+{/* annot:snapshot */}

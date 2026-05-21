@@ -1,0 +1,84 @@
+---
+annot:
+  id: SD-003
+  title: New application (spec)
+  purpose: Per-element spec for the applicant's form.
+  meta:
+    audience: developers + QA
+    route: "#/apply"
+    component: "<wf-application-form>"
+    revisedDate: 2026-05-22
+  xlsx:
+    book: Screen Design
+    sheet: SD-003 New application
+    role: screen
+    order: 300
+---
+
+import Screen from "@ingcreators/annot-product-docs-astro/components/Screen.astro";
+import Overlay from "@ingcreators/annot-product-docs-astro/components/Overlay.astro";
+
+# New application — element spec
+
+Route: `#/apply`. Component: `<wf-application-form>`
+(src/screens/application-form.ts). Applicant-only — guard
+in `<wf-app-shell>` redirects approvers to `/menu`.
+
+The form persists the in-progress values to `state.draft`
+via `updateDraft` on every input event, so navigating to
+the confirm screen and back preserves the entered data.
+
+<Screen id="application-form" src="/shots/application-form.png">
+
+<Overlay match={{ role: "combobox", name: "Category (Required)" }} intent="required" number={1}>
+**Category select**
+
+- Type: `<select>`
+- Required: yes
+- Options: `leave`, `expense`, `purchase`
+- `data-testid`: `form-category`
+- Mutates `state.draft.category` via `updateDraft`.
+  Switching to `leave` hides the Amount row.
+</Overlay>
+
+<Overlay match={{ role: "textbox", name: "Reason (Required)" }} intent="required" number={2}>
+**Reason textarea**
+
+- Type: `<textarea>`
+- Required: yes (non-empty after trim)
+- Rows: 5
+- `data-testid`: `form-reason`
+- No max length is enforced at the UI layer — the in-memory
+  store accepts arbitrary strings.
+</Overlay>
+
+<Overlay match={{ role: "button", name: "Review" }} intent="action" number={3}>
+**Review button**
+
+- Type: `submit`
+- `data-testid`: `form-next`
+- Validates: category required, amount ≥ 0 when shown,
+  reason non-empty after trim. Errors render in-line per
+  field (`data-testid="form-error-*"`). On success,
+  `navigate("/apply/confirm")`.
+</Overlay>
+
+<Overlay match={{ role: "link", name: "Back" }} intent="info" number={4}>
+**Back link**
+
+- Element: `<a>` with hash href.
+- Navigates to `/menu` without clearing the draft.
+</Overlay>
+
+</Screen>
+
+## Conditional Amount field
+
+When `state.draft.category !== "" && state.draft.category !== "leave"`,
+an additional row mounts with a `<input type="number" min="0" step="1">`
+labelled `Amount (JPY) (Required)`.
+`data-testid="form-amount"`, `data-testid="form-amount-row"` on the
+wrapper. Validation: integer ≥ 0; non-integers are floored
+to 0 by `submitDraft`.
+
+{/* annot:snapshot */}

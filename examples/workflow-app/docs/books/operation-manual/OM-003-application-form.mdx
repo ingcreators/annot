@@ -1,0 +1,61 @@
+---
+annot:
+  id: OM-003
+  title: New application
+  purpose: Capture the applicant's request — category, amount, reason.
+  meta:
+    audience: end users
+    role: applicant
+    revisedDate: 2026-05-22
+  xlsx:
+    book: Operation Manual
+    sheet: OM-003 New application
+    role: screen
+    order: 300
+---
+
+import Screen from "@ingcreators/annot-product-docs-astro/components/Screen.astro";
+import Overlay from "@ingcreators/annot-product-docs-astro/components/Overlay.astro";
+import Transition from "@ingcreators/annot-product-docs-astro/components/Transition.astro";
+
+# New application
+
+Fill in the category, the requested amount (when applicable),
+and the business reason. Every field is required — the Review
+button shows per-field errors if anything is missing.
+
+<Screen id="application-form" src="/shots/application-form.png">
+
+<Overlay match={{ role: "combobox", name: "Category (Required)" }} intent="required" number={1}>
+Choose one of Leave / Expense / Purchase. The Amount field
+hides automatically for Leave applications.
+</Overlay>
+
+<Overlay match={{ role: "textbox", name: "Reason (Required)" }} intent="required" number={2}>
+Free-form text. Approvers see this verbatim — include the
+context they need to decide.
+</Overlay>
+
+<Overlay match={{ role: "button", name: "Review" }} intent="action" number={3}>
+Validates the form. On success, transitions to the confirm
+screen; on failure, the empty fields surface their error
+message in place.
+</Overlay>
+
+<Overlay match={{ role: "link", name: "Back" }} intent="info" number={4}>
+Returns to the menu without submitting. The draft is kept in
+memory — re-opening the form restores the partially-filled
+state until the user signs out.
+</Overlay>
+
+</Screen>
+
+## Transitions
+
+<Transition trigger={{ role: "button", name: "Review" }} on="success" to="OM-004" />
+<Transition trigger={{ role: "button", name: "Review" }} on="failure" to="self">
+  Field-level errors render inline. Resolve each error and
+  press Review again.
+</Transition>
+
+{/* annot:snapshot */}

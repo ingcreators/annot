@@ -1,0 +1,58 @@
+---
+annot:
+  id: OM-008
+  title: Review application
+  purpose: The approver reads the full application and records their decision.
+  meta:
+    audience: end users
+    role: approver
+    revisedDate: 2026-05-22
+  xlsx:
+    book: Operation Manual
+    sheet: OM-008 Review application
+    role: screen
+    order: 800
+---
+
+import Screen from "@ingcreators/annot-product-docs-astro/components/Screen.astro";
+import Overlay from "@ingcreators/annot-product-docs-astro/components/Overlay.astro";
+import Transition from "@ingcreators/annot-product-docs-astro/components/Transition.astro";
+
+# Review application
+
+Each pending application opens onto a full-width detail
+screen. The approver sees the applicant, category, amount,
+submission timestamp, and the free-form reason in a single
+definition list, then either approves or rejects.
+
+<Screen id="approval-detail" src="/shots/approval-detail.png">
+
+<Overlay match={{ role: "heading", name: "Review application" }} intent="info" number={1}>
+Page heading. The definition list below shows every field
+the applicant submitted.
+</Overlay>
+
+<Overlay match={{ role: "textbox", name: "Decision comment (Optional)" }} intent="info" number={2}>
+Optional free-form comment shared with the applicant after
+the decision. Use it to explain a rejection or attach a
+condition to an approval.
+</Overlay>
+
+<Overlay match={{ role: "button", name: "Reject" }} intent="error" number={3}>
+Records a rejection. Persists the comment and transitions to
+the decision terminal with a "rejected" badge.
+</Overlay>
+
+<Overlay match={{ role: "button", name: "Approve" }} intent="success" number={4}>
+Records an approval. Persists the comment and transitions to
+the decision terminal with an "approved" badge.
+</Overlay>
+
+</Screen>
+
+## Transitions
+
+<Transition trigger={{ role: "button", name: "Approve" }} on="approved" to="OM-009" />
+<Transition trigger={{ role: "button", name: "Reject" }} on="rejected" to="OM-009" />
+
+{/* annot:snapshot */}

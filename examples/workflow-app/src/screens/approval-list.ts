@@ -97,6 +97,7 @@ export class WfApprovalList extends LitElement {
                                 class="wf-button wf-button--ghost"
                                 href=${`#/approve/${app.id}`}
                                 data-testid=${`approval-review-${app.id}`}
+                                aria-label=${`${t("approve.list.review")} ${app.id}`}
                                 @click=${(e: Event) =>
                                   this.#go(e, `/approve/${app.id}`)}
                               >
