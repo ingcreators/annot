@@ -24,8 +24,8 @@ The mark encodes this directly:
 | Color | Hex | Meaning |
 |---|---|---|
 | **Blue** | `#7c9cff` | `i` — you, the creator, the individual |
-| **Green** | `#7ef0c5` | 追跡者 / follower — lower-left, behind, still following your steps |
-| **Purple** | `#b391ff` | 先駆者 / pioneer — upper-right, ahead, someone you look up to |
+| **Green** | `#7ef0c5` | follower — lower-left, behind, still following your steps |
+| **Purple** | `#b391ff` | pioneer — upper-right, ahead, someone you look up to |
 
 The blue arc from green to purple physically connects follower ↔
 pioneer in the color of `i`. The message is not "you are connected

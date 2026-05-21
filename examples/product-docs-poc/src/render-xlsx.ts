@@ -23,16 +23,16 @@ export async function renderXlsx(opts: {
   workbook.created = new Date();
 
   // ─── Cover sheet ─────────────────────────────────────────
-  const cover = workbook.addWorksheet("表紙");
+  const cover = workbook.addWorksheet("Cover");
   cover.addRow([]);
-  cover.addRow(["", "画面設計書"]);
+  cover.addRow(["", "Screen specifications"]);
   cover.addRow([]);
-  cover.addRow(["", "画面ID", frontmatter.id]);
-  cover.addRow(["", "画面名", frontmatter.title ?? ""]);
-  cover.addRow(["", "用途", frontmatter.purpose ?? ""]);
+  cover.addRow(["", "Screen ID", frontmatter.id]);
+  cover.addRow(["", "Screen name", frontmatter.title ?? ""]);
+  cover.addRow(["", "Purpose", frontmatter.purpose ?? ""]);
   cover.addRow([]);
   if (frontmatter.meta) {
-    cover.addRow(["", "メタ情報"]);
+    cover.addRow(["", "Metadata"]);
     for (const [k, v] of Object.entries(frontmatter.meta)) {
       cover.addRow(["", "", k, String(v)]);
     }
@@ -54,15 +54,15 @@ export async function renderXlsx(opts: {
     sheet.getCell("A1").font = { size: 16, bold: true };
     sheet.addRow([]);
 
-    sheet.addRow(["画面ID", frontmatter.id]);
-    sheet.addRow(["画面名", frontmatter.title ?? ""]);
-    sheet.addRow(["用途", frontmatter.purpose ?? ""]);
+    sheet.addRow(["Screen ID", frontmatter.id]);
+    sheet.addRow(["Screen name", frontmatter.title ?? ""]);
+    sheet.addRow(["Purpose", frontmatter.purpose ?? ""]);
 
     if (frontmatter.meta?.author) {
-      sheet.addRow(["作成者", String(frontmatter.meta.author)]);
+      sheet.addRow(["Author", String(frontmatter.meta.author)]);
     }
     if (frontmatter.meta?.createdDate) {
-      sheet.addRow(["作成日", String(frontmatter.meta.createdDate)]);
+      sheet.addRow(["Created", String(frontmatter.meta.createdDate)]);
     }
     if (frontmatter.meta?.revision) {
       sheet.addRow(["Rev", String(frontmatter.meta.revision)]);
@@ -88,7 +88,7 @@ export async function renderXlsx(opts: {
     for (let i = 0; i < 26; i++) sheet.addRow([]);
 
     // Item table header
-    sheet.addRow(["番号", "項目名", "種別", "必須", "説明"]);
+    sheet.addRow(["#", "Item", "Role", "Required", "Description"]);
     const headerRow = sheet.lastRow;
     if (headerRow) {
       headerRow.font = { bold: true };
@@ -107,7 +107,7 @@ export async function renderXlsx(opts: {
       const number = o.number ?? "";
       const name = o.match.name;
       const role = o.match.role;
-      const required = o.intent === "required" ? "○" : "";
+      const required = o.intent === "required" ? "Yes" : "";
       const description = stripMarkdown(o.body);
       sheet.addRow([number, name, role, required, description]);
     }
@@ -116,12 +116,12 @@ export async function renderXlsx(opts: {
 
     // Transitions section
     if (transitions.length > 0) {
-      sheet.addRow(["画面遷移"]);
+      sheet.addRow(["Transitions"]);
       const transitionHeader = sheet.lastRow;
       if (transitionHeader) {
         transitionHeader.font = { bold: true, size: 14 };
       }
-      sheet.addRow(["トリガー", "条件", "遷移先", "備考"]);
+      sheet.addRow(["Trigger", "Event", "Target", "Notes"]);
       const tHeaderRow = sheet.lastRow;
       if (tHeaderRow) {
         tHeaderRow.font = { bold: true };
@@ -172,7 +172,7 @@ function stripMarkdown(md: string): string {
     .replace(/\*\*([^*]+)\*\*/g, "$1")
     .replace(/`([^`]+)`/g, "$1")
     .replace(/^> /gm, "")
-    .replace(/^- /gm, "・")
+    .replace(/^- /gm, "• ")
     .replace(/\r?\n+/g, " / ")
     .trim();
 }

@@ -160,7 +160,7 @@ export class SelectionManager {
    *  mosaic visually pinned to gesture A's geometry (newElA was
    *  built from rebake A's snapshot) with the latest geometry's
    *  rebake silently lost — the symptom the user reported as
-   *  "再mosaic化が行われない."
+   *  "mosaic redact doesn't re-rasterise after the geometry change."
    *
    *  Serialise via a one-slot queue: at most one rebake runs at a
    *  time; concurrent requests collapse into a single follow-up
@@ -1740,7 +1740,7 @@ export class SelectionManager {
           // so a rapid sequence of moves / resizes doesn't race
           // multiple `replaceChild` calls into the same DOM slot
           // (the `NotFoundError` regression behind the user-
-          // reported "再mosaic化が行われない").
+          // reported "mosaic redact doesn't re-rasterise" regression).
           const movedRedactImages = this.#collectMovedRedactImages();
           if (movedRedactImages.length > 0) {
             this.#queueRebake();

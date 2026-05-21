@@ -104,7 +104,12 @@ describe("applyDefaultLayout", () => {
         ),
       ],
     });
-    expect(wb.worksheets.map((s) => s.name)).toEqual(["表紙", "改訂履歴", "画面一覧", "Login"]);
+    expect(wb.worksheets.map((s) => s.name)).toEqual([
+      "Cover",
+      "Revision history",
+      "Screen list",
+      "Login",
+    ]);
   });
 
   it("renders a history sheet with one row per entry", () => {
@@ -146,7 +151,7 @@ describe("applyDefaultLayout", () => {
       ),
     ];
     applyDefaultLayout({ workbook: wb, bundles });
-    const list = wb.worksheets.find((s) => s.name === "画面一覧")!;
+    const list = wb.worksheets.find((s) => s.name === "Screen list")!;
     expect(list.getCell("A1").value).toBe("ID");
     expect(list.getCell("A2").value).toBe("SC-001");
     expect(list.getCell("B2").value).toBe("Login");

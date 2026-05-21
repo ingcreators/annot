@@ -1220,7 +1220,7 @@ html.light .view-toggle-btn.active {
   min-width: 0;
   /* Critical: lets the main column shrink inside the workspace's
    * vertical flex when the viewport loses height (Chrome's
-   * "<host> をこのタブに共有しています" bar shrinks the visual
+   * "<host> is sharing this tab" bar shrinks the visual
    * viewport without firing a `resize` until the bar settles).
    * Without this, the `flex: 1` preview frame keeps its original
    * height and the toolbar gets pushed below the viewport. */

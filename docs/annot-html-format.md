@@ -614,7 +614,7 @@ interface ImageMeta {
 interface NumberingMeta {
   headings?: boolean;       // h1/h2/h3 get hierarchical numbering (1., 1.1, 1.1.1)
   figures?: boolean;        // image-block figcaptions get "Figure N: " prefix
-  figureLabel?: string;     // override "Figure " (e.g. "図 ", "Abbildung ")
+  figureLabel?: string;     // override "Figure " (e.g. "Abbildung " for German)
   steps?: boolean;          // step-block cards get a Scribe-style numbered badge
                             // (CSS counter on `[data-annot-block="step"]::before`)
   stepLabel?: string;       // badge content template; `%n` is the counter
@@ -705,9 +705,9 @@ without breaking the export.
 The label format mirrors the figure-caption prefix:
 
 - Default: `"Figure 1"`, `"Figure 2"`, …
-- With `meta.numbering.figureLabel = "図 "`: `"図 1"`,
-  `"図 2"`, …
-- Stale: `"Figure ?"` (or `"図 ?"`).
+- With `meta.numbering.figureLabel = "Abbildung "`: `"Abbildung 1"`,
+  `"Abbildung 2"`, …
+- Stale: `"Figure ?"` (or `"Abbildung ?"`).
 
 Phase 13b lands the resolver helper; the editor's `@<id>`
 autocomplete that turns user-typed `@img-foo` into the

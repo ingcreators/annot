@@ -15,10 +15,10 @@
                               between who follows you and who
                               leads you
 
-    GREEN = 追跡者 (follower / trailing)
+    GREEN = follower / trailing
       • lower-left, further out — those following in your steps
 
-    PURPLE = 先駆者 (pioneer / leading)
+    PURPLE = pioneer / leading
       • upper-right, further ahead — those you look up to
 
   The blue arc physically connects green ↔ purple in the color of

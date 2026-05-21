@@ -153,8 +153,8 @@ function buildImageRedact(
   // the PNG is at gesture-A's aspect — meet padding shows the
   // unredacted screenshot through the difference until the
   // serialised follow-up rebake catches up. Reported by the user
-  // as: "blurも連続してサイズ変更していると、オブジェクトとblurの
-  // エリアに差異が発生します。"
+  // as: "when blur is resized repeatedly the blur area diverges
+  // from the object beneath it."
   //
   // Setting `preserveAspectRatio="none"` makes the embedded image
   // ALWAYS stretch to fill the wrapper, eliminating the gap. The
@@ -189,7 +189,7 @@ async function sampleBlockAveragePng(
   // mosaic looks "transparent" because the unblocked text shows
   // straight through the failed averaging. Flooring here keeps
   // every index integer so the loop pixelates the entire region.
-  // Reported by the user as: "サイズ拡大は透明になる."
+  // Reported by the user as: "the redact becomes transparent when resized larger."
   const width = Math.floor(rect.width);
   const height = Math.floor(rect.height);
   if (width <= 0 || height <= 0) {

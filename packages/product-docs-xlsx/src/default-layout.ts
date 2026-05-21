@@ -181,10 +181,12 @@ function pickSheetName(bundle: ExcelMdxBundle, role: string): string {
   if (typeof xlsx?.sheet === "string" && xlsx.sheet.length > 0) {
     return sanitiseSheetName(xlsx.sheet);
   }
-  // Fallback by role.
-  if (role === "cover") return "表紙";
-  if (role === "history") return "改訂履歴";
-  if (role === "list") return "画面一覧";
+  // Fallback by role. English defaults until i18n support
+  // lands — until then locale-specific labels are caller-driven
+  // via `templateSheets[role]` in the project config.
+  if (role === "cover") return "Cover";
+  if (role === "history") return "Revision history";
+  if (role === "list") return "Screen list";
   if (role === "reference") return sanitiseSheetName(bundle.frontmatter.id);
   // screen default
   return sanitiseSheetName(bundle.frontmatter.title ?? bundle.frontmatter.id);

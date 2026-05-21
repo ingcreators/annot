@@ -2,9 +2,9 @@
 //
 // Phase 3 PR 3 of `docs/plans/living-product-docs.md`. The
 // template is an `.xlsx` the customer provides (e.g. their
-// corporate 画面設計書 template). Each `xlsx.role` may map to
-// a named template sheet (`templateSheets[role]`); for each
-// MDX in the project, we:
+// corporate screen-specifications template). Each `xlsx.role`
+// may map to a named template sheet (`templateSheets[role]`);
+// for each MDX in the project, we:
 //
 //   1. Clone the template sheet by name (via
 //      `worksheet.workbook.addWorksheet({ ... model })`).

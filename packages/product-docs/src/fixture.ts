@@ -53,7 +53,7 @@ export interface Screen {
 /**
  * HTML attributes captured into the `annot:attributes` block by
  * default. Focused on form-control + accessibility shape — the
- * stuff a 画面設計書 / operation manual cares about per element.
+ * stuff a screen-specifications spreadsheet / operation manual cares about per element.
  *
  * Hosts can override per-call via `opts.attributeWhitelist`.
  */

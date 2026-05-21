@@ -201,7 +201,7 @@ packages/
                 --book <name>` CLI walks the docs root, groups
                 by `xlsx.book`, picks template-vs-default per
                 book config, and writes one `<book>.xlsx` per
-                group. Targets the Japanese SI 画面設計書 use
+                group. Targets the corporate screen-specifications use
                 case where customers expect a specific
                 corporate Excel template populated from a
                 code-driven source of truth. See

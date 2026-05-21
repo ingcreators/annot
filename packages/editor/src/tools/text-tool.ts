@@ -645,8 +645,9 @@ export class TextTool extends ToolBase {
     // so only the contentEditable overlay paints the yellow bg
     // during edit. Without restoring it on commit, the wrapper stays
     // `display: none` and the yellow area + text both vanish (user
-    // bug: "Sticky note の Autofit を変更すると黄色いエリアが透明
-    // になって文字も見えなくなる" — the autofit / margin / color /
+    // bug: "Changing the autofit on a sticky note makes the
+    // yellow area transparent and the text invisible" — the
+    // autofit / margin / color /
     // anchor changes during edit are fine; the symptom shows up
     // when the user commits the edit and the wrapper that's been
     // hidden the whole time fails to come back).
