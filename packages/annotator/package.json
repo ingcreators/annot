@@ -55,7 +55,7 @@
     "@ingcreators/annot-core": "workspace:*",
     "typescript": "catalog:",
     "vite": "catalog:",
-    "vite-plugin-dts": "^5.0.0"
+    "vite-plugin-dts": "^5.0.1"
   },
   "dependencies": {
     "@napi-rs/canvas": "^1.0.0",
