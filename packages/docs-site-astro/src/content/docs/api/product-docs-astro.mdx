@@ -1,0 +1,181 @@
+---
+title: annot-product-docs-astro
+description: API reference for the Astro adapter — productDocsIntegration(), renderAnnotatedScreen(), the seven components, the file + memory cache helpers.
+---
+
+`@ingcreators/annot-product-docs-astro` ships the Astro
+integration + components + Image Service for living product
+docs. Tier B-render — Astro build-time, no live editor.
+
+## `productDocsIntegration()`
+
+```ts
+import { productDocsIntegration } from "@ingcreators/annot-product-docs-astro";
+
+export default defineConfig({
+  integrations: [mdx(), productDocsIntegration()],
+});
+```
+
+The integration:
+
+- Registers the Image Service against any `<Screen>` that
+  declares a `src`.
+- Adds the MDX-config tweaks needed by the components
+  (frontmatter exposure, the `Overlay` / `Screen` type
+  declarations).
+- Surfaces a build-time finding when an MDX's stored snapshot
+  contains an `<Overlay match>` that didn't resolve at tour
+  time.
+
+No options at v0.1.
+
+## `renderAnnotatedScreen(options)`
+
+```ts
+import {
+  renderAnnotatedScreen,
+  createFileCache,
+} from "@ingcreators/annot-product-docs-astro";
+
+const { bytes, fromCache, hadBoundingBoxes } = await renderAnnotatedScreen({
+  mdxPath: "docs/books/spec/SC-001.mdx",
+  screenId: "login",
+  cache: createFileCache("./node_modules/.annot-cache"),
+});
+```
+
+Returns `Promise<RenderResult>`:
+
+```ts
+interface RenderResult {
+  bytes: Uint8Array;       // composed PNG
+  fromCache: boolean;      // true → no compose work happened
+  hadBoundingBoxes: boolean; // false → returned base PNG verbatim
+}
+```
+
+When `hadBoundingBoxes` is false (stored snapshot lacks bbox
+markers), the function returns the base PNG verbatim. Your
+docs site builds before the Playwright tour has run; the
+overlays render as a numbered list under the screen instead
+of being composited.
+
+## Caches
+
+| Helper | Backing | Use when |
+|---|---|---|
+| `createMemoryCache()` | in-process `Map` | dev / single-build invocation |
+| `createFileCache(dir)` | SHA-keyed JSON files | CI / persists across builds |
+
+The cache key is SHA-256 over the MDX source + the base PNG
+bytes + the `screenId`. Changing any one of those invalidates
+only the affected screens.
+
+```ts
+const cache = createFileCache("./node_modules/.annot-cache");
+const cacheKey = await cache.keyFor({ mdxPath, screenId });
+const entry = await cache.get(cacheKey);   // undefined when cold
+await cache.put(cacheKey, bytes);
+```
+
+You typically don't call these directly — pass the cache to
+`renderAnnotatedScreen()` and let it manage the read/write.
+
+## Components
+
+Each component is a single-root `.astro` file. The shipped
+modules are usable from MDX via:
+
+```mdx
+import Screen from "@ingcreators/annot-product-docs-astro/components/Screen.astro";
+import Overlay from "@ingcreators/annot-product-docs-astro/components/Overlay.astro";
+import Transition from "@ingcreators/annot-product-docs-astro/components/Transition.astro";
+import TransitionTable from "@ingcreators/annot-product-docs-astro/components/TransitionTable.astro";
+import HistoryEntry from "@ingcreators/annot-product-docs-astro/components/HistoryEntry.astro";
+import ScreenList from "@ingcreators/annot-product-docs-astro/components/ScreenList.astro";
+import TransitionGraph from "@ingcreators/annot-product-docs-astro/components/TransitionGraph.astro";
+```
+
+### `<Screen>`
+
+```ts
+interface ScreenProps {
+  id: string;
+  src: string;       // base PNG path, relative to the MDX
+  width?: number;    // optional fixed width
+}
+```
+
+Children: one or more `<Overlay>` blocks.
+
+### `<Overlay>`
+
+```ts
+interface OverlayProps {
+  match: {
+    role: string;
+    name?: string | RegExp;
+    under?: OverlayProps["match"];
+    nth?: number;
+  };
+  intent?: "required" | "action" | "info" | "warning" | "note";
+  number: number;
+}
+```
+
+Body content is MDX. Renders a numbered callout badge over the
+matched element's bounding box and a caption next to it.
+
+### `<Transition>`
+
+```ts
+interface TransitionProps {
+  from: string;        // source screen id
+  to: string;          // target screen id
+  trigger: string;     // e.g. "Sign in button clicked"
+  event?: string;      // optional event name
+}
+```
+
+### `<TransitionTable>`
+
+```ts
+interface TransitionTableProps {
+  book: string;        // book id; rows are auto-collected
+}
+```
+
+### `<HistoryEntry>`
+
+```ts
+interface HistoryEntryProps {
+  version: string;
+  date: string;
+  author: string;
+  notes: string;
+}
+```
+
+### `<ScreenList>`
+
+```ts
+interface ScreenListProps {
+  book: string;
+}
+```
+
+Auto-enumerated table of every screen in the named book —
+useful for the cover sheet of a 画面設計書.
+
+### `<TransitionGraph>`
+
+```ts
+interface TransitionGraphProps {
+  book: string;
+  layout?: "TD" | "LR";   // Mermaid direction
+}
+```
+
+Renders a Mermaid flowchart derived from the book's
+`<Transition>` declarations.

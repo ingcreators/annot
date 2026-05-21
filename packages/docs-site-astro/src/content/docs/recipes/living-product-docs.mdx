@@ -1,0 +1,235 @@
+---
+title: Living product docs — Playwright tour → docs site + 画面設計書
+description: End-to-end working example — write one MDX, write one Playwright tour, ship a docs site and an Excel 画面設計書 from the same source, kept in sync.
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+This recipe walks the full living-product-docs flow against a
+tiny example app. The result: one MDX file produces both an
+Astro docs page **and** a Japanese 画面設計書 Excel
+spreadsheet, with drift between MDX + live UI caught at lint
+time.
+
+## Setup
+
+```sh
+pnpm add @ingcreators/annot-product-docs
+pnpm add @ingcreators/annot-product-docs-astro
+pnpm add @ingcreators/annot-product-docs-xlsx
+pnpm add -D @playwright/test
+pnpm exec playwright install chromium
+```
+
+Scaffold:
+
+```sh
+pnpm annot-docs init
+```
+
+Three files land in the repo:
+
+```
+annot-docs.config.ts
+tests/docs/example.spec.ts
+docs/books/example/SC-001-login.mdx
+```
+
+## 1. Author the MDX
+
+Edit `docs/books/example/SC-001-login.mdx`:
+
+```mdx
+---
+annot:
+  id: SC-001
+  title: Login screen
+  xlsx:
+    book: 画面設計書
+    sheet: SC-001 ログイン
+    role: screen
+---
+
+import Screen from "@ingcreators/annot-product-docs-astro/components/Screen.astro";
+import Overlay from "@ingcreators/annot-product-docs-astro/components/Overlay.astro";
+
+# ログイン画面
+
+ユーザーがメールアドレスとパスワードでサインインする画面。
+
+<Screen id="login" src="./shots/login.png">
+
+<Overlay match={{ role: "textbox", name: "Email" }} intent="required" number={1}>
+**Email** — 登録済みメールアドレスを入力。
+</Overlay>
+
+<Overlay match={{ role: "textbox", name: "Password" }} intent="required" number={2}>
+**Password** — 大文字小文字 + 数字を含む 8 文字以上。
+</Overlay>
+
+<Overlay match={{ role: "button", name: "Sign in" }} intent="action" number={3}>
+入力検証後、サーバーに認証リクエストを送信。
+</Overlay>
+
+</Screen>
+```
+
+## 2. Wire the tour
+
+`tests/docs/auth.spec.ts`:
+
+```ts
+import { test } from "@ingcreators/annot-product-docs";
+
+test("login flow", async ({ page, screen }) => {
+  await page.goto("/login");
+  await screen.capture({
+    id: "login",
+    mdxPath: "docs/books/example/SC-001-login.mdx",
+  });
+});
+```
+
+Run it against the dev server:
+
+```sh
+pnpm dev &
+pnpm exec playwright test tests/docs/auth.spec.ts
+```
+
+The tour:
+
+- Captures `docs/books/example/shots/login.png`
+- Rewrites the `annot:snapshot` block in the MDX with the
+  current aria-snapshot YAML + `[box=...]` markers
+- Rewrites the `annot:attributes` block with the per-`ref`
+  HTML attribute extraction
+
+The diff on second run (no UI change) is empty.
+
+## 3. Render the docs site
+
+Wire `productDocsIntegration()` into your `astro.config.mjs`
+and build:
+
+```js
+// astro.config.mjs
+import { defineConfig } from "astro/config";
+import mdx from "@astrojs/mdx";
+import { productDocsIntegration } from "@ingcreators/annot-product-docs-astro";
+
+export default defineConfig({
+  integrations: [mdx(), productDocsIntegration()],
+});
+```
+
+```sh
+pnpm build
+```
+
+The output includes a page that renders the screenshot with
+three numbered overlay callouts composited at the exact bbox
+coordinates the tour captured.
+
+## 4. Render the 画面設計書
+
+```ts
+// annot-docs.config.ts
+import { defineConfig } from "@ingcreators/annot-product-docs";
+
+export default defineConfig({
+  meta: {
+    projectName: "顧客管理システム",
+    customerName: "株式会社XYZ",
+  },
+  xlsx: {
+    defaultBook: "画面設計書",
+    books: {
+      "画面設計書": {
+        // No `template` — use the OSS default layout.
+      },
+    },
+  },
+});
+```
+
+```sh
+pnpm annot-docs-xlsx render --book "画面設計書"
+```
+
+Output: `dist/xlsx/画面設計書.xlsx` with cover / history /
+screen-list / per-screen sheets, the annotated PNG embedded
+on the per-screen sheet, the overlay table populated from the
+three `<Overlay>` entries.
+
+For a customer-supplied template, swap the `defineConfig`
+above with the `template` + `templateSheets` form shown on
+[the xlsx-templates page](../product-docs/xlsx-templates).
+
+## 5. Lint for drift in CI
+
+Add the bundled GitHub Actions workflow to `.github/workflows/docs.yml`:
+
+```yaml
+on:
+  pull_request:
+    paths:
+      - "packages/web/**"
+      - "docs/books/**"
+      - "tests/docs/**"
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm dev &
+      - run: npx wait-on http://localhost:5173
+      - run: pnpm exec playwright install chromium
+      - run: pnpm exec playwright test tests/docs/
+      - run: pnpm annot-docs lint --ci --json --url http://localhost:5173 > drift.json || true
+      - run: node node_modules/@ingcreators/annot-product-docs/dist/cli/annotate-pr.js < drift.json
+```
+
+A PR that adds a new button — without updating the MDX — gets
+a yellow warning annotation on the PR diff:
+
+```
+⚠ added — button "Cancel" appears under <form name="sign in"> but is not
+documented in docs/books/example/SC-001-login.mdx
+```
+
+The author either:
+
+- Adds an `<Overlay match>` for the new button, runs the tour,
+  the warning clears.
+- Runs `annot-docs lint --fix` if the new button is
+  intentionally undocumented (it gets recorded but produces no
+  warning).
+
+<Aside type="tip" title="Pair with the MCP flow for AI-assisted authoring">
+The three docs-flow MCP tools
+([`annot_draft_screen_spec`](../ai-agents/tools#annot_draft_screen_spec) /
+[`annot_propose_drift_fixes`](../ai-agents/tools#annot_propose_drift_fixes) /
+[`annot_translate_screen_spec`](../ai-agents/tools#annot_translate_screen_spec))
+turn this recipe into an agent-assisted authoring loop —
+the agent drafts the MDX from an aria snapshot, proposes
+per-finding patches when drift surfaces, and translates the
+human-readable strings across locales while preserving every
+`annot:` machine field verbatim.
+</Aside>
+
+## See also
+
+- [Concepts](../product-docs/concepts) — MDX format reference.
+- [Drift detection](../product-docs/drift-detection) — the
+  lint flow in detail.
+- [Astro integration](../product-docs/astro-integration) — the
+  Image Service + per-component reference.
+- [Xlsx templates](../product-docs/xlsx-templates) — customer
+  template authoring guide.

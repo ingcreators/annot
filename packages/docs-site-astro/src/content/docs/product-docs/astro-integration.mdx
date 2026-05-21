@@ -1,0 +1,125 @@
+---
+title: Astro integration
+description: Wire productDocsIntegration() into your astro.config.mjs, drop the seven components into MDX, and the Image Service composes annotated PNGs at build time.
+---
+
+`@ingcreators/annot-product-docs-astro` is the Astro adapter
+for the docs core. Drop the integration into `astro.config.mjs`,
+import the components from MDX, and the Image Service composes
+annotated PNGs at build time from the stored bbox markers your
+Playwright tour wrote.
+
+## Install
+
+```sh
+pnpm add astro @astrojs/mdx
+pnpm add @ingcreators/annot-product-docs-astro
+```
+
+## Wire the integration
+
+```js
+// astro.config.mjs
+import { defineConfig } from "astro/config";
+import mdx from "@astrojs/mdx";
+import { productDocsIntegration } from "@ingcreators/annot-product-docs-astro";
+
+export default defineConfig({
+  integrations: [mdx(), productDocsIntegration()],
+});
+```
+
+The `productDocsIntegration()` factory:
+
+- Registers the Image Service against any `<Screen>` that
+  declares a `src`.
+- Adds the MDX-config tweaks needed by the components (frontmatter
+  exposure, the `Overlay` / `Screen` types).
+- Surfaces a build-time finding when an MDX's stored snapshot
+  contains an `<Overlay match>` that didn't resolve at tour
+  time.
+
+## Author MDX
+
+```mdx
+---
+annot:
+  id: SC-001
+  title: Login
+---
+
+import Screen from "@ingcreators/annot-product-docs-astro/components/Screen.astro";
+import Overlay from "@ingcreators/annot-product-docs-astro/components/Overlay.astro";
+
+# Login
+
+<Screen id="login" src="./shots/login.png">
+<Overlay match={{ role: "textbox", name: "Email" }} number={1}>
+Email — enter your registered address.
+</Overlay>
+</Screen>
+```
+
+## The seven components
+
+| Component | Purpose |
+|---|---|
+| `<Screen>` | Annotated screenshot block; renders the base PNG with overlay callouts composited via the Image Service. |
+| `<Overlay>` | Numbered callout with a persistent `match` key. Children are MDX (text / markdown / further components). |
+| `<Transition>` | Inline screen-to-screen transition (trigger / event / target screen id). Renders a one-line arrow. |
+| `<TransitionTable>` | Tabular list of transitions within a book. Auto-generated from the book's MDXs. |
+| `<HistoryEntry>` | Revision-history row. Drops into the book's history page. |
+| `<ScreenList>` | Auto-enumerated screen index across a book. Renders a sortable table. |
+| `<TransitionGraph>` | Mermaid-rendered cross-screen flowchart. Auto-derived from `<Transition>` declarations. |
+
+Each is a single-root `.astro` file with a typed `Props`
+interface; data attributes flow through to the rendered DOM
+so you can hook CSS / JS by `data-annot-*` selectors without
+editing the component source.
+
+## Image Service
+
+`renderAnnotatedScreen({ mdxPath, screenId, cache? })` is the
+core composition primitive. It:
+
+1. Loads the base PNG from the MDX's `<Screen src>`.
+2. Reads the `annot:snapshot` block from the same MDX.
+3. Composes overlay callouts at the stored `[box=x,y,w,h]`
+   coordinates with the matching `<Overlay number / intent>` style.
+4. Returns the composed PNG bytes plus metadata.
+
+```ts
+import {
+  renderAnnotatedScreen,
+  createFileCache,
+} from "@ingcreators/annot-product-docs-astro";
+
+const cache = createFileCache("./node_modules/.annot-cache");
+const { bytes, fromCache, hadBoundingBoxes } = await renderAnnotatedScreen({
+  mdxPath: "docs/books/spec/SC-001.mdx",
+  screenId: "login",
+  cache,
+});
+```
+
+When `hadBoundingBoxes: false` (the stored snapshot lacks bbox
+markers — no Playwright tour has run yet), the function returns
+the base PNG verbatim. Your docs site builds before the tour
+has run; the overlays just don't have visual coordinates yet.
+
+### Caches
+
+- `createMemoryCache()` — in-process Map, lives for the build's
+  lifetime. Good for development.
+- `createFileCache(dir)` — SHA-keyed on the MDX content + base
+  PNG bytes; persists across builds. Recommended for CI.
+
+The cache key includes the snapshot block, so a tour that
+changes a bbox invalidates only the affected screens.
+
+## See also
+
+- [`/api/product-docs-astro`](../api/product-docs-astro) — full
+  type signatures.
+- [Drift detection](./drift-detection) — the lint flow that
+  surfaces snapshot vs UI divergence as PR annotations.

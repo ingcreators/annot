@@ -1,0 +1,133 @@
+---
+title: annot-product-docs
+description: API reference for the living-product-docs core — parseMdx, the Playwright screen fixture, detectDrift, the annot-docs CLI.
+---
+
+`@ingcreators/annot-product-docs` is the core of the
+living-product-docs flow: MDX parser, Playwright `screen`
+fixture, byte-stable comment-block rewriter, drift detector,
+and the `annot-docs` CLI.
+
+Tier A — Node-only, no DOM. Loads `playwright-core` at CLI
+runtime for `sync` / `lint`. The library surface (parser, match
+resolver, drift detector) is DOM-free.
+
+## Parser
+
+```ts
+import { parseMdx, parseMdxFile } from "@ingcreators/annot-product-docs";
+
+const parsed = parseMdxFile("docs/books/spec/SC-001.mdx");
+// {
+//   frontmatter: { annot: { id, title, xlsx: ... }, meta: {} },
+//   body: "# Login screen\n\n<Screen ...>...",
+//   snapshot: "- textbox [name=...]...",   // verbatim
+//   attributes: { e1: "id=\"email\"...", ... },
+//   overlays: [{ screenId, number, match, intent, content }, ...],
+// }
+```
+
+`parseMdx(source)` operates on a string; `parseMdxFile(path)`
+reads from disk. Both are pure — no side effects, no IO beyond
+the optional file read.
+
+## Match resolver
+
+```ts
+import { parseSnapshot, resolveMatch } from "@ingcreators/annot-product-docs";
+
+const snapshot = parseSnapshot(rawSnapshotYaml);
+const ref = resolveMatch(snapshot, { role: "textbox", name: "Email" });
+// → "e1"  or  undefined when unresolved
+```
+
+`match.under` constrains the search to descendants of an
+ancestor that itself matches the under-clause; `match.nth`
+picks the Nth match.
+
+## Playwright `screen` fixture
+
+```ts
+import { test } from "@ingcreators/annot-product-docs";
+
+test("login", async ({ page, screen }) => {
+  await page.goto("/login");
+  await screen.capture({ id: "login", mdxPath: "docs/spec/SC-001.mdx" });
+});
+```
+
+`screen.capture(options)` re-syncs the `annot:snapshot` +
+`annot:attributes` blocks in the named MDX. Options:
+
+| Option | Default | Purpose |
+|---|---|---|
+| `id` | required | Which `<Screen id>` block to update |
+| `mdxPath` | required | The MDX file to rewrite |
+| `strict` | `false` | Throw when an `<Overlay match>` doesn't resolve |
+| `screenshot` | `{}` | Forwarded to `page.screenshot()` |
+
+The fixture writes the screenshot to the path the
+`<Screen src>` references — typically `./shots/<id>.png`
+relative to the MDX.
+
+## Comment-block rewriter
+
+`updateCommentBlocks(source, { snapshot, attributes })` performs
+the byte-stable rewrite that `screen.capture` calls
+internally. Useful when you're building a custom tour runner:
+
+```ts
+import { updateCommentBlocks } from "@ingcreators/annot-product-docs";
+
+const rewritten = updateCommentBlocks(mdxSource, {
+  snapshot: yamlWithBoxes,
+  attributes: extractedAttrSet,
+});
+await writeFile(mdxPath, rewritten);
+```
+
+The rewrite is byte-stable: rerunning with the same inputs
+produces a byte-identical output. Empty diff on no-change runs.
+
+## Drift detector
+
+```ts
+import {
+  detectDrift,
+  detectDriftFromYaml,
+  type DriftFinding,
+} from "@ingcreators/annot-product-docs";
+
+const findings: DriftFinding[] = await detectDriftFromYaml(
+  storedSnapshotYaml,
+  liveSnapshotYaml,
+  { tier: "strict" }
+);
+```
+
+Returns a flat list of findings. Each finding carries:
+
+```ts
+interface DriftFinding {
+  kind: "added" | "removed" | "renamed" | "role-changed" |
+        "duplicated" | "attribute-drift";
+  severity: "error" | "warning";
+  mdxPath?: string;
+  lineNumber?: number;
+  detail: string;   // human-readable message
+}
+```
+
+## CLI
+
+```sh
+annot-docs init                          # scaffold config + sample
+annot-docs sync --url <url>              # refresh snapshot/attrs across MDXs
+annot-docs lint --url <url>              # report drift; non-zero exit on errors
+annot-docs lint --json --ci              # CI-shaped output (JSON + warnings fail)
+annot-docs lint --fix                    # auto-refresh stored blocks
+```
+
+`--url` defaults to `http://localhost:5173` for the dev
+case. `--ci` activates the severity-bucket exit-code logic;
+`--json` emits machine-readable findings on stdout.

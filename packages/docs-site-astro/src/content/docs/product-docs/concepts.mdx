@@ -1,0 +1,122 @@
+---
+title: Concepts
+description: The MDX format, Screen / Overlay components, annot frontmatter, the match resolver, and the snapshot / attributes comment blocks the tour rewrites byte-stably.
+---
+
+## The MDX bundle
+
+A living-product-docs source unit is **one MDX file per screen**.
+The file has three layers:
+
+1. **`annot:` frontmatter** — machine-readable identity +
+   metadata (id, title, optional `xlsx.book` / `xlsx.sheet` /
+   `xlsx.role`).
+2. **MDX body** — human prose, the `<Screen>` block, and one
+   `<Overlay>` per annotated element.
+3. **Comment blocks** — `annot:snapshot` (aria YAML with bbox
+   markers) + `annot:attributes` (extracted HTML attribute set),
+   rewritten on every tour run.
+
+```mdx
+---
+annot:
+  id: SC-001
+  title: Login screen
+  xlsx:
+    book: Screen spec
+    sheet: SC-001 Login
+    role: screen
+---
+
+import Screen from "@ingcreators/annot-product-docs-astro/components/Screen.astro";
+import Overlay from "@ingcreators/annot-product-docs-astro/components/Overlay.astro";
+
+# Login screen
+
+<Screen id="login" src="./shots/login.png">
+
+<Overlay match={{ role: "textbox", name: "Email" }} intent="required" number={1}>
+**Email** — Enter your registered email.
+</Overlay>
+
+<Overlay match={{ role: "button", name: "Sign in" }} intent="action" number={2}>
+Click to sign in.
+</Overlay>
+
+</Screen>
+
+{/* annot:snapshot
+- textbox [name="Email"] [ref=e1] [box=42,180,420,40]
+- button "Sign in" [ref=e2] [box=42,260,420,44]
+*/}
+
+{/* annot:attributes
+e1: id="email" type="email" autocomplete="email"
+e2: id="signin" type="submit"
+*/}
+```
+
+The two `{/* annot:* */}` comment blocks are the byte-stable
+output of the Playwright tour's `screen.capture(...)` call.
+Storing them in the MDX (rather than in a sidecar JSON) keeps
+the source-of-truth in one file the author edits.
+
+## `<Screen>` + `<Overlay>` semantics
+
+`<Screen id="login" src="./shots/login.png">` carries:
+
+- `id` — the identifier the tour passes to `screen.capture({ id })`
+  to know which screen this is. Multiple screens in one MDX are
+  fine; each `<Screen>` block has a unique `id`.
+- `src` — the base screenshot. Relative paths resolve from the
+  MDX file.
+
+`<Overlay>` children are the annotations:
+
+- `match={{ role, name }}` — accessibility-tree match key.
+  Persistent — the resolver re-finds the element by role + name
+  on every tour run, so a Playwright `ref=eN` changing
+  between runs doesn't break the link.
+- `intent` — `required` / `action` / `info` / `warning` / `note`.
+  Maps to a colour from the Annot design system.
+- `number` — the callout number. Drives the badge index in the
+  rendered docs site + the row order in the 画面設計書 Excel
+  output.
+- The body content is MDX — text / markdown / further components.
+
+## `match` disambiguation
+
+When `role + name` resolve to multiple elements, add `match.under`
+or `match.nth`:
+
+```mdx
+<Overlay match={{ role: "button", name: "Save", under: { role: "dialog", name: "Edit profile" } }}>
+Saves the profile edits.
+</Overlay>
+```
+
+`under` constrains the search to descendants of an ancestor that
+itself matches the under-clause; `nth` picks the Nth match if
+the role+name pair genuinely repeats.
+
+## The snapshot block
+
+`annot:snapshot` is a verbatim copy of Playwright's AI-mode aria
+snapshot, with `[box=x,y,w,h]` markers appended to each line by
+the `screen` fixture's `ariaSnapshot({ boxes: true })` call. The
+markers feed the Astro Image Service (Phase 5 of the plan) so
+overlays render at the correct on-screen coordinates without
+the MDX author providing pixel positions by hand.
+
+If a tour hasn't run yet (the file ships without the snapshot
+block), the docs site still builds — `<Screen>` falls back to
+the base PNG verbatim and `<Overlay>` callouts render as a
+numbered list under the screen.
+
+## The attributes block
+
+`annot:attributes` extracts a per-`ref` set of HTML attribute
+strings — `id`, `type`, `autocomplete`, `aria-*`,
+`data-testid`, and a small allowlist of common form-related
+attributes. Drives the Excel adapter's attributes table and
+the drift detector's `attribute-drift` finding kind.
