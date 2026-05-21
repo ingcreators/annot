@@ -1,10 +1,33 @@
 # annot.work — unify on Astro, refresh content end-to-end
 
-> **Status:** In progress — Phase 1 underway. Open Questions
->   resolved (see "Open questions / risks" below — every default
->   carried, with one user-modified pick in Q1, Q2, plus a new
->   resolution for the `/docs/pwa/*` → `/docs/app/*` URL rename
->   surfaced during Phase 1 kick-off).
+> **Status:** Done — Phases 1-7 landed across PRs
+>   [#904](https://github.com/ingcreators/annot/pull/904) (Phase 1),
+>   [#905](https://github.com/ingcreators/annot/pull/905) (Phase 2),
+>   [#906](https://github.com/ingcreators/annot/pull/906) (Phase 3),
+>   [#907](https://github.com/ingcreators/annot/pull/907) (Phase 4),
+>   [#908](https://github.com/ingcreators/annot/pull/908) (Phase 5),
+>   [#910](https://github.com/ingcreators/annot/pull/910) (Phase 6),
+>   plus the Phase 7 retirement PR.
+>
+> **Follow-up TODOs not part of this plan**:
+>
+> - **Phase 6.5 — default-flip + picker retirement.** After a
+>   7-day observation window of stable cookie-opt-in traffic
+>   against the Astro stack, two small commits land: (a) change
+>   `packages/docs-site-vitepress/worker.js`'s default branch
+>   from `env.ASSETS.fetch` → `env.ASTRO.fetch`; (b) move the
+>   `annot.work/docs/*` route claim from the picker Worker onto
+>   the Astro Worker, then delete the picker.
+> - **Phase 7.5 — Cloudflare Worker rename.** Rename the
+>   Cloudflare-side Worker `annot-docs-site-astro` →
+>   `annot-docs-site` to match the reclaimed npm name.
+>   Requires a Cloudflare admin step (delete the legacy
+>   `annot-docs-site` Worker first to free the name) so it
+>   stays user-driven.
+> - **Phase 7-final — workspace deletion.** After one release
+>   cycle, delete `packages/docs-site-vitepress/` entirely and
+>   remove the picker / VitePress deploy steps from
+>   `.github/workflows/deploy.yml`.
 > **Compatibility:** No user-visible URL changes during the
 >   migration. `annot.work/` (marketing) stays the same origin;
 >   `annot.work/docs/*` (VitePress → Astro Starlight) keeps every

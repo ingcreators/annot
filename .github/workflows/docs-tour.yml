@@ -5,7 +5,7 @@ name: Docs dogfood tour
 # Runs the Playwright tour that captures live screens of the
 # Annot web app at `annot.work/app/` and re-syncs the matching
 # `<Screen>` + `<Overlay match>` MDX blocks in
-# `packages/docs-site-astro/src/content/docs/app/`. Phase 5
+# `packages/docs-site/src/content/docs/app/`. Phase 5
 # scope is the proof-of-concept `app/index.mdx` page; the tour
 # expands to the remaining /docs/app/* + screenshot-heavy
 # getting-started / recipes pages as follow-up PRs.
@@ -32,8 +32,8 @@ on:
   pull_request:
     paths:
       - "packages/web/**"
-      - "packages/docs-site-astro/tests/docs/**"
-      - "packages/docs-site-astro/src/content/docs/app/**"
+      - "packages/docs-site/tests/docs/**"
+      - "packages/docs-site/src/content/docs/app/**"
       - ".github/workflows/docs-tour.yml"
   workflow_dispatch:
 
@@ -70,18 +70,18 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Install Chromium
-        run: pnpm --filter @ingcreators/annot-docs-site-astro exec playwright install chromium
+        run: pnpm --filter @ingcreators/annot-docs-site exec playwright install chromium
 
       - name: Run the dogfood tour
         env:
           ANNOT_APP_URL: https://annot.work/app/
-        run: pnpm --filter @ingcreators/annot-docs-site-astro docs:tour
+        run: pnpm --filter @ingcreators/annot-docs-site docs:tour
 
       - name: Surface MDX diff
         if: always()
         run: |
           set +e
-          git diff --stat packages/docs-site-astro/src/content/docs/app/ > /tmp/diff-stat.txt
+          git diff --stat packages/docs-site/src/content/docs/app/ > /tmp/diff-stat.txt
           if [ -s /tmp/diff-stat.txt ]; then
             echo "::notice::Docs tour rewrote MDX snapshot blocks:"
             cat /tmp/diff-stat.txt
