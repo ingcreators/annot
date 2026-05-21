@@ -159,6 +159,90 @@ const DICT: Record<string, DictEntry> = {
   "status.submitted": { en: "Submitted", ja: "申請中" },
   "status.approved": { en: "Approved", ja: "承認済み" },
   "status.rejected": { en: "Rejected", ja: "却下" },
+
+  // Approval list (approver).
+  "approve.list.heading": {
+    en: "Pending approvals",
+    ja: "承認待ち一覧",
+  },
+  "approve.list.subheading": {
+    en: "Open an item to review the full application.",
+    ja: "明細を開いて申請内容をご確認ください。",
+  },
+  "approve.list.column.id": { en: "ID", ja: "申請番号" },
+  "approve.list.column.applicant": { en: "Applicant", ja: "申請者" },
+  "approve.list.column.category": { en: "Category", ja: "区分" },
+  "approve.list.column.amount": { en: "Amount", ja: "金額" },
+  "approve.list.column.submittedAt": {
+    en: "Submitted at",
+    ja: "申請日時",
+  },
+  "approve.list.column.action": { en: "Action", ja: "操作" },
+  "approve.list.review": { en: "Review", ja: "詳細" },
+  "approve.list.empty": {
+    en: "No applications awaiting approval.",
+    ja: "承認待ちの申請はありません。",
+  },
+
+  // Approval detail.
+  "approve.detail.heading": {
+    en: "Review application",
+    ja: "申請内容の確認",
+  },
+  "approve.detail.field.id": { en: "ID", ja: "申請番号" },
+  "approve.detail.field.applicant": { en: "Applicant", ja: "申請者" },
+  "approve.detail.field.category": { en: "Category", ja: "区分" },
+  "approve.detail.field.amount": { en: "Amount", ja: "金額" },
+  "approve.detail.field.submittedAt": {
+    en: "Submitted at",
+    ja: "申請日時",
+  },
+  "approve.detail.field.reason": { en: "Reason", ja: "申請理由" },
+  "approve.detail.comment.label": {
+    en: "Decision comment",
+    ja: "判断コメント",
+  },
+  "approve.detail.comment.placeholder": {
+    en: "Add an optional comment that will be shown to the applicant.",
+    ja: "申請者に共有するコメントを任意で入力できます。",
+  },
+  "approve.detail.approve": { en: "Approve", ja: "承認" },
+  "approve.detail.reject": { en: "Reject", ja: "却下" },
+  "approve.detail.notFound": {
+    en: "The requested application was not found.",
+    ja: "対象の申請が見つかりませんでした。",
+  },
+  "approve.detail.alreadyDecided": {
+    en: "This application has already been decided.",
+    ja: "この申請は既に判定済みです。",
+  },
+  "approve.detail.backToList": {
+    en: "Back to list",
+    ja: "一覧へ戻る",
+  },
+
+  "approve.decided.field.decision": {
+    en: "Decision",
+    ja: "判断",
+  },
+
+  // Approval decided (terminal).
+  "approve.decided.heading.approved": {
+    en: "Application approved",
+    ja: "申請を承認しました",
+  },
+  "approve.decided.heading.rejected": {
+    en: "Application rejected",
+    ja: "申請を却下しました",
+  },
+  "approve.decided.body": {
+    en: "The applicant will be notified of your decision.",
+    ja: "判断結果は申請者へ通知されます。",
+  },
+  "approve.decided.backToList": {
+    en: "Back to pending list",
+    ja: "承認待ち一覧へ戻る",
+  },
 };
 
 let currentLocale: Locale = "en";

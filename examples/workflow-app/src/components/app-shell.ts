@@ -6,6 +6,9 @@ import "../screens/menu.js";
 import "../screens/application-form.js";
 import "../screens/application-confirm.js";
 import "../screens/application-submitted.js";
+import "../screens/approval-list.js";
+import "../screens/approval-detail.js";
+import "../screens/approval-decided.js";
 import { displayName } from "../format.js";
 import { onLocaleChange, t } from "../i18n.js";
 import {
@@ -47,12 +50,11 @@ const APPROVER_ONLY = new Set<ScreenId>([
   "approvalDecided",
 ]);
 
-// Phase 3 screens not yet implemented — render the placeholder.
-const PENDING_SCREENS = new Set<ScreenId>([
-  "approvalList",
-  "approvalDetail",
-  "approvalDecided",
-]);
+// Every planned screen now ships a component — Phase 3 closes
+// the last placeholder set. Kept here as an empty set so the
+// render-dispatcher still has the hook point in case future
+// phases stage routes before their components exist.
+const PENDING_SCREENS = new Set<ScreenId>();
 
 export class WfAppShell extends LitElement {
   protected override createRenderRoot(): HTMLElement {
@@ -188,6 +190,12 @@ export class WfAppShell extends LitElement {
         return html`<wf-application-confirm></wf-application-confirm>`;
       case "applicationSubmitted":
         return html`<wf-application-submitted></wf-application-submitted>`;
+      case "approvalList":
+        return html`<wf-approval-list></wf-approval-list>`;
+      case "approvalDetail":
+        return html`<wf-approval-detail></wf-approval-detail>`;
+      case "approvalDecided":
+        return html`<wf-approval-decided></wf-approval-decided>`;
       default:
         return this.#renderPlaceholder(r);
     }
