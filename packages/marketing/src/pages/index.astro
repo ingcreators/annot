@@ -1,34 +1,43 @@
 ---
 import Base from "../layouts/Base.astro";
 
-const title = "Annot — Annotated screenshots for Playwright and CI";
+// Phase 4 of `docs/plans/annot-work-astro-unification.md` —
+// landing redesign around the three-vector positioning from
+// `PRODUCT_DIRECTION.md`. Hero leads with "living product docs
+// from your Playwright tests" (the new headline framing); the
+// Playwright code snippet stays as the right-rail anchor because
+// it's the clearest 5-second pitch. A second hero introduces
+// the dual docs site + 画面設計書 angle with a `<Screen>` /
+// `<Overlay>` MDX snippet. Features row expands from 4 to 5
+// cards. Brand palette unchanged; no rebrand here.
+const title = "Annot — Living product docs from your Playwright tests";
 const description =
-  "An SVG-first screenshot annotation toolkit you can call from Playwright. Capture, annotate, and attach annotated screenshots to your test report in a few lines of code.";
+  "Generate a docs site AND a Japanese 画面設計書 spreadsheet from the same Playwright tour. SVG-first annotated screenshots; open source; drift between MDX and live UI caught at lint time.";
 ---
 
 <Base title={title} description={description}>
   <!--
-    Hero — moat anchor. The single most important pixel above the
-    fold is the Playwright code snippet on the right: it shows
-    that a single fixture call produces an annotated PNG.
+    Hero — moat anchor. Headline reframes around living product
+    docs (PRODUCT_DIRECTION third vector); the right-rail
+    Playwright fixture snippet stays because it is still the
+    clearest 5-second pitch for a fresh visitor.
   -->
   <section class="hero">
     <div class="container hero-grid">
       <div>
-        <span class="hero-eyebrow">New · v0.1.0 on npm</span>
+        <span class="hero-eyebrow">v0.1.0 across the product-docs trio · v0.3.0 across the annotator + Playwright fixture</span>
         <h1 class="hero-headline">
-          Annotated screenshots,<br />from a Playwright fixture.
+          Living product docs<br />from your Playwright tests.
         </h1>
         <p class="hero-subhead">
-          Annot is an SVG-first annotation toolkit. Drop the
-          <code>annotator</code> fixture into your Playwright suite and
-          attach annotated screenshots to your HTML report — no extra
-          tabs, no manual edits, no Electron app in CI.
+          Annot turns the Playwright tour you already maintain into
+          always-fresh user manuals + Japanese 画面設計書. Same MDX,
+          dual rendering targets, drift between docs and UI caught
+          as a CI lint step. SVG-first under the hood — annotate one
+          screenshot or a hundred from a fixture.
         </p>
         <div class="hero-cta-row">
-          <a class="btn btn-primary" href="/docs/getting-started"
-            >Read the quickstart</a
-          >
+          <a class="btn btn-primary" href="/docs/getting-started">Read the quickstart</a>
           <a class="btn btn-secondary" href="/app">Try the editor →</a>
         </div>
       </div>
@@ -56,46 +65,64 @@ test(<span class="tok-s">"login form is reachable"</span>, <span class="tok-k">a
   </section>
 
   <!--
-    Three flow showcases. Plain text for v1 — illustrated demos
-    follow when the demo video / GIFs are recorded in Phase 8g.
+    Five-card features row. Re-ranked: Playwright fixture first
+    (the headline 5-second pitch), then the new growth vector
+    (living product docs), then MCP tools, then the runtime
+    pieces (headless annotator), then OSS posture.
   -->
   <section class="section">
     <div class="container">
-      <div class="section-eyebrow">Three flows out of the box</div>
-      <h2 class="section-title">From failing test to annotated report.</h2>
+      <div class="section-eyebrow">What's in the box</div>
+      <h2 class="section-title">Five entry points, one toolkit.</h2>
       <p class="section-lead">
-        The fixture composes three pure SVG-fragment helpers
-        (<code>rectForBoundingBox</code>, <code>arrowBetween</code>,
-        <code>textAt</code>) with the headless annotator. Each flow
-        works against any Playwright <code>page</code>.
+        Each card maps to a published npm package. The same SVG
+        annotation format flows through every one — annotate from a
+        test, an agent, a CLI, or by hand in the editor.
       </p>
 
       <div class="flow-grid">
         <article class="flow-card">
-          <h3>Annotate on assertion failure</h3>
+          <h3>Playwright fixture</h3>
           <p>
-            Catch a failing assertion in a try/catch and call
-            <code>annotateScreenshot</code> with a red rectangle around
-            the locator that misbehaved. The annotated PNG attaches to
-            the HTML report automatically.
+            <code>npm install --save-dev @ingcreators/annot-playwright</code>.
+            Drop the <code>annotator</code> fixture into
+            <code>test.extend</code>, attach annotated screenshots to
+            the HTML report from a try/catch in a few lines.
           </p>
         </article>
         <article class="flow-card">
-          <h3>Draw by DOM locator</h3>
+          <h3>Living product docs</h3>
           <p>
-            <code>locator.boundingBox()</code> + <code>rectForBoundingBox</code>
-            gives you a precise overlay rectangle without measuring
-            anything by hand. Add an arrow with <code>arrowBetween</code>
-            to label it.
+            Generate a docs site <strong>and</strong> a Japanese
+            画面設計書 spreadsheet from the same MDX, kept in sync
+            with Playwright snapshots. Drift caught as a CI lint step.
           </p>
         </article>
         <article class="flow-card">
-          <h3>Attach to the HTML report</h3>
+          <h3>MCP tools for agents</h3>
           <p>
-            Annot returns the PNG as a buffer. Pass it straight to
-            <code>testInfo.attach()</code> and Playwright's HTML report
-            renders the annotated screenshot inline next to the failing
-            step.
+            <code>npm install -g @ingcreators/annot-mcp</code>. Nine
+            tools for Claude Desktop / Claude Code / Cursor — annotate
+            URLs, capture aria snapshots, propose drift fixes, translate
+            screen specs.
+          </p>
+        </article>
+        <article class="flow-card">
+          <h3>Headless annotator</h3>
+          <p>
+            <code>npm install @ingcreators/annot-annotator</code>. The
+            same SVG annotation engine as the in-browser editor,
+            callable from any Node script — no browser, no Electron, no
+            tab in CI.
+          </p>
+        </article>
+        <article class="flow-card">
+          <h3>Open source</h3>
+          <p>
+            Apache-2.0 across every package. PWA, Chrome extension,
+            desktop app, headless annotator, Playwright fixture, MCP
+            server, and the living-product-docs trio all live in one
+            monorepo.
           </p>
         </article>
       </div>
@@ -103,16 +130,77 @@ test(<span class="tok-s">"login form is reachable"</span>, <span class="tok-k">a
   </section>
 
   <!--
-    Install CTAs — direct links to the three published npm packages.
+    Second hero — the two-vertical positioning. Left side: the
+    pitch (one MDX → docs site + 画面設計書). Right side: the
+    MDX snippet with <Screen> / <Overlay match> so visitors can
+    see the source shape that drives both renderings.
   -->
   <section class="section section-alt">
+    <div class="container hero-grid">
+      <div>
+        <span class="hero-eyebrow">Living product docs</span>
+        <h2 class="section-title">
+          Generate the docs site, AND the 画面設計書,<br />
+          from the same MDX.
+        </h2>
+        <p class="section-lead">
+          Author one screen spec; the Astro adapter renders it as a
+          docs page, the Excel adapter renders it into a customer
+          template populated via Named Ranges and
+          <code>{`{var}`}</code> placeholders. A Playwright tour
+          re-syncs both on every CI run — drift between the MDX and
+          the live UI surfaces as a per-line warning on the PR diff.
+        </p>
+        <div class="hero-cta-row">
+          <a class="btn btn-primary" href="/docs/product-docs/">Read the overview</a>
+          <a class="btn btn-secondary" href="/docs/recipes/living-product-docs">See the recipe →</a>
+        </div>
+      </div>
+
+      <div>
+        <div class="code-card" aria-label="Living product docs MDX example">
+          <span class="filename">SC-001-login.mdx</span>
+          <pre><code><span class="tok-c">---</span>
+<span class="tok-k">annot:</span>
+  <span class="tok-k">id:</span> SC-001
+  <span class="tok-k">title:</span> Login screen
+  <span class="tok-k">xlsx:</span>
+    <span class="tok-k">book:</span> 画面設計書
+    <span class="tok-k">sheet:</span> SC-001 ログイン
+<span class="tok-c">---</span>
+
+<span class="tok-k">import</span> Screen <span class="tok-k">from</span> <span class="tok-s">"@ingcreators/annot-product-docs-astro/components/Screen.astro"</span>;
+<span class="tok-k">import</span> Overlay <span class="tok-k">from</span> <span class="tok-s">"@ingcreators/annot-product-docs-astro/components/Overlay.astro"</span>;
+
+<span class="tok-f">&lt;Screen</span> id=<span class="tok-s">"login"</span> src=<span class="tok-s">"./shots/login.png"</span><span class="tok-f">&gt;</span>
+
+  <span class="tok-f">&lt;Overlay</span> match={`{{ role: "textbox", name: "Email" }}`} number={`{1}`}<span class="tok-f">&gt;</span>
+    Email — 登録済みのメールアドレスを入力。
+  <span class="tok-f">&lt;/Overlay&gt;</span>
+
+  <span class="tok-f">&lt;Overlay</span> match={`{{ role: "button", name: "Sign in" }}`} number={`{2}`}<span class="tok-f">&gt;</span>
+    クリックで認証リクエスト送信。
+  <span class="tok-f">&lt;/Overlay&gt;</span>
+
+<span class="tok-f">&lt;/Screen&gt;</span>
+</code></pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!--
+    Install CTAs — every published package on npm.
+  -->
+  <section class="section">
     <div class="container">
       <div class="section-eyebrow">Install</div>
-      <h2 class="section-title">Three packages, one toolkit.</h2>
+      <h2 class="section-title">Pick the entry point that matches your flow.</h2>
       <p class="section-lead">
-        All three publish under <code>@ingcreators/</code> on npm at
-        <code>0.1.0</code>. <code>annot-playwright</code> is what you
-        install if you just want the fixture.
+        Everything publishes under <code>@ingcreators/</code> on npm.
+        Most users start with <code>annot-playwright</code>; if you're
+        shipping product docs, the <code>annot-product-docs</code>
+        trio is the dedicated path.
       </p>
 
       <div class="install-row">
@@ -120,6 +208,16 @@ test(<span class="tok-s">"login form is reachable"</span>, <span class="tok-k">a
           <h3>annot-playwright</h3>
           <p>The fixture, plus three pure SVG-fragment helpers.</p>
           <div class="cmd">npm install --save-dev @ingcreators/annot-playwright</div>
+        </div>
+        <div class="install-card">
+          <h3>annot-mcp</h3>
+          <p>Stdio MCP server with nine tools for Claude / Cursor / Continue.</p>
+          <div class="cmd">npm install -g @ingcreators/annot-mcp</div>
+        </div>
+        <div class="install-card">
+          <h3>annot-product-docs (trio)</h3>
+          <p>Core + Astro adapter + Excel adapter for living product docs.</p>
+          <div class="cmd">npm install @ingcreators/annot-product-docs</div>
         </div>
         <div class="install-card">
           <h3>annot-annotator</h3>
@@ -136,19 +234,19 @@ test(<span class="tok-s">"login form is reachable"</span>, <span class="tok-k">a
   </section>
 
   <!--
-    Editor CTA. The PWA at annot.work/app is where annotated
+    Editor CTA. The web app at annot.work/app is where annotated
     screenshots are edited by hand; the Playwright fixture is
     where they're generated in CI. Both produce the same SVG.
   -->
-  <section class="section">
+  <section class="section section-alt">
     <div class="container">
-      <div class="section-eyebrow">Or use the PWA</div>
-      <h2 class="section-title">Annotate by hand in your browser.</h2>
+      <div class="section-eyebrow">Or annotate by hand</div>
+      <h2 class="section-title">Open the editor in your browser.</h2>
       <p class="section-lead">
-        The same SVG format powers a free in-browser editor. Capture
-        with the Chrome extension, drop a file in, or paste from the
-        clipboard. Local-first storage; optional sync to GitHub or
-        Annot Cloud.
+        The same SVG format powers a free in-browser editor at
+        <code>annot.work/app</code>. Capture with the Chrome extension,
+        drop a file in, or paste from the clipboard. Local-first
+        storage; optional sync to GitHub, Google Drive, or Annot Cloud.
       </p>
       <a class="btn btn-primary" href="/app">Open the editor →</a>
     </div>
