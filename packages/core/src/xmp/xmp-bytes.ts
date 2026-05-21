@@ -1,0 +1,520 @@
+/**
+ * Tier-A XMP metadata embedding for re-editable images — pure-bytes
+ * primitives that run in Node and the browser alike.
+ *
+ * This file holds the byte-level XMP build / read / write logic that
+ * used to live inside `xmp-browser.ts`. The browser-side
+ * `createEditableImage` (Blob in → Blob out) is now a thin wrapper
+ * around `createEditablePngBytes` for the PNG path.
+ *
+ * JPEG WRITE remains browser-only because the rendered PNG → JPEG
+ * conversion needs an Image + <canvas> pipeline. The JPEG READ path
+ * is pure bytes and lives here.
+ *
+ * PNG: XMP in iTXt chunk, original image in a custom "svGo" chunk.
+ * JPEG: XMP in APP1 segment, original image in one or more APP2
+ *       segments (each prefixed with `annot:OriginalImage\0`).
+ */
+
+const XMP_NS = "annot";
+const XMP_NS_URI = "https://ingcreators.com/annot/ns/1.0/";
+const XMP_APP1_PREFIX = new TextEncoder().encode("http://ns.adobe.com/xap/1.0/\0");
+const ANNOT_APP2_PREFIX = new TextEncoder().encode("annot:OriginalImage\0");
+const PNG_XMP_KEYWORD = new TextEncoder().encode("XML:com.adobe.xmp");
+
+// ─── XMP XML ────────────────────────────────────────────────────────
+
+export function buildXmp(
+  annotationsSvg: string,
+  width: number,
+  height: number,
+  tags?: Record<string, string>,
+): string {
+  const tagsJson = tags && Object.keys(tags).length > 0 ? JSON.stringify(tags) : "";
+  const tagsLine = tagsJson ? `\n      <${XMP_NS}:tags>${tagsJson}</${XMP_NS}:tags>` : "";
+  return `<?xpacket begin="﻿" id="W5M0MpCehiHzreSzNTczkc9d"?>
+<x:xmpmeta xmlns:x="adobe:ns:meta/">
+  <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+    <rdf:Description rdf:about=""
+      xmlns:${XMP_NS}="${XMP_NS_URI}">
+      <${XMP_NS}:annotations><![CDATA[${annotationsSvg}]]></${XMP_NS}:annotations>
+      <${XMP_NS}:width>${width}</${XMP_NS}:width>
+      <${XMP_NS}:height>${height}</${XMP_NS}:height>
+      <${XMP_NS}:version>1.0</${XMP_NS}:version>${tagsLine}
+    </rdf:Description>
+  </rdf:RDF>
+</x:xmpmeta>
+<?xpacket end="w"?>`;
+}
+
+// ─── Byte helpers ───────────────────────────────────────────────────
+
+function u16be(n: number): Uint8Array {
+  return new Uint8Array([(n >> 8) & 0xff, n & 0xff]);
+}
+
+function u32be(n: number): Uint8Array {
+  return new Uint8Array([(n >> 24) & 0xff, (n >> 16) & 0xff, (n >> 8) & 0xff, n & 0xff]);
+}
+
+function readU16be(data: Uint8Array, offset: number): number {
+  // Callers guarantee `offset + 1 < data.length` (bounds are checked
+  // in the outer parse loops). `!` matches the contract.
+  return (data[offset]! << 8) | data[offset + 1]!;
+}
+
+function readU32be(data: Uint8Array, offset: number): number {
+  return (
+    ((data[offset]! << 24) |
+      (data[offset + 1]! << 16) |
+      (data[offset + 2]! << 8) |
+      data[offset + 3]!) >>>
+    0
+  );
+}
+
+function concat(...arrays: Uint8Array[]): Uint8Array {
+  let totalLen = 0;
+  for (const a of arrays) totalLen += a.length;
+  const result = new Uint8Array(totalLen);
+  let offset = 0;
+  for (const a of arrays) {
+    result.set(a, offset);
+    offset += a.length;
+  }
+  return result;
+}
+
+function startsWith(data: Uint8Array, offset: number, prefix: Uint8Array): boolean {
+  if (offset + prefix.length > data.length) return false;
+  for (let i = 0; i < prefix.length; i++) {
+    if (data[offset + i] !== prefix[i]) return false;
+  }
+  return true;
+}
+
+export function dataUrlToUint8Array(dataUrl: string): Uint8Array {
+  const b64 = dataUrl.split(",")[1] || "";
+  const bin = atob(b64);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return arr;
+}
+
+// ─── JPEG writing ───────────────────────────────────────────────────
+
+function buildJpegSegment(marker: number, payload: Uint8Array): Uint8Array {
+  const segLen = payload.length + 2;
+  return concat(new Uint8Array([0xff, marker]), u16be(segLen), payload);
+}
+
+function buildApp2Segments(data: Uint8Array): Uint8Array {
+  const prefixLen = ANNOT_APP2_PREFIX.length;
+  const maxChunk = 65533 - prefixLen - 4;
+  const totalChunks = Math.ceil(data.length / maxChunk);
+  const parts: Uint8Array[] = [];
+
+  for (let i = 0; i < totalChunks; i++) {
+    const start = i * maxChunk;
+    const end = Math.min(start + maxChunk, data.length);
+    const chunk = data.slice(start, end);
+
+    const payload = concat(ANNOT_APP2_PREFIX, u16be(i), u16be(totalChunks), chunk);
+    parts.push(buildJpegSegment(0xe2, payload));
+  }
+
+  return concat(...parts);
+}
+
+function removeJpegMetadata(data: Uint8Array): Uint8Array {
+  const parts: Uint8Array[] = [data.slice(0, 2)]; // SOI
+  let pos = 2;
+  while (pos + 4 <= data.length) {
+    if (data[pos] !== 0xff) break;
+    const marker = data[pos + 1];
+    if (marker === 0xd9 || marker === 0xda) {
+      parts.push(data.slice(pos));
+      return concat(...parts);
+    }
+    const segLen = readU16be(data, pos + 2);
+    const segEnd = pos + 2 + segLen;
+    if (segEnd > data.length) break;
+
+    const isXmp = marker === 0xe1 && startsWith(data, pos + 4, XMP_APP1_PREFIX);
+    const isAnnotApp2 = marker === 0xe2 && startsWith(data, pos + 4, ANNOT_APP2_PREFIX);
+
+    if (!isXmp && !isAnnotApp2) {
+      parts.push(data.slice(pos, segEnd));
+    }
+    pos = segEnd;
+  }
+  if (pos < data.length) parts.push(data.slice(pos));
+  return concat(...parts);
+}
+
+export function writeJpegWithMetadata(
+  jpegData: Uint8Array,
+  xmpBytes: Uint8Array,
+  originalData: Uint8Array,
+): Uint8Array {
+  const xmpPayload = concat(XMP_APP1_PREFIX, xmpBytes);
+  const xmpSeg = buildJpegSegment(0xe1, xmpPayload);
+  const app2Segs = buildApp2Segments(originalData);
+  const cleaned = removeJpegMetadata(jpegData);
+  // SOI + XMP + APP2s + rest
+  return concat(cleaned.slice(0, 2), xmpSeg, app2Segs, cleaned.slice(2));
+}
+
+// ─── PNG writing ────────────────────────────────────────────────────
+
+const CRC32_TABLE = (() => {
+  const table = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) {
+      if (c & 1) c = 0xedb88320 ^ (c >>> 1);
+      else c = c >>> 1;
+    }
+    table[n] = c;
+  }
+  return table;
+})();
+
+function crc32(data: Uint8Array): number {
+  let crc = 0xffffffff;
+  for (let i = 0; i < data.length; i++) {
+    // `CRC32_TABLE` has 256 entries; `(crc ^ data[i]) & 0xff` is a
+    // byte index, so `CRC32_TABLE[...]` is always defined.
+    // Loop bound matches `data.length`; `data[i]` is in range.
+    crc = CRC32_TABLE[(crc ^ data[i]!) & 0xff]! ^ (crc >>> 8);
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function buildPngChunk(chunkType: Uint8Array, data: Uint8Array): Uint8Array {
+  const typeAndData = concat(chunkType, data);
+  const crc = crc32(typeAndData);
+  return concat(u32be(data.length), typeAndData, u32be(crc));
+}
+
+function buildPngItxtChunk(xmpBytes: Uint8Array): Uint8Array {
+  const itxtData = concat(
+    PNG_XMP_KEYWORD,
+    new Uint8Array([0, 0, 0, 0, 0]), // null, compression flag, method, lang, translated kw
+    xmpBytes,
+  );
+  return buildPngChunk(new TextEncoder().encode("iTXt"), itxtData);
+}
+
+function removePngMetadata(data: Uint8Array): Uint8Array {
+  const parts: Uint8Array[] = [data.slice(0, 8)]; // PNG signature
+  let pos = 8;
+  while (pos + 12 <= data.length) {
+    const chunkLen = readU32be(data, pos);
+    const chunkType = data.slice(pos + 4, pos + 8);
+    const chunkDataStart = pos + 8;
+    const chunkEnd = chunkDataStart + chunkLen + 4; // +4 for CRC
+    if (chunkEnd > data.length) break;
+
+    const typeStr = String.fromCharCode(...chunkType);
+    const isXmp = typeStr === "iTXt" && startsWith(data, chunkDataStart, PNG_XMP_KEYWORD);
+    const isOrig = typeStr === "svGo";
+
+    if (!isXmp && !isOrig) {
+      parts.push(data.slice(pos, chunkEnd));
+    }
+    pos = chunkEnd;
+  }
+  return concat(...parts);
+}
+
+export function writePngWithMetadata(
+  pngData: Uint8Array,
+  xmpBytes: Uint8Array,
+  originalData: Uint8Array,
+): Uint8Array {
+  const itxtChunk = buildPngItxtChunk(xmpBytes);
+  const origChunk = buildPngChunk(new TextEncoder().encode("svGo"), originalData);
+
+  const cleaned = removePngMetadata(pngData);
+
+  // Insert before IEND (last 12 bytes)
+  const insertPos = cleaned.length - 12;
+  return concat(cleaned.slice(0, insertPos), itxtChunk, origChunk, cleaned.slice(insertPos));
+}
+
+// ─── Public API (Tier-A bytes) ──────────────────────────────────────
+
+/**
+ * Common tag keys written by built-in Annot producers. **Not validated**
+ * at write time — `createEditablePngBytes` accepts any string/string
+ * pair. Documented as a soft convention so that downstream readers can
+ * key off the same names when present.
+ *
+ * - `source`     — what produced the PNG (e.g. `"docs-tour"`,
+ *                  `"playwright-fixture"`, `"annot-mcp"`).
+ * - `screen`     — for living-product-docs, the `<Screen id>` value.
+ * - `capturedAt` — ISO timestamp.
+ * - `commit`     — git SHA when applicable.
+ */
+export const WELL_KNOWN_TAG_KEYS = ["source", "screen", "capturedAt", "commit"] as const;
+
+export interface CreateEditablePngBytesOptions {
+  /** Rasterised PNG bytes — the visible image, with annotations already
+   *  baked into the pixels. */
+  renderedPng: Uint8Array;
+  /** Original un-annotated capture. Pass either the raw PNG/JPEG bytes
+   *  or a `data:` URL string. */
+  originalImage: Uint8Array | string;
+  /** Annotations-only SVG fragment (no `<svg>` wrapper required — this
+   *  is what the editor's `readEditableImage` will reconstruct from). */
+  annotationsSvg: string;
+  /** Image width in pixels. Written into the XMP `<annot:width>` field. */
+  width: number;
+  /** Image height in pixels. Written into the XMP `<annot:height>` field. */
+  height: number;
+  /** Optional opaque kv tags. See {@link WELL_KNOWN_TAG_KEYS} for the
+   *  soft convention. */
+  tags?: Record<string, string>;
+}
+
+/**
+ * Write a re-editable PNG: takes a rasterised PNG (visible image) and
+ * embeds the original capture + annotations SVG in the XMP / custom
+ * chunks. The Annot editor reads the metadata back via
+ * {@link readEditablePngBytes} / {@link readEditableImage} and
+ * reconstructs an editable document.
+ *
+ * The returned bytes are still a valid PNG — image viewers that don't
+ * know about the custom chunks display the rasterised pixels verbatim.
+ */
+export function createEditablePngBytes(opts: CreateEditablePngBytesOptions): Uint8Array {
+  const xmpXml = buildXmp(opts.annotationsSvg, opts.width, opts.height, opts.tags);
+  const xmpBytes = new TextEncoder().encode(xmpXml);
+  const originalBytes =
+    typeof opts.originalImage === "string"
+      ? dataUrlToUint8Array(opts.originalImage)
+      : opts.originalImage;
+  return writePngWithMetadata(opts.renderedPng, xmpBytes, originalBytes);
+}
+
+/** Parsed XMP metadata extracted from a re-editable image. */
+export interface AnnotMetadata {
+  /** Original un-annotated capture re-emitted as a `data:` URL. Empty
+   *  string when no original was embedded. MIME is inferred from the
+   *  embedded bytes' magic header (PNG vs JPEG). */
+  originalImageDataUrl: string;
+  /** Annotations-only SVG fragment recovered from the XMP. */
+  annotationsSvg: string;
+  /** Image width in pixels. */
+  width: number;
+  /** Image height in pixels. */
+  height: number;
+  /** Opaque kv tags. Empty object when the XMP carried no `<annot:tags>`
+   *  element or the embedded JSON was malformed. */
+  tags: Record<string, string>;
+}
+
+/**
+ * Read XMP metadata from a re-editable PNG.
+ *
+ * Returns `null` when the bytes aren't a PNG, when the PNG carries no
+ * Annot iTXt chunk, or when the XMP is missing the required
+ * `<annot:annotations>` field. For format-agnostic reading (PNG OR
+ * JPEG), use {@link readEditableImage}.
+ */
+export function readEditablePngBytes(data: Uint8Array): AnnotMetadata | null {
+  if (!isPng(data)) return null;
+  return readPngMetadata(data);
+}
+
+/**
+ * Read XMP metadata from a re-editable image — PNG or JPEG. Returns
+ * `null` for any other format, for files without the Annot custom
+ * metadata, and for files whose XMP is missing the required
+ * `<annot:annotations>` field.
+ */
+export function readEditableImage(data: Uint8Array): AnnotMetadata | null {
+  if (isJpeg(data)) return readJpegMetadata(data);
+  if (isPng(data)) return readPngMetadata(data);
+  return null;
+}
+
+function isJpeg(data: Uint8Array): boolean {
+  return data[0] === 0xff && data[1] === 0xd8;
+}
+
+function isPng(data: Uint8Array): boolean {
+  return data[0] === 0x89 && data[1] === 0x50 && data[2] === 0x4e && data[3] === 0x47;
+}
+
+function readJpegMetadata(data: Uint8Array): AnnotMetadata | null {
+  const xmpStr = readJpegXmp(data);
+  const originalBytes = readJpegOriginal(data);
+  if (!xmpStr) return null;
+  return parseXmpToMetadata(xmpStr, originalBytes);
+}
+
+function readPngMetadata(data: Uint8Array): AnnotMetadata | null {
+  const xmpStr = readPngXmp(data);
+  const originalBytes = readPngOriginal(data);
+  if (!xmpStr) return null;
+  return parseXmpToMetadata(xmpStr, originalBytes);
+}
+
+function parseXmpToMetadata(xmp: string, originalBytes: Uint8Array | null): AnnotMetadata | null {
+  const svg = extractTag(xmp, "annotations");
+  if (!svg) return null;
+  const annotationsSvg = svg.replace(/^<!\[CDATA\[/, "").replace(/\]\]>$/, "");
+  const width = Number.parseInt(extractTag(xmp, "width") || "0", 10);
+  const height = Number.parseInt(extractTag(xmp, "height") || "0", 10);
+
+  let originalImageDataUrl = "";
+  if (originalBytes && originalBytes.length > 0) {
+    // Detect MIME from magic bytes
+    const mime =
+      originalBytes[0] === 0x89 && originalBytes[1] === 0x50 ? "image/png" : "image/jpeg";
+    const b64 = uint8ArrayToBase64(originalBytes);
+    originalImageDataUrl = `data:${mime};base64,${b64}`;
+  }
+
+  let tags: Record<string, string> = {};
+  const tagsStr = extractTag(xmp, "tags");
+  if (tagsStr) {
+    try {
+      tags = JSON.parse(tagsStr);
+    } catch {
+      /* invalid JSON, ignore */
+    }
+  }
+
+  return { originalImageDataUrl, annotationsSvg, width, height, tags };
+}
+
+function extractTag(xml: string, tag: string): string | null {
+  const open = `<${XMP_NS}:${tag}>`;
+  const close = `</${XMP_NS}:${tag}>`;
+  const start = xml.indexOf(open);
+  if (start < 0) return null;
+  const end = xml.indexOf(close, start);
+  if (end < 0) return null;
+  return xml.substring(start + open.length, end);
+}
+
+function readJpegXmp(data: Uint8Array): string | null {
+  let pos = 2;
+  while (pos + 4 <= data.length) {
+    if (data[pos] !== 0xff) break;
+    const marker = data[pos + 1];
+    if (marker === 0xd9 || marker === 0xda) break;
+    const segLen = readU16be(data, pos + 2);
+    const segEnd = pos + 2 + segLen;
+    if (segEnd > data.length) break;
+
+    if (marker === 0xe1 && startsWith(data, pos + 4, XMP_APP1_PREFIX)) {
+      const xmpStart = pos + 4 + XMP_APP1_PREFIX.length;
+      return new TextDecoder().decode(data.slice(xmpStart, segEnd));
+    }
+    pos = segEnd;
+  }
+  return null;
+}
+
+function readJpegOriginal(data: Uint8Array): Uint8Array | null {
+  const prefixLen = ANNOT_APP2_PREFIX.length;
+  const chunks: { seq: number; data: Uint8Array }[] = [];
+
+  let pos = 2;
+  while (pos + 4 <= data.length) {
+    if (data[pos] !== 0xff) break;
+    const marker = data[pos + 1];
+    if (marker === 0xd9 || marker === 0xda) break;
+    const segLen = readU16be(data, pos + 2);
+    const segEnd = pos + 2 + segLen;
+    if (segEnd > data.length) break;
+
+    if (marker === 0xe2 && startsWith(data, pos + 4, ANNOT_APP2_PREFIX)) {
+      const headerEnd = pos + 4 + prefixLen;
+      if (headerEnd + 4 <= segEnd) {
+        const seq = readU16be(data, headerEnd);
+        const chunkData = data.slice(headerEnd + 4, segEnd);
+        chunks.push({ seq, data: chunkData });
+      }
+    }
+    pos = segEnd;
+  }
+
+  if (chunks.length === 0) return null;
+  chunks.sort((a, b) => a.seq - b.seq);
+  return concat(...chunks.map((c) => c.data));
+}
+
+function readPngXmp(data: Uint8Array): string | null {
+  let pos = 8;
+  while (pos + 12 <= data.length) {
+    const chunkLen = readU32be(data, pos);
+    // Loop guard `pos + 12 <= data.length` means `pos + 4..7` are
+    // always in bounds for the 4-byte chunk-type read.
+    const chunkType = String.fromCharCode(
+      data[pos + 4]!,
+      data[pos + 5]!,
+      data[pos + 6]!,
+      data[pos + 7]!,
+    );
+    const chunkDataStart = pos + 8;
+    const chunkEnd = chunkDataStart + chunkLen + 4;
+    if (chunkEnd > data.length) break;
+
+    if (chunkType === "iTXt" && startsWith(data, chunkDataStart, PNG_XMP_KEYWORD)) {
+      const afterKw = chunkDataStart + PNG_XMP_KEYWORD.length;
+      // Skip 4 null bytes (null, compression flag, method, lang separator, translated kw separator)
+      let nulls = 0;
+      let xmpStart = afterKw;
+      for (let i = afterKw; i < chunkDataStart + chunkLen; i++) {
+        if (data[i] === 0) nulls++;
+        if (nulls >= 4) {
+          xmpStart = i + 1;
+          break;
+        }
+      }
+      return new TextDecoder().decode(data.slice(xmpStart, chunkDataStart + chunkLen));
+    }
+    pos = chunkEnd;
+  }
+  return null;
+}
+
+function readPngOriginal(data: Uint8Array): Uint8Array | null {
+  let pos = 8;
+  while (pos + 12 <= data.length) {
+    const chunkLen = readU32be(data, pos);
+    // Same bounds-guard pattern as `readPngXmp` above.
+    const chunkType = String.fromCharCode(
+      data[pos + 4]!,
+      data[pos + 5]!,
+      data[pos + 6]!,
+      data[pos + 7]!,
+    );
+    const chunkDataStart = pos + 8;
+    const chunkEnd = chunkDataStart + chunkLen + 4;
+    if (chunkEnd > data.length) break;
+
+    if (chunkType === "svGo") {
+      return data.slice(chunkDataStart, chunkDataStart + chunkLen);
+    }
+    pos = chunkEnd;
+  }
+  return null;
+}
+
+function uint8ArrayToBase64(data: Uint8Array): string {
+  // Use chunked btoa to avoid call stack size exceeded for large arrays.
+  // btoa is available in Node 16+ and all browsers.
+  const CHUNK = 0x8000;
+  let result = "";
+  for (let i = 0; i < data.length; i += CHUNK) {
+    const slice = data.subarray(i, Math.min(i + CHUNK, data.length));
+    result += String.fromCharCode.apply(null, slice as unknown as number[]);
+  }
+  return btoa(result);
+}
