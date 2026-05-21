@@ -1,7 +1,7 @@
 # `astro-docs-site` example
 
 Phase 2 PR 4 dogfood for
-[`docs/plans/living-product-docs.md`](../../docs/plans/living-product-docs.md).
+[`docs/plans/_done/living-product-docs.md`](../../docs/plans/_done/living-product-docs.md).
 A minimal Astro site demonstrating
 `@ingcreators/annot-product-docs-astro` end-to-end against one
 sample screen.
@@ -33,11 +33,11 @@ npm run dev
 
 The example depends on `@ingcreators/annot-product-docs` +
 `@ingcreators/annot-product-docs-astro` at `^0.1.0`. Both
-packages are currently `private: true` in the workspace
-([living-product-docs.md](../../docs/plans/living-product-docs.md)
-Phase 7 publishes them).
+packages were published 2026-05-21 (Phase 7 of
+[`_done/living-product-docs.md`](../../docs/plans/_done/living-product-docs.md));
+`npm install` resolves them from the registry directly.
 
-Until then, run via workspace linking:
+Workspace-link alternative for local hacking on the deps:
 
 ```sh
 # from repo root

@@ -1,13 +1,21 @@
 # Living product docs — Playwright + Astro + annot
 
-> **Status:** Draft — strategic plan establishing `annot` as a
->   "living product docs platform" with two verticals (global
->   operation manuals + Japanese 画面設計書). Phase 0 PoC is in
->   progress: Stage 1 (`annot_aria_snapshot` MCP tool) landed in
->   [#869](https://github.com/ingcreators/annot/pull/869); Stages 2–6
->   ready to start. Phase 1+ gated on PoC findings and a
->   positioning update in
->   [`PRODUCT_DIRECTION.md`](../../PRODUCT_DIRECTION.md).
+> **Status:** Done — Phases 0 + 1-5 + 7 landed 2026-05-21
+>   across PRs [#869](https://github.com/ingcreators/annot/pull/869)
+>   + [#875](https://github.com/ingcreators/annot/pull/875)
+>   + [#876](https://github.com/ingcreators/annot/pull/876)–[#900](https://github.com/ingcreators/annot/pull/900).
+>   Three packages published on npm 2026-05-21:
+>   `@ingcreators/annot-product-docs@0.1.0`,
+>   `@ingcreators/annot-product-docs-astro@0.1.0`,
+>   `@ingcreators/annot-product-docs-xlsx@0.1.0`. Three new
+>   docs-flow tools added to `@ingcreators/annot-mcp@0.2.0`:
+>   `annot_draft_screen_spec`, `annot_propose_drift_fixes`,
+>   `annot_translate_screen_spec`. Phase 6 (Annot Cloud Web
+>   editor) lives in the private `annot-cloud` repo per
+>   [`oss-cloud-split.md`](./oss-cloud-split.md) and is out of
+>   scope for this plan. Open Question #1 (VitePress → Astro
+>   migration of `packages/docs-site`) is tracked in
+>   [`annot-work-astro-unification.md`](./annot-work-astro-unification.md).
 > **Compatibility:** Additive across the existing OSS surface. New
 >   packages (`@ingcreators/annot-product-docs`,
 >   `@ingcreators/annot-product-docs-astro`,

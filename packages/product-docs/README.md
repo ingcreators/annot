@@ -8,7 +8,7 @@ always-fresh user manuals + Japanese 画面設計書, with drift
 between MDX and live UI caught as a CI lint step.
 
 Phase 1 of
-[`docs/plans/living-product-docs.md`](https://github.com/ingcreators/annot/blob/main/docs/plans/living-product-docs.md).
+[`docs/plans/_done/living-product-docs.md`](https://github.com/ingcreators/annot/blob/main/docs/plans/_done/living-product-docs.md).
 
 ## Install
 
