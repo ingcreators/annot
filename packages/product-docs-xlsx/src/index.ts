@@ -25,6 +25,9 @@ export type {
 } from "./extract.js";
 export { extractFromParsed, extractMdxFile } from "./extract.js";
 
+export type { NamedRangeWriteInput } from "./named-range.js";
+export { applyNamedRanges } from "./named-range.js";
+
 export type { SubstituteOptions } from "./placeholder.js";
 export {
   applyPlaceholders,
