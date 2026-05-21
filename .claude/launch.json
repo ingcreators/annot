@@ -18,6 +18,12 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "@ingcreators/annot-extension", "exec", "vite", "--port", "5173", "--strictPort"],
       "port": 5173
+    },
+    {
+      "name": "annot-docs-site-astro",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@ingcreators/annot-docs-site-astro", "exec", "astro", "dev", "--port", "4321", "--host", "127.0.0.1"],
+      "port": 4321
     }
   ]
 }

@@ -1,0 +1,31 @@
+{
+  "name": "@ingcreators/annot-docs-site-astro",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Astro Starlight documentation site for annot.work/docs — parallel build during the VitePress → Astro migration (`docs/plans/annot-work-astro-unification.md`). Cuts over to the production /docs/* route in Phase 6; renamed to `docs-site` in Phase 7.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ingcreators/annot.git",
+    "directory": "packages/docs-site-astro"
+  },
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "typecheck": "astro check",
+    "cf:deploy": "wrangler deploy",
+    "astro": "astro"
+  },
+  "dependencies": {
+    "@astrojs/sitemap": "^3.7.2",
+    "@astrojs/starlight": "^0.39.2",
+    "astro": "^6.1.10",
+    "sharp": "^0.34.5"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.4",
+    "typescript": "catalog:",
+    "wrangler": "^4.45.0"
+  }
+}

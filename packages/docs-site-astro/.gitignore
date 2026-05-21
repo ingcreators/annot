@@ -1,0 +1,14 @@
+# Astro build artefacts
+dist/
+.astro/
+
+# Node
+node_modules/
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# Wrangler
+.wrangler/
