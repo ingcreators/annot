@@ -163,6 +163,39 @@ describe("main: sync / lint require --url", () => {
   });
 });
 
+describe("main: lint --json output shape", () => {
+  it("emits empty JSON object when no annot MDXs", async () => {
+    const cwd = await makeTempDir();
+    const stdout: string[] = [];
+    const exit = await main(
+      ["node", "annot-docs", "lint", "--url", "http://localhost:1234", "--json"],
+      {
+        cwd,
+        stdout: (l) => stdout.push(l),
+        stderr: () => {},
+      },
+    );
+    expect(exit).toBe(0);
+    const out = JSON.parse(stdout[0]!);
+    expect(out).toEqual({ findings: [], summary: { errors: 0, warnings: 0, infos: 0 } });
+  });
+});
+
+describe("main: lint --ci flag affects exit code", () => {
+  it("with no findings + --ci still exits 0", async () => {
+    const cwd = await makeTempDir();
+    const exit = await main(
+      ["node", "annot-docs", "lint", "--url", "http://localhost:1234", "--ci"],
+      {
+        cwd,
+        stdout: () => {},
+        stderr: () => {},
+      },
+    );
+    expect(exit).toBe(0);
+  });
+});
+
 describe("main: sync / lint with no annot MDXs", () => {
   it("sync exits 0 with a friendly message when no annot MDX exists", async () => {
     const cwd = await makeTempDir();

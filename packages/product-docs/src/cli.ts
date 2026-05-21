@@ -263,14 +263,25 @@ async function runLint(args: string[], deps: RunDeps): Promise<number> {
   const mdxFiles = await walkMdx(resolve(cwd, flags.root ?? "docs"));
   const annotMdxs = await filterAnnotMdxFiles(mdxFiles);
   if (annotMdxs.length === 0) {
-    stdout(
-      `annot docs lint: no MDX files with \`annot:\` frontmatter under ${flags.root ?? "docs"}.`,
-    );
+    if (!flags.json) {
+      stdout(
+        `annot docs lint: no MDX files with \`annot:\` frontmatter under ${flags.root ?? "docs"}.`,
+      );
+    } else {
+      stdout(JSON.stringify({ findings: [], summary: { errors: 0, warnings: 0, infos: 0 } }));
+    }
     return 0;
   }
-  stdout(`annot docs lint: ${annotMdxs.length} MDX file(s) → ${flags.url}`);
+  if (!flags.json) {
+    stdout(`annot docs lint: ${annotMdxs.length} MDX file(s) → ${flags.url}`);
+  }
 
-  const allFindings: Array<{ file: string; finding: DriftFinding }> = [];
+  interface FileFinding {
+    file: string;
+    finding: DriftFinding;
+  }
+  const allFindings: FileFinding[] = [];
+  const filesWithDrift = new Set<string>();
 
   const { newPage, close } = await openBrowser(flags.url, deps);
   try {
@@ -285,6 +296,7 @@ async function runLint(args: string[], deps: RunDeps): Promise<number> {
           const findings = detectDrift({ screen, liveSnapshot });
           for (const f of findings) {
             allFindings.push({ file: relative(cwd, mdx), finding: f });
+            filesWithDrift.add(mdx);
           }
         } finally {
           await dispose();
@@ -295,15 +307,72 @@ async function runLint(args: string[], deps: RunDeps): Promise<number> {
     await close();
   }
 
-  for (const { file, finding } of allFindings) {
+  if (flags.json) {
+    const summary = summariseDrift(allFindings.map((f) => f.finding));
     stdout(
-      `${formatSeverity(finding.severity)} ${file} [${finding.screenId}] ${finding.kind}: ${finding.message}`,
+      JSON.stringify({
+        findings: allFindings.map(({ file, finding }) => ({
+          file,
+          severity: finding.severity,
+          kind: finding.kind,
+          screenId: finding.screenId,
+          message: finding.message,
+          match: finding.match,
+          suggestion: finding.suggestion,
+        })),
+        summary,
+      }),
+    );
+  } else {
+    for (const { file, finding } of allFindings) {
+      stdout(
+        `${formatSeverity(finding.severity)} ${file} [${finding.screenId}] ${finding.kind}: ${finding.message}`,
+      );
+    }
+    const summary = summariseDrift(allFindings.map((f) => f.finding));
+    stdout(
+      `annot docs lint: ${summary.errors} error(s), ${summary.warnings} warning(s), ${summary.infos} info(s).`,
     );
   }
+
+  // `--fix` re-runs captureScreen for every file that produced
+  // any drift finding. That refreshes the stored snapshot +
+  // attributes blocks so the next `lint` is clean. It does NOT
+  // rewrite `<Overlay match>` keys — renames are author
+  // decisions, not pipeline fixes.
+  let fixedCount = 0;
+  if (flags.fix && filesWithDrift.size > 0) {
+    const { newPage: newPageFix, close: closeFix } = await openBrowser(flags.url, deps);
+    try {
+      for (const mdx of filesWithDrift) {
+        const parsed = await parseMdxFile(mdx);
+        if (!parsed) continue;
+        for (const screen of lintableScreens(parsed.screens)) {
+          const { page, dispose } = await newPageFix(screen.src ?? "/");
+          try {
+            await captureScreen(page, { id: screen.id, mdxPath: mdx });
+            fixedCount++;
+          } finally {
+            await dispose();
+          }
+        }
+      }
+    } finally {
+      await closeFix();
+    }
+    if (!flags.json) {
+      stdout(`annot docs lint --fix: refreshed snapshot/attributes for ${fixedCount} screen(s).`);
+    }
+  }
+
   const summary = summariseDrift(allFindings.map((f) => f.finding));
-  stdout(
-    `annot docs lint: ${summary.errors} error(s), ${summary.warnings} warning(s), ${summary.infos} info(s).`,
-  );
+  // --ci treats warnings as failures too. --fix excuses errors
+  // it actually fixed (attribute-drift); for non-trivial drifts
+  // (removed / duplicated) we still want a non-zero exit so the
+  // CI run flags the docs as out-of-sync.
+  if (flags.ci) {
+    return summary.errors + summary.warnings > 0 ? 1 : 0;
+  }
   return summary.errors > 0 ? 1 : 0;
 }
 
@@ -361,6 +430,16 @@ function joinUrl(base: string, path: string): string {
 interface ParsedFlags {
   url?: string;
   root?: string;
+  /** Phase 4: emit machine-readable JSON to stdout instead of
+   *  human-readable lines. Useful for editor / CI integrations. */
+  json?: boolean;
+  /** Phase 4: also fail on warnings (used by `--ci`). */
+  ci?: boolean;
+  /** Phase 4: auto-fix safe drift kinds (attribute-drift,
+   *  refresh stored snapshot). Equivalent to running
+   *  `annot docs sync` against the same URL, but scoped to the
+   *  files where lint found drift. */
+  fix?: boolean;
 }
 
 function parseFlags(args: string[]): ParsedFlags {
@@ -371,6 +450,12 @@ function parseFlags(args: string[]): ParsedFlags {
       out.url = args[++i];
     } else if (arg === "--root" || arg === "-r") {
       out.root = args[++i];
+    } else if (arg === "--json") {
+      out.json = true;
+    } else if (arg === "--ci") {
+      out.ci = true;
+    } else if (arg === "--fix") {
+      out.fix = true;
     }
   }
   return out;
