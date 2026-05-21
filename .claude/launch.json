@@ -20,9 +20,9 @@
       "port": 5173
     },
     {
-      "name": "annot-docs-site-astro",
+      "name": "annot-docs-site",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "@ingcreators/annot-docs-site-astro", "exec", "astro", "dev", "--port", "4321", "--host", "127.0.0.1"],
+      "runtimeArgs": ["--filter", "@ingcreators/annot-docs-site", "exec", "astro", "dev", "--port", "4321", "--host", "127.0.0.1"],
       "port": 4321
     },
     {

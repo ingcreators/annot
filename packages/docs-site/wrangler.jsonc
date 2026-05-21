@@ -1,68 +1,52 @@
 /**
- * Cloudflare Workers Static Assets config for the annot.work/docs
- * VitePress documentation site.
+ * Cloudflare Workers Static Assets config for the Astro Starlight
+ * documentation site at packages/docs-site-astro/.
  *
- * No Worker script — just the VitePress static build from
- * `.vitepress/dist/docs/` behind Cloudflare's asset server.
+ * **Phase 6 status: deployed, accessed via service binding from
+ * the legacy `annot-docs-site` worker.** Production
+ * `annot.work/docs/*` still belongs to the legacy worker's
+ * picker, but that picker forwards requests over to this
+ * worker via a Cloudflare service binding when the
+ * `annot-docs-stack=astro` cookie or `?docs-stack=astro`
+ * query param opts in. After the 7-day observation window
+ * (Phase 6.5 TODO in `docs/plans/annot-work-astro-unification.md`),
+ * the picker is retired and this worker claims the route
+ * directly; the VitePress sibling is then archived in Phase 7.
  *
- * VitePress is configured to write to `.vitepress/dist/docs/`
- * (not the default `dist/`) so the on-disk layout mirrors the
- * public URL space — Cloudflare's static-asset binding includes
- * the route prefix when mapping URL → file, so a request to
- * `annot.work/docs/getting-started/` lands on
- * `<assets.directory>/docs/getting-started/index.html`.
+ * URL layout after Phase 6:
  *
- * URL layout (Phase 8d of docs/plans/launch-prep.md):
- *
- *   annot.work/      → annot-marketing (landing site)
- *   annot.work/app/* → annot (PWA)
- *   annot.work/docs/*→ THIS worker (VitePress docs)
+ *   annot.work/      → annot-marketing (landing)
+ *   annot.work/app/* → annot (PWA at /app/)
+ *   annot.work/docs/*→ annot-docs-site (legacy worker as picker)
+ *                       ├─ default → its own VitePress assets
+ *                       └─ opt-in  → THIS worker via service
+ *                                    binding `ASTRO`
  *   annot.work/api/* → annot-api
  *
- * Cloudflare resolves overlapping routes by longest-prefix match
- * — `annot.work/docs/*` is more specific than the marketing
- * worker's `annot.work/*`, so it wins.
+ * URL layout after Phase 6.5 (no more picker):
  *
- * VitePress is configured with `base: "/docs/"` so every
- * internal link in the built HTML already includes that prefix.
- * `not_found_handling: "404-page"` because VitePress emits a
+ *   annot.work/docs/*→ THIS worker (Astro Starlight)
+ *
+ * Astro is configured with `base: "/docs/"` so every internal
+ * link in the built HTML already includes that prefix.
+ * `not_found_handling: "404-page"` because Astro emits a
  * per-route static file — falling through to an index page
  * would be wrong.
  */
 {
-  "name": "annot-docs-site",
+  "name": "annot-docs-site-astro",
   "compatibility_date": "2026-04-23",
   "main": "./worker.js",
-  "workers_dev": false,
-  "preview_urls": false,
-  "routes": [
-    {
-      "pattern": "annot.work/docs",
-      "zone_name": "annot.work"
-    },
-    {
-      "pattern": "annot.work/docs/*",
-      "zone_name": "annot.work"
-    }
-  ],
+  // `workers_dev: true` keeps the
+  // `<worker>.<account>.workers.dev` subdomain alive so the
+  // operator can hit this worker directly during smoke tests
+  // before the picker opts users in. The picker reaches this
+  // worker via service binding regardless of `workers_dev`.
+  "workers_dev": true,
+  "preview_urls": true,
   "assets": {
-    "directory": "./.vitepress/dist",
+    "directory": "./dist",
     "binding": "ASSETS",
     "not_found_handling": "404-page"
-  },
-  // Phase 6 of `docs/plans/annot-work-astro-unification.md` —
-  // feature-flag cutover. The new Astro Starlight worker
-  // (`annot-docs-site-astro`) runs in parallel; this binding
-  // lets the per-request stack picker in `worker.js` proxy
-  // requests over when the cookie / query param opts in.
-  // The binding is removed in Phase 6.5 (the 7-day-observation
-  // TODO in the plan), at which point the Astro worker claims
-  // the `annot.work/docs/*` route directly and this one is
-  // retired alongside the VitePress source.
-  "services": [
-    {
-      "binding": "ASTRO",
-      "service": "annot-docs-site-astro"
-    }
-  ]
+  }
 }

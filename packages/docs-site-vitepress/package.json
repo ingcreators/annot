@@ -1,0 +1,24 @@
+{
+  "name": "@ingcreators/annot-docs-site-vitepress",
+  "version": "0.0.0",
+  "private": true,
+  "description": "RETIRED: VitePress documentation site for annot.work/docs. Phase 7 of `docs/plans/_done/annot-work-astro-unification.md` archived this package; the conventional `@ingcreators/annot-docs-site` name was reclaimed by the Astro Starlight rewrite. Kept in the tree for one release cycle as a fallback during the Phase 6 cookie-opt-in observation window, then deleted in a follow-up PR.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ingcreators/annot.git",
+    "directory": "packages/docs-site-vitepress"
+  },
+  "type": "module",
+  "scripts": {
+    "dev": "vitepress dev",
+    "build": "vitepress build",
+    "preview": "vitepress preview",
+    "typecheck": "tsc --noEmit",
+    "cf:deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "typescript": "catalog:",
+    "vitepress": "^1.6.4",
+    "wrangler": "^4.45.0"
+  }
+}

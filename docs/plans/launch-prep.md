@@ -127,7 +127,20 @@ its own root-relative `wrangler.jsonc` (alongside the existing
 PWA root config, until the existing one is repurposed for the
 new worker).
 
-### Phase 8d — VitePress docs site
+### Phase 8d — Docs site
+
+**Updated 2026-05-21**: superseded by
+[`_done/annot-work-astro-unification.md`](./_done/annot-work-astro-unification.md).
+The docs site was migrated from VitePress to Astro Starlight on
+the same day; the legacy `packages/docs-site/` (VitePress)
+moved to `packages/docs-site-vitepress/` (dormant; deleted in a
+follow-up PR after one release cycle), and the new Astro
+Starlight build now lives at `packages/docs-site/`. URLs are
+preserved with one rename: the `/docs/pwa/*` section moved to
+`/docs/app/*` (with 301 redirects) because the web app no
+longer ships a service worker or `manifest.json`. The
+description below is preserved for historical reference;
+current docs-site architecture lives in the unification plan.
 
 `packages/docs-site/` — VitePress project deploying to
 `annot.work/docs/*` via Cloudflare Workers static assets. Initial

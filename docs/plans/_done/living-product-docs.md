@@ -13,9 +13,10 @@
 >   `annot_translate_screen_spec`. Phase 6 (Annot Cloud Web
 >   editor) lives in the private `annot-cloud` repo per
 >   [`oss-cloud-split.md`](./oss-cloud-split.md) and is out of
->   scope for this plan. Open Question #1 (VitePress → Astro
->   migration of `packages/docs-site`) is tracked in
->   [`annot-work-astro-unification.md`](./annot-work-astro-unification.md).
+>   scope for this plan. **Open Question #1 (VitePress → Astro
+>   migration of `packages/docs-site`) is RESOLVED**: landed
+>   2026-05-21 across PRs [#904](https://github.com/ingcreators/annot/pull/904)–#910 + the Phase 7 retirement PR
+>   per [`annot-work-astro-unification.md`](./annot-work-astro-unification.md).
 > **Compatibility:** Additive across the existing OSS surface. New
 >   packages (`@ingcreators/annot-product-docs`,
 >   `@ingcreators/annot-product-docs-astro`,
