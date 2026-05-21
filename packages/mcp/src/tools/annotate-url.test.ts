@@ -81,7 +81,8 @@ function stubAnnotator(): {
     width: 0,
     height: 0,
   }));
-  return { annotator: { toPng, toSvg, toEncoded }, toPng };
+  const toEditablePng = vi.fn(() => stubPng);
+  return { annotator: { toPng, toSvg, toEncoded, toEditablePng }, toPng };
 }
 
 describe("handleAnnotateUrl", () => {

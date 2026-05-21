@@ -21,6 +21,7 @@ export {
   type AnnotatorInput,
   type AnnotatorOptions,
   createAnnotator,
+  type EditableInput,
 } from "./annotator.js";
 
 // ─── Encode pipeline (since 0.3.0) ─────────────────────────────

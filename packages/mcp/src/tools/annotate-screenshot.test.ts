@@ -39,7 +39,8 @@ function stubAnnotator(): { annotator: Annotator; toPng: ReturnType<typeof vi.fn
     width: 0,
     height: 0,
   }));
-  const annotator: Annotator = { toPng, toSvg, toEncoded };
+  const toEditablePng = vi.fn(() => stubPng);
+  const annotator: Annotator = { toPng, toSvg, toEncoded, toEditablePng };
   return { annotator, toPng };
 }
 

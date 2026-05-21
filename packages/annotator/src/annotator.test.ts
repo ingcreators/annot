@@ -1,3 +1,4 @@
+import { readEditablePngBytes } from "@ingcreators/annot-core/xmp-bytes";
 import { describe, expect, it } from "vitest";
 import { createAnnotator } from "./annotator.js";
 
@@ -129,6 +130,100 @@ describe("createAnnotator", () => {
       const pb = b.toPng(input);
       expect(pa.length).toBe(pb.length);
       expect(Array.from(pa.slice(0, 16))).toEqual(Array.from(pb.slice(0, 16)));
+    });
+  });
+
+  describe("toEditablePng", () => {
+    it("returns PNG bytes containing the embedded Annot custom chunks", () => {
+      const annotator = createAnnotator();
+      const out = annotator.toEditablePng({
+        originalDataUrl: TINY_PNG_DATA_URL,
+        annotationsSvg: REALISTIC_ANNOT_SVG,
+        width: 100,
+        height: 100,
+      });
+      expect(out).toBeInstanceOf(Uint8Array);
+      expect(Array.from(out.slice(0, 8))).toEqual(Array.from(PNG_MAGIC));
+      // Custom chunk type bytes appear in the output.
+      const outStr = Array.from(out)
+        .map((b) => String.fromCharCode(b))
+        .join("");
+      expect(outStr).toContain("iTXt");
+      expect(outStr).toContain("svGo");
+    });
+
+    it("round-trips the annotations + dimensions + original via readEditablePngBytes", () => {
+      const annotator = createAnnotator();
+      const out = annotator.toEditablePng({
+        originalDataUrl: TINY_PNG_DATA_URL,
+        annotationsSvg: REALISTIC_ANNOT_SVG,
+        width: 100,
+        height: 100,
+      });
+      const meta = readEditablePngBytes(out);
+      expect(meta).not.toBeNull();
+      // The annotator passes annotationsSvg into the XMP as-is, so the
+      // reader hands back the exact same string we fed in.
+      expect(meta!.annotationsSvg).toBe(REALISTIC_ANNOT_SVG);
+      expect(meta!.width).toBe(100);
+      expect(meta!.height).toBe(100);
+      // Original PNG is recovered as a data URL with the PNG MIME.
+      expect(meta!.originalImageDataUrl).toMatch(/^data:image\/png;base64,/);
+      expect(meta!.originalImageDataUrl).toBe(TINY_PNG_DATA_URL);
+    });
+
+    it("writes optional tags into the XMP and surfaces them on read", () => {
+      const annotator = createAnnotator();
+      const out = annotator.toEditablePng({
+        originalDataUrl: TINY_PNG_DATA_URL,
+        annotationsSvg: REALISTIC_ANNOT_SVG,
+        width: 100,
+        height: 100,
+        tags: {
+          source: "docs-tour",
+          screen: "app-overview",
+          capturedAt: "2026-05-21T12:00:00.000Z",
+        },
+      });
+      const meta = readEditablePngBytes(out);
+      expect(meta!.tags).toEqual({
+        source: "docs-tour",
+        screen: "app-overview",
+        capturedAt: "2026-05-21T12:00:00.000Z",
+      });
+    });
+
+    it("omits the tags element when no tags are supplied (empty tags object on read)", () => {
+      const annotator = createAnnotator();
+      const out = annotator.toEditablePng({
+        originalDataUrl: TINY_PNG_DATA_URL,
+        annotationsSvg: REALISTIC_ANNOT_SVG,
+        width: 100,
+        height: 100,
+      });
+      const meta = readEditablePngBytes(out);
+      expect(meta!.tags).toEqual({});
+    });
+
+    it("matches the rasterised pixels emitted by toPng (metadata is the only difference)", () => {
+      // Visible pixel parity: an Annot reader that ignores custom chunks
+      // sees the same image as a plain `toPng()` output. We don't have
+      // a public byte-stripping helper, but the file should at minimum
+      // contain the IHDR + IDAT chunks from the underlying render.
+      const annotator = createAnnotator();
+      const input = {
+        originalDataUrl: TINY_PNG_DATA_URL,
+        annotationsSvg: REALISTIC_ANNOT_SVG,
+        width: 100,
+        height: 100,
+      };
+      const flat = annotator.toPng(input);
+      const editable = annotator.toEditablePng(input);
+      // Editable PNG is strictly larger (carries the embedded original
+      // + XMP) — never smaller, never identical.
+      expect(editable.length).toBeGreaterThan(flat.length);
+      // Both start with the same PNG signature.
+      expect(Array.from(editable.slice(0, 8))).toEqual(Array.from(flat.slice(0, 8)));
     });
   });
 

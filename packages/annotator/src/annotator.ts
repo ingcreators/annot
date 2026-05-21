@@ -13,6 +13,7 @@ import {
   ANNOT_SVG_VERSION_ATTR,
 } from "@ingcreators/annot-core/editor/svg-format";
 import type { EncodeOptions } from "@ingcreators/annot-core/encode/options";
+import { createEditablePngBytes } from "@ingcreators/annot-core/xmp-bytes";
 import { Resvg, type ResvgRenderOptions } from "@resvg/resvg-js";
 import { encodeRgba } from "./encode/encode.js";
 import type { EncodeResult } from "./encode/options.js";
@@ -37,6 +38,23 @@ export interface AnnotatorInput {
   width: number;
   /** Output PNG height in pixels — should match the source bitmap. */
   height: number;
+}
+
+/**
+ * Input for {@link Annotator.toEditablePng}. Same shape as
+ * {@link AnnotatorInput} plus optional opaque kv `tags` written into
+ * the embedded XMP for provenance / debugging.
+ *
+ * Soft-convention key names (not validated by the writer; documented
+ * in `@ingcreators/annot-core/xmp-bytes`'s `WELL_KNOWN_TAG_KEYS`):
+ * - `source` — what produced the PNG (`"docs-tour"`, `"playwright-fixture"`, `"annot-mcp"`).
+ * - `screen` — for living-product-docs, the `<Screen id>` value.
+ * - `capturedAt` — ISO timestamp.
+ * - `commit` — git SHA when applicable.
+ */
+export interface EditableInput extends AnnotatorInput {
+  /** Optional opaque kv tags. */
+  tags?: Record<string, string>;
 }
 
 /** Annotator construction options. All optional. */
@@ -98,6 +116,20 @@ export interface Annotator {
    * the caller can feed to any other SVG tool.
    */
   toSvg(input: AnnotatorInput): string;
+  /**
+   * Rasterise the input to a re-editable PNG. Same visible pixels as
+   * {@link toPng}, plus the original un-annotated capture + the
+   * annotations SVG are embedded in the PNG's XMP metadata + custom
+   * `svGo` chunk. Re-opening the resulting file in the Annot editor
+   * (or `annot.work/app/`) restores the annotations as selectable,
+   * movable, restylable objects rather than a flat bitmap.
+   *
+   * Image viewers that don't know about the custom chunks display the
+   * rasterised pixels verbatim — no compatibility loss vs `toPng`.
+   *
+   * Synchronous. Returns PNG bytes as a `Uint8Array`.
+   */
+  toEditablePng(input: EditableInput): Uint8Array;
   /**
    * Rasterise + encode in one step. Honours `saveSizePreset`
    * (max-width resize), `format` (`"smart"` / `"png"` /
@@ -165,6 +197,23 @@ export function createAnnotator(options: AnnotatorOptions = {}): Annotator {
         font: resvgFontOptions,
       });
       return resvg.render().asPng();
+    },
+    toEditablePng(input: EditableInput): Uint8Array {
+      const svgString = buildRasterReadySvg(input);
+      const resvg = new Resvg(svgString, {
+        fitTo: { mode: "width", value: input.width },
+        background: "rgba(0, 0, 0, 0)",
+        font: resvgFontOptions,
+      });
+      const renderedPng = resvg.render().asPng();
+      return createEditablePngBytes({
+        renderedPng,
+        originalImage: input.originalDataUrl,
+        annotationsSvg: input.annotationsSvg,
+        width: input.width,
+        height: input.height,
+        tags: input.tags,
+      });
     },
     async toEncoded(input: AnnotatorInput, encodeOptions?: EncodeOptions): Promise<EncodeResult> {
       const { pixels, width, height } = rasterise(input);
