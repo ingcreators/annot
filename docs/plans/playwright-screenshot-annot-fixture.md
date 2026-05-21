@@ -92,7 +92,7 @@ XMP record. The fixture composes whatever sources you supply:
 |---|---|---|
 | `mdx: { id, path }` | `annotationsSvg` (from `<Overlay>` JSX in the MDX, resolved against the current page's aria-snapshot) | MDX file's `annot:snapshot` + `annot:attributes` blocks are rewritten in-place |
 | `overlays` | `annotationsSvg` (from the inline `BboxAnnotation[]` — same DSL `@ingcreators/annot-annotator` accepts) | None |
-| `tags` | `tags` (merged on top of auto-filled defaults) | None |
+| `tags` | `tags` (written verbatim — no auto-fill, no validation) | None |
 | `editable` | switches output between "preserve annotations as SVG layer" (default `true`) vs "bake into visible pixels, flat PNG" (`false`) | n/a |
 
 Both source fields can be present at the same time — the resulting
@@ -104,19 +104,22 @@ a single `<svg>` root.
 | `annot` value | annotationsSvg | originalImage embedded | XMP tags | Visible pixels | Output file |
 |---|---|---|---|---|---|
 | absent / `true` / `{}` | — | — | — | raw screenshot | plain PNG (= vanilla Playwright) |
-| `{ tags }` only | — | — | ✓ (user + auto) | raw screenshot | plain PNG + iTXt sidecar |
-| `{ overlays }` | inline | ✓ | ✓ | screenshot + overlays | editable PNG |
-| `{ overlays, editable: false }` | — | — | ✓ | screenshot + **baked** overlays | flat PNG + iTXt sidecar |
-| `{ mdx }` | MDX | ✓ | ✓ | screenshot + overlays | editable PNG + MDX rewrite |
-| `{ mdx, editable: false }` | — | — | ✓ | screenshot + **baked** overlays | flat PNG + MDX rewrite |
-| `{ mdx, overlays }` | merged | ✓ | ✓ | screenshot + overlays (both sources) | editable PNG + MDX rewrite |
-| `{ mdx, overlays, editable: false }` | — | — | ✓ | screenshot + **baked** (both) | flat PNG + MDX rewrite |
-| `{ mdx, overlays, tags }` | merged | ✓ | ✓ (user merged) | screenshot + overlays | editable PNG + MDX rewrite |
+| `{ tags }` only | — | — | ✓ (verbatim) | raw screenshot | plain PNG + iTXt sidecar |
+| `{ overlays }` | inline | ✓ | — | screenshot + overlays | editable PNG |
+| `{ overlays, tags }` | inline | ✓ | ✓ (verbatim) | screenshot + overlays | editable PNG |
+| `{ overlays, editable: false }` | — | — | — | screenshot + **baked** overlays | flat PNG |
+| `{ mdx }` | MDX | ✓ | — | screenshot + overlays | editable PNG + MDX rewrite |
+| `{ mdx, tags }` | MDX | ✓ | ✓ (verbatim) | screenshot + overlays | editable PNG + MDX rewrite |
+| `{ mdx, editable: false }` | — | — | — | screenshot + **baked** overlays | flat PNG + MDX rewrite |
+| `{ mdx, overlays }` | merged | ✓ | — | screenshot + overlays (both sources) | editable PNG + MDX rewrite |
+| `{ mdx, overlays, editable: false }` | — | — | — | screenshot + **baked** (both) | flat PNG + MDX rewrite |
+| `{ mdx, overlays, tags }` | merged | ✓ | ✓ (verbatim) | screenshot + overlays | editable PNG + MDX rewrite |
 
 Notes:
 - `annot: true` / `{}` is a no-op — same byte output as omitting `annot` entirely. We accept it as a shorthand because TypeScript users may type `annot: {}` while exploring auto-complete.
 - "iTXt sidecar" = a plain iTXt PNG chunk carrying just the tags. The Annot editor treats files with no `<annot:annotations>` element as ordinary PNGs (opens as fresh canvas).
 - `editable: false` always strips the annotation SVG + embedded original from the XMP. Tags survive.
+- Tags are written **verbatim** — the fixture does not auto-fill any keys (no `capturedAt`, no `commit`, no `source`). The `WELL_KNOWN_TAG_KEYS` from `@ingcreators/annot-core/xmp-bytes` (`source` / `screen` / `capturedAt` / `commit`) are documented as a soft convention; callers who want them write them.
 
 ### Example usage
 
@@ -411,8 +414,8 @@ correct). `@playwright/test` goes to `peerDependencies`.
 - **`annot: { tags }`** — plain PNG bytes + iTXt sidecar (no annotations element, no embedded original).
 - **`annot: { ..., editable: false }`** — flat PNG (no annotations SVG, no embedded original) with overlays baked into visible pixels.
 - **`path` semantics** — bytes returned by the fixture round-trip via `readEditablePngBytes`; `path`-given output exists on disk.
-- **Auto-filled tags** — without user-supplied tags, the XMP carries `source`, `screen` (when mdx present), `capturedAt`, and (in CI) `commit`.
-- **User tags merged on top of auto-fill** — user's `tags.source` overrides the default `"playwright-fixture"`.
+- **Tags written verbatim, no auto-fill** — assert the XMP `<annot:tags>` element matches the user-supplied object exactly (no extra keys added by the fixture).
+- **No tags supplied → no `<annot:tags>` element** — assert the XMP contains no tags element when `annot.tags` is omitted.
 - **Multiple test invocations idempotent-patch** — the `Symbol.for` guard prevents double-wrapping when multiple workers / multiple fixture inits run in one process.
 
 The `Page` / `Locator` interception runs against a stub
@@ -436,7 +439,11 @@ test.describe("Annot web app dogfood tour", () => {
       path: "public/app/shots/app-overview.png",
       annot: {
         mdx: { id: "app-overview", path: "src/content/docs/app/index.mdx" },
-        tags: { source: "docs-tour" },
+        tags: {
+          source: "docs-tour",
+          capturedAt: new Date().toISOString(),
+          ...(process.env.GITHUB_SHA ? { commit: process.env.GITHUB_SHA } : {}),
+        },
       },
     });
   });
@@ -444,9 +451,11 @@ test.describe("Annot web app dogfood tour", () => {
 ```
 
 Down from 4 coordinated steps + a `Uint8Array` cast to one
-`page.screenshot()` call. `source: "docs-tour"` overrides the
-fixture's `"playwright-fixture"` default; `screen` / `capturedAt`
-/ `commit` are auto-filled (Open Question 2).
+`page.screenshot()` call. Tags are explicit — the fixture writes
+exactly what's in `annot.tags`. The `source` / `capturedAt` /
+`commit` lines mirror the convention from
+`@ingcreators/annot-core/xmp-bytes`'s `WELL_KNOWN_TAG_KEYS`, but
+they're the caller's responsibility (Open Question 2).
 
 ## Phase 2 — `locator.screenshot` interception + coord rebasing
 
@@ -535,36 +544,33 @@ Asking them to opt in twice is friction.
 
 ### 2. Auto-filled `tags`
 
-The docs-tour spec currently hand-builds:
-
-```ts
-tags: {
-  source: "docs-tour",
-  screen: SCREEN_ID,
-  capturedAt: new Date().toISOString(),
-  ...(process.env.GITHUB_SHA ? { commit: process.env.GITHUB_SHA } : {}),
-}
-```
+Should the fixture inject default tag values (e.g. `capturedAt`,
+`commit` from `$GITHUB_SHA`, `source: "playwright-fixture"`) when
+the caller's `annot.tags` is absent or partial?
 
 Options:
 
-- **(a) Fixture auto-fills `source: "playwright-fixture"` / `screen: <mdx.id>` (when mdx present) / `capturedAt: now` / `commit: $GITHUB_SHA`; user can override per call.**
-- **(b) Fixture writes nothing; user supplies all tags.**
+- **(a) Fixture writes nothing; caller supplies all tags verbatim.** Tags are written exactly as the caller specified. Empty `tags` → no `<annot:tags>` element in the XMP.
+- **(b) Fixture auto-fills `source: "playwright-fixture"` / `screen: <mdx.id>` (when mdx present) / `capturedAt: now` / `commit: $GITHUB_SHA`; user can override per call.**
 - **(c) Fixture writes ONLY `capturedAt` + `commit` (the obvious "free" metadata); user supplies the rest.**
 
-**Default: (a).** Annot is the producer; it should know to label
-itself. Matches the `WELL_KNOWN_TAG_KEYS` convention from
-`@ingcreators/annot-core/xmp-bytes`. User overrides any field
-just by setting it in `annot.tags`.
+**Default: (a).** Two reasons:
 
-`source` default is `"playwright-fixture"` rather than
-`"docs-tour"` — the fixture is a general tool, the docs-tour is
-one of its callers. The docs-tour spec can override `source` to
-`"docs-tour"` if it cares (as shown above).
+1. **Playwright philosophy alignment.** `page.screenshot()` does
+   not silently inject fields the caller didn't ask for. Auto-
+   filling would surprise readers — they'd see `<annot:tags>` in
+   the output and have to dig to find out where the values came
+   from.
+2. **Predictability and debugability.** What the caller writes is
+   what ends up in the XMP. No fixture-version-specific defaults
+   that change over time and shift downstream consumers' parsing.
 
-When `mdx` is absent (inline-overlays / tags-only mode), the
-`screen` auto-fill is skipped — there's no canonical screen id
-to refer to.
+`WELL_KNOWN_TAG_KEYS` from `@ingcreators/annot-core/xmp-bytes`
+(`source` / `screen` / `capturedAt` / `commit`) is documented as
+a soft convention — callers who care about provenance write those
+keys themselves. Adding a helper (e.g. `annotTags.forCI(...)`) is
+deferred to a follow-up if real demand emerges (see Future work
+below).
 
 ### 3. Coordinate rebasing for sub-region overlays — auto, or explicit?
 
@@ -622,6 +628,15 @@ The following ideas surfaced during plan kick-off and are NOT
 addressed in this plan. Reserved for follow-up plans when
 concrete demand appears:
 
+- **Tag auto-fill / helper.** v1 leaves `annot.tags` entirely
+  to the caller. If a recurring "fill in `capturedAt` + `commit`
+  for CI builds" pattern surfaces across multiple consumers, a
+  small helper exported alongside `test` (e.g.
+  `annotTags.forCI({ source: "docs-tour" })` returning a
+  `Record<string, string>` with `capturedAt` + `$GITHUB_SHA`
+  merged in) is the natural shape. The Playwright-native
+  philosophy stays intact — the helper is opt-in, the fixture
+  itself remains side-effect-free on the tag axis.
 - **Read-only / batched refresh mode.** `mdx.skipRefresh` was
   considered and dropped because its only natural partner is a
   separate `screen.capture()` call, which re-introduces the
