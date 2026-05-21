@@ -22,7 +22,7 @@
 import { readFile } from "node:fs/promises";
 import { dirname, isAbsolute, resolve } from "node:path";
 import {
-  type BboxCalloutAnnotation,
+  type BboxNumberedBadgeAnnotation,
   bboxAnnotationsToSvg,
   createAnnotator,
 } from "@ingcreators/annot-annotator";
@@ -111,7 +111,7 @@ export async function renderAnnotatedScreen(
     options.basePngBytes ?? (await loadBasePng(parsed, screen.src, dirname(mdxAbs)));
   const dims = readPngDimensions(baseBytes);
   const bboxes = parseSnapshotBoxes(parsed.commentBlocks.snapshot ?? "");
-  const annotations = buildCalloutAnnotations(screen.overlays, bboxes, dims);
+  const annotations = buildBadgeAnnotations(screen.overlays, bboxes, dims);
 
   let result: Uint8Array;
   let hadBoundingBoxes: boolean;
@@ -120,7 +120,7 @@ export async function renderAnnotatedScreen(
     hadBoundingBoxes = false;
   } else {
     const dataUrl = `data:image/png;base64,${Buffer.from(baseBytes).toString("base64")}`;
-    const annotationsSvg = svgFromCallouts(annotations);
+    const annotationsSvg = svgFromBadges(annotations);
     result = createAnnotator().toPng({
       originalDataUrl: dataUrl,
       annotationsSvg,
@@ -181,43 +181,24 @@ export function parseSnapshotBoxes(yaml: string): BoxedEntry[] {
   return out;
 }
 
-/**
- * Pixel padding from the screenshot edge that a caption number
- * needs to render fully visible. ~22 px = the callout text's
- * cap height + a small breathing margin under default styling.
- */
-const CAPTION_PADDING = 22;
-
-function buildCalloutAnnotations(
+function buildBadgeAnnotations(
   overlays: ParsedMdx["screens"][number]["overlays"],
   boxed: BoxedEntry[],
   dims: { width: number; height: number },
-): BboxCalloutAnnotation[] {
-  const annotations: BboxCalloutAnnotation[] = [];
+): BboxNumberedBadgeAnnotation[] {
+  const annotations: BboxNumberedBadgeAnnotation[] = [];
   let auto = 1;
   for (const overlay of overlays) {
     const entry = boxed.find((b) => b.role === overlay.match.role && b.name === overlay.match.name);
     if (!entry) continue;
     const num = overlay.number ?? auto++;
-    // Caption x: centred over the target.
-    const cx = entry.box.x + entry.box.width / 2;
-    // Caption y: prefer above the target (16 px headroom). When
-    // the target sits too close to the top edge to fit a caption
-    // there, drop the caption below the target instead so the
-    // number stays inside the image.
-    let cy: number;
-    if (entry.box.y >= CAPTION_PADDING) {
-      cy = entry.box.y - 16;
-    } else {
-      // Below: target's bottom edge + headroom, but clamp so we
-      // don't fall off the bottom either.
-      cy = Math.min(entry.box.y + entry.box.height + 16, dims.height - CAPTION_PADDING);
-    }
     annotations.push({
-      type: "callout",
-      at: { x: cx, y: cy },
-      targetBbox: entry.box,
-      content: String(num),
+      type: "numberedBadge",
+      bbox: entry.box,
+      number: num,
+      placement: "auto",
+      imageWidth: dims.width,
+      imageHeight: dims.height,
       intent:
         overlay.intent === "action" ? "warning" : overlay.intent === "required" ? "error" : "info",
     });
@@ -225,13 +206,13 @@ function buildCalloutAnnotations(
   return annotations;
 }
 
-function svgFromCallouts(callouts: BboxCalloutAnnotation[]): string {
+function svgFromBadges(badges: BboxNumberedBadgeAnnotation[]): string {
   // `bboxAnnotationsToSvg` returns a multi-root fragment
-  // (`<rect/><defs/><line/><text/>`); the annotator's sanitiser
-  // expects a single-root SVG document and silently drops the
-  // siblings otherwise. Wrap in an `<svg>` so all primitives
-  // survive into the composited output.
-  const fragment = bboxAnnotationsToSvg(callouts);
+  // (`<rect/><circle/><text/>` per badge); the annotator's
+  // sanitiser expects a single-root SVG document and silently
+  // drops the siblings otherwise. Wrap in an `<svg>` so all
+  // primitives survive into the composited output.
+  const fragment = bboxAnnotationsToSvg(badges);
   return `<svg xmlns="http://www.w3.org/2000/svg">${fragment}</svg>`;
 }
 

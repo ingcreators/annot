@@ -80,6 +80,50 @@ export type BboxCalloutAnnotation = AnnotationStyle & {
   content: string;
 };
 
+/**
+ * Which corner of the target bbox the badge sits at. The badge
+ * is centred on the corner — half inside the rect, half outside —
+ * so the legend number remains readable against either light or
+ * dark target content. `"auto"` (the default) picks the corner
+ * that's furthest from the supplied image edge so the badge
+ * never clips off the screenshot.
+ */
+export type BadgePlacement = "auto" | "topLeft" | "topRight" | "bottomLeft" | "bottomRight";
+
+/**
+ * Numbered legend badge — target rect outline plus a filled
+ * intent-coloured circle at one corner with a bold white number
+ * inside. The visual idiom for "this is item N in a step-by-step
+ * legend over a screenshot."
+ *
+ * Differs from `callout` in two ways:
+ * 1. No caption arrow — the badge sits ON the target, not next to it.
+ * 2. The number renders inside a sized circle, not as bare `<text>`,
+ *    so it stays readable when the screenshot is scaled down in
+ *    docs / slides.
+ *
+ * When `imageWidth` / `imageHeight` are supplied alongside
+ * `placement: "auto"`, the renderer picks the corner furthest
+ * from the image edge so the badge never clips. Without those,
+ * `"auto"` falls back to `"topRight"`.
+ */
+export type BboxNumberedBadgeAnnotation = AnnotationStyle & {
+  type: "numberedBadge";
+  bbox: BBox;
+  number: number;
+  /** Override the corner. Default `"auto"`. */
+  placement?: BadgePlacement;
+  /** Badge diameter in image pixels. Default `40`. */
+  badgeSize?: number;
+  /**
+   * Image dimensions in page pixels — used by `placement: "auto"`
+   * to pick the corner furthest from the image edge. When omitted,
+   * `"auto"` resolves to `"topRight"`.
+   */
+  imageWidth?: number;
+  imageHeight?: number;
+};
+
 export interface RawAnnotation {
   type: "raw";
   svgFragment: string;
@@ -91,6 +135,7 @@ export type BboxAnnotation =
   | BboxArrowAnnotation
   | BboxTextAnnotation
   | BboxCalloutAnnotation
+  | BboxNumberedBadgeAnnotation
   | RawAnnotation;
 
 // ─── Redact regions ─────────────────────────────────────────────

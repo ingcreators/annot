@@ -131,6 +131,34 @@ entry produces three drawn elements.
 }
 ```
 
+### `numberedBadge`
+
+Numbered legend marker for "this is item N in a step-by-step
+overlay over a screenshot". Composes a target rect outline + a
+filled intent-coloured circle at one corner + a bold white
+number inside the circle. The badge sits ON the target (not next
+to it) so the legend stays readable when the screenshot is
+scaled down in docs / slides.
+
+```ts
+{
+  type: "numberedBadge",
+  bbox: { x: 200, y: 100, width: 80, height: 40 },
+  number: 1,
+  placement?: "auto" | "topLeft" | "topRight" | "bottomLeft" | "bottomRight",
+  badgeSize?: number,           // diameter in px, default 40
+  imageWidth?: number,          // used by placement: "auto"
+  imageHeight?: number,
+  intent?, stroke?, strokeWidth?, fill?, color?,
+}
+```
+
+When `placement` is `"auto"` (the default) and both
+`imageWidth` / `imageHeight` are supplied, the renderer picks the
+corner of the target rect that's furthest from the image edge so
+the badge never clips. Without image dimensions, `"auto"` falls
+back to `"topRight"`.
+
 ### `raw`
 
 Escape hatch for SVG you compose yourself:

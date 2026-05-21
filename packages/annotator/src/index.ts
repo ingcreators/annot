@@ -64,11 +64,13 @@ export {
 export { bboxAnnotationsToSvg } from "./dsl/to-svg.js";
 export type {
   AnnotationStyle,
+  BadgePlacement,
   BBox,
   BboxAnnotation,
   BboxArrowAnnotation,
   BboxCalloutAnnotation,
   BboxCircleAnnotation,
+  BboxNumberedBadgeAnnotation,
   BboxRectAnnotation,
   BboxRedactRegion,
   BboxTextAnnotation,

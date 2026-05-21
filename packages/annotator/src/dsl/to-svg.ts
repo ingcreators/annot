@@ -11,10 +11,12 @@
 import { arrowBetween, rectForBoundingBox, textAt } from "./svg-primitives.js";
 import type {
   AnnotationStyle,
+  BadgePlacement,
   BboxAnnotation,
   BboxArrowAnnotation,
   BboxCalloutAnnotation,
   BboxCircleAnnotation,
+  BboxNumberedBadgeAnnotation,
   BboxRectAnnotation,
   BboxTextAnnotation,
   Intent,
@@ -80,6 +82,8 @@ function bboxAnnotationToSvg(annotation: BboxAnnotation): string {
       return textFragment(annotation);
     case "callout":
       return calloutFragment(annotation);
+    case "numberedBadge":
+      return numberedBadgeFragment(annotation);
     case "raw":
       return rawFragment(annotation);
   }
@@ -156,6 +160,116 @@ function calloutFragment(annotation: BboxCalloutAnnotation): string {
 
 function rawFragment(annotation: RawAnnotation): string {
   return annotation.svgFragment;
+}
+
+/**
+ * Default badge diameter in image pixels. Sized so the number
+ * stays legible when the screenshot is scaled to 50 % in a
+ * documentation column.
+ */
+const DEFAULT_BADGE_SIZE = 40;
+
+function numberedBadgeFragment(annotation: BboxNumberedBadgeAnnotation): string {
+  const colours = resolveColours(annotation);
+  const badgeSize = annotation.badgeSize ?? DEFAULT_BADGE_SIZE;
+  const placement = resolvePlacement(annotation, badgeSize);
+
+  // 1. Target outline — same shape as a bare `rect` annotation,
+  //    but always intent-stroked + transparent fill so the user
+  //    can see what the badge is pointing at.
+  const rect = rectForBoundingBox(annotation.bbox, {
+    stroke: colours.stroke,
+    strokeWidth: annotation.strokeWidth ?? 3,
+    fill: annotation.fill ?? "none",
+  });
+
+  // 2. Badge: filled intent-coloured circle, white inner ring for
+  //    contrast against any underlying screenshot content.
+  const center = badgeCenter(annotation.bbox, placement);
+  const r = badgeSize / 2;
+  const circle =
+    `<circle cx="${center.x}" cy="${center.y}" r="${r}" ` +
+    `fill="${colours.stroke}" stroke="#ffffff" stroke-width="${Math.max(2, r * 0.12)}" />`;
+
+  // 3. The number — bold, white, vertically + horizontally
+  //    centred via `text-anchor` + `dominant-baseline`. Font size
+  //    scales with the badge so a custom `badgeSize` reads as
+  //    intended.
+  const fontSize = Math.round(r * 1.1);
+  const number =
+    `<text x="${center.x}" y="${center.y}" ` +
+    `font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" ` +
+    `font-size="${fontSize}" font-weight="700" fill="#ffffff" ` +
+    `text-anchor="middle" dominant-baseline="central">` +
+    `${escapeAttr(String(annotation.number))}` +
+    "</text>";
+
+  return rect + circle + number;
+}
+
+function resolvePlacement(
+  annotation: BboxNumberedBadgeAnnotation,
+  badgeSize: number,
+): Exclude<BadgePlacement, "auto"> {
+  if (annotation.placement && annotation.placement !== "auto") {
+    return annotation.placement;
+  }
+  // `auto`: pick the corner of the target bbox that's furthest
+  // from the image edge. Falls back to `topRight` when image
+  // dims are unknown.
+  if (annotation.imageWidth === undefined || annotation.imageHeight === undefined) {
+    return "topRight";
+  }
+  const r = badgeSize / 2;
+  const corners: Array<{ kind: Exclude<BadgePlacement, "auto">; x: number; y: number }> = [
+    { kind: "topLeft", x: annotation.bbox.x, y: annotation.bbox.y },
+    {
+      kind: "topRight",
+      x: annotation.bbox.x + annotation.bbox.width,
+      y: annotation.bbox.y,
+    },
+    {
+      kind: "bottomLeft",
+      x: annotation.bbox.x,
+      y: annotation.bbox.y + annotation.bbox.height,
+    },
+    {
+      kind: "bottomRight",
+      x: annotation.bbox.x + annotation.bbox.width,
+      y: annotation.bbox.y + annotation.bbox.height,
+    },
+  ];
+  // Score = min distance to ANY image edge after the badge's
+  // half-radius offset is applied. Pick the corner with the
+  // highest score (furthest from clipping).
+  let best = corners[0]!;
+  let bestScore = Number.NEGATIVE_INFINITY;
+  for (const c of corners) {
+    const minDist = Math.min(
+      c.x - r, // distance from left edge after badge centred
+      c.y - r, // top
+      annotation.imageWidth - c.x - r, // right
+      annotation.imageHeight - c.y - r, // bottom
+    );
+    if (minDist > bestScore) {
+      bestScore = minDist;
+      best = c;
+    }
+  }
+  return best.kind;
+}
+
+function badgeCenter(bbox: BboxLike, placement: Exclude<BadgePlacement, "auto">): Point {
+  switch (placement) {
+    case "topLeft":
+      return { x: bbox.x, y: bbox.y };
+    case "topRight":
+      return { x: bbox.x + bbox.width, y: bbox.y };
+    case "bottomLeft":
+      return { x: bbox.x, y: bbox.y + bbox.height };
+    case "bottomRight":
+      return { x: bbox.x + bbox.width, y: bbox.y + bbox.height };
+  }
 }
 
 // ─── Geometry helpers ───────────────────────────────────────────

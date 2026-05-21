@@ -125,6 +125,29 @@ const BBOX_CALLOUT = {
   },
 };
 
+const BBOX_NUMBERED_BADGE = {
+  type: "object",
+  required: ["type", "bbox", "number"],
+  additionalProperties: false,
+  properties: {
+    type: { const: "numberedBadge" },
+    bbox: { $ref: "#/$defs/BBox" },
+    number: { type: "number" },
+    placement: {
+      type: "string",
+      enum: ["auto", "topLeft", "topRight", "bottomLeft", "bottomRight"],
+    },
+    badgeSize: { type: "number", minimum: 0 },
+    imageWidth: { type: "number", minimum: 0 },
+    imageHeight: { type: "number", minimum: 0 },
+    intent: { $ref: "#/$defs/Intent" },
+    stroke: { type: "string" },
+    strokeWidth: { type: "number", minimum: 0 },
+    fill: { type: "string" },
+    color: { type: "string" },
+  },
+};
+
 const RAW = {
   type: "object",
   required: ["type", "svgFragment"],
@@ -136,7 +159,7 @@ const RAW = {
 };
 
 export const BBOX_ANNOTATION_SCHEMA = {
-  oneOf: [BBOX_RECT, BBOX_CIRCLE, BBOX_ARROW, BBOX_TEXT, BBOX_CALLOUT, RAW],
+  oneOf: [BBOX_RECT, BBOX_CIRCLE, BBOX_ARROW, BBOX_TEXT, BBOX_CALLOUT, BBOX_NUMBERED_BADGE, RAW],
 };
 
 // ─── Bbox redact region schema ───────────────────────────────────
