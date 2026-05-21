@@ -1,6 +1,6 @@
 # Workflow-app example + dogfooded living product docs
 
-> **Status:** Draft
+> **Status:** In progress
 > **Owner:** Naoki Ichimura
 > **Plan PR:** TBD
 > **Created:** 2026-05-22
