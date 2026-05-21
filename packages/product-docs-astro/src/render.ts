@@ -39,6 +39,15 @@ export interface RenderAnnotatedScreenOptions {
   cache?: FileCache;
   /** Override the cwd used to resolve relative `mdxPath`. */
   cwd?: string;
+  /**
+   * Override the base PNG that `<Screen src>` would otherwise
+   * point at. Useful when the on-disk PNG and the served URL
+   * diverge — e.g. an Astro site that serves PNGs from
+   * `public/` while the MDX `<Screen src>` carries the
+   * absolute browser URL. The caller hands in the bytes
+   * directly and `loadBasePng` is skipped.
+   */
+  basePngBytes?: Uint8Array;
 }
 
 export interface RenderResult {
@@ -98,7 +107,8 @@ export async function renderAnnotatedScreen(
     }
   }
 
-  const baseBytes = await loadBasePng(parsed, screen.src, dirname(mdxAbs));
+  const baseBytes =
+    options.basePngBytes ?? (await loadBasePng(parsed, screen.src, dirname(mdxAbs)));
   const bboxes = parseSnapshotBoxes(parsed.commentBlocks.snapshot ?? "");
   const annotations = buildCalloutAnnotations(screen.overlays, bboxes);
 
