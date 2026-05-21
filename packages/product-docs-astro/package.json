@@ -66,6 +66,7 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "@ingcreators/annot-core": "workspace:*",
     "astro": "^6.1.10",
     "typescript": "catalog:",
     "vite": "catalog:",

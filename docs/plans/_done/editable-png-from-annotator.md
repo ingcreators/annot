@@ -1,9 +1,17 @@
 # Editable PNG from `@ingcreators/annot-annotator`
 
-> **Status:** Draft — design only; implementation queued.
+> **Status:** Done — landed 2026-05-21 via PRs
+> [#931](https://github.com/ingcreators/annot/pull/931) (Phase 1 —
+> Tier-A `xmp-bytes` primitives),
+> [#932](https://github.com/ingcreators/annot/pull/932) (Phase 2 —
+> `Annotator.toEditablePng()`), and the docs-tour adopter PR
+> (Phase 3 — `renderAnnotatedScreen({ editable })` + spec swap).
+> All four Open Questions resolved on their defaults: (a) strict
+> subpath split / PNG-only Tier-A / separate `toEditablePng()`
+> method / soft-convention `tags` vocabulary.
 > Triggered 2026-05-21 by a question on the docs-tour-generated
 > `/docs/app/` screenshot ("can the output PNG be reopened in
-> Annot for re-editing?"). Answer today: no. This plan adds the
+> Annot for re-editing?"). Answer today: yes. This plan added the
 > capability without affecting the existing flat-raster path.
 > **Compatibility:** Additive. New `toEditablePng()` method on
 > the annotator + a new Tier-A subpath on
