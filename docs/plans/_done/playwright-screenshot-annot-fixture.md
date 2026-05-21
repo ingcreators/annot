@@ -1,11 +1,22 @@
 # Playwright `screenshot({ annot: { … } })` fixture
 
-> **Status:** Draft — design only; implementation queued.
-> Triggered 2026-05-21 during the [`editable-png-from-annotator`](./_done/editable-png-from-annotator.md)
+> **Status:** Done — landed 2026-05-21 via PRs
+> [#936](https://github.com/ingcreators/annot/pull/936) (Phase 1 —
+> `Page.prototype.screenshot` patch + compositional `annot` opt +
+> docs-tour spec rewrite),
+> [#937](https://github.com/ingcreators/annot/pull/937) (Phase 2 —
+> `Locator.prototype.screenshot` patch + coordinate rebasing),
+> and the docs PR (Phase 3 — `create-annotator.mdx` section +
+> new `playwright-fixture.mdx` page + README migration note +
+> plan archive). All five Open Questions resolved on their
+> recommended defaults: editable=true / no tag auto-fill / auto
+> rebase via locator.boundingBox / warn + skip on out-of-clip
+> overlays / wrap as editable on MDX-empty.
+> Triggered 2026-05-21 during the [`editable-png-from-annotator`](./editable-png-from-annotator.md)
 > Phase 3 review. The new editable-PNG plumbing lifted the
 > docs-tour spec from "4 steps coordinated by hand" to "4 steps
 > coordinated by hand with one of them swapped" — still verbose,
-> still un-Playwright-y. This plan fixes the ergonomics.
+> still un-Playwright-y. This plan fixed the ergonomics.
 > **Compatibility:** Additive at the API level. New
 > `@ingcreators/annot-product-docs-astro/playwright` subpath that
 > re-exports an extended `test` whose `page.screenshot` /

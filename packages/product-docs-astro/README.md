@@ -89,6 +89,42 @@ When the stored snapshot lacks `[box=x,y,w,h]` markers (no
 Playwright tour has run yet), the function returns the base
 PNG verbatim with `hadBoundingBoxes: false`.
 
+## Playwright fixture (`/playwright` subpath)
+
+For Playwright specs producing screenshots of a documented
+screen, the `./playwright` subpath ships an extended `test`
+fixture that intercepts `page.screenshot()` and
+`locator.screenshot()`. Calls carrying a compositional
+`annot: { mdx | overlays | tags | editable }` option get a
+one-line capture pipeline that replaces the previous
+`page.screenshot` + `screen.capture` + `renderAnnotatedScreen`
++ `writeFile` quartet:
+
+```ts
+import { test } from "@ingcreators/annot-product-docs-astro/playwright";
+
+test("app overview", async ({ page }) => {
+  await page.goto("https://annot.work/app/");
+  await page.screenshot({
+    path: "public/app/shots/app-overview.png",
+    annot: {
+      mdx: { id: "app-overview", path: "src/content/docs/app/index.mdx" },
+      tags: { source: "docs-tour", capturedAt: new Date().toISOString() },
+    },
+  });
+});
+```
+
+Calls without `annot` (or with `annot: true` / `{}`) fall
+through to vanilla Playwright byte-for-byte — codegen-emitted
+calls keep working unedited. See the docs at
+[`annot.work/docs/product-docs/playwright-fixture/`](https://annot.work/docs/product-docs/playwright-fixture/)
+for the compositional vocabulary, locator screenshot semantics,
+and the codegen→hand-edit workflow.
+
+`@playwright/test` is an **optional peer** — Astro-only users
+don't need to install it.
+
 ## Tier
 
 Tier B-render — Astro build-time, no live editor.
