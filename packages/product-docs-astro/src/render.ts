@@ -109,8 +109,9 @@ export async function renderAnnotatedScreen(
 
   const baseBytes =
     options.basePngBytes ?? (await loadBasePng(parsed, screen.src, dirname(mdxAbs)));
+  const dims = readPngDimensions(baseBytes);
   const bboxes = parseSnapshotBoxes(parsed.commentBlocks.snapshot ?? "");
-  const annotations = buildCalloutAnnotations(screen.overlays, bboxes);
+  const annotations = buildCalloutAnnotations(screen.overlays, bboxes, dims);
 
   let result: Uint8Array;
   let hadBoundingBoxes: boolean;
@@ -119,13 +120,12 @@ export async function renderAnnotatedScreen(
     hadBoundingBoxes = false;
   } else {
     const dataUrl = `data:image/png;base64,${Buffer.from(baseBytes).toString("base64")}`;
-    const { width, height } = readPngDimensions(baseBytes);
     const annotationsSvg = svgFromCallouts(annotations);
     result = createAnnotator().toPng({
       originalDataUrl: dataUrl,
       annotationsSvg,
-      width,
-      height,
+      width: dims.width,
+      height: dims.height,
     });
     hadBoundingBoxes = true;
   }
@@ -181,9 +181,17 @@ export function parseSnapshotBoxes(yaml: string): BoxedEntry[] {
   return out;
 }
 
+/**
+ * Pixel padding from the screenshot edge that a caption number
+ * needs to render fully visible. ~22 px = the callout text's
+ * cap height + a small breathing margin under default styling.
+ */
+const CAPTION_PADDING = 22;
+
 function buildCalloutAnnotations(
   overlays: ParsedMdx["screens"][number]["overlays"],
   boxed: BoxedEntry[],
+  dims: { width: number; height: number },
 ): BboxCalloutAnnotation[] {
   const annotations: BboxCalloutAnnotation[] = [];
   let auto = 1;
@@ -191,9 +199,23 @@ function buildCalloutAnnotations(
     const entry = boxed.find((b) => b.role === overlay.match.role && b.name === overlay.match.name);
     if (!entry) continue;
     const num = overlay.number ?? auto++;
+    // Caption x: centred over the target.
+    const cx = entry.box.x + entry.box.width / 2;
+    // Caption y: prefer above the target (16 px headroom). When
+    // the target sits too close to the top edge to fit a caption
+    // there, drop the caption below the target instead so the
+    // number stays inside the image.
+    let cy: number;
+    if (entry.box.y >= CAPTION_PADDING) {
+      cy = entry.box.y - 16;
+    } else {
+      // Below: target's bottom edge + headroom, but clamp so we
+      // don't fall off the bottom either.
+      cy = Math.min(entry.box.y + entry.box.height + 16, dims.height - CAPTION_PADDING);
+    }
     annotations.push({
       type: "callout",
-      at: { x: entry.box.x + entry.box.width / 2, y: entry.box.y - 16 },
+      at: { x: cx, y: cy },
       targetBbox: entry.box,
       content: String(num),
       intent:
