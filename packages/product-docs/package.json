@@ -1,7 +1,6 @@
 {
   "name": "@ingcreators/annot-product-docs",
   "version": "0.1.0",
-  "private": true,
   "description": "Living product docs core — parse `.mdx` files with `annot:` frontmatter, resolve `<Overlay match>` keys against live Playwright `aria-snapshot` trees, run drift detection against the rendered UI, and ship a Playwright `screen` fixture that re-captures + re-syncs MDX snapshot blocks. Tier A (Node-only). Phase 1 of docs/plans/living-product-docs.md.",
   "license": "Apache-2.0",
   "author": "ingcreators",
