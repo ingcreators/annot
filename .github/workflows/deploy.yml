@@ -87,6 +87,11 @@ on:
       # otherwise. Re-include them so a docs-only change still
       # ships.
       - "packages/docs-site/**/*.md"
+      # The Astro Starlight docs site's CONTENT is `.mdx` (not
+      # in scope of `!**/*.md`) — but a docs-tour run that
+      # rewrites the snapshot blocks of an existing MDX would
+      # otherwise be hidden. Explicit re-include for clarity.
+      - "packages/docs-site-astro/src/content/docs/**/*.mdx"
   workflow_dispatch:
 
 # Serialise deploys. `cancel-in-progress: true` lets a newer
@@ -208,13 +213,14 @@ jobs:
       # Phase 8d adds two new asset-server workers (marketing
       # landing + VitePress docs). Build all three in one
       # invocation; turbo dedupes the shared work.
-      - name: Build annot (PWA), annot-marketing, annot-docs-site
+      - name: Build annot (PWA), annot-marketing, annot-docs-site, annot-docs-site-astro
         run: >
           pnpm
           --filter @ingcreators/annot-core
           --filter @ingcreators/annot-web
           --filter @ingcreators/annot-marketing
           --filter @ingcreators/annot-docs-site
+          --filter @ingcreators/annot-docs-site-astro
           build
 
       # ── 6. Deploy the PWA worker (annot.work/app/*) ──────────
@@ -247,7 +253,23 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: pnpm --filter @ingcreators/annot-marketing cf:deploy
 
-      # ── 8. Deploy the docs-site worker (annot.work/docs/*) ───
+      # ── 8a. Deploy annot-docs-site-astro FIRST ───────────────
+      # Phase 6 of `docs/plans/annot-work-astro-unification.md`.
+      # The legacy `annot-docs-site` worker has a service binding
+      # to this Astro worker, so the Astro worker MUST exist
+      # before the legacy one (re-)deploys, or wrangler will
+      # error on the unresolved binding name.
+      - name: Deploy annot-docs-site-astro
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm --filter @ingcreators/annot-docs-site-astro cf:deploy
+
+      # ── 8b. Deploy the docs-site worker (annot.work/docs/*) ──
+      # The picker. Reads the `annot-docs-stack=astro` cookie or
+      # `?docs-stack=astro` query param and proxies to the Astro
+      # worker via service binding; defaults to its own VitePress
+      # assets otherwise.
       - name: Deploy annot-docs-site
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -277,4 +299,21 @@ jobs:
           }
           smoke "https://annot.work/" "marketing landing"
           smoke "https://annot.work/app/" "PWA"
-          smoke "https://annot.work/docs/" "docs site"
+          smoke "https://annot.work/docs/" "docs site (default → VitePress)"
+          # Cookie / query-param opt-in to the Astro Starlight
+          # stack (Phase 6 of
+          # `docs/plans/annot-work-astro-unification.md`).
+          # Retired in Phase 6.5 when the Astro stack becomes
+          # the default and the picker is removed.
+          for i in {1..6}; do
+            if curl -sfI --max-time 5 "https://annot.work/docs/?docs-stack=astro" | grep -qE "^HTTP/.* 200"; then
+              echo "✓ docs site (Astro opt-in) → 200"
+              break
+            fi
+            echo "  Astro-opt-in attempt $i failed; retrying in 5s…"
+            sleep 5
+            [ "$i" = "6" ] && {
+              echo "::error::docs site Astro opt-in smoke check failed after 30s"
+              exit 1
+            }
+          done

@@ -49,5 +49,20 @@
     "directory": "./.vitepress/dist",
     "binding": "ASSETS",
     "not_found_handling": "404-page"
-  }
+  },
+  // Phase 6 of `docs/plans/annot-work-astro-unification.md` —
+  // feature-flag cutover. The new Astro Starlight worker
+  // (`annot-docs-site-astro`) runs in parallel; this binding
+  // lets the per-request stack picker in `worker.js` proxy
+  // requests over when the cookie / query param opts in.
+  // The binding is removed in Phase 6.5 (the 7-day-observation
+  // TODO in the plan), at which point the Astro worker claims
+  // the `annot.work/docs/*` route directly and this one is
+  // retired alongside the VitePress source.
+  "services": [
+    {
+      "binding": "ASTRO",
+      "service": "annot-docs-site-astro"
+    }
+  ]
 }
