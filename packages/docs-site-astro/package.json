@@ -15,16 +15,20 @@
     "preview": "astro preview",
     "typecheck": "astro check",
     "cf:deploy": "wrangler deploy",
-    "astro": "astro"
+    "astro": "astro",
+    "docs:tour": "playwright test"
   },
   "dependencies": {
     "@astrojs/sitemap": "^3.7.2",
     "@astrojs/starlight": "^0.39.2",
+    "@ingcreators/annot-product-docs": "workspace:*",
+    "@ingcreators/annot-product-docs-astro": "workspace:*",
     "astro": "^6.1.10",
     "sharp": "^0.34.5"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.4",
+    "@playwright/test": "^1.50.0",
     "typescript": "catalog:",
     "wrangler": "^4.45.0"
   }

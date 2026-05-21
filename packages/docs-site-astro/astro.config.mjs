@@ -2,6 +2,7 @@
 
 import sitemap from "@astrojs/sitemap";
 import starlight from "@astrojs/starlight";
+import { productDocsIntegration } from "@ingcreators/annot-product-docs-astro";
 import { defineConfig } from "astro/config";
 
 // Astro config for annot.work/docs — Starlight-powered docs site.
@@ -109,5 +110,12 @@ export default defineConfig({
       ],
     }),
     sitemap(),
+    // Phase 5 of `docs/plans/annot-work-astro-unification.md` —
+    // wires the dogfooded `<Screen>` + `<Overlay>` components
+    // against the Astro Image Service. The cache lives under
+    // node_modules/.annot-cache so CI runs share entries
+    // across builds; SHA-keyed so a tour-driven snapshot
+    // refresh invalidates only the affected screens.
+    productDocsIntegration(),
   ],
 });
