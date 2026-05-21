@@ -8,22 +8,22 @@ point that matches how you want to use it.
 
 | Package | Use it when | npm |
 | ------- | ----------- | --- |
-| **[`@ingcreators/annot-playwright`](./playwright)** | You run Playwright tests and want to attach annotated screenshots to the HTML report. | [![npm](https://img.shields.io/npm/v/@ingcreators/annot-playwright)](https://www.npmjs.com/package/@ingcreators/annot-playwright) |
-| **[`@ingcreators/annot-mcp`](./mcp)** | You drive Annot from an AI agent (Claude Desktop / Claude Code / Cursor) via the Model Context Protocol. | [![npm](https://img.shields.io/npm/v/@ingcreators/annot-mcp)](https://www.npmjs.com/package/@ingcreators/annot-mcp) |
-| **[`annot-product-docs` (trio)](./product-docs)** | You want a docs site + Excel screen-specifications spreadsheet generated from the same MDX, kept in sync with Playwright snapshots. | [![npm](https://img.shields.io/npm/v/@ingcreators/annot-product-docs)](https://www.npmjs.com/package/@ingcreators/annot-product-docs) |
-| **[`@ingcreators/annot-annotator`](./annotator)** | You want the headless annotator from any Node script — CI, a CLI, a build pipeline. | [![npm](https://img.shields.io/npm/v/@ingcreators/annot-annotator)](https://www.npmjs.com/package/@ingcreators/annot-annotator) |
-| **[`@ingcreators/annot-core`](./core)** | You're building a new host (extension, editor, plugin) and need the SVG annotation format + storage types. | [![npm](https://img.shields.io/npm/v/@ingcreators/annot-core)](https://www.npmjs.com/package/@ingcreators/annot-core) |
+| **[`@ingcreators/annot-playwright`](/docs/getting-started/playwright)** | You run Playwright tests and want to attach annotated screenshots to the HTML report. | [![npm](https://img.shields.io/npm/v/@ingcreators/annot-playwright)](https://www.npmjs.com/package/@ingcreators/annot-playwright) |
+| **[`@ingcreators/annot-mcp`](/docs/getting-started/mcp)** | You drive Annot from an AI agent (Claude Desktop / Claude Code / Cursor) via the Model Context Protocol. | [![npm](https://img.shields.io/npm/v/@ingcreators/annot-mcp)](https://www.npmjs.com/package/@ingcreators/annot-mcp) |
+| **[`annot-product-docs` (trio)](/docs/getting-started/product-docs)** | You want a docs site + Excel screen-specifications spreadsheet generated from the same MDX, kept in sync with Playwright snapshots. | [![npm](https://img.shields.io/npm/v/@ingcreators/annot-product-docs)](https://www.npmjs.com/package/@ingcreators/annot-product-docs) |
+| **[`@ingcreators/annot-annotator`](/docs/getting-started/annotator)** | You want the headless annotator from any Node script — CI, a CLI, a build pipeline. | [![npm](https://img.shields.io/npm/v/@ingcreators/annot-annotator)](https://www.npmjs.com/package/@ingcreators/annot-annotator) |
+| **[`@ingcreators/annot-core`](/docs/getting-started/core)** | You're building a new host (extension, editor, plugin) and need the SVG annotation format + storage types. | [![npm](https://img.shields.io/npm/v/@ingcreators/annot-core)](https://www.npmjs.com/package/@ingcreators/annot-core) |
 
 If in doubt, start with **annot-playwright** — it's the highest-
 leverage entry point and pulls the rest in transitively. If
 you're wiring an AI agent, start with **annot-mcp**. If you're
 shipping product docs alongside a UI, the
-[**living-product-docs trio**](./product-docs) is the dedicated
+[**living-product-docs trio**](/docs/getting-started/product-docs) is the dedicated
 path.
 
 ## What you get
 
-The same [annotation DSL](../api/dsl) — `rect` / `circle` /
+The same [annotation DSL](/docs/api/dsl) — `rect` / `circle` /
 `arrow` / `text` / `callout` / `raw` with an `intent` shorthand
 mapped to design-system colours — works from any of the
 packages:
@@ -51,12 +51,12 @@ test("login form is reachable", async ({ page, annotator }) => {
 
 The resulting PNG attaches to the Playwright HTML report next to
 the failing step. AI agents emit the same `BboxAnnotation[]`
-shape over MCP tool calls; see [AI agents](../ai-agents/).
+shape over MCP tool calls; see [AI agents](/docs/ai-agents).
 
 Need smaller files? Pass `encode: { format: "smart",
 saveSizePreset: "standard" }` and the output PNG-32 gets
 auto-quantized to PNG-8 (UI-heavy) or compressed to JPEG
-(photo-heavy). See [Encode pipeline](../api/encode).
+(photo-heavy). See [Encode pipeline](/docs/api/encode).
 
 ## Requirements
 

@@ -61,7 +61,10 @@ export default defineConfig({
         },
       ],
       editLink: {
-        baseUrl: "https://github.com/ingcreators/annot/edit/main/packages/docs-site-astro/",
+        // Phase 7 of `docs/plans/_done/annot-work-astro-unification.md`
+        // reclaimed the conventional `packages/docs-site/` directory
+        // for the Astro Starlight build; the editLink baseUrl follows.
+        baseUrl: "https://github.com/ingcreators/annot/edit/main/packages/docs-site/",
       },
       lastUpdated: true,
       // Sidebar mirrors the VitePress one in `.vitepress/config.ts`.

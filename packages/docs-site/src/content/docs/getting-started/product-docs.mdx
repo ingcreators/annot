@@ -12,9 +12,9 @@ Three packages compose into the flow:
 
 | Package | Role |
 |---|---|
-| [`@ingcreators/annot-product-docs`](../api/product-docs) | Core: MDX parser, Playwright `screen` fixture, drift detector, `annot docs` CLI |
-| [`@ingcreators/annot-product-docs-astro`](../api/product-docs-astro) | Astro components (`<Screen>` / `<Overlay>` / …) + the Image Service that composes annotated PNGs at build time |
-| [`@ingcreators/annot-product-docs-xlsx`](../api/product-docs-xlsx) | Excel adapter — emits one `.xlsx` per book using either the OSS default layout or a customer-supplied template populated via `{var}` placeholders + Named Ranges |
+| [`@ingcreators/annot-product-docs`](/docs/api/product-docs) | Core: MDX parser, Playwright `screen` fixture, drift detector, `annot docs` CLI |
+| [`@ingcreators/annot-product-docs-astro`](/docs/api/product-docs-astro) | Astro components (`<Screen>` / `<Overlay>` / …) + the Image Service that composes annotated PNGs at build time |
+| [`@ingcreators/annot-product-docs-xlsx`](/docs/api/product-docs-xlsx) | Excel adapter — emits one `.xlsx` per book using either the OSS default layout or a customer-supplied template populated via `{var}` placeholders + Named Ranges |
 
 ## Install
 
@@ -118,16 +118,16 @@ workflow shipped with the package converts the JSON to per-line
 
 ## Next steps
 
-- [Concepts](../product-docs/concepts) — the MDX format,
+- [Concepts](/docs/product-docs/concepts) — the MDX format,
   `<Screen>` / `<Overlay>`, snapshot blocks, attributes.
-- [Playwright tour](../product-docs/playwright-tour) — full
+- [Playwright tour](/docs/product-docs/playwright-tour) — full
   walkthrough of the tour file shape + the `screen` fixture.
-- [Astro integration](../product-docs/astro-integration) —
+- [Astro integration](/docs/product-docs/astro-integration) —
   `productDocsIntegration()`, the Image Service, the seven
   components.
-- [Xlsx templates](../product-docs/xlsx-templates) — placeholder
+- [Xlsx templates](/docs/product-docs/xlsx-templates) — placeholder
   vocabulary + Named Ranges for customer template authoring.
-- [Drift detection](../product-docs/drift-detection) — the lint
+- [Drift detection](/docs/product-docs/drift-detection) — the lint
   flow + the bundled GitHub Actions workflow.
-- [Recipe: living product docs](../recipes/living-product-docs) —
+- [Recipe: living product docs](/docs/recipes/living-product-docs) —
   end-to-end working example.

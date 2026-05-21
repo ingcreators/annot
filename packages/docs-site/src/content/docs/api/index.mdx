@@ -14,20 +14,20 @@ any patch release.
 
 ## Modules
 
-- [**`createAnnotator`**](./create-annotator) —
+- [**`createAnnotator`**](/docs/api/create-annotator) —
   factory for the headless annotator.
-- [**Playwright fixture**](./playwright-fixture) —
+- [**Playwright fixture**](/docs/api/playwright-fixture) —
   the `test.extend({ annotator })` surface.
-- [**Annotation DSL**](./dsl) — typed JSON vocabulary
+- [**Annotation DSL**](/docs/api/dsl) — typed JSON vocabulary
   (`rect` / `circle` / `arrow` / `text` / `callout` / `raw`)
   shared by the annotator, the Playwright fixture, and the MCP
   server. **Recommended starting point for new code.**
-- [**Encode pipeline**](./encode) — `format: "smart"` +
+- [**Encode pipeline**](/docs/api/encode) — `format: "smart"` +
   `saveSizePreset` for PNG-8 / JPEG / resize. Optional on the
   annotator, the Playwright fixture, and every MCP tool that
   emits an image. Typically halves the output bytes for UI
   screenshots.
-- [**SVG helpers**](./svg-helpers) — low-level fragment
+- [**SVG helpers**](/docs/api/svg-helpers) — low-level fragment
   builders (`rectForBoundingBox`, `arrowBetween`, `textAt`).
   Useful when the DSL doesn't cover what you need; otherwise
   prefer the DSL.
