@@ -1,0 +1,40 @@
+---
+// Local vendored copy of `<Transition>` while the upstream
+// `@ingcreators/annot-product-docs-astro@0.1.0` publish is
+// missing its `dist/` directory (fix #947). The published
+// source lives at
+// `packages/product-docs-astro/src/components/Transition.astro`
+// in the monorepo; this file is a byte-for-byte copy.
+
+interface Match {
+  role: string;
+  name: string;
+  under?: Match;
+}
+
+interface Props {
+  trigger: Match;
+  on?: string;
+  to?: string;
+}
+const { trigger, on, to } = Astro.props;
+---
+<div
+  class="annot-transition"
+  data-trigger-role={trigger.role}
+  data-trigger-name={trigger.name}
+  data-on={on}
+  data-to={to}
+>
+  <div class="annot-transition-summary">
+    <code class="annot-transition-trigger">{trigger.name}</code>
+    {on && <span class="annot-transition-event">{on}</span>}
+    {to && (
+      <span class="annot-transition-arrow" aria-hidden="true">→</span>
+    )}
+    {to && <code class="annot-transition-target">{to}</code>}
+  </div>
+  <div class="annot-transition-body">
+    <slot />
+  </div>
+</div>

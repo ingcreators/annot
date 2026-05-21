@@ -1,0 +1,30 @@
+---
+import DocsLayout from "../../layouts/DocsLayout.astro";
+import { getCollection } from "astro:content";
+
+const entries = await getCollection("operation-manual");
+entries.sort((a, b) => {
+  const ao = a.data.annot.xlsx?.order ?? 0;
+  const bo = b.data.annot.xlsx?.order ?? 0;
+  return ao - bo;
+});
+---
+<DocsLayout
+  title="Operation Manual"
+  intro="User-facing walkthrough of every screen. Read the chapters in order to mirror a real session."
+>
+  <ol class="book-toc">
+    {entries.map((entry) => (
+      <li>
+        <a href={`/operation-manual/${entry.id}/`}>
+          <strong>{entry.data.annot.id}</strong>
+          {" — "}
+          {entry.data.annot.title ?? entry.id}
+        </a>
+        {entry.data.annot.purpose && (
+          <p class="book-toc__purpose">{entry.data.annot.purpose}</p>
+        )}
+      </li>
+    ))}
+  </ol>
+</DocsLayout>

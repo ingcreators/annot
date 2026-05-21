@@ -1,0 +1,66 @@
+---
+import DocsLayout from "../layouts/DocsLayout.astro";
+import { getCollection } from "astro:content";
+
+const operationManual = await getCollection("operation-manual");
+const screenDesign = await getCollection("screen-design");
+
+const sortByOrder = (a, b) => {
+  const ao = a.data.annot.xlsx?.order ?? 0;
+  const bo = b.data.annot.xlsx?.order ?? 0;
+  return ao - bo;
+};
+operationManual.sort(sortByOrder);
+screenDesign.sort(sortByOrder);
+---
+<DocsLayout
+  title="Workflow App — Documentation"
+  intro="Living docs assembled from two books that share one MDX source pool. The operation manual targets end users; the screen design document targets developers + QA. Both render the same set of annotated screens with different prose."
+>
+  <section class="book-grid">
+    <article class="book-card">
+      <header>
+        <h2>Operation Manual</h2>
+        <p class="book-card__audience">For end users</p>
+      </header>
+      <p>
+        Walk-through of every screen in the order an applicant or
+        approver would encounter it. Each chapter shows an
+        annotated screenshot with numbered callouts.
+      </p>
+      <ol class="book-card__toc">
+        {operationManual.map((entry) => (
+          <li>
+            <a href={`/operation-manual/${entry.id}/`}>
+              <strong>{entry.data.annot.id}</strong>
+              {" — "}
+              {entry.data.annot.title ?? entry.id}
+            </a>
+          </li>
+        ))}
+      </ol>
+    </article>
+    <article class="book-card">
+      <header>
+        <h2>Screen Design</h2>
+        <p class="book-card__audience">For developers + QA</p>
+      </header>
+      <p>
+        Per-element spec for every screen. Field types, data
+        constraints, validation rules, routing + state-mutation
+        side effects.
+      </p>
+      <ol class="book-card__toc">
+        {screenDesign.map((entry) => (
+          <li>
+            <a href={`/screen-design/${entry.id}/`}>
+              <strong>{entry.data.annot.id}</strong>
+              {" — "}
+              {entry.data.annot.title ?? entry.id}
+            </a>
+          </li>
+        ))}
+      </ol>
+    </article>
+  </section>
+</DocsLayout>
