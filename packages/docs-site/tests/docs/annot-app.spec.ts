@@ -9,12 +9,18 @@ import { renderAnnotatedScreen } from "@ingcreators/annot-product-docs-astro";
 //   1. Saves the raw screenshot PNG to a temp variable.
 //   2. Runs `screen.capture(...)` to refresh the MDX
 //      `annot:snapshot` + `annot:attributes` comment blocks.
-//   3. Calls `renderAnnotatedScreen(...)` with the raw bytes
-//      to bake numbered callout badges onto the screenshot
-//      using the bbox markers from the refreshed snapshot.
-//   4. Writes the annotated PNG to `public/app/shots/<id>.png`
+//   3. Calls `renderAnnotatedScreen(..., { editable })` with the
+//      raw bytes to bake numbered callout badges onto the
+//      screenshot using the bbox markers from the refreshed
+//      snapshot AND embed the original capture + annotations
+//      SVG in the PNG's XMP / `svGo` chunk via the new
+//      `Annotator.toEditablePng()` path.
+//   4. Writes the editable PNG to `public/app/shots/<id>.png`
 //      so Astro serves it under `/docs/app/shots/<id>.png` at
-//      build time.
+//      build time. The file is a valid PNG for image viewers
+//      AND drop-in re-editable in Annot Cloud
+//      (`annot.work/app/`) for any reader who wants to tweak
+//      the callouts.
 //
 // Why pass `basePngBytes`: the MDX's `<Screen src>` is the
 // absolute browser URL (`/docs/app/shots/...`) because Astro
@@ -61,10 +67,26 @@ test.describe("Annot web app dogfood tour", () => {
     //    `renderAnnotatedScreen`'s default file-system load
     //    (which would try to read `/docs/app/shots/...` as a
     //    filesystem path).
+    //
+    //    `editable: { tags }` swaps the underlying annotator call
+    //    from `toPng` to `toEditablePng`, so the output PNG
+    //    carries the original capture + annotations SVG embedded
+    //    in XMP. Anyone visiting
+    //    `https://annot.work/docs/app/shots/<id>.png` can save the
+    //    image and drop it into `annot.work/app/` to tweak the
+    //    callouts.
     const result = await renderAnnotatedScreen({
       mdxPath: MDX_PATH,
       screenId: SCREEN_ID,
       basePngBytes: new Uint8Array(rawBytes.buffer, rawBytes.byteOffset, rawBytes.byteLength),
+      editable: {
+        tags: {
+          source: "docs-tour",
+          screen: SCREEN_ID,
+          capturedAt: new Date().toISOString(),
+          ...(process.env.GITHUB_SHA ? { commit: process.env.GITHUB_SHA } : {}),
+        },
+      },
     });
 
     // 4. Persist the annotated PNG to Astro's `public/` so it's

@@ -8,6 +8,7 @@ import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createAnnotator } from "@ingcreators/annot-annotator";
+import { readEditablePngBytes } from "@ingcreators/annot-core/xmp-bytes";
 
 import { describe, expect, it } from "vitest";
 
@@ -152,5 +153,97 @@ describe("renderAnnotatedScreen", () => {
     expect(second.fromCache).toBe(true);
     // Cached buffer is the same instance/contents.
     expect(Array.from(second.bytes)).toEqual(Array.from(first.bytes));
+  });
+
+  describe("editable: true | { tags }", () => {
+    it("returns a re-editable PNG that round-trips via readEditablePngBytes", async () => {
+      const snapshotBlock = `{/* annot:snapshot
+- textbox "Email" [ref=e1] [box=20,40,200,30]
+- button "Sign in" [ref=e9] [box=150,100,80,30]
+*/}`;
+      const { mdxPath } = await makeFixture(snapshotBlock);
+      const result = await renderAnnotatedScreen({
+        mdxPath,
+        screenId: "login",
+        editable: true,
+      });
+      expect(result.hadBoundingBoxes).toBe(true);
+      const meta = readEditablePngBytes(result.bytes);
+      expect(meta).not.toBeNull();
+      // The annotations layer carries the badge SVG primitives.
+      expect(meta!.annotationsSvg).toContain("<svg");
+      // The base PNG round-trips byte-for-byte.
+      expect(meta!.originalImageDataUrl).toMatch(/^data:image\/png;base64,/);
+    });
+
+    it("writes the optional tags into the XMP", async () => {
+      const snapshotBlock = `{/* annot:snapshot
+- textbox "Email" [ref=e1] [box=20,40,200,30]
+*/}`;
+      const { mdxPath } = await makeFixture(snapshotBlock);
+      const result = await renderAnnotatedScreen({
+        mdxPath,
+        screenId: "login",
+        editable: {
+          tags: {
+            source: "docs-tour-test",
+            screen: "login",
+            capturedAt: "2026-05-21T00:00:00.000Z",
+          },
+        },
+      });
+      const meta = readEditablePngBytes(result.bytes);
+      expect(meta!.tags).toEqual({
+        source: "docs-tour-test",
+        screen: "login",
+        capturedAt: "2026-05-21T00:00:00.000Z",
+      });
+    });
+
+    it("wraps even a no-bbox screen as editable so re-opening works", async () => {
+      // No snapshot → empty annotations layer, but the editable
+      // wrapper must still embed the base PNG so a future editor
+      // session can re-import the file.
+      const { mdxPath } = await makeFixture("");
+      const result = await renderAnnotatedScreen({
+        mdxPath,
+        screenId: "login",
+        editable: true,
+      });
+      expect(result.hadBoundingBoxes).toBe(false);
+      const meta = readEditablePngBytes(result.bytes);
+      expect(meta).not.toBeNull();
+      // No overlays baked → annotations SVG is the empty wrapper.
+      expect(meta!.annotationsSvg).toContain("<svg");
+    });
+
+    it("uses a distinct cache key from the flat-raster variant", async () => {
+      const snapshotBlock = `{/* annot:snapshot
+- textbox "Email" [ref=e1] [box=20,40,200,30]
+*/}`;
+      const { mdxPath } = await makeFixture(snapshotBlock);
+      const cache = createMemoryCache();
+
+      const flat = await renderAnnotatedScreen({ mdxPath, screenId: "login", cache });
+      expect(flat.fromCache).toBe(false);
+
+      // Same screen, same MDX, but editable: true → must miss cache.
+      const editable = await renderAnnotatedScreen({
+        mdxPath,
+        screenId: "login",
+        cache,
+        editable: true,
+      });
+      expect(editable.fromCache).toBe(false);
+
+      // And the editable variant cache hit on a second call.
+      const editable2 = await renderAnnotatedScreen({
+        mdxPath,
+        screenId: "login",
+        cache,
+        editable: true,
+      });
+      expect(editable2.fromCache).toBe(true);
+    });
   });
 });

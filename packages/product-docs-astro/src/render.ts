@@ -48,6 +48,26 @@ export interface RenderAnnotatedScreenOptions {
    * directly and `loadBasePng` is skipped.
    */
   basePngBytes?: Uint8Array;
+  /**
+   * Emit a re-editable PNG instead of a flat raster. When set,
+   * the visible pixels match the default rasterised output but
+   * the file additionally carries the original (un-annotated)
+   * base image + the annotations SVG in the PNG's XMP metadata
+   * + custom `svGo` chunk, so re-opening the file in Annot Cloud
+   * / the editor / VSCode hosts restores the annotations as
+   * selectable / movable objects.
+   *
+   * Pass `true` for the defaults, or an object to set the optional
+   * `tags` field on the embedded XMP (e.g. `source` / `screen` /
+   * `capturedAt` provenance metadata — see
+   * `@ingcreators/annot-annotator`'s `EditableInput`).
+   *
+   * When no overlay bboxes resolve (the snapshot block has no
+   * `[box=…]` markers yet), the base PNG is wrapped as an editable
+   * PNG with an empty annotations layer — re-opening still works,
+   * the editor just shows the un-annotated capture.
+   */
+  editable?: boolean | { tags?: Record<string, string> };
 }
 
 export interface RenderResult {
@@ -99,7 +119,16 @@ export async function renderAnnotatedScreen(
     );
   }
 
-  const key = cacheKey({ mdxSource: parsed.source, screenId: options.screenId });
+  const editable = normaliseEditable(options.editable);
+  // Cache key includes the editable flag so flat + editable variants of
+  // the same screen don't collide. Tag values are deliberately NOT in
+  // the cache key — they only affect XMP metadata, not pixel output,
+  // and including timestamps / commit SHAs would defeat caching.
+  const key = cacheKey({
+    mdxSource: parsed.source,
+    screenId: options.screenId,
+    editable: editable !== null,
+  });
   if (options.cache) {
     const cached = await options.cache.get(key);
     if (cached) {
@@ -116,8 +145,22 @@ export async function renderAnnotatedScreen(
   let result: Uint8Array;
   let hadBoundingBoxes: boolean;
   if (annotations.length === 0) {
-    result = baseBytes;
     hadBoundingBoxes = false;
+    if (editable !== null) {
+      // No overlays to bake, but the caller still wants an editable
+      // file — wrap the base PNG with an empty annotations layer so
+      // re-opening in Annot loads the un-annotated capture.
+      const dataUrl = `data:image/png;base64,${Buffer.from(baseBytes).toString("base64")}`;
+      result = createAnnotator({ loadSystemFonts: true }).toEditablePng({
+        originalDataUrl: dataUrl,
+        annotationsSvg: emptyAnnotationsSvg(),
+        width: dims.width,
+        height: dims.height,
+        tags: editable.tags,
+      });
+    } else {
+      result = baseBytes;
+    }
   } else {
     const dataUrl = `data:image/png;base64,${Buffer.from(baseBytes).toString("base64")}`;
     const annotationsSvg = svgFromBadges(annotations);
@@ -130,12 +173,17 @@ export async function renderAnnotatedScreen(
     // need a stricter font set can pre-render with their own
     // `createAnnotator` invocation and pass `basePngBytes`
     // for the unannotated fall-through.
-    result = createAnnotator({ loadSystemFonts: true }).toPng({
+    const annotator = createAnnotator({ loadSystemFonts: true });
+    const input = {
       originalDataUrl: dataUrl,
       annotationsSvg,
       width: dims.width,
       height: dims.height,
-    });
+    };
+    result =
+      editable !== null
+        ? annotator.toEditablePng({ ...input, tags: editable.tags })
+        : annotator.toPng(input);
     hadBoundingBoxes = true;
   }
 
@@ -143,6 +191,28 @@ export async function renderAnnotatedScreen(
     await options.cache.set(key, result);
   }
   return { bytes: result, fromCache: false, hadBoundingBoxes };
+}
+
+/**
+ * Normalise the `editable` option onto a single nullable record. `null`
+ * = flat raster (default). Object = editable PNG, with the optional
+ * `tags` field passed verbatim to `Annotator.toEditablePng`.
+ */
+function normaliseEditable(
+  v: RenderAnnotatedScreenOptions["editable"],
+): { tags?: Record<string, string> } | null {
+  if (!v) return null;
+  if (v === true) return {};
+  return v;
+}
+
+/**
+ * Minimal SVG fragment for the "editable wrap, no overlays" case.
+ * The editor's import path reads `annotationsSvg` from the XMP and
+ * reconstructs an empty annotations layer — fine to be wrapper-only.
+ */
+function emptyAnnotationsSvg(): string {
+  return '<svg xmlns="http://www.w3.org/2000/svg"></svg>';
 }
 
 // ─── snapshot bbox parsing ─────────────────────────────────────
