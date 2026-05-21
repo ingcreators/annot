@@ -322,6 +322,168 @@ describe("patchScreenshot — MDX source", () => {
   });
 });
 
+describe("patchScreenshot — locator screenshots (Phase 2)", () => {
+  /**
+   * Build a stub Locator with a configurable boundingBox + page()
+   * accessor and a `screenshot` mock returning the cropped bytes.
+   * The patch lands on the prototype just like for Pages.
+   */
+  function makeStubLocator(opts: {
+    boundingBox: { x: number; y: number; width: number; height: number } | null;
+    page: { screenshot: (opts?: unknown) => Promise<Buffer> };
+    croppedPngBytes: Buffer;
+  }) {
+    interface StubLocator {
+      screenshot: (opts?: unknown) => Promise<Buffer>;
+      boundingBox: () => Promise<typeof opts.boundingBox>;
+      page: () => typeof opts.page;
+    }
+    const proto: StubLocator = {
+      screenshot: vi.fn(
+        async (_opts?: unknown) => opts.croppedPngBytes,
+      ) as unknown as StubLocator["screenshot"],
+      boundingBox: async () => opts.boundingBox,
+      page: () => opts.page,
+    };
+    return Object.create(proto) as StubLocator;
+  }
+
+  it("locator.screenshot({ annot: { overlays } }) rebases overlays into clip-space", async () => {
+    const croppedPngBytes = makePng(200, 150);
+    const fakePage = { screenshot: vi.fn(async () => Buffer.alloc(0)) };
+    const stub = makeStubLocator({
+      boundingBox: { x: 100, y: 50, width: 200, height: 150 },
+      page: fakePage,
+      croppedPngBytes,
+    });
+    patchScreenshot(Object.getPrototypeOf(stub));
+    const result = await stub.screenshot({
+      annot: {
+        overlays: [
+          // In page-space: bbox at (120,60) — INSIDE the locator clip.
+          { type: "rect", bbox: { x: 120, y: 60, width: 50, height: 30 }, intent: "warning" },
+        ],
+      },
+    });
+    const meta = readEditablePngBytes(new Uint8Array(result));
+    expect(meta).not.toBeNull();
+    // Rebased: x=120-100=20, y=60-50=10. SVG should reference these.
+    expect(meta!.annotationsSvg).toMatch(/x="?20"?/);
+    expect(meta!.annotationsSvg).toMatch(/y="?10"?/);
+  });
+
+  it("drops overlays whose page-space bbox falls outside the locator clip", async () => {
+    const croppedPngBytes = makePng(200, 150);
+    const fakePage = { screenshot: vi.fn(async () => Buffer.alloc(0)) };
+    const stub = makeStubLocator({
+      boundingBox: { x: 100, y: 50, width: 200, height: 150 },
+      page: fakePage,
+      croppedPngBytes,
+    });
+    patchScreenshot(Object.getPrototypeOf(stub));
+    const result = await stub.screenshot({
+      annot: {
+        overlays: [
+          // INSIDE
+          { type: "rect", bbox: { x: 120, y: 60, width: 30, height: 30 } },
+          // OUTSIDE (left of clip)
+          { type: "rect", bbox: { x: 0, y: 0, width: 30, height: 30 } },
+          // OUTSIDE (right of clip)
+          { type: "rect", bbox: { x: 350, y: 60, width: 30, height: 30 } },
+        ],
+      },
+    });
+    const meta = readEditablePngBytes(new Uint8Array(result));
+    expect(meta).not.toBeNull();
+    // Only the in-clip rect survives. Count rect tags in the svg.
+    const rectMatches = meta!.annotationsSvg.match(/<rect/g) ?? [];
+    // The annotator may add additional rects internally; assert
+    // at least one (the kept one) and that the dropped coords
+    // (0,0 / 350,60) are NOT present.
+    expect(rectMatches.length).toBeGreaterThanOrEqual(1);
+    expect(meta!.annotationsSvg).not.toMatch(/x="?350"?/);
+  });
+
+  it("locator.screenshot({ annot: { tags } }) without overlays writes a tags-only sidecar", async () => {
+    const croppedPngBytes = makePng(200, 150);
+    const fakePage = { screenshot: vi.fn() };
+    const stub = makeStubLocator({
+      boundingBox: { x: 100, y: 50, width: 200, height: 150 },
+      page: fakePage,
+      croppedPngBytes,
+    });
+    patchScreenshot(Object.getPrototypeOf(stub));
+    const result = await stub.screenshot({
+      annot: { tags: { source: "locator-shot" } },
+    });
+    expect(Array.from(result.subarray(0, 8))).toEqual(PNG_MAGIC);
+    // No re-editable record (tags-only).
+    expect(readEditablePngBytes(new Uint8Array(result))).toBeNull();
+    const text = Array.from(new Uint8Array(result))
+      .map((b) => String.fromCharCode(b))
+      .join("");
+    expect(text).toContain('"source":"locator-shot"');
+  });
+
+  it("throws with a friendly diagnostic when the locator has no bounding box", async () => {
+    const croppedPngBytes = makePng(100, 100);
+    const fakePage = { screenshot: vi.fn() };
+    const stub = makeStubLocator({
+      boundingBox: null,
+      page: fakePage,
+      croppedPngBytes,
+    });
+    patchScreenshot(Object.getPrototypeOf(stub));
+    await expect(
+      stub.screenshot({
+        annot: { overlays: [{ type: "rect", bbox: { x: 0, y: 0, width: 10, height: 10 } }] },
+      }),
+    ).rejects.toThrow(/no bounding box/);
+  });
+
+  it("locator.screenshot WITHOUT annot falls through to original (vanilla)", async () => {
+    const croppedPngBytes = makePng(100, 100);
+    const fakePage = { screenshot: vi.fn() };
+    const stub = makeStubLocator({
+      boundingBox: { x: 0, y: 0, width: 100, height: 100 },
+      page: fakePage,
+      croppedPngBytes,
+    });
+    const originalSpy = (Object.getPrototypeOf(stub) as { screenshot: ReturnType<typeof vi.fn> })
+      .screenshot;
+    patchScreenshot(Object.getPrototypeOf(stub));
+    await stub.screenshot({ scale: "css" });
+    expect(originalSpy).toHaveBeenCalledTimes(1);
+    expect(originalSpy).toHaveBeenCalledWith({ scale: "css" });
+  });
+});
+
+describe("patchScreenshot — page.screenshot({ clip })", () => {
+  it("rebases overlays against an explicit clip on a Page screenshot", async () => {
+    const croppedPngBytes = makePng(200, 150);
+    // The stub returns the cropped bytes directly — Playwright would
+    // ordinarily perform the cropping itself when `clip` is set.
+    const stub = makeStubPage({ snapshotYaml: "", pngBytes: croppedPngBytes });
+    patchScreenshot(Object.getPrototypeOf(stub));
+    const result = await stub.screenshot({
+      clip: { x: 100, y: 50, width: 200, height: 150 },
+      annot: {
+        overlays: [
+          { type: "rect", bbox: { x: 120, y: 60, width: 30, height: 20 }, intent: "info" },
+          { type: "rect", bbox: { x: 0, y: 0, width: 30, height: 20 } }, // outside
+        ],
+      },
+    });
+    const meta = readEditablePngBytes(new Uint8Array(result));
+    expect(meta).not.toBeNull();
+    // Inside rect rebased: x=20, y=10
+    expect(meta!.annotationsSvg).toMatch(/x="?20"?/);
+    // Outside rect dropped
+    const rectMatches = meta!.annotationsSvg.match(/<rect/g) ?? [];
+    expect(rectMatches.length).toBeGreaterThanOrEqual(1);
+  });
+});
+
 describe("patchScreenshot — invariants", () => {
   it("is idempotent: applying twice doesn't double-wrap", async () => {
     const pngBytes = makePng(100, 100);
