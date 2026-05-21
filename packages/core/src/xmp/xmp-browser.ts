@@ -16,13 +16,9 @@
  */
 
 import {
-  type AnnotMetadata,
   buildXmp,
   createEditablePngBytes,
   dataUrlToUint8Array,
-  readEditableImage,
-  readEditablePngBytes,
-  WELL_KNOWN_TAG_KEYS,
   writeJpegWithMetadata,
 } from "./xmp-bytes.js";
 

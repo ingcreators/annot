@@ -6,7 +6,7 @@
 // proper component implementations.
 
 import { writeFile } from "node:fs/promises";
-import { basename, dirname, join } from "node:path";
+import { basename, dirname } from "node:path";
 
 import type { ParsedMdx } from "./parse-mdx.ts";
 
