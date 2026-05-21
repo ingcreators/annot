@@ -163,6 +163,14 @@ jobs:
       # We pin the filter targets explicitly rather than
       # `pnpm -r build` to avoid time spent on the host apps
       # (web / extension / desktop) that aren't publishing.
+      #
+      # The list MUST match the seven packages enumerated in the
+      # "Verify pack contents" + `changeset publish` paths below.
+      # Earlier publish runs missed the three `product-docs*`
+      # packages here, which is why their 0.1.0 tarballs shipped
+      # without a `dist/` directory — `files: ["dist", "bin",
+      # ...]` resolves to the LITERAL paths that exist when pack
+      # runs, and no `dist/` had been built.
       - name: Build publishable packages
         run: >
           pnpm
@@ -170,6 +178,9 @@ jobs:
           --filter @ingcreators/annot-annotator
           --filter @ingcreators/annot-playwright
           --filter @ingcreators/annot-mcp
+          --filter @ingcreators/annot-product-docs
+          --filter @ingcreators/annot-product-docs-astro
+          --filter @ingcreators/annot-product-docs-xlsx
           build
 
       # Sanity: `pnpm pack` round-trip catches `files` allowlist

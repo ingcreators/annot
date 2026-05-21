@@ -53,7 +53,8 @@
   },
   "scripts": {
     "build": "vite build",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepack": "pnpm run build"
   },
   "devDependencies": {
     "@playwright/test": "^1.50.0",
