@@ -1,6 +1,10 @@
 # annot.work — unify on Astro, refresh content end-to-end
 
-> **Status:** Draft — scope locked, awaiting first-PR start.
+> **Status:** In progress — Phase 1 underway. Open Questions
+>   resolved (see "Open questions / risks" below — every default
+>   carried, with one user-modified pick in Q1, Q2, plus a new
+>   resolution for the `/docs/pwa/*` → `/docs/app/*` URL rename
+>   surfaced during Phase 1 kick-off).
 > **Compatibility:** No user-visible URL changes during the
 >   migration. `annot.work/` (marketing) stays the same origin;
 >   `annot.work/docs/*` (VitePress → Astro Starlight) keeps every
@@ -165,7 +169,11 @@ package did during the Electron migration — see
 
 Every existing `annot.work/docs/<path>` MUST resolve to the same
 content (or better content at that path) after cutover. The
-content port in Phase 2 is a 1:1 mapping:
+content port in Phase 2 is a 1:1 mapping for every section
+EXCEPT `/docs/pwa/*`, which is renamed to `/docs/app/*` with
+permanent 301 redirects installed in `worker.js` (see Open
+Question #7 for the rationale — the web app is no longer a
+PWA, so the URL segment was misleading).
 
 | VitePress path | Starlight path | Notes |
 |---|---|---|
@@ -186,8 +194,8 @@ content port in Phase 2 is a 1:1 mapping:
 | `/docs/ai-agents/` | same | AI agents overview |
 | `/docs/ai-agents/install` | same | |
 | `/docs/ai-agents/tools` | same | MCP tools reference |
-| `/docs/pwa/` | same | PWA overview |
-| `/docs/pwa/*` | same | All 3 existing PWA pages |
+| `/docs/pwa/` | `/docs/app/` | Web-app overview — renamed (see Open Question #7); 301 redirect installed |
+| `/docs/pwa/*` | `/docs/app/*` | All 3 existing pages — renamed + redirected |
 | `/docs/contributing/` | same | |
 | `/docs/contributing/*` | same | |
 
@@ -457,10 +465,10 @@ PR scopes. "Disposition" is one of:
 
 | Path | Today | Disposition |
 |---|---|---|
-| `/docs/pwa/` | Overview | Keep |
-| `/docs/pwa/sign-in` | Existing | Keep |
-| `/docs/pwa/storage-backends` | Existing | Keep |
-| `/docs/pwa/share-links` | Existing | Keep |
+| `/docs/pwa/` → `/docs/app/` | Overview | Update — rename to `/docs/app/`, 301 redirect, drop "PWA" in titles + body in favour of "Annot web app" |
+| `/docs/pwa/sign-in` → `/docs/app/sign-in` | Existing | Update — same rename + redirect |
+| `/docs/pwa/storage-backends` → `/docs/app/storage-backends` | Existing | Update — same rename + redirect |
+| `/docs/pwa/share-links` → `/docs/app/share-links` | Existing | Update — same rename + redirect |
 
 ### `/docs/product-docs/` (new section)
 
@@ -550,9 +558,23 @@ How much of the docs site should be dogfooded? Two extremes:
   regenerated from a Playwright tour. High marketing impact;
   the tour has to be kept stable.
 
-**Default: (a).** Phase 5 is the lowest-priority phase; if the
-tour stays stable for 2-3 release cycles we expand to (b) as a
-follow-up.
+**Resolved (Phase 1 kick-off): all pages that explain the Annot
+web app.** Concretely:
+
+- Every page under `/docs/app/*` (the renamed `/docs/pwa/*`)
+  is generated from a Playwright tour of `annot.work/app/`.
+- Every `getting-started` and `recipes` page that ALREADY ships
+  a UI screenshot today is regenerated through the same tour,
+  with the rendered screenshots replacing the static images.
+- API-reference pages, `contributing/*`, `ai-agents/*`, the
+  product-docs section, and the home page stay as
+  hand-written MDX — they don't show the web app UI.
+
+The tour file lives at
+`packages/docs-site-astro/tests/docs/annot-app.spec.ts` and runs
+nightly + on PRs touching `packages/web/` (Phase 5 wires the
+GitHub Actions workflow). Tour failures are advisory initially
+(warning, not error) until the screen identifiers stabilise.
 
 ### 2. Cutover window
 
@@ -566,10 +588,16 @@ when:
 - **(c)** Behind a feature flag — both workers run, a header /
   cookie picks which.
 
-**Default: (b).** The fast-rollback story matters more than the
-"low traffic window" — annot.work isn't yet load-bearing for
-production users; the readers are early adopters who tolerate
-1-minute glitches.
+**Resolved (Phase 1 kick-off): (c) — feature-flag cutover.**
+Both the Astro Starlight worker and the legacy VitePress worker
+keep running through the cutover; a thin picker Worker reads a
+cookie (`annot-docs-stack=astro`) or a query parameter
+(`?docs-stack=astro`) to route the request to one or the other.
+Default routing is "VitePress" on day one, flipped to "Astro"
+in a follow-up commit once smoke tests pass under the cookie
+opt-in. After a 7-day observation window the picker is removed
+and the Astro worker claims the route directly (Phase 6.5,
+folded into the Phase 6 PR as a TODO checklist).
 
 ### 3. Starlight customisation depth
 
@@ -581,27 +609,31 @@ Starlight's default theme is good but generic. Two depths:
   spacing scales + dark-mode palette + custom sidebar
   component.
 
-**Default: (a).** Phase 4 redesigns the marketing landing; the
-docs surface is fine as Starlight-default for v1. (b) is a
-follow-up if visual consistency between `/` and `/docs/` ends
-up jarring after cutover.
+**Resolved (Phase 1 kick-off): (a).** Phase 4 redesigns the
+marketing landing; the docs surface is fine as Starlight-default
+for v1. (b) is a follow-up if visual consistency between `/`
+and `/docs/` ends up jarring after cutover. The Phase 1 scaffold
+implements the brand-accent override in
+`packages/docs-site-astro/src/styles/brand.css`.
 
 ### 4. URL trailing-slash policy
 
 VitePress and Starlight have different defaults for trailing
 slashes on directory-index pages. Astro is configurable.
 
-**Default: ignore** (match marketing's `trailingSlash: "ignore"`).
-This preserves both `/docs/getting-started` and
-`/docs/getting-started/` resolving to the same page, matching
-VitePress's current behaviour.
+**Resolved (Phase 1 kick-off): `ignore`** (match marketing's
+`trailingSlash: "ignore"`). This preserves both
+`/docs/getting-started` and `/docs/getting-started/` resolving
+to the same page, matching VitePress's current behaviour.
+Set in `packages/docs-site-astro/astro.config.mjs`.
 
 ### 5. RSS / sitemap
 
 Today VitePress emits neither. Starlight supports both.
 
-**Default: emit a sitemap.xml** (free, helps SEO). RSS deferred
-to a future "blog" plan — there's nothing to feed yet.
+**Resolved (Phase 1 kick-off): emit sitemap.xml** (free, helps
+SEO) via `@astrojs/sitemap`. RSS deferred to a future "blog"
+plan — there's nothing to feed yet.
 
 ### 6. `docs-site-astro/` naming
 
@@ -612,8 +644,31 @@ The temporary parallel name is awkward. Two paths:
 - **(b)** Rename `docs-site/` to `docs-site-vitepress/` in
   Phase 1; new package takes the `docs-site` name immediately.
 
-**Default: (a).** Phase 1's PR is bigger if it also renames an
-existing package. The (a) ordering keeps each PR's diff focused.
+**Resolved (Phase 1 kick-off): (a).** Phase 1's PR is bigger if
+it also renames an existing package. The (a) ordering keeps
+each PR's diff focused.
+
+### 7. `/docs/pwa/*` URL rename
+
+Surfaced during Phase 1 kick-off: the existing VitePress
+"PWA" section name predates the SPA reorg — the web app at
+`annot.work/app/` no longer ships a service worker or
+`manifest.json`, so the "PWA" label is misleading. Three options:
+
+- **(a)** Keep `/docs/pwa/*` URLs to honour the URL preservation
+  contract literally; rewrite only the page body copy.
+- **(b)** Phase 2 ports the section under `/docs/app/*` AND
+  installs a 301 redirect from each `/docs/pwa/<page>` →
+  `/docs/app/<page>` in `worker.js`. Page titles + nav copy
+  also drop "PWA" in favour of "Annot web app".
+- **(c)** Defer to a follow-up plan; Phase 2 keeps `/docs/pwa/*`.
+
+**Resolved (Phase 1 kick-off): (b).** The URL preservation
+contract is honoured via 301s — external links keep working —
+while the live URLs match the product naming. Phase 2 owns the
+rewrite + the redirect rules in `worker.js`. The redirect map
+covers `/docs/pwa/` (overview), `/docs/pwa/sign-in`,
+`/docs/pwa/storage-backends`, `/docs/pwa/share-links`.
 
 ## References
 

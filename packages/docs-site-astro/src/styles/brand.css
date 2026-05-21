@@ -1,0 +1,42 @@
+/*
+ * Annot brand override for Starlight defaults.
+ *
+ * Phase 1 of `docs/plans/annot-work-astro-unification.md` resolved
+ * Open Question #3 with "minimal customisation" — we only retint
+ * Starlight's accent + neutral palette so the docs surface visually
+ * harmonises with `annot.work/`. Heavy customisation (typography
+ * scale, custom sidebar component) is deferred to a follow-up plan
+ * if the seam ends up jarring after Phase 6 cutover.
+ *
+ * Palette source: `packages/marketing/src/styles/global.css` and
+ * `packages/marketing/public/brand/annot-icon.svg`. The accent
+ * colour is `--annot-blue` (#7c9cff), matching the marketing CTA
+ * underline + brand-icon highlight stroke.
+ *
+ * Starlight exposes both `--sl-color-accent-*` (for the active
+ * sidebar item, link colour, button background) and
+ * `--sl-color-gray-*` (for the neutral text + chrome scale).
+ * Override only the colour tokens; typography + spacing keep
+ * Starlight's defaults so future Starlight upgrades flow through.
+ */
+
+:root {
+  /* Accent — light theme. Maps Starlight's accent scale to the
+   * Annot blue ramp. The named stops are the ones Starlight
+   * references in its CSS. */
+  --sl-color-accent-low: #e0e7ff;
+  --sl-color-accent: #5b7fff;
+  --sl-color-accent-high: #1b3aa3;
+
+  /* Brand-driven neutrals. The deep `--annot-ink` is reused for
+   * headings + accent text against light surfaces. */
+  --sl-color-text-accent: #1b3aa3;
+}
+
+:root[data-theme="dark"] {
+  --sl-color-accent-low: #18223f;
+  --sl-color-accent: #7c9cff;
+  --sl-color-accent-high: #d3def8;
+
+  --sl-color-text-accent: #7c9cff;
+}

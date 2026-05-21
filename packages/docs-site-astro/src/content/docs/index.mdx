@@ -1,0 +1,64 @@
+---
+title: Annot
+description: SVG-first annotated screenshots — call it from Playwright, host it in a web app, share through GitHub.
+template: splash
+hero:
+  tagline: Living product docs from your Playwright tests.
+  image:
+    file: ../../assets/annot-icon.svg
+  actions:
+    - text: Get started
+      link: /docs/getting-started/
+      icon: right-arrow
+      variant: primary
+    - text: API reference
+      link: /docs/api/
+      icon: open-book
+    - text: View on GitHub
+      link: https://github.com/ingcreators/annot
+      icon: external
+      variant: minimal
+---
+
+import { Card, CardGrid } from "@astrojs/starlight/components";
+
+<CardGrid stagger>
+  <Card title="Playwright fixture" icon="seti:playwright">
+    `npm install --save-dev @ingcreators/annot-playwright`. Drop the
+    fixture into `test.extend({ annotator })` and annotate
+    screenshots with a single call. → [Install](/docs/getting-started/playwright)
+  </Card>
+  <Card title="Living product docs" icon="document">
+    Generate a docs site **and** a Japanese 画面設計書 spreadsheet
+    from the same MDX, kept in sync with Playwright snapshots.
+    → [Overview](/docs/product-docs/)
+  </Card>
+  <Card title="MCP tools" icon="puzzle">
+    Drive Annot from Claude / agents over a stdio MCP server —
+    annotate URLs, capture aria snapshots, propose drift fixes.
+    → [Reference](/docs/ai-agents/tools)
+  </Card>
+  <Card title="Headless annotator" icon="rocket">
+    `npm install @ingcreators/annot-annotator`. The same annotation
+    engine as the web app, callable from any Node script — no
+    browser required. → [Install](/docs/getting-started/annotator)
+  </Card>
+  <Card title="SVG-first core" icon="pencil">
+    `npm install @ingcreators/annot-core`. Versioned SVG annotation
+    format with round-trip-safe parsing. Plug into your own renderer.
+    → [Install](/docs/getting-started/core)
+  </Card>
+  <Card title="Open source" icon="github">
+    Apache-2.0. The web app, Chrome extension, desktop app,
+    headless annotator, and Playwright fixture all live in one
+    monorepo. → [Browse the repo](https://github.com/ingcreators/annot)
+  </Card>
+</CardGrid>
+
+{/*
+  Phase 1 of `docs/plans/annot-work-astro-unification.md` — this
+  home page is the placeholder Starlight surface that proves the
+  scaffold works. Phase 2 lands the rest of the content port; the
+  six cards above mirror the eventual landing positioning so the
+  scaffold reviewer can already see the target shape.
+*/}

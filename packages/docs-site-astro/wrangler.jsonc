@@ -1,0 +1,51 @@
+/**
+ * Cloudflare Workers Static Assets config for the Astro Starlight
+ * documentation site at packages/docs-site-astro/.
+ *
+ * **Phase 1-5 status: PREVIEW ONLY.** The production
+ * `annot.work/docs/*` route still belongs to the legacy VitePress
+ * worker (`packages/docs-site/wrangler.jsonc`). This config
+ * deploys to a preview origin so we can smoke-test the Astro
+ * build without touching production. The route is added in
+ * Phase 6 (`docs/plans/annot-work-astro-unification.md`).
+ *
+ * Phase 6 cutover plan: feature-flag based — both workers run
+ * in parallel, a header / cookie picks which serves a given
+ * request. The Phase 6 PR adds the route + the picker Worker.
+ *
+ * URL layout once cutover lands:
+ *
+ *   annot.work/      → annot-marketing (landing)
+ *   annot.work/app/* → annot (PWA at /app/)
+ *   annot.work/docs/*→ THIS worker (Astro Starlight)
+ *   annot.work/api/* → annot-api
+ *
+ * Astro is configured with `base: "/docs/"` so every internal
+ * link in the built HTML already includes that prefix.
+ * `not_found_handling: "404-page"` because Astro emits a
+ * per-route static file — falling through to an index page
+ * would be wrong.
+ *
+ * The preview origin (`docs-astro-preview.annot.work` or a
+ * `workers.dev` subdomain — provisioned by the maintainer)
+ * still needs `workers_dev: false` flipped to `true` OR a
+ * routes pattern targeting the preview hostname; this is left
+ * for the maintainer to wire up alongside the Cloudflare
+ * account setup. The on-disk build artefact in `./dist/docs/`
+ * is correct either way; only the `routes` / `workers_dev`
+ * lines differ between preview + production.
+ */
+{
+  "name": "annot-docs-site-astro",
+  "compatibility_date": "2026-04-23",
+  "main": "./worker.js",
+  // Preview-only flag for Phase 1-5. Phase 6 PR flips this and
+  // adds the production route block to claim annot.work/docs/*.
+  "workers_dev": true,
+  "preview_urls": true,
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "404-page"
+  }
+}
