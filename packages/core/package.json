@@ -33,6 +33,7 @@
     "./icons": "./src/icons/index.ts",
     "./icons/*": "./src/icons/*.ts",
     "./xmp": "./src/xmp/xmp-browser.ts",
+    "./xmp-bytes": "./src/xmp/xmp-bytes.ts",
     "./zip": "./src/zip/zip-builder.ts",
     "./zip-bytes": "./src/zip/zip-bytes.ts",
     "./utils": "./src/utils/index.ts",
