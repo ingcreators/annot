@@ -32,21 +32,22 @@ between this MDX and the live UI surfaces as a CI warning.
 
 <Screen id="app-overview" src="./shots/app-overview.png">
 
-<Overlay match={{ role: "toolbar" }} intent="info" number={1}>
-**Toolbar** — Tool picker for rects, arrows, callouts, text,
-redact, and the freehand tool. Each tool has its own colour /
-variant flyout.
+<Overlay match={{ role: "searchbox", name: "Search images and tags" }} intent="info" number={1}>
+**Search** — Filter the image gallery by filename, tag, or
+metadata. Substring matching across both titles and tag
+labels.
 </Overlay>
 
-<Overlay match={{ role: "main" }} intent="info" number={2}>
-**Canvas** — The SVG annotation surface. Drag to draw the
-currently-selected tool; right-click switches between selection
-and tool-pick modes.
+<Overlay match={{ role: "button", name: "Help" }} intent="info" number={2}>
+**Help** — Opens the keyboard-shortcut reference and the
+"What's new" panel. The same shortcut surface that appears
+when you press `?` anywhere in the gallery.
 </Overlay>
 
-<Overlay match={{ role: "complementary" }} intent="info" number={3}>
-**Right panel** — Property editor for the selected element +
-the file metadata drawer.
+<Overlay match={{ role: "toolbar", name: "Block actions" }} intent="info" number={3}>
+**Block actions** — Per-file actions that operate on the
+gallery selection: open in editor, duplicate, delete, tag,
+move to folder.
 </Overlay>
 
 </Screen>
