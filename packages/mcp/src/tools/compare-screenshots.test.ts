@@ -30,7 +30,12 @@ function stubAnnotator(): { annotator: Annotator; toPng: ReturnType<typeof vi.fn
     height: 0,
   }));
   return {
-    annotator: { toPng, toSvg: vi.fn(() => "<svg/>"), toEncoded },
+    annotator: {
+      toPng,
+      toSvg: vi.fn(() => "<svg/>"),
+      toEncoded,
+      toEditablePng: vi.fn(() => stub),
+    },
     toPng,
   };
 }

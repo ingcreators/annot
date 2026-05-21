@@ -30,6 +30,7 @@ interface AnnotatorOptions {
 interface Annotator {
   toPng(input: AnnotateInput): Promise<Buffer>;
   toSvg(input: AnnotateInput): Promise<string>;
+  toEditablePng(input: EditableInput): Promise<Buffer>;
 }
 
 interface AnnotateInput {
@@ -45,6 +46,15 @@ interface AnnotateInput {
    * the PNG IHDR chunk).
    */
   annotationsSvg: string;
+}
+
+interface EditableInput extends AnnotateInput {
+  /**
+   * Optional opaque kv tags written into the embedded XMP.
+   * Soft-convention key names (`source`, `screen`, `capturedAt`,
+   * `commit`) are documented but not validated.
+   */
+  tags?: Record<string, string>;
 }
 ```
 
@@ -73,6 +83,46 @@ diffing in tests, for piping into another converter — use
 const svg = await annotator.toSvg({ baseImage, annotationsSvg });
 await writeFile("./annotated.svg", svg);
 ```
+
+### Re-editable PNG
+
+`toEditablePng` returns the same visible image as `toPng`, plus
+the original un-annotated capture + the annotations SVG embedded
+in the PNG's XMP metadata + custom `svGo` chunk. Re-opening the
+file in the Annot editor — `annot.work/app/`, the desktop /
+VSCode hosts, or the Chrome extension — restores the annotations
+as selectable / movable / restylable objects rather than a flat
+bitmap.
+
+```ts
+const annotator = createAnnotator();
+const editable = await annotator.toEditablePng({
+  baseImage: await readFile("./screenshot.png"),
+  annotationsSvg,
+  tags: {
+    source: "docs-tour",
+    screen: "app-overview",
+    capturedAt: new Date().toISOString(),
+  },
+});
+await writeFile("./editable.png", editable);
+```
+
+Image viewers that don't know about the custom chunks display
+the rasterised pixels verbatim — no compatibility loss versus
+`toPng`. The bytes are still a valid PNG.
+
+The optional `tags` are written verbatim into the XMP — no
+validation, no transformation. Soft-convention key names that
+built-in producers use (so downstream readers can key off the
+same names when present):
+
+| Key | Meaning |
+|-----|---------|
+| `source` | What produced the PNG — e.g. `"docs-tour"`, `"playwright-fixture"`, `"annot-mcp"`. |
+| `screen` | Living-product-docs `<Screen id>` value. |
+| `capturedAt` | ISO timestamp. |
+| `commit` | Git SHA when applicable. |
 
 ## Sanitisation
 
