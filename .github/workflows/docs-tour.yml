@@ -32,6 +32,16 @@ name: Docs dogfood tour
 # rewrites as a workflow annotation for the PR author to act
 # on manually.
 #
+# **Token: GitHub App, not GITHUB_TOKEN.** Auto-PRs created
+# with the default `GITHUB_TOKEN` don't trigger downstream
+# CI workflows (GitHub's anti-recursion guard) — the PR would
+# need a manual close+reopen to fire `ci.yml`. Using a token
+# minted by the `annot-docs-tour` GitHub App via
+# `actions/create-github-app-token` produces a PR authored
+# by the App's bot identity, which triggers CI normally.
+# App ID + private key live in repo secrets
+# `DOCS_TOUR_APP_ID` + `DOCS_TOUR_APP_PRIVATE_KEY`.
+#
 # **Tour failures are advisory** in Phase 5
 # (`continue-on-error: true`). Promotes to blocking once the
 # tour stays stable across 2-3 release cycles.
@@ -48,8 +58,12 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write # auto-PR step pushes a branch
-  pull-requests: write
+  # The auto-PR step uses an App installation token (minted by
+  # actions/create-github-app-token), not GITHUB_TOKEN, so we
+  # don't need contents/pull-requests write here. Workflow-
+  # annotation writes (the "Surface MDX diff" step's
+  # `::notice::` lines) require nothing extra.
+  contents: read
 
 concurrency:
   group: docs-tour-${{ github.ref }}
@@ -102,6 +116,21 @@ jobs:
             echo "::notice::Docs tour completed; no file rewrites (UI matched stored snapshot)."
           fi
 
+      # ── Mint a GitHub App installation token ─────────────────
+      # The token below is what the auto-PR step uses. Default
+      # GITHUB_TOKEN-authored PRs don't trigger downstream CI
+      # workflows; App-authored ones do (the App is a distinct
+      # identity, not the workflow itself).
+      - name: Generate App installation token
+        if: |
+          steps.diff.outputs.changed == 'true'
+          && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.DOCS_TOUR_APP_ID }}
+          private-key: ${{ secrets.DOCS_TOUR_APP_PRIVATE_KEY }}
+
       # ── Auto-PR on scheduled + manual runs ───────────────────
       # `pull_request`-triggered runs skip this — those runs are
       # drift detection only, surfacing rewrites as an annotation
@@ -112,8 +141,7 @@ jobs:
           && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
         uses: peter-evans/create-pull-request@v7
         with:
-          # Default GITHUB_TOKEN is fine — workflow has
-          # `contents: write` + `pull-requests: write` above.
+          token: ${{ steps.app-token.outputs.token }}
           commit-message: |
             chore(docs-tour): refresh /docs/app/* screenshots + snapshot blocks
 
