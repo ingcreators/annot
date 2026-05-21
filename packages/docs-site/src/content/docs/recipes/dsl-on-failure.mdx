@@ -3,7 +3,7 @@ title: Annotate on failure with the DSL
 description: Same assertion-failure flow with the typed DSL — intent — "error" instead of raw hex, callout instead of three string-concatenated helpers.
 ---
 
-`annotateScreenshot()` accepts the [annotation DSL](../api/dsl)
+`annotateScreenshot()` accepts the [annotation DSL](/docs/api/dsl)
 directly since `annot-playwright@0.2.0`. The DSL is typically
 clearer than hand-rolled SVG when the goal is "highlight the
 failing element + label it":
@@ -53,7 +53,7 @@ error chrome elsewhere in the product.
 ## Comparing the two flavours
 
 The `annotationsSvg: string` flavour from
-[the SVG helpers page](../api/svg-helpers) still works and is
+[the SVG helpers page](/docs/api/svg-helpers) still works and is
 appropriate when:
 
 - You need a shape the DSL doesn't model (use `{ type: "raw" }`
@@ -78,10 +78,10 @@ The DSL doesn't resolve locators itself — Playwright tests
 already hold a `Page` and can resolve via
 `await locator.boundingBox()`. If you find yourself writing the
 same locator → bbox dance many times, the
-[draw-by-DOM-locator recipe](./dom-locator) lifts it into a
+[draw-by-DOM-locator recipe](/docs/recipes/dom-locator) lifts it into a
 helper.
 
 For agent-side workflows where the agent has the locator string
 but no `Page`, the
-[MCP `annot_annotate_url` tool](../ai-agents/tools#annot_annotate_url)
+[MCP `annot_annotate_url` tool](/docs/ai-agents/tools#annot_annotate_url)
 takes locators directly.

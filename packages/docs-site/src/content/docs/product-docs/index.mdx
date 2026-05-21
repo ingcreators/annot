@@ -30,31 +30,31 @@ docs invert the lifecycle:
 
 ## What lives in this section
 
-- [**Concepts**](./concepts) — the MDX format, `<Screen>` /
+- [**Concepts**](/docs/product-docs/concepts) — the MDX format, `<Screen>` /
   `<Overlay>`, the `annot:` frontmatter, the `match` resolver,
   the snapshot / attributes comment blocks the tour rewrites.
-- [**Playwright tour**](./playwright-tour) — the test file
+- [**Playwright tour**](/docs/product-docs/playwright-tour) — the test file
   shape, the `screen` fixture from `annot-product-docs`,
   capture conventions, scaling to dozens of screens.
-- [**Astro integration**](./astro-integration) — wiring
+- [**Astro integration**](/docs/product-docs/astro-integration) — wiring
   `productDocsIntegration()` into an Astro config, the seven
   shipped components, the Image Service + caches.
-- [**Xlsx templates**](./xlsx-templates) — Excel emission via
+- [**Xlsx templates**](/docs/product-docs/xlsx-templates) — Excel emission via
   customer templates: `{var}` placeholders, Named Ranges, the
   default no-template layout for the OSS use case.
-- [**Drift detection**](./drift-detection) — `annot docs lint`,
+- [**Drift detection**](/docs/product-docs/drift-detection) — `annot docs lint`,
   the six finding kinds, the bundled GitHub Actions workflow
   that converts JSON output into `core.warning` annotations
   on the PR diff.
 
 ## See also
 
-- [Get started — install the trio](../getting-started/product-docs)
-- [Recipe: build a screen-spec spreadsheet from a Playwright tour](../recipes/living-product-docs)
-- API references: [`annot-product-docs`](../api/product-docs) /
-  [`-astro`](../api/product-docs-astro) /
-  [`-xlsx`](../api/product-docs-xlsx)
+- [Get started — install the trio](/docs/getting-started/product-docs)
+- [Recipe: build a screen-spec spreadsheet from a Playwright tour](/docs/recipes/living-product-docs)
+- API references: [`annot-product-docs`](/docs/api/product-docs) /
+  [`-astro`](/docs/api/product-docs-astro) /
+  [`-xlsx`](/docs/api/product-docs-xlsx)
 - MCP tools for the docs flow:
-  [`annot_draft_screen_spec`](../ai-agents/tools#annot_draft_screen_spec) /
-  [`annot_propose_drift_fixes`](../ai-agents/tools#annot_propose_drift_fixes) /
-  [`annot_translate_screen_spec`](../ai-agents/tools#annot_translate_screen_spec)
+  [`annot_draft_screen_spec`](/docs/ai-agents/tools#annot_draft_screen_spec) /
+  [`annot_propose_drift_fixes`](/docs/ai-agents/tools#annot_propose_drift_fixes) /
+  [`annot_translate_screen_spec`](/docs/ai-agents/tools#annot_translate_screen_spec)
