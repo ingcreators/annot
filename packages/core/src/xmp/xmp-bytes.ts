@@ -243,6 +243,55 @@ export function writePngWithMetadata(
   return concat(cleaned.slice(0, insertPos), itxtChunk, origChunk, cleaned.slice(insertPos));
 }
 
+/**
+ * Build a tags-only XMP packet — `<annot:tags>` element present,
+ * `<annot:annotations>` / `<annot:width>` / `<annot:height>` absent.
+ *
+ * Used for the "PNG with provenance metadata sidecar" path: image viewers
+ * see a normal PNG, the Annot editor reads no `<annot:annotations>` and
+ * treats it as an ordinary file, but XMP-aware tools (or this library's
+ * own reader) can extract the `tags` for downstream consumption.
+ */
+export function buildXmpTagsOnly(tags: Record<string, string>): string {
+  const tagsJson = JSON.stringify(tags);
+  return `<?xpacket begin="﻿" id="W5M0MpCehiHzreSzNTczkc9d"?>
+<x:xmpmeta xmlns:x="adobe:ns:meta/">
+  <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+    <rdf:Description rdf:about=""
+      xmlns:${XMP_NS}="${XMP_NS_URI}">
+      <${XMP_NS}:tags>${tagsJson}</${XMP_NS}:tags>
+    </rdf:Description>
+  </rdf:RDF>
+</x:xmpmeta>
+<?xpacket end="w"?>`;
+}
+
+/**
+ * Write `tags` into a PNG's XMP iTXt chunk without embedding an original
+ * capture or annotations layer. The resulting bytes are still a valid PNG
+ * (image viewers display the rasterised pixels) and the Annot editor
+ * treats it as a normal PNG (no `<annot:annotations>` → not editable
+ * round-trip).
+ *
+ * Use this for "I want my CI failure screenshot to carry test-id /
+ * commit metadata" style provenance sidecars.
+ *
+ * Returns the input bytes unchanged if `tags` is empty.
+ */
+export function writePngWithTagsOnly(
+  pngData: Uint8Array,
+  tags: Record<string, string>,
+): Uint8Array {
+  if (!tags || Object.keys(tags).length === 0) return pngData;
+  const xmpBytes = new TextEncoder().encode(buildXmpTagsOnly(tags));
+  const itxtChunk = buildPngItxtChunk(xmpBytes);
+  const cleaned = removePngMetadata(pngData);
+
+  // Insert before IEND (last 12 bytes)
+  const insertPos = cleaned.length - 12;
+  return concat(cleaned.slice(0, insertPos), itxtChunk, cleaned.slice(insertPos));
+}
+
 // ─── Public API (Tier-A bytes) ──────────────────────────────────────
 
 /**

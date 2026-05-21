@@ -30,4 +30,6 @@ export type {
 export {
   parseSnapshotBoxes,
   renderAnnotatedScreen,
+  resolveMdxAnnotations,
+  svgFromBboxAnnotations,
 } from "./render.js";

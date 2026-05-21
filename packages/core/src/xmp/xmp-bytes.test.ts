@@ -5,6 +5,7 @@ import {
   readEditableImage,
   readEditablePngBytes,
   WELL_KNOWN_TAG_KEYS,
+  writePngWithTagsOnly,
 } from "./xmp-bytes.js";
 
 /**
@@ -216,6 +217,62 @@ describe("readEditableImage — dual-format dispatch", () => {
 
   it("returns null for non-PNG, non-JPEG bytes", () => {
     expect(readEditableImage(new Uint8Array([0, 0, 0, 0]))).toBeNull();
+  });
+});
+
+describe("writePngWithTagsOnly", () => {
+  it("returns input bytes unchanged when tags is empty", () => {
+    const out = writePngWithTagsOnly(tinyPng, {});
+    expect(Array.from(out)).toEqual(Array.from(tinyPng));
+  });
+
+  it("writes a PNG that the editable reader rejects (no <annot:annotations>)", () => {
+    const out = writePngWithTagsOnly(tinyPng, { source: "vrt", testId: "x" });
+    // Plain readEditablePngBytes returns null — the file is NOT a re-editable Annot file.
+    expect(readEditablePngBytes(out)).toBeNull();
+  });
+
+  it("preserves PNG signature + visible chunks", () => {
+    const out = writePngWithTagsOnly(tinyPng, { source: "vrt" });
+    expect(out[0]).toBe(0x89);
+    expect(out[1]).toBe(0x50);
+    expect(out[2]).toBe(0x4e);
+    expect(out[3]).toBe(0x47);
+    const outStr = Array.from(out)
+      .map((b) => String.fromCharCode(b))
+      .join("");
+    expect(outStr).toContain("IHDR");
+    expect(outStr).toContain("IDAT");
+    expect(outStr).toContain("IEND");
+    expect(outStr).toContain("iTXt");
+    // No svGo chunk (no embedded original).
+    expect(outStr).not.toContain("svGo");
+  });
+
+  it("embeds the tag json into the XMP iTXt chunk", () => {
+    const tags = { source: "vrt-failure", testId: "login-flow", commit: "abc123" };
+    const out = writePngWithTagsOnly(tinyPng, tags);
+    const outStr = Array.from(out)
+      .map((b) => String.fromCharCode(b))
+      .join("");
+    expect(outStr).toContain("annot:tags");
+    expect(outStr).toContain('"source":"vrt-failure"');
+    expect(outStr).toContain('"testId":"login-flow"');
+    expect(outStr).toContain('"commit":"abc123"');
+    // Tags-only XMP must NOT include the annotations element — that's
+    // what makes the editor treat the file as plain PNG.
+    expect(outStr).not.toContain("annot:annotations");
+  });
+
+  it("re-writing a tags-only PNG cleans the old iTXt chunk (no double-insert)", () => {
+    const first = writePngWithTagsOnly(tinyPng, { source: "first" });
+    const second = writePngWithTagsOnly(first, { source: "second" });
+    const outStr = Array.from(second)
+      .map((b) => String.fromCharCode(b))
+      .join("");
+    expect(outStr.match(/iTXt/g)?.length).toBe(1);
+    expect(outStr).toContain('"source":"second"');
+    expect(outStr).not.toContain('"source":"first"');
   });
 });
 

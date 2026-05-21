@@ -260,6 +260,44 @@ export function parseSnapshotBoxes(yaml: string): BoxedEntry[] {
   return out;
 }
 
+/**
+ * Resolve the `<Overlay>` blocks inside `screenId` against the MDX
+ * file's stored `annot:snapshot` block and return a typed annotation
+ * array ready to feed into `createAnnotator().toEditablePng()`.
+ *
+ * Exposed so the Playwright fixture can compose MDX-derived overlays
+ * with caller-supplied inline overlays before rasterisation. Throws
+ * the same diagnostics `renderAnnotatedScreen` would (no annot
+ * frontmatter / no matching `<Screen id>`).
+ *
+ * Returns an empty array when no `<Overlay>` matches a bbox marker
+ * — e.g. the snapshot was never captured, or `<Overlay match>`
+ * targets an element that's no longer in the page.
+ */
+export async function resolveMdxAnnotations(opts: {
+  mdxPath: string;
+  screenId: string;
+  dims: { width: number; height: number };
+  cwd?: string;
+}): Promise<BboxNumberedBadgeAnnotation[]> {
+  const cwd = opts.cwd ?? process.cwd();
+  const mdxAbs = isAbsolute(opts.mdxPath) ? opts.mdxPath : resolve(cwd, opts.mdxPath);
+  const parsed = await parseMdxFile(mdxAbs);
+  if (!parsed) {
+    throw new Error(
+      `resolveMdxAnnotations: ${opts.mdxPath} has no \`annot:\` frontmatter — cannot resolve.`,
+    );
+  }
+  const screen = parsed.screens.find((s) => s.id === opts.screenId);
+  if (!screen) {
+    throw new Error(
+      `resolveMdxAnnotations: ${opts.mdxPath} has no <Screen id="${opts.screenId}"> block.`,
+    );
+  }
+  const bboxes = parseSnapshotBoxes(parsed.commentBlocks.snapshot ?? "");
+  return buildBadgeAnnotations(screen.overlays, bboxes, opts.dims);
+}
+
 function buildBadgeAnnotations(
   overlays: ParsedMdx["screens"][number]["overlays"],
   boxed: BoxedEntry[],
@@ -292,6 +330,25 @@ function svgFromBadges(badges: BboxNumberedBadgeAnnotation[]): string {
   // drops the siblings otherwise. Wrap in an `<svg>` so all
   // primitives survive into the composited output.
   const fragment = bboxAnnotationsToSvg(badges);
+  return `<svg xmlns="http://www.w3.org/2000/svg">${fragment}</svg>`;
+}
+
+/**
+ * Wrap a generic `BboxAnnotation[]` (the union DSL accepted by
+ * `@ingcreators/annot-annotator`) into a single-root `<svg>` ready
+ * for the annotator's `annotationsSvg` input. Mirrors `svgFromBadges`
+ * but stays type-permissive — the Playwright fixture's inline overlays
+ * can be any `BboxAnnotation` shape, not just numbered badges.
+ *
+ * Returns the empty wrapper `<svg/>` when `annotations` is empty —
+ * lets the editor open the file with no annotations layer rather
+ * than throwing.
+ */
+export function svgFromBboxAnnotations(
+  annotations: import("@ingcreators/annot-annotator").BboxAnnotation[],
+): string {
+  if (annotations.length === 0) return '<svg xmlns="http://www.w3.org/2000/svg"></svg>';
+  const fragment = bboxAnnotationsToSvg(annotations);
   return `<svg xmlns="http://www.w3.org/2000/svg">${fragment}</svg>`;
 }
 
