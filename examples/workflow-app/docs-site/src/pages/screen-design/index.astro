@@ -1,0 +1,30 @@
+---
+import DocsLayout from "../../layouts/DocsLayout.astro";
+import { getCollection } from "astro:content";
+
+const entries = await getCollection("screen-design");
+entries.sort((a, b) => {
+  const ao = a.data.annot.xlsx?.order ?? 0;
+  const bo = b.data.annot.xlsx?.order ?? 0;
+  return ao - bo;
+});
+---
+<DocsLayout
+  title="Screen Design"
+  intro="Per-element spec for every screen. Aimed at developers and QA — field types, data constraints, validation rules, routing + state-mutation side effects."
+>
+  <ol class="book-toc">
+    {entries.map((entry) => (
+      <li>
+        <a href={`/screen-design/${entry.id}/`}>
+          <strong>{entry.data.annot.id}</strong>
+          {" — "}
+          {entry.data.annot.title ?? entry.id}
+        </a>
+        {entry.data.annot.purpose && (
+          <p class="book-toc__purpose">{entry.data.annot.purpose}</p>
+        )}
+      </li>
+    ))}
+  </ol>
+</DocsLayout>

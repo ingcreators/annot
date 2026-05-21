@@ -1,0 +1,25 @@
+---
+import DocsLayout from "../../layouts/DocsLayout.astro";
+import { getCollection, render } from "astro:content";
+
+export async function getStaticPaths() {
+  const entries = await getCollection("operation-manual");
+  return entries.map((entry) => ({
+    params: { slug: entry.id },
+    props: { entry },
+  }));
+}
+
+const { entry } = Astro.props;
+const { Content } = await render(entry);
+---
+<DocsLayout
+  title={`${entry.data.annot.id} — ${entry.data.annot.title ?? entry.id}`}
+  intro={entry.data.annot.purpose}
+>
+  <Content />
+  <hr />
+  <p class="doc-meta">
+    <a href="/operation-manual/">← All chapters</a>
+  </p>
+</DocsLayout>

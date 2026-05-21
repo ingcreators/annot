@@ -1,0 +1,56 @@
+---
+interface Props {
+  title: string;
+  intro?: string;
+}
+const { title, intro } = Astro.props;
+const path = Astro.url.pathname;
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="site-header__inner">
+        <a class="site-brand" href="/">Workflow App Docs</a>
+        <nav class="site-nav" aria-label="Books">
+          <a
+            href="/operation-manual/"
+            aria-current={path.startsWith("/operation-manual") ? "page" : "false"}
+          >
+            Operation Manual
+          </a>
+          <a
+            href="/screen-design/"
+            aria-current={path.startsWith("/screen-design") ? "page" : "false"}
+          >
+            Screen Design
+          </a>
+        </nav>
+      </div>
+    </header>
+    <main class="site-main">
+      <article class="doc-article">
+        <header class="doc-header">
+          <h1>{title}</h1>
+          {intro && <p class="doc-intro">{intro}</p>}
+        </header>
+        <slot />
+      </article>
+    </main>
+    <footer class="site-footer">
+      <p>
+        Generated from
+        <a href="https://github.com/ingcreators/annot/tree/main/examples/workflow-app/docs/books">
+          <code>examples/workflow-app/docs/books/</code>
+        </a>
+        via Astro + a glob content loader.
+      </p>
+    </footer>
+  </body>
+</html>
