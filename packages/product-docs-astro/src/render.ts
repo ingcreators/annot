@@ -121,7 +121,16 @@ export async function renderAnnotatedScreen(
   } else {
     const dataUrl = `data:image/png;base64,${Buffer.from(baseBytes).toString("base64")}`;
     const annotationsSvg = svgFromBadges(annotations);
-    result = createAnnotator().toPng({
+    // The badge primitive emits `<text>` for each numbered label.
+    // `@ingcreators/annot-annotator` defaults `loadSystemFonts:
+    // false` for CI determinism — fine for the bare-rect /
+    // arrow primitives but means the badge numbers render as
+    // invisible glyphs. The Image Service is a text-bearing
+    // path by construction, so we opt-in here. Callers that
+    // need a stricter font set can pre-render with their own
+    // `createAnnotator` invocation and pass `basePngBytes`
+    // for the unannotated fall-through.
+    result = createAnnotator({ loadSystemFonts: true }).toPng({
       originalDataUrl: dataUrl,
       annotationsSvg,
       width: dims.width,
