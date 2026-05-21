@@ -16,8 +16,11 @@ const DICT: Record<string, DictEntry> = {
   "app.lang.en": { en: "English", ja: "英語" },
   "app.lang.ja": { en: "Japanese", ja: "日本語" },
   "app.signOut": { en: "Sign out", ja: "サインアウト" },
+  "app.signedInAs": { en: "Signed in as", ja: "サインイン中:" },
 
-  // Placeholder screen (Phase 1 only).
+  // Placeholder screen (still used by Phase 3 routes that
+  // haven't shipped their components yet — the approver flow
+  // arrives in Phase 3).
   "placeholder.heading": { en: "TODO screen", ja: "TODO 画面" },
   "placeholder.body": {
     en: "This screen will be implemented in a later phase.",
@@ -25,14 +28,137 @@ const DICT: Record<string, DictEntry> = {
   },
   "placeholder.routeLabel": { en: "Current route:", ja: "現在のルート:" },
 
-  // Login (placeholder copy — full impl arrives in Phase 2).
-  "login.heading": { en: "Sign in", ja: "サインイン" },
-
-  // Menu (placeholder).
-  "menu.heading": { en: "Menu", ja: "メニュー" },
-
-  // Generic.
+  // Common widget copy.
   "common.back": { en: "Back", ja: "戻る" },
+  "common.cancel": { en: "Cancel", ja: "キャンセル" },
+  "common.submit": { en: "Submit", ja: "送信" },
+  "common.required": { en: "Required", ja: "必須" },
+  "common.optional": { en: "Optional", ja: "任意" },
+  "common.yen": { en: "JPY", ja: "円" },
+
+  // Login.
+  "login.heading": { en: "Sign in", ja: "サインイン" },
+  "login.subheading": {
+    en: "Enter your registered email and password.",
+    ja: "登録済みのメールアドレスとパスワードを入力してください。",
+  },
+  "login.email": { en: "Email", ja: "メールアドレス" },
+  "login.password": { en: "Password", ja: "パスワード" },
+  "login.submit": { en: "Sign in", ja: "サインイン" },
+  "login.error.invalid": {
+    en: "The email or password is incorrect.",
+    ja: "メールアドレスまたはパスワードが正しくありません。",
+  },
+  "login.hint.title": {
+    en: "Demo credentials",
+    ja: "デモ用ログイン情報",
+  },
+  "login.hint.body": {
+    en: "Password for every demo account is \"password\".",
+    ja: "全てのデモアカウントのパスワードは「password」です。",
+  },
+  "login.hint.applicant": { en: "Applicant", ja: "申請者" },
+  "login.hint.approver": { en: "Approver", ja: "承認者" },
+
+  // Menu.
+  "menu.heading": { en: "Menu", ja: "メニュー" },
+  "menu.subheading.applicant": {
+    en: "Submit a new application or review past ones.",
+    ja: "新しい申請を作成するか、過去の申請を確認できます。",
+  },
+  "menu.subheading.approver": {
+    en: "Review applications waiting for your decision.",
+    ja: "あなたの判断を待っている申請を確認できます。",
+  },
+  "menu.card.newApplication.title": {
+    en: "New application",
+    ja: "新しい申請",
+  },
+  "menu.card.newApplication.body": {
+    en: "Start a new leave / expense / purchase application.",
+    ja: "休暇 / 経費 / 購買 の申請を新規作成します。",
+  },
+  "menu.card.myApplications.title": {
+    en: "My applications",
+    ja: "申請履歴",
+  },
+  "menu.card.myApplications.body": {
+    en: "Browse the applications you have submitted.",
+    ja: "これまでに提出した申請を一覧できます。",
+  },
+  "menu.card.pendingApprovals.title": {
+    en: "Pending approvals",
+    ja: "承認待ち一覧",
+  },
+  "menu.card.pendingApprovals.body": {
+    en: "Open the queue of applications awaiting your decision.",
+    ja: "あなたの判断を待つ申請一覧を開きます。",
+  },
+  "menu.myApplications.empty": {
+    en: "No applications submitted yet.",
+    ja: "まだ申請履歴はありません。",
+  },
+
+  // Application form (applicant).
+  "form.heading": { en: "New application", ja: "新規申請" },
+  "form.category.label": { en: "Category", ja: "申請区分" },
+  "form.category.placeholder": {
+    en: "Select a category",
+    ja: "区分を選択",
+  },
+  "form.category.leave": { en: "Leave", ja: "休暇" },
+  "form.category.expense": { en: "Expense", ja: "経費" },
+  "form.category.purchase": { en: "Purchase", ja: "購買" },
+  "form.amount.label": { en: "Amount (JPY)", ja: "金額 (円)" },
+  "form.amount.help": {
+    en: "Hidden for leave applications.",
+    ja: "休暇申請では入力不要です。",
+  },
+  "form.reason.label": { en: "Reason", ja: "申請理由" },
+  "form.reason.placeholder": {
+    en: "Describe the background and any approval context.",
+    ja: "背景や承認に必要な情報を記載してください。",
+  },
+  "form.next": { en: "Review", ja: "確認画面へ" },
+  "form.error.categoryRequired": {
+    en: "Select a category.",
+    ja: "区分を選択してください。",
+  },
+  "form.error.amountInvalid": {
+    en: "Enter an amount of 0 or more.",
+    ja: "0 以上の金額を入力してください。",
+  },
+  "form.error.reasonRequired": {
+    en: "Enter the reason for the application.",
+    ja: "申請理由を入力してください。",
+  },
+
+  // Application confirm.
+  "confirm.heading": { en: "Confirm application", ja: "申請内容の確認" },
+  "confirm.subheading": {
+    en: "Review every field before submitting.",
+    ja: "送信前に各項目をご確認ください。",
+  },
+  "confirm.field.applicant": { en: "Applicant", ja: "申請者" },
+  "confirm.field.category": { en: "Category", ja: "区分" },
+  "confirm.field.amount": { en: "Amount", ja: "金額" },
+  "confirm.field.reason": { en: "Reason", ja: "理由" },
+  "confirm.back": { en: "Back to edit", ja: "戻って修正" },
+  "confirm.submit": { en: "Submit application", ja: "申請を送信" },
+
+  // Application submitted (success terminal).
+  "submitted.heading": { en: "Application submitted", ja: "申請を送信しました" },
+  "submitted.body": {
+    en: "Your application has been forwarded for approval.",
+    ja: "申請を承認担当者に転送しました。",
+  },
+  "submitted.idLabel": { en: "Application ID:", ja: "申請番号:" },
+  "submitted.backToMenu": { en: "Back to menu", ja: "メニューへ戻る" },
+
+  // Status badges.
+  "status.submitted": { en: "Submitted", ja: "申請中" },
+  "status.approved": { en: "Approved", ja: "承認済み" },
+  "status.rejected": { en: "Rejected", ja: "却下" },
 };
 
 let currentLocale: Locale = "en";
