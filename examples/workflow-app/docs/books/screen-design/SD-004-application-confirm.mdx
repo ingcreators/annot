@@ -69,4 +69,31 @@ Static text. Definition list below carries the actual draft.
 | Amount | `formatAmount(draft.amount, draft.category)` | `confirm-amount` |
 | Reason | `draft.reason` (verbatim, may contain newlines) | `confirm-reason` |
 
-{/* annot:snapshot */}
+{/* annot:snapshot
+id: application-confirm
+capturedBy: workflow-app-tour
+capturedAt: 2026-05-21T23:15:39.329Z
+---
+- banner:
+  - link "Workflow App":
+    - /url: "#/menu"
+  - text: Taro Yamada Applicant
+  - button "Sign out"
+  - text: Language
+  - group "Language":
+    - button "English" [pressed]
+    - button "Japanese"
+- main:
+  - heading "Confirm application" [level=1]
+  - paragraph: Review every field before submitting.
+  - term: Applicant
+  - definition: Taro Yamada (yamada@example.com)
+  - term: Category
+  - definition: Expense
+  - term: Amount
+  - definition: ¥8,500
+  - term: Reason
+  - definition: Team dinner with the new design hire.
+  - button "Back to edit"
+  - button "Submit application"
+*/}

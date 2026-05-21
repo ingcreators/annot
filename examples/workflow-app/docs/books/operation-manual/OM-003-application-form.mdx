@@ -58,4 +58,36 @@ state until the user signs out.
   press Review again.
 </Transition>
 
-{/* annot:snapshot */}
+{/* annot:snapshot
+id: application-form
+capturedBy: workflow-app-tour
+capturedAt: 2026-05-21T23:15:39.215Z
+---
+- banner:
+  - link "Workflow App":
+    - /url: "#/menu"
+  - text: Taro Yamada Applicant
+  - button "Sign out"
+  - text: Language
+  - group "Language":
+    - button "English" [pressed]
+    - button "Japanese"
+- main:
+  - heading "New application" [level=1]
+  - text: Category (Required)
+  - combobox "Category (Required)":
+    - option "Select a category" [disabled]
+    - option "Leave"
+    - option "Expense" [selected]
+    - option "Purchase"
+  - text: Amount (JPY) (Required)
+  - spinbutton "Amount (JPY) (Required)": "8500"
+  - paragraph: Hidden for leave applications.
+  - text: Reason (Required)
+  - textbox "Reason (Required)":
+    - /placeholder: Describe the background and any approval context.
+    - text: Team dinner with the new design hire.
+  - link "Back":
+    - /url: "#/menu"
+  - button "Review"
+*/}

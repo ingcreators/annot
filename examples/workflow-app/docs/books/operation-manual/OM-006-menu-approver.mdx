@@ -41,4 +41,30 @@ Signs the approver out and returns to the login screen.
 
 <Transition trigger={{ role: "link", name: "Pending approvals" }} to="OM-007" />
 
-{/* annot:snapshot */}
+{/* annot:snapshot
+id: menu-approver
+capturedBy: workflow-app-tour
+capturedAt: 2026-05-21T23:15:39.669Z
+---
+- banner:
+  - link "Workflow App":
+    - /url: "#/menu"
+  - text: Ichiro Tanaka Approver
+  - button "Sign out"
+  - text: Language
+  - group "Language":
+    - button "English" [pressed]
+    - button "Japanese"
+- main:
+  - heading "Menu" [level=1]
+  - paragraph:
+    - text: Signed in as
+    - strong: Ichiro Tanaka
+    - text: (tanaka@example.com)
+  - paragraph: Review applications waiting for your decision.
+  - link "Pending approvals":
+    - /url: "#/approve"
+    - heading "Pending approvals" [level=2]
+    - text: "1"
+    - paragraph: Open the queue of applications awaiting your decision.
+*/}

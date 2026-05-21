@@ -54,4 +54,25 @@ The new id is rendered inside `<strong data-testid="submitted-id">`.
 Tests use the testid to assert on the assigned id (e.g.
 `APP-004` after the seed `APP-001..003`).
 
-{/* annot:snapshot */}
+{/* annot:snapshot
+id: application-submitted
+capturedBy: workflow-app-tour
+capturedAt: 2026-05-21T23:15:39.421Z
+---
+- banner:
+  - link "Workflow App":
+    - /url: "#/menu"
+  - text: Taro Yamada Applicant
+  - button "Sign out"
+  - text: Language
+  - group "Language":
+    - button "English" [pressed]
+    - button "Japanese"
+- main:
+  - heading "Application submitted" [level=1]
+  - paragraph: Your application has been forwarded for approval.
+  - paragraph:
+    - text: "Application ID:"
+    - strong: APP-004
+  - button "Back to menu"
+*/}
