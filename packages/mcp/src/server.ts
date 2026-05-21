@@ -45,11 +45,26 @@ import {
   handleCompareScreenshots,
 } from "./tools/compare-screenshots.js";
 import {
+  DRAFT_SCREEN_SPEC_TOOL_NAME,
+  draftScreenSpecTool,
+  handleDraftScreenSpec,
+} from "./tools/draft-screen-spec.js";
+import {
+  handleProposeDriftFixes,
+  PROPOSE_DRIFT_FIXES_TOOL_NAME,
+  proposeDriftFixesTool,
+} from "./tools/propose-drift-fixes.js";
+import {
   handleRedactScreenshot,
   REDACT_SCREENSHOT_TOOL_NAME,
   redactScreenshotTool,
 } from "./tools/redact-screenshot.js";
 import { handleRedactUrl, REDACT_URL_TOOL_NAME, redactUrlTool } from "./tools/redact-url.js";
+import {
+  handleTranslateScreenSpec,
+  TRANSLATE_SCREEN_SPEC_TOOL_NAME,
+  translateScreenSpecTool,
+} from "./tools/translate-screen-spec.js";
 
 export interface CreateServerOptions {
   /**
@@ -89,6 +104,9 @@ const TOOL_REGISTRY = [
   redactUrlTool,
   compareScreenshotsTool,
   ariaSnapshotTool,
+  draftScreenSpecTool,
+  proposeDriftFixesTool,
+  translateScreenSpecTool,
 ] as const;
 
 /**
@@ -138,6 +156,15 @@ export function createServer(options: CreateServerOptions = {}): Server {
         break;
       case ARIA_SNAPSHOT_TOOL_NAME:
         result = await handleAriaSnapshot(args ?? {}, { pool });
+        break;
+      case DRAFT_SCREEN_SPEC_TOOL_NAME:
+        result = await handleDraftScreenSpec(args ?? {}, { pool });
+        break;
+      case PROPOSE_DRIFT_FIXES_TOOL_NAME:
+        result = await handleProposeDriftFixes(args ?? {}, { pool });
+        break;
+      case TRANSLATE_SCREEN_SPEC_TOOL_NAME:
+        result = await handleTranslateScreenSpec(args ?? {});
         break;
       default:
         result = {
