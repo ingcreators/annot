@@ -30,6 +30,7 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
+    "./playwright": "./src/playwright/index.ts",
     "./components/Screen.astro": "./src/components/Screen.astro",
     "./components/Overlay.astro": "./src/components/Overlay.astro",
     "./components/Transition.astro": "./src/components/Transition.astro",
@@ -52,6 +53,10 @@
         "types": "./dist/index.d.ts",
         "default": "./dist/index.js"
       },
+      "./playwright": {
+        "types": "./dist/playwright/index.d.ts",
+        "default": "./dist/playwright/index.js"
+      },
       "./components/Screen.astro": "./dist/components/Screen.astro",
       "./components/Overlay.astro": "./dist/components/Overlay.astro",
       "./components/Transition.astro": "./dist/components/Transition.astro",
@@ -66,7 +71,7 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@ingcreators/annot-core": "workspace:*",
+    "@playwright/test": "^1.50.0",
     "astro": "^6.1.10",
     "typescript": "catalog:",
     "vite": "catalog:",
@@ -74,9 +79,16 @@
   },
   "dependencies": {
     "@ingcreators/annot-annotator": "workspace:*",
+    "@ingcreators/annot-core": "workspace:*",
     "@ingcreators/annot-product-docs": "workspace:*"
   },
   "peerDependencies": {
+    "@playwright/test": "^1.42.0",
     "astro": "^5.0.0 || ^6.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@playwright/test": {
+      "optional": true
+    }
   }
 }

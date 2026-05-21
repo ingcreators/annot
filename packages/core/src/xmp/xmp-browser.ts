@@ -34,6 +34,7 @@ export {
   readEditableImage,
   readEditablePngBytes,
   WELL_KNOWN_TAG_KEYS,
+  writePngWithTagsOnly,
 } from "./xmp-bytes.js";
 
 function blobToUint8Array(blob: Blob): Promise<Uint8Array> {
