@@ -8,30 +8,50 @@
 ## The product in one sentence
 
 Annot is **a screenshot annotation system built around a portable SVG
-format** — shipped today as a PWA and browser extension, and intended
-tomorrow as a programmable library that slots into automated testing
-and CI workflows.
+format** — shipped today as a PWA and browser extension, callable
+tomorrow from Playwright and CI, and growing into a **living product
+docs platform** that generates always-fresh user manuals + Japanese
+画面設計書 from a project's existing Playwright tour suite.
 
 ## Strategic direction
 
-We are committing to two adjacent growth vectors:
+We are committing to three adjacent growth vectors:
 
 1. **Playwright / headless automation integration.**
-   The same SVG annotation core that powers the PWA will be callable
-   from Node so that E2E tests, visual regression pipelines, and
-   documentation generators can produce annotated screenshots
-   automatically from `page.locator(...)` references.
+   The same SVG annotation core that powers the PWA is callable from
+   Node so E2E tests, visual regression pipelines, and documentation
+   generators can produce annotated screenshots automatically from
+   `page.locator(...)` references. Shipped as
+   `@ingcreators/annot-annotator` + `@ingcreators/annot-playwright`.
 
 2. **GitHub as the collaboration hub.**
-   Annotated screenshots should flow natively into Issues, PRs, and
-   CI artifacts. A GitHub Action posts them on PRs, a storage backend
+   Annotated screenshots flow natively into Issues, PRs, and CI
+   artifacts. A GitHub Action posts them on PRs, a storage backend
    lets them live inside a repo under version control, and a
    "Share to GitHub" path connects the PWA to the collaboration loop
    developers already live in.
 
-Neither vector is implemented yet. Current work on the PWA, extension,
-and core should be done **as if these vectors were imminent** so the
-eventual transition is a straight continuation, not a rewrite.
+3. **Living product docs platform.**
+   The `aria-snapshot` primitive + the headless annotator + MDX
+   compose into a category-defining "Playwright → docs" pipeline.
+   A project's Playwright tour suite walks every screen, captures
+   `aria-snapshot` + per-element attributes, annotates the
+   screenshots, and emits an Astro docs site (for end-user manuals
+   in the global vertical) AND an Excel `.xlsx` (for Japanese 画面
+   設計書). Drift between MDX and live UI is detected as a lint
+   step in CI. AI agents (Claude / Cursor / Aider) drive the
+   pipeline via `@ingcreators/annot-mcp` tools. See
+   [`docs/plans/living-product-docs.md`](./docs/plans/living-product-docs.md).
+   Shipped as `@ingcreators/annot-product-docs` +
+   `@ingcreators/annot-product-docs-astro` +
+   `@ingcreators/annot-product-docs-xlsx`.
+
+Vectors 1 + 2 are in production; vector 3 (Phases 1-5 + 7 landed
+2026-05-21) is the strategic shift this document captures.
+
+Current work on the PWA, extension, and core should be done **as if
+all three vectors were imminent** so the eventual transition is a
+straight continuation, not a rewrite.
 
 ## What follows from this (core principles)
 
@@ -237,6 +257,14 @@ distributed via npm:
   `annot-render`, `annot-doc`, `annot-capture`, `annot-cloud-store`,
   `annot-imagequant` — refactor freely within the monorepo; not
   contracted as external APIs yet.
+- Living product docs (Phases 1-5 + 7 of
+  [`docs/plans/living-product-docs.md`](./docs/plans/living-product-docs.md)
+  landed 2026-05-21): `annot-product-docs` (MDX parser + match
+  resolver + `screen` fixture + `annot-docs` CLI),
+  `annot-product-docs-astro` (Astro integration + Image Service +
+  7 docs components), `annot-product-docs-xlsx` (Excel adapter +
+  template + named ranges + `annot-docs-xlsx` CLI). All three
+  stay `private: true` pending the publication PR.
 - Server-side: `annot-worker` deploys to Cloudflare via
   `.github/workflows/deploy.yml`, not npm.
 
@@ -251,3 +279,4 @@ npm.com, (d) a Changesets entry.
 |------------|--------------------------------------------|
 | 2026-04-23 | Initial document. Committed to Playwright + GitHub direction. |
 | 2026-05-19 | First npm publish — `annot-core@0.1.0`, `annot-annotator@0.1.0`, `annot-playwright@0.1.0`. Added "What's published" section. |
+| 2026-05-21 | Added "living product docs platform" as growth vector 3. Phases 1-5 + 7 of `living-product-docs.md` landed: `annot-product-docs`, `annot-product-docs-astro`, `annot-product-docs-xlsx` packages (still `private: true` pending Phase 7 publication PR). |
