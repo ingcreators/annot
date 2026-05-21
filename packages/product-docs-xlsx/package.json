@@ -31,7 +31,11 @@
   "exports": {
     ".": "./src/index.ts"
   },
+  "bin": {
+    "annot-docs-xlsx": "./bin/annot-docs-xlsx.mjs"
+  },
   "files": [
+    "bin",
     "dist",
     "README.md",
     "CHANGELOG.md"

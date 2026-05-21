@@ -11,6 +11,9 @@
 //   PR 5 — `{annot:date}` special vars + multi-screen `sheets` map.
 //   PR 6 — multi-book CLI integration + Mermaid → PNG embed.
 
+export type { CliOptions } from "./cli.js";
+export { main, main as cliMain } from "./cli.js";
+
 export type { ApplyDefaultLayoutInput } from "./default-layout.js";
 export {
   applyDefaultLayout,
