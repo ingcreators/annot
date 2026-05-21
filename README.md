@@ -77,6 +77,12 @@ omissions.
 | Package | npm name | Role |
 |---------|----------|------|
 | [`packages/core`](./packages/core) | `@ingcreators/annot-core` | Editor core — SVG tools, PPTX export, storage types. Shared by every host. |
+| [`packages/annotator`](./packages/annotator) | `@ingcreators/annot-annotator` | Headless annotator — Node-side `createAnnotator({ toPng, toSvg })`. |
+| [`packages/playwright`](./packages/playwright) | `@ingcreators/annot-playwright` | Playwright fixture composing the headless annotator. |
+| [`packages/mcp`](./packages/mcp) | `@ingcreators/annot-mcp` | MCP server exposing the annotator + docs tools to AI agents. |
+| [`packages/product-docs`](./packages/product-docs) | `@ingcreators/annot-product-docs` | Living product docs core — MDX parser + match resolver + `screen` fixture + `annot-docs` CLI. |
+| [`packages/product-docs-astro`](./packages/product-docs-astro) | `@ingcreators/annot-product-docs-astro` | Astro integration + Image Service + 7 docs components. |
+| [`packages/product-docs-xlsx`](./packages/product-docs-xlsx) | `@ingcreators/annot-product-docs-xlsx` | Excel adapter — template + placeholder + named ranges + `annot-docs-xlsx` CLI. |
 | [`packages/web`](./packages/web) | `@ingcreators/annot-web` | PWA host. Routing, storage implementations, right panel. |
 | [`packages/extension`](./packages/extension) | `@ingcreators/annot-extension` | Chrome MV3 extension. Capture pipeline + content-script DOM metadata. |
 | [`packages/desktop`](./packages/desktop) | `@ingcreators/annot-desktop` | Electron desktop wrapper. |
