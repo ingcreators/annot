@@ -9,7 +9,7 @@ docs-MDX components into an Astro site and ships an Image Service
 that renders annotated PNGs from `<Screen>` blocks at build time.
 
 Phase 2 of
-[`docs/plans/living-product-docs.md`](https://github.com/ingcreators/annot/blob/main/docs/plans/living-product-docs.md).
+[`docs/plans/_done/living-product-docs.md`](https://github.com/ingcreators/annot/blob/main/docs/plans/_done/living-product-docs.md).
 
 ## Install
 

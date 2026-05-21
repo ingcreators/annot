@@ -1,6 +1,6 @@
 # product-docs-poc
 
-Phase 0 PoC for [`docs/plans/living-product-docs.md`](../../docs/plans/living-product-docs.md).
+Phase 0 PoC for [`docs/plans/_done/living-product-docs.md`](../../docs/plans/_done/living-product-docs.md).
 Disposable code exercising the end-to-end "living product docs"
 pipeline against a tiny static HTML fixture, so the design can
 be validated before Phase 1+ builds the real packages.

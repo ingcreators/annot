@@ -114,33 +114,101 @@ packages/
                 npm name: @ingcreators/annot-playwright
                 (published 2026-05-19; current 0.3.0)
   mcp/          Model Context Protocol stdio server exposing the
-                headless annotator as agent-callable tools. Five
-                tools at v1: `annot_annotate_screenshot` + paired
-                `annot_annotate_url` (live `playwright-core`
-                capture + locator-or-bbox positioning); same
-                pairing for `annot_redact_*` (destructive
-                solid / mosaic / blur burn over `@napi-rs/canvas`);
-                `annot_compare_screenshots` (pixelmatch + flood-
-                fill region aggregation, warning-intent rect
-                output). Locator-flavour DSL accepts Playwright
-                locator strings (`button:has-text("...")`,
-                `[data-testid="..."]`, `role=…`); resolution rules
-                for non-rect shapes (circle centroid, arrow
-                endpoint centroid, text top-left raised one font
-                line, callout split into anchor + target) live in
+                headless annotator as agent-callable tools. Nine
+                tools at current: the five annotation /
+                comparison tools (`annot_annotate_screenshot` +
+                `annot_annotate_url`; `annot_redact_screenshot` +
+                `annot_redact_url`; `annot_compare_screenshots`)
+                plus `annot_aria_snapshot` (Playwright AI-mode
+                snapshot) plus the three living-product-docs
+                flow tools (`annot_draft_screen_spec` /
+                `annot_propose_drift_fixes` /
+                `annot_translate_screen_spec`). Locator-flavour
+                DSL accepts Playwright locator strings
+                (`button:has-text("...")`,
+                `[data-testid="..."]`, `role=…`); resolution
+                rules for non-rect shapes live in
                 `src/browser/resolve-locator.ts`. Refcounted
                 `BrowserPool` with 30 s idle close. Tier A
-                (Node-only, no DOM). Currently `private: true`;
-                first npm publish is Phase 8 of the plan, which
-                piggy-backs on
-                `docs/plans/_done/headless-annotator-publish.md`'s
-                Changesets pipeline. PPTX export (Phase 6 of the
-                plan) deferred indefinitely pending the
-                pptx-export `ImageRecord[]`-driven refactor noted
-                under "Tier C-render" in section 2. See
-                `docs/plans/agent-mcp-integration.md`.
+                (Node-only, no DOM). PPTX export deferred
+                indefinitely pending the pptx-export
+                `ImageRecord[]`-driven refactor noted under
+                "Tier C-render" in section 2. See
+                `docs/plans/_done/agent-mcp-integration.md` for
+                the original 1-5 tool surface and
+                `docs/plans/_done/living-product-docs.md` Phase 5
+                for the docs-flow tools.
                 npm name: @ingcreators/annot-mcp
                 (published 2026-05-20; current 0.2.0)
+  product-docs/ Living product docs core. Tier A — MDX parser
+                (`parseMdx` / `parseMdxFile` on remark + unified
+                + remark-mdx) for `.mdx` files with `annot:`
+                frontmatter; match resolver (`parseSnapshot` /
+                `resolveMatch`) for Playwright aria-snapshot
+                YAML honouring `match.under` disambiguation;
+                Playwright `screen` fixture
+                (`screen.capture({ id, mdxPath })`) that
+                re-syncs `annot:snapshot` + `annot:attributes`
+                comment blocks in place via the byte-stable
+                `updateCommentBlocks` rewriter; drift detector
+                (`detectDrift` / `detectDriftFromYaml`) emitting
+                six finding kinds (added / removed / renamed /
+                role-changed / duplicated / attribute-drift)
+                with severity-bucket exit-code logic; `annot
+                docs` CLI (`init` / `sync` / `lint`) with
+                `--ci` / `--json` / `--fix` flags + sample
+                GitHub Actions workflow that converts drift
+                JSON into per-line `core.warning` annotations
+                on the PR diff view. See
+                `docs/plans/_done/living-product-docs.md`.
+                npm name: @ingcreators/annot-product-docs
+                (published 2026-05-21; current 0.1.0)
+  product-docs-astro/ Astro 5.x integration for the docs core.
+                Tier B-render — `productDocsIntegration()`
+                factory consumers drop into `astro.config.mjs`;
+                seven `.astro` components (`<Screen>` /
+                `<Overlay>` / `<Transition>` /
+                `<TransitionTable>` / `<HistoryEntry>` /
+                `<ScreenList>` / `<TransitionGraph>`) shipped as
+                source under `./components/*.astro` exports;
+                Image Service (`renderAnnotatedScreen` +
+                SHA-keyed `createFileCache` /
+                `createMemoryCache`) that composes the base
+                screenshot with overlay callouts at build time
+                using stored `[box=x,y,w,h]` markers from the
+                fixture's `ariaSnapshot({ boxes: true })`
+                output. Falls back to the base PNG verbatim
+                when the snapshot lacks bbox data — the docs
+                site still builds before the Playwright tour
+                has run. See
+                `docs/plans/_done/living-product-docs.md`
+                Phase 2.
+                npm name: @ingcreators/annot-product-docs-astro
+                (published 2026-05-21; current 0.1.0)
+  product-docs-xlsx/ Excel adapter for the docs core. Tier A —
+                walks MDX bundles, dispatches per `xlsx.role`
+                to the default no-template layout (cover /
+                history / list / screen / reference Japanese-
+                friendly defaults) OR the customer-template
+                path that clones a configured `templateSheets[role]`
+                sheet per bundle + substitutes `{var}` /
+                `{meta.<name>}` / `{annot:date}` / `{var:format}`
+                placeholders + writes `annot*`-prefixed Excel
+                Named Ranges (`annotImage` /
+                `annotImage_<screenId>` / `annotItemTable` /
+                `annotHistory` / `annotList` / `annotSnapshot` /
+                `annotAttributes`). `annot-docs-xlsx render
+                --book <name>` CLI walks the docs root, groups
+                by `xlsx.book`, picks template-vs-default per
+                book config, and writes one `<book>.xlsx` per
+                group. Targets the Japanese SI 画面設計書 use
+                case where customers expect a specific
+                corporate Excel template populated from a
+                code-driven source of truth. See
+                `docs/plans/_done/living-product-docs.md`
+                Phase 3.
+                npm name: @ingcreators/annot-product-docs-xlsx
+                (published 2026-05-21; current 0.1.0)
 ```
 
 Naming convention: **`@ingcreators/annot-<role>`** for every package.
