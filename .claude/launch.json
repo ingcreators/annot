@@ -30,6 +30,12 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "@ingcreators/annot-marketing", "exec", "astro", "dev", "--port", "4322", "--host", "127.0.0.1"],
       "port": 4322
+    },
+    {
+      "name": "workflow-app-example",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "examples/workflow-app", "run", "dev"],
+      "port": 5173
     }
   ]
 }

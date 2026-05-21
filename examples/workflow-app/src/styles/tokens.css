@@ -1,0 +1,54 @@
+:root {
+  /* Colour palette — modest enterprise blue + neutral greys. */
+  --wf-color-bg: #f7f8fa;
+  --wf-color-surface: #ffffff;
+  --wf-color-surface-muted: #eef1f5;
+  --wf-color-border: #d6dde6;
+  --wf-color-border-strong: #b3bdcc;
+  --wf-color-text: #1f2937;
+  --wf-color-text-muted: #5a6678;
+  --wf-color-text-subtle: #8a94a3;
+  --wf-color-link: #1d4ed8;
+  --wf-color-primary: #2563eb;
+  --wf-color-primary-hover: #1d4ed8;
+  --wf-color-primary-contrast: #ffffff;
+  --wf-color-success: #16a34a;
+  --wf-color-success-soft: #dcfce7;
+  --wf-color-danger: #dc2626;
+  --wf-color-danger-soft: #fee2e2;
+  --wf-color-warning: #d97706;
+  --wf-color-warning-soft: #fef3c7;
+
+  /* Spacing scale — multiples of 4 px. */
+  --wf-space-1: 4px;
+  --wf-space-2: 8px;
+  --wf-space-3: 12px;
+  --wf-space-4: 16px;
+  --wf-space-5: 24px;
+  --wf-space-6: 32px;
+  --wf-space-8: 48px;
+
+  /* Radii. */
+  --wf-radius-sm: 4px;
+  --wf-radius-md: 8px;
+  --wf-radius-lg: 12px;
+
+  /* Shadows. */
+  --wf-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05);
+  --wf-shadow-md: 0 4px 12px rgba(15, 23, 42, 0.08);
+
+  /* Typography. */
+  --wf-font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans",
+    "Yu Gothic UI", Meiryo, sans-serif;
+  --wf-font-size-sm: 13px;
+  --wf-font-size-md: 14px;
+  --wf-font-size-lg: 16px;
+  --wf-font-size-xl: 20px;
+  --wf-font-size-xxl: 28px;
+  --wf-line-height: 1.5;
+
+  /* Layout. */
+  --wf-max-width: 960px;
+  --wf-header-height: 56px;
+}

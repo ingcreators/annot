@@ -1,0 +1,21 @@
+{
+  "name": "@ingcreators/workflow-app-example",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Workflow approval SPA example exercising @ingcreators/annot-product-docs + -astro end-to-end. Standalone — NOT a workspace package; cd here and run `npm install` before `npm run dev`. Phase 1 of docs/plans/workflow-app-example.md ships the scaffold (router + i18n + shell); subsequent phases fill in screens, MDX, the docs site, and the Playwright tour.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "lit": "^3.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0",
+    "vite": "^6.0.0"
+  }
+}
