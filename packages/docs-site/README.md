@@ -3,11 +3,11 @@
 Astro Starlight documentation site for `annot.work/docs`. Took
 over the conventional `docs-site/` directory + `@ingcreators/annot-docs-site`
 npm name in Phase 7 of
-[`docs/plans/_done/annot-work-astro-unification.md`](../../docs/plans/_done/annot-work-astro-unification.md);
-the legacy VitePress site renamed to
-[`@ingcreators/annot-docs-site-vitepress`](../docs-site-vitepress)
-and stays in the tree as the Phase 6 cookie-opt-in picker for
-one release cycle, then deleted.
+[`docs/plans/_done/annot-work-astro-unification.md`](../../docs/plans/_done/annot-work-astro-unification.md).
+The legacy VitePress sibling was deleted in the
+"retire VitePress + English-only" follow-up — the one-release-cycle
+grace was skipped because no users had started reading the docs
+yet.
 
 ## Layout
 
@@ -67,22 +67,10 @@ The plan's seven Open Questions resolved as follows:
 | 6 | Temporary parallel name | `docs-site-astro` through Phase 6, renamed in Phase 7 (this one). |
 | 7 | `/docs/pwa/*` URL rename | Phase 2 ported under `/docs/app/*` + installed 301 redirects. |
 
-## Cutover state (post-Phase 6)
+## Cutover state
 
-The picker Worker at
-[`packages/docs-site-vitepress/worker.js`](../docs-site-vitepress/worker.js)
-claims `annot.work/docs/*` and decides per-request which stack
-serves:
-
-| Trigger | Stack | Side effect |
-|---|---|---|
-| `?docs-stack=astro` query | This Worker (via service binding) | Sets `annot-docs-stack=astro` cookie |
-| `?docs-stack=vitepress` query | Picker's own VitePress assets | Clears the cookie |
-| Cookie `annot-docs-stack=astro` present | This Worker | — |
-| (default) | Picker's VitePress assets | — |
-
-Phase 6.5 (a 7-day-observation-gated follow-up commit, tracked
-in the archived plan) flips the picker's default branch from
-its own ASSETS → this Worker via the binding. A subsequent
-commit moves the `annot.work/docs/*` route claim onto this
-Worker's `wrangler.jsonc` and retires the picker entirely.
+This Worker claims `annot.work/docs/*` directly via the
+`routes` block in `wrangler.jsonc`. The legacy VitePress
+worker entry may still exist on the Cloudflare dashboard with
+no route claim of its own — the operator can delete it from
+the dashboard at any time without affecting traffic.

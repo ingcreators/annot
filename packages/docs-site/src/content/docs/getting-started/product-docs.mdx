@@ -1,12 +1,12 @@
 ---
 title: Install the living-product-docs trio
-description: annot-product-docs + -astro + -xlsx — generate a docs site and a Japanese 画面設計書 from the same MDX, kept in sync with Playwright snapshots.
+description: annot-product-docs + -astro + -xlsx — generate a docs site and an Excel screen-specifications spreadsheet from the same MDX, kept in sync with Playwright snapshots.
 ---
 
 The living-product-docs packages turn a Playwright tour suite
-into always-fresh user manuals, **and** Excel 画面設計書
-(screen specs) — same MDX source, dual rendering targets, drift
-between MDX + live UI caught as a CI lint step.
+into always-fresh user manuals, **and** Excel screen
+specifications — same MDX source, dual rendering targets,
+drift between MDX + live UI caught as a CI lint step.
 
 Three packages compose into the flow:
 
@@ -21,7 +21,7 @@ Three packages compose into the flow:
 ```sh
 pnpm add @ingcreators/annot-product-docs
 pnpm add @ingcreators/annot-product-docs-astro      # if you want a docs site
-pnpm add @ingcreators/annot-product-docs-xlsx       # if you want 画面設計書 Excel output
+pnpm add @ingcreators/annot-product-docs-xlsx       # if you want Excel screen-spec output
 
 # Playwright is a peer dep of the core package.
 pnpm add -D @playwright/test
@@ -101,7 +101,7 @@ test("login flow", async ({ page, screen }) => {
 # Astro docs site
 pnpm --filter docs-site build
 
-# Excel 画面設計書
+# Excel screen specifications
 pnpm annot-docs-xlsx render
 ```
 

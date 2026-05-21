@@ -4,8 +4,8 @@
 [![license](https://img.shields.io/npm/l/@ingcreators/annot-product-docs.svg)](https://github.com/ingcreators/annot/blob/main/LICENSE)
 
 Living product docs core. Turn a Playwright tour suite into
-always-fresh user manuals + Japanese 画面設計書, with drift
-between MDX and live UI caught as a CI lint step.
+always-fresh user manuals + Excel screen specifications, with
+drift between MDX and live UI caught as a CI lint step.
 
 Phase 1 of
 [`docs/plans/_done/living-product-docs.md`](https://github.com/ingcreators/annot/blob/main/docs/plans/_done/living-product-docs.md).
@@ -99,7 +99,7 @@ annot-docs lint --fix                    # auto-refresh stored blocks for files 
 
 The companion adapters consume the MDXs:
 - [`@ingcreators/annot-product-docs-astro`](../product-docs-astro) renders an Astro docs site.
-- [`@ingcreators/annot-product-docs-xlsx`](../product-docs-xlsx) emits Excel 画面設計書.
+- [`@ingcreators/annot-product-docs-xlsx`](../product-docs-xlsx) emits Excel screen specifications.
 
 ## Tier
 

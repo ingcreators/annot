@@ -1,49 +1,52 @@
 /**
  * Cloudflare Workers Static Assets config for the Astro Starlight
- * documentation site at packages/docs-site-astro/.
+ * documentation site at `packages/docs-site/`.
  *
- * **Phase 6 status: deployed, accessed via service binding from
- * the legacy `annot-docs-site` worker.** Production
- * `annot.work/docs/*` still belongs to the legacy worker's
- * picker, but that picker forwards requests over to this
- * worker via a Cloudflare service binding when the
- * `annot-docs-stack=astro` cookie or `?docs-stack=astro`
- * query param opts in. After the 7-day observation window
- * (Phase 6.5 TODO in `docs/plans/annot-work-astro-unification.md`),
- * the picker is retired and this worker claims the route
- * directly; the VitePress sibling is then archived in Phase 7.
+ * Claims `annot.work/docs/*` directly. The legacy VitePress
+ * sibling (the Phase 6 picker Worker) was retired in the
+ * "retire VitePress + English-only" follow-up to
+ * `docs/plans/_done/annot-work-astro-unification.md` — the
+ * one-release-cycle grace was skipped because nobody had
+ * started reading the docs yet.
  *
- * URL layout after Phase 6:
+ * URL layout:
  *
  *   annot.work/      → annot-marketing (landing)
  *   annot.work/app/* → annot (PWA at /app/)
- *   annot.work/docs/*→ annot-docs-site (legacy worker as picker)
- *                       ├─ default → its own VitePress assets
- *                       └─ opt-in  → THIS worker via service
- *                                    binding `ASTRO`
- *   annot.work/api/* → annot-api
- *
- * URL layout after Phase 6.5 (no more picker):
- *
  *   annot.work/docs/*→ THIS worker (Astro Starlight)
+ *   annot.work/api/* → annot-api
  *
  * Astro is configured with `base: "/docs/"` so every internal
  * link in the built HTML already includes that prefix.
  * `not_found_handling: "404-page"` because Astro emits a
  * per-route static file — falling through to an index page
  * would be wrong.
+ *
+ * The Cloudflare-side Worker name stays `annot-docs-site-astro`
+ * (rather than the conventional `annot-docs-site`) until the
+ * legacy `annot-docs-site` Worker is deleted from the Cloudflare
+ * dashboard, which would free the name. That step is operator-
+ * driven; until it happens, `routes: annot.work/docs/*` lives
+ * on this Worker by route-pattern claim alone, and the legacy
+ * Worker can be deleted from Cloudflare at the operator's
+ * convenience without affecting traffic.
  */
 {
   "name": "annot-docs-site-astro",
   "compatibility_date": "2026-04-23",
   "main": "./worker.js",
-  // `workers_dev: true` keeps the
-  // `<worker>.<account>.workers.dev` subdomain alive so the
-  // operator can hit this worker directly during smoke tests
-  // before the picker opts users in. The picker reaches this
-  // worker via service binding regardless of `workers_dev`.
-  "workers_dev": true,
-  "preview_urls": true,
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [
+    {
+      "pattern": "annot.work/docs",
+      "zone_name": "annot.work"
+    },
+    {
+      "pattern": "annot.work/docs/*",
+      "zone_name": "annot.work"
+    }
+  ],
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",

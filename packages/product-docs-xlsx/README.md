@@ -9,8 +9,8 @@ files with `annot:` frontmatter, fills customer-supplied Excel
 templates via `{var}` placeholders + Excel Named Ranges, and
 emits one `.xlsx` per book.
 
-Targets the Japanese SI 画面設計書 use case where customers
-expect a specific corporate Excel template, populated from a
+Targets the corporate screen-specifications use case where
+customers expect a specific Excel template populated from a
 code-driven source of truth.
 
 Phase 3 of
@@ -26,7 +26,7 @@ pnpm add @ingcreators/annot-product-docs-xlsx
 
 ```sh
 annot-docs-xlsx render --root docs --out dist/xlsx
-annot-docs-xlsx render --book "Screen spec"
+annot-docs-xlsx render --book "Screen specifications"
 ```
 
 Reads `annot-docs.config.ts` from the project root; uses a
@@ -41,19 +41,19 @@ import { defineConfig } from "@ingcreators/annot-product-docs";
 
 export default defineConfig({
   meta: {
-    projectName: "顧客管理システム",
-    customerName: "株式会社XYZ",
+    projectName: "Customer management system",
+    customerName: "Acme Corp.",
   },
   xlsx: {
-    defaultBook: "画面設計書",
+    defaultBook: "Screen specifications",
     books: {
-      "画面設計書": {
+      "Screen specifications": {
         template: "./templates/customer-screen-spec.xlsx",
         templateSheets: {
-          cover: "表紙テンプレ",
-          history: "改訂履歴テンプレ",
-          list: "画面一覧テンプレ",
-          screen: "個別画面テンプレ",
+          cover: "Cover template",
+          history: "History template",
+          list: "Screen list template",
+          screen: "Per-screen template",
         },
       },
     },
@@ -71,7 +71,7 @@ In template cells:
 {meta.author}                         → frontmatter meta.author
 {projectName}                         → project meta.projectName
 {annot:date}                          → "2026-05-21"
-{annot:date:yyyy年MM月dd日}           → "2026年05月21日"
+{annot:date:yyyy-MM-dd}               → "2026-05-21"
 {meta.createdDate:yyyy/MM/dd}         → "2026/05/21"
 {annot:sheetIndex}/{annot:totalSheets} → "3/12"
 ```

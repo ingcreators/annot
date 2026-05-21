@@ -1,6 +1,6 @@
 ---
-title: Xlsx templates (画面設計書)
-description: Emit Japanese 画面設計書 spreadsheets from the same MDX — customer template populated via {var} placeholders + Excel Named Ranges, or the OSS default layout.
+title: Xlsx templates (screen specifications)
+description: Emit Excel screen-specification spreadsheets from the same MDX — customer template populated via {var} placeholders + Excel Named Ranges, or the OSS default layout.
 ---
 
 `@ingcreators/annot-product-docs-xlsx` walks the MDX bundles
@@ -23,7 +23,7 @@ pnpm add @ingcreators/annot-product-docs-xlsx
 annot-docs-xlsx render --root docs --out dist/xlsx
 
 # Render one book by name
-annot-docs-xlsx render --book "画面設計書"
+annot-docs-xlsx render --book "Screen specifications"
 ```
 
 The CLI reads `annot-docs.config.ts` from the project root,
@@ -38,19 +38,19 @@ import { defineConfig } from "@ingcreators/annot-product-docs";
 
 export default defineConfig({
   meta: {
-    projectName: "顧客管理システム",
-    customerName: "株式会社XYZ",
+    projectName: "Customer management system",
+    customerName: "Acme Corp.",
   },
   xlsx: {
-    defaultBook: "画面設計書",
+    defaultBook: "Screen specifications",
     books: {
-      "画面設計書": {
+      "Screen specifications": {
         template: "./templates/customer-screen-spec.xlsx",
         templateSheets: {
-          cover: "表紙テンプレ",
-          history: "改訂履歴テンプレ",
-          list: "画面一覧テンプレ",
-          screen: "個別画面テンプレ",
+          cover: "Cover template",
+          history: "History template",
+          list: "Screen list template",
+          screen: "Per-screen template",
         },
       },
     },
@@ -60,9 +60,7 @@ export default defineConfig({
 
 Each `templateSheets[role]` names a sheet in the customer's
 `.xlsx` that the adapter clones-per-bundle. If a book's config
-omits `template`, the default OSS layout is used (Japanese-
-friendly defaults — `表紙` / `改訂履歴` / `画面一覧` /
-individual screen sheets with sensible labels).
+omits `template`, the default OSS layout is used.
 
 ## Placeholder vocabulary
 
@@ -76,7 +74,7 @@ In any cell of a templated sheet, the adapter substitutes:
 | `{projectName}` | project `meta.projectName` |
 | `{customerName}` | project `meta.customerName` |
 | `{annot:date}` | today's date `YYYY-MM-DD` |
-| `{annot:date:yyyy年MM月dd日}` | today, with a date-fns format string |
+| `{annot:date:yyyy-MM-dd}` | today, with a date-fns format string |
 | `{meta.createdDate:yyyy/MM/dd}` | per-MDX date field, with format string |
 | `{annot:sheetIndex}` / `{annot:totalSheets}` | per-book sheet position |
 
@@ -107,10 +105,10 @@ not `annotImage:login`).
 
 The default layout (used when `template` is unset on a book)
 covers cover / history / list / screen / reference sheets with
-Japanese 画面設計書 conventions baked in. Run
+sensible labels. Run
 
 ```sh
-annot-docs-xlsx render --book "画面設計書"
+annot-docs-xlsx render --book "Screen specifications"
 ```
 
 once, open the output, and use it as the **structural reference**

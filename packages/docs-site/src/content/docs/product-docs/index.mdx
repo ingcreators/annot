@@ -1,13 +1,13 @@
 ---
 title: Living product docs
-description: Generate a docs site and a Japanese 画面設計書 spreadsheet from the same MDX, kept in sync with Playwright snapshots — drift caught at lint time, not at customer review.
+description: Generate a docs site and an Excel screen-specifications spreadsheet from the same MDX, kept in sync with Playwright snapshots — drift caught at lint time, not at customer review.
 ---
 
 The third growth vector of `PRODUCT_DIRECTION.md`: turn the
 Playwright fixture into a docs-publishing pipeline. A test
 suite that captures every screen of your app feeds an MDX
 content collection; the same MDX feeds **both** an Astro docs
-site **and** a Japanese 画面設計書 Excel spreadsheet. Drift
+site **and** an Excel screen-specifications spreadsheet. Drift
 between the MDX and the live UI is detected as a CI lint step.
 
 ## Why this exists
@@ -50,7 +50,7 @@ docs invert the lifecycle:
 ## See also
 
 - [Get started — install the trio](../getting-started/product-docs)
-- [Recipe: build a 画面設計書 from a Playwright tour](../recipes/living-product-docs)
+- [Recipe: build a screen-spec spreadsheet from a Playwright tour](../recipes/living-product-docs)
 - API references: [`annot-product-docs`](../api/product-docs) /
   [`-astro`](../api/product-docs-astro) /
   [`-xlsx`](../api/product-docs-xlsx)

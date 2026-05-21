@@ -7,12 +7,12 @@ import Base from "../layouts/Base.astro";
 // from your Playwright tests" (the new headline framing); the
 // Playwright code snippet stays as the right-rail anchor because
 // it's the clearest 5-second pitch. A second hero introduces
-// the dual docs site + 画面設計書 angle with a `<Screen>` /
-// `<Overlay>` MDX snippet. Features row expands from 4 to 5
-// cards. Brand palette unchanged; no rebrand here.
+// the dual docs site + screen-specifications angle with a
+// `<Screen>` / `<Overlay>` MDX snippet. Features row expands
+// from 4 to 5 cards. Brand palette unchanged; no rebrand here.
 const title = "Annot — Living product docs from your Playwright tests";
 const description =
-  "Generate a docs site AND a Japanese 画面設計書 spreadsheet from the same Playwright tour. SVG-first annotated screenshots; open source; drift between MDX and live UI caught at lint time.";
+  "Generate a docs site AND an Excel screen-specifications spreadsheet from the same Playwright tour. SVG-first annotated screenshots; open source; drift between MDX and live UI caught at lint time.";
 ---
 
 <Base title={title} description={description}>
@@ -31,10 +31,10 @@ const description =
         </h1>
         <p class="hero-subhead">
           Annot turns the Playwright tour you already maintain into
-          always-fresh user manuals + Japanese 画面設計書. Same MDX,
-          dual rendering targets, drift between docs and UI caught
-          as a CI lint step. SVG-first under the hood — annotate one
-          screenshot or a hundred from a fixture.
+          always-fresh user manuals + Excel screen specifications.
+          Same MDX, dual rendering targets, drift between docs and
+          UI caught as a CI lint step. SVG-first under the hood —
+          annotate one screenshot or a hundred from a fixture.
         </p>
         <div class="hero-cta-row">
           <a class="btn btn-primary" href="/docs/getting-started">Read the quickstart</a>
@@ -93,9 +93,10 @@ test(<span class="tok-s">"login form is reachable"</span>, <span class="tok-k">a
         <article class="flow-card">
           <h3>Living product docs</h3>
           <p>
-            Generate a docs site <strong>and</strong> a Japanese
-            画面設計書 spreadsheet from the same MDX, kept in sync
-            with Playwright snapshots. Drift caught as a CI lint step.
+            Generate a docs site <strong>and</strong> an Excel
+            screen-specifications spreadsheet from the same MDX,
+            kept in sync with Playwright snapshots. Drift caught
+            as a CI lint step.
           </p>
         </article>
         <article class="flow-card">
@@ -131,17 +132,18 @@ test(<span class="tok-s">"login form is reachable"</span>, <span class="tok-k">a
 
   <!--
     Second hero — the two-vertical positioning. Left side: the
-    pitch (one MDX → docs site + 画面設計書). Right side: the
-    MDX snippet with <Screen> / <Overlay match> so visitors can
-    see the source shape that drives both renderings.
+    pitch (one MDX → docs site + screen-specifications
+    spreadsheet). Right side: the MDX snippet with <Screen> /
+    <Overlay match> so visitors can see the source shape that
+    drives both renderings.
   -->
   <section class="section section-alt">
     <div class="container hero-grid">
       <div>
         <span class="hero-eyebrow">Living product docs</span>
         <h2 class="section-title">
-          Generate the docs site, AND the 画面設計書,<br />
-          from the same MDX.
+          Generate the docs site AND the screen<br />
+          specifications, from the same MDX.
         </h2>
         <p class="section-lead">
           Author one screen spec; the Astro adapter renders it as a
@@ -165,8 +167,8 @@ test(<span class="tok-s">"login form is reachable"</span>, <span class="tok-k">a
   <span class="tok-k">id:</span> SC-001
   <span class="tok-k">title:</span> Login screen
   <span class="tok-k">xlsx:</span>
-    <span class="tok-k">book:</span> 画面設計書
-    <span class="tok-k">sheet:</span> SC-001 ログイン
+    <span class="tok-k">book:</span> Screen specifications
+    <span class="tok-k">sheet:</span> SC-001 Login
 <span class="tok-c">---</span>
 
 <span class="tok-k">import</span> Screen <span class="tok-k">from</span> <span class="tok-s">"@ingcreators/annot-product-docs-astro/components/Screen.astro"</span>;
@@ -175,11 +177,11 @@ test(<span class="tok-s">"login form is reachable"</span>, <span class="tok-k">a
 <span class="tok-f">&lt;Screen</span> id=<span class="tok-s">"login"</span> src=<span class="tok-s">"./shots/login.png"</span><span class="tok-f">&gt;</span>
 
   <span class="tok-f">&lt;Overlay</span> match={`{{ role: "textbox", name: "Email" }}`} number={`{1}`}<span class="tok-f">&gt;</span>
-    Email — 登録済みのメールアドレスを入力。
+    Email — enter your registered email address.
   <span class="tok-f">&lt;/Overlay&gt;</span>
 
   <span class="tok-f">&lt;Overlay</span> match={`{{ role: "button", name: "Sign in" }}`} number={`{2}`}<span class="tok-f">&gt;</span>
-    クリックで認証リクエスト送信。
+    Click to send the auth request to the server.
   <span class="tok-f">&lt;/Overlay&gt;</span>
 
 <span class="tok-f">&lt;/Screen&gt;</span>

@@ -22,7 +22,7 @@
     "mdx",
     "docs",
     "screen-spec",
-    "画面設計書"
+    "screen-specifications"
   ],
   "type": "module",
   "main": "./src/index.ts",

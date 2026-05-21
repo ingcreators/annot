@@ -21,7 +21,7 @@ the AI-agent workflows.
 | ------ | ------------- |
 | **[Agent bug-report autopilot](./agent-bug-report)** | Locator-first MCP workflow: navigate → identify broken element → file a GitHub issue with annotated screenshot in one turn. |
 | **[Generate a manual from screenshots](./manual-from-screenshots)** | Combine MCP capture + DSL annotations + the [encode pipeline](../api/encode) (`format: "smart"` + `saveSizePreset`) for ~3–5× smaller per-step bytes. Includes a link to the living-product-docs recipe for the kept-in-sync flavour. |
-| **[Living product docs](./living-product-docs)** | Drive `annot-product-docs` + `-astro` + `-xlsx` from a Playwright tour — generate a docs site **and** a Japanese 画面設計書 spreadsheet from the same MDX, kept in sync with snapshots. |
+| **[Living product docs](./living-product-docs)** | Drive `annot-product-docs` + `-astro` + `-xlsx` from a Playwright tour — generate a docs site **and** an Excel screen-specifications spreadsheet from the same MDX, kept in sync with snapshots. |
 
 Each recipe is self-contained — copy-paste it into a new
 `example.spec.ts` (or paste the MCP payload into your agent's

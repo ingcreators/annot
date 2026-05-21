@@ -61,13 +61,10 @@ jobs:
       # `desktop-release.yml`, which runs the matching
       # `electron-builder` invocation on a matrix of OSes.
       # `@ingcreators/annot-docs-site` is the Astro Starlight
-      # docs site (took over the conventional name in Phase 7 of
-      # `docs/plans/_done/annot-work-astro-unification.md`).
-      # `@ingcreators/annot-docs-site-vitepress` is the dormant
-      # legacy site — still in the workspace for one release
-      # cycle as a fallback during the Phase 6 cookie-opt-in
-      # observation, then deleted in a follow-up PR.
-      - name: Build (core, web, extension, desktop, marketing, docs-site, docs-site-vitepress)
+      # docs site. The legacy VitePress sibling was deleted in
+      # the "retire VitePress + English-only" follow-up to
+      # `docs/plans/_done/annot-work-astro-unification.md`.
+      - name: Build (core, web, extension, desktop, marketing, docs-site)
         run: >
           pnpm
           --filter @ingcreators/annot-core
@@ -76,7 +73,6 @@ jobs:
           --filter @ingcreators/annot-desktop
           --filter @ingcreators/annot-marketing
           --filter @ingcreators/annot-docs-site
-          --filter @ingcreators/annot-docs-site-vitepress
           build
 
       # Storybook build. Originally landed as `continue-on-error: true`
