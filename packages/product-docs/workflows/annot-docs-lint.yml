@@ -1,0 +1,79 @@
+# Sample GitHub Actions workflow for `annot docs lint --ci`.
+#
+# Phase 4 PR 2 of `docs/plans/living-product-docs.md`. Copy to
+# `.github/workflows/annot-docs-lint.yml` in your consumer repo
+# and adjust the `--url` value to point at your preview / dev
+# server.
+#
+# Behaviour:
+#   - On every PR, runs the docs lint against a built site.
+#   - JSON output is captured and converted to GitHub
+#     annotations (one per finding) via the small inline
+#     script below. The annotation API positions the warning
+#     at the matching MDX line, so reviewers see drift inline
+#     on the diff view.
+
+name: annot docs lint
+
+on:
+  pull_request:
+    paths:
+      - "docs/**"
+      - "tests/docs/**"
+      - "annot-docs.config.ts"
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm playwright install --with-deps chromium
+      - name: Start dev server in background
+        run: |
+          pnpm dev &
+          # Wait for server to come up. Adjust the URL + port to
+          # match your project.
+          npx wait-on http://localhost:5173 --timeout 60000
+      - name: Run annot docs lint
+        id: lint
+        run: |
+          pnpm annot-docs lint --url http://localhost:5173 --ci --json > drift.json
+        continue-on-error: true
+      - name: Convert drift JSON → GitHub annotations
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require("fs");
+            const data = JSON.parse(fs.readFileSync("drift.json", "utf8"));
+            for (const finding of data.findings ?? []) {
+              const level = finding.severity === "error"
+                ? "error"
+                : finding.severity === "warning"
+                  ? "warning"
+                  : "notice";
+              core.summary.addRaw(
+                `- **${finding.severity.toUpperCase()}** ${finding.file} [${finding.screenId}] ${finding.kind}: ${finding.message}`,
+              );
+              core.summary.addEOL();
+              // GitHub annotation — `::warning file=...::message`
+              core[level](
+                `${finding.kind}: ${finding.message}`,
+                { file: finding.file, title: `annot-docs:${finding.screenId}` },
+              );
+            }
+            await core.summary.write();
+      - name: Fail if any error severity findings
+        if: steps.lint.outcome != 'success'
+        run: exit 1
