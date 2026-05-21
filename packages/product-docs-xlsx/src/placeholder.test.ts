@@ -55,9 +55,48 @@ describe("resolvePlaceholders", () => {
     expect(resolvePlaceholders("{id} - {title} - {id}", bundle)).toBe("X - Y - X");
   });
 
-  it("ignores `:format` suffix tokens (reserved for PR 5)", () => {
+  it("resolves `{annot:date}` against the pinned renderTime", () => {
     const bundle = makeBundle({ id: "X" });
-    expect(resolvePlaceholders("{annot:date}", bundle)).toBe("{annot:date}");
+    const out = resolvePlaceholders("{annot:date}", bundle, {
+      renderTime: new Date(2026, 4, 21),
+    });
+    expect(out).toBe("2026-05-21");
+  });
+
+  it("formats `{meta.date:yyyy/MM/dd}` from a stored ISO date", () => {
+    const bundle = makeBundle({ id: "X", meta: { createdDate: "2026-05-21" } });
+    const out = resolvePlaceholders("{meta.createdDate:yyyy/MM/dd}", bundle);
+    expect(out).toBe("2026/05/21");
+  });
+
+  it("formats `{annot:date:yyyy年MM月dd日}` with literal Japanese tokens", () => {
+    const bundle = makeBundle({ id: "X" });
+    const out = resolvePlaceholders("{annot:date:yyyy年MM月dd日}", bundle, {
+      renderTime: new Date(2026, 4, 21),
+    });
+    expect(out).toBe("2026年05月21日");
+  });
+
+  it("resolves `{annot:sheetIndex}` / `{annot:totalSheets}` from options", () => {
+    const bundle = makeBundle({ id: "X" });
+    const out = resolvePlaceholders("Page {annot:sheetIndex}/{annot:totalSheets}", bundle, {
+      sheetIndex: 3,
+      totalSheets: 8,
+    });
+    expect(out).toBe("Page 3/8");
+  });
+
+  it("`{annot:datetime}` returns ISO timestamp", () => {
+    const bundle = makeBundle({ id: "X" });
+    const dt = new Date(Date.UTC(2026, 4, 21, 12, 34, 56));
+    const out = resolvePlaceholders("{annot:datetime}", bundle, { renderTime: dt });
+    expect(out).toBe(dt.toISOString());
+  });
+
+  it("ignores `:format` when the value isn't a parseable date", () => {
+    const bundle = makeBundle({ id: "X", title: "Login" });
+    const out = resolvePlaceholders("{title:yyyy/MM/dd}", bundle);
+    expect(out).toBe("Login");
   });
 });
 

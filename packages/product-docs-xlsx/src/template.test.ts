@@ -94,6 +94,30 @@ describe("applyTemplateLayout", () => {
     expect(target.worksheets.map((s) => s.name)).toEqual(["Login"]);
   });
 
+  it("clones once per entry in `xlsx.sheets` for multi-screen MDXs", () => {
+    const target = new ExcelJS.Workbook();
+    const template = makeTemplateWorkbook();
+    applyTemplateLayout({
+      workbook: target,
+      template,
+      bookConfig: { templateSheets: { screen: "個別画面テンプレ" } },
+      bundles: [
+        makeBundle({
+          id: "SC-001",
+          title: "Login",
+          xlsx: {
+            role: "screen",
+            sheets: { default: "Login (default)", error: "Login (error)" },
+          },
+        }),
+      ],
+    });
+    expect(target.worksheets.map((s) => s.name).sort()).toEqual([
+      "Login (default)",
+      "Login (error)",
+    ]);
+  });
+
   it("throws when the configured template sheet is missing", () => {
     const target = new ExcelJS.Workbook();
     const template = makeTemplateWorkbook();

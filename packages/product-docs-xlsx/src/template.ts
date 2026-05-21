@@ -48,18 +48,24 @@ export function applyTemplateLayout(input: ApplyTemplateInput): void {
   for (const bundle of sorted) {
     const role = bundle.frontmatter.xlsx?.role ?? "screen";
     const templateName = input.bookConfig.templateSheets?.[role];
-    if (!templateName) {
-      // No template configured for this role — fall through to
-      // the default layout caller-side. (The dispatcher in PR 6
-      // makes that decision; this function is the "template path"
-      // half.)
-      continue;
-    }
+    if (!templateName) continue;
     const templateSheet = input.template.getWorksheet(templateName);
     if (!templateSheet) {
       throw new Error(
         `Template sheet "${templateName}" not found for role "${role}" in book template.`,
       );
+    }
+    // Multi-screen MDXs use `xlsx.sheets: { <key>: <sheetName>, ... }`
+    // to declare one sheet per `<Screen>` (or per "state").
+    // Each entry clones the template once.
+    const sheetsMap = bundle.frontmatter.xlsx?.sheets;
+    if (sheetsMap) {
+      const entries = Object.entries(sheetsMap);
+      for (const [, sheetName] of entries) {
+        const clone = cloneSheet(input.workbook, templateSheet, sanitiseSheetName(sheetName));
+        applyPlaceholdersToSheet(clone, bundle, input.substitute ?? {});
+      }
+      continue;
     }
     const sheetName = sanitiseSheetName(
       bundle.frontmatter.xlsx?.sheet ?? bundle.frontmatter.title ?? bundle.frontmatter.id,
