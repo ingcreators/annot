@@ -1,0 +1,108 @@
+---
+title: annot-product-docs-xlsx
+description: API reference for the Excel adapter — annot-docs-xlsx CLI, applyDefaultLayout, applyTemplateLayout, the placeholder vocabulary, the Named Range allowlist.
+---
+
+`@ingcreators/annot-product-docs-xlsx` is the Excel adapter
+for the living-product-docs core. Walks MDX bundles, dispatches
+per `xlsx.role` to either a customer-supplied template or the
+OSS default layout, and emits one `.xlsx` per book.
+
+Tier A — Node-only, no DOM. Depends on
+[`exceljs`](https://github.com/exceljs/exceljs).
+
+## CLI
+
+```sh
+annot-docs-xlsx render --root docs --out dist/xlsx
+annot-docs-xlsx render --book "画面設計書"
+```
+
+Reads `annot-docs.config.ts` from the project root, groups the
+walked MDXs by `annot.xlsx.book`, picks the per-book template
+config, and writes one `<book>.xlsx` per group.
+
+### CLI flags
+
+| Flag | Default | Purpose |
+|---|---|---|
+| `--root <dir>` | `docs` | MDX walk root |
+| `--out <dir>` | `dist/xlsx` | Output directory |
+| `--book <name>` | (all) | Render only the named book |
+| `--config <path>` | `annot-docs.config.ts` | Override config location |
+
+## `applyDefaultLayout(book)`
+
+```ts
+import { applyDefaultLayout } from "@ingcreators/annot-product-docs-xlsx";
+
+const bytes = await applyDefaultLayout(book);
+// Uint8Array of an .xlsx
+```
+
+Used when a book has no `template` configured. Emits the
+Japanese 画面設計書 default layout — cover / history / list /
+screen / reference sheets with sensible labels + styling.
+
+## `applyTemplateLayout(book, templatePath)`
+
+```ts
+import { applyTemplateLayout } from "@ingcreators/annot-product-docs-xlsx";
+
+const bytes = await applyTemplateLayout(book, "./templates/spec.xlsx");
+```
+
+Clones each `templateSheets[role]` sheet per bundle, substitutes
+`{var}` placeholders, populates `annot*`-prefixed Named Ranges.
+
+## Placeholders
+
+| Placeholder | Source |
+|---|---|
+| `{id}` | `annot.id` |
+| `{title}` | `annot.title` |
+| `{meta.<name>}` | per-MDX `meta.<name>` frontmatter |
+| `{projectName}` | project `meta.projectName` |
+| `{customerName}` | project `meta.customerName` |
+| `{annot:date}` | today, `YYYY-MM-DD` |
+| `{annot:date:fmt}` | today with date-fns format string |
+| `{meta.<name>:fmt}` | per-MDX date field with format string |
+| `{annot:sheetIndex}` | sheet position in the book (1-indexed) |
+| `{annot:totalSheets}` | total sheet count in the book |
+
+Unmatched placeholders pass through verbatim — typos surface
+at review time.
+
+## Named ranges
+
+| Range | Content |
+|---|---|
+| `annotImage` | annotated PNG for a single-screen MDX |
+| `annotImage_<screenId>` | per-screen PNG (multi-screen MDX) |
+| `annotItemTable` | overlay table — `#` / Role / Name / Intent / Notes |
+| `annotHistory` | revision history rows |
+| `annotList` | screen index across the book |
+| `annotSnapshot` | verbatim aria-snapshot YAML |
+| `annotAttributes` | verbatim HTML attribute extraction |
+
+Excel forbids `:` in Named Range identifiers, so the per-screen
+PNG variant uses an underscore.
+
+## `applyNamedRanges(workbook, bundle)`
+
+```ts
+import { applyNamedRanges } from "@ingcreators/annot-product-docs-xlsx";
+
+await applyNamedRanges(workbook, parsedMdxBundle);
+```
+
+The lower-level entry point — useful when integrating into a
+custom render pipeline that doesn't use the default
+template-cloning flow.
+
+## See also
+
+- [Xlsx templates page](../product-docs/xlsx-templates) —
+  authoring guide for the customer-template flow.
+- [`annot-product-docs` API](./product-docs) — the MDX parser
+  this adapter consumes.

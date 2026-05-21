@@ -1,0 +1,127 @@
+---
+title: Drift detection
+description: annot docs lint — six finding kinds across the MDX vs live UI gap, severity-bucket exit-code logic, GitHub Actions workflow that converts JSON output into PR-diff annotations.
+---
+
+The drift detector catches divergence between the stored
+`annot:snapshot` blocks (what the docs say) and the live UI
+(what the app actually shows). Run it from a Playwright tour
+that hits a running app — local dev server, staging URL, or
+preview deploy.
+
+## Six finding kinds
+
+| Kind | Means | Severity |
+|---|---|---|
+| `added` | UI ships a new interactive element the docs don't mention | warning |
+| `removed` | Docs mention an element the UI no longer ships | error |
+| `renamed` | An element's accessibility name changed | warning |
+| `role-changed` | An element's role changed (e.g. `link` → `button`) | error |
+| `duplicated` | A `match` key resolves to multiple elements | error |
+| `attribute-drift` | A tracked HTML attribute changed (e.g. `type`, `autocomplete`) | warning |
+
+Errors block CI; warnings surface as PR-diff annotations but
+don't fail the build. The bucket-to-exit-code mapping is
+configurable via `annot-docs.config.ts`.
+
+## CLI
+
+```sh
+annot-docs lint --url http://localhost:5173
+```
+
+Default output is human-readable text on stdout, one block per
+finding with file:line markers.
+
+### CI mode
+
+```sh
+annot-docs lint --ci --json --url https://staging.example.com
+```
+
+- `--ci` activates the severity-bucket exit-code logic
+  (default: errors → exit 1, warnings → exit 0).
+- `--json` emits machine-readable JSON on stdout. Pipe into
+  `core.warning` / `core.error` annotations on GitHub Actions
+  (the bundled workflow does this — see below).
+
+### Auto-fix
+
+```sh
+annot-docs lint --fix --url http://localhost:5173
+```
+
+For files with drift, refreshes the stored `annot:snapshot` +
+`annot:attributes` blocks against the live UI. Use sparingly —
+this hides drift instead of surfacing it. Useful when:
+
+- You're intentionally accepting a UI rename.
+- You're catching up the docs after a refactor.
+
+For deliberate single-finding fixes, edit the MDX by hand
+instead of running `--fix` over the whole tree.
+
+## GitHub Actions workflow
+
+The package ships a sample workflow that converts the JSON
+drift report into per-line `core.warning` / `core.error`
+annotations on the PR diff view:
+
+```yaml
+# .github/workflows/docs.yml
+name: docs drift
+on:
+  pull_request:
+    paths:
+      - "packages/web/**"
+      - "docs/books/**"
+      - "tests/docs/**"
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @ingcreators/annot-web build
+      - run: pnpm exec playwright install chromium
+      - name: Run the docs tour
+        run: |
+          pnpm dev &
+          npx wait-on http://localhost:5173
+          pnpm exec playwright test tests/docs/
+      - name: Lint for drift
+        run: pnpm annot-docs lint --ci --json --url http://localhost:5173 > drift.json || true
+      - name: Annotate the PR diff
+        run: node node_modules/@ingcreators/annot-product-docs/dist/cli/annotate-pr.js < drift.json
+```
+
+The `annotate-pr.js` helper emits `::warning file=...,line=...::`
+on stdout per finding; GitHub Actions renders those inline on
+the PR's "Files changed" view.
+
+## When drift is OK
+
+Drift findings aren't always bugs in the UI. Three legitimate
+cases:
+
+1. **The UI was right; the docs are stale.** Run
+   `annot docs lint --fix` to accept the new UI as canonical.
+2. **The UI is mid-refactor.** Mark the MDX with
+   `annot.lint.skip: ["renamed", "attribute-drift"]` in the
+   frontmatter to silence specific finding kinds during the
+   refactor; remove the skip once the rename is complete.
+3. **The UI is wrong.** Fix the code, re-run the tour, the
+   finding clears.
+
+## See also
+
+- [`/api/product-docs`](../api/product-docs) — programmatic
+  `detectDrift` / `detectDriftFromYaml` for embedding in
+  custom CI pipelines.
+- [Playwright tour](./playwright-tour) — the upstream step
+  that produces the snapshots drift detection compares.

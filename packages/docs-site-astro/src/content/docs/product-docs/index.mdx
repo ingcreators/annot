@@ -1,0 +1,60 @@
+---
+title: Living product docs
+description: Generate a docs site and a Japanese 画面設計書 spreadsheet from the same MDX, kept in sync with Playwright snapshots — drift caught at lint time, not at customer review.
+---
+
+The third growth vector of `PRODUCT_DIRECTION.md`: turn the
+Playwright fixture into a docs-publishing pipeline. A test
+suite that captures every screen of your app feeds an MDX
+content collection; the same MDX feeds **both** an Astro docs
+site **and** a Japanese 画面設計書 Excel spreadsheet. Drift
+between the MDX and the live UI is detected as a CI lint step.
+
+## Why this exists
+
+UI documentation rots. The traditional remedy — a heroic
+quarterly screenshot refresh — falls apart at scale: 50 screens
+× 4 quarters = 200 PRs nobody reviews carefully. Living product
+docs invert the lifecycle:
+
+1. **The Playwright tour IS the docs.** Every CI run captures
+   every screen and re-syncs the stored aria-snapshot.
+2. **The docs site re-renders from the latest snapshot.**
+   Astro's Image Service composes annotated PNGs at build time
+   from the `[box=x,y,w,h]` markers your tour wrote into the
+   MDX.
+3. **Drift is a CI finding, not a discovery at customer review.**
+   `annot docs lint --ci` surfaces added / removed / renamed /
+   role-changed / duplicated / attribute-drift findings as
+   PR-diff annotations.
+
+## What lives in this section
+
+- [**Concepts**](./concepts) — the MDX format, `<Screen>` /
+  `<Overlay>`, the `annot:` frontmatter, the `match` resolver,
+  the snapshot / attributes comment blocks the tour rewrites.
+- [**Playwright tour**](./playwright-tour) — the test file
+  shape, the `screen` fixture from `annot-product-docs`,
+  capture conventions, scaling to dozens of screens.
+- [**Astro integration**](./astro-integration) — wiring
+  `productDocsIntegration()` into an Astro config, the seven
+  shipped components, the Image Service + caches.
+- [**Xlsx templates**](./xlsx-templates) — Excel emission via
+  customer templates: `{var}` placeholders, Named Ranges, the
+  default no-template layout for the OSS use case.
+- [**Drift detection**](./drift-detection) — `annot docs lint`,
+  the six finding kinds, the bundled GitHub Actions workflow
+  that converts JSON output into `core.warning` annotations
+  on the PR diff.
+
+## See also
+
+- [Get started — install the trio](../getting-started/product-docs)
+- [Recipe: build a 画面設計書 from a Playwright tour](../recipes/living-product-docs)
+- API references: [`annot-product-docs`](../api/product-docs) /
+  [`-astro`](../api/product-docs-astro) /
+  [`-xlsx`](../api/product-docs-xlsx)
+- MCP tools for the docs flow:
+  [`annot_draft_screen_spec`](../ai-agents/tools#annot_draft_screen_spec) /
+  [`annot_propose_drift_fixes`](../ai-agents/tools#annot_propose_drift_fixes) /
+  [`annot_translate_screen_spec`](../ai-agents/tools#annot_translate_screen_spec)

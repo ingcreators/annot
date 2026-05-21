@@ -1,0 +1,128 @@
+---
+title: Xlsx templates (画面設計書)
+description: Emit Japanese 画面設計書 spreadsheets from the same MDX — customer template populated via {var} placeholders + Excel Named Ranges, or the OSS default layout.
+---
+
+`@ingcreators/annot-product-docs-xlsx` walks the MDX bundles
+your tour writes and emits one `.xlsx` per book — either using
+a customer-supplied Excel template populated via `{var}`
+placeholders + Excel Named Ranges, or the OSS default layout
+(cover / history / list / screen / reference) for projects
+without a corporate template.
+
+## Install
+
+```sh
+pnpm add @ingcreators/annot-product-docs-xlsx
+```
+
+## CLI
+
+```sh
+# Render every book defined in annot-docs.config.ts
+annot-docs-xlsx render --root docs --out dist/xlsx
+
+# Render one book by name
+annot-docs-xlsx render --book "画面設計書"
+```
+
+The CLI reads `annot-docs.config.ts` from the project root,
+groups MDXs by `annot.xlsx.book`, and writes one `<book>.xlsx`
+per group.
+
+## Project config
+
+```ts
+// annot-docs.config.ts
+import { defineConfig } from "@ingcreators/annot-product-docs";
+
+export default defineConfig({
+  meta: {
+    projectName: "顧客管理システム",
+    customerName: "株式会社XYZ",
+  },
+  xlsx: {
+    defaultBook: "画面設計書",
+    books: {
+      "画面設計書": {
+        template: "./templates/customer-screen-spec.xlsx",
+        templateSheets: {
+          cover: "表紙テンプレ",
+          history: "改訂履歴テンプレ",
+          list: "画面一覧テンプレ",
+          screen: "個別画面テンプレ",
+        },
+      },
+    },
+  },
+});
+```
+
+Each `templateSheets[role]` names a sheet in the customer's
+`.xlsx` that the adapter clones-per-bundle. If a book's config
+omits `template`, the default OSS layout is used (Japanese-
+friendly defaults — `表紙` / `改訂履歴` / `画面一覧` /
+individual screen sheets with sensible labels).
+
+## Placeholder vocabulary
+
+In any cell of a templated sheet, the adapter substitutes:
+
+| Placeholder | Source |
+|---|---|
+| `{id}` | `annot.id` |
+| `{title}` | `annot.title` |
+| `{meta.<name>}` | per-MDX `meta.<name>` frontmatter |
+| `{projectName}` | project `meta.projectName` |
+| `{customerName}` | project `meta.customerName` |
+| `{annot:date}` | today's date `YYYY-MM-DD` |
+| `{annot:date:yyyy年MM月dd日}` | today, with a date-fns format string |
+| `{meta.createdDate:yyyy/MM/dd}` | per-MDX date field, with format string |
+| `{annot:sheetIndex}` / `{annot:totalSheets}` | per-book sheet position |
+
+Unmatched placeholders pass through verbatim so authoring
+typos are visible at review time (the rendered Excel still
+contains the literal text `{meta.typoName}`).
+
+## Named ranges
+
+The adapter recognises Named Ranges with the `annot` prefix in
+the customer's template:
+
+| Range | Content |
+|---|---|
+| `annotImage` | annotated PNG for the MDX (single-screen variant) |
+| `annotImage_<screenId>` | per-screen PNG (multi-screen MDX) |
+| `annotItemTable` | overlay table — `#` / Role / Name / Intent / Notes |
+| `annotHistory` | revision-history rows (one per `<HistoryEntry>` in the book) |
+| `annotList` | screen index across the book (one row per `<Screen>`) |
+| `annotSnapshot` | verbatim aria-snapshot YAML |
+| `annotAttributes` | verbatim HTML attribute extraction |
+
+Excel named-range identifiers can't contain `:`, so the per-screen
+PNG variant uses an underscore (`annotImage_login`,
+not `annotImage:login`).
+
+## Authoring tip — start with the default layout
+
+The default layout (used when `template` is unset on a book)
+covers cover / history / list / screen / reference sheets with
+Japanese 画面設計書 conventions baked in. Run
+
+```sh
+annot-docs-xlsx render --book "画面設計書"
+```
+
+once, open the output, and use it as the **structural reference**
+for authoring the customer-template version. The Named Range
+names + placeholder syntax stay identical between the default
+layout and any customer template; only the per-cell styling +
+the row layout differ.
+
+## See also
+
+- [`/api/product-docs-xlsx`](../api/product-docs-xlsx) — full
+  CLI + programmatic API.
+- [Concepts](./concepts) — the MDX format the adapter consumes.
+- [Recipe: living product docs](../recipes/living-product-docs)
+  — end-to-end working example.

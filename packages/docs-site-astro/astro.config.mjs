@@ -84,6 +84,14 @@ export default defineConfig({
           items: [{ autogenerate: { directory: "recipes" } }],
         },
         {
+          // Living product docs section (Phase 3 of
+          // `docs/plans/annot-work-astro-unification.md`).
+          // Houses the concepts + per-package walkthrough
+          // pages for `annot-product-docs` / `-astro` / `-xlsx`.
+          label: "Living product docs",
+          items: [{ autogenerate: { directory: "product-docs" } }],
+        },
+        {
           label: "AI agents",
           items: [{ autogenerate: { directory: "ai-agents" } }],
         },

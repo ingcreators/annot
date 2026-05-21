@@ -1,0 +1,122 @@
+---
+title: Writing the Playwright tour
+description: The tour file shape, the screen fixture, capture conventions, scaling to dozens of screens.
+---
+
+The Playwright tour is the single source of UI truth.
+`@ingcreators/annot-product-docs` ships a `screen` fixture you
+extend `@playwright/test`'s `test` with; each `screen.capture(...)`
+call re-syncs the `annot:snapshot` + `annot:attributes` blocks
+in the matching MDX file in place.
+
+## Minimal tour
+
+```ts
+// tests/docs/auth.spec.ts
+import { test } from "@ingcreators/annot-product-docs";
+
+test("login flow", async ({ page, screen }) => {
+  await page.goto("/login");
+  await screen.capture({
+    id: "login",
+    mdxPath: "docs/books/example/SC-001-login.mdx",
+  });
+});
+```
+
+Run it:
+
+```sh
+pnpm exec playwright test tests/docs/auth.spec.ts
+```
+
+The fixture:
+
+1. Calls Playwright's AI-mode `ariaSnapshot({ boxes: true })`.
+2. Captures `page.screenshot()` to the MDX's `<Screen src>`
+   relative path.
+3. Re-finds each `<Overlay match>` against the snapshot and
+   writes `[box=x,y,w,h]` markers next to the matching nodes.
+4. Extracts the per-`ref` HTML attribute set.
+5. Rewrites the `annot:snapshot` + `annot:attributes` comment
+   blocks byte-stably (unchanged screens produce zero-diff
+   reruns).
+
+## Multi-step tours
+
+Same shape: one `screen.capture(...)` per screen, in narrative
+order. Use `page.goto` / `page.click` / `expect.toBeVisible`
+between captures just like a normal Playwright test.
+
+```ts
+test("checkout flow", async ({ page, screen }) => {
+  await page.goto("/cart");
+  await screen.capture({ id: "cart", mdxPath: "docs/checkout/SC-002-cart.mdx" });
+
+  await page.getByRole("button", { name: "Checkout" }).click();
+  await expect(page.getByRole("heading", { name: "Shipping" })).toBeVisible();
+  await screen.capture({ id: "shipping", mdxPath: "docs/checkout/SC-003-shipping.mdx" });
+
+  // ...
+});
+```
+
+## Multi-screen in one MDX
+
+When two screens share frontmatter (same feature, same Excel
+sheet), bundle them in one MDX:
+
+```mdx
+# Checkout
+
+<Screen id="cart" src="./shots/cart.png">
+<Overlay match={{ role: "button", name: "Checkout" }} number={1}>
+Proceed to shipping.
+</Overlay>
+</Screen>
+
+<Screen id="shipping" src="./shots/shipping.png">
+<Overlay match={{ role: "textbox", name: "Address" }} number={1}>
+Shipping address. Required for physical goods.
+</Overlay>
+</Screen>
+```
+
+Two `screen.capture` calls in the tour, both passing the same
+`mdxPath` with different `id`. Each call updates only its own
+screen's blocks.
+
+## Scaling to dozens of screens
+
+Two patterns work well:
+
+- **One spec file per feature** (`auth.spec.ts`, `checkout.spec.ts`)
+  — pairs naturally with how teams split test ownership.
+- **One spec file per screen** if Playwright's parallelism
+  becomes the bottleneck — each spec is independently
+  parallelisable.
+
+Both run nightly + on PRs touching the relevant feature code
+via a path filter:
+
+```yaml
+# .github/workflows/docs.yml
+on:
+  schedule:
+    - cron: "0 18 * * *"   # nightly
+  pull_request:
+    paths: ["packages/web/**"]
+```
+
+## Tour failures are advisory by default
+
+`screen.capture` doesn't throw when an `<Overlay match>` fails
+to resolve — it writes a `match: unresolved` marker and lets
+the test continue. The drift detector reports the failure as
+an `added` or `removed` finding at lint time, where it's a CI
+warning, not a hard test failure. This keeps the tour stable
+during UI churn — a single removed button doesn't take down
+the whole tour run.
+
+For strict mode, pass `screen.capture({ strict: true })` per
+call (throws on unresolved match).
