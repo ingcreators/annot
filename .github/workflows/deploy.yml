@@ -247,14 +247,31 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: pnpm --filter @ingcreators/annot-marketing cf:deploy
 
-      # ── 8. Deploy the Astro Starlight docs site ──────────────
+      # ── 8a. Free the annot.work/docs route ───────────────────
+      # The legacy VitePress Worker (`annot-docs-site`) was
+      # retired in PR #913 but its Cloudflare-side Worker entry
+      # still holds the `annot.work/docs` + `annot.work/docs/*`
+      # route claim. Cloudflare blocks two Workers from claiming
+      # the same route, so we delete the legacy Worker before
+      # the new one (`annot-docs-site-astro`) tries to claim it.
+      # `continue-on-error: true` because once the Worker is
+      # gone, subsequent deploys would fail this step — it's
+      # idempotent only on the first run, then becomes a no-op
+      # advisory.
+      - name: Delete legacy annot-docs-site Worker (one-time)
+        continue-on-error: true
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm dlx wrangler delete --name annot-docs-site --force
+
+      # ── 8b. Deploy the Astro Starlight docs site ──────────────
       # The Worker is named `annot-docs-site-astro` on
-      # Cloudflare's side (so we don't collide with the still-
-      # existing `annot-docs-site` Worker entry — that entry is
-      # operator-deletable from the Cloudflare dashboard when
-      # convenient; deleting it doesn't affect traffic because
-      # the Astro Worker has already claimed
-      # `annot.work/docs/*` via its own routes block).
+      # Cloudflare's side (avoiding the Cloudflare-side rename
+      # that would otherwise require the legacy Worker to be
+      # deleted first; with step 8a above doing that delete,
+      # we could now rename — deferred to a follow-up to keep
+      # this PR's blast radius minimal).
       - name: Deploy annot-docs-site (Astro Starlight)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
