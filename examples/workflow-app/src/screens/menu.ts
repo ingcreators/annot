@@ -65,11 +65,16 @@ export class WfMenu extends LitElement {
   }
 
   #renderApplicantCards(): unknown {
+    // aria-label cropped to the title so MDX overlays can match
+    // on a clean `name: "New application"` rather than the
+    // concatenated heading + body text the browser would
+    // otherwise derive as the link's accessible name.
     return html`
       <a
         class="wf-card wf-card--action"
         href="#/apply"
         data-testid="menu-new-application"
+        aria-label=${t("menu.card.newApplication.title")}
         @click=${(e: Event) => this.#go(e, "/apply")}
       >
         <h2 class="wf-subheading">${t("menu.card.newApplication.title")}</h2>
@@ -85,6 +90,7 @@ export class WfMenu extends LitElement {
         class="wf-card wf-card--action"
         href="#/approve"
         data-testid="menu-pending-approvals"
+        aria-label=${t("menu.card.pendingApprovals.title")}
         @click=${(e: Event) => this.#go(e, "/approve")}
       >
         <div class="wf-row" style="justify-content: space-between">

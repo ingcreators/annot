@@ -1,0 +1,44 @@
+---
+annot:
+  id: OM-006
+  title: Menu (Approver)
+  purpose: Post-login landing for approvers. Routes into the pending-approvals queue.
+  meta:
+    audience: end users
+    role: approver
+    revisedDate: 2026-05-22
+  xlsx:
+    book: Operation Manual
+    sheet: OM-006 Menu (Approver)
+    role: screen
+    order: 600
+---
+
+import Screen from "@ingcreators/annot-product-docs-astro/components/Screen.astro";
+import Overlay from "@ingcreators/annot-product-docs-astro/components/Overlay.astro";
+import Transition from "@ingcreators/annot-product-docs-astro/components/Transition.astro";
+
+# Menu — Approver
+
+After signing in as an approver, the menu shows a single
+"Pending approvals" card. The badge in the corner of the
+card reflects the queue depth.
+
+<Screen id="menu-approver" src="/shots/menu-approver.png">
+
+<Overlay match={{ role: "link", name: "Pending approvals" }} intent="action" number={1}>
+Opens the approval queue. The badge inside the card shows
+how many submissions are waiting for a decision.
+</Overlay>
+
+<Overlay match={{ role: "button", name: "Sign out" }} intent="info" number={2}>
+Signs the approver out and returns to the login screen.
+</Overlay>
+
+</Screen>
+
+## Transitions
+
+<Transition trigger={{ role: "link", name: "Pending approvals" }} to="OM-007" />
+
+{/* annot:snapshot */}

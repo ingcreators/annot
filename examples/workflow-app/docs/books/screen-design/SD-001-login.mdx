@@ -1,0 +1,63 @@
+---
+annot:
+  id: SD-001
+  title: Sign in (spec)
+  purpose: Per-element spec for the login form.
+  meta:
+    audience: developers + QA
+    route: "#/login"
+    component: "<wf-login>"
+    revisedDate: 2026-05-22
+  xlsx:
+    book: Screen Design
+    sheet: SD-001 Sign in
+    role: screen
+    order: 100
+---
+
+import Screen from "@ingcreators/annot-product-docs-astro/components/Screen.astro";
+import Overlay from "@ingcreators/annot-product-docs-astro/components/Overlay.astro";
+
+# Sign in — element spec
+
+Route: `#/login`. Component: `<wf-login>` (src/screens/login.ts).
+Anonymous-only — signed-in users are redirected to `/menu`
+by the shell guard.
+
+<Screen id="login" src="/shots/login.png">
+
+<Overlay match={{ role: "textbox", name: "Email" }} intent="required" number={1}>
+**Email field**
+
+- Type: `email`
+- Required: yes
+- Autocomplete: `email`
+- `data-testid`: `login-email`
+- Validation: HTML5 `type="email"` constraint only; deeper
+  format validation happens server-side in a real app.
+</Overlay>
+
+<Overlay match={{ role: "textbox", name: "Password" }} intent="required" number={2}>
+**Password field**
+
+- Type: `password`
+- Required: yes
+- Autocomplete: `current-password`
+- `data-testid`: `login-password`
+- Validation: HTML5 `required` only. Demo accepts any
+  non-empty string matching the seed password.
+</Overlay>
+
+<Overlay match={{ role: "button", name: "Sign in" }} intent="action" number={3}>
+**Sign in button**
+
+- Type: `submit`
+- `data-testid`: `login-submit`
+- Calls `signIn(email, password)` from `state.ts`. On
+  success, `navigate("/menu")`; on failure, sets the form
+  error message rendered via `data-testid="login-error"`.
+</Overlay>
+
+</Screen>
+
+{/* annot:snapshot */}

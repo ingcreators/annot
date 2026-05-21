@@ -1,0 +1,65 @@
+---
+annot:
+  id: SD-008
+  title: Decision recorded (spec)
+  purpose: Per-element spec for the approver's decision terminal.
+  meta:
+    audience: developers + QA
+    route: "#/approve/:id/decided"
+    component: "<wf-approval-decided>"
+    revisedDate: 2026-05-22
+  xlsx:
+    book: Screen Design
+    sheet: SD-008 Decision recorded
+    role: screen
+    order: 800
+---
+
+import Screen from "@ingcreators/annot-product-docs-astro/components/Screen.astro";
+import Overlay from "@ingcreators/annot-product-docs-astro/components/Overlay.astro";
+
+# Decision recorded — element spec
+
+Route: `#/approve/:id/decided`. Component:
+`<wf-approval-decided>` (src/screens/approval-decided.ts).
+Approver-only.
+
+Guards: redirects to `/approve` if the id is unknown or the
+application is still in `submitted` state.
+
+The DL displays three rows: id, decision badge, optional
+decision comment.
+
+<Screen id="approval-decided" src="/shots/approval-decided.png">
+
+<Overlay match={{ role: "heading", name: "Application approved" }} intent="success" number={1}>
+**Decision heading**
+
+- Locale-aware: en `"Application approved"` /
+  `"Application rejected"`; ja `"申請を承認しました"` /
+  `"申請を却下しました"`.
+- The screenshot shows the approved variant. The data-attr
+  `data-decision="approved" | "rejected"` on the outer
+  card lets tests assert on the resolved decision without
+  reading the localised heading.
+</Overlay>
+
+<Overlay match={{ role: "button", name: "Back to pending list" }} intent="action" number={2}>
+**Back to pending list**
+
+- `data-testid`: `decided-back-to-list`.
+- `navigate("/approve")`. The decided item is no longer in
+  `pendingApprovals()` so the queue depth drops.
+</Overlay>
+
+</Screen>
+
+## DL rows
+
+| dt | dd source | `data-testid` |
+|----|-----------|---------------|
+| ID | `app.id` | `decided-id` |
+| Decision | `formatStatus(app.status)` inside a `.wf-status[data-status]` pill | (status attr) |
+| Decision comment | `app.decisionComment` (omitted when empty) | `decided-comment` |
+
+{/* annot:snapshot */}

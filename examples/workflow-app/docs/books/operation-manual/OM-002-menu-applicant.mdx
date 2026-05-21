@@ -1,0 +1,53 @@
+---
+annot:
+  id: OM-002
+  title: Menu (Applicant)
+  purpose: Post-login landing for applicants. Launches a new application or browses history.
+  meta:
+    audience: end users
+    role: applicant
+    revisedDate: 2026-05-22
+  xlsx:
+    book: Operation Manual
+    sheet: OM-002 Menu (Applicant)
+    role: screen
+    order: 200
+---
+
+import Screen from "@ingcreators/annot-product-docs-astro/components/Screen.astro";
+import Overlay from "@ingcreators/annot-product-docs-astro/components/Overlay.astro";
+import Transition from "@ingcreators/annot-product-docs-astro/components/Transition.astro";
+
+# Menu — Applicant
+
+After signing in as an applicant, the menu surfaces two
+affordances: a "New application" card to start a request,
+and a "My applications" list of submissions to date.
+
+<Screen id="menu-applicant" src="/shots/menu-applicant.png">
+
+<Overlay match={{ role: "link", name: "New application" }} intent="action" number={1}>
+Opens the application form. Tab through to a category and
+fill in the required fields. The card carries an
+`aria-label` so its accessible name is just the heading,
+not the heading + body paragraph.
+</Overlay>
+
+<Overlay match={{ role: "heading", name: "My applications" }} intent="info" number={2}>
+Lists every application this user has submitted, newest
+first. Status badges show whether each is still pending or
+has been decided.
+</Overlay>
+
+<Overlay match={{ role: "button", name: "Sign out" }} intent="info" number={3}>
+Sign out from any screen via the header button. The session
+is in-memory only — refreshing the page also signs out.
+</Overlay>
+
+</Screen>
+
+## Transitions
+
+<Transition trigger={{ role: "link", name: "New application" }} to="OM-003" />
+
+{/* annot:snapshot */}

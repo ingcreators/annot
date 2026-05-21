@@ -1,0 +1,64 @@
+---
+annot:
+  id: SD-002
+  title: Menu (spec)
+  purpose: Per-element spec for the role-conditional menu.
+  meta:
+    audience: developers + QA
+    route: "#/menu"
+    component: "<wf-menu>"
+    revisedDate: 2026-05-22
+  xlsx:
+    book: Screen Design
+    sheet: SD-002 Menu
+    role: screen
+    order: 200
+---
+
+import Screen from "@ingcreators/annot-product-docs-astro/components/Screen.astro";
+import Overlay from "@ingcreators/annot-product-docs-astro/components/Overlay.astro";
+
+# Menu — element spec
+
+Route: `#/menu`. Component: `<wf-menu>` (src/screens/menu.ts).
+Renders one of two variants by `currentUser.role`:
+
+- **Applicant** — "New application" card + history list.
+- **Approver** — "Pending approvals" card with count badge.
+
+The screenshot below is the applicant variant.
+
+<Screen id="menu-applicant" src="/shots/menu-applicant.png">
+
+<Overlay match={{ role: "heading", name: "Menu" }} intent="info" number={1}>
+**Page heading**
+
+Static text. Renders for both role variants.
+</Overlay>
+
+<Overlay match={{ role: "link", name: "New application" }} intent="action" number={2}>
+**New application card** (applicant variant only)
+
+- Element: `<a href="#/apply">` with `aria-label="New application"`.
+- `data-testid`: `menu-new-application`.
+- Visible-when: `currentUser.role === "applicant"`.
+</Overlay>
+
+<Overlay match={{ role: "heading", name: "My applications" }} intent="info" number={3}>
+**History section** (applicant variant only)
+
+Lists `applicationsByApplicant(currentUser.id)` from
+`state.ts`. Empty state surfaces
+`menu.myApplications.empty` when no items exist.
+</Overlay>
+
+</Screen>
+
+## Approver variant
+
+The approver sees a single "Pending approvals" card
+(`aria-label="Pending approvals"`, `data-testid="menu-pending-approvals"`).
+A `<span class="wf-badge" data-testid="menu-pending-count">`
+inside the card shows `pendingApprovals().length`.
+
+{/* annot:snapshot */}

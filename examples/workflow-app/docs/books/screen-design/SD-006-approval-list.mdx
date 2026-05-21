@@ -1,0 +1,75 @@
+---
+annot:
+  id: SD-006
+  title: Pending approvals (spec)
+  purpose: Per-element spec for the approver's queue.
+  meta:
+    audience: developers + QA
+    route: "#/approve"
+    component: "<wf-approval-list>"
+    revisedDate: 2026-05-22
+  xlsx:
+    book: Screen Design
+    sheet: SD-006 Pending approvals
+    role: screen
+    order: 600
+---
+
+import Screen from "@ingcreators/annot-product-docs-astro/components/Screen.astro";
+import Overlay from "@ingcreators/annot-product-docs-astro/components/Overlay.astro";
+
+# Pending approvals — element spec
+
+Route: `#/approve`. Component: `<wf-approval-list>`
+(src/screens/approval-list.ts). Approver-only.
+
+Renders `pendingApprovals()` (filter on
+`status === "submitted"`) as a 6-column table:
+id / applicant / category / amount / submitted-at / Review.
+
+<Screen id="approval-list" src="/shots/approval-list.png">
+
+<Overlay match={{ role: "heading", name: "Pending approvals" }} intent="info" number={1}>
+**Page heading**
+
+Static text. Subheading prompts the approver to "Open an
+item to review the full application."
+</Overlay>
+
+<Overlay match={{ role: "columnheader", name: "Applicant" }} intent="info" number={2}>
+**Applicant column**
+
+`displayName(findUser(app.applicantId))` — locale-aware
+display name. Falls back to empty string if the user record
+is missing (defensive — should never happen with seed data).
+</Overlay>
+
+<Overlay match={{ role: "columnheader", name: "Amount" }} intent="info" number={3}>
+**Amount column**
+
+- Class: `wf-table__amount` (tabular-nums + nowrap).
+- Formatter: `formatAmount(app.amount, app.category)`.
+- For `leave` applications, renders an em-dash.
+</Overlay>
+
+<Overlay match={{ role: "link", name: "Review APP-001" }} intent="action" number={4}>
+**Review CTA (one per row)**
+
+- Element: `<a>` with the `wf-button wf-button--ghost` look.
+- `aria-label`: `Review {app.id}` — disambiguates the
+  otherwise-identical "Review" text across rows so the
+  match resolver can pin to a specific id.
+- `data-testid`: `approval-review-{app.id}`.
+- `href`: `#/approve/{app.id}`.
+</Overlay>
+
+</Screen>
+
+## Empty state
+
+When `pendingApprovals().length === 0`, the table is replaced
+with a card whose body reads
+`approve.list.empty` ("No applications awaiting approval.")
+and `data-testid="approval-list-empty"`.
+
+{/* annot:snapshot */}

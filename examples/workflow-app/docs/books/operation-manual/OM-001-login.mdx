@@ -1,0 +1,52 @@
+---
+annot:
+  id: OM-001
+  title: Sign in
+  purpose: Unauthenticated entry point. Both applicants and approvers sign in here.
+  meta:
+    audience: end users
+    revisedDate: 2026-05-22
+  xlsx:
+    book: Operation Manual
+    sheet: OM-001 Sign in
+    role: screen
+    order: 100
+---
+
+import Screen from "@ingcreators/annot-product-docs-astro/components/Screen.astro";
+import Overlay from "@ingcreators/annot-product-docs-astro/components/Overlay.astro";
+import Transition from "@ingcreators/annot-product-docs-astro/components/Transition.astro";
+
+# Sign in
+
+The sign-in screen is the unauthenticated entry point. The
+form accepts a registered email address and password; on
+success the user is routed to the role-aware menu.
+
+<Screen id="login" src="/shots/login.png">
+
+<Overlay match={{ role: "textbox", name: "Email" }} intent="required" number={1}>
+Enter your registered company email. Personal accounts are
+not accepted.
+</Overlay>
+
+<Overlay match={{ role: "textbox", name: "Password" }} intent="required" number={2}>
+Enter your password. Every demo account uses `password`.
+</Overlay>
+
+<Overlay match={{ role: "button", name: "Sign in" }} intent="action" number={3}>
+Authenticates against the in-memory user table and routes to
+the menu.
+</Overlay>
+
+</Screen>
+
+## Transitions
+
+<Transition trigger={{ role: "button", name: "Sign in" }} on="success" to="OM-002" />
+<Transition trigger={{ role: "button", name: "Sign in" }} on="failure" to="self">
+  An error message is displayed under the form. Re-enter the
+  credentials and submit again.
+</Transition>
+
+{/* annot:snapshot */}

@@ -1,0 +1,90 @@
+---
+annot:
+  id: SD-007
+  title: Review application (spec)
+  purpose: Per-element spec for the approver's detail + decision screen.
+  meta:
+    audience: developers + QA
+    route: "#/approve/:id"
+    component: "<wf-approval-detail>"
+    revisedDate: 2026-05-22
+  xlsx:
+    book: Screen Design
+    sheet: SD-007 Review application
+    role: screen
+    order: 700
+---
+
+import Screen from "@ingcreators/annot-product-docs-astro/components/Screen.astro";
+import Overlay from "@ingcreators/annot-product-docs-astro/components/Overlay.astro";
+
+# Review application — element spec
+
+Route: `#/approve/:id`. Component: `<wf-approval-detail>`
+(src/screens/approval-detail.ts). Approver-only.
+
+Conditional renders:
+
+- **Application not found**: shows the
+  `approve.detail.notFound` error and a back-to-list link.
+- **Already decided** (status ≠ "submitted"): shows the same
+  DL plus the `approve.detail.alreadyDecided` notice, hides
+  the comment textarea + approve / reject buttons.
+- **Pending** (default): full DL + comment textarea + two
+  CTAs.
+
+The screenshot below shows the pending variant.
+
+<Screen id="approval-detail" src="/shots/approval-detail.png">
+
+<Overlay match={{ role: "heading", name: "Review application" }} intent="info" number={1}>
+**Page heading**
+
+Static text. DL below carries `app.id`, applicant,
+category, amount, submitted-at, reason.
+</Overlay>
+
+<Overlay match={{ role: "textbox", name: "Decision comment (Optional)" }} intent="info" number={2}>
+**Comment textarea**
+
+- Type: `<textarea rows="3">`
+- Required: no.
+- `data-testid`: `approval-comment`
+- Forwarded to `decideApplication(id, decision, comment)`.
+  A trimmed-empty comment is stored as `undefined`.
+</Overlay>
+
+<Overlay match={{ role: "button", name: "Reject" }} intent="error" number={3}>
+**Reject button**
+
+- Variant: `data-variant="danger"`.
+- `data-testid`: `approval-reject`.
+- Calls `decideApplication(id, "rejected", comment)`. On
+  success, `navigate("/approve/{id}/decided")`.
+</Overlay>
+
+<Overlay match={{ role: "button", name: "Approve" }} intent="success" number={4}>
+**Approve button**
+
+- Variant: `data-variant="primary"`.
+- `data-testid`: `approval-approve`.
+- Calls `decideApplication(id, "approved", comment)`. On
+  success, `navigate("/approve/{id}/decided")`.
+</Overlay>
+
+</Screen>
+
+## Already-decided variant
+
+- `data-testid="approval-detail-already-decided"` on the
+  notice paragraph.
+- Comment textarea + decision buttons unmounted.
+- Back-to-list link rendered in their place.
+
+## Not-found variant
+
+- `data-testid="approval-detail-not-found"` on the error
+  paragraph.
+- Back-to-list link below.
+
+{/* annot:snapshot */}
