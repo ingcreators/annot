@@ -11,7 +11,7 @@ Annot is **a screenshot annotation system built around a portable SVG
 format** — shipped today as a PWA and browser extension, callable
 tomorrow from Playwright and CI, and growing into a **living product
 docs platform** that generates always-fresh user manuals + Japanese
-画面設計書 from a project's existing Playwright tour suite.
+screen specifications from a project's existing Playwright tour suite.
 
 ## Strategic direction
 
@@ -37,8 +37,9 @@ We are committing to three adjacent growth vectors:
    A project's Playwright tour suite walks every screen, captures
    `aria-snapshot` + per-element attributes, annotates the
    screenshots, and emits an Astro docs site (for end-user manuals
-   in the global vertical) AND an Excel `.xlsx` (for Japanese 画面
-   設計書). Drift between MDX and live UI is detected as a lint
+   in the global vertical) AND an Excel `.xlsx` (for the
+   corporate screen-specifications use case). Drift between MDX and
+   live UI is detected as a lint
    step in CI. AI agents (Claude / Cursor / Aider) drive the
    pipeline via `@ingcreators/annot-mcp` tools. See
    [`docs/plans/living-product-docs.md`](./docs/plans/living-product-docs.md).

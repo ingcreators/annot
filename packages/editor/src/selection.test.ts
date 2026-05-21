@@ -935,8 +935,8 @@ describe("SelectionManager — redact rebake on move (arrow-key path)", () => {
   });
 
   it("rapid concurrent rebake requests serialise — no replaceChild race, last writer wins", async () => {
-    // Regression test for the user-reported "mosaicの移動、サイズ変更
-    // での再mosaic化が行われない" bug. Without serialisation in the
+    // Regression test for the user-reported "mosaic move + resize
+    // does not trigger a re-rasterise" bug. Without serialisation in the
     // rebake gate, two pointerups (or two arrow nudges) fired before
     // the first rebake's `await loadImage(...)` resolves both end up
     // calling `parent.replaceChild(newEl, oldEl)` with the same

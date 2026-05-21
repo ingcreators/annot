@@ -69,16 +69,16 @@ export async function renderHtml(opts: {
 <body>
   <h1>${escapeHtml(frontmatter.title ?? frontmatter.id)} <small style="color:#9ca3af">(${escapeHtml(frontmatter.id)})</small></h1>
   <div class="meta">
-    ${frontmatter.purpose ? `<div><strong>用途:</strong> ${escapeHtml(frontmatter.purpose)}</div>` : ""}
+    ${frontmatter.purpose ? `<div><strong>Purpose:</strong> ${escapeHtml(frontmatter.purpose)}</div>` : ""}
     ${formatMeta(frontmatter.meta)}
   </div>
 
   <img class="screenshot" src="${pngRel}" alt="${escapeHtml(frontmatter.title ?? frontmatter.id)}" />
 
-  <h2>項目定義</h2>
+  <h2>Items</h2>
   <ol class="overlays">${overlayItems}</ol>
 
-  ${transitions.length ? `<h2>画面遷移</h2><ul class="transitions">${transitionsList}</ul>` : ""}
+  ${transitions.length ? `<h2>Transitions</h2><ul class="transitions">${transitionsList}</ul>` : ""}
 </body>
 </html>
 `;

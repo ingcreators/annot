@@ -24,14 +24,14 @@ function makeBundle(fm: ExcelMdxBundle["frontmatter"]): ExcelMdxBundle {
 
 function makeTemplateWorkbook(): ExcelJS.Workbook {
   const wb = new ExcelJS.Workbook();
-  const screen = wb.addWorksheet("個別画面テンプレ");
+  const screen = wb.addWorksheet("PerScreenTemplate");
   screen.columns = [{ width: 18 }, { width: 60 }];
   screen.addRow(["ID", "{id}"]);
   screen.addRow(["Title", "{title}"]);
   screen.addRow(["Author", "{meta.author}"]);
   screen.addRow(["Reviewer", "{meta.reviewedBy}"]);
 
-  const cover = wb.addWorksheet("表紙テンプレ");
+  const cover = wb.addWorksheet("CoverTemplate");
   cover.addRow(["Project", "{projectName}"]);
   cover.addRow(["Customer", "{customerName}"]);
   return wb;
@@ -46,8 +46,8 @@ describe("applyTemplateLayout", () => {
       template,
       bookConfig: {
         templateSheets: {
-          screen: "個別画面テンプレ",
-          cover: "表紙テンプレ",
+          screen: "PerScreenTemplate",
+          cover: "CoverTemplate",
         },
       },
       bundles: [
@@ -85,7 +85,7 @@ describe("applyTemplateLayout", () => {
     applyTemplateLayout({
       workbook: target,
       template,
-      bookConfig: { templateSheets: { screen: "個別画面テンプレ" } },
+      bookConfig: { templateSheets: { screen: "PerScreenTemplate" } },
       bundles: [
         makeBundle({ id: "COVER", xlsx: { sheet: "Cover", role: "cover" } }),
         makeBundle({ id: "SC-001", xlsx: { sheet: "Login", role: "screen" } }),
@@ -100,7 +100,7 @@ describe("applyTemplateLayout", () => {
     applyTemplateLayout({
       workbook: target,
       template,
-      bookConfig: { templateSheets: { screen: "個別画面テンプレ" } },
+      bookConfig: { templateSheets: { screen: "PerScreenTemplate" } },
       bundles: [
         makeBundle({
           id: "SC-001",

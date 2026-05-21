@@ -12,7 +12,7 @@
 //   - `{<var>:<format>}` — format suffix applied to date-like
 //     values. Examples:
 //       {meta.createdDate:yyyy/MM/dd}     → "2026/05/21"
-//       {annot:date:yyyy年MM月dd日}        → "2026年05月21日"
+//       {annot:date:yyyy-MM-dd}            → "2026-05-21"
 //     Supported format tokens: `yyyy` / `MM` / `dd` / `HH` /
 //     `mm` / `ss`. Anything else passes through literally.
 

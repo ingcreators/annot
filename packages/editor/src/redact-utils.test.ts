@@ -208,8 +208,8 @@ describe("renderMosaicRedact — out-of-bounds rebake transparency fix", () => {
   });
 
   it("floors fractional rect dimensions before passing them to the typed-array index math", async () => {
-    // Regression test for the user-reported "サイズ拡大は透明になる"
-    // bug. SelectionManager's resize path computes width/height as
+    // Regression test for the user-reported "the redact becomes
+    // transparent when resized larger" bug. SelectionManager's resize path computes width/height as
     // `pt.x - x` where `pt` came from `svgPoint(e)`'s viewport
     // transform — on a high-DPI base image where DOM-pixel-size /
     // viewBox-size isn't exact, IEEE-754 rounding leaves tail bits
@@ -261,8 +261,8 @@ describe("renderMosaicRedact — out-of-bounds rebake transparency fix", () => {
 });
 
 describe("buildImageRedact — preserveAspectRatio for race-window resilience", () => {
-  // Regression test for the user-reported "blurも連続してサイズ変更
-  // していると、オブジェクトとblurのエリアに差異が発生します。" bug.
+  // Regression test for the user-reported "when blur is resized
+  // repeatedly, the blur area diverges from the object beneath" bug.
   //
   // SVG `<image>` defaults to `preserveAspectRatio="xMidYMid meet"`,
   // which fits the embedded raster inside the wrapper without

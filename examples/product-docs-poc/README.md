@@ -104,7 +104,7 @@ After running the PoC, evaluate:
 4. **Excel path visibly distinct from manual templates?**
    — Open `output/login.xlsx` — cover + per-screen sheet
    with embedded image + item-spec table. Does this look
-   like a usable 画面設計書 starting point?
+   like a usable screen-specifications starting point?
 5. **Drift detection visible enough?** — Run
    `npm run poc:drift`. Does the resolver error path
    surface the mismatch clearly enough that a CI failure

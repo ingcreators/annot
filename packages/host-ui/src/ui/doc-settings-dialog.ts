@@ -198,12 +198,12 @@ const APPEARANCE_TEMPLATE_OPTIONS: readonly {
 
 const COMMON_LANGS: readonly { value: string; label: string }[] = [
   { value: "en", label: "English (en)" },
-  { value: "ja", label: "日本語 (ja)" },
-  { value: "de", label: "Deutsch (de)" },
-  { value: "fr", label: "Français (fr)" },
-  { value: "es", label: "Español (es)" },
-  { value: "zh", label: "中文 (zh)" },
-  { value: "ko", label: "한국어 (ko)" },
+  { value: "ja", label: "Japanese (ja)" },
+  { value: "de", label: "German (de)" },
+  { value: "fr", label: "French (fr)" },
+  { value: "es", label: "Spanish (es)" },
+  { value: "zh", label: "Chinese (zh)" },
+  { value: "ko", label: "Korean (ko)" },
 ];
 
 const THEME_OPTIONS: readonly { value: "light" | "dark" | "auto"; label: string }[] = [

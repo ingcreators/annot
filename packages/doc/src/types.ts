@@ -142,8 +142,8 @@ export interface NumberingMeta {
    *  in document order, regardless of section nesting. */
   readonly figures?: boolean;
   /** Override the figure-number prefix label. Default:
-   *  `"Figure "`. Set to `"図 "` for Japanese-localised docs,
-   *  `"Abbildung "` for German, etc. The trailing space is
+   *  `"Figure "`. Override per non-English locale (e.g.
+   *  `"Abbildung "` for German). The trailing space is
    *  authored explicitly so multi-byte locales that don't use
    *  spaces can elide it. */
   readonly figureLabel?: string;

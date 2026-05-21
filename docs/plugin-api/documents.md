@@ -38,7 +38,7 @@ What's already pluggable in v1:
   template marker discriminator (`<meta name="annot-template"
   content="1">`). No registration call needed.
 - **Localised numbering / labels** — set
-  `meta.numbering.figureLabel` to `"図 "`, `"Abbildung "`,
+  `meta.numbering.figureLabel` to `"Abbildung "`, `"Figur "`,
   etc. `injectDocumentStyles` + `resolveFigureRefs` use the
   override transparently. See the format spec's
   [Cross-references](../annot-html-format.md#cross-references)

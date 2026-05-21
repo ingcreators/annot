@@ -1,60 +1,61 @@
 ---
 annot:
   id: SC-001
-  title: ログイン画面
-  purpose: 未認証ユーザーが認証情報を入力する
+  title: Login screen
+  purpose: Unauthenticated users enter their credentials
   meta:
-    author: 山田太郎
+    author: Taro Yamada
     createdDate: 2026-05-21
     revision: "1.0"
   xlsx:
-    book: 画面設計書
-    sheet: SC-001 ログイン
+    book: Screen specifications
+    sheet: SC-001 Login
     role: screen
     order: 100
 ---
 
 import { Screen, Overlay, Transition } from "@ingcreators/annot-product-docs-astro";
 
-# ログイン画面 (SC-001)
+# Login screen (SC-001)
 
-未認証ユーザーが認証情報を入力する画面です。社員 ID 移行までの
-暫定実装で、SSO 切替後に廃止予定。
+The screen where unauthenticated users enter their credentials.
+Provisional implementation until the employee-ID migration
+completes; retired after the SSO switchover.
 
 <Screen id="login" src="./shots/login.png">
 
-<Overlay match={{ role: "textbox", name: "メールアドレス" }} intent="required" number={1}>
-**メールアドレス** — 会社のメールアドレスを入力してください。
+<Overlay match={{ role: "textbox", name: "Email" }} intent="required" number={1}>
+**Email** — Enter your corporate email address.
 
-- 必須項目
-- 最大 255 文字
-- メール形式 (RFC 5322)
-- 個人 Gmail は許可していません
+- Required
+- Up to 255 characters
+- RFC 5322 email format
+- Personal Gmail addresses are not allowed
 </Overlay>
 
-<Overlay match={{ role: "textbox", name: "パスワード" }} intent="required" number={2}>
-**パスワード** — 8 文字以上、英数記号混合。
+<Overlay match={{ role: "textbox", name: "Password" }} intent="required" number={2}>
+**Password** — 8+ characters, mix of letters / digits / symbols.
 
-> 3 回連続失敗するとアカウントが 30 分ロックされます。
+> 3 consecutive failures lock the account for 30 minutes.
 </Overlay>
 
-<Overlay match={{ role: "checkbox", name: "ログイン状態を保持" }} intent="info" number={3}>
-**ログイン状態を保持** — チェックすると 30 日間ログインを保持します。
+<Overlay match={{ role: "checkbox", name: "Stay signed in" }} intent="info" number={3}>
+**Stay signed in** — Tick to keep the session for 30 days.
 
-共有端末では使用しないでください。
+Do not use on shared devices.
 </Overlay>
 
-<Overlay match={{ role: "button", name: "ログイン" }} intent="action" number={4}>
-**ログインボタン** — クリックで `POST /api/auth/sign-in` を発行。
+<Overlay match={{ role: "button", name: "Sign in" }} intent="action" number={4}>
+**Sign in button** — Click to issue `POST /api/auth/sign-in`.
 
-認証成功で `/dashboard` へ遷移。
+On success, the user is routed to `/dashboard`.
 </Overlay>
 
 </Screen>
 
-## 画面遷移
+## Transitions
 
-<Transition trigger={{ role: "button", name: "ログイン" }} on="認証成功" to="SC-002" />
-<Transition trigger={{ role: "button", name: "ログイン" }} on="認証失敗" to="self">
-  エラー帯を画面上部に表示。
+<Transition trigger={{ role: "button", name: "Sign in" }} on="auth-success" to="SC-002" />
+<Transition trigger={{ role: "button", name: "Sign in" }} on="auth-failure" to="self">
+  Show an error banner at the top of the screen.
 </Transition>
