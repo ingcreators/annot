@@ -31,6 +31,7 @@ function readComponent(name: string): string {
 const COMPONENTS = [
   "Screen",
   "Overlay",
+  "AnnotCallout",
   "Transition",
   "TransitionTable",
   "HistoryEntry",
@@ -52,10 +53,25 @@ describe("Astro components: existence + frontmatter shape", () => {
 describe("Screen.astro", () => {
   const src = readComponent("Screen");
   it("emits a <figure> root with data-screen-id", () => {
-    expect(src).toMatch(/<figure class="annot-screen"\s+data-screen-id=/);
+    expect(src).toMatch(/<figure[\s\S]*?class="annot-screen"[\s\S]*?data-screen-id=/);
   });
   it("embeds an <img> + slot for overlays", () => {
     expect(src).toMatch(/<img src={src}/);
+    expect(src).toMatch(/<slot \/>/);
+  });
+  it("accepts the Phase 2b `annotations` prop and emits data-annotations-path", () => {
+    expect(src).toMatch(/annotations\?:\s*string/);
+    expect(src).toMatch(/data-annotations-path={annotations}/);
+  });
+});
+
+describe("AnnotCallout.astro", () => {
+  const src = readComponent("AnnotCallout");
+  it("propagates `for` as data-callout-for", () => {
+    expect(src).toMatch(/data-callout-for={forId}/);
+  });
+  it("renders body inside an .annot-callout-body wrapper", () => {
+    expect(src).toMatch(/annot-callout-body/);
     expect(src).toMatch(/<slot \/>/);
   });
 });

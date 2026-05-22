@@ -39,6 +39,22 @@ export interface OverlaySpec {
   body: string;
 }
 
+/**
+ * Phase 2b of `docs/plans/living-spec-authoring-roadmap.md`.
+ * A `<AnnotCallout for="id">body</AnnotCallout>` child of a
+ * `<Screen annotations="...">` block. The visible / numbered /
+ * intent-colored callout is composed onto the annotated PNG by the
+ * Image Service using the matching entry in the annotation yaml;
+ * this spec carries only what the MDX side contributes: the
+ * `for=` reference and the inner markdown body.
+ */
+export interface AnnotCalloutSpec {
+  /** References `overlays[].id` in the screen's annotation yaml. */
+  for: string;
+  /** Markdown body between the opening and closing tags. */
+  body: string;
+}
+
 export interface TransitionSpec {
   trigger: MatchKey;
   on?: string;
@@ -49,7 +65,29 @@ export interface TransitionSpec {
 export interface ScreenSpec {
   id: string;
   src?: string;
+  /**
+   * Legacy inline overlays — `<Overlay>` JSX children of the
+   * `<Screen>` block. Carries match / intent / number / body
+   * inline; deprecated in favour of the Phase 2b annotation yaml
+   * path. Empty when the author has migrated to the yaml form.
+   */
   overlays: OverlaySpec[];
+  /**
+   * Phase 2b of `docs/plans/living-spec-authoring-roadmap.md`.
+   * Optional path (relative to the MDX file) to an
+   * `.annotations.yaml` that describes the screen's overlays —
+   * see `@ingcreators/annot-product-docs/annotations-yaml`. When
+   * set, the Image Service prefers yaml-driven badge composition
+   * over the inline `overlays[]`.
+   */
+  annotations?: string;
+  /**
+   * Phase 2b. `<AnnotCallout for="id">body</AnnotCallout>` JSX
+   * children of the screen, paired with yaml overlay entries by
+   * `id`. Empty when the screen still uses the legacy
+   * `<Overlay>` form.
+   */
+  callouts: AnnotCalloutSpec[];
 }
 
 export interface HistoryEntrySpec {

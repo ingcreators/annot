@@ -12,7 +12,7 @@ import {
 import type { ScreenSpec } from "./types.js";
 
 function screenWith(overlays: ScreenSpec["overlays"]): ScreenSpec {
-  return { id: "login", src: "./shots/login.png", overlays };
+  return { id: "login", src: "./shots/login.png", overlays, callouts: [] };
 }
 
 describe("detectDrift", () => {
@@ -136,8 +136,12 @@ describe("summariseDrift", () => {
 describe("isLintableScreen / lintableScreens", () => {
   it("filters out screens with no overlays", () => {
     const screens: ScreenSpec[] = [
-      { id: "a", overlays: [] },
-      { id: "b", overlays: [{ match: { role: "button", name: "OK" }, body: "" }] },
+      { id: "a", overlays: [], callouts: [] },
+      {
+        id: "b",
+        overlays: [{ match: { role: "button", name: "OK" }, body: "" }],
+        callouts: [],
+      },
     ];
     expect(lintableScreens(screens).map((s) => s.id)).toEqual(["b"]);
     expect(isLintableScreen(screens[0]!)).toBe(false);

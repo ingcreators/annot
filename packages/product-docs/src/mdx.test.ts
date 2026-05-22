@@ -108,6 +108,62 @@ Confirm OK
     });
   });
 
+  it("Phase 2b — extracts <Screen annotations> + <AnnotCallout> children", () => {
+    const source = `---
+annot:
+  id: SC-001
+---
+
+import { Screen, AnnotCallout } from "@ingcreators/annot-product-docs-astro";
+
+<Screen id="login" src="./shots/login.png" annotations="./login.annotations.yaml">
+
+<AnnotCallout for="o1">
+**Email** — enter your registered email.
+</AnnotCallout>
+
+<AnnotCallout for="o2">
+**Password** — characters are hidden.
+</AnnotCallout>
+
+</Screen>
+`;
+    const parsed = parseMdx(source);
+    const screen = parsed!.screens[0]!;
+    expect(screen.id).toBe("login");
+    expect(screen.annotations).toBe("./login.annotations.yaml");
+    expect(screen.overlays).toHaveLength(0);
+    expect(screen.callouts).toHaveLength(2);
+    expect(screen.callouts[0]).toMatchObject({ for: "o1" });
+    expect(screen.callouts[0]?.body).toMatch(/^\*\*Email\*\*/);
+    expect(screen.callouts[1]?.for).toBe("o2");
+  });
+
+  it("Phase 2b — <Screen annotations> is optional; legacy `<Overlay>` path still works", () => {
+    const parsed = parseMdx(LOGIN_MDX);
+    const screen = parsed!.screens[0]!;
+    expect(screen.annotations).toBeUndefined();
+    expect(screen.callouts).toEqual([]);
+    expect(screen.overlays).toHaveLength(2);
+  });
+
+  it("Phase 2b — <AnnotCallout> missing `for` throws", () => {
+    const source = `---
+annot:
+  id: X
+---
+
+import { Screen, AnnotCallout } from "@ingcreators/annot-product-docs-astro";
+
+<Screen id="s" src="./x.png" annotations="./s.yaml">
+
+<AnnotCallout>oops</AnnotCallout>
+
+</Screen>
+`;
+    expect(() => parseMdx(source)).toThrow(/<AnnotCallout> requires a `for=/);
+  });
+
   it("throws on invalid frontmatter (Zod surfaces the path)", () => {
     const source = `---
 annot:

@@ -1,0 +1,32 @@
+---
+// `<AnnotCallout>` — Phase 2b of
+// `docs/plans/living-spec-authoring-roadmap.md`. Caption for one
+// callout entry on a `<Screen annotations="…">`. Replaces the
+// inline `<Overlay match intent number>` form: match / intent /
+// number now live in the screen's annotation yaml, and this
+// component carries only the visible body.
+//
+// MDX usage:
+//   <Screen id="login" src="./shots/login.png"
+//           annotations="./annotations/login.yaml">
+//     <AnnotCallout for="o1">**Email** — registered address.</AnnotCallout>
+//     <AnnotCallout for="o2">**Password** — characters hidden.</AnnotCallout>
+//   </Screen>
+//
+// The visible badge / number / intent border is composed onto the
+// annotated PNG by the Image Service (see `../render.ts`). The
+// HTML side emits the body inside a `<li>` so the legend
+// auto-numbers via the surrounding `<ol class="annot-screen-overlays">`
+// counter — no per-call `number` prop required.
+
+interface Props {
+  /** Targets `overlays[].id` in the screen's annotation yaml. */
+  for: string;
+}
+const { for: forId } = Astro.props;
+---
+<li class="annot-callout" data-callout-for={forId}>
+  <div class="annot-callout-body">
+    <slot />
+  </div>
+</li>

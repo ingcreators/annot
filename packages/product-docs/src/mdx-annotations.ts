@@ -17,6 +17,7 @@ import {
 } from "@ingcreators/annot-annotator";
 import { type ElementTree, walkTree } from "@ingcreators/annot-core";
 
+import type { OverlayEntry } from "./annotations-yaml.js";
 import { parseMdxFile } from "./mdx.js";
 import type { OverlaySpec } from "./types.js";
 
@@ -121,6 +122,39 @@ export function buildBadgeAnnotations(
       type: "numberedBadge",
       bbox: entry.box,
       number: num,
+      placement: "auto",
+      imageWidth: dims.width,
+      imageHeight: dims.height,
+      intent:
+        overlay.intent === "action" ? "warning" : overlay.intent === "required" ? "error" : "info",
+    });
+  }
+  return annotations;
+}
+
+/**
+ * Sibling of {@link buildBadgeAnnotations} that takes yaml-form
+ * {@link OverlayEntry} objects. Phase 2b of
+ * `docs/plans/living-spec-authoring-roadmap.md` — the Image Service
+ * resolves a `<Screen annotations="…">` block against this entry
+ * point instead of the legacy inline `<Overlay>` path.
+ *
+ * Entries without a matching boxed entry are skipped silently —
+ * the drift detector (Phase 2c) surfaces them as findings upstream.
+ */
+export function buildBadgeAnnotationsFromYaml(
+  overlays: readonly OverlayEntry[],
+  boxed: readonly BoxedEntry[],
+  dims: { width: number; height: number },
+): BboxNumberedBadgeAnnotation[] {
+  const annotations: BboxNumberedBadgeAnnotation[] = [];
+  for (const overlay of overlays) {
+    const entry = boxed.find((b) => b.role === overlay.match.role && b.name === overlay.match.name);
+    if (!entry) continue;
+    annotations.push({
+      type: "numberedBadge",
+      bbox: entry.box,
+      number: overlay.number,
       placement: "auto",
       imageWidth: dims.width,
       imageHeight: dims.height,

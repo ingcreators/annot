@@ -24,10 +24,13 @@ import { dirname, isAbsolute, resolve } from "node:path";
 import { createAnnotator } from "@ingcreators/annot-annotator";
 import { readElementTreePng } from "@ingcreators/annot-core";
 import {
+  type AnnotationsFile,
   buildBadgeAnnotations,
+  buildBadgeAnnotationsFromYaml,
   elementTreeToBoxedEntries,
   emptyAnnotationsSvg,
   type ParsedMdx,
+  parseAnnotationsYaml,
   parseMdxFile,
   parseSnapshotBoxes,
   svgFromBadges,
@@ -133,14 +136,19 @@ export async function renderAnnotatedScreen(
   }
 
   const editable = normaliseEditable(options.editable);
+  const mdxDir = dirname(mdxAbs);
+  const annotationsFile = await loadAnnotationsYaml(screen.annotations, mdxDir);
   // Cache key includes the editable flag so flat + editable variants of
-  // the same screen don't collide. Tag values are deliberately NOT in
-  // the cache key — they only affect XMP metadata, not pixel output,
-  // and including timestamps / commit SHAs would defeat caching.
+  // the same screen don't collide. The annotations-yaml source bytes
+  // are part of the key (when set) so re-saving the yaml busts the
+  // cache. Tag values are deliberately NOT in the cache key — they
+  // only affect XMP metadata, not pixel output, and including
+  // timestamps / commit SHAs would defeat caching.
   const key = cacheKey({
     mdxSource: parsed.source,
     screenId: options.screenId,
     editable: editable !== null,
+    annotationsYamlSource: annotationsFile?.source,
   });
   if (options.cache) {
     const cached = await options.cache.get(key);
@@ -149,8 +157,7 @@ export async function renderAnnotatedScreen(
     }
   }
 
-  const baseBytes =
-    options.basePngBytes ?? (await loadBasePng(parsed, screen.src, dirname(mdxAbs)));
+  const baseBytes = options.basePngBytes ?? (await loadBasePng(parsed, screen.src, mdxDir));
   const dims = readPngDimensions(baseBytes);
   // Prefer the canonical `annot:elementTree` PNG XMP chunk (Phase
   // 1d) when present — that's where post-migration PNGs carry
@@ -171,7 +178,14 @@ export async function renderAnnotatedScreen(
   // `bboxSource` is reserved for future telemetry; suppress the
   // unused-var diagnostic without changing the variable shape.
   void bboxSource;
-  const annotations = buildBadgeAnnotations(screen.overlays, bboxes, dims);
+  // Phase 2b: when the screen carries an `annotations="…"` prop,
+  // yaml-driven overlays take precedence over inline `<Overlay>`
+  // children. Both paths produce identical `BboxNumberedBadgeAnnotation`
+  // shapes; the only difference is the source of `match` / `intent`
+  // / `number`.
+  const annotations = annotationsFile
+    ? buildBadgeAnnotationsFromYaml(annotationsFile.file.overlays, bboxes, dims)
+    : buildBadgeAnnotations(screen.overlays, bboxes, dims);
 
   let result: Uint8Array;
   let hadBoundingBoxes: boolean;
@@ -252,6 +266,38 @@ function safeReadElementTree(bytes: Uint8Array): ReturnType<typeof readElementTr
   } catch {
     return null;
   }
+}
+
+/**
+ * Phase 2b: load `<Screen annotations="…">`-referenced yaml off
+ * disk, returning both the parsed `AnnotationsFile` and the raw
+ * source. The raw source feeds into the cache key so an edit to
+ * the yaml busts the cached PNG. Returns `null` when the screen
+ * has no `annotations` prop — the renderer falls back to the
+ * inline `<Overlay>` path.
+ *
+ * A missing or unreadable yaml file is a build-time error, not a
+ * silent fallback: the explicit `annotations` reference is the
+ * author saying "this is where my overlays live", and the right
+ * failure mode is a loud diagnostic so the bad reference gets
+ * fixed.
+ */
+async function loadAnnotationsYaml(
+  annotationsRef: string | undefined,
+  mdxDir: string,
+): Promise<{ file: AnnotationsFile; source: string } | null> {
+  if (!annotationsRef) return null;
+  const abs = isAbsolute(annotationsRef) ? annotationsRef : resolve(mdxDir, annotationsRef);
+  let source: string;
+  try {
+    source = await readFile(abs, "utf8");
+  } catch (err) {
+    throw new Error(
+      `renderAnnotatedScreen: <Screen annotations="${annotationsRef}"> — failed to read ${abs}: ${(err as Error).message}`,
+    );
+  }
+  const file = parseAnnotationsYaml(source);
+  return { file, source };
 }
 
 async function loadBasePng(
