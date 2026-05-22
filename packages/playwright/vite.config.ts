@@ -38,7 +38,21 @@ export default defineConfig({
       //
       // `@playwright/test` stays external because it's a peer dep
       // (consumers bring their own pinned Playwright version).
-      external: ["@playwright/test", /^@ingcreators\//, "@resvg/resvg-js", "@xmldom/xmldom"],
+      //
+      // `/^node:/` keeps Node builtins (`node:fs/promises`, …) as
+      // native imports in the bundle. Without it, Vite's default
+      // browser-compat externalisation rewrites the import in a way
+      // that destructured names (e.g. `writeFile`) resolve to
+      // `undefined` at consumer runtime — the workflow-app docs-tour
+      // hit exactly that on 0.4.0 with a `(0 , d.writeFile) is not
+      // a function` crash.
+      external: [
+        "@playwright/test",
+        /^@ingcreators\//,
+        /^node:/,
+        "@resvg/resvg-js",
+        "@xmldom/xmldom",
+      ],
     },
   },
 });
