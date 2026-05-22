@@ -69,6 +69,7 @@ export { parseMdx, parseMdxFile, updateCommentBlocks } from "./mdx.js";
 export type { BoxedEntry } from "./mdx-annotations.js";
 export {
   buildBadgeAnnotations,
+  buildBadgeAnnotationsFromYaml,
   elementTreeToBoxedEntries,
   emptyAnnotationsSvg,
   parseSnapshotBoxes,
@@ -88,6 +89,7 @@ export {
 } from "./resolver.js";
 
 export type {
+  AnnotCalloutSpec,
   AnnotCommentBlocks,
   AnnotFrontmatter,
   AnnotFrontmatterRole,

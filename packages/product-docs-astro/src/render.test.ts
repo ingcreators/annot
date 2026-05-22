@@ -317,4 +317,110 @@ describe("renderAnnotatedScreen", () => {
       expect(result.hadBoundingBoxes).toBe(true);
     });
   });
+
+  describe("Phase 2b — <Screen annotations='…'> + .annotations.yaml", () => {
+    /**
+     * MDX fixture using the new `<Screen annotations>` form. No
+     * `<Overlay>` children — the overlays live in the yaml.
+     */
+    function mdxWithAnnotations(): string {
+      return `---
+annot:
+  id: SC-001
+---
+
+import { Screen, AnnotCallout } from "@ingcreators/annot-product-docs-astro";
+
+<Screen id="login" src="./shot.png" annotations="./login.annotations.yaml">
+<AnnotCallout for="o1">Email</AnnotCallout>
+<AnnotCallout for="o2">Sign in</AnnotCallout>
+</Screen>
+`;
+    }
+
+    async function makeAnnotationsFixture(opts: {
+      yaml: string;
+      snapshotBlock?: string;
+    }): Promise<{ mdxPath: string; yamlPath: string; pngPath: string }> {
+      const dir = await mkdtemp(join(tmpdir(), "annot-render-yaml-"));
+      const mdxPath = join(dir, "screen.mdx");
+      const yamlPath = join(dir, "login.annotations.yaml");
+      const pngPath = join(dir, "shot.png");
+      const pngBytes = makePng(400, 300);
+      await writeFile(pngPath, pngBytes);
+      const snapshotBlock = opts.snapshotBlock ?? "";
+      await writeFile(mdxPath, `${mdxWithAnnotations()}\n${snapshotBlock}`);
+      await writeFile(yamlPath, opts.yaml);
+      return { mdxPath, yamlPath, pngPath };
+    }
+
+    it("annotates the PNG using yaml-driven overlays + legacy snapshot bboxes", async () => {
+      const yaml = `version: 1
+overlays:
+  - id: o1
+    kind: numberedBadge
+    match: { role: textbox, name: Email }
+    intent: required
+    number: 1
+  - id: o2
+    kind: numberedBadge
+    match: { role: button, name: "Sign in" }
+    intent: action
+    number: 2
+`;
+      const snapshotBlock = `{/* annot:snapshot
+- textbox "Email" [ref=e1] [box=20,40,200,30]
+- button "Sign in" [ref=e9] [box=150,100,80,30]
+*/}`;
+      const { mdxPath } = await makeAnnotationsFixture({ yaml, snapshotBlock });
+      const result = await renderAnnotatedScreen({ mdxPath, screenId: "login" });
+      expect(result.hadBoundingBoxes).toBe(true);
+      expect(Array.from(result.bytes.slice(0, 8))).toEqual(PNG_MAGIC);
+    });
+
+    it("editing the yaml busts the cache", async () => {
+      const baseYaml = `version: 1
+overlays:
+  - id: o1
+    kind: numberedBadge
+    match: { role: textbox, name: Email }
+    number: 1
+`;
+      const snapshotBlock = `{/* annot:snapshot
+- textbox "Email" [ref=e1] [box=20,40,200,30]
+*/}`;
+      const { mdxPath, yamlPath } = await makeAnnotationsFixture({
+        yaml: baseYaml,
+        snapshotBlock,
+      });
+      const cache = createMemoryCache();
+
+      const first = await renderAnnotatedScreen({ mdxPath, screenId: "login", cache });
+      expect(first.fromCache).toBe(false);
+
+      const second = await renderAnnotatedScreen({ mdxPath, screenId: "login", cache });
+      expect(second.fromCache).toBe(true);
+
+      // Mutate the yaml — same overlays count but different intent.
+      const mutatedYaml = baseYaml.replace("number: 1", "intent: action\n    number: 1");
+      await writeFile(yamlPath, mutatedYaml);
+
+      const third = await renderAnnotatedScreen({ mdxPath, screenId: "login", cache });
+      expect(third.fromCache).toBe(false);
+    });
+
+    it("loud-fails when the referenced yaml file is missing", async () => {
+      const yaml = `version: 1
+overlays: []
+`;
+      const { mdxPath, yamlPath } = await makeAnnotationsFixture({ yaml });
+      // Remove the yaml after wiring the fixture so the renderer
+      // experiences the "explicit reference, but file gone" path.
+      await writeFile(yamlPath, ""); // truncate
+      // Truncated content fails the parser (no `version` key).
+      await expect(renderAnnotatedScreen({ mdxPath, screenId: "login" })).rejects.toThrow(
+        /annotations yaml/i,
+      );
+    });
+  });
 });

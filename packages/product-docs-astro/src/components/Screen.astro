@@ -1,27 +1,47 @@
 ---
 // `<Screen>` — annotated screenshot block.
 //
-// MDX usage:
+// MDX usage (legacy, inline `<Overlay>` callouts):
 //   <Screen id="login" src="./shots/login.png">
 //     <Overlay match={...} number={1}>...</Overlay>
 //   </Screen>
 //
+// MDX usage (Phase 2b, yaml-driven callouts):
+//   <Screen id="login" src="./shots/login.png"
+//           annotations="./annotations/login.yaml">
+//     <AnnotCallout for="o1">...</AnnotCallout>
+//   </Screen>
+//
 // The annotated PNG is produced at build time by the Image
 // Service in `@ingcreators/annot-product-docs-astro` (see
-// `../render.ts`). At render time we just emit an `<img>` that
-// points at the cache hash; the Astro pipeline resolves the
-// final URL.
+// `../render.ts`). When `annotations` is set, the service reads
+// the yaml + composes badges from `overlays[]`; otherwise it
+// resolves the inline `<Overlay match>` children. At render time
+// we just emit an `<img>` that points at the cache hash; the
+// Astro pipeline resolves the final URL.
 
 interface Props {
   id: string;
   src: string;
   alt?: string;
+  /**
+   * Phase 2b of `docs/plans/living-spec-authoring-roadmap.md`.
+   * Path (relative to the MDX file) to an `.annotations.yaml`
+   * file describing the screen's overlays. When set, the Image
+   * Service prefers yaml-driven badge composition over the
+   * legacy inline `<Overlay>` children.
+   */
+  annotations?: string;
 }
-const { id, src, alt } = Astro.props;
+const { id, src, alt, annotations } = Astro.props;
 ---
-<figure class="annot-screen" data-screen-id={id}>
+<figure
+  class="annot-screen"
+  data-screen-id={id}
+  data-annotations-path={annotations}
+>
   <img src={src} alt={alt ?? `Screen ${id}`} loading="lazy" />
-  <div class="annot-screen-overlays" data-screen-overlays={id}>
+  <ol class="annot-screen-overlays" data-screen-overlays={id}>
     <slot />
-  </div>
+  </ol>
 </figure>

@@ -24,6 +24,7 @@ import { visit } from "unist-util-visit";
 
 import { annotFrontmatterSchema } from "./config.js";
 import type {
+  AnnotCalloutSpec,
   AnnotCommentBlocks,
   AnnotFrontmatter,
   HistoryEntrySpec,
@@ -177,18 +178,23 @@ function visitJsxElement(node: unknown, source: string, acc: JsxAccumulators): v
 function buildScreen(el: JsxNode, source: string): ScreenSpec {
   const props = readJsxAttributes(el);
   const overlays: OverlaySpec[] = [];
+  const callouts: AnnotCalloutSpec[] = [];
 
-  // Walk the screen's subtree recursively for `<Overlay>` JSX
-  // elements. When the author omits blank lines between
-  // `<Overlay>` tags inside a `<Screen>`, mdast wraps the
-  // siblings in an implicit `paragraph` node — the direct-child
-  // walk misses them. Recursion picks them up uniformly while
-  // still stopping descent into nested `<Screen>` blocks
-  // (defensive — the MDX grammar doesn't actually nest screens).
+  // Walk the screen's subtree recursively for `<Overlay>` /
+  // `<AnnotCallout>` JSX elements. When the author omits blank
+  // lines between sibling tags inside a `<Screen>`, mdast wraps
+  // them in an implicit `paragraph` node — the direct-child walk
+  // misses them. Recursion picks them up uniformly while still
+  // stopping descent into nested `<Screen>` blocks (defensive —
+  // the MDX grammar doesn't actually nest screens).
   const walk = (node: unknown): void => {
     const n = node as JsxNode & { children?: unknown[] };
     if (n.name === "Overlay") {
       overlays.push(buildOverlay(n, source));
+      return;
+    }
+    if (n.name === "AnnotCallout") {
+      callouts.push(buildAnnotCallout(n, source));
       return;
     }
     if (n.name === "Screen" && n !== el) {
@@ -203,11 +209,24 @@ function buildScreen(el: JsxNode, source: string): ScreenSpec {
   if (!id) {
     throw new Error("<Screen> requires an `id` prop.");
   }
-  return {
+  const annotations = asString(props["annotations"]);
+  const screen: ScreenSpec = {
     id,
     src: asString(props["src"]),
     overlays,
+    callouts,
   };
+  if (annotations) screen.annotations = annotations;
+  return screen;
+}
+
+function buildAnnotCallout(el: JsxNode, source: string): AnnotCalloutSpec {
+  const props = readJsxAttributes(el);
+  const id = asString(props["for"]);
+  if (!id) {
+    throw new Error('<AnnotCallout> requires a `for="<overlay id>"` prop.');
+  }
+  return { for: id, body: sliceInnerBody(el, source) };
 }
 
 function buildOverlay(el: JsxNode, source: string): OverlaySpec {
