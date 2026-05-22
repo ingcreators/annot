@@ -107,27 +107,26 @@ npm run docs:sync
 
 `docs:sync` runs Playwright against the SPA (Vite is started
 automatically via the config's `webServer` block) and, per
-screen:
+screen, calls the unified
+`page.screenshot({ annot: { mdx: { id, path } } })` fixture
+from
+[`@ingcreators/annot-product-docs-astro/playwright`](https://www.npmjs.com/package/@ingcreators/annot-product-docs-astro)
+once per matching MDX. Each call:
 
 1. Writes a fresh `docs-site/public/shots/<id>.png`.
-2. Calls `captureScreen()` from
-   [`@ingcreators/annot-product-docs`](https://www.npmjs.com/package/@ingcreators/annot-product-docs)
-   once per matching MDX (one per book) to refresh the file's
-   `annot:snapshot` (Playwright `aria-snapshot` YAML with
-   `[ref=eN]` + `[box=x,y,w,h]` markers) and
-   `annot:attributes` (per-`<Overlay>` HTML attribute
-   whitelist) comment blocks in-place.
+2. Refreshes the target MDX's `annot:snapshot` (Playwright
+   `aria-snapshot` YAML with `[ref=eN]` + `[box=x,y,w,h]`
+   markers) and `annot:attributes` (per-`<Overlay>` HTML
+   attribute whitelist) comment blocks in place.
+3. Bakes the MDX `<Overlay match>` blocks into the PNG as
+   editable SVG annotations stored in an XMP chunk — drop
+   the resulting `.png` into Annot Cloud
+   (`annot.work/app/`) and the overlays come back editable.
 
 The per-screen → MDX mapping lives in
 [`tests/docs/tour-helpers.ts`](./tests/docs/tour-helpers.ts).
-Future direction: the unified one-call
-`page.screenshot({ annot: { mdx: { id, path } } })` API from
-[`@ingcreators/annot-product-docs-astro/playwright`](https://www.npmjs.com/package/@ingcreators/annot-product-docs-astro)
-will collapse the screenshot + capture pair into a single
-call once the package's `0.2.1` publishes (the playwright
-subpath's runtime entry isn't built into the `0.2.0`
-tarball — single-entry `vite.config.ts` bug, follow-up
-fix lands separately).
+The whole thing is a single Playwright call per (screen, book)
+pair — about 60 lines of test code plus a tiny lookup table.
 
 ## CI
 
