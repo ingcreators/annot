@@ -20,10 +20,11 @@
 // this PR ships the human-readable form so the workflow is
 // end-to-end usable today.
 
-import { mkdir, readdir, writeFile } from "node:fs/promises";
-import { dirname, join, relative, resolve, sep } from "node:path";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
 import type { Browser, Page } from "playwright-core";
+import { parseAnnotationsYaml } from "./annotations-yaml.js";
 import {
   type DriftFinding,
   type DriftSeverity,
@@ -35,6 +36,7 @@ import { syncProductDocs } from "./fixture.js";
 import { parseMdxFile } from "./mdx.js";
 import { migrateMdxFile } from "./migrate-to-element-tree.js";
 import { parseSnapshot } from "./resolver.js";
+import type { ScreenSpec } from "./types.js";
 
 export interface CliOptions {
   cwd?: string;
@@ -95,6 +97,9 @@ const USAGE = [
   "  --root <dir>               Override MDX search root (default: docs/)",
   "  --dry-run                  migrate-to-element-tree only — report what would",
   "                             be changed without writing back",
+  "  --check-descriptions       lint only — also validate <AnnotCallout for> IDs",
+  "                             against the screen's annotations yaml overlays[]",
+  "                             (Phase 2c of living-spec-authoring-roadmap.md)",
   "  --help                     Show this help",
 ].join("\n");
 
@@ -302,7 +307,10 @@ async function runLint(args: string[], deps: RunDeps): Promise<number> {
         try {
           const yaml = await page.locator("body").ariaSnapshot({ mode: "ai" });
           const liveSnapshot = parseSnapshot(yaml);
-          const findings = detectDrift({ screen, liveSnapshot });
+          const yamlOverlays = flags.checkDescriptions
+            ? await tryLoadYamlOverlays(screen, mdx, stderr)
+            : undefined;
+          const findings = detectDrift({ screen, liveSnapshot, yamlOverlays });
           for (const f of findings) {
             allFindings.push({ file: relative(cwd, mdx), finding: f });
             filesWithDrift.add(mdx);
@@ -383,6 +391,37 @@ async function runLint(args: string[], deps: RunDeps): Promise<number> {
     return summary.errors + summary.warnings > 0 ? 1 : 0;
   }
   return summary.errors > 0 ? 1 : 0;
+}
+
+/**
+ * Phase 2c. Load `<Screen annotations="…">`-referenced yaml off
+ * disk, returning the parsed overlays for the drift detector to
+ * consume. Returns `undefined` when the screen has no `annotations`
+ * prop — the drift detector then falls back to the legacy inline
+ * `<Overlay>` path. A parse / IO error logs a warning to stderr
+ * and returns `undefined` so a malformed yaml doesn't sink the
+ * entire lint run; the next regeneration cycle (or a focused
+ * `parseAnnotationsYaml` test) surfaces the diagnostic.
+ */
+async function tryLoadYamlOverlays(
+  screen: ScreenSpec,
+  mdxPath: string,
+  stderr: (line: string) => void,
+): Promise<import("./annotations-yaml.js").OverlayEntry[] | undefined> {
+  if (!screen.annotations) return undefined;
+  const abs = isAbsolute(screen.annotations)
+    ? screen.annotations
+    : resolve(dirname(mdxPath), screen.annotations);
+  try {
+    const source = await readFile(abs, "utf8");
+    const file = parseAnnotationsYaml(source);
+    return file.overlays;
+  } catch (err) {
+    stderr(
+      `annot docs lint --check-descriptions: failed to load ${abs} (${(err as Error).message}). Skipping description cross-refs for this screen.`,
+    );
+    return undefined;
+  }
 }
 
 interface OpenedBrowser {
@@ -508,6 +547,13 @@ interface ParsedFlags {
   /** Phase 1g `migrate-to-element-tree` only: report what would
    *  change without writing back to disk. */
   dryRun?: boolean;
+  /** Phase 2c of `docs/plans/living-spec-authoring-roadmap.md`:
+   *  enable description cross-ref drift findings
+   *  (`description-missing` / `description-orphan`) for screens
+   *  that carry an `annotations="…"` yaml ref. Default: off, so
+   *  authors mid-migration aren't spammed before they've populated
+   *  every callout body. */
+  checkDescriptions?: boolean;
 }
 
 function parseFlags(args: string[]): ParsedFlags {
@@ -526,6 +572,8 @@ function parseFlags(args: string[]): ParsedFlags {
       out.fix = true;
     } else if (arg === "--dry-run") {
       out.dryRun = true;
+    } else if (arg === "--check-descriptions") {
+      out.checkDescriptions = true;
     }
   }
   return out;

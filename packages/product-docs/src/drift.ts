@@ -21,8 +21,9 @@
 
 import { type ElementNode, type ElementTree, walkTree } from "@ingcreators/annot-core";
 
+import type { OverlayEntry } from "./annotations-yaml.js";
 import { parseSnapshot, type SnapshotEntry } from "./resolver.js";
-import type { MatchKey, OverlaySpec, ScreenSpec } from "./types.js";
+import type { MatchKey, ScreenSpec } from "./types.js";
 
 export type DriftSeverity = "error" | "warning" | "info";
 
@@ -32,7 +33,12 @@ export type DriftKind =
   | "renamed"
   | "role-changed"
   | "duplicated"
-  | "attribute-drift";
+  | "attribute-drift"
+  // Phase 2c of `docs/plans/living-spec-authoring-roadmap.md`:
+  // cross-references between annotation yaml `overlays[].id` and
+  // MDX `<AnnotCallout for="id">`.
+  | "description-missing"
+  | "description-orphan";
 
 export interface DriftFinding {
   severity: DriftSeverity;
@@ -55,6 +61,21 @@ export interface DetectDriftOptions {
   storedAttributesYaml?: string;
   /** Optional verbatim YAML of the freshly-captured attributes. */
   freshAttributesYaml?: string;
+  /**
+   * Phase 2c of `docs/plans/living-spec-authoring-roadmap.md`.
+   * When the screen carries `annotations="…"`, callers parse the
+   * yaml and pass its overlays here. The detector then:
+   *   - Pulls match keys from this list instead of
+   *     `screen.overlays` for the match-cycle (removed / renamed /
+   *     role-changed / duplicated / added).
+   *   - Emits new cross-ref findings: `description-missing` (yaml
+   *     id has no `<AnnotCallout for>`) and `description-orphan`
+   *     (`<AnnotCallout for>` references a yaml id that doesn't
+   *     exist).
+   * Independent of `screen.overlays`: the legacy inline path stays
+   * inert when this is set.
+   */
+  yamlOverlays?: readonly OverlayEntry[];
 }
 
 /**
@@ -72,8 +93,15 @@ export interface DetectDriftOptions {
  *   the next CI run.
  */
 export function detectDrift(opts: DetectDriftOptions): DriftFinding[] {
-  const { screen, liveSnapshot, storedAttributesYaml, freshAttributesYaml } = opts;
+  const { screen, liveSnapshot, storedAttributesYaml, freshAttributesYaml, yamlOverlays } = opts;
   const findings: DriftFinding[] = [];
+
+  // Phase 2c: when `yamlOverlays` is set, the screen has migrated
+  // to the new `<Screen annotations="…">` form — match-cycle
+  // findings come from the yaml's entries instead of the inline
+  // `<Overlay>` JSX. Both shapes carry `match: MatchKey`, so the
+  // detector body is identical apart from the source array.
+  const overlayMatchSource: readonly { match: MatchKey }[] = yamlOverlays ?? screen.overlays;
 
   // ── Per-overlay: removed / renamed / role-changed / duplicated ─
 
@@ -85,7 +113,7 @@ export function detectDrift(opts: DetectDriftOptions): DriftFinding[] {
   // NOT also trigger an `added` warning.
   const accountedFor = new Set<string>();
 
-  for (const overlay of screen.overlays) {
+  for (const overlay of overlayMatchSource) {
     const hits = liveSnapshot.filter(
       (e) => e.role === overlay.match.role && e.name === overlay.match.name,
     );
@@ -148,7 +176,7 @@ export function detectDrift(opts: DetectDriftOptions): DriftFinding[] {
 
   // ── Live-side: added — elements with no overlay ─────────────
 
-  const overlayKeys = new Set(screen.overlays.map((o) => `${o.match.role}|${o.match.name}`));
+  const overlayKeys = new Set(overlayMatchSource.map((o) => `${o.match.role}|${o.match.name}`));
   for (const entry of liveSnapshot) {
     if (!isInteractive(entry.role)) continue;
     const key = `${entry.role}|${entry.name}`;
@@ -161,6 +189,34 @@ export function detectDrift(opts: DetectDriftOptions): DriftFinding[] {
       message: `New ${entry.role} "${entry.name}" on the page has no <Overlay>.`,
       suggestion: { role: entry.role, name: entry.name },
     });
+  }
+
+  // ── Phase 2c: description cross-refs (yaml id ↔ <AnnotCallout for>) ──
+
+  if (yamlOverlays !== undefined) {
+    const yamlIds = new Set(yamlOverlays.map((o) => o.id));
+    const calloutIds = new Set(screen.callouts.map((c) => c.for));
+    for (const overlay of yamlOverlays) {
+      if (!calloutIds.has(overlay.id)) {
+        findings.push({
+          severity: "warning",
+          kind: "description-missing",
+          screenId: screen.id,
+          message: `annotations yaml has \`overlays[].id="${overlay.id}"\` but no <AnnotCallout for="${overlay.id}"> in MDX.`,
+          match: overlay.match,
+        });
+      }
+    }
+    for (const callout of screen.callouts) {
+      if (!yamlIds.has(callout.for)) {
+        findings.push({
+          severity: "error",
+          kind: "description-orphan",
+          screenId: screen.id,
+          message: `<AnnotCallout for="${callout.for}"> has no matching entry in annotations yaml \`overlays[]\`.`,
+        });
+      }
+    }
   }
 
   // ── Attribute drift ──────────────────────────────────────────
@@ -192,12 +248,15 @@ export function detectDriftFromYaml(args: {
   liveSnapshotYaml: string;
   storedAttributesYaml?: string;
   freshAttributesYaml?: string;
+  /** Phase 2c. See {@link DetectDriftOptions.yamlOverlays}. */
+  yamlOverlays?: readonly OverlayEntry[];
 }): DriftFinding[] {
   return detectDrift({
     screen: args.screen,
     liveSnapshot: parseSnapshot(args.liveSnapshotYaml),
     storedAttributesYaml: args.storedAttributesYaml,
     freshAttributesYaml: args.freshAttributesYaml,
+    yamlOverlays: args.yamlOverlays,
   });
 }
 
@@ -247,12 +306,15 @@ export function detectDriftFromElementTree(args: {
   liveElementTree: ElementTree;
   storedAttributesYaml?: string;
   freshAttributesYaml?: string;
+  /** Phase 2c. See {@link DetectDriftOptions.yamlOverlays}. */
+  yamlOverlays?: readonly OverlayEntry[];
 }): DriftFinding[] {
   return detectDrift({
     screen: args.screen,
     liveSnapshot: elementTreeToSnapshotEntries(args.liveElementTree),
     storedAttributesYaml: args.storedAttributesYaml,
     freshAttributesYaml: args.freshAttributesYaml,
+    yamlOverlays: args.yamlOverlays,
   });
 }
 
@@ -353,11 +415,15 @@ function normaliseYaml(yaml: string): string {
 
 /**
  * A `<Screen>` is drift-checkable when it has at least one
- * `<Overlay>`. Files without `<Screen>` blocks (cover / history /
- * list / reference MDXs) are skipped by the lint walker.
+ * `<Overlay>` (legacy form), an `annotations` ref (yaml form), or
+ * an `<AnnotCallout>` (yaml form, in case the author wrote callouts
+ * before the yaml). Files without `<Screen>` blocks (cover / history
+ * / list / reference MDXs) are skipped by the lint walker.
  */
 export function isLintableScreen(screen: ScreenSpec): boolean {
-  return screen.overlays.length > 0;
+  return (
+    screen.overlays.length > 0 || screen.annotations !== undefined || screen.callouts.length > 0
+  );
 }
 
 /**
