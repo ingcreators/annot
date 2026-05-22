@@ -46,6 +46,10 @@ export {
   type AttachAttributesOptions,
   type AttachAttributesPage,
   attachAttributes,
+  type CaptureElementTreeLocator,
+  type CaptureElementTreeOptions,
+  type CaptureElementTreePage,
+  captureElementTree,
   type PlaywrightYamlToElementTreeOptions,
   playwrightYamlToElementTree,
 } from "./element-tree-adapter.js";

@@ -99,6 +99,8 @@ describe("@ingcreators/annot-core/headless boundary", () => {
     expect(typeof headless.writeElementTreePng).toBe("function");
     expect(typeof headless.readElementTreePng).toBe("function");
     expect(typeof headless.hasElementTreePng).toBe("function");
+    // Legacy PageMetadata → ElementTree adapter — Phase 1e.
+    expect(typeof headless.pageMetadataToElementTree).toBe("function");
   });
 
   it("does not leak `document` / `window` into the importing context", () => {

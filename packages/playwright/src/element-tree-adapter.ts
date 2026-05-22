@@ -315,6 +315,77 @@ export async function attachAttributes(
 }
 
 /**
+ * Options for `captureElementTree` — the high-level composition that
+ * runs an aria-snapshot, converts to an ElementTree, optionally
+ * attaches HTML attributes, and returns the canonical tree. Wraps
+ * `playwrightYamlToElementTree` + `attachAttributes` in one call so
+ * downstream callers (productDocs sync flows, screenshot resolvers,
+ * MCP tools) don't have to plumb the intermediate YAML.
+ *
+ * Phase 1e of `docs/plans/living-spec-authoring-roadmap.md`.
+ */
+export interface CaptureElementTreeOptions {
+  /** Root locator for the snapshot. Defaults to the page body. */
+  rootLocator?: CaptureElementTreeLocator;
+  /** Page URL stored in `ElementTree.source.url`. Defaults to
+   *  `page.url()` when the host page exposes that method. */
+  url?: string;
+  /** Agent string stored in `ElementTree.source.agent`. */
+  agent?: string;
+  /** Capture timestamp override (defaults to `new Date().toISOString()`). */
+  capturedAt?: string;
+  /** When set, walks the resulting tree and fills per-node `attributes`
+   *  via `attachAttributes`. Pass `[]` to skip attribute capture
+   *  entirely; pass a name list to opt in. */
+  attributeWhitelist?: readonly string[];
+}
+
+/**
+ * Structural subset of Playwright `Page` that `captureElementTree`
+ * needs: viewport reader + ariaSnapshot dispatch on a root locator
+ * + the role-resolver `attachAttributes` uses for attribute
+ * collection. Real Playwright `Page` instances satisfy this.
+ */
+export interface CaptureElementTreePage extends AttachAttributesPage {
+  viewportSize(): { width: number; height: number } | null;
+  locator(selector: string): CaptureElementTreeLocator;
+  url(): string;
+}
+
+export interface CaptureElementTreeLocator {
+  ariaSnapshot(options: { mode: "ai"; boxes: boolean }): Promise<string>;
+}
+
+/**
+ * One-shot capture composition: snapshot → ElementTree → attributes →
+ * return. The returned tree carries `source.kind: "playwright"` and
+ * `source.url` populated from the page when not overridden.
+ */
+export async function captureElementTree(
+  page: CaptureElementTreePage,
+  options: CaptureElementTreeOptions = {},
+): Promise<ElementTree> {
+  const rootLocator = options.rootLocator ?? page.locator("body");
+  const yaml = await rootLocator.ariaSnapshot({ mode: "ai", boxes: true });
+  const viewportSize = page.viewportSize();
+  const viewport = viewportSize
+    ? { width: viewportSize.width, height: viewportSize.height, scale: 1 }
+    : { width: 0, height: 0, scale: 1 };
+  const url = options.url ?? page.url();
+  const tree = playwrightYamlToElementTree({
+    yaml,
+    viewport,
+    url,
+    ...(options.agent !== undefined ? { agent: options.agent } : {}),
+    ...(options.capturedAt !== undefined ? { capturedAt: options.capturedAt } : {}),
+  });
+  if (options.attributeWhitelist !== undefined && options.attributeWhitelist.length > 0) {
+    await attachAttributes(tree, page, { whitelist: options.attributeWhitelist });
+  }
+  return tree;
+}
+
+/**
  * Structural subset of Playwright `Page` that `attachAttributes`
  * needs. Real Playwright `Page` instances satisfy this; the trimmed
  * shape lets unit tests pass a minimal mock without pulling in
