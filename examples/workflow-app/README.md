@@ -107,51 +107,26 @@ npm run docs:sync
 
 `docs:sync` runs Playwright against the SPA (Vite is started
 automatically via the config's `webServer` block) and, per
-screen:
+screen, calls the unified
+`page.screenshot({ annot: { mdx: { id, path } } })` fixture
+from
+[`@ingcreators/annot-product-docs-astro/playwright`](https://www.npmjs.com/package/@ingcreators/annot-product-docs-astro)
+once per matching MDX. Each call:
 
 1. Writes a fresh `docs-site/public/shots/<id>.png`.
-2. Calls `captureScreen()` from
-   [`@ingcreators/annot-product-docs`](https://www.npmjs.com/package/@ingcreators/annot-product-docs)
-   once per matching MDX (one per book) to refresh the file's
-   `annot:snapshot` (Playwright `aria-snapshot` YAML with
-   `[ref=eN]` + `[box=x,y,w,h]` markers) and
-   `annot:attributes` (per-`<Overlay>` HTML attribute
-   whitelist) comment blocks in-place.
+2. Refreshes the target MDX's `annot:snapshot` (Playwright
+   `aria-snapshot` YAML with `[ref=eN]` + `[box=x,y,w,h]`
+   markers) and `annot:attributes` (per-`<Overlay>` HTML
+   attribute whitelist) comment blocks in place.
+3. Bakes the MDX `<Overlay match>` blocks into the PNG as
+   editable SVG annotations stored in an XMP chunk — drop
+   the resulting `.png` into Annot Cloud
+   (`annot.work/app/`) and the overlays come back editable.
 
 The per-screen → MDX mapping lives in
 [`tests/docs/tour-helpers.ts`](./tests/docs/tour-helpers.ts).
-
-### Why not the unified `page.screenshot({ annot })` API?
-
-[`@ingcreators/annot-product-docs-astro/playwright`](https://www.npmjs.com/package/@ingcreators/annot-product-docs-astro)
-ships a one-call `page.screenshot({ annot: { mdx: { id, path } } })`
-fixture that would collapse the screenshot + `captureScreen`
-pair to a single call. The example doesn't use it yet because
-two upstream publish-pipeline bugs are layered:
-
-1. ~~`-astro@0.2.0` shipped `dist/playwright/*.d.ts` but not
-   `dist/playwright/index.js`.~~ Fixed +
-   republished as `0.2.1`
-   ([annot#954](https://github.com/ingcreators/annot/pull/954),
-   [annot#956](https://github.com/ingcreators/annot/pull/956)).
-2. **`@ingcreators/annot-core@0.2.0`'s `publishConfig.exports`
-   only declares `.` + `./styles/*`** — none of the workspace
-   subpaths (`./xmp-bytes`, `./headless`, `./editor`, etc.)
-   make it into the published tarball. The astro `0.2.1`
-   playwright fixture imports `@ingcreators/annot-core/xmp-bytes`,
-   so `npm run docs:sync` fails with `Package subpath
-   './xmp-bytes' is not defined`. Fix needs
-   `packages/core/vite.config.ts` to switch to multi-entry
-   build + an expanded `publishConfig.exports` map. Once
-   core republishes as `0.2.1` with the full surface AND
-   astro republishes as `0.2.2` pinned to that, the
-   example can migrate in one small PR.
-
-Until both upstream republishes land, the hybrid
-`captureScreen + page.screenshot` setup works perfectly
-fine and produces the same `annot:snapshot` +
-`annot:attributes` blocks. The unified API is a nicety,
-not a need.
+The whole thing is a single Playwright call per (screen, book)
+pair — about 60 lines of test code plus a tiny lookup table.
 
 ## CI
 
