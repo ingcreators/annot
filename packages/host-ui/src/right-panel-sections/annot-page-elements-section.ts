@@ -16,6 +16,7 @@
  * legacy) skip the section's heading entirely.
  */
 
+import type { ElementNode, ElementTree } from "@ingcreators/annot-core";
 import { builtinIcon } from "@ingcreators/annot-core";
 import type { PageElement } from "@ingcreators/annot-core/storage";
 import type { CanvasManager, History, SelectionManager } from "@ingcreators/annot-editor";
@@ -29,11 +30,20 @@ import {
   SVG_NS,
   subLabelFor,
 } from "./element-helpers.js";
+import {
+  type FlatTreeRow,
+  flattenForTreeRender,
+  fullDescriptionForNode,
+  iconForElementNode,
+  primaryLabelForNode,
+  subLabelForNode,
+} from "./element-node-helpers.js";
 import type { PageMetadataLike } from "./types.js";
 
 export class AnnotRightPanelPageElementsSectionElement extends LitElement {
   static override properties = {
     pageMetadata: { attribute: false },
+    elementTree: { attribute: false },
     canvas: { attribute: false },
     history: { attribute: false },
     selection: { attribute: false },
@@ -41,6 +51,13 @@ export class AnnotRightPanelPageElementsSectionElement extends LitElement {
   };
 
   declare pageMetadata: PageMetadataLike | null;
+  /** Canonical screen-capture tree — Phase 1f of
+   *  `docs/plans/living-spec-authoring-roadmap.md`. When non-null,
+   *  the section renders a hierarchical tree view of the
+   *  `ElementTree` instead of the legacy flat list derived from
+   *  `pageMetadata`. The two inputs are independent during the
+   *  multi-PR migration; Phase 1i removes `pageMetadata` entirely. */
+  declare elementTree: ElementTree | null;
   declare canvas: CanvasManager | null;
   declare history: History | null;
   declare selection: SelectionManager | null;
@@ -52,6 +69,7 @@ export class AnnotRightPanelPageElementsSectionElement extends LitElement {
   constructor() {
     super();
     this.pageMetadata = null;
+    this.elementTree = null;
     this.canvas = null;
     this.history = null;
     this.selection = null;
@@ -63,7 +81,6 @@ export class AnnotRightPanelPageElementsSectionElement extends LitElement {
   }
 
   override render() {
-    const filtered = this.#filteredElements();
     return html`
       <div class="editor-right-panel-elements">
         <p class="editor-right-panel-elements-hint">Click to draw a box around it.</p>
@@ -75,46 +92,82 @@ export class AnnotRightPanelPageElementsSectionElement extends LitElement {
           @input=${this.#onSearchInput}
         />
         <div class="editor-right-panel-elements-list">
-          ${
-            filtered.length === 0
-              ? html`<div class="editor-right-panel-elements-empty">
-                ${this.searchQuery ? "No matches." : "No interactive elements detected."}
-              </div>`
-              : filtered.map(
-                  (el) => html`
-                  <button
-                    type="button"
-                    class="editor-right-panel-element-row"
-                    data-tooltip=${fullDescriptionFor(el)}
-                    aria-label=${fullDescriptionFor(el)}
-                    @mouseenter=${() => this.#showHoverHighlight(el)}
-                    @mouseleave=${() => this.#clearHoverHighlight()}
-                    @click=${() => this.#annotateElement(el)}
-                  >
-                    <annot-icon
-                      class="editor-right-panel-element-icon"
-                      .spec=${builtinIcon(iconForElement(el))}
-                    ></annot-icon>
-                    <span class="editor-right-panel-element-label"
-                      >${primaryLabelFor(el)}</span
-                    >
-                    <span class="editor-right-panel-element-sub"
-                      >${subLabelFor(el)}</span
-                    >
-                  </button>
-                `,
-                )
-          }
+          ${this.elementTree ? this.#renderTree() : this.#renderFlatList()}
         </div>
       </div>
     `;
+  }
+
+  /** Legacy flat-list rendering (PageMetadata path). Phase 1i
+   *  removes this when PageMetadata itself is deleted. */
+  #renderFlatList() {
+    const filtered = this.#filteredElements();
+    if (filtered.length === 0) {
+      return html`<div class="editor-right-panel-elements-empty">
+        ${this.searchQuery ? "No matches." : "No interactive elements detected."}
+      </div>`;
+    }
+    return filtered.map(
+      (el) => html`
+        <button
+          type="button"
+          class="editor-right-panel-element-row"
+          data-tooltip=${fullDescriptionFor(el)}
+          aria-label=${fullDescriptionFor(el)}
+          @mouseenter=${() => this.#showHoverHighlight(el)}
+          @mouseleave=${() => this.#clearHoverHighlight()}
+          @click=${() => this.#annotateElement(el)}
+        >
+          <annot-icon
+            class="editor-right-panel-element-icon"
+            .spec=${builtinIcon(iconForElement(el))}
+          ></annot-icon>
+          <span class="editor-right-panel-element-label">${primaryLabelFor(el)}</span>
+          <span class="editor-right-panel-element-sub">${subLabelFor(el)}</span>
+        </button>
+      `,
+    );
+  }
+
+  /** Tree-view rendering (ElementTree path). Each row is a
+   *  flat-rendered button with `padding-inline-start` derived
+   *  from depth \u2014 keeps the layout simple while still
+   *  conveying the DOM hierarchy. */
+  #renderTree() {
+    const rows = this.#filteredTreeRows();
+    if (rows.length === 0) {
+      return html`<div class="editor-right-panel-elements-empty">
+        ${this.searchQuery ? "No matches." : "No interactive elements detected."}
+      </div>`;
+    }
+    return rows.map(
+      (row: FlatTreeRow) => html`
+        <button
+          type="button"
+          class="editor-right-panel-element-row"
+          data-tooltip=${fullDescriptionForNode(row.node)}
+          aria-label=${fullDescriptionForNode(row.node)}
+          style="padding-inline-start: ${0.5 + row.depth * 0.875}rem;"
+          @mouseenter=${() => this.#showHoverHighlightNode(row.node)}
+          @mouseleave=${() => this.#clearHoverHighlight()}
+          @click=${() => this.#annotateElementNode(row.node)}
+        >
+          <annot-icon
+            class="editor-right-panel-element-icon"
+            .spec=${builtinIcon(iconForElementNode(row.node))}
+          ></annot-icon>
+          <span class="editor-right-panel-element-label">${primaryLabelForNode(row.node)}</span>
+          <span class="editor-right-panel-element-sub">${subLabelForNode(row.node)}</span>
+        </button>
+      `,
+    );
   }
 
   /** Metadata changed — clear the search query so the new image's
    *  list renders without a stale filter, and drop the canvas
    *  hover highlight before it points at the old image. */
   protected override willUpdate(changed: Map<string, unknown>): void {
-    if (changed.has("pageMetadata")) {
+    if (changed.has("pageMetadata") || changed.has("elementTree")) {
       this.searchQuery = "";
       this.#clearHoverHighlight();
     }
@@ -201,6 +254,87 @@ export class AnnotRightPanelPageElementsSectionElement extends LitElement {
     if (this.#hoverHighlight) this.#hoverHighlight.setAttribute("opacity", "0");
   }
 
+  // ── ElementTree (tree-view) helpers — Phase 1f ─────────────────
+
+  #filteredTreeRows(): FlatTreeRow[] {
+    if (!this.elementTree) return [];
+    const rows = flattenForTreeRender(this.elementTree.root);
+    // Drop the synthetic root (`role: "document" | "generic"`) so the
+    // visible tree starts at the page's first real child. The root
+    // is informationally empty — it just holds the captureRect.
+    const visible = rows.filter((r) => r.depth > 0);
+    const q = this.searchQuery.toLowerCase();
+    if (!q) return visible;
+    return visible.filter((r) => this.#nodeMatchesQuery(r.node, q));
+  }
+
+  #nodeMatchesQuery(node: ElementNode, q: string): boolean {
+    const haystack = [node.name, node.text, node.role, node.attributes?.placeholder].filter(
+      (s): s is string => typeof s === "string",
+    );
+    return haystack.some((s) => s.toLowerCase().includes(q));
+  }
+
+  /** Convert an ElementNode's bbox (CSS px, document coords) to
+   *  the canvas SVG's viewBox coords. Mirrors `#bboxOnScreenshot`
+   *  but reads from `ElementTree.viewport.scale` instead of
+   *  `pageMetadata.devicePixelRatio`. */
+  #bboxOnScreenshotForNode(node: ElementNode): [number, number, number, number] | null {
+    if (!this.elementTree || !node.bbox) return null;
+    const dpr = this.elementTree.viewport.scale || 1;
+    const root = this.elementTree.root;
+    const origin = root.bbox ?? { x: 0, y: 0, width: 0, height: 0 };
+    return [
+      (node.bbox.x - origin.x) * dpr,
+      (node.bbox.y - origin.y) * dpr,
+      node.bbox.width * dpr,
+      node.bbox.height * dpr,
+    ];
+  }
+
+  #showHoverHighlightNode(node: ElementNode): void {
+    if (!this.canvas) return;
+    const bbox = this.#bboxOnScreenshotForNode(node);
+    if (!bbox) return;
+    const [x, y, w, h] = bbox;
+    if (!this.#hoverHighlight) {
+      const rect = document.createElementNS(SVG_NS, "rect");
+      rect.setAttribute("fill", "none");
+      rect.setAttribute("stroke", "#ff00a8");
+      rect.setAttribute("stroke-width", "2");
+      rect.setAttribute("vector-effect", "non-scaling-stroke");
+      rect.setAttribute("pointer-events", "none");
+      rect.setAttribute("data-role", "elements-hover");
+      this.canvas.svg.appendChild(rect);
+      this.#hoverHighlight = rect;
+    }
+    this.#hoverHighlight.setAttribute("x", String(x));
+    this.#hoverHighlight.setAttribute("y", String(y));
+    this.#hoverHighlight.setAttribute("width", String(w));
+    this.#hoverHighlight.setAttribute("height", String(h));
+    this.#hoverHighlight.setAttribute("opacity", "1");
+  }
+
+  #annotateElementNode(node: ElementNode): void {
+    if (!this.canvas || !this.history || !this.selection) return;
+    const bbox = this.#bboxOnScreenshotForNode(node);
+    if (!bbox) return;
+    const [x, y, w, h] = bbox;
+    if (w < 1 || h < 1) return;
+    this.#clearHoverHighlight();
+    const rect = document.createElementNS(SVG_NS, "rect");
+    rect.setAttribute("x", String(x));
+    rect.setAttribute("y", String(y));
+    rect.setAttribute("width", String(w));
+    rect.setAttribute("height", String(h));
+    rect.setAttribute("fill", "none");
+    rect.setAttribute("stroke", "#ff0000");
+    rect.setAttribute("stroke-width", "3");
+    this.canvas.annotations.appendChild(rect);
+    this.history.save();
+    this.selection.select(rect);
+  }
+
   /** Insert a red rectangle annotation around the element's bbox.
    *  The new rect lands in `#annotations` (so it exports / saves
    *  like any user-drawn rect) and becomes the selection so the
@@ -239,6 +373,11 @@ declare global {
 
 export interface PageElementsSectionDeps {
   getPageMetadata(): PageMetadataLike | null;
+  /** Canonical screen-capture tree — Phase 1f. When the host
+   *  populates this, the section renders a hierarchical tree view.
+   *  Optional during the multi-PR migration; falls back to the
+   *  legacy `getPageMetadata()` flat list when undefined / null. */
+  getElementTree?(): ElementTree | null;
   getCanvas(): CanvasManager;
   getHistory(): History;
   getSelection(): SelectionManager;
@@ -249,6 +388,7 @@ export function createPageElementsSection(deps: PageElementsSectionDeps): UISect
   const sync = () => {
     if (!el) return;
     el.pageMetadata = deps.getPageMetadata();
+    el.elementTree = deps.getElementTree?.() ?? null;
     el.canvas = deps.getCanvas();
     el.history = deps.getHistory();
     el.selection = deps.getSelection();
@@ -259,6 +399,8 @@ export function createPageElementsSection(deps: PageElementsSectionDeps): UISect
     title: "Elements",
     priority: 30,
     visible() {
+      const tree = deps.getElementTree?.();
+      if (tree && (tree.root.children?.length ?? 0) > 0) return true;
       const meta = deps.getPageMetadata();
       return Boolean(meta && meta.elements.length > 0);
     },
