@@ -31,6 +31,24 @@ export type {
 // the full surface.
 export { bboxAnnotationsToSvg } from "@ingcreators/annot-annotator";
 export { expect } from "@playwright/test";
+// ElementTree adapter — Phase 1b of
+// `docs/plans/living-spec-authoring-roadmap.md`. Converts
+// Playwright's `ariaSnapshot({ mode: "ai", boxes: true })` YAML into
+// the canonical `ElementTree` model from
+// `@ingcreators/annot-core/element-tree`. `attachAttributes` walks
+// the resulting tree and fills per-node HTML attributes via
+// `locator.evaluate`. Purely additive in 1b; existing `parseSnapshot`
+// / `collectAttributesYaml` paths in `@ingcreators/annot-product-docs`
+// stay untouched until Phase 1e wires this adapter into
+// `productDocs.sync` and 1i removes the legacy helpers.
+export {
+  type AttachAttributesLocator,
+  type AttachAttributesOptions,
+  type AttachAttributesPage,
+  attachAttributes,
+  type PlaywrightYamlToElementTreeOptions,
+  playwrightYamlToElementTree,
+} from "./element-tree-adapter.js";
 export {
   type AnnotateScreenshotOptions,
   annotateScreenshot,
