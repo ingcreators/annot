@@ -15,8 +15,13 @@
 > ambiguous about who owns what. This roadmap captures the
 > resulting positioning decision: **Annot becomes the visual
 > authoring surface for living product docs**, with a strict
-> 3-layer artifact model and a 5-phase implementation path that
-> ends with embedded in-browser editing committing back to GitHub.
+> 3-layer artifact model and a 6-phase implementation path that
+> ends with embedded in-browser editing committing back to GitHub
+> (Phase 5) plus a host-neutral MDX WYSIWYG editor surface
+> (`<annot-mdx-editor>`, MDXEditor-based) that lets non-IDE
+> users edit both annotation yaml (via image-click modal) and
+> Description bodies (via AST-stable rich-markdown round-trip)
+> from one place (Phase 6).
 >
 > **Compatibility:** Additive throughout. Existing `<Overlay>` JSX
 > migrates via deterministic CLIs. Existing `screen.capture(...)`
@@ -329,7 +334,7 @@ free-coord to `match`-based.
 
 ## Phase plan
 
-The roadmap spans 6 phases (counting the already-Draft relayer
+The roadmap spans 7 phases (counting the already-Draft relayer
 plan as Phase 0). Each phase is independently shippable and
 revertable; collectively they implement the 3-layer model.
 
@@ -341,8 +346,9 @@ revertable; collectively they implement the 3-layer model.
 | 3 | Annotation palette extension (arrows / rect / freehand / etc.) | ~4 PRs | annot |
 | 4 | Annot editor's Overlay tool + yaml writer | ~6 PRs | annot |
 | 5 | Embedded editor + GitHub round-trip | ~8 PRs | annot + annot-cloud |
+| 6 | `.annot.mdx` unified authoring surface (MDXEditor + image-click modal) | ~10 PRs (6 sub-phases) | annot |
 
-Cumulative implementation: ~30 PRs across both repos. Each phase
+Cumulative implementation: ~40 PRs across both repos. Each phase
 delivers user-visible value standalone.
 
 ### Phase 0 — Architecture relayer (Draft)
@@ -732,7 +738,140 @@ limitation.
 
 - Real-time collaboration (multiple editors editing the same file simultaneously). Defer to a future plan.
 - Mobile-friendly editor — desktop-only in v1.
-- Inline editing of `<Description>` MDX bodies. The embedded editor only edits Layer 2 (annotation yaml). Description editing requires opening MDX in IDE or future MDX editor.
+- Inline editing of `<Description>` MDX bodies. The embedded editor only edits Layer 2 (annotation yaml). Description editing is Phase 6's scope.
+
+### Phase 6 — `.annot.mdx` unified authoring surface
+
+**Goal**: A single Annot-hosted MDX editor surface where the
+rendered MDX is WYSIWYG-editable, image blocks open the existing
+annotation editor in a modal (mirroring the card-document
+`<annot-doc-image-editor-modal>` pattern from
+[`_done/card-document-themes.md`](./_done/card-document-themes.md)),
+and Description bodies + surrounding markdown are edited
+in-place with AST-level round-trip. Three distinct layers, three
+distinct writers, one editor:
+
+- **Image click → annotation editor modal** writes Layer 2 (annotation yaml). Reuses Phase 4's writer wholesale.
+- **`<Description>` body edit** writes Layer 3 (MDX) via MDXEditor's AST round-trip — only the inner markdown of the Description block changes, the `<Description for="…">` JSX structure stays byte-stable.
+- **Surrounding markdown edit** writes Layer 3 (MDX) the same way — paragraphs / headings / lists round-trip through the AST.
+
+The surface lands first as a VSCode custom editor registered
+for `.annot.mdx` (extending the existing `.annot.{svg,png,jpeg,jpg}`
+registration), with annot.work/app and Annot desktop following
+the same `<annot-mdx-editor>` Lit component.
+
+**Why this scope**: Phase 4 + 5 deliver visual annotation
+editing through the EditButton flow, but description text
+editing still requires an IDE. Phase 6 closes the last gap —
+non-IDE users edit both Layer 2 (yaml) and Layer 3 (MDX
+descriptions) from one surface. The technical breakthrough
+that makes this safe (and overturns DA-03's prior rejection)
+is **MDXEditor**: an MDX-native WYSIWYG built on Lexical that
+treats unknown JSX as opaque AST nodes with byte-stable
+round-trip. There is no "synthesize JSX from canvas operation"
+path — MDXEditor edits the MDX directly the way a user types
+into a text editor, just with WYSIWYG presentation. DA-03's
+fatal flaw (byte-stable JSX writer for canvas-driven overlay
+insertion) does not apply here.
+
+#### MDXEditor selection rationale
+
+See [AD-11](#ad-11-mdxeditor-chosen-over-tiptap-lexical-raw-prosemirror-raw-codemirror-split-view)
+for the full comparison. Short version: MDXEditor
+([mdxeditor.dev](https://mdxeditor.dev)) is the only candidate
+that's MDX-first (not markdown-with-patches), preserves unknown
+JSX byte-stable, allows registered components to render with
+custom WYSIWYG renderers, and supports frontmatter + imports
+out of the box. The single trade-off is React, captured in
+[AD-10](#ad-10-react-permitted-inside-annot-mdx-editor-boundary-lit-elsewhere).
+
+#### Sub-phases
+
+| Sub | Output | Scope |
+|---|---|---|
+| **6a** | `<annot-mdx-editor>` Lit element in `@ingcreators/annot-host-ui`. Mounts MDXEditor via `React.createRoot` inside the Lit render root. Frontmatter + imports plugins registered. All Annot JSX (`<Screen>`, `<Description>`, etc.) treated as opaque (no descriptor yet). Markdown editing fully WYSIWYG. React dep added to `packages/host-ui/package.json`. | Foundation. JSX blocks render as collapsed "MDX block: <ComponentName>" placeholders. Proves MDXEditor + Lit composition + AD-10 boundary. |
+| **6b** | `<Screen>` jsxComponentDescriptor. Renders the composed annotated image (via Phase 1h's `renderAnnotatedScreen` path) with an "Edit annotations" affordance. Click → `<annot-screen-editor-modal>` opens. On save → modal writes via `StorageWithDocuments.setAnnotationsYaml` (Phase 4f's surface). MDX source unchanged by the modal flow. | The image-click flow. Reuses Phase 4 modal pattern + Phase 4 yaml writer. |
+| **6c** | `<Description>` + remaining product-docs JSX descriptors (`<EditButton>`, `<HistoryEntry>`, `<ScreenList>`, `<TransitionGraph>`, `<Transition>`, `<TransitionTable>`). `<Description>` body is inline rich-text; other components render as inert previews with collapsed property panels. Round-trip preserves component identity (`<Description for="o1">…</Description>` stays that — only inner markdown changes). | The rich-markdown writer. Each descriptor ≈ 50 lines (renderer + Lexical node spec + serializer hint). |
+| **6d** | VSCode custom editor registration for `.annot.mdx`. `packages/vscode/src/mdx-custom-editor/`. Loads `<annot-mdx-editor>` in a webview against `VSCodeStore` (the same StorageProvider used for `.annot.png` editing). | First host. Extends the existing `.annot.{svg,png,jpeg,jpg}` custom editor registration. Dogfooding loop on real workflow-app `.mdx`. |
+| **6e** | annot.work/app integration. Adds `.annot.mdx` (and bare `.mdx` containing `<Screen>`) to the gallery's openable file kinds. Same `<annot-mdx-editor>` mount, against the host's active StorageProvider. | Second host. Brings the editor to the web. Phase 5's EditButton can target `.annot.mdx` directly. |
+| **6f** | Annot desktop integration. `packages/desktop` opens `.annot.mdx` against DesktopStore. Mostly packaging — `<annot-mdx-editor>` already runs in desktop's webview. | Third host. |
+
+Phase 6 is independently shippable per sub-phase. The minimum
+viable cut is **6a + 6b + 6d** — VSCode users edit annotations
+via image click; descriptions stay in source view. 6c completes
+the Layer-3 rich-text story. 6e + 6f are host expansions.
+
+#### Files added
+
+- `packages/host-ui/src/annot-mdx-editor.ts` — Lit element + `React.createRoot` mount (6a)
+- `packages/host-ui/src/annot-mdx-editor.stories.ts` — Storybook coverage (6a)
+- `packages/host-ui/src/annot-screen-editor-modal.ts` — modal wrapping `EditorShell` for annotation yaml editing, parallel to existing `annot-doc-image-editor-modal.ts` (6b)
+- `packages/host-ui/src/mdx-descriptors/screen.ts` — `<Screen>` descriptor (6b)
+- `packages/host-ui/src/mdx-descriptors/description.ts` — `<Description>` descriptor (6c)
+- `packages/host-ui/src/mdx-descriptors/edit-button.ts` — `<EditButton>` descriptor (6c)
+- `packages/host-ui/src/mdx-descriptors/{history-entry,screen-list,transition-graph,transition,transition-table}.ts` — remaining product-docs descriptors (6c)
+- `packages/host-ui/src/mdx-descriptors/index.ts` — barrel + descriptor list (6c)
+- `packages/vscode/src/mdx-custom-editor/extension.ts` — VSCode custom-editor registration (6d)
+- `packages/vscode/src/mdx-custom-editor/webview/main.ts` — webview entry mounting `<annot-mdx-editor>` (6d)
+- `packages/web/src/file-manager/mdx-loader.ts` — annot.work/app routing for `.annot.mdx` (6e)
+
+#### Files modified
+
+- `packages/host-ui/package.json` — add `react` / `react-dom` / `@mdxeditor/editor` deps (6a). `@mdxeditor/editor` major aligned with the MDX-js version `@ingcreators/annot-product-docs` already depends on.
+- `packages/host-ui/host-boundary.test.ts` — extend the boundary test to verify React is only imported from `annot-mdx-editor` and its sibling React-internal modules (6a). See AD-10.
+- `packages/vscode/package.json` — add `customEditors` contribution for `.annot.mdx` (6d).
+
+#### Storage adapter surface
+
+Phase 4 already extends `StorageWithDocuments` with
+`getAnnotationsYaml` / `setAnnotationsYaml`. Phase 6 reuses
+both. Additionally needs `getMdxSource(path)` /
+`setMdxSource(path, content)` on the same capability since
+editing the MDX itself requires storage access. Both are
+additive on `StorageWithDocuments`; feature code checks
+`if (store.getMdxSource)` before use.
+
+#### UX flow
+
+```
+User opens login.annot.mdx in VSCode (or annot.work/app)
+  ↓
+<annot-mdx-editor> mounts → MDXEditor renders the source
+  ↓
+<Screen src="login.png" annotations="login.annotations.yaml"> renders as:
+  - The composed annotated image (Phase 1h render path or local preview)
+  - "Edit annotations" button overlay
+  ↓
+User clicks "Edit annotations" → <annot-screen-editor-modal> opens
+  - Modal loads PNG + annotation yaml from storage
+  - Mounts EditorShell with Overlay tool
+  - User edits visual annotations
+  - Save → modal calls store.setAnnotationsYaml(path, newYaml) → modal closes
+  ↓
+MDXEditor re-renders Screen descriptor → composed image picks up new annotations
+  ↓
+User clicks a <Description for="o1"> body → inline rich-text edit
+  - Markdown shortcuts work (**, _, [link](), lists, code, etc.)
+  - Save (debounced or on blur) → MDXEditor serializes AST → store.setMdxSource(path, newMd)
+  ↓
+On close: every layer saved via its own writer. No writer touches more than one layer.
+```
+
+#### Verification
+
+- Storybook stories for `<annot-mdx-editor>` covering: empty doc / doc with one Screen / doc with Screen + Description / doc with unknown custom JSX (verify opaque preservation)
+- Vitest tests for descriptor round-trip: load a known `.mdx`, edit via MDXEditor model API, serialize, byte-compare against expected
+- Integration test (VSCode): open a real workflow-app `.mdx`, click an image, edit, save, verify yaml diff matches expected and MDX bytes are unchanged
+- Boundary test (`host-boundary.test.ts`) ensures React imports are contained to `annot-mdx-editor` + its sibling React-internal modules
+
+#### Out of scope for Phase 6
+
+- Collaborative editing (deferred per Phase 5 OQ-07).
+- Live preview pane separate from the editor — MDXEditor IS the WYSIWYG; no separate "rendered preview" pane unless a future request justifies it.
+- Custom Lexical nodes for Annot-internal markdown extensions — Phase 6 sticks to MDX-spec markdown. If we add custom shortcuts (e.g. `::note`), that's a follow-up.
+- Inline insertion of new `<Screen>` blocks from the editor toolbar — first ship the edit flow on existing blocks; insertion can be a Phase 6.x.
+- Mobile-friendly editor.
+- Plugin author support for custom JSX descriptors — initial descriptors cover Annot's first-party components only. Third-party descriptor registration is a follow-up once the API stabilizes.
 
 ## Architectural decisions
 
@@ -768,15 +907,37 @@ destroyed on every CI run.
 Annotation yaml lives in a separate file, never overwritten by
 re-capture. PNG XMP is purely machine-generated metadata.
 
-### AD-04: Annot editor never edits MDX
+### AD-04: Canvas editor writes annotation yaml, MDX editor writes MDX — neither writes both
 
-The previous design iteration assumed Annot would write MDX
-overlay JSX. This required a byte-stable JSX writer (high
-implementation cost, remark-mdx limitations).
+The previous statement of this AD was "Annot editor never edits
+MDX". That stance is correct for the **canvas editor**
+(Phase 4 `<annot-screen-editor-modal>`): canvas-driven
+annotation edits write only annotation yaml, never MDX. The
+discarded DA-03 alternative — driving MDX `<Overlay>` JSX from
+canvas operations via a byte-stable JSX writer — remains
+rejected.
 
-Separating annotation yaml from MDX descriptions eliminates this
-requirement: editor writes only yaml. MDX is read-only to the
-editor.
+Phase 6 introduces a separate **MDX editor** surface
+(`<annot-mdx-editor>`, MDXEditor-based) which does edit MDX,
+but with a fundamentally different writer model: MDXEditor
+parses MDX to AST, treats unknown JSX (`<Screen>`, etc.) as
+opaque nodes preserved byte-stable, and serializes back
+through Lexical's AST-grounded round-trip. There is no
+"synthesize JSX from canvas operation" path; the MDX editor
+edits MDX directly the way a user types into a text editor,
+just with WYSIWYG presentation.
+
+Two editors, two writers, one file kind each owns:
+
+| Editor | Writes | Does NOT write |
+|---|---|---|
+| Canvas editor (Phase 4 `<annot-screen-editor-modal>`) | annotation yaml | MDX, PNG bytes, PNG XMP |
+| MDX editor (Phase 6 `<annot-mdx-editor>`) | MDX | annotation yaml (delegates to canvas editor), PNG bytes, PNG XMP |
+
+The MDX editor delegates annotation editing to the canvas
+editor via image-click → `<annot-screen-editor-modal>`
+(Phase 6b). Each writer owns one file kind end-to-end; no
+writer touches two file kinds.
 
 ### AD-05: Match-anchored positions are first-class, free-coord is escape hatch
 
@@ -874,6 +1035,67 @@ Key shape decisions:
 The user authorized breaking `PageMetadata` to make this
 consolidation possible. Phase 1's first three sub-phases land
 as a single PR because the schema break is atomic.
+
+### AD-10: React permitted inside `<annot-mdx-editor>` boundary; Lit elsewhere
+
+MDXEditor (Phase 6's MDX WYSIWYG) is React-based, while
+`@ingcreators/annot-host-ui` is otherwise Lit-only. Mixing the
+two is allowed under a strict containment rule:
+
+- `react`, `react-dom`, and React-only Lexical / MDXEditor packages MAY be imported from `packages/host-ui/src/annot-mdx-editor.ts` and from sibling files under `packages/host-ui/src/mdx-descriptors/` and `packages/host-ui/src/mdx-editor-internal/`.
+- No other host-ui file imports React. The boundary is CI-enforced by extending `packages/host-ui/host-boundary.test.ts` with a probe that walks `require.cache` after importing each non-`annot-mdx-editor` host-ui entry and fails if any `react` / `react-dom` / `@mdxeditor/*` module appears.
+- Plugin authors writing custom Annot UI continue to use Lit (the `@ingcreators/annot-web/lit` re-export). React is not a public extension surface — the MDX descriptors are first-party only at the time of Phase 6 landing.
+
+The trade-off: ~500 KB gzipped of bundle weight in editor-mode-only
+code paths. Acceptable because the MDX editor is opt-in per
+file kind and lazy-loaded — pages that don't open `.annot.mdx`
+files never pay the cost. The host-ui Lit consumers (PWA
+editor surface, VSCode `.annot.png` custom editor, etc.) stay
+unaffected.
+
+The previous Lit-only invariant ("the host-ui surface is Lit;
+no other UI framework") is intentionally narrowed by AD-10
+from "no other framework ever" to "no other framework outside
+`<annot-mdx-editor>`'s boundary". The original invariant was
+guarding against accidental framework proliferation, not
+guarding against deliberate opt-in within a tightly-bounded
+component.
+
+### AD-11: MDXEditor chosen over Tiptap, Lexical raw, ProseMirror raw, CodeMirror split-view
+
+Phase 6's WYSIWYG MDX editor MUST: parse MDX (not patched
+markdown), preserve unknown JSX byte-stable, allow registered
+JSX components to render with custom WYSIWYG renderers,
+support frontmatter and imports, and round-trip the AST
+without normalizing unrelated content.
+
+Only MDXEditor meets all five out of the box. Alternatives
+evaluated:
+
+| Candidate | MDX first-class | Unknown JSX preserved | Custom JSX renderers | Frontmatter | Round-trip safety | React dep |
+|---|---|---|---|---|---|---|
+| **MDXEditor** | ✓ | ✓ (AST opaque nodes) | ✓ (`jsxComponentDescriptors`) | ✓ | ✓ (Lexical AST) | yes |
+| Tiptap (ProseMirror) | ✗ (markdown ext only) | needs custom serializer | needs custom NodeView | needs custom node | ⚠️ (formatting loss risk) | no |
+| Lexical raw | ✗ | needs custom plugins | needs custom node | needs custom plugin | ✓ once plugins built | no |
+| ProseMirror raw | ✗ | needs custom schema | needs custom NodeSpec | needs custom plugin | ⚠️ (formatting loss risk) | no |
+| CodeMirror 6 + lezer-mdx | ✓ (source-as-truth) | ✓ (source bytes) | n/a (not WYSIWYG) | ✓ | ✓ (no transform) | no |
+
+CodeMirror is the only non-React candidate that passes the
+correctness rows. It fails the UX requirement (WYSIWYG) — it's
+a source-pane editor, not a rich-text editor. It's held in
+reserve as a fallback if MDXEditor proves unworkable in
+practice but is not the Phase 6 baseline.
+
+Tiptap / Lexical raw / ProseMirror raw each require
+re-implementing what MDXEditor already provides. Estimated 2-4x
+the implementation cost with no advantage at the end. Adopting
+Lexical raw and re-implementing the MDX plugin set is
+particularly wasteful given that `@mdxeditor/editor` IS that
+plugin set, packaged.
+
+The single trade-off is the React dep captured in AD-10. The
+roadmap accepts that trade-off in exchange for implementation
+savings + the maturity of MDXEditor's AST round-trip.
 
 ## Open Questions
 
@@ -1084,6 +1306,43 @@ Drift detection works against `match` lookups, not ref. The ref's
 job is purely "address this node within this tree" — sufficient
 for the editor's hotspot rendering and within-capture diagnostics.
 
+### OQ-12: Phase 6 first host — VSCode vs annot.work/app vs Annot desktop
+
+Phase 6's `<annot-mdx-editor>` needs a first host platform.
+The component is host-neutral by design, but one of the three
+realizations (6d / 6e / 6f) lands first.
+
+- **(a) VSCode first (6d)** — fastest dogfooding loop. Most workflow-app contributors already author `.mdx` in VSCode. Smallest install surface (just an extension update). Reuses the existing `.annot.{svg,png,jpeg,jpg}` custom-editor registration pattern.
+- **(b) annot.work/app first (6e)** — broadest reach, no IDE requirement. Verifies the hosted Phase 5 ↔ Phase 6 integration end-to-end early. Larger surface (gallery routing, file open dialog, etc.).
+- **(c) Annot desktop first (6f)** — local file editing, no web hosting concerns. Smallest deployment risk. But the desktop host has fewer current users than VSCode or the web.
+
+**Recommended:** (a). VSCode is where the existing workflow-app
+contributors author MDX today, so the dogfooding loop is
+fastest and most honest. annot.work/app (b) follows once the
+editor proves out; desktop (c) comes essentially for free
+thereafter (Annot desktop already loads host-ui Lit
+components).
+
+### OQ-13: MDXEditor descriptor scope — first-party only vs. plugin API
+
+Phase 6c lands descriptors for Annot's first-party
+product-docs JSX (`<Screen>` / `<Description>` / `<EditButton>` /
+etc.). Custom components added by docs authors (e.g.
+`<Note>`, `<KeyboardKey>` mentioned in AD-02) are NOT
+descriptor-registered out of the box.
+
+Options:
+
+- **(a) First-party only** — non-registered JSX renders as opaque "MDX block: <ComponentName>" placeholder. Docs authors edit such blocks via the source view. (Phase 6's baseline.)
+- **(b) Configurable descriptor registry in `annot-docs.config.ts`** — docs authors register their own components for WYSIWYG rendering. Requires a public descriptor API + version stability commitment.
+- **(c) Best-effort generic descriptor** — heuristically renders any unknown JSX as a "block with children" with toolbar for inserting/editing children. Risky; could mislead authors about what's actually being preserved.
+
+**Recommended:** (a) for Phase 6 landing. (b) as a Phase 6.x
+follow-up once descriptor API stabilizes (descriptor shape is
+likely to iterate during 6c, so freezing the public API at
+6c-landing time is premature). (c) not pursued — opaque
+preservation is safer than wrong WYSIWYG.
+
 ## Discarded alternatives
 
 ### DA-01: PNG XMP carries everything (single-file vision)
@@ -1119,6 +1378,17 @@ implementation that consumers (anyone writing MDX) would
 notice and dislike (their carefully formatted MDX gets
 reformatted by the tool).
 
+**Partial reversal in Phase 6**: Phase 6's MDX editor does
+write MDX, but the fatal-flaw analysis above doesn't apply
+because it doesn't *synthesize JSX from canvas operations* —
+the user types into a WYSIWYG editor whose AST round-trip is
+grounded in MDXEditor's Lexical model. Unknown JSX is
+preserved opaque (not reformatted); registered JSX nodes
+serialize via per-descriptor rules. The Phase 4 canvas editor
+still doesn't write MDX (AD-04 maintains the canvas/MDX
+writer split). DA-03's specific failure mode — a canvas
+operation needing to emit JSX bytes — is still off the table.
+
 ### DA-04: Two yaml files (annotation + description)
 
 **Idea**: Annotation in `.annotations.yaml`, description in
@@ -1145,6 +1415,8 @@ of truth?) creates race conditions.
 - [`annot-cloud-roadmap.md`](./annot-cloud-roadmap.md) — Phase 3 (auth foundation) is a prerequisite for Phase 5 of this roadmap. Phase 5's GitHub App + commit logic lives in annot-cloud per [`oss-cloud-split.md`](./oss-cloud-split.md).
 - [`oss-cloud-split.md`](./oss-cloud-split.md) — Phase 5's iframe boundary is the canonical example of "OSS provides the affordance, cloud provides the paid service" pattern.
 - [`launch-prep.md`](./launch-prep.md) — annot-cloud launch (Phase 8 of annot-cloud-roadmap) precedes Phase 5 of this roadmap. Phase 5 is a post-launch feature.
+- [`_done/card-document-themes.md`](./_done/card-document-themes.md) — `<annot-doc-image-editor-modal>` introduced there is the direct pattern Phase 6b reuses for `<annot-screen-editor-modal>`. The same "click image inside a document, open EditorShell in a modal, save back to the host document model" flow is generalized: card docs save inline SVG into block bytes; Phase 6 saves into annotation yaml via a separate writer.
+- [`_done/vscode-extension-host.md`](./_done/vscode-extension-host.md) — `.annot.{svg,png,jpeg,jpg}` custom editor registration is the pattern Phase 6d extends with `.annot.mdx`. Same `VSCodeStore` + webview shell + `EditorShell` mount; only the file-kind discriminator and the loaded host-ui component differ.
 
 ## Timeline
 
@@ -1159,14 +1431,19 @@ Phase 2 (annotation yaml + Description JSX)
     ↓
 Phase 3 (palette extension) ── independent ──→ Phase 4 (editor)
                                                     ↓
-                                              Phase 5 (embedded editor)
-                                                    ↑
-                                              annot-cloud Phase 3 (auth)
+                                       ┌────────────┴────────────┐
+                                       ↓                         ↓
+                            Phase 5 (embedded editor)   Phase 6 (.annot.mdx editor)
+                                       ↑                         ↑
+                            annot-cloud Phase 3 (auth)    (reuses Phase 4 modal)
 ```
 
 Phase 3 and Phase 4 can run in parallel (Phase 3 is build-time
 schema work, Phase 4 is editor UI work). Phase 5 depends on both
 Phase 4 (editor capability) and annot-cloud's auth foundation.
+Phase 6 depends only on Phase 4 — it runs parallel to Phase 5
+since the dependencies don't overlap (Phase 5 is cloud +
+GitHub App, Phase 6 is the host-ui MDX editor surface).
 
 Realistic calendar:
 
@@ -1176,17 +1453,22 @@ Realistic calendar:
 - Phase 3: 2026-07 mid (parallel with Phase 4)
 - Phase 4: 2026-07 mid to 2026-08 early
 - Phase 5: post-launch (annot-cloud launch is targeted 2026-Q4 per annot-cloud-roadmap), so Phase 5 starts late 2026 / early 2027
+- Phase 6: post-Phase-4. Sub-phases 6a + 6b + 6d (minimum viable cut) target ~2026-09; 6c (rich-markdown writer) ~2026-10; 6e + 6f follow as host-expansion work. Runs parallel to Phase 5.
 
 This is aggressive but plausible at 40h/wk. The dependencies are
 clean; risk is mostly in Phase 4's UX iteration (visual editing
 of element-anchored annotations has no clear competitor to
-benchmark against).
+benchmark against) and Phase 6c's descriptor stability (each
+first-party JSX component needs a well-behaved descriptor
+before the rich-markdown writer is trusted on real docs).
 
 ## When to revisit this roadmap
 
 - After Phase 0 lands — confirm hook-registry pattern matches expectations before Phase 1 builds on it.
 - After Phase 2 lands — gather feedback from workflow-app users on the migration UX. The Phase 2 migration CLI is the riskiest transition; if it leaves users with broken MDX, fix before Phase 3.
 - Before Phase 5 — re-evaluate the iframe-vs-inline decision (AD-08) once annot-cloud's auth is real. The current AD-08 reasoning is sound but should be re-validated.
+- Before Phase 6c — re-evaluate MDXEditor selection (AD-11) once Phase 6a + 6b are running on real `.mdx`. If descriptor authoring proves much harder than projected, fall back to CodeMirror split-view per AD-11's reserve option.
+- After Phase 6d — gather feedback from workflow-app contributors on VSCode dogfooding. The descriptor API stability question (OQ-13) is best answered here.
 - If a competitor ships embedded visual editing — adjust the strategic positioning section. The space is empty today but the underlying tech (postMessage + GitHub App) is well-trodden.
 
 ## References
