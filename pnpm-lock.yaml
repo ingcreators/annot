@@ -390,6 +390,9 @@ importers:
       '@ingcreators/annot-annotator':
         specifier: workspace:*
         version: link:../annotator
+      '@ingcreators/annot-core':
+        specifier: workspace:*
+        version: link:../core
       '@ingcreators/annot-playwright':
         specifier: workspace:*
         version: link:../playwright

@@ -33,6 +33,7 @@ import {
 } from "./drift.js";
 import { syncProductDocs } from "./fixture.js";
 import { parseMdxFile } from "./mdx.js";
+import { migrateMdxFile } from "./migrate-to-element-tree.js";
 import { parseSnapshot } from "./resolver.js";
 
 export interface CliOptions {
@@ -55,7 +56,7 @@ export async function main(argv: string[], options: CliOptions = {}): Promise<nu
   const cwd = options.cwd ?? process.cwd();
 
   const [, , verb, ...rest] = argv;
-  if (verb !== "init" && verb !== "sync" && verb !== "lint") {
+  if (verb !== "init" && verb !== "sync" && verb !== "lint" && verb !== "migrate-to-element-tree") {
     stderr(USAGE);
     return verb ? 1 : 0;
   }
@@ -68,6 +69,8 @@ export async function main(argv: string[], options: CliOptions = {}): Promise<nu
         return await runSync(rest, { ...options, cwd, stdout, stderr });
       case "lint":
         return await runLint(rest, { ...options, cwd, stdout, stderr });
+      case "migrate-to-element-tree":
+        return await runMigrateToElementTree(rest, { cwd, stdout, stderr });
     }
   } catch (err) {
     stderr(`annot docs ${verb}: ${(err as Error).message}`);
@@ -82,10 +85,16 @@ const USAGE = [
   "  init                       Scaffold annot-docs.config.ts + sample files",
   "  sync   --url <baseUrl>     Re-capture snapshot + attrs into every annot MDX",
   "  lint   --url <baseUrl>     Report drift between annot MDXs and the live page",
+  "  migrate-to-element-tree    Convert legacy annot:snapshot / annot:attributes",
+  "                             MDX blocks into PNG XMP annot:elementTree chunks",
+  "                             (one-time, per Phase 1g of",
+  "                             docs/plans/living-spec-authoring-roadmap.md)",
   "",
   "Options:",
   "  --url <baseUrl>            Base URL Playwright navigates to (sync / lint)",
   "  --root <dir>               Override MDX search root (default: docs/)",
+  "  --dry-run                  migrate-to-element-tree only — report what would",
+  "                             be changed without writing back",
   "  --help                     Show this help",
 ].join("\n");
 
@@ -415,6 +424,62 @@ async function openBrowser(baseUrl: string, deps: RunDeps): Promise<OpenedBrowse
   };
 }
 
+// ─── migrate-to-element-tree (Phase 1g) ────────────────────────
+
+interface MigrateDeps {
+  cwd: string;
+  stdout: (line: string) => void;
+  stderr: (line: string) => void;
+}
+
+async function runMigrateToElementTree(args: string[], deps: MigrateDeps): Promise<number> {
+  const { cwd, stdout, stderr } = deps;
+  const flags = parseFlags(args);
+  const mdxFiles = await walkMdx(resolve(cwd, flags.root ?? "docs"));
+  const annotMdxs = await filterAnnotMdxFiles(mdxFiles);
+  if (annotMdxs.length === 0) {
+    stdout(
+      `annot docs migrate-to-element-tree: no MDX files with \`annot:\` frontmatter under ${flags.root ?? "docs"}.`,
+    );
+    return 0;
+  }
+  stdout(
+    `annot docs migrate-to-element-tree: ${annotMdxs.length} MDX file(s)${flags.dryRun ? " (dry run)" : ""}`,
+  );
+
+  let xmpWrites = 0;
+  let mdxRewrites = 0;
+  let skips = 0;
+
+  for (const mdx of annotMdxs) {
+    try {
+      const result = await migrateMdxFile(mdx, { dryRun: flags.dryRun });
+      for (const s of result.screens) {
+        if (s.xmpWritten) {
+          xmpWrites++;
+          stdout(`  xmp     ${relative(cwd, mdx)} (screen=${s.id})`);
+        } else if (s.skipReason) {
+          skips++;
+          stdout(`  skip    ${relative(cwd, mdx)} (screen=${s.id}, ${s.skipReason})`);
+        }
+      }
+      if (result.mdxRewritten) {
+        mdxRewrites++;
+        stdout(`  rewrote ${relative(cwd, mdx)} (legacy blocks stripped)`);
+      }
+    } catch (err) {
+      stderr(
+        `annot docs migrate-to-element-tree: ${relative(cwd, mdx)}: ${(err as Error).message}`,
+      );
+      return 1;
+    }
+  }
+  stdout(
+    `annot docs migrate-to-element-tree: ${xmpWrites} XMP write(s), ${mdxRewrites} MDX rewrite(s), ${skips} skip(s).`,
+  );
+  return 0;
+}
+
 function joinUrl(base: string, path: string): string {
   if (/^https?:\/\//.test(path)) return path;
   if (path.startsWith("/")) {
@@ -440,6 +505,9 @@ interface ParsedFlags {
    *  `annot docs sync` against the same URL, but scoped to the
    *  files where lint found drift. */
   fix?: boolean;
+  /** Phase 1g `migrate-to-element-tree` only: report what would
+   *  change without writing back to disk. */
+  dryRun?: boolean;
 }
 
 function parseFlags(args: string[]): ParsedFlags {
@@ -456,6 +524,8 @@ function parseFlags(args: string[]): ParsedFlags {
       out.ci = true;
     } else if (arg === "--fix") {
       out.fix = true;
+    } else if (arg === "--dry-run") {
+      out.dryRun = true;
     }
   }
   return out;
