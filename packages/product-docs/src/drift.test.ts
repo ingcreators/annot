@@ -149,6 +149,159 @@ describe("isLintableScreen / lintableScreens", () => {
   });
 });
 
+// Phase 2c of `docs/plans/living-spec-authoring-roadmap.md`:
+// yaml-driven overlays + description cross-ref findings.
+describe("detectDrift — yamlOverlays (Phase 2c)", () => {
+  const liveSnapshot = [
+    { role: "textbox", name: "Email", ref: "e1", depth: 0, ancestors: [] },
+    { role: "button", name: "Sign in", ref: "e2", depth: 0, ancestors: [] },
+  ];
+
+  it("uses yaml overlays for the match-cycle instead of inline `<Overlay>`", () => {
+    const screen: ScreenSpec = {
+      id: "login",
+      src: "./shots/login.png",
+      overlays: [], // legacy path empty
+      callouts: [
+        { for: "o1", body: "**Email**" },
+        { for: "o2", body: "Sign in" },
+      ],
+      annotations: "./login.annotations.yaml",
+    };
+    const findings = detectDrift({
+      screen,
+      liveSnapshot,
+      yamlOverlays: [
+        {
+          id: "o1",
+          kind: "numberedBadge",
+          match: { role: "textbox", name: "Email" },
+          number: 1,
+        },
+        {
+          id: "o2",
+          kind: "numberedBadge",
+          match: { role: "button", name: "Sign in" },
+          number: 2,
+        },
+      ],
+    });
+    expect(findings).toEqual([]);
+  });
+
+  it("emits `description-missing` for a yaml id with no AnnotCallout", () => {
+    const screen: ScreenSpec = {
+      id: "login",
+      src: "./shots/login.png",
+      overlays: [],
+      callouts: [{ for: "o1", body: "Email" }],
+      annotations: "./login.annotations.yaml",
+    };
+    const findings = detectDrift({
+      screen,
+      liveSnapshot,
+      yamlOverlays: [
+        {
+          id: "o1",
+          kind: "numberedBadge",
+          match: { role: "textbox", name: "Email" },
+          number: 1,
+        },
+        {
+          id: "o2",
+          kind: "numberedBadge",
+          match: { role: "button", name: "Sign in" },
+          number: 2,
+        },
+      ],
+    });
+    expect(findings.map((f) => f.kind)).toEqual(["description-missing"]);
+    expect(findings[0]?.severity).toBe("warning");
+    expect(findings[0]?.message).toMatch(/o2/);
+  });
+
+  it("emits `description-orphan` (error) for a stale `<AnnotCallout for>`", () => {
+    const screen: ScreenSpec = {
+      id: "login",
+      src: "./shots/login.png",
+      overlays: [],
+      callouts: [
+        { for: "o1", body: "Email" },
+        { for: "o2", body: "Sign in" },
+        { for: "o3", body: "ghost" },
+      ],
+      annotations: "./login.annotations.yaml",
+    };
+    const findings = detectDrift({
+      screen,
+      liveSnapshot,
+      yamlOverlays: [
+        {
+          id: "o1",
+          kind: "numberedBadge",
+          match: { role: "textbox", name: "Email" },
+          number: 1,
+        },
+        {
+          id: "o2",
+          kind: "numberedBadge",
+          match: { role: "button", name: "Sign in" },
+          number: 2,
+        },
+      ],
+    });
+    expect(findings.map((f) => f.kind)).toEqual(["description-orphan"]);
+    expect(findings[0]?.severity).toBe("error");
+    expect(findings[0]?.message).toMatch(/o3/);
+  });
+
+  it("legacy `screen.overlays` stays inert when yamlOverlays is set", () => {
+    const screen: ScreenSpec = {
+      id: "login",
+      src: "./shots/login.png",
+      // Stale inline overlay — would normally trigger a `removed`
+      // finding, but yaml overlays take over the match-cycle.
+      overlays: [{ match: { role: "link", name: "Forgot password" }, body: "" }],
+      callouts: [{ for: "o1", body: "Email" }],
+      annotations: "./login.annotations.yaml",
+    };
+    const findings = detectDrift({
+      screen,
+      liveSnapshot,
+      yamlOverlays: [
+        {
+          id: "o1",
+          kind: "numberedBadge",
+          match: { role: "textbox", name: "Email" },
+          number: 1,
+        },
+      ],
+    });
+    // No `removed` from the stale legacy overlay — only `added`
+    // for "Sign in" which has no yaml entry.
+    expect(findings.map((f) => f.kind).sort()).toEqual(["added"]);
+  });
+
+  it("isLintableScreen treats yaml-form screens as lintable", () => {
+    const yamlScreen: ScreenSpec = {
+      id: "y",
+      src: "./y.png",
+      overlays: [],
+      callouts: [{ for: "o1", body: "" }],
+      annotations: "./y.yaml",
+    };
+    expect(isLintableScreen(yamlScreen)).toBe(true);
+
+    const annotationsOnlyScreen: ScreenSpec = {
+      id: "a",
+      overlays: [],
+      callouts: [],
+      annotations: "./a.yaml",
+    };
+    expect(isLintableScreen(annotationsOnlyScreen)).toBe(true);
+  });
+});
+
 describe("detectDrift (snapshot pre-parsed)", () => {
   it("accepts a SnapshotEntry[] directly", () => {
     const findings = detectDrift({
