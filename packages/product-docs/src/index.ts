@@ -14,8 +14,29 @@
 // sentinel on the resolver reference makes re-import a no-op.
 import "./playwright-screenshot-hook.js";
 
-export type { AnnotationsFile, OverlayEntry } from "./annotations-yaml.js";
+export type {
+  AnnotationBBox,
+  AnnotationKind,
+  AnnotationPoint,
+  AnnotationSpec,
+  AnnotationStyleFields,
+  AnnotationsFile,
+  ArrowAnnotation,
+  ArrowEndpoint,
+  CalloutAnnotation,
+  CalloutTarget,
+  CircleAnnotation,
+  FocusMaskAnnotation,
+  FocusMaskCutout,
+  FreehandAnnotation,
+  OverlayEntry,
+  RectAnnotation,
+  RedactAnnotation,
+  TextAnchorPosition,
+  TextAnnotation,
+} from "./annotations-yaml.js";
 export {
+  ANNOTATION_KINDS,
   ANNOTATIONS_YAML_VERSION,
   AnnotationsYamlError,
   parseAnnotationsYaml,
