@@ -1,26 +1,28 @@
 // Tour helpers — captures a screen for both books in one step.
 //
-// Combines:
-//   1. `page.screenshot()` — writes the base PNG into
-//      `docs-site/public/shots/<id>.png`.
-//   2. `captureScreen()` from `@ingcreators/annot-product-docs` —
-//      refreshes the MDX `annot:snapshot` + `annot:attributes`
-//      comment blocks for the screen, per book.
+// Uses the unified `page.screenshot({ annot: { mdx: { id, path } } })`
+// API from `@ingcreators/annot-product-docs-astro/playwright`,
+// which in a single Playwright call:
 //
-// The upstream `@ingcreators/annot-product-docs-astro/playwright`
-// subpath ships a one-call `page.screenshot({ annot: { mdx } })`
-// API that does all three steps at once, but its 0.2.0 publish
-// is missing the compiled `dist/playwright/index.js` (a separate
-// publish-pipeline bug from the prepack one fixed in #947 —
-// vite.config.ts's `lib.entry` is single-entry only and never
-// emits the subpath bundle). A follow-up PR fixes the vite
-// config + ships 0.2.1; once that lands, this whole module
-// collapses to one call per (screen, mdx) pair.
+//   1. Writes the base PNG to `path` (in `docs-site/public/shots/`).
+//   2. Refreshes the MDX `annot:snapshot` + `annot:attributes`
+//      comment blocks via upstream `captureScreen`.
+//   3. Bakes the MDX `<Overlay match>` blocks into the PNG as
+//      editable SVG annotations stored in an XMP chunk — drop
+//      the resulting `.png` into Annot Cloud (`annot.work/app/`)
+//      and the overlays come back editable.
+//
+// Each screen maps to one MDX per book. The MDX update happens
+// per-call, so we loop the lookup table and call screenshot once
+// per (screen, mdx) pair. The PNG path is the same on each
+// iteration — the second write overwrites the first with the
+// same image bytes plus updated XMP tags reflecting the
+// later-walked overlay set, which is harmless when both books
+// declare overlays at the same coordinates.
 
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { captureScreen } from "@ingcreators/annot-product-docs";
 import type { Page } from "@playwright/test";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -79,9 +81,9 @@ export interface CaptureOptions {
  * Capture one screen for every MDX in the lookup table.
  *
  * Writes a single `<id>.png` (each book uses the same base
- * screenshot) plus updates each MDX's `annot:snapshot` /
+ * screenshot) and updates each MDX's `annot:snapshot` /
  * `annot:attributes` comment blocks via the upstream
- * `captureScreen` helper.
+ * `page.screenshot({ annot: { mdx } })` interceptor.
  */
 export async function capture(page: Page, options: CaptureOptions): Promise<void> {
   const targets = SCREEN_TO_MDX[options.id];
@@ -92,8 +94,10 @@ export async function capture(page: Page, options: CaptureOptions): Promise<void
     );
   }
   const shotPath = path.join(SHOTS_DIR, `${options.id}.png`);
-  await page.screenshot({ path: shotPath, fullPage: false });
   for (const mdxPath of targets) {
-    await captureScreen(page, { id: options.id, mdxPath });
+    await page.screenshot({
+      path: shotPath,
+      annot: { mdx: { id: options.id, path: mdxPath } },
+    });
   }
 }
