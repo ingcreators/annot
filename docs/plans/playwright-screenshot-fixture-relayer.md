@@ -3,6 +3,13 @@
 > **Status:** Draft — written 2026-05-22 during a Q&A session that
 > exposed an architectural mismatch in
 > [`_done/playwright-screenshot-annot-fixture.md`](./_done/playwright-screenshot-annot-fixture.md).
+> Subsequently positioned as **Phase 0 of
+> [`living-spec-authoring-roadmap.md`](./living-spec-authoring-roadmap.md)**
+> — the relayer's hook-registry mechanism (`annotSourceResolvers`)
+> is the foundation that later phases (annotation yaml resolver,
+> palette extension, editor integration, embedded editor) all
+> build on. Read the roadmap for the broader 3-layer artifact
+> model (Image / Annotation / Description) this relayer enables.
 >
 > **Trigger:** A reader asking "if `page.screenshot` is patched, is
 > the fixture codegen-compatible?" surfaced that the patching lives
@@ -363,8 +370,9 @@ follow-up after 1-2 release cycles of real-world usage.
 | 0 | This plan doc | ~1 hour (this PR) |
 | 1 | Move generic patch + composeOutput + rebase to `@ingcreators/annot-playwright`; `page` fixture override; hook registry interface | ~3 hours |
 | 2 | Move `resolveMdxAnnotations` + `svgFromBboxAnnotations` to `@ingcreators/annot-product-docs`; register `mdx` resolver; module augment `AnnotScreenshotOptions.mdx` | ~2 hours |
-| 3 | Convert `@ingcreators/annot-product-docs-astro/playwright` to a deprecated re-export pointing at `@ingcreators/annot-product-docs`; update product-docs-astro internals that consumed the moved helpers | ~1.5 hours |
-| 4 | Docs (playwright-fixture.mdx update, product-docs README, product-docs-astro README migration note), CLAUDE.md section adjustments, plan archive | ~1 hour |
+| 3 | Rename `screen` fixture → `productDocs`, `capture` method → `sync`. Keep deprecated re-exports for back-compat. Pending OQ-06 sign-off. | ~2 hours |
+| 4 | Convert `@ingcreators/annot-product-docs-astro/playwright` to a deprecated re-export pointing at `@ingcreators/annot-product-docs`; update product-docs-astro internals that consumed the moved helpers | ~1.5 hours |
+| 5 | Docs (playwright-fixture.mdx update, product-docs README, product-docs-astro README migration note), CLAUDE.md section adjustments, plan archive | ~1 hour |
 
 ## Phase 0 — Plan doc
 
@@ -512,7 +520,110 @@ gets a one-line import swap:
 The rest of the file is byte-identical. CI run is the canary —
 golden PNG bytes shouldn't change at all.
 
-## Phase 3 — `annot-product-docs-astro` becomes Astro-only
+## Phase 3 — Rename `screen` fixture → `productDocs`, `capture` → `sync`
+
+**Goal**: Rename the `screen` fixture (and its `capture` method)
+on `@ingcreators/annot-product-docs`'s extended `test` to
+`productDocs` (with `sync` method). Keep deprecated re-exports
+for back-compat during the transition.
+
+**Why this rename**: The current name `screen` is ambiguous to
+fresh readers:
+
+1. **Sounds like a Playwright built-in.** Playwright's own
+   fixtures are `page` / `context` / `browser` / `request` /
+   etc. `screen` fits that pattern even though it's not part of
+   Playwright — readers expect to find documentation in
+   Playwright's docs and don't.
+2. **Collides with `@testing-library/react`'s `screen`**, which
+   is well-known as a DOM query top-level. Front-end developers
+   coming from React Testing Library are likely to assume
+   `screen.capture(...)` is related.
+3. **Doesn't signal annot-specific behaviour.** When a reader
+   sees `await screen.capture({ id, mdxPath })`, the package
+   origin (`@ingcreators/annot-product-docs`) is not immediately
+   readable.
+
+`productDocs` mirrors the package name (the convention already
+established by `annotator` from `@ingcreators/annot-annotator`).
+`sync` more accurately describes the operation than `capture`:
+the function does **not** take a screenshot — it synchronizes
+the MDX `annot:snapshot` / `annot:attributes` blocks with the
+live UI.
+
+**Decision pending sign-off at OQ-06.** If reviewers prefer a
+different naming (e.g. method-only rename keeping `screen`
+fixture name, or `annotDocs` prefix), this phase swaps to the
+chosen variant.
+
+### Files modified in `packages/product-docs/src/`
+
+- `fixture.ts` — exports a new `test` that uses
+  `productDocs: Screen` (type kept, name changes). Internal
+  implementation unchanged.
+- `index.ts` — re-exports `productDocs` as the canonical name.
+  Re-exports `screen` as a deprecated alias pointing at the
+  same fixture for back-compat.
+
+### Standalone helper renames
+
+- `captureScreen(page, opts)` → `syncProductDocs(page, opts)`.
+  Old name kept as deprecated re-export pointing at the new
+  implementation.
+
+### Type renames
+
+- `Screen` (interface) → `ProductDocs` (interface). Old name
+  kept as deprecated type alias.
+- `ScreenCaptureOptions` → `ProductDocsSyncOptions`. Old name
+  kept as deprecated type alias.
+
+### Migration of in-tree consumers
+
+- `examples/workflow-app/tests/docs/tour-helpers.ts` — swaps
+  `captureScreen` → `syncProductDocs` import.
+- `packages/docs-site/tests/docs/annot-app.spec.ts` — swaps
+  `screen` → `productDocs` destructure.
+- All documentation (`packages/docs-site/src/content/docs/product-docs/playwright-tour.mdx`,
+  `packages/product-docs/README.md`, generated scaffold by
+  `annot-docs init`) updates the example to the new names.
+- The Phase 2 docs-tour spec rewrite (`import { test } from "@ingcreators/annot-product-docs"`)
+  uses the new fixture name in its example.
+
+### `package.json` changes
+
+- `@ingcreators/annot-product-docs` version bump 0.3.0 → 0.3.1
+  (deprecation additions; old names kept).
+
+### Tests
+
+- Existing `fixture.test.ts` tests adjusted to use new names.
+  Add one test asserting the deprecated `screen` / `captureScreen`
+  exports resolve to the same identity as the new
+  `productDocs` / `syncProductDocs` (so `instanceof` checks
+  across the rename boundary keep working for any external
+  caller migrating gradually).
+
+### Verification
+
+- `pnpm -r typecheck` passes.
+- `pnpm test` — fixture + CLI + docs-tour suites all green.
+- `pnpm --filter @ingcreators/annot-product-docs build` — both
+  old and new names appear in the published dist.
+- Example workflow-app tour run end-to-end produces byte-identical
+  PNG + MDX output before and after the rename.
+
+### Out of scope for Phase 3
+
+- Hard removal of the deprecated `screen` / `captureScreen` exports.
+  That happens in a follow-up after the deprecation period — same
+  timeline as the `<Overlay>` JSX deprecation (see
+  [`living-spec-authoring-roadmap.md`](./living-spec-authoring-roadmap.md)
+  OQ-08).
+- Adding new methods on the renamed fixture. Stays single-method
+  (`sync`) until a concrete use case for a second method emerges.
+
+## Phase 4 — `annot-product-docs-astro` becomes Astro-only
 
 ### Files deleted in `packages/product-docs-astro/src/`
 
@@ -580,7 +691,7 @@ golden PNG bytes shouldn't change at all.
   `@ingcreators/annot-product-docs` so existing callers using the
   old import path still pass.
 
-## Phase 4 — Docs + plan archive
+## Phase 5 — Docs + plan archive
 
 ### Doc surface updates
 
@@ -667,16 +778,94 @@ Playwright relationship it no longer has.
 `page.screenshot({ annot: { mdx } })` (which calls `captureScreen`
 internally during the `prepare` hook).
 
-- **(a) Keep `screen.capture` as a first-class API.** It's still
-  useful for batched MDX refresh without taking a screenshot
-  (the original use case before the `annot:` fixture landed).
-- **(b) Deprecate `screen.capture` in favour of `page.screenshot({
-  annot: { mdx } })`.** One way to do things; cleaner surface.
+- **(a) Keep as a first-class API.** Still useful for batched
+  MDX refresh without taking a screenshot (Astro Image Service
+  flow, drift-detection-only CI runs, large per-language /
+  per-book refresh loops where re-shooting PNGs would be
+  wasteful).
+- **(b) Deprecate in favour of `page.screenshot({ annot: { mdx } })`.**
+  One way to do things; cleaner surface.
 
 **Recommended:** (a). The two have different shapes — one takes
-a screenshot, one doesn't. Both are useful. Keep `screen.capture`
-as a documented escape hatch for read-only / batched refresh
-flows.
+a screenshot, one doesn't. Both are useful. Keep this method as
+a documented escape hatch for read-only / batched refresh flows.
+
+Note: under OQ-06 (rename below), the method's user-facing
+name shifts from `screen.capture` to `productDocs.sync` while
+its semantics (and this OQ-04 recommendation) stay identical.
+
+### 5. Should the `annotSourceResolvers` registry be exposed publicly?
+
+annot-playwright exports it for annot-product-docs to consume.
+Third-party plugin authors (e.g. an `@ingcreators/annot-product-docs-figma`
+adapter) could also push into it.
+
+- **(a) Public surface, documented in
+  `docs/plugin-api/playwright-screenshot-hook.md`.** Makes the
+  extension model first-class.
+- **(b) Internal export — consumed by annot-product-docs but
+  not documented.** Keep it semi-private until a second adapter
+  exists.
+
+**Recommended:** (a). The mechanism IS extensible by design and
+documenting it now is free. The `docs/plugin-api/` directory
+already houses similar plugin-author guides (`icons.md`,
+`themes.md`, `metadata-cache.md`).
+
+### 6. Should the `screen` fixture / `captureScreen` helper be renamed?
+
+The current public API exposes `test.extend({ screen })` with
+`screen.capture({ id, mdxPath })` and a standalone
+`captureScreen(page, opts)` helper. The name `screen` is
+ambiguous to fresh readers (see Phase 3's rationale).
+
+Four candidate shapes:
+
+- **(A) Status quo** — keep `screen` / `screen.capture` /
+  `captureScreen`. Zero migration cost, ambiguous to newcomers.
+- **(B) Method-only rename** — keep `screen` fixture, rename
+  method to `syncMdx` or similar. Reduces "capture" confusion
+  but fixture name still resembles Testing Library / Playwright.
+- **(C) Full rename to `productDocs` / `sync`** — fixture
+  becomes `productDocs`, method becomes `sync`, standalone
+  helper becomes `syncProductDocs`. Mirrors the
+  `annotator` convention from `@ingcreators/annot-annotator`.
+  Old names kept as deprecated re-exports.
+- **(D) Annot prefix** — fixture becomes `annotDocs` or
+  `annot`. Explicit prefix but conflicts with the
+  `annot: { ... }` option on `page.screenshot`.
+
+**Recommended:** (C). Reasons:
+
+1. **Fixture name = package name** ("productDocs" matches
+   `@ingcreators/annot-product-docs`) makes the origin obvious.
+   Same convention as `annotator` (which comes from
+   `@ingcreators/annot-annotator`).
+2. **"sync" describes the operation** accurately — the method
+   synchronizes MDX with live UI. "capture" misleads readers
+   into expecting a screenshot (which conflicts with
+   `page.screenshot({ annot: { mdx } })`'s actual screenshot
+   role).
+3. **In-tree consumers are few** — the audit during session
+   discussion found only `examples/workflow-app`'s
+   `tour-helpers.ts` and `docs-site/tests/docs/annot-app.spec.ts`
+   using the names. External consumers are likely zero or few
+   given the package's `0.2.0` age. Migration window can be
+   short.
+4. **Use-case validation already happened** — the design
+   discussion enumerated 4 concrete use cases for the renamed
+   `productDocs.sync` (multi-book screen reuse, Astro Image
+   Service flow, batched refresh, CI drift gate), confirming
+   the function deserves a precise name distinct from
+   `page.screenshot`.
+
+Phase 3 implements (C) including deprecated re-exports of the
+old names. The deprecation deadline matches OQ-08 of
+[`living-spec-authoring-roadmap.md`](./living-spec-authoring-roadmap.md)
+(soft deprecate for 2-3 release cycles, then drop).
+
+If reviewers prefer (B) (method-only rename) or (A) (status
+quo), this OQ flips and Phase 3 is rewritten or removed.
 
 ### 5. Should the `annotSourceResolvers` registry be exposed publicly?
 
