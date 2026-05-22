@@ -98,30 +98,51 @@ export function playwrightYamlToElementTree(opts: PlaywrightYamlToElementTreeOpt
 
   for (const rawLine of lines) {
     if (!rawLine.trim()) continue;
-    // Split indent + body cleanly so the bullet regex doesn't have
-    // a leading `\s*` adjacent to its own `\s+`. The two overlapping
-    // whitespace patterns create polynomial backtracking under
-    // adversarial input (CodeQL flag).
-    const trimmedStart = rawLine.replace(/^\s+/, "");
-    const indent = rawLine.length - trimmedStart.length;
-    const body = trimmedStart.replace(/\s+$/, "");
+    // Parse the bullet line procedurally rather than with one
+    // composite regex. The regex form (`^\s*-\s+([a-z]+)(?:\s+"...")?...`)
+    // tripped multiple CodeQL polynomial-regex flags because of
+    // overlapping whitespace patterns + a backtrackable optional
+    // group on the name capture. Procedural slicing has no
+    // backtracking — every step is O(1) in the length of the
+    // portion it consumes.
 
-    // Match the bullet, role, optional quoted name, the rest of the
-    // line (which may contain bracket groups and/or a trailing `:`).
-    //
-    // Name uses the simple `"([^"]*)"` pattern (same as
-    // `parseSnapshot` in `@ingcreators/annot-product-docs/resolver.ts`)
-    // instead of the backslash-escape-aware
-    // `(?:[^"\\]|\\.)*?` form. The escape-aware version is
-    // polynomial under adversarial input (CodeQL flags it) and
-    // Playwright's aria-snapshot output empirically never escapes
-    // quotes inside names — it just doesn't emit names containing
-    // internal double-quotes.
-    const head = body.match(/^-\s+([a-z]+)(?:\s+"([^"]*)")?(.*)$/);
-    if (!head) continue;
-    const role = head[1] ?? "";
-    const name = head[2];
-    let rest = head[3] ?? "";
+    // 1. Compute indent + strip leading whitespace via String#trimStart.
+    const trimmedStart = rawLine.trimStart();
+    const indent = rawLine.length - trimmedStart.length;
+
+    // 2. Bullet lines begin with `"- "`. Skip anything else.
+    if (!trimmedStart.startsWith("- ")) continue;
+    let cursor = trimmedStart.slice(2);
+
+    // 3. Read the role: a run of lowercase ASCII letters. Any
+    //    other-character bullet is malformed; skip.
+    let roleEnd = 0;
+    while (roleEnd < cursor.length) {
+      const code = cursor.charCodeAt(roleEnd);
+      if (code < 0x61 || code > 0x7a) break; // not a-z
+      roleEnd++;
+    }
+    if (roleEnd === 0) continue;
+    const role = cursor.slice(0, roleEnd);
+    cursor = cursor.slice(roleEnd);
+
+    // 4. Optional name: ` "<name>"` (space + double-quoted string).
+    //    Empirically Playwright doesn't emit escaped quotes inside
+    //    names, so a plain `indexOf('"')` walks to the closer in
+    //    one O(name length) pass.
+    let name: string | undefined;
+    if (cursor.startsWith(' "')) {
+      const closeQuote = cursor.indexOf('"', 2);
+      if (closeQuote > 1) {
+        name = cursor.slice(2, closeQuote);
+        cursor = cursor.slice(closeQuote + 1);
+      }
+    }
+
+    // 5. Everything that's left is bracket groups and an optional
+    //    trailing `:`. Trim trailing whitespace via String#trimEnd
+    //    rather than a `/\s+$/` regex (also polynomial).
+    let rest = cursor.trimEnd();
 
     const isContainer = /:$/.test(rest);
     if (isContainer) rest = rest.slice(0, -1);
