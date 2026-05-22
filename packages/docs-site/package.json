@@ -1,6 +1,6 @@
 {
   "name": "@ingcreators/annot-docs-site",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "private": true,
   "description": "Astro Starlight documentation site for annot.work/docs. Reclaims the conventional `@ingcreators/annot-docs-site` name from the retired VitePress sibling in Phase 7 of `docs/plans/_done/annot-work-astro-unification.md`.",
   "repository": {
