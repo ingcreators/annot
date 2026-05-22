@@ -94,6 +94,11 @@ describe("@ingcreators/annot-core/headless boundary", () => {
     expect(typeof headless.findByRef).toBe("function");
     expect(typeof headless.findByMatch).toBe("function");
     expect(typeof headless.flattenTree).toBe("function");
+    // ElementTree PNG XMP payload — Phase 1d of the same roadmap.
+    expect(typeof headless.ELEMENT_TREE_ITXT_KEYWORD).toBe("string");
+    expect(typeof headless.writeElementTreePng).toBe("function");
+    expect(typeof headless.readElementTreePng).toBe("function");
+    expect(typeof headless.hasElementTreePng).toBe("function");
   });
 
   it("does not leak `document` / `window` into the importing context", () => {
