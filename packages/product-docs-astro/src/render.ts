@@ -21,19 +21,20 @@
 
 import { readFile } from "node:fs/promises";
 import { dirname, isAbsolute, resolve } from "node:path";
-import { createAnnotator } from "@ingcreators/annot-annotator";
+import { type BboxAnnotation, createAnnotator } from "@ingcreators/annot-annotator";
 import { readElementTreePng } from "@ingcreators/annot-core";
 import {
   type AnnotationsFile,
   buildBadgeAnnotations,
   buildBadgeAnnotationsFromYaml,
+  buildShapeAnnotationsFromYaml,
   elementTreeToBoxedEntries,
   emptyAnnotationsSvg,
   type ParsedMdx,
   parseAnnotationsYaml,
   parseMdxFile,
   parseSnapshotBoxes,
-  svgFromBadges,
+  svgFromBboxAnnotations,
   warnLegacyOverlay,
 } from "@ingcreators/annot-product-docs";
 
@@ -195,9 +196,24 @@ export async function renderAnnotatedScreen(
       overlayCount: screen.overlays.length,
     });
   }
-  const annotations = annotationsFile
+  // Phase 2b: numbered-badge overlays come from yaml when the
+  // screen carries `annotations="…"`, otherwise from inline
+  // `<Overlay>` children.
+  const badges = annotationsFile
     ? buildBadgeAnnotationsFromYaml(annotationsFile.file.overlays, bboxes, dims)
     : buildBadgeAnnotations(screen.overlays, bboxes, dims);
+
+  // Phase 3c: shape annotations (the full visual palette) come
+  // from yaml only, and are composed on top of the badges.
+  const shapes: BboxAnnotation[] =
+    annotationsFile && annotationsFile.file.annotations
+      ? buildShapeAnnotationsFromYaml(annotationsFile.file.annotations, bboxes, dims)
+      : [];
+
+  // Combine in z-order: shapes underneath, badges on top so the
+  // numbered callouts stay legible when a shape (rect / focusMask
+  // / etc.) covers the same region.
+  const annotations: BboxAnnotation[] = [...shapes, ...badges];
 
   let result: Uint8Array;
   let hadBoundingBoxes: boolean;
@@ -220,7 +236,7 @@ export async function renderAnnotatedScreen(
     }
   } else {
     const dataUrl = `data:image/png;base64,${Buffer.from(baseBytes).toString("base64")}`;
-    const annotationsSvg = svgFromBadges(annotations);
+    const annotationsSvg = svgFromBboxAnnotations(annotations);
     // The badge primitive emits `<text>` for each numbered label.
     // `@ingcreators/annot-annotator` defaults `loadSystemFonts:
     // false` for CI determinism — fine for the bare-rect /

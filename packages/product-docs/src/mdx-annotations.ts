@@ -11,15 +11,30 @@
 import { isAbsolute, resolve } from "node:path";
 
 import {
+  type BBox,
   type BboxAnnotation,
+  type BboxArrowAnnotation,
+  type BboxCalloutAnnotation,
+  type BboxCircleAnnotation,
+  type BboxFocusMaskAnnotation,
+  type BboxFreehandAnnotation,
   type BboxNumberedBadgeAnnotation,
+  type BboxRectAnnotation,
+  type BboxTextAnnotation,
   bboxAnnotationsToSvg,
+  type Intent,
 } from "@ingcreators/annot-annotator";
 import { type ElementTree, walkTree } from "@ingcreators/annot-core";
 
-import type { OverlayEntry } from "./annotations-yaml.js";
+import type {
+  AnnotationBBox,
+  AnnotationSpec,
+  AnnotationStyleFields,
+  ArrowEndpoint,
+  OverlayEntry,
+} from "./annotations-yaml.js";
 import { parseMdxFile } from "./mdx.js";
-import type { OverlaySpec } from "./types.js";
+import type { MatchKey, OverlayIntent, OverlaySpec } from "./types.js";
 
 /** A parsed entry of an aria-snapshot YAML line carrying both a
  *  `[ref=…]` marker and a `[box=x,y,w,h]` marker. */
@@ -222,6 +237,339 @@ export function svgFromBadges(badges: BboxNumberedBadgeAnnotation[]): string {
   // primitives survive into the composited output.
   const fragment = bboxAnnotationsToSvg(badges);
   return `<svg xmlns="http://www.w3.org/2000/svg">${fragment}</svg>`;
+}
+
+/**
+ * Phase 3c of `docs/plans/living-spec-authoring-roadmap.md`.
+ * Resolve each Phase 3a `AnnotationSpec` against the page's
+ * boxed entries + image dimensions and convert to the
+ * `BboxAnnotation` shape `bboxAnnotationsToSvg` consumes.
+ *
+ * Skips entries whose required `match` (or the matches inside
+ * `coversElements` / `from` / `to` / `target` / `cutout`) can't
+ * be resolved — the drift detector (Phase 3d) surfaces those
+ * upstream. Free-coord entries (`bbox` / `point` / `at` / `path`
+ * / `center`) always resolve.
+ */
+export function buildShapeAnnotationsFromYaml(
+  annotations: readonly AnnotationSpec[],
+  boxed: readonly BoxedEntry[],
+  dims: { width: number; height: number },
+): BboxAnnotation[] {
+  const out: BboxAnnotation[] = [];
+  for (const spec of annotations) {
+    const mapped = mapAnnotation(spec, boxed, dims);
+    if (mapped) out.push(mapped);
+  }
+  return out;
+}
+
+function mapAnnotation(
+  spec: AnnotationSpec,
+  boxed: readonly BoxedEntry[],
+  dims: { width: number; height: number },
+): BboxAnnotation | null {
+  switch (spec.kind) {
+    case "rect":
+      return mapRect(spec, boxed);
+    case "circle":
+      return mapCircle(spec, boxed);
+    case "arrow":
+      return mapArrow(spec, boxed);
+    case "text":
+      return mapText(spec, boxed);
+    case "callout":
+      return mapCallout(spec, boxed);
+    case "freehand":
+      return mapFreehand(spec);
+    case "redact":
+      return mapRedact(spec, boxed);
+    case "focusMask":
+      return mapFocusMask(spec, boxed, dims);
+  }
+}
+
+function mapRect(
+  spec: Extract<AnnotationSpec, { kind: "rect" }>,
+  boxed: readonly BoxedEntry[],
+): BboxRectAnnotation | null {
+  let bbox: BBox | null = null;
+  if (spec.match) {
+    const entry = findBoxed(boxed, spec.match);
+    if (!entry) return null;
+    bbox = entry.box;
+  } else if (spec.coversElements) {
+    const boxes: BBox[] = [];
+    for (const m of spec.coversElements) {
+      const entry = findBoxed(boxed, m);
+      if (!entry) return null;
+      boxes.push(entry.box);
+    }
+    bbox = unionBoxes(boxes);
+  } else if (spec.bbox) {
+    bbox = spec.bbox;
+  }
+  if (!bbox) return null;
+  return withStyle({ type: "rect", bbox }, spec);
+}
+
+function mapCircle(
+  spec: Extract<AnnotationSpec, { kind: "circle" }>,
+  boxed: readonly BoxedEntry[],
+): BboxCircleAnnotation | null {
+  if (spec.match) {
+    const entry = findBoxed(boxed, spec.match);
+    if (!entry) return null;
+    const center = bboxCenter(entry.box);
+    // Match-anchored circle defaults to a radius matching the
+    // element's bounding half-circle, so a square element gets a
+    // circle that just covers it. Authors can override via
+    // `radius` in yaml.
+    const radius = spec.radius ?? Math.max(entry.box.width, entry.box.height) / 2;
+    return withStyle({ type: "circle", center, radius }, spec);
+  }
+  if (spec.center && spec.radius !== undefined) {
+    return withStyle({ type: "circle", center: spec.center, radius: spec.radius }, spec);
+  }
+  return null;
+}
+
+function mapArrow(
+  spec: Extract<AnnotationSpec, { kind: "arrow" }>,
+  boxed: readonly BoxedEntry[],
+): BboxArrowAnnotation | null {
+  const from = resolveEndpoint(spec.from, boxed);
+  if (!from) return null;
+  const to = resolveEndpoint(spec.to, boxed);
+  if (!to) return null;
+  return withStyle({ type: "arrow", from, to }, spec);
+}
+
+function resolveEndpoint(
+  ep: ArrowEndpoint,
+  boxed: readonly BoxedEntry[],
+): { x: number; y: number } | null {
+  if ("point" in ep) return ep.point;
+  const entry = findBoxed(boxed, ep.match);
+  if (!entry) return null;
+  return bboxCenter(entry.box);
+}
+
+/**
+ * Text-anchor offset in image pixels per `position`. Chosen so
+ * the text sits visibly outside the element bbox without
+ * overlapping the element itself.
+ */
+const TEXT_ANCHOR_PADDING = 8;
+
+function mapText(
+  spec: Extract<AnnotationSpec, { kind: "text" }>,
+  boxed: readonly BoxedEntry[],
+): BboxTextAnnotation | null {
+  let at: { x: number; y: number };
+  let anchor: BboxTextAnnotation["anchor"];
+  if (spec.anchor) {
+    const entry = findBoxed(boxed, spec.anchor.match);
+    if (!entry) return null;
+    const placed = placeTextRelativeToBbox(entry.box, spec.anchor.position ?? "above");
+    at = placed.at;
+    anchor = placed.anchor;
+  } else if (spec.at) {
+    at = spec.at;
+    anchor = "start";
+  } else {
+    return null;
+  }
+  const base: BboxTextAnnotation = {
+    type: "text",
+    at,
+    content: spec.text,
+    anchor,
+  };
+  if (spec.fontSize !== undefined) base.fontSize = spec.fontSize;
+  return withStyle(base, spec);
+}
+
+function placeTextRelativeToBbox(
+  bbox: BBox,
+  position: "above" | "below" | "left" | "right" | "center",
+): { at: { x: number; y: number }; anchor: BboxTextAnnotation["anchor"] } {
+  const cx = bbox.x + bbox.width / 2;
+  const cy = bbox.y + bbox.height / 2;
+  switch (position) {
+    case "above":
+      return { at: { x: cx, y: bbox.y - TEXT_ANCHOR_PADDING }, anchor: "middle" };
+    case "below":
+      return {
+        at: { x: cx, y: bbox.y + bbox.height + TEXT_ANCHOR_PADDING },
+        anchor: "middle",
+      };
+    case "left":
+      return { at: { x: bbox.x - TEXT_ANCHOR_PADDING, y: cy }, anchor: "end" };
+    case "right":
+      return {
+        at: { x: bbox.x + bbox.width + TEXT_ANCHOR_PADDING, y: cy },
+        anchor: "start",
+      };
+    case "center":
+      return { at: { x: cx, y: cy }, anchor: "middle" };
+  }
+}
+
+function mapCallout(
+  spec: Extract<AnnotationSpec, { kind: "callout" }>,
+  boxed: readonly BoxedEntry[],
+): BboxCalloutAnnotation | null {
+  let targetBbox: BBox | null = null;
+  if ("match" in spec.target) {
+    const entry = findBoxed(boxed, spec.target.match);
+    if (!entry) return null;
+    targetBbox = entry.box;
+  } else {
+    targetBbox = spec.target.bbox;
+  }
+  return withStyle({ type: "callout", at: spec.at, targetBbox, content: spec.text }, spec);
+}
+
+function mapFreehand(spec: Extract<AnnotationSpec, { kind: "freehand" }>): BboxFreehandAnnotation {
+  return withStyle({ type: "freehand", path: spec.path }, spec);
+}
+
+/**
+ * Solid-style redact = filled rect with opaque fill + no stroke.
+ * Yaml-supplied `fill` wins over the intent default; if unset we
+ * fall back to a neutral dark grey so the redact reads as
+ * "censored" even without a custom colour.
+ */
+const REDACT_DEFAULT_FILL = "#222222";
+
+function mapRedact(
+  spec: Extract<AnnotationSpec, { kind: "redact" }>,
+  boxed: readonly BoxedEntry[],
+): BboxRectAnnotation | null {
+  let bbox: BBox | null = null;
+  if (spec.match) {
+    const entry = findBoxed(boxed, spec.match);
+    if (!entry) return null;
+    bbox = entry.box;
+  } else if (spec.bbox) {
+    bbox = spec.bbox;
+  }
+  if (!bbox) return null;
+  // Render as a filled rect (Phase 3 ships solid only). Honour
+  // explicit `fill` / `stroke` overrides; default to opaque
+  // dark grey + no stroke so the redact looks like a censor bar.
+  return {
+    type: "rect",
+    bbox,
+    fill: spec.fill ?? REDACT_DEFAULT_FILL,
+    stroke: spec.stroke ?? "none",
+    strokeWidth: spec.strokeWidth ?? 0,
+    ...(spec.intent ? { intent: mapIntent(spec.intent) } : {}),
+  };
+}
+
+function mapFocusMask(
+  spec: Extract<AnnotationSpec, { kind: "focusMask" }>,
+  boxed: readonly BoxedEntry[],
+  dims: { width: number; height: number },
+): BboxFocusMaskAnnotation | null {
+  let cutout: BBox | null = null;
+  if ("match" in spec.cutout) {
+    const entry = findBoxed(boxed, spec.cutout.match);
+    if (!entry) return null;
+    const padding = spec.cutout.padding ?? 0;
+    cutout = expandBbox(entry.box, padding);
+  } else {
+    cutout = spec.cutout.bbox;
+  }
+  const base: BboxFocusMaskAnnotation = {
+    type: "focusMask",
+    cutout,
+    imageWidth: dims.width,
+    imageHeight: dims.height,
+  };
+  if (spec.dimColor !== undefined) base.dimColor = spec.dimColor;
+  return withStyle(base, spec);
+}
+
+// ─── shared helpers ────────────────────────────────────────────
+
+function findBoxed(boxed: readonly BoxedEntry[], match: MatchKey): BoxedEntry | undefined {
+  return boxed.find((b) => b.role === match.role && b.name === match.name);
+}
+
+function bboxCenter(b: BBox): { x: number; y: number } {
+  return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+}
+
+function unionBoxes(boxes: readonly BBox[]): BBox {
+  const minX = Math.min(...boxes.map((b) => b.x));
+  const minY = Math.min(...boxes.map((b) => b.y));
+  const maxX = Math.max(...boxes.map((b) => b.x + b.width));
+  const maxY = Math.max(...boxes.map((b) => b.y + b.height));
+  return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+}
+
+function expandBbox(b: AnnotationBBox, padding: number): BBox {
+  if (padding <= 0) return b;
+  return {
+    x: b.x - padding,
+    y: b.y - padding,
+    width: b.width + padding * 2,
+    height: b.height + padding * 2,
+  };
+}
+
+/**
+ * Map the docs flavour `OverlayIntent` (`required` / `action` /
+ * generic) onto the annotator DSL's `Intent` enum
+ * (`info` / `warning` / `error` / `success` / `neutral`).
+ *
+ * Mirrors the existing mapping in `buildBadgeAnnotations` /
+ * `buildBadgeAnnotationsFromYaml` so an `intent: "required"` /
+ * `intent: "action"` annotation renders in the same colour as
+ * an equally-flavoured overlay badge.
+ */
+function mapIntent(intent: OverlayIntent | undefined): Intent | undefined {
+  if (intent === undefined) return undefined;
+  switch (intent) {
+    case "required":
+      return "error";
+    case "action":
+      return "warning";
+    case "info":
+    case "warning":
+    case "error":
+    case "success":
+    case "neutral":
+      return intent;
+  }
+}
+
+/**
+ * Apply the style fields from a Phase 3a `AnnotationSpec` onto a
+ * partially-built `BboxAnnotation`. Only sets fields that are
+ * defined on the spec — keeps the renderer's intent-derived
+ * defaults active for fields the author left blank.
+ */
+function withStyle<T extends BboxAnnotation>(base: T, src: AnnotationStyleFields): T {
+  const mapped = mapIntent(src.intent);
+  const out: BboxAnnotation = { ...base };
+  if (mapped !== undefined && "intent" in out === false) {
+    (out as { intent?: Intent }).intent = mapped;
+  }
+  // The base type may already carry intent (we forward it from
+  // the spec); the conditional above protects against doubling.
+  if (mapped !== undefined && (out as { intent?: Intent }).intent === undefined) {
+    (out as { intent?: Intent }).intent = mapped;
+  }
+  if (src.stroke !== undefined) (out as { stroke?: string }).stroke = src.stroke;
+  if (src.strokeWidth !== undefined)
+    (out as { strokeWidth?: number }).strokeWidth = src.strokeWidth;
+  if (src.fill !== undefined) (out as { fill?: string }).fill = src.fill;
+  if (src.color !== undefined) (out as { color?: string }).color = src.color;
+  return out as T;
 }
 
 /**
