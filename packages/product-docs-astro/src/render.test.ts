@@ -13,7 +13,7 @@ import { readEditablePngBytes } from "@ingcreators/annot-core/xmp-bytes";
 import { describe, expect, it } from "vitest";
 
 import { createMemoryCache } from "./cache.js";
-import { parseSnapshotBoxes, renderAnnotatedScreen } from "./render.js";
+import { renderAnnotatedScreen } from "./render.js";
 
 const PNG_MAGIC = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 
@@ -68,34 +68,6 @@ async function makeFixture(snapshotBlock: string): Promise<{ mdxPath: string; pn
   await writeFile(mdxPath, fixtureMdx(snapshotBlock));
   return { mdxPath, pngBytes };
 }
-
-describe("parseSnapshotBoxes", () => {
-  it("returns empty for lines without box markers", () => {
-    const out = parseSnapshotBoxes(`- textbox "Email" [ref=e1]
-- button "Save" [ref=e2]`);
-    expect(out).toEqual([]);
-  });
-
-  it("extracts role + name + ref + box for entries that have all four", () => {
-    const out = parseSnapshotBoxes(
-      `- textbox "Email" [ref=e1] [box=10,20,200,30]
-- button "Sign in" [ref=e9] [box=100,80,120,40]`,
-    );
-    expect(out).toHaveLength(2);
-    expect(out[0]).toEqual({
-      role: "textbox",
-      name: "Email",
-      ref: "e1",
-      box: { x: 10, y: 20, width: 200, height: 30 },
-    });
-    expect(out[1]?.box).toEqual({ x: 100, y: 80, width: 120, height: 40 });
-  });
-
-  it("accepts decimal coordinates", () => {
-    const out = parseSnapshotBoxes('- textbox "Email" [ref=e1] [box=10.5,20.25,200.0,30.75]');
-    expect(out[0]?.box).toEqual({ x: 10.5, y: 20.25, width: 200, height: 30.75 });
-  });
-});
 
 describe("renderAnnotatedScreen", () => {
   it("throws on MDX without annot frontmatter", async () => {
