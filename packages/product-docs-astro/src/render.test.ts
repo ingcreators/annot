@@ -423,4 +423,178 @@ overlays: []
       );
     });
   });
+
+  // ─── Phase 3c — annotations[] composition ────────────────────
+
+  describe("Phase 3c — annotations[] composes on top of overlays[]", () => {
+    /**
+     * Same MDX shape as the Phase 2b block — the yaml gains an
+     * `annotations[]` section in addition to `overlays[]`.
+     */
+    function mdxForAnnotations(): string {
+      return `---
+annot:
+  id: SC-001
+---
+
+import { Screen, AnnotCallout } from "@ingcreators/annot-product-docs-astro";
+
+<Screen id="login" src="./shot.png" annotations="./login.annotations.yaml">
+<AnnotCallout for="o1">Email</AnnotCallout>
+</Screen>
+`;
+    }
+
+    async function makePaletteFixture(
+      yaml: string,
+      snapshotBlock: string,
+    ): Promise<{ mdxPath: string }> {
+      const dir = await mkdtemp(join(tmpdir(), "annot-render-phase3c-"));
+      const mdxPath = join(dir, "screen.mdx");
+      const yamlPath = join(dir, "login.annotations.yaml");
+      const pngPath = join(dir, "shot.png");
+      await writeFile(pngPath, makePng(400, 300));
+      await writeFile(mdxPath, `${mdxForAnnotations()}\n${snapshotBlock}`);
+      await writeFile(yamlPath, yaml);
+      return { mdxPath };
+    }
+
+    const snapshotBlock = `{/* annot:snapshot
+- textbox "Email" [ref=e1] [box=20,40,200,30]
+- button "Sign in" [ref=e9] [box=150,100,80,30]
+*/}`;
+
+    it("composes the full palette into the editable PNG's annotations layer", async () => {
+      const yaml = `version: 1
+overlays:
+  - id: o1
+    kind: numberedBadge
+    match: { role: textbox, name: Email }
+    number: 1
+annotations:
+  - id: a-rect
+    kind: rect
+    match: { role: textbox, name: Email }
+    intent: info
+  - id: a-arrow
+    kind: arrow
+    from: { match: { role: textbox, name: Email } }
+    to: { match: { role: button, name: "Sign in" } }
+    intent: action
+  - id: a-text
+    kind: text
+    text: "auth target"
+    anchor: { match: { role: button, name: "Sign in" }, position: above }
+  - id: a-callout
+    kind: callout
+    text: "submits the form"
+    target: { match: { role: button, name: "Sign in" } }
+    at: { x: 50, y: 250 }
+  - id: a-freehand
+    kind: freehand
+    path: "M0,0 L50,50 L100,0"
+    stroke: "#00aa00"
+  - id: a-redact
+    kind: redact
+    match: { role: textbox, name: Email }
+    style: solid
+  - id: a-focus
+    kind: focusMask
+    cutout: { match: { role: button, name: "Sign in" }, padding: 4 }
+`;
+      const { mdxPath } = await makePaletteFixture(yaml, snapshotBlock);
+      const result = await renderAnnotatedScreen({
+        mdxPath,
+        screenId: "login",
+        editable: true,
+      });
+      expect(result.hadBoundingBoxes).toBe(true);
+      expect(Array.from(result.bytes.slice(0, 8))).toEqual(PNG_MAGIC);
+      const meta = readEditablePngBytes(result.bytes);
+      expect(meta).not.toBeNull();
+      // The annotations SVG embedded in the editable PNG carries
+      // every variant the palette produced — verifies the wire
+      // path end-to-end without relying on visual diffing.
+      const svg = meta!.annotationsSvg;
+      // rect (from `rect` + the `redact`-as-rect)
+      expect(svg).toContain("<rect");
+      // arrow
+      expect(svg).toMatch(/<defs><marker /);
+      // text label
+      expect(svg).toMatch(/<text [^>]*>auth target<\/text>/);
+      // callout body text
+      expect(svg).toMatch(/<text [^>]*>submits the form<\/text>/);
+      // freehand stroke
+      expect(svg).toContain(`<path d="M0,0 L50,50 L100,0"`);
+      // focus mask uses evenodd-rule path
+      expect(svg).toContain(`fill-rule="evenodd"`);
+      // numbered badge survives — `<text>` with `font-weight="700"`
+      expect(svg).toMatch(/<text [^>]*font-weight="700"/);
+    });
+
+    it("renders annotations[] alone (no overlays / no <AnnotCallout>)", async () => {
+      const yaml = `version: 1
+overlays: []
+annotations:
+  - id: a-rect
+    kind: rect
+    bbox: { x: 0, y: 0, width: 100, height: 100 }
+`;
+      // Use a minimal MDX without the AnnotCallout so the screen
+      // has no overlays — the renderer still composes the rect.
+      const mdx = `---
+annot:
+  id: SC-001
+---
+
+import { Screen } from "@ingcreators/annot-product-docs-astro";
+
+<Screen id="login" src="./shot.png" annotations="./login.annotations.yaml" />
+
+${snapshotBlock}
+`;
+      const dir = await mkdtemp(join(tmpdir(), "annot-render-phase3c-bare-"));
+      const mdxPath = join(dir, "screen.mdx");
+      await writeFile(mdxPath, mdx);
+      await writeFile(join(dir, "login.annotations.yaml"), yaml);
+      await writeFile(join(dir, "shot.png"), makePng(400, 300));
+
+      const result = await renderAnnotatedScreen({
+        mdxPath,
+        screenId: "login",
+        editable: true,
+      });
+      expect(result.hadBoundingBoxes).toBe(true);
+      const meta = readEditablePngBytes(result.bytes);
+      const svg = meta!.annotationsSvg;
+      // Just the free-coord rect, no badge.
+      expect(svg).toContain(`<rect x="0" y="0" width="100" height="100"`);
+      expect(svg).not.toMatch(/font-weight="700"/);
+    });
+
+    it("skips annotations whose match doesn't resolve (drift surfaces upstream)", async () => {
+      const yaml = `version: 1
+overlays: []
+annotations:
+  - id: a-missing
+    kind: rect
+    match: { role: textbox, name: NoSuchElement }
+  - id: a-present
+    kind: rect
+    match: { role: textbox, name: Email }
+`;
+      const { mdxPath } = await makePaletteFixture(yaml, snapshotBlock);
+      const result = await renderAnnotatedScreen({
+        mdxPath,
+        screenId: "login",
+        editable: true,
+      });
+      const svg = readEditablePngBytes(result.bytes)!.annotationsSvg;
+      // Exactly one rect makes it through — the resolved Email rect
+      // at (20, 40, 200, 30) from the snapshot.
+      const rectCount = svg.match(/<rect /g)?.length ?? 0;
+      expect(rectCount).toBe(1);
+      expect(svg).toContain(`x="20" y="40" width="200" height="30"`);
+    });
+  });
 });
