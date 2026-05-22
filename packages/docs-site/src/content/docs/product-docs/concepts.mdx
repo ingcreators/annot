@@ -57,7 +57,7 @@ e2: id="signin" type="submit"
 ```
 
 The two `{/* annot:* */}` comment blocks are the byte-stable
-output of the Playwright tour's `screen.capture(...)` call.
+output of the Playwright tour's `productDocs.sync(...)` call.
 Storing them in the MDX (rather than in a sidecar JSON) keeps
 the source-of-truth in one file the author edits.
 
@@ -65,7 +65,7 @@ the source-of-truth in one file the author edits.
 
 `<Screen id="login" src="./shots/login.png">` carries:
 
-- `id` — the identifier the tour passes to `screen.capture({ id })`
+- `id` — the identifier the tour passes to `productDocs.sync({ id })`
   to know which screen this is. Multiple screens in one MDX are
   fine; each `<Screen>` block has a unique `id`.
 - `src` — the base screenshot. Relative paths resolve from the

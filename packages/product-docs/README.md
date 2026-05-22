@@ -78,9 +78,9 @@ don't. The resolver re-finds each element on every run.
 // tests/docs/auth.spec.ts
 import { test } from "@ingcreators/annot-product-docs";
 
-test("login flow", async ({ page, screen }) => {
+test("login flow", async ({ page, productDocs }) => {
   await page.goto("/login");
-  await screen.capture({
+  await productDocs.sync({
     id: "login",
     mdxPath: "docs/books/example/SC-001-login.mdx",
   });
