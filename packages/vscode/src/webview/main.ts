@@ -451,7 +451,7 @@ function mountToolbarAndRightPanel(): void {
   panel.refreshRedactCount();
   rightPanelMount.appendChild(panel);
   activeRightPanel = panel;
-  panel.setPageMetadata(shell.getCurrentPageMetadata());
+  panel.setElementTree(shell.getCurrentElementTree());
 
   // Toolbar — vertical strip on the left, mirroring the PWA's
   // layout. Theme toggle / gallery button / save group hidden

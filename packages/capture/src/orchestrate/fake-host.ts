@@ -12,7 +12,7 @@
  * integration tests) can reuse it.
  */
 
-import type { PageMetadata } from "@ingcreators/annot-core";
+import type { ElementTree } from "@ingcreators/annot-core";
 import type {
   CaptureRect,
   CaptureSegment,
@@ -38,7 +38,7 @@ export type FakeCall =
     }
   | { kind: "sendToContent"; target: CaptureTargetRef; msg: BackgroundToContentMessage }
   | { kind: "injectContentScript"; target: CaptureTargetRef }
-  | { kind: "requestPageMetadata"; target: CaptureTargetRef; area: CaptureRect | undefined }
+  | { kind: "requestElementTree"; target: CaptureTargetRef; area: CaptureRect | undefined }
   | {
       kind: "stitchSegments";
       segments: CaptureSegment[];
@@ -64,8 +64,8 @@ export interface FakeHostOverrides {
    *  a synthetic `PageDimensions` for `get-page-dimensions` and
    *  `undefined` otherwise. */
   sendToContent?: (msg: BackgroundToContentMessage) => unknown;
-  /** Per-call `requestPageMetadata` factory. */
-  pageMetadata?: PageMetadata | null;
+  /** Per-call `requestElementTree` factory. */
+  elementTree?: ElementTree | null;
   /** Settings returned by `loadSettings`. Defaults to `DEFAULT_SETTINGS`. */
   settings?: Settings;
   /** Crop result. Defaults to a recognisable sentinel. */
@@ -174,9 +174,9 @@ export function createFakeCaptureHost(overrides: FakeHostOverrides = {}): FakeHo
       calls.push({ kind: "injectContentScript", target: t });
     },
 
-    async requestPageMetadata(t, area) {
-      calls.push({ kind: "requestPageMetadata", target: t, area });
-      return overrides.pageMetadata ?? null;
+    async requestElementTree(t, area) {
+      calls.push({ kind: "requestElementTree", target: t, area });
+      return overrides.elementTree ?? null;
     },
 
     async stitchSegments(segments, width, height) {

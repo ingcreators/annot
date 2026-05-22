@@ -18,7 +18,7 @@
  *   - `browse.host.executeMainWorld(webContentsId, expression)` —
  *     run a JavaScript expression in the target's MAIN world.
  *     The renderer-side host calls this with a stringified
- *     `walkPageMetadata` IIFE for `requestPageMetadata`, but the
+ *     `walkElementTree` IIFE for `requestElementTree`, but the
  *     channel itself is generic so future orchestrator surfaces
  *     (e.g. element-picker pre-fetch, area-snap probes) can
  *     reuse it.

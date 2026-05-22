@@ -51,12 +51,12 @@ export async function runVisibleCapture(host: CaptureHost): Promise<CaptureResul
           },
         },
       ]);
-      // Snapshot DOM metadata AFTER capture (so
+      // Snapshot ElementTree AFTER capture (so
       // `content-visibility: auto` descendants are laid out) but
       // BEFORE endCapturePrep below (stickies stay hidden, so
-      // their descendants are filtered out — metadata's element
+      // their descendants are filtered out — the tree's element
       // list 1:1 matches the screenshot pixels).
-      const meta = await host.requestPageMetadata(target);
+      const tree = await host.requestElementTree(target);
       const frame: CaptureFrame = {
         dataUrl: encoded?.dataUrl ?? captured.pngDataUrl,
         // Width / height stay 0 here — the caller probes the
@@ -65,7 +65,7 @@ export async function runVisibleCapture(host: CaptureHost): Promise<CaptureResul
         // probe via createImageBitmap.
         width: 0,
         height: 0,
-        pageMetadata: meta ?? undefined,
+        elementTree: tree ?? undefined,
       };
       return { target, frames: [frame], kind: "visible" };
     } finally {

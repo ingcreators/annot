@@ -109,8 +109,8 @@ describe("runPerPageCapture — DPR propagation (Phase 2)", () => {
     // "uses captured.dpr"; the exact slice math is covered by
     // strategy.test.ts).
     const metaCalls = fake.calls.filter(
-      (c): c is Extract<FakeCall, { kind: "requestPageMetadata" }> =>
-        c.kind === "requestPageMetadata",
+      (c): c is Extract<FakeCall, { kind: "requestElementTree" }> =>
+        c.kind === "requestElementTree",
     );
     expect(metaCalls.length).toBeGreaterThanOrEqual(1);
     for (const m of metaCalls) {
@@ -124,7 +124,7 @@ describe("runPerPageCapture — DPR propagation (Phase 2)", () => {
 describe("CaptureHost contract — captureViewport returns authoritative DPR", () => {
   it("orchestrators that need post-capture DPR receive it from captureViewport", async () => {
     // This is a smoke test: any orchestrator that calls captureViewport
-    // and downstream calls cropRect / requestPageMetadata should never
+    // and downstream calls cropRect / requestElementTree should never
     // pass content-side dpr to those primitives — only host-reported.
     const fake = createFakeCaptureHost({ dpr: 2.5 });
     fake.enqueueContentEvent({

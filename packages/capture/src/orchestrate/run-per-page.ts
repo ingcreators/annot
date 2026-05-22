@@ -8,7 +8,7 @@
  * one iteration at a time via `planPerPageStep`.
  */
 
-import type { PageMetadata } from "@ingcreators/annot-core";
+import type { ElementTree } from "@ingcreators/annot-core";
 import type { PageDimensions } from "@ingcreators/annot-core/utils/types";
 import type { CaptureHost } from "../host.js";
 import {
@@ -51,7 +51,7 @@ export async function runPerPageCapture(host: CaptureHost): Promise<CaptureResul
       pngDataUrl: string;
       srcYpx: number;
       sliceHeightPx: number;
-      pageMetadata?: PageMetadata;
+      elementTree?: ElementTree;
     }
     const rawPages: RawPage[] = [];
     let nextDocTop = 0;
@@ -90,21 +90,22 @@ export async function runPerPageCapture(host: CaptureHost): Promise<CaptureResul
       lastActualScrollY = after.scrollY;
 
       const captured = await host.captureViewport(target);
-      // Snapshot per-page DOM metadata AFTER captureViewport forced
+      // Snapshot per-page ElementTree AFTER captureViewport forced
       // a paint of this viewport (lays out `content-visibility: auto`
       // descendants currently on screen) but BEFORE the next iteration
-      // restores stickies. The `area` argument narrows captureRect to
-      // the slice this page contributes to the final image, so the
-      // editor's Elements panel filters off-frame elements correctly.
+      // restores stickies. The `area` argument narrows the captured
+      // tree's bounding rect to the slice this page contributes to
+      // the final image, so the editor's Elements panel filters off-
+      // frame elements correctly.
       //
       // DPR-from-host (Phase 2 of `desktop-browser-mode.md`): the
-      // metadata area math converts physical-pixel slice offsets
-      // back to CSS pixels for the walker. Trust the capture-time
-      // DPR returned by `captureViewport` so the area lines up
-      // with the actual pixel data, even if `after.devicePixelRatio`
-      // (read post-scroll, pre-capture) drifted.
+      // area math converts physical-pixel slice offsets back to CSS
+      // pixels for the walker. Trust the capture-time DPR returned
+      // by `captureViewport` so the area lines up with the actual
+      // pixel data, even if `after.devicePixelRatio` (read
+      // post-scroll, pre-capture) drifted.
       const dprNow = captured.dpr || after.devicePixelRatio || dpr;
-      const pageMeta = await host.requestPageMetadata(target, {
+      const pageTree = await host.requestElementTree(target, {
         x: 0,
         y: decision.slice.srcYpx / dprNow,
         width: dims.viewportWidth,
@@ -114,7 +115,7 @@ export async function runPerPageCapture(host: CaptureHost): Promise<CaptureResul
         pngDataUrl: captured.pngDataUrl,
         srcYpx: decision.slice.srcYpx,
         sliceHeightPx: decision.slice.sliceHeightPx,
-        pageMetadata: pageMeta ?? undefined,
+        elementTree: pageTree ?? undefined,
       });
 
       pageIndex += 1;
@@ -169,7 +170,7 @@ export async function runPerPageCapture(host: CaptureHost): Promise<CaptureResul
         dataUrl: r.dataUrl,
         width,
         height,
-        pageMetadata: raw.pageMetadata,
+        elementTree: raw.elementTree,
       };
     });
 

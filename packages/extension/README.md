@@ -53,7 +53,7 @@ After building, load `dist/` as an unpacked extension in
 ## Depends on
 
 - [`@ingcreators/annot-core`](../core) — `ImageRecord`,
-  `PageMetadata`, encode helpers, capability predicates.
+  `ElementTree`, encode helpers, capability predicates.
 
 ## See also
 

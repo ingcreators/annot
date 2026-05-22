@@ -35,7 +35,7 @@ import {
   bakeAnnotationsTranslate,
   pruneAnnotationsOutsideRect,
 } from "@ingcreators/annot-core/editor/bake-translate";
-import type { ImageRecord, PageMetadata, StorageProvider } from "@ingcreators/annot-core/storage";
+import type { ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
 import type { CanvasManager, History, SelectionManager } from "@ingcreators/annot-editor";
 import {
   CanvasManager as CanvasManagerImpl,
@@ -143,13 +143,11 @@ export class EditorShell {
   #selection: SelectionManager | null = null;
   #currentPath: string | null = null;
   #currentRecord: ImageRecord | null = null;
-  #pageMetadata: PageMetadata | null = null;
-  /** Canonical screen-capture tree — Phase 1f of
-   *  `docs/plans/living-spec-authoring-roadmap.md`. Hosts that read
-   *  `annot:elementTree` PNG XMP via `readElementTreePng` set this
-   *  alongside the legacy `pageMetadata`; the right panel's
-   *  Elements section renders the tree view when set. Null when
-   *  no tree was found (most non-instrumented captures). */
+  /** Canonical screen-capture tree. Hosts that read
+   *  `annot:elementTree` PNG XMP via `readElementTreePng` push it
+   *  here on each mount; the right panel's Elements section renders
+   *  the tree view when set. Null when no tree was found (most
+   *  non-instrumented captures). */
   #elementTree: ElementTree | null = null;
   #destroyed = false;
 
@@ -624,24 +622,11 @@ export class EditorShell {
     return { applied: true, width: croppedW, height: croppedH };
   }
 
-  /** Page metadata setter for hosts that capture it out-of-band
-   *  (PWA's extension-transfer flow). The shell stashes it; hosts
-   *  that consume it (right-panel Elements section) read it back
-   *  via `getCurrentPageMetadata()`. */
-  setPageMetadata(metadata: PageMetadata | null): void {
-    this.#pageMetadata = metadata;
-  }
-
-  /** Snapshot of the current page metadata. */
-  getCurrentPageMetadata(): PageMetadata | null {
-    return this.#pageMetadata;
-  }
-
-  /** Canonical screen-capture tree setter — Phase 1f. Hosts pass
-   *  the tree from `readElementTreePng(record.bytes)` (when
+  /** Canonical screen-capture tree setter. Hosts pass the tree
+   *  from `readElementTreePng(record.originalDataUrl)` (when
    *  present) so the right-panel Elements section can render the
-   *  hierarchical view. Independent of `setPageMetadata`; either,
-   *  both, or neither may be populated. */
+   *  hierarchical view. Pass `null` when the capture didn't carry
+   *  one (paste / desktop screenshot / legacy). */
   setElementTree(tree: ElementTree | null): void {
     this.#elementTree = tree;
   }

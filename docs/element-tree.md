@@ -1,31 +1,22 @@
 # ElementTree — canonical screen-capture model
 
 > Phase 1 of [`living-spec-authoring-roadmap.md`](./plans/living-spec-authoring-roadmap.md).
-> Replaces the previously parallel extension `PageMetadata` /
+> Replaces the previously parallel extension flat-list and
 > Playwright `ariaSnapshot` + sibling `annot:attributes` YAML paths.
 > See AD-09 in the roadmap for the design rationale and OQ-10 /
 > OQ-11 for the wire format + ref-stability decisions.
 
 ## Why this exists
 
-Annot captures "what's on this page" from two sources today:
-
-- The **browser extension** walks the DOM in the MAIN world and
-  produces a flat `PageMetadata` / `PageElement[]` list for the
-  editor's Elements panel.
-- **Playwright** emits a YAML-formatted aria-snapshot via
-  `page.locator(...).ariaSnapshot({ mode: "ai", boxes: true })`,
-  which `@ingcreators/annot-product-docs` parses into a flat
-  `SnapshotEntry[]` for drift detection, plus a sibling
-  `annot:attributes` YAML block for per-element HTML attribute
-  capture.
-
-Both held the same information in incompatible shapes — kept apart
-by implementation accident, not by design. ElementTree consolidates
-them onto a single canonical model so downstream consumers (editor's
-Elements panel, Astro Image Service, drift detector, annotation
-`match` resolver, MCP tools) all read the same shape regardless of
-which capture source produced it.
+Annot captures "what's on this page" from multiple sources — the
+browser extension's MAIN-world DOM walker, Playwright's
+`ariaSnapshot({ mode: "ai", boxes: true })`, and (in future) Figma
+adapters, OCR-derived snapshots, etc. ElementTree is a single
+canonical model every capture source produces and every downstream
+consumer reads, so the editor's Elements panel, Astro Image Service,
+drift detector, annotation `match` resolver, and MCP tools never
+need to know which capture source produced the data they are
+reading.
 
 ## Data shape
 

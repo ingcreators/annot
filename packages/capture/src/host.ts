@@ -52,7 +52,7 @@
  *    shared seam.
  */
 
-import type { PageMetadata } from "@ingcreators/annot-core";
+import type { ElementTree } from "@ingcreators/annot-core";
 import type { EncodeResult } from "@ingcreators/annot-core/encode";
 import type { CaptureRect, CaptureSegment } from "@ingcreators/annot-core/utils/types";
 import type { BatchItem } from "./encode/worker-pool.js";
@@ -155,11 +155,11 @@ export interface CaptureHost {
    *  ping-then-skip-or-reinject and the "non-injectable URL" cases. */
   injectContentScript(target: CaptureTargetRef): Promise<void>;
 
-  /** Snapshot DOM metadata for `target`, optionally narrowed to
-   *  `area` (in viewport CSS pixels). Returns null when injection
-   *  isn't possible (e.g. chrome:// URLs) or fails for any reason —
-   *  callers treat metadata as best-effort. */
-  requestPageMetadata(target: CaptureTargetRef, area?: CaptureRect): Promise<PageMetadata | null>;
+  /** Snapshot the canonical `ElementTree` for `target`, optionally
+   *  narrowed to `area` (in viewport CSS pixels). Returns null when
+   *  injection isn't possible (e.g. chrome:// URLs) or fails for any
+   *  reason — callers treat the tree as best-effort. */
+  requestElementTree(target: CaptureTargetRef, area?: CaptureRect): Promise<ElementTree | null>;
 
   /** Stitch a vertical scroll capture's segments into one PNG. */
   stitchSegments(segments: CaptureSegment[], width: number, height: number): Promise<string>;

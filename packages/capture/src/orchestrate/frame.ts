@@ -10,7 +10,7 @@
  * the shared orchestrator.
  */
 
-import type { PageMetadata } from "@ingcreators/annot-core";
+import type { ElementTree } from "@ingcreators/annot-core";
 import type { CaptureTargetRef } from "../host.js";
 import type { CaptureKind } from "../shared/settings.js";
 
@@ -22,8 +22,11 @@ export interface CaptureFrame {
   width: number;
   /** Pixel height of the encoded image. */
   height: number;
-  /** Optional DOM-side metadata snapshotted alongside the capture. */
-  pageMetadata?: PageMetadata;
+  /** Optional canonical `ElementTree` snapshotted alongside the
+   *  capture. Hosts that can produce one (Chrome extension + Electron
+   *  Browse-window) populate it; pasted / desktop-screenshot captures
+   *  leave it undefined. */
+  elementTree?: ElementTree;
 }
 
 export interface CaptureResult {

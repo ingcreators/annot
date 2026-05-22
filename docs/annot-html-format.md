@@ -608,7 +608,7 @@ interface ImageMeta {
   alt?: string;             // for accessibility
   sourceUrl?: string;       // page URL the screenshot was captured from
   capturedAt?: string;      // ISO timestamp
-  // forward-compat: PageMetadata-style additivity per docs/svg-format.md
+  // forward-compat: ElementTree-style additivity per docs/element-tree.md
 }
 
 interface NumberingMeta {
@@ -1128,12 +1128,13 @@ goldens AND the format spec in the same change.
 These didn't block the v1 spec freeze but are tracked here for
 v2 consideration:
 
-- [ ] **Per-image `PageMetadata`** — `docs/svg-format.md` mentions
-  embedding `PageMetadata` (DOM elements captured alongside a
-  screenshot) inside the SVG itself. v1 of the doc format puts it
-  in the sidecar's `imageMeta[<id>]` map. Are there cases where
-  per-image-block locality matters more than central JSON locality?
-  Unclear before the Playwright integration ships.
+- [ ] **Per-image `ElementTree`** — `docs/element-tree.md` defines
+  the canonical screen-capture model, currently stored as a PNG XMP
+  `iTXt` chunk alongside the bitmap. v1 of the doc format puts no
+  per-image-block screen-capture data in the sidecar; if the doc
+  format ever needs to round-trip an ElementTree across rebuilds
+  (e.g. for an inline editor), `imageMeta[<id>]` is the obvious
+  drop-in slot. Unclear before the editor's inline-edit flow ships.
 - [x] **Cross-references** — _resolved by Phase 13b_ (see the
   [Cross-references](#cross-references) section above). v1
   source text stores the resolved label via

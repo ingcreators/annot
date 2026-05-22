@@ -34,12 +34,12 @@ export async function runAreaCapture(host: CaptureHost): Promise<CaptureResult |
 
     try {
       const captured = await host.captureViewport(target);
-      // Metadata snapshot AFTER captureViewport (forces paint of
-      // `content-visibility: auto` descendants) but BEFORE
+      // ElementTree snapshot AFTER captureViewport (forces paint
+      // of `content-visibility: auto` descendants) but BEFORE
       // endCapturePrep below (stickies remain hidden, so their
-      // descendants are filtered out of metadata to match the
+      // descendants are filtered out of the tree to match the
       // screenshot pixels exactly).
-      const areaMeta = await host.requestPageMetadata(target, rect.rect);
+      const areaTree = await host.requestElementTree(target, rect.rect);
       // DPR-from-host (Phase 2 of `desktop-browser-mode.md`): the
       // crop math scales the CSS-pixel rect to physical pixels in
       // the captured PNG. `captured.dpr` is the host-authoritative
@@ -71,7 +71,7 @@ export async function runAreaCapture(host: CaptureHost): Promise<CaptureResult |
         dataUrl: encoded?.dataUrl ?? cropped,
         width: croppedW,
         height: croppedH,
-        pageMetadata: areaMeta ?? undefined,
+        elementTree: areaTree ?? undefined,
       };
       return { target, frames: [frame], kind: "area" };
     } finally {

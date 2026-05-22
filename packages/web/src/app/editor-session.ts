@@ -13,8 +13,9 @@
  * everything through a deps-object indirection.
  */
 
+import type { ElementTree } from "@ingcreators/annot-core";
 import type { ToolOptions } from "@ingcreators/annot-core/editor/tool-options";
-import type { ImageRecord, PageMetadata, StorageProvider } from "@ingcreators/annot-core/storage";
+import type { ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
 import { getFilename } from "@ingcreators/annot-core/storage";
 import { assertNonNull } from "@ingcreators/annot-core/utils";
 import type { CanvasManager, History, SelectionManager } from "@ingcreators/annot-editor";
@@ -103,11 +104,12 @@ export class EditorSession {
   #editorRightPanel: AnnotEditorRightPanelElement | null = null;
   /** The file-details drawer, created per editor session. */
   #fileDetailsDrawer: AnnotFileDetailsDrawerElement | null = null;
-  /** DOM-element metadata captured alongside the current screenshot
-   *  (browser-extension captures only). Drives the Elements sidebar
-   *  panel / smart-annotation features in the editor. Null when the
-   *  image has no metadata (paste, desktop capture, legacy). */
-  #pageMetadata: PageMetadata | null = null;
+  /** Canonical screen-capture tree captured alongside the current
+   *  screenshot (browser-extension / Playwright / etc.). Drives the
+   *  Elements sidebar panel / smart-annotation features in the
+   *  editor. Null when the image has no tree (paste, desktop
+   *  capture, legacy). */
+  #elementTree: ElementTree | null = null;
   /** Teardown for the global `?` keyboard-help listener. Installed
    *  once at editor boot; removed on destroy. */
   #keyboardHelpUninstall: (() => void) | null = null;
@@ -206,10 +208,10 @@ export class EditorSession {
     width: number,
     height: number,
     annotations?: string,
-    pageMetadata?: PageMetadata,
+    elementTree?: ElementTree,
   ): void {
     this.#currentImageDataUrl = dataUrl;
-    this.#pageMetadata = pageMetadata ?? null;
+    this.#elementTree = elementTree ?? null;
 
     // Clear local handles + shell-event subscriptions from the
     // previous open. The shell itself disposes its CanvasManager /
@@ -273,7 +275,7 @@ export class EditorSession {
     const currentRecord = this.deps.getCurrentImageRecord();
     const record = synthesizeShellRecord(dataUrl, width, height, annotations ?? "", currentRecord);
     shell.mountFromRecord(currentPath, record);
-    shell.setPageMetadata(this.#pageMetadata);
+    shell.setElementTree(this.#elementTree);
 
     const canvas = assertNonNull(
       shell.getCanvas(),
@@ -488,11 +490,11 @@ export class EditorSession {
     });
     rightPanelEl.appendChild(panel);
     this.#editorRightPanel = panel;
-    // Push DOM-element metadata (captured by the browser extension)
-    // into the right panel so the Elements section appears for
-    // browser-sourced screenshots. Null/undefined hides the section
-    // gracefully for paste / desktop / legacy captures.
-    this.#editorRightPanel.setPageMetadata(this.#pageMetadata);
+    // Push the canonical screen-capture tree into the right panel
+    // so the Elements section appears for browser-sourced screenshots.
+    // Null/undefined hides the section gracefully for paste / desktop
+    // / legacy captures.
+    this.#editorRightPanel.setElementTree(this.#elementTree);
 
     // Global `?` key → open the keyboard-shortcut help modal. Idempotent
     // — if a prior editor session installed a listener, tear it down

@@ -211,9 +211,11 @@ export {
 } from "./editor/viewport-math.js";
 // ─── ElementTree canonical screen-capture model (Tier A) ─────────────
 // Phase 1a of `docs/plans/living-spec-authoring-roadmap.md`.
-// Single source-agnostic model replacing the parallel
-// extension `PageMetadata` / Playwright `parseSnapshot`+`annot:attributes`
-// paths. Pure data types + serializers + traversal helpers; no DOM.
+// Single source-agnostic model for "what's on this page" — consumed
+// by every capture source (browser extension, Playwright, future
+// Figma / OCR adapters) and every downstream reader (editor, Astro
+// Image Service, drift detector, MCP tools). Pure data types +
+// serializers + traversal helpers; no DOM.
 export {
   type BBox,
   type ElementMatch,
@@ -226,9 +228,6 @@ export {
   findByRef,
   flattenTree,
   isElementTreeShape,
-  type LegacyPageElementLike,
-  type LegacyPageMetadataLike,
-  pageMetadataToElementTree,
   parseElementTreeFromJson,
   parseElementTreeFromYaml,
   serializeElementTreeToJson,
@@ -309,8 +308,6 @@ export type {
   FolderRecord,
   ImageRecord,
   ImageRecordUpdate,
-  PageElement,
-  PageMetadata,
   StorageProvider,
   StorageWithDocuments,
   StorageWithForceRefresh,

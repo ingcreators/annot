@@ -22,7 +22,7 @@ export default defineConfig({
         index: resolve(__dirname, "src/index.ts"),
         host: resolve(__dirname, "src/host.ts"),
         "content/index": resolve(__dirname, "src/content/index.ts"),
-        "content/page-metadata-walker": resolve(__dirname, "src/content/page-metadata-walker.ts"),
+        "content/element-tree-walker": resolve(__dirname, "src/content/element-tree-walker.ts"),
         "encode/index": resolve(__dirname, "src/encode/index.ts"),
         "shared/index": resolve(__dirname, "src/shared/index.ts"),
         "orchestrate/index": resolve(__dirname, "src/orchestrate/index.ts"),

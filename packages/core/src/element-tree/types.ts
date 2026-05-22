@@ -1,16 +1,9 @@
 // ElementTree — canonical "what's on this page" model.
 //
 // Phase 1a of `docs/plans/living-spec-authoring-roadmap.md`. Single
-// source-agnostic representation replacing two parallel paths kept
-// apart by implementation accident:
-//
-//   - Browser extension's flat `PageMetadata` / `PageElement[]`
-//     produced by the MAIN-world DOM walker (see
-//     `packages/capture/src/content/page-metadata-walker.ts`).
-//   - Playwright's `ariaSnapshot({ mode: "ai", boxes: true })` YAML
-//     parsed into a flat `SnapshotEntry[]` with parent-chain
-//     reconstruction (see `parseSnapshot` in
-//     `@ingcreators/annot-product-docs/resolver.ts`).
+// source-agnostic representation produced by every capture source —
+// browser extension's MAIN-world DOM walker, Playwright adapter,
+// and any future capture path (Figma adapter, OCR-derived, …).
 //
 // ElementTree is a **proper tree** (matches the DOM mental model),
 // carries per-node attributes inline (eliminates the sibling

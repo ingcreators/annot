@@ -1174,7 +1174,7 @@ export class GitHubStore
       tags: data.tags || {},
       createdAt: data.createdAt || now,
       updatedAt: data.updatedAt || now,
-      pageMetadata: data.pageMetadata,
+      elementTree: data.elementTree,
     };
     await this.#cachePutRecord(relPath, record);
     // Thumbnail bytes are owned by the unified `ThumbnailManager`:

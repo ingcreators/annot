@@ -34,7 +34,7 @@
  * (Phase 3 wiring): `captureViewport` →
  * `browse.host.captureViewport` (which calls
  * `webContents.capturePage()` server-side); and
- * `requestPageMetadata` → `browse.host.executeMainWorld` (the
+ * `requestElementTree` → `browse.host.executeMainWorld` (the
  * walker stringification stays renderer-side so
  * `src-electron/tsconfig.json` doesn't have to pull DOM types).
  *
@@ -46,7 +46,7 @@
  * remain Phase-6 stubs that return `DEFAULT_SETTINGS` and no-op.
  */
 
-import { walkPageMetadata } from "@ingcreators/annot-capture/content/page-metadata-walker";
+import { walkElementTree } from "@ingcreators/annot-capture/content/element-tree-walker";
 import {
   applyMosaic,
   cropRect as cropRectInRenderer,
@@ -66,7 +66,7 @@ import {
   mergeSettings,
   type Settings,
 } from "@ingcreators/annot-capture/shared";
-import type { PageMetadata } from "@ingcreators/annot-core";
+import type { ElementTree } from "@ingcreators/annot-core";
 import { encodeCapture } from "@ingcreators/annot-core/encode";
 import type { CaptureRect, CaptureSegment } from "@ingcreators/annot-core/utils/types";
 
@@ -328,31 +328,31 @@ export function createBrowseCaptureHost(opts: CreateBrowseCaptureHostOpts): Capt
       // re-injection.
     },
 
-    async requestPageMetadata(target, area?: CaptureRect): Promise<PageMetadata | null> {
+    async requestElementTree(target, area?: CaptureRect): Promise<ElementTree | null> {
       // Renderer-side composition of the walker expression. Keeping
       // the `.toString()` call on this side means src-electron's
       // tsconfig (which drops `lib: DOM` to keep main-process code
       // honest about no `document` / `window` access) doesn't have
       // to resolve the walker's DOM-using body. The IPC channel is
       // a generic main-world JS executor.
-      const walkerSource = walkPageMetadata.toString();
+      const walkerSource = walkElementTree.toString();
       const areaArg = area ? JSON.stringify(area) : "null";
       const expression = `(${walkerSource})(${areaArg})`;
       try {
         const result = (await api.invoke<unknown>("browse.host.executeMainWorld", {
           webContentsId: target.id,
           expression,
-        })) as PageMetadata | null | undefined;
+        })) as ElementTree | null | undefined;
         if (
           result &&
           typeof result === "object" &&
-          Array.isArray((result as { elements?: unknown }).elements)
+          (result as { root?: unknown }).root !== undefined
         ) {
           return result;
         }
         return null;
       } catch (err) {
-        log.warn("[browse-host] page metadata request failed:", err);
+        log.warn("[browse-host] ElementTree request failed:", err);
         return null;
       }
     },
