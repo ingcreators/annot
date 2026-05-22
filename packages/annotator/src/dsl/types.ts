@@ -129,6 +129,48 @@ export interface RawAnnotation {
   svgFragment: string;
 }
 
+/**
+ * Free-form path. The `path` field carries the SVG `<path>` d
+ * attribute verbatim — `M` / `L` / `C` / `Q` / `Z` commands.
+ *
+ * Style fields are interpreted as stroke-only by default
+ * (`fill: "none"` unless overridden) so a freehand stroke
+ * doesn't accidentally fill its own enclosed area.
+ *
+ * Phase 3b of
+ * [`docs/plans/living-spec-authoring-roadmap.md`](../../../../docs/plans/living-spec-authoring-roadmap.md).
+ */
+export type BboxFreehandAnnotation = AnnotationStyle & {
+  type: "freehand";
+  path: string;
+};
+
+/**
+ * Focus mask — dim the entire image area EXCEPT the cutout
+ * region. The cutout draws crisp; everything outside is filled
+ * with `dimColor` (default `rgba(0,0,0,0.5)`).
+ *
+ * Implemented as a single `<path>` element with `fill-rule="evenodd"`
+ * combining a full-image rect with the cutout rect: the
+ * even-odd rule cancels overlap, leaving the cutout area
+ * transparent on top of the dimmed background.
+ *
+ * `imageWidth` / `imageHeight` are required so the outer rect
+ * covers the full screenshot; the renderer rejects a partial
+ * focus mask. Phase 3b of
+ * [`docs/plans/living-spec-authoring-roadmap.md`](../../../../docs/plans/living-spec-authoring-roadmap.md).
+ */
+export type BboxFocusMaskAnnotation = AnnotationStyle & {
+  type: "focusMask";
+  /** The crisp cutout region. */
+  cutout: BBox;
+  /** Full-image dimensions — required so the outer rect covers everything. */
+  imageWidth: number;
+  imageHeight: number;
+  /** CSS colour for the dim layer. Default `rgba(0,0,0,0.5)`. */
+  dimColor?: string;
+};
+
 export type BboxAnnotation =
   | BboxRectAnnotation
   | BboxCircleAnnotation
@@ -136,6 +178,8 @@ export type BboxAnnotation =
   | BboxTextAnnotation
   | BboxCalloutAnnotation
   | BboxNumberedBadgeAnnotation
+  | BboxFreehandAnnotation
+  | BboxFocusMaskAnnotation
   | RawAnnotation;
 
 // ─── Redact regions ─────────────────────────────────────────────

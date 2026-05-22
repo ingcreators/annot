@@ -278,4 +278,93 @@ describe("bboxAnnotationsToSvg", () => {
   test("empty annotation list produces empty string", () => {
     expect(bboxAnnotationsToSvg([])).toBe("");
   });
+
+  // ─── Phase 3b — freehand + focusMask ───────────────────────
+
+  test("freehand renders a stroked `<path>` with default fill: none", () => {
+    const out = bboxAnnotationsToSvg([
+      {
+        type: "freehand",
+        path: "M100,200 L150,250 L200,210",
+      },
+    ]);
+    expect(out).toBe(
+      `<path d="M100,200 L150,250 L200,210" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`,
+    );
+  });
+
+  test("freehand honours intent + explicit stroke override", () => {
+    const out = bboxAnnotationsToSvg([
+      {
+        type: "freehand",
+        path: "M0,0 L100,100",
+        intent: "info",
+        strokeWidth: 4,
+      },
+    ]);
+    expect(out).toContain(`stroke="#3b82f6"`);
+    expect(out).toContain(`stroke-width="4"`);
+  });
+
+  test("freehand explicit fill wins over the `none` default", () => {
+    const out = bboxAnnotationsToSvg([
+      {
+        type: "freehand",
+        path: "M0,0 L10,0 L10,10 Z",
+        fill: "#ffeecc",
+      },
+    ]);
+    expect(out).toContain(`fill="#ffeecc"`);
+  });
+
+  test("freehand escapes attribute-special characters in the path", () => {
+    const out = bboxAnnotationsToSvg([
+      {
+        type: "freehand",
+        path: `M0,0 L"10","10"`,
+      },
+    ]);
+    expect(out).toContain("&quot;");
+    expect(out).not.toMatch(/d="M0,0 L"10/);
+  });
+
+  test("focusMask renders a single evenodd `<path>` framing the cutout", () => {
+    const out = bboxAnnotationsToSvg([
+      {
+        type: "focusMask",
+        cutout: { x: 200, y: 100, width: 80, height: 40 },
+        imageWidth: 1280,
+        imageHeight: 800,
+      },
+    ]);
+    expect(out).toBe(
+      `<path d="M0,0 H1280 V800 H0 Z M200,100 H280 V140 H200 Z" fill="rgba(0,0,0,0.5)" fill-rule="evenodd" stroke="none"/>`,
+    );
+  });
+
+  test("focusMask custom dimColor overrides the default", () => {
+    const out = bboxAnnotationsToSvg([
+      {
+        type: "focusMask",
+        cutout: { x: 0, y: 0, width: 10, height: 10 },
+        imageWidth: 100,
+        imageHeight: 100,
+        dimColor: "rgba(255,0,0,0.25)",
+      },
+    ]);
+    expect(out).toContain(`fill="rgba(255,0,0,0.25)"`);
+  });
+
+  test("focusMask cutout coordinates compose correctly into the path d", () => {
+    const out = bboxAnnotationsToSvg([
+      {
+        type: "focusMask",
+        cutout: { x: 12.5, y: 34, width: 100, height: 25 },
+        imageWidth: 800,
+        imageHeight: 600,
+      },
+    ]);
+    // Outer rect = full image; inner rect = cutout @ (12.5,34) → (112.5,59).
+    expect(out).toContain("M0,0 H800 V600 H0 Z M12.5,34 H112.5 V59 H12.5 Z");
+  });
 });

@@ -148,6 +148,39 @@ const BBOX_NUMBERED_BADGE = {
   },
 };
 
+const BBOX_FREEHAND = {
+  type: "object",
+  required: ["type", "path"],
+  additionalProperties: false,
+  properties: {
+    type: { const: "freehand" },
+    path: { type: "string", minLength: 1 },
+    intent: { $ref: "#/$defs/Intent" },
+    stroke: { type: "string" },
+    strokeWidth: { type: "number", minimum: 0 },
+    fill: { type: "string" },
+    color: { type: "string" },
+  },
+};
+
+const BBOX_FOCUS_MASK = {
+  type: "object",
+  required: ["type", "cutout", "imageWidth", "imageHeight"],
+  additionalProperties: false,
+  properties: {
+    type: { const: "focusMask" },
+    cutout: { $ref: "#/$defs/BBox" },
+    imageWidth: { type: "number", minimum: 0 },
+    imageHeight: { type: "number", minimum: 0 },
+    dimColor: { type: "string" },
+    intent: { $ref: "#/$defs/Intent" },
+    stroke: { type: "string" },
+    strokeWidth: { type: "number", minimum: 0 },
+    fill: { type: "string" },
+    color: { type: "string" },
+  },
+};
+
 const RAW = {
   type: "object",
   required: ["type", "svgFragment"],
@@ -159,7 +192,17 @@ const RAW = {
 };
 
 export const BBOX_ANNOTATION_SCHEMA = {
-  oneOf: [BBOX_RECT, BBOX_CIRCLE, BBOX_ARROW, BBOX_TEXT, BBOX_CALLOUT, BBOX_NUMBERED_BADGE, RAW],
+  oneOf: [
+    BBOX_RECT,
+    BBOX_CIRCLE,
+    BBOX_ARROW,
+    BBOX_TEXT,
+    BBOX_CALLOUT,
+    BBOX_NUMBERED_BADGE,
+    BBOX_FREEHAND,
+    BBOX_FOCUS_MASK,
+    RAW,
+  ],
 };
 
 // ─── Bbox redact region schema ───────────────────────────────────
