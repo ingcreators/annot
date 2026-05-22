@@ -1,5 +1,146 @@
 # @ingcreators/annot-product-docs-astro
 
+## 0.3.0
+
+### Minor Changes
+
+- f5dc7cb: **`@ingcreators/annot-product-docs-astro/playwright` becomes a
+  deprecated re-export** — Phase 4 of
+  `docs/plans/playwright-screenshot-fixture-relayer.md`. The fixture
+  that originally lived here moved to `@ingcreators/annot-playwright`
+  (generic patch) + `@ingcreators/annot-product-docs` (MDX resolver)
+  in Phases 1–3 of the plan. Phase 4 deletes the duplicate code
+  from this package and converts the `/playwright` subpath into a
+  shim that re-exports the canonical surface so existing callers
+  keep compiling.
+
+  ```ts
+  // Was:
+  import { test } from "@ingcreators/annot-product-docs-astro/playwright";
+
+  // Now (recommended):
+  import { test } from "@ingcreators/annot-product-docs"; // with MDX
+  // or
+  import { test } from "@ingcreators/annot-playwright"; // without MDX
+  ```
+
+  The deprecated subpath emits a one-time
+  `process.emitWarning("DeprecationWarning", …)` at import time so
+  the migration prompt shows up in CI logs. **Reference equality
+  preserved** — `test`, `expect`, `patchScreenshot`,
+  `rebaseAnnotations`, `describeAnnotation` are reference-equal to
+  their canonical homes; a new
+  `packages/product-docs-astro/src/playwright/index.test.ts`
+  asserts this.
+
+  **Removal target**: `@ingcreators/annot-product-docs-astro@0.5.0`,
+  matching the OQ-2 decision (b) in the parent plan — visible
+  deprecation, known sunset.
+
+  ## render.ts switches to the canonical helpers
+
+  `renderAnnotatedScreen()` previously carried its own copies of
+  `resolveMdxAnnotations` / `parseSnapshotBoxes` /
+  `buildBadgeAnnotations` / `svgFromBadges` / `svgFromBboxAnnotations`
+  / `emptyAnnotationsSvg`. Phase 2 of the plan moved the canonical
+  home into `@ingcreators/annot-product-docs`; this PR deletes the
+  duplicates from `product-docs-astro/render.ts` and consumes the
+  ones in product-docs going forward.
+
+  `resolveMdxAnnotations` + `svgFromBboxAnnotations` are re-exported
+  from `render.ts` for one deprecation cycle so existing callers
+  that imported them from `@ingcreators/annot-product-docs-astro`
+  keep compiling. `parseSnapshotBoxes` is dropped from the public
+  surface — new code should import it from
+  `@ingcreators/annot-product-docs` directly.
+
+  ## peerDependencies cleanup
+
+  `@playwright/test` is removed from `peerDependencies` (and from
+  `peerDependenciesMeta`). The package no longer has a Playwright
+  relationship to advertise — the `/playwright` subpath is purely
+  a re-export shim, and its types flow through the
+  `@ingcreators/annot-product-docs` workspace dep transitively.
+  This matches the OQ-3 decision (b) in the parent plan.
+
+  ## Verified
+  - `pnpm -r typecheck` — 20 packages, all pass.
+  - `pnpm test` — 252 files, 3641 tests, 0 failures. New
+    `playwright/index.test.ts` (5 reference-equality assertions)
+    passes; the deprecation `process.emitWarning` fires on
+    import (visible in vitest output) but does not break anything.
+  - `pnpm lint` — exit 0; 29 pre-existing warnings unchanged.
+  - `pnpm --filter @ingcreators/annot-product-docs-astro build` —
+    emits `dist/index.js` (3.96 kB / 1.71 kB gzip) +
+    `dist/playwright/index.js` (0.85 kB / 0.39 kB gzip) — the
+    shrunken subpath bundle reflects the re-export-only shape.
+
+### Patch Changes
+
+- 85d40e6: **Docs + CLAUDE.md + plan archive** — Phase 5 (final) of
+  `docs/plans/_done/playwright-screenshot-fixture-relayer.md`.
+  Refreshes the doc surfaces, the operational CLAUDE.md notes,
+  and archives the relayer plan into `_done/`.
+
+  ## Doc surface updates
+  - `packages/docs-site/src/content/docs/product-docs/playwright-fixture.mdx`
+    — recommended import paths updated; new "Choosing your import"
+    section covers the `@ingcreators/annot-product-docs` (MDX)
+    vs. `@ingcreators/annot-playwright` (no MDX) split; companion
+    helpers section now imports from the canonical homes; codegen
+    workflow example swapped to `@ingcreators/annot-product-docs`.
+  - `packages/docs-site/src/content/docs/api/create-annotator.mdx`
+    — "From a Playwright test" example imports from the canonical
+    home; mentions the no-MDX alternative.
+  - `packages/playwright/README.md` — adds the
+    `page.screenshot({ annot: { … } })` (recommended) section
+    above the existing `annotator.annotateScreenshot(...)` flow;
+    documents the `annotSourceResolvers` extension hook + the
+    coordinate-rebase helpers.
+  - `packages/product-docs/README.md` — adds a `page.screenshot({
+annot })` Playwright fixture section explaining the
+    productDocs.sync + MDX-resolver bundle.
+  - `packages/product-docs-astro/README.md` — replaces the
+    Playwright fixture section with a Migration note pointing at
+    the canonical homes; documents the `0.5.0` removal target.
+
+  ## CLAUDE.md monorepo layout
+  - `playwright/` entry now describes the canonical
+    `page.screenshot({ annot })` patch + `annotSourceResolvers`
+    extension hook. Version bumped to 0.4.0.
+  - `product-docs/` entry mentions the `productDocs` fixture
+    rename + the MDX-aware resolver registration via the hook
+    registry. Version bumped to 0.3.0.
+  - `product-docs-astro/` entry calls out the deprecated
+    `/playwright` re-export shim + 0.5.0 removal target.
+    `@playwright/test` no longer a peer dep. Version bumped to
+    0.3.0.
+
+  ## Plan archive
+  - `docs/plans/playwright-screenshot-fixture-relayer.md` →
+    `docs/plans/_done/playwright-screenshot-fixture-relayer.md`.
+    Status header switched to `Done` with the four landing PRs
+    enumerated. Internal `./_done/...` link paths updated to
+    `./...` (the plan is itself inside `_done/` now).
+  - `docs/plans/README.md` — removed the active entry, added a
+    "Recently landed plans" row pointing at the archived plan
+    with a multi-phase summary covering all four landing PRs.
+  - `docs/plans/living-spec-authoring-roadmap.md` — three link
+    references updated to point at the archived path; the "How
+    this relates" line switched from "Already Draft" to "Landed
+    2026-05-22 (PRs #962 / #963 / #964 / #966)".
+
+  No source code changes; verified via `pnpm -r typecheck`,
+  `pnpm test`, `pnpm lint` regardless to confirm the doc/comment
+  edits parse cleanly.
+
+- Updated dependencies [f979374]
+- Updated dependencies [5778902]
+- Updated dependencies [96e7625]
+- Updated dependencies [85d40e6]
+  - @ingcreators/annot-playwright@0.4.0
+  - @ingcreators/annot-product-docs@0.3.0
+
 ## 0.2.2
 
 ### Patch Changes
