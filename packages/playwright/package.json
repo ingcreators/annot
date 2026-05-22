@@ -57,7 +57,8 @@
     "vite-plugin-dts": "^5.0.1"
   },
   "dependencies": {
-    "@ingcreators/annot-annotator": "workspace:*"
+    "@ingcreators/annot-annotator": "workspace:*",
+    "@ingcreators/annot-core": "workspace:*"
   },
   "peerDependencies": {
     "@playwright/test": "^1.40.0"

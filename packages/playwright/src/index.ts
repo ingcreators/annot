@@ -51,3 +51,30 @@ export {
   type TextOptions,
   textAt,
 } from "./helpers.js";
+// Coordinate-rebase helpers — added in 0.4.0 alongside the
+// `page.screenshot({ annot })` patch. Exported for callers that
+// want to rebase annotations themselves without going through the
+// patch (e.g. running rebases against an arbitrary clip for
+// downstream tools). The patch invokes the same functions
+// internally for `locator.screenshot()` and
+// `page.screenshot({ clip })`.
+export {
+  type Clip,
+  describeAnnotation,
+  type RebaseResult,
+  rebaseAnnotations,
+} from "./rebase.js";
+// `page.screenshot({ annot })` prototype patch + extension hooks.
+// Added in 0.4.0 as Phase 1 of
+// `docs/plans/playwright-screenshot-fixture-relayer.md`. Downstream
+// packages register MDX / Figma / Sentry / … resolvers into
+// `annotSourceResolvers`; annot-playwright stays MDX-unaware.
+export {
+  ANNOT_PATCHED,
+  type AnnotScreenshotOptions,
+  type AnnotSourceContext,
+  type AnnotSourceContribution,
+  type AnnotSourceResolver,
+  annotSourceResolvers,
+} from "./screenshot-hooks.js";
+export { patchScreenshot } from "./screenshot-patch.js";
