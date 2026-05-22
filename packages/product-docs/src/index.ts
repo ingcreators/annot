@@ -5,6 +5,15 @@
 // PRs 3–4 add the Playwright `screen` fixture and the
 // `annot docs init / sync / lint` CLI on top.
 
+// Side-effect import: belt-and-braces registration of the MDX
+// resolver into `@ingcreators/annot-playwright`'s
+// `annotSourceResolvers` registry. Loaded so callers who reach
+// for ANY symbol on the package root (not just `test` / `screen`
+// from `./fixture.js`) still get the resolver active before they
+// `page.screenshot({ annot: { mdx } })`. The Symbol-keyed
+// sentinel on the resolver reference makes re-import a no-op.
+import "./playwright-screenshot-hook.js";
+
 export {
   filterAnnotMdxFiles,
   main,
@@ -38,6 +47,15 @@ export {
 } from "./fixture.js";
 export type { ParseMdxOptions } from "./mdx.js";
 export { parseMdx, parseMdxFile, updateCommentBlocks } from "./mdx.js";
+export type { BoxedEntry } from "./mdx-annotations.js";
+export {
+  buildBadgeAnnotations,
+  emptyAnnotationsSvg,
+  parseSnapshotBoxes,
+  resolveMdxAnnotations,
+  svgFromBadges,
+  svgFromBboxAnnotations,
+} from "./mdx-annotations.js";
 export type {
   ResolveFailureKind,
   ResolveResult,

@@ -1,4 +1,4 @@
-import { test } from "@ingcreators/annot-product-docs-astro/playwright";
+import { test } from "@ingcreators/annot-product-docs";
 
 // Dogfood tour. Captures live screens of the Annot web app at
 // `annot.work/app/` (production) or a maintainer-supplied URL
