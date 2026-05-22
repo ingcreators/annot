@@ -30,6 +30,7 @@
 // proves the architecture works without trying to swallow every
 // PWA-shell concern in one go.
 
+import type { ElementTree } from "@ingcreators/annot-core";
 import {
   bakeAnnotationsTranslate,
   pruneAnnotationsOutsideRect,
@@ -143,6 +144,13 @@ export class EditorShell {
   #currentPath: string | null = null;
   #currentRecord: ImageRecord | null = null;
   #pageMetadata: PageMetadata | null = null;
+  /** Canonical screen-capture tree — Phase 1f of
+   *  `docs/plans/living-spec-authoring-roadmap.md`. Hosts that read
+   *  `annot:elementTree` PNG XMP via `readElementTreePng` set this
+   *  alongside the legacy `pageMetadata`; the right panel's
+   *  Elements section renders the tree view when set. Null when
+   *  no tree was found (most non-instrumented captures). */
+  #elementTree: ElementTree | null = null;
   #destroyed = false;
 
   // Per-event handler arrays. A `Map<event, Set<handler>>` would
@@ -627,6 +635,20 @@ export class EditorShell {
   /** Snapshot of the current page metadata. */
   getCurrentPageMetadata(): PageMetadata | null {
     return this.#pageMetadata;
+  }
+
+  /** Canonical screen-capture tree setter — Phase 1f. Hosts pass
+   *  the tree from `readElementTreePng(record.bytes)` (when
+   *  present) so the right-panel Elements section can render the
+   *  hierarchical view. Independent of `setPageMetadata`; either,
+   *  both, or neither may be populated. */
+  setElementTree(tree: ElementTree | null): void {
+    this.#elementTree = tree;
+  }
+
+  /** Snapshot of the current ElementTree. */
+  getCurrentElementTree(): ElementTree | null {
+    return this.#elementTree;
   }
 
   /** The live `CanvasManager` for the open image, or null if no

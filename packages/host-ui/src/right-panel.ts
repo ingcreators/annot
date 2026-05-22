@@ -55,6 +55,7 @@ import "./annot-icon.js";
  *      survive mode switches.
  */
 
+import type { ElementTree } from "@ingcreators/annot-core";
 import { highlightColorLabel } from "@ingcreators/annot-core/editor";
 import {
   readTransformState,
@@ -150,6 +151,7 @@ export class AnnotEditorRightPanelElement extends LitElement {
     activeToolId: { state: true },
     currentSelection: { state: true },
     pageMetadata: { state: true },
+    elementTree: { state: true },
     redactCount: { state: true },
   };
 
@@ -168,6 +170,12 @@ export class AnnotEditorRightPanelElement extends LitElement {
   declare activeToolId: string | null;
   declare currentSelection: SVGElement[];
   declare pageMetadata: PageMetadata | null;
+  /** Canonical screen-capture tree — Phase 1f of
+   *  `docs/plans/living-spec-authoring-roadmap.md`. Pushed by the
+   *  host on each `setupEditor` via `setElementTree`. When set,
+   *  the Elements section renders a hierarchical tree view; when
+   *  null it falls back to the legacy `pageMetadata` flat list. */
+  declare elementTree: ElementTree | null;
   /** Live count of `[data-redact-style]` elements on the canvas.
    *  Pushed by the host (PWA's EditorSession listens to the
    *  shell's `dirty` event) — the panel itself doesn't observe
@@ -200,6 +208,7 @@ export class AnnotEditorRightPanelElement extends LitElement {
     this.activeToolId = null;
     this.currentSelection = [];
     this.pageMetadata = null;
+    this.elementTree = null;
     this.redactCount = 0;
     // Stable PropertyPanel host built once; the selection section
     // attaches / detaches it across mode switches.
@@ -496,6 +505,7 @@ export class AnnotEditorRightPanelElement extends LitElement {
       }),
       createPageElementsSection({
         getPageMetadata: () => this.pageMetadata,
+        getElementTree: () => this.elementTree,
         getCanvas: () => this.canvas!,
         getHistory: () => this.history!,
         getSelection: () => this.selection!,
@@ -651,6 +661,13 @@ export class AnnotEditorRightPanelElement extends LitElement {
       meta ? `${meta.elements.length} elements` : "null/undefined",
       meta?.captureRect,
     );
+  }
+
+  /** Update / clear the canonical screen-capture tree for the
+   *  current image. Phase 1f. Mirrors `setPageMetadata` —
+   *  independent input the Elements section prefers when set. */
+  setElementTree(tree: ElementTree | null | undefined): void {
+    this.elementTree = tree ?? null;
   }
 
   /** Pre-Lit API parity — `.destroy()` is an alias for `.remove()`.
