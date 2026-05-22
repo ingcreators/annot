@@ -71,6 +71,8 @@ export type {
   BboxArrowAnnotation,
   BboxCalloutAnnotation,
   BboxCircleAnnotation,
+  BboxFocusMaskAnnotation,
+  BboxFreehandAnnotation,
   BboxNumberedBadgeAnnotation,
   BboxRectAnnotation,
   BboxRedactRegion,

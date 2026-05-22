@@ -25,6 +25,8 @@ import type {
   BboxArrowAnnotation,
   BboxCalloutAnnotation,
   BboxCircleAnnotation,
+  BboxFocusMaskAnnotation,
+  BboxFreehandAnnotation,
   BboxNumberedBadgeAnnotation,
   BboxRectAnnotation,
   BboxTextAnnotation,
@@ -86,6 +88,15 @@ function rebaseOne(ann: BboxAnnotation, clip: Clip): BboxAnnotation | null {
       return rebaseArrow(ann, clip);
     case "text":
       return rebaseText(ann, clip);
+    case "freehand":
+      // Free-form path data — same reasoning as `raw`: we can't
+      // walk arbitrary SVG path commands and translate every
+      // coord. Keep verbatim; the caller is responsible for
+      // emitting clip-space `path` data if they want visual
+      // correctness on locator screenshots.
+      return rebaseFreehand(ann);
+    case "focusMask":
+      return rebaseFocusMask(ann, clip);
     case "raw":
       // Raw SVG fragment — we can't safely walk arbitrary user
       // SVG and translate every coord. Keep verbatim; caller is
@@ -161,6 +172,25 @@ function rebaseRaw(ann: RawAnnotation): RawAnnotation {
   return ann;
 }
 
+function rebaseFreehand(ann: BboxFreehandAnnotation): BboxFreehandAnnotation {
+  // No translation — see comment in dispatch above.
+  return ann;
+}
+
+function rebaseFocusMask(ann: BboxFocusMaskAnnotation, clip: Clip): BboxFocusMaskAnnotation | null {
+  if (!bboxFitsInClip(ann.cutout, clip)) return null;
+  // Same rebasing logic as `numberedBadge`: the cutout translates
+  // by `(-clip.x, -clip.y)`, and `imageWidth` / `imageHeight`
+  // collapse to the clip dims so the outer "dim everything"
+  // rect covers the cropped canvas rather than the page canvas.
+  return {
+    ...ann,
+    cutout: translateBBox(ann.cutout, clip),
+    imageWidth: clip.width,
+    imageHeight: clip.height,
+  };
+}
+
 function translateBBox(b: BBox, clip: Clip): BBox {
   return { x: b.x - clip.x, y: b.y - clip.y, width: b.width, height: b.height };
 }
@@ -209,6 +239,10 @@ export function describeAnnotation(ann: BboxAnnotation): string {
       return `arrow@(${ann.from.x},${ann.from.y})→(${ann.to.x},${ann.to.y})`;
     case "text":
       return `text@(${ann.at.x},${ann.at.y})`;
+    case "freehand":
+      return `freehand[d=${ann.path.slice(0, 32)}${ann.path.length > 32 ? "…" : ""}]`;
+    case "focusMask":
+      return `focusMask@(${ann.cutout.x},${ann.cutout.y},${ann.cutout.width},${ann.cutout.height})`;
     case "raw":
       return "raw[<svg fragment>]";
   }

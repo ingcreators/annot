@@ -16,6 +16,8 @@ import type {
   BboxArrowAnnotation,
   BboxCalloutAnnotation,
   BboxCircleAnnotation,
+  BboxFocusMaskAnnotation,
+  BboxFreehandAnnotation,
   BboxNumberedBadgeAnnotation,
   BboxRectAnnotation,
   BboxTextAnnotation,
@@ -84,6 +86,10 @@ function bboxAnnotationToSvg(annotation: BboxAnnotation): string {
       return calloutFragment(annotation);
     case "numberedBadge":
       return numberedBadgeFragment(annotation);
+    case "freehand":
+      return freehandFragment(annotation);
+    case "focusMask":
+      return focusMaskFragment(annotation);
     case "raw":
       return rawFragment(annotation);
   }
@@ -160,6 +166,52 @@ function calloutFragment(annotation: BboxCalloutAnnotation): string {
 
 function rawFragment(annotation: RawAnnotation): string {
   return annotation.svgFragment;
+}
+
+/**
+ * Freehand stroke — `<path>` with the supplied `d` attribute,
+ * stroked in the intent / explicit colour. Defaults `fill` to
+ * `"none"` so the stroke doesn't accidentally fill its own
+ * enclosed area. Phase 3b.
+ */
+function freehandFragment(annotation: BboxFreehandAnnotation): string {
+  const colours = resolveColours(annotation);
+  const fill = annotation.fill ?? "none";
+  const strokeWidth = annotation.strokeWidth ?? 2;
+  return (
+    `<path d="${escapeAttr(annotation.path)}" ` +
+    `fill="${escapeAttr(fill)}" ` +
+    `stroke="${escapeAttr(colours.stroke)}" ` +
+    `stroke-width="${strokeWidth}" ` +
+    `stroke-linecap="round" stroke-linejoin="round"/>`
+  );
+}
+
+/**
+ * Default dim colour for the focus mask — 50 % black. Mirrors the
+ * Annot editor's focus-mask tool default.
+ */
+const DEFAULT_FOCUS_MASK_DIM_COLOR = "rgba(0,0,0,0.5)";
+
+/**
+ * Focus mask — dim everything except the cutout. One `<path>` with
+ * `fill-rule="evenodd"` composes an outer full-image rect and an
+ * inner cutout rect; the even-odd rule cancels overlap so the
+ * cutout area renders transparent on top of the dimmed
+ * background. Phase 3b.
+ */
+function focusMaskFragment(annotation: BboxFocusMaskAnnotation): string {
+  const { cutout, imageWidth, imageHeight } = annotation;
+  const dim = annotation.dimColor ?? DEFAULT_FOCUS_MASK_DIM_COLOR;
+  // Outer rect = full image. Inner rect = cutout. The two
+  // subpaths form a "ring" the even-odd rule keeps as a frame.
+  const d =
+    `M0,0 H${imageWidth} V${imageHeight} H0 Z ` +
+    `M${cutout.x},${cutout.y} ` +
+    `H${cutout.x + cutout.width} ` +
+    `V${cutout.y + cutout.height} ` +
+    `H${cutout.x} Z`;
+  return `<path d="${escapeAttr(d)}" fill="${escapeAttr(dim)}" fill-rule="evenodd" stroke="none"/>`;
 }
 
 /**
