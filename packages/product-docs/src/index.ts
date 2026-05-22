@@ -78,6 +78,15 @@ export {
   svgFromBboxAnnotations,
 } from "./mdx-annotations.js";
 export type {
+  MigrateOverlaysOptions,
+  OverlayMigrationFileResult,
+  ScreenOverlayMigrationResult,
+} from "./migrate-overlays-to-annotations.js";
+export {
+  buildAnnotationsFile,
+  migrateOverlaysToAnnotationsFile,
+} from "./migrate-overlays-to-annotations.js";
+export type {
   ResolveFailureKind,
   ResolveResult,
   SnapshotEntry,
