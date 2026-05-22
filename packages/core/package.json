@@ -62,6 +62,10 @@
         "types": "./dist/index.d.ts",
         "default": "./dist/index.js"
       },
+      "./xmp-bytes": {
+        "types": "./dist/xmp/xmp-bytes.d.ts",
+        "default": "./dist/xmp-bytes.js"
+      },
       "./styles/*": "./styles/*"
     }
   },

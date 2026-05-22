@@ -24,9 +24,25 @@ export default defineConfig({
   ],
   build: {
     lib: {
-      entry: resolve(__dirname, "src/index.ts"),
+      // Multi-entry library mode so the Tier A xmp-bytes
+      // subpath reaches published consumers as a standalone
+      // bundle. `publishConfig.exports` in `package.json`
+      // declares the matching `./xmp-bytes` entry pointing at
+      // the `dist/xmp-bytes.js` file emitted here.
+      //
+      // Without this, `@ingcreators/annot-product-docs-astro`'s
+      // playwright fixture (which imports `writePngWithTagsOnly`
+      // from `@ingcreators/annot-core/xmp-bytes`) fails at
+      // runtime against any published `core` tarball.
+      //
+      // Pure-Tier-A subpaths only — browser-only code under
+      // `editor/`, `icons/`, etc. stays workspace-internal
+      // (consumers reach for `annot-editor` / `annot-render`).
+      entry: {
+        index: resolve(__dirname, "src/index.ts"),
+        "xmp-bytes": resolve(__dirname, "src/xmp/xmp-bytes.ts"),
+      },
       formats: ["es"],
-      fileName: "index",
     },
     outDir: "dist",
     emptyOutDir: true,
