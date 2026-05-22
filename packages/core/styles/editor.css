@@ -179,9 +179,12 @@ body {
 
 /* The contentEditable overlay lives inside a `<foreignObject>` —
    bring text selection back so the user can mark / replace runs
-   while editing. */
-#svg-root foreignObject [contenteditable="true"],
-[data-annot-shell-root] foreignObject [contenteditable="true"] {
+   while editing. Selectors ordered ascending-by-specificity so
+   Biome's `noDescendingSpecificity` rule is satisfied:
+   `[data-annot-shell-root]` is (0,2,1); `#svg-root` is (1,1,1).
+   Same applied rules either way. */
+[data-annot-shell-root] foreignObject [contenteditable="true"],
+#svg-root foreignObject [contenteditable="true"] {
   user-select: text;
   -webkit-user-select: text;
 }
