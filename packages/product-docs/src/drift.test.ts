@@ -1,8 +1,10 @@
+import type { ElementTree } from "@ingcreators/annot-core";
 import { describe, expect, it } from "vitest";
-
 import {
   detectDrift,
+  detectDriftFromElementTree,
   detectDriftFromYaml,
+  elementTreeToSnapshotEntries,
   isLintableScreen,
   lintableScreens,
   summariseDrift,
@@ -150,5 +152,110 @@ describe("detectDrift (snapshot pre-parsed)", () => {
       liveSnapshot: [{ role: "button", name: "Save", ref: "e1", depth: 0, ancestors: [] }],
     });
     expect(findings).toEqual([]);
+  });
+});
+
+// Phase 1i of `docs/plans/living-spec-authoring-roadmap.md` —
+// the drift detector consumes ElementTree directly via the new
+// adapter, eliminating the YAML round-trip for callers that
+// already have the canonical model in hand (PNG XMP readers,
+// MCP tools, future in-editor drift overlays).
+describe("elementTreeToSnapshotEntries", () => {
+  it("flattens a tree, skipping nodes without name", () => {
+    const tree: ElementTree = {
+      version: 1,
+      source: { kind: "extension", capturedAt: "2026-05-23T00:00:00Z" },
+      viewport: { width: 100, height: 100, scale: 1 },
+      root: {
+        ref: "e0",
+        role: "document",
+        children: [
+          { ref: "e1", role: "heading", name: "Sign in" },
+          { ref: "e2", role: "form" }, // no name → skipped
+          {
+            ref: "e3",
+            role: "textbox",
+            name: "Email",
+            children: [{ ref: "e4", role: "generic" }], // no name
+          },
+        ],
+      },
+    };
+    const entries = elementTreeToSnapshotEntries(tree);
+    expect(entries.map((e) => e.ref)).toEqual(["e1", "e3"]);
+    expect(entries[1]).toMatchObject({ role: "textbox", name: "Email" });
+  });
+
+  it("populates ancestor chain with named ancestors only", () => {
+    const tree: ElementTree = {
+      version: 1,
+      source: { kind: "extension", capturedAt: "2026-05-23T00:00:00Z" },
+      viewport: { width: 100, height: 100, scale: 1 },
+      root: {
+        ref: "e0",
+        role: "document",
+        children: [
+          {
+            ref: "e1",
+            role: "dialog",
+            name: "Confirm",
+            children: [
+              { ref: "e2", role: "button", name: "OK" },
+              { ref: "e3", role: "button", name: "Cancel" },
+            ],
+          },
+        ],
+      },
+    };
+    const entries = elementTreeToSnapshotEntries(tree);
+    const ok = entries.find((e) => e.name === "OK");
+    expect(ok?.ancestors).toEqual([{ role: "dialog", name: "Confirm" }]);
+  });
+});
+
+describe("detectDriftFromElementTree", () => {
+  function liveTree(children: Array<{ role: string; name: string; ref: string }>): ElementTree {
+    return {
+      version: 1,
+      source: { kind: "playwright", capturedAt: "2026-05-23T00:00:00Z" },
+      viewport: { width: 100, height: 100, scale: 1 },
+      root: { ref: "e0", role: "document", children },
+    };
+  }
+
+  it("emits no findings on a clean match", () => {
+    const findings = detectDriftFromElementTree({
+      screen: screenWith([
+        { match: { role: "textbox", name: "Email" }, body: "" },
+        { match: { role: "button", name: "Sign in" }, body: "" },
+      ]),
+      liveElementTree: liveTree([
+        { ref: "e1", role: "textbox", name: "Email" },
+        { ref: "e2", role: "button", name: "Sign in" },
+      ]),
+    });
+    expect(findings).toEqual([]);
+  });
+
+  it("reports removed elements as error", () => {
+    const findings = detectDriftFromElementTree({
+      screen: screenWith([{ match: { role: "textbox", name: "Email" }, body: "" }]),
+      liveElementTree: liveTree([]),
+    });
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.kind).toBe("removed");
+  });
+
+  it("produces identical findings to detectDriftFromYaml on equivalent input", () => {
+    const screen = screenWith([{ match: { role: "button", name: "Save" }, body: "" }]);
+    const fromYaml = detectDriftFromYaml({
+      screen,
+      liveSnapshotYaml: '- button "Save" [ref=e1]',
+    });
+    const fromTree = detectDriftFromElementTree({
+      screen,
+      liveElementTree: liveTree([{ ref: "e1", role: "button", name: "Save" }]),
+    });
+    expect(fromTree).toEqual(fromYaml);
   });
 });

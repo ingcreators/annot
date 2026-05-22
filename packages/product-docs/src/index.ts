@@ -33,7 +33,9 @@ export type {
 } from "./drift.js";
 export {
   detectDrift,
+  detectDriftFromElementTree,
   detectDriftFromYaml,
+  elementTreeToSnapshotEntries,
   isLintableScreen,
   lintableScreens,
   summariseDrift,
