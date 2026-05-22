@@ -1,3 +1,5 @@
+import { defineConfig } from "@ingcreators/annot-product-docs";
+
 // Shared `annot-docs` config for the workflow-app example.
 //
 // Two books live side-by-side under `docs/books/`:
@@ -10,18 +12,8 @@
 // (Phase 6) drives the SPA at `http://localhost:5173/` in English
 // and refreshes `annot:snapshot` + `annot:attributes` blocks in
 // every MDX.
-//
-// NOTE: we deliberately avoid importing `defineConfig` from
-// `@ingcreators/annot-product-docs` because the npm-published
-// `0.1.0` tarball is missing its `dist/` build output (the
-// publish-workflow's pre-pack `pnpm build` step was missed).
-// Until a fixed version is republished, the config is a plain
-// object literal — the CLI parses + validates it at runtime via
-// the same Zod schema either way. A follow-up PR
-// (`fix(publish): add prepack build step for product-docs
-// packages`) will restore the typed import.
 
-const config = {
+export default defineConfig({
   meta: {
     author: "Annot example",
     revision: "1.0",
@@ -34,6 +26,4 @@ const config = {
       "Screen Design": {},
     },
   },
-};
-
-export default config;
+});

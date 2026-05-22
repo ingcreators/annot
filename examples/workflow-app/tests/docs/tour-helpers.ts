@@ -1,23 +1,26 @@
-// Tour helpers: capture base PNG + aria-snapshot per screen,
-// inline the snapshot YAML into every MDX that references the
-// screen id under `docs/books/{operation-manual,screen-design}/`.
+// Tour helpers — captures a screen for both books in one step.
 //
-// Replaces the Phase 5 `scripts/capture-shots.mjs` stop-gap.
-// Until `@ingcreators/annot-product-docs@0.1.1` republishes
-// (#947), this module rolls its own equivalent of the
-// upstream `screen.capture` fixture. Two responsibilities:
+// Combines:
+//   1. `page.screenshot()` — writes the base PNG into
+//      `docs-site/public/shots/<id>.png`.
+//   2. `captureScreen()` from `@ingcreators/annot-product-docs` —
+//      refreshes the MDX `annot:snapshot` + `annot:attributes`
+//      comment blocks for the screen, per book.
 //
-//   1. Snapshot PNGs for the docs site
-//      (`docs-site/public/shots/<id>.png`).
-//   2. Inline aria-snapshot YAML into every MDX that contains
-//      `<Screen id="<id>">` — finds the placeholder
-//      `{/* annot:snapshot */}` marker (or a previously-filled
-//      block) and rewrites it to the current capture.
+// The upstream `@ingcreators/annot-product-docs-astro/playwright`
+// subpath ships a one-call `page.screenshot({ annot: { mdx } })`
+// API that does all three steps at once, but its 0.2.0 publish
+// is missing the compiled `dist/playwright/index.js` (a separate
+// publish-pipeline bug from the prepack one fixed in #947 —
+// vite.config.ts's `lib.entry` is single-entry only and never
+// emits the subpath bundle). A follow-up PR fixes the vite
+// config + ships 0.2.1; once that lands, this whole module
+// collapses to one call per (screen, mdx) pair.
 
-import { promises as fs } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { captureScreen } from "@ingcreators/annot-product-docs";
 import type { Page } from "@playwright/test";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -25,97 +28,72 @@ const ROOT = path.resolve(HERE, "../..");
 const SHOTS_DIR = path.resolve(ROOT, "docs-site/public/shots");
 const BOOKS_DIR = path.resolve(ROOT, "docs/books");
 
-// Marker pattern: matches both the placeholder ({/* annot:snapshot */})
-// and a previously-filled block ({/* annot:snapshot\n<body>\n*/}).
-// We replace the entire match with a freshly-filled block.
-const SNAPSHOT_MARKER_RE = /\{\/\*\s*annot:snapshot[\s\S]*?\*\/\}/;
+// Per-screen lookup table — explicit (rather than glob) so a
+// typo'd id fails fast at tour time.
+const SCREEN_TO_MDX: Record<string, ReadonlyArray<string>> = {
+  login: [
+    path.join(BOOKS_DIR, "operation-manual/OM-001-login.mdx"),
+    path.join(BOOKS_DIR, "screen-design/SD-001-login.mdx"),
+  ],
+  "menu-applicant": [
+    path.join(BOOKS_DIR, "operation-manual/OM-002-menu-applicant.mdx"),
+    path.join(BOOKS_DIR, "screen-design/SD-002-menu.mdx"),
+  ],
+  "application-form": [
+    path.join(BOOKS_DIR, "operation-manual/OM-003-application-form.mdx"),
+    path.join(BOOKS_DIR, "screen-design/SD-003-application-form.mdx"),
+  ],
+  "application-confirm": [
+    path.join(BOOKS_DIR, "operation-manual/OM-004-application-confirm.mdx"),
+    path.join(BOOKS_DIR, "screen-design/SD-004-application-confirm.mdx"),
+  ],
+  "application-submitted": [
+    path.join(BOOKS_DIR, "operation-manual/OM-005-application-submitted.mdx"),
+    path.join(BOOKS_DIR, "screen-design/SD-005-application-submitted.mdx"),
+  ],
+  "menu-approver": [
+    path.join(BOOKS_DIR, "operation-manual/OM-006-menu-approver.mdx"),
+    // SD-002 already covers menu via the applicant variant; the
+    // approver variant is documented inline in the same file.
+  ],
+  "approval-list": [
+    path.join(BOOKS_DIR, "operation-manual/OM-007-approval-list.mdx"),
+    path.join(BOOKS_DIR, "screen-design/SD-006-approval-list.mdx"),
+  ],
+  "approval-detail": [
+    path.join(BOOKS_DIR, "operation-manual/OM-008-approval-detail.mdx"),
+    path.join(BOOKS_DIR, "screen-design/SD-007-approval-detail.mdx"),
+  ],
+  "approval-decided": [
+    path.join(BOOKS_DIR, "operation-manual/OM-009-approval-decided.mdx"),
+    path.join(BOOKS_DIR, "screen-design/SD-008-approval-decided.mdx"),
+  ],
+};
 
 export interface CaptureOptions {
   /** Logical screen id — matches `<Screen id="...">` in MDX. */
   readonly id: string;
 }
 
+/**
+ * Capture one screen for every MDX in the lookup table.
+ *
+ * Writes a single `<id>.png` (each book uses the same base
+ * screenshot) plus updates each MDX's `annot:snapshot` /
+ * `annot:attributes` comment blocks via the upstream
+ * `captureScreen` helper.
+ */
 export async function capture(page: Page, options: CaptureOptions): Promise<void> {
-  const { id } = options;
-
-  await ensureDir(SHOTS_DIR);
-  const shotPath = path.join(SHOTS_DIR, `${id}.png`);
+  const targets = SCREEN_TO_MDX[options.id];
+  if (!targets) {
+    throw new Error(
+      `capture: no MDX targets known for screen id "${options.id}". ` +
+        "Add an entry to SCREEN_TO_MDX in tests/docs/tour-helpers.ts.",
+    );
+  }
+  const shotPath = path.join(SHOTS_DIR, `${options.id}.png`);
   await page.screenshot({ path: shotPath, fullPage: false });
-
-  // Playwright's aria-snapshot is the canonical match input
-  // for `<Overlay match={{ role, name }}>` blocks. We grab the
-  // entire body's tree.
-  const yaml = await page.locator("body").ariaSnapshot();
-
-  await refreshSnapshotInMdx(id, yaml);
-}
-
-async function refreshSnapshotInMdx(id: string, yaml: string): Promise<void> {
-  const targets = await findMdxFilesForScreen(id);
-  if (targets.length === 0) {
-    // Not every screen id has a matching MDX (the SPA might
-    // have transient routes). Skip silently rather than fail
-    // the tour.
-    return;
+  for (const mdxPath of targets) {
+    await captureScreen(page, { id: options.id, mdxPath });
   }
-  const block = formatSnapshotBlock(id, yaml);
-  for (const file of targets) {
-    const raw = await fs.readFile(file, "utf8");
-    if (!SNAPSHOT_MARKER_RE.test(raw)) {
-      // MDX lacks a snapshot marker — append one at end of file.
-      const next = `${raw.replace(/\s*$/, "")}\n\n${block}\n`;
-      await fs.writeFile(file, next);
-      continue;
-    }
-    const next = raw.replace(SNAPSHOT_MARKER_RE, block);
-    if (next !== raw) {
-      await fs.writeFile(file, next);
-    }
-  }
-}
-
-function formatSnapshotBlock(id: string, yaml: string): string {
-  // Strip a leading "- " from Playwright's yaml output if
-  // present so the inlined block reads cleanly.
-  const body = yaml.trim();
-  return [
-    "{/* annot:snapshot",
-    `id: ${id}`,
-    "capturedBy: workflow-app-tour",
-    `capturedAt: ${new Date().toISOString()}`,
-    "---",
-    body,
-    "*/}",
-  ].join("\n");
-}
-
-async function findMdxFilesForScreen(id: string): Promise<string[]> {
-  const entries = await walk(BOOKS_DIR);
-  const matching: string[] = [];
-  for (const file of entries) {
-    if (!file.endsWith(".mdx")) continue;
-    const raw = await fs.readFile(file, "utf8");
-    if (raw.includes(`<Screen id="${id}"`)) {
-      matching.push(file);
-    }
-  }
-  return matching;
-}
-
-async function walk(dir: string): Promise<string[]> {
-  let out: string[] = [];
-  const entries = await fs.readdir(dir, { withFileTypes: true });
-  for (const entry of entries) {
-    const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      out = out.concat(await walk(full));
-    } else if (entry.isFile()) {
-      out.push(full);
-    }
-  }
-  return out;
-}
-
-async function ensureDir(dir: string): Promise<void> {
-  await fs.mkdir(dir, { recursive: true });
 }

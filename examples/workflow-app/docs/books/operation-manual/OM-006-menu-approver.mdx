@@ -42,29 +42,39 @@ Signs the approver out and returns to the login screen.
 <Transition trigger={{ role: "link", name: "Pending approvals" }} to="OM-007" />
 
 {/* annot:snapshot
-id: menu-approver
-capturedBy: workflow-app-tour
-capturedAt: 2026-05-21T23:15:39.669Z
----
-- banner:
-  - link "Workflow App":
-    - /url: "#/menu"
-  - text: Ichiro Tanaka Approver
-  - button "Sign out"
-  - text: Language
-  - group "Language":
-    - button "English" [pressed]
-    - button "Japanese"
-- main:
-  - heading "Menu" [level=1]
-  - paragraph:
-    - text: Signed in as
-    - strong: Ichiro Tanaka
-    - text: (tanaka@example.com)
-  - paragraph: Review applications waiting for your decision.
-  - link "Pending approvals":
-    - /url: "#/approve"
-    - heading "Pending approvals" [level=2]
-    - text: "1"
-    - paragraph: Open the queue of applications awaiting your decision.
+- generic [ref=e2] [box=0,0,1280,721]:
+  - banner [ref=e3] [box=0,0,1280,57]:
+    - generic [ref=e4] [box=160,0,960,56]:
+      - link "Workflow App" [ref=e5] [cursor=pointer] [box=176,16,105,24]:
+        - /url: "#/menu"
+      - generic [ref=e6] [box=651,11,453,34]:
+        - generic [ref=e7] [box=651,13,154,30]:
+          - generic [ref=e8] [box=662,18,75,20]: Ichiro Tanaka
+          - generic [ref=e9] [box=744,19,49,18]: Approver
+        - button "Sign out" [ref=e10] [cursor=pointer] [box=817,12,76,32]
+        - generic [ref=e11] [box=904,11,200,34]:
+          - generic [ref=e12] [box=904,18,56,20]: Language
+          - group "Language" [ref=e13] [box=968,11,136,34]:
+            - button "English" [pressed] [ref=e14] [cursor=pointer] [box=969,12,61,32]
+            - button "Japanese" [ref=e15] [cursor=pointer] [box=1030,12,73,32]
+  - main [ref=e16] [box=0,57,1280,664]:
+    - generic [ref=e19] [box=176,81,928,353]:
+      - generic [ref=e20] [box=176,81,928,188]:
+        - heading "Menu" [level=1] [ref=e21] [box=176,81,928,42]
+        - paragraph [ref=e22] [box=176,169,928,21]:
+          - generic [ref=e23] [box=176,170,78,19]: Signed in as
+          - strong [ref=e24] [box=254,170,87,19]: Ichiro Tanaka
+          - generic [ref=e25] [box=346,170,144,19]: (tanaka@example.com)
+        - paragraph [ref=e26] [box=176,234,928,21]: Review applications waiting for your decision.
+      - link "Pending approvals" [ref=e28] [cursor=pointer] [box=176,285,928,149]:
+        - /url: "#/approve"
+        - generic [ref=e29] [box=201,310,878,42]:
+          - heading "Pending approvals" [level=2] [ref=e30] [box=201,310,168,30]
+          - generic [ref=e31] [box=1051,317,28,28]: "1"
+        - paragraph [ref=e32] [box=201,374,878,21]: Open the queue of applications awaiting your decision.
+*/}
+
+{/* annot:attributes
+button "Sign out":
+  type: button
 */}

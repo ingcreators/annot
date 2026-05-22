@@ -56,37 +56,62 @@ the decision terminal with an "approved" badge.
 <Transition trigger={{ role: "button", name: "Reject" }} on="rejected" to="OM-009" />
 
 {/* annot:snapshot
-id: approval-detail
-capturedBy: workflow-app-tour
-capturedAt: 2026-05-21T23:15:39.891Z
----
-- banner:
-  - link "Workflow App":
-    - /url: "#/menu"
-  - text: Ichiro Tanaka Approver
-  - button "Sign out"
-  - text: Language
-  - group "Language":
-    - button "English" [pressed]
-    - button "Japanese"
-- main:
-  - heading "Review application" [level=1]
-  - term: ID
-  - definition: APP-001
-  - term: Applicant
-  - definition: Taro Yamada (yamada@example.com)
-  - term: Category
-  - definition: Leave
-  - term: Amount
-  - definition: —
-  - term: Submitted at
-  - definition: May 19, 2026, 6:00 PM
-  - term: Reason
-  - definition: Annual leave for family event.
-  - text: Decision comment (Optional)
-  - textbox "Decision comment (Optional)":
-    - /placeholder: Add an optional comment that will be shown to the applicant.
-    - text: Approved — family event covered.
-  - button "Reject"
-  - button "Approve"
+- generic [ref=e2] [box=0,0,1280,721]:
+  - banner [ref=e3] [box=0,0,1280,57]:
+    - generic [ref=e4] [box=160,0,960,56]:
+      - link "Workflow App" [ref=e5] [cursor=pointer] [box=176,16,105,24]:
+        - /url: "#/menu"
+      - generic [ref=e6] [box=651,11,453,34]:
+        - generic [ref=e7] [box=651,13,154,30]:
+          - generic [ref=e8] [box=662,18,75,20]: Ichiro Tanaka
+          - generic [ref=e9] [box=744,19,49,18]: Approver
+        - button "Sign out" [ref=e10] [cursor=pointer] [box=817,12,76,32]
+        - generic [ref=e11] [box=904,11,200,34]:
+          - generic [ref=e12] [box=904,18,56,20]: Language
+          - group "Language" [ref=e13] [box=968,11,136,34]:
+            - button "English" [pressed] [ref=e14] [cursor=pointer] [box=969,12,61,32]
+            - button "Japanese" [ref=e15] [cursor=pointer] [box=1030,12,73,32]
+  - main [ref=e16] [box=0,57,1280,664]:
+    - generic [ref=e61] [box=396,81,488,578]:
+      - heading "Review application" [level=1] [ref=e63] [box=421,106,438,42]
+      - generic [ref=e64] [box=421,180,438,277]:
+        - generic [ref=e65] [box=422,181,436,45]:
+          - term [ref=e66] [box=438,193,131,21]: ID
+          - definition [ref=e67] [box=581,193,261,21]: APP-001
+        - generic [ref=e68] [box=422,226,436,46]:
+          - term [ref=e69] [box=438,239,131,21]: Applicant
+          - definition [ref=e70] [box=581,239,261,21]:
+            - text: Taro Yamada
+            - generic [ref=e71] [box=662,240,152,19]: (yamada@example.com)
+        - generic [ref=e72] [box=422,272,436,46]:
+          - term [ref=e73] [box=438,285,131,21]: Category
+          - definition [ref=e74] [box=581,285,261,21]: Leave
+        - generic [ref=e75] [box=422,318,436,46]:
+          - term [ref=e76] [box=438,331,131,21]: Amount
+          - definition [ref=e77] [box=581,331,261,21]: —
+        - generic [ref=e78] [box=422,364,436,46]:
+          - term [ref=e79] [box=438,377,131,21]: Submitted at
+          - definition [ref=e80] [box=581,377,261,21]: May 19, 2026, 6:00 PM
+        - generic [ref=e81] [box=422,410,436,46]:
+          - term [ref=e82] [box=438,423,131,21]: Reason
+          - definition [ref=e83] [box=581,423,261,21]: Annual leave for family event.
+      - generic [ref=e84] [box=421,473,438,105]:
+        - generic [ref=e85] [box=421,473,438,20]:
+          - text: Decision comment
+          - generic [ref=e86] [box=534,474,60,17]: (Optional)
+        - textbox "Decision comment (Optional)" [active] [ref=e87] [box=421,497,438,81]:
+          - /placeholder: Add an optional comment that will be shown to the applicant.
+          - text: Approved — family event covered.
+      - generic [ref=e88] [box=421,594,438,40]:
+        - button "Reject" [ref=e89] [cursor=pointer] [box=421,594,73,40]
+        - button "Approve" [ref=e90] [cursor=pointer] [box=771,594,88,40]
+*/}
+
+{/* annot:attributes
+textbox "Decision comment (Optional)":
+  placeholder: Add an optional comment that will be shown to the applicant.
+button "Reject":
+  type: button
+button "Approve":
+  type: button
 */}
