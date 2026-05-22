@@ -103,49 +103,63 @@ export function playwrightYamlToElementTree(opts: PlaywrightYamlToElementTreeOpt
 
     // Match the bullet, role, optional quoted name, the rest of the
     // line (which may contain bracket groups and/or a trailing `:`).
-    const head = rawLine.match(/^\s*-\s+([a-z]+)(?:\s+"((?:[^"\\]|\\.)*?)")?(.*?)\s*$/);
+    //
+    // Name uses the simple `"([^"]*)"` pattern (same as
+    // `parseSnapshot` in `@ingcreators/annot-product-docs/resolver.ts`)
+    // instead of the backslash-escape-aware
+    // `(?:[^"\\]|\\.)*?` form. The escape-aware version is
+    // polynomial under adversarial input (CodeQL flags it) and
+    // Playwright's aria-snapshot output empirically never escapes
+    // quotes inside names — it just doesn't emit names containing
+    // internal double-quotes.
+    const head = rawLine.match(/^\s*-\s+([a-z]+)(?:\s+"([^"]*)")?(.*?)\s*$/);
     if (!head) continue;
     const role = head[1] ?? "";
-    // Unescape any backslash-escapes Playwright emits in names.
-    const rawName = head[2];
-    const name = rawName !== undefined ? unescapeYamlString(rawName) : undefined;
+    const name = head[2];
     let rest = head[3] ?? "";
 
     const isContainer = /:$/.test(rest);
     if (isContainer) rest = rest.slice(0, -1);
 
-    // Extract bracket groups from `rest`. Each group is `[…]` with
-    // balanced inner content (no nested brackets in ariaSnapshot
-    // output).
-    const bracketRegex = /\[([^\]]+)\]/g;
+    // Bracket extraction uses three TARGETED patterns instead of a
+    // generic `\[([^\]]+)\]` walker. The `[^\]]+` form is polynomial
+    // under adversarial input (CodeQL flags it for the same reason
+    // `parseSnapshot` switched to targeted patterns). The targeted
+    // forms have bounded backtracking because their inner character
+    // classes exclude the literal `]` terminator AND restrict to a
+    // short whitelist.
     const states: string[] = [];
     let ref: string | undefined;
     let bbox: BBox | undefined;
-    let match: RegExpExecArray | null;
-    while ((match = bracketRegex.exec(rest)) !== null) {
-      const inner = match[1] ?? "";
-      const refMatch = inner.match(/^ref=(e\d+)$/);
-      if (refMatch) {
-        ref = refMatch[1];
-        continue;
-      }
-      const boxMatch = inner.match(
-        /^box=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)$/,
-      );
-      if (boxMatch) {
-        bbox = {
-          x: Number(boxMatch[1]),
-          y: Number(boxMatch[2]),
-          width: Number(boxMatch[3]),
-          height: Number(boxMatch[4]),
-        };
-        continue;
-      }
-      // Everything else is a state token (e.g. `active`, `level=1`,
-      // `valuetext="Hello"` — Playwright's mode "ai" emits these
-      // bracket-wrapped). We preserve them verbatim so downstream
-      // consumers can pattern-match.
-      states.push(inner);
+
+    const refMatch = rest.match(/\[ref=(e\d+)\]/);
+    if (refMatch) ref = refMatch[1];
+
+    const boxMatch = rest.match(
+      /\[box=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)\]/,
+    );
+    if (boxMatch) {
+      bbox = {
+        x: Number(boxMatch[1]),
+        y: Number(boxMatch[2]),
+        width: Number(boxMatch[3]),
+        height: Number(boxMatch[4]),
+      };
+    }
+
+    // Remaining brackets are state tokens (e.g. `active`,
+    // `disabled`, `level=2`). The restricted character class
+    // `[A-Za-z0-9_=,.\-]+` matches what Playwright actually emits
+    // and is linear-time (no `]` in the class).
+    const stateRegex = /\[([A-Za-z][A-Za-z0-9_=,.\-]*)\]/g;
+    let stateMatch: RegExpExecArray | null;
+    while ((stateMatch = stateRegex.exec(rest)) !== null) {
+      const token = stateMatch[1] ?? "";
+      // Skip `ref=…` and `box=…` since those are captured above; the
+      // bracket regex matches them too but their semantic slots are
+      // distinct from generic states.
+      if (token.startsWith("ref=") || token.startsWith("box=")) continue;
+      states.push(token);
     }
 
     const node: ElementNode = {
@@ -208,10 +222,6 @@ export function playwrightYamlToElementTree(opts: PlaywrightYamlToElementTreeOpt
     viewport: opts.viewport,
     root,
   };
-}
-
-function unescapeYamlString(s: string): string {
-  return s.replace(/\\(.)/g, "$1");
 }
 
 /**
