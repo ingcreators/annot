@@ -1,5 +1,14 @@
 # @ingcreators/annot-mcp
 
+## 0.3.1
+
+### Patch Changes
+
+- Updated dependencies [5778902]
+- Updated dependencies [96e7625]
+- Updated dependencies [85d40e6]
+  - @ingcreators/annot-product-docs@0.3.0
+
 ## 0.3.0
 
 ### Minor Changes
