@@ -21,7 +21,7 @@
 
 import { type ElementNode, type ElementTree, walkTree } from "@ingcreators/annot-core";
 
-import type { OverlayEntry } from "./annotations-yaml.js";
+import type { AnnotationSpec, OverlayEntry } from "./annotations-yaml.js";
 import { parseSnapshot, type SnapshotEntry } from "./resolver.js";
 import type { MatchKey, ScreenSpec } from "./types.js";
 
@@ -76,6 +76,28 @@ export interface DetectDriftOptions {
    * inert when this is set.
    */
   yamlOverlays?: readonly OverlayEntry[];
+  /**
+   * Phase 3d of `docs/plans/living-spec-authoring-roadmap.md`.
+   * Optional sibling to {@link yamlOverlays} for the Phase 3
+   * `annotations[]` palette (rect / circle / arrow / text /
+   * callout / freehand / redact / focusMask). The detector walks
+   * the match keys reachable from each variant via
+   * {@link collectMatchKeysFromAnnotation} and feeds them through
+   * the same match-cycle as the overlays (`removed` / `renamed` /
+   * `role-changed` / `duplicated`). Free-coord entries
+   * (`bbox` / `point` / `at` / `path` / `center`) contribute zero
+   * match keys and are silently skipped.
+   *
+   * `annotations[]` IDs are NEVER referenced from `<AnnotCallout for>`
+   * — they're self-contained visual marking — so no
+   * `description-missing` / `description-orphan` findings fire for
+   * this source.
+   *
+   * Findings from this source attach a `match` derived from the
+   * annotation entry so authors can trace which annotation's match
+   * key triggered the finding.
+   */
+  yamlAnnotations?: readonly AnnotationSpec[];
 }
 
 /**
@@ -93,7 +115,14 @@ export interface DetectDriftOptions {
  *   the next CI run.
  */
 export function detectDrift(opts: DetectDriftOptions): DriftFinding[] {
-  const { screen, liveSnapshot, storedAttributesYaml, freshAttributesYaml, yamlOverlays } = opts;
+  const {
+    screen,
+    liveSnapshot,
+    storedAttributesYaml,
+    freshAttributesYaml,
+    yamlOverlays,
+    yamlAnnotations,
+  } = opts;
   const findings: DriftFinding[] = [];
 
   // Phase 2c: when `yamlOverlays` is set, the screen has migrated
@@ -191,6 +220,81 @@ export function detectDrift(opts: DetectDriftOptions): DriftFinding[] {
     });
   }
 
+  // ── Phase 3d: annotations[] match-cycle ────────────────────
+
+  // Each yaml `AnnotationSpec` may reach 0+ MatchKeys via
+  // collectMatchKeysFromAnnotation. We run them through the same
+  // resolver as overlays (removed / renamed / role-changed /
+  // duplicated). Free-coord-only entries contribute nothing and
+  // pass through silently. Findings include the annotation id in
+  // the message so authors can trace which entry triggered each
+  // miss.
+  //
+  // Note: `annotations[]` IDs are NEVER referenced from
+  // <AnnotCallout for> (overlays[] owns that contract). The
+  // `description-missing` / `description-orphan` block below
+  // stays scoped to overlays[].
+  if (yamlAnnotations !== undefined) {
+    for (const spec of yamlAnnotations) {
+      for (const match of collectMatchKeysFromAnnotation(spec)) {
+        const hits = liveSnapshot.filter((e) => e.role === match.role && e.name === match.name);
+        if (hits.length > 1) {
+          findings.push({
+            severity: "error",
+            kind: "duplicated",
+            screenId: screen.id,
+            message: `Annotation ${spec.id}: multiple elements match role="${match.role}" name="${match.name}". Use \`under\` to disambiguate.`,
+            match,
+          });
+          continue;
+        }
+        if (hits.length === 1) continue;
+
+        // Zero hits — diagnose why.
+        const sameName = liveSnapshot.filter((e) => e.name === match.name);
+        if (sameName.length === 1 && sameName[0]!.role !== match.role) {
+          const target = sameName[0]!;
+          accountedFor.add(`${target.role}|${target.name}`);
+          findings.push({
+            severity: "warning",
+            kind: "role-changed",
+            screenId: screen.id,
+            message: `Annotation ${spec.id}: element with name="${match.name}" exists but has role="${target.role}", not "${match.role}".`,
+            match,
+            suggestion: { role: target.role },
+          });
+          continue;
+        }
+        const sameRole = liveSnapshot.filter((e) => e.role === match.role);
+        if (sameRole.length > 0) {
+          const closest = pickClosest(
+            match.name,
+            sameRole.map((e) => e.name),
+          );
+          if (closest) {
+            accountedFor.add(`${match.role}|${closest}`);
+            findings.push({
+              severity: "warning",
+              kind: "renamed",
+              screenId: screen.id,
+              message: `Annotation ${spec.id}: no element with role="${match.role}" name="${match.name}". Closest match: name="${closest}".`,
+              match,
+              suggestion: { name: closest },
+            });
+            continue;
+          }
+        }
+        findings.push({
+          severity: "error",
+          kind: "removed",
+          screenId: screen.id,
+          message: `Annotation ${spec.id}: no element with role="${match.role}" name="${match.name}".`,
+          match,
+        });
+      }
+    }
+  }
+
   // ── Phase 2c: description cross-refs (yaml id ↔ <AnnotCallout for>) ──
 
   if (yamlOverlays !== undefined) {
@@ -250,6 +354,8 @@ export function detectDriftFromYaml(args: {
   freshAttributesYaml?: string;
   /** Phase 2c. See {@link DetectDriftOptions.yamlOverlays}. */
   yamlOverlays?: readonly OverlayEntry[];
+  /** Phase 3d. See {@link DetectDriftOptions.yamlAnnotations}. */
+  yamlAnnotations?: readonly AnnotationSpec[];
 }): DriftFinding[] {
   return detectDrift({
     screen: args.screen,
@@ -257,6 +363,7 @@ export function detectDriftFromYaml(args: {
     storedAttributesYaml: args.storedAttributesYaml,
     freshAttributesYaml: args.freshAttributesYaml,
     yamlOverlays: args.yamlOverlays,
+    yamlAnnotations: args.yamlAnnotations,
   });
 }
 
@@ -308,6 +415,8 @@ export function detectDriftFromElementTree(args: {
   freshAttributesYaml?: string;
   /** Phase 2c. See {@link DetectDriftOptions.yamlOverlays}. */
   yamlOverlays?: readonly OverlayEntry[];
+  /** Phase 3d. See {@link DetectDriftOptions.yamlAnnotations}. */
+  yamlAnnotations?: readonly AnnotationSpec[];
 }): DriftFinding[] {
   return detectDrift({
     screen: args.screen,
@@ -315,6 +424,7 @@ export function detectDriftFromElementTree(args: {
     storedAttributesYaml: args.storedAttributesYaml,
     freshAttributesYaml: args.freshAttributesYaml,
     yamlOverlays: args.yamlOverlays,
+    yamlAnnotations: args.yamlAnnotations,
   });
 }
 
@@ -433,4 +543,46 @@ export function isLintableScreen(screen: ScreenSpec): boolean {
  */
 export function lintableScreens(screens: ScreenSpec[]): ScreenSpec[] {
   return screens.filter(isLintableScreen);
+}
+
+/**
+ * Walk an `AnnotationSpec` and emit every `MatchKey` reachable
+ * from its match-anchored fields. Free-coord variants
+ * (bbox-only rect / center-only circle / point-only arrow
+ * endpoint / `at`-only text / bbox-only callout target / freehand /
+ * bbox-only redact / bbox-only focusMask cutout) contribute zero
+ * keys.
+ *
+ * Phase 3d of `docs/plans/living-spec-authoring-roadmap.md`.
+ * Exposed publicly so callers (the CLI, alternative drift
+ * detectors, future editor surfaces) can resolve the match keys
+ * a Phase 3a `AnnotationSpec[]` exposes without duplicating the
+ * per-variant traversal.
+ */
+export function collectMatchKeysFromAnnotation(spec: AnnotationSpec): MatchKey[] {
+  switch (spec.kind) {
+    case "rect": {
+      if (spec.match) return [spec.match];
+      if (spec.coversElements) return [...spec.coversElements];
+      return [];
+    }
+    case "circle":
+      return spec.match ? [spec.match] : [];
+    case "arrow": {
+      const keys: MatchKey[] = [];
+      if ("match" in spec.from) keys.push(spec.from.match);
+      if ("match" in spec.to) keys.push(spec.to.match);
+      return keys;
+    }
+    case "text":
+      return spec.anchor ? [spec.anchor.match] : [];
+    case "callout":
+      return "match" in spec.target ? [spec.target.match] : [];
+    case "freehand":
+      return [];
+    case "redact":
+      return spec.match ? [spec.match] : [];
+    case "focusMask":
+      return "match" in spec.cutout ? [spec.cutout.match] : [];
+  }
 }

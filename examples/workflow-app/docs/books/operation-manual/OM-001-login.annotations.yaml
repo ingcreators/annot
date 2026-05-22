@@ -1,0 +1,53 @@
+version: 1
+overlays:
+  - id: o1
+    kind: numberedBadge
+    match:
+      role: textbox
+      name: Email
+    intent: required
+    number: 1
+  - id: o2
+    kind: numberedBadge
+    match:
+      role: textbox
+      name: Password
+    intent: required
+    number: 2
+  - id: o3
+    kind: numberedBadge
+    match:
+      role: button
+      name: Sign in
+    intent: action
+    number: 3
+annotations:
+  # Phase 3 dogfood — exercises the rect + arrow + focusMask
+  # palette members end-to-end through the workflow-app's
+  # Astro Image Service build.
+  - id: a1
+    kind: rect
+    coversElements:
+      - role: textbox
+        name: Email
+      - role: textbox
+        name: Password
+    intent: info
+  - id: a2
+    kind: arrow
+    from:
+      match:
+        role: textbox
+        name: Password
+    to:
+      match:
+        role: button
+        name: Sign in
+    intent: action
+  - id: a3
+    kind: focusMask
+    cutout:
+      match:
+        role: button
+        name: Sign in
+      padding: 12
