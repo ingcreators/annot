@@ -15,6 +15,8 @@ import {
 } from "@ingcreators/annot-annotator";
 import { test as base } from "@playwright/test";
 
+import { patchScreenshot } from "./screenshot-patch.js";
+
 /**
  * Minimal Playwright `Page` surface the fixture relies on. The full
  * `@playwright/test` `Page` type is much wider, but importing it
@@ -73,9 +75,20 @@ export interface PlaywrightAnnotator {
 }
 
 /**
- * `test = base.extend({ annotator })` — drop-in replacement for
- * `@playwright/test`'s `test` with an `annotator` fixture available
- * in every test.
+ * `test = base.extend({ annotator, page })` — drop-in replacement
+ * for `@playwright/test`'s `test` with:
+ *
+ * - an `annotator` fixture for the legacy
+ *   `annotator.annotateScreenshot(page, opts)` convenience;
+ * - a `page` fixture override that one-time-patches
+ *   `Page.prototype.screenshot` AND `Locator.prototype.screenshot`
+ *   per worker so calls carrying `annot: { ... }` run through the
+ *   patch pipeline in [`./screenshot-patch.ts`](./screenshot-patch.ts).
+ *
+ * The patch is idempotent (guarded by the `ANNOT_PATCHED` symbol
+ * exported from [`./screenshot-hooks.ts`](./screenshot-hooks.ts)),
+ * so multiple `test.extend({ page })` layers in the fixture chain
+ * coexist safely.
  */
 export const test = base.extend<{ annotator: PlaywrightAnnotator }>({
   // biome-ignore lint/correctness/noEmptyPattern: Playwright fixture signature requires the empty destructure.
@@ -86,6 +99,20 @@ export const test = base.extend<{ annotator: PlaywrightAnnotator }>({
       annotateScreenshot: (page: PageLike, opts: AnnotateScreenshotOptions) =>
         annotateScreenshot(raw, page, opts),
     });
+  },
+  page: async ({ page }, use) => {
+    patchScreenshot(
+      Object.getPrototypeOf(page) as { screenshot: (opts?: unknown) => Promise<Buffer> },
+    );
+    // Patch the Locator prototype too. `page.locator("html")`
+    // returns a real Locator regardless of whether `html` matches;
+    // we only need it for the prototype reference.
+    patchScreenshot(
+      Object.getPrototypeOf(page.locator("html")) as {
+        screenshot: (opts?: unknown) => Promise<Buffer>;
+      },
+    );
+    await use(page);
   },
 });
 

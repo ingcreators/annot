@@ -81,6 +81,7 @@
   "dependencies": {
     "@ingcreators/annot-annotator": "workspace:*",
     "@ingcreators/annot-core": "workspace:*",
+    "@ingcreators/annot-playwright": "workspace:*",
     "@ingcreators/annot-product-docs": "workspace:*"
   },
   "peerDependencies": {

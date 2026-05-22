@@ -31,6 +31,14 @@ import {
   createAnnotator,
 } from "@ingcreators/annot-annotator";
 import { writePngWithTagsOnly } from "@ingcreators/annot-core/xmp-bytes";
+// Side-effect import: pulls annot-playwright's module-augmentation
+// of `@playwright/test`'s screenshot options into scope. With the
+// Phase 1 relayer landed, annot-playwright owns the canonical
+// `annot?: AnnotScreenshotOptions` declaration on
+// `PageScreenshotOptions` / `LocatorScreenshotOptions` and exports
+// the base interface that this file's `AnnotScreenshotOptions`
+// extends.
+import type { AnnotScreenshotOptions as BaseAnnotOptions } from "@ingcreators/annot-playwright";
 import { test as base, captureScreen } from "@ingcreators/annot-product-docs";
 import type { Locator, Page } from "@playwright/test";
 
@@ -53,36 +61,29 @@ const ANNOT_PATCHED = Symbol.for("@ingcreators/annot:screenshot-patched");
  * `annot: true` / `annot: {}` is treated as a no-op shorthand — the
  * fixture detects no contribution and the screenshot falls through
  * to vanilla Playwright behaviour.
+ *
+ * Phase 1 of `docs/plans/playwright-screenshot-fixture-relayer.md`:
+ * `overlays` / `tags` / `editable` now live on annot-playwright's
+ * exported `AnnotScreenshotOptions`; this file extends that base
+ * with the MDX-aware `mdx` field via module augmentation so the
+ * `@playwright/test` option type — augmented once in
+ * annot-playwright — picks the field up for callers using this
+ * fixture's `test`.
  */
-export interface AnnotScreenshotOptions {
-  /** Refresh the MDX `annot:snapshot` block and resolve the
-   *  `<Screen id>`'s overlays. The MDX file is rewritten in-place
-   *  with the current page's aria-snapshot before overlays resolve.
-   */
-  mdx?: { id: string; path: string };
-  /** Caller-supplied annotations — merged with MDX-derived ones if
-   *  `mdx` is also set. Same DSL `@ingcreators/annot-annotator`
-   *  accepts. */
-  overlays?: BboxAnnotation[];
-  /** Provenance metadata written verbatim into the PNG's XMP. The
-   *  fixture adds no defaults; callers who want `WELL_KNOWN_TAG_KEYS`
-   *  (`source` / `screen` / `capturedAt` / `commit`) write them. */
-  tags?: Record<string, string>;
-  /** When `true` (default): annotations stored as SVG in XMP +
-   *  original capture embedded → re-editable in Annot Cloud. When
-   *  `false`: annotations baked into the visible pixels, no XMP
-   *  layer, no embedded original — flat PNG, no round-trip. */
-  editable?: boolean;
+declare module "@ingcreators/annot-playwright" {
+  interface AnnotScreenshotOptions {
+    /** Refresh the MDX `annot:snapshot` block and resolve the
+     *  `<Screen id>`'s overlays. The MDX file is rewritten in-place
+     *  with the current page's aria-snapshot before overlays resolve.
+     */
+    mdx?: { id: string; path: string };
+  }
 }
 
-declare module "@playwright/test" {
-  interface PageScreenshotOptions {
-    annot?: AnnotScreenshotOptions;
-  }
-  interface LocatorScreenshotOptions {
-    annot?: AnnotScreenshotOptions;
-  }
-}
+/** Back-compat re-export of the (now augmented) interface from
+ *  annot-playwright. Existing callers that imported
+ *  `AnnotScreenshotOptions` from this package keep working. */
+export type AnnotScreenshotOptions = BaseAnnotOptions;
 
 /**
  * Idempotent prototype patch — wrap `screenshot` to intercept the

@@ -362,6 +362,9 @@ importers:
       '@ingcreators/annot-annotator':
         specifier: workspace:*
         version: link:../annotator
+      '@ingcreators/annot-core':
+        specifier: workspace:*
+        version: link:../core
     devDependencies:
       '@playwright/test':
         specifier: ^1.50.0
@@ -442,6 +445,9 @@ importers:
       '@ingcreators/annot-core':
         specifier: workspace:*
         version: link:../core
+      '@ingcreators/annot-playwright':
+        specifier: workspace:*
+        version: link:../playwright
       '@ingcreators/annot-product-docs':
         specifier: workspace:*
         version: link:../product-docs
