@@ -15,6 +15,7 @@ import {
   type BboxNumberedBadgeAnnotation,
   bboxAnnotationsToSvg,
 } from "@ingcreators/annot-annotator";
+import { type ElementTree, walkTree } from "@ingcreators/annot-core";
 
 import { parseMdxFile } from "./mdx.js";
 import type { OverlaySpec } from "./types.js";
@@ -61,6 +62,38 @@ export function parseSnapshotBoxes(yaml: string): BoxedEntry[] {
       },
     });
   }
+  return out;
+}
+
+/**
+ * Convert an `ElementTree` (Phase 1a of
+ * `docs/plans/living-spec-authoring-roadmap.md`) into the same
+ * `BoxedEntry[]` shape `parseSnapshotBoxes` emits, so the Astro
+ * Image Service + Playwright screenshot hook can resolve
+ * `<Overlay match>` against PNG XMP-stored trees with no
+ * additional code path.
+ *
+ * Only nodes with both `name` and `bbox` populated produce
+ * entries — matches the legacy YAML parser's filter (boxed +
+ * referenced entries with a name). Decorative containers and
+ * synthetic roots are skipped.
+ *
+ * Phase 1h of the roadmap. Lives alongside `parseSnapshotBoxes`
+ * so consumers that prefer one input shape don't need to know
+ * about the other.
+ */
+export function elementTreeToBoxedEntries(tree: ElementTree): BoxedEntry[] {
+  const out: BoxedEntry[] = [];
+  walkTree(tree, (node) => {
+    if (!node.bbox) return;
+    if (!node.name) return;
+    out.push({
+      role: node.role,
+      name: node.name,
+      ref: node.ref,
+      box: node.bbox,
+    });
+  });
   return out;
 }
 

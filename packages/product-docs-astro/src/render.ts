@@ -22,8 +22,10 @@
 import { readFile } from "node:fs/promises";
 import { dirname, isAbsolute, resolve } from "node:path";
 import { createAnnotator } from "@ingcreators/annot-annotator";
+import { readElementTreePng } from "@ingcreators/annot-core";
 import {
   buildBadgeAnnotations,
+  elementTreeToBoxedEntries,
   emptyAnnotationsSvg,
   type ParsedMdx,
   parseMdxFile,
@@ -150,7 +152,25 @@ export async function renderAnnotatedScreen(
   const baseBytes =
     options.basePngBytes ?? (await loadBasePng(parsed, screen.src, dirname(mdxAbs)));
   const dims = readPngDimensions(baseBytes);
-  const bboxes = parseSnapshotBoxes(parsed.commentBlocks.snapshot ?? "");
+  // Prefer the canonical `annot:elementTree` PNG XMP chunk (Phase
+  // 1d) when present — that's where post-migration PNGs carry
+  // their boxed elements. Fall back to the legacy
+  // `annot:snapshot` MDX comment block for pre-migration files.
+  // Phase 1i deletes the comment-block path once every consumer
+  // has migrated.
+  let bboxes: ReturnType<typeof parseSnapshotBoxes>;
+  let bboxSource: "elementTreeXmp" | "legacySnapshotBlock";
+  const elementTree = safeReadElementTree(baseBytes);
+  if (elementTree) {
+    bboxes = elementTreeToBoxedEntries(elementTree);
+    bboxSource = "elementTreeXmp";
+  } else {
+    bboxes = parseSnapshotBoxes(parsed.commentBlocks.snapshot ?? "");
+    bboxSource = "legacySnapshotBlock";
+  }
+  // `bboxSource` is reserved for future telemetry; suppress the
+  // unused-var diagnostic without changing the variable shape.
+  void bboxSource;
   const annotations = buildBadgeAnnotations(screen.overlays, bboxes, dims);
 
   let result: Uint8Array;
@@ -218,6 +238,21 @@ function normaliseEditable(
 }
 
 // ─── helpers ───────────────────────────────────────────────────
+
+/**
+ * Tolerant wrapper around `readElementTreePng`: returns null when
+ * the PNG carries no chunk, when the chunk is malformed, or when
+ * the schema version is unrecognised. The Astro Image Service
+ * MUST keep producing a result regardless of XMP state — failing
+ * the build for a stale chunk would be hostile to migration.
+ */
+function safeReadElementTree(bytes: Uint8Array): ReturnType<typeof readElementTreePng> | null {
+  try {
+    return readElementTreePng(bytes);
+  } catch {
+    return null;
+  }
+}
 
 async function loadBasePng(
   _parsed: ParsedMdx,

@@ -8,6 +8,7 @@ import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createAnnotator } from "@ingcreators/annot-annotator";
+import { writeElementTreePng } from "@ingcreators/annot-core";
 import { readEditablePngBytes } from "@ingcreators/annot-core/xmp-bytes";
 
 import { describe, expect, it } from "vitest";
@@ -216,6 +217,104 @@ describe("renderAnnotatedScreen", () => {
         editable: true,
       });
       expect(editable2.fromCache).toBe(true);
+    });
+  });
+
+  // Phase 1h of `docs/plans/living-spec-authoring-roadmap.md` —
+  // when the base PNG carries an `annot:elementTree` XMP chunk, the
+  // renderer prefers it over the legacy `annot:snapshot` MDX
+  // comment block. This is the path that lights up after the
+  // `annot-docs migrate-to-element-tree` CLI runs.
+  describe("ElementTree XMP path (Phase 1h)", () => {
+    it("reads bboxes from PNG XMP when the MDX has no snapshot block", async () => {
+      const { mdxPath, pngBytes } = await makeFixture("");
+      const pngPath = join(mdxPath, "..", "shot.png");
+      // Stamp an annot:elementTree chunk onto the PNG with bboxes
+      // that match the MDX overlay's role+name.
+      const withTree = writeElementTreePng(new Uint8Array(pngBytes), {
+        version: 1,
+        source: { kind: "playwright", capturedAt: "2026-05-23T00:00:00Z" },
+        viewport: { width: 400, height: 300, scale: 1 },
+        root: {
+          ref: "e0",
+          role: "main",
+          children: [
+            {
+              ref: "e1",
+              role: "textbox",
+              name: "Email",
+              bbox: { x: 20, y: 40, width: 200, height: 30 },
+            },
+            {
+              ref: "e2",
+              role: "button",
+              name: "Sign in",
+              bbox: { x: 150, y: 100, width: 80, height: 30 },
+            },
+          ],
+        },
+      });
+      await writeFile(pngPath, withTree);
+      const result = await renderAnnotatedScreen({ mdxPath, screenId: "login" });
+      expect(result.hadBoundingBoxes).toBe(true);
+      expect(Array.from(result.bytes.slice(0, 8))).toEqual(PNG_MAGIC);
+    });
+
+    it("prefers XMP elementTree over MDX comment block when both are present", async () => {
+      // MDX has a snapshot block with WRONG coordinates; PNG XMP
+      // has RIGHT coordinates. The renderer should produce
+      // annotated output matching the XMP-driven path.
+      const snapshotBlock = `{/* annot:snapshot
+- textbox "Email" [ref=e1] [box=999,999,1,1]
+- button "Sign in" [ref=e9] [box=999,999,1,1]
+*/}`;
+      const { mdxPath, pngBytes } = await makeFixture(snapshotBlock);
+      const pngPath = join(mdxPath, "..", "shot.png");
+      const withTree = writeElementTreePng(new Uint8Array(pngBytes), {
+        version: 1,
+        source: { kind: "playwright", capturedAt: "2026-05-23T00:00:00Z" },
+        viewport: { width: 400, height: 300, scale: 1 },
+        root: {
+          ref: "e0",
+          role: "main",
+          children: [
+            {
+              ref: "e1",
+              role: "textbox",
+              name: "Email",
+              bbox: { x: 20, y: 40, width: 200, height: 30 },
+            },
+            {
+              ref: "e2",
+              role: "button",
+              name: "Sign in",
+              bbox: { x: 150, y: 100, width: 80, height: 30 },
+            },
+          ],
+        },
+      });
+      await writeFile(pngPath, withTree);
+
+      const withXmp = await renderAnnotatedScreen({ mdxPath, screenId: "login" });
+
+      // Render again from a PNG without XMP — the MDX block's
+      // bad bboxes are used. Output should differ from the XMP
+      // path (the bboxes are wildly different).
+      const { mdxPath: mdxPath2, pngBytes: pngBytes2 } = await makeFixture(snapshotBlock);
+      await writeFile(join(mdxPath2, "..", "shot.png"), pngBytes2);
+      const withoutXmp = await renderAnnotatedScreen({ mdxPath: mdxPath2, screenId: "login" });
+
+      expect(Array.from(withXmp.bytes)).not.toEqual(Array.from(withoutXmp.bytes));
+    });
+
+    it("falls back to legacy snapshot block when PNG has no XMP", async () => {
+      const snapshotBlock = `{/* annot:snapshot
+- textbox "Email" [ref=e1] [box=20,40,200,30]
+*/}`;
+      const { mdxPath } = await makeFixture(snapshotBlock);
+      // PNG has no elementTree chunk — renderer falls back to MDX.
+      const result = await renderAnnotatedScreen({ mdxPath, screenId: "login" });
+      expect(result.hadBoundingBoxes).toBe(true);
     });
   });
 });
