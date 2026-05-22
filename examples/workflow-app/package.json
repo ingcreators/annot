@@ -2,7 +2,7 @@
   "name": "@ingcreators/workflow-app-example",
   "version": "0.0.0",
   "private": true,
-  "description": "Workflow approval SPA example exercising @ingcreators/annot-product-docs + -astro end-to-end. Standalone — NOT a workspace package; cd here and run `npm install` before `npm run dev`. Phase 1 of docs/plans/workflow-app-example.md ships the scaffold (router + i18n + shell); subsequent phases fill in screens, MDX, the docs site, and the Playwright tour.",
+  "description": "Workflow approval SPA example exercising @ingcreators/annot-product-docs + -astro end-to-end. Standalone — NOT a workspace package; cd here and run `npm install` before `npm run dev`. See docs/plans/_done/workflow-app-example.md for the build history.",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -15,7 +15,8 @@
     "lit": "^3.2.0"
   },
   "devDependencies": {
-    "@ingcreators/annot-playwright": "^0.3.0",
+    "@ingcreators/annot-product-docs": "^0.2.0",
+    "@ingcreators/annot-product-docs-astro": "^0.2.0",
     "@playwright/test": "^1.50.0",
     "@types/node": "^22.10.0",
     "typescript": "^5.7.0",

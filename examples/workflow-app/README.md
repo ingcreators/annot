@@ -43,12 +43,11 @@ examples/workflow-app/
       operation-manual/    # 10 MDX files (cover + OM-001..OM-009)
       screen-design/       #  9 MDX files (cover + SD-001..SD-008)
   docs-site/               # Astro 5 docs site (Phase 5)
-    package.json           # Separate npm project
-    astro.config.mjs
+    package.json           # Separate npm project (depends on @ingcreators/annot-product-docs-astro)
+    astro.config.mjs       # mdx() + productDocsIntegration() + ssr.noExternal for the components
     src/
       content.config.ts    # Glob loaders for both books
       layouts/DocsLayout.astro
-      _components/         # Local vendored <Screen>/<Overlay>/<Transition>
       pages/
         index.astro                          # Landing
         operation-manual/index.astro         # Book TOC
@@ -107,42 +106,28 @@ npm run docs:sync
 ```
 
 `docs:sync` runs Playwright against the SPA (Vite is started
-automatically via the config's `webServer` block) and:
+automatically via the config's `webServer` block) and, per
+screen:
 
-1. Captures a fresh `docs-site/public/shots/<id>.png` per screen.
-2. Captures Playwright's `body.ariaSnapshot()` YAML and inlines
-   it into every MDX that contains a `<Screen id="<id>">`,
-   replacing the `{/* annot:snapshot */}` marker with a freshly-
-   timestamped YAML block.
+1. Writes a fresh `docs-site/public/shots/<id>.png`.
+2. Calls `captureScreen()` from
+   [`@ingcreators/annot-product-docs`](https://www.npmjs.com/package/@ingcreators/annot-product-docs)
+   once per matching MDX (one per book) to refresh the file's
+   `annot:snapshot` (Playwright `aria-snapshot` YAML with
+   `[ref=eN]` + `[box=x,y,w,h]` markers) and
+   `annot:attributes` (per-`<Overlay>` HTML attribute
+   whitelist) comment blocks in-place.
 
-Behaviour matches the upstream
-[`@ingcreators/annot-product-docs`](https://www.npmjs.com/package/@ingcreators/annot-product-docs)
-`screen.capture` fixture but is rolled locally in
-`tests/docs/tour-helpers.ts` while the upstream `0.1.0`
-publish is missing its `dist/` (fix at the source in
-[annot#947](https://github.com/ingcreators/annot/pull/947)).
-Once `0.1.1` republishes, the tour migrates to
-`import { test } from "@ingcreators/annot-product-docs"`
-+ `screen.capture({ id, mdxPath })`.
-
-## Upstream-publish blocker
-
-The npm-published `@ingcreators/annot-product-docs@0.1.0` and
-`-astro@0.1.0` tarballs are missing their `dist/` directory
-(fixed at the source by
-[#947](https://github.com/ingcreators/annot/pull/947); needs a
-`0.1.1` republish before consumers can pull them).
-
-Workarounds in this example until `0.1.1` lands:
-
-- `annot-docs.config.ts` is a plain object literal instead of
-  using `defineConfig` — the runtime CLI's Zod schema validates
-  the same shape either way.
-- `docs-site/astro.config.mjs` aliases
-  `@ingcreators/annot-product-docs-astro/components/*.astro` to
-  vendored copies under `docs-site/src/_components/`. The MDX
-  `import` statements stay unchanged — only the resolution
-  changes. Drop the alias block once the package republishes.
+The per-screen → MDX mapping lives in
+[`tests/docs/tour-helpers.ts`](./tests/docs/tour-helpers.ts).
+Future direction: the unified one-call
+`page.screenshot({ annot: { mdx: { id, path } } })` API from
+[`@ingcreators/annot-product-docs-astro/playwright`](https://www.npmjs.com/package/@ingcreators/annot-product-docs-astro)
+will collapse the screenshot + capture pair into a single
+call once the package's `0.2.1` publishes (the playwright
+subpath's runtime entry isn't built into the `0.2.0`
+tarball — single-entry `vite.config.ts` bug, follow-up
+fix lands separately).
 
 ## CI
 
@@ -164,9 +149,7 @@ The example is designed to fork directly:
    chapters that describe YOUR app.
 5. Edit `tests/docs/{applicant,approver}-flow.spec.ts` to
    walk YOUR happy paths — the `capture(page, { id })`
-   helper still does the screenshot + MDX rewrite work for
-   free.
-6. After `@ingcreators/annot-product-docs@0.1.1`
-   republishes, drop the local `tour-helpers.ts` + the
-   Astro alias workaround in favour of the upstream
-   `screen.capture` fixture.
+   helper does the screenshot + MDX rewrite work for free.
+6. Update `SCREEN_TO_MDX` in
+   `tests/docs/tour-helpers.ts` to map each of YOUR screen
+   ids to the per-book MDX file(s) the tour should refresh.

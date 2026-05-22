@@ -62,36 +62,49 @@ A `<span class="wf-badge" data-testid="menu-pending-count">`
 inside the card shows `pendingApprovals().length`.
 
 {/* annot:snapshot
-id: menu-applicant
-capturedBy: workflow-app-tour
-capturedAt: 2026-05-21T23:15:39.039Z
----
-- banner:
-  - link "Workflow App":
-    - /url: "#/menu"
-  - text: Taro Yamada Applicant
-  - button "Sign out"
-  - text: Language
-  - group "Language":
-    - button "English" [pressed]
-    - button "Japanese"
-- main:
-  - heading "Menu" [level=1]
-  - paragraph:
-    - text: Signed in as
-    - strong: Taro Yamada
-    - text: (yamada@example.com)
-  - paragraph: Submit a new application or review past ones.
-  - link "New application":
-    - /url: "#/apply"
-    - heading "New application" [level=2]
-    - paragraph: Start a new leave / expense / purchase application.
-  - heading "My applications" [level=2]
-  - list:
-    - listitem:
-      - strong: APP-001
-      - text: Leave May 19, 2026, 6:00 PM Submitted
-    - listitem:
-      - strong: APP-003
-      - text: Purchase May 17, 2026, 8:45 PM Rejected
+- generic [ref=e2] [box=0,0,1280,721]:
+  - banner [ref=e3] [box=0,0,1280,57]:
+    - generic [ref=e4] [box=160,0,960,56]:
+      - link "Workflow App" [ref=e5] [cursor=pointer] [box=176,16,105,24]:
+        - /url: "#/menu"
+      - generic [ref=e6] [box=652,11,452,34]:
+        - generic [ref=e36] [box=652,13,153,30]:
+          - generic [ref=e37] [box=663,18,72,20]: Taro Yamada
+          - generic [ref=e38] [box=743,19,50,18]: Applicant
+        - button "Sign out" [ref=e39] [cursor=pointer] [box=817,12,76,32]
+        - generic [ref=e7] [box=904,11,200,34]:
+          - generic [ref=e8] [box=904,18,56,20]: Language
+          - group "Language" [ref=e9] [box=968,11,136,34]:
+            - button "English" [pressed] [ref=e10] [cursor=pointer] [box=969,12,61,32]
+            - button "Japanese" [ref=e11] [cursor=pointer] [box=1030,12,73,32]
+  - main [ref=e12] [box=0,57,1280,664]:
+    - generic [ref=e42] [box=176,81,928,575]:
+      - generic [ref=e43] [box=176,81,928,188]:
+        - heading "Menu" [level=1] [ref=e44] [box=176,81,928,42]
+        - paragraph [ref=e45] [box=176,169,928,21]:
+          - generic [ref=e46] [box=176,170,78,19]: Signed in as
+          - strong [ref=e47] [box=254,170,84,19]: Taro Yamada
+          - generic [ref=e48] [box=342,170,152,19]: (yamada@example.com)
+        - paragraph [ref=e49] [box=176,234,928,21]: Submit a new application or review past ones.
+      - link "New application" [ref=e51] [cursor=pointer] [box=176,285,928,149]:
+        - /url: "#/apply"
+        - heading "New application" [level=2] [ref=e52] [box=201,310,878,30]
+        - paragraph [ref=e53] [box=201,374,878,21]: Start a new leave / expense / purchase application.
+      - generic [ref=e54] [box=176,450,928,206]:
+        - heading "My applications" [level=2] [ref=e55] [box=176,450,928,30]
+        - list [ref=e56] [box=176,508,928,148]:
+          - listitem [ref=e57] [box=176,508,928,70]:
+            - generic [ref=e58] [box=193,521,527,44]:
+              - strong [ref=e59] [box=193,521,527,21]: APP-001
+              - generic [ref=e60] [box=193,544,527,21]: Leave
+            - generic [ref=e61] [box=732,533,264,21]: May 19, 2026, 6:00 PM
+            - generic [ref=e62] [box=1008,530,79,26]: Submitted
+          - listitem [ref=e63] [box=176,586,928,70]:
+            - generic [ref=e64] [box=193,599,534,44]:
+              - strong [ref=e65] [box=193,599,534,21]: APP-003
+              - generic [ref=e66] [box=193,622,534,21]: Purchase
+            - generic [ref=e67] [box=739,611,267,21]: May 17, 2026, 8:45 PM
+            - generic [ref=e68] [box=1019,608,68,26]: Rejected
 */}
+
+{/* annot:attributes */}
