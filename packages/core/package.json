@@ -30,6 +30,8 @@
     "./headless": "./src/headless.ts",
     "./editor": "./src/editor/index.ts",
     "./editor/*": "./src/editor/*.ts",
+    "./element-tree": "./src/element-tree/index.ts",
+    "./element-tree/*": "./src/element-tree/*.ts",
     "./icons": "./src/icons/index.ts",
     "./icons/*": "./src/icons/*.ts",
     "./xmp": "./src/xmp/xmp-browser.ts",
@@ -75,12 +77,14 @@
     "bench:quantize": "node --experimental-strip-types --no-warnings scripts/bench-quantize.ts"
   },
   "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
     "@types/pako": "^2.0.4",
     "typescript": "catalog:",
     "vite": "catalog:",
     "vite-plugin-dts": "^5.0.1"
   },
   "dependencies": {
+    "js-yaml": "^4.1.1",
     "pako": "^2.1.0"
   }
 }

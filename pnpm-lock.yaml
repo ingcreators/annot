@@ -101,10 +101,16 @@ importers:
 
   packages/core:
     dependencies:
+      js-yaml:
+        specifier: ^4.1.1
+        version: 4.1.1
       pako:
         specifier: ^2.1.0
         version: 2.1.0
     devDependencies:
+      '@types/js-yaml':
+        specifier: ^4.0.9
+        version: 4.0.9
       '@types/pako':
         specifier: ^2.0.4
         version: 2.0.4
