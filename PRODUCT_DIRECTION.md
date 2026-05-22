@@ -47,6 +47,21 @@ We are committing to three adjacent growth vectors:
    `@ingcreators/annot-product-docs-astro` +
    `@ingcreators/annot-product-docs-xlsx`.
 
+   **Next evolution: visual authoring.** The pipeline above
+   produces annotated docs but requires IDE access for editing
+   (MDX `<Overlay>` JSX). The strategic next step makes Annot
+   itself the visual authoring surface: PNG → click an element
+   → add a numbered callout with description text → save → docs
+   site updates. With embedded editing in Phase 5 (annot-cloud
+   GitHub App-backed), the docs site visitor edits in-place and
+   commits land via PR. This positions Annot as the canonical
+   editor for screen specifications (画面仕様書), a category
+   no existing product (VitePress / Mintlify / Notion / Figma)
+   covers end-to-end. See
+   [`docs/plans/living-spec-authoring-roadmap.md`](./docs/plans/living-spec-authoring-roadmap.md)
+   for the 6-phase roadmap, the 3-layer artifact model (Image /
+   Annotation / Description), and the OSS / annot-cloud split.
+
 Vectors 1 + 2 are in production; vector 3 (Phases 1-5 + 7 landed
 2026-05-21) is the strategic shift this document captures.
 
