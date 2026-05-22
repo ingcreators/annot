@@ -19,6 +19,8 @@
 // `annot docs sync` runs `captureScreen` against the same MDX to
 // fix the auto-fixable subset.
 
+import { type ElementNode, type ElementTree, walkTree } from "@ingcreators/annot-core";
+
 import { parseSnapshot, type SnapshotEntry } from "./resolver.js";
 import type { MatchKey, OverlaySpec, ScreenSpec } from "./types.js";
 
@@ -194,6 +196,61 @@ export function detectDriftFromYaml(args: {
   return detectDrift({
     screen: args.screen,
     liveSnapshot: parseSnapshot(args.liveSnapshotYaml),
+    storedAttributesYaml: args.storedAttributesYaml,
+    freshAttributesYaml: args.freshAttributesYaml,
+  });
+}
+
+/**
+ * Convert an `ElementTree` (Phase 1a of
+ * `docs/plans/living-spec-authoring-roadmap.md`) into the
+ * `SnapshotEntry[]` shape the drift detector consumes. Pure data
+ * transform — walks the tree depth-first, emits one entry per node
+ * that has both `role` and `name` (decorative containers and
+ * synthetic roots are skipped, matching the legacy parser's filter).
+ *
+ * Phase 1i. Exposed for tests + callers that want to construct
+ * adapters in front of the existing `detectDrift` API without
+ * paying the YAML detour.
+ */
+export function elementTreeToSnapshotEntries(tree: ElementTree): SnapshotEntry[] {
+  const out: SnapshotEntry[] = [];
+  walkTree(tree, (node, parents) => {
+    if (!node.role || !node.name) return;
+    out.push({
+      role: node.role,
+      name: node.name,
+      ref: node.ref,
+      depth: parents.length,
+      ancestors: parents
+        .filter((p): p is ElementNode & { name: string } => typeof p.name === "string")
+        .map((p) => ({ role: p.role, name: p.name })),
+    });
+  });
+  return out;
+}
+
+/**
+ * Drift detection driven by an `ElementTree` (the canonical
+ * screen-capture model from Phase 1a) instead of the legacy
+ * YAML-parsed `SnapshotEntry[]`. Internally converts the tree
+ * via `elementTreeToSnapshotEntries` and dispatches to
+ * `detectDrift` — both paths produce identical findings for
+ * equivalent inputs.
+ *
+ * Phase 1i. Lets the CLI's `lint` flow consume the new PNG XMP
+ * `annot:elementTree` chunk directly (via `readElementTreePng`)
+ * without round-tripping through Playwright YAML.
+ */
+export function detectDriftFromElementTree(args: {
+  screen: ScreenSpec;
+  liveElementTree: ElementTree;
+  storedAttributesYaml?: string;
+  freshAttributesYaml?: string;
+}): DriftFinding[] {
+  return detectDrift({
+    screen: args.screen,
+    liveSnapshot: elementTreeToSnapshotEntries(args.liveElementTree),
     storedAttributesYaml: args.storedAttributesYaml,
     freshAttributesYaml: args.freshAttributesYaml,
   });

@@ -1,6 +1,28 @@
 # Living-spec visual authoring roadmap
 
-> **Status:** In progress — Phase 1 implementation started 2026-05-23.
+> **Status:** Phase 1 land-staging in progress — Phase 1 sub-phases 1a–1i
+> all landed 2026-05-23 as the additive migration path:
+> [annot#970](https://github.com/ingcreators/annot/pull/970) (1a) /
+> [#971](https://github.com/ingcreators/annot/pull/971) (1b) /
+> [#972](https://github.com/ingcreators/annot/pull/972) (1c) /
+> [#973](https://github.com/ingcreators/annot/pull/973) (1d) /
+> [#974](https://github.com/ingcreators/annot/pull/974) (1e) /
+> [#975](https://github.com/ingcreators/annot/pull/975) (1f) /
+> [#976](https://github.com/ingcreators/annot/pull/976) (1g) /
+> [#977](https://github.com/ingcreators/annot/pull/977) (1h) /
+> 1i (this PR).
+>
+> The plan's original 1i goal — destructive removal of `PageMetadata` /
+> `PageElement` / `parseSnapshot` / `collectAttributesYaml` — is
+> intentionally **deferred to a follow-up cleanup PR**. Doing it in
+> step with the additive migration would have required coordinated
+> changes across ~15 files (extension capture pipeline, desktop
+> click-hotkey, editor session, host-ui plumbing) that don't fit
+> the "each sub-phase as an independent revertable PR" landing
+> shape. The follow-up is tracked as a sequel cleanup once
+> downstream consumers have switched to `readElementTreePng` +
+> `detectDriftFromElementTree`.
+>
 > Original plan body below was written 2026-05-22 as the synthesis of a long
 > design discussion that started from
 > [`playwright-screenshot-fixture-relayer.md`](./_done/playwright-screenshot-fixture-relayer.md)'s
