@@ -4,6 +4,9 @@ import {
   type AttachAttributesLocator,
   type AttachAttributesPage,
   attachAttributes,
+  type CaptureElementTreeLocator,
+  type CaptureElementTreePage,
+  captureElementTree,
   playwrightYamlToElementTree,
 } from "./element-tree-adapter.js";
 
@@ -181,5 +184,93 @@ describe("attachAttributes", () => {
     const page = pageWith({});
     const result = await attachAttributes(tree, page, { whitelist: [] });
     expect(result).toBe(tree);
+  });
+});
+
+describe("captureElementTree", () => {
+  function makePage(opts: {
+    yaml: string;
+    viewport?: { width: number; height: number } | null;
+    url?: string;
+    resolvers?: Record<string, { count: number; attrs: Record<string, string> }>;
+  }): CaptureElementTreePage {
+    const rootLocator: CaptureElementTreeLocator = {
+      ariaSnapshot: async () => opts.yaml,
+    };
+    return {
+      viewportSize: () => opts.viewport ?? null,
+      url: () => opts.url ?? "https://example.test/",
+      locator: () => rootLocator,
+      getByRole: (role, byRoleOpts) => {
+        const key = `${role}|${byRoleOpts.name}`;
+        const spec = opts.resolvers?.[key];
+        const locator: AttachAttributesLocator = {
+          count: async () => spec?.count ?? 0,
+          evaluate: async <R>() => (spec?.attrs ?? {}) as R,
+        };
+        return locator;
+      },
+    };
+  }
+
+  it("composes ariaSnapshot + adapter into an ElementTree", async () => {
+    const page = makePage({
+      yaml: "- main [ref=e1]",
+      viewport: { width: 800, height: 600 },
+      url: "https://example.test/login",
+    });
+    const tree = await captureElementTree(page);
+    expect(tree.root.role).toBe("main");
+    expect(tree.viewport).toEqual({ width: 800, height: 600, scale: 1 });
+    expect(tree.source.url).toBe("https://example.test/login");
+    expect(tree.source.kind).toBe("playwright");
+  });
+
+  it("attaches attributes when whitelist is set", async () => {
+    const page = makePage({
+      yaml: '- textbox "Email" [ref=e1]',
+      viewport: { width: 1024, height: 768 },
+      resolvers: {
+        "textbox|Email": { count: 1, attrs: { type: "email", required: "" } },
+      },
+    });
+    const tree = await captureElementTree(page, { attributeWhitelist: ["type", "required"] });
+    expect(tree.root.attributes).toEqual({ type: "email", required: "" });
+  });
+
+  it("skips attribute attachment when whitelist is empty", async () => {
+    const page = makePage({
+      yaml: '- textbox "Email" [ref=e1]',
+      viewport: { width: 1024, height: 768 },
+      resolvers: {
+        "textbox|Email": { count: 1, attrs: { type: "email" } },
+      },
+    });
+    const tree = await captureElementTree(page, { attributeWhitelist: [] });
+    expect(tree.root.attributes).toBeUndefined();
+  });
+
+  it("falls back to 0x0 viewport when page.viewportSize returns null", async () => {
+    const page = makePage({
+      yaml: "- main [ref=e1]",
+      viewport: null,
+    });
+    const tree = await captureElementTree(page);
+    expect(tree.viewport).toEqual({ width: 0, height: 0, scale: 1 });
+  });
+
+  it("uses the override url/agent/capturedAt when provided", async () => {
+    const page = makePage({
+      yaml: "- main [ref=e1]",
+      viewport: { width: 100, height: 100 },
+    });
+    const tree = await captureElementTree(page, {
+      url: "https://override.example/x",
+      agent: "captureElementTree-test@1",
+      capturedAt: "2026-05-23T00:00:00Z",
+    });
+    expect(tree.source.url).toBe("https://override.example/x");
+    expect(tree.source.agent).toBe("captureElementTree-test@1");
+    expect(tree.source.capturedAt).toBe("2026-05-23T00:00:00Z");
   });
 });
