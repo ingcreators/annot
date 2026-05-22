@@ -60,6 +60,7 @@ export { parseMdx, parseMdxFile, updateCommentBlocks } from "./mdx.js";
 export type { BoxedEntry } from "./mdx-annotations.js";
 export {
   buildBadgeAnnotations,
+  elementTreeToBoxedEntries,
   emptyAnnotationsSvg,
   parseSnapshotBoxes,
   resolveMdxAnnotations,
