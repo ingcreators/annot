@@ -89,41 +89,30 @@ When the stored snapshot lacks `[box=x,y,w,h]` markers (no
 Playwright tour has run yet), the function returns the base
 PNG verbatim with `hadBoundingBoxes: false`.
 
-## Playwright fixture (`/playwright` subpath)
+## Migration — Playwright fixture moved
 
-For Playwright specs producing screenshots of a documented
-screen, the `./playwright` subpath ships an extended `test`
-fixture that intercepts `page.screenshot()` and
-`locator.screenshot()`. Calls carrying a compositional
-`annot: { mdx | overlays | tags | editable }` option get a
-one-line capture pipeline that replaces the previous
-`page.screenshot` + `screen.capture` + `renderAnnotatedScreen`
-+ `writeFile` quartet:
+> The Playwright fixture that previously lived at
+> `@ingcreators/annot-product-docs-astro/playwright` moved out
+> of this package as part of
+> [`docs/plans/_done/playwright-screenshot-fixture-relayer.md`](https://github.com/ingcreators/annot/blob/main/docs/plans/_done/playwright-screenshot-fixture-relayer.md)
+> (Phases 1–4). Code authoring a Playwright spec should pick
+> one of the two canonical homes:
 
-```ts
-import { test } from "@ingcreators/annot-product-docs-astro/playwright";
+| Use case | Import |
+|---|---|
+| Living-product-docs tour (MDX-linked `annot.mdx`) | `import { test } from "@ingcreators/annot-product-docs";` |
+| VRT specs / marketing screenshots / AI agent flows (no MDX) | `import { test } from "@ingcreators/annot-playwright";` |
 
-test("app overview", async ({ page }) => {
-  await page.goto("https://annot.work/app/");
-  await page.screenshot({
-    path: "public/app/shots/app-overview.png",
-    annot: {
-      mdx: { id: "app-overview", path: "src/content/docs/app/index.mdx" },
-      tags: { source: "docs-tour", capturedAt: new Date().toISOString() },
-    },
-  });
-});
-```
+The `@ingcreators/annot-product-docs-astro/playwright` subpath
+remains as a deprecated re-export so existing callers still
+compile; it emits a `DeprecationWarning` at import time and
+will be removed in `@ingcreators/annot-product-docs-astro@0.5.0`.
+`@playwright/test` is no longer a peer dep of this package —
+the canonical homes carry the relationship now.
 
-Calls without `annot` (or with `annot: true` / `{}`) fall
-through to vanilla Playwright byte-for-byte — codegen-emitted
-calls keep working unedited. See the docs at
-[`annot.work/docs/product-docs/playwright-fixture/`](https://annot.work/docs/product-docs/playwright-fixture/)
-for the compositional vocabulary, locator screenshot semantics,
-and the codegen→hand-edit workflow.
-
-`@playwright/test` is an **optional peer** — Astro-only users
-don't need to install it.
+`renderAnnotatedScreen` (the Astro Image Service) lives on as
+the build-time renderer for the `<Screen>` block; this section
+isn't going anywhere.
 
 ## Tier
 

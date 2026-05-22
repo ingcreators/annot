@@ -1,10 +1,11 @@
 # Re-layer the `page.screenshot({ annot })` fixture into the right packages
 
-> **Status:** Draft — written 2026-05-22 during a Q&A session that
-> exposed an architectural mismatch in
-> [`_done/playwright-screenshot-annot-fixture.md`](./_done/playwright-screenshot-annot-fixture.md).
-> Subsequently positioned as **Phase 0 of
-> [`living-spec-authoring-roadmap.md`](./living-spec-authoring-roadmap.md)**
+> **Status:** Done — landed across PRs #962 / #963 / #964 / #966
+> on 2026-05-22 (Phases 1–4) + a docs / plan-archive PR for
+> Phase 5. Replaces the original implementation in
+> [`playwright-screenshot-annot-fixture.md`](./playwright-screenshot-annot-fixture.md).
+> Positioned as **Phase 0 of
+> [`living-spec-authoring-roadmap.md`](../living-spec-authoring-roadmap.md)**
 > — the relayer's hook-registry mechanism (`annotSourceResolvers`)
 > is the foundation that later phases (annotation yaml resolver,
 > palette extension, editor integration, embedded editor) all
@@ -38,7 +39,7 @@
 ## TL;DR
 
 The `page.screenshot({ annot: { … } })` prototype patch landed by
-[`_done/playwright-screenshot-annot-fixture.md`](./_done/playwright-screenshot-annot-fixture.md)
+[`playwright-screenshot-annot-fixture.md`](./playwright-screenshot-annot-fixture.md)
 currently lives at
 [`packages/product-docs-astro/src/playwright/fixture.ts`](../../packages/product-docs-astro/src/playwright/fixture.ts).
 The Astro package is the wrong home for it:
@@ -956,10 +957,10 @@ Actions workflow.
 ## References
 
 - Parent plan that landed the original implementation:
-  [`_done/playwright-screenshot-annot-fixture.md`](./_done/playwright-screenshot-annot-fixture.md)
-- Underlying annotator: [`_done/annot-annotator-package.md`](./_done/annot-annotator-package.md)
-- Existing annot-playwright fixture: [`_done/annot-playwright-fixture.md`](./_done/annot-playwright-fixture.md)
+  [`playwright-screenshot-annot-fixture.md`](./playwright-screenshot-annot-fixture.md)
+- Underlying annotator: [`annot-annotator-package.md`](./annot-annotator-package.md)
+- Existing annot-playwright fixture: [`annot-playwright-fixture.md`](./annot-playwright-fixture.md)
 - Living product docs platform (defines annot-product-docs +
-  annot-product-docs-astro): [`_done/living-product-docs.md`](./_done/living-product-docs.md)
+  annot-product-docs-astro): [`living-product-docs.md`](./living-product-docs.md)
 - Editable PNG (consumed by `editable: true` path):
-  [`_done/editable-png-from-annotator.md`](./_done/editable-png-from-annotator.md)
+  [`editable-png-from-annotator.md`](./editable-png-from-annotator.md)
