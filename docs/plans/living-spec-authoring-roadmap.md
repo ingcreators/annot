@@ -366,38 +366,132 @@ the registry, every new field on `AnnotScreenshotOptions` would
 require modifying the top-level patch — exactly the wrong shape
 for a multi-phase evolution.
 
-### Phase 1 — PNG XMP snapshot/attributes cache
+### Phase 1 — Unified `ElementTree` data model + PNG XMP storage
 
-**Goal**: Move `annot:snapshot` and `annot:attributes` blocks
-from MDX comment blocks to PNG XMP. MDX retains its blocks for
-backward compatibility during transition.
+**Goal**: Introduce a single source-agnostic `ElementTree` type
+as the canonical representation of "what's on this page",
+replacing both today's parallel paths (extension's
+`PageMetadata` flat list, Playwright's `ariaSnapshot` YAML +
+`annot:attributes` block). Stored in PNG XMP as a single
+`annot:elementTree` payload. Consumed uniformly by editor /
+Astro / drift detector / MCP tools.
 
-**Files added**:
+**Why this scope**: Earlier draft of this roadmap planned to
+cache the raw Playwright YAML and the attributes YAML
+separately in PNG XMP (mirroring the existing MDX comment
+blocks). Subsequent design discussion surfaced that the
+extension's `PageMetadata` and Playwright's snapshot are
+**conceptually the same data with different shapes**, kept
+apart by implementation accident. With the extension's schema
+breakable (`PageMetadata` is acknowledged "first cut"),
+Phase 1's right scope is to converge both paths onto a single
+canonical model, eliminating the duplication at the root.
 
-- `packages/core/src/xmp-bytes/snapshot-fields.ts` — Tier A. Type definitions for `SnapshotXmp` / `AttributesXmp` payloads + reader / writer functions. Reuses existing iTXt encoder.
-- `packages/playwright/src/snapshot-writer.ts` — fixture writes PNG XMP at capture time, populates `snapshot` / `attributes` fields from the same `ariaSnapshot()` call that today writes to MDX comment blocks.
+#### Canonical schema
 
-**Files modified**:
+`@ingcreators/annot-core/element-tree` (Tier A, new):
 
-- `packages/product-docs/src/fixture.ts` — `captureScreen()` writes BOTH PNG XMP (new) AND MDX comment blocks (existing). Dual-write during transition.
-- `packages/product-docs-astro/src/render.ts` — `renderAnnotatedScreen()` reads snapshot from PNG XMP if present, falls back to MDX comment block. Build-time logging notes which source was used.
+```ts
+export interface ElementTree {
+  version: 1;
+  source: {
+    kind: "extension" | "playwright" | (string & {});
+    capturedAt: string;          // ISO 8601
+    agent?: string;               // tool name + version
+    url?: string;                 // captured page URL
+  };
+  viewport: {
+    width: number;                // CSS px
+    height: number;
+    scale: number;                // devicePixelRatio
+  };
+  root: ElementNode;
+}
 
-**CLI additions**:
+export interface ElementNode {
+  /** ARIA role. Always present — decorative nodes use "generic" or "presentation". */
+  role: string;
+  /** Accessible name. */
+  name?: string;
+  /** Page-space bounding box in CSS px. Omitted for hidden/abstract nodes. */
+  bbox?: BBox;
+  /** Tree-unique identifier, `e<n>` format (depth-first numbering).
+   *  Stable within one capture; not stable across re-captures (see OQ-11). */
+  ref: string;
+  /** ARIA states (single tokens): "checked" / "pressed" / "expanded" /
+   *  "selected" / "disabled" / "required" / "invalid" / "level=2" /
+   *  "valuetext=10" / etc. */
+  states?: readonly string[];
+  /** HTML attribute snapshot (whitelist-filtered at capture time). */
+  attributes?: Readonly<Record<string, string>>;
+  /** Direct text content (heading body, paragraph text, textbox value).
+   *  Distinct from `name` for elements where they differ. */
+  text?: string;
+  /** Children in document order. */
+  children?: readonly ElementNode[];
+}
 
-- `annot-docs migrate-snapshots-to-png` — walk all `<Screen src>` references in MDX bundle. For each, find the PNG, copy its `annot:snapshot` and `annot:attributes` content from the MDX comment block to PNG XMP. Idempotent.
+export interface BBox { x: number; y: number; width: number; height: number; }
+```
 
-**Schema versioning**: PNG XMP gets `snapshot-version: 1` and
-`attributes-version: 1` fields so future schema changes can be
-detected.
+#### Sub-phases
 
-**Verification**: dual-write means existing MDX builds unchanged.
-Migration CLI tested with workflow-app's 17 MDX files. After
-migration, deleting MDX comment blocks should produce
-byte-identical Astro builds (snapshot read from PNG instead).
+| Sub | Output | Scope |
+|---|---|---|
+| **1a** | `ElementTree` types + YAML/JSON serializers + walk/find/flatten utilities in `@ingcreators/annot-core/element-tree` | New Tier A package surface. Pure data, no DOM. Vitest unit tests for round-trip + walk semantics. |
+| **1b** | Playwright adapter — `@ingcreators/annot-playwright/element-tree-adapter.ts`. Converts `ariaSnapshot({ mode: "ai", boxes: true })` YAML into ElementTree. Integrates HTML attribute collection (per-element `locator.evaluate`) into the same conversion, eliminating the separate attributes-yaml step. | Replaces `parseSnapshot` from `@ingcreators/annot-product-docs/resolver.ts` and `collectAttributesYaml` from `@ingcreators/annot-product-docs/fixture.ts`. |
+| **1c** | Extension MAIN-world walker rewrite — `packages/extension/src/background/element-tree-walker.ts`. Walks DOM, produces ElementTree directly. **Breaking change**: removes `PageMetadata` / `PageElement` types from `@ingcreators/annot-core/storage`. | Editor's Elements panel adapts (see 1f). External plugin consumers of `PageMetadata` (none known) would need migration; tracked in changesets. |
+| **1d** | PNG XMP read/write for `annot:elementTree` — `@ingcreators/annot-core/xmp-bytes` extension. iTXt chunk with `compressionFlag=1` (deflate) since ElementTree YAML is large. Schema version dispatch in the reader. | Wire-format spec documented in `docs/svg-format.md` companion page (or new `docs/element-tree.md`). |
+| **1e** | Capture-time integration — extension capture path + Playwright `productDocs.sync` (renamed `screen.capture`, per relayer Phase 3) both write `annot:elementTree` to PNG XMP. The legacy `annot:snapshot` / `annot:attributes` MDX comment blocks are **no longer written**. | Migration CLI for existing MDX (see 1g). |
+| **1f** | Editor's Elements panel migration — `packages/host-ui/src/elements-panel.ts` (or equivalent) reads ElementTree from the host's current image record, renders a hierarchical tree view (replaces today's flat list). Click-to-locate works the same. | UX upgrade — tree view matches DOM mental model. Storybook stories updated. |
+| **1g** | Migration CLI — `annot-docs migrate-to-element-tree`. Walks every MDX with `<Screen src>`. For each: (1) parse the legacy `annot:snapshot` + `annot:attributes` comment blocks; (2) convert to ElementTree (best-effort, preserving role/name/bbox/states/attributes); (3) write to the referenced PNG's XMP; (4) remove the MDX comment blocks. Idempotent. | One-time-per-repo migration. Audit log emitted to stderr. |
+| **1h** | Astro Image Service migration — `@ingcreators/annot-product-docs-astro/src/render.ts`'s `renderAnnotatedScreen` reads ElementTree from PNG XMP instead of MDX comment blocks. `<Overlay match>` (or post-Phase-2: annotation yaml `match`) resolves against ElementTree. | Pixel-identical output before/after migration (verified against workflow-app's 17 MDX). |
+| **1i** | Drift detector migration — `@ingcreators/annot-product-docs/drift.ts` consumes ElementTree directly. Snapshot drift + attribute drift unified into one detector walk. **`parseSnapshot` removed**, **`PageMetadata` removed**, **`collectAttributesYaml` removed**. | All legacy adapter code paths are gone after this sub-phase. Single canonical model on every consumer. |
 
-**Out of scope for Phase 1**: removing MDX comment block
-support. That happens in a follow-up after the transition
-period (1-2 release cycles).
+Sub-phases 1a–1c can be a single landing PR (the schema break);
+1d onward are individually shippable.
+
+#### Files added
+
+- `packages/core/src/element-tree/types.ts` — `ElementTree` / `ElementNode` / `BBox` (1a)
+- `packages/core/src/element-tree/yaml.ts` — `serializeElementTreeToYaml` / `parseElementTreeFromYaml` (1a)
+- `packages/core/src/element-tree/json.ts` — `serializeElementTreeToJson` / `parseElementTreeFromJson` (1a)
+- `packages/core/src/element-tree/walk.ts` — `walkTree` / `findByRef` / `findByMatch` / `flattenTree` (1a)
+- `packages/core/src/element-tree/index.ts` — public surface re-exports (1a)
+- `packages/playwright/src/element-tree-adapter.ts` — `playwrightYamlToElementTree` + attribute collection integration (1b)
+- `packages/extension/src/background/element-tree-walker.ts` — MAIN-world walker producing ElementTree (1c)
+- `packages/core/src/xmp-bytes/element-tree-payload.ts` — XMP iTXt encoder/decoder for `annot:elementTree` (1d)
+- `packages/product-docs/src/cli/migrate-to-element-tree.ts` — migration CLI command (1g)
+- `docs/element-tree.md` — wire format + adapter contract specification
+
+#### Files removed (breaking changes)
+
+- `packages/core/src/storage/PageMetadata.ts` — replaced by `ElementTree` (1c)
+- `packages/product-docs/src/resolver.ts:parseSnapshot` — replaced by ElementTree walk (1i)
+- `packages/product-docs/src/fixture.ts:collectAttributesYaml` — integrated into Playwright adapter (1b)
+- MDX `annot:snapshot` / `annot:attributes` comment block writers (existed in `@ingcreators/annot-product-docs`'s `captureScreen`) — readers stay in migration CLI only (1e)
+
+#### `package.json` changes
+
+- `@ingcreators/annot-core` bump to next minor (breaking change in `storage` subpath — `PageMetadata` removed)
+- `@ingcreators/annot-playwright` bump (adapter added, no breaking removals)
+- `@ingcreators/annot-product-docs` bump to next minor (parseSnapshot / collectAttributesYaml removed)
+- `@ingcreators/annot-product-docs-astro` bump (consumer migration)
+- Changeset describes the breaking changes and migration steps
+
+#### Verification
+
+- **Schema round-trip**: any ElementTree serializes to YAML / JSON and parses back to byte-identical structure
+- **Playwright adapter parity**: an existing Playwright snapshot YAML (e.g. from workflow-app fixtures) converts to ElementTree and back to byte-equivalent YAML
+- **Extension adapter parity**: an extension capture on a known fixture page produces an ElementTree with the same elements as today's `PageMetadata` (modulo ordering — tree vs flat)
+- **Migration CLI**: workflow-app's 17 MDX files migrate cleanly. PNG bytes change (XMP added) but Astro builds produce identical visual output
+- **Drift detector**: unified detector reports the same findings as today's two separate detectors on the same fixtures
+
+#### Out of scope for Phase 1
+
+- Cross-capture `ref` stability (refs are transient per capture). Tracked in OQ-11.
+- Locator field for Playwright extension handoff (P5's old `locator?: string` aspiration). Reserved for future phase if Playwright integration in editor needs it.
+- Attribute whitelist per role (e.g. only collect `type/required/maxlength` on `textbox`, only `href` on `link`). Phase 1 keeps the global whitelist; per-role whitelisting is a Phase 2 follow-up if collection size becomes a problem.
 
 ### Phase 2 — Annotation yaml extraction + `<Description>` JSX
 
@@ -744,6 +838,43 @@ is more accurate and admits the `newTab` default that better
 fits Enterprise deployments. See **OQ-09** for the rationale
 behind making `newTab` the default and `inline` an opt-in.
 
+### AD-09: `ElementTree` is the canonical screen-capture model
+
+A single Tier A `ElementTree` type in
+`@ingcreators/annot-core/element-tree` represents "what's on
+this page" across every capture source (browser extension,
+Playwright, future Figma / screen recorder / OCR-derived).
+Source-specific adapters convert raw outputs to ElementTree at
+capture time. Downstream consumers (editor, Astro Image
+Service, drift detector, annotation `match` resolver, MCP
+tools) read only ElementTree.
+
+This consolidates two previously parallel paths:
+
+- Extension MAIN-world walker produced a flat `PageMetadata`
+  list with role / name / bbox per element
+- Playwright `ariaSnapshot({ mode: "ai", boxes: true })`
+  produced a YAML tree with role / name / states / bbox / ref,
+  parsed by a Playwright-specific `parseSnapshot` helper, with
+  HTML attributes collected separately as a sibling
+  `annot:attributes` YAML block
+
+The two paths held the same information in incompatible shapes,
+kept apart by implementation accident. Phase 1 of this roadmap
+replaces both with ElementTree. PRODUCT_DIRECTION P5 is rewritten
+to reflect the new canonical model.
+
+Key shape decisions:
+
+- **Tree, not flat list.** Reflects DOM parent-child relationships and matches what consumers (editor sidebar, drift detector subtree comparison) naturally want.
+- **`ref` is required, `e<n>` format.** Stable within one capture; not stable across re-captures (drift detection uses `match: { role, name }` for cross-capture identity — see OQ-11).
+- **`states` is a string array, not a brackets-merged token blob.** Cleanly separable for diff: today Playwright's YAML mixes `[active] [ref=e21] [box=...]` in one bracket group; the ElementTree separates them.
+- **`attributes` lives on each node**, eliminating the parallel `annot:attributes` YAML. The single tree carries all the per-element data.
+
+The user authorized breaking `PageMetadata` to make this
+consolidation possible. Phase 1's first three sub-phases land
+as a single PR because the schema break is atomic.
+
 ## Open Questions
 
 ### OQ-01: Annotation yaml schema versioning policy
@@ -891,6 +1022,67 @@ Enterprise tier (per `annot-cloud-roadmap.md`) effectively
 guarantees. The OSS component still ships both modes; Enterprise
 config (`embedMode: "newTab"` enforced server-side) gates the
 choice.
+
+### OQ-10: ElementTree canonical serialization — YAML or JSON?
+
+Phase 1d stores ElementTree in PNG XMP. Two serialization
+candidates:
+
+- **(a) YAML** — `compressionFlag=1` (deflate) keeps size manageable. Human-readable when manually inspecting PNG XMP via `exiftool -annot:elementTree login.png`. Matches today's Playwright `ariaSnapshot` aesthetic. Whitespace-sensitive parsing.
+- **(b) JSON** — More compact (no indentation overhead). Parse-efficient. Unambiguous. Less human-readable in raw form.
+- **(c) Both, selectable** — Writer defaults to YAML; reader accepts both. Allows JSON-preferring tools without forcing YAML on every consumer.
+
+**Recommended:** (a) YAML as the canonical wire format, with
+`@ingcreators/annot-core/element-tree/yaml.ts` as the
+authoritative serializer.
+
+Reasons:
+
+1. **Human-readability matters for debug**: PNG XMP gets
+   inspected via tools (`exiftool`, our own `annot show-xmp`
+   CLI). YAML is readable; JSON in raw form is wall-of-text.
+2. **Diff-friendly via git textconv hook**: a future
+   `git diff --textconv` for `.png` files that extracts the
+   ElementTree benefits from line-based YAML over
+   pretty-printed JSON.
+3. **Compression evens out the size difference**: ElementTree
+   YAML has high token repetition (role / name / bbox keys);
+   deflate compresses it well. The raw-size delta against JSON
+   is small post-compression.
+4. **Parse cost is negligible**: ElementTree per page is
+   ~1-50 KB. YAML parsing at this scale is sub-millisecond
+   even in Node.
+
+JSON is still exported by the serializer module
+(`serializeElementTreeToJson`) for callers who want it
+(MCP tool payloads, AI agent prompts, in-memory snapshotting).
+Just not the on-disk canonical.
+
+### OQ-11: `ref` stability across re-captures
+
+ElementTree's `ref: "e<n>"` is depth-first-counted at capture
+time. Re-running the capture produces the same numbering for a
+structurally-identical page, but adding or removing a single
+element shifts every ref after it. This makes ref unsuitable
+as a cross-capture identity for annotations.
+
+Options for cross-capture identity:
+
+- **(a) Accept ref as transient.** Annotation yaml's `match: { role, name }` is the cross-capture identity. Ref is only meaningful within a single ElementTree instance.
+- **(b) Anchor refs to (role, name, parent-path).** Compute ref as a hash of the element's accessibility location. Stable across captures iff the element's role / name / DOM position is stable.
+- **(c) Carry stable IDs from the page itself.** Use HTML `id` / `data-testid` / `data-annot-id` attributes when present. Falls back to (a) when absent.
+
+**Recommended:** (a) for v1.
+
+Reasons:
+
+1. **Annotation yaml already uses `match`**: the cross-capture identity problem is solved at the annotation layer. Adding a parallel cross-capture identity in ElementTree is over-engineering.
+2. **(b) is brittle in practice**: name-based hashes break on translation (i18n), on small UI text changes (".. submit" → "... submit"), and on accessible-name resolution differences across browsers.
+3. **(c) is good but additive**: a future Phase 2.5 could add `stableId?: string` to ElementNode as an opt-in for pages with `data-testid` discipline. Doesn't conflict with (a).
+
+Drift detection works against `match` lookups, not ref. The ref's
+job is purely "address this node within this tree" — sufficient
+for the editor's hotspot rendering and within-capture diagnostics.
 
 ## Discarded alternatives
 

@@ -112,13 +112,44 @@ be added without touching consumers.
 When `StorageProvider` needs new methods, add them as **optional** so
 existing implementations keep working until they opt in.
 
-### P5. DOM metadata is a future locator bridge
+### P5. `ElementTree` is the canonical screen-capture data model
 
-`PageMetadata` / `PageElement` captured by the extension today will,
-in the Playwright integration, be produced from `locator.boundingBox()`
-instead. Keep the schema **additive**: new fields OK, removal or
-semantic change NOT OK. Plan for a future `locator?: string` field
-that the headless side populates.
+A single Tier A `ElementTree` type in
+`@ingcreators/annot-core/element-tree` represents "what's on this
+page" across every capture source — the browser extension's
+MAIN-world walker, Playwright's `ariaSnapshot`, and future
+adapters (Figma export, screen-recorder OCR, etc.). Source-
+specific adapters convert their raw outputs to ElementTree at
+capture time; downstream consumers (editor's Elements panel,
+annotation `match` resolver, drift detector, Astro Image Service,
+MCP tools) read only the canonical form.
+
+The tree carries:
+
+- ARIA `role` + accessible `name`
+- Page-space `bbox`
+- ARIA `states` (checked / pressed / expanded / level / etc.)
+- HTML `attributes` (whitelist-filtered at capture)
+- Per-node `ref` (`e<n>`, stable within one capture)
+- Direct `text` content
+- Recursive `children`
+
+Schema rules:
+
+- New fields are additive
+- Field renames or semantic changes require an explicit migration plan
+- `ref` scheme stays `e<n>` for cross-source compatibility
+- Wire format is YAML (canonical, stored in PNG XMP iTXt chunks
+  with deflate compression). JSON serialization available for
+  in-memory / MCP / AI agent use.
+
+The legacy `PageMetadata` / `PageElement` types (extension's
+"first cut" flat list) and the parallel `parseSnapshot` /
+`annot:attributes` Playwright path are replaced by ElementTree
+in Phase 1 of
+[`docs/plans/living-spec-authoring-roadmap.md`](./docs/plans/living-spec-authoring-roadmap.md).
+That phase is the breaking-change consolidation; new
+"additive-only" forward starts after it lands.
 
 ### P6. Public API surface is explicit
 
