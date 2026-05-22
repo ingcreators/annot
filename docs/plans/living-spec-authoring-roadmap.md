@@ -1,6 +1,6 @@
 # Living-spec visual authoring roadmap
 
-> **Status:** Phase 1 + Phase 2 both landed 2026-05-23.
+> **Status:** Phase 1 + Phase 2 + Phase 3 all landed 2026-05-23.
 >
 > Phase 1 sub-phases 1a–1i:
 > [#970](https://github.com/ingcreators/annot/pull/970) /
@@ -27,11 +27,24 @@
 > [#982](https://github.com/ingcreators/annot/pull/982) (2b — `<AnnotCallout>` + `<Screen annotations>` prop + yaml-driven Image Service) /
 > [#983](https://github.com/ingcreators/annot/pull/983) (2c — drift detector cross-refs + `lint --check-descriptions`) /
 > [#984](https://github.com/ingcreators/annot/pull/984) (2d — `annot-docs migrate-overlays-to-annotations` CLI) /
-> 2e (this PR — soft-deprecation shim for inline `<Overlay>`).
+> [#985](https://github.com/ingcreators/annot/pull/985) (2e — soft-deprecation shim for inline `<Overlay>`).
 >
 > Phase 2e closes Phase 2. Removal of the legacy `<Overlay>` JSX
 > is a separate PR scheduled per OQ-08 (~2-3 release cycles
 > after 2e). Until then both forms work end-to-end.
+>
+> Phase 3 sub-phases 3a–3d (decomposition: [#986](https://github.com/ingcreators/annot/pull/986)):
+> [#987](https://github.com/ingcreators/annot/pull/987) (3a — annotation yaml `AnnotationSpec` palette schema) /
+> [#988](https://github.com/ingcreators/annot/pull/988) (3b — annotator `freehand` + `focusMask` DSL primitives) /
+> [#989](https://github.com/ingcreators/annot/pull/989) (3c — `buildShapeAnnotationsFromYaml` + Image Service composition) /
+> [#990](https://github.com/ingcreators/annot/pull/990) (3d — drift `yamlAnnotations` + xlsx yaml-driven rows + workflow-app dogfood).
+>
+> Phase 3 ships the full annotation palette (rect / circle /
+> arrow / text / callout / freehand / redact / focusMask) as
+> additive yaml + Image Service composition on top of Phase 2's
+> overlay foundation. Mosaic / blur redact reserved for a
+> follow-up (needs raster pixel access; SVG-fragment Image
+> Service can't express them).
 >
 > Original plan body below was written 2026-05-22 as the synthesis of a long
 > design discussion that started from
