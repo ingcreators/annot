@@ -127,13 +127,13 @@ same names when present):
 ### From a Playwright test
 
 For Playwright specs producing screenshots of a documented
-screen, the `@ingcreators/annot-product-docs-astro/playwright`
-subpath ships an extended `test` fixture that bundles the whole
-flow (refresh MDX snapshot → take raw screenshot → bake editable
-PNG → write to disk) into one `page.screenshot()` call:
+screen, the `@ingcreators/annot-product-docs` package ships an
+extended `test` fixture that bundles the whole flow (refresh
+MDX snapshot → take raw screenshot → bake editable PNG → write
+to disk) into one `page.screenshot()` call:
 
 ```ts
-import { test } from "@ingcreators/annot-product-docs-astro/playwright";
+import { test } from "@ingcreators/annot-product-docs";
 
 test("app overview", async ({ page }) => {
   await page.goto("https://annot.work/app/");
@@ -146,6 +146,10 @@ test("app overview", async ({ page }) => {
   });
 });
 ```
+
+If you don't need MDX-linked screenshots, swap the import to
+`@ingcreators/annot-playwright` — same `annot: { overlays, tags,
+editable }` surface, no Astro / MDX dependency.
 
 The `annot` option is compositional — `mdx` / `overlays` / `tags`
 / `editable` are independent fields, each contributing to a

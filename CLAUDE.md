@@ -97,22 +97,34 @@ packages/
                 npm name: @ingcreators/annot-annotator
                 (published 2026-05-19; current 0.3.0)
   playwright/   Playwright fixture composing `annot-annotator` into
-                idiomatic `test.extend({ annotator })` form.
-                Callers `import { test, expect, rectForBoundingBox
-                } from "@ingcreators/annot-playwright"` and gain
-                `annotator.annotateScreenshot(page, { annotationsSvg
-                })` — dimensions read from the PNG IHDR chunk so
+                idiomatic `test.extend({ annotator })` form +
+                shipping the canonical `page.screenshot({ annot:
+                { … } })` prototype patch. Callers `import { test,
+                expect, rectForBoundingBox } from
+                "@ingcreators/annot-playwright"` and gain both
+                `annotator.annotateScreenshot(page, { … })` AND
+                `page.screenshot({ annot: { overlays, tags,
+                editable } })` / `locator.screenshot({ annot: { … }
+                })`. The patch falls through byte-for-byte when
+                `annot` is absent, so Playwright Codegen output
+                works unedited. Dimensions read from PNG IHDR so
                 clipped + full-page captures both work.
                 `@playwright/test` declared as `peerDependencies`.
-                Three pure SVG-fragment helpers
-                (`rectForBoundingBox` / `arrowBetween` / `textAt`)
-                composable via string concatenation. Tier C
-                (Playwright runtime), but Tier A for the helpers.
-                Currently `private: true`; same Phase 3 publish
-                gate. See
-                `docs/plans/_done/annot-playwright-fixture.md`.
+                The generic patch is extensible via the
+                `annotSourceResolvers` module-level registry —
+                downstream packages (`@ingcreators/annot-product-docs`
+                for MDX, hypothetical Figma / Sentry adapters)
+                push resolvers that claim extra `annot.*` fields
+                via `prepare()` (pre-screenshot side effects) +
+                `resolveAnnotations(dims)` (post-screenshot
+                page-space annotations). Three pure SVG-fragment
+                helpers (`rectForBoundingBox` / `arrowBetween` /
+                `textAt`) composable via string concatenation.
+                Tier C (Playwright runtime); helpers are Tier A.
+                See `docs/plans/_done/annot-playwright-fixture.md`
+                + `docs/plans/_done/playwright-screenshot-fixture-relayer.md`.
                 npm name: @ingcreators/annot-playwright
-                (published 2026-05-19; current 0.3.0)
+                (published 2026-05-19; current 0.4.0)
   mcp/          Model Context Protocol stdio server exposing the
                 headless annotator as agent-callable tools. Nine
                 tools at current: the five annotation /
@@ -146,25 +158,34 @@ packages/
                 frontmatter; match resolver (`parseSnapshot` /
                 `resolveMatch`) for Playwright aria-snapshot
                 YAML honouring `match.under` disambiguation;
-                Playwright `screen` fixture
-                (`screen.capture({ id, mdxPath })`) that
+                Playwright `productDocs` fixture
+                (`productDocs.sync({ id, mdxPath })`) that
                 re-syncs `annot:snapshot` + `annot:attributes`
                 comment blocks in place via the byte-stable
-                `updateCommentBlocks` rewriter; drift detector
-                (`detectDrift` / `detectDriftFromYaml`) emitting
-                six finding kinds (added / removed / renamed /
-                role-changed / duplicated / attribute-drift)
-                with severity-bucket exit-code logic; `annot
-                docs` CLI (`init` / `sync` / `lint`) with
-                `--ci` / `--json` / `--fix` flags + sample
-                GitHub Actions workflow that converts drift
-                JSON into per-line `core.warning` annotations
-                on the PR diff view. See
-                `docs/plans/_done/living-product-docs.md`.
+                `updateCommentBlocks` rewriter (old `screen` /
+                `capture` / `captureScreen` names kept as
+                deprecated back-compat aliases since Phase 3 of
+                `_done/playwright-screenshot-fixture-relayer.md`);
+                MDX-aware resolver registered into annot-playwright's
+                `annotSourceResolvers` registry so `page.screenshot({
+                annot: { mdx: { id, path } } })` bundles the
+                refresh-MDX + screenshot + bake + write pipeline
+                into one call; drift detector (`detectDrift` /
+                `detectDriftFromYaml`) emitting six finding kinds
+                (added / removed / renamed / role-changed /
+                duplicated / attribute-drift) with severity-bucket
+                exit-code logic; `annot docs` CLI (`init` / `sync`
+                / `lint`) with `--ci` / `--json` / `--fix` flags
+                + sample GitHub Actions workflow that converts
+                drift JSON into per-line `core.warning`
+                annotations on the PR diff view. See
+                `docs/plans/_done/living-product-docs.md` for the
+                base design + `docs/plans/_done/playwright-screenshot-fixture-relayer.md`
+                for the MDX hook + rename.
                 npm name: @ingcreators/annot-product-docs
-                (published 2026-05-21; current 0.1.0)
-  product-docs-astro/ Astro 5.x integration for the docs core.
-                Tier B-render — `productDocsIntegration()`
+                (published 2026-05-21; current 0.3.0)
+  product-docs-astro/ Astro 5.x / 6.x integration for the docs
+                core. Tier B-render — `productDocsIntegration()`
                 factory consumers drop into `astro.config.mjs`;
                 seven `.astro` components (`<Screen>` /
                 `<Overlay>` / `<Transition>` /
@@ -180,11 +201,19 @@ packages/
                 output. Falls back to the base PNG verbatim
                 when the snapshot lacks bbox data — the docs
                 site still builds before the Playwright tour
-                has run. See
-                `docs/plans/_done/living-product-docs.md`
-                Phase 2.
+                has run. The `/playwright` subpath that
+                previously housed the screenshot fixture is now
+                a deprecated re-export (Phase 4 of
+                `_done/playwright-screenshot-fixture-relayer.md`)
+                pointing at `@ingcreators/annot-product-docs`
+                + `@ingcreators/annot-playwright`; it emits a
+                `DeprecationWarning` at import time and will be
+                removed in 0.5.0. `@playwright/test` is no
+                longer a peer dep. See
+                `docs/plans/_done/living-product-docs.md` Phase 2
+                + `docs/plans/_done/playwright-screenshot-fixture-relayer.md`.
                 npm name: @ingcreators/annot-product-docs-astro
-                (published 2026-05-21; current 0.1.0)
+                (published 2026-05-21; current 0.3.0)
   product-docs-xlsx/ Excel adapter for the docs core. Tier A —
                 walks MDX bundles, dispatches per `xlsx.role`
                 to the default no-template layout (cover /

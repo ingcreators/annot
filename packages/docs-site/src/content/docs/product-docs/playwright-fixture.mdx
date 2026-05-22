@@ -3,14 +3,14 @@ title: Playwright fixture — page.screenshot({ annot })
 description: One-call screenshot capture that refreshes the MDX snapshot, bakes overlays into a re-editable PNG, and writes to disk. Drop-in for `page.screenshot()` and `locator.screenshot()`.
 ---
 
-The `@ingcreators/annot-product-docs-astro/playwright` subpath
-ships an extended Playwright `test` fixture that intercepts
-`page.screenshot()` and `locator.screenshot()`. When the call
-carries an `annot: { … }` option, the fixture bundles four
-coordinated steps into one:
+The `@ingcreators/annot-product-docs` package ships an extended
+Playwright `test` fixture that intercepts `page.screenshot()`
+and `locator.screenshot()`. When the call carries an
+`annot: { … }` option, the fixture bundles four coordinated
+steps into one:
 
 1. Refresh the MDX `annot:snapshot` block against the current page
-   (via `screen.capture` from `@ingcreators/annot-product-docs`).
+   (via `productDocs.sync` from `@ingcreators/annot-product-docs`).
 2. Take the raw screenshot.
 3. Resolve `<Overlay>` annotations and merge with any
    caller-supplied inline overlays.
@@ -18,7 +18,7 @@ coordinated steps into one:
    tags-only sidecar — and write to `path`.
 
 ```ts
-import { test } from "@ingcreators/annot-product-docs-astro/playwright";
+import { test } from "@ingcreators/annot-product-docs";
 
 test("app overview", async ({ page }) => {
   await page.goto("https://annot.work/app/");
@@ -31,6 +31,28 @@ test("app overview", async ({ page }) => {
   });
 });
 ```
+
+## Choosing your import
+
+Two packages export `test` with the `annot` option:
+
+| Import | Use when |
+|---|---|
+| `import { test } from "@ingcreators/annot-product-docs";` | You're using the MDX-linked flow (`annot.mdx`) — e.g. living-product-docs tours. Also gets `overlays` / `tags` / `editable`. |
+| `import { test } from "@ingcreators/annot-playwright";` | VRT specs, marketing screenshots, AI agent flows — anywhere `annot.overlays` / `annot.tags` is enough. Doesn't drag in the MDX parser dependencies. |
+
+Both surfaces share the same patch at runtime — the
+`@ingcreators/annot-product-docs` chain registers an MDX-aware
+resolver into `@ingcreators/annot-playwright`'s
+`annotSourceResolvers` registry on module load. Plugin authors
+can register their own resolvers (Figma / Sentry / custom data
+sources) the same way.
+
+The `@ingcreators/annot-product-docs-astro/playwright` subpath
+that earlier docs referenced is a deprecated re-export; new code
+should pick one of the two above. The deprecated subpath emits
+a `DeprecationWarning` at import time and will be removed in
+`@ingcreators/annot-product-docs-astro@0.5.0`.
 
 The resulting PNG is drop-in re-editable in Annot Cloud
 (`annot.work/app/`) — readers can save the image and load it as
@@ -194,25 +216,43 @@ tags: {
 ## Companion helpers
 
 For callers that want to compose annotations themselves without
-going through the `annot` option, the same subpath also exports:
+going through the `annot` option, the canonical homes export:
 
 ```ts
 import {
   rebaseAnnotations,
   describeAnnotation,
+} from "@ingcreators/annot-playwright";
+import {
   resolveMdxAnnotations,
   svgFromBboxAnnotations,
-} from "@ingcreators/annot-product-docs-astro/playwright";
+} from "@ingcreators/annot-product-docs";
 ```
 
 - `rebaseAnnotations(annotations, clip)` — pure
   `BboxAnnotation[]` → `{ kept, dropped }` partition. Same
-  function the fixture uses internally.
+  function the patch uses internally.
 - `resolveMdxAnnotations({ mdxPath, screenId, dims })` — read
   MDX overlays into a typed annotation list.
 - `svgFromBboxAnnotations(annotations)` — wrap a
   `BboxAnnotation[]` into a single-root `<svg>` ready for
   `Annotator.toEditablePng()` / `toPng()`.
+
+Third-party packages can extend the patch with their own
+`annot.*` field by pushing a resolver into
+`annotSourceResolvers`:
+
+```ts
+import { annotSourceResolvers } from "@ingcreators/annot-playwright";
+
+annotSourceResolvers.push(async ({ annot, page }) => {
+  if (!annot.figma) return null;
+  return {
+    prepare: () => refreshFigmaCache(annot.figma),
+    resolveAnnotations: (dims) => readFigmaOverlays(annot.figma, dims),
+  };
+});
+```
 
 ## Codegen workflow
 
@@ -224,7 +264,7 @@ swap and the `annot: { … }` opt by hand:
 
 ```diff
 -import { test, expect } from "@playwright/test";
-+import { test, expect } from "@ingcreators/annot-product-docs-astro/playwright";
++import { test, expect } from "@ingcreators/annot-product-docs";
 
  test("…", async ({ page }) => {
    await page.goto("…");
@@ -236,5 +276,7 @@ swap and the `annot: { … }` opt by hand:
  });
 ```
 
-`@playwright/test`'s `expect` is re-exported from the subpath so
-the import swap is a one-liner.
+If you don't need MDX support, swap to
+`@ingcreators/annot-playwright` instead — `expect` is
+re-exported from both packages so the import swap is a
+one-liner either way.

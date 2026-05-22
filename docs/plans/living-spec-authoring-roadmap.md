@@ -2,7 +2,7 @@
 
 > **Status:** Draft — written 2026-05-22 as the synthesis of a long
 > design discussion that started from
-> [`playwright-screenshot-fixture-relayer.md`](./playwright-screenshot-fixture-relayer.md)'s
+> [`playwright-screenshot-fixture-relayer.md`](./_done/playwright-screenshot-fixture-relayer.md)'s
 > Q&A about Playwright codegen compatibility and walked through six
 > architectural alternatives before landing on a 3-layer model.
 >
@@ -354,7 +354,7 @@ delivers user-visible value standalone.
 ### Phase 0 — Architecture relayer (Draft)
 
 Already captured in
-[`playwright-screenshot-fixture-relayer.md`](./playwright-screenshot-fixture-relayer.md)
+[`playwright-screenshot-fixture-relayer.md`](./_done/playwright-screenshot-fixture-relayer.md)
 ([PR #955](https://github.com/ingcreators/annot/pull/955)).
 
 Moves `page.screenshot({ annot: { … } })` prototype patch from
@@ -1410,7 +1410,7 @@ of truth?) creates race conditions.
 
 ## How this relates to existing plans
 
-- [`playwright-screenshot-fixture-relayer.md`](./playwright-screenshot-fixture-relayer.md) — Phase 0 of this roadmap. Already Draft.
+- [`_done/playwright-screenshot-fixture-relayer.md`](./_done/playwright-screenshot-fixture-relayer.md) — Phase 0 of this roadmap. Landed 2026-05-22 (PRs #962 / #963 / #964 / #966).
 - [`_done/living-product-docs.md`](./_done/living-product-docs.md) — Established the docs platform this roadmap evolves. The 3-layer model is the natural progression of that plan's authoring story.
 - [`annot-cloud-roadmap.md`](./annot-cloud-roadmap.md) — Phase 3 (auth foundation) is a prerequisite for Phase 5 of this roadmap. Phase 5's GitHub App + commit logic lives in annot-cloud per [`oss-cloud-split.md`](./oss-cloud-split.md).
 - [`oss-cloud-split.md`](./oss-cloud-split.md) — Phase 5's iframe boundary is the canonical example of "OSS provides the affordance, cloud provides the paid service" pattern.
@@ -1473,7 +1473,7 @@ before the rich-markdown writer is trusted on real docs).
 
 ## References
 
-- [`playwright-screenshot-fixture-relayer.md`](./playwright-screenshot-fixture-relayer.md)
+- [`playwright-screenshot-fixture-relayer.md`](./_done/playwright-screenshot-fixture-relayer.md)
 - [`_done/living-product-docs.md`](./_done/living-product-docs.md)
 - [`_done/playwright-screenshot-annot-fixture.md`](./_done/playwright-screenshot-annot-fixture.md)
 - [`_done/editable-png-from-annotator.md`](./_done/editable-png-from-annotator.md)

@@ -52,6 +52,94 @@ The `test` import is `@playwright/test`'s `test`, extended with an
 `annotator` fixture. Everything else (`test.describe`,
 `test.beforeEach`, `expect`, …) passes straight through.
 
+## `page.screenshot({ annot: { … } })` (recommended)
+
+The `test` fixture also patches `Page.prototype.screenshot` and
+`Locator.prototype.screenshot` so any call carrying an
+`annot: { … }` option runs the annot pipeline inline — no
+separate `annotateScreenshot` call, no manual file write:
+
+```ts
+import { test } from "@ingcreators/annot-playwright";
+
+test("login form callouts", async ({ page }) => {
+  await page.goto("/login");
+  await page.screenshot({
+    path: "login.png",
+    annot: {
+      overlays: [
+        { type: "rect", bbox: { x: 10, y: 10, width: 200, height: 30 }, intent: "warning" },
+        { type: "numberedBadge", bbox: { x: 10, y: 10, width: 24, height: 24 }, number: 1 },
+      ],
+      tags: { source: "vrt-failure", testId: "login" },
+      // editable: true (default) → output PNG is re-editable in Annot Cloud.
+    },
+  });
+});
+```
+
+Three independent contributions compose into the output:
+
+- `overlays: BboxAnnotation[]` — inline annotations (rect /
+  circle / arrow / text / callout / numberedBadge / raw SVG).
+- `tags: Record<string, string>` — provenance metadata
+  serialised into the PNG's XMP (or iTXt sidecar when no
+  overlays are present).
+- `editable: boolean` (default `true`) — re-editable wrap
+  (annotations + original capture in XMP) vs. flat baked PNG.
+
+`Locator.screenshot` + `page.screenshot({ clip, annot })` both
+go through the same pipeline; page-space overlay coordinates are
+automatically rebased into the clipped image's coordinate space.
+Overlays whose bbox falls outside the clip drop with a
+`test.info()` warning.
+
+Calls without `annot` (or with `annot: true` / `{}`) fall
+through to vanilla Playwright byte-for-byte — codegen-emitted
+specs work unedited.
+
+### Extension hook registry
+
+`annotSourceResolvers` is a module-level array that downstream
+packages push into to claim extra `annot.*` fields:
+
+```ts
+import { annotSourceResolvers } from "@ingcreators/annot-playwright";
+
+annotSourceResolvers.push(async ({ annot, page }) => {
+  if (!annot.figma) return null;
+  return {
+    prepare: () => refreshFigmaCache(annot.figma),
+    resolveAnnotations: (dims) => readFigmaOverlays(annot.figma, dims),
+  };
+});
+```
+
+The resolver's `prepare()` hook fires before the raw screenshot
+is taken; `resolveAnnotations(dims)` runs after with the
+page-space dimensions and returns `BboxAnnotation[]` to merge
+into the output.
+[`@ingcreators/annot-product-docs`](https://www.npmjs.com/package/@ingcreators/annot-product-docs)
+ships an MDX-aware resolver via this hook — importing its `test`
+adds an `annot.mdx?: { id, path }` field that bundles the
+refresh-MDX + take-screenshot + bake-PNG sequence into one
+`page.screenshot()` call.
+
+### Coordinate-rebase helpers
+
+```ts
+import {
+  rebaseAnnotations,
+  describeAnnotation,
+} from "@ingcreators/annot-playwright";
+
+const { kept, dropped } = rebaseAnnotations(annotations, clip);
+```
+
+Use these when you want to drive the rebase logic without going
+through the patch (custom test reporters, third-party tools that
+ship with their own composer).
+
 ## Compose annotations with the helpers
 
 ```ts

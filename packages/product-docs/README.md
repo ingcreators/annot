@@ -87,6 +87,41 @@ test("login flow", async ({ page, productDocs }) => {
 });
 ```
 
+## `page.screenshot({ annot })` Playwright fixture
+
+The package's `test` extends
+[`@ingcreators/annot-playwright`](../playwright)'s test with the
+`productDocs.sync(...)` fixture above AND registers an MDX-aware
+resolver into the `annotSourceResolvers` registry. Pass
+`annot: { mdx }` on `page.screenshot()` to bundle the
+refresh-snapshot + take-screenshot + bake-overlays + write-PNG
+sequence into one call — the same `<Screen id>` block in the
+target MDX gets re-synced before the screenshot fires, and the
+output PNG is re-editable in Annot Cloud:
+
+```ts
+test("app overview", async ({ page }) => {
+  await page.goto("https://annot.work/app/");
+  await page.screenshot({
+    path: "public/app/shots/app-overview.png",
+    annot: {
+      mdx: { id: "app-overview", path: "src/content/docs/app/index.mdx" },
+      tags: { source: "docs-tour", capturedAt: new Date().toISOString() },
+    },
+  });
+});
+```
+
+Calls without `annot` (or with `annot: true` / `{}`) fall
+through to vanilla Playwright byte-for-byte — codegen-emitted
+calls keep working unedited. The generic `annot.overlays` /
+`annot.tags` / `annot.editable` fields are handled by
+annot-playwright; this package contributes the MDX-aware
+`annot.mdx` field on top via the hook registry. See
+[`annot.work/docs/product-docs/playwright-fixture/`](https://annot.work/docs/product-docs/playwright-fixture/)
+for the compositional vocabulary, locator screenshot semantics,
+and the codegen→hand-edit workflow.
+
 ## CLI
 
 ```sh
