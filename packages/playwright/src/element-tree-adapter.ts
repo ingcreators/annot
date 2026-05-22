@@ -98,8 +98,13 @@ export function playwrightYamlToElementTree(opts: PlaywrightYamlToElementTreeOpt
 
   for (const rawLine of lines) {
     if (!rawLine.trim()) continue;
-    const indentMatch = rawLine.match(/^(\s*)/);
-    const indent = indentMatch?.[1]?.length ?? 0;
+    // Split indent + body cleanly so the bullet regex doesn't have
+    // a leading `\s*` adjacent to its own `\s+`. The two overlapping
+    // whitespace patterns create polynomial backtracking under
+    // adversarial input (CodeQL flag).
+    const trimmedStart = rawLine.replace(/^\s+/, "");
+    const indent = rawLine.length - trimmedStart.length;
+    const body = trimmedStart.replace(/\s+$/, "");
 
     // Match the bullet, role, optional quoted name, the rest of the
     // line (which may contain bracket groups and/or a trailing `:`).
@@ -112,7 +117,7 @@ export function playwrightYamlToElementTree(opts: PlaywrightYamlToElementTreeOpt
     // Playwright's aria-snapshot output empirically never escapes
     // quotes inside names — it just doesn't emit names containing
     // internal double-quotes.
-    const head = rawLine.match(/^\s*-\s+([a-z]+)(?:\s+"([^"]*)")?(.*?)\s*$/);
+    const head = body.match(/^-\s+([a-z]+)(?:\s+"([^"]*)")?(.*)$/);
     if (!head) continue;
     const role = head[1] ?? "";
     const name = head[2];
