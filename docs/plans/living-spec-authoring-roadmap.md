@@ -600,28 +600,174 @@ release cycles), legacy support is removed — see OQ-08.
 
 **Goal**: Extend annotation yaml schema with the full Annot
 palette beyond numbered badges. Add `annotations[]` section
-(distinct from `overlays[]`).
+(distinct from `overlays[]`), populated by the full shape
+palette: `rect` / `circle` / `arrow` / `text` / `callout` /
+`freehand` / `redact` / `focusMask`. Reuses the Phase 2
+`<Screen annotations="…">` plumbing — only the yaml schema
+extends; no new MDX components ship.
 
-**Files added**:
+The split between `overlays[]` and `annotations[]` mirrors the
+docs-flow distinction set by Phase 2: `overlays[]` entries get
+a numbered badge + a paired `<AnnotCallout for>` description
+slot in the MDX; `annotations[]` entries are pure visual marking
+with no description slot. `<AnnotCallout for>` JSX in MDX
+targets `overlays[].id` only — `annotations[].id` is
+self-contained.
 
-- `packages/product-docs/src/annotations-yaml.ts` (extended from Phase 2) — adds `AnnotationSpec` variants: `rect`, `arrow`, `text`, `callout`, `freehand`, `redact`, `focusMask`, `circle`.
-- `packages/product-docs-astro/src/render-annotations.ts` — extends `renderAnnotatedScreen` to compose `annotations[]` entries onto the base PNG, on top of the `overlays[]` numbered badges.
-- `packages/annotator/src/dsl-annotations-yaml.ts` — yaml → `BboxAnnotation[]` mapper. The existing `bboxAnnotationsToSvg` DSL in `@ingcreators/annot-annotator` handles all the rendering once we map yaml entries to `BboxAnnotation` union members.
+#### Sub-phases
 
-**Files modified**:
+| Sub | Output | Scope |
+|---|---|---|
+| **3a** | Annotation yaml Tier A surface extension — `packages/product-docs/src/annotations-yaml.ts`. Adds the `AnnotationSpec` discriminated union (`rect` / `circle` / `arrow` / `text` / `callout` / `freehand` / `redact` / `focusMask`), extends `AnnotationsFile` with the optional `annotations?: AnnotationSpec[]` section, extends the parser + serializer + roundtrip tests. Pure Tier A; no callers yet — pure data foundation 3b–3d build on. Schema header stays at `version: 1` since the extension is additive (per OQ-01). | New types + parser + serializer extension. Vitest coverage for every variant's roundtrip. |
+| **3b** | Annotator DSL primitive extensions — `packages/annotator/src/dsl/types.ts` + `to-svg.ts` + `schema.ts`. Adds `BboxFreehandAnnotation` (SVG path data) + `BboxFocusMaskAnnotation` (cutout bbox + dimColor) to the `BboxAnnotation` union; per-shape SVG fragment renderers in `to-svg.ts`; JSON Schemas in `schema.ts` so MCP / agent callers can validate. `redact` (style: `solid`) is implemented through the existing `rect` primitive with opaque fill — mosaic / blur are reserved for a follow-up since they need raster pixel data instead of SVG fragment output. Independently usable by any annotator caller (Playwright fixtures, MCP server) without yaml / MDX involvement. | Tier A annotator surface bump. Vitest coverage for every new primitive. Bumps `@ingcreators/annot-annotator` to the next minor. |
+| **3c** | yaml → `BboxAnnotation[]` mapper + Astro Image Service composition. Adds `buildShapeAnnotationsFromYaml(annotations, boxed, dims)` to `packages/product-docs/src/mdx-annotations.ts` (sibling of the existing `buildBadgeAnnotationsFromYaml`). Resolves each `AnnotationSpec`'s match keys against the `BoxedEntry[]` derived from the page's `ElementTree`, computes endpoint / anchor coordinates, and emits a `BboxAnnotation` (or skips silently when a match is missing — drift surfaces it). `renderAnnotatedScreen` composes the `annotations[]` SVG fragment on top of the `overlays[]` badges in one pass, with the annotations-yaml source already in the cache key from Phase 2b. | Wires 3a + 3b together. Vitest coverage in `render.test.ts` for each kind composed onto a synthetic PNG. The yaml→BboxAnnotation mapper lives in `product-docs` (not `annotator`, despite the roadmap's earlier file-path suggestion) to avoid an annotator→product-docs cycle — product-docs already depends on annotator. |
+| **3d** | Drift detector + xlsx extractor extensions + workflow-app dogfood. `packages/product-docs/src/drift.ts` walks the match keys reachable from each `AnnotationSpec` variant (`RectAnnotation.match` / `coversElements[]`, `ArrowAnnotation.from.match` / `to.match`, `TextAnnotation.anchor.match`, `CalloutAnnotation.target.match`, `RedactAnnotation.match`, `FocusMaskAnnotation.cutout.match`) and feeds them through the existing match-cycle (removed / renamed / role-changed / duplicated); free-coord entries are skipped. `packages/product-docs-xlsx/src/extract.ts` reads from the annotations yaml when a screen carries `annotations="…"`, expanding `overlays[]` into the existing item-table while `annotations[]` is image-only (no text rows). workflow-app's `OM-001-login.mdx` gains at least one `annotations[]` entry exercising an arrow / rect / focusMask combination so the Astro build dogfoods the full path. | Drift coverage + Excel coverage extend to the new format. Bumps `@ingcreators/annot-product-docs` and `@ingcreators/annot-product-docs-xlsx` to their next minor. |
 
-- `packages/product-docs/src/drift.ts` — drift detection scope: match-anchored `annotations[]` entries participate; free-coord entries are skipped.
-- `packages/product-docs-xlsx/src/extract.ts` — extends Excel extraction: `overlays[]` populates the "項目定義" table (already today's behavior); `annotations[]` is rendered into the image-only column without text rows.
+Each sub-phase lands as an independent PR, merged to main before
+the next starts, mirroring Phase 1's and Phase 2's rhythm.
 
-**Element anchoring vs free-coord**:
+#### Files added
 
-- Match-anchored is the default for `rect` / `arrow` / `text` / `callout` / `circle` / `redact` / `focusMask` when the entry has a `match` / `coversElements` / `anchor` field.
-- Free-coord (`bbox` / `position` / `path`) is the escape hatch for `freehand`, decorative `text`, and any annotation that doesn't correspond to an aria element.
-- Editor's "snap to element" UX (added in Phase 4) nudges users toward match-anchored when possible.
+- `packages/annotator/src/dsl/types.ts` — extended: adds `BboxFreehandAnnotation` + `BboxFocusMaskAnnotation` to the `BboxAnnotation` union. (3b)
+- `packages/annotator/src/dsl/to-svg.ts` — extended: per-shape SVG fragment renderers for the two new kinds. (3b)
+- `packages/annotator/src/dsl/schema.ts` — extended: JSON Schemas for the two new kinds; added to the `oneOf` list. (3b)
+- `packages/product-docs/src/annotations-yaml.ts` — extended: `AnnotationSpec` discriminated union; `AnnotationsFile.annotations?` field; per-variant parser + serializer. (3a)
+- `packages/product-docs/src/mdx-annotations.ts` — extended: `buildShapeAnnotationsFromYaml(annotations, boxed, dims)` helper. (3c)
+- workflow-app fixture update (one MDX gains an `annotations[]` block in its yaml). (3d)
 
-**Verification**: Storybook stories for each annotation kind
-demonstrating composition with a base PNG. Snapshot tests in
-`packages/product-docs-astro/src/render-annotations.test.ts`.
+#### Files modified
+
+- `packages/product-docs/src/types.ts` — no shape changes (annotation kinds live entirely in `annotations-yaml.ts`); doc comments cross-reference the new union. (3a)
+- `packages/product-docs-astro/src/render.ts` — `renderAnnotatedScreen` composes the `annotations[]` SVG fragment on top of the `overlays[]` badges; `svgFromBadges` is reused or paired with a sibling `svgFromShapes` that emits the same single-root wrapper. (3c)
+- `packages/product-docs/src/drift.ts` — walks `AnnotationSpec` match keys for the match-cycle findings; free-coord entries are skipped. New helper `collectMatchKeysFromAnnotation(spec) → MatchKey[]` extracts the per-variant match keys. (3d)
+- `packages/product-docs-xlsx/src/extract.ts` — when the screen carries `annotations`, the bundle's `overlays[]` rows are sourced from the yaml's `overlays[]`; `annotations[]` participates only in the visual column. (3d)
+- `examples/workflow-app/docs/**/*.mdx` + corresponding `.annotations.yaml` — at least one screen exercises an `annotations[]` palette entry. (3d)
+
+#### Schema versioning
+
+The `annotations[]` extension is additive (existing `version: 1`
+files without an `annotations` key keep parsing). Per OQ-01 the
+parser stays on `ANNOTATIONS_YAML_VERSION = 1`; the parser is
+permissive about an `annotations` key being absent and rejects
+unknown `kind` values per variant. A future v2 bump (for a
+mosaic / blur redact style, an `image` annotation kind, etc.)
+would gate on the version dispatch.
+
+#### Annotation kind palette (reference)
+
+```yaml
+version: 1
+
+overlays:
+  - id: o1
+    kind: numberedBadge
+    match: { role: "textbox", name: "Email" }
+    intent: required
+    number: 1
+
+annotations:
+  # outline around one element OR a group of elements
+  - id: a1
+    kind: rect
+    match: { role: "textbox", name: "Email" }   # OR coversElements / bbox
+    intent: info
+
+  # circle centred on the element OR free-coord
+  - id: a2
+    kind: circle
+    match: { role: "button", name: "Sign in" }   # OR center + radius
+
+  # arrow between two elements (or between two free points)
+  - id: a3
+    kind: arrow
+    from: { match: { role: "textbox", name: "Email" } }   # OR { point: { x, y } }
+    to:   { match: { role: "button", name: "Sign in" } }
+    intent: action
+
+  # text label anchored above / below / left / right of an element
+  - id: a4
+    kind: text
+    text: "未認証ユーザのエントリポイント"
+    anchor: { match: { role: "heading", name: "Sign in" }, position: above }
+    # OR at: { x, y }
+
+  # caption with arrow pointing at the target element
+  - id: a5
+    kind: callout
+    text: "Authenticates against the in-memory user table."
+    target: { match: { role: "button", name: "Sign in" } }   # OR { bbox }
+    at: { x: 240, y: 320 }
+
+  # free-form path (always free-coord; UI changes may misalign)
+  - id: a6
+    kind: freehand
+    path: "M100,200 L150,250 L200,210"
+    stroke: "#ff0000"
+
+  # opaque rect that obscures content (style: solid only in Phase 3)
+  - id: a7
+    kind: redact
+    match: { role: "textbox", name: "Email" }   # OR bbox
+    style: solid
+    color: "#000000"
+
+  # dim everything EXCEPT the cutout area
+  - id: a8
+    kind: focusMask
+    cutout: { match: { role: "button", name: "Sign in" }, padding: 8 }   # OR { bbox }
+    dimColor: "rgba(0,0,0,0.5)"
+```
+
+Element anchoring vs free-coord: match-anchored is the default
+for `rect` / `circle` / `arrow` / `text` / `callout` / `redact`
+/ `focusMask` when the entry has `match` / `coversElements` /
+`anchor` / `target.match` / `cutout.match`. Free-coord (`bbox`
+/ `center` + `radius` / `point` / `at` / `path`) is the escape
+hatch for `freehand`, decorative `text`, and any annotation
+that doesn't correspond to an aria element. Each variant
+documents which fields are required + which combinations are
+mutually exclusive at the parser level. Phase 4's "snap to
+element" UX (proposed in the Phase 4 section) nudges users
+toward match-anchored when possible.
+
+#### Verification
+
+- Annotation yaml roundtrip — every `AnnotationSpec` variant
+  serialises + reparses to a byte-equivalent object (3a).
+- Annotator primitive snapshots — each new SVG fragment
+  renderer has a frozen-shape inline-snapshot test (3b).
+- Image Service composition — `render.test.ts` exercises an
+  MDX + yaml fixture containing one entry of every variant
+  + verifies the PNG bytes start with the magic header
+  + that an `<svg>` payload survives the sanitiser into the
+  rasterised output (3c).
+- Drift findings — match-anchored `annotations[]` entries
+  produce the same `removed` / `renamed` / `role-changed` /
+  `duplicated` finding kinds the legacy overlays cycle
+  produces; free-coord entries produce zero findings (3d).
+- workflow-app build — the dogfooded MDX renders end-to-end
+  via the Astro Image Service + the xlsx adapter
+  without a regression (3d).
+
+#### Out of scope for Phase 3
+
+- Mosaic / blur redact rendering. These need raster pixel
+  data (the existing `burnRedactions` path in
+  `@ingcreators/annot-mcp` covers it destructively, but the
+  Image Service is SVG-fragment-driven and a non-destructive
+  mosaic / blur primitive would need a different renderer).
+  Tracked as a Phase 3 follow-up; `style: solid` ships now,
+  `style: "mosaic" | "blur"` rejected by the parser until
+  the renderer lands.
+- An `image` annotation kind (overlay another image on top
+  of the screenshot). Reserved for a later phase if the use
+  case emerges.
+- Per-role validation that a `match` resolves to a sensible
+  element kind (e.g. an `arrow.from.match` resolving to a
+  `presentation` role with no bbox). The existing match-
+  resolver's drift output is sufficient for now; a stricter
+  per-variant validator can layer on later if the noise gets
+  unmanageable.
 
 ### Phase 4 — Annot editor's Overlay tool + yaml writer
 
