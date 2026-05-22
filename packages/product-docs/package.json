@@ -67,6 +67,7 @@
   },
   "dependencies": {
     "@ingcreators/annot-annotator": "workspace:*",
+    "@ingcreators/annot-core": "workspace:*",
     "@ingcreators/annot-playwright": "workspace:*",
     "js-yaml": "^4.1.1",
     "remark-frontmatter": "^5.0.0",
