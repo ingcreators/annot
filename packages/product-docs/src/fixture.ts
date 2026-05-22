@@ -25,6 +25,14 @@ import { test as annotatorTest } from "@ingcreators/annot-playwright";
 import type { Locator, Page } from "@playwright/test";
 
 import { parseMdxFile, updateCommentBlocks } from "./mdx.js";
+// Side-effect import: registers the MDX-aware resolver into
+// `@ingcreators/annot-playwright`'s `annotSourceResolvers`
+// registry + augments `AnnotScreenshotOptions` with `mdx`. Phase 2
+// of `docs/plans/playwright-screenshot-fixture-relayer.md` — once
+// loaded, `page.screenshot({ annot: { mdx: { id, path } } })`
+// runs the refresh + screenshot + bake + write pipeline in a
+// single call.
+import "./playwright-screenshot-hook.js";
 import type { OverlaySpec } from "./types.js";
 
 export interface ScreenCaptureOptions {
