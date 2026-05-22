@@ -56,7 +56,7 @@ describe("main: init", () => {
     expect(configBytes).toMatch(/defineConfig/);
 
     const tourBytes = await readFile(join(cwd, "tests", "docs", "example.spec.ts"), "utf8");
-    expect(tourBytes).toMatch(/screen\.capture/);
+    expect(tourBytes).toMatch(/productDocs\.sync/);
 
     const screenBytes = await readFile(
       join(cwd, "docs", "books", "example", "SC-001-login.mdx"),

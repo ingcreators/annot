@@ -1,4 +1,4 @@
-// Unit tests for the `screen` fixture's standalone helpers.
+// Unit tests for the `productDocs` fixture's standalone helpers.
 //
 // Same approach as `@ingcreators/annot-playwright`'s
 // `fixture.test.ts`: stub the Playwright `Page` surface we
@@ -14,7 +14,7 @@ import { join } from "node:path";
 import type { Page } from "@playwright/test";
 import { describe, expect, it } from "vitest";
 
-import { captureScreen, collectAttributesYaml } from "./fixture.js";
+import { captureScreen, collectAttributesYaml, syncProductDocs } from "./fixture.js";
 import type { OverlaySpec } from "./types.js";
 
 const FIXTURE_MDX = `---
@@ -146,7 +146,7 @@ describe("collectAttributesYaml", () => {
   });
 });
 
-describe("captureScreen", () => {
+describe("syncProductDocs", () => {
   async function writeFixture(): Promise<string> {
     const dir = await mkdtemp(join(tmpdir(), "annot-product-docs-test-"));
     const mdxPath = join(dir, "screen.mdx");
@@ -164,7 +164,7 @@ describe("captureScreen", () => {
         "button|Sign in": { type: "submit" },
       },
     });
-    await captureScreen(page, { id: "login", mdxPath });
+    await syncProductDocs(page, { id: "login", mdxPath });
     const updated = await readFile(mdxPath, "utf8");
     expect(updated).toContain("{/* annot:snapshot");
     expect(updated).toContain('textbox "Email" [ref=e3]');
@@ -182,7 +182,7 @@ describe("captureScreen", () => {
     const mdxPath = join(dir, "plain.mdx");
     await writeFile(mdxPath, "# Just plain MDX\n", "utf8");
     const page = makeStubPage({ snapshotYaml: "" });
-    await expect(captureScreen(page, { id: "x", mdxPath })).rejects.toThrow(
+    await expect(syncProductDocs(page, { id: "x", mdxPath })).rejects.toThrow(
       /no `annot:` frontmatter/,
     );
   });
@@ -190,7 +190,7 @@ describe("captureScreen", () => {
   it("throws when the requested screen id is missing from the file", async () => {
     const mdxPath = await writeFixture();
     const page = makeStubPage({ snapshotYaml: "" });
-    await expect(captureScreen(page, { id: "does-not-exist", mdxPath })).rejects.toThrow(
+    await expect(syncProductDocs(page, { id: "does-not-exist", mdxPath })).rejects.toThrow(
       /has no <Screen id="does-not-exist">/,
     );
   });
@@ -201,7 +201,7 @@ describe("captureScreen", () => {
       snapshotYaml: '- textbox "Email" [ref=e1]',
       perElement: { "textbox|Email": { type: "email" } },
     });
-    await captureScreen(page1, { id: "login", mdxPath });
+    await syncProductDocs(page1, { id: "login", mdxPath });
 
     const page2 = makeStubPage({
       snapshotYaml: '- textbox "Email" [ref=e7]\n- button "Sign in" [ref=e9]',
@@ -210,7 +210,7 @@ describe("captureScreen", () => {
         "button|Sign in": { type: "submit" },
       },
     });
-    await captureScreen(page2, { id: "login", mdxPath });
+    await syncProductDocs(page2, { id: "login", mdxPath });
 
     const updated = await readFile(mdxPath, "utf8");
     expect(updated).toContain("[ref=e7]");
@@ -220,5 +220,14 @@ describe("captureScreen", () => {
     // One snapshot block, one attributes block — not stacked.
     expect(updated.match(/annot:snapshot/g)).toHaveLength(1);
     expect(updated.match(/annot:attributes/g)).toHaveLength(1);
+  });
+});
+
+describe("deprecated `captureScreen` alias", () => {
+  it("is reference-equal to `syncProductDocs` (gradual-migration friendly)", () => {
+    // The Phase 3 rename keeps `captureScreen` as a back-compat
+    // re-export. Reference equality matters when external callers
+    // identity-check the function across the rename boundary.
+    expect(captureScreen).toBe(syncProductDocs);
   });
 });

@@ -45,18 +45,18 @@ const ref = resolveMatch(snapshot, { role: "textbox", name: "Email" });
 ancestor that itself matches the under-clause; `match.nth`
 picks the Nth match.
 
-## Playwright `screen` fixture
+## Playwright `productDocs` fixture
 
 ```ts
 import { test } from "@ingcreators/annot-product-docs";
 
-test("login", async ({ page, screen }) => {
+test("login", async ({ page, productDocs }) => {
   await page.goto("/login");
-  await screen.capture({ id: "login", mdxPath: "docs/spec/SC-001.mdx" });
+  await productDocs.sync({ id: "login", mdxPath: "docs/spec/SC-001.mdx" });
 });
 ```
 
-`screen.capture(options)` re-syncs the `annot:snapshot` +
+`productDocs.sync(options)` re-syncs the `annot:snapshot` +
 `annot:attributes` blocks in the named MDX. Options:
 
 | Option | Default | Purpose |

@@ -20,7 +20,7 @@
 
 import { type AnnotSourceResolver, annotSourceResolvers } from "@ingcreators/annot-playwright";
 
-import { captureScreen } from "./fixture.js";
+import { syncProductDocs } from "./fixture.js";
 import { resolveMdxAnnotations } from "./mdx-annotations.js";
 
 // Module augmentation: extends annot-playwright's
@@ -60,7 +60,7 @@ interface ResolverSentinel {
  *
  *   1. (prepare) Rewriting the MDX file's
  *      `annot:snapshot` + `annot:attributes` blocks against the
- *      live page via `captureScreen`. Runs BEFORE the raw
+ *      live page via `syncProductDocs`. Runs BEFORE the raw
  *      screenshot so the resolved bboxes match the visible DOM.
  *   2. (resolveAnnotations) Reading the freshly-written
  *      `annot:snapshot` block + the `<Overlay match>` blocks and
@@ -73,7 +73,7 @@ const mdxResolver: AnnotSourceResolver = async ({ annot, page }) => {
   if (!annot.mdx) return null;
   const { id, path } = annot.mdx;
   return {
-    prepare: () => captureScreen(page, { id, mdxPath: path }),
+    prepare: () => syncProductDocs(page, { id, mdxPath: path }),
     resolveAnnotations: (dims) =>
       // `BboxNumberedBadgeAnnotation[]` is assignable to
       // `BboxAnnotation[]` — TypeScript needs the up-cast since
