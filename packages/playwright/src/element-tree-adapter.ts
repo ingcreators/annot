@@ -177,7 +177,7 @@ export function playwrightYamlToElementTree(opts: PlaywrightYamlToElementTreeOpt
     // `disabled`, `level=2`). The restricted character class
     // `[A-Za-z0-9_=,.\-]+` matches what Playwright actually emits
     // and is linear-time (no `]` in the class).
-    const stateRegex = /\[([A-Za-z][A-Za-z0-9_=,.\-]*)\]/g;
+    const stateRegex = /\[([A-Za-z][A-Za-z0-9_=,.-]*)\]/g;
     let stateMatch: RegExpExecArray | null;
     while ((stateMatch = stateRegex.exec(rest)) !== null) {
       const token = stateMatch[1] ?? "";
