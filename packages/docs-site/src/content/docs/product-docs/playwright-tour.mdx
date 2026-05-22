@@ -1,13 +1,13 @@
 ---
 title: Writing the Playwright tour
-description: The tour file shape, the screen fixture, capture conventions, scaling to dozens of screens.
+description: The tour file shape, the productDocs fixture, sync conventions, scaling to dozens of screens.
 ---
 
 The Playwright tour is the single source of UI truth.
-`@ingcreators/annot-product-docs` ships a `screen` fixture you
-extend `@playwright/test`'s `test` with; each `screen.capture(...)`
-call re-syncs the `annot:snapshot` + `annot:attributes` blocks
-in the matching MDX file in place.
+`@ingcreators/annot-product-docs` ships a `productDocs` fixture
+you extend `@playwright/test`'s `test` with; each
+`productDocs.sync(...)` call re-syncs the `annot:snapshot` +
+`annot:attributes` blocks in the matching MDX file in place.
 
 ## Minimal tour
 
@@ -15,9 +15,9 @@ in the matching MDX file in place.
 // tests/docs/auth.spec.ts
 import { test } from "@ingcreators/annot-product-docs";
 
-test("login flow", async ({ page, screen }) => {
+test("login flow", async ({ page, productDocs }) => {
   await page.goto("/login");
-  await screen.capture({
+  await productDocs.sync({
     id: "login",
     mdxPath: "docs/books/example/SC-001-login.mdx",
   });
@@ -44,18 +44,18 @@ The fixture:
 
 ## Multi-step tours
 
-Same shape: one `screen.capture(...)` per screen, in narrative
+Same shape: one `productDocs.sync(...)` per screen, in narrative
 order. Use `page.goto` / `page.click` / `expect.toBeVisible`
-between captures just like a normal Playwright test.
+between syncs just like a normal Playwright test.
 
 ```ts
-test("checkout flow", async ({ page, screen }) => {
+test("checkout flow", async ({ page, productDocs }) => {
   await page.goto("/cart");
-  await screen.capture({ id: "cart", mdxPath: "docs/checkout/SC-002-cart.mdx" });
+  await productDocs.sync({ id: "cart", mdxPath: "docs/checkout/SC-002-cart.mdx" });
 
   await page.getByRole("button", { name: "Checkout" }).click();
   await expect(page.getByRole("heading", { name: "Shipping" })).toBeVisible();
-  await screen.capture({ id: "shipping", mdxPath: "docs/checkout/SC-003-shipping.mdx" });
+  await productDocs.sync({ id: "shipping", mdxPath: "docs/checkout/SC-003-shipping.mdx" });
 
   // ...
 });
@@ -82,7 +82,7 @@ Shipping address. Required for physical goods.
 </Screen>
 ```
 
-Two `screen.capture` calls in the tour, both passing the same
+Two `productDocs.sync` calls in the tour, both passing the same
 `mdxPath` with different `id`. Each call updates only its own
 screen's blocks.
 
@@ -110,7 +110,7 @@ on:
 
 ## Tour failures are advisory by default
 
-`screen.capture` doesn't throw when an `<Overlay match>` fails
+`productDocs.sync` doesn't throw when an `<Overlay match>` fails
 to resolve — it writes a `match: unresolved` marker and lets
 the test continue. The drift detector reports the failure as
 an `added` or `removed` finding at lint time, where it's a CI
@@ -118,5 +118,5 @@ warning, not a hard test failure. This keeps the tour stable
 during UI churn — a single removed button doesn't take down
 the whole tour run.
 
-For strict mode, pass `screen.capture({ strict: true })` per
+For strict mode, pass `productDocs.sync({ strict: true })` per
 call (throws on unresolved match).

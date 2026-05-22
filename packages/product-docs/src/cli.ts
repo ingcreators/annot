@@ -31,7 +31,7 @@ import {
   lintableScreens,
   summariseDrift,
 } from "./drift.js";
-import { captureScreen } from "./fixture.js";
+import { syncProductDocs } from "./fixture.js";
 import { parseMdxFile } from "./mdx.js";
 import { parseSnapshot } from "./resolver.js";
 
@@ -160,9 +160,9 @@ import { test } from "@ingcreators/annot-product-docs";
 
 test.describe.configure({ mode: "serial" });
 
-test("login flow", async ({ page, screen }) => {
+test("login flow", async ({ page, productDocs }) => {
   await page.goto("/login");
-  await screen.capture({
+  await productDocs.sync({
     id: "login",
     mdxPath: "docs/books/example/SC-001-login.mdx",
   });
@@ -240,7 +240,7 @@ async function runSync(args: string[], deps: RunDeps): Promise<number> {
       for (const screen of screens) {
         const { page, dispose } = await newPage(screen.src ?? "/");
         try {
-          await captureScreen(page, { id: screen.id, mdxPath: mdx });
+          await syncProductDocs(page, { id: screen.id, mdxPath: mdx });
           stdout(`  synced ${relative(cwd, mdx)} (screen=${screen.id})`);
         } finally {
           await dispose();
@@ -335,7 +335,7 @@ async function runLint(args: string[], deps: RunDeps): Promise<number> {
     );
   }
 
-  // `--fix` re-runs captureScreen for every file that produced
+  // `--fix` re-runs syncProductDocs for every file that produced
   // any drift finding. That refreshes the stored snapshot +
   // attributes blocks so the next `lint` is clean. It does NOT
   // rewrite `<Overlay match>` keys — renames are author
@@ -350,7 +350,7 @@ async function runLint(args: string[], deps: RunDeps): Promise<number> {
         for (const screen of lintableScreens(parsed.screens)) {
           const { page, dispose } = await newPageFix(screen.src ?? "/");
           try {
-            await captureScreen(page, { id: screen.id, mdxPath: mdx });
+            await syncProductDocs(page, { id: screen.id, mdxPath: mdx });
             fixedCount++;
           } finally {
             await dispose();

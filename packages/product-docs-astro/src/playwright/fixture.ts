@@ -39,7 +39,7 @@ import { writePngWithTagsOnly } from "@ingcreators/annot-core/xmp-bytes";
 // the base interface that this file's `AnnotScreenshotOptions`
 // extends.
 import type { AnnotScreenshotOptions as BaseAnnotOptions } from "@ingcreators/annot-playwright";
-import { test as base, captureScreen } from "@ingcreators/annot-product-docs";
+import { test as base, syncProductDocs } from "@ingcreators/annot-product-docs";
 import type { Locator, Page } from "@playwright/test";
 
 import { resolveMdxAnnotations, svgFromBboxAnnotations } from "../render.js";
@@ -162,7 +162,7 @@ async function runAnnotMode(
   //    we're shooting a locator — overlay bboxes are always
   //    page-space; rebasing happens after.
   if (annot.mdx) {
-    await captureScreen(pageFor(this), {
+    await syncProductDocs(pageFor(this), {
       id: annot.mdx.id,
       mdxPath: annot.mdx.path,
     });

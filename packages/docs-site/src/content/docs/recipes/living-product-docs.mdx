@@ -81,9 +81,9 @@ After client-side validation, sends the auth request to the server.
 ```ts
 import { test } from "@ingcreators/annot-product-docs";
 
-test("login flow", async ({ page, screen }) => {
+test("login flow", async ({ page, productDocs }) => {
   await page.goto("/login");
-  await screen.capture({
+  await productDocs.sync({
     id: "login",
     mdxPath: "docs/books/example/SC-001-login.mdx",
   });
