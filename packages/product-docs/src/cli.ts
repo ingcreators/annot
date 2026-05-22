@@ -25,6 +25,7 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
 import type { Browser, Page } from "playwright-core";
 import { parseAnnotationsYaml } from "./annotations-yaml.js";
+import { warnLegacyOverlay } from "./deprecation.js";
 import {
   type DriftFinding,
   type DriftSeverity,
@@ -325,6 +326,18 @@ async function runLint(args: string[], deps: RunDeps): Promise<number> {
           const yamlOverlays = flags.checkDescriptions
             ? await tryLoadYamlOverlays(screen, mdx, stderr)
             : undefined;
+          // Phase 2e: legacy `<Overlay>` deprecation warning. Once
+          // per screen per CLI run; pointer to the migration CLI.
+          if (screen.overlays.length > 0 && screen.annotations === undefined) {
+            warnLegacyOverlay(
+              {
+                mdxPath: mdx,
+                screenId: screen.id,
+                overlayCount: screen.overlays.length,
+              },
+              stderr,
+            );
+          }
           const findings = detectDrift({ screen, liveSnapshot, yamlOverlays });
           for (const f of findings) {
             allFindings.push({ file: relative(cwd, mdx), finding: f });

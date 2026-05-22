@@ -34,6 +34,7 @@ import {
   parseMdxFile,
   parseSnapshotBoxes,
   svgFromBadges,
+  warnLegacyOverlay,
 } from "@ingcreators/annot-product-docs";
 
 import { cacheKey, type FileCache } from "./cache.js";
@@ -183,6 +184,17 @@ export async function renderAnnotatedScreen(
   // children. Both paths produce identical `BboxNumberedBadgeAnnotation`
   // shapes; the only difference is the source of `match` / `intent`
   // / `number`.
+  // Phase 2e: warn (once per process) when a screen still uses the
+  // legacy inline form. The warning isn't a build failure; it's a
+  // nudge so docs sites running CI builds see the migration path
+  // surfaced. Removal schedule lives in OQ-08 of the roadmap.
+  if (!annotationsFile && screen.overlays.length > 0) {
+    warnLegacyOverlay({
+      mdxPath: options.mdxPath,
+      screenId: options.screenId,
+      overlayCount: screen.overlays.length,
+    });
+  }
   const annotations = annotationsFile
     ? buildBadgeAnnotationsFromYaml(annotationsFile.file.overlays, bboxes, dims)
     : buildBadgeAnnotations(screen.overlays, bboxes, dims);

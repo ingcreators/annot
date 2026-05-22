@@ -1,35 +1,37 @@
 # Living-spec visual authoring roadmap
 
-> **Status:** Phase 1 landed 2026-05-23 (additive migration);
-> follow-up cleanup PR pending land. Phase 1 sub-phases 1a–1i:
-> [annot#970](https://github.com/ingcreators/annot/pull/970) (1a) /
-> [#971](https://github.com/ingcreators/annot/pull/971) (1b) /
-> [#972](https://github.com/ingcreators/annot/pull/972) (1c) /
-> [#973](https://github.com/ingcreators/annot/pull/973) (1d) /
-> [#974](https://github.com/ingcreators/annot/pull/974) (1e) /
-> [#975](https://github.com/ingcreators/annot/pull/975) (1f) /
-> [#976](https://github.com/ingcreators/annot/pull/976) (1g) /
-> [#977](https://github.com/ingcreators/annot/pull/977) (1h) /
-> [#978](https://github.com/ingcreators/annot/pull/978) (1i).
+> **Status:** Phase 1 + Phase 2 both landed 2026-05-23.
+>
+> Phase 1 sub-phases 1a–1i:
+> [#970](https://github.com/ingcreators/annot/pull/970) /
+> [#971](https://github.com/ingcreators/annot/pull/971) /
+> [#972](https://github.com/ingcreators/annot/pull/972) /
+> [#973](https://github.com/ingcreators/annot/pull/973) /
+> [#974](https://github.com/ingcreators/annot/pull/974) /
+> [#975](https://github.com/ingcreators/annot/pull/975) /
+> [#976](https://github.com/ingcreators/annot/pull/976) /
+> [#977](https://github.com/ingcreators/annot/pull/977) /
+> [#978](https://github.com/ingcreators/annot/pull/978).
 >
 > **Phase 1 cleanup PR** (the destructive removal Phase 1i
-> intentionally deferred) lands the following invariant:
-> `PageMetadata` / `PageElement` types deleted from
-> `packages/core/src/storage/types.ts`, `pageMetadata` field on
-> `ImageRecord` replaced by `elementTree`, capture orchestrator
-> `host.requestPageMetadata` renamed to `host.requestElementTree`,
-> `Frame.pageMetadata` field renamed to `Frame.elementTree`, the
-> legacy MAIN-world walker (`page-metadata-walker.ts`) and the
-> `pageMetadataToElementTree` adapter deleted, every consumer
-> (extension capture pipeline, desktop click-hotkey, PWA editor
-> session, host-ui right-panel, VSCode webview, gallery) migrated
-> to read / write ElementTree directly. Single canonical model
-> on every capture / storage / consumer path.
+> intentionally deferred):
+> [#980](https://github.com/ingcreators/annot/pull/980) —
+> `PageMetadata` / `PageElement` deleted; `ImageRecord.elementTree`
+> replaces `pageMetadata`; `host.requestElementTree` replaces
+> `requestPageMetadata`; legacy walker + adapter removed; every
+> consumer migrated. Single canonical model on every capture /
+> storage / consumer path.
 >
-> **Phase 2 in progress** — annotation yaml extraction + new
-> `<AnnotCallout>` JSX. Decomposed into sub-phases 2a–2e (see the
-> table inside Phase 2 below); each sub-phase lands as an
-> independent revertable PR, mirroring the Phase 1 shape.
+> Phase 2 sub-phases 2a–2e:
+> [#981](https://github.com/ingcreators/annot/pull/981) (2a — Tier A annotation yaml types + parser + serializer) /
+> [#982](https://github.com/ingcreators/annot/pull/982) (2b — `<AnnotCallout>` + `<Screen annotations>` prop + yaml-driven Image Service) /
+> [#983](https://github.com/ingcreators/annot/pull/983) (2c — drift detector cross-refs + `lint --check-descriptions`) /
+> [#984](https://github.com/ingcreators/annot/pull/984) (2d — `annot-docs migrate-overlays-to-annotations` CLI) /
+> 2e (this PR — soft-deprecation shim for inline `<Overlay>`).
+>
+> Phase 2e closes Phase 2. Removal of the legacy `<Overlay>` JSX
+> is a separate PR scheduled per OQ-08 (~2-3 release cycles
+> after 2e). Until then both forms work end-to-end.
 >
 > Original plan body below was written 2026-05-22 as the synthesis of a long
 > design discussion that started from

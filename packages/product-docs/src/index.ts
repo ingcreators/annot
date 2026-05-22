@@ -32,6 +32,12 @@ export {
   defineConfig,
   isScreenRole,
 } from "./config.js";
+export type { LegacyOverlayUsage } from "./deprecation.js";
+export {
+  _resetLegacyOverlayDedupForTests,
+  formatLegacyOverlayWarning,
+  warnLegacyOverlay,
+} from "./deprecation.js";
 export type {
   DetectDriftOptions,
   DriftFinding,

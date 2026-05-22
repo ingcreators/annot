@@ -31,6 +31,14 @@ export type OverlayIntent =
   | "required"
   | "action";
 
+/**
+ * @deprecated Phase 2e of
+ * `docs/plans/living-spec-authoring-roadmap.md`. The inline
+ * `<Overlay match intent number>body</Overlay>` form is being
+ * replaced by the Phase 2b yaml + `<AnnotCallout for>` shape.
+ * Migrate with `annot docs migrate-overlays-to-annotations`.
+ * Slated for removal per OQ-08 (~2-3 release cycles after 2e).
+ */
 export interface OverlaySpec {
   match: MatchKey;
   intent?: OverlayIntent;
