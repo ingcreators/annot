@@ -397,6 +397,7 @@ revertable; collectively they implement the 3-layer model.
 | 1 | PNG XMP snapshot/attributes cache | ~3 PRs | annot |
 | 2 | Annotation yaml extraction + `<AnnotCallout>` JSX | ~5 PRs | annot |
 | 3 | Annotation palette extension (arrows / rect / freehand / etc.) | ~4 PRs | annot |
+| 3 follow-up | Mosaic / blur redact raster path + `burnRedactions` relocation | ~4 PRs | annot |
 | 4 | Annot editor's Overlay tool + yaml writer | ~6 PRs | annot |
 | 5 | Embedded editor + GitHub round-trip | ~8 PRs | annot + annot-cloud |
 | 6 | `.annot.mdx` unified authoring surface (MDXEditor + image-click modal) | ~10 PRs (6 sub-phases) | annot |
@@ -764,13 +765,10 @@ toward match-anchored when possible.
 
 #### Out of scope for Phase 3
 
-- Mosaic / blur redact rendering. These need raster pixel
-  data (the existing `burnRedactions` path in
-  `@ingcreators/annot-mcp` covers it destructively, but the
-  Image Service is SVG-fragment-driven and a non-destructive
-  mosaic / blur primitive would need a different renderer).
-  Tracked as a Phase 3 follow-up; `style: solid` ships now,
-  `style: "mosaic" | "blur"` rejected by the parser until
+- Mosaic / blur redact rendering. Tracked as the
+  [Phase 3 follow-up](#phase-3-follow-up--mosaic--blur-redact-raster-path)
+  section below; `style: solid` ships in 3a–3d,
+  `style: "mosaic" | "blur"` is rejected by the parser until
   the renderer lands.
 - An `image` annotation kind (overlay another image on top
   of the screenshot). Reserved for a later phase if the use
@@ -781,6 +779,129 @@ toward match-anchored when possible.
   resolver's drift output is sufficient for now; a stricter
   per-variant validator can layer on later if the noise gets
   unmanageable.
+
+### Phase 3 follow-up — Mosaic / blur redact (raster path)
+
+**Goal**: Extend `redact` annotations beyond `style: solid` to
+support `mosaic` and `blur`. Both require raster pixel access
+(read the underlying screenshot bitmap, transform a region,
+write back) — distinct from the SVG-fragment composition path
+Phase 3 ships, which is why 3a–3d intentionally rejects them
+at the parser.
+
+**Why this isn't just a parser relaxation**: The Astro Image
+Service composes SVG fragments on top of a base PNG via the
+headless annotator's `toPng({ originalDataUrl, annotationsSvg,
+... })`. Mosaic and blur cannot be expressed as SVG fragments
+inside that path — they need to read RGBA pixels from the
+base, average / blur them per region, and emit a modified
+PNG. This is fundamentally a raster transform, not an SVG
+overlay. The Phase 3 follow-up wires that pre-processing
+pass in before SVG composition.
+
+**Pre-requisite — relocate `burnRedactions`**: The Node-side
+raster burn primitive (solid / mosaic / blur over a PNG buffer)
+already exists at
+[`packages/mcp/src/redact/burn.ts`](../../packages/mcp/src/redact/burn.ts),
+built on `@napi-rs/canvas`. It lives in `@ingcreators/annot-mcp`
+for historical reasons (the MCP server's `annot_redact_screenshot`
+tool was the first caller), but the function itself has no
+MCP-specific surface — it's pure (`pngBytes + regions →
+pngBytes`).
+
+For the follow-up the Image Service needs to call it without
+dragging the MCP server's dep footprint (Playwright,
+`@modelcontextprotocol/sdk`, etc.) into the Astro adapter.
+The cleanest move is to **relocate `burnRedactions` to
+`@ingcreators/annot-annotator`** — the canonical Node-side
+raster home, which already depends on `@napi-rs/canvas` for
+its encode pipeline (so the move adds zero transitive deps).
+MCP keeps its current API by re-exporting from annotator;
+Astro / Playwright / agent callers consume from annotator
+directly.
+
+Alternative considered: a standalone `@ingcreators/annot-redact`
+package. Rejected for v1 — annotator is the obvious home for
+"Node-side raster work that's docs/agents agnostic", and
+single-purpose packages can split out later if the surface
+grows. If a second non-redact raster utility lands, we
+revisit (likely splitting into `@ingcreators/annot-raster`).
+
+#### Sub-phases
+
+| Sub | Output | Scope |
+|---|---|---|
+| **3e** | Relocate `burnRedactions` + `RedactRegion` from `@ingcreators/annot-mcp/redact/burn` to `@ingcreators/annot-annotator/redact-burn`. annotator exports it from its root entry. MCP's existing `redact/burn.ts` becomes a one-line re-export of the new home so `annot_redact_screenshot` + every other MCP caller keeps working byte-identical. Tests move with the code; new annotator tests cover the same solid / mosaic / blur scenarios. Pure refactor, no behaviour change. | annotator + mcp coordinated bump (annotator minor for the new surface; mcp patch — re-export only). Changeset for both. |
+| **3f** | Yaml parser relaxation. `packages/product-docs/src/annotations-yaml.ts` accepts `redact.style: "mosaic" \| "blur"` alongside the existing `"solid"`. Roundtrip + parser tests cover all three. The Phase 3a rejection message disappears for these values. | Tier A only. No renderer changes. After this PR the parser accepts the values but the Image Service drops them on the floor (raster path lands in 3g). |
+| **3g** | Image Service raster composition. `packages/product-docs-astro/src/render.ts` walks `annotations[]` for `redact` entries with raster styles BEFORE SVG-fragment composition, resolves cutouts to bboxes, calls `burnRedactions` on the base PNG, then proceeds with normal SVG composition for the remaining annotations (including any `style: solid` redacts, which keep going through the existing filled-rect path for consistency). End-to-end render tests verify pixel-level hashes on a synthetic PNG. Cache key includes the raster pass so a yaml edit invalidates correctly. | The user-visible PR — Astro builds now bake mosaic / blur redacts onto the screenshot. |
+| **3h** | workflow-app dogfood. One screen (`OM-003-application-form` is a natural fit — the reason textbox carries free-text PII in the demo) gets a `redact { style: mosaic }` entry to exercise the new path through the docs-site build. Documents the editorial pattern for downstream consumers. | One-MDX dogfood. Mirrors Phase 3d's OM-001-login migration. |
+
+Each sub-phase lands as an independent PR, merged before the
+next starts, mirroring Phase 1's / Phase 2's / Phase 3's
+rhythm.
+
+#### Files added / moved
+
+- `packages/annotator/src/redact-burn.ts` — moved from `packages/mcp/src/redact/burn.ts` (3e)
+- `packages/annotator/src/redact-burn.test.ts` — moved from `packages/mcp/src/redact/burn.test.ts` (3e)
+
+#### Files modified
+
+- `packages/annotator/src/index.ts` — exports `burnRedactions` + `RedactRegion` (3e)
+- `packages/mcp/src/redact/burn.ts` — replaced by a re-export from annotator (3e)
+- `packages/mcp/src/index.ts` — keeps its existing `burnRedactions` / `RedactRegion` exports, now sourced from annotator transitively (3e)
+- `packages/product-docs/src/annotations-yaml.ts` — `redact.style` enum widens to `"solid" | "mosaic" | "blur"` (3f)
+- `packages/product-docs/src/annotations-yaml.test.ts` — extra cases per style (3f)
+- `packages/product-docs-astro/src/render.ts` — raster pre-processing pass + cache-key update (3g)
+- `packages/product-docs-astro/src/render.test.ts` — per-style end-to-end coverage (3g)
+- `examples/workflow-app/docs/books/operation-manual/OM-003-application-form.mdx` + companion `.annotations.yaml` — mosaic dogfood (3h)
+
+#### Schema versioning
+
+The `mosaic` / `blur` additions are additive within `version: 1`
+per OQ-01 — the schema header doesn't bump. Pre-3f files
+without raster redacts parse unchanged; post-3f files with
+mosaic / blur values are rejected by the *pre-3f parser*
+(unsupported style), which is the correct loud-failure
+behaviour for a non-additive value change. Consumers running
+older `@ingcreators/annot-product-docs` see the rejection
+and upgrade.
+
+#### Verification
+
+- annotator tests (3e) — every solid / mosaic / blur scenario
+  the existing MCP burn tests covered passes at the new home;
+  no test regression in MCP.
+- Yaml roundtrip (3f) — every `RedactStyle` (`solid` /
+  `mosaic` / `blur`) survives parse → serialize → parse
+  byte-equivalent.
+- Image Service composition (3g) — synthetic PNG +
+  per-style redact yaml produces deterministic pixel-hash
+  output. `solid` continues to flow through the SVG path
+  (Phase 3c parity); `mosaic` / `blur` flow through the
+  raster pre-pass.
+- workflow-app build (3h) — docs-site Astro build green;
+  mosaic redact visible on the rendered application-form
+  screenshot.
+
+#### Out of scope for the follow-up
+
+- Per-region mosaic block size / blur radius customisation
+  in yaml. The defaults (`MOSAIC_BLOCK_PX = 16` /
+  `BLUR_RADIUS_PX = 12`, matching the editor) cover the
+  common screenshot scale; a yaml-side override (e.g.
+  `redact.style: mosaic` + `redact.blockSize: 32`) is
+  reserved for a later PR if the demand surfaces.
+- Editor's redact-tool UX changes. The editor's existing
+  redact tool ships solid / mosaic / blur today; Phase 4
+  covers tool integration with the new yaml writer. No
+  changes to the live editor in this follow-up.
+- Custom color for solid (already supported via Phase 3a's
+  `fill` field).
+- A non-destructive editor preview for mosaic / blur (the
+  editor's tool already previews raster styles via its
+  in-editor canvas path). The follow-up only affects the
+  headless Astro build.
 
 ### Phase 4 — Annot editor's Overlay tool + yaml writer
 
