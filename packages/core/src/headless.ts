@@ -350,5 +350,16 @@ export {
 } from "./utils/filename.js";
 // ─── ID generation (Web Crypto, Node 19+ or `node:crypto` webcrypto) ──
 export { newIdB58 } from "./utils/id.js";
+// ─── ElementTree PNG XMP payload (Tier A) ────────────────────────────
+// Phase 1d of `docs/plans/living-spec-authoring-roadmap.md`. PNG
+// iTXt chunk read / write keyed by `annot:elementTree`,
+// deflate-compressed YAML. See `docs/element-tree.md` for the wire
+// format spec.
+export {
+  ELEMENT_TREE_ITXT_KEYWORD,
+  hasElementTreePng,
+  readElementTreePng,
+  writeElementTreePng,
+} from "./xmp/element-tree-payload.js";
 // ─── ZIP builder (Uint8Array + Blob; no DOM) ──────────────────────────
 export { buildZip, dataUrlExt, dataUrlToBytes } from "./zip/zip-builder.js";

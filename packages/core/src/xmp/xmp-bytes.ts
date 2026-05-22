@@ -49,11 +49,17 @@ export function buildXmp(
 
 // ─── Byte helpers ───────────────────────────────────────────────────
 
+// Re-exported as the building blocks for `element-tree-payload.ts`
+// (Phase 1d of `docs/plans/living-spec-authoring-roadmap.md`). The
+// internal helpers below were lifted to `export` purely so a sibling
+// module can reuse them without copy-paste; the function bodies are
+// unchanged.
+
 function u16be(n: number): Uint8Array {
   return new Uint8Array([(n >> 8) & 0xff, n & 0xff]);
 }
 
-function u32be(n: number): Uint8Array {
+export function u32be(n: number): Uint8Array {
   return new Uint8Array([(n >> 24) & 0xff, (n >> 16) & 0xff, (n >> 8) & 0xff, n & 0xff]);
 }
 
@@ -63,7 +69,7 @@ function readU16be(data: Uint8Array, offset: number): number {
   return (data[offset]! << 8) | data[offset + 1]!;
 }
 
-function readU32be(data: Uint8Array, offset: number): number {
+export function readU32be(data: Uint8Array, offset: number): number {
   return (
     ((data[offset]! << 24) |
       (data[offset + 1]! << 16) |
@@ -73,7 +79,7 @@ function readU32be(data: Uint8Array, offset: number): number {
   );
 }
 
-function concat(...arrays: Uint8Array[]): Uint8Array {
+export function concat(...arrays: Uint8Array[]): Uint8Array {
   let totalLen = 0;
   for (const a of arrays) totalLen += a.length;
   const result = new Uint8Array(totalLen);
@@ -85,7 +91,7 @@ function concat(...arrays: Uint8Array[]): Uint8Array {
   return result;
 }
 
-function startsWith(data: Uint8Array, offset: number, prefix: Uint8Array): boolean {
+export function startsWith(data: Uint8Array, offset: number, prefix: Uint8Array): boolean {
   if (offset + prefix.length > data.length) return false;
   for (let i = 0; i < prefix.length; i++) {
     if (data[offset + i] !== prefix[i]) return false;
@@ -180,7 +186,7 @@ const CRC32_TABLE = (() => {
   return table;
 })();
 
-function crc32(data: Uint8Array): number {
+export function crc32(data: Uint8Array): number {
   let crc = 0xffffffff;
   for (let i = 0; i < data.length; i++) {
     // `CRC32_TABLE` has 256 entries; `(crc ^ data[i]) & 0xff` is a
@@ -191,7 +197,7 @@ function crc32(data: Uint8Array): number {
   return (crc ^ 0xffffffff) >>> 0;
 }
 
-function buildPngChunk(chunkType: Uint8Array, data: Uint8Array): Uint8Array {
+export function buildPngChunk(chunkType: Uint8Array, data: Uint8Array): Uint8Array {
   const typeAndData = concat(chunkType, data);
   const crc = crc32(typeAndData);
   return concat(u32be(data.length), typeAndData, u32be(crc));
