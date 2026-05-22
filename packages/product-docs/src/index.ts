@@ -14,6 +14,13 @@
 // sentinel on the resolver reference makes re-import a no-op.
 import "./playwright-screenshot-hook.js";
 
+export type { AnnotationsFile, OverlayEntry } from "./annotations-yaml.js";
+export {
+  ANNOTATIONS_YAML_VERSION,
+  AnnotationsYamlError,
+  parseAnnotationsYaml,
+  serializeAnnotationsYaml,
+} from "./annotations-yaml.js";
 export {
   filterAnnotMdxFiles,
   main,
