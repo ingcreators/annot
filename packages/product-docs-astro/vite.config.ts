@@ -67,13 +67,7 @@ export default defineConfig({
     emptyOutDir: true,
     target: "es2022",
     rollupOptions: {
-      external: [
-        "astro",
-        /^astro\//,
-        "@playwright/test",
-        /^@ingcreators\//,
-        /^node:/,
-      ],
+      external: ["astro", /^astro\//, "@playwright/test", /^@ingcreators\//, /^node:/],
     },
   },
 });
