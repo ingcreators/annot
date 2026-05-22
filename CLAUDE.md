@@ -336,15 +336,16 @@ references at all?" — `annot-core` root.
   [`docs/plans/path-based-storage.md`](./docs/plans/path-based-storage.md)
   (queued).
 
-### 4. PageMetadata schema is additive-only
+### 4. ElementTree schema is additive-only
 
-- Location: `packages/core/src/storage/types.ts`
-  (`PageMetadata`, `PageElement`).
+- Location: `packages/core/src/element-tree/types.ts`
+  (`ElementTree`, `ElementNode`, `BBox`). Wire format spec:
+  [`docs/element-tree.md`](./docs/element-tree.md).
 - OK: add optional fields, add optional sub-objects.
 - NOT OK: rename existing fields, change the semantics of a field,
   remove a field.
-- Future-proofing: Playwright integration will populate a
-  `locator?: string` field. Treat that name as reserved.
+- Future-proofing: Playwright integration may eventually populate a
+  per-node `locator?: string` field. Treat that name as reserved.
 
 ### 5. Public API of `@ingcreators/annot-core` / `-editor` / `-render`
 
@@ -359,7 +360,8 @@ in section 2 above.
 |---------|---------|
 | `@ingcreators/annot-core` (or `/headless`) | Tier A. DOM-free: SVG format versioning, storage types, path utilities, capability predicates, dash utils, constants, id, assertNonNull, ZIP builder. **Importable in pure Node.** |
 | `@ingcreators/annot-core/editor` | Tier B. jsdom-friendly element-taking helpers: `arrow-markers`, `transform-utils`, `shape-utils`, `text-utils` (unified text-bearing shape skeleton — every text-carrying element is `<g data-type="shape" data-shape-kind="...">` with per-`<tspan>` formatting on bold / italic / underline / size / family / color), `rich-text-mapper` (contentEditable HTML ↔ `TextRun[]`), `gradient-utils`, `tool-options` types, svg-format, toolbar-icons. No `<canvas>`. |
-| `@ingcreators/annot-core/storage` | Tier A. Storage value types (`ImageRecord`, `FolderRecord`, `PageElement`, `PageMetadata`, `StorageProvider`). |
+| `@ingcreators/annot-core/storage` | Tier A. Storage value types (`ImageRecord`, `FolderRecord`, `StorageProvider`). |
+| `@ingcreators/annot-core/element-tree` | Tier A. Canonical screen-capture model (`ElementTree`, `ElementNode`, `BBox`) + YAML / JSON serializers + walk/find/flatten utilities. See [`docs/element-tree.md`](./docs/element-tree.md). |
 | `@ingcreators/annot-core/utils` | Tier A. Pure utilities: `assertNonNull`, `computeDasharray`, `detectDashKey`, `newIdB58`, `DEFAULT_*` constants. |
 | `@ingcreators/annot-core/xmp` | Browser-side. `createEditableImage` / `readEditableImage` round-trip. |
 | `@ingcreators/annot-core/desktop-bridge` | Browser-side. Desktop-host IPC + `isDesktop` detection. Speaks Electron via `window.electronAPI.invoke` (Phase 9 of `_done/desktop-electron-migration.md` removed the Tauri sources + the dual-transport fallback). |
@@ -1061,8 +1063,8 @@ Before declaring a feature done:
 - [ ] If `StorageProvider` changed, all four existing implementations
       compile AND the change is marked optional for the future
       GitHubStore
-- [ ] If `PageMetadata` / `PageElement` changed, the change is purely
-      additive
+- [ ] If `ElementTree` changed, the change is purely additive
+      (no renames, no field removals)
 - [ ] No new DOM dependencies introduced into `packages/core` outside
       of the editor UI layer
 - [ ] Diagnostic `console.log` lines removed (or clearly marked
@@ -1075,7 +1077,7 @@ Before declaring a feature done:
 - The extension saves captures to its own IDB, then the PWA
   transfers them via `transferAllFromExtension` into local storage.
 - **Every field in `ImageRecord` must be explicitly carried through
-  the transfer call**. Missing one (e.g. `pageMetadata`) silently
+  the transfer call**. Missing one (e.g. `elementTree`) silently
   drops that data. History: April 2026 — DOM metadata was lost
   between extension → PWA because the transfer call didn't pass it.
 
@@ -1115,13 +1117,15 @@ Before declaring a feature done:
 
 ### DOM metadata collection runs in MAIN world
 
-The walker that produces `PageMetadata` for the editor's Elements
-panel lives in `requestPageMetadata` in
-[`packages/extension/src/background/service-worker.ts`](./packages/extension/src/background/service-worker.ts)
-and is injected via `chrome.scripting.executeScript({world:
-"MAIN"})`. The function body is intentionally inlined and self-
-contained (no module imports) because `executeScript({func})`
-cannot accept closures or external references.
+The walker that produces the `ElementTree` for the editor's
+Elements panel — `walkElementTree` in
+[`packages/capture/src/content/element-tree-walker.ts`](./packages/capture/src/content/element-tree-walker.ts)
+— is injected by the extension host
+([`packages/extension/src/background/host.ts`](./packages/extension/src/background/host.ts))
+via `chrome.scripting.executeScript({ world: "MAIN" })`. The
+function body is intentionally inlined and self-contained (no
+module imports) because `executeScript({func})` cannot accept
+closures or external references.
 
 **Don't move this back into the isolated-world content script.**
 Empirically (b.hatena.ne.jp/hotentry/it on Chrome 134), the

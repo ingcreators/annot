@@ -529,10 +529,11 @@ export class App {
         folderPath: this.#currentFolderPath,
         createdAt: now,
         updatedAt: now,
-        // Carry DOM element metadata through the extension → app
-        // hand-off so smart annotations (Elements sidebar) work on
-        // freshly-captured screenshots, not just reloads.
-        pageMetadata: record.pageMetadata,
+        // Carry the canonical screen-capture tree through the
+        // extension → app hand-off so smart annotations (Elements
+        // sidebar) work on freshly-captured screenshots, not just
+        // reloads.
+        elementTree: record.elementTree,
       });
 
       this.#currentImagePath = savedPath;
@@ -540,10 +541,10 @@ export class App {
       this.#fileManager = null;
 
       logger.debug(
-        "[annot/app] handoff record.pageMetadata:",
-        record.pageMetadata ? `${record.pageMetadata.elements.length} elements` : "none",
+        "[annot/app] handoff record.elementTree:",
+        record.elementTree ? `root role=${record.elementTree.root.role}` : "none",
       );
-      this.#editorSession.setupEditor(record.originalDataUrl, w, h, undefined, record.pageMetadata);
+      this.#editorSession.setupEditor(record.originalDataUrl, w, h, undefined, record.elementTree);
 
       pushRoute(editUrl(getStorageMode(), savedPath));
 
@@ -864,7 +865,7 @@ export class App {
       w,
       h,
       full.annotationsSvg || undefined,
-      full.pageMetadata,
+      full.elementTree,
     );
   }
 

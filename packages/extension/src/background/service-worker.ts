@@ -149,7 +149,7 @@ async function openEditorWithFrame(frame: CaptureFrame, sourceUrl: string): Prom
     folderPath: "",
     createdAt: now,
     updatedAt: now,
-    pageMetadata: frame.pageMetadata ?? undefined,
+    elementTree: frame.elementTree ?? undefined,
   });
 
   const extId = chrome.runtime.id;
@@ -185,7 +185,7 @@ async function saveAsScrollSession(frame: CaptureFrame, sourceUrl: string): Prom
     folderPath: "",
     createdAt: now,
     updatedAt: now,
-    pageMetadata: frame.pageMetadata,
+    elementTree: frame.elementTree,
   });
   await openOrReuseAnnotTab(chrome.runtime.id, sessionId);
 }
@@ -220,7 +220,7 @@ async function saveAsPerPageSession(frames: CaptureFrame[], sourceUrl: string): 
       folderPath: "",
       createdAt: now,
       updatedAt: now,
-      pageMetadata: frame.pageMetadata,
+      elementTree: frame.elementTree,
     });
   }
 
@@ -674,7 +674,7 @@ async function hotkeyCaptureShot(firedTab?: chrome.tabs.Tab): Promise<void> {
     }
     Object.assign(tags, urlTags(url));
 
-    const meta = injectable ? await host.requestPageMetadata(target) : null;
+    const tree = injectable ? await host.requestElementTree(target) : null;
 
     await idbStore.saveImage({
       originalDataUrl: dataUrl,
@@ -687,7 +687,7 @@ async function hotkeyCaptureShot(firedTab?: chrome.tabs.Tab): Promise<void> {
       folderPath: "",
       createdAt: ts,
       updatedAt: ts,
-      pageMetadata: meta ?? undefined,
+      elementTree: tree ?? undefined,
     });
 
     hotkeyState.count += 1;
@@ -1077,7 +1077,7 @@ async function performAutoCapture(opts: { kind: "observer" | "probe" | "manual" 
     };
     Object.assign(tags, urlTags(url));
 
-    const meta = await host.requestPageMetadata(target);
+    const tree = await host.requestElementTree(target);
 
     await idbStore.saveImage({
       originalDataUrl: dataUrl,
@@ -1090,7 +1090,7 @@ async function performAutoCapture(opts: { kind: "observer" | "probe" | "manual" 
       folderPath: "",
       createdAt: ts,
       updatedAt: ts,
-      pageMetadata: meta ?? undefined,
+      elementTree: tree ?? undefined,
     });
 
     autoState.count += 1;

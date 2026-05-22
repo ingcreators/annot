@@ -2,26 +2,17 @@
  * MAIN-world DOM walker that produces an `ElementTree` snapshot for
  * the canonical living-spec model.
  *
- * Phase 1c of `docs/plans/living-spec-authoring-roadmap.md`. Sibling
- * to `page-metadata-walker.ts` — the new walker produces the
- * `ElementTree` shape from `@ingcreators/annot-core/element-tree`
- * (added in 1a) instead of the legacy flat `PageMetadata`.
+ * Produces the `ElementTree` shape from
+ * `@ingcreators/annot-core/element-tree`. Invoked by the chrome
+ * extension's capture host (and the Electron Browse window's host)
+ * via `chrome.scripting.executeScript({ func: walkElementTree,
+ * world: "MAIN" })` / `webContents.executeJavaScript(...)`.
  *
- * Both walkers coexist during the multi-PR migration:
- *   - 1c (this PR) lands the new walker as ADDITIVE
- *   - 1e wires capture orchestrators to invoke this walker alongside
- *     the legacy one + persist the result to PNG XMP
- *   - 1f migrates the editor's Elements panel to consume ElementTree
- *   - 1i removes `page-metadata-walker.ts` + the storage `PageMetadata`
- *     type entirely
- *
- * **This function MUST stay closure-free.** Same contract as the
- * legacy walker: the chrome host calls
- * `chrome.scripting.executeScript({ func: walkElementTree, world:
- * "MAIN", args: [region] })`, which serializes the function body via
- * `func.toString()` and runs it in the page's main realm. Any
- * external module reference inside the body becomes an undefined
- * identifier at runtime — keep imports out of the function body.
+ * **This function MUST stay closure-free.** The host serializes the
+ * function body via `func.toString()` and runs it in the page's
+ * main realm. Any external module reference inside the body becomes
+ * an undefined identifier at runtime — keep imports out of the
+ * function body.
  *
  * Returns an `ElementTree`-shaped object. The function declares the
  * shape inline (rather than importing from `@ingcreators/annot-core`)

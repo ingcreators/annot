@@ -67,19 +67,18 @@ export async function runScrollCapture(host: CaptureHost): Promise<CaptureResult
       await delay(settings.timing.interSegmentMs);
     }
 
-    // Snapshot DOM metadata for the WHOLE stitched document AFTER the
-    // last `captureViewport` (the most recently-visible
+    // Snapshot the ElementTree for the WHOLE stitched document AFTER
+    // the last `captureViewport` (the most recently-visible
     // `content-visibility: auto` descendants are laid out) but BEFORE
     // `endCapturePrep` (stickies stay hidden, matching the screenshots
-    // taken throughout the loop). The `area` argument rewrites
-    // `captureRect` in document coords to span the entire stitched
-    // image: `region` is viewport-relative, so we offset by the
-    // CURRENT scroll (= last segment's scrollY) to make
-    // `captureRect.y` land at 0 in document coords.
+    // taken throughout the loop). The `area` argument rewrites the
+    // viewport-relative `region` to span the entire stitched image:
+    // we offset by the CURRENT scroll (= last segment's scrollY) so
+    // the tree's root bbox lands at 0 in document coords.
     const dimsAtEnd = await host.sendToContent<PageDimensions>(target, {
       type: "get-page-dimensions",
     });
-    const stitchedMeta = await host.requestPageMetadata(target, {
+    const stitchedTree = await host.requestElementTree(target, {
       x: -dimsAtEnd.scrollX,
       y: -dimsAtEnd.scrollY,
       width: dimsAtEnd.scrollWidth,
@@ -118,7 +117,7 @@ export async function runScrollCapture(host: CaptureHost): Promise<CaptureResult
       dataUrl: encoded?.dataUrl ?? stitchedDataUrl,
       width: plan.stitchWidth,
       height: plan.stitchHeight,
-      pageMetadata: stitchedMeta ?? undefined,
+      elementTree: stitchedTree ?? undefined,
     };
     await sendHideProgress(host, target);
     return { target, frames: [frame], kind: "scroll" };

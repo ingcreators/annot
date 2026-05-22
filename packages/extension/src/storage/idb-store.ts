@@ -86,10 +86,10 @@ export async function saveImage(
     tags: data.tags,
     createdAt: data.createdAt,
     updatedAt: data.updatedAt,
-    // Persist DOM-element metadata when the capture path supplied it
-    // (browser extension captures only). Editor uses this for smart
-    // annotations; it's safe to omit for non-browser sources.
-    ...(data.pageMetadata ? { pageMetadata: data.pageMetadata } : {}),
+    // Persist the canonical screen-capture tree when the capture path
+    // supplied it (browser extension captures only). Editor uses this
+    // for smart annotations; it's safe to omit for non-browser sources.
+    ...(data.elementTree ? { elementTree: data.elementTree } : {}),
   };
   const db = await openDB();
   await new Promise<void>((resolve, reject) => {

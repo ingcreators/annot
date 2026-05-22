@@ -189,14 +189,17 @@ Flipping is recorded as:
 
 Two extension surfaces that are part of the contract:
 
-### 1. `PageMetadata` (DOM elements from capture)
+### 1. `ElementTree` (canonical screen-capture model)
 
-Stored **alongside** the SVG in the storage record, not inside the
-SVG itself. See `PageMetadata` / `PageElement` in
-`packages/core/src/storage/types.ts`.
+Stored **inside** the captured PNG as a deflate-compressed `iTXt`
+chunk keyed `annot:elementTree`, and (transiently) on the storage
+record as `ImageRecord.elementTree`. See `ElementTree` in
+[`packages/core/src/element-tree/types.ts`](../packages/core/src/element-tree/types.ts)
+and the wire-format spec in [`element-tree.md`](./element-tree.md).
 
-This is the bridge to the future Playwright integration — locators
-will be synthesized from / mapped to these records.
+This is the bridge to the Playwright integration — locators are
+mapped to / from these records by the resolver in
+`@ingcreators/annot-product-docs`.
 
 ### 2. XMP (editable image round-trip)
 
@@ -220,9 +223,10 @@ Readers treat missing attribute as v0 and re-stamp on save.
 
 ## Open questions (track here before the schema freeze)
 
-- [ ] Should `PageMetadata` be embeddable inside the SVG as a
-      `<metadata>` element for single-file portability? Trades file
-      size against simplicity of the storage contract.
+- [ ] Should the `annot:elementTree` PNG XMP payload have an
+      analogous embed point inside the SVG (`<metadata>` child) for
+      single-file SVG portability? Trades file size against simplicity
+      of the storage contract.
 - [ ] Namespacing: do we want
       `xmlns:annot="https://ingcreators.com/annot/ns/1.0/"` and
       `<annot:*>` elements instead of `data-*` attributes? More

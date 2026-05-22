@@ -183,35 +183,30 @@ describe("selection-properties section", () => {
 });
 
 describe("page-elements section", () => {
-  // Minimal PageMetadata factory — just the fields the section
+  // Minimal ElementTree factory — just the fields the section
   // consults on visible() / mount().
-  function pageMeta(elements: number, overrides: Record<string, unknown> = {}) {
+  function elementTree(elements: number) {
     return {
-      version: 1,
-      url: "https://example.test",
-      viewport: { width: 800, height: 600 },
-      devicePixelRatio: 1,
-      scrollOffset: { x: 0, y: 0 },
-      captureRect: { x: 0, y: 0, width: 800, height: 600 },
-      capturedAt: "2026-01-01T00:00:00Z",
-      elements: Array.from({ length: elements }, (_, i) => ({
-        id: `el-${i}`,
-        tag: "button",
-        text: `Button ${i}`,
-        bbox: [10, 10, 100, 30] as [number, number, number, number],
-        visible: true,
-      })),
-      ...overrides,
-    } as unknown as Parameters<typeof createPageElementsSection>[0] extends {
-      getPageMetadata(): infer T;
-    }
-      ? T
-      : never;
+      version: 1 as const,
+      source: { kind: "extension" as const, capturedAt: "2026-01-01T00:00:00Z" },
+      viewport: { width: 800, height: 600, scale: 1 },
+      root: {
+        ref: "e0",
+        role: "document",
+        bbox: { x: 0, y: 0, width: 800, height: 600 },
+        children: Array.from({ length: elements }, (_, i) => ({
+          ref: `e${i + 1}`,
+          role: "button",
+          name: `Button ${i}`,
+          bbox: { x: 10, y: 10 + i * 40, width: 100, height: 30 },
+        })),
+      },
+    };
   }
 
-  it("hides itself when there's no metadata", () => {
+  it("hides itself when there's no tree", () => {
     const section = createPageElementsSection({
-      getPageMetadata: () => null,
+      getElementTree: () => null,
       getCanvas: () => ({ svg: {} as SVGSVGElement, annotations: {} as SVGGElement }) as never,
       getHistory: () => ({ save: () => {} }) as never,
       getSelection: () => ({ select: () => {} }) as never,
@@ -219,9 +214,9 @@ describe("page-elements section", () => {
     expect(section.visible?.(fakeCtx())).toBe(false);
   });
 
-  it("hides itself when the metadata has zero elements", () => {
+  it("hides itself when the tree has zero named children", () => {
     const section = createPageElementsSection({
-      getPageMetadata: () => pageMeta(0),
+      getElementTree: () => elementTree(0),
       getCanvas: () => ({ svg: {} as SVGSVGElement, annotations: {} as SVGGElement }) as never,
       getHistory: () => ({ save: () => {} }) as never,
       getSelection: () => ({ select: () => {} }) as never,
@@ -229,9 +224,9 @@ describe("page-elements section", () => {
     expect(section.visible?.(fakeCtx())).toBe(false);
   });
 
-  it("renders an interactive list when metadata carries elements", async () => {
+  it("renders an interactive list when the tree carries elements", async () => {
     const section = createPageElementsSection({
-      getPageMetadata: () => pageMeta(3),
+      getElementTree: () => elementTree(3),
       getCanvas: () => ({ svg: {} as SVGSVGElement, annotations: {} as SVGGElement }) as never,
       getHistory: () => ({ save: () => {} }) as never,
       getSelection: () => ({ select: () => {} }) as never,

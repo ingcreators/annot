@@ -1,13 +1,12 @@
 /**
- * Helpers for the tree-view variant of the page-elements section
- * — Phase 1f of `docs/plans/living-spec-authoring-roadmap.md`.
- * These mirror `element-helpers.ts` but accept the canonical
- * `ElementNode` (from `@ingcreators/annot-core/element-tree`)
- * instead of the legacy flat `PageElement`. The two helper sets
- * coexist during the migration; Phase 1i removes the legacy ones.
+ * Helpers for the tree-view page-elements section. Pure functions
+ * of an `ElementNode` (from `@ingcreators/annot-core/element-tree`)
+ * plus the SVG namespace constant.
  */
 
 import type { ElementNode } from "@ingcreators/annot-core";
+
+export const SVG_NS = "http://www.w3.org/2000/svg";
 
 /** Material Symbols glyph name appropriate to the node's role. */
 export function iconForElementNode(node: ElementNode): string {

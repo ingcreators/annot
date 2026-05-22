@@ -599,7 +599,7 @@ export class AnnotDocImageEditorModalElement extends LitElement {
     panel.refreshRedactCount();
     rightPanelMount.appendChild(panel);
     this.#rightPanel = panel;
-    panel.setPageMetadata(shell.getCurrentPageMetadata());
+    panel.setElementTree(shell.getCurrentElementTree());
 
     // Toolbar — vertical strip on the left. Same hidden-affordance
     // bag the VSCode webview uses (no theme toggle / gallery /

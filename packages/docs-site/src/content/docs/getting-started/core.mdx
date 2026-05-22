@@ -22,8 +22,8 @@ Web Worker without pulling in `document` / `window`.
 
 ```ts
 import {
+  type ElementTree,
   type ImageRecord,
-  type PageMetadata,
   type StorageProvider,
   parseAnnotationSvg,
   serializeAnnotationSvg,
@@ -34,8 +34,10 @@ import {
 - **Format primitives** — `parseAnnotationSvg` /
   `serializeAnnotationSvg` + the `data-annot-version` attribute
   constants
-- **Storage types** — `ImageRecord`, `FolderRecord`, `PageElement`,
-  `PageMetadata`, `StorageProvider`
+- **Storage types** — `ImageRecord`, `FolderRecord`,
+  `StorageProvider`
+- **ElementTree** — canonical screen-capture model + serializers
+  + traversal helpers (`@ingcreators/annot-core/element-tree`)
 - **Pure utilities** — id generation, dasharray helpers, ZIP
   building, default colour constants
 

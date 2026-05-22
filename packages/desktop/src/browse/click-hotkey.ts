@@ -32,7 +32,7 @@
 
 import { beginCapturePrep, delay, endCapturePrep } from "@ingcreators/annot-capture/orchestrate";
 import type { ContentToBackgroundMessage } from "@ingcreators/annot-capture/shared";
-import type { PageMetadata } from "@ingcreators/annot-core";
+import type { ElementTree } from "@ingcreators/annot-core";
 import { encodeCapture } from "@ingcreators/annot-core/encode";
 import { newIdB58 } from "@ingcreators/annot-core/utils";
 import type { DesktopStore } from "../storage/desktop-store.js";
@@ -194,10 +194,10 @@ export function installClickHotkeyHandlers(deps: ClickHotkeyDeps): ClickHotkeyHa
       return;
     }
 
-    let pageMetadata: PageMetadata | undefined;
+    let elementTree: ElementTree | undefined;
     try {
       const captured = await deps.host.captureViewport(target);
-      pageMetadata = (await deps.host.requestPageMetadata(target)) ?? undefined;
+      elementTree = (await deps.host.requestElementTree(target)) ?? undefined;
       await endCapturePrep(deps.host, target);
       const encoded = await encodeCapture(captured.pngDataUrl, {
         format: settings.quality.format,
@@ -208,7 +208,7 @@ export function installClickHotkeyHandlers(deps: ClickHotkeyDeps): ClickHotkeyHa
       await persistClickFrame({
         dataUrl: encoded.dataUrl,
         clickMsg: msg,
-        pageMetadata,
+        elementTree,
       });
       clickState.count += 1;
       refreshButtons();
@@ -227,9 +227,9 @@ export function installClickHotkeyHandlers(deps: ClickHotkeyDeps): ClickHotkeyHa
   async function persistClickFrame(args: {
     dataUrl: string;
     clickMsg: Extract<ContentToBackgroundMessage, { type: "click-detected" }>;
-    pageMetadata: PageMetadata | undefined;
+    elementTree: ElementTree | undefined;
   }): Promise<void> {
-    const { dataUrl, clickMsg, pageMetadata } = args;
+    const { dataUrl, clickMsg, elementTree } = args;
     const probed = await probeDataUrlDimensions(dataUrl);
     const sourceUrl = clickMsg.url || resolveLiveUrl();
     const title = (clickMsg.title || resolveLiveTitle()).slice(0, 120);
@@ -270,7 +270,7 @@ export function installClickHotkeyHandlers(deps: ClickHotkeyDeps): ClickHotkeyHa
       folderPath: deps.inboxFolder,
       createdAt: ts,
       updatedAt: ts,
-      pageMetadata,
+      elementTree,
     });
   }
 
@@ -358,7 +358,7 @@ export function installClickHotkeyHandlers(deps: ClickHotkeyDeps): ClickHotkeyHa
 
     try {
       const captured = await deps.host.captureViewport(target);
-      const pageMetadata = (await deps.host.requestPageMetadata(target)) ?? undefined;
+      const elementTree = (await deps.host.requestElementTree(target)) ?? undefined;
       await endCapturePrep(deps.host, target);
       const encoded = await encodeCapture(captured.pngDataUrl, {
         format: settings.quality.format,
@@ -369,7 +369,7 @@ export function installClickHotkeyHandlers(deps: ClickHotkeyDeps): ClickHotkeyHa
       await persistHotkeyFrame({
         dataUrl: encoded.dataUrl,
         context,
-        pageMetadata,
+        elementTree,
       });
       hotkeyState.count += 1;
       refreshButtons();
@@ -388,9 +388,9 @@ export function installClickHotkeyHandlers(deps: ClickHotkeyDeps): ClickHotkeyHa
   async function persistHotkeyFrame(args: {
     dataUrl: string;
     context: CaptureContext | null;
-    pageMetadata: PageMetadata | undefined;
+    elementTree: ElementTree | undefined;
   }): Promise<void> {
-    const { dataUrl, context, pageMetadata } = args;
+    const { dataUrl, context, elementTree } = args;
     const probed = await probeDataUrlDimensions(dataUrl);
     const url = context?.url || resolveLiveUrl();
     const title = (context?.title || resolveLiveTitle()).slice(0, 120);
@@ -431,7 +431,7 @@ export function installClickHotkeyHandlers(deps: ClickHotkeyDeps): ClickHotkeyHa
       folderPath: deps.inboxFolder,
       createdAt: ts,
       updatedAt: ts,
-      pageMetadata,
+      elementTree,
     });
   }
 

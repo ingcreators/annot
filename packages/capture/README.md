@@ -65,7 +65,7 @@ pnpm --filter @ingcreators/annot-capture build
 
 ## Depends on
 
-- [`@ingcreators/annot-core`](../core) — `PageMetadata`,
+- [`@ingcreators/annot-core`](../core) — `ElementTree`,
   `CaptureRect`, `CaptureSegment`, encoder.
 
 ## License

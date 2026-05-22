@@ -100,11 +100,12 @@ export class ExtensionTransferHost {
                 folderPath,
                 createdAt: full.createdAt || now,
                 updatedAt: now,
-                // Carry DOM element metadata through the extension → app
-                // hand-off so the Elements sidebar works on captures that
-                // came in through this bulk-transfer path (which is how
-                // the extension typically hands screenshots over).
-                pageMetadata: full.pageMetadata,
+                // Carry the canonical screen-capture tree through the
+                // extension → app hand-off so the Elements sidebar works
+                // on captures that came in through this bulk-transfer
+                // path (which is how the extension typically hands
+                // screenshots over).
+                elementTree: full.elementTree,
               },
               { filename },
             ),
@@ -160,13 +161,13 @@ export class ExtensionTransferHost {
       folderPath: this.deps.getCurrentFolderPath(),
       createdAt: now,
       updatedAt: now,
-      // Carry DOM-element metadata through the single-record handoff
-      // so the Elements right-panel section is restored on reload (the
-      // first open works either way because setupEditor receives
-      // `record.pageMetadata` directly below — but reopening from the
-      // gallery later goes through `getImage`, which only sees what
-      // was actually persisted here).
-      pageMetadata: record.pageMetadata,
+      // Carry the canonical screen-capture tree through the
+      // single-record handoff so the Elements right-panel section is
+      // restored on reload (the first open works either way because
+      // setupEditor receives `record.elementTree` directly below — but
+      // reopening from the gallery later goes through `getImage`,
+      // which only sees what was actually persisted here).
+      elementTree: record.elementTree,
     });
 
     this.deps.setCurrentImagePath(savedPath);
@@ -182,7 +183,7 @@ export class ExtensionTransferHost {
         w,
         h,
         record.annotationsSvg || undefined,
-        record.pageMetadata,
+        record.elementTree,
       );
 
     deleteExtensionImage(extPath);

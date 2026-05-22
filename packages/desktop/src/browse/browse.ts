@@ -447,7 +447,7 @@ document.addEventListener("DOMContentLoaded", () => {
       folderPath: INBOX_FOLDER,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      pageMetadata: input.frame.pageMetadata,
+      elementTree: input.frame.elementTree,
     });
   }
 

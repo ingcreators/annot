@@ -40,7 +40,7 @@ headless tool against the SDK.
 |---------|------|---------|---|
 | `@ingcreators/annot-core` | A | Re-exports everything from `/headless` — DOM-free root entry | ✅ |
 | `@ingcreators/annot-core/headless` | A | Same as root, kept as an alias for callers that want to be explicit | workspace only (v0.1.0) |
-| `@ingcreators/annot-core/storage` | A | `ImageRecord`, `FolderRecord`, `PageElement`, `PageMetadata`, `StorageProvider` | workspace only (v0.1.0) |
+| `@ingcreators/annot-core/storage` | A | `ImageRecord`, `FolderRecord`, `StorageProvider` | workspace only (v0.1.0) |
 | `@ingcreators/annot-core/utils` | A | `assertNonNull`, `computeDasharray`, `newIdB58`, defaults | workspace only (v0.1.0) |
 | `@ingcreators/annot-core/zip` | A | ZIP builder used by PPTX export | workspace only (v0.1.0) |
 | `@ingcreators/annot-core/encode` | A | Image encode helpers | workspace only (v0.1.0) |

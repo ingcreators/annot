@@ -34,7 +34,7 @@
 
      - `data-annot-version` bump from N to N+1
      - `StorageProvider.foo` added (optional, defaulted in all four backends)
-     - `PageMetadata.bar` added (additive only)
+     - `ElementTree.bar` added (additive only)
 -->
 
 ## Out of scope
@@ -58,8 +58,8 @@
       `docs/svg-format.md` updated
 - [ ] If touching `StorageProvider`: all backends compile + new
       methods marked optional
-- [ ] If touching `PageMetadata` / `PageElement`: change is
-      additive (no renames, no field removals)
+- [ ] If touching `ElementTree`: change is additive (no renames,
+      no field removals)
 - [ ] If UI-visible: tested in the relevant host (PWA / extension
       / desktop / VSCode); behaviour with **and without** the
       change verified

@@ -17,14 +17,14 @@ import "./annot-icon.js";
  *   ┌─ Sections (sorted by priority) ┐
  *   │ • right-panel.tool-properties   │  ← when active tool
  *   │ • right-panel.selection-properties│ ← when selection
- *   │ • right-panel.page-elements     │  ← when pageMetadata
+ *   │ • right-panel.page-elements     │  ← when elementTree
  *   │ • plugin sections by priority   │
  *   └─────────────────────────────────┘
  *   ┌─ Empty state ──────────────────┐    ← when no section visible
  *   └─────────────────────────────────┘
  *
  * Lit Phase 2 — the class facade became this Lit element. The
- * `setPageMetadata` / `showToolProperties` / `showSelectionProperties`
+ * `setElementTree` / `showToolProperties` / `showSelectionProperties`
  * / `destroy` / `notifyUpdate` method surface is preserved so
  * pre-Lit callers don't move.
  *
@@ -62,7 +62,6 @@ import {
   setRotation,
   toggleFlip,
 } from "@ingcreators/annot-core/editor/transform-utils";
-import type { PageMetadata } from "@ingcreators/annot-core/storage";
 import type { SelectionManager } from "@ingcreators/annot-editor";
 import { type CanvasManager, type History, PropertyPanel } from "@ingcreators/annot-editor";
 import type { Toolbar } from "@ingcreators/annot-host-ui/toolbar";
@@ -150,7 +149,6 @@ export class AnnotEditorRightPanelElement extends LitElement {
     applyAllRedactions: { attribute: false },
     activeToolId: { state: true },
     currentSelection: { state: true },
-    pageMetadata: { state: true },
     elementTree: { state: true },
     redactCount: { state: true },
   };
@@ -169,19 +167,15 @@ export class AnnotEditorRightPanelElement extends LitElement {
   declare applyAllRedactions: (() => Promise<{ count: number }>) | null;
   declare activeToolId: string | null;
   declare currentSelection: SVGElement[];
-  declare pageMetadata: PageMetadata | null;
-  /** Canonical screen-capture tree — Phase 1f of
-   *  `docs/plans/living-spec-authoring-roadmap.md`. Pushed by the
-   *  host on each `setupEditor` via `setElementTree`. When set,
-   *  the Elements section renders a hierarchical tree view; when
-   *  null it falls back to the legacy `pageMetadata` flat list. */
+  /** Canonical screen-capture tree. Pushed by the host on each
+   *  `setupEditor` via `setElementTree` — when populated, the
+   *  Elements section renders the hierarchical tree view. */
   declare elementTree: ElementTree | null;
   /** Live count of `[data-redact-style]` elements on the canvas.
    *  Pushed by the host (PWA's EditorSession listens to the
    *  shell's `dirty` event) — the panel itself doesn't observe
-   *  the canvas, mirroring how `currentSelection` /
-   *  `pageMetadata` flow through `showSelectionProperties` /
-   *  `setPageMetadata`. */
+   *  the canvas, mirroring how `currentSelection` flows through
+   *  `showSelectionProperties`. */
   declare redactCount: number;
 
   /** Inline, "docked" PropertyPanel — owned at the panel level so
@@ -207,7 +201,6 @@ export class AnnotEditorRightPanelElement extends LitElement {
     this.applyAllRedactions = null;
     this.activeToolId = null;
     this.currentSelection = [];
-    this.pageMetadata = null;
     this.elementTree = null;
     this.redactCount = 0;
     // Stable PropertyPanel host built once; the selection section
@@ -504,7 +497,6 @@ export class AnnotEditorRightPanelElement extends LitElement {
         computeTitle: (els) => this.#computeSelectionTitle(els),
       }),
       createPageElementsSection({
-        getPageMetadata: () => this.pageMetadata,
         getElementTree: () => this.elementTree,
         getCanvas: () => this.canvas!,
         getHistory: () => this.history!,
@@ -649,25 +641,18 @@ export class AnnotEditorRightPanelElement extends LitElement {
     this.setRedactCount(count);
   }
 
-  /** Update / clear the DOM-element metadata for the current image.
-   *  Pass `null` (or omit) when loading an image without metadata
-   *  (paste, desktop capture, legacy) — the Elements section then
-   *  hides itself. Called by EditorSession on each new editor
-   *  session. */
-  setPageMetadata(meta: PageMetadata | null | undefined): void {
-    this.pageMetadata = meta ?? null;
-    console.debug(
-      "[annot/editor] setPageMetadata:",
-      meta ? `${meta.elements.length} elements` : "null/undefined",
-      meta?.captureRect,
-    );
-  }
-
   /** Update / clear the canonical screen-capture tree for the
-   *  current image. Phase 1f. Mirrors `setPageMetadata` —
-   *  independent input the Elements section prefers when set. */
+   *  current image. Pass `null` (or omit) when loading an image
+   *  without one (paste, desktop capture, legacy) — the Elements
+   *  section then hides itself. Called by EditorSession on each
+   *  new editor session. */
   setElementTree(tree: ElementTree | null | undefined): void {
     this.elementTree = tree ?? null;
+    console.debug(
+      "[annot/editor] setElementTree:",
+      tree ? `root role=${tree.root.role}` : "null/undefined",
+      tree?.root.bbox,
+    );
   }
 
   /** Pre-Lit API parity — `.destroy()` is an alias for `.remove()`.

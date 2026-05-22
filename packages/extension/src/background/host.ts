@@ -9,9 +9,9 @@
  */
 
 import {
-  type WalkerRegion,
-  walkPageMetadata,
-} from "@ingcreators/annot-capture/content/page-metadata-walker";
+  type ElementTreeWalkerRegion,
+  walkElementTree,
+} from "@ingcreators/annot-capture/content/element-tree-walker";
 import type { BatchItem } from "@ingcreators/annot-capture/encode";
 import type {
   CapturedViewport,
@@ -35,7 +35,7 @@ import type {
   ContentToBackgroundMessage,
   Settings,
 } from "@ingcreators/annot-capture/shared";
-import type { PageMetadata } from "@ingcreators/annot-core";
+import type { ElementTree } from "@ingcreators/annot-core";
 import { encodeCapture as encodeOne } from "@ingcreators/annot-core/encode";
 import type {
   CaptureRect,
@@ -151,16 +151,16 @@ async function injectContentScript(tabId: number): Promise<void> {
   }
 }
 
-async function requestPageMetadataChrome(
+async function requestElementTreeChrome(
   tabId: number,
   area: CaptureRect | undefined,
-): Promise<PageMetadata | null> {
+): Promise<ElementTree | null> {
   try {
     // chrome-types' `executeScript` overload pins `func` to `() => void`
     // and doesn't model the `args` -> `func` parameter relationship; cast
     // the call to bypass the overhead of writing a typed wrapper that
     // wouldn't gain anything at runtime.
-    const region: WalkerRegion = area
+    const region: ElementTreeWalkerRegion = area
       ? { x: area.x, y: area.y, width: area.width, height: area.height }
       : null;
     const results = await (
@@ -176,19 +176,15 @@ async function requestPageMetadataChrome(
       // package and has no module-level references in its body, so
       // chrome.scripting can serialize via toString() and run it in
       // MAIN world.
-      func: walkPageMetadata,
+      func: walkElementTree,
     });
     const result = (results?.[0] as { result?: unknown } | undefined)?.result;
-    if (
-      result &&
-      typeof result === "object" &&
-      Array.isArray((result as { elements?: unknown }).elements)
-    ) {
-      return result as PageMetadata;
+    if (result && typeof result === "object" && (result as { root?: unknown }).root !== undefined) {
+      return result as ElementTree;
     }
     return null;
   } catch (err) {
-    console.warn("[annot] page metadata MAIN-world injection failed:", err);
+    console.warn("[annot] ElementTree MAIN-world injection failed:", err);
     return null;
   }
 }
@@ -478,8 +474,8 @@ export function createChromeCaptureHost(): CaptureHost {
       await injectContentScript(target.id);
     },
 
-    async requestPageMetadata(target, area) {
-      return requestPageMetadataChrome(target.id, area);
+    async requestElementTree(target, area) {
+      return requestElementTreeChrome(target.id, area);
     },
 
     async stitchSegments(segments: CaptureSegment[], width, height) {

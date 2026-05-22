@@ -143,13 +143,12 @@ Schema rules:
   with deflate compression). JSON serialization available for
   in-memory / MCP / AI agent use.
 
-The legacy `PageMetadata` / `PageElement` types (extension's
-"first cut" flat list) and the parallel `parseSnapshot` /
-`annot:attributes` Playwright path are replaced by ElementTree
-in Phase 1 of
-[`docs/plans/living-spec-authoring-roadmap.md`](./docs/plans/living-spec-authoring-roadmap.md).
-That phase is the breaking-change consolidation; new
-"additive-only" forward starts after it lands.
+ElementTree is the canonical replacement for the legacy
+`PageMetadata` / `PageElement` types and the parallel
+`parseSnapshot` / `annot:attributes` Playwright path. Phase 1 of
+[`docs/plans/living-spec-authoring-roadmap.md`](./docs/plans/living-spec-authoring-roadmap.md)
+landed the consolidation; the "additive-only" schema discipline
+applies to ElementTree going forward.
 
 ### P6. Public API surface is explicit
 
@@ -232,7 +231,7 @@ begins. Paste this into the planning issue / doc:
 - [ ] PWA / extension UI only (right-click menu, keyboard, layout…)
 - [ ] Core — SVG authoring, annotation types, preset system
 - [ ] Storage — file / folder operations
-- [ ] Metadata — PageMetadata / PageElement schema
+- [ ] Metadata — ElementTree schema
 
 **Would a headless (Node / Playwright) caller need this?**
 - [ ] Yes → must be implementable without DOM

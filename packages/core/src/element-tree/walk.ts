@@ -93,8 +93,7 @@ export function findByMatch(tree: ElementTree, match: ElementMatch): ElementNode
  * Each entry is the live `ElementNode` reference (no copying); the
  * caller must treat the result as read-only.
  *
- * Useful for consumers that prefer flat iteration (legacy
- * `PageElement[]`-shaped consumers during migration, search index
+ * Useful for consumers that prefer flat iteration (search index
  * builders, etc.). Prefer `walkTree` when ancestor context matters.
  */
 export function flattenTree(tree: ElementTree): ElementNode[] {

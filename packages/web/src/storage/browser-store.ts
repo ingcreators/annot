@@ -122,9 +122,10 @@ export class BrowserStore
       tags: data.tags,
       createdAt: data.createdAt,
       updatedAt: data.updatedAt,
-      // DOM metadata passed through by browser-extension captures.
-      // Optional — screenshots from paste / desktop capture omit it.
-      ...(data.pageMetadata ? { pageMetadata: data.pageMetadata } : {}),
+      // Canonical screen-capture tree passed through by browser-
+      // extension / Playwright captures. Optional — screenshots from
+      // paste / desktop capture omit it.
+      ...(data.elementTree ? { elementTree: data.elementTree } : {}),
     };
     const db = await openDB();
     await new Promise<void>((resolve, reject) => {

@@ -1,7 +1,7 @@
 /**
  * Stories for `<annot-right-panel-page-elements-section>` — the
- * DOM-element list sourced from the browser-extension's
- * `pageMetadata` capture. Renders a search input + scrollable
+ * DOM-element list sourced from the `ElementTree` captured
+ * alongside the screenshot. Renders a search input + scrollable
  * row list; hover / click would manipulate the live canvas in
  * production, but the canvas is null in the story so those are
  * exercised as no-ops (logged via console).
@@ -12,10 +12,8 @@
 import type { ElementTree } from "@ingcreators/annot-core";
 import type { Meta, StoryObj } from "@storybook/web-components-vite";
 import "./annot-page-elements-section.js";
-import type { PageMetadataLike } from "./types.js";
 
 interface Args {
-  metadata: PageMetadataLike | null;
   elementTree: ElementTree | null;
 }
 
@@ -101,60 +99,6 @@ function makeElementTree(): ElementTree {
   };
 }
 
-function makeMetadata(): PageMetadataLike {
-  return {
-    capturedAt: "2026-04-25T10:00:00Z",
-    url: "https://example.com/article",
-    title: "Example article",
-    devicePixelRatio: 2,
-    viewport: { width: 1024, height: 768 },
-    scrollOffset: { x: 0, y: 0 },
-    captureRect: { x: 0, y: 0, width: 1024, height: 1600 },
-    elements: [
-      {
-        bbox: [40, 40, 160, 40] as [number, number, number, number],
-        tag: "button",
-        role: "button",
-        text: "Subscribe",
-      },
-      {
-        bbox: [40, 100, 200, 24] as [number, number, number, number],
-        tag: "a",
-        role: "link",
-        text: "Read more",
-        href: "https://example.com/more",
-      },
-      {
-        bbox: [40, 160, 320, 36] as [number, number, number, number],
-        tag: "input",
-        inputType: "search",
-        placeholder: "Search the docs",
-      },
-      {
-        bbox: [40, 220, 280, 36] as [number, number, number, number],
-        tag: "input",
-        inputType: "email",
-        placeholder: "you@example.com",
-      },
-      {
-        bbox: [40, 280, 240, 28] as [number, number, number, number],
-        tag: "h2",
-        text: "Getting started",
-      },
-      {
-        bbox: [40, 340, 200, 24] as [number, number, number, number],
-        tag: "label",
-        text: "Accept terms",
-      },
-      {
-        bbox: [40, 380, 200, 24] as [number, number, number, number],
-        tag: "input",
-        inputType: "checkbox",
-      },
-    ],
-  } as unknown as PageMetadataLike;
-}
-
 const meta: Meta<Args> = {
   title: "Editor / RightPanelSections / right-panel.page-elements",
   render: (args) => {
@@ -168,7 +112,6 @@ const meta: Meta<Args> = {
     heading.textContent = "Elements";
     wrapper.appendChild(heading);
     const section = document.createElement("annot-right-panel-page-elements-section");
-    section.pageMetadata = args.metadata;
     section.elementTree = args.elementTree;
     section.canvas = null;
     section.history = null;
@@ -177,42 +120,41 @@ const meta: Meta<Args> = {
     return wrapper;
   },
   argTypes: {
-    metadata: { control: false },
     elementTree: { control: false },
   },
   args: {
-    metadata: makeMetadata(),
-    elementTree: null,
+    elementTree: makeElementTree(),
   },
 };
 export default meta;
 
 type Story = StoryObj<Args>;
 
-export const Populated: Story = {
-  args: { metadata: makeMetadata(), elementTree: null },
+/** Tree view — hierarchical render of the `ElementTree`. The
+ *  synthetic root is hidden; visible rows start at the first real
+ *  child. */
+export const TreeView: Story = {
+  args: { elementTree: makeElementTree() },
 };
 
-export const EmptyMetadata: Story = {
+/** Empty tree — the synthetic root has no named children. The
+ *  section's `visible(ctx)` predicate hides the heading entirely
+ *  in this case; the story still mounts the body so the empty
+ *  state itself is inspectable. */
+export const EmptyTree: Story = {
   args: {
-    metadata: { ...makeMetadata(), elements: [] } as PageMetadataLike,
-    elementTree: null,
+    elementTree: {
+      ...makeElementTree(),
+      root: {
+        ...makeElementTree().root,
+        children: [],
+      },
+    },
   },
 };
 
-export const NoMetadata: Story = {
-  args: { metadata: null, elementTree: null },
-};
-
-/** Phase 1f tree-view variant — when an `ElementTree` is set, the
- *  section renders a hierarchical view that mirrors the DOM
- *  structure of the captured page. The synthetic root is hidden;
- *  visible rows start at the first real child. */
-export const TreeView: Story = {
-  args: { metadata: null, elementTree: makeElementTree() },
-};
-
-/** Tree view + legacy metadata both set — `elementTree` wins. */
-export const TreeViewWithLegacyFallback: Story = {
-  args: { metadata: makeMetadata(), elementTree: makeElementTree() },
+/** No tree — paste / desktop / legacy capture. The section hides
+ *  itself in the host; the story leaves the body inert. */
+export const NoTree: Story = {
+  args: { elementTree: null },
 };

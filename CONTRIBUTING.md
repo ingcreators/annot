@@ -105,8 +105,8 @@ Before opening a PR, please run:
 - [ ] If touching `StorageProvider`, all four implementations
       compile AND the change is marked optional for any future
       backend
-- [ ] If touching `PageMetadata` / `PageElement`, the change is
-      purely additive (no renames, no field removals)
+- [ ] If touching `ElementTree`, the change is purely additive
+      (no renames, no field removals)
 - [ ] No new DOM dependencies in `packages/core` outside of the
       editor UI layer
 - [ ] Diagnostic `console.log` lines removed (or clearly marked
@@ -132,8 +132,10 @@ when touching adjacent code:
    imports a concrete storage class; it uses the
    `StorageProvider` dependency injected at boot. New methods
    are added as optional fields on the interface.
-4. **`PageMetadata` schema is additive-only** — see the gate
-   list above.
+4. **`ElementTree` schema is additive-only** — see the gate
+   list above. The model lives at
+   `packages/core/src/element-tree/types.ts`; the wire format
+   spec is `docs/element-tree.md`.
 5. **Public API of `@ingcreators/annot-core`** — two stable
    entry points: `@ingcreators/annot-core` (full surface,
    browser-only allowed) and `@ingcreators/annot-core/headless`

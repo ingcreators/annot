@@ -137,17 +137,21 @@ describe("EditorShell — Phase 3 implementation", () => {
     shell.destroy();
   });
 
-  it("setPageMetadata + getCurrentPageMetadata round-trip", () => {
+  it("setElementTree + getCurrentElementTree round-trip", () => {
     const container = makeContainer();
     const { storage } = makeStorage();
     const shell = new EditorShell({ container, storage });
-    expect(shell.getCurrentPageMetadata()).toBeNull();
-    shell.setPageMetadata({ elements: [] } as unknown as Parameters<
-      typeof shell.setPageMetadata
-    >[0]);
-    expect(shell.getCurrentPageMetadata()).toEqual({ elements: [] });
-    shell.setPageMetadata(null);
-    expect(shell.getCurrentPageMetadata()).toBeNull();
+    expect(shell.getCurrentElementTree()).toBeNull();
+    const tree = {
+      version: 1,
+      source: { kind: "extension", capturedAt: "2026-05-23T00:00:00Z" },
+      viewport: { width: 1024, height: 768, scale: 1 },
+      root: { ref: "e0", role: "document" },
+    } as unknown as Parameters<typeof shell.setElementTree>[0];
+    shell.setElementTree(tree);
+    expect(shell.getCurrentElementTree()).toEqual(tree);
+    shell.setElementTree(null);
+    expect(shell.getCurrentElementTree()).toBeNull();
     shell.destroy();
   });
 

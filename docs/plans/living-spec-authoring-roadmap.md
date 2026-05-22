@@ -1,7 +1,7 @@
 # Living-spec visual authoring roadmap
 
-> **Status:** Phase 1 land-staging in progress — Phase 1 sub-phases 1a–1i
-> all landed 2026-05-23 as the additive migration path:
+> **Status:** Phase 1 landed 2026-05-23 (additive migration);
+> follow-up cleanup PR pending land. Phase 1 sub-phases 1a–1i:
 > [annot#970](https://github.com/ingcreators/annot/pull/970) (1a) /
 > [#971](https://github.com/ingcreators/annot/pull/971) (1b) /
 > [#972](https://github.com/ingcreators/annot/pull/972) (1c) /
@@ -10,18 +10,26 @@
 > [#975](https://github.com/ingcreators/annot/pull/975) (1f) /
 > [#976](https://github.com/ingcreators/annot/pull/976) (1g) /
 > [#977](https://github.com/ingcreators/annot/pull/977) (1h) /
-> 1i (this PR).
+> [#978](https://github.com/ingcreators/annot/pull/978) (1i).
 >
-> The plan's original 1i goal — destructive removal of `PageMetadata` /
-> `PageElement` / `parseSnapshot` / `collectAttributesYaml` — is
-> intentionally **deferred to a follow-up cleanup PR**. Doing it in
-> step with the additive migration would have required coordinated
-> changes across ~15 files (extension capture pipeline, desktop
-> click-hotkey, editor session, host-ui plumbing) that don't fit
-> the "each sub-phase as an independent revertable PR" landing
-> shape. The follow-up is tracked as a sequel cleanup once
-> downstream consumers have switched to `readElementTreePng` +
-> `detectDriftFromElementTree`.
+> **Phase 1 cleanup PR** (the destructive removal Phase 1i
+> intentionally deferred) lands the following invariant:
+> `PageMetadata` / `PageElement` types deleted from
+> `packages/core/src/storage/types.ts`, `pageMetadata` field on
+> `ImageRecord` replaced by `elementTree`, capture orchestrator
+> `host.requestPageMetadata` renamed to `host.requestElementTree`,
+> `Frame.pageMetadata` field renamed to `Frame.elementTree`, the
+> legacy MAIN-world walker (`page-metadata-walker.ts`) and the
+> `pageMetadataToElementTree` adapter deleted, every consumer
+> (extension capture pipeline, desktop click-hotkey, PWA editor
+> session, host-ui right-panel, VSCode webview, gallery) migrated
+> to read / write ElementTree directly. Single canonical model
+> on every capture / storage / consumer path.
+>
+> **Phase 2 in progress** — annotation yaml extraction + new
+> `<AnnotCallout>` JSX. Decomposed into sub-phases 2a–2e (see the
+> table inside Phase 2 below); each sub-phase lands as an
+> independent revertable PR, mirroring the Phase 1 shape.
 >
 > Original plan body below was written 2026-05-22 as the synthesis of a long
 > design discussion that started from
@@ -540,34 +548,51 @@ the legacy `<Overlay>` JSX with the new
 `<AnnotCallout for="id">body</AnnotCallout>` (the AnnotXxx-prefixed
 form per AD-14) for the description text.
 
-**Files added**:
+#### Sub-phases
 
-- `packages/product-docs/src/annotations-yaml.ts` — Tier A. Type definitions for `OverlayEntry` (`id` / `kind: numberedBadge` / `match` / `intent` / `number`). Parser + serializer (`js-yaml` already in deps).
-- `packages/product-docs-astro/src/components/AnnotCallout.astro` — new JSX component matching annotation by `for` prop. Children are markdown / JSX, rendered below the annotated image with intent-colored callout border (matching the screenshot the user shared during the design discussion).
+| Sub | Output | Scope |
+|---|---|---|
+| **2a** | Annotation yaml Tier A surface — `packages/product-docs/src/annotations-yaml.ts`. `OverlayEntry` type (`id` / `kind: numberedBadge` / `match` / `intent` / `number`), parser, serializer. Pure data; round-trip vitest coverage. `version: 1` schema header. | New Tier A module. No callers yet — pure data foundation 2b–2e build on. |
+| **2b** | `<AnnotCallout>` + `<AnnotFigure annotations>` Astro components. `packages/product-docs-astro/src/components/AnnotCallout.astro` (new) accepts `for="id"` + markdown / JSX children. `AnnotFigure.astro` (existing, extended) accepts a new `annotations="<path>"` prop pointing at the yaml file. Image Service reads yaml + composes overlays onto the base PNG using `overlays[].match` resolved against the PNG's `annot:elementTree`. `<AnnotCallout>` children render below the image in `overlays[].number` order. | Rendering path lives end-to-end. workflow-app fixtures gain at least one `<AnnotFigure annotations>` block to exercise the new path alongside the existing `<Overlay>` blocks. |
+| **2c** | Drift detector + lint extension — `packages/product-docs/src/drift.ts`. New finding kinds: (a) annotation yaml's `overlays[].match` doesn't resolve in the live ElementTree, (b) `<AnnotCallout for>` IDs don't match any `overlays[].id`, (c) annotation yaml has IDs with no `<AnnotCallout>` rendering them. `annot-docs lint --check-descriptions` CLI flag gates (b) + (c) on a per-direction severity. | Drift coverage extends to the new format. Existing `<Overlay>` drift findings unaffected. |
+| **2d** | Migration CLI — `annot-docs migrate-overlays-to-annotations`. Walks MDX, finds every legacy `<Overlay match intent number>body</Overlay>` block, groups them by their containing `<AnnotFigure src>`, generates one yaml file per figure (`<src basename>.annotations.yaml`), and rewrites the MDX to `<AnnotFigure src="…" annotations="…"><AnnotCallout for="o1">body</AnnotCallout>…</AnnotFigure>`. Idempotent — re-running on already-migrated MDX is a no-op. Audit log on stderr. | One-time per-repo migration. Documented in the docs-site adoption guide. |
+| **2e** | Soft-deprecation shim — legacy `<Overlay>` resolver stays in place but emits a `core.warning` at build time (Astro plugin / CLI lint) pointing at the migration CLI. Removal scheduled per OQ-08 (~3 months / 2-3 release cycles after 2d lands). | The break-the-glass cutoff. Removal is its own PR in a later milestone. |
 
-**Files modified**:
+Each sub-phase lands as an independent PR, merged before the
+next starts, mirroring the Phase 1 shape.
 
-- `packages/product-docs-astro/src/components/AnnotFigure.astro` — accepts new `annotations` prop pointing at the yaml file. Reads yaml + composes with snapshot bboxes + base PNG to produce the annotated PNG. Renders `<AnnotCallout>` children in order matching `overlays[].number`.
-- `packages/product-docs/src/types.ts` — `OverlaySpec` deprecated. Replaced by `AnnotationSpec` (in yaml) + `AnnotCalloutSpec` (in MDX, just `id` + children).
-- `packages/product-docs/src/drift.ts` — drift detection extends to validate annotation yaml against live snapshot AND validates MDX `<AnnotCallout for>` IDs against annotation yaml `overlays[].id`.
+#### Files added
 
-**CLI additions**:
+- `packages/product-docs/src/annotations-yaml.ts` — Tier A. `OverlayEntry` type, parser, serializer (`js-yaml` already in deps). (2a)
+- `packages/product-docs/src/annotations-yaml.test.ts` — round-trip vitest coverage. (2a)
+- `packages/product-docs-astro/src/components/AnnotCallout.astro` — new JSX component matching annotation by `for` prop. Children are markdown / JSX, rendered below the annotated image with intent-colored callout border (matching the screenshot the user shared during the design discussion). (2b)
+- `packages/product-docs/src/cli/migrate-overlays-to-annotations.ts` — migration CLI command. (2d)
 
-- `annot-docs migrate-overlays-to-annotations` — walk MDX, find every legacy `<Overlay match intent number>body</Overlay>`. For each, generate an entry in the figure's annotation yaml file (one yaml per `<AnnotFigure src>`). Replace the JSX in MDX with `<AnnotFigure annotations="..."><AnnotCallout for="id">body</AnnotCallout></AnnotFigure>`.
-- `annot-docs lint --check-descriptions` — verify every `<AnnotCallout for>` matches an annotation yaml ID. Verify every `overlays[].id` has a description. Configurable severity per direction.
+#### Files modified
 
-**Schema versioning**: annotation yaml carries `version: 1`. Parser version-dispatches.
+- `packages/product-docs-astro/src/components/AnnotFigure.astro` — accepts new `annotations` prop pointing at the yaml file. Reads yaml + composes with snapshot bboxes + base PNG to produce the annotated PNG. Renders `<AnnotCallout>` children in order matching `overlays[].number`. (2b)
+- `packages/product-docs/src/types.ts` — `OverlaySpec` marked deprecated. Replaced by `AnnotationSpec` (in yaml) + `AnnotCalloutSpec` (in MDX, just `id` + children). (2a)
+- `packages/product-docs/src/drift.ts` — drift detection extends to validate annotation yaml against live snapshot AND validates MDX `<AnnotCallout for>` IDs against annotation yaml `overlays[].id`. (2c)
+- `packages/product-docs/src/cli/lint.ts` — `--check-descriptions` flag. (2c)
 
-**Migration path**: dual support during transition — the
-legacy `<Overlay>` JSX continues to work (parsed by existing
-resolver) AND the new `<AnnotFigure annotations>` +
-`<AnnotCallout>` works. After a deprecation period, legacy
-`<Overlay>` support is removed (see OQ-08 for the schedule).
+#### Schema versioning
 
-**Verification**: workflow-app's existing `<Overlay>` count
-(17 MDX × ~5 overlays each = ~85 overlays) all migrate
-deterministically to the new `<AnnotCallout>` form.
-Pixel-identical Astro output before and after migration.
+Annotation yaml carries `version: 1`. Parser version-dispatches per OQ-01.
+
+#### Migration path
+
+Dual support during transition — the legacy `<Overlay>` JSX
+continues to work (parsed by existing resolver) AND the new
+`<AnnotFigure annotations>` + `<AnnotCallout>` works. After 2d
+runs, the build emits a `core.warning` for any remaining
+`<Overlay>` usage. After a deprecation period (~3 months / 2-3
+release cycles), legacy support is removed — see OQ-08.
+
+#### Verification
+
+- workflow-app's existing `<Overlay>` count (17 MDX × ~5 overlays each = ~85 overlays) all migrate deterministically to the new `<AnnotCallout>` form (2d).
+- Pixel-identical Astro output before and after migration (2b + 2d).
+- Drift detector + lint exit code matches the expected finding count on the migrated fixtures (2c).
 
 ### Phase 3 — Annotation palette extension
 

@@ -5,11 +5,6 @@
 // for the schema and AD-09 in the roadmap for the design rationale.
 
 export {
-  type LegacyPageElementLike,
-  type LegacyPageMetadataLike,
-  pageMetadataToElementTree,
-} from "./from-page-metadata.js";
-export {
   parseElementTreeFromJson,
   serializeElementTreeToJson,
   validateElementTree,

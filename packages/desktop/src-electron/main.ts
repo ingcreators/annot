@@ -557,7 +557,7 @@ async function captureWebContentsById(webContentsId: number): Promise<CapturedIm
 }
 
 /** Run a MAIN-world JavaScript expression against the target
- *  `webContents`. Used by `browse.host.requestPageMetadata` to
+ *  `webContents`. Used by `browse.host.requestElementTree` to
  *  drive the capture-package walker. The `userGesture` flag is
  *  `true` so the executed code can call APIs that require a user
  *  activation (the walker doesn't, but the chrome host's
