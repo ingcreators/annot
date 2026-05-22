@@ -23,6 +23,7 @@ export {
 
 export type {
   ExcelMdxBundle,
+  ExtractFromParsedOptions,
   NormalisedOverlay,
   NormalisedScreen,
 } from "./extract.js";

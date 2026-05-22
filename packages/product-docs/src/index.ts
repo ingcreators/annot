@@ -66,6 +66,7 @@ export type {
   DriftSeverity,
 } from "./drift.js";
 export {
+  collectMatchKeysFromAnnotation,
   detectDrift,
   detectDriftFromElementTree,
   detectDriftFromYaml,
