@@ -120,14 +120,38 @@ screen:
 
 The per-screen → MDX mapping lives in
 [`tests/docs/tour-helpers.ts`](./tests/docs/tour-helpers.ts).
-Future direction: the unified one-call
-`page.screenshot({ annot: { mdx: { id, path } } })` API from
+
+### Why not the unified `page.screenshot({ annot })` API?
+
 [`@ingcreators/annot-product-docs-astro/playwright`](https://www.npmjs.com/package/@ingcreators/annot-product-docs-astro)
-will collapse the screenshot + capture pair into a single
-call once the package's `0.2.1` publishes (the playwright
-subpath's runtime entry isn't built into the `0.2.0`
-tarball — single-entry `vite.config.ts` bug, follow-up
-fix lands separately).
+ships a one-call `page.screenshot({ annot: { mdx: { id, path } } })`
+fixture that would collapse the screenshot + `captureScreen`
+pair to a single call. The example doesn't use it yet because
+two upstream publish-pipeline bugs are layered:
+
+1. ~~`-astro@0.2.0` shipped `dist/playwright/*.d.ts` but not
+   `dist/playwright/index.js`.~~ Fixed +
+   republished as `0.2.1`
+   ([annot#954](https://github.com/ingcreators/annot/pull/954),
+   [annot#956](https://github.com/ingcreators/annot/pull/956)).
+2. **`@ingcreators/annot-core@0.2.0`'s `publishConfig.exports`
+   only declares `.` + `./styles/*`** — none of the workspace
+   subpaths (`./xmp-bytes`, `./headless`, `./editor`, etc.)
+   make it into the published tarball. The astro `0.2.1`
+   playwright fixture imports `@ingcreators/annot-core/xmp-bytes`,
+   so `npm run docs:sync` fails with `Package subpath
+   './xmp-bytes' is not defined`. Fix needs
+   `packages/core/vite.config.ts` to switch to multi-entry
+   build + an expanded `publishConfig.exports` map. Once
+   core republishes as `0.2.1` with the full surface AND
+   astro republishes as `0.2.2` pinned to that, the
+   example can migrate in one small PR.
+
+Until both upstream republishes land, the hybrid
+`captureScreen + page.screenshot` setup works perfectly
+fine and produces the same `annot:snapshot` +
+`annot:attributes` blocks. The unified API is a nicety,
+not a need.
 
 ## CI
 
