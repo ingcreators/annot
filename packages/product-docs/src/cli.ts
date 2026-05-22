@@ -34,6 +34,7 @@ import {
 } from "./drift.js";
 import { syncProductDocs } from "./fixture.js";
 import { parseMdxFile } from "./mdx.js";
+import { migrateOverlaysToAnnotationsFile } from "./migrate-overlays-to-annotations.js";
 import { migrateMdxFile } from "./migrate-to-element-tree.js";
 import { parseSnapshot } from "./resolver.js";
 import type { ScreenSpec } from "./types.js";
@@ -58,7 +59,13 @@ export async function main(argv: string[], options: CliOptions = {}): Promise<nu
   const cwd = options.cwd ?? process.cwd();
 
   const [, , verb, ...rest] = argv;
-  if (verb !== "init" && verb !== "sync" && verb !== "lint" && verb !== "migrate-to-element-tree") {
+  if (
+    verb !== "init" &&
+    verb !== "sync" &&
+    verb !== "lint" &&
+    verb !== "migrate-to-element-tree" &&
+    verb !== "migrate-overlays-to-annotations"
+  ) {
     stderr(USAGE);
     return verb ? 1 : 0;
   }
@@ -73,6 +80,8 @@ export async function main(argv: string[], options: CliOptions = {}): Promise<nu
         return await runLint(rest, { ...options, cwd, stdout, stderr });
       case "migrate-to-element-tree":
         return await runMigrateToElementTree(rest, { cwd, stdout, stderr });
+      case "migrate-overlays-to-annotations":
+        return await runMigrateOverlaysToAnnotations(rest, { cwd, stdout, stderr });
     }
   } catch (err) {
     stderr(`annot docs ${verb}: ${(err as Error).message}`);
@@ -90,6 +99,12 @@ const USAGE = [
   "  migrate-to-element-tree    Convert legacy annot:snapshot / annot:attributes",
   "                             MDX blocks into PNG XMP annot:elementTree chunks",
   "                             (one-time, per Phase 1g of",
+  "                             docs/plans/living-spec-authoring-roadmap.md)",
+  "  migrate-overlays-to-annotations",
+  "                             Extract inline <Overlay> JSX into",
+  "                             .annotations.yaml files and rewrite the MDX to use",
+  "                             <Screen annotations> + <AnnotCallout for> (one-time,",
+  "                             per Phase 2d of",
   "                             docs/plans/living-spec-authoring-roadmap.md)",
   "",
   "Options:",
@@ -515,6 +530,58 @@ async function runMigrateToElementTree(args: string[], deps: MigrateDeps): Promi
   }
   stdout(
     `annot docs migrate-to-element-tree: ${xmpWrites} XMP write(s), ${mdxRewrites} MDX rewrite(s), ${skips} skip(s).`,
+  );
+  return 0;
+}
+
+// ─── migrate-overlays-to-annotations (Phase 2d) ────────────────
+
+async function runMigrateOverlaysToAnnotations(args: string[], deps: MigrateDeps): Promise<number> {
+  const { cwd, stdout, stderr } = deps;
+  const flags = parseFlags(args);
+  const mdxFiles = await walkMdx(resolve(cwd, flags.root ?? "docs"));
+  const annotMdxs = await filterAnnotMdxFiles(mdxFiles);
+  if (annotMdxs.length === 0) {
+    stdout(
+      `annot docs migrate-overlays-to-annotations: no MDX files with \`annot:\` frontmatter under ${flags.root ?? "docs"}.`,
+    );
+    return 0;
+  }
+  stdout(
+    `annot docs migrate-overlays-to-annotations: ${annotMdxs.length} MDX file(s)${flags.dryRun ? " (dry run)" : ""}`,
+  );
+
+  let yamlWrites = 0;
+  let mdxRewrites = 0;
+  let skips = 0;
+
+  for (const mdx of annotMdxs) {
+    try {
+      const result = await migrateOverlaysToAnnotationsFile(mdx, { dryRun: flags.dryRun });
+      for (const s of result.screens) {
+        if (s.yamlPath && !s.skipReason) {
+          yamlWrites++;
+          stdout(
+            `  yaml    ${relative(cwd, mdx)} (screen=${s.id}, overlays=${s.overlayCount}) → ${relative(cwd, s.yamlPath)}`,
+          );
+        } else if (s.skipReason) {
+          skips++;
+          stdout(`  skip    ${relative(cwd, mdx)} (screen=${s.id}, ${s.skipReason})`);
+        }
+      }
+      if (result.mdxRewritten) {
+        mdxRewrites++;
+        stdout(`  rewrote ${relative(cwd, mdx)} (Overlay → AnnotCallout)`);
+      }
+    } catch (err) {
+      stderr(
+        `annot docs migrate-overlays-to-annotations: ${relative(cwd, mdx)}: ${(err as Error).message}`,
+      );
+      return 1;
+    }
+  }
+  stdout(
+    `annot docs migrate-overlays-to-annotations: ${yamlWrites} yaml write(s), ${mdxRewrites} MDX rewrite(s), ${skips} skip(s).`,
   );
   return 0;
 }
