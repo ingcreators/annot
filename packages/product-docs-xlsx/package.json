@@ -1,6 +1,6 @@
 {
   "name": "@ingcreators/annot-product-docs-xlsx",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Excel adapter for `@ingcreators/annot-product-docs`. Walks MDX files with `annot:` frontmatter, fills customer-supplied Excel templates via `{var}` placeholders + named ranges, and emits one `.xlsx` per book. Phase 3 of docs/plans/living-product-docs.md.",
   "license": "Apache-2.0",
   "author": "ingcreators",

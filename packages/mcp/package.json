@@ -1,6 +1,6 @@
 {
   "name": "@ingcreators/annot-mcp",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Model Context Protocol server exposing the Annot headless annotator as agent-callable tools. Drop into Claude Desktop / Claude Code / Cursor and let an AI agent compose Annot with @playwright/mcp + GitHub MCP for one-turn bug-report autopilot, visual-diff PR review, and locator-first annotation workflows.",
   "license": "Apache-2.0",
   "author": "ingcreators",
