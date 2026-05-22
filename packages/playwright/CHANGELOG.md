@@ -1,5 +1,13 @@
 # @ingcreators/annot-playwright
 
+## 0.3.1
+
+### Patch Changes
+
+- Updated dependencies [806badc]
+- Updated dependencies [df1a429]
+  - @ingcreators/annot-annotator@0.5.0
+
 ## 0.3.0
 
 ### Minor Changes

@@ -1,5 +1,85 @@
 # @ingcreators/annot-annotator
 
+## 0.5.0
+
+### Minor Changes
+
+- 806badc: Retire the `@ingcreators/annot-imagequant` (GPL-3.0) dynamic-import
+  boundary that gated PNG-8 output in the headless annotator and the
+  MCP server. `Annotator.toEncoded()`'s smart mode now routes PNG-8
+  through the pure-TS Median Cut + Floyd–Steinberg dither at
+  `@ingcreators/annot-core/encode/quantize-median-cut` directly.
+
+  ### Removed public API
+  - `isImagequantAvailable()` is no longer exported from
+    `@ingcreators/annot-annotator`. PNG-8 is now unconditionally
+    available — callers that previously gated `format: "smart"` on
+    this can drop the check.
+  - `Annotator.toEncoded()` no longer emits
+    `EncodeResult.reason === "imagequant-missing"`. The
+    graceful-PNG-32-fallback path that produced this reason is
+    unreachable.
+
+  ### Removed dependency
+  - `@ingcreators/annot-imagequant` is dropped from
+    `@ingcreators/annot-annotator`'s `dependencies`. Consumers
+    that previously installed it as a side-effect of installing
+    `annot-annotator` will save the WASM payload from their
+    `node_modules`. `annot-mcp` inherits the removal transitively.
+
+  Phase 3 of `docs/plans/replace-libimagequant-with-median-cut.md`.
+  Phase 4 deletes the `@ingcreators/annot-imagequant` workspace
+  package and deprecates the published 0.1.0 on npm.
+
+- df1a429: **`@ingcreators/annot-annotator` — new `Annotator.toEditablePng()`
+  method** that returns a re-editable PNG. The bytes carry the same
+  visible pixels as `toPng()` plus the original un-annotated capture +
+  the annotations SVG embedded in the PNG's XMP / custom `svGo` chunk.
+  Re-opening the file in the Annot editor (or `annot.work/app/`)
+  restores the annotations as selectable / movable / restylable
+  objects rather than a flat bitmap.
+
+  ```ts
+  const annotator = createAnnotator();
+  const editablePng = annotator.toEditablePng({
+    originalDataUrl,
+    annotationsSvg,
+    width,
+    height,
+    tags: {
+      source: "playwright-fixture",
+      capturedAt: new Date().toISOString(),
+    },
+  });
+  await writeFile("shot.png", editablePng);
+  ```
+
+  Image viewers that don't know about the custom chunks display the
+  rasterised pixels verbatim — no compatibility loss vs `toPng()`.
+
+  The existing `toPng()` / `toSvg()` / `toEncoded()` methods are
+  unchanged — `toEditablePng()` is purely additive.
+
+  **`@ingcreators/annot-core` — new `/xmp-bytes` Tier-A subpath**
+  exposing the pure-bytes XMP encode / decode primitives that used to
+  live (Blob-wrapped) inside `/xmp`:
+  - `createEditablePngBytes(opts) -> Uint8Array` — write a re-editable
+    PNG. Takes raw PNG bytes for both the rasterised image and the
+    original capture; no `Blob` / `FileReader` dependency. The
+    function the new `Annotator.toEditablePng()` is built on.
+  - `readEditablePngBytes(data) -> AnnotMetadata | null` — PNG-only
+    reader.
+  - `readEditableImage(data) -> AnnotMetadata | null` — dual PNG /
+    JPEG reader (moved here from `/xmp`, also re-exported from `/xmp`
+    for source-compat).
+  - `WELL_KNOWN_TAG_KEYS` — soft-convention key names for the
+    optional `tags` field (`source` / `screen` / `capturedAt` /
+    `commit`).
+
+  Existing `@ingcreators/annot-core/xmp` consumers stay working
+  without source changes — `xmp-browser.ts` re-exports the Tier-A
+  surface alongside its Blob-wrapped `createEditableImage`.
+
 ## 0.3.0
 
 ### Minor Changes
