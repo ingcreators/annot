@@ -73,19 +73,29 @@ This separation enables:
 
 Today's competitive landscape:
 
-| Product | Visual editor | Docs output | Embedded editing |
-|---|---|---|---|
-| VitePress / Mintlify | None (markdown only) | Yes | None (PRs only) |
-| Notion | Rich text | Yes | Yes (in-app, not git) |
-| Confluence | Rich text | Yes | Yes (in-app, not git) |
-| Excalidraw | Free-form drawing | Limited | Limited |
-| Figma | UI design | Read-only | Comments only |
-| **Annot (after this roadmap)** | **Element-aware visual** | **Yes** | **Yes (git-backed)** |
+| Product | Visual editor | Docs output | Embedded editing | Enterprise (SSO / on-prem / audit) |
+|---|---|---|---|---|
+| VitePress / Mintlify | None (markdown only) | Yes | None (PRs only) | Mintlify Pro |
+| Notion | Rich text | Yes | Yes (in-app, not git) | Notion Enterprise |
+| Confluence | Rich text | Yes | Yes (in-app, not git) | Atlassian Cloud / DC |
+| Excalidraw | Free-form drawing | Limited | Limited | None |
+| Figma | UI design | Read-only | Comments only | Figma Enterprise |
+| **Annot (after this roadmap)** | **Element-aware visual** | **Yes** | **Yes (git-backed)** | **On-prem `cloudUrl` + SSO** |
 
 The combination — visual editor + element-aware annotations + git
 round-trip — has no existing competitor. Mintlify is closest but
 lacks visual editing; Notion is closest on UX but isn't
-git-backed.
+git-backed. Enterprise tier additionally differentiates on
+**on-prem deployability** (the `<EditButton cloudUrl>` config
+lets the same OSS component point at customer infrastructure)
+plus SSO via SAML / Okta / Azure AD — a combination Notion /
+Confluence offer but Mintlify and Excalidraw don't.
+
+The default embed mode (`newTab`, see OQ-09) was chosen
+specifically to keep this Enterprise compatibility intact
+without forcing the consumer / Pro tier to give up smooth UX
+(`inline` iframe mode opt-in remains available for those
+deployments).
 
 This positions Annot as **the canonical editor for screen
 specifications** (画面仕様書) — a category that exists in
@@ -494,75 +504,137 @@ yaml writer's idempotency and atomicity.
 
 ### Phase 5 — Embedded editor + GitHub round-trip
 
-**Goal**: Annot editor mountable inline in any docs site,
-edits commit back to GitHub via annot-cloud's GitHub App
-integration.
+**Goal**: Annot editor reachable from any docs site via an
+`<EditButton>` component, edits commit back to GitHub via
+annot-cloud's GitHub App integration. The button supports
+multiple **embed modes** so the same OSS component fits
+consumer / Pro / Team / Enterprise deployment scenarios.
 
-**Files added (annot repo, OSS side)**:
+#### Embed modes
 
-- `packages/product-docs-astro/src/components/EditButton.astro` — MDX-mountable component. Renders an "✏️ Edit" button. On click, opens the annot.work editor in an iframe (modal or inline).
-- `packages/product-docs-astro/src/components/AnnotEditorEmbed.astro` — wraps the iframe with sizing, focus, and postMessage handling.
-- `packages/annot-embed-protocol/` (new workspace package) — Tier A. Defines the postMessage protocol between the parent (docs site) and the iframe (annot.work editor). Messages: `EditorReady` / `EditRequested` / `EditCommitted` / `EditAbandoned` / `ResizeNeeded`.
+The `<EditButton>` component supports three modes, selected
+either per-call (`mode` prop) or globally via
+`annot-docs.config.ts`:
 
-**Files added (annot-cloud repo, paid side)**:
+| Mode | UX | Best for | Trade-off |
+|---|---|---|---|
+| **`newTab`** (default) | Click → new tab opens annot-cloud editor → edit → tab closes / returns | Enterprise / Team / Air-gapped (with on-prem `cloudUrl`) | Tab switching friction, but rock-solid SSO / CSP / on-prem compatibility |
+| **`inline`** (opt-in) | Click → modal iframe loads annot-cloud editor → edit → modal dismisses | Consumer / Pro / personal sites | Smooth UX but requires CSP `frame-src` whitelist + third-party cookie support |
+| **`disabled`** | Button not rendered | Pure-static read-only sites / air-gapped without on-prem cloud | No edit affordance shown |
 
-- `embed/` route in annot.work — receives URL params (`repo` / `pngPath` / `annotationsPath` / `return`), reads from GitHub via GitHub App credentials, mounts an editor instance, sends `EditorReady` postMessage to parent.
+Configuration:
+
+```ts
+// annot-docs.config.ts
+export default defineConfig({
+  editor: {
+    embedMode: "newTab",                  // "newTab" (default) | "inline" | "disabled"
+    cloudUrl: "https://annot.work",       // override with "https://annot.example.com" for on-prem
+  },
+});
+```
+
+```mdx
+{/* Global default (newTab) */}
+<EditButton repo="..." path="..." />
+
+{/* Per-call opt-in to inline iframe */}
+<EditButton repo="..." path="..." mode="inline" />
+
+{/* Per-call disable (e.g. on a frozen reference page) */}
+<EditButton repo="..." path="..." mode="disabled" />
+```
+
+The `newTab` default is the **architecturally safer choice**
+because it works under every Enterprise constraint
+(strict CSPs, SSO redirect flows, on-prem deployments,
+third-party cookie bans, network isolation with an internal
+annot-cloud instance). The `inline` mode is a UX upgrade for
+consumer-grade deployments where those constraints don't
+apply.
+
+#### Files added (annot repo, OSS side)
+
+- `packages/product-docs-astro/src/components/EditButton.astro` — MDX-mountable component. Renders an "✏️ Edit" button. Resolves embed mode from per-call `mode` prop OR `annot-docs.config.ts` `editor.embedMode`. Opens `${cloudUrl}/embed?repo=...&path=...&return=...` in new tab (default) or iframe modal (opt-in).
+- `packages/product-docs-astro/src/components/AnnotEditorIframeModal.astro` — modal wrapper for `mode: "inline"`. Lazy-loaded so `mode: "newTab"` sites don't ship the modal code.
+- `packages/annot-embed-protocol/` (new workspace package) — Tier A. Defines the protocol between docs site and editor in BOTH modes: postMessage events (for inline iframe) AND URL-callback events (for newTab, via `?return=https://docs.site/path#edit-complete=<edit-id>` redirect). Messages: `EditorReady` / `EditRequested` / `EditCommitted` / `EditAbandoned` / `ResizeNeeded`.
+
+#### Files added (annot-cloud repo, paid side)
+
+- `embed/` route in annot-cloud — receives URL params (`repo` / `pngPath` / `annotationsPath` / `return`), reads from GitHub via GitHub App credentials, mounts an editor instance. On commit:
+  - `mode=inline`: sends `EditCommitted` postMessage to parent
+  - `mode=newTab`: redirects to `${return}?edit-complete=<edit-id>` so docs site picks up the result
 - GitHub App "annot-cloud-editor" — installable on customer repos. Permissions: contents (read+write), metadata (read), pull_requests (write, for PR-mode edits).
 - Worker route in annot-cloud Workers that proxies the GitHub commit (so the editor doesn't need a user PAT — only the GitHub App's installation token).
 - Build trigger integration — after commit, the Worker pings the customer's Cloudflare Pages / Vercel / GitHub Pages build endpoint (configured per-installation).
+- **On-prem variant**: annot-cloud bundle deployable to customer infrastructure. Same `embed/` route, same GitHub App registration model, but served at customer subdomain. Customer's `<EditButton cloudUrl="https://annot.internal.example.com">` points there.
 
-**UX flow**:
+#### UX flow (default `newTab` mode)
 
 ```
 Public docs site (annot.work/docs or customer site)
   ↓
 Visitor sees <Screen> with annotated PNG + descriptions
   ↓
-"✏️ Edit" button (only if EditButton component present + repo has annot-cloud App installed)
+"✏️ Edit" button (only if EditButton component present + repo has annot-cloud App installed + embedMode != "disabled")
   ↓
-Click → iframe opens annot.work/embed?repo=...&png=...&yaml=...
+Click → window.open("${cloudUrl}/embed?repo=...&path=...&return=https://docs.site/login#edit-complete")
   ↓
-Authentication: GitHub OAuth in iframe (if not already signed in)
+New tab loads annot-cloud editor; visitor authenticates if not already signed in (SSO / GitHub OAuth — works natively since no iframe)
   ↓
 Editor loads PNG + yaml from GitHub via GitHub App
   ↓
 User edits visual annotations
   ↓
-"Save" → annot-cloud commits to GitHub:
-  - Option A: direct push to main
-  - Option B: PR to main from a branch
-  - Configured per-installation
+"Save" → annot-cloud commits to GitHub (PR or direct push per installation policy)
   ↓
-Build trigger fires → site rebuilds in 30s-2min
+Tab redirects to return URL with edit-complete hash
   ↓
-postMessage notifies parent → "Edit saved, refresh in ~1 minute"
+Original docs tab (still open) picks up the hash on focus, shows "Edit saved, site rebuilds in ~1 minute" toast
+  ↓
+Build trigger fires → site rebuilds in 30s-2min → user refreshes
 ```
 
-**Conflict handling**: simple "last write wins" in v1. Future:
-optimistic locking via GitHub's `If-Match` ETag header.
-Documented as a known limitation.
+#### UX flow (opt-in `inline` mode)
 
-**Permissions model**:
+```
+Same setup, but Click → modal iframe instead of window.open
+  ↓
+Iframe loads annot-cloud editor; auth via cross-origin
+  cookies or top-level redirect dance (FedCM if available)
+  ↓
+Edit + Save → annot-cloud commits → postMessage(EditCommitted) → parent dismisses modal
+  ↓
+Parent shows toast "Edit saved..."; build trigger fires
+```
 
-- **Anonymous viewer**: sees Edit button if EditButton is rendered, click prompts GitHub sign-in
+#### Conflict handling
+
+Simple "last write wins" in v1. Future: optimistic locking via
+GitHub's `If-Match` ETag header. Documented as a known
+limitation.
+
+#### Permissions model
+
+- **Anonymous viewer**: sees Edit button if EditButton is rendered, click triggers sign-in (in new tab for default mode — clean SSO flow; in iframe with cross-origin auth dance for inline mode)
 - **Signed-in viewer without repo write**: editor opens in read-only mode (still useful for previewing annotations) + offers "Suggest changes via PR" flow
 - **Signed-in with repo write**: full edit, commits to configured target (main or branch)
-- **Repo owner**: configures per-installation policy in annot-cloud dashboard
+- **Repo owner**: configures per-installation policy in annot-cloud dashboard (commit target, audit log endpoint, etc.)
 
-**Pricing tier mapping** (per
-[`annot-cloud-roadmap.md`](./annot-cloud-roadmap.md)):
+#### Pricing tier mapping (per [`annot-cloud-roadmap.md`](./annot-cloud-roadmap.md))
 
-- Free hosted (annot.work/app) — visitors can edit their own repos, no embedding allowed in third-party sites
-- Pro ($5/mo) — embed in personal sites, public repos only
-- Team ($5/user/mo) — embed in private repos, audit log
-- Enterprise — SSO, custom GitHub App, SLA
+- **Free hosted** (annot.work/app) — visitors can edit their own repos via annot.work directly. No `<EditButton>` integration in third-party sites.
+- **Pro** ($5/mo) — embed `<EditButton>` in personal sites, public repos only. Both `newTab` and `inline` modes available.
+- **Team** ($5/user/mo) — `<EditButton>` in private repos, audit log, per-repo embed-mode policy enforcement.
+- **Enterprise** — SSO via SAML / Okta / Azure AD, custom GitHub App (or GitHub Enterprise integration), on-prem `cloudUrl` deployment, IP allowlist, dedicated audit log endpoint, SLA. **`newTab` mode strongly preferred** for SSO redirect compatibility and CSP simplification — `inline` mode disabled by default at this tier.
 
-**Verification**: integration tests in annot-cloud staging
-environment exercising the full GitHub round-trip against a
-test repo. Manual QA covering the conflict + permissions
-matrix.
+#### Verification
 
-**Out of scope for Phase 5**:
+- Integration tests in annot-cloud staging environment exercising the full GitHub round-trip against a test repo
+- Manual QA covering the conflict + permissions matrix in BOTH embed modes
+- Enterprise tier validation: deploy on-prem variant to a test environment, verify SSO redirect flow works in `newTab` mode without iframe-related fallbacks
+
+#### Out of scope for Phase 5
 
 - Real-time collaboration (multiple editors editing the same file simultaneously). Defer to a future plan.
 - Mobile-friendly editor — desktop-only in v1.
@@ -647,19 +719,30 @@ etc.
 Single prototype patch, multiple contributors, tree-shake
 friendly.
 
-### AD-08: OSS / Cloud split via iframe boundary
+### AD-08: OSS / Cloud split via origin boundary (not iframe boundary)
 
-Phase 5's embedded editor lives behind an iframe. The OSS side
-ships only the `<EditButton>` / `<AnnotEditorEmbed>` components
-that mount the iframe. The actual editor + GitHub App + commit
-logic lives in annot-cloud.
+Phase 5's editor lives at a **distinct origin** (annot-cloud's
+domain — `annot.work` for the hosted variant,
+`annot.example.com` for on-prem). The OSS side ships only the
+`<EditButton>` component that routes visitors to that origin
+via one of three embed modes (`newTab` default / `inline`
+opt-in / `disabled`).
 
-This keeps:
+The boundary is **the origin separation**, not the iframe
+specifically. Both `newTab` and `inline` modes preserve the same
+guarantees:
 
-- OSS docs sites lightweight (no bundled editor)
-- annot-cloud as a clear paid service
-- Security boundary explicit (GitHub credentials never enter
-  the parent docs site's JS context)
+- OSS docs sites stay lightweight (no bundled editor in either mode)
+- annot-cloud is a clear paid service with its own infrastructure
+- Security boundary is explicit at the origin level: GitHub credentials, OAuth state, GitHub App installation tokens never leak across origins
+- On-prem deployments work cleanly: customer points `cloudUrl` at their own annot-cloud instance
+
+An earlier iteration of this AD framed the boundary as
+"iframe", which conflated the trust boundary (origin) with the
+rendering mode (iframe vs new tab). The origin-boundary framing
+is more accurate and admits the `newTab` default that better
+fits Enterprise deployments. See **OQ-09** for the rationale
+behind making `newTab` the default and `inline` an opt-in.
 
 ## Open Questions
 
@@ -763,6 +846,51 @@ Phase 2 dual-supports `<Overlay>` JSX and the new
 **Recommended:** (b). Two cycles (~3 months) of dual support
 with build warnings gives external consumers time to migrate
 without permanent maintenance debt.
+
+### OQ-09: `<EditButton>` embed mode — `newTab` default vs `inline` default
+
+Phase 5's `<EditButton>` component routes visitors to
+annot-cloud via either `newTab` (open editor in new tab) or
+`inline` (modal iframe). The default mode affects how Phase 5
+plays with Enterprise constraints.
+
+Options:
+
+- **(a) `newTab` default, `inline` as opt-in.** Click opens new tab; modal iframe available via `mode="inline"` prop.
+- **(b) `inline` default, `newTab` as opt-in.** Click opens modal iframe; new tab available via `mode="newTab"` prop.
+- **(c) No default — author must explicitly set `mode`.** Forces a decision per call site.
+
+**Recommended:** (a).
+
+This was originally framed as a UX preference (in-page vs tab
+switching), and an earlier draft of this roadmap leaned toward
+(b) for the "stays in context" feel. Re-evaluation surfaced
+that `inline` mode interacts badly with Enterprise constraints:
+
+| Constraint | `inline` (iframe) | `newTab` |
+|---|---|---|
+| Strict CSP `frame-src` | ✗ requires per-customer whitelisting | ✓ unaffected |
+| Third-party cookies (Safari ITP / Brave / corp Chrome) | ✗ OAuth session breaks | ✓ unaffected |
+| SAML / Okta / Azure AD SSO redirect | ✗ frame-busting IdPs reject iframe redirect | ✓ native flow works |
+| On-prem `cloudUrl` deployments | ✗ docs site must know iframe target at build time | ✓ link target is just a config string |
+| Network isolation / air-gapped | ✗ iframe fails if annot-cloud unreachable | ✓ same, but link can target on-prem cloud |
+| Audit log capture by customer | ✗ postMessage-bridged events are awkward | ✓ all activity on annot-cloud origin, log natively |
+| Long-running edit sessions | ✗ parent navigation kills iframe | ✓ new tab is independent lifecycle |
+| Visual continuity / brand consistency | ✓ stays on docs site | ✗ visible context switch |
+| Initial discovery / ease | ✓ "feels seamless" | ✗ "tab switching" is a learnable extra step |
+
+Eight of nine rows favor `newTab`. Only the bottom two favor
+`inline`, and they're consumer-UX concerns rather than
+deployment-correctness concerns. For a product positioned to
+serve both consumer (Pro tier) and Enterprise tiers from the
+same OSS component, **`newTab` as the safe default + `inline`
+as a deliberate consumer opt-in** is the right shape.
+
+Enterprise tier (per `annot-cloud-roadmap.md`) effectively
+**disables `inline` mode** to enforce the deployment-correctness
+guarantees. The OSS component still ships both modes; Enterprise
+config (`embedMode: "newTab"` enforced server-side) gates the
+choice.
 
 ## Discarded alternatives
 
