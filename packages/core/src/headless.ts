@@ -209,6 +209,30 @@ export {
   DEFAULT_MIN_ZOOM,
   FIT_VIEW_PADDING,
 } from "./editor/viewport-math.js";
+// ─── ElementTree canonical screen-capture model (Tier A) ─────────────
+// Phase 1a of `docs/plans/living-spec-authoring-roadmap.md`.
+// Single source-agnostic model replacing the parallel
+// extension `PageMetadata` / Playwright `parseSnapshot`+`annot:attributes`
+// paths. Pure data types + serializers + traversal helpers; no DOM.
+export {
+  type BBox,
+  type ElementMatch,
+  type ElementNode,
+  type ElementTree,
+  type ElementTreeSource,
+  type ElementTreeViewport,
+  type ElementTreeVisitor,
+  findByMatch,
+  findByRef,
+  flattenTree,
+  isElementTreeShape,
+  parseElementTreeFromJson,
+  parseElementTreeFromYaml,
+  serializeElementTreeToJson,
+  serializeElementTreeToYaml,
+  validateElementTree,
+  walkTree,
+} from "./element-tree/index.js";
 // ─── Icon descriptor (Tier A pure types + value-level helpers) ────────
 // Phase 1 of `docs/plans/svg-icons-and-plugin-icon-spec.md`. The
 // `IconSpec` discriminated union is the public, plugin-facing handle

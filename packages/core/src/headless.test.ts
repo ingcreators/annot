@@ -82,6 +82,18 @@ describe("@ingcreators/annot-core/headless boundary", () => {
     expect(typeof headless.renderIconHtml).toBe("function");
     expect(typeof headless.renderIconElement).toBe("function");
     expect(typeof headless.sanitizeIconSvg).toBe("function");
+    // ElementTree — Phase 1a of `docs/plans/living-spec-authoring-roadmap.md`.
+    // Tier A pure data types + serializers + traversal helpers.
+    expect(typeof headless.isElementTreeShape).toBe("function");
+    expect(typeof headless.serializeElementTreeToYaml).toBe("function");
+    expect(typeof headless.parseElementTreeFromYaml).toBe("function");
+    expect(typeof headless.serializeElementTreeToJson).toBe("function");
+    expect(typeof headless.parseElementTreeFromJson).toBe("function");
+    expect(typeof headless.validateElementTree).toBe("function");
+    expect(typeof headless.walkTree).toBe("function");
+    expect(typeof headless.findByRef).toBe("function");
+    expect(typeof headless.findByMatch).toBe("function");
+    expect(typeof headless.flattenTree).toBe("function");
   });
 
   it("does not leak `document` / `window` into the importing context", () => {
@@ -125,6 +137,7 @@ describe("@ingcreators/annot-core ↔ @ingcreators/annot-editor cycle prevention
     await import("@ingcreators/annot-core/storage");
     await import("@ingcreators/annot-core/utils");
     await import("@ingcreators/annot-core/icons");
+    await import("@ingcreators/annot-core/element-tree");
 
     // Vitest's loader exposes the resolved module list via the
     // CJS-side `require.cache`. We avoid pulling `@types/node` into

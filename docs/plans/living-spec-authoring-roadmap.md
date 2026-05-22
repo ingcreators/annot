@@ -1,6 +1,7 @@
 # Living-spec visual authoring roadmap
 
-> **Status:** Draft — written 2026-05-22 as the synthesis of a long
+> **Status:** In progress — Phase 1 implementation started 2026-05-23.
+> Original plan body below was written 2026-05-22 as the synthesis of a long
 > design discussion that started from
 > [`playwright-screenshot-fixture-relayer.md`](./_done/playwright-screenshot-fixture-relayer.md)'s
 > Q&A about Playwright codegen compatibility and walked through six
