@@ -91,9 +91,10 @@ describe("AnnotEditButton.astro", () => {
     expect(src).toMatch(/cloudUrl\?:\s*string/);
     expect(src).toMatch(/label\?:\s*string/);
   });
-  it("defaults mode to newTab + cloudUrl to https://annot.work", () => {
-    expect(src).toMatch(/mode = "newTab"/);
-    expect(src).toMatch(/cloudUrl = "https:\/\/annot\.work"/);
+  it("defaults mode + cloudUrl from the editor-config virtual module (Phase 5f)", () => {
+    expect(src).toMatch(/mode = ANNOT_EDITOR_CONFIG\.embedMode/);
+    expect(src).toMatch(/cloudUrl = ANNOT_EDITOR_CONFIG\.cloudUrl/);
+    expect(src).toMatch(/from "\.\.\/editor-config-virtual\.js"/);
   });
   it('renders no button when mode === "disabled"', () => {
     expect(src).toMatch(/mode !== "disabled" &&/);

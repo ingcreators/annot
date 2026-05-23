@@ -145,4 +145,4 @@ export type {
   TransitionSpec,
 } from "./types.js";
 
-export type { AnnotDocsConfig, BookConfig } from "./types-config.js";
+export type { AnnotDocsConfig, AnnotEditorConfig, BookConfig } from "./types-config.js";
