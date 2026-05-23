@@ -1,0 +1,43 @@
+version: 1
+overlays:
+  - id: o1
+    kind: numberedBadge
+    match:
+      role: combobox
+      name: Category (Required)
+    intent: required
+    number: 1
+  - id: o2
+    kind: numberedBadge
+    match:
+      role: textbox
+      name: Reason (Required)
+    intent: required
+    number: 2
+  - id: o3
+    kind: numberedBadge
+    match:
+      role: button
+      name: Review
+    intent: action
+    number: 3
+  - id: o4
+    kind: numberedBadge
+    match:
+      role: link
+      name: Back
+    intent: info
+    number: 4
+annotations:
+  # Phase 3 follow-up dogfood (3h) — mosaic redact on the
+  # free-text Reason field. Demonstrates the raster
+  # pre-processing pass burned onto the base PNG before
+  # SVG-fragment composition. Approvers see the literal
+  # text; for the published docs screenshot we pixelate it
+  # so the demo content doesn't read as a "real" reason.
+  - id: a1
+    kind: redact
+    match:
+      role: textbox
+      name: Reason (Required)
+    style: mosaic

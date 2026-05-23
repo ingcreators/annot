@@ -15,7 +15,7 @@ annot:
 ---
 
 import Screen from "@ingcreators/annot-product-docs-astro/components/Screen.astro";
-import Overlay from "@ingcreators/annot-product-docs-astro/components/Overlay.astro";
+import AnnotCallout from "@ingcreators/annot-product-docs-astro/components/AnnotCallout.astro";
 import Transition from "@ingcreators/annot-product-docs-astro/components/Transition.astro";
 
 # New application
@@ -24,29 +24,33 @@ Fill in the category, the requested amount (when applicable),
 and the business reason. Every field is required — the Review
 button shows per-field errors if anything is missing.
 
-<Screen id="application-form" src="/shots/application-form.png">
+<Screen
+  id="application-form"
+  src="/shots/application-form.png"
+  annotations="./OM-003-application-form.annotations.yaml"
+>
 
-<Overlay match={{ role: "combobox", name: "Category (Required)" }} intent="required" number={1}>
+<AnnotCallout for="o1">
 Choose one of Leave / Expense / Purchase. The Amount field
 hides automatically for Leave applications.
-</Overlay>
+</AnnotCallout>
 
-<Overlay match={{ role: "textbox", name: "Reason (Required)" }} intent="required" number={2}>
+<AnnotCallout for="o2">
 Free-form text. Approvers see this verbatim — include the
 context they need to decide.
-</Overlay>
+</AnnotCallout>
 
-<Overlay match={{ role: "button", name: "Review" }} intent="action" number={3}>
+<AnnotCallout for="o3">
 Validates the form. On success, transitions to the confirm
 screen; on failure, the empty fields surface their error
 message in place.
-</Overlay>
+</AnnotCallout>
 
-<Overlay match={{ role: "link", name: "Back" }} intent="info" number={4}>
+<AnnotCallout for="o4">
 Returns to the menu without submitting. The draft is kept in
 memory — re-opening the form restores the partially-filled
 state until the user signs out.
-</Overlay>
+</AnnotCallout>
 
 </Screen>
 
