@@ -46,6 +46,19 @@ export {
 } from "./encode/options.js";
 export { isPhotoHeavy } from "./encode/quantize.js";
 
+// ─── Redact burn (since 0.6.0 — relocated from @ingcreators/annot-mcp) ───
+//
+// Tier A Node-side raster utility — destructively paint solid /
+// mosaic / blur over PNG regions. The function is pure
+// (`pngBytes + regions → pngBytes`) and ships here so non-MCP
+// callers (`@ingcreators/annot-product-docs-astro`'s Phase 3
+// follow-up Image Service, Playwright fixtures, custom test
+// reporters, …) can consume it without dragging the MCP server's
+// dep footprint. MCP keeps its existing public API via a
+// re-export from this entry point.
+
+export { burnRedactions, type RedactRegion } from "./redact-burn.js";
+
 // ─── DSL (since 0.2.0) ──────────────────────────────────────────
 
 export {
