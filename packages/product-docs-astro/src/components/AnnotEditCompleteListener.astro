@@ -1,0 +1,186 @@
+---
+// `<AnnotEditCompleteListener>` — Phase 5g of
+// `docs/plans/living-spec-authoring-roadmap.md`.
+//
+// Invisible client-side component that surfaces a transient
+// toast when the cloud editor returns control to the docs site
+// after a save. Two trigger paths:
+//
+//   - `newTab` mode: the cloud editor redirects to
+//     `${returnUrl}#edit-complete=<editId>`. On client-side mount
+//     this component parses `window.location.hash` via the 5b
+//     `parseEmbedReturnHash` codec, renders a toast when the
+//     hash carries an `EmbedReturnSignal` of kind `"complete"`,
+//     and dispatches an `annot:edit-complete` `CustomEvent` on
+//     `document` so downstream listeners (analytics, custom
+//     rebuild-status badges) can react.
+//
+//   - `inline` mode: the 5e `<AnnotEditorIframeModal>` already
+//     dismisses itself on `EditCommitted`. This component
+//     listens for the same lifecycle event via an
+//     `annot-editor-iframe-modal-event` `CustomEvent` the 5e
+//     modal dispatches on `document`, then renders the same
+//     toast.
+//
+// Mount once per page (typically inside the layout). Multiple
+// instances are safe — only the first activates; the rest
+// short-circuit on init via the `data-annot-edit-complete-listener-active`
+// marker.
+
+interface Props {
+  /** Toast message override. Defaults to "Edit saved — site
+   *  rebuilds in ~1 minute." */
+  message?: string;
+  /** Auto-dismiss timeout in milliseconds. Defaults to 8000.
+   *  Set to `0` to keep the toast visible until the user
+   *  dismisses it manually. */
+  dismissAfterMs?: number;
+}
+
+const { message = "Edit saved — site rebuilds in ~1 minute.", dismissAfterMs = 8000 } =
+  Astro.props;
+---
+
+<div
+  class="annot-edit-complete-listener"
+  data-annot-edit-complete-listener-root
+  data-annot-edit-complete-message={message}
+  data-annot-edit-complete-dismiss-ms={dismissAfterMs}
+  aria-live="polite"
+  aria-atomic="true"
+>
+  <slot />
+</div>
+
+<script>
+  import { parseEmbedReturnHash } from "@ingcreators/annot-embed-protocol";
+
+  const ROOT_SELECTOR = "[data-annot-edit-complete-listener-root]";
+  const ACTIVE_MARKER = "data-annot-edit-complete-listener-active";
+  const TOAST_DISMISS_FALLBACK_MS = 8000;
+
+  interface Detail {
+    readonly editId: string;
+    readonly source: "newTab" | "inline";
+  }
+
+  function findRoot(): HTMLElement | null {
+    // Pick the FIRST listener mounted on the page. Multiple
+    // copies are safe; subsequent ones short-circuit.
+    return document.querySelector<HTMLElement>(ROOT_SELECTOR);
+  }
+
+  function showToast(root: HTMLElement, detail: Detail): void {
+    const message = root.dataset.annotEditCompleteMessage ?? "Edit saved.";
+    const dismissAfterMs = Number(
+      root.dataset.annotEditCompleteDismissMs ?? TOAST_DISMISS_FALLBACK_MS,
+    );
+
+    const toast = document.createElement("div");
+    toast.className = "annot-edit-complete-toast";
+    toast.setAttribute("role", "status");
+    toast.dataset.annotEditCompleteId = detail.editId;
+    toast.dataset.annotEditCompleteSource = detail.source;
+    toast.textContent = message;
+
+    const dismissBtn = document.createElement("button");
+    dismissBtn.type = "button";
+    dismissBtn.className = "annot-edit-complete-toast-dismiss";
+    dismissBtn.setAttribute("aria-label", "Dismiss notification");
+    dismissBtn.textContent = "×";
+    dismissBtn.addEventListener("click", () => {
+      toast.remove();
+    });
+    toast.appendChild(dismissBtn);
+
+    root.appendChild(toast);
+
+    if (Number.isFinite(dismissAfterMs) && dismissAfterMs > 0) {
+      window.setTimeout(() => {
+        toast.remove();
+      }, dismissAfterMs);
+    }
+
+    document.dispatchEvent(
+      new CustomEvent("annot:edit-complete", { detail }),
+    );
+  }
+
+  function consumeReturnHash(root: HTMLElement): void {
+    const signal = parseEmbedReturnHash(window.location.hash);
+    if (!signal || signal.kind !== "complete") return;
+    showToast(root, { editId: signal.editId, source: "newTab" });
+    // Clear the hash so a page refresh doesn't re-toast.
+    if (typeof window.history.replaceState === "function") {
+      const cleanUrl = `${window.location.pathname}${window.location.search}`;
+      window.history.replaceState(null, "", cleanUrl);
+    }
+  }
+
+  function attachInlineListener(root: HTMLElement): void {
+    document.addEventListener("annot:editor-iframe-committed", (event: Event) => {
+      const detail = (event as CustomEvent<{ editId?: string }>).detail;
+      const editId = detail?.editId ?? "";
+      if (!editId) return;
+      showToast(root, { editId, source: "inline" });
+    });
+  }
+
+  function init(): void {
+    const root = findRoot();
+    if (!root) return;
+    if (root.hasAttribute(ACTIVE_MARKER)) return;
+    root.setAttribute(ACTIVE_MARKER, "1");
+
+    consumeReturnHash(root);
+    attachInlineListener(root);
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
+  }
+</script>
+
+<style>
+  .annot-edit-complete-listener {
+    position: fixed;
+    bottom: 1.5rem;
+    right: 1.5rem;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    pointer-events: none;
+  }
+  .annot-edit-complete-toast {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    color: var(--annot-edit-toast-fg, #ffffff);
+    background: var(--annot-edit-toast-bg, #16a34a);
+    border-radius: 0.4em;
+    box-shadow: 0 0.25rem 0.75rem rgba(0, 0, 0, 0.25);
+    font-family: inherit;
+    font-size: 0.95em;
+    line-height: 1.3;
+    pointer-events: auto;
+  }
+  .annot-edit-complete-toast-dismiss {
+    margin-left: auto;
+    background: transparent;
+    border: 0;
+    color: inherit;
+    font-size: 1.25em;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 0.25em;
+  }
+  .annot-edit-complete-toast-dismiss:hover,
+  .annot-edit-complete-toast-dismiss:focus-visible {
+    opacity: 0.8;
+    outline: none;
+  }
+</style>

@@ -34,6 +34,7 @@ const COMPONENTS = [
   "AnnotCallout",
   "AnnotEditButton",
   "AnnotEditorIframeModal",
+  "AnnotEditCompleteListener",
   "Transition",
   "TransitionTable",
   "HistoryEntry",
@@ -49,8 +50,9 @@ describe("Astro components: existence + frontmatter shape", () => {
       expect(src).toMatch(/interface Props\b/);
       // Allow either single-line or multi-line destructuring
       // — components with many defaults wrap the `const { … } =
-      // Astro.props;` line by Biome's formatter.
-      expect(src).toMatch(/const \{[\s\S]*?\} = Astro\.props;/);
+      // Astro.props;` line by Biome's formatter (which can also
+      // wrap the assignment AFTER the `}` onto the next line).
+      expect(src).toMatch(/const \{[\s\S]*?\}\s*=\s*Astro\.props;/);
     });
   }
 });
@@ -125,6 +127,35 @@ describe("AnnotEditButton.astro", () => {
   });
 });
 
+describe("AnnotEditCompleteListener.astro", () => {
+  const src = readComponent("AnnotEditCompleteListener");
+  it("renders a hidden root marked with data-annot-edit-complete-listener-root", () => {
+    expect(src).toMatch(/data-annot-edit-complete-listener-root/);
+  });
+  it("propagates the configurable message + dismissAfterMs via data attrs", () => {
+    expect(src).toMatch(/data-annot-edit-complete-message={message}/);
+    expect(src).toMatch(/data-annot-edit-complete-dismiss-ms={dismissAfterMs}/);
+  });
+  it("imports parseEmbedReturnHash from the protocol pkg", () => {
+    expect(src).toMatch(
+      /import \{ parseEmbedReturnHash \} from "@ingcreators\/annot-embed-protocol"/,
+    );
+  });
+  it("checks the location.hash on init and renders a toast for `complete` signals", () => {
+    expect(src).toMatch(/consumeReturnHash/);
+    expect(src).toMatch(/signal\.kind !== "complete"/);
+  });
+  it("dispatches the `annot:edit-complete` CustomEvent on toast render", () => {
+    expect(src).toMatch(/new CustomEvent\("annot:edit-complete"/);
+  });
+  it("listens for the inline-mode `annot:editor-iframe-committed` CustomEvent", () => {
+    expect(src).toMatch(/addEventListener\("annot:editor-iframe-committed"/);
+  });
+  it("clears the hash via history.replaceState so refresh doesn't re-toast", () => {
+    expect(src).toMatch(/history\.replaceState/);
+  });
+});
+
 describe("AnnotEditorIframeModal.astro", () => {
   const src = readComponent("AnnotEditorIframeModal");
   it("renders a <dialog> root marked with data-annot-edit-modal-root", () => {
@@ -143,6 +174,10 @@ describe("AnnotEditorIframeModal.astro", () => {
     expect(src).toMatch(/EditCommitted/);
     expect(src).toMatch(/EditAbandoned/);
     expect(src).toMatch(/modal\.close\(\)/);
+  });
+  it("dispatches `annot:editor-iframe-committed` on EditCommitted for Phase 5g", () => {
+    expect(src).toMatch(/annot:editor-iframe-committed/);
+    expect(src).toMatch(/document\.dispatchEvent\(/);
   });
   it("resizes the iframe on ResizeNeeded with a clamped height", () => {
     expect(src).toMatch(/ResizeNeeded/);
