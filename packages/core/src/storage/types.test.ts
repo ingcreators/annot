@@ -7,6 +7,7 @@
 import { describe, expect, it } from "vitest";
 import type {
   StorageProvider,
+  StorageWithDocuments,
   StorageWithForceRefresh,
   StorageWithInit,
   StorageWithRateLimit,
@@ -14,6 +15,7 @@ import type {
   StorageWithTokenRefresher,
 } from "./types.js";
 import {
+  supportsAnnotationsYaml,
   supportsForceRefresh,
   supportsInit,
   supportsRateLimit,
@@ -145,5 +147,43 @@ describe("supportsRateLimit", () => {
       setRateLimitListener: () => {},
     };
     expect(supportsRateLimit(store)).toBe(true);
+  });
+});
+
+describe("supportsAnnotationsYaml", () => {
+  it("returns false for a bare StorageProvider", () => {
+    expect(supportsAnnotationsYaml(bareStorage())).toBe(false);
+  });
+
+  it("returns false when only getAnnotationsYaml is present", () => {
+    const store = bareStorage() as unknown as Record<string, unknown>;
+    store.getAnnotationsYaml = async () => undefined;
+    expect(supportsAnnotationsYaml(store as unknown as StorageProvider)).toBe(false);
+  });
+
+  it("returns false when only setAnnotationsYaml is present", () => {
+    const store = bareStorage() as unknown as Record<string, unknown>;
+    store.setAnnotationsYaml = async () => {};
+    expect(supportsAnnotationsYaml(store as unknown as StorageProvider)).toBe(false);
+  });
+
+  it("returns true when both methods are functions", () => {
+    const store: StorageProvider & StorageWithDocuments = {
+      ...bareStorage(),
+      saveDocument: async () => "",
+      getDocument: async () => undefined,
+      listDocuments: async () => [],
+      updateDocument: async () => {},
+      getAnnotationsYaml: async () => undefined,
+      setAnnotationsYaml: async () => {},
+    };
+    expect(supportsAnnotationsYaml(store)).toBe(true);
+  });
+
+  it("returns false when the methods are non-function values", () => {
+    const store = bareStorage() as unknown as Record<string, unknown>;
+    store.getAnnotationsYaml = "not a function";
+    store.setAnnotationsYaml = 42;
+    expect(supportsAnnotationsYaml(store as unknown as StorageProvider)).toBe(false);
   });
 });

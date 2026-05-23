@@ -43,6 +43,7 @@ import type {
 } from "@ingcreators/annot-core/storage";
 import {
   ancestorPaths,
+  annotationsYamlPathFor,
   getFilename,
   getParentPath,
   joinPath,
@@ -1620,6 +1621,26 @@ export class GitHubStore
     if (updates.imageCount !== undefined) existing.imageCount = updates.imageCount;
     if (updates.updatedAt !== undefined) existing.updatedAt = updates.updatedAt;
     await this.#cachePutDocument(path, existing);
+  }
+
+  // ===========================================================================
+  // Annotations YAML sidecar (Phase 4a)
+  // ===========================================================================
+
+  async getAnnotationsYaml(pngPath: string): Promise<string | undefined> {
+    const sidecarPath = annotationsYamlPathFor(pngPath);
+    const result = await this.#getContents(sidecarPath);
+    if (!result) return undefined;
+    return new TextDecoder().decode(result.bytes);
+  }
+
+  async setAnnotationsYaml(pngPath: string, content: string): Promise<void> {
+    await this.#ensureTreeLoaded();
+    const sidecarPath = annotationsYamlPathFor(pngPath);
+    const existingSha = this.#tree.getBlobSha(sidecarPath);
+    const blob = new Blob([content], { type: "text/yaml" });
+    const verb: "add" | "update" = existingSha ? "update" : "add";
+    await this.#putContents(sidecarPath, blob, this.#commitMessage(verb, sidecarPath), existingSha);
   }
 
   // ===========================================================================

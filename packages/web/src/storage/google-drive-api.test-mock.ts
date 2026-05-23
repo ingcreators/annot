@@ -93,14 +93,25 @@ function parseQuery(q: string): {
   parentId?: string;
   mimeTypeIs?: string;
   mimeTypeIsNot?: string;
+  nameEquals?: string;
 } | null {
-  const result: { parentId?: string; mimeTypeIs?: string; mimeTypeIsNot?: string } = {};
+  const result: {
+    parentId?: string;
+    mimeTypeIs?: string;
+    mimeTypeIsNot?: string;
+    nameEquals?: string;
+  } = {};
   const parentMatch = q.match(/'([^']+)' in parents/);
   if (parentMatch) result.parentId = parentMatch[1];
   const mimeEqMatch = q.match(/mimeType\s*=\s*'([^']+)'/);
   if (mimeEqMatch) result.mimeTypeIs = mimeEqMatch[1];
   const mimeNeMatch = q.match(/mimeType\s*!=\s*'([^']+)'/);
   if (mimeNeMatch) result.mimeTypeIsNot = mimeNeMatch[1];
+  // Drive's escape syntax doubles backslashes, so undo the
+  // `\\\\` → `\\` and `\\'` → `'` the store emits in
+  // `#findChildIdByName` before matching against stored names.
+  const nameMatch = q.match(/name\s*=\s*'((?:\\.|[^'\\])*)'/);
+  if (nameMatch) result.nameEquals = nameMatch[1]!.replace(/\\'/g, "'").replace(/\\\\/g, "\\");
   if (!result.parentId) return null;
   return result;
 }
@@ -163,6 +174,7 @@ export function buildDriveHandlers(state: DriveState) {
         if (!f.parents.includes(parsed.parentId!)) continue;
         if (parsed.mimeTypeIs && f.mimeType !== parsed.mimeTypeIs) continue;
         if (parsed.mimeTypeIsNot && f.mimeType === parsed.mimeTypeIsNot) continue;
+        if (parsed.nameEquals && f.name !== parsed.nameEquals) continue;
         files.push(f);
       }
       // Same sort order Drive uses for the store's `orderBy=createdTime desc`.

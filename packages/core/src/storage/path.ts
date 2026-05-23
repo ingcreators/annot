@@ -49,6 +49,26 @@ export function getFilename(path: string): string {
   return i < 0 ? path : path.slice(i + 1);
 }
 
+/**
+ * Derive the annotations YAML sidecar path paired with the image
+ * at `pngPath`. Convention introduced in Phase 4a of the
+ * [living-spec authoring roadmap](../../../../docs/plans/living-spec-authoring-roadmap.md):
+ * the sidecar sits in the same folder as the PNG with filename
+ * `<pngFilename>.annotations.yaml`.
+ *
+ * Examples:
+ * - `shots/login.png` → `shots/login.png.annotations.yaml`
+ * - `login.jpg`       → `login.jpg.annotations.yaml`
+ *
+ * The leaf-as-suffix form (keep the full PNG filename including
+ * its extension, then append `.annotations.yaml`) keeps the
+ * sidecar discoverable next to its image regardless of the image
+ * extension.
+ */
+export function annotationsYamlPathFor(pngPath: string): string {
+  return `${pngPath}.annotations.yaml`;
+}
+
 /** Split a path into its segments. Returns [] for the root path. */
 export function splitPath(path: string): string[] {
   return path ? path.split("/") : [];

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   ancestorPaths,
+  annotationsYamlPathFor,
   getFilename,
   getParentPath,
   isDescendantOrSame,
@@ -235,5 +236,27 @@ describe("rewritePathPrefix", () => {
   it("is not fooled by shared-prefix names", () => {
     // "AB/x.png" starts with "A" as a string but isn't under "A".
     expect(rewritePathPrefix("AB/x.png", "A", "Z")).toBe("AB/x.png");
+  });
+});
+
+describe("annotationsYamlPathFor", () => {
+  it("appends .annotations.yaml to the PNG path", () => {
+    expect(annotationsYamlPathFor("shots/login.png")).toBe("shots/login.png.annotations.yaml");
+  });
+
+  it("works on root-level PNGs", () => {
+    expect(annotationsYamlPathFor("login.png")).toBe("login.png.annotations.yaml");
+  });
+
+  it("preserves the PNG extension in the sidecar name", () => {
+    // Keeping the full filename keeps the sidecar discoverable next
+    // to its image regardless of the image extension.
+    expect(annotationsYamlPathFor("shots/login.jpg")).toBe("shots/login.jpg.annotations.yaml");
+  });
+
+  it("threads deeply-nested paths through unchanged", () => {
+    expect(annotationsYamlPathFor("a/b/c/d/screenshot.png")).toBe(
+      "a/b/c/d/screenshot.png.annotations.yaml",
+    );
   });
 });

@@ -647,6 +647,55 @@ export interface StorageWithDocuments {
    * @throws `Error` for unstructured backend / IO failures.
    */
   updateDocument(path: string, updates: DocumentRecordUpdate): Promise<void>;
+
+  /**
+   * Read the annotations YAML sidecar paired with the image at
+   * `pngPath`. The store derives the sidecar location internally
+   * from the convention `<pngPath>.annotations.yaml` (so
+   * `shots/login.png` →`shots/login.png.annotations.yaml`); callers
+   * pass the PNG path only.
+   *
+   * Optional — stores that don't support sidecar yaml files may
+   * omit this method. Callers gate on
+   * {@link supportsAnnotationsYaml} before invoking.
+   *
+   * Introduced in Phase 4a of the
+   * [living-spec authoring roadmap](../../../../docs/plans/living-spec-authoring-roadmap.md)
+   * for the Annot editor's Overlay tool. Each entry in the yaml
+   * follows the `AnnotationsFile` schema defined by
+   * `@ingcreators/annot-product-docs` (Phase 2a).
+   *
+   * @returns the YAML source string, or `undefined` when no
+   *   sidecar exists for that PNG.
+   * @throws `Error` for backend / IO / parse failures.
+   */
+  getAnnotationsYaml?(pngPath: string): Promise<string | undefined>;
+
+  /**
+   * Atomically create or replace the annotations YAML sidecar
+   * paired with the image at `pngPath`. The store derives the
+   * sidecar location internally from the convention
+   * `<pngPath>.annotations.yaml`.
+   *
+   * Optional — stores that don't support sidecar yaml files may
+   * omit this method. Callers gate on
+   * {@link supportsAnnotationsYaml} before invoking.
+   *
+   * The write does NOT touch the PNG bytes or any sibling MDX
+   * file — only the sidecar yaml is mutated. Idempotent on
+   * unchanged input (same `content` twice produces the same
+   * on-disk bytes).
+   *
+   * Introduced in Phase 4a of the
+   * [living-spec authoring roadmap](../../../../docs/plans/living-spec-authoring-roadmap.md).
+   *
+   * @throws `StoragePermissionError` for backend auth / ACL
+   *   rejection.
+   * @throws `StorageQuotaError` when the backend reports
+   *   out-of-space.
+   * @throws `Error` for unstructured backend / IO failures.
+   */
+  setAnnotationsYaml?(pngPath: string, content: string): Promise<void>;
 }
 
 // ─── Capability predicates ────────────────────────────────────────────
@@ -708,4 +757,24 @@ export function supportsDocuments(
     typeof s.listDocuments === "function" &&
     typeof s.updateDocument === "function"
   );
+}
+
+/**
+ * Narrows a store to one that exposes the Phase 4a annotations
+ * YAML sidecar surface (`getAnnotationsYaml` + `setAnnotationsYaml`).
+ *
+ * Use instead of `if (store.getAnnotationsYaml)` so the narrow is
+ * type-safe and the optional behaviour is documented at the call
+ * site. The methods sit on
+ * {@link StorageWithDocuments} as optional members; this predicate
+ * is the dedicated capability check for callers that need both
+ * sides of the read / write pair.
+ */
+export function supportsAnnotationsYaml(store: StorageProvider): store is StorageProvider &
+  StorageWithDocuments & {
+    getAnnotationsYaml: NonNullable<StorageWithDocuments["getAnnotationsYaml"]>;
+    setAnnotationsYaml: NonNullable<StorageWithDocuments["setAnnotationsYaml"]>;
+  } {
+  const s = store as Partial<StorageWithDocuments>;
+  return typeof s.getAnnotationsYaml === "function" && typeof s.setAnnotationsYaml === "function";
 }
