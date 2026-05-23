@@ -30,6 +30,7 @@
     "@ingcreators/annot-core": "workspace:*",
     "@ingcreators/annot-doc": "workspace:*",
     "@ingcreators/annot-editor": "workspace:*",
+    "@ingcreators/annot-product-docs": "workspace:*",
     "@ingcreators/annot-render": "workspace:*",
     "lit": "^3.3.3"
   }
