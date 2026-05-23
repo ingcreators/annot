@@ -1,6 +1,6 @@
 # Living-spec visual authoring roadmap
 
-> **Status:** Phase 1 + Phase 2 + Phase 3 + Phase 4 all landed 2026-05-23.
+> **Status:** Phase 1 + Phase 2 + Phase 3 + Phase 4 + Phase 5 (OSS side) all landed 2026-05-23.
 >
 > Phase 1 sub-phases 1a–1i:
 > [#970](https://github.com/ingcreators/annot/pull/970) /
@@ -99,6 +99,32 @@
 > proper `VSCodeStore` is deferred to Phase 6's `.annot.mdx`
 > custom editor; today the VSCode webview's
 > `MessageProxyStorageProvider` stays overlay-yaml-agnostic.
+>
+> Phase 5 OSS-side sub-phases 5a–5h (decomposition: [#1012](https://github.com/ingcreators/annot/pull/1012)):
+> [#1013](https://github.com/ingcreators/annot/pull/1013) (5a — `@ingcreators/annot-embed-protocol` Tier A package + `EmbedEvent` types) /
+> [#1014](https://github.com/ingcreators/annot/pull/1014) (5b — URL-callback codec for newTab mode) /
+> [#1015](https://github.com/ingcreators/annot/pull/1015) (5c — postMessage dispatcher for inline mode) /
+> [#1016](https://github.com/ingcreators/annot/pull/1016) (5d — `<AnnotEditButton>` Astro component: newTab + disabled) /
+> [#1017](https://github.com/ingcreators/annot/pull/1017) (5e — `<AnnotEditorIframeModal>` + inline-mode wiring) /
+> [#1018](https://github.com/ingcreators/annot/pull/1018) (5f — `editor` config schema + Vite virtual plugin) /
+> [#1019](https://github.com/ingcreators/annot/pull/1019) (5g — `<AnnotEditCompleteListener>` + toast) /
+> [#1020](https://github.com/ingcreators/annot/pull/1020) (5h — workflow-app dogfood + docs-site authoring guides).
+>
+> Phase 5 OSS-side ships the docs-site-facing pieces of the
+> embedded-editor flow: an `<AnnotEditButton>` consumers drop
+> into MDX next to an `<AnnotFigure>`, with three embed modes
+> (`newTab` default per OQ-09, `inline` opt-in via the iframe
+> modal, `disabled` for read-only / air-gapped deployments),
+> a project-wide `editor.cloudUrl` config via
+> `productDocsIntegration({ editor })` for on-prem deployments,
+> and an `<AnnotEditCompleteListener>` that surfaces a toast on
+> post-edit return. The cloud-side `/embed` route + GitHub App
+> + Worker proxy + on-prem deployable bundle (annot-cloud-side
+> 5y / 5z) land separately in the private
+> `ingcreators/annot-cloud` repo and depend on the
+> [`annot-cloud-roadmap.md`](./annot-cloud-roadmap.md) Phase 3
+> auth foundation; the OSS-side 5a–5h ship independently of
+> that work via a placeholder `cloudUrl` until 5y goes live.
 >
 > Original plan body below was written 2026-05-22 as the synthesis of a long
 > design discussion that started from
