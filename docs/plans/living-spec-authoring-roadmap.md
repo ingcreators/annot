@@ -411,6 +411,7 @@ revertable; collectively they implement the 3-layer model.
 | 2 | Annotation yaml extraction + `<AnnotCallout>` JSX | ~5 PRs | annot |
 | 3 | Annotation palette extension (arrows / rect / freehand / etc.) | ~4 PRs | annot |
 | 3 follow-up | Mosaic / blur redact raster path + `burnRedactions` relocation | ~4 PRs | annot |
+| 3 follow-up #2 | annot-annotator raster utilities (diffScreenshots relocation + flattenEditablePng + burnRegions alias) | ~3 PRs | annot |
 | 4 | Annot editor's Overlay tool + yaml writer | ~6 PRs | annot |
 | 5 | Embedded editor + GitHub round-trip | ~8 PRs | annot + annot-cloud |
 | 6 | `.annot.mdx` unified authoring surface (MDXEditor + image-click modal) | ~10 PRs (6 sub-phases) | annot |
@@ -915,6 +916,161 @@ and upgrade.
   editor's tool already previews raster styles via its
   in-editor canvas path). The follow-up only affects the
   headless Astro build.
+
+### Phase 3 follow-up #2 — annot-annotator raster utilities
+
+**Goal**: Consolidate the Node-side raster utilities currently
+scattered across `@ingcreators/annot-mcp` into
+`@ingcreators/annot-annotator` so all callers (annot-mcp,
+annot-product-docs-astro, future Playwright fixtures, custom
+test reporters, editor host export paths) consume them from
+one place. Closes the architectural concern surfaced after
+3e: `burnRedactions` is a region-burn primitive, not
+redaction-specific; the same logic applies to the comparison
+diff in MCP. The "burn" frame extends naturally to "flatten
+an editable PNG" (drop the embedded original + annotations
+SVG, keep only the visible bytes).
+
+The follow-up to the follow-up: 3e relocated `burnRedactions`
+because it was MCP-imprisoned; 3i–3k generalize the move to
+the full Node-side raster toolkit + add the missing
+`flattenEditablePng` primitive that the editable-PNG format
+implied but didn't yet expose.
+
+#### Three primitives, one home
+
+| Primitive | Source today | After follow-up #2 |
+|---|---|---|
+| `burnRedactions` (region-burn) | `@ingcreators/annot-annotator` (3e) | unchanged + `burnRegions` alias |
+| `diffScreenshots` (pixel diff → regions) | `@ingcreators/annot-mcp/compare/diff` | `@ingcreators/annot-annotator/diff` |
+| `flattenEditablePng` (strip editable XMP) | (does not exist) | `@ingcreators/annot-annotator/flatten` |
+
+All three sit at Tier A — pure Node, `pngBytes → pngBytes` (or
+`pngBytes → DiffResult` for the comparison case). No
+DOM, no MCP dependency, no Playwright dependency.
+
+#### `flattenEditablePng` design
+
+Reads PNG chunks from the input, strips the editable layer's
+`iTXt` chunks carrying `XML:com.adobe.xmp` (Adobe XMP) AND
+the custom `svGo` chunk (the editor's annotations SVG +
+original-image carrier), recomputes the IDAT CRCs as needed,
+returns the modified bytes. **No re-rasterization** — the
+visible bytes were already the annotated bitmap; flattening is
+metadata removal only.
+
+```ts
+import { flattenEditablePng } from "@ingcreators/annot-annotator";
+
+// Editable PNG: visible = annotated, XMP carries original + SVG (re-editable)
+const editableBytes = await fs.readFile("./annotated.png");
+
+// Flat PNG: visible = same annotated bitmap, XMP gone
+const flatBytes = flattenEditablePng(editableBytes);
+
+// Re-opening flatBytes in the editor restores no annotations
+// (the layer is gone); reading via `readEditablePngBytes(...)`
+// returns `null`. The visible pixels are byte-identical.
+```
+
+**Use cases:**
+- "Publish flat" — editor session → distribution-ready PNG.
+- File size — editable PNG embeds original + SVG, doubling
+  bytes; flat output drops the overhead for downstream
+  consumers (Slack drop, third-party viewers, CI artifacts).
+- Privacy hardening — burning redact regions into the
+  bitmap is the strong version; flattening drops the
+  recoverable original entirely for non-redact annotations
+  too (e.g. an arrow annotation that authors a story the
+  publisher doesn't want recoverable).
+
+#### `burnRegions` alias for `burnRedactions`
+
+The function's signature (`pngBytes + regions[] → pngBytes`,
+with `style: solid | mosaic | blur`) is generic — only the
+name suggests "redact". After this follow-up,
+`@ingcreators/annot-annotator` exports both:
+
+```ts
+import { burnRegions } from "@ingcreators/annot-annotator";
+// Same function, intent-neutral name. Use this for new code.
+
+import { burnRedactions } from "@ingcreators/annot-annotator";
+// Deprecated alias kept for back-compat. New code should
+// prefer `burnRegions`.
+```
+
+No callers are forced to migrate; the alias stays
+indefinitely. The new name surfaces in JSDoc + docs as the
+canonical entry point.
+
+#### Sub-phases
+
+| Sub | Output | Scope |
+|---|---|---|
+| **3i** | Relocate `diffScreenshots` + `aggregateDiffRegions` + `DimensionMismatchError` + `DiffResult` / `DiffOptions` types from `@ingcreators/annot-mcp/compare/` to `@ingcreators/annot-annotator/diff`. annotator gains `pixelmatch` as a runtime dep (~4 KB, no transitive deps). MCP's `compare/diff.ts` becomes a one-line re-export shim so the existing `compare_screenshots` tool keeps working byte-identical. Tests move with the code. Mirrors 3e's pattern. | annotator + mcp coordinated bump (annotator minor for new surface; mcp patch — re-export only). |
+| **3j** | Add `flattenEditablePng(bytes) → bytes` to `@ingcreators/annot-annotator`. Reads PNG chunks, strips Adobe XMP + custom `svGo` chunks, recomputes CRCs, writes back. No re-rasterization. Vitest covers roundtrip: editable → flatten → `readEditablePngBytes` returns null + visible bytes byte-identical to the editable's visible bytes. | New surface — no relocation. annotator minor. |
+| **3k** | Export `burnRegions` as a re-export of `burnRedactions` (3e's relocated function). Deprecate `burnRedactions` in JSDoc — point new callers at `burnRegions`. MCP's re-export shim updates to forward both names. No behaviour change. | annotator minor (new export). Pure documentation + alias. |
+
+Each sub-phase lands as an independent PR, merged on CI green
+before the next starts. Same rhythm as Phase 3 / Phase 3
+follow-up.
+
+No workflow-app dogfood in this follow-up — the three
+primitives target downstream library use cases (visual
+regression tests, editor-host publish-flat, third-party
+viewers) that the workflow-app example doesn't exercise. The
+relocation itself is the value.
+
+#### Files added / moved
+
+- `packages/annotator/src/diff.ts` — moved from `packages/mcp/src/compare/diff.ts` (3i)
+- `packages/annotator/src/diff-aggregate.ts` — moved from `packages/mcp/src/compare/aggregate.ts` (3i)
+- `packages/annotator/src/diff.test.ts` — moved from `packages/mcp/src/compare/diff.test.ts` (3i)
+- `packages/annotator/src/flatten-editable-png.ts` — new (3j)
+- `packages/annotator/src/flatten-editable-png.test.ts` — new (3j)
+
+#### Files modified
+
+- `packages/annotator/src/index.ts` — exports the new surface (`diffScreenshots`, `DiffResult`, `DiffOptions`, `DimensionMismatchError`, `flattenEditablePng`, `burnRegions` alias) (3i / 3j / 3k)
+- `packages/annotator/package.json` — adds `pixelmatch` as a runtime dep (3i)
+- `packages/mcp/src/compare/diff.ts` — replaced by a one-line re-export from annotator (3i)
+- `packages/mcp/src/compare/aggregate.ts` — replaced by a one-line re-export (3i)
+- `packages/mcp/src/index.ts` — surface keeps existing exports; sourced from annotator transitively (3i)
+- `packages/annotator/src/redact-burn.ts` — JSDoc update + `burnRegions` re-export (3k)
+
+#### Verification
+
+- annotator tests — every `diffScreenshots` scenario the MCP
+  compare tests covered passes at the new home (3i).
+- `flattenEditablePng` roundtrip — editable PNG produced by
+  `Annotator.toEditablePng` flattens via `flattenEditablePng`;
+  `readEditablePngBytes` returns null on the result; visible
+  bytes equal the editable's IDAT-decoded bitmap (3j).
+- `burnRegions` import resolves + behaves identically to
+  `burnRedactions` (3k).
+- MCP's existing `annot_compare_screenshots`,
+  `annot_redact_screenshot`, `annot_redact_url` tools keep
+  working byte-identical.
+- `pnpm -r typecheck` / `pnpm -w lint` / per-package vitest
+  + build all green.
+
+#### Out of scope for follow-up #2
+
+- A non-destructive `unflattenEditablePng` (re-attach an
+  editable layer to a flat PNG). Theoretically possible only
+  when the caller still has the source SVG + original — not
+  a useful primitive without that input.
+- Bulk PNG metadata removal beyond Adobe XMP + `svGo`. There
+  are dozens of PNG ancillary chunk types; `flattenEditablePng`
+  is scoped to the editor's editable layer specifically.
+  Generic chunk-strip is a separate utility if it ever needs.
+- A new `@ingcreators/annot-raster` package. Considered
+  ([see follow-up #1's pre-requisite discussion](#pre-requisite--relocate-burnredactions)),
+  rejected for now — three Node-side raster utilities in one
+  package is the right cardinality. If the toolkit grows
+  beyond 5 utilities, revisit (likely splitting at that
+  point).
 
 ### Phase 4 — Annot editor's Overlay tool + yaml writer
 
