@@ -108,7 +108,24 @@ const { ariaLabel = "Annot editor" } = Astro.props;
     };
 
     const onEvent = (event: EmbedEvent): void => {
-      if (event.type === "EditCommitted" || event.type === "EditAbandoned") {
+      if (event.type === "EditCommitted") {
+        // Forward to the docs-site's `<AnnotEditCompleteListener>` so the
+        // post-edit toast surfaces consistently across newTab + inline
+        // modes (Phase 5g).
+        document.dispatchEvent(
+          new CustomEvent("annot:editor-iframe-committed", {
+            detail: {
+              editId: event.editId,
+              commitSha: event.commitSha,
+              branch: event.branch,
+              prUrl: event.prUrl,
+            },
+          }),
+        );
+        modal.close();
+        return;
+      }
+      if (event.type === "EditAbandoned") {
         modal.close();
         return;
       }
