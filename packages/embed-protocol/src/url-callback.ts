@@ -89,8 +89,13 @@ export function encodeEmbedRequestUrl(params: EmbedRequestParams): string {
     throw new EmbedRequestUrlError("returnUrl is required");
   }
 
-  // Strip trailing slash on cloudUrl to canonicalize.
-  const cloudUrl = params.cloudUrl.replace(/\/+$/, "");
+  // Strip a single trailing slash on cloudUrl to canonicalize.
+  // Plain character check rather than a `/+$` regex — the
+  // quantified form triggers a ReDoS warning, and a single
+  // trailing slash is the only case the caller is plausibly
+  // hitting (it falls out of how authors type origins, not from
+  // adversarial input).
+  const cloudUrl = params.cloudUrl.endsWith("/") ? params.cloudUrl.slice(0, -1) : params.cloudUrl;
 
   let baseUrl: URL;
   try {
