@@ -1,0 +1,19 @@
+{
+  "name": "annot-cloud-editor",
+  "url": "https://annot.work",
+  "hook_attributes": {
+    "url": "https://annot.work/api/embed/webhook",
+    "active": true
+  },
+  "redirect_url": "https://annot.work/api/embed/setup/callback",
+  "callback_urls": ["https://annot.work/api/embed/setup/callback"],
+  "setup_url": "https://annot.work/api/embed/setup",
+  "setup_on_update": true,
+  "public": false,
+  "default_permissions": {
+    "contents": "write",
+    "metadata": "read",
+    "pull_requests": "write"
+  },
+  "default_events": ["installation", "installation_repositories", "push"]
+}
