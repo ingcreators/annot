@@ -475,6 +475,9 @@ importers:
       '@ingcreators/annot-core':
         specifier: workspace:*
         version: link:../core
+      '@ingcreators/annot-embed-protocol':
+        specifier: workspace:*
+        version: link:../embed-protocol
       '@ingcreators/annot-playwright':
         specifier: workspace:*
         version: link:../playwright

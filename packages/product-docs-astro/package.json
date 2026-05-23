@@ -34,6 +34,7 @@
     "./components/Screen.astro": "./src/components/Screen.astro",
     "./components/Overlay.astro": "./src/components/Overlay.astro",
     "./components/AnnotCallout.astro": "./src/components/AnnotCallout.astro",
+    "./components/AnnotEditButton.astro": "./src/components/AnnotEditButton.astro",
     "./components/Transition.astro": "./src/components/Transition.astro",
     "./components/TransitionTable.astro": "./src/components/TransitionTable.astro",
     "./components/HistoryEntry.astro": "./src/components/HistoryEntry.astro",
@@ -61,6 +62,7 @@
       "./components/Screen.astro": "./dist/components/Screen.astro",
       "./components/Overlay.astro": "./dist/components/Overlay.astro",
       "./components/AnnotCallout.astro": "./dist/components/AnnotCallout.astro",
+      "./components/AnnotEditButton.astro": "./dist/components/AnnotEditButton.astro",
       "./components/Transition.astro": "./dist/components/Transition.astro",
       "./components/TransitionTable.astro": "./dist/components/TransitionTable.astro",
       "./components/HistoryEntry.astro": "./dist/components/HistoryEntry.astro",
@@ -83,6 +85,7 @@
   "dependencies": {
     "@ingcreators/annot-annotator": "workspace:*",
     "@ingcreators/annot-core": "workspace:*",
+    "@ingcreators/annot-embed-protocol": "workspace:*",
     "@ingcreators/annot-playwright": "workspace:*",
     "@ingcreators/annot-product-docs": "workspace:*"
   },
