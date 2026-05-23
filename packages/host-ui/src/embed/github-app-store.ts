@@ -40,6 +40,30 @@ export class EmbedStorageUnsupportedError extends Error {
   }
 }
 
+/** Thrown when the cloud-side commit endpoint returns
+ *  `error: "conflict"` (a 409 from GitHub's Contents API —
+ *  someone else pushed to the same path). The shell surfaces
+ *  this to the user with a reload + retry prompt. */
+export class EmbedCommitConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "EmbedCommitConflictError";
+  }
+}
+
+/** Success / error variants returned by `/api/embed/commit`. */
+export type EmbedCommitResponse =
+  | {
+      ok: true;
+      editId: string;
+      commitSha: string;
+      branch: string;
+      prUrl?: string;
+      policy: "pr-mode" | "direct-push";
+    }
+  | { ok: false; error: "conflict"; message: string }
+  | { ok: false; error: string; message: string };
+
 /** Response shape returned by `/api/embed/load`. Mirrors the
  *  `EmbedLoadResponseBody` shape exported by the worker but
  *  declared here so host-ui has no compile-time dependency on
@@ -260,12 +284,79 @@ export class GitHubAppStorageProvider implements StorageProvider {
     return [];
   }
 
-  async updateImage(_path: string, _updates: ImageRecordUpdate): Promise<void> {
-    // 5y-4 will implement this against `/api/embed/commit`. For
-    // 5y-3 the save button stays disabled in the embed shell, so
-    // this should never be hit in normal flow; throwing here
-    // surfaces a regression loudly.
-    throw new EmbedStorageUnsupportedError("updateImage (lands in 5y-4)");
+  /**
+   * Persist the current edit via the cloud-side `/api/embed/commit`
+   * endpoint. The shell drives this — the StorageProvider
+   * interface's `updateImage` doesn't carry an `editId` field, so
+   * the shell passes it via an internal channel.
+   *
+   * Callers from EditorShell pass only `annotationsSvg` updates;
+   * we ignore that field (the embed flow round-trips yaml, not
+   * SVG) and use `this.repoState.annotationsYaml` (kept current
+   * by the shell's `setAnnotationsYaml` calls).
+   *
+   * For the embed flow, prefer `.commit({ editId, annotationsYaml })`
+   * (this class's own method) over the `StorageProvider.updateImage`
+   * call — the named method makes the editId requirement explicit.
+   */
+  async updateImage(_path: string, updates: ImageRecordUpdate): Promise<void> {
+    if (!this.#repoState) {
+      throw new Error("updateImage called before getImage");
+    }
+    // Generate a random editId for this save; the shell calling
+    // `.commit({ editId })` explicitly passes a known id instead
+    // (used by 5y-5's hash-redirect path).
+    await this.commit({
+      editId: crypto.randomUUID(),
+      annotationsYaml: updates.annotationsSvg ?? this.#repoState.annotationsYaml,
+      pngBase64: undefined,
+      pngSha: undefined,
+    });
+  }
+
+  /** Cloud-side commit response (mirrors the worker's
+   *  `CommitResponseBody` success / conflict / error variants). */
+  async commit(opts: {
+    editId: string;
+    annotationsYaml: string;
+    pngBase64?: string;
+    pngSha?: string;
+  }): Promise<EmbedCommitResponse> {
+    if (!this.#repoState) {
+      throw new Error("commit called before getImage");
+    }
+    const url = new URL("/api/embed/commit", this.#cloudUrl).toString();
+    const res = await this.#fetchImpl(url, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        installationId: this.#repoState.installationId,
+        repo: this.#repoState.repo,
+        pngPath: this.#repoState.pngPath,
+        annotationsPath: this.#repoState.annotationsPath,
+        branch: this.#repoState.branch,
+        annotationsYaml: opts.annotationsYaml,
+        annotationsSha: this.#repoState.annotationsSha,
+        pngBase64: opts.pngBase64,
+        pngSha: opts.pngSha,
+        editId: opts.editId,
+      }),
+    });
+    const body = (await res.json()) as EmbedCommitResponse;
+    if (!body.ok && body.error === "conflict") {
+      throw new EmbedCommitConflictError(body.message ?? "Commit conflict");
+    }
+    if (!body.ok) {
+      throw new Error(`/api/embed/commit ${res.status}: ${body.message ?? body.error}`);
+    }
+    // Refresh the cached annotationsSha so the next commit uses
+    // the just-committed blob's sha as the optimistic-write base.
+    // The commit endpoint returns the COMMIT sha; we leave the
+    // blob sha stale until the next load (worst case is a second
+    // save fails with conflict + the user reloads).
+    this.#repoState = { ...this.#repoState, annotationsYaml: opts.annotationsYaml };
+    return body;
   }
 
   async moveImage(): Promise<string> {
