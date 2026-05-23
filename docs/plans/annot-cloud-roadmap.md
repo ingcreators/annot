@@ -509,43 +509,54 @@ their own GitHub repo.
 
 The OSS-side numbering (5a–5h) was already consumed by the
 living-spec plan; this phase uses `5y` / `5z` per that plan
-to stay consistent across both documents.
+to stay consistent across both documents. Each sub-phase
+lands as an independent PR, merged on CI green before the
+next starts, mirroring the OSS-side Phase 5 cadence.
 
-- **5y-1**: Register the `annot-cloud-editor` GitHub App (App
-  ID + client secret + webhook secret stored as Worker
-  secrets). One-time GitHub-side registration. The OSS code
-  ships the installation manifest + a setup wizard for the
-  self-host path so customers can register their own App
-  against `cloudUrl` = their domain.
-- **5y-2**: `/api/embed/...` endpoint on the existing Worker.
-  Receives URL params via the `parseEmbedRequestUrl` codec
-  from `@ingcreators/annot-embed-protocol` (living-spec
-  Phase 5b), authorises the visitor via session (Phase 3),
-  checks the App is installed on the target repo, reads PNG
-  + `.annotations.yaml` via the App's installation token.
-- **5y-3**: `/embed` static route at `annot.work/embed` —
-  mounts host-ui's `EditorShell` against a GitHub-App-backed
-  StorageProvider. Posts `EditorReady` to the parent via the
-  Phase 5c client messenger (inline mode) OR loads as a
-  standalone page (newTab mode).
-- **5y-4**: Commit proxy endpoint using the App's installation
-  token. Per [OQ-05](./living-spec-authoring-roadmap.md#oq-05-pr-mode-vs-direct-push-for-github-round-trip)
-  of the living-spec roadmap, defaults to PR-mode for
-  public-repo installations + direct push for solo /
-  trusted-team installations (per-installation policy
-  configurable in the annot-cloud dashboard).
-- **5y-5**: Hash-redirect to the configured `returnUrl` per
-  the Phase 5b codec on save / abandon. The docs site's
-  Phase 5g `<AnnotEditCompleteListener>` picks up
-  `#edit-complete=<editId>` + renders the toast.
-- **5z-1**: Build trigger integration — Worker pings the
-  customer's configured Cloudflare Pages / Vercel / GitHub
-  Pages webhook on commit. Per-installation config stored in
-  the existing D1 schema (extension to the Phase 4 schema).
-- **5z-2**: On-prem deployable bundle — same Worker code,
-  packaged for customer deployment (Cloudflare deployment
-  recipe + BYO GitHub App setup wizard + customer-side
-  `<AnnotEditButton cloudUrl=...>` config recipe).
+| Sub | Output | Scope |
+|---|---|---|
+| **5y-1** | `annot-cloud-editor` GitHub App registration + D1 migration for `github_installations` extensions + Worker secrets surface. New file `packages/worker/src/embed/github-app.ts` declaring `GITHUB_APP_ID` / `GITHUB_APP_CLIENT_ID` / `GITHUB_APP_CLIENT_SECRET` / `GITHUB_APP_PRIVATE_KEY` / `GITHUB_APP_WEBHOOK_SECRET` on the `Env` interface (private key as PEM string secret). D1 migration `0007_github_installations_embed.sql` extends the existing `github_installations` table from the Phase 3 schema with `repo_policy` (`'pr-mode' \| 'direct-push'`, default `'pr-mode'`), `default_branch_override` (nullable), `build_hook_url` (nullable, populated by 5z-1), `target_paths_json` (nullable JSON allowlist of `<repo>/<path-prefix>` pairs the App is authorised to commit under). Repo manifest committed at `packages/worker/embed-github-app-manifest.json` so customers can register their BYO App via [GitHub's manifest flow](https://docs.github.com/en/apps/sharing-github-apps/registering-a-github-app-from-a-manifest). Worker exposes a one-shot `/api/embed/setup` page (Pro-tier dashboard later) that POSTs the manifest to GitHub on the user's behalf for the self-host path. **No GitHub-side credentials in code** — the user creates the App at <https://github.com/settings/apps/new> (or imports the manifest) BEFORE this PR's tests can run end-to-end; the PR description carries the explicit user-action callout. | Tier A (Worker-only). Establishes the credential surface + schema columns the rest of 5y / 5z consume. No editor-mounting logic yet — landing it first means the secret-binding deploy gets a dedicated PR review. |
+| **5y-2** | `/api/embed/load?repo=…&pngPath=…&annotationsPath=…` Worker endpoint. New file `packages/worker/src/embed/load.ts` plus `packages/worker/src/embed/github-app-token.ts` (App JWT signing via `crypto.subtle.importKey({...RSASSA-PKCS1-v1_5}, "spki" / "pkcs8")` + installation-token caching with 50-minute TTL in `SESSIONS` KV). Endpoint parses URL params via `parseEmbedRequestUrl` from `@ingcreators/annot-embed-protocol` (so the codec contract is the single source of truth for what the OSS-side `encodeEmbedRequestUrl` produces; 5b shipped in PR [#1015](https://github.com/ingcreators/annot/pull/1015)), looks up the installation row via `github_installations` + `target_paths_json` allowlist, mints an installation token, reads `pngPath` (binary) + `annotationsPath` (text) via the GitHub Contents API. Returns `{ pngBase64, annotationsYaml, repoState: { branch, headSha, sourceCommitSha } }` for the editor to consume. Visitor authorised via session (cloud-roadmap Phase 3 in production). Per the pricing tier mapping below: free-tier users can hit the endpoint only for PUBLIC repos; private-repo access requires `users.plan IN ('pro', 'team', 'enterprise')`. | Tier A (Worker-only). Independent PR because the App-token signing logic + the Contents API read path are testable end-to-end against a synthetic installation without the editor side mounted yet (we mock `/installations/:id/access_tokens` + `/repos/:owner/:repo/contents/:path` in vitest-with-miniflare). |
+| **5y-3** | `/embed` static HTML route + `<annot-embed-shell>` LitElement. New files `packages/worker/src/embed/page.ts` (HTML emitter — the Worker serves the page directly since it's tiny and benefits from Cloudflare Pages's edge cache via the same Worker fetch handler) + `packages/host-ui/src/embed/embed-shell.ts` + `packages/host-ui/src/embed/github-app-store.ts`. `GitHubAppStorageProvider` is a `StorageProvider` impl whose reads / writes proxy to `/api/embed/load` / `/api/embed/commit` (5y-2 / 5y-4). `<annot-embed-shell>` mounts `EditorShell.mountFromRecord` from `@ingcreators/annot-host-ui` (the same shell the PWA boots through per `_done/editor-session-shell-switchover.md`) against `GitHubAppStorageProvider`, posts `EditorReady` via `createEmbedClientMessenger` from `@ingcreators/annot-embed-protocol` (5c, PR [#1015](https://github.com/ingcreators/annot/pull/1015)) when the URL params include `?mode=inline`, OR runs standalone for `?mode=newTab`. CSP set to `frame-ancestors *` for inline mode (relaxed from default `frame-ancestors 'none'`) since arbitrary docs sites embed us — origin validation lives in the message-channel layer per 5c's design. | Tier C (host-ui — DOM-bound). Independent PR because mounting `EditorShell` against the new `GitHubAppStorageProvider` exercises every read/write surface and is non-trivial to land alongside the commit endpoint. The Save button stays disabled until 5y-4 lands; `EditAbandoned` flows through 5y-5. |
+| **5y-4** | `POST /api/embed/commit` endpoint with PR-mode / direct-push policy. New file `packages/worker/src/embed/commit.ts`. Reads the installation's `repo_policy`: `'direct-push'` commits straight to `default_branch_override ?? <repo default>` via the Contents API (`PUT /repos/:owner/:repo/contents/:path` with `sha` from 5y-2's `repoState`); `'pr-mode'` creates a branch `annot-edit/<editId>`, commits there, then opens a PR via `/repos/:owner/:repo/pulls` with the editor metadata (commit message includes `Annot edit via annot.work/embed`). On Contents-API 409 (sha mismatch — someone else pushed to the same path), 5y-4 returns `{ ok: false, error: "conflict" }` so the editor surfaces a "reload + retry" prompt per the [Conflict handling](./living-spec-authoring-roadmap.md#conflict-handling) section. The Worker emits an `audit_events` row per commit (`action: 'embed_commit'`, `metadata_json` carries the policy + branch + PR number + edit id). | Tier A. Independent PR because the policy switch + audit-event semantics are reviewable separately from the Editor-Save UX it unblocks. |
+| **5y-5** | Hash-redirect on save / abandon. Adds `<annot-embed-shell>` save / abandon handlers: `mode=newTab` runs `window.location.replace(returnUrl + '#edit-complete=' + editId)` on commit success (or `'#edit-abandoned=1'` on abandon); `mode=inline` posts `EditCommitted({ editId, commitSha, prUrl? })` / `EditAbandoned()` via the 5c messenger. The OSS-side `<AnnotEditCompleteListener>` from Phase 5g (PR [#1019](https://github.com/ingcreators/annot/pull/1019)) parses the hash + renders the toast, so this PR's job is just to emit the hash byte-for-byte per 5b's `encodeEmbedReturnHash` shape. Worker emits `audit_events` for `embed_abandoned` to mirror the commit log. | Tier C (host-ui surface). Independent PR because the new-tab return flow is testable via Playwright end-to-end against the dogfood workflow-app docs site once 5y-2/-3/-4 have landed (a state we get to between 5y-4 and 5y-5). |
+| **5z-1** | Build-trigger integration. After 5y-4 commits, the Worker `fetch()`-pings `github_installations.build_hook_url` (Cloudflare Pages deploy hook / Vercel deploy hook / GitHub Pages `repository_dispatch` URL). Per-installation config: 5y-1 added the `build_hook_url` column; this PR adds a `PATCH /api/embed/installations/:id` endpoint so the installation's owner can rotate the URL via curl / the future dashboard (no UI in this PR; CLI-only via session cookie). Failure is non-fatal — the commit still returns 200 and the build-hook outcome is logged to `audit_events` (`action: 'embed_build_hook'`, `metadata_json.http_status`). Idempotent retry on 5xx with a 30-second back-off (capped at 3 attempts). | Tier A. Independent PR because the build-trigger semantics + retry policy are orthogonal to the commit flow. |
+| **5z-2** | On-prem deployable bundle + setup recipe. Adds `docs/plugin-api/embed-editor-self-host.md` walking through: (a) deploying `packages/worker/` to the customer's own Cloudflare account (`wrangler deploy --env=customer` recipe with the customer's `account_id`); (b) provisioning D1 + KV + R2 bindings via the existing `migrations/*.sql`; (c) registering a BYO GitHub App via the `embed-github-app-manifest.json` flow from 5y-1 (the same manifest URL but with `cloudUrl` = `https://annot.example.com`); (d) consuming the on-prem editor from a customer docs site by setting `editor.cloudUrl` in `annot-docs.config.ts` per Phase 5f (PR [#1018](https://github.com/ingcreators/annot/pull/1018)). New `packages/worker/scripts/setup-customer.ts` (Node CLI) bundles the wrangler config + secret-puts + D1 migrate steps into one command. No new Worker code — this PR is documentation + the CLI wrapper. | Tier A (docs + CLI). Independent PR because it's the closing publication step, depending on every preceding sub-phase being in production. |
+
+##### 5y-1 user action required
+
+The `5y-1` PR cannot be tested end-to-end until the user has
+manually registered the GitHub App on `github.com`. **Before
+opening the 5y-1 PR for merge**, do the following on the
+GitHub-side (one-time, ~10 minutes):
+
+1. Visit <https://github.com/settings/apps/new> while signed in
+   to the GitHub user / org that will own the App
+   (`ingcreators` for the production `annot.work` deployment;
+   the customer's own org for self-host deployments).
+2. Fill in the manifest fields per
+   `packages/worker/embed-github-app-manifest.json` (this
+   file lands in the 5y-1 PR — use it as the source of truth
+   for `name` / `url` / `callback URLs` / `permissions` /
+   `events`).
+3. Once the App is created, generate the private key (PEM
+   download) and capture: **App ID** (integer, shown on the
+   App settings page) + **Client ID** + **Client secret** +
+   **Webhook secret** (paste the value used at creation) +
+   the downloaded `*.pem` private key file.
+4. Set the Worker secrets via `wrangler secret put` against
+   the `annot-api` Worker (one command per secret —
+   `GITHUB_APP_ID`, `GITHUB_APP_CLIENT_ID`,
+   `GITHUB_APP_CLIENT_SECRET`, `GITHUB_APP_WEBHOOK_SECRET`,
+   `GITHUB_APP_PRIVATE_KEY`). The last one accepts a
+   multi-line PEM — `wrangler secret put` reads stdin.
+5. Confirm via `wrangler tail --env production` + a manual
+   GET against the new `/api/embed/health` endpoint
+   (shipped in 5y-1) that the secrets are present.
+
+The PR description for 5y-1 ships with a copy-pasteable
+version of these steps so the user can complete them right
+before merging.
 
 #### Pricing implications
 
@@ -589,6 +600,43 @@ site receives the post-edit hash + renders the Phase 5g
 toast. On-prem variant verified by deploying the Worker
 bundle to a test Cloudflare account and round-tripping
 against a different test repo.
+
+#### OSS-side surface consumed (canonical reference)
+
+Phase 5 OSS-side shipped through PRs
+[#1013](https://github.com/ingcreators/annot/pull/1013)–[#1020](https://github.com/ingcreators/annot/pull/1020),
+matching the living-spec roadmap's sub-phases 5a–5h. The
+cloud-side 5y / 5z consume the following surfaces verbatim
+(no shape changes — if the cloud-side wants different
+bytes, the request comes back through a new
+embed-protocol PR first):
+
+- **`@ingcreators/annot-embed-protocol`** —
+  - `EmbedMode = "newTab" | "inline" | "disabled"` (5a)
+  - `EmbedEvent` discriminated union (`EditorReady` /
+    `EditRequested` / `EditCommitted` / `EditAbandoned` /
+    `ResizeNeeded`) (5a)
+  - `encodeEmbedRequestUrl` / `parseEmbedRequestUrl`
+    (`?repo` / `?pngPath` / `?annotationsPath` / `?return` /
+    `?mode`) (5b)
+  - `encodeEmbedReturnHash` / `parseEmbedReturnHash`
+    (`#edit-complete=<editId>` / `#edit-abandoned=1`) (5b)
+  - `createEmbedHostMessenger` (consumer side, used by
+    `<AnnotEditorIframeModal>`) /
+    `createEmbedClientMessenger` (producer side, used by
+    5y-3's `<annot-embed-shell>`) (5c)
+- **`@ingcreators/annot-product-docs-astro` components** —
+  - `<AnnotEditButton>` (5d / 5e) — emits the URL the
+    Worker's `/embed` route must accept.
+  - `<AnnotEditorIframeModal>` (5e) — consumes the
+    `EditCommitted` / `EditAbandoned` / `ResizeNeeded`
+    events the Worker's editor side posts via 5y-5.
+  - `<AnnotEditCompleteListener>` (5g) — consumes the
+    `#edit-complete=<id>` hash 5y-5 redirects to.
+- **`annot-docs.config.ts`** `editor.cloudUrl`
+  (Phase 5f) — every customer docs site points at the
+  Worker route via this knob. The on-prem 5z-2 recipe is
+  the customer changing the `cloudUrl` value, nothing more.
 
 #### Out of scope for this phase
 
