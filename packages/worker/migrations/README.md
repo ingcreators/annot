@@ -53,8 +53,12 @@ pnpm --filter @ingcreators/annot-worker exec wrangler d1 execute annot-db --comm
 - **0002_storage.sql** (Phase 4) — `images`, `documents`,
   `audit_events` tables.
 - **0003_shares.sql** (Phase 5) — `share_links` table.
-- **0004_github_apps.sql** (Phase 2c follow-up) —
-  `github_installations` table.
+- **0004_github_apps.sql** (Phase 6 follow-up 5y-1) —
+  `github_installations` table + embed-flow extension columns
+  (`repo_policy` / `default_branch_override` / `build_hook_url`
+  / `target_paths_json`). See
+  `docs/plans/annot-cloud-roadmap.md` § "Phase 6 follow-up —
+  Embedded editor + GitHub round-trip".
 - **0005_billing.sql** (Phase 7) — Stripe-related columns +
   subscription state tables (lands from the `annot-cloud` private
   repo, not this OSS package).

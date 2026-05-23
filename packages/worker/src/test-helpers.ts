@@ -247,6 +247,16 @@ export function makeMockEnv(overrides: Partial<Env> = {}): Env {
     GITHUB_OAUTH_CLIENT_SECRET: "test-client-secret",
     GOOGLE_OAUTH_CLIENT_ID: "test-google-client-id",
     GOOGLE_OAUTH_CLIENT_SECRET: "test-google-client-secret",
+    // Test-only GitHub App credentials (5y-1). The PEM is the
+    // shortest possible RSA private key for unit-test consumers
+    // that just need a non-empty string; tests that exercise
+    // real JWT signing land in 5y-2 and use a freshly-generated
+    // key fixture.
+    GITHUB_APP_ID: "123456",
+    GITHUB_APP_CLIENT_ID: "test-app-client-id",
+    GITHUB_APP_CLIENT_SECRET: "test-app-client-secret",
+    GITHUB_APP_PRIVATE_KEY: "-----BEGIN PRIVATE KEY-----\nTEST\n-----END PRIVATE KEY-----\n",
+    GITHUB_APP_WEBHOOK_SECRET: "test-webhook-secret",
     ...overrides,
   };
 }

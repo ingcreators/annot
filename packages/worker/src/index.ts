@@ -1,7 +1,7 @@
 // `@ingcreators/annot-worker` — Cloudflare Worker hosting Annot's
 // API surface.
 //
-// Current state (Phase 5):
+// Current state (Phase 5 + 6 follow-up 5y-1):
 //   - /api/health                            (liveness probe)
 //   - /api/health/bindings                   (KV + D1 + R2 reachability)
 //   - /api/auth/github + /github/callback    (GitHub OAuth)
@@ -21,6 +21,8 @@
 //   - /api/shares                            (POST create, GET list)
 //   - /api/shares/:token                     (GET public, DELETE revoke)
 //   - /api/shares/:token/payload             (GET public bytes)
+//   - /api/embed/health                      (5y-1 — GitHub App secret-binding status)
+//   - /api/embed/setup                       (5y-1 — App registration manifest-flow page)
 //   - per-workspace plan-gated quotas on POST /api/images, POST
 //     /api/documents, PATCH /api/documents/:id/content, POST
 //     /api/shares (Phase 4e + 5)
@@ -28,9 +30,13 @@
 //   - users / workspaces / workspace_members tables (Phase 3a)
 //   - images / documents / audit_events tables (Phase 4b)
 //   - share_links table (Phase 5)
+//   - github_installations table (Phase 6 follow-up 5y-1)
 //   - GITHUB_OAUTH_CLIENT_ID / _SECRET secrets
 //   - GOOGLE_OAUTH_CLIENT_ID / _SECRET secrets
-//   Phase 5:  /api/shares/* + /share/:token + /embed/:token
+//   - GITHUB_APP_* secrets (5y-1; consumed by 5y-2+)
+//   Phase 6 follow-up 5y-2+:
+//             /api/embed/load + /api/embed/commit + /api/embed/webhook
+//             + /api/embed/setup/callback
 //   Phase 7:  /api/billing/* + /api/webhooks/stripe (private repo
 //             integration)
 //
@@ -50,6 +56,7 @@ import {
   handleDocumentPatch,
   handleDocumentUpload,
 } from "./documents.js";
+import { handleEmbedHealth, handleEmbedSetupPage } from "./embed/routes.js";
 import {
   handleImageAnnotationsGet,
   handleImageAnnotationsPatch,
@@ -131,6 +138,38 @@ export interface Env {
    * `wrangler secret put GOOGLE_OAUTH_CLIENT_SECRET`.
    */
   GOOGLE_OAUTH_CLIENT_SECRET: string;
+  /**
+   * GitHub App `App ID` (integer, surfaced as a string secret so
+   * the same `wrangler secret put` flow as the others applies).
+   * The App is registered manually on github.com / app settings
+   * per the 5y-1 user-action callout in `annot-cloud-roadmap.md`.
+   * Consumed by 5y-2's installation-token JWT signer.
+   */
+  GITHUB_APP_ID: string;
+  /**
+   * GitHub App OAuth Client ID. Used by 5y-2+ for the
+   * user-authorisation flow that lets visitors log into the embed
+   * editor against their installed App.
+   */
+  GITHUB_APP_CLIENT_ID: string;
+  /**
+   * GitHub App OAuth Client Secret. Required for the
+   * `code → access_token` exchange on the user-authorisation flow.
+   */
+  GITHUB_APP_CLIENT_SECRET: string;
+  /**
+   * GitHub App private key in PEM format (RSA). Used to sign App
+   * JWTs that the Worker exchanges for installation tokens. Stored
+   * verbatim as a Worker secret (multi-line PEM is accepted by
+   * `wrangler secret put`).
+   */
+  GITHUB_APP_PRIVATE_KEY: string;
+  /**
+   * GitHub App webhook secret. Used by the (still-to-land) webhook
+   * verifier in 5y-2 to confirm `X-Hub-Signature-256` headers on
+   * `installation` / `installation_repositories` / `push` events.
+   */
+  GITHUB_APP_WEBHOOK_SECRET: string;
 }
 
 const app = new Hono<{ Bindings: Env }>();
@@ -265,6 +304,16 @@ app.get("/api/shares", handleShareList);
 app.get("/api/shares/:token", handleShareGet);
 app.delete("/api/shares/:token", handleShareRevoke);
 app.get("/api/shares/:token/payload", handleSharePayload);
+
+// ─── Embed editor (Phase 6 follow-up 5y-1 scaffolding) ───────
+// `/api/embed/health` reports the bind status of every GitHub
+// App secret so a `curl` after `wrangler secret put` confirms
+// the deploy worked. `/api/embed/setup` renders the operator's
+// one-time App-registration page (manifest-flow POST →
+// github.com/settings/apps/new). The user-facing /api/embed/load
+// + /commit + /webhook + /setup/callback endpoints land in 5y-2+.
+app.get("/api/embed/health", handleEmbedHealth);
+app.get("/api/embed/setup", handleEmbedSetupPage);
 
 /**
  * Catch-all 404 so probes against an undefined route return a
