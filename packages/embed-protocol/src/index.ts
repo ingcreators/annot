@@ -24,6 +24,15 @@ export {
   EMBED_PROTOCOL_VERSION,
   isEmbedEvent,
 } from "./events.js";
+export type {
+  EmbedClientMessengerOptions,
+  EmbedHostMessengerOptions,
+  EmbedMessenger,
+} from "./postmessage.js";
+export {
+  createEmbedClientMessenger,
+  createEmbedHostMessenger,
+} from "./postmessage.js";
 export type { EmbedRequestParams, EmbedReturnSignal } from "./url-callback.js";
 export {
   EmbedRequestUrlError,

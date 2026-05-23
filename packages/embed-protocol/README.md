@@ -10,7 +10,7 @@ Sub-phase 5a ships event types + protocol version constant;
 sub-phase 5b layers the URL-callback codec; sub-phase 5c
 layers the postMessage dispatcher.
 
-## What's here today (5a + 5b)
+## What's here today (5a + 5b + 5c)
 
 - `EmbedMode` — `"newTab" | "inline" | "disabled"`
 - `EmbedEvent` — discriminated union of every event that flows
@@ -28,11 +28,18 @@ layers the postMessage dispatcher.
 - `encodeEmbedReturnHash(signal)` — inverse of `parseEmbedReturnHash`;
   the annot-cloud `/embed` route uses this to build the
   redirect target (5b)
+- `createEmbedHostMessenger({ frame, expectedOrigin, onEvent })`
+  — docs-site side of the `inline` mode postMessage transport
+  (5c)
+- `createEmbedClientMessenger({ parentOrigin, onEvent })` —
+  editor side of the `inline` mode postMessage transport;
+  ships in this package so annot-cloud's `/embed` route just
+  imports it (5c)
 
 ## What's coming next
 
-- 5c — `createEmbedHostMessenger` + `createEmbedClientMessenger`
-  for `inline` mode's postMessage transport
+- 5d — `<AnnotEditButton>` Astro component (newTab + disabled)
+- 5e — `<AnnotEditorIframeModal>` Astro component (inline)
 
 ## Why this lives in `embed-protocol/` (not in `core/`)
 
