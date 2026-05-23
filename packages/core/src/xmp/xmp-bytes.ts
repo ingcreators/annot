@@ -212,7 +212,29 @@ function buildPngItxtChunk(xmpBytes: Uint8Array): Uint8Array {
   return buildPngChunk(new TextEncoder().encode("iTXt"), itxtData);
 }
 
-function removePngMetadata(data: Uint8Array): Uint8Array {
+/**
+ * Strip the Annot editor's editable-layer metadata from a PNG.
+ * Walks the chunk stream, drops the Adobe XMP iTXt chunk (the
+ * `<annot:annotations>` / `<annot:tags>` carrier) AND the custom
+ * `svGo` chunk (the original un-annotated bitmap), keeps every
+ * other chunk verbatim (including all critical chunks IHDR /
+ * IDAT / IEND so the result stays a valid PNG with the same
+ * visible pixels).
+ *
+ * Returns the input bytes unchanged when no editable-layer
+ * chunks are present.
+ *
+ * Used internally by `writePngWithMetadata` / `writePngWithTagsOnly`
+ * to clear stale metadata before re-injecting new chunks. Exposed
+ * since Phase 3j of `docs/plans/living-spec-authoring-roadmap.md`
+ * (Phase 3 follow-up #2) so `@ingcreators/annot-annotator` can
+ * publish a top-level `flattenEditablePng` primitive against the
+ * same logic without duplicating chunk-walking code.
+ *
+ * No re-rasterization — the visible bytes were already the
+ * annotated bitmap; this is metadata removal only.
+ */
+export function stripPngEditableLayer(data: Uint8Array): Uint8Array {
   const parts: Uint8Array[] = [data.slice(0, 8)]; // PNG signature
   let pos = 8;
   while (pos + 12 <= data.length) {
@@ -242,7 +264,7 @@ export function writePngWithMetadata(
   const itxtChunk = buildPngItxtChunk(xmpBytes);
   const origChunk = buildPngChunk(new TextEncoder().encode("svGo"), originalData);
 
-  const cleaned = removePngMetadata(pngData);
+  const cleaned = stripPngEditableLayer(pngData);
 
   // Insert before IEND (last 12 bytes)
   const insertPos = cleaned.length - 12;
@@ -291,7 +313,7 @@ export function writePngWithTagsOnly(
   if (!tags || Object.keys(tags).length === 0) return pngData;
   const xmpBytes = new TextEncoder().encode(buildXmpTagsOnly(tags));
   const itxtChunk = buildPngItxtChunk(xmpBytes);
-  const cleaned = removePngMetadata(pngData);
+  const cleaned = stripPngEditableLayer(pngData);
 
   // Insert before IEND (last 12 bytes)
   const insertPos = cleaned.length - 12;

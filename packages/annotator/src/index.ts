@@ -77,6 +77,18 @@ export {
 } from "./diff.js";
 export { aggregateDiffRegions } from "./diff-aggregate.js";
 
+// ─── Flatten editable PNG (Phase 3j — new primitive) ───────────
+//
+// "Burn" an editable PNG into a flat one — drop the editor's
+// editable layer (Adobe XMP iTXt + custom `svGo` chunk) while
+// keeping the visible bitmap byte-identical. No re-rasterization;
+// pure metadata removal. Companion to `burnRedactions` (region-
+// level destructive paint) and `Annotator.toPng` (SVG composite
+// burn) — the three together form the Node-side "burn" toolkit.
+// See the doc comment on `flattenEditablePng` for use cases.
+
+export { flattenEditablePng } from "./flatten-editable-png.js";
+
 // ─── DSL (since 0.2.0) ──────────────────────────────────────────
 
 export {
