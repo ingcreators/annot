@@ -24,6 +24,7 @@
 //   - /api/embed/health                      (5y-1 — GitHub App secret-binding status)
 //   - /api/embed/setup                       (5y-1 — App registration manifest-flow page)
 //   - /api/embed/load                        (5y-2 — reads PNG + annotations yaml via App installation token)
+//   - /api/embed/commit                      (5y-4 — commits edited yaml + optional PNG via PR-mode or direct-push)
 //   - /embed                                 (5y-3 — static HTML mounting <annot-embed-shell>)
 //   - per-workspace plan-gated quotas on POST /api/images, POST
 //     /api/documents, PATCH /api/documents/:id/content, POST
@@ -58,6 +59,7 @@ import {
   handleDocumentPatch,
   handleDocumentUpload,
 } from "./documents.js";
+import { handleEmbedCommit } from "./embed/commit.js";
 import { handleEmbedLoad } from "./embed/load.js";
 import { handleEmbedPage } from "./embed/page.js";
 import { handleEmbedHealth, handleEmbedSetupPage } from "./embed/routes.js";
@@ -329,6 +331,7 @@ app.get("/api/shares/:token/payload", handleSharePayload);
 app.get("/api/embed/health", handleEmbedHealth);
 app.get("/api/embed/setup", handleEmbedSetupPage);
 app.get("/api/embed/load", handleEmbedLoad);
+app.post("/api/embed/commit", handleEmbedCommit);
 // `/embed` (no `/api/` prefix) is the visitor-facing static HTML
 // page that mounts `<annot-embed-shell>`. The shell's JS bundle
 // is served separately (Cloudflare Pages or via the
