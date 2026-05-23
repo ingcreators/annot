@@ -257,6 +257,9 @@ export function makeMockEnv(overrides: Partial<Env> = {}): Env {
     GITHUB_APP_CLIENT_SECRET: "test-app-client-secret",
     GITHUB_APP_PRIVATE_KEY: "-----BEGIN PRIVATE KEY-----\nTEST\n-----END PRIVATE KEY-----\n",
     GITHUB_APP_WEBHOOK_SECRET: "test-webhook-secret",
+    // EMBED_SHELL_BUNDLE_URL stays optional + unset so the
+    // worker's default-relative path is exercised; tests that
+    // care override it explicitly.
     ...overrides,
   };
 }

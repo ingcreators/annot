@@ -24,6 +24,7 @@
 //   - /api/embed/health                      (5y-1 — GitHub App secret-binding status)
 //   - /api/embed/setup                       (5y-1 — App registration manifest-flow page)
 //   - /api/embed/load                        (5y-2 — reads PNG + annotations yaml via App installation token)
+//   - /embed                                 (5y-3 — static HTML mounting <annot-embed-shell>)
 //   - per-workspace plan-gated quotas on POST /api/images, POST
 //     /api/documents, PATCH /api/documents/:id/content, POST
 //     /api/shares (Phase 4e + 5)
@@ -58,6 +59,7 @@ import {
   handleDocumentUpload,
 } from "./documents.js";
 import { handleEmbedLoad } from "./embed/load.js";
+import { handleEmbedPage } from "./embed/page.js";
 import { handleEmbedHealth, handleEmbedSetupPage } from "./embed/routes.js";
 import {
   handleImageAnnotationsGet,
@@ -172,6 +174,16 @@ export interface Env {
    * `installation` / `installation_repositories` / `push` events.
    */
   GITHUB_APP_WEBHOOK_SECRET: string;
+  /**
+   * Optional override for where the `/embed` page loads its shell
+   * JS bundle from. Defaults to the same-origin `/embed/shell.js`
+   * path (which the future Cloudflare Pages deploy will serve).
+   * Self-host customers running the bundle on a different origin
+   * (e.g. their CDN) set this to the absolute URL of their
+   * bundle. Set via `wrangler secret put EMBED_SHELL_BUNDLE_URL`,
+   * or leave unset for the default.
+   */
+  EMBED_SHELL_BUNDLE_URL?: string;
 }
 
 const app = new Hono<{ Bindings: Env }>();
@@ -317,6 +329,11 @@ app.get("/api/shares/:token/payload", handleSharePayload);
 app.get("/api/embed/health", handleEmbedHealth);
 app.get("/api/embed/setup", handleEmbedSetupPage);
 app.get("/api/embed/load", handleEmbedLoad);
+// `/embed` (no `/api/` prefix) is the visitor-facing static HTML
+// page that mounts `<annot-embed-shell>`. The shell's JS bundle
+// is served separately (Cloudflare Pages or via the
+// `EMBED_SHELL_BUNDLE_URL` env override).
+app.get("/embed", handleEmbedPage);
 
 /**
  * Catch-all 404 so probes against an undefined route return a
