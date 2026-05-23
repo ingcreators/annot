@@ -42,6 +42,7 @@ import type {
 } from "@ingcreators/annot-core/storage";
 import {
   ancestorPaths,
+  annotationsYamlPathFor,
   getFilename,
   getParentPath,
   joinPath,
@@ -820,6 +821,43 @@ export class DeviceStore
     await this.#cachePutDocument(path, version, cached);
     if (newMtime !== undefined) {
       await this.#upsertListing(folderPath, { path, version, kind: "document" });
+    }
+  }
+
+  // ── Annotations YAML sidecar (Phase 4a) ──────────────────────
+
+  async getAnnotationsYaml(pngPath: string): Promise<string | undefined> {
+    const sidecarPath = annotationsYamlPathFor(pngPath);
+    try {
+      const dir = await this.#getDirHandle(getParentPath(sidecarPath));
+      const handle = await dir.getFileHandle(getFilename(sidecarPath));
+      const file = await handle.getFile();
+      return await file.text();
+    } catch {
+      return undefined;
+    }
+  }
+
+  async setAnnotationsYaml(pngPath: string, content: string): Promise<void> {
+    const sidecarPath = annotationsYamlPathFor(pngPath);
+    const folderPath = getParentPath(sidecarPath);
+    const dir = await this.#getDirHandle(folderPath, true);
+    const handle = await dir.getFileHandle(getFilename(sidecarPath), { create: true });
+    let writable: FileSystemWritableFileStream | null = null;
+    try {
+      writable = await handle.createWritable();
+      await writable.write(content);
+      await writable.close();
+      writable = null;
+    } catch (e) {
+      if (writable) {
+        try {
+          await writable.abort();
+        } catch {
+          /* ignore */
+        }
+      }
+      throw e;
     }
   }
 

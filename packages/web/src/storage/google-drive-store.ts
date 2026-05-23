@@ -26,6 +26,7 @@ import type {
 } from "@ingcreators/annot-core/storage";
 import {
   ancestorPaths,
+  annotationsYamlPathFor,
   getFilename,
   getParentPath,
   joinPath,
@@ -1044,6 +1045,58 @@ export class GoogleDriveStore
     }
     meta.modifiedTime = new Date().toISOString();
     this.#documentMeta.set(driveId, meta);
+  }
+
+  // ---- Annotations YAML sidecar (Phase 4a) ─────────────────────
+  // Sidecars are auxiliary files (not images, not documents), so
+  // they don't participate in the existing path→ID maps. Lookups
+  // happen on demand via `files.list` keyed on the sidecar's
+  // canonical name within the PNG's parent folder.
+
+  async getAnnotationsYaml(pngPath: string): Promise<string | undefined> {
+    const sidecarPath = annotationsYamlPathFor(pngPath);
+    const folderPath = getParentPath(sidecarPath);
+    const sidecarName = getFilename(sidecarPath);
+    const parentId = await this.#resolveFolderId(folderPath);
+    if (!parentId) return undefined;
+    const driveId = await this.#findChildIdByName(parentId, sidecarName);
+    if (!driveId) return undefined;
+    try {
+      const resp = await this.#fetch(`${DRIVE_API}/files/${driveId}?alt=media`);
+      return await resp.text();
+    } catch {
+      return undefined;
+    }
+  }
+
+  async setAnnotationsYaml(pngPath: string, content: string): Promise<void> {
+    const sidecarPath = annotationsYamlPathFor(pngPath);
+    const folderPath = getParentPath(sidecarPath);
+    const sidecarName = getFilename(sidecarPath);
+    const parentId = await this.#resolveFolderId(folderPath);
+    if (!parentId) throw new Error(`Folder not found: ${folderPath}`);
+    const existingId = await this.#findChildIdByName(parentId, sidecarName);
+    const blob = new Blob([content], { type: "text/yaml" });
+    if (existingId) {
+      // Replace contents in place via the upload API.
+      await this.#fetch(`${UPLOAD_API}/files/${existingId}?uploadType=media`, {
+        method: "PATCH",
+        headers: { "Content-Type": "text/yaml" },
+        body: await blob.arrayBuffer(),
+      });
+    } else {
+      await this.#uploadFile(sidecarName, blob, parentId);
+    }
+  }
+
+  /** Look up a Drive file by exact name within a parent folder. */
+  async #findChildIdByName(parentId: string, name: string): Promise<string | undefined> {
+    const escaped = name.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+    const files = await this.#listDrive(
+      `'${parentId}' in parents and name = '${escaped}' and trashed = false`,
+      "files(id,name)",
+    );
+    return files[0]?.id;
   }
 
   // ---- Folders ----

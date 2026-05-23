@@ -45,6 +45,7 @@ import type {
 } from "@ingcreators/annot-core/storage";
 import {
   ancestorPaths,
+  annotationsYamlPathFor,
   getFilename,
   getParentPath,
   joinPath,
@@ -710,6 +711,28 @@ export class DesktopStore
     if (newMtime !== undefined) {
       await this.#upsertListing(folderPath, { path, version, kind: "document" });
     }
+  }
+
+  // ── Annotations YAML sidecar (Phase 4a) ──────────────────────
+
+  async getAnnotationsYaml(pngPath: string): Promise<string | undefined> {
+    const sidecarPath = annotationsYamlPathFor(pngPath);
+    try {
+      const raw = await this.#fs.readFile(sidecarPath);
+      return new TextDecoder().decode(raw);
+    } catch {
+      return undefined;
+    }
+  }
+
+  async setAnnotationsYaml(pngPath: string, content: string): Promise<void> {
+    const sidecarPath = annotationsYamlPathFor(pngPath);
+    const folderPath = getParentPath(sidecarPath);
+    if (folderPath) {
+      await this.#fs.mkdir(folderPath, { recursive: true });
+    }
+    const bytes = new TextEncoder().encode(content);
+    await this.#fs.writeFile(sidecarPath, bytes);
   }
 
   // ── Folders ──────────────────────────────────────────────────
