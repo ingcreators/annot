@@ -1,0 +1,56 @@
+{
+  "name": "@ingcreators/annot-embed-protocol",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Tier A protocol definitions shared between docs sites and the annot-cloud editor — `EmbedMode` literal, `EmbedEvent` discriminated union, URL-callback codec for newTab mode, postMessage dispatcher for inline mode. Phase 5 of docs/plans/living-spec-authoring-roadmap.md.",
+  "license": "Apache-2.0",
+  "author": "ingcreators",
+  "homepage": "https://github.com/ingcreators/annot/tree/main/packages/embed-protocol#readme",
+  "bugs": {
+    "url": "https://github.com/ingcreators/annot/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ingcreators/annot.git",
+    "directory": "packages/embed-protocol"
+  },
+  "keywords": [
+    "annotation",
+    "embed",
+    "iframe",
+    "postmessage",
+    "docs",
+    "editor"
+  ],
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    }
+  },
+  "scripts": {
+    "build": "vite build",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vite-plugin-dts": "^5.0.1"
+  }
+}
