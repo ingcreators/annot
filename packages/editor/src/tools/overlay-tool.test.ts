@@ -70,13 +70,16 @@ function makeTree(): ElementTree {
   };
 }
 
+type OpenDialogFn = (p: OverlayProposal) => Promise<OverlayEntry | null>;
+type CommitFn = (entry: OverlayEntry) => void | Promise<void>;
+
 interface TestHarness {
   tool: OverlayTool;
   container: HTMLElement;
   mountedPickers: HTMLElement[];
-  unmountSpy: ReturnType<typeof vi.fn>;
-  openIntentDialog: ReturnType<typeof vi.fn>;
-  onCommit: ReturnType<typeof vi.fn>;
+  unmountSpy: ReturnType<typeof vi.fn<() => void>>;
+  openIntentDialog: ReturnType<typeof vi.fn<OpenDialogFn>>;
+  onCommit: ReturnType<typeof vi.fn<CommitFn>>;
   dialogResolver: { resolve: (entry: OverlayEntry | null) => void } | null;
 }
 
@@ -96,8 +99,8 @@ function makeHarness(
   const container = document.createElement("div");
   document.body.appendChild(container);
   const mountedPickers: HTMLElement[] = [];
-  const unmountSpy = vi.fn();
-  const dialogStub = vi.fn<(p: OverlayProposal) => Promise<OverlayEntry | null>>(async (p) => {
+  const unmountSpy = vi.fn<() => void>();
+  const dialogStub = vi.fn<OpenDialogFn>(async (p) => {
     if ("dialogResult" in opts) return opts.dialogResult ?? null;
     return {
       id: `o${p.proposedNumber}`,
@@ -107,7 +110,7 @@ function makeHarness(
       number: p.proposedNumber,
     };
   });
-  const commitStub = vi.fn();
+  const commitStub = vi.fn<CommitFn>();
   const context: OverlayToolContext = {
     overlayContainer: container,
     elementTree: opts.elementTree,
