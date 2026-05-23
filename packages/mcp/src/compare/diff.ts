@@ -1,82 +1,23 @@
-// PNG diff via `pixelmatch`. Produces a mask buffer of per-pixel
-// differences AND a list of contiguous changed-region bboxes the
-// caller can hand straight to the SVG-conversion path.
+// Re-export shim — Phase 3i of
+// `docs/plans/living-spec-authoring-roadmap.md` (Phase 3
+// follow-up #2) relocated the diff primitive itself to
+// `@ingcreators/annot-annotator/diff`. The function is pure
+// (`pngBytes + pngBytes → DiffResult`) with no MCP-specific
+// surface, and non-MCP callers (Playwright visual regression
+// fixtures, Astro pixel drift CI, custom reporters) need to
+// consume it without dragging the MCP server's dep footprint.
 //
-// Phase 5 of `docs/plans/agent-mcp-integration.md`.
+// This file stays as a thin shim so existing MCP-internal
+// imports (`../compare/diff.js` from `tools/compare-screenshots.ts`)
+// and the public `@ingcreators/annot-mcp` re-export both keep
+// working byte-identical. Future cleanup could collapse callers
+// onto the annotator import directly and delete this file;
+// deliberately left in place for now to keep the relocation a
+// no-behaviour-change refactor.
 
-import { createCanvas, loadImage } from "@napi-rs/canvas";
-import pixelmatch from "pixelmatch";
-
-import type { BBox } from "../dsl/types.js";
-import { aggregateDiffRegions } from "./aggregate.js";
-
-export interface DiffResult {
-  /** Number of mismatched pixels. */
-  mismatchedPixels: number;
-  /** Bounding boxes of contiguous changed regions. */
-  regions: BBox[];
-  /** Dimensions of the input pair. */
-  width: number;
-  height: number;
-}
-
-export interface DiffOptions {
-  /** Matching threshold (0 to 1); smaller is more sensitive. */
-  threshold?: number;
-}
-
-export class DimensionMismatchError extends Error {
-  constructor(a: { width: number; height: number }, b: { width: number; height: number }) {
-    super(
-      "Cannot compare screenshots of different dimensions: " +
-        `before is ${a.width}×${a.height}, after is ${b.width}×${b.height}.`,
-    );
-    this.name = "DimensionMismatchError";
-  }
-}
-
-/**
- * Compare two PNGs pixel-by-pixel and return the changed-region
- * bboxes. Throws `DimensionMismatchError` when the inputs have
- * different sizes — the agent has to capture both with the same
- * viewport for the comparison to make sense.
- */
-export async function diffScreenshots(
-  before: Uint8Array,
-  after: Uint8Array,
-  options: DiffOptions = {},
-): Promise<DiffResult> {
-  const [beforeImage, afterImage] = await Promise.all([
-    loadImage(Buffer.from(before)),
-    loadImage(Buffer.from(after)),
-  ]);
-  if (beforeImage.width !== afterImage.width || beforeImage.height !== afterImage.height) {
-    throw new DimensionMismatchError(
-      { width: beforeImage.width, height: beforeImage.height },
-      { width: afterImage.width, height: afterImage.height },
-    );
-  }
-  const { width, height } = beforeImage;
-  const beforePixels = imageToRgba(beforeImage, width, height);
-  const afterPixels = imageToRgba(afterImage, width, height);
-  const diffPixels = new Uint8Array(width * height * 4);
-  const mismatchedPixels = pixelmatch(beforePixels, afterPixels, diffPixels, width, height, {
-    threshold: options.threshold ?? 0.1,
-    includeAA: false,
-    diffMask: true,
-  });
-  const regions = aggregateDiffRegions(diffPixels, width, height);
-  return { mismatchedPixels, regions, width, height };
-}
-
-function imageToRgba(
-  image: Awaited<ReturnType<typeof loadImage>>,
-  width: number,
-  height: number,
-): Uint8Array {
-  const canvas = createCanvas(width, height);
-  const ctx = canvas.getContext("2d");
-  ctx.drawImage(image, 0, 0);
-  const data = ctx.getImageData(0, 0, width, height).data;
-  return new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
-}
+export {
+  type DiffOptions,
+  type DiffResult,
+  DimensionMismatchError,
+  diffScreenshots,
+} from "@ingcreators/annot-annotator";

@@ -59,6 +59,24 @@ export { isPhotoHeavy } from "./encode/quantize.js";
 
 export { burnRedactions, type RedactRegion } from "./redact-burn.js";
 
+// ─── Pixel diff (Phase 3i — relocated from @ingcreators/annot-mcp) ───
+//
+// Tier A Node-side raster utility — pixelmatch-driven PNG
+// comparison with contiguous-region bbox aggregation. Same
+// rationale as the redact burn: pure `pngBytes + pngBytes →
+// DiffResult`, no MCP-specific surface. Ships here so non-MCP
+// callers (Playwright visual regression fixtures, Astro pixel
+// drift CI, custom test reporters, editor before/after preview)
+// can consume it without the MCP server's dep footprint.
+
+export {
+  type DiffOptions,
+  type DiffResult,
+  DimensionMismatchError,
+  diffScreenshots,
+} from "./diff.js";
+export { aggregateDiffRegions } from "./diff-aggregate.js";
+
 // ─── DSL (since 0.2.0) ──────────────────────────────────────────
 
 export {

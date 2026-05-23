@@ -1,6 +1,10 @@
+// Phase 3i of `docs/plans/living-spec-authoring-roadmap.md`
+// (Phase 3 follow-up #2). Moved alongside `diff-aggregate.ts` from
+// `packages/mcp/src/compare/aggregate.test.ts`.
+
 import { describe, expect, test } from "vitest";
 
-import { aggregateDiffRegions } from "./aggregate.js";
+import { aggregateDiffRegions } from "./diff-aggregate.js";
 
 /** Build a synthetic RGBA mask with diff pixels at the given indices. */
 function buildMask(width: number, height: number, diffPixels: Array<[number, number]>): Uint8Array {
