@@ -28,6 +28,7 @@
     "secrets:put:github-app-client-secret": "wrangler secret put GITHUB_APP_CLIENT_SECRET",
     "secrets:put:github-app-private-key": "wrangler secret put GITHUB_APP_PRIVATE_KEY",
     "secrets:put:github-app-webhook-secret": "wrangler secret put GITHUB_APP_WEBHOOK_SECRET",
+    "setup-customer": "tsx scripts/setup-customer.ts",
     "tail": "wrangler tail"
   },
   "dependencies": {
