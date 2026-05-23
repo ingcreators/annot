@@ -246,10 +246,14 @@ describe("TOOL_REGISTRY.panelControls — shape invariants", () => {
   // edit can't silently drop the field for one tool and break the
   // schema-driven renderer's input.
 
-  it("every tool except crop has a non-empty panelControls array", () => {
+  it("every tool except crop / overlay has a non-empty panelControls array", () => {
     for (const [toolId, entry] of Object.entries(TOOL_REGISTRY)) {
-      if (toolId === "crop") {
-        expect(entry.panelControls, "crop has no side panel").toBeUndefined();
+      if (toolId === "crop" || toolId === "overlay") {
+        // Crop is a transient destructive op (no panel); overlay
+        // (Phase 4 of `docs/plans/living-spec-authoring-roadmap.md`)
+        // writes to the `.annotations.yaml` sidecar, not to the
+        // editor's SVG, so it has no presets to surface in a panel.
+        expect(entry.panelControls, `${toolId} has no side panel`).toBeUndefined();
         continue;
       }
       expect(entry.panelControls, `${toolId}.panelControls must be defined`).toBeDefined();

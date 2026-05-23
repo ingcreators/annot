@@ -94,7 +94,7 @@ const VALID_TOOL_OPTIONS_KEYS = new Set<keyof ToolOptions>([
 ]);
 
 describe("TOOL_REGISTRY shape invariants", () => {
-  it("covers exactly the 8 toolbar tool ids", () => {
+  it("covers exactly the 9 toolbar tool ids", () => {
     expect(Object.keys(TOOL_REGISTRY).sort()).toEqual([...TOOL_REGISTRY_IDS].sort());
   });
 
@@ -375,9 +375,17 @@ describe("TOOL_REGISTRY variantKeyForElement spot-checks", () => {
     expect(TOOL_REGISTRY.crop!.variantKeyForElement).toBeUndefined();
   });
 
-  it("each non-crop tool's variantKeyForElement is defined", () => {
+  it("overlay: has no variantKeyForElement (writes yaml, not SVG)", () => {
+    expect(TOOL_REGISTRY.overlay!.variantKeyForElement).toBeUndefined();
+  });
+
+  it("each on-canvas tool defines variantKeyForElement", () => {
+    // Crop + Overlay are exceptions: Crop is a transient destructive
+    // op (no persistent on-canvas element); Overlay writes to the
+    // `.annotations.yaml` sidecar, not to the editor's SVG, so it
+    // has no rubber-band-from-element semantics to drive.
     for (const [id, entry] of Object.entries(TOOL_REGISTRY)) {
-      if (id === "crop") continue;
+      if (id === "crop" || id === "overlay") continue;
       expect(entry.variantKeyForElement, `${id}.variantKeyForElement`).toBeDefined();
     }
   });

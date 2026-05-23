@@ -43,8 +43,22 @@ import {
   History as HistoryImpl,
   SelectionManager as SelectionManagerImpl,
 } from "@ingcreators/annot-editor";
+import type {
+  OverlayEntry,
+  OverlayProposal,
+  OverlayToolContext,
+  SnapshotPickerHandle,
+} from "@ingcreators/annot-editor/tools/overlay-tool";
+import type {
+  AnnotationsFile,
+  OverlayEntry as ProductDocsOverlayEntry,
+} from "@ingcreators/annot-product-docs/annotations-yaml";
 import { burnRedactionsIntoBitmap, cropBitmap } from "@ingcreators/annot-render";
+import { loadAnnotationsYaml } from "./annotation-yaml-loader.js";
+import { saveAnnotationsYaml } from "./annotation-yaml-writer.js";
 import { restoreAnnotations } from "./restore-annotations.js";
+import type { AnnotSnapshotOverlayElement } from "./snapshot-overlay.js";
+import "./snapshot-overlay.js";
 
 /**
  * Feature opt-out bag the host passes at construction. Defaults
@@ -149,6 +163,19 @@ export class EditorShell {
    *  the tree view when set. Null when no tree was found (most
    *  non-instrumented captures). */
   #elementTree: ElementTree | null = null;
+  /** Phase 4e: PNG path supplied via `mountFromRecord` opts that the
+   *  Phase 4a storage capability uses to resolve the sidecar yaml.
+   *  Typically the same as `#currentPath` — kept as a separate slot
+   *  so a host that drives sidecar yaml against a path different
+   *  from the image's own (e.g. a future MDX-attached editor view)
+   *  can override. Null when the host didn't supply one. */
+  #overlayYamlPngPath: string | null = null;
+  /** Phase 4e: Cached `AnnotationsFile` for the active image.
+   *  Loaded lazily after mount via `loadAnnotations`; queried by
+   *  the OverlayTool's context provider for the existing-entries
+   *  list + the number-auto-assign source. Null when no sidecar
+   *  exists (the editor falls back to "empty overlays"). */
+  #currentAnnotations: AnnotationsFile | null = null;
   #destroyed = false;
 
   // Per-event handler arrays. A `Map<event, Set<handler>>` would
@@ -213,13 +240,33 @@ export class EditorShell {
    *  (a freshly captured / pasted but un-saved image); `saveNow()`
    *  then no-ops until a path is assigned via a future
    *  `setCurrentPath` API. */
-  mountFromRecord(path: string | null, record: ImageRecord): void {
+  mountFromRecord(
+    path: string | null,
+    record: ImageRecord,
+    opts?: { annotationsYamlPath?: string },
+  ): void {
     if (this.#destroyed) {
       throw new Error("EditorShell.mountFromRecord: shell already destroyed");
     }
     this.#currentPath = path;
     this.#currentRecord = record;
+    // Phase 4e: the annotations-yaml sidecar key. Defaults to the
+    // image path when the host doesn't override — the Phase 4a
+    // storage capability resolves the sidecar location internally
+    // via `<pngPath>.annotations.yaml`.
+    this.#overlayYamlPngPath = opts?.annotationsYamlPath ?? path ?? null;
+    this.#currentAnnotations = null;
     this.#mountCanvas(record);
+    // Fire-and-forget async load; callers that need to await it use
+    // `loadAnnotations` directly. Production code reads
+    // `#currentAnnotations` via the OverlayTool context provider,
+    // which is queried at click time — by then the load is usually
+    // done, and on the rare race the tool sees zero entries (i.e.
+    // auto-assigns number 1; the next pick fetches the up-to-date
+    // list).
+    if (this.#overlayYamlPngPath !== null) {
+      void this.loadAnnotations();
+    }
   }
 
   /** Mount the canvas inside `host.container`. Tears down any
@@ -634,6 +681,128 @@ export class EditorShell {
   /** Snapshot of the current ElementTree. */
   getCurrentElementTree(): ElementTree | null {
     return this.#elementTree;
+  }
+
+  // ╭─ Phase 4e: annotations YAML sidecar ───────────────────────────╮
+  // │ Wires the host's `OverlayTool` activation to the Phase 4b      │
+  // │ loader / writer using the Phase 4a storage capability. Hosts   │
+  // │ that don't supply an `annotationsYamlPath` at mount time get   │
+  // │ a no-op path — `getCurrentAnnotationsYaml` returns null;       │
+  // │ `publishOverlay` throws; `createOverlayToolContext` returns    │
+  // │ null so the OverlayTool factory falls back to the inert        │
+  // │ no-context tool.                                               │
+  // ╰────────────────────────────────────────────────────────────────╯
+
+  /** Re-read the annotations sidecar for the active image. Hosts
+   *  that want to refresh after an out-of-band edit (e.g. another
+   *  tab wrote to the same file) can call this manually; the
+   *  result lands in `#currentAnnotations`. Returns the loaded
+   *  file (null when the sidecar is missing OR the store doesn't
+   *  expose the capability). */
+  async loadAnnotations(): Promise<AnnotationsFile | null> {
+    const pngPath = this.#overlayYamlPngPath;
+    if (pngPath === null) {
+      this.#currentAnnotations = null;
+      return null;
+    }
+    const file = await loadAnnotationsYaml(this.#host.storage, pngPath);
+    this.#currentAnnotations = file;
+    return file;
+  }
+
+  /** Snapshot of the in-memory `AnnotationsFile`. Null when no
+   *  sidecar is loaded for the active image. Used by the
+   *  OverlayTool's context provider + future MDX-attached editor
+   *  modes that want to mirror the editor's view of the world. */
+  getCurrentAnnotationsYaml(): AnnotationsFile | null {
+    return this.#currentAnnotations;
+  }
+
+  /** Persist a single overlay entry. Upserts by `id` — when an
+   *  entry with the same id exists, it's replaced; otherwise the
+   *  new entry is appended. Updates `#currentAnnotations` so
+   *  subsequent activations of the OverlayTool see the new state
+   *  without a re-load.
+   *
+   *  @throws Error when the host didn't supply an
+   *    `annotationsYamlPath` at mount time (i.e.
+   *    `#overlayYamlPngPath` is null).
+   *  @throws backend-specific errors from the Phase 4b writer
+   *    (e.g. `StoragePermissionError`).
+   */
+  async publishOverlay(entry: OverlayEntry): Promise<void> {
+    const pngPath = this.#overlayYamlPngPath;
+    if (pngPath === null) {
+      throw new Error(
+        "EditorShell.publishOverlay: no annotationsYamlPath set. Pass `annotationsYamlPath` " +
+          "to `mountFromRecord` before invoking the OverlayTool.",
+      );
+    }
+    // `OverlayEntry` is duplicated across `@ingcreators/annot-editor`
+    // (Phase 4d, minimal — kept narrow to avoid an editor →
+    // product-docs dep) and `@ingcreators/annot-product-docs` (Phase
+    // 2a, wider `OverlayIntent` palette). The editor type is
+    // structurally a subset of the product-docs one, so the cast at
+    // the boundary is sound. A future refactor can lift the type
+    // into `@ingcreators/annot-core` and drop the cast.
+    const pdEntry = entry as ProductDocsOverlayEntry;
+    const current = this.#currentAnnotations ?? { version: 1, overlays: [] };
+    const overlays = [...current.overlays];
+    const existingIdx = overlays.findIndex((o) => o.id === entry.id);
+    if (existingIdx >= 0) {
+      overlays[existingIdx] = pdEntry;
+    } else {
+      overlays.push(pdEntry);
+    }
+    const updated: AnnotationsFile = { ...current, overlays };
+    await saveAnnotationsYaml(this.#host.storage, pngPath, updated);
+    this.#currentAnnotations = updated;
+  }
+
+  /** Build a fresh `OverlayToolContext` snapshotting the shell's
+   *  current state. Called by the host's `Toolbar` via the
+   *  `overlayContextProvider` deps entry. Returns null when the
+   *  shell can't usefully drive the tool — currently when no
+   *  `annotationsYamlPath` is set (the publishOverlay path would
+   *  throw, so the factory falls back to the no-context inert tool
+   *  rather than activating one that throws on first click).
+   *
+   *  Hosts supply the `overlayContainer` (the HTML element that
+   *  hosts the `<annot-snapshot-overlay>` Lit element) and the
+   *  `openIntentDialog` (the function that renders an intent
+   *  picker UI). The shell wires the snapshot-picker factory + the
+   *  onCommit handler internally.
+   */
+  createOverlayToolContext(opts: {
+    overlayContainer: HTMLElement;
+    openIntentDialog: (proposal: OverlayProposal) => Promise<OverlayEntry | null>;
+  }): OverlayToolContext | null {
+    if (this.#overlayYamlPngPath === null) return null;
+    const elementTree = this.#elementTree ?? undefined;
+    // Same product-docs ↔ editor `OverlayEntry` duality as in
+    // `publishOverlay`; structural subset assignment is sound, the
+    // cast pins it for tsc until the type lifts to annot-core.
+    const existingOverlays = (this.#currentAnnotations?.overlays ?? []) as readonly OverlayEntry[];
+    return {
+      overlayContainer: opts.overlayContainer,
+      elementTree,
+      existingOverlays,
+      mountSnapshotPicker: (container, tree): SnapshotPickerHandle => {
+        const element = document.createElement(
+          "annot-snapshot-overlay",
+        ) as AnnotSnapshotOverlayElement;
+        element.elementTree = tree;
+        container.appendChild(element);
+        return {
+          element,
+          unmount: (): void => {
+            element.remove();
+          },
+        };
+      },
+      openIntentDialog: opts.openIntentDialog,
+      onCommit: (entry): Promise<void> => this.publishOverlay(entry),
+    };
   }
 
   /** The live `CanvasManager` for the open image, or null if no

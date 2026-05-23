@@ -1082,6 +1082,24 @@ export const TOOL_REGISTRY: Readonly<Record<string, ToolRegistryEntry>> = {
     category: "image-op",
     presetFields: [],
   },
+  /**
+   * Overlay — Phase 4 of the
+   * [living-spec authoring roadmap](../../../../docs/plans/living-spec-authoring-roadmap.md).
+   *
+   * Adds numbered-badge overlays to the linked `.annotations.yaml`
+   * sidecar by clicking a snapshot region. Pure orchestration tool:
+   * doesn't paint SVG annotations onto the canvas, doesn't persist
+   * a preset, doesn't carry variants. The shell wires the tool's
+   * context (existing entries, intent dialog, commit callback)
+   * after construction via the per-factory `overlayContextProvider`.
+   */
+  overlay: {
+    id: "overlay",
+    label: "Overlay",
+    icon: "label",
+    category: "annotation",
+    presetFields: [],
+  },
 } as const;
 
 /** All tool ids the toolbar exposes. Frozen tuple form for tests
@@ -1095,6 +1113,7 @@ export const TOOL_REGISTRY_IDS = [
   "marker",
   "redact",
   "crop",
+  "overlay",
 ] as const;
 
 export type ToolRegistryId = (typeof TOOL_REGISTRY_IDS)[number];

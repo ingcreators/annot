@@ -101,7 +101,19 @@ function dispatchToolboxRightClick(ctx: ToolbarCanvasMenuContext): CanvasMenuIte
 }
 
 describe("openToolboxMenu — three-section layout", () => {
-  const ANNOTATION_LABELS = ["Line", "Shape", "Highlight", "Text", "Draw", "Counter", "Redact"];
+  // Phase 4e of `docs/plans/living-spec-authoring-roadmap.md` added
+  // the Overlay tool — category "annotation", so it renders inside
+  // the annotation group, after Redact and before the Crop divider.
+  const ANNOTATION_LABELS = [
+    "Line",
+    "Shape",
+    "Highlight",
+    "Text",
+    "Draw",
+    "Counter",
+    "Redact",
+    "Overlay",
+  ];
   const IMAGE_OP_LABELS = ["Crop"];
 
   it("with extras: extras → divider → annotation tools → divider → image-op tools", () => {
