@@ -1,6 +1,6 @@
 # Living-spec visual authoring roadmap
 
-> **Status:** Phase 1 + Phase 2 + Phase 3 all landed 2026-05-23.
+> **Status:** Phase 1 + Phase 2 + Phase 3 + Phase 4 all landed 2026-05-23.
 >
 > Phase 1 sub-phases 1a–1i:
 > [#970](https://github.com/ingcreators/annot/pull/970) /
@@ -76,6 +76,29 @@
 > Astro pixel drift CI, custom reporters, editor publish-flat)
 > can consume any of the three without the MCP server's dep
 > footprint.
+>
+> Phase 4 sub-phases 4a–4f (decomposition: [#1004](https://github.com/ingcreators/annot/pull/1004)):
+> [#1005](https://github.com/ingcreators/annot/pull/1005) (4a — `StorageWithDocuments` annotations YAML sidecar capability + 4 store impls) /
+> [#1006](https://github.com/ingcreators/annot/pull/1006) (4b — host-ui annotation yaml loader + writer) /
+> [#1007](https://github.com/ingcreators/annot/pull/1007) (4c — `<annot-snapshot-overlay>` Lit element) /
+> [#1008](https://github.com/ingcreators/annot/pull/1008) (4d — `OverlayTool` snapshot region pick → intent dialog) /
+> [#1009](https://github.com/ingcreators/annot/pull/1009) (4e — `TOOL_REGISTRY` + factory + `EditorShell.mountFromRecord({ annotationsYamlPath })` plumbing) /
+> [#1010](https://github.com/ingcreators/annot/pull/1010) (4f — vitest integration dogfood + `<annot-save-menu>` publish-flat affordance via `flattenEditablePng`).
+>
+> Phase 4 closes the visual authoring half of the
+> [3-layer artifact model](#the-3-layer-artifact-model): opening
+> a PNG that carries a Phase 1 `annot:elementTree` snapshot in
+> the editor now surfaces hover-pickable element regions; a
+> click + intent pick adds a numbered-badge overlay to the
+> linked `.annotations.yaml` sidecar via the Phase 4a storage
+> capability — without touching the PNG bytes or any MDX.
+> Phase 5 (embedded editor + GitHub round-trip via
+> annot-cloud) builds on this foundation. The publish-flat
+> affordance is the first user-visible integration of a Phase 3
+> follow-up #2 annotator primitive in the editor host. VSCode's
+> proper `VSCodeStore` is deferred to Phase 6's `.annot.mdx`
+> custom editor; today the VSCode webview's
+> `MessageProxyStorageProvider` stays overlay-yaml-agnostic.
 >
 > Original plan body below was written 2026-05-22 as the synthesis of a long
 > design discussion that started from
