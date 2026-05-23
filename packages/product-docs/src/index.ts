@@ -32,6 +32,7 @@ export type {
   OverlayEntry,
   RectAnnotation,
   RedactAnnotation,
+  RedactAnnotationStyle,
   TextAnchorPosition,
   TextAnnotation,
 } from "./annotations-yaml.js";

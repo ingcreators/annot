@@ -259,18 +259,32 @@ export interface FreehandAnnotation extends AnnotationStyleFields {
 }
 
 /**
- * Opaque rect obscuring content. Phase 3 ships `style: "solid"`
- * only — mosaic / blur need raster pixel access (out of scope
- * for the SVG-fragment Image Service); the parser rejects other
- * values for now.
+ * Style of a redact rect. `solid` paints an opaque rect over the
+ * region; `mosaic` and `blur` are raster transforms applied to
+ * the underlying screenshot bitmap before SVG-fragment
+ * composition (Phase 3 follow-up — see Astro Image Service for
+ * the rendering path).
+ */
+export type RedactAnnotationStyle = "solid" | "mosaic" | "blur";
+
+/**
+ * Opaque or scrambled rect obscuring content. `solid` renders as
+ * a filled rect via the SVG-fragment path; `mosaic` and `blur`
+ * trigger a raster pre-processing pass in the Astro Image Service
+ * (Phase 3 follow-up — Phase 3a–3d shipped `solid` only).
  */
 export interface RedactAnnotation extends AnnotationStyleFields {
   id: string;
   kind: "redact";
   match?: MatchKey;
   bbox?: AnnotationBBox;
-  /** Phase 3 ships `solid` only. */
-  style?: "solid";
+  /**
+   * Defaults to `solid` at render time when omitted. Phase 3 follow-up
+   * (3f) widened this from the original `"solid"`-only to also
+   * accept `"mosaic"` and `"blur"` — both routed through
+   * `burnRedactions` from `@ingcreators/annot-annotator`.
+   */
+  style?: RedactAnnotationStyle;
 }
 
 /** Focus-mask cutout — element-anchored (with optional padding) or free-coord bbox. */
@@ -735,9 +749,9 @@ function coerceRedact(id: string, a: Record<string, unknown>): RedactAnnotation 
 
   const style = a["style"];
   if (style !== undefined) {
-    if (style !== "solid") {
+    if (style !== "solid" && style !== "mosaic" && style !== "blur") {
       throw new AnnotationsYamlError(
-        `Annotation ${id}: redact.style must be "solid" (Phase 3 ships solid only; mosaic / blur are reserved)`,
+        `Annotation ${id}: redact.style must be one of "solid" / "mosaic" / "blur"`,
       );
     }
     out.style = style;
@@ -1100,9 +1114,14 @@ function validateAnnotation(spec: AnnotationSpec): void {
           `Annotation ${spec.id}: redact requires exactly one of match / bbox`,
         );
       }
-      if (spec.style !== undefined && spec.style !== "solid") {
+      if (
+        spec.style !== undefined &&
+        spec.style !== "solid" &&
+        spec.style !== "mosaic" &&
+        spec.style !== "blur"
+      ) {
         throw new AnnotationsYamlError(
-          `Annotation ${spec.id}: redact.style must be "solid" (Phase 3 ships solid only)`,
+          `Annotation ${spec.id}: redact.style must be one of "solid" / "mosaic" / "blur"`,
         );
       }
       break;
