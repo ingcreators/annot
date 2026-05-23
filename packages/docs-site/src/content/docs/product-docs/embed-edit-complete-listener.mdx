@@ -1,0 +1,95 @@
+---
+title: AnnotEditCompleteListener (Phase 5g)
+description: Mount once in your layout to surface a transient toast when the cloud editor returns control to the docs site. Unifies the post-edit UX across newTab + inline modes.
+---
+
+`<AnnotEditCompleteListener>` is the docs-site-side partner to
+[`<AnnotEditButton>`](/product-docs/embed-edit-button/). Mount it
+once per page (typically in your layout) and visitors see a
+transient toast whenever the cloud editor returns control after
+a save.
+
+## Quick start
+
+```mdx
+{/* In your layout (typically `src/layouts/*.astro`): */}
+import AnnotEditCompleteListener from
+  "@ingcreators/annot-product-docs-astro/components/AnnotEditCompleteListener.astro";
+
+<slot />
+<AnnotEditCompleteListener />
+```
+
+That's it. The component is invisible until a post-edit signal
+arrives, then renders a "Edit saved — site rebuilds in ~1
+minute." toast in the bottom-right corner.
+
+## Trigger paths
+
+Two paths unify into one toast surface:
+
+### newTab return-hash
+
+The default newTab flow:
+
+1. Visitor clicks `<AnnotEditButton>` → new tab opens cloud editor.
+2. Visitor saves → cloud editor redirects the new tab to `${returnUrl}#edit-complete=<editId>`.
+3. The new tab is the docs site itself (since `returnUrl` was set to the docs page's URL).
+4. `<AnnotEditCompleteListener>` on the docs site parses the hash via [`parseEmbedReturnHash`](https://github.com/ingcreators/annot/blob/main/packages/embed-protocol/src/url-callback.ts) and renders the toast.
+5. The component clears the hash via `history.replaceState` so a page refresh doesn't re-toast.
+
+### inline `EditCommitted`
+
+The opt-in inline flow:
+
+1. Visitor clicks `<AnnotEditButton mode="inline">` → modal opens.
+2. Visitor saves → cloud editor sends `EditCommitted` postMessage to the modal.
+3. The modal dispatches an `annot:editor-iframe-committed` `CustomEvent` on `document` + dismisses itself.
+4. `<AnnotEditCompleteListener>` listens for the custom event + renders the same toast.
+
+Both paths use the SAME toast UX, so visitors see consistent
+behaviour regardless of mode.
+
+## Customisation
+
+Two optional Props:
+
+```mdx
+<AnnotEditCompleteListener
+  message="保存しました。サイトの再ビルドまで約1分かかります。"
+  dismissAfterMs={12000}
+/>
+```
+
+- `message` — toast text. Defaults to "Edit saved — site rebuilds in ~1 minute."
+- `dismissAfterMs` — auto-dismiss timeout in ms. Defaults to `8000`. `0` keeps the toast visible until user-dismissed via the × button.
+
+Style overrides via CSS variables:
+
+```css
+:root {
+  --annot-edit-toast-bg: #16a34a;   /* default: green-600 */
+  --annot-edit-toast-fg: #ffffff;
+}
+```
+
+## Downstream listeners
+
+Subscribe to the `annot:edit-complete` `CustomEvent` for
+analytics, custom badges, or any post-edit reaction:
+
+```ts
+document.addEventListener("annot:edit-complete", (event) => {
+  const { editId, source } = event.detail;
+  // `source` is "newTab" or "inline".
+  // Track + react.
+});
+```
+
+## Single-instance contract
+
+Multiple `<AnnotEditCompleteListener />` mounts on the same page
+are safe — only the first activates via the
+`data-annot-edit-complete-listener-active` marker; the rest
+short-circuit. This means it's safe to drop the component in
+both your global layout AND in individual pages if needed.

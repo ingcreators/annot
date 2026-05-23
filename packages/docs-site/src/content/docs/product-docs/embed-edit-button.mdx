@@ -1,0 +1,179 @@
+---
+title: AnnotEditButton (Phase 5)
+description: Mount `<AnnotEditButton>` in your MDX to route docs visitors at the annot-cloud editor. Supports newTab (default), inline modal, and disabled modes; ships with project-wide defaults via `productDocsIntegration({ editor })`.
+---
+
+`<AnnotEditButton>` is the docs-site-side entry point for Phase 5
+of the [living-spec authoring
+roadmap](/contributing/living-spec-authoring/) — embedded editing
+with GitHub round-trip. Mount the component next to an
+`<AnnotFigure>` (`<Screen>` in pre-Phase-7a docs) and visitors get
+a one-click path to the annot-cloud editor for that PNG +
+annotation yaml pair.
+
+## Quick start
+
+Import the component + drop it into MDX:
+
+```mdx
+import AnnotEditButton from
+  "@ingcreators/annot-product-docs-astro/components/AnnotEditButton.astro";
+
+<AnnotEditButton
+  repo="ingcreators/annot"
+  pngPath="docs/shots/login.png"
+  annotationsPath="docs/annotations/login.annotations.yaml"
+/>
+```
+
+That's it for the default newTab mode. Click → new tab opens
+`https://annot.work/embed?repo=...&pngPath=...&...`. Save in the
+cloud editor → the tab returns with `#edit-complete=<editId>` →
+the [`<AnnotEditCompleteListener>` (Phase 5g)](/product-docs/embed-edit-complete-listener/)
+on your layout shows a "Edit saved — site rebuilds in ~1 minute"
+toast.
+
+## Embed modes
+
+Three modes per [OQ-09](https://github.com/ingcreators/annot/blob/main/docs/plans/living-spec-authoring-roadmap.md#oq-09-annoteditbutton-embed-mode--newtab-default-vs-inline-default)
+of the plan:
+
+| Mode | UX | Best for |
+|---|---|---|
+| `newTab` (default) | Click → new tab opens annot-cloud editor → save → tab redirects to docs site → toast | Enterprise / Team / Air-gapped (with on-prem `cloudUrl`) |
+| `inline` (opt-in) | Click → modal iframe loads annot-cloud editor → save → modal dismisses + toast | Consumer / Pro / personal sites |
+| `disabled` | Button not rendered | Read-only docs / air-gapped without on-prem cloud |
+
+### Why `newTab` is the default
+
+The plan analyses nine deployment constraints (CSP `frame-src`,
+third-party cookies, SAML / Okta / Azure AD SSO redirect,
+on-prem `cloudUrl`, network isolation, audit log capture,
+long-running edit sessions, visual continuity, initial
+discovery). Eight of nine favour `newTab`. `inline` mode is the
+better UX for consumer-grade deployments where the constraints
+don't apply; Enterprise tier disables it by default.
+
+### Opting into `inline` mode
+
+Two pieces are needed:
+
+```mdx
+{/* In your layout (typically one of `src/layouts/*.astro`): */}
+import AnnotEditorIframeModal from
+  "@ingcreators/annot-product-docs-astro/components/AnnotEditorIframeModal.astro";
+
+<slot />
+<AnnotEditorIframeModal />
+
+{/* In MDX, opt-in per-call: */}
+<AnnotEditButton
+  repo="ingcreators/annot"
+  pngPath="docs/shots/login.png"
+  annotationsPath="docs/annotations/login.annotations.yaml"
+  mode="inline"
+/>
+```
+
+If you forget the modal mount, `mode="inline"` gracefully
+degrades to `newTab` + a one-time `console.warn` in DevTools.
+
+## Project-wide defaults
+
+Don't repeat `cloudUrl` on every button — pass it once to the
+integration:
+
+```js
+// astro.config.mjs
+import { defineConfig } from "astro/config";
+import { productDocsIntegration } from "@ingcreators/annot-product-docs-astro";
+
+export default defineConfig({
+  integrations: [
+    productDocsIntegration({
+      editor: {
+        embedMode: "newTab",
+        cloudUrl: "https://annot.work",
+      },
+    }),
+  ],
+});
+```
+
+Precedence (highest wins):
+
+1. Per-call props on `<AnnotEditButton>` (`mode`, `cloudUrl`)
+2. `productDocsIntegration({ editor: { embedMode, cloudUrl } })`
+3. Built-in defaults (`mode="newTab"`, `cloudUrl="https://annot.work"`)
+
+## On-prem `cloudUrl`
+
+For Enterprise deployments behind a firewall, point the button
+at the customer's annot-cloud instance:
+
+```js
+productDocsIntegration({
+  editor: {
+    cloudUrl: "https://annot.internal.example.com",
+  },
+})
+```
+
+The on-prem `cloudUrl` is the canonical Enterprise affordance —
+visitors of the docs site stay on the customer's network end to
+end, no traffic to `annot.work`.
+
+## Troubleshooting
+
+### `mode="inline"` falls back to `newTab` in DevTools
+
+The `<AnnotEditorIframeModal />` component isn't on the page.
+Mount it once in your layout (see "Opting into inline mode"
+above).
+
+### `inline` mode breaks in Safari / Brave / corporate Chrome
+
+These browsers ship third-party cookie blocking by default
+(ITP / Brave Shields / corporate policy). The cloud editor's
+auth session fails to persist across the iframe boundary. Two
+remediations:
+
+1. Switch to `mode="newTab"` for this audience — the new tab
+   inherits first-party cookies natively.
+2. Configure the cloud editor's auth to use `SameSite=None`
+   + the FedCM API where available (annot-cloud's responsibility,
+   not the docs site's).
+
+### CSP `frame-src` rejection on `inline` mode
+
+Your docs site's CSP needs the cloud editor's origin
+whitelisted. Add to your CSP header:
+
+```
+Content-Security-Policy: frame-src https://annot.work;
+```
+
+For on-prem: substitute your `cloudUrl`. The `newTab` mode
+sidesteps this entirely.
+
+### `#edit-complete=<editId>` hash sticks around after the toast
+
+The Phase 5g [`<AnnotEditCompleteListener>`](/product-docs/embed-edit-complete-listener/)
+component clears the hash via `history.replaceState` on toast
+render. Verify the listener is mounted on the page. If you
+intentionally don't want hash-clearing (e.g. for analytics
+URL capture), fork the component.
+
+## What's behind the scenes
+
+Phase 5 lands across eight OSS-side sub-phases (5a–5h) plus
+~eight annot-cloud-side sub-phases (5y / 5z). The OSS bits:
+
+- [`@ingcreators/annot-embed-protocol`](https://github.com/ingcreators/annot/tree/main/packages/embed-protocol) — Tier A wire-format (5a–5c)
+- `<AnnotEditButton>` — this component (5d, plus 5e's inline-mode wiring)
+- `<AnnotEditorIframeModal>` — inline-mode iframe modal (5e)
+- `productDocsIntegration({ editor })` — project-wide defaults via Vite virtual module (5f)
+- [`<AnnotEditCompleteListener>`](/product-docs/embed-edit-complete-listener/) — post-edit toast (5g)
+- This dogfood + guide (5h)
+
+The cloud-side `/embed` route + GitHub App + Worker proxy + on-prem deployable bundle (5y / 5z) live in the private `annot-cloud` repo and depend on the [`annot-cloud-roadmap.md` Phase 3](https://github.com/ingcreators/annot/blob/main/docs/plans/annot-cloud-roadmap.md#phase-3--auth-foundation--multi-tenant-db--2-weeks) auth foundation.

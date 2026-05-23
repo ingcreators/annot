@@ -15,6 +15,7 @@ annot:
 
 import Screen from "@ingcreators/annot-product-docs-astro/components/Screen.astro";
 import AnnotCallout from "@ingcreators/annot-product-docs-astro/components/AnnotCallout.astro";
+import AnnotEditButton from "@ingcreators/annot-product-docs-astro/components/AnnotEditButton.astro";
 import Transition from "@ingcreators/annot-product-docs-astro/components/Transition.astro";
 
 # Sign in
@@ -40,6 +41,21 @@ the menu.
 </AnnotCallout>
 
 </Screen>
+
+{/*
+  Phase 5h of `docs/plans/living-spec-authoring-roadmap.md`:
+  workflow-app dogfood of `<AnnotEditButton>`. `cloudUrl` points
+  at a placeholder host until annot-cloud's 5y `/embed` route
+  goes live in the private repo; until then, click is the safe
+  newTab default + a friendly "coming soon" page on the
+  placeholder host.
+*/}
+<AnnotEditButton
+  repo="ingcreators/annot"
+  pngPath="examples/workflow-app/docs/shots/login.png"
+  annotationsPath="examples/workflow-app/docs/books/operation-manual/OM-001-login.annotations.yaml"
+  cloudUrl="https://embed.annot.work.placeholder"
+/>
 
 ## Transitions
 
