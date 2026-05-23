@@ -517,9 +517,9 @@ annotations:
       /freehand.*path/,
     ],
     [
-      "redact rejects mosaic / blur in Phase 3",
-      "version: 1\noverlays: []\nannotations:\n  - id: a1\n    kind: redact\n    match: { role: textbox, name: Email }\n    style: mosaic\n",
-      /style must be "solid"/,
+      "redact rejects unknown style values",
+      "version: 1\noverlays: []\nannotations:\n  - id: a1\n    kind: redact\n    match: { role: textbox, name: Email }\n    style: pixelate\n",
+      /style must be one of "solid" \/ "mosaic" \/ "blur"/,
     ],
     [
       "focusMask cutout requires exactly one of match / bbox",
@@ -567,16 +567,75 @@ describe("Phase 3a — annotations[] serializer rejects in-memory invariants", (
     ).toThrowError(/rect requires exactly one of/);
   });
 
-  it("rejects redact with mosaic style", () => {
+  it("rejects redact with an unknown style value", () => {
     expect(() =>
       serializeAnnotationsYaml(
         fileWith({
           id: "a1",
           kind: "redact",
           bbox: { x: 0, y: 0, width: 10, height: 10 },
-          style: "mosaic" as unknown as "solid",
+          style: "pixelate" as unknown as "solid",
         }),
       ),
-    ).toThrowError(/style must be "solid"/);
+    ).toThrowError(/style must be one of "solid" \/ "mosaic" \/ "blur"/);
+  });
+});
+
+// ─── Phase 3f — redact: mosaic / blur acceptance ───────────────
+
+describe("Phase 3f — redact accepts mosaic / blur (raster styles)", () => {
+  it.each([
+    "solid",
+    "mosaic",
+    "blur",
+  ] as const)("round-trips a redact entry with style=%s", (style) => {
+    const file: AnnotationsFile = {
+      version: ANNOTATIONS_YAML_VERSION,
+      overlays: [],
+      annotations: [
+        {
+          id: "a1",
+          kind: "redact",
+          bbox: { x: 10, y: 20, width: 100, height: 30 },
+          style,
+        },
+      ],
+    };
+    const yaml = serializeAnnotationsYaml(file);
+    expect(yaml).toContain(`style: ${style}`);
+    expect(parseAnnotationsYaml(yaml)).toEqual(file);
+  });
+
+  it("round-trips a match-anchored mosaic redact through serialize → parse", () => {
+    const file: AnnotationsFile = {
+      version: ANNOTATIONS_YAML_VERSION,
+      overlays: [],
+      annotations: [
+        {
+          id: "censor-email",
+          kind: "redact",
+          match: { role: "textbox", name: "Email" },
+          style: "mosaic",
+        },
+      ],
+    };
+    expect(parseAnnotationsYaml(serializeAnnotationsYaml(file))).toEqual(file);
+  });
+
+  it("accepts a blur redact via the parser (was rejected pre-3f)", () => {
+    const yaml = `version: 1
+overlays: []
+annotations:
+  - id: a1
+    kind: redact
+    bbox: { x: 0, y: 0, width: 10, height: 10 }
+    style: blur
+`;
+    const parsed = parseAnnotationsYaml(yaml);
+    expect(parsed.annotations).toHaveLength(1);
+    expect(parsed.annotations?.[0]).toMatchObject({
+      kind: "redact",
+      style: "blur",
+    });
   });
 });
