@@ -20,7 +20,8 @@ export type {
   ScreenListEntry,
   TransitionEntry,
 } from "./components/types.js";
-
+export type { ResolvedEditorConfig } from "./editor-config-virtual.js";
+export { ANNOT_EDITOR_CONFIG } from "./editor-config-virtual.js";
 export type {
   ProductDocsEditorOptions,
   ProductDocsIntegrationOptions,
@@ -30,8 +31,6 @@ export {
   productDocsIntegration,
   resolveEditorConfig,
 } from "./integration.js";
-export type { ResolvedEditorConfig } from "./editor-config-virtual.js";
-export { ANNOT_EDITOR_CONFIG } from "./editor-config-virtual.js";
 export type {
   RenderAnnotatedScreenOptions,
   RenderResult,
