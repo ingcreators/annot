@@ -284,6 +284,9 @@ importers:
 
   packages/host-ui:
     dependencies:
+      '@ingcreators/annot-annotator':
+        specifier: workspace:*
+        version: link:../annotator
       '@ingcreators/annot-capture':
         specifier: workspace:*
         version: link:../capture

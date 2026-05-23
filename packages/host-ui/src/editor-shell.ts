@@ -30,16 +30,19 @@
 // proves the architecture works without trying to swallow every
 // PWA-shell concern in one go.
 
+import { flattenEditablePng } from "@ingcreators/annot-annotator/flatten";
 import type { ElementTree } from "@ingcreators/annot-core";
 import {
   bakeAnnotationsTranslate,
   pruneAnnotationsOutsideRect,
 } from "@ingcreators/annot-core/editor/bake-translate";
 import type { ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
+import { dataUrlToUint8Array } from "@ingcreators/annot-core/xmp";
 import type { CanvasManager, History, SelectionManager } from "@ingcreators/annot-editor";
 import {
   CanvasManager as CanvasManagerImpl,
   exportSVGString,
+  getPngDataUrl,
   History as HistoryImpl,
   SelectionManager as SelectionManagerImpl,
 } from "@ingcreators/annot-editor";
@@ -250,11 +253,16 @@ export class EditorShell {
     }
     this.#currentPath = path;
     this.#currentRecord = record;
-    // Phase 4e: the annotations-yaml sidecar key. Defaults to the
-    // image path when the host doesn't override — the Phase 4a
-    // storage capability resolves the sidecar location internally
-    // via `<pngPath>.annotations.yaml`.
-    this.#overlayYamlPngPath = opts?.annotationsYamlPath ?? path ?? null;
+    // Phase 4e: opt-in to overlay-yaml capabilities. When the host
+    // doesn't supply an `annotationsYamlPath`, the shell stays
+    // overlay-yaml-agnostic — `publishOverlay` throws,
+    // `getCurrentAnnotationsYaml` returns null, and
+    // `createOverlayToolContext` returns null so the OverlayTool
+    // factory's fallback kicks in. Hosts that DO want yaml editing
+    // typically pass `annotationsYamlPath: path` (the image's own
+    // path — the Phase 4a storage capability resolves the sidecar
+    // location internally via `<pngPath>.annotations.yaml`).
+    this.#overlayYamlPngPath = opts?.annotationsYamlPath ?? null;
     this.#currentAnnotations = null;
     this.#mountCanvas(record);
     // Fire-and-forget async load; callers that need to await it use
@@ -803,6 +811,42 @@ export class EditorShell {
       openIntentDialog: opts.openIntentDialog,
       onCommit: (entry): Promise<void> => this.publishOverlay(entry),
     };
+  }
+
+  // ╭─ Phase 4f: publish-flat PNG via flattenEditablePng ────────────╮
+  // │ The "Save as flat PNG" entry in `<annot-save-menu>` calls this │
+  // │ to get distribution-ready bytes — annotations baked in         │
+  // │ visibly, no recoverable editable layer. Demonstrates the       │
+  // │ Phase 3 follow-up #2 annotator primitive from a user-facing    │
+  // │ surface; opens the door for future host-ui workflows that      │
+  // │ need flattened output (Slack drop, third-party viewers, etc.). │
+  // ╰────────────────────────────────────────────────────────────────╯
+
+  /** Produce a distribution-ready flat PNG. Renders the live
+   *  canvas (so the user's most recent edits are visible) and
+   *  passes the bytes through `flattenEditablePng` to strip any
+   *  recoverable editable-layer chunks the canvas's underlying
+   *  `originalDataUrl` may have carried. The result is safe to
+   *  hand to a downstream viewer without leaking the original
+   *  bitmap or the annotations SVG.
+   *
+   *  Returns `null` when no image is open. Throws on render
+   *  failures.
+   */
+  async publishFlatPng(): Promise<Uint8Array | null> {
+    if (this.#destroyed) return null;
+    const canvas = this.#canvas;
+    if (!canvas) return null;
+    // Render the current canvas state as a PNG data URL — the
+    // resulting bytes have the annotations rasterised into the
+    // pixel data and no editable XMP layer of their own.
+    const renderedDataUrl = await getPngDataUrl(canvas);
+    const renderedBytes = dataUrlToUint8Array(renderedDataUrl);
+    // Defensive flatten: should be a no-op on freshly rendered
+    // bytes (no Adobe XMP / `svGo` chunks present), but guarantees
+    // that even if a future rendering path were to round-trip
+    // through an editable PNG, the published output stays flat.
+    return flattenEditablePng(renderedBytes);
   }
 
   /** The live `CanvasManager` for the open image, or null if no

@@ -27,6 +27,7 @@ export {
   type AnnotMetadata,
   type CreateEditablePngBytesOptions,
   createEditablePngBytes,
+  dataUrlToUint8Array,
   readEditableImage,
   readEditablePngBytes,
   WELL_KNOWN_TAG_KEYS,

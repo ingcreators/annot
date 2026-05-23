@@ -135,4 +135,83 @@ describe("AnnotSaveMenuElement.openFor", () => {
     menu.close();
     expect(document.querySelector("annot-save-menu")).toBeNull();
   });
+
+  it("omits the 'Save as flat PNG' entry when no publishFlatPng is supplied", async () => {
+    const anchor = makeAnchor();
+    AnnotSaveMenuElement.openFor(anchor, fakeCtx());
+    const menu = document.querySelector("annot-save-menu") as AnnotSaveMenuElement;
+    await menu.updateComplete;
+    const labels = Array.from(menu.querySelectorAll<HTMLButtonElement>(".copy-dropdown-item")).map(
+      (b) => b.textContent?.trim(),
+    );
+    expect(labels).not.toContain("Save as flat PNG");
+  });
+
+  it("adds 'Save as flat PNG' when publishFlatPng is wired (Phase 4f)", async () => {
+    const anchor = makeAnchor();
+    const publishFlatPng = vi
+      .fn<() => Promise<Uint8Array | null>>()
+      .mockResolvedValue(new Uint8Array([0x89, 0x50, 0x4e, 0x47]));
+    AnnotSaveMenuElement.openFor(anchor, { ...fakeCtx(), publishFlatPng });
+    const menu = document.querySelector("annot-save-menu") as AnnotSaveMenuElement;
+    await menu.updateComplete;
+    const labels = Array.from(menu.querySelectorAll<HTMLButtonElement>(".copy-dropdown-item")).map(
+      (b) => b.textContent?.trim(),
+    );
+    expect(labels).toContain("Save as flat PNG");
+  });
+
+  it("clicking 'Save as flat PNG' runs publishFlatPng and downloads the result", async () => {
+    const anchor = makeAnchor();
+    const flatBytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const publishFlatPng = vi.fn<() => Promise<Uint8Array | null>>().mockResolvedValue(flatBytes);
+    // Capture the `<a>` element the helper creates so we can assert
+    // on its download attributes. Spy on appendChild + click.
+    const originalAppendChild = document.body.appendChild.bind(document.body);
+    let downloadedAnchor: HTMLAnchorElement | null = null;
+    const appendSpy = vi
+      .spyOn(document.body, "appendChild")
+      .mockImplementation(<T extends Node>(node: T): T => {
+        if (node instanceof HTMLAnchorElement && node.download) {
+          downloadedAnchor = node;
+        }
+        return originalAppendChild(node);
+      });
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    AnnotSaveMenuElement.openFor(anchor, { ...fakeCtx(), publishFlatPng });
+    const menu = document.querySelector("annot-save-menu") as AnnotSaveMenuElement;
+    await menu.updateComplete;
+    const flatBtn = Array.from(
+      menu.querySelectorAll<HTMLButtonElement>(".copy-dropdown-item"),
+    ).find((b) => b.textContent?.trim() === "Save as flat PNG");
+    expect(flatBtn).toBeDefined();
+    flatBtn!.click();
+    // Async flow: publishFlatPng → download. Wait for the chain.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(publishFlatPng).toHaveBeenCalledTimes(1);
+    expect(clickSpy).toHaveBeenCalled();
+    expect(downloadedAnchor).not.toBeNull();
+    expect(downloadedAnchor!.download).toBe("doc.png");
+    appendSpy.mockRestore();
+    clickSpy.mockRestore();
+  });
+
+  it("'Save as flat PNG' silently no-ops when publishFlatPng resolves to null", async () => {
+    const anchor = makeAnchor();
+    const publishFlatPng = vi.fn<() => Promise<Uint8Array | null>>().mockResolvedValue(null);
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    AnnotSaveMenuElement.openFor(anchor, { ...fakeCtx(), publishFlatPng });
+    const menu = document.querySelector("annot-save-menu") as AnnotSaveMenuElement;
+    await menu.updateComplete;
+    const flatBtn = Array.from(
+      menu.querySelectorAll<HTMLButtonElement>(".copy-dropdown-item"),
+    ).find((b) => b.textContent?.trim() === "Save as flat PNG");
+    flatBtn!.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(publishFlatPng).toHaveBeenCalledTimes(1);
+    expect(clickSpy).not.toHaveBeenCalled();
+    clickSpy.mockRestore();
+  });
 });
