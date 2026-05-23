@@ -25,6 +25,7 @@
 //   - /api/embed/setup                       (5y-1 — App registration manifest-flow page)
 //   - /api/embed/load                        (5y-2 — reads PNG + annotations yaml via App installation token)
 //   - /api/embed/commit                      (5y-4 — commits edited yaml + optional PNG via PR-mode or direct-push)
+//   - /api/embed/installations/:id           (5z-1 — PATCH build_hook_url / repo_policy / default_branch_override)
 //   - /embed                                 (5y-3 — static HTML mounting <annot-embed-shell>)
 //   - per-workspace plan-gated quotas on POST /api/images, POST
 //     /api/documents, PATCH /api/documents/:id/content, POST
@@ -59,6 +60,7 @@ import {
   handleDocumentPatch,
   handleDocumentUpload,
 } from "./documents.js";
+import { handleEmbedInstallationPatch } from "./embed/build-trigger.js";
 import { handleEmbedCommit } from "./embed/commit.js";
 import { handleEmbedLoad } from "./embed/load.js";
 import { handleEmbedPage } from "./embed/page.js";
@@ -332,6 +334,11 @@ app.get("/api/embed/health", handleEmbedHealth);
 app.get("/api/embed/setup", handleEmbedSetupPage);
 app.get("/api/embed/load", handleEmbedLoad);
 app.post("/api/embed/commit", handleEmbedCommit);
+// 5z-1 dashboard knob — update build_hook_url / repo_policy /
+// default_branch_override on an installation row. Unclaimed
+// installations get bound to the caller's workspace on first
+// PATCH.
+app.patch("/api/embed/installations/:id", handleEmbedInstallationPatch);
 // `/embed` (no `/api/` prefix) is the visitor-facing static HTML
 // page that mounts `<annot-embed-shell>`. The shell's JS bundle
 // is served separately (Cloudflare Pages or via the

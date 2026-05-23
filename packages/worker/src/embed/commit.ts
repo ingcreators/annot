@@ -38,6 +38,7 @@ import type { Context } from "hono";
 import { requireAuth } from "../auth-middleware.js";
 import type { Env } from "../index.js";
 import { recordAuditEvent } from "../storage-repo.js";
+import { pingBuildHook } from "./build-trigger.js";
 import { findGitHubInstallationById, type GitHubInstallationRow } from "./github-app.js";
 import { getInstallationToken } from "./github-app-token.js";
 
@@ -158,7 +159,7 @@ export async function handleEmbedCommit(c: Context<{ Bindings: Env }>): Promise<
       policy === "direct-push"
         ? await commitDirectPush({ body, installation, installationToken })
         : await commitPullRequestMode({ body, installation, installationToken });
-    // ── Audit ────────────────────────────────────────────────
+    // ── Audit (commit) ───────────────────────────────────────
     await recordAuditEvent(c.env.DB, {
       workspaceId: auth.workspaceId,
       userId: auth.userId,
@@ -175,6 +176,25 @@ export async function handleEmbedCommit(c: Context<{ Bindings: Env }>): Promise<
         pngMutated: Boolean(body.pngBase64),
       },
     });
+    // ── Build-trigger ping + audit ───────────────────────────
+    // Failure absorbed; logged to audit_events for the
+    // installation owner to spot in the dashboard.
+    const buildOutcome = await pingBuildHook({ installation });
+    if (buildOutcome.pinged) {
+      await recordAuditEvent(c.env.DB, {
+        workspaceId: auth.workspaceId,
+        userId: auth.userId,
+        action: "embed_build_hook",
+        resourceType: "github_installation",
+        resourceId: String(installation.id),
+        metadata: {
+          buildHookUrl: installation.build_hook_url,
+          httpStatus: buildOutcome.status,
+          attempts: buildOutcome.attempts,
+          editId: body.editId,
+        },
+      });
+    }
     return c.json<CommitResponseBody>({ ok: true, ...result, policy });
   } catch (err) {
     if (err instanceof CommitConflictError) {
