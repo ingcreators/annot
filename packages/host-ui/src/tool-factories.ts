@@ -23,6 +23,7 @@ import { ArrowTool } from "@ingcreators/annot-editor/tools/arrow-tool";
 import { CropTool } from "@ingcreators/annot-editor/tools/crop-tool";
 import { FreehandTool } from "@ingcreators/annot-editor/tools/freehand-tool";
 import { MarkerTool } from "@ingcreators/annot-editor/tools/marker-tool";
+import { OverlayTool, type OverlayToolContext } from "@ingcreators/annot-editor/tools/overlay-tool";
 import { RedactTool } from "@ingcreators/annot-editor/tools/redact-tool";
 import { ShapeTool } from "@ingcreators/annot-editor/tools/shape-tool";
 import { TextTool } from "@ingcreators/annot-editor/tools/text-tool";
@@ -53,6 +54,23 @@ export interface ToolFactoryDeps {
    *  behaviour. The omission is opt-in so existing callers stay
    *  green during the rollout. */
   applyCrop?: (x: number, y: number, w: number, h: number) => Promise<boolean>;
+  /**
+   * Phase 4e of
+   * [`docs/plans/living-spec-authoring-roadmap.md`](../../../docs/plans/living-spec-authoring-roadmap.md).
+   *
+   * Supplies the `OverlayTool`'s context (existing entries,
+   * snapshot picker factory, intent dialog, onCommit handler).
+   * Re-evaluated on every toolbar button click — so re-mounting
+   * the editor against a different image record refreshes the
+   * tool's view of the world without manual re-registration.
+   *
+   * When omitted, the `OverlayTool` activates as a no-op (the
+   * picker never mounts, no events fire). Hosts that haven't
+   * wired the yaml plumbing skip the affordance entirely. The
+   * `EditorShell.createOverlayToolContext` method (Phase 4e) is
+   * the typical source.
+   */
+  overlayContextProvider?: () => OverlayToolContext | null;
 }
 
 /** Build a live `ToolBase` for one tool id. `opts` is the
@@ -95,6 +113,17 @@ export const TOOL_FACTORIES: Record<string, ToolFactory> = {
     // applies (session-only crop, lost on reload).
     if (applyCrop) {
       t.onCropConfirmed = applyCrop;
+    }
+    return t;
+  },
+  overlay: (o, { canvas, history, overlayContextProvider }) => {
+    const t = new OverlayTool(canvas, history, o);
+    // Pull the live context at activation time; the shell's
+    // provider sees the freshest yaml + intent dialog + onCommit
+    // wiring without the factory caching stale state.
+    const ctx = overlayContextProvider?.();
+    if (ctx) {
+      t.setContext(ctx);
     }
     return t;
   },

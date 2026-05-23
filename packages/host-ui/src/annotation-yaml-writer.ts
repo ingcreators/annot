@@ -24,7 +24,10 @@
 
 import type { StorageProvider } from "@ingcreators/annot-core/storage";
 import { supportsAnnotationsYaml } from "@ingcreators/annot-core/storage";
-import { type AnnotationsFile, serializeAnnotationsYaml } from "@ingcreators/annot-product-docs";
+import {
+  type AnnotationsFile,
+  serializeAnnotationsYaml,
+} from "@ingcreators/annot-product-docs/annotations-yaml";
 
 /**
  * Thrown by {@link saveAnnotationsYaml} when the provided store

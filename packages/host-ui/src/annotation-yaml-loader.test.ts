@@ -14,7 +14,7 @@
  */
 
 import type { StorageProvider } from "@ingcreators/annot-core/storage";
-import { ANNOTATIONS_YAML_VERSION } from "@ingcreators/annot-product-docs";
+import { ANNOTATIONS_YAML_VERSION } from "@ingcreators/annot-product-docs/annotations-yaml";
 import { describe, expect, it } from "vitest";
 import { loadAnnotationsYaml } from "./annotation-yaml-loader.js";
 

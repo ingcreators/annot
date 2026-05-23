@@ -16,7 +16,7 @@
  */
 
 import type { StorageProvider } from "@ingcreators/annot-core/storage";
-import type { AnnotationsFile } from "@ingcreators/annot-product-docs";
+import type { AnnotationsFile } from "@ingcreators/annot-product-docs/annotations-yaml";
 import { describe, expect, it } from "vitest";
 import { loadAnnotationsYaml } from "./annotation-yaml-loader.js";
 import { AnnotationsYamlUnsupportedError, saveAnnotationsYaml } from "./annotation-yaml-writer.js";
