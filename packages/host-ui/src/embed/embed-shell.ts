@@ -43,11 +43,12 @@ import {
   EMBED_PROTOCOL_VERSION,
   type EmbedMessenger,
   EmbedRequestUrlError,
+  encodeEmbedReturnHash,
   parseEmbedRequestUrl,
 } from "@ingcreators/annot-embed-protocol";
 import { EditorShell, type EditorShellHost } from "../editor-shell.js";
 import { html, LitElement } from "../lit.js";
-import { GitHubAppStorageProvider } from "./github-app-store.js";
+import { EmbedCommitConflictError, GitHubAppStorageProvider } from "./github-app-store.js";
 
 /** Detail payload for the `mounted` CustomEvent fired after the
  *  EditorShell has successfully loaded the requested file. Tests
@@ -78,10 +79,16 @@ export interface EmbedShellMountOpts {
   annotationsPath: string;
   returnUrl: string;
   mode: "newTab" | "inline";
+  /** Optional explicit editId. Defaults to `crypto.randomUUID()`.
+   *  Tests override this for deterministic assertions. */
+  editId?: string;
   /** Override the global `fetch` (mostly for tests). */
   fetchImpl?: typeof fetch;
   /** Override the EditorShell constructor (for tests). */
   editorShellFactory?: (host: EditorShellHost) => EditorShell;
+  /** Override the redirect call (for tests). Defaults to
+   *  `window.location.replace`. */
+  redirectImpl?: (url: string) => void;
 }
 
 const PARAMS_ATTRIBUTE = "data-embed-params";
@@ -107,6 +114,18 @@ export class AnnotEmbedShellElement extends LitElement {
    *  Created in `firstUpdated` so the Light-DOM children are in
    *  the DOM by the time EditorShell looks for them. */
   #shellContainer: HTMLDivElement | null = null;
+  /** Embed mode + returnUrl + editId snapshot taken at mount.
+   *  `save()` / `abandon()` read this to decide between the
+   *  newTab hash-redirect path and the inline postMessage path. */
+  #mountSnapshot: {
+    mode: "newTab" | "inline";
+    returnUrl: string;
+    editId: string;
+  } | null = null;
+  /** Optional override for the post-save redirect / postMessage.
+   *  Lets tests assert the redirect target without actually
+   *  navigating. */
+  #onSaveRedirect: ((url: string) => void) | null = null;
 
   constructor() {
     super();
@@ -217,19 +236,21 @@ export class AnnotEmbedShellElement extends LitElement {
       child.style.display = "none";
     }
 
+    const editId = opts.editId ?? crypto.randomUUID();
+    this.#mountSnapshot = { mode: opts.mode, returnUrl: opts.returnUrl, editId };
+    this.#onSaveRedirect = opts.redirectImpl ?? null;
+
     if (opts.mode === "inline") {
       this.#messenger = createEmbedClientMessenger({
         parentOrigin: inferParentOrigin(opts.returnUrl),
         onEvent: () => {
-          // 5y-4 wires inbound message handling (parent → editor
-          // requests like "discard" + "blur-away"). For 5y-3 we
-          // just open the channel + post EditorReady.
+          // Future: parent → editor requests (discard / blur).
         },
       });
       this.#messenger.sendEvent({
         type: "EditorReady",
         protocolVersion: EMBED_PROTOCOL_VERSION,
-        editorId: crypto.randomUUID(),
+        editorId: editId,
       });
     }
 
@@ -246,6 +267,79 @@ export class AnnotEmbedShellElement extends LitElement {
         composed: true,
       }),
     );
+  }
+
+  /** Persist the current edit. Posts to `/api/embed/commit` via
+   *  the storage provider, then triggers the post-save redirect
+   *  (newTab) or `EditCommitted` postMessage (inline). Throws
+   *  `EmbedCommitConflictError` on 409 so callers can prompt
+   *  reload + retry. */
+  async save(
+    opts: { annotationsYaml: string; pngBase64?: string; pngSha?: string } = {
+      annotationsYaml: "",
+    },
+  ): Promise<void> {
+    if (!this.#store) {
+      throw new Error("save() called before mount");
+    }
+    if (!this.#mountSnapshot) {
+      throw new Error("save() called before mount snapshot was captured");
+    }
+    const snapshot = this.#mountSnapshot;
+    const yaml = opts.annotationsYaml || this.#store.repoState?.annotationsYaml || "";
+    try {
+      const response = await this.#store.commit({
+        editId: snapshot.editId,
+        annotationsYaml: yaml,
+        pngBase64: opts.pngBase64,
+        pngSha: opts.pngSha,
+      });
+      if (!response.ok) {
+        throw new Error(`commit failed: ${response.error}`);
+      }
+      if (snapshot.mode === "inline" && this.#messenger) {
+        this.#messenger.sendEvent({
+          type: "EditCommitted",
+          editId: snapshot.editId,
+          commitSha: response.commitSha,
+          branch: response.branch,
+          prUrl: response.prUrl,
+        });
+      } else {
+        const hash = encodeEmbedReturnHash({ kind: "complete", editId: snapshot.editId });
+        const target = appendHash(snapshot.returnUrl, hash);
+        this.#redirect(target);
+      }
+    } catch (err) {
+      if (err instanceof EmbedCommitConflictError) {
+        // Surface as `error` event so the host can show a reload
+        // prompt; do NOT redirect (the visitor would lose their
+        // unsaved edits).
+        this.#emitError("Someone else pushed to this file. Reload and try again.", err);
+        throw err;
+      }
+      throw err;
+    }
+  }
+
+  /** Discard the current edit. Posts an `EditAbandoned` event
+   *  (inline) or redirects with `#edit-abandoned=1` (newTab). */
+  abandon(reason: "userCancelled" | "saveError" | "authRejected" = "userCancelled"): void {
+    if (!this.#mountSnapshot) {
+      throw new Error("abandon() called before mount snapshot was captured");
+    }
+    const snapshot = this.#mountSnapshot;
+    if (snapshot.mode === "inline" && this.#messenger) {
+      this.#messenger.sendEvent({
+        type: "EditAbandoned",
+        editId: snapshot.editId,
+        reason,
+      });
+      return;
+    }
+    const hash = encodeEmbedReturnHash({ kind: "abandoned", reason });
+    const target = appendHash(snapshot.returnUrl, hash);
+    this.#redirect(target);
   }
 
   /** Test-only accessor — returns the mounted EditorShell, or
@@ -286,6 +380,16 @@ export class AnnotEmbedShellElement extends LitElement {
     this.#shellContainer = container;
   }
 
+  #redirect(url: string): void {
+    if (this.#onSaveRedirect) {
+      this.#onSaveRedirect(url);
+      return;
+    }
+    if (typeof window !== "undefined" && window.location) {
+      window.location.replace(url);
+    }
+  }
+
   #emitError(reason: string, cause?: unknown): void {
     console.error("[annot-embed-shell]", reason, cause);
     this.dispatchEvent(
@@ -313,6 +417,23 @@ function inferParentOrigin(returnUrl: string): string {
     return new URL(returnUrl).origin;
   } catch {
     return "*";
+  }
+}
+
+/** Append the embed-protocol hash fragment to a return URL,
+ *  preserving any existing query string. Replaces any existing
+ *  hash. */
+function appendHash(returnUrl: string, hash: string): string {
+  try {
+    const url = new URL(returnUrl);
+    url.hash = hash;
+    return url.toString();
+  } catch {
+    // Caller validated returnUrl as absolute already; the catch
+    // here is just for type-narrowing — if we get here something
+    // went very wrong, return the URL as-is so we don't break
+    // the abandon flow.
+    return returnUrl + hash;
   }
 }
 

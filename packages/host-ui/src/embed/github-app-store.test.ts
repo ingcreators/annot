@@ -131,16 +131,77 @@ describe("GitHubAppStorageProvider", () => {
     await expect(store.getImage("other.png")).rejects.toBeInstanceOf(EmbedStorageUnsupportedError);
   });
 
-  it("updateImage throws (5y-4 lights this up)", async () => {
+  it("updateImage throws when called before getImage seeds repoState", async () => {
     const store = new GitHubAppStorageProvider({
       cloudUrl: "https://annot.work",
       repo: "o/r",
       pngPath: "a.png",
       annotationsPath: "a.yaml",
     });
-    await expect(store.updateImage("a.png", {})).rejects.toBeInstanceOf(
-      EmbedStorageUnsupportedError,
-    );
+    // Before getImage, repoState is null — the new (5y-5) commit
+    // path can't proceed without it. The thrown error is a plain
+    // Error rather than EmbedStorageUnsupportedError because the
+    // op IS supported, just not in this state.
+    await expect(store.updateImage("a.png", {})).rejects.toThrow(/before getImage/);
+  });
+
+  it("commit posts to /api/embed/commit with the cached repoState", async () => {
+    const png = bytesToBase64(buildTinyPng(1, 1));
+    const captured: { url: string; init: RequestInit | undefined }[] = [];
+    const store = new GitHubAppStorageProvider({
+      cloudUrl: "https://annot.work",
+      repo: "octocat/myrepo",
+      pngPath: "docs/login.png",
+      annotationsPath: "docs/login.annotations.yaml",
+      fetchImpl: (async (input: Request | URL | string, init?: RequestInit) => {
+        const url =
+          typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+        captured.push({ url, init });
+        if (url.includes("/api/embed/load")) {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              installationId: 999,
+              pngBase64: png,
+              annotationsYaml: "version: 1\noverlays: []\n",
+              repoState: { branch: "main", pngSha: "p", annotationsSha: "a", private: false },
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          );
+        }
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            editId: "e1",
+            commitSha: "abc",
+            branch: "main",
+            policy: "direct-push",
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }) as typeof fetch,
+    });
+    await store.getImage("docs/login.png");
+    const response = await store.commit({
+      editId: "e1",
+      annotationsYaml: "version: 1\noverlays:\n  - id: o1\n",
+    });
+    expect(response.ok).toBe(true);
+    const commitCall = captured.find((c) => c.url.includes("/api/embed/commit"));
+    expect(commitCall).toBeDefined();
+    expect(commitCall?.init?.method).toBe("POST");
+    const body = JSON.parse(commitCall?.init?.body as string);
+    expect(body).toMatchObject({
+      installationId: 999,
+      repo: "octocat/myrepo",
+      pngPath: "docs/login.png",
+      annotationsPath: "docs/login.annotations.yaml",
+      branch: "main",
+      annotationsSha: "a",
+      editId: "e1",
+    });
+    // The yaml the editor passed is the one that gets posted.
+    expect(body.annotationsYaml).toContain("o1");
   });
 
   it("trims a trailing slash off cloudUrl", async () => {
