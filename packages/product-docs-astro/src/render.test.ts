@@ -597,4 +597,158 @@ annotations:
       expect(svg).toContain(`x="20" y="40" width="200" height="30"`);
     });
   });
+
+  // ─── Phase 3g — raster redact (mosaic / blur) pre-processing ─
+
+  describe("Phase 3g — mosaic / blur redact burns onto the base PNG", () => {
+    function mdxForAnnotations(): string {
+      return `---
+annot:
+  id: SC-001
+---
+
+import { Screen, AnnotCallout } from "@ingcreators/annot-product-docs-astro";
+
+<Screen id="login" src="./shot.png" annotations="./login.annotations.yaml" />
+`;
+    }
+
+    async function makeRedactFixture(
+      yaml: string,
+      snapshotBlock: string,
+    ): Promise<{ mdxPath: string; basePng: Buffer }> {
+      const dir = await mkdtemp(join(tmpdir(), "annot-render-phase3g-"));
+      const mdxPath = join(dir, "screen.mdx");
+      const yamlPath = join(dir, "login.annotations.yaml");
+      const pngPath = join(dir, "shot.png");
+      const basePng = makePng(400, 300);
+      await writeFile(pngPath, basePng);
+      await writeFile(mdxPath, `${mdxForAnnotations()}\n${snapshotBlock}`);
+      await writeFile(yamlPath, yaml);
+      return { mdxPath, basePng };
+    }
+
+    const snapshotBlock = `{/* annot:snapshot
+- textbox "Email" [ref=e1] [box=20,40,200,30]
+- button "Sign in" [ref=e9] [box=150,100,80,30]
+*/}`;
+
+    it.each([
+      "mosaic",
+      "blur",
+    ] as const)("burns a %s redact onto the base PNG (no SVG rect emitted)", async (style) => {
+      const yaml = `version: 1
+overlays: []
+annotations:
+  - id: raster-redact
+    kind: redact
+    match: { role: textbox, name: Email }
+    style: ${style}
+`;
+      const { mdxPath, basePng } = await makeRedactFixture(yaml, snapshotBlock);
+      const result = await renderAnnotatedScreen({
+        mdxPath,
+        screenId: "login",
+        editable: true,
+      });
+      // hadBoundingBoxes flips true because raster redacts
+      // resolved through bbox data (even though no SVG layer
+      // composed on top).
+      expect(result.hadBoundingBoxes).toBe(true);
+      const meta = readEditablePngBytes(result.bytes);
+      expect(meta).not.toBeNull();
+      // No SVG `<rect>` for the raster redact — the burn path
+      // mutates the base bitmap instead.
+      expect(meta!.annotationsSvg).not.toMatch(/<rect /);
+      // The embedded "original" PNG is the BURNED base (not
+      // the pre-burn input) so re-opening in the editor shows
+      // the same redacted pixels the rendered output carries.
+      // Verify by comparing byte length against the pre-burn
+      // base — burning rewrites pixels via canvas, so the
+      // encoded PNG bytes will differ.
+      const originalDataUrl = meta!.originalImageDataUrl;
+      expect(originalDataUrl).toMatch(/^data:image\/png;base64,/);
+      const originalBytes = Buffer.from(originalDataUrl.split(",")[1] ?? "", "base64");
+      expect(originalBytes.equals(basePng)).toBe(false);
+    });
+
+    it("solid redacts stay on the SVG path (filled rect) even when mosaic redacts exist on the same screen", async () => {
+      const yaml = `version: 1
+overlays: []
+annotations:
+  - id: solid-rect
+    kind: redact
+    match: { role: button, name: "Sign in" }
+    style: solid
+  - id: mosaic-pixelate
+    kind: redact
+    match: { role: textbox, name: Email }
+    style: mosaic
+`;
+      const { mdxPath } = await makeRedactFixture(yaml, snapshotBlock);
+      const result = await renderAnnotatedScreen({
+        mdxPath,
+        screenId: "login",
+        editable: true,
+      });
+      const svg = readEditablePngBytes(result.bytes)!.annotationsSvg;
+      // Exactly one SVG `<rect>` (the solid Sign-in redact at
+      // 150,100,80x30). The mosaic Email redact mutated the base
+      // bitmap rather than producing an SVG primitive.
+      const rectCount = svg.match(/<rect /g)?.length ?? 0;
+      expect(rectCount).toBe(1);
+      expect(svg).toContain(`x="150" y="100" width="80" height="30"`);
+      expect(svg).not.toContain(`x="20" y="40" width="200" height="30"`);
+    });
+
+    it("editing the yaml style busts the cache (mosaic ↔ blur ↔ solid)", async () => {
+      const baseYaml = `version: 1
+overlays: []
+annotations:
+  - id: r1
+    kind: redact
+    match: { role: textbox, name: Email }
+    style: mosaic
+`;
+      const { mdxPath } = await makeRedactFixture(baseYaml, snapshotBlock);
+      const cache = createMemoryCache();
+
+      const first = await renderAnnotatedScreen({ mdxPath, screenId: "login", cache });
+      expect(first.fromCache).toBe(false);
+      const second = await renderAnnotatedScreen({ mdxPath, screenId: "login", cache });
+      expect(second.fromCache).toBe(true);
+
+      // Swap mosaic → blur on the yaml; cache should miss because
+      // `annotationsYamlSource` is part of the cache key.
+      const yamlPath = join(mdxPath, "..", "login.annotations.yaml");
+      await writeFile(yamlPath, baseYaml.replace("style: mosaic", "style: blur"));
+      const third = await renderAnnotatedScreen({ mdxPath, screenId: "login", cache });
+      expect(third.fromCache).toBe(false);
+    });
+
+    it("missing-match raster redact is silently skipped (drift surfaces upstream)", async () => {
+      const yaml = `version: 1
+overlays: []
+annotations:
+  - id: ghost
+    kind: redact
+    match: { role: textbox, name: NoSuchField }
+    style: mosaic
+`;
+      const { mdxPath, basePng } = await makeRedactFixture(yaml, snapshotBlock);
+      const result = await renderAnnotatedScreen({
+        mdxPath,
+        screenId: "login",
+        editable: true,
+      });
+      // No raster redact resolved → no burn → no SVG annotations →
+      // hadBoundingBoxes false (we didn't end up using bbox data).
+      expect(result.hadBoundingBoxes).toBe(false);
+      // The embedded original PNG equals the input base (no burn
+      // happened).
+      const meta = readEditablePngBytes(result.bytes)!;
+      const originalBytes = Buffer.from(meta.originalImageDataUrl.split(",")[1] ?? "", "base64");
+      expect(originalBytes.equals(basePng)).toBe(true);
+    });
+  });
 });

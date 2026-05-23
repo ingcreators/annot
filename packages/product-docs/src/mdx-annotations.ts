@@ -20,6 +20,7 @@ import {
   type BboxFreehandAnnotation,
   type BboxNumberedBadgeAnnotation,
   type BboxRectAnnotation,
+  type BboxRedactRegion,
   type BboxTextAnnotation,
   bboxAnnotationsToSvg,
   type Intent,
@@ -264,6 +265,54 @@ export function buildShapeAnnotationsFromYaml(
   return out;
 }
 
+/**
+ * Phase 3g of `docs/plans/living-spec-authoring-roadmap.md`
+ * (Phase 3 follow-up). Walk `annotations[]` for `redact` entries
+ * whose `style` is a raster transform (`mosaic` / `blur`),
+ * resolve each cutout to a bbox, and emit `BboxRedactRegion[]`
+ * ready for `burnRedactions` from `@ingcreators/annot-annotator`.
+ *
+ * Entries with `style: solid` (or undefined / unset) are skipped
+ * here — the SVG-fragment path
+ * ({@link buildShapeAnnotationsFromYaml}) handles those as
+ * filled rects. Match-anchored entries whose `match` doesn't
+ * resolve are skipped silently (drift detector surfaces them
+ * upstream).
+ *
+ * Returns the regions in document order; `burnRedactions`
+ * applies them in that order with later regions overlaying
+ * earlier ones (no alpha-blending), so authors can express
+ * "mosaic, then opaque overlay on top" combinations by
+ * sequencing entries.
+ */
+export function buildRasterRedactRegionsFromYaml(
+  annotations: readonly AnnotationSpec[],
+  boxed: readonly BoxedEntry[],
+): BboxRedactRegion[] {
+  const out: BboxRedactRegion[] = [];
+  for (const spec of annotations) {
+    if (spec.kind !== "redact") continue;
+    if (spec.style !== "mosaic" && spec.style !== "blur") continue;
+    let bbox: BBox | null = null;
+    if (spec.match) {
+      const entry = findBoxed(boxed, spec.match);
+      if (!entry) continue;
+      bbox = entry.box;
+    } else if (spec.bbox) {
+      bbox = spec.bbox;
+    }
+    if (!bbox) continue;
+    const region: BboxRedactRegion = { bbox, style: spec.style };
+    // The annotator's `burnRedactions` only honours `color` on
+    // `style: solid`. Mosaic / blur ignore it; pass through
+    // anyway for forward-compat (a future blur tint or similar
+    // could pick it up without a wire-format change).
+    if (spec.color !== undefined) region.color = spec.color;
+    out.push(region);
+  }
+  return out;
+}
+
 function mapAnnotation(
   spec: AnnotationSpec,
   boxed: readonly BoxedEntry[],
@@ -443,10 +492,30 @@ function mapFreehand(spec: Extract<AnnotationSpec, { kind: "freehand" }>): BboxF
  */
 const REDACT_DEFAULT_FILL = "#222222";
 
+/**
+ * Map a `redact` annotation to its `BboxAnnotation` SVG-fragment
+ * representation.
+ *
+ * Only `style: "solid"` (or the unset default, which the renderer
+ * treats as solid) produces an output here. `style: "mosaic"` and
+ * `style: "blur"` are raster-pixel transforms that can't be
+ * expressed as an SVG fragment — the Astro Image Service routes
+ * them through `burnRedactions` from `@ingcreators/annot-annotator`
+ * BEFORE SVG composition. See `buildRasterRedactRegionsFromYaml`
+ * below for the raster-path companion.
+ *
+ * Returning `null` for mosaic / blur ensures they don't double-bake
+ * as a filled rect on top of the already-pixelated bitmap.
+ */
 function mapRedact(
   spec: Extract<AnnotationSpec, { kind: "redact" }>,
   boxed: readonly BoxedEntry[],
 ): BboxRectAnnotation | null {
+  if (spec.style === "mosaic" || spec.style === "blur") {
+    // Raster path consumes this entry instead — see
+    // `buildRasterRedactRegionsFromYaml`.
+    return null;
+  }
   let bbox: BBox | null = null;
   if (spec.match) {
     const entry = findBoxed(boxed, spec.match);
@@ -456,7 +525,7 @@ function mapRedact(
     bbox = spec.bbox;
   }
   if (!bbox) return null;
-  // Render as a filled rect (Phase 3 ships solid only). Honour
+  // Render as a filled rect (solid style — the SVG path). Honour
   // explicit `fill` / `stroke` overrides; default to opaque
   // dark grey + no stroke so the redact looks like a censor bar.
   return {
