@@ -296,6 +296,9 @@ importers:
       '@ingcreators/annot-editor':
         specifier: workspace:*
         version: link:../editor
+      '@ingcreators/annot-product-docs':
+        specifier: workspace:*
+        version: link:../product-docs
       '@ingcreators/annot-render':
         specifier: workspace:*
         version: link:../render
