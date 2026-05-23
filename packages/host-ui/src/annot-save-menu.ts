@@ -47,6 +47,16 @@ export interface SaveMenuContext {
    *  be `undefined` for ephemeral / new documents — the export
    *  helpers fall back to an auto-generated name in that case. */
   getCurrentFilename?: () => string | undefined;
+  /**
+   * Optional Phase 4f hook for the "Save as flat PNG" entry.
+   * Resolves to the bytes of a distribution-ready flat PNG (no
+   * editable XMP layer); the menu downloads them via a synthetic
+   * `<a download>` click. When omitted, the entry isn't rendered.
+   *
+   * Production wires `EditorShell.publishFlatPng` here; tests can
+   * stub a deterministic bytes-producing implementation.
+   */
+  publishFlatPng?: () => Promise<Uint8Array | null>;
 }
 
 let activeMenu: AnnotSaveMenuElement | null = null;
@@ -120,6 +130,26 @@ export class AnnotSaveMenuElement extends LitElement {
       label: "Download PPTX (PowerPoint)",
       description: "Editable PowerPoint slide with native shapes",
     });
+    // Phase 4f of `docs/plans/living-spec-authoring-roadmap.md` —
+    // the publish-flat affordance. Renders only when the host
+    // wired `publishFlatPng` (the PWA passes
+    // `EditorShell.publishFlatPng.bind(shell)`); otherwise the
+    // entry is omitted so non-editor save menus (e.g. card-doc)
+    // don't grow an item they can't fulfil.
+    if (ctx.publishFlatPng) {
+      const publishFlatPng = ctx.publishFlatPng;
+      const getCurrentFilename = ctx.getCurrentFilename;
+      actions["png-flat"] = async (): Promise<void> => {
+        const bytes = await publishFlatPng();
+        if (!bytes) return;
+        downloadFlatPngBytes(bytes, getCurrentFilename?.());
+      };
+      items.push({
+        id: "png-flat",
+        label: "Save as flat PNG",
+        description: "PNG with annotations baked in (no editable layer)",
+      });
+    }
 
     const el = document.createElement("annot-save-menu");
     el.items = items;
@@ -229,6 +259,32 @@ export class AnnotSaveMenuElement extends LitElement {
       this.#onDocClick = null;
     }
   }
+}
+
+/**
+ * Trigger a browser download of the supplied PNG bytes. Phase 4f
+ * helper for the "Save as flat PNG" entry — mirrors the
+ * `<a download>` dance `downloadAsImage` uses internally, kept
+ * inline here so the menu doesn't reach back into
+ * `@ingcreators/annot-editor` for a one-time helper.
+ */
+function downloadFlatPngBytes(bytes: Uint8Array, filename?: string): void {
+  // Copy the bytes into a fresh `ArrayBuffer` (instead of passing
+  // the Uint8Array view straight to `new Blob`) so the Blob owns
+  // a tight buffer that matches the data length exactly — sidesteps
+  // an edge case where the view sits over a longer pooled buffer
+  // and the Blob ends up carrying trailing zeros.
+  const buffer = new ArrayBuffer(bytes.length);
+  new Uint8Array(buffer).set(bytes);
+  const blob = new Blob([buffer], { type: "image/png" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename || `annot-${Date.now()}.png`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 if (!customElements.get("annot-save-menu")) {
