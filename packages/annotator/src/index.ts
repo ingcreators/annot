@@ -57,7 +57,7 @@ export { isPhotoHeavy } from "./encode/quantize.js";
 // dep footprint. MCP keeps its existing public API via a
 // re-export from this entry point.
 
-export { burnRedactions, type RedactRegion } from "./redact-burn.js";
+export { burnRedactions, burnRegions, type RedactRegion } from "./redact-burn.js";
 
 // ─── Pixel diff (Phase 3i — relocated from @ingcreators/annot-mcp) ───
 //
