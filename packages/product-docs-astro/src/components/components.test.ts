@@ -33,6 +33,7 @@ const COMPONENTS = [
   "Overlay",
   "AnnotCallout",
   "AnnotEditButton",
+  "AnnotEditorIframeModal",
   "Transition",
   "TransitionTable",
   "HistoryEntry",
@@ -109,13 +110,51 @@ describe("AnnotEditButton.astro", () => {
       /import \{ encodeEmbedRequestUrl \} from "@ingcreators\/annot-embed-protocol"/,
     );
   });
-  it('falls back to newTab + console.warn when mode === "inline" (5e lands the modal)', () => {
+  it("opens the inline modal via __annotEditorIframeModal when present", () => {
+    expect(src).toMatch(/__annotEditorIframeModal/);
+    expect(src).toMatch(/modalApi\.open\(\{ cloudUrl, editorUrl: url \}\)/);
+  });
+  it('falls back to newTab + console.warn when mode === "inline" and the modal is missing', () => {
     expect(src).toMatch(/effectiveMode = "newTab"/);
     expect(src).toMatch(/console\.warn\(/);
-    expect(src).toMatch(/warnedInlineFallback/);
+    expect(src).toMatch(/warnedMissingModal/);
   });
   it("opens the cloud editor via window.open with noopener,noreferrer", () => {
     expect(src).toMatch(/window\.open\(url, "_blank", "noopener,noreferrer"\)/);
+  });
+});
+
+describe("AnnotEditorIframeModal.astro", () => {
+  const src = readComponent("AnnotEditorIframeModal");
+  it("renders a <dialog> root marked with data-annot-edit-modal-root", () => {
+    expect(src).toMatch(/<dialog[\s\S]*?data-annot-edit-modal-root/);
+  });
+  it("contains an <iframe> with the annot-editor-iframe-modal-frame class", () => {
+    expect(src).toMatch(/class="annot-editor-iframe-modal-frame"/);
+  });
+  it("imports the 5c host messenger factory + EmbedEvent types", () => {
+    expect(src).toMatch(
+      /import\s*\{\s*[\s\S]*?createEmbedHostMessenger[\s\S]*?\}\s*from\s*"@ingcreators\/annot-embed-protocol"/,
+    );
+    expect(src).toMatch(/type EmbedEvent/);
+  });
+  it("dismisses the modal on EditCommitted / EditAbandoned", () => {
+    expect(src).toMatch(/EditCommitted/);
+    expect(src).toMatch(/EditAbandoned/);
+    expect(src).toMatch(/modal\.close\(\)/);
+  });
+  it("resizes the iframe on ResizeNeeded with a clamped height", () => {
+    expect(src).toMatch(/ResizeNeeded/);
+    expect(src).toMatch(/clampHeight/);
+    expect(src).toMatch(/frame\.style\.height/);
+  });
+  it("attaches the host messenger only after the iframe load event", () => {
+    expect(src).toMatch(/frame\.addEventListener\(\s*"load"/);
+    expect(src).toMatch(/createEmbedHostMessenger\(/);
+  });
+  it("exposes the open function via __annotEditorIframeModal", () => {
+    expect(src).toMatch(/__annotEditorIframeModal/);
+    expect(src).toMatch(/open:\s*openModal/);
   });
 });
 

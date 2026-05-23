@@ -11,9 +11,11 @@
 //     `living-spec-authoring-roadmap.md`.
 //   - `disabled`: button is not rendered. For read-only docs /
 //     air-gapped deployments without on-prem annot-cloud.
-//   - `inline` (opt-in, lands in 5e): modal `<iframe>` mounted
-//     on the docs site. Until 5e lands, `inline` falls back to
-//     `newTab` with a one-time `console.warn`.
+//   - `inline` (opt-in): modal `<iframe>` mounted on the docs
+//     site. Requires `<AnnotEditorIframeModal />` (5e) to be
+//     mounted somewhere on the same page (typically in the
+//     layout). If the modal isn't present, `inline` gracefully
+//     degrades to `newTab` with a one-time `console.warn`.
 //
 // MDX usage:
 //
@@ -79,10 +81,19 @@ const {
   import { encodeEmbedRequestUrl } from "@ingcreators/annot-embed-protocol";
 
   // One-time warning when a `mode="inline"` button is clicked
-  // and 5e hasn't shipped yet on the host site's bundle. The
+  // but `<AnnotEditorIframeModal />` isn't on the page. The
   // warning lives at the page-script level so multiple buttons
   // share it.
-  let warnedInlineFallback = false;
+  let warnedMissingModal = false;
+
+  interface ModalApi {
+    open: (options: { cloudUrl: string; editorUrl: string }) => void;
+  }
+
+  function findModalApi(): ModalApi | undefined {
+    return (window as unknown as { __annotEditorIframeModal?: ModalApi })
+      .__annotEditorIframeModal;
+  }
 
   function activate(button: HTMLButtonElement): void {
     const mode = button.dataset.annotEditMode ?? "newTab";
@@ -92,19 +103,19 @@ const {
     const annotationsPath = button.dataset.annotEditAnnotationsPath ?? "";
 
     button.addEventListener("click", () => {
+      // Resolve the effective mode. `inline` falls back to
+      // `newTab` if `<AnnotEditorIframeModal />` isn't on the
+      // page so the button still does something useful (warn
+      // once so authors notice in DevTools).
       let effectiveMode: "newTab" | "inline" = mode === "inline" ? "inline" : "newTab";
-      if (effectiveMode === "inline") {
-        // The inline modal lands in Phase 5e of
-        // `living-spec-authoring-roadmap.md`. Until then, fall
-        // back to newTab so the button still does something
-        // useful. Warn once so authors know they need to
-        // upgrade the docs-site dep to pick up 5e's modal.
-        if (!warnedInlineFallback) {
-          // biome-ignore lint/suspicious/noConsole: build-warning UX for the missing 5e modal.
+      const modalApi = effectiveMode === "inline" ? findModalApi() : undefined;
+      if (effectiveMode === "inline" && !modalApi) {
+        if (!warnedMissingModal) {
+          // biome-ignore lint/suspicious/noConsole: degraded-UX surface for the missing modal.
           console.warn(
-            "[<AnnotEditButton>] mode=\"inline\" is not yet implemented in this build; falling back to mode=\"newTab\". Upgrade to the annot-cloud release that ships Phase 5e to get the inline modal.",
+            '[<AnnotEditButton>] mode="inline" requires <AnnotEditorIframeModal /> on the page; falling back to mode="newTab". Mount the modal component in your layout to enable the inline flow.',
           );
-          warnedInlineFallback = true;
+          warnedMissingModal = true;
         }
         effectiveMode = "newTab";
       }
@@ -119,6 +130,10 @@ const {
           returnUrl,
           mode: effectiveMode,
         });
+        if (effectiveMode === "inline" && modalApi) {
+          modalApi.open({ cloudUrl, editorUrl: url });
+          return;
+        }
         window.open(url, "_blank", "noopener,noreferrer");
       } catch (error) {
         // biome-ignore lint/suspicious/noConsole: encoder errors surface as runtime warnings.

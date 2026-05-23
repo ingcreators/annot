@@ -1,0 +1,185 @@
+---
+// `<AnnotEditorIframeModal>` — Phase 5e of
+// `docs/plans/living-spec-authoring-roadmap.md`. The inline-
+// mode counterpart to `<AnnotEditButton>`'s default newTab
+// behaviour. Mount once per page (typically in the docs site's
+// layout) and any `<AnnotEditButton mode="inline">` on the
+// same page opens the modal instead of a new tab.
+//
+// Lazy-loaded: the modal HTML + script only ship if this
+// component is mounted. Pages that only use `mode="newTab"`
+// (the default per OQ-09) never download the modal code.
+// `<AnnotEditButton mode="inline">` on a page without
+// `<AnnotEditorIframeModal />` gracefully degrades to newTab
+// + a one-time `console.warn`.
+//
+// MDX usage in a layout:
+//
+//   ---
+//   import { AnnotEditorIframeModal } from "@ingcreators/annot-product-docs-astro/components/AnnotEditorIframeModal.astro";
+//   ---
+//   <slot />
+//   <AnnotEditorIframeModal />
+//
+// Then any `<AnnotEditButton mode="inline" ... />` in MDX
+// opens the modal on click. The modal listens for
+// `EditCommitted` / `EditAbandoned` / `ResizeNeeded` via the
+// 5c postMessage dispatcher and dismisses itself accordingly.
+
+interface Props {
+  /** Modal aria-label. Overridable for localisation. */
+  ariaLabel?: string;
+}
+
+const { ariaLabel = "Annot editor" } = Astro.props;
+---
+
+<dialog
+  class="annot-editor-iframe-modal"
+  data-annot-edit-modal-root
+  aria-label={ariaLabel}
+>
+  <iframe
+    class="annot-editor-iframe-modal-frame"
+    title={ariaLabel}
+    allow="clipboard-read; clipboard-write"
+    referrerpolicy="origin"
+  ></iframe>
+</dialog>
+
+<script>
+  import {
+    createEmbedHostMessenger,
+    type EmbedEvent,
+    type EmbedMessenger,
+  } from "@ingcreators/annot-embed-protocol";
+
+  interface OpenModalOptions {
+    readonly cloudUrl: string;
+    readonly editorUrl: string;
+  }
+
+  const MAX_HEIGHT_FRACTION = 0.95;
+  const DEFAULT_FRAME_HEIGHT_PX = 720;
+
+  function findModal(): HTMLDialogElement | null {
+    return document.querySelector<HTMLDialogElement>(
+      "dialog[data-annot-edit-modal-root]",
+    );
+  }
+
+  function findFrame(modal: HTMLDialogElement): HTMLIFrameElement | null {
+    return modal.querySelector<HTMLIFrameElement>(
+      "iframe.annot-editor-iframe-modal-frame",
+    );
+  }
+
+  function clampHeight(requested: number): number {
+    if (!Number.isFinite(requested) || requested <= 0) {
+      return DEFAULT_FRAME_HEIGHT_PX;
+    }
+    const max = window.innerHeight * MAX_HEIGHT_FRACTION;
+    return Math.min(requested, max);
+  }
+
+  function openModal(options: OpenModalOptions): void {
+    const modal = findModal();
+    if (!modal) {
+      // biome-ignore lint/suspicious/noConsole: lazy-mount contract violation surfaces here.
+      console.warn(
+        "[<AnnotEditorIframeModal>] dialog element not found — was the component mounted on this page?",
+      );
+      return;
+    }
+    const frame = findFrame(modal);
+    if (!frame) return;
+
+    frame.style.height = `${DEFAULT_FRAME_HEIGHT_PX}px`;
+    frame.src = options.editorUrl;
+
+    let messenger: EmbedMessenger | null = null;
+
+    const teardown = (): void => {
+      if (messenger) {
+        messenger.cleanup();
+        messenger = null;
+      }
+      frame.removeAttribute("src");
+    };
+
+    const onEvent = (event: EmbedEvent): void => {
+      if (event.type === "EditCommitted" || event.type === "EditAbandoned") {
+        modal.close();
+        return;
+      }
+      if (event.type === "ResizeNeeded") {
+        frame.style.height = `${clampHeight(event.height)}px`;
+      }
+    };
+
+    modal.addEventListener(
+      "close",
+      () => {
+        teardown();
+      },
+      { once: true },
+    );
+
+    // Set up the host messenger after the iframe loads — its
+    // `contentWindow` is null until then. Once loaded, attach
+    // the messenger; subsequent postMessages from the cloud
+    // editor route through it.
+    frame.addEventListener(
+      "load",
+      () => {
+        try {
+          messenger = createEmbedHostMessenger({
+            frame,
+            expectedOrigin: options.cloudUrl,
+            onEvent,
+          });
+        } catch (error) {
+          // biome-ignore lint/suspicious/noConsole: surface failed host-messenger setup.
+          console.error("[<AnnotEditorIframeModal>] failed to attach host messenger:", error);
+          modal.close();
+        }
+      },
+      { once: true },
+    );
+
+    modal.showModal();
+  }
+
+  // Expose the open function for `<AnnotEditButton>`'s inline-
+  // mode click handler to call. Keep the surface narrow — just
+  // `open` — so future expansion (close-from-outside,
+  // post-event listener API) is additive.
+  type ModalApi = {
+    open: (options: OpenModalOptions) => void;
+  };
+  (window as unknown as { __annotEditorIframeModal?: ModalApi }).__annotEditorIframeModal =
+    { open: openModal };
+</script>
+
+<style>
+  .annot-editor-iframe-modal {
+    width: min(95vw, 1280px);
+    max-width: 95vw;
+    max-height: 95vh;
+    padding: 0;
+    border: 0;
+    border-radius: 0.6em;
+    background: var(--annot-editor-modal-bg, #ffffff);
+    box-shadow: 0 0.5em 2em rgba(0, 0, 0, 0.4);
+    overflow: hidden;
+  }
+  .annot-editor-iframe-modal::backdrop {
+    background: rgba(0, 0, 0, 0.5);
+  }
+  .annot-editor-iframe-modal-frame {
+    display: block;
+    width: 100%;
+    min-height: 360px;
+    border: 0;
+  }
+</style>
