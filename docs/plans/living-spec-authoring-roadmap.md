@@ -59,6 +59,24 @@
 > non-MCP callers (Astro Image Service today; future
 > Playwright fixtures, custom test reporters).
 >
+> Phase 3 follow-up #2 — annot-annotator raster utilities (plan addition: [#999](https://github.com/ingcreators/annot/pull/999)):
+> [#1000](https://github.com/ingcreators/annot/pull/1000) (3i — relocate `diffScreenshots` from `@ingcreators/annot-mcp` to `@ingcreators/annot-annotator`) /
+> [#1001](https://github.com/ingcreators/annot/pull/1001) (3j — `flattenEditablePng` primitive) /
+> [#1002](https://github.com/ingcreators/annot/pull/1002) (3k — `burnRegions` alias for `burnRedactions`).
+>
+> Phase 3 follow-up #2 consolidates the Node-side raster
+> toolkit into `@ingcreators/annot-annotator`. After the
+> follow-up, three "burn" primitives sit at annotator's Tier
+> A surface: `burnRedactions` / `burnRegions` (region-based
+> destructive paint), `flattenEditablePng` (drop the editor's
+> editable layer from a PNG — metadata removal, no
+> re-rasterization), and `diffScreenshots` (pixelmatch-driven
+> PNG comparison). MCP keeps every existing API via re-export
+> shims; non-MCP callers (Playwright visual regression,
+> Astro pixel drift CI, custom reporters, editor publish-flat)
+> can consume any of the three without the MCP server's dep
+> footprint.
+>
 > Original plan body below was written 2026-05-22 as the synthesis of a long
 > design discussion that started from
 > [`playwright-screenshot-fixture-relayer.md`](./_done/playwright-screenshot-fixture-relayer.md)'s
