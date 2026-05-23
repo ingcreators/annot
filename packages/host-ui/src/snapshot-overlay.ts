@@ -27,20 +27,12 @@
  * relying on a host stylesheet.
  */
 
+import type { OverlayRegionPickDetail } from "@ingcreators/annot-core/editor";
 import type { ElementNode, ElementTree } from "@ingcreators/annot-core/element-tree";
 import { findByRef } from "@ingcreators/annot-core/element-tree";
 import { css, html, LitElement, svg } from "./lit.js";
 
-export interface OverlayRegionPickDetail {
-  /** Tree-unique identifier of the picked node (e.g. `"e3"`). */
-  ref: string;
-  /** ARIA role of the picked node. */
-  role: string;
-  /** Accessible name, when the node carries one. */
-  name?: string;
-  /** Page-space bounding box of the picked node. CSS px. */
-  bbox: { x: number; y: number; width: number; height: number };
-}
+export type { OverlayRegionPickDetail } from "@ingcreators/annot-core/editor";
 
 /**
  * One ready-to-render region — derived from an `ElementNode` with a
