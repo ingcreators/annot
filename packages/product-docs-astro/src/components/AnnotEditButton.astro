@@ -1,0 +1,170 @@
+---
+// `<AnnotEditButton>` — Phase 5d of
+// `docs/plans/living-spec-authoring-roadmap.md`. Mountable
+// "✏️ Edit" button that routes visitors to the annot-cloud
+// editor at `${cloudUrl}/embed?...`. Phase 5 ships three embed
+// modes:
+//
+//   - `newTab` (default): click → `window.open(...)`. Works
+//     under every Enterprise constraint (CSP / SSO / on-prem /
+//     air-gapped). See OQ-09 in
+//     `living-spec-authoring-roadmap.md`.
+//   - `disabled`: button is not rendered. For read-only docs /
+//     air-gapped deployments without on-prem annot-cloud.
+//   - `inline` (opt-in, lands in 5e): modal `<iframe>` mounted
+//     on the docs site. Until 5e lands, `inline` falls back to
+//     `newTab` with a one-time `console.warn`.
+//
+// MDX usage:
+//
+//   <AnnotEditButton
+//     repo="ingcreators/annot"
+//     pngPath="docs/shots/login.png"
+//     annotationsPath="docs/annotations/login.annotations.yaml"
+//   />
+//
+// `cloudUrl` defaults to `https://annot.work`. Override via
+// per-call prop OR (in Phase 5f) `annot-docs.config.ts`'s
+// `editor.cloudUrl` default. The defaults landed here are
+// what Phase 5f will lift into the config; Phase 5d ships
+// per-call props only.
+
+import type { EmbedMode } from "@ingcreators/annot-embed-protocol";
+
+interface Props {
+  /** Owner/repo slug, e.g. `"ingcreators/annot"`. */
+  repo: string;
+  /** Path within the repo of the PNG being edited. */
+  pngPath: string;
+  /** Path within the repo of the linked `.annotations.yaml`. */
+  annotationsPath: string;
+  /** Embed mode. Defaults to `"newTab"`. */
+  mode?: EmbedMode;
+  /** Cloud editor origin override (for on-prem). Defaults to
+   *  `https://annot.work`. Phase 5f introduces an
+   *  `annot-docs.config.ts` `editor.cloudUrl` default that
+   *  acts as the project-wide fallback. */
+  cloudUrl?: string;
+  /** Visible button label. Defaults to `"✏️ Edit"`. */
+  label?: string;
+}
+
+const {
+  repo,
+  pngPath,
+  annotationsPath,
+  mode = "newTab",
+  cloudUrl = "https://annot.work",
+  label = "✏️ Edit",
+} = Astro.props;
+---
+{
+  mode !== "disabled" && (
+    <button
+      type="button"
+      class="annot-edit-button"
+      data-annot-edit-mode={mode}
+      data-annot-edit-cloud-url={cloudUrl}
+      data-annot-edit-repo={repo}
+      data-annot-edit-png-path={pngPath}
+      data-annot-edit-annotations-path={annotationsPath}
+      aria-label={`Edit ${pngPath}`}
+    >
+      {label}
+    </button>
+  )
+}
+
+<script>
+  import { encodeEmbedRequestUrl } from "@ingcreators/annot-embed-protocol";
+
+  // One-time warning when a `mode="inline"` button is clicked
+  // and 5e hasn't shipped yet on the host site's bundle. The
+  // warning lives at the page-script level so multiple buttons
+  // share it.
+  let warnedInlineFallback = false;
+
+  function activate(button: HTMLButtonElement): void {
+    const mode = button.dataset.annotEditMode ?? "newTab";
+    const cloudUrl = button.dataset.annotEditCloudUrl ?? "";
+    const repo = button.dataset.annotEditRepo ?? "";
+    const pngPath = button.dataset.annotEditPngPath ?? "";
+    const annotationsPath = button.dataset.annotEditAnnotationsPath ?? "";
+
+    button.addEventListener("click", () => {
+      let effectiveMode: "newTab" | "inline" = mode === "inline" ? "inline" : "newTab";
+      if (effectiveMode === "inline") {
+        // The inline modal lands in Phase 5e of
+        // `living-spec-authoring-roadmap.md`. Until then, fall
+        // back to newTab so the button still does something
+        // useful. Warn once so authors know they need to
+        // upgrade the docs-site dep to pick up 5e's modal.
+        if (!warnedInlineFallback) {
+          // biome-ignore lint/suspicious/noConsole: build-warning UX for the missing 5e modal.
+          console.warn(
+            "[<AnnotEditButton>] mode=\"inline\" is not yet implemented in this build; falling back to mode=\"newTab\". Upgrade to the annot-cloud release that ships Phase 5e to get the inline modal.",
+          );
+          warnedInlineFallback = true;
+        }
+        effectiveMode = "newTab";
+      }
+
+      const returnUrl = window.location.href.split("#")[0];
+      try {
+        const url = encodeEmbedRequestUrl({
+          cloudUrl,
+          repo,
+          pngPath,
+          annotationsPath,
+          returnUrl,
+          mode: effectiveMode,
+        });
+        window.open(url, "_blank", "noopener,noreferrer");
+      } catch (error) {
+        // biome-ignore lint/suspicious/noConsole: encoder errors surface as runtime warnings.
+        console.error("[<AnnotEditButton>] failed to build embed URL:", error);
+      }
+    });
+  }
+
+  function init(): void {
+    const buttons = document.querySelectorAll<HTMLButtonElement>(
+      "button.annot-edit-button",
+    );
+    for (const button of Array.from(buttons)) {
+      activate(button);
+    }
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
+  }
+</script>
+
+<style>
+  .annot-edit-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4em;
+    padding: 0.4em 0.8em;
+    font-family: inherit;
+    font-size: 0.9em;
+    line-height: 1.2;
+    color: var(--annot-edit-button-fg, #ffffff);
+    background: var(--annot-edit-button-bg, #3b82f6);
+    border: 0;
+    border-radius: 0.4em;
+    cursor: pointer;
+    transition: background 0.15s ease-out;
+  }
+  .annot-edit-button:hover,
+  .annot-edit-button:focus-visible {
+    background: var(--annot-edit-button-bg-hover, #2563eb);
+    outline: none;
+  }
+  .annot-edit-button:focus-visible {
+    box-shadow: 0 0 0 2px var(--annot-edit-button-focus-ring, #93c5fd);
+  }
+</style>

@@ -32,6 +32,7 @@ const COMPONENTS = [
   "Screen",
   "Overlay",
   "AnnotCallout",
+  "AnnotEditButton",
   "Transition",
   "TransitionTable",
   "HistoryEntry",
@@ -45,7 +46,10 @@ describe("Astro components: existence + frontmatter shape", () => {
       const src = readComponent(name);
       expect(src).toMatch(/^---/);
       expect(src).toMatch(/interface Props\b/);
-      expect(src).toMatch(/const \{ .* \} = Astro\.props;/);
+      // Allow either single-line or multi-line destructuring
+      // — components with many defaults wrap the `const { … } =
+      // Astro.props;` line by Biome's formatter.
+      expect(src).toMatch(/const \{[\s\S]*?\} = Astro\.props;/);
     });
   }
 });
@@ -73,6 +77,45 @@ describe("AnnotCallout.astro", () => {
   it("renders body inside an .annot-callout-body wrapper", () => {
     expect(src).toMatch(/annot-callout-body/);
     expect(src).toMatch(/<slot \/>/);
+  });
+});
+
+describe("AnnotEditButton.astro", () => {
+  const src = readComponent("AnnotEditButton");
+  it("declares the three required Props + the optional mode/cloudUrl/label", () => {
+    expect(src).toMatch(/repo:\s*string/);
+    expect(src).toMatch(/pngPath:\s*string/);
+    expect(src).toMatch(/annotationsPath:\s*string/);
+    expect(src).toMatch(/mode\?:\s*EmbedMode/);
+    expect(src).toMatch(/cloudUrl\?:\s*string/);
+    expect(src).toMatch(/label\?:\s*string/);
+  });
+  it("defaults mode to newTab + cloudUrl to https://annot.work", () => {
+    expect(src).toMatch(/mode = "newTab"/);
+    expect(src).toMatch(/cloudUrl = "https:\/\/annot\.work"/);
+  });
+  it('renders no button when mode === "disabled"', () => {
+    expect(src).toMatch(/mode !== "disabled" &&/);
+  });
+  it("emits data-annot-edit-* attrs that the inline script reads", () => {
+    expect(src).toMatch(/data-annot-edit-mode={mode}/);
+    expect(src).toMatch(/data-annot-edit-cloud-url={cloudUrl}/);
+    expect(src).toMatch(/data-annot-edit-repo={repo}/);
+    expect(src).toMatch(/data-annot-edit-png-path={pngPath}/);
+    expect(src).toMatch(/data-annot-edit-annotations-path={annotationsPath}/);
+  });
+  it("inline script imports encodeEmbedRequestUrl from the protocol pkg", () => {
+    expect(src).toMatch(
+      /import \{ encodeEmbedRequestUrl \} from "@ingcreators\/annot-embed-protocol"/,
+    );
+  });
+  it('falls back to newTab + console.warn when mode === "inline" (5e lands the modal)', () => {
+    expect(src).toMatch(/effectiveMode = "newTab"/);
+    expect(src).toMatch(/console\.warn\(/);
+    expect(src).toMatch(/warnedInlineFallback/);
+  });
+  it("opens the cloud editor via window.open with noopener,noreferrer", () => {
+    expect(src).toMatch(/window\.open\(url, "_blank", "noopener,noreferrer"\)/);
   });
 });
 
